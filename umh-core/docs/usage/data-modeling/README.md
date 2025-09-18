@@ -1,8 +1,8 @@
 # Data Modeling
 
-Unified data-modelling builds on our existing data contract foundation to provide a comprehensive approach to industrial data modeling.
+> **Quick Start**: If you just want to connect devices and see data flowing, start with [Bridges](../data-flows/bridges.md) and the `_raw` data contract. Come back here when you need structured, validated data models.
 
-UMH Core's unified data-modelling system provides a structured approach to defining, validating, and processing industrial data. It bridges the gap between raw sensor data and meaningful business information through a clear hierarchy of components.
+UMH Core's data modeling system helps you transform raw industrial data into structured, validated information. Start simple with device-specific models, then evolve to business-ready analytics.
 
 ## Why Data Modeling Matters
 
@@ -26,69 +26,140 @@ But as companies scale across **multiple factories**, they hit a wall:
 
 UMH's unified data-modelling bridges this gap: keep the flexibility of per-site bridges for raw data collection, but add explicit modeling on top for enterprise standardization.
 
-## Object Hierarchy
+## Progressive Learning Path
 
-The unified data-modelling system uses a four-layer hierarchy:
-
+### Step 1: Start Simple (No Modeling)
+Connect your devices with bridges and use the `_raw` data contract. Your data flows immediately:
 ```
-Payload-Shape → Data-Model → Data-Contract → Stream-Processor
+OPC UA → Bridge → umh.v1.plant.line.device._raw.temperature
 ```
+This is already "Silver" data - it has location context.
 
-| Layer | Purpose | Example |
-|-------|---------|---------|
-| **[Payload-Shape](payload-shapes.md)** | Canonical schema fragment (timeseries default) | `timeseries`, `blob` |
-| **[Data-Model](data-models.md)** | Reusable class; tree of fields, folders, sub-models | `Motor`, `Pump`, `Temperature` |
-| **[Data-Contract](data-contracts.md)** | Binds model version; decides retention & sinks | `_temperature_v1`, `_pump_v1` |
-| **[Stream-Processor](stream-processors.md)** | Runtime pipeline for model instances | `furnaceTemp_sp`, `pump41_sp` |
-
-## Quick Example
-
-Here's how the system transforms raw PLC data into structured, validated information:
-
-### 1. Raw Data Input
+### Step 2: Add Device Models
+When you need validation and structure, create device-specific models:
 ```
-Topic: umh.v1.corpA.plant-A.line-4.furnace1._raw.temperature_F
-Payload: { "value": 1500, "timestamp_ms": 1733904005123 }
+OPC UA → Bridge with Model → umh.v1.plant.line.device._pump_v1.pressure
+```
+Most users only need this level - device modeling with validation.
+
+### Step 3: Business Analytics (Gold)
+For cross-device business data, use stream processors to transform Silver → Gold:
+```
+Multiple Silver sources → Stream Processor → umh.v1.plant._workorder_v1.created
 ```
 
-### 2. Data Model Definition
+## The Silver → Gold Architecture
+
+In industrial data, we distinguish between two types of modeling:
+
+### Silver: Device-Specific Models
+- **What**: Individual device data with structure (`_pump_v1`, `_temperature_v1`)
+- **Where**: Created in bridges using data models and contracts
+- **Format**: Mostly time-series data
+- **Example**: Pump pressure, motor RPM, temperature readings
+
+### Gold: Use-Case Specific Models  
+- **What**: Business data aggregated across devices (`_workorder_v1`, `_maintenance_v1`)
+- **Where**: Created by stream processors (🚧 currently time-series only)
+- **Format**: Mostly relational data
+- **Example**: Work orders, maintenance requests, production batches
+
+> **Important**: You don't have to follow this pattern strictly. Bridges can write directly to Gold-level contracts if needed. This is guidance, not enforcement.
+
+## Building Blocks
+
+When you're ready to create models, understand these components:
+
+| Component | Purpose | When You Need It |
+|-----------|---------|------------------|
+| **[Payload Shapes](payload-shapes.md)** | Define JSON structure for data | Custom relational formats |
+| **[Data Models](data-models.md)** | Define virtual topic hierarchy | Device templates |
+| **[Data Contracts](data-contracts.md)** | Enforce validation at gateway | Data quality assurance |
+| **[Stream Processors](stream-processors.md)** | Transform between models | Silver → Gold only |
+
+## Example: Device Modeling in Bridges
+
+Most users start with device-specific modeling directly in bridges:
+
+### 1. Create a Simple Pump Model
 ```yaml
+# Define the model structure
 datamodels:
-  temperature:
-    description: "Temperature sensor model"
+  pump:
+    description: "Standard pump model"
     versions:
       v1:
         structure:
-          temperatureInC:
+          pressure:
+            _payloadshape: timeseries-number
+          temperature:
+            _payloadshape: timeseries-number
+          running:
             _payloadshape: timeseries-number
 ```
 
-### 3. Data Contract
+### 2. Create a Data Contract for Enforcement
 ```yaml
+# This enforces validation
 datacontracts:
-  - name: _temperature_v1
+  - name: _pump_v1
     model:
-      name: temperature
+      name: pump
       version: v1
 ```
 
-### 4. Stream Processor
+### 3. Configure Bridge to Use the Model
 ```yaml
-streamprocessors:
-  - name: furnaceTemp_sp
-    _templateRef: "temperature_template"
-    location:
-      0: corpA
-      1: plant-A
-      2: line-4
-      3: furnace1
-    variables:
-      temp_sensor: "temperature_F"
-      sn: "SN-F1-001"
+protocolConverter:
+  - name: pump-bridge
+    dataflowcomponent_read:
+      data_contract: "_pump_v1"  # Enforce pump model
+      benthos:
+        input:
+          opcua:
+            endpoint: "opc.tcp://192.168.1.100:4840"
+            nodeIDs: ["ns=2;s=Pressure", "ns=2;s=Temperature", "ns=2;s=Status"]
+        pipeline:
+          processors:
+            - tag_processor:
+                defaults: |
+                  msg.meta.location_path = "{{ .location_path }}";
+                  msg.meta.data_contract = "_pump_v1";  # Use pump contract
+                  msg.meta.tag_name = msg.meta.opcua_tag_name;
+        output:
+          uns: {}  # Validates against pump model
 ```
 
-### 5. Structured Output
+### 4. Result: Validated, Structured Data
 ```
-Topic: umh.v1.corpA.plant-A.line-4.furnace1._temperature.temperatureInC
-Payload: { "value": 815.6, "timestamp_ms": 1733904005123 }
+✅ Valid: umh.v1.plant.line.pump42._pump_v1.pressure
+   Payload: { "value": 4.2, "timestamp_ms": 1733904005123 }
+
+❌ Invalid: umh.v1.plant.line.pump42._pump_v1.invalid_field
+   Result: Bridge goes degraded, message rejected
 ```
+
+**No stream processor needed!** The bridge handles device modeling directly.
+
+## When Do You Need Stream Processors?
+
+Stream processors are ONLY for transforming data between different models (Silver → Gold):
+
+| Use Case | Solution | Why |
+|----------|----------|-----|
+| Rename OPC UA tags to friendly names | Bridge with `tag_processor` | Simple mapping, same model |
+| Convert temperature units (°F → °C) | Bridge with expression | Simple transformation, same model |
+| Enforce pump data structure | Bridge with data contract | Device modeling, validation |
+| **Create work order from alarms** | **Stream Processor** | **Multiple devices, relational output** |
+| **Generate maintenance request** | **Stream Processor** | **Business logic, different model** |
+| **Batch production records** | **Stream Processor** | **Aggregate cycle data, new format** |
+
+> **Rule of Thumb**: If you're working with a single device and want to structure its data, use a bridge. If you're combining data from multiple sources into business KPIs, use a stream processor.
+
+## Next Steps
+
+- **New to UMH?** Start with [Bridges](../data-flows/bridges.md) and `_raw` data
+- **Ready for validation?** Learn about [Data Contracts](data-contracts.md)
+- **Need custom formats?** Explore [Payload Shapes](payload-shapes.md)
+- **Building device templates?** Read [Data Models](data-models.md)
+- **Creating business KPIs?** Check [Stream Processors](stream-processors.md) (currently time-series only)
