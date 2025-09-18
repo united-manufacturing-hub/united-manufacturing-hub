@@ -26,7 +26,7 @@ But as companies scale across **multiple factories**, they hit a wall:
 
 UMH's unified data-modelling bridges this gap: keep the flexibility of per-site bridges for raw data collection, but add explicit modeling on top for enterprise standardization.
 
-## Progressive Learning Path
+## Get Started
 
 ### Step 1: Start Simple (No Modeling)
 Connect your devices with bridges and use the `_raw` data contract. Your data flows immediately:
@@ -35,6 +35,8 @@ OPC UA → Bridge → umh.v1.plant.line.device._raw.temperature
 ```
 This is already "Silver" data - it has location context.
 
+**Learn more:** [Creating Bridges](../data-flows/bridges.md) | [Producing Data](../unified-namespace/producing-data.md)
+
 ### Step 2: Add Device Models
 When you need validation and structure, create device-specific models:
 ```
@@ -42,11 +44,15 @@ OPC UA → Bridge with Model → umh.v1.plant.line.device._pump_v1.pressure
 ```
 Most users only need this level - device modeling with validation.
 
+**Learn more:** [Data Models](data-models.md) | [Data Contracts](data-contracts.md) | [Example below](#example-device-modeling-in-bridges)
+
 ### Step 3: Business Analytics (Gold)
 For cross-device business data, use stream processors to transform Silver → Gold:
 ```
 Multiple Silver sources → Stream Processor → umh.v1.plant._workorder_v1.created
 ```
+
+**Learn more:** [Stream Processors](stream-processors.md) | [Payload Formats](../unified-namespace/payload-formats.md#relational-data)
 
 ## The Silver → Gold Architecture
 
