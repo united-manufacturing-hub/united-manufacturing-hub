@@ -1,10 +1,12 @@
 # Data Contracts
 
-Data contracts are the **enforcement mechanism** that makes data validation actually happen in the UNS. Without a contract, models and shapes are just documentation - contracts make them enforced rules.
+Data contracts are the **enforcement mechanism** that makes data validation actually happen in the UNS. Without a contract, [data models](data-models.md) and [payload shapes](payload-shapes.md) are just documentation - contracts make them enforced rules.
+
+> **For most users**: You'll use data contracts with [bridges](../data-flows/bridges.md) for [Silver-level](README.md#silver-data) device modeling. Only advanced users need contracts for [Gold-level](README.md#gold-data) business data.
 
 ## How Data Contracts Work
 
-Data contracts operate at the gateway where data enters the UNS:
+Data contracts operate in [bridges](../data-flows/bridges.md) where data enters the UNS:
 
 ```
 Device → Bridge → UNS Output Plugin → [Contract Check] → Kafka/Redpanda
@@ -13,10 +15,10 @@ Device → Bridge → UNS Output Plugin → [Contract Check] → Kafka/Redpanda
 ```
 
 **Key Concepts:**
-1. **Contracts enforce validation** - Models and shapes alone do nothing
-2. **Gateway enforcement** - The [UNS output plugin](https://docs.umh.app/benthos-umh/output/uns-output) validates all data
+1. **Contracts enforce validation** - [Data models](data-models.md) and [payload shapes](payload-shapes.md) alone do nothing
+2. **Bridge enforcement** - The [UNS output plugin](https://docs.umh.app/benthos-umh/output/uns-output) in benthos-umh validates all data
 3. **No contract = No validation** - Data passes through if no contract exists
-4. **Bridge degraded state** - Failed validation puts the bridge in degraded state for easy debugging
+4. **Bridge degraded state** - Failed validation puts the [bridge](../data-flows/bridges.md) in degraded state for easy debugging
 
 ## Overview
 
@@ -26,7 +28,7 @@ Data contracts are stored in the `datacontracts:` configuration section:
 datacontracts:
   - name: _machine-state_v1  # Becomes part of the topic name
     model:
-      name: machine-state     # References a data model
+      name: machine-state     # References a [data model](data-models.md)
       version: v1             # Specific model version
 ```
 
@@ -49,7 +51,7 @@ datacontracts:
 
 ### Model Binding
 
-Each contract binds to exactly one data model version:
+Each contract binds to exactly one [data model](data-models.md) version:
 
 ```yaml
 datacontracts:

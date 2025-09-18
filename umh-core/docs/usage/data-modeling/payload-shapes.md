@@ -2,6 +2,8 @@
 
 Payload shapes define the JSON schema for data in the UNS. They ensure type safety and consistency across your industrial data infrastructure.
 
+> **Usage Pattern**: Time-series shapes are typically used for [Silver data](README.md#silver-data) (device-specific), while custom relational shapes are for [Gold data](README.md#gold-data) (business-specific). These shapes are enforced through [data contracts](data-contracts.md).
+
 ## Overview
 
 UMH uses two fundamental payload formats (see [Payload Formats](../unified-namespace/payload-formats.md) for details):
@@ -38,7 +40,7 @@ fields:
 
 **Validation Example:**
 
-If you have a data model using `timeseries-number`:
+If you have a [data model](data-models.md) using `timeseries-number`:
 ```yaml
 dataModels:
   - name: temperature-sensor

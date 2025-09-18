@@ -2,6 +2,8 @@
 
 Data models define the **virtual topic hierarchy** that appears after the data contract in your UNS topics. They transform flat data into organized, hierarchical structures.
 
+> **Context**: Data models are used for both [Silver](README.md#silver-data) (device-specific) and [Gold](README.md#gold-data) (use-case specific) data. Most users create device models for use in [bridges](../data-flows/bridges.md), while advanced users may create business models for [stream processors](stream-processors.md).
+
 ## How Models Create Topic Structure
 
 Data models literally become the topic path segments after your data contract:
@@ -47,7 +49,7 @@ datamodels:
 ### Important Concepts
 
 1. **Models are templates** - They don't enforce anything by themselves
-2. **Data contracts enforce models** - Only when a contract references a model does validation occur
+2. **[Data contracts](data-contracts.md) enforce models** - Only when a contract references a model does validation occur
 3. **Models apply to all locations** - Once defined, the same virtual structure works everywhere
 4. **Structure becomes topics** - The hierarchy you define becomes your actual topic paths
 
@@ -55,7 +57,7 @@ See [Topic Convention](../unified-namespace/topic-convention.md) for complete to
 
 ## Payload Shapes
 
-Payload shapes define the JSON schema for field values. They provide reusable templates for common data structures in industrial systems. For complete documentation on available payload shapes, their structure, and usage examples, see [Payload Shapes](payload-shapes.md)
+[Payload shapes](payload-shapes.md) define the JSON schema for field values. They provide reusable templates for common data structures in industrial systems. For complete documentation on available payload shapes, their structure, and usage examples, see [Payload Shapes](payload-shapes.md)
 
 Common payload shapes include:
 - `timeseries-number`: For numeric sensor data

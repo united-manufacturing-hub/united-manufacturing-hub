@@ -1,10 +1,10 @@
 # Stream Processors
 
-> **Important**: Stream processors are for **Silver → Gold transformations only**. For device-specific modeling (Bronze → Silver), use [bridges with data contracts](../data-flows/bridges.md) instead. Most users don't need stream processors.
+> **Important**: Stream processors are for **[Silver → Gold](README.md#the-silver--gold-architecture) transformations only**. For device-specific modeling (Bronze → [Silver](README.md#silver-data)), use [bridges with data contracts](../data-flows/bridges.md) instead. Most users don't need stream processors.
 >
-> **Current Limitation**: Stream processors currently support [time-series output](../unified-namespace/payload-formats.md#time-series-data) only. [Relational output](../unified-namespace/payload-formats.md#relational-data) for Gold-level business data is planned.
+> **Current Limitation**: Stream processors currently support [time-series output](../unified-namespace/payload-formats.md#time-series-data) only. [Relational output](../unified-namespace/payload-formats.md#relational-data) for [Gold-level](README.md#gold-data) business data is planned.
 
-Stream processors transform Silver data into Gold by aggregating multiple sources and creating different views of existing UNS data.
+Stream processors transform [Silver data](README.md#silver-data) into [Gold](README.md#gold-data) by aggregating multiple sources and creating different views of existing UNS data.
 
 ## When to Use Stream Processors
 
@@ -14,16 +14,16 @@ Stream processors transform Silver data into Gold by aggregating multiple source
 | Convert units (°F → °C) | **Bridge** with expression | Simple transformation, same model |
 | Rename cryptic tags | **Bridge** with tag_processor | Device-level mapping |
 | **Aggregate multiple devices** | **Stream Processor** | Cross-device, new model |
-| **Create business KPIs** | **Stream Processor** | Silver → Gold transformation |
+| **Create business KPIs** | **Stream Processor** | [Silver → Gold](README.md#the-silver--gold-architecture) transformation |
 | **Generate different data views** | **Stream Processor** | Same data, new perspective |
 
 ## Overview
 
-Stream processors create business-ready Gold data from device-specific Silver data:
+Stream processors create business-ready [Gold data](README.md#gold-data) from device-specific [Silver data](README.md#silver-data):
 
-- **Input**: Silver data from multiple devices (e.g., `_raw`, `_pump_v1`, `_temperature_v1`)
+- **Input**: [Silver data](README.md#silver-data) from multiple devices (e.g., `_raw`, `_pump_v1`, `_temperature_v1`)
 - **Processing**: Aggregation, calculation, business logic across devices
-- **Output**: Gold-level business data (e.g., `_workorder_v1`, `_maintenance_v1`)
+- **Output**: [Gold-level](README.md#gold-data) business data (e.g., `_workorder_v1`, `_maintenance_v1`)
 - **Templates**: Reusable configurations with variable substitution
 - **Auto-validation**: If data contracts exist for the model, output is automatically validated and routed to contract bridges
 
