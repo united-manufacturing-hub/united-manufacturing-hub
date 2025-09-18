@@ -50,7 +50,9 @@ The status "Starting_failed_dfc_missing" means we haven't configured a data flow
 Three required fields:
 - **location_path:** Where the data goes (auto-filled from bridge location)
 - **data_contract:** Leave as `_raw` for now (no validation rules)
-- **tag_name:** Name your data point - we'll use `my_data`
+- **tag_name:** Name your tag (data point) - we'll use `my_data`
+
+💡 **What's a tag?** In industrial systems, a "tag" is a single data point - like a temperature sensor reading, motor speed, or valve position. Think of it as a variable that changes over time.
 
 The **Always** section uses JavaScript to process messages. We're not modifying anything for now, just passing the data through.
 
@@ -78,8 +80,10 @@ Your data is flowing!
 
 Click **"Topic Browser"** in the left menu. This shows all data in your Unified Namespace.
 
-You'll see your data organized as:
+You'll see your data organized as a **topic**:
 - `enterprise` → `siteA` → `_raw` → `my_data`
+
+This is the full topic path: `enterprise.siteA._raw.my_data`
 
 Exactly as we configured it! Click on `my_data` to see details.
 
@@ -98,9 +102,10 @@ Bridge → Processing → Unified Namespace → Topic Browser
 
 **Key Concepts:**
 - **Bridge:** The ONLY way data enters UMH (ensures quality and monitoring)
-- **Location Path:** Automatically organizes your data (`enterprise.siteA`)
+- **Location Path:** Organizes your data hierarchically (`enterprise.siteA`)
 - **Data Contract:** Currently `_raw` (no validation rules)
-- **Tag Name:** Your measurement name (`my_data`)
+- **Tag:** Your data point (`my_data`)
+- **Topic:** Complete address in the UNS (`enterprise.siteA._raw.my_data`)
 
 ## What's Next?
 
@@ -116,18 +121,19 @@ Bridge → Processing → Unified Namespace → Topic Browser
 
 ## Concepts Learned
 
-- **Bridge** - The only way data enters UMH Core
-- **Data Flows** - Configuration area for bridges
-- **Protocol** - How to connect (Generate, OPC UA, Modbus, S7)
-- **Connection settings** - IP/hostname and port configuration
-- **Latency indicator** - Connection health monitoring
-- **Tag Processor** - JavaScript-based data transformation
-- **location_path** - Data organization hierarchy
-- **data_contract** - Data validation rules (_raw = no validation)
-- **tag_name** - Individual measurement identifier
-- **Unified Namespace** - Central data repository
-- **Topic Browser** - UI for viewing all data
-- **Throughput** - Messages per second metric
+Building on the location hierarchy from Step 1, you now understand:
+
+- **Unified Namespace (UNS)** - Event-driven data backbone that eliminates point-to-point connections ([learn more](../usage/unified-namespace/README.md))
+- **Bridge** - Gateway for external data into the UNS (the only way data enters)
+- **Data Flows** - Configuration area for bridges and other data pipelines
+- **Protocol** - Connection method (manufacturing protocols like OPC UA, Modbus, S7, or IT protocols like HTTP)
+- **Connection** - IP/hostname and port settings with latency monitoring
+- **Tag** - A time-series data point (like a PLC variable)
+- **Tag Processor** - JavaScript-based transformation for time-series data
+- **Topic** - Complete data address: `location_path.data_contract.tag_name` ([topic convention](../usage/unified-namespace/topic-convention.md))
+- **data_contract** - Data validation rules (`_raw` = no validation)
+- **Topic Browser** - UI for viewing all data in the UNS
+- **Throughput** - Tag updates per second for time-series data
 
 ---
 

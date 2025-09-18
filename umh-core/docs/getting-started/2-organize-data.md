@@ -59,8 +59,8 @@ In the **Processing** section, look at the **Always** code:
 // Set location from bridge config
 msg.meta.location_path = "{{ .location_path }}";
 
-// Use _historian for S7 data
-msg.meta.data_contract = "_historian";
+// Use _raw for S7 data (no validation)
+msg.meta.data_contract = "_raw";
 
 // THE MAGIC: S7 address becomes the tag name automatically!
 msg.meta.tag_name = msg.meta.s7_address;
@@ -96,9 +96,9 @@ Click **Save & Deploy**.
 In **Topic Browser**, you now see ALL your PLC data automatically organized:
 
 ```
-enterprise.sksk._historian.DB1.DW20     [12345]
-enterprise.sksk._historian.DB1.S30.10   ["Product ABC"]
-enterprise.sksk._historian.DB3.I270     [789]
+enterprise.sksk._raw.DB1.DW20     [12345]
+enterprise.sksk._raw.DB1.S30.10   ["Product ABC"]
+enterprise.sksk._raw.DB3.I270     [789]
 ```
 
 **🎉 One bridge reads your ENTIRE PLC!** Every address becomes a tag automatically.
@@ -182,9 +182,9 @@ return msg;
 In **Topic Browser**, your data is now organized:
 
 ```
-enterprise.sksk._historian.production.DB1.DW20     [12345]
-enterprise.sksk._historian.production.DB1.S30.10   ["Product ABC"]
-enterprise.sksk._historian.quality.DB3.I270        [789]
+enterprise.sksk._raw.production.DB1.DW20     [12345]
+enterprise.sksk._raw.production.DB1.S30.10   ["Product ABC"]
+enterprise.sksk._raw.quality.DB3.I270        [789]
 ```
 
 **📁 It's like folders on your computer!**
@@ -229,9 +229,9 @@ return msg;
 **ONE bridge now routes to MULTIPLE machines:**
 
 ```
-enterprise.sksk.machine-1._historian.sensors.DB1.DW20     [12345]
-enterprise.sksk.machine-1._historian.sensors.DB1.S30.10   ["Product ABC"]
-enterprise.sksk.machine-2._historian.quality.DB3.I270     [789]
+enterprise.sksk.machine-1._raw.sensors.DB1.DW20     [12345]
+enterprise.sksk.machine-1._raw.sensors.DB1.S30.10   ["Product ABC"]
+enterprise.sksk.machine-2._raw.quality.DB3.I270     [789]
 ```
 
 ## Understanding the Complete Picture
@@ -239,9 +239,9 @@ enterprise.sksk.machine-2._historian.quality.DB3.I270     [789]
 You now control every part of the topic:
 
 ```
-umh.v1.enterprise.sksk.machine-1._historian.sensors.DB1.DW20
-       └─ fixed ─┘└─ location_path ─┘          └virtual┘└tag┘
-                                                  path   name
+umh.v1.enterprise.sksk.machine-1._raw.sensors.DB1.DW20
+       └─ fixed ─┘└─ location_path ─┘     └virtual┘└tag┘
+                                             path   name
 ```
 
 - **location_path**: WHERE the device is (can be dynamic)
@@ -260,17 +260,13 @@ umh.v1.enterprise.sksk.machine-1._historian.sensors.DB1.DW20
 
 Building on previous guides, you now understand:
 
-- **PLC addresses** - DB1.DW20 format for Siemens PLCs
-- **Data Blocks** - PLC memory organization (DB1, DB3)
-- **S7 protocol** - Siemens-specific communication
-- **Template variables** - `{{ .IP }}`, `{{ .PORT }}`, `{{ .location_path }}`
-- **_historian contract** - Different validation than _raw
-- **Conditions** - If-then rules in Tag Processor
-- **virtual_path** - Folder organization within topics
-- **Dynamic routing** - One bridge serving multiple machines
-- **Engineering units** - Adding metadata like "bar", "°C"
-- **msg object** - Message structure (msg.meta, msg.payload)
-- **Auto-tagging** - Protocol addresses becoming tag names
+- **Siemens S7** - Example protocol for connecting to PLCs
+- **Template variables** - Dynamic configuration using `{{ .IP }}`, `{{ .PORT }}`, `{{ .location_path }}`
+- **Conditions** - If-then rules in Tag Processor for special handling
+- **virtual_path** - Additional folder organization within topics
+- **Dynamic routing** - One bridge serving multiple locations
+- **Metadata** - Additional context in msg.meta (units, sources, custom fields)
+- **Message structure** - msg.meta (metadata) and msg.payload (actual value)
 
 ## What's Next?
 
