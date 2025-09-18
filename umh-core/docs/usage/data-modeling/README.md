@@ -104,6 +104,8 @@ datamodels:
             _payloadshape: timeseries-number
 ```
 
+**Learn how:** [Data Models documentation](data-models.md) | [Model structure guide](data-models.md#structure-definition)
+
 ### 2. Create a Data Contract for Enforcement
 ```yaml
 # This enforces validation
@@ -113,6 +115,8 @@ datacontracts:
       name: pump
       version: v1
 ```
+
+**Learn how:** [Data Contracts documentation](data-contracts.md) | [Contract configuration](data-contracts.md#core-properties)
 
 ### 3. Configure Bridge to Use the Model
 ```yaml
@@ -135,6 +139,8 @@ protocolConverter:
         output:
           uns: {}  # Validates against pump model
 ```
+
+**Learn how:** [Bridges documentation](../data-flows/bridges.md) | [Tag processor configuration](../data-flows/bridges.md#tag-processor)
 
 ### 4. Result: Validated, Structured Data
 ```
