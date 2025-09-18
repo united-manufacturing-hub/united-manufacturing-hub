@@ -82,8 +82,8 @@ Click **Save & Deploy**.
 **Your deployment fails!** Look at the error:
 
 ```
-schema validation failed for message with topic 'umh.v1.enterprise.sksk._cnc_v1.DB1.DW20': 
-Valid virtual_paths are: [vibration.x-axis, vibration.y-axis]. 
+schema validation failed for message with topic 'umh.v1.enterprise.sksk._cnc_v1.DB1.DW20':
+Valid virtual_paths are: [vibration.x-axis, vibration.y-axis].
 Your virtual_path is: DB1.DW20
 ```
 
@@ -134,40 +134,10 @@ enterprise.sksk._raw.DB1.S30.10             ["text"]  (Unvalidated)
 enterprise.sksk._raw.DB3.I270               [789]     (Unvalidated)
 ```
 
-**The magic:** 
+**The magic:**
 - The CNC model GUARANTEES `x-axis` is always a number
 - If someone sends text, it's rejected at the bridge
 - Other data flows normally through `_raw`
-
-## Understanding Validation Errors
-
-Deployments can now fail for two reasons:
-
-1. **Connection issues** (learned in Step 2) - Can't reach the device
-2. **Validation errors** (new!) - Data doesn't match the model
-
-Both protect your data quality at different levels.
-
-## Real-World Pattern
-
-You don't validate everything immediately:
-
-```
-Week 1: Everything → _raw (explore the data)
-Week 2: Critical sensors → Validated models
-Week 3: Add more fields to models
-Eventually: Most data validated, only new/unknown → _raw
-```
-
-This gradual approach lets you improve data quality without breaking existing flows.
-
-## What You've Learned
-
-✅ **Data Models define structure** - Like a contract for your data
-✅ **Validation happens at the bridge** - Bad data never enters
-✅ **Selective validation** - Mix validated and raw data
-✅ **Clear error messages** - Know exactly what's wrong
-✅ **Progressive improvement** - Start simple, add validation over time
 
 ## Concepts Learned
 
