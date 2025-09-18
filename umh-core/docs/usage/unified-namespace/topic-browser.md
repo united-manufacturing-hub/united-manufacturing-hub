@@ -37,14 +37,14 @@ When you click on a specific topic (a leaf node in the tree), the right-hand **d
 ### Topic Details Section
 At the top, you'll see core information about the selected topic:
 - **Physical Path**: The location hierarchy (e.g., `enterprise-3.site-3.line-1`)
-- **Data Contract**: The schema type (e.g., `_historian`, `_raw`, `_oee`)  
+- **Data Contract**: The schema type (e.g., `_raw`, `_machine-state_v1`, `_pump_v1`)
 - **Virtual Path**: Additional path information if applicable
 - **Tag Name**: The specific tag identifier (e.g., `temperature`, `pressure`)
 
 ### Last Message Section
 This shows the most recent data point:
 - **Payload Type**: The [message format](./payload-formats.md) (`Time-Series`, `Relational`, etc.)
-- **Timestamp**: The timestamp inside of the message. Not to be confused with the **Produced At** timestamp.   
+- **Timestamp**: The timestamp inside of the message. Not to be confused with the **Produced At** timestamp.
 - **Data Type**: The value type (`string`, `number`, `boolean`)
 - **Value**: The actual current value
 - **Produced At**: The timestamp of when the message arrived in the UNS. Not to be confused with the **Timestamp** timestamp.
@@ -60,7 +60,7 @@ For **Relational** payloads, structured JSON data is displayed in a formatted vi
 }
 ```
 
-### Metadata Section  
+### Metadata Section
 Displays message metadata and context information
 
 ### History Section
@@ -91,14 +91,14 @@ Here's a comprehensive example showing how to filter topics by text and metadata
 
 ```graphql
 {
-  topics(filter: { 
+  topics(filter: {
     text: "temperature",
-    meta: [{ key: "data_contract", eq: "_historian" }]
+    meta: [{ key: "data_contract", eq: "_raw" }]
   }) {
     topic
-    metadata { 
-      key 
-      value 
+    metadata {
+      key
+      value
     }
     lastEvent {
       ... on TimeSeriesEvent {
@@ -115,7 +115,7 @@ Here's a comprehensive example showing how to filter topics by text and metadata
 }
 ```
 
-This query finds all topics containing "temperature" that use the `_historian` data contract, returns their metadata, and shows the latest message data with timestamps and values.
+This query finds all topics containing "temperature" that use the `_raw` data contract, returns their metadata, and shows the latest message data with timestamps and values.
 
 ### Configuration
 
@@ -133,4 +133,4 @@ agent:
     debug: false    # Set true for GraphiQL UI
 ```
 
-For detailed API documentation and additional query examples, see [GraphQL API Reference](../../reference/http-api/topic-browser-graphql.md). 
+For detailed API documentation and additional query examples, see [GraphQL API Reference](../../reference/http-api/topic-browser-graphql.md).

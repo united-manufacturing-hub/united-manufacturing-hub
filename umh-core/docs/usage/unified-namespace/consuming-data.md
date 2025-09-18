@@ -6,7 +6,7 @@ Consuming data from the Unified Namespace involves subscribing to specific topic
 
 ## Consumption Patterns
 
-### 1. Bridge Sink Flows
+### 1. Bridge Read Flows
 
 Create outbound Bridges to send UNS data to external systems:
 
@@ -52,7 +52,7 @@ dataFlow:
                 # Parse topic to extract location hierarchy
                 let topic_parts = metadata("umh_topic").split(".")
                 root.enterprise = topic_parts.1
-                root.site = topic_parts.2  
+                root.site = topic_parts.2
                 root.area = topic_parts.3
                 root.line = topic_parts.4
                 root.work_cell = topic_parts.5
@@ -140,7 +140,7 @@ pipeline:
         root.timestamp_iso = this.timestamp_ms.ts_unix_milli().ts_format("2006-01-02T15:04:05Z07:00")
         root.timestamp_unix = this.timestamp_ms / 1000
         root.measurement = this.value
-        
+
         # Extract location from UNS topic (see Topic Convention for structure)
         let parts = metadata("umh_topic").split(".")
         root.location = {
@@ -170,7 +170,7 @@ pipeline:
         # Handle different fields from pump model
         match metadata("umh_topic").split(".").7 {
           "pressure" => root.sensor_type = "pressure"
-          "temperature" => root.sensor_type = "temperature"  
+          "temperature" => root.sensor_type = "temperature"
           "motor.current" => root.sensor_type = "motor_current"
           "motor.rpm" => root.sensor_type = "motor_rpm"
           "diagnostics.vibration" => root.sensor_type = "vibration"
@@ -192,7 +192,7 @@ UNS input abstracts away Kafka/Redpanda complexity and provides:
 ```yaml
 input:
   uns:
-    topics: 
+    topics:
       - "umh.v1.acme.plant1.+.+._raw.+"      # Wildcard matching
       - "umh.v1.acme.plant2.line[1-3].+._temperature.+" # Regex support
 ```
@@ -213,7 +213,7 @@ pipeline:
                 root = deleted()
                 # Log error and continue
             - log:
-                level: "ERROR" 
+                level: "ERROR"
                 message: "Failed to process message: ${! error() }"
 ```
 

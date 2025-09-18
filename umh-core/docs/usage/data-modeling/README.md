@@ -64,7 +64,7 @@ In industrial data, we distinguish between two types of modeling:
 - **Format**: Mostly [time-series data](../unified-namespace/payload-formats.md#time-series-data)
 - **Example**: Pump pressure, motor RPM, temperature readings
 
-### Gold: Use-Case Specific Models  
+### Gold: Use-Case Specific Models
 - **What**: Business data aggregated across devices (`_workorder_v1`, `_maintenance_v1`)
 - **Where**: Created by stream processors (🚧 currently [time-series](../unified-namespace/payload-formats.md#time-series-data) only)
 - **Format**: Mostly [relational data](../unified-namespace/payload-formats.md#relational-data)
@@ -241,6 +241,9 @@ Payload Shapes → Data Models → Data Contracts → Runtime Components
 - **Configuration**: Defined in `dataContracts:` section referencing model + version
 
 #### 4. Runtime Components
+
+--> TODO: rename Runtime Components to Flows (/Users/jeremytheocharis/Documents/git/united-manufacturing-hub/umh-core/docs/usage/data-flows)
+--> TODO: unsure whether we need to explain it in detail or just link to them
 
 ##### Bridges (Protocol Converters)
 - **Definition**: Components that connect external systems to UNS with optional data modeling

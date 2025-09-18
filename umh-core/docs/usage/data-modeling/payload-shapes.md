@@ -1,6 +1,6 @@
 # Payload Shapes
-
-Payload shapes define the JSON schema for data in the UNS. They ensure type safety and consistency across your industrial data infrastructure.
+TODO: fix this, progressive learning
+Payload shapes define the [payload format](../unified-namespace/payload-formats.md) that can then be used in [data models] and then enforced in [data contracts]. They ensure type safety and consistency across your industrial data infrastructure.
 
 > **Usage Pattern**: Time-series shapes are typically used for [Silver data](README.md#silver-data) (device-specific), while custom relational shapes are for [Gold data](README.md#gold-data) (business-specific). These shapes are enforced through [data contracts](data-contracts.md).
 
@@ -62,7 +62,7 @@ Payload: {"timestamp_ms": 1733904005123, "value": 42.5}
 Topic: umh.v1.plant._temperature-sensor.temp
 Reason: Field 'temp' not defined in model - only 'temperature' exists
 
-Topic: umh.v1.plant._temperature-sensor.temperature  
+Topic: umh.v1.plant._temperature-sensor.temperature
 Payload: {"timestamp": 1733904005123, "value": 42.5}
 Reason: Wrong field name - expected 'timestamp_ms', got 'timestamp'
 
@@ -211,7 +211,7 @@ templates:
                     msg.meta.data_contract = "_machine-state";
                     msg.meta.tag_name = "update";
                     msg.meta.umh_topic = "umh.v1.{{ .location_path }}._machine-state.update";
-                    
+
                     // Build payload matching your custom shape
                     msg.payload = {
                       "asset_id": "MACHINE_001",
@@ -221,7 +221,7 @@ templates:
                       "updated_ts": new Date().toISOString(),
                       "schema": "v1.0"
                     };
-                    
+
                     return msg;
 ```
 

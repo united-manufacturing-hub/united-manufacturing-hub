@@ -2,9 +2,8 @@
 
 Data contracts are the **enforcement mechanism** that makes data validation actually happen in the UNS. Without a contract, [data models](data-models.md) and [payload shapes](payload-shapes.md) are just documentation - contracts make them enforced rules.
 
-> **For most users**: You'll use data contracts with [bridges](../data-flows/bridges.md) for [Silver-level](README.md#silver-data) device modeling. Only advanced users need contracts for [Gold-level](README.md#gold-data) business data.
-
 ## How Data Contracts Work
+Datat contracts are terchnically enforced at the end of every bridge.
 
 Data contracts operate in [bridges](../data-flows/bridges.md) where data enters the UNS:
 
@@ -77,7 +76,7 @@ datacontracts:
 
 ## How Validation Works
 
-### The Gateway Pattern
+### The Bridge Pattern
 
 All data enters the UNS through bridges or standalone flows - **never directly to Kafka/MQTT**. This ensures consistent validation:
 

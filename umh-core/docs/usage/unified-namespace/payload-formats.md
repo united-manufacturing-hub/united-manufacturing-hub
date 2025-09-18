@@ -110,7 +110,7 @@ CNC machines often have multiple sensor groups for different aspects of operatio
 
 ```
 umh.v1.acme.plant1.machining.cnc-mill-1234._cnc.axis.x_position
-umh.v1.acme.plant1.machining.cnc-mill-1234._cnc.axis.y_position  
+umh.v1.acme.plant1.machining.cnc-mill-1234._cnc.axis.y_position
 umh.v1.acme.plant1.machining.cnc-mill-1234._cnc.axis.z_position
 umh.v1.acme.plant1.machining.cnc-mill-1234._cnc.machine_state.status
 umh.v1.acme.plant1.machining.cnc-mill-1234._cnc.machine_state.program_name
@@ -127,7 +127,7 @@ umh.v1.acme.plant1.machining.cnc-mill-1234._cnc.spindle.load_percent
   "timestamp_ms": 1733904005123
 }
 
-// Machine state data  
+// Machine state data
 {
   "value": "running",
   "timestamp_ms": 1733904005123
@@ -193,6 +193,6 @@ mapping:
 
 ```
 umh.v1.acme.plant1.line4.sensor1._environmental.environment.temperature_c
-umh.v1.acme.plant1.line4.sensor1._environmental.environment.humidity_percent  
+umh.v1.acme.plant1.line4.sensor1._environmental.environment.humidity_percent
 umh.v1.acme.plant1.line4.sensor1._environmental.environment.pressure_kpa
 ```

@@ -354,7 +354,7 @@ dataFlow:
       benthos:
         input:
           mqtt:
-            urls: ["tcp://broker:1883"]  
+            urls: ["tcp://broker:1883"]
             topics: ["sensors/+"]
         # Add your existing pipeline and output here
 ```
