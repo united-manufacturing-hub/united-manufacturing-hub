@@ -2,7 +2,7 @@
 
 > This article assumes you've completed the [Getting Started guide](../../getting-started/) and understand the [data modeling concepts](README.md).
 
-Stream processors transform multiple device model streams into business models, creating KPIs and metrics from equipment data.
+Stream processors are one way to create business models by transforming multiple device model streams into KPIs and metrics.
 
 ## Overview
 

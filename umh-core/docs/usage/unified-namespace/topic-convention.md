@@ -33,7 +33,7 @@ umh.v1.<location_path>.<data_contract>[.<virtual_path>].<name>
 
 ## Location Path - WHERE
 
-The location hierarchy organizes your physical and logical structure:
+The location path organizes your physical and logical structure:
 
 - **Level 0 (Required)**: Enterprise - your company
 - **Level 1**: Site - physical location

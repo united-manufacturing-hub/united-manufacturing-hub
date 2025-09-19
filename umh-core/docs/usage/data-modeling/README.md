@@ -34,7 +34,7 @@ See [Topic Convention](../unified-namespace/topic-convention.md) for complete st
 
 ## Progressive Power: Raw to Production
 
-Data evolves through three stages as your needs grow:
+Data can follow these patterns based on your needs:
 
 ### 1. Device Language (_raw)
 Start by exploring your equipment data with original naming:

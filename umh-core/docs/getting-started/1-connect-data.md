@@ -121,7 +121,7 @@ Bridge → Processing → Unified Namespace → Topic Browser
 
 ## Concepts Learned
 
-Building on the location hierarchy from Step 1, you now understand:
+Building on the location path from Step 1, you now understand:
 
 - **Unified Namespace (UNS)** - Event-driven data backbone that eliminates point-to-point connections ([learn more](../usage/unified-namespace/README.md))
 - **Bridge** - Gateway for external data into the UNS (the only way data enters)

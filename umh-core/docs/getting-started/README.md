@@ -26,7 +26,7 @@ For detailed sizing recommendations, see the [Sizing Guide](../production/sizing
 3. **Configure your instance:**
    - **Name** (1): Give it a cool name (e.g., `my-first-umh`)
    - **Type** (2): Select "Core" from the dropdown
-   - **Location** (3): Enter your location hierarchy:
+   - **Location** (3): Enter your location path:
      - **Level 0**: `your-company` (required - your enterprise name)
      - **Level 1**: `Your level 1 name` (optional - e.g., site or plant)
      - **Level 2-4**: Leave empty for now (optional)

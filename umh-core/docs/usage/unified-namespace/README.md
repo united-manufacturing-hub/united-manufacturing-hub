@@ -29,7 +29,7 @@ Your PLC doesn't care if anyone is listening. It publishes "pump is running" to 
 
 ### 2. Structured Topics
 Every piece of data has an address that answers three questions:
-- **WHERE**: `enterprise.site.area.line` - the location hierarchy
+- **WHERE**: `enterprise.site.area.line` - the location path
 - **WHAT**: `_pump_v1` - the data contract defining structure
 - **WHICH**: `inlet_temperature` - the specific data point
 
@@ -42,9 +42,9 @@ Data enters and exits the UNS exclusively through [bridges](../data-flows/bridge
 Start simple, add complexity as needed:
 - **Raw Data (`_raw`)**: Mirror device 1:1 for initial exploration and debugging
 - **Device Models (`_pump_v1`)**: Apply business names directly in bridges for production
-- **Business Models (`_maintenance_v1`)**: Aggregate device models via stream processors for KPIs
+- **Business Models (`_maintenance_v1`)**: From stream processors (aggregating device models) OR directly from ERP/MES systems
 
-The progression: Use `_raw` temporarily to understand your data, then apply device models directly in bridges for production. Once multiple sites have device models, create business models on top for cross-site metrics.
+The progression: Use `_raw` temporarily to understand your data, then apply device models directly in bridges for production. Business models can be created by aggregating device models via stream processors OR by connecting directly to business systems like ERP/MES.
 
 ## Documentation Structure
 

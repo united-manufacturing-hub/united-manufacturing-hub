@@ -2,7 +2,7 @@
 
 ## What is an Instance?
 
-An instance is a running UMH Core container - a single Docker container that hosts your entire Unified Namespace. Each instance is identified by its location hierarchy (like `enterprise.site.area.line`) which determines where data is organized in your industrial data infrastructure.
+An instance is a running UMH Core container - a single Docker container that hosts your entire Unified Namespace. Each instance is identified by its location path (like `enterprise.site.area.line`) which determines where data is organized in your industrial data infrastructure.
 
 ## Instance Overview Page
 
@@ -37,7 +37,7 @@ The instance details page provides comprehensive monitoring and management:
 
 ### Agent Panel
 - **Name**: Instance identifier (e.g., `sk-core-hetzner`)
-- **Location hierarchy**: Your organizational structure
+- **Location path**: Your organizational structure
   - Level 0: Enterprise (required)
   - Level 1-4: Site, Area, Line, etc. (optional)
 - **Latency**: Connection health indicator (N/A when healthy)

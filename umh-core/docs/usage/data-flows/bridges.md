@@ -10,7 +10,7 @@ Bridges move data into and out of the Unified Namespace, providing connection mo
 |--------|-----------|-------|
 | Create bridges | ✅ | Visual protocol configuration |
 | Select protocols | ✅ | OPC UA, Modbus, S7, MQTT, 50+ more |
-| Configure location hierarchy | ✅ | ISA-95 levels (0-4) |
+| Configure location path | ✅ | ISA-95 levels (0-4) |
 | Monitor connection health | ✅ | Real-time status |
 | View logs | ✅ | Live log streaming |
 | View metrics | ✅ | Throughput monitoring |
@@ -35,7 +35,7 @@ Fill in the basic information:
 **General Information:**
 - **Name**: Unique identifier for your bridge
 - **Instance**: Select your UMH instance
-- **Level 0-4**: Location hierarchy (e.g., enterprise → site → area → line → machine)
+- **Level 0-4**: Location path (e.g., enterprise → site → area → line → machine)
 
 **Connection:**
 - **IP Address**: Device IP (becomes `{{ .IP }}` variable)
@@ -148,7 +148,7 @@ protocolConverter:
 
 ### Key Configuration Elements
 
-**Location Hierarchy:**
+**Location Path:**
 ```yaml
 location:
   0: enterprise   # Optional: inherits from agent

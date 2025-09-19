@@ -7,13 +7,13 @@ Data flows move and transform industrial data in UMH Core. Three types serve dif
 ## Flow Types
 
 ### [Bridges](bridges.md)
-Move data into and out of the Unified Namespace with connection monitoring and automatic location hierarchy. Support for 50+ industrial protocols (OPC UA, Modbus, S7) plus IT systems. Write flows coming soon - use stand-alone flows meanwhile.
+Move data into and out of the Unified Namespace with connection monitoring and automatic location path. Support for 50+ industrial protocols (OPC UA, Modbus, S7) plus IT systems. Write flows coming soon - use stand-alone flows meanwhile.
 
 ### [Stand-alone Flows](stand-alone-flow.md)
 Raw Benthos access for custom processing when bridges or stream processors aren't sufficient. Used as fallback for write flows, external integrations, and specialized transformations.
 
 ### [Stream Processors](stream-processor.md)
-Transform existing UNS data into different structures. Part of the [data modeling system](../data-modeling/stream-processors.md) for creating business views from device data.
+Transform existing UNS data into different structures. Part of the [data modeling system](../data-modeling/stream-processors.md) for aggregating device data into business views.
 
 ## Quick Start
 

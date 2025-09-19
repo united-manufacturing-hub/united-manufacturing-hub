@@ -31,7 +31,7 @@ That one Docker container includes everything you need:
 
 Through our getting-started guide, you'll understand:
 
-* **Instance** – A running UMH Core container identified by its location hierarchy
+* **Instance** – A running UMH Core container identified by its location path
 * **Management Console** – Cloud UI for deploying and managing instances without touching YAML
 * **Unified Namespace (UNS)** – The event-driven data backbone that eliminates point-to-point connections
 * **Bridge** – The gateway for external data into the UNS (**the ONLY way data enters**)
@@ -42,7 +42,7 @@ Through our getting-started guide, you'll understand:
 * **Data Contract** – Validation rules (`_raw` = no validation, `_modelname_v1` = enforced structure)
 
 Advanced concepts (after getting-started):
-* **Stream Processor** – Transforms messages already inside the UNS (device models → business models)
+* **Stream Processor** – Transforms messages already inside the UNS (e.g., device models → business models)
 * **Stand-alone Flow** – Point-to-point when UNS buffering isn't wanted
 * **State Machines** – Component lifecycle management (active/idle/degraded states)
 
