@@ -1,238 +1,172 @@
 # Payload Shapes
 
-> **You've already used these!** Remember in [Step 4](../../getting-started/3-validate-data.md) when you defined `_payloadshape: timeseries-number` for your vibration data? That ensured only numbers could be stored. This guide explains all the shapes available to you.
+> This article assumes you've completed the [Getting Started guide](../../getting-started/) and understand the [data modeling concepts](README.md).
 
-## What Are Payload Shapes?
+Payload shapes define the structure and validation rules for message payloads. While built-in shapes handle most time-series data, custom shapes enable relational data modeling for complex business records.
 
-Payload shapes are **validation rules** for your data. They define:
-- What fields are allowed in a message
-- What data types each field must be (number, string, etc.)
-- Whether fields are required or optional
+## Overview
 
-Think of them as the difference between:
-- ❌ **Without shapes**: "temperature" could receive "hello" instead of 42.5
-- ✅ **With shapes**: "temperature" only accepts numbers, rejecting invalid data
+In the [component chain](README.md#the-component-chain), payload shapes provide the foundation:
 
-## The Shapes You've Already Used
+```
+Payload Shapes → Data Models → Data Contracts → Data Flows
+       ↑
+  Value types defined here
+```
 
-### timeseries-number (Used in Step 4)
+## UI Capabilities
 
-You used this for your CNC vibration data. It's built into UMH - no configuration needed.
+Payload shapes have no UI component:
 
-**What it accepts:**
+| Feature | Available | Notes |
+|---------|-----------|-------|
+| View shapes | ❌ | Configuration file only |
+| Create shapes | ❌ | Edit config.yaml directly |
+| Edit shapes | ❌ | Modify config.yaml |
+| Built-in shapes | ✅ | Always available, no configuration needed |
+
+**Configuration location**: Select your instance under `Instances` in the menu, press `...`, then `Config File`. Find payload shapes under the `payloadShapes:` section
+
+## Built-in Shapes
+
+UMH provides two built-in shapes that handle 90% of industrial data:
+
+### timeseries-number
+
+For numeric sensor data and measurements.
+
+**Structure:**
 ```json
 {
   "timestamp_ms": 1733904005123,
-  "value": 12.5  // Your x-axis vibration reading
+  "value": 42.5
 }
 ```
 
-**What it means:**
-- `timestamp_ms`: When the reading was taken (milliseconds since 1970)
-- `value`: The actual sensor reading (any number)
+**Use cases:** Temperature, pressure, speed, counts, any numeric measurement
 
-This is perfect for 90% of industrial data: temperature, pressure, speed, counts, etc.
+### timeseries-string
 
-**Real Validation from Step 4:**
+For text-based status and identifiers.
 
-Remember when your bridge failed because `DB1.DW20` didn't match `vibration.x-axis`? That was payload shape validation in action!
-
-✅ **What worked:**
-```javascript
-// Your fixed Tag Processor code
-msg.meta.data_contract = "_cnc_v1";
-msg.meta.virtual_path = "vibration";
-msg.meta.tag_name = "x-axis";
-msg.payload = parseFloat(msg.payload) * 1.0;  // Ensures it's a number!
-```
-
-❌ **What would fail:**
-```javascript
-msg.payload = "sensor error";  // String instead of number - REJECTED!
-msg.payload = {temp: 42.5};    // Object instead of number - REJECTED!
-// Bridge goes to degraded state, deployment fails
-```
-
-### timeseries-string (For Text Data)
-
-For status messages, product names, batch IDs - anything that's not a number.
-
-**What it accepts:**
+**Structure:**
 ```json
 {
   "timestamp_ms": 1733904005123,
-  "value": "running"  // Or "stopped", "Product-ABC", "Batch-2024-001"
+  "value": "running"
 }
 ```
 
-**Common uses:**
-- Machine states: "running", "stopped", "maintenance"
-- Product codes from `DB1.S30.10` (remember that from Step 3?)
-- Operator names, batch IDs, quality grades
+**Use cases:** Machine states, batch IDs, product codes, operator names
 
-## When You Need More: Custom Shapes
+## Custom Shapes for Relational Data
 
-### The Problem with Time-Series
+### When to Use Custom Shapes
 
-Time-series is great for single values, but what about complex data?
+Custom shapes are specifically for **relational data** - business records with multiple related fields that must stay together.
 
-**Example:** A quality inspection has multiple related fields:
-- Product ID
-- Inspector name  
-- Pass/fail result
-- Multiple measurements
-- Timestamp
+**Time-series vs Relational:**
 
-You can't split this into separate time-series messages - it's one inspection event.
+| Data Type | Shape | Example |
+|-----------|-------|----------|
+| Single values over time | Built-in timeseries-* | Temperature readings |
+| Complex business records | Custom shape | Work orders, quality inspections |
 
-**Solution:** Create a custom shape that accepts all fields together.
+Learn more: [Payload Formats](../unified-namespace/payload-formats.md)
 
-### Creating Your First Custom Shape
+### Defining Custom Shapes
 
-Let's extend your CNC example with quality inspection data:
+Access configuration via: Instances → Select instance → `...` → Config File
 
 ```yaml
-# In /data/config.yaml
 payloadShapes:
-  cnc-quality-check:
-    description: "CNC part quality inspection"
+  work-order:    # Shape name (referenced in models)
+    description: "Work order record"
     fields:
-      part_id:
-        _type: string        # "PART-2024-001"
-      machine_id:
-        _type: string        # Which CNC produced it
-      pass_fail:
-        _type: string        # "pass" or "fail"
-      measurements:
-        diameter_mm:
-          _type: number      # 25.4
-        length_mm:
-          _type: number      # 100.2
-        surface_finish:
-          _type: number      # 0.8 (Ra value)
-      inspector:
-        _type: string        # "John Smith"
+      orderId:
+        _type: string
+      productId:
+        _type: string
+      quantity:
+        _type: number
+      status:
+        _type: string    # created/in-progress/completed
+      operatorId:
+        _type: string
       timestamp:
-        _type: string        # "2024-01-15T10:30:00Z"
+        _type: string    # ISO 8601 format
 ```
 
-Now one message contains the complete inspection record.
+**Key points:**
+- Only two types: `string` and `number`
+- All fields are required
+- Shape names must be unique
 
 ### Using Custom Shapes in Models
 
-Just like you used `timeseries-number` in Step 4:
+Reference custom shapes in your data models to create CRUD-like endpoints:
 
 ```yaml
-dataModels:
-  - name: cnc-complete  # Your enhanced CNC model
+datamodels:
+  - name: work-order
     version:
-      v3:
+      v1:
         structure:
-          vibration:      # Time-series data (existing)
-            x-axis:
-              _payloadshape: timeseries-number
-          quality:        # Complex data (new!)
-            inspection:
-              _payloadshape: cnc-quality-check
+          create:
+            _payloadshape: work-order    # Custom shape for new orders
+          update:
+            _payloadshape: work-order    # Same shape for updates
+          delete:
+            _payloadshape: work-order    # Or simplified delete shape
 ```
 
-Now your CNC model handles both vibration AND quality data.
+This creates topics like:
+- `enterprise.site._work_order_v1.create` - New work orders
+- `enterprise.site._work_order_v1.update` - Update existing orders
+- `enterprise.site._work_order_v1.delete` - Delete orders
 
-### How Validation Works
+## Processing Relational Data
 
-Just like in Step 4, validation happens at the bridge:
+### Bridge Configuration
 
-✅ **Valid quality inspection:**
-```json
-{
-  "part_id": "PART-2024-001",
-  "machine_id": "CNC-01",
-  "pass_fail": "pass",
-  "measurements": {
-    "diameter_mm": 25.4,
-    "length_mm": 100.2,
-    "surface_finish": 0.8
-  },
-  "inspector": "John Smith",
-  "timestamp": "2024-01-15T10:30:00Z"
-}
+To use custom shapes, specify `relational` as the data type in your bridge or standalone flow:
+
+```yaml
+protocolConverter:
+  - name: mes-integration
+    dataFlowComponent:
+      processingType: relational  # Required for custom shapes
 ```
 
-❌ **Invalid - wrong data types:**
-```json
-{
-  "part_id": "PART-2024-001",
-  "machine_id": "CNC-01",
-  "pass_fail": true,  // Should be string "pass"/"fail"
-  "measurements": {
-    "diameter_mm": "25.4mm",  // Should be number, not string
-    ...
-  }
-}
-// Result: Bridge goes degraded, just like in Step 4!
-```
+### Example: Processing Work Orders
 
-### Processing Complex Data
-
-Unlike simple tags (Step 3's Tag Processor), complex data needs different processing:
-
-**Simple (what you know):**
 ```javascript
-// Tag Processor for time-series
-msg.meta.tag_name = msg.meta.s7_address;  // "DB1.DW20"
-msg.payload = parseFloat(msg.payload);     // Single number
-```
+// In nodered_js processor for work order creation
+msg.meta.data_contract = "_work_order_v1";
+msg.meta.tag_name = "create";  // Maps to the 'create' endpoint
 
-**Complex (custom shapes):**
-```javascript
-// nodered_js processor for inspection data
-msg.meta.data_contract = "_cnc-complete_v3";
-msg.meta.tag_name = "inspection";
-
-// Build complete inspection object
+// Build work order record
 msg.payload = {
-  "part_id": generatePartId(),
-  "machine_id": "CNC-01",
-  "pass_fail": checkTolerance() ? "pass" : "fail",
-  "measurements": {
-    "diameter_mm": parseFloat(msg.diameter),
-    "length_mm": parseFloat(msg.length),
-    "surface_finish": parseFloat(msg.surface)
-  },
-  "inspector": getOperatorName(),
-  "timestamp": new Date().toISOString()
+  orderId: "WO-" + Date.now(),
+  productId: msg.product,
+  quantity: msg.qty,
+  status: "created",
+  operatorId: msg.operator,
+  timestamp: new Date().toISOString()
 };
+
+return msg;
 ```
 
-## Quick Reference: Data Types
+This creates a message at `enterprise.site._work_order_v1.create` with the complete work order data.
 
-Only two types you need to know:
 
-- `_type: number` - Any numeric value (42, 3.14, -100)
-- `_type: string` - Any text ("running", "Product-ABC", "2024-01-15")
+## Relationship to Other Components
 
-That's it! These handle 99% of industrial data.
+Payload shapes are referenced by [data models](data-models.md), which are then enforced by [data contracts](data-contracts.md).
 
-## Decision Guide: Which Shape Do I Need?
+## Next Steps
 
-```
-Is your data a single value changing over time?
-├─ Yes → Use built-in shapes
-│   ├─ Numbers? → timeseries-number (temperature, pressure, speed)
-│   └─ Text? → timeseries-string (status, batch ID, operator)
-│
-└─ No → Create custom shape
-    ├─ Quality inspection with multiple measurements
-    ├─ Work order with multiple fields
-    └─ Any business record with related data
-```
-
-**Start simple:** Use time-series shapes until you need more.
-
-## Your Next Step
-
-Now that you understand how data validation works:
-
-- **To organize your data better** → Read [Data Models](data-models.md) 
-- **To enforce these rules** → Read [Data Contracts](data-contracts.md)
-- **To see it all together** → Review the [complete CNC example](README.md#real-example-scaling-your-cnc-model)
+- **Define structure**: [Data Models](data-models.md) - Create hierarchies using shapes
+- **Enforce validation**: [Data Contracts](data-contracts.md) - Make shapes mandatory
+- **Build pipelines**: [Data Flows](../data-flows/) - Process data with bridges
