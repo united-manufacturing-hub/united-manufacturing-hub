@@ -28,7 +28,7 @@ Go to **Data Flows** and click **Add Bridge**:
 
 ### Step 2: Configure General Settings
 
-Fill in the basic information:
+Fill in the basic information and press **Save & Deploy**. A popup will appear. Only then you can proceed with Step 3.
 
 ![Bridge General Configuration](./images/bridge-general-good-conenction-no-read-flow.png)
 
@@ -60,7 +60,7 @@ Common industrial protocols:
 
 Each protocol has specific settings. For example, S7:
 
-![Siemens S7 Data Types](./images/bridges-read-no-dfc-data-type-selector-for-siemens.png)
+![Siemens S7 Configuration](./images/s7-protocol-config.png)
 
 ### Step 5: Deploy
 
@@ -76,7 +76,7 @@ The main view shows all bridges with connection status and throughput:
 
 - **Green dot**: Connected and running
 - **Yellow dot**: Starting or warning state
-- **Red dot**: Connection failed
+- **Grey dot**: Intermediate states (starting, stopping, or stuck in starting state)
 
 ### Context Menu
 
@@ -174,85 +174,6 @@ connection:
     port: "{{ .PORT }}"    # Uses PORT variable
 ```
 
-## Data Entry: The Model-First Approach
-
-Apply data models directly in bridges for consistent business naming from the start:
-
-```yaml
-pipeline:
-  processors:
-    - tag_processor:
-        defaults: |
-          msg.meta.location_path = "{{ .location_path }}";
-          msg.meta.data_contract = "_pump_v1";
-          return msg;
-        conditions:
-          - condition: msg.meta.opcua_tag_name == "DB1.DW20"
-            script: |
-              msg.meta.name = "inlet_temperature";
-              return msg;
-output:
-  uns: {}
-```
-
-**Result:** Device tag `DB1.DW20` becomes `umh.v1.enterprise.site._pump_v1.inlet_temperature`
-
-### Exploration with _raw
-
-For initial exploration or debugging, use `_raw` to preserve original naming:
-
-```yaml
-defaults: |
-  msg.meta.location_path = "{{ .location_path }}";
-  msg.meta.data_contract = "_raw";
-  msg.meta.name = msg.meta.opcua_tag_name;  # Keep original
-  return msg;
-```
-
-### Metadata Preservation
-
-Original device tags are automatically preserved in metadata for troubleshooting:
-- `opcua_tag_name`: "DB1.DW20" (original tag)
-- `name`: "inlet_temperature" (business name)
-- `bridged_by`: "protocol-converter_pump-bridge"
-
-Engineers can always trace back to the original device tag when debugging.
-
-## Data Exit: The UNS Input Plugin
-
-Data exits the UNS exclusively through bridges using the `uns-input` plugin:
-
-```yaml
-protocolConverter:
-  - name: uns-to-database
-    desiredState: active
-    protocolConverterServiceConfig:
-      config:
-        dataflowcomponent_write:
-          benthos:
-            input:
-              uns:
-                topics: ["umh.v1.enterprise.+.+._pump_v1.+"]
-            pipeline:
-              processors:
-                - mapping: |
-                    root.timestamp = this.timestamp_ms
-                    root.value = this.value
-                    root.topic = metadata("umh_topic")
-            output:
-              sql_insert:
-                driver: "postgres"
-                dsn: "postgres://user:pass@localhost:5432/manufacturing"
-                table: "pump_data"
-```
-
-**Never use direct Kafka consumers** - always use the uns-input plugin for:
-- Automatic metadata propagation
-- Topic pattern matching
-- Consistent error handling
-- Future-proof architecture
-
-For complete topic pattern documentation, see: [Benthos-UMH UNS Input](https://docs.umh.app/benthos-umh/input/uns-input)
 
 ## Next Steps
 

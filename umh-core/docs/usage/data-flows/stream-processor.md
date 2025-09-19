@@ -36,11 +36,53 @@ Stream processors are created through the **Data Flows → Stream** tab:
 
 ![Stream Processors List](../data-modeling/images/stream-processors.png)
 
-The UI guides you through:
-1. **Name and instance** selection
-2. **Source topic** selection from your UNS
-3. **Output model** configuration  
-4. **Field mapping** between sources and model
+### Step 1: General Configuration
+
+Configure basic settings and location hierarchy:
+
+![Stream Processor General Configuration](./images/stream-processor-general.png)
+
+- **Name**: Unique identifier for your processor
+- **Instance**: The UMH Core instance to run on
+- **Data Contract**: Select the output model (creates validated structure)
+- **Location Levels**: Set where in the hierarchy to output data (Level 0-4)
+
+### Step 2: Topic Selection
+
+Select source topics and they'll automatically get variable names:
+
+![Topic Selection and Variable Names](./images/stream-processor-topic-selection.png)
+
+- Browse available topics in your UNS
+- Select multiple sources with checkboxes
+- Variables auto-generated (e.g., `_10` for first topic, `_10_2` for second)
+- Use "Show Selected Only" to filter view
+- Copy variable names for use in expressions
+
+### Step 3: Expression Mapping
+
+Map source variables to model fields using expressions:
+
+![Expression Mapping](./images/stream-processor-expression-mapping.png)
+
+- Each field in your data model appears on the right
+- Enter expressions using the source variables
+- Simple passthrough: `source_alias`
+- Calculations: `_10 + _10_2` or more complex formulas
+- The expressions support standard mathematical operations
+
+### Step 4: Code Mode (Advanced)
+
+Switch to Code Mode to see or edit the generated YAML configuration:
+
+![Code Mode Configuration](./images/stream-processor-code-mode.png)
+
+The UI automatically generates YAML with:
+- **sources**: Your selected topics with location_path templates
+- **mapping**: Field-to-expression mappings
+- Comments explaining the structure
+
+You can switch between UI and Code Mode anytime to fine-tune configurations.
 
 **For detailed configuration instructions**, see the comprehensive [Stream Processors guide](../data-modeling/stream-processors.md) in Data Modeling.
 
