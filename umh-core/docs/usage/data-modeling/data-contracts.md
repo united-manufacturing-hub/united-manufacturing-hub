@@ -30,7 +30,7 @@ The Management Console provides read-only access to contracts:
 | Edit contracts | ❌ | Immutable once created |
 | Delete contracts | ❌ | Must be done via config.yaml |
 
-![Contracts List](images/2-contracts-list.png)
+![Contracts List](./images/data-contracts.png)
 
 **What you see in the UI:**
 - **Name**: Contract identifier (e.g., `_cnc_v1`, `_pump_v2`)

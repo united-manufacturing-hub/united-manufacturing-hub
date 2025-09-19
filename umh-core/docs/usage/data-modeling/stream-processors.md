@@ -33,7 +33,7 @@ The Management Console provides visual stream processor creation:
 | Edit processors | ✅ | Modify existing processors |
 | Delete processors | ✅ | Remove unused processors |
 
-![Stream Processors List](images/stream-processors.png)
+![Stream Processors List](./images/stream-processors.png)
 
 **What you see in the UI:**
 - **Name**: Processor identifier
@@ -46,7 +46,7 @@ The UI is the primary way to create stream processors. It generates the YAML con
 
 ### Step 1: Basic Configuration
 
-![Add Stream Processor](images/stream-processors-add.png)
+![Add Stream Processor](./images/stream-processors-add.png)
 
 1. Click **Add Stream Processor**
 2. Enter **Name**: Descriptive identifier
@@ -56,7 +56,7 @@ The UI is the primary way to create stream processors. It generates the YAML con
 
 ### Step 2: Topic Selection
 
-![Topic Selection](images/stream-processors-add-topic-expression.png)
+![Topic Selection](./images/stream-processors-add-topic-expression.png)
 
 Select source topics to aggregate:
 - Browse available topics
@@ -72,7 +72,7 @@ Map source data to output fields:
 
 ### Step 4: Code Mode (Advanced)
 
-![Code Mode Configuration](images/stream-processors-add-code-mode.png)
+![Code Mode Configuration](./images/stream-processors-add-code-mode.png)
 
 Switch to code mode to see or edit the generated YAML:
 ```yaml

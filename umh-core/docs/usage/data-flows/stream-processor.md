@@ -170,7 +170,7 @@ This configuration creates a managed data flow that:
 
 Stream processors are visible in the **Data Flows → Stream** tab where you can:
 
-![Stream Processors List](../data-modeling/images/stream-processors-overview.png)
+![Stream Processors List](../data-modeling/images/stream-processors.png)
 
 - **View all processors**: Listed with instance and throughput
 - **Add new processors**: Click "Add Stream Processor" button

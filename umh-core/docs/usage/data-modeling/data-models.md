@@ -33,7 +33,7 @@ The Management Console provides full control over data models:
 | Delete models | ✅ | Remove unused model versions |
 | Direct editing | ❌ | Use "New Version" to modify |
 
-![Data Models List](images/2-data-models-list.png)
+![Data Models List](./images/data-models.png)
 
 **What you see in the UI:**
 - **Name**: Model identifier (e.g., `cnc`, `pump`, `temperature-sensor`)
@@ -45,13 +45,13 @@ The Management Console provides full control over data models:
 
 Click the three-dot menu (⋮) on any model to access actions:
 
-![Data Model Actions](images/2-data-model-actions.png)
+![Data Model Actions](./images/data-models-context-menu.png)
 
 - **Data Model**: View the model's structure and YAML configuration
 - **New Version**: Create a new version with modifications (since models are immutable)
 - **Delete**: Remove the model (only if not in use by contracts or bridges)
 
-![Data Model Creation](images/2-data-model-add.png)
+![Data Model Creation](./images/data-models-add.png)
 
 ## Configuration
 
