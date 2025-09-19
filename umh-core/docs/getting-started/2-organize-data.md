@@ -2,6 +2,14 @@
 
 > **Prerequisite:** You should have data flowing from [Step 2](1-connect-data.md). If not, go back and complete that first!
 
+## Understanding Messages
+
+When data flows through bridges, each message contains:
+- **payload**: The actual data value
+- **meta**: Information about the message (source, destination, tag names, etc.)
+
+In the processing code, you'll work with these as `msg.payload` and `msg.meta`.
+
 ## The Challenge
 
 Right now you have one measurement going to one place:
@@ -10,19 +18,21 @@ enterprise.siteA._raw.my_data
 ```
 
 But real PLCs have:
-- Hundreds of data points (DB1.DW20, DB1.S30.10, DB3.I270...)
+- Hundreds of data points with various address formats
 - Different data types (numbers, strings, booleans)
 - Multiple machines on the same line
 
-**Do you need to map each tag manually?** No! Let's connect a real PLC and see the magic.
+**Do you need to map each tag manually?** No! Let's connect a real PLC and see how automatic mapping works.
 
 ## Part 1: Connect a Real PLC (Or Simulate One)
 
-### Create a New Bridge for Siemens S7
+### Create a New Bridge for a Real PLC
+
+We'll use Siemens S7 as an example, but this works identically with OPC UA, Modbus, or any other protocol.
 
 1. Go to **Data Flows** → **Add Bridge**
 2. **Name:** `s7-plc`
-3. **Protocol:** Select **Siemens S7** (instead of Generate)
+3. **Protocol:** Select **Siemens S7** (or your protocol)
 4. **Connection:**
    - **IP:** Use `{{ .IP }}` (we'll set this in variables)
    - **Rack:** 0
@@ -32,14 +42,14 @@ But real PLCs have:
 
 ### Configure What to Read
 
-In the **Input** section, you'll see S7-specific settings:
+In the **Input** section, you'll see protocol-specific settings:
 
 ```yaml
 s7comm:
     addresses:
-        - DB1.DW20      # Data Word in Data Block 1
-        - DB1.S30.10    # String in DB1 (30 chars)
-        - DB3.I270      # Integer in Data Block 3
+        - DB1.DW20      # Example address
+        - DB1.S30.10    # Another address
+        - DB3.I270      # Third address
     tcpDevice: '{{ .IP }}'
     rack: 0
     slot: 1
@@ -47,7 +57,7 @@ s7comm:
 
 ![S7 Input Configuration](./images/2-input.png)
 
-### The Magic Line
+### Automatic Tag Mapping
 
 In the **Processing** section, look at the **Always** code:
 
@@ -55,11 +65,11 @@ In the **Processing** section, look at the **Always** code:
 // Set location from bridge config
 msg.meta.location_path = "{{ .location_path }}";
 
-// Use _raw for S7 data (no validation)
+// Use _raw (no validation - data passes through as-is)
 msg.meta.data_contract = "_raw";
 
-// THE MAGIC: S7 address becomes the tag name automatically!
-msg.meta.tag_name = msg.meta.s7_address;
+// Key concept: Protocol address becomes the tag name automatically
+msg.meta.tag_name = msg.meta.s7_address;  // For OPC UA: msg.meta.opcua_tag_name
 
 // Pass the value through
 msg.payload = msg.payload;
@@ -67,21 +77,23 @@ msg.payload = msg.payload;
 return msg;
 ```
 
-**The brilliant part:** `msg.meta.tag_name = msg.meta.s7_address`
+**Key line:** `msg.meta.tag_name = msg.meta.s7_address`
 
-This one line means:
-- `DB1.DW20` automatically becomes a tag
-- `DB1.S30.10` automatically becomes a tag
-- `DB3.I270` automatically becomes a tag
-- **You don't map anything manually!**
+Each protocol provides its address in metadata:
+- Siemens S7: `msg.meta.s7_address`
+- OPC UA: `msg.meta.opcua_tag_name`
+- Modbus: `msg.meta.modbus_address`
 
-### Understanding Template Variables
+The addresses automatically become tags - no manual mapping needed!
 
-Notice the `tcpDevice: '{{ .IP }}'` in the configuration? This is a **template variable**.
+### Template Variables
 
-When you entered the IP address in the **Connection** settings (Step 1 of bridge creation), it automatically became available as `{{ .IP }}` throughout your configuration. The same happens with the port as `{{ .PORT }}`.
+The `{{ .IP }}` and `{{ .PORT }}` in your configuration are template variables. They come from the Connection settings you entered earlier:
+- `{{ .IP }}` - The IP address from Connection settings
+- `{{ .PORT }}` - The port from Connection settings  
+- `{{ .location_path }}` - The location from Bridge configuration
 
-💡 **Why Variables?** Instead of hardcoding `192.168.1.100` everywhere, using `{{ .IP }}` means you can change the PLC address in one place (Connection settings) and it updates everywhere. Perfect for deploying the same configuration to multiple sites!
+This makes configurations reusable across different sites - just change the Connection settings.
 
 Learn more: [Template Variables Reference](../reference/variables.md)
 
@@ -97,7 +109,9 @@ enterprise.sksk._raw.DB1.S30.10   ["Product ABC"]
 enterprise.sksk._raw.DB3.I270     [789]
 ```
 
-**🎉 One bridge reads your ENTIRE PLC!** Every address becomes a tag automatically.
+(These are S7 addresses, but OPC UA NodeIDs or Modbus registers would appear the same way)
+
+**Result:** One bridge reads your entire PLC. Every address becomes a tag automatically.
 
 ![Topic Browser DB1.DW20](./images/2-topic-browser-DB1.DW20.png)
 
@@ -108,7 +122,7 @@ Some PLC tags need special treatment - scaling, unit conversion, or validation. 
 ### Add Your First Condition
 
 1. Below the **Always** section, click **Add Condition**
-2. **If Condition:** `msg.meta.s7_address == "DB1.DW20"`
+2. **If Condition:** `msg.meta.s7_address == "DB1.DW20"` (use the appropriate metadata field for your protocol)
 3. **Then Action:**
 
 ```javascript
@@ -138,7 +152,7 @@ return msg;
 - **Always section:** Runs for EVERY tag (sets basics)
 - **Conditions:** Run ONLY for specific tags (special handling)
 
-**The power:** You can handle hundreds of tags with just a few conditions for the special cases!
+You can handle hundreds of tags with just a few conditions for the special cases.
 
 ### View the Enhanced Data
 
@@ -161,7 +175,7 @@ Right now all tags are at the root level. Let's organize them into logical folde
 
 ```javascript
 // Group all DB1 data under "production" folder
-msg.meta.virtual_path = "production";
+msg.meta.virtual_path = "production";  // Creates organizational folder
 return msg;
 ```
 
@@ -171,7 +185,7 @@ return msg;
 
 ```javascript
 // Group all DB3 data under "quality" folder
-msg.meta.virtual_path = "quality";
+msg.meta.virtual_path = "quality";  // Creates organizational folder
 return msg;
 ```
 
@@ -185,12 +199,11 @@ enterprise.sksk._raw.production.DB1.S30.10   ["Product ABC"]
 enterprise.sksk._raw.quality.DB3.I270        [789]
 ```
 
-**📁 It's like folders on your computer!**
 - All DB1 tags → production folder
 - All DB3 tags → quality folder
-- Automatically organized by data block!
+- Automatically organized by data block
 
-💡 **The Power:** You organize ENTIRE data blocks with one condition, not individual tags!
+You organize entire data blocks with one condition, not individual tags.
 
 ## Part 4: Route to Different Machines
 
@@ -222,7 +235,7 @@ msg.meta.virtual_path = "quality";
 return msg;
 ```
 
-### The Magic Result
+### Result
 
 **ONE bridge now routes to MULTIPLE machines:**
 
@@ -258,13 +271,13 @@ umh.v1.enterprise.sksk.machine-1._raw.sensors.DB1.DW20
 
 Building on previous guides, you now understand:
 
-- **Siemens S7** - Example protocol for connecting to PLCs
 - **Template variables** - Dynamic configuration using `{{ .IP }}`, `{{ .PORT }}`, `{{ .location_path }}`
+- **Message structure** - msg.meta (metadata) and msg.payload (actual value)
 - **Conditions** - If-then rules in Tag Processor for special handling
 - **virtual_path** - Additional folder organization within topics
 - **Dynamic routing** - One bridge serving multiple locations
+- **Automatic tag mapping** - Protocol addresses become tag names automatically
 - **Metadata** - Additional context in msg.meta (units, sources, custom fields)
-- **Message structure** - msg.meta (metadata) and msg.payload (actual value)
 
 ## What's Next?
 

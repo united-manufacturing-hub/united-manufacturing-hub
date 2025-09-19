@@ -106,7 +106,7 @@ Result:
 
 ## Contract Types
 
-### 1. The Special _raw Contract
+### The Special _raw Contract
 
 ```yaml
 # No explicit definition needed - always available
@@ -118,7 +118,7 @@ msg.meta.data_contract = "_raw";
 - Use for exploration and development
 - Bridge never goes degraded from data issues
 
-### 2. Model-Based Contracts
+### Model-Based Contracts
 
 ```yaml
 datacontracts:
@@ -133,7 +133,7 @@ datacontracts:
 - Rejects non-conforming messages
 - Use for production systems
 
-### 3. Relationship to Data Types
+### Relationship to Data Types
 
 | Data Type | Common Contracts | Validation |
 |-----------|------------------|------------|

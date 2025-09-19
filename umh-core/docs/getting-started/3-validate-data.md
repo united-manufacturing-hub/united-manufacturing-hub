@@ -89,7 +89,7 @@ Valid virtual_paths are: [vibration.x-axis, vibration.y-axis].
 Your virtual_path is: DB1.DW20
 ```
 
-**The lesson:** Data models ENFORCE structure. Your S7 address `DB1.DW20` doesn't match the expected paths `vibration.x-axis` or `vibration.y-axis`.
+Data models ENFORCE structure. Your S7 address `DB1.DW20` doesn't match the expected paths `vibration.x-axis` or `vibration.y-axis`.
 
 **Two new concepts here:**
 1. Deployments can fail not only if the connection is bad (learned in Step 2)
@@ -138,8 +138,8 @@ enterprise.sksk._raw.DB1.S30.10             ["text"]  (Unvalidated)
 enterprise.sksk._raw.DB3.I270               [789]     (Unvalidated)
 ```
 
-**The magic:**
-- The CNC model GUARANTEES `x-axis` is always a number
+**How validation works:**
+- The CNC model guarantees `x-axis` is always a number
 - If someone sends text, it's rejected at the bridge
 - Other data flows normally through `_raw`
 

@@ -87,10 +87,10 @@ This is the full topic path: `enterprise.siteA._raw.my_data`
 
 Exactly as we configured it! Click on `my_data` to see details.
 
-**Topic Details:** Shows your bridge configuration and data location
-**Last Message:** The most recent `hello world` message with timestamp
-**History:** A table showing recent messages (would be a chart for numeric data)
-**Metadata:** Additional information about the data source (we'll use this later)
+- Topic Details shows your bridge configuration and data location
+- Last Message shows the most recent `hello world` message with timestamp
+- History shows a table of recent messages (would be a chart for numeric data)
+- Metadata contains additional information about the data source (we'll use this later)
 
 ## Understanding What You Built
 

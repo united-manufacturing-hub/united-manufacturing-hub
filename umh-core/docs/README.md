@@ -6,9 +6,9 @@
 
 UMH Core is a **single Docker container that turns any PC, VM, or edge gateway into an Industrial Data Hub**.
 
-**The problem it solves:** In manufacturing, every device speaks a different language - PLCs use OPC UA, sensors use Modbus, MES systems use REST APIs. Connecting them all creates a tangled mess of point-to-point integrations. Change one thing, break ten others.
+In manufacturing, every device speaks a different language - PLCs use OPC UA, sensors use Modbus, MES systems use REST APIs. Connecting them all creates a tangled mess of point-to-point integrations. Change one thing, break ten others.
 
-**The solution:** UMH Core creates a **Unified Namespace (UNS)** - a central data backbone where all your industrial data lives in one organized, validated place. Instead of 100 devices talking to each other (creating 1000s of connections), they all publish to one place, and consumers subscribe to what they need.
+UMH Core creates a **Unified Namespace (UNS)** - a central data backbone where all your industrial data lives in one organized, validated place. Instead of 100 devices talking to each other (creating 1000s of connections), they all publish to one place, and consumers subscribe to what they need.
 
 ### What's Inside
 
@@ -67,7 +67,7 @@ _Every message is buffered, validated, and organized - no data loss, guaranteed 
 
 ## Getting Started
 
-**Quick Start:** Sign up at [management.umh.app](https://management.umh.app) and deploy your first instance in 60 seconds through the UI.
+Sign up at [management.umh.app](https://management.umh.app) and deploy your first instance in 60 seconds through the UI.
 
 **Prefer step-by-step learning?** Follow our progressive 4-step guide:
 

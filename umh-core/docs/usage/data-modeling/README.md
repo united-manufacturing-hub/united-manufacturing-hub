@@ -32,11 +32,11 @@ umh.v1.enterprise.site.area.line._contract.virtual.path.name
 
 See [Topic Convention](../unified-namespace/topic-convention.md) for complete structure.
 
-## Progressive Power: Raw to Production
+## Data Flow Patterns
 
 Data can follow these patterns based on your needs:
 
-### 1. Device Language (_raw)
+### Device Language (_raw)
 Start by exploring your equipment data with original naming:
 
 ```
@@ -44,11 +44,11 @@ Device → Bridge → _raw → Topic Browser
 ```
 
 **Example**: `umh.v1.enterprise.chicago.line-1.pump._raw.DB1.DW20`
-- **Purpose**: Exploration, debugging, quick connectivity
-- **Users**: Site engineers who know the PLC addressing
-- **Metadata**: Original tags preserved (e.g., `s7_address: "DB1.DW20"`)
+- Exploration, debugging, quick connectivity
+- Site engineers who know the PLC addressing
+- Original tags preserved (e.g., `s7_address: "DB1.DW20"`)
 
-### 2. Device Models (_pump_v1, _cnc_v1)
+### Device Models
 Apply business naming directly in bridges:
 
 ```
@@ -57,11 +57,11 @@ Device → Bridge + Model → _pump_v1 → Applications
 ```
 
 **Example**: `umh.v1.enterprise.chicago.line-1.pump._pump_v1.inlet_temperature`
-- **Purpose**: Consistent naming across equipment types
-- **Users**: Operations teams, local dashboards
-- **Current focus**: Most implementations start here
+- Consistent naming across equipment types
+- Operations teams, local dashboards
+- Most implementations start here
 
-### 3. Business Models (_maintenance_v1, _production_v1)
+### Business Models
 Transform device data into business KPIs:
 
 ```
@@ -69,9 +69,9 @@ Multiple _pump_v1 → Stream Processor → _maintenance_v1 → Enterprise Apps
 ```
 
 **Example**: `umh.v1.enterprise.chicago._maintenance_v1.work_orders.create`
-- **Purpose**: Aggregated metrics, business records
-- **Users**: Enterprise systems, management dashboards
-- **Future need**: Required when scaling across sites
+- Aggregated metrics, business records
+- Enterprise systems, management dashboards
+- Required when scaling across sites
 
 ## The Two-Layer Architecture
 

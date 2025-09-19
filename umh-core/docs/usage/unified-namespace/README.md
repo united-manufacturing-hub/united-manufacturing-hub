@@ -24,10 +24,10 @@ All data flows through one place with consistent structure, validation, and acce
 
 ## How It Works
 
-### 1. Publish Regardless
+### Publish Regardless
 Your PLC doesn't care if anyone is listening. It publishes "pump is running" to the UNS and moves on. When someone needs that data next week, it's already there. No reprogramming required.
 
-### 2. Structured Topics
+### Structured Topics
 Every piece of data has an address that answers three questions:
 - **WHERE**: `enterprise.site.area.line` - the location path
 - **WHAT**: `_pump_v1` - the data contract defining structure
@@ -35,14 +35,14 @@ Every piece of data has an address that answers three questions:
 
 Result: `umh.v1.enterprise.site.area.line._pump_v1.inlet_temperature`
 
-### 3. Bridges Handle All Data Flow
+### Bridges Handle All Data Flow
 Data enters and exits the UNS exclusively through [bridges](../data-flows/bridges.md). This ensures every message gets proper context, validation, and organization.
 
-### 4. Progressive Power: From Device to Business
+### From Device to Business
 Start simple, add complexity as needed:
-- **Raw Data (`_raw`)**: Mirror device 1:1 for initial exploration and debugging
-- **Device Models (`_pump_v1`)**: Apply business names directly in bridges for production
-- **Business Models (`_maintenance_v1`)**: From stream processors (aggregating device models) OR directly from ERP/MES systems
+- **`_raw`** - Mirror device 1:1 for initial exploration and debugging
+- **`_pump_v1` and similar** - Apply business names directly in bridges for production
+- **`_maintenance_v1` and similar** - From stream processors (aggregating device models) OR directly from ERP/MES systems
 
 The progression: Use `_raw` temporarily to understand your data, then apply device models directly in bridges for production. Business models can be created by aggregating device models via stream processors OR by connecting directly to business systems like ERP/MES.
 

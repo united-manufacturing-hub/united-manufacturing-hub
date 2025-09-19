@@ -15,9 +15,9 @@ Payload Shapes → Data Models → Data Contracts → Data Flows
 ```
 
 When you create a data model, you're defining:
-- **Virtual paths**: Organizational folders (e.g., `vibration`, `motor.electrical`)
-- **Fields**: Data endpoints with specific types (e.g., `temperature`, `pressure`)
-- **Relationships**: How components nest and reference each other
+- Virtual paths - organizational folders (e.g., `vibration`, `motor.electrical`)
+- Fields - data endpoints with specific types (e.g., `temperature`, `pressure`)
+- Relationships - how components nest and reference each other
 
 ## UI Capabilities
 
@@ -89,7 +89,7 @@ umh.v1.enterprise.site._pump_v1.vibration.x-axis
 
 ## The Three Building Blocks
 
-### 1. Fields - Data Endpoints
+### Fields
 
 ```yaml
 temperature:
@@ -102,7 +102,7 @@ temperature:
 - References a [payload shape](payload-shapes.md) for validation
 - Cannot have child elements
 
-### 2. Folders - Organizational Structure
+### Folders
 
 ```yaml
 vibration:           # Folder - no _payloadshape
@@ -118,7 +118,7 @@ vibration:           # Folder - no _payloadshape
 - Creates hierarchy in topic path
 - Can nest multiple levels deep
 
-### 3. Sub-Models - Reusable Components
+### Sub-Models
 
 Define once, use everywhere:
 
@@ -149,7 +149,7 @@ datamodels:
               version: v1
 ```
 
-**Result:** Topics created:
+Topics created:
 - `_pump_v1.pressure.inlet`
 - `_pump_v1.motor.rpm`
 - `_pump_v1.motor.temperature`
@@ -208,7 +208,7 @@ Models define structure, but don't enforce it. That's where [data contracts](dat
 | **Model** | Defines structure | `pump` model with fields |
 | **Contract** | Enforces structure | `_pump_v1` validates messages |
 
-**Auto-creation:** When you create a model in the UI:
+When you create a model in the UI:
 1. Model `pump` version `v1` is created
 2. Contract `_pump_v1` is auto-generated
 3. Contract becomes available in bridges
@@ -217,6 +217,6 @@ Without a contract, a model is just documentation. With a contract, it becomes v
 
 ## Next Steps
 
-- **Enforce validation**: [Data Contracts](data-contracts.md) - Make models mandatory
-- **Define value types**: [Payload Shapes](payload-shapes.md) - Specify data types for fields
-- **Create aggregations**: [Stream Processors](stream-processors.md) - Transform device models to business models
+- [Data Contracts](data-contracts.md) - Make models mandatory
+- [Payload Shapes](payload-shapes.md) - Specify data types for fields
+- [Stream Processors](stream-processors.md) - Transform device models to business models
