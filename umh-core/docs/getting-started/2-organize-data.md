@@ -28,7 +28,7 @@ But real PLCs have:
    - **Rack:** 0
    - **Slot:** 1
 
-![S7 Connection Setup](images/s7-connection.png)
+![Protocol Selection](./images/2-protocol.png)
 
 ### Configure What to Read
 
@@ -44,6 +44,8 @@ s7comm:
     rack: 0
     slot: 1
 ```
+
+![S7 Input Configuration](./images/2-input.png)
 
 ### The Magic Line
 
@@ -97,6 +99,8 @@ enterprise.sksk._raw.DB3.I270     [789]
 
 **🎉 One bridge reads your ENTIRE PLC!** Every address becomes a tag automatically.
 
+![Topic Browser DB1.DW20](./images/2-topic-browser-DB1.DW20.png)
+
 ## Part 2: Special Handling with Conditions
 
 Some PLC tags need special treatment - scaling, unit conversion, or validation. Let's use **Conditions** to handle specific addresses differently.
@@ -127,7 +131,7 @@ msg.meta.unit = "Text";  // Mark as text data
 return msg;
 ```
 
-![Conditions in Tag Processor](images/tag-processor-conditions.png)
+![Processing Conditions](./images/2-processing.png)
 
 ### What Conditions Do
 
@@ -143,7 +147,7 @@ In **Topic Browser**, click on `DB1.DW20`. Notice:
 - **Metadata** now shows `unit: "bar"`
 - Special handling applied ONLY to this tag
 
-![Metadata showing unit](images/topic-browser-metadata.png)
+![Metadata View](./images/2-topic-browser-metadata-raw.png)
 
 ## Part 3: Organize with Virtual Folders
 

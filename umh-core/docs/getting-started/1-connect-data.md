@@ -8,44 +8,44 @@ Let's get some data flowing! We'll start with simulated data, then you can conne
 2. Go to the "Bridges" tab. Here you find all of your bridges.
 3. Click **"Add Bridge"** (that's it - no other options to confuse you!)
 
-![](images/data-flow.png)
+![Data Flow](./images/data-flow.png)
 
 ## Configure the Bridge - General Tab
 
-**Bridge Name:** `my-first-bridge`
-**Instance:** <Your UMH Core instance>
-**Location:** Pre-filled with your instance location. You can add more detail later, but for now leave it as is. In the screenshot, we're defining a bridge for `enterprise.siteA`.
-**Connection:** Enter the IP/hostname and port of the device you want to connect to. Since we don't have a real PLC for this tutorial, we'll use `localhost` as IP and `8080` as port.
+- **Bridge Name:** `my-first-bridge`
+- **Instance:** Your UMH Core instance
+- **Location:** Pre-filled with your instance location. You can add more detail later, but for now leave it as is. In the screenshot, we're defining a bridge for `enterprise.siteA`.
+- **Connection:** Enter the IP/hostname and port of the device you want to connect to. Since we don't have a real PLC for this tutorial, we'll use `localhost` as IP and `8080` as port.
 
-![Screenshot: Bridge creation form with these fields filled](images/bridge-general.png)
+![Bridge General Configuration](./images/bridge-general.png)
 
 Click **"Save and Deploy"**. A popup will show the deployment progress and any errors or warnings. If everything goes well, you'll be automatically redirected.
 
-![](images/bridge-general-deploy.png)
+![Bridge Deploy Status](./images/bridge-general-deploy.png)
 
 Back on the "General" tab, you can verify the connection was successful. Here we see a latency of "0 ms" since we're connecting to localhost.
 
-![](images/bridge-general-latency.png)
+![Bridge Latency Good](./images/bridge-general-latency.png)
 
 If connecting to a real PLC fails, the latency indicator will turn orange:
 
-![](images/bridge-general-latency-bad.png)
+![Bridge Latency Bad](./images/bridge-general-latency-bad.png)
 
 The status "Starting_failed_dfc_missing" means we haven't configured a data flow yet - we've only tested the connection. Let's actually get data flowing by configuring the "Read" tab.
 
-![](images/bridge-read-header.png)
+![Bridge Read Header](./images/bridge-read-header.png)
 
-**Protocol:** Select the protocol to read from. Choose "Generate" to simulate data without a real PLC.
-**Data Type:** Select "Time Series" (the standard for PLC tags).
-**Monitoring:** Shows the bridge state (currently "Starting_failed_dfc_missing") and throughput (currently zero).
+- **Protocol:** Select the protocol to read from. Choose "Generate" to simulate data without a real PLC.
+- **Data Type:** Select "Time Series" (the standard for PLC tags).
+- **Monitoring:** Shows the bridge state (currently "Starting_failed_dfc_missing") and throughput (currently zero).
 
-![](images/bridge-read-input.png)
+![Bridge Read Input](./images/bridge-read-input.png)
 
-**Input:** Since we selected "Generate", we can create test messages. With real protocols like "Modbus" or "Siemens S7", you'd see protocol-specific settings here. For now, use the defaults: generate `hello world` every `1s`.
+- **Input:** Since we selected "Generate", we can create test messages. With real protocols like "Modbus" or "Siemens S7", you'd see protocol-specific settings here. For now, use the defaults: generate `hello world` every `1s`.
 
-![](images/bridge-read-processing.png)
+![Bridge Read Processing](./images/bridge-read-processing.png)
 
-**Processing:** The "Tag Processor" appears because we selected "Time Series" data type.
+- **Processing:** The "Tag Processor" appears because we selected "Time Series" data type.
 
 Three required fields:
 - **location_path:** Where the data goes (auto-filled from bridge location)
@@ -58,13 +58,13 @@ The **Always** section uses JavaScript to process messages. We're not modifying 
 
 💡 **Tip:** You can modify data here later (e.g., unit conversions, renaming). If you don't know JavaScript, any LLM (ChatGPT, Claude) can help write the code.
 
-![](images/bridge-read-output.png)
+![Bridge Read Output](./images/bridge-read-output.png)
 
 The Output section is auto-generated - it sends data to your Unified Namespace.
 
 Click **"Save & Deploy"**.
 
-![](images/bridge-read-deployed.png)
+![Bridge Read Deployed](./images/bridge-read-deployed.png)
 
 ## 🎉 Success!
 
@@ -76,7 +76,7 @@ Your data is flowing!
 
 ## Step 3: View Your Data in the Topic Browser
 
-![](images/topic-browser-my_data.png)
+![Topic Browser My Data](./images/topic-browser-my_data.png)
 
 Click **"Topic Browser"** in the left menu. This shows all data in your Unified Namespace.
 

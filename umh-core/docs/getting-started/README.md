@@ -19,7 +19,7 @@ For detailed sizing recommendations, see the [Sizing Guide](../production/sizing
 1. **Sign up** at [management.umh.app](https://management.umh.app)
 2. Click **"Add a new instance"**
 
-![Instance setup screen](images/instance-setup.png)
+![Instance setup screen](./images/instance-setup.png)
 
 3. **Configure your instance:**
    - **Name** (1): Give it a cool name (e.g., `my-first-umh`)

@@ -39,11 +39,11 @@ vibration:
 - Inside are two measurements: `x-axis` and `y-axis`
 - Both must be numbers (enforced automatically!)
 
-![Data Model Creation](images/3-data-model-create.png)
+![Data Model Creation](./images/3-models-cnc.png)
 
 Click **Save & Deploy**.
 
-![Data Model List](images/3-data-model-list.png)
+![Data Model List](./images/3-models.png)
 
 💡 **Behind the scenes:** The system automatically creates a data contract called `_cnc_v1`. This contract will enforce your model's structure. [Learn more about data contracts →](../usage/data-modeling/data-contracts.md)
 
@@ -55,7 +55,7 @@ Click **Save & Deploy**.
 2. Find `_cnc_v1` - this was auto-generated from your model
 3. Note the structure it expects
 
-![Contract View](images/3-contract-view.png)
+![Contract View](./images/3-contracts.png)
 
 ### Update Your Bridge
 
@@ -73,11 +73,13 @@ To:
 msg.meta.data_contract = "_cnc_v1";
 ```
 
+![Incorrect Processing Setup](./images/3-bridge-cnc-wrong.png)
+
 Click **Save & Deploy**.
 
 ## Part 3: Experience Validation (It Will Fail!)
 
-![Deployment Failed](images/3-deployment-failed.png)
+![Deployment Failed](./images/3-bridge-cnc-deploy-failed.png)
 
 **Your deployment fails!** Look at the error:
 
@@ -117,6 +119,8 @@ msg.meta.unit = "raw";
 return msg;
 ```
 
+![Correct Processing Setup](./images/3-bridge-cnc-processing-correct.png)
+
 **What this does:**
 - DB1.DW20 → Validated as `vibration.x-axis` in CNC model
 - All other tags → Continue to `_raw` (no validation)
@@ -125,7 +129,7 @@ Click **Save & Deploy**. Now it succeeds!
 
 ## Part 5: Success! View Your Validated Data
 
-![Topic Browser with Validated Data](images/3-topic-browser-validated.png)
+![Topic Browser with Validated Data](./images/3-topic-browser-correct.png)
 
 In **Topic Browser**, you now see:
 ```
