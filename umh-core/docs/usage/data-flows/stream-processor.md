@@ -1,201 +1,94 @@
 # Stream Processors
 
-> **Prerequisite:** Understand [Data Flow concepts](README.md) and [Data Modeling](../data-modeling/).
+> **Prerequisite:** Understand [Data Flow concepts](README.md) and complete the [Getting Started guide](../../getting-started/).
 
-Stream processors are specialized data flows that transform existing UNS data into different structures, creating business-oriented views from device data.
+Stream processors transform data already inside the Unified Namespace, aggregating multiple device streams into business KPIs and metrics. They're the third type of data flow, specialized for Silver → Gold data transformations.
 
-## Overview
+## When to Use
 
-Stream processors differ from other data flows:
-- **Bridges**: Connect external devices → UNS
-- **Stand-alone Flows**: Custom point-to-point processing
-- **Stream Processors**: Transform UNS data → different UNS structure
+Use stream processors for:
+- Aggregating data from multiple devices into KPIs
+- Creating business metrics from raw sensor data
+- Calculating OEE, efficiency, or other derived values
+- Reducing data volume for cloud transmission
 
-They're part of the [data modeling system](../data-modeling/stream-processors.md) for Silver → Gold transformations.
+Use bridges instead for:
+- Getting data into the UNS initially
+- Single device to model mapping
+- Direct protocol connections
 
-## When to Use Stream Processors
+## UI Capabilities
 
-| Scenario | Solution |
-|----------|----------|
-| Get data from one device into a model | Bridge with data contract |
-| Combine data from multiple devices | Multiple bridges → same model |
-| **Create business view from device data** | **Stream Processor** |
-| **Aggregate time-series into KPIs** | **Stream Processor** |
-| **Generate events from state changes** | **Stream Processor** (future) |
+| Action | Available | Notes |
+|--------|-----------|-------|
+| Create processors | ✅ | Visual configuration with topic browser |
+| Select source topics | ✅ | Browse and multi-select |
+| Map to model fields | ✅ | Expression-based mapping |
+| View processors | ✅ | Listed in Stream tab |
+| Monitor throughput | ✅ | Real-time message rates |
+| Edit processors | ✅ | Modify configuration |
+| Delete processors | ✅ | Remove when not needed |
+| Code mode | ✅ | Direct YAML editing |
 
-## How They Work as Data Flows
+## Creating a Stream Processor
 
-### Data Flow Characteristics
-
-Stream processors are managed data flows with:
-
-1. **Automatic Kafka Consumer Groups**: Each processor gets a unique consumer group (hex-encoded name) for offset tracking
-2. **Topic Subscriptions**: Subscribe to specific UNS topics (no wildcards)
-3. **Dependency-based Processing**: Only process when required source data arrives
-4. **Guaranteed Output Structure**: Publish to model-defined topics
-
-### Processing Pipeline
-
-```
-Source Topics → Stream Processor → Output Topics
-(Silver data)     (Transform)      (Gold data)
-```
-
-Example flow:
-```
-umh.v1.plant.line._raw.temperature ─┐
-                                     ├→ Processor → umh.v1.plant.line._pump_v1.inlet_temp
-umh.v1.plant.line._raw.pressure ────┘              └→ umh.v1.plant.line._pump_v1.outlet_temp
-```
-
-## Time-Series to Relational Challenges
-
-Stream processors currently handle **time-series data only**. Creating relational records from time-series involves complex decisions:
-
-### The Fundamental Problem
-
-PLCs and sensors provide continuous streams:
-```
-Time    | machine_state | temperature | count
---------|---------------|-------------|-------
-10:00:01| RUNNING       | 45.2        | 100
-10:00:02| RUNNING       | 45.3        | 101
-10:00:03| STOPPED       | 45.1        | 101
-10:00:04| IDLE          | 44.9        | 101
-```
-
-But business systems need discrete records:
-```json
-{
-  "batch_id": "BATCH-123",
-  "start": "10:00:01",
-  "end": "10:00:03",
-  "total_produced": 1,
-  "avg_temperature": 45.2,
-  "result": "COMPLETE"
-}
-```
-
-### Key Challenges
-
-1. **Record Boundaries**
-   - When does a batch start? (state change? operator input? time?)
-   - When is it complete? (state change? count reached? timeout?)
-
-2. **Data Completeness**
-   - What if temperature arrives late?
-   - What if count never updates?
-   - How long to wait for all values?
-
-3. **Edge Cases**
-   - Machine stops mid-batch
-   - Network interruption causes gaps
-   - Values arrive out of order
-   - Clock synchronization issues
-
-4. **State Management**
-   - Track partial records
-   - Handle overlapping events
-   - Manage timeout conditions
-
-### Current Solutions
-
-Until relational output is supported:
-
-**Option 1: Use Stand-alone Flows**
-```yaml
-dataFlow:
-  - name: batch-detector
-    dataFlowComponentConfig:
-      benthos:
-        input:
-          uns:
-            topics: ["umh.v1.+.+.+.+._raw.machine_state"]
-        pipeline:
-          processors:
-            - mapping: |
-                # Detect state changes and create events
-                if this.value == "STOPPED" && meta("previous_state") == "RUNNING" {
-                  root.event = "BATCH_END"
-                  root.batch_data = meta("accumulated_data")
-                }
-        output:
-          sql_insert:  # Write to relational database
-            table: "batch_records"
-```
-
-**Option 2: External Processing**
-- Use stream processors for aggregation
-- External service reads aggregated data
-- Business logic creates relational records
-
-See [Payload Formats](../unified-namespace/payload-formats.md#edge-cases-and-considerations) for detailed guidance.
-
-## Configuration as Data Flow
-
-Stream processors are configured through the data modeling system but execute as data flows:
-
-```yaml
-# Template defines the transformation
-templates:
-  streamProcessors:
-    pump_monitor:
-      model:
-        name: pump
-        version: v1
-      sources:
-        temp_in: "{{ .location_path }}._raw.inlet_temp"
-        temp_out: "{{ .location_path }}._raw.outlet_temp"
-      mapping:
-        efficiency: "(temp_out - temp_in) / temp_in * 100"
-        status: "temp_out > 80 ? 'WARNING' : 'OK'"
-
-# Instance creates the data flow
-streamprocessors:
-  - name: pump1_monitor
-    _templateRef: "pump_monitor"
-    location:
-      0: plant
-      1: building_a
-      2: line_1
-      3: pump_1
-```
-
-This configuration creates a managed data flow that:
-1. Subscribes to `umh.v1.plant.building_a.line_1.pump_1._raw.inlet_temp|outlet_temp`
-2. Calculates efficiency and status
-3. Publishes to `umh.v1.plant.building_a.line_1.pump_1._pump_v1.efficiency|status`
-
-## Monitoring Stream Processors
-
-Stream processors are visible in the **Data Flows → Stream** tab where you can:
+Stream processors are created through the **Data Flows → Stream** tab:
 
 ![Stream Processors List](../data-modeling/images/stream-processors.png)
 
-- **View all processors**: Listed with instance and throughput
-- **Add new processors**: Click "Add Stream Processor" button
-- **Monitor status**: Check real-time throughput metrics
-- **Access management**: Right-click for logs, metrics, and configuration
+The UI guides you through:
+1. **Name and instance** selection
+2. **Source topic** selection from your UNS
+3. **Output model** configuration  
+4. **Field mapping** between sources and model
 
-Additional monitoring through:
-1. **Kafka Consumer Groups**: Check offset lag and consumption rate
-2. **Output Topics**: Verify data is being produced
-3. **Logs**: Debug transformation issues
+**For detailed configuration instructions**, see the comprehensive [Stream Processors guide](../data-modeling/stream-processors.md) in Data Modeling.
 
-## Comparison with Other Data Flows
+## How It Works
 
-| Aspect | Bridges | Stand-alone | Stream Processors |
-|--------|---------|-------------|-------------------|
-| **Input** | External protocols | Any source | UNS topics only |
-| **Output** | UNS topics | Any destination | UNS model topics |
-| **Structure** | Tag-based | Free-form | Model-enforced |
-| **Processing** | Tag processor | Any Benthos processor | JavaScript expressions |
-| **Management** | UI + YAML | YAML only | UI + Templates |
-| **Use Case** | Device connectivity | Custom integration | Data transformation |
+Stream processors subscribe to multiple UNS topics and output to a single model-based topic:
 
-## Next Steps
+```
+Multiple Silver Topics → Stream Processor → Gold Topic
+(device data)             (aggregation)     (business KPI)
+```
 
-- Learn [Stream Processor configuration](../data-modeling/stream-processors.md) in detail
-- Understand [Data Models](../data-modeling/data-models.md) that define output structure
-- Explore [Bridges](bridges.md) for device connectivity
-- See [Stand-alone Flows](stand-alone-flow.md) for custom processing
+Example: Combining temperature and pressure from different sensors into a pump model:
+- Input: `enterprise.site._raw.temp_sensor_1`, `enterprise.site._raw.pressure_gauge_2`  
+- Output: `enterprise.site._pump_v1` with calculated efficiency
+
+The system handles:
+- Consumer group management for offset tracking
+- Dependency-based processing (waits for all required inputs)
+- Guaranteed output structure via data models
+
+## Configuration (YAML)
+
+While the UI is the primary way to create stream processors, they're stored as YAML:
+
+```yaml
+streamprocessors:
+  - name: pump_efficiency_calc
+    model:
+      name: pump
+      version: v1
+    sources:
+      - topic: enterprise.site._raw.inlet_temp
+      - topic: enterprise.site._raw.outlet_temp
+    mapping:
+      efficiency: "(outlet_temp - inlet_temp) / inlet_temp * 100"
+```
+
+See the [Stream Processors configuration guide](../data-modeling/stream-processors.md) for detailed YAML structure.
+
+## Key Differences from Other Data Flows
+
+| Data Flow Type | Purpose | Input Source | Output |
+|----------------|---------|--------------|--------|
+| **Bridges** | Get data INTO the UNS | External devices (PLCs, sensors) | UNS topics |
+| **Stream Processors** | Transform data WITHIN the UNS | UNS topics | UNS model topics |
+| **Stand-alone Flows** | Custom processing | Any source | Any destination |
+
+## Learn More
+
+For comprehensive stream processor configuration and examples, see the [Stream Processors guide](../data-modeling/stream-processors.md) in Data Modeling documentation.
