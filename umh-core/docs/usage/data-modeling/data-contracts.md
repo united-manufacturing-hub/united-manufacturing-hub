@@ -1,179 +1,181 @@
 # Data Contracts
 
-Data contracts are the **enforcement mechanism** that makes data validation actually happen in the UNS. Without a contract, [data models](data-models.md) and [payload shapes](payload-shapes.md) are just documentation - contracts make them enforced rules.
+> This article assumes you've completed the [Getting Started guide](../../getting-started/) and understand the [data modeling concepts](README.md).
 
-## How Data Contracts Work
-Datat contracts are terchnically enforced at the end of every bridge.
-
-Data contracts operate in [bridges](../data-flows/bridges.md) where data enters the UNS:
-
-```
-Device → Bridge → UNS Output Plugin → [Contract Check] → Kafka/Redpanda
-                         ↑                    ↑
-                  (in benthos-umh)     If contract exists, validate
-```
-
-**Key Concepts:**
-1. **Contracts enforce validation** - [Data models](data-models.md) and [payload shapes](payload-shapes.md) alone do nothing
-2. **Bridge enforcement** - The [UNS output plugin](https://docs.umh.app/benthos-umh/output/uns-output) in benthos-umh validates all data
-3. **No contract = No validation** - Data passes through if no contract exists
-4. **Bridge degraded state** - Failed validation puts the [bridge](../data-flows/bridges.md) in degraded state for easy debugging
+Data contracts are the enforcement mechanism that makes data models mandatory. Without a contract, models are just documentation - contracts make validation happen.
 
 ## Overview
 
-Data contracts are stored in the `datacontracts:` configuration section:
+In the [component chain](README.md#the-component-chain), contracts sit between models and execution:
+
+```
+Payload Shapes → Data Models → Data Contracts → Data Flows
+                                      ↑
+                              Enforcement happens here
+```
+
+When you specify a data contract in a bridge, the UNS output plugin validates every message against the associated model.
+
+## UI Capabilities
+
+The Management Console provides read-only access to contracts:
+
+| Feature | Available | Notes |
+|---------|-----------|-------|
+| View contract list | ✅ | Shows all contracts with their models |
+| Filter/search | ✅ | Filter by name, instance, or model |
+| View associations | ✅ | See which model version each contract enforces |
+| View usage | ✅ | Shows count of stream processors using contract |
+| Create contracts | ❌ | Auto-created when creating models in UI |
+| Edit contracts | ❌ | Immutable once created |
+| Delete contracts | ❌ | Must be done via config.yaml |
+
+![Contracts List](images/2-contracts-list.png)
+
+**What you see in the UI:**
+- **Name**: Contract identifier (e.g., `_cnc_v1`, `_pump_v2`)
+- **Instance**: Which UMH instance owns the contract
+- **Model**: The model and version being enforced (e.g., `cnc (v1)`)
+- **Stream Processors**: Count of processors using this contract
+
+## Configuration
+
+### Basic Structure
 
 ```yaml
 datacontracts:
-  - name: _machine-state_v1  # Becomes part of the topic name
+  - name: _pump_v1          # Contract name (used in bridges)
     model:
-      name: machine-state     # References a [data model](data-models.md)
-      version: v1             # Specific model version
+      name: pump            # References a data model
+      version: v1           # Specific version to enforce
 ```
 
-## Core Properties
+### Naming Convention
 
-### Name and Versioning
+Contracts follow the pattern `_modelname_version`:
+- Always start with underscore
+- Include model name
+- End with version number
+- Examples: `_pump_v1`, `_temperature_sensor_v2`, `_workorder_v1`
+
+### Auto-Creation via UI
+
+When you create a model in the UI, it automatically generates a matching contract:
+
+1. Create model `pump` version `v1` in UI
+2. System auto-creates contract `_pump_v1`
+3. Contract immediately available for use in bridges
+
+## Enforcement Mechanism
+
+### Where Validation Happens
+
+```
+Bridge → UNS Output Plugin → [Contract Check] → Kafka/Redpanda
+                                    ↑
+                            Validation happens here
+```
+
+The UNS output plugin (`output: uns: {}`) performs validation:
+
+1. **Reads metadata**: Extracts `data_contract` from message
+2. **Looks up contract**: Finds the associated model
+3. **Validates structure**: Checks topic path matches model
+4. **Validates payload**: Ensures data types match shapes
+5. **Result**:
+   - ✅ Valid → Message published to topic
+   - ❌ Invalid → Message rejected, bridge degraded
+
+### Validation Failures
+
+When validation fails:
+
+```
+ERROR: schema validation failed for message with topic 'umh.v1.enterprise.site._pump_v1.invalid.path':
+Valid virtual_paths are: [pressure, temperature, motor.rpm].
+Your virtual_path is: invalid.path
+```
+
+Result:
+- Message rejected (not published)
+- Bridge enters degraded state
+- Error logged with details
+- Bridge retries with backoff
+
+## Contract Types
+
+### 1. The Special _raw Contract
 
 ```yaml
-datacontracts:
-  - name: _temperature_v1    # This exact string appears in topics
-    model:
-      name: temperature       # Which model to enforce
-      version: v1            # Which version of that model
+# No explicit definition needed - always available
+msg.meta.data_contract = "_raw";
 ```
 
-**Naming Convention:**
-- Contract names start with underscore and include version (`_temperature_v1`, `_pump_v2`)
-- The contract name becomes the data_contract segment in topics
-- Version suffix (`_v1`, `_v2`) is part of the contract name, not separate
+- Accepts any structure
+- No validation performed
+- Use for exploration and development
+- Bridge never goes degraded from data issues
 
-### Model Binding
-
-Each contract binds to exactly one [data model](data-models.md) version:
+### 2. Model-Based Contracts
 
 ```yaml
 datacontracts:
   - name: _pump_v1
     model:
       name: pump
-      version: v1  # Specific model version
-```
-
-This binding is immutable - to change the model, create a new contract version.
-
-### Data Bridges
-
-Contracts specify where data gets stored and processed:
-
-```yaml
-datacontracts:
-  - name: _temperature_v1
-    model:
-      name: temperature
       version: v1
 ```
 
-## How Validation Works
+- Enforces exact model structure
+- Validates data types via payload shapes
+- Rejects non-conforming messages
+- Use for production systems
 
-### The Bridge Pattern
+### 3. Relationship to Data Levels
 
-All data enters the UNS through bridges or standalone flows - **never directly to Kafka/MQTT**. This ensures consistent validation:
+| Data Level | Common Contracts | Validation |
+|------------|-----------------|------------|
+| Silver (Device) | `_raw`, `_pump_v1`, `_sensor_v1` | Optional to strict |
+| Gold (Business) | `_workorder_v1`, `_maintenance_v1` | Always strict |
 
-```yaml
-# In every bridge with read flow:
-output:
-  uns: {}  # Uses UNS output plugin - enforces contracts
+## Examples
 
-# Never this (bypasses validation):
-output:
-  kafka: {}  # Direct Kafka - no contract enforcement!
-```
-
-### Processor Differences
-
-How metadata gets set depends on your processor choice:
-
-**With tag_processor (Time-Series bridges):**
-```yaml
-processors:
-  - tag_processor:
-      defaults: |
-        msg.meta.location_path = "{{ .location_path }}";
-        msg.meta.data_contract = "_raw";
-        msg.meta.tag_name = msg.meta.opcua_tag_name;
-        # Metadata set automatically, UNS plugin builds topic
-```
-
-**With nodered_js (Relational bridges):**
-```yaml
-processors:
-  - nodered_js:
-      code: |
-        // Must manually set umh_topic!
-        msg.meta.umh_topic = "umh.v1.plant._machine-state_v1.update";
-        msg.meta.data_contract = "_machine-state_v1";
-        // Build your relational payload
-        msg.payload = { /* your complex data */ };
-```
-
-> **Important**: With `nodered_js`, you must set `umh_topic` manually. The UNS output plugin won't build it from metadata.
-
-### What Happens During Validation
-
-When data arrives at the UNS output plugin:
-
-1. **Extract metadata**:
-   - From `tag_processor`: Uses location_path, data_contract, tag_name to build topic
-   - From `nodered_js`: Uses the manually set umh_topic
-
-2. **Check contract existence**:
-   - Contract exists → Validate payload against model
-   - No contract → Data passes through without validation
-
-3. **Validation result**:
-   - ✅ Valid → Publish to Kafka topic
-   - ❌ Invalid → Reject message, outputs WARN message, bridge goes to degraded state
-
-### Example Validation
-
-With contract `_pump_v1` referencing a pump model:
+### Simple Device Contract
 
 ```yaml
-# ✅ Valid - matches model structure
-Topic: umh.v1.plant.line1._pump_v1.pressure
-Payload: {"value": 42.5, "timestamp_ms": 1733904005123}
+# Model definition
+datamodels:
+  - name: temperature-sensor
+    version:
+      v1:
+        structure:
+          celsius:
+            _payloadshape: timeseries-number
 
-# ❌ Invalid - field not in model
-Topic: umh.v1.plant.line1._pump_v1.invalid_field
-Result: Bridge goes degraded, message rejected
+# Contract (auto-created or manual)
+datacontracts:
+  - name: _temperature-sensor_v1
+    model:
+      name: temperature-sensor
+      version: v1
 
-# ✅ Valid - no contract, no validation
-Topic: umh.v1.plant.line1._raw.anything
-Payload: {"any": "data", "structure": "works"}
+# Usage in bridge
+msg.meta.data_contract = "_temperature-sensor_v1";
+msg.meta.tag_name = "celsius";
+msg.payload = 23.5;
 ```
 
 ## Relationship to Stream Processors
 
-**[Stream processors](../data-flows/stream-processor.md) do NOT use data contracts directly.** Instead, stream processors use templates that reference data models directly:
+Stream processors don't use contracts directly - they reference models:
 
 ```yaml
-# Template references model directly, not contract
 templates:
   streamProcessors:
-    pump_template:
-      model:
-        name: pump      # Direct model reference
+    pump_aggregator:
+      model:           # Direct model reference
+        name: pump
         version: v1
-      sources: {...}
-      mapping: {...}
-
-# Stream processor uses template
-streamProcessors:
-  - name: pump41_sp
-    _templateRef: "pump_template"
-    location: {...}
-    variables: {...}
 ```
 
-**Data contracts are separate** - they define storage bridges and retention policies for data models. Stream processors work with models directly through templates, but **if a data contract exists for the same model**, the stream processor's output will be automatically validated against that contract and routed to the contract's configured bridges.
+However, if a matching contract exists (`_pump_v1`), the stream processor's output will be validated against it automatically.

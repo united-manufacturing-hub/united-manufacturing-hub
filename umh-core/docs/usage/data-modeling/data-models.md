@@ -1,150 +1,216 @@
 # Data Models
 
-Data models define the **virtual path hierarchy** that appears after the data contract in your UNS topics. They transform flat data into organized, hierarchical structures.
+> This article assumes you've completed the [Getting Started guide](../../getting-started/) and understand the [data modeling concepts](README.md).
 
-## How Models Create Topic Structure
+Data models define the hierarchical structure of your industrial data. They create the virtual paths and fields that organize raw data into meaningful information.
 
-Data models literally become the topic path segments after your data contract:
+## Overview
+
+In the [component chain](README.md#the-component-chain), models provide the structure:
 
 ```
-umh.v1.<location_path>.<data_contract>.[<virtual_path>].<name>
-                                         ↑________________↑
-                                    This part comes from your model structure
+Payload Shapes → Data Models → Data Contracts → Data Flows
+                      ↑
+                 Structure defined here
 ```
 
-For example, a model with this structure:
-```yaml
-structure:
-  motor:           # Creates virtual path segment
-    current:       # Becomes a topic accepting data
-    rpm:           # Becomes a topic accepting data
-  diagnostics:     # Creates virtual path segment
-    vibration:     # Becomes a topic accepting data
-```
+When you create a data model, you're defining:
+- **Virtual paths**: Organizational folders (e.g., `vibration`, `motor.electrical`)
+- **Fields**: Data endpoints with specific types (e.g., `temperature`, `pressure`)
+- **Relationships**: How components nest and reference each other
 
-## How Models Work
+## UI Capabilities
 
-Data models are stored in the `datamodels:` configuration section in the [config.yaml](../../reference/configuration-reference.md):
+The Management Console provides full control over data models:
+
+| Feature | Available | Notes |
+|---------|-----------|-------|
+| View model list | ✅ | Shows all models with versions |
+| Create models | ✅ | Visual editor with YAML preview |
+| View model details | ✅ | Inspect structure and configuration |
+| Create new versions | ✅ | Models are immutable, edit by versioning |
+| Reference sub-models | ✅ | Link to other models via `_refModel` |
+| Delete models | ✅ | Remove unused model versions |
+| Direct editing | ❌ | Use "New Version" to modify |
+
+![Data Models List](images/2-data-models-list.png)
+
+**What you see in the UI:**
+- **Name**: Model identifier (e.g., `cnc`, `pump`, `temperature-sensor`)
+- **Instance**: Which UMH instance owns the model
+- **Description**: Optional description of the model's purpose
+- **Latest**: Current version number (v1, v2, etc.)
+
+### Model Actions
+
+Click the three-dot menu (⋮) on any model to access actions:
+
+![Data Model Actions](images/2-data-model-actions.png)
+
+- **Data Model**: View the model's structure and YAML configuration
+- **New Version**: Create a new version with modifications (since models are immutable)
+- **Delete**: Remove the model (only if not in use by contracts or bridges)
+
+![Data Model Creation](images/2-data-model-add.png)
+
+## Configuration
+
+### Basic Structure
 
 ```yaml
 datamodels:
-  - name: pump
-    description: "pump from vendor ABC"
+  - name: pump                    # Model name
+    description: "Pump monitoring" # Optional description
     version:
-      v1:
-        structure:
+      v1:                         # Version identifier
+        structure:                # Hierarchical definition
           pressure:
-            _payloadshape: timeseries-number
-          status:
-            _payloadshape: timeseries-string
+            inlet:
+              _payloadshape: timeseries-number
+            outlet:
+              _payloadshape: timeseries-number
 ```
 
-### Important Concepts
+### How Structure Becomes Topics
 
-1. **Models are templates** - They don't enforce anything by themselves
-2. **[Data contracts](data-contracts.md) enforce models** - Only when a contract references a model does validation occur
-3. **Models apply to all locations** - Once defined, the same virtual structure works everywhere
-4. **Structure becomes topics** - The hierarchy you define becomes your actual topic paths
+Model structure directly maps to UNS topics:
 
-See [Topic Convention](../unified-namespace/topic-convention.md) for complete topic structure details.
+```yaml
+structure:
+  vibration:        # Creates: .../_pump_v1.vibration
+    x-axis:         # Creates: .../_pump_v1.vibration.x-axis
+```
 
-## Payload Shapes
+**Complete topic path:**
+```
+umh.v1.enterprise.site._pump_v1.vibration.x-axis
+       └─ fixed ─┘     └contract┘└─from model─┘
+```
 
-[Payload shapes](payload-shapes.md) define the JSON schema for field values. They provide reusable templates for common data structures in industrial systems. For complete documentation on available payload shapes, their structure, and usage examples, see [Payload Shapes](payload-shapes.md)
-
-Common payload shapes include:
-- `timeseries-number`: For numeric sensor data
-- `timeseries-string`: For textual data and status values
-
-## Three Types of Structure Elements
-
-Data models use three building blocks to create your topic hierarchy:
+## The Three Building Blocks
 
 ### 1. Fields - Data Endpoints
 
-Fields are the actual data points that accept messages. They must reference a payload shape:
-
 ```yaml
-pressure:
-  _payloadshape: timeseries-number  # This field accepts time-series data
+temperature:
+  _payloadshape: timeseries-number  # Accepts numeric values
 ```
 
-**What fields do:**
-- Create the final topic segment that accepts data
-- Define what payload format is expected (via `_payloadshape`)
-- Become the `tag_name` in your topic path
+**Characteristics:**
+- Has `_payloadshape` property
+- Creates a topic endpoint that accepts data
+- References a [payload shape](payload-shapes.md) for validation
+- Cannot have child elements
 
-**Example**: The field `pressure` creates topic ending `...pressure` that accepts `{"timestamp_ms": 123, "value": 42.5}`
-
-### 2. Folders - Virtual Organization
-
-Folders create hierarchy without being data points themselves. They have no special properties:
+### 2. Folders - Organizational Structure
 
 ```yaml
-diagnostics:              # This is a folder (no _payloadshape)
-  vibration:             # This is a field
+vibration:           # Folder - no _payloadshape
+  x-axis:           # Field inside folder
     _payloadshape: timeseries-number
-  temperature:           # This is a field
+  y-axis:           # Field inside folder
     _payloadshape: timeseries-number
 ```
 
-**What folders do:**
-- Create virtual path segments in your topic structure
-- Organize related fields together
-- Make topics more readable and logical
+**Characteristics:**
+- No `_payloadshape` property
+- Groups related fields or other folders
+- Creates hierarchy in topic path
+- Can nest multiple levels deep
 
-**Result**: Creates topics with `diagnostics` as a path segment:
-- `umh.v1.plant._pump_v1.diagnostics.vibration`
-- `umh.v1.plant._pump_v1.diagnostics.temperature`
+### 3. Sub-Models - Reusable Components
 
-### 3. Sub-Models - Composition and Reuse
-only for advanced users
-
-Sub-models let you include another model's entire structure:
+Define once, use everywhere:
 
 ```yaml
-motor:
-  _refModel:
-    name: motor
-    version: v1
-```
-
-**What sub-models do:**
-- Include all fields and folders from another model
-- Enable reuse across different equipment types
-- Maintain consistency for common components
-
-**Example**: Define motor once, use in pump, conveyor, mixer models:
-
-```yaml
-# Define motor model once
-dataModels:
+# Define reusable motor model
+datamodels:
   - name: motor
-    description: "Standard motor"
     version:
       v1:
         structure:
-          current:
-            _payloadshape: timeseries-number
           rpm:
             _payloadshape: timeseries-number
+          temperature:
+            _payloadshape: timeseries-number
 
-# Reuse in pump model
-dataModels:
+# Reference in pump model
+datamodels:
   - name: pump
-    description: "Pump with motor"
     version:
       v1:
         structure:
           pressure:
-            _payloadshape: timeseries-number
-          motor:              # Includes all motor fields
+            inlet:
+              _payloadshape: timeseries-number
+          motor:           # Include the motor model
             _refModel:
               name: motor
               version: v1
 ```
 
-**Result**: Creates topics:
-- `umh.v1.plant._pump_v1.pressure`
-- `umh.v1.plant._pump_v1.motor.current`
-- `umh.v1.plant._pump_v1.motor.rpm`
+**Result:** Topics created:
+- `_pump_v1.pressure.inlet`
+- `_pump_v1.motor.rpm`
+- `_pump_v1.motor.temperature`
+
+**Benefits:**
+- Single source of truth
+- Consistent structure across models
+- Update once, reflected everywhere
+
+## Version Evolution
+
+Models are immutable once created. To add fields, create a new version:
+
+### Why Immutability?
+
+From the [README](README.md#why-are-models-immutable):
+- Models are contracts between teams
+- Dashboards depend on stable structure
+- Historical data queries must not break
+
+### Evolution Pattern
+
+**Version 1 - Basic:**
+```yaml
+version:
+  v1:
+    structure:
+      temperature:
+        _payloadshape: timeseries-number
+```
+
+**Version 2 - Add pressure:**
+```yaml
+version:
+  v2:
+    structure:
+      temperature:
+        _payloadshape: timeseries-number
+      pressure:                          # New field
+        _payloadshape: timeseries-number
+```
+
+**Migration steps:**
+1. Create v2 with additions
+2. Deploy new bridges using v2
+3. Update dashboards to v2
+4. Keep v1 running during transition
+5. Deprecate v1 when safe
+
+## Relationship to Contracts
+
+Models define structure, but don't enforce it. That's where [data contracts](data-contracts.md) come in:
+
+| Component | Purpose | Example |
+|-----------|---------|----------|
+| **Model** | Defines structure | `pump` model with fields |
+| **Contract** | Enforces structure | `_pump_v1` validates messages |
+
+**Auto-creation:** When you create a model in the UI:
+1. Model `pump` version `v1` is created
+2. Contract `_pump_v1` is auto-generated
+3. Contract becomes available in bridges
+
+Without a contract, a model is just documentation. With a contract, it becomes validation.
