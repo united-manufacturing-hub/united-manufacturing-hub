@@ -4,6 +4,8 @@
 
 No kubectl, no Kubernetes setup, just a single Docker container. Anything that runs Docker works — from your MacBook terminal to enterprise edge boxes.
 
+> **Note:** This getting-started guide follows the common PLC/sensor path (raw → device models). For ERP integration and other patterns, see the [Data Modeling documentation](../usage/data-modeling/).
+
 ## System requirements
 
 **Minimum:**

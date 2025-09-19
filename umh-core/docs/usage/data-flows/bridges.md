@@ -174,10 +174,90 @@ connection:
     port: "{{ .PORT }}"    # Uses PORT variable
 ```
 
+## Data Entry: The Model-First Approach
+
+Apply data models directly in bridges for consistent business naming from the start:
+
+```yaml
+pipeline:
+  processors:
+    - tag_processor:
+        defaults: |
+          msg.meta.location_path = "{{ .location_path }}";
+          msg.meta.data_contract = "_pump_v1";
+          return msg;
+        conditions:
+          - condition: msg.meta.opcua_tag_name == "DB1.DW20"
+            script: |
+              msg.meta.name = "inlet_temperature";
+              return msg;
+output:
+  uns: {}
+```
+
+**Result:** Device tag `DB1.DW20` becomes `umh.v1.enterprise.site._pump_v1.inlet_temperature`
+
+### Exploration with _raw
+
+For initial exploration or debugging, use `_raw` to preserve original naming:
+
+```yaml
+defaults: |
+  msg.meta.location_path = "{{ .location_path }}";
+  msg.meta.data_contract = "_raw";
+  msg.meta.name = msg.meta.opcua_tag_name;  # Keep original
+  return msg;
+```
+
+### Metadata Preservation
+
+Original device tags are automatically preserved in metadata for troubleshooting:
+- `opcua_tag_name`: "DB1.DW20" (original tag)
+- `name`: "inlet_temperature" (business name)
+- `bridged_by`: "protocol-converter_pump-bridge"
+
+Engineers can always trace back to the original device tag when debugging.
+
+## Data Exit: The UNS Input Plugin
+
+Data exits the UNS exclusively through bridges using the `uns-input` plugin:
+
+```yaml
+protocolConverter:
+  - name: uns-to-database
+    desiredState: active
+    protocolConverterServiceConfig:
+      config:
+        dataflowcomponent_write:
+          benthos:
+            input:
+              uns:
+                topics: ["umh.v1.enterprise.+.+._pump_v1.+"]
+            pipeline:
+              processors:
+                - mapping: |
+                    root.timestamp = this.timestamp_ms
+                    root.value = this.value
+                    root.topic = metadata("umh_topic")
+            output:
+              sql_insert:
+                driver: "postgres"
+                dsn: "postgres://user:pass@localhost:5432/manufacturing"
+                table: "pump_data"
+```
+
+**Never use direct Kafka consumers** - always use the uns-input plugin for:
+- Automatic metadata propagation
+- Topic pattern matching
+- Consistent error handling
+- Future-proof architecture
+
+For complete topic pattern documentation, see: [Benthos-UMH UNS Input](https://docs.umh.app/benthos-umh/input/uns-input)
+
 ## Next Steps
 
 - Try the [Getting Started guide](../../getting-started/) to connect your first device
 - Learn about [Data Models](../data-modeling/data-models.md) to structure your data
-- Explore [Bridges](bridges.md) to get data in and out of the UNS
+- Explore [Metadata and Tracing](../unified-namespace/metadata-and-tracing.md) for debugging
 - Use [Stand-alone Flows](stand-alone-flow.md) for custom processing
 - Configure [Stream Processors](stream-processor.md) to transform data

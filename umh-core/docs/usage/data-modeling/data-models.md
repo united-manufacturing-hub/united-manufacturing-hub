@@ -219,4 +219,4 @@ Without a contract, a model is just documentation. With a contract, it becomes v
 
 - **Enforce validation**: [Data Contracts](data-contracts.md) - Make models mandatory
 - **Define value types**: [Payload Shapes](payload-shapes.md) - Specify data types for fields
-- **Create aggregations**: [Stream Processors](stream-processors.md) - Transform Silver to Gold data
+- **Create aggregations**: [Stream Processors](stream-processors.md) - Transform device models to business models

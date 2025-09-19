@@ -2,7 +2,7 @@
 
 > **Prerequisite:** Understand [Data Flow concepts](README.md) and complete the [Getting Started guide](../../getting-started/).
 
-Stream processors transform data already inside the Unified Namespace, aggregating multiple device streams into business KPIs and metrics. They're the third type of data flow, specialized for Silver → Gold data transformations.
+Stream processors transform data already inside the Unified Namespace, aggregating multiple device streams into business KPIs and metrics. They're the third type of data flow, specialized for transforming device models into business models.
 
 ## When to Use
 
@@ -49,8 +49,8 @@ The UI guides you through:
 Stream processors subscribe to multiple UNS topics and output to a single model-based topic:
 
 ```
-Multiple Silver Topics → Stream Processor → Gold Topic
-(device data)             (aggregation)     (business KPI)
+Multiple Device Model Topics → Stream Processor → Business Model Topic
+(e.g., _pump_v1, _cnc_v1)        (aggregation)     (e.g., _maintenance_v1)
 ```
 
 Example: Combining temperature and pressure from different sensors into a pump model:

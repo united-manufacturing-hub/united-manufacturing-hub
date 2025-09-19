@@ -2,16 +2,16 @@
 
 > This article assumes you've completed the [Getting Started guide](../../getting-started/) and understand the [data modeling concepts](README.md).
 
-Stream processors transform multiple Silver data streams into aggregated Gold data, creating business KPIs and metrics from device-level information.
+Stream processors transform multiple device model streams into business models, creating KPIs and metrics from equipment data.
 
 ## Overview
 
-In the [data architecture](README.md#data-architecture-levels), stream processors handle Silver → Gold transformation:
+Stream processors aggregate device data into business KPIs:
 
 ```
-Multiple Silver Topics → Stream Processor → Gold Topic
-                              ↑
-                    Aggregation happens here
+Multiple Device Model Topics → Stream Processor → Business Model Topic
+                                     ↑
+                           Aggregation happens here
 ```
 
 Stream processors are for:
@@ -160,10 +160,10 @@ mapping:
 Stream processors work with:
 - **[Data Models](data-models.md)**: Define output structure via `model` reference
 - **[Data Contracts](data-contracts.md)**: Enforce output validation
-- **[Bridges](../data-flows/bridges.md)**: Provide input data (Silver topics)
+- **[Bridges](../data-flows/bridges.md)**: Provide input data (device model topics)
 
 ## Next Steps
 
-- **Create Silver data**: [Bridges](../data-flows/bridges.md) - Connect devices first
+- **Create device data**: [Bridges](../data-flows/bridges.md) - Connect devices first
 - **Define structures**: [Data Models](data-models.md) - Create output models
-- **Learn patterns**: [README](README.md#the-dual-approach) - Understand Silver → Gold flow
+- **Learn concepts**: [README](README.md) - Understand data modeling approach

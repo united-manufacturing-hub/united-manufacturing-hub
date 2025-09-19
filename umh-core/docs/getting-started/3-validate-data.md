@@ -164,7 +164,7 @@ You now have a complete data pipeline with:
 **Ready for production?** Check out:
 - [Production Guide](../production/README.md) - Sizing, security, monitoring
 - [Data Modeling Deep Dive](../usage/data-modeling/README.md) - Advanced models
-- [Stream Processors](../usage/data-modeling/stream-processors.md) - Transform Silver → Gold
+- [Stream Processors](../usage/data-modeling/stream-processors.md) - Transform device data to business KPIs
 
 ---
 

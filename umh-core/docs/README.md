@@ -42,7 +42,7 @@ Through our getting-started guide, you'll understand:
 * **Data Contract** – Validation rules (`_raw` = no validation, `_modelname_v1` = enforced structure)
 
 Advanced concepts (after getting-started):
-* **Stream Processor** – Transforms messages already inside the UNS (Silver → Gold data)
+* **Stream Processor** – Transforms messages already inside the UNS (device models → business models)
 * **Stand-alone Flow** – Point-to-point when UNS buffering isn't wanted
 * **State Machines** – Component lifecycle management (active/idle/degraded states)
 

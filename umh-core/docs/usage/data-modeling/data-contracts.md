@@ -133,12 +133,13 @@ datacontracts:
 - Rejects non-conforming messages
 - Use for production systems
 
-### 3. Relationship to Data Levels
+### 3. Relationship to Data Types
 
-| Data Level | Common Contracts | Validation |
-|------------|-----------------|------------|
-| Silver (Device) | `_raw`, `_pump_v1`, `_sensor_v1` | Optional to strict |
-| Gold (Business) | `_workorder_v1`, `_maintenance_v1` | Always strict |
+| Data Type | Common Contracts | Validation |
+|-----------|------------------|------------|
+| Raw/Exploration | `_raw` | No validation |
+| Device Models | `_pump_v1`, `_sensor_v1`, `_cnc_v1` | Model-based validation |
+| Business Models | `_workorder_v1`, `_maintenance_v1` | Always strict |
 
 ## Examples
 
