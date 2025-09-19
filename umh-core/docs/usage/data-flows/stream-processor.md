@@ -1,256 +1,201 @@
 # Stream Processors
 
-> **Important**: Stream processors create different views of existing [Silver data](../data-modeling/README.md#silver-data). Most users don't need them - use [bridges](bridges.md) with [data models](../data-modeling/data-models.md) and [data contracts](../data-modeling/data-contracts.md) instead.
->
-> **Current Limitation**: [Time-series data](../unified-namespace/payload-formats.md#time-series-data) only. [Relational output](../unified-namespace/payload-formats.md#relational-data) for business records (work orders, maintenance requests) is planned. For now, use for relational data [standalone flows](stand-alone-flow.md) instead.
+> **Prerequisite:** Understand [Data Flow concepts](README.md) and [Data Modeling](../data-modeling/).
 
-Stream processors transform data that's already in the UNS into a different structure or view.
+Stream processors are specialized data flows that transform existing UNS data into different structures, creating business-oriented views from device data.
 
-## When You Need Stream Processors
+## Overview
 
-| What You Want | Solution | Why |
-|---------------|----------|-----|
-| Structure data from one device | [Bridge](bridges.md) + [data model](../data-modeling/data-models.md) | Bridges can write to any model |
-| Data from multiple devices in one model | Multiple [bridges](bridges.md) → same model | Each bridge fills different fields |
-| **Different view of existing data** | **Stream Processor** | Transform Silver → different structure |
-| **Business records (future)** | **Stream Processor** | When relational support is added |
+Stream processors differ from other data flows:
+- **Bridges**: Connect external devices → UNS
+- **Stand-alone Flows**: Custom point-to-point processing
+- **Stream Processors**: Transform UNS data → different UNS structure
 
-## How Stream Processors Work
+They're part of the [data modeling system](../data-modeling/stream-processors.md) for Silver → Gold transformations.
 
-Stream processors subscribe to multiple UNS topics and transform the data:
+## When to Use Stream Processors
 
-**Key concepts:**
-- **Consumer Group**: Each processor gets a unique consumer group ID (hex-encoded name) for Kafka offset tracking
-- **Topic Subscription**: The `sources` section defines specific topics to subscribe to (not regex patterns)
-- **Dependency Evaluation**: Static mappings evaluate on every message, dynamic mappings only when dependencies arrive
-- **Output Topics**: Generated as `umh.v1.<location_path>._<model_name>_<version>.<field_path>`
+| Scenario | Solution |
+|----------|----------|
+| Get data from one device into a model | Bridge with data contract |
+| Combine data from multiple devices | Multiple bridges → same model |
+| **Create business view from device data** | **Stream Processor** |
+| **Aggregate time-series into KPIs** | **Stream Processor** |
+| **Generate events from state changes** | **Stream Processor** (future) |
 
-Stream processors use templates to define reusable transformations:
+## How They Work as Data Flows
+
+### Data Flow Characteristics
+
+Stream processors are managed data flows with:
+
+1. **Automatic Kafka Consumer Groups**: Each processor gets a unique consumer group (hex-encoded name) for offset tracking
+2. **Topic Subscriptions**: Subscribe to specific UNS topics (no wildcards)
+3. **Dependency-based Processing**: Only process when required source data arrives
+4. **Guaranteed Output Structure**: Publish to model-defined topics
+
+### Processing Pipeline
+
+```
+Source Topics → Stream Processor → Output Topics
+(Silver data)     (Transform)      (Gold data)
+```
+
+Example flow:
+```
+umh.v1.plant.line._raw.temperature ─┐
+                                     ├→ Processor → umh.v1.plant.line._pump_v1.inlet_temp
+umh.v1.plant.line._raw.pressure ────┘              └→ umh.v1.plant.line._pump_v1.outlet_temp
+```
+
+## Time-Series to Relational Challenges
+
+Stream processors currently handle **time-series data only**. Creating relational records from time-series involves complex decisions:
+
+### The Fundamental Problem
+
+PLCs and sensors provide continuous streams:
+```
+Time    | machine_state | temperature | count
+--------|---------------|-------------|-------
+10:00:01| RUNNING       | 45.2        | 100
+10:00:02| RUNNING       | 45.3        | 101
+10:00:03| STOPPED       | 45.1        | 101
+10:00:04| IDLE          | 44.9        | 101
+```
+
+But business systems need discrete records:
+```json
+{
+  "batch_id": "BATCH-123",
+  "start": "10:00:01",
+  "end": "10:00:03",
+  "total_produced": 1,
+  "avg_temperature": 45.2,
+  "result": "COMPLETE"
+}
+```
+
+### Key Challenges
+
+1. **Record Boundaries**
+   - When does a batch start? (state change? operator input? time?)
+   - When is it complete? (state change? count reached? timeout?)
+
+2. **Data Completeness**
+   - What if temperature arrives late?
+   - What if count never updates?
+   - How long to wait for all values?
+
+3. **Edge Cases**
+   - Machine stops mid-batch
+   - Network interruption causes gaps
+   - Values arrive out of order
+   - Clock synchronization issues
+
+4. **State Management**
+   - Track partial records
+   - Handle overlapping events
+   - Manage timeout conditions
+
+### Current Solutions
+
+Until relational output is supported:
+
+**Option 1: Use Stand-alone Flows**
+```yaml
+dataFlow:
+  - name: batch-detector
+    dataFlowComponentConfig:
+      benthos:
+        input:
+          uns:
+            topics: ["umh.v1.+.+.+.+._raw.machine_state"]
+        pipeline:
+          processors:
+            - mapping: |
+                # Detect state changes and create events
+                if this.value == "STOPPED" && meta("previous_state") == "RUNNING" {
+                  root.event = "BATCH_END"
+                  root.batch_data = meta("accumulated_data")
+                }
+        output:
+          sql_insert:  # Write to relational database
+            table: "batch_records"
+```
+
+**Option 2: External Processing**
+- Use stream processors for aggregation
+- External service reads aggregated data
+- Business logic creates relational records
+
+See [Payload Formats](../unified-namespace/payload-formats.md#edge-cases-and-considerations) for detailed guidance.
+
+## Configuration as Data Flow
+
+Stream processors are configured through the data modeling system but execute as data flows:
 
 ```yaml
-# Simplified example
-payloadshapes:
-  timeseries-number:
-    fields:
-      timestamp_ms:
-        _type: number
-      value:
-        _type: number
-
-datamodels:
-  pump:
-    description: "Pump with motor sub-model"
-    versions:
-      v1:
-        structure:
-          pressure:
-            _payloadshape: timeseries-number
-          motor:
-            _refModel:
-              name: motor
-              version: v1
-
-datacontracts:
-  - name: _pump_v1
-    model:
-      name: pump
-      version: v1
-    default_bridges:
-      - type: timescaledb
-        retention_in_days: 365
-
+# Template defines the transformation
 templates:
   streamProcessors:
-    pump_template:
+    pump_monitor:
       model:
         name: pump
         version: v1
       sources:
-        press: "{{ .location_path }}._raw.{{ .pressure_sensor }}"
-        temp: "{{ .location_path }}._raw.tempF"
+        temp_in: "{{ .location_path }}._raw.inlet_temp"
+        temp_out: "{{ .location_path }}._raw.outlet_temp"
       mapping:
-        pressure: "press"
-        temperature: "(temp-32)*5/9"
-        serialNumber: "{{ .sn }}"
+        efficiency: "(temp_out - temp_in) / temp_in * 100"
+        status: "temp_out > 80 ? 'WARNING' : 'OK'"
 
+# Instance creates the data flow
 streamprocessors:
-  - name: pump41_sp
-    _templateRef: "pump_template"
+  - name: pump1_monitor
+    _templateRef: "pump_monitor"
     location:
-      0: corpA
-      1: plant-A
-      2: line-4
-      3: pump41
-    variables:
-      pressure_sensor: "pressure"
-      sn: "SN-P41-007"
+      0: plant
+      1: building_a
+      2: line_1
+      3: pump_1
 ```
 
-## Configuration
+This configuration creates a managed data flow that:
+1. Subscribes to `umh.v1.plant.building_a.line_1.pump_1._raw.inlet_temp|outlet_temp`
+2. Calculates efficiency and status
+3. Publishes to `umh.v1.plant.building_a.line_1.pump_1._pump_v1.efficiency|status`
 
-### Templates
+## Monitoring Stream Processors
 
-Define once, use many times with different variables:
+Stream processors are visible in the **Data Flows → Stream** tab where you can:
 
-```yaml
-templates:
-  streamProcessors:
-    template_name:
-      model:
-        name: model_name
-        version: v1
-      sources:
-        var_name: "{{ .location_path }}._raw.{{ .variable_name }}"
-      mapping:
-        model_field: "javascript_expression"
-        folder:
-          sub_field: "javascript_expression"
-        metadata_field: "{{ .variable_name }}"
-```
+![Stream Processors List](../data-modeling/images/stream-processors-overview.png)
 
-### Stream Processor Instances
+- **View all processors**: Listed with instance and throughput
+- **Add new processors**: Click "Add Stream Processor" button
+- **Monitor status**: Check real-time throughput metrics
+- **Access management**: Right-click for logs, metrics, and configuration
 
-```yaml
-streamprocessors:
-  - name: processor_name
-    _templateRef: "template_name"     # Required: references template
-    location:                        # Hierarchical organization (ISA-95, KKS, or custom)
-      0: enterprise                  # Level 0 (mandatory)
-      1: site                        # Level 1 (optional)
-      2: area                        # Level 2 (optional)
-      3: work_unit                   # Level 3 (optional)
-      4: work_center                 # Level 4 (optional)
-    variables:                       # Template variable substitution
-      variable_name: "value"
-```
+Additional monitoring through:
+1. **Kafka Consumer Groups**: Check offset lag and consumption rate
+2. **Output Topics**: Verify data is being produced
+3. **Logs**: Debug transformation issues
 
-### Location Hierarchy
+## Comparison with Other Data Flows
 
-Stream processors define their position in the hierarchical organization (commonly based on ISA-95 but adaptable to KKS or custom naming standards). For complete hierarchy structure and rules, see [Topic Convention](../unified-namespace/topic-convention.md).
+| Aspect | Bridges | Stand-alone | Stream Processors |
+|--------|---------|-------------|-------------------|
+| **Input** | External protocols | Any source | UNS topics only |
+| **Output** | UNS topics | Any destination | UNS model topics |
+| **Structure** | Tag-based | Free-form | Model-enforced |
+| **Processing** | Tag processor | Any Benthos processor | JavaScript expressions |
+| **Management** | UI + YAML | YAML only | UI + Templates |
+| **Use Case** | Device connectivity | Custom integration | Data transformation |
 
-```yaml
-location:
-  0: corpA        # Enterprise (mandatory)
-  1: plant-A      # Site/Region (optional)
-  2: line-4       # Area/Zone (optional)
-  3: pump42       # Work Unit (optional)
-  4: motor1       # Work Center (optional)
-```
+## Next Steps
 
-This creates UNS topics following the standard convention:
-```
-umh.v1.{0}.{1}.{2}.{3}[.{4}].{contract}.{field_path}
-```
-
-### Variables
-
-Replace placeholders in templates with actual values:
-
-```yaml
-templates:
-  streamProcessors:
-    sensor_template:
-      model:
-        name: temperature
-        version: v1
-      sources:
-        temp: "{{ .location_path }}._raw.{{ .sensor_name }}"
-      mapping:
-        temperatureInC: "(temp - 32) * 5 / 9"
-        sensor_id: "{{ .sensor_id }}"
-        location: "{{ .location_description }}"
-```
-
-**Built-in Variables:**
-- `{{ .location_path }}`: Auto-generated from location hierarchy (e.g., `umh.v1.corpA.plant-A.line-4.pump41`)
-
-**Custom Variables:**
-- Define in `variables:` section of stream processor
-- Reference in templates using `{{ .variable_name }}`
-
-### Mapping
-
-Transform source data with JavaScript:
-
-```yaml
-mapping:
-  # Direct pass-through
-  pressure: "press"
-
-  # Unit conversions
-  temperature: "(temp - 32) * 5 / 9"
-
-  # Calculations
-  total_power: "l1 + l2 + l3"
-
-  # Conditional logic
-  status: "temp > 100 ? 'hot' : 'normal'"
-
-  # Sub-model fields (nested YAML)
-  motor:
-    current: "motor_current_var"
-    rpm: "motor_speed_var"
-
-  # Folder fields
-  diagnostics:
-    vibration: "vibration_var"
-```
-
-Or use static values from variables:
-
-```yaml
-mapping:
-  serialNumber: "{{ .sn }}"
-  firmware_version: "{{ .firmware_ver }}"
-  installation_date: "{{ .install_date }}"
-```
-
-## Example: Creating a Different View
-
-Let's say you have temperature data in Fahrenheit across multiple furnaces (already in Silver as `_raw`), and you want a unified Celsius view:
-
-```yaml
-# Template: Convert any Fahrenheit source to Celsius model
-templates:
-  streamProcessors:
-    temp_celsius_converter:
-      model:
-        name: temperature
-        version: v1
-      sources:
-        tempF: "{{ .location_path }}._raw.temperature_F"
-      mapping:
-        temperatureInC: "(tempF - 32) * 5 / 9"
-
-# Create different view for each furnace
-streamprocessors:
-  - name: furnace1_celsius
-    _templateRef: "temp_celsius_converter"
-    location:
-      0: corpA
-      1: plant-A
-      2: line-4
-      3: furnace1
-
-  - name: furnace2_celsius
-    _templateRef: "temp_celsius_converter"
-    location:
-      0: corpA
-      1: plant-A
-      2: line-4
-      3: furnace2
-```
-
-Now you have both views:
-- Original: `umh.v1.corpA.plant-A.line-4.furnace1._raw.temperature_F` (Fahrenheit)
-- New view: `umh.v1.corpA.plant-A.line-4.furnace1._temperature_v1.temperatureInC` (Celsius)
-
-## Management Console
-
-The Management Console provides a visual interface for creating and managing stream processors. See [Stream Processors UI documentation](../data-modeling/stream-processors.md#creating-a-stream-processor-ui) for details.
-
-## Related Documentation
-
-- [Data Modeling Overview](../data-modeling/README.md) - When to use stream processors vs bridges
-- [Data Models](../data-modeling/data-models.md) - Structure definition
-- [Data Contracts](../data-modeling/data-contracts.md) - Enforcement mechanism
+- Learn [Stream Processor configuration](../data-modeling/stream-processors.md) in detail
+- Understand [Data Models](../data-modeling/data-models.md) that define output structure
+- Explore [Bridges](bridges.md) for device connectivity
+- See [Stand-alone Flows](stand-alone-flow.md) for custom processing
