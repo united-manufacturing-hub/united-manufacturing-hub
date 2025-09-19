@@ -31,13 +31,13 @@ If connecting to a real PLC fails, the latency indicator will turn orange:
 
 ![Bridge Latency Bad](./images/bridge-general-latency-bad.png)
 
-The status "Starting_failed_dfc_missing" means we haven't configured a data flow yet - we've only tested the connection. Let's actually get data flowing by configuring the "Read" tab.
+The status "starting_failed_dfc_missing" means we haven't configured a data flow yet - we've only tested the connection. Let's actually get data flowing by configuring the "Read" tab.
 
 ![Bridge Read Header](./images/bridge-read-header.png)
 
 - **Protocol:** Select the protocol to read from. Choose "Generate" to simulate data without a real PLC.
 - **Data Type:** Select "Time Series" (the standard for PLC tags).
-- **Monitoring:** Shows the bridge state (currently "Starting_failed_dfc_missing") and throughput (currently zero).
+- **Monitoring:** Shows the bridge state (currently "starting_failed_dfc_missing") and throughput (currently zero).
 
 ![Bridge Read Input](./images/bridge-read-input.png)
 
