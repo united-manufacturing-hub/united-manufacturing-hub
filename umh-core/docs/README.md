@@ -31,16 +31,20 @@ That one Docker container includes everything you need:
 
 Through our getting-started guide, you'll understand:
 
+* **Instance** – A running UMH Core container identified by its location hierarchy
+* **Management Console** – Cloud UI for deploying and managing instances without touching YAML
 * **Unified Namespace (UNS)** – The event-driven data backbone that eliminates point-to-point connections
-* **Bridge** – The gateway for external data into the UNS (the ONLY way data enters)
+* **Bridge** – The gateway for external data into the UNS (**the ONLY way data enters**)
 * **Topic** – How data is addressed: `location.contract.virtual_path.tag_name`
 * **Tag** – A time-series data point (like a PLC variable or sensor reading)
+* **Virtual Path** – Folder organization within topics for grouping related data
 * **Data Model** – Templates that define and validate data structure
-* **Data Contract** – Validation rules (`_raw` = no validation, `_model_v1` = enforced structure)
+* **Data Contract** – Validation rules (`_raw` = no validation, `_modelname_v1` = enforced structure)
 
 Advanced concepts (after getting-started):
-* **Stream Processor** – Transforms messages already inside the UNS
+* **Stream Processor** – Transforms messages already inside the UNS (Silver → Gold data)
 * **Stand-alone Flow** – Point-to-point when UNS buffering isn't wanted
+* **State Machines** – Component lifecycle management (active/idle/degraded states)
 
 ### How It Works
 
@@ -53,16 +57,19 @@ Sensors (OPC UA)     ─┼─[Bridge]─▶ Unified Namespace ─[Bridge]─┼
 MES/ERP (REST)       ─┘              (organized data)            └─▶ Databases
 ```
 
-1. **Bridges** connect your devices to the UNS (50+ protocols supported)
-2. **Data flows** into organized topics: `enterprise.site.area.line._contract.tag`
-3. **Models** validate critical data (optional but recommended)
+1. **Bridges** connect your devices to the UNS (50+ protocols supported) - they're the ONLY entry point
+2. **Data flows** into organized topics: `enterprise.site.area.line._contract.virtual_path.tag`
+3. **Models** validate critical data (optional but recommended for production)
 4. **Consumers** subscribe to the data they need
+5. **Configure** via Management Console UI or directly edit YAML files
 
 _Every message is buffered, validated, and organized - no data loss, guaranteed structure._
 
 ## Getting Started
 
-**New to UMH Core?** Follow our progressive 4-step guide:
+**Quick Start:** Sign up at [management.umh.app](https://management.umh.app) and deploy your first instance in 60 seconds through the UI.
+
+**Prefer step-by-step learning?** Follow our progressive 4-step guide:
 
 1. [**Install UMH Core**](getting-started/README.md) - One Docker command (5 minutes)
 2. [**Connect Your First Data**](getting-started/1-connect-data.md) - Create a Bridge and see data flow (10 minutes)
@@ -74,9 +81,11 @@ By the end, you'll have production-ready data pipelines with validation, organiz
 ## Documentation Structure
 
 * [**Usage Guides**](usage/) - Step-by-step implementation guides
+  * [**Instances**](usage/instances/) - Managing and configuring UMH Core deployments
   * [**Unified Namespace**](usage/unified-namespace/) - Core messaging architecture
-  * [**Data Modeling**](usage/data-modeling/) - Enterprise data structuring
   * [**Data Flows**](usage/data-flows/) - Connect and process data streams
+  * [**Data Modeling**](usage/data-modeling/) - Enterprise data structuring
+  * [**Management Console**](usage/management-console/) - Cloud-based control center
 * [**Production Deployment**](production/) - Scaling, security, and operations
 * [**Reference Documentation**](reference/) - Complete API and configuration reference
 
