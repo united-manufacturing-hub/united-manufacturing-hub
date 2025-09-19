@@ -59,9 +59,7 @@ For text-based status and identifiers.
 
 **Use cases:** Machine states, batch IDs, product codes, operator names
 
-## Custom Shapes for Relational Data
-
-### When to Use Custom Shapes
+## When to Use Custom Shapes
 
 Custom shapes are specifically for **relational data** - business records with multiple related fields that must stay together.
 
@@ -74,9 +72,11 @@ Custom shapes are specifically for **relational data** - business records with m
 
 Learn more: [Payload Formats](../unified-namespace/payload-formats.md)
 
-### Defining Custom Shapes
+## Configuration
 
 Access configuration via: Instances → Select instance → `...` → Config File
+
+### Defining Custom Shapes
 
 ```yaml
 payloadShapes:
@@ -126,17 +126,6 @@ This creates topics like:
 - `enterprise.site._work_order_v1.delete` - Delete orders
 
 ## Processing Relational Data
-
-### Bridge Configuration
-
-To use custom shapes, specify `relational` as the data type in your bridge or standalone flow:
-
-```yaml
-protocolConverter:
-  - name: mes-integration
-    dataFlowComponent:
-      processingType: relational  # Required for custom shapes
-```
 
 ### Example: Processing Work Orders
 

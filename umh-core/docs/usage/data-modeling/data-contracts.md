@@ -38,7 +38,17 @@ The Management Console provides read-only access to contracts:
 - **Model**: The model and version being enforced (e.g., `cnc (v1)`)
 - **Stream Processors**: Count of processors using this contract
 
+### Auto-Creation via UI
+
+When you create a model in the UI, it automatically generates a matching contract:
+
+1. Create model `pump` version `v1` in UI
+2. System auto-creates contract `_pump_v1`
+3. Contract immediately available for use in bridges
+
 ## Configuration
+
+Access configuration via: Instances → Select instance → `...` → Config File
 
 ### Basic Structure
 
@@ -57,14 +67,6 @@ Contracts follow the pattern `_modelname_version`:
 - Include model name
 - End with version number
 - Examples: `_pump_v1`, `_temperature_sensor_v2`, `_workorder_v1`
-
-### Auto-Creation via UI
-
-When you create a model in the UI, it automatically generates a matching contract:
-
-1. Create model `pump` version `v1` in UI
-2. System auto-creates contract `_pump_v1`
-3. Contract immediately available for use in bridges
 
 ## Enforcement Mechanism
 

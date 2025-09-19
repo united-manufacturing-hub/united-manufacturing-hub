@@ -17,6 +17,14 @@ Stream processors transform data that's already in the UNS into a different stru
 
 ## How Stream Processors Work
 
+Stream processors subscribe to multiple UNS topics and transform the data:
+
+**Key concepts:**
+- **Consumer Group**: Each processor gets a unique consumer group ID (hex-encoded name) for Kafka offset tracking
+- **Topic Subscription**: The `sources` section defines specific topics to subscribe to (not regex patterns)
+- **Dependency Evaluation**: Static mappings evaluate on every message, dynamic mappings only when dependencies arrive
+- **Output Topics**: Generated as `umh.v1.<location_path>._<model_name>_<version>.<field_path>`
+
 Stream processors use templates to define reusable transformations:
 
 ```yaml
@@ -58,12 +66,12 @@ templates:
         name: pump
         version: v1
       sources:
-        press: "${{ .location_path }}._raw.${{ .pressure_sensor }}"
-        temp: "${{ .location_path }}._raw.tempF"
+        press: "{{ .location_path }}._raw.{{ .pressure_sensor }}"
+        temp: "{{ .location_path }}._raw.tempF"
       mapping:
         pressure: "press"
         temperature: "(temp-32)*5/9"
-        serialNumber: "${{ .sn }}"
+        serialNumber: "{{ .sn }}"
 
 streamprocessors:
   - name: pump41_sp
@@ -92,12 +100,12 @@ templates:
         name: model_name
         version: v1
       sources:
-        var_name: "${{ .location_path }}._raw.${{ .variable_name }}"
+        var_name: "{{ .location_path }}._raw.{{ .variable_name }}"
       mapping:
         model_field: "javascript_expression"
         folder:
           sub_field: "javascript_expression"
-        metadata_field: "${{ .variable_name }}"
+        metadata_field: "{{ .variable_name }}"
 ```
 
 ### Stream Processor Instances
@@ -146,19 +154,19 @@ templates:
         name: temperature
         version: v1
       sources:
-        temp: "${{ .location_path }}._raw.${{ .sensor_name }}"
+        temp: "{{ .location_path }}._raw.{{ .sensor_name }}"
       mapping:
         temperatureInC: "(temp - 32) * 5 / 9"
-        sensor_id: "${{ .sensor_id }}"
-        location: "${{ .location_description }}"
+        sensor_id: "{{ .sensor_id }}"
+        location: "{{ .location_description }}"
 ```
 
 **Built-in Variables:**
-- `${{ .location_path }}`: Auto-generated from location hierarchy (e.g., `umh.v1.corpA.plant-A.line-4.pump41`)
+- `{{ .location_path }}`: Auto-generated from location hierarchy (e.g., `umh.v1.corpA.plant-A.line-4.pump41`)
 
 **Custom Variables:**
 - Define in `variables:` section of stream processor
-- Reference in templates using `${{ .variable_name }}`
+- Reference in templates using `{{ .variable_name }}`
 
 ### Mapping
 
@@ -192,9 +200,9 @@ Or use static values from variables:
 
 ```yaml
 mapping:
-  serialNumber: "${{ .sn }}"
-  firmware_version: "${{ .firmware_ver }}"
-  installation_date: "${{ .install_date }}"
+  serialNumber: "{{ .sn }}"
+  firmware_version: "{{ .firmware_ver }}"
+  installation_date: "{{ .install_date }}"
 ```
 
 ## Example: Creating a Different View
@@ -210,7 +218,7 @@ templates:
         name: temperature
         version: v1
       sources:
-        tempF: "${{ .location_path }}._raw.temperature_F"
+        tempF: "{{ .location_path }}._raw.temperature_F"
       mapping:
         temperatureInC: "(tempF - 32) * 5 / 9"
 
@@ -239,7 +247,7 @@ Now you have both views:
 
 ## Management Console
 
-> 🚧 **Roadmap Item** - Visual interface for creating stream processors coming soon.
+The Management Console provides a visual interface for creating and managing stream processors. See [Stream Processors UI documentation](../data-modeling/stream-processors.md#creating-a-stream-processor-ui) for details.
 
 ## Related Documentation
 

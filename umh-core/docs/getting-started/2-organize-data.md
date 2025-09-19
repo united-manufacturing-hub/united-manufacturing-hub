@@ -45,12 +45,6 @@ s7comm:
     slot: 1
 ```
 
-**What are these addresses?**
-- `DB1` = Data Block 1 (like a folder in your PLC)
-- `DW20` = Data Word at position 20 (a number)
-- `S30.10` = String, 30 characters starting at position 10
-- `I270` = Integer at position 270
-
 ### The Magic Line
 
 In the **Processing** section, look at the **Always** code:
