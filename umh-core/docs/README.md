@@ -48,7 +48,7 @@ Advanced concepts (after getting-started):
 
 ### How It Works
 
-```
+```text
 Your Factory Floor                    UMH Core                         Your Systems
 ──────────────────                    ────────                         ────────────
                                                         

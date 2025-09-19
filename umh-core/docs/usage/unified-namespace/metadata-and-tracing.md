@@ -48,40 +48,8 @@ The Management Console shows metadata in the details panel:
 
 For details, see [Topic Browser documentation](topic-browser.md).
 
-
-
-## Common Metadata Fields
-
-### Core UNS Metadata
-| Field | Description | Example |
-|-------|-------------|---------|
-| `umh_topic` | Full UNS topic path | `umh.v1.enterprise.chicago._pump_v1.temperature` |
-| `location_path` | Location path in hierarchy | `enterprise.chicago.packaging.line-1` |
-| `data_contract` | Applied data contract | `_pump_v1` |
-| `name` | Data point name | `inlet_temperature` |
-| `virtual_path` | Optional grouping | `motor.electrical` |
-
-### Kafka/Redpanda Metadata
-| Field | Description | Example |
-|-------|-------------|---------|
-| `kafka_topic` | Internal topic | `umh.messages` |
-| `kafka_msg_key` | Message key | Same as umh_topic |
-| `kafka_timestamp_ms` | Broker timestamp | `1758290100065` |
-| `kafka_offset` | Message offset | `12345` |
-| `kafka_partition` | Topic partition | `0` |
-
-### Protocol-Specific Metadata
-
-**OPC UA** (documented fields):
-- `opcua_tag_name` - The sanitized Node ID
-- `opcua_tag_path` - Dot-separated path to the tag
-- `opcua_tag_type` - The data type
-- `opcua_source_timestamp` - OPC UA SourceTimestamp
-- `opcua_server_timestamp` - OPC UA ServerTimestamp
-- Additional attributes like `opcua_attr_nodeid`, `opcua_attr_browsename`, etc.
-
-**Other Protocols**:
-Each protocol input adds its own metadata. For complete field documentation, see:
+**Further metadata**:
+Each input or processing step adds its own metadata. For complete field documentation, see:
 - [Benthos-UMH Input Plugins](https://docs.umh.app/benthos-umh/input)
 
 ## Next Steps

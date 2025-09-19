@@ -13,7 +13,7 @@ In the processing code, you'll work with these as `msg.payload` and `msg.meta`.
 ## The Challenge
 
 Right now you have one measurement going to one place:
-```
+```text
 enterprise.siteA._raw.my_data
 ```
 
@@ -103,7 +103,7 @@ Click **Save & Deploy**.
 
 In **Topic Browser**, you now see ALL your PLC data automatically organized:
 
-```
+```text
 enterprise.sksk._raw.DB1.DW20     [12345]
 enterprise.sksk._raw.DB1.S30.10   ["Product ABC"]
 enterprise.sksk._raw.DB3.I270     [789]
@@ -193,7 +193,7 @@ return msg;
 
 In **Topic Browser**, your data is now organized:
 
-```
+```text
 enterprise.sksk._raw.production.DB1.DW20     [12345]
 enterprise.sksk._raw.production.DB1.S30.10   ["Product ABC"]
 enterprise.sksk._raw.quality.DB3.I270        [789]
@@ -239,7 +239,7 @@ return msg;
 
 **ONE bridge now routes to MULTIPLE machines:**
 
-```
+```text
 enterprise.sksk.machine-1._raw.sensors.DB1.DW20     [12345]
 enterprise.sksk.machine-1._raw.sensors.DB1.S30.10   ["Product ABC"]
 enterprise.sksk.machine-2._raw.quality.DB3.I270     [789]
@@ -249,7 +249,7 @@ enterprise.sksk.machine-2._raw.quality.DB3.I270     [789]
 
 You now control every part of the topic:
 
-```
+```text
 umh.v1.enterprise.sksk.machine-1._raw.sensors.DB1.DW20
        └─ fixed ─┘└─ location_path ─┘     └virtual┘└tag┘
                                              path   name

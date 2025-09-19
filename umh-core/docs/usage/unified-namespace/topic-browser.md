@@ -106,5 +106,3 @@ agent:
 ## Next Steps
 
 - [**Metadata and Tracing**](metadata-and-tracing.md) - Understanding metadata fields
-- [**Consuming Data**](consuming-data.md) - Access data programmatically
-- [**Troubleshooting**](troubleshooting.md) - Common issues

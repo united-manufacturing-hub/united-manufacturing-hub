@@ -8,7 +8,7 @@ Data contracts are the enforcement mechanism that makes data models mandatory. W
 
 In the [component chain](README.md#the-component-chain), contracts sit between models and execution:
 
-```
+```text
 Payload Shapes → Data Models → Data Contracts → Data Flows
                                       ↑
                               Enforcement happens here
@@ -34,7 +34,7 @@ The Management Console provides read-only access to contracts:
 
 **What you see in the UI:**
 - **Name**: Contract identifier (e.g., `_cnc_v1`, `_pump_v2`)
-- **Instance**: Which UMH instance owns the contract
+- **Instance**: Which UMH Core instance owns the contract
 - **Model**: The model and version being enforced (e.g., `cnc (v1)`)
 - **Stream Processors**: Count of processors using this contract
 
@@ -72,7 +72,7 @@ Contracts follow the pattern `_modelname_version`:
 
 ### Where Validation Happens
 
-```
+```text
 Bridge → UNS Output Plugin → [Contract Check] → Kafka/Redpanda
                                     ↑
                             Validation happens here
@@ -92,7 +92,7 @@ The UNS output plugin (`output: uns: {}`) performs validation:
 
 When validation fails:
 
-```
+```text
 ERROR: schema validation failed for message with topic 'umh.v1.enterprise.site._pump_v1.invalid.path':
 Valid virtual_paths are: [pressure, temperature, motor.rpm].
 Your virtual_path is: invalid.path

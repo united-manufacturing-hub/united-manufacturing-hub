@@ -7,7 +7,7 @@ The Unified Namespace (UNS) is where ALL your industrial data lives in one organ
 ## The Problem: Spaghetti Diagrams
 
 Traditional manufacturing IT looks like this:
-```
+```text
 100 devices × 100 systems = 10,000 point-to-point connections
 ```
 
@@ -16,7 +16,7 @@ Every new dashboard means updating PLCs. Every new sensor means modifying databa
 ## The Solution: One Central Hub
 
 The UNS flips this architecture:
-```
+```text
 100 devices → 1 namespace ← 100 systems = 200 total connections
 ```
 

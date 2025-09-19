@@ -96,7 +96,7 @@ Exactly as we configured it! Click on `my_data` to see details.
 
 You just created a complete data pipeline:
 
-```
+```text
 Bridge → Processing → Unified Namespace → Topic Browser
 ```
 

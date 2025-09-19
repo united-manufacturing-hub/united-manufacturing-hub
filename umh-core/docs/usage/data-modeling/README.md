@@ -4,7 +4,7 @@ Data modeling in UMH Core transforms device data into business-ready information
 
 ## The Component Chain
 
-```
+```text
 Payload Shapes → Data Models → Data Contracts → Data Flows
        ↓              ↓              ↓                ↓
   Value types     Structure      Enforcement    Execution
@@ -20,7 +20,7 @@ Each component builds on the previous:
 
 In any UNS topic, data modeling controls specific portions:
 
-```
+```text
 umh.v1.enterprise.site.area.line._contract.virtual.path.name
        └───────── fixed ─────────┘         └── modeled ──┘
 ```
@@ -39,7 +39,7 @@ Data can follow these patterns based on your needs:
 ### Device Language (_raw)
 Start by exploring your equipment data with original naming:
 
-```
+```text
 Device → Bridge → _raw → Topic Browser
 ```
 
@@ -51,7 +51,7 @@ Device → Bridge → _raw → Topic Browser
 ### Device Models
 Apply business naming directly in bridges:
 
-```
+```text
 Device → Bridge + Model → _pump_v1 → Applications
          (one step)
 ```
@@ -64,7 +64,7 @@ Device → Bridge + Model → _pump_v1 → Applications
 ### Business Models
 Transform device data into business KPIs:
 
-```
+```text
 Multiple _pump_v1 → Stream Processor → _maintenance_v1 → Enterprise Apps
 ```
 
@@ -177,7 +177,7 @@ Based on your data source, choose the appropriate path:
 ## Implementation Patterns
 
 ### Pattern 1: Equipment Monitoring
-```
+```text
 PLC tags → Bridge + tag_processor → Device Model (_pump_v1)
 Location: enterprise.site.line.pump-01
 Model adds: .temperature, .pressure, .status
@@ -185,13 +185,13 @@ Model adds: .temperature, .pressure, .status
 **When**: Connecting industrial equipment with time-series data
 
 ### Pattern 2: ERP Integration
-```
+```text
 SAP work orders → Bridge + nodered_js → Business Model (_workorder_v1)
 ```
 **When**: Connecting business systems with relational data
 
 ### Pattern 3: Multi-Site Aggregation
-```
+```text
 site1._pump_v1 ─┐
 site2._pump_v1 ─├→ Stream Processor → _maintenance_v1
 site3._pump_v1 ─┘   (JavaScript expressions)
@@ -199,7 +199,7 @@ site3._pump_v1 ─┘   (JavaScript expressions)
 **When**: Creating KPIs from multiple device models
 
 ### Pattern 4: Exploration First
-```
+```text
 Unknown PLC → Bridge + tag_processor → _raw → Topic Browser
                                            ↓
                                     Design device model
@@ -245,7 +245,7 @@ Create separate models:
 ### What about equipment-specific data?
 
 Use virtual paths to organize:
-```
+```text
 _pump_v1.motor.temperature
 _pump_v1.motor.current
 _pump_v1.diagnostics.vibration

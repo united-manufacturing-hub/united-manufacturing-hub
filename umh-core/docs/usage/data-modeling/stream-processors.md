@@ -8,7 +8,7 @@ Stream processors are one way to create business models by transforming multiple
 
 Stream processors aggregate device data into business KPIs:
 
-```
+```text
 Multiple Device Model Topics → Stream Processor → Business Model Topic
                                      ↑
                            Aggregation happens here
@@ -37,7 +37,7 @@ The Management Console provides visual stream processor creation:
 
 **What you see in the UI:**
 - **Name**: Processor identifier
-- **Instance**: Which UMH instance runs the processor
+- **Instance**: Which UMH Core instance runs the processor
 - **Throughput**: Messages processed per second
 
 ## Creating a Stream Processor (UI)

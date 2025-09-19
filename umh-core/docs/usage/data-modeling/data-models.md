@@ -8,7 +8,7 @@ Data models define the hierarchical structure of your industrial data. They crea
 
 In the [component chain](README.md#the-component-chain), models provide the structure:
 
-```
+```text
 Payload Shapes → Data Models → Data Contracts → Data Flows
                       ↑
                  Structure defined here
@@ -37,7 +37,7 @@ The Management Console provides full control over data models:
 
 **What you see in the UI:**
 - **Name**: Model identifier (e.g., `cnc`, `pump`, `temperature-sensor`)
-- **Instance**: Which UMH instance owns the model
+- **Instance**: Which UMH Core instance owns the model
 - **Description**: Optional description of the model's purpose
 - **Latest**: Current version number (v1, v2, etc.)
 
@@ -82,7 +82,7 @@ structure:
 ```
 
 **Complete topic path:**
-```
+```text
 umh.v1.enterprise.site._pump_v1.vibration.x-axis
        └─ fixed ─┘     └contract┘└─from model─┘
 ```

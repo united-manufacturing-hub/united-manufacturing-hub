@@ -48,7 +48,7 @@ The UI guides you through:
 
 Stream processors subscribe to multiple UNS topics and output to a single model-based topic:
 
-```
+```text
 Multiple Device Model Topics → Stream Processor → Business Model Topic
 (e.g., _pump_v1, _cnc_v1)        (aggregation)     (e.g., _maintenance_v1)
 ```

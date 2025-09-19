@@ -83,10 +83,11 @@ Click **Save & Deploy**.
 
 **Your deployment fails!** Look at the error:
 
-```
+```text
 schema validation failed for message with topic 'umh.v1.enterprise.sksk._cnc_v1.DB1.DW20':
 Valid virtual_paths are: [vibration.x-axis, vibration.y-axis].
 Your virtual_path is: DB1.DW20
+Fix: Update the bridge to set meta.virtual_path to 'vibration' and meta.tag_name to 'x-axis' or 'y-axis'
 ```
 
 Data models ENFORCE structure. Your S7 address `DB1.DW20` doesn't match the expected paths `vibration.x-axis` or `vibration.y-axis`.
@@ -103,7 +104,6 @@ Instead of forcing ALL data into the model, let's be selective. Change your **Al
 // Most data stays unvalidated
 msg.meta.data_contract = "_raw";
 msg.meta.tag_name = msg.meta.s7_address;
-msg.payload = msg.payload;
 return msg;
 ```
 
@@ -132,7 +132,7 @@ Click **Save & Deploy**. Now it succeeds!
 ![Topic Browser with Validated Data](./images/3-topic-browser-correct.png)
 
 In **Topic Browser**, you now see:
-```
+```text
 enterprise.sksk._cnc_v1.vibration.x-axis    [12345]  ✓ Validated
 enterprise.sksk._raw.DB1.S30.10             ["text"]  (Unvalidated)
 enterprise.sksk._raw.DB3.I270               [789]     (Unvalidated)

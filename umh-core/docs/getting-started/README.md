@@ -65,7 +65,7 @@ If you see `s6-svscan: warning: unable to stat benthos-dataflow-*` or protocol c
 On RHEL, Rocky, or other SELinux-enabled systems, append `:z` to the volume mount so Docker can relabel the directory:
 
 ```bash
--v "$(pwd)/umh-core-data:/data:z"
+-v "$(pwd):/data:z"
 ```
 
 If you omit this, you might see `chmod: /data/config.yaml: no such file or directory` and the container fails to start.
