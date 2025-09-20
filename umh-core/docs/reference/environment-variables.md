@@ -9,5 +9,5 @@ This is the reference for all environment variables used by umh-core. These vari
 | API\_URL         | https://management.umh.app/api, https://staging.management.umh.app/api | Management Console API endpoint. Use staging for testing environments |
 | RELEASE\_CHANNEL | enterprise, stable, nightly                                            | Auto-update channel. Enterprise = most stable, nightly = latest features |
 | ALLOW\_INSECURE\_TLS | true, false                                                        | Skip TLS certificate verification. Use for corporate firewalls with MITM proxies |
-| LOCATION\_<0-6>  | (string values)                                                        | Sets Agent location hierarchy levels 0-6. Example: LOCATION_0=factory, LOCATION_1=line1 |
+| LOCATION\_<0-6>  | (string values)                                                        | Sets Agent location path levels 0-6. Example: LOCATION_0=factory, LOCATION_1=line1 |
 

@@ -1,34 +1,61 @@
 # Unified Namespace
 
-The Unified Namespace (UNS) is the core messaging backbone of UMH Core, providing a standardized, event-driven architecture that eliminates point-to-point integration complexity.
+> **Prerequisite:** Complete the [Getting Started guide](../../getting-started/) to see the UNS in action with real devices and data.
 
-## Key Concepts
+The Unified Namespace (UNS) is where ALL your industrial data lives in one organized, accessible place. Instead of hunting through 50 different systems to find a temperature reading, everything flows through one central hub.
 
-Traditional manufacturing systems create "spaghetti diagrams" with point-to-point connections between every system. The UNS flips this model:
+## The Problem: Spaghetti Diagrams
 
-- **Event-driven**: Devices publish data as events happen
-- **Standard hierarchy**: Flexible location paths (supports ISA-95, KKS, or custom naming)
-- **Schema enforcement**: Data contracts ensure consistent payload formats
-- **Publish-regardless**: Producers don't need to know about consumers
+Traditional manufacturing IT looks like this:
+```text
+100 devices × 100 systems = 10,000 point-to-point connections
+```
+
+Every new dashboard means updating PLCs. Every new sensor means modifying databases. Every integration breaks when you upgrade. It's a maintenance nightmare that gets worse with scale.
+
+## The Solution: One Central Hub
+
+The UNS flips this architecture:
+```text
+100 devices → 1 namespace ← 100 systems = 200 total connections
+```
+
+All data flows through one place with consistent structure, validation, and access patterns.
+
+## How It Works
+
+### Publish Regardless
+Your PLC doesn't care if anyone is listening. It publishes "pump is running" to the UNS and moves on. When someone needs that data next week, it's already there. No reprogramming required.
+
+### Structured Topics
+Every piece of data has an address that answers three questions:
+- **WHERE**: `enterprise.site.area.line` - the location path
+- **WHAT**: `_pump_v1` - the data contract defining structure
+- **WHICH**: `inlet_temperature` - the specific data point
+
+Result: `umh.v1.enterprise.site.area.line._pump_v1.inlet_temperature`
+
+### Bridges Handle All Data Flow
+Data enters and exits the UNS exclusively through [bridges](../data-flows/bridges.md). This ensures every message gets proper context, validation, and organization.
+
+### From Device to Business
+Start simple, add complexity as needed:
+- **`_raw`** - Mirror device 1:1 for initial exploration and debugging
+- **`_pump_v1` and similar** - Apply business names directly in bridges for production
+- **`_maintenance_v1` and similar** - From stream processors (aggregating device models) OR directly from ERP/MES systems
+
+The progression: Use `_raw` temporarily to understand your data, then apply device models directly in bridges for production. Business models can be created by aggregating device models via stream processors OR by connecting directly to business systems like ERP/MES.
 
 ## Documentation Structure
 
-- **[Overview](overview.md)** - Core UNS concepts and benefits
-- **[Topic Convention](topic-convention.md)** - Hierarchical naming structure (ISA-95 compatible)
-- **[Payload Formats](payload-formats.md)** - Message structure and data types
-- **[Producing Data](producing-data.md)** 🚧 - How to publish data to the UNS
-- **[Consuming Data](consuming-data.md)** 🚧 - How to subscribe and process UNS data
+- **[Topic Convention](topic-convention.md)** - How data is addressed in the namespace
+- **[Payload Formats](payload-formats.md)** - Time-series vs relational message structure
+- **[Metadata and Tracing](metadata-and-tracing.md)** - Original tags and data lineage
+- **[Topic Browser](topic-browser.md)** - Explore your namespace in real-time
 
-## Related Documentation
+## Next Steps
 
-- **[Data Modeling](../data-modeling/README.md)** - Structure your industrial data with reusable models
-- **[Data Flows](../data-flows/README.md)** - Connect external systems via Bridges and Stand-alone Flows
-- **[Configuration Reference](../../reference/configuration-reference.md)** - YAML configuration for UNS integration
-
-## Learn More
-
-For deeper understanding of UNS concepts, see our educational content:
-- [The Rise of the Unified Namespace](https://learn.umh.app/lesson/chapter-2-the-rise-of-the-unified-namespace/) - Core UNS principles
-- [NAMUR Open Architecture versus Unified Namespace](https://learn.umh.app/blog/namur-open-architecture-versus-unified-namespace-two-sides-of-the-same-coin/) - Industrial standards context
-- [What is MQTT? Why Most MQTT Explanations Suck](https://learn.umh.app/blog/what-is-mqtt-why-most-mqtt-explanations-suck-and-our-attempt-to-fix-them/) - MQTT vs UNS comparison
-
+1. **Explore your data**: Open the [Topic Browser](topic-browser.md)
+2. **Connect devices**: Create [bridges](../data-flows/bridges.md)
+3. **Model your data**: Define [data models](../data-modeling/data-models.md)
+4. **Create KPIs**: Build [stream processors](../data-modeling/stream-processors.md)

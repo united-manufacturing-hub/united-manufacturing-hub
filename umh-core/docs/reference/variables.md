@@ -141,7 +141,7 @@ If a variable is not resolving:
 1. Check spelling and case sensitivity
 2. Verify the variable is defined in the `variables:` section (for user variables)
 3. Ensure Connection is properly attached (for `.IP`/`.PORT`)
-4. Check that location hierarchy is configured (for location variables)
+4. Check that location path is configured (for location variables)
 
 ### Deprecated Variable Warnings
 Replace deprecated variables with their current equivalents:
