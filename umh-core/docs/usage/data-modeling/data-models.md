@@ -1,348 +1,222 @@
 # Data Models
 
-Data models provide reusable, hierarchical data structures for industrial assets and processes.
+> This article assumes you've completed the [Getting Started guide](../../getting-started/) and understand the [data modeling concepts](README.md).
 
-Data models define the structure and schema of your industrial data. They act as reusable templates that can be instantiated across multiple assets, ensuring consistency and enabling powerful sub-model composition.
+Data models define the hierarchical structure of your industrial data. They create the virtual paths and fields that organize raw data into meaningful information.
 
 ## Overview
 
-Data models are stored in the `datamodels:` configuration section and define the logical structure of your data without specifying where it comes from or where it goes. They focus purely on the "what" - what fields exist, their types, and how they're organized.
+In the [component chain](README.md#the-component-chain), models provide the structure:
+
+```text
+Payload Shapes → Data Models → Data Contracts → Data Flows
+                      ↑
+                 Structure defined here
+```
+
+When you create a data model, you're defining:
+- Virtual paths - organizational folders (e.g., `vibration`, `motor.electrical`)
+- Fields - data endpoints with specific types (e.g., `temperature`, `pressure`)
+- Relationships - how components nest and reference each other
+
+## UI Capabilities
+
+The Management Console provides full control over data models:
+
+| Feature | Available | Notes |
+|---------|-----------|-------|
+| View model list | ✅ | Shows all models with versions |
+| Create models | ✅ | Visual editor with YAML preview |
+| View model details | ✅ | Inspect structure and configuration |
+| Create new versions | ✅ | Models are immutable, edit by versioning |
+| Reference sub-models | ✅ | Link to other models via `_refModel` |
+| Delete models | ✅ | Remove unused model versions |
+| Direct editing | ❌ | Use "New Version" to modify |
+
+![Data Models List](./images/data-models.png)
+
+**What you see in the UI:**
+- **Name**: Model identifier (e.g., `cnc`, `pump`, `temperature-sensor`)
+- **Instance**: Which UMH Core instance owns the model
+- **Description**: Optional description of the model's purpose
+- **Latest**: Current version number (v1, v2, etc.)
+
+### Model Actions
+
+Click the three-dot menu (⋮) on any model to access actions:
+
+![Data Model Actions](./images/data-models-context-menu.png)
+
+- **Data Model**: View the model's structure and YAML configuration
+- **New Version**: Create a new version with modifications (since models are immutable)
+- **Delete**: Remove the model (only if not in use by contracts or bridges)
+
+![Data Model Creation](./images/data-models-add.png)
+
+## Configuration
+
+### Basic Structure
 
 ```yaml
 datamodels:
-  pump:
-    description: "pump from vendor ABC"
-    versions:
-      v1:
-        structure:
-          count:
-            _payloadshape: timeseries-number
-          serialNumber:
-            _payloadshape: timeseries-string
+  - name: pump                    # Model name
+    description: "Pump monitoring" # Optional description
+    version:
+      v1:                         # Version identifier
+        structure:                # Hierarchical definition
+          pressure:
+            inlet:
+              _payloadshape: timeseries-number
+            outlet:
+              _payloadshape: timeseries-number
 ```
 
-## Payload Shapes
+### How Structure Becomes Topics
 
-Payload shapes define the JSON schema for field values. They provide reusable templates for common data structures in industrial systems. For complete documentation on available payload shapes, their structure, and usage examples, see [Payload Shapes](payload-shapes.md)
+Model structure directly maps to UNS topics:
 
-Common payload shapes include:
-- `timeseries-number`: For numeric sensor data
-- `timeseries-string`: For textual data and status values
+```yaml
+structure:
+  vibration:        # Creates: .../_pump_v1.vibration
+    x-axis:         # Creates: .../_pump_v1.vibration.x-axis
+```
 
-## Structure Elements
+**Complete topic path:**
+```text
+umh.v1.enterprise.site._pump_v1.vibration.x-axis
+       └─ fixed ─┘     └contract┘└─from model─┘
+```
 
-Data models support three types of structural elements:
+## The Three Building Blocks
 
 ### Fields
 
-Fields represent actual data points and contain a `_payloadshape:` specification:
-
 ```yaml
-pressure:
-  _payloadshape: timeseries-number
+temperature:
+  _payloadshape: timeseries-number  # Accepts numeric values
 ```
 
-> 🚧 **Roadmap Item** - Enhanced field metadata and constraints:
-
-```yaml
-pressure:
-  _payloadshape: timeseries-number
-  _meta: 
-    description: "System pressure measurement"
-    unit: "kPa"
-  _constraints: 
-    min: 0
-    max: 1000
-```
-
-**Field Properties:**
-- `_payloadshape`: Reference to a payload shape definition
-
-> 🚧 **Roadmap Item** - Enhanced field metadata and constraints (only on leaf nodes):
-
-- `_meta`: Optional metadata (description, units) - 🚧 **Roadmap Item**
-- `_constraints`: Optional validation rules - 🚧 **Roadmap Item**
-
-**Note:** Leaf nodes are fields that contain `_payloadshape` and represent actual data points, not organizational folders or sub-model references.
+**Characteristics:**
+- Has `_payloadshape` property
+- Creates a topic endpoint that accepts data
+- References a [payload shape](payload-shapes.md) for validation
+- Cannot have child elements
 
 ### Folders
 
-Folders organize related fields without containing data themselves. They have no `_payloadshape:`, `_refModel:`, or `_meta:` properties:
-
 ```yaml
-diagnostics:
-  vibration:
+vibration:           # Folder - no _payloadshape
+  x-axis:           # Field inside folder
     _payloadshape: timeseries-number
-  temperature:
+  y-axis:           # Field inside folder
     _payloadshape: timeseries-number
 ```
 
-Folders create hierarchical organization in your UNS topics:
-```
-umh.v1.corpA.plant-A.line-4.pump41._pump.diagnostics.vibration
-umh.v1.corpA.plant-A.line-4.pump41._pump.diagnostics.temperature
-```
+**Characteristics:**
+- No `_payloadshape` property
+- Groups related fields or other folders
+- Creates hierarchy in topic path
+- Can nest multiple levels deep
 
 ### Sub-Models
 
-Sub-models enable composition by referencing other data models. They contain a `_refModel:` property:
+Define once, use everywhere:
 
 ```yaml
-motor:
-  _refModel:
-    name: motor
-    version: v1
-```
-
-This includes all fields from the referenced model:
-
-```yaml
-# Motor model definition
+# Define reusable motor model
 datamodels:
-  motor:
-    description: "Standard motor model"
-    versions:
+  - name: motor
+    version:
       v1:
         structure:
-          current:
-            _payloadshape: timeseries-number
           rpm:
             _payloadshape: timeseries-number
           temperature:
             _payloadshape: timeseries-number
 
-# Usage in Pump model
+# Reference in pump model
 datamodels:
-  pump:
-    description: "Pump with motor sub-model"
-    versions:
+  - name: pump
+    version:
       v1:
         structure:
           pressure:
-            _payloadshape: timeseries-number
-          motor:
+            inlet:
+              _payloadshape: timeseries-number
+          motor:           # Include the motor model
             _refModel:
               name: motor
               version: v1
 ```
 
-## Complete Examples
+Topics created:
+- `_pump_v1.pressure.inlet`
+- `_pump_v1.motor.rpm`
+- `_pump_v1.motor.temperature`
 
-### Simple Model
+**Benefits:**
+- Single source of truth
+- Consistent structure across models
+- Update once, reflected everywhere
 
+## Version Evolution
+
+Models are immutable once created. To add fields, create a new version:
+
+### Why Immutability?
+
+From the [README](README.md#why-are-models-immutable):
+- Models are contracts between teams
+- Dashboards depend on stable structure
+- Historical data queries must not break
+
+### Evolution Pattern
+
+**Version 1 - Basic:**
 ```yaml
-datamodels:
-  temperature:
-    description: "Temperature sensor model"
-    versions:
-      v1:
-        structure:
-          value:
-            _payloadshape: timeseries-number
+version:
+  v1:
+    structure:
+      temperature:
+        _payloadshape: timeseries-number
 ```
 
-### Complex Model with Sub-Models
-
+**Version 2 - Add pressure:**
 ```yaml
-datamodels:
-  motor:
-    description: "Standard motor model"
-    versions:
-      v1:
-        structure:
-          current:
-            _payloadshape: timeseries-number
-          rpm:
-            _payloadshape: timeseries-number
-          temperature:
-            _payloadshape: timeseries-number
-
-  pump:
-    description: "Pump with motor and diagnostics"
-    versions:
-      v1:
-        structure:
-          pressure:
-            _payloadshape: timeseries-number
-          temperature:
-            _payloadshape: timeseries-number
-          running:
-            _payloadshape: timeseries-string
-          vibration:
-            x-axis:
-              _payloadshape: timeseries-number
-            y-axis:
-              _payloadshape: timeseries-number
-            z-axis:
-              _payloadshape: timeseries-number
-              _meta: # 🚧 **Roadmap Item**
-                description: "Z-axis vibration measurement"
-                unit: "m/s"
-              _constraints: # 🚧 **Roadmap Item**
-                max: 100
-                min: 0
-          motor:
-            _refModel:
-              name: motor
-              version: v1
-          acceleration:
-            x:
-              _payloadshape: timeseries-number
-            y:
-              _payloadshape: timeseries-number
-          serialNumber:
-            _payloadshape: timeseries-string
-
-  mitarbeiter:
-    description: "irgendwas relational"
-    versions:
-      v1:
-        structure:
-          meldePerson:
-            _payloadshape: relational-meldePerson
-          setzeStatus:
-            _payloadshape: relational-setzeStatus
-          aendereStatus:
-            _payloadshape: relational-aendereStatus
-
-  motor-base:
-    description: "basic motor component"
-    versions:
-      v1:
-        structure:
-          current:
-            _payloadshape: timeseries-number
-          rpm:
-            _payloadshape: timeseries-number
-
-  motor:
-    description: "some motor"
-    versions:
-      v1:
-        structure:
-          engine:
-            _refModel: 
-              name: motor-base
-              version: v1
+version:
+  v2:
+    structure:
+      temperature:
+        _payloadshape: timeseries-number
+      pressure:                          # New field
+        _payloadshape: timeseries-number
 ```
 
-## Metadata and Constraints
+**Migration steps:**
+1. Create v2 with additions
+2. Deploy new bridges using v2
+3. Update dashboards to v2
+4. Keep v1 running during transition
+5. Deprecate v1 when safe
 
-> 🚧 **Roadmap Item** - Enhanced field metadata and validation rules (only on leaf nodes):
+## Relationship to Contracts
 
-**Important:** `_meta` and `_constraints` properties can only be applied to leaf nodes - fields that contain `_payloadshape` and represent actual data points. They cannot be applied to folder nodes or sub-model references.
+Models define structure, but don't enforce it. That's where [data contracts](data-contracts.md) come in:
 
-### Valid Usage (Leaf Nodes)
-```yaml
-datamodels:
-  pump:
-    versions:
-      v1:
-        structure:
-          # ✅ Valid - _meta on leaf node
-          pressure:
-            _payloadshape: timeseries-number
-            _meta: 
-              description: "System pressure measurement"
-              unit: "kPa"
-            _constraints: 
-              min: 0
-              max: 1000
-          
-          # ✅ Valid - _constraints on leaf node
-          status:
-            _payloadshape: timeseries-string
-            _constraints: 
-              allowed: ["running", "stopped", "fault"]
-          
-          # ✅ Valid - combined example
-          z-axis:
-            _payloadshape: timeseries-number
-            _meta: # 🚧 **Roadmap Item**
-              description: "Z-axis position measurement"
-              unit: "m/s"
-            _constraints: # 🚧 **Roadmap Item**
-            max: 100
-            min: 0
-```
+| Component | Purpose | Example |
+|-----------|---------|----------|
+| **Model** | Defines structure | `pump` model with fields |
+| **Contract** | Enforces structure | `_pump_v1` validates messages |
 
-### Invalid Usage (Non-Leaf Nodes)
-```yaml
-datamodels:
-  pump:
-    versions:
-      v1:
-        structure:
-          # ❌ Invalid - _meta on folder node
-          diagnostics:
-            _meta: # This is NOT allowed
-              description: "Diagnostic data"
-            vibration:
-              _payloadshape: timeseries-number
-          
-          # ❌ Invalid - _meta on sub-model reference
-          motor:
-            _refModel:
-              name: motor
-              version: v1
-            _meta: # This is NOT allowed
-              description: "Motor component"
-```
+When you create a model in the UI:
+1. Model `pump` version `v1` is created
+2. Contract `_pump_v1` is auto-generated
+3. Contract becomes available in bridges
 
-### Constraint Types
+Without a contract, a model is just documentation. With a contract, it becomes validation.
 
-#### Numeric Constraints
-```yaml
-temperature:
-  _payloadshape: timeseries-number
-  _constraints: 
-    min: -40
-    max: 200
-```
+## Next Steps
 
-#### Enumerated Values
-```yaml
-status:
-  _payloadshape: timeseries-string
-  _constraints: 
-    allowed: ["running", "stopped", "fault"]
-```
-
-#### Units and Metadata
-```yaml
-pressure:
-  _payloadshape: timeseries-number
-  _meta: 
-    unit: "kPa"
-    description: "System pressure measurement"
-```
-
-## Best Practices
-
-### Model Organization
-- **Keep models focused**: Each model should represent a single logical entity
-- **Use sub-models for reusability**: Common components like motors, sensors
-- **Version models explicitly**: Always specify version numbers
-- **Use descriptive naming**: Clear, self-documenting field names
-
-### Field Naming
-- **Use camelCase**: `totalPower`, `serialNumber`
-- **Be specific**: `temperatureInlet` vs. just `temperature`
-- **Use clear references**: `_payloadshape` for payload shape
-
-### Folder Structure
-- **Group related fields**: All diagnostics under `diagnostics/`
-- **Avoid deep nesting**: Keep hierarchy manageable (2-3 levels max)
-- **Use logical grouping**: By function, not by data source
-
-### Sub-Model Usage
-- **Create reusable components**: Common equipment types
-- **Version sub-models independently**: Allow evolution of components
-- **Use clear references**: `_refModel` with explicit name and version
-
-## Related Documentation
-
-- [Payload Shapes](payload-shapes.md) - Reusable JSON schemas for field values
-- [Data Contracts](data-contracts.md) - Binding models to storage and processing
-- [Stream Processors](stream-processors.md) - Implementing model instances
-- [Payload Formats](../unified-namespace/payload-formats.md) - UNS payload structure 
+- [Data Contracts](data-contracts.md) - Make models mandatory
+- [Payload Shapes](payload-shapes.md) - Specify data types for fields
+- [Stream Processors](stream-processors.md) - Transform device models to business models

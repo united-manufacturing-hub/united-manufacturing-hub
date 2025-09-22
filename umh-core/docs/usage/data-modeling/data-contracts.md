@@ -1,373 +1,184 @@
 # Data Contracts
 
-Data contracts bind data models to storage, retention, and processing policies, ensuring consistent data handling across your industrial systems.
+> This article assumes you've completed the [Getting Started guide](../../getting-started/) and understand the [data modeling concepts](README.md).
 
-Data contracts define the operational aspects of your data models - where data gets stored, how long it's retained, and what processing rules apply. They bridge the gap between logical data structure (models) and physical data management.
+Data contracts are the enforcement mechanism that makes data models mandatory. Without a contract, models are just documentation - contracts make validation happen.
 
 ## Overview
 
-Data contracts are stored in the `datacontracts:` configuration section and reference specific versions of data models:
+In the [component chain](README.md#the-component-chain), contracts sit between models and execution:
+
+```text
+Payload Shapes → Data Models → Data Contracts → Data Flows
+                                      ↑
+                              Enforcement happens here
+```
+
+When you specify a data contract in a bridge, the UNS output plugin validates every message against the associated model.
+
+## UI Capabilities
+
+The Management Console provides read-only access to contracts:
+
+| Feature | Available | Notes |
+|---------|-----------|-------|
+| View contract list | ✅ | Shows all contracts with their models |
+| Filter/search | ✅ | Filter by name, instance, or model |
+| View associations | ✅ | See which model version each contract enforces |
+| View usage | ✅ | Shows count of stream processors using contract |
+| Create contracts | ❌ | Auto-created when creating models in UI |
+| Edit contracts | ❌ | Immutable once created |
+| Delete contracts | ❌ | Must be done via config.yaml |
+
+![Contracts List](./images/data-contracts.png)
+
+**What you see in the UI:**
+- **Name**: Contract identifier (e.g., `_cnc_v1`, `_pump_v2`)
+- **Instance**: Which UMH Core instance owns the contract
+- **Model**: The model and version being enforced (e.g., `cnc (v1)`)
+- **Stream Processors**: Count of processors using this contract
+
+### Auto-Creation via UI
+
+When you create a model in the UI, it automatically generates a matching contract:
+
+1. Create model `pump` version `v1` in UI
+2. System auto-creates contract `_pump_v1`
+3. Contract immediately available for use in bridges
+
+## Configuration
+
+Access configuration via: Instances → Select instance → `...` → Config File
+
+### Basic Structure
 
 ```yaml
 datacontracts:
-  - name: contract_name
+  - name: _pump_v1          # Contract name (used in bridges)
     model:
-      name: modelname
-      version: v1
-    default_bridges:
-      - type: timescaledb
-        retention_in_days: 365
+      name: pump            # References a data model
+      version: v1           # Specific version to enforce
 ```
 
-## Core Properties
+### Naming Convention
 
-### Name and Versioning
+Contracts follow the pattern `_modelname_version`:
+- Always start with underscore
+- Include model name
+- End with version number
+- Examples: `_pump_v1`, `_temperature_sensor_v2`, `_workorder_v1`
+
+## Enforcement Mechanism
+
+### Where Validation Happens
+
+```text
+Bridge → UNS Output Plugin → [Contract Check] → Kafka/Redpanda
+                                    ↑
+                            Validation happens here
+```
+
+The UNS output plugin (`output: uns: {}`) performs validation:
+
+1. **Reads metadata**: Extracts `data_contract` from message
+2. **Looks up contract**: Finds the associated model
+3. **Validates structure**: Checks topic path matches model
+4. **Validates payload**: Ensures data types match shapes
+5. **Result**:
+   - ✅ Valid → Message published to topic
+   - ❌ Invalid → Message rejected, bridge degraded
+
+### Validation Failures
+
+When validation fails:
+
+```text
+ERROR: schema validation failed for message with topic 'umh.v1.enterprise.site._pump_v1.invalid.path':
+Valid virtual_paths are: [pressure, temperature, motor.rpm].
+Your virtual_path is: invalid.path
+```
+
+Result:
+- Message rejected (not published)
+- Bridge enters degraded state
+- Error logged with details
+- Bridge retries with backoff
+
+## Contract Types
+
+### The Special _raw Contract
 
 ```yaml
-datacontracts:
-  - name: _temperature_v1
-    model:
-      name: temperature
-      version: v1
+# No explicit definition needed - always available
+msg.meta.data_contract = "_raw";
 ```
 
-**Naming Convention:**
-- Contract names start with underscore (`_temperature`, `_pump`)
-- Model references include name and version (`name: temperature, version: v1`)
+- Accepts any structure
+- No validation performed
+- Use for exploration and development
+- Bridge never goes degraded from data issues
 
-### Model Binding
-
-Each contract binds to exactly one data model version:
+### Model-Based Contracts
 
 ```yaml
 datacontracts:
   - name: _pump_v1
     model:
       name: pump
-      version: v1  # Specific model version
-```
-
-This binding is immutable - to change the model, create a new contract version.
-
-### Data Bridges
-
-Contracts specify where data gets stored and processed:
-
-```yaml
-datacontracts:
-  - name: _temperature_v1
-    model:
-      name: temperature
       version: v1
-    default_bridges:
-      - type: timescaledb
-        retention_in_days: 365
-      - type: cloud_storage
 ```
 
-**Available Bridge Types:**
-- `timescaledb`: Automatic TimescaleDB hypertable creation
-- `umh-api-sync`: Sync to higher-level UNS
-- `cloud_storage`: S3-compatible storage
-- `analytics_pipeline`: Stream analytics processing
+- Enforces exact model structure
+- Validates data types via payload shapes
+- Rejects non-conforming messages
+- Use for production systems
 
-**Bridge Configuration Details:**
-```yaml
-default_bridges:        # 🚧 **Roadmap Item**
-  - type: timescaledb   # create a default bridge that will store it to timescaledb 
-    host:
-    port:
-    credentials:
-    retention_in_days: 365
-  - type: umh-api-sync
-    remote: 10.13.37.50:80   # create a default bridge, that will send it to a higher level UNS on that IP
-```
+### Relationship to Data Types
 
-### Retention Policies
+| Data Type | Common Contracts | Validation |
+|-----------|------------------|------------|
+| Raw/Exploration | `_raw` | No validation |
+| Device Models | `_pump_v1`, `_sensor_v1`, `_cnc_v1` | Model-based validation |
+| Business Models | `_workorder_v1`, `_maintenance_v1` | Always strict |
 
-Define how long data is kept:
+## Examples
+
+### Simple Device Contract
 
 ```yaml
-datacontracts:
-  - name: _historian_v1
-    model:
-      name: historiandata
-      version: v1
-    default_bridges:
-      - type: timescaledb
-        retention_in_days: 2555  # ~7 years
-```
-
-## Complete Examples
-
-### Simple Temperature Contract
-
-```yaml
+# Model definition
 datamodels:
-  temperature:
-    description: "Temperature sensor model"
-    versions:
+  - name: temperature-sensor
+    version:
       v1:
         structure:
-          temperatureInC:
+          celsius:
             _payloadshape: timeseries-number
 
+# Contract (auto-created or manual)
 datacontracts:
-  - name: _temperature_v1
+  - name: _temperature-sensor_v1
     model:
-      name: temperature
+      name: temperature-sensor
       version: v1
-    default_bridges:
-      - type: timescaledb
-        retention_in_days: 365
+
+# Usage in bridge
+msg.meta.data_contract = "_temperature-sensor_v1";
+msg.meta.tag_name = "celsius";
+msg.payload = 23.5;
 ```
-
-### Complex Pump Contract
-
-```yaml
-datamodels:
-  motor:
-    description: "Standard motor model"
-    versions:
-      v1:
-        structure:
-          current:
-            _payloadshape: timeseries-number
-          rpm:
-            _payloadshape: timeseries-number
-          temperature:
-            _payloadshape: timeseries-number
-
-  pump:
-    description: "Pump with motor and diagnostics"
-    versions:
-      v1:
-        structure:
-          pressure:
-            _payloadshape: timeseries-number
-          temperature:
-            _payloadshape: timeseries-number
-          running:
-            _payloadshape: timeseries-string
-          vibration:
-            x-axis:
-              _payloadshape: timeseries-number
-            y-axis:
-              _payloadshape: timeseries-number
-            z-axis:
-              _payloadshape: timeseries-number
-              _meta: # 🚧 **Roadmap Item**
-                description: "Z-axis vibration measurement"
-                unit: "m/s"
-              _constraints: # 🚧 **Roadmap Item**
-                max: 100
-                min: 0
-          motor:
-            _refModel:
-              name: motor
-              version: v1
-          acceleration:
-            x:
-              _payloadshape: timeseries-number
-            y:
-              _payloadshape: timeseries-number
-          serialNumber:
-            _payloadshape: timeseries-string
-
-datacontracts:
-  - name: _pump_v1
-    model:
-      name: pump
-      version: v1
-    default_bridges:
-      - type: timescaledb
-        retention_in_days: 1825  # 5 years
-      - type: analytics_pipeline
-  - name: _historian
-    # no model = no enforcement
-    default_bridges: # 🚧 **Roadmap Item**
-      - type: timescaledb   # create a default bridge that will store it to timescaledb 
-        host:
-        port:
-        credentials:
-        retention_in_days: 365
-  - name: _raw
-    # no model
-    # no bridge
-```
-
-## Generated Database Schema
-
-> 🚧 **Roadmap Item** - Automatic database schema generation from data contracts and models is under design. This will include:
-> - Auto-generated TimescaleDB hypertables based on data models
-> - Field type mapping from payload shapes to database columns
-> - Automatic indexing for location-based queries
-> - Sub-model field flattening strategies
-> - Location hierarchy storage format
-
-## Contract Evolution
-
-### Version Management
-
-Contracts support controlled evolution:
-
-```yaml
-# Version 1
-datacontracts:
-  - name: _pump_v1
-    model:
-      name: pump
-      version: v1
-    default_bridges:
-      - type: timescaledb
-        retention_in_days: 365
-
-# Version 2 - Extended retention
-datacontracts:
-  - name: _pump_v2
-    model:
-      name: pump
-      version: v2  # Updated model
-    default_bridges:
-      - type: timescaledb
-        retention_in_days: 2555  # Extended retention
-      - type: analytics_pipeline  # New bridge
-```
-
-### Backward Compatibility
-
-- Multiple contract versions can coexist
-- Existing stream processors continue using their bound contract version
-- Database schemas adapt automatically for new fields
-- No downtime required for contract updates
-
-## Bridge Configuration Details
-
-### TimescaleDB Bridge
-
-```yaml
-default_bridges:
-  - type: timescaledb
-    retention_in_days: 365
-```
-
-**Behavior:**
-- Auto-creates hypertable `{contract_name}_{version}`
-- Generates appropriate column types from model constraints
-- Creates location indexes for ISA-95 queries
-- Handles sub-model field flattening automatically
-
-### UMH API Sync Bridge
-
-```yaml
-default_bridges:
-  - type: umh-api-sync
-    remote: "10.13.37.50:80"
-    auth_token: "${API_AUTH_TOKEN}"
-    batch_size: 1000
-```
-
-**Behavior:**
-- Sends data to external systems
-- Supports authentication and batching
-- Configurable retry policies
-- Schema validation before transmission
-
-### Cloud Storage Bridge
-
-```yaml
-default_bridges:
-  - type: cloud_storage
-    bucket: "industrial-data-lake"
-    prefix: "pump-data/{year}/{month}/{day}/"
-    format: "parquet"
-    compression: "gzip"
-```
-
-**Behavior:**
-- Partitioned storage by time
-- Multiple format support (JSON, Parquet, Avro)
-- Compression options
-- Automated lifecycle management
-
-## Validation and Enforcement
-
-### Schema Enforcement
-
-All data contracts are registered in Redpanda Schema Registry:
-
-- **Publish-time validation**: Messages are validated before acceptance
-- **Consumer protection**: Invalid messages are rejected automatically  
-- **Evolution safety**: Schema changes must maintain compatibility
-
-### Runtime Validation
-
-The UNS output plugin enforces contract compliance:
-
-```yaml
-# Invalid message - rejected
-Topic: umh.v1.corpA.plant-A.line-4.pump41._pump_v1.invalid_field
-Reason: Field 'invalid_field' not defined in _pump model, version v1
-
-# Valid message - accepted
-Topic: umh.v1.corpA.plant-A.line-4.pump41._pump_v1.pressure
-Payload: {"value": 42.5, "timestamp_ms": 1733904005123}
-```
-
-## Best Practices
-
-### Contract Design
-
-- **Single responsibility**: One contract per logical entity type
-- **Semantic naming**: Use descriptive, underscore-prefixed names
-- **Version explicitly**: Always specify model and contract versions
-- **Plan for growth**: Consider future bridge requirements
-
-### Retention Planning
-
-- **Match business needs**: Align retention with regulatory requirements
-- **Consider storage costs**: Balance retention vs. storage expenses
-- **Plan for archival**: Design archival strategies for historical data
-
-### Bridge Selection
-
-- **TimescaleDB for time-series**: Optimal for sensor data and analytics
-- **Cloud storage for archives**: Long-term, cost-effective storage
-- **UMH API Sync for integration**: Higher-level UNS connectivity
-
-### Schema Evolution
-
-- **Additive changes**: Add fields rather than modifying existing ones
-- **Test compatibility**: Validate schema evolution before deployment
-- **Document changes**: Maintain clear change logs
 
 ## Relationship to Stream Processors
 
-**Stream processors do NOT use data contracts directly.** Instead, stream processors use templates that reference data models directly:
+Stream processors don't use contracts directly - they reference models:
 
 ```yaml
-# Template references model directly, not contract
 templates:
   streamProcessors:
-    pump_template:
-      model:
-        name: pump      # Direct model reference
+    pump_aggregator:
+      model:           # Direct model reference
+        name: pump
         version: v1
-      sources: {...}
-      mapping: {...}
-
-# Stream processor uses template
-streamProcessors:
-  - name: pump41_sp
-    _templateRef: "pump_template"
-    location: {...}
-    variables: {...}
 ```
 
-**Data contracts are separate** - they define storage bridges and retention policies for data models. Stream processors work with models directly through templates, but **if a data contract exists for the same model**, the stream processor's output will be automatically validated against that contract and routed to the contract's configured bridges.
-
-## Related Documentation
-
-- [Data Models](data-models.md) - Defining reusable data structures
-- [Stream Processors](stream-processors.md) - Implementing contract instances
-- [Stream Processor Implementation](../data-flows/stream-processor.md) - Detailed runtime configuration 
+However, if a matching contract exists (`_pump_v1`), the stream processor's output will be validated against it automatically.
