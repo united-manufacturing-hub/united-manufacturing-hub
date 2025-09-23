@@ -3,6 +3,7 @@ package deepcopy
 import (
 	"fmt"
 	"reflect"
+	"strings"
 	"sync"
 )
 
@@ -171,8 +172,14 @@ func buildCopier(ctx *Context, dstType, srcType reflect.Type) (copier copier, er
 	//nolint:nestif
 	if srcKind == reflect.Struct {
 		if dstKind == reflect.Struct {
-			// At this point, cachedCopier should be `nil`.
-			// If it's non-nil, seems like a circular reference occurs, use an inline copier.
+			// Build a special copier for Go standard types such as time.Time, unique.Handle
+			copier = buildCopierForStandardStructs(dstType, srcType)
+			if copier != nil {
+				goto OnComplete
+			}
+
+			// At this point, cached copier should not exist in the cache map.
+			// If it exists, seems like a circular reference occurs, use an inline copier.
 			if cachedCopierFound {
 				return &inlineCopier{ctx: ctx, dstType: dstType, srcType: srcType}, nil
 			}
@@ -224,6 +231,32 @@ OnNonCopyable:
 		return defaultNopCopier, nil
 	}
 	return nil, fmt.Errorf("%w: %v -> %v", ErrTypeNonCopyable, srcType, dstType)
+}
+
+func buildCopierForStandardStructs(dstType, srcType reflect.Type) copier {
+	switch srcType.PkgPath() {
+	// When copy time.Time -> time.Time or derived type
+	case "time":
+		if srcType.Name() == "Time" {
+			if dstType == srcType {
+				return defaultDirectCopier
+			}
+			if dstType.ConvertibleTo(srcType) {
+				return defaultConvCopier
+			}
+		}
+	// When copy unique.Handle[T] -> unique.Handle[T] or derived type
+	case "unique":
+		if strings.HasPrefix(srcType.Name(), "Handle[") {
+			if dstType == srcType {
+				return defaultDirectCopier
+			}
+			if dstType.ConvertibleTo(srcType) {
+				return defaultConvCopier
+			}
+		}
+	}
+	return nil
 }
 
 func setCachedCopier(ctx *Context, cacheKey *cacheKey, cp copier) {

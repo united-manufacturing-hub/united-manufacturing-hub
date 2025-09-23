@@ -24,6 +24,7 @@ import (
 
 	"github.com/bytedance/sonic/internal/encoder/alg"
 	"github.com/bytedance/sonic/internal/encoder/ir"
+	"github.com/bytedance/sonic/internal/encoder/prim"
 	"github.com/bytedance/sonic/internal/encoder/vars"
 	"github.com/bytedance/sonic/internal/rt"
 )
@@ -47,7 +48,7 @@ func print_instr(buf []byte, pc int, op ir.Op, ins *ir.Instr, p unsafe.Pointer) 
 	fmt.Printf("pc %04d, op %v, ins %#v, ptr: %x\n", pc, op, ins.Disassemble(), p)
 }
 
-func Execute(b *[]byte, p unsafe.Pointer, s *vars.Stack, flags uint64, prog *ir.Program) (error) {
+func Execute(b *[]byte, p unsafe.Pointer, s *vars.Stack, flags uint64, prog *ir.Program) error {
 	pl := len(*prog)
 	if pl <= 0 {
 		return nil
@@ -80,7 +81,7 @@ func Execute(b *[]byte, p unsafe.Pointer, s *vars.Stack, flags uint64, prog *ir.
 			p = rt.Add(p, uintptr(ins.I64()))
 		case ir.OP_load:
 			// NOTICE: load CANNOT change f!
-			x, _, p, q = s.Load() 
+			x, _, p, q = s.Load()
 		case ir.OP_save:
 			if !s.Save(x, f, p, q) {
 				return vars.ERR_too_deep
@@ -183,7 +184,7 @@ func Execute(b *[]byte, p unsafe.Pointer, s *vars.Stack, flags uint64, prog *ir.
 			v := *(*json.Number)(p)
 			if v == "" {
 				buf = append(buf, '0')
-			} else if !rt.IsValidNumber(string(v)) {
+			} else if !alg.IsValidNumber(string(v)) {
 				return vars.Error_number(v)
 			} else {
 				buf = append(buf, v...)
@@ -196,7 +197,7 @@ func Execute(b *[]byte, p unsafe.Pointer, s *vars.Stack, flags uint64, prog *ir.
 			buf = *b
 		case ir.OP_iface:
 			*b = buf
-			if err := EncodeTypedPointer(b,  (*(**rt.GoItab)(p)).Vt, (*unsafe.Pointer)(rt.Add(p, 8)), s, flags); err != nil {
+			if err := EncodeTypedPointer(b, (*(**rt.GoItab)(p)).Vt, (*unsafe.Pointer)(rt.Add(p, 8)), s, flags); err != nil {
 				return err
 			}
 			buf = *b
@@ -233,22 +234,24 @@ func Execute(b *[]byte, p unsafe.Pointer, s *vars.Stack, flags uint64, prog *ir.
 			vt, itab := ins.Vtab()
 			var it rt.GoIface
 			switch vt.Kind() {
-				case reflect.Interface        : 
+			case reflect.Interface:
 				if is_nil(p) {
 					buf = append(buf, 'n', 'u', 'l', 'l')
 					continue
 				}
 				it = rt.AssertI2I(_T_encoding_TextMarshaler, *(*rt.GoIface)(p))
-				case reflect.Ptr, reflect.Map : it = convT2I(p, true, itab)
-				default                       : it = convT2I(p, !vt.Indirect(), itab)
+			case reflect.Ptr, reflect.Map:
+				it = convT2I(p, true, itab)
+			default:
+				it = convT2I(p, !vt.Indirect(), itab)
 			}
-			if err := alg.EncodeTextMarshaler(&buf, *(*encoding.TextMarshaler)(unsafe.Pointer(&it)), (flags)); err != nil {
+			if err := prim.EncodeTextMarshaler(&buf, *(*encoding.TextMarshaler)(unsafe.Pointer(&it)), (flags)); err != nil {
 				return err
 			}
 		case ir.OP_marshal_text_p:
 			_, itab := ins.Vtab()
 			it := convT2I(p, false, itab)
-			if err := alg.EncodeTextMarshaler(&buf, *(*encoding.TextMarshaler)(unsafe.Pointer(&it)), (flags)); err != nil {
+			if err := prim.EncodeTextMarshaler(&buf, *(*encoding.TextMarshaler)(unsafe.Pointer(&it)), (flags)); err != nil {
 				return err
 			}
 		case ir.OP_map_write_key:
@@ -263,7 +266,7 @@ func Execute(b *[]byte, p unsafe.Pointer, s *vars.Stack, flags uint64, prog *ir.
 			x = v.Len
 			p = v.Ptr
 			//TODO: why?
-			f |= 1<<_S_init 
+			f |= 1 << _S_init
 		case ir.OP_slice_next:
 			if x == 0 {
 				pc = ins.Vi()
@@ -276,7 +279,7 @@ func Execute(b *[]byte, p unsafe.Pointer, s *vars.Stack, flags uint64, prog *ir.
 				p = rt.Add(p, uintptr(ins.Vlen()))
 			}
 		case ir.OP_cond_set:
-			f |= 1<<_S_cond
+			f |= 1 << _S_cond
 		case ir.OP_cond_testc:
 			if has_opts(f, _S_cond) {
 				f &= ^uint64(1 << _S_cond)
@@ -285,7 +288,7 @@ func Execute(b *[]byte, p unsafe.Pointer, s *vars.Stack, flags uint64, prog *ir.
 			}
 		case ir.OP_is_zero:
 			fv := ins.VField()
-			if alg.IsZero(p, fv) {
+			if prim.IsZero(p, fv) {
 				pc = ins.Vi()
 				continue
 			}
@@ -325,22 +328,24 @@ func Execute(b *[]byte, p unsafe.Pointer, s *vars.Stack, flags uint64, prog *ir.
 			vt, itab := ins.Vtab()
 			var it rt.GoIface
 			switch vt.Kind() {
-				case reflect.Interface        : 
+			case reflect.Interface:
 				if is_nil(p) {
 					buf = append(buf, 'n', 'u', 'l', 'l')
 					continue
 				}
 				it = rt.AssertI2I(_T_json_Marshaler, *(*rt.GoIface)(p))
-				case reflect.Ptr, reflect.Map : it = convT2I(p, true, itab)
-				default                       : it = convT2I(p, !vt.Indirect(), itab)
+			case reflect.Ptr, reflect.Map:
+				it = convT2I(p, true, itab)
+			default:
+				it = convT2I(p, !vt.Indirect(), itab)
 			}
-			if err := alg.EncodeJsonMarshaler(&buf, *(*json.Marshaler)(unsafe.Pointer(&it)), (flags)); err != nil {
+			if err := prim.EncodeJsonMarshaler(&buf, *(*json.Marshaler)(unsafe.Pointer(&it)), (flags)); err != nil {
 				return err
 			}
 		case ir.OP_marshal_p:
 			_, itab := ins.Vtab()
 			it := convT2I(p, false, itab)
-			if err := alg.EncodeJsonMarshaler(&buf, *(*json.Marshaler)(unsafe.Pointer(&it)), (flags)); err != nil {
+			if err := prim.EncodeJsonMarshaler(&buf, *(*json.Marshaler)(unsafe.Pointer(&it)), (flags)); err != nil {
 				return err
 			}
 		case ir.OP_unsupported:
@@ -354,16 +359,15 @@ func Execute(b *[]byte, p unsafe.Pointer, s *vars.Stack, flags uint64, prog *ir.
 	return nil
 }
 
-
 func has_opts(opts uint64, bit int) bool {
-	return opts & (1<<bit) != 0
+	return opts&(1<<bit) != 0
 }
 
 func is_nil(p unsafe.Pointer) bool {
 	return *(*unsafe.Pointer)(p) == nil
 }
 
-func convT2I(ptr unsafe.Pointer, deref bool, itab *rt.GoItab) (rt.GoIface) {
+func convT2I(ptr unsafe.Pointer, deref bool, itab *rt.GoItab) rt.GoIface {
 	if deref {
 		ptr = *(*unsafe.Pointer)(ptr)
 	}

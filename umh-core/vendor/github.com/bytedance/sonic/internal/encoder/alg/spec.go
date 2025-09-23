@@ -35,33 +35,32 @@ import (
 //
 // Note: it does not check for the invalid UTF-8 characters.
 func Valid(data []byte) (ok bool, start int) {
-    n := len(data)
-    if n == 0 {
-        return false, -1
-    }
-    s := rt.Mem2Str(data)
-    p := 0
-    m := types.NewStateMachine()
-    ret := native.ValidateOne(&s, &p, m, 0)
-    types.FreeStateMachine(m)
+	n := len(data)
+	if n == 0 {
+		return false, -1
+	}
+	s := rt.Mem2Str(data)
+	p := 0
+	m := types.NewStateMachine()
+	ret := native.ValidateOne(&s, &p, m, 0)
+	types.FreeStateMachine(m)
 
-    if ret < 0 {
-        return false, p-1
-    }
+	if ret < 0 {
+		return false, p - 1
+	}
 
-    /* check for trailing spaces */
-    for ;p < n; p++ {
-        if (types.SPACE_MASK & (1 << data[p])) == 0 {
-            return false, p
-        }
-    }
+	/* check for trailing spaces */
+	for ; p < n; p++ {
+		if (types.SPACE_MASK & (1 << data[p])) == 0 {
+			return false, p
+		}
+	}
 
-    return true, ret
+	return true, ret
 }
 
 var typeByte = rt.UnpackEface(byte(0)).Type
 
-//go:nocheckptr
 func Quote(buf []byte, val string, double bool) []byte {
 	if len(val) == 0 {
 		if double {
@@ -77,6 +76,8 @@ func Quote(buf []byte, val string, double bool) []byte {
 	}
 	sp := rt.IndexChar(val, 0)
 	nb := len(val)
+
+	buf = rt.GuardSlice2(buf, nb+1)
 	b := (*rt.GoSlice)(unsafe.Pointer(&buf))
 
 	// input buffer
@@ -104,7 +105,9 @@ func Quote(buf []byte, val string, double bool) []byte {
 		ret = ^ret
 		// update input buffer
 		nb -= ret
-		sp = unsafe.Pointer(uintptr(sp) + uintptr(ret))
+		if nb > 0 {
+			sp = unsafe.Pointer(uintptr(sp) + uintptr(ret))
+		}
 	}
 
 	runtime.KeepAlive(buf)
@@ -151,7 +154,7 @@ func HtmlEscape(dst []byte, src []byte) []byte {
 	return dst
 }
 
-func F64toa(buf []byte, v float64) ([]byte) {
+func F64toa(buf []byte, v float64) []byte {
 	if v == 0 {
 		return append(buf, '0')
 	}
@@ -164,7 +167,7 @@ func F64toa(buf []byte, v float64) ([]byte) {
 	}
 }
 
-func F32toa(buf []byte, v float32) ([]byte) {
+func F32toa(buf []byte, v float32) []byte {
 	if v == 0 {
 		return append(buf, '0')
 	}
@@ -177,10 +180,10 @@ func F32toa(buf []byte, v float32) ([]byte) {
 	}
 }
 
-func I64toa(buf []byte, v int64) ([]byte) {
+func I64toa(buf []byte, v int64) []byte {
 	return strconv.AppendInt(buf, v, 10)
 }
 
-func U64toa(buf []byte, v uint64) ([]byte) {
+func U64toa(buf []byte, v uint64) []byte {
 	return strconv.AppendUint(buf, v, 10)
 }
