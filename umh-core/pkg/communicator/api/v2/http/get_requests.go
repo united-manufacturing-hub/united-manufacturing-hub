@@ -34,7 +34,7 @@ func GetRequest[R any](ctx context.Context, endpoint Endpoint, header map[string
 
 	url := apiURL + string(endpoint)
 
-	response, err := DoHTTPRequestUnifiedWithRetry[any](ctx, http.MethodGet, url, nil, header, cookies, insecureTLS, true, logger)
+	response, err := DoHTTPRequestWithRetry[any](ctx, http.MethodGet, url, nil, header, cookies, insecureTLS, true, logger)
 	if err != nil {
 		if response != nil {
 			return nil, response.StatusCode, err

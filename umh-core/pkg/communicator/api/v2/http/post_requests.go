@@ -35,7 +35,7 @@ func PostRequest[R any, T any](ctx context.Context, endpoint Endpoint, data *T, 
 
 	url := apiURL + string(endpoint)
 
-	response, err := DoHTTPRequestUnifiedWithRetry(ctx, http.MethodPost, url, data, header, cookies, insecureTLS, false, logger)
+	response, err := DoHTTPRequestWithRetry(ctx, http.MethodPost, url, data, header, cookies, insecureTLS, false, logger)
 	if err != nil {
 		if response != nil {
 			return nil, response.StatusCode, err
