@@ -359,9 +359,9 @@ func processJSONResponse[R any](response *http.Response, cookies *map[string]str
 func DoHTTPRequestUnifiedWithRetry[T any](ctx context.Context, method, url string, data *T, header map[string]string, cookies *map[string]string, insecureTLS bool, enableLongPoll bool, logger *zap.SugaredLogger) (*http.Response, error) {
 	retryClient := retryablehttp.NewClient()
 	retryClient.HTTPClient = GetClient(insecureTLS)
-	retryClient.RetryMax = 3
-	retryClient.RetryWaitMin = 100 * time.Millisecond
-	retryClient.RetryWaitMax = 2 * time.Second
+	retryClient.RetryMax = 10
+	retryClient.RetryWaitMin = 1 * time.Second
+	retryClient.RetryWaitMax = 5 * time.Second
 
 	// Use a logger that wraps zap
 	retryClient.Logger = &zapRetryLogger{logger: logger}
