@@ -43,7 +43,7 @@ var _ = Describe("Requester", func() {
 	doHTTPRequestWithRetry := func(ctx context.Context, url string, header map[string]string, cookies *map[string]string, insecureTLS bool, logger *zap.SugaredLogger) (*netHTTP.Response, error) {
 		var lastErr error
 		for i := range 10 {
-			response, err := http.DoHTTPRequest(ctx, url, header, cookies, insecureTLS, logger)
+			response, err := http.DoHTTPRequestUnified[any](ctx, netHTTP.MethodGet, url, nil, header, cookies, insecureTLS, true, logger)
 			if err == nil {
 				return response, nil
 			}

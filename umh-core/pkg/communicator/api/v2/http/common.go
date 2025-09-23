@@ -25,8 +25,10 @@ import (
 	"net/http"
 	"net/http/httptrace"
 	"strings"
+	"sync"
 	"time"
 
+	"github.com/hashicorp/go-retryablehttp"
 	"github.com/united-manufacturing-hub/expiremap/v2/pkg/expiremap"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2/error_handler"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/latency"
@@ -45,26 +47,25 @@ var (
 
 var secureHTTPClient *http.Client
 var insecureHTTPClient *http.Client
+var initHTTPClientOnce sync.Once
 
 func GetClient(insecureTLS bool) *http.Client {
-	if !insecureTLS && secureHTTPClient == nil {
+	// Prevent init race
+	initHTTPClientOnce.Do(func() {
 		// Create a custom transport with HTTP/2 disabled
-		transport := &http.Transport{
+		secureTransport := &http.Transport{
 			ForceAttemptHTTP2: false,
 			TLSNextProto:      make(map[string]func(authority string, c *tls.Conn) http.RoundTripper),
 			Proxy:             http.ProxyFromEnvironment,
 		}
 
-		// Create an HTTP client with the custom transport
 		secureHTTPClient = &http.Client{
-			Transport: transport,
+			Transport: secureTransport,
 			Timeout:   30 * time.Second,
 		}
-	}
 
-	if insecureTLS && insecureHTTPClient == nil {
 		// Create a custom transport with HTTP/2 disabled and insecure TLS
-		transport := &http.Transport{
+		insecureTransport := &http.Transport{
 			ForceAttemptHTTP2: false,
 			TLSNextProto:      make(map[string]func(authority string, c *tls.Conn) http.RoundTripper),
 			Proxy:             http.ProxyFromEnvironment,
@@ -76,10 +77,10 @@ func GetClient(insecureTLS bool) *http.Client {
 
 		// Create an HTTP client with the custom transport
 		insecureHTTPClient = &http.Client{
-			Transport: transport,
+			Transport: insecureTransport,
 			Timeout:   30 * time.Second,
 		}
-	}
+	})
 
 	if insecureTLS {
 		return insecureHTTPClient
@@ -155,6 +156,84 @@ func setupClientTrace(requestStart *time.Time, timings *struct {
 	}
 }
 
+// DoHTTPRequestUnified performs HTTP requests with conditional behavior based on method and options.
+// This unified function handles both GET and POST requests with appropriate headers and body handling.
+func DoHTTPRequestUnified[T any](ctx context.Context, method, url string, data *T, header map[string]string, cookies *map[string]string, insecureTLS bool, enableLongPoll bool, logger *zap.SugaredLogger) (*http.Response, error) {
+	var bodyReader io.Reader
+
+	// Handle request body for POST requests
+	if method == http.MethodPost && data != nil {
+		body, err := safejson.Marshal(data)
+		if err != nil {
+			return nil, err
+		}
+
+		bodyReader = bytes.NewReader(body)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, method, url, bodyReader)
+	if err != nil {
+		return nil, err
+	}
+
+	// Set method-specific headers
+	if method == http.MethodPost {
+		req.Header.Set("Content-Type", "application/json")
+		// Remove Content-Length header to enable chunked transfer encoding
+		req.ContentLength = -1
+	}
+
+	// Set headers
+	for k, v := range header {
+		req.Header.Set(k, v)
+	}
+
+	// Set cookies
+	if cookies != nil {
+		for k, v := range *cookies {
+			req.AddCookie(&http.Cookie{Name: k, Value: v})
+		}
+	}
+
+	// Set long poll headers conditionally
+	if enableLongPoll {
+		req.Header.Set("Connection", "keep-alive")
+		req.Header.Set("Keep-Alive", "timeout=30, max=1000")
+		req.Header.Set("X-Features", "longpoll;")
+	}
+
+	// Setup comprehensive request tracing
+	var (
+		requestStart time.Time
+		timings      struct{ firstByte, dns, tls, conn time.Duration }
+	)
+
+	trace := setupClientTrace(&requestStart, &timings)
+
+	// Send request
+	requestStart = time.Now()
+
+	response, err := GetClient(insecureTLS).Do(req.WithContext(httptrace.WithClientTrace(req.Context(), trace)))
+	if err != nil {
+		if response != nil {
+			return response, err
+		}
+		// Enhance error message for connection failures
+		return nil, enhanceConnectionError(err)
+	}
+
+	// Record comprehensive latencies
+	now := time.Now()
+	latenciesFRB.Set(now, timings.firstByte)
+	latenciesDNS.Set(now, timings.dns)
+	latenciesTLS.Set(now, timings.tls)
+	latenciesConn.Set(now, timings.conn)
+
+	processLatencyHeaders(response, timings.firstByte, logger)
+
+	return response, nil
+}
+
 // processCookies handles cookie updates from response headers.
 func processCookies(response *http.Response, cookies *map[string]string) {
 	if cookies == nil {
@@ -223,63 +302,6 @@ func enhanceConnectionError(err error) error {
 	return fmt.Errorf("connection error: %w (no response received from server, status code 0)", err)
 }
 
-// DoHTTPRequest performs the actual HTTP request and returns the response and any errors
-// This is an internal function, better use GetRequest or PostRequest instead.
-func DoHTTPRequest(ctx context.Context, url string, header map[string]string, cookies *map[string]string, insecureTLS bool, logger *zap.SugaredLogger) (*http.Response, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	// Set headers
-	for k, v := range header {
-		req.Header.Set(k, v)
-	}
-
-	// Set cookies
-	if cookies != nil {
-		for k, v := range *cookies {
-			req.AddCookie(&http.Cookie{Name: k, Value: v})
-		}
-	}
-
-	// Set long poll headers
-	req.Header.Set("Connection", "keep-alive")
-	req.Header.Set("Keep-Alive", "timeout=30, max=1000")
-	req.Header.Set("X-Features", "longpoll;")
-
-	// Setup request tracing
-	var (
-		requestStart time.Time
-		timings      struct{ firstByte, dns, tls, conn time.Duration }
-	)
-
-	trace := setupClientTrace(&requestStart, &timings)
-
-	// Send request
-	requestStart = time.Now()
-
-	response, err := GetClient(insecureTLS).Do(req.WithContext(httptrace.WithClientTrace(req.Context(), trace)))
-	if err != nil {
-		if response != nil {
-			return response, err
-		}
-		// Enhance error message for connection failures
-		return nil, enhanceConnectionError(err)
-	}
-
-	// Record latencies
-	now := time.Now()
-	latenciesFRB.Set(now, timings.firstByte)
-	latenciesDNS.Set(now, timings.dns)
-	latenciesTLS.Set(now, timings.tls)
-	latenciesConn.Set(now, timings.conn)
-
-	processLatencyHeaders(response, timings.firstByte, logger)
-
-	return response, nil
-}
-
 // processJSONResponse processes the HTTP response and unmarshals the JSON body.
 func processJSONResponse[R any](response *http.Response, cookies *map[string]string, endpoint Endpoint, logger *zap.SugaredLogger) (*R, int, error) {
 	defer func() {
@@ -333,122 +355,108 @@ func processJSONResponse[R any](response *http.Response, cookies *map[string]str
 	return &typedResult, response.StatusCode, nil
 }
 
-// GetRequest does a GET request to the given endpoint, with optional header and cookies
-// It is a wrapper around DoHTTPRequest.
-func GetRequest[R any](ctx context.Context, endpoint Endpoint, header map[string]string, cookies *map[string]string, insecureTLS bool, apiURL string, logger *zap.SugaredLogger) (result *R, statusCode int, responseErr error) {
-	// Set up context with default 30 second timeout if none provided
-	if ctx == nil {
-		var cancel context.CancelFunc
+// DoHTTPRequestUnifiedWithRetry wraps DoHTTPRequestUnified with automatic retries for connection errors.
+func DoHTTPRequestUnifiedWithRetry[T any](ctx context.Context, method, url string, data *T, header map[string]string, cookies *map[string]string, insecureTLS bool, enableLongPoll bool, logger *zap.SugaredLogger) (*http.Response, error) {
+	retryClient := retryablehttp.NewClient()
+	retryClient.HTTPClient = GetClient(insecureTLS)
+	retryClient.RetryMax = 3
+	retryClient.RetryWaitMin = 100 * time.Millisecond
+	retryClient.RetryWaitMax = 2 * time.Second
 
-		ctx, cancel = context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-	}
+	// Use a logger that wraps zap
+	retryClient.Logger = &zapRetryLogger{logger: logger}
 
-	url := apiURL + string(endpoint)
-
-	response, err := DoHTTPRequest(ctx, url, header, cookies, insecureTLS, logger)
-	if err != nil {
-		if response != nil {
-			return nil, response.StatusCode, err
+	// Custom retry policy that only retries on connection errors, not HTTP status codes
+	retryClient.CheckRetry = func(ctx context.Context, resp *http.Response, err error) (bool, error) {
+		// Don't retry if context was cancelled
+		if ctx.Err() != nil {
+			return false, ctx.Err()
 		}
 
-		return nil, 0, err
+		// Only retry on connection errors (when err != nil), not on HTTP status errors
+		if err != nil {
+			// Check if it's a retryable connection error
+			errStr := err.Error()
+			isRetryable := strings.Contains(errStr, "EOF") ||
+				strings.Contains(errStr, "connection reset") ||
+				strings.Contains(errStr, "connection refused") ||
+				strings.Contains(errStr, "timeout") ||
+				strings.Contains(errStr, "deadline exceeded") ||
+				strings.Contains(errStr, "no such host") ||
+				strings.Contains(errStr, "network is unreachable")
+
+			if isRetryable {
+				logger.Debugf("Retrying due to connection error: %v", err)
+
+				return true, nil
+			}
+		}
+
+		// Don't retry on HTTP status errors (4xx, 5xx)
+		return false, nil
 	}
 
-	result, statusCode, responseErr = processJSONResponse[R](response, cookies, endpoint, logger)
+	var bodyReader io.Reader
 
-	return
-}
+	if method == http.MethodPost && data != nil {
+		body, err := safejson.Marshal(data)
+		if err != nil {
+			return nil, err
+		}
 
-// DoHTTPPostRequest performs the actual HTTP POST request and returns the response and any errors.
-func DoHTTPPostRequest[T any](ctx context.Context, url string, data *T, header map[string]string, cookies *map[string]string, insecureTLS bool, logger *zap.SugaredLogger) (*http.Response, error) {
-	// Marshal the data into JSON format
-	body, err := safejson.Marshal(data)
+		bodyReader = bytes.NewReader(body)
+	}
+
+	req, err := retryablehttp.NewRequestWithContext(ctx, method, url, bodyReader)
 	if err != nil {
 		return nil, err
 	}
 
-	// Create a reader from the body
-	bodyReader := bytes.NewReader(body)
-
-	// Create a new HTTP request with context
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bodyReader)
-	if err != nil {
-		return nil, err
+	// Set method-specific headers
+	if method == http.MethodPost {
+		req.Header.Set("Content-Type", "application/json")
+		req.ContentLength = -1
 	}
 
-	// Set content type to application/json
-	req.Header.Set("Content-Type", "application/json")
-
-	// Add any provided headers
+	// Set headers
 	for k, v := range header {
 		req.Header.Set(k, v)
 	}
 
-	// Add any provided cookies
+	// Set cookies
 	if cookies != nil {
 		for k, v := range *cookies {
 			req.AddCookie(&http.Cookie{Name: k, Value: v})
 		}
 	}
 
-	// Remove Content-Length header to enable chunked transfer encoding
-	req.ContentLength = -1
-
-	// Enable trace for response time tracking
-	var (
-		start             time.Time
-		timeTillFirstByte time.Duration
-	)
-
-	trace := setupClientTrace(&start, &struct {
-		firstByte time.Duration
-		dns       time.Duration
-		tls       time.Duration
-		conn      time.Duration
-	}{})
-
-	// Send the request
-	start = time.Now()
-
-	response, err := GetClient(insecureTLS).Do(req.WithContext(httptrace.WithClientTrace(req.Context(), trace)))
-	if err != nil {
-		if response != nil {
-			return response, err
-		}
-		// Enhance error message for connection failures
-		return nil, enhanceConnectionError(err)
+	// Set long poll headers conditionally
+	if enableLongPoll {
+		req.Header.Set("Connection", "keep-alive")
+		req.Header.Set("Keep-Alive", "timeout=30, max=1000")
+		req.Header.Set("X-Features", "longpoll;")
 	}
 
-	latenciesFRB.Set(time.Now(), timeTillFirstByte)
-
-	return response, nil
+	return retryClient.Do(req)
 }
 
-// PostRequest does a POST request to the given endpoint, with optional header and cookies
-// Note: Cookies will be updated with the response cookies, if not nil
-// It is a wrapper around DoHTTPPostRequest.
-func PostRequest[R any, T any](ctx context.Context, endpoint Endpoint, data *T, header map[string]string, cookies *map[string]string, insecureTLS bool, apiURL string, logger *zap.SugaredLogger) (result *R, statusCode int, responseErr error) {
-	// Set up context with default 30 second timeout if none provided
-	if ctx == nil {
-		var cancel context.CancelFunc
+// zapRetryLogger adapts zap.SugaredLogger to retryablehttp.LeveledLogger interface.
+type zapRetryLogger struct {
+	logger *zap.SugaredLogger
+}
 
-		ctx, cancel = context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-	}
+func (z *zapRetryLogger) Error(msg string, keysAndValues ...interface{}) {
+	z.logger.Errorw(msg, keysAndValues...)
+}
 
-	url := apiURL + string(endpoint)
+func (z *zapRetryLogger) Info(msg string, keysAndValues ...interface{}) {
+	z.logger.Infow(msg, keysAndValues...)
+}
 
-	response, err := DoHTTPPostRequest(ctx, url, data, header, cookies, insecureTLS, logger)
-	if err != nil {
-		if response != nil {
-			return nil, response.StatusCode, err
-		}
+func (z *zapRetryLogger) Debug(msg string, keysAndValues ...interface{}) {
+	z.logger.Debugw(msg, keysAndValues...)
+}
 
-		return nil, 0, err
-	}
-
-	result, statusCode, responseErr = processJSONResponse[R](response, cookies, endpoint, logger)
-
-	return
+func (z *zapRetryLogger) Warn(msg string, keysAndValues ...interface{}) {
+	z.logger.Warnw(msg, keysAndValues...)
 }
