@@ -57,6 +57,7 @@ TARGETARCH := $(shell go env GOARCH)
 # Default values for go tools
 GINKGO_VERSION = v2.23.4
 NILWAY_VERSION = latest
+LEFTHOOK_VERSION = v1.13.2
 GOLANGCI_LINT_VERSION = v2.3.1
 BETTERALIGN_VERSION = v0.7.1
 DLV_VERSION = v1.25.1
@@ -87,7 +88,7 @@ install:
 	sudo chown vscode:vscode tmp || true
 	go install go.uber.org/nilaway/cmd/nilaway@$(NILWAY_VERSION)
 	go install github.com/onsi/ginkgo/v2/ginkgo@$(GINKGO_VERSION)
-	go install github.com/evilmartians/lefthook@latest
+	go install github.com/evilmartians/lefthook@$(LEFTHOOK_VERSION)
 	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
 	go install github.com/dkorunic/betteralign/cmd/betteralign@$(BETTERALIGN_VERSION)
 
