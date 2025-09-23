@@ -29,7 +29,7 @@ The United Manufacturing Hub (UMH) is an Industrial IoT platform for manufacturi
 - **Bridge = Connection + Source Flow + Sink Flow**: Connection only monitors network availability
 - **Data validation**: Happens at UNS output plugin, not at source
 - **Bridge states**: `starting_failed_dfc_missing` = no data flow configured yet
-- **Resource limiting**: 5 bridges per CPU core (after reserving 1 for Redpanda), blocks at 70% CPU
+- **Resource limiting**: Controlled by `agent.enableResourceLimitBlocking` and related settings. Default: ≤70% CPU; ~5 bridges per CPU core after reserving 1 for Redpanda
 - **Template variables**: `{{ .IP }}`, `{{ .PORT }}` auto-injected from Connection config
 - **Location computation**: Agent location + bridge location = `{{ .location_path }}`
 
@@ -41,9 +41,9 @@ The United Manufacturing Hub (UMH) is an Industrial IoT platform for manufacturi
 
 **Dev**: `make test-graphql` (port 8090), `make pod-shell`, `make test-no-copy` (use current config)
 
-**Clean**: `make stop-all-pods`, `make cleanup-all`
+**Clean** (destructive): `make stop-all-pods`, `make cleanup-all`
 
-**MUST run before completing tasks**: `golangci-lint run`, `go vet ./...`
+**MUST run before completing tasks**: `golangci-lint run`, `go vet ./...`, check no focused tests with `ginkgo -r --fail-on-focused`
 
 **Git**: Default branch is `staging`. Lefthook runs gofmt, go vet, license checks on commit; nilaway, golangci-lint on push.
 
@@ -98,7 +98,8 @@ The United Manufacturing Hub (UMH) is an Industrial IoT platform for manufacturi
 - **Unit Tests**: Focus on business logic, avoid mocking FSM internals
 - **Key Test Patterns**:
   ```go
-  // Use focused specs during development
+  // Use focused specs during development (CI fails if any are present)
+  // CI runs with: ginkgo -r -p --fail-on-focused
   FIt("should handle state transition", func() {
       // Test implementation
   })
@@ -147,8 +148,8 @@ When investigating FSM or service issues, follow this systematic approach:
 
 Start broad, then narrow:
 ```bash
-# Recent errors and warnings
-tail -1000 /data/logs/umh-core/current | grep -E "ERROR|WARN"
+# Recent errors and warnings (with human-readable timestamps)
+tai64nlocal < /data/logs/umh-core/current | tail -1000 | grep -E "ERROR|WARN"
 
 # FSM state changes for specific service
 grep "service-name.*currentFSM" /data/logs/umh-core/current
@@ -203,7 +204,7 @@ Verify the configuration chain:
 
 Create a clear sequence:
 1. User action → System response
-2. FSM state transitions with timestamps
+2. FSM state transitions with timestamps (ISO-8601 with timezone, e.g., 2025-09-22T14:37:05Z)
 3. Where it got stuck and why
 4. Evidence from logs (quote exact lines)
 
@@ -251,11 +252,68 @@ To trace issues:
 
 Remember: Every FSM issue has a trigger, a stuck state, and a missing transition. Find all three.
 
+## UI Testing with Playwright MCP
+
+When reproducing or testing UI-related issues, use Playwright MCP for browser automation:
+
+### Setup and Navigation
+```bash
+# Start test environment
+make test-no-copy  # Use current config without copying
+
+# Navigate to Management Console
+mcp__playwright__browser_navigate url: "https://management.umh.app"
+
+# Take screenshots for documentation
+mcp__playwright__browser_take_screenshot fullPage: true, filename: "before-deployment.png"
+```
+
+### Collaborative Workflow
+The most effective approach combines human and AI capabilities:
+
+1. **Human prepares context**: User creates initial setup, navigates to relevant page
+2. **AI traces actions**: Uses browser_snapshot to understand current state
+3. **Human provides credentials**: Login, sensitive data entry
+4. **AI performs repetitive tasks**: Clicking through deployment flows, waiting for timeouts
+5. **Both observe results**: Human confirms visual state, AI analyzes logs
+
+### Key Capabilities
+- **State observation**: `browser_snapshot` provides accessibility tree for navigation
+- **Action automation**: Click buttons, fill forms, wait for conditions
+- **Evidence collection**: Screenshots (though not automatically saved to PR)
+- **Multi-tab handling**: Track deployment dialogs and logs simultaneously
+
+### Testing Protocol Converter Deployments
+```yaml
+# Example reproduction workflow:
+1. Navigate to Data Flows page
+2. Click on protocol converter to edit
+3. Change protocol type (e.g., S7 → Generate)
+4. Click "Save & Deploy"
+5. Monitor deployment dialog for status changes
+6. Wait for timeout/success
+7. Check logs for FSM state transitions
+8. Screenshot final state for documentation
+```
+
+### Best Practices
+- **Always screenshot before/after**: Provides visual evidence for reports
+- **Monitor both UI and logs**: Deployment dialog + backend FSM states
+- **Document timing**: Note when "not existing" states appear
+- **Capture error messages**: Exact text from UI alerts and dialogs
+- **Test multiple scenarios**: Failed deployments, successful deployments, rollbacks
+
+### Limitations and Improvements
+- Screenshots aren't automatically attached to PRs (manual step needed)
+- Browser console errors should be checked with `browser_console_messages`
+- Network requests can be monitored with `browser_network_requests`
+- For complex forms, use `browser_fill_form` for batch field updates
+
 
 ## Important Notes
 
 - **Default branch for PRs**: `staging` (not main)
-- **Focused tests**: Don't remove `FIt()` or `FDescribe()` - they're intentional
+- **Focused tests**: Do not commit focused specs. CI runs with `--fail-on-focused` and will fail if any are present
 - **FSM callbacks**: Keep them fail-free (logging only)
 - **Actions**: Must be idempotent and handle context cancellation
 - **Exponential backoff**: System automatically retries failed transitions
