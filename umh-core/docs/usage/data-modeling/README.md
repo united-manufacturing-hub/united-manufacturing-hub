@@ -1,132 +1,265 @@
 # Data Modeling
 
-Unified data-modelling builds on our existing data contract foundation to provide a comprehensive approach to industrial data modeling.
+Data modeling in UMH Core transforms device data into business-ready information through structured schemas and validation.
 
-UMH Core's unified data-modelling system provides a structured approach to defining, validating, and processing industrial data. It bridges the gap between raw sensor data and meaningful business information through a clear hierarchy of components.
+## The Component Chain
 
-## Why Data Modeling Matters
-
-Manufacturing companies typically start with **implicit data modeling** - using bridges to contextualize data factory by factory. This bottom-up approach works well for single sites: look at what's available in your PLC/Kepware, add basic metadata, rename cryptic tags like `XYDAG324` to `temperature`, and publish to the UNS.
-
-But as companies scale across **multiple factories**, they hit a wall:
-
-- **Inconsistent schemas**: Each site names the same equipment differently (`motor_speed` vs `rpm` vs `rotational_velocity`)
-- **No standardization**: Pump data from Factory A has different fields than identical pumps in Factory B
-- **Analytics nightmares**: Cross-site dashboards and analytics require custom mapping for every location
-- **Knowledge silos**: Each site's contextualization is trapped in local configurations
-
-**Explicit data modeling** solves this by defining standardized templates that enforce consistency across the entire enterprise. Instead of each factory doing its own contextualization, you define once: "Every Pump has these exact fields: `pressure`, `temperature`, `motor.current`, `motor.rpm`" - then apply that template everywhere.
-
-### From Implicit to Explicit
-
-| Approach | Scope | Benefits | Limitations |
-|----------|--------|----------|-------------|
-| **Implicit** (Current Bridges) | Per-factory contextualization | Quick setup, site-specific optimization | Inconsistent across sites, no templates |
-| **Explicit** (Data Modeling) | Enterprise-wide standardization | Consistent schemas, reusable templates, cross-site analytics | Requires upfront design, more rigid |
-
-UMH's unified data-modelling bridges this gap: keep the flexibility of per-site bridges for raw data collection, but add explicit modeling on top for enterprise standardization.
-
-## Object Hierarchy
-
-The unified data-modelling system uses a four-layer hierarchy:
-
-```
-Payload-Shape → Data-Model → Data-Contract → Stream-Processor
+```text
+Payload Shapes → Data Models → Data Contracts → Data Flows
+       ↓              ↓              ↓                ↓
+  Value types     Structure      Enforcement    Execution
 ```
 
-| Layer | Purpose | Example |
-|-------|---------|---------|
-| **[Payload-Shape](payload-shapes.md)** | Canonical schema fragment (timeseries default) | `timeseries`, `blob` |
-| **[Data-Model](data-models.md)** | Reusable class; tree of fields, folders, sub-models | `Motor`, `Pump`, `Temperature` |
-| **[Data-Contract](data-contracts.md)** | Binds model version; decides retention & sinks | `_temperature_v1`, `_pump_v1` |
-| **[Stream-Processor](stream-processors.md)** | Runtime pipeline for model instances | `furnaceTemp_sp`, `pump41_sp` |
+Each component builds on the previous:
+- **[Payload Shapes](payload-shapes.md)** define what types of values are allowed
+- **[Data Models](data-models.md)** use shapes to create hierarchical structure
+- **[Data Contracts](data-contracts.md)** enforce models at runtime
+- **[Data Flows](../data-flows/)** execute with or without contracts
 
-## Quick Example
+## What You Can Model
 
-Here's how the system transforms raw PLC data into structured, validated information:
+In any UNS topic, data modeling controls specific portions:
 
-### 1. Raw Data Input
-```
-Topic: umh.v1.corpA.plant-A.line-4.furnace1._raw.temperature_F
-Payload: { "value": 1500, "timestamp_ms": 1733904005123 }
+```text
+umh.v1.enterprise.site.area.line._contract.virtual.path.name
+       └───────── fixed ─────────┘         └── modeled ──┘
 ```
 
-### 2. Data Model Definition
-```yaml
-datamodels:
-  temperature:
-    description: "Temperature sensor model"
-    versions:
-      v1:
-        structure:
-          temperatureInC:
-            _payloadshape: timeseries-number
+- **Fixed**: Location hierarchy comes from bridge configuration
+- **Modeled**: Everything after the contract is defined by your data model
+  - Virtual path: Organizational folders (e.g., `motor.electrical`)
+  - Name: The actual data point (e.g., `current`)
+
+See [Topic Convention](../unified-namespace/topic-convention.md) for complete structure.
+
+## Data Flow Patterns
+
+Data can follow these patterns based on your needs:
+
+### Device Language (_raw)
+Start by exploring your equipment data with original naming:
+
+```text
+Device → Bridge → _raw → Topic Browser
 ```
 
-### 3. Data Contract
-```yaml
-datacontracts:
-  - name: _temperature_v1
-    model:
-      name: temperature
-      version: v1
-    default_bridges:
-      - type: timescaledb
-        retention_in_days: 365
+**Example**: `umh.v1.enterprise.chicago.line-1.pump._raw.DB1.DW20`
+- Exploration, debugging, quick connectivity
+- Site engineers who know the PLC addressing
+- Original tags preserved (e.g., `s7_address: "DB1.DW20"`)
+
+### Device Models
+Apply business naming directly in bridges:
+
+```text
+Device → Bridge + Model → _pump_v1 → Applications
+         (one step)
 ```
 
-### 4. Stream Processor
-```yaml
-streamprocessors:
-  - name: furnaceTemp_sp
-    _templateRef: "temperature_template"
-    location:
-      0: corpA
-      1: plant-A
-      2: line-4
-      3: furnace1
-    variables:
-      temp_sensor: "temperature_F"
-      sn: "SN-F1-001"
+**Example**: `umh.v1.enterprise.chicago.line-1.pump._pump_v1.inlet_temperature`
+- Consistent naming across equipment types
+- Operations teams, local dashboards
+- Most implementations start here
+
+### Business Models
+Transform device data into business KPIs:
+
+```text
+Multiple _pump_v1 → Stream Processor → _maintenance_v1 → Enterprise Apps
 ```
 
-### 5. Structured Output
+**Example**: `umh.v1.enterprise.chicago._maintenance_v1.work_orders.create`
+- Aggregated metrics, business records
+- Enterprise systems, management dashboards
+- Required when scaling across sites
+
+## The Two-Layer Architecture
+
+**Sites and HQ both need their view of the same data.** This isn't a choice between approaches - it's about enabling both layers to work together:
+
+### Layer 1: Device Models (Data Structure Within Equipment)
+- Define WHAT data points exist in equipment (temperature, vibration)
+- NOT the organizational structure (that's location_path)
+- Sites maintain control of their data definitions
+- Original tags preserved in metadata
+- Applied directly in bridges (one step)
+- Primarily time-series data
+- **Result**: Sites trust the system because they built it
+
+### Layer 2: Business Models (Enterprise Metrics)
+Created in TWO ways:
+1. **Aggregation**: Stream processors combine device models into KPIs
+2. **Direct**: Bridges connect to ERP/MES systems for business data
+
+- Creates consistent metrics across sites
+- Doesn't disturb site operations
+- Multiple departments can create their own views
+- Primarily relational data
+- **Result**: Everyone gets the metrics they need
+
+The key: Device models describe equipment internals, business models describe enterprise needs.
+
+### Why Both Layers Matter
+**Common failure patterns:**
+- **Only device models**: Chaos across multiple sites, no standardization
+- **Only business models**: Sites lose control, engineers reject the system
+
+**The success formula:** Sites own their data structure (device models), everyone creates their views (business models). This is why stream processors exist - to bridge these layers without forcing change on sites.
+
+## Key Concepts
+
+### Location Path vs Device Model
+- **Location Path**: WHERE equipment sits in your organization
+  - Example: `enterprise.chicago.packaging.line-1.pump-01`
+  - Defined in bridge configuration
+  - This is your factory hierarchy
+  
+- **Device Model**: WHAT data points exist within that equipment  
+  - Example: `_pump_v1.temperature`, `_pump_v1.vibration.x-axis`
+  - Defines internal data structure of a single device
+  - NOT the organizational structure
+
+### Name vs Tag
+- **Name**: The data point identifier in UNS topics
+- **Tag**: Industry term for a sensor/data point
+- We use "name" for broader applicability (not just time-series)
+
+### Virtual Path
+Organizational folders within your data model:
+- **Example**: `motor.electrical`, `diagnostics.vibration`
+- **Purpose**: Groups related data points logically within a device
+
+### Data Contract vs Data Model
+- **Data Model**: Defines structure (template)
+- **Data Contract**: Enforces structure (runtime validation)
+- **Example**: Creating `pump` model auto-creates `_pump_v1` contract
+
+### Time-Series vs Relational
+- **Time-Series**: Single value with timestamp
+  - Example: `{"timestamp_ms": 1733904005123, "value": 42.5}`
+- **Relational**: Multiple fields in one message
+  - Example: Work order with 10 fields
+
+See [Payload Formats](../unified-namespace/payload-formats.md) for details.
+
+### Processing Methods
+
+**In Bridges:**
+- `tag_processor`: For time-series data from PLCs/sensors
+- `nodered_js`: For relational data from ERP/MES systems
+
+**In Stream Processors:**
+- JavaScript expressions: For aggregating and transforming data
+- Example: `total: "sensor1 + sensor2 + sensor3"`
+
+## Choosing Your Data Flow
+
+Based on your data source, choose the appropriate path:
+
+| Source | Output | Bridge Processor | Path |
+|--------|--------|-----------------|------|
+| PLC/Sensor | Device Model | `tag_processor` | Direct to _pump_v1 |
+| PLC/Sensor | Raw | `tag_processor` | Direct to _raw (exploration) |
+| ERP/MES | Business Model | `nodered_js` | Direct to _workorder_v1 |
+| Multiple Device Models | Business Model | - | Via Stream Processor |
+
+### Data Type Alignment
+- **Device Models**: 90% time-series data
+  - Temperature, pressure, vibration readings
+  - Status indicators, counters, running hours
+  - Process with: `tag_processor` in bridges
+  
+- **Business Models**: 90% relational data  
+  - Work orders, maintenance schedules
+  - Production batches, quality reports
+  - Process with: `nodered_js` in bridges OR aggregate via stream processors
+
+## Implementation Patterns
+
+### Pattern 1: Equipment Monitoring
+```text
+PLC tags → Bridge + tag_processor → Device Model (_pump_v1)
+Location: enterprise.site.line.pump-01
+Model adds: .temperature, .pressure, .status
 ```
-Topic: umh.v1.corpA.plant-A.line-4.furnace1._temperature.temperatureInC
-Payload: { "value": 815.6, "timestamp_ms": 1733904005123 }
-Database: Auto-created TimescaleDB hypertable
+**When**: Connecting industrial equipment with time-series data
+
+### Pattern 2: ERP Integration
+```text
+SAP work orders → Bridge + nodered_js → Business Model (_workorder_v1)
+```
+**When**: Connecting business systems with relational data
+
+### Pattern 3: Multi-Site Aggregation
+```text
+site1._pump_v1 ─┐
+site2._pump_v1 ─├→ Stream Processor → _maintenance_v1
+site3._pump_v1 ─┘   (JavaScript expressions)
+```
+**When**: Creating KPIs from multiple device models
+
+### Pattern 4: Exploration First
+```text
+Unknown PLC → Bridge + tag_processor → _raw → Topic Browser
+                                           ↓
+                                    Design device model
+                                           ↓
+                                    Apply in bridge
+```
+**When**: Understanding new equipment before modeling
+
+## Why Models Are Immutable
+
+**The scenario**: A data scientist builds a dashboard using `_pump_v1` for 500 pumps across 10 sites.
+
+**Without immutability**: Someone modifies `_pump_v1`:
+- Dashboard breaks - fields renamed
+- Historical queries fail - structure changed
+- Other sites stop working
+- Weekend ruined
+
+**With immutability**:
+1. Create `_pump_v2` with changes
+2. Test thoroughly
+3. Migrate gradually
+4. Deprecate v1 when safe
+5. Dashboard keeps working throughout
+
+## Common Questions
+
+### When should I use data models?
+
+Start with `_raw` for exploration. Add models when:
+- You need consistent naming across sites
+- Multiple applications consume the data
+- Validation becomes critical
+- You're ready for production
+
+### How do I handle different equipment versions?
+
+Create separate models:
+- `_pump_v1` for older pumps
+- `_pump_v2` for newer pumps with more sensors
+- Stream processors can aggregate both
+
+### What about equipment-specific data?
+
+Use virtual paths to organize:
+```text
+_pump_v1.motor.temperature
+_pump_v1.motor.current
+_pump_v1.diagnostics.vibration
 ```
 
-## Key Benefits
+## Next Steps
 
-- **Unified YAML Dialect**: Single configuration language for all transformations
-- **Generic ISA-95 Support**: Built-in hierarchical naming (level0-4)
-- **Schema Registry Integration**: All layers pushed to Redpanda Schema Registry
-- **Automatic Validation**: UNS output plugin rejects non-compliant messages
-- **Sub-Model Reusability**: Define once, use across multiple assets
-- **Enterprise Reliability**: Combines MQTT simplicity with data-center-grade features
-- **Generic Hierarchical Support**: Built-in hierarchical naming (level0-4+) supports ISA-95, KKS, or custom standards
+1. **Define value types**: [Payload Shapes](payload-shapes.md)
+2. **Create structure**: [Data Models](data-models.md)
+3. **Enforce validation**: [Data Contracts](data-contracts.md)
+4. **Transform data**: [Stream Processors](stream-processors.md)
 
-## Getting Started
+## Learn More
 
-1. **[Define Data Models](data-models.md)** - Create reusable data structures
-2. **[Create Data Contracts](data-contracts.md)** - Bind models to storage and retention policies  
-3. **[Deploy Stream Processors](stream-processors.md)** - Implement real-time data transformation
-4. **[Configure in Management Console](../data-flows/stream-processor.md#management-console)** - Use the web interface for deployment
-
-## Architecture Context
-
-This unified approach builds on UMH's hybrid architecture, combining:
-
-- **MQTT** for lightweight edge communication
-- **Kafka** for reliable enterprise messaging  
-- **Data Contracts** for application-level guarantees
-- **Schema Registry** for centralized validation
-
-For deeper technical background on why this hybrid approach is necessary, see our [comprehensive analysis of MQTT limitations and data contract solutions](https://learn.umh.app/blog/what-is-mqtt-why-most-mqtt-explanations-suck-and-our-attempt-to-fix-them/).
-
-## Related Documentation
-
-- [Stream Processors Implementation](../data-flows/stream-processor.md) - Detailed runtime configuration
-- [Unified Namespace](../unified-namespace/README.md) - Topic structure and payload formats
-- [Data Flows Overview](../data-flows/README.md) - Integration with other flow types 
+- [Getting Started Guide](../../getting-started/) - See data modeling in action
+- [Bridges](../data-flows/bridges.md) - Apply models during ingestion
+- [Topic Convention](../unified-namespace/topic-convention.md) - Understand topic structure

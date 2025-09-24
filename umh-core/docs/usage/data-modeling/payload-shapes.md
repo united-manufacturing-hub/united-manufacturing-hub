@@ -1,168 +1,161 @@
 # Payload Shapes
 
-Payload shapes define reusable JSON schemas for field values in industrial data models.
+> This article assumes you've completed the [Getting Started guide](../../getting-started/) and understand the [data modeling concepts](README.md).
 
-Payload shapes define the JSON schema for field values. They provide reusable templates for common data structures in industrial systems, ensuring consistency across your data models.
+Payload shapes define the structure and validation rules for message payloads. While built-in shapes handle most time-series data, custom shapes enable relational data modeling for complex business records.
 
 ## Overview
 
-Payload shapes are stored in the `payloadshapes:` configuration section and define the structure of data that flows through your UNS topics. They use `_type:` to define the types of fields within the payload shape structure:
+In the [component chain](README.md#the-component-chain), payload shapes provide the foundation:
 
-```yaml
-payloadshapes:
-  timeseries-number:
-    fields:
-      timestamp_ms:
-        _type: number
-      value:
-        _type: number
-  timeseries-string:
-    fields:
-      timestamp_ms:
-        _type: number
-      value:
-        _type: string
+```
+Payload Shapes → Data Models → Data Contracts → Data Flows
+       ↑
+  Value types defined here
 ```
 
-## Built-in Payload Shapes
+## UI Capabilities
 
-### Timeseries Number
+Payload shapes have no UI component:
 
-The default payload shape for numeric sensor data:
+| Feature | Available | Notes |
+|---------|-----------|-------|
+| View shapes | ❌ | Configuration file only |
+| Create shapes | ❌ | Edit config.yaml directly |
+| Edit shapes | ❌ | Modify config.yaml |
+| Built-in shapes | ✅ | Always available, no configuration needed |
 
-```yaml
-payloadshapes:
-  timeseries-number:
-    fields:
-      timestamp_ms:
-        _type: number
-      value:
-        _type: number
-```
+**Configuration location**: Select your instance under `Instances` in the menu, press `...`, then `Config File`. Find payload shapes under the `payloadShapes:` section
 
-**Example payload:**
+## Built-in Shapes
+
+UMH provides two built-in shapes that handle 90% of industrial data:
+
+### timeseries-number
+
+For numeric sensor data and measurements.
+
+**Structure:**
 ```json
 {
-  "value": 42.5,
-  "timestamp_ms": 1733904005123
+  "timestamp_ms": 1733904005123,
+  "value": 42.5
 }
 ```
 
-**Common use cases:**
-- Temperature measurements
-- Pressure readings
-- RPM values
-- Current measurements
-- Power consumption
+**Use cases:** Temperature, pressure, speed, counts, any numeric measurement
 
-### Timeseries String
+### timeseries-string
 
-For textual sensor data and status values:
+For text-based status and identifiers.
 
-```yaml
-payloadshapes:
-  timeseries-string:
-    fields:
-      timestamp_ms:
-        _type: number
-      value:
-        _type: string
-```
-
-**Example payload:**
+**Structure:**
 ```json
 {
-  "value": "running",
-  "timestamp_ms": 1733904005123
+  "timestamp_ms": 1733904005123,
+  "value": "running"
 }
 ```
 
-**Common use cases:**
-- Equipment status ("running", "stopped", "fault")
-- Serial numbers
-- Product codes
-- Error messages
-- Operator notes
+**Use cases:** Machine states, batch IDs, product codes, operator names
 
-## Usage in Data Models
+## When to Use Custom Shapes
 
-Payload shapes are referenced in data models using the `_payloadshape:` property:
+Custom shapes are specifically for **relational data** - business records with multiple related fields that must stay together.
+
+**Time-series vs Relational:**
+
+| Data Type | Shape | Example |
+|-----------|-------|----------|
+| Single values over time | Built-in timeseries-* | Temperature readings |
+| Complex business records | Custom shape | Work orders, quality inspections |
+
+Learn more: [Payload Formats](../unified-namespace/payload-formats.md)
+
+## Configuration
+
+Access configuration via: Instances → Select instance → `...` → Config File
+
+### Defining Custom Shapes
+
+```yaml
+payloadShapes:
+  work-order:    # Shape name (referenced in models)
+    description: "Work order record"
+    fields:
+      orderId:
+        _type: string
+      productId:
+        _type: string
+      quantity:
+        _type: number
+      status:
+        _type: string    # created/in-progress/completed
+      operatorId:
+        _type: string
+      timestamp:
+        _type: string    # ISO 8601 format
+```
+
+**Key points:**
+- Only two types: `string` and `number`
+- All fields are required
+- Shape names must be unique
+
+### Using Custom Shapes in Models
+
+Reference custom shapes in your data models to create CRUD-like endpoints:
 
 ```yaml
 datamodels:
-  pump:
-    description: "Pump with various measurements"
-    versions:
+  - name: work-order
+    version:
       v1:
         structure:
-          pressure:
-            _payloadshape: timeseries-number
-          status:
-            _payloadshape: timeseries-string
+          create:
+            _payloadshape: work-order    # Custom shape for new orders
+          update:
+            _payloadshape: work-order    # Same shape for updates
+          delete:
+            _payloadshape: work-order    # Or simplified delete shape
 ```
 
-## Type System
+This creates topics like:
+- `enterprise.site._work_order_v1.create` - New work orders
+- `enterprise.site._work_order_v1.update` - Update existing orders
+- `enterprise.site._work_order_v1.delete` - Delete orders
 
-The `_type:` field (used within payload shapes) can reference:
+## Processing Relational Data
 
-### Basic Types
-- `number`: Numeric values (integers, floats)
-- `string`: Text values
-- `boolean`: True/false values
+### Example: Processing Work Orders
 
-## Relational Payload Shapes
+```javascript
+// In nodered_js processor for work order creation
+msg.meta.data_contract = "_work_order_v1";
+msg.meta.tag_name = "create";  // Maps to the 'create' endpoint
 
-> 🚧 **Roadmap Item** - Relational payload shapes for complex relational data:
+// Build work order record
+msg.payload = {
+  orderId: "WO-" + Date.now(),
+  productId: msg.product,
+  quantity: msg.qty,
+  status: "created",
+  operatorId: msg.operator,
+  timestamp: new Date().toISOString()
+};
 
-```yaml
-payloadshapes:
-  relational-meldePerson:
-    fields:
-      perso_no:
-        _type: string
-      gesundheit:
-        pulse:
-          value:
-            _type: number
-          messaured_at:
-            _type: number
-  relational-setzeStatus:
-    fields:
-      status:
-        _type: string
-      timestamp:
-        _type: number
-  relational-aendereStatus:
-    fields:
-      old_status:
-        _type: string
-      new_status:
-        _type: string
-      changed_at:
-        _type: number
+return msg;
 ```
 
-## Best Practices
-
-### Naming Convention
-- **Use hyphenated names**: `timeseries-number`, `batch-report`
-- **Include data type**: `timeseries-number` vs. just `timeseries`
-
-### Design Principles
-- **Keep shapes focused**: Each shape should serve a specific purpose
-- **Favor composition**: Use existing shapes as building blocks
-- **Plan for evolution**: Consider future field additions
-- **Document use cases**: Clear examples of when to use each shape
-
-### Field Organization
-- **Group related fields**: Logical field grouping within shapes
-- **Use consistent naming**: `timestamp_ms` not `time` or `ts`
-- **Include required metadata**: Timestamp fields for time-series data
+This creates a message at `enterprise.site._work_order_v1.create` with the complete work order data.
 
 
-## Related Documentation
+## Relationship to Other Components
 
-- [Data Models](data-models.md) - Using payload shapes in data models
-- [Data Contracts](data-contracts.md) - Storage and retention policies
-- [Stream Processors](stream-processors.md) - Processing data with payload shapes
-- [Payload Formats](../unified-namespace/payload-formats.md) - UNS payload structure 
+Payload shapes are referenced by [data models](data-models.md), which are then enforced by [data contracts](data-contracts.md).
+
+## Next Steps
+
+- **Define structure**: [Data Models](data-models.md) - Create hierarchies using shapes
+- **Enforce validation**: [Data Contracts](data-contracts.md) - Make shapes mandatory
+- **Build pipelines**: [Data Flows](../data-flows/) - Process data with bridges

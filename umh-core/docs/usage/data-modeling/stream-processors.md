@@ -1,284 +1,169 @@
 # Stream Processors
 
-Stream processors transform raw data into structured, validated information according to your data models using reusable template configurations.
+> This article assumes you've completed the [Getting Started guide](../../getting-started/) and understand the [data modeling concepts](README.md).
 
-Stream processors are the runtime components that bring data models to life. They consume raw data from your industrial systems, apply transformations according to your data models, and output structured data. Stream processors work directly with data models through templates, not through data contracts.
+Stream processors are one way to create business models by transforming multiple device model streams into KPIs and metrics.
 
 ## Overview
 
-Stream processors bridge the gap between raw industrial data and structured business information:
+Stream processors aggregate device data into business KPIs:
 
-- **Input**: Raw sensor data, PLC values, device messages
-- **Processing**: Transformation, validation, contextualization according to data models
-- **Output**: Structured data compliant with data models
-- **Templates**: Reusable configurations with variable substitution
-- **Auto-validation**: If data contracts exist for the model, output is automatically validated and routed to contract bridges
-
-```yaml
-# Template definition
-templates:
-  streamProcessors:
-    motor_template:
-      model:
-        name: pump
-        version: v1
-      sources:               # alias → raw topic
-        press: "${{ .location_path }}._raw.${{ .abc }}"
-        tF: "${{ .location_path }}._raw.tempF"
-        r: "${{ .location_path }}._raw.run"
-      mapping:               # field → JS / constant / alias
-        pressure: "press"
-        temperature: "(tF-32)*5/9" # JavaScript expressions for data transformation 
-        running: "r"
-        motor:
-          rpm: "press"
-        serialNumber: "${{ .sn }}"
-
-# Stream processor instances
-streamprocessors:
-  - name: motor_assembly
-    _templateRef: "motor_template"
-    location:
-      0: corpA
-      1: plant-A
-    variables:
-      abc: "assembly"
-      sn: "SN-P42-008"
-  - name: motor_qualitycheck
-    _templateRef: "motor_template"
-    variables:
-      abc: "qualitycheck"
-      sn: "SN-P42-213"
+```text
+Multiple Device Model Topics → Stream Processor → Business Model Topic
+                                     ↑
+                           Aggregation happens here
 ```
 
-## Key Concepts
+Stream processors are for:
+- **Aggregating** data from multiple devices
+- **Creating** business KPIs from raw metrics
+- **Calculating** derived values across equipment
+- **Reducing** data volume for cloud transmission
 
-### Template Reference
+## UI Capabilities
 
-Each stream processor references a reusable template:
+The Management Console provides visual stream processor creation:
 
-```yaml
-streamprocessors:
-  - name: pump41_sp
-    _templateRef: "pump_template"
-```
+| Feature | Available | Notes |
+|---------|-----------|-------|
+| View processor list | ✅ | Shows all processors with throughput |
+| Create processors | ✅ | Visual or code mode |
+| Topic selection | ✅ | Browse and select source topics |
+| Expression mapping | ✅ | Map topics to model fields |
+| Edit processors | ✅ | Modify existing processors |
+| Delete processors | ✅ | Remove unused processors |
 
-This template reference ensures:
-- Output data matches the template's data model structure
-- Validation occurs against the model's schema
-- Template variables provide instance-specific configuration
-- **Automatic integration**: If data contracts exist for the same model, output is automatically validated and routed to contract bridges
+![Stream Processors List](./images/stream-processors.png)
 
-### Location Hierarchy
+**What you see in the UI:**
+- **Name**: Processor identifier
+- **Instance**: Which UMH Core instance runs the processor
+- **Throughput**: Messages processed per second
 
-Stream processors define their position in the hierarchical organization (commonly based on ISA-95 but adaptable to KKS or custom naming standards). For complete hierarchy structure and rules, see [Topic Convention](../unified-namespace/topic-convention.md).
+## Creating a Stream Processor (UI)
 
-```yaml
-location:
-  0: corpA        # Enterprise (mandatory)
-  1: plant-A      # Site/Region (optional)
-  2: line-4       # Area/Zone (optional)
-  3: pump41       # Work Unit (optional)
-  4: motor        # Work Center (optional)
-```
+The UI is the primary way to create stream processors. It generates the YAML configuration automatically.
 
-This creates UNS topics like:
-```
-umh.v1.corpA.plant-A.line-4.pump41._pump.pressure
-```
+### Step 1: Basic Configuration
 
-### Data Sources
+![Add Stream Processor](./images/stream-processors-add.png)
 
-Stream processors subscribe to raw data topics:
+1. Click **Add Stream Processor**
+2. Enter **Name**: Descriptive identifier
+3. Select **Instance**: Where to run the processor
+4. Choose **Data Contract**: Output structure (e.g., `_production_v1`)
+5. Set **Location levels**: Where in the UNS hierarchy (enterprise, site, etc.)
 
+### Step 2: Topic Selection
+
+![Topic Selection](./images/stream-processors-add-topic-expression.png)
+
+Select source topics to aggregate:
+- Browse available topics
+- Select multiple sources
+- Variable names auto-generated (e.g., `_10` for each topic)
+
+### Step 3: Expression Mapping
+
+Map source data to output fields:
+- Use variable names from selected topics
+- Write expressions (e.g., `_10 + _10_2` for sum)
+- Each field in your model needs a mapping
+
+### Step 4: Code Mode (Advanced)
+
+![Code Mode Configuration](./images/stream-processors-add-code-mode.png)
+
+Switch to code mode to see or edit the generated YAML:
 ```yaml
 sources:
-  press: "umh.v1.corpA.plant-A.line-4.pump41.deviceX._raw.press"
-  temp: "umh.v1.corpA.plant-A.line-4.pump41.deviceX._raw.tempF"
-  power1: "umh.v1.corpA.plant-A.line-4.pump41._raw.power_l1"
-  power2: "umh.v1.corpA.plant-A.line-4.pump41._raw.power_l2"
-```
-
-### Field Mapping
-
-Transform raw values into model fields using JavaScript expressions:
-
-```yaml
+  # Define your data sources (specific topics)
+  source_alias: "{{ .location_path }}._raw.some_field"
 mapping:
-  pressure: "press"                    # Direct pass-through
-  temperature: "(temp - 32) * 5 / 9"  # Fahrenheit to Celsius
-  total_power: "power1 + power2"      # Derived calculation
-  serialNumber: "'SN-P41-007'"       # Static metadata
+  # Map source aliases to data model fields
+  field_name: "source_alias"
 ```
 
-## Simple Example
+**Note**: The UI generates this YAML configuration. You can switch between visual and code modes.
 
-### Temperature Sensor
+## Configuration
 
-Transform Fahrenheit readings to Celsius:
+Access configuration via: Instances → Select instance → `...` → Config File
+
+### How Stream Processors Work
+
+Stream processors use templates for reusability and subscribe to specific topics:
 
 ```yaml
-# Data model (from data-models.md)
-datamodels:
-  temperature:
-    description: "Temperature sensor model"
-    versions:
-      v1:
-        structure:
-          temperatureInC:
-            _payloadshape: timeseries-number
+templates:
+  streamProcessors:
+    production_aggregator:
+      model:
+        name: production-metrics
+        version: v1
+      sources:  # Specific topics to subscribe to
+        cnc1: "{{ .location_path }}.cnc-01._cnc_v1.vibration.x-axis"
+        cnc2: "{{ .location_path }}.cnc-02._cnc_v1.vibration.x-axis"
+        cnc3: "{{ .location_path }}.cnc-03._cnc_v1.vibration.x-axis"
+      mapping:  # Transform to model fields
+        total-vibration: "cnc1 + cnc2 + cnc3"
+        avg-vibration: "(cnc1 + cnc2 + cnc3) / 3"
+        machines-running: "(cnc1 > 0 ? 1 : 0) + (cnc2 > 0 ? 1 : 0) + (cnc3 > 0 ? 1 : 0)"
+```
 
-# Data contract (from data-contracts.md)  
-datacontracts:
-  - name: _temperature_v1
-    model:
-      name: temperature
-      version: v1
-    default_bridges:
-      - type: timescaledb
-        retention_in_days: 365
+**Key concepts:**
+- Each processor gets a unique consumer group (for offset tracking)
+- Sources define exact topics to subscribe to (not patterns)
+- Outputs go to: `umh.v1.{{ .location_path }}._<model>_<version>.<field>`
 
-# Stream processor implementation
+### Deploying Stream Processors
+
+```yaml
 streamprocessors:
-  - name: furnaceTemp_sp
-    _templateRef: "temperature_template"
+  - name: line_a_metrics
+    _templateRef: "production_aggregator"
     location:
-      0: corpA
-      1: plant-A
-      2: line-4
-      3: furnace1
-    variables:
-      temp_sensor: "temperature_F"
-      sn: "SN-F1-001"
+      0: enterprise
+      1: site
+      2: line-a
 ```
 
-**Result:**
-- Input: `1500°F` from PLC
-- Output: `815.6°C` in structured format
-- Storage: Auto-created TimescaleDB hypertable
+### Expression Language
 
-## Complex Example
-
-### Pump with Motor Sub-Model
+Mappings use JavaScript expressions with dependency-based evaluation:
 
 ```yaml
-# Stream processor for pump with motor sub-model
-streamprocessors:
-  - name: pump41_sp
-    _templateRef: "pump_template"
-    location:
-      0: corpA
-      1: plant-A
-      2: line-4
-      3: pump41
-    variables:
-      abc: "deviceX"
-      sn: "SN-P41-007"
-```
-
-**Generated Topics:**
-```
-umh.v1.corpA.plant-A.line-4.pump41._pump.pressure
-umh.v1.corpA.plant-A.line-4.pump41._pump.temperature
-umh.v1.corpA.plant-A.line-4.pump41._pump.running
-umh.v1.corpA.plant-A.line-4.pump41._pump.diagnostics.vibration
-umh.v1.corpA.plant-A.line-4.pump41._pump.motor.current
-umh.v1.corpA.plant-A.line-4.pump41._pump.motor.rpm
-umh.v1.corpA.plant-A.line-4.pump41._pump.total_power
-umh.v1.corpA.plant-A.line-4.pump41._pump.serial_number
-```
-
-## Validation and Error Handling
-
-Stream processors provide built-in validation:
-
-### Schema Validation
-- Output must match the referenced data model structure
-- Field types validated against payload shapes
-- Constraint checking (min/max, allowed values)
-- **Additional validation**: If data contracts exist for the model, output is automatically validated against contract requirements
-
-### Runtime Validation
-```yaml
-# Invalid mapping - caught at startup
 mapping:
-  invalid_field: "someVar"  # Error: not defined in model
+  # Direct pass-through
+  value: "source1"
 
-# Runtime error handling
-mapping:
-  temperature: "temp / 0"   # Expression error: skips message
+  # Math operations
+  total: "source1 + source2 + source3"
+  average: "(source1 + source2) / 2"
+
+  # Conditionals
+  status: "value > 100 ? 'HIGH' : 'NORMAL'"
+
+  # Complex logic
+  efficiency: |
+    var produced = source1;
+    var planned = source2;
+    return (produced / planned) * 100;
 ```
 
-### Error Scenarios
-- **Unknown fields**: Processor fails to start
-- **Missing variables**: Processor fails to start  
-- **Expression errors**: Message skipped, logged
-- **Undefined expression results**: Message skipped
+**Evaluation behavior:**
+- Static mappings (no dependencies) evaluate on every message
+- Dynamic mappings only evaluate when their dependencies arrive
 
-## Deployment and Management
+## Relationship to Other Components
 
-Stream processors are deployed through:
+Stream processors work with:
+- **[Data Models](data-models.md)**: Define output structure via `model` reference
+- **[Data Contracts](data-contracts.md)**: Enforce output validation
+- **[Bridges](../data-flows/bridges.md)**: Provide input data (device model topics)
 
-1. **YAML Configuration**: Direct configuration files
-2. **Management Console**: Web-based interface (recommended)
-3. **API**: Programmatic deployment
+## Next Steps
 
-### Management Console Workflow
-
-For detailed information on using the Management Console interface, see:
-
-**[Stream Processor Implementation → Management Console](../data-flows/stream-processor.md#management-console)**
-
-The console provides:
-- Visual data model builder
-- Interactive mapping configuration
-- Tag browser for source selection
-- Live validation and preview
-- One-click deployment
-
-## Operational Benefits
-
-### Automatic Infrastructure
-- **Database tables**: Auto-created from data models
-- **Schema registry**: Models registered automatically
-- **Validation pipelines**: Generated from contracts
-- **Monitoring**: Built-in performance metrics
-
-### Scalability
-- **Multiple instances**: Same model deployed across assets
-- **Shared infrastructure**: One contract, many processors
-- **Resource efficiency**: Optimized processing pipelines
-
-### Maintainability  
-- **Version management**: Controlled model/contract evolution
-- **Configuration as code**: YAML-based, version-controlled
-- **Centralized validation**: Consistent across all processors
-
-## Best Practices
-
-### Naming
-- **Descriptive names**: `pump41_sp`, `furnace_temp_sp`
-- **Include location**: Reference the asset/location
-- **Consistent suffix**: Use `_sp` for stream processors
-
-### Source Management
-- **Meaningful variable names**: `press`, `temp`, not `var1`, `var2`
-- **Full topic paths**: Avoid ambiguity with complete UNS paths
-- **Document complex sources**: Comment unusual data sources
-
-### Mapping Logic
-- **Keep expressions simple**: Complex logic should be in separate steps
-- **Use appropriate precision**: Match industrial data accuracy
-- **Handle edge cases**: Consider sensor failure scenarios
-- **Document calculations**: Comment unit conversions and formulas
-
-## Related Documentation
-
-For complete implementation details, configuration syntax, and Management Console usage:
-
-**[Data Flows → Stream Processor Implementation](../data-flows/stream-processor.md)**
-
-Additional references:
-- [Data Models](data-models.md) - Defining data structures
-- [Data Contracts](data-contracts.md) - Storage and retention policies
-- [Unified Namespace](../unified-namespace/README.md) - Topic structure and conventions 
+- **Create device data**: [Bridges](../data-flows/bridges.md) - Connect devices first
+- **Define structures**: [Data Models](data-models.md) - Create output models
+- **Learn concepts**: [README](README.md) - Understand data modeling approach

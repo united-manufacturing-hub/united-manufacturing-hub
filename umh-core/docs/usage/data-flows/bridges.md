@@ -1,71 +1,121 @@
 # Bridges
 
-> 🚧 **Roadmap Item** - Bridges are under active development. Current functionality includes connection monitoring and basic read/write flows.
+> **Prerequisite:** Understand [Data Flow concepts](README.md) and complete the [Getting Started guide](../../getting-started/).
 
-Bridges (shown as `protocolConverter:` in YAML configuration) connect external devices and systems to the Unified Namespace. They combine connection health monitoring with bidirectional data flows, making them ideal for industrial device connectivity.
+Bridges move data into and out of the Unified Namespace, providing connection monitoring and automatic data organization. While read flows work with any protocol, write flows are not yet implemented - use [stand-alone flows](stand-alone-flow.md) for writing to external systems.
 
-## Key Features
+## UI Capabilities
 
-* **Connection Monitoring**: Continuous health checks via nmap, ping, or custom probes
-* **Location Hierarchy**: Automatic hierarchical path construction from agent and bridge locations (supports ISA-95, KKS, or custom naming)
-* **Bidirectional Data Flow**: Separate read and write pipelines for full device interaction
-* **Variable Templating**: Go template support for flexible configuration
-* **State Management**: Advanced finite state machine for operational visibility
+| Action | Available | Notes |
+|--------|-----------|-------|
+| Create bridges | ✅ | Visual protocol configuration |
+| Select protocols | ✅ | OPC UA, Modbus, S7, MQTT, 50+ more |
+| Configure location path | ✅ | ISA-95 levels (0-4) |
+| Monitor connection health | ✅ | Real-time status |
+| View logs | ✅ | Live log streaming |
+| View metrics | ✅ | Throughput monitoring |
+| Edit bridges | ✅ | Modify and redeploy |
+| Delete bridges | ✅ | Clean removal |
+| Advanced mode | ✅ | Direct YAML editing |
 
-## When to Use Bridges
+## Creating a Bridge (UI)
 
-**Choose Bridges for:**
+### Step 1: Navigate to Data Flows
 
-* Connecting to field devices (PLCs, HMIs, sensors, actuators)
-* Industrial protocol communication (OPC UA, Modbus, S7, Ethernet/IP)
-* Systems requiring connection health monitoring
-* Publishing data to the Unified Namespace with automatic location context
+Go to **Data Flows** and click **Add Bridge**:
 
-**Use** [**Stand-alone Flows**](stand-alone-flow.md) **for:**
+![Data Flows Overview](./images/bridges-overview.png)
 
-* Point-to-point data transformation without UNS integration
-* Custom processing that doesn't require device connectivity patterns
-* High-throughput scenarios where monitoring overhead isn't needed
+### Step 2: Configure General Settings
 
-## Benthos vs Node-RED Decision Matrix
+Fill in the basic information and press **Save & Deploy**. A popup will appear. Only then you can proceed with Step 3.
 
-**Use Benthos/Bridges** for data pipelines with verified industrial protocols (OPC UA, Modbus, S7, Ethernet/IP), production throughput requirements, or when you need enterprise reliability and structured configurations that scale across teams. The Management Console provides GUI configuration with input validation 🚧, making Benthos accessible to OT teams while maintaining structured, maintainable configs. **Use Node-RED** for rapid prototyping with visual programming, complex site-specific business logic requiring full JavaScript, protocols not yet available in Benthos-UMH, or when building custom applications and dashboards beyond data movement. Many deployments use both: Benthos for high-volume standard protocols, Node-RED for specialized integration and custom applications.
+![Bridge General Configuration](./images/bridge-general-good-conenction-no-read-flow.png)
 
-## Configuration Structure
+**General Information:**
+- **Name**: Unique identifier for your bridge
+- **Instance**: Select your UMH instance
+- **Level 0-4**: Location path (e.g., enterprise → site → area → line → machine)
+
+**Connection:**
+- **IP Address**: Device IP (becomes `{{ .IP }}` variable)
+- **Port**: Connection port (becomes `{{ .PORT }}` variable)
+
+### Step 3: Select Protocol
+
+Click the **Read** tab and select your protocol:
+
+![Protocol Selection](./images/bridges-read-no-dfc-protocol-selection.png)
+
+We support **50+ industrial protocols** through [Benthos-UMH](https://docs.umh.app/benthos-umh/input) plus everything from [Redpanda Connect](https://docs.redpanda.com/redpanda-connect/components/inputs/about/):
+
+Common industrial protocols:
+- **Modbus**: For PLCs and RTUs
+- **OPC UA**: For industrial servers
+- **S7**: For Siemens PLCs
+- **Ethernet/IP**: For Allen-Bradley
+- **And many more**: See full list at [Benthos-UMH Inputs](https://docs.umh.app/benthos-umh/input)
+
+### Step 4: Configure Protocol Settings
+
+Each protocol has specific settings. For example, S7:
+
+![Siemens S7 Configuration](./images/s7-protocol-config.png)
+
+### Step 5: Deploy
+
+Click **Save & Deploy**. The bridge will start connecting to your device.
+
+## Managing Bridges
+
+### View Status
+
+The main view shows all bridges with connection status and throughput:
+
+![Bridges Overview](./images/bridges-overview.png)
+
+- **Green dot**: Connected and running
+- **Yellow dot**: Starting or warning state
+- **Grey dot**: Intermediate states (starting, stopping, or stuck in starting state)
+
+### Context Menu
+
+Right-click any bridge for quick actions:
+
+![Bridge Context Menu](./images/bridges-overview-context-menu.png)
+
+### View Logs
+
+Monitor bridge activity in real-time:
+
+![Bridge Logs](./images/bridges-logs.png)
+
+### View Metrics
+
+Track performance and throughput:
+
+![Bridge Metrics](./images/bridges-metrics.png)
+
+## Important: Data Types from Different Protocols
+
+**Industrial protocols (OPC UA, Modbus, S7) only provide time-series data** - snapshots of values at points in time. They cannot directly provide relational records.
+
+**IT protocols (MQTT, HTTP, Kafka) can provide relational data** - when you select "relational" as the data type in the UI, the bridge automatically uses [`nodered_js` processor](https://docs.umh.app/benthos-umh/processing/node-red-javascript-processor) to handle complex business records like work orders or batch reports.
+
+For converting time-series to relational data, see [Stream Processors](stream-processor.md#time-series-to-relational-challenges) or use [Stand-alone Flows](stand-alone-flow.md) with state management.
+
+## Configuration (YAML)
+
+Advanced users can edit the YAML directly:
 
 ```yaml
 protocolConverter:
-  - name: device-bridge
+  - name: my-plc-bridge
     desiredState: active
     protocolConverterServiceConfig:
       location:
-        2: "area-name"    # Appended to agent.location
-        3: "device-id"
-      config:
-        connection:
-          # Health monitoring configuration
-        dataflowcomponent_read:
-          # Data ingestion pipeline (optional)
-        dataflowcomponent_write:
-          # Data output pipeline (optional)
-      variables:
-        # Template variables
-```
-
-## Industrial Protocol Examples
-
-### Basic Bridge Pattern
-
-All industrial protocol bridges follow the same pattern - only the input configuration changes. This example uses connection variables ([{{ .IP }}](../../reference/variables.md#variables) and [{{ .PORT }}](../../reference/variables.md#variables)) and the location variable ([{{ .location_path }}](../../reference/variables.md#variables)):
-
-```yaml
-protocolConverter:
-  - name: industrial-device
-    desiredState: active
-    protocolConverterServiceConfig:
-      location:
-        2: "production-line"  # Area
-        3: "device-name"      # Work cell
+        2: "production-line"
+        3: "plc-01"
       config:
         connection:
           nmap:
@@ -74,236 +124,61 @@ protocolConverter:
         dataflowcomponent_read:
           benthos:
             input:
-              # ANY benthos-umh industrial protocol input
-              opcua: { /* ... */ }     # or modbus, s7, etc.
+              s7comm:
+                addresses:
+                  - DB1.DW20
+                  - DB3.I270
+                tcpDevice: "{{ .IP }}"
+                rack: 0
+                slot: 1
             pipeline:
               processors:
                 - tag_processor:
                     defaults: |
                       msg.meta.location_path = "{{ .location_path }}";
                       msg.meta.data_contract = "_raw";
-                      msg.meta.tag_name = msg.meta.opcua_tag_name;
+                      msg.meta.tag_name = msg.meta.s7_address;
                       return msg;
             output:
               uns: {}
       variables:
         IP: "192.168.1.100"
-        PORT: "502"
+        PORT: "102"
 ```
 
-### Supported Protocols
+### Key Configuration Elements
 
-UMH Core supports 50+ industrial protocols via [Benthos-UMH](https://docs.umh.app/benthos-umh). For complete, up-to-date configuration examples:
-
-**Industrial Protocols:**
-
-* [**OPC UA**](https://docs.umh.app/benthos-umh/input/opc-ua-input) - Industry standard automation protocol
-* [**Modbus**](https://docs.umh.app/benthos-umh/input/modbus) - Serial and TCP Modbus devices
-* [**Siemens S7**](https://docs.umh.app/benthos-umh/input/siemens-s7) - Direct PLC communication
-* [**Ethernet/IP**](https://docs.umh.app/benthos-umh/input/ethernet-ip) - Allen-Bradley and CIP devices
-* [**ifm IO-Link Master**](https://docs.umh.app/benthos-umh/input/ifm-io-link-master-sensorconnect) - Sensor connectivity
-
-**IT Protocols:**
-
-* MQTT, Kafka, HTTP/REST, SQL databases, File systems
-
-> **Note:** Always reference the [Benthos-UMH documentation](https://docs.umh.app/benthos-umh) for the most current protocol configurations and features.
-
-## Bidirectional Communication
-
-Bridges support both reading from and writing to devices using separate pipelines. This example uses connection variables ([{{ .IP }}](../../reference/variables.md#variables) and [{{ .PORT }}](../../reference/variables.md#variables)) for device connectivity:
-
+**Location Path:**
 ```yaml
-protocolConverter:
-  - name: bidirectional-device
-    desiredState: active
-    protocolConverterServiceConfig:
-      location:
-        2: "assembly-line"
-        3: "controller"
-      config:
-        connection:
-          nmap:
-            target: "{{ .IP }}"
-            port: "{{ .PORT }}"
-        dataflowcomponent_read:
-          benthos:
-            input:
-              opcua: { /* read configuration */ }
-            pipeline:
-              processors:
-                - tag_processor: { /* UNS metadata */ }
-            output:
-              uns: {}
-        dataflowcomponent_write:
-          benthos:
-            input:
-              uns:
-                topics: ["umh.v1.+.+.assembly-line.controller._commands.+"]
-            pipeline:
-              processors:
-                - mapping: |
-                    # Transform UNS commands to device writes
-                    root.command = metadata("umh_topic").split(".").7
-                    root.value = this.value
-            output:
-              opcua_write: { /* write configuration */ }
-      variables:
-        IP: "192.168.1.100"
-        PORT: "4840"
+location:
+  0: enterprise   # Optional: inherits from agent
+  1: site        # Optional: inherits from agent
+  2: area        # Required: your addition
+  3: line        # Required: your addition
+  4: cell        # Optional: further subdivision
 ```
 
-**Pattern:**
+**Template Variables:**
+```yaml
+variables:
+  IP: "192.168.1.100"      # Available as {{ .IP }}
+  PORT: "502"              # Available as {{ .PORT }}
+  SCAN_RATE: "1s"          # Custom variable {{ .SCAN_RATE }}
+```
 
-* **Read pipeline**: Device → tag\_processor → UNS output
-* **Write pipeline**: UNS input → command mapping → Device output
-
-## Connection Health Monitoring
-
-UMH Core currently supports network connectivity monitoring via nmap:
-
-### Network Connectivity (nmap)
-
-The nmap health check uses connection variables ([{{ .IP }}](../../reference/variables.md#variables) and [{{ .PORT }}](../../reference/variables.md#variables)) to verify device connectivity:
-
+**Connection Monitoring:**
 ```yaml
 connection:
   nmap:
-    target: "{{ .IP }}"
-    port: "{{ .PORT }}"
+    target: "{{ .IP }}"    # Uses IP variable
+    port: "{{ .PORT }}"    # Uses PORT variable
 ```
 
-The nmap health check verifies that the target device is reachable on the specified port, ensuring the bridge can establish connections before attempting data operations.
 
-## State Management
+## Next Steps
 
-Bridges use finite state machines to track operational status. For complete state definitions, transitions, and monitoring details, see [State Machines Reference](../../reference/state-machines.md).
-
-## Template Variables
-
-Use Go template syntax for flexible configuration. For a complete list of all available variables, see the [Template Variables Reference](../../reference/variables.md#variables).
-
-```yaml
-variables:
-  IP: "192.168.1.100"
-  PORT: "4840"
-  SCAN_RATE: "1s"
-  TAG_PREFIX: "line4_pump"
-
-template:
-  dataflowcomponent_read:
-    benthos:
-      input:
-        opcua:
-          endpoint: "opc.tcp://{{ .IP }}:{{ .PORT }}"
-          subscription_interval: "{{ .SCAN_RATE }}"
-      pipeline:
-        processors:
-          - tag_processor:
-              defaults: |
-                msg.meta.tag_name = "{{ .TAG_PREFIX }}_" + msg.meta.opcua_tag_name;
-```
-
-## Integration with Data Modeling
-
-Bridges work seamlessly with UMH's [data modeling system](../data-modeling/):
-
-```yaml
-# Bridge publishes raw data
-protocolConverter:
-  - name: pump-raw-data
-    # ... bridge configuration ...
-    pipeline:
-      processors:
-        - tag_processor:
-            defaults: |
-              msg.meta.data_contract = "_raw";  # Raw data contract
-
-# Stream Processor transforms to structured model 🚧
-streamprocessors:
-  - name: pump_structured
-    contract: _pump:v1  # References pump data model
-    sources:
-      pressure: "umh.v1.acme.plant1.line4.pump01._raw.pressure"
-      temperature: "umh.v1.acme.plant1.line4.pump01._raw.temperature"
-    # ... transformation logic ...
-```
-
-## Data Contract Evolution 🚧
-
-> **🚧 Roadmap Item**: The current `tag_processor` implementation follows the benthos-umh pattern with tag names in payloads. With the next UMH Core release, `tag_processor` will be updated to align with the new data model where tag names are only in topics (not in payloads) and metadata is not included in message payloads.
-
-Bridges support evolution from simple raw data to structured data contracts. See [Configuration Reference - Data Contract Guidelines](../../reference/configuration-reference.md#tag_processor) for complete tag\_processor syntax.
-
-### Start Simple (Raw Data)
-
-```yaml
-pipeline:
-  processors:
-    - tag_processor:
-        defaults: |
-          msg.meta.data_contract = "_raw";
-          msg.meta.tag_name = "temperature";
-```
-
-_Results in:_ `umh.v1.acme.plant1.line4.sensor1._raw.temperature`
-
-Raw data uses the standard [timeseries payload format](../unified-namespace/payload-formats.md).
-
-### Evolve to Structured (Data Models) 🚧
-
-```yaml
-# Stream Processor creates structured data from raw inputs
-streamprocessors:
-  - name: temperature_structured
-    contract: _temperature:v1  # References Temperature data model
-    sources:
-      raw_temp: "umh.v1.acme.plant1.line4.sensor1._raw.temperature"
-    # ... transformation logic ...
-```
-
-_Results in:_ `umh.v1.acme.plant1.line4.sensor1._temperature.temperatureInC`
-
-For payload format details, see [Payload Formats](../unified-namespace/payload-formats.md).
-
-## UNS Input/Output Usage
-
-Bridges exclusively use UNS input/output for UNS integration:
-
-**For reading device data:**
-
-```yaml
-input:
-  opcua: {}           # Industrial protocol input
-output:
-  uns: {}             # Always use UNS output for publishing to UNS
-```
-
-**For writing to devices:**
-
-```yaml
-input:
-  uns:                # Use UNS input to consume commands from UNS
-    topics: ["umh.v1.+.+.+.+._commands.+"]
-output:
-  opcua_write: {}     # Industrial protocol output
-```
-
-This approach abstracts away Kafka/Redpanda complexity and aligns with UMH Core's embedded architecture philosophy. See [UNS Output Documentation](https://docs.umh.app/benthos-umh/output/uns-output) for complete configuration options.
-
-## Migration from UMH Classic
-
-> **UMH Classic Users:** See [Migration from UMH Classic to UMH Core](../../production/migration-from-classic.md) for complete migration instructions including `_historian` → `_raw` data contract changes and configuration updates.
-
-## Related Documentation
-
-* [**Stand-alone Flows**](stand-alone-flow.md) - Alternative for custom processing
-* [**Data Modeling**](../data-modeling/) - Structure bridge data with models
-* [**Configuration Reference**](../../reference/configuration-reference.md) - Complete YAML syntax
-* [**State Machines**](../../reference/state-machines.md) - Bridge state management details
-
-## Learn More
-
-* [**Connect ifm IO-Link Masters with the UNS**](https://learn.umh.app/blog/connect-ifm-io-link-masters-with-the-uns/) - Real-world sensor connectivity example
-* [**New Bridges and Automatic Helm Upgrade in UMH**](https://learn.umh.app/blog/new-bridges-and-automatic-helm-upgrade-in-umh/) - Bridge architecture evolution
-* [**Benthos-UMH UNS Output Documentation**](https://docs.umh.app/benthos-umh/output/uns-output) - Complete UNS output reference
+- Try the [Getting Started guide](../../getting-started/) to connect your first device
+- Learn about [Data Models](../data-modeling/data-models.md) to structure your data
+- Explore [Metadata and Tracing](../unified-namespace/metadata-and-tracing.md) for debugging
+- Use [Stand-alone Flows](stand-alone-flow.md) for custom processing
+- Configure [Stream Processors](stream-processor.md) to transform data

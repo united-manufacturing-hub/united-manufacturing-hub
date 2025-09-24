@@ -46,17 +46,17 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 		mockFS = filesystem.NewMockFileSystem()
 		artifacts = &ServiceArtifacts{
 			ServiceDir:    filepath.Join(constants.S6BaseDir, "test-service"),
-			RepositoryDir: filepath.Join(constants.S6RepositoryBaseDir, "test-service"),
+			RepositoryDir: filepath.Join(constants.GetS6RepositoryBaseDir(), "test-service"),
 			LogDir:        filepath.Join(constants.S6LogBaseDir, "test-service"),
 			CreatedFiles: []string{
-				filepath.Join(constants.S6RepositoryBaseDir, "test-service", "down"),
-				filepath.Join(constants.S6RepositoryBaseDir, "test-service", "type"),
-				filepath.Join(constants.S6RepositoryBaseDir, "test-service", "log", "type"),
-				filepath.Join(constants.S6RepositoryBaseDir, "test-service", "log", "down"),
-				filepath.Join(constants.S6RepositoryBaseDir, "test-service", "log", "run"),
-				filepath.Join(constants.S6RepositoryBaseDir, "test-service", "run"),
-				filepath.Join(constants.S6RepositoryBaseDir, "test-service", "dependencies.d", "base"),
-				filepath.Join(constants.S6RepositoryBaseDir, "test-service", ".complete"),
+				filepath.Join(constants.GetS6RepositoryBaseDir(), "test-service", "down"),
+				filepath.Join(constants.GetS6RepositoryBaseDir(), "test-service", "type"),
+				filepath.Join(constants.GetS6RepositoryBaseDir(), "test-service", "log", "type"),
+				filepath.Join(constants.GetS6RepositoryBaseDir(), "test-service", "log", "down"),
+				filepath.Join(constants.GetS6RepositoryBaseDir(), "test-service", "log", "run"),
+				filepath.Join(constants.GetS6RepositoryBaseDir(), "test-service", "run"),
+				filepath.Join(constants.GetS6RepositoryBaseDir(), "test-service", "dependencies.d", "base"),
+				filepath.Join(constants.GetS6RepositoryBaseDir(), "test-service", ".complete"),
 			},
 		}
 		config = s6serviceconfig.S6ServiceConfig{
@@ -406,11 +406,11 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 			})
 
 			mockFS.WithPathExistsFunc(func(ctx context.Context, path string) (bool, error) {
-				return strings.Contains(path, constants.S6RepositoryBaseDir) && repositoryExists, nil
+				return strings.Contains(path, constants.GetS6RepositoryBaseDir()) && repositoryExists, nil
 			})
 
 			mockFS.WithRemoveAllFunc(func(ctx context.Context, path string) error {
-				if strings.Contains(path, constants.S6RepositoryBaseDir) {
+				if strings.Contains(path, constants.GetS6RepositoryBaseDir()) {
 					cleanupFailed = true
 
 					return errors.New("cleanup failed: device busy")
