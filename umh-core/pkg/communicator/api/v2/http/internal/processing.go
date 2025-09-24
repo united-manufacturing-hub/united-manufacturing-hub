@@ -33,6 +33,11 @@ func processCookies(response *http.Response, cookies *map[string]string) {
 		return
 	}
 
+	// Initialize the map if it's nil to prevent panic
+	if *cookies == nil {
+		*cookies = make(map[string]string)
+	}
+
 	cookieMap := *cookies
 	// Process response cookies
 	for _, cookie := range response.Cookies() {
