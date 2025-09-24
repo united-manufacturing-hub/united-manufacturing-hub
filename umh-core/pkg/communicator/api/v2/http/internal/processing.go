@@ -71,7 +71,7 @@ func ProcessJSONResponse[R any](response *http.Response, cookies *map[string]str
 			error_handler.ReportHTTPErrors(
 				errors.New("error response code: "+response.Status),
 				response.StatusCode,
-				string(endpoint),
+				endpoint,
 				method,
 				nil,
 				bodyBytes,
