@@ -775,6 +775,119 @@ var _ = Describe("BenthosInstance FSM", func() {
 			Expect(err).NotTo(HaveOccurred())
 		})
 
+		It("should handle empty S6 FSM state during stopping (ENG-3522)", func() {
+			// This test simulates the scenario where S6 FSM is removed from manager
+			// during Benthos stopping state, causing an empty string response
+			var err error
+
+			// Setup: Create and start the service
+			tick, err = fsmtest.TestBenthosStateTransition(
+				ctx, instance, mockService, mockSvcRegistry, serviceName,
+				internalfsm.LifecycleStateToBeCreated,
+				internalfsm.LifecycleStateCreating,
+				5,
+				tick,
+				time.Now(),
+			)
+			Expect(err).NotTo(HaveOccurred())
+
+			mockService.ServiceStates[serviceName] = &benthossvc.ServiceInfo{S6FSMState: s6fsm.OperationalStateStopped}
+			mockService.ExistingServices[serviceName] = true
+
+			tick, err = fsmtest.TestBenthosStateTransition(
+				ctx, instance, mockService, mockSvcRegistry, serviceName,
+				internalfsm.LifecycleStateCreating,
+				benthosfsm.OperationalStateStopped,
+				5,
+				tick,
+				time.Now(),
+			)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Start the service
+			Expect(instance.SetDesiredFSMState(benthosfsm.OperationalStateActive)).To(Succeed())
+			tick, err = fsmtest.TestBenthosStateTransition(
+				ctx, instance, mockService, mockSvcRegistry, serviceName,
+				benthosfsm.OperationalStateStopped,
+				benthosfsm.OperationalStateStarting,
+				5,
+				tick,
+				time.Now(),
+			)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Get to active state by going through all required transitions
+			mockService.SetServiceState(serviceName, benthossvc.ServiceStateFlags{
+				IsS6Running:            true,
+				S6FSMState:             s6fsm.OperationalStateRunning,
+				IsConfigLoaded:         true,
+				IsHealthchecksPassed:   true,
+				IsRunningWithoutErrors: true,
+				HasProcessingActivity:  true,
+			})
+			
+			// Go through intermediate states to reach active
+			tick, err = fsmtest.TestBenthosStateTransition(
+				ctx, instance, mockService, mockSvcRegistry, serviceName,
+				benthosfsm.OperationalStateStarting,
+				benthosfsm.OperationalStateStartingConfigLoading,
+				5,
+				tick,
+				time.Now(),
+			)
+			Expect(err).NotTo(HaveOccurred())
+			
+			tick, err = fsmtest.TestBenthosStateTransition(
+				ctx, instance, mockService, mockSvcRegistry, serviceName,
+				benthosfsm.OperationalStateStartingConfigLoading,
+				benthosfsm.OperationalStateIdle,
+				60,
+				tick,
+				time.Now(),
+			)
+			Expect(err).NotTo(HaveOccurred())
+			
+			tick, err = fsmtest.TestBenthosStateTransition(
+				ctx, instance, mockService, mockSvcRegistry, serviceName,
+				benthosfsm.OperationalStateIdle,
+				benthosfsm.OperationalStateActive,
+				5,
+				tick,
+				time.Now(),
+			)
+			Expect(err).NotTo(HaveOccurred())
+			
+			// Now stop the service
+			Expect(instance.SetDesiredFSMState(benthosfsm.OperationalStateStopped)).To(Succeed())
+			
+			// Transition to stopping state
+			tick, err = fsmtest.TestBenthosStateTransition(
+				ctx, instance, mockService, mockSvcRegistry, serviceName,
+				benthosfsm.OperationalStateActive,
+				benthosfsm.OperationalStateStopping,
+				5,
+				tick,
+				time.Now(),
+			)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Simulate S6 FSM being removed from manager (returns empty string)
+			mockService.ServiceStates[serviceName] = &benthossvc.ServiceInfo{
+				S6FSMState: "", // Empty string - FSM doesn't exist in manager
+			}
+
+			// Should transition from stopping to stopped even with empty S6 state
+			tick, err = fsmtest.TestBenthosStateTransition(
+				ctx, instance, mockService, mockSvcRegistry, serviceName,
+				benthosfsm.OperationalStateStopping,
+				benthosfsm.OperationalStateStopped,
+				5,
+				tick,
+				time.Now(),
+			)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
 		It("should stop gracefully from Degraded state", func() {
 			// Step 1: to_be_created => creating => stopped
 			var err error

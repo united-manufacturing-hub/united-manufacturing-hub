@@ -1107,6 +1107,7 @@ func (m *FileConfigManager) WriteYAMLConfigFromString(ctx context.Context, confi
 		m.cacheRawConfig = ""
 		m.cacheError = err
 		m.cacheMu.Unlock()
+
 		return fmt.Errorf("failed to parse new config for cache update: %w", err)
 	}
 
