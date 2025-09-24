@@ -44,7 +44,7 @@ var _ = Describe("Requester", func() {
 		var lastErr error
 		client := GetClient(insecureTLS)
 		for i := range 10 {
-			response, err := internal.DoHTTPRequestWithRetry[any](ctx, netHTTP.MethodGet, url, nil, header, cookies, insecureTLS, true, logger, client)
+			response, err := internal.DoHTTPRequestWithRetry(ctx, netHTTP.MethodGet, url, nil, header, cookies, insecureTLS, true, logger, client)
 			if err == nil {
 				return response, nil
 			}
