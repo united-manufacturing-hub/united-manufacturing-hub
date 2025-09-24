@@ -68,7 +68,7 @@ func GetRequest[R any](ctx context.Context, endpoint Endpoint, header map[string
 		return nil, 0, err
 	}
 
-	result, statusCode, responseErr = internal.ProcessJSONResponse[R](response, cookies, string(endpoint), http.MethodGet, logger)
+	result, statusCode, responseErr = internal.ProcessJSONResponse[R](response, cookies, string(endpoint), http.MethodGet, nil, logger)
 
 	return
 }

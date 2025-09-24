@@ -69,7 +69,7 @@ func PostRequest[R any](ctx context.Context, endpoint Endpoint, data any, header
 		return nil, 0, err
 	}
 
-	result, statusCode, responseErr = internal.ProcessJSONResponse[R](response, cookies, string(endpoint), http.MethodPost, logger)
+	result, statusCode, responseErr = internal.ProcessJSONResponse[R](response, cookies, string(endpoint), http.MethodPost, data, logger)
 
 	return
 }

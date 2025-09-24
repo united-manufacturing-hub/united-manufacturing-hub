@@ -53,7 +53,7 @@ func processCookies(response *http.Response, cookies *map[string]string) {
 // Returns the deserialized data, HTTP status code, and any processing error.
 // For 401 Unauthorized responses, returns a specific authentication error without reporting to Sentry.
 // Other HTTP errors (4xx, 5xx) are reported to the error handler for monitoring.
-func ProcessJSONResponse[R any](response *http.Response, cookies *map[string]string, endpoint string, method string, logger *zap.SugaredLogger) (*R, int, error) {
+func ProcessJSONResponse[R any](response *http.Response, cookies *map[string]string, endpoint string, method string, requestBody interface{}, logger *zap.SugaredLogger) (*R, int, error) {
 	defer func() {
 		if err := response.Body.Close(); err != nil {
 			// Log error but don't return it since we're in a defer
@@ -78,7 +78,7 @@ func ProcessJSONResponse[R any](response *http.Response, cookies *map[string]str
 				response.StatusCode,
 				endpoint,
 				method,
-				nil,
+				requestBody,
 				bodyBytes,
 			)
 		}
