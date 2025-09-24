@@ -99,7 +99,7 @@ func (s *DefaultService) CreateArtifacts(ctx context.Context, servicePath string
 	}
 
 	serviceName := filepath.Base(servicePath)
-	repositoryDir := filepath.Join(constants.S6RepositoryBaseDir, serviceName)
+	repositoryDir := filepath.Join(constants.GetS6RepositoryBaseDir(), serviceName)
 
 	// Create artifacts structure
 	artifacts := &ServiceArtifacts{
