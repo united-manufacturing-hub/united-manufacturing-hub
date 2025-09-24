@@ -20,7 +20,6 @@ import (
 	"io"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/hashicorp/go-retryablehttp"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/safejson"
@@ -48,9 +47,9 @@ import (
 func DoHTTPRequestWithRetry(ctx context.Context, method, url string, data any, header map[string]string, cookies *map[string]string, insecureTLS bool, enableLongPoll bool, logger *zap.SugaredLogger, httpClient *http.Client) (*http.Response, error) {
 	retryClient := retryablehttp.NewClient()
 	retryClient.HTTPClient = httpClient
-	retryClient.RetryMax = 10
-	retryClient.RetryWaitMin = 1 * time.Second
-	retryClient.RetryWaitMax = 5 * time.Second
+	retryClient.RetryMax = MaxRetryAttempts
+	retryClient.RetryWaitMin = MinRetryWait
+	retryClient.RetryWaitMax = MaxRetryWait
 
 	// Use a logger that wraps zap
 	retryClient.Logger = &zapRetryLogger{logger: logger}
@@ -103,7 +102,7 @@ func DoHTTPRequestWithRetry(ctx context.Context, method, url string, data any, h
 
 	// Set method-specific headers
 	if method == http.MethodPost {
-		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Content-Type", ContentTypeJSON)
 		req.ContentLength = -1
 	}
 
@@ -121,9 +120,9 @@ func DoHTTPRequestWithRetry(ctx context.Context, method, url string, data any, h
 
 	// Set long poll headers conditionally
 	if enableLongPoll {
-		req.Header.Set("Connection", "keep-alive")
-		req.Header.Set("Keep-Alive", "timeout=30, max=1000")
-		req.Header.Set("X-Features", "longpoll;")
+		req.Header.Set("Connection", ConnectionKeepAlive)
+		req.Header.Set("Keep-Alive", KeepAliveTimeout)
+		req.Header.Set("X-Features", LongPollFeatureHeader)
 	}
 
 	return retryClient.Do(req)
