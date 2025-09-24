@@ -17,6 +17,7 @@ package http
 import (
 	"context"
 	"net/http"
+	"net/url"
 	"time"
 
 	"go.uber.org/zap"
@@ -33,9 +34,12 @@ func PostRequest[R any, T any](ctx context.Context, endpoint Endpoint, data *T, 
 		defer cancel()
 	}
 
-	url := apiURL + string(endpoint)
+	requestURL, err := url.JoinPath(apiURL, string(endpoint))
+	if err != nil {
+		return nil, 0, err
+	}
 
-	response, err := DoHTTPRequestWithRetry(ctx, http.MethodPost, url, data, header, cookies, insecureTLS, false, logger)
+	response, err := DoHTTPRequestWithRetry(ctx, http.MethodPost, requestURL, data, header, cookies, insecureTLS, false, logger)
 	if err != nil {
 		if response != nil {
 			return nil, response.StatusCode, err
