@@ -19,7 +19,6 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"strings"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2/error_handler"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/safejson"
@@ -38,24 +37,11 @@ func processCookies(response *http.Response, cookies *map[string]string) {
 		cookieMap[cookie.Name] = cookie.Value
 	}
 
-	// Process Cookie and Set-Cookie headers
-	for _, headerName := range []string{"Cookie", "Set-Cookie"} {
-		header := response.Header.Get(headerName)
-		for _, pair := range strings.Split(header, ";") {
-			pair = strings.TrimSpace(pair)
-
-			parts := strings.Split(pair, "=")
-			if len(parts) == 2 {
-				cookieMap[parts[0]] = parts[1]
-			}
-		}
-	}
-
 	*cookies = cookieMap
 }
 
 // processJSONResponse processes the HTTP response and unmarshals the JSON body.
-func processJSONResponse[R any](response *http.Response, cookies *map[string]string, endpoint Endpoint, logger *zap.SugaredLogger) (*R, int, error) {
+func processJSONResponse[R any](response *http.Response, cookies *map[string]string, endpoint Endpoint, method string, logger *zap.SugaredLogger) (*R, int, error) {
 	defer func() {
 		if err := response.Body.Close(); err != nil {
 			// Log error but don't return it since we're in a defer
@@ -79,7 +65,7 @@ func processJSONResponse[R any](response *http.Response, cookies *map[string]str
 				errors.New("error response code: "+response.Status),
 				response.StatusCode,
 				string(endpoint),
-				http.MethodGet,
+				method,
 				nil,
 				bodyBytes,
 			)

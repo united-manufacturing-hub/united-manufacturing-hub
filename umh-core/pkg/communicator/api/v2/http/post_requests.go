@@ -44,7 +44,7 @@ func PostRequest[R any, T any](ctx context.Context, endpoint Endpoint, data *T, 
 		return nil, 0, err
 	}
 
-	result, statusCode, responseErr = processJSONResponse[R](response, cookies, endpoint, logger)
+	result, statusCode, responseErr = processJSONResponse[R](response, cookies, endpoint, http.MethodPost, logger)
 
 	return
 }

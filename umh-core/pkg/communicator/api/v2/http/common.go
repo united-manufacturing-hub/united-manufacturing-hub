@@ -27,12 +27,16 @@ import (
 	"go.uber.org/zap"
 )
 
+// Endpoint represents the HTTP path type used for API endpoints.
 type Endpoint string
 
 var (
+	// LoginEndpoint is the login endpoint for instance authentication.
 	LoginEndpoint Endpoint = "/v2/instance/login"
-	PushEndpoint  Endpoint = "/v2/instance/push"
-	PullEndpoint  Endpoint = "/v2/instance/pull"
+	// PushEndpoint is the push endpoint for sending instance data.
+	PushEndpoint Endpoint = "/v2/instance/push"
+	// PullEndpoint is the pull endpoint for retrieving instance data.
+	PullEndpoint Endpoint = "/v2/instance/pull"
 )
 
 // DoHTTPRequestWithRetry performs HTTP requests with automatic retries for connection errors.
