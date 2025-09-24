@@ -23,6 +23,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2/http/internal"
 	"go.uber.org/zap"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
@@ -41,8 +42,9 @@ var _ = Describe("Requester", func() {
 	// doHTTPRequestWithRetry is a test helper that retries HTTP requests on connection issues
 	doHTTPRequestWithRetry := func(ctx context.Context, url string, header map[string]string, cookies *map[string]string, insecureTLS bool, logger *zap.SugaredLogger) (*netHTTP.Response, error) {
 		var lastErr error
+		client := GetClient(insecureTLS)
 		for i := range 10 {
-			response, err := doHTTPRequestWithRetry[any](ctx, netHTTP.MethodGet, url, nil, header, cookies, insecureTLS, true, logger)
+			response, err := internal.DoHTTPRequestWithRetry[any](ctx, netHTTP.MethodGet, url, nil, header, cookies, insecureTLS, true, logger, client)
 			if err == nil {
 				return response, nil
 			}

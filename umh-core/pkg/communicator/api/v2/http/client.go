@@ -25,7 +25,11 @@ var secureHTTPClient *http.Client
 var insecureHTTPClient *http.Client
 var initHTTPClientOnce sync.Once
 
-// GetClient returns an *http.Client configured with TLS verification disabled when insecureTLS is true.
+// GetClient returns a configured HTTP client with TLS and HTTP/2 settings.
+// When insecureTLS is true, TLS certificate verification is disabled and minimum TLS version is set to 1.0 for compatibility.
+// HTTP/2 is explicitly disabled to avoid issues with some middleware and legacy systems.
+// The client includes a 30-second timeout and uses system proxy settings.
+// You probably don't want to use this, but use PostRequest or GetRequest instead.
 func GetClient(insecureTLS bool) *http.Client {
 	// Prevent init race
 	initHTTPClientOnce.Do(func() {

@@ -20,10 +20,31 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2/http/internal"
 	"go.uber.org/zap"
 )
 
-// GetRequest does a GET request to the given endpoint, with optional header and cookies.
+// GetRequest performs an HTTP GET request to the specified endpoint with automatic retry logic.
+// The generic type parameter R specifies the expected response type for JSON deserialization.
+// Returns the deserialized response, HTTP status code, and any error that occurred.
+// Long polling is enabled by default for GET requests to support server-sent events.
+//
+// Type Parameters:
+//   - R: The expected response type that the JSON response will be unmarshaled into
+//
+// Parameters:
+//   - ctx: Context for request cancellation and timeout (defaults to 30s if nil)
+//   - endpoint: API endpoint path to request
+//   - header: Optional HTTP headers to include
+//   - cookies: Optional HTTP cookies (may be updated with response cookies)
+//   - insecureTLS: Whether to disable TLS certificate verification
+//   - apiURL: Base API URL to prepend to endpoint
+//   - logger: Logger instance for request logging
+//
+// Returns:
+//   - result: Pointer to deserialized response data of type R (nil if error or empty response)
+//   - statusCode: HTTP status code from the response
+//   - responseErr: Any error that occurred during the request or response processing
 func GetRequest[R any](ctx context.Context, endpoint Endpoint, header map[string]string, cookies *map[string]string, insecureTLS bool, apiURL string, logger *zap.SugaredLogger) (result *R, statusCode int, responseErr error) {
 	// Set up context with default 30 second timeout if none provided
 	if ctx == nil {
@@ -38,7 +59,7 @@ func GetRequest[R any](ctx context.Context, endpoint Endpoint, header map[string
 		return nil, 0, err
 	}
 
-	response, err := doHTTPRequestWithRetry[any](ctx, http.MethodGet, requestURL, nil, header, cookies, insecureTLS, true, logger)
+	response, err := internal.DoHTTPRequestWithRetry(ctx, http.MethodGet, requestURL, nil, header, cookies, insecureTLS, true, logger, GetClient(insecureTLS))
 	if err != nil {
 		if response != nil {
 			return nil, response.StatusCode, err
@@ -47,7 +68,7 @@ func GetRequest[R any](ctx context.Context, endpoint Endpoint, header map[string
 		return nil, 0, err
 	}
 
-	result, statusCode, responseErr = processJSONResponse[R](response, cookies, endpoint, http.MethodGet, logger)
+	result, statusCode, responseErr = internal.ProcessJSONResponse[R](response, cookies, string(endpoint), http.MethodGet, logger)
 
 	return
 }

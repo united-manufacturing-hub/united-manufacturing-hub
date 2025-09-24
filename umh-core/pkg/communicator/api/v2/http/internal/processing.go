@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package http
+package internal
 
 import (
 	"errors"
@@ -25,7 +25,9 @@ import (
 	"go.uber.org/zap"
 )
 
-// processCookies handles cookie updates from response headers.
+// processCookies extracts cookies from the HTTP response and updates the provided cookie map.
+// This function is used internally to maintain session state across requests.
+// If the cookies parameter is nil, no processing is performed.
 func processCookies(response *http.Response, cookies *map[string]string) {
 	if cookies == nil {
 		return
@@ -40,8 +42,13 @@ func processCookies(response *http.Response, cookies *map[string]string) {
 	*cookies = cookieMap
 }
 
-// processJSONResponse processes the HTTP response and unmarshals the JSON body.
-func processJSONResponse[R any](response *http.Response, cookies *map[string]string, endpoint Endpoint, method string, logger *zap.SugaredLogger) (*R, int, error) {
+// processJSONResponse handles HTTP response processing including JSON deserialization and error handling.
+// This function reads the response body, checks for HTTP errors, deserializes JSON data, processes cookies,
+// and extracts the client's external IP address from response headers.
+// Returns the deserialized data, HTTP status code, and any processing error.
+// For 401 Unauthorized responses, returns a specific authentication error without reporting to Sentry.
+// Other HTTP errors (4xx, 5xx) are reported to the error handler for monitoring.
+func ProcessJSONResponse[R any](response *http.Response, cookies *map[string]string, endpoint string, method string, logger *zap.SugaredLogger) (*R, int, error) {
 	defer func() {
 		if err := response.Body.Close(); err != nil {
 			// Log error but don't return it since we're in a defer

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package http
+package internal
 
 import (
 	"bytes"
@@ -25,18 +25,6 @@ import (
 	"github.com/hashicorp/go-retryablehttp"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/safejson"
 	"go.uber.org/zap"
-)
-
-// Endpoint represents the HTTP path type used for API endpoints.
-type Endpoint string
-
-var (
-	// LoginEndpoint is the login endpoint for instance authentication.
-	LoginEndpoint Endpoint = "/v2/instance/login"
-	// PushEndpoint is the push endpoint for sending instance data.
-	PushEndpoint Endpoint = "/v2/instance/push"
-	// PullEndpoint is the pull endpoint for retrieving instance data.
-	PullEndpoint Endpoint = "/v2/instance/pull"
 )
 
 // doHTTPRequestWithRetry performs HTTP requests with automatic retries for connection errors.
@@ -52,13 +40,14 @@ var (
 //   - insecureTLS: Whether to skip TLS certificate verification (See also GetClient())
 //   - enableLongPoll: Whether to enable long polling with extended timeout
 //   - logger: Logger instance for request logging
+//   - httpClient: Configured HTTP client to use for the request
 //
 // Returns:
 //   - *http.Response: The HTTP response from the server
 //   - error: Any error that occurred during the request
-func doHTTPRequestWithRetry[T any](ctx context.Context, method, url string, data *T, header map[string]string, cookies *map[string]string, insecureTLS bool, enableLongPoll bool, logger *zap.SugaredLogger) (*http.Response, error) {
+func DoHTTPRequestWithRetry(ctx context.Context, method, url string, data any, header map[string]string, cookies *map[string]string, insecureTLS bool, enableLongPoll bool, logger *zap.SugaredLogger, httpClient *http.Client) (*http.Response, error) {
 	retryClient := retryablehttp.NewClient()
-	retryClient.HTTPClient = GetClient(insecureTLS)
+	retryClient.HTTPClient = httpClient
 	retryClient.RetryMax = 10
 	retryClient.RetryWaitMin = 1 * time.Second
 	retryClient.RetryWaitMax = 5 * time.Second
@@ -140,23 +129,28 @@ func doHTTPRequestWithRetry[T any](ctx context.Context, method, url string, data
 	return retryClient.Do(req)
 }
 
-// zapRetryLogger adapts zap.SugaredLogger to retryablehttp.LeveledLogger interface.
+// zapRetryLogger adapts zap.SugaredLogger to implement the retryablehttp.LeveledLogger interface.
+// This allows the retryable HTTP client to use our existing zap logger for consistent log formatting.
 type zapRetryLogger struct {
 	logger *zap.SugaredLogger
 }
 
+// Error logs an error message with structured key-value pairs.
 func (z *zapRetryLogger) Error(msg string, keysAndValues ...interface{}) {
 	z.logger.Errorw(msg, keysAndValues...)
 }
 
+// Info logs an info message with structured key-value pairs.
 func (z *zapRetryLogger) Info(msg string, keysAndValues ...interface{}) {
 	z.logger.Infow(msg, keysAndValues...)
 }
 
+// Debug logs a debug message with structured key-value pairs.
 func (z *zapRetryLogger) Debug(msg string, keysAndValues ...interface{}) {
 	z.logger.Debugw(msg, keysAndValues...)
 }
 
+// Warn logs a warning message with structured key-value pairs.
 func (z *zapRetryLogger) Warn(msg string, keysAndValues ...interface{}) {
 	z.logger.Warnw(msg, keysAndValues...)
 }

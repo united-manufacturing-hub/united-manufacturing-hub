@@ -20,12 +20,33 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2/http/internal"
 	"go.uber.org/zap"
 )
 
-// PostRequest does a POST request to the given endpoint, with optional header and cookies
-// Note: Cookies will be updated with the response cookies, if not nil.
-func PostRequest[R any, T any](ctx context.Context, endpoint Endpoint, data *T, header map[string]string, cookies *map[string]string, insecureTLS bool, apiURL string, logger *zap.SugaredLogger) (result *R, statusCode int, responseErr error) {
+// PostRequest performs an HTTP POST request to the specified endpoint with automatic retry logic.
+// The generic type parameter R specifies the expected response type for JSON deserialization.
+// The request body is JSON-encoded from the provided data parameter.
+// Returns the deserialized response, HTTP status code, and any error that occurred.
+//
+// Type Parameters:
+//   - R: The expected response type that the JSON response will be unmarshaled into
+//
+// Parameters:
+//   - ctx: Context for request cancellation and timeout (defaults to 30s if nil)
+//   - endpoint: API endpoint path to request
+//   - data: Request body data to be JSON-encoded (can be any serializable type)
+//   - header: Optional HTTP headers to include
+//   - cookies: Optional HTTP cookies (will be updated with response cookies if not nil)
+//   - insecureTLS: Whether to disable TLS certificate verification
+//   - apiURL: Base API URL to prepend to endpoint
+//   - logger: Logger instance for request logging
+//
+// Returns:
+//   - result: Pointer to deserialized response data of type R (nil if error or empty response)
+//   - statusCode: HTTP status code from the response
+//   - responseErr: Any error that occurred during the request or response processing
+func PostRequest[R any](ctx context.Context, endpoint Endpoint, data any, header map[string]string, cookies *map[string]string, insecureTLS bool, apiURL string, logger *zap.SugaredLogger) (result *R, statusCode int, responseErr error) {
 	// Set up context with default 30 second timeout if none provided
 	if ctx == nil {
 		var cancel context.CancelFunc
@@ -39,7 +60,7 @@ func PostRequest[R any, T any](ctx context.Context, endpoint Endpoint, data *T, 
 		return nil, 0, err
 	}
 
-	response, err := doHTTPRequestWithRetry(ctx, http.MethodPost, requestURL, data, header, cookies, insecureTLS, false, logger)
+	response, err := internal.DoHTTPRequestWithRetry(ctx, http.MethodPost, requestURL, data, header, cookies, insecureTLS, false, logger, GetClient(insecureTLS))
 	if err != nil {
 		if response != nil {
 			return nil, response.StatusCode, err
@@ -48,7 +69,7 @@ func PostRequest[R any, T any](ctx context.Context, endpoint Endpoint, data *T, 
 		return nil, 0, err
 	}
 
-	result, statusCode, responseErr = processJSONResponse[R](response, cookies, endpoint, http.MethodPost, logger)
+	result, statusCode, responseErr = internal.ProcessJSONResponse[R](response, cookies, string(endpoint), http.MethodPost, logger)
 
 	return
 }
