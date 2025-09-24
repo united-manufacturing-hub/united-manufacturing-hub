@@ -25,6 +25,7 @@ var secureHTTPClient *http.Client
 var insecureHTTPClient *http.Client
 var initHTTPClientOnce sync.Once
 
+// GetClient returns an *http.Client configured with TLS verification disabled when insecureTLS is true.
 func GetClient(insecureTLS bool) *http.Client {
 	// Prevent init race
 	initHTTPClientOnce.Do(func() {
@@ -47,7 +48,8 @@ func GetClient(insecureTLS bool) *http.Client {
 			Proxy:             http.ProxyFromEnvironment,
 			TLSClientConfig: &tls.Config{
 				InsecureSkipVerify: true,
-				MinVersion:         tls.VersionTLS10, // Allow older TLS versions
+				// MinVersion: TLS 1.0, since middle boxes sometime struggle with newer TLS versions at our customers.
+				MinVersion: tls.VersionTLS10,
 			},
 		}
 

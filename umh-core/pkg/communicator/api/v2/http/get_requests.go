@@ -38,7 +38,7 @@ func GetRequest[R any](ctx context.Context, endpoint Endpoint, header map[string
 		return nil, 0, err
 	}
 
-	response, err := DoHTTPRequestWithRetry[any](ctx, http.MethodGet, requestURL, nil, header, cookies, insecureTLS, true, logger)
+	response, err := doHTTPRequestWithRetry[any](ctx, http.MethodGet, requestURL, nil, header, cookies, insecureTLS, true, logger)
 	if err != nil {
 		if response != nil {
 			return nil, response.StatusCode, err

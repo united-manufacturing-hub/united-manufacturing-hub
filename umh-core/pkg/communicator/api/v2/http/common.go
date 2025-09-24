@@ -39,9 +39,24 @@ var (
 	PullEndpoint Endpoint = "/v2/instance/pull"
 )
 
-// DoHTTPRequestWithRetry performs HTTP requests with automatic retries for connection errors.
-// This is the main function that external callers should use for HTTP requests.
-func DoHTTPRequestWithRetry[T any](ctx context.Context, method, url string, data *T, header map[string]string, cookies *map[string]string, insecureTLS bool, enableLongPoll bool, logger *zap.SugaredLogger) (*http.Response, error) {
+// doHTTPRequestWithRetry performs HTTP requests with automatic retries for connection errors.
+// This is an internal helper function. Use GetRequest() in get_requests.go or PostRequest() in post_requests.go instead.
+//
+// Parameters:
+//   - ctx: Context for request cancellation and timeout
+//   - method: HTTP method (GET or POST)
+//   - url: Full URL to send the request to
+//   - data: Request body data (nil for GET requests), this needs to be a JSON encode-able data type.
+//   - header: HTTP headers to include in the request
+//   - cookies: HTTP cookies to include in the request
+//   - insecureTLS: Whether to skip TLS certificate verification (See also GetClient())
+//   - enableLongPoll: Whether to enable long polling with extended timeout
+//   - logger: Logger instance for request logging
+//
+// Returns:
+//   - *http.Response: The HTTP response from the server
+//   - error: Any error that occurred during the request
+func doHTTPRequestWithRetry[T any](ctx context.Context, method, url string, data *T, header map[string]string, cookies *map[string]string, insecureTLS bool, enableLongPoll bool, logger *zap.SugaredLogger) (*http.Response, error) {
 	retryClient := retryablehttp.NewClient()
 	retryClient.HTTPClient = GetClient(insecureTLS)
 	retryClient.RetryMax = 10
