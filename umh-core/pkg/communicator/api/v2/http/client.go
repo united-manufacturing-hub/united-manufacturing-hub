@@ -46,7 +46,7 @@ func GetClient(insecureTLS bool) *http.Client {
 			TLSNextProto:      make(map[string]func(authority string, c *tls.Conn) http.RoundTripper),
 			Proxy:             http.ProxyFromEnvironment,
 			TLSClientConfig: &tls.Config{
-				InsecureSkipVerify: insecureTLS,
+				InsecureSkipVerify: true,
 				MinVersion:         tls.VersionTLS10, // Allow older TLS versions
 			},
 		}
