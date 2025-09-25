@@ -15,10 +15,9 @@
 package api
 
 import (
+	"net/http"
 	"os"
 	"strings"
-
-	"net/http"
 
 	httpv2 "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2/http"
 	"go.uber.org/zap"

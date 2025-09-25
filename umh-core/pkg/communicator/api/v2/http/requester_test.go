@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package http_test
+package http
 
 import (
 	"context"
@@ -23,7 +23,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2/http"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2/http/internal"
 	"go.uber.org/zap"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
@@ -42,8 +42,9 @@ var _ = Describe("Requester", func() {
 	// doHTTPRequestWithRetry is a test helper that retries HTTP requests on connection issues
 	doHTTPRequestWithRetry := func(ctx context.Context, url string, header map[string]string, cookies *map[string]string, insecureTLS bool, logger *zap.SugaredLogger) (*netHTTP.Response, error) {
 		var lastErr error
+		client := GetClient(insecureTLS)
 		for i := range 10 {
-			response, err := http.DoHTTPRequest(ctx, url, header, cookies, insecureTLS, logger)
+			response, err := internal.DoHTTPRequestWithRetry(ctx, netHTTP.MethodGet, url, nil, header, cookies, insecureTLS, true, logger, client)
 			if err == nil {
 				return response, nil
 			}
@@ -87,7 +88,7 @@ var _ = Describe("Requester", func() {
 			It("should return no error", func() {
 				ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 				defer cancel()
-				_, status, err := http.GetRequest[any](ctx, http.LoginEndpoint, header, &cookies, false, apiUrl, log)
+				_, status, err := GetRequest[any](ctx, LoginEndpoint, header, &cookies, false, apiUrl, log)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(status).To(Equal(200))
 			})
@@ -97,7 +98,7 @@ var _ = Describe("Requester", func() {
 			It("should return error an error", func() {
 				ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 				defer cancel()
-				_, status, err := http.PostRequest[any](ctx, http.LoginEndpoint, &data, header, &cookies, false, apiUrl, log)
+				_, status, err := PostRequest[any](ctx, LoginEndpoint, &data, header, &cookies, false, apiUrl, log)
 				Expect(err).To(HaveOccurred())
 				Expect(status).To(Equal(401))
 			})
