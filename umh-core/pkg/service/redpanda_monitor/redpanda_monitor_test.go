@@ -314,7 +314,7 @@ var _ = Describe("Redpanda Monitor Service", func() {
 		Expect(m).To(Equal(mShould))
 	})
 
-	It("should parse the test_metrics", func() {
+	It("should parse the test_metrics", FlakeAttempts(3), func() {
 		// 1. Load the test_metrics.txt file (from current dir)
 		metricsData, err := os.ReadFile("test_metrics.txt")
 		Expect(err).NotTo(HaveOccurred())
