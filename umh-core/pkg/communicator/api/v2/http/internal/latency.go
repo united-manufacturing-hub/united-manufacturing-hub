@@ -16,6 +16,7 @@ package internal
 
 import (
 	"net"
+	"sync"
 	"time"
 
 	"github.com/united-manufacturing-hub/expiremap/v2/pkg/expiremap"
@@ -23,10 +24,24 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 )
 
-// LatestExternalIp is the latest external IP address
-// Our backend server is configured to set a header containing the client's external IP address
-// Note: This is best effort, and may not be accurate if the client is behind a proxy.
-var LatestExternalIp net.IP
+var (
+	latestExternalIp   net.IP
+	latestExternalIpMu sync.RWMutex
+)
+
+func GetLatestExternalIp() net.IP {
+	latestExternalIpMu.RLock()
+	defer latestExternalIpMu.RUnlock()
+
+	return latestExternalIp
+}
+
+func SetLatestExternalIp(ip net.IP) {
+	latestExternalIpMu.Lock()
+	defer latestExternalIpMu.Unlock()
+
+	latestExternalIp = ip
+}
 
 var latenciesFRB = expiremap.NewEx[time.Time, time.Duration](5*time.Minute, 5*time.Minute)
 var latenciesDNS = expiremap.NewEx[time.Time, time.Duration](5*time.Minute, 5*time.Minute)

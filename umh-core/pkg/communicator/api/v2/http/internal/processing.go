@@ -99,7 +99,7 @@ func ProcessJSONResponse[R any](response *http.Response, cookies *map[string]str
 
 	// Process client IP
 	if ip := net.ParseIP(response.Header.Get("X-Client-Ip")); ip != nil {
-		LatestExternalIp = ip
+		SetLatestExternalIp(ip)
 	}
 
 	return &typedResult, response.StatusCode, nil
