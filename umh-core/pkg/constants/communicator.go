@@ -16,10 +16,17 @@ package constants
 
 // these constants are used to make processors in communicator actions more applicable.
 const (
-	// nodered_js processor of benthos-umh, used for relational data.
+	// RelationalProcessor is the benthos-umh processor for relational data, currently nodered_js.
 	RelationalProcessor = "nodered_js"
-	// tag_processor of benthos-umh, used for timeseries data.
+
+	// TimeseriesProcessor is the benthos-umh processor for timeseries data, currently the tag_processor.
 	TimeseriesProcessor = "tag_processor"
+
+	// DownsamplerProcessor is the benthos-umh processor for the downsampler.
+	DownsamplerProcessor = "downsampler"
+
+	// CustomProcessor is a custom processing set of benthos-umh processors.
+	CustomProcessor = "custom"
 )
 
 // DetermineProcessorType returns the processor of the according category.
@@ -28,7 +35,7 @@ func DetermineProcessorType(processors any) string {
 	// case for the communicator-actions
 	case map[string]struct{ Type, Data string }:
 		if len(p) != 1 {
-			return "custom"
+			return CustomProcessor
 		}
 
 		for _, processor := range p {
@@ -38,7 +45,7 @@ func DetermineProcessorType(processors any) string {
 			case RelationalProcessor:
 				return RelationalProcessor
 			default:
-				return "custom"
+				return CustomProcessor
 			}
 		}
 
@@ -57,7 +64,7 @@ func DetermineProcessorType(processors any) string {
 			for key := range procMap {
 				if key == TimeseriesProcessor {
 					hasTagProcessor = true
-				} else if key != "downsampler" {
+				} else if key != DownsamplerProcessor {
 					hasOtherProcessors = true
 				}
 
@@ -82,11 +89,11 @@ func DetermineProcessorType(processors any) string {
 			}
 		}
 
-		return "custom"
+		return CustomProcessor
 
 	default:
-		return "custom"
+		return CustomProcessor
 	}
 
-	return "custom"
+	return CustomProcessor
 }
