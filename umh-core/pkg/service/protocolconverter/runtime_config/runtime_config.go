@@ -23,7 +23,9 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/connectionserviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 )
 
 // BuildRuntimeConfig merges all variables (user + agent + global + internal),
@@ -293,6 +295,9 @@ func renderConfig(
 		return protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime{}, err
 	}
 
+	// the downsampler will be appended only for timeseries data
+	read = appendDownsampler(read)
+
 	write, err := config.RenderTemplate(spec.GetDFCWriteServiceConfig(), scope)
 	if err != nil {
 		return protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime{}, err
@@ -303,4 +308,62 @@ func renderConfig(
 		DataflowComponentReadServiceConfig:  read,
 		DataflowComponentWriteServiceConfig: write,
 	}, nil
+}
+
+// appendDownsampler appends a downsampler as the last processor if one doesn't already exist.
+func appendDownsampler(dfc dataflowcomponentserviceconfig.DataflowComponentServiceConfig) dataflowcomponentserviceconfig.DataflowComponentServiceConfig {
+	processors := getProcessors(dfc.BenthosConfig.Pipeline)
+
+	processorType := constants.DetermineProcessorType(processors)
+	if processorType != constants.TimeseriesProcessor {
+		return dfc
+	}
+
+	if hasDownsampler(processors) {
+		return dfc // User has already configured downsampling
+	}
+
+	defaultDownsampler := map[string]any{
+		"downsampler": map[string]any{}, // Empty config - reads from metadata
+	}
+
+	processors = append(processors, defaultDownsampler)
+
+	// update the config
+	updatedDFC := dfc
+	if updatedDFC.BenthosConfig.Pipeline == nil {
+		updatedDFC.BenthosConfig.Pipeline = make(map[string]any)
+	}
+
+	updatedDFC.BenthosConfig.Pipeline["processors"] = processors
+
+	return updatedDFC
+}
+
+// getProcessors safely extracts the processors array from a pipeline configuration.
+func getProcessors(pipeline map[string]any) []any {
+	if pipeline == nil {
+		return []any{}
+	}
+
+	if procs, ok := pipeline["processors"]; ok {
+		if procsArray, ok := procs.([]any); ok {
+			return procsArray
+		}
+	}
+
+	return []any{}
+}
+
+// hasDownsampler checks if any processor in the pipeline is a downsampler.
+func hasDownsampler(processors []any) bool {
+	for _, proc := range processors {
+		if procMap, ok := proc.(map[string]any); ok {
+			if _, hasDownsampler := procMap["downsampler"]; hasDownsampler {
+				return true
+			}
+		}
+	}
+
+	return false
 }

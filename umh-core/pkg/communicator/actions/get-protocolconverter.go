@@ -138,30 +138,7 @@ func determineProcessingMode(readDFC *models.ProtocolConverterDFC) string {
 		return "" // reply with empty string to indicate that no DFC is present
 	}
 
-	processors := readDFC.Pipeline.Processors
-
-	// If more than one processor, return custom
-	if len(processors) > 1 {
-		return "custom"
-	}
-
-	// If exactly one processor, check its type
-	if len(processors) == 1 {
-		// Get the first (and only) processor from the map
-		for _, processor := range processors {
-			switch processor.Type {
-			case "nodered_js":
-				return "nodered_js"
-			case "tag_processor":
-				return "tag_processor"
-			default:
-				return "custom"
-			}
-		}
-	}
-
-	// No processors found, fall back to custom
-	return "custom"
+	return constants.DetermineProcessorType(readDFC.Pipeline.Processors)
 }
 
 // determineProtocol analyzes the input processors to determine the protocol.

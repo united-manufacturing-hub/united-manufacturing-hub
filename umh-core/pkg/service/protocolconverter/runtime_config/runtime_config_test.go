@@ -23,6 +23,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/connectionserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/protocolconverter/runtime_config"
@@ -163,6 +164,233 @@ var _ = Describe("BuildRuntimeConfig", func() {
 			// Verify that no template strings remain (no {{ }} patterns)
 			Expect(result.ConnectionServiceConfig.NmapServiceConfig.Target).NotTo(ContainSubstring("{{"))
 			Expect(result.ConnectionServiceConfig.NmapServiceConfig.Target).NotTo(ContainSubstring("}}"))
+		})
+	})
+
+	Describe("Downsampler injection", func() {
+		// Helper function to create a basic connection config for tests
+		createConnectionConfig := func() connectionserviceconfig.ConnectionServiceConfigTemplate {
+			return connectionserviceconfig.ConnectionServiceConfigTemplate{
+				NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
+					Target: "127.0.0.1",
+					Port:   "8080",
+				},
+			}
+		}
+		It("should NOT inject downsampler when no processors exist", func() {
+			// Create a simple spec with no processors
+			testSpec := protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
+				Config: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
+					ConnectionServiceConfig: createConnectionConfig(),
+					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
+							Input: map[string]any{
+								"generate": map[string]any{
+									"count": 1,
+								},
+							},
+							Output: map[string]any{
+								"stdout": map[string]any{},
+							},
+						},
+					},
+				},
+			}
+
+			result, err := runtime_config.BuildRuntimeConfig(testSpec, agentLocation, globalVars, nodeName, pcName)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Check that NO downsampler was injected (since no tag_processor)
+			readConfig := result.DataflowComponentReadServiceConfig
+			_, exists := readConfig.BenthosConfig.Pipeline["processors"]
+			Expect(exists).To(BeFalse(), "Pipeline should NOT have processors when no tag_processor exists")
+		})
+
+		It("should inject downsampler as last processor after existing processors", func() {
+			// Create spec with existing processors
+			testSpec := protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
+				Config: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
+					ConnectionServiceConfig: createConnectionConfig(),
+					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
+							Input: map[string]any{
+								"generate": map[string]any{
+									"count": 1,
+								},
+							},
+							Pipeline: map[string]any{
+								"processors": []any{
+									map[string]any{
+										"tag_processor": map[string]any{
+											"defaults": "msg.meta.tag_name = 'test'; return msg;",
+										},
+									},
+									map[string]any{
+										"mapping": "root = this.upper()",
+									},
+								},
+							},
+							Output: map[string]any{
+								"stdout": map[string]any{},
+							},
+						},
+					},
+				},
+			}
+
+			result, err := runtime_config.BuildRuntimeConfig(testSpec, agentLocation, globalVars, nodeName, pcName)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Check processors were preserved and downsampler appended
+			readConfig := result.DataflowComponentReadServiceConfig
+			processors := readConfig.BenthosConfig.Pipeline["processors"].([]interface{})
+
+			Expect(processors).To(HaveLen(3), "Should have tag_processor + mapping + downsampler")
+
+			// Check that original processors are preserved
+			tagProcessor := processors[0].(map[string]interface{})
+			Expect(tagProcessor).To(HaveKey("tag_processor"))
+
+			mappingProcessor := processors[1].(map[string]interface{})
+			Expect(mappingProcessor).To(HaveKey("mapping"))
+
+			// Check that downsampler is the last processor
+			lastProcessor := processors[2].(map[string]interface{})
+			Expect(lastProcessor).To(HaveKey("downsampler"))
+			downsamplerConfig := lastProcessor["downsampler"].(map[string]interface{})
+			Expect(downsamplerConfig).To(BeEmpty(), "Downsampler should have empty config")
+		})
+
+		It("should not inject downsampler if one already exists", func() {
+			// Create spec with existing downsampler
+			testSpec := protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
+				Config: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
+					ConnectionServiceConfig: createConnectionConfig(),
+					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
+							Input: map[string]any{
+								"generate": map[string]any{
+									"count": 1,
+								},
+							},
+							Pipeline: map[string]any{
+								"processors": []any{
+									map[string]any{
+										"tag_processor": map[string]any{
+											"defaults": "msg.meta.tag_name = 'test'; return msg;",
+										},
+									},
+									map[string]any{
+										"downsampler": map[string]any{
+											"default": map[string]any{
+												"deadband": map[string]any{
+													"threshold": 2.0,
+												},
+											},
+										},
+									},
+								},
+							},
+							Output: map[string]any{
+								"stdout": map[string]any{},
+							},
+						},
+					},
+				},
+			}
+
+			result, err := runtime_config.BuildRuntimeConfig(testSpec, agentLocation, globalVars, nodeName, pcName)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Should not inject additional downsampler
+			readConfig := result.DataflowComponentReadServiceConfig
+			processors := readConfig.BenthosConfig.Pipeline["processors"].([]interface{})
+
+			Expect(processors).To(HaveLen(2), "Should still have 2 processors, no injection")
+
+			// Verify existing downsampler config is preserved
+			downsampler := processors[1].(map[string]interface{})
+			Expect(downsampler).To(HaveKey("downsampler"))
+			downsamplerConfig := downsampler["downsampler"].(map[string]interface{})
+			Expect(downsamplerConfig).To(HaveKey("default"), "Should preserve user's downsampler config")
+		})
+
+		// Note: We don't test write config injection because:
+		// 1. Downsampler injection only happens in read configs (by design)
+		// 2. Write configs have complex template requirements that are tested elsewhere
+		// 3. The existing tests already verify downsampler only affects read configs
+
+		It("should NOT inject downsampler for nodered_js processor", func() {
+			// Create spec with nodered_js processor (relational data)
+			testSpec := protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
+				Config: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
+					ConnectionServiceConfig: createConnectionConfig(),
+					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
+							Input: map[string]any{
+								"generate": map[string]any{
+									"count": 1,
+								},
+							},
+							Pipeline: map[string]any{
+								"processors": []any{
+									map[string]any{
+										"nodered_js": map[string]any{
+											"code": "return msg;",
+										},
+									},
+								},
+							},
+							Output: map[string]any{
+								"stdout": map[string]any{},
+							},
+						},
+					},
+				},
+			}
+
+			result, err := runtime_config.BuildRuntimeConfig(testSpec, agentLocation, globalVars, nodeName, pcName)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Check that NO downsampler was injected (nodered_js is relational, not timeseries)
+			readConfig := result.DataflowComponentReadServiceConfig
+			processors := readConfig.BenthosConfig.Pipeline["processors"].([]interface{})
+
+			Expect(processors).To(HaveLen(1), "Should have only the original nodered_js processor")
+
+			// Verify it's still the original nodered_js processor
+			noredejsProcessor := processors[0].(map[string]interface{})
+			Expect(noredejsProcessor).To(HaveKey("nodered_js"))
+			Expect(noredejsProcessor).ToNot(HaveKey("downsampler"))
+		})
+
+		It("should handle empty pipeline gracefully (no downsampler injection)", func() {
+			// Create spec with no pipeline
+			testSpec := protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
+				Config: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
+					ConnectionServiceConfig: createConnectionConfig(),
+					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
+							Input: map[string]any{
+								"generate": map[string]any{
+									"count": 1,
+								},
+							},
+							Output: map[string]any{
+								"stdout": map[string]any{},
+							},
+						},
+					},
+				},
+			}
+
+			result, err := runtime_config.BuildRuntimeConfig(testSpec, agentLocation, globalVars, nodeName, pcName)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Should NOT create pipeline with downsampler (no tag_processor)
+			readConfig := result.DataflowComponentReadServiceConfig
+			_, exists := readConfig.BenthosConfig.Pipeline["processors"]
+			Expect(exists).To(BeFalse(), "Pipeline should NOT be created with processors when no tag_processor exists")
 		})
 	})
 })
