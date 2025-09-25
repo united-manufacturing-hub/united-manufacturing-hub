@@ -324,7 +324,7 @@ func appendDownsampler(dfc dataflowcomponentserviceconfig.DataflowComponentServi
 	}
 
 	defaultDownsampler := map[string]any{
-		"downsampler": map[string]any{}, // Empty config - reads from metadata
+		constants.DownsamplerProcessor: map[string]any{}, // Empty config - reads from metadata
 	}
 
 	processors = append(processors, defaultDownsampler)
@@ -359,7 +359,7 @@ func getProcessors(pipeline map[string]any) []any {
 func hasDownsampler(processors []any) bool {
 	for _, proc := range processors {
 		if procMap, ok := proc.(map[string]any); ok {
-			if _, hasDownsampler := procMap["downsampler"]; hasDownsampler {
+			if _, hasDownsampler := procMap[constants.DownsamplerProcessor]; hasDownsampler {
 				return true
 			}
 		}
