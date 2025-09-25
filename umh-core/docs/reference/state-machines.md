@@ -6,8 +6,8 @@
 
 UMH Core uses hierarchical state machines where components build upon each other:
 
-- **Bridge** (formerly Protocol Converter) = Connection + Source Flow + Sink Flow
-- **Flow** (DataFlow Component) = Benthos instance with lifecycle management  
+- **Bridge** = Connection + Source Flow + Sink Flow
+- **Flow** = Benthos instance with lifecycle management  
 - **Benthos Flow** = Individual Benthos process with detailed startup phases
 - **Connection** = Network probe service (typically nmap-based)
 
@@ -50,19 +50,25 @@ Each component inherits lifecycle states (`to_be_created`, `creating`, `removing
 
 ---
 
-## 4 — DataFlow Component (Bridge)
+## 4 — Bridge
 
 ### Aggregate Bridge FSM
 
-| State                | Verified | Meaning                                                 | Enter                                            | Exit                                                                                           |
-| -------------------- | -------- | ------------------------------------------------------- | ------------------------------------------------ | ---------------------------------------------------------------------------------------------- |
-| **stopped**          | ✅        | All sub‑services stopped.                               | *stop\_done* or after create.                    | *start* → **starting**                                                                         |
-| *starting*           | ✅        | Launching source & sink Benthos + connection monitor.   | *start*                                          | *start\_done* → **idle**<br>*start\_failed* → **starting\_failed**                             |
-| **starting\_failed** | ✅        | At least one sub‑service failed during start.           | *start\_failed*                                  | Manual retry (*start*) or removal                                                              |
-| **idle**             | ✅        | Sub‑services healthy, **no payload for 30 s**.          | *start\_done*, *no\_data\_received*, *recovered* | *data\_received* → **active**<br>*benthos\_degraded* → **degraded**<br>*stop* → **stopping**   |
-| **active**           | ✅        | Data moving through at least one flow.                  | *data\_received*                                 | *no\_data\_received* → **idle**<br>*benthos\_degraded* → **degraded**<br>*stop* → **stopping** |
-| ⚠️ **degraded**      | ✅        | ≥1 sub‑FSM degraded/down (connection lost, flow error). | *benthos\_degraded*                              | *benthos\_recovered* → **idle**<br>*stop* → **stopping**                                       |
-| *stopping*           | ✅        | Stopping Benthos + connection monitor.                  | *stop*                                           | *stop\_done* → **stopped**                                                                     |
+| State                              | Verified | Meaning                                                      | Status Reason Examples                                           | Enter                                            | Exit                                                                                           |
+| ---------------------------------- | -------- | ------------------------------------------------------------ | ---------------------------------------------------------------- | ------------------------------------------------ | ---------------------------------------------------------------------------------------------- |
+| **stopped**                        | ✅        | All sub‑services stopped.                                    | `"stopped"`                                                      | *stop\_done* or after create.                    | *start* → **starting\_connection**                                                             |
+| *starting\_connection*             | ✅        | Waiting for connection to establish.                         | `"starting: waiting for connection"`                            | *start*                                          | *start\_connection\_up* → **starting\_redpanda**                                               |
+| *starting\_redpanda*                | ✅        | Connection up, waiting for message broker.                   | `"starting: redpanda not healthy"`                              | *start\_connection\_up*                          | *start\_redpanda\_up* → **starting\_dfc**                                                      |
+| *starting\_dfc*                     | ✅        | Connection + Redpanda up, waiting for flow.                  | `"starting: flow not running"`                                  | *start\_redpanda\_up*                            | *start\_dfc\_up* → **idle**<br>*start\_failed\_dfc\_missing* → **starting\_failed\_dfc\_missing** |
+| **starting\_failed\_dfc**           | ✅        | Flow component failed to start.                              | `"starting failed: flow in error state"`                        | *start\_failed\_dfc*                             | Manual retry or removal                                                                       |
+| **starting\_failed\_dfc\_missing**   | ✅        | No flow configured.                                          | `"starting failed: no flows configured"`                        | *start\_failed\_dfc\_missing*                    | *start\_retry* (when flow added) or removal                                                   |
+| **idle**                           | ✅        | All healthy, **no data for 30 s**.                           | `"idling: no messages processed in 60s"`                        | *start\_dfc\_up*, *no\_data\_timeout*, *recovered* | *data\_received* → **active**<br>*degraded* events → **degraded\_***<br>*stop* → **stopping**   |
+| **active**                         | ✅        | Processing data through flows.                               | `""` (empty when fully healthy)                                 | *data\_received*                                 | *no\_data\_timeout* → **idle**<br>*degraded* events → **degraded\_***<br>*stop* → **stopping**   |
+| ⚠️ **degraded\_connection**        | ✅        | Connection lost/flaky after successful start.                | `"connection degraded: probe timeout after 30s"`                | *connection\_unhealthy*                          | *recovered* → **idle**<br>*stop* → **stopping**                                               |
+| ⚠️ **degraded\_redpanda**          | ✅        | Message broker issues after successful start.                | `"redpanda degraded: not responding"`                           | *redpanda\_degraded*                             | *recovered* → **idle**<br>*stop* → **stopping**                                               |
+| ⚠️ **degraded\_dfc**               | ✅        | Flow component issues after successful start.                | `"flow degraded: benthos service not running"`                  | *dfc\_degraded*                                  | *recovered* → **idle**<br>*stop* → **stopping**                                               |
+| ⚠️ **degraded\_other**             | ✅        | Inconsistent component states detected.                      | `"other degraded: inconsistent states"`                         | *degraded\_other*                                | *recovered* → **idle**<br>*stop* → **stopping**                                               |
+| *stopping*                         | ✅        | Stopping all components.                                     | `"stopping"`                                                     | *stop*                                           | *stop\_done* → **stopped**                                                                     |
 
 ### 4.1 Connection Service FSM
 
@@ -89,7 +95,7 @@ Each component inherits lifecycle states (`to_be_created`, `creating`, `removing
 | ⚠️ **degraded**                                        | ✅        | Flow running but error state (e.g., endpoint retries). |
 | *stopping*                                             | ✅        | Graceful SIGTERM underway.                             |
 
-> **Idle/Active timeout:** default 30 s (`DFC_IDLE_WINDOW`).
+> **Idle/Active timeout:** default 30 s (`BRIDGE_IDLE_WINDOW`).
 
 ---
 
@@ -120,7 +126,7 @@ The Topic Browser service manages real-time topic discovery and caching.
 | Parameter              | Default | Source Const / Env     |
 | ---------------------- | ------- | ---------------------- |
 | Idle window (Redpanda) | 30 s    | `REDPANDA_IDLE_WINDOW` |
-| Idle window (Bridge)   | 30 s    | `DFC_IDLE_WINDOW`      |
+| Idle window (Bridge)   | 30 s    | `BRIDGE_IDLE_WINDOW`   |
 | Container CPU limit    | 85 %    | `CONTAINER_CPU_LIMIT`  |
 | Container RAM limit    | 90 %    | `CONTAINER_RAM_LIMIT`  |
 | Container Disk limit   | 90 %    | `CONTAINER_DISK_LIMIT` |

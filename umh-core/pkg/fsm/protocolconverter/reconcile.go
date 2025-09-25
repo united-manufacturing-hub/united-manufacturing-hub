@@ -373,7 +373,7 @@ func (p *ProtocolConverterInstance) reconcileStartingStates(ctx context.Context,
 			return p.baseFSMInstance.SendEvent(ctx, EventStartRetry), false // a previous succeeding check failed, so let's retry the whole start process
 		}
 
-		// If neither read not write DFC is existing, then go into OperationalStateStartingFailedDFCMissing
+		// If neither read nor write flow is existing, then go into OperationalStateStartingFailedDFCMissing
 		existing, reason := p.IsDFCExisting()
 		if !existing {
 			p.ObservedState.ServiceInfo.StatusReason = "starting: " + reason
@@ -381,14 +381,14 @@ func (p *ProtocolConverterInstance) reconcileStartingStates(ctx context.Context,
 			return p.baseFSMInstance.SendEvent(ctx, EventStartFailedDFCMissing), true
 		}
 
-		// Start the DFC components now that prerequisites are met
+		// Start the flow components now that prerequisites are met
 		if err := p.StartDFCInstance(ctx, services.GetFileSystem()); err != nil {
-			p.baseFSMInstance.GetLogger().Debugf("Failed to start DFC: %v", err)
+			p.baseFSMInstance.GetLogger().Debugf("Failed to start flow: %v", err)
 
 			return err, false
 		}
 
-		// Now check whether the DFC is healthy
+		// Now check whether the flow is healthy
 		running, reason = p.IsDFCHealthy()
 		if !running {
 			p.ObservedState.ServiceInfo.StatusReason = "starting: " + reason
@@ -439,16 +439,16 @@ func (p *ProtocolConverterInstance) reconcileStartingStates(ctx context.Context,
 		// 2. If DFC exists, send EventStartRetry to restart the startup sequence
 		// 3. EventStartRetry transitions back to OperationalStateStartingConnection
 		// 4. Normal startup flow continues: connection → redpanda → dfc → idle/active
-		// 5. If DFC still missing, remain in failed state with clear status reason
+		// 5. If flow still missing, remain in failed state with clear status reason
 		//
 		existing, reason := p.IsDFCExisting()
 		if existing {
-			// DFC is now available, retry the start process
-			p.ObservedState.ServiceInfo.StatusReason = "retrying start: DFC now available"
+			// flow is now available, retry the start process
+			p.ObservedState.ServiceInfo.StatusReason = "retrying start: flow now available"
 
 			return p.baseFSMInstance.SendEvent(ctx, EventStartRetry), true
 		}
-		// Still no DFC available, stay in failed state
+		// Still no flow available, stay in failed state
 		p.ObservedState.ServiceInfo.StatusReason = "starting failed: " + reason
 
 		return nil, false
@@ -507,7 +507,7 @@ func (p *ProtocolConverterInstance) reconcileRunningState(ctx context.Context, s
 
 			return nil, false
 		case !dfcHealthy:
-			p.ObservedState.ServiceInfo.StatusReason = "DFC degraded: " + reasonDFC
+			p.ObservedState.ServiceInfo.StatusReason = "flow degraded: " + reasonDFC
 			if currentState != OperationalStateDegradedDFC {
 				return p.baseFSMInstance.SendEvent(ctx, EventDFCDegraded), true
 			}
@@ -554,7 +554,7 @@ func (p *ProtocolConverterInstance) reconcileRunningState(ctx context.Context, s
 
 			return nil, false
 		case !dfcHealthy:
-			p.ObservedState.ServiceInfo.StatusReason = "DFC degraded: " + reasonDFC
+			p.ObservedState.ServiceInfo.StatusReason = "flow degraded: " + reasonDFC
 			if currentState != OperationalStateDegradedDFC {
 				return p.baseFSMInstance.SendEvent(ctx, EventDFCDegraded), true
 			}
@@ -618,7 +618,7 @@ func (p *ProtocolConverterInstance) reconcileRunningState(ctx context.Context, s
 
 			return nil, false
 		case !dfcHealthy:
-			p.ObservedState.ServiceInfo.StatusReason = "DFC degraded: " + reasonDFC
+			p.ObservedState.ServiceInfo.StatusReason = "flow degraded: " + reasonDFC
 			if currentState != OperationalStateDegradedDFC {
 				return p.baseFSMInstance.SendEvent(ctx, EventDFCDegraded), true
 			}

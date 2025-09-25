@@ -63,7 +63,7 @@ import (
 // already configured when this function returns – they will be updated in
 // the next reconciliation cycle.
 func (p *ProtocolConverterInstance) CreateInstance(ctx context.Context, filesystemService filesystem.Service) error {
-	p.baseFSMInstance.GetLogger().Debugf("Starting Action: Adding ProtocolConverter service %s to DFC and Connection manager ...", p.baseFSMInstance.GetID())
+	p.baseFSMInstance.GetLogger().Debugf("Starting Action: Adding ProtocolConverter service %s to flow and Connection manager ...", p.baseFSMInstance.GetID())
 
 	// AddToManager intentionally receives an empty runtime config because template
 	// rendering requires SystemSnapshot data not available at creation time.
@@ -71,15 +71,15 @@ func (p *ProtocolConverterInstance) CreateInstance(ctx context.Context, filesyst
 	err := p.service.AddToManager(ctx, filesystemService, &p.runtimeConfig, p.baseFSMInstance.GetID())
 	if err != nil {
 		if errors.Is(err, protocolconvertersvc.ErrServiceAlreadyExists) {
-			p.baseFSMInstance.GetLogger().Debugf("ProtocolConverter service %s already exists in DFC and Connection manager", p.baseFSMInstance.GetID())
+			p.baseFSMInstance.GetLogger().Debugf("ProtocolConverter service %s already exists in flow and Connection manager", p.baseFSMInstance.GetID())
 
 			return nil // do not throw an error, as each action is expected to be idempotent
 		}
 
-		return fmt.Errorf("failed to add ProtocolConverter service %s to DFC and Connection manager: %w", p.baseFSMInstance.GetID(), err)
+		return fmt.Errorf("failed to add ProtocolConverter service %s to flow and Connection manager: %w", p.baseFSMInstance.GetID(), err)
 	}
 
-	p.baseFSMInstance.GetLogger().Debugf("ProtocolConverter service %s added to DFC and Connection manager", p.baseFSMInstance.GetID())
+	p.baseFSMInstance.GetLogger().Debugf("ProtocolConverter service %s added to flow and Connection manager", p.baseFSMInstance.GetID())
 
 	return nil
 }
@@ -87,7 +87,7 @@ func (p *ProtocolConverterInstance) CreateInstance(ctx context.Context, filesyst
 // RemoveInstance attempts to remove the ProtocolConverter from the Benthos and connection manager.
 // It requires the service to be stopped before removal.
 func (p *ProtocolConverterInstance) RemoveInstance(ctx context.Context, filesystemService filesystem.Service) error {
-	p.baseFSMInstance.GetLogger().Debugf("Starting Action: Removing ProtocolConverter service %s from DFC and Connection manager ...", p.baseFSMInstance.GetID())
+	p.baseFSMInstance.GetLogger().Debugf("Starting Action: Removing ProtocolConverter service %s from flow and Connection manager ...", p.baseFSMInstance.GetID())
 
 	// Remove the initiateDataflowComponent from the Benthos manager
 	err := p.service.RemoveFromManager(ctx, filesystemService, p.baseFSMInstance.GetID())
@@ -158,15 +158,15 @@ func (p *ProtocolConverterInstance) StartConnectionInstance(ctx context.Context,
 // This method evaluates which DFCs should be active based on their configurations
 // and is used during the "starting_dfc" FSM state.
 func (p *ProtocolConverterInstance) StartDFCInstance(ctx context.Context, filesystemService filesystem.Service) error {
-	p.baseFSMInstance.GetLogger().Debugf("Starting Action: Starting DFCs for ProtocolConverter service %s ...", p.baseFSMInstance.GetID())
+	p.baseFSMInstance.GetLogger().Debugf("Starting Action: Starting flows for ProtocolConverter service %s ...", p.baseFSMInstance.GetID())
 
 	// Start the DFC components with conditional evaluation
 	err := p.service.StartDFC(ctx, filesystemService, p.baseFSMInstance.GetID())
 	if err != nil {
-		return fmt.Errorf("failed to start DFCs for ProtocolConverter service %s: %w", p.baseFSMInstance.GetID(), err)
+		return fmt.Errorf("failed to start flows for ProtocolConverter service %s: %w", p.baseFSMInstance.GetID(), err)
 	}
 
-	p.baseFSMInstance.GetLogger().Debugf("ProtocolConverter service %s DFC start command executed", p.baseFSMInstance.GetID())
+	p.baseFSMInstance.GetLogger().Debugf("ProtocolConverter service %s flow start command executed", p.baseFSMInstance.GetID())
 
 	return nil
 }
@@ -348,14 +348,14 @@ func (p *ProtocolConverterInstance) UpdateObservedStateOfInstance(ctx context.Co
 			// 2. Empty DFCs should remain stopped, populated DFCs should be started
 			// 3. This ensures we don't start broken Benthos instances with empty configs
 			if p.baseFSMInstance.GetDesiredFSMState() == OperationalStateActive {
-				p.baseFSMInstance.GetLogger().Debugf("re-evaluating DFC desired states and will be active")
+				p.baseFSMInstance.GetLogger().Debugf("re-evaluating flow desired states and will be active")
 
 				err := p.service.EvaluateDFCDesiredStates(p.baseFSMInstance.GetID(), "active", p.baseFSMInstance.GetCurrentFSMState()) // NOTE: Hardcoded to avoid circular import
 				if err != nil {
-					p.baseFSMInstance.GetLogger().Debugf("Failed to re-evaluate DFC states after config update: %v", err)
+					p.baseFSMInstance.GetLogger().Debugf("Failed to re-evaluate flow states after config update: %v", err)
 					// Don't fail the entire update - this is a best-effort re-evaluation
 				} else {
-					p.baseFSMInstance.GetLogger().Debugf("Re-evaluated DFC desired states after config update")
+					p.baseFSMInstance.GetLogger().Debugf("Re-evaluated flow desired states after config update")
 				}
 			}
 		} else {
@@ -427,7 +427,7 @@ func (p *ProtocolConverterInstance) IsDFCHealthy() (bool, string) {
 
 	statusReason := p.ObservedState.ServiceInfo.DataflowComponentReadObservedState.ServiceInfo.StatusReason
 	if statusReason == "" {
-		statusReason = "DFC Health status unknown"
+		statusReason = "flow health status unknown"
 	}
 
 	// TODO: check the write DFC as well
@@ -471,7 +471,7 @@ func (p *ProtocolConverterInstance) IsOtherDegraded() (bool, string) {
 	// Check for case 1.1
 	if p.ObservedState.ServiceInfo.DataflowComponentReadFSMState == dataflowfsm.OperationalStateActive &&
 		p.ObservedState.ServiceInfo.RedpandaFSMState == redpandafsm.OperationalStateIdle {
-		return true, "DFC is active, but redpanda is idle"
+		return true, "flow is active, but redpanda is idle"
 	}
 
 	// Safely extract Benthos metrics to avoid nil pointer panics
@@ -482,14 +482,14 @@ func (p *ProtocolConverterInstance) IsOtherDegraded() (bool, string) {
 	if (p.ObservedState.ServiceInfo.RedpandaFSMState == redpandafsm.OperationalStateIdle ||
 		p.ObservedState.ServiceInfo.RedpandaFSMState == redpandafsm.OperationalStateActive) &&
 		!isBenthosOutputActive {
-		return true, fmt.Sprintf("Redpanda is %s, but the DFC has no output active (connection up: %d, connection lost: %d)", p.ObservedState.ServiceInfo.RedpandaFSMState, outputMetrics.ConnectionUp, outputMetrics.ConnectionLost)
+		return true, fmt.Sprintf("Redpanda is %s, but the flow has no output active (connection up: %d, connection lost: %d)", p.ObservedState.ServiceInfo.RedpandaFSMState, outputMetrics.ConnectionUp, outputMetrics.ConnectionLost)
 	}
 
 	// Check for case 3
 	isBenthosInputActive := inputMetrics.ConnectionUp-inputMetrics.ConnectionLost > 0 // if the amount of connection losts is bigger than the amount of connection ups, the input is not active
 	if p.ObservedState.ServiceInfo.ConnectionFSMState != connectionfsm.OperationalStateUp &&
 		isBenthosInputActive {
-		return true, fmt.Sprintf("Connection is %s, but the DFC has input active (connection up: %d, connection lost: %d)", p.ObservedState.ServiceInfo.ConnectionFSMState, inputMetrics.ConnectionUp, inputMetrics.ConnectionLost)
+		return true, fmt.Sprintf("Connection is %s, but the flow has input active (connection up: %d, connection lost: %d)", p.ObservedState.ServiceInfo.ConnectionFSMState, inputMetrics.ConnectionUp, inputMetrics.ConnectionLost)
 	}
 
 	return false, ""
@@ -513,7 +513,7 @@ func (p *ProtocolConverterInstance) IsDataflowComponentWithProcessingActivity() 
 		dfcState = "not existing"
 	}
 
-	return false, "DFC is " + dfcState
+	return false, "flow is " + dfcState
 }
 
 // IsProtocolConverterStopped checks whether the ProtocolConverter is stopped
@@ -540,7 +540,7 @@ func (p *ProtocolConverterInstance) IsProtocolConverterStopped() (bool, string) 
 		dfcState = "not existing"
 	}
 
-	return false, fmt.Sprintf("connection is %s, DFC is %s", connState, dfcState)
+	return false, fmt.Sprintf("connection is %s, flow is %s", connState, dfcState)
 }
 
 // IsDFCExisting checks whether either the read or write DFC is existing
@@ -555,5 +555,5 @@ func (p *ProtocolConverterInstance) IsDFCExisting() (bool, string) {
 		return true, ""
 	}
 
-	return false, "no DFCs configured"
+	return false, "no flows configured"
 }
