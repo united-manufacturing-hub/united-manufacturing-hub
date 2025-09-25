@@ -1,0 +1,70 @@
+# Test config with templated stream processor for round-trip testing
+
+# Agent configuration
+agent:
+  location:
+    0: test-enterprise
+    1: test-site
+  metricsPort: 9090
+
+# Payload shapes
+payloadShapes:
+  test-shape:
+    fields:
+      timestamp_ms:
+        _type: number
+      value:
+        _type: string
+    description: "Test payload shape"
+
+# Data models
+dataModels:
+  - name: test-model
+    description: "Test model for round-trip"
+    version:
+      v1:
+        structure:
+          field1:
+            _payloadshape: test-shape
+
+# Templates
+templates:
+  streamProcessor:
+    test-template:
+      model:
+        name: test-model
+        version: v1
+      sources:
+        source1: "umh.v1.{{ .location_path }}.test"
+      mapping:
+        field1: "source1.value"
+
+# Stream processors
+streamProcessor:
+  - name: processor-with-template
+    desiredState: active
+    streamProcessorServiceConfig:
+      templateRef: test-template
+      location:
+        2: area-1
+        3: machine-1
+      variables:
+        user:
+          VAR1: value1
+  
+  - name: processor-inline
+    desiredState: stopped
+    streamProcessorServiceConfig:
+      config:
+        model:
+          name: test-model
+          version: v1
+        sources:
+          source2: "umh.v1.{{ .location_path }}.inline"
+        mapping:
+          field1: "{{ .VAR2 }}"
+      variables:
+        user:
+          VAR2: inline-value
+      location:
+        2: area-2

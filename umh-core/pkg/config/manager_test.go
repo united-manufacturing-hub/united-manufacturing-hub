@@ -662,6 +662,110 @@ internal:
 				Expect(directProcessor.StreamProcessorServiceConfig.Config.Model.Name).To(Equal("motor"))
 				Expect(directProcessor.StreamProcessorServiceConfig.Variables.User).To(HaveKeyWithValue("STATUS", "operational"))
 			})
+
+			It("should handle complete round-trip with templated stream processor preserving all template references", func() {
+				// Read the test config file
+				testData, err := fsService.ReadFile(ctx, "testdata/test-config-streamprocessor-templated.yaml")
+				Expect(err).NotTo(HaveOccurred())
+
+				// Parse the config with anchor extraction enabled
+				config, err := ParseConfig(testData, ctx, true)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Debug logging
+				fmt.Printf("DEBUG: Test YAML content:\n%s\n", string(testData))
+				fmt.Printf("DEBUG: Templates.StreamProcessor after parsing: %+v\n", config.Templates.StreamProcessor)
+				fmt.Printf("DEBUG: Templates.ProtocolConverter after parsing: %+v\n", config.Templates.ProtocolConverter)
+				fmt.Printf("DEBUG: Number of StreamProcessors: %d\n", len(config.StreamProcessor))
+				if len(config.StreamProcessor) > 0 {
+					fmt.Printf("DEBUG: First StreamProcessor templateRef: %s\n", config.StreamProcessor[0].StreamProcessorServiceConfig.TemplateRef)
+				}
+
+				// Verify initial structure
+				Expect(config.StreamProcessor).To(HaveLen(2))
+				Expect(config.Templates.StreamProcessor).To(HaveLen(1))
+				Expect(config.DataModels).To(HaveLen(1))
+				Expect(config.PayloadShapes).To(HaveLen(1))
+
+				// Write the config
+				configManager.WithFileSystemService(mockFS)
+
+				var writtenData []byte
+				mockFS.WithEnsureDirectoryFunc(func(ctx context.Context, path string) error {
+					return nil
+				})
+				mockFS.WithWriteFileFunc(func(ctx context.Context, path string, data []byte, perm os.FileMode) error {
+					writtenData = data
+					return nil
+				})
+				mockFS.WithStatFunc(func(ctx context.Context, path string) (os.FileInfo, error) {
+					return mockFS.NewMockFileInfo("config.yaml", int64(len(writtenData)), 0644, time.Now(), false), nil
+				})
+
+				err = configManager.writeConfig(ctx, config)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(writtenData).NotTo(BeEmpty())
+
+				// Parse the written data
+				readConfig, err := ParseConfig(writtenData, ctx, true)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Debug logging after round-trip
+				fmt.Printf("\nDEBUG: Written YAML content:\n%s\n", string(writtenData))
+				fmt.Printf("DEBUG: Templates.StreamProcessor after round-trip: %+v\n", readConfig.Templates.StreamProcessor)
+				fmt.Printf("DEBUG: Number of StreamProcessors after round-trip: %d\n", len(readConfig.StreamProcessor))
+
+				// Verify templates are preserved
+				Expect(readConfig.Templates.StreamProcessor).To(HaveLen(1))
+				Expect(readConfig.Templates.StreamProcessor).To(HaveKey("test-template"))
+
+				templateData := readConfig.Templates.StreamProcessor["test-template"].(map[string]interface{})
+				modelData := templateData["model"].(map[string]interface{})
+				Expect(modelData["name"]).To(Equal("test-model"))
+				Expect(modelData["version"]).To(Equal("v1"))
+				sourcesData := templateData["sources"].(map[string]interface{})
+				Expect(sourcesData).To(HaveKeyWithValue("source1", "umh.v1.{{ .location_path }}.test"))
+				mappingData := templateData["mapping"].(map[string]interface{})
+				Expect(mappingData).To(HaveKeyWithValue("field1", "source1.value"))
+
+				// Verify stream processors are preserved
+				Expect(readConfig.StreamProcessor).To(HaveLen(2))
+
+				// Find processors by name
+				var templatedProcessor, inlineProcessor *StreamProcessorConfig
+				for i := range readConfig.StreamProcessor {
+					if readConfig.StreamProcessor[i].Name == "processor-with-template" {
+						templatedProcessor = &readConfig.StreamProcessor[i]
+					} else if readConfig.StreamProcessor[i].Name == "processor-inline" {
+						inlineProcessor = &readConfig.StreamProcessor[i]
+					}
+				}
+
+				// Verify templated processor
+				Expect(templatedProcessor).NotTo(BeNil())
+				Expect(templatedProcessor.DesiredFSMState).To(Equal("active"))
+				Expect(templatedProcessor.StreamProcessorServiceConfig.TemplateRef).To(Equal("test-template"))
+				Expect(templatedProcessor.StreamProcessorServiceConfig.Location).To(HaveKeyWithValue("2", "area-1"))
+				Expect(templatedProcessor.StreamProcessorServiceConfig.Location).To(HaveKeyWithValue("3", "machine-1"))
+				Expect(templatedProcessor.StreamProcessorServiceConfig.Variables.User).To(HaveKeyWithValue("VAR1", "value1"))
+
+				// Verify inline processor
+				Expect(inlineProcessor).NotTo(BeNil())
+				Expect(inlineProcessor.DesiredFSMState).To(Equal("stopped"))
+				Expect(inlineProcessor.StreamProcessorServiceConfig.TemplateRef).To(Equal(""))
+				Expect(inlineProcessor.StreamProcessorServiceConfig.Config).NotTo(BeNil())
+				Expect(inlineProcessor.StreamProcessorServiceConfig.Config.Model.Name).To(Equal("test-model"))
+				Expect(inlineProcessor.StreamProcessorServiceConfig.Config.Sources).To(HaveKeyWithValue("source2", "umh.v1.{{ .location_path }}.inline"))
+				Expect(inlineProcessor.StreamProcessorServiceConfig.Variables.User).To(HaveKeyWithValue("VAR2", "inline-value"))
+
+				// Verify other config elements are preserved
+				Expect(readConfig.Agent.Location).To(HaveKeyWithValue(0, "test-enterprise"))
+				Expect(readConfig.Agent.Location).To(HaveKeyWithValue(1, "test-site"))
+				Expect(readConfig.Agent.MetricsPort).To(Equal(9090))
+				Expect(readConfig.PayloadShapes).To(HaveKey("test-shape"))
+				Expect(readConfig.DataModels).To(HaveLen(1))
+				Expect(readConfig.DataModels[0].Name).To(Equal("test-model"))
+			})
 		})
 	})
 
