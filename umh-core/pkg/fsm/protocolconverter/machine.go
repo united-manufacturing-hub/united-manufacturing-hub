@@ -191,7 +191,7 @@ func (d *ProtocolConverterInstance) IsStopped() bool {
 func (d *ProtocolConverterInstance) PrintState() {
 	d.baseFSMInstance.GetLogger().Debugf("Current state: %s", d.baseFSMInstance.GetCurrentFSMState())
 	d.baseFSMInstance.GetLogger().Debugf("Desired state: %s", d.baseFSMInstance.GetDesiredFSMState())
-	d.baseFSMInstance.GetLogger().Debugf("Connection: %s, Read DFC: %s, Write DFC: %s, Status: %s",
+	d.baseFSMInstance.GetLogger().Debugf("Connection: %s, Read Flow: %s, Write Flow: %s, Status: %s",
 		d.ObservedState.ServiceInfo.ConnectionFSMState,
 		d.ObservedState.ServiceInfo.DataflowComponentReadFSMState,
 		d.ObservedState.ServiceInfo.DataflowComponentWriteFSMState,

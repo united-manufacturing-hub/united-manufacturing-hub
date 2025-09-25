@@ -6,7 +6,7 @@
 
 UMH Core uses hierarchical state machines where components build upon each other:
 
-- **Bridge** = Connection + Source Flow + Sink Flow
+- **Bridge** = Connection + Read Flow + Write Flow
 - **Flow** = Benthos instance with lifecycle management  
 - **Benthos Flow** = Individual Benthos process with detailed startup phases
 - **Connection** = Network probe service (typically nmap-based)
