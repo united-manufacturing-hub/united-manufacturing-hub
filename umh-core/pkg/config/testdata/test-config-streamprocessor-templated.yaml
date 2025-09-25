@@ -41,7 +41,7 @@ templates:
 
 # Stream processors
 streamProcessor:
-  - name: processor-with-template
+  - name: processor-with-template-1
     desiredState: active
     streamProcessorServiceConfig:
       templateRef: test-template
@@ -51,6 +51,17 @@ streamProcessor:
       variables:
         user:
           VAR1: value1
+  
+  - name: processor-with-template-2
+    desiredState: active
+    streamProcessorServiceConfig:
+      templateRef: test-template
+      location:
+        2: area-2
+        3: machine-2
+      variables:
+        user:
+          VAR1: value2
   
   - name: processor-inline
     desiredState: stopped
@@ -67,4 +78,4 @@ streamProcessor:
         user:
           VAR2: inline-value
       location:
-        2: area-2
+        2: area-3

@@ -487,6 +487,7 @@ internal:
 
 				// Verify we have the expected structure
 				Expect(config.ProtocolConverter).To(HaveLen(3))
+				// Templates should be empty in spec representation
 				Expect(config.Templates.ProtocolConverter).To(BeEmpty())
 
 				// Find the temperature-sensor-pc that uses the template
@@ -563,6 +564,7 @@ internal:
 				Expect(config.PayloadShapes).To(HaveLen(3))
 				Expect(config.DataModels).To(HaveLen(2))
 				Expect(config.DataContracts).To(HaveLen(2))
+				// Templates should be empty in spec representation
 				Expect(config.Templates.StreamProcessor).To(BeEmpty())
 
 				// Verify payload shapes
@@ -672,20 +674,21 @@ internal:
 				config, err := ParseConfig(testData, ctx, true)
 				Expect(err).NotTo(HaveOccurred())
 
-				// Debug logging
-				fmt.Printf("DEBUG: Test YAML content:\n%s\n", string(testData))
-				fmt.Printf("DEBUG: Templates.StreamProcessor after parsing: %+v\n", config.Templates.StreamProcessor)
-				fmt.Printf("DEBUG: Templates.ProtocolConverter after parsing: %+v\n", config.Templates.ProtocolConverter)
-				fmt.Printf("DEBUG: Number of StreamProcessors: %d\n", len(config.StreamProcessor))
-				if len(config.StreamProcessor) > 0 {
-					fmt.Printf("DEBUG: First StreamProcessor templateRef: %s\n", config.StreamProcessor[0].StreamProcessorServiceConfig.TemplateRef)
-				}
-
 				// Verify initial structure
-				Expect(config.StreamProcessor).To(HaveLen(2))
-				Expect(config.Templates.StreamProcessor).To(HaveLen(1))
+				Expect(config.StreamProcessor).To(HaveLen(3)) // Two using template, one inline
+				// Templates should be empty in spec representation
+				Expect(config.Templates.StreamProcessor).To(BeEmpty())
 				Expect(config.DataModels).To(HaveLen(1))
 				Expect(config.PayloadShapes).To(HaveLen(1))
+
+				// Verify all processors have the template content expanded
+				for _, sp := range config.StreamProcessor {
+					if sp.StreamProcessorServiceConfig.TemplateRef == "test-template" {
+						// Processors using templates should have config expanded
+						Expect(sp.StreamProcessorServiceConfig.Config.Model.Name).To(Equal("test-model"))
+						Expect(sp.StreamProcessorServiceConfig.Config.Model.Version).To(Equal("v1"))
+					}
+				}
 
 				// Write the config
 				configManager.WithFileSystemService(mockFS)
@@ -706,48 +709,54 @@ internal:
 				Expect(err).NotTo(HaveOccurred())
 				Expect(writtenData).NotTo(BeEmpty())
 
+				// Verify the written YAML contains templates
+				yamlStr := string(writtenData)
+				Expect(yamlStr).To(ContainSubstring("templates:"))
+				Expect(yamlStr).To(ContainSubstring("streamProcessor:"))
+				Expect(yamlStr).To(ContainSubstring("test-template:"))
+
 				// Parse the written data
 				readConfig, err := ParseConfig(writtenData, ctx, true)
 				Expect(err).NotTo(HaveOccurred())
 
-				// Debug logging after round-trip
-				fmt.Printf("\nDEBUG: Written YAML content:\n%s\n", string(writtenData))
-				fmt.Printf("DEBUG: Templates.StreamProcessor after round-trip: %+v\n", readConfig.Templates.StreamProcessor)
-				fmt.Printf("DEBUG: Number of StreamProcessors after round-trip: %d\n", len(readConfig.StreamProcessor))
+				// After parsing, templates are cleared in spec (this is expected)
+				Expect(readConfig.Templates.StreamProcessor).To(BeEmpty())
 
-				// Verify templates are preserved
-				Expect(readConfig.Templates.StreamProcessor).To(HaveLen(1))
-				Expect(readConfig.Templates.StreamProcessor).To(HaveKey("test-template"))
-
-				templateData := readConfig.Templates.StreamProcessor["test-template"].(map[string]interface{})
-				modelData := templateData["model"].(map[string]interface{})
-				Expect(modelData["name"]).To(Equal("test-model"))
-				Expect(modelData["version"]).To(Equal("v1"))
-				sourcesData := templateData["sources"].(map[string]interface{})
-				Expect(sourcesData).To(HaveKeyWithValue("source1", "umh.v1.{{ .location_path }}.test"))
-				mappingData := templateData["mapping"].(map[string]interface{})
-				Expect(mappingData).To(HaveKeyWithValue("field1", "source1.value"))
-
-				// Verify stream processors are preserved
-				Expect(readConfig.StreamProcessor).To(HaveLen(2))
+				// Verify stream processors are preserved with correct structure
+				Expect(readConfig.StreamProcessor).To(HaveLen(3))
 
 				// Find processors by name
-				var templatedProcessor, inlineProcessor *StreamProcessorConfig
+				var templatedProcessor1, templatedProcessor2, inlineProcessor *StreamProcessorConfig
 				for i := range readConfig.StreamProcessor {
-					if readConfig.StreamProcessor[i].Name == "processor-with-template" {
-						templatedProcessor = &readConfig.StreamProcessor[i]
-					} else if readConfig.StreamProcessor[i].Name == "processor-inline" {
+					switch readConfig.StreamProcessor[i].Name {
+					case "processor-with-template-1":
+						templatedProcessor1 = &readConfig.StreamProcessor[i]
+					case "processor-with-template-2":
+						templatedProcessor2 = &readConfig.StreamProcessor[i]
+					case "processor-inline":
 						inlineProcessor = &readConfig.StreamProcessor[i]
 					}
 				}
 
-				// Verify templated processor
-				Expect(templatedProcessor).NotTo(BeNil())
-				Expect(templatedProcessor.DesiredFSMState).To(Equal("active"))
-				Expect(templatedProcessor.StreamProcessorServiceConfig.TemplateRef).To(Equal("test-template"))
-				Expect(templatedProcessor.StreamProcessorServiceConfig.Location).To(HaveKeyWithValue("2", "area-1"))
-				Expect(templatedProcessor.StreamProcessorServiceConfig.Location).To(HaveKeyWithValue("3", "machine-1"))
-				Expect(templatedProcessor.StreamProcessorServiceConfig.Variables.User).To(HaveKeyWithValue("VAR1", "value1"))
+				// Verify first templated processor
+				Expect(templatedProcessor1).NotTo(BeNil())
+				Expect(templatedProcessor1.DesiredFSMState).To(Equal("active"))
+				Expect(templatedProcessor1.StreamProcessorServiceConfig.TemplateRef).To(Equal("test-template"))
+				Expect(templatedProcessor1.StreamProcessorServiceConfig.Location).To(HaveKeyWithValue("2", "area-1"))
+				Expect(templatedProcessor1.StreamProcessorServiceConfig.Location).To(HaveKeyWithValue("3", "machine-1"))
+				Expect(templatedProcessor1.StreamProcessorServiceConfig.Variables.User).To(HaveKeyWithValue("VAR1", "value1"))
+				// Should have expanded config
+				Expect(templatedProcessor1.StreamProcessorServiceConfig.Config.Model.Name).To(Equal("test-model"))
+
+				// Verify second templated processor
+				Expect(templatedProcessor2).NotTo(BeNil())
+				Expect(templatedProcessor2.DesiredFSMState).To(Equal("active"))
+				Expect(templatedProcessor2.StreamProcessorServiceConfig.TemplateRef).To(Equal("test-template"))
+				Expect(templatedProcessor2.StreamProcessorServiceConfig.Location).To(HaveKeyWithValue("2", "area-2"))
+				Expect(templatedProcessor2.StreamProcessorServiceConfig.Location).To(HaveKeyWithValue("3", "machine-2"))
+				Expect(templatedProcessor2.StreamProcessorServiceConfig.Variables.User).To(HaveKeyWithValue("VAR1", "value2"))
+				// Should have expanded config
+				Expect(templatedProcessor2.StreamProcessorServiceConfig.Config.Model.Name).To(Equal("test-model"))
 
 				// Verify inline processor
 				Expect(inlineProcessor).NotTo(BeNil())
