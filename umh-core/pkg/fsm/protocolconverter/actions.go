@@ -63,7 +63,7 @@ import (
 // already configured when this function returns – they will be updated in
 // the next reconciliation cycle.
 func (p *ProtocolConverterInstance) CreateInstance(ctx context.Context, filesystemService filesystem.Service) error {
-	p.baseFSMInstance.GetLogger().Debugf("Starting Action: Adding ProtocolConverter service %s to flow and Connection manager ...", p.baseFSMInstance.GetID())
+	p.baseFSMInstance.GetLogger().Debugf("Starting Action: Adding bridge %s to flow and Connection manager ...", p.baseFSMInstance.GetID())
 
 	// AddToManager intentionally receives an empty runtime config because template
 	// rendering requires SystemSnapshot data not available at creation time.
@@ -71,15 +71,15 @@ func (p *ProtocolConverterInstance) CreateInstance(ctx context.Context, filesyst
 	err := p.service.AddToManager(ctx, filesystemService, &p.runtimeConfig, p.baseFSMInstance.GetID())
 	if err != nil {
 		if errors.Is(err, protocolconvertersvc.ErrServiceAlreadyExists) {
-			p.baseFSMInstance.GetLogger().Debugf("ProtocolConverter service %s already exists in flow and Connection manager", p.baseFSMInstance.GetID())
+			p.baseFSMInstance.GetLogger().Debugf("Bridge %s already exists in flow and Connection manager", p.baseFSMInstance.GetID())
 
 			return nil // do not throw an error, as each action is expected to be idempotent
 		}
 
-		return fmt.Errorf("failed to add ProtocolConverter service %s to flow and Connection manager: %w", p.baseFSMInstance.GetID(), err)
+		return fmt.Errorf("failed to add bridge %s to flow and Connection manager: %w", p.baseFSMInstance.GetID(), err)
 	}
 
-	p.baseFSMInstance.GetLogger().Debugf("ProtocolConverter service %s added to flow and Connection manager", p.baseFSMInstance.GetID())
+	p.baseFSMInstance.GetLogger().Debugf("Bridge %s added to flow and Connection manager", p.baseFSMInstance.GetID())
 
 	return nil
 }
@@ -87,7 +87,7 @@ func (p *ProtocolConverterInstance) CreateInstance(ctx context.Context, filesyst
 // RemoveInstance attempts to remove the ProtocolConverter from the Benthos and connection manager.
 // It requires the service to be stopped before removal.
 func (p *ProtocolConverterInstance) RemoveInstance(ctx context.Context, filesystemService filesystem.Service) error {
-	p.baseFSMInstance.GetLogger().Debugf("Starting Action: Removing ProtocolConverter service %s from flow and Connection manager ...", p.baseFSMInstance.GetID())
+	p.baseFSMInstance.GetLogger().Debugf("Starting Action: Removing bridge %s from flow and Connection manager ...", p.baseFSMInstance.GetID())
 
 	// Remove the initiateDataflowComponent from the Benthos manager
 	err := p.service.RemoveFromManager(ctx, filesystemService, p.baseFSMInstance.GetID())
@@ -141,15 +141,15 @@ func (p *ProtocolConverterInstance) StartInstance(ctx context.Context, filesyste
 // This method is used during the "starting_connection" FSM state and only brings
 // the connection to "up" state without touching DFCs.
 func (p *ProtocolConverterInstance) StartConnectionInstance(ctx context.Context, filesystemService filesystem.Service) error {
-	p.baseFSMInstance.GetLogger().Debugf("Starting Action: Starting Connection for ProtocolConverter service %s ...", p.baseFSMInstance.GetID())
+	p.baseFSMInstance.GetLogger().Debugf("Starting Action: Starting Connection for bridge %s ...", p.baseFSMInstance.GetID())
 
 	// Start only the connection component
 	err := p.service.StartConnection(ctx, filesystemService, p.baseFSMInstance.GetID())
 	if err != nil {
-		return fmt.Errorf("failed to start connection for ProtocolConverter service %s: %w", p.baseFSMInstance.GetID(), err)
+		return fmt.Errorf("failed to start connection for bridge %s: %w", p.baseFSMInstance.GetID(), err)
 	}
 
-	p.baseFSMInstance.GetLogger().Debugf("ProtocolConverter service %s connection start command executed", p.baseFSMInstance.GetID())
+	p.baseFSMInstance.GetLogger().Debugf("Bridge %s connection start command executed", p.baseFSMInstance.GetID())
 
 	return nil
 }
@@ -158,31 +158,31 @@ func (p *ProtocolConverterInstance) StartConnectionInstance(ctx context.Context,
 // This method evaluates which DFCs should be active based on their configurations
 // and is used during the "starting_dfc" FSM state.
 func (p *ProtocolConverterInstance) StartDFCInstance(ctx context.Context, filesystemService filesystem.Service) error {
-	p.baseFSMInstance.GetLogger().Debugf("Starting Action: Starting flows for ProtocolConverter service %s ...", p.baseFSMInstance.GetID())
+	p.baseFSMInstance.GetLogger().Debugf("Starting Action: Starting flows for bridge %s ...", p.baseFSMInstance.GetID())
 
 	// Start the DFC components with conditional evaluation
 	err := p.service.StartDFC(ctx, filesystemService, p.baseFSMInstance.GetID())
 	if err != nil {
-		return fmt.Errorf("failed to start flows for ProtocolConverter service %s: %w", p.baseFSMInstance.GetID(), err)
+		return fmt.Errorf("failed to start flows for bridge %s: %w", p.baseFSMInstance.GetID(), err)
 	}
 
-	p.baseFSMInstance.GetLogger().Debugf("ProtocolConverter service %s flow start command executed", p.baseFSMInstance.GetID())
+	p.baseFSMInstance.GetLogger().Debugf("Bridge %s flow start command executed", p.baseFSMInstance.GetID())
 
 	return nil
 }
 
 // StopInstance attempts to stop the DataflowComponent by setting the desired state to stopped for the given instance.
 func (p *ProtocolConverterInstance) StopInstance(ctx context.Context, filesystemService filesystem.Service) error {
-	p.baseFSMInstance.GetLogger().Debugf("Starting Action: Stopping ProtocolConverter service %s ...", p.baseFSMInstance.GetID())
+	p.baseFSMInstance.GetLogger().Debugf("Starting Action: Stopping bridge %s ...", p.baseFSMInstance.GetID())
 
 	// Set the desired state to stopped for the given instance
 	err := p.service.StopProtocolConverter(ctx, filesystemService, p.baseFSMInstance.GetID())
 	if err != nil {
 		// if the service is not there yet but we attempt to stop it, we need to throw an error
-		return fmt.Errorf("failed to stop ProtocolConverter service %s: %w", p.baseFSMInstance.GetID(), err)
+		return fmt.Errorf("failed to stop bridge %s: %w", p.baseFSMInstance.GetID(), err)
 	}
 
-	p.baseFSMInstance.GetLogger().Debugf("ProtocolConverter service %s stop command executed", p.baseFSMInstance.GetID())
+	p.baseFSMInstance.GetLogger().Debugf("Bridge %s stop command executed", p.baseFSMInstance.GetID())
 
 	return nil
 }
@@ -280,7 +280,7 @@ func (p *ProtocolConverterInstance) UpdateObservedStateOfInstance(ctx context.Co
 
 			return nil
 		} else {
-			return fmt.Errorf("failed to get observed ProtocolConverter config: %w", err)
+			return fmt.Errorf("failed to get observed bridge config: %w", err)
 		}
 	}
 
@@ -328,7 +328,7 @@ func (p *ProtocolConverterInstance) UpdateObservedStateOfInstance(ctx context.Co
 	if !protocolconverterserviceconfig.ConfigsEqualRuntime(p.runtimeConfig, p.ObservedState.ObservedProtocolConverterRuntimeConfig) {
 		// Check if the service exists before attempting to update
 		if p.service.ServiceExists(ctx, services.GetFileSystem(), p.baseFSMInstance.GetID()) {
-			p.baseFSMInstance.GetLogger().Debugf("Observed ProtocolConverter config is different from desired config, updating ProtocolConverter configuration")
+			p.baseFSMInstance.GetLogger().Debugf("Observed bridge config is different from desired config, updating bridge configuration")
 
 			diffStr := protocolconverterserviceconfig.ConfigDiffRuntime(p.runtimeConfig, p.ObservedState.ObservedProtocolConverterRuntimeConfig)
 			p.baseFSMInstance.GetLogger().Debugf("Configuration differences: %s", diffStr)
@@ -336,7 +336,7 @@ func (p *ProtocolConverterInstance) UpdateObservedStateOfInstance(ctx context.Co
 			// Update the config in the Benthos manager
 			err := p.service.UpdateInManager(ctx, services.GetFileSystem(), &p.runtimeConfig, p.baseFSMInstance.GetID())
 			if err != nil {
-				return fmt.Errorf("failed to update ProtocolConverter service configuration: %w", err)
+				return fmt.Errorf("failed to update bridge configuration: %w", err)
 			}
 
 			p.baseFSMInstance.GetLogger().Debugf("config updated")

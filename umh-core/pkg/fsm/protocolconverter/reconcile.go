@@ -45,7 +45,7 @@ func (p *ProtocolConverterInstance) Reconcile(ctx context.Context, snapshot fsm.
 		metrics.ObserveReconcileTime(metrics.ComponentProtocolConverterInstance, protocolConverterInstanceName, time.Since(start))
 
 		if err != nil {
-			p.baseFSMInstance.GetLogger().Errorf("error reconciling protocolconverter instance %s: %v", protocolConverterInstanceName, err)
+			p.baseFSMInstance.GetLogger().Errorf("error reconciling bridge %s: %v", protocolConverterInstanceName, err)
 			p.PrintState()
 			// Add metrics for error
 			metrics.IncErrorCountAndLog(metrics.ComponentProtocolConverterInstance, protocolConverterInstanceName, err, p.baseFSMInstance.GetLogger())
@@ -64,7 +64,7 @@ func (p *ProtocolConverterInstance) Reconcile(ctx context.Context, snapshot fsm.
 	// Step 1: If there's a lastError, see if we've waited enough.
 	if p.baseFSMInstance.ShouldSkipReconcileBecauseOfError(snapshot.Tick) {
 		err := p.baseFSMInstance.GetBackoffError(snapshot.Tick)
-		p.baseFSMInstance.GetLogger().Debugf("Skipping reconcile for Protocolconverter pipeline %s: %v", protocolConverterInstanceName, err)
+		p.baseFSMInstance.GetLogger().Debugf("Skipping reconcile for bridge %s: %v", protocolConverterInstanceName, err)
 
 		// if it is a permanent error, start the removal process and reset the error (so that we can reconcile towards a stopped / removed state)
 		if backoff.IsPermanentFailureError(err) {
