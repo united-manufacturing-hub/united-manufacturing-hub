@@ -294,6 +294,7 @@ func (b *BenthosInstance) reconcileStartingStates(ctx context.Context, services 
 		return b.baseFSMInstance.SendEvent(ctx, EventS6Started), true
 	case OperationalStateStartingConfigLoading:
 		// Check if config has been loaded
+
 		// If the S6 is not running, go back to starting
 		running, reason := b.IsBenthosS6Running()
 		if !running {
@@ -429,7 +430,7 @@ func (b *BenthosInstance) reconcileRunningStates(ctx context.Context, services s
 		s6Running, _ := b.IsBenthosS6Running()
 		if !s6Running {
 			b.baseFSMInstance.GetLogger().Debugf("S6 service stopped while in degraded state, attempting to restart")
-
+			
 			// Log diagnostic state before attempting restart
 			b.logS6DirectoryState("degraded_before_restart")
 
@@ -484,7 +485,7 @@ func (b *BenthosInstance) reconcileTransitionToStopped(ctx context.Context, serv
 			if strings.Contains(reason, benthos_service.S6StateNotExisting) {
 				b.logS6DirectoryState("stopping_not_existing")
 			}
-
+			
 			b.ObservedState.ServiceInfo.BenthosStatus.StatusReason = "stopping: " + reason
 
 			return nil, false
