@@ -21,6 +21,7 @@ import (
 )
 
 var _ = Describe("Login", func() {
+	// This token belongs to a community user, that is created exactly for this test and has no other machines or permissions
 	token := "ff2dbf482c7e54dbaecc9367d56b93cf492653da075345155991d5fad6fa5e4e"
 	It("should hash the auth token correctly", func() {
 
