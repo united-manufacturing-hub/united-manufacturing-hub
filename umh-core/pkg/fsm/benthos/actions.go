@@ -592,8 +592,8 @@ func (b *BenthosInstance) IsBenthosS6Stopped() (bool, string) {
 	case "":
 		// Log diagnostic info when we encounter empty S6 state
 		b.logS6DirectoryState("IsBenthosS6Stopped_empty_state")
-
-		fsmState = benthos_service.S6StateNotExisting
+		// Empty state means S6 FSM doesn't exist in manager - treat as stopped (ENG-3522)
+		return true, "service not existing (effectively stopped)"
 	case s6fsm.OperationalStateStopped:
 		return true, ""
 	}

@@ -33,7 +33,7 @@ import (
 func login(token string, insecureTLS bool, apiURL string, logger *zap.SugaredLogger) (*LoginResponse, error) {
 	var cookieMap = make(map[string]string)
 
-	request, status, err := http.PostRequest[backend_api_structs.InstanceLoginResponse, any](context.Background(), http.LoginEndpoint, nil, map[string]string{
+	request, status, err := http.PostRequest[backend_api_structs.InstanceLoginResponse](context.Background(), http.LoginEndpoint, nil, map[string]string{
 		"Authorization": fmt.Sprint("Bearer ", LoginHash(token)),
 	}, &cookieMap, insecureTLS, apiURL, logger)
 	if err != nil {
