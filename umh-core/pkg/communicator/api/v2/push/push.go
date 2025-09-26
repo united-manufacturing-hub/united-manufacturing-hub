@@ -133,7 +133,7 @@ func (p *Pusher) push() {
 				UMHMessages: messages,
 			}
 
-			_, status, err := http.PostRequest[any](context.Background(), http.PushEndpoint, &payload, nil, &cookies, p.insecureTLS, p.apiURL, p.logger)
+			_, status, err := http.PostRequest[any, backend_api_structs.PushPayload](context.Background(), http.PushEndpoint, &payload, nil, &cookies, p.insecureTLS, p.apiURL, p.logger)
 			if err != nil {
 				error_handler.ReportHTTPErrors(err, status, string(http.PushEndpoint), "POST", &payload, nil)
 				p.dog.ReportHeartbeatStatus(p.watcherUUID, watchdog.HEARTBEAT_STATUS_WARNING)
@@ -175,7 +175,7 @@ func (p *Pusher) push() {
 
 			d.retryAttempts++
 
-			_, _, err := http.PostRequest[any](context.Background(), http.PushEndpoint, &backend_api_structs.PushPayload{UMHMessages: d.messages}, nil, &d.cookies, p.insecureTLS, p.apiURL, p.logger)
+			_, _, err := http.PostRequest[any, backend_api_structs.PushPayload](context.Background(), http.PushEndpoint, &backend_api_structs.PushPayload{UMHMessages: d.messages}, nil, &d.cookies, p.insecureTLS, p.apiURL, p.logger)
 			if err != nil {
 				p.dog.ReportHeartbeatStatus(p.watcherUUID, watchdog.HEARTBEAT_STATUS_WARNING)
 				boPostRequest.IncrementAndSleep()
