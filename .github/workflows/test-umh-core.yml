@@ -50,6 +50,8 @@ jobs:
           make download-docker-binaries
 
       - name: Run unit tests
+        env:
+          UMH_LOGIN_TEST_TOKEN: ${{ secrets.UMH_LOGIN_TEST_TOKEN }}
         run: make unit-test
 
   integration-tests:
