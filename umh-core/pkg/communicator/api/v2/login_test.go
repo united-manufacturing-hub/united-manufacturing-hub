@@ -15,6 +15,8 @@
 package v2
 
 import (
+	"os"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"go.uber.org/zap"
@@ -22,8 +24,9 @@ import (
 
 var _ = Describe("Login", func() {
 	// This token belongs to a community user, that is created exactly for this test and has no other machines or permissions
-	token := "ff2dbf482c7e54dbaecc9367d56b93cf492653da075345155991d5fad6fa5e4e"
+	token := os.Getenv("UMH_LOGIN_TEST_TOKEN")
 	It("should hash the auth token correctly", func() {
+		Expect(token).NotTo(BeEmpty())
 
 		result := LoginHash(token)
 
@@ -32,6 +35,7 @@ var _ = Describe("Login", func() {
 	})
 
 	It("should login successfully against management.umh.app", func() {
+		Expect(token).NotTo(BeEmpty())
 		logger := zap.NewNop().Sugar()
 
 		response, err := login(token, false, "https://management.umh.app/api", logger)
