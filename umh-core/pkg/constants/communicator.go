@@ -27,73 +27,44 @@ const (
 
 	// CustomProcessor is a custom processing set of benthos-umh processors.
 	CustomProcessor = "custom"
+
+	// TimeseriesData indicates the pipeline processes timeseries data.
+	TimeseriesData = "timeseries"
+
+	// RelationalData indicates the pipeline processes relational data.
+	RelationalData = "relational"
+
+	// CustomData indicates the pipeline processes custom data.
+	CustomData = "custom"
 )
 
-// DetermineProcessorType returns the processor of the according category.
-func DetermineProcessorType(processors any) string {
-	switch p := processors.(type) {
-	// case for the communicator-actions
-	case map[string]struct{ Type, Data string }:
-		if len(p) != 1 {
-			return CustomProcessor
+// DetermineDataType analyzes the pipeline processors to determine the core data type.
+func DetermineDataType(processors []any) string {
+	if len(processors) > 1 {
+		return CustomData
+	}
+
+	if len(processors) == 1 {
+		procMap, ok := processors[0].(map[string]any)
+		if !ok {
+			return CustomData
 		}
 
-		for _, processor := range p {
-			switch processor.Type {
-			case TimeseriesProcessor:
-				return TimeseriesProcessor
-			case RelationalProcessor:
-				return RelationalProcessor
-			default:
-				return CustomProcessor
-			}
-		}
-
-	// case for appending downsampler
-	case []any:
-		hasTagProcessor := false
-		hasOtherProcessors := false
-
-		for _, proc := range p {
-			procMap, ok := proc.(map[string]any)
-			if !ok {
+		for processorType := range procMap {
+			if processorType == DownsamplerProcessor {
 				continue
 			}
 
-			// Check what type of processor this is
-			for key := range procMap {
-				if key == TimeseriesProcessor {
-					hasTagProcessor = true
-				} else if key != DownsamplerProcessor {
-					hasOtherProcessors = true
-				}
-
-				break
+			switch processorType {
+			case RelationalProcessor:
+				return RelationalData
+			case TimeseriesProcessor:
+				return TimeseriesData
+			default:
+				return CustomData
 			}
 		}
-
-		if hasTagProcessor {
-			return TimeseriesProcessor
-		}
-
-		if len(p) == 1 && hasOtherProcessors {
-			procMap, ok := p[0].(map[string]any)
-			if ok {
-				for key := range procMap {
-					if key == RelationalProcessor {
-						return RelationalProcessor
-					}
-
-					break
-				}
-			}
-		}
-
-		return CustomProcessor
-
-	default:
-		return CustomProcessor
 	}
 
-	return CustomProcessor
+	return CustomData
 }

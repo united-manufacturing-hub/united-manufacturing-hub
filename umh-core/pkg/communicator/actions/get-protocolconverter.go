@@ -132,13 +132,36 @@ func (a *GetProtocolConverterAction) Validate() error {
 
 // determineProcessingMode analyzes the pipeline processors in readDFC only
 // to determine the appropriate processing mode based on the business rules.
+// NOTE:
+// This is used as a wrapper that converts the communicator format to runtime format,
+// calls the core DetermineDataType function, and maps results to be used for the UI.
 func determineProcessingMode(readDFC *models.ProtocolConverterDFC) string {
 	// Only look at readDFC as requested
 	if readDFC == nil {
 		return "" // reply with empty string to indicate that no DFC is present
 	}
 
-	return constants.DetermineProcessorType(readDFC.Pipeline.Processors)
+	// convert communicator format to runtime format
+	var runtimeProcessors []any
+	for _, processor := range readDFC.Pipeline.Processors {
+		procMap := map[string]any{
+			processor.Type: map[string]any{},
+		}
+		runtimeProcessors = append(runtimeProcessors, procMap)
+	}
+
+	dataType := constants.DetermineDataType(runtimeProcessors)
+
+	switch dataType {
+	case constants.TimeseriesData:
+		return constants.TimeseriesProcessor
+	case constants.RelationalData:
+		return constants.RelationalProcessor
+	case constants.CustomData:
+		return constants.CustomProcessor
+	default:
+		return constants.CustomProcessor
+	}
 }
 
 // determineProtocol analyzes the input processors to determine the protocol.

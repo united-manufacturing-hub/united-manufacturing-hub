@@ -206,8 +206,8 @@ var _ = Describe("BuildRuntimeConfig", func() {
 			Expect(exists).To(BeFalse(), "Pipeline should NOT have processors when no tag_processor exists")
 		})
 
-		It("should inject downsampler as last processor after existing processors", func() {
-			// Create spec with existing processors
+		It("should NOT inject downsampler when there are multiple processors", func() {
+			// Create spec with multiple processors (tag_processor + mapping)
 			testSpec := protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
 				Config: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
 					ConnectionServiceConfig: createConnectionConfig(),
@@ -241,11 +241,11 @@ var _ = Describe("BuildRuntimeConfig", func() {
 			result, err := runtime_config.BuildRuntimeConfig(testSpec, agentLocation, globalVars, nodeName, pcName)
 			Expect(err).NotTo(HaveOccurred())
 
-			// Check processors were preserved and downsampler appended
+			// Check that NO downsampler was injected (multiple processors = custom)
 			readConfig := result.DataflowComponentReadServiceConfig
 			processors := readConfig.BenthosConfig.Pipeline["processors"].([]interface{})
 
-			Expect(processors).To(HaveLen(3), "Should have tag_processor + mapping + downsampler")
+			Expect(processors).To(HaveLen(2), "Should have only tag_processor + mapping, no downsampler")
 
 			// Check that original processors are preserved
 			tagProcessor := processors[0].(map[string]interface{})
@@ -254,11 +254,11 @@ var _ = Describe("BuildRuntimeConfig", func() {
 			mappingProcessor := processors[1].(map[string]interface{})
 			Expect(mappingProcessor).To(HaveKey("mapping"))
 
-			// Check that downsampler is the last processor
-			lastProcessor := processors[2].(map[string]interface{})
-			Expect(lastProcessor).To(HaveKey("downsampler"))
-			downsamplerConfig := lastProcessor["downsampler"].(map[string]interface{})
-			Expect(downsamplerConfig).To(BeEmpty(), "Downsampler should have empty config")
+			// Verify no downsampler was added
+			for _, proc := range processors {
+				procMap := proc.(map[string]interface{})
+				Expect(procMap).NotTo(HaveKey("downsampler"), "Downsampler should not be injected with multiple processors")
+			}
 		})
 
 		It("should not inject downsampler if one already exists", func() {
