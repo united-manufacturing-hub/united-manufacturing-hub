@@ -80,32 +80,53 @@ func NewPusher(instanceUUID uuid.UUID, jwt string, dog watchdog.Iface, outboundC
 func (p *Pusher) UpdateJWT(jwt string) {
 	p.jwt.Store(jwt)
 }
+
 func (p *Pusher) Start() {
 	go p.push()
 }
 
 func (p *Pusher) Push(message models.UMHMessage) {
-	if len(p.outboundMessageChannel) == cap(p.outboundMessageChannel) {
-		p.logger.Warnf("Outbound message channel is full !")
-
-		if p.watcherUUID != uuid.Nil {
-			p.dog.ReportHeartbeatStatus(p.watcherUUID, watchdog.HEARTBEAT_STATUS_WARNING)
-		}
+	umhMessage := &models.UMHMessage{
+		InstanceUUID: p.instanceUUID,
+		Content:      message.Content,
+		Email:        message.Email,
 	}
 
 	// Recover from panic
 	// This is primarily for tests, where the outboundMessageChannel is closed.
 	defer func() {
 		if r := recover(); r != nil {
-			zap.S().Errorf("Panic in Push: %v", r)
+			p.logger.Errorf("Panic in Push: %v", r)
 			p.dog.ReportHeartbeatStatus(p.watcherUUID, watchdog.HEARTBEAT_STATUS_WARNING)
 		}
 	}()
 
-	p.outboundMessageChannel <- &models.UMHMessage{
-		InstanceUUID: p.instanceUUID,
-		Content:      message.Content,
-		Email:        message.Email,
+	select {
+	case p.outboundMessageChannel <- umhMessage:
+		return
+	default:
+		p.logger.Warnf("Outbound message channel is full, dropping oldest message.")
+
+		if p.watcherUUID != uuid.Nil {
+			p.dog.ReportHeartbeatStatus(p.watcherUUID, watchdog.HEARTBEAT_STATUS_WARNING)
+		}
+
+		p.dropOldest(umhMessage)
+	}
+}
+
+// dropOldest removes the oldest message from the channel and adds the new one.
+func (p *Pusher) dropOldest(newMessage *models.UMHMessage) {
+	select {
+	case <-p.outboundMessageChannel:
+		p.logger.Debugf("Dropped oldest message to not have a blocking channel")
+	default:
+	}
+
+	select {
+	case p.outboundMessageChannel <- newMessage:
+		return
+	default:
 	}
 }
 
@@ -113,7 +134,7 @@ func (p *Pusher) push() {
 	boPostRequest := p.backoff
 	p.watcherUUID = p.dog.RegisterHeartbeat("push", 10, 600, false)
 
-	var ticker = time.NewTicker(10 * time.Millisecond)
+	ticker := time.NewTicker(10 * time.Millisecond)
 
 	for {
 		select {
@@ -125,7 +146,7 @@ func (p *Pusher) push() {
 				continue
 			}
 
-			var cookies = map[string]string{
+			cookies := map[string]string{
 				"token": p.jwt.Load().(string),
 			}
 
