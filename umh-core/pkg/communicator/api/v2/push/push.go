@@ -21,7 +21,6 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/backend_api_structs"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 
 	"github.com/google/uuid"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2/error_handler"
@@ -33,8 +32,7 @@ import (
 )
 
 type DeadLetter struct {
-	cookies       map[string]string
-	messages      []models.UMHMessage
+	Messages      []models.UMHMessage
 	retryAttempts int
 }
 
@@ -92,8 +90,6 @@ func (p *Pusher) Push(message models.UMHMessage) {
 		Email:        message.Email,
 	}
 
-	// Recover from panic
-	// This is primarily for tests, where the outboundMessageChannel is closed.
 	defer func() {
 		if r := recover(); r != nil {
 			p.logger.Errorf("Panic in Push: %v", r)
@@ -105,26 +101,39 @@ func (p *Pusher) Push(message models.UMHMessage) {
 	case p.outboundMessageChannel <- umhMessage:
 		return
 	default:
-		p.logger.Warnf("Outbound message channel is full, dropping oldest message.")
+		p.logger.Warnf("Outbound message channel is full, draining to deadletter channel.")
 
 		if p.watcherUUID != uuid.Nil {
 			p.dog.ReportHeartbeatStatus(p.watcherUUID, watchdog.HEARTBEAT_STATUS_WARNING)
 		}
 
-		p.dropOldest(umhMessage)
+		messages := p.outBoundMessages()
+		messages = append(messages, *umhMessage)
+		p.enqueueAndDropOldestDeadLetterCh(messages, 0)
 	}
 }
 
-// dropOldest removes the oldest message from the channel and adds the new one.
-func (p *Pusher) dropOldest(newMessage *models.UMHMessage) {
+func (p *Pusher) enqueueAndDropOldestDeadLetterCh(messages []models.UMHMessage, retryAttempt int) {
+	dl := DeadLetter{
+		Messages:      messages,
+		retryAttempts: retryAttempt,
+	}
+
 	select {
-	case <-p.outboundMessageChannel:
-		p.logger.Debugf("Dropped oldest message to not have a blocking channel")
+	case p.deadletterCh <- dl:
+		return
+	default:
+		p.logger.Warnf("Deadletter channel is full, dropping oldest message.")
+	}
+
+	select {
+	case <-p.deadletterCh:
+		p.logger.Debugf("Dropped oldest deadletter message to not have a blocking channel")
 	default:
 	}
 
 	select {
-	case p.outboundMessageChannel <- newMessage:
+	case p.deadletterCh <- dl:
 		return
 	default:
 	}
@@ -160,16 +169,12 @@ func (p *Pusher) push() {
 				p.dog.ReportHeartbeatStatus(p.watcherUUID, watchdog.HEARTBEAT_STATUS_WARNING)
 
 				if status == http2.StatusBadRequest {
-					// Its bit fuzzy here to determine the error code since the PostRequest does not return the error code.
-					// Todo: Need to refactor the PostRequest to return the error code.
-					// If the error is 400, drop the message, then the message is invalid.
-					// Hence do not reenqueue the message to the deadletter channel.
 					boPostRequest.IncrementAndSleep()
 
 					continue
 				}
-				// In case of an error, push the message back to the deadletter channel.
-				go enqueueToDeadLetterChannel(p.deadletterCh, messages, cookies, 0, p.logger)
+
+				p.enqueueAndDropOldestDeadLetterCh(messages, 0)
 
 				boPostRequest.IncrementAndSleep()
 
@@ -184,50 +189,32 @@ func (p *Pusher) push() {
 				continue
 			}
 
-			if len(d.messages) == 0 {
+			if len(d.Messages) == 0 {
 				continue
 			}
 
 			p.dog.ReportHeartbeatStatus(p.watcherUUID, watchdog.HEARTBEAT_STATUS_OK)
-			// Retry the messages in deadletter channel only thrice. If it fails after 3 retryAttempts, log the message and drop.
+
 			if d.retryAttempts > 2 {
 				continue
 			}
 
 			d.retryAttempts++
 
-			_, _, err := http.PostRequest[any, backend_api_structs.PushPayload](context.Background(), http.PushEndpoint, &backend_api_structs.PushPayload{UMHMessages: d.messages}, nil, &d.cookies, p.insecureTLS, p.apiURL, p.logger)
+			cookies := map[string]string{
+				"token": p.jwt.Load().(string),
+			}
+
+			_, _, err := http.PostRequest[any, backend_api_structs.PushPayload](context.Background(), http.PushEndpoint, &backend_api_structs.PushPayload{UMHMessages: d.Messages}, nil, &cookies, p.insecureTLS, p.apiURL, p.logger)
 			if err != nil {
 				p.dog.ReportHeartbeatStatus(p.watcherUUID, watchdog.HEARTBEAT_STATUS_WARNING)
 				boPostRequest.IncrementAndSleep()
-				// In case of an error, push the message back to the deadletter channel.
-				go enqueueToDeadLetterChannel(p.deadletterCh, d.messages, d.cookies, d.retryAttempts, p.logger)
+
+				p.enqueueAndDropOldestDeadLetterCh(d.Messages, d.retryAttempts)
 			}
 
 			boPostRequest.Reset()
 		}
-	}
-}
-
-func enqueueToDeadLetterChannel(deadLetterCh chan DeadLetter, messages []models.UMHMessage, cookies map[string]string, retryAttempt int, logger *zap.SugaredLogger) {
-	logger.Debugf("Enqueueing to deadletter channel to push messages: %v with retry attempts: %d", messages, retryAttempt)
-
-	select {
-	case _, ok := <-deadLetterCh:
-		if !ok {
-			// Channel is closed
-			sentry.ReportIssuef(sentry.IssueTypeError, logger, "[enqueueToDeadLetterChannel] Deadletter channel is closed, cannot enqueue messages!")
-
-			return
-		}
-	case deadLetterCh <- DeadLetter{
-		messages:      messages,
-		cookies:       cookies,
-		retryAttempts: retryAttempt,
-	}:
-		// Message successfully enqueued to deadletter channel. Do nothing.
-	default:
-		sentry.ReportIssuef(sentry.IssueTypeError, logger, "[enqueueToDeadLetterChannel] Deadletter channel is not open or ready to receive the re-enqueued messages from the Pusher!")
 	}
 }
 
@@ -237,14 +224,16 @@ func (p *Pusher) outBoundMessages() []models.UMHMessage {
 		return messages
 	}
 
-	for len(p.outboundMessageChannel) > 0 {
-		msgX := <-p.outboundMessageChannel
-		if msgX == nil {
-			continue
+	for {
+		select {
+		case msgX := <-p.outboundMessageChannel:
+			if msgX == nil {
+				continue
+			}
+
+			messages = append(messages, *msgX)
+		default:
+			return messages
 		}
-
-		messages = append(messages, *msgX)
 	}
-
-	return messages
 }

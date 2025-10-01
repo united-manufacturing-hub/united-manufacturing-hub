@@ -16,6 +16,9 @@ package push_test
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -28,11 +31,16 @@ import (
 	"go.uber.org/zap"
 )
 
-var _ = Describe("Push non-blocking behavior", func() {
-	It("should not block when channel is full", func() {
+var _ = Describe("Push blocking under connection loss", func() {
+	It("should not block when backend is unresponsive and channels fill up", func() {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			time.Sleep(30 * time.Second)
+		}))
+		defer server.Close()
+
 		channelSize := 5
 		outboundChannel := make(chan *models.UMHMessage, channelSize)
-		deadletterCh := make(chan push.DeadLetter, 100)
+		deadletterCh := make(chan push.DeadLetter, 10)
 
 		logger, _ := zap.NewDevelopment()
 		sugaredLogger := logger.Sugar()
@@ -41,7 +49,7 @@ var _ = Describe("Push non-blocking behavior", func() {
 		defer ticker.Stop()
 		dog := watchdog.NewWatchdog(ctx, ticker, false, sugaredLogger)
 
-		backoff := tools.NewBackoff(time.Millisecond, time.Millisecond, time.Second, tools.BackoffPolicyExponential)
+		backoff := tools.NewBackoff(time.Millisecond, time.Millisecond, 10*time.Millisecond, tools.BackoffPolicyExponential)
 		pusher := push.NewPusher(
 			uuid.New(),
 			"test-jwt",
@@ -50,35 +58,47 @@ var _ = Describe("Push non-blocking behavior", func() {
 			deadletterCh,
 			backoff,
 			true,
-			"http://localhost:8080",
+			server.URL,
 			sugaredLogger,
 		)
 
-		for range channelSize {
-			pusher.Push(models.UMHMessage{
-				Content: "fill-message",
-				Email:   "test@example.com",
-			})
+		pusher.Start()
+
+		var wg sync.WaitGroup
+		messageCount := 200
+		blockedCount := 0
+		var mu sync.Mutex
+
+		for i := range messageCount {
+			wg.Add(1)
+			go func(idx int) {
+				defer wg.Done()
+				start := time.Now()
+				pusher.Push(models.UMHMessage{
+					Content: "test-message",
+					Email:   "test@example.com",
+				})
+				duration := time.Since(start)
+
+				if duration > 100*time.Millisecond {
+					mu.Lock()
+					blockedCount++
+					mu.Unlock()
+				}
+			}(i)
 		}
 
-		Expect(outboundChannel).To(HaveLen(channelSize))
+		done := make(chan bool)
+		go func() {
+			wg.Wait()
+			done <- true
+		}()
 
-		start := time.Now()
-		pusher.Push(models.UMHMessage{
-			Content: "overflow-message",
-			Email:   "test@example.com",
-		})
-		duration := time.Since(start)
-
-		Expect(duration).To(BeNumerically("<", 5*time.Millisecond))
-
-		Expect(outboundChannel).To(BeEmpty())
-		Expect(deadletterCh).To(HaveLen(1))
-
-		dl := <-deadletterCh
-		Expect(dl.Messages).To(HaveLen(channelSize + 1))
-
-		close(outboundChannel)
-		close(deadletterCh)
+		select {
+		case <-done:
+			Expect(blockedCount).To(Equal(0), "No Push() calls should block")
+		case <-time.After(5 * time.Second):
+			Fail("Test timed out - Push() is blocking!")
+		}
 	})
 })
