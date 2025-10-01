@@ -40,7 +40,7 @@ Stream processors are created through the **Data Flows → Stream** tab:
 
 Configure basic settings and location hierarchy:
 
-![Stream Processor General Configuration](./images/stream-processor-general.png)
+![Stream Processor General Configuration](../data-modeling/images/stream-processors-add.png)
 
 - **Name**: Unique identifier for your processor
 - **Instance**: The UMH Core instance to run on
@@ -51,7 +51,7 @@ Configure basic settings and location hierarchy:
 
 Select source topics and they'll automatically get variable names:
 
-![Topic Selection and Variable Names](./images/stream-processor-topic-selection.png)
+![Topic Selection and Variable Names](../data-modeling/images/stream-processors-add-topic-expression.png)
 
 - Browse available topics in your UNS
 - Select multiple sources with checkboxes
@@ -63,7 +63,7 @@ Select source topics and they'll automatically get variable names:
 
 Map source variables to model fields using expressions:
 
-![Expression Mapping](./images/stream-processor-expression-mapping.png)
+![Expression Mapping](../data-modeling/images/stream-processors-add-topic-expression.png)
 
 - Each field in your data model appears on the right
 - Enter expressions using the source variables
@@ -75,7 +75,7 @@ Map source variables to model fields using expressions:
 
 Switch to Code Mode to see or edit the generated YAML configuration:
 
-![Code Mode Configuration](./images/stream-processor-code-mode.png)
+![Code Mode Configuration](../data-modeling/images/stream-processors-add-code-mode.png)
 
 The UI automatically generates YAML with:
 - **sources**: Your selected topics with location_path templates
