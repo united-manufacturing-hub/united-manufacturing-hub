@@ -128,6 +128,72 @@ The United Manufacturing Hub (UMH) is an Industrial IoT platform for manufacturi
 
 **GraphQL changes**: Modify schema → `make generate` → Test with `make test-graphql`
 
+**Bumping benthos-umh Version**:
+
+*Step 1: Deep Research (understand EVERYTHING first)*
+
+Before writing the PR, gather complete context:
+
+1. **Identify version range**: Check current version in `umh-core/Makefile` line ~72, determine target version
+2. **Read ALL benthos-umh releases** between versions: https://github.com/united-manufacturing-hub/benthos-umh/releases
+3. **Read related Linear tickets**:
+   - Main issue requesting the bump
+   - Parent/child issues
+   - Root cause issues referenced in release notes
+   - **Read ALL comments** on each issue
+4. **Read ALL related PRs**:
+   - benthos-umh PRs that introduced the fixes
+   - PR descriptions, code changes, review comments
+   - ManagementConsole PRs that are blocked (if mentioned)
+5. **Understand the user impact**:
+   - What was broken from user perspective?
+   - What symptoms did they see? (error messages, stuck states, etc.)
+   - What manual workarounds existed?
+   - How does the fix change their experience?
+
+*Step 2: Condense for User Impact*
+
+Transform technical commits into user-facing descriptions:
+- ❌ "fix: use bytes.TrimRight() for S7 strings"
+- ✅ "Fixed S7 bridges stuck in starting state due to NULL-padded strings"
+
+Each bug fix should answer:
+- What was broken? (observable symptoms)
+- Why did it happen? (root cause in one sentence)
+- What's fixed? (user experience improvement)
+- Technical details? (inline, not separate section)
+
+*Step 3: Create PR*
+
+File to modify: `umh-core/Makefile` (line ~72: `BENTHOS_UMH_VERSION`)
+
+PR format (matches UMH release notes):
+```
+This PR bumps benthos-umh from vX.Y.Z to vA.B.C
+
+🐛 Bug Fixes
+
+**[User-facing symptom]** (from vX.Y.Z+1)
+[One concise paragraph: what was broken, why, what's fixed, technical details inline]
+
+**[User-facing symptom]** (from vA.B.C)
+[Same format]
+
+📝 Notes
+
+- [Why this bump is needed, urgency, blocking issues with links]
+- Release Notes from benthos-umh: [vX.Y.Z+1](link) and [vA.B.C](link)
+```
+
+**Important**:
+- Include ALL versions between current and target (jumping 0.11.3 → 0.11.5 needs both 0.11.4 and 0.11.5)
+- Focus on user impact, not code changes
+- Keep concise: bold title + inline version marker + one paragraph
+- Add emoji sections (🐛, 💪, 📝) for visual hierarchy
+- This PR description becomes the changelog for next umh-core release
+
+**Example**: See PR #2284 for benthos-umh v0.11.3 → v0.11.5 bump
+
 ## Issue Investigation Workflow
 
 When investigating FSM or service issues, follow this systematic approach:
