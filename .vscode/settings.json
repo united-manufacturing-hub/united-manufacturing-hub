@@ -1,4 +1,0 @@
-{
-    "go.buildTags": "test",
-    "makefile.configureOnOpen": false
-} 

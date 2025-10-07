@@ -69,14 +69,21 @@ The United Manufacturing Hub (UMH) is an Industrial IoT platform for manufacturi
 
 ### FSM Pattern
 
-**Files**: `machine.go` (states) → `reconcile.go` (control loop) → `actions.go` (operations)
+**Separation of Concerns**:
+- `machine.go`: FSM definition with state constants and transitions
+- `fsm_callbacks.go`: Fail-free callback implementations (logging only, no errors)
+- `actions.go`: Idempotent operations with context handling (can fail and retry)
+- `reconcile.go`: Single-threaded control loop (only place that modifies state)
+- `models.go`: Data structures and types
 
 **State precedence**: Lifecycle (`to_be_created`, `removing`) > Operational (`running`, `stopped`)
 
 **Key rules**:
 - Actions must be idempotent (will retry on failure)
-- Only reconciliation loop modifies state (deterministic)
-- FSM callbacks fail-free (logging only)
+- Only reconciliation loop modifies state (deterministic, single-threaded)
+- FSM callbacks fail-free (logging only, never return errors)
+- Use exponential backoff for failed transitions
+- All actions must handle context cancellation
 
 ### Data Architecture Decisions
 
@@ -119,6 +126,367 @@ The United Manufacturing Hub (UMH) is an Industrial IoT platform for manufacturi
 5. **Error handling**: Return errors up the stack, handle in reconciliation loop
 6. **No direct FSM state changes**: Always go through reconciliation
 
+## Go Performance Patterns
+
+### Object Pooling
+
+Use `sync.Pool` to reduce GC pressure for frequently allocated objects:
+
+```go
+var bufferPool = sync.Pool{
+    New: func() interface{} {
+        return new(bytes.Buffer)
+    },
+}
+
+func processData(data []byte) {
+    buf := bufferPool.Get().(*bytes.Buffer)
+    defer func() {
+        buf.Reset()
+        bufferPool.Put(buf)
+    }()
+    buf.Write(data)
+    // Process buffer
+}
+```
+
+**When to use**: Objects allocated/freed in hot paths (>1000/sec), especially large objects.
+
+### Memory Preallocation
+
+Preallocate slices and maps when size is known:
+
+```go
+// Good: Preallocate with known capacity
+items := make([]Item, 0, expectedSize)
+cache := make(map[string]Value, expectedSize)
+
+// Avoid: Growing dynamically causes multiple allocations
+items := []Item{}  // Will reallocate as it grows
+```
+
+**Rule of thumb**: If you know approximate size, preallocate. Saves 3-5 allocations per slice growth.
+
+### Struct Field Alignment
+
+Order struct fields by decreasing size to minimize padding:
+
+```go
+// Bad: 32 bytes with padding
+type BadStruct struct {
+    flag bool      // 1 byte + 7 bytes padding
+    count int64    // 8 bytes
+    id int32       // 4 bytes + 4 bytes padding
+}
+
+// Good: 16 bytes, no padding
+type GoodStruct struct {
+    count int64    // 8 bytes
+    id int32       // 4 bytes
+    flag bool      // 1 byte + 3 bytes padding (at end)
+}
+```
+
+**Impact**: Can reduce struct size by 30-50% in many cases.
+
+### Zero-Copy Techniques
+
+Avoid unnecessary copies, especially for large data:
+
+```go
+// Bad: Creates copy
+func ProcessData(data []byte) {
+    dataCopy := make([]byte, len(data))
+    copy(dataCopy, data)
+    // Process dataCopy
+}
+
+// Good: Use slices to reference original data
+func ProcessData(data []byte) {
+    // Process data directly (read-only)
+    // Or use subslices: segment := data[offset:offset+length]
+}
+```
+
+**When safe**: If function doesn't need to modify data and data lifetime is longer than function execution.
+
+### Stack vs Heap Allocations
+
+Keep allocations on stack when possible (escape analysis):
+
+```go
+// Bad: Escapes to heap (pointer returned)
+func createConfig() *Config {
+    cfg := Config{...}
+    return &cfg  // cfg escapes to heap
+}
+
+// Good: Stays on stack (value returned)
+func createConfig() Config {
+    return Config{...}  // Allocated on stack
+}
+```
+
+**Check with**: `go build -gcflags="-m"` to see escape analysis.
+
+### Goroutine Worker Pools
+
+Limit goroutine count with worker pools for CPU-bound tasks:
+
+```go
+func processItems(items []Item) {
+    numWorkers := runtime.NumCPU()
+    workCh := make(chan Item, numWorkers)
+
+    // Start workers
+    var wg sync.WaitGroup
+    for i := 0; i < numWorkers; i++ {
+        wg.Add(1)
+        go func() {
+            defer wg.Done()
+            for item := range workCh {
+                process(item)
+            }
+        }()
+    }
+
+    // Send work
+    for _, item := range items {
+        workCh <- item
+    }
+    close(workCh)
+    wg.Wait()
+}
+```
+
+**Avoid**: Creating unbounded goroutines (e.g., `for _, item := range items { go process(item) }`).
+
+### Atomic Operations
+
+Use atomics for lock-free counters and flags:
+
+```go
+import "sync/atomic"
+
+type Counter struct {
+    count atomic.Int64
+}
+
+func (c *Counter) Increment() {
+    c.count.Add(1)
+}
+
+func (c *Counter) Get() int64 {
+    return c.count.Load()
+}
+```
+
+**When to use**: Simple counters, flags, or pointers accessed from multiple goroutines.
+
+### Lazy Initialization
+
+Defer expensive initialization until first use:
+
+```go
+import "sync"
+
+type Service struct {
+    clientOnce sync.Once
+    client     *ExpensiveClient
+}
+
+func (s *Service) getClient() *ExpensiveClient {
+    s.clientOnce.Do(func() {
+        s.client = newExpensiveClient()
+    })
+    return s.client
+}
+```
+
+**When to use**: Optional features, expensive clients used in <50% of requests.
+
+### Immutable Data Sharing
+
+Share read-only data across goroutines without locks:
+
+```go
+// Safe: Config is read-only after initialization
+type Config struct {
+    MaxConnections int
+    Timeout        time.Duration
+}
+
+var globalConfig atomic.Pointer[Config]
+
+func updateConfig(newConfig Config) {
+    globalConfig.Store(&newConfig)  // Atomic pointer update
+}
+
+func getConfig() *Config {
+    return globalConfig.Load()  // Safe concurrent reads
+}
+```
+
+**When to use**: Configuration, lookup tables, caches that update infrequently.
+
+### Context Management
+
+Always pass context and check cancellation in long operations:
+
+```go
+func processWithContext(ctx context.Context, items []Item) error {
+    for _, item := range items {
+        select {
+        case <-ctx.Done():
+            return ctx.Err()  // Respect cancellation
+        default:
+            if err := process(item); err != nil {
+                return err
+            }
+        }
+    }
+    return nil
+}
+```
+
+**Critical**: All FSM actions must handle context cancellation.
+
+### Efficient Buffering
+
+Use buffered channels to reduce synchronization overhead:
+
+```go
+// Bad: Unbuffered channel blocks on every send
+ch := make(chan Message)
+
+// Good: Buffered channel allows burst sends
+ch := make(chan Message, 100)
+```
+
+**Rule**: Buffer size ≈ expected burst size or 2× number of producers.
+
+### Batching Operations
+
+Batch small operations to reduce overhead:
+
+```go
+// Bad: Write each message individually
+for _, msg := range messages {
+    kafka.Write(msg)  // Network round-trip per message
+}
+
+// Good: Batch writes
+batch := make([]Message, 0, len(messages))
+for _, msg := range messages {
+    batch = append(batch, msg)
+    if len(batch) >= 100 {
+        kafka.WriteBatch(batch)
+        batch = batch[:0]
+    }
+}
+if len(batch) > 0 {
+    kafka.WriteBatch(batch)  // Write remaining
+}
+```
+
+**When to use**: Network I/O, database writes, file operations.
+
+## Documentation Maintenance
+
+### Core Principle
+
+**No code change without corresponding documentation updates.**
+
+Every code modification must include relevant documentation changes in the same PR. This ensures documentation stays synchronized with implementation and reduces technical debt.
+
+### Documentation Location Mapping
+
+**UMH Core (`umh-core/`)**:
+- **Architecture changes** → `docs/architecture/`
+- **FSM modifications** → `docs/fsm/`
+- **API endpoints** → `docs/api/`
+- **Configuration options** → `docs/configuration/`
+- **Deployment guides** → `docs/deployment/`
+
+**Features/Components**:
+- **New features** → Add to `docs/features/` with examples
+- **Protocol converters** → Update `docs/bridges/`
+- **Data flow components** → Update `docs/dataflows/`
+- **Stream processors** → Update `docs/processors/`
+
+**Breaking Changes**:
+- **Version upgrade guides** → `docs/migration/`
+- **Deprecation notices** → Mark in relevant docs + `CHANGELOG.md`
+- **Configuration changes** → Update examples in `config/` directory
+
+### Documentation Requirements by Change Type
+
+**Code Changes**:
+- Public API: Update function documentation (godoc)
+- Configuration: Update YAML examples and schema docs
+- FSM states: Update state machine diagrams
+- Error handling: Document new error codes/messages
+
+**Bug Fixes**:
+- If fix changes behavior: Update relevant user-facing documentation
+- If fix is internal: Update architecture/implementation docs
+- Always: Add to `CHANGELOG.md` under "Bug Fixes"
+
+**New Features**:
+- Feature documentation in `docs/features/`
+- Configuration examples in `config/examples/`
+- Update main `README.md` if user-facing
+- Add to `CHANGELOG.md` under "New Features"
+
+### Documentation Update Checklist
+
+Before marking PR as ready for review:
+- [ ] Code changes have corresponding doc updates
+- [ ] Examples tested and verified
+- [ ] CHANGELOG.md updated
+- [ ] Breaking changes clearly documented
+- [ ] Migration guides provided (if needed)
+- [ ] API documentation regenerated (if applicable)
+
+### Tools and Validation
+
+**Generate docs**:
+```bash
+make generate  # Regenerates GraphQL schema docs, OpenAPI specs
+```
+
+**Validate docs**:
+```bash
+make lint-docs  # Check for broken links, formatting issues
+```
+
+**Local preview**:
+```bash
+make serve-docs  # Start local documentation server
+```
+
+### Anti-Patterns to Avoid
+
+**Don't**:
+- Defer documentation to "later" (it never happens)
+- Write documentation separately from code changes
+- Assume "the code is self-documenting"
+- Leave TODO comments in documentation
+- Create documentation debt intentionally
+
+**Do**:
+- Write docs alongside code in same commit/PR
+- Update examples when changing behavior
+- Remove outdated documentation immediately
+- Keep CHANGELOG.md up to date with every PR
+
+### Documentation Review Guidelines
+
+When reviewing PRs:
+1. **Check completeness**: Are all user-facing changes documented?
+2. **Verify accuracy**: Do examples actually work?
+3. **Test migration paths**: Can users upgrade without breaking changes?
+4. **Review clarity**: Is documentation clear for target audience?
 
 ## Common Development Tasks
 
@@ -384,3 +752,7 @@ The most effective approach combines human and AI capabilities:
 - **Actions**: Must be idempotent and handle context cancellation
 - **Exponential backoff**: System automatically retries failed transitions
 - **Resource Limiting**: Bridge creation is blocked when resources are constrained (controlled by `agent.enableResourceLimitBlocking` feature flag)
+
+## UX Standards
+
+See `UX_STANDARDS.md` for UI/UX principles when building management interfaces or user-facing components.

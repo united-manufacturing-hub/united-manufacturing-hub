@@ -1,8 +1,0 @@
----
-alwaysApply: true
----
-You can use the following commands from the makefile (located in the umh-core subfolder):
- - vet (go vet with correct tags and path)
- - lint (golangci with correct path)
- - nilaway (nilaway with custom config)
- - unit-test (runs all our unit tests). Internally also calls vet, nilaway, lint
