@@ -126,502 +126,15 @@ The United Manufacturing Hub (UMH) is an Industrial IoT platform for manufacturi
 5. **Error handling**: Return errors up the stack, handle in reconciliation loop
 6. **No direct FSM state changes**: Always go through reconciliation
 
-## Go Performance Patterns
-
-### Object Pooling
-
-Use `sync.Pool` to reduce GC pressure for frequently allocated objects:
-
-```go
-var bufferPool = sync.Pool{
-    New: func() interface{} {
-        return new(bytes.Buffer)
-    },
-}
-
-func processData(data []byte) {
-    buf := bufferPool.Get().(*bytes.Buffer)
-    defer func() {
-        buf.Reset()
-        bufferPool.Put(buf)
-    }()
-    buf.Write(data)
-    // Process buffer
-}
-```
-
-**When to use**: Objects allocated/freed in hot paths (>1000/sec), especially large objects.
-
-### Memory Preallocation
-
-Preallocate slices and maps when size is known:
-
-```go
-// Good: Preallocate with known capacity
-items := make([]Item, 0, expectedSize)
-cache := make(map[string]Value, expectedSize)
-
-// Avoid: Growing dynamically causes multiple allocations
-items := []Item{}  // Will reallocate as it grows
-```
-
-**Rule of thumb**: If you know approximate size, preallocate. Saves 3-5 allocations per slice growth.
-
-### Struct Field Alignment
-
-Order struct fields by decreasing size to minimize padding:
-
-```go
-// Bad: 32 bytes with padding
-type BadStruct struct {
-    flag bool      // 1 byte + 7 bytes padding
-    count int64    // 8 bytes
-    id int32       // 4 bytes + 4 bytes padding
-}
-
-// Good: 16 bytes, no padding
-type GoodStruct struct {
-    count int64    // 8 bytes
-    id int32       // 4 bytes
-    flag bool      // 1 byte + 3 bytes padding (at end)
-}
-```
-
-**Impact**: Can reduce struct size by 30-50% in many cases.
-
-### Zero-Copy Techniques
-
-Avoid unnecessary copies, especially for large data:
-
-```go
-// Bad: Creates copy
-func ProcessData(data []byte) {
-    dataCopy := make([]byte, len(data))
-    copy(dataCopy, data)
-    // Process dataCopy
-}
-
-// Good: Use slices to reference original data
-func ProcessData(data []byte) {
-    // Process data directly (read-only)
-    // Or use subslices: segment := data[offset:offset+length]
-}
-```
-
-**When safe**: If function doesn't need to modify data and data lifetime is longer than function execution.
-
-### Stack vs Heap Allocations
-
-Keep allocations on stack when possible (escape analysis):
-
-```go
-// Bad: Escapes to heap (pointer returned)
-func createConfig() *Config {
-    cfg := Config{...}
-    return &cfg  // cfg escapes to heap
-}
-
-// Good: Stays on stack (value returned)
-func createConfig() Config {
-    return Config{...}  // Allocated on stack
-}
-```
-
-**Check with**: `go build -gcflags="-m"` to see escape analysis.
-
-### Goroutine Worker Pools
-
-Limit goroutine count with worker pools for CPU-bound tasks:
-
-```go
-func processItems(items []Item) {
-    numWorkers := runtime.NumCPU()
-    workCh := make(chan Item, numWorkers)
-
-    // Start workers
-    var wg sync.WaitGroup
-    for i := 0; i < numWorkers; i++ {
-        wg.Add(1)
-        go func() {
-            defer wg.Done()
-            for item := range workCh {
-                process(item)
-            }
-        }()
-    }
-
-    // Send work
-    for _, item := range items {
-        workCh <- item
-    }
-    close(workCh)
-    wg.Wait()
-}
-```
-
-**Avoid**: Creating unbounded goroutines (e.g., `for _, item := range items { go process(item) }`).
-
-### Atomic Operations
-
-Use atomics for lock-free counters and flags:
-
-```go
-import "sync/atomic"
-
-type Counter struct {
-    count atomic.Int64
-}
-
-func (c *Counter) Increment() {
-    c.count.Add(1)
-}
-
-func (c *Counter) Get() int64 {
-    return c.count.Load()
-}
-```
-
-**When to use**: Simple counters, flags, or pointers accessed from multiple goroutines.
-
-### Lazy Initialization
-
-Defer expensive initialization until first use:
-
-```go
-import "sync"
-
-type Service struct {
-    clientOnce sync.Once
-    client     *ExpensiveClient
-}
-
-func (s *Service) getClient() *ExpensiveClient {
-    s.clientOnce.Do(func() {
-        s.client = newExpensiveClient()
-    })
-    return s.client
-}
-```
-
-**When to use**: Optional features, expensive clients used in <50% of requests.
-
-### Immutable Data Sharing
-
-Share read-only data across goroutines without locks:
-
-```go
-// Safe: Config is read-only after initialization
-type Config struct {
-    MaxConnections int
-    Timeout        time.Duration
-}
-
-var globalConfig atomic.Pointer[Config]
-
-func updateConfig(newConfig Config) {
-    globalConfig.Store(&newConfig)  // Atomic pointer update
-}
-
-func getConfig() *Config {
-    return globalConfig.Load()  // Safe concurrent reads
-}
-```
-
-**When to use**: Configuration, lookup tables, caches that update infrequently.
-
-### Context Management
-
-Always pass context and check cancellation in long operations:
-
-```go
-func processWithContext(ctx context.Context, items []Item) error {
-    for _, item := range items {
-        select {
-        case <-ctx.Done():
-            return ctx.Err()  // Respect cancellation
-        default:
-            if err := process(item); err != nil {
-                return err
-            }
-        }
-    }
-    return nil
-}
-```
-
-**Critical**: All FSM actions must handle context cancellation.
-
-### Efficient Buffering
-
-Use buffered channels to reduce synchronization overhead:
-
-```go
-// Bad: Unbuffered channel blocks on every send
-ch := make(chan Message)
-
-// Good: Buffered channel allows burst sends
-ch := make(chan Message, 100)
-```
-
-**Rule**: Buffer size ≈ expected burst size or 2× number of producers.
-
-### Batching Operations
-
-Batch small operations to reduce overhead:
-
-```go
-// Bad: Write each message individually
-for _, msg := range messages {
-    kafka.Write(msg)  // Network round-trip per message
-}
-
-// Good: Batch writes
-batch := make([]Message, 0, len(messages))
-for _, msg := range messages {
-    batch = append(batch, msg)
-    if len(batch) >= 100 {
-        kafka.WriteBatch(batch)
-        batch = batch[:0]
-    }
-}
-if len(batch) > 0 {
-    kafka.WriteBatch(batch)  // Write remaining
-}
-```
-
-**When to use**: Network I/O, database writes, file operations.
-
 ## Documentation Maintenance
 
 ### Core Principle
 
-**No code change without corresponding documentation updates.**
-
-Every code modification must include relevant documentation changes in the same PR. This ensures documentation stays synchronized with implementation and reduces technical debt.
-
-### Documentation Location Mapping
-
-**UMH Core (`umh-core/`)**:
-- **Architecture changes** → `docs/architecture/`
-- **FSM modifications** → `docs/fsm/`
-- **API endpoints** → `docs/api/`
-- **Configuration options** → `docs/configuration/`
-- **Deployment guides** → `docs/deployment/`
-
-**Features/Components**:
-- **New features** → Add to `docs/features/` with examples
-- **Protocol converters** → Update `docs/bridges/`
-- **Data flow components** → Update `docs/dataflows/`
-- **Stream processors** → Update `docs/processors/`
-
-**Breaking Changes**:
-- **Version upgrade guides** → `docs/migration/`
-- **Deprecation notices** → Mark in relevant docs + `CHANGELOG.md`
-- **Configuration changes** → Update examples in `config/` directory
-
-### Documentation Requirements by Change Type
-
-**Code Changes**:
-- Public API: Update function documentation (godoc)
-- Configuration: Update YAML examples and schema docs
-- FSM states: Update state machine diagrams
-- Error handling: Document new error codes/messages
-
-**Bug Fixes**:
-- If fix changes behavior: Update relevant user-facing documentation
-- If fix is internal: Update architecture/implementation docs
-- Always: Add to `CHANGELOG.md` under "Bug Fixes"
-
-**New Features**:
-- Feature documentation in `docs/features/`
-- Configuration examples in `config/examples/`
-- Update main `README.md` if user-facing
-- Add to `CHANGELOG.md` under "New Features"
-
-### Documentation Update Checklist
-
-Before marking PR as ready for review:
-- [ ] Code changes have corresponding doc updates
-- [ ] Examples tested and verified
-- [ ] CHANGELOG.md updated
-- [ ] Breaking changes clearly documented
-- [ ] Migration guides provided (if needed)
-- [ ] API documentation regenerated (if applicable)
-
-### Tools and Validation
-
-**Generate docs**:
-```bash
-make generate  # Regenerates GraphQL schema docs, OpenAPI specs
-```
-
-**Validate docs**:
-```bash
-make lint-docs  # Check for broken links, formatting issues
-```
-
-**Local preview**:
-```bash
-make serve-docs  # Start local documentation server
-```
-
-### Anti-Patterns to Avoid
-
-**Don't**:
-- Defer documentation to "later" (it never happens)
-- Write documentation separately from code changes
-- Assume "the code is self-documenting"
-- Leave TODO comments in documentation
-- Create documentation debt intentionally
-
-**Do**:
-- Write docs alongside code in same commit/PR
-- Update examples when changing behavior
-- Remove outdated documentation immediately
-- Keep CHANGELOG.md up to date with every PR
-
-### Documentation Review Guidelines
-
-When reviewing PRs:
-1. **Check completeness**: Are all user-facing changes documented?
-2. **Verify accuracy**: Do examples actually work?
-3. **Test migration paths**: Can users upgrade without breaking changes?
-4. **Review clarity**: Is documentation clear for target audience?
+**No code change without corresponding documentation updates.** Every code modification must include relevant documentation changes in the same PR. See `docs/` directory for user-facing documentation.
 
 ## Support & Troubleshooting Workflows
 
-This section covers workflows for investigating and resolving production issues in UMH Core deployments.
-
-### Linear/Sentry Integration
-
-#### Critical Linear Integration Rules
-
-**NEVER modify issue title or description unless explicitly requested by the user**
-- Screenshots and original content in Linear tickets must be preserved
-- Use comments for analysis, insights, and resolution documentation
-- Only update status/labels/assignee fields when appropriate
-
-#### Linear Investigation Protocol
-
-**Always start with comments** - They contain the real story, not the description:
-
-1. **Comments BEFORE description**:
-   ```bash
-   # FIRST THING - before even looking at description
-   mcp__linear-server__list_comments issueId: "ISSUE-ID"
-   ```
-
-2. **Fetch ALL comments immediately** - Critical details are often in updates, not the description
-3. **Download ALL attachments** - Screenshots, logs, and files contain evidence
-4. **Transcribe screenshots immediately** - Don't wait, evidence disappears
-5. **Check for related issues** - Search for duplicates, dependencies, and similar problems
-6. **Identify existing workarounds** - Users often document their current painful solutions
-7. **Look for patterns across issues** - Multiple related issues may need a parent epic
-8. **Quantify customer impact** - "100 processors instead of 1" is clearer than "performance issues"
-9. **Create parent epics when needed** - Group related issues under strategic initiatives
-10. **Check if already fixed** - Search recent PRs, the fix might already exist
-
-**Key Questions to Answer**:
-- What are customers doing TODAY to work around this? (check comments!)
-- How many customers affected? Named examples?
-- Is this a symptom of a larger architectural gap?
-- Are there related issues that should be solved together?
-- Has this been fixed in another issue/PR already?
-
-**Common Pitfalls**:
-- Assuming the issue description is complete (it never is)
-- Missing critical context in comment threads
-- Not recognizing when multiple issues are the same root cause
-- Over-engineering solutions instead of simple foundations
-- Not checking if it's already been fixed elsewhere
-
-#### Linking Linear and Sentry Issues
-
-1. **In Linear**: Add Sentry URLs as attachments to ticket
-2. **In Sentry**: Navigate to issue → "Linked Issues" panel → Link to Linear ticket
-   - **Do NOT use MCP tools** - Ask user to link manually in Sentry UI
-   - This enables automatic reopening when errors recur
-
-#### Incident Response Comment Template
-
-```markdown
-## 🔍 Root Cause Analysis
-
-### Key Evidence
-- [Sentry Issue ID](url): Description
-- Log Location: `path/to/log:line_number`
-- Critical Error: [timestamp] "exact error message"
-
-### Timeline
-[Detailed timeline with evidence]
-
-### Technical Analysis
-[Root cause explanation]
-
-### Recommendations
-**Immediate**: [Quick fixes]
-**Long-term**: [Permanent solutions]
-```
-
-#### GitHub Actions Investigation
-
-**IMPORTANT**: Must be run from within git repository directory. If you get "failed to determine base repo", navigate to the repository first.
-
-```bash
-# Basic commands
-gh run list --limit 20
-gh run view <run-id> --log-failed
-gh run view <run-id> --job <job-id> --log
-
-# Extract raw logs when run is still in progress
-curl -sL "https://api.github.com/repos/united-manufacturing-hub/united-manufacturing-hub/actions/jobs/<job-id>/logs" \
-  -H "Authorization: token $(gh auth token)" > job_raw.txt
-
-# Parse the raw logs (contains escape sequences)
-cat job_raw.txt | sed 's/\\r\\n/\n/g' | sed 's/\\t/    /g' | grep -A 100 "pattern"
-```
-
-**Data Race Detection**:
-```bash
-# Go test with race detector (enabled in CI by default)
-go test -race ./...
-
-# Extract race warnings from CI logs
-gh run view <run-id> --job <job-id> --log | grep -A 100 "WARNING: DATA RACE"
-
-# Key indicators of data races:
-# - "testing.go:1490: race detected during execution of test"
-# - "WARNING: DATA RACE" followed by stack traces
-# - Multiple goroutines writing to same memory address
-# - Look for concurrent operations in stack traces (e.g., dialParallel)
-```
-
-**CI Failure Investigation Workflow**:
-
-1. Check if failure is related to PR:
-   ```bash
-   gh pr diff <pr-number> --name-only  # List changed files
-   ```
-
-2. Check base branch history:
-   ```bash
-   gh run list --branch staging --limit 10 --json conclusion,createdAt
-   # Look for recent successful runs to confirm issue is new
-   ```
-
-3. For unrelated test failures:
-   - Document the issue with evidence
-   - Create Linear ticket but don't block PR
-   - Check if another PR already addresses it
-   - Assign to developer working in that area
-
-**Linear Ticket Best Practices for Test Failures**:
-- **Title**: Include test suite and brief description
-- **Evidence**: Link to failed CI run, include relevant stack traces
-- **Cross-reference**: Link related PRs (both failing and fixing)
-- **Assignment**: Assign to developer already working in affected code
-- **Priority**: Set appropriately (test-only races = Low/Normal)
-- **Note solutions**: If another PR fixes it, mention in description
+This section covers umh-core-specific troubleshooting workflows. For universal team processes (Linear/Sentry integration, ticket routing), see `/Users/jeremytheocharis/Documents/git/troubleshooting/CLAUDE.md`.
 
 ### Instance Offline Troubleshooting
 
@@ -684,24 +197,6 @@ Example:
 - Clears message queue
 - Resets TCP connection states
 - May route through different Cloudflare edge
-
-### Support Ticket Routing
-
-Route issues to appropriate teams based on symptom classification:
-
-#### IT/Support Team
-- Instance offline/connectivity issues
-- Network problems, DNS issues
-- Infrastructure failures
-- Customer-reported outages
-
-#### Engineering Team (ENG)
-- Code bugs, FSM failures
-- Build/dependency failures
-- Data flow component errors
-- Test failures
-
-**Priority Guidelines**: Never set automated issues to "Urgent". Use "High" for blocking issues.
 
 ### Investigation Best Practices
 
@@ -854,9 +349,8 @@ The UMH ecosystem consists of three interconnected repositories:
 
 **ManagementConsole**:
 - `frontend/`: Svelte 5 web application (user interface)
-- `backend/`: Go API server (handles user requests, manages Redis message queues)
+- `backend/`: Go API server providing configuration and monitoring APIs
 - Provides remote configuration and monitoring of umh-core instances
-- Does NOT directly access umh-core - all communication via message queues
 
 **benthos-umh**:
 - Fork of Benthos stream processor with UMH-specific plugins
@@ -864,106 +358,23 @@ The UMH ecosystem consists of three interconnected repositories:
 - Handles all data flow processing (protocol converters, data flows, stream processors)
 - Each instance runs as separate S6-supervised process
 
-### Message Queue Architecture
+### Communication API
 
-**CRITICAL**: ManagementConsole does NOT have direct REST API access to umh-core. All communication flows through Redis-based message queues with a pull model.
+umh-core communicates with ManagementConsole backend via HTTP API endpoints:
 
-#### Communication Flow
+**Endpoints umh-core calls**:
+- `POST /v2/instance/push` - Send status updates to backend
+- `GET /v2/instance/pull` - Retrieve actions from backend (polling)
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                     Management Console                          │
-├──────────────────────┬──────────────────────────────────────────┤
-│  Frontend (Svelte)   │  Backend (Go API)                        │
-│  - User actions      │  - Validates requests                    │
-│  - Display status    │  - Queues in Redis                       │
-└──────────────────────┴──────────────────────────────────────────┘
-                                    │
-                          ┌─────────┴─────────┐
-                          │   Redis Queues    │
-                          │  (Message Broker) │
-                          └─────────┬─────────┘
-                                    │
-┌───────────────────────────────────┴─────────────────────────────┐
-│                         umh-core                                 │
-├──────────────────────────────────────────────────────────────────┤
-│  Communicator:                                                   │
-│  - Puller: Polls /v2/instance/pull every 10ms                   │
-│  - Pusher: Sends status via /v2/instance/push                   │
-│                                                                  │
-│  Agent:                                                          │
-│  - Receives actions from Puller                                 │
-│  - Routes to appropriate handlers                               │
-│  - Triggers FSM transitions                                     │
-│  - Updates config.yaml                                          │
-│  - Generates benthos configs                                    │
-│                                                                  │
-│  FSM Controllers:                                                │
-│  - BenthosFSM: Manages benthos-umh lifecycle                    │
-│  - RedpandaFSM: Manages Kafka broker lifecycle                  │
-│  - S6 FSM: Manages process supervision                          │
-└──────────────────────────────────────────────────────────────────┘
-```
+**Message format**: JSON-encoded `UMHMessage` with `Email`, `InstanceUUID`, `Content` fields.
 
-#### API Endpoints (Management Console Backend)
-
-**User-facing endpoints**:
-- `POST /v2/user/push` - User sends actions to instances (via frontend)
-- `GET /v2/user/pull` - User receives status updates (long polling)
-
-**Instance-facing endpoints**:
-- `POST /v2/instance/push` - Instance sends status to users (called by umh-core Pusher)
-- `GET /v2/instance/pull` - Instance receives actions (polled by umh-core Puller every 10ms)
-
-**Key architectural points**:
-- **No direct instance → backend communication**: umh-core only knows about /v2/instance/* endpoints
-- **Redis as broker**: Backend queues messages in Redis, instances poll to retrieve
-- **10ms polling**: umh-core Puller checks for new actions 100 times per second
-- **Bidirectional**: Actions flow backend → instance, status flows instance → backend
+**Implementation**: See `pkg/communicator/` for Puller (retrieves actions) and Pusher (sends status).
 
 ### Action Processing Flow
 
-When a user deploys a bridge in the Management Console UI, here's the complete flow:
+When ManagementConsole sends an action (e.g., deploy bridge), umh-core processes it:
 
-#### 1. Frontend Creates Action
-
-```typescript
-// Frontend sends action to backend
-const action: ActionMessagePayload = {
-  ActionType: "deploy-protocol-converter",
-  ActionPayload: {
-    id: "bridge-123",
-    name: "PLC-Bridge",
-    // ... bridge configuration
-  },
-  ActionUUID: crypto.randomUUID()
-};
-
-await fetch('/v2/user/push', {
-  method: 'POST',
-  body: JSON.stringify({
-    Email: user.email,
-    InstanceUUID: instance.id,
-    Content: JSON.stringify(action)
-  })
-});
-```
-
-#### 2. Backend Validates and Queues
-
-```go
-// backend/cmd/v2/user_push.go
-func (h *Handler) UserPush(w http.ResponseWriter, r *http.Request) {
-    var msg models.UMHMessage
-    json.NewDecoder(r.Body).Decode(&msg)
-
-    // Validate message
-    // Queue in Redis for instance to pull
-    h.redis.QueueForInstance(msg.InstanceUUID, msg)
-}
-```
-
-#### 3. umh-core Pulls Action
+#### 1. Communicator Pulls Action
 
 ```go
 // umh-core/pkg/communicator/api/v2/pull/pull.go
@@ -978,7 +389,7 @@ func (p *Puller) Start() {
 }
 ```
 
-#### 4. Agent Routes Action
+#### 2. Agent Routes Action
 
 ```go
 // umh-core/pkg/agent/agent.go
@@ -996,7 +407,7 @@ func (a *Agent) processAction(msg models.UMHMessage) {
 }
 ```
 
-#### 5. FSM Processes Action
+#### 3. FSM Processes Action
 
 ```go
 // umh-core/pkg/fsm/benthos/reconcile.go
@@ -1010,7 +421,7 @@ func (b *BenthosFSM) Reconcile(ctx context.Context) {
 }
 ```
 
-#### 6. S6 Launches benthos-umh
+#### 4. S6 Launches benthos-umh
 
 ```bash
 # umh-core creates service directory
@@ -1021,7 +432,7 @@ func (b *BenthosFSM) Reconcile(ctx context.Context) {
     └── config.yaml        # Generated benthos config
 ```
 
-#### 7. Status Flows Back
+#### 5. Status Flows Back
 
 ```go
 // umh-core/pkg/communicator/api/v2/push/push.go
@@ -1637,64 +1048,6 @@ To trace issues:
 - Rollback creates more problems → Non-idempotent operations
 
 Remember: Every FSM issue has a trigger, a stuck state, and a missing transition. Find all three.
-
-## UI Testing with Playwright MCP
-
-When reproducing or testing UI-related issues, use Playwright MCP for browser automation:
-
-### Setup and Navigation
-```bash
-# Start test environment
-make test-no-copy  # Use current config without copying
-
-# Navigate to Management Console
-mcp__playwright__browser_navigate url: "https://management.umh.app"
-
-# Take screenshots for documentation
-mcp__playwright__browser_take_screenshot fullPage: true, filename: "before-deployment.png"
-```
-
-### Collaborative Workflow
-The most effective approach combines human and AI capabilities:
-
-1. **Human prepares context**: User creates initial setup, navigates to relevant page
-2. **AI traces actions**: Uses browser_snapshot to understand current state
-3. **Human provides credentials**: Login, sensitive data entry
-4. **AI performs repetitive tasks**: Clicking through deployment flows, waiting for timeouts
-5. **Both observe results**: Human confirms visual state, AI analyzes logs
-
-### Key Capabilities
-- **State observation**: `browser_snapshot` provides accessibility tree for navigation
-- **Action automation**: Click buttons, fill forms, wait for conditions
-- **Evidence collection**: Screenshots (though not automatically saved to PR)
-- **Multi-tab handling**: Track deployment dialogs and logs simultaneously
-
-### Testing Protocol Converter Deployments
-```yaml
-# Example reproduction workflow:
-1. Navigate to Data Flows page
-2. Click on protocol converter to edit
-3. Change protocol type (e.g., S7 → Generate)
-4. Click "Save & Deploy"
-5. Monitor deployment dialog for status changes
-6. Wait for timeout/success
-7. Check logs for FSM state transitions
-8. Screenshot final state for documentation
-```
-
-### Best Practices
-- **Always screenshot before/after**: Provides visual evidence for reports
-- **Monitor both UI and logs**: Deployment dialog + backend FSM states
-- **Document timing**: Note when "not existing" states appear
-- **Capture error messages**: Exact text from UI alerts and dialogs
-- **Test multiple scenarios**: Failed deployments, successful deployments, rollbacks
-
-### Limitations and Improvements
-- Screenshots aren't automatically attached to PRs (manual step needed)
-- Browser console errors should be checked with `browser_console_messages`
-- Network requests can be monitored with `browser_network_requests`
-- For complex forms, use `browser_fill_form` for batch field updates
-
 
 ## Important Notes
 
