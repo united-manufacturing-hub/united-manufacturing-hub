@@ -19,7 +19,6 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/container/states"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/container_monitor"
 )
 
@@ -101,5 +100,5 @@ func (w *ContainerWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredSta
 // Called once during worker creation.
 func (w *ContainerWorker) GetInitialState() fsmv2.State {
 	// Container monitoring starts in stopped state
-	return &states.StoppedState{}
+	return &StoppedState{}
 }

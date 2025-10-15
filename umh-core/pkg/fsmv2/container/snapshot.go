@@ -174,11 +174,3 @@ func (o *ContainerObservedState) GetDiskHealth() string {
 func (o *ContainerObservedState) GetTimestampUnix() int64 {
 	return o.CollectedAt.Unix()
 }
-
-// IsHealthy returns true if all health categories are Active.
-func (o *ContainerObservedState) IsHealthy() bool {
-	return o.OverallHealth == models.Active &&
-		o.CPUHealth == models.Active &&
-		o.MemoryHealth == models.Active &&
-		o.DiskHealth == models.Active
-}

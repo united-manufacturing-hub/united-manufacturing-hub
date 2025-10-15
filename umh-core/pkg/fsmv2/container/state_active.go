@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package states
+package container
 
 import (
 	"time"
@@ -42,16 +42,10 @@ func (s *ActiveState) Next(snapshot fsmv2.Snapshot) (fsmv2.State, fsmv2.Signal, 
 		return &DegradedState{reason: "stale metrics data"}, fsmv2.SignalNone, nil
 	}
 
-	// Type assert to access container-specific health check
-	// TODO: Consider moving health check to a more generic interface
-	type healthChecker interface {
-		IsHealthy() bool
-	}
-
-	if checker, ok := observed.(healthChecker); ok {
-		if !checker.IsHealthy() {
-			return &DegradedState{reason: "metrics unhealthy"}, fsmv2.SignalNone, nil
-		}
+	// Check container health metrics
+	containerObserved := observed.(*ContainerObservedState)
+	if !isFullyHealthy(containerObserved) {
+		return &DegradedState{reason: "metrics unhealthy"}, fsmv2.SignalNone, nil
 	}
 
 	// Stay in active state (passive - no action needed)

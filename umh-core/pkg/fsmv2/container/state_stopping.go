@@ -12,35 +12,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package states
+package container
 
 import "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 
-// StartingState represents the transition from stopped to active monitoring.
-// This is a PASSIVE state - no actual startup work needed for monitoring.
-type StartingState struct{}
+// StoppingState represents the transition from active/degraded to stopped monitoring.
+// This is a PASSIVE state - no actual shutdown work needed for monitoring.
+type StoppingState struct{}
 
 // Next evaluates the snapshot and returns the next transition.
-func (s *StartingState) Next(snapshot fsmv2.Snapshot) (fsmv2.State, fsmv2.Signal, fsmv2.Action) {
-	desired := snapshot.Desired
-
-	// ALWAYS check shutdown first
-	if desired.ShutdownRequested() {
-		// Transition to stopping
-		return &StoppingState{}, fsmv2.SignalNone, nil
-	}
-
-	// For container monitoring, starting immediately goes to active
-	// (No actual startup process - monitoring just begins)
-	return &ActiveState{}, fsmv2.SignalNone, nil
+func (s *StoppingState) Next(snapshot fsmv2.Snapshot) (fsmv2.State, fsmv2.Signal, fsmv2.Action) {
+	// For container monitoring, stopping immediately goes to stopped
+	// (No actual shutdown process - monitoring just stops)
+	return &StoppedState{}, fsmv2.SignalNone, nil
 }
 
 // String returns the state name for logging/debugging.
-func (s *StartingState) String() string {
-	return "Starting"
+func (s *StoppingState) String() string {
+	return "Stopping"
 }
 
 // Reason provides context for why we're in this state.
-func (s *StartingState) Reason() string {
-	return "Initializing monitoring"
+func (s *StoppingState) Reason() string {
+	return "Stopping monitoring"
 }

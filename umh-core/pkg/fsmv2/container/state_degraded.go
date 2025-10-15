@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package states
+package container
 
 import (
 	"fmt"
@@ -51,15 +51,10 @@ func (s *DegradedState) Next(snapshot fsmv2.Snapshot) (fsmv2.State, fsmv2.Signal
 	}
 
 	// Data is fresh, check if metrics recovered
-	type healthChecker interface {
-		IsHealthy() bool
-	}
-
-	if checker, ok := observed.(healthChecker); ok {
-		if checker.IsHealthy() {
-			// Metrics recovered, transition back to active
-			return &ActiveState{}, fsmv2.SignalNone, nil
-		}
+	containerObserved := observed.(*ContainerObservedState)
+	if isFullyHealthy(containerObserved) {
+		// Metrics recovered, transition back to active
+		return &ActiveState{}, fsmv2.SignalNone, nil
 	}
 
 	// Still unhealthy, stay degraded (passive - waiting for recovery)
