@@ -48,16 +48,6 @@ func (d *ContainerDesiredState) SetShutdownRequested(requested bool) {
 	d.shutdownRequested = requested
 }
 
-// GetMonitoringEnabled returns whether monitoring is enabled.
-func (d *ContainerDesiredState) GetMonitoringEnabled() bool {
-	return d.MonitoringEnabled
-}
-
-// GetCollectionIntervalMs returns the collection interval in milliseconds.
-func (d *ContainerDesiredState) GetCollectionIntervalMs() int {
-	return d.CollectionIntervalMs
-}
-
 // ContainerObservedState represents the actual state of container monitoring.
 // It mirrors the desired state fields plus additional observed-only fields.
 type ContainerObservedState struct {
@@ -93,84 +83,4 @@ func (o *ContainerObservedState) GetObservedDesiredState() fsmv2.DesiredState {
 // GetTimestamp returns when this observed state was collected.
 func (o *ContainerObservedState) GetTimestamp() time.Time {
 	return o.CollectedAt
-}
-
-// GetMonitoringEnabled returns the observed monitoring enabled state.
-func (o *ContainerObservedState) GetMonitoringEnabled() bool {
-	return o.ObservedDesiredState.MonitoringEnabled
-}
-
-// GetCollectionIntervalMs returns the observed collection interval.
-func (o *ContainerObservedState) GetCollectionIntervalMs() int {
-	return o.ObservedDesiredState.CollectionIntervalMs
-}
-
-// GetCPUUsageMCores returns CPU usage in milli-cores.
-func (o *ContainerObservedState) GetCPUUsageMCores() float64 {
-	return o.CPUUsageMCores
-}
-
-// GetCPUCoreCount returns the number of CPU cores.
-func (o *ContainerObservedState) GetCPUCoreCount() int {
-	return o.CPUCoreCount
-}
-
-// GetCgroupCores returns the cgroup CPU quota in cores.
-func (o *ContainerObservedState) GetCgroupCores() float64 {
-	return o.CgroupCores
-}
-
-// GetThrottleRatio returns the percentage of periods throttled.
-func (o *ContainerObservedState) GetThrottleRatio() float64 {
-	return o.ThrottleRatio
-}
-
-// GetIsThrottled returns whether CPU is currently throttled.
-func (o *ContainerObservedState) GetIsThrottled() bool {
-	return o.IsThrottled
-}
-
-// GetMemoryUsedBytes returns memory used in bytes.
-func (o *ContainerObservedState) GetMemoryUsedBytes() int64 {
-	return o.MemoryUsedBytes
-}
-
-// GetMemoryTotalBytes returns total memory in bytes.
-func (o *ContainerObservedState) GetMemoryTotalBytes() int64 {
-	return o.MemoryTotalBytes
-}
-
-// GetDiskUsedBytes returns disk used in bytes.
-func (o *ContainerObservedState) GetDiskUsedBytes() int64 {
-	return o.DiskUsedBytes
-}
-
-// GetDiskTotalBytes returns total disk in bytes.
-func (o *ContainerObservedState) GetDiskTotalBytes() int64 {
-	return o.DiskTotalBytes
-}
-
-// GetOverallHealth returns the overall health status.
-func (o *ContainerObservedState) GetOverallHealth() string {
-	return o.OverallHealth.String()
-}
-
-// GetCPUHealth returns the CPU health status.
-func (o *ContainerObservedState) GetCPUHealth() string {
-	return o.CPUHealth.String()
-}
-
-// GetMemoryHealth returns the memory health status.
-func (o *ContainerObservedState) GetMemoryHealth() string {
-	return o.MemoryHealth.String()
-}
-
-// GetDiskHealth returns the disk health status.
-func (o *ContainerObservedState) GetDiskHealth() string {
-	return o.DiskHealth.String()
-}
-
-// GetTimestampUnix returns the collection timestamp as Unix timestamp.
-func (o *ContainerObservedState) GetTimestampUnix() int64 {
-	return o.CollectedAt.Unix()
 }
