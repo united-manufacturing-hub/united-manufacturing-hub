@@ -151,6 +151,13 @@ func (s *Supervisor) tick(ctx context.Context) error {
 		return fmt.Errorf("failed to load snapshot: %w", err)
 	}
 
+	// TODO: Evaluate data freshness here (RFC line 109: supervisor responsibility)
+	// age := time.Since(snapshot.Observed.GetTimestamp())
+	// if age > 20*time.Second { snapshot.DataFreshness = Broken; handle restart }
+	// else if age > 10*time.Second { snapshot.DataFreshness = Stale }
+	// else { snapshot.DataFreshness = Fresh }
+	// This moves staleness logic out of states and into supervisor infrastructure layer
+
 	// Call state transition
 	nextState, signal, action := s.currentState.Next(*snapshot)
 

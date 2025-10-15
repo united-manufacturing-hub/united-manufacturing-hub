@@ -34,6 +34,9 @@ func (s *ActiveState) Next(snapshot fsmv2.Snapshot) (fsmv2.State, fsmv2.Signal, 
 		return &StoppingState{}, fsmv2.SignalNone, nil
 	}
 
+	// TODO: Move staleness detection to supervisor (RFC line 109)
+	// Supervisor should compute DataFreshness (Fresh/Stale/Broken) and add it to Snapshot
+	// States should only check snapshot.DataFreshness, not perform timestamp arithmetic
 	// Check if observed state is stale (no updates in 30 seconds)
 	if time.Since(observed.GetTimestamp()) > 30*time.Second {
 		return &DegradedState{reason: "stale metrics data"}, fsmv2.SignalNone, nil
