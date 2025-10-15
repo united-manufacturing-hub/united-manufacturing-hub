@@ -67,6 +67,9 @@ type ContainerObservedState struct {
 	// Observed-only fields (system reality)
 	CPUUsageMCores   float64 // CPU usage in milli-cores
 	CPUCoreCount     int     // Number of CPU cores
+	CgroupCores      float64 // Cgroup CPU quota in cores
+	ThrottleRatio    float64 // Percentage of periods throttled
+	IsThrottled      bool    // Whether CPU is currently throttled
 	MemoryUsedBytes  int64   // Memory used in bytes
 	MemoryTotalBytes int64   // Total memory in bytes
 	DiskUsedBytes    int64   // Disk used in bytes
@@ -110,6 +113,21 @@ func (o *ContainerObservedState) GetCPUUsageMCores() float64 {
 // GetCPUCoreCount returns the number of CPU cores.
 func (o *ContainerObservedState) GetCPUCoreCount() int {
 	return o.CPUCoreCount
+}
+
+// GetCgroupCores returns the cgroup CPU quota in cores.
+func (o *ContainerObservedState) GetCgroupCores() float64 {
+	return o.CgroupCores
+}
+
+// GetThrottleRatio returns the percentage of periods throttled.
+func (o *ContainerObservedState) GetThrottleRatio() float64 {
+	return o.ThrottleRatio
+}
+
+// GetIsThrottled returns whether CPU is currently throttled.
+func (o *ContainerObservedState) GetIsThrottled() bool {
+	return o.IsThrottled
 }
 
 // GetMemoryUsedBytes returns memory used in bytes.

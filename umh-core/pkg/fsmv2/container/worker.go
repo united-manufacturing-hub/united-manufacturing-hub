@@ -63,6 +63,9 @@ func (w *ContainerWorker) CollectObservedState(ctx context.Context) (fsmv2.Obser
 		// Observed-only fields from metrics
 		CPUUsageMCores:   serviceInfo.CPU.TotalUsageMCpu,
 		CPUCoreCount:     serviceInfo.CPU.CoreCount,
+		CgroupCores:      serviceInfo.CPU.CgroupCores,
+		ThrottleRatio:    serviceInfo.CPU.ThrottleRatio,
+		IsThrottled:      serviceInfo.CPU.IsThrottled,
 		MemoryUsedBytes:  serviceInfo.Memory.CGroupUsedBytes,
 		MemoryTotalBytes: serviceInfo.Memory.CGroupTotalBytes,
 		DiskUsedBytes:    serviceInfo.Disk.DataPartitionUsedBytes,
