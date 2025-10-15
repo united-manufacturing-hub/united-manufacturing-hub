@@ -70,7 +70,7 @@ func buildStreamProcessorAsDfc(
 		streamprocessor.OperationalStateDegradedOther:
 		healthCat = models.Degraded
 	case streamprocessor.OperationalStateIdle:
-		healthCat = models.Neutral
+		healthCat = models.Active
 	}
 
 	// Generate UUID from the stream processor name
