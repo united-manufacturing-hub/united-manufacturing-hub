@@ -52,7 +52,7 @@ func (s *DegradedState) Next(snapshot fsmv2.Snapshot) (fsmv2.State, fsmv2.Signal
 
 	// Data is fresh, check if metrics recovered
 	containerObserved := observed.(*ContainerObservedState)
-	if isFullyHealthy(containerObserved) {
+	if IsFullyHealthy(containerObserved) {
 		// Metrics recovered, transition back to active
 		return &ActiveState{}, fsmv2.SignalNone, nil
 	}

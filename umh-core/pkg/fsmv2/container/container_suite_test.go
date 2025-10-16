@@ -12,15 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package container
+package container_test
 
-import "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
+import (
+	"testing"
 
-// IsFullyHealthy returns true when all container health categories are Active.
-// Used by Active and Degraded states for health-based transitions.
-func IsFullyHealthy(observed *ContainerObservedState) bool {
-	return observed.OverallHealth == models.Active &&
-		observed.CPUHealth == models.Active &&
-		observed.MemoryHealth == models.Active &&
-		observed.DiskHealth == models.Active
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+)
+
+func TestContainer(t *testing.T) {
+	RegisterFailHandler(Fail)
+	RunSpecs(t, "Container Suite")
 }
