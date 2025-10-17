@@ -158,7 +158,23 @@ func createSentryEventWithContext(level sentry.Level, err error, context map[str
 				event.Extra[key] = v
 			}
 
-			// If the tag is called operation, add it to the fingerprint
+
+			// Special context keys that affect Sentry fingerprinting for better error grouping.
+			// These keys group errors by their semantic meaning rather than instance-specific data,
+			// making it easier to identify patterns and root causes in Sentry.
+			//
+			// The four fingerprinting keys:
+			// - "operation": What action was being performed (e.g., "reconcile", "create_failure", "status_check")
+			//   Added by: ReportFSMErrorf(), ReportServiceErrorf()
+			// - "fsm_type": Which FSM encountered the error (e.g., "benthosfsm", "s6fsm", "redpandafsm")
+			//   Added by: ReportFSMErrorf()
+			// - "service_type": Which service type had the error (e.g., "benthos", "kafka", "s6")
+			//   Added by: ReportServiceErrorf()
+			// - "trigger": Which code path detected the issue (e.g., "IsBenthosS6Stopped_empty_state")
+			//   Added by: ReportIssueWithContext() in S6 directory health diagnostics
+			//
+			// Example: Instead of creating 51 separate Sentry issues for S6 health problems on different
+			// services, this groups them into 2 issues based on the trigger condition that detected them.
 			if key == "operation" {
 				valueStr := fmt.Sprintf("operation: %v", value)
 				event.Fingerprint = append(event.Fingerprint, valueStr)
@@ -173,6 +189,11 @@ func createSentryEventWithContext(level sentry.Level, err error, context map[str
 				valueStr := fmt.Sprintf("service_type: %v", value)
 				event.Fingerprint = append(event.Fingerprint, valueStr)
 			}
+
+		if key == "trigger" {
+			valueStr := fmt.Sprintf("trigger: %v", value)
+			event.Fingerprint = append(event.Fingerprint, valueStr)
+		}
 		}
 	}
 
