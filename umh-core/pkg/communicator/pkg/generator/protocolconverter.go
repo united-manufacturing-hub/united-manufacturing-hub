@@ -75,7 +75,7 @@ func buildProtocolConverterAsDfc(
 		protocolconverter.OperationalStateDegradedOther:
 		healthCat = models.Degraded
 	case protocolconverter.OperationalStateIdle:
-		healthCat = models.Neutral
+		healthCat = models.Active
 	}
 
 	// Generate UUID from the protocol converter name
@@ -271,7 +271,7 @@ func getHealthCategoryFromState(state string) models.HealthCategory {
 	case connection.OperationalStateDown, connection.OperationalStateDegraded, connection.OperationalStateStopped:
 		return models.Degraded
 	case protocolconverter.OperationalStateIdle:
-		return models.Neutral
+		return models.Active
 	default:
 		return models.Neutral
 	}
