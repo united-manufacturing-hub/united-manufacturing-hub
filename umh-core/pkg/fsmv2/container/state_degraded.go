@@ -16,7 +16,6 @@ package container
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 )
@@ -37,20 +36,7 @@ func (s *DegradedState) Next(snapshot fsmv2.Snapshot) (fsmv2.State, fsmv2.Signal
 		return &StoppingState{}, fsmv2.SignalNone, nil
 	}
 
-	// TODO: Move staleness detection to supervisor (RFC line 109)
-	// Supervisor should compute DataFreshness (Fresh/Stale/Broken) and add it to Snapshot
-	// States should only check snapshot.DataFreshness, not perform timestamp arithmetic
-	// Check if observed state is still stale
-	if time.Since(observed.GetTimestamp()) > 30*time.Second {
-		// Update reason if needed
-		if s.reason != "stale metrics data" {
-			return &DegradedState{reason: "stale metrics data"}, fsmv2.SignalNone, nil
-		}
-		// Stay degraded (passive - waiting for fresh data)
-		return s, fsmv2.SignalNone, nil
-	}
-
-	// Data is fresh, check if metrics recovered
+	// Check if metrics recovered
 	containerObserved := observed.(*ContainerObservedState)
 	if IsFullyHealthy(containerObserved) {
 		// Metrics recovered, transition back to active

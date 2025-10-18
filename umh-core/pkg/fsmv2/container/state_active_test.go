@@ -73,28 +73,6 @@ var _ = Describe("ActiveState", func() {
 			})
 		})
 
-		Context("when observed state is stale", func() {
-			BeforeEach(func() {
-				desired.SetShutdownRequested(false)
-				observed.CollectedAt = time.Now().Add(-31 * time.Second)
-				snapshot = fsmv2.Snapshot{
-					Desired:  desired,
-					Observed: observed,
-				}
-			})
-
-			It("should transition to DegradedState", func() {
-				nextState, _, _ := state.Next(snapshot)
-				Expect(nextState).To(BeAssignableToTypeOf(&container.DegradedState{}))
-			})
-
-			It("should include reason for degraded state", func() {
-				nextState, _, _ := state.Next(snapshot)
-				degradedState := nextState.(*container.DegradedState)
-				Expect(degradedState.Reason()).To(ContainSubstring("stale metrics data"))
-			})
-		})
-
 		Context("when container health is degraded", func() {
 			BeforeEach(func() {
 				desired.SetShutdownRequested(false)

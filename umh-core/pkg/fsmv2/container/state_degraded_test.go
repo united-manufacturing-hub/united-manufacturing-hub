@@ -74,31 +74,6 @@ var _ = Describe("DegradedState", func() {
 			})
 		})
 
-		Context("when observed state is stale", func() {
-			var state *container.DegradedState
-
-			BeforeEach(func() {
-				state = &container.DegradedState{}
-				desired.SetShutdownRequested(false)
-				observed.CollectedAt = time.Now().Add(-31 * time.Second)
-				snapshot = fsmv2.Snapshot{
-					Desired:  desired,
-					Observed: observed,
-				}
-			})
-
-			It("should stay in DegradedState", func() {
-				nextState, _, _ := state.Next(snapshot)
-				Expect(nextState).To(BeAssignableToTypeOf(&container.DegradedState{}))
-			})
-
-			It("should update reason to stale metrics", func() {
-				nextState, _, _ := state.Next(snapshot)
-				degradedState := nextState.(*container.DegradedState)
-				Expect(degradedState.Reason()).To(ContainSubstring("stale metrics data"))
-			})
-		})
-
 		Context("when metrics recovered", func() {
 			var state *container.DegradedState
 
@@ -176,21 +151,6 @@ var _ = Describe("DegradedState", func() {
 			It("should return generic reason", func() {
 				state := &container.DegradedState{}
 				Expect(state.Reason()).To(Equal("Monitoring degraded"))
-			})
-		})
-
-		Context("when reason is set", func() {
-			It("should include specific reason", func() {
-				state := &container.DegradedState{}
-				desired.SetShutdownRequested(false)
-				observed.CollectedAt = time.Now().Add(-31 * time.Second)
-				snapshot = fsmv2.Snapshot{
-					Desired:  desired,
-					Observed: observed,
-				}
-				nextState, _, _ := state.Next(snapshot)
-				degradedState := nextState.(*container.DegradedState)
-				Expect(degradedState.Reason()).To(ContainSubstring("stale metrics data"))
 			})
 		})
 	})
