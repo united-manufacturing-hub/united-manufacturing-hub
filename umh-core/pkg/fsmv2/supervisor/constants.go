@@ -25,5 +25,10 @@ const (
 
 	// DefaultObservationTimeout is the default timeout for observation operations.
 	// Calculated as: observation interval + cgroup throttle buffer + safety margin.
+	//
+	// IMPORTANT: Timeout ordering invariant (I7)
+	// ObservationTimeout < StaleThreshold < CollectorTimeout
+	// This ordering ensures observation failures don't trigger stale detection,
+	// and stale detection occurs before collector restart.
 	DefaultObservationTimeout = DefaultObservationInterval + MaxCgroupThrottlePeriod + 1*time.Second
 )

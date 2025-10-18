@@ -1587,6 +1587,589 @@ var _ = Describe("SQLiteStore", func() {
 		})
 	})
 
+	Context("Find", func() {
+		var store basic.Store
+
+		BeforeEach(func() {
+			var err error
+			store, err = basic.NewSQLiteStore(dbPath)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		AfterEach(func() {
+			if store != nil {
+				_ = store.Close()
+			}
+		})
+
+		It("should find all documents with empty query", func() {
+			ctx := context.Background()
+
+			err := store.CreateCollection(ctx, "test_find_all", nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = store.Insert(ctx, "test_find_all", basic.Document{"name": "doc1"})
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = store.Insert(ctx, "test_find_all", basic.Document{"name": "doc2"})
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = store.Insert(ctx, "test_find_all", basic.Document{"name": "doc3"})
+			Expect(err).NotTo(HaveOccurred())
+
+			query := basic.NewQuery()
+			docs, err := store.Find(ctx, "test_find_all", *query)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(docs).To(HaveLen(3))
+		})
+
+		It("should return empty slice for empty collection", func() {
+			ctx := context.Background()
+
+			err := store.CreateCollection(ctx, "test_find_empty", nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			query := basic.NewQuery()
+			docs, err := store.Find(ctx, "test_find_empty", *query)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(docs).To(HaveLen(0))
+		})
+
+		It("should filter by equality (Eq operator)", func() {
+			ctx := context.Background()
+
+			err := store.CreateCollection(ctx, "test_find_eq", nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = store.Insert(ctx, "test_find_eq", basic.Document{"status": "active", "value": 1})
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = store.Insert(ctx, "test_find_eq", basic.Document{"status": "inactive", "value": 2})
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = store.Insert(ctx, "test_find_eq", basic.Document{"status": "active", "value": 3})
+			Expect(err).NotTo(HaveOccurred())
+
+			query := basic.NewQuery().Filter("status", basic.Eq, "active")
+			docs, err := store.Find(ctx, "test_find_eq", *query)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(docs).To(HaveLen(2))
+			Expect(docs[0]["status"]).To(Equal("active"))
+			Expect(docs[1]["status"]).To(Equal("active"))
+		})
+
+		It("should filter by inequality (Ne operator)", func() {
+			ctx := context.Background()
+
+			err := store.CreateCollection(ctx, "test_find_ne", nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = store.Insert(ctx, "test_find_ne", basic.Document{"status": "active"})
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = store.Insert(ctx, "test_find_ne", basic.Document{"status": "inactive"})
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = store.Insert(ctx, "test_find_ne", basic.Document{"status": "active"})
+			Expect(err).NotTo(HaveOccurred())
+
+			query := basic.NewQuery().Filter("status", basic.Ne, "active")
+			docs, err := store.Find(ctx, "test_find_ne", *query)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(docs).To(HaveLen(1))
+			Expect(docs[0]["status"]).To(Equal("inactive"))
+		})
+
+		It("should filter by greater than (Gt operator)", func() {
+			ctx := context.Background()
+
+			err := store.CreateCollection(ctx, "test_find_gt", nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = store.Insert(ctx, "test_find_gt", basic.Document{"age": 15})
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = store.Insert(ctx, "test_find_gt", basic.Document{"age": 20})
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = store.Insert(ctx, "test_find_gt", basic.Document{"age": 25})
+			Expect(err).NotTo(HaveOccurred())
+
+			query := basic.NewQuery().Filter("age", basic.Gt, 18)
+			docs, err := store.Find(ctx, "test_find_gt", *query)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(docs).To(HaveLen(2))
+		})
+
+		It("should filter by greater than or equal (Gte operator)", func() {
+			ctx := context.Background()
+
+			err := store.CreateCollection(ctx, "test_find_gte", nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = store.Insert(ctx, "test_find_gte", basic.Document{"age": 15})
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = store.Insert(ctx, "test_find_gte", basic.Document{"age": 18})
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = store.Insert(ctx, "test_find_gte", basic.Document{"age": 25})
+			Expect(err).NotTo(HaveOccurred())
+
+			query := basic.NewQuery().Filter("age", basic.Gte, 18)
+			docs, err := store.Find(ctx, "test_find_gte", *query)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(docs).To(HaveLen(2))
+		})
+
+		It("should filter by less than (Lt operator)", func() {
+			ctx := context.Background()
+
+			err := store.CreateCollection(ctx, "test_find_lt", nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = store.Insert(ctx, "test_find_lt", basic.Document{"age": 15})
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = store.Insert(ctx, "test_find_lt", basic.Document{"age": 20})
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = store.Insert(ctx, "test_find_lt", basic.Document{"age": 25})
+			Expect(err).NotTo(HaveOccurred())
+
+			query := basic.NewQuery().Filter("age", basic.Lt, 20)
+			docs, err := store.Find(ctx, "test_find_lt", *query)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(docs).To(HaveLen(1))
+			Expect(docs[0]["age"]).To(BeNumerically("==", 15))
+		})
+
+		It("should filter by less than or equal (Lte operator)", func() {
+			ctx := context.Background()
+
+			err := store.CreateCollection(ctx, "test_find_lte", nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = store.Insert(ctx, "test_find_lte", basic.Document{"age": 15})
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = store.Insert(ctx, "test_find_lte", basic.Document{"age": 20})
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = store.Insert(ctx, "test_find_lte", basic.Document{"age": 25})
+			Expect(err).NotTo(HaveOccurred())
+
+			query := basic.NewQuery().Filter("age", basic.Lte, 20)
+			docs, err := store.Find(ctx, "test_find_lte", *query)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(docs).To(HaveLen(2))
+		})
+
+		It("should filter by In operator", func() {
+			ctx := context.Background()
+
+			err := store.CreateCollection(ctx, "test_find_in", nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = store.Insert(ctx, "test_find_in", basic.Document{"role": "admin"})
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = store.Insert(ctx, "test_find_in", basic.Document{"role": "user"})
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = store.Insert(ctx, "test_find_in", basic.Document{"role": "moderator"})
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = store.Insert(ctx, "test_find_in", basic.Document{"role": "guest"})
+			Expect(err).NotTo(HaveOccurred())
+
+			query := basic.NewQuery().Filter("role", basic.In, []string{"admin", "moderator"})
+			docs, err := store.Find(ctx, "test_find_in", *query)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(docs).To(HaveLen(2))
+		})
+
+		It("should filter by Nin operator", func() {
+			ctx := context.Background()
+
+			err := store.CreateCollection(ctx, "test_find_nin", nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = store.Insert(ctx, "test_find_nin", basic.Document{"role": "admin"})
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = store.Insert(ctx, "test_find_nin", basic.Document{"role": "user"})
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = store.Insert(ctx, "test_find_nin", basic.Document{"role": "moderator"})
+			Expect(err).NotTo(HaveOccurred())
+
+			query := basic.NewQuery().Filter("role", basic.Nin, []string{"admin", "moderator"})
+			docs, err := store.Find(ctx, "test_find_nin", *query)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(docs).To(HaveLen(1))
+			Expect(docs[0]["role"]).To(Equal("user"))
+		})
+
+		It("should sort by field ascending", func() {
+			ctx := context.Background()
+
+			err := store.CreateCollection(ctx, "test_find_sort_asc", nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			id1, err := store.Insert(ctx, "test_find_sort_asc", basic.Document{"value": 30})
+			Expect(err).NotTo(HaveOccurred())
+
+			id2, err := store.Insert(ctx, "test_find_sort_asc", basic.Document{"value": 10})
+			Expect(err).NotTo(HaveOccurred())
+
+			id3, err := store.Insert(ctx, "test_find_sort_asc", basic.Document{"value": 20})
+			Expect(err).NotTo(HaveOccurred())
+
+			query := basic.NewQuery().Sort("id", basic.Asc)
+			docs, err := store.Find(ctx, "test_find_sort_asc", *query)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(docs).To(HaveLen(3))
+
+			if id1 < id2 && id2 < id3 {
+				Expect(docs[0]["value"]).To(BeNumerically("==", 30))
+				Expect(docs[1]["value"]).To(BeNumerically("==", 10))
+				Expect(docs[2]["value"]).To(BeNumerically("==", 20))
+			}
+		})
+
+		It("should sort by field descending", func() {
+			ctx := context.Background()
+
+			err := store.CreateCollection(ctx, "test_find_sort_desc", nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			id1, err := store.Insert(ctx, "test_find_sort_desc", basic.Document{"value": 30})
+			Expect(err).NotTo(HaveOccurred())
+
+			id2, err := store.Insert(ctx, "test_find_sort_desc", basic.Document{"value": 10})
+			Expect(err).NotTo(HaveOccurred())
+
+			id3, err := store.Insert(ctx, "test_find_sort_desc", basic.Document{"value": 20})
+			Expect(err).NotTo(HaveOccurred())
+
+			query := basic.NewQuery().Sort("id", basic.Desc)
+			docs, err := store.Find(ctx, "test_find_sort_desc", *query)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(docs).To(HaveLen(3))
+
+			if id1 < id2 && id2 < id3 {
+				Expect(docs[0]["value"]).To(BeNumerically("==", 20))
+				Expect(docs[1]["value"]).To(BeNumerically("==", 10))
+				Expect(docs[2]["value"]).To(BeNumerically("==", 30))
+			}
+		})
+
+		It("should apply limit", func() {
+			ctx := context.Background()
+
+			err := store.CreateCollection(ctx, "test_find_limit", nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			for i := range 10 {
+				_, err = store.Insert(ctx, "test_find_limit", basic.Document{"index": i})
+				Expect(err).NotTo(HaveOccurred())
+			}
+
+			query := basic.NewQuery().Limit(5)
+			docs, err := store.Find(ctx, "test_find_limit", *query)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(docs).To(HaveLen(5))
+		})
+
+		It("should apply skip (offset)", func() {
+			ctx := context.Background()
+
+			err := store.CreateCollection(ctx, "test_find_skip", nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			for i := range 10 {
+				_, err = store.Insert(ctx, "test_find_skip", basic.Document{"index": i})
+				Expect(err).NotTo(HaveOccurred())
+			}
+
+			query := basic.NewQuery().Skip(7)
+			docs, err := store.Find(ctx, "test_find_skip", *query)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(docs).To(HaveLen(3))
+		})
+
+		It("should apply limit and skip for pagination", func() {
+			ctx := context.Background()
+
+			err := store.CreateCollection(ctx, "test_find_pagination", nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			for i := range 10 {
+				_, err = store.Insert(ctx, "test_find_pagination", basic.Document{"index": i})
+				Expect(err).NotTo(HaveOccurred())
+			}
+
+			query := basic.NewQuery().Limit(3).Skip(3)
+			docs, err := store.Find(ctx, "test_find_pagination", *query)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(docs).To(HaveLen(3))
+		})
+
+		It("should combine multiple filters (AND logic)", func() {
+			ctx := context.Background()
+
+			err := store.CreateCollection(ctx, "test_find_and", nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = store.Insert(ctx, "test_find_and", basic.Document{"status": "active", "age": 15})
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = store.Insert(ctx, "test_find_and", basic.Document{"status": "active", "age": 25})
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = store.Insert(ctx, "test_find_and", basic.Document{"status": "inactive", "age": 25})
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = store.Insert(ctx, "test_find_and", basic.Document{"status": "active", "age": 30})
+			Expect(err).NotTo(HaveOccurred())
+
+			query := basic.NewQuery().
+				Filter("status", basic.Eq, "active").
+				Filter("age", basic.Gte, 18)
+			docs, err := store.Find(ctx, "test_find_and", *query)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(docs).To(HaveLen(2))
+		})
+
+		It("should combine filters, sorting, and pagination", func() {
+			ctx := context.Background()
+
+			err := store.CreateCollection(ctx, "test_find_complex", nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			for i := range 20 {
+				status := "active"
+				if i%3 == 0 {
+					status = "inactive"
+				}
+				_, err = store.Insert(ctx, "test_find_complex", basic.Document{
+					"status": status,
+					"value": i,
+				})
+				Expect(err).NotTo(HaveOccurred())
+			}
+
+			query := basic.NewQuery().
+				Filter("status", basic.Eq, "active").
+				Sort("id", basic.Asc).
+				Limit(5).
+				Skip(2)
+			docs, err := store.Find(ctx, "test_find_complex", *query)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(docs).To(HaveLen(5))
+			for _, doc := range docs {
+				Expect(doc["status"]).To(Equal("active"))
+			}
+		})
+
+		It("should return empty result set when no documents match filter", func() {
+			ctx := context.Background()
+
+			err := store.CreateCollection(ctx, "test_find_no_match", nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = store.Insert(ctx, "test_find_no_match", basic.Document{"status": "active"})
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = store.Insert(ctx, "test_find_no_match", basic.Document{"status": "inactive"})
+			Expect(err).NotTo(HaveOccurred())
+
+			query := basic.NewQuery().Filter("status", basic.Eq, "nonexistent")
+			docs, err := store.Find(ctx, "test_find_no_match", *query)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(docs).To(HaveLen(0))
+		})
+
+		It("should fail when store is closed", func() {
+			ctx := context.Background()
+
+			err := store.CreateCollection(ctx, "test_find_closed", nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			_ = store.Close()
+
+			query := basic.NewQuery()
+			_, err = store.Find(ctx, "test_find_closed", *query)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("store is closed"))
+		})
+
+		It("should filter by float comparison", func() {
+			ctx := context.Background()
+
+			err := store.CreateCollection(ctx, "test_find_float", nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = store.Insert(ctx, "test_find_float", basic.Document{"temperature": 15.5})
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = store.Insert(ctx, "test_find_float", basic.Document{"temperature": 20.3})
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = store.Insert(ctx, "test_find_float", basic.Document{"temperature": 25.7})
+			Expect(err).NotTo(HaveOccurred())
+
+			query := basic.NewQuery().Filter("temperature", basic.Gt, 18.0)
+			docs, err := store.Find(ctx, "test_find_float", *query)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(docs).To(HaveLen(2))
+		})
+
+		It("should filter by string comparison", func() {
+			ctx := context.Background()
+
+			err := store.CreateCollection(ctx, "test_find_string", nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = store.Insert(ctx, "test_find_string", basic.Document{"name": "alice"})
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = store.Insert(ctx, "test_find_string", basic.Document{"name": "bob"})
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = store.Insert(ctx, "test_find_string", basic.Document{"name": "charlie"})
+			Expect(err).NotTo(HaveOccurred())
+
+			query := basic.NewQuery().Filter("name", basic.Gt, "alice")
+			docs, err := store.Find(ctx, "test_find_string", *query)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(docs).To(HaveLen(2))
+		})
+	})
+
+	Context("Transaction Find", func() {
+		var store basic.Store
+
+		BeforeEach(func() {
+			var err error
+			store, err = basic.NewSQLiteStore(dbPath)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		AfterEach(func() {
+			if store != nil {
+				_ = store.Close()
+			}
+		})
+
+		It("should find documents within transaction", func() {
+			ctx := context.Background()
+
+			err := store.CreateCollection(ctx, "tx_find", nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = store.Insert(ctx, "tx_find", basic.Document{"status": "active"})
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = store.Insert(ctx, "tx_find", basic.Document{"status": "inactive"})
+			Expect(err).NotTo(HaveOccurred())
+
+			tx, err := store.BeginTx(ctx)
+			Expect(err).NotTo(HaveOccurred())
+			defer func() { _ = tx.Rollback() }()
+
+			query := basic.NewQuery().Filter("status", basic.Eq, "active")
+			docs, err := tx.Find(ctx, "tx_find", *query)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(docs).To(HaveLen(1))
+			Expect(docs[0]["status"]).To(Equal("active"))
+
+			err = tx.Commit()
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should find documents inserted in same transaction", func() {
+			ctx := context.Background()
+
+			err := store.CreateCollection(ctx, "tx_find_insert", nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			tx, err := store.BeginTx(ctx)
+			Expect(err).NotTo(HaveOccurred())
+			defer func() { _ = tx.Rollback() }()
+
+			_, err = tx.Insert(ctx, "tx_find_insert", basic.Document{"name": "doc1"})
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = tx.Insert(ctx, "tx_find_insert", basic.Document{"name": "doc2"})
+			Expect(err).NotTo(HaveOccurred())
+
+			query := basic.NewQuery()
+			docs, err := tx.Find(ctx, "tx_find_insert", *query)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(docs).To(HaveLen(2))
+
+			err = tx.Commit()
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should fail when transaction is closed", func() {
+			ctx := context.Background()
+
+			err := store.CreateCollection(ctx, "tx_find_closed", nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			tx, err := store.BeginTx(ctx)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = tx.Commit()
+			Expect(err).NotTo(HaveOccurred())
+
+			query := basic.NewQuery()
+			_, err = tx.Find(ctx, "tx_find_closed", *query)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("transaction is closed"))
+		})
+
+		It("should apply filters and sorting in transaction", func() {
+			ctx := context.Background()
+
+			err := store.CreateCollection(ctx, "tx_find_complex", nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			tx, err := store.BeginTx(ctx)
+			Expect(err).NotTo(HaveOccurred())
+			defer func() { _ = tx.Rollback() }()
+
+			for i := range 10 {
+				status := "active"
+				if i%2 == 0 {
+					status = "inactive"
+				}
+				_, err = tx.Insert(ctx, "tx_find_complex", basic.Document{
+					"status": status,
+					"value": i,
+				})
+				Expect(err).NotTo(HaveOccurred())
+			}
+
+			query := basic.NewQuery().
+				Filter("status", basic.Eq, "active").
+				Sort("id", basic.Asc).
+				Limit(3)
+			docs, err := tx.Find(ctx, "tx_find_complex", *query)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(docs).To(HaveLen(3))
+			for _, doc := range docs {
+				Expect(doc["status"]).To(Equal("active"))
+			}
+
+			err = tx.Commit()
+			Expect(err).NotTo(HaveOccurred())
+		})
+	})
+
 	Context("Transaction Delete", func() {
 		var store basic.Store
 

@@ -115,4 +115,57 @@ var _ = Describe("Supervisor Configuration", func() {
 			}).To(Panic())
 		})
 	})
+
+	Context("timeout ordering validation (I7)", func() {
+		It("should panic when ObservationTimeout >= StaleThreshold", func() {
+			Expect(func() {
+				supervisor.NewSupervisor(supervisor.Config{
+					Worker:   &mockWorker{},
+					Identity: mockIdentity(),
+					Store:    &mockStore{},
+					Logger:   zap.NewNop().Sugar(),
+					CollectorHealth: supervisor.CollectorHealthConfig{
+						ObservationTimeout: 10 * time.Second,
+						StaleThreshold:     10 * time.Second,
+						Timeout:            20 * time.Second,
+						MaxRestartAttempts: 3,
+					},
+				})
+			}).To(Panic())
+		})
+
+		It("should panic when StaleThreshold >= CollectorTimeout", func() {
+			Expect(func() {
+				supervisor.NewSupervisor(supervisor.Config{
+					Worker:   &mockWorker{},
+					Identity: mockIdentity(),
+					Store:    &mockStore{},
+					Logger:   zap.NewNop().Sugar(),
+					CollectorHealth: supervisor.CollectorHealthConfig{
+						ObservationTimeout: 1 * time.Second,
+						StaleThreshold:     15 * time.Second,
+						Timeout:            15 * time.Second,
+						MaxRestartAttempts: 3,
+					},
+				})
+			}).To(Panic())
+		})
+
+		It("should accept valid timeout ordering", func() {
+			Expect(func() {
+				supervisor.NewSupervisor(supervisor.Config{
+					Worker:   &mockWorker{},
+					Identity: mockIdentity(),
+					Store:    &mockStore{},
+					Logger:   zap.NewNop().Sugar(),
+					CollectorHealth: supervisor.CollectorHealthConfig{
+						ObservationTimeout: 1 * time.Second,
+						StaleThreshold:     5 * time.Second,
+						Timeout:            10 * time.Second,
+						MaxRestartAttempts: 3,
+					},
+				})
+			}).NotTo(Panic())
+		})
+	})
 })

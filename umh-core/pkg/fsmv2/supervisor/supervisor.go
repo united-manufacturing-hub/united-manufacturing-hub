@@ -53,6 +53,12 @@ import (
 //     WHY:  Must escalate to shutdown after max attempts, not retry forever
 //     ENFORCED: tick() logic ensures this + RestartCollector() panics if violated
 //
+// I7: timeout ordering validation
+//     MUST: ObservationTimeout < StaleThreshold < CollectorTimeout
+//     WHY:  Observation failures must not trigger stale detection, and stale detection
+//           must occur before collector restart
+//     ENFORCED: NewSupervisor() panics if configuration violates this ordering
+//
 // =============================================================================
 
 // CollectorHealth tracks the health and restart state of the observation collector.
@@ -96,6 +102,12 @@ type Supervisor struct {
 // blocked operations, or infrastructure problems. These settings control when to
 // pause the FSM (stale data) and when to restart the collector (timeout).
 type CollectorHealthConfig struct {
+	// ObservationTimeout is the maximum time allowed for a single observation operation.
+	// If an observation takes longer than this, it is cancelled and considered failed.
+	// Must be less than StaleThreshold to ensure observation failures don't trigger stale detection.
+	// Default: ~1.3 seconds (see DefaultObservationTimeout in constants.go)
+	ObservationTimeout time.Duration
+
 	// StaleThreshold is how old observation data can be before FSM pauses.
 	// When exceeded, supervisor stops calling state.Next() but does not restart collector.
 	// Default: 10 seconds (see DefaultStaleThreshold in constants.go)
@@ -151,6 +163,11 @@ func NewSupervisor(cfg Config) *Supervisor {
 		tickInterval = DefaultTickInterval
 	}
 
+	observationTimeout := cfg.CollectorHealth.ObservationTimeout
+	if observationTimeout == 0 {
+		observationTimeout = DefaultObservationTimeout
+	}
+
 	staleThreshold := cfg.CollectorHealth.StaleThreshold
 	if staleThreshold == 0 {
 		staleThreshold = DefaultStaleThreshold
@@ -179,6 +196,14 @@ func NewSupervisor(cfg Config) *Supervisor {
 		panic(fmt.Sprintf("supervisor config error: maxRestartAttempts must be positive, got %d", maxRestartAttempts))
 	}
 
+	// I7: Validate timeout ordering (ObservationTimeout < StaleThreshold < CollectorTimeout)
+	if observationTimeout >= staleThreshold {
+		panic(fmt.Sprintf("supervisor config error: observationTimeout (%v) must be less than staleThreshold (%v)", observationTimeout, staleThreshold))
+	}
+
+	cfg.Logger.Infof("Supervisor timeout configuration: ObservationTimeout=%v, StaleThreshold=%v, CollectorTimeout=%v",
+		observationTimeout, staleThreshold, timeout)
+
 	freshnessChecker := NewFreshnessChecker(staleThreshold, timeout, cfg.Logger)
 
 	collector := NewCollector(CollectorConfig{
@@ -187,7 +212,7 @@ func NewSupervisor(cfg Config) *Supervisor {
 		Store:               cfg.Store,
 		Logger:              cfg.Logger,
 		ObservationInterval: DefaultObservationInterval,
-		ObservationTimeout:  DefaultObservationTimeout,
+		ObservationTimeout:  observationTimeout,
 	})
 
 	return &Supervisor{

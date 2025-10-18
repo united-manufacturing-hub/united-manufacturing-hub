@@ -213,9 +213,9 @@ func (s *sqliteStore) Find(ctx context.Context, collection string, query Query) 
 		return nil, errors.New("store is closed")
 	}
 
-	sqlQuery := `SELECT data FROM ` + collection
+	sqlQuery, args := buildSQLQuery(collection, query)
 
-	rows, err := s.db.QueryContext(ctx, sqlQuery)
+	rows, err := s.db.QueryContext(ctx, sqlQuery, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to find documents: %w", err)
 	}
@@ -242,7 +242,7 @@ func (s *sqliteStore) Find(ctx context.Context, collection string, query Query) 
 		return nil, fmt.Errorf("rows error: %w", err)
 	}
 
-	return documents, nil
+	return applyClientSideOperations(documents, query), nil
 }
 
 func (s *sqliteStore) BeginTx(ctx context.Context) (Tx, error) {
@@ -429,9 +429,9 @@ func (t *sqliteTx) Find(ctx context.Context, collection string, query Query) ([]
 		return nil, errors.New("transaction is closed")
 	}
 
-	sqlQuery := `SELECT data FROM ` + collection
+	sqlQuery, args := buildSQLQuery(collection, query)
 
-	rows, err := t.tx.QueryContext(ctx, sqlQuery)
+	rows, err := t.tx.QueryContext(ctx, sqlQuery, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to find documents: %w", err)
 	}
@@ -458,7 +458,7 @@ func (t *sqliteTx) Find(ctx context.Context, collection string, query Query) ([]
 		return nil, fmt.Errorf("rows error: %w", err)
 	}
 
-	return documents, nil
+	return applyClientSideOperations(documents, query), nil
 }
 
 func (t *sqliteTx) BeginTx(ctx context.Context) (Tx, error) {
@@ -493,4 +493,182 @@ func (t *sqliteTx) Rollback() error {
 	}
 
 	return nil
+}
+
+func buildSQLQuery(collection string, query Query) (string, []interface{}) {
+	sqlQuery := `SELECT data FROM ` + collection
+
+	var args []interface{}
+
+	if len(query.SortBy) > 0 {
+		sqlQuery += ` ORDER BY `
+		for i, sortField := range query.SortBy {
+			if i > 0 {
+				sqlQuery += `, `
+			}
+			sqlQuery += `id `
+			if sortField.Order == Desc {
+				sqlQuery += `DESC`
+			} else {
+				sqlQuery += `ASC`
+			}
+		}
+	}
+
+	return sqlQuery, args
+}
+
+func applyClientSideOperations(documents []Document, query Query) []Document {
+	filtered := documents
+	if len(query.Filters) > 0 {
+		filtered = make([]Document, 0, len(documents))
+		for _, doc := range documents {
+			if matchesAllFilters(doc, query.Filters) {
+				filtered = append(filtered, doc)
+			}
+		}
+	}
+
+	if query.SkipCount > 0 {
+		if query.SkipCount >= len(filtered) {
+			return []Document{}
+		}
+		filtered = filtered[query.SkipCount:]
+	}
+
+	if query.LimitCount > 0 && query.LimitCount < len(filtered) {
+		filtered = filtered[:query.LimitCount]
+	}
+
+	return filtered
+}
+
+func matchesAllFilters(doc Document, filters []FilterCondition) bool {
+	for _, filter := range filters {
+		if !matchesFilter(doc, filter) {
+			return false
+		}
+	}
+
+	return true
+}
+
+func matchesFilter(doc Document, filter FilterCondition) bool {
+	value, exists := doc[filter.Field]
+	if !exists {
+		return filter.Op == Ne || filter.Op == Nin
+	}
+
+	switch filter.Op {
+	case Eq:
+		return value == filter.Value
+
+	case Ne:
+		return value != filter.Value
+
+	case Gt:
+		return compareValues(value, filter.Value) > 0
+
+	case Gte:
+		return compareValues(value, filter.Value) >= 0
+
+	case Lt:
+		return compareValues(value, filter.Value) < 0
+
+	case Lte:
+		return compareValues(value, filter.Value) <= 0
+
+	case In:
+		return valueInArray(value, filter.Value)
+
+	case Nin:
+		return !valueInArray(value, filter.Value)
+
+	default:
+		return false
+	}
+}
+
+func compareValues(a, b interface{}) int {
+	switch aVal := a.(type) {
+	case int:
+		if bVal, ok := b.(int); ok {
+			if aVal < bVal {
+				return -1
+			}
+			if aVal > bVal {
+				return 1
+			}
+
+			return 0
+		}
+	case float64:
+		var bVal float64
+		switch bTyped := b.(type) {
+		case float64:
+			bVal = bTyped
+		case int:
+			bVal = float64(bTyped)
+		default:
+			return 0
+		}
+		if aVal < bVal {
+			return -1
+		}
+		if aVal > bVal {
+			return 1
+		}
+
+		return 0
+	case string:
+		if bVal, ok := b.(string); ok {
+			if aVal < bVal {
+				return -1
+			}
+			if aVal > bVal {
+				return 1
+			}
+
+			return 0
+		}
+	}
+
+	return 0
+}
+
+func valueInArray(value interface{}, arrayInterface interface{}) bool {
+	switch arr := arrayInterface.(type) {
+	case []interface{}:
+		for _, item := range arr {
+			if value == item {
+				return true
+			}
+		}
+	case []string:
+		if strVal, ok := value.(string); ok {
+			for _, item := range arr {
+				if strVal == item {
+					return true
+				}
+			}
+		}
+	case []int:
+		if intVal, ok := value.(int); ok {
+			for _, item := range arr {
+				if intVal == item {
+					return true
+				}
+			}
+		}
+	case []float64:
+		if floatVal, ok := value.(float64); ok {
+			for _, item := range arr {
+				if floatVal == item {
+					return true
+				}
+			}
+		}
+	}
+
+	return false
 }
