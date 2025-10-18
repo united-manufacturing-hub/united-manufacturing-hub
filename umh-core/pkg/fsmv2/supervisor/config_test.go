@@ -49,4 +49,70 @@ var _ = Describe("Supervisor Configuration", func() {
 			Expect(s.GetMaxRestartAttempts()).To(Equal(5))
 		})
 	})
+
+	Context("when creating supervisor with invalid config", func() {
+		It("should panic when staleThreshold is negative", func() {
+			Expect(func() {
+				supervisor.NewSupervisor(supervisor.Config{
+					Worker:   &mockWorker{},
+					Identity: mockIdentity(),
+					Store:    &mockStore{},
+					Logger:   zap.NewNop().Sugar(),
+					CollectorHealth: supervisor.CollectorHealthConfig{
+						StaleThreshold:     -5 * time.Second,
+						Timeout:            20 * time.Second,
+						MaxRestartAttempts: 3,
+					},
+				})
+			}).To(Panic())
+		})
+
+		It("should panic when timeout equals staleThreshold", func() {
+			Expect(func() {
+				supervisor.NewSupervisor(supervisor.Config{
+					Worker:   &mockWorker{},
+					Identity: mockIdentity(),
+					Store:    &mockStore{},
+					Logger:   zap.NewNop().Sugar(),
+					CollectorHealth: supervisor.CollectorHealthConfig{
+						StaleThreshold:     10 * time.Second,
+						Timeout:            10 * time.Second,
+						MaxRestartAttempts: 3,
+					},
+				})
+			}).To(Panic())
+		})
+
+		It("should panic when timeout is less than staleThreshold", func() {
+			Expect(func() {
+				supervisor.NewSupervisor(supervisor.Config{
+					Worker:   &mockWorker{},
+					Identity: mockIdentity(),
+					Store:    &mockStore{},
+					Logger:   zap.NewNop().Sugar(),
+					CollectorHealth: supervisor.CollectorHealthConfig{
+						StaleThreshold:     20 * time.Second,
+						Timeout:            10 * time.Second,
+						MaxRestartAttempts: 3,
+					},
+				})
+			}).To(Panic())
+		})
+
+		It("should panic when maxRestartAttempts is negative", func() {
+			Expect(func() {
+				supervisor.NewSupervisor(supervisor.Config{
+					Worker:   &mockWorker{},
+					Identity: mockIdentity(),
+					Store:    &mockStore{},
+					Logger:   zap.NewNop().Sugar(),
+					CollectorHealth: supervisor.CollectorHealthConfig{
+						StaleThreshold:     10 * time.Second,
+						Timeout:            20 * time.Second,
+						MaxRestartAttempts: -1,
+					},
+				})
+			}).To(Panic())
+		})
+	})
 })

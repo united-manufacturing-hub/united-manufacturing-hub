@@ -167,9 +167,23 @@ type State interface {
 //  6. Supervisor removes worker from system
 type Worker interface {
 	// CollectObservedState monitors the actual system state.
-	// Called in a separate goroutine, can block for long periods.
-	// Should periodically update observations (e.g., process status, metrics).
-	// Errors are logged but don't stop the FSM - supervisor handles staleness.
+	// Called in a separate goroutine with timeout protection.
+	//
+	// Context Handling (Invariant I6):
+	//   - MUST respect context cancellation within grace period (5 seconds)
+	//   - Failure to exit after context cancellation will cause panic
+	//   - This enforces proper async operation lifecycle management
+	//
+	// Timeout Protection:
+	//   - Wrapped with per-operation timeout (observation interval + cgroup buffer + margin)
+	//   - Default: 1s interval + 200ms cgroup throttle + 1s margin = 2.2s timeout
+	//   - Accounts for Docker/Kubernetes CPU throttling (100ms cgroup period)
+	//   - Operations exceeding timeout are cancelled automatically
+	//
+	// Error Handling:
+	//   - Errors are logged but don't stop the FSM
+	//   - Supervisor handles staleness via FreshnessChecker
+	//   - Repeated timeouts trigger collector restart with backoff
 	//
 	// Upgrade Notice from fsm: this function replaces the whole `_monitor` logic
 	//

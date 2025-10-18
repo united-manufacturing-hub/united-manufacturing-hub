@@ -32,7 +32,7 @@ var _ = Describe("Collector Restart Logic", func() {
 	})
 
 	Context("when max restart attempts exceeded", func() {
-		It("should return error", func() {
+		It("should panic", func() {
 			s := supervisor.NewSupervisor(supervisor.Config{
 				Worker:   &mockWorker{},
 				Identity: mockIdentity(),
@@ -45,10 +45,9 @@ var _ = Describe("Collector Restart Logic", func() {
 
 			s.SetRestartCount(3)
 
-			err := s.RestartCollector(context.Background())
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("exceeded max attempts"))
-			Expect(s.GetRestartCount()).To(Equal(3))
+			Expect(func() {
+				_ = s.RestartCollector(context.Background())
+			}).To(Panic())
 		})
 	})
 

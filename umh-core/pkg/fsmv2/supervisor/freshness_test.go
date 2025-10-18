@@ -11,71 +11,58 @@ import (
 	"go.uber.org/zap"
 )
 
-var _ = Describe("Data Freshness Checking", func() {
-	var (
-		s        *supervisor.Supervisor
-		snapshot *fsmv2.Snapshot
-	)
-
-	BeforeEach(func() {
-		snapshot = &fsmv2.Snapshot{
-			Identity: mockIdentity(),
-			Desired:  &mockDesiredState{},
-		}
-	})
-
+var _ = Describe("FreshnessChecker", func() {
 	Context("when observation data is fresh", func() {
 		It("should return true", func() {
-			s = supervisor.NewSupervisor(supervisor.Config{
-				Worker:   &mockWorker{},
+			checker := supervisor.NewFreshnessChecker(
+				10*time.Second,
+				20*time.Second,
+				zap.NewNop().Sugar(),
+			)
+
+			snapshot := &fsmv2.Snapshot{
 				Identity: mockIdentity(),
-				Store:    &mockStore{},
-				Logger:   zap.NewNop().Sugar(),
-				CollectorHealth: supervisor.CollectorHealthConfig{
-					StaleThreshold: 10 * time.Second,
-				},
-			})
+				Observed: &mockObservedState{timestamp: time.Now()},
+				Desired:  &mockDesiredState{},
+			}
 
-			snapshot.Observed = &mockObservedState{timestamp: time.Now()}
-
-			Expect(s.CheckDataFreshness(snapshot)).To(BeTrue())
+			Expect(checker.Check(snapshot)).To(BeTrue())
 		})
 	})
 
 	Context("when observation data is stale", func() {
 		It("should return false", func() {
-			s = supervisor.NewSupervisor(supervisor.Config{
-				Worker:   &mockWorker{},
+			checker := supervisor.NewFreshnessChecker(
+				10*time.Second,
+				20*time.Second,
+				zap.NewNop().Sugar(),
+			)
+
+			snapshot := &fsmv2.Snapshot{
 				Identity: mockIdentity(),
-				Store:    &mockStore{},
-				Logger:   zap.NewNop().Sugar(),
-				CollectorHealth: supervisor.CollectorHealthConfig{
-					StaleThreshold: 10 * time.Second,
-					Timeout:        20 * time.Second,
-				},
-			})
+				Observed: &mockObservedState{timestamp: time.Now().Add(-15 * time.Second)},
+				Desired:  &mockDesiredState{},
+			}
 
-			snapshot.Observed = &mockObservedState{timestamp: time.Now().Add(-15 * time.Second)}
-
-			Expect(s.CheckDataFreshness(snapshot)).To(BeFalse())
+			Expect(checker.Check(snapshot)).To(BeFalse())
 		})
 	})
 
 	Context("when observation data has timed out", func() {
-		It("should return false", func() {
-			s = supervisor.NewSupervisor(supervisor.Config{
-				Worker:   &mockWorker{},
+		It("should detect timeout", func() {
+			checker := supervisor.NewFreshnessChecker(
+				10*time.Second,
+				20*time.Second,
+				zap.NewNop().Sugar(),
+			)
+
+			snapshot := &fsmv2.Snapshot{
 				Identity: mockIdentity(),
-				Store:    &mockStore{},
-				Logger:   zap.NewNop().Sugar(),
-				CollectorHealth: supervisor.CollectorHealthConfig{
-					Timeout: 20 * time.Second,
-				},
-			})
+				Observed: &mockObservedState{timestamp: time.Now().Add(-25 * time.Second)},
+				Desired:  &mockDesiredState{},
+			}
 
-			snapshot.Observed = &mockObservedState{timestamp: time.Now().Add(-25 * time.Second)}
-
-			Expect(s.CheckDataFreshness(snapshot)).To(BeFalse())
+			Expect(checker.IsTimeout(snapshot)).To(BeTrue())
 		})
 	})
 })
