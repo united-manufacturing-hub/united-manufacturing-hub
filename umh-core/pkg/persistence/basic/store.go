@@ -304,6 +304,52 @@ type Store interface {
 	//   - error: if query is invalid or execution fails
 	Find(ctx context.Context, collection string, query Query) ([]Document, error)
 
+	// Maintenance performs database optimization and cleanup operations.
+	//
+	// DESIGN DECISION: Abstract maintenance interface, not backend-specific operations
+	// WHY: Different backends have different housekeeping needs:
+	//   - SQLite: VACUUM (defragment), ANALYZE (update statistics)
+	//   - Postgres: VACUUM, ANALYZE, REINDEX
+	//   - MongoDB: compact, repairDatabase
+	// Providing unified interface allows backends to run appropriate operations.
+	//
+	// BLOCKING BEHAVIOR:
+	//   ⚠️  May block ALL database operations during execution (seconds to minutes)
+	//   - SQLite VACUUM: Requires exclusive lock, blocks reads AND writes
+	//   - Postgres VACUUM: Blocks table updates (reads continue)
+	//   - Backend implementations document their specific blocking behavior
+	//
+	// REQUIREMENTS:
+	//   - MUST respect context cancellation/timeout
+	//   - MUST be idempotent (safe to call multiple times)
+	//   - SHOULD log operations performed for observability
+	//
+	// USAGE PATTERNS:
+	//   - Automatic: Close() may call Maintenance() during shutdown
+	//   - Manual: Orchestrator calls during maintenance window
+	//   - Scheduled: External cron/scheduler triggers periodic maintenance
+	//
+	// COORDINATION:
+	//   Caller is responsible for coordinating with application:
+	//   - Pause FSM workers before calling
+	//   - Drain request queues
+	//   - Wait for in-flight operations to complete
+	//
+	// Example:
+	//
+	//	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	//	defer cancel()
+	//	if err := store.Maintenance(ctx); err != nil {
+	//	    log.Error("maintenance failed", "error", err)
+	//	}
+	//
+	// Returns:
+	//   - nil on success
+	//   - context.DeadlineExceeded if timeout exceeded
+	//   - context.Canceled if context cancelled
+	//   - backend-specific errors (disk full, permissions, corruption)
+	Maintenance(ctx context.Context) error
+
 	// BeginTx starts a transaction for atomic multi-document operations.
 	//
 	// DESIGN DECISION: Explicit transactions, not implicit/auto-commit
