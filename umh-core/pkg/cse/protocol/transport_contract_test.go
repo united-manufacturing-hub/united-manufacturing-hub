@@ -1,4 +1,4 @@
-package cse_test
+package protocol_test
 
 import (
 	"context"
@@ -8,14 +8,14 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence/cse"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/protocol"
 )
 
-func RunTransportContractTests(factory func() cse.Transport) {
+func RunTransportContractTests(factory func() protocol.Transport) {
 	var (
 		ctx       context.Context
 		cancel    context.CancelFunc
-		transport cse.Transport
+		transport protocol.Transport
 	)
 
 	BeforeEach(func() {
@@ -41,7 +41,7 @@ func RunTransportContractTests(factory func() cse.Transport) {
 			err = transport.Send(ctx, "recipient-uuid", testPayload)
 			Expect(err).ToNot(HaveOccurred())
 
-			var received cse.RawMessage
+			var received protocol.RawMessage
 			Eventually(msgChan).Should(Receive(&received))
 			Expect(received.Payload).To(Equal(testPayload))
 			Expect(received.Timestamp).To(BeTemporally("~", time.Now(), time.Second))
@@ -63,7 +63,7 @@ func RunTransportContractTests(factory func() cse.Transport) {
 			}
 
 			for _, expectedPayload := range payloads {
-				var received cse.RawMessage
+				var received protocol.RawMessage
 				Eventually(msgChan).Should(Receive(&received))
 				Expect(received.Payload).To(Equal(expectedPayload))
 			}
@@ -72,7 +72,7 @@ func RunTransportContractTests(factory func() cse.Transport) {
 
 	Describe("Sender UUID propagation", func() {
 		It("should include From field in received messages", func() {
-			if mockTransport, ok := transport.(*cse.MockTransport); ok {
+			if mockTransport, ok := transport.(*protocol.MockTransport); ok {
 				mockTransport.SetSenderUUID("sender-123")
 			}
 
@@ -82,10 +82,10 @@ func RunTransportContractTests(factory func() cse.Transport) {
 			err = transport.Send(ctx, "recipient-uuid", []byte("test"))
 			Expect(err).ToNot(HaveOccurred())
 
-			var received cse.RawMessage
+			var received protocol.RawMessage
 			Eventually(msgChan).Should(Receive(&received))
 
-			if _, ok := transport.(*cse.MockTransport); ok {
+			if _, ok := transport.(*protocol.MockTransport); ok {
 				Expect(received.From).To(Equal("sender-123"))
 			} else {
 				Expect(received.From).ToNot(BeEmpty())
@@ -126,37 +126,37 @@ func RunTransportContractTests(factory func() cse.Transport) {
 
 	Describe("Error propagation", func() {
 		It("should propagate network errors as TransportNetworkError", func() {
-			if mockTransport, ok := transport.(*cse.MockTransport); ok {
+			if mockTransport, ok := transport.(*protocol.MockTransport); ok {
 				mockTransport.SimulateNetworkError(errors.New("network down"))
 
 				err := transport.Send(ctx, "recipient-uuid", []byte("test"))
 				Expect(err).To(HaveOccurred())
 
-				var netErr cse.TransportNetworkError
+				var netErr protocol.TransportNetworkError
 				Expect(errors.As(err, &netErr)).To(BeTrue())
 			}
 		})
 
 		It("should propagate overflow errors as TransportOverflowError", func() {
-			if mockTransport, ok := transport.(*cse.MockTransport); ok {
+			if mockTransport, ok := transport.(*protocol.MockTransport); ok {
 				mockTransport.SimulateOverflowError(errors.New("queue full"))
 
 				err := transport.Send(ctx, "recipient-uuid", []byte("test"))
 				Expect(err).To(HaveOccurred())
 
-				var overflowErr cse.TransportOverflowError
+				var overflowErr protocol.TransportOverflowError
 				Expect(errors.As(err, &overflowErr)).To(BeTrue())
 			}
 		})
 
 		It("should propagate timeout errors as TransportTimeoutError", func() {
-			if mockTransport, ok := transport.(*cse.MockTransport); ok {
+			if mockTransport, ok := transport.(*protocol.MockTransport); ok {
 				mockTransport.SimulateTimeoutError(errors.New("timeout"))
 
 				err := transport.Send(ctx, "recipient-uuid", []byte("test"))
 				Expect(err).To(HaveOccurred())
 
-				var timeoutErr cse.TransportTimeoutError
+				var timeoutErr protocol.TransportTimeoutError
 				Expect(errors.As(err, &timeoutErr)).To(BeTrue())
 			}
 		})

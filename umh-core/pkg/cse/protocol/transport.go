@@ -1,4 +1,4 @@
-package cse
+package protocol
 
 import (
 	"context"

@@ -1,4 +1,4 @@
-package cse_test
+package protocol_test
 
 import (
 	"context"
@@ -7,22 +7,22 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence/cse"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/protocol"
 )
 
 var _ = Describe("Transport Interface", func() {
 	Describe("MockTransport", func() {
 		Context("Contract tests", func() {
-			RunTransportContractTests(func() cse.Transport {
-				return cse.NewMockTransport()
+			RunTransportContractTests(func() protocol.Transport {
+				return protocol.NewMockTransport()
 			})
 		})
 
 		Context("Mock-specific utilities", func() {
-			var transport *cse.MockTransport
+			var transport *protocol.MockTransport
 
 			BeforeEach(func() {
-				transport = cse.NewMockTransport()
+				transport = protocol.NewMockTransport()
 			})
 
 			AfterEach(func() {
