@@ -20,9 +20,6 @@ var _ = Describe("State Timestamp Handling", func() {
 				// Create snapshot with VERY old data (60s)
 				// States should never check this - supervisor's job
 				observed := &container.ContainerObservedState{
-					ObservedDesiredState: container.ContainerDesiredState{
-						MonitoringEnabled: true,
-					},
 					OverallHealth: models.Active,
 					CPUHealth:     models.Active,
 					MemoryHealth:  models.Active,
@@ -31,7 +28,7 @@ var _ = Describe("State Timestamp Handling", func() {
 				}
 
 				snapshot := fsmv2.Snapshot{
-					Desired:  &container.ContainerDesiredState{MonitoringEnabled: true},
+					Desired:  &container.ContainerDesiredState{},
 					Observed: observed,
 				}
 
@@ -51,9 +48,6 @@ var _ = Describe("State Timestamp Handling", func() {
 
 				// Create snapshot with old data (60s) but healthy metrics
 				observed := &container.ContainerObservedState{
-					ObservedDesiredState: container.ContainerDesiredState{
-						MonitoringEnabled: true,
-					},
 					OverallHealth: models.Active, // Metrics recovered!
 					CPUHealth:     models.Active,
 					MemoryHealth:  models.Active,
@@ -62,7 +56,7 @@ var _ = Describe("State Timestamp Handling", func() {
 				}
 
 				snapshot := fsmv2.Snapshot{
-					Desired:  &container.ContainerDesiredState{MonitoringEnabled: true},
+					Desired:  &container.ContainerDesiredState{},
 					Observed: observed,
 				}
 

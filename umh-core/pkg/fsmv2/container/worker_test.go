@@ -121,8 +121,6 @@ var _ = Describe("ContainerWorker", func() {
 				Expect(desired).NotTo(BeNil())
 
 				containerDesired := desired.(*container.ContainerDesiredState)
-				Expect(containerDesired.MonitoringEnabled).To(BeTrue())
-				Expect(containerDesired.CollectionIntervalMs).To(Equal(5000))
 				Expect(containerDesired.ShutdownRequested()).To(BeFalse())
 			})
 		})

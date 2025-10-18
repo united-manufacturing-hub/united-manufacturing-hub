@@ -94,3 +94,149 @@ var _ = Describe("isFullyHealthy", func() {
 		})
 	})
 })
+
+var _ = Describe("BuildDegradedReason", func() {
+	Context("when CPU is degraded", func() {
+		It("should include CPU in reason", func() {
+			observed := &container.ContainerObservedState{
+				OverallHealth: models.Degraded,
+				CPUHealth:     models.Degraded,
+				MemoryHealth:  models.Active,
+				DiskHealth:    models.Active,
+			}
+			reason := container.BuildDegradedReason(observed)
+			Expect(reason).To(ContainSubstring("CPU"))
+			Expect(reason).To(ContainSubstring("degraded"))
+		})
+
+		It("should not mention healthy metrics", func() {
+			observed := &container.ContainerObservedState{
+				OverallHealth: models.Degraded,
+				CPUHealth:     models.Degraded,
+				MemoryHealth:  models.Active,
+				DiskHealth:    models.Active,
+			}
+			reason := container.BuildDegradedReason(observed)
+			Expect(reason).NotTo(ContainSubstring("Memory"))
+			Expect(reason).NotTo(ContainSubstring("Disk"))
+		})
+	})
+
+	Context("when Memory is degraded", func() {
+		It("should include Memory in reason", func() {
+			observed := &container.ContainerObservedState{
+				OverallHealth: models.Degraded,
+				CPUHealth:     models.Active,
+				MemoryHealth:  models.Degraded,
+				DiskHealth:    models.Active,
+			}
+			reason := container.BuildDegradedReason(observed)
+			Expect(reason).To(ContainSubstring("Memory"))
+			Expect(reason).To(ContainSubstring("degraded"))
+		})
+
+		It("should not mention healthy metrics", func() {
+			observed := &container.ContainerObservedState{
+				OverallHealth: models.Degraded,
+				CPUHealth:     models.Active,
+				MemoryHealth:  models.Degraded,
+				DiskHealth:    models.Active,
+			}
+			reason := container.BuildDegradedReason(observed)
+			Expect(reason).NotTo(ContainSubstring("CPU"))
+			Expect(reason).NotTo(ContainSubstring("Disk"))
+		})
+	})
+
+	Context("when Disk is degraded", func() {
+		It("should include Disk in reason", func() {
+			observed := &container.ContainerObservedState{
+				OverallHealth: models.Degraded,
+				CPUHealth:     models.Active,
+				MemoryHealth:  models.Active,
+				DiskHealth:    models.Degraded,
+			}
+			reason := container.BuildDegradedReason(observed)
+			Expect(reason).To(ContainSubstring("Disk"))
+			Expect(reason).To(ContainSubstring("degraded"))
+		})
+
+		It("should not mention healthy metrics", func() {
+			observed := &container.ContainerObservedState{
+				OverallHealth: models.Degraded,
+				CPUHealth:     models.Active,
+				MemoryHealth:  models.Active,
+				DiskHealth:    models.Degraded,
+			}
+			reason := container.BuildDegradedReason(observed)
+			Expect(reason).NotTo(ContainSubstring("CPU"))
+			Expect(reason).NotTo(ContainSubstring("Memory"))
+		})
+	})
+
+	Context("when multiple metrics are unhealthy", func() {
+		It("should include all unhealthy metrics", func() {
+			observed := &container.ContainerObservedState{
+				OverallHealth: models.Degraded,
+				CPUHealth:     models.Degraded,
+				MemoryHealth:  models.Degraded,
+				DiskHealth:    models.Active,
+			}
+			reason := container.BuildDegradedReason(observed)
+			Expect(reason).To(ContainSubstring("CPU"))
+			Expect(reason).To(ContainSubstring("Memory"))
+		})
+
+		It("should not mention healthy metrics", func() {
+			observed := &container.ContainerObservedState{
+				OverallHealth: models.Degraded,
+				CPUHealth:     models.Degraded,
+				MemoryHealth:  models.Degraded,
+				DiskHealth:    models.Active,
+			}
+			reason := container.BuildDegradedReason(observed)
+			Expect(reason).NotTo(ContainSubstring("Disk"))
+		})
+	})
+
+	Context("when all metrics are unhealthy", func() {
+		It("should include all metrics in reason", func() {
+			observed := &container.ContainerObservedState{
+				OverallHealth: models.Degraded,
+				CPUHealth:     models.Degraded,
+				MemoryHealth:  models.Degraded,
+				DiskHealth:    models.Degraded,
+			}
+			reason := container.BuildDegradedReason(observed)
+			Expect(reason).To(ContainSubstring("CPU"))
+			Expect(reason).To(ContainSubstring("Memory"))
+			Expect(reason).To(ContainSubstring("Disk"))
+		})
+	})
+
+	Context("when OverallHealth is degraded but individual metrics are healthy", func() {
+		It("should handle edge case gracefully", func() {
+			observed := &container.ContainerObservedState{
+				OverallHealth: models.Degraded,
+				CPUHealth:     models.Active,
+				MemoryHealth:  models.Active,
+				DiskHealth:    models.Active,
+			}
+			reason := container.BuildDegradedReason(observed)
+			Expect(reason).NotTo(BeEmpty())
+		})
+
+		It("should not claim individual metrics are degraded", func() {
+			observed := &container.ContainerObservedState{
+				OverallHealth: models.Degraded,
+				CPUHealth:     models.Active,
+				MemoryHealth:  models.Active,
+				DiskHealth:    models.Active,
+			}
+			reason := container.BuildDegradedReason(observed)
+			Expect(reason).NotTo(MatchRegexp("CPU.*degraded"))
+			Expect(reason).NotTo(MatchRegexp("Memory.*degraded"))
+			Expect(reason).NotTo(MatchRegexp("Disk.*degraded"))
+		})
+	})
+})

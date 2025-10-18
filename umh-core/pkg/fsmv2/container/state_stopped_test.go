@@ -30,10 +30,7 @@ var _ = Describe("StoppedState", func() {
 
 	BeforeEach(func() {
 		state = &container.StoppedState{}
-		desired = &container.ContainerDesiredState{
-			MonitoringEnabled:    true,
-			CollectionIntervalMs: 5000,
-		}
+		desired = &container.ContainerDesiredState{}
 	})
 
 	Describe("Next", func() {

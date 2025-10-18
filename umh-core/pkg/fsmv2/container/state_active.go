@@ -35,7 +35,9 @@ func (s *ActiveState) Next(snapshot fsmv2.Snapshot) (fsmv2.State, fsmv2.Signal, 
 	// Check container health metrics
 	containerObserved := observed.(*ContainerObservedState)
 	if !IsFullyHealthy(containerObserved) {
-		return &DegradedState{reason: "metrics unhealthy"}, fsmv2.SignalNone, nil
+		reason := BuildDegradedReason(containerObserved)
+
+		return &DegradedState{reason: reason}, fsmv2.SignalNone, nil
 	}
 
 	// Stay in active state (passive - no action needed)

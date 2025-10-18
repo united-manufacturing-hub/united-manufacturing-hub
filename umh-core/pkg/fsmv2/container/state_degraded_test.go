@@ -32,10 +32,7 @@ var _ = Describe("DegradedState", func() {
 	)
 
 	BeforeEach(func() {
-		desired = &container.ContainerDesiredState{
-			MonitoringEnabled:    true,
-			CollectionIntervalMs: 5000,
-		}
+		desired = &container.ContainerDesiredState{}
 		observed = &container.ContainerObservedState{
 			OverallHealth: models.Degraded,
 			CPUHealth:     models.Degraded,

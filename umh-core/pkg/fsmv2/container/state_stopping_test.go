@@ -30,10 +30,7 @@ var _ = Describe("StoppingState", func() {
 
 	BeforeEach(func() {
 		state = &container.StoppingState{}
-		desired = &container.ContainerDesiredState{
-			MonitoringEnabled:    true,
-			CollectionIntervalMs: 5000,
-		}
+		desired = &container.ContainerDesiredState{}
 		desired.SetShutdownRequested(true)
 		snapshot = fsmv2.Snapshot{
 			Desired: desired,

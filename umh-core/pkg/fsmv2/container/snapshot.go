@@ -72,3 +72,10 @@ type ContainerObservedState struct {
 func (o *ContainerObservedState) GetTimestamp() time.Time {
 	return o.CollectedAt
 }
+
+// GetObservedDesiredState returns the desired state that was observed in the system.
+// For container monitoring, there is no deployed configuration to observe,
+// so this always returns an empty desired state.
+func (o *ContainerObservedState) GetObservedDesiredState() fsmv2.DesiredState {
+	return &ContainerDesiredState{}
+}

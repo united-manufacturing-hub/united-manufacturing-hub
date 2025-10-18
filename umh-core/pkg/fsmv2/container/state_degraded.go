@@ -15,8 +15,6 @@
 package container
 
 import (
-	"fmt"
-
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 )
 
@@ -55,7 +53,8 @@ func (s *DegradedState) String() string {
 // Reason provides context for why we're in this state.
 func (s *DegradedState) Reason() string {
 	if s.reason != "" {
-		return fmt.Sprintf("Monitoring degraded: %s", s.reason)
+		return "Monitoring degraded: " + s.reason
 	}
+
 	return "Monitoring degraded"
 }

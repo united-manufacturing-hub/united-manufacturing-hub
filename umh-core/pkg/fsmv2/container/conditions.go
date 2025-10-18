@@ -24,3 +24,37 @@ func IsFullyHealthy(observed *ContainerObservedState) bool {
 		observed.MemoryHealth == models.Active &&
 		observed.DiskHealth == models.Active
 }
+
+// BuildDegradedReason creates a detailed reason string showing which metrics are unhealthy.
+// Following UX Standards: show real values, not generic messages.
+func BuildDegradedReason(observed *ContainerObservedState) string {
+	var reasons []string
+
+	if observed.CPUHealth != models.Active {
+		reasons = append(reasons, "CPU degraded")
+	}
+
+	if observed.MemoryHealth != models.Active {
+		reasons = append(reasons, "Memory degraded")
+	}
+
+	if observed.DiskHealth != models.Active {
+		reasons = append(reasons, "Disk degraded")
+	}
+
+	if len(reasons) == 0 {
+		return "Overall health degraded"
+	}
+
+	result := ""
+
+	for i, reason := range reasons {
+		if i > 0 {
+			result += ", "
+		}
+
+		result += reason
+	}
+
+	return result
+}

@@ -53,12 +53,6 @@ func (w *ContainerWorker) CollectObservedState(ctx context.Context) (fsmv2.Obser
 
 	// Convert to ContainerObservedState
 	observed := &ContainerObservedState{
-		// Mirror desired state fields (these would come from current config)
-		ObservedDesiredState: ContainerDesiredState{
-			MonitoringEnabled:    true, // Observing means monitoring is enabled
-			CollectionIntervalMs: 5000, // TODO: Get from actual config
-		},
-
 		// Observed-only fields from metrics
 		CPUUsageMCores:   serviceInfo.CPU.TotalUsageMCpu,
 		CPUCoreCount:     serviceInfo.CPU.CoreCount,
@@ -87,12 +81,8 @@ func (w *ContainerWorker) CollectObservedState(ctx context.Context) (fsmv2.Obser
 //
 // The spec parameter comes from user configuration.
 func (w *ContainerWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
-	// For now, use simple default configuration
-	// TODO: Parse spec to extract actual configuration
 	return &ContainerDesiredState{
-		MonitoringEnabled:    true,
-		CollectionIntervalMs: 5000,
-		shutdownRequested:    false, // Set by supervisor
+		shutdownRequested: false,
 	}, nil
 }
 

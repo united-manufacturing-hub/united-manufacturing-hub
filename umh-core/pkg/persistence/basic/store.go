@@ -78,18 +78,7 @@ type Schema struct {
 //
 // INSPIRED BY: MongoDB query syntax, ORM query builders (GORM, SQLAlchemy).
 //
-// Note: Currently a placeholder. Will be expanded to support:
-//   - Filter: map[string]interface{} for field conditions
-//   - Sort: []SortField for ordering
-//   - Limit/Skip: for pagination
-//   - Projection: []string for selecting specific fields
-type Query struct {
-	// Fields will be added as needed
-	// Example: Filter map[string]interface{}
-	// Example: Sort []SortField
-	// Example: Limit int
-	// Example: Skip int
-}
+// Implementation: See query.go for full Query builder API with Filter(), Sort(), Limit(), Skip()
 
 // Store provides database-agnostic CRUD operations on collections of documents.
 //
@@ -111,6 +100,50 @@ type Query struct {
 //   - ErrNotFound: document or collection doesn't exist
 //   - ErrConflict: version mismatch, unique constraint violation
 //   - Backend-specific errors: connection failures, query syntax errors
+//
+// Performance Characteristics:
+//
+// REQUIREMENT: Low-latency writes for FSM and CSE use cases
+// WHY: FSM workers write observed state on every tick (1-10 Hz per worker).
+// With 10-100 workers, this means 10-1000 writes/second sustained load.
+// CSE sync operations add burst writes during active synchronization.
+//
+// EXPECTATION: Write latency <10ms p99, <5ms p50 under normal load
+// WHY: FSM state transitions cannot wait long for database writes.
+// Blocking state machines causes cascading delays in reconciliation loops.
+//
+// EXPECTATION: Read latency <5ms p99 for single-document Get operations
+// WHY: FSM reads observed/desired state on every tick to decide next action.
+// Slow reads delay state transitions and reduce system responsiveness.
+//
+// EXPECTATION: Support 100+ concurrent writers (one per FSM worker)
+// WHY: Each FSM worker runs in separate goroutine, writing independently.
+// Database must handle concurrent writes without excessive lock contention.
+//
+// TRADE-OFF: These requirements favor WAL mode (SQLite) or connection pooling (Postgres)
+// over simpler single-threaded approaches. See sqlite.go for WAL design considerations.
+//
+// Housekeeping Operations:
+//
+// AWARENESS: Some database maintenance operations conflict with write availability
+// WHY: SQLite WAL checkpoint blocks writers briefly (~10-100ms).
+// SQLite VACUUM blocks all access for seconds to minutes (full table rewrite).
+// SQLite ANALYZE blocks briefly while collecting statistics.
+//
+// REQUIREMENT: Housekeeping must be scheduled during low-traffic periods
+// WHY: Running VACUUM during peak FSM activity would block state transitions,
+// causing FSM workers to timeout and enter error states.
+//
+// EXPECTATION: Implementations provide hooks for scheduling maintenance:
+//   - WAL checkpoint: automatic at 1000 pages, or manual trigger
+//   - VACUUM: manual trigger only, should be scheduled weekly/monthly
+//   - ANALYZE: after bulk inserts, or manual trigger
+//
+// TRADE-OFF: Automatic maintenance (PRAGMA auto_vacuum) trades write performance
+// for smaller database size. Disable auto_vacuum for FSM use case, run manual
+// VACUUM during maintenance windows.
+//
+// INSPIRED BY: Linear's maintenance window scheduling, Postgres autovacuum tuning
 //
 // Example usage:
 //

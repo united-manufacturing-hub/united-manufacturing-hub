@@ -34,10 +34,7 @@ var _ = Describe("ActiveState", func() {
 
 	BeforeEach(func() {
 		state = &container.ActiveState{}
-		desired = &container.ContainerDesiredState{
-			MonitoringEnabled:    true,
-			CollectionIntervalMs: 5000,
-		}
+		desired = &container.ContainerDesiredState{}
 		observed = &container.ContainerObservedState{
 			OverallHealth: models.Active,
 			CPUHealth:     models.Active,
@@ -92,7 +89,7 @@ var _ = Describe("ActiveState", func() {
 			It("should include reason for degraded state", func() {
 				nextState, _, _ := state.Next(snapshot)
 				degradedState := nextState.(*container.DegradedState)
-				Expect(degradedState.Reason()).To(ContainSubstring("metrics unhealthy"))
+				Expect(degradedState.Reason()).To(ContainSubstring("CPU"))
 			})
 		})
 
