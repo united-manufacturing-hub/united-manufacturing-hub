@@ -96,25 +96,30 @@ var _ = Describe("isFullyHealthy", func() {
 })
 
 var _ = Describe("BuildDegradedReason", func() {
-	Context("when CPU is degraded", func() {
-		It("should include CPU in reason", func() {
+	Context("when CPU is degraded by usage", func() {
+		It("should show CPU percentage with threshold", func() {
 			observed := &container.ContainerObservedState{
-				OverallHealth: models.Degraded,
-				CPUHealth:     models.Degraded,
-				MemoryHealth:  models.Active,
-				DiskHealth:    models.Active,
+				OverallHealth:  models.Degraded,
+				CPUHealth:      models.Degraded,
+				MemoryHealth:   models.Active,
+				DiskHealth:     models.Active,
+				CPUUsageMCores: 1800, // 90% of 2 cores
+				CgroupCores:    2.0,
+				IsThrottled:    false,
 			}
 			reason := container.BuildDegradedReason(observed)
-			Expect(reason).To(ContainSubstring("CPU"))
-			Expect(reason).To(ContainSubstring("degraded"))
+			Expect(reason).To(MatchRegexp(`CPU at \d+% \(threshold 70%\)`))
 		})
 
 		It("should not mention healthy metrics", func() {
 			observed := &container.ContainerObservedState{
-				OverallHealth: models.Degraded,
-				CPUHealth:     models.Degraded,
-				MemoryHealth:  models.Active,
-				DiskHealth:    models.Active,
+				OverallHealth:  models.Degraded,
+				CPUHealth:      models.Degraded,
+				MemoryHealth:   models.Active,
+				DiskHealth:     models.Active,
+				CPUUsageMCores: 1800,
+				CgroupCores:    2.0,
+				IsThrottled:    false,
 			}
 			reason := container.BuildDegradedReason(observed)
 			Expect(reason).NotTo(ContainSubstring("Memory"))
@@ -122,25 +127,44 @@ var _ = Describe("BuildDegradedReason", func() {
 		})
 	})
 
-	Context("when Memory is degraded", func() {
-		It("should include Memory in reason", func() {
+	Context("when CPU is throttled", func() {
+		It("should show throttle percentage instead of usage", func() {
 			observed := &container.ContainerObservedState{
 				OverallHealth: models.Degraded,
-				CPUHealth:     models.Active,
-				MemoryHealth:  models.Degraded,
+				CPUHealth:     models.Degraded,
+				MemoryHealth:  models.Active,
 				DiskHealth:    models.Active,
+				IsThrottled:   true,
+				ThrottleRatio: 0.125, // 12.5%
 			}
 			reason := container.BuildDegradedReason(observed)
-			Expect(reason).To(ContainSubstring("Memory"))
-			Expect(reason).To(ContainSubstring("degraded"))
+			Expect(reason).To(ContainSubstring("CPU throttled"))
+			Expect(reason).To(MatchRegexp(`\d+\.\d+% periods`))
+		})
+	})
+
+	Context("when Memory is degraded", func() {
+		It("should show Memory percentage with threshold", func() {
+			observed := &container.ContainerObservedState{
+				OverallHealth:    models.Degraded,
+				CPUHealth:        models.Active,
+				MemoryHealth:     models.Degraded,
+				DiskHealth:       models.Active,
+				MemoryUsedBytes:  8_500_000_000, // 8.5GB
+				MemoryTotalBytes: 10_000_000_000, // 10GB = 85%
+			}
+			reason := container.BuildDegradedReason(observed)
+			Expect(reason).To(MatchRegexp(`Memory at \d+% \(threshold 80%\)`))
 		})
 
 		It("should not mention healthy metrics", func() {
 			observed := &container.ContainerObservedState{
-				OverallHealth: models.Degraded,
-				CPUHealth:     models.Active,
-				MemoryHealth:  models.Degraded,
-				DiskHealth:    models.Active,
+				OverallHealth:    models.Degraded,
+				CPUHealth:        models.Active,
+				MemoryHealth:     models.Degraded,
+				DiskHealth:       models.Active,
+				MemoryUsedBytes:  8_500_000_000,
+				MemoryTotalBytes: 10_000_000_000,
 			}
 			reason := container.BuildDegradedReason(observed)
 			Expect(reason).NotTo(ContainSubstring("CPU"))
@@ -149,24 +173,27 @@ var _ = Describe("BuildDegradedReason", func() {
 	})
 
 	Context("when Disk is degraded", func() {
-		It("should include Disk in reason", func() {
+		It("should show Disk percentage with threshold", func() {
 			observed := &container.ContainerObservedState{
-				OverallHealth: models.Degraded,
-				CPUHealth:     models.Active,
-				MemoryHealth:  models.Active,
-				DiskHealth:    models.Degraded,
+				OverallHealth:   models.Degraded,
+				CPUHealth:       models.Active,
+				MemoryHealth:    models.Active,
+				DiskHealth:      models.Degraded,
+				DiskUsedBytes:   90_000_000_000, // 90GB
+				DiskTotalBytes:  100_000_000_000, // 100GB = 90%
 			}
 			reason := container.BuildDegradedReason(observed)
-			Expect(reason).To(ContainSubstring("Disk"))
-			Expect(reason).To(ContainSubstring("degraded"))
+			Expect(reason).To(MatchRegexp(`Disk at \d+% \(threshold 85%\)`))
 		})
 
 		It("should not mention healthy metrics", func() {
 			observed := &container.ContainerObservedState{
-				OverallHealth: models.Degraded,
-				CPUHealth:     models.Active,
-				MemoryHealth:  models.Active,
-				DiskHealth:    models.Degraded,
+				OverallHealth:   models.Degraded,
+				CPUHealth:       models.Active,
+				MemoryHealth:    models.Active,
+				DiskHealth:      models.Degraded,
+				DiskUsedBytes:   90_000_000_000,
+				DiskTotalBytes:  100_000_000_000,
 			}
 			reason := container.BuildDegradedReason(observed)
 			Expect(reason).NotTo(ContainSubstring("CPU"))
@@ -175,24 +202,34 @@ var _ = Describe("BuildDegradedReason", func() {
 	})
 
 	Context("when multiple metrics are unhealthy", func() {
-		It("should include all unhealthy metrics", func() {
+		It("should include all unhealthy metrics with percentages", func() {
 			observed := &container.ContainerObservedState{
-				OverallHealth: models.Degraded,
-				CPUHealth:     models.Degraded,
-				MemoryHealth:  models.Degraded,
-				DiskHealth:    models.Active,
+				OverallHealth:    models.Degraded,
+				CPUHealth:        models.Degraded,
+				MemoryHealth:     models.Degraded,
+				DiskHealth:       models.Active,
+				CPUUsageMCores:   1600,
+				CgroupCores:      2.0,
+				IsThrottled:      false,
+				MemoryUsedBytes:  8_500_000_000,
+				MemoryTotalBytes: 10_000_000_000,
 			}
 			reason := container.BuildDegradedReason(observed)
-			Expect(reason).To(ContainSubstring("CPU"))
-			Expect(reason).To(ContainSubstring("Memory"))
+			Expect(reason).To(MatchRegexp(`CPU at \d+%`))
+			Expect(reason).To(MatchRegexp(`Memory at \d+%`))
 		})
 
 		It("should not mention healthy metrics", func() {
 			observed := &container.ContainerObservedState{
-				OverallHealth: models.Degraded,
-				CPUHealth:     models.Degraded,
-				MemoryHealth:  models.Degraded,
-				DiskHealth:    models.Active,
+				OverallHealth:    models.Degraded,
+				CPUHealth:        models.Degraded,
+				MemoryHealth:     models.Degraded,
+				DiskHealth:       models.Active,
+				CPUUsageMCores:   1600,
+				CgroupCores:      2.0,
+				IsThrottled:      false,
+				MemoryUsedBytes:  8_500_000_000,
+				MemoryTotalBytes: 10_000_000_000,
 			}
 			reason := container.BuildDegradedReason(observed)
 			Expect(reason).NotTo(ContainSubstring("Disk"))
@@ -200,17 +237,24 @@ var _ = Describe("BuildDegradedReason", func() {
 	})
 
 	Context("when all metrics are unhealthy", func() {
-		It("should include all metrics in reason", func() {
+		It("should include all metrics with percentages", func() {
 			observed := &container.ContainerObservedState{
-				OverallHealth: models.Degraded,
-				CPUHealth:     models.Degraded,
-				MemoryHealth:  models.Degraded,
-				DiskHealth:    models.Degraded,
+				OverallHealth:    models.Degraded,
+				CPUHealth:        models.Degraded,
+				MemoryHealth:     models.Degraded,
+				DiskHealth:       models.Degraded,
+				CPUUsageMCores:   1600,
+				CgroupCores:      2.0,
+				IsThrottled:      false,
+				MemoryUsedBytes:  8_500_000_000,
+				MemoryTotalBytes: 10_000_000_000,
+				DiskUsedBytes:    90_000_000_000,
+				DiskTotalBytes:   100_000_000_000,
 			}
 			reason := container.BuildDegradedReason(observed)
-			Expect(reason).To(ContainSubstring("CPU"))
-			Expect(reason).To(ContainSubstring("Memory"))
-			Expect(reason).To(ContainSubstring("Disk"))
+			Expect(reason).To(MatchRegexp(`CPU at \d+%`))
+			Expect(reason).To(MatchRegexp(`Memory at \d+%`))
+			Expect(reason).To(MatchRegexp(`Disk at \d+%`))
 		})
 	})
 
@@ -226,7 +270,7 @@ var _ = Describe("BuildDegradedReason", func() {
 			Expect(reason).NotTo(BeEmpty())
 		})
 
-		It("should not claim individual metrics are degraded", func() {
+		It("should not show percentage patterns since no metrics degraded", func() {
 			observed := &container.ContainerObservedState{
 				OverallHealth: models.Degraded,
 				CPUHealth:     models.Active,
@@ -234,9 +278,52 @@ var _ = Describe("BuildDegradedReason", func() {
 				DiskHealth:    models.Active,
 			}
 			reason := container.BuildDegradedReason(observed)
-			Expect(reason).NotTo(MatchRegexp("CPU.*degraded"))
-			Expect(reason).NotTo(MatchRegexp("Memory.*degraded"))
-			Expect(reason).NotTo(MatchRegexp("Disk.*degraded"))
+			Expect(reason).NotTo(MatchRegexp(`\d+%`))
+			Expect(reason).NotTo(ContainSubstring("threshold"))
+		})
+	})
+
+	Context("UX Standards compliance", func() {
+		It("should show exact CPU percentage", func() {
+			observed := &container.ContainerObservedState{
+				CPUHealth:      models.Degraded,
+				MemoryHealth:   models.Active,
+				DiskHealth:     models.Active,
+				CPUUsageMCores: 1800,
+				CgroupCores:    2.0,
+				IsThrottled:    false,
+			}
+			reason := container.BuildDegradedReason(observed)
+			Expect(reason).To(Equal("CPU at 90% (threshold 70%)"))
+		})
+
+		It("should show exact throttle percentage", func() {
+			observed := &container.ContainerObservedState{
+				CPUHealth:     models.Degraded,
+				MemoryHealth:  models.Active,
+				DiskHealth:    models.Active,
+				IsThrottled:   true,
+				ThrottleRatio: 0.125,
+			}
+			reason := container.BuildDegradedReason(observed)
+			Expect(reason).To(Equal("CPU throttled (12.5% periods)"))
+		})
+
+		It("should format multiple components with commas", func() {
+			observed := &container.ContainerObservedState{
+				CPUHealth:        models.Degraded,
+				MemoryHealth:     models.Degraded,
+				DiskHealth:       models.Active,
+				CPUUsageMCores:   1600,
+				CgroupCores:      2.0,
+				IsThrottled:      false,
+				MemoryUsedBytes:  8_500_000_000,
+				MemoryTotalBytes: 10_000_000_000,
+			}
+			reason := container.BuildDegradedReason(observed)
+			Expect(reason).To(ContainSubstring("CPU at"))
+			Expect(reason).To(ContainSubstring("Memory at"))
+			Expect(reason).To(ContainSubstring(", "))
 		})
 	})
 })

@@ -1236,4 +1236,453 @@ var _ = Describe("SQLiteStore", func() {
 			Expect(err).NotTo(HaveOccurred())
 		})
 	})
+
+	Context("Update", func() {
+		var store basic.Store
+
+		BeforeEach(func() {
+			var err error
+			store, err = basic.NewSQLiteStore(dbPath)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		AfterEach(func() {
+			if store != nil {
+				_ = store.Close()
+			}
+		})
+
+		It("should update existing document successfully", func() {
+			ctx := context.Background()
+
+			err := store.CreateCollection(ctx, "test_update", nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			originalDoc := basic.Document{
+				"name": "original",
+				"value": 42,
+			}
+
+			id, err := store.Insert(ctx, "test_update", originalDoc)
+			Expect(err).NotTo(HaveOccurred())
+
+			updatedDoc := basic.Document{
+				"name": "updated",
+				"value": 100,
+				"new_field": "added",
+			}
+
+			err = store.Update(ctx, "test_update", id, updatedDoc)
+			Expect(err).NotTo(HaveOccurred())
+
+			retrieved, err := store.Get(ctx, "test_update", id)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(retrieved["name"]).To(Equal("updated"))
+			Expect(retrieved["value"]).To(BeNumerically("==", 100))
+			Expect(retrieved["new_field"]).To(Equal("added"))
+		})
+
+		It("should retrieve updated document with new content", func() {
+			ctx := context.Background()
+
+			err := store.CreateCollection(ctx, "test_update_retrieve", nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			id, err := store.Insert(ctx, "test_update_retrieve", basic.Document{"old": "data"})
+			Expect(err).NotTo(HaveOccurred())
+
+			newDoc := basic.Document{
+				"completely": "different",
+				"structure": map[string]interface{}{
+					"nested": "value",
+				},
+			}
+
+			err = store.Update(ctx, "test_update_retrieve", id, newDoc)
+			Expect(err).NotTo(HaveOccurred())
+
+			retrieved, err := store.Get(ctx, "test_update_retrieve", id)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(retrieved["old"]).To(BeNil())
+			Expect(retrieved["completely"]).To(Equal("different"))
+
+			structure := retrieved["structure"].(map[string]interface{})
+			Expect(structure["nested"]).To(Equal("value"))
+		})
+
+		It("should return ErrNotFound when updating non-existent document", func() {
+			ctx := context.Background()
+
+			err := store.CreateCollection(ctx, "test_update_notfound", nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = store.Update(ctx, "test_update_notfound", "non-existent-id", basic.Document{"test": "value"})
+			Expect(err).To(Equal(basic.ErrNotFound))
+		})
+
+		It("should fail when updating in non-existent collection", func() {
+			ctx := context.Background()
+
+			err := store.Update(ctx, "nonexistent_collection", "some-id", basic.Document{"test": "value"})
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("failed to update document"))
+		})
+
+		It("should update document with complex nested data", func() {
+			ctx := context.Background()
+
+			err := store.CreateCollection(ctx, "test_update_nested", nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			id, err := store.Insert(ctx, "test_update_nested", basic.Document{"simple": "data"})
+			Expect(err).NotTo(HaveOccurred())
+
+			complexDoc := basic.Document{
+				"level1": map[string]interface{}{
+					"level2": map[string]interface{}{
+						"level3": []interface{}{
+							map[string]interface{}{"item": 1},
+							map[string]interface{}{"item": 2},
+						},
+					},
+					"array": []interface{}{1, "two", 3.0, nil},
+				},
+				"mixed": []interface{}{
+					"string",
+					42,
+					true,
+					map[string]interface{}{"nested": "object"},
+				},
+			}
+
+			err = store.Update(ctx, "test_update_nested", id, complexDoc)
+			Expect(err).NotTo(HaveOccurred())
+
+			retrieved, err := store.Get(ctx, "test_update_nested", id)
+			Expect(err).NotTo(HaveOccurred())
+
+			level1 := retrieved["level1"].(map[string]interface{})
+			level2 := level1["level2"].(map[string]interface{})
+			level3 := level2["level3"].([]interface{})
+			Expect(level3).To(HaveLen(2))
+
+			array := level1["array"].([]interface{})
+			Expect(array).To(HaveLen(4))
+			Expect(array[3]).To(BeNil())
+
+			mixed := retrieved["mixed"].([]interface{})
+			Expect(mixed).To(HaveLen(4))
+		})
+
+		It("should fail when store is closed", func() {
+			ctx := context.Background()
+
+			err := store.CreateCollection(ctx, "test_update_closed", nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			id, err := store.Insert(ctx, "test_update_closed", basic.Document{"test": "value"})
+			Expect(err).NotTo(HaveOccurred())
+
+			_ = store.Close()
+
+			err = store.Update(ctx, "test_update_closed", id, basic.Document{"new": "value"})
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("store is closed"))
+		})
+	})
+
+	Context("Transaction Update", func() {
+		var store basic.Store
+
+		BeforeEach(func() {
+			var err error
+			store, err = basic.NewSQLiteStore(dbPath)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		AfterEach(func() {
+			if store != nil {
+				_ = store.Close()
+			}
+		})
+
+		It("should update document within transaction and commit", func() {
+			ctx := context.Background()
+
+			err := store.CreateCollection(ctx, "tx_update", nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			id, err := store.Insert(ctx, "tx_update", basic.Document{"name": "original"})
+			Expect(err).NotTo(HaveOccurred())
+
+			tx, err := store.BeginTx(ctx)
+			Expect(err).NotTo(HaveOccurred())
+			defer func() { _ = tx.Rollback() }()
+
+			err = tx.Update(ctx, "tx_update", id, basic.Document{"name": "updated"})
+			Expect(err).NotTo(HaveOccurred())
+
+			err = tx.Commit()
+			Expect(err).NotTo(HaveOccurred())
+
+			retrieved, err := store.Get(ctx, "tx_update", id)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(retrieved["name"]).To(Equal("updated"))
+		})
+
+		It("should rollback update on transaction rollback", func() {
+			ctx := context.Background()
+
+			err := store.CreateCollection(ctx, "tx_update_rollback", nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			id, err := store.Insert(ctx, "tx_update_rollback", basic.Document{"name": "original"})
+			Expect(err).NotTo(HaveOccurred())
+
+			tx, err := store.BeginTx(ctx)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = tx.Update(ctx, "tx_update_rollback", id, basic.Document{"name": "updated"})
+			Expect(err).NotTo(HaveOccurred())
+
+			err = tx.Rollback()
+			Expect(err).NotTo(HaveOccurred())
+
+			retrieved, err := store.Get(ctx, "tx_update_rollback", id)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(retrieved["name"]).To(Equal("original"))
+		})
+
+		It("should return ErrNotFound when updating non-existent document in transaction", func() {
+			ctx := context.Background()
+
+			err := store.CreateCollection(ctx, "tx_update_notfound", nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			tx, err := store.BeginTx(ctx)
+			Expect(err).NotTo(HaveOccurred())
+			defer func() { _ = tx.Rollback() }()
+
+			err = tx.Update(ctx, "tx_update_notfound", "non-existent", basic.Document{"test": "value"})
+			Expect(err).To(Equal(basic.ErrNotFound))
+
+			err = tx.Commit()
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should fail when transaction is closed", func() {
+			ctx := context.Background()
+
+			err := store.CreateCollection(ctx, "tx_update_closed", nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			id, err := store.Insert(ctx, "tx_update_closed", basic.Document{"test": "value"})
+			Expect(err).NotTo(HaveOccurred())
+
+			tx, err := store.BeginTx(ctx)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = tx.Commit()
+			Expect(err).NotTo(HaveOccurred())
+
+			err = tx.Update(ctx, "tx_update_closed", id, basic.Document{"new": "value"})
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("transaction is closed"))
+		})
+	})
+
+	Context("Delete", func() {
+		var store basic.Store
+
+		BeforeEach(func() {
+			var err error
+			store, err = basic.NewSQLiteStore(dbPath)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		AfterEach(func() {
+			if store != nil {
+				_ = store.Close()
+			}
+		})
+
+		It("should delete existing document successfully", func() {
+			ctx := context.Background()
+
+			err := store.CreateCollection(ctx, "test_delete", nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			id, err := store.Insert(ctx, "test_delete", basic.Document{"name": "to-delete"})
+			Expect(err).NotTo(HaveOccurred())
+
+			err = store.Delete(ctx, "test_delete", id)
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = store.Get(ctx, "test_delete", id)
+			Expect(err).To(Equal(basic.ErrNotFound))
+		})
+
+		It("should return ErrNotFound when deleting non-existent document", func() {
+			ctx := context.Background()
+
+			err := store.CreateCollection(ctx, "test_delete_notfound", nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = store.Delete(ctx, "test_delete_notfound", "non-existent-id")
+			Expect(err).To(Equal(basic.ErrNotFound))
+		})
+
+		It("should fail when deleting from non-existent collection", func() {
+			ctx := context.Background()
+
+			err := store.Delete(ctx, "nonexistent_collection", "some-id")
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("failed to delete document"))
+		})
+
+		It("should delete multiple documents independently", func() {
+			ctx := context.Background()
+
+			err := store.CreateCollection(ctx, "test_delete_multiple", nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			id1, err := store.Insert(ctx, "test_delete_multiple", basic.Document{"name": "doc1"})
+			Expect(err).NotTo(HaveOccurred())
+
+			id2, err := store.Insert(ctx, "test_delete_multiple", basic.Document{"name": "doc2"})
+			Expect(err).NotTo(HaveOccurred())
+
+			id3, err := store.Insert(ctx, "test_delete_multiple", basic.Document{"name": "doc3"})
+			Expect(err).NotTo(HaveOccurred())
+
+			err = store.Delete(ctx, "test_delete_multiple", id2)
+			Expect(err).NotTo(HaveOccurred())
+
+			doc1, err := store.Get(ctx, "test_delete_multiple", id1)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(doc1["name"]).To(Equal("doc1"))
+
+			_, err = store.Get(ctx, "test_delete_multiple", id2)
+			Expect(err).To(Equal(basic.ErrNotFound))
+
+			doc3, err := store.Get(ctx, "test_delete_multiple", id3)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(doc3["name"]).To(Equal("doc3"))
+		})
+
+		It("should fail when store is closed", func() {
+			ctx := context.Background()
+
+			err := store.CreateCollection(ctx, "test_delete_closed", nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			id, err := store.Insert(ctx, "test_delete_closed", basic.Document{"test": "value"})
+			Expect(err).NotTo(HaveOccurred())
+
+			_ = store.Close()
+
+			err = store.Delete(ctx, "test_delete_closed", id)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("store is closed"))
+		})
+	})
+
+	Context("Transaction Delete", func() {
+		var store basic.Store
+
+		BeforeEach(func() {
+			var err error
+			store, err = basic.NewSQLiteStore(dbPath)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		AfterEach(func() {
+			if store != nil {
+				_ = store.Close()
+			}
+		})
+
+		It("should delete document within transaction and commit", func() {
+			ctx := context.Background()
+
+			err := store.CreateCollection(ctx, "tx_delete", nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			id, err := store.Insert(ctx, "tx_delete", basic.Document{"name": "to-delete"})
+			Expect(err).NotTo(HaveOccurred())
+
+			tx, err := store.BeginTx(ctx)
+			Expect(err).NotTo(HaveOccurred())
+			defer func() { _ = tx.Rollback() }()
+
+			err = tx.Delete(ctx, "tx_delete", id)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = tx.Commit()
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = store.Get(ctx, "tx_delete", id)
+			Expect(err).To(Equal(basic.ErrNotFound))
+		})
+
+		It("should rollback delete on transaction rollback", func() {
+			ctx := context.Background()
+
+			err := store.CreateCollection(ctx, "tx_delete_rollback", nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			id, err := store.Insert(ctx, "tx_delete_rollback", basic.Document{"name": "keep-me"})
+			Expect(err).NotTo(HaveOccurred())
+
+			tx, err := store.BeginTx(ctx)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = tx.Delete(ctx, "tx_delete_rollback", id)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = tx.Rollback()
+			Expect(err).NotTo(HaveOccurred())
+
+			retrieved, err := store.Get(ctx, "tx_delete_rollback", id)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(retrieved["name"]).To(Equal("keep-me"))
+		})
+
+		It("should return ErrNotFound when deleting non-existent document in transaction", func() {
+			ctx := context.Background()
+
+			err := store.CreateCollection(ctx, "tx_delete_notfound", nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			tx, err := store.BeginTx(ctx)
+			Expect(err).NotTo(HaveOccurred())
+			defer func() { _ = tx.Rollback() }()
+
+			err = tx.Delete(ctx, "tx_delete_notfound", "non-existent")
+			Expect(err).To(Equal(basic.ErrNotFound))
+
+			err = tx.Commit()
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should fail when transaction is closed", func() {
+			ctx := context.Background()
+
+			err := store.CreateCollection(ctx, "tx_delete_closed", nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			id, err := store.Insert(ctx, "tx_delete_closed", basic.Document{"test": "value"})
+			Expect(err).NotTo(HaveOccurred())
+
+			tx, err := store.BeginTx(ctx)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = tx.Commit()
+			Expect(err).NotTo(HaveOccurred())
+
+			err = tx.Delete(ctx, "tx_delete_closed", id)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("transaction is closed"))
+		})
+	})
 })

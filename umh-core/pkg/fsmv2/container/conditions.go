@@ -14,7 +14,12 @@
 
 package container
 
-import "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
+import (
+	"fmt"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
+)
 
 // IsFullyHealthy returns true when all container health categories are Active.
 // Used by Active and Degraded states for health-based transitions.
@@ -31,15 +36,23 @@ func BuildDegradedReason(observed *ContainerObservedState) string {
 	var reasons []string
 
 	if observed.CPUHealth != models.Active {
-		reasons = append(reasons, "CPU degraded")
+		if observed.IsThrottled {
+			throttlePercent := observed.ThrottleRatio * 100
+			reasons = append(reasons, fmt.Sprintf("CPU throttled (%.1f%% periods)", throttlePercent))
+		} else {
+			cpuPercent := (observed.CPUUsageMCores / 1000.0) / observed.CgroupCores * 100
+			reasons = append(reasons, fmt.Sprintf("CPU at %.0f%% (threshold %.0f%%)", cpuPercent, constants.CPUHighThresholdPercent))
+		}
 	}
 
 	if observed.MemoryHealth != models.Active {
-		reasons = append(reasons, "Memory degraded")
+		memPercent := float64(observed.MemoryUsedBytes) / float64(observed.MemoryTotalBytes) * 100
+		reasons = append(reasons, fmt.Sprintf("Memory at %.0f%% (threshold %.0f%%)", memPercent, constants.MemoryHighThresholdPercent))
 	}
 
 	if observed.DiskHealth != models.Active {
-		reasons = append(reasons, "Disk degraded")
+		diskPercent := float64(observed.DiskUsedBytes) / float64(observed.DiskTotalBytes) * 100
+		reasons = append(reasons, fmt.Sprintf("Disk at %.0f%% (threshold %.0f%%)", diskPercent, constants.DiskHighThresholdPercent))
 	}
 
 	if len(reasons) == 0 {

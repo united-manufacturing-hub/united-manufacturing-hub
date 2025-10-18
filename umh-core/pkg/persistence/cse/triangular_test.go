@@ -4,15 +4,15 @@ import (
 	"context"
 	"errors"
 	"sync"
-	"testing"
 	"time"
+
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence/basic"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence/cse"
 )
 
-// mockStore implements basic.Store interface for testing.
-// Provides in-memory storage with collection-based isolation.
 type mockStore struct {
 	collections map[string]map[string]basic.Document
 	mu          sync.RWMutex
@@ -58,7 +58,6 @@ func (m *mockStore) Insert(ctx context.Context, collection string, doc basic.Doc
 
 	id := doc["id"].(string)
 
-	// Copy document to prevent external mutations
 	docCopy := make(basic.Document)
 	for k, v := range doc {
 		docCopy[k] = v
@@ -81,7 +80,6 @@ func (m *mockStore) Get(ctx context.Context, collection string, id string) (basi
 		return nil, basic.ErrNotFound
 	}
 
-	// Copy document to prevent external mutations
 	docCopy := make(basic.Document)
 	for k, v := range doc {
 		docCopy[k] = v
@@ -102,7 +100,6 @@ func (m *mockStore) Update(ctx context.Context, collection string, id string, do
 		return basic.ErrNotFound
 	}
 
-	// Copy document to prevent external mutations
 	docCopy := make(basic.Document)
 	for k, v := range doc {
 		docCopy[k] = v
@@ -156,7 +153,6 @@ func (m *mockStore) Close() error {
 	return nil
 }
 
-// mockTx implements basic.Tx interface for testing.
 type mockTx struct {
 	mockStore *mockStore
 	rollback  bool
@@ -210,7 +206,6 @@ func (tx *mockTx) Rollback() error {
 	return nil
 }
 
-// setupTestRegistry creates a registry with triangular collections for testing.
 func setupTestRegistry() *cse.Registry {
 	registry := cse.NewRegistry()
 
@@ -241,432 +236,394 @@ func setupTestRegistry() *cse.Registry {
 	return registry
 }
 
-func TestTriangularStore_NewTriangularStore(t *testing.T) {
-	store := newMockStore()
-	registry := setupTestRegistry()
+var _ = Describe("TriangularStore", func() {
+	var (
+		store    *mockStore
+		registry *cse.Registry
+		ts       *cse.TriangularStore
+		ctx      context.Context
+	)
 
-	ts := cse.NewTriangularStore(store, registry)
-
-	if ts == nil {
-		t.Fatal("NewTriangularStore() returned nil")
-	}
-}
-
-func TestTriangularStore_SaveIdentity(t *testing.T) {
-	store := newMockStore()
-	registry := setupTestRegistry()
-	ts := cse.NewTriangularStore(store, registry)
-
-	identity := basic.Document{
-		"id":   "worker-123",
-		"name": "Container A",
-		"ip":   "192.168.1.100",
-	}
-
-	err := ts.SaveIdentity(context.Background(), "container", "worker-123", identity)
-	if err != nil {
-		t.Fatalf("SaveIdentity() failed: %v", err)
-	}
-
-	// Verify CSE metadata was injected
-	saved, err := store.Get(context.Background(), "container_identity", "worker-123")
-	if err != nil {
-		t.Fatalf("Failed to retrieve saved identity: %v", err)
-	}
-
-	if saved[cse.FieldSyncID] == nil {
-		t.Error("_sync_id not injected")
-	}
-
-	if saved[cse.FieldVersion] != int64(1) {
-		t.Errorf("_version = %v, want 1", saved[cse.FieldVersion])
-	}
-
-	if saved[cse.FieldCreatedAt] == nil {
-		t.Error("_created_at not injected")
-	}
-
-	// Verify original fields preserved
-	if saved["name"] != "Container A" {
-		t.Errorf("name = %v, want 'Container A'", saved["name"])
-	}
-
-	if saved["ip"] != "192.168.1.100" {
-		t.Errorf("ip = %v, want '192.168.1.100'", saved["ip"])
-	}
-}
-
-func TestTriangularStore_LoadIdentity(t *testing.T) {
-	store := newMockStore()
-	registry := setupTestRegistry()
-	ts := cse.NewTriangularStore(store, registry)
-
-	// Save identity first
-	identity := basic.Document{
-		"id":   "worker-123",
-		"name": "Container A",
-	}
-	ts.SaveIdentity(context.Background(), "container", "worker-123", identity)
-
-	// Load identity
-	loaded, err := ts.LoadIdentity(context.Background(), "container", "worker-123")
-	if err != nil {
-		t.Fatalf("LoadIdentity() failed: %v", err)
-	}
-
-	if loaded["name"] != "Container A" {
-		t.Errorf("name = %v, want 'Container A'", loaded["name"])
-	}
-
-	// Test loading non-existent worker
-	_, err = ts.LoadIdentity(context.Background(), "container", "nonexistent")
-	if !errors.Is(err, basic.ErrNotFound) {
-		t.Errorf("LoadIdentity() for nonexistent worker should return ErrNotFound, got %v", err)
-	}
-}
-
-func TestTriangularStore_SaveDesired(t *testing.T) {
-	store := newMockStore()
-	registry := setupTestRegistry()
-	ts := cse.NewTriangularStore(store, registry)
-
-	// First save
-	desired := basic.Document{
-		"id":     "worker-123",
-		"config": "value1",
-	}
-	err := ts.SaveDesired(context.Background(), "container", "worker-123", desired)
-	if err != nil {
-		t.Fatalf("SaveDesired() failed: %v", err)
-	}
-
-	saved, _ := store.Get(context.Background(), "container_desired", "worker-123")
-	firstSyncID := saved[cse.FieldSyncID].(int64)
-	firstVersion := saved[cse.FieldVersion].(int64)
-
-	if firstVersion != 1 {
-		t.Errorf("First save _version = %v, want 1", firstVersion)
-	}
-
-	// Second save (update)
-	desired["config"] = "value2"
-	err = ts.SaveDesired(context.Background(), "container", "worker-123", desired)
-	if err != nil {
-		t.Fatalf("SaveDesired() second save failed: %v", err)
-	}
-
-	saved, _ = store.Get(context.Background(), "container_desired", "worker-123")
-	secondSyncID := saved[cse.FieldSyncID].(int64)
-	secondVersion := saved[cse.FieldVersion].(int64)
-
-	if secondSyncID <= firstSyncID {
-		t.Errorf("SaveDesired() should increment _sync_id: first=%v, second=%v", firstSyncID, secondSyncID)
-	}
-
-	if secondVersion != 2 {
-		t.Errorf("SaveDesired() should increment _version to 2, got %v", secondVersion)
-	}
-
-	if saved[cse.FieldUpdatedAt] == nil {
-		t.Error("_updated_at not set on update")
-	}
-}
-
-func TestTriangularStore_LoadDesired(t *testing.T) {
-	store := newMockStore()
-	registry := setupTestRegistry()
-	ts := cse.NewTriangularStore(store, registry)
-
-	// Save desired first
-	desired := basic.Document{
-		"id":     "worker-123",
-		"config": "value",
-	}
-	ts.SaveDesired(context.Background(), "container", "worker-123", desired)
-
-	// Load desired
-	loaded, err := ts.LoadDesired(context.Background(), "container", "worker-123")
-	if err != nil {
-		t.Fatalf("LoadDesired() failed: %v", err)
-	}
-
-	if loaded["config"] != "value" {
-		t.Errorf("config = %v, want 'value'", loaded["config"])
-	}
-}
-
-func TestTriangularStore_SaveObserved(t *testing.T) {
-	store := newMockStore()
-	registry := setupTestRegistry()
-	ts := cse.NewTriangularStore(store, registry)
-
-	// First save
-	observed := basic.Document{
-		"id":     "worker-123",
-		"status": "running",
-		"cpu":    50,
-	}
-	err := ts.SaveObserved(context.Background(), "container", "worker-123", observed)
-	if err != nil {
-		t.Fatalf("SaveObserved() failed: %v", err)
-	}
-
-	saved, _ := store.Get(context.Background(), "container_observed", "worker-123")
-	firstSyncID := saved[cse.FieldSyncID].(int64)
-	firstVersion := saved[cse.FieldVersion].(int64)
-
-	if firstVersion != 1 {
-		t.Errorf("First save _version = %v, want 1", firstVersion)
-	}
-
-	// Second save (update)
-	observed["cpu"] = 60
-	err = ts.SaveObserved(context.Background(), "container", "worker-123", observed)
-	if err != nil {
-		t.Fatalf("SaveObserved() second save failed: %v", err)
-	}
-
-	saved, _ = store.Get(context.Background(), "container_observed", "worker-123")
-	secondSyncID := saved[cse.FieldSyncID].(int64)
-	secondVersion := saved[cse.FieldVersion].(int64)
-
-	// Critical test: Observed should increment sync ID but NOT version
-	if secondSyncID <= firstSyncID {
-		t.Errorf("SaveObserved() should increment _sync_id: first=%v, second=%v", firstSyncID, secondSyncID)
-	}
-
-	if secondVersion != 1 {
-		t.Errorf("SaveObserved() should NOT increment _version (ephemeral data), expected 1, got %v", secondVersion)
-	}
-}
-
-func TestTriangularStore_LoadObserved(t *testing.T) {
-	store := newMockStore()
-	registry := setupTestRegistry()
-	ts := cse.NewTriangularStore(store, registry)
-
-	// Save observed first
-	observed := basic.Document{
-		"id":     "worker-123",
-		"status": "running",
-	}
-	ts.SaveObserved(context.Background(), "container", "worker-123", observed)
-
-	// Load observed
-	loaded, err := ts.LoadObserved(context.Background(), "container", "worker-123")
-	if err != nil {
-		t.Fatalf("LoadObserved() failed: %v", err)
-	}
-
-	if loaded["status"] != "running" {
-		t.Errorf("status = %v, want 'running'", loaded["status"])
-	}
-}
-
-func TestTriangularStore_LoadSnapshot(t *testing.T) {
-	store := newMockStore()
-	registry := setupTestRegistry()
-	ts := cse.NewTriangularStore(store, registry)
-
-	// Save all three parts
-	ts.SaveIdentity(context.Background(), "container", "worker-123", basic.Document{
-		"id":   "worker-123",
-		"name": "Container A",
-	})
-	ts.SaveDesired(context.Background(), "container", "worker-123", basic.Document{
-		"id":     "worker-123",
-		"config": "value",
-	})
-	ts.SaveObserved(context.Background(), "container", "worker-123", basic.Document{
-		"id":     "worker-123",
-		"status": "running",
+	BeforeEach(func() {
+		ctx = context.Background()
+		store = newMockStore()
+		registry = setupTestRegistry()
+		ts = cse.NewTriangularStore(store, registry)
 	})
 
-	// Load snapshot
-	snapshot, err := ts.LoadSnapshot(context.Background(), "container", "worker-123")
-	if err != nil {
-		t.Fatalf("LoadSnapshot() failed: %v", err)
-	}
-
-	if snapshot.Identity["name"] != "Container A" {
-		t.Error("Identity not loaded correctly")
-	}
-	if snapshot.Desired["config"] != "value" {
-		t.Error("Desired not loaded correctly")
-	}
-	if snapshot.Observed["status"] != "running" {
-		t.Error("Observed not loaded correctly")
-	}
-}
-
-func TestTriangularStore_LoadSnapshot_MissingParts(t *testing.T) {
-	store := newMockStore()
-	registry := setupTestRegistry()
-	ts := cse.NewTriangularStore(store, registry)
-
-	// Save only identity
-	ts.SaveIdentity(context.Background(), "container", "worker-123", basic.Document{
-		"id":   "worker-123",
-		"name": "Container A",
+	Describe("NewTriangularStore", func() {
+		It("should create non-nil store", func() {
+			Expect(ts).NotTo(BeNil())
+		})
 	})
 
-	// Attempt to load snapshot (should fail - missing desired and observed)
-	_, err := ts.LoadSnapshot(context.Background(), "container", "worker-123")
-	if err == nil {
-		t.Error("LoadSnapshot() should fail when parts are missing")
-	}
-}
+	Describe("SaveIdentity", func() {
+		var identity basic.Document
 
-func TestTriangularStore_DeleteWorker(t *testing.T) {
-	store := newMockStore()
-	registry := setupTestRegistry()
-	ts := cse.NewTriangularStore(store, registry)
+		BeforeEach(func() {
+			identity = basic.Document{
+				"id":   "worker-123",
+				"name": "Container A",
+				"ip":   "192.168.1.100",
+			}
+		})
 
-	// Save all three parts
-	ts.SaveIdentity(context.Background(), "container", "worker-123", basic.Document{
-		"id":   "worker-123",
-		"name": "Container A",
+		It("should save identity successfully", func() {
+			err := ts.SaveIdentity(ctx, "container", "worker-123", identity)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should inject CSE metadata", func() {
+			err := ts.SaveIdentity(ctx, "container", "worker-123", identity)
+			Expect(err).NotTo(HaveOccurred())
+
+			saved, err := store.Get(ctx, "container_identity", "worker-123")
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(saved[cse.FieldSyncID]).NotTo(BeNil())
+			Expect(saved[cse.FieldVersion]).To(Equal(int64(1)))
+			Expect(saved[cse.FieldCreatedAt]).NotTo(BeNil())
+		})
+
+		It("should preserve original fields", func() {
+			err := ts.SaveIdentity(ctx, "container", "worker-123", identity)
+			Expect(err).NotTo(HaveOccurred())
+
+			saved, err := store.Get(ctx, "container_identity", "worker-123")
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(saved["name"]).To(Equal("Container A"))
+			Expect(saved["ip"]).To(Equal("192.168.1.100"))
+		})
 	})
-	ts.SaveDesired(context.Background(), "container", "worker-123", basic.Document{
-		"id":     "worker-123",
-		"config": "value",
+
+	Describe("LoadIdentity", func() {
+		BeforeEach(func() {
+			identity := basic.Document{
+				"id":   "worker-123",
+				"name": "Container A",
+			}
+			ts.SaveIdentity(ctx, "container", "worker-123", identity)
+		})
+
+		It("should load identity successfully", func() {
+			loaded, err := ts.LoadIdentity(ctx, "container", "worker-123")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(loaded["name"]).To(Equal("Container A"))
+		})
+
+		Context("when worker does not exist", func() {
+			It("should return ErrNotFound", func() {
+				_, err := ts.LoadIdentity(ctx, "container", "nonexistent")
+				Expect(err).To(MatchError(basic.ErrNotFound))
+			})
+		})
 	})
-	ts.SaveObserved(context.Background(), "container", "worker-123", basic.Document{
-		"id":     "worker-123",
-		"status": "running",
+
+	Describe("SaveDesired", func() {
+		var desired basic.Document
+
+		BeforeEach(func() {
+			desired = basic.Document{
+				"id":     "worker-123",
+				"config": "value1",
+			}
+		})
+
+		It("should save desired successfully", func() {
+			err := ts.SaveDesired(ctx, "container", "worker-123", desired)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should set version to 1 on first save", func() {
+			err := ts.SaveDesired(ctx, "container", "worker-123", desired)
+			Expect(err).NotTo(HaveOccurred())
+
+			saved, err := store.Get(ctx, "container_desired", "worker-123")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(saved[cse.FieldVersion]).To(Equal(int64(1)))
+		})
+
+		Context("when updating desired state", func() {
+			BeforeEach(func() {
+				ts.SaveDesired(ctx, "container", "worker-123", desired)
+			})
+
+			It("should increment sync ID", func() {
+				saved, _ := store.Get(ctx, "container_desired", "worker-123")
+				firstSyncID := saved[cse.FieldSyncID].(int64)
+
+				desired["config"] = "value2"
+				ts.SaveDesired(ctx, "container", "worker-123", desired)
+
+				saved, _ = store.Get(ctx, "container_desired", "worker-123")
+				secondSyncID := saved[cse.FieldSyncID].(int64)
+
+				Expect(secondSyncID).To(BeNumerically(">", firstSyncID))
+			})
+
+			It("should increment version", func() {
+				desired["config"] = "value2"
+				err := ts.SaveDesired(ctx, "container", "worker-123", desired)
+				Expect(err).NotTo(HaveOccurred())
+
+				saved, err := store.Get(ctx, "container_desired", "worker-123")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(saved[cse.FieldVersion]).To(Equal(int64(2)))
+			})
+
+			It("should set updated_at timestamp", func() {
+				desired["config"] = "value2"
+				err := ts.SaveDesired(ctx, "container", "worker-123", desired)
+				Expect(err).NotTo(HaveOccurred())
+
+				saved, err := store.Get(ctx, "container_desired", "worker-123")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(saved[cse.FieldUpdatedAt]).NotTo(BeNil())
+			})
+		})
 	})
 
-	// Delete worker
-	err := ts.DeleteWorker(context.Background(), "container", "worker-123")
-	if err != nil {
-		t.Fatalf("DeleteWorker() failed: %v", err)
-	}
+	Describe("LoadDesired", func() {
+		BeforeEach(func() {
+			desired := basic.Document{
+				"id":     "worker-123",
+				"config": "value",
+			}
+			ts.SaveDesired(ctx, "container", "worker-123", desired)
+		})
 
-	// Verify all parts deleted
-	_, err = store.Get(context.Background(), "container_identity", "worker-123")
-	if !errors.Is(err, basic.ErrNotFound) {
-		t.Error("Identity should be deleted")
-	}
-
-	_, err = store.Get(context.Background(), "container_desired", "worker-123")
-	if !errors.Is(err, basic.ErrNotFound) {
-		t.Error("Desired should be deleted")
-	}
-
-	_, err = store.Get(context.Background(), "container_observed", "worker-123")
-	if !errors.Is(err, basic.ErrNotFound) {
-		t.Error("Observed should be deleted")
-	}
-}
-
-func TestTriangularStore_GlobalSyncID_Increments(t *testing.T) {
-	store := newMockStore()
-	registry := setupTestRegistry()
-	ts := cse.NewTriangularStore(store, registry)
-
-	// Save identity
-	ts.SaveIdentity(context.Background(), "container", "worker-1", basic.Document{
-		"id": "worker-1",
+		It("should load desired successfully", func() {
+			loaded, err := ts.LoadDesired(ctx, "container", "worker-123")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(loaded["config"]).To(Equal("value"))
+		})
 	})
-	identity1, _ := store.Get(context.Background(), "container_identity", "worker-1")
-	syncID1 := identity1[cse.FieldSyncID].(int64)
 
-	// Save desired (different worker)
-	ts.SaveDesired(context.Background(), "container", "worker-2", basic.Document{
-		"id": "worker-2",
+	Describe("SaveObserved", func() {
+		var observed basic.Document
+
+		BeforeEach(func() {
+			observed = basic.Document{
+				"id":     "worker-123",
+				"status": "running",
+				"cpu":    50,
+			}
+		})
+
+		It("should save observed successfully", func() {
+			err := ts.SaveObserved(ctx, "container", "worker-123", observed)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should set version to 1 on first save", func() {
+			err := ts.SaveObserved(ctx, "container", "worker-123", observed)
+			Expect(err).NotTo(HaveOccurred())
+
+			saved, err := store.Get(ctx, "container_observed", "worker-123")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(saved[cse.FieldVersion]).To(Equal(int64(1)))
+		})
+
+		Context("when updating observed state", func() {
+			BeforeEach(func() {
+				ts.SaveObserved(ctx, "container", "worker-123", observed)
+			})
+
+			It("should increment sync ID", func() {
+				saved, _ := store.Get(ctx, "container_observed", "worker-123")
+				firstSyncID := saved[cse.FieldSyncID].(int64)
+
+				observed["cpu"] = 60
+				ts.SaveObserved(ctx, "container", "worker-123", observed)
+
+				saved, _ = store.Get(ctx, "container_observed", "worker-123")
+				secondSyncID := saved[cse.FieldSyncID].(int64)
+
+				Expect(secondSyncID).To(BeNumerically(">", firstSyncID))
+			})
+
+			It("should NOT increment version", func() {
+				observed["cpu"] = 60
+				err := ts.SaveObserved(ctx, "container", "worker-123", observed)
+				Expect(err).NotTo(HaveOccurred())
+
+				saved, err := store.Get(ctx, "container_observed", "worker-123")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(saved[cse.FieldVersion]).To(Equal(int64(1)))
+			})
+		})
 	})
-	desired2, _ := store.Get(context.Background(), "container_desired", "worker-2")
-	syncID2 := desired2[cse.FieldSyncID].(int64)
 
-	// Save observed (yet another worker)
-	ts.SaveObserved(context.Background(), "container", "worker-3", basic.Document{
-		"id": "worker-3",
+	Describe("LoadObserved", func() {
+		BeforeEach(func() {
+			observed := basic.Document{
+				"id":     "worker-123",
+				"status": "running",
+			}
+			ts.SaveObserved(ctx, "container", "worker-123", observed)
+		})
+
+		It("should load observed successfully", func() {
+			loaded, err := ts.LoadObserved(ctx, "container", "worker-123")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(loaded["status"]).To(Equal("running"))
+		})
 	})
-	observed3, _ := store.Get(context.Background(), "container_observed", "worker-3")
-	syncID3 := observed3[cse.FieldSyncID].(int64)
 
-	// Verify global sync ID increments across all operations
-	if syncID2 <= syncID1 {
-		t.Errorf("Global sync ID should increment: identity=%v, desired=%v", syncID1, syncID2)
-	}
-	if syncID3 <= syncID2 {
-		t.Errorf("Global sync ID should increment: desired=%v, observed=%v", syncID2, syncID3)
-	}
-}
+	Describe("LoadSnapshot", func() {
+		BeforeEach(func() {
+			ts.SaveIdentity(ctx, "container", "worker-123", basic.Document{
+				"id":   "worker-123",
+				"name": "Container A",
+			})
+			ts.SaveDesired(ctx, "container", "worker-123", basic.Document{
+				"id":     "worker-123",
+				"config": "value",
+			})
+			ts.SaveObserved(ctx, "container", "worker-123", basic.Document{
+				"id":     "worker-123",
+				"status": "running",
+			})
+		})
 
-func TestTriangularStore_UnregisteredWorkerType(t *testing.T) {
-	store := newMockStore()
-	registry := setupTestRegistry()
-	ts := cse.NewTriangularStore(store, registry)
+		It("should load complete snapshot", func() {
+			snapshot, err := ts.LoadSnapshot(ctx, "container", "worker-123")
+			Expect(err).NotTo(HaveOccurred())
 
-	// Attempt to save identity for unregistered worker type
-	err := ts.SaveIdentity(context.Background(), "nonexistent", "worker-123", basic.Document{
-		"id": "worker-123",
+			Expect(snapshot.Identity["name"]).To(Equal("Container A"))
+			Expect(snapshot.Desired["config"]).To(Equal("value"))
+			Expect(snapshot.Observed["status"]).To(Equal("running"))
+		})
+
+		Context("when parts are missing", func() {
+			It("should fail when desired and observed are missing", func() {
+				ts := cse.NewTriangularStore(newMockStore(), registry)
+				ts.SaveIdentity(ctx, "container", "worker-456", basic.Document{
+					"id":   "worker-456",
+					"name": "Container B",
+				})
+
+				_, err := ts.LoadSnapshot(ctx, "container", "worker-456")
+				Expect(err).To(HaveOccurred())
+			})
+		})
 	})
-	if err == nil {
-		t.Error("SaveIdentity() should fail for unregistered worker type")
-	}
-}
 
-func TestTriangularStore_TimestampProgression(t *testing.T) {
-	store := newMockStore()
-	registry := setupTestRegistry()
-	ts := cse.NewTriangularStore(store, registry)
+	Describe("DeleteWorker", func() {
+		BeforeEach(func() {
+			ts.SaveIdentity(ctx, "container", "worker-123", basic.Document{
+				"id":   "worker-123",
+				"name": "Container A",
+			})
+			ts.SaveDesired(ctx, "container", "worker-123", basic.Document{
+				"id":     "worker-123",
+				"config": "value",
+			})
+			ts.SaveObserved(ctx, "container", "worker-123", basic.Document{
+				"id":     "worker-123",
+				"status": "running",
+			})
+		})
 
-	// First save
-	ts.SaveDesired(context.Background(), "container", "worker-123", basic.Document{
-		"id": "worker-123",
+		It("should delete all three parts", func() {
+			err := ts.DeleteWorker(ctx, "container", "worker-123")
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = store.Get(ctx, "container_identity", "worker-123")
+			Expect(err).To(MatchError(basic.ErrNotFound))
+
+			_, err = store.Get(ctx, "container_desired", "worker-123")
+			Expect(err).To(MatchError(basic.ErrNotFound))
+
+			_, err = store.Get(ctx, "container_observed", "worker-123")
+			Expect(err).To(MatchError(basic.ErrNotFound))
+		})
 	})
-	first, _ := store.Get(context.Background(), "container_desired", "worker-123")
-	createdAt := first[cse.FieldCreatedAt].(time.Time)
 
-	// Small delay to ensure time progresses
-	time.Sleep(10 * time.Millisecond)
+	Describe("GlobalSyncID", func() {
+		It("should increment across all operations", func() {
+			ts.SaveIdentity(ctx, "container", "worker-1", basic.Document{
+				"id": "worker-1",
+			})
+			identity1, _ := store.Get(ctx, "container_identity", "worker-1")
+			syncID1 := identity1[cse.FieldSyncID].(int64)
 
-	// Second save
-	ts.SaveDesired(context.Background(), "container", "worker-123", basic.Document{
-		"id": "worker-123",
+			ts.SaveDesired(ctx, "container", "worker-2", basic.Document{
+				"id": "worker-2",
+			})
+			desired2, _ := store.Get(ctx, "container_desired", "worker-2")
+			syncID2 := desired2[cse.FieldSyncID].(int64)
+
+			ts.SaveObserved(ctx, "container", "worker-3", basic.Document{
+				"id": "worker-3",
+			})
+			observed3, _ := store.Get(ctx, "container_observed", "worker-3")
+			syncID3 := observed3[cse.FieldSyncID].(int64)
+
+			Expect(syncID2).To(BeNumerically(">", syncID1))
+			Expect(syncID3).To(BeNumerically(">", syncID2))
+		})
 	})
-	second, _ := store.Get(context.Background(), "container_desired", "worker-123")
-	updatedAt := second[cse.FieldUpdatedAt].(time.Time)
 
-	if !updatedAt.After(createdAt) {
-		t.Errorf("_updated_at should be after _created_at: created=%v, updated=%v", createdAt, updatedAt)
-	}
-}
-
-func TestTriangularStore_DocumentValidation(t *testing.T) {
-	store := newMockStore()
-	registry := setupTestRegistry()
-	ts := cse.NewTriangularStore(store, registry)
-
-	// Test nil document
-	err := ts.SaveIdentity(context.Background(), "container", "worker-123", nil)
-	if err == nil {
-		t.Error("SaveIdentity() should fail for nil document")
-	}
-
-	// Test document without id field
-	err = ts.SaveIdentity(context.Background(), "container", "worker-123", basic.Document{
-		"name": "Container A",
+	Describe("UnregisteredWorkerType", func() {
+		It("should fail for unregistered worker type", func() {
+			err := ts.SaveIdentity(ctx, "nonexistent", "worker-123", basic.Document{
+				"id": "worker-123",
+			})
+			Expect(err).To(HaveOccurred())
+		})
 	})
-	if err == nil {
-		t.Error("SaveIdentity() should fail for document without 'id' field")
-	}
 
-	// Test same for desired
-	err = ts.SaveDesired(context.Background(), "container", "worker-123", basic.Document{
-		"config": "value",
-	})
-	if err == nil {
-		t.Error("SaveDesired() should fail for document without 'id' field")
-	}
+	Describe("TimestampProgression", func() {
+		It("should have updated_at after created_at", func() {
+			ts.SaveDesired(ctx, "container", "worker-123", basic.Document{
+				"id": "worker-123",
+			})
+			first, _ := store.Get(ctx, "container_desired", "worker-123")
+			createdAt := first[cse.FieldCreatedAt].(time.Time)
 
-	// Test same for observed
-	err = ts.SaveObserved(context.Background(), "container", "worker-123", basic.Document{
-		"status": "running",
+			time.Sleep(10 * time.Millisecond)
+
+			ts.SaveDesired(ctx, "container", "worker-123", basic.Document{
+				"id": "worker-123",
+			})
+			second, _ := store.Get(ctx, "container_desired", "worker-123")
+			updatedAt := second[cse.FieldUpdatedAt].(time.Time)
+
+			Expect(updatedAt).To(BeTemporally(">", createdAt))
+		})
 	})
-	if err == nil {
-		t.Error("SaveObserved() should fail for document without 'id' field")
-	}
-}
+
+	Describe("DocumentValidation", func() {
+		It("should fail for nil document", func() {
+			err := ts.SaveIdentity(ctx, "container", "worker-123", nil)
+			Expect(err).To(HaveOccurred())
+		})
+
+		It("should fail for document without id field", func() {
+			err := ts.SaveIdentity(ctx, "container", "worker-123", basic.Document{
+				"name": "Container A",
+			})
+			Expect(err).To(HaveOccurred())
+		})
+
+		Context("for desired state", func() {
+			It("should fail for document without id field", func() {
+				err := ts.SaveDesired(ctx, "container", "worker-123", basic.Document{
+					"config": "value",
+				})
+				Expect(err).To(HaveOccurred())
+			})
+		})
+
+		Context("for observed state", func() {
+			It("should fail for document without id field", func() {
+				err := ts.SaveObserved(ctx, "container", "worker-123", basic.Document{
+					"status": "running",
+				})
+				Expect(err).To(HaveOccurred())
+			})
+		})
+	})
+})
