@@ -200,6 +200,9 @@ func NewSupervisor(cfg Config) *Supervisor {
 	if observationTimeout >= staleThreshold {
 		panic(fmt.Sprintf("supervisor config error: observationTimeout (%v) must be less than staleThreshold (%v)", observationTimeout, staleThreshold))
 	}
+	if staleThreshold >= timeout {
+		panic(fmt.Sprintf("supervisor config error: staleThreshold (%v) must be less than collectorTimeout (%v)", staleThreshold, timeout))
+	}
 
 	cfg.Logger.Infof("Supervisor timeout configuration: ObservationTimeout=%v, StaleThreshold=%v, CollectorTimeout=%v",
 		observationTimeout, staleThreshold, timeout)
