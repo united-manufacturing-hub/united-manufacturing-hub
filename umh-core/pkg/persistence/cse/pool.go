@@ -30,6 +30,7 @@ func (p *ObjectPool) Get(key string) (interface{}, bool) {
 	defer p.mu.RUnlock()
 
 	obj, found := p.objects[key]
+
 	return obj, found
 }
 
@@ -80,6 +81,7 @@ func (p *ObjectPool) Has(key string) bool {
 	defer p.mu.RUnlock()
 
 	_, found := p.objects[key]
+
 	return found
 }
 
