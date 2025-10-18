@@ -612,6 +612,29 @@ func (s *sqliteStore) Find(ctx context.Context, collection string, query Query) 
 	return applyClientSideOperations(documents, query), nil
 }
 
+func (s *sqliteStore) maintenanceInternal(ctx context.Context) error {
+	if _, err := s.db.ExecContext(ctx, "VACUUM"); err != nil {
+		return fmt.Errorf("VACUUM failed: %w", err)
+	}
+
+	if _, err := s.db.ExecContext(ctx, "ANALYZE"); err != nil {
+		return fmt.Errorf("ANALYZE failed: %w", err)
+	}
+
+	return nil
+}
+
+func (s *sqliteStore) Maintenance(ctx context.Context) error {
+	s.mu.RLock()
+	if s.closed {
+		s.mu.RUnlock()
+		return errors.New("store is closed")
+	}
+	s.mu.RUnlock()
+
+	return s.maintenanceInternal(ctx)
+}
+
 // BeginTx starts a transaction for atomic multi-document operations.
 //
 // DESIGN DECISION: Use DEFERRED transaction isolation level
@@ -687,7 +710,7 @@ func (s *sqliteStore) BeginTx(ctx context.Context) (Tx, error) {
 //
 // Returns:
 //   - error: if cleanup fails (usually safe to ignore)
-func (s *sqliteStore) Close() error {
+func (s *sqliteStore) Close(ctx context.Context) error {
 	if s.closed {
 		return errors.New("store already closed")
 	}
@@ -1000,6 +1023,10 @@ func (t *sqliteTx) Rollback() error {
 	}
 
 	return nil
+}
+
+func (tx *sqliteTx) Maintenance(ctx context.Context) error {
+	return errors.New("cannot run maintenance in transaction, use Store.Maintenance()")
 }
 
 // buildSQLQuery constructs SQL ORDER BY clause using json_extract for sorting.

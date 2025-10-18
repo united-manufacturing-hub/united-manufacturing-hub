@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"go.uber.org/zap"
@@ -101,14 +102,15 @@ type Supervisor struct {
 // managed by a multi-worker Supervisor. It groups the worker's identity,
 // implementation, current FSM state, and observation collector.
 //
-// This struct is internal to the supervisor package and used for managing
-// multiple workers within a single Supervisor instance. Each worker has its
-// own context containing its isolated state and data collection pipeline.
+// THREAD SAFETY: currentState is protected by mu. Always lock before accessing.
+// tickInProgress prevents concurrent ticks for the same worker.
 type WorkerContext struct {
-	identity     fsmv2.Identity
-	worker       fsmv2.Worker
-	currentState fsmv2.State
-	collector    *Collector
+	mu             sync.RWMutex
+	tickInProgress atomic.Bool
+	identity       fsmv2.Identity
+	worker         fsmv2.Worker
+	currentState   fsmv2.State
+	collector      *Collector
 }
 
 // CollectorHealthConfig configures observation collector health monitoring.
@@ -277,6 +279,9 @@ func (s *Supervisor) RemoveWorker(workerID string) error {
 		return fmt.Errorf("worker %s not found", workerID)
 	}
 
+	// TODO: Stop collector goroutine to prevent leak
+	// Need to add collector.Stop() method or use context cancellation
+
 	delete(s.workers, workerID)
 	s.logger.Infof("Removed worker %s from supervisor", workerID)
 	return nil
@@ -327,7 +332,7 @@ func (s *Supervisor) SetRestartCount(count int) {
 	s.collectorHealth.restartCount = count
 }
 
-func (s *Supervisor) RestartCollector(ctx context.Context) error {
+func (s *Supervisor) RestartCollector(ctx context.Context, workerID string) error {
 	// I1 & I4: This should never be called with restartCount >= maxRestartAttempts.
 	// If it is, that's a programming error (bug in tick() logic).
 	if s.collectorHealth.restartCount >= s.collectorHealth.maxRestartAttempts {
@@ -339,18 +344,22 @@ func (s *Supervisor) RestartCollector(ctx context.Context) error {
 	s.collectorHealth.lastRestart = time.Now()
 
 	backoff := time.Duration(s.collectorHealth.restartCount*2) * time.Second
-	s.logger.Warnf("Restarting collector (attempt %d/%d) after %v backoff",
-		s.collectorHealth.restartCount, s.collectorHealth.maxRestartAttempts, backoff)
+	s.logger.Warnf("Restarting collector for worker %s (attempt %d/%d) after %v backoff",
+		workerID, s.collectorHealth.restartCount, s.collectorHealth.maxRestartAttempts, backoff)
 
 	time.Sleep(backoff)
 
 	s.mu.RLock()
-	for _, workerCtx := range s.workers {
-		if workerCtx.collector != nil {
-			workerCtx.collector.Restart()
-		}
-	}
+	workerCtx, exists := s.workers[workerID]
 	s.mu.RUnlock()
+
+	if !exists {
+		return fmt.Errorf("worker %s not found", workerID)
+	}
+
+	if workerCtx.collector != nil {
+		workerCtx.collector.Restart()
+	}
 
 	return nil
 }
@@ -446,6 +455,13 @@ func (s *Supervisor) tickWorker(ctx context.Context, workerID string) error {
 		return fmt.Errorf("worker %s not found", workerID)
 	}
 
+	// Skip if tick already in progress
+	if !workerCtx.tickInProgress.CompareAndSwap(false, true) {
+		s.logger.Debugf("Skipping tick for %s (previous tick still running)", workerID)
+		return nil
+	}
+	defer workerCtx.tickInProgress.Store(false)
+
 	// Load latest snapshot from database
 	snapshot, err := s.store.LoadSnapshot(ctx, s.workerType, workerID)
 	if err != nil {
@@ -471,7 +487,7 @@ func (s *Supervisor) tickWorker(ctx context.Context, workerID string) error {
 
 			// I4: Safe to restart (restartCount < maxRestartAttempts)
 			// RestartCollector will panic if invariant violated (defensive check)
-			if err := s.RestartCollector(ctx); err != nil {
+			if err := s.RestartCollector(ctx, workerID); err != nil {
 				return fmt.Errorf("failed to restart collector: %w", err)
 			}
 		}
@@ -487,13 +503,17 @@ func (s *Supervisor) tickWorker(ctx context.Context, workerID string) error {
 	}
 
 	// Data is fresh - safe to progress FSM
-	// Call state transition
-	nextState, signal, action := workerCtx.currentState.Next(*snapshot)
+	// Call state transition (read current state with lock)
+	workerCtx.mu.RLock()
+	currentState := workerCtx.currentState
+	workerCtx.mu.RUnlock()
+
+	nextState, signal, action := currentState.Next(*snapshot)
 
 	// VALIDATION: Cannot switch state AND emit action simultaneously
-	if nextState != workerCtx.currentState && action != nil {
+	if nextState != currentState && action != nil {
 		panic(fmt.Sprintf("invalid state transition: state %s tried to switch to %s AND emit action %s",
-			workerCtx.currentState.String(), nextState.String(), action.Name()))
+			currentState.String(), nextState.String(), action.Name()))
 	}
 
 	// Execute action if present
@@ -506,13 +526,13 @@ func (s *Supervisor) tickWorker(ctx context.Context, workerID string) error {
 	}
 
 	// Transition to next state
-	if nextState != workerCtx.currentState {
+	if nextState != currentState {
 		s.logger.Infof("State transition: %s -> %s (reason: %s)",
-			workerCtx.currentState.String(), nextState.String(), nextState.Reason())
+			currentState.String(), nextState.String(), nextState.Reason())
 
-		s.mu.Lock()
+		workerCtx.mu.Lock()
 		workerCtx.currentState = nextState
-		s.mu.Unlock()
+		workerCtx.mu.Unlock()
 	}
 
 	// Process signal
@@ -629,7 +649,10 @@ func (s *Supervisor) GetCurrentState() string {
 	defer s.mu.RUnlock()
 
 	for _, workerCtx := range s.workers {
-		return workerCtx.currentState.String()
+		workerCtx.mu.RLock()
+		state := workerCtx.currentState.String()
+		workerCtx.mu.RUnlock()
+		return state
 	}
 
 	return "no workers"
