@@ -87,6 +87,40 @@ type Snapshot struct {
 // They can be long-running and will be retried with backoff on failure.
 // Actions MUST be idempotent - safe to retry after partial completion.
 //
+// IDEMPOTENCY REQUIREMENT (Invariant I10):
+// Actions MUST be safe to call multiple times. Each action implementation should:
+//   1. Check if work is already done before performing it
+//   2. Produce the same final state whether called once or multiple times
+//   3. Handle partial completion gracefully (retry from checkpoint)
+//
+// Example idempotent action:
+//
+//	func (a *CreateFileAction) Execute(ctx context.Context) error {
+//	    // Check if already done
+//	    if fileExists(a.path) {
+//	        return nil  // Already created, idempotent
+//	    }
+//	    return createFile(a.path, a.content)
+//	}
+//
+// Example NON-idempotent action (DO NOT DO THIS):
+//
+//	func (a *IncrementCounterAction) Execute(ctx context.Context) error {
+//	    counter++  // WRONG! Multiple calls increment multiple times
+//	    return nil
+//	}
+//
+// Testing idempotency:
+// Use the idempotency test helper in supervisor/action_test_helpers.go:
+//
+//	VerifyActionIdempotency(action, iterations, verifyState)
+//
+// Defense-in-depth layers:
+//   - Layer 1: Document requirement in Action interface
+//   - Layer 2: Provide test helpers for verification
+//   - Layer 3: Examples showing idempotent patterns
+//   - Layer 4: Retry logic in executeActionWithRetry validates this
+//
 // Example: StartProcess, StopProcess, CreateConfigFiles, CallAPI
 type Action interface {
 	// Execute performs the action. Can be blocking and long-running.
