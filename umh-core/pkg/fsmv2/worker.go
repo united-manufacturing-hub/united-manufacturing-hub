@@ -51,6 +51,31 @@ type DesiredState interface {
 // Snapshot is the complete view of the worker at a point in time.
 // The supervisor assembles this from the database and passes it to State.Next().
 // This enables pure functional state transitions based on complete information.
+//
+// IMMUTABILITY (Invariant I9):
+// Snapshot is passed by value to State.Next(), making it inherently immutable.
+// States receive a COPY of the snapshot, so mutations don't affect the original.
+// This guarantees that state transitions are pure functions without side effects.
+//
+// Go's pass-by-value semantics enforce this at the language level:
+//   - When State.Next(snapshot Snapshot) is called, Go copies the struct
+//   - Fields (Identity, Observed, Desired) are copied as interface pointers
+//   - States can mutate their local copy without affecting supervisor's snapshot
+//   - No runtime validation needed - the compiler enforces this
+//
+// Example showing immutability in practice:
+//
+//	func (s MyState) Next(snapshot Snapshot) (State, Signal, Action) {
+//	    // snapshot is a copy - mutations here don't affect supervisor's snapshot
+//	    snapshot.Observed = nil  // This only affects the local copy
+//	    snapshot.Identity.Name = "modified"  // Local copy only
+//	    return s, SignalNone, nil
+//	}
+//
+// Defense-in-depth layers:
+//   - Layer 1: Pass-by-value (Go language design)
+//   - Layer 2: Documentation (this godoc)
+//   - Layer 3: Tests demonstrating immutability (supervisor/immutability_test.go)
 type Snapshot struct {
 	Identity Identity      // Who am I?
 	Observed ObservedState // What is the actual state?
@@ -116,6 +141,17 @@ type State interface {
 	// Next evaluates the snapshot and returns the next transition.
 	// This is a pure function - no side effects, no external calls.
 	// The supervisor calls this on each tick (e.g., every second).
+	//
+	// IMMUTABILITY (Invariant I9):
+	// The snapshot parameter is passed by value (copied), so any modifications
+	// to it within Next() do not affect the supervisor's original snapshot.
+	// This enforces immutability and enables pure functional transitions.
+	//
+	// Go's pass-by-value semantics guarantee:
+	//   - snapshot is a COPY of the supervisor's snapshot
+	//   - Mutations to snapshot only affect this local copy
+	//   - The supervisor's snapshot remains unchanged
+	//   - No defensive copying or validation needed
 	//
 	// Returns:
 	//   - nextState: State to transition to (can return self to stay)
