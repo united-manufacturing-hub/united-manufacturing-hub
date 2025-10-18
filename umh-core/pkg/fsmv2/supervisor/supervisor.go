@@ -97,6 +97,13 @@ type Supervisor struct {
 	freshnessChecker *FreshnessChecker     // Data freshness validator
 }
 
+type WorkerContext struct {
+	identity     fsmv2.Identity
+	worker       fsmv2.Worker
+	currentState fsmv2.State
+	collector    *Collector
+}
+
 // CollectorHealthConfig configures observation collector health monitoring.
 // The collector runs in a separate goroutine and may fail due to network issues,
 // blocked operations, or infrastructure problems. These settings control when to
