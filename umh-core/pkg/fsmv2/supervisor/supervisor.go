@@ -309,8 +309,16 @@ func (s *Supervisor) tick(ctx context.Context) error {
 
 		if age > s.collectorHealth.timeout {
 			if err := s.RestartCollector(ctx); err != nil {
+				// Max restart attempts exceeded - escalate to graceful shutdown
 				s.logger.Errorf("Collector restart failed: %v", err)
-				return err
+
+				// Layer 3: Request graceful FSM shutdown
+				if shutdownErr := s.RequestShutdown(ctx,
+					fmt.Sprintf("collector unresponsive after %d restart attempts", s.collectorHealth.maxRestartAttempts)); shutdownErr != nil {
+					s.logger.Errorf("Failed to request shutdown: %v", shutdownErr)
+				}
+
+				return fmt.Errorf("collector unresponsive, shutdown requested: %w", err)
 			}
 		}
 
@@ -403,7 +411,10 @@ func (s *Supervisor) processSignal(ctx context.Context, signal fsmv2.Signal) err
 
 // RequestShutdown sets the shutdown flag in desired state.
 // This triggers graceful shutdown through state transitions.
-func (s *Supervisor) RequestShutdown(ctx context.Context) error {
+// This implements Layer 3 (Graceful Shutdown) of the 4-layer defense.
+func (s *Supervisor) RequestShutdown(ctx context.Context, reason string) error {
+	s.logger.Warnf("Requesting shutdown for worker %s: %s", s.identity.ID, reason)
+
 	// Load current desired state
 	// TODO: Extract workerType from identity or config
 	desired, err := s.store.LoadDesired(ctx, "container", s.identity.ID)
@@ -411,18 +422,28 @@ func (s *Supervisor) RequestShutdown(ctx context.Context) error {
 		return fmt.Errorf("failed to load desired state: %w", err)
 	}
 
-	// Set shutdown flag
-	// TODO: This requires a SetShutdownRequested method on DesiredState
-	// For now, this is a placeholder
-	_ = desired
+	// NOTE: Current DesiredState interface doesn't have SetShutdownRequested()
+	// For this implementation, we create a shutdownDesiredState wrapper that
+	// marks shutdown as requested. This is a temporary solution until the
+	// DesiredState interface is extended to support mutation.
+	shutdownDesired := &shutdownDesiredState{inner: desired}
 
-	// Save updated desired state
-	// if err := s.store.SaveDesired(ctx, "container", s.identity.ID, desired); err != nil {
-	// 	return fmt.Errorf("failed to save desired state: %w", err)
-	// }
+	// Save updated desired state with shutdown flag set
+	if err := s.store.SaveDesired(ctx, "container", s.identity.ID, shutdownDesired); err != nil {
+		return fmt.Errorf("failed to save desired state: %w", err)
+	}
 
-	s.logger.Infof("Shutdown requested for worker %s", s.identity.ID)
 	return nil
+}
+
+// shutdownDesiredState wraps a DesiredState and overrides ShutdownRequested to return true.
+// This is a temporary wrapper until DesiredState interface supports mutation.
+type shutdownDesiredState struct {
+	inner fsmv2.DesiredState
+}
+
+func (s *shutdownDesiredState) ShutdownRequested() bool {
+	return true
 }
 
 // GetCurrentState returns the current state name.
