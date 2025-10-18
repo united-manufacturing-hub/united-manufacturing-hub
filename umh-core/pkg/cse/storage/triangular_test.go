@@ -1,4 +1,4 @@
-package cse_test
+package storage_test
 
 import (
 	"context"
@@ -9,8 +9,8 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence/basic"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence/cse"
 )
 
 type mockStore struct {
@@ -149,7 +149,11 @@ func (m *mockStore) BeginTx(ctx context.Context) (basic.Tx, error) {
 	return &mockTx{mockStore: m, rollback: false}, nil
 }
 
-func (m *mockStore) Close() error {
+func (m *mockStore) Close(ctx context.Context) error {
+	return nil
+}
+
+func (m *mockStore) Maintenance(ctx context.Context) error {
 	return nil
 }
 
@@ -190,8 +194,8 @@ func (tx *mockTx) BeginTx(ctx context.Context) (basic.Tx, error) {
 	return tx.mockStore.BeginTx(ctx)
 }
 
-func (tx *mockTx) Close() error {
-	return tx.mockStore.Close()
+func (tx *mockTx) Close(ctx context.Context) error {
+	return tx.mockStore.Close(ctx)
 }
 
 func (tx *mockTx) Commit() error {
@@ -206,31 +210,35 @@ func (tx *mockTx) Rollback() error {
 	return nil
 }
 
-func setupTestRegistry() *cse.Registry {
-	registry := cse.NewRegistry()
+func (tx *mockTx) Maintenance(ctx context.Context) error {
+	return tx.mockStore.Maintenance(ctx)
+}
 
-	registry.Register(&cse.CollectionMetadata{
+func setupTestRegistry() *storage.Registry {
+	registry := storage.NewRegistry()
+
+	registry.Register(&storage.CollectionMetadata{
 		Name:          "container_identity",
 		WorkerType:    "container",
-		Role:          cse.RoleIdentity,
-		CSEFields:     []string{cse.FieldSyncID, cse.FieldVersion, cse.FieldCreatedAt, cse.FieldUpdatedAt},
-		IndexedFields: []string{cse.FieldSyncID},
+		Role:          storage.RoleIdentity,
+		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
+		IndexedFields: []string{storage.FieldSyncID},
 	})
 
-	registry.Register(&cse.CollectionMetadata{
+	registry.Register(&storage.CollectionMetadata{
 		Name:          "container_desired",
 		WorkerType:    "container",
-		Role:          cse.RoleDesired,
-		CSEFields:     []string{cse.FieldSyncID, cse.FieldVersion, cse.FieldCreatedAt, cse.FieldUpdatedAt},
-		IndexedFields: []string{cse.FieldSyncID},
+		Role:          storage.RoleDesired,
+		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
+		IndexedFields: []string{storage.FieldSyncID},
 	})
 
-	registry.Register(&cse.CollectionMetadata{
+	registry.Register(&storage.CollectionMetadata{
 		Name:          "container_observed",
 		WorkerType:    "container",
-		Role:          cse.RoleObserved,
-		CSEFields:     []string{cse.FieldSyncID, cse.FieldVersion, cse.FieldCreatedAt, cse.FieldUpdatedAt},
-		IndexedFields: []string{cse.FieldSyncID},
+		Role:          storage.RoleObserved,
+		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
+		IndexedFields: []string{storage.FieldSyncID},
 	})
 
 	return registry
@@ -239,8 +247,8 @@ func setupTestRegistry() *cse.Registry {
 var _ = Describe("TriangularStore", func() {
 	var (
 		store    *mockStore
-		registry *cse.Registry
-		ts       *cse.TriangularStore
+		registry *storage.Registry
+		ts       *storage.TriangularStore
 		ctx      context.Context
 	)
 
@@ -248,7 +256,7 @@ var _ = Describe("TriangularStore", func() {
 		ctx = context.Background()
 		store = newMockStore()
 		registry = setupTestRegistry()
-		ts = cse.NewTriangularStore(store, registry)
+		ts = storage.NewTriangularStore(store, registry)
 	})
 
 	Describe("NewTriangularStore", func() {
@@ -280,9 +288,9 @@ var _ = Describe("TriangularStore", func() {
 			saved, err := store.Get(ctx, "container_identity", "worker-123")
 			Expect(err).NotTo(HaveOccurred())
 
-			Expect(saved[cse.FieldSyncID]).NotTo(BeNil())
-			Expect(saved[cse.FieldVersion]).To(Equal(int64(1)))
-			Expect(saved[cse.FieldCreatedAt]).NotTo(BeNil())
+			Expect(saved[storage.FieldSyncID]).NotTo(BeNil())
+			Expect(saved[storage.FieldVersion]).To(Equal(int64(1)))
+			Expect(saved[storage.FieldCreatedAt]).NotTo(BeNil())
 		})
 
 		It("should preserve original fields", func() {
@@ -341,7 +349,7 @@ var _ = Describe("TriangularStore", func() {
 
 			saved, err := store.Get(ctx, "container_desired", "worker-123")
 			Expect(err).NotTo(HaveOccurred())
-			Expect(saved[cse.FieldVersion]).To(Equal(int64(1)))
+			Expect(saved[storage.FieldVersion]).To(Equal(int64(1)))
 		})
 
 		Context("when updating desired state", func() {
@@ -351,13 +359,13 @@ var _ = Describe("TriangularStore", func() {
 
 			It("should increment sync ID", func() {
 				saved, _ := store.Get(ctx, "container_desired", "worker-123")
-				firstSyncID := saved[cse.FieldSyncID].(int64)
+				firstSyncID := saved[storage.FieldSyncID].(int64)
 
 				desired["config"] = "value2"
 				ts.SaveDesired(ctx, "container", "worker-123", desired)
 
 				saved, _ = store.Get(ctx, "container_desired", "worker-123")
-				secondSyncID := saved[cse.FieldSyncID].(int64)
+				secondSyncID := saved[storage.FieldSyncID].(int64)
 
 				Expect(secondSyncID).To(BeNumerically(">", firstSyncID))
 			})
@@ -369,7 +377,7 @@ var _ = Describe("TriangularStore", func() {
 
 				saved, err := store.Get(ctx, "container_desired", "worker-123")
 				Expect(err).NotTo(HaveOccurred())
-				Expect(saved[cse.FieldVersion]).To(Equal(int64(2)))
+				Expect(saved[storage.FieldVersion]).To(Equal(int64(2)))
 			})
 
 			It("should set updated_at timestamp", func() {
@@ -379,7 +387,7 @@ var _ = Describe("TriangularStore", func() {
 
 				saved, err := store.Get(ctx, "container_desired", "worker-123")
 				Expect(err).NotTo(HaveOccurred())
-				Expect(saved[cse.FieldUpdatedAt]).NotTo(BeNil())
+				Expect(saved[storage.FieldUpdatedAt]).NotTo(BeNil())
 			})
 		})
 	})
@@ -422,7 +430,7 @@ var _ = Describe("TriangularStore", func() {
 
 			saved, err := store.Get(ctx, "container_observed", "worker-123")
 			Expect(err).NotTo(HaveOccurred())
-			Expect(saved[cse.FieldVersion]).To(Equal(int64(1)))
+			Expect(saved[storage.FieldVersion]).To(Equal(int64(1)))
 		})
 
 		Context("when updating observed state", func() {
@@ -432,13 +440,13 @@ var _ = Describe("TriangularStore", func() {
 
 			It("should increment sync ID", func() {
 				saved, _ := store.Get(ctx, "container_observed", "worker-123")
-				firstSyncID := saved[cse.FieldSyncID].(int64)
+				firstSyncID := saved[storage.FieldSyncID].(int64)
 
 				observed["cpu"] = 60
 				ts.SaveObserved(ctx, "container", "worker-123", observed)
 
 				saved, _ = store.Get(ctx, "container_observed", "worker-123")
-				secondSyncID := saved[cse.FieldSyncID].(int64)
+				secondSyncID := saved[storage.FieldSyncID].(int64)
 
 				Expect(secondSyncID).To(BeNumerically(">", firstSyncID))
 			})
@@ -450,7 +458,7 @@ var _ = Describe("TriangularStore", func() {
 
 				saved, err := store.Get(ctx, "container_observed", "worker-123")
 				Expect(err).NotTo(HaveOccurred())
-				Expect(saved[cse.FieldVersion]).To(Equal(int64(1)))
+				Expect(saved[storage.FieldVersion]).To(Equal(int64(1)))
 			})
 		})
 	})
@@ -498,7 +506,7 @@ var _ = Describe("TriangularStore", func() {
 
 		Context("when parts are missing", func() {
 			It("should fail when desired and observed are missing", func() {
-				ts := cse.NewTriangularStore(newMockStore(), registry)
+				ts := storage.NewTriangularStore(newMockStore(), registry)
 				ts.SaveIdentity(ctx, "container", "worker-456", basic.Document{
 					"id":   "worker-456",
 					"name": "Container B",
@@ -547,19 +555,19 @@ var _ = Describe("TriangularStore", func() {
 				"id": "worker-1",
 			})
 			identity1, _ := store.Get(ctx, "container_identity", "worker-1")
-			syncID1 := identity1[cse.FieldSyncID].(int64)
+			syncID1 := identity1[storage.FieldSyncID].(int64)
 
 			ts.SaveDesired(ctx, "container", "worker-2", basic.Document{
 				"id": "worker-2",
 			})
 			desired2, _ := store.Get(ctx, "container_desired", "worker-2")
-			syncID2 := desired2[cse.FieldSyncID].(int64)
+			syncID2 := desired2[storage.FieldSyncID].(int64)
 
 			ts.SaveObserved(ctx, "container", "worker-3", basic.Document{
 				"id": "worker-3",
 			})
 			observed3, _ := store.Get(ctx, "container_observed", "worker-3")
-			syncID3 := observed3[cse.FieldSyncID].(int64)
+			syncID3 := observed3[storage.FieldSyncID].(int64)
 
 			Expect(syncID2).To(BeNumerically(">", syncID1))
 			Expect(syncID3).To(BeNumerically(">", syncID2))
@@ -581,7 +589,7 @@ var _ = Describe("TriangularStore", func() {
 				"id": "worker-123",
 			})
 			first, _ := store.Get(ctx, "container_desired", "worker-123")
-			createdAt := first[cse.FieldCreatedAt].(time.Time)
+			createdAt := first[storage.FieldCreatedAt].(time.Time)
 
 			time.Sleep(10 * time.Millisecond)
 
@@ -589,7 +597,7 @@ var _ = Describe("TriangularStore", func() {
 				"id": "worker-123",
 			})
 			second, _ := store.Get(ctx, "container_desired", "worker-123")
-			updatedAt := second[cse.FieldUpdatedAt].(time.Time)
+			updatedAt := second[storage.FieldUpdatedAt].(time.Time)
 
 			Expect(updatedAt).To(BeTemporally(">", createdAt))
 		})

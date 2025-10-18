@@ -1,4 +1,4 @@
-package cse_test
+package storage_test
 
 import (
 	"context"
@@ -9,23 +9,23 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence/basic"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence/cse"
 )
 
 var _ = Describe("TxCache", func() {
 	var (
 		store    *mockStore
-		registry *cse.Registry
-		cache    *cse.TxCache
+		registry *storage.Registry
+		cache    *storage.TxCache
 		ctx      context.Context
 	)
 
 	BeforeEach(func() {
 		ctx = context.Background()
 		store = newMockStore()
-		registry = cse.NewRegistry()
-		cache = cse.NewTxCache(store, registry)
+		registry = storage.NewRegistry()
+		cache = storage.NewTxCache(store, registry)
 	})
 
 	Describe("NewTxCache", func() {
@@ -69,7 +69,7 @@ var _ = Describe("TxCache", func() {
 			cache.BeginTx("tx-123", metadata)
 
 			pending, _ := cache.GetPending()
-			Expect(pending[0].Status).To(Equal(cse.TxStatusPending))
+			Expect(pending[0].Status).To(Equal(storage.TxStatusPending))
 		})
 
 		It("should preserve metadata", func() {
@@ -81,11 +81,11 @@ var _ = Describe("TxCache", func() {
 	})
 
 	Describe("RecordOp", func() {
-		var op cse.CachedOp
+		var op storage.CachedOp
 
 		BeforeEach(func() {
 			cache.BeginTx("tx-123", nil)
-			op = cse.CachedOp{
+			op = storage.CachedOp{
 				OpType:     "insert",
 				Collection: "container_desired",
 				ID:         "worker-123",
@@ -135,7 +135,7 @@ var _ = Describe("TxCache", func() {
 
 		It("should record multiple operations", func() {
 			for i := 0; i < 3; i++ {
-				op := cse.CachedOp{
+				op := storage.CachedOp{
 					OpType:     "insert",
 					Collection: "test",
 					ID:         "doc-" + strconv.Itoa(i),
@@ -153,7 +153,7 @@ var _ = Describe("TxCache", func() {
 	Describe("Commit", func() {
 		BeforeEach(func() {
 			cache.BeginTx("tx-123", nil)
-			cache.RecordOp("tx-123", cse.CachedOp{
+			cache.RecordOp("tx-123", storage.CachedOp{
 				OpType:     "insert",
 				Collection: "test",
 				ID:         "doc-1",
@@ -185,7 +185,7 @@ var _ = Describe("TxCache", func() {
 	Describe("Rollback", func() {
 		BeforeEach(func() {
 			cache.BeginTx("tx-123", nil)
-			cache.RecordOp("tx-123", cse.CachedOp{
+			cache.RecordOp("tx-123", storage.CachedOp{
 				OpType:     "insert",
 				Collection: "test",
 				ID:         "doc-1",
@@ -211,7 +211,7 @@ var _ = Describe("TxCache", func() {
 		BeforeEach(func() {
 			store.CreateCollection(ctx, "_tx_cache", nil)
 			cache.BeginTx("tx-123", map[string]interface{}{"saga_type": "deploy"})
-			cache.RecordOp("tx-123", cse.CachedOp{
+			cache.RecordOp("tx-123", storage.CachedOp{
 				OpType:     "insert",
 				Collection: "test",
 				ID:         "doc-1",
@@ -244,7 +244,7 @@ var _ = Describe("TxCache", func() {
 			cache.Flush(ctx)
 
 			docs, _ := store.Find(ctx, "_tx_cache", basic.Query{})
-			Expect(docs[0]["status"]).To(Equal(string(cse.TxStatusPending)))
+			Expect(docs[0]["status"]).To(Equal(string(storage.TxStatusPending)))
 		})
 
 		Context("when transaction is committed", func() {
@@ -257,7 +257,7 @@ var _ = Describe("TxCache", func() {
 
 				docs, _ := store.Find(ctx, "_tx_cache", basic.Query{})
 				Expect(docs).To(HaveLen(1))
-				Expect(docs[0]["status"]).To(Equal(string(cse.TxStatusCommitted)))
+				Expect(docs[0]["status"]).To(Equal(string(storage.TxStatusCommitted)))
 			})
 
 			It("should set finished_at timestamp", func() {
@@ -270,18 +270,18 @@ var _ = Describe("TxCache", func() {
 	})
 
 	Describe("Replay", func() {
-		var executedOps []cse.CachedOp
+		var executedOps []storage.CachedOp
 
 		BeforeEach(func() {
 			cache.BeginTx("tx-123", nil)
-			cache.RecordOp("tx-123", cse.CachedOp{
+			cache.RecordOp("tx-123", storage.CachedOp{
 				OpType:     "insert",
 				Collection: "test",
 				ID:         "doc-1",
 				Data:       basic.Document{"value": 123},
 				Timestamp:  time.Now(),
 			})
-			cache.RecordOp("tx-123", cse.CachedOp{
+			cache.RecordOp("tx-123", storage.CachedOp{
 				OpType:     "update",
 				Collection: "test",
 				ID:         "doc-2",
@@ -289,11 +289,11 @@ var _ = Describe("TxCache", func() {
 				Timestamp:  time.Now(),
 			})
 
-			executedOps = []cse.CachedOp{}
+			executedOps = []storage.CachedOp{}
 		})
 
 		It("should replay all operations", func() {
-			executor := func(op cse.CachedOp) error {
+			executor := func(op storage.CachedOp) error {
 				executedOps = append(executedOps, op)
 				return nil
 			}
@@ -304,7 +304,7 @@ var _ = Describe("TxCache", func() {
 		})
 
 		It("should replay operations in order", func() {
-			executor := func(op cse.CachedOp) error {
+			executor := func(op storage.CachedOp) error {
 				executedOps = append(executedOps, op)
 				return nil
 			}
@@ -318,7 +318,7 @@ var _ = Describe("TxCache", func() {
 		Context("when executor returns error", func() {
 			It("should fail replay", func() {
 				expectedErr := fmt.Errorf("executor failed")
-				executor := func(op cse.CachedOp) error {
+				executor := func(op storage.CachedOp) error {
 					return expectedErr
 				}
 
@@ -411,7 +411,7 @@ var _ = Describe("TxCache", func() {
 				go func(id int) {
 					txID := "tx-" + string(rune('0'+id))
 					cache.BeginTx(txID, nil)
-					cache.RecordOp(txID, cse.CachedOp{
+					cache.RecordOp(txID, storage.CachedOp{
 						OpType:     "insert",
 						Collection: "test",
 						ID:         "doc-" + string(rune('0'+id)),

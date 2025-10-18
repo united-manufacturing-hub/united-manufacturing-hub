@@ -711,16 +711,23 @@ func (s *sqliteStore) BeginTx(ctx context.Context) (Tx, error) {
 // Returns:
 //   - error: if cleanup fails (usually safe to ignore)
 func (s *sqliteStore) Close(ctx context.Context) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	if s.closed {
-		return errors.New("store already closed")
+		return nil
+	}
+
+	if s.maintenanceOnShutdown {
+		if err := s.maintenanceInternal(ctx); err != nil {
+			s.closed = true
+			_ = s.db.Close()
+			return fmt.Errorf("maintenance incomplete: %w", err)
+		}
 	}
 
 	s.closed = true
-	if err := s.db.Close(); err != nil {
-		return fmt.Errorf("failed to close database: %w", err)
-	}
-
-	return nil
+	return s.db.Close()
 }
 
 // sqliteTx implements Tx interface wrapping sql.Tx for transactional operations.
@@ -952,8 +959,8 @@ func (t *sqliteTx) BeginTx(ctx context.Context) (Tx, error) {
 // Alternative would be Close = Rollback, but that's error-prone (accidental commits lost).
 //
 // INSPIRED BY: database/sql's Tx pattern (no Close method).
-func (t *sqliteTx) Close() error {
-	return errors.New("cannot close transaction directly, use Commit or Rollback")
+func (t *sqliteTx) Close(ctx context.Context) error {
+	return errors.New("cannot close transaction directly, use Commit() or Rollback()")
 }
 
 // Commit makes all transaction changes permanent.

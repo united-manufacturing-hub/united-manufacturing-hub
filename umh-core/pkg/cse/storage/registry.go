@@ -1,4 +1,4 @@
-// Package cse provides CSE (Control Sync Engine) conventions for FSM v2 persistence.
+// Package storage provides CSE (Control Sync Engine) conventions for FSM v2 persistence.
 //
 // CSE is a three-tier sync system inspired by Linear's sync engine:
 //   - Frontend ↔ Relay ↔ Edge
@@ -15,20 +15,20 @@
 // A package-level global registry is provided for convenience:
 //
 //	// Register collections at application startup
-//	cse.Register(&cse.CollectionMetadata{
+//	storage.Register(&storage.CollectionMetadata{
 //	    Name:       "container_identity",
 //	    WorkerType: "container",
-//	    Role:       cse.RoleIdentity,
+//	    Role:       storage.RoleIdentity,
 //	})
 //
 //	// Later: Look up metadata
-//	metadata, err := cse.Get("container_identity")
+//	metadata, err := storage.Get("container_identity")
 //
 // For advanced use cases (testing, multiple registries), create separate Registry instances:
 //
-//	registry := cse.NewRegistry()
+//	registry := storage.NewRegistry()
 //	registry.Register(metadata)
-package cse
+package storage
 
 import (
 	"fmt"

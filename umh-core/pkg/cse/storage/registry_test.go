@@ -1,4 +1,4 @@
-package cse_test
+package storage_test
 
 import (
 	"fmt"
@@ -6,14 +6,14 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence/cse"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 )
 
 var _ = Describe("Registry", func() {
-	var registry *cse.Registry
+	var registry *storage.Registry
 
 	BeforeEach(func() {
-		registry = cse.NewRegistry()
+		registry = storage.NewRegistry()
 	})
 
 	Describe("NewRegistry", func() {
@@ -29,12 +29,12 @@ var _ = Describe("Registry", func() {
 
 	Describe("Register", func() {
 		It("should register a collection successfully", func() {
-			metadata := &cse.CollectionMetadata{
+			metadata := &storage.CollectionMetadata{
 				Name:          "container_identity",
 				WorkerType:    "container",
-				Role:          cse.RoleIdentity,
-				CSEFields:     []string{cse.FieldSyncID, cse.FieldVersion},
-				IndexedFields: []string{cse.FieldSyncID},
+				Role:          storage.RoleIdentity,
+				CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion},
+				IndexedFields: []string{storage.FieldSyncID},
 			}
 
 			err := registry.Register(metadata)
@@ -44,19 +44,19 @@ var _ = Describe("Registry", func() {
 
 		Context("when collection already registered", func() {
 			BeforeEach(func() {
-				metadata := &cse.CollectionMetadata{
+				metadata := &storage.CollectionMetadata{
 					Name:       "container_identity",
 					WorkerType: "container",
-					Role:       cse.RoleIdentity,
+					Role:       storage.RoleIdentity,
 				}
 				registry.Register(metadata)
 			})
 
 			It("should return error", func() {
-				metadata := &cse.CollectionMetadata{
+				metadata := &storage.CollectionMetadata{
 					Name:       "container_identity",
 					WorkerType: "container",
-					Role:       cse.RoleIdentity,
+					Role:       storage.RoleIdentity,
 				}
 
 				err := registry.Register(metadata)
@@ -71,10 +71,10 @@ var _ = Describe("Registry", func() {
 			})
 
 			It("should return error for empty collection name", func() {
-				metadata := &cse.CollectionMetadata{
+				metadata := &storage.CollectionMetadata{
 					Name:       "",
 					WorkerType: "container",
-					Role:       cse.RoleIdentity,
+					Role:       storage.RoleIdentity,
 				}
 
 				err := registry.Register(metadata)
@@ -82,10 +82,10 @@ var _ = Describe("Registry", func() {
 			})
 
 			It("should return error for empty worker type", func() {
-				metadata := &cse.CollectionMetadata{
+				metadata := &storage.CollectionMetadata{
 					Name:       "container_identity",
 					WorkerType: "",
-					Role:       cse.RoleIdentity,
+					Role:       storage.RoleIdentity,
 				}
 
 				err := registry.Register(metadata)
@@ -93,7 +93,7 @@ var _ = Describe("Registry", func() {
 			})
 
 			It("should return error for invalid role", func() {
-				metadata := &cse.CollectionMetadata{
+				metadata := &storage.CollectionMetadata{
 					Name:       "container_identity",
 					WorkerType: "container",
 					Role:       "invalid_role",
@@ -107,10 +107,10 @@ var _ = Describe("Registry", func() {
 
 	Describe("Get", func() {
 		BeforeEach(func() {
-			metadata := &cse.CollectionMetadata{
+			metadata := &storage.CollectionMetadata{
 				Name:       "container_identity",
 				WorkerType: "container",
-				Role:       cse.RoleIdentity,
+				Role:       storage.RoleIdentity,
 			}
 			registry.Register(metadata)
 		})
@@ -129,20 +129,20 @@ var _ = Describe("Registry", func() {
 
 	Describe("GetTriangularCollections", func() {
 		BeforeEach(func() {
-			registry.Register(&cse.CollectionMetadata{
+			registry.Register(&storage.CollectionMetadata{
 				Name:       "container_identity",
 				WorkerType: "container",
-				Role:       cse.RoleIdentity,
+				Role:       storage.RoleIdentity,
 			})
-			registry.Register(&cse.CollectionMetadata{
+			registry.Register(&storage.CollectionMetadata{
 				Name:       "container_desired",
 				WorkerType: "container",
-				Role:       cse.RoleDesired,
+				Role:       storage.RoleDesired,
 			})
-			registry.Register(&cse.CollectionMetadata{
+			registry.Register(&storage.CollectionMetadata{
 				Name:       "container_observed",
 				WorkerType: "container",
-				Role:       cse.RoleObserved,
+				Role:       storage.RoleObserved,
 			})
 		})
 
@@ -157,11 +157,11 @@ var _ = Describe("Registry", func() {
 
 		Context("when collections are missing", func() {
 			It("should return error when only identity registered", func() {
-				registry := cse.NewRegistry()
-				registry.Register(&cse.CollectionMetadata{
+				registry := storage.NewRegistry()
+				registry.Register(&storage.CollectionMetadata{
 					Name:       "container_identity",
 					WorkerType: "container",
-					Role:       cse.RoleIdentity,
+					Role:       storage.RoleIdentity,
 				})
 
 				_, _, _, err := registry.GetTriangularCollections("container")
@@ -172,15 +172,15 @@ var _ = Describe("Registry", func() {
 
 	Describe("List", func() {
 		It("should return all registered collections", func() {
-			registry.Register(&cse.CollectionMetadata{
+			registry.Register(&storage.CollectionMetadata{
 				Name:       "container_identity",
 				WorkerType: "container",
-				Role:       cse.RoleIdentity,
+				Role:       storage.RoleIdentity,
 			})
-			registry.Register(&cse.CollectionMetadata{
+			registry.Register(&storage.CollectionMetadata{
 				Name:       "container_desired",
 				WorkerType: "container",
-				Role:       cse.RoleDesired,
+				Role:       storage.RoleDesired,
 			})
 
 			collections := registry.List()
@@ -194,10 +194,10 @@ var _ = Describe("Registry", func() {
 		})
 
 		It("should return true for registered collection", func() {
-			registry.Register(&cse.CollectionMetadata{
+			registry.Register(&storage.CollectionMetadata{
 				Name:       "container_identity",
 				WorkerType: "container",
-				Role:       cse.RoleIdentity,
+				Role:       storage.RoleIdentity,
 			})
 
 			Expect(registry.IsRegistered("container_identity")).To(BeTrue())
@@ -207,10 +207,10 @@ var _ = Describe("Registry", func() {
 	Describe("ConcurrentAccess", func() {
 		BeforeEach(func() {
 			for i := 0; i < 10; i++ {
-				registry.Register(&cse.CollectionMetadata{
+				registry.Register(&storage.CollectionMetadata{
 					Name:       fmt.Sprintf("collection_%d", i),
 					WorkerType: "test",
-					Role:       cse.RoleIdentity,
+					Role:       storage.RoleIdentity,
 				})
 			}
 		})
@@ -234,7 +234,7 @@ var _ = Describe("Registry", func() {
 			done := make(chan bool)
 			for i := 0; i < 10; i++ {
 				go func(version int) {
-					err := registry.RegisterVersion("test", cse.RoleIdentity, fmt.Sprintf("v%d", version))
+					err := registry.RegisterVersion("test", storage.RoleIdentity, fmt.Sprintf("v%d", version))
 					Expect(err).ToNot(HaveOccurred())
 					done <- true
 				}(i)
@@ -254,12 +254,12 @@ var _ = Describe("CollectionMetadata", func() {
 	Describe("CSEFields", func() {
 		It("should have all expected CSE field constants", func() {
 			expectedFields := []string{
-				cse.FieldSyncID,
-				cse.FieldVersion,
-				cse.FieldCreatedAt,
-				cse.FieldUpdatedAt,
-				cse.FieldDeletedAt,
-				cse.FieldDeletedBy,
+				storage.FieldSyncID,
+				storage.FieldVersion,
+				storage.FieldCreatedAt,
+				storage.FieldUpdatedAt,
+				storage.FieldDeletedAt,
+				storage.FieldDeletedBy,
 			}
 
 			for _, field := range expectedFields {
@@ -271,9 +271,9 @@ var _ = Describe("CollectionMetadata", func() {
 	Describe("Roles", func() {
 		It("should have all expected role constants", func() {
 			expectedRoles := []string{
-				cse.RoleIdentity,
-				cse.RoleDesired,
-				cse.RoleObserved,
+				storage.RoleIdentity,
+				storage.RoleDesired,
+				storage.RoleObserved,
 			}
 
 			for _, role := range expectedRoles {
@@ -284,19 +284,19 @@ var _ = Describe("CollectionMetadata", func() {
 })
 
 var _ = Describe("Schema Versioning", func() {
-	var registry *cse.Registry
+	var registry *storage.Registry
 
 	BeforeEach(func() {
-		registry = cse.NewRegistry()
-		registry.Register(&cse.CollectionMetadata{
+		registry = storage.NewRegistry()
+		registry.Register(&storage.CollectionMetadata{
 			Name:       "workers",
 			WorkerType: "container",
-			Role:       cse.RoleIdentity,
+			Role:       storage.RoleIdentity,
 		})
 	})
 
 	It("should register and retrieve schema version", func() {
-		err := registry.RegisterVersion("container", cse.RoleIdentity, "v2")
+		err := registry.RegisterVersion("container", storage.RoleIdentity, "v2")
 		Expect(err).ToNot(HaveOccurred())
 		version := registry.GetVersion("workers")
 		Expect(version).To(Equal("v2"))
@@ -308,23 +308,23 @@ var _ = Describe("Schema Versioning", func() {
 	})
 
 	It("should update schema version when registered multiple times", func() {
-		err := registry.RegisterVersion("container", cse.RoleIdentity, "v1")
+		err := registry.RegisterVersion("container", storage.RoleIdentity, "v1")
 		Expect(err).ToNot(HaveOccurred())
-		err = registry.RegisterVersion("container", cse.RoleIdentity, "v2")
+		err = registry.RegisterVersion("container", storage.RoleIdentity, "v2")
 		Expect(err).ToNot(HaveOccurred())
 		version := registry.GetVersion("workers")
 		Expect(version).To(Equal("v2"))
 	})
 
 	It("should track versions independently per collection", func() {
-		registry.Register(&cse.CollectionMetadata{
+		registry.Register(&storage.CollectionMetadata{
 			Name:       "datapoints",
 			WorkerType: "sensor",
-			Role:       cse.RoleIdentity,
+			Role:       storage.RoleIdentity,
 		})
-		err := registry.RegisterVersion("container", cse.RoleIdentity, "v2")
+		err := registry.RegisterVersion("container", storage.RoleIdentity, "v2")
 		Expect(err).ToNot(HaveOccurred())
-		err = registry.RegisterVersion("sensor", cse.RoleIdentity, "v1")
+		err = registry.RegisterVersion("sensor", storage.RoleIdentity, "v1")
 		Expect(err).ToNot(HaveOccurred())
 
 		Expect(registry.GetVersion("workers")).To(Equal("v2"))
@@ -332,14 +332,14 @@ var _ = Describe("Schema Versioning", func() {
 	})
 
 	It("should return all versioned collections", func() {
-		registry.Register(&cse.CollectionMetadata{
+		registry.Register(&storage.CollectionMetadata{
 			Name:       "datapoints",
 			WorkerType: "sensor",
-			Role:       cse.RoleIdentity,
+			Role:       storage.RoleIdentity,
 		})
-		err := registry.RegisterVersion("container", cse.RoleIdentity, "v2")
+		err := registry.RegisterVersion("container", storage.RoleIdentity, "v2")
 		Expect(err).ToNot(HaveOccurred())
-		err = registry.RegisterVersion("sensor", cse.RoleIdentity, "v1")
+		err = registry.RegisterVersion("sensor", storage.RoleIdentity, "v1")
 		Expect(err).ToNot(HaveOccurred())
 
 		versions := registry.GetAllVersions()
@@ -349,17 +349,17 @@ var _ = Describe("Schema Versioning", func() {
 	})
 
 	It("should reject empty version string", func() {
-		err := registry.RegisterVersion("container", cse.RoleIdentity, "")
+		err := registry.RegisterVersion("container", storage.RoleIdentity, "")
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("version cannot be empty"))
 	})
 })
 
 var _ = Describe("Feature Registry", func() {
-	var registry *cse.Registry
+	var registry *storage.Registry
 
 	BeforeEach(func() {
-		registry = cse.NewRegistry()
+		registry = storage.NewRegistry()
 	})
 
 	It("should register and retrieve feature", func() {
@@ -438,29 +438,29 @@ var _ = Describe("Feature Registry", func() {
 var _ = Describe("GlobalRegistry", func() {
 	Describe("Register", func() {
 		It("should register collection in global registry", func() {
-			metadata := &cse.CollectionMetadata{
+			metadata := &storage.CollectionMetadata{
 				Name:       "global_test_identity",
 				WorkerType: "global_test",
-				Role:       cse.RoleIdentity,
+				Role:       storage.RoleIdentity,
 			}
 
-			err := cse.Register(metadata)
+			err := storage.Register(metadata)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(cse.IsRegistered("global_test_identity")).To(BeTrue())
+			Expect(storage.IsRegistered("global_test_identity")).To(BeTrue())
 		})
 	})
 
 	Describe("Get", func() {
 		It("should retrieve from global registry", func() {
-			metadata := &cse.CollectionMetadata{
+			metadata := &storage.CollectionMetadata{
 				Name:       "global_get_test",
 				WorkerType: "test",
-				Role:       cse.RoleIdentity,
+				Role:       storage.RoleIdentity,
 			}
 
-			cse.Register(metadata)
+			storage.Register(metadata)
 
-			retrieved, err := cse.Get("global_get_test")
+			retrieved, err := storage.Get("global_get_test")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(retrieved.Name).To(Equal("global_get_test"))
 		})
@@ -468,36 +468,36 @@ var _ = Describe("GlobalRegistry", func() {
 
 	Describe("List", func() {
 		It("should list collections from global registry", func() {
-			cse.Register(&cse.CollectionMetadata{
+			storage.Register(&storage.CollectionMetadata{
 				Name:       "global_list_test",
 				WorkerType: "test",
-				Role:       cse.RoleIdentity,
+				Role:       storage.RoleIdentity,
 			})
 
-			collections := cse.List()
+			collections := storage.List()
 			Expect(collections).NotTo(BeEmpty())
 		})
 	})
 
 	Describe("GetTriangularCollections", func() {
 		It("should retrieve triangular collections from global registry", func() {
-			cse.Register(&cse.CollectionMetadata{
+			storage.Register(&storage.CollectionMetadata{
 				Name:       "global_triangular_identity",
 				WorkerType: "global_triangular",
-				Role:       cse.RoleIdentity,
+				Role:       storage.RoleIdentity,
 			})
-			cse.Register(&cse.CollectionMetadata{
+			storage.Register(&storage.CollectionMetadata{
 				Name:       "global_triangular_desired",
 				WorkerType: "global_triangular",
-				Role:       cse.RoleDesired,
+				Role:       storage.RoleDesired,
 			})
-			cse.Register(&cse.CollectionMetadata{
+			storage.Register(&storage.CollectionMetadata{
 				Name:       "global_triangular_observed",
 				WorkerType: "global_triangular",
-				Role:       cse.RoleObserved,
+				Role:       storage.RoleObserved,
 			})
 
-			identity, desired, observed, err := cse.GetTriangularCollections("global_triangular")
+			identity, desired, observed, err := storage.GetTriangularCollections("global_triangular")
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(identity.Name).To(Equal("global_triangular_identity"))

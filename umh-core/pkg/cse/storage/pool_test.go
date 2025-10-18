@@ -1,4 +1,4 @@
-package cse_test
+package storage_test
 
 import (
 	"errors"
@@ -9,7 +9,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence/cse"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 )
 
 // Mock closeable object for testing
@@ -48,11 +48,11 @@ type mockObject struct {
 
 var _ = Describe("ObjectPool", func() {
 	var (
-		pool *cse.ObjectPool
+		pool *storage.ObjectPool
 	)
 
 	BeforeEach(func() {
-		pool = cse.NewObjectPool()
+		pool = storage.NewObjectPool()
 	})
 
 	Describe("NewObjectPool", func() {
@@ -258,7 +258,7 @@ var _ = Describe("ObjectPool", func() {
 		})
 
 		It("should work on empty pool", func() {
-			emptyPool := cse.NewObjectPool()
+			emptyPool := storage.NewObjectPool()
 			err := emptyPool.Clear()
 			Expect(err).NotTo(HaveOccurred())
 			Expect(emptyPool.Size()).To(Equal(0))
@@ -294,7 +294,7 @@ var _ = Describe("ObjectPool", func() {
 			factoryObj = &mockCloseable{}
 		})
 
-		factory := func() cse.Factory {
+		factory := func() storage.Factory {
 			return func() (interface{}, error) {
 				factoryCalled = true
 				return factoryObj, nil
