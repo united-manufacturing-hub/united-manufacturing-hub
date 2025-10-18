@@ -25,8 +25,8 @@ import (
 // ContainerWorker implements the Worker interface for container monitoring.
 // It wraps the existing container_monitor.Service to collect metrics.
 type ContainerWorker struct {
-	identity       fsmv2.Identity
-	monitorService container_monitor.Service
+	identity       fsmv2.Identity              // Immutable identity (ID + Name)
+	monitorService container_monitor.Service   // Service providing container metrics
 }
 
 // NewContainerWorker creates a new container worker.
