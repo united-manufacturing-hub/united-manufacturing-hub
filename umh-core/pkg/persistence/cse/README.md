@@ -23,9 +23,18 @@ umh-core/pkg/persistence/
 │   ├── transaction.go
 │   └── sqlite.go
 └── cse/                # Layer 2: CSE conventions (this package)
-    ├── registry.go     # Schema registry implementation
+    ├── registry.go          # Schema registry implementation
     ├── registry_test.go
-    └── example_test.go
+    ├── triangular.go        # Triangular store (identity/desired/observed)
+    ├── triangular_test.go
+    ├── tx_cache.go          # Transaction cache for batching
+    ├── tx_cache_test.go
+    ├── sync_state.go        # Sync state tracking (_sync_id/_version)
+    ├── sync_state_test.go
+    ├── pool.go              # Object pool for singleton management
+    ├── pool_test.go
+    ├── example_test.go
+    └── README.md
 ```
 
 ## Schema Registry
@@ -196,6 +205,130 @@ func createTable(metadata *cse.CollectionMetadata) {
 }
 ```
 
+## Object Pool
+
+The Object Pool provides singleton management for FSM workers, sync state, and shared resources:
+- **Identity Map Pattern**: Same key always returns same object reference
+- **Reference Counting**: Multiple consumers can safely share objects
+- **Automatic Cleanup**: Closeable objects are closed when removed
+- **Thread-Safe**: Concurrent access with `sync.RWMutex`
+
+### Core Types
+
+```go
+// Closeable represents objects that need cleanup
+type Closeable interface {
+    Close() error
+}
+
+// Factory creates new instances of objects
+type Factory func() (interface{}, error)
+
+// ObjectPool manages singleton object instances
+type ObjectPool struct {
+    // Thread-safe with RWMutex
+}
+```
+
+### Quick Start
+
+```go
+import "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence/cse"
+
+// Create pool
+pool := cse.NewObjectPool()
+
+// Store object (initializes ref count to 1)
+pool.Put("container-123", worker)
+
+// Retrieve object
+obj, found := pool.Get("container-123")
+if found {
+    worker := obj.(*ContainerWorker)
+}
+
+// Get or create with factory
+obj, err := pool.GetOrCreate("container-123", func() (interface{}, error) {
+    return NewContainerWorker("container-123", config)
+})
+
+// Acquire reference (increment ref count)
+pool.Acquire("container-123")
+
+// Release reference (decrement ref count, remove if zero)
+pool.Release("container-123")
+
+// Cleanup (closes Closeable objects)
+pool.Clear()
+```
+
+### API Overview
+
+**Basic Operations**:
+- `NewObjectPool()` - Create new pool
+- `Put(key, obj)` - Store object (ref count = 1)
+- `Get(key)` - Retrieve object
+- `Has(key)` - Check if object exists
+- `Size()` - Get pool size
+- `Remove(key)` - Remove and close object
+- `Clear()` - Remove all objects
+
+**Factory Pattern**:
+- `GetOrCreate(key, factory)` - Get existing or create new (ref count = 1)
+
+**Reference Counting**:
+- `Acquire(key)` - Increment ref count
+- `Release(key)` - Decrement ref count (remove if zero)
+
+### Complete Example
+
+```go
+package main
+
+import (
+    "log"
+
+    "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence/cse"
+)
+
+type ContainerWorker struct {
+    id     string
+    config Config
+}
+
+func (w *ContainerWorker) Close() error {
+    log.Printf("Closing worker %s", w.id)
+    return nil
+}
+
+func main() {
+    pool := cse.NewObjectPool()
+
+    // FSM creates worker on first use
+    worker1, err := pool.GetOrCreate("container-123", func() (interface{}, error) {
+        return &ContainerWorker{id: "container-123"}, nil
+    })
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    // API also needs this worker (shares same instance)
+    pool.Acquire("container-123")
+    worker2, _ := pool.Get("container-123")
+
+    // Both point to same object (identity map)
+    if worker1 != worker2 {
+        log.Fatal("Should be same instance!")
+    }
+
+    // API done with worker
+    pool.Release("container-123")
+
+    // FSM done with worker (ref count = 0, worker closed and removed)
+    pool.Release("container-123")
+}
+```
+
 ## Design Decisions
 
 ### 1. Metadata-Driven Registration (Not Code Generation)
@@ -259,6 +392,66 @@ func createTable(metadata *cse.CollectionMetadata) {
 **Trade-off**: More upfront validation code, but prevents runtime errors.
 
 **Inspired by**: "Parse, don't validate" principle - ensure valid state.
+
+### 7. Identity Map Pattern (Object Pool)
+
+**Decision**: Same key always returns same object reference, not new instances.
+
+**Why**: Prevents duplicate FSM workers for same container ID (memory efficiency, consistency).
+
+**Trade-off**: Must manually remove objects when done, but ensures identity consistency.
+
+**Inspired by**: Linear's object pool, JPA entity manager.
+
+**Benefit**: Only one Container FSM instance per worker ID exists in memory.
+
+### 8. Reference Counting (Not Weak References)
+
+**Decision**: Acquire/Release pattern instead of immediate removal or weak references.
+
+**Why**: Multiple consumers may use same object (FSM + API both need worker reference).
+
+**Trade-off**: Requires careful acquire/release pairing, but Go doesn't support weak references natively.
+
+**Inspired by**: C++ `shared_ptr`, Objective-C retain/release.
+
+**Alternative**: Could use finalizers, but unpredictable timing (GC-dependent).
+
+### 9. Closeable Interface (Not defer-based cleanup)
+
+**Decision**: Pool closes objects on removal via `Closeable` interface.
+
+**Why**: FSM workers need cleanup (close DB connections, stop goroutines).
+
+**Trade-off**: Objects must implement `Close()` if cleanup needed, but explicit and clear.
+
+**Inspired by**: `io.Closer`, `database/sql` connection pools.
+
+**Benefit**: Automatic cleanup when reference count reaches zero.
+
+### 10. Factory Pattern for GetOrCreate
+
+**Decision**: GetOrCreate takes factory function, not new() constructor.
+
+**Why**: Flexible object creation (may need context, config, DB connection).
+
+**Trade-off**: Caller must provide factory function each time, but enables dependency injection.
+
+**Inspired by**: `sync.Pool`, Linear's object construction.
+
+**Alternative**: Could use type parameter `[T any]`, but less flexible for initialization.
+
+### 11. Thread-Safe with RWMutex (Object Pool)
+
+**Decision**: Concurrent access allowed via `sync.RWMutex`.
+
+**Why**: Pool accessed from multiple FSM workers simultaneously.
+
+**Trade-off**: Lock overhead, but acceptable for infrequent access (workers cached long-term).
+
+**Inspired by**: `sync.Map`, thread-safe collections.
+
+**Optimization**: Read-heavy workload benefits from `RLock` (multiple readers).
 
 ## Testing
 

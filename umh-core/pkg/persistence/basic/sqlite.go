@@ -10,7 +10,7 @@ import (
 	"runtime"
 
 	"github.com/google/uuid"
-	_ "github.com/mattn/go-sqlite3"
+	"github.com/mattn/go-sqlite3"
 )
 
 var collectionNamePattern = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`)
@@ -25,6 +25,35 @@ func validateCollectionName(name string) error {
 	}
 
 	return nil
+}
+
+func mapSQLiteError(err error) error {
+	if err == nil {
+		return nil
+	}
+
+	if errors.Is(err, sql.ErrNoRows) {
+		return ErrNotFound
+	}
+
+	var sqliteErr sqlite3.Error
+	if errors.As(err, &sqliteErr) {
+		switch sqliteErr.ExtendedCode {
+		case sqlite3.ErrConstraintPrimaryKey:
+			return ErrConflict
+		case sqlite3.ErrConstraintUnique:
+			return ErrConflict
+		default:
+			switch sqliteErr.Code {
+			case sqlite3.ErrConstraint:
+				return ErrConflict
+			case sqlite3.ErrBusy, sqlite3.ErrLocked:
+				return err
+			}
+		}
+	}
+
+	return err
 }
 
 type sqliteStore struct {
@@ -123,7 +152,7 @@ func (s *sqliteStore) Insert(ctx context.Context, collection string, doc Documen
 
 	_, err = s.db.ExecContext(ctx, query, id, data)
 	if err != nil {
-		return "", fmt.Errorf("failed to insert document: %w", err)
+		return "", fmt.Errorf("failed to insert document: %w", mapSQLiteError(err))
 	}
 
 	return id, nil
@@ -140,11 +169,7 @@ func (s *sqliteStore) Get(ctx context.Context, collection string, id string) (Do
 
 	err := s.db.QueryRowContext(ctx, query, id).Scan(&data)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, ErrNotFound
-		}
-
-		return nil, fmt.Errorf("failed to get document: %w", err)
+		return nil, fmt.Errorf("failed to get document: %w", mapSQLiteError(err))
 	}
 
 	var doc Document
@@ -169,7 +194,7 @@ func (s *sqliteStore) Update(ctx context.Context, collection string, id string, 
 
 	result, err := s.db.ExecContext(ctx, query, data, id)
 	if err != nil {
-		return fmt.Errorf("failed to update document: %w", err)
+		return fmt.Errorf("failed to update document: %w", mapSQLiteError(err))
 	}
 
 	rowsAffected, err := result.RowsAffected()
@@ -193,7 +218,7 @@ func (s *sqliteStore) Delete(ctx context.Context, collection string, id string) 
 
 	result, err := s.db.ExecContext(ctx, query, id)
 	if err != nil {
-		return fmt.Errorf("failed to delete document: %w", err)
+		return fmt.Errorf("failed to delete document: %w", mapSQLiteError(err))
 	}
 
 	rowsAffected, err := result.RowsAffected()
@@ -339,7 +364,7 @@ func (t *sqliteTx) Insert(ctx context.Context, collection string, doc Document) 
 
 	_, err = t.tx.ExecContext(ctx, query, id, data)
 	if err != nil {
-		return "", fmt.Errorf("failed to insert document: %w", err)
+		return "", fmt.Errorf("failed to insert document: %w", mapSQLiteError(err))
 	}
 
 	return id, nil
@@ -356,11 +381,7 @@ func (t *sqliteTx) Get(ctx context.Context, collection string, id string) (Docum
 
 	err := t.tx.QueryRowContext(ctx, query, id).Scan(&data)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, ErrNotFound
-		}
-
-		return nil, fmt.Errorf("failed to get document: %w", err)
+		return nil, fmt.Errorf("failed to get document: %w", mapSQLiteError(err))
 	}
 
 	var doc Document
@@ -385,7 +406,7 @@ func (t *sqliteTx) Update(ctx context.Context, collection string, id string, doc
 
 	result, err := t.tx.ExecContext(ctx, query, data, id)
 	if err != nil {
-		return fmt.Errorf("failed to update document: %w", err)
+		return fmt.Errorf("failed to update document: %w", mapSQLiteError(err))
 	}
 
 	rowsAffected, err := result.RowsAffected()
@@ -409,7 +430,7 @@ func (t *sqliteTx) Delete(ctx context.Context, collection string, id string) err
 
 	result, err := t.tx.ExecContext(ctx, query, id)
 	if err != nil {
-		return fmt.Errorf("failed to delete document: %w", err)
+		return fmt.Errorf("failed to delete document: %w", mapSQLiteError(err))
 	}
 
 	rowsAffected, err := result.RowsAffected()

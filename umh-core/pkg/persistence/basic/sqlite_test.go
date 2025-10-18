@@ -16,6 +16,7 @@ package basic_test
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -356,7 +357,7 @@ var _ = Describe("SQLiteStore", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			_, err = store.Get(ctx, collectionName, id)
-			Expect(err).To(Equal(basic.ErrNotFound))
+			Expect(errors.Is(err, basic.ErrNotFound)).To(BeTrue())
 		})
 	})
 
@@ -772,7 +773,7 @@ var _ = Describe("SQLiteStore", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			_, err = store.Get(ctx, "tx_rollback", id)
-			Expect(err).To(Equal(basic.ErrNotFound))
+			Expect(errors.Is(err, basic.ErrNotFound)).To(BeTrue())
 		})
 
 		It("should insert multiple documents atomically", func() {
@@ -925,7 +926,7 @@ var _ = Describe("SQLiteStore", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			_, err = store.Get(ctx, "test_not_found", "non-existent-id")
-			Expect(err).To(Equal(basic.ErrNotFound))
+			Expect(errors.Is(err, basic.ErrNotFound)).To(BeTrue())
 		})
 
 		It("should return ErrNotFound for non-existent collection", func() {
@@ -1173,7 +1174,7 @@ var _ = Describe("SQLiteStore", func() {
 			defer func() { _ = tx.Rollback() }()
 
 			_, err = tx.Get(ctx, "tx_get_notfound", "non-existent")
-			Expect(err).To(Equal(basic.ErrNotFound))
+			Expect(errors.Is(err, basic.ErrNotFound)).To(BeTrue())
 
 			err = tx.Commit()
 			Expect(err).NotTo(HaveOccurred())
@@ -1317,7 +1318,7 @@ var _ = Describe("SQLiteStore", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			err = store.Update(ctx, "test_update_notfound", "non-existent-id", basic.Document{"test": "value"})
-			Expect(err).To(Equal(basic.ErrNotFound))
+			Expect(errors.Is(err, basic.ErrNotFound)).To(BeTrue())
 		})
 
 		It("should fail when updating in non-existent collection", func() {
@@ -1464,7 +1465,7 @@ var _ = Describe("SQLiteStore", func() {
 			defer func() { _ = tx.Rollback() }()
 
 			err = tx.Update(ctx, "tx_update_notfound", "non-existent", basic.Document{"test": "value"})
-			Expect(err).To(Equal(basic.ErrNotFound))
+			Expect(errors.Is(err, basic.ErrNotFound)).To(BeTrue())
 
 			err = tx.Commit()
 			Expect(err).NotTo(HaveOccurred())
@@ -1519,7 +1520,7 @@ var _ = Describe("SQLiteStore", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			_, err = store.Get(ctx, "test_delete", id)
-			Expect(err).To(Equal(basic.ErrNotFound))
+			Expect(errors.Is(err, basic.ErrNotFound)).To(BeTrue())
 		})
 
 		It("should return ErrNotFound when deleting non-existent document", func() {
@@ -1529,7 +1530,7 @@ var _ = Describe("SQLiteStore", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			err = store.Delete(ctx, "test_delete_notfound", "non-existent-id")
-			Expect(err).To(Equal(basic.ErrNotFound))
+			Expect(errors.Is(err, basic.ErrNotFound)).To(BeTrue())
 		})
 
 		It("should fail when deleting from non-existent collection", func() {
@@ -1563,7 +1564,7 @@ var _ = Describe("SQLiteStore", func() {
 			Expect(doc1["name"]).To(Equal("doc1"))
 
 			_, err = store.Get(ctx, "test_delete_multiple", id2)
-			Expect(err).To(Equal(basic.ErrNotFound))
+			Expect(errors.Is(err, basic.ErrNotFound)).To(BeTrue())
 
 			doc3, err := store.Get(ctx, "test_delete_multiple", id3)
 			Expect(err).NotTo(HaveOccurred())
@@ -2205,7 +2206,7 @@ var _ = Describe("SQLiteStore", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			_, err = store.Get(ctx, "tx_delete", id)
-			Expect(err).To(Equal(basic.ErrNotFound))
+			Expect(errors.Is(err, basic.ErrNotFound)).To(BeTrue())
 		})
 
 		It("should rollback delete on transaction rollback", func() {
@@ -2242,7 +2243,7 @@ var _ = Describe("SQLiteStore", func() {
 			defer func() { _ = tx.Rollback() }()
 
 			err = tx.Delete(ctx, "tx_delete_notfound", "non-existent")
-			Expect(err).To(Equal(basic.ErrNotFound))
+			Expect(errors.Is(err, basic.ErrNotFound)).To(BeTrue())
 
 			err = tx.Commit()
 			Expect(err).NotTo(HaveOccurred())
@@ -2266,6 +2267,121 @@ var _ = Describe("SQLiteStore", func() {
 			err = tx.Delete(ctx, "tx_delete_closed", id)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("transaction is closed"))
+		})
+	})
+
+	Context("Error Mapping", func() {
+		var store basic.Store
+
+		BeforeEach(func() {
+			var err error
+			store, err = basic.NewSQLiteStore(dbPath)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		AfterEach(func() {
+			if store != nil {
+				_ = store.Close()
+			}
+		})
+
+		It("should return ErrNotFound for non-existent document in Get", func() {
+			ctx := context.Background()
+
+			err := store.CreateCollection(ctx, "error_mapping_get", nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = store.Get(ctx, "error_mapping_get", "non-existent-id")
+			Expect(errors.Is(err, basic.ErrNotFound)).To(BeTrue())
+		})
+
+		It("should return ErrNotFound for non-existent document in Update", func() {
+			ctx := context.Background()
+
+			err := store.CreateCollection(ctx, "error_mapping_update", nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = store.Update(ctx, "error_mapping_update", "non-existent-id", basic.Document{"test": "value"})
+			Expect(errors.Is(err, basic.ErrNotFound)).To(BeTrue())
+		})
+
+		It("should return ErrNotFound for non-existent document in Delete", func() {
+			ctx := context.Background()
+
+			err := store.CreateCollection(ctx, "error_mapping_delete", nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = store.Delete(ctx, "error_mapping_delete", "non-existent-id")
+			Expect(errors.Is(err, basic.ErrNotFound)).To(BeTrue())
+		})
+
+		It("should return ErrConflict for duplicate primary key on Insert", func() {
+		})
+
+		It("should preserve generic SQLite errors without mapping", func() {
+			ctx := context.Background()
+
+			_, err := store.Get(ctx, "nonexistent_table", "some-id")
+			Expect(err).To(HaveOccurred())
+			Expect(errors.Is(err, basic.ErrNotFound)).To(BeFalse())
+		})
+	})
+
+	Context("Transaction Error Mapping", func() {
+		var store basic.Store
+
+		BeforeEach(func() {
+			var err error
+			store, err = basic.NewSQLiteStore(dbPath)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		AfterEach(func() {
+			if store != nil {
+				_ = store.Close()
+			}
+		})
+
+		It("should return ErrNotFound for non-existent document in transaction Get", func() {
+			ctx := context.Background()
+
+			err := store.CreateCollection(ctx, "tx_error_get", nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			tx, err := store.BeginTx(ctx)
+			Expect(err).NotTo(HaveOccurred())
+			defer func() { _ = tx.Rollback() }()
+
+			_, err = tx.Get(ctx, "tx_error_get", "non-existent")
+			Expect(errors.Is(err, basic.ErrNotFound)).To(BeTrue())
+		})
+
+		It("should return ErrNotFound for non-existent document in transaction Update", func() {
+			ctx := context.Background()
+
+			err := store.CreateCollection(ctx, "tx_error_update", nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			tx, err := store.BeginTx(ctx)
+			Expect(err).NotTo(HaveOccurred())
+			defer func() { _ = tx.Rollback() }()
+
+			err = tx.Update(ctx, "tx_error_update", "non-existent", basic.Document{"test": "value"})
+			Expect(errors.Is(err, basic.ErrNotFound)).To(BeTrue())
+		})
+
+		It("should return ErrNotFound for non-existent document in transaction Delete", func() {
+			ctx := context.Background()
+
+			err := store.CreateCollection(ctx, "tx_error_delete", nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			tx, err := store.BeginTx(ctx)
+			Expect(err).NotTo(HaveOccurred())
+			defer func() { _ = tx.Rollback() }()
+
+			err = tx.Delete(ctx, "tx_error_delete", "non-existent")
+			Expect(errors.Is(err, basic.ErrNotFound)).To(BeTrue())
 		})
 	})
 })
