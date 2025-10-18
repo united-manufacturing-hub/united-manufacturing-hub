@@ -31,13 +31,15 @@ var _ = Describe("Supervisor Configuration", func() {
 	Context("when creating supervisor with custom config", func() {
 		It("should use custom collector health thresholds", func() {
 			cfg := supervisor.Config{
-				Worker:             &mockWorker{},
-				Identity:           mockIdentity(),
-				Store:              &mockStore{},
-				Logger:             zap.NewNop().Sugar(),
-				StaleThreshold:     5 * time.Second,
-				CollectorTimeout:   15 * time.Second,
-				MaxRestartAttempts: 5,
+				Worker:   &mockWorker{},
+				Identity: mockIdentity(),
+				Store:    &mockStore{},
+				Logger:   zap.NewNop().Sugar(),
+				CollectorHealth: supervisor.CollectorHealthConfig{
+					StaleThreshold:     5 * time.Second,
+					Timeout:            15 * time.Second,
+					MaxRestartAttempts: 5,
+				},
 			}
 
 			s := supervisor.NewSupervisor(cfg)

@@ -37,11 +37,13 @@ var _ = Describe("Tick with Data Freshness", func() {
 			}
 
 			s = supervisor.NewSupervisor(supervisor.Config{
-				Worker:         &mockWorker{initialState: initialState},
-				Identity:       mockIdentity(),
-				Store:          store,
-				Logger:         zap.NewNop().Sugar(),
-				StaleThreshold: 10 * time.Second,
+				Worker:   &mockWorker{initialState: initialState},
+				Identity: mockIdentity(),
+				Store:    store,
+				Logger:   zap.NewNop().Sugar(),
+				CollectorHealth: supervisor.CollectorHealthConfig{
+					StaleThreshold: 10 * time.Second,
+				},
 			})
 
 			err := s.Tick(context.Background())
@@ -62,11 +64,13 @@ var _ = Describe("Tick with Data Freshness", func() {
 			}
 
 			s = supervisor.NewSupervisor(supervisor.Config{
-				Worker:         &mockWorker{initialState: initialState},
-				Identity:       mockIdentity(),
-				Store:          store,
-				Logger:         zap.NewNop().Sugar(),
-				StaleThreshold: 10 * time.Second,
+				Worker:   &mockWorker{initialState: initialState},
+				Identity: mockIdentity(),
+				Store:    store,
+				Logger:   zap.NewNop().Sugar(),
+				CollectorHealth: supervisor.CollectorHealthConfig{
+					StaleThreshold: 10 * time.Second,
+				},
 			})
 
 			err := s.Tick(context.Background())

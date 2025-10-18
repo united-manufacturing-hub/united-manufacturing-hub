@@ -27,11 +27,13 @@ var _ = Describe("Data Freshness Checking", func() {
 	Context("when observation data is fresh", func() {
 		It("should return true", func() {
 			s = supervisor.NewSupervisor(supervisor.Config{
-				Worker:         &mockWorker{},
-				Identity:       mockIdentity(),
-				Store:          &mockStore{},
-				Logger:         zap.NewNop().Sugar(),
-				StaleThreshold: 10 * time.Second,
+				Worker:   &mockWorker{},
+				Identity: mockIdentity(),
+				Store:    &mockStore{},
+				Logger:   zap.NewNop().Sugar(),
+				CollectorHealth: supervisor.CollectorHealthConfig{
+					StaleThreshold: 10 * time.Second,
+				},
 			})
 
 			snapshot.Observed = &mockObservedState{timestamp: time.Now()}
@@ -43,12 +45,14 @@ var _ = Describe("Data Freshness Checking", func() {
 	Context("when observation data is stale", func() {
 		It("should return false", func() {
 			s = supervisor.NewSupervisor(supervisor.Config{
-				Worker:           &mockWorker{},
-				Identity:         mockIdentity(),
-				Store:            &mockStore{},
-				Logger:           zap.NewNop().Sugar(),
-				StaleThreshold:   10 * time.Second,
-				CollectorTimeout: 20 * time.Second,
+				Worker:   &mockWorker{},
+				Identity: mockIdentity(),
+				Store:    &mockStore{},
+				Logger:   zap.NewNop().Sugar(),
+				CollectorHealth: supervisor.CollectorHealthConfig{
+					StaleThreshold: 10 * time.Second,
+					Timeout:        20 * time.Second,
+				},
 			})
 
 			snapshot.Observed = &mockObservedState{timestamp: time.Now().Add(-15 * time.Second)}
@@ -60,11 +64,13 @@ var _ = Describe("Data Freshness Checking", func() {
 	Context("when observation data has timed out", func() {
 		It("should return false", func() {
 			s = supervisor.NewSupervisor(supervisor.Config{
-				Worker:           &mockWorker{},
-				Identity:         mockIdentity(),
-				Store:            &mockStore{},
-				Logger:           zap.NewNop().Sugar(),
-				CollectorTimeout: 20 * time.Second,
+				Worker:   &mockWorker{},
+				Identity: mockIdentity(),
+				Store:    &mockStore{},
+				Logger:   zap.NewNop().Sugar(),
+				CollectorHealth: supervisor.CollectorHealthConfig{
+					Timeout: 20 * time.Second,
+				},
 			})
 
 			snapshot.Observed = &mockObservedState{timestamp: time.Now().Add(-25 * time.Second)}

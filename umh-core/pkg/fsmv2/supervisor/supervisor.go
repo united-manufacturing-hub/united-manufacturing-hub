@@ -25,100 +25,98 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/persistence"
 )
 
-// Supervisor manages the lifecycle of a single worker.
-// It runs two goroutines:
-//   1. Observation loop: Continuously calls worker.CollectObservedState()
-//   2. Main tick loop: Calls state.Next() and executes actions
-type Supervisor struct {
-	worker       fsmv2.Worker
-	identity     fsmv2.Identity
-	store        persistence.Store
-	currentState fsmv2.State
-	logger       *zap.SugaredLogger
-	tickInterval time.Duration
-
-	staleThreshold        time.Duration
-	collectorTimeout      time.Duration
-	maxRestartAttempts    int
-	collectorRestartCount int
-	lastCollectorRestart  time.Time
+type CollectorHealth struct {
+	staleThreshold     time.Duration
+	timeout            time.Duration
+	maxRestartAttempts int
+	restartCount       int
+	lastRestart        time.Time
 }
 
-// Config contains supervisor configuration.
-type Config struct {
-	Worker       fsmv2.Worker
-	Identity     fsmv2.Identity
-	Store        persistence.Store
-	Logger       *zap.SugaredLogger
-	TickInterval time.Duration // How often to call state.Next()
+type Supervisor struct {
+	worker          fsmv2.Worker
+	identity        fsmv2.Identity
+	store           persistence.Store
+	currentState    fsmv2.State
+	logger          *zap.SugaredLogger
+	tickInterval    time.Duration
+	collectorHealth CollectorHealth
+}
 
+type CollectorHealthConfig struct {
 	StaleThreshold     time.Duration
-	CollectorTimeout   time.Duration
+	Timeout            time.Duration
 	MaxRestartAttempts int
 }
 
-// NewSupervisor creates a new supervisor.
+type Config struct {
+	Worker          fsmv2.Worker
+	Identity        fsmv2.Identity
+	Store           persistence.Store
+	Logger          *zap.SugaredLogger
+	TickInterval    time.Duration
+	CollectorHealth CollectorHealthConfig
+}
+
 func NewSupervisor(cfg Config) *Supervisor {
 	tickInterval := cfg.TickInterval
 	if tickInterval == 0 {
-		tickInterval = 1 * time.Second
+		tickInterval = DefaultTickInterval
 	}
 
-	staleThreshold := cfg.StaleThreshold
+	staleThreshold := cfg.CollectorHealth.StaleThreshold
 	if staleThreshold == 0 {
-		staleThreshold = 10 * time.Second
+		staleThreshold = DefaultStaleThreshold
 	}
 
-	collectorTimeout := cfg.CollectorTimeout
-	if collectorTimeout == 0 {
-		collectorTimeout = 20 * time.Second
+	timeout := cfg.CollectorHealth.Timeout
+	if timeout == 0 {
+		timeout = DefaultCollectorTimeout
 	}
 
-	maxRestartAttempts := cfg.MaxRestartAttempts
+	maxRestartAttempts := cfg.CollectorHealth.MaxRestartAttempts
 	if maxRestartAttempts == 0 {
-		maxRestartAttempts = 3
+		maxRestartAttempts = DefaultMaxRestartAttempts
 	}
 
 	return &Supervisor{
-		worker:                cfg.Worker,
-		identity:              cfg.Identity,
-		store:                 cfg.Store,
-		currentState:          cfg.Worker.GetInitialState(),
-		logger:                cfg.Logger,
-		tickInterval:          tickInterval,
-		staleThreshold:        staleThreshold,
-		collectorTimeout:      collectorTimeout,
-		maxRestartAttempts:    maxRestartAttempts,
-		collectorRestartCount: 0,
+		worker:       cfg.Worker,
+		identity:     cfg.Identity,
+		store:        cfg.Store,
+		currentState: cfg.Worker.GetInitialState(),
+		logger:       cfg.Logger,
+		tickInterval: tickInterval,
+		collectorHealth: CollectorHealth{
+			staleThreshold:     staleThreshold,
+			timeout:            timeout,
+			maxRestartAttempts: maxRestartAttempts,
+			restartCount:       0,
+		},
 	}
 }
 
 func (s *Supervisor) GetStaleThreshold() time.Duration {
-	return s.staleThreshold
+	return s.collectorHealth.staleThreshold
 }
 
 func (s *Supervisor) GetCollectorTimeout() time.Duration {
-	return s.collectorTimeout
+	return s.collectorHealth.timeout
 }
 
 func (s *Supervisor) GetMaxRestartAttempts() int {
-	return s.maxRestartAttempts
+	return s.collectorHealth.maxRestartAttempts
 }
 
-// CheckDataFreshness returns true if observation data is fresh enough to progress FSM.
-// Logs warnings for stale data and triggers collector restart for timeouts.
-// This implements Layer 1 (Pause) and Layer 2 (Restart) of the 4-layer defense.
-// Exported for testing.
 func (s *Supervisor) CheckDataFreshness(snapshot *fsmv2.Snapshot) bool {
 	age := time.Since(snapshot.Observed.GetTimestamp())
 
-	if age > s.collectorTimeout {
-		s.logger.Warnf("Data timeout: observation is %v old (threshold: %v)", age, s.collectorTimeout)
+	if age > s.collectorHealth.timeout {
+		s.logger.Warnf("Data timeout: observation is %v old (threshold: %v)", age, s.collectorHealth.timeout)
 		return false
 	}
 
-	if age > s.staleThreshold {
-		s.logger.Warnf("Data stale: observation is %v old (threshold: %v)", age, s.staleThreshold)
+	if age > s.collectorHealth.staleThreshold {
+		s.logger.Warnf("Data stale: observation is %v old (threshold: %v)", age, s.collectorHealth.staleThreshold)
 		return false
 	}
 
@@ -142,12 +140,10 @@ func (s *Supervisor) Start(ctx context.Context) <-chan struct{} {
 	return done
 }
 
-// observationLoop continuously collects observed state.
-// Runs in a separate goroutine.
 func (s *Supervisor) observationLoop(ctx context.Context) {
 	s.logger.Infof("Starting observation loop for worker %s", s.identity.ID)
 
-	ticker := time.NewTicker(1 * time.Second) // TODO: Make configurable
+	ticker := time.NewTicker(DefaultObservationInterval)
 	defer ticker.Stop()
 
 	for {
