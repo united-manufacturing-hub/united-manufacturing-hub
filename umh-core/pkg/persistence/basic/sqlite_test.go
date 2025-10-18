@@ -841,4 +841,399 @@ var _ = Describe("SQLiteStore", func() {
 			Expect(err.Error()).To(ContainSubstring("transaction is closed"))
 		})
 	})
+
+	Context("Get", func() {
+		var store basic.Store
+
+		BeforeEach(func() {
+			var err error
+			store, err = basic.NewSQLiteStore(dbPath)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		AfterEach(func() {
+			if store != nil {
+				_ = store.Close()
+			}
+		})
+
+		It("should get existing document successfully", func() {
+			ctx := context.Background()
+
+			err := store.CreateCollection(ctx, "test_get", nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			doc := basic.Document{
+				"name": "test-document",
+				"value": 42,
+			}
+
+			id, err := store.Insert(ctx, "test_get", doc)
+			Expect(err).NotTo(HaveOccurred())
+
+			retrieved, err := store.Get(ctx, "test_get", id)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(retrieved).NotTo(BeNil())
+			Expect(retrieved["name"]).To(Equal("test-document"))
+			Expect(retrieved["value"]).To(BeNumerically("==", 42))
+		})
+
+		It("should return exact document content with deep equality", func() {
+			ctx := context.Background()
+
+			err := store.CreateCollection(ctx, "test_exact", nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			original := basic.Document{
+				"string": "text",
+				"int": 42,
+				"float": 3.14,
+				"bool": true,
+				"null": nil,
+				"array": []interface{}{1, "two", 3.0},
+				"object": map[string]interface{}{"nested": "value"},
+			}
+
+			id, err := store.Insert(ctx, "test_exact", original)
+			Expect(err).NotTo(HaveOccurred())
+
+			retrieved, err := store.Get(ctx, "test_exact", id)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(retrieved["string"]).To(Equal(original["string"]))
+			Expect(retrieved["int"]).To(BeNumerically("==", original["int"]))
+			Expect(retrieved["float"]).To(BeNumerically("~", original["float"]))
+			Expect(retrieved["bool"]).To(Equal(original["bool"]))
+			Expect(retrieved["null"]).To(BeNil())
+
+			retrievedArray := retrieved["array"].([]interface{})
+			originalArray := original["array"].([]interface{})
+			Expect(retrievedArray).To(HaveLen(len(originalArray)))
+			Expect(retrievedArray[0]).To(BeNumerically("==", originalArray[0]))
+			Expect(retrievedArray[1]).To(Equal(originalArray[1]))
+			Expect(retrievedArray[2]).To(BeNumerically("~", originalArray[2]))
+
+			retrievedObj := retrieved["object"].(map[string]interface{})
+			originalObj := original["object"].(map[string]interface{})
+			Expect(retrievedObj["nested"]).To(Equal(originalObj["nested"]))
+		})
+
+		It("should return ErrNotFound for non-existent document", func() {
+			ctx := context.Background()
+
+			err := store.CreateCollection(ctx, "test_not_found", nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = store.Get(ctx, "test_not_found", "non-existent-id")
+			Expect(err).To(Equal(basic.ErrNotFound))
+		})
+
+		It("should return ErrNotFound for non-existent collection", func() {
+			ctx := context.Background()
+
+			_, err := store.Get(ctx, "nonexistent_collection", "some-id")
+			Expect(err).To(HaveOccurred())
+		})
+
+		It("should fail when store is closed", func() {
+			ctx := context.Background()
+
+			err := store.CreateCollection(ctx, "test_closed_get", nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			doc := basic.Document{"test": "value"}
+			id, err := store.Insert(ctx, "test_closed_get", doc)
+			Expect(err).NotTo(HaveOccurred())
+
+			_ = store.Close()
+
+			_, err = store.Get(ctx, "test_closed_get", id)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("store is closed"))
+		})
+
+		It("should preserve complex nested structure", func() {
+			ctx := context.Background()
+
+			err := store.CreateCollection(ctx, "test_nested_get", nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			doc := basic.Document{
+				"level1": map[string]interface{}{
+					"level2": map[string]interface{}{
+						"level3": map[string]interface{}{
+							"deep": "value",
+							"number": 999,
+						},
+						"array": []interface{}{
+							map[string]interface{}{"item": 1},
+							map[string]interface{}{"item": 2},
+						},
+					},
+				},
+			}
+
+			id, err := store.Insert(ctx, "test_nested_get", doc)
+			Expect(err).NotTo(HaveOccurred())
+
+			retrieved, err := store.Get(ctx, "test_nested_get", id)
+			Expect(err).NotTo(HaveOccurred())
+
+			level1 := retrieved["level1"].(map[string]interface{})
+			level2 := level1["level2"].(map[string]interface{})
+			level3 := level2["level3"].(map[string]interface{})
+
+			Expect(level3["deep"]).To(Equal("value"))
+			Expect(level3["number"]).To(BeNumerically("==", 999))
+
+			array := level2["array"].([]interface{})
+			Expect(array).To(HaveLen(2))
+
+			item0 := array[0].(map[string]interface{})
+			Expect(item0["item"]).To(BeNumerically("==", 1))
+
+			item1 := array[1].(map[string]interface{})
+			Expect(item1["item"]).To(BeNumerically("==", 2))
+		})
+
+		It("should preserve null values in JSON", func() {
+			ctx := context.Background()
+
+			err := store.CreateCollection(ctx, "test_nulls_get", nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			doc := basic.Document{
+				"field1": "value",
+				"field2": nil,
+				"field3": map[string]interface{}{
+					"nested": nil,
+				},
+			}
+
+			id, err := store.Insert(ctx, "test_nulls_get", doc)
+			Expect(err).NotTo(HaveOccurred())
+
+			retrieved, err := store.Get(ctx, "test_nulls_get", id)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(retrieved["field1"]).To(Equal("value"))
+			Expect(retrieved["field2"]).To(BeNil())
+
+			nested := retrieved["field3"].(map[string]interface{})
+			Expect(nested["nested"]).To(BeNil())
+		})
+
+		It("should preserve arrays with mixed types", func() {
+			ctx := context.Background()
+
+			err := store.CreateCollection(ctx, "test_arrays_get", nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			doc := basic.Document{
+				"mixed": []interface{}{
+					"string",
+					42,
+					3.14,
+					true,
+					nil,
+					map[string]interface{}{"key": "value"},
+					[]interface{}{1, 2, 3},
+				},
+			}
+
+			id, err := store.Insert(ctx, "test_arrays_get", doc)
+			Expect(err).NotTo(HaveOccurred())
+
+			retrieved, err := store.Get(ctx, "test_arrays_get", id)
+			Expect(err).NotTo(HaveOccurred())
+
+			mixed := retrieved["mixed"].([]interface{})
+			Expect(mixed).To(HaveLen(7))
+			Expect(mixed[0]).To(Equal("string"))
+			Expect(mixed[1]).To(BeNumerically("==", 42))
+			Expect(mixed[2]).To(BeNumerically("~", 3.14))
+			Expect(mixed[3]).To(BeTrue())
+			Expect(mixed[4]).To(BeNil())
+
+			obj := mixed[5].(map[string]interface{})
+			Expect(obj["key"]).To(Equal("value"))
+
+			arr := mixed[6].([]interface{})
+			Expect(arr).To(HaveLen(3))
+		})
+
+		It("should preserve all JSON data types", func() {
+			ctx := context.Background()
+
+			err := store.CreateCollection(ctx, "test_types_get", nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			doc := basic.Document{
+				"string": "test",
+				"int": 42,
+				"negativeInt": -10,
+				"float": 3.14159,
+				"negativeFloat": -2.718,
+				"boolTrue": true,
+				"boolFalse": false,
+				"null": nil,
+				"emptyString": "",
+				"zeroInt": 0,
+				"zeroFloat": 0.0,
+			}
+
+			id, err := store.Insert(ctx, "test_types_get", doc)
+			Expect(err).NotTo(HaveOccurred())
+
+			retrieved, err := store.Get(ctx, "test_types_get", id)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(retrieved["string"]).To(Equal("test"))
+			Expect(retrieved["int"]).To(BeNumerically("==", 42))
+			Expect(retrieved["negativeInt"]).To(BeNumerically("==", -10))
+			Expect(retrieved["float"]).To(BeNumerically("~", 3.14159))
+			Expect(retrieved["negativeFloat"]).To(BeNumerically("~", -2.718))
+			Expect(retrieved["boolTrue"]).To(BeTrue())
+			Expect(retrieved["boolFalse"]).To(BeFalse())
+			Expect(retrieved["null"]).To(BeNil())
+			Expect(retrieved["emptyString"]).To(Equal(""))
+			Expect(retrieved["zeroInt"]).To(BeNumerically("==", 0))
+			Expect(retrieved["zeroFloat"]).To(BeNumerically("==", 0.0))
+		})
+	})
+
+	Context("Transaction Get", func() {
+		var store basic.Store
+
+		BeforeEach(func() {
+			var err error
+			store, err = basic.NewSQLiteStore(dbPath)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		AfterEach(func() {
+			if store != nil {
+				_ = store.Close()
+			}
+		})
+
+		It("should get document within transaction", func() {
+			ctx := context.Background()
+
+			err := store.CreateCollection(ctx, "tx_get", nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			doc := basic.Document{"name": "tx-doc", "value": 100}
+			id, err := store.Insert(ctx, "tx_get", doc)
+			Expect(err).NotTo(HaveOccurred())
+
+			tx, err := store.BeginTx(ctx)
+			Expect(err).NotTo(HaveOccurred())
+			defer func() { _ = tx.Rollback() }()
+
+			retrieved, err := tx.Get(ctx, "tx_get", id)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(retrieved["name"]).To(Equal("tx-doc"))
+			Expect(retrieved["value"]).To(BeNumerically("==", 100))
+
+			err = tx.Commit()
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should get document inserted in same transaction", func() {
+			ctx := context.Background()
+
+			err := store.CreateCollection(ctx, "tx_get_insert", nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			tx, err := store.BeginTx(ctx)
+			Expect(err).NotTo(HaveOccurred())
+			defer func() { _ = tx.Rollback() }()
+
+			doc := basic.Document{"name": "in-tx"}
+			id, err := tx.Insert(ctx, "tx_get_insert", doc)
+			Expect(err).NotTo(HaveOccurred())
+
+			retrieved, err := tx.Get(ctx, "tx_get_insert", id)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(retrieved["name"]).To(Equal("in-tx"))
+
+			err = tx.Commit()
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should return ErrNotFound for non-existent document in transaction", func() {
+			ctx := context.Background()
+
+			err := store.CreateCollection(ctx, "tx_get_notfound", nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			tx, err := store.BeginTx(ctx)
+			Expect(err).NotTo(HaveOccurred())
+			defer func() { _ = tx.Rollback() }()
+
+			_, err = tx.Get(ctx, "tx_get_notfound", "non-existent")
+			Expect(err).To(Equal(basic.ErrNotFound))
+
+			err = tx.Commit()
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should fail when transaction is closed", func() {
+			ctx := context.Background()
+
+			err := store.CreateCollection(ctx, "tx_get_closed", nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			doc := basic.Document{"test": "value"}
+			id, err := store.Insert(ctx, "tx_get_closed", doc)
+			Expect(err).NotTo(HaveOccurred())
+
+			tx, err := store.BeginTx(ctx)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = tx.Commit()
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = tx.Get(ctx, "tx_get_closed", id)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("transaction is closed"))
+		})
+
+		It("should preserve complex nested structure in transaction", func() {
+			ctx := context.Background()
+
+			err := store.CreateCollection(ctx, "tx_get_nested", nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			tx, err := store.BeginTx(ctx)
+			Expect(err).NotTo(HaveOccurred())
+			defer func() { _ = tx.Rollback() }()
+
+			doc := basic.Document{
+				"nested": map[string]interface{}{
+					"array": []interface{}{1, 2, 3},
+					"object": map[string]interface{}{
+						"deep": "value",
+					},
+				},
+			}
+
+			id, err := tx.Insert(ctx, "tx_get_nested", doc)
+			Expect(err).NotTo(HaveOccurred())
+
+			retrieved, err := tx.Get(ctx, "tx_get_nested", id)
+			Expect(err).NotTo(HaveOccurred())
+
+			nested := retrieved["nested"].(map[string]interface{})
+			array := nested["array"].([]interface{})
+			Expect(array).To(HaveLen(3))
+
+			object := nested["object"].(map[string]interface{})
+			Expect(object["deep"]).To(Equal("value"))
+
+			err = tx.Commit()
+			Expect(err).NotTo(HaveOccurred())
+		})
+	})
 })
