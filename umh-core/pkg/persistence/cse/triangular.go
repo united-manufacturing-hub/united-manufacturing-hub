@@ -1,0 +1,549 @@
+package cse
+
+import (
+	"context"
+	"fmt"
+	"sync/atomic"
+	"time"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence/basic"
+)
+
+// TriangularStore provides high-level operations for FSM v2's triangular model.
+//
+// DESIGN DECISION: Auto-inject CSE metadata transparently
+// WHY: Callers shouldn't manage _sync_id, _version, timestamps manually.
+// Reduces boilerplate and prevents mistakes (forgetting to increment sync ID).
+//
+// TRADE-OFF: Less control over metadata fields, but fewer bugs.
+// If fine-grained control is needed, callers can use basic.Store directly.
+//
+// INSPIRED BY: ORM auto-timestamps (created_at, updated_at in Rails/Django),
+// Linear's transparent sync metadata injection.
+//
+// The triangular model separates each worker into three parts:
+//   - Identity: Immutable worker identification (ID, Name, IP)
+//   - Desired: User intent / configuration (what we want)
+//   - Observed: System reality (what actually exists)
+//
+// Each part is stored in a separate collection:
+//   - container_identity (immutable, created once)
+//   - container_desired (user configuration, increments version on change)
+//   - container_observed (system state, increments sync ID but not version)
+//
+// Example usage:
+//
+//	ts := cse.NewTriangularStore(sqliteStore, globalRegistry)
+//
+//	// Create worker
+//	ts.SaveIdentity(ctx, "container", "worker-123", basic.Document{
+//	    "id": "worker-123",
+//	    "name": "Container A",
+//	    "ip": "192.168.1.100",
+//	})
+//
+//	// Save user intent
+//	ts.SaveDesired(ctx, "container", "worker-123", basic.Document{
+//	    "id": "worker-123",
+//	    "config": "production",
+//	})
+//
+//	// Save system reality (called on every FSM tick)
+//	ts.SaveObserved(ctx, "container", "worker-123", basic.Document{
+//	    "id": "worker-123",
+//	    "status": "running",
+//	    "cpu": 45.2,
+//	})
+//
+//	// FSM supervisor loads complete snapshot
+//	snapshot, _ := ts.LoadSnapshot(ctx, "container", "worker-123")
+//	// Use snapshot.Identity, snapshot.Desired, snapshot.Observed for Next() decision
+type TriangularStore struct {
+	store    basic.Store
+	registry *Registry
+	syncID   *atomic.Int64
+}
+
+// NewTriangularStore creates a new TriangularStore.
+//
+// DESIGN DECISION: Require explicit registry injection
+// WHY: Makes dependencies explicit, supports testing with custom registries.
+// Registry defines which collections exist and their metadata conventions.
+//
+// TRADE-OFF: More verbose than using global registry, but more testable.
+//
+// INSPIRED BY: Dependency injection pattern, avoiding global state in constructors.
+//
+// Parameters:
+//   - store: Backend storage implementation (SQLite, Postgres, etc.)
+//   - registry: Schema registry with triangular collection metadata
+//
+// Returns:
+//   - *TriangularStore: Ready-to-use triangular store instance
+func NewTriangularStore(store basic.Store, registry *Registry) *TriangularStore {
+	return &TriangularStore{
+		store:    store,
+		registry: registry,
+		syncID:   &atomic.Int64{},
+	}
+}
+
+// SaveIdentity stores immutable worker identity.
+//
+// DESIGN DECISION: Identity is created once and never updated
+// WHY: Identity fields (IP, hostname, bootstrap config) don't change.
+// Immutability simplifies reasoning about worker lifecycle.
+//
+// TRADE-OFF: Can't update identity after creation. If identity needs to change,
+// must delete worker and recreate with new identity.
+//
+// INSPIRED BY: FSM v2 worker.go identity semantics, database primary keys.
+//
+// CSE metadata injected:
+//   - _sync_id: Global sync version (for delta sync queries)
+//   - _version: Set to 1 (identity version never changes)
+//   - _created_at: Timestamp of creation
+//
+// Parameters:
+//   - ctx: Cancellation context
+//   - workerType: Worker type (e.g., "container", "relay")
+//   - id: Unique worker identifier
+//   - identity: Identity document (id, name, ip, etc.)
+//
+// Returns:
+//   - error: If worker type not registered or insertion fails
+//
+// Example:
+//
+//	err := ts.SaveIdentity(ctx, "container", "worker-123", basic.Document{
+//	    "id": "worker-123",
+//	    "name": "Container A",
+//	    "ip": "192.168.1.100",
+//	})
+func (ts *TriangularStore) SaveIdentity(ctx context.Context, workerType string, id string, identity basic.Document) error {
+	// Validate document has required fields
+	if err := ts.validateDocument(identity); err != nil {
+		return fmt.Errorf("invalid identity document: %w", err)
+	}
+
+	// Look up identity collection for this worker type
+	identityMeta, _, _, err := ts.registry.GetTriangularCollections(workerType)
+	if err != nil {
+		return fmt.Errorf("worker type %q not registered: %w", workerType, err)
+	}
+
+	// Inject CSE metadata
+	ts.injectMetadata(identity, RoleIdentity, true)
+
+	// Insert identity (first time creation)
+	_, err = ts.store.Insert(ctx, identityMeta.Name, identity)
+	if err != nil {
+		return fmt.Errorf("failed to save identity for %s/%s: %w", workerType, id, err)
+	}
+
+	return nil
+}
+
+// LoadIdentity retrieves worker identity.
+//
+// DESIGN DECISION: Return ErrNotFound if worker doesn't exist
+// WHY: Explicit error handling - caller knows whether worker exists.
+// Matches basic.Store.Get semantics.
+//
+// Parameters:
+//   - ctx: Cancellation context
+//   - workerType: Worker type (e.g., "container")
+//   - id: Unique worker identifier
+//
+// Returns:
+//   - basic.Document: Identity document with CSE metadata
+//   - error: ErrNotFound if worker doesn't exist
+func (ts *TriangularStore) LoadIdentity(ctx context.Context, workerType string, id string) (basic.Document, error) {
+	identityMeta, _, _, err := ts.registry.GetTriangularCollections(workerType)
+	if err != nil {
+		return nil, fmt.Errorf("worker type %q not registered: %w", workerType, err)
+	}
+
+	doc, err := ts.store.Get(ctx, identityMeta.Name, id)
+	if err != nil {
+		return nil, err
+	}
+
+	return doc, nil
+}
+
+// SaveDesired stores user intent/configuration.
+//
+// DESIGN DECISION: Increment _version for optimistic locking
+// WHY: Desired state represents user configuration. Version prevents lost updates
+// when multiple clients modify configuration concurrently.
+//
+// TRADE-OFF: Callers must handle version conflicts (retry logic).
+// Alternative would be last-write-wins, but that loses concurrent updates.
+//
+// INSPIRED BY: Optimistic locking in ORMs (Hibernate, Entity Framework),
+// Linear's version-based conflict resolution.
+//
+// CSE metadata injected/updated:
+//   - _sync_id: Incremented (for delta sync)
+//   - _version: Incremented (for optimistic locking)
+//   - _updated_at: Current timestamp
+//   - _created_at: Set if first save
+//
+// Parameters:
+//   - ctx: Cancellation context
+//   - workerType: Worker type
+//   - id: Unique worker identifier
+//   - desired: Desired state document
+//
+// Returns:
+//   - error: If worker type not registered or save fails
+func (ts *TriangularStore) SaveDesired(ctx context.Context, workerType string, id string, desired basic.Document) error {
+	// Validate document has required fields
+	if err := ts.validateDocument(desired); err != nil {
+		return fmt.Errorf("invalid desired document: %w", err)
+	}
+
+	_, desiredMeta, _, err := ts.registry.GetTriangularCollections(workerType)
+	if err != nil {
+		return fmt.Errorf("worker type %q not registered: %w", workerType, err)
+	}
+
+	// Check if this is first save or update
+	_, err = ts.store.Get(ctx, desiredMeta.Name, id)
+	isNew := err != nil && err.Error() == basic.ErrNotFound.Error()
+
+	// Inject CSE metadata
+	ts.injectMetadata(desired, RoleDesired, isNew)
+
+	if isNew {
+		_, err = ts.store.Insert(ctx, desiredMeta.Name, desired)
+	} else {
+		err = ts.store.Update(ctx, desiredMeta.Name, id, desired)
+	}
+
+	if err != nil {
+		return fmt.Errorf("failed to save desired for %s/%s: %w", workerType, id, err)
+	}
+
+	return nil
+}
+
+// LoadDesired retrieves user intent/configuration.
+//
+// Parameters:
+//   - ctx: Cancellation context
+//   - workerType: Worker type
+//   - id: Unique worker identifier
+//
+// Returns:
+//   - basic.Document: Desired state document with CSE metadata
+//   - error: ErrNotFound if not found
+func (ts *TriangularStore) LoadDesired(ctx context.Context, workerType string, id string) (basic.Document, error) {
+	_, desiredMeta, _, err := ts.registry.GetTriangularCollections(workerType)
+	if err != nil {
+		return nil, fmt.Errorf("worker type %q not registered: %w", workerType, err)
+	}
+
+	doc, err := ts.store.Get(ctx, desiredMeta.Name, id)
+	if err != nil {
+		return nil, err
+	}
+
+	return doc, nil
+}
+
+// SaveObserved stores system reality.
+//
+// DESIGN DECISION: Increment _sync_id but NOT _version
+// WHY: Observed state is ephemeral (reconstructed from polling external systems).
+// It doesn't participate in optimistic locking - only user intent (desired) does.
+//
+// TRADE-OFF: Can't detect concurrent observed updates, but not needed.
+// Observed state is always overwritten by latest poll results.
+//
+// INSPIRED BY: FSM v2 design (desired is user intent, observed is system reality),
+// CQRS pattern (write side doesn't version read models).
+//
+// CSE metadata injected/updated:
+//   - _sync_id: Incremented (for delta sync)
+//   - _version: NOT incremented (observed is ephemeral)
+//   - _updated_at: Current timestamp
+//   - _created_at: Set if first save
+//
+// Parameters:
+//   - ctx: Cancellation context
+//   - workerType: Worker type
+//   - id: Unique worker identifier
+//   - observed: Observed state document
+//
+// Returns:
+//   - error: If worker type not registered or save fails
+func (ts *TriangularStore) SaveObserved(ctx context.Context, workerType string, id string, observed basic.Document) error {
+	// Validate document has required fields
+	if err := ts.validateDocument(observed); err != nil {
+		return fmt.Errorf("invalid observed document: %w", err)
+	}
+
+	_, _, observedMeta, err := ts.registry.GetTriangularCollections(workerType)
+	if err != nil {
+		return fmt.Errorf("worker type %q not registered: %w", workerType, err)
+	}
+
+	// Check if this is first save or update
+	_, err = ts.store.Get(ctx, observedMeta.Name, id)
+	isNew := err != nil && err.Error() == basic.ErrNotFound.Error()
+
+	// Inject CSE metadata
+	ts.injectMetadata(observed, RoleObserved, isNew)
+
+	if isNew {
+		_, err = ts.store.Insert(ctx, observedMeta.Name, observed)
+	} else {
+		err = ts.store.Update(ctx, observedMeta.Name, id, observed)
+	}
+
+	if err != nil {
+		return fmt.Errorf("failed to save observed for %s/%s: %w", workerType, id, err)
+	}
+
+	return nil
+}
+
+// LoadObserved retrieves system reality.
+//
+// Parameters:
+//   - ctx: Cancellation context
+//   - workerType: Worker type
+//   - id: Unique worker identifier
+//
+// Returns:
+//   - basic.Document: Observed state document with CSE metadata
+//   - error: ErrNotFound if not found
+func (ts *TriangularStore) LoadObserved(ctx context.Context, workerType string, id string) (basic.Document, error) {
+	_, _, observedMeta, err := ts.registry.GetTriangularCollections(workerType)
+	if err != nil {
+		return nil, fmt.Errorf("worker type %q not registered: %w", workerType, err)
+	}
+
+	doc, err := ts.store.Get(ctx, observedMeta.Name, id)
+	if err != nil {
+		return nil, err
+	}
+
+	return doc, nil
+}
+
+// Snapshot represents the complete state of a worker.
+//
+// DESIGN DECISION: Separate struct instead of map[string]Document
+// WHY: Type-safe access to three parts. Prevents mistakes like
+// accessing snapshot["identity"] instead of snapshot.Identity.
+//
+// TRADE-OFF: More verbose than map, but self-documenting.
+//
+// INSPIRED BY: Domain-driven design value objects, Linear's entity snapshots.
+type Snapshot struct {
+	Identity basic.Document
+	Desired  basic.Document
+	Observed basic.Document
+}
+
+// LoadSnapshot atomically loads all three parts of the triangular model.
+//
+// DESIGN DECISION: Use transaction for atomic read
+// WHY: Ensure consistent view of worker state. Don't mix old desired with new observed.
+// Critical for FSM correctness - state machine needs snapshot at single point in time.
+//
+// TRADE-OFF: Slight overhead from transaction, but essential for correctness.
+// Without transaction, FSM might see inconsistent state (e.g., desired says "stop"
+// but observed says "running" from before the desired change).
+//
+// INSPIRED BY: Database MVCC (multi-version concurrency control),
+// Linear's snapshot isolation for sync operations.
+//
+// Parameters:
+//   - ctx: Cancellation context
+//   - workerType: Worker type
+//   - id: Unique worker identifier
+//
+// Returns:
+//   - *Snapshot: Complete worker state (identity, desired, observed)
+//   - error: ErrNotFound if any part is missing, or transaction fails
+//
+// Example:
+//
+//	snapshot, err := ts.LoadSnapshot(ctx, "container", "worker-123")
+//	if err != nil {
+//	    return err
+//	}
+//
+//	// FSM uses snapshot for decision
+//	if snapshot.Desired["status"] == "stopped" && snapshot.Observed["status"] == "running" {
+//	    // Transition to stopping state
+//	}
+func (ts *TriangularStore) LoadSnapshot(ctx context.Context, workerType string, id string) (*Snapshot, error) {
+	identityMeta, desiredMeta, observedMeta, err := ts.registry.GetTriangularCollections(workerType)
+	if err != nil {
+		return nil, fmt.Errorf("worker type %q not registered: %w", workerType, err)
+	}
+
+	// Use transaction for atomic read
+	tx, err := ts.store.BeginTx(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	// Load all three parts
+	identity, err := tx.Get(ctx, identityMeta.Name, id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load identity: %w", err)
+	}
+
+	desired, err := tx.Get(ctx, desiredMeta.Name, id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load desired: %w", err)
+	}
+
+	observed, err := tx.Get(ctx, observedMeta.Name, id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load observed: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	return &Snapshot{
+		Identity: identity,
+		Desired:  desired,
+		Observed: observed,
+	}, nil
+}
+
+// DeleteWorker removes all three parts of the triangular model.
+//
+// DESIGN DECISION: Use transaction for atomic delete
+// WHY: Either delete all three parts or none. Partial deletion would leave
+// orphaned state (identity without observed, etc.) causing FSM errors.
+//
+// TRADE-OFF: Transaction overhead, but necessary for data consistency.
+//
+// INSPIRED BY: Database referential integrity (CASCADE DELETE),
+// Linear's entity deletion (removes all related records atomically).
+//
+// Parameters:
+//   - ctx: Cancellation context
+//   - workerType: Worker type
+//   - id: Unique worker identifier
+//
+// Returns:
+//   - error: If transaction fails or any deletion fails
+//
+// Example:
+//
+//	// User deletes worker in UI
+//	err := ts.DeleteWorker(ctx, "container", "worker-123")
+//	// All three collections cleaned up atomically
+func (ts *TriangularStore) DeleteWorker(ctx context.Context, workerType string, id string) error {
+	identityMeta, desiredMeta, observedMeta, err := ts.registry.GetTriangularCollections(workerType)
+	if err != nil {
+		return fmt.Errorf("worker type %q not registered: %w", workerType, err)
+	}
+
+	// Use transaction for atomic delete
+	tx, err := ts.store.BeginTx(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	// Delete all three parts
+	if err := tx.Delete(ctx, identityMeta.Name, id); err != nil && err.Error() != basic.ErrNotFound.Error() {
+		return fmt.Errorf("failed to delete identity: %w", err)
+	}
+
+	if err := tx.Delete(ctx, desiredMeta.Name, id); err != nil && err.Error() != basic.ErrNotFound.Error() {
+		return fmt.Errorf("failed to delete desired: %w", err)
+	}
+
+	if err := tx.Delete(ctx, observedMeta.Name, id); err != nil && err.Error() != basic.ErrNotFound.Error() {
+		return fmt.Errorf("failed to delete observed: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	return nil
+}
+
+// injectMetadata adds or updates CSE metadata fields in a document.
+//
+// DESIGN DECISION: Mutate document in-place instead of returning new document
+// WHY: Simple and efficient - caller already provides document to save.
+// No need to create defensive copies.
+//
+// TRADE-OFF: Modifies caller's document, but this is expected behavior
+// (caller explicitly calls Save, expects metadata to be added).
+//
+// INSPIRED BY: ORM before_save callbacks (Rails, Django),
+// Linear's transparent metadata injection.
+//
+// Metadata injected/updated based on role:
+//   - RoleIdentity: _sync_id, _version=1, _created_at (immutable after creation)
+//   - RoleDesired: _sync_id++, _version++, _updated_at (increments version)
+//   - RoleObserved: _sync_id++, _updated_at (does NOT increment version)
+//
+// Parameters:
+//   - doc: Document to inject metadata into (mutated in-place)
+//   - role: Triangular model role (identity, desired, observed)
+//   - isNew: True if first save, false if update
+func (ts *TriangularStore) injectMetadata(doc basic.Document, role string, isNew bool) {
+	now := time.Now().UTC()
+
+	// Always increment global sync ID for delta sync queries
+	doc[FieldSyncID] = ts.syncID.Add(1)
+
+	if isNew {
+		// First save: set creation timestamp and initial version
+		doc[FieldCreatedAt] = now
+		doc[FieldVersion] = int64(1)
+	} else {
+		// Update: set update timestamp
+		doc[FieldUpdatedAt] = now
+
+		// Increment version only for desired state (optimistic locking)
+		// Observed state is ephemeral and doesn't participate in versioning
+		if role == RoleDesired {
+			currentVersion, ok := doc[FieldVersion].(int64)
+			if !ok {
+				// If version field doesn't exist or wrong type, start at 1
+				currentVersion = 0
+			}
+			doc[FieldVersion] = currentVersion + 1
+		}
+	}
+}
+
+// validateDocument checks that a document has the required "id" field.
+//
+// DESIGN DECISION: Fail fast with validation before save
+// WHY: Prevent invalid documents from being stored. ID is required for
+// all triangular model documents (used as primary key).
+//
+// TRADE-OFF: Additional validation overhead, but prevents data corruption.
+//
+// INSPIRED BY: "Parse, don't validate" principle - ensure valid state.
+func (ts *TriangularStore) validateDocument(doc basic.Document) error {
+	if doc == nil {
+		return fmt.Errorf("document cannot be nil")
+	}
+
+	if doc["id"] == nil {
+		return fmt.Errorf("document must have 'id' field")
+	}
+
+	return nil
+}

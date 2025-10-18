@@ -473,6 +473,138 @@ var _ = Describe("Edge Cases", func() {
 			})
 		})
 	})
+
+	Describe("Context cancellation", func() {
+		Context("when context is canceled during tick loop", func() {
+			It("should stop tick loop gracefully", func() {
+				s := supervisor.NewSupervisor(supervisor.Config{
+					Worker:       &mockWorker{},
+					Identity:     mockIdentity(),
+					Store:        &mockStore{},
+					Logger:       zap.NewNop().Sugar(),
+					TickInterval: 100 * time.Millisecond,
+				})
+
+				ctx, cancel := context.WithCancel(context.Background())
+
+				done := s.Start(ctx)
+
+				time.Sleep(50 * time.Millisecond)
+
+				cancel()
+
+				Eventually(done, 2*time.Second).Should(BeClosed())
+			})
+		})
+
+		Context("when context is canceled before first tick", func() {
+			It("should stop immediately", func() {
+				s := supervisor.NewSupervisor(supervisor.Config{
+					Worker:       &mockWorker{},
+					Identity:     mockIdentity(),
+					Store:        &mockStore{},
+					Logger:       zap.NewNop().Sugar(),
+					TickInterval: 5 * time.Second,
+				})
+
+				ctx, cancel := context.WithCancel(context.Background())
+				cancel()
+
+				done := s.Start(ctx)
+
+				Eventually(done, 1*time.Second).Should(BeClosed())
+			})
+		})
+	})
+
+	Describe("RequestShutdown LoadDesired error", func() {
+		Context("when LoadDesired fails", func() {
+			It("should return error", func() {
+				store := &mockStore{
+					loadDesired: func(ctx context.Context, workerType string, id string) (fsmv2.DesiredState, error) {
+						return nil, errors.New("load desired error")
+					},
+				}
+
+				s := supervisor.NewSupervisor(supervisor.Config{
+					Worker:   &mockWorker{},
+					Identity: mockIdentity(),
+					Store:    store,
+					Logger:   zap.NewNop().Sugar(),
+				})
+
+				err := s.RequestShutdown(context.Background(), "test reason")
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("failed to load desired state"))
+			})
+		})
+	})
+
+	Describe("Shutdown escalation with SaveDesired error", func() {
+		Context("when max restart attempts reached and SaveDesired fails", func() {
+			It("should log error and return shutdown error", func() {
+				saveErr := errors.New("save desired error")
+				store := &mockStore{
+					snapshot: &fsmv2.Snapshot{
+						Identity: mockIdentity(),
+						Desired:  &mockDesiredState{},
+						Observed: &mockObservedState{timestamp: time.Now().Add(-25 * time.Second)},
+					},
+					saveDesired: func(ctx context.Context, workerType string, id string, desired fsmv2.DesiredState) error {
+						return saveErr
+					},
+				}
+
+				s := supervisor.NewSupervisor(supervisor.Config{
+					Worker:   &mockWorker{},
+					Identity: mockIdentity(),
+					Store:    store,
+					Logger:   zap.NewNop().Sugar(),
+					CollectorHealth: supervisor.CollectorHealthConfig{
+						StaleThreshold:     10 * time.Second,
+						Timeout:            20 * time.Second,
+						MaxRestartAttempts: 3,
+					},
+				})
+
+				s.SetRestartCount(3)
+
+				err := s.Tick(context.Background())
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("unresponsive"))
+			})
+		})
+	})
+
+	Describe("Stale data pausing FSM", func() {
+		Context("when data is stale but not timed out", func() {
+			It("should pause FSM without restarting collector", func() {
+				store := &mockStore{
+					snapshot: &fsmv2.Snapshot{
+						Identity: mockIdentity(),
+						Desired:  &mockDesiredState{},
+						Observed: &mockObservedState{timestamp: time.Now().Add(-15 * time.Second)},
+					},
+				}
+
+				s := supervisor.NewSupervisor(supervisor.Config{
+					Worker:   &mockWorker{},
+					Identity: mockIdentity(),
+					Store:    store,
+					Logger:   zap.NewNop().Sugar(),
+					CollectorHealth: supervisor.CollectorHealthConfig{
+						StaleThreshold:     10 * time.Second,
+						Timeout:            20 * time.Second,
+						MaxRestartAttempts: 3,
+					},
+				})
+
+				err := s.Tick(context.Background())
+				Expect(err).ToNot(HaveOccurred())
+				Expect(s.GetRestartCount()).To(Equal(0))
+			})
+		})
+	})
 })
 
 type mockAction struct {

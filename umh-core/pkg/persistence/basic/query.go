@@ -64,7 +64,7 @@ type FilterCondition struct {
 // TRADE-OFF: Could use bool (true=asc) but "1" and "-1" are more universally understood
 // across databases. MongoDB, Elasticsearch, and many ORMs use this convention.
 //
-// INSPIRED BY: MongoDB sort order syntax
+// INSPIRED BY: MongoDB sort order syntax.
 type SortOrder int
 
 const (
@@ -136,7 +136,7 @@ type SortField struct {
 // FUTURE: Add cursor-based pagination for large result sets
 // Example: NextCursor string, PreviousCursor string (like Linear's pagination)
 //
-// INSPIRED BY: SQL LIMIT/OFFSET, MongoDB limit/skip, Linear's sync pagination
+// INSPIRED BY: SQL LIMIT/OFFSET, MongoDB limit/skip, Linear's sync pagination.
 type Query struct {
 	Filters    []FilterCondition
 	SortBy     []SortField
@@ -202,6 +202,7 @@ func (q *Query) Filter(field string, op Operator, value interface{}) *Query {
 		Op:    op,
 		Value: value,
 	})
+
 	return q
 }
 
@@ -230,6 +231,7 @@ func (q *Query) Sort(field string, order SortOrder) *Query {
 		Field: field,
 		Order: order,
 	})
+
 	return q
 }
 
@@ -254,7 +256,9 @@ func (q *Query) Limit(count int) *Query {
 	if count < 0 {
 		count = 0
 	}
+
 	q.LimitCount = count
+
 	return q
 }
 
@@ -287,6 +291,8 @@ func (q *Query) Skip(count int) *Query {
 	if count < 0 {
 		count = 0
 	}
+
 	q.SkipCount = count
+
 	return q
 }

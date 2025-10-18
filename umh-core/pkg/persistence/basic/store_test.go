@@ -34,10 +34,9 @@ func TestCreateCollection(t *testing.T) {
 
 // TestTransactionInterface verifies the Tx interface extends Store.
 func TestTransactionInterface(t *testing.T) {
-	// This should compile once the Tx interface exists
 	var _ basic.Tx = nil
 
-	// Tx should be assignable to Store (interface embedding)
 	var tx basic.Tx
+
 	var _ basic.Store = tx
 }

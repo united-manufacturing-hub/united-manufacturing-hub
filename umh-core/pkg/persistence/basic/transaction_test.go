@@ -20,6 +20,7 @@ func (m *mockStore) BeginTx(ctx context.Context) (basic.Tx, error) {
 	if m.beginTxErr != nil {
 		return nil, m.beginTxErr
 	}
+
 	return &mockTx{store: m}, nil
 }
 
@@ -61,11 +62,13 @@ type mockTx struct {
 
 func (t *mockTx) Commit() error {
 	t.store.txCommitted = true
+
 	return nil
 }
 
 func (t *mockTx) Rollback() error {
 	t.store.txRolledBack = true
+
 	return nil
 }
 
@@ -190,6 +193,7 @@ func TestWithRetry_Success(t *testing.T) {
 
 	err := basic.WithRetry(context.Background(), store, 3, func(tx basic.Tx) error {
 		callCount++
+
 		return nil
 	})
 	if err != nil {
@@ -210,6 +214,7 @@ func TestWithRetry_Conflict(t *testing.T) {
 		if callCount < 3 {
 			return basic.ErrConflict
 		}
+
 		return nil
 	})
 	if err != nil {
@@ -227,6 +232,7 @@ func TestWithRetry_ExceedsMaxRetries(t *testing.T) {
 
 	err := basic.WithRetry(context.Background(), store, 3, func(tx basic.Tx) error {
 		callCount++
+
 		return basic.ErrConflict
 	})
 
@@ -246,6 +252,7 @@ func TestWithRetry_NonConflictError(t *testing.T) {
 
 	err := basic.WithRetry(context.Background(), store, 3, func(tx basic.Tx) error {
 		callCount++
+
 		return otherErr
 	})
 

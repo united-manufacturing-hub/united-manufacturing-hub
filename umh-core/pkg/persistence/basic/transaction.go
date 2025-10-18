@@ -64,11 +64,13 @@ func WithTransaction(ctx context.Context, store Store, fn func(tx Tx) error) err
 	err = fn(tx)
 	if err != nil {
 		_ = tx.Rollback()
+
 		return err
 	}
 
 	if ctx.Err() != nil {
 		_ = tx.Rollback()
+
 		return ctx.Err()
 	}
 

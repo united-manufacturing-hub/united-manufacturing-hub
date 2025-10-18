@@ -90,6 +90,7 @@ type mockStore struct {
 	snapshot     *fsmv2.Snapshot
 	saveErr      error
 	loadSnapshot func(ctx context.Context, workerType string, id string) (*fsmv2.Snapshot, error)
+	loadDesired  func(ctx context.Context, workerType string, id string) (fsmv2.DesiredState, error)
 	saveDesired  func(ctx context.Context, workerType string, id string, desired fsmv2.DesiredState) error
 }
 
@@ -110,6 +111,10 @@ func (m *mockStore) SaveDesired(ctx context.Context, workerType string, id strin
 }
 
 func (m *mockStore) LoadDesired(ctx context.Context, workerType string, id string) (fsmv2.DesiredState, error) {
+	if m.loadDesired != nil {
+		return m.loadDesired(ctx, workerType, id)
+	}
+
 	return &mockDesiredState{}, nil
 }
 

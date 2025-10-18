@@ -6,11 +6,26 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"runtime"
 
 	"github.com/google/uuid"
 	_ "github.com/mattn/go-sqlite3"
 )
+
+var collectionNamePattern = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`)
+
+func validateCollectionName(name string) error {
+	if name == "" {
+		return errors.New("invalid collection name: cannot be empty")
+	}
+
+	if !collectionNamePattern.MatchString(name) {
+		return errors.New("invalid collection name: must contain only alphanumeric characters and underscores, and must start with a letter or underscore")
+	}
+
+	return nil
+}
 
 type sqliteStore struct {
 	db     *sql.DB
@@ -56,6 +71,10 @@ func (s *sqliteStore) CreateCollection(ctx context.Context, name string, schema 
 		return errors.New("store is closed")
 	}
 
+	if err := validateCollectionName(name); err != nil {
+		return err
+	}
+
 	query := fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s (
 		id TEXT PRIMARY KEY,
 		data BLOB NOT NULL
@@ -72,6 +91,10 @@ func (s *sqliteStore) CreateCollection(ctx context.Context, name string, schema 
 func (s *sqliteStore) DropCollection(ctx context.Context, name string) error {
 	if s.closed {
 		return errors.New("store is closed")
+	}
+
+	if err := validateCollectionName(name); err != nil {
+		return err
 	}
 
 	query := `DROP TABLE IF EXISTS ` + name
@@ -264,6 +287,10 @@ func (t *sqliteTx) CreateCollection(ctx context.Context, name string, schema *Sc
 		return errors.New("transaction is closed")
 	}
 
+	if err := validateCollectionName(name); err != nil {
+		return err
+	}
+
 	query := fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s (
 		id TEXT PRIMARY KEY,
 		data BLOB NOT NULL
@@ -280,6 +307,10 @@ func (t *sqliteTx) CreateCollection(ctx context.Context, name string, schema *Sc
 func (t *sqliteTx) DropCollection(ctx context.Context, name string) error {
 	if t.closed {
 		return errors.New("transaction is closed")
+	}
+
+	if err := validateCollectionName(name); err != nil {
+		return err
 	}
 
 	query := `DROP TABLE IF EXISTS ` + name
