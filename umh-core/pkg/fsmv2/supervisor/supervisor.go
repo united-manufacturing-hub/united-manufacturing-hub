@@ -163,6 +163,9 @@ func NewSupervisor(cfg Config) *Supervisor {
 		tickInterval = DefaultTickInterval
 	}
 
+	// NOTE (Invariant I13): Zero timeouts default to safe values.
+	// This prevents invalid configurations where timeouts of 0 would
+	// cause immediate failures or infinite loops.
 	observationTimeout := cfg.CollectorHealth.ObservationTimeout
 	if observationTimeout == 0 {
 		observationTimeout = DefaultObservationTimeout
@@ -280,6 +283,14 @@ func (s *Supervisor) RestartCollector(ctx context.Context) error {
 
 func (s *Supervisor) CheckDataFreshness(snapshot *fsmv2.Snapshot) bool {
 	age := time.Since(snapshot.Observed.GetTimestamp())
+
+	// GRACEFUL DEGRADATION (Invariant I15): Tight timeouts cause pausing, not crashes
+	// If timeouts are configured too tight (e.g., ObservationTimeout < actual operation time),
+	// the FSM will pause frequently but won't crash. Warning logs help diagnose misconfigurations.
+	//
+	// Design choice: Pause > Crash
+	// - Pausing allows manual intervention and configuration fixes
+	// - Crashing would require restart and potentially lose state
 
 	if s.freshnessChecker.IsTimeout(snapshot) {
 		s.logger.Warnf("Data timeout: observation is %v old (threshold: %v)", age, s.collectorHealth.timeout)
