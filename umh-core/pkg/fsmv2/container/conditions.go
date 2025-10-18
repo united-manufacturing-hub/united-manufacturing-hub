@@ -41,19 +41,31 @@ func BuildDegradedReason(observed *ContainerObservedState) string {
 			throttlePercent := observed.ThrottleRatio * 100
 			reasons = append(reasons, fmt.Sprintf("CPU throttled (%.1f%% periods)", throttlePercent))
 		} else {
-			cpuPercent := (observed.CPUUsageMCores / 1000.0) / observed.CgroupCores * 100
-			reasons = append(reasons, fmt.Sprintf("CPU at %.0f%% (threshold %.0f%%)", cpuPercent, thresholds.CPUHighPercent))
+			if observed.CgroupCores > 0 {
+				cpuPercent := (observed.CPUUsageMCores / 1000.0) / observed.CgroupCores * 100
+				reasons = append(reasons, fmt.Sprintf("CPU at %.0f%% (threshold %.0f%%)", cpuPercent, thresholds.CPUHighPercent))
+			} else {
+				reasons = append(reasons, "CPU metrics unavailable")
+			}
 		}
 	}
 
 	if observed.MemoryHealth != models.Active {
-		memPercent := float64(observed.MemoryUsedBytes) / float64(observed.MemoryTotalBytes) * 100
-		reasons = append(reasons, fmt.Sprintf("Memory at %.0f%% (threshold %.0f%%)", memPercent, thresholds.MemoryHighPercent))
+		if observed.MemoryTotalBytes > 0 {
+			memPercent := float64(observed.MemoryUsedBytes) / float64(observed.MemoryTotalBytes) * 100
+			reasons = append(reasons, fmt.Sprintf("Memory at %.0f%% (threshold %.0f%%)", memPercent, thresholds.MemoryHighPercent))
+		} else {
+			reasons = append(reasons, "Memory metrics unavailable")
+		}
 	}
 
 	if observed.DiskHealth != models.Active {
-		diskPercent := float64(observed.DiskUsedBytes) / float64(observed.DiskTotalBytes) * 100
-		reasons = append(reasons, fmt.Sprintf("Disk at %.0f%% (threshold %.0f%%)", diskPercent, thresholds.DiskHighPercent))
+		if observed.DiskTotalBytes > 0 {
+			diskPercent := float64(observed.DiskUsedBytes) / float64(observed.DiskTotalBytes) * 100
+			reasons = append(reasons, fmt.Sprintf("Disk at %.0f%% (threshold %.0f%%)", diskPercent, thresholds.DiskHighPercent))
+		} else {
+			reasons = append(reasons, "Disk metrics unavailable")
+		}
 	}
 
 	if len(reasons) == 0 {

@@ -57,6 +57,7 @@ type exampleNonIdempotentAction struct {
 
 func (a *exampleNonIdempotentAction) Execute(ctx context.Context) error {
 	a.counter++
+
 	return nil
 }
 

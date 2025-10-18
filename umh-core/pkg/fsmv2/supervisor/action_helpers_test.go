@@ -65,6 +65,7 @@ func VerifyActionIdempotencyWithSetup(
 	verifyState func(),
 ) {
 	setup()
+
 	defer teardown()
 
 	VerifyActionIdempotency(action, iterations, verifyState)

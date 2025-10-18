@@ -10,7 +10,7 @@ const (
 	// This prevents tick queue buildup when observations take longer.
 	// When TickInterval > ObservationInterval, multiple ticks may execute on same stale snapshot.
 	//
-	// Current defaults: 1s tick interval, 1s observation interval (equal, optimal)
+	// Current defaults: 1s tick interval, 1s observation interval (equal, optimal).
 	DefaultTickInterval = 1 * time.Second
 
 	// DefaultStaleThreshold is the default age threshold for detecting stale observation data.

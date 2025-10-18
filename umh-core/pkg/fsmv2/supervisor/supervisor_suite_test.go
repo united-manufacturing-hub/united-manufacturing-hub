@@ -220,7 +220,23 @@ func (m *mockTx) Rollback() error {
 
 func mockIdentity() fsmv2.Identity {
 	return fsmv2.Identity{
-		ID:   "test-worker",
-		Name: "Test Worker",
+		ID:         "test-worker",
+		Name:       "Test Worker",
+		WorkerType: "container",
 	}
 }
+
+var _ = Describe("Identity WorkerType Field", func() {
+	It("should have WorkerType field that can be accessed and set", func() {
+		identity := fsmv2.Identity{
+			ID:         "test-id",
+			Name:       "test-name",
+			WorkerType: "container",
+		}
+
+		Expect(identity.WorkerType).To(Equal("container"))
+
+		identity.WorkerType = "pod"
+		Expect(identity.WorkerType).To(Equal("pod"))
+	})
+})

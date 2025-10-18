@@ -329,4 +329,85 @@ var _ = Describe("BuildDegradedReason", func() {
 			Expect(reason).To(ContainSubstring(", "))
 		})
 	})
+
+	Context("Edge cases with zero denominators", func() {
+		It("should handle zero CgroupCores gracefully", func() {
+			observed := &container.ContainerObservedState{
+				CPUHealth:      models.Degraded,
+				MemoryHealth:   models.Active,
+				DiskHealth:     models.Active,
+				CPUUsageMCores: 1800,
+				CgroupCores:    0,
+				IsThrottled:    false, ObservedThresholds: standardThresholds(),
+			}
+			reason := container.BuildDegradedReason(observed)
+			Expect(reason).To(Equal("CPU metrics unavailable"))
+			Expect(reason).NotTo(ContainSubstring("NaN"))
+			Expect(reason).NotTo(ContainSubstring("Inf"))
+		})
+
+		It("should handle zero MemoryTotalBytes gracefully", func() {
+			observed := &container.ContainerObservedState{
+				CPUHealth:        models.Active,
+				MemoryHealth:     models.Degraded,
+				DiskHealth:       models.Active,
+				MemoryUsedBytes:  8_500_000_000,
+				MemoryTotalBytes: 0, ObservedThresholds: standardThresholds(),
+			}
+			reason := container.BuildDegradedReason(observed)
+			Expect(reason).To(Equal("Memory metrics unavailable"))
+			Expect(reason).NotTo(ContainSubstring("NaN"))
+			Expect(reason).NotTo(ContainSubstring("Inf"))
+		})
+
+		It("should handle zero DiskTotalBytes gracefully", func() {
+			observed := &container.ContainerObservedState{
+				CPUHealth:      models.Active,
+				MemoryHealth:   models.Active,
+				DiskHealth:     models.Degraded,
+				DiskUsedBytes:  90_000_000_000,
+				DiskTotalBytes: 0, ObservedThresholds: standardThresholds(),
+			}
+			reason := container.BuildDegradedReason(observed)
+			Expect(reason).To(Equal("Disk metrics unavailable"))
+			Expect(reason).NotTo(ContainSubstring("NaN"))
+			Expect(reason).NotTo(ContainSubstring("Inf"))
+		})
+
+		It("should handle multiple zero denominators", func() {
+			observed := &container.ContainerObservedState{
+				CPUHealth:        models.Degraded,
+				MemoryHealth:     models.Degraded,
+				DiskHealth:       models.Degraded,
+				CPUUsageMCores:   1800,
+				CgroupCores:      0,
+				IsThrottled:      false,
+				MemoryUsedBytes:  8_500_000_000,
+				MemoryTotalBytes: 0,
+				DiskUsedBytes:    90_000_000_000,
+				DiskTotalBytes:   0, ObservedThresholds: standardThresholds(),
+			}
+			reason := container.BuildDegradedReason(observed)
+			Expect(reason).To(ContainSubstring("CPU metrics unavailable"))
+			Expect(reason).To(ContainSubstring("Memory metrics unavailable"))
+			Expect(reason).To(ContainSubstring("Disk metrics unavailable"))
+			Expect(reason).NotTo(ContainSubstring("NaN"))
+			Expect(reason).NotTo(ContainSubstring("Inf"))
+		})
+
+		It("should format multiple unavailable metrics with commas", func() {
+			observed := &container.ContainerObservedState{
+				CPUHealth:        models.Degraded,
+				MemoryHealth:     models.Degraded,
+				DiskHealth:       models.Active,
+				CPUUsageMCores:   1800,
+				CgroupCores:      0,
+				IsThrottled:      false,
+				MemoryUsedBytes:  8_500_000_000,
+				MemoryTotalBytes: 0, ObservedThresholds: standardThresholds(),
+			}
+			reason := container.BuildDegradedReason(observed)
+			Expect(reason).To(Equal("CPU metrics unavailable, Memory metrics unavailable"))
+		})
+	})
 })

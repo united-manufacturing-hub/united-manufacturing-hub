@@ -90,6 +90,7 @@ func (c *Collector) Restart() {
 
 	if !running {
 		c.config.Logger.Errorf("Cannot restart collector: not running (current state: %d)", c.state)
+
 		return
 	}
 

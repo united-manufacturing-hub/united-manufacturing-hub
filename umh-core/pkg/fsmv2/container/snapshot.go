@@ -30,13 +30,13 @@ type ContainerIdentity struct {
 
 // HealthThresholds defines the percentage thresholds for health assessment.
 type HealthThresholds struct {
-	CPUHighPercent        float64
-	CPUMediumPercent      float64
-	MemoryHighPercent     float64
-	MemoryMediumPercent   float64
-	DiskHighPercent       float64
-	DiskMediumPercent     float64
-	CPUThrottleRatioLimit float64
+	CPUHighPercent        float64 // Degraded threshold for CPU usage (e.g., 70%)
+	CPUMediumPercent      float64 // Warning threshold for CPU usage (e.g., 60%)
+	MemoryHighPercent     float64 // Degraded threshold for memory usage (e.g., 80%)
+	MemoryMediumPercent   float64 // Warning threshold for memory usage (e.g., 70%)
+	DiskHighPercent       float64 // Degraded threshold for disk usage (e.g., 85%)
+	DiskMediumPercent     float64 // Warning threshold for disk usage (e.g., 75%)
+	CPUThrottleRatioLimit float64 // Maximum acceptable CPU throttle ratio (e.g., 0.10 for 10%)
 }
 
 // ContainerDesiredState represents what we want the container monitoring to be.

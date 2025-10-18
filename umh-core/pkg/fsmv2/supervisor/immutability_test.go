@@ -164,6 +164,7 @@ type snapshotMutatingState struct{}
 
 func (s *snapshotMutatingState) Next(snapshot fsmv2.Snapshot) (fsmv2.State, fsmv2.Signal, fsmv2.Action) {
 	snapshot.Observed = nil
+
 	return s, fsmv2.SignalNone, nil
 }
 
@@ -175,6 +176,7 @@ type identityMutatingState struct{}
 func (s *identityMutatingState) Next(snapshot fsmv2.Snapshot) (fsmv2.State, fsmv2.Signal, fsmv2.Action) {
 	snapshot.Identity.ID = "hacked-id"
 	snapshot.Identity.Name = "Hacked Name"
+
 	return s, fsmv2.SignalNone, nil
 }
 
@@ -188,6 +190,7 @@ func (s *aggressiveMutatingState) Next(snapshot fsmv2.Snapshot) (fsmv2.State, fs
 	snapshot.Identity.Name = "Totally Hacked"
 	snapshot.Observed = &mockObservedState{timestamp: time.Unix(0, 0)}
 	snapshot.Desired = &mockDesiredState{shutdown: true}
+
 	return s, fsmv2.SignalNone, nil
 }
 

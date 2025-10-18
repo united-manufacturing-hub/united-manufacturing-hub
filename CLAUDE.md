@@ -85,6 +85,33 @@ The United Manufacturing Hub (UMH) is an Industrial IoT platform for manufacturi
 - Use exponential backoff for failed transitions
 - All actions must handle context cancellation
 
+### FSM v2 Pattern (New - pkg/fsmv2/)
+
+**Critical**: FSM v2 is a new architecture for data freshness and future components. It uses different patterns than the old FSM (pkg/fsm/).
+
+**Separation of Concerns**:
+- `worker.go`: Interface definitions (State, Action, ObservedState, DesiredState)
+- `supervisor/`: Generic supervisor managing any worker implementation
+- Implementation-specific: Worker implements interfaces in own package
+
+**Key Differences from Old FSM**:
+- **Actions**: All Actions are defined as structs implementing `fsmv2.Action` interface
+- **Testing**: Every Action MUST have idempotency test using `VerifyActionIdempotency()` helper
+- **Supervisor-driven**: Supervisor manages observation loop, state transitions, action execution
+- **Type-safe**: Workers strongly typed with generics
+
+**Required for FSM v2 Actions**:
+```go
+// Every action_*.go file needs action_*_test.go with:
+VerifyActionIdempotency(action, 3, func() {
+    // Verify final state
+})
+```
+
+See `pkg/fsmv2/supervisor/action_helpers_test.go` for test helpers.
+
+**Old FSM (pkg/fsm/)**: Follows different pattern, no retroactive test requirement.
+
 ### Data Architecture Decisions
 
 **Two-layer model**:
@@ -117,6 +144,13 @@ The United Manufacturing Hub (UMH) is an Industrial IoT platform for manufacturi
   }).Should(Equal(StateRunning))
   ```
 
+- **FSM v2 Action Idempotency** (pkg/fsmv2/ only):
+  - Every Action implementation MUST have an idempotency test
+  - Use `VerifyActionIdempotency()` helper from `pkg/fsmv2/supervisor/action_helpers_test.go`
+  - Pattern: Execute action 3 times, verify final state identical to single execution
+  - Example: See `pkg/fsmv2/supervisor/action_idempotency_test.go`
+  - **Note**: This is a new requirement for FSM v2, not applicable to old FSM (pkg/fsm/)
+
 ## Code Style Requirements
 
 1. **Do NOT add comments unless explicitly requested**
@@ -125,6 +159,25 @@ The United Manufacturing Hub (UMH) is an Industrial IoT platform for manufacturi
 4. **Struct field alignment**: Order fields by decreasing size
 5. **Error handling**: Return errors up the stack, handle in reconciliation loop
 6. **No direct FSM state changes**: Always go through reconciliation
+
+## Code Review Checklist
+
+When reviewing FSM v2-related PRs (pkg/fsmv2/), verify:
+
+### FSM v2 Actions (NEW REQUIREMENT)
+- [ ] Every new Action has a corresponding test file (`action_*_test.go`)
+- [ ] Idempotency test uses `VerifyActionIdempotency()` helper
+- [ ] Test verifies action can be called 3+ times without side effects
+- [ ] Action checks if work is already done before performing it
+- [ ] Action handles partial completion gracefully
+
+### General FSM Rules (both old and v2)
+- [ ] Actions are idempotent (will retry on failure)
+- [ ] Only reconciliation loop modifies state
+- [ ] FSM callbacks are fail-free (logging only, no errors)
+- [ ] All actions handle context cancellation
+
+**Note**: Idempotency *testing* requirement only applies to FSM v2 (pkg/fsmv2/). Old FSM (pkg/fsm/) has existing patterns.
 
 ## Documentation Maintenance
 

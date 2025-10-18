@@ -21,8 +21,9 @@ const (
 // Identity uniquely identifies a worker instance.
 // This is immutable for the lifetime of the worker.
 type Identity struct {
-	ID   string // Unique identifier (e.g., UUID)
-	Name string // Human-readable name
+	ID         string // Unique identifier (e.g., UUID)
+	Name       string // Human-readable name
+	WorkerType string // Type of worker (e.g., "container", "pod")
 }
 
 // ObservedState represents the actual state gathered from monitoring the system.
@@ -111,9 +112,14 @@ type Snapshot struct {
 //	}
 //
 // Testing idempotency:
-// Use the idempotency test helper in supervisor/action_test_helpers.go:
+// Use the idempotency test helper in supervisor/action_helpers_test.go:
 //
-//	VerifyActionIdempotency(action, iterations, verifyState)
+//	VerifyActionIdempotency(action, 3, func() {
+//	    Expect(fileExists("test.txt")).To(BeTrue())
+//	})
+//
+// REQUIREMENT (FSM v2): Every Action implementation MUST have an idempotency test.
+// Code reviewers: Check that action_*_test.go files use VerifyActionIdempotency.
 //
 // Defense-in-depth layers:
 //   - Layer 1: Document requirement in Action interface
