@@ -21,6 +21,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"testing"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -516,7 +517,7 @@ var _ = Describe("SQLiteStore", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			doc := basic.Document{
-				"name": "test-doc",
+				"name":  "test-doc",
 				"value": 42,
 			}
 
@@ -534,8 +535,8 @@ var _ = Describe("SQLiteStore", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			doc := basic.Document{
-				"name": "test-doc",
-				"value": 42,
+				"name":   "test-doc",
+				"value":  42,
 				"active": true,
 			}
 
@@ -588,7 +589,7 @@ var _ = Describe("SQLiteStore", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			doc := basic.Document{
-				"tags": []interface{}{"production", "critical", "monitored"},
+				"tags":   []interface{}{"production", "critical", "monitored"},
 				"values": []interface{}{1, 2, 3, 4, 5},
 			}
 
@@ -615,7 +616,7 @@ var _ = Describe("SQLiteStore", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			doc := basic.Document{
-				"name": "has-nulls",
+				"name":     "has-nulls",
 				"optional": nil,
 			}
 
@@ -636,11 +637,11 @@ var _ = Describe("SQLiteStore", func() {
 
 			doc := basic.Document{
 				"string": "text",
-				"int": 42,
-				"float": 3.14,
-				"bool": true,
-				"null": nil,
-				"array": []interface{}{1, "two", 3.0},
+				"int":    42,
+				"float":  3.14,
+				"bool":   true,
+				"null":   nil,
+				"array":  []interface{}{1, "two", 3.0},
 				"object": map[string]interface{}{"key": "value"},
 			}
 
@@ -865,7 +866,7 @@ var _ = Describe("SQLiteStore", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			doc := basic.Document{
-				"name": "test-document",
+				"name":  "test-document",
 				"value": 42,
 			}
 
@@ -887,11 +888,11 @@ var _ = Describe("SQLiteStore", func() {
 
 			original := basic.Document{
 				"string": "text",
-				"int": 42,
-				"float": 3.14,
-				"bool": true,
-				"null": nil,
-				"array": []interface{}{1, "two", 3.0},
+				"int":    42,
+				"float":  3.14,
+				"bool":   true,
+				"null":   nil,
+				"array":  []interface{}{1, "two", 3.0},
 				"object": map[string]interface{}{"nested": "value"},
 			}
 
@@ -963,7 +964,7 @@ var _ = Describe("SQLiteStore", func() {
 				"level1": map[string]interface{}{
 					"level2": map[string]interface{}{
 						"level3": map[string]interface{}{
-							"deep": "value",
+							"deep":   "value",
 							"number": 999,
 						},
 						"array": []interface{}{
@@ -1070,17 +1071,17 @@ var _ = Describe("SQLiteStore", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			doc := basic.Document{
-				"string": "test",
-				"int": 42,
-				"negativeInt": -10,
-				"float": 3.14159,
+				"string":        "test",
+				"int":           42,
+				"negativeInt":   -10,
+				"float":         3.14159,
 				"negativeFloat": -2.718,
-				"boolTrue": true,
-				"boolFalse": false,
-				"null": nil,
-				"emptyString": "",
-				"zeroInt": 0,
-				"zeroFloat": 0.0,
+				"boolTrue":      true,
+				"boolFalse":     false,
+				"null":          nil,
+				"emptyString":   "",
+				"zeroInt":       0,
+				"zeroFloat":     0.0,
 			}
 
 			id, err := store.Insert(ctx, "test_types_get", doc)
@@ -1260,7 +1261,7 @@ var _ = Describe("SQLiteStore", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			originalDoc := basic.Document{
-				"name": "original",
+				"name":  "original",
 				"value": 42,
 			}
 
@@ -1268,8 +1269,8 @@ var _ = Describe("SQLiteStore", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			updatedDoc := basic.Document{
-				"name": "updated",
-				"value": 100,
+				"name":      "updated",
+				"value":     100,
 				"new_field": "added",
 			}
 
@@ -1633,7 +1634,7 @@ var _ = Describe("SQLiteStore", func() {
 			query := basic.NewQuery()
 			docs, err := store.Find(ctx, "test_find_empty", *query)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(docs).To(HaveLen(0))
+			Expect(docs).To(BeEmpty())
 		})
 
 		It("should filter by equality (Eq operator)", func() {
@@ -1812,6 +1813,27 @@ var _ = Describe("SQLiteStore", func() {
 			Expect(docs[0]["role"]).To(Equal("user"))
 		})
 
+		It("should filter by In operator with boolean array", func() {
+			ctx := context.Background()
+
+			err := store.CreateCollection(ctx, "test_find_bool_in", nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = store.Insert(ctx, "test_find_bool_in", basic.Document{"active": true, "name": "service1"})
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = store.Insert(ctx, "test_find_bool_in", basic.Document{"active": false, "name": "service2"})
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = store.Insert(ctx, "test_find_bool_in", basic.Document{"active": true, "name": "service3"})
+			Expect(err).NotTo(HaveOccurred())
+
+			query := basic.NewQuery().Filter("active", basic.In, []bool{true})
+			docs, err := store.Find(ctx, "test_find_bool_in", *query)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(docs).To(HaveLen(2))
+		})
+
 		It("should sort by field ascending", func() {
 			ctx := context.Background()
 
@@ -1956,7 +1978,7 @@ var _ = Describe("SQLiteStore", func() {
 				}
 				_, err = store.Insert(ctx, "test_find_complex", basic.Document{
 					"status": status,
-					"value": i,
+					"value":  i,
 				})
 				Expect(err).NotTo(HaveOccurred())
 			}
@@ -1989,7 +2011,7 @@ var _ = Describe("SQLiteStore", func() {
 			query := basic.NewQuery().Filter("status", basic.Eq, "nonexistent")
 			docs, err := store.Find(ctx, "test_find_no_match", *query)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(docs).To(HaveLen(0))
+			Expect(docs).To(BeEmpty())
 		})
 
 		It("should fail when store is closed", func() {
@@ -2046,6 +2068,26 @@ var _ = Describe("SQLiteStore", func() {
 			docs, err := store.Find(ctx, "test_find_string", *query)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(docs).To(HaveLen(2))
+		})
+
+		It("should return error when context is cancelled during Find", func() {
+			ctx := context.Background()
+
+			err := store.CreateCollection(ctx, "test_find_cancel", nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			for i := range 100 {
+				_, err = store.Insert(ctx, "test_find_cancel", basic.Document{"value": i})
+				Expect(err).NotTo(HaveOccurred())
+			}
+
+			cancelCtx, cancel := context.WithCancel(ctx)
+			cancel()
+
+			query := basic.NewQuery()
+			_, err = store.Find(cancelCtx, "test_find_cancel", *query)
+			Expect(err).To(HaveOccurred())
+			Expect(errors.Is(err, context.Canceled)).To(BeTrue())
 		})
 	})
 
@@ -2150,7 +2192,7 @@ var _ = Describe("SQLiteStore", func() {
 				}
 				_, err = tx.Insert(ctx, "tx_find_complex", basic.Document{
 					"status": status,
-					"value": i,
+					"value":  i,
 				})
 				Expect(err).NotTo(HaveOccurred())
 			}
@@ -2385,3 +2427,230 @@ var _ = Describe("SQLiteStore", func() {
 		})
 	})
 })
+
+var _ = Describe("SQLiteStore Integration", func() {
+	var store basic.Store
+	var tempDir string
+	var dbPath string
+
+	BeforeEach(func() {
+		tempDir = GinkgoT().TempDir()
+		dbPath = filepath.Join(tempDir, "test.db")
+		var err error
+		store, err = basic.NewSQLiteStore(dbPath)
+		Expect(err).NotTo(HaveOccurred())
+	})
+
+	AfterEach(func() {
+		if store != nil {
+			_ = store.Close()
+		}
+	})
+
+	Context("when multiple goroutines write concurrently", func() {
+		It("should handle 100 concurrent inserts without errors", func() {
+			ctx := context.Background()
+			collectionName := "concurrent_test"
+
+			err := store.CreateCollection(ctx, collectionName, nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			numGoroutines := 100
+			insertsPerGoroutine := 10
+			totalInserts := numGoroutines * insertsPerGoroutine
+
+			type result struct {
+				id  string
+				err error
+			}
+			results := make(chan result, totalInserts)
+
+			for g := range numGoroutines {
+				go func(goroutineID int) {
+					for i := range insertsPerGoroutine {
+						doc := basic.Document{
+							"goroutine": goroutineID,
+							"index":     i,
+							"value":     goroutineID*1000 + i,
+						}
+						id, err := store.Insert(ctx, collectionName, doc)
+						results <- result{id: id, err: err}
+					}
+				}(g)
+			}
+
+			insertedIDs := make(map[string]bool)
+			errorCount := 0
+
+			for range totalInserts {
+				res := <-results
+				if res.err != nil {
+					errorCount++
+				} else {
+					Expect(insertedIDs[res.id]).To(BeFalse(), "UUID collision detected: %s", res.id)
+					insertedIDs[res.id] = true
+				}
+			}
+			close(results)
+
+			Expect(errorCount).To(Equal(0), "All inserts should succeed")
+			Expect(insertedIDs).To(HaveLen(totalInserts), "All UUIDs should be unique")
+
+			docs, err := store.Find(ctx, collectionName, basic.Query{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(docs).To(HaveLen(totalInserts), "All documents should be persisted")
+		})
+	})
+
+	Context("when WAL checkpoint occurs during writes", func() {
+		It("should complete writes successfully during checkpoint", func() {
+			ctx := context.Background()
+			collectionName := "checkpoint_test"
+
+			err := store.CreateCollection(ctx, collectionName, nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			stopWriter := make(chan bool)
+			writerDone := make(chan int)
+
+			go func() {
+				successCount := 0
+				for {
+					select {
+					case <-stopWriter:
+						writerDone <- successCount
+
+						return
+					default:
+						doc := basic.Document{"data": "background_write"}
+						_, err := store.Insert(ctx, collectionName, doc)
+						if err == nil {
+							successCount++
+						}
+					}
+				}
+			}()
+
+			for i := range 100 {
+				doc := basic.Document{"checkpoint": i}
+				_, err := store.Insert(ctx, collectionName, doc)
+				Expect(err).NotTo(HaveOccurred())
+			}
+
+			close(stopWriter)
+			successCount := <-writerDone
+
+			Expect(successCount).To(BeNumerically(">", 0), "Background writer should succeed during checkpoints")
+
+			docs, err := store.Find(ctx, collectionName, basic.Query{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(docs).To(HaveLen(100+successCount), "All writes should be persisted")
+		})
+	})
+
+	Context("when database is closed and reopened", func() {
+		It("should recover all committed data", func() {
+			ctx := context.Background()
+			collectionName := "durability_test"
+
+			err := store.CreateCollection(ctx, collectionName, nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			testDocs := make([]string, 0, 100)
+			for i := range 100 {
+				doc := basic.Document{
+					"index": i,
+					"value": "test_data_" + string(rune(i)),
+				}
+				id, err := store.Insert(ctx, collectionName, doc)
+				Expect(err).NotTo(HaveOccurred())
+				testDocs = append(testDocs, id)
+			}
+
+			err = store.Close()
+			Expect(err).NotTo(HaveOccurred())
+
+			store, err = basic.NewSQLiteStore(dbPath)
+			Expect(err).NotTo(HaveOccurred())
+
+			for idx, id := range testDocs {
+				doc, err := store.Get(ctx, collectionName, id)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(doc["index"]).To(Equal(float64(idx)))
+			}
+
+			docs, err := store.Find(ctx, collectionName, basic.Query{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(docs).To(HaveLen(100), "All documents should be recovered after reopen")
+		})
+	})
+
+	Context("when measuring operation latency", func() {
+		It("should meet FSM v2 latency requirements", func() {
+			ctx := context.Background()
+			collectionName := "latency_test"
+
+			err := store.CreateCollection(ctx, collectionName, nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			numOperations := 1000
+
+			insertDurations := make([]time.Duration, numOperations)
+			insertedIDs := make([]string, numOperations)
+			for i := range numOperations {
+				doc := basic.Document{
+					"index": i,
+					"value": "latency_test_data",
+				}
+				start := time.Now()
+				id, err := store.Insert(ctx, collectionName, doc)
+				duration := time.Since(start)
+				Expect(err).NotTo(HaveOccurred())
+				insertDurations[i] = duration
+				insertedIDs[i] = id
+			}
+
+			insertP50 := calculatePercentileDuration(insertDurations, 50)
+			insertP99 := calculatePercentileDuration(insertDurations, 99)
+
+			Expect(insertP50.Milliseconds()).To(BeNumerically("<", 5), "Insert p50 should be < 5ms")
+			Expect(insertP99.Milliseconds()).To(BeNumerically("<", 10), "Insert p99 should be < 10ms")
+
+			getDurations := make([]time.Duration, numOperations)
+			for i := range numOperations {
+				start := time.Now()
+				_, err := store.Get(ctx, collectionName, insertedIDs[i])
+				duration := time.Since(start)
+				Expect(err).NotTo(HaveOccurred())
+				getDurations[i] = duration
+			}
+
+			getP99 := calculatePercentileDuration(getDurations, 99)
+			Expect(getP99.Milliseconds()).To(BeNumerically("<", 5), "Get p99 should be < 5ms")
+		})
+	})
+})
+
+func calculatePercentileDuration(durations []time.Duration, percentile int) time.Duration {
+	if len(durations) == 0 {
+		return 0
+	}
+
+	sorted := make([]time.Duration, len(durations))
+	copy(sorted, durations)
+
+	for i := 0; i < len(sorted); i++ {
+		for j := i + 1; j < len(sorted); j++ {
+			if sorted[i] > sorted[j] {
+				sorted[i], sorted[j] = sorted[j], sorted[i]
+			}
+		}
+	}
+
+	index := (len(sorted) * percentile) / 100
+	if index >= len(sorted) {
+		index = len(sorted) - 1
+	}
+
+	return sorted[index]
+}
