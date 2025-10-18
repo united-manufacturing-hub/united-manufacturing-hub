@@ -1,3 +1,17 @@
+// Copyright 2025 UMH Systems GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package basic_test
 
 import (
@@ -7,112 +21,100 @@ import (
 	"runtime"
 	"testing"
 
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence/basic"
 )
 
-func TestNewSQLiteStore_Success(t *testing.T) {
-	tmpDir := t.TempDir()
-	dbPath := filepath.Join(tmpDir, "test.db")
-
-	store, err := basic.NewSQLiteStore(dbPath)
-	if err != nil {
-		t.Fatalf("NewSQLiteStore() failed: %v", err)
-	}
-
-	defer func() { _ = store.Close() }()
-
-	if store == nil {
-		t.Fatal("NewSQLiteStore() returned nil store")
-	}
+func TestSQLiteStore(t *testing.T) {
+	RegisterFailHandler(Fail)
+	RunSpecs(t, "SQLiteStore Suite")
 }
 
-func TestNewSQLiteStore_InvalidPath(t *testing.T) {
-	invalidPath := "/nonexistent/directory/that/does/not/exist/test.db"
+var _ = Describe("SQLiteStore", func() {
+	var (
+		tempDir string
+		dbPath  string
+	)
 
-	store, err := basic.NewSQLiteStore(invalidPath)
-	if err == nil {
-		if store != nil {
-			_ = store.Close()
-		}
+	BeforeEach(func() {
+		tempDir = GinkgoT().TempDir()
+		dbPath = filepath.Join(tempDir, "test.db")
+	})
 
-		t.Fatal("NewSQLiteStore() should fail with invalid path")
-	}
-}
+	Context("when creating a new store", func() {
+		It("should create store successfully with valid path", func() {
+			store, err := basic.NewSQLiteStore(dbPath)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(store).NotTo(BeNil())
 
-func TestNewSQLiteStore_WALModeEnabled(t *testing.T) {
-	tmpDir := t.TempDir()
-	dbPath := filepath.Join(tmpDir, "test.db")
+			defer func() { _ = store.Close() }()
+		})
 
-	store, err := basic.NewSQLiteStore(dbPath)
-	if err != nil {
-		t.Fatalf("NewSQLiteStore() failed: %v", err)
-	}
+		It("should fail with invalid path", func() {
+			invalidPath := "/nonexistent/directory/that/does/not/exist/test.db"
 
-	defer func() { _ = store.Close() }()
+			store, err := basic.NewSQLiteStore(invalidPath)
+			Expect(err).To(HaveOccurred())
 
-	ctx := context.Background()
+			if store != nil {
+				_ = store.Close()
+			}
+		})
 
-	err = store.CreateCollection(ctx, "test_collection", nil)
-	if err != nil {
-		t.Fatalf("CreateCollection() failed: %v", err)
-	}
+		It("should enable WAL mode", func() {
+			store, err := basic.NewSQLiteStore(dbPath)
+			Expect(err).NotTo(HaveOccurred())
+			defer func() { _ = store.Close() }()
 
-	walFile := dbPath + "-wal"
+			ctx := context.Background()
+			err = store.CreateCollection(ctx, "test_collection", nil)
+			Expect(err).NotTo(HaveOccurred())
 
-	_, err = os.Stat(walFile)
-	if os.IsNotExist(err) {
-		t.Errorf("WAL file does not exist at %s - WAL mode may not be enabled", walFile)
-	}
-}
+			walFile := dbPath + "-wal"
+			_, err = os.Stat(walFile)
+			Expect(err).NotTo(HaveOccurred(), "WAL file should exist at %s - WAL mode should be enabled", walFile)
+		})
 
-func TestNewSQLiteStore_DarwinFullFsync(t *testing.T) {
-	if runtime.GOOS != "darwin" {
-		t.Skip("Skipping darwin-specific test on non-darwin platform")
-	}
+		It("should configure darwin fullfsync on macOS", func() {
+			if runtime.GOOS != "darwin" {
+				Skip("Skipping darwin-specific test on non-darwin platform")
+			}
 
-	tmpDir := t.TempDir()
-	dbPath := filepath.Join(tmpDir, "test.db")
+			store, err := basic.NewSQLiteStore(dbPath)
+			Expect(err).NotTo(HaveOccurred())
+			defer func() { _ = store.Close() }()
+		})
+	})
 
-	store, err := basic.NewSQLiteStore(dbPath)
-	if err != nil {
-		t.Fatalf("NewSQLiteStore() failed: %v", err)
-	}
+	Context("when closing the store", func() {
+		It("should close successfully", func() {
+			store, err := basic.NewSQLiteStore(dbPath)
+			Expect(err).NotTo(HaveOccurred())
 
-	defer func() { _ = store.Close() }()
-}
+			err = store.Close()
+			Expect(err).NotTo(HaveOccurred())
+		})
 
-func TestSQLiteStore_Close(t *testing.T) {
-	tmpDir := t.TempDir()
-	dbPath := filepath.Join(tmpDir, "test.db")
+		It("should return error when called twice", func() {
+			store, err := basic.NewSQLiteStore(dbPath)
+			Expect(err).NotTo(HaveOccurred())
 
-	store, err := basic.NewSQLiteStore(dbPath)
-	if err != nil {
-		t.Fatalf("NewSQLiteStore() failed: %v", err)
-	}
+			err = store.Close()
+			Expect(err).NotTo(HaveOccurred())
 
-	err = store.Close()
-	if err != nil {
-		t.Errorf("Close() failed: %v", err)
-	}
+			err = store.Close()
+			Expect(err).To(HaveOccurred())
+		})
+	})
 
-	err = store.Close()
-	if err == nil {
-		t.Error("Close() should return error when called twice")
-	}
-}
+	Context("when implementing Store interface", func() {
+		It("should satisfy the Store interface", func() {
+			store, err := basic.NewSQLiteStore(dbPath)
+			Expect(err).NotTo(HaveOccurred())
+			defer func() { _ = store.Close() }()
 
-func TestSQLiteStore_ImplementsStoreInterface(t *testing.T) {
-	tmpDir := t.TempDir()
-	dbPath := filepath.Join(tmpDir, "test.db")
-
-	store, err := basic.NewSQLiteStore(dbPath)
-	if err != nil {
-		t.Fatalf("NewSQLiteStore() failed: %v", err)
-	}
-
-	defer func() { _ = store.Close() }()
-
-	var _ basic.Store
-
-	_ = store
-}
+			_ = store
+		})
+	})
+})
