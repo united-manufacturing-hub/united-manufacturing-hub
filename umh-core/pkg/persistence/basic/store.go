@@ -383,19 +383,37 @@ type Store interface {
 	//   - error: if transaction cannot be started
 	BeginTx(ctx context.Context) (Tx, error)
 
-	// Close closes the store and releases resources (connections, files).
+	// Close closes the store and releases resources.
 	//
-	// DESIGN DECISION: Explicit cleanup, not finalization/GC
-	// WHY: Deterministic resource release. Database connections, file handles
-	// should be closed promptly, not wait for garbage collection.
+	// DESIGN DECISION: Accept context for graceful shutdown control
+	// WHY: Close() may perform maintenance operations (VACUUM, ANALYZE) that take
+	// seconds to minutes. Caller needs ability to:
+	//   - Set deadline: ctx with timeout controls max shutdown time
+	//   - Cancel early: ctx cancellation aborts maintenance, closes immediately
+	//   - Trace shutdown: ctx carries tracing/logging context
 	//
-	// TRADE-OFF: Caller must remember to call Close. Use defer patterns to ensure cleanup.
+	// BLOCKING BEHAVIOR:
+	//   If MaintenanceOnShutdown is enabled, Close() will block during maintenance.
+	//   Context controls maximum wait time.
 	//
-	// Parameters: none
+	// GRACEFUL DEGRADATION:
+	//   If context expires during maintenance, database still closes safely.
+	//   Maintenance may be incomplete, but data integrity is preserved.
+	//
+	// Example:
+	//
+	//	// Graceful shutdown with 30s timeout
+	//	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	//	defer cancel()
+	//	if err := store.Close(ctx); err != nil {
+	//	    log.Warn("maintenance incomplete during shutdown", "error", err)
+	//	}
 	//
 	// Returns:
-	//   - error: if cleanup fails (usually safe to ignore)
-	Close() error
+	//   - nil: closed successfully, maintenance completed
+	//   - context.DeadlineExceeded: maintenance incomplete, database closed anyway
+	//   - other errors: close failures (rare, usually safe to ignore)
+	Close(ctx context.Context) error
 }
 
 // Tx represents a database transaction for atomic multi-document operations.
