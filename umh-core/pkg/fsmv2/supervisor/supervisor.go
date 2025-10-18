@@ -36,6 +36,12 @@ type Supervisor struct {
 	currentState fsmv2.State
 	logger       *zap.SugaredLogger
 	tickInterval time.Duration
+
+	staleThreshold        time.Duration
+	collectorTimeout      time.Duration
+	maxRestartAttempts    int
+	collectorRestartCount int
+	lastCollectorRestart  time.Time
 }
 
 // Config contains supervisor configuration.
@@ -45,24 +51,58 @@ type Config struct {
 	Store        persistence.Store
 	Logger       *zap.SugaredLogger
 	TickInterval time.Duration // How often to call state.Next()
+
+	StaleThreshold     time.Duration
+	CollectorTimeout   time.Duration
+	MaxRestartAttempts int
 }
 
 // NewSupervisor creates a new supervisor.
 func NewSupervisor(cfg Config) *Supervisor {
-	// Set default tick interval if not specified
 	tickInterval := cfg.TickInterval
 	if tickInterval == 0 {
 		tickInterval = 1 * time.Second
 	}
 
-	return &Supervisor{
-		worker:       cfg.Worker,
-		identity:     cfg.Identity,
-		store:        cfg.Store,
-		currentState: cfg.Worker.GetInitialState(),
-		logger:       cfg.Logger,
-		tickInterval: tickInterval,
+	staleThreshold := cfg.StaleThreshold
+	if staleThreshold == 0 {
+		staleThreshold = 10 * time.Second
 	}
+
+	collectorTimeout := cfg.CollectorTimeout
+	if collectorTimeout == 0 {
+		collectorTimeout = 20 * time.Second
+	}
+
+	maxRestartAttempts := cfg.MaxRestartAttempts
+	if maxRestartAttempts == 0 {
+		maxRestartAttempts = 3
+	}
+
+	return &Supervisor{
+		worker:                cfg.Worker,
+		identity:              cfg.Identity,
+		store:                 cfg.Store,
+		currentState:          cfg.Worker.GetInitialState(),
+		logger:                cfg.Logger,
+		tickInterval:          tickInterval,
+		staleThreshold:        staleThreshold,
+		collectorTimeout:      collectorTimeout,
+		maxRestartAttempts:    maxRestartAttempts,
+		collectorRestartCount: 0,
+	}
+}
+
+func (s *Supervisor) GetStaleThreshold() time.Duration {
+	return s.staleThreshold
+}
+
+func (s *Supervisor) GetCollectorTimeout() time.Duration {
+	return s.collectorTimeout
+}
+
+func (s *Supervisor) GetMaxRestartAttempts() int {
+	return s.maxRestartAttempts
 }
 
 // Start starts the supervisor goroutines.
