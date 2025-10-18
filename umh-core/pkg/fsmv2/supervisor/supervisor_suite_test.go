@@ -28,12 +28,15 @@ func (m *mockWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedSt
 	if m.collectFunc != nil {
 		return m.collectFunc(ctx)
 	}
+
 	if m.collectErr != nil {
 		return nil, m.collectErr
 	}
+
 	if m.observed != nil {
 		return m.observed, nil
 	}
+
 	return &mockObservedState{timestamp: time.Now()}, nil
 }
 
@@ -45,6 +48,7 @@ func (m *mockWorker) GetInitialState() fsmv2.State {
 	if m.initialState != nil {
 		return m.initialState
 	}
+
 	return &mockState{}
 }
 
@@ -58,6 +62,7 @@ func (m *mockState) Next(snapshot fsmv2.Snapshot) (fsmv2.State, fsmv2.Signal, fs
 	if m.nextState == nil {
 		return m, fsmv2.SignalNone, nil
 	}
+
 	return m.nextState, m.signal, m.action
 }
 
@@ -100,6 +105,7 @@ func (m *mockStore) SaveDesired(ctx context.Context, workerType string, id strin
 	if m.saveDesired != nil {
 		return m.saveDesired(ctx, workerType, id, desired)
 	}
+
 	return m.saveErr
 }
 
@@ -115,6 +121,7 @@ func (m *mockStore) LoadObserved(ctx context.Context, workerType string, id stri
 	if m.snapshot != nil && m.snapshot.Observed != nil {
 		return m.snapshot.Observed, nil
 	}
+
 	return &mockObservedState{timestamp: time.Now()}, nil
 }
 
@@ -122,9 +129,11 @@ func (m *mockStore) LoadSnapshot(ctx context.Context, workerType string, id stri
 	if m.loadSnapshot != nil {
 		return m.loadSnapshot(ctx, workerType, id)
 	}
+
 	if m.snapshot != nil {
 		return m.snapshot, nil
 	}
+
 	return &fsmv2.Snapshot{
 		Identity: mockIdentity(),
 		Desired:  &mockDesiredState{},

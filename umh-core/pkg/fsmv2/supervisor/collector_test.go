@@ -117,6 +117,7 @@ func (c *testCollectorWithHangingLoop) Restart() {
 	if c.cancel != nil {
 		c.cancel()
 	}
+
 	done := c.goroutineDone
 	parentCtx := c.parentCtx
 

@@ -60,12 +60,14 @@ func (c *Collector) Start(ctx context.Context) error {
 func (c *Collector) IsRunning() bool {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
+
 	return c.running
 }
 
 // Restart signals the observation loop to collect immediately.
 func (c *Collector) Restart() {
 	c.config.Logger.Info("Collector restart requested, collecting immediately")
+
 	select {
 	case c.restartChan <- struct{}{}:
 		c.config.Logger.Debug("Collector restart signal sent")
@@ -97,14 +99,17 @@ func (c *Collector) observationLoop() {
 		select {
 		case <-ctx.Done():
 			c.config.Logger.Infof("Observation loop stopped for worker %s", c.config.Identity.ID)
+
 			return
 
 		case <-c.restartChan:
 			c.config.Logger.Info("Collector restart requested, collecting immediately")
+
 			collectCtx, cancel := context.WithTimeout(ctx, timeout)
 			if err := c.collectAndSaveObservedState(collectCtx); err != nil {
 				c.config.Logger.Errorf("Failed to collect observed state after restart: %v", err)
 			}
+
 			cancel()
 
 		case <-ticker.C:
@@ -112,6 +117,7 @@ func (c *Collector) observationLoop() {
 			if err := c.collectAndSaveObservedState(collectCtx); err != nil {
 				c.config.Logger.Errorf("Failed to collect observed state: %v", err)
 			}
+
 			cancel()
 		}
 	}

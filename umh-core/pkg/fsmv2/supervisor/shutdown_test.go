@@ -28,6 +28,7 @@ var _ = Describe("Shutdown Escalation", func() {
 					if desired.ShutdownRequested() {
 						shutdownRequested = true
 					}
+
 					return nil
 				},
 			}
@@ -69,6 +70,7 @@ var _ = Describe("Shutdown Escalation", func() {
 					if desired.ShutdownRequested() {
 						shutdownRequested = true
 					}
+
 					return nil
 				},
 			}

@@ -38,6 +38,7 @@ func (f *FreshnessChecker) Check(snapshot *fsmv2.Snapshot) bool {
 	}
 
 	age := time.Since(timestampProvider.GetTimestamp())
+
 	return age <= f.staleThreshold
 }
 
@@ -55,5 +56,6 @@ func (f *FreshnessChecker) IsTimeout(snapshot *fsmv2.Snapshot) bool {
 	}
 
 	age := time.Since(timestampProvider.GetTimestamp())
+
 	return age > f.timeout
 }

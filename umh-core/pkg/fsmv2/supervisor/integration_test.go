@@ -37,6 +37,7 @@ var _ = Describe("DataFreshness Full Cycle Integration", func() {
 				if desired.ShutdownRequested() {
 					shutdownRequested = true
 				}
+
 				return nil
 			},
 		}

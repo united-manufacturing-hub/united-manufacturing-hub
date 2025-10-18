@@ -16,6 +16,7 @@ package supervisor
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -169,9 +170,11 @@ func NewSupervisor(cfg Config) *Supervisor {
 	if staleThreshold <= 0 {
 		panic(fmt.Sprintf("supervisor config error: staleThreshold must be positive, got %v", staleThreshold))
 	}
+
 	if timeout <= staleThreshold {
 		panic(fmt.Sprintf("supervisor config error: timeout (%v) must be greater than staleThreshold (%v)", timeout, staleThreshold))
 	}
+
 	if maxRestartAttempts <= 0 {
 		panic(fmt.Sprintf("supervisor config error: maxRestartAttempts must be positive, got %d", maxRestartAttempts))
 	}
@@ -252,11 +255,13 @@ func (s *Supervisor) CheckDataFreshness(snapshot *fsmv2.Snapshot) bool {
 
 	if s.freshnessChecker.IsTimeout(snapshot) {
 		s.logger.Warnf("Data timeout: observation is %v old (threshold: %v)", age, s.collectorHealth.timeout)
+
 		return false
 	}
 
 	if !s.freshnessChecker.Check(snapshot) {
 		s.logger.Warnf("Data stale: observation is %v old (threshold: %v)", age, s.collectorHealth.staleThreshold)
+
 		return false
 	}
 
@@ -276,6 +281,7 @@ func (s *Supervisor) Start(ctx context.Context) <-chan struct{} {
 	// Start main tick loop
 	go func() {
 		defer close(done)
+
 		s.tickLoop(ctx)
 	}()
 
@@ -294,6 +300,7 @@ func (s *Supervisor) tickLoop(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			s.logger.Infof("Tick loop stopped for worker %s", s.identity.ID)
+
 			return
 		case <-ticker.C:
 			if err := s.tick(ctx); err != nil {
@@ -326,7 +333,7 @@ func (s *Supervisor) tick(ctx context.Context) error {
 					s.logger.Errorf("Failed to request shutdown: %v", shutdownErr)
 				}
 
-				return fmt.Errorf("collector unresponsive, shutdown requested")
+				return errors.New("collector unresponsive, shutdown requested")
 			}
 
 			// I4: Safe to restart (restartCount < maxRestartAttempts)
@@ -337,6 +344,7 @@ func (s *Supervisor) tick(ctx context.Context) error {
 		}
 
 		s.logger.Debug("Pausing FSM due to stale/timeout data")
+
 		return nil
 	}
 
@@ -358,6 +366,7 @@ func (s *Supervisor) tick(ctx context.Context) error {
 	// Execute action if present
 	if action != nil {
 		s.logger.Infof("Executing action: %s", action.Name())
+
 		if err := s.executeActionWithRetry(ctx, action); err != nil {
 			return fmt.Errorf("action execution failed: %w", err)
 		}
@@ -394,6 +403,7 @@ func (s *Supervisor) executeActionWithRetry(ctx context.Context, action fsmv2.Ac
 		if err := action.Execute(ctx); err != nil {
 			lastErr = err
 			s.logger.Errorf("Action %s failed (attempt %d/%d): %v", action.Name(), attempt+1, maxRetries, err)
+
 			continue
 		}
 
@@ -413,11 +423,11 @@ func (s *Supervisor) processSignal(ctx context.Context, signal fsmv2.Signal) err
 	case fsmv2.SignalNeedsRemoval:
 		s.logger.Infof("Worker %s requested removal", s.identity.ID)
 		// TODO: Notify manager to remove this worker
-		return fmt.Errorf("worker removal requested (not yet implemented)")
+		return errors.New("worker removal requested (not yet implemented)")
 	case fsmv2.SignalNeedsRestart:
 		s.logger.Infof("Worker %s requested restart", s.identity.ID)
 		// TODO: Implement restart logic
-		return fmt.Errorf("worker restart requested (not yet implemented)")
+		return errors.New("worker restart requested (not yet implemented)")
 	default:
 		return fmt.Errorf("unknown signal: %d", signal)
 	}

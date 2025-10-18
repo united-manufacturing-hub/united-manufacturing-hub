@@ -31,9 +31,7 @@ type ContainerIdentity struct {
 // ContainerDesiredState represents what we want the container monitoring to be.
 // This is derived from user configuration.
 type ContainerDesiredState struct {
-	MonitoringEnabled    bool // Whether monitoring is enabled
-	CollectionIntervalMs int  // How often to collect metrics (milliseconds)
-	shutdownRequested    bool // Set by supervisor to initiate shutdown
+	shutdownRequested bool // Set by supervisor to initiate shutdown
 }
 
 // ShutdownRequested returns whether shutdown has been requested.
@@ -49,11 +47,7 @@ func (d *ContainerDesiredState) SetShutdownRequested(requested bool) {
 }
 
 // ContainerObservedState represents the actual state of container monitoring.
-// It mirrors the desired state fields plus additional observed-only fields.
 type ContainerObservedState struct {
-	// Mirror of desired state (what the system believes it should be)
-	ObservedDesiredState ContainerDesiredState
-
 	// Observed-only fields (system reality)
 	CPUUsageMCores   float64 // CPU usage in milli-cores
 	CPUCoreCount     int     // Number of CPU cores
@@ -72,12 +66,6 @@ type ContainerObservedState struct {
 	DiskHealth    models.HealthCategory
 
 	CollectedAt time.Time // When metrics were collected
-}
-
-// GetObservedDesiredState returns the mirror of the desired state.
-// This allows comparing what's deployed vs what we want to deploy.
-func (o *ContainerObservedState) GetObservedDesiredState() fsmv2.DesiredState {
-	return &o.ObservedDesiredState
 }
 
 // GetTimestamp returns when this observed state was collected.
