@@ -34,6 +34,7 @@ import (
 	"fmt"
 	"regexp"
 	"runtime"
+	"sync"
 
 	"github.com/google/uuid"
 	"github.com/mattn/go-sqlite3"
@@ -158,51 +159,42 @@ func mapSQLiteError(err error) error {
 //   - db: SQLite connection pool (limited to 1 connection for single-writer semantics)
 //   - closed: prevents use-after-close errors
 type sqliteStore struct {
-	db     *sql.DB
-	closed bool
+	db                    *sql.DB
+	mu                    sync.RWMutex
+	closed                bool
+	maintenanceOnShutdown bool
 }
 
-// NewSQLiteStore creates a new SQLite-backed Store with WAL mode and durability settings.
+type Config struct {
+	DBPath string
+
+	MaintenanceOnShutdown bool
+}
+
+func DefaultConfig(dbPath string) Config {
+	return Config{
+		DBPath:                dbPath,
+		MaintenanceOnShutdown: true,
+	}
+}
+
+// NewStore creates a SQLite-backed Store with production-grade configuration.
 //
-// DESIGN DECISION: WAL mode with synchronous=FULL instead of DELETE journal
-// WHY: WAL enables concurrent readers during writes (FSM workers read state while reconciling),
-// and synchronous=FULL ensures fsync after each transaction (power loss protection for edge devices).
-// Andrew Ayer's research shows this combination provides <10ms write latency with full durability.
-//
-// TRADE-OFF: WAL checkpoint blocks writers briefly every 1000 pages (~10-100ms).
-// Alternative synchronous=NORMAL is faster but loses last transaction on power loss.
-//
-// INSPIRED BY: Andrew Ayer's "SQLite Performance and WAL Mode" (https://avi.im/blag/2024/wal-performance/),
-// Linear's SQLite-based edge sync architecture.
-//
-// Connection Pool Configuration:
-//   - SetMaxOpenConns(1): Single-writer semantics (SQLite serializes writes anyway)
-//   - SetMaxIdleConns(1): Keep connection alive (avoid reconnect overhead)
-//   - SetConnMaxLifetime(0): No connection recycling (embedded database, no server restart)
-//
-// Platform-Specific Settings:
-//   - macOS: fullfsync=1 (F_FULLFSYNC syscall for true disk flush)
-//   - Other: standard fsync (kernel buffer flush)
-//
-// Parameters:
-//   - dbPath: File path for SQLite database (will be created if doesn't exist)
-//
-// Returns:
-//   - Store: SQLite implementation of Store interface
-//   - error: if database cannot be opened or configured
+// DESIGN DECISION: Accept Config instead of individual parameters
+// WHY: Makes it easy to add new configuration options without breaking callers.
+// Callers can use DefaultConfig() and override specific fields.
 //
 // Example:
 //
-//	store, err := basic.NewSQLiteStore("./data/fsm.db")
-//	if err != nil {
-//	    return err
-//	}
-//	defer store.Close()
-//
-//	// Database is ready for concurrent FSM workers
-//	store.CreateCollection(ctx, "assets", nil)
-func NewSQLiteStore(dbPath string) (Store, error) {
-	connStr := buildConnectionString(dbPath)
+//	cfg := basic.DefaultConfig("./data.db")
+//	cfg.MaintenanceOnShutdown = false // Skip VACUUM in dev
+//	store, err := basic.NewStore(cfg)
+func NewStore(cfg Config) (Store, error) {
+	if cfg.DBPath == "" {
+		return nil, fmt.Errorf("DBPath cannot be empty")
+	}
+
+	connStr := buildConnectionString(cfg.DBPath)
 
 	db, err := sql.Open("sqlite3", connStr)
 	if err != nil {
@@ -215,13 +207,19 @@ func NewSQLiteStore(dbPath string) (Store, error) {
 
 	if err := db.Ping(); err != nil {
 		_ = db.Close()
+		return nil, fmt.Errorf("failed to connect to database: %w", err)
+	}
 
-		return nil, fmt.Errorf("failed to ping database: %w", err)
+	var journalMode string
+	err = db.QueryRow("PRAGMA journal_mode").Scan(&journalMode)
+	if err != nil || journalMode != "wal" {
+		_ = db.Close()
+		return nil, fmt.Errorf("failed to enable WAL mode: got %s", journalMode)
 	}
 
 	return &sqliteStore{
-		db:     db,
-		closed: false,
+		db:                    db,
+		maintenanceOnShutdown: cfg.MaintenanceOnShutdown,
 	}, nil
 }
 
