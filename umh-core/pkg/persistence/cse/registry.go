@@ -219,7 +219,10 @@ type Registry struct {
 	// collections maps collection name to metadata
 	collections map[string]*CollectionMetadata
 
-	// mu protects concurrent access to collections map
+	// features maps feature name to support status
+	features map[string]bool
+
+	// mu protects concurrent access to collections and features maps
 	mu sync.RWMutex
 }
 
@@ -230,6 +233,7 @@ type Registry struct {
 func NewRegistry() *Registry {
 	return &Registry{
 		collections: make(map[string]*CollectionMetadata),
+		features:    make(map[string]bool),
 	}
 }
 
@@ -483,4 +487,54 @@ func (r *Registry) GetAllVersions() map[string]string {
 		}
 	}
 	return versions
+}
+
+// RegisterFeature sets whether a feature is supported.
+//
+// DESIGN DECISION: Feature registry for capability negotiation
+// WHY: Frontend needs to know what features umh-core supports
+// TRADE-OFF: Extra registry state, but enables per-feature capability detection
+//
+// THREAD SAFETY: Write lock held during entire mutation.
+//
+// Example:
+//
+//	registry.RegisterFeature("delta_sync", true)
+//	registry.RegisterFeature("e2e_encryption", true)
+//	registry.RegisterFeature("triangular_model", true)
+func (r *Registry) RegisterFeature(feature string, supported bool) error {
+	if feature == "" {
+		return fmt.Errorf("feature name cannot be empty")
+	}
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	r.features[feature] = supported
+	return nil
+}
+
+// HasFeature checks if a feature is supported.
+//
+// Returns false if feature is not registered or explicitly set to false.
+func (r *Registry) HasFeature(feature string) bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	supported, exists := r.features[feature]
+	return exists && supported
+}
+
+// GetFeatures returns all registered features and their support status.
+//
+// Returns map of feature name → support status.
+func (r *Registry) GetFeatures() map[string]bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	features := make(map[string]bool, len(r.features))
+	for name, supported := range r.features {
+		features[name] = supported
+	}
+	return features
 }

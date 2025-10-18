@@ -355,6 +355,86 @@ var _ = Describe("Schema Versioning", func() {
 	})
 })
 
+var _ = Describe("Feature Registry", func() {
+	var registry *cse.Registry
+
+	BeforeEach(func() {
+		registry = cse.NewRegistry()
+	})
+
+	It("should register and retrieve feature", func() {
+		err := registry.RegisterFeature("delta_sync", true)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(registry.HasFeature("delta_sync")).To(BeTrue())
+	})
+
+	It("should return false for non-existent feature", func() {
+		Expect(registry.HasFeature("nonexistent_feature")).To(BeFalse())
+	})
+
+	It("should update feature when registered multiple times", func() {
+		err := registry.RegisterFeature("delta_sync", true)
+		Expect(err).ToNot(HaveOccurred())
+		err = registry.RegisterFeature("delta_sync", false)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(registry.HasFeature("delta_sync")).To(BeFalse())
+	})
+
+	It("should track features independently", func() {
+		err := registry.RegisterFeature("delta_sync", true)
+		Expect(err).ToNot(HaveOccurred())
+		err = registry.RegisterFeature("e2e_encryption", false)
+		Expect(err).ToNot(HaveOccurred())
+
+		Expect(registry.HasFeature("delta_sync")).To(BeTrue())
+		Expect(registry.HasFeature("e2e_encryption")).To(BeFalse())
+	})
+
+	It("should return all registered features", func() {
+		err := registry.RegisterFeature("delta_sync", true)
+		Expect(err).ToNot(HaveOccurred())
+		err = registry.RegisterFeature("e2e_encryption", true)
+		Expect(err).ToNot(HaveOccurred())
+		err = registry.RegisterFeature("triangular_model", false)
+		Expect(err).ToNot(HaveOccurred())
+
+		features := registry.GetFeatures()
+		Expect(features).To(HaveLen(3))
+		Expect(features["delta_sync"]).To(BeTrue())
+		Expect(features["e2e_encryption"]).To(BeTrue())
+		Expect(features["triangular_model"]).To(BeFalse())
+	})
+
+	It("should reject empty feature name", func() {
+		err := registry.RegisterFeature("", true)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("feature name cannot be empty"))
+	})
+
+	It("should handle concurrent RegisterFeature calls safely", func() {
+		done := make(chan bool)
+		for i := 0; i < 10; i++ {
+			go func(index int) {
+				featureName := fmt.Sprintf("feature_%d", index)
+				err := registry.RegisterFeature(featureName, true)
+				Expect(err).ToNot(HaveOccurred())
+				done <- true
+			}(i)
+		}
+
+		for i := 0; i < 10; i++ {
+			<-done
+		}
+
+		features := registry.GetFeatures()
+		Expect(features).To(HaveLen(10))
+		for i := 0; i < 10; i++ {
+			featureName := fmt.Sprintf("feature_%d", i)
+			Expect(registry.HasFeature(featureName)).To(BeTrue())
+		}
+	})
+})
+
 var _ = Describe("GlobalRegistry", func() {
 	Describe("Register", func() {
 		It("should register collection in global registry", func() {

@@ -7,7 +7,11 @@ Layer 2 of the FSM v2 persistence architecture - Common Sync Engine conventions 
 ```go
 // Initialize CSE components
 registry := cse.NewRegistry()
-registry.RegisterCollection("workers", "container", "identity")
+registry.Register(&cse.CollectionMetadata{
+    Name:       "workers",
+    WorkerType: "container",
+    Role:       cse.RoleIdentity,
+})
 
 triangular := cse.NewTriangularStore(store, registry)
 syncState := cse.NewSyncState(store, registry)
@@ -65,13 +69,62 @@ See `ARCHITECTURE.md` for full explanation of why we had 3-tier implementation a
 ## Package Components
 
 ### Registry (registry.go)
-Schema metadata tracking for CSE-aware collections.
+Schema metadata and capability tracking for CSE-aware collections.
 
+**Collection Registration:**
 ```go
 registry := cse.NewRegistry()
-registry.RegisterCollection("workers", "container", "identity")
-metadata := registry.GetMetadata("workers")
+registry.Register(&cse.CollectionMetadata{
+    Name:       "workers",
+    WorkerType: "container",
+    Role:       cse.RoleIdentity,
+})
+metadata, err := registry.Get("workers")
 ```
+
+**Schema Versioning:**
+```go
+// Register schema version for workerType+role
+registry.RegisterVersion("container", "identity", "v2")
+
+// Check version
+version := registry.GetVersion("workers")  // Returns "v2"
+
+// Get all versions
+versions := registry.GetAllVersions()
+// Returns: {"workers": "v2", "datapoints": "v1", ...}
+```
+
+**Feature Registry:**
+```go
+// Register feature support
+registry.RegisterFeature("delta_sync", true)
+registry.RegisterFeature("e2e_encryption", true)
+registry.RegisterFeature("triangular_model", true)
+
+// Check feature support
+if registry.HasFeature("delta_sync") {
+    // Enable delta sync functionality
+}
+
+// Get all features
+features := registry.GetFeatures()
+// Returns: {"delta_sync": true, "e2e_encryption": true, ...}
+```
+
+**Capability Negotiation Use Case:**
+
+Schema versioning and feature registry enable frontend-backend capability negotiation:
+
+1. **Frontend** has all schema versions compiled in (v1, v2, v3)
+2. **umh-core** advertises supported schemas via `GetAllVersions()`
+3. **Frontend** selects appropriate schema version at runtime
+4. **Frontend** enables/disables features based on `GetFeatures()`
+
+This allows:
+- One frontend version to work with multiple umh-core versions
+- Graceful degradation when backend lacks features
+- Per-feature capability detection (not just version number)
 
 ### Triangular Store (triangular.go)
 High-level operations for FSM v2's triangular model (Identity/Desired/Observed).
@@ -173,7 +226,7 @@ All components use Ginkgo v2 + Gomega:
 ginkgo -r ./umh-core/pkg/persistence/cse
 ```
 
-Current test coverage: 158 specs
+Current test coverage: 172 specs (includes schema versioning and feature registry)
 
 ## References
 
