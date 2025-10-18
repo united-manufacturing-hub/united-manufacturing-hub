@@ -50,13 +50,14 @@ type CollectorHealth struct {
 //   - Layer 3: Request graceful shutdown after max restart attempts
 //   - Layer 4: Comprehensive logging and metrics (observability)
 type Supervisor struct {
-	worker          fsmv2.Worker          // Worker implementation
-	identity        fsmv2.Identity        // Worker's immutable identity
-	store           persistence.Store     // State persistence layer
-	currentState    fsmv2.State           // Current FSM state
-	logger          *zap.SugaredLogger    // Logger for supervisor operations
-	tickInterval    time.Duration         // How often to evaluate state transitions
-	collectorHealth CollectorHealth       // Collector health tracking
+	worker               fsmv2.Worker          // Worker implementation
+	identity             fsmv2.Identity        // Worker's immutable identity
+	store                persistence.Store     // State persistence layer
+	currentState         fsmv2.State           // Current FSM state
+	logger               *zap.SugaredLogger    // Logger for supervisor operations
+	tickInterval         time.Duration         // How often to evaluate state transitions
+	collectorHealth      CollectorHealth       // Collector health tracking
+	collectorRestartChan chan struct{}         // Signal to restart observation loop
 }
 
 // CollectorHealthConfig configures observation collector health monitoring.
@@ -135,12 +136,13 @@ func NewSupervisor(cfg Config) *Supervisor {
 	}
 
 	return &Supervisor{
-		worker:       cfg.Worker,
-		identity:     cfg.Identity,
-		store:        cfg.Store,
-		currentState: cfg.Worker.GetInitialState(),
-		logger:       cfg.Logger,
-		tickInterval: tickInterval,
+		worker:               cfg.Worker,
+		identity:             cfg.Identity,
+		store:                cfg.Store,
+		currentState:         cfg.Worker.GetInitialState(),
+		logger:               cfg.Logger,
+		tickInterval:         tickInterval,
+		collectorRestartChan: make(chan struct{}, 1),
 		collectorHealth: CollectorHealth{
 			staleThreshold:     staleThreshold,
 			timeout:            timeout,
@@ -160,6 +162,38 @@ func (s *Supervisor) GetCollectorTimeout() time.Duration {
 
 func (s *Supervisor) GetMaxRestartAttempts() int {
 	return s.collectorHealth.maxRestartAttempts
+}
+
+func (s *Supervisor) GetRestartCount() int {
+	return s.collectorHealth.restartCount
+}
+
+func (s *Supervisor) SetRestartCount(count int) {
+	s.collectorHealth.restartCount = count
+}
+
+func (s *Supervisor) RestartCollector(ctx context.Context) error {
+	if s.collectorHealth.restartCount >= s.collectorHealth.maxRestartAttempts {
+		return fmt.Errorf("collector restart failed: exceeded max attempts (%d)", s.collectorHealth.maxRestartAttempts)
+	}
+
+	s.collectorHealth.restartCount++
+	s.collectorHealth.lastRestart = time.Now()
+
+	backoff := time.Duration(s.collectorHealth.restartCount*2) * time.Second
+	s.logger.Warnf("Restarting collector (attempt %d/%d) after %v backoff",
+		s.collectorHealth.restartCount, s.collectorHealth.maxRestartAttempts, backoff)
+
+	time.Sleep(backoff)
+
+	select {
+	case s.collectorRestartChan <- struct{}{}:
+		s.logger.Info("Collector restart signal sent")
+	default:
+		s.logger.Debug("Collector restart already pending")
+	}
+
+	return nil
 }
 
 func (s *Supervisor) CheckDataFreshness(snapshot *fsmv2.Snapshot) bool {
@@ -206,10 +240,16 @@ func (s *Supervisor) observationLoop(ctx context.Context) {
 		case <-ctx.Done():
 			s.logger.Infof("Observation loop stopped for worker %s", s.identity.ID)
 			return
+
+		case <-s.collectorRestartChan:
+			s.logger.Info("Collector restart requested, collecting immediately")
+			if err := s.collectAndSaveObservedState(ctx); err != nil {
+				s.logger.Errorf("Failed to collect observed state after restart: %v", err)
+			}
+
 		case <-ticker.C:
 			if err := s.collectAndSaveObservedState(ctx); err != nil {
 				s.logger.Errorf("Failed to collect observed state: %v", err)
-				// Continue anyway - errors are expected (network issues, etc.)
 			}
 		}
 	}
@@ -265,9 +305,22 @@ func (s *Supervisor) tick(ctx context.Context) error {
 	// Check data freshness BEFORE calling state.Next()
 	// This is the trust boundary: states assume data is always fresh
 	if !s.CheckDataFreshness(snapshot) {
-		// Data is stale or timeout - pause FSM
+		age := time.Since(snapshot.Observed.GetTimestamp())
+
+		if age > s.collectorHealth.timeout {
+			if err := s.RestartCollector(ctx); err != nil {
+				s.logger.Errorf("Collector restart failed: %v", err)
+				return err
+			}
+		}
+
 		s.logger.Debug("Pausing FSM due to stale/timeout data")
 		return nil
+	}
+
+	if s.collectorHealth.restartCount > 0 {
+		s.logger.Infof("Collector recovered after %d restart attempts", s.collectorHealth.restartCount)
+		s.collectorHealth.restartCount = 0
 	}
 
 	// Data is fresh - safe to progress FSM
