@@ -111,7 +111,6 @@ func TestWithTransaction_Success(t *testing.T) {
 	err := basic.WithTransaction(context.Background(), store, func(tx basic.Tx) error {
 		return nil
 	})
-
 	if err != nil {
 		t.Errorf("WithTransaction() returned error: %v", err)
 	}
@@ -128,12 +127,11 @@ func TestWithTransaction_Success(t *testing.T) {
 func TestWithTransaction_Error(t *testing.T) {
 	store := &mockStore{}
 	expectedErr := errors.New("transaction failed")
-
 	err := basic.WithTransaction(context.Background(), store, func(tx basic.Tx) error {
 		return expectedErr
 	})
 
-	if err != expectedErr {
+	if !errors.Is(err, expectedErr) && err.Error() != expectedErr.Error() {
 		t.Errorf("WithTransaction() error = %v, want %v", err, expectedErr)
 	}
 
@@ -163,7 +161,7 @@ func TestWithTransaction_Panic(t *testing.T) {
 		}
 	}()
 
-	basic.WithTransaction(context.Background(), store, func(tx basic.Tx) error {
+	_ = basic.WithTransaction(context.Background(), store, func(tx basic.Tx) error {
 		panic("something went wrong")
 	})
 }
@@ -177,7 +175,7 @@ func TestWithTransaction_ContextCancelled(t *testing.T) {
 		return nil
 	})
 
-	if err != context.Canceled {
+	if !errors.Is(err, context.Canceled) {
 		t.Errorf("WithTransaction() error = %v, want %v", err, context.Canceled)
 	}
 
@@ -194,7 +192,6 @@ func TestWithRetry_Success(t *testing.T) {
 		callCount++
 		return nil
 	})
-
 	if err != nil {
 		t.Errorf("WithRetry() returned error: %v", err)
 	}
@@ -215,7 +212,6 @@ func TestWithRetry_Conflict(t *testing.T) {
 		}
 		return nil
 	})
-
 	if err != nil {
 		t.Errorf("WithRetry() returned error: %v", err)
 	}
@@ -253,11 +249,26 @@ func TestWithRetry_NonConflictError(t *testing.T) {
 		return otherErr
 	})
 
-	if err != otherErr {
+	if !errors.Is(err, otherErr) && err.Error() != otherErr.Error() {
 		t.Errorf("WithRetry() error = %v, want %v", err, otherErr)
 	}
 
 	if callCount != 1 {
 		t.Errorf("Function called %d times, expected 1 (no retry for non-conflict)", callCount)
+	}
+}
+
+func TestWithRetry_NegativeMaxRetries(t *testing.T) {
+	store := &mockStore{}
+
+	err := basic.WithRetry(context.Background(), store, -1, func(tx basic.Tx) error {
+		return nil
+	})
+	if err == nil {
+		t.Error("WithRetry() should return error for negative maxRetries")
+	}
+
+	if store.beginTxCalled > 0 {
+		t.Error("BeginTx should not be called with negative maxRetries")
 	}
 }
