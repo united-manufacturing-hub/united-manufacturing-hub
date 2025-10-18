@@ -209,6 +209,25 @@ func (ss *SyncState) MarkSynced(tier Tier, syncID int64) error {
 	return nil
 }
 
+// filterSyncIDs removes sync IDs that are less than or equal to the threshold.
+//
+// DESIGN DECISION: Filter in-place with new slice, not modify original
+// WHY: Preserve original slice for caller, avoid side effects
+// TRADE-OFF: Allocates new slice, but pendingEdge/pendingRelay are typically small
+// INSPIRED BY: Go slice filtering patterns, functional programming filter()
+//
+// Parameters:
+//   - syncIDs: List of pending sync IDs
+//   - threshold: Maximum sync ID that has been successfully synced
+//
+// Returns:
+//   - []int64: New slice containing only sync IDs > threshold
+//
+// Example:
+//
+//	pending := []int64{100, 101, 102, 103}
+//	remaining := filterSyncIDs(pending, 101)
+//	// Result: [102, 103] (100 and 101 were successfully synced)
 func filterSyncIDs(syncIDs []int64, threshold int64) []int64 {
 	result := make([]int64, 0)
 	for _, id := range syncIDs {
@@ -326,13 +345,13 @@ func (ss *SyncState) Flush(ctx context.Context) error {
 	defer ss.mu.RUnlock()
 
 	doc := basic.Document{
-		"id":                "sync_state",
-		"edge_sync_id":      ss.edgeSyncID,
-		"relay_sync_id":     ss.relaySyncID,
-		"frontend_sync_id":  ss.frontendSyncID,
-		"pending_edge":      ss.pendingEdge,
-		"pending_relay":     ss.pendingRelay,
-		"updated_at":        time.Now().Format(time.RFC3339Nano),
+		"id":               "sync_state",
+		"edge_sync_id":     ss.edgeSyncID,
+		"relay_sync_id":    ss.relaySyncID,
+		"frontend_sync_id": ss.frontendSyncID,
+		"pending_edge":     ss.pendingEdge,
+		"pending_relay":    ss.pendingRelay,
+		"updated_at":       time.Now().Format(time.RFC3339Nano),
 	}
 
 	existing, err := ss.store.Get(ctx, "_sync_state", "sync_state")
@@ -416,6 +435,28 @@ func (ss *SyncState) Load(ctx context.Context) error {
 	return nil
 }
 
+// convertToInt64Slice converts a slice of interface{} values to []int64.
+//
+// DESIGN DECISION: Handle multiple numeric types (int64, float64, json.Number)
+// WHY: JSON unmarshaling produces different types depending on parser configuration
+// TRADE-OFF: Complex type switching, but necessary for robust JSON deserialization
+// INSPIRED BY: Type coercion in dynamic languages, JSON number handling in Go
+//
+// Parameters:
+//   - input: Slice of interface{} values (typically from JSON unmarshaling)
+//
+// Returns:
+//   - []int64: Converted slice (skips values that can't be converted)
+//
+// Note: Silently skips non-numeric values instead of erroring.
+// This is defensive - better to have partial data than fail completely.
+//
+// Example:
+//
+//	// JSON: {"pending_edge": [100.0, 101.0, 102.0]}
+//	// Unmarshal produces: []interface{}{float64(100), float64(101), float64(102)}
+//	pending := convertToInt64Slice(jsonSlice)
+//	// Result: []int64{100, 101, 102}
 func convertToInt64Slice(input []interface{}) []int64 {
 	result := make([]int64, 0, len(input))
 	for _, v := range input {
