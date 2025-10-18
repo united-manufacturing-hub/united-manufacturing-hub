@@ -429,13 +429,21 @@ func (r *Registry) GetTriangularCollections(workerType string) (identity, desire
 // DESIGN DECISION: Version per workerType+role, not per collection name
 // WHY: Multiple collections can share same workerType+role (e.g., container_identity, container_desired)
 // TRADE-OFF: Must track by composite key, but enables consistent versioning across related collections
+//
+// THREAD SAFETY: Write lock held during entire iteration and mutation.
+// Metadata fields are safe to mutate directly because we hold exclusive write lock.
+//
 // INSPIRED BY: GraphQL schema versioning, Semantic Versioning
 //
 // Example:
 //
 //	registry.RegisterVersion("container", "identity", "v2")
 //	// Sets version for all container identity collections
-func (r *Registry) RegisterVersion(workerType, role, version string) {
+func (r *Registry) RegisterVersion(workerType, role, version string) error {
+	if version == "" {
+		return fmt.Errorf("version cannot be empty for workerType %q role %q", workerType, role)
+	}
+
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -444,6 +452,7 @@ func (r *Registry) RegisterVersion(workerType, role, version string) {
 			meta.SchemaVersion = version
 		}
 	}
+	return nil
 }
 
 // GetVersion returns the schema version for a collection.

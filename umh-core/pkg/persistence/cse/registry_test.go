@@ -229,6 +229,24 @@ var _ = Describe("Registry", func() {
 				<-done
 			}
 		})
+
+		It("should handle concurrent RegisterVersion calls safely", func() {
+			done := make(chan bool)
+			for i := 0; i < 10; i++ {
+				go func(version int) {
+					err := registry.RegisterVersion("test", cse.RoleIdentity, fmt.Sprintf("v%d", version))
+					Expect(err).ToNot(HaveOccurred())
+					done <- true
+				}(i)
+			}
+
+			for i := 0; i < 10; i++ {
+				<-done
+			}
+
+			version := registry.GetVersion("collection_0")
+			Expect(version).To(MatchRegexp(`^v\d+$`))
+		})
 	})
 })
 
@@ -278,7 +296,8 @@ var _ = Describe("Schema Versioning", func() {
 	})
 
 	It("should register and retrieve schema version", func() {
-		registry.RegisterVersion("container", cse.RoleIdentity, "v2")
+		err := registry.RegisterVersion("container", cse.RoleIdentity, "v2")
+		Expect(err).ToNot(HaveOccurred())
 		version := registry.GetVersion("workers")
 		Expect(version).To(Equal("v2"))
 	})
@@ -289,8 +308,10 @@ var _ = Describe("Schema Versioning", func() {
 	})
 
 	It("should update schema version when registered multiple times", func() {
-		registry.RegisterVersion("container", cse.RoleIdentity, "v1")
-		registry.RegisterVersion("container", cse.RoleIdentity, "v2")
+		err := registry.RegisterVersion("container", cse.RoleIdentity, "v1")
+		Expect(err).ToNot(HaveOccurred())
+		err = registry.RegisterVersion("container", cse.RoleIdentity, "v2")
+		Expect(err).ToNot(HaveOccurred())
 		version := registry.GetVersion("workers")
 		Expect(version).To(Equal("v2"))
 	})
@@ -301,8 +322,10 @@ var _ = Describe("Schema Versioning", func() {
 			WorkerType: "sensor",
 			Role:       cse.RoleIdentity,
 		})
-		registry.RegisterVersion("container", cse.RoleIdentity, "v2")
-		registry.RegisterVersion("sensor", cse.RoleIdentity, "v1")
+		err := registry.RegisterVersion("container", cse.RoleIdentity, "v2")
+		Expect(err).ToNot(HaveOccurred())
+		err = registry.RegisterVersion("sensor", cse.RoleIdentity, "v1")
+		Expect(err).ToNot(HaveOccurred())
 
 		Expect(registry.GetVersion("workers")).To(Equal("v2"))
 		Expect(registry.GetVersion("datapoints")).To(Equal("v1"))
@@ -314,13 +337,21 @@ var _ = Describe("Schema Versioning", func() {
 			WorkerType: "sensor",
 			Role:       cse.RoleIdentity,
 		})
-		registry.RegisterVersion("container", cse.RoleIdentity, "v2")
-		registry.RegisterVersion("sensor", cse.RoleIdentity, "v1")
+		err := registry.RegisterVersion("container", cse.RoleIdentity, "v2")
+		Expect(err).ToNot(HaveOccurred())
+		err = registry.RegisterVersion("sensor", cse.RoleIdentity, "v1")
+		Expect(err).ToNot(HaveOccurred())
 
 		versions := registry.GetAllVersions()
 		Expect(versions).To(HaveLen(2))
 		Expect(versions["workers"]).To(Equal("v2"))
 		Expect(versions["datapoints"]).To(Equal("v1"))
+	})
+
+	It("should reject empty version string", func() {
+		err := registry.RegisterVersion("container", cse.RoleIdentity, "")
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("version cannot be empty"))
 	})
 })
 
