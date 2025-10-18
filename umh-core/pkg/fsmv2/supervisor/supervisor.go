@@ -211,13 +211,15 @@ func (s *Supervisor) tick(ctx context.Context) error {
 		return fmt.Errorf("failed to load snapshot: %w", err)
 	}
 
-	// TODO: Evaluate data freshness here (RFC line 109: supervisor responsibility)
-	// age := time.Since(snapshot.Observed.GetTimestamp())
-	// if age > 20*time.Second { snapshot.DataFreshness = Broken; handle restart }
-	// else if age > 10*time.Second { snapshot.DataFreshness = Stale }
-	// else { snapshot.DataFreshness = Fresh }
-	// This moves staleness logic out of states and into supervisor infrastructure layer
+	// Check data freshness BEFORE calling state.Next()
+	// This is the trust boundary: states assume data is always fresh
+	if !s.CheckDataFreshness(snapshot) {
+		// Data is stale or timeout - pause FSM
+		s.logger.Debug("Pausing FSM due to stale/timeout data")
+		return nil
+	}
 
+	// Data is fresh - safe to progress FSM
 	// Call state transition
 	nextState, signal, action := s.currentState.Next(*snapshot)
 
@@ -322,4 +324,9 @@ func (s *Supervisor) RequestShutdown(ctx context.Context) error {
 // GetCurrentState returns the current state name.
 func (s *Supervisor) GetCurrentState() string {
 	return s.currentState.String()
+}
+
+// Tick performs one FSM tick (for testing).
+func (s *Supervisor) Tick(ctx context.Context) error {
+	return s.tick(ctx)
 }
