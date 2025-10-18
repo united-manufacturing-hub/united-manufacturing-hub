@@ -13,7 +13,7 @@ import (
 	"go.uber.org/zap"
 )
 
-var _ = Describe("Additional Coverage Tests", func() {
+var _ = Describe("Supervisor Lifecycle", func() {
 	Describe("Start and tickLoop integration", func() {
 		Context("when supervisor is started", func() {
 			It("should run tick loop until context is cancelled", func() {
@@ -149,6 +149,92 @@ var _ = Describe("Additional Coverage Tests", func() {
 
 				cancel()
 				time.Sleep(100 * time.Millisecond)
+			})
+		})
+	})
+
+	Describe("processSignal error handling", func() {
+		Context("when SignalNeedsRemoval is received", func() {
+			It("should return error for unimplemented feature", func() {
+				store := &mockStore{
+					snapshot: &fsmv2.Snapshot{
+						Identity: mockIdentity(),
+						Desired:  &mockDesiredState{},
+						Observed: &mockObservedState{timestamp: time.Now()},
+					},
+				}
+
+				state := &mockState{
+					signal: fsmv2.SignalNeedsRemoval,
+				}
+				state.nextState = state
+
+				s := supervisor.NewSupervisor(supervisor.Config{
+					Worker:   &mockWorker{initialState: state},
+					Identity: mockIdentity(),
+					Store:    store,
+					Logger:   zap.NewNop().Sugar(),
+				})
+
+				err := s.Tick(context.Background())
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("worker removal requested"))
+			})
+		})
+
+		Context("when SignalNeedsRestart is received", func() {
+			It("should return error for unimplemented feature", func() {
+				store := &mockStore{
+					snapshot: &fsmv2.Snapshot{
+						Identity: mockIdentity(),
+						Desired:  &mockDesiredState{},
+						Observed: &mockObservedState{timestamp: time.Now()},
+					},
+				}
+
+				state := &mockState{
+					signal: fsmv2.SignalNeedsRestart,
+				}
+				state.nextState = state
+
+				s := supervisor.NewSupervisor(supervisor.Config{
+					Worker:   &mockWorker{initialState: state},
+					Identity: mockIdentity(),
+					Store:    store,
+					Logger:   zap.NewNop().Sugar(),
+				})
+
+				err := s.Tick(context.Background())
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("worker restart requested"))
+			})
+		})
+
+		Context("when unknown signal is received", func() {
+			It("should return error for invalid signal", func() {
+				store := &mockStore{
+					snapshot: &fsmv2.Snapshot{
+						Identity: mockIdentity(),
+						Desired:  &mockDesiredState{},
+						Observed: &mockObservedState{timestamp: time.Now()},
+					},
+				}
+
+				state := &mockState{
+					signal: fsmv2.Signal(999),
+				}
+				state.nextState = state
+
+				s := supervisor.NewSupervisor(supervisor.Config{
+					Worker:   &mockWorker{initialState: state},
+					Identity: mockIdentity(),
+					Store:    store,
+					Logger:   zap.NewNop().Sugar(),
+				})
+
+				err := s.Tick(context.Background())
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("unknown signal"))
 			})
 		})
 	})

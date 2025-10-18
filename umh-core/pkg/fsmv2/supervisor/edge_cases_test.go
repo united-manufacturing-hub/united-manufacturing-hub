@@ -13,7 +13,7 @@ import (
 	"go.uber.org/zap"
 )
 
-var _ = Describe("Coverage Tests", func() {
+var _ = Describe("Edge Cases", func() {
 	Describe("FreshnessChecker edge cases", func() {
 		Context("when snapshot has nil observed state", func() {
 			It("should return false for Check", func() {
