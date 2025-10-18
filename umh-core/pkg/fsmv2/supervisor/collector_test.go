@@ -87,6 +87,86 @@ var _ = Describe("Collector", func() {
 			}).To(Panic())
 		})
 	})
+
+	Context("Invariant I8: Collector lifecycle validation", func() {
+		It("should panic when Start() is called twice", func() {
+			collector := supervisor.NewCollector(supervisor.CollectorConfig{
+				Worker:              &mockWorker{},
+				Identity:            mockIdentity(),
+				Store:               &mockStore{},
+				Logger:              zap.NewNop().Sugar(),
+				ObservationInterval: 1 * time.Second,
+				ObservationTimeout:  3 * time.Second,
+			})
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			err := collector.Start(ctx)
+			Expect(err).ToNot(HaveOccurred())
+
+			time.Sleep(50 * time.Millisecond)
+
+			Expect(func() {
+				_ = collector.Start(ctx)
+			}).To(PanicWith(ContainSubstring("collector already started")))
+
+			cancel()
+			time.Sleep(100 * time.Millisecond)
+		})
+
+		It("should return error when Restart() is called before Start()", func() {
+			collector := supervisor.NewCollector(supervisor.CollectorConfig{
+				Worker:              &mockWorker{},
+				Identity:            mockIdentity(),
+				Store:               &mockStore{},
+				Logger:              zap.NewNop().Sugar(),
+				ObservationInterval: 1 * time.Second,
+				ObservationTimeout:  3 * time.Second,
+			})
+
+			collector.Restart()
+		})
+
+		It("should return false from IsRunning() before Start()", func() {
+			collector := supervisor.NewCollector(supervisor.CollectorConfig{
+				Worker:              &mockWorker{},
+				Identity:            mockIdentity(),
+				Store:               &mockStore{},
+				Logger:              zap.NewNop().Sugar(),
+				ObservationInterval: 1 * time.Second,
+				ObservationTimeout:  3 * time.Second,
+			})
+
+			Expect(collector.IsRunning()).To(BeFalse())
+		})
+
+		It("should track lifecycle correctly through normal flow", func() {
+			collector := supervisor.NewCollector(supervisor.CollectorConfig{
+				Worker:              &mockWorker{},
+				Identity:            mockIdentity(),
+				Store:               &mockStore{},
+				Logger:              zap.NewNop().Sugar(),
+				ObservationInterval: 1 * time.Second,
+				ObservationTimeout:  3 * time.Second,
+			})
+
+			Expect(collector.IsRunning()).To(BeFalse())
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			err := collector.Start(ctx)
+			Expect(err).ToNot(HaveOccurred())
+
+			time.Sleep(50 * time.Millisecond)
+			Expect(collector.IsRunning()).To(BeTrue())
+
+			cancel()
+			time.Sleep(100 * time.Millisecond)
+			Expect(collector.IsRunning()).To(BeFalse())
+		})
+	})
 })
 
 type testCollectorWithHangingLoop struct {
