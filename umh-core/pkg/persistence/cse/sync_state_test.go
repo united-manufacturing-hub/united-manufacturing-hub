@@ -51,26 +51,6 @@ var _ = Describe("SyncState", func() {
 			})
 		})
 
-		Context("for relay tier", func() {
-			It("should start at 0", func() {
-				Expect(syncState.GetRelaySyncID()).To(Equal(int64(0)))
-			})
-
-			It("should update relay sync ID", func() {
-				err := syncState.SetRelaySyncID(95)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(syncState.GetRelaySyncID()).To(Equal(int64(95)))
-			})
-
-			It("should track relay sync ID independently", func() {
-				syncState.SetEdgeSyncID(100)
-				syncState.SetRelaySyncID(95)
-
-				Expect(syncState.GetEdgeSyncID()).To(Equal(int64(100)))
-				Expect(syncState.GetRelaySyncID()).To(Equal(int64(95)))
-			})
-		})
-
 		Context("for frontend tier", func() {
 			It("should start at 0", func() {
 				Expect(syncState.GetFrontendSyncID()).To(Equal(int64(0)))
@@ -82,13 +62,11 @@ var _ = Describe("SyncState", func() {
 				Expect(syncState.GetFrontendSyncID()).To(Equal(int64(90)))
 			})
 
-			It("should track all three tiers independently", func() {
+			It("should track both tiers independently", func() {
 				syncState.SetEdgeSyncID(100)
-				syncState.SetRelaySyncID(95)
 				syncState.SetFrontendSyncID(90)
 
 				Expect(syncState.GetEdgeSyncID()).To(Equal(int64(100)))
-				Expect(syncState.GetRelaySyncID()).To(Equal(int64(95)))
 				Expect(syncState.GetFrontendSyncID()).To(Equal(int64(90)))
 			})
 		})
@@ -104,15 +82,6 @@ var _ = Describe("SyncState", func() {
 			Expect(pending).To(ContainElement(int64(100)))
 		})
 
-		It("should track pending changes for relay tier", func() {
-			err := syncState.RecordChange(200, cse.TierRelay)
-			Expect(err).NotTo(HaveOccurred())
-
-			pending, err := syncState.GetPendingChanges(cse.TierRelay)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(pending).To(ContainElement(int64(200)))
-		})
-
 		It("should track multiple pending changes", func() {
 			syncState.RecordChange(100, cse.TierEdge)
 			syncState.RecordChange(101, cse.TierEdge)
@@ -123,19 +92,6 @@ var _ = Describe("SyncState", func() {
 			Expect(pending).To(ContainElement(int64(100)))
 			Expect(pending).To(ContainElement(int64(101)))
 			Expect(pending).To(ContainElement(int64(102)))
-		})
-
-		It("should keep edge and relay pending changes separate", func() {
-			syncState.RecordChange(100, cse.TierEdge)
-			syncState.RecordChange(200, cse.TierRelay)
-
-			edgePending, _ := syncState.GetPendingChanges(cse.TierEdge)
-			relayPending, _ := syncState.GetPendingChanges(cse.TierRelay)
-
-			Expect(edgePending).To(ContainElement(int64(100)))
-			Expect(edgePending).NotTo(ContainElement(int64(200)))
-			Expect(relayPending).To(ContainElement(int64(200)))
-			Expect(relayPending).NotTo(ContainElement(int64(100)))
 		})
 	})
 
@@ -156,17 +112,9 @@ var _ = Describe("SyncState", func() {
 			Expect(pending).To(ContainElement(int64(102)))
 		})
 
-		It("should update relay sync ID when edge syncs", func() {
+		It("should update frontend sync ID when edge syncs", func() {
 			syncState.MarkSynced(cse.TierEdge, 101)
-			Expect(syncState.GetRelaySyncID()).To(Equal(int64(101)))
-		})
-
-		It("should update frontend sync ID when relay syncs", func() {
-			syncState.RecordChange(200, cse.TierRelay)
-			syncState.RecordChange(201, cse.TierRelay)
-
-			syncState.MarkSynced(cse.TierRelay, 201)
-			Expect(syncState.GetFrontendSyncID()).To(Equal(int64(201)))
+			Expect(syncState.GetFrontendSyncID()).To(Equal(int64(101)))
 		})
 
 		It("should handle partial sync", func() {
@@ -205,7 +153,7 @@ var _ = Describe("SyncState", func() {
 
 	Describe("GetDeltaSince", func() {
 		BeforeEach(func() {
-			syncState.SetRelaySyncID(100)
+			syncState.SetFrontendSyncID(100)
 		})
 
 		It("should construct query for delta sync", func() {
@@ -214,7 +162,7 @@ var _ = Describe("SyncState", func() {
 			Expect(query).NotTo(BeNil())
 		})
 
-		It("should filter by sync ID greater than relay sync ID", func() {
+		It("should filter by sync ID greater than frontend sync ID", func() {
 			query, _ := syncState.GetDeltaSince(cse.TierEdge)
 
 			Expect(query.Filters).To(HaveLen(1))
@@ -223,18 +171,11 @@ var _ = Describe("SyncState", func() {
 			Expect(query.Filters[0].Value).To(Equal(int64(100)))
 		})
 
-		It("should use edge sync ID for relay tier", func() {
+		It("should use edge sync ID for frontend tier", func() {
 			syncState.SetEdgeSyncID(150)
-			query, _ := syncState.GetDeltaSince(cse.TierRelay)
-
-			Expect(query.Filters[0].Value).To(Equal(int64(150)))
-		})
-
-		It("should use relay sync ID for frontend tier", func() {
-			syncState.SetRelaySyncID(125)
 			query, _ := syncState.GetDeltaSince(cse.TierFrontend)
 
-			Expect(query.Filters[0].Value).To(Equal(int64(125)))
+			Expect(query.Filters[0].Value).To(Equal(int64(150)))
 		})
 	})
 
@@ -245,7 +186,6 @@ var _ = Describe("SyncState", func() {
 
 		It("should persist sync state", func() {
 			syncState.SetEdgeSyncID(100)
-			syncState.SetRelaySyncID(95)
 			syncState.SetFrontendSyncID(90)
 			syncState.RecordChange(96, cse.TierEdge)
 			syncState.RecordChange(97, cse.TierEdge)
@@ -275,7 +215,6 @@ var _ = Describe("SyncState", func() {
 
 		It("should restore sync state from storage", func() {
 			syncState.SetEdgeSyncID(100)
-			syncState.SetRelaySyncID(95)
 			syncState.SetFrontendSyncID(90)
 			syncState.RecordChange(96, cse.TierEdge)
 			syncState.RecordChange(97, cse.TierEdge)
@@ -286,7 +225,6 @@ var _ = Describe("SyncState", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(newSyncState.GetEdgeSyncID()).To(Equal(int64(100)))
-			Expect(newSyncState.GetRelaySyncID()).To(Equal(int64(95)))
 			Expect(newSyncState.GetFrontendSyncID()).To(Equal(int64(90)))
 
 			pending, _ := newSyncState.GetPendingChanges(cse.TierEdge)
@@ -317,17 +255,14 @@ var _ = Describe("SyncState", func() {
 		It("should preserve pending changes across flush/load cycle", func() {
 			syncState.RecordChange(100, cse.TierEdge)
 			syncState.RecordChange(101, cse.TierEdge)
-			syncState.RecordChange(200, cse.TierRelay)
 			syncState.Flush(ctx)
 
 			newSyncState := cse.NewSyncState(store, registry)
 			newSyncState.Load(ctx)
 
 			edgePending, _ := newSyncState.GetPendingChanges(cse.TierEdge)
-			relayPending, _ := newSyncState.GetPendingChanges(cse.TierRelay)
 
 			Expect(edgePending).To(HaveLen(2))
-			Expect(relayPending).To(HaveLen(1))
 		})
 
 		It("should set updated_at timestamp on flush", func() {
@@ -368,10 +303,6 @@ var _ = Describe("SyncState", func() {
 	Describe("TierConstants", func() {
 		It("should define edge tier constant", func() {
 			Expect(cse.TierEdge).To(Equal(cse.Tier("edge")))
-		})
-
-		It("should define relay tier constant", func() {
-			Expect(cse.TierRelay).To(Equal(cse.Tier("relay")))
 		})
 
 		It("should define frontend tier constant", func() {

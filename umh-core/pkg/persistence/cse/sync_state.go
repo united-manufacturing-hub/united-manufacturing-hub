@@ -10,9 +10,9 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence/basic"
 )
 
-// Tier represents a CSE synchronization tier in the three-tier architecture.
+// Tier represents a CSE synchronization tier in the two-tier architecture.
 //
-// DESIGN DECISION: Named tiers instead of numeric levels (0/1/2)
+// DESIGN DECISION: Named tiers instead of numeric levels (0/1)
 // WHY: Self-documenting code. "TierEdge" is clearer than "0" or "TIER_LEVEL_0".
 // TRADE-OFF: More verbose but eliminates confusion about tier ordering.
 // INSPIRED BY: Network OSI layers use names (Physical/Data Link/Network) not just numbers.
@@ -20,39 +20,34 @@ import (
 // CSE Architecture:
 //
 //	Frontend (Web UI)
-//	    ↕ (delta sync with relaySyncID)
-//	Relay (Cloud)
-//	    ↕ (delta sync with edgeSyncID)
+//	    ↕ (delta sync, relay is transparent E2E encrypted proxy)
 //	Edge (Customer Site)
 //
 // Each tier tracks:
-//   - Local sync ID (last change applied locally)
-//   - Remote sync ID (last change synced to next tier)
-//   - Pending changes (not yet synced to next tier)
+//   - Local sync ID (last change created/received)
+//   - Pending changes (not yet synced to other tier)
 type Tier string
 
 const (
 	TierEdge     Tier = "edge"
-	TierRelay    Tier = "relay"
 	TierFrontend Tier = "frontend"
 )
 
-// SyncState tracks synchronization state across CSE's three-tier architecture.
+// SyncState tracks synchronization state across CSE's two-tier architecture.
 //
-// DESIGN DECISION: Three separate sync IDs (edge/relay/frontend) instead of single global ID
+// DESIGN DECISION: Two separate sync IDs (edge/frontend) instead of single global ID
 // WHY: Each tier may be at different sync states due to network latency, offline periods,
-// or sync failures. Edge may be at sync ID 12345, relay at 12340, frontend at 12335.
+// or sync failures. Edge may be at sync ID 12345, frontend at 12335.
 // TRADE-OFF: More complex tracking, but accurately reflects CSE's distributed reality.
 // INSPIRED BY: CRDTs with vector clocks, Linear's client/server sync IDs
 //
-// CSE EXTENSION: Linear has 2 tiers (client ↔ server), CSE has 3 (edge ↔ relay ↔ frontend).
-// Linear uses lastSyncId in both client and server. CSE extends this to three separate IDs.
+// CSE MATCHES Linear: Linear has 2 tiers (client ↔ server), CSE has 2 (edge ↔ frontend).
+// Linear uses lastSyncId in both client and server. CSE uses edgeSyncID and frontendSyncID.
 //
 // Example sync progression:
 //
-//	Edge creates change → syncID=12345, edgeSyncID=12345, relaySyncID=12340
-//	Edge syncs to relay → relay receives 12345, relaySyncID=12345
-//	Relay syncs to frontend → frontend receives 12345, frontendSyncID=12345
+//	Edge creates change → syncID=12345, edgeSyncID=12345
+//	Edge syncs to frontend → frontend receives 12345, frontendSyncID=12345
 //
 // Thread-safety: All methods use RWMutex for concurrent access.
 // Persistence: Call Flush() to persist state, Load() to restore after restart.
@@ -61,11 +56,9 @@ type SyncState struct {
 	registry *Registry
 
 	edgeSyncID     int64
-	relaySyncID    int64
 	frontendSyncID int64
 
-	pendingEdge  []int64
-	pendingRelay []int64
+	pendingEdge []int64
 
 	mu sync.RWMutex
 }
@@ -85,10 +78,9 @@ type SyncState struct {
 //	defer syncState.Flush(ctx) // Persist state on shutdown
 func NewSyncState(store basic.Store, registry *Registry) *SyncState {
 	return &SyncState{
-		store:        store,
-		registry:     registry,
-		pendingEdge:  make([]int64, 0),
-		pendingRelay: make([]int64, 0),
+		store:       store,
+		registry:    registry,
+		pendingEdge: make([]int64, 0),
 	}
 }
 
@@ -105,19 +97,6 @@ func (ss *SyncState) SetEdgeSyncID(syncID int64) error {
 	return nil
 }
 
-func (ss *SyncState) GetRelaySyncID() int64 {
-	ss.mu.RLock()
-	defer ss.mu.RUnlock()
-	return ss.relaySyncID
-}
-
-func (ss *SyncState) SetRelaySyncID(syncID int64) error {
-	ss.mu.Lock()
-	defer ss.mu.Unlock()
-	ss.relaySyncID = syncID
-	return nil
-}
-
 func (ss *SyncState) GetFrontendSyncID() int64 {
 	ss.mu.RLock()
 	defer ss.mu.RUnlock()
@@ -131,7 +110,7 @@ func (ss *SyncState) SetFrontendSyncID(syncID int64) error {
 	return nil
 }
 
-// RecordChange tracks a new change for synchronization to the next tier.
+// RecordChange tracks a new change for synchronization to the other tier.
 //
 // DESIGN DECISION: Track pending changes, not just "last synced" ID
 // WHY: Need to retry failed syncs and track partial sync progress. If sync fails,
@@ -146,12 +125,12 @@ func (ss *SyncState) SetFrontendSyncID(syncID int64) error {
 //	syncState.RecordChange(101, cse.TierEdge)
 //	syncState.RecordChange(102, cse.TierEdge)
 //
-//	// Sync to relay succeeds for 100-101, fails for 102
+//	// Sync to frontend succeeds for 100-101, fails for 102
 //	syncState.MarkSynced(cse.TierEdge, 101) // Removes 100, 101 from pending
 //	// 102 remains in pendingEdge for retry
 //
-// Note: Only TierEdge and TierRelay track pending changes. TierFrontend is the final
-// destination (no further sync), so it doesn't need pending tracking.
+// Note: Only TierEdge tracks pending changes. TierFrontend is the receiving
+// tier, so it doesn't need pending tracking.
 func (ss *SyncState) RecordChange(syncID int64, tier Tier) error {
 	ss.mu.Lock()
 	defer ss.mu.Unlock()
@@ -159,8 +138,6 @@ func (ss *SyncState) RecordChange(syncID int64, tier Tier) error {
 	switch tier {
 	case TierEdge:
 		ss.pendingEdge = append(ss.pendingEdge, syncID)
-	case TierRelay:
-		ss.pendingRelay = append(ss.pendingRelay, syncID)
 	default:
 		return fmt.Errorf("unsupported tier: %s", tier)
 	}
@@ -168,17 +145,16 @@ func (ss *SyncState) RecordChange(syncID int64, tier Tier) error {
 	return nil
 }
 
-// MarkSynced marks changes up to syncID as successfully synced to the next tier.
+// MarkSynced marks changes up to syncID as successfully synced to the other tier.
 //
-// DESIGN DECISION: MarkSynced updates the NEXT tier's sync ID, not the current tier's
-// WHY: Matches Linear's pattern. When edge syncs to relay, relay's sync ID updates.
-// "relaySyncID" means "what relay has received from edge", not "what relay has sent".
+// DESIGN DECISION: MarkSynced updates the OTHER tier's sync ID, not the current tier's
+// WHY: Matches Linear's pattern. When edge syncs to frontend, frontend's sync ID updates.
+// "frontendSyncID" means "what frontend has received from edge".
 // TRADE-OFF: Slightly confusing naming, but matches Linear's architecture.
 // INSPIRED BY: Linear's lastSyncId in server (tracks what was received from client).
 //
 // Tier progression:
-//   - MarkSynced(TierEdge, 100) → updates relaySyncID=100 (relay received up to 100)
-//   - MarkSynced(TierRelay, 100) → updates frontendSyncID=100 (frontend received up to 100)
+//   - MarkSynced(TierEdge, 100) → updates frontendSyncID=100 (frontend received up to 100)
 //
 // All pending changes ≤ syncID are removed from the pending list.
 //
@@ -188,9 +164,9 @@ func (ss *SyncState) RecordChange(syncID int64, tier Tier) error {
 //	syncState.RecordChange(101, cse.TierEdge)
 //	syncState.RecordChange(102, cse.TierEdge)
 //
-//	// Sync successfully sent 100-101 to relay
+//	// Sync successfully sent 100-101 to frontend
 //	syncState.MarkSynced(cse.TierEdge, 101)
-//	// Result: relaySyncID=101, pendingEdge=[102]
+//	// Result: frontendSyncID=101, pendingEdge=[102]
 func (ss *SyncState) MarkSynced(tier Tier, syncID int64) error {
 	ss.mu.Lock()
 	defer ss.mu.Unlock()
@@ -198,9 +174,6 @@ func (ss *SyncState) MarkSynced(tier Tier, syncID int64) error {
 	switch tier {
 	case TierEdge:
 		ss.pendingEdge = filterSyncIDs(ss.pendingEdge, syncID)
-		ss.relaySyncID = syncID
-	case TierRelay:
-		ss.pendingRelay = filterSyncIDs(ss.pendingRelay, syncID)
 		ss.frontendSyncID = syncID
 	default:
 		return fmt.Errorf("unsupported tier: %s", tier)
@@ -247,10 +220,6 @@ func (ss *SyncState) GetPendingChanges(tier Tier) ([]int64, error) {
 		result := make([]int64, len(ss.pendingEdge))
 		copy(result, ss.pendingEdge)
 		return result, nil
-	case TierRelay:
-		result := make([]int64, len(ss.pendingRelay))
-		copy(result, ss.pendingRelay)
-		return result, nil
 	default:
 		return nil, fmt.Errorf("unsupported tier: %s", tier)
 	}
@@ -265,13 +234,12 @@ func (ss *SyncState) GetPendingChanges(tier Tier) ([]int64, error) {
 // INSPIRED BY: Linear's delta sync, rsync (only transfer diffs), Git fetch (only new commits).
 //
 // Tier logic:
-//   - TierEdge: Query changes > relaySyncID (what relay hasn't received yet)
-//   - TierRelay: Query changes > edgeSyncID (what relay needs to send to frontend)
-//   - TierFrontend: Query changes > relaySyncID (what frontend hasn't received yet)
+//   - TierEdge: Query changes > frontendSyncID (what frontend hasn't received yet)
+//   - TierFrontend: Query changes > edgeSyncID (what frontend needs to request from edge)
 //
 // Example:
 //
-//	// Edge has changes up to 12345, relay has received up to 12340
+//	// Edge has changes up to 12345, frontend has received up to 12340
 //	query, _ := syncState.GetDeltaSince(cse.TierEdge)
 //	// Returns: Query{Filters: [{Field: "_sync_id", Op: "$gt", Value: 12340}]}
 //	// When executed: Returns changes 12341-12345 (5 new changes)
@@ -280,7 +248,7 @@ func (ss *SyncState) GetPendingChanges(tier Tier) ([]int64, error) {
 //
 //	query, _ := syncState.GetDeltaSince(cse.TierEdge)
 //	changes, _ := store.Find(ctx, "container_desired", *query)
-//	// Send changes to relay via HTTP
+//	// Send changes to frontend via HTTP
 func (ss *SyncState) GetDeltaSince(tier Tier) (*basic.Query, error) {
 	ss.mu.RLock()
 	defer ss.mu.RUnlock()
@@ -289,11 +257,9 @@ func (ss *SyncState) GetDeltaSince(tier Tier) (*basic.Query, error) {
 
 	switch tier {
 	case TierEdge:
-		lastSyncID = ss.relaySyncID
-	case TierRelay:
-		lastSyncID = ss.edgeSyncID
+		lastSyncID = ss.frontendSyncID
 	case TierFrontend:
-		lastSyncID = ss.relaySyncID
+		lastSyncID = ss.edgeSyncID
 	default:
 		return nil, fmt.Errorf("unsupported tier: %s", tier)
 	}
@@ -323,10 +289,8 @@ func (ss *SyncState) GetDeltaSince(tier Tier) (*basic.Query, error) {
 //	{
 //	  "id": "sync_state",
 //	  "edge_sync_id": 12345,
-//	  "relay_sync_id": 12340,
 //	  "frontend_sync_id": 12335,
 //	  "pending_edge": [12341, 12342, 12343, 12344, 12345],
-//	  "pending_relay": [12336, 12337, 12338, 12339, 12340],
 //	  "updated_at": "2025-01-15T10:30:00.123456789Z"
 //	}
 //
@@ -347,10 +311,8 @@ func (ss *SyncState) Flush(ctx context.Context) error {
 	doc := basic.Document{
 		"id":               "sync_state",
 		"edge_sync_id":     ss.edgeSyncID,
-		"relay_sync_id":    ss.relaySyncID,
 		"frontend_sync_id": ss.frontendSyncID,
 		"pending_edge":     ss.pendingEdge,
-		"pending_relay":    ss.pendingRelay,
 		"updated_at":       time.Now().Format(time.RFC3339Nano),
 	}
 
@@ -408,12 +370,6 @@ func (ss *SyncState) Load(ctx context.Context) error {
 		ss.edgeSyncID = int64(edgeSyncID)
 	}
 
-	if relaySyncID, ok := doc["relay_sync_id"].(int64); ok {
-		ss.relaySyncID = relaySyncID
-	} else if relaySyncID, ok := doc["relay_sync_id"].(float64); ok {
-		ss.relaySyncID = int64(relaySyncID)
-	}
-
 	if frontendSyncID, ok := doc["frontend_sync_id"].(int64); ok {
 		ss.frontendSyncID = frontendSyncID
 	} else if frontendSyncID, ok := doc["frontend_sync_id"].(float64); ok {
@@ -424,12 +380,6 @@ func (ss *SyncState) Load(ctx context.Context) error {
 		ss.pendingEdge = convertToInt64Slice(pendingEdge)
 	} else if pendingEdge, ok := doc["pending_edge"].([]int64); ok {
 		ss.pendingEdge = pendingEdge
-	}
-
-	if pendingRelay, ok := doc["pending_relay"].([]interface{}); ok {
-		ss.pendingRelay = convertToInt64Slice(pendingRelay)
-	} else if pendingRelay, ok := doc["pending_relay"].([]int64); ok {
-		ss.pendingRelay = pendingRelay
 	}
 
 	return nil
