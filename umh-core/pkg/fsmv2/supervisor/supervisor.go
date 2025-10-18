@@ -105,6 +105,26 @@ func (s *Supervisor) GetMaxRestartAttempts() int {
 	return s.maxRestartAttempts
 }
 
+// CheckDataFreshness returns true if observation data is fresh enough to progress FSM.
+// Logs warnings for stale data and triggers collector restart for timeouts.
+// This implements Layer 1 (Pause) and Layer 2 (Restart) of the 4-layer defense.
+// Exported for testing.
+func (s *Supervisor) CheckDataFreshness(snapshot *fsmv2.Snapshot) bool {
+	age := time.Since(snapshot.Observed.GetTimestamp())
+
+	if age > s.collectorTimeout {
+		s.logger.Warnf("Data timeout: observation is %v old (threshold: %v)", age, s.collectorTimeout)
+		return false
+	}
+
+	if age > s.staleThreshold {
+		s.logger.Warnf("Data stale: observation is %v old (threshold: %v)", age, s.staleThreshold)
+		return false
+	}
+
+	return true
+}
+
 // Start starts the supervisor goroutines.
 // Returns a channel that will be closed when the supervisor stops.
 func (s *Supervisor) Start(ctx context.Context) <-chan struct{} {
