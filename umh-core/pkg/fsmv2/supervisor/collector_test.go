@@ -115,7 +115,7 @@ var _ = Describe("Collector", func() {
 			time.Sleep(100 * time.Millisecond)
 		})
 
-		It("should return error when Restart() is called before Start()", func() {
+		It("should handle Restart() gracefully when called before Start()", func() {
 			collector := supervisor.NewCollector(supervisor.CollectorConfig{
 				Worker:              &mockWorker{},
 				Identity:            mockIdentity(),
