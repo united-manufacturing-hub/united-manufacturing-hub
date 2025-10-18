@@ -25,36 +25,91 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/persistence"
 )
 
+// CollectorHealth tracks the health and restart state of the observation collector.
+// The collector runs in a separate goroutine and may fail due to network issues,
+// blocked operations, or other infrastructure problems.
+//
+// This struct is internal to Supervisor and tracks runtime state.
+// Configuration is provided via CollectorHealthConfig.
 type CollectorHealth struct {
-	staleThreshold     time.Duration
-	timeout            time.Duration
-	maxRestartAttempts int
-	restartCount       int
-	lastRestart        time.Time
+	staleThreshold     time.Duration // Age when data considered stale (pause FSM)
+	timeout            time.Duration // Age when collector considered broken (trigger restart)
+	maxRestartAttempts int           // Maximum restart attempts before escalation
+	restartCount       int           // Current restart attempt counter
+	lastRestart        time.Time     // Timestamp of last restart attempt
 }
 
+// Supervisor manages the lifecycle of a single worker.
+// It runs two goroutines:
+//   1. Observation loop: Continuously calls worker.CollectObservedState()
+//   2. Main tick loop: Calls state.Next() and executes actions
+//
+// The supervisor implements the 4-layer defense for data freshness:
+//   - Layer 1: Pause FSM when data is stale (>10s by default)
+//   - Layer 2: Restart collector when data times out (>20s by default)
+//   - Layer 3: Request graceful shutdown after max restart attempts
+//   - Layer 4: Comprehensive logging and metrics (observability)
 type Supervisor struct {
-	worker          fsmv2.Worker
-	identity        fsmv2.Identity
-	store           persistence.Store
-	currentState    fsmv2.State
-	logger          *zap.SugaredLogger
-	tickInterval    time.Duration
-	collectorHealth CollectorHealth
+	worker          fsmv2.Worker          // Worker implementation
+	identity        fsmv2.Identity        // Worker's immutable identity
+	store           persistence.Store     // State persistence layer
+	currentState    fsmv2.State           // Current FSM state
+	logger          *zap.SugaredLogger    // Logger for supervisor operations
+	tickInterval    time.Duration         // How often to evaluate state transitions
+	collectorHealth CollectorHealth       // Collector health tracking
 }
 
+// CollectorHealthConfig configures observation collector health monitoring.
+// The collector runs in a separate goroutine and may fail due to network issues,
+// blocked operations, or infrastructure problems. These settings control when to
+// pause the FSM (stale data) and when to restart the collector (timeout).
 type CollectorHealthConfig struct {
-	StaleThreshold     time.Duration
-	Timeout            time.Duration
+	// StaleThreshold is how old observation data can be before FSM pauses.
+	// When exceeded, supervisor stops calling state.Next() but does not restart collector.
+	// Default: 10 seconds (see DefaultStaleThreshold in constants.go)
+	StaleThreshold time.Duration
+
+	// Timeout is how old observation data can be before collector is considered broken.
+	// When exceeded, supervisor triggers collector restart with exponential backoff.
+	// Should be significantly larger than StaleThreshold to avoid restart thrashing.
+	// Default: 20 seconds (see DefaultCollectorTimeout in constants.go)
+	Timeout time.Duration
+
+	// MaxRestartAttempts is the maximum number of collector restart attempts.
+	// After this many failed restarts, supervisor escalates to graceful FSM shutdown.
+	// Each restart uses exponential backoff: attempt N waits N*2 seconds.
+	// Default: 3 attempts (see DefaultMaxRestartAttempts in constants.go)
 	MaxRestartAttempts int
 }
 
+// Config contains supervisor configuration.
+// All fields except Worker, Identity, and Store have sensible defaults.
 type Config struct {
-	Worker          fsmv2.Worker
-	Identity        fsmv2.Identity
-	Store           persistence.Store
-	Logger          *zap.SugaredLogger
-	TickInterval    time.Duration
+	// Worker implements the FSM worker interface.
+	// Required - no default.
+	Worker fsmv2.Worker
+
+	// Identity contains the worker's immutable ID and name.
+	// Required - no default.
+	Identity fsmv2.Identity
+
+	// Store persists FSM state (identity, desired, observed).
+	// Required - no default.
+	Store persistence.Store
+
+	// Logger for supervisor operations.
+	// Required - no default (use zap.NewNop().Sugar() for tests).
+	Logger *zap.SugaredLogger
+
+	// TickInterval is how often supervisor evaluates FSM state transitions.
+	// Optional - defaults to DefaultTickInterval (1 second).
+	TickInterval time.Duration
+
+	// CollectorHealth configures observation collector monitoring.
+	// The collector runs in a separate goroutine collecting observed state.
+	// These settings control when to pause the FSM (stale data) and when to
+	// restart the collector (timeout).
+	// Optional - all fields default to values in constants.go.
 	CollectorHealth CollectorHealthConfig
 }
 
