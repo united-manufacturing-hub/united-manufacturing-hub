@@ -265,6 +265,65 @@ var _ = Describe("CollectionMetadata", func() {
 	})
 })
 
+var _ = Describe("Schema Versioning", func() {
+	var registry *cse.Registry
+
+	BeforeEach(func() {
+		registry = cse.NewRegistry()
+		registry.Register(&cse.CollectionMetadata{
+			Name:       "workers",
+			WorkerType: "container",
+			Role:       cse.RoleIdentity,
+		})
+	})
+
+	It("should register and retrieve schema version", func() {
+		registry.RegisterVersion("container", cse.RoleIdentity, "v2")
+		version := registry.GetVersion("workers")
+		Expect(version).To(Equal("v2"))
+	})
+
+	It("should return empty string for unversioned schema", func() {
+		version := registry.GetVersion("workers")
+		Expect(version).To(Equal(""))
+	})
+
+	It("should update schema version when registered multiple times", func() {
+		registry.RegisterVersion("container", cse.RoleIdentity, "v1")
+		registry.RegisterVersion("container", cse.RoleIdentity, "v2")
+		version := registry.GetVersion("workers")
+		Expect(version).To(Equal("v2"))
+	})
+
+	It("should track versions independently per collection", func() {
+		registry.Register(&cse.CollectionMetadata{
+			Name:       "datapoints",
+			WorkerType: "sensor",
+			Role:       cse.RoleIdentity,
+		})
+		registry.RegisterVersion("container", cse.RoleIdentity, "v2")
+		registry.RegisterVersion("sensor", cse.RoleIdentity, "v1")
+
+		Expect(registry.GetVersion("workers")).To(Equal("v2"))
+		Expect(registry.GetVersion("datapoints")).To(Equal("v1"))
+	})
+
+	It("should return all versioned collections", func() {
+		registry.Register(&cse.CollectionMetadata{
+			Name:       "datapoints",
+			WorkerType: "sensor",
+			Role:       cse.RoleIdentity,
+		})
+		registry.RegisterVersion("container", cse.RoleIdentity, "v2")
+		registry.RegisterVersion("sensor", cse.RoleIdentity, "v1")
+
+		versions := registry.GetAllVersions()
+		Expect(versions).To(HaveLen(2))
+		Expect(versions["workers"]).To(Equal("v2"))
+		Expect(versions["datapoints"]).To(Equal("v1"))
+	})
+})
+
 var _ = Describe("GlobalRegistry", func() {
 	Describe("Register", func() {
 		It("should register collection in global registry", func() {

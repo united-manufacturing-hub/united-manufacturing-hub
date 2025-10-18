@@ -162,6 +162,10 @@ type CollectionMetadata struct {
 	// Role is the triangular model role: "identity", "desired", or "observed".
 	Role string
 
+	// SchemaVersion is the schema version for frontend codegen integration.
+	// Example: "v1", "v2", "v3"
+	SchemaVersion string
+
 	// CSEFields are fields managed by CSE (_sync_id, _version, etc.).
 	// These fields are automatically maintained by the sync engine.
 	CSEFields []string
@@ -418,4 +422,56 @@ func (r *Registry) GetTriangularCollections(workerType string) (identity, desire
 	}
 
 	return foundIdentity, foundDesired, foundObserved, nil
+}
+
+// RegisterVersion sets the schema version for a collection.
+//
+// DESIGN DECISION: Version per workerType+role, not per collection name
+// WHY: Multiple collections can share same workerType+role (e.g., container_identity, container_desired)
+// TRADE-OFF: Must track by composite key, but enables consistent versioning across related collections
+// INSPIRED BY: GraphQL schema versioning, Semantic Versioning
+//
+// Example:
+//
+//	registry.RegisterVersion("container", "identity", "v2")
+//	// Sets version for all container identity collections
+func (r *Registry) RegisterVersion(workerType, role, version string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	for _, meta := range r.collections {
+		if meta.WorkerType == workerType && meta.Role == role {
+			meta.SchemaVersion = version
+		}
+	}
+}
+
+// GetVersion returns the schema version for a collection.
+//
+// Returns empty string if no version registered.
+func (r *Registry) GetVersion(collection string) string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	if meta, exists := r.collections[collection]; exists {
+		return meta.SchemaVersion
+	}
+	return ""
+}
+
+// GetAllVersions returns schema versions for all collections.
+//
+// Returns map of collection name → schema version.
+// Collections without versions are omitted from result.
+func (r *Registry) GetAllVersions() map[string]string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	versions := make(map[string]string)
+	for name, meta := range r.collections {
+		if meta.SchemaVersion != "" {
+			versions[name] = meta.SchemaVersion
+		}
+	}
+	return versions
 }
