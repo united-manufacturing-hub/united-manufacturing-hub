@@ -9,7 +9,6 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
-	"go.uber.org/zap"
 )
 
 var _ = Describe("Snapshot Immutability (I9)", func() {
@@ -46,12 +45,7 @@ var _ = Describe("Snapshot Immutability (I9)", func() {
 					},
 				}
 
-				s := supervisor.NewSupervisor(supervisor.Config{
-					Worker:   &mockWorker{initialState: mutatingState},
-					Identity: mockIdentity(),
-					Store:    store,
-					Logger:   zap.NewNop().Sugar(),
-				})
+				s := newSupervisorWithWorker(&mockWorker{initialState: mutatingState}, store, supervisor.CollectorHealthConfig{})
 
 				err := s.Tick(context.Background())
 				Expect(err).ToNot(HaveOccurred())
@@ -73,12 +67,7 @@ var _ = Describe("Snapshot Immutability (I9)", func() {
 					},
 				}
 
-				s := supervisor.NewSupervisor(supervisor.Config{
-					Worker:   &mockWorker{initialState: mutatingState},
-					Identity: mockIdentity(),
-					Store:    store,
-					Logger:   zap.NewNop().Sugar(),
-				})
+				s := newSupervisorWithWorker(&mockWorker{initialState: mutatingState}, store, supervisor.CollectorHealthConfig{})
 
 				for i := 0; i < 5; i++ {
 					err := s.Tick(context.Background())
@@ -104,12 +93,7 @@ var _ = Describe("Snapshot Immutability (I9)", func() {
 					},
 				}
 
-				s := supervisor.NewSupervisor(supervisor.Config{
-					Worker:   &mockWorker{initialState: identityMutatingState},
-					Identity: mockIdentity(),
-					Store:    store,
-					Logger:   zap.NewNop().Sugar(),
-				})
+				s := newSupervisorWithWorker(&mockWorker{initialState: identityMutatingState}, store, supervisor.CollectorHealthConfig{})
 
 				err := s.Tick(context.Background())
 				Expect(err).ToNot(HaveOccurred())
@@ -134,12 +118,7 @@ var _ = Describe("Snapshot Immutability (I9)", func() {
 					},
 				}
 
-				s := supervisor.NewSupervisor(supervisor.Config{
-					Worker:   &mockWorker{initialState: aggressiveMutatingState},
-					Identity: mockIdentity(),
-					Store:    store,
-					Logger:   zap.NewNop().Sugar(),
-				})
+				s := newSupervisorWithWorker(&mockWorker{initialState: aggressiveMutatingState}, store, supervisor.CollectorHealthConfig{})
 
 				err := s.Tick(context.Background())
 				Expect(err).ToNot(HaveOccurred())

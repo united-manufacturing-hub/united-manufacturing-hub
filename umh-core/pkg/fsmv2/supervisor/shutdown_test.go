@@ -9,7 +9,6 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
-	"go.uber.org/zap"
 )
 
 var _ = Describe("Shutdown Escalation", func() {
@@ -33,16 +32,10 @@ var _ = Describe("Shutdown Escalation", func() {
 				},
 			}
 
-			s := supervisor.NewSupervisor(supervisor.Config{
-				Worker:   &mockWorker{},
-				Identity: mockIdentity(),
-				Store:    store,
-				Logger:   zap.NewNop().Sugar(),
-				CollectorHealth: supervisor.CollectorHealthConfig{
-					StaleThreshold:     10 * time.Second,
-					Timeout:            20 * time.Second,
-					MaxRestartAttempts: 3,
-				},
+			s := newSupervisorWithWorker(&mockWorker{}, store, supervisor.CollectorHealthConfig{
+				StaleThreshold:     10 * time.Second,
+				Timeout:            20 * time.Second,
+				MaxRestartAttempts: 3,
 			})
 
 			s.SetRestartCount(3)
@@ -75,16 +68,10 @@ var _ = Describe("Shutdown Escalation", func() {
 				},
 			}
 
-			s := supervisor.NewSupervisor(supervisor.Config{
-				Worker:   &mockWorker{},
-				Identity: mockIdentity(),
-				Store:    store,
-				Logger:   zap.NewNop().Sugar(),
-				CollectorHealth: supervisor.CollectorHealthConfig{
-					StaleThreshold:     10 * time.Second,
-					Timeout:            20 * time.Second,
-					MaxRestartAttempts: 3,
-				},
+			s := newSupervisorWithWorker(&mockWorker{}, store, supervisor.CollectorHealthConfig{
+				StaleThreshold:     10 * time.Second,
+				Timeout:            20 * time.Second,
+				MaxRestartAttempts: 3,
 			})
 
 			s.SetRestartCount(1)

@@ -26,12 +26,16 @@ var _ = Describe("Supervisor Lifecycle", func() {
 				}
 
 				s := supervisor.NewSupervisor(supervisor.Config{
-					Worker:       &mockWorker{},
-					Identity:     mockIdentity(),
+					WorkerType:   "container",
 					Store:        store,
 					Logger:       zap.NewNop().Sugar(),
 					TickInterval: 50 * time.Millisecond,
 				})
+
+				identity := mockIdentity()
+				worker := &mockWorker{}
+				err := s.AddWorker(identity, worker)
+				Expect(err).ToNot(HaveOccurred())
 
 				ctx, cancel := context.WithCancel(context.Background())
 
@@ -60,16 +64,10 @@ var _ = Describe("Supervisor Lifecycle", func() {
 					saveErr: errors.New("save error"),
 				}
 
-				s := supervisor.NewSupervisor(supervisor.Config{
-					Worker:   &mockWorker{},
-					Identity: mockIdentity(),
-					Store:    store,
-					Logger:   zap.NewNop().Sugar(),
-					CollectorHealth: supervisor.CollectorHealthConfig{
-						StaleThreshold:     10 * time.Second,
-						Timeout:            20 * time.Second,
-						MaxRestartAttempts: 1,
-					},
+				s := newSupervisorWithWorker(&mockWorker{}, store, supervisor.CollectorHealthConfig{
+					StaleThreshold:     10 * time.Second,
+					Timeout:            20 * time.Second,
+					MaxRestartAttempts: 1,
 				})
 
 				s.SetRestartCount(1)
@@ -99,12 +97,7 @@ var _ = Describe("Supervisor Lifecycle", func() {
 					action:    action,
 				}
 
-				s := supervisor.NewSupervisor(supervisor.Config{
-					Worker:   &mockWorker{initialState: initialState},
-					Identity: mockIdentity(),
-					Store:    store,
-					Logger:   zap.NewNop().Sugar(),
-				})
+				s := newSupervisorWithWorker(&mockWorker{initialState: initialState}, store, supervisor.CollectorHealthConfig{})
 
 				Expect(func() {
 					_ = s.Tick(context.Background())
@@ -169,12 +162,7 @@ var _ = Describe("Supervisor Lifecycle", func() {
 				}
 				state.nextState = state
 
-				s := supervisor.NewSupervisor(supervisor.Config{
-					Worker:   &mockWorker{initialState: state},
-					Identity: mockIdentity(),
-					Store:    store,
-					Logger:   zap.NewNop().Sugar(),
-				})
+				s := newSupervisorWithWorker(&mockWorker{initialState: state}, store, supervisor.CollectorHealthConfig{})
 
 				err := s.Tick(context.Background())
 				Expect(err).To(HaveOccurred())
@@ -197,12 +185,7 @@ var _ = Describe("Supervisor Lifecycle", func() {
 				}
 				state.nextState = state
 
-				s := supervisor.NewSupervisor(supervisor.Config{
-					Worker:   &mockWorker{initialState: state},
-					Identity: mockIdentity(),
-					Store:    store,
-					Logger:   zap.NewNop().Sugar(),
-				})
+				s := newSupervisorWithWorker(&mockWorker{initialState: state}, store, supervisor.CollectorHealthConfig{})
 
 				err := s.Tick(context.Background())
 				Expect(err).To(HaveOccurred())
@@ -225,12 +208,7 @@ var _ = Describe("Supervisor Lifecycle", func() {
 				}
 				state.nextState = state
 
-				s := supervisor.NewSupervisor(supervisor.Config{
-					Worker:   &mockWorker{initialState: state},
-					Identity: mockIdentity(),
-					Store:    store,
-					Logger:   zap.NewNop().Sugar(),
-				})
+				s := newSupervisorWithWorker(&mockWorker{initialState: state}, store, supervisor.CollectorHealthConfig{})
 
 				err := s.Tick(context.Background())
 				Expect(err).To(HaveOccurred())

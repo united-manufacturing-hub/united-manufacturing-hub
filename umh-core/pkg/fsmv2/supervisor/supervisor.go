@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"go.uber.org/zap"
@@ -86,15 +87,14 @@ type CollectorHealth struct {
 //   - Layer 3: Request graceful shutdown after max restart attempts
 //   - Layer 4: Comprehensive logging and metrics (observability)
 type Supervisor struct {
-	worker           fsmv2.Worker          // Worker implementation
-	identity         fsmv2.Identity        // Worker's immutable identity
-	store            persistence.Store     // State persistence layer
-	currentState     fsmv2.State           // Current FSM state
-	logger           *zap.SugaredLogger    // Logger for supervisor operations
-	tickInterval     time.Duration         // How often to evaluate state transitions
-	collectorHealth  CollectorHealth       // Collector health tracking
-	collector        *Collector            // Observation data collector
-	freshnessChecker *FreshnessChecker     // Data freshness validator
+	workerType       string                        // Type of workers managed (e.g., "container")
+	workers          map[string]*WorkerContext     // workerID → worker context
+	mu               sync.RWMutex                  // Protects workers map
+	store            persistence.Store             // State persistence layer
+	logger           *zap.SugaredLogger            // Logger for supervisor operations
+	tickInterval     time.Duration                 // How often to evaluate state transitions
+	collectorHealth  CollectorHealth               // Collector health tracking
+	freshnessChecker *FreshnessChecker             // Data freshness validator
 }
 
 // WorkerContext encapsulates the runtime state for a single worker
@@ -141,15 +141,11 @@ type CollectorHealthConfig struct {
 }
 
 // Config contains supervisor configuration.
-// All fields except Worker, Identity, and Store have sensible defaults.
+// All fields except WorkerType and Store have sensible defaults.
 type Config struct {
-	// Worker implements the FSM worker interface.
+	// WorkerType identifies the type of workers this supervisor manages.
 	// Required - no default.
-	Worker fsmv2.Worker
-
-	// Identity contains the worker's immutable ID and name.
-	// Required - no default.
-	Identity fsmv2.Identity
+	WorkerType string
 
 	// Store persists FSM state (identity, desired, observed).
 	// Required - no default.
@@ -164,9 +160,6 @@ type Config struct {
 	TickInterval time.Duration
 
 	// CollectorHealth configures observation collector monitoring.
-	// The collector runs in a separate goroutine collecting observed state.
-	// These settings control when to pause the FSM (stale data) and when to
-	// restart the collector (timeout).
 	// Optional - all fields default to values in constants.go.
 	CollectorHealth CollectorHealthConfig
 }
@@ -227,23 +220,13 @@ func NewSupervisor(cfg Config) *Supervisor {
 
 	freshnessChecker := NewFreshnessChecker(staleThreshold, timeout, cfg.Logger)
 
-	collector := NewCollector(CollectorConfig{
-		Worker:              cfg.Worker,
-		Identity:            cfg.Identity,
-		Store:               cfg.Store,
-		Logger:              cfg.Logger,
-		ObservationInterval: DefaultObservationInterval,
-		ObservationTimeout:  observationTimeout,
-	})
-
 	return &Supervisor{
-		worker:           cfg.Worker,
-		identity:         cfg.Identity,
+		workerType:       cfg.WorkerType,
+		workers:          make(map[string]*WorkerContext),
+		mu:               sync.RWMutex{},
 		store:            cfg.Store,
-		currentState:     cfg.Worker.GetInitialState(),
 		logger:           cfg.Logger,
 		tickInterval:     tickInterval,
-		collector:        collector,
 		freshnessChecker: freshnessChecker,
 		collectorHealth: CollectorHealth{
 			staleThreshold:     staleThreshold,
@@ -252,6 +235,76 @@ func NewSupervisor(cfg Config) *Supervisor {
 			restartCount:       0,
 		},
 	}
+}
+
+// AddWorker adds a new worker to the supervisor's registry.
+// Returns error if worker with same ID already exists.
+func (s *Supervisor) AddWorker(identity fsmv2.Identity, worker fsmv2.Worker) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if _, exists := s.workers[identity.ID]; exists {
+		return fmt.Errorf("worker %s already exists", identity.ID)
+	}
+
+	collector := NewCollector(CollectorConfig{
+		Worker:              worker,
+		Identity:            identity,
+		Store:               s.store,
+		Logger:              s.logger,
+		ObservationInterval: DefaultObservationInterval,
+		ObservationTimeout:  s.collectorHealth.staleThreshold,
+	})
+
+	s.workers[identity.ID] = &WorkerContext{
+		identity:     identity,
+		worker:       worker,
+		currentState: worker.GetInitialState(),
+		collector:    collector,
+	}
+
+	s.logger.Infof("Added worker %s to supervisor", identity.ID)
+	return nil
+}
+
+// RemoveWorker removes a worker from the registry.
+func (s *Supervisor) RemoveWorker(workerID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	_, exists := s.workers[workerID]
+	if !exists {
+		return fmt.Errorf("worker %s not found", workerID)
+	}
+
+	delete(s.workers, workerID)
+	s.logger.Infof("Removed worker %s from supervisor", workerID)
+	return nil
+}
+
+// GetWorker returns the worker context for the given ID.
+func (s *Supervisor) GetWorker(workerID string) (*WorkerContext, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	ctx, exists := s.workers[workerID]
+	if !exists {
+		return nil, fmt.Errorf("worker %s not found", workerID)
+	}
+
+	return ctx, nil
+}
+
+// ListWorkers returns all worker IDs currently managed by this supervisor.
+func (s *Supervisor) ListWorkers() []string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	ids := make([]string, 0, len(s.workers))
+	for id := range s.workers {
+		ids = append(ids, id)
+	}
+	return ids
 }
 
 func (s *Supervisor) GetStaleThreshold() time.Duration {
@@ -291,7 +344,13 @@ func (s *Supervisor) RestartCollector(ctx context.Context) error {
 
 	time.Sleep(backoff)
 
-	s.collector.Restart()
+	s.mu.RLock()
+	for _, workerCtx := range s.workers {
+		if workerCtx.collector != nil {
+			workerCtx.collector.Restart()
+		}
+	}
+	s.mu.RUnlock()
 
 	return nil
 }
@@ -327,10 +386,14 @@ func (s *Supervisor) CheckDataFreshness(snapshot *fsmv2.Snapshot) bool {
 func (s *Supervisor) Start(ctx context.Context) <-chan struct{} {
 	done := make(chan struct{})
 
-	// Start observation collector
-	if err := s.collector.Start(ctx); err != nil {
-		s.logger.Errorf("Failed to start collector: %v", err)
+	// Start observation collectors for all workers
+	s.mu.RLock()
+	for _, workerCtx := range s.workers {
+		if err := workerCtx.collector.Start(ctx); err != nil {
+			s.logger.Errorf("Failed to start collector for worker %s: %v", workerCtx.identity.ID, err)
+		}
 	}
+	s.mu.RUnlock()
 
 	// Start main tick loop
 	go func() {
@@ -343,9 +406,9 @@ func (s *Supervisor) Start(ctx context.Context) <-chan struct{} {
 }
 
 // tickLoop is the main FSM loop.
-// Calls state.Next() and executes actions.
+// Calls state.Next() and executes actions for all workers.
 func (s *Supervisor) tickLoop(ctx context.Context) {
-	s.logger.Infof("Starting tick loop for worker %s", s.identity.ID)
+	s.logger.Info("Starting tick loop for supervisor")
 
 	ticker := time.NewTicker(s.tickInterval)
 	defer ticker.Stop()
@@ -353,22 +416,38 @@ func (s *Supervisor) tickLoop(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			s.logger.Infof("Tick loop stopped for worker %s", s.identity.ID)
+			s.logger.Info("Tick loop stopped for supervisor")
 
 			return
 		case <-ticker.C:
-			if err := s.tick(ctx); err != nil {
-				s.logger.Errorf("Tick error: %v", err)
+			s.mu.RLock()
+			workerIDs := make([]string, 0, len(s.workers))
+			for id := range s.workers {
+				workerIDs = append(workerIDs, id)
+			}
+			s.mu.RUnlock()
+
+			for _, workerID := range workerIDs {
+				if err := s.tickWorker(ctx, workerID); err != nil {
+					s.logger.Errorf("Tick error for worker %s: %v", workerID, err)
+				}
 			}
 		}
 	}
 }
 
-// tick performs one FSM tick.
-func (s *Supervisor) tick(ctx context.Context) error {
+// tickWorker performs one FSM tick for a specific worker.
+func (s *Supervisor) tickWorker(ctx context.Context, workerID string) error {
+	s.mu.RLock()
+	workerCtx, exists := s.workers[workerID]
+	s.mu.RUnlock()
+
+	if !exists {
+		return fmt.Errorf("worker %s not found", workerID)
+	}
+
 	// Load latest snapshot from database
-	// TODO: Extract workerType from identity or config
-	snapshot, err := s.store.LoadSnapshot(ctx, "container", s.identity.ID)
+	snapshot, err := s.store.LoadSnapshot(ctx, s.workerType, workerID)
 	if err != nil {
 		return fmt.Errorf("failed to load snapshot: %w", err)
 	}
@@ -382,7 +461,7 @@ func (s *Supervisor) tick(ctx context.Context) error {
 				// Max attempts reached - escalate to shutdown (Layer 3)
 				s.logger.Errorf("Collector unresponsive after %d restart attempts", s.collectorHealth.maxRestartAttempts)
 
-				if shutdownErr := s.RequestShutdown(ctx,
+				if shutdownErr := s.RequestShutdown(ctx, workerID,
 					fmt.Sprintf("collector unresponsive after %d restart attempts", s.collectorHealth.maxRestartAttempts)); shutdownErr != nil {
 					s.logger.Errorf("Failed to request shutdown: %v", shutdownErr)
 				}
@@ -409,12 +488,12 @@ func (s *Supervisor) tick(ctx context.Context) error {
 
 	// Data is fresh - safe to progress FSM
 	// Call state transition
-	nextState, signal, action := s.currentState.Next(*snapshot)
+	nextState, signal, action := workerCtx.currentState.Next(*snapshot)
 
 	// VALIDATION: Cannot switch state AND emit action simultaneously
-	if nextState != s.currentState && action != nil {
+	if nextState != workerCtx.currentState && action != nil {
 		panic(fmt.Sprintf("invalid state transition: state %s tried to switch to %s AND emit action %s",
-			s.currentState.String(), nextState.String(), action.Name()))
+			workerCtx.currentState.String(), nextState.String(), action.Name()))
 	}
 
 	// Execute action if present
@@ -427,18 +506,39 @@ func (s *Supervisor) tick(ctx context.Context) error {
 	}
 
 	// Transition to next state
-	if nextState != s.currentState {
+	if nextState != workerCtx.currentState {
 		s.logger.Infof("State transition: %s -> %s (reason: %s)",
-			s.currentState.String(), nextState.String(), nextState.Reason())
-		s.currentState = nextState
+			workerCtx.currentState.String(), nextState.String(), nextState.Reason())
+
+		s.mu.Lock()
+		workerCtx.currentState = nextState
+		s.mu.Unlock()
 	}
 
 	// Process signal
-	if err := s.processSignal(ctx, signal); err != nil {
+	if err := s.processSignal(ctx, workerID, signal); err != nil {
 		return fmt.Errorf("signal processing failed: %w", err)
 	}
 
 	return nil
+}
+
+// Tick performs one FSM tick for a specific worker (for testing).
+func (s *Supervisor) Tick(ctx context.Context) error {
+	// For backwards compatibility, tick the first worker
+	s.mu.RLock()
+	var firstWorkerID string
+	for id := range s.workers {
+		firstWorkerID = id
+		break
+	}
+	s.mu.RUnlock()
+
+	if firstWorkerID == "" {
+		return errors.New("no workers in supervisor")
+	}
+
+	return s.tickWorker(ctx, firstWorkerID)
 }
 
 // executeActionWithRetry executes an action with exponential backoff retry.
@@ -469,17 +569,17 @@ func (s *Supervisor) executeActionWithRetry(ctx context.Context, action fsmv2.Ac
 }
 
 // processSignal handles signals from states.
-func (s *Supervisor) processSignal(ctx context.Context, signal fsmv2.Signal) error {
+func (s *Supervisor) processSignal(ctx context.Context, workerID string, signal fsmv2.Signal) error {
 	switch signal {
 	case fsmv2.SignalNone:
 		// Normal operation
 		return nil
 	case fsmv2.SignalNeedsRemoval:
-		s.logger.Infof("Worker %s requested removal", s.identity.ID)
+		s.logger.Infof("Worker %s requested removal", workerID)
 		// TODO: Notify manager to remove this worker
 		return errors.New("worker removal requested (not yet implemented)")
 	case fsmv2.SignalNeedsRestart:
-		s.logger.Infof("Worker %s requested restart", s.identity.ID)
+		s.logger.Infof("Worker %s requested restart", workerID)
 		// TODO: Implement restart logic
 		return errors.New("worker restart requested (not yet implemented)")
 	default:
@@ -487,15 +587,14 @@ func (s *Supervisor) processSignal(ctx context.Context, signal fsmv2.Signal) err
 	}
 }
 
-// RequestShutdown sets the shutdown flag in desired state.
+// RequestShutdown sets the shutdown flag in desired state for a specific worker.
 // This triggers graceful shutdown through state transitions.
 // This implements Layer 3 (Graceful Shutdown) of the 4-layer defense.
-func (s *Supervisor) RequestShutdown(ctx context.Context, reason string) error {
-	s.logger.Warnf("Requesting shutdown for worker %s: %s", s.identity.ID, reason)
+func (s *Supervisor) RequestShutdown(ctx context.Context, workerID string, reason string) error {
+	s.logger.Warnf("Requesting shutdown for worker %s: %s", workerID, reason)
 
 	// Load current desired state
-	// TODO: Extract workerType from identity or config
-	desired, err := s.store.LoadDesired(ctx, "container", s.identity.ID)
+	desired, err := s.store.LoadDesired(ctx, s.workerType, workerID)
 	if err != nil {
 		return fmt.Errorf("failed to load desired state: %w", err)
 	}
@@ -507,7 +606,7 @@ func (s *Supervisor) RequestShutdown(ctx context.Context, reason string) error {
 	shutdownDesired := &shutdownDesiredState{inner: desired}
 
 	// Save updated desired state with shutdown flag set
-	if err := s.store.SaveDesired(ctx, "container", s.identity.ID, shutdownDesired); err != nil {
+	if err := s.store.SaveDesired(ctx, s.workerType, workerID, shutdownDesired); err != nil {
 		return fmt.Errorf("failed to save desired state: %w", err)
 	}
 
@@ -524,12 +623,14 @@ func (s *shutdownDesiredState) ShutdownRequested() bool {
 	return true
 }
 
-// GetCurrentState returns the current state name.
+// GetCurrentState returns the current state name for the first worker (backwards compatibility).
 func (s *Supervisor) GetCurrentState() string {
-	return s.currentState.String()
-}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 
-// Tick performs one FSM tick (for testing).
-func (s *Supervisor) Tick(ctx context.Context) error {
-	return s.tick(ctx)
+	for _, workerCtx := range s.workers {
+		return workerCtx.currentState.String()
+	}
+
+	return "no workers"
 }

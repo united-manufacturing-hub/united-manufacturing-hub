@@ -9,20 +9,13 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
-	"go.uber.org/zap"
 )
 
 var _ = Describe("Collector Restart Logic", func() {
 	Context("when restart is successful", func() {
 		It("should increment restart count", func() {
-			s := supervisor.NewSupervisor(supervisor.Config{
-				Worker:   &mockWorker{},
-				Identity: mockIdentity(),
-				Store:    &mockStore{},
-				Logger:   zap.NewNop().Sugar(),
-				CollectorHealth: supervisor.CollectorHealthConfig{
-					MaxRestartAttempts: 3,
-				},
+			s := newSupervisorWithWorker(&mockWorker{}, &mockStore{}, supervisor.CollectorHealthConfig{
+				MaxRestartAttempts: 3,
 			})
 
 			err := s.RestartCollector(context.Background())
@@ -33,14 +26,8 @@ var _ = Describe("Collector Restart Logic", func() {
 
 	Context("when max restart attempts exceeded", func() {
 		It("should panic", func() {
-			s := supervisor.NewSupervisor(supervisor.Config{
-				Worker:   &mockWorker{},
-				Identity: mockIdentity(),
-				Store:    &mockStore{},
-				Logger:   zap.NewNop().Sugar(),
-				CollectorHealth: supervisor.CollectorHealthConfig{
-					MaxRestartAttempts: 3,
-				},
+			s := newSupervisorWithWorker(&mockWorker{}, &mockStore{}, supervisor.CollectorHealthConfig{
+				MaxRestartAttempts: 3,
 			})
 
 			s.SetRestartCount(3)
@@ -63,14 +50,8 @@ var _ = Describe("Collector Restart Logic", func() {
 				},
 			}
 
-			s := supervisor.NewSupervisor(supervisor.Config{
-				Worker:   &mockWorker{},
-				Identity: mockIdentity(),
-				Store:    store,
-				Logger:   zap.NewNop().Sugar(),
-				CollectorHealth: supervisor.CollectorHealthConfig{
-					StaleThreshold: 10 * time.Second,
-				},
+			s := newSupervisorWithWorker(&mockWorker{}, store, supervisor.CollectorHealthConfig{
+				StaleThreshold: 10 * time.Second,
 			})
 
 			s.SetRestartCount(2)

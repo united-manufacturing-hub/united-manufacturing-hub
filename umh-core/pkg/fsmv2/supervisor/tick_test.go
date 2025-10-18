@@ -9,7 +9,6 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
-	"go.uber.org/zap"
 )
 
 var _ = Describe("Tick with Data Freshness", func() {
@@ -36,14 +35,8 @@ var _ = Describe("Tick with Data Freshness", func() {
 				},
 			}
 
-			s = supervisor.NewSupervisor(supervisor.Config{
-				Worker:   &mockWorker{initialState: initialState},
-				Identity: mockIdentity(),
-				Store:    store,
-				Logger:   zap.NewNop().Sugar(),
-				CollectorHealth: supervisor.CollectorHealthConfig{
-					StaleThreshold: 10 * time.Second,
-				},
+			s = newSupervisorWithWorker(&mockWorker{initialState: initialState}, store, supervisor.CollectorHealthConfig{
+				StaleThreshold: 10 * time.Second,
 			})
 
 			err := s.Tick(context.Background())
@@ -63,14 +56,8 @@ var _ = Describe("Tick with Data Freshness", func() {
 				},
 			}
 
-			s = supervisor.NewSupervisor(supervisor.Config{
-				Worker:   &mockWorker{initialState: initialState},
-				Identity: mockIdentity(),
-				Store:    store,
-				Logger:   zap.NewNop().Sugar(),
-				CollectorHealth: supervisor.CollectorHealthConfig{
-					StaleThreshold: 10 * time.Second,
-				},
+			s = newSupervisorWithWorker(&mockWorker{initialState: initialState}, store, supervisor.CollectorHealthConfig{
+				StaleThreshold: 10 * time.Second,
 			})
 
 			err := s.Tick(context.Background())

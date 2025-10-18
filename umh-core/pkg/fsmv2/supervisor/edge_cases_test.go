@@ -191,12 +191,7 @@ var _ = Describe("Edge Cases", func() {
 
 				initialState := &mockState{signal: fsmv2.SignalNone}
 
-				s := supervisor.NewSupervisor(supervisor.Config{
-					Worker:   &mockWorker{initialState: initialState},
-					Identity: mockIdentity(),
-					Store:    store,
-					Logger:   zap.NewNop().Sugar(),
-				})
+				s := newSupervisorWithWorker(&mockWorker{initialState: initialState}, store, supervisor.CollectorHealthConfig{})
 
 				err := s.Tick(context.Background())
 				Expect(err).ToNot(HaveOccurred())
@@ -219,14 +214,9 @@ var _ = Describe("Edge Cases", func() {
 					},
 				}
 
-				s := supervisor.NewSupervisor(supervisor.Config{
-					Worker:   &mockWorker{},
-					Identity: mockIdentity(),
-					Store:    store,
-					Logger:   zap.NewNop().Sugar(),
-				})
+				s := newSupervisorWithWorker(&mockWorker{}, store, supervisor.CollectorHealthConfig{})
 
-				err := s.RequestShutdown(context.Background(), "test reason")
+				err := s.RequestShutdown(context.Background(), "test-worker", "test reason")
 				Expect(err).ToNot(HaveOccurred())
 				Expect(savedDesired).To(BeTrue())
 			})
@@ -238,14 +228,9 @@ var _ = Describe("Edge Cases", func() {
 					saveErr: errors.New("save error"),
 				}
 
-				s := supervisor.NewSupervisor(supervisor.Config{
-					Worker:   &mockWorker{},
-					Identity: mockIdentity(),
-					Store:    store,
-					Logger:   zap.NewNop().Sugar(),
-				})
+				s := newSupervisorWithWorker(&mockWorker{}, store, supervisor.CollectorHealthConfig{})
 
-				err := s.RequestShutdown(context.Background(), "test reason")
+				err := s.RequestShutdown(context.Background(), "test-worker", "test reason")
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to save desired state"))
 			})
@@ -276,12 +261,7 @@ var _ = Describe("Edge Cases", func() {
 				initialState.nextState = initialState
 				initialState.action = action
 
-				s := supervisor.NewSupervisor(supervisor.Config{
-					Worker:   &mockWorker{initialState: initialState},
-					Identity: mockIdentity(),
-					Store:    store,
-					Logger:   zap.NewNop().Sugar(),
-				})
+				s := newSupervisorWithWorker(&mockWorker{initialState: initialState}, store, supervisor.CollectorHealthConfig{})
 
 				err := s.Tick(context.Background())
 				Expect(err).ToNot(HaveOccurred())
@@ -315,12 +295,7 @@ var _ = Describe("Edge Cases", func() {
 				initialState.nextState = initialState
 				initialState.action = action
 
-				s := supervisor.NewSupervisor(supervisor.Config{
-					Worker:   &mockWorker{initialState: initialState},
-					Identity: mockIdentity(),
-					Store:    store,
-					Logger:   zap.NewNop().Sugar(),
-				})
+				s := newSupervisorWithWorker(&mockWorker{initialState: initialState}, store, supervisor.CollectorHealthConfig{})
 
 				err := s.Tick(context.Background())
 				Expect(err).ToNot(HaveOccurred())
@@ -351,12 +326,7 @@ var _ = Describe("Edge Cases", func() {
 				initialState.nextState = initialState
 				initialState.action = action
 
-				s := supervisor.NewSupervisor(supervisor.Config{
-					Worker:   &mockWorker{initialState: initialState},
-					Identity: mockIdentity(),
-					Store:    store,
-					Logger:   zap.NewNop().Sugar(),
-				})
+				s := newSupervisorWithWorker(&mockWorker{initialState: initialState}, store, supervisor.CollectorHealthConfig{})
 
 				err := s.Tick(context.Background())
 				Expect(err).To(HaveOccurred())
@@ -377,16 +347,10 @@ var _ = Describe("Edge Cases", func() {
 					},
 				}
 
-				s := supervisor.NewSupervisor(supervisor.Config{
-					Worker:   &mockWorker{},
-					Identity: mockIdentity(),
-					Store:    store,
-					Logger:   zap.NewNop().Sugar(),
-					CollectorHealth: supervisor.CollectorHealthConfig{
-						StaleThreshold:     10 * time.Second,
-						Timeout:            20 * time.Second,
-						MaxRestartAttempts: 3,
-					},
+				s := newSupervisorWithWorker(&mockWorker{}, store, supervisor.CollectorHealthConfig{
+					StaleThreshold:     10 * time.Second,
+					Timeout:            20 * time.Second,
+					MaxRestartAttempts: 3,
 				})
 
 				err := s.Tick(context.Background())
@@ -405,16 +369,10 @@ var _ = Describe("Edge Cases", func() {
 					},
 				}
 
-				s := supervisor.NewSupervisor(supervisor.Config{
-					Worker:   &mockWorker{},
-					Identity: mockIdentity(),
-					Store:    store,
-					Logger:   zap.NewNop().Sugar(),
-					CollectorHealth: supervisor.CollectorHealthConfig{
-						StaleThreshold:     10 * time.Second,
-						Timeout:            20 * time.Second,
-						MaxRestartAttempts: 3,
-					},
+				s := newSupervisorWithWorker(&mockWorker{}, store, supervisor.CollectorHealthConfig{
+					StaleThreshold:     10 * time.Second,
+					Timeout:            20 * time.Second,
+					MaxRestartAttempts: 3,
 				})
 
 				s.SetRestartCount(3)
@@ -429,12 +387,7 @@ var _ = Describe("Edge Cases", func() {
 			It("should reset restart count", func() {
 				store := &mockStore{}
 
-				s := supervisor.NewSupervisor(supervisor.Config{
-					Worker:   &mockWorker{},
-					Identity: mockIdentity(),
-					Store:    store,
-					Logger:   zap.NewNop().Sugar(),
-				})
+				s := newSupervisorWithWorker(&mockWorker{}, store, supervisor.CollectorHealthConfig{})
 
 				s.SetRestartCount(2)
 
@@ -460,12 +413,7 @@ var _ = Describe("Edge Cases", func() {
 					},
 				}
 
-				s := supervisor.NewSupervisor(supervisor.Config{
-					Worker:   &mockWorker{},
-					Identity: mockIdentity(),
-					Store:    store,
-					Logger:   zap.NewNop().Sugar(),
-				})
+				s := newSupervisorWithWorker(&mockWorker{}, store, supervisor.CollectorHealthConfig{})
 
 				err := s.Tick(context.Background())
 				Expect(err).To(HaveOccurred())
@@ -478,12 +426,16 @@ var _ = Describe("Edge Cases", func() {
 		Context("when context is canceled during tick loop", func() {
 			It("should stop tick loop gracefully", func() {
 				s := supervisor.NewSupervisor(supervisor.Config{
-					Worker:       &mockWorker{},
-					Identity:     mockIdentity(),
+					WorkerType:   "container",
 					Store:        &mockStore{},
 					Logger:       zap.NewNop().Sugar(),
 					TickInterval: 100 * time.Millisecond,
 				})
+
+				identity := mockIdentity()
+				worker := &mockWorker{}
+				err := s.AddWorker(identity, worker)
+				Expect(err).ToNot(HaveOccurred())
 
 				ctx, cancel := context.WithCancel(context.Background())
 
@@ -500,12 +452,16 @@ var _ = Describe("Edge Cases", func() {
 		Context("when context is canceled before first tick", func() {
 			It("should stop immediately", func() {
 				s := supervisor.NewSupervisor(supervisor.Config{
-					Worker:       &mockWorker{},
-					Identity:     mockIdentity(),
+					WorkerType:   "container",
 					Store:        &mockStore{},
 					Logger:       zap.NewNop().Sugar(),
 					TickInterval: 5 * time.Second,
 				})
+
+				identity := mockIdentity()
+				worker := &mockWorker{}
+				err := s.AddWorker(identity, worker)
+				Expect(err).ToNot(HaveOccurred())
 
 				ctx, cancel := context.WithCancel(context.Background())
 				cancel()
@@ -526,14 +482,9 @@ var _ = Describe("Edge Cases", func() {
 					},
 				}
 
-				s := supervisor.NewSupervisor(supervisor.Config{
-					Worker:   &mockWorker{},
-					Identity: mockIdentity(),
-					Store:    store,
-					Logger:   zap.NewNop().Sugar(),
-				})
+				s := newSupervisorWithWorker(&mockWorker{}, store, supervisor.CollectorHealthConfig{})
 
-				err := s.RequestShutdown(context.Background(), "test reason")
+				err := s.RequestShutdown(context.Background(), "test-worker", "test reason")
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to load desired state"))
 			})
@@ -555,16 +506,10 @@ var _ = Describe("Edge Cases", func() {
 					},
 				}
 
-				s := supervisor.NewSupervisor(supervisor.Config{
-					Worker:   &mockWorker{},
-					Identity: mockIdentity(),
-					Store:    store,
-					Logger:   zap.NewNop().Sugar(),
-					CollectorHealth: supervisor.CollectorHealthConfig{
-						StaleThreshold:     10 * time.Second,
-						Timeout:            20 * time.Second,
-						MaxRestartAttempts: 3,
-					},
+				s := newSupervisorWithWorker(&mockWorker{}, store, supervisor.CollectorHealthConfig{
+					StaleThreshold:     10 * time.Second,
+					Timeout:            20 * time.Second,
+					MaxRestartAttempts: 3,
 				})
 
 				s.SetRestartCount(3)
@@ -587,16 +532,10 @@ var _ = Describe("Edge Cases", func() {
 					},
 				}
 
-				s := supervisor.NewSupervisor(supervisor.Config{
-					Worker:   &mockWorker{},
-					Identity: mockIdentity(),
-					Store:    store,
-					Logger:   zap.NewNop().Sugar(),
-					CollectorHealth: supervisor.CollectorHealthConfig{
-						StaleThreshold:     10 * time.Second,
-						Timeout:            20 * time.Second,
-						MaxRestartAttempts: 3,
-					},
+				s := newSupervisorWithWorker(&mockWorker{}, store, supervisor.CollectorHealthConfig{
+					StaleThreshold:     10 * time.Second,
+					Timeout:            20 * time.Second,
+					MaxRestartAttempts: 3,
 				})
 
 				err := s.Tick(context.Background())

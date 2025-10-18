@@ -14,10 +14,9 @@ var _ = Describe("Supervisor Configuration", func() {
 	Context("when creating supervisor with default config", func() {
 		It("should use default collector health thresholds", func() {
 			cfg := supervisor.Config{
-				Worker:   &mockWorker{},
-				Identity: mockIdentity(),
-				Store:    &mockStore{},
-				Logger:   zap.NewNop().Sugar(),
+				WorkerType: "container",
+				Store:      &mockStore{},
+				Logger:     zap.NewNop().Sugar(),
 			}
 
 			s := supervisor.NewSupervisor(cfg)
@@ -31,10 +30,9 @@ var _ = Describe("Supervisor Configuration", func() {
 	Context("when creating supervisor with custom config", func() {
 		It("should use custom collector health thresholds", func() {
 			cfg := supervisor.Config{
-				Worker:   &mockWorker{},
-				Identity: mockIdentity(),
-				Store:    &mockStore{},
-				Logger:   zap.NewNop().Sugar(),
+				WorkerType: "container",
+				Store:      &mockStore{},
+				Logger:     zap.NewNop().Sugar(),
 				CollectorHealth: supervisor.CollectorHealthConfig{
 					StaleThreshold:     5 * time.Second,
 					Timeout:            15 * time.Second,
@@ -54,10 +52,9 @@ var _ = Describe("Supervisor Configuration", func() {
 		It("should panic when staleThreshold is negative", func() {
 			Expect(func() {
 				supervisor.NewSupervisor(supervisor.Config{
-					Worker:   &mockWorker{},
-					Identity: mockIdentity(),
-					Store:    &mockStore{},
-					Logger:   zap.NewNop().Sugar(),
+					WorkerType: "container",
+					Store:      &mockStore{},
+					Logger:     zap.NewNop().Sugar(),
 					CollectorHealth: supervisor.CollectorHealthConfig{
 						StaleThreshold:     -5 * time.Second,
 						Timeout:            20 * time.Second,
@@ -70,10 +67,9 @@ var _ = Describe("Supervisor Configuration", func() {
 		It("should panic when timeout equals staleThreshold", func() {
 			Expect(func() {
 				supervisor.NewSupervisor(supervisor.Config{
-					Worker:   &mockWorker{},
-					Identity: mockIdentity(),
-					Store:    &mockStore{},
-					Logger:   zap.NewNop().Sugar(),
+					WorkerType: "container",
+					Store:      &mockStore{},
+					Logger:     zap.NewNop().Sugar(),
 					CollectorHealth: supervisor.CollectorHealthConfig{
 						StaleThreshold:     10 * time.Second,
 						Timeout:            10 * time.Second,
@@ -86,10 +82,9 @@ var _ = Describe("Supervisor Configuration", func() {
 		It("should panic when timeout is less than staleThreshold", func() {
 			Expect(func() {
 				supervisor.NewSupervisor(supervisor.Config{
-					Worker:   &mockWorker{},
-					Identity: mockIdentity(),
-					Store:    &mockStore{},
-					Logger:   zap.NewNop().Sugar(),
+					WorkerType: "container",
+					Store:      &mockStore{},
+					Logger:     zap.NewNop().Sugar(),
 					CollectorHealth: supervisor.CollectorHealthConfig{
 						StaleThreshold:     20 * time.Second,
 						Timeout:            10 * time.Second,
@@ -102,10 +97,9 @@ var _ = Describe("Supervisor Configuration", func() {
 		It("should panic when maxRestartAttempts is negative", func() {
 			Expect(func() {
 				supervisor.NewSupervisor(supervisor.Config{
-					Worker:   &mockWorker{},
-					Identity: mockIdentity(),
-					Store:    &mockStore{},
-					Logger:   zap.NewNop().Sugar(),
+					WorkerType: "container",
+					Store:      &mockStore{},
+					Logger:     zap.NewNop().Sugar(),
 					CollectorHealth: supervisor.CollectorHealthConfig{
 						StaleThreshold:     10 * time.Second,
 						Timeout:            20 * time.Second,
@@ -120,10 +114,9 @@ var _ = Describe("Supervisor Configuration", func() {
 		It("should panic when ObservationTimeout >= StaleThreshold", func() {
 			Expect(func() {
 				supervisor.NewSupervisor(supervisor.Config{
-					Worker:   &mockWorker{},
-					Identity: mockIdentity(),
-					Store:    &mockStore{},
-					Logger:   zap.NewNop().Sugar(),
+					WorkerType: "container",
+					Store:      &mockStore{},
+					Logger:     zap.NewNop().Sugar(),
 					CollectorHealth: supervisor.CollectorHealthConfig{
 						ObservationTimeout: 10 * time.Second,
 						StaleThreshold:     10 * time.Second,
@@ -137,10 +130,9 @@ var _ = Describe("Supervisor Configuration", func() {
 		It("should panic when StaleThreshold >= CollectorTimeout", func() {
 			Expect(func() {
 				supervisor.NewSupervisor(supervisor.Config{
-					Worker:   &mockWorker{},
-					Identity: mockIdentity(),
-					Store:    &mockStore{},
-					Logger:   zap.NewNop().Sugar(),
+					WorkerType: "container",
+					Store:      &mockStore{},
+					Logger:     zap.NewNop().Sugar(),
 					CollectorHealth: supervisor.CollectorHealthConfig{
 						ObservationTimeout: 1 * time.Second,
 						StaleThreshold:     15 * time.Second,
@@ -154,10 +146,9 @@ var _ = Describe("Supervisor Configuration", func() {
 		It("should accept valid timeout ordering", func() {
 			Expect(func() {
 				supervisor.NewSupervisor(supervisor.Config{
-					Worker:   &mockWorker{},
-					Identity: mockIdentity(),
-					Store:    &mockStore{},
-					Logger:   zap.NewNop().Sugar(),
+					WorkerType: "container",
+					Store:      &mockStore{},
+					Logger:     zap.NewNop().Sugar(),
 					CollectorHealth: supervisor.CollectorHealthConfig{
 						ObservationTimeout: 1 * time.Second,
 						StaleThreshold:     5 * time.Second,

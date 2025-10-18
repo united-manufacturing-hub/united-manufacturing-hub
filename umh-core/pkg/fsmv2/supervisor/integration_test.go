@@ -9,7 +9,6 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
-	"go.uber.org/zap"
 )
 
 var _ = Describe("DataFreshness Full Cycle Integration", func() {
@@ -42,16 +41,10 @@ var _ = Describe("DataFreshness Full Cycle Integration", func() {
 			},
 		}
 
-		s := supervisor.NewSupervisor(supervisor.Config{
-			Worker:   worker,
-			Identity: mockIdentity(),
-			Store:    store,
-			Logger:   zap.NewNop().Sugar(),
-			CollectorHealth: supervisor.CollectorHealthConfig{
-				StaleThreshold:     5 * time.Second,  // Shortened for test
-				Timeout:            10 * time.Second, // Shortened for test
-				MaxRestartAttempts: 3,
-			},
+		s := newSupervisorWithWorker(worker, store, supervisor.CollectorHealthConfig{
+			StaleThreshold:     5 * time.Second,  // Shortened for test
+			Timeout:            10 * time.Second, // Shortened for test
+			MaxRestartAttempts: 3,
 		})
 
 		ctx := context.Background()

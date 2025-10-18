@@ -8,9 +8,11 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"go.uber.org/zap"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/persistence"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 )
 
 func TestSupervisor(t *testing.T) {
@@ -225,6 +227,24 @@ func mockIdentity() fsmv2.Identity {
 		Name:       "Test Worker",
 		WorkerType: "container",
 	}
+}
+
+func newSupervisorWithWorker(worker *mockWorker, store *mockStore, cfg supervisor.CollectorHealthConfig) *supervisor.Supervisor {
+	identity := mockIdentity()
+
+	s := supervisor.NewSupervisor(supervisor.Config{
+		WorkerType:      "container",
+		Store:           store,
+		Logger:          zap.NewNop().Sugar(),
+		CollectorHealth: cfg,
+	})
+
+	err := s.AddWorker(identity, worker)
+	if err != nil {
+		panic(err)
+	}
+
+	return s
 }
 
 var _ = Describe("Identity WorkerType Field", func() {
