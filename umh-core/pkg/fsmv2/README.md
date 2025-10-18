@@ -117,4 +117,25 @@ The supervisor is then responsible for:
 9. If the supervisor receives the `SignalNeedsRestart` signal, it will set the `ShutdownRequested` to true.
 
 
-Because the supervisor is taking care of the “tick” and not the worker itself, the supervisor can track "ticks in current state" for timeout detection, and also detect workers that are “stuck” (they are not progressing through states)
+Because the supervisor is taking care of the "tick" and not the worker itself, the supervisor can track "ticks in current state" for timeout detection, and also detect workers that are "stuck" (they are not progressing through states)
+
+#### Design Decision: Data Freshness and Collector Health
+
+The FSM separates two orthogonal concerns that could otherwise become entangled:
+
+1. **Infrastructure concern** (supervisor): Is the observation collector working?
+2. **Application concern** (states): Is the application/service healthy?
+
+**Collector health is a supervisor concern, not a state concern.** States never see stale data - they assume observations are always fresh and focus purely on business logic (e.g., "is container CPU healthy?").
+
+The supervisor checks data freshness **before** calling `state.Next()`. If observations are stale, the supervisor handles it:
+- Pauses the FSM (doesn't call state transitions)
+- Attempts to restart the collector with exponential backoff
+- Escalates to graceful shutdown if collector cannot be recovered
+
+**Why this separation matters:**
+
+- **Simplicity**: States are pure business logic without infrastructure concerns - easier to write and test
+- **Safety**: No risk of making decisions on stale data (e.g., thinking CPU is 50% when it's actually 95% and about to OOM)
+- **Reliability**: Automatic collector recovery with clear escalation paths
+- **Observability**: Clear separation makes it obvious where failures occur (collector infrastructure vs application health)
