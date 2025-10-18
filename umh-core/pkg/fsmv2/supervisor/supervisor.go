@@ -97,6 +97,13 @@ type Supervisor struct {
 	freshnessChecker *FreshnessChecker     // Data freshness validator
 }
 
+// WorkerContext encapsulates the runtime state for a single worker
+// managed by a multi-worker Supervisor. It groups the worker's identity,
+// implementation, current FSM state, and observation collector.
+//
+// This struct is internal to the supervisor package and used for managing
+// multiple workers within a single Supervisor instance. Each worker has its
+// own context containing its isolated state and data collection pipeline.
 type WorkerContext struct {
 	identity     fsmv2.Identity
 	worker       fsmv2.Worker
