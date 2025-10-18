@@ -40,7 +40,7 @@ var _ = Describe("ActiveState", func() {
 			CPUHealth:     models.Active,
 			MemoryHealth:  models.Active,
 			DiskHealth:    models.Active,
-			CollectedAt:   time.Now(),
+			CollectedAt:   time.Now(), ObservedThresholds: standardThresholds(),
 		}
 	})
 

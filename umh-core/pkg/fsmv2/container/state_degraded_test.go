@@ -38,7 +38,7 @@ var _ = Describe("DegradedState", func() {
 			CPUHealth:     models.Degraded,
 			MemoryHealth:  models.Active,
 			DiskHealth:    models.Active,
-			CollectedAt:   time.Now(),
+			CollectedAt:   time.Now(), ObservedThresholds: standardThresholds(),
 		}
 	})
 

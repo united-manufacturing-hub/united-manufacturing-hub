@@ -28,10 +28,22 @@ type ContainerIdentity struct {
 	Name string // Human-readable name
 }
 
+// HealthThresholds defines the percentage thresholds for health assessment.
+type HealthThresholds struct {
+	CPUHighPercent        float64
+	CPUMediumPercent      float64
+	MemoryHighPercent     float64
+	MemoryMediumPercent   float64
+	DiskHighPercent       float64
+	DiskMediumPercent     float64
+	CPUThrottleRatioLimit float64
+}
+
 // ContainerDesiredState represents what we want the container monitoring to be.
 // This is derived from user configuration.
 type ContainerDesiredState struct {
-	shutdownRequested bool // Set by supervisor to initiate shutdown
+	shutdownRequested bool
+	healthThresholds  HealthThresholds
 }
 
 // ShutdownRequested returns whether shutdown has been requested.
@@ -44,6 +56,11 @@ func (d *ContainerDesiredState) ShutdownRequested() bool {
 // Called by the supervisor to initiate graceful shutdown.
 func (d *ContainerDesiredState) SetShutdownRequested(requested bool) {
 	d.shutdownRequested = requested
+}
+
+// HealthThresholds returns the configured health thresholds.
+func (d *ContainerDesiredState) HealthThresholds() HealthThresholds {
+	return d.healthThresholds
 }
 
 // ContainerObservedState represents the actual state of container monitoring.
@@ -66,6 +83,8 @@ type ContainerObservedState struct {
 	DiskHealth    models.HealthCategory
 
 	CollectedAt time.Time // When metrics were collected
+
+	ObservedThresholds HealthThresholds
 }
 
 // GetTimestamp returns when this observed state was collected.
@@ -77,5 +96,8 @@ func (o *ContainerObservedState) GetTimestamp() time.Time {
 // For container monitoring, there is no deployed configuration to observe,
 // so this always returns an empty desired state.
 func (o *ContainerObservedState) GetObservedDesiredState() fsmv2.DesiredState {
-	return &ContainerDesiredState{}
+	return &ContainerDesiredState{
+		shutdownRequested: false,
+		healthThresholds:  o.ObservedThresholds,
+	}
 }

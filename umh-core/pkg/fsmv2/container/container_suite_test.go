@@ -19,9 +19,22 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/container"
 )
 
 func TestContainer(t *testing.T) {
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "Container Suite")
+}
+
+func standardThresholds() container.HealthThresholds {
+	return container.HealthThresholds{
+		CPUHighPercent:        70.0,
+		CPUMediumPercent:      60.0,
+		MemoryHighPercent:     80.0,
+		MemoryMediumPercent:   70.0,
+		DiskHighPercent:       85.0,
+		DiskMediumPercent:     75.0,
+		CPUThrottleRatioLimit: 0.05,
+	}
 }

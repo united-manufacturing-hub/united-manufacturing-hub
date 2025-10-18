@@ -18,6 +18,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/container_monitor"
 )
@@ -71,6 +72,16 @@ func (w *ContainerWorker) CollectObservedState(ctx context.Context) (fsmv2.Obser
 		DiskHealth:    serviceInfo.DiskHealth,
 
 		CollectedAt: time.Now(),
+
+		ObservedThresholds: HealthThresholds{
+			CPUHighPercent:        constants.CPUHighThresholdPercent,
+			CPUMediumPercent:      constants.CPUMediumThresholdPercent,
+			MemoryHighPercent:     constants.MemoryHighThresholdPercent,
+			MemoryMediumPercent:   constants.MemoryMediumThresholdPercent,
+			DiskHighPercent:       constants.DiskHighThresholdPercent,
+			DiskMediumPercent:     constants.DiskMediumThresholdPercent,
+			CPUThrottleRatioLimit: constants.CPUThrottleRatioThreshold,
+		},
 	}
 
 	return observed, nil
@@ -83,6 +94,15 @@ func (w *ContainerWorker) CollectObservedState(ctx context.Context) (fsmv2.Obser
 func (w *ContainerWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
 	return &ContainerDesiredState{
 		shutdownRequested: false,
+		healthThresholds: HealthThresholds{
+			CPUHighPercent:        constants.CPUHighThresholdPercent,
+			CPUMediumPercent:      constants.CPUMediumThresholdPercent,
+			MemoryHighPercent:     constants.MemoryHighThresholdPercent,
+			MemoryMediumPercent:   constants.MemoryMediumThresholdPercent,
+			DiskHighPercent:       constants.DiskHighThresholdPercent,
+			DiskMediumPercent:     constants.DiskMediumThresholdPercent,
+			CPUThrottleRatioLimit: constants.CPUThrottleRatioThreshold,
+		},
 	}, nil
 }
 

@@ -36,7 +36,8 @@ var _ = Describe("State Timestamp Independence", func() {
 					CPUHealth:     models.Active,
 					MemoryHealth:  models.Active,
 					DiskHealth:    models.Active,
-					CollectedAt:   time.Now().Add(-60 * time.Second), // VERY stale
+					CollectedAt:   time.Now().Add(-60 * time.Second), ObservedThresholds: // VERY stale
+					standardThresholds(),
 				}
 
 				snapshot := fsmv2.Snapshot{
@@ -64,7 +65,8 @@ var _ = Describe("State Timestamp Independence", func() {
 					CPUHealth:     models.Active,
 					MemoryHealth:  models.Active,
 					DiskHealth:    models.Active,
-					CollectedAt:   time.Now().Add(-60 * time.Second), // VERY stale
+					CollectedAt:   time.Now().Add(-60 * time.Second), ObservedThresholds: // VERY stale
+					standardThresholds(),
 				}
 
 				snapshot := fsmv2.Snapshot{

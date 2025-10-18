@@ -28,7 +28,7 @@ var _ = Describe("isFullyHealthy", func() {
 				OverallHealth: models.Active,
 				CPUHealth:     models.Active,
 				MemoryHealth:  models.Active,
-				DiskHealth:    models.Active,
+				DiskHealth:    models.Active, ObservedThresholds: standardThresholds(),
 			}
 			Expect(container.IsFullyHealthy(observed)).To(BeTrue())
 		})
@@ -40,7 +40,7 @@ var _ = Describe("isFullyHealthy", func() {
 				OverallHealth: models.Degraded,
 				CPUHealth:     models.Active,
 				MemoryHealth:  models.Active,
-				DiskHealth:    models.Active,
+				DiskHealth:    models.Active, ObservedThresholds: standardThresholds(),
 			}
 			Expect(container.IsFullyHealthy(observed)).To(BeFalse())
 		})
@@ -52,7 +52,7 @@ var _ = Describe("isFullyHealthy", func() {
 				OverallHealth: models.Active,
 				CPUHealth:     models.Degraded,
 				MemoryHealth:  models.Active,
-				DiskHealth:    models.Active,
+				DiskHealth:    models.Active, ObservedThresholds: standardThresholds(),
 			}
 			Expect(container.IsFullyHealthy(observed)).To(BeFalse())
 		})
@@ -64,7 +64,7 @@ var _ = Describe("isFullyHealthy", func() {
 				OverallHealth: models.Active,
 				CPUHealth:     models.Active,
 				MemoryHealth:  models.Degraded,
-				DiskHealth:    models.Active,
+				DiskHealth:    models.Active, ObservedThresholds: standardThresholds(),
 			}
 			Expect(container.IsFullyHealthy(observed)).To(BeFalse())
 		})
@@ -76,7 +76,7 @@ var _ = Describe("isFullyHealthy", func() {
 				OverallHealth: models.Active,
 				CPUHealth:     models.Active,
 				MemoryHealth:  models.Active,
-				DiskHealth:    models.Degraded,
+				DiskHealth:    models.Degraded, ObservedThresholds: standardThresholds(),
 			}
 			Expect(container.IsFullyHealthy(observed)).To(BeFalse())
 		})
@@ -88,7 +88,7 @@ var _ = Describe("isFullyHealthy", func() {
 				OverallHealth: models.Degraded,
 				CPUHealth:     models.Degraded,
 				MemoryHealth:  models.Active,
-				DiskHealth:    models.Active,
+				DiskHealth:    models.Active, ObservedThresholds: standardThresholds(),
 			}
 			Expect(container.IsFullyHealthy(observed)).To(BeFalse())
 		})
@@ -105,7 +105,7 @@ var _ = Describe("BuildDegradedReason", func() {
 				DiskHealth:     models.Active,
 				CPUUsageMCores: 1800, // 90% of 2 cores
 				CgroupCores:    2.0,
-				IsThrottled:    false,
+				IsThrottled:    false, ObservedThresholds: standardThresholds(),
 			}
 			reason := container.BuildDegradedReason(observed)
 			Expect(reason).To(MatchRegexp(`CPU at \d+% \(threshold 70%\)`))
@@ -119,7 +119,7 @@ var _ = Describe("BuildDegradedReason", func() {
 				DiskHealth:     models.Active,
 				CPUUsageMCores: 1800,
 				CgroupCores:    2.0,
-				IsThrottled:    false,
+				IsThrottled:    false, ObservedThresholds: standardThresholds(),
 			}
 			reason := container.BuildDegradedReason(observed)
 			Expect(reason).NotTo(ContainSubstring("Memory"))
@@ -135,7 +135,8 @@ var _ = Describe("BuildDegradedReason", func() {
 				MemoryHealth:  models.Active,
 				DiskHealth:    models.Active,
 				IsThrottled:   true,
-				ThrottleRatio: 0.125, // 12.5%
+				ThrottleRatio: 0.125, ObservedThresholds: // 12.5%
+				standardThresholds(),
 			}
 			reason := container.BuildDegradedReason(observed)
 			Expect(reason).To(ContainSubstring("CPU throttled"))
@@ -150,8 +151,9 @@ var _ = Describe("BuildDegradedReason", func() {
 				CPUHealth:        models.Active,
 				MemoryHealth:     models.Degraded,
 				DiskHealth:       models.Active,
-				MemoryUsedBytes:  8_500_000_000, // 8.5GB
-				MemoryTotalBytes: 10_000_000_000, // 10GB = 85%
+				MemoryUsedBytes:  8_500_000_000,                      // 8.5GB
+				MemoryTotalBytes: 10_000_000_000, ObservedThresholds: // 10GB = 85%
+				standardThresholds(),
 			}
 			reason := container.BuildDegradedReason(observed)
 			Expect(reason).To(MatchRegexp(`Memory at \d+% \(threshold 80%\)`))
@@ -164,7 +166,7 @@ var _ = Describe("BuildDegradedReason", func() {
 				MemoryHealth:     models.Degraded,
 				DiskHealth:       models.Active,
 				MemoryUsedBytes:  8_500_000_000,
-				MemoryTotalBytes: 10_000_000_000,
+				MemoryTotalBytes: 10_000_000_000, ObservedThresholds: standardThresholds(),
 			}
 			reason := container.BuildDegradedReason(observed)
 			Expect(reason).NotTo(ContainSubstring("CPU"))
@@ -175,12 +177,13 @@ var _ = Describe("BuildDegradedReason", func() {
 	Context("when Disk is degraded", func() {
 		It("should show Disk percentage with threshold", func() {
 			observed := &container.ContainerObservedState{
-				OverallHealth:   models.Degraded,
-				CPUHealth:       models.Active,
-				MemoryHealth:    models.Active,
-				DiskHealth:      models.Degraded,
-				DiskUsedBytes:   90_000_000_000, // 90GB
-				DiskTotalBytes:  100_000_000_000, // 100GB = 90%
+				OverallHealth:  models.Degraded,
+				CPUHealth:      models.Active,
+				MemoryHealth:   models.Active,
+				DiskHealth:     models.Degraded,
+				DiskUsedBytes:  90_000_000_000,                      // 90GB
+				DiskTotalBytes: 100_000_000_000, ObservedThresholds: // 100GB = 90%
+				standardThresholds(),
 			}
 			reason := container.BuildDegradedReason(observed)
 			Expect(reason).To(MatchRegexp(`Disk at \d+% \(threshold 85%\)`))
@@ -188,12 +191,12 @@ var _ = Describe("BuildDegradedReason", func() {
 
 		It("should not mention healthy metrics", func() {
 			observed := &container.ContainerObservedState{
-				OverallHealth:   models.Degraded,
-				CPUHealth:       models.Active,
-				MemoryHealth:    models.Active,
-				DiskHealth:      models.Degraded,
-				DiskUsedBytes:   90_000_000_000,
-				DiskTotalBytes:  100_000_000_000,
+				OverallHealth:  models.Degraded,
+				CPUHealth:      models.Active,
+				MemoryHealth:   models.Active,
+				DiskHealth:     models.Degraded,
+				DiskUsedBytes:  90_000_000_000,
+				DiskTotalBytes: 100_000_000_000, ObservedThresholds: standardThresholds(),
 			}
 			reason := container.BuildDegradedReason(observed)
 			Expect(reason).NotTo(ContainSubstring("CPU"))
@@ -212,7 +215,7 @@ var _ = Describe("BuildDegradedReason", func() {
 				CgroupCores:      2.0,
 				IsThrottled:      false,
 				MemoryUsedBytes:  8_500_000_000,
-				MemoryTotalBytes: 10_000_000_000,
+				MemoryTotalBytes: 10_000_000_000, ObservedThresholds: standardThresholds(),
 			}
 			reason := container.BuildDegradedReason(observed)
 			Expect(reason).To(MatchRegexp(`CPU at \d+%`))
@@ -229,7 +232,7 @@ var _ = Describe("BuildDegradedReason", func() {
 				CgroupCores:      2.0,
 				IsThrottled:      false,
 				MemoryUsedBytes:  8_500_000_000,
-				MemoryTotalBytes: 10_000_000_000,
+				MemoryTotalBytes: 10_000_000_000, ObservedThresholds: standardThresholds(),
 			}
 			reason := container.BuildDegradedReason(observed)
 			Expect(reason).NotTo(ContainSubstring("Disk"))
@@ -249,7 +252,7 @@ var _ = Describe("BuildDegradedReason", func() {
 				MemoryUsedBytes:  8_500_000_000,
 				MemoryTotalBytes: 10_000_000_000,
 				DiskUsedBytes:    90_000_000_000,
-				DiskTotalBytes:   100_000_000_000,
+				DiskTotalBytes:   100_000_000_000, ObservedThresholds: standardThresholds(),
 			}
 			reason := container.BuildDegradedReason(observed)
 			Expect(reason).To(MatchRegexp(`CPU at \d+%`))
@@ -264,7 +267,7 @@ var _ = Describe("BuildDegradedReason", func() {
 				OverallHealth: models.Degraded,
 				CPUHealth:     models.Active,
 				MemoryHealth:  models.Active,
-				DiskHealth:    models.Active,
+				DiskHealth:    models.Active, ObservedThresholds: standardThresholds(),
 			}
 			reason := container.BuildDegradedReason(observed)
 			Expect(reason).NotTo(BeEmpty())
@@ -275,7 +278,7 @@ var _ = Describe("BuildDegradedReason", func() {
 				OverallHealth: models.Degraded,
 				CPUHealth:     models.Active,
 				MemoryHealth:  models.Active,
-				DiskHealth:    models.Active,
+				DiskHealth:    models.Active, ObservedThresholds: standardThresholds(),
 			}
 			reason := container.BuildDegradedReason(observed)
 			Expect(reason).NotTo(MatchRegexp(`\d+%`))
@@ -291,7 +294,7 @@ var _ = Describe("BuildDegradedReason", func() {
 				DiskHealth:     models.Active,
 				CPUUsageMCores: 1800,
 				CgroupCores:    2.0,
-				IsThrottled:    false,
+				IsThrottled:    false, ObservedThresholds: standardThresholds(),
 			}
 			reason := container.BuildDegradedReason(observed)
 			Expect(reason).To(Equal("CPU at 90% (threshold 70%)"))
@@ -303,7 +306,7 @@ var _ = Describe("BuildDegradedReason", func() {
 				MemoryHealth:  models.Active,
 				DiskHealth:    models.Active,
 				IsThrottled:   true,
-				ThrottleRatio: 0.125,
+				ThrottleRatio: 0.125, ObservedThresholds: standardThresholds(),
 			}
 			reason := container.BuildDegradedReason(observed)
 			Expect(reason).To(Equal("CPU throttled (12.5% periods)"))
@@ -318,7 +321,7 @@ var _ = Describe("BuildDegradedReason", func() {
 				CgroupCores:      2.0,
 				IsThrottled:      false,
 				MemoryUsedBytes:  8_500_000_000,
-				MemoryTotalBytes: 10_000_000_000,
+				MemoryTotalBytes: 10_000_000_000, ObservedThresholds: standardThresholds(),
 			}
 			reason := container.BuildDegradedReason(observed)
 			Expect(reason).To(ContainSubstring("CPU at"))

@@ -17,7 +17,6 @@ package container
 import (
 	"fmt"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 )
 
@@ -33,6 +32,8 @@ func IsFullyHealthy(observed *ContainerObservedState) bool {
 // BuildDegradedReason creates a detailed reason string showing which metrics are unhealthy.
 // Following UX Standards: show real values, not generic messages.
 func BuildDegradedReason(observed *ContainerObservedState) string {
+	thresholds := observed.ObservedThresholds
+
 	var reasons []string
 
 	if observed.CPUHealth != models.Active {
@@ -41,18 +42,18 @@ func BuildDegradedReason(observed *ContainerObservedState) string {
 			reasons = append(reasons, fmt.Sprintf("CPU throttled (%.1f%% periods)", throttlePercent))
 		} else {
 			cpuPercent := (observed.CPUUsageMCores / 1000.0) / observed.CgroupCores * 100
-			reasons = append(reasons, fmt.Sprintf("CPU at %.0f%% (threshold %.0f%%)", cpuPercent, constants.CPUHighThresholdPercent))
+			reasons = append(reasons, fmt.Sprintf("CPU at %.0f%% (threshold %.0f%%)", cpuPercent, thresholds.CPUHighPercent))
 		}
 	}
 
 	if observed.MemoryHealth != models.Active {
 		memPercent := float64(observed.MemoryUsedBytes) / float64(observed.MemoryTotalBytes) * 100
-		reasons = append(reasons, fmt.Sprintf("Memory at %.0f%% (threshold %.0f%%)", memPercent, constants.MemoryHighThresholdPercent))
+		reasons = append(reasons, fmt.Sprintf("Memory at %.0f%% (threshold %.0f%%)", memPercent, thresholds.MemoryHighPercent))
 	}
 
 	if observed.DiskHealth != models.Active {
 		diskPercent := float64(observed.DiskUsedBytes) / float64(observed.DiskTotalBytes) * 100
-		reasons = append(reasons, fmt.Sprintf("Disk at %.0f%% (threshold %.0f%%)", diskPercent, constants.DiskHighThresholdPercent))
+		reasons = append(reasons, fmt.Sprintf("Disk at %.0f%% (threshold %.0f%%)", diskPercent, thresholds.DiskHighPercent))
 	}
 
 	if len(reasons) == 0 {

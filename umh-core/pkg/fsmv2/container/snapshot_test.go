@@ -27,26 +27,71 @@ var _ = Describe("ContainerObservedState", func() {
 		It("should return the CollectedAt timestamp", func() {
 			expectedTime := time.Date(2025, 10, 18, 12, 0, 0, 0, time.UTC)
 			observed := &container.ContainerObservedState{
-				CollectedAt: expectedTime,
+				CollectedAt: expectedTime, ObservedThresholds: standardThresholds(),
 			}
 			Expect(observed.GetTimestamp()).To(Equal(expectedTime))
 		})
 
 		It("should return zero time when not set", func() {
-			observed := &container.ContainerObservedState{}
+			observed := &container.ContainerObservedState{ObservedThresholds: standardThresholds()}
 			Expect(observed.GetTimestamp()).To(Equal(time.Time{}))
 		})
 	})
 
 	Describe("GetObservedDesiredState", func() {
 		It("should return an empty ContainerDesiredState", func() {
-			observed := &container.ContainerObservedState{}
+			observed := &container.ContainerObservedState{ObservedThresholds: standardThresholds()}
 			desiredState := observed.GetObservedDesiredState()
 			Expect(desiredState).NotTo(BeNil())
 
 			containerDesiredState, ok := desiredState.(*container.ContainerDesiredState)
 			Expect(ok).To(BeTrue())
 			Expect(containerDesiredState.ShutdownRequested()).To(BeFalse())
+		})
+
+		It("should return thresholds from observed state", func() {
+			observed := &container.ContainerObservedState{
+				ObservedThresholds: container.HealthThresholds{
+					CPUHighPercent:        70.0,
+					CPUMediumPercent:      60.0,
+					MemoryHighPercent:     80.0,
+					MemoryMediumPercent:   70.0,
+					DiskHighPercent:       85.0,
+					DiskMediumPercent:     75.0,
+					CPUThrottleRatioLimit: 0.05,
+				},
+			}
+
+			desired := observed.GetObservedDesiredState().(*container.ContainerDesiredState)
+			thresholds := desired.HealthThresholds()
+
+			Expect(thresholds.CPUHighPercent).To(Equal(70.0))
+			Expect(thresholds.CPUMediumPercent).To(Equal(60.0))
+			Expect(thresholds.MemoryHighPercent).To(Equal(80.0))
+			Expect(thresholds.MemoryMediumPercent).To(Equal(70.0))
+			Expect(thresholds.DiskHighPercent).To(Equal(85.0))
+			Expect(thresholds.DiskMediumPercent).To(Equal(75.0))
+			Expect(thresholds.CPUThrottleRatioLimit).To(Equal(0.05))
+		})
+
+		It("should return empty thresholds when not set", func() {
+			observed := &container.ContainerObservedState{}
+
+			desired := observed.GetObservedDesiredState().(*container.ContainerDesiredState)
+			thresholds := desired.HealthThresholds()
+
+			Expect(thresholds.CPUHighPercent).To(Equal(0.0))
+		})
+	})
+})
+
+var _ = Describe("HealthThresholds", func() {
+	Context("DesiredState HealthThresholds getter", func() {
+		It("should return configured thresholds", func() {
+			desired := &container.ContainerDesiredState{}
+
+			thresholds := desired.HealthThresholds()
+			Expect(thresholds).To(Equal(container.HealthThresholds{}))
 		})
 	})
 })
