@@ -334,6 +334,7 @@ type Store interface {
 	//   - Pause FSM workers before calling
 	//   - Drain request queues
 	//   - Wait for in-flight operations to complete
+	//   - NOTE: Calling Maintenance() on a Tx is not supported (call on Store directly)
 	//
 	// Example:
 	//
