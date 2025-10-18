@@ -186,7 +186,7 @@ func (ss *SyncState) MarkSynced(tier Tier, syncID int64) error {
 //
 // DESIGN DECISION: Filter in-place with new slice, not modify original
 // WHY: Preserve original slice for caller, avoid side effects
-// TRADE-OFF: Allocates new slice, but pendingEdge/pendingRelay are typically small
+// TRADE-OFF: Allocates new slice, but pendingEdge is typically small
 // INSPIRED BY: Go slice filtering patterns, functional programming filter()
 //
 // Parameters:
