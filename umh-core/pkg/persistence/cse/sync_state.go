@@ -70,6 +70,19 @@ type SyncState struct {
 	mu sync.RWMutex
 }
 
+// NewSyncState creates a new SyncState tracker with all sync IDs initialized to 0.
+//
+// DESIGN DECISION: All sync IDs start at 0, not -1 or 1
+// WHY: 0 means "no changes synced yet", which is semantically clearer than -1.
+// First sync will query "WHERE _sync_id > 0" to get all changes.
+// TRADE-OFF: Can't distinguish "never synced" from "synced up to ID 0", but ID 0 is never used.
+// INSPIRED BY: Git commit hashes (initial commit has no parent), database AUTO_INCREMENT starts at 1.
+//
+// Usage:
+//
+//	syncState := cse.NewSyncState(store, registry)
+//	syncState.Load(ctx) // Restore state after restart
+//	defer syncState.Flush(ctx) // Persist state on shutdown
 func NewSyncState(store basic.Store, registry *Registry) *SyncState {
 	return &SyncState{
 		store:        store,
@@ -118,6 +131,27 @@ func (ss *SyncState) SetFrontendSyncID(syncID int64) error {
 	return nil
 }
 
+// RecordChange tracks a new change for synchronization to the next tier.
+//
+// DESIGN DECISION: Track pending changes, not just "last synced" ID
+// WHY: Need to retry failed syncs and track partial sync progress. If sync fails,
+// we know which specific changes need to be retried.
+// TRADE-OFF: Memory/storage overhead for pending list vs simplicity of single ID.
+// INSPIRED BY: Git unpushed commits (git knows exactly what to push), email outbox.
+//
+// Example:
+//
+//	// Edge created changes 100, 101, 102
+//	syncState.RecordChange(100, cse.TierEdge)
+//	syncState.RecordChange(101, cse.TierEdge)
+//	syncState.RecordChange(102, cse.TierEdge)
+//
+//	// Sync to relay succeeds for 100-101, fails for 102
+//	syncState.MarkSynced(cse.TierEdge, 101) // Removes 100, 101 from pending
+//	// 102 remains in pendingEdge for retry
+//
+// Note: Only TierEdge and TierRelay track pending changes. TierFrontend is the final
+// destination (no further sync), so it doesn't need pending tracking.
 func (ss *SyncState) RecordChange(syncID int64, tier Tier) error {
 	ss.mu.Lock()
 	defer ss.mu.Unlock()
@@ -134,6 +168,29 @@ func (ss *SyncState) RecordChange(syncID int64, tier Tier) error {
 	return nil
 }
 
+// MarkSynced marks changes up to syncID as successfully synced to the next tier.
+//
+// DESIGN DECISION: MarkSynced updates the NEXT tier's sync ID, not the current tier's
+// WHY: Matches Linear's pattern. When edge syncs to relay, relay's sync ID updates.
+// "relaySyncID" means "what relay has received from edge", not "what relay has sent".
+// TRADE-OFF: Slightly confusing naming, but matches Linear's architecture.
+// INSPIRED BY: Linear's lastSyncId in server (tracks what was received from client).
+//
+// Tier progression:
+//   - MarkSynced(TierEdge, 100) → updates relaySyncID=100 (relay received up to 100)
+//   - MarkSynced(TierRelay, 100) → updates frontendSyncID=100 (frontend received up to 100)
+//
+// All pending changes ≤ syncID are removed from the pending list.
+//
+// Example:
+//
+//	syncState.RecordChange(100, cse.TierEdge)
+//	syncState.RecordChange(101, cse.TierEdge)
+//	syncState.RecordChange(102, cse.TierEdge)
+//
+//	// Sync successfully sent 100-101 to relay
+//	syncState.MarkSynced(cse.TierEdge, 101)
+//	// Result: relaySyncID=101, pendingEdge=[102]
 func (ss *SyncState) MarkSynced(tier Tier, syncID int64) error {
 	ss.mu.Lock()
 	defer ss.mu.Unlock()
@@ -180,6 +237,31 @@ func (ss *SyncState) GetPendingChanges(tier Tier) ([]int64, error) {
 	}
 }
 
+// GetDeltaSince constructs a query to fetch changes since the last sync for a tier.
+//
+// DESIGN DECISION: Delta sync using "WHERE _sync_id > lastSyncID"
+// WHY: Efficient sync (only changes since last sync), not full data transfer every time.
+// Requires monotonic sync IDs (enforced by TriangularStore).
+// TRADE-OFF: Can't sync if sync ID sequence has gaps, but TriangularStore guarantees monotonic IDs.
+// INSPIRED BY: Linear's delta sync, rsync (only transfer diffs), Git fetch (only new commits).
+//
+// Tier logic:
+//   - TierEdge: Query changes > relaySyncID (what relay hasn't received yet)
+//   - TierRelay: Query changes > edgeSyncID (what relay needs to send to frontend)
+//   - TierFrontend: Query changes > relaySyncID (what frontend hasn't received yet)
+//
+// Example:
+//
+//	// Edge has changes up to 12345, relay has received up to 12340
+//	query, _ := syncState.GetDeltaSince(cse.TierEdge)
+//	// Returns: Query{Filters: [{Field: "_sync_id", Op: "$gt", Value: 12340}]}
+//	// When executed: Returns changes 12341-12345 (5 new changes)
+//
+// Usage with store:
+//
+//	query, _ := syncState.GetDeltaSince(cse.TierEdge)
+//	changes, _ := store.Find(ctx, "container_desired", *query)
+//	// Send changes to relay via HTTP
 func (ss *SyncState) GetDeltaSince(tier Tier) (*basic.Query, error) {
 	ss.mu.RLock()
 	defer ss.mu.RUnlock()
@@ -210,6 +292,35 @@ func (ss *SyncState) GetDeltaSince(tier Tier) (*basic.Query, error) {
 	return query, nil
 }
 
+// Flush persists sync state to storage for recovery after restart.
+//
+// DESIGN DECISION: Singleton document with ID "sync_state" in special collection "_sync_state"
+// WHY: Only one sync state per edge instance. Singleton pattern prevents duplicates.
+// TRADE-OFF: Can't track multiple edge instances from one storage, but each edge runs independently.
+// INSPIRED BY: SQLite PRAGMA settings (singleton config), Git HEAD file (single pointer).
+//
+// Storage schema:
+//
+//	{
+//	  "id": "sync_state",
+//	  "edge_sync_id": 12345,
+//	  "relay_sync_id": 12340,
+//	  "frontend_sync_id": 12335,
+//	  "pending_edge": [12341, 12342, 12343, 12344, 12345],
+//	  "pending_relay": [12336, 12337, 12338, 12339, 12340],
+//	  "updated_at": "2025-01-15T10:30:00.123456789Z"
+//	}
+//
+// Flush timing: Call after batch of changes (not every change) to reduce I/O overhead.
+// Critical errors: Flush/Load errors indicate sync state corruption - handle with care.
+//
+// Usage:
+//
+//	// After processing batch of changes
+//	syncState.Flush(ctx)
+//
+//	// On graceful shutdown
+//	defer syncState.Flush(ctx)
 func (ss *SyncState) Flush(ctx context.Context) error {
 	ss.mu.RLock()
 	defer ss.mu.RUnlock()
@@ -241,6 +352,24 @@ func (ss *SyncState) Flush(ctx context.Context) error {
 	return nil
 }
 
+// Load restores sync state from storage after restart.
+//
+// DESIGN DECISION: Silent success if no state exists (returns nil, not error)
+// WHY: First startup has no persisted state yet. This is normal, not an error condition.
+// TRADE-OFF: Can't distinguish "fresh start" from "storage corruption", but fresh start is common.
+// INSPIRED BY: Git clone (no .git/config initially), browser first run (no saved state).
+//
+// Type handling: Handles both int64 and float64 from JSON unmarshaling.
+// JSON stores numbers as float64, but we need int64 for sync IDs.
+//
+// Usage:
+//
+//	syncState := cse.NewSyncState(store, registry)
+//	if err := syncState.Load(ctx); err != nil {
+//	    // Critical error: storage corruption
+//	    log.Fatalf("failed to load sync state: %v", err)
+//	}
+//	// syncState now has restored state or defaults to 0
 func (ss *SyncState) Load(ctx context.Context) error {
 	doc, err := ss.store.Get(ctx, "_sync_state", "sync_state")
 	if err == basic.ErrNotFound {

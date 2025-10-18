@@ -506,7 +506,11 @@ func buildSQLQuery(collection string, query Query) (string, []interface{}) {
 			if i > 0 {
 				sqlQuery += `, `
 			}
-			sqlQuery += `id `
+			if sortField.Field == "id" {
+				sqlQuery += `id `
+			} else {
+				sqlQuery += `json_extract(data, '$.` + sortField.Field + `') `
+			}
 			if sortField.Order == Desc {
 				sqlQuery += `DESC`
 			} else {
