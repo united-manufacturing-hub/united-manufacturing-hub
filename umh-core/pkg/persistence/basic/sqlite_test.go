@@ -492,4 +492,353 @@ var _ = Describe("SQLiteStore", func() {
 			Expect(doc["test"]).To(Equal("value"))
 		})
 	})
+
+	Context("Insert", func() {
+		var store basic.Store
+
+		BeforeEach(func() {
+			var err error
+			store, err = basic.NewSQLiteStore(dbPath)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		AfterEach(func() {
+			if store != nil {
+				_ = store.Close()
+			}
+		})
+
+		It("should insert document and return valid UUID v4", func() {
+			ctx := context.Background()
+
+			err := store.CreateCollection(ctx, "test_insert", nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			doc := basic.Document{
+				"name": "test-doc",
+				"value": 42,
+			}
+
+			id, err := store.Insert(ctx, "test_insert", doc)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(id).NotTo(BeEmpty())
+
+			Expect(id).To(MatchRegexp(`^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`))
+		})
+
+		It("should insert and retrieve document with same content", func() {
+			ctx := context.Background()
+
+			err := store.CreateCollection(ctx, "test_retrieve", nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			doc := basic.Document{
+				"name": "test-doc",
+				"value": 42,
+				"active": true,
+			}
+
+			id, err := store.Insert(ctx, "test_retrieve", doc)
+			Expect(err).NotTo(HaveOccurred())
+
+			retrieved, err := store.Get(ctx, "test_retrieve", id)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(retrieved["name"]).To(Equal("test-doc"))
+			Expect(retrieved["value"]).To(BeNumerically("==", 42))
+			Expect(retrieved["active"]).To(BeTrue())
+		})
+
+		It("should insert document with nested maps", func() {
+			ctx := context.Background()
+
+			err := store.CreateCollection(ctx, "test_nested", nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			doc := basic.Document{
+				"name": "nested-doc",
+				"metadata": map[string]interface{}{
+					"level1": map[string]interface{}{
+						"level2": "deep-value",
+						"number": 123,
+					},
+				},
+			}
+
+			id, err := store.Insert(ctx, "test_nested", doc)
+			Expect(err).NotTo(HaveOccurred())
+
+			retrieved, err := store.Get(ctx, "test_nested", id)
+			Expect(err).NotTo(HaveOccurred())
+
+			metadata, ok := retrieved["metadata"].(map[string]interface{})
+			Expect(ok).To(BeTrue())
+
+			level1, ok := metadata["level1"].(map[string]interface{})
+			Expect(ok).To(BeTrue())
+
+			Expect(level1["level2"]).To(Equal("deep-value"))
+			Expect(level1["number"]).To(BeNumerically("==", 123))
+		})
+
+		It("should insert document with arrays", func() {
+			ctx := context.Background()
+
+			err := store.CreateCollection(ctx, "test_arrays", nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			doc := basic.Document{
+				"tags": []interface{}{"production", "critical", "monitored"},
+				"values": []interface{}{1, 2, 3, 4, 5},
+			}
+
+			id, err := store.Insert(ctx, "test_arrays", doc)
+			Expect(err).NotTo(HaveOccurred())
+
+			retrieved, err := store.Get(ctx, "test_arrays", id)
+			Expect(err).NotTo(HaveOccurred())
+
+			tags, ok := retrieved["tags"].([]interface{})
+			Expect(ok).To(BeTrue())
+			Expect(tags).To(HaveLen(3))
+			Expect(tags[0]).To(Equal("production"))
+
+			values, ok := retrieved["values"].([]interface{})
+			Expect(ok).To(BeTrue())
+			Expect(values).To(HaveLen(5))
+		})
+
+		It("should insert document with null values", func() {
+			ctx := context.Background()
+
+			err := store.CreateCollection(ctx, "test_nulls", nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			doc := basic.Document{
+				"name": "has-nulls",
+				"optional": nil,
+			}
+
+			id, err := store.Insert(ctx, "test_nulls", doc)
+			Expect(err).NotTo(HaveOccurred())
+
+			retrieved, err := store.Get(ctx, "test_nulls", id)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(retrieved["name"]).To(Equal("has-nulls"))
+			Expect(retrieved["optional"]).To(BeNil())
+		})
+
+		It("should insert document with all JSON-serializable types", func() {
+			ctx := context.Background()
+
+			err := store.CreateCollection(ctx, "test_types", nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			doc := basic.Document{
+				"string": "text",
+				"int": 42,
+				"float": 3.14,
+				"bool": true,
+				"null": nil,
+				"array": []interface{}{1, "two", 3.0},
+				"object": map[string]interface{}{"key": "value"},
+			}
+
+			id, err := store.Insert(ctx, "test_types", doc)
+			Expect(err).NotTo(HaveOccurred())
+
+			retrieved, err := store.Get(ctx, "test_types", id)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(retrieved["string"]).To(Equal("text"))
+			Expect(retrieved["int"]).To(BeNumerically("==", 42))
+			Expect(retrieved["float"]).To(BeNumerically("~", 3.14))
+			Expect(retrieved["bool"]).To(BeTrue())
+			Expect(retrieved["null"]).To(BeNil())
+			Expect(retrieved["array"]).To(HaveLen(3))
+			Expect(retrieved["object"]).To(HaveKey("key"))
+		})
+
+		It("should fail when inserting into non-existent collection", func() {
+			ctx := context.Background()
+
+			doc := basic.Document{"test": "value"}
+
+			_, err := store.Insert(ctx, "nonexistent_collection", doc)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("failed to insert document"))
+		})
+
+		It("should fail when store is closed", func() {
+			ctx := context.Background()
+
+			err := store.CreateCollection(ctx, "test_closed", nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			_ = store.Close()
+
+			doc := basic.Document{"test": "value"}
+			_, err = store.Insert(ctx, "test_closed", doc)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("store is closed"))
+		})
+
+		It("should generate unique IDs for multiple inserts", func() {
+			ctx := context.Background()
+
+			err := store.CreateCollection(ctx, "test_unique", nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			ids := make(map[string]bool)
+			for i := range 100 {
+				doc := basic.Document{"index": i}
+				id, err := store.Insert(ctx, "test_unique", doc)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(ids[id]).To(BeFalse())
+				ids[id] = true
+			}
+
+			Expect(ids).To(HaveLen(100))
+		})
+
+		It("should insert empty document", func() {
+			ctx := context.Background()
+
+			err := store.CreateCollection(ctx, "test_empty", nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			doc := basic.Document{}
+
+			id, err := store.Insert(ctx, "test_empty", doc)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(id).NotTo(BeEmpty())
+
+			retrieved, err := store.Get(ctx, "test_empty", id)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(retrieved).NotTo(BeNil())
+		})
+	})
+
+	Context("Transaction Insert", func() {
+		var store basic.Store
+
+		BeforeEach(func() {
+			var err error
+			store, err = basic.NewSQLiteStore(dbPath)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		AfterEach(func() {
+			if store != nil {
+				_ = store.Close()
+			}
+		})
+
+		It("should insert within transaction and commit", func() {
+			ctx := context.Background()
+
+			err := store.CreateCollection(ctx, "tx_insert", nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			tx, err := store.BeginTx(ctx)
+			Expect(err).NotTo(HaveOccurred())
+			defer func() { _ = tx.Rollback() }()
+
+			doc := basic.Document{"name": "tx-doc"}
+			id, err := tx.Insert(ctx, "tx_insert", doc)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(id).NotTo(BeEmpty())
+
+			err = tx.Commit()
+			Expect(err).NotTo(HaveOccurred())
+
+			retrieved, err := store.Get(ctx, "tx_insert", id)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(retrieved["name"]).To(Equal("tx-doc"))
+		})
+
+		It("should rollback insert on transaction rollback", func() {
+			ctx := context.Background()
+
+			err := store.CreateCollection(ctx, "tx_rollback", nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			tx, err := store.BeginTx(ctx)
+			Expect(err).NotTo(HaveOccurred())
+
+			doc := basic.Document{"name": "rollback-doc"}
+			id, err := tx.Insert(ctx, "tx_rollback", doc)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = tx.Rollback()
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = store.Get(ctx, "tx_rollback", id)
+			Expect(err).To(Equal(basic.ErrNotFound))
+		})
+
+		It("should insert multiple documents atomically", func() {
+			ctx := context.Background()
+
+			err := store.CreateCollection(ctx, "tx_multi", nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			tx, err := store.BeginTx(ctx)
+			Expect(err).NotTo(HaveOccurred())
+			defer func() { _ = tx.Rollback() }()
+
+			id1, err := tx.Insert(ctx, "tx_multi", basic.Document{"index": 1})
+			Expect(err).NotTo(HaveOccurred())
+
+			id2, err := tx.Insert(ctx, "tx_multi", basic.Document{"index": 2})
+			Expect(err).NotTo(HaveOccurred())
+
+			err = tx.Commit()
+			Expect(err).NotTo(HaveOccurred())
+
+			doc1, err := store.Get(ctx, "tx_multi", id1)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(doc1["index"]).To(BeNumerically("==", 1))
+
+			doc2, err := store.Get(ctx, "tx_multi", id2)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(doc2["index"]).To(BeNumerically("==", 2))
+		})
+
+		It("should generate valid UUID v4 within transaction", func() {
+			ctx := context.Background()
+
+			err := store.CreateCollection(ctx, "tx_uuid", nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			tx, err := store.BeginTx(ctx)
+			Expect(err).NotTo(HaveOccurred())
+			defer func() { _ = tx.Rollback() }()
+
+			doc := basic.Document{"test": "value"}
+			id, err := tx.Insert(ctx, "tx_uuid", doc)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(id).To(MatchRegexp(`^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`))
+
+			err = tx.Commit()
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should fail when transaction is closed", func() {
+			ctx := context.Background()
+
+			err := store.CreateCollection(ctx, "tx_closed", nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			tx, err := store.BeginTx(ctx)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = tx.Commit()
+			Expect(err).NotTo(HaveOccurred())
+
+			doc := basic.Document{"test": "value"}
+			_, err = tx.Insert(ctx, "tx_closed", doc)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("transaction is closed"))
+		})
+	})
 })
