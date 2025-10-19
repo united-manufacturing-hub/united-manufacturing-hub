@@ -1,4 +1,4 @@
-package cse
+package sync
 
 import (
 	"context"
@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence/basic"
 )
 
@@ -53,7 +54,7 @@ const (
 // Persistence: Call Flush() to persist state, Load() to restore after restart.
 type SyncState struct {
 	store    basic.Store
-	registry *Registry
+	registry *storage.Registry
 
 	edgeSyncID     int64
 	frontendSyncID int64
@@ -76,7 +77,7 @@ type SyncState struct {
 //	syncState := cse.NewSyncState(store, registry)
 //	syncState.Load(ctx) // Restore state after restart
 //	defer syncState.Flush(ctx) // Persist state on shutdown
-func NewSyncState(store basic.Store, registry *Registry) *SyncState {
+func NewSyncState(store basic.Store, registry *storage.Registry) *SyncState {
 	return &SyncState{
 		store:       store,
 		registry:    registry,
@@ -267,7 +268,7 @@ func (ss *SyncState) GetDeltaSince(tier Tier) (*basic.Query, error) {
 	query := &basic.Query{
 		Filters: []basic.FilterCondition{
 			{
-				Field: FieldSyncID,
+				Field: storage.FieldSyncID,
 				Op:    basic.Gt,
 				Value: lastSyncID,
 			},
