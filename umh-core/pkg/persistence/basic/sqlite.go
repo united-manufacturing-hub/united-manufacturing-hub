@@ -886,6 +886,33 @@ func (s *sqliteStore) BeginTx(ctx context.Context) (Tx, error) {
 
 // Close closes the store and releases database resources.
 //
+// DESIGN DECISION: Accept context for graceful shutdown control
+// WHY: Close() may perform maintenance operations (VACUUM, ANALYZE) that take
+// seconds to minutes. Caller needs ability to:
+//   - Set deadline: ctx with timeout controls max shutdown time
+//   - Cancel early: ctx cancellation aborts maintenance, closes immediately
+//
+// GRACEFUL DEGRADATION:
+//   If context expires during maintenance, database still closes safely.
+//   Maintenance may be incomplete, but data integrity is preserved.
+//
+// WAL CHECKPOINT HANDLING:
+//   Close() executes PRAGMA wal_checkpoint(TRUNCATE) to:
+//   - Flush WAL contents back to main database file
+//   - Truncate WAL file to minimize disk usage
+//   - Prepare for clean shutdown
+//
+//   If checkpoint fails (e.g., locked by another process):
+//   - Warning logged to stderr
+//   - Database still closes successfully
+//   - WAL automatically checkpointed on next open
+//   - No data loss - WAL contains transaction history
+//
+// ERROR HANDLING:
+//   - Checkpoint failure: Logs warning, continues with close
+//   - Maintenance failure: Returns error, still closes database
+//   - Close() is idempotent: Safe to call multiple times
+//
 // DESIGN DECISION: Explicit cleanup, not finalization/GC
 // WHY: Deterministic resource release. SQLite database connection and file handles
 // should be closed promptly, not wait for garbage collection. Ensures WAL checkpoint
@@ -895,11 +922,6 @@ func (s *sqliteStore) BeginTx(ctx context.Context) (Tx, error) {
 // Alternative finalizer would be less reliable (GC timing is unpredictable).
 //
 // INSPIRED BY: database/sql's Close pattern, io.Closer interface.
-//
-// Implementation Details:
-//   - Sets closed flag to prevent further operations
-//   - Calls db.Close() which checkpoints WAL and releases locks
-//   - Returns error if already closed (helps detect double-close bugs)
 //
 // Returns:
 //   - error: if cleanup fails (usually safe to ignore)
