@@ -157,7 +157,7 @@ var _ = Describe("Supervisor Lifecycle", func() {
 
 	Describe("processSignal error handling", func() {
 		Context("when SignalNeedsRemoval is received", func() {
-			It("should return error for unimplemented feature", func() {
+			It("should remove worker from registry", func() {
 				store := &mockStore{
 					snapshot: &fsmv2.Snapshot{
 						Identity: mockIdentity(),
@@ -173,9 +173,14 @@ var _ = Describe("Supervisor Lifecycle", func() {
 
 				s := newSupervisorWithWorker(&mockWorker{initialState: state}, store, supervisor.CollectorHealthConfig{})
 
+				workersBefore := s.ListWorkers()
+				Expect(workersBefore).To(HaveLen(1))
+
 				err := s.Tick(context.Background())
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("worker removal requested"))
+				Expect(err).ToNot(HaveOccurred())
+
+				workersAfter := s.ListWorkers()
+				Expect(workersAfter).To(BeEmpty())
 			})
 		})
 

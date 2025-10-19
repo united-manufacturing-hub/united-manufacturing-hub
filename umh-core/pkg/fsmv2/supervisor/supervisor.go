@@ -267,24 +267,28 @@ func (s *Supervisor) AddWorker(identity fsmv2.Identity, worker fsmv2.Worker) err
 	}
 
 	s.logger.Infof("Added worker %s to supervisor", identity.ID)
+
 	return nil
 }
 
 // RemoveWorker removes a worker from the registry.
-func (s *Supervisor) RemoveWorker(workerID string) error {
+func (s *Supervisor) RemoveWorker(ctx context.Context, workerID string) error {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 
-	_, exists := s.workers[workerID]
+	workerCtx, exists := s.workers[workerID]
 	if !exists {
+		s.mu.Unlock()
+
 		return fmt.Errorf("worker %s not found", workerID)
 	}
 
-	// TODO: Stop collector goroutine to prevent leak
-	// Need to add collector.Stop() method or use context cancellation
-
 	delete(s.workers, workerID)
+	s.mu.Unlock()
+
+	workerCtx.collector.Stop(ctx)
+
 	s.logger.Infof("Removed worker %s from supervisor", workerID)
+
 	return nil
 }
 
@@ -625,9 +629,21 @@ func (s *Supervisor) processSignal(ctx context.Context, workerID string, signal 
 		// Normal operation
 		return nil
 	case fsmv2.SignalNeedsRemoval:
-		s.logger.Infof("Worker %s requested removal", workerID)
-		// TODO: Notify manager to remove this worker
-		return errors.New("worker removal requested (not yet implemented)")
+		s.logger.Infof("Worker %s signaled removal, removing from registry", workerID)
+
+		s.mu.Lock()
+		workerCtx, exists := s.workers[workerID]
+		if !exists {
+			s.mu.Unlock()
+			return fmt.Errorf("worker %s not found in registry", workerID)
+		}
+
+		workerCtx.collector.Stop(ctx)
+
+		delete(s.workers, workerID)
+		s.mu.Unlock()
+
+		return nil
 	case fsmv2.SignalNeedsRestart:
 		s.logger.Infof("Worker %s requested restart", workerID)
 		// TODO: Implement restart logic

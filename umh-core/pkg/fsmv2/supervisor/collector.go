@@ -105,6 +105,31 @@ func (c *Collector) Restart() {
 	}
 }
 
+func (c *Collector) Stop(ctx context.Context) {
+	c.mu.Lock()
+
+	if c.state != collectorStateRunning {
+		c.config.Logger.Warnf("Collector not running, cannot stop (current state: %d)", c.state)
+		c.mu.Unlock()
+
+		return
+	}
+
+	c.config.Logger.Info("Stopping collector")
+	c.cancel()
+	doneChan := c.goroutineDone
+	c.mu.Unlock()
+
+	select {
+	case <-doneChan:
+		c.config.Logger.Info("Collector stopped successfully")
+	case <-ctx.Done():
+		c.config.Logger.Warn("Context cancelled while waiting for collector to stop")
+	case <-time.After(5 * time.Second):
+		c.config.Logger.Error("Timeout waiting for collector to stop")
+	}
+}
+
 func (c *Collector) observationLoop() {
 	defer func() {
 		c.mu.Lock()

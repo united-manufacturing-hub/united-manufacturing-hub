@@ -77,14 +77,16 @@ var _ = Describe("Multi-Worker Supervisor", func() {
 
 			Expect(s.ListWorkers()).To(ContainElement("worker-1"))
 
-			err = s.RemoveWorker("worker-1")
+			ctx := context.Background()
+			err = s.RemoveWorker(ctx, "worker-1")
 			Expect(err).ToNot(HaveOccurred())
 
 			Expect(s.ListWorkers()).ToNot(ContainElement("worker-1"))
 		})
 
 		It("should return error for non-existent worker", func() {
-			err := s.RemoveWorker("non-existent")
+			ctx := context.Background()
+			err := s.RemoveWorker(ctx, "non-existent")
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("not found"))
 		})
