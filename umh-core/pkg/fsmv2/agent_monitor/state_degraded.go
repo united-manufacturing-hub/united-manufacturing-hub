@@ -46,9 +46,8 @@ func (s *DegradedState) Next(snapshot fsmv2.Snapshot) (fsmv2.State, fsmv2.Signal
 		return &ActiveState{}, fsmv2.SignalNone, nil
 	}
 
-	// Still unhealthy, stay degraded with updated reason
-	reason := BuildDegradedReason(observed)
-	return &DegradedState{reason: reason}, fsmv2.SignalNone, nil
+	// Still unhealthy, stay degraded (passive - waiting for recovery)
+	return s, fsmv2.SignalNone, nil
 }
 
 // String returns the state name for logging/debugging.
