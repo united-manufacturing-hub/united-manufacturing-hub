@@ -95,6 +95,7 @@ type mockStore struct {
 	loadSnapshot func(ctx context.Context, workerType string, id string) (*fsmv2.Snapshot, error)
 	loadDesired  func(ctx context.Context, workerType string, id string) (fsmv2.DesiredState, error)
 	saveDesired  func(ctx context.Context, workerType string, id string, desired fsmv2.DesiredState) error
+	saveObserved func(ctx context.Context, workerType string, id string, observed fsmv2.ObservedState) error
 }
 
 func (m *mockStore) SaveIdentity(ctx context.Context, workerType string, id string, data interface{}) error {
@@ -122,6 +123,10 @@ func (m *mockStore) LoadDesired(ctx context.Context, workerType string, id strin
 }
 
 func (m *mockStore) SaveObserved(ctx context.Context, workerType string, id string, observed fsmv2.ObservedState) error {
+	if m.saveObserved != nil {
+		return m.saveObserved(ctx, workerType, id, observed)
+	}
+
 	return m.saveErr
 }
 

@@ -27,6 +27,7 @@ type CollectorConfig struct {
 	Logger              *zap.SugaredLogger
 	ObservationInterval time.Duration
 	ObservationTimeout  time.Duration
+	WorkerType          string
 }
 
 // Collector manages the observation loop lifecycle and data collection.
@@ -159,7 +160,7 @@ func (c *Collector) collectAndSaveObservedState(ctx context.Context) error {
 		return err
 	}
 
-	if err := c.config.Store.SaveObserved(ctx, "container", c.config.Identity.ID, observed); err != nil {
+	if err := c.config.Store.SaveObserved(ctx, c.config.WorkerType, c.config.Identity.ID, observed); err != nil {
 		return err
 	}
 

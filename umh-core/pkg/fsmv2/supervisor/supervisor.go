@@ -256,6 +256,7 @@ func (s *Supervisor) AddWorker(identity fsmv2.Identity, worker fsmv2.Worker) err
 		Logger:              s.logger,
 		ObservationInterval: DefaultObservationInterval,
 		ObservationTimeout:  s.collectorHealth.staleThreshold,
+		WorkerType:          s.workerType,
 	})
 
 	s.workers[identity.ID] = &WorkerContext{
