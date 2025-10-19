@@ -34,6 +34,7 @@ import (
 	"fmt"
 	"regexp"
 	"runtime"
+	"strings"
 	"sync"
 
 	"github.com/google/uuid"
@@ -237,7 +238,30 @@ func NewStore(cfg Config) (Store, error) {
 		return nil, errors.New("DBPath cannot be empty")
 	}
 
-	connStr := buildConnectionString(cfg.DBPath)
+	if cfg.JournalMode == "" {
+		cfg.JournalMode = JournalModeWAL
+	}
+	if cfg.JournalMode != JournalModeWAL && cfg.JournalMode != JournalModeDELETE {
+		return nil, fmt.Errorf("invalid JournalMode: %s (must be WAL or DELETE)", cfg.JournalMode)
+	}
+
+	isNetwork, fsType, err := IsNetworkFilesystem(cfg.DBPath)
+	if err != nil {
+		fmt.Printf("WARNING: Could not detect filesystem type for %s: %v\n", cfg.DBPath, err)
+	} else if isNetwork && cfg.JournalMode == JournalModeWAL {
+		return nil, fmt.Errorf(
+			"Network filesystem detected: %s at %s\n\n"+
+				"SQLite WAL mode is unsafe on network filesystems and can cause database\n"+
+				"corruption. Use DELETE journal mode for network filesystems:\n\n"+
+				"    cfg := basic.DefaultConfig(%q)\n"+
+				"    cfg.JournalMode = basic.JournalModeDELETE\n"+
+				"    store, err := basic.NewStore(cfg)\n\n"+
+				"See: https://www.sqlite.org/wal.html#nfs",
+			fsType, cfg.DBPath, cfg.DBPath,
+		)
+	}
+
+	connStr := buildConnectionString(cfg.DBPath, cfg.JournalMode)
 
 	db, err := sql.Open("sqlite3", connStr)
 	if err != nil {
@@ -257,10 +281,18 @@ func NewStore(cfg Config) (Store, error) {
 	var journalMode string
 
 	err = db.QueryRow("PRAGMA journal_mode").Scan(&journalMode)
-	if err != nil || journalMode != "wal" {
+	if err != nil {
 		_ = db.Close()
 
-		return nil, fmt.Errorf("failed to enable WAL mode: got %s", journalMode)
+		return nil, fmt.Errorf("failed to query journal mode: %w", err)
+	}
+
+	expectedMode := strings.ToLower(string(cfg.JournalMode))
+	actualMode := strings.ToLower(journalMode)
+	if actualMode != expectedMode {
+		_ = db.Close()
+
+		return nil, fmt.Errorf("failed to set journal mode to %s: got %s", cfg.JournalMode, journalMode)
 	}
 
 	return &sqliteStore{
@@ -269,7 +301,7 @@ func NewStore(cfg Config) (Store, error) {
 	}, nil
 }
 
-// buildConnectionString constructs SQLite connection string with WAL and durability parameters.
+// buildConnectionString constructs SQLite connection string with durability parameters.
 //
 // DESIGN DECISION: Encode all configuration in connection string
 // WHY: SQLite pragmas set via connection string are applied during connection setup,
@@ -285,7 +317,7 @@ func NewStore(cfg Config) (Store, error) {
 // Parameters:
 //   - cache=shared: Allow multiple connections to share page cache
 //   - mode=rwc: Read-write-create (create database if doesn't exist)
-//   - _journal_mode=WAL: Enable Write-Ahead Logging for concurrent access
+//   - _journal_mode: Configurable (WAL for local FS, DELETE for network FS)
 //   - _synchronous=FULL: Ensure fsync after each transaction (power loss protection)
 //   - _busy_timeout=5000: Wait 5 seconds for lock instead of failing immediately
 //   - _cache_size=-64000: 64MB page cache (negative = KB, positive = pages)
@@ -293,11 +325,12 @@ func NewStore(cfg Config) (Store, error) {
 //
 // Parameters:
 //   - dbPath: database file path
+//   - journalMode: journal mode (WAL or DELETE)
 //
 // Returns:
 //   - string: complete connection string with all parameters
-func buildConnectionString(dbPath string) string {
-	baseParams := "?cache=shared&mode=rwc&_journal_mode=WAL&_synchronous=FULL&_busy_timeout=5000&_cache_size=-64000"
+func buildConnectionString(dbPath string, journalMode JournalMode) string {
+	baseParams := fmt.Sprintf("?cache=shared&mode=rwc&_journal_mode=%s&_synchronous=FULL&_busy_timeout=5000&_cache_size=-64000", journalMode)
 
 	if runtime.GOOS == "darwin" {
 		baseParams += "&_fullfsync=1"

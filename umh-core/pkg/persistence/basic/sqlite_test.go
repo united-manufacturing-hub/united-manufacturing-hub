@@ -2963,3 +2963,89 @@ func calculatePercentileDuration(durations []time.Duration, percentile int) time
 
 	return sorted[index]
 }
+
+var _ = Describe("NewStore validation", func() {
+	var tempDir string
+
+	BeforeEach(func() {
+		var err error
+		tempDir, err = os.MkdirTemp("", "sqlite-test-*")
+		Expect(err).NotTo(HaveOccurred())
+	})
+
+	AfterEach(func() {
+		os.RemoveAll(tempDir)
+	})
+
+	Context("with local filesystem", func() {
+		It("should accept WAL mode on local filesystem", func() {
+			dbPath := filepath.Join(tempDir, "test.db")
+			cfg := basic.Config{
+				DBPath:                dbPath,
+				JournalMode:           basic.JournalModeWAL,
+				MaintenanceOnShutdown: false,
+			}
+			store, err := basic.NewStore(cfg)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(store).NotTo(BeNil())
+			store.Close(context.Background())
+		})
+
+		It("should accept DELETE mode on local filesystem", func() {
+			dbPath := filepath.Join(tempDir, "test2.db")
+			cfg := basic.Config{
+				DBPath:                dbPath,
+				JournalMode:           basic.JournalModeDELETE,
+				MaintenanceOnShutdown: false,
+			}
+			store, err := basic.NewStore(cfg)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(store).NotTo(BeNil())
+			store.Close(context.Background())
+		})
+	})
+
+	Context("JournalMode validation", func() {
+		It("should default to WAL if JournalMode is empty", func() {
+			dbPath := filepath.Join(tempDir, "test3.db")
+			cfg := basic.Config{
+				DBPath:                dbPath,
+				JournalMode:           "",
+				MaintenanceOnShutdown: false,
+			}
+			store, err := basic.NewStore(cfg)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(store).NotTo(BeNil())
+			store.Close(context.Background())
+		})
+
+		It("should reject invalid JournalMode values", func() {
+			dbPath := filepath.Join(tempDir, "test4.db")
+			cfg := basic.Config{
+				DBPath:                dbPath,
+				JournalMode:           basic.JournalMode("INVALID"),
+				MaintenanceOnShutdown: false,
+			}
+			_, err := basic.NewStore(cfg)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("invalid JournalMode"))
+			Expect(err.Error()).To(ContainSubstring("must be WAL or DELETE"))
+		})
+
+		It("should reject empty DBPath", func() {
+			cfg := basic.Config{
+				DBPath:      "",
+				JournalMode: basic.JournalModeWAL,
+			}
+			_, err := basic.NewStore(cfg)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("DBPath cannot be empty"))
+		})
+	})
+
+	Context("network filesystem detection", func() {
+		It("should provide helpful error for network FS + WAL", func() {
+			Skip("Requires real network filesystem mount - test manually")
+		})
+	})
+})
