@@ -17,6 +17,7 @@ package basic_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -3091,6 +3092,85 @@ var _ = Describe("NewStore validation", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(store).NotTo(BeNil())
 			_ = store.Close(context.Background())
+		})
+	})
+
+	Context("Context nil checks", func() {
+		var store basic.Store
+		var tempDB string
+
+		BeforeEach(func() {
+			var err error
+			tempDB = filepath.Join(os.TempDir(), fmt.Sprintf("test-%d.db", time.Now().UnixNano()))
+			cfg := basic.DefaultConfig(tempDB)
+			store, err = basic.NewStore(cfg)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		AfterEach(func() {
+			if store != nil {
+				_ = store.Close(context.Background())
+			}
+			_ = os.Remove(tempDB)
+		})
+
+		It("should reject nil context in CreateCollection", func() {
+			err := store.CreateCollection(nil, "test", nil)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("context cannot be nil"))
+		})
+
+		It("should reject nil context in Insert", func() {
+			_ = store.CreateCollection(context.Background(), "test", nil)
+			_, err := store.Insert(nil, "test", basic.Document{"key": "value"})
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("context cannot be nil"))
+		})
+
+		It("should reject nil context in Get", func() {
+			_ = store.CreateCollection(context.Background(), "test", nil)
+			_, err := store.Get(nil, "test", "any-id")
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("context cannot be nil"))
+		})
+
+		It("should reject nil context in Update", func() {
+			_ = store.CreateCollection(context.Background(), "test", nil)
+			err := store.Update(nil, "test", "any-id", basic.Document{"key": "value"})
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("context cannot be nil"))
+		})
+
+		It("should reject nil context in Delete", func() {
+			_ = store.CreateCollection(context.Background(), "test", nil)
+			err := store.Delete(nil, "test", "any-id")
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("context cannot be nil"))
+		})
+
+		It("should reject nil context in Find", func() {
+			_ = store.CreateCollection(context.Background(), "test", nil)
+			_, err := store.Find(nil, "test", basic.Query{})
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("context cannot be nil"))
+		})
+
+		It("should reject nil context in BeginTx", func() {
+			_, err := store.BeginTx(nil)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("context cannot be nil"))
+		})
+
+		It("should reject nil context in Maintenance", func() {
+			err := store.Maintenance(nil)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("context cannot be nil"))
+		})
+
+		It("should reject nil context in Close", func() {
+			err := store.Close(nil)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("context cannot be nil"))
 		})
 	})
 

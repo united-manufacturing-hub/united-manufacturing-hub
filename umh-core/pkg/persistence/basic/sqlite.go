@@ -80,6 +80,15 @@ const (
 	JournalModeDELETE JournalMode = "DELETE"
 )
 
+// validateContext checks if context is nil and returns an error if so.
+// All Store methods must validate context before use.
+func validateContext(ctx context.Context) error {
+	if ctx == nil {
+		return fmt.Errorf("context cannot be nil")
+	}
+	return nil
+}
+
 // validateCollectionName verifies collection name is a valid SQL identifier.
 //
 // DESIGN DECISION: Regex validation instead of parameterized DDL
@@ -388,6 +397,10 @@ func buildConnectionString(dbPath string, journalMode JournalMode) string {
 // Returns:
 //   - error: if collection name is invalid or table creation fails
 func (s *sqliteStore) CreateCollection(ctx context.Context, name string, schema *Schema) error {
+	if err := validateContext(ctx); err != nil {
+		return err
+	}
+
 	if s.closed {
 		return errors.New("store is closed")
 	}
@@ -472,6 +485,10 @@ func (s *sqliteStore) DropCollection(ctx context.Context, name string) error {
 //   - id: UUID of inserted document
 //   - error: if marshaling fails or insertion fails (including constraint violations)
 func (s *sqliteStore) Insert(ctx context.Context, collection string, doc Document) (string, error) {
+	if err := validateContext(ctx); err != nil {
+		return "", err
+	}
+
 	if s.closed {
 		return "", errors.New("store is closed")
 	}
@@ -518,6 +535,10 @@ func (s *sqliteStore) Insert(ctx context.Context, collection string, doc Documen
 //   - Document: the found document
 //   - error: ErrNotFound if document doesn't exist, or unmarshaling error
 func (s *sqliteStore) Get(ctx context.Context, collection string, id string) (Document, error) {
+	if err := validateContext(ctx); err != nil {
+		return nil, err
+	}
+
 	if s.closed {
 		return nil, errors.New("store is closed")
 	}
@@ -566,6 +587,10 @@ func (s *sqliteStore) Get(ctx context.Context, collection string, id string) (Do
 // Returns:
 //   - error: ErrNotFound if document doesn't exist, or marshaling/update error
 func (s *sqliteStore) Update(ctx context.Context, collection string, id string, doc Document) error {
+	if err := validateContext(ctx); err != nil {
+		return err
+	}
+
 	if s.closed {
 		return errors.New("store is closed")
 	}
@@ -617,6 +642,10 @@ func (s *sqliteStore) Update(ctx context.Context, collection string, id string, 
 // Returns:
 //   - error: ErrNotFound if document doesn't exist, or delete fails
 func (s *sqliteStore) Delete(ctx context.Context, collection string, id string) error {
+	if err := validateContext(ctx); err != nil {
+		return err
+	}
+
 	if s.closed {
 		return errors.New("store is closed")
 	}
@@ -673,6 +702,10 @@ func (s *sqliteStore) Delete(ctx context.Context, collection string, id string) 
 //   - []Document: matching documents (empty slice if none match)
 //   - error: if query execution fails or unmarshaling fails
 func (s *sqliteStore) Find(ctx context.Context, collection string, query Query) ([]Document, error) {
+	if err := validateContext(ctx); err != nil {
+		return nil, err
+	}
+
 	if s.closed {
 		return nil, errors.New("store is closed")
 	}
@@ -728,6 +761,10 @@ func (s *sqliteStore) maintenanceInternal(ctx context.Context) error {
 }
 
 func (s *sqliteStore) Maintenance(ctx context.Context) error {
+	if err := validateContext(ctx); err != nil {
+		return err
+	}
+
 	s.mu.RLock()
 
 	if s.closed {
@@ -780,6 +817,10 @@ func (s *sqliteStore) Maintenance(ctx context.Context) error {
 //
 //	return tx.Commit()
 func (s *sqliteStore) BeginTx(ctx context.Context) (Tx, error) {
+	if err := validateContext(ctx); err != nil {
+		return nil, err
+	}
+
 	if s.closed {
 		return nil, errors.New("store is closed")
 	}
@@ -817,6 +858,10 @@ func (s *sqliteStore) BeginTx(ctx context.Context) (Tx, error) {
 // Returns:
 //   - error: if cleanup fails (usually safe to ignore)
 func (s *sqliteStore) Close(ctx context.Context) error {
+	if err := validateContext(ctx); err != nil {
+		return err
+	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
