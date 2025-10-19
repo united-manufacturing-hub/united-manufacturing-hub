@@ -21,13 +21,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/agent_monitor"
 )
 
-// AgentMonitorIdentity represents the immutable identity of an agent monitor instance.
-// These fields never change after creation.
-type AgentMonitorIdentity struct {
-	ID   string // Unique agent monitor identifier
-	Name string // Human-readable name
-}
-
 // AgentMonitorDesiredState represents what we want the agent monitoring to be.
 // This is derived from user configuration.
 type AgentMonitorDesiredState struct {

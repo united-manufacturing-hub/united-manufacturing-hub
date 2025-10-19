@@ -26,16 +26,17 @@ import (
 // AgentMonitorWorker implements the Worker interface for agent monitoring.
 // It wraps the existing agent_monitor.Service to collect agent health metrics.
 type AgentMonitorWorker struct {
-	identity       AgentMonitorIdentity
+	identity       fsmv2.Identity
 	monitorService agent_monitor.IAgentMonitorService
 }
 
 // NewAgentMonitorWorker creates a new agent monitor worker.
 func NewAgentMonitorWorker(id string, name string, service agent_monitor.IAgentMonitorService) *AgentMonitorWorker {
 	return &AgentMonitorWorker{
-		identity: AgentMonitorIdentity{
-			ID:   id,
-			Name: name,
+		identity: fsmv2.Identity{
+			ID:         id,
+			Name:       name,
+			WorkerType: "agent_monitor",
 		},
 		monitorService: service,
 	}

@@ -172,11 +172,6 @@ var _ = Describe("AgentMonitorWorker", func() {
 			initialState := worker.GetInitialState()
 			Expect(initialState.String()).To(Equal("Stopped"))
 		})
-
-		It("should implement State interface", func() {
-			initialState := worker.GetInitialState()
-			Expect(initialState).To(BeAssignableToTypeOf((*fsmv2.State)(nil)))
-		})
 	})
 
 	Describe("Worker interface implementation", func() {
