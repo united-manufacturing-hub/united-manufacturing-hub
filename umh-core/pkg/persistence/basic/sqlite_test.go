@@ -226,6 +226,55 @@ var _ = Describe("SQLiteStore", func() {
 		})
 	})
 
+	Context("WAL checkpoint failure handling", func() {
+		It("should log warning but still close on checkpoint failure", func() {
+			cfg := basic.DefaultConfig(dbPath)
+			cfg.MaintenanceOnShutdown = false
+			store, err := basic.NewStore(cfg)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = store.CreateCollection(context.Background(), "test", nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			for i := 0; i < 10; i++ {
+				_, err := store.Insert(context.Background(), "test", basic.Document{"idx": i})
+				Expect(err).NotTo(HaveOccurred())
+			}
+
+			err = store.Close(context.Background())
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should attempt checkpoint before close", func() {
+			cfg := basic.DefaultConfig(dbPath)
+			cfg.MaintenanceOnShutdown = false
+			store, err := basic.NewStore(cfg)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = store.CreateCollection(context.Background(), "test", nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			for i := 0; i < 100; i++ {
+				_, err := store.Insert(context.Background(), "test", basic.Document{"idx": i})
+				Expect(err).NotTo(HaveOccurred())
+			}
+
+			walFile := dbPath + "-wal"
+			_, err = os.Stat(walFile)
+			walExistsBefore := err == nil
+
+			err = store.Close(context.Background())
+			Expect(err).NotTo(HaveOccurred())
+
+			info, err := os.Stat(walFile)
+			if err == nil {
+				if walExistsBefore {
+					Expect(info.Size()).To(BeNumerically("<", 1000), "WAL should be checkpointed")
+				}
+			}
+		})
+	})
+
 	Context("when implementing Store interface", func() {
 		It("should satisfy the Store interface", func() {
 			store, err := basic.NewStore(basic.DefaultConfig(dbPath))

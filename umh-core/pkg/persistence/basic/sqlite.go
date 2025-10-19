@@ -924,9 +924,14 @@ func (s *sqliteStore) Close(ctx context.Context) error {
 		}
 	}
 
+	if _, err := s.db.ExecContext(ctx, "PRAGMA wal_checkpoint(TRUNCATE)"); err != nil {
+		fmt.Printf("WARNING: WAL checkpoint failed during close: %v\n", err)
+		fmt.Printf("Database will still close safely. WAL will be checkpointed on next open.\n")
+	}
+
 	s.closed = true
 
-	return s.db.Close()
+	return s.enhanceSQLiteError(s.db.Close())
 }
 
 // sqliteTx implements Tx interface wrapping sql.Tx for transactional operations.
