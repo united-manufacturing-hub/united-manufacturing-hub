@@ -139,3 +139,36 @@ The supervisor checks data freshness **before** calling `state.Next()`. If obser
 - **Safety**: No risk of making decisions on stale data (e.g., thinking CPU is 50% when it's actually 95% and about to OOM)
 - **Reliability**: Automatic collector recovery with clear escalation paths
 - **Observability**: Clear separation makes it obvious where failures occur (collector infrastructure vs application health)
+
+#### State Naming Convention
+
+FSM v2 uses a strict naming convention to make state behavior immediately obvious:
+
+**PASSIVE states** (observe and transition based on conditions):
+- Use descriptive nouns/adjectives: `ActiveState`, `DegradedState`, `StoppedState`
+- **Never emit actions** - only evaluate conditions and return next state
+- Examples: Health monitoring, status observation
+
+**ACTIVE states** (perform work with retry logic):
+- Use "TryingTo" prefix: `TryingToStartState`, `TryingToAuthenticateState`, `TryingToStopState`
+- **Always emit actions on every tick** until success
+- Examples: Authentication, initialization, cleanup operations
+
+**When to skip transition states:**
+- If transitioning requires NO work (no actions), skip the intermediate state
+- ❌ Bad: `Stopped` → `StartingState` (passive, no action) → `Active`
+- ✅ Good: `Stopped` → `Active` (direct transition)
+- ✅ Good: `Stopped` → `TryingToStartState` (emits `InitializeAction`) → `Active`
+
+**Examples:**
+```go
+// PASSIVE: Monitoring FSMs (Container, Agent)
+// No startup/shutdown work needed
+Stopped → Active → Degraded ↔ Active → Stopped
+
+// ACTIVE: Component FSMs (Communicator, Benthos)
+// Require actions with retry logic
+Stopped → TryingToAuthenticateState → TryingToConnectState → Active → TryingToStopState → Stopped
+```
+
+**Rule of thumb:** If the state name uses a gerund ("-ing") but doesn't emit actions, it's named wrong. Either add the action or rename to a descriptive noun.

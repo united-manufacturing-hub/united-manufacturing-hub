@@ -55,9 +55,9 @@ var _ = Describe("DegradedState", func() {
 				}
 			})
 
-			It("should transition to StoppingState", func() {
+			It("should transition to StoppedState directly", func() {
 				nextState, _, _ := state.Next(snapshot)
-				Expect(nextState).To(BeAssignableToTypeOf(&container.StoppingState{}))
+				Expect(nextState).To(BeAssignableToTypeOf(&container.StoppedState{}))
 			})
 
 			It("should not signal anything", func() {

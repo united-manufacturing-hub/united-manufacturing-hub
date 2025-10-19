@@ -52,9 +52,9 @@ var _ = Describe("ActiveState", func() {
 				}
 			})
 
-			It("should transition to StoppingState", func() {
+			It("should transition to StoppedState directly", func() {
 				nextState, _, _ := state.Next(snapshot)
-				Expect(nextState).To(BeAssignableToTypeOf(&agent.StoppingState{}))
+				Expect(nextState).To(BeAssignableToTypeOf(&agent.StoppedState{}))
 			})
 
 			It("should not signal anything", func() {

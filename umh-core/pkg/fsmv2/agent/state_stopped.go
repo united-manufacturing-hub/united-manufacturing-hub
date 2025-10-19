@@ -31,8 +31,8 @@ func (s *StoppedState) Next(snapshot fsmv2.Snapshot) (fsmv2.State, fsmv2.Signal,
 	}
 
 	// Agent monitoring is always active (no explicit "enabled" config)
-	// Transition from stopped to starting
-	return &StartingState{}, fsmv2.SignalNone, nil
+	// Agent starts in degraded state until health is verified
+	return &DegradedState{}, fsmv2.SignalNone, nil
 }
 
 // String returns the state name for logging/debugging.

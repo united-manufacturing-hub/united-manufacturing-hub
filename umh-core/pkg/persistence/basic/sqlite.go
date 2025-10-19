@@ -241,6 +241,7 @@ func NewStore(cfg Config) (Store, error) {
 	if cfg.JournalMode == "" {
 		cfg.JournalMode = JournalModeWAL
 	}
+
 	if cfg.JournalMode != JournalModeWAL && cfg.JournalMode != JournalModeDELETE {
 		return nil, fmt.Errorf("invalid JournalMode: %s (must be WAL or DELETE)", cfg.JournalMode)
 	}
@@ -250,7 +251,7 @@ func NewStore(cfg Config) (Store, error) {
 		fmt.Printf("WARNING: Could not detect filesystem type for %s: %v\n", cfg.DBPath, err)
 	} else if isNetwork && cfg.JournalMode == JournalModeWAL {
 		return nil, fmt.Errorf(
-			"Network filesystem detected: %s at %s\n\n"+
+			"network filesystem detected: %s at %s\n\n"+
 				"SQLite WAL mode is unsafe on network filesystems and can cause database\n"+
 				"corruption. Use DELETE journal mode for network filesystems:\n\n"+
 				"    cfg := basic.DefaultConfig(%q)\n"+
@@ -288,6 +289,7 @@ func NewStore(cfg Config) (Store, error) {
 	}
 
 	expectedMode := strings.ToLower(string(cfg.JournalMode))
+
 	actualMode := strings.ToLower(journalMode)
 	if actualMode != expectedMode {
 		_ = db.Close()

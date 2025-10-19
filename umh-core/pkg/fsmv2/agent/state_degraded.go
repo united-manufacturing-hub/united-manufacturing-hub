@@ -30,7 +30,7 @@ func (s *DegradedState) Next(snapshot fsmv2.Snapshot) (fsmv2.State, fsmv2.Signal
 
 	// ALWAYS check shutdown first
 	if desired.ShutdownRequested() {
-		return &StoppingState{}, fsmv2.SignalNone, nil
+		return &StoppedState{}, fsmv2.SignalNone, nil
 	}
 
 	observed := snapshot.Observed.(*AgentMonitorObservedState)

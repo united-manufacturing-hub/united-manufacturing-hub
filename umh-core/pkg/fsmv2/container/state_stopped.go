@@ -31,9 +31,9 @@ func (s *StoppedState) Next(snapshot fsmv2.Snapshot) (fsmv2.State, fsmv2.Signal,
 	}
 
 	// For container monitoring, there's no explicit "monitoring enabled" check
-	// If we're stopped and not shutdown requested, transition to starting
+	// If we're stopped and not shutdown requested, transition directly to active
 	// (The container FSM is always "active" in the sense that it monitors)
-	return &StartingState{}, fsmv2.SignalNone, nil
+	return &ActiveState{}, fsmv2.SignalNone, nil
 }
 
 // String returns the state name for logging/debugging.

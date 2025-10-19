@@ -2974,7 +2974,7 @@ var _ = Describe("NewStore validation", func() {
 	})
 
 	AfterEach(func() {
-		os.RemoveAll(tempDir)
+		_ = os.RemoveAll(tempDir)
 	})
 
 	Context("with local filesystem", func() {
@@ -2988,7 +2988,7 @@ var _ = Describe("NewStore validation", func() {
 			store, err := basic.NewStore(cfg)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(store).NotTo(BeNil())
-			store.Close(context.Background())
+			_ = store.Close(context.Background())
 		})
 
 		It("should accept DELETE mode on local filesystem", func() {
@@ -3001,7 +3001,7 @@ var _ = Describe("NewStore validation", func() {
 			store, err := basic.NewStore(cfg)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(store).NotTo(BeNil())
-			store.Close(context.Background())
+			_ = store.Close(context.Background())
 		})
 	})
 
@@ -3016,7 +3016,7 @@ var _ = Describe("NewStore validation", func() {
 			store, err := basic.NewStore(cfg)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(store).NotTo(BeNil())
-			store.Close(context.Background())
+			_ = store.Close(context.Background())
 		})
 
 		It("should reject invalid JournalMode values", func() {

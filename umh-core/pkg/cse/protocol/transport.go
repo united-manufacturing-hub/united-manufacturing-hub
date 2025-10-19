@@ -2,6 +2,7 @@ package protocol
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -24,7 +25,7 @@ type RawMessage struct {
 // - Send/Receive are asynchronous to support real-world network latency
 // - RawMessage.From is unverified because relay cannot authenticate E2E encrypted traffic
 // - Timestamp enables replay attack detection at application layer
-// - Context support enables graceful shutdown and request cancellation
+// - Context support enables graceful shutdown and request cancellation.
 type Transport interface {
 	Send(ctx context.Context, to string, payload []byte) error
 	Receive(ctx context.Context) (<-chan RawMessage, error)
@@ -121,7 +122,7 @@ func (m *MockTransport) Send(ctx context.Context, to string, payload []byte) err
 	defer m.mu.RUnlock()
 
 	if m.closed {
-		return fmt.Errorf("transport closed")
+		return errors.New("transport closed")
 	}
 
 	if m.simError != nil {
@@ -149,7 +150,7 @@ func (m *MockTransport) Receive(ctx context.Context) (<-chan RawMessage, error) 
 	defer m.mu.RUnlock()
 
 	if m.closed {
-		return nil, fmt.Errorf("transport closed")
+		return nil, errors.New("transport closed")
 	}
 
 	return m.msgChan, nil
@@ -166,6 +167,7 @@ func (m *MockTransport) Close() error {
 
 	m.closed = true
 	close(m.msgChan)
+
 	return nil
 }
 
@@ -173,6 +175,7 @@ func (m *MockTransport) Close() error {
 func (m *MockTransport) SetSenderUUID(uuid string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.senderUUID = uuid
 }
 
@@ -180,6 +183,7 @@ func (m *MockTransport) SetSenderUUID(uuid string) {
 func (m *MockTransport) SimulateNetworkError(err error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.simError = TransportNetworkError{Err: err}
 }
 
@@ -187,6 +191,7 @@ func (m *MockTransport) SimulateNetworkError(err error) {
 func (m *MockTransport) SimulateOverflowError(err error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.simError = TransportOverflowError{Err: err}
 }
 
@@ -194,6 +199,7 @@ func (m *MockTransport) SimulateOverflowError(err error) {
 func (m *MockTransport) SimulateTimeoutError(err error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.simError = TransportTimeoutError{Err: err}
 }
 
@@ -201,5 +207,6 @@ func (m *MockTransport) SimulateTimeoutError(err error) {
 func (m *MockTransport) ClearSimulatedErrors() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.simError = nil
 }
