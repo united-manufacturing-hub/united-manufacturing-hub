@@ -20,10 +20,14 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 )
 
+// IsFullyHealthy returns true when agent health is Active.
+// Used by Active and Degraded states for health-based transitions.
 func IsFullyHealthy(observed *AgentMonitorObservedState) bool {
 	return observed.ServiceInfo != nil && observed.ServiceInfo.OverallHealth == models.Active
 }
 
+// BuildDegradedReason creates a detailed reason string showing agent health status.
+// Following UX Standards: show real values, not generic messages.
 func BuildDegradedReason(observed *AgentMonitorObservedState) string {
 	if observed.ServiceInfo == nil {
 		return "No service info available"
