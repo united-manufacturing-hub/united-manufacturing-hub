@@ -638,10 +638,10 @@ func (s *Supervisor) processSignal(ctx context.Context, workerID string, signal 
 			return fmt.Errorf("worker %s not found in registry", workerID)
 		}
 
-		workerCtx.collector.Stop(ctx)
-
 		delete(s.workers, workerID)
 		s.mu.Unlock()
+
+		workerCtx.collector.Stop(ctx)
 
 		return nil
 	case fsmv2.SignalNeedsRestart:
