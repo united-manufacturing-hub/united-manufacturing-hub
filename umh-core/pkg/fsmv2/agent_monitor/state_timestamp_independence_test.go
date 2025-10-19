@@ -23,6 +23,18 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/agent_monitor"
 )
 
+// These tests enforce the architectural boundary between Supervisor and States.
+//
+// From README.md (lines 122-141): "Collector health is a supervisor concern, not
+// a state concern. States never see stale data - they assume observations are
+// always fresh and focus purely on business logic."
+//
+// The supervisor checks data freshness BEFORE calling state.Next(). If data is
+// stale, the supervisor pauses the FSM and handles collector recovery.
+//
+// These tests verify states make decisions based ONLY on health metrics, never
+// timestamps. If a state starts checking CollectedAt, these tests will fail,
+// preventing architectural erosion.
 var _ = Describe("State Timestamp Independence", func() {
 	Describe("ActiveState", func() {
 		Context("when observation data is very stale", func() {
