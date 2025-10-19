@@ -193,6 +193,11 @@ type sqliteStore struct {
 type Config struct {
 	DBPath string
 
+	// JournalMode specifies the SQLite journaling mode.
+	// Default: WAL (optimal for local filesystems)
+	// Use DELETE for network filesystems (NFS/CIFS)
+	//
+	// VALIDATION: Network filesystem + WAL = startup error
 	JournalMode JournalMode
 
 	MaintenanceOnShutdown bool
