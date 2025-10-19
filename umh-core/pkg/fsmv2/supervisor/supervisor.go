@@ -500,6 +500,24 @@ func (s *Supervisor) tickWorker(ctx context.Context, workerID string) error {
 		return fmt.Errorf("failed to load snapshot: %w", err)
 	}
 
+	// I16: Validate ObservedState type before calling state.Next()
+	// This is Layer 3.5: Supervisor-level type validation BEFORE state logic
+	// MUST happen before CheckDataFreshness because freshness check dereferences Observed
+	s.mu.RLock()
+	expectedType, exists := s.expectedObservedTypes[workerID]
+	s.mu.RUnlock()
+
+	if exists {
+		if snapshot.Observed == nil {
+			panic(fmt.Sprintf("Invariant I16 violated: Worker %s returned nil ObservedState", workerID))
+		}
+		actualType := reflect.TypeOf(snapshot.Observed)
+		if actualType != expectedType {
+			panic(fmt.Sprintf("Invariant I16 violated: Worker %s (type %s) returned ObservedState type %s, expected %s",
+				workerID, s.workerType, actualType, expectedType))
+		}
+	}
+
 	// I3: Check data freshness BEFORE calling state.Next()
 	// This is the trust boundary: states assume data is always fresh
 	if !s.CheckDataFreshness(snapshot) {
@@ -532,20 +550,6 @@ func (s *Supervisor) tickWorker(ctx context.Context, workerID string) error {
 	if s.collectorHealth.restartCount > 0 {
 		s.logger.Infof("Collector recovered after %d restart attempts", s.collectorHealth.restartCount)
 		s.collectorHealth.restartCount = 0
-	}
-
-	// I16: Validate ObservedState type before calling state.Next()
-	// This is Layer 3.5: Supervisor-level type validation BEFORE state logic
-	s.mu.RLock()
-	expectedType, exists := s.expectedObservedTypes[workerID]
-	s.mu.RUnlock()
-
-	if exists {
-		actualType := reflect.TypeOf(snapshot.Observed)
-		if actualType != expectedType {
-			panic(fmt.Sprintf("Invariant I16 violated: Worker %s (type %s) returned ObservedState type %s, expected %s",
-				workerID, s.workerType, actualType, expectedType))
-		}
 	}
 
 	// Data is fresh - safe to progress FSM

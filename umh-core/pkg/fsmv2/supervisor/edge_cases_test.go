@@ -4,6 +4,7 @@ package supervisor_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"time"
 
@@ -632,6 +633,40 @@ var _ = Describe("Type Safety (Invariant I16)", func() {
 				Expect(panicMessage).To(ContainSubstring("test-worker"))
 				Expect(panicMessage).To(ContainSubstring("alternateObservedState"))
 				Expect(panicMessage).To(ContainSubstring("mockObservedState"))
+			})
+		})
+
+		Context("when worker returns nil ObservedState", func() {
+			It("should panic with clear message before calling state.Next()", func() {
+				worker := &mockWorker{
+					collectFunc: func(ctx context.Context) (fsmv2.ObservedState, error) {
+						return &mockObservedState{timestamp: time.Now()}, nil
+					},
+				}
+
+				store := &mockStore{
+					snapshot: &fsmv2.Snapshot{
+						Identity: mockIdentity(),
+						Desired:  &mockDesiredState{shutdown: false},
+						Observed: nil,
+					},
+				}
+
+				s := newSupervisorWithWorker(worker, store, supervisor.CollectorHealthConfig{})
+
+				var panicMessage string
+				func() {
+					defer func() {
+						if r := recover(); r != nil {
+							panicMessage = fmt.Sprintf("%v", r)
+						}
+					}()
+					_ = s.Tick(context.Background())
+				}()
+
+				Expect(panicMessage).To(ContainSubstring("Invariant I16 violated"))
+				Expect(panicMessage).To(ContainSubstring("nil ObservedState"))
+				Expect(panicMessage).To(ContainSubstring("test-worker"))
 			})
 		})
 
