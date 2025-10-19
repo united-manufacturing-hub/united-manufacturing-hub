@@ -101,4 +101,89 @@ var _ = Describe("Signal Handling", func() {
 			Expect(workersAfter).To(BeEmpty())
 		})
 	})
+
+	Context("when worker returns SignalNeedsRestart", func() {
+		It("should restart collector for that worker", func() {
+			restartState := &mockState{
+				signal: fsmv2.SignalNeedsRestart,
+			}
+			restartState.nextState = restartState
+
+			store := &mockStore{
+				snapshot: &fsmv2.Snapshot{
+					Identity: mockIdentity(),
+					Desired:  &mockDesiredState{},
+					Observed: &mockObservedState{timestamp: time.Now()},
+				},
+			}
+
+			s := newSupervisorWithWorker(&mockWorker{initialState: restartState}, store, supervisor.CollectorHealthConfig{
+				MaxRestartAttempts: 3,
+			})
+
+			initialRestartCount := s.GetRestartCount()
+			Expect(initialRestartCount).To(Equal(0))
+
+			ctx := context.Background()
+			err := s.Tick(ctx)
+			Expect(err).ToNot(HaveOccurred())
+
+			finalRestartCount := s.GetRestartCount()
+			Expect(finalRestartCount).To(Equal(1))
+		})
+
+		It("should increment restart count", func() {
+			restartState := &mockState{
+				signal: fsmv2.SignalNeedsRestart,
+			}
+			restartState.nextState = restartState
+
+			store := &mockStore{
+				snapshot: &fsmv2.Snapshot{
+					Identity: mockIdentity(),
+					Desired:  &mockDesiredState{},
+					Observed: &mockObservedState{timestamp: time.Now()},
+				},
+			}
+
+			s := newSupervisorWithWorker(&mockWorker{initialState: restartState}, store, supervisor.CollectorHealthConfig{
+				MaxRestartAttempts: 3,
+			})
+
+			ctx := context.Background()
+			err := s.Tick(ctx)
+			Expect(err).ToNot(HaveOccurred())
+
+			restartCount := s.GetRestartCount()
+			Expect(restartCount).To(Equal(1))
+		})
+
+		It("should call RestartCollector when signal is received", func() {
+			restartState := &mockState{
+				signal: fsmv2.SignalNeedsRestart,
+			}
+			restartState.nextState = restartState
+
+			store := &mockStore{
+				snapshot: &fsmv2.Snapshot{
+					Identity: mockIdentity(),
+					Desired:  &mockDesiredState{},
+					Observed: &mockObservedState{timestamp: time.Now()},
+				},
+			}
+
+			s := newSupervisorWithWorker(&mockWorker{initialState: restartState}, store, supervisor.CollectorHealthConfig{
+				MaxRestartAttempts: 3,
+			})
+
+			ctx := context.Background()
+
+			Expect(s.GetRestartCount()).To(Equal(0))
+
+			err := s.Tick(ctx)
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(s.GetRestartCount()).To(Equal(1))
+		})
+	})
 })

@@ -645,9 +645,13 @@ func (s *Supervisor) processSignal(ctx context.Context, workerID string, signal 
 
 		return nil
 	case fsmv2.SignalNeedsRestart:
-		s.logger.Infof("Worker %s requested restart", workerID)
-		// TODO: Implement restart logic
-		return errors.New("worker restart requested (not yet implemented)")
+		s.logger.Infof("Worker %s signaled restart", workerID)
+
+		if err := s.RestartCollector(ctx, workerID); err != nil {
+			return fmt.Errorf("failed to restart collector for worker %s: %w", workerID, err)
+		}
+
+		return nil
 	default:
 		return fmt.Errorf("unknown signal: %d", signal)
 	}

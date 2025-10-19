@@ -185,7 +185,7 @@ var _ = Describe("Supervisor Lifecycle", func() {
 		})
 
 		Context("when SignalNeedsRestart is received", func() {
-			It("should return error for unimplemented feature", func() {
+			It("should restart collector and increment restart count", func() {
 				store := &mockStore{
 					snapshot: &fsmv2.Snapshot{
 						Identity: mockIdentity(),
@@ -199,11 +199,13 @@ var _ = Describe("Supervisor Lifecycle", func() {
 				}
 				state.nextState = state
 
-				s := newSupervisorWithWorker(&mockWorker{initialState: state}, store, supervisor.CollectorHealthConfig{})
+				s := newSupervisorWithWorker(&mockWorker{initialState: state}, store, supervisor.CollectorHealthConfig{
+					MaxRestartAttempts: 3,
+				})
 
 				err := s.Tick(context.Background())
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("worker restart requested"))
+				Expect(err).ToNot(HaveOccurred())
+				Expect(s.GetRestartCount()).To(Equal(1))
 			})
 		})
 
