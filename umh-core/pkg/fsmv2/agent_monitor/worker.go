@@ -75,19 +75,3 @@ func (w *AgentMonitorWorker) DeriveDesiredState(spec interface{}) (fsmv2.Desired
 func (w *AgentMonitorWorker) GetInitialState() fsmv2.State {
 	return &StoppedState{}
 }
-
-// StoppedState is a placeholder state for agent monitoring.
-// Full state implementations will be added in Phase 3.
-type StoppedState struct{}
-
-func (s *StoppedState) Next(snapshot fsmv2.Snapshot) (fsmv2.State, fsmv2.Signal, fsmv2.Action) {
-	return s, fsmv2.SignalNone, nil
-}
-
-func (s *StoppedState) String() string {
-	return "Stopped"
-}
-
-func (s *StoppedState) Reason() string {
-	return ""
-}
