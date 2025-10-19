@@ -32,6 +32,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"regexp"
 	"runtime"
 	"strings"
@@ -236,6 +238,26 @@ func DefaultConfig(dbPath string) Config {
 func NewStore(cfg Config) (Store, error) {
 	if cfg.DBPath == "" {
 		return nil, errors.New("DBPath cannot be empty")
+	}
+
+	if info, err := os.Stat(cfg.DBPath); err == nil {
+		if info.IsDir() {
+			return nil, fmt.Errorf("DBPath is a directory: %s (must be a file path)", cfg.DBPath)
+		}
+	}
+
+	parentDir := filepath.Dir(cfg.DBPath)
+	if err := os.MkdirAll(parentDir, 0755); err != nil {
+		return nil, fmt.Errorf("cannot create parent directory for DBPath: %w", err)
+	}
+
+	testFile := filepath.Join(parentDir, ".write_test")
+	if f, err := os.Create(testFile); err != nil {
+		return nil, fmt.Errorf("DBPath parent directory is not writable: %w", err)
+	} else {
+		_ = f.Close()
+
+		_ = os.Remove(testFile)
 	}
 
 	if cfg.JournalMode == "" {

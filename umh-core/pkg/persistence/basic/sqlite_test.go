@@ -3043,6 +3043,57 @@ var _ = Describe("NewStore validation", func() {
 		})
 	})
 
+	Context("DBPath validation", func() {
+		It("should reject DBPath that is a directory", func() {
+			tempTestDir, err := os.MkdirTemp("", "sqlite-test-*")
+			Expect(err).NotTo(HaveOccurred())
+			defer func() { _ = os.RemoveAll(tempTestDir) }()
+
+			cfg := basic.Config{
+				DBPath:      tempTestDir,
+				JournalMode: basic.JournalModeWAL,
+			}
+			_, err = basic.NewStore(cfg)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("DBPath is a directory"))
+		})
+
+		It("should reject DBPath with unwritable parent directory", func() {
+			readOnlyDir, err := os.MkdirTemp("", "sqlite-test-*")
+			Expect(err).NotTo(HaveOccurred())
+			defer func() {
+				_ = os.Chmod(readOnlyDir, 0755)
+				_ = os.RemoveAll(readOnlyDir)
+			}()
+
+			err = os.Chmod(readOnlyDir, 0444)
+			Expect(err).NotTo(HaveOccurred())
+
+			cfg := basic.Config{
+				DBPath:      filepath.Join(readOnlyDir, "test.db"),
+				JournalMode: basic.JournalModeWAL,
+			}
+			_, err = basic.NewStore(cfg)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("permission denied"))
+		})
+
+		It("should allow DBPath in writable directory", func() {
+			writableDir, err := os.MkdirTemp("", "sqlite-test-*")
+			Expect(err).NotTo(HaveOccurred())
+			defer func() { _ = os.RemoveAll(writableDir) }()
+
+			cfg := basic.Config{
+				DBPath:      filepath.Join(writableDir, "test.db"),
+				JournalMode: basic.JournalModeWAL,
+			}
+			store, err := basic.NewStore(cfg)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(store).NotTo(BeNil())
+			_ = store.Close(context.Background())
+		})
+	})
+
 	Context("network filesystem detection", func() {
 		It("should provide helpful error for network FS + WAL", func() {
 			Skip("Requires real network filesystem mount - test manually")
