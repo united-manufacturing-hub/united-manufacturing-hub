@@ -12,39 +12,39 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package agent_monitor_test
+package agent_test
 
 import (
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/agent_monitor"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/agent"
 )
 
 var _ = Describe("AgentMonitorObservedState", func() {
 	Describe("GetTimestamp", func() {
 		It("should return the CollectedAt timestamp", func() {
 			expectedTime := time.Date(2025, 10, 18, 12, 0, 0, 0, time.UTC)
-			observed := &agent_monitor.AgentMonitorObservedState{
+			observed := &agent.AgentMonitorObservedState{
 				CollectedAt: expectedTime,
 			}
 			Expect(observed.GetTimestamp()).To(Equal(expectedTime))
 		})
 
 		It("should return zero time when not set", func() {
-			observed := &agent_monitor.AgentMonitorObservedState{}
+			observed := &agent.AgentMonitorObservedState{}
 			Expect(observed.GetTimestamp()).To(Equal(time.Time{}))
 		})
 	})
 
 	Describe("GetObservedDesiredState", func() {
 		It("should return an empty AgentMonitorDesiredState", func() {
-			observed := &agent_monitor.AgentMonitorObservedState{}
+			observed := &agent.AgentMonitorObservedState{}
 			desiredState := observed.GetObservedDesiredState()
 			Expect(desiredState).NotTo(BeNil())
 
-			agentDesiredState, ok := desiredState.(*agent_monitor.AgentMonitorDesiredState)
+			agentDesiredState, ok := desiredState.(*agent.AgentMonitorDesiredState)
 			Expect(ok).To(BeTrue())
 			Expect(agentDesiredState.ShutdownRequested()).To(BeFalse())
 		})
@@ -54,18 +54,18 @@ var _ = Describe("AgentMonitorObservedState", func() {
 var _ = Describe("AgentMonitorDesiredState", func() {
 	Describe("ShutdownRequested", func() {
 		It("should return false by default", func() {
-			desired := &agent_monitor.AgentMonitorDesiredState{}
+			desired := &agent.AgentMonitorDesiredState{}
 			Expect(desired.ShutdownRequested()).To(BeFalse())
 		})
 
 		It("should return true when set", func() {
-			desired := &agent_monitor.AgentMonitorDesiredState{}
+			desired := &agent.AgentMonitorDesiredState{}
 			desired.SetShutdownRequested(true)
 			Expect(desired.ShutdownRequested()).To(BeTrue())
 		})
 
 		It("should return false when set back", func() {
-			desired := &agent_monitor.AgentMonitorDesiredState{}
+			desired := &agent.AgentMonitorDesiredState{}
 			desired.SetShutdownRequested(true)
 			desired.SetShutdownRequested(false)
 			Expect(desired.ShutdownRequested()).To(BeFalse())

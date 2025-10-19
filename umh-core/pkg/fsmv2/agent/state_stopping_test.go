@@ -12,25 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package agent_monitor_test
+package agent_test
 
 import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/agent_monitor"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/agent"
 )
 
 var _ = Describe("StoppingState", func() {
 	var (
-		state    *agent_monitor.StoppingState
+		state    *agent.StoppingState
 		snapshot fsmv2.Snapshot
-		desired  *agent_monitor.AgentMonitorDesiredState
+		desired  *agent.AgentMonitorDesiredState
 	)
 
 	BeforeEach(func() {
-		state = &agent_monitor.StoppingState{}
-		desired = &agent_monitor.AgentMonitorDesiredState{}
+		state = &agent.StoppingState{}
+		desired = &agent.AgentMonitorDesiredState{}
 		desired.SetShutdownRequested(true)
 		snapshot = fsmv2.Snapshot{
 			Desired: desired,
@@ -40,7 +40,7 @@ var _ = Describe("StoppingState", func() {
 	Describe("Next", func() {
 		It("should transition to StoppedState immediately", func() {
 			nextState, _, _ := state.Next(snapshot)
-			Expect(nextState).To(BeAssignableToTypeOf(&agent_monitor.StoppedState{}))
+			Expect(nextState).To(BeAssignableToTypeOf(&agent.StoppedState{}))
 		})
 
 		It("should not signal anything", func() {

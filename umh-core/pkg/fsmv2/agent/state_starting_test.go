@@ -12,25 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package agent_monitor_test
+package agent_test
 
 import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/agent_monitor"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/agent"
 )
 
 var _ = Describe("StartingState", func() {
 	var (
-		state    *agent_monitor.StartingState
+		state    *agent.StartingState
 		snapshot fsmv2.Snapshot
-		desired  *agent_monitor.AgentMonitorDesiredState
+		desired  *agent.AgentMonitorDesiredState
 	)
 
 	BeforeEach(func() {
-		state = &agent_monitor.StartingState{}
-		desired = &agent_monitor.AgentMonitorDesiredState{}
+		state = &agent.StartingState{}
+		desired = &agent.AgentMonitorDesiredState{}
 	})
 
 	Describe("Next", func() {
@@ -44,7 +44,7 @@ var _ = Describe("StartingState", func() {
 
 			It("should transition to StoppingState", func() {
 				nextState, _, _ := state.Next(snapshot)
-				Expect(nextState).To(BeAssignableToTypeOf(&agent_monitor.StoppingState{}))
+				Expect(nextState).To(BeAssignableToTypeOf(&agent.StoppingState{}))
 			})
 
 			It("should not signal anything", func() {
@@ -68,7 +68,7 @@ var _ = Describe("StartingState", func() {
 
 			It("should transition to DegradedState immediately", func() {
 				nextState, _, _ := state.Next(snapshot)
-				Expect(nextState).To(BeAssignableToTypeOf(&agent_monitor.DegradedState{}))
+				Expect(nextState).To(BeAssignableToTypeOf(&agent.DegradedState{}))
 			})
 
 			It("should not signal anything", func() {

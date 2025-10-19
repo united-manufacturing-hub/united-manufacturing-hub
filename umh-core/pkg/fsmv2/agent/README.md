@@ -4,7 +4,7 @@ Agent health monitoring implementation using FSM v2 architecture.
 
 ## Overview
 
-The agent_monitor FSM v2 tracks the health status of the UMH agent by continuously monitoring latency, release version, and overall operational health. This is a **passive monitoring FSM** - it observes metrics and transitions states based on health conditions without performing any control actions.
+The agent FSM v2 tracks the health status of the UMH agent by continuously monitoring latency, release version, and overall operational health. This is a **passive monitoring FSM** - it observes metrics and transitions states based on health conditions without performing any control actions.
 
 ### Key Characteristics
 
@@ -26,7 +26,7 @@ This provides visibility into the agent's operational state and enables automate
 
 ## Architecture
 
-The agent_monitor FSM v2 implements the triangular model from the FSM v2 RFC:
+The agent FSM v2 implements the triangular model from the FSM v2 RFC:
 
 ```
         IDENTITY
@@ -49,7 +49,7 @@ The agent_monitor FSM v2 implements the triangular model from the FSM v2 RFC:
 
 **Identity**:
 - ID: Unique identifier for this worker
-- Name: "agent_monitor"
+- Name: User-defined name for this agent monitoring worker
 - WorkerType: "agent_monitor"
 
 **Desired State**:
@@ -323,7 +323,7 @@ serviceInfo, err := w.monitorService.Status(ctx, fsm.SystemSnapshot{})
 **What this replaces**: The entire `_monitor` logic from FSM v1. Previously, the monitoring logic was embedded in the FSM callbacks. Now it's cleanly separated:
 
 - **Service layer** (`pkg/service/agent_monitor`): Collects health metrics
-- **FSM layer** (`pkg/fsmv2/agent_monitor`): Makes state transition decisions based on metrics
+- **FSM layer** (`pkg/fsmv2/agent`): Makes state transition decisions based on metrics
 
 ### Shutdown Handling
 
@@ -434,7 +434,7 @@ Describe("DeriveDesiredState", func() {
 
 ```bash
 # Run all tests
-cd pkg/fsmv2/agent_monitor
+cd pkg/fsmv2/agent
 go test
 
 # Run with coverage report
@@ -483,7 +483,7 @@ This ensures the FSM is deterministic and timestamp bugs cannot occur.
 - Manual retry logic and error handling
 - State stored only in memory
 
-**FSM v2** (`pkg/fsmv2/agent_monitor`):
+**FSM v2** (`pkg/fsmv2/agent`):
 - Clean separation: Service collects metrics, FSM makes decisions
 - Worker pattern with explicit Identity/Desired/Observed model
 - Supervisor handles data freshness, states assume fresh data
@@ -514,7 +514,7 @@ This ensures the FSM is deterministic and timestamp bugs cannot occur.
 3. Health-based alerting or automated responses
 4. Historical health tracking and trending
 
-**Why deferred**: FSM v2 and agent_monitor implementation are complete and tested. Integration requires broader system changes and is tracked separately.
+**Why deferred**: FSM v2 agent monitoring implementation is complete and tested. Integration requires broader system changes and is tracked separately.
 
 ## References
 

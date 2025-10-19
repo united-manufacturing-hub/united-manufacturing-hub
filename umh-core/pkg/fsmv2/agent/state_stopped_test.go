@@ -12,25 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package agent_monitor_test
+package agent_test
 
 import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/agent_monitor"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/agent"
 )
 
 var _ = Describe("StoppedState", func() {
 	var (
-		state    *agent_monitor.StoppedState
+		state    *agent.StoppedState
 		snapshot fsmv2.Snapshot
-		desired  *agent_monitor.AgentMonitorDesiredState
+		desired  *agent.AgentMonitorDesiredState
 	)
 
 	BeforeEach(func() {
-		state = &agent_monitor.StoppedState{}
-		desired = &agent_monitor.AgentMonitorDesiredState{}
+		state = &agent.StoppedState{}
+		desired = &agent.AgentMonitorDesiredState{}
 	})
 
 	Describe("Next", func() {
@@ -68,7 +68,7 @@ var _ = Describe("StoppedState", func() {
 
 			It("should transition to StartingState", func() {
 				nextState, _, _ := state.Next(snapshot)
-				Expect(nextState).To(BeAssignableToTypeOf(&agent_monitor.StartingState{}))
+				Expect(nextState).To(BeAssignableToTypeOf(&agent.StartingState{}))
 			})
 
 			It("should not signal anything", func() {

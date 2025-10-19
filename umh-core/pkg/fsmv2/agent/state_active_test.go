@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package agent_monitor_test
+package agent_test
 
 import (
 	"time"
@@ -20,23 +20,23 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/agent_monitor"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/agent"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	agentmonitorservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/agent_monitor"
 )
 
 var _ = Describe("ActiveState", func() {
 	var (
-		state    *agent_monitor.ActiveState
+		state    *agent.ActiveState
 		snapshot fsmv2.Snapshot
-		desired  *agent_monitor.AgentMonitorDesiredState
-		observed *agent_monitor.AgentMonitorObservedState
+		desired  *agent.AgentMonitorDesiredState
+		observed *agent.AgentMonitorObservedState
 	)
 
 	BeforeEach(func() {
-		state = &agent_monitor.ActiveState{}
-		desired = &agent_monitor.AgentMonitorDesiredState{}
-		observed = &agent_monitor.AgentMonitorObservedState{
+		state = &agent.ActiveState{}
+		desired = &agent.AgentMonitorDesiredState{}
+		observed = &agent.AgentMonitorObservedState{
 			ServiceInfo: healthyServiceInfo(),
 			CollectedAt: time.Now(),
 		}
@@ -54,7 +54,7 @@ var _ = Describe("ActiveState", func() {
 
 			It("should transition to StoppingState", func() {
 				nextState, _, _ := state.Next(snapshot)
-				Expect(nextState).To(BeAssignableToTypeOf(&agent_monitor.StoppingState{}))
+				Expect(nextState).To(BeAssignableToTypeOf(&agent.StoppingState{}))
 			})
 
 			It("should not signal anything", func() {
@@ -80,12 +80,12 @@ var _ = Describe("ActiveState", func() {
 
 			It("should transition to DegradedState", func() {
 				nextState, _, _ := state.Next(snapshot)
-				Expect(nextState).To(BeAssignableToTypeOf(&agent_monitor.DegradedState{}))
+				Expect(nextState).To(BeAssignableToTypeOf(&agent.DegradedState{}))
 			})
 
 			It("should include reason for degraded state", func() {
 				nextState, _, _ := state.Next(snapshot)
-				degradedState := nextState.(*agent_monitor.DegradedState)
+				degradedState := nextState.(*agent.DegradedState)
 				Expect(degradedState.Reason()).To(ContainSubstring("No service info available"))
 			})
 		})
@@ -102,12 +102,12 @@ var _ = Describe("ActiveState", func() {
 
 			It("should transition to DegradedState", func() {
 				nextState, _, _ := state.Next(snapshot)
-				Expect(nextState).To(BeAssignableToTypeOf(&agent_monitor.DegradedState{}))
+				Expect(nextState).To(BeAssignableToTypeOf(&agent.DegradedState{}))
 			})
 
 			It("should include reason for degraded state", func() {
 				nextState, _, _ := state.Next(snapshot)
-				degradedState := nextState.(*agent_monitor.DegradedState)
+				degradedState := nextState.(*agent.DegradedState)
 				Expect(degradedState.Reason()).To(ContainSubstring("Agent health"))
 			})
 		})
@@ -149,12 +149,12 @@ var _ = Describe("ActiveState", func() {
 
 			It("should transition to DegradedState", func() {
 				nextState, _, _ := state.Next(snapshot)
-				Expect(nextState).To(BeAssignableToTypeOf(&agent_monitor.DegradedState{}))
+				Expect(nextState).To(BeAssignableToTypeOf(&agent.DegradedState{}))
 			})
 
 			It("should include diagnostic reason", func() {
 				nextState, _, _ := state.Next(snapshot)
-				degradedState := nextState.(*agent_monitor.DegradedState)
+				degradedState := nextState.(*agent.DegradedState)
 				Expect(degradedState.Reason()).To(ContainSubstring("Invalid observed state type"))
 			})
 		})
@@ -196,5 +196,5 @@ func (i *invalidObservedState) GetTimestamp() time.Time {
 }
 
 func (i *invalidObservedState) GetObservedDesiredState() fsmv2.DesiredState {
-	return &agent_monitor.AgentMonitorDesiredState{}
+	return &agent.AgentMonitorDesiredState{}
 }

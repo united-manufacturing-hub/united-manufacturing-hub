@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package agent_monitor_test
+package agent_test
 
 import (
 	"time"
@@ -20,7 +20,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/agent_monitor"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/agent"
 )
 
 // These tests enforce the architectural boundary between Supervisor and States.
@@ -39,21 +39,21 @@ var _ = Describe("State Timestamp Independence", func() {
 	Describe("ActiveState", func() {
 		Context("when observation data is very stale", func() {
 			It("should not check timestamp - focus only on health metrics", func() {
-				state := &agent_monitor.ActiveState{}
+				state := &agent.ActiveState{}
 
-				observed := &agent_monitor.AgentMonitorObservedState{
+				observed := &agent.AgentMonitorObservedState{
 					ServiceInfo: healthyServiceInfo(),
 					CollectedAt: time.Now().Add(-60 * time.Second),
 				}
 
 				snapshot := fsmv2.Snapshot{
-					Desired:  &agent_monitor.AgentMonitorDesiredState{},
+					Desired:  &agent.AgentMonitorDesiredState{},
 					Observed: observed,
 				}
 
 				nextState, _, _ := state.Next(snapshot)
 
-				_, ok := nextState.(*agent_monitor.ActiveState)
+				_, ok := nextState.(*agent.ActiveState)
 				Expect(ok).To(BeTrue(), "should remain in ActiveState with stale timestamp")
 			})
 		})
@@ -62,21 +62,21 @@ var _ = Describe("State Timestamp Independence", func() {
 	Describe("DegradedState", func() {
 		Context("when observation data is very stale but metrics are healthy", func() {
 			It("should not check timestamp - focus only on health metrics", func() {
-				state := &agent_monitor.DegradedState{}
+				state := &agent.DegradedState{}
 
-				observed := &agent_monitor.AgentMonitorObservedState{
+				observed := &agent.AgentMonitorObservedState{
 					ServiceInfo: healthyServiceInfo(),
 					CollectedAt: time.Now().Add(-60 * time.Second),
 				}
 
 				snapshot := fsmv2.Snapshot{
-					Desired:  &agent_monitor.AgentMonitorDesiredState{},
+					Desired:  &agent.AgentMonitorDesiredState{},
 					Observed: observed,
 				}
 
 				nextState, _, _ := state.Next(snapshot)
 
-				_, ok := nextState.(*agent_monitor.ActiveState)
+				_, ok := nextState.(*agent.ActiveState)
 				Expect(ok).To(BeTrue(), "should transition to Active on healthy metrics (ignoring timestamp)")
 			})
 		})

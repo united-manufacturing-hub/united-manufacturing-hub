@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package agent_monitor_test
+package agent_test
 
 import (
 	"context"
@@ -22,7 +22,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/agent_monitor"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/agent"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	agent_monitor_service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/agent_monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
@@ -30,7 +30,7 @@ import (
 
 var _ = Describe("AgentMonitorWorker", func() {
 	var (
-		worker      *agent_monitor.AgentMonitorWorker
+		worker      *agent.AgentMonitorWorker
 		mockService *agent_monitor_service.MockService
 		ctx         context.Context
 		fs          filesystem.Service
@@ -40,7 +40,7 @@ var _ = Describe("AgentMonitorWorker", func() {
 		ctx = context.Background()
 		fs = filesystem.NewDefaultService()
 		mockService = agent_monitor_service.NewMockService(fs)
-		worker = agent_monitor.NewAgentMonitorWorker("test-id", "test-agent", mockService)
+		worker = agent.NewAgentMonitorWorker("test-id", "test-agent", mockService)
 	})
 
 	Describe("CollectObservedState", func() {
@@ -54,7 +54,7 @@ var _ = Describe("AgentMonitorWorker", func() {
 				Expect(err).NotTo(HaveOccurred())
 				Expect(observed).NotTo(BeNil())
 
-				agentObserved := observed.(*agent_monitor.AgentMonitorObservedState)
+				agentObserved := observed.(*agent.AgentMonitorObservedState)
 				Expect(agentObserved.ServiceInfo).NotTo(BeNil())
 				Expect(agentObserved.ServiceInfo.OverallHealth).To(Equal(models.Active))
 				Expect(agentObserved.ServiceInfo.LatencyHealth).To(Equal(models.Active))
@@ -65,7 +65,7 @@ var _ = Describe("AgentMonitorWorker", func() {
 				observed, err := worker.CollectObservedState(ctx)
 				Expect(err).NotTo(HaveOccurred())
 
-				agentObserved := observed.(*agent_monitor.AgentMonitorObservedState)
+				agentObserved := observed.(*agent.AgentMonitorObservedState)
 				Expect(agentObserved.ServiceInfo.Location).NotTo(BeEmpty())
 			})
 
@@ -73,7 +73,7 @@ var _ = Describe("AgentMonitorWorker", func() {
 				observed, err := worker.CollectObservedState(ctx)
 				Expect(err).NotTo(HaveOccurred())
 
-				agentObserved := observed.(*agent_monitor.AgentMonitorObservedState)
+				agentObserved := observed.(*agent.AgentMonitorObservedState)
 				Expect(agentObserved.ServiceInfo.Release).NotTo(BeNil())
 				Expect(agentObserved.ServiceInfo.Release.Channel).NotTo(BeEmpty())
 				Expect(agentObserved.ServiceInfo.Release.Version).NotTo(BeEmpty())
@@ -85,7 +85,7 @@ var _ = Describe("AgentMonitorWorker", func() {
 				after := time.Now()
 				Expect(err).NotTo(HaveOccurred())
 
-				agentObserved := observed.(*agent_monitor.AgentMonitorObservedState)
+				agentObserved := observed.(*agent.AgentMonitorObservedState)
 				Expect(agentObserved.CollectedAt).NotTo(BeZero())
 				Expect(agentObserved.CollectedAt).To(BeTemporally(">=", before))
 				Expect(agentObserved.CollectedAt).To(BeTemporally("<=", after))
@@ -101,7 +101,7 @@ var _ = Describe("AgentMonitorWorker", func() {
 				observed, err := worker.CollectObservedState(ctx)
 				Expect(err).NotTo(HaveOccurred())
 
-				agentObserved := observed.(*agent_monitor.AgentMonitorObservedState)
+				agentObserved := observed.(*agent.AgentMonitorObservedState)
 				Expect(agentObserved.ServiceInfo.OverallHealth).To(Equal(models.Degraded))
 				Expect(agentObserved.ServiceInfo.LatencyHealth).To(Equal(models.Degraded))
 			})
@@ -131,7 +131,7 @@ var _ = Describe("AgentMonitorWorker", func() {
 				Expect(err).NotTo(HaveOccurred())
 				Expect(observed).NotTo(BeNil())
 
-				agentObserved := observed.(*agent_monitor.AgentMonitorObservedState)
+				agentObserved := observed.(*agent.AgentMonitorObservedState)
 				Expect(agentObserved.ServiceInfo).To(BeNil())
 				Expect(agentObserved.CollectedAt).NotTo(BeZero())
 			})
@@ -145,7 +145,7 @@ var _ = Describe("AgentMonitorWorker", func() {
 				Expect(err).NotTo(HaveOccurred())
 				Expect(desired).NotTo(BeNil())
 
-				agentDesired := desired.(*agent_monitor.AgentMonitorDesiredState)
+				agentDesired := desired.(*agent.AgentMonitorDesiredState)
 				Expect(agentDesired.ShutdownRequested()).To(BeFalse())
 			})
 		})
@@ -156,7 +156,7 @@ var _ = Describe("AgentMonitorWorker", func() {
 				Expect(err).NotTo(HaveOccurred())
 				Expect(desired).NotTo(BeNil())
 
-				agentDesired := desired.(*agent_monitor.AgentMonitorDesiredState)
+				agentDesired := desired.(*agent.AgentMonitorDesiredState)
 				Expect(agentDesired.ShutdownRequested()).To(BeFalse())
 			})
 		})
@@ -165,7 +165,7 @@ var _ = Describe("AgentMonitorWorker", func() {
 	Describe("GetInitialState", func() {
 		It("should return StoppedState", func() {
 			initialState := worker.GetInitialState()
-			Expect(initialState).To(BeAssignableToTypeOf(&agent_monitor.StoppedState{}))
+			Expect(initialState).To(BeAssignableToTypeOf(&agent.StoppedState{}))
 		})
 
 		It("should return state with correct name", func() {
