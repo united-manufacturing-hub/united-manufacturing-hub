@@ -20,6 +20,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 
@@ -46,28 +47,28 @@ var _ = Describe("SQLiteStore", func() {
 
 	Context("when creating a new store", func() {
 		It("should create store successfully with valid path", func() {
-			store, err := basic.NewSQLiteStore(dbPath)
+			store, err := basic.NewStore(basic.DefaultConfig(dbPath))
 			Expect(err).NotTo(HaveOccurred())
 			Expect(store).NotTo(BeNil())
 
-			defer func() { _ = store.Close() }()
+			defer func() { _ = store.Close(context.Background()) }()
 		})
 
 		It("should fail with invalid path", func() {
 			invalidPath := "/nonexistent/directory/that/does/not/exist/test.db"
 
-			store, err := basic.NewSQLiteStore(invalidPath)
+			store, err := basic.NewStore(basic.DefaultConfig(invalidPath))
 			Expect(err).To(HaveOccurred())
 
 			if store != nil {
-				_ = store.Close()
+				_ = store.Close(context.Background())
 			}
 		})
 
 		It("should enable WAL mode", func() {
-			store, err := basic.NewSQLiteStore(dbPath)
+			store, err := basic.NewStore(basic.DefaultConfig(dbPath))
 			Expect(err).NotTo(HaveOccurred())
-			defer func() { _ = store.Close() }()
+			defer func() { _ = store.Close(context.Background()) }()
 
 			ctx := context.Background()
 			err = store.CreateCollection(ctx, "test_collection", nil)
@@ -83,38 +84,38 @@ var _ = Describe("SQLiteStore", func() {
 				Skip("Skipping darwin-specific test on non-darwin platform")
 			}
 
-			store, err := basic.NewSQLiteStore(dbPath)
+			store, err := basic.NewStore(basic.DefaultConfig(dbPath))
 			Expect(err).NotTo(HaveOccurred())
-			defer func() { _ = store.Close() }()
+			defer func() { _ = store.Close(context.Background()) }()
 		})
 	})
 
 	Context("when closing the store", func() {
 		It("should close successfully", func() {
-			store, err := basic.NewSQLiteStore(dbPath)
+			store, err := basic.NewStore(basic.DefaultConfig(dbPath))
 			Expect(err).NotTo(HaveOccurred())
 
-			err = store.Close()
+			err = store.Close(context.Background())
 			Expect(err).NotTo(HaveOccurred())
 		})
 
-		It("should return error when called twice", func() {
-			store, err := basic.NewSQLiteStore(dbPath)
+		It("should be idempotent when called twice", func() {
+			store, err := basic.NewStore(basic.DefaultConfig(dbPath))
 			Expect(err).NotTo(HaveOccurred())
 
-			err = store.Close()
+			err = store.Close(context.Background())
 			Expect(err).NotTo(HaveOccurred())
 
-			err = store.Close()
-			Expect(err).To(HaveOccurred())
+			err = store.Close(context.Background())
+			Expect(err).NotTo(HaveOccurred())
 		})
 	})
 
 	Context("when implementing Store interface", func() {
 		It("should satisfy the Store interface", func() {
-			store, err := basic.NewSQLiteStore(dbPath)
+			store, err := basic.NewStore(basic.DefaultConfig(dbPath))
 			Expect(err).NotTo(HaveOccurred())
-			defer func() { _ = store.Close() }()
+			defer func() { _ = store.Close(context.Background()) }()
 
 			_ = store
 		})
@@ -125,13 +126,13 @@ var _ = Describe("SQLiteStore", func() {
 
 		BeforeEach(func() {
 			var err error
-			store, err = basic.NewSQLiteStore(dbPath)
+			store, err = basic.NewStore(basic.DefaultConfig(dbPath))
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		AfterEach(func() {
 			if store != nil {
-				_ = store.Close()
+				_ = store.Close(context.Background())
 			}
 		})
 
@@ -214,7 +215,7 @@ var _ = Describe("SQLiteStore", func() {
 
 		It("should return error when store is closed", func() {
 			ctx := context.Background()
-			_ = store.Close()
+			_ = store.Close(context.Background())
 
 			err := store.CreateCollection(ctx, "test_collection", nil)
 			Expect(err).To(HaveOccurred())
@@ -227,13 +228,13 @@ var _ = Describe("SQLiteStore", func() {
 
 		BeforeEach(func() {
 			var err error
-			store, err = basic.NewSQLiteStore(dbPath)
+			store, err = basic.NewStore(basic.DefaultConfig(dbPath))
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		AfterEach(func() {
 			if store != nil {
-				_ = store.Close()
+				_ = store.Close(context.Background())
 			}
 		})
 
@@ -297,7 +298,7 @@ var _ = Describe("SQLiteStore", func() {
 
 		It("should return error when store is closed", func() {
 			ctx := context.Background()
-			_ = store.Close()
+			_ = store.Close(context.Background())
 
 			err := store.DropCollection(ctx, "test_collection")
 			Expect(err).To(HaveOccurred())
@@ -327,13 +328,13 @@ var _ = Describe("SQLiteStore", func() {
 
 		BeforeEach(func() {
 			var err error
-			store, err = basic.NewSQLiteStore(dbPath)
+			store, err = basic.NewStore(basic.DefaultConfig(dbPath))
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		AfterEach(func() {
 			if store != nil {
-				_ = store.Close()
+				_ = store.Close(context.Background())
 			}
 		})
 
@@ -367,13 +368,13 @@ var _ = Describe("SQLiteStore", func() {
 
 		BeforeEach(func() {
 			var err error
-			store, err = basic.NewSQLiteStore(dbPath)
+			store, err = basic.NewStore(basic.DefaultConfig(dbPath))
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		AfterEach(func() {
 			if store != nil {
-				_ = store.Close()
+				_ = store.Close(context.Background())
 			}
 		})
 
@@ -429,13 +430,13 @@ var _ = Describe("SQLiteStore", func() {
 
 		BeforeEach(func() {
 			var err error
-			store, err = basic.NewSQLiteStore(dbPath)
+			store, err = basic.NewStore(basic.DefaultConfig(dbPath))
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		AfterEach(func() {
 			if store != nil {
-				_ = store.Close()
+				_ = store.Close(context.Background())
 			}
 		})
 
@@ -500,13 +501,13 @@ var _ = Describe("SQLiteStore", func() {
 
 		BeforeEach(func() {
 			var err error
-			store, err = basic.NewSQLiteStore(dbPath)
+			store, err = basic.NewStore(basic.DefaultConfig(dbPath))
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		AfterEach(func() {
 			if store != nil {
-				_ = store.Close()
+				_ = store.Close(context.Background())
 			}
 		})
 
@@ -675,7 +676,7 @@ var _ = Describe("SQLiteStore", func() {
 			err := store.CreateCollection(ctx, "test_closed", nil)
 			Expect(err).NotTo(HaveOccurred())
 
-			_ = store.Close()
+			_ = store.Close(context.Background())
 
 			doc := basic.Document{"test": "value"}
 			_, err = store.Insert(ctx, "test_closed", doc)
@@ -724,13 +725,13 @@ var _ = Describe("SQLiteStore", func() {
 
 		BeforeEach(func() {
 			var err error
-			store, err = basic.NewSQLiteStore(dbPath)
+			store, err = basic.NewStore(basic.DefaultConfig(dbPath))
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		AfterEach(func() {
 			if store != nil {
-				_ = store.Close()
+				_ = store.Close(context.Background())
 			}
 		})
 
@@ -849,13 +850,13 @@ var _ = Describe("SQLiteStore", func() {
 
 		BeforeEach(func() {
 			var err error
-			store, err = basic.NewSQLiteStore(dbPath)
+			store, err = basic.NewStore(basic.DefaultConfig(dbPath))
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		AfterEach(func() {
 			if store != nil {
-				_ = store.Close()
+				_ = store.Close(context.Background())
 			}
 		})
 
@@ -947,7 +948,7 @@ var _ = Describe("SQLiteStore", func() {
 			id, err := store.Insert(ctx, "test_closed_get", doc)
 			Expect(err).NotTo(HaveOccurred())
 
-			_ = store.Close()
+			_ = store.Close(context.Background())
 
 			_, err = store.Get(ctx, "test_closed_get", id)
 			Expect(err).To(HaveOccurred())
@@ -1109,13 +1110,13 @@ var _ = Describe("SQLiteStore", func() {
 
 		BeforeEach(func() {
 			var err error
-			store, err = basic.NewSQLiteStore(dbPath)
+			store, err = basic.NewStore(basic.DefaultConfig(dbPath))
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		AfterEach(func() {
 			if store != nil {
-				_ = store.Close()
+				_ = store.Close(context.Background())
 			}
 		})
 
@@ -1244,13 +1245,13 @@ var _ = Describe("SQLiteStore", func() {
 
 		BeforeEach(func() {
 			var err error
-			store, err = basic.NewSQLiteStore(dbPath)
+			store, err = basic.NewStore(basic.DefaultConfig(dbPath))
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		AfterEach(func() {
 			if store != nil {
-				_ = store.Close()
+				_ = store.Close(context.Background())
 			}
 		})
 
@@ -1385,7 +1386,7 @@ var _ = Describe("SQLiteStore", func() {
 			id, err := store.Insert(ctx, "test_update_closed", basic.Document{"test": "value"})
 			Expect(err).NotTo(HaveOccurred())
 
-			_ = store.Close()
+			_ = store.Close(context.Background())
 
 			err = store.Update(ctx, "test_update_closed", id, basic.Document{"new": "value"})
 			Expect(err).To(HaveOccurred())
@@ -1398,13 +1399,13 @@ var _ = Describe("SQLiteStore", func() {
 
 		BeforeEach(func() {
 			var err error
-			store, err = basic.NewSQLiteStore(dbPath)
+			store, err = basic.NewStore(basic.DefaultConfig(dbPath))
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		AfterEach(func() {
 			if store != nil {
-				_ = store.Close()
+				_ = store.Close(context.Background())
 			}
 		})
 
@@ -1498,13 +1499,13 @@ var _ = Describe("SQLiteStore", func() {
 
 		BeforeEach(func() {
 			var err error
-			store, err = basic.NewSQLiteStore(dbPath)
+			store, err = basic.NewStore(basic.DefaultConfig(dbPath))
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		AfterEach(func() {
 			if store != nil {
-				_ = store.Close()
+				_ = store.Close(context.Background())
 			}
 		})
 
@@ -1581,7 +1582,7 @@ var _ = Describe("SQLiteStore", func() {
 			id, err := store.Insert(ctx, "test_delete_closed", basic.Document{"test": "value"})
 			Expect(err).NotTo(HaveOccurred())
 
-			_ = store.Close()
+			_ = store.Close(context.Background())
 
 			err = store.Delete(ctx, "test_delete_closed", id)
 			Expect(err).To(HaveOccurred())
@@ -1594,13 +1595,13 @@ var _ = Describe("SQLiteStore", func() {
 
 		BeforeEach(func() {
 			var err error
-			store, err = basic.NewSQLiteStore(dbPath)
+			store, err = basic.NewStore(basic.DefaultConfig(dbPath))
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		AfterEach(func() {
 			if store != nil {
-				_ = store.Close()
+				_ = store.Close(context.Background())
 			}
 		})
 
@@ -2020,7 +2021,7 @@ var _ = Describe("SQLiteStore", func() {
 			err := store.CreateCollection(ctx, "test_find_closed", nil)
 			Expect(err).NotTo(HaveOccurred())
 
-			_ = store.Close()
+			_ = store.Close(context.Background())
 
 			query := basic.NewQuery()
 			_, err = store.Find(ctx, "test_find_closed", *query)
@@ -2096,13 +2097,13 @@ var _ = Describe("SQLiteStore", func() {
 
 		BeforeEach(func() {
 			var err error
-			store, err = basic.NewSQLiteStore(dbPath)
+			store, err = basic.NewStore(basic.DefaultConfig(dbPath))
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		AfterEach(func() {
 			if store != nil {
-				_ = store.Close()
+				_ = store.Close(context.Background())
 			}
 		})
 
@@ -2218,13 +2219,13 @@ var _ = Describe("SQLiteStore", func() {
 
 		BeforeEach(func() {
 			var err error
-			store, err = basic.NewSQLiteStore(dbPath)
+			store, err = basic.NewStore(basic.DefaultConfig(dbPath))
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		AfterEach(func() {
 			if store != nil {
-				_ = store.Close()
+				_ = store.Close(context.Background())
 			}
 		})
 
@@ -2317,13 +2318,13 @@ var _ = Describe("SQLiteStore", func() {
 
 		BeforeEach(func() {
 			var err error
-			store, err = basic.NewSQLiteStore(dbPath)
+			store, err = basic.NewStore(basic.DefaultConfig(dbPath))
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		AfterEach(func() {
 			if store != nil {
-				_ = store.Close()
+				_ = store.Close(context.Background())
 			}
 		})
 
@@ -2374,13 +2375,13 @@ var _ = Describe("SQLiteStore", func() {
 
 		BeforeEach(func() {
 			var err error
-			store, err = basic.NewSQLiteStore(dbPath)
+			store, err = basic.NewStore(basic.DefaultConfig(dbPath))
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		AfterEach(func() {
 			if store != nil {
-				_ = store.Close()
+				_ = store.Close(context.Background())
 			}
 		})
 
@@ -2437,13 +2438,13 @@ var _ = Describe("SQLiteStore Integration", func() {
 		tempDir = GinkgoT().TempDir()
 		dbPath = filepath.Join(tempDir, "test.db")
 		var err error
-		store, err = basic.NewSQLiteStore(dbPath)
+		store, err = basic.NewStore(basic.DefaultConfig(dbPath))
 		Expect(err).NotTo(HaveOccurred())
 	})
 
 	AfterEach(func() {
 		if store != nil {
-			_ = store.Close()
+			_ = store.Close(context.Background())
 		}
 	})
 
@@ -2567,10 +2568,10 @@ var _ = Describe("SQLiteStore Integration", func() {
 				testDocs = append(testDocs, id)
 			}
 
-			err = store.Close()
+			err = store.Close(context.Background())
 			Expect(err).NotTo(HaveOccurred())
 
-			store, err = basic.NewSQLiteStore(dbPath)
+			store, err = basic.NewStore(basic.DefaultConfig(dbPath))
 			Expect(err).NotTo(HaveOccurred())
 
 			for idx, id := range testDocs {
@@ -2627,6 +2628,200 @@ var _ = Describe("SQLiteStore Integration", func() {
 
 			getP99 := calculatePercentileDuration(getDurations, 99)
 			Expect(getP99.Milliseconds()).To(BeNumerically("<", 5), "Get p99 should be < 5ms")
+		})
+	})
+
+	Context("Maintenance operations", func() {
+		var (
+			store basic.Store
+			ctx   context.Context
+		)
+
+		BeforeEach(func() {
+			ctx = context.Background()
+			cfg := basic.DefaultConfig(dbPath)
+			cfg.MaintenanceOnShutdown = false
+			var err error
+			store, err = basic.NewStore(cfg)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		AfterEach(func() {
+			if store != nil {
+				_ = store.Close(context.Background())
+			}
+		})
+
+		It("should run VACUUM and ANALYZE successfully", func() {
+			err := store.CreateCollection(ctx, "test", nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			for i := 0; i < 100; i++ {
+				_, err := store.Insert(ctx, "test", basic.Document{
+					"value": i,
+					"data":  strings.Repeat("x", 1000),
+				})
+				Expect(err).NotTo(HaveOccurred())
+			}
+
+			maintenanceCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+			defer cancel()
+
+			err = store.Maintenance(maintenanceCtx)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should respect context timeout during Maintenance", func() {
+			err := store.CreateCollection(ctx, "test", nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			for i := 0; i < 1000; i++ {
+				_, err := store.Insert(ctx, "test", basic.Document{
+					"value": i,
+					"data":  strings.Repeat("x", 10000),
+				})
+				Expect(err).NotTo(HaveOccurred())
+			}
+
+			timeoutCtx, cancel := context.WithTimeout(ctx, 1*time.Millisecond)
+			defer cancel()
+
+			err = store.Maintenance(timeoutCtx)
+			Expect(errors.Is(err, context.DeadlineExceeded)).To(BeTrue())
+		})
+
+		It("should respect context cancellation during Maintenance", func() {
+			err := store.CreateCollection(ctx, "test", nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			for i := 0; i < 500; i++ {
+				_, err := store.Insert(ctx, "test", basic.Document{
+					"value": i,
+					"data":  strings.Repeat("x", 5000),
+				})
+				Expect(err).NotTo(HaveOccurred())
+			}
+
+			cancelCtx, cancel := context.WithCancel(ctx)
+			cancel()
+
+			err = store.Maintenance(cancelCtx)
+			Expect(errors.Is(err, context.Canceled)).To(BeTrue())
+		})
+
+		It("should return error when store is closed", func() {
+			err := store.Close(context.Background())
+			Expect(err).NotTo(HaveOccurred())
+
+			err = store.Maintenance(ctx)
+			Expect(err).To(MatchError("store is closed"))
+		})
+
+		It("should be idempotent - safe to call multiple times", func() {
+			err := store.CreateCollection(ctx, "test", nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = store.Insert(ctx, "test", basic.Document{"value": 1})
+			Expect(err).NotTo(HaveOccurred())
+
+			for i := 0; i < 3; i++ {
+				err = store.Maintenance(ctx)
+				Expect(err).NotTo(HaveOccurred())
+			}
+		})
+	})
+
+	Context("Close with maintenance", func() {
+		It("should run maintenance on shutdown when enabled", func() {
+			ctx := context.Background()
+			cfg := basic.DefaultConfig(dbPath)
+			cfg.MaintenanceOnShutdown = true
+
+			var err error
+			store, err := basic.NewStore(cfg)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = store.CreateCollection(ctx, "test", nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			for i := 0; i < 100; i++ {
+				_, err = store.Insert(ctx, "test", basic.Document{
+					"value": i,
+					"data":  strings.Repeat("x", 1000),
+				})
+				Expect(err).NotTo(HaveOccurred())
+			}
+
+			closeCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+
+			err = store.Close(closeCtx)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should skip maintenance when disabled", func() {
+			ctx := context.Background()
+			cfg := basic.DefaultConfig(dbPath)
+			cfg.MaintenanceOnShutdown = false
+
+			var err error
+			store, err := basic.NewStore(cfg)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = store.CreateCollection(ctx, "test", nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			start := time.Now()
+			err = store.Close(context.Background())
+			duration := time.Since(start)
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(duration).To(BeNumerically("<", 100*time.Millisecond))
+		})
+
+		It("should close database even if maintenance times out", func() {
+			ctx := context.Background()
+			cfg := basic.DefaultConfig(dbPath)
+			cfg.MaintenanceOnShutdown = true
+
+			var err error
+			store, err := basic.NewStore(cfg)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = store.CreateCollection(ctx, "test", nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			for i := 0; i < 1000; i++ {
+				_, err = store.Insert(ctx, "test", basic.Document{
+					"value": i,
+					"data":  strings.Repeat("x", 10000),
+				})
+				Expect(err).NotTo(HaveOccurred())
+			}
+
+			closeCtx, cancel := context.WithTimeout(context.Background(), 1*time.Millisecond)
+			defer cancel()
+
+			err = store.Close(closeCtx)
+
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("maintenance incomplete"))
+
+			_, err = store.Get(ctx, "test", "any-id")
+			Expect(err).To(MatchError("store is closed"))
+		})
+
+		It("should be idempotent - safe to close multiple times", func() {
+			cfg := basic.DefaultConfig(dbPath)
+			var err error
+			store, err := basic.NewStore(cfg)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = store.Close(context.Background())
+			Expect(err).NotTo(HaveOccurred())
+
+			err = store.Close(context.Background())
+			Expect(err).NotTo(HaveOccurred())
 		})
 	})
 })

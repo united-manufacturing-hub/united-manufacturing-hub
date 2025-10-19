@@ -26,12 +26,12 @@ func BenchmarkInsert(b *testing.B) {
 	tempDir := b.TempDir()
 	dbPath := filepath.Join(tempDir, "bench.db")
 
-	store, err := basic.NewSQLiteStore(dbPath)
+	store, err := basic.NewStore(basic.DefaultConfig(dbPath))
 	if err != nil {
 		b.Fatalf("Failed to create store: %v", err)
 	}
 
-	defer func() { _ = store.Close() }()
+	defer func() { _ = store.Close(context.Background()) }()
 
 	ctx := context.Background()
 
@@ -59,12 +59,12 @@ func BenchmarkGet(b *testing.B) {
 	tempDir := b.TempDir()
 	dbPath := filepath.Join(tempDir, "bench.db")
 
-	store, err := basic.NewSQLiteStore(dbPath)
+	store, err := basic.NewStore(basic.DefaultConfig(dbPath))
 	if err != nil {
 		b.Fatalf("Failed to create store: %v", err)
 	}
 
-	defer func() { _ = store.Close() }()
+	defer func() { _ = store.Close(context.Background()) }()
 
 	ctx := context.Background()
 
@@ -103,12 +103,12 @@ func BenchmarkUpdate(b *testing.B) {
 	tempDir := b.TempDir()
 	dbPath := filepath.Join(tempDir, "bench.db")
 
-	store, err := basic.NewSQLiteStore(dbPath)
+	store, err := basic.NewStore(basic.DefaultConfig(dbPath))
 	if err != nil {
 		b.Fatalf("Failed to create store: %v", err)
 	}
 
-	defer func() { _ = store.Close() }()
+	defer func() { _ = store.Close(context.Background()) }()
 
 	ctx := context.Background()
 
@@ -152,12 +152,12 @@ func BenchmarkDelete(b *testing.B) {
 	tempDir := b.TempDir()
 	dbPath := filepath.Join(tempDir, "bench.db")
 
-	store, err := basic.NewSQLiteStore(dbPath)
+	store, err := basic.NewStore(basic.DefaultConfig(dbPath))
 	if err != nil {
 		b.Fatalf("Failed to create store: %v", err)
 	}
 
-	defer func() { _ = store.Close() }()
+	defer func() { _ = store.Close(context.Background()) }()
 
 	ctx := context.Background()
 
@@ -195,12 +195,12 @@ func BenchmarkFind(b *testing.B) {
 	tempDir := b.TempDir()
 	dbPath := filepath.Join(tempDir, "bench.db")
 
-	store, err := basic.NewSQLiteStore(dbPath)
+	store, err := basic.NewStore(basic.DefaultConfig(dbPath))
 	if err != nil {
 		b.Fatalf("Failed to create store: %v", err)
 	}
 
-	defer func() { _ = store.Close() }()
+	defer func() { _ = store.Close(context.Background()) }()
 
 	ctx := context.Background()
 
@@ -241,12 +241,12 @@ func BenchmarkFindWithSort(b *testing.B) {
 	tempDir := b.TempDir()
 	dbPath := filepath.Join(tempDir, "bench.db")
 
-	store, err := basic.NewSQLiteStore(dbPath)
+	store, err := basic.NewStore(basic.DefaultConfig(dbPath))
 	if err != nil {
 		b.Fatalf("Failed to create store: %v", err)
 	}
 
-	defer func() { _ = store.Close() }()
+	defer func() { _ = store.Close(context.Background()) }()
 
 	ctx := context.Background()
 

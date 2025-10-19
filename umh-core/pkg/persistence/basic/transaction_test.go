@@ -52,7 +52,11 @@ func (m *mockStore) Find(ctx context.Context, collection string, query basic.Que
 	panic("not implemented")
 }
 
-func (m *mockStore) Close() error {
+func (m *mockStore) Maintenance(ctx context.Context) error {
+	panic("not implemented")
+}
+
+func (m *mockStore) Close(ctx context.Context) error {
 	panic("not implemented")
 }
 
@@ -104,7 +108,11 @@ func (t *mockTx) Find(ctx context.Context, collection string, query basic.Query)
 	return nil, nil
 }
 
-func (t *mockTx) Close() error {
+func (t *mockTx) Maintenance(ctx context.Context) error {
+	panic("not implemented")
+}
+
+func (t *mockTx) Close(ctx context.Context) error {
 	panic("not implemented")
 }
 
