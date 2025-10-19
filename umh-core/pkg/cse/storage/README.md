@@ -250,7 +250,7 @@ All components use Ginkgo v2 + Gomega:
 ginkgo -r ./pkg/cse/storage
 ```
 
-Current test coverage: 172 specs (includes schema versioning and feature registry)
+Current test coverage: 143 specs (Triangular + Registry + Pool + TxCache)
 
 ## References
 

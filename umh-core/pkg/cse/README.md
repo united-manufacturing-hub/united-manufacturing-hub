@@ -10,12 +10,31 @@ The CSE package is organized into three subpackages representing different archi
 
 ### Layer 3: Protocol (`pkg/cse/protocol/`)
 
-The lowest layer providing network and security interfaces:
-- **Transport interfaces**: Abstract network communication mechanisms
-- **Cryptographic interfaces**: Encryption/decryption operations
-- **Authorization interfaces**: Access control for encrypted data
+Network and security interfaces for CSE sync protocol.
 
-This layer is protocol-agnostic and crypto-agnostic, allowing different implementations to be swapped without affecting higher layers.
+**Transport Interface**:
+- Abstracts network layer (HTTP pull/push, WebSocket, etc.)
+- Defines RawMessage with UNVERIFIED sender
+- 5 typed errors: Network/Overflow/Config/Timeout/Auth
+- 18 contract tests, MockTransport for testing
+
+**Crypto Interface**:
+- E2E encryption with sender authentication
+- Combined encryption+auth prevents unsafe usage
+- Idempotent encryption via random nonce
+- Based on patent EP4512040A2 (blind relay design)
+- 17 contract tests, MockCrypto with XOR cipher
+
+**Authorizer Interface**:
+- ABAC (Attribute-Based Access Control)
+- Three permission levels:
+  * CanSubscribe (collection-level)
+  * CanReadField (field-level granular)
+  * CanWriteTransaction (write operation control)
+- Fail-closed security (deny by default)
+- 29 contract tests, MockAuthorizer with policy configuration
+
+**Total: 64 protocol tests passing**
 
 ### Layer 2: Storage (`pkg/cse/storage/`)
 
@@ -30,12 +49,16 @@ This layer is storage-agnostic, supporting various backends (disk, memory, datab
 ### Orchestration: Sync (`pkg/cse/sync/`)
 
 The orchestration layer coordinating synchronization:
-- **Sync state management**: Track synchronization status
+- **Sync state management**: 2-tier tracking (Frontend ↔ Edge)
 - **Retry logic**: Handle transient failures
 - **Conflict resolution**: Manage concurrent modifications
 - **Progress tracking**: Monitor and report sync operations
 
 This layer composes the protocol and storage layers to implement end-to-end sync workflows.
+
+**Note**: Relay is a transparent E2E encrypted proxy, NOT a sync tier. See `storage/ARCHITECTURE.md` for details.
+
+**Total: 29 sync tests passing**
 
 ## Design Principles
 
@@ -59,19 +82,47 @@ External Storage    External Network/Crypto
 - `storage` and `protocol` are independent (same layer, different domains)
 - Lower layers have no dependencies on upper layers
 
-## Usage Patterns
+## Quick Start
 
-### Basic Encryption Flow
+### Transport Interface
+```go
+import "github.com/united-manufacturing-hub/umh-core/pkg/cse/protocol"
 
-1. **Protocol layer**: Encrypt data using `Encryptor` interface
-2. **Storage layer**: Persist encrypted data using `Store` interface
-3. **Sync layer**: Orchestrate sync to remote using `SyncEngine`
+transport := protocol.NewMockTransport()
+rawMsg, err := transport.ReceiveMessage(ctx, subscriptionID)
+if err != nil {
+    // Handle typed errors: NetworkError, OverflowError, etc.
+}
+```
 
-### Reading Encrypted Data
+### Crypto Interface
+```go
+crypto := protocol.NewMockCrypto()
+encrypted, err := crypto.EncryptAndSign(ctx, plaintext, recipientID)
+plaintext, senderID, err := crypto.DecryptAndVerify(ctx, encrypted)
+```
 
-1. **Storage layer**: Retrieve encrypted data from `Cache` or `Store`
-2. **Protocol layer**: Decrypt data using `Encryptor` interface
-3. **Sync layer**: Handle cache misses by triggering sync from remote
+### Authorizer Interface
+```go
+authorizer := protocol.NewMockAuthorizer()
+if !authorizer.CanReadField(userID, collection, field) {
+    return errors.New("access denied")
+}
+```
+
+## Testing
+
+All components use Ginkgo v2 + Gomega:
+
+```bash
+ginkgo -r ./pkg/cse/
+```
+
+Current test coverage:
+- Protocol layer: 64 specs (Transport + Crypto + Authorizer)
+- Sync layer: 29 specs (state management)
+- Storage layer: 143 specs (Triangular + Registry + Pool + TxCache)
+- **Total: 236 specs**
 
 ## Development Roadmap
 
@@ -102,6 +153,13 @@ External Storage    External Network/Crypto
 - [Protocol Layer](./protocol/README.md) - Transport, crypto, and authorization interfaces
 - [Storage Layer](./storage/README.md) - Persistence patterns and interfaces
 - [Sync Layer](./sync/README.md) - Orchestration and synchronization logic
+
+## References
+
+- **Patent EP4512040A2**: E2E encryption with blind relay architecture
+- **Linear sync engine**: wzhudev/reverse-linear-sync-engine
+- **ENG-3622**: CSE RFC (Linear-quality UX for Kubernetes)
+- **ENG-3647**: FSM v2 RFC
 
 ## Contributing
 

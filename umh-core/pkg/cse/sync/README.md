@@ -2,41 +2,64 @@
 
 ## Sync Orchestration Layer
 
-This package orchestrates the synchronization of encrypted data between local storage and remote systems.
+Synchronization orchestration for CSE's 2-tier architecture (Frontend ↔ Edge).
 
-### Responsibilities
+## Architecture WARNING
 
-- **Sync state management**: Track what data needs synchronization
-- **Retry logic**: Handle transient failures during sync operations
-- **Conflict resolution**: Decide how to handle concurrent modifications
-- **Progress tracking**: Report sync status to callers
+**DEPLOYMENT**: Frontend ↔ Relay ↔ Edge (3 physical tiers)
+**DATA FLOW**: Frontend ↔ Edge (2 logical tiers)
 
-### Design Principles
+### Relay is a TRANSPARENT PROXY
 
-- Composable: Work with any storage and protocol layer implementations
-- Observable: Provide clear visibility into sync state and progress
-- Resilient: Handle network failures, partial syncs, and interruptions
+The relay is **E2E encrypted** and **cannot see message contents**.
 
-### Key Components
+Think of relay like:
+- nginx reverse proxy
+- Cloudflare edge node
+- Your ISP's routers
 
-- `SyncEngine`: Core orchestration logic
-- `SyncQueue`: Prioritize and schedule sync operations
-- `ConflictResolver`: Handle data conflicts during sync
-- `ProgressTracker`: Monitor sync progress and report metrics
+**Relay provides**:
+- NAT traversal (customer sites behind firewalls)
+- HTTPS termination / TLS offloading
+- Authentication / routing
+- Connection management
 
-### Dependencies
+**Relay does NOT**:
+- Read data (E2E encrypted)
+- Transform data (blind to contents)
+- Validate data (cannot see it)
+- Merge changes (no sync logic)
+- Maintain sync state (not a tier)
+
+See `../storage/ARCHITECTURE.md` for complete explanation.
+
+## SyncState Component
+
+2-tier sync state tracking for Frontend ↔ Edge synchronization.
+
+**Key Features**:
+- Delta sync based on `_sync_id` monotonic counter
+- Subscription-based (client declares what to sync)
+- Optimistic concurrency via `_version` field
+- Inspired by Linear's sync engine
+
+**Testing**: 29 specs verify state transitions and delta queries
+
+## Dependencies
 
 - **Internal**: `pkg/cse/storage` (persistence), `pkg/cse/protocol` (transport)
-- **External**: Context management, metrics libraries
+- **External**: Context management
 
-### Sync Strategies
+## Testing
 
-- **Immediate**: Sync on every write (high consistency, high latency)
-- **Batched**: Accumulate writes and sync periodically (lower latency, eventual consistency)
-- **On-demand**: Sync only when explicitly requested (manual control)
+```bash
+ginkgo -r ./pkg/cse/sync
+```
 
-### Future Considerations
+Current: 29 specs passing
 
-- Support for partial/incremental syncs
-- Bandwidth throttling and QoS controls
-- Multi-region sync topologies
+## References
+
+- **Linear sync engine**: wzhudev/reverse-linear-sync-engine
+- **CSE RFC (ENG-3622)**: Complete design documentation
+- **Storage ARCHITECTURE.md**: Why relay is transparent (prevent confusion)
