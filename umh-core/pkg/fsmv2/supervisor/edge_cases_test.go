@@ -581,3 +581,79 @@ func (m *mockAction) Name() string {
 
 	return "MockAction"
 }
+
+type alternateObservedState struct {
+	timestamp time.Time
+}
+
+func (a *alternateObservedState) GetTimestamp() time.Time { return a.timestamp }
+func (a *alternateObservedState) ShutdownRequested() bool { return false }
+func (a *alternateObservedState) GetObservedDesiredState() fsmv2.DesiredState {
+	return &mockDesiredState{}
+}
+
+var _ = Describe("Type Safety (Invariant I16)", func() {
+	Describe("ObservedState type validation", func() {
+		Context("when worker returns wrong ObservedState type", func() {
+			It("should panic with clear message before calling state.Next()", func() {
+				callCount := 0
+				store := &mockStore{}
+
+				worker := &mockWorker{
+					collectFunc: func(ctx context.Context) (fsmv2.ObservedState, error) {
+						callCount++
+						if callCount == 1 {
+							return &mockObservedState{timestamp: time.Now()}, nil
+						}
+
+						return &alternateObservedState{timestamp: time.Now()}, nil
+					},
+				}
+
+				s := newSupervisorWithWorker(worker, store, supervisor.CollectorHealthConfig{})
+
+				store.snapshot = &fsmv2.Snapshot{
+					Identity: mockIdentity(),
+					Desired:  &mockDesiredState{},
+					Observed: &alternateObservedState{timestamp: time.Now()},
+				}
+
+				var panicMessage string
+				func() {
+					defer func() {
+						if r := recover(); r != nil {
+							panicMessage = r.(string)
+						}
+					}()
+					_ = s.Tick(context.Background())
+				}()
+
+				Expect(panicMessage).To(ContainSubstring("Invariant I16 violated"))
+				Expect(panicMessage).To(ContainSubstring("test-worker"))
+				Expect(panicMessage).To(ContainSubstring("alternateObservedState"))
+				Expect(panicMessage).To(ContainSubstring("mockObservedState"))
+			})
+		})
+
+		Context("when worker consistently returns correct type", func() {
+			It("should not panic", func() {
+				store := &mockStore{
+					snapshot: &fsmv2.Snapshot{
+						Identity: mockIdentity(),
+						Desired:  &mockDesiredState{},
+						Observed: &mockObservedState{timestamp: time.Now()},
+					},
+				}
+
+				worker := &mockWorker{
+					observed: &mockObservedState{timestamp: time.Now()},
+				}
+
+				s := newSupervisorWithWorker(worker, store, supervisor.CollectorHealthConfig{})
+
+				err := s.Tick(context.Background())
+				Expect(err).ToNot(HaveOccurred())
+			})
+		})
+	})
+})

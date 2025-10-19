@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -61,6 +62,16 @@ import (
 //           must occur before collector restart
 //     ENFORCED: NewSupervisor() panics if configuration violates this ordering
 //
+// I16: type safety (ObservedState type validation)
+//     MUST: Worker returns consistent ObservedState type matching initial discovery
+//     WHY:  Type mismatches indicate programming errors (wrong state type wiring)
+//           States assume snapshot.Observed has correct concrete type for assertions
+//           Catching this at supervisor boundary prevents invalid type assertions in states
+//     ENFORCED: AddWorker() discovers expected type via CollectObservedState()
+//               tickWorker() validates type before calling state.Next() (Layer 3.5)
+//               Panics with clear message showing worker type and actual/expected types
+//     LAYER: Defense Layer 3.5 (between freshness check and state logic)
+//
 // =============================================================================
 
 // CollectorHealth tracks the health and restart state of the observation collector.
@@ -88,14 +99,15 @@ type CollectorHealth struct {
 //   - Layer 3: Request graceful shutdown after max restart attempts
 //   - Layer 4: Comprehensive logging and metrics (observability)
 type Supervisor struct {
-	workerType       string                        // Type of workers managed (e.g., "container")
-	workers          map[string]*WorkerContext     // workerID → worker context
-	mu               sync.RWMutex                  // Protects workers map
-	store            persistence.Store             // State persistence layer
-	logger           *zap.SugaredLogger            // Logger for supervisor operations
-	tickInterval     time.Duration                 // How often to evaluate state transitions
-	collectorHealth  CollectorHealth               // Collector health tracking
-	freshnessChecker *FreshnessChecker             // Data freshness validator
+	workerType            string                        // Type of workers managed (e.g., "container")
+	workers               map[string]*WorkerContext     // workerID → worker context
+	mu                    sync.RWMutex                  // Protects workers map
+	store                 persistence.Store             // State persistence layer
+	logger                *zap.SugaredLogger            // Logger for supervisor operations
+	tickInterval          time.Duration                 // How often to evaluate state transitions
+	collectorHealth       CollectorHealth               // Collector health tracking
+	freshnessChecker      *FreshnessChecker             // Data freshness validator
+	expectedObservedTypes map[string]reflect.Type       // workerID → expected ObservedState type
 }
 
 // WorkerContext encapsulates the runtime state for a single worker
@@ -223,13 +235,14 @@ func NewSupervisor(cfg Config) *Supervisor {
 	freshnessChecker := NewFreshnessChecker(staleThreshold, timeout, cfg.Logger)
 
 	return &Supervisor{
-		workerType:       cfg.WorkerType,
-		workers:          make(map[string]*WorkerContext),
-		mu:               sync.RWMutex{},
-		store:            cfg.Store,
-		logger:           cfg.Logger,
-		tickInterval:     tickInterval,
-		freshnessChecker: freshnessChecker,
+		workerType:            cfg.WorkerType,
+		workers:               make(map[string]*WorkerContext),
+		mu:                    sync.RWMutex{},
+		store:                 cfg.Store,
+		logger:                cfg.Logger,
+		tickInterval:          tickInterval,
+		freshnessChecker:      freshnessChecker,
+		expectedObservedTypes: make(map[string]reflect.Type),
 		collectorHealth: CollectorHealth{
 			staleThreshold:     staleThreshold,
 			timeout:            timeout,
@@ -248,6 +261,19 @@ func (s *Supervisor) AddWorker(identity fsmv2.Identity, worker fsmv2.Worker) err
 	if _, exists := s.workers[identity.ID]; exists {
 		return fmt.Errorf("worker %s already exists", identity.ID)
 	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	observed, err := worker.CollectObservedState(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to discover worker ObservedState type: %w", err)
+	}
+
+	expectedType := reflect.TypeOf(observed)
+	s.expectedObservedTypes[identity.ID] = expectedType
+
+	s.logger.Infof("Registered ObservedState type for worker %s: %s", identity.ID, expectedType)
 
 	collector := NewCollector(CollectorConfig{
 		Worker:              worker,
@@ -283,6 +309,7 @@ func (s *Supervisor) RemoveWorker(ctx context.Context, workerID string) error {
 	}
 
 	delete(s.workers, workerID)
+	delete(s.expectedObservedTypes, workerID)
 	s.mu.Unlock()
 
 	workerCtx.collector.Stop(ctx)
@@ -505,6 +532,20 @@ func (s *Supervisor) tickWorker(ctx context.Context, workerID string) error {
 	if s.collectorHealth.restartCount > 0 {
 		s.logger.Infof("Collector recovered after %d restart attempts", s.collectorHealth.restartCount)
 		s.collectorHealth.restartCount = 0
+	}
+
+	// I16: Validate ObservedState type before calling state.Next()
+	// This is Layer 3.5: Supervisor-level type validation BEFORE state logic
+	s.mu.RLock()
+	expectedType, exists := s.expectedObservedTypes[workerID]
+	s.mu.RUnlock()
+
+	if exists {
+		actualType := reflect.TypeOf(snapshot.Observed)
+		if actualType != expectedType {
+			panic(fmt.Sprintf("Invariant I16 violated: Worker %s (type %s) returned ObservedState type %s, expected %s",
+				workerID, s.workerType, actualType, expectedType))
+		}
 	}
 
 	// Data is fresh - safe to progress FSM
