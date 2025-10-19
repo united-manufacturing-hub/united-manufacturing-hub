@@ -3174,6 +3174,47 @@ var _ = Describe("NewStore validation", func() {
 		})
 	})
 
+	Context("Empty ID validation", func() {
+		var store basic.Store
+		var tempDB string
+
+		BeforeEach(func() {
+			var err error
+			tempDB = filepath.Join(os.TempDir(), fmt.Sprintf("test-%d.db", time.Now().UnixNano()))
+			cfg := basic.DefaultConfig(tempDB)
+			store, err = basic.NewStore(cfg)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = store.CreateCollection(context.Background(), "test", nil)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		AfterEach(func() {
+			if store != nil {
+				_ = store.Close(context.Background())
+			}
+			_ = os.Remove(tempDB)
+		})
+
+		It("should reject empty ID in Get", func() {
+			_, err := store.Get(context.Background(), "test", "")
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("id cannot be empty"))
+		})
+
+		It("should reject empty ID in Update", func() {
+			err := store.Update(context.Background(), "test", "", basic.Document{"key": "value"})
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("id cannot be empty"))
+		})
+
+		It("should reject empty ID in Delete", func() {
+			err := store.Delete(context.Background(), "test", "")
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("id cannot be empty"))
+		})
+	})
+
 	Context("network filesystem detection", func() {
 		It("should provide helpful error for network FS + WAL", func() {
 			Skip("Requires real network filesystem mount - test manually")

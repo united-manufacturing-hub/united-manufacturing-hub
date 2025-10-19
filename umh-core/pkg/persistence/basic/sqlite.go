@@ -538,6 +538,9 @@ func (s *sqliteStore) Get(ctx context.Context, collection string, id string) (Do
 	if err := validateContext(ctx); err != nil {
 		return nil, err
 	}
+	if id == "" {
+		return nil, fmt.Errorf("id cannot be empty")
+	}
 
 	if s.closed {
 		return nil, errors.New("store is closed")
@@ -589,6 +592,9 @@ func (s *sqliteStore) Get(ctx context.Context, collection string, id string) (Do
 func (s *sqliteStore) Update(ctx context.Context, collection string, id string, doc Document) error {
 	if err := validateContext(ctx); err != nil {
 		return err
+	}
+	if id == "" {
+		return fmt.Errorf("id cannot be empty")
 	}
 
 	if s.closed {
@@ -644,6 +650,9 @@ func (s *sqliteStore) Update(ctx context.Context, collection string, id string, 
 func (s *sqliteStore) Delete(ctx context.Context, collection string, id string) error {
 	if err := validateContext(ctx); err != nil {
 		return err
+	}
+	if id == "" {
+		return fmt.Errorf("id cannot be empty")
 	}
 
 	if s.closed {
