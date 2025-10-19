@@ -8,15 +8,70 @@ import (
 	"sync"
 )
 
+// Crypto abstracts E2E encryption with sender authentication for CSE sync protocol.
+// Based on patent EP4512040A2: blind relay cannot authenticate E2E encrypted traffic,
+// so encryption MUST include cryptographic authentication (AEAD/MAC) to prevent tampering.
+//
+// DESIGN DECISION: Combined encryption + authentication (not separate interfaces)
+// WHY: Patent shows they're inseparable - every encrypted message MUST be authenticated.
+// Separating them would allow unsafe usage (encrypt without auth).
+// TRADE-OFF: Less flexible, but prevents security bugs.
+// INSPIRED BY: TLS (encryption+MAC in one layer), NaCl secretbox (encrypt+auth primitive).
+//
+// This is Layer 3 (protocol layer) of the CSE architecture.
 type Crypto interface {
+	// Encrypt encrypts plaintext and adds sender authentication (MAC).
+	// Returns ciphertext that only intended recipient can decrypt.
+	//
+	// Idempotent-safe: Encrypting same data twice yields different ciphertext via random nonce.
+	// This enables safe retries on network failures without replay attack risk.
+	//
+	// Parameters:
+	//   - ctx: Context for cancellation and timeout
+	//   - plaintext: Data to encrypt (can be empty)
+	//   - recipientID: Recipient identifier for key lookup (not embedded in ciphertext)
+	//
+	// Returns:
+	//   - Ciphertext bytes (includes nonce + encrypted data + MAC)
+	//   - CryptoEncryptionError if encryption fails
+	//   - CryptoConfigError if recipientID is invalid
 	Encrypt(ctx context.Context, plaintext []byte, recipientID string) ([]byte, error)
 
+	// Decrypt decrypts ciphertext and verifies sender authentication.
+	// Returns error if MAC verification fails or decryption fails.
+	//
+	// SECURITY: senderID MUST match the authenticated sender from MAC.
+	// This prevents impersonation attacks where attacker replays valid
+	// ciphertext but claims different sender.
+	//
+	// Parameters:
+	//   - ctx: Context for cancellation and timeout
+	//   - ciphertext: Encrypted data from Encrypt() (includes nonce + data + MAC)
+	//   - senderID: Claimed sender from Transport layer (UNVERIFIED, must match MAC)
+	//
+	// Returns:
+	//   - Plaintext bytes
+	//   - CryptoDecryptionError if decryption fails
+	//   - CryptoAuthenticationError if MAC verification fails (SECURITY CRITICAL)
+	//   - CryptoConfigError if senderID is invalid
 	Decrypt(ctx context.Context, ciphertext []byte, senderID string) ([]byte, error)
 }
 
+// CryptoEncryptionError indicates encryption operation failed.
+// Common causes: key unavailable, RNG failure, context cancelled.
 type CryptoEncryptionError struct{ Err error }
+
+// CryptoDecryptionError indicates decryption operation failed.
+// Common causes: corrupted ciphertext, wrong key, context cancelled.
 type CryptoDecryptionError struct{ Err error }
+
+// CryptoAuthenticationError indicates MAC verification failed.
+// SECURITY CRITICAL: This means ciphertext was tampered or replayed.
+// Always treat as potential attack, never ignore this error.
 type CryptoAuthenticationError struct{ Err error }
+
+// CryptoConfigError indicates configuration problem.
+// Common causes: invalid recipientID/senderID, missing keys.
 type CryptoConfigError struct{ Err error }
 
 func (e CryptoEncryptionError) Error() string {
@@ -51,6 +106,11 @@ func (e CryptoConfigError) Unwrap() error {
 	return e.Err
 }
 
+// MockCrypto provides a test implementation using XOR cipher with checksum authentication.
+// NOT SECURE - for testing only. Real implementation will use AES-GCM or ChaCha20-Poly1305.
+//
+// Implements idempotent encryption via random nonce and simple checksum-based MAC.
+// Supports error simulation for testing failure scenarios.
 type MockCrypto struct {
 	mu          sync.RWMutex
 	failEncrypt bool
@@ -59,10 +119,14 @@ type MockCrypto struct {
 	simulateErr error
 }
 
+// NewMockCrypto creates a new MockCrypto instance for testing.
+// Starts with no simulated errors - use SimulateXXXFailure() to inject failures.
 func NewMockCrypto() *MockCrypto {
 	return &MockCrypto{}
 }
 
+// SimulateEncryptFailure makes the next Encrypt() call fail with err.
+// Use ClearSimulatedErrors() to reset.
 func (m *MockCrypto) SimulateEncryptFailure(err error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -71,6 +135,8 @@ func (m *MockCrypto) SimulateEncryptFailure(err error) {
 	m.simulateErr = err
 }
 
+// SimulateDecryptFailure makes the next Decrypt() call fail with err.
+// Use ClearSimulatedErrors() to reset.
 func (m *MockCrypto) SimulateDecryptFailure(err error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -79,6 +145,8 @@ func (m *MockCrypto) SimulateDecryptFailure(err error) {
 	m.simulateErr = err
 }
 
+// SimulateAuthFailure makes the next Decrypt() call fail MAC verification.
+// Returns CryptoAuthenticationError. Use ClearSimulatedErrors() to reset.
 func (m *MockCrypto) SimulateAuthFailure() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -86,6 +154,8 @@ func (m *MockCrypto) SimulateAuthFailure() {
 	m.failAuth = true
 }
 
+// ClearSimulatedErrors resets all simulated error states.
+// Useful in test cleanup (AfterEach) to prevent test contamination.
 func (m *MockCrypto) ClearSimulatedErrors() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
