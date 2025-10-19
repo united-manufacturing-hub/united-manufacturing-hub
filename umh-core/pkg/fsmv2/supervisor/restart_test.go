@@ -18,7 +18,7 @@ var _ = Describe("Collector Restart Logic", func() {
 				MaxRestartAttempts: 3,
 			})
 
-			err := s.RestartCollector(context.Background())
+			err := s.RestartCollector(context.Background(), "test-worker")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(s.GetRestartCount()).To(Equal(1))
 		})
@@ -33,7 +33,7 @@ var _ = Describe("Collector Restart Logic", func() {
 			s.SetRestartCount(3)
 
 			Expect(func() {
-				_ = s.RestartCollector(context.Background())
+				_ = s.RestartCollector(context.Background(), "test-worker")
 			}).To(Panic())
 		})
 	})

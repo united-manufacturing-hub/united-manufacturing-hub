@@ -4,6 +4,7 @@ package supervisor_test
 import (
 	"context"
 	"errors"
+	"sync"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -109,11 +110,14 @@ var _ = Describe("Supervisor Lifecycle", func() {
 	Describe("observationLoop ticker and restart channel", func() {
 		Context("when restart is requested during observation", func() {
 			It("should collect immediately", func() {
+				var collectCountMutex sync.Mutex
 				collectCount := 0
 				collector := supervisor.NewCollector(supervisor.CollectorConfig{
 					Worker: &mockWorker{
 						collectFunc: func(ctx context.Context) (fsmv2.ObservedState, error) {
+							collectCountMutex.Lock()
 							collectCount++
+							collectCountMutex.Unlock()
 
 							return &mockObservedState{timestamp: time.Now()}, nil
 						},
@@ -132,13 +136,18 @@ var _ = Describe("Supervisor Lifecycle", func() {
 				Expect(err).ToNot(HaveOccurred())
 
 				time.Sleep(100 * time.Millisecond)
+				collectCountMutex.Lock()
 				initialCount := collectCount
+				collectCountMutex.Unlock()
 
 				collector.Restart()
 
 				time.Sleep(200 * time.Millisecond)
 
-				Expect(collectCount).To(BeNumerically(">", initialCount))
+				collectCountMutex.Lock()
+				finalCount := collectCount
+				collectCountMutex.Unlock()
+				Expect(finalCount).To(BeNumerically(">", initialCount))
 
 				cancel()
 				time.Sleep(100 * time.Millisecond)

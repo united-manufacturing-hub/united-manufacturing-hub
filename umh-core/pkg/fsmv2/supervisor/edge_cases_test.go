@@ -4,6 +4,7 @@ package supervisor_test
 import (
 	"context"
 	"errors"
+	"sync"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -53,12 +54,17 @@ var _ = Describe("Edge Cases", func() {
 	Describe("Collector error handling", func() {
 		Context("when CollectObservedState fails", func() {
 			It("should continue observation loop", func() {
+				var callCountMutex sync.Mutex
 				callCount := 0
 				collector := supervisor.NewCollector(supervisor.CollectorConfig{
 					Worker: &mockWorker{
 						collectFunc: func(ctx context.Context) (fsmv2.ObservedState, error) {
+							callCountMutex.Lock()
 							callCount++
-							if callCount == 1 {
+							count := callCount
+							callCountMutex.Unlock()
+
+							if count == 1 {
 								return nil, errors.New("collection error")
 							}
 
@@ -80,7 +86,10 @@ var _ = Describe("Edge Cases", func() {
 
 				time.Sleep(200 * time.Millisecond)
 
-				Expect(callCount).To(BeNumerically(">=", 2))
+				callCountMutex.Lock()
+				finalCount := callCount
+				callCountMutex.Unlock()
+				Expect(finalCount).To(BeNumerically(">=", 2))
 
 				cancel()
 				time.Sleep(100 * time.Millisecond)
@@ -89,6 +98,7 @@ var _ = Describe("Edge Cases", func() {
 
 		Context("when SaveObserved fails", func() {
 			It("should continue observation loop", func() {
+				var saveCallCountMutex sync.Mutex
 				saveCallCount := 0
 				store := &mockStore{
 					saveErr: errors.New("save error"),
@@ -97,7 +107,9 @@ var _ = Describe("Edge Cases", func() {
 				collector := supervisor.NewCollector(supervisor.CollectorConfig{
 					Worker: &mockWorker{
 						collectFunc: func(ctx context.Context) (fsmv2.ObservedState, error) {
+							saveCallCountMutex.Lock()
 							saveCallCount++
+							saveCallCountMutex.Unlock()
 
 							return &mockObservedState{timestamp: time.Now()}, nil
 						},
@@ -117,7 +129,10 @@ var _ = Describe("Edge Cases", func() {
 
 				time.Sleep(200 * time.Millisecond)
 
-				Expect(saveCallCount).To(BeNumerically(">=", 2))
+				saveCallCountMutex.Lock()
+				finalSaveCount := saveCallCount
+				saveCallCountMutex.Unlock()
+				Expect(finalSaveCount).To(BeNumerically(">=", 2))
 
 				cancel()
 				time.Sleep(100 * time.Millisecond)
