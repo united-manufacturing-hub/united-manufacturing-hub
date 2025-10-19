@@ -54,6 +54,26 @@ var _ = Describe("JournalMode constants", func() {
 	})
 })
 
+var _ = Describe("Config struct", func() {
+	It("should include JournalMode field", func() {
+		cfg := basic.Config{
+			DBPath:                "./test.db",
+			JournalMode:           basic.JournalModeWAL,
+			MaintenanceOnShutdown: true,
+		}
+		Expect(cfg.JournalMode).To(Equal(basic.JournalModeWAL))
+	})
+
+	It("should allow DELETE mode", func() {
+		cfg := basic.Config{
+			DBPath:                "./test.db",
+			JournalMode:           basic.JournalModeDELETE,
+			MaintenanceOnShutdown: false,
+		}
+		Expect(cfg.JournalMode).To(Equal(basic.JournalModeDELETE))
+	})
+})
+
 var _ = Describe("SQLiteStore", func() {
 	var (
 		tempDir string

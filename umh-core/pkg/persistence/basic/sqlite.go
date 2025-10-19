@@ -193,6 +193,8 @@ type sqliteStore struct {
 type Config struct {
 	DBPath string
 
+	JournalMode JournalMode
+
 	MaintenanceOnShutdown bool
 }
 
