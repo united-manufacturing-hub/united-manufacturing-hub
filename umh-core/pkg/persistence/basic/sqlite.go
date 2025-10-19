@@ -203,9 +203,20 @@ type Config struct {
 	MaintenanceOnShutdown bool
 }
 
+// DefaultConfig returns production-ready SQLite configuration.
+//
+// DEFAULTS:
+//   - JournalMode: WAL (optimal for local filesystems)
+//   - MaintenanceOnShutdown: true (automatic VACUUM on clean shutdown)
+//
+// NETWORK FILESYSTEMS:
+//   If dbPath is on NFS/CIFS, override JournalMode:
+//     cfg := basic.DefaultConfig("/mnt/nfs/data.db")
+//     cfg.JournalMode = basic.JournalModeDELETE
 func DefaultConfig(dbPath string) Config {
 	return Config{
 		DBPath:                dbPath,
+		JournalMode:           JournalModeWAL,
 		MaintenanceOnShutdown: true,
 	}
 }

@@ -74,6 +74,23 @@ var _ = Describe("Config struct", func() {
 	})
 })
 
+var _ = Describe("DefaultConfig", func() {
+	It("should set JournalMode to WAL by default", func() {
+		cfg := basic.DefaultConfig("./test.db")
+		Expect(cfg.JournalMode).To(Equal(basic.JournalModeWAL))
+	})
+
+	It("should set MaintenanceOnShutdown to true by default", func() {
+		cfg := basic.DefaultConfig("./test.db")
+		Expect(cfg.MaintenanceOnShutdown).To(BeTrue())
+	})
+
+	It("should preserve provided DBPath", func() {
+		cfg := basic.DefaultConfig("/custom/path.db")
+		Expect(cfg.DBPath).To(Equal("/custom/path.db"))
+	})
+})
+
 var _ = Describe("SQLiteStore", func() {
 	var (
 		tempDir string
