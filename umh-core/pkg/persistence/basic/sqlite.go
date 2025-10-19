@@ -1511,6 +1511,43 @@ func compareValues(a, b interface{}) int {
 // Returns:
 //   - bool: true if value is in array
 func valueInArray(value interface{}, arrayInterface interface{}) bool {
+	if arr, ok := value.([]interface{}); ok {
+		switch filterValue := arrayInterface.(type) {
+		case []int:
+			for _, item := range arr {
+				if num, ok := item.(float64); ok {
+					for _, fv := range filterValue {
+						if int(num) == fv {
+							return true
+						}
+					}
+				}
+			}
+		case []string:
+			for _, item := range arr {
+				if str, ok := item.(string); ok {
+					for _, fv := range filterValue {
+						if str == fv {
+							return true
+						}
+					}
+				}
+			}
+		case []float64:
+			for _, item := range arr {
+				if num, ok := item.(float64); ok {
+					for _, fv := range filterValue {
+						if num == fv {
+							return true
+						}
+					}
+				}
+			}
+		}
+
+		return false
+	}
+
 	switch arr := arrayInterface.(type) {
 	case []interface{}:
 		for _, item := range arr {

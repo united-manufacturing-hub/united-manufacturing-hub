@@ -3279,4 +3279,69 @@ var _ = Describe("NewStore validation", func() {
 			Expect(len(results)).To(BeNumerically("<=", 200))
 		})
 	})
+
+	Context("valueInArray with additional types", func() {
+		var store basic.Store
+		var tempDB string
+
+		BeforeEach(func() {
+			var err error
+			tempDB = filepath.Join(os.TempDir(), fmt.Sprintf("test-%d.db", time.Now().UnixNano()))
+			cfg := basic.DefaultConfig(tempDB)
+			store, err = basic.NewStore(cfg)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = store.CreateCollection(context.Background(), "test", nil)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		AfterEach(func() {
+			if store != nil {
+				_ = store.Close(context.Background())
+			}
+			_ = os.Remove(tempDB)
+		})
+
+		It("should support []string in filter array values", func() {
+			_, err := store.Insert(context.Background(), "test", basic.Document{
+				"tags": []string{"go", "database", "sqlite"},
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			query := basic.NewQuery().Filter("tags", basic.In, []string{"database"})
+			results, err := store.Find(context.Background(), "test", *query)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(results).To(HaveLen(1))
+		})
+
+		It("should support []float64 in filter array values", func() {
+			_, err := store.Insert(context.Background(), "test", basic.Document{
+				"measurements": []float64{1.5, 2.3, 3.7},
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			query := basic.NewQuery().Filter("measurements", basic.In, []float64{2.3})
+			results, err := store.Find(context.Background(), "test", *query)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(results).To(HaveLen(1))
+		})
+
+		It("should handle mixed array types correctly", func() {
+			_, err := store.Insert(context.Background(), "test", basic.Document{
+				"int_array":    []int{1, 2, 3},
+				"string_array": []string{"a", "b", "c"},
+				"float_array":  []float64{1.1, 2.2, 3.3},
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			results, err := store.Find(context.Background(), "test", *basic.NewQuery())
+			Expect(err).NotTo(HaveOccurred())
+			Expect(results).To(HaveLen(1))
+
+			doc := results[0]
+			Expect(doc["int_array"]).To(Equal([]interface{}{float64(1), float64(2), float64(3)}))
+			Expect(doc["string_array"]).To(Equal([]interface{}{"a", "b", "c"}))
+			Expect(doc["float_array"]).To(Equal([]interface{}{1.1, 2.2, 3.3}))
+		})
+	})
 })
