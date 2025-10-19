@@ -91,6 +91,63 @@ var _ = Describe("DefaultConfig", func() {
 	})
 })
 
+var _ = Describe("Network filesystem detection", func() {
+	Context("isNetworkFilesystem function", func() {
+		It("should detect current directory as local filesystem", func() {
+			isNetwork, fsType, err := basic.IsNetworkFilesystem(".")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(isNetwork).To(BeFalse())
+			Expect(fsType).NotTo(BeEmpty())
+		})
+
+		It("should return filesystem type name", func() {
+			_, fsType, err := basic.IsNetworkFilesystem(".")
+			Expect(err).NotTo(HaveOccurred())
+			// macOS: "apfs", "hfs", etc.
+			// Linux: "ext4", "btrfs", "xfs", etc.
+			Expect(fsType).To(MatchRegexp(`(?i)(apfs|hfs|ext[234]|xfs|btrfs|zfs|tmpfs)`))
+		})
+
+		It("should return error for non-existent path", func() {
+			_, _, err := basic.IsNetworkFilesystem("/nonexistent/path/that/does/not/exist")
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("failed to stat filesystem"))
+		})
+
+		It("should identify NFS filesystem type as network", func() {
+			// This is a logic test, not integration test
+			// We test the helper function directly
+			Expect(basic.IsNetworkFSType("nfs")).To(BeTrue())
+			Expect(basic.IsNetworkFSType("nfs4")).To(BeTrue())
+		})
+
+		It("should identify CIFS/SMB filesystem types as network", func() {
+			Expect(basic.IsNetworkFSType("cifs")).To(BeTrue())
+			Expect(basic.IsNetworkFSType("smb")).To(BeTrue())
+			Expect(basic.IsNetworkFSType("smbfs")).To(BeTrue())
+		})
+
+		It("should identify WebDAV filesystem type as network", func() {
+			Expect(basic.IsNetworkFSType("webdav")).To(BeTrue())
+		})
+
+		It("should identify local filesystem types as NOT network", func() {
+			Expect(basic.IsNetworkFSType("apfs")).To(BeFalse())
+			Expect(basic.IsNetworkFSType("hfs")).To(BeFalse())
+			Expect(basic.IsNetworkFSType("ext4")).To(BeFalse())
+			Expect(basic.IsNetworkFSType("xfs")).To(BeFalse())
+			Expect(basic.IsNetworkFSType("btrfs")).To(BeFalse())
+			Expect(basic.IsNetworkFSType("tmpfs")).To(BeFalse())
+		})
+
+		It("should be case-insensitive for filesystem type matching", func() {
+			Expect(basic.IsNetworkFSType("NFS")).To(BeTrue())
+			Expect(basic.IsNetworkFSType("Cifs")).To(BeTrue())
+			Expect(basic.IsNetworkFSType("APFS")).To(BeFalse())
+		})
+	})
+})
+
 var _ = Describe("SQLiteStore", func() {
 	var (
 		tempDir string
