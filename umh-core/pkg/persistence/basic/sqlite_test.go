@@ -3344,4 +3344,25 @@ var _ = Describe("NewStore validation", func() {
 			Expect(doc["float_array"]).To(Equal([]interface{}{1.1, 2.2, 3.3}))
 		})
 	})
+
+	Context("Enhanced SQLite error messages", func() {
+		It("should provide actionable message for disk full errors", func() {
+			err := basic.EnhanceSQLiteError(fmt.Errorf("database or disk is full"))
+			Expect(err.Error()).To(ContainSubstring("database or disk is full"))
+			Expect(err.Error()).To(ContainSubstring("Free up disk space"))
+		})
+
+		It("should provide actionable message for database locked errors", func() {
+			err := basic.EnhanceSQLiteError(fmt.Errorf("database is locked"))
+			Expect(err.Error()).To(ContainSubstring("database is locked"))
+			Expect(err.Error()).To(ContainSubstring("Retry operation"))
+			Expect(err.Error()).To(ContainSubstring("concurrent access"))
+		})
+
+		It("should pass through unrecognized errors unchanged", func() {
+			originalErr := fmt.Errorf("some other error")
+			err := basic.EnhanceSQLiteError(originalErr)
+			Expect(err).To(Equal(originalErr))
+		})
+	})
 })

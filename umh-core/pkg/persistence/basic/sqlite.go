@@ -84,8 +84,9 @@ const (
 // All Store methods must validate context before use.
 func validateContext(ctx context.Context) error {
 	if ctx == nil {
-		return fmt.Errorf("context cannot be nil")
+		return errors.New("context cannot be nil")
 	}
+
 	return nil
 }
 
@@ -123,6 +124,39 @@ func validateCollectionName(name string) error {
 	}
 
 	return nil
+}
+
+// EnhanceSQLiteError wraps SQLite errors with actionable context.
+// Exposed for testing.
+func EnhanceSQLiteError(err error) error {
+	if err == nil {
+		return nil
+	}
+
+	errMsg := err.Error()
+
+	if strings.Contains(errMsg, "database or disk is full") || strings.Contains(errMsg, "disk is full") {
+		return fmt.Errorf("%w\n\nActionable steps:\n"+
+			"1. Free up disk space (remove old logs, temp files)\n"+
+			"2. Run VACUUM to reclaim deleted data space\n"+
+			"3. Check disk quota limits\n"+
+			"4. Consider moving database to larger volume", err)
+	}
+
+	if strings.Contains(errMsg, "database is locked") {
+		return fmt.Errorf("%w\n\nActionable steps:\n"+
+			"1. Retry operation after brief delay (100-1000ms)\n"+
+			"2. Check for long-running transactions blocking writes\n"+
+			"3. Verify concurrent access patterns (WAL mode helps)\n"+
+			"4. Increase busy_timeout if using immediate transactions", err)
+	}
+
+	return err
+}
+
+// enhanceSQLiteError is the internal version that wraps all Store method errors.
+func (s *sqliteStore) enhanceSQLiteError(err error) error {
+	return EnhanceSQLiteError(err)
 }
 
 // mapSQLiteError converts SQLite-specific errors to Store interface errors.
@@ -504,7 +538,7 @@ func (s *sqliteStore) Insert(ctx context.Context, collection string, doc Documen
 
 	_, err = s.db.ExecContext(ctx, query, id, data)
 	if err != nil {
-		return "", fmt.Errorf("failed to insert document: %w", mapSQLiteError(err))
+		return "", s.enhanceSQLiteError(fmt.Errorf("failed to insert document: %w", mapSQLiteError(err)))
 	}
 
 	return id, nil
@@ -538,8 +572,9 @@ func (s *sqliteStore) Get(ctx context.Context, collection string, id string) (Do
 	if err := validateContext(ctx); err != nil {
 		return nil, err
 	}
+
 	if id == "" {
-		return nil, fmt.Errorf("id cannot be empty")
+		return nil, errors.New("id cannot be empty")
 	}
 
 	if s.closed {
@@ -552,7 +587,7 @@ func (s *sqliteStore) Get(ctx context.Context, collection string, id string) (Do
 
 	err := s.db.QueryRowContext(ctx, query, id).Scan(&data)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get document: %w", mapSQLiteError(err))
+		return nil, s.enhanceSQLiteError(fmt.Errorf("failed to get document: %w", mapSQLiteError(err)))
 	}
 
 	var doc Document
@@ -593,8 +628,9 @@ func (s *sqliteStore) Update(ctx context.Context, collection string, id string, 
 	if err := validateContext(ctx); err != nil {
 		return err
 	}
+
 	if id == "" {
-		return fmt.Errorf("id cannot be empty")
+		return errors.New("id cannot be empty")
 	}
 
 	if s.closed {
@@ -610,7 +646,7 @@ func (s *sqliteStore) Update(ctx context.Context, collection string, id string, 
 
 	result, err := s.db.ExecContext(ctx, query, data, id)
 	if err != nil {
-		return fmt.Errorf("failed to update document: %w", mapSQLiteError(err))
+		return s.enhanceSQLiteError(fmt.Errorf("failed to update document: %w", mapSQLiteError(err)))
 	}
 
 	rowsAffected, err := result.RowsAffected()
@@ -651,8 +687,9 @@ func (s *sqliteStore) Delete(ctx context.Context, collection string, id string) 
 	if err := validateContext(ctx); err != nil {
 		return err
 	}
+
 	if id == "" {
-		return fmt.Errorf("id cannot be empty")
+		return errors.New("id cannot be empty")
 	}
 
 	if s.closed {
@@ -663,7 +700,7 @@ func (s *sqliteStore) Delete(ctx context.Context, collection string, id string) 
 
 	result, err := s.db.ExecContext(ctx, query, id)
 	if err != nil {
-		return fmt.Errorf("failed to delete document: %w", mapSQLiteError(err))
+		return s.enhanceSQLiteError(fmt.Errorf("failed to delete document: %w", mapSQLiteError(err)))
 	}
 
 	rowsAffected, err := result.RowsAffected()
@@ -983,7 +1020,7 @@ func (t *sqliteTx) Insert(ctx context.Context, collection string, doc Document) 
 
 	_, err = t.tx.ExecContext(ctx, query, id, data)
 	if err != nil {
-		return "", fmt.Errorf("failed to insert document: %w", mapSQLiteError(err))
+		return "", t.store.enhanceSQLiteError(fmt.Errorf("failed to insert document: %w", mapSQLiteError(err)))
 	}
 
 	return id, nil
@@ -1000,7 +1037,7 @@ func (t *sqliteTx) Get(ctx context.Context, collection string, id string) (Docum
 
 	err := t.tx.QueryRowContext(ctx, query, id).Scan(&data)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get document: %w", mapSQLiteError(err))
+		return nil, t.store.enhanceSQLiteError(fmt.Errorf("failed to get document: %w", mapSQLiteError(err)))
 	}
 
 	var doc Document
@@ -1025,7 +1062,7 @@ func (t *sqliteTx) Update(ctx context.Context, collection string, id string, doc
 
 	result, err := t.tx.ExecContext(ctx, query, data, id)
 	if err != nil {
-		return fmt.Errorf("failed to update document: %w", mapSQLiteError(err))
+		return t.store.enhanceSQLiteError(fmt.Errorf("failed to update document: %w", mapSQLiteError(err)))
 	}
 
 	rowsAffected, err := result.RowsAffected()
@@ -1049,7 +1086,7 @@ func (t *sqliteTx) Delete(ctx context.Context, collection string, id string) err
 
 	result, err := t.tx.ExecContext(ctx, query, id)
 	if err != nil {
-		return fmt.Errorf("failed to delete document: %w", mapSQLiteError(err))
+		return t.store.enhanceSQLiteError(fmt.Errorf("failed to delete document: %w", mapSQLiteError(err)))
 	}
 
 	rowsAffected, err := result.RowsAffected()
