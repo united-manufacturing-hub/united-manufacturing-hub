@@ -1,22 +1,22 @@
-package cse_test
+package storage_test
 
 import (
 	"fmt"
 	"log"
 	"sort"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence/cse"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 )
 
 // Example_basicUsage demonstrates basic registry usage with the global registry.
 func Example_basicUsage() {
 	// Register a collection at application startup
-	err := cse.Register(&cse.CollectionMetadata{
+	err := storage.Register(&storage.CollectionMetadata{
 		Name:          "container_identity",
 		WorkerType:    "container",
-		Role:          cse.RoleIdentity,
-		CSEFields:     []string{cse.FieldSyncID, cse.FieldVersion, cse.FieldCreatedAt, cse.FieldUpdatedAt},
-		IndexedFields: []string{cse.FieldSyncID},
+		Role:          storage.RoleIdentity,
+		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
+		IndexedFields: []string{storage.FieldSyncID},
 		RelatedTo:     []string{"container_desired", "container_observed"},
 	})
 	if err != nil {
@@ -24,12 +24,12 @@ func Example_basicUsage() {
 	}
 
 	// Later: Check if collection is registered
-	if cse.IsRegistered("container_identity") {
+	if storage.IsRegistered("container_identity") {
 		fmt.Println("Collection registered")
 	}
 
 	// Later: Retrieve metadata
-	metadata, err := cse.Get("container_identity")
+	metadata, err := storage.Get("container_identity")
 	if err != nil {
 		log.Fatalf("Failed to get collection: %v", err)
 	}
@@ -48,38 +48,38 @@ func Example_basicUsage() {
 // Example_triangularModel demonstrates registering and retrieving a complete triangular model.
 func Example_triangularModel() {
 	// Register all three collections for the "relay" worker type
-	collections := []*cse.CollectionMetadata{
+	collections := []*storage.CollectionMetadata{
 		{
 			Name:          "relay_identity",
 			WorkerType:    "relay",
-			Role:          cse.RoleIdentity,
-			CSEFields:     []string{cse.FieldSyncID, cse.FieldVersion, cse.FieldCreatedAt},
-			IndexedFields: []string{cse.FieldSyncID},
+			Role:          storage.RoleIdentity,
+			CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt},
+			IndexedFields: []string{storage.FieldSyncID},
 		},
 		{
 			Name:          "relay_desired",
 			WorkerType:    "relay",
-			Role:          cse.RoleDesired,
-			CSEFields:     []string{cse.FieldSyncID, cse.FieldVersion, cse.FieldCreatedAt, cse.FieldUpdatedAt},
-			IndexedFields: []string{cse.FieldSyncID},
+			Role:          storage.RoleDesired,
+			CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
+			IndexedFields: []string{storage.FieldSyncID},
 		},
 		{
 			Name:          "relay_observed",
 			WorkerType:    "relay",
-			Role:          cse.RoleObserved,
-			CSEFields:     []string{cse.FieldSyncID, cse.FieldVersion, cse.FieldCreatedAt, cse.FieldUpdatedAt},
-			IndexedFields: []string{cse.FieldSyncID},
+			Role:          storage.RoleObserved,
+			CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
+			IndexedFields: []string{storage.FieldSyncID},
 		},
 	}
 
 	for _, metadata := range collections {
-		if err := cse.Register(metadata); err != nil {
+		if err := storage.Register(metadata); err != nil {
 			log.Fatalf("Failed to register %s: %v", metadata.Name, err)
 		}
 	}
 
 	// Retrieve all three collections at once
-	identity, desired, observed, err := cse.GetTriangularCollections("relay")
+	identity, desired, observed, err := storage.GetTriangularCollections("relay")
 	if err != nil {
 		log.Fatalf("Failed to get triangular collections: %v", err)
 	}
@@ -97,18 +97,18 @@ func Example_triangularModel() {
 // Example_separateRegistry demonstrates creating a separate registry instance for testing.
 func Example_separateRegistry() {
 	// Create a separate registry (useful for testing)
-	registry := cse.NewRegistry()
+	registry := storage.NewRegistry()
 
 	// Register collections
-	registry.Register(&cse.CollectionMetadata{
+	registry.Register(&storage.CollectionMetadata{
 		Name:       "test_identity",
 		WorkerType: "test",
-		Role:       cse.RoleIdentity,
+		Role:       storage.RoleIdentity,
 	})
-	registry.Register(&cse.CollectionMetadata{
+	registry.Register(&storage.CollectionMetadata{
 		Name:       "test_desired",
 		WorkerType: "test",
-		Role:       cse.RoleDesired,
+		Role:       storage.RoleDesired,
 	})
 
 	// List all registered collections
@@ -134,12 +134,12 @@ func Example_separateRegistry() {
 func Example_cseFieldConstants() {
 	// CSE field constants are available for building queries
 	fields := []string{
-		cse.FieldSyncID,
-		cse.FieldVersion,
-		cse.FieldCreatedAt,
-		cse.FieldUpdatedAt,
-		cse.FieldDeletedAt,
-		cse.FieldDeletedBy,
+		storage.FieldSyncID,
+		storage.FieldVersion,
+		storage.FieldCreatedAt,
+		storage.FieldUpdatedAt,
+		storage.FieldDeletedAt,
+		storage.FieldDeletedBy,
 	}
 
 	fmt.Println("CSE metadata fields:")
@@ -160,9 +160,9 @@ func Example_cseFieldConstants() {
 // Example_roleConstants demonstrates using role constants.
 func Example_roleConstants() {
 	roles := []string{
-		cse.RoleIdentity,
-		cse.RoleDesired,
-		cse.RoleObserved,
+		storage.RoleIdentity,
+		storage.RoleDesired,
+		storage.RoleObserved,
 	}
 
 	fmt.Println("Triangular model roles:")

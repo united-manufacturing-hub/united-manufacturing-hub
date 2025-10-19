@@ -191,7 +191,7 @@ func DefaultConfig(dbPath string) Config {
 //	store, err := basic.NewStore(cfg)
 func NewStore(cfg Config) (Store, error) {
 	if cfg.DBPath == "" {
-		return nil, fmt.Errorf("DBPath cannot be empty")
+		return nil, errors.New("DBPath cannot be empty")
 	}
 
 	connStr := buildConnectionString(cfg.DBPath)
@@ -207,13 +207,16 @@ func NewStore(cfg Config) (Store, error) {
 
 	if err := db.Ping(); err != nil {
 		_ = db.Close()
+
 		return nil, fmt.Errorf("failed to connect to database: %w", err)
 	}
 
 	var journalMode string
+
 	err = db.QueryRow("PRAGMA journal_mode").Scan(&journalMode)
 	if err != nil || journalMode != "wal" {
 		_ = db.Close()
+
 		return nil, fmt.Errorf("failed to enable WAL mode: got %s", journalMode)
 	}
 
@@ -626,10 +629,13 @@ func (s *sqliteStore) maintenanceInternal(ctx context.Context) error {
 
 func (s *sqliteStore) Maintenance(ctx context.Context) error {
 	s.mu.RLock()
+
 	if s.closed {
 		s.mu.RUnlock()
+
 		return errors.New("store is closed")
 	}
+
 	s.mu.RUnlock()
 
 	return s.maintenanceInternal(ctx)
@@ -722,11 +728,13 @@ func (s *sqliteStore) Close(ctx context.Context) error {
 		if err := s.maintenanceInternal(ctx); err != nil {
 			s.closed = true
 			_ = s.db.Close()
+
 			return fmt.Errorf("maintenance incomplete: %w", err)
 		}
 	}
 
 	s.closed = true
+
 	return s.db.Close()
 }
 

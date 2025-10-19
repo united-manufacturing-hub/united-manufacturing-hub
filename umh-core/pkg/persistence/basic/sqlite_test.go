@@ -2656,7 +2656,7 @@ var _ = Describe("SQLiteStore Integration", func() {
 			err := store.CreateCollection(ctx, "test", nil)
 			Expect(err).NotTo(HaveOccurred())
 
-			for i := 0; i < 100; i++ {
+			for i := range 100 {
 				_, err := store.Insert(ctx, "test", basic.Document{
 					"value": i,
 					"data":  strings.Repeat("x", 1000),
@@ -2675,7 +2675,7 @@ var _ = Describe("SQLiteStore Integration", func() {
 			err := store.CreateCollection(ctx, "test", nil)
 			Expect(err).NotTo(HaveOccurred())
 
-			for i := 0; i < 1000; i++ {
+			for i := range 1000 {
 				_, err := store.Insert(ctx, "test", basic.Document{
 					"value": i,
 					"data":  strings.Repeat("x", 10000),
@@ -2694,7 +2694,7 @@ var _ = Describe("SQLiteStore Integration", func() {
 			err := store.CreateCollection(ctx, "test", nil)
 			Expect(err).NotTo(HaveOccurred())
 
-			for i := 0; i < 500; i++ {
+			for i := range 500 {
 				_, err := store.Insert(ctx, "test", basic.Document{
 					"value": i,
 					"data":  strings.Repeat("x", 5000),
@@ -2724,7 +2724,7 @@ var _ = Describe("SQLiteStore Integration", func() {
 			_, err = store.Insert(ctx, "test", basic.Document{"value": 1})
 			Expect(err).NotTo(HaveOccurred())
 
-			for i := 0; i < 3; i++ {
+			for range 3 {
 				err = store.Maintenance(ctx)
 				Expect(err).NotTo(HaveOccurred())
 			}
@@ -2744,7 +2744,7 @@ var _ = Describe("SQLiteStore Integration", func() {
 			err = store.CreateCollection(ctx, "test", nil)
 			Expect(err).NotTo(HaveOccurred())
 
-			for i := 0; i < 100; i++ {
+			for i := range 100 {
 				_, err = store.Insert(ctx, "test", basic.Document{
 					"value": i,
 					"data":  strings.Repeat("x", 1000),
@@ -2791,7 +2791,7 @@ var _ = Describe("SQLiteStore Integration", func() {
 			err = store.CreateCollection(ctx, "test", nil)
 			Expect(err).NotTo(HaveOccurred())
 
-			for i := 0; i < 1000; i++ {
+			for i := range 1000 {
 				_, err = store.Insert(ctx, "test", basic.Document{
 					"value": i,
 					"data":  strings.Repeat("x", 10000),
