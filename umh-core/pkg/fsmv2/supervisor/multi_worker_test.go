@@ -1,6 +1,10 @@
 package supervisor_test
 
 import (
+	"context"
+	"errors"
+	"time"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"go.uber.org/zap"
@@ -129,6 +133,80 @@ var _ = Describe("Multi-Worker Supervisor", func() {
 		It("should return empty list when no workers", func() {
 			workers := s.ListWorkers()
 			Expect(workers).To(BeEmpty())
+		})
+	})
+
+	Describe("TickAll", func() {
+		It("should tick all workers in registry", func() {
+			identity1 := fsmv2.Identity{ID: "worker-1", Name: "Worker 1"}
+			identity2 := fsmv2.Identity{ID: "worker-2", Name: "Worker 2"}
+			identity3 := fsmv2.Identity{ID: "worker-3", Name: "Worker 3"}
+
+			worker1 := &mockWorker{}
+			worker2 := &mockWorker{}
+			worker3 := &mockWorker{}
+
+			err := s.AddWorker(identity1, worker1)
+			Expect(err).ToNot(HaveOccurred())
+
+			err = s.AddWorker(identity2, worker2)
+			Expect(err).ToNot(HaveOccurred())
+
+			err = s.AddWorker(identity3, worker3)
+			Expect(err).ToNot(HaveOccurred())
+
+			ctx := context.Background()
+			err = s.TickAll(ctx)
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("should continue ticking other workers even if one fails", func() {
+			identity1 := fsmv2.Identity{ID: "worker-1", Name: "Worker 1"}
+			identity2 := fsmv2.Identity{ID: "worker-2", Name: "Worker 2"}
+			identity3 := fsmv2.Identity{ID: "worker-3", Name: "Worker 3"}
+
+			worker1 := &mockWorker{}
+			worker2 := &mockWorker{}
+			worker3 := &mockWorker{}
+
+			s.AddWorker(identity1, worker1)
+			s.AddWorker(identity2, worker2)
+			s.AddWorker(identity3, worker3)
+
+			failingStore := &mockStore{
+				loadSnapshot: func(ctx context.Context, workerType string, id string) (*fsmv2.Snapshot, error) {
+					if id == "worker-2" {
+						return nil, errors.New("simulated failure for worker-2")
+					}
+					return &fsmv2.Snapshot{
+						Identity: fsmv2.Identity{ID: id, Name: "Test"},
+						Observed: &mockObservedState{timestamp: time.Now()},
+						Desired:  &mockDesiredState{},
+					}, nil
+				},
+			}
+
+			s2 := supervisor.NewSupervisor(supervisor.Config{
+				WorkerType: "container",
+				Store:      failingStore,
+				Logger:     zap.NewNop().Sugar(),
+			})
+
+			s2.AddWorker(identity1, worker1)
+			s2.AddWorker(identity2, worker2)
+			s2.AddWorker(identity3, worker3)
+
+			ctx := context.Background()
+			err := s2.TickAll(ctx)
+
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("worker-2"))
+		})
+
+		It("should return no error when no workers exist", func() {
+			ctx := context.Background()
+			err := s.TickAll(ctx)
+			Expect(err).ToNot(HaveOccurred())
 		})
 	})
 })

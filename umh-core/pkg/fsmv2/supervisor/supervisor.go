@@ -561,6 +561,35 @@ func (s *Supervisor) Tick(ctx context.Context) error {
 	return s.tickWorker(ctx, firstWorkerID)
 }
 
+// TickAll performs one FSM tick for all workers in the registry.
+// Each worker is ticked independently. Errors from one worker do not stop others.
+// Returns an aggregated error containing all individual worker errors.
+func (s *Supervisor) TickAll(ctx context.Context) error {
+	s.mu.RLock()
+	workerIDs := make([]string, 0, len(s.workers))
+	for id := range s.workers {
+		workerIDs = append(workerIDs, id)
+	}
+	s.mu.RUnlock()
+
+	if len(workerIDs) == 0 {
+		return nil
+	}
+
+	var errs []error
+	for _, workerID := range workerIDs {
+		if err := s.tickWorker(ctx, workerID); err != nil {
+			errs = append(errs, fmt.Errorf("worker %s: %w", workerID, err))
+		}
+	}
+
+	if len(errs) > 0 {
+		return fmt.Errorf("tick errors: %v", errs)
+	}
+
+	return nil
+}
+
 // executeActionWithRetry executes an action with exponential backoff retry.
 func (s *Supervisor) executeActionWithRetry(ctx context.Context, action fsmv2.Action) error {
 	maxRetries := 3
