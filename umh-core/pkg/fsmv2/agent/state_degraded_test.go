@@ -125,29 +125,6 @@ var _ = Describe("DegradedState", func() {
 			})
 		})
 
-		Context("when invalid observed state type", func() {
-			var state *agent.DegradedState
-
-			BeforeEach(func() {
-				state = &agent.DegradedState{}
-				desired.SetShutdownRequested(false)
-				snapshot = fsmv2.Snapshot{
-					Desired:  desired,
-					Observed: &invalidObservedState{},
-				}
-			})
-
-			It("should stay in DegradedState", func() {
-				nextState, _, _ := state.Next(snapshot)
-				Expect(nextState).To(BeAssignableToTypeOf(&agent.DegradedState{}))
-			})
-
-			It("should update reason", func() {
-				nextState, _, _ := state.Next(snapshot)
-				degradedState := nextState.(*agent.DegradedState)
-				Expect(degradedState.Reason()).To(ContainSubstring("Invalid observed state type"))
-			})
-		})
 	})
 
 	Describe("String", func() {

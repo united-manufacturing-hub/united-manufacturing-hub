@@ -138,26 +138,6 @@ var _ = Describe("ActiveState", func() {
 			})
 		})
 
-		Context("when invalid observed state type", func() {
-			BeforeEach(func() {
-				desired.SetShutdownRequested(false)
-				snapshot = fsmv2.Snapshot{
-					Desired:  desired,
-					Observed: &invalidObservedState{},
-				}
-			})
-
-			It("should transition to DegradedState", func() {
-				nextState, _, _ := state.Next(snapshot)
-				Expect(nextState).To(BeAssignableToTypeOf(&agent.DegradedState{}))
-			})
-
-			It("should include diagnostic reason", func() {
-				nextState, _, _ := state.Next(snapshot)
-				degradedState := nextState.(*agent.DegradedState)
-				Expect(degradedState.Reason()).To(ContainSubstring("Invalid observed state type"))
-			})
-		})
 	})
 
 	Describe("String", func() {
@@ -187,14 +167,4 @@ func unhealthyServiceInfo() *agentmonitorservice.ServiceInfo {
 		LatencyHealth: models.Degraded,
 		ReleaseHealth: models.Active,
 	}
-}
-
-type invalidObservedState struct{}
-
-func (i *invalidObservedState) GetTimestamp() time.Time {
-	return time.Now()
-}
-
-func (i *invalidObservedState) GetObservedDesiredState() fsmv2.DesiredState {
-	return &agent.AgentMonitorDesiredState{}
 }

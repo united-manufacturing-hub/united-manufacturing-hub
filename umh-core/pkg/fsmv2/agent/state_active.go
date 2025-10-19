@@ -31,12 +31,7 @@ func (s *ActiveState) Next(snapshot fsmv2.Snapshot) (fsmv2.State, fsmv2.Signal, 
 		return &StoppingState{}, fsmv2.SignalNone, nil
 	}
 
-	// Type assert to get agent-specific observed state
-	observed, ok := snapshot.Observed.(*AgentMonitorObservedState)
-	if !ok {
-		// Invalid observed state type
-		return &DegradedState{reason: "Invalid observed state type"}, fsmv2.SignalNone, nil
-	}
+	observed := snapshot.Observed.(*AgentMonitorObservedState)
 
 	// Check agent health
 	if !IsFullyHealthy(observed) {
