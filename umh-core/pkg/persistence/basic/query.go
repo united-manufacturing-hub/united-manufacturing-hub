@@ -1,5 +1,9 @@
 package basic
 
+const (
+	DefaultMaxFindLimit = 1000
+)
+
 // Operator represents MongoDB-style query operators for filtering documents.
 //
 // DESIGN DECISION: Use MongoDB-style operators ($eq, $gt, $in)
@@ -138,10 +142,11 @@ type SortField struct {
 //
 // INSPIRED BY: SQL LIMIT/OFFSET, MongoDB limit/skip, Linear's sync pagination.
 type Query struct {
-	Filters    []FilterCondition
-	SortBy     []SortField
-	LimitCount int
-	SkipCount  int
+	Filters      []FilterCondition
+	SortBy       []SortField
+	LimitCount   int
+	SkipCount    int
+	MaxFindLimit int
 }
 
 // NewQuery creates an empty query builder.
@@ -293,6 +298,16 @@ func (q *Query) Skip(count int) *Query {
 	}
 
 	q.SkipCount = count
+
+	return q
+}
+
+func (q *Query) WithMaxFindLimit(limit int) *Query {
+	if limit < 0 {
+		limit = 0
+	}
+
+	q.MaxFindLimit = limit
 
 	return q
 }

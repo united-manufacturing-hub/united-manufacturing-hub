@@ -1298,8 +1298,18 @@ func applyClientSideOperations(documents []Document, query Query) []Document {
 		filtered = filtered[query.SkipCount:]
 	}
 
-	if query.LimitCount > 0 && query.LimitCount < len(filtered) {
-		filtered = filtered[:query.LimitCount]
+	maxLimit := DefaultMaxFindLimit
+	if query.MaxFindLimit > 0 {
+		maxLimit = query.MaxFindLimit
+	}
+
+	effectiveLimit := maxLimit
+	if query.LimitCount > 0 && query.LimitCount < maxLimit {
+		effectiveLimit = query.LimitCount
+	}
+
+	if effectiveLimit > 0 && effectiveLimit < len(filtered) {
+		filtered = filtered[:effectiveLimit]
 	}
 
 	return filtered

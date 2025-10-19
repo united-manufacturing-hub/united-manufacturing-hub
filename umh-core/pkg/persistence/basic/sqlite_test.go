@@ -3220,4 +3220,63 @@ var _ = Describe("NewStore validation", func() {
 			Skip("Requires real network filesystem mount - test manually")
 		})
 	})
+
+	Context("Find result size protection", func() {
+		var store basic.Store
+		var tempDB string
+
+		BeforeEach(func() {
+			var err error
+			tempDB = filepath.Join(os.TempDir(), fmt.Sprintf("test-%d.db", time.Now().UnixNano()))
+			cfg := basic.DefaultConfig(tempDB)
+			store, err = basic.NewStore(cfg)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = store.CreateCollection(context.Background(), "test", nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			for i := range 1000 {
+				_, err := store.Insert(context.Background(), "test", basic.Document{
+					"index": i,
+					"data":  fmt.Sprintf("doc-%d", i),
+				})
+				Expect(err).NotTo(HaveOccurred())
+			}
+		})
+
+		AfterEach(func() {
+			if store != nil {
+				_ = store.Close(context.Background())
+			}
+			_ = os.Remove(tempDB)
+		})
+
+		It("should allow queries with reasonable result sizes", func() {
+			query := basic.NewQuery().Limit(100)
+			results, err := store.Find(context.Background(), "test", *query)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(results).To(HaveLen(100))
+		})
+
+		It("should limit results to DefaultMaxFindLimit when no limit specified", func() {
+			query := basic.NewQuery()
+			results, err := store.Find(context.Background(), "test", *query)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(results)).To(BeNumerically("<=", 1000))
+		})
+
+		It("should enforce DefaultMaxFindLimit even when higher limit requested", func() {
+			query := basic.NewQuery().Limit(50000)
+			results, err := store.Find(context.Background(), "test", *query)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(results)).To(BeNumerically("<=", 1000))
+		})
+
+		It("should allow configuring custom MaxFindLimit", func() {
+			query := basic.NewQuery().Limit(100).WithMaxFindLimit(200)
+			results, err := store.Find(context.Background(), "test", *query)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(results)).To(BeNumerically("<=", 200))
+		})
+	})
 })
