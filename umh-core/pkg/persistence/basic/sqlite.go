@@ -52,6 +52,31 @@ import (
 // INSPIRED BY: SQL-92 identifier rules, Go variable naming conventions.
 var collectionNamePattern = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`)
 
+// JournalMode specifies SQLite journaling mode for durability and concurrency.
+//
+// DESIGN DECISION: Only expose WAL and DELETE modes
+// WHY: These are the only two modes that work reliably in production:
+//   - WAL: Optimal for local filesystems (concurrent reads, fast writes)
+//   - DELETE: Compatible with network filesystems (NFS/CIFS safe)
+//
+// Other modes (TRUNCATE, PERSIST, MEMORY, OFF) are either redundant or unsafe.
+//
+// RESTRICTION: WAL mode MUST NOT be used on network filesystems
+// Source: https://www.sqlite.org/wal.html#nfs
+// "there have been multiple cases of database corruption due to bugs in
+// the remote file system implementation or the network itself".
+type JournalMode string
+
+const (
+	// JournalModeWAL enables Write-Ahead Logging for optimal performance on local filesystems.
+	// UNSAFE on network filesystems (NFS/CIFS) - will be rejected by NewStore().
+	JournalModeWAL JournalMode = "WAL"
+
+	// JournalModeDELETE uses traditional rollback journal, safe for network filesystems.
+	// Compatible with NFS/CIFS but slower than WAL mode.
+	JournalModeDELETE JournalMode = "DELETE"
+)
+
 // validateCollectionName verifies collection name is a valid SQL identifier.
 //
 // DESIGN DECISION: Regex validation instead of parameterized DDL

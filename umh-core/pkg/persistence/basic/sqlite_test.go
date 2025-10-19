@@ -34,6 +34,26 @@ func TestSQLiteStore(t *testing.T) {
 	RunSpecs(t, "SQLiteStore Suite")
 }
 
+var _ = Describe("JournalMode constants", func() {
+	It("should define WAL mode constant", func() {
+		Expect(basic.JournalModeWAL).To(Equal(basic.JournalMode("WAL")))
+	})
+
+	It("should define DELETE mode constant", func() {
+		Expect(basic.JournalModeDELETE).To(Equal(basic.JournalMode("DELETE")))
+	})
+
+	It("should use WAL as string representation", func() {
+		mode := basic.JournalModeWAL
+		Expect(string(mode)).To(Equal("WAL"))
+	})
+
+	It("should use DELETE as string representation", func() {
+		mode := basic.JournalModeDELETE
+		Expect(string(mode)).To(Equal("DELETE"))
+	})
+})
+
 var _ = Describe("SQLiteStore", func() {
 	var (
 		tempDir string
