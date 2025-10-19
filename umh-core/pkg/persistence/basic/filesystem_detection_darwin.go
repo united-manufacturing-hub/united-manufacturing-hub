@@ -28,20 +28,22 @@ func IsNetworkFilesystem(path string) (bool, string, error) {
 		return false, "", fmt.Errorf("failed to stat filesystem at %s: %w", path, err)
 	}
 
-	fsTypeBytes := make([]byte, len(stat.Fstypename))
+	var fsTypeBytes [16]byte
 	for i, v := range stat.Fstypename {
 		fsTypeBytes[i] = byte(v)
 	}
-	fsType := string(fsTypeBytes[:clen(fsTypeBytes)])
+
+	fsType := string(fsTypeBytes[:clen(fsTypeBytes[:])])
 
 	return IsNetworkFSType(fsType), fsType, nil
 }
 
 func clen(n []byte) int {
-	for i := 0; i < len(n); i++ {
+	for i := range n {
 		if n[i] == 0 {
 			return i
 		}
 	}
+
 	return len(n)
 }
