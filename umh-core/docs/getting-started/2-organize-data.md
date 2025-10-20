@@ -34,7 +34,7 @@ We'll use Siemens S7 as an example, but this works identically with OPC UA, Modb
 2. **Name:** `s7-plc`
 3. **Protocol:** Select **Siemens S7** (or your protocol)
 4. **Connection:**
-   - **IP:** Use `{{ .IP }}` (we'll set this in variables)
+   - **IP:** Enter your PLC's IP address (example: 192.168.1.100)
    - **Rack:** 0
    - **Slot:** 1
 
@@ -88,12 +88,12 @@ The addresses automatically become tags - no manual mapping needed!
 
 ### Template Variables
 
-The `{{ .IP }}` and `{{ .PORT }}` in your configuration are template variables. They come from the Connection settings you entered earlier:
-- `{{ .IP }}` - The IP address from Connection settings
-- `{{ .PORT }}` - The port from Connection settings  
+When you entered `192.168.1.100` in the Connection settings, it automatically became available as `{{ .IP }}` in your configuration code. Template variables connect your Connection settings to the processing code:
+- `{{ .IP }}` - The IP address you entered in Connection settings
+- `{{ .PORT }}` - The port you entered in Connection settings
 - `{{ .location_path }}` - The location from Bridge configuration
 
-This makes configurations reusable across different sites - just change the Connection settings.
+This makes configurations reusable across different sites - just change the Connection settings and the template variables update automatically.
 
 Learn more: [Template Variables Reference](../reference/variables.md)
 
