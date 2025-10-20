@@ -118,8 +118,6 @@ func (p *Pusher) push() {
 	for {
 		select {
 		case <-ticker.C:
-			p.dog.ReportHeartbeatStatus(p.watcherUUID, watchdog.HEARTBEAT_STATUS_OK)
-
 			messages := p.outBoundMessages()
 			if len(messages) == 0 {
 				continue
@@ -155,6 +153,7 @@ func (p *Pusher) push() {
 				continue
 			}
 
+			p.dog.ReportHeartbeatStatus(p.watcherUUID, watchdog.HEARTBEAT_STATUS_OK)
 			error_handler.ResetErrorCounter()
 			boPostRequest.Reset()
 
