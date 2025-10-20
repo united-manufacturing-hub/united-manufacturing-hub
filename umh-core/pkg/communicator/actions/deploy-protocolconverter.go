@@ -38,6 +38,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -263,6 +264,27 @@ func (a *DeployProtocolConverterAction) GetParsedPayload() models.ProtocolConver
 	return a.payload
 }
 
+// enhanceStatusReason adds actionable guidance to resource blocking messages
+func enhanceStatusReason(reason string) string {
+	if reason == "" {
+		return reason
+	}
+
+	// Check for resource degradation patterns and add actionable guidance
+	if strings.Contains(reason, "CPU degraded") {
+		return "Blocked: " + reason + " - Reduce system load or disable resource limits (agent.enableResourceLimitBlocking: false)"
+	}
+	if strings.Contains(reason, "Memory degraded") {
+		return "Blocked: " + reason + " - Reduce memory usage or disable resource limits (agent.enableResourceLimitBlocking: false)"
+	}
+	if strings.Contains(reason, "Disk degraded") {
+		return "Blocked: " + reason + " - Free disk space or disable resource limits (agent.enableResourceLimitBlocking: false)"
+	}
+
+	// For other blocking reasons, just pass through
+	return reason
+}
+
 // waitForComponentToAppear polls live FSM state until the new component
 // becomes available or the timeout hits (→ delete unless ignoreHealthCheck).
 // the function returns the error code and the error message via an error object
@@ -275,6 +297,9 @@ func (a *DeployProtocolConverterAction) waitForComponentToAppear() (string, erro
 	timeout := time.After(constants.DataflowComponentWaitForActiveTimeout)
 	startTime := time.Now()
 	timeoutDuration := constants.DataflowComponentWaitForActiveTimeout
+
+	// Track last known blocking reason for timeout error message
+	var lastStatusReason string
 
 	for {
 		elapsed := time.Since(startTime)
@@ -297,7 +322,15 @@ func (a *DeployProtocolConverterAction) waitForComponentToAppear() (string, erro
 				return models.ErrRetryRollbackTimeout, fmt.Errorf("protocol converter '%s' failed to activate within timeout but could not be removed: %w. Please check system load and consider removing the component manually", a.payload.Name, err)
 			}
 
-			return models.ErrRetryRollbackTimeout, fmt.Errorf("protocol converter '%s' was removed because it did not become active within the timeout period. Please check system load or component configuration and try again", a.payload.Name)
+			// Build timeout error message with blocking reason if available
+			errorMsg := fmt.Sprintf("protocol converter '%s' was removed because it did not become active within the timeout period", a.payload.Name)
+			if lastStatusReason != "" {
+				errorMsg = fmt.Sprintf("protocol converter '%s' was removed because: %s", a.payload.Name, enhanceStatusReason(lastStatusReason))
+			} else {
+				errorMsg += ". Please check system load or component configuration and try again"
+			}
+
+			return models.ErrRetryRollbackTimeout, fmt.Errorf("%s", errorMsg)
 
 		case <-ticker.C:
 			// the snapshot manager holds the latest system snapshot which is asynchronously updated by the other goroutines
@@ -313,24 +346,27 @@ func (a *DeployProtocolConverterAction) waitForComponentToAppear() (string, erro
 						continue
 					}
 
-					// cast the instance LastObservedState to a protocolconverter instance
-					pcSnapshot, ok := instance.LastObservedState.(*protocolconverter.ProtocolConverterObservedStateSnapshot)
-					if !ok {
-						continue
-					}
-
 					found = true
 
-					// check the nmap configuration
-					if pcSnapshot.ServiceInfo.ConnectionObservedState.ServiceInfo.NmapObservedState.ObservedNmapServiceConfig.Port != uint16(a.payload.Connection.Port) {
-						stateMessage := RemainingPrefixSec(remainingSeconds) + "waiting for nmap to apply the connection configuration"
-						SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
-							stateMessage, a.outboundChannel, models.DeployProtocolConverter)
-
-						continue
+					// Check if the protocol converter is in an active state
+					if instance.CurrentState == "active" || instance.CurrentState == "idle" {
+						return "", nil
 					}
 
-					return "", nil
+					// Get more detailed status information from the protocol converter snapshot
+					currentStateReason := "current state: " + instance.CurrentState
+
+					// Cast the instance LastObservedState to a protocolconverter instance
+					pcSnapshot, ok := instance.LastObservedState.(*protocolconverter.ProtocolConverterObservedStateSnapshot)
+					if ok && pcSnapshot != nil && pcSnapshot.ServiceInfo.StatusReason != "" {
+						// Capture the raw status reason for timeout error message
+						lastStatusReason = pcSnapshot.ServiceInfo.StatusReason
+						currentStateReason = enhanceStatusReason(pcSnapshot.ServiceInfo.StatusReason)
+					}
+
+					stateMessage := RemainingPrefixSec(remainingSeconds) + currentStateReason
+					SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
+						stateMessage, a.outboundChannel, models.DeployProtocolConverter)
 				}
 
 				if !found {
