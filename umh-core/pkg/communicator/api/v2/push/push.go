@@ -33,9 +33,9 @@ import (
 )
 
 type DeadLetter struct {
-	cookies       map[string]string
-	messages      []models.UMHMessage
-	retryAttempts int
+	Cookies       map[string]string
+	Messages      []models.UMHMessage
+	RetryAttempts int
 }
 
 func DefaultDeadLetterChanBuffer() chan DeadLetter {
@@ -162,26 +162,27 @@ func (p *Pusher) push() {
 				continue
 			}
 
-			if len(d.messages) == 0 {
+			if len(d.Messages) == 0 {
 				continue
 			}
 
-			p.dog.ReportHeartbeatStatus(p.watcherUUID, watchdog.HEARTBEAT_STATUS_OK)
 			// Retry the messages in deadletter channel only thrice. If it fails after 3 retryAttempts, log the message and drop.
-			if d.retryAttempts > 2 {
+			if d.RetryAttempts > 2 {
 				continue
 			}
 
-			d.retryAttempts++
+			d.RetryAttempts++
 
-			_, _, err := http.PostRequest[any, backend_api_structs.PushPayload](context.Background(), http.PushEndpoint, &backend_api_structs.PushPayload{UMHMessages: d.messages}, nil, &d.cookies, p.insecureTLS, p.apiURL, p.logger)
+			_, _, err := http.PostRequest[any, backend_api_structs.PushPayload](context.Background(), http.PushEndpoint, &backend_api_structs.PushPayload{UMHMessages: d.Messages}, nil, &d.Cookies, p.insecureTLS, p.apiURL, p.logger)
 			if err != nil {
 				p.dog.ReportHeartbeatStatus(p.watcherUUID, watchdog.HEARTBEAT_STATUS_WARNING)
 				boPostRequest.IncrementAndSleep()
 				// In case of an error, push the message back to the deadletter channel.
-				go enqueueToDeadLetterChannel(p.deadletterCh, d.messages, d.cookies, d.retryAttempts, p.logger)
+				go enqueueToDeadLetterChannel(p.deadletterCh, d.Messages, d.Cookies, d.RetryAttempts, p.logger)
+				continue
 			}
 
+			p.dog.ReportHeartbeatStatus(p.watcherUUID, watchdog.HEARTBEAT_STATUS_OK)
 			boPostRequest.Reset()
 		}
 	}
@@ -199,9 +200,9 @@ func enqueueToDeadLetterChannel(deadLetterCh chan DeadLetter, messages []models.
 			return
 		}
 	case deadLetterCh <- DeadLetter{
-		messages:      messages,
-		cookies:       cookies,
-		retryAttempts: retryAttempt,
+		Messages:      messages,
+		Cookies:       cookies,
+		RetryAttempts: retryAttempt,
 	}:
 		// Message successfully enqueued to deadletter channel. Do nothing.
 	default:
