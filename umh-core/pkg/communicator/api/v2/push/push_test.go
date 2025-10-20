@@ -17,6 +17,7 @@ package push_test
 import (
 	"net/http"
 	"net/http/httptest"
+	"sync"
 
 	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo/v2"
@@ -28,6 +29,7 @@ import (
 )
 
 type MockWatchdog struct {
+	mu           sync.Mutex
 	warningCount int
 	okCount      int
 	watcherUUID  uuid.UUID
@@ -43,6 +45,9 @@ func (m *MockWatchdog) RegisterHeartbeat(name string, warningsUntilFailure uint6
 func (m *MockWatchdog) UnregisterHeartbeat(uniqueIdentifier uuid.UUID) {}
 
 func (m *MockWatchdog) ReportHeartbeatStatus(uniqueIdentifier uuid.UUID, status watchdog.HeartbeatStatus) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	if uniqueIdentifier != m.watcherUUID {
 		return
 	}
@@ -57,10 +62,14 @@ func (m *MockWatchdog) ReportHeartbeatStatus(uniqueIdentifier uuid.UUID, status 
 func (m *MockWatchdog) SetHasSubscribers(has bool) {}
 
 func (m *MockWatchdog) GetWarningCount() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	return m.warningCount
 }
 
 func (m *MockWatchdog) GetOKCount() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	return m.okCount
 }
 
@@ -82,8 +91,6 @@ var _ = Describe("Pusher Deadletter Handler", func() {
 	})
 
 	AfterEach(func() {
-		close(outboundCh)
-		close(deadletterCh)
 	})
 
 	Context("when processing deadletter messages with failed HTTP requests", func() {
@@ -145,6 +152,98 @@ var _ = Describe("Pusher Deadletter Handler", func() {
 			}, "5s").Should(BeNumerically(">=", 1))
 
 			Expect(mockDog.GetWarningCount()).To(Equal(0))
+		})
+	})
+})
+
+var _ = Describe("Pusher Main Ticker Loop", func() {
+	var (
+		mockDog      *MockWatchdog
+		outboundCh   chan *models.UMHMessage
+		deadletterCh chan push.DeadLetter
+		logger       *zap.SugaredLogger
+		instanceUUID uuid.UUID
+	)
+
+	BeforeEach(func() {
+		mockDog = &MockWatchdog{}
+		outboundCh = make(chan *models.UMHMessage, 100)
+		deadletterCh = push.DefaultDeadLetterChanBuffer()
+		logger = zap.NewNop().Sugar()
+		instanceUUID = uuid.New()
+	})
+
+	AfterEach(func() {
+	})
+
+	Context("when processing messages from main ticker loop with failed HTTP requests", func() {
+		It("should accumulate watchdog warnings without resetting on failures", func() {
+			mockHTTPServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusInternalServerError)
+			}))
+			defer mockHTTPServer.Close()
+
+			backoff := push.DefaultBackoffPolicy()
+			pusher := push.NewPusher(instanceUUID, "test-jwt", mockDog, outboundCh, deadletterCh, backoff, true, mockHTTPServer.URL, logger)
+			pusher.Start()
+
+			outboundCh <- &models.UMHMessage{
+				InstanceUUID: instanceUUID,
+				Content:      "test message from main loop",
+				Email:        "test@example.com",
+			}
+
+			Eventually(func() int {
+				return mockDog.GetWarningCount()
+			}, "5s").Should(BeNumerically(">=", 1))
+
+			Consistently(func() int {
+				return mockDog.GetWarningCount()
+			}, "2s").Should(BeNumerically(">=", 1))
+
+			Expect(mockDog.GetOKCount()).To(Equal(0))
+		})
+
+		It("should report OK only after successful POST request", func() {
+			mockHTTPServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusOK)
+			}))
+			defer mockHTTPServer.Close()
+
+			backoff := push.DefaultBackoffPolicy()
+			pusher := push.NewPusher(instanceUUID, "test-jwt", mockDog, outboundCh, deadletterCh, backoff, true, mockHTTPServer.URL, logger)
+			pusher.Start()
+
+			outboundCh <- &models.UMHMessage{
+				InstanceUUID: instanceUUID,
+				Content:      "test message from main loop",
+				Email:        "test@example.com",
+			}
+
+			Eventually(func() int {
+				return mockDog.GetOKCount()
+			}, "5s").Should(BeNumerically(">=", 1))
+
+			Expect(mockDog.GetWarningCount()).To(Equal(0))
+		})
+
+		It("should not report watchdog status when message batch is empty", func() {
+			mockHTTPServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusOK)
+			}))
+			defer mockHTTPServer.Close()
+
+			backoff := push.DefaultBackoffPolicy()
+			pusher := push.NewPusher(instanceUUID, "test-jwt", mockDog, outboundCh, deadletterCh, backoff, true, mockHTTPServer.URL, logger)
+			pusher.Start()
+
+			Consistently(func() int {
+				return mockDog.GetWarningCount()
+			}, "1s").Should(Equal(0))
+
+			Consistently(func() int {
+				return mockDog.GetOKCount()
+			}, "1s").Should(Equal(0))
 		})
 	})
 })
