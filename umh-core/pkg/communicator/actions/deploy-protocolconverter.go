@@ -38,7 +38,6 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -270,19 +269,10 @@ func enhanceStatusReason(reason string) string {
 		return reason
 	}
 
-	// Check for resource degradation patterns and add actionable guidance
-	if strings.Contains(reason, "CPU degraded") {
-		return "Blocked: " + reason + " - Reduce system load or disable resource limits (agent.enableResourceLimitBlocking: false)"
-	}
-	if strings.Contains(reason, "Memory degraded") {
-		return "Blocked: " + reason + " - Reduce memory usage or disable resource limits (agent.enableResourceLimitBlocking: false)"
-	}
-	if strings.Contains(reason, "Disk degraded") {
-		return "Blocked: " + reason + " - Free disk space or disable resource limits (agent.enableResourceLimitBlocking: false)"
-	}
-
-	// For other blocking reasons, just pass through
-	return reason
+	// Add context and actionable guidance for any blocking reason
+	return "Deployment blocked due to resource constraints: " + reason +
+		". The system monitors CPU, memory, and disk usage to prevent overload. " +
+		"To proceed: reduce system load, free resources, or disable monitoring (set agent.enableResourceLimitBlocking: false in configuration)"
 }
 
 // waitForComponentToAppear polls live FSM state until the new component
