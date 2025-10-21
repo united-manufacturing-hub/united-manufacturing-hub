@@ -88,7 +88,7 @@ The addresses automatically become tags - no manual mapping needed!
 
 ### Template Variables
 
-When you entered `192.168.1.100` in the Connection settings, it automatically became available as `{{ .IP }}` in your configuration code. Template variables connect your Connection settings to the processing code:
+When you entered your PLC's IP address in the Connection settings, it automatically became available as `{{ .IP }}` in your configuration code. Template variables connect your Connection settings to the processing code:
 - `{{ .IP }}` - The IP address you entered in Connection settings
 - `{{ .PORT }}` - The port you entered in Connection settings
 - `{{ .location_path }}` - The location from Bridge configuration
