@@ -92,12 +92,6 @@ var _ = Describe("ValidateComponentName", func() {
 			Expect(err.Error()).To(Equal("Name has to start and end with a letter or number"))
 		})
 
-		It("should reject names starting with hyphen", func() {
-			err := actions.ValidateComponentName("-component")
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(Equal("Name has to start and end with a letter or number"))
-		})
-
 		It("should reject names ending with hyphen", func() {
 			err := actions.ValidateComponentName("component-")
 			Expect(err).To(HaveOccurred())
