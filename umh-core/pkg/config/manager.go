@@ -217,8 +217,9 @@ func (m *FileConfigManager) GetConfigWithOverwritesOrCreateNew(ctx context.Conte
 	}
 
 	var config FullConfig
-	// default config value
+	// default config values
 	config.Agent.MetricsPort = 8080
+	config.Agent.EnableResourceLimitBlocking = constants.DefaultEnableResourceLimitBlocking
 
 	exists, err := m.fsService.FileExists(ctx, m.configPath)
 	switch {
@@ -250,6 +251,10 @@ func (m *FileConfigManager) GetConfigWithOverwritesOrCreateNew(ctx context.Conte
 
 	if configOverride.Agent.AllowInsecureTLS {
 		config.Agent.AllowInsecureTLS = configOverride.Agent.AllowInsecureTLS
+	}
+
+	if configOverride.Agent.MetricsPort > 0 || configOverride.Agent.APIURL != "" || configOverride.Agent.AuthToken != "" || string(configOverride.Agent.ReleaseChannel) != "" {
+		config.Agent.EnableResourceLimitBlocking = configOverride.Agent.EnableResourceLimitBlocking
 	}
 
 	if configOverride.Agent.Location != nil {
@@ -1107,6 +1112,7 @@ func (m *FileConfigManager) WriteYAMLConfigFromString(ctx context.Context, confi
 		m.cacheRawConfig = ""
 		m.cacheError = err
 		m.cacheMu.Unlock()
+
 		return fmt.Errorf("failed to parse new config for cache update: %w", err)
 	}
 
