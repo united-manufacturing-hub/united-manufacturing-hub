@@ -117,8 +117,9 @@ func LoadConfigWithEnvOverrides(ctx context.Context, configManager *FileConfigMa
 				APIURL:    apiURL,
 				AuthToken: authToken,
 			},
-			ReleaseChannel: ReleaseChannel(releaseChannel),
-			Location:       locations,
+			ReleaseChannel:              ReleaseChannel(releaseChannel),
+			Location:                    locations,
+			EnableResourceLimitBlocking: true,
 		},
 		Internal: InternalConfig{
 			Redpanda: RedpandaConfig{

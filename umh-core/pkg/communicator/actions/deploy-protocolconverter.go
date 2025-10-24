@@ -263,18 +263,6 @@ func (a *DeployProtocolConverterAction) GetParsedPayload() models.ProtocolConver
 	return a.payload
 }
 
-// enhanceStatusReason adds actionable guidance to resource blocking messages
-func enhanceStatusReason(reason string) string {
-	if reason == "" {
-		return reason
-	}
-
-	// Add context and actionable guidance for any blocking reason
-	return "Deployment blocked due to resource constraints: " + reason +
-		". The system monitors CPU, memory, and disk usage to prevent overload. " +
-		"To proceed: reduce system load, free resources, or disable monitoring (set agent.enableResourceLimitBlocking: false in configuration)"
-}
-
 // waitForComponentToAppear polls live FSM state until the new component
 // becomes available or the timeout hits (→ delete unless ignoreHealthCheck).
 // the function returns the error code and the error message via an error object
@@ -315,7 +303,7 @@ func (a *DeployProtocolConverterAction) waitForComponentToAppear() (string, erro
 			// Build timeout error message with blocking reason if available
 			errorMsg := fmt.Sprintf("protocol converter '%s' was removed because it did not become active within the timeout period", a.payload.Name)
 			if lastStatusReason != "" {
-				errorMsg = fmt.Sprintf("protocol converter '%s' was removed because: %s", a.payload.Name, enhanceStatusReason(lastStatusReason))
+				errorMsg = fmt.Sprintf("protocol converter '%s' was removed because: %s", a.payload.Name, lastStatusReason)
 			} else {
 				errorMsg += ". Please check system load or component configuration and try again"
 			}
@@ -339,7 +327,9 @@ func (a *DeployProtocolConverterAction) waitForComponentToAppear() (string, erro
 					found = true
 
 					// Check if the protocol converter is in an active state
-					if instance.CurrentState == "active" || instance.CurrentState == "idle" {
+					// Note: starting_failed_dfc_missing is a valid state for empty bridges (no DFCs configured yet)
+					// This allows the deploy → edit workflow where deploy creates an empty bridge and edit adds DFCs later
+					if instance.CurrentState == "active" || instance.CurrentState == "idle" || instance.CurrentState == "starting_failed_dfc_missing" {
 						return "", nil
 					}
 
@@ -349,9 +339,9 @@ func (a *DeployProtocolConverterAction) waitForComponentToAppear() (string, erro
 					// Cast the instance LastObservedState to a protocolconverter instance
 					pcSnapshot, ok := instance.LastObservedState.(*protocolconverter.ProtocolConverterObservedStateSnapshot)
 					if ok && pcSnapshot != nil && pcSnapshot.ServiceInfo.StatusReason != "" {
-						// Capture the raw status reason for timeout error message
+						// Use the raw status reason from FSM - frontend will handle enhancement
 						lastStatusReason = pcSnapshot.ServiceInfo.StatusReason
-						currentStateReason = enhanceStatusReason(pcSnapshot.ServiceInfo.StatusReason)
+						currentStateReason = pcSnapshot.ServiceInfo.StatusReason
 					}
 
 					stateMessage := RemainingPrefixSec(remainingSeconds) + currentStateReason
