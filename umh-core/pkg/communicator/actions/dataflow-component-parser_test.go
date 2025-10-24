@@ -15,6 +15,8 @@
 package actions_test
 
 import (
+	"strings"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions"
@@ -177,10 +179,7 @@ var _ = Describe("ValidateComponentName", func() {
 		})
 
 		It("should accept very long valid names", func() {
-			longName := "a" + string(make([]byte, 100)) // Create a long string
-			for i := range longName[1:] {
-				longName = longName[:i+1] + "a" + longName[i+2:]
-			}
+			longName := strings.Repeat("a", 100)
 			err := actions.ValidateComponentName(longName)
 			Expect(err).NotTo(HaveOccurred())
 		})
