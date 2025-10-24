@@ -98,20 +98,6 @@ func LoadConfigWithEnvOverrides(ctx context.Context, configManager *FileConfigMa
 		}
 	}
 
-	var (
-		enableResourceLimitBlocking    bool
-		enableResourceLimitBlockingSet bool
-	)
-
-	if enableResourceLimitBlockingStr, exists := os.LookupEnv("ENABLE_RESOURCE_LIMIT_BLOCKING"); exists {
-		enableResourceLimitBlocking, err = env.GetAsBool("ENABLE_RESOURCE_LIMIT_BLOCKING", false, false)
-		if err != nil {
-			sentry.ReportIssuef(sentry.IssueTypeWarning, log, "Failed to parse ENABLE_RESOURCE_LIMIT_BLOCKING=%q as boolean: %w. Existing config value will be kept to avoid accidental security regressions", enableResourceLimitBlockingStr, err)
-		} else {
-			enableResourceLimitBlockingSet = true
-		}
-	}
-
 	// Location values are numbered 0-6 and passed as LOCATION_0, LOCATION_1, etc.
 	locations := make(map[int]string)
 
@@ -166,11 +152,6 @@ func LoadConfigWithEnvOverrides(ctx context.Context, configManager *FileConfigMa
 	// Only set AllowInsecureTLS if it was explicitly provided as an environment variable
 	if allowInsecureTLSSet {
 		configOverride.Agent.AllowInsecureTLS = allowInsecureTLS
-	}
-
-	// Only set EnableResourceLimitBlocking if it was explicitly provided as an environment variable
-	if enableResourceLimitBlockingSet {
-		configOverride.Agent.EnableResourceLimitBlocking = enableResourceLimitBlocking
 	}
 
 	// Apply the environment overrides to the config

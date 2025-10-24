@@ -249,9 +249,8 @@ func (m *FileConfigManager) GetConfigWithOverwritesOrCreateNew(ctx context.Conte
 		config.Agent.ReleaseChannel = configOverride.Agent.ReleaseChannel
 	}
 
-	if configOverride.Agent.MetricsPort > 0 || configOverride.Agent.APIURL != "" || configOverride.Agent.AuthToken != "" || string(configOverride.Agent.ReleaseChannel) != "" {
+	if configOverride.Agent.AllowInsecureTLS {
 		config.Agent.AllowInsecureTLS = configOverride.Agent.AllowInsecureTLS
-		config.Agent.EnableResourceLimitBlocking = configOverride.Agent.EnableResourceLimitBlocking
 	}
 
 	if configOverride.Agent.Location != nil {

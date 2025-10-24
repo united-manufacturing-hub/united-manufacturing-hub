@@ -1214,9 +1214,7 @@ var _ = Describe("ProtocolConverter FSM", func() {
 
 			observedSpec := testInstance.ObservedState.ObservedProtocolConverterSpecConfig
 			Expect(observedSpec.Location).NotTo(BeNil())
-			Expect(observedSpec.Location).To(HaveLen(4))
-			Expect(observedSpec.Location["1"]).To(Equal("enterprise-value"))
-			Expect(observedSpec.Location["2"]).To(Equal("site-value"))
+			Expect(observedSpec.Location).To(HaveLen(2))
 			Expect(observedSpec.Location["facility"]).To(Equal("test-facility"))
 			Expect(observedSpec.Location["area"]).To(Equal("test-area"))
 		})

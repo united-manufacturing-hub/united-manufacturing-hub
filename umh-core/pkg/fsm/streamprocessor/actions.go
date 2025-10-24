@@ -253,31 +253,15 @@ func (i *Instance) UpdateObservedStateOfInstance(ctx context.Context, services s
 		}
 	}
 
-	// Merge agent location with stream processor location for the observed spec config
-	// This ensures the system snapshot shows the effective location that includes agent location inheritance
-	agentLocationStr := convertIntMapToStringMap(snapshot.CurrentConfig.Agent.Location)
-	mergedLocation := make(map[string]string)
-
-	// 1a) copy agent levels (authoritative)
-	for k, v := range agentLocationStr {
-		mergedLocation[k] = v
-	}
-
-	// 1b) extend with SP-local additions (never overwrite agent keys)
-	for k, v := range i.specConfig.Location {
-		if agentValue, exists := mergedLocation[k]; !exists || agentValue == "" {
-			mergedLocation[k] = v
-		}
-	}
-
-	// Update the spec config with the merged location before storing in observed state
-	observedSpecConfig := i.specConfig
-	observedSpecConfig.Location = mergedLocation
-	i.ObservedState.ObservedSpecConfig = observedSpecConfig
+	// Store spec config in observed state for reference
+	// BuildRuntimeConfig will perform the authoritative location merge
+	i.ObservedState.ObservedSpecConfig = i.specConfig
 
 	// Now render the config
 	// WARN: TODO
 	start = time.Now()
+
+	agentLocationStr := convertIntMapToStringMap(snapshot.CurrentConfig.Agent.Location)
 
 	i.runtimeConfig, i.dfcRuntimeConfig, err = runtime_config.BuildRuntimeConfig(
 		i.specConfig,

@@ -246,32 +246,14 @@ func (p *ProtocolConverterInstance) UpdateObservedStateOfInstance(ctx context.Co
 		return ctx.Err()
 	}
 
-	// Populate spec config from available YAML data immediately
-	// This ensures observed state is valid even when service doesn't exist yet (e.g., to_be_created state)
-	agentLocationStr := convertIntMapToStringMap(snapshot.CurrentConfig.Agent.Location)
-	mergedLocation := make(map[string]string)
-
-	// Copy agent-level location (authoritative)
-	for k, v := range agentLocationStr {
-		mergedLocation[k] = v
-	}
-
-	// Extend with protocol converter-specific location (never overwrite agent keys)
-	for k, v := range p.specConfig.Location {
-		if agentValue, exists := mergedLocation[k]; !exists || agentValue == "" {
-			mergedLocation[k] = v
-		}
-	}
-
-	// Update the spec config with merged location before storing in observed state
-	observedSpecConfig := p.specConfig
-	observedSpecConfig.Location = mergedLocation
-	p.ObservedState.ObservedProtocolConverterSpecConfig = observedSpecConfig
+	// Store spec config in observed state for reference
+	// BuildRuntimeConfig will perform the authoritative location merge
+	p.ObservedState.ObservedProtocolConverterSpecConfig = p.specConfig
 
 	currentState := p.baseFSMInstance.GetCurrentFSMState()
 	desiredState := p.baseFSMInstance.GetDesiredFSMState()
 
-	// For to_be_created/creating states, spec config is already populated above
+	// For to_be_created/creating states, spec config is stored above
 	// but service doesn't exist yet, so return early to avoid service operations
 	if currentState == internalfsm.LifecycleStateToBeCreated ||
 		currentState == internalfsm.LifecycleStateCreating {
@@ -279,6 +261,8 @@ func (p *ProtocolConverterInstance) UpdateObservedStateOfInstance(ctx context.Co
 	}
 
 	start := time.Now()
+
+	agentLocationStr := convertIntMapToStringMap(snapshot.CurrentConfig.Agent.Location)
 
 	info, err := p.getServiceStatus(ctx, services, snapshot)
 	if err != nil {
