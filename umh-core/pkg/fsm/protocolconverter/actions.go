@@ -246,9 +246,34 @@ func (p *ProtocolConverterInstance) UpdateObservedStateOfInstance(ctx context.Co
 		return ctx.Err()
 	}
 
-	// Store spec config in observed state for reference
-	// BuildRuntimeConfig will perform the authoritative location merge
+	// Merge agent location with protocol converter location for ObservedSpecConfig
+	//
+	// ARCHITECTURE NOTE: This merging happens in TWO places for different purposes:
+	//
+	// 1. HERE (FSM actions): Merge for ObservedSpecConfig
+	//    - Purpose: UI display and editing via REST API (GetProtocolConverterAction/EditProtocolConverterAction)
+	//    - The UI needs the complete merged location to display all levels and allow editing
+	//    - Without this, users cannot view/edit inherited agent location levels in the UI
+	//
+	// 2. BuildRuntimeConfig(): Merge for template variable substitution
+	//    - Purpose: Provide merged location to template rendering ({{ .location }})
+	//    - This creates the runtime config that Benthos actually executes
+	//
+	// This is intentional duplication - each serves a distinct purpose in the system.
+	agentLocationStr := convertIntMapToStringMap(snapshot.CurrentConfig.Agent.Location)
+
+	mergedLocation := make(map[string]string)
+	for k, v := range agentLocationStr {
+		mergedLocation[k] = v
+	}
+
+	for k, v := range p.specConfig.Location {
+		mergedLocation[k] = v
+	}
+
+	// Store spec config with merged location in observed state for UI
 	p.ObservedState.ObservedProtocolConverterSpecConfig = p.specConfig
+	p.ObservedState.ObservedProtocolConverterSpecConfig.Location = mergedLocation
 
 	currentState := p.baseFSMInstance.GetCurrentFSMState()
 	desiredState := p.baseFSMInstance.GetDesiredFSMState()
@@ -261,8 +286,6 @@ func (p *ProtocolConverterInstance) UpdateObservedStateOfInstance(ctx context.Co
 	}
 
 	start := time.Now()
-
-	agentLocationStr := convertIntMapToStringMap(snapshot.CurrentConfig.Agent.Location)
 
 	info, err := p.getServiceStatus(ctx, services, snapshot)
 	if err != nil {
