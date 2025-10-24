@@ -33,6 +33,22 @@ When selecting a topic, view:
 
 Programmatic access at `http://localhost:8090/graphql` (per instance).
 
+> **Note:** The GraphQL API is disabled by default. You must enable it in your configuration before using the examples below.
+
+### Configuration
+
+```yaml
+internal:
+  topicBrowser:
+    desiredState: "active"  # Enable/disable
+
+agent:
+  graphql:
+    enabled: true           # Enable GraphQL API (required!)
+    port: 8090             # API port
+    debug: false           # Set true for GraphiQL UI
+```
+
 ### Basic Query
 ```graphql
 {
@@ -61,20 +77,6 @@ Programmatic access at `http://localhost:8090/graphql` (per instance).
 curl -X POST http://localhost:8090/graphql \
   -H "Content-Type: application/json" \
   -d '{"query": "{ topics(limit: 10) { topic } }"}'
-```
-
-## Configuration
-
-```yaml
-internal:
-  topicBrowser:
-    desiredState: "active"  # Enable/disable
-
-agent:
-  graphql:
-    enabled: true           # Enable GraphQL API
-    port: 8090             # API port
-    debug: false           # Set true for GraphiQL UI
 ```
 
 ## Common Use Cases
