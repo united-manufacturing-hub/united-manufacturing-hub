@@ -528,15 +528,19 @@ func BuildCommonDataFlowComponentPropertiesFromConfig(dfcConfig dataflowcomponen
 }
 
 // ValidateComponentName validates that a component name contains only valid characters
-// and is not empty. Valid characters are letters (a-z, A-Z), numbers (0-9), and hyphens (-).
+// and is not empty. Valid characters are lowercase letters (a-z), numbers (0-9), underscores (_) and hyphens (-).
 func ValidateComponentName(name string) error {
 	if name == "" {
-		return errors.New("name cannot be empty")
+		return errors.New("Name cannot be empty")
+	}
+
+	if name[0] == '-' || name[0] == '_' || name[len(name)-1] == '-' || name[len(name)-1] == '_' {
+		return errors.New("Name has to start and end with a letter or number")
 	}
 
 	for _, char := range name {
-		if (char < 'a' || char > 'z') && (char < 'A' || char > 'Z') && (char < '0' || char > '9') && char != '-' {
-			return errors.New("name can only contain letters (a-z, A-Z) and numbers (0-9) and hyphens (-)")
+		if (char < 'a' || char > 'z') && (char < '0' || char > '9') && char != '-' && char != '_' {
+			return errors.New("Only lowercase letters, numbers, dashes and underscores are allowed")
 		}
 	}
 

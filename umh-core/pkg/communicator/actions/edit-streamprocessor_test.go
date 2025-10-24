@@ -331,7 +331,7 @@ var _ = Describe("EditStreamProcessor", func() {
 			Expect(err).ToNot(HaveOccurred())
 			err = action.Validate()
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("name cannot be empty"))
+			Expect(err.Error()).To(ContainSubstring("Name cannot be empty"))
 		})
 
 		It("should fail validation with missing model name", func() {
@@ -390,7 +390,7 @@ var _ = Describe("EditStreamProcessor", func() {
 			Expect(err).ToNot(HaveOccurred())
 			err = action.Validate()
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("name can only contain letters"))
+			Expect(err.Error()).To(ContainSubstring("Only lowercase letters, numbers, dashes and underscores are allowed"))
 		})
 	})
 
