@@ -253,7 +253,7 @@ func (m *FileConfigManager) GetConfigWithOverwritesOrCreateNew(ctx context.Conte
 		config.Agent.AllowInsecureTLS = configOverride.Agent.AllowInsecureTLS
 	}
 
-	if configOverride.Agent.MetricsPort > 0 || configOverride.Agent.APIURL != "" || configOverride.Agent.AuthToken != "" || string(configOverride.Agent.ReleaseChannel) != "" {
+	if configOverride.Agent.EnableResourceLimitBlocking {
 		config.Agent.EnableResourceLimitBlocking = configOverride.Agent.EnableResourceLimitBlocking
 	}
 
