@@ -531,16 +531,16 @@ func BuildCommonDataFlowComponentPropertiesFromConfig(dfcConfig dataflowcomponen
 // and is not empty. Valid characters are lowercase letters (a-z), numbers (0-9), underscores (_) and hyphens (-).
 func ValidateComponentName(name string) error {
 	if name == "" {
-		return errors.New("Name cannot be empty")
+		return errors.New("name cannot be empty")
 	}
 
 	if name[0] == '-' || name[0] == '_' || name[len(name)-1] == '-' || name[len(name)-1] == '_' {
-		return errors.New("Name has to start and end with a letter or number")
+		return errors.New("name has to start and end with a letter or number")
 	}
 
 	for _, char := range name {
 		if (char < 'a' || char > 'z') && (char < '0' || char > '9') && char != '-' && char != '_' {
-			return errors.New("Only lowercase letters, numbers, dashes and underscores are allowed")
+			return errors.New("only lowercase letters, numbers, dashes and underscores are allowed")
 		}
 	}
 

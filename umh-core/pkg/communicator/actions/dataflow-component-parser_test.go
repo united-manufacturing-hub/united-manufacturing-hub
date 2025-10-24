@@ -22,6 +22,12 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions"
 )
 
+const (
+	errEmptyName         = "name cannot be empty"
+	errInvalidStartEnd   = "name has to start and end with a letter or number"
+	errInvalidCharacters = "only lowercase letters, numbers, dashes and underscores are allowed"
+)
+
 var _ = Describe("ValidateComponentName", func() {
 	Context("Valid component names", func() {
 		It("should accept lowercase letters only", func() {
@@ -79,79 +85,79 @@ var _ = Describe("ValidateComponentName", func() {
 		It("should reject empty names", func() {
 			err := actions.ValidateComponentName("")
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(Equal("Name cannot be empty"))
+			Expect(err.Error()).To(Equal(errEmptyName))
 		})
 
 		It("should reject names starting with hyphen", func() {
 			err := actions.ValidateComponentName("-component")
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(Equal("Name has to start and end with a letter or number"))
+			Expect(err.Error()).To(Equal(errInvalidStartEnd))
 		})
 
 		It("should reject names starting with underscore", func() {
 			err := actions.ValidateComponentName("_component")
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(Equal("Name has to start and end with a letter or number"))
+			Expect(err.Error()).To(Equal(errInvalidStartEnd))
 		})
 
 		It("should reject names ending with hyphen", func() {
 			err := actions.ValidateComponentName("component-")
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(Equal("Name has to start and end with a letter or number"))
+			Expect(err.Error()).To(Equal(errInvalidStartEnd))
 		})
 
 		It("should reject names ending with underscore", func() {
 			err := actions.ValidateComponentName("component_")
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(Equal("Name has to start and end with a letter or number"))
+			Expect(err.Error()).To(Equal(errInvalidStartEnd))
 		})
 
 		It("should reject uppercase letters", func() {
 			err := actions.ValidateComponentName("Component")
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(Equal("Only lowercase letters, numbers, dashes and underscores are allowed"))
+			Expect(err.Error()).To(Equal(errInvalidCharacters))
 		})
 
 		It("should reject special characters", func() {
 			err := actions.ValidateComponentName("component@123")
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(Equal("Only lowercase letters, numbers, dashes and underscores are allowed"))
+			Expect(err.Error()).To(Equal(errInvalidCharacters))
 		})
 
 		It("should reject spaces", func() {
 			err := actions.ValidateComponentName("component name")
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(Equal("Only lowercase letters, numbers, dashes and underscores are allowed"))
+			Expect(err.Error()).To(Equal(errInvalidCharacters))
 		})
 
 		It("should reject dots", func() {
 			err := actions.ValidateComponentName("component.name")
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(Equal("Only lowercase letters, numbers, dashes and underscores are allowed"))
+			Expect(err.Error()).To(Equal(errInvalidCharacters))
 		})
 
 		It("should reject slashes", func() {
 			err := actions.ValidateComponentName("component/name")
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(Equal("Only lowercase letters, numbers, dashes and underscores are allowed"))
+			Expect(err.Error()).To(Equal(errInvalidCharacters))
 		})
 
 		It("should reject exclamation marks", func() {
 			err := actions.ValidateComponentName("component!")
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(Equal("Only lowercase letters, numbers, dashes and underscores are allowed"))
+			Expect(err.Error()).To(Equal(errInvalidCharacters))
 		})
 
 		It("should reject question marks", func() {
 			err := actions.ValidateComponentName("component?")
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(Equal("Only lowercase letters, numbers, dashes and underscores are allowed"))
+			Expect(err.Error()).To(Equal(errInvalidCharacters))
 		})
 
 		It("should reject hash symbols", func() {
 			err := actions.ValidateComponentName("component#123")
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(Equal("Only lowercase letters, numbers, dashes and underscores are allowed"))
+			Expect(err.Error()).To(Equal(errInvalidCharacters))
 		})
 	})
 
@@ -169,13 +175,13 @@ var _ = Describe("ValidateComponentName", func() {
 		It("should reject single hyphen", func() {
 			err := actions.ValidateComponentName("-")
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(Equal("Name has to start and end with a letter or number"))
+			Expect(err.Error()).To(Equal(errInvalidStartEnd))
 		})
 
 		It("should reject single underscore", func() {
 			err := actions.ValidateComponentName("_")
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(Equal("Name has to start and end with a letter or number"))
+			Expect(err.Error()).To(Equal(errInvalidStartEnd))
 		})
 
 		It("should accept very long valid names", func() {
