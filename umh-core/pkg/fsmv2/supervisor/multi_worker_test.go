@@ -9,8 +9,10 @@ import (
 	. "github.com/onsi/gomega"
 	"go.uber.org/zap"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence/basic"
 )
 
 var _ = Describe("Multi-Worker Supervisor", func() {
@@ -24,7 +26,7 @@ var _ = Describe("Multi-Worker Supervisor", func() {
 
 		s = supervisor.NewSupervisor(supervisor.Config{
 			WorkerType: "container",
-			Store:      store,
+			Store:        store,
 			Logger:     zap.NewNop().Sugar(),
 		})
 	})
@@ -138,6 +140,72 @@ var _ = Describe("Multi-Worker Supervisor", func() {
 		})
 	})
 
+	Describe("GetWorkerState", func() {
+		It("should return state name and reason for a worker", func() {
+			identity := fsmv2.Identity{ID: "worker-1", Name: "Worker 1"}
+
+			stateWithReason := &mockState{}
+			worker := &mockWorker{
+				initialState: stateWithReason,
+			}
+
+			err := s.AddWorker(identity, worker)
+			Expect(err).ToNot(HaveOccurred())
+
+			stateName, reason, err := s.GetWorkerState("worker-1")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(stateName).To(Equal("MockState"))
+			Expect(reason).To(Equal("mock state"))
+		})
+
+		It("should return error for non-existent worker", func() {
+			stateName, reason, err := s.GetWorkerState("non-existent")
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("not found"))
+			Expect(stateName).To(BeEmpty())
+			Expect(reason).To(BeEmpty())
+		})
+
+		It("should safely return state during concurrent tick operations", func() {
+			identity := fsmv2.Identity{ID: "worker-1", Name: "Worker 1"}
+
+			stateWithReason := &mockState{}
+			worker := &mockWorker{
+				initialState: stateWithReason,
+			}
+
+			err := s.AddWorker(identity, worker)
+			Expect(err).ToNot(HaveOccurred())
+
+			done := make(chan bool)
+			errorChan := make(chan error, 100)
+
+			go func() {
+				for i := 0; i < 100; i++ {
+					stateName, reason, err := s.GetWorkerState("worker-1")
+					if err != nil {
+						errorChan <- err
+						return
+					}
+					if stateName == "" || reason == "" {
+						errorChan <- errors.New("empty state or reason")
+						return
+					}
+					time.Sleep(time.Millisecond)
+				}
+				close(done)
+			}()
+
+			select {
+			case err := <-errorChan:
+				Fail("concurrent access error: " + err.Error())
+			case <-done:
+			case <-time.After(5 * time.Second):
+				Fail("concurrent access test timed out")
+			}
+		})
+	})
+
 	Describe("TickAll", func() {
 		It("should tick all workers in registry", func() {
 			identity1 := fsmv2.Identity{ID: "worker-1", Name: "Worker 1"}
@@ -176,14 +244,27 @@ var _ = Describe("Multi-Worker Supervisor", func() {
 			s.AddWorker(identity3, worker3)
 
 			failingStore := &mockStore{
-				loadSnapshot: func(ctx context.Context, workerType string, id string) (*fsmv2.Snapshot, error) {
+				loadSnapshot: func(ctx context.Context, workerType string, id string) (*storage.Snapshot, error) {
 					if id == "worker-2" {
 						return nil, errors.New("simulated failure for worker-2")
 					}
-					return &fsmv2.Snapshot{
-						Identity: fsmv2.Identity{ID: id, Name: "Test"},
-						Observed: &mockObservedState{timestamp: time.Now()},
-						Desired:  &mockDesiredState{},
+
+					identityDoc := basic.Document{
+						"id":         id,
+						"name":       "Test",
+						"workerType": "container",
+					}
+
+					desiredDoc := basic.Document{}
+
+					observedDoc := basic.Document{
+						"timestamp": time.Now(),
+					}
+
+					return &storage.Snapshot{
+						Identity: identityDoc,
+						Desired:  desiredDoc,
+						Observed: observedDoc,
 					}, nil
 				},
 			}

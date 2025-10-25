@@ -16,6 +16,7 @@ package supervisor_test
 
 import (
 	"reflect"
+	"testing"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -228,3 +229,204 @@ var _ = Describe("Serialization", func() {
 		})
 	})
 })
+
+func BenchmarkToDocument(b *testing.B) {
+	b.Run("SimpleStruct", func(b *testing.B) {
+		type SimpleStruct struct {
+			Name  string `json:"name"`
+			Count int    `json:"count"`
+		}
+
+		input := SimpleStruct{
+			Name:  "test",
+			Count: 42,
+		}
+
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			_, _ = supervisor.ToDocument(input)
+		}
+	})
+
+	b.Run("ContainerObservedState", func(b *testing.B) {
+		now := time.Now().UTC().Truncate(time.Second)
+		state := container.ContainerObservedState{
+			CPUUsageMCores:   1500.0,
+			CPUCoreCount:     4,
+			CgroupCores:      2.0,
+			ThrottleRatio:    0.05,
+			IsThrottled:      false,
+			MemoryUsedBytes:  1024 * 1024 * 512,
+			MemoryTotalBytes: 1024 * 1024 * 1024 * 2,
+			DiskUsedBytes:    1024 * 1024 * 1024 * 10,
+			DiskTotalBytes:   1024 * 1024 * 1024 * 50,
+			CollectedAt:      now,
+			ObservedThresholds: container.HealthThresholds{
+				CPUHighPercent:        70.0,
+				CPUMediumPercent:      60.0,
+				MemoryHighPercent:     80.0,
+				MemoryMediumPercent:   70.0,
+				DiskHighPercent:       85.0,
+				DiskMediumPercent:     75.0,
+				CPUThrottleRatioLimit: 0.10,
+			},
+		}
+
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			_, _ = supervisor.ToDocument(state)
+		}
+	})
+}
+
+func BenchmarkFromDocument(b *testing.B) {
+	b.Run("SimpleStruct", func(b *testing.B) {
+		type SimpleStruct struct {
+			Name  string `json:"name"`
+			Count int    `json:"count"`
+		}
+
+		doc := basic.Document{
+			"name":  "test",
+			"count": 42,
+		}
+		targetType := reflect.TypeOf(SimpleStruct{})
+
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			_, _ = supervisor.FromDocument(doc, targetType)
+		}
+	})
+
+	b.Run("ContainerObservedState", func(b *testing.B) {
+		now := time.Now().UTC().Truncate(time.Second)
+		state := container.ContainerObservedState{
+			CPUUsageMCores:   1500.0,
+			CPUCoreCount:     4,
+			CgroupCores:      2.0,
+			ThrottleRatio:    0.05,
+			IsThrottled:      false,
+			MemoryUsedBytes:  1024 * 1024 * 512,
+			MemoryTotalBytes: 1024 * 1024 * 1024 * 2,
+			DiskUsedBytes:    1024 * 1024 * 1024 * 10,
+			DiskTotalBytes:   1024 * 1024 * 1024 * 50,
+			CollectedAt:      now,
+			ObservedThresholds: container.HealthThresholds{
+				CPUHighPercent:        70.0,
+				CPUMediumPercent:      60.0,
+				MemoryHighPercent:     80.0,
+				MemoryMediumPercent:   70.0,
+				DiskHighPercent:       85.0,
+				DiskMediumPercent:     75.0,
+				CPUThrottleRatioLimit: 0.10,
+			},
+		}
+
+		doc, _ := supervisor.ToDocument(state)
+		targetType := reflect.TypeOf(container.ContainerObservedState{})
+
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			_, _ = supervisor.FromDocument(doc, targetType)
+		}
+	})
+}
+
+func BenchmarkRoundTrip(b *testing.B) {
+	b.Run("SimpleStruct", func(b *testing.B) {
+		type SimpleStruct struct {
+			Name  string `json:"name"`
+			Count int    `json:"count"`
+		}
+
+		input := SimpleStruct{
+			Name:  "test",
+			Count: 42,
+		}
+		targetType := reflect.TypeOf(SimpleStruct{})
+
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			doc, _ := supervisor.ToDocument(input)
+			_, _ = supervisor.FromDocument(doc, targetType)
+		}
+	})
+
+	b.Run("ContainerObservedState", func(b *testing.B) {
+		now := time.Now().UTC().Truncate(time.Second)
+		state := container.ContainerObservedState{
+			CPUUsageMCores:   1500.0,
+			CPUCoreCount:     4,
+			CgroupCores:      2.0,
+			ThrottleRatio:    0.05,
+			IsThrottled:      false,
+			MemoryUsedBytes:  1024 * 1024 * 512,
+			MemoryTotalBytes: 1024 * 1024 * 1024 * 2,
+			DiskUsedBytes:    1024 * 1024 * 1024 * 10,
+			DiskTotalBytes:   1024 * 1024 * 1024 * 50,
+			CollectedAt:      now,
+			ObservedThresholds: container.HealthThresholds{
+				CPUHighPercent:        70.0,
+				CPUMediumPercent:      60.0,
+				MemoryHighPercent:     80.0,
+				MemoryMediumPercent:   70.0,
+				DiskHighPercent:       85.0,
+				DiskMediumPercent:     75.0,
+				CPUThrottleRatioLimit: 0.10,
+			},
+		}
+
+		targetType := reflect.TypeOf(container.ContainerObservedState{})
+
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			doc, _ := supervisor.ToDocument(state)
+			_, _ = supervisor.FromDocument(doc, targetType)
+		}
+	})
+}
+
+func BenchmarkDirectFieldAccess(b *testing.B) {
+	b.Run("ManualCopy", func(b *testing.B) {
+		now := time.Now().UTC().Truncate(time.Second)
+		state := container.ContainerObservedState{
+			CPUUsageMCores:   1500.0,
+			CPUCoreCount:     4,
+			CgroupCores:      2.0,
+			ThrottleRatio:    0.05,
+			IsThrottled:      false,
+			MemoryUsedBytes:  1024 * 1024 * 512,
+			MemoryTotalBytes: 1024 * 1024 * 1024 * 2,
+			DiskUsedBytes:    1024 * 1024 * 1024 * 10,
+			DiskTotalBytes:   1024 * 1024 * 1024 * 50,
+			CollectedAt:      now,
+			ObservedThresholds: container.HealthThresholds{
+				CPUHighPercent:        70.0,
+				CPUMediumPercent:      60.0,
+				MemoryHighPercent:     80.0,
+				MemoryMediumPercent:   70.0,
+				DiskHighPercent:       85.0,
+				DiskMediumPercent:     75.0,
+				CPUThrottleRatioLimit: 0.10,
+			},
+		}
+
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			result := container.ContainerObservedState{
+				CPUUsageMCores:     state.CPUUsageMCores,
+				CPUCoreCount:       state.CPUCoreCount,
+				CgroupCores:        state.CgroupCores,
+				ThrottleRatio:      state.ThrottleRatio,
+				IsThrottled:        state.IsThrottled,
+				MemoryUsedBytes:    state.MemoryUsedBytes,
+				MemoryTotalBytes:   state.MemoryTotalBytes,
+				DiskUsedBytes:      state.DiskUsedBytes,
+				DiskTotalBytes:     state.DiskTotalBytes,
+				CollectedAt:        state.CollectedAt,
+				ObservedThresholds: state.ObservedThresholds,
+			}
+			_ = result
+		}
+	})
+}

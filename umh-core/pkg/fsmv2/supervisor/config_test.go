@@ -15,7 +15,7 @@ var _ = Describe("Supervisor Configuration", func() {
 		It("should use default collector health thresholds", func() {
 			cfg := supervisor.Config{
 				WorkerType: "container",
-				Store:      &mockStore{},
+				Store:               nil,
 				Logger:     zap.NewNop().Sugar(),
 			}
 
@@ -31,7 +31,7 @@ var _ = Describe("Supervisor Configuration", func() {
 		It("should use custom collector health thresholds", func() {
 			cfg := supervisor.Config{
 				WorkerType: "container",
-				Store:      &mockStore{},
+				Store:               nil,
 				Logger:     zap.NewNop().Sugar(),
 				CollectorHealth: supervisor.CollectorHealthConfig{
 					StaleThreshold:     5 * time.Second,
@@ -53,7 +53,7 @@ var _ = Describe("Supervisor Configuration", func() {
 			Expect(func() {
 				supervisor.NewSupervisor(supervisor.Config{
 					WorkerType: "container",
-					Store:      &mockStore{},
+					Store:               nil,
 					Logger:     zap.NewNop().Sugar(),
 					CollectorHealth: supervisor.CollectorHealthConfig{
 						StaleThreshold:     -5 * time.Second,
@@ -68,7 +68,7 @@ var _ = Describe("Supervisor Configuration", func() {
 			Expect(func() {
 				supervisor.NewSupervisor(supervisor.Config{
 					WorkerType: "container",
-					Store:      &mockStore{},
+					Store:               nil,
 					Logger:     zap.NewNop().Sugar(),
 					CollectorHealth: supervisor.CollectorHealthConfig{
 						StaleThreshold:     10 * time.Second,
@@ -83,7 +83,7 @@ var _ = Describe("Supervisor Configuration", func() {
 			Expect(func() {
 				supervisor.NewSupervisor(supervisor.Config{
 					WorkerType: "container",
-					Store:      &mockStore{},
+					Store:               nil,
 					Logger:     zap.NewNop().Sugar(),
 					CollectorHealth: supervisor.CollectorHealthConfig{
 						StaleThreshold:     20 * time.Second,
@@ -98,7 +98,7 @@ var _ = Describe("Supervisor Configuration", func() {
 			Expect(func() {
 				supervisor.NewSupervisor(supervisor.Config{
 					WorkerType: "container",
-					Store:      &mockStore{},
+					Store:               nil,
 					Logger:     zap.NewNop().Sugar(),
 					CollectorHealth: supervisor.CollectorHealthConfig{
 						StaleThreshold:     10 * time.Second,
@@ -115,7 +115,7 @@ var _ = Describe("Supervisor Configuration", func() {
 			Expect(func() {
 				supervisor.NewSupervisor(supervisor.Config{
 					WorkerType: "container",
-					Store:      &mockStore{},
+					Store:               nil,
 					Logger:     zap.NewNop().Sugar(),
 					CollectorHealth: supervisor.CollectorHealthConfig{
 						ObservationTimeout: 10 * time.Second,
@@ -131,7 +131,7 @@ var _ = Describe("Supervisor Configuration", func() {
 			Expect(func() {
 				supervisor.NewSupervisor(supervisor.Config{
 					WorkerType: "container",
-					Store:      &mockStore{},
+					Store:               nil,
 					Logger:     zap.NewNop().Sugar(),
 					CollectorHealth: supervisor.CollectorHealthConfig{
 						ObservationTimeout: 1 * time.Second,
@@ -147,7 +147,7 @@ var _ = Describe("Supervisor Configuration", func() {
 			Expect(func() {
 				supervisor.NewSupervisor(supervisor.Config{
 					WorkerType: "container",
-					Store:      &mockStore{},
+					Store:               nil,
 					Logger:     zap.NewNop().Sugar(),
 					CollectorHealth: supervisor.CollectorHealthConfig{
 						ObservationTimeout: 1 * time.Second,

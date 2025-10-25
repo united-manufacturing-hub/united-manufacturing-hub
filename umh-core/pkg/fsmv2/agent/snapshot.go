@@ -39,6 +39,15 @@ func (d *AgentMonitorDesiredState) SetShutdownRequested(requested bool) {
 
 // AgentMonitorObservedState represents the actual state of agent monitoring.
 // Collected from the agent_monitor service.
+//
+// TODO(Phase 2 - CSE Storage): Logs are currently stored inline in ServiceInfo.AgentLogs,
+// but should be moved to CSE (Context State Engine) for better scalability.
+// Future implementation:
+// - Store logs separately in CSE with timestamp-based indexing
+// - Keep only metadata/summary in ServiceInfo
+// - Worker provides incremental logs to supervisor
+// - Supervisor persists to CSE storage
+// See IMPLEMENTATION_PLAN.md for details.
 type AgentMonitorObservedState struct {
 	ServiceInfo *agent_monitor.ServiceInfo // Health metrics and assessments from agent_monitor service
 	CollectedAt time.Time                   // When metrics were collected

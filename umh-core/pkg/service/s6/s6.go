@@ -186,6 +186,8 @@ type Service interface {
 	ForceRemove(ctx context.Context, servicePath string, fsService filesystem.Service) error
 	// GetLogs gets the logs of the service
 	GetLogs(ctx context.Context, servicePath string, fsService filesystem.Service) ([]LogEntry, error)
+	// GetLogsSince gets logs of the service with timestamps after the specified time
+	GetLogsSince(ctx context.Context, servicePath string, fsService filesystem.Service, since time.Time) ([]LogEntry, error)
 	// EnsureSupervision checks if the supervise directory exists for a service and notifies
 	// s6-svscan if it doesn't, to trigger supervision setup.
 	// Returns true if supervise directory exists (ready for supervision), false otherwise.
@@ -1139,6 +1141,110 @@ func (s *DefaultService) appendToRingBuffer(entries []LogEntry, st *logState) {
 			st.full = true // wrapped around for the first time
 		}
 	}
+}
+
+// GetLogsSince returns log entries with timestamps after the specified time.
+// It reads from both rotated and current log files, filtering entries where
+// entry.Timestamp > since (exclusive comparison).
+//
+// Returns:
+//   - Empty slice (not nil) when no logs match the criteria
+//   - Entries in chronological order (oldest to newest)
+//   - ErrServiceNotExist if the service doesn't exist
+//   - ErrLogFileNotFound if the log file doesn't exist
+//
+// This method is stateless and does not use the ring buffer cursor system.
+func (s *DefaultService) GetLogsSince(ctx context.Context, servicePath string, fsService filesystem.Service, since time.Time) ([]LogEntry, error) {
+	start := time.Now()
+
+	defer func() {
+		metrics.ObserveReconcileTime(metrics.ComponentS6Service, servicePath+".getLogsSince", time.Since(start))
+	}()
+
+	serviceName := filepath.Base(servicePath)
+
+	exists, err := s.ServiceExists(ctx, servicePath, fsService)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check if service exists: %w", err)
+	}
+
+	if !exists {
+		return nil, ErrServiceNotExist
+	}
+
+	logDir := filepath.Join(constants.S6LogBaseDir, serviceName)
+	currentFile := filepath.Join(logDir, "current")
+
+	exists, err = fsService.PathExists(ctx, currentFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check if log file exists: %w", err)
+	}
+
+	if !exists {
+		return nil, ErrLogFileNotFound
+	}
+
+	var allEntries []LogEntry
+
+	pattern := filepath.Join(logDir, "@*.s")
+
+	rotatedFiles, err := fsService.Glob(ctx, pattern)
+	if err != nil {
+		s.logger.Warnf("Failed to glob rotated files: %v", err)
+		rotatedFiles = []string{}
+	}
+
+	for _, rotatedFile := range rotatedFiles {
+		content, _, err := fsService.ReadFileRange(ctx, rotatedFile, 0)
+		if err != nil {
+			s.logger.Warnf("Failed to read rotated file %s: %v", rotatedFile, err)
+
+			continue
+		}
+
+		if len(content) > 0 {
+			entries, err := ParseLogsFromBytes(content)
+			if err != nil {
+				s.logger.Warnf("Failed to parse rotated file %s: %v", rotatedFile, err)
+
+				continue
+			}
+
+			allEntries = append(allEntries, entries...)
+		}
+	}
+
+	currentContent, _, err := fsService.ReadFileRange(ctx, currentFile, 0)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read current log file: %w", err)
+	}
+
+	if len(currentContent) > 0 {
+		entries, err := ParseLogsFromBytes(currentContent)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse current log file: %w", err)
+		}
+
+		allEntries = append(allEntries, entries...)
+	}
+
+	slices.SortFunc(allEntries, func(a, b LogEntry) int {
+		return a.Timestamp.Compare(b.Timestamp)
+	})
+
+	var filtered []LogEntry
+
+	for _, entry := range allEntries {
+		if entry.Timestamp.After(since) {
+			filtered = append(filtered, entry)
+		}
+	}
+
+	if filtered == nil {
+		return []LogEntry{}, nil
+	}
+
+	return filtered, nil
 }
 
 // GetLogs reads "just the new bytes" of the log file located at

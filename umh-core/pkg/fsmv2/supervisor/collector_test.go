@@ -17,7 +17,7 @@ var _ = Describe("Collector", func() {
 			collector := supervisor.NewCollector(supervisor.CollectorConfig{
 				Worker:              &mockWorker{},
 				Identity:            mockIdentity(),
-				Store:               &mockStore{},
+				Store:               nil,
 				Logger:              zap.NewNop().Sugar(),
 				ObservationInterval: 1 * time.Second,
 				ObservationTimeout:  3 * time.Second,
@@ -47,7 +47,7 @@ var _ = Describe("Collector", func() {
 			collector := supervisor.NewCollector(supervisor.CollectorConfig{
 				Worker:              &mockWorker{},
 				Identity:            mockIdentity(),
-				Store:               &mockStore{},
+				Store:               nil,
 				Logger:              zap.NewNop().Sugar(),
 				ObservationInterval: 1 * time.Second,
 				ObservationTimeout:  3 * time.Second,
@@ -93,7 +93,7 @@ var _ = Describe("Collector", func() {
 			collector := supervisor.NewCollector(supervisor.CollectorConfig{
 				Worker:              &mockWorker{},
 				Identity:            mockIdentity(),
-				Store:               &mockStore{},
+				Store:               nil,
 				Logger:              zap.NewNop().Sugar(),
 				ObservationInterval: 1 * time.Second,
 				ObservationTimeout:  3 * time.Second,
@@ -119,7 +119,7 @@ var _ = Describe("Collector", func() {
 			collector := supervisor.NewCollector(supervisor.CollectorConfig{
 				Worker:              &mockWorker{},
 				Identity:            mockIdentity(),
-				Store:               &mockStore{},
+				Store:               nil,
 				Logger:              zap.NewNop().Sugar(),
 				ObservationInterval: 1 * time.Second,
 				ObservationTimeout:  3 * time.Second,
@@ -132,7 +132,7 @@ var _ = Describe("Collector", func() {
 			collector := supervisor.NewCollector(supervisor.CollectorConfig{
 				Worker:              &mockWorker{},
 				Identity:            mockIdentity(),
-				Store:               &mockStore{},
+				Store:               nil,
 				Logger:              zap.NewNop().Sugar(),
 				ObservationInterval: 1 * time.Second,
 				ObservationTimeout:  3 * time.Second,
@@ -145,7 +145,7 @@ var _ = Describe("Collector", func() {
 			collector := supervisor.NewCollector(supervisor.CollectorConfig{
 				Worker:              &mockWorker{},
 				Identity:            mockIdentity(),
-				Store:               &mockStore{},
+				Store:               nil,
 				Logger:              zap.NewNop().Sugar(),
 				ObservationInterval: 1 * time.Second,
 				ObservationTimeout:  3 * time.Second,

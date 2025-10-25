@@ -29,17 +29,29 @@ func NewFreshnessChecker(staleThreshold, timeout time.Duration, logger *zap.Suga
 func (f *FreshnessChecker) Check(snapshot *fsmv2.Snapshot) bool {
 	observed := snapshot.Observed
 	if observed == nil {
+		f.logger.Debugf("[DataFreshness] Check failed: snapshot.Observed is nil")
 		return false
 	}
 
 	timestampProvider, ok := observed.(interface{ GetTimestamp() time.Time })
 	if !ok {
+		f.logger.Debugf("[DataFreshness] Check failed: observed state does not implement GetTimestamp() interface (type: %T)", observed)
 		return false
 	}
 
-	age := time.Since(timestampProvider.GetTimestamp())
+	observationTimestamp := timestampProvider.GetTimestamp()
+	currentTime := time.Now()
+	age := time.Since(observationTimestamp)
+	isFresh := age <= f.staleThreshold
 
-	return age <= f.staleThreshold
+	f.logger.Debugf("[DataFreshness] Check result: %v | observation_timestamp=%s | current_time=%s | age=%v | threshold=%v",
+		isFresh,
+		observationTimestamp.Format(time.RFC3339Nano),
+		currentTime.Format(time.RFC3339Nano),
+		age,
+		f.staleThreshold)
+
+	return isFresh
 }
 
 // IsTimeout checks if observation data has exceeded the timeout threshold.

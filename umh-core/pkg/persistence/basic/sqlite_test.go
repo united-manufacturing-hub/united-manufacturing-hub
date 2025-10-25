@@ -3415,3 +3415,218 @@ var _ = Describe("NewStore validation", func() {
 		})
 	})
 })
+
+var _ = Describe("Document ID as Primary Key", func() {
+	var store basic.Store
+	var ctx context.Context
+	var dbPath string
+
+	BeforeEach(func() {
+		ctx = context.Background()
+		dbPath = filepath.Join(os.TempDir(), fmt.Sprintf("test-%d.db", time.Now().UnixNano()))
+		var err error
+		store, err = basic.NewStore(basic.DefaultConfig(dbPath))
+		Expect(err).NotTo(HaveOccurred())
+
+		err = store.CreateCollection(ctx, "test_collection", nil)
+		Expect(err).NotTo(HaveOccurred())
+	})
+
+	AfterEach(func() {
+		if store != nil {
+			_ = store.Close(ctx)
+		}
+		_ = os.Remove(dbPath)
+	})
+
+	It("should use document id field as SQL primary key", func() {
+		doc := basic.Document{
+			"id":   "test-doc-123",
+			"name": "Test Document",
+		}
+
+		id, err := store.Insert(ctx, "test_collection", doc)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(id).To(Equal("test-doc-123"))
+
+		retrieved, err := store.Get(ctx, "test_collection", "test-doc-123")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(retrieved["id"]).To(Equal("test-doc-123"))
+	})
+
+	It("should inject _sync_uuid for CSE", func() {
+		doc := basic.Document{
+			"id":   "test-doc-456",
+			"data": "test",
+		}
+
+		_, err := store.Insert(ctx, "test_collection", doc)
+		Expect(err).NotTo(HaveOccurred())
+
+		retrieved, err := store.Get(ctx, "test_collection", "test-doc-456")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(retrieved["_sync_uuid"]).NotTo(BeNil())
+		Expect(retrieved["_sync_uuid"].(string)).NotTo(BeEmpty())
+	})
+
+	It("should return error if document missing id field", func() {
+		doc := basic.Document{
+			"name": "No ID Document",
+		}
+
+		_, err := store.Insert(ctx, "test_collection", doc)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("id"))
+	})
+
+	It("should return ErrConflict on duplicate id", func() {
+		doc1 := basic.Document{
+			"id":   "duplicate-id",
+			"name": "First",
+		}
+		doc2 := basic.Document{
+			"id":   "duplicate-id",
+			"name": "Second",
+		}
+
+		_, err := store.Insert(ctx, "test_collection", doc1)
+		Expect(err).NotTo(HaveOccurred())
+
+		_, err = store.Insert(ctx, "test_collection", doc2)
+		Expect(err).To(HaveOccurred())
+		Expect(errors.Is(err, basic.ErrConflict)).To(BeTrue())
+	})
+
+	It("should return error if document has empty string id field", func() {
+		doc := basic.Document{
+			"id":   "",
+			"name": "Empty ID Document",
+		}
+
+		_, err := store.Insert(ctx, "test_collection", doc)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("non-empty"))
+		Expect(err.Error()).To(ContainSubstring("id"))
+	})
+})
+
+var _ = Describe("Transaction Document ID as Primary Key", func() {
+	var store basic.Store
+	var ctx context.Context
+	var dbPath string
+
+	BeforeEach(func() {
+		ctx = context.Background()
+		dbPath = filepath.Join(os.TempDir(), fmt.Sprintf("test-%d.db", time.Now().UnixNano()))
+		var err error
+		store, err = basic.NewStore(basic.DefaultConfig(dbPath))
+		Expect(err).NotTo(HaveOccurred())
+
+		err = store.CreateCollection(ctx, "test_collection", nil)
+		Expect(err).NotTo(HaveOccurred())
+	})
+
+	AfterEach(func() {
+		if store != nil {
+			_ = store.Close(ctx)
+		}
+		_ = os.Remove(dbPath)
+	})
+
+	It("should use document id field as primary key in transaction", func() {
+		tx, err := store.BeginTx(ctx)
+		Expect(err).NotTo(HaveOccurred())
+		defer func() { _ = tx.Rollback() }()
+
+		doc := basic.Document{
+			"id":   "tx-doc-123",
+			"name": "Transaction Document",
+		}
+
+		id, err := tx.Insert(ctx, "test_collection", doc)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(id).To(Equal("tx-doc-123"))
+
+		err = tx.Commit()
+		Expect(err).NotTo(HaveOccurred())
+
+		retrieved, err := store.Get(ctx, "test_collection", "tx-doc-123")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(retrieved["id"]).To(Equal("tx-doc-123"))
+	})
+
+	It("should inject _sync_uuid in transaction", func() {
+		tx, err := store.BeginTx(ctx)
+		Expect(err).NotTo(HaveOccurred())
+		defer func() { _ = tx.Rollback() }()
+
+		doc := basic.Document{
+			"id":   "tx-doc-456",
+			"data": "test",
+		}
+
+		_, err = tx.Insert(ctx, "test_collection", doc)
+		Expect(err).NotTo(HaveOccurred())
+
+		err = tx.Commit()
+		Expect(err).NotTo(HaveOccurred())
+
+		retrieved, err := store.Get(ctx, "test_collection", "tx-doc-456")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(retrieved["_sync_uuid"]).NotTo(BeNil())
+		Expect(retrieved["_sync_uuid"].(string)).NotTo(BeEmpty())
+	})
+
+	It("should return error if document missing id field in transaction", func() {
+		tx, err := store.BeginTx(ctx)
+		Expect(err).NotTo(HaveOccurred())
+		defer func() { _ = tx.Rollback() }()
+
+		doc := basic.Document{
+			"name": "No ID Document",
+		}
+
+		_, err = tx.Insert(ctx, "test_collection", doc)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("id"))
+	})
+
+	It("should return ErrConflict on duplicate id in transaction", func() {
+		doc1 := basic.Document{
+			"id":   "tx-duplicate-id",
+			"name": "First",
+		}
+
+		_, err := store.Insert(ctx, "test_collection", doc1)
+		Expect(err).NotTo(HaveOccurred())
+
+		tx, err := store.BeginTx(ctx)
+		Expect(err).NotTo(HaveOccurred())
+		defer func() { _ = tx.Rollback() }()
+
+		doc2 := basic.Document{
+			"id":   "tx-duplicate-id",
+			"name": "Second",
+		}
+
+		_, err = tx.Insert(ctx, "test_collection", doc2)
+		Expect(err).To(HaveOccurred())
+		Expect(errors.Is(err, basic.ErrConflict)).To(BeTrue())
+	})
+
+	It("should return error if document has empty string id field in transaction", func() {
+		tx, err := store.BeginTx(ctx)
+		Expect(err).NotTo(HaveOccurred())
+		defer func() { _ = tx.Rollback() }()
+
+		doc := basic.Document{
+			"id":   "",
+			"name": "Empty ID Document",
+		}
+
+		_, err = tx.Insert(ctx, "test_collection", doc)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("non-empty"))
+		Expect(err.Error()).To(ContainSubstring("id"))
+	})
+})

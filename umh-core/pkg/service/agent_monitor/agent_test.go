@@ -43,6 +43,13 @@ func (m *CustomMockS6Service) GetLogs(ctx context.Context, servicePath string, f
 	return m.MockService.GetLogs(ctx, servicePath, fs)
 }
 
+// GetLogsSince overrides the mock implementation to track the servicePath parameter.
+func (m *CustomMockS6Service) GetLogsSince(ctx context.Context, servicePath string, fs filesystem.Service, since time.Time) ([]s6.LogEntry, error) {
+	m.lastServicePath = servicePath
+
+	return m.MockService.GetLogsSince(ctx, servicePath, fs, since)
+}
+
 // NewCustomMockS6Service creates a new custom mock S6 service.
 func NewCustomMockS6Service() *CustomMockS6Service {
 	return &CustomMockS6Service{

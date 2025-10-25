@@ -36,7 +36,9 @@ type MockService struct {
 	GetStatusResult *ServiceInfo
 
 	// For more complex testing scenarios
-	healthState models.HealthCategory
+	healthState     models.HealthCategory
+	allLogs         []s6.LogEntry
+	lastQueryTime   time.Time
 	// Tracks calls to methods
 	GetStatusCalled bool
 }
@@ -60,8 +62,29 @@ func (m *MockService) Status(ctx context.Context, snapshot fsm.SystemSnapshot) (
 		return nil, m.GetStatusError
 	}
 
-	// Return the configured result
-	return m.GetStatusResult, nil
+	result := m.GetStatusResult
+	if result != nil {
+		var filteredLogs []s6.LogEntry
+
+		var latestTimestamp time.Time
+
+		for _, log := range m.allLogs {
+			if log.Timestamp.After(m.lastQueryTime) {
+				filteredLogs = append(filteredLogs, log)
+				if log.Timestamp.After(latestTimestamp) {
+					latestTimestamp = log.Timestamp
+				}
+			}
+		}
+
+		result.AgentLogs = filteredLogs
+
+		if !latestTimestamp.IsZero() {
+			m.lastQueryTime = latestTimestamp
+		}
+	}
+
+	return result, nil
 }
 
 // CreateDefaultAgentStatus returns a default agent status with healthy metrics for testing.
@@ -110,7 +133,9 @@ func CreateDegradedAgentStatus() *ServiceInfo {
 // SetupMockForHealthyState configures the mock to return healthy agent status.
 func (m *MockService) SetupMockForHealthyState() {
 	m.GetStatusResult = CreateDefaultAgentStatus()
+	m.GetStatusResult.AgentLogs = []s6.LogEntry{}
 	m.healthState = models.Active
+	m.lastQueryTime = time.Now()
 }
 
 // SetupMockForDegradedState configures the mock to return degraded agent status.
@@ -126,4 +151,37 @@ func (m *MockService) SetupMockForError(err error) {
 
 func (m *MockService) GetFilesystemService() filesystem.Service {
 	return m.fs
+}
+
+// SetInitialLogCount populates the mock with a specified number of old logs.
+func (m *MockService) SetInitialLogCount(count int) {
+	baseTime := time.Now().Add(-1 * time.Hour)
+
+	for range count {
+		m.allLogs = append(m.allLogs, s6.LogEntry{
+			Timestamp: baseTime.Add(time.Duration(len(m.allLogs)) * time.Second),
+			Content:   "old log",
+		})
+	}
+}
+
+// AddNewLogs adds new logs to the mock service.
+func (m *MockService) AddNewLogs(logs []s6.LogEntry) {
+	m.allLogs = append(m.allLogs, logs...)
+}
+
+// CreateMockLogEntries creates a specified number of mock log entries for testing.
+func CreateMockLogEntries(count int, contentPrefix string) []s6.LogEntry {
+	entries := make([]s6.LogEntry, count)
+
+	baseTime := time.Now()
+
+	for i := range count {
+		entries[i] = s6.LogEntry{
+			Timestamp: baseTime.Add(time.Duration(i+1) * time.Second),
+			Content:   contentPrefix + " " + string(rune('0'+i)),
+		}
+	}
+
+	return entries
 }

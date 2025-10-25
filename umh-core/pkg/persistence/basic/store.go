@@ -199,26 +199,26 @@ type Store interface {
 	//   - error: if collection doesn't exist or operation fails
 	DropCollection(ctx context.Context, name string) error
 
-	// Insert adds a document to a collection and returns its unique ID.
+	// Insert adds a document to a collection and returns its ID.
 	//
-	// DESIGN DECISION: Auto-generate ID on server side, not client side
-	// WHY: Prevent ID collisions, ensure uniqueness across distributed systems.
-	// Backends generate IDs using their native mechanisms (SQLite AUTOINCREMENT,
-	// MongoDB ObjectId, UUID).
+	// DESIGN DECISION: Use document's "id" field as SQL primary key
+	// WHY: TriangularStore pattern requires Get(collection, documentID) for CSE sync.
+	// Documents must have an "id" field; this becomes the SQL primary key.
+	// Separate "_sync_uuid" field is auto-injected for CSE sync operations.
 	//
-	// TRADE-OFF: Client doesn't control IDs. If client needs specific IDs,
-	// store them as regular fields and use Update instead.
+	// TRADE-OFF: Documents must provide their own ID. Enables predictable lookups
+	// but requires callers to ensure ID uniqueness. Duplicate IDs return ErrConflict.
 	//
-	// INSPIRED BY: MongoDB's insertOne returning insertedId, Linear's server-generated IDs.
+	// INSPIRED BY: Linear's client-controlled IDs, CouchDB/PouchDB ID strategy.
 	//
 	// Parameters:
 	//   - ctx: cancellation context
 	//   - collection: collection name
-	//   - doc: document to insert
+	//   - doc: document to insert (MUST contain "id" field)
 	//
 	// Returns:
-	//   - id: unique identifier for the inserted document
-	//   - error: if validation fails or insertion fails
+	//   - id: the document's "id" field value
+	//   - error: if doc["id"] missing/empty, or insertion fails (ErrConflict for duplicates)
 	Insert(ctx context.Context, collection string, doc Document) (id string, err error)
 
 	// Get retrieves a document by its unique ID.

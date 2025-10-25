@@ -7,14 +7,16 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence/basic"
 )
 
 var _ = Describe("Collector Restart Logic", func() {
 	Context("when restart is successful", func() {
 		It("should increment restart count", func() {
-			s := newSupervisorWithWorker(&mockWorker{}, &mockStore{}, supervisor.CollectorHealthConfig{
+			store := &mockStore{}
+			s := newSupervisorWithWorker(&mockWorker{}, store, supervisor.CollectorHealthConfig{
 				MaxRestartAttempts: 3,
 			})
 
@@ -26,7 +28,8 @@ var _ = Describe("Collector Restart Logic", func() {
 
 	Context("when max restart attempts exceeded", func() {
 		It("should panic", func() {
-			s := newSupervisorWithWorker(&mockWorker{}, &mockStore{}, supervisor.CollectorHealthConfig{
+			store := &mockStore{}
+			s := newSupervisorWithWorker(&mockWorker{}, store, supervisor.CollectorHealthConfig{
 				MaxRestartAttempts: 3,
 			})
 
@@ -41,11 +44,24 @@ var _ = Describe("Collector Restart Logic", func() {
 	Context("when collector recovers", func() {
 		It("should reset restart counter", func() {
 			store := &mockStore{
-				loadSnapshot: func(ctx context.Context, workerType string, id string) (*fsmv2.Snapshot, error) {
-					return &fsmv2.Snapshot{
-						Identity: mockIdentity(),
-						Desired:  &mockDesiredState{},
-						Observed: &mockObservedState{timestamp: time.Now()},
+				loadSnapshot: func(ctx context.Context, workerType string, id string) (*storage.Snapshot, error) {
+					identity := mockIdentity()
+					identityDoc := basic.Document{
+						"id":         identity.ID,
+						"name":       identity.Name,
+						"workerType": identity.WorkerType,
+					}
+
+					desiredDoc := basic.Document{}
+
+					observedDoc := basic.Document{
+						"timestamp": time.Now(),
+					}
+
+					return &storage.Snapshot{
+						Identity: identityDoc,
+						Desired:  desiredDoc,
+						Observed: observedDoc,
 					}, nil
 				},
 			}

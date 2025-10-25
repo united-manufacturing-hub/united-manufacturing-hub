@@ -10,9 +10,11 @@ import (
 	. "github.com/onsi/gomega"
 	"go.uber.org/zap"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/persistence"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/container"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence/basic"
 )
 
 func TestSupervisor(t *testing.T) {
@@ -40,11 +42,13 @@ func (m *mockWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedSt
 		return m.observed, nil
 	}
 
-	return &mockObservedState{timestamp: time.Now()}, nil
+	return &container.ContainerObservedState{
+		CollectedAt: time.Now(),
+	}, nil
 }
 
 func (m *mockWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
-	return &mockDesiredState{}, nil
+	return &container.ContainerDesiredState{}, nil
 }
 
 func (m *mockWorker) GetInitialState() fsmv2.State {
@@ -72,23 +76,6 @@ func (m *mockState) Next(snapshot fsmv2.Snapshot) (fsmv2.State, fsmv2.Signal, fs
 func (m *mockState) String() string { return "MockState" }
 func (m *mockState) Reason() string { return "mock state" }
 
-type mockObservedState struct {
-	timestamp time.Time
-	shutdown  bool
-}
-
-func (m *mockObservedState) GetTimestamp() time.Time              { return m.timestamp }
-func (m *mockObservedState) ShutdownRequested() bool              { return m.shutdown }
-func (m *mockObservedState) GetObservedDesiredState() fsmv2.DesiredState {
-	return &mockDesiredState{}
-}
-
-type mockDesiredState struct {
-	shutdown bool
-}
-
-func (m *mockDesiredState) ShutdownRequested() bool { return m.shutdown }
-
 type mockStore struct {
 	snapshot     *fsmv2.Snapshot
 	saveErr      error
@@ -98,12 +85,12 @@ type mockStore struct {
 	saveObserved func(ctx context.Context, workerType string, id string, observed fsmv2.ObservedState) error
 }
 
-func (m *mockStore) SaveIdentity(ctx context.Context, workerType string, id string, data interface{}) error {
+func (m *mockStore) SaveIdentity(ctx context.Context, workerType string, id string, identity interface{}) error {
 	return nil
 }
 
 func (m *mockStore) LoadIdentity(ctx context.Context, workerType string, id string) (interface{}, error) {
-	return nil, nil
+	return basic.Document{}, nil
 }
 
 func (m *mockStore) SaveDesired(ctx context.Context, workerType string, id string, desired fsmv2.DesiredState) error {
@@ -119,7 +106,7 @@ func (m *mockStore) LoadDesired(ctx context.Context, workerType string, id strin
 		return m.loadDesired(ctx, workerType, id)
 	}
 
-	return &mockDesiredState{}, nil
+	return &container.ContainerDesiredState{}, nil
 }
 
 func (m *mockStore) SaveObserved(ctx context.Context, workerType string, id string, observed fsmv2.ObservedState) error {
@@ -135,7 +122,7 @@ func (m *mockStore) LoadObserved(ctx context.Context, workerType string, id stri
 		return m.snapshot.Observed, nil
 	}
 
-	return &mockObservedState{timestamp: time.Now()}, nil
+	return &container.ContainerObservedState{CollectedAt: time.Now()}, nil
 }
 
 func (m *mockStore) LoadSnapshot(ctx context.Context, workerType string, id string) (*fsmv2.Snapshot, error) {
@@ -143,14 +130,18 @@ func (m *mockStore) LoadSnapshot(ctx context.Context, workerType string, id stri
 		return m.loadSnapshot(ctx, workerType, id)
 	}
 
-	if m.snapshot != nil {
-		return m.snapshot, nil
+	identity := &container.ContainerIdentity{
+		ID:   "test-worker",
+		Name: "Test Worker",
 	}
 
+	desired := &container.ContainerDesiredState{}
+	observed := &container.ContainerObservedState{CollectedAt: time.Now()}
+
 	return &fsmv2.Snapshot{
-		Identity: mockIdentity(),
-		Desired:  &mockDesiredState{},
-		Observed: &mockObservedState{timestamp: time.Now()},
+		Identity: identity,
+		Desired:  desired,
+		Observed: observed,
 	}, nil
 }
 
@@ -159,70 +150,10 @@ func (m *mockStore) GetLastSyncID(ctx context.Context) (int64, error) {
 }
 
 func (m *mockStore) IncrementSyncID(ctx context.Context) (int64, error) {
-	return 1, nil
-}
-
-func (m *mockStore) BeginTx(ctx context.Context) (persistence.Tx, error) {
-	return &mockTx{store: m}, nil
+	return 0, nil
 }
 
 func (m *mockStore) Close() error {
-	return nil
-}
-
-type mockTx struct {
-	store *mockStore
-}
-
-func (m *mockTx) SaveIdentity(ctx context.Context, workerType string, id string, data interface{}) error {
-	return m.store.SaveIdentity(ctx, workerType, id, data)
-}
-
-func (m *mockTx) LoadIdentity(ctx context.Context, workerType string, id string) (interface{}, error) {
-	return m.store.LoadIdentity(ctx, workerType, id)
-}
-
-func (m *mockTx) SaveDesired(ctx context.Context, workerType string, id string, desired fsmv2.DesiredState) error {
-	return m.store.SaveDesired(ctx, workerType, id, desired)
-}
-
-func (m *mockTx) LoadDesired(ctx context.Context, workerType string, id string) (fsmv2.DesiredState, error) {
-	return m.store.LoadDesired(ctx, workerType, id)
-}
-
-func (m *mockTx) SaveObserved(ctx context.Context, workerType string, id string, observed fsmv2.ObservedState) error {
-	return m.store.SaveObserved(ctx, workerType, id, observed)
-}
-
-func (m *mockTx) LoadObserved(ctx context.Context, workerType string, id string) (fsmv2.ObservedState, error) {
-	return m.store.LoadObserved(ctx, workerType, id)
-}
-
-func (m *mockTx) LoadSnapshot(ctx context.Context, workerType string, id string) (*fsmv2.Snapshot, error) {
-	return m.store.LoadSnapshot(ctx, workerType, id)
-}
-
-func (m *mockTx) GetLastSyncID(ctx context.Context) (int64, error) {
-	return m.store.GetLastSyncID(ctx)
-}
-
-func (m *mockTx) IncrementSyncID(ctx context.Context) (int64, error) {
-	return m.store.IncrementSyncID(ctx)
-}
-
-func (m *mockTx) BeginTx(ctx context.Context) (persistence.Tx, error) {
-	return m, nil
-}
-
-func (m *mockTx) Close() error {
-	return nil
-}
-
-func (m *mockTx) Commit() error {
-	return nil
-}
-
-func (m *mockTx) Rollback() error {
 	return nil
 }
 

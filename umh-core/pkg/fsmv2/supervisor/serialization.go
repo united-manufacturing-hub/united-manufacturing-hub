@@ -52,7 +52,7 @@ func FromDocument(doc basic.Document, targetType reflect.Type) (interface{}, err
 		Result:           result,
 		WeaklyTypedInput: true,
 		TagName:          "json",
-		DecodeHook:       preserveTimeHook(),
+		DecodeHook:       mapstructure.StringToTimeHookFunc(time.RFC3339),
 	}
 
 	decoder, err := mapstructure.NewDecoder(config)

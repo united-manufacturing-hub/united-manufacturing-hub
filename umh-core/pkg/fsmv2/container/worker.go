@@ -54,6 +54,8 @@ func (w *ContainerWorker) CollectObservedState(ctx context.Context) (fsmv2.Obser
 
 	// Convert to ContainerObservedState
 	observed := &ContainerObservedState{
+		ID: w.identity.ID,
+
 		// Observed-only fields from metrics
 		CPUUsageMCores:   serviceInfo.CPU.TotalUsageMCpu,
 		CPUCoreCount:     serviceInfo.CPU.CoreCount,
@@ -93,8 +95,9 @@ func (w *ContainerWorker) CollectObservedState(ctx context.Context) (fsmv2.Obser
 // The spec parameter comes from user configuration.
 func (w *ContainerWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
 	return &ContainerDesiredState{
-		shutdownRequested: false,
-		healthThresholds: HealthThresholds{
+		ID:               w.identity.ID,
+		Shutdown:         false,
+		HealthThresholds: HealthThresholds{
 			CPUHighPercent:        constants.CPUHighThresholdPercent,
 			CPUMediumPercent:      constants.CPUMediumThresholdPercent,
 			MemoryHighPercent:     constants.MemoryHighThresholdPercent,

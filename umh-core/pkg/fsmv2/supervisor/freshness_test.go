@@ -7,6 +7,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/container"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 	"go.uber.org/zap"
 )
@@ -22,8 +23,8 @@ var _ = Describe("FreshnessChecker", func() {
 
 			snapshot := &fsmv2.Snapshot{
 				Identity: mockIdentity(),
-				Observed: &mockObservedState{timestamp: time.Now()},
-				Desired:  &mockDesiredState{},
+				Observed: &container.ContainerObservedState{CollectedAt: time.Now()},
+				Desired:  &container.ContainerDesiredState{},
 			}
 
 			Expect(checker.Check(snapshot)).To(BeTrue())
@@ -40,8 +41,8 @@ var _ = Describe("FreshnessChecker", func() {
 
 			snapshot := &fsmv2.Snapshot{
 				Identity: mockIdentity(),
-				Observed: &mockObservedState{timestamp: time.Now().Add(-15 * time.Second)},
-				Desired:  &mockDesiredState{},
+				Observed: &container.ContainerObservedState{CollectedAt: time.Now().Add(-15 * time.Second)},
+				Desired:  &container.ContainerDesiredState{},
 			}
 
 			Expect(checker.Check(snapshot)).To(BeFalse())
@@ -58,8 +59,8 @@ var _ = Describe("FreshnessChecker", func() {
 
 			snapshot := &fsmv2.Snapshot{
 				Identity: mockIdentity(),
-				Observed: &mockObservedState{timestamp: time.Now().Add(-25 * time.Second)},
-				Desired:  &mockDesiredState{},
+				Observed: &container.ContainerObservedState{CollectedAt: time.Now().Add(-25 * time.Second)},
+				Desired:  &container.ContainerDesiredState{},
 			}
 
 			Expect(checker.IsTimeout(snapshot)).To(BeTrue())

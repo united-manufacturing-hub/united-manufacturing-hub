@@ -25,9 +25,18 @@ import (
 
 // AgentMonitorWorker implements the Worker interface for agent monitoring.
 // It wraps the existing agent_monitor.Service to collect agent health metrics.
+//
+// TODO(Phase 2 - Incremental Log Collection): Currently using FSM v1's GetLogs() method
+// which reads all logs. Should be updated to use GetLogsSince(lastLogTimestamp) for
+// incremental collection. This requires:
+// - Update agent_monitor.Service interface to accept since parameter
+// - Use s6.GetLogsSince() instead of s6.GetLogs()
+// - Track lastLogTimestamp properly (already implemented here)
+// See IMPLEMENTATION_PLAN.md Stage 4 for details.
 type AgentMonitorWorker struct {
-	identity       fsmv2.Identity
-	monitorService agent_monitor.IAgentMonitorService
+	identity         fsmv2.Identity
+	monitorService   agent_monitor.IAgentMonitorService
+	lastLogTimestamp time.Time
 }
 
 // NewAgentMonitorWorker creates a new agent monitor worker.
@@ -47,6 +56,10 @@ func NewAgentMonitorWorker(id string, name string, service agent_monitor.IAgentM
 //
 // This replaces the whole `_monitor` logic from FSM v1.
 func (w *AgentMonitorWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedState, error) {
+	if w.lastLogTimestamp.IsZero() {
+		w.lastLogTimestamp = time.Now()
+	}
+
 	serviceInfo, err := w.monitorService.Status(ctx, fsm.SystemSnapshot{})
 	if err != nil {
 		return nil, err
@@ -57,7 +70,14 @@ func (w *AgentMonitorWorker) CollectObservedState(ctx context.Context) (fsmv2.Ob
 		CollectedAt: time.Now(),
 	}
 
+	w.lastLogTimestamp = time.Now()
+
 	return observed, nil
+}
+
+// GetLastLogTimestamp returns the timestamp of the last log collection.
+func (w *AgentMonitorWorker) GetLastLogTimestamp() time.Time {
+	return w.lastLogTimestamp
 }
 
 // DeriveDesiredState transforms user configuration into desired state.

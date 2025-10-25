@@ -8,8 +8,9 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/persistence"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence/basic"
 	"go.uber.org/zap"
 )
 
@@ -26,7 +27,7 @@ var _ = Describe("WorkerContext", func() {
 		collector := NewCollector(CollectorConfig{
 			Worker:              worker,
 			Identity:            identity,
-			Store:               &testStore{},
+			Store:               nil,
 			Logger:              zap.NewNop().Sugar(),
 			ObservationInterval: time.Second,
 			ObservationTimeout:  time.Second,
@@ -115,15 +116,23 @@ func (m *testStore) LoadObserved(ctx context.Context, workerType string, id stri
 	return &testObservedState{timestamp: time.Now()}, nil
 }
 
-func (m *testStore) LoadSnapshot(ctx context.Context, workerType string, id string) (*fsmv2.Snapshot, error) {
-	return &fsmv2.Snapshot{
-		Identity: fsmv2.Identity{
-			ID:         id,
-			Name:       "Test",
-			WorkerType: workerType,
-		},
-		Desired:  &testDesiredState{},
-		Observed: &testObservedState{timestamp: time.Now()},
+func (m *testStore) LoadSnapshot(ctx context.Context, workerType string, id string) (*storage.Snapshot, error) {
+	identityDoc := basic.Document{
+		"id":         id,
+		"name":       "Test",
+		"workerType": workerType,
+	}
+
+	desiredDoc := basic.Document{}
+
+	observedDoc := basic.Document{
+		"timestamp": time.Now(),
+	}
+
+	return &storage.Snapshot{
+		Identity: identityDoc,
+		Desired:  desiredDoc,
+		Observed: observedDoc,
 	}, nil
 }
 
@@ -135,66 +144,6 @@ func (m *testStore) IncrementSyncID(ctx context.Context) (int64, error) {
 	return 1, nil
 }
 
-func (m *testStore) BeginTx(ctx context.Context) (persistence.Tx, error) {
-	return &testTx{store: m}, nil
-}
-
 func (m *testStore) Close() error {
-	return nil
-}
-
-type testTx struct {
-	store *testStore
-}
-
-func (m *testTx) SaveIdentity(ctx context.Context, workerType string, id string, data interface{}) error {
-	return m.store.SaveIdentity(ctx, workerType, id, data)
-}
-
-func (m *testTx) LoadIdentity(ctx context.Context, workerType string, id string) (interface{}, error) {
-	return m.store.LoadIdentity(ctx, workerType, id)
-}
-
-func (m *testTx) SaveDesired(ctx context.Context, workerType string, id string, desired fsmv2.DesiredState) error {
-	return m.store.SaveDesired(ctx, workerType, id, desired)
-}
-
-func (m *testTx) LoadDesired(ctx context.Context, workerType string, id string) (fsmv2.DesiredState, error) {
-	return m.store.LoadDesired(ctx, workerType, id)
-}
-
-func (m *testTx) SaveObserved(ctx context.Context, workerType string, id string, observed fsmv2.ObservedState) error {
-	return m.store.SaveObserved(ctx, workerType, id, observed)
-}
-
-func (m *testTx) LoadObserved(ctx context.Context, workerType string, id string) (fsmv2.ObservedState, error) {
-	return m.store.LoadObserved(ctx, workerType, id)
-}
-
-func (m *testTx) LoadSnapshot(ctx context.Context, workerType string, id string) (*fsmv2.Snapshot, error) {
-	return m.store.LoadSnapshot(ctx, workerType, id)
-}
-
-func (m *testTx) GetLastSyncID(ctx context.Context) (int64, error) {
-	return m.store.GetLastSyncID(ctx)
-}
-
-func (m *testTx) IncrementSyncID(ctx context.Context) (int64, error) {
-	return m.store.IncrementSyncID(ctx)
-}
-
-func (m *testTx) BeginTx(ctx context.Context) (persistence.Tx, error) {
-	return m, nil
-}
-
-func (m *testTx) Close() error {
-	return nil
-}
-
-func (m *testTx) Commit() error {
-	return nil
-}
-
-func (m *testTx) Rollback() error {
 	return nil
 }

@@ -492,32 +492,36 @@ func (s *sqliteStore) DropCollection(ctx context.Context, name string) error {
 	return nil
 }
 
-// Insert adds a document to a collection and returns its auto-generated UUID.
+// Insert adds a document to a collection using the document's "id" field as primary key.
 //
-// DESIGN DECISION: Use UUID v4 for document IDs instead of AUTOINCREMENT
-// WHY: UUIDs enable distributed systems and CSE multi-tier sync without ID collisions.
-// SQLite AUTOINCREMENT IDs work only within single database (conflicts during sync).
+// BREAKING CHANGE: Document must contain non-empty "id" field (string type).
+// The "id" field is used as the SQL PRIMARY KEY instead of auto-generation.
 //
-// TRADE-OFF: UUIDs are longer (36 bytes vs 8 bytes) and less human-readable.
-// But for CSE use case (syncing between edge and cloud), globally unique IDs
-// are essential. Alternative snowflake IDs would require coordination.
+// DESIGN DECISION: Use document's "id" field as primary key
+// WHY: Enables client-controlled IDs for CSE sync (cloud assigns IDs, edge syncs).
+// Alternative auto-generated server IDs don't work for bidirectional sync
+// (edge and cloud both need to agree on document identity).
 //
-// INSPIRED BY: Linear's UUID-based sync architecture, MongoDB's ObjectId pattern.
+// TRADE-OFF: Caller must provide unique IDs. Server validates non-empty string.
+// Alternative UUID generation works for unidirectional sync only.
+//
+// INSPIRED BY: Linear's client-controlled sync IDs, CouchDB's _id field.
 //
 // Implementation Details:
-//   - Generates UUID v4 (random) on server side
+//   - Requires doc["id"] field (string type, non-empty)
+//   - Uses doc["id"] as SQL PRIMARY KEY
+//   - Automatically injects "_sync_uuid" if not already present (for CSE)
 //   - Marshals document to JSON before storage
-//   - Uses parameterized query for data (prevents injection)
-//   - Collection name validated before string concatenation
+//   - Returns ErrConflict if document with same ID already exists
 //
 // Parameters:
 //   - ctx: cancellation context
 //   - collection: collection name
-//   - doc: document to insert
+//   - doc: document to insert (must have non-empty "id" field)
 //
 // Returns:
-//   - id: UUID of inserted document
-//   - error: if marshaling fails or insertion fails (including constraint violations)
+//   - id: the document's "id" field value
+//   - error: if doc missing "id", "id" is empty, or constraint violations (ErrConflict)
 func (s *sqliteStore) Insert(ctx context.Context, collection string, doc Document) (string, error) {
 	if err := validateContext(ctx); err != nil {
 		return "", err
@@ -527,7 +531,14 @@ func (s *sqliteStore) Insert(ctx context.Context, collection string, doc Documen
 		return "", errors.New("store is closed")
 	}
 
-	id := uuid.New().String()
+	id, ok := doc["id"].(string)
+	if !ok || id == "" {
+		return "", errors.New("document must have non-empty 'id' field")
+	}
+
+	if doc["_sync_uuid"] == nil {
+		doc["_sync_uuid"] = uuid.New().String()
+	}
 
 	data, err := json.Marshal(doc)
 	if err != nil {
@@ -1031,12 +1042,50 @@ func (t *sqliteTx) DropCollection(ctx context.Context, name string) error {
 	return nil
 }
 
+// Insert adds a document to a collection using the document's "id" field as primary key.
+//
+// BREAKING CHANGE: Document must contain non-empty "id" field (string type).
+// The "id" field is used as the SQL PRIMARY KEY instead of auto-generation.
+//
+// DESIGN DECISION: Use document's "id" field as primary key
+// WHY: Enables client-controlled IDs for CSE sync (cloud assigns IDs, edge syncs).
+// Alternative auto-generated server IDs don't work for bidirectional sync
+// (edge and cloud both need to agree on document identity).
+//
+// TRADE-OFF: Caller must provide unique IDs. Server validates non-empty string.
+// Alternative UUID generation works for unidirectional sync only.
+//
+// INSPIRED BY: Linear's client-controlled sync IDs, CouchDB's _id field.
+//
+// Implementation Details:
+//   - Requires doc["id"] field (string type, non-empty)
+//   - Uses doc["id"] as SQL PRIMARY KEY
+//   - Automatically injects "_sync_uuid" if not already present (for CSE)
+//   - Marshals document to JSON before storage
+//   - Returns ErrConflict if document with same ID already exists
+//   - Executes within transaction context
+//
+// Parameters:
+//   - ctx: cancellation context
+//   - collection: collection name
+//   - doc: document to insert (must have non-empty "id" field)
+//
+// Returns:
+//   - id: the document's "id" field value
+//   - error: if doc missing "id", "id" is empty, or constraint violations (ErrConflict)
 func (t *sqliteTx) Insert(ctx context.Context, collection string, doc Document) (string, error) {
 	if t.closed {
 		return "", errors.New("transaction is closed")
 	}
 
-	id := uuid.New().String()
+	id, ok := doc["id"].(string)
+	if !ok || id == "" {
+		return "", errors.New("document must have non-empty 'id' field")
+	}
+
+	if doc["_sync_uuid"] == nil {
+		doc["_sync_uuid"] = uuid.New().String()
+	}
 
 	data, err := json.Marshal(doc)
 	if err != nil {

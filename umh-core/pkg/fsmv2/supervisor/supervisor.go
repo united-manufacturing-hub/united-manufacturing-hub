@@ -74,6 +74,23 @@ import (
 //
 // =============================================================================
 
+// normalizeType strips pointer indirection to get the base struct type.
+// This ensures consistent type comparison regardless of whether a worker
+// returns *Type or Type.
+//
+// Examples:
+//   - *ContainerObservedState → ContainerObservedState
+//   - **Type → *Type (only strips one level)
+//
+// Used by both AddWorker (type registration) and tickWorker (type validation)
+// to ensure they compare apples-to-apples.
+func normalizeType(t reflect.Type) reflect.Type {
+	if t.Kind() == reflect.Ptr {
+		return t.Elem()
+	}
+	return t
+}
+
 // CollectorHealth tracks the health and restart state of the observation collector.
 // The collector runs in a separate goroutine and may fail due to network issues,
 // blocked operations, or other infrastructure problems.
@@ -90,8 +107,8 @@ type CollectorHealth struct {
 
 // Supervisor manages the lifecycle of a single worker.
 // It runs two goroutines:
-//   1. Observation loop: Continuously calls worker.CollectObservedState()
-//   2. Main tick loop: Calls state.Next() and executes actions
+//  1. Observation loop: Continuously calls worker.CollectObservedState()
+//  2. Main tick loop: Calls state.Next() and executes actions
 //
 // The supervisor implements the 4-layer defense for data freshness:
 //   - Layer 1: Pause FSM when data is stale (>10s by default)
@@ -99,15 +116,15 @@ type CollectorHealth struct {
 //   - Layer 3: Request graceful shutdown after max restart attempts
 //   - Layer 4: Comprehensive logging and metrics (observability)
 type Supervisor struct {
-	workerType            string                        // Type of workers managed (e.g., "container")
-	workers               map[string]*WorkerContext     // workerID → worker context
-	mu                    sync.RWMutex                  // Protects workers map
-	store                 persistence.Store             // State persistence layer
-	logger                *zap.SugaredLogger            // Logger for supervisor operations
-	tickInterval          time.Duration                 // How often to evaluate state transitions
-	collectorHealth       CollectorHealth               // Collector health tracking
-	freshnessChecker      *FreshnessChecker             // Data freshness validator
-	expectedObservedTypes map[string]reflect.Type       // workerID → expected ObservedState type
+	workerType            string                    // Type of workers managed (e.g., "container")
+	workers               map[string]*WorkerContext // workerID → worker context
+	mu                    sync.RWMutex              // Protects workers map
+	store                 persistence.Store         // State persistence layer
+	logger                *zap.SugaredLogger        // Logger for supervisor operations
+	tickInterval          time.Duration             // How often to evaluate state transitions
+	collectorHealth       CollectorHealth           // Collector health tracking
+	freshnessChecker      *FreshnessChecker         // Data freshness validator
+	expectedObservedTypes map[string]reflect.Type   // workerID → expected ObservedState type
 }
 
 // WorkerContext encapsulates the runtime state for a single worker
@@ -270,10 +287,16 @@ func (s *Supervisor) AddWorker(identity fsmv2.Identity, worker fsmv2.Worker) err
 		return fmt.Errorf("failed to discover worker ObservedState type: %w", err)
 	}
 
-	expectedType := reflect.TypeOf(observed)
+	expectedType := normalizeType(reflect.TypeOf(observed))
 	s.expectedObservedTypes[identity.ID] = expectedType
 
 	s.logger.Infof("Registered ObservedState type for worker %s: %s", identity.ID, expectedType)
+
+	// Save initial observation to database for immediate availability
+	if err := s.store.SaveObserved(ctx, s.workerType, identity.ID, observed); err != nil {
+		return fmt.Errorf("failed to save initial observation: %w", err)
+	}
+	s.logger.Debugf("Saved initial observation for worker: %s", identity.ID)
 
 	collector := NewCollector(CollectorConfig{
 		Worker:              worker,
@@ -427,6 +450,8 @@ func (s *Supervisor) CheckDataFreshness(snapshot *fsmv2.Snapshot) bool {
 func (s *Supervisor) Start(ctx context.Context) <-chan struct{} {
 	done := make(chan struct{})
 
+	s.logger.Debugf("Supervisor started for workerType: %s", s.workerType)
+
 	// Start observation collectors for all workers
 	s.mu.RLock()
 	for _, workerCtx := range s.workers {
@@ -454,6 +479,8 @@ func (s *Supervisor) tickLoop(ctx context.Context) {
 	ticker := time.NewTicker(s.tickInterval)
 	defer ticker.Stop()
 
+	s.logger.Debugf("Tick loop started, interval: %v", s.tickInterval)
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -467,6 +494,8 @@ func (s *Supervisor) tickLoop(ctx context.Context) {
 				workerIDs = append(workerIDs, id)
 			}
 			s.mu.RUnlock()
+
+			s.logger.Debugf("Tick: processing %d workers", len(workerIDs))
 
 			for _, workerID := range workerIDs {
 				if err := s.tickWorker(ctx, workerID); err != nil {
@@ -494,10 +523,26 @@ func (s *Supervisor) tickWorker(ctx context.Context, workerID string) error {
 	}
 	defer workerCtx.tickInProgress.Store(false)
 
+	workerCtx.mu.RLock()
+	s.logger.Debugf("Ticking worker: %s, current state: %s", workerID, workerCtx.currentState.String())
+	workerCtx.mu.RUnlock()
+
 	// Load latest snapshot from database
+	s.logger.Debugf("[DataFreshness] Worker %s: Loading snapshot from database", workerID)
 	snapshot, err := s.store.LoadSnapshot(ctx, s.workerType, workerID)
 	if err != nil {
+		s.logger.Debugf("[DataFreshness] Worker %s: Failed to load snapshot: %v", workerID, err)
 		return fmt.Errorf("failed to load snapshot: %w", err)
+	}
+
+	// Log loaded observation details
+	if snapshot.Observed == nil {
+		s.logger.Debugf("[DataFreshness] Worker %s: Loaded snapshot has nil Observed state", workerID)
+	} else if timestampProvider, ok := snapshot.Observed.(interface{ GetTimestamp() time.Time }); ok {
+		observationTimestamp := timestampProvider.GetTimestamp()
+		s.logger.Debugf("[DataFreshness] Worker %s: Loaded observation timestamp=%s", workerID, observationTimestamp.Format(time.RFC3339Nano))
+	} else {
+		s.logger.Debugf("[DataFreshness] Worker %s: Loaded observation does not implement GetTimestamp() (type: %T)", workerID, snapshot.Observed)
 	}
 
 	// I16: Validate ObservedState type before calling state.Next()
@@ -511,7 +556,7 @@ func (s *Supervisor) tickWorker(ctx context.Context, workerID string) error {
 		if snapshot.Observed == nil {
 			panic(fmt.Sprintf("Invariant I16 violated: Worker %s returned nil ObservedState", workerID))
 		}
-		actualType := reflect.TypeOf(snapshot.Observed)
+		actualType := normalizeType(reflect.TypeOf(snapshot.Observed))
 		if actualType != expectedType {
 			panic(fmt.Sprintf("Invariant I16 violated: Worker %s (type %s) returned ObservedState type %s, expected %s",
 				workerID, s.workerType, actualType, expectedType))
@@ -558,7 +603,13 @@ func (s *Supervisor) tickWorker(ctx context.Context, workerID string) error {
 	currentState := workerCtx.currentState
 	workerCtx.mu.RUnlock()
 
+	s.logger.Debugf("Evaluating state transition for worker: %s", workerID)
+
 	nextState, signal, action := currentState.Next(*snapshot)
+
+	hasAction := action != nil
+	s.logger.Debugf("State evaluation result for worker %s - nextState: %s, signal: %d, hasAction: %t",
+		workerID, nextState.String(), signal, hasAction)
 
 	// VALIDATION: Cannot switch state AND emit action simultaneously
 	if nextState != currentState && action != nil {
@@ -577,12 +628,17 @@ func (s *Supervisor) tickWorker(ctx context.Context, workerID string) error {
 
 	// Transition to next state
 	if nextState != currentState {
+		s.logger.Debugf("State transition for worker %s: %s → %s",
+			workerID, currentState.String(), nextState.String())
+
 		s.logger.Infof("State transition: %s -> %s (reason: %s)",
 			currentState.String(), nextState.String(), nextState.Reason())
 
 		workerCtx.mu.Lock()
 		workerCtx.currentState = nextState
 		workerCtx.mu.Unlock()
+	} else {
+		s.logger.Debugf("State unchanged for worker %s: %s", workerID, currentState.String())
 	}
 
 	// Process signal
@@ -702,40 +758,40 @@ func (s *Supervisor) processSignal(ctx context.Context, workerID string, signal 
 	}
 }
 
-// RequestShutdown sets the shutdown flag in desired state for a specific worker.
-// This triggers graceful shutdown through state transitions.
-// This implements Layer 3 (Graceful Shutdown) of the 4-layer defense.
+// RequestShutdown requests a worker to shut down by setting the shutdown flag in its desired state.
+//
+// DESIGN DECISION: Mutate loaded desired state instead of wrapper
+// WHY: DesiredState structs have SetShutdownRequested() method for mutation.
+// Wrapper pattern failed because it serialized as {"inner": {...}} losing top-level fields.
+//
+// IMPLEMENTATION: Load → Mutate → Save pattern
+// 1. Load current desired state
+// 2. Call SetShutdownRequested(true) if supported
+// 3. Save mutated desired state
 func (s *Supervisor) RequestShutdown(ctx context.Context, workerID string, reason string) error {
 	s.logger.Warnf("Requesting shutdown for worker %s: %s", workerID, reason)
 
 	// Load current desired state
 	desired, err := s.store.LoadDesired(ctx, s.workerType, workerID)
 	if err != nil {
-		return fmt.Errorf("failed to load desired state: %w", err)
+		return fmt.Errorf("failed to load desired state for shutdown: %w", err)
 	}
 
-	// NOTE: Current DesiredState interface doesn't have SetShutdownRequested()
-	// For this implementation, we create a shutdownDesiredState wrapper that
-	// marks shutdown as requested. This is a temporary solution until the
-	// DesiredState interface is extended to support mutation.
-	shutdownDesired := &shutdownDesiredState{inner: desired}
+	// Type assert to check if it supports shutdown mutation
+	setter, ok := desired.(interface{ SetShutdownRequested(bool) })
+	if !ok {
+		return fmt.Errorf("desired state type %T does not support shutdown", desired)
+	}
 
-	// Save updated desired state with shutdown flag set
-	if err := s.store.SaveDesired(ctx, s.workerType, workerID, shutdownDesired); err != nil {
-		return fmt.Errorf("failed to save desired state: %w", err)
+	// Mutate to set shutdown flag
+	setter.SetShutdownRequested(true)
+
+	// Save mutated desired state
+	if err := s.store.SaveDesired(ctx, s.workerType, workerID, desired); err != nil {
+		return fmt.Errorf("failed to save shutdown desired state: %w", err)
 	}
 
 	return nil
-}
-
-// shutdownDesiredState wraps a DesiredState and overrides ShutdownRequested to return true.
-// This is a temporary wrapper until DesiredState interface supports mutation.
-type shutdownDesiredState struct {
-	inner fsmv2.DesiredState
-}
-
-func (s *shutdownDesiredState) ShutdownRequested() bool {
-	return true
 }
 
 // GetCurrentState returns the current state name for the first worker (backwards compatibility).
@@ -751,4 +807,27 @@ func (s *Supervisor) GetCurrentState() string {
 	}
 
 	return "no workers"
+}
+
+// GetWorkerState returns the current state name and reason for a worker.
+// This method is thread-safe and can be safely called concurrently with tick operations.
+// Returns "Unknown" state with reason "current state is nil" if the worker's state is nil.
+// Returns an error if the worker is not found.
+func (s *Supervisor) GetWorkerState(workerID string) (string, string, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	workerCtx, exists := s.workers[workerID]
+	if !exists {
+		return "", "", fmt.Errorf("worker %s not found", workerID)
+	}
+
+	workerCtx.mu.RLock()
+	defer workerCtx.mu.RUnlock()
+
+	if workerCtx.currentState == nil {
+		return "Unknown", "current state is nil", nil
+	}
+
+	return workerCtx.currentState.String(), workerCtx.currentState.Reason(), nil
 }

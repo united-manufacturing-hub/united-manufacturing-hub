@@ -9,6 +9,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/protocol"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	csesync "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/sync"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence/basic"
@@ -275,20 +276,20 @@ var _ = Describe("SyncState", func() {
 
 	Describe("RecordChange", func() {
 		It("should track pending changes for edge tier", func() {
-			err := syncState.RecordChange(100, csesync.TierEdge)
+			err := syncState.RecordChange(100, protocol.TierEdge)
 			Expect(err).NotTo(HaveOccurred())
 
-			pending, err := syncState.GetPendingChanges(csesync.TierEdge)
+			pending, err := syncState.GetPendingChanges(protocol.TierEdge)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(pending).To(ContainElement(int64(100)))
 		})
 
 		It("should track multiple pending changes", func() {
-			syncState.RecordChange(100, csesync.TierEdge)
-			syncState.RecordChange(101, csesync.TierEdge)
-			syncState.RecordChange(102, csesync.TierEdge)
+			syncState.RecordChange(100, protocol.TierEdge)
+			syncState.RecordChange(101, protocol.TierEdge)
+			syncState.RecordChange(102, protocol.TierEdge)
 
-			pending, _ := syncState.GetPendingChanges(csesync.TierEdge)
+			pending, _ := syncState.GetPendingChanges(protocol.TierEdge)
 			Expect(pending).To(HaveLen(3))
 			Expect(pending).To(ContainElement(int64(100)))
 			Expect(pending).To(ContainElement(int64(101)))
@@ -298,56 +299,56 @@ var _ = Describe("SyncState", func() {
 
 	Describe("MarkSynced", func() {
 		BeforeEach(func() {
-			syncState.RecordChange(100, csesync.TierEdge)
-			syncState.RecordChange(101, csesync.TierEdge)
-			syncState.RecordChange(102, csesync.TierEdge)
+			syncState.RecordChange(100, protocol.TierEdge)
+			syncState.RecordChange(101, protocol.TierEdge)
+			syncState.RecordChange(102, protocol.TierEdge)
 		})
 
 		It("should remove synced changes from pending", func() {
-			err := syncState.MarkSynced(csesync.TierEdge, 101)
+			err := syncState.MarkSynced(protocol.TierEdge, 101)
 			Expect(err).NotTo(HaveOccurred())
 
-			pending, _ := syncState.GetPendingChanges(csesync.TierEdge)
+			pending, _ := syncState.GetPendingChanges(protocol.TierEdge)
 			Expect(pending).NotTo(ContainElement(int64(100)))
 			Expect(pending).NotTo(ContainElement(int64(101)))
 			Expect(pending).To(ContainElement(int64(102)))
 		})
 
 		It("should update frontend sync ID when edge syncs", func() {
-			syncState.MarkSynced(csesync.TierEdge, 101)
+			syncState.MarkSynced(protocol.TierEdge, 101)
 			Expect(syncState.GetFrontendSyncID()).To(Equal(int64(101)))
 		})
 
 		It("should handle partial sync", func() {
-			syncState.MarkSynced(csesync.TierEdge, 100)
+			syncState.MarkSynced(protocol.TierEdge, 100)
 
-			pending, _ := syncState.GetPendingChanges(csesync.TierEdge)
+			pending, _ := syncState.GetPendingChanges(protocol.TierEdge)
 			Expect(pending).NotTo(ContainElement(int64(100)))
 			Expect(pending).To(ContainElement(int64(101)))
 			Expect(pending).To(ContainElement(int64(102)))
 		})
 
 		It("should handle complete sync", func() {
-			syncState.MarkSynced(csesync.TierEdge, 102)
+			syncState.MarkSynced(protocol.TierEdge, 102)
 
-			pending, _ := syncState.GetPendingChanges(csesync.TierEdge)
+			pending, _ := syncState.GetPendingChanges(protocol.TierEdge)
 			Expect(pending).To(BeEmpty())
 		})
 	})
 
 	Describe("GetPendingChanges", func() {
 		It("should return empty list initially", func() {
-			pending, err := syncState.GetPendingChanges(csesync.TierEdge)
+			pending, err := syncState.GetPendingChanges(protocol.TierEdge)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(pending).To(BeEmpty())
 		})
 
 		It("should return changes in order", func() {
-			syncState.RecordChange(102, csesync.TierEdge)
-			syncState.RecordChange(100, csesync.TierEdge)
-			syncState.RecordChange(101, csesync.TierEdge)
+			syncState.RecordChange(102, protocol.TierEdge)
+			syncState.RecordChange(100, protocol.TierEdge)
+			syncState.RecordChange(101, protocol.TierEdge)
 
-			pending, _ := syncState.GetPendingChanges(csesync.TierEdge)
+			pending, _ := syncState.GetPendingChanges(protocol.TierEdge)
 			Expect(pending).To(HaveLen(3))
 		})
 	})
@@ -358,13 +359,13 @@ var _ = Describe("SyncState", func() {
 		})
 
 		It("should construct query for delta sync", func() {
-			query, err := syncState.GetDeltaSince(csesync.TierEdge)
+			query, err := syncState.GetDeltaSince(protocol.TierEdge)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(query).NotTo(BeNil())
 		})
 
 		It("should filter by sync ID greater than frontend sync ID", func() {
-			query, _ := syncState.GetDeltaSince(csesync.TierEdge)
+			query, _ := syncState.GetDeltaSince(protocol.TierEdge)
 
 			Expect(query.Filters).To(HaveLen(1))
 			Expect(query.Filters[0].Field).To(Equal(storage.FieldSyncID))
@@ -374,7 +375,7 @@ var _ = Describe("SyncState", func() {
 
 		It("should use edge sync ID for frontend tier", func() {
 			syncState.SetEdgeSyncID(150)
-			query, _ := syncState.GetDeltaSince(csesync.TierFrontend)
+			query, _ := syncState.GetDeltaSince(protocol.TierFrontend)
 
 			Expect(query.Filters[0].Value).To(Equal(int64(150)))
 		})
@@ -388,8 +389,8 @@ var _ = Describe("SyncState", func() {
 		It("should persist sync state", func() {
 			syncState.SetEdgeSyncID(100)
 			syncState.SetFrontendSyncID(90)
-			syncState.RecordChange(96, csesync.TierEdge)
-			syncState.RecordChange(97, csesync.TierEdge)
+			syncState.RecordChange(96, protocol.TierEdge)
+			syncState.RecordChange(97, protocol.TierEdge)
 
 			err := syncState.Flush(ctx)
 			Expect(err).NotTo(HaveOccurred())
@@ -417,8 +418,8 @@ var _ = Describe("SyncState", func() {
 		It("should restore sync state from storage", func() {
 			syncState.SetEdgeSyncID(100)
 			syncState.SetFrontendSyncID(90)
-			syncState.RecordChange(96, csesync.TierEdge)
-			syncState.RecordChange(97, csesync.TierEdge)
+			syncState.RecordChange(96, protocol.TierEdge)
+			syncState.RecordChange(97, protocol.TierEdge)
 			syncState.Flush(ctx)
 
 			newSyncState := csesync.NewSyncState(store, registry)
@@ -428,7 +429,7 @@ var _ = Describe("SyncState", func() {
 			Expect(newSyncState.GetEdgeSyncID()).To(Equal(int64(100)))
 			Expect(newSyncState.GetFrontendSyncID()).To(Equal(int64(90)))
 
-			pending, _ := newSyncState.GetPendingChanges(csesync.TierEdge)
+			pending, _ := newSyncState.GetPendingChanges(protocol.TierEdge)
 			Expect(pending).To(ContainElement(int64(96)))
 			Expect(pending).To(ContainElement(int64(97)))
 		})
@@ -454,14 +455,14 @@ var _ = Describe("SyncState", func() {
 		})
 
 		It("should preserve pending changes across flush/load cycle", func() {
-			syncState.RecordChange(100, csesync.TierEdge)
-			syncState.RecordChange(101, csesync.TierEdge)
+			syncState.RecordChange(100, protocol.TierEdge)
+			syncState.RecordChange(101, protocol.TierEdge)
 			syncState.Flush(ctx)
 
 			newSyncState := csesync.NewSyncState(store, registry)
 			newSyncState.Load(ctx)
 
-			edgePending, _ := newSyncState.GetPendingChanges(csesync.TierEdge)
+			edgePending, _ := newSyncState.GetPendingChanges(protocol.TierEdge)
 
 			Expect(edgePending).To(HaveLen(2))
 		})
@@ -487,7 +488,7 @@ var _ = Describe("SyncState", func() {
 			for i := 0; i < 10; i++ {
 				go func(id int) {
 					syncState.SetEdgeSyncID(int64(id * 10))
-					syncState.RecordChange(int64(id*10), csesync.TierEdge)
+					syncState.RecordChange(int64(id*10), protocol.TierEdge)
 					done <- true
 				}(i)
 			}
@@ -496,18 +497,18 @@ var _ = Describe("SyncState", func() {
 				<-done
 			}
 
-			pending, _ := syncState.GetPendingChanges(csesync.TierEdge)
+			pending, _ := syncState.GetPendingChanges(protocol.TierEdge)
 			Expect(pending).NotTo(BeEmpty())
 		})
 	})
 
 	Describe("TierConstants", func() {
 		It("should define edge tier constant", func() {
-			Expect(csesync.TierEdge).To(Equal(csesync.Tier("edge")))
+			Expect(protocol.TierEdge).To(Equal(protocol.Tier("edge")))
 		})
 
 		It("should define frontend tier constant", func() {
-			Expect(csesync.TierFrontend).To(Equal(csesync.Tier("frontend")))
+			Expect(protocol.TierFrontend).To(Equal(protocol.Tier("frontend")))
 		})
 	})
 })

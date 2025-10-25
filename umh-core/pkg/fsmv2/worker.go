@@ -21,9 +21,9 @@ const (
 // Identity uniquely identifies a worker instance.
 // This is immutable for the lifetime of the worker.
 type Identity struct {
-	ID         string // Unique identifier (e.g., UUID)
-	Name       string // Human-readable name
-	WorkerType string // Type of worker (e.g., "container", "pod")
+	ID         string `json:"id"`         // Unique identifier (e.g., UUID)
+	Name       string `json:"name"`       // Human-readable name
+	WorkerType string `json:"workerType"` // Type of worker (e.g., "container", "pod")
 }
 
 // ObservedState represents the actual state gathered from monitoring the system.

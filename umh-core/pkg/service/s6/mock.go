@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"sync"
+	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
@@ -40,6 +41,7 @@ type MockService struct {
 	GetS6ConfigFileError         error
 	ForceRemoveError             error
 	GetLogsError                 error
+	GetLogsSinceError            error
 
 	// Results for each method
 	CreateResult                  error
@@ -60,6 +62,7 @@ type MockService struct {
 	ExitHistoryResult     []ExitEvent
 	GetS6ConfigFileResult []byte
 	GetLogsResult         []LogEntry
+	GetLogsSinceResult    []LogEntry
 
 	GetConfigResult s6serviceconfig.S6ServiceConfig
 	StatusResult    ServiceInfo
@@ -81,6 +84,7 @@ type MockService struct {
 	GetS6ConfigFileCalled         bool
 	ForceRemoveCalled             bool
 	GetLogsCalled                 bool
+	GetLogsSinceCalled            bool
 	GetStructuredLogsCalled       bool
 
 	ServiceExistsResult bool
@@ -240,6 +244,12 @@ func (m *MockService) GetLogs(ctx context.Context, servicePath string, filesyste
 	m.GetLogsCalled = true
 
 	return m.GetLogsResult, m.GetLogsError
+}
+
+func (m *MockService) GetLogsSince(ctx context.Context, servicePath string, filesystemService filesystem.Service, since time.Time) ([]LogEntry, error) {
+	m.GetLogsSinceCalled = true
+
+	return m.GetLogsSinceResult, m.GetLogsSinceError
 }
 
 // EnsureSupervision is a mock implementation that checks if supervise dir exists.

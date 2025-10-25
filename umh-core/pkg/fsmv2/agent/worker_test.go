@@ -179,4 +179,134 @@ var _ = Describe("AgentMonitorWorker", func() {
 			var _ fsmv2.Worker = worker
 		})
 	})
+
+	Describe("Incremental log collection", func() {
+		Context("lastLogTimestamp initialization", func() {
+			It("should initialize lastLogTimestamp to time.Now() on first observation", func() {
+				mockService.SetupMockForHealthyState()
+				beforeCall := time.Now()
+
+				observed, err := worker.CollectObservedState(ctx)
+				Expect(err).ToNot(HaveOccurred())
+
+				afterCall := time.Now()
+
+				agentObserved, ok := observed.(*agent.AgentMonitorObservedState)
+				Expect(ok).To(BeTrue())
+				Expect(agentObserved).NotTo(BeNil())
+
+				lastTimestamp := worker.GetLastLogTimestamp()
+				Expect(lastTimestamp).To(BeTemporally(">=", beforeCall))
+				Expect(lastTimestamp).To(BeTemporally("<=", afterCall))
+			})
+
+			It("should not read entire log history on first call", func() {
+				mockService.SetupMockForHealthyState()
+				mockService.SetInitialLogCount(1000)
+
+				observed, err := worker.CollectObservedState(ctx)
+				Expect(err).ToNot(HaveOccurred())
+
+				agentObserved, ok := observed.(*agent.AgentMonitorObservedState)
+				Expect(ok).To(BeTrue())
+
+				Expect(agentObserved.ServiceInfo.AgentLogs).To(BeEmpty())
+			})
+		})
+
+		Context("incremental log collection on subsequent calls", func() {
+			It("should only collect logs since last observation", func() {
+				mockService.SetupMockForHealthyState()
+
+				firstObserved, err := worker.CollectObservedState(ctx)
+				Expect(err).ToNot(HaveOccurred())
+
+				firstAgentObserved, ok := firstObserved.(*agent.AgentMonitorObservedState)
+				Expect(ok).To(BeTrue())
+				Expect(firstAgentObserved.ServiceInfo.AgentLogs).To(BeEmpty())
+
+				mockService.AddNewLogs(agent_monitor_service.CreateMockLogEntries(2, "new log"))
+
+				secondObserved, err := worker.CollectObservedState(ctx)
+				Expect(err).ToNot(HaveOccurred())
+
+				secondAgentObserved, ok := secondObserved.(*agent.AgentMonitorObservedState)
+				Expect(ok).To(BeTrue())
+
+				Expect(secondAgentObserved.ServiceInfo.AgentLogs).To(HaveLen(2))
+				Expect(secondAgentObserved.ServiceInfo.AgentLogs[0].Content).To(ContainSubstring("new log"))
+				Expect(secondAgentObserved.ServiceInfo.AgentLogs[1].Content).To(ContainSubstring("new log"))
+			})
+
+			It("should update lastLogTimestamp after each collection", func() {
+				mockService.SetupMockForHealthyState()
+
+				firstObserved, err := worker.CollectObservedState(ctx)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(firstObserved).NotTo(BeNil())
+
+				firstTimestamp := worker.GetLastLogTimestamp()
+
+				time.Sleep(10 * time.Millisecond)
+
+				mockService.AddNewLogs(agent_monitor_service.CreateMockLogEntries(1, "new log"))
+
+				secondObserved, err := worker.CollectObservedState(ctx)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(secondObserved).NotTo(BeNil())
+
+				secondTimestamp := worker.GetLastLogTimestamp()
+
+				Expect(secondTimestamp).To(BeTemporally(">", firstTimestamp))
+			})
+
+			It("should return empty logs when no new logs available", func() {
+				mockService.SetupMockForHealthyState()
+
+				firstObserved, err := worker.CollectObservedState(ctx)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(firstObserved).NotTo(BeNil())
+
+				secondObserved, err := worker.CollectObservedState(ctx)
+				Expect(err).ToNot(HaveOccurred())
+
+				secondAgentObserved, ok := secondObserved.(*agent.AgentMonitorObservedState)
+				Expect(ok).To(BeTrue())
+
+				Expect(secondAgentObserved.ServiceInfo.AgentLogs).To(BeEmpty())
+			})
+
+			It("should handle multiple incremental collections", func() {
+				mockService.SetupMockForHealthyState()
+
+				_, err := worker.CollectObservedState(ctx)
+				Expect(err).ToNot(HaveOccurred())
+
+				mockService.AddNewLogs(agent_monitor_service.CreateMockLogEntries(1, "log 1"))
+				secondObserved, err := worker.CollectObservedState(ctx)
+				Expect(err).ToNot(HaveOccurred())
+				secondAgentObserved := secondObserved.(*agent.AgentMonitorObservedState)
+				Expect(secondAgentObserved.ServiceInfo.AgentLogs).To(HaveLen(1))
+
+				mockService.AddNewLogs(agent_monitor_service.CreateMockLogEntries(2, "log 2"))
+				thirdObserved, err := worker.CollectObservedState(ctx)
+				Expect(err).ToNot(HaveOccurred())
+				thirdAgentObserved := thirdObserved.(*agent.AgentMonitorObservedState)
+				Expect(thirdAgentObserved.ServiceInfo.AgentLogs).To(HaveLen(2))
+			})
+		})
+
+		Context("memory management", func() {
+			It("should not accumulate logs in worker memory", func() {
+				mockService.SetupMockForHealthyState()
+
+				for range 100 {
+					mockService.AddNewLogs(agent_monitor_service.CreateMockLogEntries(1, "log"))
+					_, err := worker.CollectObservedState(ctx)
+					Expect(err).ToNot(HaveOccurred())
+				}
+
+			})
+		})
+	})
 })

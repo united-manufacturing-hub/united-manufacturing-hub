@@ -7,32 +7,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/protocol"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence/basic"
 )
 
-// Tier represents a CSE synchronization tier in the two-tier architecture.
-//
-// DESIGN DECISION: Named tiers instead of numeric levels (0/1)
-// WHY: Self-documenting code. "TierEdge" is clearer than "0" or "TIER_LEVEL_0".
-// TRADE-OFF: More verbose but eliminates confusion about tier ordering.
-// INSPIRED BY: Network OSI layers use names (Physical/Data Link/Network) not just numbers.
-//
-// CSE Architecture:
-//
-//	Frontend (Web UI)
-//	    ↕ (delta sync, relay is transparent E2E encrypted proxy)
-//	Edge (Customer Site)
-//
-// Each tier tracks:
-//   - Local sync ID (last change created/received)
-//   - Pending changes (not yet synced to other tier)
-type Tier string
-
-const (
-	TierEdge     Tier = "edge"
-	TierFrontend Tier = "frontend"
-)
 
 // SyncState tracks synchronization state across CSE's two-tier architecture.
 //
@@ -122,22 +101,22 @@ func (ss *SyncState) SetFrontendSyncID(syncID int64) error {
 // Example:
 //
 //	// Edge created changes 100, 101, 102
-//	syncState.RecordChange(100, cse.TierEdge)
-//	syncState.RecordChange(101, cse.TierEdge)
-//	syncState.RecordChange(102, cse.TierEdge)
+//	syncState.RecordChange(100, protocol.TierEdge)
+//	syncState.RecordChange(101, protocol.TierEdge)
+//	syncState.RecordChange(102, protocol.TierEdge)
 //
 //	// Sync to frontend succeeds for 100-101, fails for 102
-//	syncState.MarkSynced(cse.TierEdge, 101) // Removes 100, 101 from pending
+//	syncState.MarkSynced(protocol.TierEdge, 101) // Removes 100, 101 from pending
 //	// 102 remains in pendingEdge for retry
 //
-// Note: Only TierEdge tracks pending changes. TierFrontend is the receiving
+// Note: Only protocol.TierEdge tracks pending changes. protocol.TierFrontend is the receiving
 // tier, so it doesn't need pending tracking.
-func (ss *SyncState) RecordChange(syncID int64, tier Tier) error {
+func (ss *SyncState) RecordChange(syncID int64, tier protocol.Tier) error {
 	ss.mu.Lock()
 	defer ss.mu.Unlock()
 
 	switch tier {
-	case TierEdge:
+	case protocol.TierEdge:
 		ss.pendingEdge = append(ss.pendingEdge, syncID)
 	default:
 		return fmt.Errorf("unsupported tier: %s", tier)
@@ -155,25 +134,25 @@ func (ss *SyncState) RecordChange(syncID int64, tier Tier) error {
 // INSPIRED BY: Linear's lastSyncId in server (tracks what was received from client).
 //
 // Tier progression:
-//   - MarkSynced(TierEdge, 100) → updates frontendSyncID=100 (frontend received up to 100)
+//   - MarkSynced(protocol.TierEdge, 100) → updates frontendSyncID=100 (frontend received up to 100)
 //
 // All pending changes ≤ syncID are removed from the pending list.
 //
 // Example:
 //
-//	syncState.RecordChange(100, cse.TierEdge)
-//	syncState.RecordChange(101, cse.TierEdge)
-//	syncState.RecordChange(102, cse.TierEdge)
+//	syncState.RecordChange(100, protocol.TierEdge)
+//	syncState.RecordChange(101, protocol.TierEdge)
+//	syncState.RecordChange(102, protocol.TierEdge)
 //
 //	// Sync successfully sent 100-101 to frontend
-//	syncState.MarkSynced(cse.TierEdge, 101)
+//	syncState.MarkSynced(protocol.TierEdge, 101)
 //	// Result: frontendSyncID=101, pendingEdge=[102]
-func (ss *SyncState) MarkSynced(tier Tier, syncID int64) error {
+func (ss *SyncState) MarkSynced(tier protocol.Tier, syncID int64) error {
 	ss.mu.Lock()
 	defer ss.mu.Unlock()
 
 	switch tier {
-	case TierEdge:
+	case protocol.TierEdge:
 		ss.pendingEdge = filterSyncIDs(ss.pendingEdge, syncID)
 		ss.frontendSyncID = syncID
 	default:
@@ -212,12 +191,12 @@ func filterSyncIDs(syncIDs []int64, threshold int64) []int64 {
 	return result
 }
 
-func (ss *SyncState) GetPendingChanges(tier Tier) ([]int64, error) {
+func (ss *SyncState) GetPendingChanges(tier protocol.Tier) ([]int64, error) {
 	ss.mu.RLock()
 	defer ss.mu.RUnlock()
 
 	switch tier {
-	case TierEdge:
+	case protocol.TierEdge:
 		result := make([]int64, len(ss.pendingEdge))
 		copy(result, ss.pendingEdge)
 		return result, nil
@@ -235,31 +214,31 @@ func (ss *SyncState) GetPendingChanges(tier Tier) ([]int64, error) {
 // INSPIRED BY: Linear's delta sync, rsync (only transfer diffs), Git fetch (only new commits).
 //
 // Tier logic:
-//   - TierEdge: Query changes > frontendSyncID (what frontend hasn't received yet)
-//   - TierFrontend: Query changes > edgeSyncID (what frontend needs to request from edge)
+//   - protocol.TierEdge: Query changes > frontendSyncID (what frontend hasn't received yet)
+//   - protocol.TierFrontend: Query changes > edgeSyncID (what frontend needs to request from edge)
 //
 // Example:
 //
 //	// Edge has changes up to 12345, frontend has received up to 12340
-//	query, _ := syncState.GetDeltaSince(cse.TierEdge)
+//	query, _ := syncState.GetDeltaSince(protocol.TierEdge)
 //	// Returns: Query{Filters: [{Field: "_sync_id", Op: "$gt", Value: 12340}]}
 //	// When executed: Returns changes 12341-12345 (5 new changes)
 //
 // Usage with store:
 //
-//	query, _ := syncState.GetDeltaSince(cse.TierEdge)
+//	query, _ := syncState.GetDeltaSince(protocol.TierEdge)
 //	changes, _ := store.Find(ctx, "container_desired", *query)
 //	// Send changes to frontend via HTTP
-func (ss *SyncState) GetDeltaSince(tier Tier) (*basic.Query, error) {
+func (ss *SyncState) GetDeltaSince(tier protocol.Tier) (*basic.Query, error) {
 	ss.mu.RLock()
 	defer ss.mu.RUnlock()
 
 	var lastSyncID int64
 
 	switch tier {
-	case TierEdge:
+	case protocol.TierEdge:
 		lastSyncID = ss.frontendSyncID
-	case TierFrontend:
+	case protocol.TierFrontend:
 		lastSyncID = ss.edgeSyncID
 	default:
 		return nil, fmt.Errorf("unsupported tier: %s", tier)

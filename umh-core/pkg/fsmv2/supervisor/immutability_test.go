@@ -8,6 +8,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/container"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 )
 
@@ -17,8 +18,8 @@ var _ = Describe("Snapshot Immutability (I9)", func() {
 			It("should receive a copy, not reference to original", func() {
 				originalSnapshot := fsmv2.Snapshot{
 					Identity: mockIdentity(),
-					Observed: &mockObservedState{timestamp: time.Now()},
-					Desired:  &mockDesiredState{},
+					Observed: &container.ContainerObservedState{CollectedAt: time.Now()},
+					Desired:  &container.ContainerDesiredState{},
 				}
 
 				copiedSnapshot := receiveSnapshotByValue(originalSnapshot)
@@ -40,12 +41,12 @@ var _ = Describe("Snapshot Immutability (I9)", func() {
 				store := &mockStore{
 					snapshot: &fsmv2.Snapshot{
 						Identity: mockIdentity(),
-						Observed: &mockObservedState{timestamp: time.Now()},
-						Desired:  &mockDesiredState{},
+						Observed: &container.ContainerObservedState{CollectedAt: time.Now()},
+						Desired:  &container.ContainerDesiredState{},
 					},
 				}
 
-				s := newSupervisorWithWorker(&mockWorker{initialState: mutatingState}, store, supervisor.CollectorHealthConfig{})
+				s := newSupervisorWithWorker(&mockWorker{initialState: mutatingState}, nil, supervisor.CollectorHealthConfig{})
 
 				err := s.Tick(context.Background())
 				Expect(err).ToNot(HaveOccurred())
@@ -53,7 +54,7 @@ var _ = Describe("Snapshot Immutability (I9)", func() {
 				loadedSnapshot, err := store.LoadSnapshot(context.Background(), "test", "test-worker")
 				Expect(err).ToNot(HaveOccurred())
 				Expect(loadedSnapshot.Observed).ToNot(BeNil())
-				Expect(loadedSnapshot.Identity.Name).To(Equal("Test Worker"))
+				Expect(loadedSnapshot.Identity["Name"]).To(Equal("Test Worker"))
 			})
 
 			It("should demonstrate multiple mutations don't accumulate", func() {
@@ -62,12 +63,12 @@ var _ = Describe("Snapshot Immutability (I9)", func() {
 				store := &mockStore{
 					snapshot: &fsmv2.Snapshot{
 						Identity: mockIdentity(),
-						Observed: &mockObservedState{timestamp: time.Now()},
-						Desired:  &mockDesiredState{},
+						Observed: &container.ContainerObservedState{CollectedAt: time.Now()},
+						Desired:  &container.ContainerDesiredState{},
 					},
 				}
 
-				s := newSupervisorWithWorker(&mockWorker{initialState: mutatingState}, store, supervisor.CollectorHealthConfig{})
+				s := newSupervisorWithWorker(&mockWorker{initialState: mutatingState}, nil, supervisor.CollectorHealthConfig{})
 
 				for i := 0; i < 5; i++ {
 					err := s.Tick(context.Background())
@@ -77,7 +78,7 @@ var _ = Describe("Snapshot Immutability (I9)", func() {
 				loadedSnapshot, err := store.LoadSnapshot(context.Background(), "test", "test-worker")
 				Expect(err).ToNot(HaveOccurred())
 				Expect(loadedSnapshot.Observed).ToNot(BeNil())
-				Expect(loadedSnapshot.Identity.Name).To(Equal("Test Worker"))
+				Expect(loadedSnapshot.Identity["Name"]).To(Equal("Test Worker"))
 			})
 		})
 
@@ -88,20 +89,20 @@ var _ = Describe("Snapshot Immutability (I9)", func() {
 				store := &mockStore{
 					snapshot: &fsmv2.Snapshot{
 						Identity: mockIdentity(),
-						Observed: &mockObservedState{timestamp: time.Now()},
-						Desired:  &mockDesiredState{},
+						Observed: &container.ContainerObservedState{CollectedAt: time.Now()},
+						Desired:  &container.ContainerDesiredState{},
 					},
 				}
 
-				s := newSupervisorWithWorker(&mockWorker{initialState: identityMutatingState}, store, supervisor.CollectorHealthConfig{})
+				s := newSupervisorWithWorker(&mockWorker{initialState: identityMutatingState}, nil, supervisor.CollectorHealthConfig{})
 
 				err := s.Tick(context.Background())
 				Expect(err).ToNot(HaveOccurred())
 
 				loadedSnapshot, err := store.LoadSnapshot(context.Background(), "test", "test-worker")
 				Expect(err).ToNot(HaveOccurred())
-				Expect(loadedSnapshot.Identity.ID).To(Equal("test-worker"))
-				Expect(loadedSnapshot.Identity.Name).To(Equal("Test Worker"))
+				Expect(loadedSnapshot.Identity["id"]).To(Equal("test-worker"))
+				Expect(loadedSnapshot.Identity["name"]).To(Equal("Test Worker"))
 			})
 		})
 
@@ -113,23 +114,23 @@ var _ = Describe("Snapshot Immutability (I9)", func() {
 				store := &mockStore{
 					snapshot: &fsmv2.Snapshot{
 						Identity: mockIdentity(),
-						Observed: &mockObservedState{timestamp: originalTimestamp},
-						Desired:  &mockDesiredState{},
+						Observed: &container.ContainerObservedState{CollectedAt: originalTimestamp},
+						Desired:  &container.ContainerDesiredState{},
 					},
 				}
 
-				s := newSupervisorWithWorker(&mockWorker{initialState: aggressiveMutatingState}, store, supervisor.CollectorHealthConfig{})
+				s := newSupervisorWithWorker(&mockWorker{initialState: aggressiveMutatingState}, nil, supervisor.CollectorHealthConfig{})
 
 				err := s.Tick(context.Background())
 				Expect(err).ToNot(HaveOccurred())
 
 				loadedSnapshot, err := store.LoadSnapshot(context.Background(), "test", "test-worker")
 				Expect(err).ToNot(HaveOccurred())
-				Expect(loadedSnapshot.Identity.ID).To(Equal("test-worker"))
-				Expect(loadedSnapshot.Identity.Name).To(Equal("Test Worker"))
+				Expect(loadedSnapshot.Identity["id"]).To(Equal("test-worker"))
+				Expect(loadedSnapshot.Identity["name"]).To(Equal("Test Worker"))
 				Expect(loadedSnapshot.Observed).ToNot(BeNil())
 				Expect(loadedSnapshot.Desired).ToNot(BeNil())
-				Expect(loadedSnapshot.Observed.GetTimestamp()).To(Equal(originalTimestamp))
+				Expect(loadedSnapshot.Observed["timestamp"]).To(Equal(originalTimestamp))
 			})
 		})
 	})
@@ -167,8 +168,8 @@ type aggressiveMutatingState struct{}
 func (s *aggressiveMutatingState) Next(snapshot fsmv2.Snapshot) (fsmv2.State, fsmv2.Signal, fsmv2.Action) {
 	snapshot.Identity.ID = "totally-hacked"
 	snapshot.Identity.Name = "Totally Hacked"
-	snapshot.Observed = &mockObservedState{timestamp: time.Unix(0, 0)}
-	snapshot.Desired = &mockDesiredState{shutdown: true}
+	snapshot.Observed = &container.ContainerObservedState{CollectedAt: time.Unix(0, 0)}
+	snapshot.Desired = &container.ContainerDesiredState{}
 
 	return s, fsmv2.SignalNone, nil
 }

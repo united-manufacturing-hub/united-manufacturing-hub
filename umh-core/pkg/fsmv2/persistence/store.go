@@ -30,6 +30,10 @@ import (
 //   - Observed: {workerType}_observed
 //
 // All operations automatically increment _sync_id for CSE compatibility.
+//
+// Note: Transaction support (BeginTx) was removed as it is not currently used
+// by the supervisor. Implementations can use their own internal transactions
+// without exposing them through this interface.
 type Store interface {
 	// SaveIdentity persists the immutable identity of a worker.
 	// The data parameter contains worker-specific identity fields.
@@ -69,17 +73,13 @@ type Store interface {
 	// Called automatically by Save operations.
 	IncrementSyncID(ctx context.Context) (int64, error)
 
-	// BeginTx starts a new transaction.
-	// All operations within the transaction see consistent state.
-	BeginTx(ctx context.Context) (Tx, error)
-
 	// Close closes the store and releases resources.
 	Close() error
 }
 
 // Tx represents a database transaction.
-// All Store operations are available within the transaction.
-// Changes are visible to other transactions only after Commit.
+// Note: Transactions are not currently supported in this interface.
+// This type exists for future compatibility.
 type Tx interface {
 	Store
 

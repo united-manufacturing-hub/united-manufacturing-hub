@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync/atomic"
 	"time"
@@ -211,7 +212,7 @@ func (ts *TriangularStore) SaveDesired(ctx context.Context, workerType string, i
 
 	// Check if this is first save or update
 	_, err = ts.store.Get(ctx, desiredMeta.Name, id)
-	isNew := err != nil && err.Error() == basic.ErrNotFound.Error()
+	isNew := err != nil && errors.Is(err, basic.ErrNotFound)
 
 	// Inject CSE metadata
 	ts.injectMetadata(desired, RoleDesired, isNew)
@@ -292,7 +293,7 @@ func (ts *TriangularStore) SaveObserved(ctx context.Context, workerType string, 
 
 	// Check if this is first save or update
 	_, err = ts.store.Get(ctx, observedMeta.Name, id)
-	isNew := err != nil && err.Error() == basic.ErrNotFound.Error()
+	isNew := err != nil && errors.Is(err, basic.ErrNotFound)
 
 	// Inject CSE metadata
 	ts.injectMetadata(observed, RoleObserved, isNew)
@@ -460,15 +461,15 @@ func (ts *TriangularStore) DeleteWorker(ctx context.Context, workerType string, 
 	defer tx.Rollback()
 
 	// Delete all three parts
-	if err := tx.Delete(ctx, identityMeta.Name, id); err != nil && err.Error() != basic.ErrNotFound.Error() {
+	if err := tx.Delete(ctx, identityMeta.Name, id); err != nil && !errors.Is(err, basic.ErrNotFound) {
 		return fmt.Errorf("failed to delete identity: %w", err)
 	}
 
-	if err := tx.Delete(ctx, desiredMeta.Name, id); err != nil && err.Error() != basic.ErrNotFound.Error() {
+	if err := tx.Delete(ctx, desiredMeta.Name, id); err != nil && !errors.Is(err, basic.ErrNotFound) {
 		return fmt.Errorf("failed to delete desired: %w", err)
 	}
 
-	if err := tx.Delete(ctx, observedMeta.Name, id); err != nil && err.Error() != basic.ErrNotFound.Error() {
+	if err := tx.Delete(ctx, observedMeta.Name, id); err != nil && !errors.Is(err, basic.ErrNotFound) {
 		return fmt.Errorf("failed to delete observed: %w", err)
 	}
 
@@ -546,4 +547,19 @@ func (ts *TriangularStore) validateDocument(doc basic.Document) error {
 	}
 
 	return nil
+}
+
+func (ts *TriangularStore) GetLastSyncID(_ context.Context) (int64, error) {
+	return ts.syncID.Load(), nil
+}
+
+func (ts *TriangularStore) IncrementSyncID(_ context.Context) (int64, error) {
+	newID := ts.syncID.Add(1)
+	return newID, nil
+}
+
+func (ts *TriangularStore) Close() error {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	return ts.store.Close(ctx)
 }

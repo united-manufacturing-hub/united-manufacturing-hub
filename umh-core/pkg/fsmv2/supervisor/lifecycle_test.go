@@ -10,6 +10,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/container"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 	"go.uber.org/zap"
 )
@@ -21,8 +22,8 @@ var _ = Describe("Supervisor Lifecycle", func() {
 				store := &mockStore{
 					snapshot: &fsmv2.Snapshot{
 						Identity: mockIdentity(),
-						Desired:  &mockDesiredState{},
-						Observed: &mockObservedState{timestamp: time.Now()},
+						Desired:  &container.ContainerDesiredState{},
+						Observed: &container.ContainerObservedState{CollectedAt: time.Now()},
 					},
 				}
 
@@ -59,8 +60,8 @@ var _ = Describe("Supervisor Lifecycle", func() {
 				store := &mockStore{
 					snapshot: &fsmv2.Snapshot{
 						Identity: mockIdentity(),
-						Desired:  &mockDesiredState{},
-						Observed: &mockObservedState{timestamp: time.Now().Add(-25 * time.Second)},
+						Desired:  &container.ContainerDesiredState{},
+						Observed: &container.ContainerObservedState{CollectedAt: time.Now().Add(-25 * time.Second)},
 					},
 					saveErr: errors.New("save error"),
 				}
@@ -86,8 +87,8 @@ var _ = Describe("Supervisor Lifecycle", func() {
 				store := &mockStore{
 					snapshot: &fsmv2.Snapshot{
 						Identity: mockIdentity(),
-						Desired:  &mockDesiredState{},
-						Observed: &mockObservedState{timestamp: time.Now()},
+						Desired:  &container.ContainerDesiredState{},
+						Observed: &container.ContainerObservedState{CollectedAt: time.Now()},
 					},
 				}
 
@@ -119,11 +120,11 @@ var _ = Describe("Supervisor Lifecycle", func() {
 							collectCount++
 							collectCountMutex.Unlock()
 
-							return &mockObservedState{timestamp: time.Now()}, nil
+							return &container.ContainerObservedState{CollectedAt: time.Now()}, nil
 						},
 					},
 					Identity:            mockIdentity(),
-					Store:               &mockStore{},
+					Store:               nil,
 					Logger:              zap.NewNop().Sugar(),
 					ObservationInterval: 5 * time.Second,
 					ObservationTimeout:  1 * time.Second,
@@ -161,8 +162,8 @@ var _ = Describe("Supervisor Lifecycle", func() {
 				store := &mockStore{
 					snapshot: &fsmv2.Snapshot{
 						Identity: mockIdentity(),
-						Desired:  &mockDesiredState{},
-						Observed: &mockObservedState{timestamp: time.Now()},
+						Desired:  &container.ContainerDesiredState{},
+						Observed: &container.ContainerObservedState{CollectedAt: time.Now()},
 					},
 				}
 
@@ -189,8 +190,8 @@ var _ = Describe("Supervisor Lifecycle", func() {
 				store := &mockStore{
 					snapshot: &fsmv2.Snapshot{
 						Identity: mockIdentity(),
-						Desired:  &mockDesiredState{},
-						Observed: &mockObservedState{timestamp: time.Now()},
+						Desired:  &container.ContainerDesiredState{},
+						Observed: &container.ContainerObservedState{CollectedAt: time.Now()},
 					},
 				}
 
@@ -214,8 +215,8 @@ var _ = Describe("Supervisor Lifecycle", func() {
 				store := &mockStore{
 					snapshot: &fsmv2.Snapshot{
 						Identity: mockIdentity(),
-						Desired:  &mockDesiredState{},
-						Observed: &mockObservedState{timestamp: time.Now()},
+						Desired:  &container.ContainerDesiredState{},
+						Observed: &container.ContainerObservedState{CollectedAt: time.Now()},
 					},
 				}
 

@@ -7,8 +7,11 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/container"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence/basic"
 )
 
 var _ = Describe("DataFreshness Full Cycle Integration", func() {
@@ -18,7 +21,7 @@ var _ = Describe("DataFreshness Full Cycle Integration", func() {
 
 		worker := &mockWorker{
 			collectFunc: func(ctx context.Context) (fsmv2.ObservedState, error) {
-				return &mockObservedState{timestamp: snapshotTimestamp}, nil
+				return &container.ContainerObservedState{CollectedAt: snapshotTimestamp}, nil
 			},
 		}
 
@@ -26,15 +29,28 @@ var _ = Describe("DataFreshness Full Cycle Integration", func() {
 
 		store := &mockStore{
 			loadSnapshot: func(ctx context.Context, workerType string, id string) (*fsmv2.Snapshot, error) {
+				identity := &container.ContainerIdentity{
+					ID:   "test-worker",
+					Name: "Test Worker",
+				}
+
+				desired := &container.ContainerDesiredState{
+					Shutdown: shutdownRequested,
+				}
+
+				observed := &container.ContainerObservedState{
+					CollectedAt: snapshotTimestamp,
+				}
+
 				return &fsmv2.Snapshot{
-					Identity: mockIdentity(),
-					Desired:  &mockDesiredState{shutdown: shutdownRequested},
-					Observed: &mockObservedState{timestamp: snapshotTimestamp},
+					Identity: identity,
+					Desired:  desired,
+					Observed: observed,
 				}, nil
 			},
 			saveDesired: func(ctx context.Context, workerType string, id string, desired fsmv2.DesiredState) error {
-				if desired.ShutdownRequested() {
-					shutdownRequested = true
+				if d, ok := desired.(*container.ContainerDesiredState); ok {
+					shutdownRequested = d.ShutdownRequested()
 				}
 
 				return nil

@@ -180,14 +180,36 @@ func (c *Collector) observationLoop() {
 }
 
 func (c *Collector) collectAndSaveObservedState(ctx context.Context) error {
+	collectionStartTime := time.Now()
+	c.config.Logger.Debugf("[DataFreshness] Worker %s: Starting observation collection at %s",
+		c.config.Identity.ID, collectionStartTime.Format(time.RFC3339Nano))
+
 	observed, err := c.config.Worker.CollectObservedState(ctx)
 	if err != nil {
+		c.config.Logger.Debugf("[DataFreshness] Worker %s: Failed to collect observation: %v", c.config.Identity.ID, err)
 		return err
 	}
 
+	// Extract and log observation timestamp
+	var observationTimestamp time.Time
+	if timestampProvider, ok := observed.(interface{ GetTimestamp() time.Time }); ok {
+		observationTimestamp = timestampProvider.GetTimestamp()
+		c.config.Logger.Debugf("[DataFreshness] Worker %s: Collected observation with timestamp=%s",
+			c.config.Identity.ID, observationTimestamp.Format(time.RFC3339Nano))
+	} else {
+		c.config.Logger.Debugf("[DataFreshness] Worker %s: Collected observation does not implement GetTimestamp() (type: %T)",
+			c.config.Identity.ID, observed)
+	}
+
+	saveStartTime := time.Now()
 	if err := c.config.Store.SaveObserved(ctx, c.config.WorkerType, c.config.Identity.ID, observed); err != nil {
+		c.config.Logger.Debugf("[DataFreshness] Worker %s: Failed to save observation: %v", c.config.Identity.ID, err)
 		return err
 	}
+
+	saveDuration := time.Since(saveStartTime)
+	c.config.Logger.Debugf("[DataFreshness] Worker %s: Successfully saved observation (save_duration=%v)",
+		c.config.Identity.ID, saveDuration)
 
 	return nil
 }
