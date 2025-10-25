@@ -1,0 +1,513 @@
+package sync_test
+
+import (
+	"context"
+	"errors"
+	"sync"
+	"time"
+
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
+	csesync "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/sync"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence/basic"
+)
+
+type mockStore struct {
+	collections map[string]map[string]basic.Document
+	mu          sync.RWMutex
+}
+
+func newMockStore() *mockStore {
+	return &mockStore{
+		collections: make(map[string]map[string]basic.Document),
+	}
+}
+
+func (m *mockStore) CreateCollection(ctx context.Context, name string, schema *basic.Schema) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if m.collections[name] != nil {
+		return errors.New("collection already exists")
+	}
+
+	m.collections[name] = make(map[string]basic.Document)
+	return nil
+}
+
+func (m *mockStore) DropCollection(ctx context.Context, name string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if m.collections[name] == nil {
+		return basic.ErrNotFound
+	}
+
+	delete(m.collections, name)
+	return nil
+}
+
+func (m *mockStore) Insert(ctx context.Context, collection string, doc basic.Document) (string, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if m.collections[collection] == nil {
+		m.collections[collection] = make(map[string]basic.Document)
+	}
+
+	id := doc["id"].(string)
+
+	docCopy := make(basic.Document)
+	for k, v := range doc {
+		docCopy[k] = v
+	}
+
+	m.collections[collection][id] = docCopy
+	return id, nil
+}
+
+func (m *mockStore) Get(ctx context.Context, collection string, id string) (basic.Document, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	if m.collections[collection] == nil {
+		return nil, basic.ErrNotFound
+	}
+
+	doc, exists := m.collections[collection][id]
+	if !exists {
+		return nil, basic.ErrNotFound
+	}
+
+	docCopy := make(basic.Document)
+	for k, v := range doc {
+		docCopy[k] = v
+	}
+
+	return docCopy, nil
+}
+
+func (m *mockStore) Update(ctx context.Context, collection string, id string, doc basic.Document) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if m.collections[collection] == nil {
+		return basic.ErrNotFound
+	}
+
+	if _, exists := m.collections[collection][id]; !exists {
+		return basic.ErrNotFound
+	}
+
+	docCopy := make(basic.Document)
+	for k, v := range doc {
+		docCopy[k] = v
+	}
+
+	m.collections[collection][id] = docCopy
+	return nil
+}
+
+func (m *mockStore) Delete(ctx context.Context, collection string, id string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if m.collections[collection] == nil {
+		return basic.ErrNotFound
+	}
+
+	if _, exists := m.collections[collection][id]; !exists {
+		return basic.ErrNotFound
+	}
+
+	delete(m.collections[collection], id)
+	return nil
+}
+
+func (m *mockStore) Find(ctx context.Context, collection string, query basic.Query) ([]basic.Document, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	if m.collections[collection] == nil {
+		return []basic.Document{}, nil
+	}
+
+	results := make([]basic.Document, 0)
+	for _, doc := range m.collections[collection] {
+		docCopy := make(basic.Document)
+		for k, v := range doc {
+			docCopy[k] = v
+		}
+		results = append(results, docCopy)
+	}
+
+	return results, nil
+}
+
+func (m *mockStore) BeginTx(ctx context.Context) (basic.Tx, error) {
+	return &mockTx{mockStore: m, rollback: false}, nil
+}
+
+func (m *mockStore) Close(ctx context.Context) error {
+	return nil
+}
+
+func (m *mockStore) Maintenance(ctx context.Context) error {
+	return nil
+}
+
+type mockTx struct {
+	mockStore *mockStore
+	rollback  bool
+}
+
+func (tx *mockTx) CreateCollection(ctx context.Context, name string, schema *basic.Schema) error {
+	return tx.mockStore.CreateCollection(ctx, name, schema)
+}
+
+func (tx *mockTx) DropCollection(ctx context.Context, name string) error {
+	return tx.mockStore.DropCollection(ctx, name)
+}
+
+func (tx *mockTx) Insert(ctx context.Context, collection string, doc basic.Document) (string, error) {
+	return tx.mockStore.Insert(ctx, collection, doc)
+}
+
+func (tx *mockTx) Get(ctx context.Context, collection string, id string) (basic.Document, error) {
+	return tx.mockStore.Get(ctx, collection, id)
+}
+
+func (tx *mockTx) Update(ctx context.Context, collection string, id string, doc basic.Document) error {
+	return tx.mockStore.Update(ctx, collection, id, doc)
+}
+
+func (tx *mockTx) Delete(ctx context.Context, collection string, id string) error {
+	return tx.mockStore.Delete(ctx, collection, id)
+}
+
+func (tx *mockTx) Find(ctx context.Context, collection string, query basic.Query) ([]basic.Document, error) {
+	return tx.mockStore.Find(ctx, collection, query)
+}
+
+func (tx *mockTx) BeginTx(ctx context.Context) (basic.Tx, error) {
+	return tx.mockStore.BeginTx(ctx)
+}
+
+func (tx *mockTx) Commit() error {
+	return nil
+}
+
+func (tx *mockTx) Rollback() error {
+	tx.rollback = true
+	return nil
+}
+
+func (tx *mockTx) Close(ctx context.Context) error {
+	return nil
+}
+
+func (tx *mockTx) Maintenance(ctx context.Context) error {
+	return tx.mockStore.Maintenance(ctx)
+}
+
+var _ = Describe("SyncState", func() {
+	var (
+		store     *mockStore
+		registry  *storage.Registry
+		syncState *csesync.SyncState
+		ctx       context.Context
+	)
+
+	BeforeEach(func() {
+		ctx = context.Background()
+		store = newMockStore()
+		registry = storage.NewRegistry()
+		syncState = csesync.NewSyncState(store, registry)
+	})
+
+	Describe("NewSyncState", func() {
+		It("should create non-nil sync state", func() {
+			Expect(syncState).NotTo(BeNil())
+		})
+	})
+
+	Describe("Sync ID tracking", func() {
+		Context("for edge tier", func() {
+			It("should start at 0", func() {
+				Expect(syncState.GetEdgeSyncID()).To(Equal(int64(0)))
+			})
+
+			It("should update edge sync ID", func() {
+				err := syncState.SetEdgeSyncID(100)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(syncState.GetEdgeSyncID()).To(Equal(int64(100)))
+			})
+
+			It("should update to higher sync ID", func() {
+				syncState.SetEdgeSyncID(100)
+				syncState.SetEdgeSyncID(200)
+				Expect(syncState.GetEdgeSyncID()).To(Equal(int64(200)))
+			})
+		})
+
+		Context("for frontend tier", func() {
+			It("should start at 0", func() {
+				Expect(syncState.GetFrontendSyncID()).To(Equal(int64(0)))
+			})
+
+			It("should update frontend sync ID", func() {
+				err := syncState.SetFrontendSyncID(90)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(syncState.GetFrontendSyncID()).To(Equal(int64(90)))
+			})
+
+			It("should track both tiers independently", func() {
+				syncState.SetEdgeSyncID(100)
+				syncState.SetFrontendSyncID(90)
+
+				Expect(syncState.GetEdgeSyncID()).To(Equal(int64(100)))
+				Expect(syncState.GetFrontendSyncID()).To(Equal(int64(90)))
+			})
+		})
+	})
+
+	Describe("RecordChange", func() {
+		It("should track pending changes for edge tier", func() {
+			err := syncState.RecordChange(100, csesync.TierEdge)
+			Expect(err).NotTo(HaveOccurred())
+
+			pending, err := syncState.GetPendingChanges(csesync.TierEdge)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(pending).To(ContainElement(int64(100)))
+		})
+
+		It("should track multiple pending changes", func() {
+			syncState.RecordChange(100, csesync.TierEdge)
+			syncState.RecordChange(101, csesync.TierEdge)
+			syncState.RecordChange(102, csesync.TierEdge)
+
+			pending, _ := syncState.GetPendingChanges(csesync.TierEdge)
+			Expect(pending).To(HaveLen(3))
+			Expect(pending).To(ContainElement(int64(100)))
+			Expect(pending).To(ContainElement(int64(101)))
+			Expect(pending).To(ContainElement(int64(102)))
+		})
+	})
+
+	Describe("MarkSynced", func() {
+		BeforeEach(func() {
+			syncState.RecordChange(100, csesync.TierEdge)
+			syncState.RecordChange(101, csesync.TierEdge)
+			syncState.RecordChange(102, csesync.TierEdge)
+		})
+
+		It("should remove synced changes from pending", func() {
+			err := syncState.MarkSynced(csesync.TierEdge, 101)
+			Expect(err).NotTo(HaveOccurred())
+
+			pending, _ := syncState.GetPendingChanges(csesync.TierEdge)
+			Expect(pending).NotTo(ContainElement(int64(100)))
+			Expect(pending).NotTo(ContainElement(int64(101)))
+			Expect(pending).To(ContainElement(int64(102)))
+		})
+
+		It("should update frontend sync ID when edge syncs", func() {
+			syncState.MarkSynced(csesync.TierEdge, 101)
+			Expect(syncState.GetFrontendSyncID()).To(Equal(int64(101)))
+		})
+
+		It("should handle partial sync", func() {
+			syncState.MarkSynced(csesync.TierEdge, 100)
+
+			pending, _ := syncState.GetPendingChanges(csesync.TierEdge)
+			Expect(pending).NotTo(ContainElement(int64(100)))
+			Expect(pending).To(ContainElement(int64(101)))
+			Expect(pending).To(ContainElement(int64(102)))
+		})
+
+		It("should handle complete sync", func() {
+			syncState.MarkSynced(csesync.TierEdge, 102)
+
+			pending, _ := syncState.GetPendingChanges(csesync.TierEdge)
+			Expect(pending).To(BeEmpty())
+		})
+	})
+
+	Describe("GetPendingChanges", func() {
+		It("should return empty list initially", func() {
+			pending, err := syncState.GetPendingChanges(csesync.TierEdge)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(pending).To(BeEmpty())
+		})
+
+		It("should return changes in order", func() {
+			syncState.RecordChange(102, csesync.TierEdge)
+			syncState.RecordChange(100, csesync.TierEdge)
+			syncState.RecordChange(101, csesync.TierEdge)
+
+			pending, _ := syncState.GetPendingChanges(csesync.TierEdge)
+			Expect(pending).To(HaveLen(3))
+		})
+	})
+
+	Describe("GetDeltaSince", func() {
+		BeforeEach(func() {
+			syncState.SetFrontendSyncID(100)
+		})
+
+		It("should construct query for delta sync", func() {
+			query, err := syncState.GetDeltaSince(csesync.TierEdge)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(query).NotTo(BeNil())
+		})
+
+		It("should filter by sync ID greater than frontend sync ID", func() {
+			query, _ := syncState.GetDeltaSince(csesync.TierEdge)
+
+			Expect(query.Filters).To(HaveLen(1))
+			Expect(query.Filters[0].Field).To(Equal(storage.FieldSyncID))
+			Expect(query.Filters[0].Op).To(Equal(basic.Gt))
+			Expect(query.Filters[0].Value).To(Equal(int64(100)))
+		})
+
+		It("should use edge sync ID for frontend tier", func() {
+			syncState.SetEdgeSyncID(150)
+			query, _ := syncState.GetDeltaSince(csesync.TierFrontend)
+
+			Expect(query.Filters[0].Value).To(Equal(int64(150)))
+		})
+	})
+
+	Describe("Flush and Load", func() {
+		BeforeEach(func() {
+			store.CreateCollection(ctx, "_sync_state", nil)
+		})
+
+		It("should persist sync state", func() {
+			syncState.SetEdgeSyncID(100)
+			syncState.SetFrontendSyncID(90)
+			syncState.RecordChange(96, csesync.TierEdge)
+			syncState.RecordChange(97, csesync.TierEdge)
+
+			err := syncState.Flush(ctx)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should write document to storage", func() {
+			syncState.SetEdgeSyncID(100)
+			syncState.Flush(ctx)
+
+			docs, err := store.Find(ctx, "_sync_state", basic.Query{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(docs).To(HaveLen(1))
+		})
+
+		It("should store sync state as singleton document", func() {
+			syncState.SetEdgeSyncID(100)
+			syncState.Flush(ctx)
+
+			doc, err := store.Get(ctx, "_sync_state", "sync_state")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(doc).NotTo(BeNil())
+			Expect(doc["id"]).To(Equal("sync_state"))
+		})
+
+		It("should restore sync state from storage", func() {
+			syncState.SetEdgeSyncID(100)
+			syncState.SetFrontendSyncID(90)
+			syncState.RecordChange(96, csesync.TierEdge)
+			syncState.RecordChange(97, csesync.TierEdge)
+			syncState.Flush(ctx)
+
+			newSyncState := csesync.NewSyncState(store, registry)
+			err := newSyncState.Load(ctx)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(newSyncState.GetEdgeSyncID()).To(Equal(int64(100)))
+			Expect(newSyncState.GetFrontendSyncID()).To(Equal(int64(90)))
+
+			pending, _ := newSyncState.GetPendingChanges(csesync.TierEdge)
+			Expect(pending).To(ContainElement(int64(96)))
+			Expect(pending).To(ContainElement(int64(97)))
+		})
+
+		It("should handle load when no state exists", func() {
+			newSyncState := csesync.NewSyncState(store, registry)
+			err := newSyncState.Load(ctx)
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(newSyncState.GetEdgeSyncID()).To(Equal(int64(0)))
+		})
+
+		It("should update existing state on flush", func() {
+			syncState.SetEdgeSyncID(100)
+			syncState.Flush(ctx)
+
+			syncState.SetEdgeSyncID(200)
+			syncState.Flush(ctx)
+
+			docs, _ := store.Find(ctx, "_sync_state", basic.Query{})
+			Expect(docs).To(HaveLen(1))
+			Expect(docs[0]["edge_sync_id"]).To(Equal(int64(200)))
+		})
+
+		It("should preserve pending changes across flush/load cycle", func() {
+			syncState.RecordChange(100, csesync.TierEdge)
+			syncState.RecordChange(101, csesync.TierEdge)
+			syncState.Flush(ctx)
+
+			newSyncState := csesync.NewSyncState(store, registry)
+			newSyncState.Load(ctx)
+
+			edgePending, _ := newSyncState.GetPendingChanges(csesync.TierEdge)
+
+			Expect(edgePending).To(HaveLen(2))
+		})
+
+		It("should set updated_at timestamp on flush", func() {
+			syncState.SetEdgeSyncID(100)
+			before := time.Now()
+			syncState.Flush(ctx)
+			after := time.Now()
+
+			doc, _ := store.Get(ctx, "_sync_state", "sync_state")
+			updatedAt, err := time.Parse(time.RFC3339Nano, doc["updated_at"].(string))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(updatedAt).To(BeTemporally(">=", before))
+			Expect(updatedAt).To(BeTemporally("<=", after))
+		})
+	})
+
+	Describe("ConcurrentAccess", func() {
+		It("should handle concurrent sync ID updates safely", func() {
+			done := make(chan bool)
+
+			for i := 0; i < 10; i++ {
+				go func(id int) {
+					syncState.SetEdgeSyncID(int64(id * 10))
+					syncState.RecordChange(int64(id*10), csesync.TierEdge)
+					done <- true
+				}(i)
+			}
+
+			for i := 0; i < 10; i++ {
+				<-done
+			}
+
+			pending, _ := syncState.GetPendingChanges(csesync.TierEdge)
+			Expect(pending).NotTo(BeEmpty())
+		})
+	})
+
+	Describe("TierConstants", func() {
+		It("should define edge tier constant", func() {
+			Expect(csesync.TierEdge).To(Equal(csesync.Tier("edge")))
+		})
+
+		It("should define frontend tier constant", func() {
+			Expect(csesync.TierFrontend).To(Equal(csesync.Tier("frontend")))
+		})
+	})
+})
