@@ -1,14 +1,140 @@
 # FSM v2 ↔ CSE Interface Contract
 
-**Status**: Contract Definition (PR #0)
+**Status**: Shared Persistence Foundation (PR #0)
 **Date**: 2025-10-26
-**Purpose**: Define and validate the interface between FSM v2 and CSE BEFORE implementing either component
+**Purpose**: Provide the shared persistence layer that BOTH FSM v2 and CSE build upon, with validated contract tests
 
 ## Executive Summary
 
-This contract prevents integration surprises by defining how FSM v2's typed state structures map to CSE's document storage through the TriangularAdapter. The contract is validated by executable tests that both teams code against, ensuring perfect integration when components merge.
+This PR provides the **Shared Persistence Foundation** - the common SQLite-based storage layer that both FSM v2 and CSE use. It includes:
 
-**Key Insight**: Define the contract in Week 0, implement to match the contract in Weeks 1-3, avoid rework in Week 4.
+1. **Layer 1** (`pkg/persistence/basic/`): Database-agnostic document storage with SQLite implementation
+2. **Layer 2** (`pkg/cse/storage/`): TriangularStore with automatic CSE metadata injection (`_sync_id`, `_version`, timestamps)
+3. **Contract Validation Tests**: Executable tests proving the persistence layer works for both FSM v2 and CSE use cases
+
+**Key Insight**: Both teams build on the same persistence foundation. FSM v2 writes state using TriangularStore methods, CSE reads changes via `_sync_id` queries. No adapter needed - they share the same tables.
+
+## What This PR Provides
+
+### For FSM v2 Developers
+
+**You get**:
+- `TriangularStore.SaveObserved(workerType, id, observed)` - Auto-adds CSE metadata transparently
+- `TriangularStore.SaveDesired(workerType, id, desired)` - Auto-increments version for optimistic locking
+- `TriangularStore.LoadSnapshot(workerType, id)` - Atomically loads identity + desired + observed
+- Append-only log pattern (no read-modify-write for logs)
+
+**You provide**:
+- Worker type registration with Registry
+- Observed/Desired state as `basic.Document` (map[string]interface{})
+
+**Example**:
+```go
+// Save agent observed state
+ts.SaveObserved(ctx, "agent", "agent-123", basic.Document{
+    "id": "agent-123",
+    "status": "running",
+    "cpu_percent": 45.2,
+})
+
+// CSE metadata auto-added: _sync_id, _updated_at
+```
+
+### For CSE Developers
+
+**You get**:
+- Every FSM v2 write automatically increments global `_sync_id`
+- Query changes since last sync: `WHERE _sync_id > lastSyncID`
+- Timestamps: `_created_at`, `_updated_at`
+- Version tracking: `_version` (for desired state, optimistic locking)
+
+**You provide**:
+- Sync orchestrator that queries `_sync_id`
+- Frontend/Edge tier tracking (last synced ID per tier)
+- Change filters and delta query logic
+
+**Example**:
+```go
+// Get all changes since last sync
+query := basic.NewQuery().
+    Filter("_sync_id", "$gt", lastSyncID).
+    Sort("_sync_id", 1)
+
+changes, _ := store.Find(ctx, "agent_observed", query)
+// Returns all agent state changes since lastSyncID
+```
+
+## Architecture: Three Layers
+
+```
+┌─────────────────────────────────────────────────┐
+│ PR #1: FSM v2 (Future)                          │
+│ - Worker interface implementations              │
+│ - Supervisor observation loop                   │
+│ - Action execution                              │
+└─────────────────────────────────────────────────┘
+                    ↓ uses
+┌─────────────────────────────────────────────────┐
+│ PR #0: Layer 2 - CSE Storage (THIS PR)          │
+│ pkg/cse/storage/TriangularStore                 │
+│ - SaveObserved() auto-adds _sync_id             │
+│ - SaveDesired() auto-increments _version        │
+│ - SaveIdentity() for immutable worker identity  │
+└─────────────────────────────────────────────────┘
+                    ↓ uses
+┌─────────────────────────────────────────────────┐
+│ PR #0: Layer 1 - Basic Storage (THIS PR)        │
+│ pkg/persistence/basic/Store                     │
+│ - Document CRUD (Insert, Get, Update, Delete)   │
+│ - Query builder (Filter, Sort, Limit)           │
+│ - Transaction support (BeginTx, Commit, Rollback)│
+│ - SQLite implementation with optimizations      │
+└─────────────────────────────────────────────────┘
+```
+
+## The Problem This Solves
+
+### Without Shared Foundation (Traditional Approach)
+
+**Week 1**: FSM v2 team builds Agent with custom persistence
+```go
+type AgentPersistence struct {
+    // FSM v2's own storage approach
+}
+```
+
+**Week 2**: CSE team builds TriangularStore with different storage
+```go
+type TriangularStore struct {
+    // CSE's own storage approach
+}
+```
+
+**Week 3**: Try to integrate → **INCOMPATIBLE!** 💥
+- FSM v2 writes data CSE can't query
+- CSE needs metadata FSM v2 doesn't add
+- Result: Rewrite one or both systems
+
+### With Shared Foundation (Our Approach)
+
+**Week 0 (PR #0 - THIS PR)**: Build shared persistence layer
+- TriangularStore auto-adds `_sync_id` on every write
+- FSM v2 and CSE both use TriangularStore
+- Contract tests prove it works for both
+
+**Week 1 (PR #1)**: FSM v2 uses TriangularStore
+- Calls `SaveObserved()` on every worker tick
+- Metadata added automatically
+- Tests pass ✅
+
+**Week 2 (PR #2)**: CSE queries TriangularStore
+- Queries `WHERE _sync_id > lastSyncID`
+- Gets all FSM v2 state changes
+- Tests pass ✅
+
+**Week 3 (PR #3)**: Integration → **Perfect fit!** ✅
+- Both already using same storage
+- Zero integration work needed
 
 ## The Problem This Solves
 
