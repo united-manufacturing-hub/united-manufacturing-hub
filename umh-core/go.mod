@@ -17,6 +17,7 @@ require (
 	github.com/h2non/gock v1.2.0
 	github.com/klauspost/compress v1.18.0
 	github.com/looplab/fsm v1.0.3
+	github.com/mattn/go-sqlite3 v1.14.32
 	github.com/onsi/ginkgo/v2 v2.25.1
 	github.com/onsi/gomega v1.38.1
 	github.com/prometheus/client_golang v1.23.0

@@ -38,6 +38,10 @@
   * [Variables](reference/variables.md)
   * [HTTP API Reference](reference/http-api/README.md)
     * [Topic Browser GraphQL API](reference/http-api/topic-browser-graphql.md)
+* [Architecture](architecture/README.md)
+  * [FSM v2 ↔ CSE Interface Contract](architecture/fsm-v2-cse-contract.md)
+  * [SQLite Checkpoint Handling](architecture/sqlite-checkpoint-handling.md)
+  * [SQLite Maintenance Implementation](architecture/sqlite-maintenance-implementation.md)
 * [UMH Core vs UMH Classic](umh-core-vs-classic-faq.md)
 
 ## UMH Classic
