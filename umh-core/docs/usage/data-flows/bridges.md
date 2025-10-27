@@ -60,7 +60,7 @@ Common industrial protocols:
 
 Each protocol has specific settings. For example, S7:
 
-![Siemens S7 Configuration](./images/s7-protocol-config.png)
+![Siemens S7 Configuration](./images/bridges-read-no-dfc-data-type-selector-for-siemens.png)
 
 ### Step 5: Deploy
 

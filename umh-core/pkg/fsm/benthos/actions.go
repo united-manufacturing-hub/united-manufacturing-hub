@@ -123,7 +123,12 @@ func (b *BenthosInstance) logS6DirectoryStateAsync(
 ) {
 	// Convert to S6 service name format (benthos- prefix)
 	s6ServiceName := "benthos-" + serviceName
-	servicePath := filepath.Join("/var/run/s6/services", s6ServiceName)
+	// Check the repository directory (where services are actually created)
+	// not the scan directory (which only has symlinks for running services)
+	repositoryPath := filepath.Join(constants.GetS6RepositoryBaseDir(), s6ServiceName)
+	scanPath := filepath.Join(constants.S6BaseDir, s6ServiceName)
+	// Use repository path as the primary servicePath for existence checks
+	servicePath := repositoryPath
 
 	// Gather comprehensive directory state
 	var (
@@ -190,15 +195,22 @@ func (b *BenthosInstance) logS6DirectoryStateAsync(
 
 	// TODO(ENG-3468): Remove DEBUG logging and Sentry reporting once S6 directory corruption issues are resolved
 	// Using DEBUG + Sentry to capture production diagnostics without log spam
+	// Also check if service is in scan directory (running)
+	var scanDirExists, scanDirIsDir bool
+	if scanInfo, err := os.Stat(scanPath); err == nil {
+		scanDirExists = true
+		scanDirIsDir = scanInfo.IsDir()
+	}
+
 	logger.Debugf(
 		"S6 Directory State Debug [trigger=%s]: "+
-			"service=%s, path=%s, FSMState='%s', currentFSM=%s, "+
-			"dir[exists=%v, isDir=%v], supervise[exists=%v], "+
+			"service=%s, repositoryPath=%s, scanPath=%s, FSMState='%s', currentFSM=%s, "+
+			"repository[exists=%v, isDir=%v], scan[exists=%v, isDir=%v], supervise[exists=%v], "+
 			"status[exists=%v, size=%d], run[exists=%v, size=%d], "+
 			"down[exists=%v], pid[exists=%v, value=%s, running=%v], "+
 			"s6State='%s', benthosStatus='%s'",
-		trigger, serviceName, servicePath, s6State, currentFSMState,
-		dirExists, isDir, superviseExists,
+		trigger, serviceName, repositoryPath, scanPath, s6State, currentFSMState,
+		dirExists, isDir, scanDirExists, scanDirIsDir, superviseExists,
 		statusExists, statusSize, runExists, runSize,
 		downExists, pidFileExists, pid, processRunning,
 		s6State,
@@ -580,8 +592,8 @@ func (b *BenthosInstance) IsBenthosS6Stopped() (bool, string) {
 	case "":
 		// Log diagnostic info when we encounter empty S6 state
 		b.logS6DirectoryState("IsBenthosS6Stopped_empty_state")
-
-		fsmState = benthos_service.S6StateNotExisting
+		// Empty state means S6 FSM doesn't exist in manager - treat as stopped (ENG-3522)
+		return true, "service not existing (effectively stopped)"
 	case s6fsm.OperationalStateStopped:
 		return true, ""
 	}

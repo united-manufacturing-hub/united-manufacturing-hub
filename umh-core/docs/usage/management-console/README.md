@@ -11,7 +11,7 @@ The Management Console is your cloud-based control center for managing UMH Core 
    - LinkedIn SSO
 3. **Create your first instance** and start collecting data
 
-![Login Screen](./images/Screenshot%202025-09-19%20at%2011.52.20.png)
+![Login Screen](./images/login-screen.png)
 
 ## Key Features
 

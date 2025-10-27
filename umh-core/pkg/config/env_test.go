@@ -16,7 +16,74 @@ package config
 
 import (
 	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/redpandaserviceconfig"
 )
 
-var _ = Describe("LoadConfigWithEnvOverrides", func() {
+var _ = Describe("Redpanda config hardcoded values", func() {
+	Context("when checking hardcoded Redpanda configurations in env.go", func() {
+		It("should rely on normalizer for default Redpanda resource values", func() {
+			emptyConfig := redpandaserviceconfig.RedpandaServiceConfig{
+				Resources: redpandaserviceconfig.ResourcesConfig{},
+			}
+
+			normalized := redpandaserviceconfig.NormalizeRedpandaConfig(emptyConfig)
+
+			Expect(normalized.Resources.MaxCores).To(Equal(1))
+			Expect(normalized.Resources.MemoryPerCoreInBytes).To(Equal(2147483648))
+		})
+
+		It("should rely on normalizer for default Redpanda topic values", func() {
+			emptyConfig := redpandaserviceconfig.RedpandaServiceConfig{
+				Topic: redpandaserviceconfig.TopicConfig{},
+			}
+
+			normalized := redpandaserviceconfig.NormalizeRedpandaConfig(emptyConfig)
+
+			Expect(normalized.Topic.DefaultTopicRetentionMs).To(BeNumerically(">", 0))
+			Expect(normalized.Topic.DefaultTopicCompressionAlgorithm).NotTo(BeEmpty())
+			Expect(normalized.Topic.DefaultTopicCleanupPolicy).NotTo(BeEmpty())
+			Expect(normalized.Topic.DefaultTopicSegmentMs).To(BeNumerically(">", 0))
+		})
+	})
+
+	Context("when checking that env.go doesn't override Redpanda config", func() {
+		It("should preserve user-provided Redpanda resource values through config override", func() {
+			configOverride := FullConfig{
+				Internal: InternalConfig{
+					Redpanda: RedpandaConfig{
+						FSMInstanceConfig: FSMInstanceConfig{
+							DesiredFSMState: "active",
+						},
+						RedpandaServiceConfig: redpandaserviceconfig.RedpandaServiceConfig{
+							Topic:     redpandaserviceconfig.TopicConfig{},
+							Resources: redpandaserviceconfig.ResourcesConfig{},
+						},
+					},
+				},
+			}
+
+			Expect(configOverride.Internal.Redpanda.RedpandaServiceConfig.Resources.MaxCores).To(Equal(0))
+			Expect(configOverride.Internal.Redpanda.RedpandaServiceConfig.Resources.MemoryPerCoreInBytes).To(Equal(0))
+		})
+
+		It("should preserve user-provided Redpanda topic values through config override", func() {
+			configOverride := FullConfig{
+				Internal: InternalConfig{
+					Redpanda: RedpandaConfig{
+						FSMInstanceConfig: FSMInstanceConfig{
+							DesiredFSMState: "active",
+						},
+						RedpandaServiceConfig: redpandaserviceconfig.RedpandaServiceConfig{
+							Topic:     redpandaserviceconfig.TopicConfig{},
+							Resources: redpandaserviceconfig.ResourcesConfig{},
+						},
+					},
+				},
+			}
+
+			Expect(configOverride.Internal.Redpanda.RedpandaServiceConfig.Topic.DefaultTopicRetentionMs).To(Equal(int64(0)))
+			Expect(configOverride.Internal.Redpanda.RedpandaServiceConfig.Topic.DefaultTopicCompressionAlgorithm).To(Equal(""))
+		})
+	})
 })

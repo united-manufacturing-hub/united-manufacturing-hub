@@ -103,8 +103,9 @@ func buildTopicBrowserAsDfc(
 	case topicbrowserfsm.OperationalStateDegradedBenthos,
 		topicbrowserfsm.OperationalStateDegradedRedpanda:
 		healthCat = models.Degraded
-	case topicbrowserfsm.OperationalStateIdle,
-		topicbrowserfsm.OperationalStateStarting,
+	case topicbrowserfsm.OperationalStateIdle:
+		healthCat = models.Active
+	case topicbrowserfsm.OperationalStateStarting,
 		topicbrowserfsm.OperationalStateStopping:
 		healthCat = models.Neutral
 	}

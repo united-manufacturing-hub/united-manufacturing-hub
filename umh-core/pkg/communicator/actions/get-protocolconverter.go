@@ -132,36 +132,36 @@ func (a *GetProtocolConverterAction) Validate() error {
 
 // determineProcessingMode analyzes the pipeline processors in readDFC only
 // to determine the appropriate processing mode based on the business rules.
+// NOTE:
+// This is used as a wrapper that converts the communicator format to runtime format,
+// calls the core DetermineDataType function, and maps results to be used for the UI.
 func determineProcessingMode(readDFC *models.ProtocolConverterDFC) string {
 	// Only look at readDFC as requested
 	if readDFC == nil {
 		return "" // reply with empty string to indicate that no DFC is present
 	}
 
-	processors := readDFC.Pipeline.Processors
-
-	// If more than one processor, return custom
-	if len(processors) > 1 {
-		return "custom"
-	}
-
-	// If exactly one processor, check its type
-	if len(processors) == 1 {
-		// Get the first (and only) processor from the map
-		for _, processor := range processors {
-			switch processor.Type {
-			case "nodered_js":
-				return "nodered_js"
-			case "tag_processor":
-				return "tag_processor"
-			default:
-				return "custom"
-			}
+	// convert communicator format to runtime format
+	var runtimeProcessors []any
+	for _, processor := range readDFC.Pipeline.Processors {
+		procMap := map[string]any{
+			processor.Type: map[string]any{},
 		}
+		runtimeProcessors = append(runtimeProcessors, procMap)
 	}
 
-	// No processors found, fall back to custom
-	return "custom"
+	dataType := constants.DetermineDataType(runtimeProcessors)
+
+	switch dataType {
+	case constants.TimeseriesData:
+		return constants.TimeseriesProcessor
+	case constants.RelationalData:
+		return constants.RelationalProcessor
+	case constants.CustomData:
+		return constants.CustomProcessor
+	default:
+		return constants.CustomProcessor
+	}
 }
 
 // determineProtocol analyzes the input processors to determine the protocol.

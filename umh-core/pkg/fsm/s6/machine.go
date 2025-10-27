@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"strings"
 
 	"github.com/looplab/fsm"
 
@@ -55,7 +56,14 @@ func NewS6Instance(
 
 	instance := &S6Instance{
 		baseFSMInstance: internal_fsm.NewBaseFSMInstance(cfg, backoffConfig, logger),
-		servicePath:     filepath.Join(s6BaseDir, config.Name),
+		servicePath:     func() string {
+			joined := filepath.Join(s6BaseDir, config.Name)
+			if !strings.HasPrefix(joined, filepath.Clean(s6BaseDir)+string(filepath.Separator)) {
+				logger.Errorf("invalid path: path traversal detected in %s", config.Name)
+				return s6BaseDir
+			}
+			return joined
+		}(),
 		config:          config,
 		service:         s6service.NewDefaultService(),
 	}

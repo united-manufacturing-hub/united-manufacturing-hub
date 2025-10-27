@@ -12,20 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package sentry_test
+package sentry
 
 import (
 	"errors"
 	"fmt"
 	"time"
 
+	"github.com/getsentry/sentry-go"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 )
 
 var _ = Describe("Sentry Integration", func() {
@@ -37,23 +37,36 @@ var _ = Describe("Sentry Integration", func() {
 		logger = testLogger.Sugar()
 	})
 
+	Describe("Fingerprinting", func() {
+		It("adds trigger to fingerprint when present in context", func() {
+			testError := errors.New("test error")
+			context := map[string]interface{}{
+				"trigger": "IsBenthosS6Stopped_empty_state",
+			}
+
+			event := createSentryEventWithContext(sentry.LevelWarning, testError, context)
+
+			Expect(event.Fingerprint).To(ContainElement("trigger: IsBenthosS6Stopped_empty_state"))
+		})
+	})
+
 	It("Manually sends a test message to Sentry", func() {
 		Skip("Skipping Sentry test")
 		// Initialize Sentry with a test version
-		sentry.InitSentry(constants.SentryTestVersion, false)
+		InitSentry(constants.SentryTestVersion, false)
 
 		// Generate a unique test message with timestamp
 		testMessage := "Sentry test message at " + time.Now().Format(time.RFC3339)
 		testError := errors.New(testMessage)
 
 		By("Sending a warning via ReportIssue")
-		sentry.ReportIssue(testError, sentry.IssueTypeWarning, logger)
+		ReportIssue(testError, IssueTypeWarning, logger)
 
 		By("Sending an error via ReportIssue")
-		sentry.ReportIssue(testError, sentry.IssueTypeError, logger)
+		ReportIssue(testError, IssueTypeError, logger)
 
 		By("Sending a formatted message via ReportIssuef")
-		sentry.ReportIssuef(sentry.IssueTypeWarning, logger, "Formatted test message: %s", testMessage)
+		ReportIssuef(IssueTypeWarning, logger, "Formatted test message: %s", testMessage)
 
 		// Test context-based reporting
 		context := map[string]interface{}{
@@ -63,11 +76,11 @@ var _ = Describe("Sentry Integration", func() {
 		}
 
 		By("Sending an error with context via ReportIssueWithContext")
-		sentry.ReportIssueWithContext(testError, sentry.IssueTypeError, logger, context)
+		ReportIssueWithContext(testError, IssueTypeError, logger, context)
 
 		By("Sending a formatted message with context via ReportIssuefWithContext")
-		sentry.ReportIssuefWithContext(
-			sentry.IssueTypeWarning,
+		ReportIssuefWithContext(
+			IssueTypeWarning,
 			logger,
 			context,
 			"Formatted context test message: %s",
@@ -75,7 +88,7 @@ var _ = Describe("Sentry Integration", func() {
 		)
 
 		By("Testing FSM error reporting via ReportFSMErrorf")
-		sentry.ReportFSMErrorf(
+		ReportFSMErrorf(
 			logger,
 			"test-fsm-instance",
 			"test-fsm-type",
@@ -85,7 +98,7 @@ var _ = Describe("Sentry Integration", func() {
 		)
 
 		By("Testing service error reporting via ReportServiceErrorf")
-		sentry.ReportServiceErrorf(
+		ReportServiceErrorf(
 			logger,
 			"test-service-instance",
 			"test-service-type",
