@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	netHTTP "net/http"
+	"net/http/httptest"
 	"strings"
 	"time"
 
@@ -213,6 +214,23 @@ var _ = Describe("Requester", func() {
 					Expect(err).To(HaveOccurred())
 				})
 			}
+		})
+	})
+
+	Context("Keep-Alive Header", func() {
+		FIt("should match IdleConnTimeout setting", func() {
+			var receivedKeepAlive string
+			server := httptest.NewTLSServer(netHTTP.HandlerFunc(func(w netHTTP.ResponseWriter, r *netHTTP.Request) {
+				receivedKeepAlive = r.Header.Get("Keep-Alive")
+				w.WriteHeader(netHTTP.StatusOK)
+			}))
+			defer server.Close()
+
+			ctx := context.Background()
+			_, err := http.DoHTTPRequest(ctx, server.URL, nil, nil, true, log)
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(receivedKeepAlive).To(ContainSubstring("timeout=90"))
 		})
 	})
 })
