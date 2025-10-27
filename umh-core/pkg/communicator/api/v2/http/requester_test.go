@@ -218,7 +218,7 @@ var _ = Describe("Requester", func() {
 	})
 
 	Context("Keep-Alive Header", func() {
-		FIt("should match IdleConnTimeout setting", func() {
+		It("should match IdleConnTimeout setting", func() {
 			var receivedKeepAlive string
 			server := httptest.NewTLSServer(netHTTP.HandlerFunc(func(w netHTTP.ResponseWriter, r *netHTTP.Request) {
 				receivedKeepAlive = r.Header.Get("Keep-Alive")
