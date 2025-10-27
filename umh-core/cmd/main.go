@@ -177,7 +177,7 @@ func main() {
 	}
 
 	if configData.Agent.APIURL != "" && configData.Agent.AuthToken != "" {
-		enableBackendConnection(&configData, communicationState, controlLoop, communicationState.Logger)
+		go enableBackendConnection(&configData, communicationState, controlLoop, communicationState.Logger)
 	} else {
 		log.Warnf("No backend connection enabled, please set API_URL and AUTH_TOKEN")
 	}
