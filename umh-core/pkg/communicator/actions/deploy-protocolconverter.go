@@ -276,6 +276,9 @@ func (a *DeployProtocolConverterAction) waitForComponentToAppear() (string, erro
 	startTime := time.Now()
 	timeoutDuration := constants.DataflowComponentWaitForActiveTimeout
 
+	// Track last known blocking reason for timeout error message
+	var lastStatusReason string
+
 	for {
 		elapsed := time.Since(startTime)
 		remaining := timeoutDuration - elapsed
@@ -297,7 +300,15 @@ func (a *DeployProtocolConverterAction) waitForComponentToAppear() (string, erro
 				return models.ErrRetryRollbackTimeout, fmt.Errorf("protocol converter '%s' failed to activate within timeout but could not be removed: %w. Please check system load and consider removing the component manually", a.payload.Name, err)
 			}
 
-			return models.ErrRetryRollbackTimeout, fmt.Errorf("protocol converter '%s' was removed because it did not become active within the timeout period. Please check system load or component configuration and try again", a.payload.Name)
+			// Build timeout error message with blocking reason if available
+			errorMsg := fmt.Sprintf("protocol converter '%s' was removed because it did not become active within the timeout period", a.payload.Name)
+			if lastStatusReason != "" {
+				errorMsg = fmt.Sprintf("protocol converter '%s' was removed because: %s", a.payload.Name, lastStatusReason)
+			} else {
+				errorMsg += ". Please check system load or component configuration and try again"
+			}
+
+			return models.ErrRetryRollbackTimeout, fmt.Errorf("%s", errorMsg)
 
 		case <-ticker.C:
 			// the snapshot manager holds the latest system snapshot which is asynchronously updated by the other goroutines
@@ -313,24 +324,29 @@ func (a *DeployProtocolConverterAction) waitForComponentToAppear() (string, erro
 						continue
 					}
 
-					// cast the instance LastObservedState to a protocolconverter instance
-					pcSnapshot, ok := instance.LastObservedState.(*protocolconverter.ProtocolConverterObservedStateSnapshot)
-					if !ok {
-						continue
-					}
-
 					found = true
 
-					// check the nmap configuration
-					if pcSnapshot.ServiceInfo.ConnectionObservedState.ServiceInfo.NmapObservedState.ObservedNmapServiceConfig.Port != uint16(a.payload.Connection.Port) {
-						stateMessage := RemainingPrefixSec(remainingSeconds) + "waiting for nmap to apply the connection configuration"
-						SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
-							stateMessage, a.outboundChannel, models.DeployProtocolConverter)
-
-						continue
+					// Check if the protocol converter is in an active state
+					// Note: starting_failed_dfc_missing is a valid state for empty bridges (no DFCs configured yet)
+					// This allows the deploy → edit workflow where deploy creates an empty bridge and edit adds DFCs later
+					if instance.CurrentState == "active" || instance.CurrentState == "idle" || instance.CurrentState == "starting_failed_dfc_missing" {
+						return "", nil
 					}
 
-					return "", nil
+					// Get more detailed status information from the protocol converter snapshot
+					currentStateReason := "current state: " + instance.CurrentState
+
+					// Cast the instance LastObservedState to a protocolconverter instance
+					pcSnapshot, ok := instance.LastObservedState.(*protocolconverter.ProtocolConverterObservedStateSnapshot)
+					if ok && pcSnapshot != nil && pcSnapshot.ServiceInfo.StatusReason != "" {
+						// Use the raw status reason from FSM - frontend will handle enhancement
+						lastStatusReason = pcSnapshot.ServiceInfo.StatusReason
+						currentStateReason = pcSnapshot.ServiceInfo.StatusReason
+					}
+
+					stateMessage := RemainingPrefixSec(remainingSeconds) + currentStateReason
+					SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
+						stateMessage, a.outboundChannel, models.DeployProtocolConverter)
 				}
 
 				if !found {
