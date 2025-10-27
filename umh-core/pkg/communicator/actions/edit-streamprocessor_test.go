@@ -390,7 +390,7 @@ var _ = Describe("EditStreamProcessor", func() {
 			Expect(err).ToNot(HaveOccurred())
 			err = action.Validate()
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("name can only contain letters"))
+			Expect(err.Error()).To(ContainSubstring("only lowercase letters, numbers, dashes and underscores are allowed"))
 		})
 	})
 

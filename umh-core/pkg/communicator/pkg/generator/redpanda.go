@@ -61,6 +61,8 @@ func buildRedpanda(
 	switch instance.CurrentState {
 	case redpanda.OperationalStateActive:
 		healthCat = models.Active
+	case redpanda.OperationalStateIdle:
+		healthCat = models.Active
 	case redpanda.OperationalStateDegraded:
 		healthCat = models.Degraded
 	}

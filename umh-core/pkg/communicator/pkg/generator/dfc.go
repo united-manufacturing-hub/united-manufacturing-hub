@@ -68,6 +68,8 @@ func buildDfc(
 	switch instance.CurrentState {
 	case dataflowcomponent.OperationalStateActive:
 		healthCat = models.Active
+	case dataflowcomponent.OperationalStateIdle:
+		healthCat = models.Active
 	case dataflowcomponent.OperationalStateDegraded:
 		healthCat = models.Degraded
 	}
