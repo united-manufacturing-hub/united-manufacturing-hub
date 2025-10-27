@@ -16,6 +16,7 @@ package watchdog
 
 import (
 	"context"
+	"errors"
 	"regexp"
 	"sync"
 	"sync/atomic"
@@ -175,6 +176,95 @@ var _ = Describe("Watchdog", func() {
 				dog.Load().ReportHeartbeatStatus(uuid, HEARTBEAT_STATUS_WARNING)
 			}
 			time.Sleep(1 * time.Second)
+			panickingUUIDsLock.Lock()
+			Expect(panickingUUIDs[uuid]).To(BeFalse())
+			panickingUUIDsLock.Unlock()
+		})
+	})
+
+	When("Watchdog has restart callback", func() {
+		It("should call restart function before panic", func() {
+			restartCalled := false
+			restartFunc := func() error {
+				restartCalled = true
+				return nil
+			}
+
+			uuid := dog.Load().RegisterHeartbeatWithRestart("test-restart-1", 0, 2, false, restartFunc)
+			Expect(uuid).ToNot(BeNil())
+			time.Sleep(3 * time.Second)
+
+			Expect(restartCalled).To(BeTrue())
+			panickingUUIDsLock.Lock()
+			Expect(panickingUUIDs[uuid]).To(BeFalse())
+			panickingUUIDsLock.Unlock()
+		})
+	})
+
+	When("Watchdog restart callback fails", func() {
+		It("should panic after failed restart", func() {
+			restartFunc := func() error {
+				return errors.New("restart failed")
+			}
+
+			uuid := dog.Load().RegisterHeartbeatWithRestart("test-restart-2", 0, 2, false, restartFunc)
+			Expect(uuid).ToNot(BeNil())
+			time.Sleep(3 * time.Second)
+
+			panickingUUIDsLock.Lock()
+			Expect(panickingUUIDs[uuid]).To(BeTrue())
+			panickingUUIDsLock.Unlock()
+		})
+	})
+
+	When("Watchdog has nil restart callback", func() {
+		It("should panic immediately without restart attempt", func() {
+			uuid := dog.Load().RegisterHeartbeatWithRestart("test-restart-3", 0, 2, false, nil)
+			Expect(uuid).ToNot(BeNil())
+			time.Sleep(3 * time.Second)
+
+			panickingUUIDsLock.Lock()
+			Expect(panickingUUIDs[uuid]).To(BeTrue())
+			panickingUUIDsLock.Unlock()
+		})
+	})
+
+	When("Watchdog restart succeeds and resets counter", func() {
+		It("should reset counter after successful restart", func() {
+			restartCount := 0
+			restartFunc := func() error {
+				restartCount++
+				return nil
+			}
+
+			uuid := dog.Load().RegisterHeartbeatWithRestart("test-restart-4", 0, 2, false, restartFunc)
+			Expect(uuid).ToNot(BeNil())
+			time.Sleep(3 * time.Second)
+
+			Expect(restartCount).To(Equal(1))
+
+			time.Sleep(3 * time.Second)
+			Expect(restartCount).To(Equal(2))
+
+			panickingUUIDsLock.Lock()
+			Expect(panickingUUIDs[uuid]).To(BeFalse())
+			panickingUUIDsLock.Unlock()
+		})
+	})
+
+	When("Multiple restart attempts occur", func() {
+		It("should handle multiple restart cycles", func() {
+			restartCount := 0
+			restartFunc := func() error {
+				restartCount++
+				return nil
+			}
+
+			uuid := dog.Load().RegisterHeartbeatWithRestart("test-restart-5", 0, 2, false, restartFunc)
+			Expect(uuid).ToNot(BeNil())
+			time.Sleep(3 * time.Second)
+
+			Expect(restartCount).To(BeNumerically(">=", 1))
 			panickingUUIDsLock.Lock()
 			Expect(panickingUUIDs[uuid]).To(BeFalse())
 			panickingUUIDsLock.Unlock()
