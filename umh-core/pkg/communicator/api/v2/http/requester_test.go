@@ -230,7 +230,7 @@ var _ = Describe("Requester", func() {
 			_, err := http.DoHTTPRequest(ctx, server.URL, nil, nil, true, log)
 			Expect(err).ToNot(HaveOccurred())
 
-			Expect(receivedKeepAlive).To(ContainSubstring("timeout=90"))
+			Expect(receivedKeepAlive).To(ContainSubstring("timeout=30"))
 			Expect(receivedKeepAlive).To(ContainSubstring("max=1000"))
 		})
 
@@ -247,7 +247,7 @@ var _ = Describe("Requester", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			Expect(receivedKeepAlive).To(MatchRegexp(`timeout=\d+`))
-			Expect(receivedKeepAlive).ToNot(ContainSubstring("timeout=30"))
+			Expect(receivedKeepAlive).ToNot(ContainSubstring("timeout=90"))
 		})
 	})
 })

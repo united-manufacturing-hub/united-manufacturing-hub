@@ -43,7 +43,7 @@ var (
 	PullEndpoint  Endpoint = "/v2/instance/pull"
 )
 
-const keepAliveTimeout = 90 * time.Second
+const keepAliveTimeout = 30 * time.Second
 
 var secureHTTPClient *http.Client
 var insecureHTTPClient *http.Client
