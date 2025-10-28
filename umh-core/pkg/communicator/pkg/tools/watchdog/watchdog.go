@@ -175,8 +175,34 @@ func (s *Watchdog) Start() {
 				// Unlock before any potential panic
 				s.registeredHeartbeatsMutex.Unlock()
 
-				// If we found an overdue heartbeat, panic
+				// If we found an overdue heartbeat, try restart or panic
 				if overdueHeartbeat != nil {
+					logger := s.logger.With("heartbeat", overdueHeartbeat.name)
+
+					// Try restart if function provided
+					if overdueHeartbeat.hb.restartFunc != nil {
+						logger.Warnf("[Watchdog] Heartbeat failed, attempting restart...")
+
+						if err := overdueHeartbeat.hb.restartFunc(); err != nil {
+							// Restart failed → panic with proper UUID format
+							sentry.ReportIssuef(sentry.IssueTypeError, logger,
+								"Watchdog restart failed: [%s] %s (%s) - %s",
+								s.watchdogID, overdueHeartbeat.name, overdueHeartbeat.hb.uniqueIdentifier, err.Error())
+							panic(fmt.Sprintf("Watchdog restart failed: [%s] %s (%s) - %s",
+								s.watchdogID, overdueHeartbeat.name, overdueHeartbeat.hb.uniqueIdentifier, err.Error()))
+						}
+
+						// Restart succeeded → reset counter and re-register
+						logger.Infof("[Watchdog] Restart successful, resetting heartbeat")
+						s.registeredHeartbeatsMutex.Lock()
+						now := time.Now()
+						overdueHeartbeat.hb.lastHeatbeatTime.Store(now.UTC().Unix())
+						s.registeredHeartbeats[overdueHeartbeat.name] = overdueHeartbeat.hb
+						s.registeredHeartbeatsMutex.Unlock()
+						continue
+					}
+
+					// No restart function → panic (backward compatible)
 					errorMsg := fmt.Sprintf("Heartbeat too old: [%s] %s (%s) [Lifetime heartbeats: %d] (%d seconds overdue)",
 						s.watchdogID, overdueHeartbeat.name, overdueHeartbeat.hb.uniqueIdentifier,
 						overdueHeartbeat.hb.heartbeatsReceived.Load(), overdueHeartbeat.secondsOverdue)
@@ -219,12 +245,14 @@ type Heartbeat struct {
 	warningCount         atomic.Uint32
 	uniqueIdentifier     uuid.UUID
 	onlyIfSubscribers    bool
+	restartFunc          func() error
 }
 
-// RegisterHeartbeat registers a new heartbeat
-// It returns the unique identifier of the heartbeat
-// Keep that identifier to unregister the heartbeat later.
-func (s *Watchdog) RegisterHeartbeat(name string, warningsUntilFailure uint64, timeout uint64, onlyIfSubscribers bool) uuid.UUID {
+// RegisterHeartbeatWithRestart registers a heartbeat with optional restart callback.
+// If restartFunc is provided, it will be called before panic when heartbeat fails.
+// If restart succeeds (returns nil), the heartbeat counter resets and monitoring continues.
+// If restart fails or restartFunc is nil, the watchdog panics as before (backward compatible).
+func (s *Watchdog) RegisterHeartbeatWithRestart(name string, warningsUntilFailure uint64, timeout uint64, onlyIfSubscribers bool, restartFunc func() error) uuid.UUID {
 	uniqueIdentifier := uuid.New()
 	_, file, line, ok := runtime.Caller(1)
 
@@ -234,6 +262,7 @@ func (s *Watchdog) RegisterHeartbeat(name string, warningsUntilFailure uint64, t
 		warningsUntilFailure: warningsUntilFailure,
 		timeout:              timeout,
 		onlyIfSubscribers:    onlyIfSubscribers,
+		restartFunc:          restartFunc,
 	}
 	hb.lastHeatbeatTime.Store(time.Now().UTC().Unix())
 
@@ -258,6 +287,13 @@ func (s *Watchdog) RegisterHeartbeat(name string, warningsUntilFailure uint64, t
 	s.registeredHeartbeatsMutex.Unlock()
 
 	return uniqueIdentifier
+}
+
+// RegisterHeartbeat registers a new heartbeat
+// It returns the unique identifier of the heartbeat
+// Keep that identifier to unregister the heartbeat later.
+func (s *Watchdog) RegisterHeartbeat(name string, warningsUntilFailure uint64, timeout uint64, onlyIfSubscribers bool) uuid.UUID {
+	return s.RegisterHeartbeatWithRestart(name, warningsUntilFailure, timeout, onlyIfSubscribers, nil)
 }
 
 // UnregisterHeartbeat unregisters a heartbeat
