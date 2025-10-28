@@ -94,7 +94,7 @@ type AgentConfig struct {
 	GraphQLConfig              GraphQLConfig `yaml:"graphql,omitempty"` // GraphQL server configuration
 	MetricsPort                int           `yaml:"metricsPort"`       // Port to expose metrics on
 	Simulator                  bool          `yaml:"simulator,omitempty"`
-	EnableResourceLimitBlocking bool          `yaml:"enableResourceLimitBlocking,omitempty"` // Feature flag for resource-based bridge blocking
+	EnableResourceLimitBlocking bool          `yaml:"enableResourceLimitBlocking"` // Feature flag for resource-based bridge blocking
 }
 
 type CommunicatorConfig struct {
