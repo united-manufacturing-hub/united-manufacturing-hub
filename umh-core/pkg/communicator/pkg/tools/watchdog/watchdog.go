@@ -237,6 +237,7 @@ const (
 
 // Heartbeat is a heartbeat.
 type Heartbeat struct {
+	restartFunc          func() error
 	file                 string
 	lastHeatbeatTime     atomic.Int64
 	line                 int
@@ -247,7 +248,6 @@ type Heartbeat struct {
 	warningCount         atomic.Uint32
 	uniqueIdentifier     uuid.UUID
 	onlyIfSubscribers    bool
-	restartFunc          func() error
 }
 
 // RegisterHeartbeatWithRestart registers a heartbeat with optional restart callback.

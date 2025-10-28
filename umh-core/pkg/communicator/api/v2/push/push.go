@@ -55,15 +55,15 @@ type Pusher struct {
 	deadletterCh           chan DeadLetter
 	backoff                *tools.Backoff
 	logger                 *zap.SugaredLogger
+	stopChan               chan struct{}
 	apiURL                 string
+	watcherMutex           sync.RWMutex
+	stopOnce               sync.Once
+	stopMutex              sync.Mutex
+	isRestarting           atomic.Bool
 	instanceUUID           uuid.UUID
 	watcherUUID            uuid.UUID
 	insecureTLS            bool
-	stopChan               chan struct{}
-	stopOnce               sync.Once
-	stopMutex              sync.Mutex
-	watcherMutex           sync.RWMutex
-	isRestarting           atomic.Bool
 }
 
 func NewPusher(instanceUUID uuid.UUID, jwt string, dog watchdog.Iface, outboundChannel chan *models.UMHMessage, deadletterCh chan DeadLetter, backoff *tools.Backoff, insecureTLS bool, apiURL string, logger *zap.SugaredLogger) *Pusher {

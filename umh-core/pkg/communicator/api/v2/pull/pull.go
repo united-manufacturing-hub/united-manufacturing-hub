@@ -38,15 +38,15 @@ type Puller struct {
 	dog                   watchdog.Iface
 	inboundMessageChannel chan *models.UMHMessage
 	logger                *zap.SugaredLogger
-	apiURL                string
-	shallRun              atomic.Bool
-	insecureTLS           bool
 	stopChan              chan struct{}
+	apiURL                string
+	watcherMutex          sync.RWMutex
 	stopOnce              sync.Once
 	stopMutex             sync.Mutex
-	watcherUUID           uuid.UUID
-	watcherMutex          sync.RWMutex
+	shallRun              atomic.Bool
 	isRestarting          atomic.Bool
+	watcherUUID           uuid.UUID
+	insecureTLS           bool
 }
 
 func NewPuller(jwt string, dog watchdog.Iface, inboundChannel chan *models.UMHMessage, insecureTLS bool, apiURL string, logger *zap.SugaredLogger) *Puller {
