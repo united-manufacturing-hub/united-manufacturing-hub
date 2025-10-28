@@ -49,6 +49,7 @@ func DefaultBackoffPolicy() *tools.Backoff {
 }
 
 type Pusher struct {
+	coordinatedRestartFunc func() error
 	dog                    watchdog.Iface
 	jwt                    atomic.Value
 	outboundMessageChannel chan *models.UMHMessage
@@ -67,7 +68,12 @@ type Pusher struct {
 }
 
 func NewPusher(instanceUUID uuid.UUID, jwt string, dog watchdog.Iface, outboundChannel chan *models.UMHMessage, deadletterCh chan DeadLetter, backoff *tools.Backoff, insecureTLS bool, apiURL string, logger *zap.SugaredLogger) *Pusher {
+	return NewPusherWithRestartFunc(instanceUUID, jwt, dog, outboundChannel, deadletterCh, backoff, insecureTLS, apiURL, logger, nil)
+}
+
+func NewPusherWithRestartFunc(instanceUUID uuid.UUID, jwt string, dog watchdog.Iface, outboundChannel chan *models.UMHMessage, deadletterCh chan DeadLetter, backoff *tools.Backoff, insecureTLS bool, apiURL string, logger *zap.SugaredLogger, coordinatedRestartFunc func() error) *Pusher {
 	p := Pusher{
+		coordinatedRestartFunc: coordinatedRestartFunc,
 		instanceUUID:           instanceUUID,
 		outboundMessageChannel: outboundChannel,
 		deadletterCh:           deadletterCh,
@@ -153,7 +159,12 @@ func (p *Pusher) push() {
 		p.dog.UnregisterHeartbeat(p.watcherUUID)
 	}
 
-	p.watcherUUID = p.dog.RegisterHeartbeatWithRestart("Pusher", 12, 0, false, p.Restart)
+	restartFunc := p.Restart
+	if p.coordinatedRestartFunc != nil {
+		restartFunc = p.coordinatedRestartFunc
+	}
+
+	p.watcherUUID = p.dog.RegisterHeartbeatWithRestart("Pusher", 12, 0, false, restartFunc)
 	watcherUUID := p.watcherUUID
 	p.watcherMutex.Unlock()
 

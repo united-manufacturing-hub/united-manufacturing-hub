@@ -34,31 +34,37 @@ import (
 )
 
 type Puller struct {
-	jwt                   atomic.Value
-	dog                   watchdog.Iface
-	inboundMessageChannel chan *models.UMHMessage
-	logger                *zap.SugaredLogger
-	stopChan              chan struct{}
-	apiURL                string
-	watcherMutex          sync.RWMutex
-	stopOnce              sync.Once
-	stopMutex             sync.Mutex
-	shallRun              atomic.Bool
-	isRestarting          atomic.Bool
-	watcherUUID           uuid.UUID
-	insecureTLS           bool
+	coordinatedRestartFunc func() error
+	jwt                    atomic.Value
+	dog                    watchdog.Iface
+	inboundMessageChannel  chan *models.UMHMessage
+	logger                 *zap.SugaredLogger
+	stopChan               chan struct{}
+	apiURL                 string
+	watcherMutex           sync.RWMutex
+	stopOnce               sync.Once
+	stopMutex              sync.Mutex
+	shallRun               atomic.Bool
+	isRestarting           atomic.Bool
+	watcherUUID            uuid.UUID
+	insecureTLS            bool
 }
 
 func NewPuller(jwt string, dog watchdog.Iface, inboundChannel chan *models.UMHMessage, insecureTLS bool, apiURL string, logger *zap.SugaredLogger) *Puller {
+	return NewPullerWithRestartFunc(jwt, dog, inboundChannel, insecureTLS, apiURL, logger, nil)
+}
+
+func NewPullerWithRestartFunc(jwt string, dog watchdog.Iface, inboundChannel chan *models.UMHMessage, insecureTLS bool, apiURL string, logger *zap.SugaredLogger, coordinatedRestartFunc func() error) *Puller {
 	p := Puller{
-		inboundMessageChannel: inboundChannel,
-		shallRun:              atomic.Bool{},
-		jwt:                   atomic.Value{},
-		dog:                   dog,
-		insecureTLS:           insecureTLS,
-		apiURL:                apiURL,
-		logger:                logger,
-		watcherUUID:           uuid.Nil,
+		coordinatedRestartFunc: coordinatedRestartFunc,
+		inboundMessageChannel:  inboundChannel,
+		shallRun:               atomic.Bool{},
+		jwt:                    atomic.Value{},
+		dog:                    dog,
+		insecureTLS:            insecureTLS,
+		apiURL:                 apiURL,
+		logger:                 logger,
+		watcherUUID:            uuid.Nil,
 	}
 	p.jwt.Store(jwt)
 
@@ -101,7 +107,12 @@ func (p *Puller) pull() {
 		p.dog.UnregisterHeartbeat(p.watcherUUID)
 	}
 
-	p.watcherUUID = p.dog.RegisterHeartbeatWithRestart("Puller", 12, 0, false, p.Restart)
+	restartFunc := p.Restart
+	if p.coordinatedRestartFunc != nil {
+		restartFunc = p.coordinatedRestartFunc
+	}
+
+	p.watcherUUID = p.dog.RegisterHeartbeatWithRestart("Puller", 12, 0, false, restartFunc)
 	watcherUUID := p.watcherUUID
 	p.watcherMutex.Unlock()
 

@@ -39,6 +39,7 @@ type CommunicationState struct {
 	LoginResponse         *v2.LoginResponse
 	LoginResponseMu       *sync.RWMutex
 	mu                    *sync.RWMutex
+	restartMutex          sync.Mutex
 	Watchdog              *watchdog.Watchdog
 	InboundChannel        chan *models.UMHMessage
 	Puller                *pull.Puller
@@ -108,7 +109,7 @@ func (c *CommunicationState) InitialiseAndStartPuller() {
 		return
 	}
 
-	c.Puller = pull.NewPuller(c.LoginResponse.JWT, c.Watchdog, c.InboundChannel, c.InsecureTLS, c.ApiUrl, c.Logger)
+	c.Puller = pull.NewPullerWithRestartFunc(c.LoginResponse.JWT, c.Watchdog, c.InboundChannel, c.InsecureTLS, c.ApiUrl, c.Logger, c.RestartCommunicators)
 	if c.Puller == nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "Failed to create puller")
 	}
@@ -136,7 +137,7 @@ func (c *CommunicationState) InitialiseAndStartPusher() {
 		return
 	}
 
-	c.Pusher = push.NewPusher(c.LoginResponse.UUID, c.LoginResponse.JWT, c.Watchdog, c.OutboundChannel, push.DefaultDeadLetterChanBuffer(), push.DefaultBackoffPolicy(), c.InsecureTLS, c.ApiUrl, c.Logger)
+	c.Pusher = push.NewPusherWithRestartFunc(c.LoginResponse.UUID, c.LoginResponse.JWT, c.Watchdog, c.OutboundChannel, push.DefaultDeadLetterChanBuffer(), push.DefaultBackoffPolicy(), c.InsecureTLS, c.ApiUrl, c.Logger, c.RestartCommunicators)
 	if c.Pusher == nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "Failed to create pusher")
 	}
@@ -334,4 +335,58 @@ func (c *CommunicationState) InitialiseReAuthHandler(authToken string, insecureT
 
 		// The ticker will run for the lifetime of our program, therefore no cleanup is required.
 	})
+}
+
+func (c *CommunicationState) RestartCommunicators() error {
+	c.restartMutex.Lock()
+	defer c.restartMutex.Unlock()
+
+	logger := c.Logger.With("action", "coordinated-restart")
+	logger.Info("Starting coordinated Puller/Pusher restart")
+
+	c.mu.Lock()
+	puller := c.Puller
+	pusher := c.Pusher
+	c.mu.Unlock()
+
+	if puller == nil && pusher == nil {
+		logger.Warn("Both Puller and Pusher are nil, nothing to restart")
+		return nil
+	}
+
+	logger.Debug("Step 1: Stopping both Puller and Pusher goroutines")
+	if puller != nil {
+		puller.Stop()
+	}
+	if pusher != nil {
+		pusher.Stop()
+	}
+
+	logger.Debug("Step 2: Resetting HTTP client connections")
+	httpClient := http.GetClient(c.InsecureTLS)
+	if httpClient != nil {
+		if transport, ok := httpClient.Transport.(*http2.Transport); ok {
+			transport.CloseIdleConnections()
+			logger.Debug("HTTP connection pool flushed")
+		} else {
+			logger.Debug("Transport is not *http2.Transport, skipping connection flush")
+		}
+	} else {
+		logger.Warn("HTTP client not initialized, skipping connection flush")
+	}
+
+	logger.Debug("Step 3: Waiting 5s for DNS cache expiration")
+	time.Sleep(5 * time.Second)
+
+	logger.Debug("Step 4: Starting both Puller and Pusher goroutines with fresh connections")
+	if puller != nil {
+		puller.Start()
+	}
+	if pusher != nil {
+		pusher.Start()
+	}
+
+	logger.Info("Coordinated restart complete")
+
+	return nil
 }
