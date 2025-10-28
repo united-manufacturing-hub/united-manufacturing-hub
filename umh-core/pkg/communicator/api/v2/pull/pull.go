@@ -18,7 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	http2 "net/http"
+	nethttp "net/http"
 	"net/url"
 	"sync"
 	"sync/atomic"
@@ -32,6 +32,11 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"go.uber.org/zap"
 )
+
+// connectionCloser is an interface for HTTP transports that support closing idle connections
+type connectionCloser interface {
+	CloseIdleConnections()
+}
 
 type Puller struct {
 	coordinatedRestartFunc func() error
@@ -193,11 +198,11 @@ func (p *Puller) Restart() error {
 
 	httpClient := http.GetClient(p.insecureTLS)
 	if httpClient != nil {
-		if transport, ok := httpClient.Transport.(*http2.Transport); ok {
-			transport.CloseIdleConnections()
+		if closer, ok := httpClient.Transport.(connectionCloser); ok {
+			closer.CloseIdleConnections()
 			logger.Debug("HTTP connection pool flushed")
 		} else {
-			logger.Debug("Transport is not *http2.Transport, skipping connection flush")
+			logger.Debug("Transport does not support CloseIdleConnections, skipping connection flush")
 		}
 	} else {
 		logger.Warn("HTTP client not initialized, skipping connection flush")
@@ -237,7 +242,7 @@ func GetUserCertificate(ctx context.Context, userEmail string, cookies *map[stri
 	// Make the request
 	response, statusCode, err := http.GetRequest[UserCertificateResponse](ctx, endpoint, nil, cookies, insecureTLS, apiURL, logger)
 	if err != nil {
-		if statusCode == http2.StatusNoContent {
+		if statusCode == nethttp.StatusNoContent {
 			// User does not have a certificate
 			return nil, nil
 		}

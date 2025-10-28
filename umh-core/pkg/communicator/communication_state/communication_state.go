@@ -19,6 +19,7 @@ import (
 	"time"
 
 	v2 "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2/http"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2/pull"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2/push"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/subscriber"
@@ -33,6 +34,11 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	"go.uber.org/zap"
 )
+
+// connectionCloser is an interface for HTTP transports that support closing idle connections
+type connectionCloser interface {
+	CloseIdleConnections()
+}
 
 type CommunicationState struct {
 	ConfigManager         config.ConfigManager
@@ -365,11 +371,11 @@ func (c *CommunicationState) RestartCommunicators() error {
 	logger.Debug("Step 2: Resetting HTTP client connections")
 	httpClient := http.GetClient(c.InsecureTLS)
 	if httpClient != nil {
-		if transport, ok := httpClient.Transport.(*http2.Transport); ok {
-			transport.CloseIdleConnections()
+		if closer, ok := httpClient.Transport.(connectionCloser); ok {
+			closer.CloseIdleConnections()
 			logger.Debug("HTTP connection pool flushed")
 		} else {
-			logger.Debug("Transport is not *http2.Transport, skipping connection flush")
+			logger.Debug("Transport does not support CloseIdleConnections, skipping connection flush")
 		}
 	} else {
 		logger.Warn("HTTP client not initialized, skipping connection flush")

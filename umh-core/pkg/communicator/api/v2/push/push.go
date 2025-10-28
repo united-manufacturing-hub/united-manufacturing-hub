@@ -16,7 +16,7 @@ package push
 
 import (
 	"context"
-	http2 "net/http"
+	nethttp "net/http"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -32,6 +32,11 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"go.uber.org/zap"
 )
+
+// connectionCloser is an interface for HTTP transports that support closing idle connections
+type connectionCloser interface {
+	CloseIdleConnections()
+}
 
 type DeadLetter struct {
 	cookies       map[string]string
@@ -203,7 +208,7 @@ func (p *Pusher) push() {
 				error_handler.ReportHTTPErrors(err, status, string(http.PushEndpoint), "POST", &payload, nil)
 				p.dog.ReportHeartbeatStatus(watcherUUID, watchdog.HEARTBEAT_STATUS_WARNING)
 
-				if status == http2.StatusBadRequest {
+				if status == nethttp.StatusBadRequest {
 					// Its bit fuzzy here to determine the error code since the PostRequest does not return the error code.
 					// Todo: Need to refactor the PostRequest to return the error code.
 					// If the error is 400, drop the message, then the message is invalid.
@@ -301,11 +306,11 @@ func (p *Pusher) Restart() error {
 
 	httpClient := http.GetClient(p.insecureTLS)
 	if httpClient != nil {
-		if transport, ok := httpClient.Transport.(*http2.Transport); ok {
-			transport.CloseIdleConnections()
+		if closer, ok := httpClient.Transport.(connectionCloser); ok {
+			closer.CloseIdleConnections()
 			logger.Debug("HTTP connection pool flushed")
 		} else {
-			logger.Debug("Transport is not *http2.Transport, skipping connection flush")
+			logger.Debug("Transport does not support CloseIdleConnections, skipping connection flush")
 		}
 	} else {
 		logger.Warn("HTTP client not initialized, skipping connection flush")
