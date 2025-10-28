@@ -242,13 +242,6 @@ func enqueueToDeadLetterChannel(deadLetterCh chan DeadLetter, messages []models.
 	logger.Debugf("Enqueueing to deadletter channel to push messages: %v with retry attempts: %d", messages, retryAttempt)
 
 	select {
-	case _, ok := <-deadLetterCh:
-		if !ok {
-			// Channel is closed
-			sentry.ReportIssuef(sentry.IssueTypeError, logger, "[enqueueToDeadLetterChannel] Deadletter channel is closed, cannot enqueue messages!")
-
-			return
-		}
 	case deadLetterCh <- DeadLetter{
 		messages:      messages,
 		cookies:       cookies,
@@ -256,7 +249,7 @@ func enqueueToDeadLetterChannel(deadLetterCh chan DeadLetter, messages []models.
 	}:
 		// Message successfully enqueued to deadletter channel. Do nothing.
 	default:
-		sentry.ReportIssuef(sentry.IssueTypeError, logger, "[enqueueToDeadLetterChannel] Deadletter channel is not open or ready to receive the re-enqueued messages from the Pusher!")
+		sentry.ReportIssuef(sentry.IssueTypeError, logger, "[enqueueToDeadLetterChannel] Deadletter channel full or closed, cannot enqueue messages!")
 	}
 }
 
