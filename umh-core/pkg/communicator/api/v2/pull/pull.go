@@ -20,16 +20,16 @@ import (
 	"fmt"
 	http2 "net/http"
 	"net/url"
+	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2/error_handler"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2/http"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/backend_api_structs"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/helper"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	"go.uber.org/zap"
 )
 
@@ -41,6 +41,12 @@ type Puller struct {
 	apiURL                string
 	shallRun              atomic.Bool
 	insecureTLS           bool
+	stopChan              chan struct{}
+	stopOnce              sync.Once
+	stopMutex             sync.Mutex
+	watcherUUID           uuid.UUID
+	watcherMutex          sync.RWMutex
+	isRestarting          atomic.Bool
 }
 
 func NewPuller(jwt string, dog watchdog.Iface, inboundChannel chan *models.UMHMessage, insecureTLS bool, apiURL string, logger *zap.SugaredLogger) *Puller {
@@ -52,6 +58,7 @@ func NewPuller(jwt string, dog watchdog.Iface, inboundChannel chan *models.UMHMe
 		insecureTLS:           insecureTLS,
 		apiURL:                apiURL,
 		logger:                logger,
+		watcherUUID:           uuid.Nil,
 	}
 	p.jwt.Store(jwt)
 
@@ -64,27 +71,49 @@ func (p *Puller) UpdateJWT(jwt string) {
 
 func (p *Puller) Start() {
 	p.shallRun.Store(true)
+	p.stopMutex.Lock()
+	p.stopChan = make(chan struct{})
+	p.stopOnce = sync.Once{}
+	p.stopMutex.Unlock()
 
 	go p.pull()
 }
 
 // Stop stops the puller
-// This function is only for testing purposes.
 func (p *Puller) Stop() {
-	if helper.IsTest() {
-		p.logger.Warnf("WARNING: Stopping puller !")
-		p.shallRun.Store(false)
-	} else {
-		sentry.ReportIssuef(sentry.IssueTypeError, p.logger, "[Puller.Stop()] Stop MUST NOT be used outside tests")
+	p.stopMutex.Lock()
+	stopChan := p.stopChan
+	p.stopMutex.Unlock()
+
+	if stopChan != nil {
+		p.stopOnce.Do(func() {
+			p.logger.Info("[PULL] Stopping")
+			close(stopChan)
+			p.shallRun.Store(false)
+		})
 	}
 }
 
 func (p *Puller) pull() {
-	watcherUUID := p.dog.RegisterHeartbeat("pull", 10, 600, false)
+	p.watcherMutex.Lock()
+	if p.watcherUUID != uuid.Nil {
+		p.dog.UnregisterHeartbeat(p.watcherUUID)
+	}
+	p.watcherUUID = p.dog.RegisterHeartbeatWithRestart("Puller", 12, 0, false, p.Restart)
+	watcherUUID := p.watcherUUID
+	p.watcherMutex.Unlock()
 
 	var ticker = time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
+
 	for p.shallRun.Load() {
-		<-ticker.C
+		select {
+		case <-p.stopChan:
+			// Clean shutdown - always unregister
+			p.dog.UnregisterHeartbeat(watcherUUID)
+			return
+		case <-ticker.C:
+		}
 
 		p.dog.ReportHeartbeatStatus(watcherUUID, watchdog.HEARTBEAT_STATUS_OK)
 
@@ -129,12 +158,34 @@ func (p *Puller) pull() {
 			}
 		}
 	}
+}
 
-	if helper.IsTest() {
-		p.dog.UnregisterHeartbeat(watcherUUID)
-	} else {
-		p.dog.ReportHeartbeatStatus(watcherUUID, watchdog.HEARTBEAT_STATUS_ERROR)
+// Restart performs graceful restart with HTTP client reset and DNS cache flush
+func (p *Puller) Restart() error {
+	logger := p.logger.With("component", "PULL", "action", "restart")
+	logger.Info("Starting PULL restart sequence")
+
+	p.isRestarting.Store(true)
+	defer p.isRestarting.Store(false)
+
+	logger.Debug("Step 1: Stopping PULL goroutine")
+	p.Stop()
+
+	logger.Debug("Step 2: Resetting HTTP client connections")
+	httpClient := http.GetClient(p.insecureTLS)
+	if transport, ok := httpClient.Transport.(*http2.Transport); ok {
+		transport.CloseIdleConnections()
+		logger.Debug("HTTP connection pool flushed")
 	}
+
+	logger.Debug("Step 3: Waiting 5s for DNS cache expiration")
+	time.Sleep(5 * time.Second)
+
+	logger.Debug("Step 4: Starting PULL goroutine with fresh connections")
+	p.Start()
+	logger.Info("PULL restart complete")
+
+	return nil
 }
 
 // UserCertificateEndpoint is the endpoint for getting a user certificate.

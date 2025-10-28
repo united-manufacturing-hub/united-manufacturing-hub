@@ -17,6 +17,7 @@ package push
 import (
 	"context"
 	http2 "net/http"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -58,6 +59,11 @@ type Pusher struct {
 	instanceUUID           uuid.UUID
 	watcherUUID            uuid.UUID
 	insecureTLS            bool
+	stopChan               chan struct{}
+	stopOnce               sync.Once
+	stopMutex              sync.Mutex
+	watcherMutex           sync.RWMutex
+	isRestarting           atomic.Bool
 }
 
 func NewPusher(instanceUUID uuid.UUID, jwt string, dog watchdog.Iface, outboundChannel chan *models.UMHMessage, deadletterCh chan DeadLetter, backoff *tools.Backoff, insecureTLS bool, apiURL string, logger *zap.SugaredLogger) *Pusher {
@@ -80,16 +86,40 @@ func NewPusher(instanceUUID uuid.UUID, jwt string, dog watchdog.Iface, outboundC
 func (p *Pusher) UpdateJWT(jwt string) {
 	p.jwt.Store(jwt)
 }
+
 func (p *Pusher) Start() {
+	p.stopMutex.Lock()
+	p.stopChan = make(chan struct{})
+	p.stopOnce = sync.Once{}
+	p.stopMutex.Unlock()
+
 	go p.push()
+}
+
+// Stop stops the pusher
+func (p *Pusher) Stop() {
+	p.stopMutex.Lock()
+	stopChan := p.stopChan
+	p.stopMutex.Unlock()
+
+	if stopChan != nil {
+		p.stopOnce.Do(func() {
+			p.logger.Info("[PUSH] Stopping")
+			close(stopChan)
+		})
+	}
 }
 
 func (p *Pusher) Push(message models.UMHMessage) {
 	if len(p.outboundMessageChannel) == cap(p.outboundMessageChannel) {
 		p.logger.Warnf("Outbound message channel is full !")
 
-		if p.watcherUUID != uuid.Nil {
-			p.dog.ReportHeartbeatStatus(p.watcherUUID, watchdog.HEARTBEAT_STATUS_WARNING)
+		p.watcherMutex.RLock()
+		watcherUUID := p.watcherUUID
+		p.watcherMutex.RUnlock()
+
+		if watcherUUID != uuid.Nil {
+			p.dog.ReportHeartbeatStatus(watcherUUID, watchdog.HEARTBEAT_STATUS_WARNING)
 		}
 	}
 
@@ -98,7 +128,12 @@ func (p *Pusher) Push(message models.UMHMessage) {
 	defer func() {
 		if r := recover(); r != nil {
 			zap.S().Errorf("Panic in Push: %v", r)
-			p.dog.ReportHeartbeatStatus(p.watcherUUID, watchdog.HEARTBEAT_STATUS_WARNING)
+
+			p.watcherMutex.RLock()
+			watcherUUID := p.watcherUUID
+			p.watcherMutex.RUnlock()
+
+			p.dog.ReportHeartbeatStatus(watcherUUID, watchdog.HEARTBEAT_STATUS_WARNING)
 		}
 	}()
 
@@ -111,14 +146,26 @@ func (p *Pusher) Push(message models.UMHMessage) {
 
 func (p *Pusher) push() {
 	boPostRequest := p.backoff
-	p.watcherUUID = p.dog.RegisterHeartbeat("push", 10, 600, false)
+
+	p.watcherMutex.Lock()
+	if p.watcherUUID != uuid.Nil {
+		p.dog.UnregisterHeartbeat(p.watcherUUID)
+	}
+	p.watcherUUID = p.dog.RegisterHeartbeatWithRestart("Pusher", 12, 0, false, p.Restart)
+	watcherUUID := p.watcherUUID
+	p.watcherMutex.Unlock()
 
 	var ticker = time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
 
 	for {
 		select {
+		case <-p.stopChan:
+			// Clean shutdown - always unregister
+			p.dog.UnregisterHeartbeat(watcherUUID)
+			return
 		case <-ticker.C:
-			p.dog.ReportHeartbeatStatus(p.watcherUUID, watchdog.HEARTBEAT_STATUS_OK)
+			p.dog.ReportHeartbeatStatus(watcherUUID, watchdog.HEARTBEAT_STATUS_OK)
 
 			messages := p.outBoundMessages()
 			if len(messages) == 0 {
@@ -136,7 +183,7 @@ func (p *Pusher) push() {
 			_, status, err := http.PostRequest[any, backend_api_structs.PushPayload](context.Background(), http.PushEndpoint, &payload, nil, &cookies, p.insecureTLS, p.apiURL, p.logger)
 			if err != nil {
 				error_handler.ReportHTTPErrors(err, status, string(http.PushEndpoint), "POST", &payload, nil)
-				p.dog.ReportHeartbeatStatus(p.watcherUUID, watchdog.HEARTBEAT_STATUS_WARNING)
+				p.dog.ReportHeartbeatStatus(watcherUUID, watchdog.HEARTBEAT_STATUS_WARNING)
 
 				if status == http2.StatusBadRequest {
 					// Its bit fuzzy here to determine the error code since the PostRequest does not return the error code.
@@ -167,7 +214,7 @@ func (p *Pusher) push() {
 				continue
 			}
 
-			p.dog.ReportHeartbeatStatus(p.watcherUUID, watchdog.HEARTBEAT_STATUS_OK)
+			p.dog.ReportHeartbeatStatus(watcherUUID, watchdog.HEARTBEAT_STATUS_OK)
 			// Retry the messages in deadletter channel only thrice. If it fails after 3 retryAttempts, log the message and drop.
 			if d.retryAttempts > 2 {
 				continue
@@ -177,7 +224,7 @@ func (p *Pusher) push() {
 
 			_, _, err := http.PostRequest[any, backend_api_structs.PushPayload](context.Background(), http.PushEndpoint, &backend_api_structs.PushPayload{UMHMessages: d.messages}, nil, &d.cookies, p.insecureTLS, p.apiURL, p.logger)
 			if err != nil {
-				p.dog.ReportHeartbeatStatus(p.watcherUUID, watchdog.HEARTBEAT_STATUS_WARNING)
+				p.dog.ReportHeartbeatStatus(watcherUUID, watchdog.HEARTBEAT_STATUS_WARNING)
 				boPostRequest.IncrementAndSleep()
 				// In case of an error, push the message back to the deadletter channel.
 				go enqueueToDeadLetterChannel(p.deadletterCh, d.messages, d.cookies, d.retryAttempts, p.logger)
@@ -226,4 +273,32 @@ func (p *Pusher) outBoundMessages() []models.UMHMessage {
 	}
 
 	return messages
+}
+
+// Restart performs graceful restart with HTTP client reset and DNS cache flush
+func (p *Pusher) Restart() error {
+	logger := p.logger.With("component", "PUSH", "action", "restart")
+	logger.Info("Starting PUSH restart sequence")
+
+	p.isRestarting.Store(true)
+	defer p.isRestarting.Store(false)
+
+	logger.Debug("Step 1: Stopping PUSH goroutine")
+	p.Stop()
+
+	logger.Debug("Step 2: Resetting HTTP client connections")
+	httpClient := http.GetClient(p.insecureTLS)
+	if transport, ok := httpClient.Transport.(*http2.Transport); ok {
+		transport.CloseIdleConnections()
+		logger.Debug("HTTP connection pool flushed")
+	}
+
+	logger.Debug("Step 3: Waiting 5s for DNS cache expiration")
+	time.Sleep(5 * time.Second)
+
+	logger.Debug("Step 4: Starting PUSH goroutine with fresh connections")
+	p.Start()
+	logger.Info("PUSH restart complete")
+
+	return nil
 }
