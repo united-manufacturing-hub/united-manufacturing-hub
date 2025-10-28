@@ -69,7 +69,7 @@ var _ = Describe("Push Restart", func() {
 			err := pusher.Restart()
 			elapsed := time.Since(startTime)
 
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(elapsed).To(BeNumerically(">=", 5*time.Second))
 			Expect(elapsed).To(BeNumerically("<", 6*time.Second))
 		})
@@ -83,7 +83,7 @@ var _ = Describe("Push Restart", func() {
 				wg.Add(1)
 				go func() {
 					defer wg.Done()
-					pusher.Restart()
+					Expect(pusher.Restart()).To(Succeed())
 				}()
 			}
 
@@ -92,7 +92,7 @@ var _ = Describe("Push Restart", func() {
 
 		It("should work when pusher is not running", func() {
 			err := pusher.Restart()
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 		})
 	})
 

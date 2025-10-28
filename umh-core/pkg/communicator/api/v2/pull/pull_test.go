@@ -65,7 +65,7 @@ var _ = Describe("Pull Restart", func() {
 			err := puller.Restart()
 			elapsed := time.Since(startTime)
 
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(elapsed).To(BeNumerically(">=", 5*time.Second))
 			Expect(elapsed).To(BeNumerically("<", 6*time.Second))
 		})
@@ -79,7 +79,7 @@ var _ = Describe("Pull Restart", func() {
 				wg.Add(1)
 				go func() {
 					defer wg.Done()
-					puller.Restart()
+					Expect(puller.Restart()).To(Succeed())
 				}()
 			}
 
@@ -88,7 +88,7 @@ var _ = Describe("Pull Restart", func() {
 
 		It("should work when puller is not running", func() {
 			err := puller.Restart()
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 		})
 	})
 

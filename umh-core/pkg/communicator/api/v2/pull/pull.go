@@ -79,7 +79,7 @@ func (p *Puller) Start() {
 	go p.pull()
 }
 
-// Stop stops the puller
+// Stop stops the puller.
 func (p *Puller) Stop() {
 	p.stopMutex.Lock()
 	stopChan := p.stopChan
@@ -96,9 +96,11 @@ func (p *Puller) Stop() {
 
 func (p *Puller) pull() {
 	p.watcherMutex.Lock()
+
 	if p.watcherUUID != uuid.Nil {
 		p.dog.UnregisterHeartbeat(p.watcherUUID)
 	}
+
 	p.watcherUUID = p.dog.RegisterHeartbeatWithRestart("Puller", 12, 0, false, p.Restart)
 	watcherUUID := p.watcherUUID
 	p.watcherMutex.Unlock()
@@ -111,6 +113,7 @@ func (p *Puller) pull() {
 		case <-p.stopChan:
 			// Clean shutdown - always unregister
 			p.dog.UnregisterHeartbeat(watcherUUID)
+
 			return
 		case <-ticker.C:
 		}
@@ -160,7 +163,7 @@ func (p *Puller) pull() {
 	}
 }
 
-// Restart performs graceful restart with HTTP client reset and DNS cache flush
+// Restart performs graceful restart with HTTP client reset and DNS cache flush.
 func (p *Puller) Restart() error {
 	logger := p.logger.With("component", "PULL", "action", "restart")
 	logger.Info("Starting PULL restart sequence")
@@ -172,6 +175,7 @@ func (p *Puller) Restart() error {
 	p.Stop()
 
 	logger.Debug("Step 2: Resetting HTTP client connections")
+
 	httpClient := http.GetClient(p.insecureTLS)
 	if transport, ok := httpClient.Transport.(*http2.Transport); ok {
 		transport.CloseIdleConnections()

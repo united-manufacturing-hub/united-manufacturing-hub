@@ -187,6 +187,7 @@ var _ = Describe("Watchdog", func() {
 			restartCalled := false
 			restartFunc := func() error {
 				restartCalled = true
+
 				return nil
 			}
 
@@ -234,6 +235,7 @@ var _ = Describe("Watchdog", func() {
 			restartCount := 0
 			restartFunc := func() error {
 				restartCount++
+
 				return nil
 			}
 
@@ -257,6 +259,7 @@ var _ = Describe("Watchdog", func() {
 			restartCount := 0
 			restartFunc := func() error {
 				restartCount++
+
 				return nil
 			}
 

@@ -195,10 +195,12 @@ func (s *Watchdog) Start() {
 						// Restart succeeded → reset counter and re-register
 						logger.Infof("[Watchdog] Restart successful, resetting heartbeat")
 						s.registeredHeartbeatsMutex.Lock()
+
 						now := time.Now()
 						overdueHeartbeat.hb.lastHeatbeatTime.Store(now.UTC().Unix())
 						s.registeredHeartbeats[overdueHeartbeat.name] = overdueHeartbeat.hb
 						s.registeredHeartbeatsMutex.Unlock()
+
 						continue
 					}
 

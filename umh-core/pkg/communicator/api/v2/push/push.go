@@ -96,7 +96,7 @@ func (p *Pusher) Start() {
 	go p.push()
 }
 
-// Stop stops the pusher
+// Stop stops the pusher.
 func (p *Pusher) Stop() {
 	p.stopMutex.Lock()
 	stopChan := p.stopChan
@@ -148,9 +148,11 @@ func (p *Pusher) push() {
 	boPostRequest := p.backoff
 
 	p.watcherMutex.Lock()
+
 	if p.watcherUUID != uuid.Nil {
 		p.dog.UnregisterHeartbeat(p.watcherUUID)
 	}
+
 	p.watcherUUID = p.dog.RegisterHeartbeatWithRestart("Pusher", 12, 0, false, p.Restart)
 	watcherUUID := p.watcherUUID
 	p.watcherMutex.Unlock()
@@ -163,6 +165,7 @@ func (p *Pusher) push() {
 		case <-p.stopChan:
 			// Clean shutdown - always unregister
 			p.dog.UnregisterHeartbeat(watcherUUID)
+
 			return
 		case <-ticker.C:
 			p.dog.ReportHeartbeatStatus(watcherUUID, watchdog.HEARTBEAT_STATUS_OK)
@@ -275,7 +278,7 @@ func (p *Pusher) outBoundMessages() []models.UMHMessage {
 	return messages
 }
 
-// Restart performs graceful restart with HTTP client reset and DNS cache flush
+// Restart performs graceful restart with HTTP client reset and DNS cache flush.
 func (p *Pusher) Restart() error {
 	logger := p.logger.With("component", "PUSH", "action", "restart")
 	logger.Info("Starting PUSH restart sequence")
@@ -287,6 +290,7 @@ func (p *Pusher) Restart() error {
 	p.Stop()
 
 	logger.Debug("Step 2: Resetting HTTP client connections")
+
 	httpClient := http.GetClient(p.insecureTLS)
 	if transport, ok := httpClient.Transport.(*http2.Transport); ok {
 		transport.CloseIdleConnections()
