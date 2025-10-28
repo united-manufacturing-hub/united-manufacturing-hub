@@ -177,9 +177,15 @@ func (p *Puller) Restart() error {
 	logger.Debug("Step 2: Resetting HTTP client connections")
 
 	httpClient := http.GetClient(p.insecureTLS)
-	if transport, ok := httpClient.Transport.(*http2.Transport); ok {
-		transport.CloseIdleConnections()
-		logger.Debug("HTTP connection pool flushed")
+	if httpClient != nil {
+		if transport, ok := httpClient.Transport.(*http2.Transport); ok {
+			transport.CloseIdleConnections()
+			logger.Debug("HTTP connection pool flushed")
+		} else {
+			logger.Debug("Transport is not *http2.Transport, skipping connection flush")
+		}
+	} else {
+		logger.Warn("HTTP client not initialized, skipping connection flush")
 	}
 
 	logger.Debug("Step 3: Waiting 5s for DNS cache expiration")
