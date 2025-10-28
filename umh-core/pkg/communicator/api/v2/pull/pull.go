@@ -109,8 +109,12 @@ func (p *Puller) pull() {
 	defer ticker.Stop()
 
 	for p.shallRun.Load() {
+		p.stopMutex.Lock()
+		stopChan := p.stopChan
+		p.stopMutex.Unlock()
+
 		select {
-		case <-p.stopChan:
+		case <-stopChan:
 			// Clean shutdown - always unregister
 			p.dog.UnregisterHeartbeat(watcherUUID)
 
