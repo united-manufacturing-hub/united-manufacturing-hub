@@ -45,7 +45,6 @@ type CommunicationState struct {
 	LoginResponse         *v2.LoginResponse
 	LoginResponseMu       *sync.RWMutex
 	mu                    *sync.RWMutex
-	restartMutex          sync.Mutex
 	Watchdog              *watchdog.Watchdog
 	InboundChannel        chan *models.UMHMessage
 	Puller                *pull.Puller
@@ -61,6 +60,7 @@ type CommunicationState struct {
 	TopicBrowserSimulator *topicbrowser.Simulator
 	ReleaseChannel        config.ReleaseChannel
 	ApiUrl                string
+	restartMutex          sync.Mutex
 	InsecureTLS           bool
 	// TopicBrowserSimulatorEnabled tracks whether simulator mode is enabled
 	TopicBrowserSimulatorEnabled bool
