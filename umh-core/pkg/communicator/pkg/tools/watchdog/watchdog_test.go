@@ -184,9 +184,9 @@ var _ = Describe("Watchdog", func() {
 
 	When("Watchdog has restart callback", func() {
 		It("should call restart function before panic", func() {
-			restartCalled := false
+			var restartCalled atomic.Bool
 			restartFunc := func() error {
-				restartCalled = true
+				restartCalled.Store(true)
 
 				return nil
 			}
@@ -195,7 +195,7 @@ var _ = Describe("Watchdog", func() {
 			Expect(uuid).ToNot(BeNil())
 			time.Sleep(3 * time.Second)
 
-			Expect(restartCalled).To(BeTrue())
+			Expect(restartCalled.Load()).To(BeTrue())
 			panickingUUIDsLock.Lock()
 			Expect(panickingUUIDs[uuid]).To(BeFalse())
 			panickingUUIDsLock.Unlock()
@@ -232,9 +232,9 @@ var _ = Describe("Watchdog", func() {
 
 	When("Watchdog restart succeeds and resets counter", func() {
 		It("should reset counter after successful restart", func() {
-			restartCount := 0
+			var restartCount atomic.Int32
 			restartFunc := func() error {
-				restartCount++
+				restartCount.Add(1)
 
 				return nil
 			}
@@ -243,10 +243,10 @@ var _ = Describe("Watchdog", func() {
 			Expect(uuid).ToNot(BeNil())
 			time.Sleep(3 * time.Second)
 
-			Expect(restartCount).To(Equal(1))
+			Expect(restartCount.Load()).To(Equal(int32(1)))
 
 			time.Sleep(3 * time.Second)
-			Expect(restartCount).To(Equal(2))
+			Expect(restartCount.Load()).To(Equal(int32(2)))
 
 			panickingUUIDsLock.Lock()
 			Expect(panickingUUIDs[uuid]).To(BeFalse())
@@ -256,9 +256,9 @@ var _ = Describe("Watchdog", func() {
 
 	When("Multiple restart attempts occur", func() {
 		It("should handle multiple restart cycles", func() {
-			restartCount := 0
+			var restartCount atomic.Int32
 			restartFunc := func() error {
-				restartCount++
+				restartCount.Add(1)
 
 				return nil
 			}
@@ -267,7 +267,7 @@ var _ = Describe("Watchdog", func() {
 			Expect(uuid).ToNot(BeNil())
 			time.Sleep(3 * time.Second)
 
-			Expect(restartCount).To(BeNumerically(">=", 1))
+			Expect(restartCount.Load()).To(BeNumerically(">=", int32(1)))
 			panickingUUIDsLock.Lock()
 			Expect(panickingUUIDs[uuid]).To(BeFalse())
 			panickingUUIDsLock.Unlock()
