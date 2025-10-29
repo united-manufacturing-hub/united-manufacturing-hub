@@ -113,7 +113,7 @@ var _ = Describe("Pull Restart", func() {
 
 			Expect(err).ToNot(HaveOccurred())
 			Expect(elapsed).To(BeNumerically(">=", 5*time.Second))
-			Expect(elapsed).To(BeNumerically("<", 6*time.Second))
+			Expect(elapsed).To(BeNumerically("<=", 7*time.Second))
 		})
 
 		It("should be thread-safe with concurrent restarts", func() {

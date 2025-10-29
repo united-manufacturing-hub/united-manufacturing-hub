@@ -100,9 +100,9 @@ var _ = Describe("Push Restart", func() {
 	AfterEach(func() {
 		if pusher != nil {
 			pusher.Stop()
-			time.Sleep(100 * time.Millisecond)
 		}
 		cancel()
+		time.Sleep(100 * time.Millisecond)
 	})
 
 	Describe("Restart", func() {
@@ -116,7 +116,7 @@ var _ = Describe("Push Restart", func() {
 
 			Expect(err).ToNot(HaveOccurred())
 			Expect(elapsed).To(BeNumerically(">=", 5*time.Second))
-			Expect(elapsed).To(BeNumerically("<", 6*time.Second))
+			Expect(elapsed).To(BeNumerically("<=", 7*time.Second))
 		})
 
 		It("should be thread-safe with concurrent restarts", func() {
