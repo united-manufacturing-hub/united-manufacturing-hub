@@ -361,11 +361,30 @@ func (c *CommunicationState) RestartCommunicators() error {
 	}
 
 	logger.Debug("Step 1: Stopping both Puller and Pusher goroutines")
+	var pullerDone, pusherDone <-chan struct{}
 	if puller != nil {
-		puller.Stop()
+		pullerDone = puller.Stop()
 	}
 	if pusher != nil {
-		pusher.Stop()
+		pusherDone = pusher.Stop()
+	}
+
+	timeout := time.After(5 * time.Second)
+	if pullerDone != nil {
+		select {
+		case <-pullerDone:
+			logger.Debug("Puller stopped successfully")
+		case <-timeout:
+			logger.Warn("Timeout waiting for Puller to stop")
+		}
+	}
+	if pusherDone != nil {
+		select {
+		case <-pusherDone:
+			logger.Debug("Pusher stopped successfully")
+		case <-timeout:
+			logger.Warn("Timeout waiting for Pusher to stop")
+		}
 	}
 
 	logger.Debug("Step 2: Resetting HTTP client connections")

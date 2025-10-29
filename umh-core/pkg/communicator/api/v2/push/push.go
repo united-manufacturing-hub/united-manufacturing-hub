@@ -62,6 +62,7 @@ type Pusher struct {
 	backoff                *tools.Backoff
 	logger                 *zap.SugaredLogger
 	stopChan               chan struct{}
+	doneChan               chan struct{}
 	apiURL                 string
 	watcherMutex           sync.RWMutex
 	stopOnce               sync.Once
@@ -101,16 +102,18 @@ func (p *Pusher) UpdateJWT(jwt string) {
 func (p *Pusher) Start() {
 	p.stopMutex.Lock()
 	p.stopChan = make(chan struct{})
+	p.doneChan = make(chan struct{})
 	p.stopOnce = sync.Once{}
 	p.stopMutex.Unlock()
 
 	go p.push()
 }
 
-// Stop stops the pusher.
-func (p *Pusher) Stop() {
+// Stop stops the pusher and returns a channel that will be closed when the goroutine finishes.
+func (p *Pusher) Stop() <-chan struct{} {
 	p.stopMutex.Lock()
 	stopChan := p.stopChan
+	doneChan := p.doneChan
 	p.stopMutex.Unlock()
 
 	if stopChan != nil {
@@ -119,6 +122,14 @@ func (p *Pusher) Stop() {
 			close(stopChan)
 		})
 	}
+
+	if doneChan == nil {
+		closed := make(chan struct{})
+		close(closed)
+		return closed
+	}
+
+	return doneChan
 }
 
 func (p *Pusher) Push(message models.UMHMessage) {
@@ -156,6 +167,15 @@ func (p *Pusher) Push(message models.UMHMessage) {
 }
 
 func (p *Pusher) push() {
+	defer func() {
+		p.stopMutex.Lock()
+		defer p.stopMutex.Unlock()
+		if p.doneChan != nil {
+			close(p.doneChan)
+			p.doneChan = nil
+		}
+	}()
+
 	boPostRequest := p.backoff
 
 	p.watcherMutex.Lock()
@@ -300,7 +320,13 @@ func (p *Pusher) Restart() error {
 	defer p.isRestarting.Store(false)
 
 	logger.Debug("Step 1: Stopping PUSH goroutine")
-	p.Stop()
+	done := p.Stop()
+	select {
+	case <-done:
+		logger.Debug("PUSH goroutine stopped successfully")
+	case <-time.After(5 * time.Second):
+		logger.Warn("Timeout waiting for PUSH goroutine to stop")
+	}
 
 	logger.Debug("Step 2: Resetting HTTP client connections")
 
