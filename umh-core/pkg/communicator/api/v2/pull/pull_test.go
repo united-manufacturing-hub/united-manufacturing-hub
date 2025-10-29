@@ -297,7 +297,13 @@ var _ = Describe("Channel Send stopChan Monitoring", func() {
 		inboundChannel = make(chan *models.UMHMessage, 1)
 
 		testServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			response := `{"umh_messages": [
+			// Only respond to /v2/instance/pull endpoint
+			if r.URL.Path != "/v2/instance/pull" {
+				w.WriteHeader(http.StatusNotFound)
+				return
+			}
+
+			response := `{"UMHMessages": [
 				{"email": "test1@example.com", "content": "message1", "instance_uuid": "test-instance", "metadata": {}},
 				{"email": "test2@example.com", "content": "message2", "instance_uuid": "test-instance", "metadata": {}}
 			]}`
