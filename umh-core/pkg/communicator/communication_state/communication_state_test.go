@@ -106,6 +106,10 @@ func TestRestartCommunicators_HTTPClientConnectionsAreClosed(t *testing.T) {
 	}
 	originalClient.Transport = mockTrans
 
+	t.Cleanup(func() {
+		originalClient.Transport = originalTransport
+	})
+
 	// TEST: CloseIdleConnections should be called during restart
 	err := commState.RestartCommunicators()
 	require.NoError(t, err)
