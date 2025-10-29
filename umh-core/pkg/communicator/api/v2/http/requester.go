@@ -53,6 +53,7 @@ func GetClient(insecureTLS bool) *http.Client {
 			ForceAttemptHTTP2: false,
 			TLSNextProto:      make(map[string]func(authority string, c *tls.Conn) http.RoundTripper),
 			Proxy:             http.ProxyFromEnvironment,
+			IdleConnTimeout:   30 * time.Second,
 		}
 
 		// Create an HTTP client with the custom transport
@@ -68,6 +69,7 @@ func GetClient(insecureTLS bool) *http.Client {
 			ForceAttemptHTTP2: false,
 			TLSNextProto:      make(map[string]func(authority string, c *tls.Conn) http.RoundTripper),
 			Proxy:             http.ProxyFromEnvironment,
+			IdleConnTimeout:   30 * time.Second,
 			TLSClientConfig: &tls.Config{
 				InsecureSkipVerify: insecureTLS,
 				MinVersion:         tls.VersionTLS10, // Allow older TLS versions

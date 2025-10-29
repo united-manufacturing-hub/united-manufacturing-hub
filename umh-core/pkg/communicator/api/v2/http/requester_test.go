@@ -215,4 +215,26 @@ var _ = Describe("Requester", func() {
 			}
 		})
 	})
+
+	Context("HTTP Transport Configuration (Bug #3)", func() {
+		It("should have IdleConnTimeout set to 30 seconds for secure client", func() {
+			client := http.GetClient(false)
+			Expect(client).ToNot(BeNil())
+
+			transport, ok := client.Transport.(*netHTTP.Transport)
+			Expect(ok).To(BeTrue(), "Expected client.Transport to be *http.Transport")
+
+			Expect(transport.IdleConnTimeout).To(Equal(30*time.Second), "Expected IdleConnTimeout to be 30 seconds to match Keep-Alive header")
+		})
+
+		It("should have IdleConnTimeout set to 30 seconds for insecure client", func() {
+			client := http.GetClient(true)
+			Expect(client).ToNot(BeNil())
+
+			transport, ok := client.Transport.(*netHTTP.Transport)
+			Expect(ok).To(BeTrue(), "Expected client.Transport to be *http.Transport")
+
+			Expect(transport.IdleConnTimeout).To(Equal(30*time.Second), "Expected IdleConnTimeout to be 30 seconds to match Keep-Alive header")
+		})
+	})
 })

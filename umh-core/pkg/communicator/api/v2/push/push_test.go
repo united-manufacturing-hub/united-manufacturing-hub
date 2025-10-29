@@ -240,3 +240,102 @@ var _ = Describe("Watchdog Heartbeat Bug Fix", func() {
 		Expect(foundOK).To(BeFalse(), "Expected heartbeat OK to be reported AFTER HTTP success, but it was reported before any HTTP request")
 	})
 })
+
+var _ = Describe("Channel Overflow Handling (Bug #2)", func() {
+	var (
+		pusher          *push.Pusher
+		mockDog         *MockWatchdog
+		outboundChannel chan *models.UMHMessage
+		deadletterCh    chan push.DeadLetter
+		testLogger      *zap.SugaredLogger
+	)
+
+	BeforeEach(func() {
+		testLogger = logger.For(logger.ComponentCommunicator)
+		mockDog = NewMockWatchdog()
+		outboundChannel = make(chan *models.UMHMessage, 100)
+		deadletterCh = push.DefaultDeadLetterChanBuffer()
+		backoff := push.DefaultBackoffPolicy()
+		pusher = push.NewPusher(uuid.New(), "test-jwt", mockDog, outboundChannel, deadletterCh, backoff, true, "https://management.umh.app", testLogger)
+	})
+
+	AfterEach(func() {
+		if pusher != nil {
+			pusher.Stop()
+			time.Sleep(100 * time.Millisecond)
+		}
+	})
+
+	It("should NOT block when channel is full", func() {
+		for i := 0; i < 100; i++ {
+			outboundChannel <- &models.UMHMessage{
+				InstanceUUID: uuid.New(),
+				Email:        "test@example.com",
+				Content:      "filler-message",
+			}
+		}
+
+		done := make(chan bool)
+		go func() {
+			pusher.Push(models.UMHMessage{
+				Email:   "test@example.com",
+				Content: "test-message",
+			})
+			done <- true
+		}()
+
+		select {
+		case <-done:
+		case <-time.After(1 * time.Second):
+			Expect(false).To(BeTrue(), "Push() blocked for more than 1 second when channel was full")
+		}
+	})
+
+	It("should drop message when channel is full", func() {
+		for i := 0; i < 100; i++ {
+			outboundChannel <- &models.UMHMessage{
+				InstanceUUID: uuid.New(),
+				Email:        "test@example.com",
+				Content:      "filler-message",
+			}
+		}
+
+		initialLen := len(outboundChannel)
+		Expect(initialLen).To(Equal(100))
+
+		pusher.Push(models.UMHMessage{
+			Email:   "test@example.com",
+			Content: "test-message",
+		})
+
+		time.Sleep(50 * time.Millisecond)
+
+		finalLen := len(outboundChannel)
+		Expect(finalLen).To(Equal(100), "Expected channel to remain at capacity (message dropped), but length changed")
+	})
+
+	It("should report warning when channel is full and message is dropped", func() {
+		pusher.Start()
+		time.Sleep(50 * time.Millisecond)
+
+		for i := 0; i < 100; i++ {
+			outboundChannel <- &models.UMHMessage{
+				InstanceUUID: uuid.New(),
+				Email:        "test@example.com",
+				Content:      "filler-message",
+			}
+		}
+
+		mockDog.Reset()
+
+		pusher.Push(models.UMHMessage{
+			Email:   "test@example.com",
+			Content: "test-message",
+		})
+
+		time.Sleep(50 * time.Millisecond)
+
+		reports := mockDog.GetStatusReports()
+		Expect(len(reports)).To(BeNumerically(">", 0), "Expected warning to be reported when channel is full")
+	})
+})

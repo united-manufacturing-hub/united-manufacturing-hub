@@ -133,8 +133,16 @@ func (p *Pusher) Stop() <-chan struct{} {
 }
 
 func (p *Pusher) Push(message models.UMHMessage) {
-	if len(p.outboundMessageChannel) == cap(p.outboundMessageChannel) {
-		p.logger.Warnf("Outbound message channel is full !")
+	msg := &models.UMHMessage{
+		InstanceUUID: p.instanceUUID,
+		Content:      message.Content,
+		Email:        message.Email,
+	}
+
+	select {
+	case p.outboundMessageChannel <- msg:
+	default:
+		p.logger.Warnf("Outbound message channel is full, dropping message")
 
 		p.watcherMutex.RLock()
 		watcherUUID := p.watcherUUID
@@ -143,26 +151,6 @@ func (p *Pusher) Push(message models.UMHMessage) {
 		if watcherUUID != uuid.Nil {
 			p.dog.ReportHeartbeatStatus(watcherUUID, watchdog.HEARTBEAT_STATUS_WARNING)
 		}
-	}
-
-	// Recover from panic
-	// This is primarily for tests, where the outboundMessageChannel is closed.
-	defer func() {
-		if r := recover(); r != nil {
-			zap.S().Errorf("Panic in Push: %v", r)
-
-			p.watcherMutex.RLock()
-			watcherUUID := p.watcherUUID
-			p.watcherMutex.RUnlock()
-
-			p.dog.ReportHeartbeatStatus(watcherUUID, watchdog.HEARTBEAT_STATUS_WARNING)
-		}
-	}()
-
-	p.outboundMessageChannel <- &models.UMHMessage{
-		InstanceUUID: p.instanceUUID,
-		Content:      message.Content,
-		Email:        message.Email,
 	}
 }
 
