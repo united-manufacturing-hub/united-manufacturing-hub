@@ -158,8 +158,6 @@ func (p *Puller) pull() {
 		case <-ticker.C:
 		}
 
-		p.dog.ReportHeartbeatStatus(watcherUUID, watchdog.HEARTBEAT_STATUS_OK)
-
 		var cookies = map[string]string{
 			"token": p.jwt.Load().(string),
 		}
@@ -178,6 +176,7 @@ func (p *Puller) pull() {
 			continue
 		}
 
+		p.dog.ReportHeartbeatStatus(watcherUUID, watchdog.HEARTBEAT_STATUS_OK)
 		error_handler.ResetErrorCounter()
 
 		if incomingMessages == nil || incomingMessages.UMHMessages == nil || len(incomingMessages.UMHMessages) == 0 {

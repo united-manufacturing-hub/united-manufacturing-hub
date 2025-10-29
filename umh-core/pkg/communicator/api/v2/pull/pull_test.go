@@ -19,6 +19,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2/pull"
@@ -27,6 +28,49 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"go.uber.org/zap"
 )
+
+type MockWatchdog struct {
+	statusReports []watchdog.HeartbeatStatus
+	mu            sync.Mutex
+}
+
+func NewMockWatchdog() *MockWatchdog {
+	return &MockWatchdog{
+		statusReports: []watchdog.HeartbeatStatus{},
+	}
+}
+
+func (m *MockWatchdog) Start() {}
+
+func (m *MockWatchdog) RegisterHeartbeat(name string, warningsUntilFailure uint64, timeout uint64, onlyIfSubscribers bool) uuid.UUID {
+	return uuid.New()
+}
+
+func (m *MockWatchdog) RegisterHeartbeatWithRestart(name string, warningsUntilFailure uint64, timeout uint64, onlyIfSubscribers bool, restartFunc func() error) uuid.UUID {
+	return uuid.New()
+}
+
+func (m *MockWatchdog) UnregisterHeartbeat(uniqueIdentifier uuid.UUID) {}
+
+func (m *MockWatchdog) ReportHeartbeatStatus(uniqueIdentifier uuid.UUID, status watchdog.HeartbeatStatus) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.statusReports = append(m.statusReports, status)
+}
+
+func (m *MockWatchdog) SetHasSubscribers(has bool) {}
+
+func (m *MockWatchdog) GetStatusReports() []watchdog.HeartbeatStatus {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return append([]watchdog.HeartbeatStatus{}, m.statusReports...)
+}
+
+func (m *MockWatchdog) Reset() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.statusReports = []watchdog.HeartbeatStatus{}
+}
 
 var _ = Describe("Pull Restart", func() {
 	var (
@@ -117,5 +161,48 @@ var _ = Describe("Pull Restart", func() {
 
 			wg.Wait()
 		})
+	})
+})
+
+var _ = Describe("Watchdog Heartbeat Bug Fix", func() {
+	var (
+		puller         *pull.Puller
+		mockDog        *MockWatchdog
+		inboundChannel chan *models.UMHMessage
+		testLogger     *zap.SugaredLogger
+	)
+
+	BeforeEach(func() {
+		testLogger = logger.For(logger.ComponentCommunicator)
+		mockDog = NewMockWatchdog()
+		inboundChannel = make(chan *models.UMHMessage, 100)
+		puller = pull.NewPuller("test-jwt", mockDog, inboundChannel, true, "https://management.umh.app", testLogger)
+	})
+
+	AfterEach(func() {
+		if puller != nil {
+			puller.Stop()
+			time.Sleep(100 * time.Millisecond)
+		}
+	})
+
+	It("should NOT report heartbeat OK when HTTP request fails", func() {
+		puller.Start()
+		time.Sleep(50 * time.Millisecond)
+
+		mockDog.Reset()
+
+		time.Sleep(500 * time.Millisecond)
+
+		reports := mockDog.GetStatusReports()
+
+		okCount := 0
+		for _, status := range reports {
+			if status == watchdog.HEARTBEAT_STATUS_OK {
+				okCount++
+			}
+		}
+
+		Expect(okCount).To(Equal(0), "Expected NO heartbeat OK reports when HTTP fails, but got %d", okCount)
 	})
 })

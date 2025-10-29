@@ -29,6 +29,49 @@ import (
 	"go.uber.org/zap"
 )
 
+type MockWatchdog struct {
+	statusReports []watchdog.HeartbeatStatus
+	mu            sync.Mutex
+}
+
+func NewMockWatchdog() *MockWatchdog {
+	return &MockWatchdog{
+		statusReports: []watchdog.HeartbeatStatus{},
+	}
+}
+
+func (m *MockWatchdog) Start() {}
+
+func (m *MockWatchdog) RegisterHeartbeat(name string, warningsUntilFailure uint64, timeout uint64, onlyIfSubscribers bool) uuid.UUID {
+	return uuid.New()
+}
+
+func (m *MockWatchdog) RegisterHeartbeatWithRestart(name string, warningsUntilFailure uint64, timeout uint64, onlyIfSubscribers bool, restartFunc func() error) uuid.UUID {
+	return uuid.New()
+}
+
+func (m *MockWatchdog) UnregisterHeartbeat(uniqueIdentifier uuid.UUID) {}
+
+func (m *MockWatchdog) ReportHeartbeatStatus(uniqueIdentifier uuid.UUID, status watchdog.HeartbeatStatus) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.statusReports = append(m.statusReports, status)
+}
+
+func (m *MockWatchdog) SetHasSubscribers(has bool) {}
+
+func (m *MockWatchdog) GetStatusReports() []watchdog.HeartbeatStatus {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return append([]watchdog.HeartbeatStatus{}, m.statusReports...)
+}
+
+func (m *MockWatchdog) Reset() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.statusReports = []watchdog.HeartbeatStatus{}
+}
+
 var _ = Describe("Push Restart", func() {
 	var (
 		pusher          *push.Pusher
@@ -121,5 +164,79 @@ var _ = Describe("Push Restart", func() {
 
 			wg.Wait()
 		})
+	})
+})
+
+var _ = Describe("Watchdog Heartbeat Bug Fix", func() {
+	var (
+		pusher          *push.Pusher
+		mockDog         *MockWatchdog
+		outboundChannel chan *models.UMHMessage
+		deadletterCh    chan push.DeadLetter
+		testLogger      *zap.SugaredLogger
+	)
+
+	BeforeEach(func() {
+		testLogger = logger.For(logger.ComponentCommunicator)
+		mockDog = NewMockWatchdog()
+		outboundChannel = make(chan *models.UMHMessage, 100)
+		deadletterCh = push.DefaultDeadLetterChanBuffer()
+		backoff := push.DefaultBackoffPolicy()
+		pusher = push.NewPusher(uuid.New(), "test-jwt", mockDog, outboundChannel, deadletterCh, backoff, true, "https://management.umh.app", testLogger)
+	})
+
+	AfterEach(func() {
+		if pusher != nil {
+			pusher.Stop()
+			time.Sleep(100 * time.Millisecond)
+		}
+	})
+
+	It("should NOT report heartbeat OK when HTTP request fails", func() {
+		pusher.Start()
+		time.Sleep(50 * time.Millisecond)
+
+		mockDog.Reset()
+
+		msg := &models.UMHMessage{
+			InstanceUUID: uuid.New(),
+			Email:        "test@example.com",
+			Content:      "test-message",
+		}
+		outboundChannel <- msg
+
+		time.Sleep(500 * time.Millisecond)
+
+		reports := mockDog.GetStatusReports()
+
+		okCount := 0
+		for _, status := range reports {
+			if status == watchdog.HEARTBEAT_STATUS_OK {
+				okCount++
+			}
+		}
+
+		Expect(okCount).To(Equal(0), "Expected NO heartbeat OK reports when HTTP fails, but got %d", okCount)
+	})
+
+	It("should report heartbeat OK ONLY after HTTP request succeeds", func() {
+		pusher.Start()
+		time.Sleep(50 * time.Millisecond)
+
+		mockDog.Reset()
+
+		time.Sleep(100 * time.Millisecond)
+
+		reports := mockDog.GetStatusReports()
+
+		foundOK := false
+		for _, status := range reports {
+			if status == watchdog.HEARTBEAT_STATUS_OK {
+				foundOK = true
+				break
+			}
+		}
+
+		Expect(foundOK).To(BeFalse(), "Expected heartbeat OK to be reported AFTER HTTP success, but it was reported before any HTTP request")
 	})
 })
