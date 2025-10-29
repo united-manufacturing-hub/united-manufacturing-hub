@@ -25,6 +25,7 @@ import (
 	"net/http"
 	"net/http/httptrace"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/united-manufacturing-hub/expiremap/v2/pkg/expiremap"
@@ -130,26 +131,33 @@ func setupClientTrace(requestStart *time.Time, timings *struct {
 	tls       time.Duration
 	conn      time.Duration
 }) *httptrace.ClientTrace {
-	var dnsStart, tlsStart, connStart time.Time
+	// Use atomic values to handle parallel dial attempts in net.dialParallel
+	var dnsStart, tlsStart, connStart atomic.Value
 
 	return &httptrace.ClientTrace{
 		DNSStart: func(_ httptrace.DNSStartInfo) {
-			dnsStart = time.Now()
+			dnsStart.Store(time.Now())
 		},
 		DNSDone: func(_ httptrace.DNSDoneInfo) {
-			timings.dns = time.Since(dnsStart)
+			if start := dnsStart.Load(); start != nil {
+				timings.dns = time.Since(start.(time.Time))
+			}
 		},
 		TLSHandshakeStart: func() {
-			tlsStart = time.Now()
+			tlsStart.Store(time.Now())
 		},
 		TLSHandshakeDone: func(_ tls.ConnectionState, _ error) {
-			timings.tls = time.Since(tlsStart)
+			if start := tlsStart.Load(); start != nil {
+				timings.tls = time.Since(start.(time.Time))
+			}
 		},
 		ConnectStart: func(_, _ string) {
-			connStart = time.Now()
+			connStart.Store(time.Now())
 		},
 		ConnectDone: func(_, _ string, _ error) {
-			timings.conn = time.Since(connStart)
+			if start := connStart.Load(); start != nil {
+				timings.conn = time.Since(start.(time.Time))
+			}
 		},
 		GotFirstResponseByte: func() {
 			timings.firstByte = time.Since(*requestStart)
