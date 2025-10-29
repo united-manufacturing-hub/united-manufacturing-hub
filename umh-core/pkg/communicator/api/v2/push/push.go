@@ -211,7 +211,6 @@ func (p *Pusher) push() {
 			}
 
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-			defer cancel()
 
 			go func() {
 				select {
@@ -222,6 +221,7 @@ func (p *Pusher) push() {
 			}()
 
 			_, status, err := http.PostRequest[any, backend_api_structs.PushPayload](ctx, http.PushEndpoint, &payload, nil, &cookies, p.insecureTLS, p.apiURL, p.logger)
+			cancel()
 			if err != nil{
 				if errors.Is(err, context.Canceled) {
 					continue
@@ -269,7 +269,6 @@ func (p *Pusher) push() {
 			d.retryAttempts++
 
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-			defer cancel()
 
 			go func() {
 				select {
@@ -280,6 +279,7 @@ func (p *Pusher) push() {
 			}()
 
 			_, _, err := http.PostRequest[any, backend_api_structs.PushPayload](ctx, http.PushEndpoint, &backend_api_structs.PushPayload{UMHMessages: d.messages}, nil, &d.cookies, p.insecureTLS, p.apiURL, p.logger)
+			cancel()
 			if err != nil {
 				if errors.Is(err, context.Canceled) {
 					continue

@@ -163,7 +163,6 @@ func (p *Puller) pull() {
 		}
 
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
 
 		go func() {
 			select {
@@ -174,6 +173,7 @@ func (p *Puller) pull() {
 		}()
 
 		incomingMessages, _, err := http.GetRequest[backend_api_structs.PullPayload](ctx, http.PullEndpoint, nil, &cookies, p.insecureTLS, p.apiURL, p.logger)
+		cancel()
 		if err != nil {
 			if errors.Is(err, context.Canceled) {
 				time.Sleep(1 * time.Second)
