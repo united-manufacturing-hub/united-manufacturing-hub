@@ -108,7 +108,7 @@ func TestRestartCommunicators_HTTPClientConnectionsAreClosed(t *testing.T) {
 
 	// TEST: CloseIdleConnections should be called during restart
 	err := commState.RestartCommunicators()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Verify CloseIdleConnections was actually called
 	assert.True(t, mockTrans.closeIdleConnectionsCalled,
@@ -170,7 +170,7 @@ func TestRestartCommunicators_StopsAndRestartsBothComponents(t *testing.T) {
 
 	// TEST: Restart should stop and restart both
 	err := commState.RestartCommunicators()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Verify both are running after restart
 	// (In production code, Puller/Pusher have internal state indicating running status)
@@ -268,9 +268,9 @@ func TestRestartCommunicators_NilComponentHandling(t *testing.T) {
 			err := commState.RestartCommunicators()
 
 			if tt.expectError {
-				assert.Error(t, err)
+				require.Error(t, err)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 			}
 
 			// Cleanup
@@ -345,30 +345,6 @@ func TestPusherStop_WaitsForGoroutineWithTimeout(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("Stop() done channel did not close within timeout, goroutine may still be running")
 	}
-}
-
-// mockSlowComponent simulates a component that takes a specific duration to stop
-type mockSlowComponent struct {
-	stopDuration time.Duration
-	stopChan     chan struct{}
-	doneChan     chan struct{}
-}
-
-func newMockSlowComponent(stopDuration time.Duration) *mockSlowComponent {
-	return &mockSlowComponent{
-		stopDuration: stopDuration,
-		stopChan:     make(chan struct{}),
-		doneChan:     make(chan struct{}),
-	}
-}
-
-func (m *mockSlowComponent) Stop() <-chan struct{} {
-	close(m.stopChan)
-	go func() {
-		time.Sleep(m.stopDuration)
-		close(m.doneChan)
-	}()
-	return m.doneChan
 }
 
 func TestRestartCommunicators_TimeoutReuseBug(t *testing.T) {

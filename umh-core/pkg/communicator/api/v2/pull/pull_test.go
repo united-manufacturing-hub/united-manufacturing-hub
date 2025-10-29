@@ -229,7 +229,7 @@ var _ = Describe("HTTP Request Cancellation on Stop", func() {
 			serverBlocked <- struct{}{}
 			time.Sleep(35 * time.Second)
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(`{"umh_messages": []}`))
+			_, _ = w.Write([]byte(`{"umh_messages": []}`))
 		}))
 
 		puller = pull.NewPuller("test-jwt", mockDog, inboundChannel, true, slowServer.URL, testLogger)
@@ -303,7 +303,7 @@ var _ = Describe("Channel Send stopChan Monitoring", func() {
 			]}`
 
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(response))
+			_, _ = w.Write([]byte(response))
 		}))
 
 		puller = pull.NewPuller("test-jwt", mockDog, inboundChannel, true, testServer.URL, testLogger)
