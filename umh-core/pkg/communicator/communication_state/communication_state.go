@@ -369,20 +369,24 @@ func (c *CommunicationState) RestartCommunicators() error {
 		pusherDone = pusher.Stop()
 	}
 
+	pullerStopped := false
 	pullerTimeout := time.After(5 * time.Second)
 	if pullerDone != nil {
 		select {
 		case <-pullerDone:
+			pullerStopped = true
 			logger.Debug("Puller stopped successfully")
 		case <-pullerTimeout:
 			logger.Warn("Timeout waiting for Puller to stop")
 		}
 	}
 
+	pusherStopped := false
 	pusherTimeout := time.After(5 * time.Second)
 	if pusherDone != nil {
 		select {
 		case <-pusherDone:
+			pusherStopped = true
 			logger.Debug("Pusher stopped successfully")
 		case <-pusherTimeout:
 			logger.Warn("Timeout waiting for Pusher to stop")
@@ -406,11 +410,15 @@ func (c *CommunicationState) RestartCommunicators() error {
 	time.Sleep(5 * time.Second)
 
 	logger.Debug("Step 4: Starting both Puller and Pusher goroutines with fresh connections")
-	if puller != nil {
+	if puller != nil && pullerStopped {
 		puller.Start()
+	} else if puller != nil {
+		logger.Warn("Skipping Puller start: previous instance not stopped")
 	}
-	if pusher != nil {
+	if pusher != nil && pusherStopped {
 		pusher.Start()
+	} else if pusher != nil {
+		logger.Warn("Skipping Pusher start: previous instance not stopped")
 	}
 
 	logger.Info("Coordinated restart complete")
