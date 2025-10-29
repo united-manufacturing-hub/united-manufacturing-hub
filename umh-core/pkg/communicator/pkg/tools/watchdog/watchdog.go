@@ -192,13 +192,20 @@ func (s *Watchdog) Start() {
 								s.watchdogID, overdueHeartbeat.name, overdueHeartbeat.hb.uniqueIdentifier, err.Error()))
 						}
 
-						// Restart succeeded → reset counter and re-register
+						// Restart succeeded → reset counter only if not re-registered
 						logger.Infof("[Watchdog] Restart successful, resetting heartbeat")
 						s.registeredHeartbeatsMutex.Lock()
 
-						now := time.Now()
-						overdueHeartbeat.hb.lastHeatbeatTime.Store(now.UTC().Unix())
-						s.registeredHeartbeats[overdueHeartbeat.name] = overdueHeartbeat.hb
+						// Only re-add if component hasn't re-registered yet (fallback)
+						if _, exists := s.registeredHeartbeats[overdueHeartbeat.name]; !exists {
+							now := time.Now()
+							overdueHeartbeat.hb.lastHeatbeatTime.Store(now.UTC().Unix())
+							s.registeredHeartbeats[overdueHeartbeat.name] = overdueHeartbeat.hb
+							logger.Debugf("[Watchdog] Re-added old heartbeat (component not yet re-registered)")
+						} else {
+							logger.Debugf("[Watchdog] Component already re-registered with new UUID")
+						}
+
 						s.registeredHeartbeatsMutex.Unlock()
 
 						continue
