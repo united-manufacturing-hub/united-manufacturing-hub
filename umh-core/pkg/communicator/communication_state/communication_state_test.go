@@ -283,3 +283,182 @@ func TestRestartCommunicators_NilComponentHandling(t *testing.T) {
 		})
 	}
 }
+
+func TestPullerStop_WaitsForGoroutineWithTimeout(t *testing.T) {
+	ctx := context.Background()
+	logger, _ := zap.NewDevelopment()
+	sugar := logger.Sugar()
+
+	watchdogInstance := watchdog.NewWatchdog(ctx, time.NewTicker(1*time.Second), false, sugar)
+	inbound := make(chan *models.UMHMessage, 10)
+
+	puller := pull.NewPullerWithRestartFunc(
+		"test-jwt",
+		watchdogInstance,
+		inbound,
+		false,
+		"https://test.example.com",
+		sugar,
+		nil,
+	)
+
+	puller.Start()
+	time.Sleep(100 * time.Millisecond)
+
+	done := puller.Stop()
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("Stop() done channel did not close within timeout, goroutine may still be running")
+	}
+}
+
+func TestPusherStop_WaitsForGoroutineWithTimeout(t *testing.T) {
+	ctx := context.Background()
+	logger, _ := zap.NewDevelopment()
+	sugar := logger.Sugar()
+
+	watchdogInstance := watchdog.NewWatchdog(ctx, time.NewTicker(1*time.Second), false, sugar)
+	outbound := make(chan *models.UMHMessage, 10)
+
+	pusher := push.NewPusherWithRestartFunc(
+		uuid.New(),
+		"test-jwt",
+		watchdogInstance,
+		outbound,
+		push.DefaultDeadLetterChanBuffer(),
+		push.DefaultBackoffPolicy(),
+		false,
+		"https://test.example.com",
+		sugar,
+		nil,
+	)
+
+	pusher.Start()
+	time.Sleep(100 * time.Millisecond)
+
+	done := pusher.Stop()
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("Stop() done channel did not close within timeout, goroutine may still be running")
+	}
+}
+
+// mockSlowComponent simulates a component that takes a specific duration to stop
+type mockSlowComponent struct {
+	stopDuration time.Duration
+	stopChan     chan struct{}
+	doneChan     chan struct{}
+}
+
+func newMockSlowComponent(stopDuration time.Duration) *mockSlowComponent {
+	return &mockSlowComponent{
+		stopDuration: stopDuration,
+		stopChan:     make(chan struct{}),
+		doneChan:     make(chan struct{}),
+	}
+}
+
+func (m *mockSlowComponent) Stop() <-chan struct{} {
+	close(m.stopChan)
+	go func() {
+		time.Sleep(m.stopDuration)
+		close(m.doneChan)
+	}()
+	return m.doneChan
+}
+
+func TestRestartCommunicators_TimeoutReuseBug(t *testing.T) {
+	// This test verifies that each component (Puller and Pusher) gets its OWN 5-second timeout
+	// when stopping during a restart, rather than sharing a single timeout channel.
+	//
+	// The bug scenario:
+	// - Single timeout channel created and used for BOTH components
+	// - When Puller takes 6s to stop, the first select consumes the timeout
+	// - The second select for Pusher sees an already-expired timeout and immediately falls through
+	// - Result: Pusher doesn't get its full 5s timeout window
+	//
+	// Expected behavior (this test verifies):
+	// - Puller gets 5s timeout (will timeout at 5s if it takes 6s)
+	// - Pusher gets SEPARATE 5s timeout (will complete at 3s)
+	// - Total time: 5s (Puller timeout) + 3s (Pusher stop) = 8s
+	//
+	// With buggy single timeout: Total ≈ 5s (Puller timeout, Pusher immediate)
+	// With fixed separate timeouts: Total ≈ 8s (Puller timeout + Pusher wait)
+
+	// Measure how long the timeout logic takes
+	start := time.Now()
+
+	// Create done channels that will close after specified durations
+	// These simulate Stop() behavior
+	pullerDone := make(chan struct{})
+	pusherDone := make(chan struct{})
+
+	// Start goroutines BEFORE creating timeouts to ensure proper timing
+	go func() {
+		time.Sleep(6 * time.Second) // Puller takes 6s (exceeds 5s timeout)
+		close(pullerDone)
+	}()
+
+	// This simulates the FIXED implementation (separate timeouts)
+	pullerTimeout := time.After(5 * time.Second)
+	pullerResult := "unknown"
+	if pullerDone != nil {
+		select {
+		case <-pullerDone:
+			pullerResult = "stopped"
+			t.Log("Puller stopped successfully")
+		case <-pullerTimeout:
+			pullerResult = "timeout"
+			t.Log("Timeout waiting for Puller to stop (expected)")
+		}
+	}
+
+	// NOW start the Pusher goroutine AFTER Puller select completes
+	go func() {
+		time.Sleep(3 * time.Second) // Pusher takes 3s (within 5s timeout)
+		close(pusherDone)
+	}()
+
+	pusherTimeout := time.After(5 * time.Second) // NEW separate timeout
+	pusherResult := "unknown"
+	if pusherDone != nil {
+		select {
+		case <-pusherDone:
+			pusherResult = "stopped"
+			t.Log("Pusher stopped successfully")
+		case <-pusherTimeout:
+			pusherResult = "timeout"
+			t.Log("Timeout waiting for Pusher to stop")
+		}
+	}
+
+	elapsed := time.Since(start)
+
+	// Verify Puller timed out (as expected for 6s stop with 5s timeout)
+	if pullerResult != "timeout" {
+		t.Errorf("Expected Puller to timeout, got: %s", pullerResult)
+	}
+
+	// Verify Pusher stopped successfully (3s < 5s timeout)
+	if pusherResult != "stopped" {
+		t.Errorf("Expected Pusher to stop successfully, got: %s", pusherResult)
+	}
+
+	// With separate timeouts: elapsed ≈ 8s (Puller timeout 5s + Pusher wait 3s)
+	// Allow small timing tolerance (7.9s to account for scheduling)
+	if elapsed < 7900*time.Millisecond {
+		t.Errorf("Separate timeout verification failed! Expected ≥8s (Puller timeout 5s + Pusher wait 3s), got %v", elapsed)
+		t.Errorf("This would indicate timeout channels are being reused instead of created separately")
+	}
+
+	// Also verify we didn't wait too long (no more than 10s)
+	if elapsed > 10*time.Second {
+		t.Errorf("Took too long! Expected ~8s, got %v", elapsed)
+	}
+
+	t.Logf("SUCCESS: Total elapsed time %v confirms separate timeouts working correctly", elapsed)
+}

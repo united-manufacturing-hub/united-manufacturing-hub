@@ -16,6 +16,8 @@ package push_test
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
 	"sync"
 	"time"
 
@@ -337,5 +339,96 @@ var _ = Describe("Channel Overflow Handling (Bug #2)", func() {
 
 		reports := mockDog.GetStatusReports()
 		Expect(len(reports)).To(BeNumerically(">", 0), "Expected warning to be reported when channel is full")
+	})
+})
+
+var _ = Describe("HTTP Request Cancellation on Stop", func() {
+	var (
+		pusher          *push.Pusher
+		mockDog         *MockWatchdog
+		outboundChannel chan *models.UMHMessage
+		deadletterCh    chan push.DeadLetter
+		testLogger      *zap.SugaredLogger
+		slowServer      *httptest.Server
+		serverBlocked   chan struct{}
+	)
+
+	BeforeEach(func() {
+		testLogger = logger.For(logger.ComponentCommunicator)
+		mockDog = NewMockWatchdog()
+		outboundChannel = make(chan *models.UMHMessage, 100)
+		deadletterCh = push.DefaultDeadLetterChanBuffer()
+
+		serverBlocked = make(chan struct{})
+		slowServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			serverBlocked <- struct{}{}
+			time.Sleep(35 * time.Second)
+			w.WriteHeader(http.StatusOK)
+		}))
+
+		backoff := push.DefaultBackoffPolicy()
+		pusher = push.NewPusher(uuid.New(), "test-jwt", mockDog, outboundChannel, deadletterCh, backoff, true, slowServer.URL, testLogger)
+	})
+
+	AfterEach(func() {
+		if pusher != nil {
+			pusher.Stop()
+			time.Sleep(100 * time.Millisecond)
+		}
+		if slowServer != nil {
+			slowServer.Close()
+		}
+	})
+
+	It("should cancel HTTP request when Stop is called during main push", func() {
+		pusher.Start()
+		time.Sleep(50 * time.Millisecond)
+
+		msg := &models.UMHMessage{
+			InstanceUUID: uuid.New(),
+			Email:        "test@example.com",
+			Content:      "test-message",
+		}
+		outboundChannel <- msg
+
+		select {
+		case <-serverBlocked:
+		case <-time.After(2 * time.Second):
+			Fail("Server never received request")
+		}
+
+		startTime := time.Now()
+		done := pusher.Stop()
+
+		select {
+		case <-done:
+			elapsed := time.Since(startTime)
+			Expect(elapsed).To(BeNumerically("<", 2*time.Second), "Expected Stop() to return quickly (<2s), but took %v. HTTP request was not cancelled.", elapsed)
+		case <-time.After(40 * time.Second):
+			Fail("Stop() did not complete within 40 seconds. HTTP request is blocking shutdown.")
+		}
+	})
+
+	It("should handle context cancellation gracefully without errors", func() {
+		pusher.Start()
+		time.Sleep(50 * time.Millisecond)
+
+		msg := &models.UMHMessage{
+			InstanceUUID: uuid.New(),
+			Email:        "test@example.com",
+			Content:      "test-message",
+		}
+		outboundChannel <- msg
+
+		select {
+		case <-serverBlocked:
+		case <-time.After(2 * time.Second):
+			Fail("Server never received request")
+		}
+
+		done := pusher.Stop()
+		<-done
+
+		time.Sleep(100 * time.Millisecond)
 	})
 })

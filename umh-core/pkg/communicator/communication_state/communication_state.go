@@ -369,20 +369,22 @@ func (c *CommunicationState) RestartCommunicators() error {
 		pusherDone = pusher.Stop()
 	}
 
-	timeout := time.After(5 * time.Second)
+	pullerTimeout := time.After(5 * time.Second)
 	if pullerDone != nil {
 		select {
 		case <-pullerDone:
 			logger.Debug("Puller stopped successfully")
-		case <-timeout:
+		case <-pullerTimeout:
 			logger.Warn("Timeout waiting for Puller to stop")
 		}
 	}
+
+	pusherTimeout := time.After(5 * time.Second)
 	if pusherDone != nil {
 		select {
 		case <-pusherDone:
 			logger.Debug("Pusher stopped successfully")
-		case <-timeout:
+		case <-pusherTimeout:
 			logger.Warn("Timeout waiting for Pusher to stop")
 		}
 	}

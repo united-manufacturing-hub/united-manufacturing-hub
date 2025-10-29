@@ -16,6 +16,8 @@ package pull_test
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
 	"sync"
 	"time"
 
@@ -204,5 +206,137 @@ var _ = Describe("Watchdog Heartbeat Bug Fix", func() {
 		}
 
 		Expect(okCount).To(Equal(0), "Expected NO heartbeat OK reports when HTTP fails, but got %d", okCount)
+	})
+})
+
+var _ = Describe("HTTP Request Cancellation on Stop", func() {
+	var (
+		puller         *pull.Puller
+		mockDog        *MockWatchdog
+		inboundChannel chan *models.UMHMessage
+		testLogger     *zap.SugaredLogger
+		slowServer     *httptest.Server
+		serverBlocked  chan struct{}
+	)
+
+	BeforeEach(func() {
+		testLogger = logger.For(logger.ComponentCommunicator)
+		mockDog = NewMockWatchdog()
+		inboundChannel = make(chan *models.UMHMessage, 100)
+
+		serverBlocked = make(chan struct{})
+		slowServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			serverBlocked <- struct{}{}
+			time.Sleep(35 * time.Second)
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(`{"umh_messages": []}`))
+		}))
+
+		puller = pull.NewPuller("test-jwt", mockDog, inboundChannel, true, slowServer.URL, testLogger)
+	})
+
+	AfterEach(func() {
+		if puller != nil {
+			puller.Stop()
+			time.Sleep(100 * time.Millisecond)
+		}
+		if slowServer != nil {
+			slowServer.Close()
+		}
+	})
+
+	It("should cancel HTTP request when Stop is called", func() {
+		puller.Start()
+
+		select {
+		case <-serverBlocked:
+		case <-time.After(2 * time.Second):
+			Fail("Server never received request")
+		}
+
+		startTime := time.Now()
+		done := puller.Stop()
+
+		select {
+		case <-done:
+			elapsed := time.Since(startTime)
+			Expect(elapsed).To(BeNumerically("<", 2*time.Second), "Expected Stop() to return quickly (<2s), but took %v. HTTP request was not cancelled.", elapsed)
+		case <-time.After(40 * time.Second):
+			Fail("Stop() did not complete within 40 seconds. HTTP request is blocking shutdown.")
+		}
+	})
+
+	It("should handle context cancellation gracefully without errors", func() {
+		puller.Start()
+
+		select {
+		case <-serverBlocked:
+		case <-time.After(2 * time.Second):
+			Fail("Server never received request")
+		}
+
+		done := puller.Stop()
+		<-done
+
+		time.Sleep(100 * time.Millisecond)
+	})
+})
+
+var _ = Describe("Channel Send stopChan Monitoring", func() {
+	var (
+		puller         *pull.Puller
+		mockDog        *MockWatchdog
+		inboundChannel chan *models.UMHMessage
+		testLogger     *zap.SugaredLogger
+		testServer     *httptest.Server
+	)
+
+	BeforeEach(func() {
+		testLogger = logger.For(logger.ComponentCommunicator)
+		mockDog = NewMockWatchdog()
+		inboundChannel = make(chan *models.UMHMessage, 1)
+
+		testServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			response := `{"umh_messages": [
+				{"email": "test1@example.com", "content": "message1", "instance_uuid": "test-instance", "metadata": {}},
+				{"email": "test2@example.com", "content": "message2", "instance_uuid": "test-instance", "metadata": {}}
+			]}`
+
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(response))
+		}))
+
+		puller = pull.NewPuller("test-jwt", mockDog, inboundChannel, true, testServer.URL, testLogger)
+	})
+
+	AfterEach(func() {
+		if puller != nil {
+			puller.Stop()
+			time.Sleep(100 * time.Millisecond)
+		}
+		if testServer != nil {
+			testServer.Close()
+		}
+	})
+
+	It("should monitor stopChan during channel send operations", func() {
+		puller.Start()
+
+		Eventually(func() int {
+			return len(inboundChannel)
+		}, 3*time.Second, 50*time.Millisecond).Should(Equal(1), "Channel should receive at least 1 message")
+
+		time.Sleep(100 * time.Millisecond)
+
+		startTime := time.Now()
+		done := puller.Stop()
+
+		select {
+		case <-done:
+			elapsed := time.Since(startTime)
+			Expect(elapsed).To(BeNumerically("<", 2*time.Second), "Stop() should return quickly by checking stopChan in channel send select")
+		case <-time.After(12 * time.Second):
+			Fail("Stop() blocked > 12s, likely waiting for 10s insertionTimeout without stopChan check")
+		}
 	})
 })

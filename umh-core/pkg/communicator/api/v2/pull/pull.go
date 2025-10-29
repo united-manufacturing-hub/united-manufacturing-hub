@@ -162,9 +162,19 @@ func (p *Puller) pull() {
 			"token": p.jwt.Load().(string),
 		}
 
-		incomingMessages, _, err := http.GetRequest[backend_api_structs.PullPayload](context.Background(), http.PullEndpoint, nil, &cookies, p.insecureTLS, p.apiURL, p.logger)
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		go func() {
+			select {
+			case <-stopChan:
+				cancel()
+			case <-ctx.Done():
+			}
+		}()
+
+		incomingMessages, _, err := http.GetRequest[backend_api_structs.PullPayload](ctx, http.PullEndpoint, nil, &cookies, p.insecureTLS, p.apiURL, p.logger)
 		if err != nil {
-			// Ignore context canceled errors
 			if errors.Is(err, context.Canceled) {
 				time.Sleep(1 * time.Second)
 
@@ -197,6 +207,9 @@ func (p *Puller) pull() {
 			case <-insertionTimeout:
 				p.logger.Warnf("Inbound message channel is full !")
 				p.dog.ReportHeartbeatStatus(watcherUUID, watchdog.HEARTBEAT_STATUS_WARNING)
+			case <-stopChan:
+				p.logger.Debug("Stop requested while sending to inbound channel")
+				return
 			}
 		}
 	}

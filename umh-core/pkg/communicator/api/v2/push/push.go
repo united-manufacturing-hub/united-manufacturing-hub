@@ -16,6 +16,7 @@ package push
 
 import (
 	"context"
+	"errors"
 	nethttp "net/http"
 	"sync"
 	"sync/atomic"
@@ -209,8 +210,23 @@ func (p *Pusher) push() {
 				UMHMessages: messages,
 			}
 
-			_, status, err := http.PostRequest[any, backend_api_structs.PushPayload](context.Background(), http.PushEndpoint, &payload, nil, &cookies, p.insecureTLS, p.apiURL, p.logger)
-			if err != nil {
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+
+			go func() {
+				select {
+				case <-stopChan:
+					cancel()
+				case <-ctx.Done():
+				}
+			}()
+
+			_, status, err := http.PostRequest[any, backend_api_structs.PushPayload](ctx, http.PushEndpoint, &payload, nil, &cookies, p.insecureTLS, p.apiURL, p.logger)
+			if err != nil{
+				if errors.Is(err, context.Canceled) {
+					continue
+				}
+
 				error_handler.ReportHTTPErrors(err, status, string(http.PushEndpoint), "POST", &payload, nil)
 				p.dog.ReportHeartbeatStatus(watcherUUID, watchdog.HEARTBEAT_STATUS_WARNING)
 
@@ -252,11 +268,25 @@ func (p *Pusher) push() {
 
 			d.retryAttempts++
 
-			_, _, err := http.PostRequest[any, backend_api_structs.PushPayload](context.Background(), http.PushEndpoint, &backend_api_structs.PushPayload{UMHMessages: d.messages}, nil, &d.cookies, p.insecureTLS, p.apiURL, p.logger)
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+
+			go func() {
+				select {
+				case <-stopChan:
+					cancel()
+				case <-ctx.Done():
+				}
+			}()
+
+			_, _, err := http.PostRequest[any, backend_api_structs.PushPayload](ctx, http.PushEndpoint, &backend_api_structs.PushPayload{UMHMessages: d.messages}, nil, &d.cookies, p.insecureTLS, p.apiURL, p.logger)
 			if err != nil {
+				if errors.Is(err, context.Canceled) {
+					continue
+				}
+
 				p.dog.ReportHeartbeatStatus(watcherUUID, watchdog.HEARTBEAT_STATUS_WARNING)
 				boPostRequest.IncrementAndSleep()
-				// In case of an error, push the message back to the deadletter channel.
 				go enqueueToDeadLetterChannel(p.deadletterCh, d.messages, d.cookies, d.retryAttempts, p.logger)
 			}
 
