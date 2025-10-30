@@ -253,27 +253,34 @@ func (i *Instance) UpdateObservedStateOfInstance(ctx context.Context, services s
 		}
 	}
 
-	// Merge agent location with stream processor location for the observed spec config
-	// This ensures the system snapshot shows the effective location that includes agent location inheritance
+	// Merge agent location with stream processor location for ObservedSpecConfig
+	//
+	// ARCHITECTURE NOTE: This merging happens in TWO places for different purposes:
+	//
+	// 1. HERE (FSM actions): Merge for ObservedSpecConfig
+	//    - Purpose: UI display and editing via REST API (GetStreamProcessorAction/EditStreamProcessorAction)
+	//    - The UI needs the complete merged location to display all levels and allow editing
+	//    - Without this, users cannot view/edit inherited agent location levels in the UI
+	//
+	// 2. BuildRuntimeConfig(): Merge for template variable substitution
+	//    - Purpose: Provide merged location to template rendering ({{ .location }})
+	//    - This creates the runtime config that Benthos actually executes
+	//
+	// This is intentional duplication - each serves a distinct purpose in the system.
 	agentLocationStr := convertIntMapToStringMap(snapshot.CurrentConfig.Agent.Location)
-	mergedLocation := make(map[string]string)
 
-	// 1a) copy agent levels (authoritative)
+	mergedLocation := make(map[string]string)
 	for k, v := range agentLocationStr {
 		mergedLocation[k] = v
 	}
 
-	// 1b) extend with SP-local additions (never overwrite agent keys)
 	for k, v := range i.specConfig.Location {
-		if agentValue, exists := mergedLocation[k]; !exists || agentValue == "" {
-			mergedLocation[k] = v
-		}
+		mergedLocation[k] = v
 	}
 
-	// Update the spec config with the merged location before storing in observed state
-	observedSpecConfig := i.specConfig
-	observedSpecConfig.Location = mergedLocation
-	i.ObservedState.ObservedSpecConfig = observedSpecConfig
+	// Store spec config with merged location in observed state for UI
+	i.ObservedState.ObservedSpecConfig = i.specConfig
+	i.ObservedState.ObservedSpecConfig.Location = mergedLocation
 
 	// Now render the config
 	// WARN: TODO

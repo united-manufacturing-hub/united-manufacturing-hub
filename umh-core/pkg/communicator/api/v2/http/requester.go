@@ -44,6 +44,8 @@ var (
 	PullEndpoint  Endpoint = "/v2/instance/pull"
 )
 
+const keepAliveTimeout = 30 * time.Second
+
 var (
 	secureHTTPClient   *http.Client
 	insecureHTTPClient *http.Client
@@ -59,6 +61,7 @@ func GetClient(insecureTLS bool) *http.Client {
 				ForceAttemptHTTP2: false,
 				TLSNextProto:      make(map[string]func(authority string, c *tls.Conn) http.RoundTripper),
 				Proxy:             http.ProxyFromEnvironment,
+				IdleConnTimeout:   keepAliveTimeout,
 			}
 
 			// Create an HTTP client with the custom transport
@@ -76,6 +79,7 @@ func GetClient(insecureTLS bool) *http.Client {
 			ForceAttemptHTTP2: false,
 			TLSNextProto:      make(map[string]func(authority string, c *tls.Conn) http.RoundTripper),
 			Proxy:             http.ProxyFromEnvironment,
+			IdleConnTimeout:   keepAliveTimeout,
 			TLSClientConfig: &tls.Config{
 				InsecureSkipVerify: insecureTLS,
 				MinVersion:         tls.VersionTLS10,
@@ -248,7 +252,7 @@ func DoHTTPRequest(ctx context.Context, url string, header map[string]string, co
 
 	// Set long poll headers
 	req.Header.Set("Connection", "keep-alive")
-	req.Header.Set("Keep-Alive", "timeout=30, max=1000")
+	req.Header.Set("Keep-Alive", fmt.Sprintf("timeout=%d, max=1000", int(keepAliveTimeout.Seconds())))
 	req.Header.Set("X-Features", "longpoll;")
 
 	// Setup request tracing

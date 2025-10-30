@@ -27,6 +27,7 @@ import (
 
 	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsmtest"
+	agentconfig "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	connectionfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/connection"
 	dataflowcomponentfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
@@ -1170,6 +1171,55 @@ var _ = Describe("ProtocolConverter FSM", func() {
 				ctx, fsm.SystemSnapshot{Tick: tick}, instance, mockService, mockRegistry, componentName,
 				protocolconverterfsm.OperationalStateActive, 5)
 			Expect(err).NotTo(HaveOccurred())
+		})
+	})
+
+	// =========================================================================
+	//  OBSERVED STATE POPULATION
+	// =========================================================================
+	Context("Observed State Population", func() {
+		It("should populate spec config when instance is in to_be_created state", func() {
+			var err error
+
+			pcTestLocation := map[string]string{
+				"facility": "test-facility",
+				"area":     "test-area",
+			}
+
+			agentTestLocation := map[int]string{
+				1: "enterprise-value",
+				2: "site-value",
+			}
+
+			testConfig := fsmtest.CreateProtocolConverterTestConfig(componentName, internalfsm.LifecycleStateToBeCreated)
+			testConfig.ProtocolConverterServiceConfig.Location = pcTestLocation
+
+			testInstance := protocolconverterfsm.NewProtocolConverterInstance("/tmp/s6", testConfig)
+
+			mockProtocolConverterService := protocolconvertersvc.NewMockProtocolConverterService()
+			testInstance.SetService(mockProtocolConverterService)
+
+			testSnapshot := fsm.SystemSnapshot{
+				Tick: tick,
+				CurrentConfig: agentconfig.FullConfig{
+					Agent: agentconfig.AgentConfig{
+						Location: agentTestLocation,
+					},
+				},
+			}
+
+			err = testInstance.UpdateObservedStateOfInstance(ctx, mockRegistry, testSnapshot)
+
+			Expect(err).NotTo(HaveOccurred())
+
+			observedSpec := testInstance.ObservedState.ObservedProtocolConverterSpecConfig
+			Expect(observedSpec.Location).NotTo(BeNil())
+			Expect(observedSpec.Location).To(HaveLen(4))
+			// Verify merged location contains both agent and component location
+			Expect(observedSpec.Location["1"]).To(Equal("enterprise-value"))
+			Expect(observedSpec.Location["2"]).To(Equal("site-value"))
+			Expect(observedSpec.Location["facility"]).To(Equal("test-facility"))
+			Expect(observedSpec.Location["area"]).To(Equal("test-area"))
 		})
 	})
 
