@@ -116,4 +116,29 @@ var _ = Describe("Backend Connection", func() {
 				"Control loop should be reached immediately, but was blocked by synchronous backend connection")
 		})
 	})
+
+	Context("when context is cancelled", func() {
+		It("should respect context cancellation and return promptly", func() {
+			// This test verifies that enableBackendConnection respects context cancellation
+			// and returns promptly when the context is cancelled during shutdown
+
+			done := make(chan bool, 1)
+
+			// Start enableBackendConnection in a goroutine
+			go func() {
+				enableBackendConnection(ctx, &configData, communicationState, controlLoop, log)
+				done <- true
+			}()
+
+			// Give it a moment to start handlers
+			time.Sleep(100 * time.Millisecond)
+
+			// Cancel the context (simulating shutdown)
+			cancel()
+
+			// Function should return within 500ms after context cancellation
+			Eventually(done, 500*time.Millisecond).Should(Receive(BeTrue()),
+				"enableBackendConnection should return promptly after context cancellation, but goroutine is still running")
+		})
+	})
 })
