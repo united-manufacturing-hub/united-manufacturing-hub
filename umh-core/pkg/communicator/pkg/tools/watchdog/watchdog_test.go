@@ -241,12 +241,14 @@ var _ = Describe("Watchdog", func() {
 
 			uuid := dog.Load().RegisterHeartbeatWithRestart("test-restart-4", 0, 2, false, restartFunc)
 			Expect(uuid).ToNot(BeNil())
-			time.Sleep(3 * time.Second)
 
-			Expect(restartCount.Load()).To(Equal(int32(1)))
+			Eventually(func() int32 {
+				return restartCount.Load()
+			}, 3*time.Second, 50*time.Millisecond).Should(Equal(int32(1)))
 
-			time.Sleep(3 * time.Second)
-			Expect(restartCount.Load()).To(Equal(int32(2)))
+			Eventually(func() int32 {
+				return restartCount.Load()
+			}, 5*time.Second, 50*time.Millisecond).Should(Equal(int32(2)))
 
 			panickingUUIDsLock.Lock()
 			Expect(panickingUUIDs[uuid]).To(BeFalse())
