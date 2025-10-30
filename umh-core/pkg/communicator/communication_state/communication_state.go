@@ -312,6 +312,7 @@ func (c *CommunicationState) InitialiseReAuthHandler(authToken string, insecureT
 
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 			credentials := v2.NewLogin(ctx, authToken, insecureTLS, c.ApiUrl, c.Logger)
+
 			cancel()
 
 			if credentials == nil {

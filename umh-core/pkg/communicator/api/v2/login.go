@@ -93,6 +93,7 @@ func NewLogin(ctx context.Context, authToken string, insecureTLS bool, apiURL st
 		select {
 		case <-ctx.Done():
 			logger.Info("Login cancelled before attempt")
+
 			return nil
 		default:
 		}
@@ -108,6 +109,7 @@ func NewLogin(ctx context.Context, authToken string, insecureTLS bool, apiURL st
 			case <-time.After(backoffDuration):
 			case <-ctx.Done():
 				logger.Info("Login cancelled during backoff")
+
 				return nil
 			}
 		} else {
