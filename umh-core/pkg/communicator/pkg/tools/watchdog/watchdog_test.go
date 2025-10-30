@@ -270,10 +270,12 @@ var _ = Describe("Watchdog", func() {
 			uuid := dog.Load().RegisterHeartbeatWithRestart("test-restart-4", 0, 2, false, restartFunc)
 			Expect(uuid).ToNot(BeNil())
 
+			//nolint:gocritic // Eventually requires lambda for polling
 			Eventually(func() int32 {
 				return restartCount.Load()
 			}, 3*time.Second, 50*time.Millisecond).Should(Equal(int32(1)))
 
+			//nolint:gocritic // Eventually requires lambda for polling
 			Eventually(func() int32 {
 				return restartCount.Load()
 			}, 5*time.Second, 50*time.Millisecond).Should(Equal(int32(2)))
@@ -299,6 +301,7 @@ var _ = Describe("Watchdog", func() {
 			uuid := dog.Load().RegisterHeartbeatWithRestart("test-restart-5", 0, 2, false, restartFunc)
 			Expect(uuid).ToNot(BeNil())
 
+			//nolint:gocritic // Eventually requires lambda for polling
 			Eventually(func() int32 {
 				return restartCount.Load()
 			}, 3*time.Second, 50*time.Millisecond).Should(BeNumerically(">=", int32(1)))
