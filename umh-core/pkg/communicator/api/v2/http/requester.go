@@ -25,6 +25,7 @@ import (
 	"net/http"
 	"net/http/httptrace"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/united-manufacturing-hub/expiremap/v2/pkg/expiremap"
@@ -43,26 +44,33 @@ var (
 	PullEndpoint  Endpoint = "/v2/instance/pull"
 )
 
-var secureHTTPClient *http.Client
-var insecureHTTPClient *http.Client
+var (
+	secureHTTPClient   *http.Client
+	insecureHTTPClient *http.Client
+	secureOnce         sync.Once
+	insecureOnce       sync.Once
+)
 
 func GetClient(insecureTLS bool) *http.Client {
-	if !insecureTLS && secureHTTPClient == nil {
-		// Create a custom transport with HTTP/2 disabled
-		transport := &http.Transport{
-			ForceAttemptHTTP2: false,
-			TLSNextProto:      make(map[string]func(authority string, c *tls.Conn) http.RoundTripper),
-			Proxy:             http.ProxyFromEnvironment,
-		}
+	if !insecureTLS {
+		secureOnce.Do(func() {
+			// Create a custom transport with HTTP/2 disabled
+			transport := &http.Transport{
+				ForceAttemptHTTP2: false,
+				TLSNextProto:      make(map[string]func(authority string, c *tls.Conn) http.RoundTripper),
+				Proxy:             http.ProxyFromEnvironment,
+			}
 
-		// Create an HTTP client with the custom transport
-		secureHTTPClient = &http.Client{
-			Transport: transport,
-			Timeout:   30 * time.Second,
-		}
+			// Create an HTTP client with the custom transport
+			secureHTTPClient = &http.Client{
+				Transport: transport,
+				Timeout:   30 * time.Second,
+			}
+		})
+		return secureHTTPClient
 	}
 
-	if insecureTLS && insecureHTTPClient == nil {
+	insecureOnce.Do(func() {
 		// Create a custom transport with HTTP/2 disabled and insecure TLS
 		transport := &http.Transport{
 			ForceAttemptHTTP2: false,
@@ -70,7 +78,7 @@ func GetClient(insecureTLS bool) *http.Client {
 			Proxy:             http.ProxyFromEnvironment,
 			TLSClientConfig: &tls.Config{
 				InsecureSkipVerify: insecureTLS,
-				MinVersion:         tls.VersionTLS10, // Allow older TLS versions
+				MinVersion:         tls.VersionTLS10,
 			},
 		}
 
@@ -79,13 +87,8 @@ func GetClient(insecureTLS bool) *http.Client {
 			Transport: transport,
 			Timeout:   30 * time.Second,
 		}
-	}
-
-	if insecureTLS {
-		return insecureHTTPClient
-	}
-
-	return secureHTTPClient
+	})
+	return insecureHTTPClient
 }
 
 // LatestExternalIp is the latest external IP address
