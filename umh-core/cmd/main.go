@@ -346,6 +346,7 @@ func enableBackendConnection(ctx context.Context, config *config.FullConfig, com
 		// This can temporarely deactivated, e.g., during integration tests where just the mgmtcompanion-config is changed directly
 		// Call NewLogin in a goroutine since it blocks with retry logic
 		loginChan := make(chan *v2.LoginResponse, 1)
+
 		go func() {
 			login := v2.NewLogin(config.Agent.AuthToken, config.Agent.AllowInsecureTLS, config.Agent.APIURL, logger)
 			loginChan <- login
