@@ -786,4 +786,51 @@ internal:
 			Expect(duration).To(BeNumerically("<", constants.ConfigBackgroundRefreshTimeout))
 		})
 	})
+
+	Describe("EnableResourceLimitBlocking Configuration", func() {
+		Context("when config file does not specify EnableResourceLimitBlocking", func() {
+			BeforeEach(func() {
+				validYAML := `
+agent:
+  metricsPort: 8080
+`
+				mockFS.WithEnsureDirectoryFunc(func(ctx context.Context, path string) error {
+					return nil
+				})
+
+				mockFS.WithFileExistsFunc(func(ctx context.Context, path string) (bool, error) {
+					return false, nil
+				})
+
+				mockFS.WithWriteFileFunc(func(ctx context.Context, path string, data []byte, perm os.FileMode) error {
+					return nil
+				})
+
+				mockFS.WithStatFunc(func(ctx context.Context, path string) (os.FileInfo, error) {
+					return mockFS.NewMockFileInfo(
+						DefaultConfigPath,
+						int64(len(validYAML)),
+						0644,
+						time.Now(),
+						false,
+					), nil
+				})
+			})
+
+			It("should default to true", func() {
+				Eventually(func() error {
+					configOverride := FullConfig{}
+					config, err := configManager.GetConfigWithOverwritesOrCreateNew(ctx, configOverride)
+					if err != nil {
+						return err
+					}
+					if !config.Agent.EnableResourceLimitBlocking {
+						return errors.New("expected EnableResourceLimitBlocking to be true, got false")
+					}
+
+					return nil
+				}, TimeToWaitForConfigRefresh*2, "10ms").Should(Succeed())
+			})
+		})
+	})
 })

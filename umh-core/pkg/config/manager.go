@@ -217,8 +217,9 @@ func (m *FileConfigManager) GetConfigWithOverwritesOrCreateNew(ctx context.Conte
 	}
 
 	var config FullConfig
-	// default config value
+	// default config values
 	config.Agent.MetricsPort = 8080
+	config.Agent.EnableResourceLimitBlocking = constants.DefaultEnableResourceLimitBlocking
 
 	exists, err := m.fsService.FileExists(ctx, m.configPath)
 	switch {
