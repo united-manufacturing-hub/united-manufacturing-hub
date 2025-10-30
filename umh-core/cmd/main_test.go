@@ -36,20 +36,17 @@ func TestMain(t *testing.T) {
 	RunSpecs(t, "Main Suite")
 }
 
-var _ = Describe("Backend Connection", func() {
+var _ = Describe("Backend Connection", Ordered, func() {
 	var (
 		configData         config.FullConfig
 		communicationState *communication_state.CommunicationState
 		controlLoop        *control.ControlLoop
 		log                *zap.SugaredLogger
-		ctx                context.Context
-		cancel             context.CancelFunc
 	)
 
-	BeforeEach(func() {
+	BeforeAll(func() {
 		logger.Initialize()
 		log = logger.For(logger.ComponentCore)
-		ctx, cancel = context.WithCancel(context.Background())
 
 		// Setup minimal config with UNREACHABLE backend
 		configData = config.FullConfig{
@@ -65,13 +62,15 @@ var _ = Describe("Backend Connection", func() {
 		}
 
 		// Create minimal control loop (we don't need full functionality)
+		// Note: Only create once per suite to avoid registry singleton panic
 		configManager := &config.MockConfigManager{}
 		controlLoop = control.NewControlLoop(configManager)
 		systemSnapshotManager := controlLoop.GetSnapshotManager()
 
-		// Create communication state
+		// Create communication state with a dummy context for initial setup
+		dummyCtx := context.Background()
 		communicationState = communication_state.NewCommunicationState(
-			watchdog.NewWatchdog(ctx, time.NewTicker(time.Second*10), true, log),
+			watchdog.NewWatchdog(dummyCtx, time.NewTicker(time.Second*10), true, log),
 			make(chan *models.UMHMessage, 100),
 			make(chan *models.UMHMessage, 100),
 			configData.Agent.ReleaseChannel,
@@ -84,14 +83,12 @@ var _ = Describe("Backend Connection", func() {
 		)
 	})
 
-	AfterEach(func() {
-		cancel()
-	})
-
 	Context("when Management Console is unreachable", func() {
 		It("should not block control loop startup", func() {
 			// This test proves that the main() flow doesn't block
 			// when backend is unreachable
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
 
 			controlLoopReached := make(chan bool, 1)
 
@@ -101,7 +98,7 @@ var _ = Describe("Backend Connection", func() {
 			go func() {
 				// Line 179-180 in main.go (with 'go' keyword)
 				if configData.Agent.APIURL != "" && configData.Agent.AuthToken != "" {
-					go enableBackendConnection(&configData, communicationState, controlLoop, log)
+					go enableBackendConnection(ctx, &configData, communicationState, controlLoop, log)
 				}
 
 				// Line 191 in main.go - we reach this immediately after line 180
@@ -121,6 +118,7 @@ var _ = Describe("Backend Connection", func() {
 		It("should respect context cancellation and return promptly", func() {
 			// This test verifies that enableBackendConnection respects context cancellation
 			// and returns promptly when the context is cancelled during shutdown
+			ctx, cancel := context.WithCancel(context.Background())
 
 			done := make(chan bool, 1)
 
@@ -130,8 +128,9 @@ var _ = Describe("Backend Connection", func() {
 				done <- true
 			}()
 
-			// Give it a moment to start handlers
-			time.Sleep(100 * time.Millisecond)
+			// Give NewLogin enough time to fail at least once (it has 1s backoff)
+			// This ensures we test cancellation during the wait period
+			time.Sleep(1200 * time.Millisecond)
 
 			// Cancel the context (simulating shutdown)
 			cancel()
