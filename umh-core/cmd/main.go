@@ -348,8 +348,11 @@ func enableBackendConnection(ctx context.Context, config *config.FullConfig, com
 		loginChan := make(chan *v2.LoginResponse, 1)
 
 		go func() {
-			login := v2.NewLogin(config.Agent.AuthToken, config.Agent.AllowInsecureTLS, config.Agent.APIURL, logger)
-			loginChan <- login
+			login := v2.NewLogin(ctx, config.Agent.AuthToken, config.Agent.AllowInsecureTLS, config.Agent.APIURL, logger)
+			select {
+			case loginChan <- login:
+			case <-ctx.Done():
+			}
 		}()
 
 		var login *v2.LoginResponse
