@@ -205,6 +205,10 @@ var _ = Describe("SyncAction", func() {
 			})
 
 			It("should batch up to 10 messages", func() {
+				// Arrange: Recreate outbound channel with capacity for 15 messages
+				outboundChan = make(chan *transportpkg.UMHMessage, 15)
+				action = communicator.NewSyncAction(transport, inboundChan, outboundChan)
+
 				// Arrange: 15 messages in outbound
 				for i := 0; i < 15; i++ {
 					outboundChan <- &transportpkg.UMHMessage{Content: fmt.Sprintf("msg%d", i)}

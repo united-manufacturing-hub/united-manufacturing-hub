@@ -107,8 +107,8 @@ func TestFullFSMLifecycle(t *testing.T) {
 	currentState = nextState
 	time.Sleep(100 * time.Millisecond)
 
-	// TODO: Inject sync errors via mockTransport once channel-based sync is implemented
-	// mockOrch.InjectError(assert.AnError)
+	// Inject sync errors via mockTransport
+	mockTransport.SetPullError(assert.AnError)
 
 	for i := 0; i < 5; i++ {
 		observed, err := worker.CollectObservedState(ctx)
@@ -134,8 +134,8 @@ func TestFullFSMLifecycle(t *testing.T) {
 
 	assert.IsType(t, &communicator.DegradedState{}, currentState, "Should transition to DegradedState after sync errors")
 
-	// TODO: Clear sync errors via mockTransport once channel-based sync is implemented
-	// mockOrch.ClearErrors()
+	// Clear sync errors via mockTransport
+	mockTransport.SetPullError(nil)
 
 	for i := 0; i < 5; i++ {
 		observed, err := worker.CollectObservedState(ctx)
