@@ -10,9 +10,11 @@ import (
 	. "github.com/onsi/gomega"
 	"go.uber.org/zap"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/container"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 )
 
 func TestSupervisor(t *testing.T) {
@@ -75,59 +77,129 @@ func (m *mockState) String() string { return "MockState" }
 func (m *mockState) Reason() string { return "mock state" }
 
 type mockStore struct {
-	snapshot     fsmv2.Snapshot
+	identity     map[string]map[string]persistence.Document // workerType -> id -> document
+	desired      map[string]map[string]persistence.Document
+	observed     map[string]map[string]persistence.Document
 	saveErr      error
-	loadSnapshot func() (fsmv2.Snapshot, error)
-	saveDesired  func(desired fsmv2.DesiredState) error
-	saveObserved func(observed fsmv2.ObservedState) error
+	loadSnapshot func(ctx context.Context, workerType string, id string) (*storage.Snapshot, error)
+	saveDesired  func(ctx context.Context, workerType string, id string, desired persistence.Document) error
+	saveObserved func(ctx context.Context, workerType string, id string, observed interface{}) error
 }
 
-func (m *mockStore) SaveDesired(desired fsmv2.DesiredState) error {
+func newMockStore() *mockStore {
+	return &mockStore{
+		identity: make(map[string]map[string]persistence.Document),
+		desired:  make(map[string]map[string]persistence.Document),
+		observed: make(map[string]map[string]persistence.Document),
+	}
+}
+
+func (m *mockStore) SaveIdentity(ctx context.Context, workerType string, id string, identity persistence.Document) error {
+	if m.identity[workerType] == nil {
+		m.identity[workerType] = make(map[string]persistence.Document)
+	}
+	m.identity[workerType][id] = identity
+	return m.saveErr
+}
+
+func (m *mockStore) LoadIdentity(ctx context.Context, workerType string, id string) (persistence.Document, error) {
+	if m.identity[workerType] == nil || m.identity[workerType][id] == nil {
+		return nil, persistence.ErrNotFound
+	}
+	return m.identity[workerType][id], nil
+}
+
+func (m *mockStore) SaveDesired(ctx context.Context, workerType string, id string, desired persistence.Document) error {
 	if m.saveDesired != nil {
-		return m.saveDesired(desired)
+		return m.saveDesired(ctx, workerType, id, desired)
 	}
 
-	m.snapshot.Desired = desired
+	if m.desired[workerType] == nil {
+		m.desired[workerType] = make(map[string]persistence.Document)
+	}
+	m.desired[workerType][id] = desired
 	return m.saveErr
 }
 
-func (m *mockStore) SaveObserved(observed fsmv2.ObservedState) error {
+func (m *mockStore) LoadDesired(ctx context.Context, workerType string, id string) (persistence.Document, error) {
+	if m.desired[workerType] == nil || m.desired[workerType][id] == nil {
+		return nil, persistence.ErrNotFound
+	}
+	return m.desired[workerType][id], nil
+}
+
+func (m *mockStore) SaveObserved(ctx context.Context, workerType string, id string, observed interface{}) error {
 	if m.saveObserved != nil {
-		return m.saveObserved(observed)
+		return m.saveObserved(ctx, workerType, id, observed)
 	}
 
-	m.snapshot.Observed = observed
+	if m.observed[workerType] == nil {
+		m.observed[workerType] = make(map[string]persistence.Document)
+	}
+
+	// Convert observed to persistence.Document if it isn't already
+	var doc persistence.Document
+	if observedDoc, ok := observed.(persistence.Document); ok {
+		doc = observedDoc
+	} else {
+		// For non-Document types (like fsmv2.ObservedState), create a simple wrapper
+		doc = persistence.Document{"data": observed, "collectedAt": time.Now()}
+	}
+
+	m.observed[workerType][id] = doc
 	return m.saveErr
 }
 
-func (m *mockStore) LoadSnapshot() (fsmv2.Snapshot, error) {
+func (m *mockStore) LoadObserved(ctx context.Context, workerType string, id string) (persistence.Document, error) {
+	if m.observed[workerType] == nil || m.observed[workerType][id] == nil {
+		return nil, persistence.ErrNotFound
+	}
+	return m.observed[workerType][id], nil
+}
+
+func (m *mockStore) LoadSnapshot(ctx context.Context, workerType string, id string) (*storage.Snapshot, error) {
 	if m.loadSnapshot != nil {
-		return m.loadSnapshot()
+		return m.loadSnapshot(ctx, workerType, id)
 	}
 
-	if m.snapshot.Identity.ID != "" {
-		return m.snapshot, nil
+	// Return default snapshot with identity
+	identity := persistence.Document{
+		"id":         id,
+		"name":       "Test Worker",
+		"workerType": workerType,
+	}
+	desired := persistence.Document{}
+	observed := persistence.Document{"collectedAt": time.Now()}
+
+	// Load from stored data if available
+	if m.identity[workerType] != nil && m.identity[workerType][id] != nil {
+		identity = m.identity[workerType][id]
+	}
+	if m.desired[workerType] != nil && m.desired[workerType][id] != nil {
+		desired = m.desired[workerType][id]
+	}
+	if m.observed[workerType] != nil && m.observed[workerType][id] != nil {
+		observed = m.observed[workerType][id]
 	}
 
-	// Default snapshot
-	identity := fsmv2.Identity{
-		ID:         "test-worker",
-		Name:       "Test Worker",
-		WorkerType: "container",
-	}
-
-	desired := &container.ContainerDesiredState{}
-	observed := &container.ContainerObservedState{CollectedAt: time.Now()}
-
-	return fsmv2.Snapshot{
+	return &storage.Snapshot{
 		Identity: identity,
 		Desired:  desired,
 		Observed: observed,
 	}, nil
 }
 
-func (m *mockStore) Close() error {
-	return nil
+func (m *mockStore) DeleteWorker(ctx context.Context, workerType string, id string) error {
+	if m.identity[workerType] != nil {
+		delete(m.identity[workerType], id)
+	}
+	if m.desired[workerType] != nil {
+		delete(m.desired[workerType], id)
+	}
+	if m.observed[workerType] != nil {
+		delete(m.observed[workerType], id)
+	}
+	return m.saveErr
 }
 
 func mockIdentity() fsmv2.Identity {
