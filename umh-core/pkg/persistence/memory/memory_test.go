@@ -16,759 +16,522 @@ package memory
 
 import (
 	"context"
-	"testing"
+
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 )
 
-func TestNewInMemoryStore(t *testing.T) {
-	store := NewInMemoryStore()
-	if store == nil {
-		t.Fatal("Expected non-nil store")
-	}
-	if store.collections == nil {
-		t.Fatal("Expected collections map to be initialized")
-	}
-	if len(store.collections) != 0 {
-		t.Errorf("Expected empty collections map, got %d entries", len(store.collections))
-	}
-}
+var _ = Describe("InMemoryStore", func() {
+	var (
+		store *InMemoryStore
+		ctx   context.Context
+	)
 
-func TestCreateCollection(t *testing.T) {
-	tests := []struct {
-		name          string
-		collectionName string
-		setup         func(store *InMemoryStore)
-		wantErr       bool
-		errContains   string
-	}{
-		{
-			name:           "create new collection",
-			collectionName: "test_collection",
-			setup:          func(store *InMemoryStore) {},
-			wantErr:        false,
-		},
-		{
-			name:           "create duplicate collection",
-			collectionName: "existing_collection",
-			setup: func(store *InMemoryStore) {
-				store.CreateCollection(context.Background(), "existing_collection", nil)
-			},
-			wantErr:     true,
-			errContains: "already exists",
-		},
-		{
-			name:           "create with nil context",
-			collectionName: "test_collection",
-			setup: func(store *InMemoryStore) {
-				// Test will provide nil context
-			},
-			wantErr:     true,
-			errContains: "context cannot be nil",
-		},
-	}
+	BeforeEach(func() {
+		store = NewInMemoryStore()
+		ctx = context.Background()
+	})
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			store := NewInMemoryStore()
-			tt.setup(store)
+	AfterEach(func() {
+		if store != nil {
+			store.Close(ctx)
+		}
+	})
 
-			ctx := context.Background()
-			if tt.errContains == "context cannot be nil" {
-				ctx = nil
-			}
-
-			err := store.CreateCollection(ctx, tt.collectionName, nil)
-			if tt.wantErr {
-				if err == nil {
-					t.Fatalf("Expected error containing %q, got nil", tt.errContains)
-				}
-				if tt.errContains != "" && !contains(err.Error(), tt.errContains) {
-					t.Errorf("Expected error containing %q, got %q", tt.errContains, err.Error())
-				}
-			} else {
-				if err != nil {
-					t.Fatalf("Expected no error, got %v", err)
-				}
-				if _, exists := store.collections[tt.collectionName]; !exists {
-					t.Errorf("Expected collection %q to exist", tt.collectionName)
-				}
-			}
+	Describe("NewInMemoryStore", func() {
+		It("should create a non-nil store", func() {
+			Expect(store).ToNot(BeNil())
 		})
-	}
-}
 
-func TestDropCollection(t *testing.T) {
-	tests := []struct {
-		name          string
-		collectionName string
-		setup         func(store *InMemoryStore)
-		wantErr       bool
-		errContains   string
-	}{
-		{
-			name:           "drop existing collection",
-			collectionName: "test_collection",
-			setup: func(store *InMemoryStore) {
-				store.CreateCollection(context.Background(), "test_collection", nil)
-			},
-			wantErr: false,
-		},
-		{
-			name:           "drop non-existent collection",
-			collectionName: "missing_collection",
-			setup:          func(store *InMemoryStore) {},
-			wantErr:        true,
-			errContains:    "does not exist",
-		},
-		{
-			name:           "drop with nil context",
-			collectionName: "test_collection",
-			setup: func(store *InMemoryStore) {
-				store.CreateCollection(context.Background(), "test_collection", nil)
-			},
-			wantErr:     true,
-			errContains: "context cannot be nil",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			store := NewInMemoryStore()
-			tt.setup(store)
-
-			ctx := context.Background()
-			if tt.errContains == "context cannot be nil" {
-				ctx = nil
-			}
-
-			err := store.DropCollection(ctx, tt.collectionName)
-			if tt.wantErr {
-				if err == nil {
-					t.Fatalf("Expected error containing %q, got nil", tt.errContains)
-				}
-				if tt.errContains != "" && !contains(err.Error(), tt.errContains) {
-					t.Errorf("Expected error containing %q, got %q", tt.errContains, err.Error())
-				}
-			} else {
-				if err != nil {
-					t.Fatalf("Expected no error, got %v", err)
-				}
-				if _, exists := store.collections[tt.collectionName]; exists {
-					t.Errorf("Expected collection %q to be dropped", tt.collectionName)
-				}
-			}
+		It("should initialize collections map", func() {
+			Expect(store.collections).ToNot(BeNil())
 		})
-	}
-}
 
-func TestInsert(t *testing.T) {
-	tests := []struct {
-		name        string
-		collection  string
-		doc         persistence.Document
-		setup       func(store *InMemoryStore)
-		wantErr     bool
-		errContains string
-	}{
-		{
-			name:       "insert valid document",
-			collection: "test_collection",
-			doc: persistence.Document{
-				"id":    "doc-1",
-				"name":  "Test Document",
-				"value": 42,
-			},
-			setup: func(store *InMemoryStore) {
-				store.CreateCollection(context.Background(), "test_collection", nil)
-			},
-			wantErr: false,
-		},
-		{
-			name:       "insert duplicate ID",
-			collection: "test_collection",
-			doc: persistence.Document{
-				"id":   "doc-1",
-				"name": "Duplicate",
-			},
-			setup: func(store *InMemoryStore) {
-				store.CreateCollection(context.Background(), "test_collection", nil)
-				store.Insert(context.Background(), "test_collection", persistence.Document{
-					"id":   "doc-1",
-					"name": "Original",
-				})
-			},
-			wantErr:     true,
-			errContains: "conflict",
-		},
-		{
-			name:       "insert into non-existent collection",
-			collection: "missing_collection",
-			doc: persistence.Document{
-				"id":   "doc-1",
-				"name": "Test",
-			},
-			setup:       func(store *InMemoryStore) {},
-			wantErr:     true,
-			errContains: "does not exist",
-		},
-		{
-			name:       "insert document without id",
-			collection: "test_collection",
-			doc: persistence.Document{
-				"name": "No ID",
-			},
-			setup: func(store *InMemoryStore) {
-				store.CreateCollection(context.Background(), "test_collection", nil)
-			},
-			wantErr:     true,
-			errContains: "non-empty 'id' field",
-		},
-		{
-			name:       "insert document with empty id",
-			collection: "test_collection",
-			doc: persistence.Document{
-				"id":   "",
-				"name": "Empty ID",
-			},
-			setup: func(store *InMemoryStore) {
-				store.CreateCollection(context.Background(), "test_collection", nil)
-			},
-			wantErr:     true,
-			errContains: "non-empty 'id' field",
-		},
-		{
-			name:       "insert document with non-string id",
-			collection: "test_collection",
-			doc: persistence.Document{
-				"id":   123,
-				"name": "Numeric ID",
-			},
-			setup: func(store *InMemoryStore) {
-				store.CreateCollection(context.Background(), "test_collection", nil)
-			},
-			wantErr:     true,
-			errContains: "non-empty 'id' field",
-		},
-		{
-			name:       "insert with nil context",
-			collection: "test_collection",
-			doc: persistence.Document{
-				"id":   "doc-1",
-				"name": "Test",
-			},
-			setup: func(store *InMemoryStore) {
-				store.CreateCollection(context.Background(), "test_collection", nil)
-			},
-			wantErr:     true,
-			errContains: "context cannot be nil",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			store := NewInMemoryStore()
-			tt.setup(store)
-
-			ctx := context.Background()
-			if tt.errContains == "context cannot be nil" {
-				ctx = nil
-			}
-
-			id, err := store.Insert(ctx, tt.collection, tt.doc)
-			if tt.wantErr {
-				if err == nil {
-					t.Fatalf("Expected error containing %q, got nil", tt.errContains)
-				}
-				if tt.errContains != "" && !contains(err.Error(), tt.errContains) {
-					t.Errorf("Expected error containing %q, got %q", tt.errContains, err.Error())
-				}
-			} else {
-				if err != nil {
-					t.Fatalf("Expected no error, got %v", err)
-				}
-				expectedID := tt.doc["id"].(string)
-				if id != expectedID {
-					t.Errorf("Expected ID %q, got %q", expectedID, id)
-				}
-			}
+		It("should have empty collections map", func() {
+			Expect(store.collections).To(BeEmpty())
 		})
-	}
-}
+	})
 
-func TestGet(t *testing.T) {
-	tests := []struct {
-		name        string
-		collection  string
-		id          string
-		setup       func(store *InMemoryStore)
-		wantErr     bool
-		errContains string
-		wantDoc     persistence.Document
-	}{
-		{
-			name:       "get existing document",
-			collection: "test_collection",
-			id:         "doc-1",
-			setup: func(store *InMemoryStore) {
-				store.CreateCollection(context.Background(), "test_collection", nil)
-				store.Insert(context.Background(), "test_collection", persistence.Document{
+	Describe("CreateCollection", func() {
+		Context("when creating a new collection", func() {
+			It("should succeed", func() {
+				err := store.CreateCollection(ctx, "test_collection", nil)
+				Expect(err).ToNot(HaveOccurred())
+				_, exists := store.collections["test_collection"]
+				Expect(exists).To(BeTrue())
+			})
+		})
+
+		Context("when creating a duplicate collection", func() {
+			BeforeEach(func() {
+				err := store.CreateCollection(ctx, "existing_collection", nil)
+				Expect(err).ToNot(HaveOccurred())
+			})
+
+			It("should return an error", func() {
+				err := store.CreateCollection(ctx, "existing_collection", nil)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("already exists"))
+			})
+		})
+
+		Context("when context is nil", func() {
+			It("should return an error", func() {
+				err := store.CreateCollection(nil, "test_collection", nil)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("context cannot be nil"))
+			})
+		})
+	})
+
+	Describe("DropCollection", func() {
+		Context("when dropping an existing collection", func() {
+			BeforeEach(func() {
+				err := store.CreateCollection(ctx, "test_collection", nil)
+				Expect(err).ToNot(HaveOccurred())
+			})
+
+			It("should succeed", func() {
+				err := store.DropCollection(ctx, "test_collection")
+				Expect(err).ToNot(HaveOccurred())
+				_, exists := store.collections["test_collection"]
+				Expect(exists).To(BeFalse())
+			})
+		})
+
+		Context("when dropping a non-existent collection", func() {
+			It("should return an error", func() {
+				err := store.DropCollection(ctx, "missing_collection")
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("does not exist"))
+			})
+		})
+
+		Context("when context is nil", func() {
+			BeforeEach(func() {
+				err := store.CreateCollection(ctx, "test_collection", nil)
+				Expect(err).ToNot(HaveOccurred())
+			})
+
+			It("should return an error", func() {
+				err := store.DropCollection(nil, "test_collection")
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("context cannot be nil"))
+			})
+		})
+	})
+
+	Describe("Insert", func() {
+		BeforeEach(func() {
+			err := store.CreateCollection(ctx, "test_collection", nil)
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		Context("when inserting a valid document", func() {
+			It("should succeed and return correct ID", func() {
+				doc := persistence.Document{
 					"id":    "doc-1",
 					"name":  "Test Document",
 					"value": 42,
-				})
-			},
-			wantErr: false,
-			wantDoc: persistence.Document{
-				"id":    "doc-1",
-				"name":  "Test Document",
-				"value": 42,
-			},
-		},
-		{
-			name:       "get missing document",
-			collection: "test_collection",
-			id:         "missing-doc",
-			setup: func(store *InMemoryStore) {
-				store.CreateCollection(context.Background(), "test_collection", nil)
-			},
-			wantErr:     true,
-			errContains: "not found",
-		},
-		{
-			name:       "get from non-existent collection",
-			collection: "missing_collection",
-			id:         "doc-1",
-			setup:      func(store *InMemoryStore) {},
-			wantErr:    true,
-			errContains: "does not exist",
-		},
-		{
-			name:       "get with nil context",
-			collection: "test_collection",
-			id:         "doc-1",
-			setup: func(store *InMemoryStore) {
-				store.CreateCollection(context.Background(), "test_collection", nil)
-			},
-			wantErr:     true,
-			errContains: "context cannot be nil",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			store := NewInMemoryStore()
-			tt.setup(store)
-
-			ctx := context.Background()
-			if tt.errContains == "context cannot be nil" {
-				ctx = nil
-			}
-
-			doc, err := store.Get(ctx, tt.collection, tt.id)
-			if tt.wantErr {
-				if err == nil {
-					t.Fatalf("Expected error containing %q, got nil", tt.errContains)
 				}
-				if tt.errContains != "" && !contains(err.Error(), tt.errContains) {
-					t.Errorf("Expected error containing %q, got %q", tt.errContains, err.Error())
-				}
-			} else {
-				if err != nil {
-					t.Fatalf("Expected no error, got %v", err)
-				}
-				if !docEqual(doc, tt.wantDoc) {
-					t.Errorf("Expected document %v, got %v", tt.wantDoc, doc)
-				}
-			}
+				id, err := store.Insert(ctx, "test_collection", doc)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(id).To(Equal("doc-1"))
+			})
 		})
-	}
-}
 
-func TestUpdate(t *testing.T) {
-	tests := []struct {
-		name        string
-		collection  string
-		id          string
-		doc         persistence.Document
-		setup       func(store *InMemoryStore)
-		wantErr     bool
-		errContains string
-	}{
-		{
-			name:       "update existing document",
-			collection: "test_collection",
-			id:         "doc-1",
-			doc: persistence.Document{
-				"id":    "doc-1",
-				"name":  "Updated Document",
-				"value": 100,
-			},
-			setup: func(store *InMemoryStore) {
-				store.CreateCollection(context.Background(), "test_collection", nil)
-				store.Insert(context.Background(), "test_collection", persistence.Document{
+		Context("when inserting a duplicate ID", func() {
+			BeforeEach(func() {
+				doc := persistence.Document{
+					"id":   "doc-1",
+					"name": "Original",
+				}
+				_, err := store.Insert(ctx, "test_collection", doc)
+				Expect(err).ToNot(HaveOccurred())
+			})
+
+			It("should return conflict error", func() {
+				doc := persistence.Document{
+					"id":   "doc-1",
+					"name": "Duplicate",
+				}
+				_, err := store.Insert(ctx, "test_collection", doc)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("conflict"))
+			})
+		})
+
+		Context("when inserting into non-existent collection", func() {
+			It("should return an error", func() {
+				doc := persistence.Document{
+					"id":   "doc-1",
+					"name": "Test",
+				}
+				_, err := store.Insert(ctx, "missing_collection", doc)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("does not exist"))
+			})
+		})
+
+		Context("when document has no id field", func() {
+			It("should return an error", func() {
+				doc := persistence.Document{
+					"name": "No ID",
+				}
+				_, err := store.Insert(ctx, "test_collection", doc)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("non-empty 'id' field"))
+			})
+		})
+
+		Context("when document has empty id", func() {
+			It("should return an error", func() {
+				doc := persistence.Document{
+					"id":   "",
+					"name": "Empty ID",
+				}
+				_, err := store.Insert(ctx, "test_collection", doc)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("non-empty 'id' field"))
+			})
+		})
+
+		Context("when document has non-string id", func() {
+			It("should return an error", func() {
+				doc := persistence.Document{
+					"id":   123,
+					"name": "Numeric ID",
+				}
+				_, err := store.Insert(ctx, "test_collection", doc)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("non-empty 'id' field"))
+			})
+		})
+
+		Context("when context is nil", func() {
+			It("should return an error", func() {
+				doc := persistence.Document{
+					"id":   "doc-1",
+					"name": "Test",
+				}
+				_, err := store.Insert(nil, "test_collection", doc)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("context cannot be nil"))
+			})
+		})
+	})
+
+	Describe("Get", func() {
+		BeforeEach(func() {
+			err := store.CreateCollection(ctx, "test_collection", nil)
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		Context("when getting an existing document", func() {
+			BeforeEach(func() {
+				doc := persistence.Document{
+					"id":    "doc-1",
+					"name":  "Test Document",
+					"value": 42,
+				}
+				_, err := store.Insert(ctx, "test_collection", doc)
+				Expect(err).ToNot(HaveOccurred())
+			})
+
+			It("should return the correct document", func() {
+				doc, err := store.Get(ctx, "test_collection", "doc-1")
+				Expect(err).ToNot(HaveOccurred())
+				Expect(doc["id"]).To(Equal("doc-1"))
+				Expect(doc["name"]).To(Equal("Test Document"))
+				Expect(doc["value"]).To(Equal(42))
+			})
+		})
+
+		Context("when getting a missing document", func() {
+			It("should return not found error", func() {
+				_, err := store.Get(ctx, "test_collection", "missing-doc")
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("not found"))
+			})
+		})
+
+		Context("when getting from non-existent collection", func() {
+			It("should return an error", func() {
+				_, err := store.Get(ctx, "missing_collection", "doc-1")
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("does not exist"))
+			})
+		})
+
+		Context("when context is nil", func() {
+			It("should return an error", func() {
+				_, err := store.Get(nil, "test_collection", "doc-1")
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("context cannot be nil"))
+			})
+		})
+	})
+
+	Describe("Update", func() {
+		BeforeEach(func() {
+			err := store.CreateCollection(ctx, "test_collection", nil)
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		Context("when updating an existing document", func() {
+			BeforeEach(func() {
+				doc := persistence.Document{
 					"id":    "doc-1",
 					"name":  "Original Document",
 					"value": 42,
-				})
-			},
-			wantErr: false,
-		},
-		{
-			name:       "update missing document",
-			collection: "test_collection",
-			id:         "missing-doc",
-			doc: persistence.Document{
-				"id":   "missing-doc",
-				"name": "New Document",
-			},
-			setup: func(store *InMemoryStore) {
-				store.CreateCollection(context.Background(), "test_collection", nil)
-			},
-			wantErr:     true,
-			errContains: "not found",
-		},
-		{
-			name:       "update in non-existent collection",
-			collection: "missing_collection",
-			id:         "doc-1",
-			doc: persistence.Document{
-				"id":   "doc-1",
-				"name": "Test",
-			},
-			setup:       func(store *InMemoryStore) {},
-			wantErr:     true,
-			errContains: "does not exist",
-		},
-		{
-			name:       "update with nil context",
-			collection: "test_collection",
-			id:         "doc-1",
-			doc: persistence.Document{
-				"id":   "doc-1",
-				"name": "Updated",
-			},
-			setup: func(store *InMemoryStore) {
-				store.CreateCollection(context.Background(), "test_collection", nil)
-				store.Insert(context.Background(), "test_collection", persistence.Document{
-					"id":   "doc-1",
-					"name": "Original",
-				})
-			},
-			wantErr:     true,
-			errContains: "context cannot be nil",
-		},
-	}
+				}
+				_, err := store.Insert(ctx, "test_collection", doc)
+				Expect(err).ToNot(HaveOccurred())
+			})
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			store := NewInMemoryStore()
-			tt.setup(store)
+			It("should succeed and update the document", func() {
+				updatedDoc := persistence.Document{
+					"id":    "doc-1",
+					"name":  "Updated Document",
+					"value": 100,
+				}
+				err := store.Update(ctx, "test_collection", "doc-1", updatedDoc)
+				Expect(err).ToNot(HaveOccurred())
 
-			ctx := context.Background()
-			if tt.errContains == "context cannot be nil" {
-				ctx = nil
-			}
-
-			err := store.Update(ctx, tt.collection, tt.id, tt.doc)
-			if tt.wantErr {
-				if err == nil {
-					t.Fatalf("Expected error containing %q, got nil", tt.errContains)
-				}
-				if tt.errContains != "" && !contains(err.Error(), tt.errContains) {
-					t.Errorf("Expected error containing %q, got %q", tt.errContains, err.Error())
-				}
-			} else {
-				if err != nil {
-					t.Fatalf("Expected no error, got %v", err)
-				}
-				updatedDoc, err := store.Get(context.Background(), tt.collection, tt.id)
-				if err != nil {
-					t.Fatalf("Failed to get updated document: %v", err)
-				}
-				if !docEqual(updatedDoc, tt.doc) {
-					t.Errorf("Expected updated document %v, got %v", tt.doc, updatedDoc)
-				}
-			}
+				retrievedDoc, err := store.Get(ctx, "test_collection", "doc-1")
+				Expect(err).ToNot(HaveOccurred())
+				Expect(retrievedDoc["name"]).To(Equal("Updated Document"))
+				Expect(retrievedDoc["value"]).To(Equal(100))
+			})
 		})
-	}
-}
 
-func TestDelete(t *testing.T) {
-	tests := []struct {
-		name        string
-		collection  string
-		id          string
-		setup       func(store *InMemoryStore)
-		wantErr     bool
-		errContains string
-	}{
-		{
-			name:       "delete existing document",
-			collection: "test_collection",
-			id:         "doc-1",
-			setup: func(store *InMemoryStore) {
-				store.CreateCollection(context.Background(), "test_collection", nil)
-				store.Insert(context.Background(), "test_collection", persistence.Document{
-					"id":   "doc-1",
-					"name": "Test Document",
-				})
-			},
-			wantErr: false,
-		},
-		{
-			name:       "delete missing document",
-			collection: "test_collection",
-			id:         "missing-doc",
-			setup: func(store *InMemoryStore) {
-				store.CreateCollection(context.Background(), "test_collection", nil)
-			},
-			wantErr:     true,
-			errContains: "not found",
-		},
-		{
-			name:       "delete from non-existent collection",
-			collection: "missing_collection",
-			id:         "doc-1",
-			setup:      func(store *InMemoryStore) {},
-			wantErr:    true,
-			errContains: "does not exist",
-		},
-		{
-			name:       "delete with nil context",
-			collection: "test_collection",
-			id:         "doc-1",
-			setup: func(store *InMemoryStore) {
-				store.CreateCollection(context.Background(), "test_collection", nil)
-				store.Insert(context.Background(), "test_collection", persistence.Document{
+		Context("when updating a missing document", func() {
+			It("should return not found error", func() {
+				doc := persistence.Document{
+					"id":   "missing-doc",
+					"name": "New Document",
+				}
+				err := store.Update(ctx, "test_collection", "missing-doc", doc)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("not found"))
+			})
+		})
+
+		Context("when updating in non-existent collection", func() {
+			It("should return an error", func() {
+				doc := persistence.Document{
 					"id":   "doc-1",
 					"name": "Test",
-				})
-			},
-			wantErr:     true,
-			errContains: "context cannot be nil",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			store := NewInMemoryStore()
-			tt.setup(store)
-
-			ctx := context.Background()
-			if tt.errContains == "context cannot be nil" {
-				ctx = nil
-			}
-
-			err := store.Delete(ctx, tt.collection, tt.id)
-			if tt.wantErr {
-				if err == nil {
-					t.Fatalf("Expected error containing %q, got nil", tt.errContains)
 				}
-				if tt.errContains != "" && !contains(err.Error(), tt.errContains) {
-					t.Errorf("Expected error containing %q, got %q", tt.errContains, err.Error())
-				}
-			} else {
-				if err != nil {
-					t.Fatalf("Expected no error, got %v", err)
-				}
-				_, err := store.Get(context.Background(), tt.collection, tt.id)
-				if err == nil {
-					t.Errorf("Expected document to be deleted")
-				}
-			}
+				err := store.Update(ctx, "missing_collection", "doc-1", doc)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("does not exist"))
+			})
 		})
-	}
-}
 
-func TestFind(t *testing.T) {
-	tests := []struct {
-		name        string
-		collection  string
-		query       persistence.Query
-		setup       func(store *InMemoryStore)
-		wantErr     bool
-		errContains string
-		wantCount   int
-	}{
-		{
-			name:       "find all documents",
-			collection: "test_collection",
-			query:      persistence.Query{},
-			setup: func(store *InMemoryStore) {
-				store.CreateCollection(context.Background(), "test_collection", nil)
-				store.Insert(context.Background(), "test_collection", persistence.Document{
+		Context("when context is nil", func() {
+			BeforeEach(func() {
+				doc := persistence.Document{
 					"id":   "doc-1",
-					"name": "Document 1",
-				})
-				store.Insert(context.Background(), "test_collection", persistence.Document{
-					"id":   "doc-2",
-					"name": "Document 2",
-				})
-				store.Insert(context.Background(), "test_collection", persistence.Document{
-					"id":   "doc-3",
-					"name": "Document 3",
-				})
-			},
-			wantErr:   false,
-			wantCount: 3,
-		},
-		{
-			name:       "find in empty collection",
-			collection: "test_collection",
-			query:      persistence.Query{},
-			setup: func(store *InMemoryStore) {
-				store.CreateCollection(context.Background(), "test_collection", nil)
-			},
-			wantErr:   false,
-			wantCount: 0,
-		},
-		{
-			name:        "find in non-existent collection",
-			collection:  "missing_collection",
-			query:       persistence.Query{},
-			setup:       func(store *InMemoryStore) {},
-			wantErr:     true,
-			errContains: "does not exist",
-		},
-		{
-			name:       "find with nil context",
-			collection: "test_collection",
-			query:      persistence.Query{},
-			setup: func(store *InMemoryStore) {
-				store.CreateCollection(context.Background(), "test_collection", nil)
-			},
-			wantErr:     true,
-			errContains: "context cannot be nil",
-		},
-	}
+					"name": "Original",
+				}
+				_, err := store.Insert(ctx, "test_collection", doc)
+				Expect(err).ToNot(HaveOccurred())
+			})
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			store := NewInMemoryStore()
-			tt.setup(store)
-
-			ctx := context.Background()
-			if tt.errContains == "context cannot be nil" {
-				ctx = nil
-			}
-
-			docs, err := store.Find(ctx, tt.collection, tt.query)
-			if tt.wantErr {
-				if err == nil {
-					t.Fatalf("Expected error containing %q, got nil", tt.errContains)
+			It("should return an error", func() {
+				doc := persistence.Document{
+					"id":   "doc-1",
+					"name": "Updated",
 				}
-				if tt.errContains != "" && !contains(err.Error(), tt.errContains) {
-					t.Errorf("Expected error containing %q, got %q", tt.errContains, err.Error())
-				}
-			} else {
-				if err != nil {
-					t.Fatalf("Expected no error, got %v", err)
-				}
-				if len(docs) != tt.wantCount {
-					t.Errorf("Expected %d documents, got %d", tt.wantCount, len(docs))
-				}
-			}
+				err := store.Update(nil, "test_collection", "doc-1", doc)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("context cannot be nil"))
+			})
 		})
-	}
-}
-
-func TestDocumentIsolation(t *testing.T) {
-	store := NewInMemoryStore()
-	ctx := context.Background()
-
-	store.CreateCollection(ctx, "test_collection", nil)
-
-	originalDoc := persistence.Document{
-		"id":    "doc-1",
-		"name":  "Original",
-		"value": 42,
-	}
-
-	store.Insert(ctx, "test_collection", originalDoc)
-
-	originalDoc["name"] = "Modified After Insert"
-	originalDoc["value"] = 999
-
-	retrievedDoc, err := store.Get(ctx, "test_collection", "doc-1")
-	if err != nil {
-		t.Fatalf("Failed to get document: %v", err)
-	}
-
-	if retrievedDoc["name"] != "Original" {
-		t.Errorf("Expected name 'Original', got %v (document not isolated)", retrievedDoc["name"])
-	}
-	if retrievedDoc["value"] != 42 {
-		t.Errorf("Expected value 42, got %v (document not isolated)", retrievedDoc["value"])
-	}
-
-	retrievedDoc["name"] = "Modified After Get"
-	retrievedDoc["value"] = 777
-
-	retrievedDoc2, err := store.Get(ctx, "test_collection", "doc-1")
-	if err != nil {
-		t.Fatalf("Failed to get document second time: %v", err)
-	}
-
-	if retrievedDoc2["name"] != "Original" {
-		t.Errorf("Expected name 'Original', got %v (returned document not isolated)", retrievedDoc2["name"])
-	}
-	if retrievedDoc2["value"] != 42 {
-		t.Errorf("Expected value 42, got %v (returned document not isolated)", retrievedDoc2["value"])
-	}
-}
-
-func TestMaintenance(t *testing.T) {
-	store := NewInMemoryStore()
-	ctx := context.Background()
-
-	err := store.Maintenance(ctx)
-	if err != nil {
-		t.Errorf("Expected Maintenance to succeed, got error: %v", err)
-	}
-}
-
-func TestClose(t *testing.T) {
-	store := NewInMemoryStore()
-	ctx := context.Background()
-
-	store.CreateCollection(ctx, "test_collection", nil)
-	store.Insert(ctx, "test_collection", persistence.Document{
-		"id":   "doc-1",
-		"name": "Test",
 	})
 
-	err := store.Close(ctx)
-	if err != nil {
-		t.Errorf("Expected Close to succeed, got error: %v", err)
-	}
+	Describe("Delete", func() {
+		BeforeEach(func() {
+			err := store.CreateCollection(ctx, "test_collection", nil)
+			Expect(err).ToNot(HaveOccurred())
+		})
 
-	if len(store.collections) != 0 {
-		t.Errorf("Expected all collections to be cleared after Close, got %d", len(store.collections))
-	}
-}
+		Context("when deleting an existing document", func() {
+			BeforeEach(func() {
+				doc := persistence.Document{
+					"id":   "doc-1",
+					"name": "Test Document",
+				}
+				_, err := store.Insert(ctx, "test_collection", doc)
+				Expect(err).ToNot(HaveOccurred())
+			})
 
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(s) > len(substr) && containsSubstring(s, substr))
-}
+			It("should succeed and remove the document", func() {
+				err := store.Delete(ctx, "test_collection", "doc-1")
+				Expect(err).ToNot(HaveOccurred())
 
-func containsSubstring(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
-}
+				_, err = store.Get(ctx, "test_collection", "doc-1")
+				Expect(err).To(HaveOccurred())
+			})
+		})
 
-func docEqual(a, b persistence.Document) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for k, v := range a {
-		if b[k] != v {
-			return false
-		}
-	}
-	return true
-}
+		Context("when deleting a missing document", func() {
+			It("should return not found error", func() {
+				err := store.Delete(ctx, "test_collection", "missing-doc")
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("not found"))
+			})
+		})
+
+		Context("when deleting from non-existent collection", func() {
+			It("should return an error", func() {
+				err := store.Delete(ctx, "missing_collection", "doc-1")
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("does not exist"))
+			})
+		})
+
+		Context("when context is nil", func() {
+			BeforeEach(func() {
+				doc := persistence.Document{
+					"id":   "doc-1",
+					"name": "Test",
+				}
+				_, err := store.Insert(ctx, "test_collection", doc)
+				Expect(err).ToNot(HaveOccurred())
+			})
+
+			It("should return an error", func() {
+				err := store.Delete(nil, "test_collection", "doc-1")
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("context cannot be nil"))
+			})
+		})
+	})
+
+	Describe("Find", func() {
+		BeforeEach(func() {
+			err := store.CreateCollection(ctx, "test_collection", nil)
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		Context("when finding all documents", func() {
+			BeforeEach(func() {
+				docs := []persistence.Document{
+					{"id": "doc-1", "name": "Document 1"},
+					{"id": "doc-2", "name": "Document 2"},
+					{"id": "doc-3", "name": "Document 3"},
+				}
+				for _, doc := range docs {
+					_, err := store.Insert(ctx, "test_collection", doc)
+					Expect(err).ToNot(HaveOccurred())
+				}
+			})
+
+			It("should return all documents", func() {
+				docs, err := store.Find(ctx, "test_collection", persistence.Query{})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(docs).To(HaveLen(3))
+			})
+		})
+
+		Context("when finding in empty collection", func() {
+			It("should return empty slice", func() {
+				docs, err := store.Find(ctx, "test_collection", persistence.Query{})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(docs).To(BeEmpty())
+			})
+		})
+
+		Context("when finding in non-existent collection", func() {
+			It("should return an error", func() {
+				_, err := store.Find(ctx, "missing_collection", persistence.Query{})
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("does not exist"))
+			})
+		})
+
+		Context("when context is nil", func() {
+			It("should return an error", func() {
+				_, err := store.Find(nil, "test_collection", persistence.Query{})
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("context cannot be nil"))
+			})
+		})
+	})
+
+	Describe("Document Isolation", func() {
+		BeforeEach(func() {
+			err := store.CreateCollection(ctx, "test_collection", nil)
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("should isolate documents after insert", func() {
+			originalDoc := persistence.Document{
+				"id":    "doc-1",
+				"name":  "Original",
+				"value": 42,
+			}
+			_, err := store.Insert(ctx, "test_collection", originalDoc)
+			Expect(err).ToNot(HaveOccurred())
+
+			originalDoc["name"] = "Modified After Insert"
+			originalDoc["value"] = 999
+
+			retrievedDoc, err := store.Get(ctx, "test_collection", "doc-1")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(retrievedDoc["name"]).To(Equal("Original"))
+			Expect(retrievedDoc["value"]).To(Equal(42))
+		})
+
+		It("should isolate returned documents from store", func() {
+			originalDoc := persistence.Document{
+				"id":    "doc-1",
+				"name":  "Original",
+				"value": 42,
+			}
+			_, err := store.Insert(ctx, "test_collection", originalDoc)
+			Expect(err).ToNot(HaveOccurred())
+
+			retrievedDoc, err := store.Get(ctx, "test_collection", "doc-1")
+			Expect(err).ToNot(HaveOccurred())
+
+			retrievedDoc["name"] = "Modified After Get"
+			retrievedDoc["value"] = 777
+
+			retrievedDoc2, err := store.Get(ctx, "test_collection", "doc-1")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(retrievedDoc2["name"]).To(Equal("Original"))
+			Expect(retrievedDoc2["value"]).To(Equal(42))
+		})
+	})
+
+	Describe("Maintenance", func() {
+		It("should succeed without error", func() {
+			err := store.Maintenance(ctx)
+			Expect(err).ToNot(HaveOccurred())
+		})
+	})
+
+	Describe("Close", func() {
+		BeforeEach(func() {
+			err := store.CreateCollection(ctx, "test_collection", nil)
+			Expect(err).ToNot(HaveOccurred())
+			doc := persistence.Document{
+				"id":   "doc-1",
+				"name": "Test",
+			}
+			_, err = store.Insert(ctx, "test_collection", doc)
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("should clear all collections", func() {
+			err := store.Close(ctx)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(store.collections).To(BeEmpty())
+		})
+	})
+})

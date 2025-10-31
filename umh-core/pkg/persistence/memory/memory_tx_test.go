@@ -16,1115 +16,709 @@ package memory
 
 import (
 	"context"
-	"testing"
+
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 )
 
-func TestBeginTx(t *testing.T) {
-	store := NewInMemoryStore()
-	ctx := context.Background()
+var _ = Describe("Transaction Support", func() {
+	var (
+		store *InMemoryStore
+		ctx   context.Context
+	)
 
-	tx, err := store.BeginTx(ctx)
-	if err != nil {
-		t.Fatalf("Expected no error from BeginTx, got %v", err)
-	}
-	if tx == nil {
-		t.Fatal("Expected non-nil transaction")
-	}
-}
-
-func TestTransactionCommit(t *testing.T) {
-	store := NewInMemoryStore()
-	ctx := context.Background()
-
-	store.CreateCollection(ctx, "test_collection", nil)
-
-	tx, err := store.BeginTx(ctx)
-	if err != nil {
-		t.Fatalf("Failed to begin transaction: %v", err)
-	}
-
-	_, err = tx.Insert(ctx, "test_collection", persistence.Document{
-		"id":   "doc-1",
-		"name": "Test Document",
-	})
-	if err != nil {
-		t.Fatalf("Failed to insert in transaction: %v", err)
-	}
-
-	err = tx.Commit()
-	if err != nil {
-		t.Fatalf("Expected successful commit, got error: %v", err)
-	}
-
-	doc, err := store.Get(ctx, "test_collection", "doc-1")
-	if err != nil {
-		t.Fatalf("Expected document to exist after commit: %v", err)
-	}
-	if doc["name"] != "Test Document" {
-		t.Errorf("Expected document name 'Test Document', got %v", doc["name"])
-	}
-}
-
-func TestTransactionRollback(t *testing.T) {
-	store := NewInMemoryStore()
-	ctx := context.Background()
-
-	store.CreateCollection(ctx, "test_collection", nil)
-
-	tx, err := store.BeginTx(ctx)
-	if err != nil {
-		t.Fatalf("Failed to begin transaction: %v", err)
-	}
-
-	_, err = tx.Insert(ctx, "test_collection", persistence.Document{
-		"id":   "doc-1",
-		"name": "Test Document",
-	})
-	if err != nil {
-		t.Fatalf("Failed to insert in transaction: %v", err)
-	}
-
-	err = tx.Rollback()
-	if err != nil {
-		t.Fatalf("Expected successful rollback, got error: %v", err)
-	}
-
-	_, err = store.Get(ctx, "test_collection", "doc-1")
-	if err != persistence.ErrNotFound {
-		t.Errorf("Expected ErrNotFound after rollback, got %v", err)
-	}
-}
-
-func TestCommitAfterCommit(t *testing.T) {
-	store := NewInMemoryStore()
-	ctx := context.Background()
-
-	tx, err := store.BeginTx(ctx)
-	if err != nil {
-		t.Fatalf("Failed to begin transaction: %v", err)
-	}
-
-	err = tx.Commit()
-	if err != nil {
-		t.Fatalf("First commit failed: %v", err)
-	}
-
-	err = tx.Commit()
-	if err != nil {
-		t.Errorf("Expected second commit to be idempotent (no error), got %v", err)
-	}
-}
-
-func TestRollbackAfterRollback(t *testing.T) {
-	store := NewInMemoryStore()
-	ctx := context.Background()
-
-	tx, err := store.BeginTx(ctx)
-	if err != nil {
-		t.Fatalf("Failed to begin transaction: %v", err)
-	}
-
-	err = tx.Rollback()
-	if err != nil {
-		t.Fatalf("First rollback failed: %v", err)
-	}
-
-	err = tx.Rollback()
-	if err != nil {
-		t.Errorf("Expected second rollback to be idempotent (no error), got %v", err)
-	}
-}
-
-func TestCommitAfterRollback(t *testing.T) {
-	store := NewInMemoryStore()
-	ctx := context.Background()
-
-	tx, err := store.BeginTx(ctx)
-	if err != nil {
-		t.Fatalf("Failed to begin transaction: %v", err)
-	}
-
-	err = tx.Rollback()
-	if err != nil {
-		t.Fatalf("Rollback failed: %v", err)
-	}
-
-	err = tx.Commit()
-	if err == nil {
-		t.Error("Expected error when committing after rollback")
-	}
-	if !contains(err.Error(), "rolled back") {
-		t.Errorf("Expected error about rollback, got %v", err)
-	}
-}
-
-func TestTransactionIsolationInsert(t *testing.T) {
-	store := NewInMemoryStore()
-	ctx := context.Background()
-
-	store.CreateCollection(ctx, "test_collection", nil)
-
-	tx, err := store.BeginTx(ctx)
-	if err != nil {
-		t.Fatalf("Failed to begin transaction: %v", err)
-	}
-
-	_, err = tx.Insert(ctx, "test_collection", persistence.Document{
-		"id":   "doc-1",
-		"name": "Test Document",
-	})
-	if err != nil {
-		t.Fatalf("Failed to insert in transaction: %v", err)
-	}
-
-	_, err = store.Get(ctx, "test_collection", "doc-1")
-	if err != persistence.ErrNotFound {
-		t.Errorf("Expected document to be invisible before commit, got error: %v", err)
-	}
-
-	err = tx.Commit()
-	if err != nil {
-		t.Fatalf("Commit failed: %v", err)
-	}
-
-	doc, err := store.Get(ctx, "test_collection", "doc-1")
-	if err != nil {
-		t.Fatalf("Expected document to exist after commit: %v", err)
-	}
-	if doc["name"] != "Test Document" {
-		t.Errorf("Expected document name 'Test Document', got %v", doc["name"])
-	}
-}
-
-func TestTransactionIsolationUpdate(t *testing.T) {
-	store := NewInMemoryStore()
-	ctx := context.Background()
-
-	store.CreateCollection(ctx, "test_collection", nil)
-	store.Insert(ctx, "test_collection", persistence.Document{
-		"id":    "doc-1",
-		"name":  "Original",
-		"value": 42,
+	BeforeEach(func() {
+		store = NewInMemoryStore()
+		ctx = context.Background()
+		err := store.CreateCollection(ctx, "test_collection", nil)
+		Expect(err).ToNot(HaveOccurred())
 	})
 
-	tx, err := store.BeginTx(ctx)
-	if err != nil {
-		t.Fatalf("Failed to begin transaction: %v", err)
-	}
-
-	err = tx.Update(ctx, "test_collection", "doc-1", persistence.Document{
-		"id":    "doc-1",
-		"name":  "Updated",
-		"value": 100,
-	})
-	if err != nil {
-		t.Fatalf("Failed to update in transaction: %v", err)
-	}
-
-	doc, err := store.Get(ctx, "test_collection", "doc-1")
-	if err != nil {
-		t.Fatalf("Failed to get document: %v", err)
-	}
-	if doc["name"] != "Original" {
-		t.Errorf("Expected original name before commit, got %v", doc["name"])
-	}
-	if doc["value"] != 42 {
-		t.Errorf("Expected original value before commit, got %v", doc["value"])
-	}
-
-	err = tx.Commit()
-	if err != nil {
-		t.Fatalf("Commit failed: %v", err)
-	}
-
-	doc, err = store.Get(ctx, "test_collection", "doc-1")
-	if err != nil {
-		t.Fatalf("Failed to get document after commit: %v", err)
-	}
-	if doc["name"] != "Updated" {
-		t.Errorf("Expected updated name after commit, got %v", doc["name"])
-	}
-	if doc["value"] != 100 {
-		t.Errorf("Expected updated value after commit, got %v", doc["value"])
-	}
-}
-
-func TestTransactionIsolationDelete(t *testing.T) {
-	store := NewInMemoryStore()
-	ctx := context.Background()
-
-	store.CreateCollection(ctx, "test_collection", nil)
-	store.Insert(ctx, "test_collection", persistence.Document{
-		"id":   "doc-1",
-		"name": "Test Document",
+	AfterEach(func() {
+		if store != nil {
+			store.Close(ctx)
+		}
 	})
 
-	tx, err := store.BeginTx(ctx)
-	if err != nil {
-		t.Fatalf("Failed to begin transaction: %v", err)
-	}
+	Describe("BeginTx", func() {
+		Context("when beginning a transaction", func() {
+			It("should return a non-nil transaction", func() {
+				tx, err := store.BeginTx(ctx)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(tx).ToNot(BeNil())
+			})
+		})
 
-	err = tx.Delete(ctx, "test_collection", "doc-1")
-	if err != nil {
-		t.Fatalf("Failed to delete in transaction: %v", err)
-	}
-
-	doc, err := store.Get(ctx, "test_collection", "doc-1")
-	if err != nil {
-		t.Errorf("Expected document to still exist before commit, got error: %v", err)
-	}
-	if doc["name"] != "Test Document" {
-		t.Errorf("Expected original document before commit, got %v", doc)
-	}
-
-	err = tx.Commit()
-	if err != nil {
-		t.Fatalf("Commit failed: %v", err)
-	}
-
-	_, err = store.Get(ctx, "test_collection", "doc-1")
-	if err != persistence.ErrNotFound {
-		t.Errorf("Expected ErrNotFound after commit, got %v", err)
-	}
-}
-
-func TestTransactionSeesOwnInsert(t *testing.T) {
-	store := NewInMemoryStore()
-	ctx := context.Background()
-
-	store.CreateCollection(ctx, "test_collection", nil)
-
-	tx, err := store.BeginTx(ctx)
-	if err != nil {
-		t.Fatalf("Failed to begin transaction: %v", err)
-	}
-
-	_, err = tx.Insert(ctx, "test_collection", persistence.Document{
-		"id":   "doc-1",
-		"name": "Test Document",
-	})
-	if err != nil {
-		t.Fatalf("Failed to insert: %v", err)
-	}
-
-	doc, err := tx.Get(ctx, "test_collection", "doc-1")
-	if err != nil {
-		t.Fatalf("Transaction should see its own insert: %v", err)
-	}
-	if doc["name"] != "Test Document" {
-		t.Errorf("Expected document name 'Test Document', got %v", doc["name"])
-	}
-}
-
-func TestTransactionSeesOwnUpdate(t *testing.T) {
-	store := NewInMemoryStore()
-	ctx := context.Background()
-
-	store.CreateCollection(ctx, "test_collection", nil)
-	store.Insert(ctx, "test_collection", persistence.Document{
-		"id":   "doc-1",
-		"name": "Original",
+		Context("when context is nil", func() {
+			It("should return an error", func() {
+				tx, err := store.BeginTx(nil)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("context cannot be nil"))
+				Expect(tx).To(BeNil())
+			})
+		})
 	})
 
-	tx, err := store.BeginTx(ctx)
-	if err != nil {
-		t.Fatalf("Failed to begin transaction: %v", err)
-	}
+	Describe("Transaction Commit", func() {
+		It("should commit changes to store", func() {
+			tx, err := store.BeginTx(ctx)
+			Expect(err).ToNot(HaveOccurred())
 
-	err = tx.Update(ctx, "test_collection", "doc-1", persistence.Document{
-		"id":   "doc-1",
-		"name": "Updated",
-	})
-	if err != nil {
-		t.Fatalf("Failed to update: %v", err)
-	}
+			_, err = tx.Insert(ctx, "test_collection", persistence.Document{
+				"id":   "doc-1",
+				"name": "Test Document",
+			})
+			Expect(err).ToNot(HaveOccurred())
 
-	doc, err := tx.Get(ctx, "test_collection", "doc-1")
-	if err != nil {
-		t.Fatalf("Transaction should see its own update: %v", err)
-	}
-	if doc["name"] != "Updated" {
-		t.Errorf("Expected updated name 'Updated', got %v", doc["name"])
-	}
-}
+			err = tx.Commit()
+			Expect(err).ToNot(HaveOccurred())
 
-func TestTransactionDoesNotSeeOwnDelete(t *testing.T) {
-	store := NewInMemoryStore()
-	ctx := context.Background()
-
-	store.CreateCollection(ctx, "test_collection", nil)
-	store.Insert(ctx, "test_collection", persistence.Document{
-		"id":   "doc-1",
-		"name": "Test Document",
+			doc, err := store.Get(ctx, "test_collection", "doc-1")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(doc["name"]).To(Equal("Test Document"))
+		})
 	})
 
-	tx, err := store.BeginTx(ctx)
-	if err != nil {
-		t.Fatalf("Failed to begin transaction: %v", err)
-	}
+	Describe("Transaction Rollback", func() {
+		It("should discard changes", func() {
+			tx, err := store.BeginTx(ctx)
+			Expect(err).ToNot(HaveOccurred())
 
-	err = tx.Delete(ctx, "test_collection", "doc-1")
-	if err != nil {
-		t.Fatalf("Failed to delete: %v", err)
-	}
+			_, err = tx.Insert(ctx, "test_collection", persistence.Document{
+				"id":   "doc-1",
+				"name": "Test Document",
+			})
+			Expect(err).ToNot(HaveOccurred())
 
-	_, err = tx.Get(ctx, "test_collection", "doc-1")
-	if err != persistence.ErrNotFound {
-		t.Errorf("Transaction should not see deleted document, got error: %v", err)
-	}
-}
+			err = tx.Rollback()
+			Expect(err).ToNot(HaveOccurred())
 
-func TestTransactionRollbackMakesChangesInvisible(t *testing.T) {
-	store := NewInMemoryStore()
-	ctx := context.Background()
-
-	store.CreateCollection(ctx, "test_collection", nil)
-
-	tx, err := store.BeginTx(ctx)
-	if err != nil {
-		t.Fatalf("Failed to begin transaction: %v", err)
-	}
-
-	_, err = tx.Insert(ctx, "test_collection", persistence.Document{
-		"id":   "doc-1",
-		"name": "Test Document",
-	})
-	if err != nil {
-		t.Fatalf("Failed to insert: %v", err)
-	}
-
-	doc, err := tx.Get(ctx, "test_collection", "doc-1")
-	if err != nil {
-		t.Fatalf("Should see document before rollback: %v", err)
-	}
-	if doc["name"] != "Test Document" {
-		t.Errorf("Expected document name 'Test Document', got %v", doc["name"])
-	}
-
-	err = tx.Rollback()
-	if err != nil {
-		t.Fatalf("Rollback failed: %v", err)
-	}
-
-	_, err = store.Get(ctx, "test_collection", "doc-1")
-	if err != persistence.ErrNotFound {
-		t.Errorf("Expected ErrNotFound after rollback, got %v", err)
-	}
-}
-
-func TestTransactionInsertSuccess(t *testing.T) {
-	store := NewInMemoryStore()
-	ctx := context.Background()
-
-	store.CreateCollection(ctx, "test_collection", nil)
-
-	tx, err := store.BeginTx(ctx)
-	if err != nil {
-		t.Fatalf("Failed to begin transaction: %v", err)
-	}
-
-	id, err := tx.Insert(ctx, "test_collection", persistence.Document{
-		"id":    "doc-1",
-		"name":  "Test Document",
-		"value": 42,
-	})
-	if err != nil {
-		t.Fatalf("Expected successful insert, got error: %v", err)
-	}
-	if id != "doc-1" {
-		t.Errorf("Expected ID 'doc-1', got %q", id)
-	}
-
-	err = tx.Commit()
-	if err != nil {
-		t.Fatalf("Commit failed: %v", err)
-	}
-
-	doc, err := store.Get(ctx, "test_collection", "doc-1")
-	if err != nil {
-		t.Fatalf("Failed to get document: %v", err)
-	}
-	if doc["value"] != 42 {
-		t.Errorf("Expected value 42, got %v", doc["value"])
-	}
-}
-
-func TestTransactionInsertDuplicateID(t *testing.T) {
-	store := NewInMemoryStore()
-	ctx := context.Background()
-
-	store.CreateCollection(ctx, "test_collection", nil)
-
-	tx, err := store.BeginTx(ctx)
-	if err != nil {
-		t.Fatalf("Failed to begin transaction: %v", err)
-	}
-
-	_, err = tx.Insert(ctx, "test_collection", persistence.Document{
-		"id":   "doc-1",
-		"name": "First",
-	})
-	if err != nil {
-		t.Fatalf("First insert failed: %v", err)
-	}
-
-	_, err = tx.Insert(ctx, "test_collection", persistence.Document{
-		"id":   "doc-1",
-		"name": "Duplicate",
-	})
-	if err != persistence.ErrConflict {
-		t.Errorf("Expected ErrConflict for duplicate ID, got %v", err)
-	}
-}
-
-func TestTransactionGetFromTransactionCache(t *testing.T) {
-	store := NewInMemoryStore()
-	ctx := context.Background()
-
-	store.CreateCollection(ctx, "test_collection", nil)
-
-	tx, err := store.BeginTx(ctx)
-	if err != nil {
-		t.Fatalf("Failed to begin transaction: %v", err)
-	}
-
-	_, err = tx.Insert(ctx, "test_collection", persistence.Document{
-		"id":   "doc-1",
-		"name": "From Transaction",
-	})
-	if err != nil {
-		t.Fatalf("Insert failed: %v", err)
-	}
-
-	doc, err := tx.Get(ctx, "test_collection", "doc-1")
-	if err != nil {
-		t.Fatalf("Get should succeed from transaction cache: %v", err)
-	}
-	if doc["name"] != "From Transaction" {
-		t.Errorf("Expected name 'From Transaction', got %v", doc["name"])
-	}
-}
-
-func TestTransactionGetFromUnderlyingStore(t *testing.T) {
-	store := NewInMemoryStore()
-	ctx := context.Background()
-
-	store.CreateCollection(ctx, "test_collection", nil)
-	store.Insert(ctx, "test_collection", persistence.Document{
-		"id":   "doc-1",
-		"name": "From Store",
+			_, err = store.Get(ctx, "test_collection", "doc-1")
+			Expect(err).To(Equal(persistence.ErrNotFound))
+		})
 	})
 
-	tx, err := store.BeginTx(ctx)
-	if err != nil {
-		t.Fatalf("Failed to begin transaction: %v", err)
-	}
+	Describe("Transaction Idempotency", func() {
+		Context("when committing twice", func() {
+			It("should be idempotent", func() {
+				tx, err := store.BeginTx(ctx)
+				Expect(err).ToNot(HaveOccurred())
 
-	doc, err := tx.Get(ctx, "test_collection", "doc-1")
-	if err != nil {
-		t.Fatalf("Get should succeed from underlying store: %v", err)
-	}
-	if doc["name"] != "From Store" {
-		t.Errorf("Expected name 'From Store', got %v", doc["name"])
-	}
-}
+				err = tx.Commit()
+				Expect(err).ToNot(HaveOccurred())
 
-func TestTransactionUpdateSuccess(t *testing.T) {
-	store := NewInMemoryStore()
-	ctx := context.Background()
+				err = tx.Commit()
+				Expect(err).ToNot(HaveOccurred())
+			})
+		})
 
-	store.CreateCollection(ctx, "test_collection", nil)
-	store.Insert(ctx, "test_collection", persistence.Document{
-		"id":   "doc-1",
-		"name": "Original",
+		Context("when rolling back twice", func() {
+			It("should be idempotent", func() {
+				tx, err := store.BeginTx(ctx)
+				Expect(err).ToNot(HaveOccurred())
+
+				err = tx.Rollback()
+				Expect(err).ToNot(HaveOccurred())
+
+				err = tx.Rollback()
+				Expect(err).ToNot(HaveOccurred())
+			})
+		})
+
+		Context("when committing after rollback", func() {
+			It("should return an error", func() {
+				tx, err := store.BeginTx(ctx)
+				Expect(err).ToNot(HaveOccurred())
+
+				err = tx.Rollback()
+				Expect(err).ToNot(HaveOccurred())
+
+				err = tx.Commit()
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("rolled back"))
+			})
+		})
 	})
 
-	tx, err := store.BeginTx(ctx)
-	if err != nil {
-		t.Fatalf("Failed to begin transaction: %v", err)
-	}
+	Describe("Transaction Isolation", func() {
+		Context("insert operations", func() {
+			It("should not be visible before commit", func() {
+				tx, err := store.BeginTx(ctx)
+				Expect(err).ToNot(HaveOccurred())
 
-	err = tx.Update(ctx, "test_collection", "doc-1", persistence.Document{
-		"id":   "doc-1",
-		"name": "Updated",
-	})
-	if err != nil {
-		t.Fatalf("Expected successful update, got error: %v", err)
-	}
+				_, err = tx.Insert(ctx, "test_collection", persistence.Document{
+					"id":   "doc-1",
+					"name": "Test Document",
+				})
+				Expect(err).ToNot(HaveOccurred())
 
-	err = tx.Commit()
-	if err != nil {
-		t.Fatalf("Commit failed: %v", err)
-	}
+				_, err = store.Get(ctx, "test_collection", "doc-1")
+				Expect(err).To(Equal(persistence.ErrNotFound))
 
-	doc, err := store.Get(ctx, "test_collection", "doc-1")
-	if err != nil {
-		t.Fatalf("Failed to get document: %v", err)
-	}
-	if doc["name"] != "Updated" {
-		t.Errorf("Expected updated name, got %v", doc["name"])
-	}
-}
+				err = tx.Commit()
+				Expect(err).ToNot(HaveOccurred())
 
-func TestTransactionUpdateMissingDocument(t *testing.T) {
-	store := NewInMemoryStore()
-	ctx := context.Background()
+				doc, err := store.Get(ctx, "test_collection", "doc-1")
+				Expect(err).ToNot(HaveOccurred())
+				Expect(doc["name"]).To(Equal("Test Document"))
+			})
+		})
 
-	store.CreateCollection(ctx, "test_collection", nil)
+		Context("update operations", func() {
+			BeforeEach(func() {
+				_, err := store.Insert(ctx, "test_collection", persistence.Document{
+					"id":    "doc-1",
+					"name":  "Original",
+					"value": 42,
+				})
+				Expect(err).ToNot(HaveOccurred())
+			})
 
-	tx, err := store.BeginTx(ctx)
-	if err != nil {
-		t.Fatalf("Failed to begin transaction: %v", err)
-	}
+			It("should not be visible before commit", func() {
+				tx, err := store.BeginTx(ctx)
+				Expect(err).ToNot(HaveOccurred())
 
-	err = tx.Update(ctx, "test_collection", "missing-doc", persistence.Document{
-		"id":   "missing-doc",
-		"name": "Updated",
-	})
-	if err != nil {
-		t.Errorf("Update of non-existent document should succeed in transaction (creates entry)")
-	}
-}
+				err = tx.Update(ctx, "test_collection", "doc-1", persistence.Document{
+					"id":    "doc-1",
+					"name":  "Updated",
+					"value": 100,
+				})
+				Expect(err).ToNot(HaveOccurred())
 
-func TestTransactionDeleteSuccess(t *testing.T) {
-	store := NewInMemoryStore()
-	ctx := context.Background()
+				doc, err := store.Get(ctx, "test_collection", "doc-1")
+				Expect(err).ToNot(HaveOccurred())
+				Expect(doc["name"]).To(Equal("Original"))
+				Expect(doc["value"]).To(Equal(42))
 
-	store.CreateCollection(ctx, "test_collection", nil)
-	store.Insert(ctx, "test_collection", persistence.Document{
-		"id":   "doc-1",
-		"name": "To Delete",
-	})
+				err = tx.Commit()
+				Expect(err).ToNot(HaveOccurred())
 
-	tx, err := store.BeginTx(ctx)
-	if err != nil {
-		t.Fatalf("Failed to begin transaction: %v", err)
-	}
+				doc, err = store.Get(ctx, "test_collection", "doc-1")
+				Expect(err).ToNot(HaveOccurred())
+				Expect(doc["name"]).To(Equal("Updated"))
+				Expect(doc["value"]).To(Equal(100))
+			})
+		})
 
-	err = tx.Delete(ctx, "test_collection", "doc-1")
-	if err != nil {
-		t.Fatalf("Expected successful delete, got error: %v", err)
-	}
+		Context("delete operations", func() {
+			BeforeEach(func() {
+				_, err := store.Insert(ctx, "test_collection", persistence.Document{
+					"id":   "doc-1",
+					"name": "Test Document",
+				})
+				Expect(err).ToNot(HaveOccurred())
+			})
 
-	err = tx.Commit()
-	if err != nil {
-		t.Fatalf("Commit failed: %v", err)
-	}
+			It("should not be visible before commit", func() {
+				tx, err := store.BeginTx(ctx)
+				Expect(err).ToNot(HaveOccurred())
 
-	_, err = store.Get(ctx, "test_collection", "doc-1")
-	if err != persistence.ErrNotFound {
-		t.Errorf("Expected ErrNotFound after delete, got %v", err)
-	}
-}
+				err = tx.Delete(ctx, "test_collection", "doc-1")
+				Expect(err).ToNot(HaveOccurred())
 
-func TestTransactionDeleteMissingDocument(t *testing.T) {
-	store := NewInMemoryStore()
-	ctx := context.Background()
+				doc, err := store.Get(ctx, "test_collection", "doc-1")
+				Expect(err).ToNot(HaveOccurred())
+				Expect(doc["name"]).To(Equal("Test Document"))
 
-	store.CreateCollection(ctx, "test_collection", nil)
+				err = tx.Commit()
+				Expect(err).ToNot(HaveOccurred())
 
-	tx, err := store.BeginTx(ctx)
-	if err != nil {
-		t.Fatalf("Failed to begin transaction: %v", err)
-	}
-
-	err = tx.Delete(ctx, "test_collection", "missing-doc")
-	if err != nil {
-		t.Errorf("Delete of non-existent document should succeed (marks as deleted)")
-	}
-}
-
-func TestTransactionFind(t *testing.T) {
-	store := NewInMemoryStore()
-	ctx := context.Background()
-
-	store.CreateCollection(ctx, "test_collection", nil)
-	store.Insert(ctx, "test_collection", persistence.Document{
-		"id":   "doc-1",
-		"name": "Document 1",
-	})
-	store.Insert(ctx, "test_collection", persistence.Document{
-		"id":   "doc-2",
-		"name": "Document 2",
+				_, err = store.Get(ctx, "test_collection", "doc-1")
+				Expect(err).To(Equal(persistence.ErrNotFound))
+			})
+		})
 	})
 
-	tx, err := store.BeginTx(ctx)
-	if err != nil {
-		t.Fatalf("Failed to begin transaction: %v", err)
-	}
+	Describe("Transaction Sees Own Changes", func() {
+		Context("insert operations", func() {
+			It("should see own inserts", func() {
+				tx, err := store.BeginTx(ctx)
+				Expect(err).ToNot(HaveOccurred())
 
-	docs, err := tx.Find(ctx, "test_collection", persistence.Query{})
-	if err != nil {
-		t.Fatalf("Find failed: %v", err)
-	}
-	if len(docs) != 2 {
-		t.Errorf("Expected 2 documents, got %d", len(docs))
-	}
-}
+				_, err = tx.Insert(ctx, "test_collection", persistence.Document{
+					"id":   "doc-1",
+					"name": "Test Document",
+				})
+				Expect(err).ToNot(HaveOccurred())
 
-func TestNestedTransactionsNotSupported(t *testing.T) {
-	store := NewInMemoryStore()
-	ctx := context.Background()
+				doc, err := tx.Get(ctx, "test_collection", "doc-1")
+				Expect(err).ToNot(HaveOccurred())
+				Expect(doc["name"]).To(Equal("Test Document"))
+			})
+		})
 
-	tx, err := store.BeginTx(ctx)
-	if err != nil {
-		t.Fatalf("Failed to begin transaction: %v", err)
-	}
+		Context("update operations", func() {
+			BeforeEach(func() {
+				_, err := store.Insert(ctx, "test_collection", persistence.Document{
+					"id":   "doc-1",
+					"name": "Original",
+				})
+				Expect(err).ToNot(HaveOccurred())
+			})
 
-	nestedTx, err := tx.BeginTx(ctx)
-	if err == nil {
-		t.Error("Expected error for nested transaction")
-	}
-	if nestedTx != nil {
-		t.Error("Expected nil transaction for nested transaction")
-	}
-	if !contains(err.Error(), "nested") {
-		t.Errorf("Expected error about nested transactions, got %v", err)
-	}
-}
+			It("should see own updates", func() {
+				tx, err := store.BeginTx(ctx)
+				Expect(err).ToNot(HaveOccurred())
 
-func TestBeginTxWithNilContext(t *testing.T) {
-	store := NewInMemoryStore()
+				err = tx.Update(ctx, "test_collection", "doc-1", persistence.Document{
+					"id":   "doc-1",
+					"name": "Updated",
+				})
+				Expect(err).ToNot(HaveOccurred())
 
-	tx, err := store.BeginTx(nil)
-	if err == nil {
-		t.Error("Expected error with nil context")
-	}
-	if tx != nil {
-		t.Error("Expected nil transaction with nil context")
-	}
-	if !contains(err.Error(), "context cannot be nil") {
-		t.Errorf("Expected error about nil context, got %v", err)
-	}
-}
+				doc, err := tx.Get(ctx, "test_collection", "doc-1")
+				Expect(err).ToNot(HaveOccurred())
+				Expect(doc["name"]).To(Equal("Updated"))
+			})
+		})
 
-func TestInsertAfterCommit(t *testing.T) {
-	store := NewInMemoryStore()
-	ctx := context.Background()
+		Context("delete operations", func() {
+			BeforeEach(func() {
+				_, err := store.Insert(ctx, "test_collection", persistence.Document{
+					"id":   "doc-1",
+					"name": "Test Document",
+				})
+				Expect(err).ToNot(HaveOccurred())
+			})
 
-	store.CreateCollection(ctx, "test_collection", nil)
+			It("should not see deleted documents", func() {
+				tx, err := store.BeginTx(ctx)
+				Expect(err).ToNot(HaveOccurred())
 
-	tx, err := store.BeginTx(ctx)
-	if err != nil {
-		t.Fatalf("Failed to begin transaction: %v", err)
-	}
+				err = tx.Delete(ctx, "test_collection", "doc-1")
+				Expect(err).ToNot(HaveOccurred())
 
-	err = tx.Commit()
-	if err != nil {
-		t.Fatalf("Commit failed: %v", err)
-	}
-
-	_, err = tx.Insert(ctx, "test_collection", persistence.Document{
-		"id":   "doc-1",
-		"name": "After Commit",
-	})
-	if err == nil {
-		t.Error("Expected error inserting after commit")
-	}
-	if !contains(err.Error(), "already completed") {
-		t.Errorf("Expected error about completed transaction, got %v", err)
-	}
-}
-
-func TestGetAfterCommit(t *testing.T) {
-	store := NewInMemoryStore()
-	ctx := context.Background()
-
-	store.CreateCollection(ctx, "test_collection", nil)
-	store.Insert(ctx, "test_collection", persistence.Document{
-		"id":   "doc-1",
-		"name": "Test",
+				_, err = tx.Get(ctx, "test_collection", "doc-1")
+				Expect(err).To(Equal(persistence.ErrNotFound))
+			})
+		})
 	})
 
-	tx, err := store.BeginTx(ctx)
-	if err != nil {
-		t.Fatalf("Failed to begin transaction: %v", err)
-	}
+	Describe("Transaction Rollback Behavior", func() {
+		It("should make changes invisible after rollback", func() {
+			tx, err := store.BeginTx(ctx)
+			Expect(err).ToNot(HaveOccurred())
 
-	err = tx.Commit()
-	if err != nil {
-		t.Fatalf("Commit failed: %v", err)
-	}
+			_, err = tx.Insert(ctx, "test_collection", persistence.Document{
+				"id":   "doc-1",
+				"name": "Test Document",
+			})
+			Expect(err).ToNot(HaveOccurred())
 
-	_, err = tx.Get(ctx, "test_collection", "doc-1")
-	if err == nil {
-		t.Error("Expected error getting after commit")
-	}
-	if !contains(err.Error(), "already completed") {
-		t.Errorf("Expected error about completed transaction, got %v", err)
-	}
-}
+			doc, err := tx.Get(ctx, "test_collection", "doc-1")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(doc["name"]).To(Equal("Test Document"))
 
-func TestUpdateAfterCommit(t *testing.T) {
-	store := NewInMemoryStore()
-	ctx := context.Background()
+			err = tx.Rollback()
+			Expect(err).ToNot(HaveOccurred())
 
-	store.CreateCollection(ctx, "test_collection", nil)
-	store.Insert(ctx, "test_collection", persistence.Document{
-		"id":   "doc-1",
-		"name": "Original",
+			_, err = store.Get(ctx, "test_collection", "doc-1")
+			Expect(err).To(Equal(persistence.ErrNotFound))
+		})
 	})
 
-	tx, err := store.BeginTx(ctx)
-	if err != nil {
-		t.Fatalf("Failed to begin transaction: %v", err)
-	}
+	Describe("Transaction Operations", func() {
+		Context("insert", func() {
+			It("should succeed and commit changes", func() {
+				tx, err := store.BeginTx(ctx)
+				Expect(err).ToNot(HaveOccurred())
 
-	err = tx.Commit()
-	if err != nil {
-		t.Fatalf("Commit failed: %v", err)
-	}
+				id, err := tx.Insert(ctx, "test_collection", persistence.Document{
+					"id":    "doc-1",
+					"name":  "Test Document",
+					"value": 42,
+				})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(id).To(Equal("doc-1"))
 
-	err = tx.Update(ctx, "test_collection", "doc-1", persistence.Document{
-		"id":   "doc-1",
-		"name": "Updated",
-	})
-	if err == nil {
-		t.Error("Expected error updating after commit")
-	}
-	if !contains(err.Error(), "already completed") {
-		t.Errorf("Expected error about completed transaction, got %v", err)
-	}
-}
+				err = tx.Commit()
+				Expect(err).ToNot(HaveOccurred())
 
-func TestDeleteAfterCommit(t *testing.T) {
-	store := NewInMemoryStore()
-	ctx := context.Background()
+				doc, err := store.Get(ctx, "test_collection", "doc-1")
+				Expect(err).ToNot(HaveOccurred())
+				Expect(doc["value"]).To(Equal(42))
+			})
 
-	store.CreateCollection(ctx, "test_collection", nil)
-	store.Insert(ctx, "test_collection", persistence.Document{
-		"id":   "doc-1",
-		"name": "Test",
-	})
+			It("should return conflict for duplicate ID", func() {
+				tx, err := store.BeginTx(ctx)
+				Expect(err).ToNot(HaveOccurred())
 
-	tx, err := store.BeginTx(ctx)
-	if err != nil {
-		t.Fatalf("Failed to begin transaction: %v", err)
-	}
+				_, err = tx.Insert(ctx, "test_collection", persistence.Document{
+					"id":   "doc-1",
+					"name": "First",
+				})
+				Expect(err).ToNot(HaveOccurred())
 
-	err = tx.Commit()
-	if err != nil {
-		t.Fatalf("Commit failed: %v", err)
-	}
+				_, err = tx.Insert(ctx, "test_collection", persistence.Document{
+					"id":   "doc-1",
+					"name": "Duplicate",
+				})
+				Expect(err).To(Equal(persistence.ErrConflict))
+			})
 
-	err = tx.Delete(ctx, "test_collection", "doc-1")
-	if err == nil {
-		t.Error("Expected error deleting after commit")
-	}
-	if !contains(err.Error(), "already completed") {
-		t.Errorf("Expected error about completed transaction, got %v", err)
-	}
-}
+			It("should error for duplicate with existing store document", func() {
+				_, err := store.Insert(ctx, "test_collection", persistence.Document{
+					"id":   "doc-1",
+					"name": "Existing",
+				})
+				Expect(err).ToNot(HaveOccurred())
 
-func TestInsertAfterRollback(t *testing.T) {
-	store := NewInMemoryStore()
-	ctx := context.Background()
+				tx, err := store.BeginTx(ctx)
+				Expect(err).ToNot(HaveOccurred())
 
-	store.CreateCollection(ctx, "test_collection", nil)
+				_, err = tx.Insert(ctx, "test_collection", persistence.Document{
+					"id":   "doc-1",
+					"name": "Duplicate",
+				})
+				Expect(err).ToNot(HaveOccurred())
 
-	tx, err := store.BeginTx(ctx)
-	if err != nil {
-		t.Fatalf("Failed to begin transaction: %v", err)
-	}
+				err = tx.Commit()
+				Expect(err).ToNot(HaveOccurred())
+			})
+		})
 
-	err = tx.Rollback()
-	if err != nil {
-		t.Fatalf("Rollback failed: %v", err)
-	}
+		Context("get", func() {
+			It("should get from transaction cache", func() {
+				tx, err := store.BeginTx(ctx)
+				Expect(err).ToNot(HaveOccurred())
 
-	_, err = tx.Insert(ctx, "test_collection", persistence.Document{
-		"id":   "doc-1",
-		"name": "After Rollback",
-	})
-	if err == nil {
-		t.Error("Expected error inserting after rollback")
-	}
-	if !contains(err.Error(), "already completed") {
-		t.Errorf("Expected error about completed transaction, got %v", err)
-	}
-}
+				_, err = tx.Insert(ctx, "test_collection", persistence.Document{
+					"id":   "doc-1",
+					"name": "From Transaction",
+				})
+				Expect(err).ToNot(HaveOccurred())
 
-func TestGetAfterRollback(t *testing.T) {
-	store := NewInMemoryStore()
-	ctx := context.Background()
+				doc, err := tx.Get(ctx, "test_collection", "doc-1")
+				Expect(err).ToNot(HaveOccurred())
+				Expect(doc["name"]).To(Equal("From Transaction"))
+			})
 
-	store.CreateCollection(ctx, "test_collection", nil)
-	store.Insert(ctx, "test_collection", persistence.Document{
-		"id":   "doc-1",
-		"name": "Test",
-	})
+			It("should get from underlying store", func() {
+				_, err := store.Insert(ctx, "test_collection", persistence.Document{
+					"id":   "doc-1",
+					"name": "From Store",
+				})
+				Expect(err).ToNot(HaveOccurred())
 
-	tx, err := store.BeginTx(ctx)
-	if err != nil {
-		t.Fatalf("Failed to begin transaction: %v", err)
-	}
+				tx, err := store.BeginTx(ctx)
+				Expect(err).ToNot(HaveOccurred())
 
-	err = tx.Rollback()
-	if err != nil {
-		t.Fatalf("Rollback failed: %v", err)
-	}
+				doc, err := tx.Get(ctx, "test_collection", "doc-1")
+				Expect(err).ToNot(HaveOccurred())
+				Expect(doc["name"]).To(Equal("From Store"))
+			})
+		})
 
-	_, err = tx.Get(ctx, "test_collection", "doc-1")
-	if err == nil {
-		t.Error("Expected error getting after rollback")
-	}
-	if !contains(err.Error(), "already completed") {
-		t.Errorf("Expected error about completed transaction, got %v", err)
-	}
-}
+		Context("update", func() {
+			BeforeEach(func() {
+				_, err := store.Insert(ctx, "test_collection", persistence.Document{
+					"id":   "doc-1",
+					"name": "Original",
+				})
+				Expect(err).ToNot(HaveOccurred())
+			})
 
-func TestUpdateAfterRollback(t *testing.T) {
-	store := NewInMemoryStore()
-	ctx := context.Background()
+			It("should succeed and commit changes", func() {
+				tx, err := store.BeginTx(ctx)
+				Expect(err).ToNot(HaveOccurred())
 
-	store.CreateCollection(ctx, "test_collection", nil)
-	store.Insert(ctx, "test_collection", persistence.Document{
-		"id":   "doc-1",
-		"name": "Original",
-	})
+				err = tx.Update(ctx, "test_collection", "doc-1", persistence.Document{
+					"id":   "doc-1",
+					"name": "Updated",
+				})
+				Expect(err).ToNot(HaveOccurred())
 
-	tx, err := store.BeginTx(ctx)
-	if err != nil {
-		t.Fatalf("Failed to begin transaction: %v", err)
-	}
+				err = tx.Commit()
+				Expect(err).ToNot(HaveOccurred())
 
-	err = tx.Rollback()
-	if err != nil {
-		t.Fatalf("Rollback failed: %v", err)
-	}
+				doc, err := store.Get(ctx, "test_collection", "doc-1")
+				Expect(err).ToNot(HaveOccurred())
+				Expect(doc["name"]).To(Equal("Updated"))
+			})
 
-	err = tx.Update(ctx, "test_collection", "doc-1", persistence.Document{
-		"id":   "doc-1",
-		"name": "Updated",
-	})
-	if err == nil {
-		t.Error("Expected error updating after rollback")
-	}
-	if !contains(err.Error(), "already completed") {
-		t.Errorf("Expected error about completed transaction, got %v", err)
-	}
-}
+			It("should succeed for missing document", func() {
+				tx, err := store.BeginTx(ctx)
+				Expect(err).ToNot(HaveOccurred())
 
-func TestDeleteAfterRollback(t *testing.T) {
-	store := NewInMemoryStore()
-	ctx := context.Background()
+				err = tx.Update(ctx, "test_collection", "missing-doc", persistence.Document{
+					"id":   "missing-doc",
+					"name": "Updated",
+				})
+				Expect(err).ToNot(HaveOccurred())
+			})
+		})
 
-	store.CreateCollection(ctx, "test_collection", nil)
-	store.Insert(ctx, "test_collection", persistence.Document{
-		"id":   "doc-1",
-		"name": "Test",
-	})
+		Context("delete", func() {
+			BeforeEach(func() {
+				_, err := store.Insert(ctx, "test_collection", persistence.Document{
+					"id":   "doc-1",
+					"name": "To Delete",
+				})
+				Expect(err).ToNot(HaveOccurred())
+			})
 
-	tx, err := store.BeginTx(ctx)
-	if err != nil {
-		t.Fatalf("Failed to begin transaction: %v", err)
-	}
+			It("should succeed and commit changes", func() {
+				tx, err := store.BeginTx(ctx)
+				Expect(err).ToNot(HaveOccurred())
 
-	err = tx.Rollback()
-	if err != nil {
-		t.Fatalf("Rollback failed: %v", err)
-	}
+				err = tx.Delete(ctx, "test_collection", "doc-1")
+				Expect(err).ToNot(HaveOccurred())
 
-	err = tx.Delete(ctx, "test_collection", "doc-1")
-	if err == nil {
-		t.Error("Expected error deleting after rollback")
-	}
-	if !contains(err.Error(), "already completed") {
-		t.Errorf("Expected error about completed transaction, got %v", err)
-	}
-}
+				err = tx.Commit()
+				Expect(err).ToNot(HaveOccurred())
 
-func TestTransactionOnNonExistentCollection(t *testing.T) {
-	store := NewInMemoryStore()
-	ctx := context.Background()
+				_, err = store.Get(ctx, "test_collection", "doc-1")
+				Expect(err).To(Equal(persistence.ErrNotFound))
+			})
 
-	tx, err := store.BeginTx(ctx)
-	if err != nil {
-		t.Fatalf("Failed to begin transaction: %v", err)
-	}
+			It("should succeed for missing document", func() {
+				tx, err := store.BeginTx(ctx)
+				Expect(err).ToNot(HaveOccurred())
 
-	_, err = tx.Insert(ctx, "missing_collection", persistence.Document{
-		"id":   "doc-1",
-		"name": "Test",
-	})
-	if err != nil {
-		t.Errorf("Insert should succeed (will fail on commit if collection missing)")
-	}
+				err = tx.Delete(ctx, "test_collection", "missing-doc")
+				Expect(err).ToNot(HaveOccurred())
+			})
+		})
 
-	err = tx.Commit()
-	if err == nil {
-		t.Error("Expected error committing to non-existent collection")
-	}
-	if !contains(err.Error(), "does not exist") {
-		t.Errorf("Expected error about collection not existing, got %v", err)
-	}
-}
+		Context("find", func() {
+			BeforeEach(func() {
+				_, err := store.Insert(ctx, "test_collection", persistence.Document{
+					"id":   "doc-1",
+					"name": "Document 1",
+				})
+				Expect(err).ToNot(HaveOccurred())
+				_, err = store.Insert(ctx, "test_collection", persistence.Document{
+					"id":   "doc-2",
+					"name": "Document 2",
+				})
+				Expect(err).ToNot(HaveOccurred())
+			})
 
-func TestTransactionInsertDuplicateWithExistingDocument(t *testing.T) {
-	store := NewInMemoryStore()
-	ctx := context.Background()
+			It("should find documents from store", func() {
+				tx, err := store.BeginTx(ctx)
+				Expect(err).ToNot(HaveOccurred())
 
-	store.CreateCollection(ctx, "test_collection", nil)
-	store.Insert(ctx, "test_collection", persistence.Document{
-		"id":   "doc-1",
-		"name": "Existing",
+				docs, err := tx.Find(ctx, "test_collection", persistence.Query{})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(docs).To(HaveLen(2))
+			})
+		})
 	})
 
-	tx, err := store.BeginTx(ctx)
-	if err != nil {
-		t.Fatalf("Failed to begin transaction: %v", err)
-	}
+	Describe("Nested Transactions", func() {
+		It("should not support nested transactions", func() {
+			tx, err := store.BeginTx(ctx)
+			Expect(err).ToNot(HaveOccurred())
 
-	_, err = tx.Insert(ctx, "test_collection", persistence.Document{
-		"id":   "doc-1",
-		"name": "Duplicate",
-	})
-	if err != nil {
-		t.Errorf("Insert should succeed in transaction even if document exists in store")
-	}
-
-	err = tx.Commit()
-	if err != nil {
-		t.Errorf("Commit should succeed (transaction insert overwrites existing)")
-	}
-}
-
-func TestTransactionDeleteThenInsertSameID(t *testing.T) {
-	store := NewInMemoryStore()
-	ctx := context.Background()
-
-	store.CreateCollection(ctx, "test_collection", nil)
-	store.Insert(ctx, "test_collection", persistence.Document{
-		"id":   "doc-1",
-		"name": "Original",
+			nestedTx, err := tx.BeginTx(ctx)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("nested"))
+			Expect(nestedTx).To(BeNil())
+		})
 	})
 
-	tx, err := store.BeginTx(ctx)
-	if err != nil {
-		t.Fatalf("Failed to begin transaction: %v", err)
-	}
+	Describe("Operations After Commit", func() {
+		var tx persistence.Tx
 
-	err = tx.Delete(ctx, "test_collection", "doc-1")
-	if err != nil {
-		t.Fatalf("Delete failed: %v", err)
-	}
+		BeforeEach(func() {
+			var err error
+			tx, err = store.BeginTx(ctx)
+			Expect(err).ToNot(HaveOccurred())
+			err = tx.Commit()
+			Expect(err).ToNot(HaveOccurred())
+		})
 
-	_, err = tx.Insert(ctx, "test_collection", persistence.Document{
-		"id":   "doc-1",
-		"name": "New Document",
-	})
-	if err == nil {
-		t.Error("Expected error inserting after delete in same transaction")
-	}
-	if !contains(err.Error(), "deleted") {
-		t.Errorf("Expected error about deleted document, got %v", err)
-	}
-}
+		It("should error on insert", func() {
+			_, err := tx.Insert(ctx, "test_collection", persistence.Document{
+				"id":   "doc-1",
+				"name": "After Commit",
+			})
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("already completed"))
+		})
 
-func TestTransactionGetDeletedDocument(t *testing.T) {
-	store := NewInMemoryStore()
-	ctx := context.Background()
+		It("should error on get", func() {
+			_, err := tx.Get(ctx, "test_collection", "doc-1")
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("already completed"))
+		})
 
-	store.CreateCollection(ctx, "test_collection", nil)
-	store.Insert(ctx, "test_collection", persistence.Document{
-		"id":   "doc-1",
-		"name": "Test",
-	})
+		It("should error on update", func() {
+			err := tx.Update(ctx, "test_collection", "doc-1", persistence.Document{
+				"id":   "doc-1",
+				"name": "Updated",
+			})
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("already completed"))
+		})
 
-	tx, err := store.BeginTx(ctx)
-	if err != nil {
-		t.Fatalf("Failed to begin transaction: %v", err)
-	}
-
-	err = tx.Delete(ctx, "test_collection", "doc-1")
-	if err != nil {
-		t.Fatalf("Delete failed: %v", err)
-	}
-
-	_, err = tx.Get(ctx, "test_collection", "doc-1")
-	if err != persistence.ErrNotFound {
-		t.Errorf("Expected ErrNotFound for deleted document, got %v", err)
-	}
-}
-
-func TestTransactionUpdateDeletedDocument(t *testing.T) {
-	store := NewInMemoryStore()
-	ctx := context.Background()
-
-	store.CreateCollection(ctx, "test_collection", nil)
-	store.Insert(ctx, "test_collection", persistence.Document{
-		"id":   "doc-1",
-		"name": "Original",
+		It("should error on delete", func() {
+			err := tx.Delete(ctx, "test_collection", "doc-1")
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("already completed"))
+		})
 	})
 
-	tx, err := store.BeginTx(ctx)
-	if err != nil {
-		t.Fatalf("Failed to begin transaction: %v", err)
-	}
+	Describe("Operations After Rollback", func() {
+		var tx persistence.Tx
 
-	err = tx.Delete(ctx, "test_collection", "doc-1")
-	if err != nil {
-		t.Fatalf("Delete failed: %v", err)
-	}
+		BeforeEach(func() {
+			var err error
+			tx, err = store.BeginTx(ctx)
+			Expect(err).ToNot(HaveOccurred())
+			err = tx.Rollback()
+			Expect(err).ToNot(HaveOccurred())
+		})
 
-	err = tx.Update(ctx, "test_collection", "doc-1", persistence.Document{
-		"id":   "doc-1",
-		"name": "Updated",
+		It("should error on insert", func() {
+			_, err := tx.Insert(ctx, "test_collection", persistence.Document{
+				"id":   "doc-1",
+				"name": "After Rollback",
+			})
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("already completed"))
+		})
+
+		It("should error on get", func() {
+			_, err := tx.Get(ctx, "test_collection", "doc-1")
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("already completed"))
+		})
+
+		It("should error on update", func() {
+			err := tx.Update(ctx, "test_collection", "doc-1", persistence.Document{
+				"id":   "doc-1",
+				"name": "Updated",
+			})
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("already completed"))
+		})
+
+		It("should error on delete", func() {
+			err := tx.Delete(ctx, "test_collection", "doc-1")
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("already completed"))
+		})
 	})
-	if err != persistence.ErrNotFound {
-		t.Errorf("Expected ErrNotFound updating deleted document, got %v", err)
-	}
-}
 
-func TestTransactionMultipleOperationsSameDocument(t *testing.T) {
-	store := NewInMemoryStore()
-	ctx := context.Background()
+	Describe("Transaction Edge Cases", func() {
+		It("should error committing to non-existent collection", func() {
+			tx, err := store.BeginTx(ctx)
+			Expect(err).ToNot(HaveOccurred())
 
-	store.CreateCollection(ctx, "test_collection", nil)
+			_, err = tx.Insert(ctx, "missing_collection", persistence.Document{
+				"id":   "doc-1",
+				"name": "Test",
+			})
+			Expect(err).ToNot(HaveOccurred())
 
-	tx, err := store.BeginTx(ctx)
-	if err != nil {
-		t.Fatalf("Failed to begin transaction: %v", err)
-	}
+			err = tx.Commit()
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("does not exist"))
+		})
 
-	_, err = tx.Insert(ctx, "test_collection", persistence.Document{
-		"id":    "doc-1",
-		"name":  "Original",
-		"value": 10,
+		Context("delete then insert same ID", func() {
+			BeforeEach(func() {
+				_, err := store.Insert(ctx, "test_collection", persistence.Document{
+					"id":   "doc-1",
+					"name": "Original",
+				})
+				Expect(err).ToNot(HaveOccurred())
+			})
+
+			It("should error", func() {
+				tx, err := store.BeginTx(ctx)
+				Expect(err).ToNot(HaveOccurred())
+
+				err = tx.Delete(ctx, "test_collection", "doc-1")
+				Expect(err).ToNot(HaveOccurred())
+
+				_, err = tx.Insert(ctx, "test_collection", persistence.Document{
+					"id":   "doc-1",
+					"name": "New Document",
+				})
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("deleted"))
+			})
+		})
+
+		Context("get deleted document", func() {
+			BeforeEach(func() {
+				_, err := store.Insert(ctx, "test_collection", persistence.Document{
+					"id":   "doc-1",
+					"name": "Test",
+				})
+				Expect(err).ToNot(HaveOccurred())
+			})
+
+			It("should return not found", func() {
+				tx, err := store.BeginTx(ctx)
+				Expect(err).ToNot(HaveOccurred())
+
+				err = tx.Delete(ctx, "test_collection", "doc-1")
+				Expect(err).ToNot(HaveOccurred())
+
+				_, err = tx.Get(ctx, "test_collection", "doc-1")
+				Expect(err).To(Equal(persistence.ErrNotFound))
+			})
+		})
+
+		Context("update deleted document", func() {
+			BeforeEach(func() {
+				_, err := store.Insert(ctx, "test_collection", persistence.Document{
+					"id":   "doc-1",
+					"name": "Original",
+				})
+				Expect(err).ToNot(HaveOccurred())
+			})
+
+			It("should return not found", func() {
+				tx, err := store.BeginTx(ctx)
+				Expect(err).ToNot(HaveOccurred())
+
+				err = tx.Delete(ctx, "test_collection", "doc-1")
+				Expect(err).ToNot(HaveOccurred())
+
+				err = tx.Update(ctx, "test_collection", "doc-1", persistence.Document{
+					"id":   "doc-1",
+					"name": "Updated",
+				})
+				Expect(err).To(Equal(persistence.ErrNotFound))
+			})
+		})
+
+		Context("multiple operations same document", func() {
+			It("should chain operations correctly", func() {
+				tx, err := store.BeginTx(ctx)
+				Expect(err).ToNot(HaveOccurred())
+
+				_, err = tx.Insert(ctx, "test_collection", persistence.Document{
+					"id":    "doc-1",
+					"name":  "Original",
+					"value": 10,
+				})
+				Expect(err).ToNot(HaveOccurred())
+
+				err = tx.Update(ctx, "test_collection", "doc-1", persistence.Document{
+					"id":    "doc-1",
+					"name":  "Updated",
+					"value": 20,
+				})
+				Expect(err).ToNot(HaveOccurred())
+
+				doc, err := tx.Get(ctx, "test_collection", "doc-1")
+				Expect(err).ToNot(HaveOccurred())
+				Expect(doc["value"]).To(Equal(20))
+
+				err = tx.Commit()
+				Expect(err).ToNot(HaveOccurred())
+
+				finalDoc, err := store.Get(ctx, "test_collection", "doc-1")
+				Expect(err).ToNot(HaveOccurred())
+				Expect(finalDoc["value"]).To(Equal(20))
+			})
+		})
 	})
-	if err != nil {
-		t.Fatalf("Insert failed: %v", err)
-	}
-
-	err = tx.Update(ctx, "test_collection", "doc-1", persistence.Document{
-		"id":    "doc-1",
-		"name":  "Updated",
-		"value": 20,
-	})
-	if err != nil {
-		t.Fatalf("Update failed: %v", err)
-	}
-
-	doc, err := tx.Get(ctx, "test_collection", "doc-1")
-	if err != nil {
-		t.Fatalf("Get failed: %v", err)
-	}
-	if doc["value"] != 20 {
-		t.Errorf("Expected value 20 after update, got %v", doc["value"])
-	}
-
-	err = tx.Commit()
-	if err != nil {
-		t.Fatalf("Commit failed: %v", err)
-	}
-
-	finalDoc, err := store.Get(ctx, "test_collection", "doc-1")
-	if err != nil {
-		t.Fatalf("Failed to get final document: %v", err)
-	}
-	if finalDoc["value"] != 20 {
-		t.Errorf("Expected final value 20, got %v", finalDoc["value"])
-	}
-}
+})
