@@ -1,23 +1,23 @@
-package basic_test
+package persistence_test
 
 import (
 	"context"
 	"testing"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence/basic"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 )
 
 // TestStoreInterfaceExists verifies that the Store interface is defined.
 // This test will fail initially (RED phase) and pass once we implement the interface (GREEN phase).
 func TestStoreInterfaceExists(t *testing.T) {
 	// This should compile once the Store interface exists
-	var _ basic.Store = nil
+	var _ persistence.Store = nil
 }
 
 // TestDocumentTypeExists verifies that the Document type is defined.
 func TestDocumentTypeExists(t *testing.T) {
 	// This should compile once the Document type exists
-	var _ basic.Document = nil
+	var _ persistence.Document = nil
 }
 
 // TestCreateCollection verifies the CreateCollection method signature exists.
@@ -26,7 +26,7 @@ func TestCreateCollection(t *testing.T) {
 
 	// We're not testing implementation yet, just interface definition
 	// This verifies method signature exists with correct parameters
-	var store basic.Store
+	var store persistence.Store
 	if store != nil {
 		_ = store.CreateCollection(ctx, "test_collection", nil)
 	}
@@ -34,9 +34,9 @@ func TestCreateCollection(t *testing.T) {
 
 // TestTransactionInterface verifies the Tx interface extends Store.
 func TestTransactionInterface(t *testing.T) {
-	var _ basic.Tx = nil
+	var _ persistence.Tx = nil
 
-	var tx basic.Tx
+	var tx persistence.Tx
 
-	var _ basic.Store = tx
+	var _ persistence.Store = tx
 }

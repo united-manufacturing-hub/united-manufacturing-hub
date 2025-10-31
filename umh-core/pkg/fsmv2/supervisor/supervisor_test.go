@@ -17,7 +17,6 @@ package supervisor
 import (
 	"context"
 	"encoding/json"
-	"os"
 	"testing"
 	"time"
 
@@ -25,7 +24,8 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence/basic"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence/memory"
 )
 
 // TestSupervisorUsesTriangularStore verifies that Supervisor uses TriangularStore instead of basic Store.
@@ -34,19 +34,8 @@ func TestSupervisorUsesTriangularStore(t *testing.T) {
 	ctx := context.Background()
 	logger := zap.NewNop().Sugar()
 
-	// Create temp database file
-	tmpFile, err := os.CreateTemp("", "test-*.db")
-	if err != nil {
-		t.Fatalf("Failed to create temp file: %v", err)
-	}
-	tmpPath := tmpFile.Name()
-	tmpFile.Close()
-	defer os.Remove(tmpPath)
-
-	basicStore, err := basic.NewStore(basic.DefaultConfig(tmpPath))
-	if err != nil {
-		t.Fatalf("Failed to create basic store: %v", err)
-	}
+	// Create in-memory store for testing
+	basicStore := memory.NewInMemoryStore()
 	defer basicStore.Close(ctx)
 
 	registry := storage.NewRegistry()
@@ -73,6 +62,7 @@ func TestSupervisorUsesTriangularStore(t *testing.T) {
 	})
 
 	// Create collections in database
+	var err error
 	err = basicStore.CreateCollection(ctx, "test_identity", nil)
 	if err != nil {
 		t.Fatalf("Failed to create identity collection: %v", err)
@@ -107,19 +97,8 @@ func TestSupervisorSavesIdentityToTriangularStore(t *testing.T) {
 	ctx := context.Background()
 	logger := zap.NewNop().Sugar()
 
-	// Create temp database file
-	tmpFile, err := os.CreateTemp("", "test-*.db")
-	if err != nil {
-		t.Fatalf("Failed to create temp file: %v", err)
-	}
-	tmpPath := tmpFile.Name()
-	tmpFile.Close()
-	defer os.Remove(tmpPath)
-
-	basicStore, err := basic.NewStore(basic.DefaultConfig(tmpPath))
-	if err != nil {
-		t.Fatalf("Failed to create basic store: %v", err)
-	}
+	// Create in-memory store for testing
+	basicStore := memory.NewInMemoryStore()
 	defer basicStore.Close(ctx)
 
 	registry := storage.NewRegistry()
@@ -146,6 +125,7 @@ func TestSupervisorSavesIdentityToTriangularStore(t *testing.T) {
 	})
 
 	// Create collections in database
+	var err error
 	err = basicStore.CreateCollection(ctx, "test_identity", nil)
 	if err != nil {
 		t.Fatalf("Failed to create identity collection: %v", err)
@@ -178,7 +158,7 @@ func TestSupervisorSavesIdentityToTriangularStore(t *testing.T) {
 	worker := &mockWorker{
 		identity:     identity,
 		initialState: &mockState{name: "initial"},
-		observed: basic.Document{
+		observed: persistence.Document{
 			"id":     "worker-1",
 			"status": "running",
 		},
@@ -208,19 +188,8 @@ func TestSupervisorLoadsSnapshotFromTriangularStore(t *testing.T) {
 	ctx := context.Background()
 	logger := zap.NewNop().Sugar()
 
-	// Create temp database file
-	tmpFile, err := os.CreateTemp("", "test-*.db")
-	if err != nil {
-		t.Fatalf("Failed to create temp file: %v", err)
-	}
-	tmpPath := tmpFile.Name()
-	tmpFile.Close()
-	defer os.Remove(tmpPath)
-
-	basicStore, err := basic.NewStore(basic.DefaultConfig(tmpPath))
-	if err != nil {
-		t.Fatalf("Failed to create basic store: %v", err)
-	}
+	// Create in-memory store for testing
+	basicStore := memory.NewInMemoryStore()
 	defer basicStore.Close(ctx)
 
 	registry := storage.NewRegistry()
@@ -247,6 +216,7 @@ func TestSupervisorLoadsSnapshotFromTriangularStore(t *testing.T) {
 	})
 
 	// Create collections in database
+	var err error
 	err = basicStore.CreateCollection(ctx, "test_identity", nil)
 	if err != nil {
 		t.Fatalf("Failed to create identity collection: %v", err)
@@ -279,7 +249,7 @@ func TestSupervisorLoadsSnapshotFromTriangularStore(t *testing.T) {
 	worker := &mockWorker{
 		identity:     identity,
 		initialState: &mockState{name: "initial"},
-		observed: basic.Document{
+		observed: persistence.Document{
 			"id":     "worker-1",
 			"status": "running",
 		},
@@ -290,7 +260,7 @@ func TestSupervisorLoadsSnapshotFromTriangularStore(t *testing.T) {
 		t.Fatalf("Failed to add worker: %v", err)
 	}
 
-	err = triangularStore.SaveDesired(ctx, "test", "worker-1", basic.Document{
+	err = triangularStore.SaveDesired(ctx, "test", "worker-1", persistence.Document{
 		"id":     "worker-1",
 		"config": "production",
 	})
@@ -307,7 +277,7 @@ func TestSupervisorLoadsSnapshotFromTriangularStore(t *testing.T) {
 type mockWorker struct {
 	identity     fsmv2.Identity
 	initialState fsmv2.State
-	observed     basic.Document
+	observed     persistence.Document
 }
 
 func (m *mockWorker) CollectObservedState(_ context.Context) (fsmv2.ObservedState, error) {
@@ -326,7 +296,7 @@ func (m *mockWorker) GetInitialState() fsmv2.State {
 }
 
 type mockObservedState struct {
-	doc       basic.Document
+	doc       persistence.Document
 	timestamp time.Time
 }
 

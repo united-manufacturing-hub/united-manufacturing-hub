@@ -17,7 +17,7 @@ package storage
 import (
 	"context"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence/basic"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 )
 
 // TriangularStoreInterface provides high-level operations for FSM v2's triangular model.
@@ -33,28 +33,28 @@ import (
 type TriangularStoreInterface interface {
 	// SaveIdentity stores immutable worker identity.
 	// Identity is created once and never updated.
-	SaveIdentity(ctx context.Context, workerType string, id string, identity basic.Document) error
+	SaveIdentity(ctx context.Context, workerType string, id string, identity persistence.Document) error
 
 	// LoadIdentity retrieves worker identity.
-	// Returns basic.ErrNotFound if identity doesn't exist.
-	LoadIdentity(ctx context.Context, workerType string, id string) (basic.Document, error)
+	// Returns persistence.ErrNotFound if identity doesn't exist.
+	LoadIdentity(ctx context.Context, workerType string, id string) (persistence.Document, error)
 
 	// SaveDesired stores user intent/configuration.
 	// Auto-increments _version on each save for optimistic concurrency control.
-	SaveDesired(ctx context.Context, workerType string, id string, desired basic.Document) error
+	SaveDesired(ctx context.Context, workerType string, id string, desired persistence.Document) error
 
 	// LoadDesired retrieves user intent.
-	// Returns basic.ErrNotFound if desired state doesn't exist.
-	LoadDesired(ctx context.Context, workerType string, id string) (basic.Document, error)
+	// Returns persistence.ErrNotFound if desired state doesn't exist.
+	LoadDesired(ctx context.Context, workerType string, id string) (persistence.Document, error)
 
 	// SaveObserved stores system reality.
 	// Auto-increments _sync_id for delta synchronization.
-	// Accepts interface{} to support both basic.Document and typed FSM states.
+	// Accepts interface{} to support both persistence.Document and typed FSM states.
 	SaveObserved(ctx context.Context, workerType string, id string, observed interface{}) error
 
 	// LoadObserved retrieves system state.
-	// Returns basic.ErrNotFound if observed state doesn't exist.
-	LoadObserved(ctx context.Context, workerType string, id string) (basic.Document, error)
+	// Returns persistence.ErrNotFound if observed state doesn't exist.
+	LoadObserved(ctx context.Context, workerType string, id string) (persistence.Document, error)
 
 	// LoadSnapshot atomically loads all three parts of the triangular model.
 	// Ensures consistent view of worker state at a single point in time.

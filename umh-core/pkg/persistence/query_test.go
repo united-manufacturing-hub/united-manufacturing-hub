@@ -1,13 +1,13 @@
-package basic_test
+package persistence_test
 
 import (
 	"testing"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence/basic"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 )
 
 func TestNewQuery(t *testing.T) {
-	query := basic.NewQuery()
+	query := persistence.NewQuery()
 
 	if query == nil {
 		t.Fatal("NewQuery() returned nil")
@@ -31,7 +31,7 @@ func TestNewQuery(t *testing.T) {
 }
 
 func TestQuery_Filter_SingleCondition(t *testing.T) {
-	query := basic.NewQuery().Filter("status", basic.Eq, "active")
+	query := persistence.NewQuery().Filter("status", persistence.Eq, "active")
 
 	if len(query.Filters) != 1 {
 		t.Fatalf("expected 1 filter, got %d", len(query.Filters))
@@ -42,7 +42,7 @@ func TestQuery_Filter_SingleCondition(t *testing.T) {
 		t.Errorf("expected field 'status', got '%s'", filter.Field)
 	}
 
-	if filter.Op != basic.Eq {
+	if filter.Op != persistence.Eq {
 		t.Errorf("expected operator Eq, got %v", filter.Op)
 	}
 
@@ -52,9 +52,9 @@ func TestQuery_Filter_SingleCondition(t *testing.T) {
 }
 
 func TestQuery_Filter_MultipleConditions(t *testing.T) {
-	query := basic.NewQuery().
-		Filter("status", basic.Eq, "active").
-		Filter("age", basic.Gt, 18)
+	query := persistence.NewQuery().
+		Filter("status", persistence.Eq, "active").
+		Filter("age", persistence.Gt, 18)
 
 	if len(query.Filters) != 2 {
 		t.Fatalf("expected 2 filters, got %d", len(query.Filters))
@@ -68,7 +68,7 @@ func TestQuery_Filter_MultipleConditions(t *testing.T) {
 		t.Errorf("expected second field 'age', got '%s'", query.Filters[1].Field)
 	}
 
-	if query.Filters[1].Op != basic.Gt {
+	if query.Filters[1].Op != persistence.Gt {
 		t.Errorf("expected second operator Gt, got %v", query.Filters[1].Op)
 	}
 
@@ -80,17 +80,17 @@ func TestQuery_Filter_MultipleConditions(t *testing.T) {
 func TestQuery_Filter_ComparisonOperators(t *testing.T) {
 	tests := []struct {
 		name     string
-		operator basic.Operator
-		expected basic.Operator
+		operator persistence.Operator
+		expected persistence.Operator
 	}{
-		{"Equal", basic.Eq, "$eq"},
-		{"NotEqual", basic.Ne, "$ne"},
-		{"GreaterThan", basic.Gt, "$gt"},
-		{"GreaterThanOrEqual", basic.Gte, "$gte"},
-		{"LessThan", basic.Lt, "$lt"},
-		{"LessThanOrEqual", basic.Lte, "$lte"},
-		{"In", basic.In, "$in"},
-		{"NotIn", basic.Nin, "$nin"},
+		{"Equal", persistence.Eq, "$eq"},
+		{"NotEqual", persistence.Ne, "$ne"},
+		{"GreaterThan", persistence.Gt, "$gt"},
+		{"GreaterThanOrEqual", persistence.Gte, "$gte"},
+		{"LessThan", persistence.Lt, "$lt"},
+		{"LessThanOrEqual", persistence.Lte, "$lte"},
+		{"In", persistence.In, "$in"},
+		{"NotIn", persistence.Nin, "$nin"},
 	}
 
 	for _, tt := range tests {
@@ -99,7 +99,7 @@ func TestQuery_Filter_ComparisonOperators(t *testing.T) {
 				t.Errorf("operator %v != expected %v", tt.operator, tt.expected)
 			}
 
-			query := basic.NewQuery().Filter("field", tt.operator, "value")
+			query := persistence.NewQuery().Filter("field", tt.operator, "value")
 			if query.Filters[0].Op != tt.operator {
 				t.Errorf("filter operator %v != expected %v", query.Filters[0].Op, tt.operator)
 			}
@@ -108,7 +108,7 @@ func TestQuery_Filter_ComparisonOperators(t *testing.T) {
 }
 
 func TestQuery_Sort_SingleField(t *testing.T) {
-	query := basic.NewQuery().Sort("createdAt", basic.Desc)
+	query := persistence.NewQuery().Sort("createdAt", persistence.Desc)
 
 	if len(query.SortBy) != 1 {
 		t.Fatalf("expected 1 sort field, got %d", len(query.SortBy))
@@ -119,15 +119,15 @@ func TestQuery_Sort_SingleField(t *testing.T) {
 		t.Errorf("expected field 'createdAt', got '%s'", sort.Field)
 	}
 
-	if sort.Order != basic.Desc {
+	if sort.Order != persistence.Desc {
 		t.Errorf("expected order Desc (-1), got %v", sort.Order)
 	}
 }
 
 func TestQuery_Sort_MultipleFields(t *testing.T) {
-	query := basic.NewQuery().
-		Sort("createdAt", basic.Desc).
-		Sort("name", basic.Asc)
+	query := persistence.NewQuery().
+		Sort("createdAt", persistence.Desc).
+		Sort("name", persistence.Asc)
 
 	if len(query.SortBy) != 2 {
 		t.Fatalf("expected 2 sort fields, got %d", len(query.SortBy))
@@ -137,7 +137,7 @@ func TestQuery_Sort_MultipleFields(t *testing.T) {
 		t.Errorf("expected first field 'createdAt', got '%s'", query.SortBy[0].Field)
 	}
 
-	if query.SortBy[0].Order != basic.Desc {
+	if query.SortBy[0].Order != persistence.Desc {
 		t.Errorf("expected first order Desc, got %v", query.SortBy[0].Order)
 	}
 
@@ -145,23 +145,23 @@ func TestQuery_Sort_MultipleFields(t *testing.T) {
 		t.Errorf("expected second field 'name', got '%s'", query.SortBy[1].Field)
 	}
 
-	if query.SortBy[1].Order != basic.Asc {
+	if query.SortBy[1].Order != persistence.Asc {
 		t.Errorf("expected second order Asc, got %v", query.SortBy[1].Order)
 	}
 }
 
 func TestQuery_Sort_OrderConstants(t *testing.T) {
-	if basic.Asc != 1 {
-		t.Errorf("Asc constant should be 1, got %d", basic.Asc)
+	if persistence.Asc != 1 {
+		t.Errorf("Asc constant should be 1, got %d", persistence.Asc)
 	}
 
-	if basic.Desc != -1 {
-		t.Errorf("Desc constant should be -1, got %d", basic.Desc)
+	if persistence.Desc != -1 {
+		t.Errorf("Desc constant should be -1, got %d", persistence.Desc)
 	}
 }
 
 func TestQuery_Limit(t *testing.T) {
-	query := basic.NewQuery().Limit(10)
+	query := persistence.NewQuery().Limit(10)
 
 	if query.LimitCount != 10 {
 		t.Errorf("expected limit 10, got %d", query.LimitCount)
@@ -169,7 +169,7 @@ func TestQuery_Limit(t *testing.T) {
 }
 
 func TestQuery_Skip(t *testing.T) {
-	query := basic.NewQuery().Skip(20)
+	query := persistence.NewQuery().Skip(20)
 
 	if query.SkipCount != 20 {
 		t.Errorf("expected skip 20, got %d", query.SkipCount)
@@ -177,7 +177,7 @@ func TestQuery_Skip(t *testing.T) {
 }
 
 func TestQuery_LimitSkip_Together(t *testing.T) {
-	query := basic.NewQuery().Limit(10).Skip(20)
+	query := persistence.NewQuery().Limit(10).Skip(20)
 
 	if query.LimitCount != 10 {
 		t.Errorf("expected limit 10, got %d", query.LimitCount)
@@ -189,10 +189,10 @@ func TestQuery_LimitSkip_Together(t *testing.T) {
 }
 
 func TestQuery_Chaining(t *testing.T) {
-	query := basic.NewQuery().
-		Filter("status", basic.Eq, "active").
-		Filter("age", basic.Gt, 18).
-		Sort("createdAt", basic.Desc).
+	query := persistence.NewQuery().
+		Filter("status", persistence.Eq, "active").
+		Filter("age", persistence.Gt, 18).
+		Sort("createdAt", persistence.Desc).
 		Limit(10).
 		Skip(5)
 
@@ -214,11 +214,11 @@ func TestQuery_Chaining(t *testing.T) {
 }
 
 func TestQuery_ComplexChaining(t *testing.T) {
-	query := basic.NewQuery().
-		Filter("status", basic.Eq, "active").
-		Sort("priority", basic.Desc).
-		Filter("category", basic.In, []string{"urgent", "high"}).
-		Sort("createdAt", basic.Desc).
+	query := persistence.NewQuery().
+		Filter("status", persistence.Eq, "active").
+		Sort("priority", persistence.Desc).
+		Filter("category", persistence.In, []string{"urgent", "high"}).
+		Sort("createdAt", persistence.Desc).
 		Limit(100).
 		Skip(50)
 
@@ -241,13 +241,13 @@ func TestQuery_ComplexChaining(t *testing.T) {
 
 func TestQuery_InOperator_WithArray(t *testing.T) {
 	values := []string{"active", "pending", "processing"}
-	query := basic.NewQuery().Filter("status", basic.In, values)
+	query := persistence.NewQuery().Filter("status", persistence.In, values)
 
 	if len(query.Filters) != 1 {
 		t.Fatalf("expected 1 filter, got %d", len(query.Filters))
 	}
 
-	if query.Filters[0].Op != basic.In {
+	if query.Filters[0].Op != persistence.In {
 		t.Errorf("expected In operator, got %v", query.Filters[0].Op)
 	}
 
@@ -262,7 +262,7 @@ func TestQuery_InOperator_WithArray(t *testing.T) {
 }
 
 func TestQuery_EmptyQuery(t *testing.T) {
-	query := basic.NewQuery()
+	query := persistence.NewQuery()
 
 	if query.Filters != nil {
 		t.Errorf("empty query should have nil filters")
@@ -282,7 +282,7 @@ func TestQuery_EmptyQuery(t *testing.T) {
 }
 
 func TestQuery_Limit_NegativeValue(t *testing.T) {
-	query := basic.NewQuery().Limit(-10)
+	query := persistence.NewQuery().Limit(-10)
 
 	if query.LimitCount != 0 {
 		t.Errorf("negative limit should be treated as 0, got %d", query.LimitCount)
@@ -290,7 +290,7 @@ func TestQuery_Limit_NegativeValue(t *testing.T) {
 }
 
 func TestQuery_Skip_NegativeValue(t *testing.T) {
-	query := basic.NewQuery().Skip(-20)
+	query := persistence.NewQuery().Skip(-20)
 
 	if query.SkipCount != 0 {
 		t.Errorf("negative skip should be treated as 0, got %d", query.SkipCount)
@@ -298,11 +298,11 @@ func TestQuery_Skip_NegativeValue(t *testing.T) {
 }
 
 func TestQuery_Validation_InChain(t *testing.T) {
-	query := basic.NewQuery().
-		Filter("status", basic.Eq, "active").
+	query := persistence.NewQuery().
+		Filter("status", persistence.Eq, "active").
 		Limit(-5).
 		Skip(-10).
-		Sort("createdAt", basic.Desc)
+		Sort("createdAt", persistence.Desc)
 
 	if query.LimitCount != 0 {
 		t.Errorf("expected limit 0, got %d", query.LimitCount)
@@ -322,13 +322,13 @@ func TestQuery_Validation_InChain(t *testing.T) {
 }
 
 func TestQuery_RealWorldExample(t *testing.T) {
-	query := basic.NewQuery().
-		Filter("status", basic.Eq, "active").
-		Filter("age", basic.Gte, 18).
-		Filter("age", basic.Lte, 65).
-		Filter("role", basic.In, []string{"admin", "moderator", "user"}).
-		Sort("priority", basic.Desc).
-		Sort("createdAt", basic.Asc).
+	query := persistence.NewQuery().
+		Filter("status", persistence.Eq, "active").
+		Filter("age", persistence.Gte, 18).
+		Filter("age", persistence.Lte, 65).
+		Filter("role", persistence.In, []string{"admin", "moderator", "user"}).
+		Sort("priority", persistence.Desc).
+		Sort("createdAt", persistence.Asc).
 		Limit(25).
 		Skip(50)
 
@@ -336,19 +336,19 @@ func TestQuery_RealWorldExample(t *testing.T) {
 		t.Errorf("expected 4 filters, got %d", len(query.Filters))
 	}
 
-	if query.Filters[0].Field != "status" || query.Filters[0].Op != basic.Eq {
+	if query.Filters[0].Field != "status" || query.Filters[0].Op != persistence.Eq {
 		t.Errorf("first filter incorrect")
 	}
 
-	if query.Filters[1].Field != "age" || query.Filters[1].Op != basic.Gte {
+	if query.Filters[1].Field != "age" || query.Filters[1].Op != persistence.Gte {
 		t.Errorf("second filter incorrect")
 	}
 
-	if query.Filters[2].Field != "age" || query.Filters[2].Op != basic.Lte {
+	if query.Filters[2].Field != "age" || query.Filters[2].Op != persistence.Lte {
 		t.Errorf("third filter incorrect")
 	}
 
-	if query.Filters[3].Field != "role" || query.Filters[3].Op != basic.In {
+	if query.Filters[3].Field != "role" || query.Filters[3].Op != persistence.In {
 		t.Errorf("fourth filter incorrect")
 	}
 
@@ -356,11 +356,11 @@ func TestQuery_RealWorldExample(t *testing.T) {
 		t.Errorf("expected 2 sort fields, got %d", len(query.SortBy))
 	}
 
-	if query.SortBy[0].Field != "priority" || query.SortBy[0].Order != basic.Desc {
+	if query.SortBy[0].Field != "priority" || query.SortBy[0].Order != persistence.Desc {
 		t.Errorf("first sort incorrect")
 	}
 
-	if query.SortBy[1].Field != "createdAt" || query.SortBy[1].Order != basic.Asc {
+	if query.SortBy[1].Field != "createdAt" || query.SortBy[1].Order != persistence.Asc {
 		t.Errorf("second sort incorrect")
 	}
 

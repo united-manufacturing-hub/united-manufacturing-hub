@@ -1,11 +1,11 @@
-package basic_test
+package persistence_test
 
 import (
 	"context"
 	"errors"
 	"testing"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence/basic"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 )
 
 type mockStore struct {
@@ -15,7 +15,7 @@ type mockStore struct {
 	txRolledBack  bool
 }
 
-func (m *mockStore) BeginTx(ctx context.Context) (basic.Tx, error) {
+func (m *mockStore) BeginTx(ctx context.Context) (persistence.Tx, error) {
 	m.beginTxCalled++
 	if m.beginTxErr != nil {
 		return nil, m.beginTxErr
@@ -24,7 +24,7 @@ func (m *mockStore) BeginTx(ctx context.Context) (basic.Tx, error) {
 	return &mockTx{store: m}, nil
 }
 
-func (m *mockStore) CreateCollection(ctx context.Context, name string, schema *basic.Schema) error {
+func (m *mockStore) CreateCollection(ctx context.Context, name string, schema *persistence.Schema) error {
 	panic("not implemented")
 }
 
@@ -32,15 +32,15 @@ func (m *mockStore) DropCollection(ctx context.Context, name string) error {
 	panic("not implemented")
 }
 
-func (m *mockStore) Insert(ctx context.Context, collection string, doc basic.Document) (string, error) {
+func (m *mockStore) Insert(ctx context.Context, collection string, doc persistence.Document) (string, error) {
 	panic("not implemented")
 }
 
-func (m *mockStore) Get(ctx context.Context, collection string, id string) (basic.Document, error) {
+func (m *mockStore) Get(ctx context.Context, collection string, id string) (persistence.Document, error) {
 	panic("not implemented")
 }
 
-func (m *mockStore) Update(ctx context.Context, collection string, id string, doc basic.Document) error {
+func (m *mockStore) Update(ctx context.Context, collection string, id string, doc persistence.Document) error {
 	panic("not implemented")
 }
 
@@ -48,7 +48,7 @@ func (m *mockStore) Delete(ctx context.Context, collection string, id string) er
 	panic("not implemented")
 }
 
-func (m *mockStore) Find(ctx context.Context, collection string, query basic.Query) ([]basic.Document, error) {
+func (m *mockStore) Find(ctx context.Context, collection string, query persistence.Query) ([]persistence.Document, error) {
 	panic("not implemented")
 }
 
@@ -76,11 +76,11 @@ func (t *mockTx) Rollback() error {
 	return nil
 }
 
-func (t *mockTx) BeginTx(ctx context.Context) (basic.Tx, error) {
+func (t *mockTx) BeginTx(ctx context.Context) (persistence.Tx, error) {
 	panic("not implemented")
 }
 
-func (t *mockTx) CreateCollection(ctx context.Context, name string, schema *basic.Schema) error {
+func (t *mockTx) CreateCollection(ctx context.Context, name string, schema *persistence.Schema) error {
 	return nil
 }
 
@@ -88,15 +88,15 @@ func (t *mockTx) DropCollection(ctx context.Context, name string) error {
 	return nil
 }
 
-func (t *mockTx) Insert(ctx context.Context, collection string, doc basic.Document) (string, error) {
+func (t *mockTx) Insert(ctx context.Context, collection string, doc persistence.Document) (string, error) {
 	return "", nil
 }
 
-func (t *mockTx) Get(ctx context.Context, collection string, id string) (basic.Document, error) {
+func (t *mockTx) Get(ctx context.Context, collection string, id string) (persistence.Document, error) {
 	return nil, nil
 }
 
-func (t *mockTx) Update(ctx context.Context, collection string, id string, doc basic.Document) error {
+func (t *mockTx) Update(ctx context.Context, collection string, id string, doc persistence.Document) error {
 	return nil
 }
 
@@ -104,7 +104,7 @@ func (t *mockTx) Delete(ctx context.Context, collection string, id string) error
 	return nil
 }
 
-func (t *mockTx) Find(ctx context.Context, collection string, query basic.Query) ([]basic.Document, error) {
+func (t *mockTx) Find(ctx context.Context, collection string, query persistence.Query) ([]persistence.Document, error) {
 	return nil, nil
 }
 
@@ -119,7 +119,7 @@ func (t *mockTx) Close(ctx context.Context) error {
 func TestWithTransaction_Success(t *testing.T) {
 	store := &mockStore{}
 
-	err := basic.WithTransaction(context.Background(), store, func(tx basic.Tx) error {
+	err := persistence.WithTransaction(context.Background(), store, func(tx persistence.Tx) error {
 		return nil
 	})
 	if err != nil {
@@ -138,7 +138,7 @@ func TestWithTransaction_Success(t *testing.T) {
 func TestWithTransaction_Error(t *testing.T) {
 	store := &mockStore{}
 	expectedErr := errors.New("transaction failed")
-	err := basic.WithTransaction(context.Background(), store, func(tx basic.Tx) error {
+	err := persistence.WithTransaction(context.Background(), store, func(tx persistence.Tx) error {
 		return expectedErr
 	})
 
@@ -172,7 +172,7 @@ func TestWithTransaction_Panic(t *testing.T) {
 		}
 	}()
 
-	_ = basic.WithTransaction(context.Background(), store, func(tx basic.Tx) error {
+	_ = persistence.WithTransaction(context.Background(), store, func(tx persistence.Tx) error {
 		panic("something went wrong")
 	})
 }
@@ -182,7 +182,7 @@ func TestWithTransaction_ContextCancelled(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	err := basic.WithTransaction(ctx, store, func(tx basic.Tx) error {
+	err := persistence.WithTransaction(ctx, store, func(tx persistence.Tx) error {
 		return nil
 	})
 
@@ -199,7 +199,7 @@ func TestWithRetry_Success(t *testing.T) {
 	store := &mockStore{}
 	callCount := 0
 
-	err := basic.WithRetry(context.Background(), store, 3, func(tx basic.Tx) error {
+	err := persistence.WithRetry(context.Background(), store, 3, func(tx persistence.Tx) error {
 		callCount++
 
 		return nil
@@ -217,10 +217,10 @@ func TestWithRetry_Conflict(t *testing.T) {
 	store := &mockStore{}
 	callCount := 0
 
-	err := basic.WithRetry(context.Background(), store, 3, func(tx basic.Tx) error {
+	err := persistence.WithRetry(context.Background(), store, 3, func(tx persistence.Tx) error {
 		callCount++
 		if callCount < 3 {
-			return basic.ErrConflict
+			return persistence.ErrConflict
 		}
 
 		return nil
@@ -238,13 +238,13 @@ func TestWithRetry_ExceedsMaxRetries(t *testing.T) {
 	store := &mockStore{}
 	callCount := 0
 
-	err := basic.WithRetry(context.Background(), store, 3, func(tx basic.Tx) error {
+	err := persistence.WithRetry(context.Background(), store, 3, func(tx persistence.Tx) error {
 		callCount++
 
-		return basic.ErrConflict
+		return persistence.ErrConflict
 	})
 
-	if !errors.Is(err, basic.ErrConflict) {
+	if !errors.Is(err, persistence.ErrConflict) {
 		t.Errorf("WithRetry() error = %v, want ErrConflict", err)
 	}
 
@@ -258,7 +258,7 @@ func TestWithRetry_NonConflictError(t *testing.T) {
 	callCount := 0
 	otherErr := errors.New("other error")
 
-	err := basic.WithRetry(context.Background(), store, 3, func(tx basic.Tx) error {
+	err := persistence.WithRetry(context.Background(), store, 3, func(tx persistence.Tx) error {
 		callCount++
 
 		return otherErr
@@ -276,7 +276,7 @@ func TestWithRetry_NonConflictError(t *testing.T) {
 func TestWithRetry_NegativeMaxRetries(t *testing.T) {
 	store := &mockStore{}
 
-	err := basic.WithRetry(context.Background(), store, -1, func(tx basic.Tx) error {
+	err := persistence.WithRetry(context.Background(), store, -1, func(tx persistence.Tx) error {
 		return nil
 	})
 	if err == nil {

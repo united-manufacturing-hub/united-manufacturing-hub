@@ -10,21 +10,21 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence/basic"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 )
 
 type mockStore struct {
-	collections map[string]map[string]basic.Document
+	collections map[string]map[string]persistence.Document
 	mu          sync.RWMutex
 }
 
 func newMockStore() *mockStore {
 	return &mockStore{
-		collections: make(map[string]map[string]basic.Document),
+		collections: make(map[string]map[string]persistence.Document),
 	}
 }
 
-func (m *mockStore) CreateCollection(ctx context.Context, name string, schema *basic.Schema) error {
+func (m *mockStore) CreateCollection(ctx context.Context, name string, schema *persistence.Schema) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -32,7 +32,7 @@ func (m *mockStore) CreateCollection(ctx context.Context, name string, schema *b
 		return errors.New("collection already exists")
 	}
 
-	m.collections[name] = make(map[string]basic.Document)
+	m.collections[name] = make(map[string]persistence.Document)
 	return nil
 }
 
@@ -41,24 +41,24 @@ func (m *mockStore) DropCollection(ctx context.Context, name string) error {
 	defer m.mu.Unlock()
 
 	if m.collections[name] == nil {
-		return basic.ErrNotFound
+		return persistence.ErrNotFound
 	}
 
 	delete(m.collections, name)
 	return nil
 }
 
-func (m *mockStore) Insert(ctx context.Context, collection string, doc basic.Document) (string, error) {
+func (m *mockStore) Insert(ctx context.Context, collection string, doc persistence.Document) (string, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	if m.collections[collection] == nil {
-		m.collections[collection] = make(map[string]basic.Document)
+		m.collections[collection] = make(map[string]persistence.Document)
 	}
 
 	id := doc["id"].(string)
 
-	docCopy := make(basic.Document)
+	docCopy := make(persistence.Document)
 	for k, v := range doc {
 		docCopy[k] = v
 	}
@@ -67,20 +67,20 @@ func (m *mockStore) Insert(ctx context.Context, collection string, doc basic.Doc
 	return id, nil
 }
 
-func (m *mockStore) Get(ctx context.Context, collection string, id string) (basic.Document, error) {
+func (m *mockStore) Get(ctx context.Context, collection string, id string) (persistence.Document, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
 	if m.collections[collection] == nil {
-		return nil, basic.ErrNotFound
+		return nil, persistence.ErrNotFound
 	}
 
 	doc, exists := m.collections[collection][id]
 	if !exists {
-		return nil, basic.ErrNotFound
+		return nil, persistence.ErrNotFound
 	}
 
-	docCopy := make(basic.Document)
+	docCopy := make(persistence.Document)
 	for k, v := range doc {
 		docCopy[k] = v
 	}
@@ -88,19 +88,19 @@ func (m *mockStore) Get(ctx context.Context, collection string, id string) (basi
 	return docCopy, nil
 }
 
-func (m *mockStore) Update(ctx context.Context, collection string, id string, doc basic.Document) error {
+func (m *mockStore) Update(ctx context.Context, collection string, id string, doc persistence.Document) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	if m.collections[collection] == nil {
-		return basic.ErrNotFound
+		return persistence.ErrNotFound
 	}
 
 	if _, exists := m.collections[collection][id]; !exists {
-		return basic.ErrNotFound
+		return persistence.ErrNotFound
 	}
 
-	docCopy := make(basic.Document)
+	docCopy := make(persistence.Document)
 	for k, v := range doc {
 		docCopy[k] = v
 	}
@@ -114,28 +114,28 @@ func (m *mockStore) Delete(ctx context.Context, collection string, id string) er
 	defer m.mu.Unlock()
 
 	if m.collections[collection] == nil {
-		return basic.ErrNotFound
+		return persistence.ErrNotFound
 	}
 
 	if _, exists := m.collections[collection][id]; !exists {
-		return basic.ErrNotFound
+		return persistence.ErrNotFound
 	}
 
 	delete(m.collections[collection], id)
 	return nil
 }
 
-func (m *mockStore) Find(ctx context.Context, collection string, query basic.Query) ([]basic.Document, error) {
+func (m *mockStore) Find(ctx context.Context, collection string, query persistence.Query) ([]persistence.Document, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
 	if m.collections[collection] == nil {
-		return []basic.Document{}, nil
+		return []persistence.Document{}, nil
 	}
 
-	results := make([]basic.Document, 0)
+	results := make([]persistence.Document, 0)
 	for _, doc := range m.collections[collection] {
-		docCopy := make(basic.Document)
+		docCopy := make(persistence.Document)
 		for k, v := range doc {
 			docCopy[k] = v
 		}
@@ -145,7 +145,7 @@ func (m *mockStore) Find(ctx context.Context, collection string, query basic.Que
 	return results, nil
 }
 
-func (m *mockStore) BeginTx(ctx context.Context) (basic.Tx, error) {
+func (m *mockStore) BeginTx(ctx context.Context) (persistence.Tx, error) {
 	return &mockTx{mockStore: m, rollback: false}, nil
 }
 
@@ -162,7 +162,7 @@ type mockTx struct {
 	rollback  bool
 }
 
-func (tx *mockTx) CreateCollection(ctx context.Context, name string, schema *basic.Schema) error {
+func (tx *mockTx) CreateCollection(ctx context.Context, name string, schema *persistence.Schema) error {
 	return tx.mockStore.CreateCollection(ctx, name, schema)
 }
 
@@ -170,15 +170,15 @@ func (tx *mockTx) DropCollection(ctx context.Context, name string) error {
 	return tx.mockStore.DropCollection(ctx, name)
 }
 
-func (tx *mockTx) Insert(ctx context.Context, collection string, doc basic.Document) (string, error) {
+func (tx *mockTx) Insert(ctx context.Context, collection string, doc persistence.Document) (string, error) {
 	return tx.mockStore.Insert(ctx, collection, doc)
 }
 
-func (tx *mockTx) Get(ctx context.Context, collection string, id string) (basic.Document, error) {
+func (tx *mockTx) Get(ctx context.Context, collection string, id string) (persistence.Document, error) {
 	return tx.mockStore.Get(ctx, collection, id)
 }
 
-func (tx *mockTx) Update(ctx context.Context, collection string, id string, doc basic.Document) error {
+func (tx *mockTx) Update(ctx context.Context, collection string, id string, doc persistence.Document) error {
 	return tx.mockStore.Update(ctx, collection, id, doc)
 }
 
@@ -186,11 +186,11 @@ func (tx *mockTx) Delete(ctx context.Context, collection string, id string) erro
 	return tx.mockStore.Delete(ctx, collection, id)
 }
 
-func (tx *mockTx) Find(ctx context.Context, collection string, query basic.Query) ([]basic.Document, error) {
+func (tx *mockTx) Find(ctx context.Context, collection string, query persistence.Query) ([]persistence.Document, error) {
 	return tx.mockStore.Find(ctx, collection, query)
 }
 
-func (tx *mockTx) BeginTx(ctx context.Context) (basic.Tx, error) {
+func (tx *mockTx) BeginTx(ctx context.Context) (persistence.Tx, error) {
 	return tx.mockStore.BeginTx(ctx)
 }
 
@@ -266,10 +266,10 @@ var _ = Describe("TriangularStore", func() {
 	})
 
 	Describe("SaveIdentity", func() {
-		var identity basic.Document
+		var identity persistence.Document
 
 		BeforeEach(func() {
-			identity = basic.Document{
+			identity = persistence.Document{
 				"id":   "worker-123",
 				"name": "Container A",
 				"ip":   "192.168.1.100",
@@ -307,7 +307,7 @@ var _ = Describe("TriangularStore", func() {
 
 	Describe("LoadIdentity", func() {
 		BeforeEach(func() {
-			identity := basic.Document{
+			identity := persistence.Document{
 				"id":   "worker-123",
 				"name": "Container A",
 			}
@@ -323,16 +323,16 @@ var _ = Describe("TriangularStore", func() {
 		Context("when worker does not exist", func() {
 			It("should return ErrNotFound", func() {
 				_, err := ts.LoadIdentity(ctx, "container", "nonexistent")
-				Expect(err).To(MatchError(basic.ErrNotFound))
+				Expect(err).To(MatchError(persistence.ErrNotFound))
 			})
 		})
 	})
 
 	Describe("SaveDesired", func() {
-		var desired basic.Document
+		var desired persistence.Document
 
 		BeforeEach(func() {
-			desired = basic.Document{
+			desired = persistence.Document{
 				"id":     "worker-123",
 				"config": "value1",
 			}
@@ -394,7 +394,7 @@ var _ = Describe("TriangularStore", func() {
 
 	Describe("LoadDesired", func() {
 		BeforeEach(func() {
-			desired := basic.Document{
+			desired := persistence.Document{
 				"id":     "worker-123",
 				"config": "value",
 			}
@@ -409,10 +409,10 @@ var _ = Describe("TriangularStore", func() {
 	})
 
 	Describe("SaveObserved", func() {
-		var observed basic.Document
+		var observed persistence.Document
 
 		BeforeEach(func() {
-			observed = basic.Document{
+			observed = persistence.Document{
 				"id":     "worker-123",
 				"status": "running",
 				"cpu":    50,
@@ -465,7 +465,7 @@ var _ = Describe("TriangularStore", func() {
 
 	Describe("LoadObserved", func() {
 		BeforeEach(func() {
-			observed := basic.Document{
+			observed := persistence.Document{
 				"id":     "worker-123",
 				"status": "running",
 			}
@@ -481,15 +481,15 @@ var _ = Describe("TriangularStore", func() {
 
 	Describe("LoadSnapshot", func() {
 		BeforeEach(func() {
-			ts.SaveIdentity(ctx, "container", "worker-123", basic.Document{
+			ts.SaveIdentity(ctx, "container", "worker-123", persistence.Document{
 				"id":   "worker-123",
 				"name": "Container A",
 			})
-			ts.SaveDesired(ctx, "container", "worker-123", basic.Document{
+			ts.SaveDesired(ctx, "container", "worker-123", persistence.Document{
 				"id":     "worker-123",
 				"config": "value",
 			})
-			ts.SaveObserved(ctx, "container", "worker-123", basic.Document{
+			ts.SaveObserved(ctx, "container", "worker-123", persistence.Document{
 				"id":     "worker-123",
 				"status": "running",
 			})
@@ -507,7 +507,7 @@ var _ = Describe("TriangularStore", func() {
 		Context("when parts are missing", func() {
 			It("should fail when desired and observed are missing", func() {
 				ts := storage.NewTriangularStore(newMockStore(), registry)
-				ts.SaveIdentity(ctx, "container", "worker-456", basic.Document{
+				ts.SaveIdentity(ctx, "container", "worker-456", persistence.Document{
 					"id":   "worker-456",
 					"name": "Container B",
 				})
@@ -520,15 +520,15 @@ var _ = Describe("TriangularStore", func() {
 
 	Describe("DeleteWorker", func() {
 		BeforeEach(func() {
-			ts.SaveIdentity(ctx, "container", "worker-123", basic.Document{
+			ts.SaveIdentity(ctx, "container", "worker-123", persistence.Document{
 				"id":   "worker-123",
 				"name": "Container A",
 			})
-			ts.SaveDesired(ctx, "container", "worker-123", basic.Document{
+			ts.SaveDesired(ctx, "container", "worker-123", persistence.Document{
 				"id":     "worker-123",
 				"config": "value",
 			})
-			ts.SaveObserved(ctx, "container", "worker-123", basic.Document{
+			ts.SaveObserved(ctx, "container", "worker-123", persistence.Document{
 				"id":     "worker-123",
 				"status": "running",
 			})
@@ -539,31 +539,31 @@ var _ = Describe("TriangularStore", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			_, err = store.Get(ctx, "container_identity", "worker-123")
-			Expect(err).To(MatchError(basic.ErrNotFound))
+			Expect(err).To(MatchError(persistence.ErrNotFound))
 
 			_, err = store.Get(ctx, "container_desired", "worker-123")
-			Expect(err).To(MatchError(basic.ErrNotFound))
+			Expect(err).To(MatchError(persistence.ErrNotFound))
 
 			_, err = store.Get(ctx, "container_observed", "worker-123")
-			Expect(err).To(MatchError(basic.ErrNotFound))
+			Expect(err).To(MatchError(persistence.ErrNotFound))
 		})
 	})
 
 	Describe("GlobalSyncID", func() {
 		It("should increment across all operations", func() {
-			ts.SaveIdentity(ctx, "container", "worker-1", basic.Document{
+			ts.SaveIdentity(ctx, "container", "worker-1", persistence.Document{
 				"id": "worker-1",
 			})
 			identity1, _ := store.Get(ctx, "container_identity", "worker-1")
 			syncID1 := identity1[storage.FieldSyncID].(int64)
 
-			ts.SaveDesired(ctx, "container", "worker-2", basic.Document{
+			ts.SaveDesired(ctx, "container", "worker-2", persistence.Document{
 				"id": "worker-2",
 			})
 			desired2, _ := store.Get(ctx, "container_desired", "worker-2")
 			syncID2 := desired2[storage.FieldSyncID].(int64)
 
-			ts.SaveObserved(ctx, "container", "worker-3", basic.Document{
+			ts.SaveObserved(ctx, "container", "worker-3", persistence.Document{
 				"id": "worker-3",
 			})
 			observed3, _ := store.Get(ctx, "container_observed", "worker-3")
@@ -576,7 +576,7 @@ var _ = Describe("TriangularStore", func() {
 
 	Describe("UnregisteredWorkerType", func() {
 		It("should fail for unregistered worker type", func() {
-			err := ts.SaveIdentity(ctx, "nonexistent", "worker-123", basic.Document{
+			err := ts.SaveIdentity(ctx, "nonexistent", "worker-123", persistence.Document{
 				"id": "worker-123",
 			})
 			Expect(err).To(HaveOccurred())
@@ -585,7 +585,7 @@ var _ = Describe("TriangularStore", func() {
 
 	Describe("TimestampProgression", func() {
 		It("should have updated_at after created_at", func() {
-			ts.SaveDesired(ctx, "container", "worker-123", basic.Document{
+			ts.SaveDesired(ctx, "container", "worker-123", persistence.Document{
 				"id": "worker-123",
 			})
 			first, _ := store.Get(ctx, "container_desired", "worker-123")
@@ -593,7 +593,7 @@ var _ = Describe("TriangularStore", func() {
 
 			time.Sleep(10 * time.Millisecond)
 
-			ts.SaveDesired(ctx, "container", "worker-123", basic.Document{
+			ts.SaveDesired(ctx, "container", "worker-123", persistence.Document{
 				"id": "worker-123",
 			})
 			second, _ := store.Get(ctx, "container_desired", "worker-123")
@@ -610,7 +610,7 @@ var _ = Describe("TriangularStore", func() {
 		})
 
 		It("should fail for document without id field", func() {
-			err := ts.SaveIdentity(ctx, "container", "worker-123", basic.Document{
+			err := ts.SaveIdentity(ctx, "container", "worker-123", persistence.Document{
 				"name": "Container A",
 			})
 			Expect(err).To(HaveOccurred())
@@ -618,7 +618,7 @@ var _ = Describe("TriangularStore", func() {
 
 		Context("for desired state", func() {
 			It("should fail for document without id field", func() {
-				err := ts.SaveDesired(ctx, "container", "worker-123", basic.Document{
+				err := ts.SaveDesired(ctx, "container", "worker-123", persistence.Document{
 					"config": "value",
 				})
 				Expect(err).To(HaveOccurred())
@@ -627,7 +627,7 @@ var _ = Describe("TriangularStore", func() {
 
 		Context("for observed state", func() {
 			It("should fail for document without id field", func() {
-				err := ts.SaveObserved(ctx, "container", "worker-123", basic.Document{
+				err := ts.SaveObserved(ctx, "container", "worker-123", persistence.Document{
 					"status": "running",
 				})
 				Expect(err).To(HaveOccurred())

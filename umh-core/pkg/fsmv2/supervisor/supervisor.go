@@ -27,7 +27,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence/basic"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 )
 
 // =============================================================================
@@ -352,7 +352,7 @@ func (s *Supervisor) AddWorker(identity fsmv2.Identity, worker fsmv2.Worker) err
 	s.logger.Infof("Registered ObservedState type for worker %s: %s", identity.ID, expectedType)
 
 	// Save identity to database
-	identityDoc := basic.Document{
+	identityDoc := persistence.Document{
 		"id":          identity.ID,
 		"name":        identity.Name,
 		"worker_type": identity.WorkerType,
@@ -648,12 +648,12 @@ func (s *Supervisor) tickWorker(ctx context.Context, workerID string) error {
 		// Skip type check for Documents loaded from storage
 		//
 		// TYPE INFORMATION LOSS (Acceptable for MVP):
-		// TriangularStore.LoadSnapshot() returns basic.Document, NOT typed structs.
+		// TriangularStore.LoadSnapshot() returns persistence.Document, NOT typed structs.
 		// This is because we persist as JSON without type metadata for deserialization.
 		// Communicator can work with Documents via reflection, so this is acceptable.
 		//
 		// See pkg/cse/storage/triangular.go LoadSnapshot() documentation for full rationale.
-		if actualType.String() != "basic.Document" && actualType != expectedType {
+		if actualType.String() != "persistence.Document" && actualType != expectedType {
 			panic(fmt.Sprintf("Invariant I16 violated: Worker %s (type %s) returned ObservedState type %s, expected %s",
 				workerID, s.workerType, actualType, expectedType))
 		}

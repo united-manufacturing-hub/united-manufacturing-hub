@@ -8,7 +8,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence/basic"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 )
 
 // TriangularStore provides high-level operations for FSM v2's triangular model.
@@ -18,7 +18,7 @@ import (
 // Reduces boilerplate and prevents mistakes (forgetting to increment sync ID).
 //
 // TRADE-OFF: Less control over metadata fields, but fewer bugs.
-// If fine-grained control is needed, callers can use basic.Store directly.
+// If fine-grained control is needed, callers can use persistence.Store directly.
 //
 // INSPIRED BY: ORM auto-timestamps (created_at, updated_at in Rails/Django),
 // Linear's transparent sync metadata injection.
@@ -38,20 +38,20 @@ import (
 //	ts := cse.NewTriangularStore(sqliteStore, globalRegistry)
 //
 //	// Create worker
-//	ts.SaveIdentity(ctx, "container", "worker-123", basic.Document{
+//	ts.SaveIdentity(ctx, "container", "worker-123", persistence.Document{
 //	    "id": "worker-123",
 //	    "name": "Container A",
 //	    "ip": "192.168.1.100",
 //	})
 //
 //	// Save user intent
-//	ts.SaveDesired(ctx, "container", "worker-123", basic.Document{
+//	ts.SaveDesired(ctx, "container", "worker-123", persistence.Document{
 //	    "id": "worker-123",
 //	    "config": "production",
 //	})
 //
 //	// Save system reality (called on every FSM tick)
-//	ts.SaveObserved(ctx, "container", "worker-123", basic.Document{
+//	ts.SaveObserved(ctx, "container", "worker-123", persistence.Document{
 //	    "id": "worker-123",
 //	    "status": "running",
 //	    "cpu": 45.2,
@@ -61,7 +61,7 @@ import (
 //	snapshot, _ := ts.LoadSnapshot(ctx, "container", "worker-123")
 //	// Use snapshot.Identity, snapshot.Desired, snapshot.Observed for Next() decision
 type TriangularStore struct {
-	store    basic.Store
+	store    persistence.Store
 	registry *Registry
 	syncID   *atomic.Int64
 }
@@ -82,7 +82,7 @@ type TriangularStore struct {
 //
 // Returns:
 //   - *TriangularStore: Ready-to-use triangular store instance
-func NewTriangularStore(store basic.Store, registry *Registry) *TriangularStore {
+func NewTriangularStore(store persistence.Store, registry *Registry) *TriangularStore {
 	return &TriangularStore{
 		store:    store,
 		registry: registry,
@@ -117,12 +117,12 @@ func NewTriangularStore(store basic.Store, registry *Registry) *TriangularStore 
 //
 // Example:
 //
-//	err := ts.SaveIdentity(ctx, "container", "worker-123", basic.Document{
+//	err := ts.SaveIdentity(ctx, "container", "worker-123", persistence.Document{
 //	    "id": "worker-123",
 //	    "name": "Container A",
 //	    "ip": "192.168.1.100",
 //	})
-func (ts *TriangularStore) SaveIdentity(ctx context.Context, workerType string, id string, identity basic.Document) error {
+func (ts *TriangularStore) SaveIdentity(ctx context.Context, workerType string, id string, identity persistence.Document) error {
 	// Validate document has required fields
 	if err := ts.validateDocument(identity); err != nil {
 		return fmt.Errorf("invalid identity document: %w", err)
@@ -165,7 +165,7 @@ func (ts *TriangularStore) SaveIdentity(ctx context.Context, workerType string, 
 //
 // DESIGN DECISION: Return ErrNotFound if worker doesn't exist
 // WHY: Explicit error handling - caller knows whether worker exists.
-// Matches basic.Store.Get semantics.
+// Matches persistence.Store.Get semantics.
 //
 // Parameters:
 //   - ctx: Cancellation context
@@ -173,9 +173,9 @@ func (ts *TriangularStore) SaveIdentity(ctx context.Context, workerType string, 
 //   - id: Unique worker identifier
 //
 // Returns:
-//   - basic.Document: Identity document with CSE metadata
+//   - persistence.Document: Identity document with CSE metadata
 //   - error: ErrNotFound if worker doesn't exist
-func (ts *TriangularStore) LoadIdentity(ctx context.Context, workerType string, id string) (basic.Document, error) {
+func (ts *TriangularStore) LoadIdentity(ctx context.Context, workerType string, id string) (persistence.Document, error) {
 	identityMeta, _, _, err := ts.registry.GetTriangularCollections(workerType)
 	if err != nil {
 		return nil, fmt.Errorf("worker type %q not registered: %w", workerType, err)
@@ -215,7 +215,7 @@ func (ts *TriangularStore) LoadIdentity(ctx context.Context, workerType string, 
 //
 // Returns:
 //   - error: If worker type not registered or save fails
-func (ts *TriangularStore) SaveDesired(ctx context.Context, workerType string, id string, desired basic.Document) error {
+func (ts *TriangularStore) SaveDesired(ctx context.Context, workerType string, id string, desired persistence.Document) error {
 	// Validate document has required fields
 	if err := ts.validateDocument(desired); err != nil {
 		return fmt.Errorf("invalid desired document: %w", err)
@@ -228,7 +228,7 @@ func (ts *TriangularStore) SaveDesired(ctx context.Context, workerType string, i
 
 	// Check if this is first save or update
 	_, err = ts.store.Get(ctx, desiredMeta.Name, id)
-	isNew := err != nil && errors.Is(err, basic.ErrNotFound)
+	isNew := err != nil && errors.Is(err, persistence.ErrNotFound)
 
 	// Inject CSE metadata (without sync ID - will be set after successful operation)
 	ts.injectMetadata(desired, RoleDesired, isNew)
@@ -267,9 +267,9 @@ func (ts *TriangularStore) SaveDesired(ctx context.Context, workerType string, i
 //   - id: Unique worker identifier
 //
 // Returns:
-//   - basic.Document: Desired state document with CSE metadata
+//   - persistence.Document: Desired state document with CSE metadata
 //   - error: ErrNotFound if not found
-func (ts *TriangularStore) LoadDesired(ctx context.Context, workerType string, id string) (basic.Document, error) {
+func (ts *TriangularStore) LoadDesired(ctx context.Context, workerType string, id string) (persistence.Document, error) {
 	_, desiredMeta, _, err := ts.registry.GetTriangularCollections(workerType)
 	if err != nil {
 		return nil, fmt.Errorf("worker type %q not registered: %w", workerType, err)
@@ -286,7 +286,7 @@ func (ts *TriangularStore) LoadDesired(ctx context.Context, workerType string, i
 // SaveObserved stores system reality.
 //
 // DESIGN DECISION: Accept interface{} for flexibility with typed states
-// WHY: Allows storing either basic.Document OR typed ObservedState structs.
+// WHY: Allows storing either persistence.Document OR typed ObservedState structs.
 // Auto-marshals typed states to Documents transparently.
 //
 // DESIGN DECISION: Increment _sync_id but NOT _version
@@ -309,7 +309,7 @@ func (ts *TriangularStore) LoadDesired(ctx context.Context, workerType string, i
 //   - ctx: Cancellation context
 //   - workerType: Worker type
 //   - id: Unique worker identifier
-//   - observed: Observed state (basic.Document or any struct/map)
+//   - observed: Observed state (persistence.Document or any struct/map)
 //
 // Returns:
 //   - error: If worker type not registered or save fails
@@ -332,7 +332,7 @@ func (ts *TriangularStore) SaveObserved(ctx context.Context, workerType string, 
 
 	// Check if this is first save or update
 	_, err = ts.store.Get(ctx, observedMeta.Name, id)
-	isNew := err != nil && errors.Is(err, basic.ErrNotFound)
+	isNew := err != nil && errors.Is(err, persistence.ErrNotFound)
 
 	// Inject CSE metadata (without sync ID - will be set after successful operation)
 	ts.injectMetadata(observedDoc, RoleObserved, isNew)
@@ -371,9 +371,9 @@ func (ts *TriangularStore) SaveObserved(ctx context.Context, workerType string, 
 //   - id: Unique worker identifier
 //
 // Returns:
-//   - basic.Document: Observed state document with CSE metadata
+//   - persistence.Document: Observed state document with CSE metadata
 //   - error: ErrNotFound if not found
-func (ts *TriangularStore) LoadObserved(ctx context.Context, workerType string, id string) (basic.Document, error) {
+func (ts *TriangularStore) LoadObserved(ctx context.Context, workerType string, id string) (persistence.Document, error) {
 	_, _, observedMeta, err := ts.registry.GetTriangularCollections(workerType)
 	if err != nil {
 		return nil, fmt.Errorf("worker type %q not registered: %w", workerType, err)
@@ -397,9 +397,9 @@ func (ts *TriangularStore) LoadObserved(ctx context.Context, workerType string, 
 //
 // INSPIRED BY: Domain-driven design value objects, Linear's entity snapshots.
 type Snapshot struct {
-	Identity basic.Document
-	Desired  basic.Document
-	Observed basic.Document
+	Identity persistence.Document
+	Desired  persistence.Document
+	Observed persistence.Document
 }
 
 // LoadSnapshot atomically loads all three parts of the triangular model.
@@ -416,7 +416,7 @@ type Snapshot struct {
 // Linear's snapshot isolation for sync operations.
 //
 // TYPE INFORMATION LOSS (Acceptable for MVP):
-// Loaded states are returned as basic.Document (map[string]interface{}), NOT typed structs.
+// Loaded states are returned as persistence.Document (map[string]interface{}), NOT typed structs.
 // Even if SaveObserved() was called with a typed struct, LoadSnapshot returns Document.
 // This is because we persist as JSON and don't store type metadata for deserialization.
 //
@@ -526,15 +526,15 @@ func (ts *TriangularStore) DeleteWorker(ctx context.Context, workerType string, 
 	defer tx.Rollback()
 
 	// Delete all three parts
-	if err := tx.Delete(ctx, identityMeta.Name, id); err != nil && !errors.Is(err, basic.ErrNotFound) {
+	if err := tx.Delete(ctx, identityMeta.Name, id); err != nil && !errors.Is(err, persistence.ErrNotFound) {
 		return fmt.Errorf("failed to delete identity: %w", err)
 	}
 
-	if err := tx.Delete(ctx, desiredMeta.Name, id); err != nil && !errors.Is(err, basic.ErrNotFound) {
+	if err := tx.Delete(ctx, desiredMeta.Name, id); err != nil && !errors.Is(err, persistence.ErrNotFound) {
 		return fmt.Errorf("failed to delete desired: %w", err)
 	}
 
-	if err := tx.Delete(ctx, observedMeta.Name, id); err != nil && !errors.Is(err, basic.ErrNotFound) {
+	if err := tx.Delete(ctx, observedMeta.Name, id); err != nil && !errors.Is(err, persistence.ErrNotFound) {
 		return fmt.Errorf("failed to delete observed: %w", err)
 	}
 
@@ -569,7 +569,7 @@ func (ts *TriangularStore) DeleteWorker(ctx context.Context, workerType string, 
 //   - doc: Document to inject metadata into (mutated in-place)
 //   - role: Triangular model role (identity, desired, observed)
 //   - isNew: True if first save, false if update
-func (ts *TriangularStore) injectMetadata(doc basic.Document, role string, isNew bool) {
+func (ts *TriangularStore) injectMetadata(doc persistence.Document, role string, isNew bool) {
 	now := time.Now().UTC()
 
 	if isNew {
@@ -602,7 +602,7 @@ func (ts *TriangularStore) injectMetadata(doc basic.Document, role string, isNew
 // TRADE-OFF: Additional validation overhead, but prevents data corruption.
 //
 // INSPIRED BY: "Parse, don't validate" principle - ensure valid state.
-func (ts *TriangularStore) validateDocument(doc basic.Document) error {
+func (ts *TriangularStore) validateDocument(doc persistence.Document) error {
 	if doc == nil {
 		return fmt.Errorf("document cannot be nil")
 	}
@@ -643,33 +643,33 @@ func (ts *TriangularStore) Close() error {
 	return ts.store.Close(ctx)
 }
 
-// toDocument converts various input types to basic.Document.
+// toDocument converts various input types to persistence.Document.
 //
 // DESIGN DECISION: Accept interface{} and handle common cases
 // WHY: Allows TriangularStore to work with both Documents and typed structs.
 // Provides flexibility without requiring callers to marshal manually.
 //
 // Supported types:
-//   - basic.Document: Pass through as-is
+//   - persistence.Document: Pass through as-is
 //   - map[string]interface{}: Convert to Document
 //   - structs with json tags: Marshal via encoding/json
 //
 // Returns:
-//   - basic.Document: Converted document
+//   - persistence.Document: Converted document
 //   - error: If conversion fails
-func (ts *TriangularStore) toDocument(v interface{}) (basic.Document, error) {
+func (ts *TriangularStore) toDocument(v interface{}) (persistence.Document, error) {
 	if v == nil {
 		return nil, fmt.Errorf("cannot convert nil to document")
 	}
 
 	// Already a Document
-	if doc, ok := v.(basic.Document); ok {
+	if doc, ok := v.(persistence.Document); ok {
 		return doc, nil
 	}
 
 	// map[string]interface{}
 	if m, ok := v.(map[string]interface{}); ok {
-		return basic.Document(m), nil
+		return persistence.Document(m), nil
 	}
 
 	// For structs and other types, use JSON marshaling
@@ -679,7 +679,7 @@ func (ts *TriangularStore) toDocument(v interface{}) (basic.Document, error) {
 		return nil, fmt.Errorf("failed to marshal to JSON: %w", err)
 	}
 
-	var doc basic.Document
+	var doc persistence.Document
 	if err := json.Unmarshal(jsonBytes, &doc); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal JSON to document: %w", err)
 	}

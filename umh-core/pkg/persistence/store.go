@@ -14,7 +14,7 @@
 //   - Layer 1 (basic): Database-agnostic collection/document API (this package)
 //   - Layer 2 (cse): CSE conventions - metadata fields, sync tracking
 //   - Layer 3 (repo): Type-safe domain models (Asset, DataPoint, etc.)
-package basic
+package persistence
 
 import (
 	"context"

@@ -10,7 +10,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence/basic"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 )
 
 var _ = Describe("TxCache", func() {
@@ -89,7 +89,7 @@ var _ = Describe("TxCache", func() {
 				OpType:     "insert",
 				Collection: "container_desired",
 				ID:         "worker-123",
-				Data:       basic.Document{"config": "value"},
+				Data:       persistence.Document{"config": "value"},
 				Timestamp:  time.Now(),
 			}
 		})
@@ -139,7 +139,7 @@ var _ = Describe("TxCache", func() {
 					OpType:     "insert",
 					Collection: "test",
 					ID:         "doc-" + strconv.Itoa(i),
-					Data:       basic.Document{"value": i},
+					Data:       persistence.Document{"value": i},
 					Timestamp:  time.Now(),
 				}
 				cache.RecordOp("tx-123", op)
@@ -157,7 +157,7 @@ var _ = Describe("TxCache", func() {
 				OpType:     "insert",
 				Collection: "test",
 				ID:         "doc-1",
-				Data:       basic.Document{"value": 123},
+				Data:       persistence.Document{"value": 123},
 				Timestamp:  time.Now(),
 			})
 		})
@@ -189,7 +189,7 @@ var _ = Describe("TxCache", func() {
 				OpType:     "insert",
 				Collection: "test",
 				ID:         "doc-1",
-				Data:       basic.Document{"value": 123},
+				Data:       persistence.Document{"value": 123},
 				Timestamp:  time.Now(),
 			})
 		})
@@ -215,7 +215,7 @@ var _ = Describe("TxCache", func() {
 				OpType:     "insert",
 				Collection: "test",
 				ID:         "doc-1",
-				Data:       basic.Document{"value": 123},
+				Data:       persistence.Document{"value": 123},
 				Timestamp:  time.Now(),
 			})
 		})
@@ -228,7 +228,7 @@ var _ = Describe("TxCache", func() {
 		It("should write transaction to storage", func() {
 			cache.Flush(ctx)
 
-			docs, err := store.Find(ctx, "_tx_cache", basic.Query{})
+			docs, err := store.Find(ctx, "_tx_cache", persistence.Query{})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(docs).To(HaveLen(1))
 		})
@@ -236,14 +236,14 @@ var _ = Describe("TxCache", func() {
 		It("should preserve transaction ID in storage", func() {
 			cache.Flush(ctx)
 
-			docs, _ := store.Find(ctx, "_tx_cache", basic.Query{})
+			docs, _ := store.Find(ctx, "_tx_cache", persistence.Query{})
 			Expect(docs[0]["id"]).To(Equal("tx-123"))
 		})
 
 		It("should preserve transaction status", func() {
 			cache.Flush(ctx)
 
-			docs, _ := store.Find(ctx, "_tx_cache", basic.Query{})
+			docs, _ := store.Find(ctx, "_tx_cache", persistence.Query{})
 			Expect(docs[0]["status"]).To(Equal(string(storage.TxStatusPending)))
 		})
 
@@ -255,7 +255,7 @@ var _ = Describe("TxCache", func() {
 			It("should persist committed status", func() {
 				cache.Flush(ctx)
 
-				docs, _ := store.Find(ctx, "_tx_cache", basic.Query{})
+				docs, _ := store.Find(ctx, "_tx_cache", persistence.Query{})
 				Expect(docs).To(HaveLen(1))
 				Expect(docs[0]["status"]).To(Equal(string(storage.TxStatusCommitted)))
 			})
@@ -263,7 +263,7 @@ var _ = Describe("TxCache", func() {
 			It("should set finished_at timestamp", func() {
 				cache.Flush(ctx)
 
-				docs, _ := store.Find(ctx, "_tx_cache", basic.Query{})
+				docs, _ := store.Find(ctx, "_tx_cache", persistence.Query{})
 				Expect(docs[0]["finished_at"]).NotTo(BeNil())
 			})
 		})
@@ -278,14 +278,14 @@ var _ = Describe("TxCache", func() {
 				OpType:     "insert",
 				Collection: "test",
 				ID:         "doc-1",
-				Data:       basic.Document{"value": 123},
+				Data:       persistence.Document{"value": 123},
 				Timestamp:  time.Now(),
 			})
 			cache.RecordOp("tx-123", storage.CachedOp{
 				OpType:     "update",
 				Collection: "test",
 				ID:         "doc-2",
-				Data:       basic.Document{"value": 456},
+				Data:       persistence.Document{"value": 456},
 				Timestamp:  time.Now(),
 			})
 
@@ -355,7 +355,7 @@ var _ = Describe("TxCache", func() {
 				err := cache.Cleanup(ctx, 24*time.Hour)
 				Expect(err).NotTo(HaveOccurred())
 
-				docs, _ := store.Find(ctx, "_tx_cache", basic.Query{})
+				docs, _ := store.Find(ctx, "_tx_cache", persistence.Query{})
 				Expect(docs).To(HaveLen(2))
 			})
 
@@ -377,7 +377,7 @@ var _ = Describe("TxCache", func() {
 				cache.Cleanup(ctx, 24*time.Hour)
 
 				_, err := store.Get(ctx, "_tx_cache", "tx-old")
-				Expect(err).To(MatchError(basic.ErrNotFound))
+				Expect(err).To(MatchError(persistence.ErrNotFound))
 			})
 		})
 	})
@@ -415,7 +415,7 @@ var _ = Describe("TxCache", func() {
 						OpType:     "insert",
 						Collection: "test",
 						ID:         "doc-" + string(rune('0'+id)),
-						Data:       basic.Document{"value": id},
+						Data:       persistence.Document{"value": id},
 						Timestamp:  time.Now(),
 					})
 					cache.Commit(txID)

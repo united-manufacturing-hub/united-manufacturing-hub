@@ -12,13 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package basic
+package memory
 
 import (
 	"context"
 	"errors"
 	"fmt"
 	"sync"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 )
 
 func validateContext(ctx context.Context) error {
@@ -30,16 +32,16 @@ func validateContext(ctx context.Context) error {
 
 type InMemoryStore struct {
 	mu          sync.RWMutex
-	collections map[string]map[string]Document
+	collections map[string]map[string]persistence.Document
 }
 
 func NewInMemoryStore() *InMemoryStore {
 	return &InMemoryStore{
-		collections: make(map[string]map[string]Document),
+		collections: make(map[string]map[string]persistence.Document),
 	}
 }
 
-func (s *InMemoryStore) CreateCollection(ctx context.Context, name string, schema *Schema) error {
+func (s *InMemoryStore) CreateCollection(ctx context.Context, name string, schema *persistence.Schema) error {
 	if err := validateContext(ctx); err != nil {
 		return err
 	}
@@ -51,7 +53,7 @@ func (s *InMemoryStore) CreateCollection(ctx context.Context, name string, schem
 		return fmt.Errorf("collection %q already exists", name)
 	}
 
-	s.collections[name] = make(map[string]Document)
+	s.collections[name] = make(map[string]persistence.Document)
 	return nil
 }
 
@@ -71,7 +73,7 @@ func (s *InMemoryStore) DropCollection(ctx context.Context, name string) error {
 	return nil
 }
 
-func (s *InMemoryStore) Insert(ctx context.Context, collection string, doc Document) (string, error) {
+func (s *InMemoryStore) Insert(ctx context.Context, collection string, doc persistence.Document) (string, error) {
 	if err := validateContext(ctx); err != nil {
 		return "", err
 	}
@@ -90,10 +92,10 @@ func (s *InMemoryStore) Insert(ctx context.Context, collection string, doc Docum
 	}
 
 	if _, exists := coll[id]; exists {
-		return "", ErrConflict
+		return "", persistence.ErrConflict
 	}
 
-	docCopy := make(Document)
+	docCopy := make(persistence.Document)
 	for k, v := range doc {
 		docCopy[k] = v
 	}
@@ -102,7 +104,7 @@ func (s *InMemoryStore) Insert(ctx context.Context, collection string, doc Docum
 	return id, nil
 }
 
-func (s *InMemoryStore) Get(ctx context.Context, collection string, id string) (Document, error) {
+func (s *InMemoryStore) Get(ctx context.Context, collection string, id string) (persistence.Document, error) {
 	if err := validateContext(ctx); err != nil {
 		return nil, err
 	}
@@ -117,10 +119,10 @@ func (s *InMemoryStore) Get(ctx context.Context, collection string, id string) (
 
 	doc, exists := coll[id]
 	if !exists {
-		return nil, ErrNotFound
+		return nil, persistence.ErrNotFound
 	}
 
-	docCopy := make(Document)
+	docCopy := make(persistence.Document)
 	for k, v := range doc {
 		docCopy[k] = v
 	}
@@ -128,7 +130,7 @@ func (s *InMemoryStore) Get(ctx context.Context, collection string, id string) (
 	return docCopy, nil
 }
 
-func (s *InMemoryStore) Update(ctx context.Context, collection string, id string, doc Document) error {
+func (s *InMemoryStore) Update(ctx context.Context, collection string, id string, doc persistence.Document) error {
 	if err := validateContext(ctx); err != nil {
 		return err
 	}
@@ -142,10 +144,10 @@ func (s *InMemoryStore) Update(ctx context.Context, collection string, id string
 	}
 
 	if _, exists := coll[id]; !exists {
-		return ErrNotFound
+		return persistence.ErrNotFound
 	}
 
-	docCopy := make(Document)
+	docCopy := make(persistence.Document)
 	for k, v := range doc {
 		docCopy[k] = v
 	}
@@ -168,14 +170,14 @@ func (s *InMemoryStore) Delete(ctx context.Context, collection string, id string
 	}
 
 	if _, exists := coll[id]; !exists {
-		return ErrNotFound
+		return persistence.ErrNotFound
 	}
 
 	delete(coll, id)
 	return nil
 }
 
-func (s *InMemoryStore) Find(ctx context.Context, collection string, query Query) ([]Document, error) {
+func (s *InMemoryStore) Find(ctx context.Context, collection string, query persistence.Query) ([]persistence.Document, error) {
 	if err := validateContext(ctx); err != nil {
 		return nil, err
 	}
@@ -188,9 +190,9 @@ func (s *InMemoryStore) Find(ctx context.Context, collection string, query Query
 		return nil, fmt.Errorf("collection %q does not exist", collection)
 	}
 
-	var results []Document
+	var results []persistence.Document
 	for _, doc := range coll {
-		docCopy := make(Document)
+		docCopy := make(persistence.Document)
 		for k, v := range doc {
 			docCopy[k] = v
 		}
@@ -204,7 +206,7 @@ func (s *InMemoryStore) Maintenance(ctx context.Context) error {
 	return nil
 }
 
-func (s *InMemoryStore) BeginTx(ctx context.Context) (Tx, error) {
+func (s *InMemoryStore) BeginTx(ctx context.Context) (persistence.Tx, error) {
 	if err := validateContext(ctx); err != nil {
 		return nil, err
 	}
@@ -213,7 +215,7 @@ func (s *InMemoryStore) BeginTx(ctx context.Context) (Tx, error) {
 		store:     s,
 		committed: false,
 		rolledBack: false,
-		changes:   make(map[string]map[string]*Document),
+		changes:   make(map[string]map[string]*persistence.Document),
 		deletes:   make(map[string]map[string]bool),
 	}, nil
 }
@@ -222,7 +224,7 @@ func (s *InMemoryStore) Close(ctx context.Context) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	s.collections = make(map[string]map[string]Document)
+	s.collections = make(map[string]map[string]persistence.Document)
 	return nil
 }
 
@@ -230,12 +232,12 @@ type inMemoryTx struct {
 	store      *InMemoryStore
 	committed  bool
 	rolledBack bool
-	changes    map[string]map[string]*Document
+	changes    map[string]map[string]*persistence.Document
 	deletes    map[string]map[string]bool
 	mu         sync.Mutex
 }
 
-func (tx *inMemoryTx) CreateCollection(ctx context.Context, name string, schema *Schema) error {
+func (tx *inMemoryTx) CreateCollection(ctx context.Context, name string, schema *persistence.Schema) error {
 	return tx.store.CreateCollection(ctx, name, schema)
 }
 
@@ -243,7 +245,7 @@ func (tx *inMemoryTx) DropCollection(ctx context.Context, name string) error {
 	return tx.store.DropCollection(ctx, name)
 }
 
-func (tx *inMemoryTx) Insert(ctx context.Context, collection string, doc Document) (string, error) {
+func (tx *inMemoryTx) Insert(ctx context.Context, collection string, doc persistence.Document) (string, error) {
 	tx.mu.Lock()
 	defer tx.mu.Unlock()
 
@@ -257,7 +259,7 @@ func (tx *inMemoryTx) Insert(ctx context.Context, collection string, doc Documen
 	}
 
 	if tx.changes[collection] == nil {
-		tx.changes[collection] = make(map[string]*Document)
+		tx.changes[collection] = make(map[string]*persistence.Document)
 	}
 
 	if tx.deletes[collection] != nil && tx.deletes[collection][id] {
@@ -265,10 +267,10 @@ func (tx *inMemoryTx) Insert(ctx context.Context, collection string, doc Documen
 	}
 
 	if tx.changes[collection][id] != nil {
-		return "", ErrConflict
+		return "", persistence.ErrConflict
 	}
 
-	docCopy := make(Document)
+	docCopy := make(persistence.Document)
 	for k, v := range doc {
 		docCopy[k] = v
 	}
@@ -277,7 +279,7 @@ func (tx *inMemoryTx) Insert(ctx context.Context, collection string, doc Documen
 	return id, nil
 }
 
-func (tx *inMemoryTx) Get(ctx context.Context, collection string, id string) (Document, error) {
+func (tx *inMemoryTx) Get(ctx context.Context, collection string, id string) (persistence.Document, error) {
 	tx.mu.Lock()
 	defer tx.mu.Unlock()
 
@@ -286,12 +288,12 @@ func (tx *inMemoryTx) Get(ctx context.Context, collection string, id string) (Do
 	}
 
 	if tx.deletes[collection] != nil && tx.deletes[collection][id] {
-		return nil, ErrNotFound
+		return nil, persistence.ErrNotFound
 	}
 
 	if tx.changes[collection] != nil {
 		if doc := tx.changes[collection][id]; doc != nil {
-			docCopy := make(Document)
+			docCopy := make(persistence.Document)
 			for k, v := range *doc {
 				docCopy[k] = v
 			}
@@ -302,7 +304,7 @@ func (tx *inMemoryTx) Get(ctx context.Context, collection string, id string) (Do
 	return tx.store.Get(ctx, collection, id)
 }
 
-func (tx *inMemoryTx) Update(ctx context.Context, collection string, id string, doc Document) error {
+func (tx *inMemoryTx) Update(ctx context.Context, collection string, id string, doc persistence.Document) error {
 	tx.mu.Lock()
 	defer tx.mu.Unlock()
 
@@ -311,14 +313,14 @@ func (tx *inMemoryTx) Update(ctx context.Context, collection string, id string, 
 	}
 
 	if tx.deletes[collection] != nil && tx.deletes[collection][id] {
-		return ErrNotFound
+		return persistence.ErrNotFound
 	}
 
 	if tx.changes[collection] == nil {
-		tx.changes[collection] = make(map[string]*Document)
+		tx.changes[collection] = make(map[string]*persistence.Document)
 	}
 
-	docCopy := make(Document)
+	docCopy := make(persistence.Document)
 	for k, v := range doc {
 		docCopy[k] = v
 	}
@@ -348,7 +350,7 @@ func (tx *inMemoryTx) Delete(ctx context.Context, collection string, id string) 
 	return nil
 }
 
-func (tx *inMemoryTx) Find(ctx context.Context, collection string, query Query) ([]Document, error) {
+func (tx *inMemoryTx) Find(ctx context.Context, collection string, query persistence.Query) ([]persistence.Document, error) {
 	return tx.store.Find(ctx, collection, query)
 }
 
@@ -356,7 +358,7 @@ func (tx *inMemoryTx) Maintenance(ctx context.Context) error {
 	return nil
 }
 
-func (tx *inMemoryTx) BeginTx(ctx context.Context) (Tx, error) {
+func (tx *inMemoryTx) BeginTx(ctx context.Context) (persistence.Tx, error) {
 	return nil, errors.New("nested transactions not supported")
 }
 
@@ -412,7 +414,7 @@ func (tx *inMemoryTx) Rollback() error {
 	}
 
 	tx.rolledBack = true
-	tx.changes = make(map[string]map[string]*Document)
+	tx.changes = make(map[string]map[string]*persistence.Document)
 	tx.deletes = make(map[string]map[string]bool)
 
 	return nil

@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence/basic"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 )
 
 // TxCacheCollection is the collection name for storing transaction cache records.
@@ -80,7 +80,7 @@ const (
 //	    OpType:     OpTypeInsert,
 //	    Collection: "container_desired",
 //	    ID:         "worker-123",
-//	    Data:       basic.Document{"id": "worker-123", "config": "production"},
+//	    Data:       persistence.Document{"id": "worker-123", "config": "production"},
 //	    Timestamp:  time.Now(),
 //	}
 type CachedOp struct {
@@ -94,7 +94,7 @@ type CachedOp struct {
 	ID string
 
 	// Data is the complete document data (nil for delete operations)
-	Data basic.Document
+	Data persistence.Document
 
 	// Timestamp is when the operation was recorded (for ordering within transaction)
 	Timestamp time.Time
@@ -176,7 +176,7 @@ type CachedTx struct {
 //	cache.Cleanup(ctx, DefaultTxCacheTTL)
 type TxCache struct {
 	// store is the persistent storage backend
-	store basic.Store
+	store persistence.Store
 
 	// registry tracks CSE-aware collections (not currently used, reserved for future features)
 	registry *Registry
@@ -201,7 +201,7 @@ type TxCache struct {
 //
 // Returns:
 //   - *TxCache: Ready-to-use transaction cache instance
-func NewTxCache(store basic.Store, registry *Registry) *TxCache {
+func NewTxCache(store persistence.Store, registry *Registry) *TxCache {
 	return &TxCache{
 		store:    store,
 		registry: registry,
@@ -268,7 +268,7 @@ func (tc *TxCache) BeginTx(txID string, metadata map[string]interface{}) error {
 //	    OpType:     OpTypeUpdate,
 //	    Collection: "container_desired",
 //	    ID:         "worker-123",
-//	    Data:       basic.Document{"id": "worker-123", "config": "production"},
+//	    Data:       persistence.Document{"id": "worker-123", "config": "production"},
 //	    Timestamp:  time.Now(),
 //	}
 //	cache.RecordOp("tx-001", op)
@@ -409,7 +409,7 @@ func (tc *TxCache) Flush(ctx context.Context) error {
 		doc := tc.txToDocument(tx)
 
 		existing, err := tc.store.Get(ctx, TxCacheCollection, tx.TxID)
-		if err == basic.ErrNotFound {
+		if err == persistence.ErrNotFound {
 			_, err = tc.store.Insert(ctx, TxCacheCollection, doc)
 			if err != nil {
 				return fmt.Errorf("failed to insert transaction %s: %w", tx.TxID, err)
@@ -509,8 +509,8 @@ func (tc *TxCache) Cleanup(ctx context.Context, ttl time.Duration) error {
 	cutoff := time.Now().Add(-ttl)
 	toDelete := make(map[string]bool)
 
-	docs, err := tc.store.Find(ctx, TxCacheCollection, basic.Query{})
-	if err != nil && err != basic.ErrNotFound {
+	docs, err := tc.store.Find(ctx, TxCacheCollection, persistence.Query{})
+	if err != nil && err != persistence.ErrNotFound {
 		return fmt.Errorf("failed to find transactions in storage: %w", err)
 	}
 
@@ -529,7 +529,7 @@ func (tc *TxCache) Cleanup(ctx context.Context, ttl time.Duration) error {
 	for txID := range toDelete {
 		delete(tc.cache, txID)
 
-		if err := tc.store.Delete(ctx, TxCacheCollection, txID); err != nil && err != basic.ErrNotFound {
+		if err := tc.store.Delete(ctx, TxCacheCollection, txID); err != nil && err != persistence.ErrNotFound {
 			return fmt.Errorf("failed to delete transaction %s: %w", txID, err)
 		}
 	}
@@ -537,7 +537,7 @@ func (tc *TxCache) Cleanup(ctx context.Context, ttl time.Duration) error {
 	return nil
 }
 
-// txToDocument converts a CachedTx to a basic.Document for storage.
+// txToDocument converts a CachedTx to a persistence.Document for storage.
 //
 // DESIGN DECISION: Serialize operation data as JSON string, not nested objects
 // WHY: Some backends (SQLite with JSON column) handle nested JSON better as strings
@@ -553,8 +553,8 @@ func (tc *TxCache) Cleanup(ctx context.Context, ttl time.Duration) error {
 //   - ops: Array of operation objects (each with op_type, collection, id, timestamp, data)
 //
 // Note: This is an internal helper. Callers should use Flush() to persist transactions.
-func (tc *TxCache) txToDocument(tx *CachedTx) basic.Document {
-	doc := basic.Document{
+func (tc *TxCache) txToDocument(tx *CachedTx) persistence.Document {
+	doc := persistence.Document{
 		"id":         tx.TxID,
 		"status":     string(tx.Status),
 		"started_at": tx.StartedAt.Format(time.RFC3339),

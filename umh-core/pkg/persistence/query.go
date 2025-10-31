@@ -1,4 +1,4 @@
-package basic
+package persistence
 
 const (
 	DefaultMaxFindLimit = 1000
