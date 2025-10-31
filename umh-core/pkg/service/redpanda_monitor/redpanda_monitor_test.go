@@ -338,7 +338,11 @@ var _ = Describe("Redpanda Monitor Service", func() {
 		}
 
 		// 3. Parse it into metrics
-		redpandaMetricsConfig, err := service.ParseRedpandaLogs(ctx, logEntries, tick)
+		// Use a longer timeout for tests since test_metrics.txt is large
+		// and processing can take longer than the production 35ms timeout on CI runners
+		testCtx, testCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer testCancel()
+		redpandaMetricsConfig, err := service.ParseRedpandaLogs(testCtx, logEntries, tick)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(redpandaMetricsConfig).NotTo(BeNil())
 
