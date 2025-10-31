@@ -116,6 +116,13 @@ type CollectorHealth struct {
 //   - Layer 2: Restart collector when data times out (>20s by default)
 //   - Layer 3: Request graceful shutdown after max restart attempts
 //   - Layer 4: Comprehensive logging and metrics (observability)
+//
+// ARCHITECTURE: Single-Node Coordination
+//
+// This implementation coordinates multiple workers on a single node only.
+// State persistence uses TriangularStore, which currently assumes all workers
+// run in the same process and can share in-memory state. For distributed deployments,
+// the persistence layer would need to be replaced with a distributed storage backend.
 type Supervisor struct {
 	workerType            string                    // Type of workers managed (e.g., "container")
 	workers               map[string]*WorkerContext // workerID → worker context

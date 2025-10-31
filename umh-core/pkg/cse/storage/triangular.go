@@ -23,6 +23,18 @@ import (
 // INSPIRED BY: ORM auto-timestamps (created_at, updated_at in Rails/Django),
 // Linear's transparent sync metadata injection.
 //
+// ARCHITECTURE: Single-Node Assumption
+//
+// Worker state is organized by workerType and id, with each worker having three
+// collections (identity, desired, observed). This collection-based storage (not
+// worker-based) allows efficient querying by role and supports the triangular model
+// where identity, desired, and observed are independent concepts.
+//
+// This implementation assumes all workers run on a single node. The underlying
+// persistence.Store (currently in-memory) keeps all collections in the same process
+// memory space. For distributed deployments, replace the persistence layer with
+// a distributed store that maintains collection-based organization.
+//
 // The triangular model separates each worker into three parts:
 //   - Identity: Immutable worker identification (ID, Name, IP)
 //   - Desired: User intent / configuration (what we want)
