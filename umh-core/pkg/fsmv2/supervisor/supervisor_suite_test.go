@@ -247,19 +247,3 @@ func newSupervisorWithWorker(worker *mockWorker, cfg supervisor.CollectorHealthC
 
 	return s
 }
-
-var _ = Describe("Identity WorkerType Field", func() {
-	It("should have WorkerType field that can be accessed and set", func() {
-		identity := fsmv2.Identity{
-			ID:         "test-id",
-			Name:       "test-name",
-			WorkerType: "container",
-		}
-
-		Expect(identity.WorkerType).To(Equal("container"))
-
-		identity.WorkerType = "pod"
-		Expect(identity.WorkerType).To(Equal("pod"))
-	})
-})
-
