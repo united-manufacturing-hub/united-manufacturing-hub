@@ -15,6 +15,7 @@
 package communication_state
 
 import (
+	"context"
 	"sync"
 	"time"
 
@@ -309,7 +310,11 @@ func (c *CommunicationState) InitialiseReAuthHandler(authToken string, insecureT
 			<-ticker.C
 			c.Logger.Debugf("Re-fetching login credentials")
 
-			credentials := v2.NewLogin(authToken, insecureTLS, c.ApiUrl, c.Logger)
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+			credentials := v2.NewLogin(ctx, authToken, insecureTLS, c.ApiUrl, c.Logger)
+
+			cancel()
+
 			if credentials == nil {
 				continue
 			}

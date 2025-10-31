@@ -177,7 +177,9 @@ func main() {
 	}
 
 	if configData.Agent.APIURL != "" && configData.Agent.AuthToken != "" {
-		enableBackendConnection(&configData, communicationState, controlLoop, communicationState.Logger)
+		sentry.SafeGoWithContext(ctx, func(ctx context.Context) {
+			enableBackendConnection(ctx, &configData, communicationState, controlLoop, communicationState.Logger)
+		})
 	} else {
 		log.Warnf("No backend connection enabled, please set API_URL and AUTH_TOKEN")
 	}
@@ -331,7 +333,7 @@ func SystemSnapshotLogger(ctx context.Context, controlLoop *control.ControlLoop)
 	}
 }
 
-func enableBackendConnection(config *config.FullConfig, communicationState *communication_state.CommunicationState, controlLoop *control.ControlLoop, logger *zap.SugaredLogger) {
+func enableBackendConnection(ctx context.Context, config *config.FullConfig, communicationState *communication_state.CommunicationState, controlLoop *control.ControlLoop, logger *zap.SugaredLogger) {
 	logger.Info("Enabling backend connection")
 	// directly log the config to console, not to the logger
 	if config == nil {
@@ -342,7 +344,28 @@ func enableBackendConnection(config *config.FullConfig, communicationState *comm
 
 	if config.Agent.APIURL != "" && config.Agent.AuthToken != "" {
 		// This can temporarely deactivated, e.g., during integration tests where just the mgmtcompanion-config is changed directly
-		login := v2.NewLogin(config.Agent.AuthToken, config.Agent.AllowInsecureTLS, config.Agent.APIURL, logger)
+		// Call NewLogin in a goroutine since it blocks with retry logic
+		loginChan := make(chan *v2.LoginResponse, 1)
+
+		go func() {
+			login := v2.NewLogin(ctx, config.Agent.AuthToken, config.Agent.AllowInsecureTLS, config.Agent.APIURL, logger)
+			select {
+			case loginChan <- login:
+			case <-ctx.Done():
+			}
+		}()
+
+		var login *v2.LoginResponse
+		select {
+		case login = <-loginChan:
+			// Login completed
+		case <-ctx.Done():
+			// Context cancelled before login completed
+			logger.Info("Backend connection context cancelled before login completed")
+
+			return
+		}
+
 		if login == nil {
 			sentry.ReportIssuef(sentry.IssueTypeError, logger, "[v2.NewLogin] Failed to create login object")
 
@@ -363,6 +386,10 @@ func enableBackendConnection(config *config.FullConfig, communicationState *comm
 		communicationState.InitialiseAndStartSubscriberHandler(time.Minute*5, time.Minute, config, snapshotManager, configManager)
 		communicationState.InitialiseAndStartRouter()
 		communicationState.InitialiseReAuthHandler(config.Agent.AuthToken, config.Agent.AllowInsecureTLS)
+
+		// Wait for context cancellation
+		<-ctx.Done()
+		logger.Info("Backend connection context cancelled, shutting down")
 	}
 
 	logger.Info("Backend connection enabled")
