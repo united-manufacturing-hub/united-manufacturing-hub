@@ -1,0 +1,374 @@
+package basic_test
+
+import (
+	"testing"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence/basic"
+)
+
+func TestNewQuery(t *testing.T) {
+	query := basic.NewQuery()
+
+	if query == nil {
+		t.Fatal("NewQuery() returned nil")
+	}
+
+	if query.Filters != nil {
+		t.Errorf("expected nil Filters, got %v", query.Filters)
+	}
+
+	if query.SortBy != nil {
+		t.Errorf("expected nil SortBy, got %v", query.SortBy)
+	}
+
+	if query.LimitCount != 0 {
+		t.Errorf("expected LimitCount 0, got %d", query.LimitCount)
+	}
+
+	if query.SkipCount != 0 {
+		t.Errorf("expected SkipCount 0, got %d", query.SkipCount)
+	}
+}
+
+func TestQuery_Filter_SingleCondition(t *testing.T) {
+	query := basic.NewQuery().Filter("status", basic.Eq, "active")
+
+	if len(query.Filters) != 1 {
+		t.Fatalf("expected 1 filter, got %d", len(query.Filters))
+	}
+
+	filter := query.Filters[0]
+	if filter.Field != "status" {
+		t.Errorf("expected field 'status', got '%s'", filter.Field)
+	}
+
+	if filter.Op != basic.Eq {
+		t.Errorf("expected operator Eq, got %v", filter.Op)
+	}
+
+	if filter.Value != "active" {
+		t.Errorf("expected value 'active', got '%v'", filter.Value)
+	}
+}
+
+func TestQuery_Filter_MultipleConditions(t *testing.T) {
+	query := basic.NewQuery().
+		Filter("status", basic.Eq, "active").
+		Filter("age", basic.Gt, 18)
+
+	if len(query.Filters) != 2 {
+		t.Fatalf("expected 2 filters, got %d", len(query.Filters))
+	}
+
+	if query.Filters[0].Field != "status" {
+		t.Errorf("expected first field 'status', got '%s'", query.Filters[0].Field)
+	}
+
+	if query.Filters[1].Field != "age" {
+		t.Errorf("expected second field 'age', got '%s'", query.Filters[1].Field)
+	}
+
+	if query.Filters[1].Op != basic.Gt {
+		t.Errorf("expected second operator Gt, got %v", query.Filters[1].Op)
+	}
+
+	if query.Filters[1].Value != 18 {
+		t.Errorf("expected second value 18, got %v", query.Filters[1].Value)
+	}
+}
+
+func TestQuery_Filter_ComparisonOperators(t *testing.T) {
+	tests := []struct {
+		name     string
+		operator basic.Operator
+		expected basic.Operator
+	}{
+		{"Equal", basic.Eq, "$eq"},
+		{"NotEqual", basic.Ne, "$ne"},
+		{"GreaterThan", basic.Gt, "$gt"},
+		{"GreaterThanOrEqual", basic.Gte, "$gte"},
+		{"LessThan", basic.Lt, "$lt"},
+		{"LessThanOrEqual", basic.Lte, "$lte"},
+		{"In", basic.In, "$in"},
+		{"NotIn", basic.Nin, "$nin"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.operator != tt.expected {
+				t.Errorf("operator %v != expected %v", tt.operator, tt.expected)
+			}
+
+			query := basic.NewQuery().Filter("field", tt.operator, "value")
+			if query.Filters[0].Op != tt.operator {
+				t.Errorf("filter operator %v != expected %v", query.Filters[0].Op, tt.operator)
+			}
+		})
+	}
+}
+
+func TestQuery_Sort_SingleField(t *testing.T) {
+	query := basic.NewQuery().Sort("createdAt", basic.Desc)
+
+	if len(query.SortBy) != 1 {
+		t.Fatalf("expected 1 sort field, got %d", len(query.SortBy))
+	}
+
+	sort := query.SortBy[0]
+	if sort.Field != "createdAt" {
+		t.Errorf("expected field 'createdAt', got '%s'", sort.Field)
+	}
+
+	if sort.Order != basic.Desc {
+		t.Errorf("expected order Desc (-1), got %v", sort.Order)
+	}
+}
+
+func TestQuery_Sort_MultipleFields(t *testing.T) {
+	query := basic.NewQuery().
+		Sort("createdAt", basic.Desc).
+		Sort("name", basic.Asc)
+
+	if len(query.SortBy) != 2 {
+		t.Fatalf("expected 2 sort fields, got %d", len(query.SortBy))
+	}
+
+	if query.SortBy[0].Field != "createdAt" {
+		t.Errorf("expected first field 'createdAt', got '%s'", query.SortBy[0].Field)
+	}
+
+	if query.SortBy[0].Order != basic.Desc {
+		t.Errorf("expected first order Desc, got %v", query.SortBy[0].Order)
+	}
+
+	if query.SortBy[1].Field != "name" {
+		t.Errorf("expected second field 'name', got '%s'", query.SortBy[1].Field)
+	}
+
+	if query.SortBy[1].Order != basic.Asc {
+		t.Errorf("expected second order Asc, got %v", query.SortBy[1].Order)
+	}
+}
+
+func TestQuery_Sort_OrderConstants(t *testing.T) {
+	if basic.Asc != 1 {
+		t.Errorf("Asc constant should be 1, got %d", basic.Asc)
+	}
+
+	if basic.Desc != -1 {
+		t.Errorf("Desc constant should be -1, got %d", basic.Desc)
+	}
+}
+
+func TestQuery_Limit(t *testing.T) {
+	query := basic.NewQuery().Limit(10)
+
+	if query.LimitCount != 10 {
+		t.Errorf("expected limit 10, got %d", query.LimitCount)
+	}
+}
+
+func TestQuery_Skip(t *testing.T) {
+	query := basic.NewQuery().Skip(20)
+
+	if query.SkipCount != 20 {
+		t.Errorf("expected skip 20, got %d", query.SkipCount)
+	}
+}
+
+func TestQuery_LimitSkip_Together(t *testing.T) {
+	query := basic.NewQuery().Limit(10).Skip(20)
+
+	if query.LimitCount != 10 {
+		t.Errorf("expected limit 10, got %d", query.LimitCount)
+	}
+
+	if query.SkipCount != 20 {
+		t.Errorf("expected skip 20, got %d", query.SkipCount)
+	}
+}
+
+func TestQuery_Chaining(t *testing.T) {
+	query := basic.NewQuery().
+		Filter("status", basic.Eq, "active").
+		Filter("age", basic.Gt, 18).
+		Sort("createdAt", basic.Desc).
+		Limit(10).
+		Skip(5)
+
+	if len(query.Filters) != 2 {
+		t.Errorf("expected 2 filters, got %d", len(query.Filters))
+	}
+
+	if len(query.SortBy) != 1 {
+		t.Errorf("expected 1 sort field, got %d", len(query.SortBy))
+	}
+
+	if query.LimitCount != 10 {
+		t.Errorf("expected limit 10, got %d", query.LimitCount)
+	}
+
+	if query.SkipCount != 5 {
+		t.Errorf("expected skip 5, got %d", query.SkipCount)
+	}
+}
+
+func TestQuery_ComplexChaining(t *testing.T) {
+	query := basic.NewQuery().
+		Filter("status", basic.Eq, "active").
+		Sort("priority", basic.Desc).
+		Filter("category", basic.In, []string{"urgent", "high"}).
+		Sort("createdAt", basic.Desc).
+		Limit(100).
+		Skip(50)
+
+	if len(query.Filters) != 2 {
+		t.Errorf("expected 2 filters")
+	}
+
+	if len(query.SortBy) != 2 {
+		t.Errorf("expected 2 sort fields")
+	}
+
+	if query.SortBy[0].Field != "priority" {
+		t.Errorf("expected first sort field 'priority', got '%s'", query.SortBy[0].Field)
+	}
+
+	if query.SortBy[1].Field != "createdAt" {
+		t.Errorf("expected second sort field 'createdAt', got '%s'", query.SortBy[1].Field)
+	}
+}
+
+func TestQuery_InOperator_WithArray(t *testing.T) {
+	values := []string{"active", "pending", "processing"}
+	query := basic.NewQuery().Filter("status", basic.In, values)
+
+	if len(query.Filters) != 1 {
+		t.Fatalf("expected 1 filter, got %d", len(query.Filters))
+	}
+
+	if query.Filters[0].Op != basic.In {
+		t.Errorf("expected In operator, got %v", query.Filters[0].Op)
+	}
+
+	valuesInterface, ok := query.Filters[0].Value.([]string)
+	if !ok {
+		t.Fatalf("expected []string value, got %T", query.Filters[0].Value)
+	}
+
+	if len(valuesInterface) != 3 {
+		t.Errorf("expected 3 values, got %d", len(valuesInterface))
+	}
+}
+
+func TestQuery_EmptyQuery(t *testing.T) {
+	query := basic.NewQuery()
+
+	if query.Filters != nil {
+		t.Errorf("empty query should have nil filters")
+	}
+
+	if query.SortBy != nil {
+		t.Errorf("empty query should have nil sort")
+	}
+
+	if query.LimitCount != 0 {
+		t.Errorf("empty query should have 0 limit")
+	}
+
+	if query.SkipCount != 0 {
+		t.Errorf("empty query should have 0 skip")
+	}
+}
+
+func TestQuery_Limit_NegativeValue(t *testing.T) {
+	query := basic.NewQuery().Limit(-10)
+
+	if query.LimitCount != 0 {
+		t.Errorf("negative limit should be treated as 0, got %d", query.LimitCount)
+	}
+}
+
+func TestQuery_Skip_NegativeValue(t *testing.T) {
+	query := basic.NewQuery().Skip(-20)
+
+	if query.SkipCount != 0 {
+		t.Errorf("negative skip should be treated as 0, got %d", query.SkipCount)
+	}
+}
+
+func TestQuery_Validation_InChain(t *testing.T) {
+	query := basic.NewQuery().
+		Filter("status", basic.Eq, "active").
+		Limit(-5).
+		Skip(-10).
+		Sort("createdAt", basic.Desc)
+
+	if query.LimitCount != 0 {
+		t.Errorf("expected limit 0, got %d", query.LimitCount)
+	}
+
+	if query.SkipCount != 0 {
+		t.Errorf("expected skip 0, got %d", query.SkipCount)
+	}
+
+	if len(query.Filters) != 1 {
+		t.Errorf("filter should still work, got %d filters", len(query.Filters))
+	}
+
+	if len(query.SortBy) != 1 {
+		t.Errorf("sort should still work, got %d sorts", len(query.SortBy))
+	}
+}
+
+func TestQuery_RealWorldExample(t *testing.T) {
+	query := basic.NewQuery().
+		Filter("status", basic.Eq, "active").
+		Filter("age", basic.Gte, 18).
+		Filter("age", basic.Lte, 65).
+		Filter("role", basic.In, []string{"admin", "moderator", "user"}).
+		Sort("priority", basic.Desc).
+		Sort("createdAt", basic.Asc).
+		Limit(25).
+		Skip(50)
+
+	if len(query.Filters) != 4 {
+		t.Errorf("expected 4 filters, got %d", len(query.Filters))
+	}
+
+	if query.Filters[0].Field != "status" || query.Filters[0].Op != basic.Eq {
+		t.Errorf("first filter incorrect")
+	}
+
+	if query.Filters[1].Field != "age" || query.Filters[1].Op != basic.Gte {
+		t.Errorf("second filter incorrect")
+	}
+
+	if query.Filters[2].Field != "age" || query.Filters[2].Op != basic.Lte {
+		t.Errorf("third filter incorrect")
+	}
+
+	if query.Filters[3].Field != "role" || query.Filters[3].Op != basic.In {
+		t.Errorf("fourth filter incorrect")
+	}
+
+	if len(query.SortBy) != 2 {
+		t.Errorf("expected 2 sort fields, got %d", len(query.SortBy))
+	}
+
+	if query.SortBy[0].Field != "priority" || query.SortBy[0].Order != basic.Desc {
+		t.Errorf("first sort incorrect")
+	}
+
+	if query.SortBy[1].Field != "createdAt" || query.SortBy[1].Order != basic.Asc {
+		t.Errorf("second sort incorrect")
+	}
+
+	if query.LimitCount != 25 {
+		t.Errorf("expected limit 25, got %d", query.LimitCount)
+	}
+
+	if query.SkipCount != 50 {
+		t.Errorf("expected skip 50, got %d", query.SkipCount)
+	}
+}
