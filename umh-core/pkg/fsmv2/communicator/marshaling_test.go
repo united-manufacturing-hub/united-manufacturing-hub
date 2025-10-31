@@ -242,3 +242,61 @@ func TestIdentityFromDocument_MissingFields(t *testing.T) {
 	_, err := communicator.IdentityFromDocument(doc)
 	assert.Error(t, err)
 }
+
+func TestIdentityToDocument_EmptyFields(t *testing.T) {
+	tests := []struct {
+		name     string
+		identity fsmv2.Identity
+		wantErr  bool
+	}{
+		{
+			name: "empty id",
+			identity: fsmv2.Identity{
+				ID:         "",
+				Name:       "Test Name",
+				WorkerType: "communicator",
+			},
+			wantErr: true,
+		},
+		{
+			name: "empty name",
+			identity: fsmv2.Identity{
+				ID:         "test-id",
+				Name:       "",
+				WorkerType: "communicator",
+			},
+			wantErr: true,
+		},
+		{
+			name: "both empty",
+			identity: fsmv2.Identity{
+				ID:         "",
+				Name:       "",
+				WorkerType: "communicator",
+			},
+			wantErr: true,
+		},
+		{
+			name: "valid identity",
+			identity: fsmv2.Identity{
+				ID:         "test-id",
+				Name:       "Test Name",
+				WorkerType: "communicator",
+			},
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			doc, err := communicator.IdentityToDocument(tt.identity)
+			if tt.wantErr {
+				assert.Error(t, err)
+				assert.Nil(t, doc)
+			} else {
+				assert.NoError(t, err)
+				assert.NotNil(t, doc)
+			}
+		})
+	}
+}

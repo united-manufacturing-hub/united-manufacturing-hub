@@ -41,6 +41,8 @@ func ObservedStateToDocument(state *CommunicatorObservedState) (basic.Document, 
 	return doc, nil
 }
 
+// ObservedStateFromDocument deserializes observed state from storage.
+// Boolean fields silently default to false if missing (lenient data plane behavior).
 func ObservedStateFromDocument(doc basic.Document) (*CommunicatorObservedState, error) {
 	if doc == nil {
 		return nil, fmt.Errorf("document cannot be nil")
@@ -125,6 +127,8 @@ func DesiredStateToDocument(state *CommunicatorDesiredState) (basic.Document, er
 	return doc, nil
 }
 
+// DesiredStateFromDocument deserializes desired state from storage.
+// Boolean fields return error if present but not boolean (strict control plane behavior).
 func DesiredStateFromDocument(doc basic.Document) (*CommunicatorDesiredState, error) {
 	if doc == nil {
 		return nil, fmt.Errorf("document cannot be nil")
@@ -142,6 +146,10 @@ func DesiredStateFromDocument(doc basic.Document) (*CommunicatorDesiredState, er
 }
 
 func IdentityToDocument(identity fsmv2.Identity) (basic.Document, error) {
+	if identity.ID == "" || identity.Name == "" {
+		return nil, fmt.Errorf("identity id and name are required")
+	}
+
 	doc := basic.Document{
 		"id":         identity.ID,
 		"name":       identity.Name,
