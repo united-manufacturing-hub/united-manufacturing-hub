@@ -252,6 +252,64 @@ func NewSupervisor(cfg Config) *Supervisor {
 
 	freshnessChecker := NewFreshnessChecker(staleThreshold, timeout, cfg.Logger)
 
+	// Auto-register triangular collections for this worker type.
+	// Collections follow convention: {workerType}_identity, {workerType}_desired, {workerType}_observed
+	// CSE fields standardized per role per FSM v2 contract.
+	//
+	// DESIGN DECISION: Auto-registration by Supervisor at initialization
+	// WHY: Eliminates worker-specific registry boilerplate (86 LOC per worker).
+	// Workers focus purely on business logic per FSM v2 design goal.
+	//
+	// TRADE-OFF: Convention over configuration. Worker type MUST follow naming convention.
+	// If custom collection names needed, can still register manually before creating Supervisor.
+	//
+	// INSPIRED BY: Rails ActiveRecord conventions, HTTP router auto-registration patterns.
+	registry := cfg.Store.Registry()
+
+	identityCollectionName := fmt.Sprintf("%s_identity", cfg.WorkerType)
+	desiredCollectionName := fmt.Sprintf("%s_desired", cfg.WorkerType)
+	observedCollectionName := fmt.Sprintf("%s_observed", cfg.WorkerType)
+
+	// Only register if not already registered (supports manual override)
+	if !registry.IsRegistered(identityCollectionName) {
+		if err := registry.Register(&storage.CollectionMetadata{
+			Name:          identityCollectionName,
+			WorkerType:    cfg.WorkerType,
+			Role:          storage.RoleIdentity,
+			CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt},
+			IndexedFields: []string{storage.FieldSyncID},
+		}); err != nil {
+			panic(fmt.Sprintf("failed to auto-register identity collection: %v", err))
+		}
+		cfg.Logger.Debugf("Auto-registered identity collection: %s", identityCollectionName)
+	}
+
+	if !registry.IsRegistered(desiredCollectionName) {
+		if err := registry.Register(&storage.CollectionMetadata{
+			Name:          desiredCollectionName,
+			WorkerType:    cfg.WorkerType,
+			Role:          storage.RoleDesired,
+			CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
+			IndexedFields: []string{storage.FieldSyncID},
+		}); err != nil {
+			panic(fmt.Sprintf("failed to auto-register desired collection: %v", err))
+		}
+		cfg.Logger.Debugf("Auto-registered desired collection: %s", desiredCollectionName)
+	}
+
+	if !registry.IsRegistered(observedCollectionName) {
+		if err := registry.Register(&storage.CollectionMetadata{
+			Name:          observedCollectionName,
+			WorkerType:    cfg.WorkerType,
+			Role:          storage.RoleObserved,
+			CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
+			IndexedFields: []string{storage.FieldSyncID},
+		}); err != nil {
+			panic(fmt.Sprintf("failed to auto-register observed collection: %v", err))
+		}
+		cfg.Logger.Debugf("Auto-registered observed collection: %s", observedCollectionName)
+	}
+
 	return &Supervisor{
 		workerType:            cfg.WorkerType,
 		workers:               make(map[string]*WorkerContext),

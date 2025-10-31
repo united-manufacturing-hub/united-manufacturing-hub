@@ -1,0 +1,172 @@
+// Copyright 2025 UMH Systems GmbH
+package supervisor_test
+
+import (
+	"context"
+	"testing"
+	"time"
+
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+	"go.uber.org/zap"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/container"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
+)
+
+func TestSupervisor(t *testing.T) {
+	RegisterFailHandler(Fail)
+	RunSpecs(t, "Supervisor Suite")
+}
+
+type mockWorker struct {
+	collectErr     error
+	observed       fsmv2.ObservedState
+	initialState   fsmv2.State
+	collectFunc    func(ctx context.Context) (fsmv2.ObservedState, error)
+}
+
+func (m *mockWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedState, error) {
+	if m.collectFunc != nil {
+		return m.collectFunc(ctx)
+	}
+
+	if m.collectErr != nil {
+		return nil, m.collectErr
+	}
+
+	if m.observed != nil {
+		return m.observed, nil
+	}
+
+	return &container.ContainerObservedState{
+		CollectedAt: time.Now(),
+	}, nil
+}
+
+func (m *mockWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
+	return &container.ContainerDesiredState{}, nil
+}
+
+func (m *mockWorker) GetInitialState() fsmv2.State {
+	if m.initialState != nil {
+		return m.initialState
+	}
+
+	return &mockState{}
+}
+
+type mockState struct {
+	nextState fsmv2.State
+	signal    fsmv2.Signal
+	action    fsmv2.Action
+}
+
+func (m *mockState) Next(snapshot fsmv2.Snapshot) (fsmv2.State, fsmv2.Signal, fsmv2.Action) {
+	if m.nextState == nil {
+		return m, fsmv2.SignalNone, nil
+	}
+
+	return m.nextState, m.signal, m.action
+}
+
+func (m *mockState) String() string { return "MockState" }
+func (m *mockState) Reason() string { return "mock state" }
+
+type mockStore struct {
+	snapshot     fsmv2.Snapshot
+	saveErr      error
+	loadSnapshot func() (fsmv2.Snapshot, error)
+	saveDesired  func(desired fsmv2.DesiredState) error
+	saveObserved func(observed fsmv2.ObservedState) error
+}
+
+func (m *mockStore) SaveDesired(desired fsmv2.DesiredState) error {
+	if m.saveDesired != nil {
+		return m.saveDesired(desired)
+	}
+
+	m.snapshot.Desired = desired
+	return m.saveErr
+}
+
+func (m *mockStore) SaveObserved(observed fsmv2.ObservedState) error {
+	if m.saveObserved != nil {
+		return m.saveObserved(observed)
+	}
+
+	m.snapshot.Observed = observed
+	return m.saveErr
+}
+
+func (m *mockStore) LoadSnapshot() (fsmv2.Snapshot, error) {
+	if m.loadSnapshot != nil {
+		return m.loadSnapshot()
+	}
+
+	if m.snapshot.Identity.ID != "" {
+		return m.snapshot, nil
+	}
+
+	// Default snapshot
+	identity := fsmv2.Identity{
+		ID:         "test-worker",
+		Name:       "Test Worker",
+		WorkerType: "container",
+	}
+
+	desired := &container.ContainerDesiredState{}
+	observed := &container.ContainerObservedState{CollectedAt: time.Now()}
+
+	return fsmv2.Snapshot{
+		Identity: identity,
+		Desired:  desired,
+		Observed: observed,
+	}, nil
+}
+
+func (m *mockStore) Close() error {
+	return nil
+}
+
+func mockIdentity() fsmv2.Identity {
+	return fsmv2.Identity{
+		ID:         "test-worker",
+		Name:       "Test Worker",
+		WorkerType: "container",
+	}
+}
+
+func newSupervisorWithWorker(worker *mockWorker, cfg supervisor.CollectorHealthConfig) *supervisor.Supervisor {
+	identity := mockIdentity()
+
+	s := supervisor.NewSupervisor(supervisor.Config{
+		WorkerType:      "container",
+		Logger:          zap.NewNop().Sugar(),
+		CollectorHealth: cfg,
+	})
+
+	err := s.AddWorker(identity, worker)
+	if err != nil {
+		panic(err)
+	}
+
+	return s
+}
+
+var _ = Describe("Identity WorkerType Field", func() {
+	It("should have WorkerType field that can be accessed and set", func() {
+		identity := fsmv2.Identity{
+			ID:         "test-id",
+			Name:       "test-name",
+			WorkerType: "container",
+		}
+
+		Expect(identity.WorkerType).To(Equal("container"))
+
+		identity.WorkerType = "pod"
+		Expect(identity.WorkerType).To(Equal("pod"))
+	})
+})
+

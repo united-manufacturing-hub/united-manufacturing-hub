@@ -623,6 +623,20 @@ func (ts *TriangularStore) IncrementSyncID(_ context.Context) (int64, error) {
 	return newID, nil
 }
 
+// Registry returns the underlying registry for auto-registration.
+// Used by Supervisor to register worker types at initialization.
+//
+// DESIGN DECISION: Expose registry for auto-registration by Supervisor
+// WHY: Eliminates worker-specific registry boilerplate (e.g., communicator/registry.go)
+// Supervisor auto-registers collections at startup based on worker type.
+//
+// TRADE-OFF: Exposes internal registry reference, but necessary for auto-registration pattern.
+//
+// INSPIRED BY: Dependency injection pattern, HTTP router registration (gin.Engine.Routes())
+func (ts *TriangularStore) Registry() *Registry {
+	return ts.registry
+}
+
 func (ts *TriangularStore) Close() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
