@@ -2,19 +2,57 @@
 package supervisor_test
 
 import (
+	"context"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence/memory"
 	"go.uber.org/zap"
 )
+
+func setupTestStore(workerType string) *storage.TriangularStore {
+	ctx := context.Background()
+	basicStore := memory.NewInMemoryStore()
+
+	registry := storage.NewRegistry()
+	registry.Register(&storage.CollectionMetadata{
+		Name:          workerType + "_identity",
+		WorkerType:    workerType,
+		Role:          storage.RoleIdentity,
+		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt},
+		IndexedFields: []string{storage.FieldSyncID},
+	})
+	registry.Register(&storage.CollectionMetadata{
+		Name:          workerType + "_desired",
+		WorkerType:    workerType,
+		Role:          storage.RoleDesired,
+		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
+		IndexedFields: []string{storage.FieldSyncID},
+	})
+	registry.Register(&storage.CollectionMetadata{
+		Name:          workerType + "_observed",
+		WorkerType:    workerType,
+		Role:          storage.RoleObserved,
+		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
+		IndexedFields: []string{storage.FieldSyncID},
+	})
+
+	basicStore.CreateCollection(ctx, workerType+"_identity", nil)
+	basicStore.CreateCollection(ctx, workerType+"_desired", nil)
+	basicStore.CreateCollection(ctx, workerType+"_observed", nil)
+
+	return storage.NewTriangularStore(basicStore, registry)
+}
 
 var _ = Describe("Supervisor Configuration", func() {
 	Context("when creating supervisor with default config", func() {
 		It("should use default collector health thresholds", func() {
 			cfg := supervisor.Config{
 				WorkerType: "container",
+				Store:      setupTestStore("container"),
 				Logger:     zap.NewNop().Sugar(),
 			}
 
@@ -30,6 +68,7 @@ var _ = Describe("Supervisor Configuration", func() {
 		It("should use custom collector health thresholds", func() {
 			cfg := supervisor.Config{
 				WorkerType: "container",
+				Store:      setupTestStore("container"),
 				Logger:     zap.NewNop().Sugar(),
 				CollectorHealth: supervisor.CollectorHealthConfig{
 					StaleThreshold:     5 * time.Second,
@@ -51,6 +90,7 @@ var _ = Describe("Supervisor Configuration", func() {
 			Expect(func() {
 				supervisor.NewSupervisor(supervisor.Config{
 					WorkerType: "container",
+					Store:      setupTestStore("container"),
 					Logger:     zap.NewNop().Sugar(),
 					CollectorHealth: supervisor.CollectorHealthConfig{
 						StaleThreshold:     -5 * time.Second,
@@ -65,6 +105,7 @@ var _ = Describe("Supervisor Configuration", func() {
 			Expect(func() {
 				supervisor.NewSupervisor(supervisor.Config{
 					WorkerType: "container",
+					Store:      setupTestStore("container"),
 					Logger:     zap.NewNop().Sugar(),
 					CollectorHealth: supervisor.CollectorHealthConfig{
 						StaleThreshold:     10 * time.Second,
@@ -79,6 +120,7 @@ var _ = Describe("Supervisor Configuration", func() {
 			Expect(func() {
 				supervisor.NewSupervisor(supervisor.Config{
 					WorkerType: "container",
+					Store:      setupTestStore("container"),
 					Logger:     zap.NewNop().Sugar(),
 					CollectorHealth: supervisor.CollectorHealthConfig{
 						StaleThreshold:     20 * time.Second,
@@ -93,6 +135,7 @@ var _ = Describe("Supervisor Configuration", func() {
 			Expect(func() {
 				supervisor.NewSupervisor(supervisor.Config{
 					WorkerType: "container",
+					Store:      setupTestStore("container"),
 					Logger:     zap.NewNop().Sugar(),
 					CollectorHealth: supervisor.CollectorHealthConfig{
 						StaleThreshold:     10 * time.Second,
@@ -109,6 +152,7 @@ var _ = Describe("Supervisor Configuration", func() {
 			Expect(func() {
 				supervisor.NewSupervisor(supervisor.Config{
 					WorkerType: "container",
+					Store:      setupTestStore("container"),
 					Logger:     zap.NewNop().Sugar(),
 					CollectorHealth: supervisor.CollectorHealthConfig{
 						ObservationTimeout: 10 * time.Second,
@@ -124,6 +168,7 @@ var _ = Describe("Supervisor Configuration", func() {
 			Expect(func() {
 				supervisor.NewSupervisor(supervisor.Config{
 					WorkerType: "container",
+					Store:      setupTestStore("container"),
 					Logger:     zap.NewNop().Sugar(),
 					CollectorHealth: supervisor.CollectorHealthConfig{
 						ObservationTimeout: 1 * time.Second,
@@ -139,6 +184,7 @@ var _ = Describe("Supervisor Configuration", func() {
 			Expect(func() {
 				supervisor.NewSupervisor(supervisor.Config{
 					WorkerType: "container",
+					Store:      setupTestStore("container"),
 					Logger:     zap.NewNop().Sugar(),
 					CollectorHealth: supervisor.CollectorHealthConfig{
 						ObservationTimeout: 1 * time.Second,
