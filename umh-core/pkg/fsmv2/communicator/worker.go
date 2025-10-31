@@ -78,6 +78,11 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/communicator/transport"
 )
 
+// WorkerType identifies this worker in the FSM v2 system.
+// It is used to distinguish communicator workers from other worker types
+// (e.g., supervisor workers) in logging, metrics, and supervision contexts.
+const WorkerType = "communicator"
+
 // CommunicatorWorker implements the FSM v2 Worker interface for channel-based synchronization.
 //
 // It manages the lifecycle of bidirectional message exchange between Edge and Backend tiers,
@@ -190,8 +195,9 @@ func NewCommunicatorWorker(
 ) *CommunicatorWorker {
 	return &CommunicatorWorker{
 		identity: fsmv2.Identity{
-			ID:   id,
-			Name: "Channel-Communicator",
+			ID:         id,
+			Name:       "Channel-Communicator",
+			WorkerType: WorkerType,
 		},
 		relayURL:      relayURL,
 		inboundChan:   inboundChan,
