@@ -588,7 +588,13 @@ func (s *Supervisor) tickWorker(ctx context.Context, workerID string) error {
 		}
 		actualType := normalizeType(reflect.TypeOf(snapshot.Observed))
 		// Skip type check for Documents loaded from storage
-		// Documents lose their original type information when persisted
+		//
+		// TYPE INFORMATION LOSS (Acceptable for MVP):
+		// TriangularStore.LoadSnapshot() returns basic.Document, NOT typed structs.
+		// This is because we persist as JSON without type metadata for deserialization.
+		// Communicator can work with Documents via reflection, so this is acceptable.
+		//
+		// See pkg/cse/storage/triangular.go LoadSnapshot() documentation for full rationale.
 		if actualType.String() != "basic.Document" && actualType != expectedType {
 			panic(fmt.Sprintf("Invariant I16 violated: Worker %s (type %s) returned ObservedState type %s, expected %s",
 				workerID, s.workerType, actualType, expectedType))

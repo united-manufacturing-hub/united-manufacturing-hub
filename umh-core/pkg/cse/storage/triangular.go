@@ -134,13 +134,28 @@ func (ts *TriangularStore) SaveIdentity(ctx context.Context, workerType string, 
 		return fmt.Errorf("worker type %q not registered: %w", workerType, err)
 	}
 
-	// Inject CSE metadata
+	// Inject CSE metadata (without sync ID - will be set after successful insert)
 	ts.injectMetadata(identity, RoleIdentity, true)
 
 	// Insert identity (first time creation)
 	_, err = ts.store.Insert(ctx, identityMeta.Name, identity)
 	if err != nil {
 		return fmt.Errorf("failed to save identity for %s/%s: %w", workerType, id, err)
+	}
+
+	// Increment sync ID ONLY after successful database commit
+	// This prevents gaps in sync ID sequence when operations fail
+	syncID := ts.syncID.Add(1)
+	identity[FieldSyncID] = syncID
+
+	// Update the document in database with sync ID
+	// This is safe because we know the document exists (we just inserted it)
+	err = ts.store.Update(ctx, identityMeta.Name, id, identity)
+	if err != nil {
+		// This is a critical error - document exists but we couldn't set sync ID
+		// The sync ID counter is already incremented, creating a gap
+		// Log this but don't fail the operation (identity was successfully created)
+		return fmt.Errorf("failed to set sync ID after identity creation for %s/%s: %w", workerType, id, err)
 	}
 
 	return nil
@@ -215,7 +230,7 @@ func (ts *TriangularStore) SaveDesired(ctx context.Context, workerType string, i
 	_, err = ts.store.Get(ctx, desiredMeta.Name, id)
 	isNew := err != nil && errors.Is(err, basic.ErrNotFound)
 
-	// Inject CSE metadata
+	// Inject CSE metadata (without sync ID - will be set after successful operation)
 	ts.injectMetadata(desired, RoleDesired, isNew)
 
 	if isNew {
@@ -226,6 +241,19 @@ func (ts *TriangularStore) SaveDesired(ctx context.Context, workerType string, i
 
 	if err != nil {
 		return fmt.Errorf("failed to save desired for %s/%s: %w", workerType, id, err)
+	}
+
+	// Increment sync ID ONLY after successful database commit
+	// This prevents gaps in sync ID sequence when operations fail
+	syncID := ts.syncID.Add(1)
+	desired[FieldSyncID] = syncID
+
+	// Update the document in database with sync ID
+	err = ts.store.Update(ctx, desiredMeta.Name, id, desired)
+	if err != nil {
+		// This is a critical error - document exists but we couldn't set sync ID
+		// The sync ID counter is already incremented, creating a gap
+		return fmt.Errorf("failed to set sync ID after desired save for %s/%s: %w", workerType, id, err)
 	}
 
 	return nil
@@ -306,7 +334,7 @@ func (ts *TriangularStore) SaveObserved(ctx context.Context, workerType string, 
 	_, err = ts.store.Get(ctx, observedMeta.Name, id)
 	isNew := err != nil && errors.Is(err, basic.ErrNotFound)
 
-	// Inject CSE metadata
+	// Inject CSE metadata (without sync ID - will be set after successful operation)
 	ts.injectMetadata(observedDoc, RoleObserved, isNew)
 
 	if isNew {
@@ -317,6 +345,19 @@ func (ts *TriangularStore) SaveObserved(ctx context.Context, workerType string, 
 
 	if err != nil {
 		return fmt.Errorf("failed to save observed for %s/%s: %w", workerType, id, err)
+	}
+
+	// Increment sync ID ONLY after successful database commit
+	// This prevents gaps in sync ID sequence when operations fail
+	syncID := ts.syncID.Add(1)
+	observedDoc[FieldSyncID] = syncID
+
+	// Update the document in database with sync ID
+	err = ts.store.Update(ctx, observedMeta.Name, id, observedDoc)
+	if err != nil {
+		// This is a critical error - document exists but we couldn't set sync ID
+		// The sync ID counter is already incremented, creating a gap
+		return fmt.Errorf("failed to set sync ID after observed save for %s/%s: %w", workerType, id, err)
 	}
 
 	return nil
@@ -374,13 +415,26 @@ type Snapshot struct {
 // INSPIRED BY: Database MVCC (multi-version concurrency control),
 // Linear's snapshot isolation for sync operations.
 //
+// TYPE INFORMATION LOSS (Acceptable for MVP):
+// Loaded states are returned as basic.Document (map[string]interface{}), NOT typed structs.
+// Even if SaveObserved() was called with a typed struct, LoadSnapshot returns Document.
+// This is because we persist as JSON and don't store type metadata for deserialization.
+//
+// WHY ACCEPTABLE:
+// - Communicator can work with Documents directly (uses reflection/type assertion)
+// - FSM's type check explicitly skips Documents (line 590-592 in supervisor.go)
+// - For MVP, we prioritize simplicity over type safety at persistence boundary
+//
+// FUTURE ENHANCEMENT:
+// Could add type registry to deserialize back to typed structs, but adds complexity.
+//
 // Parameters:
 //   - ctx: Cancellation context
 //   - workerType: Worker type
 //   - id: Unique worker identifier
 //
 // Returns:
-//   - *Snapshot: Complete worker state (identity, desired, observed)
+//   - *Snapshot: Complete worker state (identity, desired, observed as Documents)
 //   - error: ErrNotFound if any part is missing, or transaction fails
 //
 // Example:
@@ -504,9 +558,12 @@ func (ts *TriangularStore) DeleteWorker(ctx context.Context, workerType string, 
 // Linear's transparent metadata injection.
 //
 // Metadata injected/updated based on role:
-//   - RoleIdentity: _sync_id, _version=1, _created_at (immutable after creation)
-//   - RoleDesired: _sync_id++, _version++, _updated_at (increments version)
-//   - RoleObserved: _sync_id++, _updated_at (does NOT increment version)
+//   - RoleIdentity: _version=1, _created_at (immutable after creation)
+//   - RoleDesired: _version++, _updated_at (increments version)
+//   - RoleObserved: _updated_at (does NOT increment version)
+//
+// NOTE: _sync_id is NOT set here - it's incremented AFTER successful database commit
+// to prevent gaps in sync ID sequence when operations fail.
 //
 // Parameters:
 //   - doc: Document to inject metadata into (mutated in-place)
@@ -514,9 +571,6 @@ func (ts *TriangularStore) DeleteWorker(ctx context.Context, workerType string, 
 //   - isNew: True if first save, false if update
 func (ts *TriangularStore) injectMetadata(doc basic.Document, role string, isNew bool) {
 	now := time.Now().UTC()
-
-	// Always increment global sync ID for delta sync queries
-	doc[FieldSyncID] = ts.syncID.Add(1)
 
 	if isNew {
 		// First save: set creation timestamp and initial version
