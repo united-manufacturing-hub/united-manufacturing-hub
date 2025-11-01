@@ -12,32 +12,35 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package communicator
+package state
 
-import "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+import (
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/communicator/action"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/communicator/snapshot"
+)
 
 type TryingToAuthenticateState struct {
-	Worker *CommunicatorWorker
+	BaseCommunicatorState
 }
 
-func (s *TryingToAuthenticateState) Next(snapshot fsmv2.Snapshot) (fsmv2.State, fsmv2.Signal, fsmv2.Action) {
-	desired := snapshot.Desired.(*CommunicatorDesiredState)
-	observed := snapshot.Observed.(*CommunicatorObservedState)
+func (s *TryingToAuthenticateState) Next(snapshot snapshot.CommunicatorSnapshot) (BaseCommunicatorState, fsmv2.Signal, fsmv2.Action) {
+	desired := snapshot.Desired
+	observed := snapshot.Observed
 
 	if desired.ShutdownRequested() {
-		return &StoppedState{Worker: s.Worker}, fsmv2.SignalNone, nil
+		return &StoppedState{}, fsmv2.SignalNone, nil
 	}
 
-	if observed.IsAuthenticated() && !observed.IsTokenExpired() {
-		return &SyncingState{Worker: s.Worker}, fsmv2.SignalNone, nil
+	if observed.Authenticated && !observed.IsTokenExpired() { // TODO: check good abstraction / API
+		return &SyncingState{}, fsmv2.SignalNone, nil
 	}
 
 	// Create AuthenticateAction with proper dependencies
-	authenticateAction := NewAuthenticateAction(
-		s.Worker.relayURL,
-		s.Worker.instanceUUID,
-		s.Worker.authToken,
-		s.Worker.observedState,
+	authenticateAction := action.NewAuthenticateAction(
+		desired.RelayURL,
+		desired.InstanceUUID,
+		desired.AuthToken,
 	)
 	return s, fsmv2.SignalNone, authenticateAction
 }

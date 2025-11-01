@@ -75,6 +75,9 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/communicator/action"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/communicator/snapshot"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/communicator/state"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/communicator/transport"
 )
 
@@ -126,29 +129,14 @@ const WorkerType = "communicator"
 //
 // These dependencies are passed to actions when created by states.
 type CommunicatorWorker struct {
-	identity  fsmv2.Identity
-	relayURL  string
+	identity fsmv2.Identity
 
-	// Channel protocol dependencies
-	inboundChan  chan *transport.UMHMessage
-	outboundChan chan *transport.UMHMessage
-	transport    HTTPTransportInterface
-
-	// Authentication
-	instanceUUID  string
-	authToken     string
-	observedState *CommunicatorObservedState
-	logger        *zap.SugaredLogger
-}
-
-// HTTPTransportInterface defines the interface for HTTP transport operations
-type HTTPTransportInterface interface {
-	Authenticate(ctx context.Context, req transport.AuthRequest) (transport.AuthResponse, error)
-	Pull(ctx context.Context) ([]*transport.UMHMessage, error)
-	Push(ctx context.Context, messages []*transport.UMHMessage) error
-	UpdateToken(token string)
-	ResetClient()
-	Close() error
+	// Temporary State
+	// Temporary state can be a local logger, or some HTTP client, or some local services
+	// like filesystem, etc.
+	// But everything that configures it or that needs to be exposed shoudl be in observed and desired state
+	logger    *zap.SugaredLogger
+	transport transport.Transport
 }
 
 // NewCommunicatorWorker creates a new Channel-based Communicator worker.
@@ -185,28 +173,16 @@ type HTTPTransportInterface interface {
 //	supervisor.Start(ctx)
 func NewCommunicatorWorker(
 	id string,
-	relayURL string,
-	inboundChan chan *transport.UMHMessage,
-	outboundChan chan *transport.UMHMessage,
-	httpTransport HTTPTransportInterface,
-	instanceUUID string,
-	authToken string,
+	name string,
 	logger *zap.SugaredLogger,
 ) *CommunicatorWorker {
 	return &CommunicatorWorker{
 		identity: fsmv2.Identity{
 			ID:         id,
-			Name:       "Channel-Communicator",
+			Name:       name,
 			WorkerType: WorkerType,
 		},
-		relayURL:      relayURL,
-		inboundChan:   inboundChan,
-		outboundChan:  outboundChan,
-		transport:     httpTransport,
-		instanceUUID:  instanceUUID,
-		authToken:     authToken,
-		observedState: &CommunicatorObservedState{},
-		logger:        logger,
+		logger: logger, // TODO: setup configure logger wuth correct ID, Name, WorkerType logging so that the logs are structured
 	}
 }
 
@@ -217,25 +193,70 @@ func NewCommunicatorWorker(
 // state transitions are possible.
 //
 // The observed state includes:
-//   - IsAuthenticated: Whether we have a valid JWT token
-//   - JWTToken: The current JWT token (empty if not authenticated)
-//   - InboundQueueSize: Number of messages waiting in inbound channel
-//   - OutboundQueueSize: Number of messages waiting in outbound channel
 //   - CollectedAt: Timestamp of this observation
 //
 // Actions (AuthenticateAction, SyncAction) update the shared observedState,
 // and this method returns it to the supervisor.
 //
 // This method never returns an error for the communicator worker.
-func (w *CommunicatorWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedState, error) {
-	// Update timestamp
-	w.observedState.CollectedAt = time.Now()
+func (w *CommunicatorWorker) CollectObservedState(ctx context.Context, previousAction fsmv2.ActionReturn) (snapshot.CommunicatorObservedState, error) {
 
-	// Check channel queue sizes
-	w.observedState.SetInboundQueueSize(len(w.inboundChan))
-	w.observedState.SetOutboundQueueSize(len(w.outboundChan))
+	observed := snapshot.CommunicatorObservedState{
+		CollectedAt: time.Now(),
+	}
 
-	return w.observedState, nil
+	if previousAction.Name() == action.AuthenticateActionName {
+
+		// Authenticate was not successful
+		if previousAction.Error() != nil {
+
+			// Set Authenticated to false upon failed authentication
+			observed.Authenticated = false
+
+			// Reset JWT Key upon failed authentication
+			observed.JWTExpiry = time.Time{}
+			observed.JWTToken = ""
+
+			// TODO: log
+
+			return observed, nil
+		}
+
+		// When there was no error, then we successfully authenticated
+		observed.Authenticated = true
+
+		// Store JWT Key in Observed State
+		result := previousAction.Result().(action.AuthenticateActionResult)
+		observed.JWTToken = result.JWTToken
+		observed.JWTExpiry = result.JWTTokenExpiry
+
+		// Extract configuration from previous action
+		request := previousAction.Request().(action.AuthenticateAction)
+
+		// Update the observed state with what was last used to authenticate
+		// TODO: check that unset fields are then not set to nil in supervisor and instead only
+		// the set fields are updated
+		// TODO: check if this is not unnecessary boilerplate
+		observed.CommunicatorDesiredState = snapshot.CommunicatorDesiredState{
+			InstanceUUID: request.InstanceUUID,
+			AuthToken:    request.AuthToken,
+			RelayURL:     request.RelayURL,
+		}
+
+	}
+
+	// TODO: fetch somehow the messagesReceived from last sync action
+	// TODO: check that the state machine doesnt keep emitting actions, e.g., authenticate actions, as only
+	// in this logic the action result can be processed
+	// if CollectObservedState runs async from th state machine, it can mean that the state machine issues multiple authenticates
+	// before here in collectobservedstate we can fetch and update it
+	// MAYBE what helps is some debounce logic there, but that makes it really complicated
+	// or can be solved by setting datafreshness and require that CollectObservedState must be very up to date in order
+	// for the state machine to do anything (as we know here that it will not take much time)
+
+	// Observe the desired state
+
+	return observed, nil
 }
 
 // DeriveDesiredState determines what state the communicator should be in.
@@ -248,15 +269,13 @@ func (w *CommunicatorWorker) CollectObservedState(ctx context.Context) (fsmv2.Ob
 //
 // This method never returns an error for the communicator worker.
 func (w *CommunicatorWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
-	return &CommunicatorDesiredState{
-		shutdownRequested: false,
-	}, nil
+	return &snapshot.CommunicatorDesiredState{}, nil
 }
 
 // GetInitialState returns the state the FSM should start in.
 //
 // The communicator always starts in StoppedState. The FSM will transition
 // through Authenticating → Authenticated → Syncing based on observed state.
-func (w *CommunicatorWorker) GetInitialState() fsmv2.State {
-	return &StoppedState{Worker: w}
+func (w *CommunicatorWorker) GetInitialState() state.BaseCommunicatorState {
+	return &state.StoppedState{}
 }

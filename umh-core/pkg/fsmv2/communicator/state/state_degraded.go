@@ -12,24 +12,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package communicator
+package state
 
-import "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+import (
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/communicator/snapshot"
+)
 
 type DegradedState struct {
-	Worker *CommunicatorWorker
+	BaseCommunicatorState
 }
 
-func (s *DegradedState) Next(snapshot fsmv2.Snapshot) (fsmv2.State, fsmv2.Signal, fsmv2.Action) {
-	desired := snapshot.Desired.(*CommunicatorDesiredState)
-	observed := snapshot.Observed.(*CommunicatorObservedState)
+func (s *DegradedState) Next(snapshot snapshot.CommunicatorSnapshot) (BaseCommunicatorState, fsmv2.Signal, fsmv2.Action) {
+	desired := snapshot.Desired
+	observed := snapshot.Observed
 
 	if desired.ShutdownRequested() {
-		return &StoppedState{Worker: s.Worker}, fsmv2.SignalNone, nil
+		return &StoppedState{}, fsmv2.SignalNone, nil
 	}
 
 	if observed.IsSyncHealthy() && observed.GetConsecutiveErrors() == 0 {
-		return &SyncingState{Worker: s.Worker}, fsmv2.SignalNone, nil
+		return &SyncingState{}, fsmv2.SignalNone, nil
 	}
 
 	// Create SyncAction with transport and channels (retry sync in degraded state)

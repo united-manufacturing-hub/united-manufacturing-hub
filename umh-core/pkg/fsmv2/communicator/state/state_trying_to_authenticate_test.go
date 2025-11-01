@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package communicator_test
+package state_test
 
 import (
 	. "github.com/onsi/ginkgo/v2"
@@ -21,12 +21,13 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/communicator"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/communicator/state"
 	transportpkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/communicator/transport"
 )
 
 var _ = Describe("TryingToAuthenticateState", func() {
 	var (
-		state         *communicator.TryingToAuthenticateState
+		state         *state.TryingToAuthenticateState
 		snapshot      fsmv2.Snapshot
 		desired       *communicator.CommunicatorDesiredState
 		observed      *communicator.CommunicatorObservedState

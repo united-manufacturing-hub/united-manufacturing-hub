@@ -12,17 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package communicator
+package action
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
-	"fmt"
-	"io"
-	"net/http"
 	"time"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/communicator/transport"
 )
+
+const AuthenticateActionName = "authenticate"
+const defaultTokenExpiration = 24 * time.Hour
 
 // AuthenticateAction performs authentication with the relay server to obtain a JWT token.
 //
@@ -79,34 +79,34 @@ import (
 //
 // On error, the FSM will retry the authentication based on state transitions.
 type AuthenticateAction struct {
-	relayURL     string
-	instanceUUID string
-	authToken    string
-	httpClient   *http.Client
+	RelayURL     string
+	InstanceUUID string
+	AuthToken    string
 
-	// Where to store the JWT token after successful auth
-	observedState *CommunicatorObservedState
+	transport transport.Transport
+}
+
+type AuthenticateActionResult struct {
+	JWTToken       string
+	JWTTokenExpiry time.Time
 }
 
 // NewAuthenticateAction creates a new authentication action.
 //
 // Parameters:
+//   - transport: Transport implementation for HTTP communication
 //   - relayURL: Relay server endpoint (e.g., "https://relay.umh.app")
 //   - instanceUUID: Identifies this Edge instance (from config)
 //   - authToken: Pre-shared secret for authentication (from config)
-//   - observedState: Shared state where JWT token is stored
 //
 // The HTTP client is configured with a 30-second timeout to prevent
 // indefinite hangs during authentication.
-func NewAuthenticateAction(relayURL, instanceUUID, authToken string, observedState *CommunicatorObservedState) *AuthenticateAction {
+func NewAuthenticateAction(transport transport.Transport, relayURL, instanceUUID, authToken string) *AuthenticateAction {
 	return &AuthenticateAction{
-		relayURL:      relayURL,
-		instanceUUID:  instanceUUID,
-		authToken:     authToken,
-		httpClient: &http.Client{
-			Timeout: 30 * time.Second,
-		},
-		observedState: observedState,
+		RelayURL:     relayURL,
+		InstanceUUID: instanceUUID,
+		AuthToken:    authToken,
+		transport:    transport,
 	}
 }
 
@@ -148,69 +148,32 @@ func NewAuthenticateAction(relayURL, instanceUUID, authToken string, observedSta
 //	    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
 //	    "expiresAt": 1735689600
 //	}
-func (a *AuthenticateAction) Execute(ctx context.Context) error {
-	// Check if already authenticated with valid token
-	if a.observedState.IsAuthenticated() && a.observedState.GetJWTToken() != "" && !a.observedState.IsTokenExpired() {
-		// Already authenticated with valid token, nothing to do
-		return nil
+func (a *AuthenticateAction) Execute(ctx context.Context) (AuthenticateActionResult, error) {
+
+	authReq := transport.AuthRequest{
+		InstanceUUID: a.InstanceUUID,
+		Email:        a.AuthToken,
 	}
 
-	// Prepare authentication request
-	authReq := map[string]string{
-		"instanceUUID": a.instanceUUID,
-		"authToken":    a.authToken,
-	}
-
-	body, err := json.Marshal(authReq)
+	authResp, err := a.transport.Authenticate(ctx, authReq)
 	if err != nil {
-		return fmt.Errorf("failed to marshal auth request: %w", err)
+		return AuthenticateActionResult{}, err
 	}
 
-	// Create HTTP request
-	req, err := http.NewRequestWithContext(ctx, "POST", a.relayURL+"/authenticate", bytes.NewBuffer(body))
-	if err != nil {
-		return fmt.Errorf("failed to create auth request: %w", err)
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-
-	// Send authentication request
-	resp, err := a.httpClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("authentication request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	// Check response status
-	if resp.StatusCode != http.StatusOK {
-		bodyBytes, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("authentication failed with status %d: %s", resp.StatusCode, string(bodyBytes))
-	}
-
-	// Parse response
-	var authResp struct {
-		Token     string `json:"token"`
-		ExpiresAt int64  `json:"expiresAt"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&authResp); err != nil {
-		return fmt.Errorf("failed to decode auth response: %w", err)
-	}
+	actionReturn := AuthenticateActionResult{}
 
 	// Store JWT token in observed state
-	a.observedState.SetJWTToken(authResp.Token)
-	a.observedState.SetAuthenticated(true)
+	actionReturn.JWTToken = authResp.Token
 
 	if authResp.ExpiresAt > 0 {
-		a.observedState.SetTokenExpiresAt(time.Unix(authResp.ExpiresAt, 0))
+		actionReturn.JWTTokenExpiry = time.Unix(authResp.ExpiresAt, 0)
 	} else {
-		const defaultTokenExpiration = 24 * time.Hour
-		a.observedState.SetTokenExpiresAt(time.Now().Add(defaultTokenExpiration))
+		actionReturn.JWTTokenExpiry = time.Now().Add(defaultTokenExpiration)
 	}
 
-	return nil
+	return actionReturn, nil
 }
 
 func (a *AuthenticateAction) Name() string {
-	return "Authenticate"
+	return AuthenticateActionName
 }

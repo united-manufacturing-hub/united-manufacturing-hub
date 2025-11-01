@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package communicator_test
+package state_test
 
 import (
 	"time"
@@ -28,15 +28,15 @@ import (
 
 var _ = Describe("SyncingState", func() {
 	var (
-		state          *communicator.SyncingState
-		snapshot       fsmv2.Snapshot
-		desired        *communicator.CommunicatorDesiredState
-		observed       *communicator.CommunicatorObservedState
-		worker         *communicator.CommunicatorWorker
-		mockTransport  *MockTransport
-		inboundChan    chan *transportpkg.UMHMessage
-		outboundChan   chan *transportpkg.UMHMessage
-		logger         *zap.SugaredLogger
+		state         *communicator.SyncingState
+		snapshot      fsmv2.Snapshot
+		desired       *communicator.CommunicatorDesiredState
+		observed      *communicator.CommunicatorObservedState
+		worker        *communicator.CommunicatorWorker
+		mockTransport *MockTransport
+		inboundChan   chan *transportpkg.UMHMessage
+		outboundChan  chan *transportpkg.UMHMessage
+		logger        *zap.SugaredLogger
 	)
 
 	BeforeEach(func() {
