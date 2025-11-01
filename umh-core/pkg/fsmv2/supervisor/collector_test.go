@@ -12,12 +12,12 @@ import (
 )
 
 var _ = Describe("Collector", func() {
-	Context("when starting collector", func() {
+Context("when starting collector", func() {
 		It("should start observation loop", func() {
 			collector := supervisor.NewCollector(supervisor.CollectorConfig{
-				Worker:              &mockWorker{},
+				Worker:              &mockWorker{observed: createMockObservedStateWithID("test-worker")},
 				Identity:            mockIdentity(),
-				Store:               nil,
+				Store:               createTestTriangularStore(),
 				Logger:              zap.NewNop().Sugar(),
 				ObservationInterval: 1 * time.Second,
 				ObservationTimeout:  3 * time.Second,
@@ -42,12 +42,12 @@ var _ = Describe("Collector", func() {
 		})
 	})
 
-	Context("when restarting collector", func() {
+Context("when restarting collector", func() {
 		It("should stop old loop and start new one", func() {
 			collector := supervisor.NewCollector(supervisor.CollectorConfig{
-				Worker:              &mockWorker{},
+				Worker:              &mockWorker{observed: createMockObservedStateWithID("test-worker")},
 				Identity:            mockIdentity(),
-				Store:               nil,
+				Store:               createTestTriangularStore(),
 				Logger:              zap.NewNop().Sugar(),
 				ObservationInterval: 1 * time.Second,
 				ObservationTimeout:  3 * time.Second,
@@ -93,7 +93,7 @@ var _ = Describe("Collector", func() {
 			collector := supervisor.NewCollector(supervisor.CollectorConfig{
 				Worker:              &mockWorker{},
 				Identity:            mockIdentity(),
-				Store:               nil,
+				Store:               createTestTriangularStore(),
 				Logger:              zap.NewNop().Sugar(),
 				ObservationInterval: 1 * time.Second,
 				ObservationTimeout:  3 * time.Second,
@@ -119,7 +119,7 @@ var _ = Describe("Collector", func() {
 			collector := supervisor.NewCollector(supervisor.CollectorConfig{
 				Worker:              &mockWorker{},
 				Identity:            mockIdentity(),
-				Store:               nil,
+				Store:               createTestTriangularStore(),
 				Logger:              zap.NewNop().Sugar(),
 				ObservationInterval: 1 * time.Second,
 				ObservationTimeout:  3 * time.Second,
@@ -132,7 +132,7 @@ var _ = Describe("Collector", func() {
 			collector := supervisor.NewCollector(supervisor.CollectorConfig{
 				Worker:              &mockWorker{},
 				Identity:            mockIdentity(),
-				Store:               nil,
+				Store:               createTestTriangularStore(),
 				Logger:              zap.NewNop().Sugar(),
 				ObservationInterval: 1 * time.Second,
 				ObservationTimeout:  3 * time.Second,
@@ -145,7 +145,7 @@ var _ = Describe("Collector", func() {
 			collector := supervisor.NewCollector(supervisor.CollectorConfig{
 				Worker:              &mockWorker{},
 				Identity:            mockIdentity(),
-				Store:               nil,
+				Store:               createTestTriangularStore(),
 				Logger:              zap.NewNop().Sugar(),
 				ObservationInterval: 1 * time.Second,
 				ObservationTimeout:  3 * time.Second,

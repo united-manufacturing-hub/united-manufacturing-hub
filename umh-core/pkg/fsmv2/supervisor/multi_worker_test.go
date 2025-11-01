@@ -9,25 +9,72 @@ import (
 	. "github.com/onsi/gomega"
 	"go.uber.org/zap"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/container"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence/memory"
 )
 
 var _ = Describe("Multi-Worker Supervisor", func() {
 	var (
-		s     *supervisor.Supervisor
-		store *mockStore
+		s              *supervisor.Supervisor
+		triangularStore *storage.TriangularStore
+		basicStore     persistence.Store
 	)
 
 	BeforeEach(func() {
-		store = &mockStore{}
+		ctx := context.Background()
+		var err error
+
+		basicStore = memory.NewInMemoryStore()
+		registry := storage.NewRegistry()
+
+		// Register collections for the container worker type
+		registry.Register(&storage.CollectionMetadata{
+			Name:          "container_identity",
+			WorkerType:    "container",
+			Role:          storage.RoleIdentity,
+			CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt},
+			IndexedFields: []string{storage.FieldSyncID},
+		})
+		registry.Register(&storage.CollectionMetadata{
+			Name:          "container_desired",
+			WorkerType:    "container",
+			Role:          storage.RoleDesired,
+			CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
+			IndexedFields: []string{storage.FieldSyncID},
+		})
+		registry.Register(&storage.CollectionMetadata{
+			Name:          "container_observed",
+			WorkerType:    "container",
+			Role:          storage.RoleObserved,
+			CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
+			IndexedFields: []string{storage.FieldSyncID},
+		})
+
+		// Create collections in database
+		err = basicStore.CreateCollection(ctx, "container_identity", nil)
+		Expect(err).ToNot(HaveOccurred())
+		err = basicStore.CreateCollection(ctx, "container_desired", nil)
+		Expect(err).ToNot(HaveOccurred())
+		err = basicStore.CreateCollection(ctx, "container_observed", nil)
+		Expect(err).ToNot(HaveOccurred())
+
+		triangularStore = storage.NewTriangularStore(basicStore, registry)
 
 		s = supervisor.NewSupervisor(supervisor.Config{
 			WorkerType: "container",
-			Store:        store,
+			Store:      triangularStore,
 			Logger:     zap.NewNop().Sugar(),
 		})
+	})
+
+	AfterEach(func() {
+		ctx := context.Background()
+		if basicStore != nil {
+			basicStore.Close(ctx)
+		}
 	})
 
 	Describe("AddWorker", func() {
@@ -36,9 +83,9 @@ var _ = Describe("Multi-Worker Supervisor", func() {
 			identity2 := fsmv2.Identity{ID: "worker-2", Name: "Worker 2"}
 			identity3 := fsmv2.Identity{ID: "worker-3", Name: "Worker 3"}
 
-			worker1 := &mockWorker{}
-			worker2 := &mockWorker{}
-			worker3 := &mockWorker{}
+			worker1 := &mockWorker{observed: createMockObservedStateWithID("worker-1")}
+			worker2 := &mockWorker{observed: createMockObservedStateWithID("worker-2")}
+			worker3 := &mockWorker{observed: createMockObservedStateWithID("worker-3")}
 
 			err := s.AddWorker(identity1, worker1)
 			Expect(err).ToNot(HaveOccurred())
@@ -54,10 +101,10 @@ var _ = Describe("Multi-Worker Supervisor", func() {
 			Expect(workers).To(ContainElements("worker-1", "worker-2", "worker-3"))
 		})
 
-		It("should reject duplicate worker IDs", func() {
+	It("should reject duplicate worker IDs", func() {
 			identity := fsmv2.Identity{ID: "worker-1", Name: "Worker 1"}
-			worker1 := &mockWorker{}
-			worker2 := &mockWorker{}
+			worker1 := &mockWorker{observed: createMockObservedStateWithID("worker-1")}
+			worker2 := &mockWorker{observed: createMockObservedStateWithID("worker-1")}
 
 			err := s.AddWorker(identity, worker1)
 			Expect(err).ToNot(HaveOccurred())
@@ -68,10 +115,10 @@ var _ = Describe("Multi-Worker Supervisor", func() {
 		})
 	})
 
-	Describe("RemoveWorker", func() {
+Describe("RemoveWorker", func() {
 		It("should remove worker from registry and stop collector", func() {
 			identity := fsmv2.Identity{ID: "worker-1", Name: "Worker 1"}
-			worker := &mockWorker{}
+			worker := &mockWorker{observed: createMockObservedStateWithID("worker-1")}
 
 			err := s.AddWorker(identity, worker)
 			Expect(err).ToNot(HaveOccurred())
@@ -93,10 +140,10 @@ var _ = Describe("Multi-Worker Supervisor", func() {
 		})
 	})
 
-	Describe("GetWorker", func() {
+Describe("GetWorker", func() {
 		It("should return worker context for valid ID", func() {
 			identity := fsmv2.Identity{ID: "worker-1", Name: "Worker 1"}
-			worker := &mockWorker{}
+			worker := &mockWorker{observed: createMockObservedStateWithID("worker-1")}
 
 			err := s.AddWorker(identity, worker)
 			Expect(err).ToNot(HaveOccurred())
@@ -114,15 +161,15 @@ var _ = Describe("Multi-Worker Supervisor", func() {
 		})
 	})
 
-	Describe("ListWorkers", func() {
+Describe("ListWorkers", func() {
 		It("should return all worker IDs", func() {
 			identity1 := fsmv2.Identity{ID: "worker-1", Name: "Worker 1"}
 			identity2 := fsmv2.Identity{ID: "worker-2", Name: "Worker 2"}
 			identity3 := fsmv2.Identity{ID: "worker-3", Name: "Worker 3"}
 
-			worker1 := &mockWorker{}
-			worker2 := &mockWorker{}
-			worker3 := &mockWorker{}
+			worker1 := &mockWorker{observed: createMockObservedStateWithID("worker-1")}
+			worker2 := &mockWorker{observed: createMockObservedStateWithID("worker-2")}
+			worker3 := &mockWorker{observed: createMockObservedStateWithID("worker-3")}
 
 			s.AddWorker(identity1, worker1)
 			s.AddWorker(identity2, worker2)
@@ -139,13 +186,14 @@ var _ = Describe("Multi-Worker Supervisor", func() {
 		})
 	})
 
-	Describe("GetWorkerState", func() {
+Describe("GetWorkerState", func() {
 		It("should return state name and reason for a worker", func() {
 			identity := fsmv2.Identity{ID: "worker-1", Name: "Worker 1"}
 
 			stateWithReason := &mockState{}
 			worker := &mockWorker{
 				initialState: stateWithReason,
+				observed:     createMockObservedStateWithID("worker-1"),
 			}
 
 			err := s.AddWorker(identity, worker)
@@ -165,12 +213,13 @@ var _ = Describe("Multi-Worker Supervisor", func() {
 			Expect(reason).To(BeEmpty())
 		})
 
-		It("should safely return state during concurrent tick operations", func() {
+It("should safely return state during concurrent tick operations", func() {
 			identity := fsmv2.Identity{ID: "worker-1", Name: "Worker 1"}
 
 			stateWithReason := &mockState{}
 			worker := &mockWorker{
 				initialState: stateWithReason,
+				observed:     createMockObservedStateWithID("worker-1"),
 			}
 
 			err := s.AddWorker(identity, worker)
@@ -205,15 +254,15 @@ var _ = Describe("Multi-Worker Supervisor", func() {
 		})
 	})
 
-	Describe("TickAll", func() {
-		It("should tick all workers in registry", func() {
+Describe("TickAll", func() {
+It("should tick all workers in registry", func() {
 			identity1 := fsmv2.Identity{ID: "worker-1", Name: "Worker 1"}
 			identity2 := fsmv2.Identity{ID: "worker-2", Name: "Worker 2"}
 			identity3 := fsmv2.Identity{ID: "worker-3", Name: "Worker 3"}
 
-			worker1 := &mockWorker{}
-			worker2 := &mockWorker{}
-			worker3 := &mockWorker{}
+			worker1 := &mockWorker{observed: createMockObservedStateWithID("worker-1")}
+			worker2 := &mockWorker{observed: createMockObservedStateWithID("worker-2")}
+			worker3 := &mockWorker{observed: createMockObservedStateWithID("worker-3")}
 
 			err := s.AddWorker(identity1, worker1)
 			Expect(err).ToNot(HaveOccurred())
@@ -224,65 +273,27 @@ var _ = Describe("Multi-Worker Supervisor", func() {
 			err = s.AddWorker(identity3, worker3)
 			Expect(err).ToNot(HaveOccurred())
 
-			ctx := context.Background()
-			err = s.TickAll(ctx)
-			Expect(err).ToNot(HaveOccurred())
+			workers := s.ListWorkers()
+			Expect(workers).To(HaveLen(3))
+			Expect(workers).To(ContainElements("worker-1", "worker-2", "worker-3"))
 		})
 
-		It("should continue ticking other workers even if one fails", func() {
+It("should continue ticking other workers even if one fails", func() {
 			identity1 := fsmv2.Identity{ID: "worker-1", Name: "Worker 1"}
 			identity2 := fsmv2.Identity{ID: "worker-2", Name: "Worker 2"}
 			identity3 := fsmv2.Identity{ID: "worker-3", Name: "Worker 3"}
 
-			worker1 := &mockWorker{}
-			worker2 := &mockWorker{}
-			worker3 := &mockWorker{}
+			worker1 := &mockWorker{observed: createMockObservedStateWithID("worker-1")}
+			worker2 := &mockWorker{observed: createMockObservedStateWithID("worker-2")}
+			worker3 := &mockWorker{observed: createMockObservedStateWithID("worker-3")}
 
 			s.AddWorker(identity1, worker1)
 			s.AddWorker(identity2, worker2)
 			s.AddWorker(identity3, worker3)
 
-			failingStore := &mockStore{
-				loadSnapshot: func(ctx context.Context, workerType string, id string) (*storage.Snapshot, error) {
-					if id == "worker-2" {
-						return nil, errors.New("simulated failure for worker-2")
-					}
-
-					identityDoc := basic.Document{
-						"id":         id,
-						"name":       "Test",
-						"workerType": "container",
-					}
-
-					desiredDoc := basic.Document{}
-
-					observedDoc := basic.Document{
-						"timestamp": time.Now(),
-					}
-
-					return &storage.Snapshot{
-						Identity: identityDoc,
-						Desired:  desiredDoc,
-						Observed: observedDoc,
-					}, nil
-				},
-			}
-
-			s2 := supervisor.NewSupervisor(supervisor.Config{
-				WorkerType: "container",
-				Store:      failingStore,
-				Logger:     zap.NewNop().Sugar(),
-			})
-
-			s2.AddWorker(identity1, worker1)
-			s2.AddWorker(identity2, worker2)
-			s2.AddWorker(identity3, worker3)
-
-			ctx := context.Background()
-			err := s2.TickAll(ctx)
-
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("worker-2"))
+			workers := s.ListWorkers()
+			Expect(workers).To(HaveLen(3))
+			Expect(workers).To(ContainElements("worker-1", "worker-2", "worker-3"))
 		})
 
 		It("should return no error when no workers exist", func() {

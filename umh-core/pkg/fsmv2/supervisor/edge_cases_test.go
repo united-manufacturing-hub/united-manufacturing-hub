@@ -11,7 +11,6 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/container"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 	"go.uber.org/zap"
 )
@@ -26,10 +25,10 @@ var _ = Describe("Edge Cases", func() {
 					zap.NewNop().Sugar(),
 				)
 
-				snapshot := fsmv2.Snapshot{
+				snapshot := &fsmv2.Snapshot{
 					Identity: mockIdentity(),
 					Observed: nil,
-					Desired:  &container.ContainerDesiredState{},
+					Desired:  &mockDesiredState{},
 				}
 
 				Expect(checker.Check(snapshot)).To(BeFalse())
@@ -42,10 +41,10 @@ var _ = Describe("Edge Cases", func() {
 					zap.NewNop().Sugar(),
 				)
 
-				snapshot := fsmv2.Snapshot{
+				snapshot := &fsmv2.Snapshot{
 					Identity: mockIdentity(),
 					Observed: nil,
-					Desired:  &container.ContainerDesiredState{},
+					Desired:  &mockDesiredState{},
 				}
 
 				Expect(checker.IsTimeout(snapshot)).To(BeFalse())
@@ -70,10 +69,11 @@ var _ = Describe("Edge Cases", func() {
 								return nil, errors.New("collection error")
 							}
 
-							return &container.ContainerObservedState{CollectedAt: time.Now()}, nil
+							return &mockObservedState{ID: "test-worker", CollectedAt: time.Now()}, nil
 						},
 					},
 					Identity:            mockIdentity(),
+					Store:               createTestTriangularStore(),
 					Logger:              zap.NewNop().Sugar(),
 					ObservationInterval: 50 * time.Millisecond,
 					ObservationTimeout:  1 * time.Second,
@@ -109,10 +109,11 @@ var _ = Describe("Edge Cases", func() {
 							saveCallCount++
 							saveCallCountMutex.Unlock()
 
-							return &container.ContainerObservedState{CollectedAt: time.Now()}, nil
+							return &mockObservedState{ID: "test-worker", CollectedAt: time.Now()}, nil
 						},
 					},
 					Identity:            mockIdentity(),
+					Store:               createTestTriangularStore(),
 					Logger:              zap.NewNop().Sugar(),
 					ObservationInterval: 50 * time.Millisecond,
 					ObservationTimeout:  1 * time.Second,
@@ -141,6 +142,7 @@ var _ = Describe("Edge Cases", func() {
 				collector := supervisor.NewCollector(supervisor.CollectorConfig{
 					Worker:              &mockWorker{},
 					Identity:            mockIdentity(),
+					Store:               createTestTriangularStore(),
 					Logger:              zap.NewNop().Sugar(),
 					ObservationInterval: 1 * time.Second,
 					ObservationTimeout:  3 * time.Second,
@@ -167,6 +169,7 @@ var _ = Describe("Edge Cases", func() {
 				collector := supervisor.NewCollector(supervisor.CollectorConfig{
 					Worker:              &mockWorker{},
 					Identity:            mockIdentity(),
+					Store:               createTestTriangularStore(),
 					Logger:              zap.NewNop().Sugar(),
 					ObservationInterval: 1 * time.Second,
 					ObservationTimeout:  3 * time.Second,
@@ -340,17 +343,9 @@ var _ = Describe("Edge Cases", func() {
 
 		Context("when collector recovers after restarts", func() {
 			It("should reset restart count", func() {
-				store := &mockStore{}
-
 				s := newSupervisorWithWorker(&mockWorker{}, supervisor.CollectorHealthConfig{})
 
 				s.SetRestartCount(2)
-
-				store.snapshot = fsmv2.Snapshot{
-					Identity: mockIdentity(),
-					Desired:  &container.ContainerDesiredState{},
-					Observed: &container.ContainerObservedState{CollectedAt: time.Now()},
-				}
 
 				err := s.Tick(context.Background())
 				Expect(err).ToNot(HaveOccurred())
@@ -375,16 +370,13 @@ var _ = Describe("Edge Cases", func() {
 	Describe("Context cancellation", func() {
 		Context("when context is canceled during tick loop", func() {
 			It("should stop tick loop gracefully", func() {
-				s := supervisor.NewSupervisor(supervisor.Config{
-					WorkerType:   "container",
-					Logger:       zap.NewNop().Sugar(),
-					TickInterval: 100 * time.Millisecond,
-				})
-
-				identity := mockIdentity()
 				worker := &mockWorker{}
-				err := s.AddWorker(identity, worker)
-				Expect(err).ToNot(HaveOccurred())
+				s := newSupervisorWithWorker(worker, supervisor.CollectorHealthConfig{
+					ObservationTimeout: 1000 * time.Millisecond,
+					StaleThreshold:     10 * time.Second,
+					Timeout:            20 * time.Second,
+					MaxRestartAttempts: 3,
+				})
 
 				ctx, cancel := context.WithCancel(context.Background())
 
@@ -400,16 +392,13 @@ var _ = Describe("Edge Cases", func() {
 
 		Context("when context is canceled before first tick", func() {
 			It("should stop immediately", func() {
-				s := supervisor.NewSupervisor(supervisor.Config{
-					WorkerType:   "container",
-					Logger:       zap.NewNop().Sugar(),
-					TickInterval: 5 * time.Second,
-				})
-
-				identity := mockIdentity()
 				worker := &mockWorker{}
-				err := s.AddWorker(identity, worker)
-				Expect(err).ToNot(HaveOccurred())
+				s := newSupervisorWithWorker(worker, supervisor.CollectorHealthConfig{
+					ObservationTimeout: 1000 * time.Millisecond,
+					StaleThreshold:     10 * time.Second,
+					Timeout:            20 * time.Second,
+					MaxRestartAttempts: 3,
+				})
 
 				ctx, cancel := context.WithCancel(context.Background())
 				cancel()
@@ -496,9 +485,8 @@ type alternateObservedState struct {
 }
 
 func (a *alternateObservedState) GetTimestamp() time.Time { return a.timestamp }
-func (a *alternateObservedState) ShutdownRequested() bool { return false }
 func (a *alternateObservedState) GetObservedDesiredState() fsmv2.DesiredState {
-	return &container.ContainerDesiredState{}
+	return &mockDesiredState{}
 }
 
 var _ = Describe("Type Safety (Invariant I16)", func() {
@@ -506,13 +494,12 @@ var _ = Describe("Type Safety (Invariant I16)", func() {
 		Context("when worker returns wrong ObservedState type", func() {
 			It("should panic with clear message before calling state.Next()", func() {
 				callCount := 0
-				store := &mockStore{}
 
 				worker := &mockWorker{
 					collectFunc: func(ctx context.Context) (fsmv2.ObservedState, error) {
 						callCount++
 						if callCount == 1 {
-							return &container.ContainerObservedState{CollectedAt: time.Now()}, nil
+							return &mockObservedState{ID: "test-worker", CollectedAt: time.Now()}, nil
 						}
 
 						return &alternateObservedState{timestamp: time.Now()}, nil
@@ -520,12 +507,6 @@ var _ = Describe("Type Safety (Invariant I16)", func() {
 				}
 
 				s := newSupervisorWithWorker(worker, supervisor.CollectorHealthConfig{})
-
-				store.snapshot = fsmv2.Snapshot{
-					Identity: mockIdentity(),
-					Desired:  &container.ContainerDesiredState{},
-					Observed: &alternateObservedState{timestamp: time.Now()},
-				}
 
 				var panicMessage string
 				func() {
@@ -540,7 +521,7 @@ var _ = Describe("Type Safety (Invariant I16)", func() {
 				Expect(panicMessage).To(ContainSubstring("Invariant I16 violated"))
 				Expect(panicMessage).To(ContainSubstring("test-worker"))
 				Expect(panicMessage).To(ContainSubstring("alternateObservedState"))
-				Expect(panicMessage).To(ContainSubstring("ContainerObservedState"))
+				Expect(panicMessage).To(ContainSubstring("mockObservedState"))
 			})
 		})
 
@@ -548,10 +529,9 @@ var _ = Describe("Type Safety (Invariant I16)", func() {
 			It("should panic with clear message before calling state.Next()", func() {
 				worker := &mockWorker{
 					collectFunc: func(ctx context.Context) (fsmv2.ObservedState, error) {
-						return &container.ContainerObservedState{CollectedAt: time.Now()}, nil
+						return &mockObservedState{ID: "test-worker", CollectedAt: time.Now()}, nil
 					},
 				}
-
 
 				s := newSupervisorWithWorker(worker, supervisor.CollectorHealthConfig{})
 
@@ -573,9 +553,8 @@ var _ = Describe("Type Safety (Invariant I16)", func() {
 
 		Context("when worker consistently returns correct type", func() {
 			It("should not panic", func() {
-
 				worker := &mockWorker{
-					observed: &container.ContainerObservedState{CollectedAt: time.Now()},
+					observed: &mockObservedState{ID: "test-worker", CollectedAt: time.Now()},
 				}
 
 				s := newSupervisorWithWorker(worker, supervisor.CollectorHealthConfig{})
@@ -588,7 +567,7 @@ var _ = Describe("Type Safety (Invariant I16)", func() {
 		Context("when worker returns pointer type consistently (I16 normalization test)", func() {
 			It("should not panic due to pointer vs struct type mismatch", func() {
 				worker := &mockWorker{
-					observed: &container.ContainerObservedState{CollectedAt: time.Now()},
+					observed: &mockObservedState{ID: "test-worker", CollectedAt: time.Now()},
 				}
 
 				s := newSupervisorWithWorker(worker, supervisor.CollectorHealthConfig{})

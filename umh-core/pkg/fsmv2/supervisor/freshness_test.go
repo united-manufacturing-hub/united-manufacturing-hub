@@ -23,8 +23,9 @@ var _ = Describe("FreshnessChecker", func() {
 			snapshot := &fsmv2.Snapshot{
 				Identity: mockIdentity(),
 				Observed: &mockObservedState{
-					collectedAt: time.Now(),
-					desired:     &mockDesiredState{},
+					ID:          "test-worker",
+					CollectedAt: time.Now(),
+					Desired:     &mockDesiredState{},
 				},
 				Desired: &mockDesiredState{},
 			}
@@ -44,8 +45,9 @@ var _ = Describe("FreshnessChecker", func() {
 			snapshot := &fsmv2.Snapshot{
 				Identity: mockIdentity(),
 				Observed: &mockObservedState{
-					collectedAt: time.Now().Add(-15 * time.Second),
-					desired:     &mockDesiredState{},
+					ID:          "test-worker",
+					CollectedAt: time.Now().Add(-15 * time.Second),
+					Desired:     &mockDesiredState{},
 				},
 				Desired: &mockDesiredState{},
 			}
@@ -65,8 +67,9 @@ var _ = Describe("FreshnessChecker", func() {
 			snapshot := &fsmv2.Snapshot{
 				Identity: mockIdentity(),
 				Observed: &mockObservedState{
-					collectedAt: time.Now().Add(-25 * time.Second),
-					desired:     &mockDesiredState{},
+					ID:          "test-worker",
+					CollectedAt: time.Now().Add(-25 * time.Second),
+					Desired:     &mockDesiredState{},
 				},
 				Desired: &mockDesiredState{},
 			}

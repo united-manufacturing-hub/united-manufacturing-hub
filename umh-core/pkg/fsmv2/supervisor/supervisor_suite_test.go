@@ -3,6 +3,7 @@ package supervisor_test
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence/memory"
 )
 
 func TestSupervisor(t *testing.T) {
@@ -22,16 +24,17 @@ func TestSupervisor(t *testing.T) {
 }
 
 type mockObservedState struct {
-	collectedAt time.Time
-	desired     fsmv2.DesiredState
+	ID          string                `json:"id"`
+	CollectedAt time.Time             `json:"collectedAt"`
+	Desired     fsmv2.DesiredState    `json:"-"`
 }
 
 func (m *mockObservedState) GetObservedDesiredState() fsmv2.DesiredState {
-	return m.desired
+	return m.Desired
 }
 
 func (m *mockObservedState) GetTimestamp() time.Time {
-	return m.collectedAt
+	return m.CollectedAt
 }
 
 type mockDesiredState struct {
@@ -63,8 +66,9 @@ func (m *mockWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedSt
 	}
 
 	return &mockObservedState{
-		collectedAt: time.Now(),
-		desired:     &mockDesiredState{},
+		ID:          "test-worker",
+		CollectedAt: time.Now(),
+		Desired:     &mockDesiredState{},
 	}, nil
 }
 
@@ -234,10 +238,57 @@ func mockIdentity() fsmv2.Identity {
 func newSupervisorWithWorker(worker *mockWorker, cfg supervisor.CollectorHealthConfig) *supervisor.Supervisor {
 	identity := mockIdentity()
 
+	// Create a proper TriangularStore for testing
+	ctx := context.Background()
+	basicStore := memory.NewInMemoryStore()
+
+	registry := storage.NewRegistry()
+	workerType := "container"
+
+	// Auto-register collections following the supervisor convention
+	registry.Register(&storage.CollectionMetadata{
+		Name:          workerType + "_identity",
+		WorkerType:    workerType,
+		Role:          storage.RoleIdentity,
+		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt},
+		IndexedFields: []string{storage.FieldSyncID},
+	})
+	registry.Register(&storage.CollectionMetadata{
+		Name:          workerType + "_desired",
+		WorkerType:    workerType,
+		Role:          storage.RoleDesired,
+		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
+		IndexedFields: []string{storage.FieldSyncID},
+	})
+	registry.Register(&storage.CollectionMetadata{
+		Name:          workerType + "_observed",
+		WorkerType:    workerType,
+		Role:          storage.RoleObserved,
+		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
+		IndexedFields: []string{storage.FieldSyncID},
+	})
+
+	// Create collections in the basic store
+	if err := basicStore.CreateCollection(ctx, workerType+"_identity", nil); err != nil {
+		panic(fmt.Sprintf("failed to create identity collection: %v", err))
+	}
+	if err := basicStore.CreateCollection(ctx, workerType+"_desired", nil); err != nil {
+		panic(fmt.Sprintf("failed to create desired collection: %v", err))
+	}
+	if err := basicStore.CreateCollection(ctx, workerType+"_observed", nil); err != nil {
+		panic(fmt.Sprintf("failed to create observed collection: %v", err))
+	}
+
+	triangularStore := storage.NewTriangularStore(basicStore, registry)
+	if triangularStore == nil {
+		panic("triangular store is nil")
+	}
+
 	s := supervisor.NewSupervisor(supervisor.Config{
-		WorkerType:      "container",
+		WorkerType:      workerType,
 		Logger:          zap.NewNop().Sugar(),
 		CollectorHealth: cfg,
+		Store:           triangularStore,
 	})
 
 	err := s.AddWorker(identity, worker)
@@ -245,5 +296,64 @@ func newSupervisorWithWorker(worker *mockWorker, cfg supervisor.CollectorHealthC
 		panic(err)
 	}
 
+	// Pre-populate desired state document so tests don't fail with "document not found"
+	desiredDoc := persistence.Document{
+		"id":               identity.ID,
+		"shutdownRequested": false,
+	}
+	if err := triangularStore.SaveDesired(ctx, workerType, identity.ID, desiredDoc); err != nil {
+		panic(fmt.Sprintf("failed to save initial desired state: %v", err))
+	}
+
 	return s
+}
+
+func createMockObservedStateWithID(id string) *mockObservedState {
+	return &mockObservedState{
+		ID:          id,
+		CollectedAt: time.Now(),
+		Desired:     &mockDesiredState{},
+	}
+}
+
+func createTestTriangularStore() *storage.TriangularStore {
+	ctx := context.Background()
+	basicStore := memory.NewInMemoryStore()
+
+	registry := storage.NewRegistry()
+	workerType := "container"
+
+	registry.Register(&storage.CollectionMetadata{
+		Name:          workerType + "_identity",
+		WorkerType:    workerType,
+		Role:          storage.RoleIdentity,
+		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt},
+		IndexedFields: []string{storage.FieldSyncID},
+	})
+	registry.Register(&storage.CollectionMetadata{
+		Name:          workerType + "_desired",
+		WorkerType:    workerType,
+		Role:          storage.RoleDesired,
+		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
+		IndexedFields: []string{storage.FieldSyncID},
+	})
+	registry.Register(&storage.CollectionMetadata{
+		Name:          workerType + "_observed",
+		WorkerType:    workerType,
+		Role:          storage.RoleObserved,
+		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
+		IndexedFields: []string{storage.FieldSyncID},
+	})
+
+	if err := basicStore.CreateCollection(ctx, workerType+"_identity", nil); err != nil {
+		panic(fmt.Sprintf("failed to create identity collection: %v", err))
+	}
+	if err := basicStore.CreateCollection(ctx, workerType+"_desired", nil); err != nil {
+		panic(fmt.Sprintf("failed to create desired collection: %v", err))
+	}
+	if err := basicStore.CreateCollection(ctx, workerType+"_observed", nil); err != nil {
+		panic(fmt.Sprintf("failed to create observed collection: %v", err))
+	}
+
+	return storage.NewTriangularStore(basicStore, registry)
 }
