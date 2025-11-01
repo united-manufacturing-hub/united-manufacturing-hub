@@ -198,7 +198,7 @@ var _ = Describe("Edge Cases", func() {
 
 				initialState := &mockState{signal: fsmv2.SignalNone}
 
-				s := newSupervisorWithWorker(&mockWorker{initialState: initialState}, supervisor.CollectorHealthConfig{})
+				s := newSupervisorWithWorker(&mockWorker{initialState: initialState}, nil, supervisor.CollectorHealthConfig{})
 
 				err := s.Tick(context.Background())
 				Expect(err).ToNot(HaveOccurred())
@@ -307,7 +307,7 @@ var _ = Describe("Edge Cases", func() {
 				initialState.nextState = initialState
 				initialState.action = action
 
-				s := newSupervisorWithWorker(&mockWorker{initialState: initialState}, supervisor.CollectorHealthConfig{})
+				s := newSupervisorWithWorker(&mockWorker{initialState: initialState}, nil, supervisor.CollectorHealthConfig{})
 
 				err := s.Tick(context.Background())
 				Expect(err).ToNot(HaveOccurred())
@@ -334,7 +334,7 @@ var _ = Describe("Edge Cases", func() {
 				initialState.nextState = initialState
 				initialState.action = action
 
-				s := newSupervisorWithWorker(&mockWorker{initialState: initialState}, supervisor.CollectorHealthConfig{})
+				s := newSupervisorWithWorker(&mockWorker{initialState: initialState}, nil, supervisor.CollectorHealthConfig{})
 
 				err := s.Tick(context.Background())
 				Expect(err).ToNot(HaveOccurred())
@@ -358,7 +358,7 @@ var _ = Describe("Edge Cases", func() {
 				initialState.nextState = initialState
 				initialState.action = action
 
-				s := newSupervisorWithWorker(&mockWorker{initialState: initialState}, supervisor.CollectorHealthConfig{})
+				s := newSupervisorWithWorker(&mockWorker{initialState: initialState}, nil, supervisor.CollectorHealthConfig{})
 
 				err := s.Tick(context.Background())
 				Expect(err).To(HaveOccurred())
@@ -546,7 +546,7 @@ var _ = Describe("Edge Cases", func() {
 		Context("when context is canceled during tick loop", func() {
 			It("should stop tick loop gracefully", func() {
 				worker := &mockWorker{}
-				s := newSupervisorWithWorker(worker, supervisor.CollectorHealthConfig{
+				s := newSupervisorWithWorker(worker, nil, supervisor.CollectorHealthConfig{
 					ObservationTimeout: 1000 * time.Millisecond,
 					StaleThreshold:     10 * time.Second,
 					Timeout:            20 * time.Second,
@@ -568,7 +568,7 @@ var _ = Describe("Edge Cases", func() {
 		Context("when context is canceled before first tick", func() {
 			It("should stop immediately", func() {
 				worker := &mockWorker{}
-				s := newSupervisorWithWorker(worker, supervisor.CollectorHealthConfig{
+				s := newSupervisorWithWorker(worker, nil, supervisor.CollectorHealthConfig{
 					ObservationTimeout: 1000 * time.Millisecond,
 					StaleThreshold:     10 * time.Second,
 					Timeout:            20 * time.Second,
@@ -683,7 +683,7 @@ var _ = Describe("Edge Cases", func() {
 		Context("when data is stale but not timed out", func() {
 			It("should pause FSM without restarting collector", func() {
 
-				s := newSupervisorWithWorker(&mockWorker{}, supervisor.CollectorHealthConfig{
+				s := newSupervisorWithWorker(&mockWorker{}, nil, supervisor.CollectorHealthConfig{
 					StaleThreshold:     10 * time.Second,
 					Timeout:            20 * time.Second,
 					MaxRestartAttempts: 3,
@@ -851,7 +851,7 @@ var _ = Describe("Type Safety (Invariant I16)", func() {
 					observed: &mockObservedState{ID: "test-worker", CollectedAt: time.Now()},
 				}
 
-				s := newSupervisorWithWorker(worker, supervisor.CollectorHealthConfig{})
+				s := newSupervisorWithWorker(worker, nil, supervisor.CollectorHealthConfig{})
 
 				err := s.Tick(context.Background())
 				Expect(err).ToNot(HaveOccurred())
@@ -864,7 +864,7 @@ var _ = Describe("Type Safety (Invariant I16)", func() {
 					observed: &mockObservedState{ID: "test-worker", CollectedAt: time.Now()},
 				}
 
-				s := newSupervisorWithWorker(worker, supervisor.CollectorHealthConfig{})
+				s := newSupervisorWithWorker(worker, nil, supervisor.CollectorHealthConfig{})
 
 				err := s.Tick(context.Background())
 				Expect(err).ToNot(HaveOccurred())
