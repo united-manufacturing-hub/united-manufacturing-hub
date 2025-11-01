@@ -501,7 +501,9 @@ var _ = Describe("TriangularStore", func() {
 
 			Expect(snapshot.Identity["name"]).To(Equal("Container A"))
 			Expect(snapshot.Desired["config"]).To(Equal("value"))
-			Expect(snapshot.Observed["status"]).To(Equal("running"))
+			observedDoc, ok := snapshot.Observed.(persistence.Document)
+			Expect(ok).To(BeTrue())
+			Expect(observedDoc["status"]).To(Equal("running"))
 		})
 
 		Context("when parts are missing", func() {

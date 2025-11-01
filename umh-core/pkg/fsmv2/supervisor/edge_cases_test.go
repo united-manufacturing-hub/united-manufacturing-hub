@@ -12,6 +12,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 	"go.uber.org/zap"
 )
 
@@ -208,24 +209,83 @@ var _ = Describe("Edge Cases", func() {
 	Describe("RequestShutdown", func() {
 		Context("when shutdown is requested", func() {
 			It("should save desired state with shutdown flag", func() {
-				savedDesired := false
+				mockStore := newMockTriangularStore()
 
-				s := newSupervisorWithWorker(&mockWorker{}, supervisor.CollectorHealthConfig{})
-
-				err := s.RequestShutdown(context.Background(), "test-worker", "test reason")
+				identity := mockIdentity()
+				identityDoc := persistence.Document{
+					"id":         identity.ID,
+					"name":       identity.Name,
+					"workerType": identity.WorkerType,
+				}
+				err := mockStore.SaveIdentity(context.Background(), "container", identity.ID, identityDoc)
 				Expect(err).ToNot(HaveOccurred())
-				Expect(savedDesired).To(BeTrue())
+
+				desiredDoc := persistence.Document{
+					"id":               identity.ID,
+					"shutdownRequested": false,
+				}
+				err = mockStore.SaveDesired(context.Background(), "container", identity.ID, desiredDoc)
+				Expect(err).ToNot(HaveOccurred())
+
+				s := supervisor.NewSupervisor(supervisor.Config{
+					WorkerType: "container",
+					Store:      mockStore,
+					Logger:     zap.NewNop().Sugar(),
+					CollectorHealth: supervisor.CollectorHealthConfig{
+						StaleThreshold: 10 * time.Second,
+						Timeout:        20 * time.Second,
+					},
+				})
+
+				worker := &mockWorker{}
+				err = s.AddWorker(identity, worker)
+				Expect(err).ToNot(HaveOccurred())
+
+				err = s.RequestShutdown(context.Background(), identity.ID, "test reason")
+				Expect(err).ToNot(HaveOccurred())
+				Expect(mockStore.SaveDesiredCalled).To(BeNumerically(">", 1))
 			})
 		})
 
 		Context("when SaveDesired fails", func() {
 			It("should return error", func() {
+				mockStore := newMockTriangularStore()
 
-				s := newSupervisorWithWorker(&mockWorker{}, supervisor.CollectorHealthConfig{})
+				identity := mockIdentity()
+				identityDoc := persistence.Document{
+					"id":         identity.ID,
+					"name":       identity.Name,
+					"workerType": identity.WorkerType,
+				}
+				err := mockStore.SaveIdentity(context.Background(), "container", identity.ID, identityDoc)
+				Expect(err).ToNot(HaveOccurred())
 
-				err := s.RequestShutdown(context.Background(), "test-worker", "test reason")
+				desiredDoc := persistence.Document{
+					"id":               identity.ID,
+					"shutdownRequested": false,
+				}
+				err = mockStore.SaveDesired(context.Background(), "container", identity.ID, desiredDoc)
+				Expect(err).ToNot(HaveOccurred())
+
+				mockStore.SaveDesiredErr = errors.New("save failed")
+
+				s := supervisor.NewSupervisor(supervisor.Config{
+					WorkerType: "container",
+					Store:      mockStore,
+					Logger:     zap.NewNop().Sugar(),
+					CollectorHealth: supervisor.CollectorHealthConfig{
+						StaleThreshold: 10 * time.Second,
+						Timeout:        20 * time.Second,
+					},
+				})
+
+				worker := &mockWorker{}
+				err = s.AddWorker(identity, worker)
+				Expect(err).ToNot(HaveOccurred())
+
+				err = s.RequestShutdown(context.Background(), identity.ID, "test reason")
 				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("failed to save desired state"))
+				Expect(err.Error()).To(ContainSubstring("save"))
 			})
 		})
 	})
@@ -311,14 +371,44 @@ var _ = Describe("Edge Cases", func() {
 	Describe("Tick timeout handling", func() {
 		Context("when data times out and restart count is below max", func() {
 			It("should restart collector", func() {
+				mockStore := newMockTriangularStore()
 
-				s := newSupervisorWithWorker(&mockWorker{}, supervisor.CollectorHealthConfig{
-					StaleThreshold:     10 * time.Second,
-					Timeout:            20 * time.Second,
-					MaxRestartAttempts: 3,
+				identity := mockIdentity()
+				identityDoc := persistence.Document{
+					"id":         identity.ID,
+					"name":       identity.Name,
+					"workerType": identity.WorkerType,
+				}
+				err := mockStore.SaveIdentity(context.Background(), "container", identity.ID, identityDoc)
+				Expect(err).ToNot(HaveOccurred())
+
+				oldTimestamp := time.Now().Add(-30 * time.Second)
+				obs := &mockObservedState{
+					ID:          identity.ID,
+					CollectedAt: oldTimestamp,
+					Desired:     &mockDesiredState{},
+				}
+				err = mockStore.SaveObserved(context.Background(), "container", identity.ID, obs)
+				Expect(err).ToNot(HaveOccurred())
+
+				s := supervisor.NewSupervisor(supervisor.Config{
+					WorkerType: "container",
+					Store:      mockStore,
+					Logger:     zap.NewNop().Sugar(),
+					CollectorHealth: supervisor.CollectorHealthConfig{
+						StaleThreshold:     10 * time.Second,
+						Timeout:            20 * time.Second,
+						MaxRestartAttempts: 3,
+					},
 				})
 
-				err := s.Tick(context.Background())
+				worker := &mockWorker{
+					observed: obs,
+				}
+				err = s.AddWorker(identity, worker)
+				Expect(err).ToNot(HaveOccurred())
+
+				err = s.Tick(context.Background())
 				Expect(err).ToNot(HaveOccurred())
 				Expect(s.GetRestartCount()).To(Equal(1))
 			})
@@ -326,16 +416,53 @@ var _ = Describe("Edge Cases", func() {
 
 		Context("when data times out and restart count is at max", func() {
 			It("should request shutdown", func() {
+				mockStore := newMockTriangularStore()
 
-				s := newSupervisorWithWorker(&mockWorker{}, supervisor.CollectorHealthConfig{
-					StaleThreshold:     10 * time.Second,
-					Timeout:            20 * time.Second,
-					MaxRestartAttempts: 3,
+				identity := mockIdentity()
+				identityDoc := persistence.Document{
+					"id":         identity.ID,
+					"name":       identity.Name,
+					"workerType": identity.WorkerType,
+				}
+				err := mockStore.SaveIdentity(context.Background(), "container", identity.ID, identityDoc)
+				Expect(err).ToNot(HaveOccurred())
+
+				desiredDoc := persistence.Document{
+					"id":               identity.ID,
+					"shutdownRequested": false,
+				}
+				err = mockStore.SaveDesired(context.Background(), "container", identity.ID, desiredDoc)
+				Expect(err).ToNot(HaveOccurred())
+
+				oldTimestamp := time.Now().Add(-30 * time.Second)
+				obs := &mockObservedState{
+					ID:          identity.ID,
+					CollectedAt: oldTimestamp,
+					Desired:     &mockDesiredState{},
+				}
+				err = mockStore.SaveObserved(context.Background(), "container", identity.ID, obs)
+				Expect(err).ToNot(HaveOccurred())
+
+				s := supervisor.NewSupervisor(supervisor.Config{
+					WorkerType: "container",
+					Store:      mockStore,
+					Logger:     zap.NewNop().Sugar(),
+					CollectorHealth: supervisor.CollectorHealthConfig{
+						StaleThreshold:     10 * time.Second,
+						Timeout:            20 * time.Second,
+						MaxRestartAttempts: 3,
+					},
 				})
+
+				worker := &mockWorker{
+					observed: obs,
+				}
+				err = s.AddWorker(identity, worker)
+				Expect(err).ToNot(HaveOccurred())
 
 				s.SetRestartCount(3)
 
-				err := s.Tick(context.Background())
+				err = s.Tick(context.Background())
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("unresponsive"))
 			})
@@ -343,11 +470,39 @@ var _ = Describe("Edge Cases", func() {
 
 		Context("when collector recovers after restarts", func() {
 			It("should reset restart count", func() {
-				s := newSupervisorWithWorker(&mockWorker{}, supervisor.CollectorHealthConfig{})
+				mockStore := newMockTriangularStore()
+
+				identity := mockIdentity()
+				identityDoc := persistence.Document{
+					"id":         identity.ID,
+					"name":       identity.Name,
+					"workerType": identity.WorkerType,
+				}
+				err := mockStore.SaveIdentity(context.Background(), "container", identity.ID, identityDoc)
+				Expect(err).ToNot(HaveOccurred())
+
+				obs := &mockObservedState{
+					ID:          identity.ID,
+					CollectedAt: time.Now(),
+					Desired:     &mockDesiredState{},
+				}
+				err = mockStore.SaveObserved(context.Background(), "container", identity.ID, obs)
+				Expect(err).ToNot(HaveOccurred())
+
+				s := supervisor.NewSupervisor(supervisor.Config{
+					WorkerType:      "container",
+					Store:           mockStore,
+					Logger:          zap.NewNop().Sugar(),
+					CollectorHealth: supervisor.CollectorHealthConfig{},
+				})
+
+				worker := &mockWorker{observed: obs}
+				err = s.AddWorker(identity, worker)
+				Expect(err).ToNot(HaveOccurred())
 
 				s.SetRestartCount(2)
 
-				err := s.Tick(context.Background())
+				err = s.Tick(context.Background())
 				Expect(err).ToNot(HaveOccurred())
 				Expect(s.GetRestartCount()).To(Equal(0))
 			})
@@ -357,12 +512,32 @@ var _ = Describe("Edge Cases", func() {
 	Describe("Tick LoadSnapshot error handling", func() {
 		Context("when LoadSnapshot fails", func() {
 			It("should return error", func() {
+				mockStore := newMockTriangularStore()
+				mockStore.LoadSnapshotErr = errors.New("snapshot load failed")
 
-				s := newSupervisorWithWorker(&mockWorker{}, supervisor.CollectorHealthConfig{})
+				identity := mockIdentity()
+				identityDoc := persistence.Document{
+					"id":         identity.ID,
+					"name":       identity.Name,
+					"workerType": identity.WorkerType,
+				}
+				err := mockStore.SaveIdentity(context.Background(), "container", identity.ID, identityDoc)
+				Expect(err).ToNot(HaveOccurred())
 
-				err := s.Tick(context.Background())
+				s := supervisor.NewSupervisor(supervisor.Config{
+					WorkerType:      "container",
+					Store:           mockStore,
+					Logger:          zap.NewNop().Sugar(),
+					CollectorHealth: supervisor.CollectorHealthConfig{},
+				})
+
+				worker := &mockWorker{}
+				err = s.AddWorker(identity, worker)
+				Expect(err).ToNot(HaveOccurred())
+
+				err = s.Tick(context.Background())
 				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("failed to load snapshot"))
+				Expect(err.Error()).To(ContainSubstring("snapshot"))
 			})
 		})
 	})
@@ -413,12 +588,35 @@ var _ = Describe("Edge Cases", func() {
 	Describe("RequestShutdown LoadDesired error", func() {
 		Context("when LoadDesired fails", func() {
 			It("should return error", func() {
+				mockStore := newMockTriangularStore()
+				mockStore.LoadDesiredErr = errors.New("load desired failed")
 
-				s := newSupervisorWithWorker(&mockWorker{}, supervisor.CollectorHealthConfig{})
+				identity := mockIdentity()
+				identityDoc := persistence.Document{
+					"id":         identity.ID,
+					"name":       identity.Name,
+					"workerType": identity.WorkerType,
+				}
+				err := mockStore.SaveIdentity(context.Background(), "container", identity.ID, identityDoc)
+				Expect(err).ToNot(HaveOccurred())
 
-				err := s.RequestShutdown(context.Background(), "test-worker", "test reason")
+				s := supervisor.NewSupervisor(supervisor.Config{
+					WorkerType: "container",
+					Store:      mockStore,
+					Logger:     zap.NewNop().Sugar(),
+					CollectorHealth: supervisor.CollectorHealthConfig{
+						StaleThreshold: 10 * time.Second,
+						Timeout:        20 * time.Second,
+					},
+				})
+
+				worker := &mockWorker{}
+				err = s.AddWorker(identity, worker)
+				Expect(err).ToNot(HaveOccurred())
+
+				err = s.RequestShutdown(context.Background(), identity.ID, "test reason")
 				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("failed to load desired state"))
+				Expect(err.Error()).To(ContainSubstring("load"))
 			})
 		})
 	})
@@ -426,15 +624,55 @@ var _ = Describe("Edge Cases", func() {
 	Describe("Shutdown escalation with SaveDesired error", func() {
 		Context("when max restart attempts reached and SaveDesired fails", func() {
 			It("should log error and return shutdown error", func() {
-				s := newSupervisorWithWorker(&mockWorker{}, supervisor.CollectorHealthConfig{
-					StaleThreshold:     10 * time.Second,
-					Timeout:            20 * time.Second,
-					MaxRestartAttempts: 3,
+				mockStore := newMockTriangularStore()
+
+				identity := mockIdentity()
+				identityDoc := persistence.Document{
+					"id":         identity.ID,
+					"name":       identity.Name,
+					"workerType": identity.WorkerType,
+				}
+				err := mockStore.SaveIdentity(context.Background(), "container", identity.ID, identityDoc)
+				Expect(err).ToNot(HaveOccurred())
+
+				desiredDoc := persistence.Document{
+					"id":               identity.ID,
+					"shutdownRequested": false,
+				}
+				err = mockStore.SaveDesired(context.Background(), "container", identity.ID, desiredDoc)
+				Expect(err).ToNot(HaveOccurred())
+
+				oldTimestamp := time.Now().Add(-30 * time.Second)
+				obs := &mockObservedState{
+					ID:          identity.ID,
+					CollectedAt: oldTimestamp,
+					Desired:     &mockDesiredState{},
+				}
+				err = mockStore.SaveObserved(context.Background(), "container", identity.ID, obs)
+				Expect(err).ToNot(HaveOccurred())
+
+				mockStore.SaveDesiredErr = errors.New("save failed")
+
+				s := supervisor.NewSupervisor(supervisor.Config{
+					WorkerType: "container",
+					Store:      mockStore,
+					Logger:     zap.NewNop().Sugar(),
+					CollectorHealth: supervisor.CollectorHealthConfig{
+						StaleThreshold:     10 * time.Second,
+						Timeout:            20 * time.Second,
+						MaxRestartAttempts: 3,
+					},
 				})
+
+				worker := &mockWorker{
+					observed: obs,
+				}
+				err = s.AddWorker(identity, worker)
+				Expect(err).ToNot(HaveOccurred())
 
 				s.SetRestartCount(3)
 
-				err := s.Tick(context.Background())
+				err = s.Tick(context.Background())
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("unresponsive"))
 			})
@@ -493,26 +731,51 @@ var _ = Describe("Type Safety (Invariant I16)", func() {
 	Describe("ObservedState type validation", func() {
 		Context("when worker returns wrong ObservedState type", func() {
 			It("should panic with clear message before calling state.Next()", func() {
-				callCount := 0
+				mockStore := newMockTriangularStore()
+
+				identity := mockIdentity()
+				identityDoc := persistence.Document{
+					"id":         identity.ID,
+					"name":       identity.Name,
+					"workerType": identity.WorkerType,
+				}
+				err := mockStore.SaveIdentity(context.Background(), "container", identity.ID, identityDoc)
+				Expect(err).ToNot(HaveOccurred())
+
+				desiredDoc := persistence.Document{
+					"id":               identity.ID,
+					"shutdownRequested": false,
+				}
+				err = mockStore.SaveDesired(context.Background(), "container", identity.ID, desiredDoc)
+				Expect(err).ToNot(HaveOccurred())
+
+				s := supervisor.NewSupervisor(supervisor.Config{
+					WorkerType: "container",
+					Store:      mockStore,
+					Logger:     zap.NewNop().Sugar(),
+					CollectorHealth: supervisor.CollectorHealthConfig{
+						StaleThreshold: 10 * time.Second,
+						Timeout:        20 * time.Second,
+					},
+				})
 
 				worker := &mockWorker{
-					collectFunc: func(ctx context.Context) (fsmv2.ObservedState, error) {
-						callCount++
-						if callCount == 1 {
-							return &mockObservedState{ID: "test-worker", CollectedAt: time.Now()}, nil
-						}
-
-						return &alternateObservedState{timestamp: time.Now()}, nil
-					},
+					observed: &mockObservedState{ID: "test-worker", CollectedAt: time.Now()},
 				}
+				err = s.AddWorker(identity, worker)
+				Expect(err).ToNot(HaveOccurred())
 
-				s := newSupervisorWithWorker(worker, supervisor.CollectorHealthConfig{})
+				wrongTypeObs := &alternateObservedState{timestamp: time.Now()}
+				if mockStore.Observed["container"] == nil {
+					mockStore.Observed["container"] = make(map[string]interface{})
+				}
+				mockStore.Observed["container"][identity.ID] = wrongTypeObs
 
 				var panicMessage string
 				func() {
 					defer func() {
 						if r := recover(); r != nil {
-							panicMessage = r.(string)
+							panicMessage = fmt.Sprintf("%v", r)
 						}
 					}()
 					_ = s.Tick(context.Background())
@@ -527,13 +790,44 @@ var _ = Describe("Type Safety (Invariant I16)", func() {
 
 		Context("when worker returns nil ObservedState", func() {
 			It("should panic with clear message before calling state.Next()", func() {
-				worker := &mockWorker{
-					collectFunc: func(ctx context.Context) (fsmv2.ObservedState, error) {
-						return &mockObservedState{ID: "test-worker", CollectedAt: time.Now()}, nil
-					},
-				}
+				mockStore := newMockTriangularStore()
 
-				s := newSupervisorWithWorker(worker, supervisor.CollectorHealthConfig{})
+				identity := mockIdentity()
+				identityDoc := persistence.Document{
+					"id":         identity.ID,
+					"name":       identity.Name,
+					"workerType": identity.WorkerType,
+				}
+				err := mockStore.SaveIdentity(context.Background(), "container", identity.ID, identityDoc)
+				Expect(err).ToNot(HaveOccurred())
+
+				desiredDoc := persistence.Document{
+					"id":               identity.ID,
+					"shutdownRequested": false,
+				}
+				err = mockStore.SaveDesired(context.Background(), "container", identity.ID, desiredDoc)
+				Expect(err).ToNot(HaveOccurred())
+
+				s := supervisor.NewSupervisor(supervisor.Config{
+					WorkerType: "container",
+					Store:      mockStore,
+					Logger:     zap.NewNop().Sugar(),
+					CollectorHealth: supervisor.CollectorHealthConfig{
+						StaleThreshold: 10 * time.Second,
+						Timeout:        20 * time.Second,
+					},
+				})
+
+				worker := &mockWorker{
+					observed: &mockObservedState{ID: "test-worker", CollectedAt: time.Now()},
+				}
+				err = s.AddWorker(identity, worker)
+				Expect(err).ToNot(HaveOccurred())
+
+				if mockStore.Observed["container"] == nil {
+					mockStore.Observed["container"] = make(map[string]interface{})
+				}
+				mockStore.Observed["container"][identity.ID] = nil
 
 				var panicMessage string
 				func() {

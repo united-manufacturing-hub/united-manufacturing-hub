@@ -124,15 +124,15 @@ type CollectorHealth struct {
 // run in the same process and can share in-memory state. For distributed deployments,
 // the persistence layer would need to be replaced with a distributed storage backend.
 type Supervisor struct {
-	workerType            string                    // Type of workers managed (e.g., "container")
-	workers               map[string]*WorkerContext // workerID → worker context
-	mu                    sync.RWMutex              // Protects workers map
-	store                 *storage.TriangularStore  // State persistence layer (triangular model)
-	logger                *zap.SugaredLogger        // Logger for supervisor operations
-	tickInterval          time.Duration             // How often to evaluate state transitions
-	collectorHealth       CollectorHealth           // Collector health tracking
-	freshnessChecker      *FreshnessChecker         // Data freshness validator
-	expectedObservedTypes map[string]reflect.Type   // workerID → expected ObservedState type
+	workerType            string                            // Type of workers managed (e.g., "container")
+	workers               map[string]*WorkerContext         // workerID → worker context
+	mu                    sync.RWMutex                      // Protects workers map
+	store                 storage.TriangularStoreInterface  // State persistence layer (triangular model)
+	logger                *zap.SugaredLogger                // Logger for supervisor operations
+	tickInterval          time.Duration                     // How often to evaluate state transitions
+	collectorHealth       CollectorHealth                   // Collector health tracking
+	freshnessChecker      *FreshnessChecker                 // Data freshness validator
+	expectedObservedTypes map[string]reflect.Type           // workerID → expected ObservedState type
 }
 
 // WorkerContext encapsulates the runtime state for a single worker
@@ -187,8 +187,8 @@ type Config struct {
 	WorkerType string
 
 	// Store persists FSM state (identity, desired, observed) using triangular model.
-	// Required - no default. Use storage.NewTriangularStore(basicStore, registry).
-	Store *storage.TriangularStore
+	// Required - no default. Use storage.NewTriangularStore(basicStore, registry) or a mock.
+	Store storage.TriangularStoreInterface
 
 	// Logger for supervisor operations.
 	// Required - no default (use zap.NewNop().Sugar() for tests).
@@ -498,12 +498,33 @@ func (s *Supervisor) RestartCollector(ctx context.Context, workerID string) erro
 
 func (s *Supervisor) CheckDataFreshness(snapshot *fsmv2.Snapshot) bool {
 	var age time.Duration
+	var collectedAt time.Time
+	var hasTimestamp bool
+
 	if timestampProvider, ok := snapshot.Observed.(interface{ GetTimestamp() time.Time }); ok {
-		age = time.Since(timestampProvider.GetTimestamp())
-	} else {
-		s.logger.Warn("Snapshot.Observed does not implement GetTimestamp(), cannot check freshness")
-		return true // Cannot verify freshness without timestamp
+		collectedAt = timestampProvider.GetTimestamp()
+		hasTimestamp = true
+	} else if doc, ok := snapshot.Observed.(persistence.Document); ok {
+		if ts, exists := doc["collectedAt"]; exists {
+			if timestamp, ok := ts.(time.Time); ok {
+				collectedAt = timestamp
+				hasTimestamp = true
+			} else if timeStr, ok := ts.(string); ok {
+				var err error
+				collectedAt, err = time.Parse(time.RFC3339Nano, timeStr)
+				if err == nil {
+					hasTimestamp = true
+				}
+			}
+		}
 	}
+
+	if !hasTimestamp {
+		s.logger.Warn("Snapshot.Observed does not implement GetTimestamp() or have collectedAt field, cannot check freshness")
+		return true
+	}
+
+	age = time.Since(collectedAt)
 
 	// GRACEFUL DEGRADATION (Invariant I15): Tight timeouts cause pausing, not crashes
 	// If timeouts are configured too tight (e.g., ObservationTimeout < actual operation time),

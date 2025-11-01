@@ -23,7 +23,7 @@ const (
 type CollectorConfig struct {
 	Worker              fsmv2.Worker
 	Identity            fsmv2.Identity
-	Store               *storage.TriangularStore
+	Store               storage.TriangularStoreInterface
 	Logger              *zap.SugaredLogger
 	ObservationInterval time.Duration
 	ObservationTimeout  time.Duration

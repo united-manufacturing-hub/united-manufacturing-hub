@@ -411,7 +411,7 @@ func (ts *TriangularStore) LoadObserved(ctx context.Context, workerType string, 
 type Snapshot struct {
 	Identity persistence.Document
 	Desired  persistence.Document
-	Observed persistence.Document
+	Observed interface{} // Can be persistence.Document or any ObservedState type (for type validation)
 }
 
 // LoadSnapshot atomically loads all three parts of the triangular model.

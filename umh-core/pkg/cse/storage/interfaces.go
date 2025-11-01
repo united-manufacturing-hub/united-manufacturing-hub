@@ -64,6 +64,10 @@ type TriangularStoreInterface interface {
 	// DeleteWorker removes all three parts of a worker atomically.
 	// Used for cleanup when worker is permanently removed.
 	DeleteWorker(ctx context.Context, workerType string, id string) error
+
+	// Registry returns the collection registry for metadata access.
+	// Used for auto-registration and metadata queries.
+	Registry() *Registry
 }
 
 // Compile-time check that TriangularStore implements TriangularStoreInterface
