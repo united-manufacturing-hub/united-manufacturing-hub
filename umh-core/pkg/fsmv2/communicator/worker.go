@@ -215,7 +215,9 @@ func (w *CommunicatorWorker) CollectObservedState(ctx context.Context) (fsmv2.Ob
 //
 // This method never returns an error for the communicator worker.
 func (w *CommunicatorWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
-	return &snapshot.CommunicatorDesiredState{}, nil
+	return &snapshot.CommunicatorDesiredState{
+		Registry: w.GetRegistry(),
+	}, nil
 }
 
 // GetInitialState returns the state the FSM should start in.

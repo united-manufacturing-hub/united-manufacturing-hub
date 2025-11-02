@@ -23,7 +23,8 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/communicator"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/communicator/transport"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/communicator/snapshot"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/communicator/state"
 )
 
 func TestCommunicator(t *testing.T) {
@@ -33,35 +34,22 @@ func TestCommunicator(t *testing.T) {
 
 var _ = Describe("CommunicatorWorker", func() {
 	var (
-		worker       *communicator.CommunicatorWorker
-		ctx          context.Context
+		worker        *communicator.CommunicatorWorker
+		ctx           context.Context
 		mockTransport *MockTransport
-		inboundChan  chan *transport.UMHMessage
-		outboundChan chan *transport.UMHMessage
-		logger       *zap.SugaredLogger
+		logger        *zap.SugaredLogger
 	)
 
 	BeforeEach(func() {
 		ctx = context.Background()
 		logger = zap.NewNop().Sugar()
 		mockTransport = NewMockTransport()
-		inboundChan = make(chan *transport.UMHMessage, 100)
-		outboundChan = make(chan *transport.UMHMessage, 100)
 		worker = communicator.NewCommunicatorWorker(
 			"test-id",
-			"https://relay.example.com",
-			inboundChan,
-			outboundChan,
+			"Test Communicator",
 			mockTransport,
-			"instance-uuid",
-			"auth-token",
 			logger,
 		)
-	})
-
-	AfterEach(func() {
-		close(inboundChan)
-		close(outboundChan)
 	})
 
 	Describe("Worker interface implementation", func() {
@@ -73,37 +61,32 @@ var _ = Describe("CommunicatorWorker", func() {
 	Describe("GetInitialState", func() {
 		It("should return StoppedState", func() {
 			initialState := worker.GetInitialState()
-			Expect(initialState).To(BeAssignableToTypeOf(&communicator.StoppedState{}))
+			Expect(initialState).To(BeAssignableToTypeOf(&state.StoppedState{}))
 		})
 	})
 
 	Describe("DeriveDesiredState", func() {
 		Context("with nil spec", func() {
-			It("should return default desired state", func() {
+			It("should return default desired state with Registry populated", func() {
 				desired, err := worker.DeriveDesiredState(nil)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(desired).NotTo(BeNil())
 
-				communicatorDesired := desired.(*communicator.CommunicatorDesiredState)
+				communicatorDesired := desired.(*snapshot.CommunicatorDesiredState)
 				Expect(communicatorDesired.ShutdownRequested()).To(BeFalse())
+				Expect(communicatorDesired.Registry).NotTo(BeNil())
 			})
 		})
 	})
 
 	Describe("CollectObservedState", func() {
-		It("should return observed state with channel queue sizes", func() {
-			// Add some messages to channels
-			outboundChan <- &transport.UMHMessage{InstanceUUID: "test", Content: "msg1"}
-			outboundChan <- &transport.UMHMessage{InstanceUUID: "test", Content: "msg2"}
-
+		It("should return observed state", func() {
 			observed, err := worker.CollectObservedState(ctx)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(observed).NotTo(BeNil())
 
-			communicatorObserved := observed.(*communicator.CommunicatorObservedState)
+			communicatorObserved := observed.(snapshot.CommunicatorObservedState)
 			Expect(communicatorObserved.CollectedAt).NotTo(BeZero())
-			Expect(communicatorObserved.GetOutboundQueueSize()).To(Equal(2))
-			Expect(communicatorObserved.GetInboundQueueSize()).To(Equal(0))
 		})
 	})
 })

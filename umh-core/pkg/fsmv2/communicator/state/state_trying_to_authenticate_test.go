@@ -21,16 +21,17 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/communicator"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/communicator/snapshot"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/communicator/state"
 	transportpkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/communicator/transport"
 )
 
 var _ = Describe("TryingToAuthenticateState", func() {
 	var (
-		state         *state.TryingToAuthenticateState
-		snapshot      fsmv2.Snapshot
-		desired       *communicator.CommunicatorDesiredState
-		observed      *communicator.CommunicatorObservedState
+		testState     *state.TryingToAuthenticateState
+		snap          fsmv2.Snapshot
+		desired       *snapshot.CommunicatorDesiredState
+		observed      *snapshot.CommunicatorObservedState
 		worker        *communicator.CommunicatorWorker
 		mockTransport *MockTransport
 		inboundChan   chan *transportpkg.UMHMessage
@@ -45,17 +46,13 @@ var _ = Describe("TryingToAuthenticateState", func() {
 		outboundChan = make(chan *transportpkg.UMHMessage, 10)
 		worker = communicator.NewCommunicatorWorker(
 			"test-communicator",
-			"https://relay.example.com",
-			inboundChan,
-			outboundChan,
+			"Test Communicator",
 			mockTransport,
-			"test-uuid",
-			"test-token",
 			logger,
 		)
-		state = &communicator.TryingToAuthenticateState{Worker: worker}
-		desired = &communicator.CommunicatorDesiredState{}
-		observed = &communicator.CommunicatorObservedState{}
+		testState = &state.TryingToAuthenticateState{}
+		desired = &snapshot.CommunicatorDesiredState{}
+		observed = &snapshot.CommunicatorObservedState{}
 	})
 
 	Describe("Next", func() {
