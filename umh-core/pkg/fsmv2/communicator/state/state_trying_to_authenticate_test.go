@@ -20,7 +20,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/communicator/state"
 )
 
-var _ = XDescribe("TryingToAuthenticateState", func() {
+var _ = Describe("TryingToAuthenticateState", func() {
 	var (
 		stateObj *state.TryingToAuthenticateState
 	)
@@ -30,5 +30,7 @@ var _ = XDescribe("TryingToAuthenticateState", func() {
 		_ = stateObj
 	})
 
-	// Tests skipped: Need registry pattern updates
+	PIt("should transition to appropriate state based on authentication result", func() {
+		// Tests pending: Need registry pattern updates
+	})
 })

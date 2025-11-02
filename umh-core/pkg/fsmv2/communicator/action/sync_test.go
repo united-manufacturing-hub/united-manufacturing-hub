@@ -20,7 +20,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/communicator/action"
 )
 
-var _ = XDescribe("SyncAction", func() {
+var _ = Describe("SyncAction", func() {
 	var (
 		act *action.SyncAction
 	)
@@ -30,5 +30,7 @@ var _ = XDescribe("SyncAction", func() {
 		_ = act
 	})
 
-	// Tests skipped: Need registry pattern updates
+	PIt("should execute sync operation", func() {
+		// Tests pending: Need registry pattern updates
+	})
 })

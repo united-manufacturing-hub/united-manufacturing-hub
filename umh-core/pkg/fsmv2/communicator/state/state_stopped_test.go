@@ -33,10 +33,6 @@ var _ = Describe("StoppedState", func() {
 	})
 
 	Describe("Next", func() {
-		XContext("when shutdown is requested", func() {
-			// Skip: Cannot test private shutdownRequested field from external package
-		})
-
 		Context("when shutdown is not requested", func() {
 			BeforeEach(func() {
 				snap = snapshot.CommunicatorSnapshot{

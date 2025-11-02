@@ -20,7 +20,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/communicator/state"
 )
 
-var _ = XDescribe("SyncingState", func() {
+var _ = Describe("SyncingState", func() {
 	var (
 		stateObj *state.SyncingState
 	)
@@ -30,5 +30,7 @@ var _ = XDescribe("SyncingState", func() {
 		_ = stateObj
 	})
 
-	// Tests skipped: Need registry pattern updates
+	PIt("should sync messages and transition to appropriate state", func() {
+		// Tests pending: Need registry pattern updates
+	})
 })

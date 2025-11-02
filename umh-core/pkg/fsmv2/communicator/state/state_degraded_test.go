@@ -37,10 +37,6 @@ var _ = Describe("DegradedState", func() {
 	})
 
 	Describe("Next", func() {
-		XContext("when shutdown is requested", func() {
-			// Skip: Cannot test private shutdownRequested field from external package
-		})
-
 		Context("when sync recovers", func() {
 			var snap snapshot.CommunicatorSnapshot
 
