@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/communicator/registry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/communicator/transport"
 )
 
@@ -51,7 +52,7 @@ type SyncAction struct {
 	JWTToken string
 
 	MessagesToBePushed []*transport.UMHMessage
-	transport          transport.Transport
+	registry           *registry.CommunicatorRegistry
 }
 
 // TODO: docstring
@@ -60,16 +61,15 @@ type SyncActionResult struct {
 	PulledMessages []*transport.UMHMessage
 }
 
-// NewSyncAction creates a new sync action with the given transport and channels.
+// NewSyncAction creates a new sync action with the given registry.
 //
 // Parameters:
-//   - transport: HTTP transport for pull/push operations
-//   - inboundChan: Channel for messages received from backend
-//   - outboundChan: Channel for messages to send to backend
-func NewSyncAction(transport transport.Transport, JWTToken string) *SyncAction {
+//   - registry: Registry providing access to transport and other tools
+//   - JWTToken: JWT token for authentication
+func NewSyncAction(reg *registry.CommunicatorRegistry, JWTToken string) *SyncAction {
 	return &SyncAction{
-		transport: transport,
-		JWTToken:  JWTToken,
+		registry: reg,
+		JWTToken: JWTToken,
 	}
 }
 
@@ -96,7 +96,7 @@ func NewSyncAction(transport transport.Transport, JWTToken string) *SyncAction {
 // This allows the sync loop to continue even if some operations fail.
 func (a *SyncAction) Execute(ctx context.Context) error {
 	// 1. Pull messages from backend
-	messages, err := a.transport.Pull(ctx, a.JWTToken)
+	messages, err := a.registry.GetTransport().Pull(ctx, a.JWTToken)
 	if err != nil {
 		return fmt.Errorf("pull failed: %w", err)
 	}
@@ -106,7 +106,7 @@ func (a *SyncAction) Execute(ctx context.Context) error {
 
 	// 3. Push batch to backend if we have messages
 	if len(a.MessagesToBePushed) > 0 {
-		if err := a.transport.Push(ctx, a.JWTToken, a.MessagesToBePushed); err != nil {
+		if err := a.registry.GetTransport().Push(ctx, a.JWTToken, a.MessagesToBePushed); err != nil {
 			return fmt.Errorf("push failed: %w", err)
 		}
 	}

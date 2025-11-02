@@ -12,18 +12,30 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package communicator
+package registry
 
 import (
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/communicator/registry"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/communicator/transport"
 	"go.uber.org/zap"
 )
 
-// CommunicatorRegistry is re-exported from registry package for backward compatibility.
-type CommunicatorRegistry = registry.CommunicatorRegistry
+// CommunicatorRegistry provides access to tools needed by communicator worker actions.
+// It extends BaseRegistry with communicator-specific tools (transport).
+type CommunicatorRegistry struct {
+	*fsmv2.BaseRegistry
+	transport transport.Transport
+}
 
 // NewCommunicatorRegistry creates a new registry for the communicator worker.
-func NewCommunicatorRegistry(t transport.Transport, logger *zap.SugaredLogger) *CommunicatorRegistry {
-	return registry.NewCommunicatorRegistry(t, logger)
+func NewCommunicatorRegistry(transport transport.Transport, logger *zap.SugaredLogger) *CommunicatorRegistry {
+	return &CommunicatorRegistry{
+		BaseRegistry: fsmv2.NewBaseRegistry(logger),
+		transport:    transport,
+	}
+}
+
+// GetTransport returns the transport for HTTP communication.
+func (r *CommunicatorRegistry) GetTransport() transport.Transport {
+	return r.transport
 }

@@ -1,0 +1,102 @@
+// Copyright 2025 UMH Systems GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package registry_test
+
+import (
+	"context"
+	"testing"
+
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+	"go.uber.org/zap"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/communicator/registry"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/communicator/transport"
+)
+
+func TestRegistry(t *testing.T) {
+	RegisterFailHandler(Fail)
+	RunSpecs(t, "Registry Suite")
+}
+
+type mockTransport struct{}
+
+func (m *mockTransport) Authenticate(_ context.Context, _ transport.AuthRequest) (transport.AuthResponse, error) {
+	return transport.AuthResponse{}, nil
+}
+func (m *mockTransport) Pull(_ context.Context, _ string) ([]*transport.UMHMessage, error) {
+	return nil, nil
+}
+func (m *mockTransport) Push(_ context.Context, _ string, _ []*transport.UMHMessage) error {
+	return nil
+}
+func (m *mockTransport) Close() {}
+
+var _ = Describe("CommunicatorRegistry", func() {
+	var (
+		mt     transport.Transport
+		logger *zap.SugaredLogger
+	)
+
+	BeforeEach(func() {
+		mt = &mockTransport{}
+		logger = zap.NewNop().Sugar()
+	})
+
+	Describe("NewCommunicatorRegistry", func() {
+		Context("when creating a new registry", func() {
+			It("should return a non-nil registry", func() {
+				reg := registry.NewCommunicatorRegistry(mt, logger)
+				Expect(reg).NotTo(BeNil())
+			})
+
+			It("should store the transport", func() {
+				reg := registry.NewCommunicatorRegistry(mt, logger)
+				Expect(reg.GetTransport()).To(Equal(mt))
+			})
+
+			It("should store the logger", func() {
+				reg := registry.NewCommunicatorRegistry(mt, logger)
+				Expect(reg.GetLogger()).To(Equal(logger))
+			})
+		})
+	})
+
+	Describe("GetTransport", func() {
+		It("should return the transport passed to the constructor", func() {
+			reg := registry.NewCommunicatorRegistry(mt, logger)
+			Expect(reg.GetTransport()).To(Equal(mt))
+		})
+	})
+
+	Describe("GetLogger", func() {
+		It("should return the logger inherited from BaseRegistry", func() {
+			reg := registry.NewCommunicatorRegistry(mt, logger)
+			Expect(reg.GetLogger()).To(Equal(logger))
+		})
+	})
+
+	Describe("Registry interface implementation", func() {
+		It("should implement fsmv2.Registry interface", func() {
+			reg := registry.NewCommunicatorRegistry(mt, logger)
+			var _ fsmv2.Registry = reg
+			Expect(reg).To(Satisfy(func(r interface{}) bool {
+				_, ok := r.(fsmv2.Registry)
+				return ok
+			}))
+		})
+	})
+})
