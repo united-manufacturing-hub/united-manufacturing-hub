@@ -44,7 +44,7 @@ func (s *SyncingState) Next(snapshot snapshot.CommunicatorSnapshot) (BaseCommuni
 	}
 
 	syncAction := action.NewSyncAction(
-		desired.Registry, observed.JWTToken)
+		desired.Dependencies, observed.JWTToken)
 
 	return s, fsmv2.SignalNone, syncAction
 }

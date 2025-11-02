@@ -18,9 +18,16 @@ import (
 	"context"
 	"time"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/communicator/registry"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/communicator/transport"
 )
+
+// CommunicatorDependencies represents the dependencies needed by communicator actions.
+// This is an interface to avoid import cycles (action -> communicator -> snapshot -> action).
+type CommunicatorDependencies interface {
+	fsmv2.Dependencies
+	GetTransport() transport.Transport
+}
 
 const AuthenticateActionName = "authenticate"
 
@@ -83,7 +90,7 @@ type AuthenticateAction struct {
 	InstanceUUID string
 	AuthToken    string
 
-	registry *registry.CommunicatorRegistry
+	dependencies CommunicatorDependencies
 }
 
 type AuthenticateActionResult struct {
@@ -94,19 +101,19 @@ type AuthenticateActionResult struct {
 // NewAuthenticateAction creates a new authentication action.
 //
 // Parameters:
-//   - registry: Registry providing access to transport and other tools
+//   - dependencies: Dependencies providing access to transport and other tools
 //   - relayURL: Relay server endpoint (e.g., "https://relay.umh.app")
 //   - instanceUUID: Identifies this Edge instance (from config)
 //   - authToken: Pre-shared secret for authentication (from config)
 //
 // The HTTP client is configured with a 30-second timeout to prevent
 // indefinite hangs during authentication.
-func NewAuthenticateAction(reg *registry.CommunicatorRegistry, relayURL, instanceUUID, authToken string) *AuthenticateAction {
+func NewAuthenticateAction(deps CommunicatorDependencies, relayURL, instanceUUID, authToken string) *AuthenticateAction {
 	return &AuthenticateAction{
 		RelayURL:     relayURL,
 		InstanceUUID: instanceUUID,
 		AuthToken:    authToken,
-		registry:     reg,
+		dependencies: deps,
 	}
 }
 
@@ -154,7 +161,7 @@ func (a *AuthenticateAction) Execute(ctx context.Context) error {
 		Email:        a.AuthToken,
 	}
 
-	authResp, err := a.registry.GetTransport().Authenticate(ctx, authReq)
+	authResp, err := a.dependencies.GetTransport().Authenticate(ctx, authReq)
 	if err != nil {
 		return err
 	}

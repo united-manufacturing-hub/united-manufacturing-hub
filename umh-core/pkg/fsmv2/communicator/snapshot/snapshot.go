@@ -18,9 +18,15 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/communicator/registry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/communicator/transport"
 )
+
+// CommunicatorDependencies represents the dependencies needed by communicator actions.
+// This is an interface to avoid import cycles (communicator -> snapshot -> communicator).
+type CommunicatorDependencies interface {
+	fsmv2.Dependencies
+	GetTransport() transport.Transport
+}
 
 type CommunicatorSnapshot struct {
 	Identity fsmv2.Identity
@@ -40,11 +46,11 @@ type CommunicatorDesiredState struct {
 	// Messages
 	MessagesToBeSent []transport.UMHMessage
 
-	// Registry (passed from worker to states for action creation)
-	Registry *registry.CommunicatorRegistry
+	// Dependencies (passed from worker to states for action creation)
+	Dependencies CommunicatorDependencies
 
 	// Transport (passed from worker to states for action creation)
-	// Deprecated: Use Registry instead
+	// Deprecated: Use Dependencies instead
 	Transport transport.Transport
 }
 

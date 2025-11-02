@@ -38,7 +38,7 @@ func (s *TryingToAuthenticateState) Next(snapshot snapshot.CommunicatorSnapshot)
 
 	// Create AuthenticateAction with registry from snapshot
 	authenticateAction := action.NewAuthenticateAction(
-		desired.Registry,
+		desired.Dependencies,
 		desired.RelayURL,
 		desired.InstanceUUID,
 		desired.AuthToken,

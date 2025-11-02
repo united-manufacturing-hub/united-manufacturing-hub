@@ -18,7 +18,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/communicator/registry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/communicator/transport"
 )
 
@@ -52,7 +51,7 @@ type SyncAction struct {
 	JWTToken string
 
 	MessagesToBePushed []*transport.UMHMessage
-	registry           *registry.CommunicatorRegistry
+	dependencies       CommunicatorDependencies
 }
 
 // TODO: docstring.
@@ -61,15 +60,15 @@ type SyncActionResult struct {
 	PulledMessages []*transport.UMHMessage
 }
 
-// NewSyncAction creates a new sync action with the given registry.
+// NewSyncAction creates a new sync action with the given dependencies.
 //
 // Parameters:
-//   - registry: Registry providing access to transport and other tools
+//   - dependencies: Dependencies providing access to transport and other tools
 //   - jwtToken: JWT token for authentication
-func NewSyncAction(reg *registry.CommunicatorRegistry, jwtToken string) *SyncAction {
+func NewSyncAction(deps CommunicatorDependencies, jwtToken string) *SyncAction {
 	return &SyncAction{
-		registry: reg,
-		JWTToken: jwtToken,
+		dependencies: deps,
+		JWTToken:     jwtToken,
 	}
 }
 
@@ -96,7 +95,7 @@ func NewSyncAction(reg *registry.CommunicatorRegistry, jwtToken string) *SyncAct
 // This allows the sync loop to continue even if some operations fail.
 func (a *SyncAction) Execute(ctx context.Context) error {
 	// 1. Pull messages from backend
-	messages, err := a.registry.GetTransport().Pull(ctx, a.JWTToken)
+	messages, err := a.dependencies.GetTransport().Pull(ctx, a.JWTToken)
 	if err != nil {
 		return fmt.Errorf("pull failed: %w", err)
 	}
@@ -106,7 +105,7 @@ func (a *SyncAction) Execute(ctx context.Context) error {
 
 	// 3. Push batch to backend if we have messages
 	if len(a.MessagesToBePushed) > 0 {
-		if err := a.registry.GetTransport().Push(ctx, a.JWTToken, a.MessagesToBePushed); err != nil {
+		if err := a.dependencies.GetTransport().Push(ctx, a.JWTToken, a.MessagesToBePushed); err != nil {
 			return fmt.Errorf("push failed: %w", err)
 		}
 	}

@@ -28,17 +28,17 @@ import (
 
 var _ = Describe("AuthenticateAction", func() {
 	var (
-		act      *action.AuthenticateAction
-		registry *communicator.CommunicatorRegistry
-		logger   *zap.SugaredLogger
+		act          *action.AuthenticateAction
+		dependencies *communicator.CommunicatorDependencies
+		logger       *zap.SugaredLogger
 	)
 
 	BeforeEach(func() {
 		logger = zap.NewNop().Sugar()
 		mockTransport := &mockTransport{}
-		registry = communicator.NewCommunicatorRegistry(mockTransport, logger)
+		dependencies = communicator.NewCommunicatorDependencies(mockTransport, logger)
 		act = action.NewAuthenticateAction(
-			registry,
+			dependencies,
 			"https://relay.example.com",
 			"test-uuid",
 			"test-token",

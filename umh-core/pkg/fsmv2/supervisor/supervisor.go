@@ -271,6 +271,9 @@ func NewSupervisor(cfg Config) *Supervisor {
 	// If custom collection names needed, can still register manually before creating Supervisor.
 	//
 	// INSPIRED BY: Rails ActiveRecord conventions, HTTP router auto-registration patterns.
+	//
+	// Note: This uses storage.Registry from the CSE package for collection metadata,
+	// which is unrelated to fsmv2.Dependencies (worker dependency injection).
 	registry := cfg.Store.Registry()
 
 	identityCollectionName := fmt.Sprintf("%s_identity", cfg.WorkerType)

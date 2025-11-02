@@ -128,7 +128,7 @@ const WorkerType = "communicator"
 //
 // These dependencies are passed to actions when created by states.
 type CommunicatorWorker struct {
-	*fsmv2.BaseWorker[*CommunicatorRegistry]
+	*fsmv2.BaseWorker[*CommunicatorDependencies]
 	identity fsmv2.Identity
 
 	// Temporary State
@@ -166,10 +166,10 @@ func NewCommunicatorWorker(
 	transportParam transport.Transport,
 	logger *zap.SugaredLogger,
 ) *CommunicatorWorker {
-	registry := NewCommunicatorRegistry(transportParam, logger)
+	dependencies := NewCommunicatorDependencies(transportParam, logger)
 
 	return &CommunicatorWorker{
-		BaseWorker: fsmv2.NewBaseWorker(registry),
+		BaseWorker: fsmv2.NewBaseWorker(dependencies),
 		identity: fsmv2.Identity{
 			ID:         id,
 			Name:       name,
@@ -215,7 +215,7 @@ func (w *CommunicatorWorker) CollectObservedState(ctx context.Context) (fsmv2.Ob
 // This method never returns an error for the communicator worker.
 func (w *CommunicatorWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
 	return &snapshot.CommunicatorDesiredState{
-		Registry: w.GetRegistry(),
+		Dependencies: w.GetDependencies(),
 	}, nil
 }
 
