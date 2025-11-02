@@ -59,7 +59,7 @@ func (m *MockTransport) Authenticate(ctx context.Context, req transportpkg.AuthR
 	return transportpkg.AuthResponse{Token: m.token}, nil
 }
 
-func (m *MockTransport) Pull(ctx context.Context) ([]*transportpkg.UMHMessage, error) {
+func (m *MockTransport) Pull(ctx context.Context, JWTToken string) ([]*transportpkg.UMHMessage, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -72,7 +72,7 @@ func (m *MockTransport) Pull(ctx context.Context) ([]*transportpkg.UMHMessage, e
 	return m.pullMessages, nil
 }
 
-func (m *MockTransport) Push(ctx context.Context, messages []*transportpkg.UMHMessage) error {
+func (m *MockTransport) Push(ctx context.Context, JWTToken string, messages []*transportpkg.UMHMessage) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -86,19 +86,8 @@ func (m *MockTransport) Push(ctx context.Context, messages []*transportpkg.UMHMe
 	return nil
 }
 
-func (m *MockTransport) UpdateToken(token string) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	m.token = token
-}
-
-func (m *MockTransport) ResetClient() {
+func (m *MockTransport) Close() {
 	// No-op for mock
-}
-
-func (m *MockTransport) Close() error {
-	return nil
 }
 
 func (m *MockTransport) SetAuthenticateError(err error) {
