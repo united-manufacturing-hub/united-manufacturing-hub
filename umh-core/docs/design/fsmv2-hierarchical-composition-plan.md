@@ -1832,7 +1832,7 @@ Related to FSMv2 hierarchical composition implementation plan."
 ### Task 7: Integration Testing
 
 **Files:**
-- Create: `/Users/jeremytheocharis/umh-git/umh-core-eng-3806/umh-core/pkg/fsmv2/workers/protocolconverter/integration_test.go`
+- Create: `pkg/fsmv2/workers/protocolconverter/integration_test.go`
 
 **Step 1: Create integration test**
 
@@ -1924,7 +1924,7 @@ func createTestStore(t *testing.T, workerType string) storage.TriangularStoreInt
 **Step 2: Run integration tests**
 
 ```bash
-cd /Users/jeremytheocharis/umh-git/umh-core-eng-3806/umh-core
+cd umh-core
 go test ./pkg/fsmv2/workers/protocolconverter/... -v -tags=integration
 ```
 
@@ -1947,7 +1947,7 @@ Related to FSMv2 hierarchical composition implementation plan."
 ### Task 8: Update FSMv2 Documentation
 
 **Files:**
-- Update: `/Users/jeremytheocharis/umh-git/umh-core-eng-3806/umh-core/pkg/fsmv2/README.md`
+- Update: `pkg/fsmv2/README.md`
 
 **Step 1: Add troubleshooting section**
 
@@ -2021,7 +2021,7 @@ Related to FSMv2 hierarchical composition implementation plan."
 **Step 1: Run all tests**
 
 ```bash
-cd /Users/jeremytheocharis/umh-git/umh-core-eng-3806/umh-core
+cd umh-core
 make test
 ```
 
