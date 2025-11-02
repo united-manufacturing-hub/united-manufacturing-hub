@@ -15,8 +15,6 @@
 package communicator_test
 
 import (
-	"testing"
-
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"go.uber.org/zap"
@@ -25,10 +23,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/communicator"
 )
 
-func TestCommunicatorRegistry(t *testing.T) {
-	RegisterFailHandler(Fail)
-	RunSpecs(t, "CommunicatorRegistry Suite")
-}
+// Test suite is registered in worker_test.go to avoid duplicate RunSpecs
 
 var _ = Describe("CommunicatorRegistry", func() {
 	var (
