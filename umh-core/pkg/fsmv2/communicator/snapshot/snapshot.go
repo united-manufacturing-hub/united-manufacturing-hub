@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/communicator/registry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/communicator/transport"
 )
 
@@ -39,7 +40,11 @@ type CommunicatorDesiredState struct {
 	// Messages
 	MessagesToBeSent []transport.UMHMessage
 
+	// Registry (passed from worker to states for action creation)
+	Registry *registry.CommunicatorRegistry
+
 	// Transport (passed from worker to states for action creation)
+	// DEPRECATED: Use Registry instead
 	Transport transport.Transport
 }
 

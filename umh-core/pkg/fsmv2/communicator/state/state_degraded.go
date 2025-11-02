@@ -36,8 +36,8 @@ func (s *DegradedState) Next(snapshot snapshot.CommunicatorSnapshot) (BaseCommun
 		return &SyncingState{}, fsmv2.SignalNone, nil
 	}
 
-	// Create SyncAction with transport and channels (retry sync in degraded state)
-	syncAction := action.NewSyncAction(desired.Transport, observed.JWTToken)
+	// Create SyncAction with registry (retry sync in degraded state)
+	syncAction := action.NewSyncAction(desired.Registry, observed.JWTToken)
 	return s, fsmv2.SignalNone, syncAction
 }
 

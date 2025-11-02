@@ -36,9 +36,9 @@ func (s *TryingToAuthenticateState) Next(snapshot snapshot.CommunicatorSnapshot)
 		return &SyncingState{}, fsmv2.SignalNone, nil
 	}
 
-	// Create AuthenticateAction with proper dependencies
+	// Create AuthenticateAction with registry from snapshot
 	authenticateAction := action.NewAuthenticateAction(
-		desired.Transport,
+		desired.Registry,
 		desired.RelayURL,
 		desired.InstanceUUID,
 		desired.AuthToken,
