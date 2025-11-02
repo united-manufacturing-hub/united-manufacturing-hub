@@ -43,6 +43,7 @@ func (s *TryingToAuthenticateState) Next(snapshot snapshot.CommunicatorSnapshot)
 		desired.InstanceUUID,
 		desired.AuthToken,
 	)
+
 	return s, fsmv2.SignalNone, authenticateAction
 }
 

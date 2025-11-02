@@ -10,11 +10,11 @@ import (
 type Signal int
 
 const (
-	// SignalNone indicates normal operation, no special action needed
+	// SignalNone indicates normal operation, no special action needed.
 	SignalNone Signal = iota
-	// SignalNeedsRemoval tells supervisor this worker has completed cleanup and can be removed
+	// SignalNeedsRemoval tells supervisor this worker has completed cleanup and can be removed.
 	SignalNeedsRemoval
-	// SignalNeedsRestart tells supervisor to initiate shutdown for a restart cycle
+	// SignalNeedsRestart tells supervisor to initiate shutdown for a restart cycle.
 	SignalNeedsRestart
 )
 
@@ -127,7 +127,7 @@ type Snapshot struct {
 //   - Layer 3: Examples showing idempotent patterns
 //   - Layer 4: Retry logic in executeActionWithRetry validates this
 //
-// Example: StartProcess, StopProcess, CreateConfigFiles, CallAPI
+// Example: StartProcess, StopProcess, CreateConfigFiles, CallAPI.
 type Action interface {
 	// Execute performs the action. Can be blocking and long-running.
 	// Must handle context cancellation. Must be idempotent.

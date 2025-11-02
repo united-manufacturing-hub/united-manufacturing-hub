@@ -3,6 +3,7 @@ package supervisor_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -30,21 +31,21 @@ var _ = Describe("Collector WorkerType", func() {
 				WorkerType: workerType,
 			}
 
-			registry.Register(&storage.CollectionMetadata{
+			_ = registry.Register(&storage.CollectionMetadata{
 				Name:          workerType + "_identity",
 				WorkerType:    workerType,
 				Role:          storage.RoleIdentity,
 				CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt},
 				IndexedFields: []string{storage.FieldSyncID},
 			})
-			registry.Register(&storage.CollectionMetadata{
+			_ = registry.Register(&storage.CollectionMetadata{
 				Name:          workerType + "_desired",
 				WorkerType:    workerType,
 				Role:          storage.RoleDesired,
 				CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
 				IndexedFields: []string{storage.FieldSyncID},
 			})
-			registry.Register(&storage.CollectionMetadata{
+			_ = registry.Register(&storage.CollectionMetadata{
 				Name:          workerType + "_observed",
 				WorkerType:    workerType,
 				Role:          storage.RoleObserved,
@@ -87,7 +88,7 @@ var _ = Describe("Collector WorkerType", func() {
 			Expect(registry.IsRegistered("container_observed")).To(BeFalse(), "should not use hardcoded container workerType")
 
 			doc, err := triangularStore.LoadObserved(ctx, "s6", identity.ID)
-			if err != nil && err != persistence.ErrNotFound {
+			if err != nil && !errors.Is(err, persistence.ErrNotFound) {
 				Fail(fmt.Sprintf("unexpected error loading observed: %v", err))
 			}
 			_ = doc
@@ -104,21 +105,21 @@ var _ = Describe("Collector WorkerType", func() {
 			supervisors := make([]*supervisor.Supervisor, 0, len(workerTypes))
 
 			for _, wt := range workerTypes {
-				registry.Register(&storage.CollectionMetadata{
+				_ = registry.Register(&storage.CollectionMetadata{
 					Name:          wt + "_identity",
 					WorkerType:    wt,
 					Role:          storage.RoleIdentity,
 					CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt},
 					IndexedFields: []string{storage.FieldSyncID},
 				})
-				registry.Register(&storage.CollectionMetadata{
+				_ = registry.Register(&storage.CollectionMetadata{
 					Name:          wt + "_desired",
 					WorkerType:    wt,
 					Role:          storage.RoleDesired,
 					CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
 					IndexedFields: []string{storage.FieldSyncID},
 				})
-				registry.Register(&storage.CollectionMetadata{
+				_ = registry.Register(&storage.CollectionMetadata{
 					Name:          wt + "_observed",
 					WorkerType:    wt,
 					Role:          storage.RoleObserved,

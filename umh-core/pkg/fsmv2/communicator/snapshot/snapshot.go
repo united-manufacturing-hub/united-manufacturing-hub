@@ -44,7 +44,7 @@ type CommunicatorDesiredState struct {
 	Registry *registry.CommunicatorRegistry
 
 	// Transport (passed from worker to states for action creation)
-	// DEPRECATED: Use Registry instead
+	// Deprecated: Use Registry instead
 	Transport transport.Transport
 }
 

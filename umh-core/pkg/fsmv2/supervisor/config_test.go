@@ -40,9 +40,9 @@ func setupTestStore(workerType string) *storage.TriangularStore {
 		IndexedFields: []string{storage.FieldSyncID},
 	})
 
-	basicStore.CreateCollection(ctx, workerType+"_identity", nil)
-	basicStore.CreateCollection(ctx, workerType+"_desired", nil)
-	basicStore.CreateCollection(ctx, workerType+"_observed", nil)
+	_ = basicStore.CreateCollection(ctx, workerType+"_identity", nil)
+	_ = basicStore.CreateCollection(ctx, workerType+"_desired", nil)
+	_ = basicStore.CreateCollection(ctx, workerType+"_observed", nil)
 
 	return storage.NewTriangularStore(basicStore, registry)
 }

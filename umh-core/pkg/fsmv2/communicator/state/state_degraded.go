@@ -38,6 +38,7 @@ func (s *DegradedState) Next(snapshot snapshot.CommunicatorSnapshot) (BaseCommun
 
 	// Create SyncAction with registry (retry sync in degraded state)
 	syncAction := action.NewSyncAction(desired.Registry, observed.JWTToken)
+
 	return s, fsmv2.SignalNone, syncAction
 }
 

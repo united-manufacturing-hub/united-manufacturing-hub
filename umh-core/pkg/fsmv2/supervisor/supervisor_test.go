@@ -36,24 +36,26 @@ func TestSupervisorUsesTriangularStore(t *testing.T) {
 
 	// Create in-memory store for testing
 	basicStore := memory.NewInMemoryStore()
-	defer basicStore.Close(ctx)
+	defer func() {
+		_ = basicStore.Close(ctx)
+	}()
 
 	registry := storage.NewRegistry()
-	registry.Register(&storage.CollectionMetadata{
+	_ = registry.Register(&storage.CollectionMetadata{
 		Name:          "test_identity",
 		WorkerType:    "test",
 		Role:          storage.RoleIdentity,
 		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt},
 		IndexedFields: []string{storage.FieldSyncID},
 	})
-	registry.Register(&storage.CollectionMetadata{
+	_ = registry.Register(&storage.CollectionMetadata{
 		Name:          "test_desired",
 		WorkerType:    "test",
 		Role:          storage.RoleDesired,
 		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
 		IndexedFields: []string{storage.FieldSyncID},
 	})
-	registry.Register(&storage.CollectionMetadata{
+	_ = registry.Register(&storage.CollectionMetadata{
 		Name:          "test_observed",
 		WorkerType:    "test",
 		Role:          storage.RoleObserved,
@@ -99,24 +101,26 @@ func TestSupervisorSavesIdentityToTriangularStore(t *testing.T) {
 
 	// Create in-memory store for testing
 	basicStore := memory.NewInMemoryStore()
-	defer basicStore.Close(ctx)
+	defer func() {
+		_ = basicStore.Close(ctx)
+	}()
 
 	registry := storage.NewRegistry()
-	registry.Register(&storage.CollectionMetadata{
+	_ = registry.Register(&storage.CollectionMetadata{
 		Name:          "test_identity",
 		WorkerType:    "test",
 		Role:          storage.RoleIdentity,
 		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt},
 		IndexedFields: []string{storage.FieldSyncID},
 	})
-	registry.Register(&storage.CollectionMetadata{
+	_ = registry.Register(&storage.CollectionMetadata{
 		Name:          "test_desired",
 		WorkerType:    "test",
 		Role:          storage.RoleDesired,
 		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
 		IndexedFields: []string{storage.FieldSyncID},
 	})
-	registry.Register(&storage.CollectionMetadata{
+	_ = registry.Register(&storage.CollectionMetadata{
 		Name:          "test_observed",
 		WorkerType:    "test",
 		Role:          storage.RoleObserved,
@@ -190,24 +194,26 @@ func TestSupervisorLoadsSnapshotFromTriangularStore(t *testing.T) {
 
 	// Create in-memory store for testing
 	basicStore := memory.NewInMemoryStore()
-	defer basicStore.Close(ctx)
+	defer func() {
+		_ = basicStore.Close(ctx)
+	}()
 
 	registry := storage.NewRegistry()
-	registry.Register(&storage.CollectionMetadata{
+	_ = registry.Register(&storage.CollectionMetadata{
 		Name:          "test_identity",
 		WorkerType:    "test",
 		Role:          storage.RoleIdentity,
 		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt},
 		IndexedFields: []string{storage.FieldSyncID},
 	})
-	registry.Register(&storage.CollectionMetadata{
+	_ = registry.Register(&storage.CollectionMetadata{
 		Name:          "test_desired",
 		WorkerType:    "test",
 		Role:          storage.RoleDesired,
 		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
 		IndexedFields: []string{storage.FieldSyncID},
 	})
-	registry.Register(&storage.CollectionMetadata{
+	_ = registry.Register(&storage.CollectionMetadata{
 		Name:          "test_observed",
 		WorkerType:    "test",
 		Role:          storage.RoleObserved,

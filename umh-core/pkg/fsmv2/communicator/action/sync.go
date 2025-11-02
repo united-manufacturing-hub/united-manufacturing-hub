@@ -55,7 +55,7 @@ type SyncAction struct {
 	registry           *registry.CommunicatorRegistry
 }
 
-// TODO: docstring
+// TODO: docstring.
 type SyncActionResult struct {
 	PushedMessages []*transport.UMHMessage
 	PulledMessages []*transport.UMHMessage
@@ -65,11 +65,11 @@ type SyncActionResult struct {
 //
 // Parameters:
 //   - registry: Registry providing access to transport and other tools
-//   - JWTToken: JWT token for authentication
-func NewSyncAction(reg *registry.CommunicatorRegistry, JWTToken string) *SyncAction {
+//   - jwtToken: JWT token for authentication
+func NewSyncAction(reg *registry.CommunicatorRegistry, jwtToken string) *SyncAction {
 	return &SyncAction{
 		registry: reg,
-		JWTToken: JWTToken,
+		JWTToken: jwtToken,
 	}
 }
 

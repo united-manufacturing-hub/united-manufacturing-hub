@@ -134,7 +134,7 @@ type CommunicatorWorker struct {
 	// Temporary State
 	// Temporary state can be a local logger, or some HTTP client, or some local services
 	// like filesystem, etc.
-	// But everything that configures it or that needs to be exposed shoudl be in observed and desired state
+	// But everything that configures it or that needs to be exposed should be in observed and desired state
 	logger *zap.SugaredLogger
 }
 
@@ -193,7 +193,6 @@ func NewCommunicatorWorker(
 //
 // This method never returns an error for the communicator worker.
 func (w *CommunicatorWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedState, error) {
-
 	observed := snapshot.CommunicatorObservedState{
 		CollectedAt: time.Now(),
 	}

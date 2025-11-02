@@ -75,6 +75,7 @@ var _ = Describe("CommunicatorRegistry", func() {
 			var _ fsmv2.Registry = registry
 			Expect(registry).To(Satisfy(func(r interface{}) bool {
 				_, ok := r.(fsmv2.Registry)
+
 				return ok
 			}))
 		})

@@ -23,7 +23,6 @@ import (
 )
 
 const AuthenticateActionName = "authenticate"
-const defaultTokenExpiration = 24 * time.Hour
 
 // AuthenticateAction performs authentication with the relay server to obtain a JWT token.
 //
@@ -150,7 +149,6 @@ func NewAuthenticateAction(reg *registry.CommunicatorRegistry, relayURL, instanc
 //	    "expiresAt": 1735689600
 //	}
 func (a *AuthenticateAction) Execute(ctx context.Context) error {
-
 	authReq := transport.AuthRequest{
 		InstanceUUID: a.InstanceUUID,
 		Email:        a.AuthToken,
