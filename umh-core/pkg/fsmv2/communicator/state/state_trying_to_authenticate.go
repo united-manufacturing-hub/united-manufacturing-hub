@@ -38,6 +38,7 @@ func (s *TryingToAuthenticateState) Next(snapshot snapshot.CommunicatorSnapshot)
 
 	// Create AuthenticateAction with proper dependencies
 	authenticateAction := action.NewAuthenticateAction(
+		desired.Transport,
 		desired.RelayURL,
 		desired.InstanceUUID,
 		desired.AuthToken,

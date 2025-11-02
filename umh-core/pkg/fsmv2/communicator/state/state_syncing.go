@@ -18,7 +18,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/communicator/action"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/communicator/snapshot"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/communicator/transport"
 )
 
 type SyncingState struct {
@@ -45,7 +44,7 @@ func (s *SyncingState) Next(snapshot snapshot.CommunicatorSnapshot) (BaseCommuni
 	}
 
 	syncAction := action.NewSyncAction(
-		transport.Transport{}, observed.JWTToken)
+		desired.Transport, observed.JWTToken)
 	return s, fsmv2.SignalNone, syncAction
 }
 

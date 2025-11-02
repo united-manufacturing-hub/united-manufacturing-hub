@@ -38,6 +38,9 @@ type CommunicatorDesiredState struct {
 
 	// Messages
 	MessagesToBeSent []transport.UMHMessage
+
+	// Transport (passed from worker to states for action creation)
+	Transport transport.Transport
 }
 
 func (s *CommunicatorDesiredState) ShutdownRequested() bool {
@@ -60,5 +63,21 @@ type CommunicatorObservedState struct {
 }
 
 func (o CommunicatorObservedState) IsTokenExpired() bool {
-	return false // TODO
+	return time.Now().After(o.JWTExpiry)
+}
+
+func (o CommunicatorObservedState) IsSyncHealthy() bool {
+	return o.Authenticated && !o.IsTokenExpired()
+}
+
+func (o CommunicatorObservedState) GetConsecutiveErrors() int {
+	return 0
+}
+
+func (o CommunicatorObservedState) GetObservedDesiredState() fsmv2.DesiredState {
+	return &o.CommunicatorDesiredState
+}
+
+func (o CommunicatorObservedState) GetTimestamp() time.Time {
+	return o.CollectedAt
 }

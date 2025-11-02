@@ -94,28 +94,24 @@ func NewSyncAction(transport transport.Transport, JWTToken string) *SyncAction {
 //
 // Non-critical failures (e.g., channel full) are logged but not returned.
 // This allows the sync loop to continue even if some operations fail.
-func (a *SyncAction) Execute(ctx context.Context) (error, SyncActionResult) {
-	result := SyncActionResult{}
-
+func (a *SyncAction) Execute(ctx context.Context) error {
 	// 1. Pull messages from backend
 	messages, err := a.transport.Pull(ctx, a.JWTToken)
 	if err != nil {
-		return fmt.Errorf("pull failed: %w", err), result
+		return fmt.Errorf("pull failed: %w", err)
 	}
 
-	// 2. Push pulled messages to inbound channel (non-blocking)
-	result.PulledMessages = messages
+	// 2. Store pulled messages (they will be available in next observed state)
+	_ = messages
 
 	// 3. Push batch to backend if we have messages
 	if len(a.MessagesToBePushed) > 0 {
 		if err := a.transport.Push(ctx, a.JWTToken, a.MessagesToBePushed); err != nil {
-			return fmt.Errorf("push failed: %w", err), result
+			return fmt.Errorf("push failed: %w", err)
 		}
-
-		result.PushedMessages = a.MessagesToBePushed
 	}
 
-	return nil, result
+	return nil
 }
 
 func (a *SyncAction) Name() string {

@@ -75,7 +75,6 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/communicator/action"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/communicator/snapshot"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/communicator/state"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/communicator/transport"
@@ -199,62 +198,15 @@ func NewCommunicatorWorker(
 // and this method returns it to the supervisor.
 //
 // This method never returns an error for the communicator worker.
-func (w *CommunicatorWorker) CollectObservedState(ctx context.Context, previousAction fsmv2.ActionReturn) (snapshot.CommunicatorObservedState, error) {
+func (w *CommunicatorWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedState, error) {
 
 	observed := snapshot.CommunicatorObservedState{
 		CollectedAt: time.Now(),
 	}
 
-	if previousAction.Name() == action.AuthenticateActionName {
-
-		// Authenticate was not successful
-		if previousAction.Error() != nil {
-
-			// Set Authenticated to false upon failed authentication
-			observed.Authenticated = false
-
-			// Reset JWT Key upon failed authentication
-			observed.JWTExpiry = time.Time{}
-			observed.JWTToken = ""
-
-			// TODO: log
-
-			return observed, nil
-		}
-
-		// When there was no error, then we successfully authenticated
-		observed.Authenticated = true
-
-		// Store JWT Key in Observed State
-		result := previousAction.Result().(action.AuthenticateActionResult)
-		observed.JWTToken = result.JWTToken
-		observed.JWTExpiry = result.JWTTokenExpiry
-
-		// Extract configuration from previous action
-		request := previousAction.Request().(action.AuthenticateAction)
-
-		// Update the observed state with what was last used to authenticate
-		// TODO: check that unset fields are then not set to nil in supervisor and instead only
-		// the set fields are updated
-		// TODO: check if this is not unnecessary boilerplate
-		observed.CommunicatorDesiredState = snapshot.CommunicatorDesiredState{
-			InstanceUUID: request.InstanceUUID,
-			AuthToken:    request.AuthToken,
-			RelayURL:     request.RelayURL,
-		}
-
-	}
-
-	// TODO: fetch somehow the messagesReceived from last sync action
-	// TODO: check that the state machine doesnt keep emitting actions, e.g., authenticate actions, as only
-	// in this logic the action result can be processed
-	// if CollectObservedState runs async from th state machine, it can mean that the state machine issues multiple authenticates
-	// before here in collectobservedstate we can fetch and update it
-	// MAYBE what helps is some debounce logic there, but that makes it really complicated
-	// or can be solved by setting datafreshness and require that CollectObservedState must be very up to date in order
-	// for the state machine to do anything (as we know here that it will not take much time)
-
-	// Observe the desired state
+	// TODO: Implement proper state collection based on transport state
+	// This will need to query the transport for current authentication status
+	// and sync health, rather than relying on previousAction pattern
 
 	return observed, nil
 }

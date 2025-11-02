@@ -16,6 +16,7 @@ package state
 
 import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/communicator/action"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/communicator/snapshot"
 )
 
@@ -36,7 +37,7 @@ func (s *DegradedState) Next(snapshot snapshot.CommunicatorSnapshot) (BaseCommun
 	}
 
 	// Create SyncAction with transport and channels (retry sync in degraded state)
-	syncAction := NewSyncAction(s.Worker.transport, s.Worker.inboundChan, s.Worker.outboundChan)
+	syncAction := action.NewSyncAction(desired.Transport, observed.JWTToken)
 	return s, fsmv2.SignalNone, syncAction
 }
 

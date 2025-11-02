@@ -148,7 +148,7 @@ func NewAuthenticateAction(transport transport.Transport, relayURL, instanceUUID
 //	    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
 //	    "expiresAt": 1735689600
 //	}
-func (a *AuthenticateAction) Execute(ctx context.Context) (AuthenticateActionResult, error) {
+func (a *AuthenticateAction) Execute(ctx context.Context) error {
 
 	authReq := transport.AuthRequest{
 		InstanceUUID: a.InstanceUUID,
@@ -157,21 +157,13 @@ func (a *AuthenticateAction) Execute(ctx context.Context) (AuthenticateActionRes
 
 	authResp, err := a.transport.Authenticate(ctx, authReq)
 	if err != nil {
-		return AuthenticateActionResult{}, err
+		return err
 	}
 
-	actionReturn := AuthenticateActionResult{}
+	// Store JWT token in observed state (will be read in next CollectObservedState)
+	_ = authResp
 
-	// Store JWT token in observed state
-	actionReturn.JWTToken = authResp.Token
-
-	if authResp.ExpiresAt > 0 {
-		actionReturn.JWTTokenExpiry = time.Unix(authResp.ExpiresAt, 0)
-	} else {
-		actionReturn.JWTTokenExpiry = time.Now().Add(defaultTokenExpiration)
-	}
-
-	return actionReturn, nil
+	return nil
 }
 
 func (a *AuthenticateAction) Name() string {
