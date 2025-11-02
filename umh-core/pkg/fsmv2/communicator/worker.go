@@ -12,6 +12,43 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// =============================================================================
+// COMMUNICATOR INVARIANTS
+// =============================================================================
+//
+// C1: Authentication precedence
+//     MUST: Cannot sync before authentication completes
+//     WHY:  JWT token required for all sync operations
+//     ENFORCED: State machine transitions (Stopped → Authenticating → Syncing)
+//
+// C2: Token expiry handling
+//     MUST: Check JWT expiry before every sync operation
+//     WHY:  Expired tokens cause 401 errors and sync failures
+//     ENFORCED: SyncAction checks JWTExpiry before transport.Push/Pull
+//
+// C3: Transport lifecycle
+//     MUST: Transport must not be nil throughout worker lifetime
+//     WHY:  All actions depend on transport for HTTP communication
+//     ENFORCED: NewCommunicatorWorker validates transport parameter
+//
+// C4: Shutdown check priority
+//     MUST: Check shutdown signal before processing any action
+//     WHY:  Prevents partial operations during graceful shutdown
+//     ENFORCED: All states check signal in Next() before returning actions
+//
+// C5: Syncing state loop
+//     MUST: SyncingState returns self on success (loops indefinitely)
+//     WHY:  Continuous bidirectional sync is the primary operational mode
+//     ENFORCED: SyncingState.Next() returns (self, SignalNone, SyncAction)
+//
+// Defense-in-depth layers:
+//   - Layer 1: Type system (Go's strong typing, interface contracts)
+//   - Layer 2: Runtime checks (state machine transitions, nil validation)
+//   - Layer 3: Tests (verify invariants hold under all conditions)
+//   - Layer 4: Monitoring (detect violations in production via status messages)
+//
+// =============================================================================
+
 // Package communicator implements the Channel Communicator FSM worker for
 // bidirectional message exchange between Edge and Backend tiers.
 //
