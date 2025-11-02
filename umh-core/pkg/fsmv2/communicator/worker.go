@@ -128,26 +128,22 @@ const WorkerType = "communicator"
 //
 // These dependencies are passed to actions when created by states.
 type CommunicatorWorker struct {
+	*fsmv2.BaseWorker[*CommunicatorRegistry]
 	identity fsmv2.Identity
 
 	// Temporary State
 	// Temporary state can be a local logger, or some HTTP client, or some local services
 	// like filesystem, etc.
 	// But everything that configures it or that needs to be exposed shoudl be in observed and desired state
-	logger    *zap.SugaredLogger
-	transport transport.Transport
+	logger *zap.SugaredLogger
 }
 
 // NewCommunicatorWorker creates a new Channel-based Communicator worker.
 //
 // Parameters:
 //   - id: Unique identifier for this worker instance
-//   - relayURL: Relay server endpoint (e.g., "https://relay.example.com")
-//   - inboundChan: Channel for messages received from backend
-//   - outboundChan: Channel for messages to send to backend
+//   - name: Human-readable name for this worker
 //   - transport: HTTP transport for push/pull operations
-//   - instanceUUID: Identifies this Edge instance (from config)
-//   - authToken: Pre-shared secret for relay authentication (from config)
 //   - logger: Structured logging (must not be nil)
 //
 // The worker is created in Stopped state. Call supervisor.Start() to begin
@@ -155,17 +151,11 @@ type CommunicatorWorker struct {
 //
 // Example:
 //
-//	inbound := make(chan *transport.UMHMessage, 100)
-//	outbound := make(chan *transport.UMHMessage, 100)
 //	httpTransport := transport.NewHTTPTransport("https://relay.umh.app")
 //	worker := NewCommunicatorWorker(
 //	    "communicator-1",
-//	    "https://relay.umh.app",
-//	    inbound,
-//	    outbound,
+//	    "Communicator Worker",
 //	    httpTransport,
-//	    "550e8400-e29b-41d4-a716-446655440000",
-//	    "secret-auth-token",
 //	    logger,
 //	)
 //	supervisor := fsmv2.NewSupervisor(worker, logger)
@@ -173,15 +163,19 @@ type CommunicatorWorker struct {
 func NewCommunicatorWorker(
 	id string,
 	name string,
+	transportParam transport.Transport,
 	logger *zap.SugaredLogger,
 ) *CommunicatorWorker {
+	registry := NewCommunicatorRegistry(transportParam, logger)
+
 	return &CommunicatorWorker{
+		BaseWorker: fsmv2.NewBaseWorker(registry),
 		identity: fsmv2.Identity{
 			ID:         id,
 			Name:       name,
 			WorkerType: WorkerType,
 		},
-		logger: logger, // TODO: setup configure logger wuth correct ID, Name, WorkerType logging so that the logs are structured
+		logger: logger,
 	}
 }
 
