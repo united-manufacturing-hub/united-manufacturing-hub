@@ -32,6 +32,12 @@ var _ = Describe("BaseRegistry", func() {
 			registry := fsmv2.NewBaseRegistry(logger)
 			Expect(registry.GetLogger()).To(Equal(logger))
 		})
+
+		It("should panic when logger is nil", func() {
+			Expect(func() {
+				fsmv2.NewBaseRegistry(nil)
+			}).To(Panic())
+		})
 	})
 
 	Describe("Registry interface compliance", func() {

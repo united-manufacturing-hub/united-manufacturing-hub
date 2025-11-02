@@ -16,6 +16,10 @@ type BaseRegistry struct {
 
 // NewBaseRegistry creates a new base registry with common tools.
 func NewBaseRegistry(logger *zap.SugaredLogger) *BaseRegistry {
+	if logger == nil {
+		panic("NewBaseRegistry: logger cannot be nil")
+	}
+
 	return &BaseRegistry{logger: logger}
 }
 
