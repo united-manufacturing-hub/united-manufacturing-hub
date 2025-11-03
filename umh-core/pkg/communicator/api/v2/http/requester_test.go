@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	netHTTP "net/http"
+	"net/http/httptest"
 	"strings"
 	"time"
 
@@ -213,6 +214,40 @@ var _ = Describe("Requester", func() {
 					Expect(err).To(HaveOccurred())
 				})
 			}
+		})
+	})
+
+	Context("Keep-Alive Header", func() {
+		It("should match IdleConnTimeout setting", func() {
+			var receivedKeepAlive string
+			server := httptest.NewTLSServer(netHTTP.HandlerFunc(func(w netHTTP.ResponseWriter, r *netHTTP.Request) {
+				receivedKeepAlive = r.Header.Get("Keep-Alive")
+				w.WriteHeader(netHTTP.StatusOK)
+			}))
+			defer server.Close()
+
+			ctx := context.Background()
+			_, err := http.DoHTTPRequest(ctx, server.URL, nil, nil, true, log)
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(receivedKeepAlive).To(ContainSubstring("timeout=30"))
+			Expect(receivedKeepAlive).To(ContainSubstring("max=1000"))
+		})
+
+		It("should format timeout as integer seconds", func() {
+			var receivedKeepAlive string
+			server := httptest.NewTLSServer(netHTTP.HandlerFunc(func(w netHTTP.ResponseWriter, r *netHTTP.Request) {
+				receivedKeepAlive = r.Header.Get("Keep-Alive")
+				w.WriteHeader(netHTTP.StatusOK)
+			}))
+			defer server.Close()
+
+			ctx := context.Background()
+			_, err := http.DoHTTPRequest(ctx, server.URL, nil, nil, true, log)
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(receivedKeepAlive).To(MatchRegexp(`timeout=\d+`))
+			Expect(receivedKeepAlive).ToNot(ContainSubstring("timeout=90"))
 		})
 	})
 })
