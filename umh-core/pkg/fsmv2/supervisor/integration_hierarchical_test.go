@@ -342,7 +342,7 @@ var _ = Describe("Integration: Hierarchical Composition (Task 0.7)", func() {
 
 			// Verify all children were removed
 			childrenAfter := parentSup.GetChildren()
-			Expect(childrenAfter).To(HaveLen(0), "parent should have 0 children after removal")
+			Expect(childrenAfter).To(BeEmpty(), "parent should have 0 children after removal")
 		})
 	})
 

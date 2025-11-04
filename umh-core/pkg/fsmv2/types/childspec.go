@@ -20,7 +20,7 @@ import "encoding/json"
 //	        ↓ DeriveDesiredState()
 //	DesiredState{Host: "192.168.1.100", Port: 502}
 type UserSpec struct {
-	Config string `yaml:"config" json:"config"` // Raw user-provided configuration (YAML, JSON, or other format)
+	Config string `json:"config" yaml:"config"` // Raw user-provided configuration (YAML, JSON, or other format)
 }
 
 // ChildSpec is a declarative specification for a child FSM worker.
@@ -85,16 +85,17 @@ type UserSpec struct {
 //	    },
 //	}
 type ChildSpec struct {
-	Name         string            `yaml:"name" json:"name"`                                   // Unique name for this child (within parent scope)
-	WorkerType   string            `yaml:"workerType" json:"workerType"`                       // Type of worker to create (registered worker factory key)
-	UserSpec     UserSpec          `yaml:"userSpec" json:"userSpec"`                           // Configuration for the child worker
-	StateMapping map[string]string `yaml:"stateMapping,omitempty" json:"stateMapping,omitempty"` // Optional parent→child state mapping
+	Name         string            `json:"name"                   yaml:"name"`                    // Unique name for this child (within parent scope)
+	WorkerType   string            `json:"workerType"             yaml:"workerType"`              // Type of worker to create (registered worker factory key)
+	UserSpec     UserSpec          `json:"userSpec"               yaml:"userSpec"`                // Configuration for the child worker
+	StateMapping map[string]string `json:"stateMapping,omitempty" yaml:"stateMapping,omitempty"` // Optional parent→child state mapping
 }
 
 // MarshalJSON implements json.Marshaler for ChildSpec.
 // This ensures consistent JSON serialization across the system.
 func (c *ChildSpec) MarshalJSON() ([]byte, error) {
 	type Alias ChildSpec
+
 	return json.Marshal((*Alias)(c))
 }
 
@@ -126,8 +127,8 @@ func (c *ChildSpec) MarshalJSON() ([]byte, error) {
 //	    ChildrenSpecs: nil,         // Children removed during shutdown
 //	}
 type DesiredState struct {
-	State         string      `yaml:"state" json:"state"`                                       // Current desired state ("running", "stopped", "shutdown", etc.)
-	ChildrenSpecs []ChildSpec `yaml:"childrenSpecs,omitempty" json:"childrenSpecs,omitempty"` // Declarative specification of child workers
+	State         string      `json:"state"                   yaml:"state"`                   // Current desired state ("running", "stopped", "shutdown", etc.)
+	ChildrenSpecs []ChildSpec `json:"childrenSpecs,omitempty" yaml:"childrenSpecs,omitempty"` // Declarative specification of child workers
 }
 
 // ShutdownRequested returns true if graceful shutdown has been requested.
