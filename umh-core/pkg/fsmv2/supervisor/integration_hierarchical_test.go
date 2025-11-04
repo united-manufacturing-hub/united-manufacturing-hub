@@ -175,6 +175,14 @@ var _ = Describe("Integration: Hierarchical Composition (Task 0.7)", func() {
 
 			events := tickLog.GetEvents()
 			Expect(events).To(ContainElement("DeriveDesiredState:parent"))
+
+			// Verify hierarchical composition
+			children := parentSup.GetChildren()
+			Expect(children).To(HaveLen(1), "parent should have exactly 1 child")
+			Expect(children).To(HaveKey("child"), "child supervisor should exist with name 'child'")
+
+			childSup := children["child"]
+			Expect(childSup).NotTo(BeNil(), "child supervisor should not be nil")
 		})
 	})
 
@@ -253,6 +261,12 @@ var _ = Describe("Integration: Hierarchical Composition (Task 0.7)", func() {
 
 			events := tickLog.GetEvents()
 			Expect(events).To(ContainElement("DeriveDesiredState:parent"))
+
+			// Verify children were created dynamically
+			children := parentSup.GetChildren()
+			Expect(children).To(HaveLen(2), "parent should have exactly 2 children after second tick")
+			Expect(children).To(HaveKey("child1"), "child1 supervisor should exist")
+			Expect(children).To(HaveKey("child2"), "child2 supervisor should exist")
 		})
 	})
 
@@ -313,6 +327,10 @@ var _ = Describe("Integration: Hierarchical Composition (Task 0.7)", func() {
 			err = parentSup.Tick(ctx)
 			Expect(err).NotTo(HaveOccurred())
 
+			// Verify children exist before removal
+			childrenBefore := parentSup.GetChildren()
+			Expect(childrenBefore).To(HaveLen(2), "parent should have 2 children before removal")
+
 			parentWorker.childrenSpecs = []types.ChildSpec{}
 
 			tickLog.Clear()
@@ -321,6 +339,10 @@ var _ = Describe("Integration: Hierarchical Composition (Task 0.7)", func() {
 
 			events := tickLog.GetEvents()
 			Expect(events).To(ContainElement("DeriveDesiredState:parent"))
+
+			// Verify all children were removed
+			childrenAfter := parentSup.GetChildren()
+			Expect(childrenAfter).To(HaveLen(0), "parent should have 0 children after removal")
 		})
 	})
 
@@ -382,6 +404,11 @@ var _ = Describe("Integration: Hierarchical Composition (Task 0.7)", func() {
 
 			events := tickLog.GetEvents()
 			Expect(events).To(ContainElement("DeriveDesiredState:parent"))
+
+			// Verify child was created with state mapping configured
+			children := parentSup.GetChildren()
+			Expect(children).To(HaveLen(1), "parent should have 1 child")
+			Expect(children).To(HaveKey("child"), "child supervisor should exist")
 		})
 	})
 
@@ -444,6 +471,15 @@ var _ = Describe("Integration: Hierarchical Composition (Task 0.7)", func() {
 
 			events := tickLog.GetEvents()
 			Expect(events).To(ContainElement("DeriveDesiredState:parent"))
+
+			// Verify children were created (failure isolation requires children to exist)
+			children := parentSup.GetChildren()
+			Expect(children).To(HaveLen(2), "parent should have 2 children")
+			Expect(children).To(HaveKey("child1"), "child1 supervisor should exist")
+			Expect(children).To(HaveKey("child2"), "child2 supervisor should exist")
+
+			// Parent tick succeeded despite potential child issues (isolation working)
+			Expect(err).NotTo(HaveOccurred(), "parent tick should succeed even if children have issues")
 		})
 	})
 
@@ -520,6 +556,11 @@ var _ = Describe("Integration: Hierarchical Composition (Task 0.7)", func() {
 
 			events := tickLog.GetEvents()
 			Expect(events).To(ContainElement("DeriveDesiredState:parent"))
+
+			// Verify child count is still 1 after update (reconciliation preserved child name)
+			children := parentSup.GetChildren()
+			Expect(children).To(HaveLen(1), "parent should still have 1 child after WorkerType change")
+			Expect(children).To(HaveKey("child"), "child supervisor should still exist with same name")
 		})
 	})
 
@@ -597,6 +638,13 @@ var _ = Describe("Integration: Hierarchical Composition (Task 0.7)", func() {
 
 			events := tickLog.GetEvents()
 			Expect(events).To(ContainElement("DeriveDesiredState:parent"))
+
+			// Verify all three children exist with different state mappings
+			children := parentSup.GetChildren()
+			Expect(children).To(HaveLen(3), "parent should have 3 children")
+			Expect(children).To(HaveKey("child1"), "child1 should exist")
+			Expect(children).To(HaveKey("child2"), "child2 should exist")
+			Expect(children).To(HaveKey("child3"), "child3 should exist")
 		})
 	})
 
@@ -662,6 +710,11 @@ var _ = Describe("Integration: Hierarchical Composition (Task 0.7)", func() {
 
 			events := tickLog.GetEvents()
 			Expect(events).To(ContainElement("DeriveDesiredState:parent"))
+
+			// Verify child was created despite empty UserSpec
+			children := parentSup.GetChildren()
+			Expect(children).To(HaveLen(1), "parent should have 1 child")
+			Expect(children).To(HaveKey("child"), "child should exist even with empty UserSpec")
 		})
 	})
 })

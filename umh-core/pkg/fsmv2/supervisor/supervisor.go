@@ -999,6 +999,18 @@ func (s *Supervisor) GetWorkerState(workerID string) (string, string, error) {
 	return workerCtx.currentState.String(), workerCtx.currentState.Reason(), nil
 }
 
+// GetChildren returns a copy of the children map for inspection.
+// This method is thread-safe and can be used in tests to verify hierarchical composition.
+func (s *Supervisor) GetChildren() map[string]*Supervisor {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	children := make(map[string]*Supervisor, len(s.children))
+	for name, child := range s.children {
+		children[name] = child
+	}
+	return children
+}
+
 // reconcileChildren reconciles actual child supervisors to match desired ChildSpec array.
 // This implements Kubernetes-style declarative reconciliation:
 //   1. ADD children that don't exist in s.children
