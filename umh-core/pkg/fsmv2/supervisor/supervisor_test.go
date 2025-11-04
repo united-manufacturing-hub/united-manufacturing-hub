@@ -345,3 +345,667 @@ func (m *mockState) Reason() string {
 func (m *mockState) Next(_ fsmv2.Snapshot) (fsmv2.State, fsmv2.Signal, fsmv2.Action) {
 	return m, fsmv2.SignalNone, nil
 }
+
+func TestReconcileChildren_AddNewChildWhenNoneExist(t *testing.T) {
+	ctx := context.Background()
+	logger := zap.NewNop().Sugar()
+
+	basicStore := memory.NewInMemoryStore()
+	defer func() {
+		_ = basicStore.Close(ctx)
+	}()
+
+	registry := storage.NewRegistry()
+	_ = registry.Register(&storage.CollectionMetadata{
+		Name:          "parent_identity",
+		WorkerType:    "parent",
+		Role:          storage.RoleIdentity,
+		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt},
+		IndexedFields: []string{storage.FieldSyncID},
+	})
+	_ = registry.Register(&storage.CollectionMetadata{
+		Name:          "parent_desired",
+		WorkerType:    "parent",
+		Role:          storage.RoleDesired,
+		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
+		IndexedFields: []string{storage.FieldSyncID},
+	})
+	_ = registry.Register(&storage.CollectionMetadata{
+		Name:          "parent_observed",
+		WorkerType:    "parent",
+		Role:          storage.RoleObserved,
+		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
+		IndexedFields: []string{storage.FieldSyncID},
+	})
+
+	_ = basicStore.CreateCollection(ctx, "parent_identity", nil)
+	_ = basicStore.CreateCollection(ctx, "parent_desired", nil)
+	_ = basicStore.CreateCollection(ctx, "parent_observed", nil)
+
+	triangularStore := storage.NewTriangularStore(basicStore, registry)
+
+	supervisorCfg := Config{
+		WorkerType: "parent",
+		Store:      triangularStore,
+		Logger:     logger,
+	}
+
+	supervisor := NewSupervisor(supervisorCfg)
+
+	specs := []types.ChildSpec{
+		{
+			Name:       "child-1",
+			WorkerType: "mqtt_client",
+			UserSpec:   types.UserSpec{Config: "url: tcp://localhost:1883"},
+		},
+	}
+
+	err := supervisor.reconcileChildren(specs)
+	if err != nil {
+		t.Fatalf("reconcileChildren failed: %v", err)
+	}
+
+	if len(supervisor.children) != 1 {
+		t.Errorf("Expected 1 child, got %d", len(supervisor.children))
+	}
+
+	if _, exists := supervisor.children["child-1"]; !exists {
+		t.Error("Expected child-1 to exist in children map")
+	}
+}
+
+func TestReconcileChildren_AddMultipleChildren(t *testing.T) {
+	ctx := context.Background()
+	logger := zap.NewNop().Sugar()
+
+	basicStore := memory.NewInMemoryStore()
+	defer func() {
+		_ = basicStore.Close(ctx)
+	}()
+
+	registry := storage.NewRegistry()
+	_ = registry.Register(&storage.CollectionMetadata{
+		Name:          "parent_identity",
+		WorkerType:    "parent",
+		Role:          storage.RoleIdentity,
+		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt},
+		IndexedFields: []string{storage.FieldSyncID},
+	})
+	_ = registry.Register(&storage.CollectionMetadata{
+		Name:          "parent_desired",
+		WorkerType:    "parent",
+		Role:          storage.RoleDesired,
+		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
+		IndexedFields: []string{storage.FieldSyncID},
+	})
+	_ = registry.Register(&storage.CollectionMetadata{
+		Name:          "parent_observed",
+		WorkerType:    "parent",
+		Role:          storage.RoleObserved,
+		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
+		IndexedFields: []string{storage.FieldSyncID},
+	})
+
+	_ = basicStore.CreateCollection(ctx, "parent_identity", nil)
+	_ = basicStore.CreateCollection(ctx, "parent_desired", nil)
+	_ = basicStore.CreateCollection(ctx, "parent_observed", nil)
+
+	triangularStore := storage.NewTriangularStore(basicStore, registry)
+
+	supervisorCfg := Config{
+		WorkerType: "parent",
+		Store:      triangularStore,
+		Logger:     logger,
+	}
+
+	supervisor := NewSupervisor(supervisorCfg)
+
+	specs := []types.ChildSpec{
+		{
+			Name:       "child-1",
+			WorkerType: "mqtt_client",
+			UserSpec:   types.UserSpec{Config: "url: tcp://localhost:1883"},
+		},
+		{
+			Name:       "child-2",
+			WorkerType: "modbus_client",
+			UserSpec:   types.UserSpec{Config: "address: 192.168.1.100:502"},
+		},
+		{
+			Name:       "child-3",
+			WorkerType: "opcua_client",
+			UserSpec:   types.UserSpec{Config: "endpoint: opc.tcp://localhost:4840"},
+		},
+	}
+
+	err := supervisor.reconcileChildren(specs)
+	if err != nil {
+		t.Fatalf("reconcileChildren failed: %v", err)
+	}
+
+	if len(supervisor.children) != 3 {
+		t.Errorf("Expected 3 children, got %d", len(supervisor.children))
+	}
+
+	for _, spec := range specs {
+		if _, exists := supervisor.children[spec.Name]; !exists {
+			t.Errorf("Expected %s to exist in children map", spec.Name)
+		}
+	}
+}
+
+func TestReconcileChildren_SkipExistingChild(t *testing.T) {
+	ctx := context.Background()
+	logger := zap.NewNop().Sugar()
+
+	basicStore := memory.NewInMemoryStore()
+	defer func() {
+		_ = basicStore.Close(ctx)
+	}()
+
+	registry := storage.NewRegistry()
+	_ = registry.Register(&storage.CollectionMetadata{
+		Name:          "parent_identity",
+		WorkerType:    "parent",
+		Role:          storage.RoleIdentity,
+		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt},
+		IndexedFields: []string{storage.FieldSyncID},
+	})
+	_ = registry.Register(&storage.CollectionMetadata{
+		Name:          "parent_desired",
+		WorkerType:    "parent",
+		Role:          storage.RoleDesired,
+		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
+		IndexedFields: []string{storage.FieldSyncID},
+	})
+	_ = registry.Register(&storage.CollectionMetadata{
+		Name:          "parent_observed",
+		WorkerType:    "parent",
+		Role:          storage.RoleObserved,
+		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
+		IndexedFields: []string{storage.FieldSyncID},
+	})
+
+	_ = basicStore.CreateCollection(ctx, "parent_identity", nil)
+	_ = basicStore.CreateCollection(ctx, "parent_desired", nil)
+	_ = basicStore.CreateCollection(ctx, "parent_observed", nil)
+
+	triangularStore := storage.NewTriangularStore(basicStore, registry)
+
+	supervisorCfg := Config{
+		WorkerType: "parent",
+		Store:      triangularStore,
+		Logger:     logger,
+	}
+
+	supervisor := NewSupervisor(supervisorCfg)
+
+	specs := []types.ChildSpec{
+		{
+			Name:       "child-1",
+			WorkerType: "mqtt_client",
+			UserSpec:   types.UserSpec{Config: "url: tcp://localhost:1883"},
+		},
+	}
+
+	err := supervisor.reconcileChildren(specs)
+	if err != nil {
+		t.Fatalf("First reconcileChildren failed: %v", err)
+	}
+
+	firstChild := supervisor.children["child-1"]
+
+	err = supervisor.reconcileChildren(specs)
+	if err != nil {
+		t.Fatalf("Second reconcileChildren failed: %v", err)
+	}
+
+	if len(supervisor.children) != 1 {
+		t.Errorf("Expected 1 child after second reconciliation, got %d", len(supervisor.children))
+	}
+
+	if supervisor.children["child-1"] != firstChild {
+		t.Error("Expected child-1 to be the same instance after second reconciliation")
+	}
+}
+
+func TestReconcileChildren_UpdateUserSpec(t *testing.T) {
+	ctx := context.Background()
+	logger := zap.NewNop().Sugar()
+
+	basicStore := memory.NewInMemoryStore()
+	defer func() {
+		_ = basicStore.Close(ctx)
+	}()
+
+	registry := storage.NewRegistry()
+	_ = registry.Register(&storage.CollectionMetadata{
+		Name:          "parent_identity",
+		WorkerType:    "parent",
+		Role:          storage.RoleIdentity,
+		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt},
+		IndexedFields: []string{storage.FieldSyncID},
+	})
+	_ = registry.Register(&storage.CollectionMetadata{
+		Name:          "parent_desired",
+		WorkerType:    "parent",
+		Role:          storage.RoleDesired,
+		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
+		IndexedFields: []string{storage.FieldSyncID},
+	})
+	_ = registry.Register(&storage.CollectionMetadata{
+		Name:          "parent_observed",
+		WorkerType:    "parent",
+		Role:          storage.RoleObserved,
+		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
+		IndexedFields: []string{storage.FieldSyncID},
+	})
+
+	_ = basicStore.CreateCollection(ctx, "parent_identity", nil)
+	_ = basicStore.CreateCollection(ctx, "parent_desired", nil)
+	_ = basicStore.CreateCollection(ctx, "parent_observed", nil)
+
+	triangularStore := storage.NewTriangularStore(basicStore, registry)
+
+	supervisorCfg := Config{
+		WorkerType: "parent",
+		Store:      triangularStore,
+		Logger:     logger,
+	}
+
+	supervisor := NewSupervisor(supervisorCfg)
+
+	initialSpecs := []types.ChildSpec{
+		{
+			Name:       "child-1",
+			WorkerType: "mqtt_client",
+			UserSpec:   types.UserSpec{Config: "url: tcp://localhost:1883"},
+		},
+	}
+
+	err := supervisor.reconcileChildren(initialSpecs)
+	if err != nil {
+		t.Fatalf("Initial reconcileChildren failed: %v", err)
+	}
+
+	updatedSpecs := []types.ChildSpec{
+		{
+			Name:       "child-1",
+			WorkerType: "mqtt_client",
+			UserSpec:   types.UserSpec{Config: "url: tcp://remotehost:1883"},
+		},
+	}
+
+	err = supervisor.reconcileChildren(updatedSpecs)
+	if err != nil {
+		t.Fatalf("Update reconcileChildren failed: %v", err)
+	}
+
+	child := supervisor.children["child-1"]
+	if child.userSpec.Config != "url: tcp://remotehost:1883" {
+		t.Errorf("Expected UserSpec to be updated to 'url: tcp://remotehost:1883', got '%s'", child.userSpec.Config)
+	}
+}
+
+func TestReconcileChildren_UpdateStateMapping(t *testing.T) {
+	ctx := context.Background()
+	logger := zap.NewNop().Sugar()
+
+	basicStore := memory.NewInMemoryStore()
+	defer func() {
+		_ = basicStore.Close(ctx)
+	}()
+
+	registry := storage.NewRegistry()
+	_ = registry.Register(&storage.CollectionMetadata{
+		Name:          "parent_identity",
+		WorkerType:    "parent",
+		Role:          storage.RoleIdentity,
+		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt},
+		IndexedFields: []string{storage.FieldSyncID},
+	})
+	_ = registry.Register(&storage.CollectionMetadata{
+		Name:          "parent_desired",
+		WorkerType:    "parent",
+		Role:          storage.RoleDesired,
+		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
+		IndexedFields: []string{storage.FieldSyncID},
+	})
+	_ = registry.Register(&storage.CollectionMetadata{
+		Name:          "parent_observed",
+		WorkerType:    "parent",
+		Role:          storage.RoleObserved,
+		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
+		IndexedFields: []string{storage.FieldSyncID},
+	})
+
+	_ = basicStore.CreateCollection(ctx, "parent_identity", nil)
+	_ = basicStore.CreateCollection(ctx, "parent_desired", nil)
+	_ = basicStore.CreateCollection(ctx, "parent_observed", nil)
+
+	triangularStore := storage.NewTriangularStore(basicStore, registry)
+
+	supervisorCfg := Config{
+		WorkerType: "parent",
+		Store:      triangularStore,
+		Logger:     logger,
+	}
+
+	supervisor := NewSupervisor(supervisorCfg)
+
+	initialSpecs := []types.ChildSpec{
+		{
+			Name:       "child-1",
+			WorkerType: "mqtt_client",
+			UserSpec:   types.UserSpec{Config: "url: tcp://localhost:1883"},
+			StateMapping: map[string]string{
+				"running": "connected",
+			},
+		},
+	}
+
+	err := supervisor.reconcileChildren(initialSpecs)
+	if err != nil {
+		t.Fatalf("Initial reconcileChildren failed: %v", err)
+	}
+
+	updatedSpecs := []types.ChildSpec{
+		{
+			Name:       "child-1",
+			WorkerType: "mqtt_client",
+			UserSpec:   types.UserSpec{Config: "url: tcp://localhost:1883"},
+			StateMapping: map[string]string{
+				"running":  "connected",
+				"stopping": "disconnected",
+			},
+		},
+	}
+
+	err = supervisor.reconcileChildren(updatedSpecs)
+	if err != nil {
+		t.Fatalf("Update reconcileChildren failed: %v", err)
+	}
+
+	child := supervisor.children["child-1"]
+	if len(child.stateMapping) != 2 {
+		t.Errorf("Expected StateMapping to have 2 entries, got %d", len(child.stateMapping))
+	}
+	if child.stateMapping["stopping"] != "disconnected" {
+		t.Errorf("Expected stopping -> disconnected mapping, got %v", child.stateMapping["stopping"])
+	}
+}
+
+func TestReconcileChildren_RemoveChild(t *testing.T) {
+	ctx := context.Background()
+	logger := zap.NewNop().Sugar()
+
+	basicStore := memory.NewInMemoryStore()
+	defer func() {
+		_ = basicStore.Close(ctx)
+	}()
+
+	registry := storage.NewRegistry()
+	_ = registry.Register(&storage.CollectionMetadata{
+		Name:          "parent_identity",
+		WorkerType:    "parent",
+		Role:          storage.RoleIdentity,
+		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt},
+		IndexedFields: []string{storage.FieldSyncID},
+	})
+	_ = registry.Register(&storage.CollectionMetadata{
+		Name:          "parent_desired",
+		WorkerType:    "parent",
+		Role:          storage.RoleDesired,
+		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
+		IndexedFields: []string{storage.FieldSyncID},
+	})
+	_ = registry.Register(&storage.CollectionMetadata{
+		Name:          "parent_observed",
+		WorkerType:    "parent",
+		Role:          storage.RoleObserved,
+		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
+		IndexedFields: []string{storage.FieldSyncID},
+	})
+
+	_ = basicStore.CreateCollection(ctx, "parent_identity", nil)
+	_ = basicStore.CreateCollection(ctx, "parent_desired", nil)
+	_ = basicStore.CreateCollection(ctx, "parent_observed", nil)
+
+	triangularStore := storage.NewTriangularStore(basicStore, registry)
+
+	supervisorCfg := Config{
+		WorkerType: "parent",
+		Store:      triangularStore,
+		Logger:     logger,
+	}
+
+	supervisor := NewSupervisor(supervisorCfg)
+
+	initialSpecs := []types.ChildSpec{
+		{
+			Name:       "child-1",
+			WorkerType: "mqtt_client",
+			UserSpec:   types.UserSpec{Config: "url: tcp://localhost:1883"},
+		},
+		{
+			Name:       "child-2",
+			WorkerType: "modbus_client",
+			UserSpec:   types.UserSpec{Config: "address: 192.168.1.100:502"},
+		},
+	}
+
+	err := supervisor.reconcileChildren(initialSpecs)
+	if err != nil {
+		t.Fatalf("Initial reconcileChildren failed: %v", err)
+	}
+
+	if len(supervisor.children) != 2 {
+		t.Errorf("Expected 2 children initially, got %d", len(supervisor.children))
+	}
+
+	updatedSpecs := []types.ChildSpec{
+		{
+			Name:       "child-1",
+			WorkerType: "mqtt_client",
+			UserSpec:   types.UserSpec{Config: "url: tcp://localhost:1883"},
+		},
+	}
+
+	err = supervisor.reconcileChildren(updatedSpecs)
+	if err != nil {
+		t.Fatalf("Update reconcileChildren failed: %v", err)
+	}
+
+	if len(supervisor.children) != 1 {
+		t.Errorf("Expected 1 child after removal, got %d", len(supervisor.children))
+	}
+
+	if _, exists := supervisor.children["child-2"]; exists {
+		t.Error("Expected child-2 to be removed")
+	}
+
+	if _, exists := supervisor.children["child-1"]; !exists {
+		t.Error("Expected child-1 to still exist")
+	}
+}
+
+func TestReconcileChildren_MixedOperations(t *testing.T) {
+	ctx := context.Background()
+	logger := zap.NewNop().Sugar()
+
+	basicStore := memory.NewInMemoryStore()
+	defer func() {
+		_ = basicStore.Close(ctx)
+	}()
+
+	registry := storage.NewRegistry()
+	_ = registry.Register(&storage.CollectionMetadata{
+		Name:          "parent_identity",
+		WorkerType:    "parent",
+		Role:          storage.RoleIdentity,
+		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt},
+		IndexedFields: []string{storage.FieldSyncID},
+	})
+	_ = registry.Register(&storage.CollectionMetadata{
+		Name:          "parent_desired",
+		WorkerType:    "parent",
+		Role:          storage.RoleDesired,
+		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
+		IndexedFields: []string{storage.FieldSyncID},
+	})
+	_ = registry.Register(&storage.CollectionMetadata{
+		Name:          "parent_observed",
+		WorkerType:    "parent",
+		Role:          storage.RoleObserved,
+		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
+		IndexedFields: []string{storage.FieldSyncID},
+	})
+
+	_ = basicStore.CreateCollection(ctx, "parent_identity", nil)
+	_ = basicStore.CreateCollection(ctx, "parent_desired", nil)
+	_ = basicStore.CreateCollection(ctx, "parent_observed", nil)
+
+	triangularStore := storage.NewTriangularStore(basicStore, registry)
+
+	supervisorCfg := Config{
+		WorkerType: "parent",
+		Store:      triangularStore,
+		Logger:     logger,
+	}
+
+	supervisor := NewSupervisor(supervisorCfg)
+
+	initialSpecs := []types.ChildSpec{
+		{
+			Name:       "child-1",
+			WorkerType: "mqtt_client",
+			UserSpec:   types.UserSpec{Config: "url: tcp://localhost:1883"},
+		},
+		{
+			Name:       "child-2",
+			WorkerType: "modbus_client",
+			UserSpec:   types.UserSpec{Config: "address: 192.168.1.100:502"},
+		},
+	}
+
+	err := supervisor.reconcileChildren(initialSpecs)
+	if err != nil {
+		t.Fatalf("Initial reconcileChildren failed: %v", err)
+	}
+
+	mixedSpecs := []types.ChildSpec{
+		{
+			Name:       "child-1",
+			WorkerType: "mqtt_client",
+			UserSpec:   types.UserSpec{Config: "url: tcp://remotehost:1883"},
+		},
+		{
+			Name:       "child-3",
+			WorkerType: "opcua_client",
+			UserSpec:   types.UserSpec{Config: "endpoint: opc.tcp://localhost:4840"},
+		},
+	}
+
+	err = supervisor.reconcileChildren(mixedSpecs)
+	if err != nil {
+		t.Fatalf("Mixed reconcileChildren failed: %v", err)
+	}
+
+	if len(supervisor.children) != 2 {
+		t.Errorf("Expected 2 children after mixed operations, got %d", len(supervisor.children))
+	}
+
+	if _, exists := supervisor.children["child-1"]; !exists {
+		t.Error("Expected child-1 to exist after update")
+	}
+
+	if supervisor.children["child-1"].userSpec.Config != "url: tcp://remotehost:1883" {
+		t.Error("Expected child-1 UserSpec to be updated")
+	}
+
+	if _, exists := supervisor.children["child-2"]; exists {
+		t.Error("Expected child-2 to be removed")
+	}
+
+	if _, exists := supervisor.children["child-3"]; !exists {
+		t.Error("Expected child-3 to be added")
+	}
+}
+
+func TestReconcileChildren_EmptySpecs(t *testing.T) {
+	ctx := context.Background()
+	logger := zap.NewNop().Sugar()
+
+	basicStore := memory.NewInMemoryStore()
+	defer func() {
+		_ = basicStore.Close(ctx)
+	}()
+
+	registry := storage.NewRegistry()
+	_ = registry.Register(&storage.CollectionMetadata{
+		Name:          "parent_identity",
+		WorkerType:    "parent",
+		Role:          storage.RoleIdentity,
+		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt},
+		IndexedFields: []string{storage.FieldSyncID},
+	})
+	_ = registry.Register(&storage.CollectionMetadata{
+		Name:          "parent_desired",
+		WorkerType:    "parent",
+		Role:          storage.RoleDesired,
+		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
+		IndexedFields: []string{storage.FieldSyncID},
+	})
+	_ = registry.Register(&storage.CollectionMetadata{
+		Name:          "parent_observed",
+		WorkerType:    "parent",
+		Role:          storage.RoleObserved,
+		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
+		IndexedFields: []string{storage.FieldSyncID},
+	})
+
+	_ = basicStore.CreateCollection(ctx, "parent_identity", nil)
+	_ = basicStore.CreateCollection(ctx, "parent_desired", nil)
+	_ = basicStore.CreateCollection(ctx, "parent_observed", nil)
+
+	triangularStore := storage.NewTriangularStore(basicStore, registry)
+
+	supervisorCfg := Config{
+		WorkerType: "parent",
+		Store:      triangularStore,
+		Logger:     logger,
+	}
+
+	supervisor := NewSupervisor(supervisorCfg)
+
+	initialSpecs := []types.ChildSpec{
+		{
+			Name:       "child-1",
+			WorkerType: "mqtt_client",
+			UserSpec:   types.UserSpec{Config: "url: tcp://localhost:1883"},
+		},
+		{
+			Name:       "child-2",
+			WorkerType: "modbus_client",
+			UserSpec:   types.UserSpec{Config: "address: 192.168.1.100:502"},
+		},
+	}
+
+	err := supervisor.reconcileChildren(initialSpecs)
+	if err != nil {
+		t.Fatalf("Initial reconcileChildren failed: %v", err)
+	}
+
+	if len(supervisor.children) != 2 {
+		t.Errorf("Expected 2 children initially, got %d", len(supervisor.children))
+	}
+
+	err = supervisor.reconcileChildren([]types.ChildSpec{})
+	if err != nil {
+		t.Fatalf("Empty reconcileChildren failed: %v", err)
+	}
+
+	if len(supervisor.children) != 0 {
+		t.Errorf("Expected 0 children after empty reconciliation, got %d", len(supervisor.children))
+	}
+}

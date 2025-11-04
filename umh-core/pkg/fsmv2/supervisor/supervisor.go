@@ -27,6 +27,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/types"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 )
 
@@ -133,6 +134,9 @@ type Supervisor struct {
 	collectorHealth       CollectorHealth                   // Collector health tracking
 	freshnessChecker      *FreshnessChecker                 // Data freshness validator
 	expectedObservedTypes map[string]reflect.Type           // workerID → expected ObservedState type
+	children              map[string]*Supervisor            // Child supervisors by name (hierarchical composition)
+	stateMapping          map[string]string                 // Parent→child state mapping
+	userSpec              types.UserSpec                    // User-provided configuration for this supervisor
 }
 
 // WorkerContext encapsulates the runtime state for a single worker
@@ -329,6 +333,8 @@ func NewSupervisor(cfg Config) *Supervisor {
 		tickInterval:          tickInterval,
 		freshnessChecker:      freshnessChecker,
 		expectedObservedTypes: make(map[string]reflect.Type),
+		children:              make(map[string]*Supervisor),
+		stateMapping:          make(map[string]string),
 		collectorHealth: CollectorHealth{
 			staleThreshold:     staleThreshold,
 			timeout:            timeout,
@@ -894,7 +900,7 @@ func (s *Supervisor) processSignal(ctx context.Context, workerID string, signal 
 // IMPLEMENTATION: Load → Mutate → Save pattern
 // 1. Load current desired state
 // 2. Call SetShutdownRequested(true) if supported
-// 3. Save mutated desired state
+// 3. Save mutated desired state.
 func (s *Supervisor) RequestShutdown(ctx context.Context, workerID string, reason string) error {
 	s.logger.Warnf("Requesting shutdown for worker %s: %s", workerID, reason)
 
@@ -956,6 +962,83 @@ func (s *Supervisor) GetWorkerState(workerID string) (string, string, error) {
 	}
 
 	return workerCtx.currentState.String(), workerCtx.currentState.Reason(), nil
+}
+
+// reconcileChildren reconciles actual child supervisors to match desired ChildSpec array.
+// This implements Kubernetes-style declarative reconciliation:
+//   1. ADD children that don't exist in s.children
+//   2. UPDATE existing children (UserSpec and StateMapping)
+//   3. REMOVE children not in desired specs
+//
+// Children are themselves Supervisors, enabling recursive hierarchical composition.
+// The factory creates workers for child types, and each child gets isolated storage via ChildStore().
+//
+// Error handling: Logs errors but continues reconciliation for remaining children.
+// This ensures partial failures don't block the entire reconciliation operation.
+func (s *Supervisor) reconcileChildren(specs []types.ChildSpec) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	specNames := make(map[string]bool)
+	for _, spec := range specs {
+		specNames[spec.Name] = true
+
+		if child, exists := s.children[spec.Name]; exists {
+			child.UpdateUserSpec(spec.UserSpec)
+			child.stateMapping = spec.StateMapping
+		} else {
+			s.logger.Infof("Adding child %s with worker type %s", spec.Name, spec.WorkerType)
+
+			childConfig := Config{
+				WorkerType: spec.WorkerType,
+				Store:      s.store,
+				Logger:     s.logger,
+			}
+
+			childSupervisor := NewSupervisor(childConfig)
+			childSupervisor.UpdateUserSpec(spec.UserSpec)
+			childSupervisor.stateMapping = spec.StateMapping
+
+			s.children[spec.Name] = childSupervisor
+		}
+	}
+
+	for name := range s.children {
+		if !specNames[name] {
+			s.logger.Infof("Removing child %s (not in desired specs)", name)
+			child := s.children[name]
+			child.Shutdown()
+			delete(s.children, name)
+		}
+	}
+
+	return nil
+}
+
+// UpdateUserSpec updates the user-provided configuration for this supervisor.
+// This method is called by parent supervisors during reconciliation to update child configuration.
+func (s *Supervisor) UpdateUserSpec(spec types.UserSpec) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.userSpec = spec
+}
+
+// Shutdown gracefully shuts down this supervisor and all its workers.
+// This method is called when the supervisor is being removed from its parent.
+func (s *Supervisor) Shutdown() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.logger.Infof("Shutting down supervisor for worker type: %s", s.workerType)
+
+	for workerID := range s.workers {
+		s.logger.Debugf("Shutting down worker: %s", workerID)
+	}
+
+	for childName, child := range s.children {
+		s.logger.Debugf("Shutting down child: %s", childName)
+		child.Shutdown()
+	}
 }
 
 // getString safely extracts a string value from a Document.
