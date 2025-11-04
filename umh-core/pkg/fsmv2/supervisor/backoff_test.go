@@ -20,9 +20,18 @@ var _ = Describe("ExponentialBackoff", func() {
 
 		It("doubles delay on each attempt", func() {
 			backoff := supervisor.NewExponentialBackoff(1*time.Second, 60*time.Second)
+
+			first := backoff.NextDelay()
 			backoff.RecordFailure()
-			delay := backoff.NextDelay()
-			Expect(delay).To(Equal(2 * time.Second))
+
+			second := backoff.NextDelay()
+			backoff.RecordFailure()
+
+			third := backoff.NextDelay()
+
+			Expect(first).To(Equal(1 * time.Second))
+			Expect(second).To(Equal(2 * time.Second))
+			Expect(third).To(Equal(4 * time.Second))
 		})
 
 		It("caps delay at max", func() {
@@ -35,33 +44,8 @@ var _ = Describe("ExponentialBackoff", func() {
 		})
 	})
 
-	Describe("RecordFailure", func() {
-		It("increments attempts counter", func() {
-			backoff := supervisor.NewExponentialBackoff(1*time.Second, 60*time.Second)
-			backoff.RecordFailure()
-			backoff.RecordFailure()
-			Expect(backoff.Attempts()).To(Equal(2))
-		})
-
-		It("records timestamp of last attempt", func() {
-			backoff := supervisor.NewExponentialBackoff(1*time.Second, 60*time.Second)
-			before := time.Now()
-			backoff.RecordFailure()
-			after := time.Now()
-			Expect(backoff.LastAttempt()).To(BeTemporally(">=", before))
-			Expect(backoff.LastAttempt()).To(BeTemporally("<=", after))
-		})
-	})
 
 	Describe("Reset", func() {
-		It("resets attempts to zero", func() {
-			backoff := supervisor.NewExponentialBackoff(1*time.Second, 60*time.Second)
-			backoff.RecordFailure()
-			backoff.RecordFailure()
-			backoff.Reset()
-			Expect(backoff.Attempts()).To(Equal(0))
-		})
-
 		It("resets delay to base", func() {
 			backoff := supervisor.NewExponentialBackoff(1*time.Second, 60*time.Second)
 			backoff.RecordFailure()

@@ -7,10 +7,9 @@ import (
 )
 
 type ExponentialBackoff struct {
-	baseDelay   time.Duration
-	maxDelay    time.Duration
-	attempts    int
-	lastAttempt time.Time
+	baseDelay time.Duration
+	maxDelay  time.Duration
+	attempts  int
 }
 
 func NewExponentialBackoff(baseDelay, maxDelay time.Duration) *ExponentialBackoff {
@@ -36,18 +35,8 @@ func (b *ExponentialBackoff) NextDelay() time.Duration {
 
 func (b *ExponentialBackoff) RecordFailure() {
 	b.attempts++
-	b.lastAttempt = time.Now()
 }
 
 func (b *ExponentialBackoff) Reset() {
 	b.attempts = 0
-	b.lastAttempt = time.Time{}
-}
-
-func (b *ExponentialBackoff) Attempts() int {
-	return b.attempts
-}
-
-func (b *ExponentialBackoff) LastAttempt() time.Time {
-	return b.lastAttempt
 }
