@@ -110,3 +110,33 @@ func ResetRegistry() {
 
 	registry = make(map[string]func(fsmv2.Identity) fsmv2.Worker)
 }
+
+// ListRegisteredTypes returns all registered worker type names.
+// Thread-safe - returns a copy of registered type names, not references to internal registry.
+// Useful for debugging, introspection, and validation.
+//
+// THREAD SAFETY:
+// This function is thread-safe and can be called concurrently from multiple goroutines.
+// The returned slice is a copy, so modifying it does not affect the registry.
+//
+// Return value:
+// A slice of registered worker type names. Returns an empty (non-nil) slice if no types are registered.
+// The order of types in the slice is not guaranteed.
+//
+// Example usage:
+//
+//	types := factory.ListRegisteredTypes()
+//	if !contains(types, "mqtt_client") {
+//	    return fmt.Errorf("mqtt_client worker type not registered")
+//	}
+func ListRegisteredTypes() []string {
+	registryMu.RLock()
+	defer registryMu.RUnlock()
+
+	types := make([]string, 0, len(registry))
+	for workerType := range registry {
+		types = append(types, workerType)
+	}
+
+	return types
+}

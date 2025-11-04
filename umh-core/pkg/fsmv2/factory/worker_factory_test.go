@@ -287,3 +287,157 @@ func findSubstring(s, substr string) bool {
 
 	return false
 }
+
+func TestListRegisteredTypes_EmptyRegistry(t *testing.T) {
+	// Reset registry before test
+	factory.ResetRegistry()
+
+	types := factory.ListRegisteredTypes()
+
+	if types == nil {
+		t.Error("ListRegisteredTypes() returned nil, want empty slice")
+	}
+
+	if len(types) != 0 {
+		t.Errorf("ListRegisteredTypes() returned %d types, want 0", len(types))
+	}
+}
+
+func TestListRegisteredTypes_SingleRegistration(t *testing.T) {
+	// Reset registry before test
+	factory.ResetRegistry()
+
+	// Register one worker type
+	err := factory.RegisterWorkerType("mqtt_client", func(id fsmv2.Identity) fsmv2.Worker {
+		return &mockWorker{identity: id}
+	})
+	if err != nil {
+		t.Fatalf("failed to register worker type: %v", err)
+	}
+
+	types := factory.ListRegisteredTypes()
+
+	if len(types) != 1 {
+		t.Errorf("ListRegisteredTypes() returned %d types, want 1", len(types))
+	}
+
+	if types[0] != "mqtt_client" {
+		t.Errorf("ListRegisteredTypes() returned %q, want %q", types[0], "mqtt_client")
+	}
+}
+
+func TestListRegisteredTypes_MultipleRegistrations(t *testing.T) {
+	// Reset registry before test
+	factory.ResetRegistry()
+
+	// Register multiple worker types
+	workerTypes := []string{"mqtt_client", "modbus_server", "opcua_client"}
+
+	for _, wt := range workerTypes {
+		err := factory.RegisterWorkerType(wt, func(id fsmv2.Identity) fsmv2.Worker {
+			return &mockWorker{identity: id}
+		})
+		if err != nil {
+			t.Fatalf("failed to register worker type %q: %v", wt, err)
+		}
+	}
+
+	types := factory.ListRegisteredTypes()
+
+	if len(types) != len(workerTypes) {
+		t.Errorf("ListRegisteredTypes() returned %d types, want %d", len(types), len(workerTypes))
+	}
+
+	// Convert slice to map for easier comparison (order not guaranteed)
+	typeMap := make(map[string]bool)
+	for _, t := range types {
+		typeMap[t] = true
+	}
+
+	for _, wt := range workerTypes {
+		if !typeMap[wt] {
+			t.Errorf("ListRegisteredTypes() missing type %q", wt)
+		}
+	}
+}
+
+func TestListRegisteredTypes_ReturnsSliceCopy(t *testing.T) {
+	// Reset registry before test
+	factory.ResetRegistry()
+
+	// Register a worker type
+	err := factory.RegisterWorkerType("test_worker", func(id fsmv2.Identity) fsmv2.Worker {
+		return &mockWorker{identity: id}
+	})
+	if err != nil {
+		t.Fatalf("failed to register worker type: %v", err)
+	}
+
+	// Get the list
+	types1 := factory.ListRegisteredTypes()
+
+	// Modify the returned slice
+	if len(types1) > 0 {
+		types1[0] = "modified"
+	}
+
+	// Get the list again
+	types2 := factory.ListRegisteredTypes()
+
+	// Verify the returned slice is a copy (not modified)
+	if types2[0] == "modified" {
+		t.Error("ListRegisteredTypes() returned slice is shared with internal registry")
+	}
+
+	if types2[0] != "test_worker" {
+		t.Errorf("ListRegisteredTypes() second call returned %q, want %q", types2[0], "test_worker")
+	}
+}
+
+func TestListRegisteredTypes_ConcurrentCalls(t *testing.T) {
+	// Reset registry before test
+	factory.ResetRegistry()
+
+	// Register worker types
+	for i := range 5 {
+		workerType := "worker_" + string(rune('A'+i))
+
+		err := factory.RegisterWorkerType(workerType, func(id fsmv2.Identity) fsmv2.Worker {
+			return &mockWorker{identity: id}
+		})
+		if err != nil {
+			t.Fatalf("failed to register worker type: %v", err)
+		}
+	}
+
+	const numGoroutines = 20
+
+	var wg sync.WaitGroup
+
+	results := make(chan []string, numGoroutines)
+	errors := make(chan error, numGoroutines)
+
+	// Launch multiple goroutines calling ListRegisteredTypes concurrently
+	for i := range numGoroutines {
+		wg.Add(1)
+
+		go func(goroutineID int) {
+			defer wg.Done()
+
+			types := factory.ListRegisteredTypes()
+			results <- types
+		}(i)
+	}
+
+	wg.Wait()
+	close(results)
+	close(errors)
+
+	// Verify all calls returned 5 types
+	for result := range results {
+		if len(result) != 5 {
+			t.Errorf("ListRegisteredTypes() concurrent call returned %d types, want 5", len(result))
+		}
+	}
+}
+
