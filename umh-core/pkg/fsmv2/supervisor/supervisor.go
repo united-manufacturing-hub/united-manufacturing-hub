@@ -141,6 +141,8 @@ type Supervisor struct {
 	globalVars            map[string]any                    // Global variables (fleet-wide settings from management system)
 	createdAt             time.Time                         // Timestamp when supervisor was created
 	parentID              string                            // ID of parent supervisor (empty string for root supervisors)
+	healthChecker         *InfrastructureHealthChecker      // Infrastructure health monitoring
+	circuitOpen           bool                              // Circuit breaker state
 }
 
 // WorkerContext encapsulates the runtime state for a single worker
@@ -341,6 +343,8 @@ func NewSupervisor(cfg Config) *Supervisor {
 		stateMapping:          make(map[string]string),
 		createdAt:             time.Now(),
 		parentID:              "", // Root supervisor has empty parentID
+		healthChecker:         NewInfrastructureHealthChecker(DefaultMaxInfraRecoveryAttempts, DefaultRecoveryAttemptWindow),
+		circuitOpen:           false,
 		collectorHealth: CollectorHealth{
 			staleThreshold:     staleThreshold,
 			timeout:            timeout,
@@ -799,6 +803,18 @@ func (s *Supervisor) tickWorker(ctx context.Context, workerID string) error {
 
 // Tick performs one FSM tick for a specific worker (for testing).
 func (s *Supervisor) Tick(ctx context.Context) error {
+	// PHASE 1: Infrastructure health check (priority 1)
+	if err := s.healthChecker.CheckChildConsistency(s.children); err != nil {
+		s.circuitOpen = true
+
+		// STUB: Child restart will be implemented in Phase 3
+		s.logger.Warnf("Infrastructure health check failed: %v", err)
+
+		return nil // Skip rest of tick
+	}
+
+	s.circuitOpen = false
+
 	// For backwards compatibility, tick the first worker
 	s.mu.RLock()
 	var firstWorkerID string
