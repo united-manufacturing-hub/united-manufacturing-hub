@@ -67,14 +67,13 @@ var _ = Describe("CommunicatorWorker", func() {
 
 	Describe("DeriveDesiredState", func() {
 		Context("with nil spec", func() {
-			It("should return default desired state with Dependencies populated", func() {
+			It("should return default desired state", func() {
 				desired, err := worker.DeriveDesiredState(nil)
 				Expect(err).NotTo(HaveOccurred())
-				Expect(desired).NotTo(BeNil())
 
-				communicatorDesired := desired.(*snapshot.CommunicatorDesiredState)
-				Expect(communicatorDesired.ShutdownRequested()).To(BeFalse())
-				Expect(communicatorDesired.Dependencies).NotTo(BeNil())
+				Expect(desired.State).To(Equal("running"))
+				Expect(desired.ShutdownRequested()).To(BeFalse())
+				Expect(desired.ChildrenSpecs).To(BeNil())
 			})
 		})
 	})

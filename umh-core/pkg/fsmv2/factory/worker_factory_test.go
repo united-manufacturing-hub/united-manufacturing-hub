@@ -7,6 +7,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/types"
 )
 
 // mockWorker is a minimal Worker implementation for testing.
@@ -18,8 +19,8 @@ func (m *mockWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedSt
 	return nil, nil
 }
 
-func (m *mockWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
-	return nil, nil
+func (m *mockWorker) DeriveDesiredState(spec interface{}) (types.DesiredState, error) {
+	return types.DesiredState{}, nil
 }
 
 func (m *mockWorker) GetInitialState() fsmv2.State {

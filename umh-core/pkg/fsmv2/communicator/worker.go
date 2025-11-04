@@ -115,6 +115,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/communicator/snapshot"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/communicator/state"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/communicator/transport"
+	fsmv2types "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/types"
 )
 
 // WorkerType identifies this worker in the FSM v2 system.
@@ -250,9 +251,12 @@ func (w *CommunicatorWorker) CollectObservedState(ctx context.Context) (fsmv2.Ob
 // The spec parameter is reserved for future use and currently ignored.
 //
 // This method never returns an error for the communicator worker.
-func (w *CommunicatorWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
-	return &snapshot.CommunicatorDesiredState{
-		Dependencies: w.GetDependencies(),
+func (w *CommunicatorWorker) DeriveDesiredState(spec interface{}) (fsmv2types.DesiredState, error) {
+	// For now, communicator uses simple desired state without children
+	// Future: may populate ChildrenSpecs for sub-components
+	return fsmv2types.DesiredState{
+		State:         "running",
+		ChildrenSpecs: nil,
 	}, nil
 }
 

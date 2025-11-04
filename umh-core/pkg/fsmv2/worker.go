@@ -3,6 +3,8 @@ package fsmv2
 import (
 	"context"
 	"time"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/types"
 )
 
 // Signal is used by states to communicate special conditions to the supervisor.
@@ -272,8 +274,12 @@ type Worker interface {
 	//
 	// This is used for templating, for example to convert user configuration to the actual "technical" template.
 	//
+	// Returns concrete types.DesiredState to enable hierarchical composition via ChildrenSpecs field.
+	// Parent workers can declare child FSM workers by populating ChildrenSpecs, allowing supervisor
+	// to reconcile actual children to match desired specs (Kubernetes-style declarative management).
+	//
 	// Example: Parse YAML config, apply templates, validate settings
-	DeriveDesiredState(spec interface{}) (DesiredState, error)
+	DeriveDesiredState(spec interface{}) (types.DesiredState, error)
 
 	// GetInitialState returns the starting state for this worker.
 	// Called once during worker creation.
