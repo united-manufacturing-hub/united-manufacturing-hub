@@ -788,8 +788,10 @@ func (s *Supervisor) Tick(ctx context.Context) error {
 	// For backwards compatibility, tick the first worker
 	s.mu.RLock()
 	var firstWorkerID string
+	var worker fsmv2.Worker
 	for id := range s.workers {
 		firstWorkerID = id
+		worker = s.workers[id].worker
 		break
 	}
 	s.mu.RUnlock()
@@ -798,6 +800,38 @@ func (s *Supervisor) Tick(ctx context.Context) error {
 		return errors.New("no workers in supervisor")
 	}
 
+	// Task 0.6: Integrate Phase 0 features BEFORE State.Next()
+	// 1. DeriveDesiredState
+	desired, err := worker.DeriveDesiredState(s.userSpec)
+	if err != nil {
+		s.logger.Errorf("Failed to derive desired state: %v", err)
+		return fmt.Errorf("failed to derive desired state: %w", err)
+	}
+
+	// 2. Reconcile children (propagate errors)
+	if err := s.reconcileChildren(desired.ChildrenSpecs); err != nil {
+		return fmt.Errorf("failed to reconcile children: %w", err)
+	}
+
+	// 3. Apply state mapping
+	s.applyStateMapping()
+
+	// 4. Recursively tick children (log errors, don't fail parent)
+	s.mu.RLock()
+	childrenToTick := make([]*Supervisor, 0, len(s.children))
+	for _, child := range s.children {
+		childrenToTick = append(childrenToTick, child)
+	}
+	s.mu.RUnlock()
+
+	for _, child := range childrenToTick {
+		if err := child.Tick(ctx); err != nil {
+			s.logger.Errorf("Child tick failed: %v", err)
+			// Continue with other children
+		}
+	}
+
+	// 5. Continue with existing worker tick logic
 	return s.tickWorker(ctx, firstWorkerID)
 }
 

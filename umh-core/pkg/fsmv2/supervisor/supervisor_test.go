@@ -315,7 +315,7 @@ func (m *mockObservedState) GetTimestamp() time.Time {
 	return m.timestamp
 }
 
-// MarshalJSON ensures mockObservedState serializes to its document content
+// MarshalJSON ensures mockObservedState serializes to its document content.
 func (m *mockObservedState) MarshalJSON() ([]byte, error) {
 	return json.Marshal(m.doc)
 }
