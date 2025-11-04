@@ -1030,7 +1030,20 @@ func (s *Supervisor) reconcileChildren(specs []types.ChildSpec) error {
 				Logger:     s.logger,
 			}
 
+			// TODO(ENG-3806): Use WorkerFactory for dynamic worker creation
+			// Currently using direct NewSupervisor() instantiation.
+			// When WorkerFactory is integrated (Phase 0.2), replace with:
+			//   worker, err := factory.NewWorker(spec.WorkerType, childIdentity)
+			//   if err != nil { return fmt.Errorf("failed to create worker: %w", err) }
+			//   childConfig.Worker = worker
 			childSupervisor := NewSupervisor(childConfig)
+
+			// TODO(ENG-3806): Implement storage isolation for children
+			// Each child should get isolated storage via s.store.ChildStore(spec.Name).
+			// Currently all children share parent's storage namespace.
+			// When ChildStore() is implemented, replace s.store with:
+			//   childStore := s.store.ChildStore(spec.Name)
+			//   childConfig.Store = childStore
 			childSupervisor.UpdateUserSpec(spec.UserSpec)
 			childSupervisor.stateMapping = spec.StateMapping
 
