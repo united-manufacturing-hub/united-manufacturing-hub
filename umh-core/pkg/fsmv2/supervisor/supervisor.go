@@ -999,6 +999,15 @@ func (s *Supervisor) GetWorkerState(workerID string) (string, string, error) {
 	return workerCtx.currentState.String(), workerCtx.currentState.Reason(), nil
 }
 
+// GetMappedParentState returns the mapped parent state for this supervisor.
+// Returns empty string if this supervisor has no parent or no mapping has been applied.
+// This method is primarily used for testing hierarchical state mapping.
+func (s *Supervisor) GetMappedParentState() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.mappedParentState
+}
+
 // GetChildren returns a copy of the children map for inspection.
 // This method is thread-safe and can be used in tests to verify hierarchical composition.
 func (s *Supervisor) GetChildren() map[string]*Supervisor {
