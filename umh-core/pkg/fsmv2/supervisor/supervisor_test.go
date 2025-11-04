@@ -1009,3 +1009,563 @@ func TestReconcileChildren_EmptySpecs(t *testing.T) {
 		t.Errorf("Expected 0 children after empty reconciliation, got %d", len(supervisor.children))
 	}
 }
+
+func TestApplyStateMapping_WithMapping(t *testing.T) {
+	ctx := context.Background()
+	logger := zap.NewNop().Sugar()
+
+	basicStore := memory.NewInMemoryStore()
+	defer func() {
+		_ = basicStore.Close(ctx)
+	}()
+
+	registry := storage.NewRegistry()
+	_ = registry.Register(&storage.CollectionMetadata{
+		Name:          "parent_identity",
+		WorkerType:    "parent",
+		Role:          storage.RoleIdentity,
+		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt},
+		IndexedFields: []string{storage.FieldSyncID},
+	})
+	_ = registry.Register(&storage.CollectionMetadata{
+		Name:          "parent_desired",
+		WorkerType:    "parent",
+		Role:          storage.RoleDesired,
+		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
+		IndexedFields: []string{storage.FieldSyncID},
+	})
+	_ = registry.Register(&storage.CollectionMetadata{
+		Name:          "parent_observed",
+		WorkerType:    "parent",
+		Role:          storage.RoleObserved,
+		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
+		IndexedFields: []string{storage.FieldSyncID},
+	})
+
+	_ = basicStore.CreateCollection(ctx, "parent_identity", nil)
+	_ = basicStore.CreateCollection(ctx, "parent_desired", nil)
+	_ = basicStore.CreateCollection(ctx, "parent_observed", nil)
+
+	triangularStore := storage.NewTriangularStore(basicStore, registry)
+
+	supervisorCfg := Config{
+		WorkerType: "parent",
+		Store:      triangularStore,
+		Logger:     logger,
+	}
+
+	parent := NewSupervisor(supervisorCfg)
+
+	identity := fsmv2.Identity{
+		ID:         "parent-1",
+		Name:       "Parent Worker",
+		WorkerType: "parent",
+	}
+
+	worker := &mockWorker{
+		identity:     identity,
+		initialState: &mockState{name: "idle"},
+		observed: persistence.Document{
+			"id":     "parent-1",
+			"status": "idle",
+		},
+	}
+
+	err := parent.AddWorker(identity, worker)
+	if err != nil {
+		t.Fatalf("Failed to add parent worker: %v", err)
+	}
+
+	specs := []types.ChildSpec{
+		{
+			Name:       "child-1",
+			WorkerType: "mqtt_client",
+			UserSpec:   types.UserSpec{Config: "url: tcp://localhost:1883"},
+			StateMapping: map[string]string{
+				"idle":   "stopped",
+				"active": "connected",
+			},
+		},
+	}
+
+	err = parent.reconcileChildren(specs)
+	if err != nil {
+		t.Fatalf("reconcileChildren failed: %v", err)
+	}
+
+	parent.applyStateMapping()
+
+	child := parent.children["child-1"]
+	if child.mappedParentState != "stopped" {
+		t.Errorf("Expected child mappedParentState 'stopped', got '%s'", child.mappedParentState)
+	}
+}
+
+func TestApplyStateMapping_NoMapping(t *testing.T) {
+	ctx := context.Background()
+	logger := zap.NewNop().Sugar()
+
+	basicStore := memory.NewInMemoryStore()
+	defer func() {
+		_ = basicStore.Close(ctx)
+	}()
+
+	registry := storage.NewRegistry()
+	_ = registry.Register(&storage.CollectionMetadata{
+		Name:          "parent_identity",
+		WorkerType:    "parent",
+		Role:          storage.RoleIdentity,
+		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt},
+		IndexedFields: []string{storage.FieldSyncID},
+	})
+	_ = registry.Register(&storage.CollectionMetadata{
+		Name:          "parent_desired",
+		WorkerType:    "parent",
+		Role:          storage.RoleDesired,
+		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
+		IndexedFields: []string{storage.FieldSyncID},
+	})
+	_ = registry.Register(&storage.CollectionMetadata{
+		Name:          "parent_observed",
+		WorkerType:    "parent",
+		Role:          storage.RoleObserved,
+		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
+		IndexedFields: []string{storage.FieldSyncID},
+	})
+
+	_ = basicStore.CreateCollection(ctx, "parent_identity", nil)
+	_ = basicStore.CreateCollection(ctx, "parent_desired", nil)
+	_ = basicStore.CreateCollection(ctx, "parent_observed", nil)
+
+	triangularStore := storage.NewTriangularStore(basicStore, registry)
+
+	supervisorCfg := Config{
+		WorkerType: "parent",
+		Store:      triangularStore,
+		Logger:     logger,
+	}
+
+	parent := NewSupervisor(supervisorCfg)
+
+	identity := fsmv2.Identity{
+		ID:         "parent-1",
+		Name:       "Parent Worker",
+		WorkerType: "parent",
+	}
+
+	worker := &mockWorker{
+		identity:     identity,
+		initialState: &mockState{name: "running"},
+		observed: persistence.Document{
+			"id":     "parent-1",
+			"status": "running",
+		},
+	}
+
+	err := parent.AddWorker(identity, worker)
+	if err != nil {
+		t.Fatalf("Failed to add parent worker: %v", err)
+	}
+
+	specs := []types.ChildSpec{
+		{
+			Name:       "child-1",
+			WorkerType: "mqtt_client",
+			UserSpec:   types.UserSpec{Config: "url: tcp://localhost:1883"},
+		},
+	}
+
+	err = parent.reconcileChildren(specs)
+	if err != nil {
+		t.Fatalf("reconcileChildren failed: %v", err)
+	}
+
+	parent.applyStateMapping()
+
+	child := parent.children["child-1"]
+	if child.mappedParentState != "running" {
+		t.Errorf("Expected child mappedParentState 'running' (parent state), got '%s'", child.mappedParentState)
+	}
+}
+
+func TestApplyStateMapping_MissingStateInMapping(t *testing.T) {
+	ctx := context.Background()
+	logger := zap.NewNop().Sugar()
+
+	basicStore := memory.NewInMemoryStore()
+	defer func() {
+		_ = basicStore.Close(ctx)
+	}()
+
+	registry := storage.NewRegistry()
+	_ = registry.Register(&storage.CollectionMetadata{
+		Name:          "parent_identity",
+		WorkerType:    "parent",
+		Role:          storage.RoleIdentity,
+		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt},
+		IndexedFields: []string{storage.FieldSyncID},
+	})
+	_ = registry.Register(&storage.CollectionMetadata{
+		Name:          "parent_desired",
+		WorkerType:    "parent",
+		Role:          storage.RoleDesired,
+		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
+		IndexedFields: []string{storage.FieldSyncID},
+	})
+	_ = registry.Register(&storage.CollectionMetadata{
+		Name:          "parent_observed",
+		WorkerType:    "parent",
+		Role:          storage.RoleObserved,
+		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
+		IndexedFields: []string{storage.FieldSyncID},
+	})
+
+	_ = basicStore.CreateCollection(ctx, "parent_identity", nil)
+	_ = basicStore.CreateCollection(ctx, "parent_desired", nil)
+	_ = basicStore.CreateCollection(ctx, "parent_observed", nil)
+
+	triangularStore := storage.NewTriangularStore(basicStore, registry)
+
+	supervisorCfg := Config{
+		WorkerType: "parent",
+		Store:      triangularStore,
+		Logger:     logger,
+	}
+
+	parent := NewSupervisor(supervisorCfg)
+
+	identity := fsmv2.Identity{
+		ID:         "parent-1",
+		Name:       "Parent Worker",
+		WorkerType: "parent",
+	}
+
+	worker := &mockWorker{
+		identity:     identity,
+		initialState: &mockState{name: "unknown"},
+		observed: persistence.Document{
+			"id":     "parent-1",
+			"status": "unknown",
+		},
+	}
+
+	err := parent.AddWorker(identity, worker)
+	if err != nil {
+		t.Fatalf("Failed to add parent worker: %v", err)
+	}
+
+	specs := []types.ChildSpec{
+		{
+			Name:       "child-1",
+			WorkerType: "mqtt_client",
+			UserSpec:   types.UserSpec{Config: "url: tcp://localhost:1883"},
+			StateMapping: map[string]string{
+				"idle":   "stopped",
+				"active": "connected",
+			},
+		},
+	}
+
+	err = parent.reconcileChildren(specs)
+	if err != nil {
+		t.Fatalf("reconcileChildren failed: %v", err)
+	}
+
+	parent.applyStateMapping()
+
+	child := parent.children["child-1"]
+	if child.mappedParentState != "unknown" {
+		t.Errorf("Expected child mappedParentState 'unknown' (parent state when not in mapping), got '%s'", child.mappedParentState)
+	}
+}
+
+func TestApplyStateMapping_MultipleChildren(t *testing.T) {
+	ctx := context.Background()
+	logger := zap.NewNop().Sugar()
+
+	basicStore := memory.NewInMemoryStore()
+	defer func() {
+		_ = basicStore.Close(ctx)
+	}()
+
+	registry := storage.NewRegistry()
+	_ = registry.Register(&storage.CollectionMetadata{
+		Name:          "parent_identity",
+		WorkerType:    "parent",
+		Role:          storage.RoleIdentity,
+		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt},
+		IndexedFields: []string{storage.FieldSyncID},
+	})
+	_ = registry.Register(&storage.CollectionMetadata{
+		Name:          "parent_desired",
+		WorkerType:    "parent",
+		Role:          storage.RoleDesired,
+		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
+		IndexedFields: []string{storage.FieldSyncID},
+	})
+	_ = registry.Register(&storage.CollectionMetadata{
+		Name:          "parent_observed",
+		WorkerType:    "parent",
+		Role:          storage.RoleObserved,
+		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
+		IndexedFields: []string{storage.FieldSyncID},
+	})
+
+	_ = basicStore.CreateCollection(ctx, "parent_identity", nil)
+	_ = basicStore.CreateCollection(ctx, "parent_desired", nil)
+	_ = basicStore.CreateCollection(ctx, "parent_observed", nil)
+
+	triangularStore := storage.NewTriangularStore(basicStore, registry)
+
+	supervisorCfg := Config{
+		WorkerType: "parent",
+		Store:      triangularStore,
+		Logger:     logger,
+	}
+
+	parent := NewSupervisor(supervisorCfg)
+
+	identity := fsmv2.Identity{
+		ID:         "parent-1",
+		Name:       "Parent Worker",
+		WorkerType: "parent",
+	}
+
+	worker := &mockWorker{
+		identity:     identity,
+		initialState: &mockState{name: "active"},
+		observed: persistence.Document{
+			"id":     "parent-1",
+			"status": "active",
+		},
+	}
+
+	err := parent.AddWorker(identity, worker)
+	if err != nil {
+		t.Fatalf("Failed to add parent worker: %v", err)
+	}
+
+	specs := []types.ChildSpec{
+		{
+			Name:       "child-1",
+			WorkerType: "mqtt_client",
+			UserSpec:   types.UserSpec{Config: "url: tcp://localhost:1883"},
+			StateMapping: map[string]string{
+				"active": "connected",
+				"idle":   "disconnected",
+			},
+		},
+		{
+			Name:       "child-2",
+			WorkerType: "modbus_client",
+			UserSpec:   types.UserSpec{Config: "address: 192.168.1.100:502"},
+			StateMapping: map[string]string{
+				"active": "polling",
+				"idle":   "stopped",
+			},
+		},
+		{
+			Name:       "child-3",
+			WorkerType: "opcua_client",
+			UserSpec:   types.UserSpec{Config: "endpoint: opc.tcp://localhost:4840"},
+		},
+	}
+
+	err = parent.reconcileChildren(specs)
+	if err != nil {
+		t.Fatalf("reconcileChildren failed: %v", err)
+	}
+
+	parent.applyStateMapping()
+
+	child1 := parent.children["child-1"]
+	if child1.mappedParentState != "connected" {
+		t.Errorf("Expected child-1 mappedParentState 'connected', got '%s'", child1.mappedParentState)
+	}
+
+	child2 := parent.children["child-2"]
+	if child2.mappedParentState != "polling" {
+		t.Errorf("Expected child-2 mappedParentState 'polling', got '%s'", child2.mappedParentState)
+	}
+
+	child3 := parent.children["child-3"]
+	if child3.mappedParentState != "active" {
+		t.Errorf("Expected child-3 mappedParentState 'active' (parent state, no mapping), got '%s'", child3.mappedParentState)
+	}
+}
+
+func TestApplyStateMapping_EmptyStateMapping(t *testing.T) {
+	ctx := context.Background()
+	logger := zap.NewNop().Sugar()
+
+	basicStore := memory.NewInMemoryStore()
+	defer func() {
+		_ = basicStore.Close(ctx)
+	}()
+
+	registry := storage.NewRegistry()
+	_ = registry.Register(&storage.CollectionMetadata{
+		Name:          "parent_identity",
+		WorkerType:    "parent",
+		Role:          storage.RoleIdentity,
+		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt},
+		IndexedFields: []string{storage.FieldSyncID},
+	})
+	_ = registry.Register(&storage.CollectionMetadata{
+		Name:          "parent_desired",
+		WorkerType:    "parent",
+		Role:          storage.RoleDesired,
+		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
+		IndexedFields: []string{storage.FieldSyncID},
+	})
+	_ = registry.Register(&storage.CollectionMetadata{
+		Name:          "parent_observed",
+		WorkerType:    "parent",
+		Role:          storage.RoleObserved,
+		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
+		IndexedFields: []string{storage.FieldSyncID},
+	})
+
+	_ = basicStore.CreateCollection(ctx, "parent_identity", nil)
+	_ = basicStore.CreateCollection(ctx, "parent_desired", nil)
+	_ = basicStore.CreateCollection(ctx, "parent_observed", nil)
+
+	triangularStore := storage.NewTriangularStore(basicStore, registry)
+
+	supervisorCfg := Config{
+		WorkerType: "parent",
+		Store:      triangularStore,
+		Logger:     logger,
+	}
+
+	parent := NewSupervisor(supervisorCfg)
+
+	identity := fsmv2.Identity{
+		ID:         "parent-1",
+		Name:       "Parent Worker",
+		WorkerType: "parent",
+	}
+
+	worker := &mockWorker{
+		identity:     identity,
+		initialState: &mockState{name: "running"},
+		observed: persistence.Document{
+			"id":     "parent-1",
+			"status": "running",
+		},
+	}
+
+	err := parent.AddWorker(identity, worker)
+	if err != nil {
+		t.Fatalf("Failed to add parent worker: %v", err)
+	}
+
+	specs := []types.ChildSpec{
+		{
+			Name:         "child-1",
+			WorkerType:   "mqtt_client",
+			UserSpec:     types.UserSpec{Config: "url: tcp://localhost:1883"},
+			StateMapping: map[string]string{},
+		},
+	}
+
+	err = parent.reconcileChildren(specs)
+	if err != nil {
+		t.Fatalf("reconcileChildren failed: %v", err)
+	}
+
+	parent.applyStateMapping()
+
+	child := parent.children["child-1"]
+	if child.mappedParentState != "running" {
+		t.Errorf("Expected child mappedParentState 'running' (parent state with empty map), got '%s'", child.mappedParentState)
+	}
+}
+
+func TestApplyStateMapping_NilStateMapping(t *testing.T) {
+	ctx := context.Background()
+	logger := zap.NewNop().Sugar()
+
+	basicStore := memory.NewInMemoryStore()
+	defer func() {
+		_ = basicStore.Close(ctx)
+	}()
+
+	registry := storage.NewRegistry()
+	_ = registry.Register(&storage.CollectionMetadata{
+		Name:          "parent_identity",
+		WorkerType:    "parent",
+		Role:          storage.RoleIdentity,
+		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt},
+		IndexedFields: []string{storage.FieldSyncID},
+	})
+	_ = registry.Register(&storage.CollectionMetadata{
+		Name:          "parent_desired",
+		WorkerType:    "parent",
+		Role:          storage.RoleDesired,
+		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
+		IndexedFields: []string{storage.FieldSyncID},
+	})
+	_ = registry.Register(&storage.CollectionMetadata{
+		Name:          "parent_observed",
+		WorkerType:    "parent",
+		Role:          storage.RoleObserved,
+		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
+		IndexedFields: []string{storage.FieldSyncID},
+	})
+
+	_ = basicStore.CreateCollection(ctx, "parent_identity", nil)
+	_ = basicStore.CreateCollection(ctx, "parent_desired", nil)
+	_ = basicStore.CreateCollection(ctx, "parent_observed", nil)
+
+	triangularStore := storage.NewTriangularStore(basicStore, registry)
+
+	supervisorCfg := Config{
+		WorkerType: "parent",
+		Store:      triangularStore,
+		Logger:     logger,
+	}
+
+	parent := NewSupervisor(supervisorCfg)
+
+	identity := fsmv2.Identity{
+		ID:         "parent-1",
+		Name:       "Parent Worker",
+		WorkerType: "parent",
+	}
+
+	worker := &mockWorker{
+		identity:     identity,
+		initialState: &mockState{name: "starting"},
+		observed: persistence.Document{
+			"id":     "parent-1",
+			"status": "starting",
+		},
+	}
+
+	err := parent.AddWorker(identity, worker)
+	if err != nil {
+		t.Fatalf("Failed to add parent worker: %v", err)
+	}
+
+	specs := []types.ChildSpec{
+		{
+			Name:         "child-1",
+			WorkerType:   "mqtt_client",
+			UserSpec:     types.UserSpec{Config: "url: tcp://localhost:1883"},
+			StateMapping: nil,
+		},
+	}
+
+	err = parent.reconcileChildren(specs)
+	if err != nil {
+		t.Fatalf("reconcileChildren failed: %v", err)
+	}
+
+	parent.applyStateMapping()
+
+	child := parent.children["child-1"]
+	if child.mappedParentState != "starting" {
+		t.Errorf("Expected child mappedParentState 'starting' (parent state with nil map), got '%s'", child.mappedParentState)
+	}
+}

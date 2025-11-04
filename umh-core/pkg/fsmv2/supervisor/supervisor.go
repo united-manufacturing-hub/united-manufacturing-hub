@@ -137,6 +137,7 @@ type Supervisor struct {
 	children              map[string]*Supervisor            // Child supervisors by name (hierarchical composition)
 	stateMapping          map[string]string                 // Parent→child state mapping
 	userSpec              types.UserSpec                    // User-provided configuration for this supervisor
+	mappedParentState     string                            // State mapped from parent (if this is a child supervisor)
 }
 
 // WorkerContext encapsulates the runtime state for a single worker
@@ -1038,6 +1039,42 @@ func (s *Supervisor) Shutdown() {
 	for childName, child := range s.children {
 		s.logger.Debugf("Shutting down child: %s", childName)
 		child.Shutdown()
+	}
+}
+
+// applyStateMapping applies parent state mapping to all children.
+// Called after reconcileChildren() during Supervisor.Tick().
+// For each child, this determines what state the child should transition to
+// based on the parent's current state and the child's StateMapping configuration.
+func (s *Supervisor) applyStateMapping() {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if len(s.workers) == 0 {
+		return
+	}
+
+	var parentState string
+	for _, workerCtx := range s.workers {
+		workerCtx.mu.RLock()
+		if workerCtx.currentState != nil {
+			parentState = workerCtx.currentState.String()
+		}
+		workerCtx.mu.RUnlock()
+		break
+	}
+
+	for childName, child := range s.children {
+		mappedState := parentState
+
+		if len(child.stateMapping) > 0 {
+			if mapped, exists := child.stateMapping[parentState]; exists {
+				mappedState = mapped
+			}
+		}
+
+		child.mappedParentState = mappedState
+		s.logger.Debugf("Child %s: parent state '%s' mapped to '%s'", childName, parentState, mappedState)
 	}
 }
 
