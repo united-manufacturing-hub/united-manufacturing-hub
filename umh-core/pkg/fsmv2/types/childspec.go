@@ -20,7 +20,8 @@ import "encoding/json"
 //	        ↓ DeriveDesiredState()
 //	DesiredState{Host: "192.168.1.100", Port: 502}
 type UserSpec struct {
-	Config string `json:"config" yaml:"config"` // Raw user-provided configuration (YAML, JSON, or other format)
+	Config    string         `json:"config" yaml:"config"`       // Raw user-provided configuration (YAML, JSON, or other format)
+	Variables VariableBundle `json:"variables" yaml:"variables"` // Variable bundle (User, Global, Internal namespaces)
 }
 
 // ChildSpec is a declarative specification for a child FSM worker.

@@ -138,6 +138,9 @@ type Supervisor struct {
 	stateMapping          map[string]string                 // Parent→child state mapping
 	userSpec              types.UserSpec                    // User-provided configuration for this supervisor
 	mappedParentState     string                            // State mapped from parent (if this is a child supervisor)
+	globalVars            map[string]any                    // Global variables (fleet-wide settings from management system)
+	createdAt             time.Time                         // Timestamp when supervisor was created
+	parentID              string                            // ID of parent supervisor (empty string for root supervisors)
 }
 
 // WorkerContext encapsulates the runtime state for a single worker
@@ -336,6 +339,8 @@ func NewSupervisor(cfg Config) *Supervisor {
 		expectedObservedTypes: make(map[string]reflect.Type),
 		children:              make(map[string]*Supervisor),
 		stateMapping:          make(map[string]string),
+		createdAt:             time.Now(),
+		parentID:              "", // Root supervisor has empty parentID
 		collectorHealth: CollectorHealth{
 			staleThreshold:     staleThreshold,
 			timeout:            timeout,
@@ -452,6 +457,15 @@ func (s *Supervisor) ListWorkers() []string {
 		ids = append(ids, id)
 	}
 	return ids
+}
+
+// SetGlobalVariables sets the global variables for this supervisor.
+// Global variables come from the management system and are fleet-wide settings.
+// They are injected into UserSpec.Variables.Global before DeriveDesiredState() is called.
+func (s *Supervisor) SetGlobalVariables(vars map[string]any) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.globalVars = vars
 }
 
 func (s *Supervisor) GetStaleThreshold() time.Duration {
@@ -800,9 +814,30 @@ func (s *Supervisor) Tick(ctx context.Context) error {
 		return errors.New("no workers in supervisor")
 	}
 
+	// Task 0.5.5: Inject Global and Internal variables into UserSpec
+	// This must happen BEFORE DeriveDesiredState() is called
+	userSpecWithVars := s.userSpec
+
+	// Preserve existing User variables
+	if userSpecWithVars.Variables.User == nil {
+		userSpecWithVars.Variables.User = make(map[string]any)
+	}
+
+	// Inject Global variables (from management system)
+	s.mu.RLock()
+	userSpecWithVars.Variables.Global = s.globalVars
+	s.mu.RUnlock()
+
+	// Inject Internal variables (runtime metadata)
+	userSpecWithVars.Variables.Internal = map[string]any{
+		"id":         firstWorkerID,
+		"created_at": s.createdAt,
+		"bridged_by": s.parentID,
+	}
+
 	// Task 0.6: Integrate Phase 0 features BEFORE State.Next()
 	// 1. DeriveDesiredState
-	desired, err := worker.DeriveDesiredState(s.userSpec)
+	desired, err := worker.DeriveDesiredState(userSpecWithVars)
 	if err != nil {
 		s.logger.Errorf("Failed to derive desired state: %v", err)
 		return fmt.Errorf("failed to derive desired state: %w", err)
