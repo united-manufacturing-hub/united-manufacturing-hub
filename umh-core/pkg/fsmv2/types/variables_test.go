@@ -162,4 +162,173 @@ global:
 			Expect(roundtripped.Internal).To(BeNil())
 		})
 	})
+
+	Describe("Flatten", func() {
+		It("should promote User variables to top-level", func() {
+			bundle := types.VariableBundle{
+				User: map[string]any{
+					"IP":   "192.168.1.100",
+					"PORT": 502,
+				},
+			}
+
+			result := bundle.Flatten()
+
+			Expect(result).To(HaveKeyWithValue("IP", "192.168.1.100"))
+			Expect(result).To(HaveKeyWithValue("PORT", 502))
+		})
+
+		It("should nest Global variables under 'global' key", func() {
+			bundle := types.VariableBundle{
+				Global: map[string]any{
+					"api_endpoint": "https://api.example.com",
+					"cluster_id":   "prod-123",
+				},
+			}
+
+			result := bundle.Flatten()
+
+			Expect(result).To(HaveKey("global"))
+			globalMap, ok := result["global"].(map[string]any)
+			Expect(ok).To(BeTrue())
+			Expect(globalMap).To(HaveKeyWithValue("api_endpoint", "https://api.example.com"))
+			Expect(globalMap).To(HaveKeyWithValue("cluster_id", "prod-123"))
+		})
+
+		It("should nest Internal variables under 'internal' key", func() {
+			bundle := types.VariableBundle{
+				Internal: map[string]any{
+					"id":        "internal-123",
+					"timestamp": 1234567890,
+				},
+			}
+
+			result := bundle.Flatten()
+
+			Expect(result).To(HaveKey("internal"))
+			internalMap, ok := result["internal"].(map[string]any)
+			Expect(ok).To(BeTrue())
+			Expect(internalMap).To(HaveKeyWithValue("id", "internal-123"))
+			Expect(internalMap).To(HaveKeyWithValue("timestamp", 1234567890))
+		})
+
+		It("should handle multiple User variables all promoted to top-level", func() {
+			bundle := types.VariableBundle{
+				User: map[string]any{
+					"IP":         "10.0.0.1",
+					"PORT":       8080,
+					"enabled":    true,
+					"rate_limit": 100.5,
+					"name":       "my-device",
+				},
+			}
+
+			result := bundle.Flatten()
+
+			Expect(result).To(HaveKeyWithValue("IP", "10.0.0.1"))
+			Expect(result).To(HaveKeyWithValue("PORT", 8080))
+			Expect(result).To(HaveKeyWithValue("enabled", true))
+			Expect(result).To(HaveKeyWithValue("rate_limit", 100.5))
+			Expect(result).To(HaveKeyWithValue("name", "my-device"))
+		})
+
+		It("should handle all three namespaces together", func() {
+			bundle := types.VariableBundle{
+				User: map[string]any{
+					"IP":   "192.168.1.100",
+					"PORT": 502,
+				},
+				Global: map[string]any{
+					"api_endpoint": "https://api.example.com",
+				},
+				Internal: map[string]any{
+					"id": "internal-123",
+				},
+			}
+
+			result := bundle.Flatten()
+
+			Expect(result).To(HaveKeyWithValue("IP", "192.168.1.100"))
+			Expect(result).To(HaveKeyWithValue("PORT", 502))
+			Expect(result).To(HaveKey("global"))
+			Expect(result).To(HaveKey("internal"))
+
+			globalMap := result["global"].(map[string]any)
+			Expect(globalMap).To(HaveKeyWithValue("api_endpoint", "https://api.example.com"))
+
+			internalMap := result["internal"].(map[string]any)
+			Expect(internalMap).To(HaveKeyWithValue("id", "internal-123"))
+		})
+
+		It("should handle empty User map without breaking", func() {
+			bundle := types.VariableBundle{
+				User: map[string]any{},
+				Global: map[string]any{
+					"api_endpoint": "https://api.example.com",
+				},
+			}
+
+			result := bundle.Flatten()
+
+			Expect(result).To(HaveKey("global"))
+			Expect(result).ToNot(HaveKey("IP"))
+			Expect(result).ToNot(HaveKey("PORT"))
+		})
+
+		It("should handle nil User map without breaking", func() {
+			bundle := types.VariableBundle{
+				User: nil,
+				Global: map[string]any{
+					"api_endpoint": "https://api.example.com",
+				},
+			}
+
+			result := bundle.Flatten()
+
+			Expect(result).To(HaveKey("global"))
+			Expect(result).ToNot(HaveKey("IP"))
+		})
+
+		It("should set global key to nil when Global map is nil", func() {
+			bundle := types.VariableBundle{
+				User: map[string]any{
+					"IP": "192.168.1.100",
+				},
+				Global: nil,
+			}
+
+			result := bundle.Flatten()
+
+			Expect(result).To(HaveKeyWithValue("IP", "192.168.1.100"))
+			Expect(result).To(HaveKey("global"))
+			Expect(result["global"]).To(BeNil())
+		})
+
+		It("should set internal key to nil when Internal map is nil", func() {
+			bundle := types.VariableBundle{
+				User: map[string]any{
+					"IP": "192.168.1.100",
+				},
+				Internal: nil,
+			}
+
+			result := bundle.Flatten()
+
+			Expect(result).To(HaveKeyWithValue("IP", "192.168.1.100"))
+			Expect(result).To(HaveKey("internal"))
+			Expect(result["internal"]).To(BeNil())
+		})
+
+		It("should handle completely empty VariableBundle", func() {
+			bundle := types.VariableBundle{}
+
+			result := bundle.Flatten()
+
+			Expect(result).ToNot(BeNil())
+			Expect(result).To(HaveKey("global"))
+			Expect(result).To(HaveKey("internal"))
+			Expect(result["global"]).To(BeNil())
+			Expect(result["internal"]).To(BeNil())
+		})
+	})
 })

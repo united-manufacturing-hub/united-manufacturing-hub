@@ -41,3 +41,29 @@ type VariableBundle struct {
 	// This namespace is NOT serialized (yaml:"-" json:"-") and exists only at runtime.
 	Internal map[string]any `json:"-" yaml:"-"`
 }
+
+// Flatten returns a map with User variables promoted to top-level and Global/Internal nested.
+// This enables intuitive template syntax where User variables are accessible as {{ .varname }}
+// while Global and Internal require explicit prefixes ({{ .global.varname }}, {{ .internal.varname }}).
+//
+// Example:
+//
+//	bundle := VariableBundle{
+//	    User: map[string]any{"IP": "192.168.1.100"},
+//	    Global: map[string]any{"api_endpoint": "https://api.example.com"},
+//	}
+//	flattened := bundle.Flatten()
+//	// flattened["IP"] = "192.168.1.100"
+//	// flattened["global"] = map[string]any{"api_endpoint": "https://api.example.com"}
+func (v VariableBundle) Flatten() map[string]any {
+	result := make(map[string]any)
+
+	for k, val := range v.User {
+		result[k] = val
+	}
+
+	result["global"] = v.Global
+	result["internal"] = v.Internal
+
+	return result
+}
