@@ -162,3 +162,75 @@ var _ = Describe("Action Execution Metrics", Label("metrics"), func() {
 		})
 	})
 })
+
+var _ = Describe("Hierarchical Composition Metrics", Label("metrics"), func() {
+	Context("RecordChildCount", func() {
+		It("should record child count", func() {
+			supervisorID := "test-supervisor-8"
+
+			Expect(func() {
+				supervisor.RecordChildCount(supervisorID, 0)
+			}).NotTo(Panic())
+
+			Expect(func() {
+				supervisor.RecordChildCount(supervisorID, 5)
+			}).NotTo(Panic())
+
+			Expect(func() {
+				supervisor.RecordChildCount(supervisorID, 10)
+			}).NotTo(Panic())
+		})
+	})
+
+	Context("RecordReconciliation", func() {
+		It("should record reconciliation with result and duration", func() {
+			supervisorID := "test-supervisor-9"
+			duration := 100 * time.Millisecond
+
+			Expect(func() {
+				supervisor.RecordReconciliation(supervisorID, "success", duration)
+			}).NotTo(Panic())
+
+			Expect(func() {
+				supervisor.RecordReconciliation(supervisorID, "failure", duration)
+			}).NotTo(Panic())
+
+			Expect(func() {
+				supervisor.RecordReconciliation(supervisorID, "partial", duration)
+			}).NotTo(Panic())
+		})
+	})
+
+	Context("RecordTickPropagationDepth", func() {
+		It("should record tick propagation depth", func() {
+			supervisorID := "test-supervisor-10"
+
+			Expect(func() {
+				supervisor.RecordTickPropagationDepth(supervisorID, 1)
+			}).NotTo(Panic())
+
+			Expect(func() {
+				supervisor.RecordTickPropagationDepth(supervisorID, 3)
+			}).NotTo(Panic())
+
+			Expect(func() {
+				supervisor.RecordTickPropagationDepth(supervisorID, 10)
+			}).NotTo(Panic())
+		})
+	})
+
+	Context("RecordTickPropagationDuration", func() {
+		It("should record tick propagation duration", func() {
+			supervisorID := "test-supervisor-11"
+			duration := 50 * time.Millisecond
+
+			Expect(func() {
+				supervisor.RecordTickPropagationDuration(supervisorID, duration)
+			}).NotTo(Panic())
+
+			Expect(func() {
+				supervisor.RecordTickPropagationDuration(supervisorID, 200*time.Millisecond)
+			}).NotTo(Panic())
+		})
+	})
+})

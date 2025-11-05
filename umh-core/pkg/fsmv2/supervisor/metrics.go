@@ -124,6 +124,56 @@ var (
 		},
 		[]string{"pool_name"},
 	)
+
+	childCount = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: namespace,
+			Subsystem: subsystem,
+			Name:      "child_count",
+			Help:      "Current number of child supervisors",
+		},
+		[]string{"supervisor_id"},
+	)
+
+	reconciliationTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: namespace,
+			Subsystem: subsystem,
+			Name:      "reconciliation_total",
+			Help:      "Total number of reconciliation cycles",
+		},
+		[]string{"supervisor_id", "result"},
+	)
+
+	reconciliationDuration = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Namespace: namespace,
+			Subsystem: subsystem,
+			Name:      "reconciliation_duration_seconds",
+			Help:      "Duration of reconciliation cycles in seconds",
+		},
+		[]string{"supervisor_id"},
+	)
+
+	tickPropagationDepth = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: namespace,
+			Subsystem: subsystem,
+			Name:      "tick_propagation_depth",
+			Help:      "Depth of tick propagation in supervisor hierarchy",
+		},
+		[]string{"supervisor_id"},
+	)
+
+	tickPropagationDuration = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Namespace: namespace,
+			Subsystem: subsystem,
+			Name:      "tick_propagation_duration_seconds",
+			Help:      "Duration of tick propagation in seconds",
+		},
+		[]string{"supervisor_id"},
+	)
 )
 
 func RecordCircuitOpen(supervisorID string, open bool) {
@@ -166,4 +216,21 @@ func RecordWorkerPoolUtilization(poolName string, utilization float64) {
 
 func RecordWorkerPoolQueueSize(poolName string, size int) {
 	workerPoolQueueSize.WithLabelValues(poolName).Set(float64(size))
+}
+
+func RecordChildCount(supervisorID string, count int) {
+	childCount.WithLabelValues(supervisorID).Set(float64(count))
+}
+
+func RecordReconciliation(supervisorID, result string, duration time.Duration) {
+	reconciliationTotal.WithLabelValues(supervisorID, result).Inc()
+	reconciliationDuration.WithLabelValues(supervisorID).Observe(duration.Seconds())
+}
+
+func RecordTickPropagationDepth(supervisorID string, depth int) {
+	tickPropagationDepth.WithLabelValues(supervisorID).Set(float64(depth))
+}
+
+func RecordTickPropagationDuration(supervisorID string, duration time.Duration) {
+	tickPropagationDuration.WithLabelValues(supervisorID).Observe(duration.Seconds())
 }
