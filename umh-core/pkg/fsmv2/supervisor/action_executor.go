@@ -94,6 +94,8 @@ func (ae *ActionExecutor) HasActionInProgress(actionID string) bool {
 }
 
 func (ae *ActionExecutor) Shutdown() {
-	ae.cancel()
+	if ae.cancel != nil {
+		ae.cancel()
+	}
 	ae.wg.Wait()
 }

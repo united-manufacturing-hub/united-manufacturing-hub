@@ -143,6 +143,7 @@ type Supervisor struct {
 	parentID              string                            // ID of parent supervisor (empty string for root supervisors)
 	healthChecker         *InfrastructureHealthChecker      // Infrastructure health monitoring
 	circuitOpen           bool                              // Circuit breaker state
+	actionExecutor        *ActionExecutor                   // Async action execution (Phase 2)
 }
 
 // WorkerContext encapsulates the runtime state for a single worker
@@ -345,6 +346,7 @@ func NewSupervisor(cfg Config) *Supervisor {
 		parentID:              "", // Root supervisor has empty parentID
 		healthChecker:         NewInfrastructureHealthChecker(DefaultMaxInfraRecoveryAttempts, DefaultRecoveryAttemptWindow),
 		circuitOpen:           false,
+		actionExecutor:        NewActionExecutor(10),
 		collectorHealth: CollectorHealth{
 			staleThreshold:     staleThreshold,
 			timeout:            timeout,
@@ -584,6 +586,8 @@ func (s *Supervisor) Start(ctx context.Context) <-chan struct{} {
 
 	s.logger.Debugf("Supervisor started for workerType: %s", s.workerType)
 
+	s.actionExecutor.Start(ctx)
+
 	// Start observation collectors for all workers
 	s.mu.RLock()
 	for _, workerCtx := range s.workers {
@@ -814,6 +818,13 @@ func (s *Supervisor) Tick(ctx context.Context) error {
 	}
 
 	s.circuitOpen = false
+
+	// PHASE 2: Action execution check (priority 2)
+	// STUB: Full action derivation will be implemented in Phase 3
+	// For now, just verify ActionExecutor is accessible
+	if s.actionExecutor.HasActionInProgress(s.workerType) {
+		return nil
+	}
 
 	// For backwards compatibility, tick the first worker
 	s.mu.RLock()
@@ -1150,6 +1161,8 @@ func (s *Supervisor) Shutdown() {
 	defer s.mu.Unlock()
 
 	s.logger.Infof("Shutting down supervisor for worker type: %s", s.workerType)
+
+	s.actionExecutor.Shutdown()
 
 	for workerID := range s.workers {
 		s.logger.Debugf("Shutting down worker: %s", workerID)
