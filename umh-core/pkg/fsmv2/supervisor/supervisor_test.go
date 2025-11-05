@@ -174,6 +174,132 @@ func TestCollectorContinuesDuringCircuitOpen(t *testing.T) {
 	//    - No staleness penalty (data is fresh)
 }
 
+// TestVariablePropagationThrough3LevelHierarchy verifies that user variables flow
+// from grandparent → parent → child through the supervisor hierarchy.
+//
+// Acceptance Criteria (Task 3.6):
+// 1. Grandparent sets Variables.User["IP"] = "192.168.1.100"
+// 2. Grandparent creates child (parent)
+// 3. Parent creates child (child)
+// 4. Child receives IP variable from grandparent
+//
+// Expected Behavior:
+// - Grandparent has Variables.User["IP"]
+// - After grandparent.Tick(), parent is created
+// - After parent.Tick(), child is created
+// - Child's UserSpec.Variables.User["IP"] equals "192.168.1.100"
+// - Variables propagate through DeriveDesiredState → ChildSpec → supervisor creation
+//
+// This is a TEST SPEC - not yet implemented.
+// Implementation will follow TDD: RED → GREEN → REFACTOR.
+func TestVariablePropagationThrough3LevelHierarchy(t *testing.T) {
+	t.Skip("Task 3.6: Test spec for variable flow through supervisor hierarchy")
+
+	// RED: This test will fail because:
+	// 1. Need to create mock workers that declare children in DeriveDesiredState()
+	// 2. Supervisor variable injection in Tick() may not be complete
+	// 3. ChildSpec.UserSpec.Variables may not preserve parent variables
+	// 4. No mechanism to access child supervisors for verification
+
+	// Test outline:
+	// 1. Create grandparent supervisor with Variables.User["IP"] = "192.168.1.100"
+	// 2. Configure grandparent worker to return ChildSpec for parent
+	// 3. Call grandparent.Tick(ctx)
+	// 4. Verify parent supervisor created
+	// 5. Configure parent worker to return ChildSpec for child
+	// 6. Call parent.Tick(ctx)
+	// 7. Verify child supervisor created
+	// 8. Access child.UserSpec.Variables.User
+	// 9. Verify child received grandparent's IP variable: "192.168.1.100"
+	// 10. Verify variable flow: grandparent → parent → child (3 levels)
+}
+
+// TestLocationHierarchyComputation verifies that parent and child locations merge
+// correctly to produce complete ISA-95 location paths.
+//
+// Acceptance Criteria (Task 3.7):
+// 1. Parent has location: Enterprise=ACME, Site=Factory-1
+// 2. Child has location: Line=Line-A, Cell=Cell-5
+// 3. After tick, child receives merged location_path
+// 4. Variables.Internal["location_path"] = "ACME.Factory-1.Line-A.Cell-5"
+//
+// Expected Behavior:
+// - Parent location defines enterprise and site levels
+// - Child location defines line and cell levels
+// - Supervisor merges locations before creating child
+// - Child receives full path in Internal variables
+// - ISA-95 gaps filled (Area level empty but included)
+//
+// This is a TEST SPEC - not yet implemented.
+// Implementation will follow TDD: RED → GREEN → REFACTOR.
+func TestLocationHierarchyComputation(t *testing.T) {
+	t.Skip("Task 3.7: Test spec for location hierarchy computation")
+
+	// RED: This test will fail because:
+	// 1. Supervisor location merging not implemented in child creation
+	// 2. Internal["location_path"] may not be populated
+	// 3. location.MergeLocations() integration with supervisor may be incomplete
+	// 4. ISA-95 gap filling might not happen automatically
+
+	// Test outline:
+	// 1. Create parent supervisor with location: [{Enterprise: "ACME"}, {Site: "Factory-1"}]
+	// 2. Configure parent worker to declare child with location: [{Line: "Line-A"}, {Cell: "Cell-5"}]
+	// 3. Call parent.Tick(ctx)
+	// 4. Verify child supervisor created
+	// 5. Access child.Variables.Internal["location_path"]
+	// 6. Verify: "ACME.Factory-1.Line-A.Cell-5" (or with Area gap: "ACME.Factory-1..Line-A.Cell-5")
+	// 7. Verify ISA-95 hierarchy: enterprise → site → area (empty) → line → cell
+}
+
+// TestProtocolConverterEndToEndTick verifies that a complete ProtocolConverter
+// workflow executes all FSMv2 phases correctly in integration.
+//
+// Acceptance Criteria (Task 3.8):
+// 1. ProtocolConverter declares children: Connection + SourceFlow + SinkFlow
+// 2. State mapping applies: idle → stopped for connection
+// 3. Templates render with variables (IP, PORT from connection config)
+// 4. Async actions execute when state transitions
+//
+// Expected Behavior:
+// Tick 1: Create children (Connection + SourceFlow + SinkFlow)
+// Tick 2: Apply state mapping (ProtocolConverter idle → Connection stopped)
+// Tick 3: Render templates with variables ({{ .IP }} → "192.168.1.100")
+// Tick 4: Execute async action (ProtocolConverter active → start flows)
+// Eventually: ProtocolConverter reaches running state
+//
+// This is a TEST SPEC - not yet implemented.
+// Implementation will follow TDD: RED → GREEN → REFACTOR.
+func TestProtocolConverterEndToEndTick(t *testing.T) {
+	t.Skip("Task 3.8: Test spec for ProtocolConverter end-to-end integration")
+
+	// RED: This test will fail because:
+	// 1. ProtocolConverter mock worker not created yet
+	// 2. State mapping application in Tick() may be incomplete
+	// 3. Template rendering integration with ChildSpec not verified
+	// 4. Async action execution for state transitions not tested end-to-end
+
+	// Test outline:
+	// 1. Create ProtocolConverter supervisor (grandparent)
+	// 2. Set Variables.User: IP="192.168.1.100", PORT=502
+	// 3. Configure ProtocolConverter to declare 3 children:
+	//    - Connection (monitors network)
+	//    - SourceFlow (reads from protocol)
+	//    - SinkFlow (writes to Kafka)
+	// 4. Tick 1: Call supervisor.Tick(ctx)
+	// 5. Verify: 3 children created
+	// 6. Tick 2: Set DesiredState{State: "idle"}
+	// 7. Call supervisor.Tick(ctx)
+	// 8. Verify: State mapping applied (Connection.observedState.State == "stopped")
+	// 9. Tick 3: Access SourceFlow child
+	// 10. Verify: Template rendered ("{{ .IP }}" → "192.168.1.100" in config)
+	// 11. Tick 4: Set DesiredState{State: "active"}
+	// 12. Call supervisor.Tick(ctx)
+	// 13. Verify: Async action enqueued (start flows)
+	// 14. Wait for action completion
+	// 15. Verify: ProtocolConverter.observedState.State == "running"
+	// 16. Verify: All phases integrated: Hierarchy + Templates + Variables + StateMapping + AsyncActions
+}
+
 // TestSupervisorSavesIdentityToTriangularStore verifies that Supervisor uses TriangularStore.SaveIdentity
 // when adding a worker.
 func TestSupervisorSavesIdentityToTriangularStore(t *testing.T) {
