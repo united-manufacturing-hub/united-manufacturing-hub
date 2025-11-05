@@ -64,6 +64,66 @@ var (
 		},
 		[]string{"supervisor_id", "child_name", "status"},
 	)
+
+	actionQueuedTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: namespace,
+			Subsystem: subsystem,
+			Name:      "action_queued_total",
+			Help:      "Total number of actions queued",
+		},
+		[]string{"supervisor_id", "action_type"},
+	)
+
+	actionQueueSize = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: namespace,
+			Subsystem: subsystem,
+			Name:      "action_queue_size",
+			Help:      "Current size of the action queue",
+		},
+		[]string{"supervisor_id"},
+	)
+
+	actionExecutionDuration = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Namespace: namespace,
+			Subsystem: subsystem,
+			Name:      "action_execution_duration_seconds",
+			Help:      "Duration of action execution in seconds",
+		},
+		[]string{"supervisor_id", "action_type", "status"},
+	)
+
+	actionTimeoutTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: namespace,
+			Subsystem: subsystem,
+			Name:      "action_timeout_total",
+			Help:      "Total number of action timeouts",
+		},
+		[]string{"supervisor_id", "action_type"},
+	)
+
+	workerPoolUtilization = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: namespace,
+			Subsystem: subsystem,
+			Name:      "worker_pool_utilization",
+			Help:      "Worker pool utilization (0.0 to 1.0)",
+		},
+		[]string{"pool_name"},
+	)
+
+	workerPoolQueueSize = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: namespace,
+			Subsystem: subsystem,
+			Name:      "worker_pool_queue_size",
+			Help:      "Current size of the worker pool queue",
+		},
+		[]string{"pool_name"},
+	)
 )
 
 func RecordCircuitOpen(supervisorID string, open bool) {
@@ -82,4 +142,28 @@ func RecordInfrastructureRecovery(supervisorID string, duration time.Duration) {
 
 func RecordChildHealthCheck(supervisorID, childName, status string) {
 	childHealthCheckTotal.WithLabelValues(supervisorID, childName, status).Inc()
+}
+
+func RecordActionQueued(supervisorID, actionType string) {
+	actionQueuedTotal.WithLabelValues(supervisorID, actionType).Inc()
+}
+
+func RecordActionQueueSize(supervisorID string, size int) {
+	actionQueueSize.WithLabelValues(supervisorID).Set(float64(size))
+}
+
+func RecordActionExecutionDuration(supervisorID, actionType, status string, duration time.Duration) {
+	actionExecutionDuration.WithLabelValues(supervisorID, actionType, status).Observe(duration.Seconds())
+}
+
+func RecordActionTimeout(supervisorID, actionType string) {
+	actionTimeoutTotal.WithLabelValues(supervisorID, actionType).Inc()
+}
+
+func RecordWorkerPoolUtilization(poolName string, utilization float64) {
+	workerPoolUtilization.WithLabelValues(poolName).Set(utilization)
+}
+
+func RecordWorkerPoolQueueSize(poolName string, size int) {
+	workerPoolQueueSize.WithLabelValues(poolName).Set(float64(size))
 }

@@ -64,3 +64,101 @@ var _ = Describe("Infrastructure Recovery Metrics", Label("metrics"), func() {
 		})
 	})
 })
+
+var _ = Describe("Action Execution Metrics", Label("metrics"), func() {
+	Context("RecordActionQueued", func() {
+		It("should record action queuing events", func() {
+			supervisorID := "test-supervisor-4"
+			actionType := "restart"
+
+			Expect(func() {
+				supervisor.RecordActionQueued(supervisorID, actionType)
+			}).NotTo(Panic())
+		})
+	})
+
+	Context("RecordActionQueueSize", func() {
+		It("should record action queue size", func() {
+			supervisorID := "test-supervisor-5"
+
+			Expect(func() {
+				supervisor.RecordActionQueueSize(supervisorID, 0)
+			}).NotTo(Panic())
+
+			Expect(func() {
+				supervisor.RecordActionQueueSize(supervisorID, 5)
+			}).NotTo(Panic())
+
+			Expect(func() {
+				supervisor.RecordActionQueueSize(supervisorID, 100)
+			}).NotTo(Panic())
+		})
+	})
+
+	Context("RecordActionExecutionDuration", func() {
+		It("should record action execution duration with status", func() {
+			supervisorID := "test-supervisor-6"
+			actionType := "restart"
+			duration := 250 * time.Millisecond
+
+			Expect(func() {
+				supervisor.RecordActionExecutionDuration(supervisorID, actionType, "success", duration)
+			}).NotTo(Panic())
+
+			Expect(func() {
+				supervisor.RecordActionExecutionDuration(supervisorID, actionType, "failure", duration)
+			}).NotTo(Panic())
+
+			Expect(func() {
+				supervisor.RecordActionExecutionDuration(supervisorID, actionType, "timeout", duration)
+			}).NotTo(Panic())
+		})
+	})
+
+	Context("RecordActionTimeout", func() {
+		It("should record action timeout events", func() {
+			supervisorID := "test-supervisor-7"
+			actionType := "restart"
+
+			Expect(func() {
+				supervisor.RecordActionTimeout(supervisorID, actionType)
+			}).NotTo(Panic())
+		})
+	})
+
+	Context("RecordWorkerPoolUtilization", func() {
+		It("should record worker pool utilization", func() {
+			poolName := "default-pool"
+
+			Expect(func() {
+				supervisor.RecordWorkerPoolUtilization(poolName, 0.0)
+			}).NotTo(Panic())
+
+			Expect(func() {
+				supervisor.RecordWorkerPoolUtilization(poolName, 0.5)
+			}).NotTo(Panic())
+
+			Expect(func() {
+				supervisor.RecordWorkerPoolUtilization(poolName, 1.0)
+			}).NotTo(Panic())
+		})
+	})
+
+	Context("RecordWorkerPoolQueueSize", func() {
+		It("should record worker pool queue size", func() {
+			poolName := "default-pool"
+
+			Expect(func() {
+				supervisor.RecordWorkerPoolQueueSize(poolName, 0)
+			}).NotTo(Panic())
+
+			Expect(func() {
+				supervisor.RecordWorkerPoolQueueSize(poolName, 10)
+			}).NotTo(Panic())
+
+			Expect(func() {
+				supervisor.RecordWorkerPoolQueueSize(poolName, 50)
+			}).NotTo(Panic())
+		})
+	})
+})
