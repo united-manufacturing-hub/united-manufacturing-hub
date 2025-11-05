@@ -819,6 +819,29 @@ func (s *Supervisor) tickWorker(ctx context.Context, workerID string) error {
 	return nil
 }
 
+// getRecoveryStatus returns a human-readable recovery status based on attempt count.
+func (s *Supervisor) getRecoveryStatus() string {
+	attempts := s.healthChecker.backoff.attempts
+	if attempts < 3 {
+		return "attempting_recovery"
+	} else if attempts < 5 {
+		return "persistent_failure"
+	}
+	return "escalation_imminent"
+}
+
+// getEscalationSteps returns manual runbook steps for specific child types.
+func (s *Supervisor) getEscalationSteps(childName string) string {
+	steps := map[string]string{
+		"dfc_read": "1) Check Redpanda logs 2) Verify network connectivity 3) Restart Redpanda manually",
+		"benthos":  "1) Check Benthos logs 2) Verify OPC UA server reachable 3) Restart Benthos manually",
+	}
+	if step, ok := steps[childName]; ok {
+		return step
+	}
+	return "1) Check component logs 2) Verify network connectivity 3) Restart component manually"
+}
+
 // Tick performs one supervisor tick cycle, integrating all FSMv2 phases.
 //
 // ARCHITECTURE: This method orchestrates four phases in priority order:
@@ -856,9 +879,61 @@ func (s *Supervisor) tickWorker(ctx context.Context, workerID string) error {
 func (s *Supervisor) Tick(ctx context.Context) error {
 	// PHASE 1: Infrastructure health check (priority 1)
 	if err := s.healthChecker.CheckChildConsistency(s.children); err != nil {
+		wasOpen := s.circuitOpen
 		s.circuitOpen = true
-		s.logger.Warnf("Infrastructure health check failed: %v", err)
-		return nil // Circuit breaker: skip rest of tick
+
+		if !wasOpen {
+			s.logger.Error("circuit breaker opened",
+				"supervisor_id", s.workerType,
+				"error", err.Error(),
+				"error_scope", "infrastructure",
+				"impact", "all_workers")
+			RecordCircuitOpen(s.workerType, true)
+		}
+
+		var childErr *ChildHealthError
+		if errors.As(err, &childErr) {
+			attempts := s.healthChecker.backoff.attempts
+			nextDelay := s.healthChecker.backoff.NextDelay()
+
+			s.logger.Warn("Circuit breaker open, retrying infrastructure checks",
+				"supervisor_id", s.workerType,
+				"failed_child", childErr.ChildName,
+				"retry_attempt", attempts,
+				"max_attempts", s.healthChecker.maxAttempts,
+				"elapsed_downtime", s.healthChecker.backoff.GetTotalDowntime().String(),
+				"next_retry_in", nextDelay.String(),
+				"recovery_status", s.getRecoveryStatus())
+
+			if attempts == 4 {
+				s.logger.Warn("WARNING: One retry attempt remaining before escalation",
+					"supervisor_id", s.workerType,
+					"child_name", childErr.ChildName,
+					"attempts_remaining", 1,
+					"total_downtime", s.healthChecker.backoff.GetTotalDowntime().String())
+			}
+
+			if attempts >= 5 {
+				s.logger.Error("ESCALATION REQUIRED: Infrastructure failure after max retry attempts. Manual intervention needed.",
+					"supervisor_id", s.workerType,
+					"child_name", childErr.ChildName,
+					"max_attempts", 5,
+					"total_downtime", s.healthChecker.backoff.GetTotalDowntime().String(),
+					"runbook_url", "https://docs.umh.app/runbooks/supervisor-escalation",
+					"manual_steps", s.getEscalationSteps(childErr.ChildName))
+			}
+		}
+
+		return nil
+	}
+
+	if s.circuitOpen {
+		downtime := time.Since(s.healthChecker.backoff.startTime)
+		s.logger.Info("Infrastructure recovered, closing circuit breaker",
+			"supervisor_id", s.workerType,
+			"total_downtime", downtime.String())
+		RecordCircuitOpen(s.workerType, false)
+		RecordInfrastructureRecovery(s.workerType, downtime)
 	}
 
 	s.circuitOpen = false
@@ -896,6 +971,7 @@ func (s *Supervisor) Tick(ctx context.Context) error {
 
 	s.mu.RLock()
 	userSpecWithVars.Variables.Global = s.globalVars
+	globalVarCount := len(s.globalVars)
 	s.mu.RUnlock()
 
 	userSpecWithVars.Variables.Internal = map[string]any{
@@ -904,13 +980,33 @@ func (s *Supervisor) Tick(ctx context.Context) error {
 		"bridged_by": s.parentID,
 	}
 
+	userVarCount := len(userSpecWithVars.Variables.User)
+	s.logger.Debug("variables propagated",
+		"supervisor_id", s.workerType,
+		"user_vars", userVarCount,
+		"global_vars", globalVarCount)
+	RecordVariablePropagation(s.workerType)
+
 	// PHASE 0: Hierarchical Composition
 	// 1. DeriveDesiredState
+	templateStart := time.Now()
 	desired, err := worker.DeriveDesiredState(userSpecWithVars)
+	templateDuration := time.Since(templateStart)
+
 	if err != nil {
-		s.logger.Errorf("Failed to derive desired state: %v", err)
+		s.logger.Error("template rendering failed",
+			"supervisor_id", s.workerType,
+			"error", err.Error(),
+			"duration_ms", templateDuration.Milliseconds())
+		RecordTemplateRenderingDuration(s.workerType, "error", templateDuration)
+		RecordTemplateRenderingError(s.workerType, "derivation_failed")
 		return fmt.Errorf("failed to derive desired state: %w", err)
 	}
+
+	s.logger.Debug("template rendered",
+		"supervisor_id", s.workerType,
+		"duration_ms", templateDuration.Milliseconds())
+	RecordTemplateRenderingDuration(s.workerType, "success", templateDuration)
 
 	// 2. Reconcile children (propagate errors)
 	if err := s.reconcileChildren(desired.ChildrenSpecs); err != nil {
@@ -1136,8 +1232,11 @@ func (s *Supervisor) GetChildren() map[string]*Supervisor {
 // Error handling: Logs errors but continues reconciliation for remaining children.
 // This ensures partial failures don't block the entire reconciliation operation.
 func (s *Supervisor) reconcileChildren(specs []types.ChildSpec) error {
+	startTime := time.Now()
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
+	var addedCount, updatedCount, removedCount int
 
 	specNames := make(map[string]bool)
 	for _, spec := range specs {
@@ -1146,8 +1245,10 @@ func (s *Supervisor) reconcileChildren(specs []types.ChildSpec) error {
 		if child, exists := s.children[spec.Name]; exists {
 			child.UpdateUserSpec(spec.UserSpec)
 			child.stateMapping = spec.StateMapping
+			updatedCount++
 		} else {
 			s.logger.Infof("Adding child %s with worker type %s", spec.Name, spec.WorkerType)
+			addedCount++
 
 			childConfig := Config{
 				WorkerType: spec.WorkerType,
@@ -1182,8 +1283,18 @@ func (s *Supervisor) reconcileChildren(specs []types.ChildSpec) error {
 			child := s.children[name]
 			child.Shutdown()
 			delete(s.children, name)
+			removedCount++
 		}
 	}
+
+	duration := time.Since(startTime)
+	s.logger.Info("child reconciliation completed",
+		"supervisor_id", s.workerType,
+		"added", addedCount,
+		"updated", updatedCount,
+		"removed", removedCount,
+		"duration_ms", duration.Milliseconds())
+	RecordReconciliation(s.workerType, "success", duration)
 
 	return nil
 }
