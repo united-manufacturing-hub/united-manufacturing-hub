@@ -174,6 +174,36 @@ var (
 		},
 		[]string{"supervisor_id"},
 	)
+
+	templateRenderingDuration = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Namespace: namespace,
+			Subsystem: subsystem,
+			Name:      "template_rendering_duration_seconds",
+			Help:      "Duration of template rendering in seconds",
+		},
+		[]string{"supervisor_id", "status"},
+	)
+
+	templateRenderingErrorsTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: namespace,
+			Subsystem: subsystem,
+			Name:      "template_rendering_errors_total",
+			Help:      "Total number of template rendering errors",
+		},
+		[]string{"supervisor_id", "error_type"},
+	)
+
+	variablePropagationTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: namespace,
+			Subsystem: subsystem,
+			Name:      "variable_propagation_total",
+			Help:      "Total number of variable propagation events",
+		},
+		[]string{"supervisor_id"},
+	)
 )
 
 func RecordCircuitOpen(supervisorID string, open bool) {
@@ -233,4 +263,16 @@ func RecordTickPropagationDepth(supervisorID string, depth int) {
 
 func RecordTickPropagationDuration(supervisorID string, duration time.Duration) {
 	tickPropagationDuration.WithLabelValues(supervisorID).Observe(duration.Seconds())
+}
+
+func RecordTemplateRenderingDuration(supervisorID, status string, duration time.Duration) {
+	templateRenderingDuration.WithLabelValues(supervisorID, status).Observe(duration.Seconds())
+}
+
+func RecordTemplateRenderingError(supervisorID, errorType string) {
+	templateRenderingErrorsTotal.WithLabelValues(supervisorID, errorType).Inc()
+}
+
+func RecordVariablePropagation(supervisorID string) {
+	variablePropagationTotal.WithLabelValues(supervisorID).Inc()
 }

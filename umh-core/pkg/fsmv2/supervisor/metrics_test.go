@@ -234,3 +234,48 @@ var _ = Describe("Hierarchical Composition Metrics", Label("metrics"), func() {
 		})
 	})
 })
+
+var _ = Describe("Template Rendering Metrics", Label("metrics"), func() {
+	Context("RecordTemplateRenderingDuration", func() {
+		It("should record template rendering duration with status", func() {
+			supervisorID := "test-supervisor-12"
+			duration := 25 * time.Millisecond
+
+			Expect(func() {
+				supervisor.RecordTemplateRenderingDuration(supervisorID, "success", duration)
+			}).NotTo(Panic())
+
+			Expect(func() {
+				supervisor.RecordTemplateRenderingDuration(supervisorID, "failure", duration)
+			}).NotTo(Panic())
+		})
+	})
+
+	Context("RecordTemplateRenderingError", func() {
+		It("should record template rendering errors by type", func() {
+			supervisorID := "test-supervisor-13"
+
+			Expect(func() {
+				supervisor.RecordTemplateRenderingError(supervisorID, "parse_error")
+			}).NotTo(Panic())
+
+			Expect(func() {
+				supervisor.RecordTemplateRenderingError(supervisorID, "execution_error")
+			}).NotTo(Panic())
+
+			Expect(func() {
+				supervisor.RecordTemplateRenderingError(supervisorID, "validation_error")
+			}).NotTo(Panic())
+		})
+	})
+
+	Context("RecordVariablePropagation", func() {
+		It("should record variable propagation events", func() {
+			supervisorID := "test-supervisor-14"
+
+			Expect(func() {
+				supervisor.RecordVariablePropagation(supervisorID)
+			}).NotTo(Panic())
+		})
+	})
+})
