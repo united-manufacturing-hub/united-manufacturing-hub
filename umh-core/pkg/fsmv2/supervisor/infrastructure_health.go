@@ -33,6 +33,11 @@ func NewInfrastructureHealthChecker(maxAttempts int, attemptWindow time.Duration
 	}
 }
 
-func (h *InfrastructureHealthChecker) CheckChildConsistency(children interface{}) error {
+func (h *InfrastructureHealthChecker) CheckChildConsistency(children map[string]*Supervisor) error {
+	for name, child := range children {
+		if child.circuitOpen {
+			return &ChildHealthError{ChildName: name}
+		}
+	}
 	return nil
 }
