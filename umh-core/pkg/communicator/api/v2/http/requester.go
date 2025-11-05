@@ -70,6 +70,7 @@ func GetClient(insecureTLS bool) *http.Client {
 				Timeout:   30 * time.Second,
 			}
 		})
+
 		return secureHTTPClient
 	}
 
@@ -92,6 +93,7 @@ func GetClient(insecureTLS bool) *http.Client {
 			Timeout:   30 * time.Second,
 		}
 	})
+
 	return insecureHTTPClient
 }
 
