@@ -191,6 +191,104 @@ var _ = Describe("ActionExecutor", func() {
 			Eventually(completed).Should(Receive())
 		})
 	})
+
+	Describe("Action Timeout Handling", func() {
+		Context("when action times out", func() {
+			It("should cancel action after configured timeout", func() {
+				executor := supervisor.NewActionExecutorWithTimeout(10, map[string]time.Duration{
+					"test-action": 100 * time.Millisecond,
+				})
+				executor.Start(ctx)
+
+				actionStarted := make(chan bool, 1)
+				actionCancelled := make(chan bool, 1)
+
+				action := &testAction{
+					execute: func(ctx context.Context) error {
+						actionStarted <- true
+						<-ctx.Done()
+						actionCancelled <- true
+						return ctx.Err()
+					},
+				}
+
+				err := executor.EnqueueAction("test-action", action)
+				Expect(err).ToNot(HaveOccurred())
+
+				Eventually(actionStarted).Should(Receive())
+				Eventually(actionCancelled, 200*time.Millisecond).Should(Receive())
+			})
+
+			It("should clear in-progress status after timeout", func() {
+				executor := supervisor.NewActionExecutorWithTimeout(10, map[string]time.Duration{
+					"timeout-action": 50 * time.Millisecond,
+				})
+				executor.Start(ctx)
+
+				action := &testAction{
+					execute: func(ctx context.Context) error {
+						<-ctx.Done()
+						return ctx.Err()
+					},
+				}
+
+				err := executor.EnqueueAction("timeout-action", action)
+				Expect(err).ToNot(HaveOccurred())
+
+				Expect(executor.HasActionInProgress("timeout-action")).To(BeTrue())
+
+				Eventually(func() bool {
+					return executor.HasActionInProgress("timeout-action")
+				}, 200*time.Millisecond).Should(BeFalse())
+			})
+		})
+
+		Context("when action completes before timeout", func() {
+			It("should allow action to complete successfully", func() {
+				executor := supervisor.NewActionExecutorWithTimeout(10, map[string]time.Duration{
+					"fast-action": 1 * time.Second,
+				})
+				executor.Start(ctx)
+
+				completed := make(chan bool, 1)
+				action := &testAction{
+					execute: func(ctx context.Context) error {
+						time.Sleep(50 * time.Millisecond)
+						completed <- true
+						return nil
+					},
+				}
+
+				err := executor.EnqueueAction("fast-action", action)
+				Expect(err).ToNot(HaveOccurred())
+
+				Eventually(completed).Should(Receive())
+			})
+		})
+
+		Context("when action type is not configured", func() {
+			It("should use default timeout for unconfigured action types", func() {
+				executor := supervisor.NewActionExecutorWithTimeout(10, map[string]time.Duration{
+					"configured": 1 * time.Second,
+				})
+				executor.Start(ctx)
+
+				cancelled := make(chan bool, 1)
+				action := &testAction{
+					execute: func(ctx context.Context) error {
+						<-ctx.Done()
+						cancelled <- true
+						return ctx.Err()
+					},
+				}
+
+				err := executor.EnqueueAction("unconfigured-action", action)
+				Expect(err).ToNot(HaveOccurred())
+
+				Eventually(cancelled, 35*time.Second).Should(Receive())
+			})
+		})
+	})
 })
 
 type testAction struct {
