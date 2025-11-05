@@ -64,7 +64,7 @@ This implementation integrates three design documents:
 ```go
 func (s *Supervisor) Tick(ctx context.Context) error {
     // NOTE: Collectors run independently in separate goroutines.
-    // They continuously write observations to TriangularStore every 5s.
+    // They continuously write observations to TriangularStore every second.
     // Circuit breaker does NOT pause collectors, only prevents tick from acting on observations.
 
     // PRIORITY 1: Infrastructure Health (affects all workers)
@@ -145,7 +145,7 @@ Two minor gaps were identified during plan alignment review. Both are **edge cas
 
 **Current Behavior:**
 - Collectors run as **independent goroutines** (1 per worker)
-- Collectors call `worker.CollectObservedState()` every 5 seconds
+- Collectors call `worker.CollectObservedState()` every second
 - Observations written to TriangularStore continuously
 - Circuit breaker does NOT pause collectors
 - Tick loop reads from TriangularStore, not collectors directly
@@ -156,7 +156,7 @@ Two minor gaps were identified during plan alignment review. Both are **edge cas
 **Rationale:**
 - Fresh data available immediately when circuit closes (faster recovery)
 - Continuous monitoring valuable even during failures (observability)
-- Observations are cheap (5s intervals, minimal overhead)
+- Observations are cheap (1-second intervals, minimal overhead)
 - Collectors already work this way (independent goroutines)
 - Master plan pseudocode was misleading (showed collection in tick loop)
 
@@ -168,7 +168,7 @@ Two minor gaps were identified during plan alignment review. Both are **edge cas
 - [ ] Documentation added to `docs/design/fsmv2-child-observed-state-usage.md`
 - [ ] Section: "Collector Independence from Circuit Breaker" with diagram:
   ```
-  [Collectors (5s loop)] → [TriangularStore] ← [Tick Loop (when circuit closed)]
+  [Collectors (1s loop)] → [TriangularStore] ← [Tick Loop (when circuit closed)]
          ↑                      ↓
          |                   [Fresh Data]
          |                      ↓
@@ -1358,7 +1358,7 @@ It("resumes normal derivation after circuit closes", func() {
 
 **Architecture:**
 - Collectors run as independent goroutines (1 per worker)
-- Collectors call `worker.CollectObservedState()` every 5 seconds
+- Collectors call `worker.CollectObservedState()` every second
 - Observations written to TriangularStore continuously
 - Circuit breaker does NOT pause collectors
 
@@ -1366,13 +1366,13 @@ It("resumes normal derivation after circuit closes", func() {
 1. Infrastructure Supervision opens circuit
 2. Tick loop skips state transitions (returns early)
 3. **Collectors continue running** (independent goroutines)
-4. Observations written to TriangularStore every 5s
+4. Observations written to TriangularStore every second
 5. When circuit closes, tick loop reads fresh observations from store
 
 **Rationale:**
 - **Fresh data when recovered:** First tick after circuit closes has current state
 - **Continuous monitoring:** Metrics and logs show what's happening during failure
-- **Cheap operations:** Collecting observations every 5s is minimal overhead
+- **Cheap operations:** Collecting observations every second is minimal overhead
 - **Decoupled design:** Collectors don't need to know about circuit breaker
 - **Observability:** Don't go "dark" during infrastructure failures
 
@@ -1380,7 +1380,7 @@ It("resumes normal derivation after circuit closes", func() {
 - [ ] Documentation added to `docs/design/fsmv2-child-observed-state-usage.md`
 - [ ] Section: "Collector Independence from Circuit Breaker" with diagram:
   ```
-  [Collectors (5s loop)] → [TriangularStore] ← [Tick Loop (when circuit closed)]
+  [Collectors (1s loop)] → [TriangularStore] ← [Tick Loop (when circuit closed)]
          ↑                      ↓
          |                   [Fresh Data]
          |                      ↓

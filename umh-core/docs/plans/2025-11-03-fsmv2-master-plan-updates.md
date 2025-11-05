@@ -866,7 +866,7 @@ Replace lines 139-147 with:
 - [ ] Documentation added to `docs/design/fsmv2-child-observed-state-usage.md`
 - [ ] Section: "Collector Independence from Circuit Breaker" with diagram:
   ```
-  [Collectors (5s loop)] → [TriangularStore] ← [Tick Loop (when circuit closed)]
+  [Collectors (1s loop)] → [TriangularStore] ← [Tick Loop (when circuit closed)]
          ↑                      ↓
          |                   [Fresh Data]
          |                      ↓
