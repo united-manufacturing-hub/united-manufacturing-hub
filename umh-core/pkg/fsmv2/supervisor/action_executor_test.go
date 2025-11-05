@@ -289,6 +289,104 @@ var _ = Describe("ActionExecutor", func() {
 			})
 		})
 	})
+
+	Describe("Non-Blocking Guarantees", func() {
+		Context("EnqueueAction non-blocking behavior", func() {
+			It("should never block when enqueueing action (even when queue full)", func() {
+				smallExecutor := supervisor.NewActionExecutor(2)
+				smallExecutor.Start(ctx)
+				defer smallExecutor.Shutdown()
+
+				blockingAction := &testAction{
+					execute: func(ctx context.Context) error {
+						time.Sleep(1 * time.Second)
+						return nil
+					},
+				}
+
+				for i := 0; i < 100; i++ {
+					start := time.Now()
+					_ = smallExecutor.EnqueueAction(fmt.Sprintf("action-%d", i), blockingAction)
+					duration := time.Since(start)
+
+					Expect(duration).To(BeNumerically("<", 1*time.Millisecond),
+						fmt.Sprintf("EnqueueAction took %v, expected <1ms (non-blocking)", duration))
+				}
+			})
+
+			It("should handle 100+ concurrent actions without blocking enqueue", func() {
+				executor := supervisor.NewActionExecutor(50)
+				executor.Start(ctx)
+				defer executor.Shutdown()
+
+				completed := make(chan string, 150)
+
+				for i := 0; i < 150; i++ {
+					actionID := fmt.Sprintf("action-%d", i)
+					action := &testAction{
+						execute: func(ctx context.Context) error {
+							time.Sleep(10 * time.Millisecond)
+							completed <- actionID
+							return nil
+						},
+					}
+
+					start := time.Now()
+					err := executor.EnqueueAction(actionID, action)
+					duration := time.Since(start)
+
+					Expect(duration).To(BeNumerically("<", 1*time.Millisecond),
+						fmt.Sprintf("EnqueueAction took %v, expected <1ms (non-blocking)", duration))
+					Expect(err).ToNot(HaveOccurred(),
+						fmt.Sprintf("Action %d should enqueue successfully", i))
+				}
+
+				completedCount := 0
+				timeout := time.After(5 * time.Second)
+			countLoop:
+				for {
+					select {
+					case <-completed:
+						completedCount++
+						if completedCount >= 150 {
+							break countLoop
+						}
+					case <-timeout:
+						break countLoop
+					}
+				}
+
+				Expect(completedCount).To(Equal(150),
+					"All 150 actions should complete")
+			})
+		})
+
+		Context("HasActionInProgress non-blocking behavior", func() {
+			It("should never block when checking action status", func() {
+				executor := supervisor.NewActionExecutor(10)
+				executor.Start(ctx)
+				defer executor.Shutdown()
+
+				for i := 0; i < 100; i++ {
+					_ = executor.EnqueueAction(fmt.Sprintf("action-%d", i), &testAction{
+						execute: func(ctx context.Context) error {
+							time.Sleep(100 * time.Millisecond)
+							return nil
+						},
+					})
+				}
+
+				for i := 0; i < 1000; i++ {
+					start := time.Now()
+					_ = executor.HasActionInProgress("action-0")
+					duration := time.Since(start)
+
+					Expect(duration).To(BeNumerically("<", 1*time.Millisecond),
+						fmt.Sprintf("HasActionInProgress took %v, expected <1ms (non-blocking read)", duration))
+				}
+			})
+		})
+	})
 })
 
 type testAction struct {
