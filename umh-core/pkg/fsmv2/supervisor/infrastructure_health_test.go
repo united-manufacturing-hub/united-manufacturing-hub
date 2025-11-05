@@ -60,5 +60,20 @@ var _ = Describe("InfrastructureHealthChecker", func() {
 			Expect(ok).To(BeTrue())
 			Expect(healthErr.ChildName).To(Equal("unhealthy"))
 		})
+
+		It("should skip nil children gracefully (defensive)", func() {
+			children := map[string]*Supervisor{
+				"healthy":   {circuitOpen: false},
+				"nil":       nil,
+				"unhealthy": {circuitOpen: true},
+			}
+
+			err := checker.CheckChildConsistency(children)
+
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(BeAssignableToTypeOf(&ChildHealthError{}))
+			healthErr := err.(*ChildHealthError)
+			Expect(healthErr.ChildName).To(Equal("unhealthy"))
+		})
 	})
 })
