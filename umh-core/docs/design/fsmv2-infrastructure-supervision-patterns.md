@@ -996,6 +996,120 @@ func (s *Supervisor) restartChild(ctx context.Context, childName string) error {
 
 ---
 
+## Action Behavior During Circuit Breaker
+
+### Overview
+
+When Infrastructure Supervision detects child inconsistency and restarts a child, **in-progress actions are NOT cancelled**. They continue execution and rely on timeout/retry mechanisms for recovery.
+
+**Decision:** Accept timeout/retry behavior (do not implement cancellation). This is a rare edge case, and adding cancellation would require dependency tracking (which workers depend on which children) - significant scope creep.
+
+### Behavior During Circuit Open
+
+When the circuit breaker opens (infrastructure issue detected):
+
+1. **In-progress actions continue** - No cancellation signal sent
+2. **Actions may timeout** - After 30s (ActionExecutorConfig.ActionTimeout) if not complete
+3. **Failed actions retry** - Exponential backoff (1s, 2s, 4s, 8s, 16s...)
+4. **Actions succeed once child recovers** - After restart completes
+5. **Total recovery time** - Typically ~60s (restart + action completion)
+
+### Example 1: Long-Running Action During Circuit Open
+
+**Scenario:** RestartRedpanda action runs 30s, circuit opens at 10s into execution.
+
+**Timeline:**
+```
+T+0s:   RestartRedpanda action starts
+        → Action: Stop Redpanda, wait for graceful shutdown
+
+T+10s:  Circuit breaker opens (child inconsistency detected)
+        → Circuit: Stop ticking, restart child
+        → Action: CONTINUES running (not cancelled)
+
+T+30s:  RestartRedpanda action completes
+        → Action: Start Redpanda, verify healthy
+        → Total execution time: 30s (as designed)
+
+T+35s:  Circuit closes (child recovered)
+        → Normal ticking resumes
+```
+
+**Key Point:** Action runs for full 30s regardless of circuit opening at T+10s. The action is NOT aware of the circuit breaker state.
+
+### Example 2: Action Timeout After Circuit Open
+
+**Scenario:** TimeoutAction set to 60s, child restarted during action execution.
+
+**Timeline:**
+```
+T+0s:   TimeoutAction starts (timeout=60s)
+        → Action: Depends on child service
+
+T+5s:   Circuit breaker opens (child inconsistency)
+        → Circuit: Restart child (stop → start)
+        → Action: CONTINUES running
+
+T+10s:  Child stopped
+        → Action: Fails with connection error
+
+T+15s:  Action exceeds timeout? NO (only 15s elapsed)
+        → Action: Retries with exponential backoff (1s delay)
+
+T+16s:  Action retry #1
+        → Action: Fails (child still starting)
+        → Backoff: 2s delay
+
+T+18s:  Action retry #2
+        → Action: Fails (child still starting)
+        → Backoff: 4s delay
+
+T+22s:  Action retry #3
+        → Child now running
+        → Action: SUCCEEDS
+
+T+22s:  Circuit closes (child recovered)
+        → Normal ticking resumes
+```
+
+**Key Point:** Worker stuck until timeout fires OR child recovers. Retry mechanism handles eventual recovery.
+
+### Why This Design?
+
+**Rationale:**
+1. **Rare edge case** - Infrastructure restarts are uncommon (failures, not normal operation)
+2. **Complexity cost** - Cancellation requires dependency tracking (which workers depend on which children)
+3. **Existing recovery** - Timeout + retry already handles this case
+4. **Separation of concerns** - Actions don't need to know about infrastructure supervision
+5. **Can revisit** - If production data shows frequent child restarts, add cancellation in Phase 4
+
+**Trade-offs:**
+- ✅ Simple implementation (no dependency tracking)
+- ✅ Actions remain infrastructure-agnostic
+- ⚠️ Actions may run longer than needed during restarts
+- ⚠️ Worker blocked until timeout/retry succeeds
+
+### Monitoring
+
+See `pkg/fsmv2/supervisor/metrics.go` for metrics:
+
+**Metrics:**
+- `supervisor_actions_during_circuit_total` (counter) - Tracks actions that started before circuit opened
+- `supervisor_action_post_circuit_duration_seconds` (histogram) - Measures how long actions run after circuit opens
+
+**Usage:**
+```promql
+# Actions running when circuit opened
+rate(supervisor_actions_during_circuit_total[5m])
+
+# P95 action duration after circuit open
+histogram_quantile(0.95, supervisor_action_post_circuit_duration_seconds)
+```
+
+These metrics help identify if action cancellation is needed in future phases.
+
+---
+
 ## Implementation Phases
 
 ### Phase 1: Basic Circuit Breaker (Week 1)

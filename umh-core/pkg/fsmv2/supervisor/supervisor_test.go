@@ -94,6 +94,43 @@ func TestSupervisorUsesTriangularStore(t *testing.T) {
 	}
 }
 
+// TestActionBehaviorDuringCircuitBreaker verifies that in-progress actions continue execution
+// when the circuit breaker opens due to infrastructure inconsistency.
+//
+// Acceptance Criteria (Task 3.2):
+// 1. Circuit opens mid-action (child inconsistency detected)
+// 2. Action continues execution (not cancelled)
+// 3. Metrics recorded:
+//    - supervisor_actions_during_circuit_total incremented
+//    - supervisor_action_post_circuit_duration_seconds observes duration
+//
+// Expected Behavior:
+// - Action started at T+0s, circuit opens at T+10s
+// - Action runs to completion (~30s total)
+// - Metrics show action continued for ~20s after circuit opened
+//
+// This is a TEST SPEC - not yet implemented.
+// Implementation will follow TDD: RED → GREEN → REFACTOR.
+func TestActionBehaviorDuringCircuitBreaker(t *testing.T) {
+	t.Skip("Task 3.2: Test spec for action-child lifecycle behavior")
+
+	// RED: This test will fail because:
+	// 1. Supervisor.circuitOpen field doesn't exist yet
+	// 2. ActionExecutor doesn't track circuit open timestamp
+	// 3. Metrics not implemented (supervisor_actions_during_circuit_total, supervisor_action_post_circuit_duration_seconds)
+	// 4. InfrastructureHealthChecker.CheckChildConsistency() not implemented
+
+	// Test outline:
+	// 1. Setup supervisor with infrastructure health checker
+	// 2. Start long-running action (30s simulated delay)
+	// 3. Trigger circuit open at T+10s (simulate child inconsistency)
+	// 4. Wait for action to complete
+	// 5. Verify:
+	//    - Action completed successfully (not cancelled)
+	//    - supervisor_actions_during_circuit_total == 1
+	//    - supervisor_action_post_circuit_duration_seconds observed ~20s
+}
+
 // TestSupervisorSavesIdentityToTriangularStore verifies that Supervisor uses TriangularStore.SaveIdentity
 // when adding a worker.
 func TestSupervisorSavesIdentityToTriangularStore(t *testing.T) {

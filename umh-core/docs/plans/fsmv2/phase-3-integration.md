@@ -55,6 +55,10 @@ func (s *Supervisor) Tick(ctx context.Context) error {
         return nil
     }
 
+    // NOTE (Task 3.2): In-progress actions are NOT cancelled when circuit opens.
+    // Actions continue execution, may timeout after 30s (ActionExecutorConfig.ActionTimeout),
+    // and retry with exponential backoff. This is acceptable for rare infrastructure restarts.
+    // See: docs/design/fsmv2-infrastructure-supervision-patterns.md#action-behavior-during-circuit-breaker
     action := s.worker.NextAction(desiredState, s.store.GetObservedState())
     s.actionExecutor.EnqueueAction(s.supervisorID, action, s.registry)
 
