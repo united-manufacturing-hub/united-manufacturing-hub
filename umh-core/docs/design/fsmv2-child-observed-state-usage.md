@@ -544,10 +544,10 @@ The observation collection system operates **independently** from the circuit br
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                   │
 │  [Collector Goroutine]           [Supervisor Tick Loop]          │
-│         (5s loop)                    (100ms loop)                │
+│         (1s loop)                    (100ms loop)                │
 │            │                              │                      │
 │            │ CollectObservedState()       │                      │
-│            │ every 5 seconds              │                      │
+│            │ every second                 │                      │
 │            ↓                              │                      │
 │    [TriangularStore] ←───────────────────┘                      │
 │     (write: continuous)        (read: when circuit closed)       │
@@ -569,7 +569,7 @@ The observation collection system operates **independently** from the circuit br
 
 1. **Collectors Always Run**
    - Each worker has 1 collector goroutine
-   - Collectors call `worker.CollectObservedState()` every 5 seconds
+   - Collectors call `worker.CollectObservedState()` every second
    - Circuit breaker state does NOT affect collector execution
    - Observations written to TriangularStore continuously
 
@@ -580,9 +580,9 @@ The observation collection system operates **independently** from the circuit br
 
 3. **Fresh Data on Recovery**
    - Circuit opens at T=0 (infrastructure failure detected)
-   - Collectors continue: T=5s, T=10s, T=15s, T=20s (observations written)
-   - Circuit closes at T=20s (infrastructure recovered)
-   - Tick loop resumes: LoadSnapshot() returns T=20s data (fresh)
+   - Collectors continue: T=1s, T=2s, T=3s...T=10s (observations written)
+   - Circuit closes at T=10s (infrastructure recovered)
+   - Tick loop resumes: LoadSnapshot() returns T=10s data (fresh)
    - **No staleness** - immediate recovery with current state
 
 4. **LoadSnapshot() Always Succeeds**
@@ -596,11 +596,11 @@ The observation collection system operates **independently** from the circuit br
 **Benefits:**
 - **Faster recovery:** Fresh data available immediately when circuit closes
 - **Continuous monitoring:** Observability maintained even during failures
-- **Low overhead:** 5-second intervals with minimal resource usage
+- **Low overhead:** 1-second intervals with minimal resource usage
 - **Simpler design:** No synchronization needed between collectors and circuit breaker
 
 **Rationale:**
-- Observations are cheap (5s intervals, no expensive operations)
+- Observations are cheap (1-second intervals, no expensive operations)
 - Continuous data valuable for debugging infrastructure issues
 - Avoids "blind period" where system has no visibility
 
@@ -695,15 +695,15 @@ func (s *Supervisor) Tick(ctx context.Context) error {
 
 **Test:** Verify collector writes continue during circuit open
 - Open circuit breaker (simulate infrastructure failure)
-- Wait 15 seconds
-- Check TriangularStore timestamps: should show 3 updates (T=5s, T=10s, T=15s)
+- Wait 10 seconds
+- Check TriangularStore timestamps: should show ~10 updates (T=1s, T=2s, T=3s...T=10s)
 - Verify observations written during circuit open period
 
 **Test:** Verify fresh data available on circuit close
 - Open circuit at T=0
-- Wait 20 seconds (4 collector cycles)
+- Wait 10 seconds (~10 collector cycles)
 - Close circuit
-- Next tick should use T=20s snapshot (not T=0s)
+- Next tick should use T=10s snapshot (not T=0s)
 - Verify no staleness penalty on recovery
 
 **Implementation:** See `pkg/fsmv2/supervisor/supervisor_test.go` Task 3.4 acceptance criteria

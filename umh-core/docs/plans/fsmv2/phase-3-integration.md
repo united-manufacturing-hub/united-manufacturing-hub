@@ -17,7 +17,7 @@ func (s *Supervisor) Tick(ctx context.Context) error {
     // PHASE 1: Infrastructure Health Check (from Phase 1)
     // NOTE (Task 3.4): Circuit breaker only affects tick loop execution.
     // Collectors run independently (started once in supervisor.Start()).
-    // Collectors call worker.CollectObservedState() every 5s regardless of circuit state.
+    // Collectors call worker.CollectObservedState() every second regardless of circuit state.
     // TriangularStore receives continuous updates even when circuit is open.
     // When circuit closes, LoadSnapshot() returns fresh data (no staleness penalty).
     // See: docs/design/fsmv2-child-observed-state-usage.md#collector-independence-from-circuit-breaker
@@ -170,7 +170,7 @@ This section documents the detailed acceptance criteria and edge case handling f
 
 **Current Behavior:**
 - Collectors run as **independent goroutines** (1 per worker)
-- Collectors call `worker.CollectObservedState()` every 5 seconds
+- Collectors call `worker.CollectObservedState()` every second
 - Observations written to TriangularStore continuously
 - Circuit breaker does NOT pause collectors
 - Tick loop reads from TriangularStore, not collectors directly
@@ -181,7 +181,7 @@ This section documents the detailed acceptance criteria and edge case handling f
 **Rationale:**
 - Fresh data available immediately when circuit closes (faster recovery)
 - Continuous monitoring valuable even during failures (observability)
-- Observations are cheap (5s intervals, minimal overhead)
+- Observations are cheap (1-second intervals, minimal overhead)
 - Collectors already work this way (independent goroutines)
 - Master plan pseudocode was misleading (showed collection in tick loop)
 
@@ -193,7 +193,7 @@ This section documents the detailed acceptance criteria and edge case handling f
 - [ ] Documentation added to `docs/design/fsmv2-child-observed-state-usage.md`
 - [ ] Section: "Collector Independence from Circuit Breaker" with diagram:
   ```
-  [Collectors (5s loop)] → [TriangularStore] ← [Tick Loop (when circuit closed)]
+  [Collectors (1s loop)] → [TriangularStore] ← [Tick Loop (when circuit closed)]
          ↑                      ↓
          |                   [Fresh Data]
          |                      ↓

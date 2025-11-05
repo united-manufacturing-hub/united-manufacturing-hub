@@ -136,16 +136,16 @@ func TestActionBehaviorDuringCircuitBreaker(t *testing.T) {
 //
 // Acceptance Criteria (Task 3.4):
 // 1. Circuit opens (infrastructure failure detected)
-// 2. Collector continues calling worker.CollectObservedState() every 5s
+// 2. Collector continues calling worker.CollectObservedState() every second
 // 3. TriangularStore receives continuous updates (verified by timestamps)
 // 4. When circuit closes, fresh observations available immediately (no staleness)
 //
 // Expected Behavior:
 // - Circuit opens at T+0s
-// - Collector writes at T+5s, T+10s, T+15s (3 updates during circuit open)
+// - Collector writes at T+1s, T+2s, T+3s...T+10s (~10 updates during circuit open)
 // - TriangularStore timestamps show continuous progression
-// - Circuit closes at T+20s
-// - Next LoadSnapshot() returns T+20s data (fresh, not T+0s)
+// - Circuit closes at T+10s
+// - Next LoadSnapshot() returns T+10s data (fresh, not T+0s)
 //
 // This is a TEST SPEC - not yet implemented.
 // Implementation will follow TDD: RED → GREEN → REFACTOR.
@@ -162,15 +162,15 @@ func TestCollectorContinuesDuringCircuitOpen(t *testing.T) {
 	// 1. Setup supervisor with mock worker that tracks CollectObservedState() calls
 	// 2. Start supervisor (spawns collector goroutine)
 	// 3. Trigger circuit open at T+0s (simulate infrastructure failure)
-	// 4. Wait 15 seconds
+	// 4. Wait 10 seconds
 	// 5. Verify:
-	//    - CollectObservedState() called 3 times (T+5s, T+10s, T+15s)
-	//    - TriangularStore write timestamps show progression: T+5s, T+10s, T+15s
+	//    - CollectObservedState() called ~10 times (T+1s, T+2s, T+3s...T+10s)
+	//    - TriangularStore write timestamps show progression: T+1s, T+2s, T+3s...T+10s
 	//    - Circuit breaker didn't pause collector
 	// 6. Close circuit
 	// 7. Trigger supervisor.Tick()
 	// 8. Verify:
-	//    - LoadSnapshot() returns T+15s data (or newer)
+	//    - LoadSnapshot() returns T+10s data (or newer)
 	//    - No staleness penalty (data is fresh)
 }
 
