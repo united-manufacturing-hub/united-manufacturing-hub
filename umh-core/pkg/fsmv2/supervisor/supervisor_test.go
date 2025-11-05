@@ -101,8 +101,8 @@ func TestSupervisorUsesTriangularStore(t *testing.T) {
 // 1. Circuit opens mid-action (child inconsistency detected)
 // 2. Action continues execution (not cancelled)
 // 3. Metrics recorded:
-//    - supervisor_actions_during_circuit_total incremented
-//    - supervisor_action_post_circuit_duration_seconds observes duration
+//   - supervisor_actions_during_circuit_total incremented
+//   - supervisor_action_post_circuit_duration_seconds observes duration
 //
 // Expected Behavior:
 // - Action started at T+0s, circuit opens at T+10s
@@ -129,6 +129,49 @@ func TestActionBehaviorDuringCircuitBreaker(t *testing.T) {
 	//    - Action completed successfully (not cancelled)
 	//    - supervisor_actions_during_circuit_total == 1
 	//    - supervisor_action_post_circuit_duration_seconds observed ~20s
+}
+
+// TestCollectorContinuesDuringCircuitOpen verifies that collector goroutines continue writing
+// observations to TriangularStore even when the circuit breaker is open.
+//
+// Acceptance Criteria (Task 3.4):
+// 1. Circuit opens (infrastructure failure detected)
+// 2. Collector continues calling worker.CollectObservedState() every 5s
+// 3. TriangularStore receives continuous updates (verified by timestamps)
+// 4. When circuit closes, fresh observations available immediately (no staleness)
+//
+// Expected Behavior:
+// - Circuit opens at T+0s
+// - Collector writes at T+5s, T+10s, T+15s (3 updates during circuit open)
+// - TriangularStore timestamps show continuous progression
+// - Circuit closes at T+20s
+// - Next LoadSnapshot() returns T+20s data (fresh, not T+0s)
+//
+// This is a TEST SPEC - not yet implemented.
+// Implementation will follow TDD: RED → GREEN → REFACTOR.
+func TestCollectorContinuesDuringCircuitOpen(t *testing.T) {
+	t.Skip("Task 3.4: Test spec for collector-circuit independence")
+
+	// RED: This test will fail because:
+	// 1. Supervisor.circuitOpen field doesn't exist yet
+	// 2. Collector goroutines not started in supervisor.Start()
+	// 3. InfrastructureHealthChecker.CheckChildConsistency() not implemented
+	// 4. No mechanism to track TriangularStore write timestamps
+
+	// Test outline:
+	// 1. Setup supervisor with mock worker that tracks CollectObservedState() calls
+	// 2. Start supervisor (spawns collector goroutine)
+	// 3. Trigger circuit open at T+0s (simulate infrastructure failure)
+	// 4. Wait 15 seconds
+	// 5. Verify:
+	//    - CollectObservedState() called 3 times (T+5s, T+10s, T+15s)
+	//    - TriangularStore write timestamps show progression: T+5s, T+10s, T+15s
+	//    - Circuit breaker didn't pause collector
+	// 6. Close circuit
+	// 7. Trigger supervisor.Tick()
+	// 8. Verify:
+	//    - LoadSnapshot() returns T+15s data (or newer)
+	//    - No staleness penalty (data is fresh)
 }
 
 // TestSupervisorSavesIdentityToTriangularStore verifies that Supervisor uses TriangularStore.SaveIdentity

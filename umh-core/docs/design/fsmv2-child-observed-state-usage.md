@@ -527,3 +527,194 @@ func (s *ActiveState) Next(snapshot Snapshot) (State, Signal, Action) {
 **Related documents:**
 - `fsmv2-infrastructure-supervision-patterns.md` - How supervisor handles sanity check failures
 - `fsmv2-developer-expectations-child-state.md` - What developers should see (state names only)
+
+---
+
+## Collector Independence from Circuit Breaker
+
+**Context:** Phase 3 Integration (UMH-CORE-ENG-3806 Task 3.4)
+
+### Architecture Overview
+
+The observation collection system operates **independently** from the circuit breaker. This ensures fresh data is always available when infrastructure failures resolve.
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                         Per-Worker Architecture                  │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                   │
+│  [Collector Goroutine]           [Supervisor Tick Loop]          │
+│         (5s loop)                    (100ms loop)                │
+│            │                              │                      │
+│            │ CollectObservedState()       │                      │
+│            │ every 5 seconds              │                      │
+│            ↓                              │                      │
+│    [TriangularStore] ←───────────────────┘                      │
+│     (write: continuous)        (read: when circuit closed)       │
+│            │                              │                      │
+│            │                              ↓                      │
+│      [Fresh Data]                 [LoadSnapshot()]               │
+│    (always updated)           (always succeeds, may be stale)    │
+│            │                              │                      │
+│            │                              ↓                      │
+│      [Timestamps show]            [Circuit Breaker Check]        │
+│     [continuous updates]                  │                      │
+│                                           ├─ CLOSED → Derive New Actions
+│                                           └─ OPEN   → Skip Tick (no new actions)
+│                                                                   │
+└───────────────────────────────────────────────────────────────────┘
+```
+
+### Key Behaviors
+
+1. **Collectors Always Run**
+   - Each worker has 1 collector goroutine
+   - Collectors call `worker.CollectObservedState()` every 5 seconds
+   - Circuit breaker state does NOT affect collector execution
+   - Observations written to TriangularStore continuously
+
+2. **Circuit Breaker Only Affects Tick Loop**
+   - When circuit is OPEN: Tick loop returns early (no new actions derived)
+   - When circuit is CLOSED: Tick loop proceeds normally
+   - Circuit does NOT pause collectors or stop observation writes
+
+3. **Fresh Data on Recovery**
+   - Circuit opens at T=0 (infrastructure failure detected)
+   - Collectors continue: T=5s, T=10s, T=15s, T=20s (observations written)
+   - Circuit closes at T=20s (infrastructure recovered)
+   - Tick loop resumes: LoadSnapshot() returns T=20s data (fresh)
+   - **No staleness** - immediate recovery with current state
+
+4. **LoadSnapshot() Always Succeeds**
+   - TriangularStore always returns latest snapshot
+   - Even during circuit open, snapshots are being updated
+   - Tick loop reads stale data when circuit is open (doesn't matter, not used)
+   - Tick loop reads fresh data when circuit closes (critical for recovery)
+
+### Why Observations Continue During Circuit Open
+
+**Benefits:**
+- **Faster recovery:** Fresh data available immediately when circuit closes
+- **Continuous monitoring:** Observability maintained even during failures
+- **Low overhead:** 5-second intervals with minimal resource usage
+- **Simpler design:** No synchronization needed between collectors and circuit breaker
+
+**Rationale:**
+- Observations are cheap (5s intervals, no expensive operations)
+- Continuous data valuable for debugging infrastructure issues
+- Avoids "blind period" where system has no visibility
+
+### Tick Loop Behavior During Circuit Breaker States
+
+**Circuit OPEN (Infrastructure Failure):**
+```go
+func (s *Supervisor) Tick(ctx context.Context) error {
+    // PHASE 1: Infrastructure Health Check
+    if err := s.healthChecker.CheckChildConsistency(s.children); err != nil {
+        s.circuitOpen = true
+        // ... handle failure, restart child ...
+        return nil  // ← EARLY RETURN, no actions derived
+    }
+
+    // PHASE 2-6: Not executed when circuit open
+    // Collectors continue independently (not in this loop)
+}
+```
+
+**Circuit CLOSED (Normal Operation):**
+```go
+func (s *Supervisor) Tick(ctx context.Context) error {
+    // PHASE 1: Infrastructure Health Check (passes)
+    if err := s.healthChecker.CheckChildConsistency(s.children); err != nil {
+        // Not reached when circuit closed
+    }
+
+    // PHASE 2: Derive Desired State
+    userSpec := s.store.GetUserSpec()
+    desiredState := s.worker.DeriveDesiredState(userSpec)
+
+    // PHASE 6: Async Actions (uses fresh observations from TriangularStore)
+    observedState := s.store.GetObservedState()  // ← Fresh data from collectors
+    action := s.worker.NextAction(desiredState, observedState)
+    s.actionExecutor.EnqueueAction(s.supervisorID, action, s.registry)
+
+    return nil
+}
+```
+
+### Master Plan Pseudocode Clarification
+
+**Original master plan pseudocode (misleading):**
+```go
+// Implied collectors run inside tick loop
+for _, worker := range workers {
+    observed := worker.CollectObservedState()  // ← Suggests part of tick
+    triangularStore.Write(worker.ID, observed)
+}
+```
+
+**Actual implementation (correct):**
+```go
+// Collectors run as independent goroutines (started once at supervisor creation)
+for _, worker := range workers {
+    go func(w Worker) {
+        ticker := time.NewTicker(5 * time.Second)
+        for range ticker.C {
+            observed := w.CollectObservedState()
+            triangularStore.Write(w.ID, observed)
+        }
+    }(worker)
+}
+
+// Tick loop only READS from TriangularStore, doesn't trigger collection
+func (s *Supervisor) Tick(ctx context.Context) error {
+    observed := s.store.LoadSnapshot()  // ← Read pre-collected data
+    // ... use observed for decisions ...
+}
+```
+
+### Implementation Notes
+
+**Collector Goroutines:**
+- Started in `supervisor.Start()` (Phase 1 implementation)
+- One goroutine per worker
+- `time.Ticker` with 5-second interval
+- No coordination with tick loop or circuit breaker
+
+**TriangularStore Writes:**
+- Atomic writes (no locking needed, append-only)
+- Timestamped snapshots for observability
+- LoadSnapshot() returns latest without blocking collectors
+
+**Circuit Breaker:**
+- Only controls tick loop execution
+- Does NOT signal or interact with collector goroutines
+- Independent failure domain separation
+
+### Testing Requirements
+
+**Test:** Verify collector writes continue during circuit open
+- Open circuit breaker (simulate infrastructure failure)
+- Wait 15 seconds
+- Check TriangularStore timestamps: should show 3 updates (T=5s, T=10s, T=15s)
+- Verify observations written during circuit open period
+
+**Test:** Verify fresh data available on circuit close
+- Open circuit at T=0
+- Wait 20 seconds (4 collector cycles)
+- Close circuit
+- Next tick should use T=20s snapshot (not T=0s)
+- Verify no staleness penalty on recovery
+
+**Implementation:** See `pkg/fsmv2/supervisor/supervisor_test.go` Task 3.4 acceptance criteria
+
+---
+
+## Summary
+
+FSMv2 collector architecture ensures:
+1. ✅ Observations collected continuously (independent of circuit breaker)
+2. ✅ Fresh data available immediately when infrastructure recovers
+3. ✅ Circuit breaker only affects action derivation (not observation collection)
+4. ✅ LoadSnapshot() always succeeds (may return stale data when circuit open, doesn't matter)
+5. ✅ Clean separation: collectors (always running) vs tick loop (conditional execution)

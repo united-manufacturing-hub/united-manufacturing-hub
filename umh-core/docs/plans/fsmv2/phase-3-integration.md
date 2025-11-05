@@ -15,12 +15,18 @@ Phase 3 integrates all FSMv2 features into a cohesive system and tests edge case
 ```go
 func (s *Supervisor) Tick(ctx context.Context) error {
     // PHASE 1: Infrastructure Health Check (from Phase 1)
+    // NOTE (Task 3.4): Circuit breaker only affects tick loop execution.
+    // Collectors run independently (started once in supervisor.Start()).
+    // Collectors call worker.CollectObservedState() every 5s regardless of circuit state.
+    // TriangularStore receives continuous updates even when circuit is open.
+    // When circuit closes, LoadSnapshot() returns fresh data (no staleness penalty).
+    // See: docs/design/fsmv2-child-observed-state-usage.md#collector-independence-from-circuit-breaker
     if err := s.healthChecker.CheckChildConsistency(s.children); err != nil {
         s.circuitOpen = true
         if failedChild, exists := s.children[err.ChildName]; exists {
             failedChild.supervisor.Restart()
         }
-        return nil
+        return nil  // ← EARLY RETURN: No new actions derived, but collectors still running
     }
 
     // PHASE 2: Derive Desired State (from Phase 0)
@@ -59,6 +65,10 @@ func (s *Supervisor) Tick(ctx context.Context) error {
     // Actions continue execution, may timeout after 30s (ActionExecutorConfig.ActionTimeout),
     // and retry with exponential backoff. This is acceptable for rare infrastructure restarts.
     // See: docs/design/fsmv2-infrastructure-supervision-patterns.md#action-behavior-during-circuit-breaker
+
+    // NOTE (Task 3.4): s.store.GetObservedState() reads from TriangularStore,
+    // which is continuously updated by collectors (even during circuit open).
+    // This ensures fresh observations are available immediately when circuit closes.
     action := s.worker.NextAction(desiredState, s.store.GetObservedState())
     s.actionExecutor.EnqueueAction(s.supervisorID, action, s.registry)
 
