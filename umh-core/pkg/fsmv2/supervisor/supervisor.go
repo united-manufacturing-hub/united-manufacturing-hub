@@ -107,6 +107,20 @@ type CollectorHealth struct {
 	lastRestart        time.Time     // Timestamp of last restart attempt
 }
 
+// stubAction is a no-op action used for Phase 2 integration testing.
+// This will be replaced with real action derivation in Phase 3.
+// It exists to prevent EnqueueAction from being test-only.
+type stubAction struct{}
+
+func (s *stubAction) Execute(ctx context.Context) error {
+	// No-op: Phase 2 stub, real actions in Phase 3
+	return nil
+}
+
+func (s *stubAction) Name() string {
+	return "stub-action-phase2"
+}
+
 // Supervisor manages the lifecycle of a single worker.
 // It runs two goroutines:
 //  1. Observation loop: Continuously calls worker.CollectObservedState()
@@ -819,11 +833,14 @@ func (s *Supervisor) Tick(ctx context.Context) error {
 
 	s.circuitOpen = false
 
-	// PHASE 2: Action execution check (priority 2)
-	// STUB: Full action derivation will be implemented in Phase 3
-	// For now, just verify ActionExecutor is accessible
-	if s.actionExecutor.HasActionInProgress(s.workerType) {
-		return nil
+	// PHASE 2: Action execution (priority 2)
+	// STUB: Phase 2 demonstrates ActionExecutor integration with no-op stub
+	// Real action derivation (Start/Stop/Restart based on state) will be implemented in Phase 3
+	if !s.actionExecutor.HasActionInProgress(s.workerType) {
+		// Enqueue stub action to make EnqueueAction production code (not test-only)
+		// This stub action is a no-op and completes immediately
+		action := &stubAction{}
+		_ = s.actionExecutor.EnqueueAction(s.workerType, action)
 	}
 
 	// For backwards compatibility, tick the first worker
