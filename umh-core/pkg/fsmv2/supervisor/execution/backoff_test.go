@@ -1,5 +1,5 @@
 // Copyright 2025 UMH Systems GmbH
-package supervisor_test
+package execution_test
 
 import (
 	"time"
@@ -7,19 +7,19 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/execution"
 )
 
 var _ = Describe("ExponentialBackoff", func() {
 	Describe("NextDelay", func() {
 		It("returns base delay on first attempt", func() {
-			backoff := supervisor.NewExponentialBackoff(1*time.Second, 60*time.Second)
+			backoff := execution.NewExponentialBackoff(1*time.Second, 60*time.Second)
 			delay := backoff.NextDelay()
 			Expect(delay).To(Equal(1 * time.Second))
 		})
 
 		It("doubles delay on each attempt", func() {
-			backoff := supervisor.NewExponentialBackoff(1*time.Second, 60*time.Second)
+			backoff := execution.NewExponentialBackoff(1*time.Second, 60*time.Second)
 
 			first := backoff.NextDelay()
 			backoff.RecordFailure()
@@ -35,7 +35,7 @@ var _ = Describe("ExponentialBackoff", func() {
 		})
 
 		It("caps delay at max", func() {
-			backoff := supervisor.NewExponentialBackoff(1*time.Second, 5*time.Second)
+			backoff := execution.NewExponentialBackoff(1*time.Second, 5*time.Second)
 			for i := 0; i < 10; i++ {
 				backoff.RecordFailure()
 			}
@@ -47,7 +47,7 @@ var _ = Describe("ExponentialBackoff", func() {
 
 	Describe("Reset", func() {
 		It("resets delay to base", func() {
-			backoff := supervisor.NewExponentialBackoff(1*time.Second, 60*time.Second)
+			backoff := execution.NewExponentialBackoff(1*time.Second, 60*time.Second)
 			backoff.RecordFailure()
 			backoff.RecordFailure()
 			backoff.Reset()

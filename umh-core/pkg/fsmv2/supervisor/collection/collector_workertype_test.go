@@ -1,5 +1,5 @@
 // Copyright 2025 UMH Systems GmbH
-package supervisor_test
+package collection_test
 
 import (
 	"context"

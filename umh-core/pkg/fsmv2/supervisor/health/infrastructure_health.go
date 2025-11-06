@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/execution"
 )
 
 const (
@@ -22,14 +23,14 @@ func (e *ChildHealthError) Error() string {
 }
 
 type InfrastructureHealthChecker struct {
-	backoff       *supervisor.ExponentialBackoff
+	backoff       *execution.ExponentialBackoff
 	maxAttempts   int
 	attemptWindow time.Duration
 }
 
 func NewInfrastructureHealthChecker(maxAttempts int, attemptWindow time.Duration) *InfrastructureHealthChecker {
 	return &InfrastructureHealthChecker{
-		backoff:       supervisor.NewExponentialBackoff(1*time.Second, 60*time.Second),
+		backoff:       execution.NewExponentialBackoff(1*time.Second, 60*time.Second),
 		maxAttempts:   maxAttempts,
 		attemptWindow: attemptWindow,
 	}

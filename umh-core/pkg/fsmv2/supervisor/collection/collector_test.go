@@ -45,7 +45,7 @@ Context("when starting collector", func() {
 
 Context("when restarting collector", func() {
 		It("should stop old loop and start new one", func() {
-			collector := supervisor.NewCollector(supervisor.CollectorConfig{
+			collector := collection.NewCollector(collection.CollectorConfig{
 				Worker:              &mockWorker{observed: createMockObservedStateWithID("test-worker")},
 				Identity:            mockIdentity(),
 				Store:               createTestTriangularStore(),
@@ -91,7 +91,7 @@ Context("when restarting collector", func() {
 
 	Context("Invariant I8: Collector lifecycle validation", func() {
 		It("should panic when Start() is called twice", func() {
-			collector := supervisor.NewCollector(supervisor.CollectorConfig{
+			collector := collection.NewCollector(collection.CollectorConfig{
 				Worker:              &mockWorker{},
 				Identity:            mockIdentity(),
 				Store:               createTestTriangularStore(),
@@ -117,7 +117,7 @@ Context("when restarting collector", func() {
 		})
 
 		It("should handle Restart() gracefully when called before Start()", func() {
-			collector := supervisor.NewCollector(supervisor.CollectorConfig{
+			collector := collection.NewCollector(collection.CollectorConfig{
 				Worker:              &mockWorker{},
 				Identity:            mockIdentity(),
 				Store:               createTestTriangularStore(),
@@ -130,7 +130,7 @@ Context("when restarting collector", func() {
 		})
 
 		It("should return false from IsRunning() before Start()", func() {
-			collector := supervisor.NewCollector(supervisor.CollectorConfig{
+			collector := collection.NewCollector(collection.CollectorConfig{
 				Worker:              &mockWorker{},
 				Identity:            mockIdentity(),
 				Store:               createTestTriangularStore(),
@@ -143,7 +143,7 @@ Context("when restarting collector", func() {
 		})
 
 		It("should track lifecycle correctly through normal flow", func() {
-			collector := supervisor.NewCollector(supervisor.CollectorConfig{
+			collector := collection.NewCollector(collection.CollectorConfig{
 				Worker:              &mockWorker{},
 				Identity:            mockIdentity(),
 				Store:               createTestTriangularStore(),
@@ -171,7 +171,7 @@ Context("when restarting collector", func() {
 })
 
 type testCollectorWithHangingLoop struct {
-	supervisor.Collector
+	collection.Collector
 	parentCtx     context.Context
 	ctx           context.Context
 	cancel        context.CancelFunc

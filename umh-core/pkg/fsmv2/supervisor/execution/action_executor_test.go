@@ -195,7 +195,7 @@ var _ = Describe("ActionExecutor", func() {
 	Describe("Action Timeout Handling", func() {
 		Context("when action times out", func() {
 			It("should cancel action after configured timeout", func() {
-				executor := supervisor.NewActionExecutorWithTimeout(10, map[string]time.Duration{
+				executor := execution.NewActionExecutorWithTimeout(10, map[string]time.Duration{
 					"test-action": 100 * time.Millisecond,
 				})
 				executor.Start(ctx)
@@ -220,7 +220,7 @@ var _ = Describe("ActionExecutor", func() {
 			})
 
 			It("should clear in-progress status after timeout", func() {
-				executor := supervisor.NewActionExecutorWithTimeout(10, map[string]time.Duration{
+				executor := execution.NewActionExecutorWithTimeout(10, map[string]time.Duration{
 					"timeout-action": 50 * time.Millisecond,
 				})
 				executor.Start(ctx)
@@ -245,7 +245,7 @@ var _ = Describe("ActionExecutor", func() {
 
 		Context("when action completes before timeout", func() {
 			It("should allow action to complete successfully", func() {
-				executor := supervisor.NewActionExecutorWithTimeout(10, map[string]time.Duration{
+				executor := execution.NewActionExecutorWithTimeout(10, map[string]time.Duration{
 					"fast-action": 1 * time.Second,
 				})
 				executor.Start(ctx)
@@ -268,7 +268,7 @@ var _ = Describe("ActionExecutor", func() {
 
 		Context("when action type is not configured", func() {
 			It("should use default timeout for unconfigured action types", func() {
-				executor := supervisor.NewActionExecutorWithTimeout(10, map[string]time.Duration{
+				executor := execution.NewActionExecutorWithTimeout(10, map[string]time.Duration{
 					"configured": 1 * time.Second,
 				})
 				executor.Start(ctx)
@@ -293,7 +293,7 @@ var _ = Describe("ActionExecutor", func() {
 	Describe("Non-Blocking Guarantees", func() {
 		Context("EnqueueAction non-blocking behavior", func() {
 			It("should never block when enqueueing action (even when queue full)", func() {
-				smallExecutor := supervisor.NewActionExecutor(2)
+				smallExecutor := execution.NewActionExecutor(2)
 				smallExecutor.Start(ctx)
 				defer smallExecutor.Shutdown()
 
@@ -315,7 +315,7 @@ var _ = Describe("ActionExecutor", func() {
 			})
 
 			It("should handle 100+ concurrent actions without blocking enqueue", func() {
-				executor := supervisor.NewActionExecutor(50)
+				executor := execution.NewActionExecutor(50)
 				executor.Start(ctx)
 				defer executor.Shutdown()
 
@@ -363,7 +363,7 @@ var _ = Describe("ActionExecutor", func() {
 
 		Context("HasActionInProgress non-blocking behavior", func() {
 			It("should never block when checking action status", func() {
-				executor := supervisor.NewActionExecutor(10)
+				executor := execution.NewActionExecutor(10)
 				executor.Start(ctx)
 				defer executor.Shutdown()
 
