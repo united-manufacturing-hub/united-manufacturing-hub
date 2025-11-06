@@ -116,27 +116,33 @@ func CreateTestTriangularStore() *storage.TriangularStore {
 	registry := storage.NewRegistry()
 	workerType := "container"
 
-	registry.Register(&storage.CollectionMetadata{
+	if err := registry.Register(&storage.CollectionMetadata{
 		Name:          workerType + "_identity",
 		WorkerType:    workerType,
 		Role:          storage.RoleIdentity,
 		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt},
 		IndexedFields: []string{storage.FieldSyncID},
-	})
-	registry.Register(&storage.CollectionMetadata{
+	}); err != nil {
+		panic(err)
+	}
+	if err := registry.Register(&storage.CollectionMetadata{
 		Name:          workerType + "_desired",
 		WorkerType:    workerType,
 		Role:          storage.RoleDesired,
 		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
 		IndexedFields: []string{storage.FieldSyncID},
-	})
-	registry.Register(&storage.CollectionMetadata{
+	}); err != nil {
+		panic(err)
+	}
+	if err := registry.Register(&storage.CollectionMetadata{
 		Name:          workerType + "_observed",
 		WorkerType:    workerType,
 		Role:          storage.RoleObserved,
 		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
 		IndexedFields: []string{storage.FieldSyncID},
-	})
+	}); err != nil {
+		panic(err)
+	}
 
 	if err := basicStore.CreateCollection(ctx, workerType+"_identity", nil); err != nil {
 		panic(fmt.Sprintf("failed to create identity collection: %v", err))
