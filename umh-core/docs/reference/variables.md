@@ -104,14 +104,13 @@ The following variables should be replaced in your configurations:
 
 You can define custom variables in the `variables:` section of your configuration. These are flattened to top-level access and override any internal variables with the same name.
 
-**Common patterns:**
+**Common scalar variable patterns:**
 - `{{ .SCAN_RATE }}` - Polling intervals
 - `{{ .TAG_PREFIX }}` - Tag naming prefixes
 - `{{ .USERNAME }}` - Authentication credentials
 - `{{ .PASSWORD }}` - Authentication credentials
-- `{{ .ADDRESSES }}` - Array of device addresses (S7, Modbus, etc.)
 
-**Example with scalar variables:**
+**Example:**
 ```yaml
 protocolConverter:
   variables:
@@ -125,41 +124,46 @@ protocolConverter:
         tag_prefix: "{{ .TAG_PREFIX }}"
 ```
 
-**Example with array variables:**
-```yaml
-protocolConverter:
-  variables:
-    ADDRESSES: [DB3.X0.0, DB3.X0.1, DB3.X0.2, DB3.X1.0]
-    SLAVE_IDS: [1, 2, 3, 5, 8]
-  config: |
-    input:
-      s7:
-        address_list: {{ .ADDRESSES }}
-    # Or for Modbus:
-    input:
-      modbus:
-        slave_ids: {{ .SLAVE_IDS }}
-```
+For working with lists of addresses, IDs, or other repeated values, see [Working with Array Variables](#working-with-array-variables) below.
 
 ### Working with Array Variables
 
-Array variables enable you to manage lists of addresses, IDs, or other repeated values. The template system uses Go's `text/template` package, providing powerful iteration and array manipulation functions.
+Array variables enable you to manage lists of addresses, IDs, or other repeated values. The template system uses Go's `text/template` package, providing powerful iteration and array manipulation capabilities.
 
-**Defining arrays:**
+#### Defining Arrays
+
+Arrays are defined using YAML list syntax in the `variables:` section:
+
 ```yaml
-variables:
-  # S7 memory addresses
-  ADDRESSES: [DB3.X0.0, DB3.X0.1, DB3.X0.2, DB3.X1.0]
+protocolConverter:
+  variables:
+    # S7 memory addresses
+    ADDRESSES: [DB3.X0.0, DB3.X0.1, DB3.X0.2, DB3.X1.0]
 
-  # Modbus slave IDs
-  SLAVE_IDS: [1, 2, 3, 5, 8]
+    # Modbus slave IDs
+    SLAVE_IDS: [1, 2, 3, 5, 8]
 
-  # Device identifiers
-  DEVICE_NAMES: [Motor1, Motor2, Pump1, Valve1]
+    # Device identifiers
+    DEVICE_NAMES: [Motor1, Motor2, Pump1, Valve1]
 ```
 
-**Iterating over arrays:**
-Use `range` to process each item in an array:
+#### Using Arrays in Templates
+
+**Direct insertion:**
+Pass entire array to protocol converter inputs:
+```yaml
+config: |
+  input:
+    s7:
+      address_list: {{ .ADDRESSES }}
+  # Or for Modbus:
+  input:
+    modbus:
+      slave_ids: {{ .SLAVE_IDS }}
+```
+
+**Iterating with range:**
+Process each item individually:
 ```yaml
 config: |
   pipeline:
@@ -171,25 +175,28 @@ config: |
       {{ end }}
 ```
 
-**Accessing individual items:**
-Use `index` to get a specific array element (0-based):
+**Accessing by index:**
+Get specific elements (0-based indexing):
 ```yaml
 config: |
   input:
     label: "primary_device"
     s7:
-      # First address
       primary_address: {{ index .ADDRESSES 0 }}
-      # Second address
       backup_address: {{ index .ADDRESSES 1 }}
 ```
 
-**Available array functions:**
-- `{{ len .ADDRESSES }}` - Get array length
-- `{{ index .ADDRESSES 0 }}` - Access element by index
-- `{{ slice .ADDRESSES 0 3 }}` - Extract sub-array (start, end)
+#### Array Functions Reference
 
-**Real-world pattern: Multiple S7 addresses with iteration**
+| Function | Description | Example |
+|----------|-------------|---------|
+| `{{ len .ADDRESSES }}` | Get array length | Returns `4` for 4-item array |
+| `{{ index .ADDRESSES 0 }}` | Access element by index | Returns first element |
+| `{{ slice .ADDRESSES 0 3 }}` | Extract sub-array | Returns items 0, 1, 2 (excludes end) |
+
+#### Real-World Patterns
+
+**Pattern 1: Multiple S7 addresses with iteration**
 ```yaml
 protocolConverter:
   variables:
@@ -207,7 +214,7 @@ protocolConverter:
           {{ end }}
 ```
 
-**Real-world pattern: Modbus multi-slave polling**
+**Pattern 2: Modbus multi-slave polling**
 ```yaml
 protocolConverter:
   variables:
@@ -228,11 +235,12 @@ protocolConverter:
           {{ end }}
 ```
 
-**Important notes:**
-- Array variables work immediately with existing configuration - no setup required
-- Inside `range` loops, use `{{ . }}` for current item, `{{ $ }}` to access parent context
-- Arrays are defined with YAML list syntax: `[item1, item2, item3]`
-- Go template functions provide additional array manipulation (len, index, slice)
+#### Key Concepts
+
+- **No setup required**: Array variables work immediately with existing configurations
+- **Context access in loops**: Use `{{ . }}` for current item, `{{ $ }}` to access parent context
+- **YAML syntax**: Arrays use square brackets: `[item1, item2, item3]`
+- **Template power**: Full Go template functions available (len, index, slice, range)
 
 ## Variable Sources
 
