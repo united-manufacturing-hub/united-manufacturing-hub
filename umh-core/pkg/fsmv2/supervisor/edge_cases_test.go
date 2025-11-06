@@ -12,6 +12,8 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/collection"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/health"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 	"go.uber.org/zap"
 )
@@ -20,7 +22,7 @@ var _ = Describe("Edge Cases", func() {
 	Describe("FreshnessChecker edge cases", func() {
 		Context("when snapshot has nil observed state", func() {
 			It("should return false for Check", func() {
-				checker := supervisor.NewFreshnessChecker(
+				checker := health.NewFreshnessChecker(
 					10*time.Second,
 					20*time.Second,
 					zap.NewNop().Sugar(),
@@ -36,7 +38,7 @@ var _ = Describe("Edge Cases", func() {
 			})
 
 			It("should return false for IsTimeout", func() {
-				checker := supervisor.NewFreshnessChecker(
+				checker := health.NewFreshnessChecker(
 					10*time.Second,
 					20*time.Second,
 					zap.NewNop().Sugar(),
@@ -58,7 +60,7 @@ var _ = Describe("Edge Cases", func() {
 			It("should continue observation loop", func() {
 				var callCountMutex sync.Mutex
 				callCount := 0
-				collector := supervisor.NewCollector(supervisor.CollectorConfig{
+				collector := collection.NewCollector(collection.CollectorConfig{
 					Worker: &mockWorker{
 						collectFunc: func(ctx context.Context) (fsmv2.ObservedState, error) {
 							callCountMutex.Lock()
@@ -103,7 +105,7 @@ var _ = Describe("Edge Cases", func() {
 				var saveCallCountMutex sync.Mutex
 				saveCallCount := 0
 
-				collector := supervisor.NewCollector(supervisor.CollectorConfig{
+				collector := collection.NewCollector(collection.CollectorConfig{
 					Worker: &mockWorker{
 						collectFunc: func(ctx context.Context) (fsmv2.ObservedState, error) {
 							saveCallCountMutex.Lock()
@@ -140,7 +142,7 @@ var _ = Describe("Edge Cases", func() {
 
 		Context("when context is canceled during collection", func() {
 			It("should stop observation loop", func() {
-				collector := supervisor.NewCollector(supervisor.CollectorConfig{
+				collector := collection.NewCollector(collection.CollectorConfig{
 					Worker:              &mockWorker{},
 					Identity:            mockIdentity(),
 					Store:               createTestTriangularStore(),
@@ -167,7 +169,7 @@ var _ = Describe("Edge Cases", func() {
 
 		Context("when Restart is called with pending restart", func() {
 			It("should not block", func() {
-				collector := supervisor.NewCollector(supervisor.CollectorConfig{
+				collector := collection.NewCollector(collection.CollectorConfig{
 					Worker:              &mockWorker{},
 					Identity:            mockIdentity(),
 					Store:               createTestTriangularStore(),

@@ -11,6 +11,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/collection"
 	"go.uber.org/zap"
 )
 
@@ -100,7 +101,7 @@ var _ = Describe("Supervisor Lifecycle", func() {
 				var collectCountMutex sync.Mutex
 				collectCount := 0
 				store := newMockTriangularStore()
-				collector := supervisor.NewCollector(supervisor.CollectorConfig{
+				collector := collection.NewCollector(collection.CollectorConfig{
 					Worker: &mockWorker{
 						collectFunc: func(ctx context.Context) (fsmv2.ObservedState, error) {
 							collectCountMutex.Lock()

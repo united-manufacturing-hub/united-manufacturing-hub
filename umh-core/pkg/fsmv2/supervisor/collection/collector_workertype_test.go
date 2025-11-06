@@ -70,8 +70,8 @@ var _ = Describe("Collector WorkerType", func() {
 				CollectorHealth: supervisor.CollectorHealthConfig{},
 			})
 
-			worker := &mockWorker{
-				observed: createMockObservedStateWithID(identity.ID),
+			worker := &supervisor.TestWorker{
+				Observed: supervisor.CreateTestObservedStateWithID(identity.ID),
 			}
 
 			err = s.AddWorker(identity, worker)
@@ -152,8 +152,8 @@ var _ = Describe("Collector WorkerType", func() {
 					CollectorHealth: supervisor.CollectorHealthConfig{},
 				})
 
-				worker := &mockWorker{
-					observed: createMockObservedStateWithID(identity.ID),
+				worker := &supervisor.TestWorker{
+					Observed: supervisor.CreateTestObservedStateWithID(identity.ID),
 				}
 
 				err := s.AddWorker(identity, worker)

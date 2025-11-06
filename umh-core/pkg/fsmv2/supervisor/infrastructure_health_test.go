@@ -22,12 +22,8 @@ var _ = Describe("InfrastructureHealthChecker", func() {
 		})
 
 		It("returns nil when all children are healthy", func() {
-			healthyChild1 := &supervisor.Supervisor{
-				circuitOpen: false,
-			}
-			healthyChild2 := &supervisor.Supervisor{
-				circuitOpen: false,
-			}
+			healthyChild1 := supervisor.CreateTestSupervisorWithCircuitState(false)
+			healthyChild2 := supervisor.CreateTestSupervisorWithCircuitState(false)
 
 			children := map[string]*supervisor.Supervisor{
 				"child1": healthyChild1,
@@ -39,12 +35,8 @@ var _ = Describe("InfrastructureHealthChecker", func() {
 		})
 
 		It("returns error when a child has circuit breaker open", func() {
-			healthyChild := &supervisor.Supervisor{
-				circuitOpen: false,
-			}
-			unhealthyChild := &supervisor.Supervisor{
-				circuitOpen: true,
-			}
+			healthyChild := supervisor.CreateTestSupervisorWithCircuitState(false)
+			unhealthyChild := supervisor.CreateTestSupervisorWithCircuitState(true)
 
 			children := map[string]*supervisor.Supervisor{
 				"healthy":   healthyChild,
@@ -54,26 +46,26 @@ var _ = Describe("InfrastructureHealthChecker", func() {
 			err := checker.CheckChildConsistency(children)
 			Expect(err).ToNot(BeNil())
 
-			var childHealthErr *health.ChildHealthError
+			var childHealthErr *supervisor.ChildHealthError
 			Expect(err).To(BeAssignableToTypeOf(childHealthErr))
 
-			healthErr, ok := err.(*health.ChildHealthError)
+			healthErr, ok := err.(*supervisor.ChildHealthError)
 			Expect(ok).To(BeTrue())
 			Expect(healthErr.ChildName).To(Equal("unhealthy"))
 		})
 
 		It("should skip nil children gracefully (defensive)", func() {
 			children := map[string]*supervisor.Supervisor{
-				"healthy":   {circuitOpen: false},
+				"healthy":   supervisor.CreateTestSupervisorWithCircuitState(false),
 				"nil":       nil,
-				"unhealthy": {circuitOpen: true},
+				"unhealthy": supervisor.CreateTestSupervisorWithCircuitState(true),
 			}
 
 			err := checker.CheckChildConsistency(children)
 
 			Expect(err).To(HaveOccurred())
-			Expect(err).To(BeAssignableToTypeOf(&health.ChildHealthError{}))
-			healthErr := err.(*health.ChildHealthError)
+			Expect(err).To(BeAssignableToTypeOf(&supervisor.ChildHealthError{}))
+			healthErr := err.(*supervisor.ChildHealthError)
 			Expect(healthErr.ChildName).To(Equal("unhealthy"))
 		})
 	})

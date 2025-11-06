@@ -7,6 +7,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/health"
 	"go.uber.org/zap"
 )
@@ -21,13 +22,13 @@ var _ = Describe("FreshnessChecker", func() {
 			)
 
 			snapshot := &fsmv2.Snapshot{
-				Identity: mockIdentity(),
-				Observed: &mockObservedState{
+				Identity: supervisor.TestIdentity(),
+				Observed: &supervisor.TestObservedState{
 					ID:          "test-worker",
 					CollectedAt: time.Now(),
-					Desired:     &mockDesiredState{},
+					Desired:     &supervisor.TestDesiredState{},
 				},
-				Desired: &mockDesiredState{},
+				Desired: &supervisor.TestDesiredState{},
 			}
 
 			Expect(checker.Check(snapshot)).To(BeTrue())
@@ -43,13 +44,13 @@ var _ = Describe("FreshnessChecker", func() {
 			)
 
 			snapshot := &fsmv2.Snapshot{
-				Identity: mockIdentity(),
-				Observed: &mockObservedState{
+				Identity: supervisor.TestIdentity(),
+				Observed: &supervisor.TestObservedState{
 					ID:          "test-worker",
 					CollectedAt: time.Now().Add(-15 * time.Second),
-					Desired:     &mockDesiredState{},
+					Desired:     &supervisor.TestDesiredState{},
 				},
-				Desired: &mockDesiredState{},
+				Desired: &supervisor.TestDesiredState{},
 			}
 
 			Expect(checker.Check(snapshot)).To(BeFalse())
@@ -65,13 +66,13 @@ var _ = Describe("FreshnessChecker", func() {
 			)
 
 			snapshot := &fsmv2.Snapshot{
-				Identity: mockIdentity(),
-				Observed: &mockObservedState{
+				Identity: supervisor.TestIdentity(),
+				Observed: &supervisor.TestObservedState{
 					ID:          "test-worker",
 					CollectedAt: time.Now().Add(-25 * time.Second),
-					Desired:     &mockDesiredState{},
+					Desired:     &supervisor.TestDesiredState{},
 				},
-				Desired: &mockDesiredState{},
+				Desired: &supervisor.TestDesiredState{},
 			}
 
 			Expect(checker.IsTimeout(snapshot)).To(BeTrue())
