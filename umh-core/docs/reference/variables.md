@@ -141,6 +141,99 @@ protocolConverter:
         slave_ids: {{ .SLAVE_IDS }}
 ```
 
+### Working with Array Variables
+
+Array variables enable you to manage lists of addresses, IDs, or other repeated values. The template system uses Go's `text/template` package, providing powerful iteration and array manipulation functions.
+
+**Defining arrays:**
+```yaml
+variables:
+  # S7 memory addresses
+  ADDRESSES: [DB3.X0.0, DB3.X0.1, DB3.X0.2, DB3.X1.0]
+
+  # Modbus slave IDs
+  SLAVE_IDS: [1, 2, 3, 5, 8]
+
+  # Device identifiers
+  DEVICE_NAMES: [Motor1, Motor2, Pump1, Valve1]
+```
+
+**Iterating over arrays:**
+Use `range` to process each item in an array:
+```yaml
+config: |
+  pipeline:
+    processors:
+      {{ range .ADDRESSES }}
+      - mapping: |
+          root.address = "{{ . }}"
+          root.timestamp = timestamp_unix()
+      {{ end }}
+```
+
+**Accessing individual items:**
+Use `index` to get a specific array element (0-based):
+```yaml
+config: |
+  input:
+    label: "primary_device"
+    s7:
+      # First address
+      primary_address: {{ index .ADDRESSES 0 }}
+      # Second address
+      backup_address: {{ index .ADDRESSES 1 }}
+```
+
+**Available array functions:**
+- `{{ len .ADDRESSES }}` - Get array length
+- `{{ index .ADDRESSES 0 }}` - Access element by index
+- `{{ slice .ADDRESSES 0 3 }}` - Extract sub-array (start, end)
+
+**Real-world pattern: Multiple S7 addresses with iteration**
+```yaml
+protocolConverter:
+  variables:
+    ADDRESSES: [DB3.X0.0, DB3.X0.1, DB3.X0.2, DB3.X1.0]
+    TAG_PREFIX: "PLC1_"
+  config: |
+    input:
+      broker:
+        inputs:
+          {{ range $index, $address := .ADDRESSES }}
+          - label: "{{ $.TAG_PREFIX }}input_{{ $index }}"
+            s7:
+              address: "{{ $address }}"
+              scan_rate: "1s"
+          {{ end }}
+```
+
+**Real-world pattern: Modbus multi-slave polling**
+```yaml
+protocolConverter:
+  variables:
+    SLAVE_IDS: [1, 2, 3, 5, 8]
+    BASE_ADDRESS: "192.168.1.100"
+  config: |
+    input:
+      broker:
+        inputs:
+          {{ range .SLAVE_IDS }}
+          - label: "modbus_slave_{{ . }}"
+            modbus_tcp:
+              address: "{{ $.BASE_ADDRESS }}:502"
+              slave_id: {{ . }}
+              holding_registers:
+                - address: 0
+                  count: 10
+          {{ end }}
+```
+
+**Important notes:**
+- Array variables work immediately with existing configuration - no setup required
+- Inside `range` loops, use `{{ . }}` for current item, `{{ $ }}` to access parent context
+- Arrays are defined with YAML list syntax: `[item1, item2, item3]`
+- Go template functions provide additional array manipulation (len, index, slice)
+
 ## Variable Sources
 
 Understanding where variables come from helps with troubleshooting:
