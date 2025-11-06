@@ -23,7 +23,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/communicator/transport"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
 )
 
 // HTTPTransport implements HTTP-based communication using umh-core protocol.

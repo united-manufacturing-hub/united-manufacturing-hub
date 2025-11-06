@@ -57,3 +57,7 @@ func (b *ExponentialBackoff) GetTotalDowntime() time.Duration {
 func (b *ExponentialBackoff) GetAttempts() int {
 	return b.attempts
 }
+
+func (b *ExponentialBackoff) GetStartTime() time.Time {
+	return b.startTime
+}

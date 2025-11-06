@@ -18,7 +18,7 @@ import (
 	"context"
 	"sync"
 
-	transportpkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/communicator/transport"
+	transportpkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
 )
 
 // MockTransport is a mock implementation of HTTPTransport for testing.

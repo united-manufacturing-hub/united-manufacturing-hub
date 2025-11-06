@@ -1,4 +1,4 @@
-package health_test
+package supervisor_test
 
 import (
 	"time"
@@ -6,14 +6,13 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/health"
 )
 
 var _ = Describe("InfrastructureHealthChecker", func() {
-	var checker *health.InfrastructureHealthChecker
+	var checker *supervisor.InfrastructureHealthChecker
 
 	BeforeEach(func() {
-		checker = health.NewInfrastructureHealthChecker(5, 5*time.Minute)
+		checker = supervisor.NewInfrastructureHealthChecker(5, 5*time.Minute)
 	})
 
 	Describe("CheckChildConsistency", func() {

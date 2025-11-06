@@ -27,6 +27,10 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/collection"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/execution"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/health"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/types"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 )
@@ -145,19 +149,19 @@ type Supervisor struct {
 	store                 storage.TriangularStoreInterface  // State persistence layer (triangular model)
 	logger                *zap.SugaredLogger                // Logger for supervisor operations
 	tickInterval          time.Duration                     // How often to evaluate state transitions
-	collectorHealth       CollectorHealth                   // Collector health tracking
-	freshnessChecker      *FreshnessChecker                 // Data freshness validator
-	expectedObservedTypes map[string]reflect.Type           // workerID → expected ObservedState type
-	children              map[string]*Supervisor            // Child supervisors by name (hierarchical composition)
-	stateMapping          map[string]string                 // Parent→child state mapping
-	userSpec              types.UserSpec                    // User-provided configuration for this supervisor
-	mappedParentState     string                            // State mapped from parent (if this is a child supervisor)
-	globalVars            map[string]any                    // Global variables (fleet-wide settings from management system)
-	createdAt             time.Time                         // Timestamp when supervisor was created
-	parentID              string                            // ID of parent supervisor (empty string for root supervisors)
-	healthChecker         *InfrastructureHealthChecker      // Infrastructure health monitoring
-	circuitOpen           bool                              // Circuit breaker state
-	actionExecutor        *ActionExecutor                   // Async action execution (Phase 2)
+	collectorHealth       CollectorHealth                          // Collector health tracking
+	freshnessChecker      *health.FreshnessChecker                 // Data freshness validator
+	expectedObservedTypes map[string]reflect.Type                  // workerID → expected ObservedState type
+	children              map[string]*Supervisor                   // Child supervisors by name (hierarchical composition)
+	stateMapping          map[string]string                        // Parent→child state mapping
+	userSpec              types.UserSpec                           // User-provided configuration for this supervisor
+	mappedParentState     string                                   // State mapped from parent (if this is a child supervisor)
+	globalVars            map[string]any                           // Global variables (fleet-wide settings from management system)
+	createdAt             time.Time                                // Timestamp when supervisor was created
+	parentID              string                                   // ID of parent supervisor (empty string for root supervisors)
+	healthChecker         *InfrastructureHealthChecker             // Infrastructure health monitoring
+	circuitOpen           bool                                     // Circuit breaker state
+	actionExecutor        *execution.ActionExecutor                // Async action execution (Phase 2)
 }
 
 // WorkerContext encapsulates the runtime state for a single worker
@@ -172,7 +176,7 @@ type WorkerContext struct {
 	identity       fsmv2.Identity
 	worker         fsmv2.Worker
 	currentState   fsmv2.State
-	collector      *Collector
+	collector      *collection.Collector
 }
 
 // CollectorHealthConfig configures observation collector health monitoring.
@@ -282,7 +286,7 @@ func NewSupervisor(cfg Config) *Supervisor {
 	cfg.Logger.Infof("Supervisor timeout configuration: ObservationTimeout=%v, StaleThreshold=%v, CollectorTimeout=%v",
 		observationTimeout, staleThreshold, timeout)
 
-	freshnessChecker := NewFreshnessChecker(staleThreshold, timeout, cfg.Logger)
+	freshnessChecker := health.NewFreshnessChecker(staleThreshold, timeout, cfg.Logger)
 
 	// Auto-register triangular collections for this worker type.
 	// Collections follow convention: {workerType}_identity, {workerType}_desired, {workerType}_observed
@@ -360,7 +364,7 @@ func NewSupervisor(cfg Config) *Supervisor {
 		parentID:              "", // Root supervisor has empty parentID
 		healthChecker:         NewInfrastructureHealthChecker(DefaultMaxInfraRecoveryAttempts, DefaultRecoveryAttemptWindow),
 		circuitOpen:           false,
-		actionExecutor:        NewActionExecutor(10),
+		actionExecutor:        execution.NewActionExecutor(10),
 		collectorHealth: CollectorHealth{
 			staleThreshold:     staleThreshold,
 			timeout:            timeout,
@@ -410,7 +414,7 @@ func (s *Supervisor) AddWorker(identity fsmv2.Identity, worker fsmv2.Worker) err
 	}
 	s.logger.Debugf("Saved initial observation for worker: %s", identity.ID)
 
-	collector := NewCollector(CollectorConfig{
+	collector := collection.NewCollector(collection.CollectorConfig{
 		Worker:              worker,
 		Identity:            identity,
 		Store:               s.store,
@@ -821,7 +825,7 @@ func (s *Supervisor) tickWorker(ctx context.Context, workerID string) error {
 
 // getRecoveryStatus returns a human-readable recovery status based on attempt count.
 func (s *Supervisor) getRecoveryStatus() string {
-	attempts := s.healthChecker.backoff.attempts
+	attempts := s.healthChecker.backoff.GetAttempts()
 	if attempts < 3 {
 		return "attempting_recovery"
 	} else if attempts < 5 {
@@ -888,12 +892,12 @@ func (s *Supervisor) Tick(ctx context.Context) error {
 				"error", err.Error(),
 				"error_scope", "infrastructure",
 				"impact", "all_workers")
-			RecordCircuitOpen(s.workerType, true)
+			metrics.RecordCircuitOpen(s.workerType, true)
 		}
 
 		var childErr *ChildHealthError
 		if errors.As(err, &childErr) {
-			attempts := s.healthChecker.backoff.attempts
+			attempts := s.healthChecker.backoff.GetAttempts()
 			nextDelay := s.healthChecker.backoff.NextDelay()
 
 			s.logger.Warn("Circuit breaker open, retrying infrastructure checks",
@@ -928,12 +932,12 @@ func (s *Supervisor) Tick(ctx context.Context) error {
 	}
 
 	if s.circuitOpen {
-		downtime := time.Since(s.healthChecker.backoff.startTime)
+		downtime := time.Since(s.healthChecker.backoff.GetStartTime())
 		s.logger.Info("Infrastructure recovered, closing circuit breaker",
 			"supervisor_id", s.workerType,
 			"total_downtime", downtime.String())
-		RecordCircuitOpen(s.workerType, false)
-		RecordInfrastructureRecovery(s.workerType, downtime)
+		metrics.RecordCircuitOpen(s.workerType, false)
+		metrics.RecordInfrastructureRecovery(s.workerType, downtime)
 	}
 
 	s.circuitOpen = false
@@ -985,7 +989,7 @@ func (s *Supervisor) Tick(ctx context.Context) error {
 		"supervisor_id", s.workerType,
 		"user_vars", userVarCount,
 		"global_vars", globalVarCount)
-	RecordVariablePropagation(s.workerType)
+	metrics.RecordVariablePropagation(s.workerType)
 
 	// PHASE 0: Hierarchical Composition
 	// 1. DeriveDesiredState
@@ -998,15 +1002,15 @@ func (s *Supervisor) Tick(ctx context.Context) error {
 			"supervisor_id", s.workerType,
 			"error", err.Error(),
 			"duration_ms", templateDuration.Milliseconds())
-		RecordTemplateRenderingDuration(s.workerType, "error", templateDuration)
-		RecordTemplateRenderingError(s.workerType, "derivation_failed")
+		metrics.RecordTemplateRenderingDuration(s.workerType, "error", templateDuration)
+		metrics.RecordTemplateRenderingError(s.workerType, "derivation_failed")
 		return fmt.Errorf("failed to derive desired state: %w", err)
 	}
 
 	s.logger.Debug("template rendered",
 		"supervisor_id", s.workerType,
 		"duration_ms", templateDuration.Milliseconds())
-	RecordTemplateRenderingDuration(s.workerType, "success", templateDuration)
+	metrics.RecordTemplateRenderingDuration(s.workerType, "success", templateDuration)
 
 	// 2. Reconcile children (propagate errors)
 	if err := s.reconcileChildren(desired.ChildrenSpecs); err != nil {
@@ -1294,7 +1298,7 @@ func (s *Supervisor) reconcileChildren(specs []types.ChildSpec) error {
 		"updated", updatedCount,
 		"removed", removedCount,
 		"duration_ms", duration.Milliseconds())
-	RecordReconciliation(s.workerType, "success", duration)
+	metrics.RecordReconciliation(s.workerType, "success", duration)
 
 	return nil
 }

@@ -17,7 +17,7 @@ package state_test
 import (
 	. "github.com/onsi/ginkgo/v2"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/communicator/state"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/state"
 )
 
 var _ = Describe("TryingToAuthenticateState", func() {

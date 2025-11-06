@@ -1,10 +1,9 @@
-package health
+package supervisor
 
 import (
 	"fmt"
 	"time"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/execution"
 )
 
@@ -36,7 +35,7 @@ func NewInfrastructureHealthChecker(maxAttempts int, attemptWindow time.Duration
 	}
 }
 
-func (h *InfrastructureHealthChecker) CheckChildConsistency(children map[string]*supervisor.Supervisor) error {
+func (h *InfrastructureHealthChecker) CheckChildConsistency(children map[string]*Supervisor) error {
 	for name, child := range children {
 		if child == nil {
 			continue
