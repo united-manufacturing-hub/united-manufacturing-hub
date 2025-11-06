@@ -1,0 +1,65 @@
+// Package fsmv2 implements a dependency injection pattern for FSM workers.
+//
+// Dependencies Pattern:
+//
+// The Dependencies interface provides a standardized way to inject worker-specific
+// tools (logger, transport, metrics, etc.) into FSM actions. This pattern:
+//
+//   - Avoids global state and tight coupling
+//   - Makes testing easier through dependency injection
+//   - Provides type-safe access to worker-specific tools
+//   - Enables worker-specific extensions through embedding
+//
+// Example usage:
+//
+//	// Worker-specific dependencies
+//	type CommunicatorDependencies struct {
+//	    *fsmv2.BaseDependencies
+//	    transport Transport
+//	}
+//
+//	func (d *CommunicatorDependencies) GetTransport() Transport {
+//	    return d.transport
+//	}
+//
+//	// Actions receive dependencies
+//	type SendHeartbeatAction struct {
+//	    dependencies *CommunicatorDependencies
+//	}
+//
+//	func (a *SendHeartbeatAction) Execute(ctx context.Context) error {
+//	    logger := a.dependencies.GetLogger()
+//	    transport := a.dependencies.GetTransport()
+//	    // ... use injected dependencies
+//	}
+//
+// Note: This is unrelated to storage.Registry (CSE collection metadata).
+package fsmv2
+
+import "go.uber.org/zap"
+
+// Dependencies provides access to worker-specific tools for actions.
+// All worker dependencies embed BaseDependencies and extend with worker-specific tools.
+type Dependencies interface {
+	GetLogger() *zap.SugaredLogger
+}
+
+// BaseDependencies provides common tools for all workers.
+// Worker-specific dependencies should embed this struct.
+type BaseDependencies struct {
+	logger *zap.SugaredLogger
+}
+
+// NewBaseDependencies creates a new base dependencies with common tools.
+func NewBaseDependencies(logger *zap.SugaredLogger) *BaseDependencies {
+	if logger == nil {
+		panic("NewBaseDependencies: logger cannot be nil")
+	}
+
+	return &BaseDependencies{logger: logger}
+}
+
+// GetLogger returns the logger for this dependencies.
+func (d *BaseDependencies) GetLogger() *zap.SugaredLogger {
+	return d.logger
+}

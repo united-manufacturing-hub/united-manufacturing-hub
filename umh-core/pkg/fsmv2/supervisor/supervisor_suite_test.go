@@ -15,6 +15,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/types"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence/memory"
 )
@@ -73,8 +74,8 @@ func (m *mockWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedSt
 	}, nil
 }
 
-func (m *mockWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
-	return &mockDesiredState{}, nil
+func (m *mockWorker) DeriveDesiredState(spec interface{}) (types.DesiredState, error) {
+	return types.DesiredState{State: "running"}, nil
 }
 
 func (m *mockWorker) GetInitialState() fsmv2.State {

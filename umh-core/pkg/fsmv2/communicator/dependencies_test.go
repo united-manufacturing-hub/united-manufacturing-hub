@@ -12,25 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package registry_test
+package communicator_test
 
 import (
 	"context"
-	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"go.uber.org/zap"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/communicator/registry"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/communicator"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/communicator/transport"
 )
 
-func TestRegistry(t *testing.T) {
-	RegisterFailHandler(Fail)
-	RunSpecs(t, "Registry Suite")
-}
+// Test suite is registered in worker_test.go to avoid duplicate RunSpecs
 
 type mockTransport struct{}
 
@@ -45,7 +41,7 @@ func (m *mockTransport) Push(_ context.Context, _ string, _ []*transport.UMHMess
 }
 func (m *mockTransport) Close() {}
 
-var _ = Describe("CommunicatorRegistry", func() {
+var _ = Describe("CommunicatorDependencies", func() {
 	var (
 		mt     transport.Transport
 		logger *zap.SugaredLogger
@@ -56,45 +52,46 @@ var _ = Describe("CommunicatorRegistry", func() {
 		logger = zap.NewNop().Sugar()
 	})
 
-	Describe("NewCommunicatorRegistry", func() {
-		Context("when creating a new registry", func() {
-			It("should return a non-nil registry", func() {
-				reg := registry.NewCommunicatorRegistry(mt, logger)
-				Expect(reg).NotTo(BeNil())
+	Describe("NewCommunicatorDependencies", func() {
+		Context("when creating a new dependencies", func() {
+			It("should return a non-nil dependencies", func() {
+				deps := communicator.NewCommunicatorDependencies(mt, logger)
+				Expect(deps).NotTo(BeNil())
 			})
 
 			It("should store the transport", func() {
-				reg := registry.NewCommunicatorRegistry(mt, logger)
-				Expect(reg.GetTransport()).To(Equal(mt))
+				deps := communicator.NewCommunicatorDependencies(mt, logger)
+				Expect(deps.GetTransport()).To(Equal(mt))
 			})
 
 			It("should store the logger", func() {
-				reg := registry.NewCommunicatorRegistry(mt, logger)
-				Expect(reg.GetLogger()).To(Equal(logger))
+				deps := communicator.NewCommunicatorDependencies(mt, logger)
+				Expect(deps.GetLogger()).To(Equal(logger))
 			})
 		})
 	})
 
 	Describe("GetTransport", func() {
 		It("should return the transport passed to the constructor", func() {
-			reg := registry.NewCommunicatorRegistry(mt, logger)
-			Expect(reg.GetTransport()).To(Equal(mt))
+			deps := communicator.NewCommunicatorDependencies(mt, logger)
+			Expect(deps.GetTransport()).To(Equal(mt))
 		})
 	})
 
 	Describe("GetLogger", func() {
-		It("should return the logger inherited from BaseRegistry", func() {
-			reg := registry.NewCommunicatorRegistry(mt, logger)
-			Expect(reg.GetLogger()).To(Equal(logger))
+		It("should return the logger inherited from BaseDependencies", func() {
+			deps := communicator.NewCommunicatorDependencies(mt, logger)
+			Expect(deps.GetLogger()).To(Equal(logger))
 		})
 	})
 
-	Describe("Registry interface implementation", func() {
-		It("should implement fsmv2.Registry interface", func() {
-			reg := registry.NewCommunicatorRegistry(mt, logger)
-			var _ fsmv2.Registry = reg
-			Expect(reg).To(Satisfy(func(r interface{}) bool {
-				_, ok := r.(fsmv2.Registry)
+	Describe("Dependencies interface implementation", func() {
+		It("should implement fsmv2.Dependencies interface", func() {
+			deps := communicator.NewCommunicatorDependencies(mt, logger)
+			var _ fsmv2.Dependencies = deps
+			Expect(deps).To(Satisfy(func(d interface{}) bool {
+				_, ok := d.(fsmv2.Dependencies)
+
 				return ok
 			}))
 		})

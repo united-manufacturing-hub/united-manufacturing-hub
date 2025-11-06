@@ -21,7 +21,7 @@ import (
 	transportpkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/communicator/transport"
 )
 
-// MockTransport is a mock implementation of HTTPTransport for testing
+// MockTransport is a mock implementation of HTTPTransport for testing.
 type MockTransport struct {
 	mu sync.Mutex
 
@@ -56,10 +56,11 @@ func (m *MockTransport) Authenticate(ctx context.Context, req transportpkg.AuthR
 	}
 
 	m.token = "mock-jwt-token"
+
 	return transportpkg.AuthResponse{Token: m.token}, nil
 }
 
-func (m *MockTransport) Pull(ctx context.Context, JWTToken string) ([]*transportpkg.UMHMessage, error) {
+func (m *MockTransport) Pull(ctx context.Context, jwtToken string) ([]*transportpkg.UMHMessage, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -72,7 +73,7 @@ func (m *MockTransport) Pull(ctx context.Context, JWTToken string) ([]*transport
 	return m.pullMessages, nil
 }
 
-func (m *MockTransport) Push(ctx context.Context, JWTToken string, messages []*transportpkg.UMHMessage) error {
+func (m *MockTransport) Push(ctx context.Context, jwtToken string, messages []*transportpkg.UMHMessage) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -83,6 +84,7 @@ func (m *MockTransport) Push(ctx context.Context, JWTToken string, messages []*t
 	}
 
 	m.pushedMessages = append(m.pushedMessages, messages...)
+
 	return nil
 }
 

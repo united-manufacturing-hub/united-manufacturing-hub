@@ -73,7 +73,7 @@ var _ = Describe("Multi-Worker Supervisor", func() {
 	AfterEach(func() {
 		ctx := context.Background()
 		if basicStore != nil {
-			basicStore.Close(ctx)
+			_ = basicStore.Close(ctx)
 		}
 	})
 
@@ -171,9 +171,9 @@ Describe("ListWorkers", func() {
 			worker2 := &mockWorker{observed: createMockObservedStateWithID("worker-2")}
 			worker3 := &mockWorker{observed: createMockObservedStateWithID("worker-3")}
 
-			s.AddWorker(identity1, worker1)
-			s.AddWorker(identity2, worker2)
-			s.AddWorker(identity3, worker3)
+			_ = s.AddWorker(identity1, worker1)
+			_ = s.AddWorker(identity2, worker2)
+			_ = s.AddWorker(identity3, worker3)
 
 			workers := s.ListWorkers()
 			Expect(workers).To(HaveLen(3))
@@ -287,9 +287,9 @@ It("should continue ticking other workers even if one fails", func() {
 			worker2 := &mockWorker{observed: createMockObservedStateWithID("worker-2")}
 			worker3 := &mockWorker{observed: createMockObservedStateWithID("worker-3")}
 
-			s.AddWorker(identity1, worker1)
-			s.AddWorker(identity2, worker2)
-			s.AddWorker(identity3, worker3)
+			_ = s.AddWorker(identity1, worker1)
+			_ = s.AddWorker(identity2, worker2)
+			_ = s.AddWorker(identity3, worker3)
 
 			workers := s.ListWorkers()
 			Expect(workers).To(HaveLen(3))

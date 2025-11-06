@@ -20,20 +20,20 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/communicator"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/communicator/snapshot"
 )
 
 var _ = Describe("CommunicatorObservedState", func() {
-	var observed *communicator.CommunicatorObservedState
+	var observed *snapshot.CommunicatorObservedState
 
 	BeforeEach(func() {
-		observed = &communicator.CommunicatorObservedState{}
+		observed = &snapshot.CommunicatorObservedState{}
 	})
 
 	Describe("IsTokenExpired", func() {
 		Context("when token expires in 1 hour", func() {
 			BeforeEach(func() {
-				observed.SetTokenExpiresAt(time.Now().Add(1 * time.Hour))
+				observed.JWTExpiry = time.Now().Add(1 * time.Hour)
 			})
 
 			It("should return false (not expired)", func() {
@@ -44,7 +44,7 @@ var _ = Describe("CommunicatorObservedState", func() {
 
 		Context("when token expired 1 hour ago", func() {
 			BeforeEach(func() {
-				observed.SetTokenExpiresAt(time.Now().Add(-1 * time.Hour))
+				observed.JWTExpiry = time.Now().Add(-1 * time.Hour)
 			})
 
 			It("should return true (expired)", func() {
@@ -55,7 +55,7 @@ var _ = Describe("CommunicatorObservedState", func() {
 
 		Context("when token expires in 5 minutes (within 10-minute buffer)", func() {
 			BeforeEach(func() {
-				observed.SetTokenExpiresAt(time.Now().Add(5 * time.Minute))
+				observed.JWTExpiry = time.Now().Add(5 * time.Minute)
 			})
 
 			It("should return true (considered expired for proactive refresh)", func() {
@@ -66,7 +66,7 @@ var _ = Describe("CommunicatorObservedState", func() {
 
 		Context("when token expires in 15 minutes (outside 10-minute buffer)", func() {
 			BeforeEach(func() {
-				observed.SetTokenExpiresAt(time.Now().Add(15 * time.Minute))
+				observed.JWTExpiry = time.Now().Add(15 * time.Minute)
 			})
 
 			It("should return false (not yet in refresh window)", func() {

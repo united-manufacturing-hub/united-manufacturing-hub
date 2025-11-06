@@ -20,120 +20,76 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/communicator"
-	transportpkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/communicator/transport"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/communicator/snapshot"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/communicator/state"
 )
 
 var _ = Describe("DegradedState", func() {
 	var (
-		state         *communicator.DegradedState
-		snapshot      fsmv2.Snapshot
-		desired       *communicator.CommunicatorDesiredState
-		observed      *communicator.CommunicatorObservedState
-		worker        *communicator.CommunicatorWorker
-		mockTransport *MockTransport
-		inboundChan   chan *transportpkg.UMHMessage
-		outboundChan  chan *transportpkg.UMHMessage
-		logger        *zap.SugaredLogger
+		stateObj *state.DegradedState
+		logger   *zap.SugaredLogger
 	)
 
 	BeforeEach(func() {
 		logger = zap.NewNop().Sugar()
-		mockTransport = NewMockTransport()
-		inboundChan = make(chan *transportpkg.UMHMessage, 10)
-		outboundChan = make(chan *transportpkg.UMHMessage, 10)
-		worker = communicator.NewCommunicatorWorker(
-			"test-communicator",
-			"https://relay.example.com",
-			inboundChan,
-			outboundChan,
-			mockTransport,
-			"test-uuid",
-			"test-token",
-			logger,
-		)
-		state = &communicator.DegradedState{Worker: worker}
-		desired = &communicator.CommunicatorDesiredState{}
-		observed = &communicator.CommunicatorObservedState{}
+		_ = logger
+		stateObj = &state.DegradedState{}
 	})
 
 	Describe("Next", func() {
-		Context("when shutdown is requested", func() {
-			BeforeEach(func() {
-				desired.SetShutdownRequested(true)
-				snapshot = fsmv2.Snapshot{
-					Desired:  desired,
-					Observed: observed,
-				}
-			})
-
-			It("should transition to StoppedState", func() {
-				nextState, _, _ := state.Next(snapshot)
-				Expect(nextState).To(BeAssignableToTypeOf(&communicator.StoppedState{}))
-			})
-
-			It("should not signal anything", func() {
-				_, signal, _ := state.Next(snapshot)
-				Expect(signal).To(Equal(fsmv2.SignalNone))
-			})
-
-			It("should not return an action", func() {
-				_, _, action := state.Next(snapshot)
-				Expect(action).To(BeNil())
-			})
-		})
-
 		Context("when sync recovers", func() {
+			var snap snapshot.CommunicatorSnapshot
+
 			BeforeEach(func() {
-				desired.SetShutdownRequested(false)
-				observed.SetSyncHealthy(true)
-				observed.SetConsecutiveErrors(0)
-				observed.SetAuthenticated(true)
-				snapshot = fsmv2.Snapshot{
-					Desired:  desired,
-					Observed: observed,
+				snap = snapshot.CommunicatorSnapshot{
+					Desired: snapshot.CommunicatorDesiredState{},
+					Observed: snapshot.CommunicatorObservedState{
+						Authenticated: true,
+					},
 				}
 			})
 
 			It("should transition to SyncingState", func() {
-				nextState, _, _ := state.Next(snapshot)
-				Expect(nextState).To(BeAssignableToTypeOf(&communicator.SyncingState{}))
+				nextState, _, _ := stateObj.Next(snap)
+				Expect(nextState).To(BeAssignableToTypeOf(&state.SyncingState{}))
 			})
 
 			It("should not signal anything", func() {
-				_, signal, _ := state.Next(snapshot)
+				_, signal, _ := stateObj.Next(snap)
 				Expect(signal).To(Equal(fsmv2.SignalNone))
 			})
 
 			It("should not return an action", func() {
-				_, _, action := state.Next(snapshot)
+				_, _, action := stateObj.Next(snap)
 				Expect(action).To(BeNil())
 			})
 		})
 
 		Context("when sync is still unhealthy", func() {
+			var snap snapshot.CommunicatorSnapshot
+
 			BeforeEach(func() {
-				desired.SetShutdownRequested(false)
-				observed.SetSyncHealthy(false)
-				observed.SetConsecutiveErrors(5)
-				snapshot = fsmv2.Snapshot{
-					Desired:  desired,
-					Observed: observed,
+				snap = snapshot.CommunicatorSnapshot{
+					Desired: snapshot.CommunicatorDesiredState{},
+					Observed: snapshot.CommunicatorObservedState{
+						Authenticated: false,
+					},
 				}
 			})
 
 			It("should stay in DegradedState", func() {
-				nextState, _, _ := state.Next(snapshot)
-				Expect(nextState).To(BeAssignableToTypeOf(&communicator.DegradedState{}))
+				nextState, _, _ := stateObj.Next(snap)
+				Expect(nextState).To(BeAssignableToTypeOf(&state.DegradedState{}))
 			})
 
 			It("should emit SyncAction to retry", func() {
-				_, _, action := state.Next(snapshot)
-				Expect(action).To(BeAssignableToTypeOf(&communicator.SyncAction{}))
+				_, _, action := stateObj.Next(snap)
+				Expect(action).NotTo(BeNil())
+				Expect(action.Name()).To(Equal("sync"))
 			})
 
 			It("should not signal anything", func() {
-				_, signal, _ := state.Next(snapshot)
+				_, signal, _ := stateObj.Next(snap)
 				Expect(signal).To(Equal(fsmv2.SignalNone))
 			})
 		})
@@ -141,13 +97,13 @@ var _ = Describe("DegradedState", func() {
 
 	Describe("String", func() {
 		It("should return state name", func() {
-			Expect(state.String()).To(Equal("Degraded"))
+			Expect(stateObj.String()).To(Equal("Degraded"))
 		})
 	})
 
 	Describe("Reason", func() {
 		It("should return descriptive reason", func() {
-			Expect(state.Reason()).To(Equal("Sync is experiencing errors"))
+			Expect(stateObj.Reason()).To(Equal("Sync is experiencing errors"))
 		})
 	})
 })

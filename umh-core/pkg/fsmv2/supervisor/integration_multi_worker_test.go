@@ -125,9 +125,9 @@ var _ = Describe("Multi-Worker Integration", func() {
 					worker := &mockWorker{
 						observed: &mockObservedState{ID: "concurrent1", CollectedAt: time.Now(), Desired: &mockDesiredState{}},
 					}
-					s.AddWorker(identity, worker)
+					_ = s.AddWorker(identity, worker)
 					time.Sleep(5 * time.Millisecond)
-					s.RemoveWorker(context.Background(), "concurrent1")
+					_ = s.RemoveWorker(context.Background(), "concurrent1")
 				}
 				done <- true
 			}()
@@ -139,9 +139,9 @@ var _ = Describe("Multi-Worker Integration", func() {
 					worker := &mockWorker{
 						observed: &mockObservedState{ID: "concurrent2", CollectedAt: time.Now(), Desired: &mockDesiredState{}},
 					}
-					s.AddWorker(identity, worker)
+					_ = s.AddWorker(identity, worker)
 					time.Sleep(5 * time.Millisecond)
-					s.RemoveWorker(context.Background(), "concurrent2")
+					_ = s.RemoveWorker(context.Background(), "concurrent2")
 				}
 				done <- true
 			}()
@@ -150,7 +150,7 @@ var _ = Describe("Multi-Worker Integration", func() {
 			<-done
 
 			workers := s.ListWorkers()
-			Expect(workers).To(HaveLen(0))
+			Expect(workers).To(BeEmpty())
 		})
 	})
 

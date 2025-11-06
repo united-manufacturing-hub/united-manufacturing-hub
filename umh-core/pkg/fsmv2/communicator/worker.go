@@ -12,6 +12,43 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// =============================================================================
+// COMMUNICATOR INVARIANTS
+// =============================================================================
+//
+// C1: Authentication precedence
+//     MUST: Cannot sync before authentication completes
+//     WHY:  JWT token required for all sync operations
+//     ENFORCED: State machine transitions (Stopped → Authenticating → Syncing)
+//
+// C2: Token expiry handling
+//     MUST: Check JWT expiry before every sync operation
+//     WHY:  Expired tokens cause 401 errors and sync failures
+//     ENFORCED: SyncAction checks JWTExpiry before transport.Push/Pull
+//
+// C3: Transport lifecycle
+//     MUST: Transport must not be nil throughout worker lifetime
+//     WHY:  All actions depend on transport for HTTP communication
+//     ENFORCED: NewCommunicatorWorker validates transport parameter
+//
+// C4: Shutdown check priority
+//     MUST: Check shutdown signal before processing any action
+//     WHY:  Prevents partial operations during graceful shutdown
+//     ENFORCED: All states check signal in Next() before returning actions
+//
+// C5: Syncing state loop
+//     MUST: SyncingState returns self on success (loops indefinitely)
+//     WHY:  Continuous bidirectional sync is the primary operational mode
+//     ENFORCED: SyncingState.Next() returns (self, SignalNone, SyncAction)
+//
+// Defense-in-depth layers:
+//   - Layer 1: Type system (Go's strong typing, interface contracts)
+//   - Layer 2: Runtime checks (state machine transitions, nil validation)
+//   - Layer 3: Tests (verify invariants hold under all conditions)
+//   - Layer 4: Monitoring (detect violations in production via status messages)
+//
+// =============================================================================
+
 // Package communicator implements the Channel Communicator FSM worker for
 // bidirectional message exchange between Edge and Backend tiers.
 //
@@ -78,6 +115,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/communicator/snapshot"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/communicator/state"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/communicator/transport"
+	fsmv2types "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/types"
 )
 
 // WorkerType identifies this worker in the FSM v2 system.
@@ -128,13 +166,13 @@ const WorkerType = "communicator"
 //
 // These dependencies are passed to actions when created by states.
 type CommunicatorWorker struct {
-	*fsmv2.BaseWorker[*CommunicatorRegistry]
+	*fsmv2.BaseWorker[*CommunicatorDependencies]
 	identity fsmv2.Identity
 
 	// Temporary State
 	// Temporary state can be a local logger, or some HTTP client, or some local services
 	// like filesystem, etc.
-	// But everything that configures it or that needs to be exposed shoudl be in observed and desired state
+	// But everything that configures it or that needs to be exposed should be in observed and desired state
 	logger *zap.SugaredLogger
 }
 
@@ -166,10 +204,10 @@ func NewCommunicatorWorker(
 	transportParam transport.Transport,
 	logger *zap.SugaredLogger,
 ) *CommunicatorWorker {
-	registry := NewCommunicatorRegistry(transportParam, logger)
+	dependencies := NewCommunicatorDependencies(transportParam, logger)
 
 	return &CommunicatorWorker{
-		BaseWorker: fsmv2.NewBaseWorker(registry),
+		BaseWorker: fsmv2.NewBaseWorker(dependencies),
 		identity: fsmv2.Identity{
 			ID:         id,
 			Name:       name,
@@ -193,7 +231,6 @@ func NewCommunicatorWorker(
 //
 // This method never returns an error for the communicator worker.
 func (w *CommunicatorWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedState, error) {
-
 	observed := snapshot.CommunicatorObservedState{
 		CollectedAt: time.Now(),
 	}
@@ -214,8 +251,13 @@ func (w *CommunicatorWorker) CollectObservedState(ctx context.Context) (fsmv2.Ob
 // The spec parameter is reserved for future use and currently ignored.
 //
 // This method never returns an error for the communicator worker.
-func (w *CommunicatorWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
-	return &snapshot.CommunicatorDesiredState{}, nil
+func (w *CommunicatorWorker) DeriveDesiredState(spec interface{}) (fsmv2types.DesiredState, error) {
+	// For now, communicator uses simple desired state without children
+	// Future: may populate ChildrenSpecs for sub-components
+	return fsmv2types.DesiredState{
+		State:         "running",
+		ChildrenSpecs: nil,
+	}, nil
 }
 
 // GetInitialState returns the state the FSM should start in.

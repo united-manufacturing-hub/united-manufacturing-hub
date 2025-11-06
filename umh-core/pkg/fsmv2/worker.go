@@ -3,6 +3,8 @@ package fsmv2
 import (
 	"context"
 	"time"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/types"
 )
 
 // Signal is used by states to communicate special conditions to the supervisor.
@@ -10,11 +12,11 @@ import (
 type Signal int
 
 const (
-	// SignalNone indicates normal operation, no special action needed
+	// SignalNone indicates normal operation, no special action needed.
 	SignalNone Signal = iota
-	// SignalNeedsRemoval tells supervisor this worker has completed cleanup and can be removed
+	// SignalNeedsRemoval tells supervisor this worker has completed cleanup and can be removed.
 	SignalNeedsRemoval
-	// SignalNeedsRestart tells supervisor to initiate shutdown for a restart cycle
+	// SignalNeedsRestart tells supervisor to initiate shutdown for a restart cycle.
 	SignalNeedsRestart
 )
 
@@ -127,7 +129,7 @@ type Snapshot struct {
 //   - Layer 3: Examples showing idempotent patterns
 //   - Layer 4: Retry logic in executeActionWithRetry validates this
 //
-// Example: StartProcess, StopProcess, CreateConfigFiles, CallAPI
+// Example: StartProcess, StopProcess, CreateConfigFiles, CallAPI.
 type Action interface {
 	// Execute performs the action. Can be blocking and long-running.
 	// Must handle context cancellation. Must be idempotent.
@@ -272,8 +274,12 @@ type Worker interface {
 	//
 	// This is used for templating, for example to convert user configuration to the actual "technical" template.
 	//
+	// Returns concrete types.DesiredState to enable hierarchical composition via ChildrenSpecs field.
+	// Parent workers can declare child FSM workers by populating ChildrenSpecs, allowing supervisor
+	// to reconcile actual children to match desired specs (Kubernetes-style declarative management).
+	//
 	// Example: Parse YAML config, apply templates, validate settings
-	DeriveDesiredState(spec interface{}) (DesiredState, error)
+	DeriveDesiredState(spec interface{}) (types.DesiredState, error)
 
 	// GetInitialState returns the starting state for this worker.
 	// Called once during worker creation.
