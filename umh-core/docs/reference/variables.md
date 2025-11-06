@@ -106,11 +106,12 @@ You can define custom variables in the `variables:` section of your configuratio
 
 **Common patterns:**
 - `{{ .SCAN_RATE }}` - Polling intervals
-- `{{ .TAG_PREFIX }}` - Tag naming prefixes  
+- `{{ .TAG_PREFIX }}` - Tag naming prefixes
 - `{{ .USERNAME }}` - Authentication credentials
 - `{{ .PASSWORD }}` - Authentication credentials
+- `{{ .ADDRESSES }}` - Array of device addresses (S7, Modbus, etc.)
 
-**Example:**
+**Example with scalar variables:**
 ```yaml
 protocolConverter:
   variables:
@@ -122,6 +123,22 @@ protocolConverter:
         endpoint: "opc.tcp://{{ .IP }}:{{ .PORT }}/OPCUA/SimulationServer"
         poll_interval: "{{ .SCAN_RATE }}"
         tag_prefix: "{{ .TAG_PREFIX }}"
+```
+
+**Example with array variables:**
+```yaml
+protocolConverter:
+  variables:
+    ADDRESSES: [DB3.X0.0, DB3.X0.1, DB3.X0.2, DB3.X1.0]
+    SLAVE_IDS: [1, 2, 3, 5, 8]
+  config: |
+    input:
+      s7:
+        address_list: {{ .ADDRESSES }}
+    # Or for Modbus:
+    input:
+      modbus:
+        slave_ids: {{ .SLAVE_IDS }}
 ```
 
 ## Variable Sources
