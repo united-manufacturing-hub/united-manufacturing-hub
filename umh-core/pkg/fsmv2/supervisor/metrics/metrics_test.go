@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package supervisor_test
+package metrics_test
 
 import (
 	"time"
@@ -20,7 +20,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/metrics"
 )
 
 var _ = Describe("Infrastructure Recovery Metrics", Label("metrics"), func() {
@@ -29,11 +29,11 @@ var _ = Describe("Infrastructure Recovery Metrics", Label("metrics"), func() {
 			supervisorID := "test-supervisor-1"
 
 			Expect(func() {
-				supervisor.RecordCircuitOpen(supervisorID, true)
+				metrics.RecordCircuitOpen(supervisorID, true)
 			}).NotTo(Panic())
 
 			Expect(func() {
-				supervisor.RecordCircuitOpen(supervisorID, false)
+				metrics.RecordCircuitOpen(supervisorID, false)
 			}).NotTo(Panic())
 		})
 	})
@@ -44,7 +44,7 @@ var _ = Describe("Infrastructure Recovery Metrics", Label("metrics"), func() {
 			duration := 500 * time.Millisecond
 
 			Expect(func() {
-				supervisor.RecordInfrastructureRecovery(supervisorID, duration)
+				metrics.RecordInfrastructureRecovery(supervisorID, duration)
 			}).NotTo(Panic())
 		})
 	})
@@ -55,11 +55,11 @@ var _ = Describe("Infrastructure Recovery Metrics", Label("metrics"), func() {
 			childName := "test-child"
 
 			Expect(func() {
-				supervisor.RecordChildHealthCheck(supervisorID, childName, "healthy")
+				metrics.RecordChildHealthCheck(supervisorID, childName, "healthy")
 			}).NotTo(Panic())
 
 			Expect(func() {
-				supervisor.RecordChildHealthCheck(supervisorID, childName, "unhealthy")
+				metrics.RecordChildHealthCheck(supervisorID, childName, "unhealthy")
 			}).NotTo(Panic())
 		})
 	})
@@ -72,7 +72,7 @@ var _ = Describe("Action Execution Metrics", Label("metrics"), func() {
 			actionType := "restart"
 
 			Expect(func() {
-				supervisor.RecordActionQueued(supervisorID, actionType)
+				metrics.RecordActionQueued(supervisorID, actionType)
 			}).NotTo(Panic())
 		})
 	})
@@ -82,15 +82,15 @@ var _ = Describe("Action Execution Metrics", Label("metrics"), func() {
 			supervisorID := "test-supervisor-5"
 
 			Expect(func() {
-				supervisor.RecordActionQueueSize(supervisorID, 0)
+				metrics.RecordActionQueueSize(supervisorID, 0)
 			}).NotTo(Panic())
 
 			Expect(func() {
-				supervisor.RecordActionQueueSize(supervisorID, 5)
+				metrics.RecordActionQueueSize(supervisorID, 5)
 			}).NotTo(Panic())
 
 			Expect(func() {
-				supervisor.RecordActionQueueSize(supervisorID, 100)
+				metrics.RecordActionQueueSize(supervisorID, 100)
 			}).NotTo(Panic())
 		})
 	})
@@ -102,15 +102,15 @@ var _ = Describe("Action Execution Metrics", Label("metrics"), func() {
 			duration := 250 * time.Millisecond
 
 			Expect(func() {
-				supervisor.RecordActionExecutionDuration(supervisorID, actionType, "success", duration)
+				metrics.RecordActionExecutionDuration(supervisorID, actionType, "success", duration)
 			}).NotTo(Panic())
 
 			Expect(func() {
-				supervisor.RecordActionExecutionDuration(supervisorID, actionType, "failure", duration)
+				metrics.RecordActionExecutionDuration(supervisorID, actionType, "failure", duration)
 			}).NotTo(Panic())
 
 			Expect(func() {
-				supervisor.RecordActionExecutionDuration(supervisorID, actionType, "timeout", duration)
+				metrics.RecordActionExecutionDuration(supervisorID, actionType, "timeout", duration)
 			}).NotTo(Panic())
 		})
 	})
@@ -121,7 +121,7 @@ var _ = Describe("Action Execution Metrics", Label("metrics"), func() {
 			actionType := "restart"
 
 			Expect(func() {
-				supervisor.RecordActionTimeout(supervisorID, actionType)
+				metrics.RecordActionTimeout(supervisorID, actionType)
 			}).NotTo(Panic())
 		})
 	})
@@ -131,15 +131,15 @@ var _ = Describe("Action Execution Metrics", Label("metrics"), func() {
 			poolName := "default-pool"
 
 			Expect(func() {
-				supervisor.RecordWorkerPoolUtilization(poolName, 0.0)
+				metrics.RecordWorkerPoolUtilization(poolName, 0.0)
 			}).NotTo(Panic())
 
 			Expect(func() {
-				supervisor.RecordWorkerPoolUtilization(poolName, 0.5)
+				metrics.RecordWorkerPoolUtilization(poolName, 0.5)
 			}).NotTo(Panic())
 
 			Expect(func() {
-				supervisor.RecordWorkerPoolUtilization(poolName, 1.0)
+				metrics.RecordWorkerPoolUtilization(poolName, 1.0)
 			}).NotTo(Panic())
 		})
 	})
@@ -149,15 +149,15 @@ var _ = Describe("Action Execution Metrics", Label("metrics"), func() {
 			poolName := "default-pool"
 
 			Expect(func() {
-				supervisor.RecordWorkerPoolQueueSize(poolName, 0)
+				metrics.RecordWorkerPoolQueueSize(poolName, 0)
 			}).NotTo(Panic())
 
 			Expect(func() {
-				supervisor.RecordWorkerPoolQueueSize(poolName, 10)
+				metrics.RecordWorkerPoolQueueSize(poolName, 10)
 			}).NotTo(Panic())
 
 			Expect(func() {
-				supervisor.RecordWorkerPoolQueueSize(poolName, 50)
+				metrics.RecordWorkerPoolQueueSize(poolName, 50)
 			}).NotTo(Panic())
 		})
 	})
@@ -169,15 +169,15 @@ var _ = Describe("Hierarchical Composition Metrics", Label("metrics"), func() {
 			supervisorID := "test-supervisor-8"
 
 			Expect(func() {
-				supervisor.RecordChildCount(supervisorID, 0)
+				metrics.RecordChildCount(supervisorID, 0)
 			}).NotTo(Panic())
 
 			Expect(func() {
-				supervisor.RecordChildCount(supervisorID, 5)
+				metrics.RecordChildCount(supervisorID, 5)
 			}).NotTo(Panic())
 
 			Expect(func() {
-				supervisor.RecordChildCount(supervisorID, 10)
+				metrics.RecordChildCount(supervisorID, 10)
 			}).NotTo(Panic())
 		})
 	})
@@ -188,15 +188,15 @@ var _ = Describe("Hierarchical Composition Metrics", Label("metrics"), func() {
 			duration := 100 * time.Millisecond
 
 			Expect(func() {
-				supervisor.RecordReconciliation(supervisorID, "success", duration)
+				metrics.RecordReconciliation(supervisorID, "success", duration)
 			}).NotTo(Panic())
 
 			Expect(func() {
-				supervisor.RecordReconciliation(supervisorID, "failure", duration)
+				metrics.RecordReconciliation(supervisorID, "failure", duration)
 			}).NotTo(Panic())
 
 			Expect(func() {
-				supervisor.RecordReconciliation(supervisorID, "partial", duration)
+				metrics.RecordReconciliation(supervisorID, "partial", duration)
 			}).NotTo(Panic())
 		})
 	})
@@ -206,15 +206,15 @@ var _ = Describe("Hierarchical Composition Metrics", Label("metrics"), func() {
 			supervisorID := "test-supervisor-10"
 
 			Expect(func() {
-				supervisor.RecordTickPropagationDepth(supervisorID, 1)
+				metrics.RecordTickPropagationDepth(supervisorID, 1)
 			}).NotTo(Panic())
 
 			Expect(func() {
-				supervisor.RecordTickPropagationDepth(supervisorID, 3)
+				metrics.RecordTickPropagationDepth(supervisorID, 3)
 			}).NotTo(Panic())
 
 			Expect(func() {
-				supervisor.RecordTickPropagationDepth(supervisorID, 10)
+				metrics.RecordTickPropagationDepth(supervisorID, 10)
 			}).NotTo(Panic())
 		})
 	})
@@ -225,11 +225,11 @@ var _ = Describe("Hierarchical Composition Metrics", Label("metrics"), func() {
 			duration := 50 * time.Millisecond
 
 			Expect(func() {
-				supervisor.RecordTickPropagationDuration(supervisorID, duration)
+				metrics.RecordTickPropagationDuration(supervisorID, duration)
 			}).NotTo(Panic())
 
 			Expect(func() {
-				supervisor.RecordTickPropagationDuration(supervisorID, 200*time.Millisecond)
+				metrics.RecordTickPropagationDuration(supervisorID, 200*time.Millisecond)
 			}).NotTo(Panic())
 		})
 	})
@@ -242,11 +242,11 @@ var _ = Describe("Template Rendering Metrics", Label("metrics"), func() {
 			duration := 25 * time.Millisecond
 
 			Expect(func() {
-				supervisor.RecordTemplateRenderingDuration(supervisorID, "success", duration)
+				metrics.RecordTemplateRenderingDuration(supervisorID, "success", duration)
 			}).NotTo(Panic())
 
 			Expect(func() {
-				supervisor.RecordTemplateRenderingDuration(supervisorID, "failure", duration)
+				metrics.RecordTemplateRenderingDuration(supervisorID, "failure", duration)
 			}).NotTo(Panic())
 		})
 	})
@@ -256,15 +256,15 @@ var _ = Describe("Template Rendering Metrics", Label("metrics"), func() {
 			supervisorID := "test-supervisor-13"
 
 			Expect(func() {
-				supervisor.RecordTemplateRenderingError(supervisorID, "parse_error")
+				metrics.RecordTemplateRenderingError(supervisorID, "parse_error")
 			}).NotTo(Panic())
 
 			Expect(func() {
-				supervisor.RecordTemplateRenderingError(supervisorID, "execution_error")
+				metrics.RecordTemplateRenderingError(supervisorID, "execution_error")
 			}).NotTo(Panic())
 
 			Expect(func() {
-				supervisor.RecordTemplateRenderingError(supervisorID, "validation_error")
+				metrics.RecordTemplateRenderingError(supervisorID, "validation_error")
 			}).NotTo(Panic())
 		})
 	})
@@ -274,7 +274,7 @@ var _ = Describe("Template Rendering Metrics", Label("metrics"), func() {
 			supervisorID := "test-supervisor-14"
 
 			Expect(func() {
-				supervisor.RecordVariablePropagation(supervisorID)
+				metrics.RecordVariablePropagation(supervisorID)
 			}).NotTo(Panic())
 		})
 	})

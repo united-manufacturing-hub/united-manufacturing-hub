@@ -1,5 +1,5 @@
 // Copyright 2025 UMH Systems GmbH
-package supervisor_test
+package collection_test
 
 import (
 	"context"
@@ -8,13 +8,14 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/collection"
 	"go.uber.org/zap"
 )
 
 var _ = Describe("Collector", func() {
 Context("when starting collector", func() {
 		It("should start observation loop", func() {
-			collector := supervisor.NewCollector(supervisor.CollectorConfig{
+			collector := collection.NewCollector(collection.CollectorConfig{
 				Worker:              &mockWorker{observed: createMockObservedStateWithID("test-worker")},
 				Identity:            mockIdentity(),
 				Store:               createTestTriangularStore(),

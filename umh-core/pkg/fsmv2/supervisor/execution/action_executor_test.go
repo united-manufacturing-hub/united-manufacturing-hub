@@ -1,4 +1,4 @@
-package supervisor_test
+package execution_test
 
 import (
 	"context"
@@ -10,19 +10,19 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/execution"
 )
 
 var _ = Describe("ActionExecutor", func() {
 	var (
-		executor *supervisor.ActionExecutor
+		executor *execution.ActionExecutor
 		ctx      context.Context
 		cancel   context.CancelFunc
 	)
 
 	BeforeEach(func() {
 		ctx, cancel = context.WithCancel(context.Background())
-		executor = supervisor.NewActionExecutor(10)
+		executor = execution.NewActionExecutor(10)
 		executor.Start(ctx)
 	})
 
