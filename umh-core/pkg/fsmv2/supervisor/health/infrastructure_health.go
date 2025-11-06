@@ -1,8 +1,10 @@
-package supervisor
+package health
 
 import (
 	"fmt"
 	"time"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 )
 
 const (
@@ -20,20 +22,20 @@ func (e *ChildHealthError) Error() string {
 }
 
 type InfrastructureHealthChecker struct {
-	backoff       *ExponentialBackoff
+	backoff       *supervisor.ExponentialBackoff
 	maxAttempts   int
 	attemptWindow time.Duration
 }
 
 func NewInfrastructureHealthChecker(maxAttempts int, attemptWindow time.Duration) *InfrastructureHealthChecker {
 	return &InfrastructureHealthChecker{
-		backoff:       NewExponentialBackoff(1*time.Second, 60*time.Second),
+		backoff:       supervisor.NewExponentialBackoff(1*time.Second, 60*time.Second),
 		maxAttempts:   maxAttempts,
 		attemptWindow: attemptWindow,
 	}
 }
 
-func (h *InfrastructureHealthChecker) CheckChildConsistency(children map[string]*Supervisor) error {
+func (h *InfrastructureHealthChecker) CheckChildConsistency(children map[string]*supervisor.Supervisor) error {
 	for name, child := range children {
 		if child == nil {
 			continue
