@@ -138,7 +138,7 @@ Arrays are defined using YAML list syntax in the `variables:` section:
 protocolConverter:
   variables:
     # S7 memory addresses
-    ADDRESSES: [DB3.X0.0, DB3.X0.1, DB3.X0.2, DB3.X1.0]
+    ADDRESSES: [DB1.DW20, DB1.S30.10, DB3.X0.0, DB3.X0.1]
 
     # Modbus slave IDs
     SLAVE_IDS: [1, 2, 3, 5, 8]
@@ -154,12 +154,21 @@ Pass entire array to protocol converter inputs:
 ```yaml
 config: |
   input:
-    s7:
-      address_list: {{ .ADDRESSES }}
+    s7comm:
+      tcpDevice: "192.168.0.1"
+      rack: 0
+      slot: 1
+      addresses:
+        {{ range .ADDRESSES }}- "{{ . }}"
+        {{ end }}
   # Or for Modbus:
   input:
     modbus:
-      slave_ids: {{ .SLAVE_IDS }}
+      controller: "tcp://localhost:502"
+      transmissionMode: "TCP"
+      slaveIDs:
+        {{ range .SLAVE_IDS }}- {{ . }}
+        {{ end }}
 ```
 
 **Iterating with range:**
@@ -181,9 +190,13 @@ Get specific elements (0-based indexing):
 config: |
   input:
     label: "primary_device"
-    s7:
-      primary_address: {{ index .ADDRESSES 0 }}
-      backup_address: {{ index .ADDRESSES 1 }}
+    s7comm:
+      tcpDevice: "192.168.0.1"
+      rack: 0
+      slot: 1
+      addresses:
+        - "{{ index .ADDRESSES 0 }}"
+        - "{{ index .ADDRESSES 1 }}"
 ```
 
 #### Array Functions Reference
@@ -196,21 +209,23 @@ config: |
 
 #### Real-World Patterns
 
-**Pattern 1: Multiple S7 addresses with iteration**
+**Pattern 1: Multiple S7 addresses with single input**
 ```yaml
 protocolConverter:
   variables:
-    ADDRESSES: [DB3.X0.0, DB3.X0.1, DB3.X0.2, DB3.X1.0]
-    TAG_PREFIX: "PLC1_"
+    ADDRESSES: [DB1.DW20, DB1.S30.10, DB3.X0.0, DB3.X1.0]
+    IP: "192.168.0.1"
   config: |
     input:
-      broker:
-        inputs:
-          {{ range $index, $address := .ADDRESSES }}
-          - label: "{{ $.TAG_PREFIX }}input_{{ $index }}"
-            s7:
-              address: "{{ $address }}"
-              scan_rate: "1s"
+      label: "s7_reader"
+      s7comm:
+        tcpDevice: "{{ .IP }}"
+        rack: 0
+        slot: 1
+        batchMaxSize: 480
+        timeout: 10
+        addresses:
+          {{ range .ADDRESSES }}- "{{ . }}"
           {{ end }}
 ```
 
@@ -219,20 +234,28 @@ protocolConverter:
 protocolConverter:
   variables:
     SLAVE_IDS: [1, 2, 3, 5, 8]
-    BASE_ADDRESS: "192.168.1.100"
+    IP: "192.168.1.100"
   config: |
     input:
-      broker:
-        inputs:
-          {{ range .SLAVE_IDS }}
-          - label: "modbus_slave_{{ . }}"
-            modbus_tcp:
-              address: "{{ $.BASE_ADDRESS }}:502"
-              slave_id: {{ . }}
-              holding_registers:
-                - address: 0
-                  count: 10
+      label: "modbus_reader"
+      modbus:
+        controller: "tcp://{{ .IP }}:502"
+        transmissionMode: "TCP"
+        slaveIDs:
+          {{ range .SLAVE_IDS }}- {{ . }}
           {{ end }}
+        timeout: "1s"
+        timeBetweenReads: "1s"
+        addresses:
+          - name: "firstFlagOfDiscreteInput"
+            register: "discrete"
+            address: 1
+            type: "BIT"
+            output: "BOOL"
+          - name: "zeroElementOfInputRegister"
+            register: "input"
+            address: 0
+            type: "UINT16"
 ```
 
 #### Key Concepts

@@ -20,16 +20,6 @@ import (
 )
 
 var _ = Describe("Template Rendering with Array Variables", func() {
-	var (
-		extractNestedString = func(m map[string]any, keys ...string) string {
-			current := m
-			for i := 0; i < len(keys)-1; i++ {
-				current = current[keys[i]].(map[string]any)
-			}
-			return current[keys[len(keys)-1]].(string)
-		}
-	)
-
 	Describe("RenderTemplate with array variables", func() {
 		Context("when using range to iterate over array", func() {
 			It("should render template with S7 address array using range", func() {
@@ -41,38 +31,56 @@ var _ = Describe("Template Rendering with Array Variables", func() {
 					Inputs: []map[string]any{
 						{
 							"label": "s7_reader",
-							"s7": map[string]any{
-								"addresses": "{{ range .ADDRESSES }}{{ . }}\n{{ end }}",
+							"s7comm": map[string]any{
+								"tcpDevice":  "192.168.0.1",
+								"rack":       0,
+								"slot":       1,
+								"addresses":  []any{"{{ range .ADDRESSES }}{{ . }}\n{{ end }}"},
+								"batchMaxSize": 480,
+								"timeout":    10,
 							},
 						},
 					},
 				}
 
 				scope := map[string]any{
-					"ADDRESSES": []string{"DB3.X0.0", "DB3.X0.1", "DB3.X0.2"},
+					"ADDRESSES": []string{"DB1.DW20", "DB1.S30.10", "DB3.X0.0"},
 				}
 
 				result, err := RenderTemplate(template, scope)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(result.Inputs).To(HaveLen(1))
 
-				addresses := extractNestedString(result.Inputs[0], "s7", "addresses")
-				Expect(addresses).To(ContainSubstring("DB3.X0.0"))
-				Expect(addresses).To(ContainSubstring("DB3.X0.1"))
-				Expect(addresses).To(ContainSubstring("DB3.X0.2"))
+				addressesSlice := result.Inputs[0]["s7comm"].(map[string]any)["addresses"].([]any)
+				addressesStr := addressesSlice[0].(string)
+				Expect(addressesStr).To(ContainSubstring("DB1.DW20"))
+				Expect(addressesStr).To(ContainSubstring("DB1.S30.10"))
+				Expect(addressesStr).To(ContainSubstring("DB3.X0.0"))
 			})
 
 			It("should render template with Modbus slave IDs array using range", func() {
 				type ModbusConfig struct {
-					Outputs []map[string]any `yaml:"outputs"`
+					Inputs []map[string]any `yaml:"inputs"`
 				}
 
 				template := ModbusConfig{
-					Outputs: []map[string]any{
+					Inputs: []map[string]any{
 						{
-							"label": "modbus_writer",
-							"modbus_tcp": map[string]any{
-								"slaves": "{{ range .SLAVE_IDS }}{{ . }}\n{{ end }}",
+							"label": "modbus_reader",
+							"modbus": map[string]any{
+								"controller":       "tcp://localhost:502",
+								"transmissionMode": "TCP",
+								"slaveIDs":         "{{ range .SLAVE_IDS }}{{ . }}\n{{ end }}",
+								"timeout":          "1s",
+								"addresses": []map[string]any{
+									{
+										"name":     "firstFlagOfDiscreteInput",
+										"register": "discrete",
+										"address":  1,
+										"type":     "BIT",
+										"output":   "BOOL",
+									},
+								},
 							},
 						},
 					},
@@ -84,12 +92,12 @@ var _ = Describe("Template Rendering with Array Variables", func() {
 
 				result, err := RenderTemplate(template, scope)
 				Expect(err).NotTo(HaveOccurred())
-				Expect(result.Outputs).To(HaveLen(1))
+				Expect(result.Inputs).To(HaveLen(1))
 
-				slaves := extractNestedString(result.Outputs[0], "modbus_tcp", "slaves")
-				Expect(slaves).To(ContainSubstring("1"))
-				Expect(slaves).To(ContainSubstring("2"))
-				Expect(slaves).To(ContainSubstring("5"))
+				slaveIDs := result.Inputs[0]["modbus"].(map[string]any)["slaveIDs"].(string)
+				Expect(slaveIDs).To(ContainSubstring("1"))
+				Expect(slaveIDs).To(ContainSubstring("2"))
+				Expect(slaveIDs).To(ContainSubstring("5"))
 			})
 		})
 
@@ -154,45 +162,52 @@ var _ = Describe("Template Rendering with Array Variables", func() {
 				}
 
 				template := ComplexConfig{
-					Protocol: "s7",
+					Protocol: "s7comm",
 					Inputs: []map[string]any{
 						{
 							"label": "s7_primary",
-							"s7": map[string]any{
-								"address": "{{ index .ADDRESSES 0 }}",
-								"rack":    "{{ .RACK }}",
-								"slot":    "{{ .SLOT }}",
+							"s7comm": map[string]any{
+								"tcpDevice": "192.168.0.1",
+								"rack":      "{{ .RACK }}",
+								"slot":      "{{ .SLOT }}",
+								"addresses": []any{"{{ index .ADDRESSES 0 }}"},
 							},
 						},
 						{
 							"label": "s7_all",
-							"s7": map[string]any{
-								"addresses": "{{ range .ADDRESSES }}{{ . }}\n{{ end }}",
+							"s7comm": map[string]any{
+								"tcpDevice": "192.168.0.1",
+								"rack":      0,
+								"slot":      1,
+								"addresses": []any{"{{ range .ADDRESSES }}{{ . }}\n{{ end }}"},
 							},
 						},
 					},
 				}
 
 				scope := map[string]any{
-					"ADDRESSES": []string{"DB3.X0.0", "DB3.X0.1", "DB3.X0.2"},
+					"ADDRESSES": []string{"DB1.DW20", "DB1.S30.10", "DB3.X0.0"},
 					"RACK":      0,
 					"SLOT":      1,
 				}
 
 				result, err := RenderTemplate(template, scope)
 				Expect(err).NotTo(HaveOccurred())
-				Expect(result.Protocol).To(Equal("s7"))
+				Expect(result.Protocol).To(Equal("s7comm"))
 				Expect(result.Inputs).To(HaveLen(2))
 
-				primaryInput := result.Inputs[0]["s7"].(map[string]any)
-				Expect(primaryInput["address"]).To(Equal("DB3.X0.0"))
+				primaryInput := result.Inputs[0]["s7comm"].(map[string]any)
+				primaryAddresses := primaryInput["addresses"].([]any)
+				Expect(primaryAddresses[0]).To(Equal("DB1.DW20"))
 				Expect(primaryInput["rack"]).To(Equal("0"))
 				Expect(primaryInput["slot"]).To(Equal("1"))
 
-				allInputAddresses := extractNestedString(result.Inputs[1], "s7", "addresses")
-				Expect(allInputAddresses).To(ContainSubstring("DB3.X0.0"))
-				Expect(allInputAddresses).To(ContainSubstring("DB3.X0.1"))
-				Expect(allInputAddresses).To(ContainSubstring("DB3.X0.2"))
+				allInput := result.Inputs[1]["s7comm"].(map[string]any)
+				allAddresses := allInput["addresses"].([]any)
+				allAddressesStr := allAddresses[0].(string)
+				Expect(allAddressesStr).To(ContainSubstring("DB1.DW20"))
+				Expect(allAddressesStr).To(ContainSubstring("DB1.S30.10"))
+				Expect(allAddressesStr).To(ContainSubstring("DB3.X0.0"))
 			})
 		})
 
@@ -225,12 +240,12 @@ var _ = Describe("Template Rendering with Array Variables", func() {
 				}
 
 				scope := map[string]any{
-					"ADDRESSES": []string{"DB3.X0.0"},
+					"ADDRESSES": []string{"DB1.DW20"},
 				}
 
 				result, err := RenderTemplate(template, scope)
 				Expect(err).NotTo(HaveOccurred())
-				Expect(result.Address).To(Equal("DB3.X0.0"))
+				Expect(result.Address).To(Equal("DB1.DW20"))
 			})
 		})
 	})
