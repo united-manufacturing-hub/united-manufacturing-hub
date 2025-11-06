@@ -20,6 +20,16 @@ import (
 )
 
 var _ = Describe("Template Rendering with Array Variables", func() {
+	var (
+		extractNestedString = func(m map[string]any, keys ...string) string {
+			current := m
+			for i := 0; i < len(keys)-1; i++ {
+				current = current[keys[i]].(map[string]any)
+			}
+			return current[keys[len(keys)-1]].(string)
+		}
+	)
+
 	Describe("RenderTemplate with array variables", func() {
 		Context("when using range to iterate over array", func() {
 			It("should render template with S7 address array using range", func() {
@@ -39,20 +49,14 @@ var _ = Describe("Template Rendering with Array Variables", func() {
 				}
 
 				scope := map[string]any{
-					"ADDRESSES": []string{
-						"DB3.X0.0",
-						"DB3.X0.1",
-						"DB3.X0.2",
-					},
+					"ADDRESSES": []string{"DB3.X0.0", "DB3.X0.1", "DB3.X0.2"},
 				}
 
 				result, err := RenderTemplate(template, scope)
 				Expect(err).NotTo(HaveOccurred())
-
 				Expect(result.Inputs).To(HaveLen(1))
-				s7Config := result.Inputs[0]["s7"].(map[string]any)
-				addresses := s7Config["addresses"].(string)
 
+				addresses := extractNestedString(result.Inputs[0], "s7", "addresses")
 				Expect(addresses).To(ContainSubstring("DB3.X0.0"))
 				Expect(addresses).To(ContainSubstring("DB3.X0.1"))
 				Expect(addresses).To(ContainSubstring("DB3.X0.2"))
@@ -80,11 +84,9 @@ var _ = Describe("Template Rendering with Array Variables", func() {
 
 				result, err := RenderTemplate(template, scope)
 				Expect(err).NotTo(HaveOccurred())
-
 				Expect(result.Outputs).To(HaveLen(1))
-				modbusConfig := result.Outputs[0]["modbus_tcp"].(map[string]any)
-				slaves := modbusConfig["slaves"].(string)
 
+				slaves := extractNestedString(result.Outputs[0], "modbus_tcp", "slaves")
 				Expect(slaves).To(ContainSubstring("1"))
 				Expect(slaves).To(ContainSubstring("2"))
 				Expect(slaves).To(ContainSubstring("5"))
@@ -104,23 +106,19 @@ var _ = Describe("Template Rendering with Array Variables", func() {
 				}
 
 				scope := map[string]any{
-					"DNS_SERVERS": []string{
-						"8.8.8.8",
-						"8.8.4.4",
-					},
+					"DNS_SERVERS": []string{"8.8.8.8", "8.8.4.4"},
 				}
 
 				result, err := RenderTemplate(template, scope)
 				Expect(err).NotTo(HaveOccurred())
-
 				Expect(result.Primary).To(Equal("8.8.8.8"))
 				Expect(result.Secondary).To(Equal("8.8.4.4"))
 			})
 
 			It("should render template with mixed array types", func() {
 				type MixedConfig struct {
-					Addresses []string         `yaml:"addresses"`
-					Config    map[string]any   `yaml:"config"`
+					Addresses []string       `yaml:"addresses"`
+					Config    map[string]any `yaml:"config"`
 				}
 
 				template := MixedConfig{
@@ -141,7 +139,6 @@ var _ = Describe("Template Rendering with Array Variables", func() {
 
 				result, err := RenderTemplate(template, scope)
 				Expect(err).NotTo(HaveOccurred())
-
 				Expect(result.Addresses).To(HaveLen(2))
 				Expect(result.Addresses[0]).To(Equal("192.168.1.100:502"))
 				Expect(result.Addresses[1]).To(Equal("192.168.1.101:503"))
@@ -177,18 +174,13 @@ var _ = Describe("Template Rendering with Array Variables", func() {
 				}
 
 				scope := map[string]any{
-					"ADDRESSES": []string{
-						"DB3.X0.0",
-						"DB3.X0.1",
-						"DB3.X0.2",
-					},
-					"RACK": 0,
-					"SLOT": 1,
+					"ADDRESSES": []string{"DB3.X0.0", "DB3.X0.1", "DB3.X0.2"},
+					"RACK":      0,
+					"SLOT":      1,
 				}
 
 				result, err := RenderTemplate(template, scope)
 				Expect(err).NotTo(HaveOccurred())
-
 				Expect(result.Protocol).To(Equal("s7"))
 				Expect(result.Inputs).To(HaveLen(2))
 
@@ -197,11 +189,10 @@ var _ = Describe("Template Rendering with Array Variables", func() {
 				Expect(primaryInput["rack"]).To(Equal("0"))
 				Expect(primaryInput["slot"]).To(Equal("1"))
 
-				allInput := result.Inputs[1]["s7"].(map[string]any)
-				addresses := allInput["addresses"].(string)
-				Expect(addresses).To(ContainSubstring("DB3.X0.0"))
-				Expect(addresses).To(ContainSubstring("DB3.X0.1"))
-				Expect(addresses).To(ContainSubstring("DB3.X0.2"))
+				allInputAddresses := extractNestedString(result.Inputs[1], "s7", "addresses")
+				Expect(allInputAddresses).To(ContainSubstring("DB3.X0.0"))
+				Expect(allInputAddresses).To(ContainSubstring("DB3.X0.1"))
+				Expect(allInputAddresses).To(ContainSubstring("DB3.X0.2"))
 			})
 		})
 
