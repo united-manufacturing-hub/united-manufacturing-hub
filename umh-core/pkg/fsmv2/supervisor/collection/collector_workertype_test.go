@@ -3,7 +3,6 @@ package collection_test
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -49,21 +48,21 @@ var _ = Describe("Collector WorkerType", func() {
 			err := s.AddWorker(identity, worker)
 			Expect(err).ToNot(HaveOccurred())
 
-			desiredDoc := persistence.Document{
+			observedDoc := persistence.Document{
 				"id":               identity.ID,
 				"shutdownRequested": false,
 			}
-			err = triangularStore.SaveDesired(ctx, workerType, identity.ID, desiredDoc)
+			err = triangularStore.SaveObserved(ctx, workerType, identity.ID, observedDoc)
 			Expect(err).ToNot(HaveOccurred())
 
 			Expect(registry.IsRegistered("s6_observed")).To(BeTrue(), "should register s6_observed collection, not container_observed")
 			Expect(registry.IsRegistered("container_observed")).To(BeFalse(), "should not use hardcoded container workerType")
 
 			doc, err := triangularStore.LoadObserved(ctx, "s6", identity.ID)
-			if err != nil && !errors.Is(err, persistence.ErrNotFound) {
-				Fail(fmt.Sprintf("unexpected error loading observed: %v", err))
-			}
-			_ = doc
+			Expect(err).ToNot(HaveOccurred(), "should load observed state that was just saved")
+			Expect(doc).ToNot(BeNil())
+			Expect(doc["id"]).To(Equal(identity.ID))
+			Expect(doc["shutdownRequested"]).To(Equal(false))
 		})
 	})
 
@@ -109,17 +108,17 @@ var _ = Describe("Collector WorkerType", func() {
 				err := s.AddWorker(identity, worker)
 				Expect(err).ToNot(HaveOccurred())
 
-				desiredDoc := persistence.Document{
+				observedDoc := persistence.Document{
 					"id":               identity.ID,
 					"shutdownRequested": false,
 				}
-				err = triangularStore.SaveDesired(ctx, wt, identity.ID, desiredDoc)
+				err = triangularStore.SaveObserved(ctx, wt, identity.ID, observedDoc)
 				Expect(err).ToNot(HaveOccurred())
 
 				supervisors = append(supervisors, s)
 			}
 
-			Expect(len(supervisors)).To(Equal(2))
+			Expect(len(supervisors)).To(Equal(len(workerTypes)))
 
 			for _, wt := range workerTypes {
 				triangularStore := stores[wt]
@@ -130,10 +129,10 @@ var _ = Describe("Collector WorkerType", func() {
 				}
 
 				doc, err := triangularStore.LoadObserved(ctx, wt, identity.ID)
-				if err != nil && !errors.Is(err, persistence.ErrNotFound) {
-					Fail(fmt.Sprintf("unexpected error loading observed from %s collection: %v", wt, err))
-				}
-				_ = doc
+				Expect(err).ToNot(HaveOccurred(), fmt.Sprintf("should load observed state from %s collection", wt))
+				Expect(doc).ToNot(BeNil())
+				Expect(doc["id"]).To(Equal(identity.ID))
+				Expect(doc["shutdownRequested"]).To(Equal(false))
 
 				otherWorkerType := "benthos"
 				if wt == "benthos" {
