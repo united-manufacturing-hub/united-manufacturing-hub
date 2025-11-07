@@ -12,6 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Package supervisor manages the lifecycle of workers in the FSM system.
+//
+// # Architecture Constraints
+//
+// Storage Abstraction:
+//
+//	The supervisor MUST interact with storage exclusively through the
+//	TriangularStore adapter interface. Direct access to storage packages
+//	(e.g., pkg/cse/storage) is not permitted in supervisor production code.
+//
+//	Rationale:
+//	  - Maintains clean abstraction boundaries
+//	  - Prevents tight coupling to storage implementations
+//	  - Enables storage backend changes without supervisor modifications
+//	  - Facilitates testing through adapter mocking
+//
+//	Tests may use direct storage access or mock implementations for
+//	test setup and verification purposes.
 package supervisor
 
 import (
