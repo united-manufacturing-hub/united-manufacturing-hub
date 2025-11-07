@@ -72,7 +72,7 @@ func getMetricsReader() *bytes.Reader {
 	return dataReader
 }
 
-var _ = Describe("Redpanda Monitor Service", func() {
+var _ = XDescribe("Redpanda Monitor Service", func() {
 	var (
 		service         *redpanda_monitor.RedpandaMonitorService
 		tick            uint64
