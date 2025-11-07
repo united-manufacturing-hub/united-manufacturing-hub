@@ -66,16 +66,52 @@ var _ = Describe("Benthos Monitor Service", func() {
 
 	BeforeEach(func() {
 		mockServices = serviceregistry.NewMockRegistry()
-		service = benthos_monitor.NewBenthosMonitorService(serviceName, benthos_monitor.WithS6Service(s6service.NewMockService()))
+		var err error
+		service, err = benthos_monitor.NewBenthosMonitorService(serviceName, benthos_monitor.WithS6Service(s6service.NewMockService()))
+		Expect(err).NotTo(HaveOccurred())
 		tick = 0
 
 		// Cleanup the data directory
 		ctx, cancel = newTimeoutContext()
-		err := mockServices.GetFileSystem().RemoveAll(ctx, getTmpDir())
+		err = mockServices.GetFileSystem().RemoveAll(ctx, getTmpDir())
 		Expect(err).NotTo(HaveOccurred())
 	})
 	AfterEach(func() {
 		cancel()
+	})
+
+	Describe("NewBenthosMonitorService", func() {
+		Context("service name validation", func() {
+			It("should reject path traversal attacks", func() {
+				invalidNames := []string{
+					"../../../etc/passwd",
+					"../../etc/shadow",
+					"../config",
+					"./../../root",
+				}
+
+				for _, invalidName := range invalidNames {
+					service, err := benthos_monitor.NewBenthosMonitorService(invalidName, benthos_monitor.WithS6Service(s6service.NewMockService()))
+					Expect(err).To(HaveOccurred(), "Expected NewBenthosMonitorService to reject path traversal: %s", invalidName)
+					Expect(service).To(BeNil())
+				}
+			})
+
+			It("should accept valid service names", func() {
+				validNames := []string{
+					"valid-service-1",
+					"myservice",
+					"test-123",
+					"a",
+				}
+
+				for _, validName := range validNames {
+					service, err := benthos_monitor.NewBenthosMonitorService(validName, benthos_monitor.WithS6Service(s6service.NewMockService()))
+					Expect(err).NotTo(HaveOccurred(), "Expected NewBenthosMonitorService to accept valid name: %s", validName)
+					Expect(service).NotTo(BeNil())
+				}
+			})
+		})
 	})
 
 	Describe("GenerateS6ConfigForBenthosMonitor", func() {
@@ -118,10 +154,12 @@ var _ = Describe("Benthos Monitor Service", func() {
 			mockS6 := s6service.NewMockService()
 
 			// Create a new service with the mock S6 service
-			service = benthos_monitor.NewBenthosMonitorService(serviceName, benthos_monitor.WithS6Service(mockS6))
+			var err error
+			service, err = benthos_monitor.NewBenthosMonitorService(serviceName, benthos_monitor.WithS6Service(mockS6))
+			Expect(err).NotTo(HaveOccurred())
 
 			// Add the service first
-			err := service.AddBenthosMonitorToS6Manager(ctx, 8080)
+			err = service.AddBenthosMonitorToS6Manager(ctx, 8080)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Make sure the service exists by reconciling
@@ -536,10 +574,11 @@ echo "No curl commands here"`,
 			defer cancel()
 
 			// Use a service that hasn't been set up (no s6ServiceConfig)
-			freshService := benthos_monitor.NewBenthosMonitorService(serviceName, benthos_monitor.WithS6Service(s6service.NewMockService()))
-			
+			freshService, err := benthos_monitor.NewBenthosMonitorService(serviceName, benthos_monitor.WithS6Service(s6service.NewMockService()))
+			Expect(err).NotTo(HaveOccurred())
+
 			// Don't call AddBenthosMonitorToS6Manager, so s6ServiceConfig is nil
-			_, err := freshService.GetConfig(ctx, mockServices.GetFileSystem())
+			_, err = freshService.GetConfig(ctx, mockServices.GetFileSystem())
 			Expect(err).To(HaveOccurred())
 			Expect(err).To(Equal(benthos_monitor.ErrServiceNotExist))
 		})
