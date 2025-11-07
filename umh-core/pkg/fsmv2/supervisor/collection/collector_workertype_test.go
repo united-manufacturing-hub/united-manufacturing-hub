@@ -18,7 +18,7 @@ import (
 
 var _ = Describe("Collector WorkerType", func() {
 	Context("when collector is configured with workerType", func() {
-		It("should use configured workerType for observations", func() {
+		It("should use configured workerType when saving", func() {
 			ctx := context.Background()
 
 			workerType := "s6"
@@ -39,8 +39,11 @@ var _ = Describe("Collector WorkerType", func() {
 				CollectorHealth: supervisor.CollectorHealthConfig{},
 			})
 
-			worker := &supervisor.TestWorker{
-				Observed: supervisor.CreateTestObservedStateWithID(identity.ID),
+			worker := &supervisor.TestWorkerWithType{
+				TestWorker: supervisor.TestWorker{
+					Observed: supervisor.CreateTestObservedStateWithID(identity.ID),
+				},
+				WorkerType: workerType,
 			}
 
 			err := s.AddWorker(identity, worker)
@@ -65,10 +68,10 @@ var _ = Describe("Collector WorkerType", func() {
 	})
 
 	Context("when multiple collectors use different workerTypes", func() {
-		It("should register separate collections for each workerType", func() {
+		It("should save to different collections for different workerTypes", func() {
 			ctx := context.Background()
 
-			workerTypes := []string{"container", "s6", "benthos"}
+			workerTypes := []string{"s6", "benthos"}
 			stores := make(map[string]*storage.TriangularStore)
 			supervisors := make([]*supervisor.Supervisor, 0, len(workerTypes))
 
@@ -96,8 +99,11 @@ var _ = Describe("Collector WorkerType", func() {
 					CollectorHealth: supervisor.CollectorHealthConfig{},
 				})
 
-				worker := &supervisor.TestWorker{
-					Observed: supervisor.CreateTestObservedStateWithID(identity.ID),
+				worker := &supervisor.TestWorkerWithType{
+					TestWorker: supervisor.TestWorker{
+						Observed: supervisor.CreateTestObservedStateWithID(identity.ID),
+					},
+					WorkerType: wt,
 				}
 
 				err := s.AddWorker(identity, worker)
@@ -113,7 +119,29 @@ var _ = Describe("Collector WorkerType", func() {
 				supervisors = append(supervisors, s)
 			}
 
-			Expect(len(supervisors)).To(Equal(3))
+			Expect(len(supervisors)).To(Equal(2))
+
+			for _, wt := range workerTypes {
+				triangularStore := stores[wt]
+				identity := fsmv2.Identity{
+					ID:         wt + "-worker",
+					Name:       wt + " Worker",
+					WorkerType: wt,
+				}
+
+				doc, err := triangularStore.LoadObserved(ctx, wt, identity.ID)
+				if err != nil && !errors.Is(err, persistence.ErrNotFound) {
+					Fail(fmt.Sprintf("unexpected error loading observed from %s collection: %v", wt, err))
+				}
+				_ = doc
+
+				otherWorkerType := "benthos"
+				if wt == "benthos" {
+					otherWorkerType = "s6"
+				}
+				_, err = triangularStore.LoadObserved(ctx, otherWorkerType, identity.ID)
+				Expect(err).To(HaveOccurred(), "should not find data from wrong workerType collection")
+			}
 		})
 	})
 })

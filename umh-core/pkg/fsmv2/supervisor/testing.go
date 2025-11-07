@@ -15,9 +15,9 @@ import (
 
 // TestObservedState is a mock ObservedState for testing subdirectories.
 type TestObservedState struct {
-	ID          string
-	CollectedAt time.Time
-	Desired     fsmv2.DesiredState
+	ID          string                `json:"id"`
+	CollectedAt time.Time             `json:"collectedAt"`
+	Desired     fsmv2.DesiredState    `json:"desired"`
 }
 
 func (t *TestObservedState) GetObservedDesiredState() fsmv2.DesiredState {
