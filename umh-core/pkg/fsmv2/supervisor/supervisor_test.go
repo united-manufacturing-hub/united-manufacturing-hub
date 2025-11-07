@@ -861,6 +861,9 @@ func TestReconcileChildren_UpdateUserSpec(t *testing.T) {
 	}
 
 	child := supervisor.children["child-1"]
+	if child == nil {
+		t.Fatal("Expected child-1 to exist")
+	}
 	if child.userSpec.Config != "url: tcp://remotehost:1883" {
 		t.Errorf("Expected UserSpec to be updated to 'url: tcp://remotehost:1883', got '%s'", child.userSpec.Config)
 	}
@@ -946,6 +949,9 @@ func TestReconcileChildren_UpdateStateMapping(t *testing.T) {
 	}
 
 	child := supervisor.children["child-1"]
+	if child == nil {
+		t.Fatal("Expected child-1 to exist")
+	}
 	if len(child.stateMapping) != 2 {
 		t.Errorf("Expected StateMapping to have 2 entries, got %d", len(child.stateMapping))
 	}
@@ -1138,7 +1144,7 @@ func TestReconcileChildren_MixedOperations(t *testing.T) {
 		t.Error("Expected child-1 to exist after update")
 	}
 
-	if supervisor.children["child-1"].userSpec.Config != "url: tcp://remotehost:1883" {
+	if child := supervisor.children["child-1"]; child != nil && child.userSpec.Config != "url: tcp://remotehost:1883" {
 		t.Error("Expected child-1 UserSpec to be updated")
 	}
 
@@ -1315,6 +1321,9 @@ func TestApplyStateMapping_WithMapping(t *testing.T) {
 	parent.applyStateMapping()
 
 	child := parent.children["child-1"]
+	if child == nil {
+		t.Fatal("Expected child-1 to exist")
+	}
 	if child.mappedParentState != "stopped" {
 		t.Errorf("Expected child mappedParentState 'stopped', got '%s'", child.mappedParentState)
 	}
@@ -1402,6 +1411,9 @@ func TestApplyStateMapping_NoMapping(t *testing.T) {
 	parent.applyStateMapping()
 
 	child := parent.children["child-1"]
+	if child == nil {
+		t.Fatal("Expected child-1 to exist")
+	}
 	if child.mappedParentState != "running" {
 		t.Errorf("Expected child mappedParentState 'running' (parent state), got '%s'", child.mappedParentState)
 	}
@@ -1493,6 +1505,9 @@ func TestApplyStateMapping_MissingStateInMapping(t *testing.T) {
 	parent.applyStateMapping()
 
 	child := parent.children["child-1"]
+	if child == nil {
+		t.Fatal("Expected child-1 to exist")
+	}
 	if child.mappedParentState != "unknown" {
 		t.Errorf("Expected child mappedParentState 'unknown' (parent state when not in mapping), got '%s'", child.mappedParentState)
 	}
@@ -1598,16 +1613,25 @@ func TestApplyStateMapping_MultipleChildren(t *testing.T) {
 	parent.applyStateMapping()
 
 	child1 := parent.children["child-1"]
+	if child1 == nil {
+		t.Fatal("Expected child-1 to exist")
+	}
 	if child1.mappedParentState != "connected" {
 		t.Errorf("Expected child-1 mappedParentState 'connected', got '%s'", child1.mappedParentState)
 	}
 
 	child2 := parent.children["child-2"]
+	if child2 == nil {
+		t.Fatal("Expected child-2 to exist")
+	}
 	if child2.mappedParentState != "polling" {
 		t.Errorf("Expected child-2 mappedParentState 'polling', got '%s'", child2.mappedParentState)
 	}
 
 	child3 := parent.children["child-3"]
+	if child3 == nil {
+		t.Fatal("Expected child-3 to exist")
+	}
 	if child3.mappedParentState != "active" {
 		t.Errorf("Expected child-3 mappedParentState 'active' (parent state, no mapping), got '%s'", child3.mappedParentState)
 	}
@@ -1696,6 +1720,9 @@ func TestApplyStateMapping_EmptyStateMapping(t *testing.T) {
 	parent.applyStateMapping()
 
 	child := parent.children["child-1"]
+	if child == nil {
+		t.Fatal("Expected child-1 to exist")
+	}
 	if child.mappedParentState != "running" {
 		t.Errorf("Expected child mappedParentState 'running' (parent state with empty map), got '%s'", child.mappedParentState)
 	}
@@ -1784,6 +1811,9 @@ func TestApplyStateMapping_NilStateMapping(t *testing.T) {
 	parent.applyStateMapping()
 
 	child := parent.children["child-1"]
+	if child == nil {
+		t.Fatal("Expected child-1 to exist")
+	}
 	if child.mappedParentState != "starting" {
 		t.Errorf("Expected child mappedParentState 'starting' (parent state with nil map), got '%s'", child.mappedParentState)
 	}

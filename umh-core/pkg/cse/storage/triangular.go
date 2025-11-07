@@ -359,6 +359,9 @@ func (ts *TriangularStore) SaveObserved(ctx context.Context, workerType string, 
 	if err != nil {
 		return fmt.Errorf("failed to convert observed to document: %w", err)
 	}
+	if observedDoc == nil {
+		return fmt.Errorf("toDocument returned nil document")
+	}
 
 	// Validate document has required fields
 	if err := ts.validateDocument(observedDoc); err != nil {

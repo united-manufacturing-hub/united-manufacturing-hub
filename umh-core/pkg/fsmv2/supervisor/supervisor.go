@@ -985,15 +985,20 @@ func (s *Supervisor) Tick(ctx context.Context) error {
 	s.mu.RLock()
 	var firstWorkerID string
 	var worker fsmv2.Worker
-	for id := range s.workers {
-		firstWorkerID = id
-		worker = s.workers[id].worker
-		break
+	for id, workerEntry := range s.workers {
+		if workerEntry != nil && workerEntry.worker != nil {
+			firstWorkerID = id
+			worker = workerEntry.worker
+			break
+		}
 	}
 	s.mu.RUnlock()
 
 	if firstWorkerID == "" {
 		return errors.New("no workers in supervisor")
+	}
+	if worker == nil {
+		return errors.New("worker is nil")
 	}
 
 	// PHASE 0.5: Variable Injection
@@ -1316,7 +1321,9 @@ func (s *Supervisor) reconcileChildren(specs []types.ChildSpec) error {
 		if !specNames[name] {
 			s.logger.Infof("Removing child %s (not in desired specs)", name)
 			child := s.children[name]
-			child.Shutdown()
+			if child != nil {
+				child.Shutdown()
+			}
 			delete(s.children, name)
 			removedCount++
 		}

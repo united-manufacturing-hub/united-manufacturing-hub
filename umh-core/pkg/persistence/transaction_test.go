@@ -156,7 +156,9 @@ func TestWithTransaction_Error(t *testing.T) {
 		return expectedErr
 	})
 
-	if !errors.Is(err, expectedErr) && err.Error() != expectedErr.Error() {
+	if err == nil {
+		t.Error("WithTransaction() expected error, got nil")
+	} else if !errors.Is(err, expectedErr) && err.Error() != expectedErr.Error() {
 		t.Errorf("WithTransaction() error = %v, want %v", err, expectedErr)
 	}
 
@@ -278,7 +280,9 @@ func TestWithRetry_NonConflictError(t *testing.T) {
 		return otherErr
 	})
 
-	if !errors.Is(err, otherErr) && err.Error() != otherErr.Error() {
+	if err == nil {
+		t.Error("WithRetry() expected error, got nil")
+	} else if !errors.Is(err, otherErr) && err.Error() != otherErr.Error() {
 		t.Errorf("WithRetry() error = %v, want %v", err, otherErr)
 	}
 
