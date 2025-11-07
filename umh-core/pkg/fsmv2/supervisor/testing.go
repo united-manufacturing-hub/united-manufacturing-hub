@@ -81,6 +81,38 @@ func (m *TestWorker) GetInitialState() fsmv2.State {
 	return &TestState{}
 }
 
+// TestWorkerWithType extends TestWorker to support workerType-specific test data.
+// This allows tests to create workers that return observed states appropriate for
+// different workerTypes (e.g., "s6", "container", "benthos").
+// It maintains full backward compatibility with TestWorker.
+type TestWorkerWithType struct {
+	TestWorker
+	WorkerType string
+}
+
+// CollectObservedState returns workerType-specific observed state if no custom behavior is set.
+// If TestWorker.CollectFunc is set, it delegates to the parent TestWorker behavior.
+// This ensures backward compatibility while allowing workerType-specific test data.
+func (m *TestWorkerWithType) CollectObservedState(ctx context.Context) (fsmv2.ObservedState, error) {
+	if m.CollectFunc != nil {
+		return m.CollectFunc(ctx)
+	}
+
+	if m.CollectErr != nil {
+		return nil, m.CollectErr
+	}
+
+	if m.Observed != nil {
+		return m.Observed, nil
+	}
+
+	return &TestObservedState{
+		ID:          m.WorkerType + "-worker",
+		CollectedAt: time.Now(),
+		Desired:     &TestDesiredState{},
+	}, nil
+}
+
 // TestState is a mock State for testing subdirectories.
 type TestState struct {
 	NextState fsmv2.State
@@ -115,6 +147,60 @@ func CreateTestTriangularStore() *storage.TriangularStore {
 
 	registry := storage.NewRegistry()
 	workerType := "container"
+
+	if err := registry.Register(&storage.CollectionMetadata{
+		Name:          workerType + "_identity",
+		WorkerType:    workerType,
+		Role:          storage.RoleIdentity,
+		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt},
+		IndexedFields: []string{storage.FieldSyncID},
+	}); err != nil {
+		panic(err)
+	}
+	if err := registry.Register(&storage.CollectionMetadata{
+		Name:          workerType + "_desired",
+		WorkerType:    workerType,
+		Role:          storage.RoleDesired,
+		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
+		IndexedFields: []string{storage.FieldSyncID},
+	}); err != nil {
+		panic(err)
+	}
+	if err := registry.Register(&storage.CollectionMetadata{
+		Name:          workerType + "_observed",
+		WorkerType:    workerType,
+		Role:          storage.RoleObserved,
+		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
+		IndexedFields: []string{storage.FieldSyncID},
+	}); err != nil {
+		panic(err)
+	}
+
+	if err := basicStore.CreateCollection(ctx, workerType+"_identity", nil); err != nil {
+		panic(fmt.Sprintf("failed to create identity collection: %v", err))
+	}
+	if err := basicStore.CreateCollection(ctx, workerType+"_desired", nil); err != nil {
+		panic(fmt.Sprintf("failed to create desired collection: %v", err))
+	}
+	if err := basicStore.CreateCollection(ctx, workerType+"_observed", nil); err != nil {
+		panic(fmt.Sprintf("failed to create observed collection: %v", err))
+	}
+
+	return storage.NewTriangularStore(basicStore, registry)
+}
+
+// CreateTestTriangularStoreForWorkerType creates a triangular store for a specific workerType.
+// This allows tests to work with different workerTypes (e.g., "s6", "container", "benthos").
+// The store is configured with three collections: {workerType}_identity, {workerType}_desired, {workerType}_observed.
+// Each collection has appropriate CSEFields for its role:
+//   - identity: FieldSyncID, FieldVersion, FieldCreatedAt (immutable)
+//   - desired: FieldSyncID, FieldVersion, FieldCreatedAt, FieldUpdatedAt (version increments)
+//   - observed: FieldSyncID, FieldVersion, FieldCreatedAt, FieldUpdatedAt (version doesn't increment)
+func CreateTestTriangularStoreForWorkerType(workerType string) *storage.TriangularStore {
+	ctx := context.Background()
+	basicStore := memory.NewInMemoryStore()
+
+	registry := storage.NewRegistry()
 
 	if err := registry.Register(&storage.CollectionMetadata{
 		Name:          workerType + "_identity",

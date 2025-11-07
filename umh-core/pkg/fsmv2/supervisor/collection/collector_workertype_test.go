@@ -13,7 +13,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence/memory"
 	"go.uber.org/zap"
 )
 
@@ -21,8 +20,6 @@ var _ = Describe("Collector WorkerType", func() {
 	Context("when collector is configured with workerType", func() {
 		It("should use configured workerType for observations", func() {
 			ctx := context.Background()
-			basicStore := memory.NewInMemoryStore()
-			registry := storage.NewRegistry()
 
 			workerType := "s6"
 			identity := fsmv2.Identity{
@@ -31,37 +28,9 @@ var _ = Describe("Collector WorkerType", func() {
 				WorkerType: workerType,
 			}
 
-			_ = registry.Register(&storage.CollectionMetadata{
-				Name:          workerType + "_identity",
-				WorkerType:    workerType,
-				Role:          storage.RoleIdentity,
-				CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt},
-				IndexedFields: []string{storage.FieldSyncID},
-			})
-			_ = registry.Register(&storage.CollectionMetadata{
-				Name:          workerType + "_desired",
-				WorkerType:    workerType,
-				Role:          storage.RoleDesired,
-				CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
-				IndexedFields: []string{storage.FieldSyncID},
-			})
-			_ = registry.Register(&storage.CollectionMetadata{
-				Name:          workerType + "_observed",
-				WorkerType:    workerType,
-				Role:          storage.RoleObserved,
-				CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
-				IndexedFields: []string{storage.FieldSyncID},
-			})
-
-			err := basicStore.CreateCollection(ctx, workerType+"_identity", nil)
-			Expect(err).ToNot(HaveOccurred())
-			err = basicStore.CreateCollection(ctx, workerType+"_desired", nil)
-			Expect(err).ToNot(HaveOccurred())
-			err = basicStore.CreateCollection(ctx, workerType+"_observed", nil)
-			Expect(err).ToNot(HaveOccurred())
-
-			triangularStore := storage.NewTriangularStore(basicStore, registry)
+			triangularStore := supervisor.CreateTestTriangularStoreForWorkerType(workerType)
 			Expect(triangularStore).ToNot(BeNil())
+			registry := triangularStore.Registry()
 
 			s := supervisor.NewSupervisor(supervisor.Config{
 				WorkerType: workerType,
@@ -74,7 +43,7 @@ var _ = Describe("Collector WorkerType", func() {
 				Observed: supervisor.CreateTestObservedStateWithID(identity.ID),
 			}
 
-			err = s.AddWorker(identity, worker)
+			err := s.AddWorker(identity, worker)
 			Expect(err).ToNot(HaveOccurred())
 
 			desiredDoc := persistence.Document{
@@ -98,47 +67,22 @@ var _ = Describe("Collector WorkerType", func() {
 	Context("when multiple collectors use different workerTypes", func() {
 		It("should register separate collections for each workerType", func() {
 			ctx := context.Background()
-			basicStore := memory.NewInMemoryStore()
-			registry := storage.NewRegistry()
 
 			workerTypes := []string{"container", "s6", "benthos"}
+			stores := make(map[string]*storage.TriangularStore)
 			supervisors := make([]*supervisor.Supervisor, 0, len(workerTypes))
 
 			for _, wt := range workerTypes {
-				_ = registry.Register(&storage.CollectionMetadata{
-					Name:          wt + "_identity",
-					WorkerType:    wt,
-					Role:          storage.RoleIdentity,
-					CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt},
-					IndexedFields: []string{storage.FieldSyncID},
-				})
-				_ = registry.Register(&storage.CollectionMetadata{
-					Name:          wt + "_desired",
-					WorkerType:    wt,
-					Role:          storage.RoleDesired,
-					CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
-					IndexedFields: []string{storage.FieldSyncID},
-				})
-				_ = registry.Register(&storage.CollectionMetadata{
-					Name:          wt + "_observed",
-					WorkerType:    wt,
-					Role:          storage.RoleObserved,
-					CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
-					IndexedFields: []string{storage.FieldSyncID},
-				})
-
-				err := basicStore.CreateCollection(ctx, wt+"_identity", nil)
-				Expect(err).ToNot(HaveOccurred())
-				err = basicStore.CreateCollection(ctx, wt+"_desired", nil)
-				Expect(err).ToNot(HaveOccurred())
-				err = basicStore.CreateCollection(ctx, wt+"_observed", nil)
-				Expect(err).ToNot(HaveOccurred())
+				stores[wt] = supervisor.CreateTestTriangularStoreForWorkerType(wt)
 			}
 
-			triangularStore := storage.NewTriangularStore(basicStore, registry)
-			Expect(triangularStore).ToNot(BeNil())
-
 			for _, wt := range workerTypes {
+				triangularStore := stores[wt]
+				registry := triangularStore.Registry()
+
+				Expect(registry.IsRegistered(wt + "_identity")).To(BeTrue())
+				Expect(registry.IsRegistered(wt + "_desired")).To(BeTrue())
+				Expect(registry.IsRegistered(wt + "_observed")).To(BeTrue())
 				identity := fsmv2.Identity{
 					ID:         wt + "-worker",
 					Name:       wt + " Worker",
@@ -169,9 +113,7 @@ var _ = Describe("Collector WorkerType", func() {
 				supervisors = append(supervisors, s)
 			}
 
-			Expect(registry.IsRegistered("container_observed")).To(BeTrue())
-			Expect(registry.IsRegistered("s6_observed")).To(BeTrue())
-			Expect(registry.IsRegistered("benthos_observed")).To(BeTrue())
+			Expect(len(supervisors)).To(Equal(3))
 		})
 	})
 })
