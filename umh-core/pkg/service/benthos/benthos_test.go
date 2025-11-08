@@ -130,6 +130,41 @@ var _ = Describe("Benthos Service", func() {
 			})
 		})
 
+		Context("S6 environment variables for debug logging", func() {
+			It("should set OPC_DEBUG=true when LogLevel is DEBUG", func() {
+				cfg := &benthosserviceconfig.BenthosServiceConfig{
+					MetricsPort: 4195,
+					LogLevel:    "DEBUG",
+				}
+
+				s6Config, err := service.GenerateS6ConfigForBenthos(cfg, "test-debug")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(s6Config.Env).To(HaveKeyWithValue("OPC_DEBUG", "true"))
+			})
+
+			It("should not set OPC_DEBUG when LogLevel is INFO", func() {
+				cfg := &benthosserviceconfig.BenthosServiceConfig{
+					MetricsPort: 4195,
+					LogLevel:    "INFO",
+				}
+
+				s6Config, err := service.GenerateS6ConfigForBenthos(cfg, "test-info")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(s6Config.Env).NotTo(HaveKey("OPC_DEBUG"))
+			})
+
+			It("should not set OPC_DEBUG when LogLevel is empty", func() {
+				cfg := &benthosserviceconfig.BenthosServiceConfig{
+					MetricsPort: 4195,
+					LogLevel:    "",
+				}
+
+				s6Config, err := service.GenerateS6ConfigForBenthos(cfg, "test-empty")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(s6Config.Env).NotTo(HaveKey("OPC_DEBUG"))
+			})
+		})
+
 		Context("with complete configuration", func() {
 			It("should generate valid YAML with all sections", func() {
 				cfg := &benthosserviceconfig.BenthosServiceConfig{
