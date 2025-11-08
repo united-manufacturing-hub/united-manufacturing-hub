@@ -110,24 +110,6 @@ type FSMInstanceConfig struct {
 	DesiredFSMState string `yaml:"desiredState,omitempty"`
 }
 
-// UnmarshalYAML implements custom YAML unmarshaling with service name validation.
-func (f *FSMInstanceConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
-	type rawConfig FSMInstanceConfig
-	var raw rawConfig
-	if err := unmarshal(&raw); err != nil {
-		return err
-	}
-
-	if raw.Name != "" {
-		if err := ValidateComponentName(raw.Name); err != nil {
-			return err
-		}
-	}
-
-	*f = FSMInstanceConfig(raw)
-	return nil
-}
-
 // ContainerConfig is the config for a container instance.
 type ContainerConfig struct {
 	Name            string `yaml:"name"`

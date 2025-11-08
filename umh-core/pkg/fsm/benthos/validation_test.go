@@ -17,115 +17,12 @@ package benthos_test
 import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"gopkg.in/yaml.v3"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 )
 
 var _ = Describe("Benthos FSM Path Traversal Protection (ENG-3869)", func() {
-	Describe("Defense Layer 1: YAML Unmarshaling Validation", func() {
-		Context("ProtocolConverterConfig unmarshaling", func() {
-			It("should reject path traversal with ../../../etc/passwd", func() {
-				yamlData := `
-name: "../../../etc/passwd"
-desiredState: active
-protocolConverterServiceConfig: {}
-`
-				var cfg config.ProtocolConverterConfig
-				err := yaml.Unmarshal([]byte(yamlData), &cfg)
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("only lowercase letters"))
-			})
-
-			It("should reject path traversal with ../../data/secrets", func() {
-				yamlData := `
-name: "../../data/secrets"
-desiredState: active
-protocolConverterServiceConfig: {}
-`
-				var cfg config.ProtocolConverterConfig
-				err := yaml.Unmarshal([]byte(yamlData), &cfg)
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("only lowercase letters"))
-			})
-
-			It("should reject names with uppercase letters", func() {
-				yamlData := `
-name: "Bridge-One"
-desiredState: active
-protocolConverterServiceConfig: {}
-`
-				var cfg config.ProtocolConverterConfig
-				err := yaml.Unmarshal([]byte(yamlData), &cfg)
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("only lowercase letters"))
-			})
-
-			It("should reject names with special characters", func() {
-				yamlData := `
-name: "bridge@special"
-desiredState: active
-protocolConverterServiceConfig: {}
-`
-				var cfg config.ProtocolConverterConfig
-				err := yaml.Unmarshal([]byte(yamlData), &cfg)
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("only lowercase letters"))
-			})
-
-			It("should accept valid lowercase names with hyphens", func() {
-				yamlData := `
-name: "bridge-1"
-desiredState: active
-protocolConverterServiceConfig: {}
-`
-				var cfg config.ProtocolConverterConfig
-				err := yaml.Unmarshal([]byte(yamlData), &cfg)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(cfg.Name).To(Equal("bridge-1"))
-			})
-		})
-
-		Context("BenthosConfig unmarshaling", func() {
-			It("should reject path traversal with ../../../etc/passwd", func() {
-				yamlData := `
-name: "../../../etc/passwd"
-desiredState: active
-benthosServiceConfig: {}
-`
-				var cfg config.BenthosConfig
-				err := yaml.Unmarshal([]byte(yamlData), &cfg)
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("only lowercase letters"))
-			})
-
-			It("should reject path traversal with ./sensitive", func() {
-				yamlData := `
-name: "./sensitive"
-desiredState: active
-benthosServiceConfig: {}
-`
-				var cfg config.BenthosConfig
-				err := yaml.Unmarshal([]byte(yamlData), &cfg)
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("only lowercase letters"))
-			})
-
-			It("should accept valid lowercase names with hyphens", func() {
-				yamlData := `
-name: "bridge-1"
-desiredState: active
-benthosServiceConfig: {}
-`
-				var cfg config.BenthosConfig
-				err := yaml.Unmarshal([]byte(yamlData), &cfg)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(cfg.Name).To(Equal("bridge-1"))
-			})
-		})
-	})
-
-	Describe("Defense Layer 2: Manager getName Validation", func() {
+	Describe("Defense Layer 1: Manager getName Validation", func() {
 		Context("BenthosConfig validation via config.ValidateComponentName", func() {
 			It("should reject path traversal with ../../../etc/passwd", func() {
 				err := config.ValidateComponentName("../../../etc/passwd")
