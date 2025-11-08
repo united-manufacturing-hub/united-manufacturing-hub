@@ -513,6 +513,7 @@ func (s *Supervisor) RemoveWorker(ctx context.Context, workerID string) error {
 	s.mu.Unlock()
 
 	workerCtx.collector.Stop(ctx)
+	workerCtx.executor.Shutdown()
 
 	s.logger.Infof("Removed worker %s from supervisor", workerID)
 
@@ -1215,6 +1216,7 @@ func (s *Supervisor) processSignal(ctx context.Context, workerID string, signal 
 		s.mu.Unlock()
 
 		workerCtx.collector.Stop(ctx)
+		workerCtx.executor.Shutdown()
 
 		return nil
 	case fsmv2.SignalNeedsRestart:
