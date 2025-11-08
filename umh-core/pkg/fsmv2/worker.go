@@ -88,6 +88,14 @@ type DesiredState interface {
 // States receive a COPY of the snapshot, so mutations don't affect the original.
 // This guarantees that state transitions are pure functions without side effects.
 //
+// We do NOT use getters because:
+//   1. Pass-by-value makes mutation impossible (copies on assignment)
+//   2. Getters add boilerplate without adding safety
+//   3. Go convention favors simple field access over accessors (see time.Time, net.IP)
+//
+// This is the idiomatic Go approach: Use value semantics for immutability,
+// not OOP patterns like getters/setters.
+//
 // Go's pass-by-value semantics enforce this at the language level:
 //   - When State.Next(snapshot Snapshot) is called, Go copies the struct
 //   - Fields (Identity, Observed, Desired) are copied as interface pointers
@@ -155,7 +163,7 @@ type Snapshot struct {
 //   - Layer 1: Document requirement in Action interface
 //   - Layer 2: Provide test helpers for verification
 //   - Layer 3: Examples showing idempotent patterns
-//   - Layer 4: Retry logic in executeActionWithRetry validates this
+//   - Layer 4: ActionExecutor with exponential backoff validates this
 //
 // Example: StartProcess, StopProcess, CreateConfigFiles, CallAPI.
 type Action interface {

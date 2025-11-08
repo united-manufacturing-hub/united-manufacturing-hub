@@ -1174,33 +1174,6 @@ func (s *Supervisor) TickAll(ctx context.Context) error {
 	return nil
 }
 
-// executeActionWithRetry executes an action with exponential backoff retry.
-func (s *Supervisor) executeActionWithRetry(ctx context.Context, action fsmv2.Action) error {
-	maxRetries := 3
-	backoff := 1 * time.Second
-
-	var lastErr error
-
-	for attempt := range maxRetries {
-		if attempt > 0 {
-			s.logger.Warnf("Retrying action %s (attempt %d/%d)", action.Name(), attempt+1, maxRetries)
-			time.Sleep(backoff)
-			backoff *= 2
-		}
-
-		if err := action.Execute(ctx); err != nil {
-			lastErr = err
-			s.logger.Errorf("Action %s failed (attempt %d/%d): %v", action.Name(), attempt+1, maxRetries, err)
-
-			continue
-		}
-
-		// Success
-		return nil
-	}
-
-	return fmt.Errorf("action %s failed after %d attempts: %w", action.Name(), maxRetries, lastErr)
-}
 
 // processSignal handles signals from states.
 func (s *Supervisor) processSignal(ctx context.Context, workerID string, signal fsmv2.Signal) error {
