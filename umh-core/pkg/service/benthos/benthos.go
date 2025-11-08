@@ -48,7 +48,6 @@ import (
 )
 
 const (
-	DebugLogLevel  = "DEBUG"
 	OPCDebugEnvVar = "OPC_DEBUG"
 )
 
@@ -320,7 +319,7 @@ func (s *BenthosService) GenerateS6ConfigForBenthos(benthosConfig *benthosservic
 	}
 
 	env := make(map[string]string)
-	if benthosConfig.LogLevel == DebugLogLevel {
+	if benthosConfig.LogLevel == constants.DebugBenthosLogLevel {
 		env[OPCDebugEnvVar] = "true"
 	}
 

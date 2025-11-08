@@ -25,9 +25,9 @@ func (c DataflowComponentServiceConfig) GetBenthosServiceConfig() benthosservice
 	cfg := c.BenthosConfig.ToBenthosServiceConfig()
 
 	if c.DebugLevel {
-		cfg.LogLevel = "DEBUG"
+		cfg.LogLevel = constants.DebugBenthosLogLevel
 	} else {
-		cfg.LogLevel = "INFO"
+		cfg.LogLevel = constants.DefaultBenthosLogLevel
 	}
 
 	return cfg
