@@ -320,7 +320,7 @@ func (s *BenthosService) GenerateS6ConfigForBenthos(benthosConfig *benthosservic
 
 	env := make(map[string]string)
 	if benthosConfig.LogLevel == constants.DebugBenthosLogLevel {
-		env[OPCDebugEnvVar] = "true"
+		env[OPCDebugEnvVar] = "debug"
 	}
 
 	s6Config = s6serviceconfig.S6ServiceConfig{

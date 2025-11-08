@@ -55,7 +55,7 @@ func TestDataFlowDebugLevel_EndToEnd_DebugEnabled(t *testing.T) {
 	require.NoError(t, err)
 
 	// 5. Verify OPC_DEBUG environment variable set
-	assert.Equal(t, "true", s6Config.Env["OPC_DEBUG"])
+	assert.Equal(t, "debug", s6Config.Env["OPC_DEBUG"])
 }
 
 func TestDataFlowDebugLevel_EndToEnd_DebugDisabled(t *testing.T) {
@@ -141,7 +141,7 @@ func TestDataFlowDebugLevel_EndToEnd_LogLevelMapping(t *testing.T) {
 			debugLevel:        true,
 			expectedLogLevel:  "DEBUG",
 			expectOpcDebugSet: true,
-			expectedOpcDebug:  "true",
+			expectedOpcDebug:  "debug",
 		},
 		{
 			name:              "debug_level false maps to LogLevel INFO",

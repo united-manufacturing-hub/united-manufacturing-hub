@@ -92,8 +92,8 @@ config:
 	require.NoError(t, err)
 
 	// 10. Verify OPC_DEBUG environment variable set in S6 configs
-	assert.Equal(t, "true", readS6.Env["OPC_DEBUG"])
-	assert.Equal(t, "true", writeS6.Env["OPC_DEBUG"])
+	assert.Equal(t, "debug", readS6.Env["OPC_DEBUG"])
+	assert.Equal(t, "debug", writeS6.Env["OPC_DEBUG"])
 }
 
 func TestProtocolConverterDebugLevel_EndToEnd_DebugDisabled(t *testing.T) {
@@ -293,7 +293,7 @@ config:
 		benthosService := benthos.NewDefaultBenthosService("integration-test")
 		s6Config, err := benthosService.GenerateS6ConfigForBenthos(&benthosConfig, "read-test")
 		require.NoError(t, err)
-		assert.Equal(t, "true", s6Config.Env["OPC_DEBUG"], "OPC_DEBUG should be set to true in S6ServiceConfig")
+		assert.Equal(t, "debug", s6Config.Env["OPC_DEBUG"], "OPC_DEBUG should be set to debug in S6ServiceConfig")
 	})
 
 	// Verify the complete chain for write DFC
@@ -311,7 +311,7 @@ config:
 		benthosService := benthos.NewDefaultBenthosService("integration-test")
 		s6Config, err := benthosService.GenerateS6ConfigForBenthos(&benthosConfig, "write-test")
 		require.NoError(t, err)
-		assert.Equal(t, "true", s6Config.Env["OPC_DEBUG"], "OPC_DEBUG should be set to true in S6ServiceConfig")
+		assert.Equal(t, "debug", s6Config.Env["OPC_DEBUG"], "OPC_DEBUG should be set to debug in S6ServiceConfig")
 	})
 }
 
@@ -329,7 +329,7 @@ func TestProtocolConverterDebugLevel_EndToEnd_LogLevelMapping(t *testing.T) {
 			debugLevel:        true,
 			expectedLogLevel:  "DEBUG",
 			expectOpcDebugSet: true,
-			expectedOpcDebug:  "true",
+			expectedOpcDebug:  "debug",
 		},
 		{
 			name:              "debug_level false maps to LogLevel INFO",

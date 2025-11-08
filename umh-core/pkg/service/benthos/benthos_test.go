@@ -131,7 +131,7 @@ var _ = Describe("Benthos Service", func() {
 		})
 
 		Context("S6 environment variables for debug logging", func() {
-			It("should set OPC_DEBUG=true when LogLevel is DEBUG", func() {
+			It("should set OPC_DEBUG=debug when LogLevel is DEBUG", func() {
 				cfg := &benthosserviceconfig.BenthosServiceConfig{
 					MetricsPort: 4195,
 					LogLevel:    "DEBUG",
@@ -139,7 +139,7 @@ var _ = Describe("Benthos Service", func() {
 
 				s6Config, err := service.GenerateS6ConfigForBenthos(cfg, "test-debug")
 				Expect(err).NotTo(HaveOccurred())
-				Expect(s6Config.Env).To(HaveKeyWithValue("OPC_DEBUG", "true"))
+				Expect(s6Config.Env).To(HaveKeyWithValue("OPC_DEBUG", "debug"))
 			})
 
 			It("should not set OPC_DEBUG when LogLevel is INFO", func() {
