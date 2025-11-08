@@ -188,10 +188,18 @@ func SpecToRuntime(spec ProtocolConverterServiceConfigSpec) (ProtocolConverterSe
 		return ProtocolConverterServiceConfigRuntime{}, fmt.Errorf("invalid connection configuration: %w", err)
 	}
 
+	// Propagate debug_level from protocol converter to data flow components
+	// This ensures debug settings flow through the entire conversion chain
+	readDFC := spec.Config.DataflowComponentReadServiceConfig
+	readDFC.DebugLevel = spec.Config.DebugLevel
+
+	writeDFC := spec.Config.DataflowComponentWriteServiceConfig
+	writeDFC.DebugLevel = spec.Config.DebugLevel
+
 	return ProtocolConverterServiceConfigRuntime{
 		DebugLevel:                          spec.Config.DebugLevel,
 		ConnectionServiceConfig:             connRuntime,
-		DataflowComponentReadServiceConfig:  spec.Config.DataflowComponentReadServiceConfig,
-		DataflowComponentWriteServiceConfig: spec.Config.DataflowComponentWriteServiceConfig,
+		DataflowComponentReadServiceConfig:  readDFC,
+		DataflowComponentWriteServiceConfig: writeDFC,
 	}, nil
 }
