@@ -871,6 +871,14 @@ func (s *Supervisor) tickWorker(ctx context.Context, workerID string) error {
 
 	// Execute action if present
 	if action != nil {
+		actionID := action.Name()
+
+		if workerCtx.executor.HasActionInProgress(actionID) {
+			s.logger.Debugf("Skipping action %s for worker %s (already in progress)", actionID, workerID)
+
+			return nil
+		}
+
 		s.logger.Infof("Executing action: %s", action.Name())
 
 		if err := s.executeActionWithRetry(ctx, action); err != nil {
