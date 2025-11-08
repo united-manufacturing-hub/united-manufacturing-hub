@@ -47,6 +47,11 @@ import (
 	"github.com/cespare/xxhash/v2"
 )
 
+const (
+	DebugLogLevel  = "DEBUG"
+	OPCDebugEnvVar = "OPC_DEBUG"
+)
+
 // IBenthosService is the interface for managing Benthos services.
 type IBenthosService interface {
 	// GenerateS6ConfigForBenthos generates a S6 config for a given benthos instance
@@ -315,8 +320,8 @@ func (s *BenthosService) GenerateS6ConfigForBenthos(benthosConfig *benthosservic
 	}
 
 	env := make(map[string]string)
-	if benthosConfig.LogLevel == "DEBUG" {
-		env["OPC_DEBUG"] = "true"
+	if benthosConfig.LogLevel == DebugLogLevel {
+		env[OPCDebugEnvVar] = "true"
 	}
 
 	s6Config = s6serviceconfig.S6ServiceConfig{
