@@ -12,20 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
-
 package execution_test
 
 import (
@@ -59,6 +45,32 @@ var _ = Describe("ActionExecutor", func() {
 		executor.Shutdown()
 	})
 
+	Describe("Constructor Validation", func() {
+		Context("NewActionExecutor with invalid worker count", func() {
+			It("should default to 10 workers when workerCount is 0", func() {
+				executor := execution.NewActionExecutor(0)
+				Expect(executor).ToNot(BeNil())
+			})
+
+			It("should default to 10 workers when workerCount is negative", func() {
+				executor := execution.NewActionExecutor(-5)
+				Expect(executor).ToNot(BeNil())
+			})
+		})
+
+		Context("NewActionExecutorWithTimeout with invalid worker count", func() {
+			It("should default to 10 workers when workerCount is 0", func() {
+				executor := execution.NewActionExecutorWithTimeout(0, map[string]time.Duration{})
+				Expect(executor).ToNot(BeNil())
+			})
+
+			It("should default to 10 workers when workerCount is negative", func() {
+				executor := execution.NewActionExecutorWithTimeout(-3, map[string]time.Duration{})
+				Expect(executor).ToNot(BeNil())
+			})
+		})
+	})
+
 	Describe("EnqueueAction", func() {
 		It("should enqueue action without blocking", func() {
 			actionID := "test-action"
@@ -67,6 +79,7 @@ var _ = Describe("ActionExecutor", func() {
 			action := &testAction{
 				execute: func(ctx context.Context) error {
 					executed <- true
+
 					return nil
 				},
 			}
@@ -77,11 +90,34 @@ var _ = Describe("ActionExecutor", func() {
 			Eventually(executed).Should(Receive())
 		})
 
+		It("should return error if action is already in progress", func() {
+			actionID := "duplicate-action"
+
+			blockChan := make(chan struct{})
+			action := &testAction{
+				execute: func(ctx context.Context) error {
+					<-blockChan
+
+					return nil
+				},
+			}
+
+			err := executor.EnqueueAction(actionID, action)
+			Expect(err).ToNot(HaveOccurred())
+
+			err = executor.EnqueueAction(actionID, action)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("already in progress"))
+
+			close(blockChan)
+		})
+
 		It("should return error if queue is full", func() {
 			blockChan := make(chan struct{})
 			blockingAction := &testAction{
 				execute: func(ctx context.Context) error {
 					<-blockChan
+
 					return nil
 				},
 			}
@@ -91,10 +127,11 @@ var _ = Describe("ActionExecutor", func() {
 			totalCapacity := workerCount + queueBuffer
 
 			var lastErr error
-			for i := 0; i < totalCapacity+2; i++ {
+			for i := range totalCapacity + 2 {
 				err := executor.EnqueueAction(fmt.Sprintf("action-%d", i), blockingAction)
 				if err != nil {
 					lastErr = err
+
 					break
 				}
 			}
@@ -114,6 +151,7 @@ var _ = Describe("ActionExecutor", func() {
 			action := &testAction{
 				execute: func(ctx context.Context) error {
 					<-blockChan
+
 					return nil
 				},
 			}
@@ -157,11 +195,12 @@ var _ = Describe("ActionExecutor", func() {
 				execute: func(ctx context.Context) error {
 					time.Sleep(10 * time.Millisecond)
 					executed.Add(1)
+
 					return nil
 				},
 			}
 
-			for i := 0; i < actionCount; i++ {
+			for i := range actionCount {
 				err := executor.EnqueueAction(fmt.Sprintf("action-%d", i), action)
 				Expect(err).ToNot(HaveOccurred())
 			}
@@ -182,6 +221,7 @@ var _ = Describe("ActionExecutor", func() {
 					select {
 					case <-ctx.Done():
 						cancelled <- true
+
 						return ctx.Err()
 					case <-time.After(1 * time.Second):
 						return nil
@@ -207,6 +247,7 @@ var _ = Describe("ActionExecutor", func() {
 				execute: func(ctx context.Context) error {
 					time.Sleep(50 * time.Millisecond)
 					completed <- true
+
 					return nil
 				},
 			}
@@ -236,6 +277,7 @@ var _ = Describe("ActionExecutor", func() {
 						actionStarted <- true
 						<-ctx.Done()
 						actionCancelled <- true
+
 						return ctx.Err()
 					},
 				}
@@ -256,6 +298,7 @@ var _ = Describe("ActionExecutor", func() {
 				action := &testAction{
 					execute: func(ctx context.Context) error {
 						<-ctx.Done()
+
 						return ctx.Err()
 					},
 				}
@@ -283,6 +326,7 @@ var _ = Describe("ActionExecutor", func() {
 					execute: func(ctx context.Context) error {
 						time.Sleep(50 * time.Millisecond)
 						completed <- true
+
 						return nil
 					},
 				}
@@ -306,6 +350,7 @@ var _ = Describe("ActionExecutor", func() {
 					execute: func(ctx context.Context) error {
 						<-ctx.Done()
 						cancelled <- true
+
 						return ctx.Err()
 					},
 				}
@@ -328,11 +373,12 @@ var _ = Describe("ActionExecutor", func() {
 				blockingAction := &testAction{
 					execute: func(ctx context.Context) error {
 						time.Sleep(1 * time.Second)
+
 						return nil
 					},
 				}
 
-				for i := 0; i < 100; i++ {
+				for i := range 100 {
 					start := time.Now()
 					_ = smallExecutor.EnqueueAction(fmt.Sprintf("action-%d", i), blockingAction)
 					duration := time.Since(start)
@@ -349,12 +395,13 @@ var _ = Describe("ActionExecutor", func() {
 
 				completed := make(chan string, 150)
 
-				for i := 0; i < 150; i++ {
+				for i := range 150 {
 					actionID := fmt.Sprintf("action-%d", i)
 					action := &testAction{
 						execute: func(ctx context.Context) error {
 							time.Sleep(10 * time.Millisecond)
 							completed <- actionID
+
 							return nil
 						},
 					}
@@ -395,16 +442,17 @@ var _ = Describe("ActionExecutor", func() {
 				executor.Start(ctx)
 				defer executor.Shutdown()
 
-				for i := 0; i < 100; i++ {
+				for i := range 100 {
 					_ = executor.EnqueueAction(fmt.Sprintf("action-%d", i), &testAction{
 						execute: func(ctx context.Context) error {
 							time.Sleep(100 * time.Millisecond)
+
 							return nil
 						},
 					})
 				}
 
-				for i := 0; i < 1000; i++ {
+				for range 1000 {
 					start := time.Now()
 					_ = executor.HasActionInProgress("action-0")
 					duration := time.Since(start)
@@ -430,6 +478,7 @@ func (t *testAction) Name() string {
 	if t.name == "" {
 		return "test-action"
 	}
+
 	return t.name
 }
 
