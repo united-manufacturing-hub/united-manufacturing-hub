@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package location provides ISA-95 location hierarchy computation for the FSM v2 system.
+// Package location provides hierarchical location computation for the FSM v2 system.
 //
-// ISA-95 Standard Hierarchy:
+// The package supports flexible location hierarchies, with ISA-95 as the default standard:
 //
 //	Enterprise → Site → Area → Line → Cell
 //
@@ -31,10 +31,10 @@ import (
 	"strings"
 )
 
-// LocationLevel represents a single level in the ISA-95 hierarchy.
-// ISA-95 defines a 5-level hierarchy: Enterprise > Site > Area > Line > Cell.
+// LocationLevel represents a single level in a location hierarchy.
+// Supports flexible hierarchies with ISA-95 as the default: Enterprise > Site > Area > Line > Cell.
 type LocationLevel struct {
-	Type  string `json:"type"  yaml:"type"`  // "enterprise", "site", "area", "line", or "cell"
+	Type  string `json:"type"  yaml:"type"`  // Level type (e.g., "enterprise", "site", "area", "line", "cell")
 	Value string `json:"value" yaml:"value"` // The actual value for this level (e.g., "ACME", "Factory-1")
 }
 
@@ -48,12 +48,12 @@ func MergeLocations(parent, child []LocationLevel) []LocationLevel {
 	return result
 }
 
-// FillISA95Gaps ensures all 5 ISA-95 levels are present in the correct order.
+// NormalizeHierarchyLevels ensures all 5 hierarchy levels are present in the correct order.
 // Missing levels are filled with empty strings.
-// ISA-95 order: enterprise → site → area → line → cell.
-func FillISA95Gaps(levels []LocationLevel) []LocationLevel {
-	// Define ISA-95 hierarchy order
-	isa95Order := []string{"enterprise", "site", "area", "line", "cell"}
+// Default order (following ISA-95): enterprise → site → area → line → cell.
+func NormalizeHierarchyLevels(levels []LocationLevel) []LocationLevel {
+	// Define standard hierarchy order (ISA-95 compatible)
+	hierarchyOrder := []string{"enterprise", "site", "area", "line", "cell"}
 
 	// Build map of existing levels
 	levelMap := make(map[string]string)
@@ -61,10 +61,10 @@ func FillISA95Gaps(levels []LocationLevel) []LocationLevel {
 		levelMap[level.Type] = level.Value
 	}
 
-	// Build result with all 5 levels in ISA-95 order
+	// Build result with all 5 levels in standard order
 	result := make([]LocationLevel, 5)
 
-	for i, levelType := range isa95Order {
+	for i, levelType := range hierarchyOrder {
 		value := levelMap[levelType]
 		result[i] = LocationLevel{
 			Type:  levelType,
@@ -73,6 +73,13 @@ func FillISA95Gaps(levels []LocationLevel) []LocationLevel {
 	}
 
 	return result
+}
+
+// FillISA95Gaps is deprecated. Use NormalizeHierarchyLevels instead.
+//
+// Deprecated: This function will be removed in a future version.
+func FillISA95Gaps(levels []LocationLevel) []LocationLevel {
+	return NormalizeHierarchyLevels(levels)
 }
 
 // ComputeLocationPath joins non-empty location values with dots.
