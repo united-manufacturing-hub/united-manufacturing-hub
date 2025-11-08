@@ -314,13 +314,18 @@ func (s *BenthosService) GenerateS6ConfigForBenthos(benthosConfig *benthosservic
 		return s6serviceconfig.S6ServiceConfig{}, err
 	}
 
+	env := make(map[string]string)
+	if benthosConfig.LogLevel == "DEBUG" {
+		env["OPC_DEBUG"] = "true"
+	}
+
 	s6Config = s6serviceconfig.S6ServiceConfig{
 		Command: []string{
 			"/usr/local/bin/benthos",
 			"-c",
 			configPath,
 		},
-		Env: map[string]string{},
+		Env: env,
 		ConfigFiles: map[string]string{
 			constants.BenthosConfigFileName: yamlConfig,
 		},
