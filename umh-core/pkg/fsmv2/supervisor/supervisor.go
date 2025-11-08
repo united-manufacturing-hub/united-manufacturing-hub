@@ -879,10 +879,10 @@ func (s *Supervisor) tickWorker(ctx context.Context, workerID string) error {
 			return nil
 		}
 
-		s.logger.Infof("Executing action: %s", action.Name())
+		s.logger.Infof("Enqueuing action: %s", actionID)
 
-		if err := s.executeActionWithRetry(ctx, action); err != nil {
-			return fmt.Errorf("action execution failed: %w", err)
+		if err := workerCtx.executor.EnqueueAction(actionID, action); err != nil {
+			return fmt.Errorf("failed to enqueue action: %w", err)
 		}
 	}
 
