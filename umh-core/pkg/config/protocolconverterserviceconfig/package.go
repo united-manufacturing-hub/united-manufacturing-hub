@@ -35,6 +35,7 @@ var (
 // This template form allows connection parameters (like port) to be templated
 // using expressions like "{{ .PORT }}" which are resolved during rendering.
 type ProtocolConverterServiceConfigTemplate struct {
+	DebugLevel bool `yaml:"debug_level,omitempty"`
 
 	// ConnectionServiceConfig describes how the converter connects to the
 	// underlying messaging infrastructure. Uses the template form to allow
@@ -68,6 +69,7 @@ type ProtocolConverterServiceConfigTemplate struct {
 //   - `DataflowComponentWriteServiceConfig.BenthosConfig.Input` **is** UNS.
 //   - `ConnectionServiceConfig` has all template variables resolved with proper types.
 type ProtocolConverterServiceConfigRuntime struct {
+	DebugLevel bool `yaml:"debug_level,omitempty"`
 
 	// DataflowComponentReadServiceConfig and DataflowComponentWriteServiceConfig
 	// remain unchanged as they don't need the template/runtime split yet.
@@ -136,6 +138,7 @@ func convertRuntimeToTemplate(runtime ProtocolConverterServiceConfigRuntime) Pro
 	connectionTemplate := connectionserviceconfig.ConvertRuntimeToTemplate(runtime.ConnectionServiceConfig)
 
 	return ProtocolConverterServiceConfigTemplate{
+		DebugLevel:                          runtime.DebugLevel,
 		ConnectionServiceConfig:             connectionTemplate,
 		DataflowComponentReadServiceConfig:  runtime.DataflowComponentReadServiceConfig,
 		DataflowComponentWriteServiceConfig: runtime.DataflowComponentWriteServiceConfig,
@@ -186,6 +189,7 @@ func SpecToRuntime(spec ProtocolConverterServiceConfigSpec) (ProtocolConverterSe
 	}
 
 	return ProtocolConverterServiceConfigRuntime{
+		DebugLevel:                          spec.Config.DebugLevel,
 		ConnectionServiceConfig:             connRuntime,
 		DataflowComponentReadServiceConfig:  spec.Config.DataflowComponentReadServiceConfig,
 		DataflowComponentWriteServiceConfig: spec.Config.DataflowComponentWriteServiceConfig,
