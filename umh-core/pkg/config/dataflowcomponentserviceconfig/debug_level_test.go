@@ -73,3 +73,41 @@ benthos:
 	assert.NoError(t, err)
 	assert.False(t, config.DebugLevel)
 }
+
+func TestDataflowComponentServiceConfig_GetBenthosServiceConfig_DebugLevelTrue(t *testing.T) {
+	cfg := DataflowComponentServiceConfig{
+		DebugLevel: true,
+		BenthosConfig: BenthosConfig{
+			Input: map[string]any{
+				"generate": map[string]any{
+					"mapping": `root = ""`,
+				},
+			},
+			Output: map[string]any{
+				"stdout": map[string]any{},
+			},
+		},
+	}
+
+	benthosConfig := cfg.GetBenthosServiceConfig()
+	assert.Equal(t, "DEBUG", benthosConfig.LogLevel)
+}
+
+func TestDataflowComponentServiceConfig_GetBenthosServiceConfig_DebugLevelFalse(t *testing.T) {
+	cfg := DataflowComponentServiceConfig{
+		DebugLevel: false,
+		BenthosConfig: BenthosConfig{
+			Input: map[string]any{
+				"generate": map[string]any{
+					"mapping": `root = ""`,
+				},
+			},
+			Output: map[string]any{
+				"stdout": map[string]any{},
+			},
+		},
+	}
+
+	benthosConfig := cfg.GetBenthosServiceConfig()
+	assert.Equal(t, "INFO", benthosConfig.LogLevel)
+}
