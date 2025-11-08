@@ -18,6 +18,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
 )
 
@@ -44,9 +45,10 @@ config:
 `
 
 	var spec ProtocolConverterServiceConfigSpec
-	err := yaml.Unmarshal([]byte(yamlData), &spec)
 
-	assert.NoError(t, err)
+	err := yaml.Unmarshal([]byte(yamlData), &spec)
+	require.NoError(t, err)
+
 	assert.True(t, spec.Config.DebugLevel)
 }
 
@@ -73,9 +75,10 @@ config:
 `
 
 	var spec ProtocolConverterServiceConfigSpec
-	err := yaml.Unmarshal([]byte(yamlData), &spec)
 
-	assert.NoError(t, err)
+	err := yaml.Unmarshal([]byte(yamlData), &spec)
+	require.NoError(t, err)
+
 	assert.False(t, spec.Config.DebugLevel)
 }
 
@@ -101,8 +104,9 @@ config:
 `
 
 	var spec ProtocolConverterServiceConfigSpec
-	err := yaml.Unmarshal([]byte(yamlData), &spec)
 
-	assert.NoError(t, err)
+	err := yaml.Unmarshal([]byte(yamlData), &spec)
+	require.NoError(t, err)
+
 	assert.False(t, spec.Config.DebugLevel)
 }

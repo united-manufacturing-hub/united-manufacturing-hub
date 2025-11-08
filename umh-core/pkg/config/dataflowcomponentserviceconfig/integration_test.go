@@ -181,6 +181,7 @@ func TestDataFlowDebugLevel_EndToEnd_LogLevelMapping(t *testing.T) {
 			// Verify OPC_DEBUG environment variable
 			opcDebugValue, opcDebugExists := s6Config.Env["OPC_DEBUG"]
 			assert.Equal(t, tc.expectOpcDebugSet, opcDebugExists, "OPC_DEBUG existence should match expected")
+
 			if tc.expectOpcDebugSet {
 				assert.Equal(t, tc.expectedOpcDebug, opcDebugValue, "OPC_DEBUG value should match expected")
 			}

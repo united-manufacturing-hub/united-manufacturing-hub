@@ -18,6 +18,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
 )
 
@@ -33,9 +34,10 @@ benthos:
 `
 
 	var config DataflowComponentServiceConfig
-	err := yaml.Unmarshal([]byte(yamlData), &config)
 
-	assert.NoError(t, err)
+	err := yaml.Unmarshal([]byte(yamlData), &config)
+	require.NoError(t, err)
+
 	assert.True(t, config.DebugLevel)
 }
 
@@ -51,9 +53,10 @@ benthos:
 `
 
 	var config DataflowComponentServiceConfig
-	err := yaml.Unmarshal([]byte(yamlData), &config)
 
-	assert.NoError(t, err)
+	err := yaml.Unmarshal([]byte(yamlData), &config)
+	require.NoError(t, err)
+
 	assert.False(t, config.DebugLevel)
 }
 
@@ -68,9 +71,10 @@ benthos:
 `
 
 	var config DataflowComponentServiceConfig
-	err := yaml.Unmarshal([]byte(yamlData), &config)
 
-	assert.NoError(t, err)
+	err := yaml.Unmarshal([]byte(yamlData), &config)
+	require.NoError(t, err)
+
 	assert.False(t, config.DebugLevel)
 }
 

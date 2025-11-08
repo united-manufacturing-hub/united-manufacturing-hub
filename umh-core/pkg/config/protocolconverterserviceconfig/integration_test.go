@@ -52,6 +52,7 @@ config:
 
 	// 1. Parse YAML to Spec
 	var spec protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec
+
 	err := yaml.Unmarshal([]byte(yamlData), &spec)
 	require.NoError(t, err)
 
@@ -122,6 +123,7 @@ config:
 
 	// 1. Parse YAML to Spec
 	var spec protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec
+
 	err := yaml.Unmarshal([]byte(yamlData), &spec)
 	require.NoError(t, err)
 
@@ -163,6 +165,7 @@ config:
 	// 10. Verify OPC_DEBUG environment variable NOT set in S6 configs
 	_, readOpcDebugExists := readS6.Env["OPC_DEBUG"]
 	_, writeOpcDebugExists := writeS6.Env["OPC_DEBUG"]
+
 	assert.False(t, readOpcDebugExists, "OPC_DEBUG should not be set when LogLevel is INFO")
 	assert.False(t, writeOpcDebugExists, "OPC_DEBUG should not be set when LogLevel is INFO")
 }
@@ -193,6 +196,7 @@ config:
 
 	// 1. Parse YAML to Spec
 	var spec protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec
+
 	err := yaml.Unmarshal([]byte(yamlData), &spec)
 	require.NoError(t, err)
 
@@ -234,6 +238,7 @@ config:
 	// 10. Verify OPC_DEBUG environment variable NOT set in S6 configs
 	_, readOpcDebugExists := readS6.Env["OPC_DEBUG"]
 	_, writeOpcDebugExists := writeS6.Env["OPC_DEBUG"]
+
 	assert.False(t, readOpcDebugExists, "OPC_DEBUG should not be set when LogLevel is INFO")
 	assert.False(t, writeOpcDebugExists, "OPC_DEBUG should not be set when LogLevel is INFO")
 }
@@ -265,6 +270,7 @@ config:
 
 	// Parse YAML
 	var spec protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec
+
 	err := yaml.Unmarshal([]byte(yamlData), &spec)
 	require.NoError(t, err)
 
@@ -359,6 +365,7 @@ config:
 `
 			// Parse base YAML
 			var spec protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec
+
 			err := yaml.Unmarshal([]byte(yamlData), &spec)
 			require.NoError(t, err)
 
@@ -379,6 +386,7 @@ config:
 
 			opcDebugValue, opcDebugExists := readS6.Env["OPC_DEBUG"]
 			assert.Equal(t, tc.expectOpcDebugSet, opcDebugExists, "OPC_DEBUG existence should match expected")
+
 			if tc.expectOpcDebugSet {
 				assert.Equal(t, tc.expectedOpcDebug, opcDebugValue, "OPC_DEBUG value should match expected")
 			}
@@ -392,6 +400,7 @@ config:
 
 			opcDebugValue, opcDebugExists = writeS6.Env["OPC_DEBUG"]
 			assert.Equal(t, tc.expectOpcDebugSet, opcDebugExists, "OPC_DEBUG existence should match expected")
+
 			if tc.expectOpcDebugSet {
 				assert.Equal(t, tc.expectedOpcDebug, opcDebugValue, "OPC_DEBUG value should match expected")
 			}
