@@ -125,6 +125,7 @@ func normalizeType(t reflect.Type) reflect.Type {
 	if t.Kind() == reflect.Ptr {
 		return t.Elem()
 	}
+
 	return t
 }
 
@@ -174,25 +175,25 @@ func (s *stubAction) Name() string {
 // run in the same process and can share in-memory state. For distributed deployments,
 // the persistence layer would need to be replaced with a distributed storage backend.
 type Supervisor struct {
-	workerType            string                            // Type of workers managed (e.g., "container")
-	workers               map[string]*WorkerContext         // workerID → worker context
-	mu                    sync.RWMutex                      // Protects workers map
-	store                 storage.TriangularStoreInterface  // State persistence layer (triangular model)
-	logger                *zap.SugaredLogger                // Logger for supervisor operations
-	tickInterval          time.Duration                     // How often to evaluate state transitions
-	collectorHealth       CollectorHealth                          // Collector health tracking
-	freshnessChecker      *health.FreshnessChecker                 // Data freshness validator
-	expectedObservedTypes map[string]reflect.Type                  // workerID → expected ObservedState type
-	children              map[string]*Supervisor                   // Child supervisors by name (hierarchical composition)
-	stateMapping          map[string]string                        // Parent→child state mapping
-	userSpec              types.UserSpec                           // User-provided configuration for this supervisor
-	mappedParentState     string                                   // State mapped from parent (if this is a child supervisor)
-	globalVars            map[string]any                           // Global variables (fleet-wide settings from management system)
-	createdAt             time.Time                                // Timestamp when supervisor was created
-	parentID              string                                   // ID of parent supervisor (empty string for root supervisors)
-	healthChecker         *InfrastructureHealthChecker             // Infrastructure health monitoring
-	circuitOpen           bool                                     // Circuit breaker state
-	actionExecutor        *execution.ActionExecutor                // Async action execution (Phase 2)
+	workerType            string                           // Type of workers managed (e.g., "container")
+	workers               map[string]*WorkerContext        // workerID → worker context
+	mu                    sync.RWMutex                     // Protects workers map
+	store                 storage.TriangularStoreInterface // State persistence layer (triangular model)
+	logger                *zap.SugaredLogger               // Logger for supervisor operations
+	tickInterval          time.Duration                    // How often to evaluate state transitions
+	collectorHealth       CollectorHealth                  // Collector health tracking
+	freshnessChecker      *health.FreshnessChecker         // Data freshness validator
+	expectedObservedTypes map[string]reflect.Type          // workerID → expected ObservedState type
+	children              map[string]*Supervisor           // Child supervisors by name (hierarchical composition)
+	stateMapping          map[string]string                // Parent→child state mapping
+	userSpec              types.UserSpec                   // User-provided configuration for this supervisor
+	mappedParentState     string                           // State mapped from parent (if this is a child supervisor)
+	globalVars            map[string]any                   // Global variables (fleet-wide settings from management system)
+	createdAt             time.Time                        // Timestamp when supervisor was created
+	parentID              string                           // ID of parent supervisor (empty string for root supervisors)
+	healthChecker         *InfrastructureHealthChecker     // Infrastructure health monitoring
+	circuitOpen           bool                             // Circuit breaker state
+	actionExecutor        *execution.ActionExecutor        // Async action execution (Phase 2)
 }
 
 // WorkerContext encapsulates the runtime state for a single worker
@@ -208,6 +209,7 @@ type WorkerContext struct {
 	worker         fsmv2.Worker
 	currentState   fsmv2.State
 	collector      *collection.Collector
+	executor       *execution.ActionExecutor
 }
 
 // CollectorHealthConfig configures observation collector health monitoring.
@@ -336,9 +338,9 @@ func NewSupervisor(cfg Config) *Supervisor {
 	// which is unrelated to fsmv2.Dependencies (worker dependency injection).
 	registry := cfg.Store.Registry()
 
-	identityCollectionName := fmt.Sprintf("%s_identity", cfg.WorkerType)
-	desiredCollectionName := fmt.Sprintf("%s_desired", cfg.WorkerType)
-	observedCollectionName := fmt.Sprintf("%s_observed", cfg.WorkerType)
+	identityCollectionName := cfg.WorkerType + "_identity"
+	desiredCollectionName := cfg.WorkerType + "_desired"
+	observedCollectionName := cfg.WorkerType + "_observed"
 
 	// Only register if not already registered (supports manual override)
 	if !registry.IsRegistered(identityCollectionName) {
@@ -351,6 +353,7 @@ func NewSupervisor(cfg Config) *Supervisor {
 		}); err != nil {
 			panic(fmt.Sprintf("failed to auto-register identity collection: %v", err))
 		}
+
 		cfg.Logger.Debugf("Auto-registered identity collection: %s", identityCollectionName)
 	}
 
@@ -364,6 +367,7 @@ func NewSupervisor(cfg Config) *Supervisor {
 		}); err != nil {
 			panic(fmt.Sprintf("failed to auto-register desired collection: %v", err))
 		}
+
 		cfg.Logger.Debugf("Auto-registered desired collection: %s", desiredCollectionName)
 	}
 
@@ -377,6 +381,7 @@ func NewSupervisor(cfg Config) *Supervisor {
 		}); err != nil {
 			panic(fmt.Sprintf("failed to auto-register observed collection: %v", err))
 		}
+
 		cfg.Logger.Debugf("Auto-registered observed collection: %s", observedCollectionName)
 	}
 
@@ -407,6 +412,26 @@ func NewSupervisor(cfg Config) *Supervisor {
 
 // AddWorker adds a new worker to the supervisor's registry.
 // Returns error if worker with same ID already exists.
+// DEFENSE-IN-DEPTH VALIDATION STRATEGY:
+//
+// FSMv2 validates data at MULTIPLE layers (not one centralized validator).
+// This is intentional, not redundant:
+//
+// Layer 1: API entry (AddWorker) - Fast fail on obvious errors
+// Layer 2: Reconciliation entry (reconcileChildren) - Catch runtime edge cases
+// Layer 3: Factory (worker creation) - Validate WorkerType exists
+// Layer 4: Worker constructor - Validate dependencies
+//
+// WHY multiple layers:
+//   - Security: Never trust data, even from internal callers
+//   - Debuggability: Errors caught closest to source
+//   - Robustness: One layer failing doesn't compromise system
+//
+// Each layer has different validation concerns:
+//   - Layer 1: Public API validation (protect against bad calls)
+//   - Layer 2: Runtime state validation (data evolved since layer 1)
+//   - Layer 3: Registry validation (WorkerType registered?)
+//   - Layer 4: Logical validation (dependencies compatible?)
 func (s *Supervisor) AddWorker(identity fsmv2.Identity, worker fsmv2.Worker) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -437,12 +462,14 @@ func (s *Supervisor) AddWorker(identity fsmv2.Identity, worker fsmv2.Worker) err
 	if err := s.store.SaveIdentity(ctx, s.workerType, identity.ID, identityDoc); err != nil {
 		return fmt.Errorf("failed to save identity: %w", err)
 	}
+
 	s.logger.Debugf("Saved identity for worker: %s", identity.ID)
 
 	// Save initial observation to database for immediate availability
 	if err := s.store.SaveObserved(ctx, s.workerType, identity.ID, observed); err != nil {
 		return fmt.Errorf("failed to save initial observation: %w", err)
 	}
+
 	s.logger.Debugf("Saved initial observation for worker: %s", identity.ID)
 
 	collector := collection.NewCollector(collection.CollectorConfig{
@@ -455,11 +482,14 @@ func (s *Supervisor) AddWorker(identity fsmv2.Identity, worker fsmv2.Worker) err
 		WorkerType:          s.workerType,
 	})
 
+	executor := execution.NewActionExecutor(10)
+
 	s.workers[identity.ID] = &WorkerContext{
 		identity:     identity,
 		worker:       worker,
 		currentState: worker.GetInitialState(),
 		collector:    collector,
+		executor:     executor,
 	}
 
 	s.logger.Infof("Added worker %s to supervisor", identity.ID)
@@ -511,6 +541,7 @@ func (s *Supervisor) ListWorkers() []string {
 	for id := range s.workers {
 		ids = append(ids, id)
 	}
+
 	return ids
 }
 
@@ -520,6 +551,7 @@ func (s *Supervisor) ListWorkers() []string {
 func (s *Supervisor) SetGlobalVariables(vars map[string]any) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
 	s.globalVars = vars
 }
 
@@ -576,9 +608,11 @@ func (s *Supervisor) RestartCollector(ctx context.Context, workerID string) erro
 }
 
 func (s *Supervisor) CheckDataFreshness(snapshot *fsmv2.Snapshot) bool {
-	var age time.Duration
-	var collectedAt time.Time
-	var hasTimestamp bool
+	var (
+		age          time.Duration
+		collectedAt  time.Time
+		hasTimestamp bool
+	)
 
 	if timestampProvider, ok := snapshot.Observed.(interface{ GetTimestamp() time.Time }); ok {
 		collectedAt = timestampProvider.GetTimestamp()
@@ -590,6 +624,7 @@ func (s *Supervisor) CheckDataFreshness(snapshot *fsmv2.Snapshot) bool {
 				hasTimestamp = true
 			} else if timeStr, ok := ts.(string); ok {
 				var err error
+
 				collectedAt, err = time.Parse(time.RFC3339Nano, timeStr)
 				if err == nil {
 					hasTimestamp = true
@@ -600,6 +635,7 @@ func (s *Supervisor) CheckDataFreshness(snapshot *fsmv2.Snapshot) bool {
 
 	if !hasTimestamp {
 		s.logger.Warn("Snapshot.Observed does not implement GetTimestamp() or have collectedAt field, cannot check freshness")
+
 		return true
 	}
 
@@ -637,13 +673,17 @@ func (s *Supervisor) Start(ctx context.Context) <-chan struct{} {
 
 	s.actionExecutor.Start(ctx)
 
-	// Start observation collectors for all workers
+	// Start observation collectors and action executors for all workers
 	s.mu.RLock()
+
 	for _, workerCtx := range s.workers {
 		if err := workerCtx.collector.Start(ctx); err != nil {
 			s.logger.Errorf("Failed to start collector for worker %s: %v", workerCtx.identity.ID, err)
 		}
+
+		workerCtx.executor.Start(ctx)
 	}
+
 	s.mu.RUnlock()
 
 	// Start main tick loop
@@ -674,10 +714,12 @@ func (s *Supervisor) tickLoop(ctx context.Context) {
 			return
 		case <-ticker.C:
 			s.mu.RLock()
+
 			workerIDs := make([]string, 0, len(s.workers))
 			for id := range s.workers {
 				workerIDs = append(workerIDs, id)
 			}
+
 			s.mu.RUnlock()
 
 			s.logger.Debugf("Tick: processing %d workers", len(workerIDs))
@@ -704,6 +746,7 @@ func (s *Supervisor) tickWorker(ctx context.Context, workerID string) error {
 	// Skip if tick already in progress
 	if !workerCtx.tickInProgress.CompareAndSwap(false, true) {
 		s.logger.Debugf("Skipping tick for %s (previous tick still running)", workerID)
+
 		return nil
 	}
 	defer workerCtx.tickInProgress.Store(false)
@@ -714,9 +757,11 @@ func (s *Supervisor) tickWorker(ctx context.Context, workerID string) error {
 
 	// Load latest snapshot from database
 	s.logger.Debugf("[DataFreshness] Worker %s: Loading snapshot from database", workerID)
+
 	storageSnapshot, err := s.store.LoadSnapshot(ctx, s.workerType, workerID)
 	if err != nil {
 		s.logger.Debugf("[DataFreshness] Worker %s: Failed to load snapshot: %v", workerID, err)
+
 		return fmt.Errorf("failed to load snapshot: %w", err)
 	}
 
@@ -753,6 +798,7 @@ func (s *Supervisor) tickWorker(ctx context.Context, workerID string) error {
 		if snapshot.Observed == nil {
 			panic(fmt.Sprintf("Invariant I16 violated: Worker %s returned nil ObservedState", workerID))
 		}
+
 		actualType := normalizeType(reflect.TypeOf(snapshot.Observed))
 		// Skip type check for Documents loaded from storage
 		//
@@ -862,6 +908,7 @@ func (s *Supervisor) getRecoveryStatus() string {
 	} else if attempts < 5 {
 		return "persistent_failure"
 	}
+
 	return "escalation_imminent"
 }
 
@@ -874,6 +921,7 @@ func (s *Supervisor) getEscalationSteps(childName string) string {
 	if step, ok := steps[childName]; ok {
 		return step
 	}
+
 	return "1) Check component logs 2) Verify network connectivity 3) Restart component manually"
 }
 
@@ -983,20 +1031,27 @@ func (s *Supervisor) Tick(ctx context.Context) error {
 
 	// For backwards compatibility, tick the first worker
 	s.mu.RLock()
-	var firstWorkerID string
-	var worker fsmv2.Worker
+
+	var (
+		firstWorkerID string
+		worker        fsmv2.Worker
+	)
+
 	for id, workerEntry := range s.workers {
 		if workerEntry != nil && workerEntry.worker != nil {
 			firstWorkerID = id
 			worker = workerEntry.worker
+
 			break
 		}
 	}
+
 	s.mu.RUnlock()
 
 	if firstWorkerID == "" {
 		return errors.New("no workers in supervisor")
 	}
+
 	if worker == nil {
 		return errors.New("worker is nil")
 	}
@@ -1040,6 +1095,7 @@ func (s *Supervisor) Tick(ctx context.Context) error {
 			"duration_ms", templateDuration.Milliseconds())
 		metrics.RecordTemplateRenderingDuration(s.workerType, "error", templateDuration)
 		metrics.RecordTemplateRenderingError(s.workerType, "derivation_failed")
+
 		return fmt.Errorf("failed to derive desired state: %w", err)
 	}
 
@@ -1058,10 +1114,12 @@ func (s *Supervisor) Tick(ctx context.Context) error {
 
 	// 4. Recursively tick children (log errors, don't fail parent)
 	s.mu.RLock()
+
 	childrenToTick := make([]*Supervisor, 0, len(s.children))
 	for _, child := range s.children {
 		childrenToTick = append(childrenToTick, child)
 	}
+
 	s.mu.RUnlock()
 
 	for _, child := range childrenToTick {
@@ -1080,10 +1138,12 @@ func (s *Supervisor) Tick(ctx context.Context) error {
 // Returns an aggregated error containing all individual worker errors.
 func (s *Supervisor) TickAll(ctx context.Context) error {
 	s.mu.RLock()
+
 	workerIDs := make([]string, 0, len(s.workers))
 	for id := range s.workers {
 		workerIDs = append(workerIDs, id)
 	}
+
 	s.mu.RUnlock()
 
 	if len(workerIDs) == 0 {
@@ -1091,6 +1151,7 @@ func (s *Supervisor) TickAll(ctx context.Context) error {
 	}
 
 	var errs []error
+
 	for _, workerID := range workerIDs {
 		if err := s.tickWorker(ctx, workerID); err != nil {
 			errs = append(errs, fmt.Errorf("worker %s: %w", workerID, err))
@@ -1110,7 +1171,8 @@ func (s *Supervisor) executeActionWithRetry(ctx context.Context, action fsmv2.Ac
 	backoff := 1 * time.Second
 
 	var lastErr error
-	for attempt := 0; attempt < maxRetries; attempt++ {
+
+	for attempt := range maxRetries {
 		if attempt > 0 {
 			s.logger.Warnf("Retrying action %s (attempt %d/%d)", action.Name(), attempt+1, maxRetries)
 			time.Sleep(backoff)
@@ -1141,9 +1203,11 @@ func (s *Supervisor) processSignal(ctx context.Context, workerID string, signal 
 		s.logger.Infof("Worker %s signaled removal, removing from registry", workerID)
 
 		s.mu.Lock()
+
 		workerCtx, exists := s.workers[workerID]
 		if !exists {
 			s.mu.Unlock()
+
 			return fmt.Errorf("worker %s not found in registry", workerID)
 		}
 
@@ -1190,6 +1254,7 @@ func (s *Supervisor) RequestShutdown(ctx context.Context, workerID string, reaso
 	if desiredDoc == nil {
 		desiredDoc = make(map[string]interface{})
 	}
+
 	desiredDoc["shutdownRequested"] = true
 	desiredDoc["id"] = workerID // Ensure ID is present
 
@@ -1210,6 +1275,7 @@ func (s *Supervisor) GetCurrentState() string {
 		workerCtx.mu.RLock()
 		state := workerCtx.currentState.String()
 		workerCtx.mu.RUnlock()
+
 		return state
 	}
 
@@ -1245,6 +1311,7 @@ func (s *Supervisor) GetWorkerState(workerID string) (string, string, error) {
 func (s *Supervisor) GetMappedParentState() string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+
 	return s.mappedParentState
 }
 
@@ -1253,18 +1320,20 @@ func (s *Supervisor) GetMappedParentState() string {
 func (s *Supervisor) GetChildren() map[string]*Supervisor {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+
 	children := make(map[string]*Supervisor, len(s.children))
 	for name, child := range s.children {
 		children[name] = child
 	}
+
 	return children
 }
 
 // reconcileChildren reconciles actual child supervisors to match desired ChildSpec array.
 // This implements Kubernetes-style declarative reconciliation:
-//   1. ADD children that don't exist in s.children
-//   2. UPDATE existing children (UserSpec and StateMapping)
-//   3. REMOVE children not in desired specs
+//  1. ADD children that don't exist in s.children
+//  2. UPDATE existing children (UserSpec and StateMapping)
+//  3. REMOVE children not in desired specs
 //
 // Children are themselves Supervisors, enabling recursive hierarchical composition.
 // The factory creates workers for child types, and each child gets isolated storage via ChildStore().
@@ -1273,6 +1342,7 @@ func (s *Supervisor) GetChildren() map[string]*Supervisor {
 // This ensures partial failures don't block the entire reconciliation operation.
 func (s *Supervisor) reconcileChildren(specs []types.ChildSpec) error {
 	startTime := time.Now()
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -1288,6 +1358,7 @@ func (s *Supervisor) reconcileChildren(specs []types.ChildSpec) error {
 			updatedCount++
 		} else {
 			s.logger.Infof("Adding child %s with worker type %s", spec.Name, spec.WorkerType)
+
 			addedCount++
 
 			childConfig := Config{
@@ -1320,11 +1391,14 @@ func (s *Supervisor) reconcileChildren(specs []types.ChildSpec) error {
 	for name := range s.children {
 		if !specNames[name] {
 			s.logger.Infof("Removing child %s (not in desired specs)", name)
+
 			child := s.children[name]
 			if child != nil {
 				child.Shutdown()
 			}
+
 			delete(s.children, name)
+
 			removedCount++
 		}
 	}
@@ -1346,6 +1420,7 @@ func (s *Supervisor) reconcileChildren(specs []types.ChildSpec) error {
 func (s *Supervisor) UpdateUserSpec(spec types.UserSpec) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
 	s.userSpec = spec
 }
 
@@ -1382,12 +1457,16 @@ func (s *Supervisor) applyStateMapping() {
 	}
 
 	var parentState string
+
 	for _, workerCtx := range s.workers {
 		workerCtx.mu.RLock()
+
 		if workerCtx.currentState != nil {
 			parentState = workerCtx.currentState.String()
 		}
+
 		workerCtx.mu.RUnlock()
+
 		break
 	}
 
