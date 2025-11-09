@@ -286,6 +286,28 @@ unit-test: vet-nilaway-lint-betteralign
 unit-test-fail-slow: vet-nilaway-lint-betteralign
 	ginkgo -r -v --tags=test --race --label-filter='!integration && !redpanda-extended && !tls' ./...
 
+.PHONY: check-idempotency-tests
+check-idempotency-tests:
+	@echo "Checking for idempotency test coverage (Invariant I10)..."
+	@FAILED=0; \
+	for action in $$(find pkg/fsmv2 -path "*/action/*.go" -not -name "*_test.go"); do \
+		test_file=$$(echo $$action | sed 's/\.go/_test\.go/'); \
+		if [ -f "$$test_file" ]; then \
+			if ! grep -q "VerifyActionIdempotency" "$$test_file"; then \
+				echo "FAIL: $$test_file missing idempotency test"; \
+				FAILED=1; \
+			fi; \
+		else \
+			echo "FAIL: $$action has no test file"; \
+			FAILED=1; \
+		fi; \
+	done; \
+	if [ $$FAILED -eq 0 ]; then \
+		echo "✓ All actions have idempotency tests"; \
+	else \
+		exit 1; \
+	fi
+
 benchmark:
 	@echo "Running benchmarks..."
 	go test -race -bench=. -benchmem ./...

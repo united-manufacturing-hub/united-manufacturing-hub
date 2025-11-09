@@ -21,6 +21,7 @@ import (
 	. "github.com/onsi/gomega"
 	"go.uber.org/zap"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/execution"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/action"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
@@ -31,12 +32,13 @@ var _ = Describe("AuthenticateAction", func() {
 		act          *action.AuthenticateAction
 		dependencies *communicator.CommunicatorDependencies
 		logger       *zap.SugaredLogger
+		transport    *mockTransport
 	)
 
 	BeforeEach(func() {
 		logger = zap.NewNop().Sugar()
-		mockTransport := &mockTransport{}
-		dependencies = communicator.NewCommunicatorDependencies(mockTransport, logger)
+		transport = &mockTransport{}
+		dependencies = communicator.NewCommunicatorDependencies(transport, logger)
 		act = action.NewAuthenticateAction(
 			dependencies,
 			"https://relay.example.com",
@@ -50,11 +52,22 @@ var _ = Describe("AuthenticateAction", func() {
 			Expect(act.Name()).To(Equal("authenticate"))
 		})
 	})
+
+	Describe("Idempotency (Invariant I10)", func() {
+		It("should be idempotent when authentication succeeds", func() {
+			execution.VerifyActionIdempotency(act, 3, func() {
+				Expect(transport.authCallCount).To(Equal(3))
+			})
+		})
+	})
 })
 
-type mockTransport struct{}
+type mockTransport struct {
+	authCallCount int
+}
 
 func (m *mockTransport) Authenticate(ctx context.Context, req transport.AuthRequest) (transport.AuthResponse, error) {
+	m.authCallCount++
 	return transport.AuthResponse{}, nil
 }
 

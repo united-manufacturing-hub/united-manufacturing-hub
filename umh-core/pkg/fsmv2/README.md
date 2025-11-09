@@ -172,3 +172,49 @@ Stopped → TryingToAuthenticateState → TryingToConnectState → Active → Tr
 ```
 
 **Rule of thumb:** If the state name uses a gerund ("-ing") but doesn't emit actions, it's named wrong. Either add the action or rename to a descriptive noun.
+
+## Testing Actions
+
+All actions MUST include idempotency tests using the `VerifyActionIdempotency` helper (Invariant I10).
+
+### Idempotency Requirement
+
+Actions in FSM v2 are designed to be called multiple times safely. The supervisor may retry actions on failure, network issues, or state machine ticks. Therefore, **every action implementation must be idempotent**.
+
+### Writing Idempotency Tests
+
+Use the test helper from `pkg/fsmv2/supervisor/execution`:
+
+```go
+import (
+    . "github.com/onsi/ginkgo/v2"
+    . "github.com/onsi/gomega"
+    "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/execution"
+)
+
+var _ = Describe("MyAction Idempotency", func() {
+    It("should be idempotent", func() {
+        action := &MyAction{
+            // ... initialize action
+        }
+
+        execution.VerifyActionIdempotency(action, 3, func() {
+            // Verify expected state after 3 executions
+            // Example: check that calling action 3 times doesn't cause 3x the effect
+        })
+    })
+})
+```
+
+### CI Enforcement
+
+The CI pipeline runs `make check-idempotency-tests` which verifies that every action has at least one idempotency test. The build will fail if any action lacks this test.
+
+To check locally:
+```bash
+make check-idempotency-tests
+```
+
+### Example
+
+See `pkg/fsmv2/supervisor/execution/action_idempotency_test.go` for complete examples of idempotent and non-idempotent actions.
