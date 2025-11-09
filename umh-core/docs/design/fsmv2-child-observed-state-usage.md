@@ -42,9 +42,9 @@ if redpandaState == "active" && !isBenthosOutputActive {
 
 ### Files Analyzed
 
-- `/Users/jeremytheocharis/umh-git/umh-core-eng-3806/umh-core/pkg/fsm/protocolconverter/actions.go`
-- `/Users/jeremytheocharis/umh-git/umh-core-eng-3806/umh-core/pkg/fsm/protocolconverter/reconcile.go`
-- `/Users/jeremytheocharis/umh-git/umh-core-eng-3806/umh-core/pkg/service/protocolconverter/protocolconverter.go`
+- `pkg/fsm/protocolconverter/actions.go`
+- `pkg/fsm/protocolconverter/reconcile.go`
+- `pkg/service/protocolconverter/protocolconverter.go`
 
 ### Search Patterns
 
