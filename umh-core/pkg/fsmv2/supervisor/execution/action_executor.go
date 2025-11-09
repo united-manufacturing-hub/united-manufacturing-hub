@@ -12,20 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
-
 package execution
 
 import (
@@ -36,9 +22,11 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/metrics"
 )
 
 type ActionExecutor struct {
+	supervisorID   string
 	workerCount    int
 	actionQueue    chan actionWork
 	inProgress     map[string]bool
@@ -48,6 +36,8 @@ type ActionExecutor struct {
 	wg             sync.WaitGroup
 	timeouts       map[string]time.Duration
 	defaultTimeout time.Duration
+	metricsCancel  context.CancelFunc
+	metricsWg      sync.WaitGroup
 }
 
 type actionWork struct {
@@ -56,12 +46,13 @@ type actionWork struct {
 	timeout  time.Duration
 }
 
-func NewActionExecutor(workerCount int) *ActionExecutor {
+func NewActionExecutor(workerCount int, supervisorID string) *ActionExecutor {
 	if workerCount <= 0 {
 		workerCount = 10
 	}
 
 	return &ActionExecutor{
+		supervisorID:   supervisorID,
 		workerCount:    workerCount,
 		actionQueue:    make(chan actionWork, workerCount*2),
 		inProgress:     make(map[string]bool),
@@ -70,12 +61,13 @@ func NewActionExecutor(workerCount int) *ActionExecutor {
 	}
 }
 
-func NewActionExecutorWithTimeout(workerCount int, timeouts map[string]time.Duration) *ActionExecutor {
+func NewActionExecutorWithTimeout(workerCount int, timeouts map[string]time.Duration, supervisorID string) *ActionExecutor {
 	if workerCount <= 0 {
 		workerCount = 10
 	}
 
 	return &ActionExecutor{
+		supervisorID:   supervisorID,
 		workerCount:    workerCount,
 		actionQueue:    make(chan actionWork, workerCount*2),
 		inProgress:     make(map[string]bool),
@@ -92,6 +84,12 @@ func (ae *ActionExecutor) Start(ctx context.Context) {
 
 		go ae.worker()
 	}
+
+	metricsCtx, metricsCancel := context.WithCancel(ctx)
+	ae.metricsCancel = metricsCancel
+	ae.metricsWg.Add(1)
+
+	go ae.metricsReporter(metricsCtx)
 }
 
 func (ae *ActionExecutor) worker() {
@@ -103,8 +101,23 @@ func (ae *ActionExecutor) worker() {
 			return
 
 		case work := <-ae.actionQueue:
+			startTime := time.Now()
 			actionCtx, cancel := context.WithTimeout(ae.ctx, work.timeout)
-			_ = work.action.Execute(actionCtx)
+
+			err := work.action.Execute(actionCtx)
+			duration := time.Since(startTime)
+
+			status := "success"
+			if err != nil {
+				if errors.Is(err, context.DeadlineExceeded) {
+					metrics.RecordActionTimeout(ae.supervisorID, work.action.Name())
+					status = "timeout"
+				} else {
+					status = "error"
+				}
+			}
+
+			metrics.RecordActionExecutionDuration(ae.supervisorID, work.action.Name(), status, duration)
 
 			cancel()
 
@@ -147,6 +160,8 @@ func (ae *ActionExecutor) EnqueueAction(actionID string, action fsmv2.Action) er
 
 	select {
 	case ae.actionQueue <- work:
+		metrics.RecordActionQueued(ae.supervisorID, action.Name())
+
 		return nil
 	default:
 		ae.mu.Lock()
@@ -154,6 +169,30 @@ func (ae *ActionExecutor) EnqueueAction(actionID string, action fsmv2.Action) er
 		ae.mu.Unlock()
 
 		return errors.New("action queue full")
+	}
+}
+
+func (ae *ActionExecutor) metricsReporter(ctx context.Context) {
+	defer ae.metricsWg.Done()
+
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			ae.mu.RLock()
+			queueSize := len(ae.actionQueue)
+			inProgressCount := len(ae.inProgress)
+			ae.mu.RUnlock()
+
+			metrics.RecordWorkerPoolQueueSize(ae.supervisorID, queueSize)
+
+			utilization := float64(inProgressCount) / float64(ae.workerCount)
+			metrics.RecordWorkerPoolUtilization(ae.supervisorID, utilization)
+		}
 	}
 }
 
@@ -171,6 +210,12 @@ func (ae *ActionExecutor) HasActionInProgress(actionID string) bool {
 }
 
 func (ae *ActionExecutor) Shutdown() {
+	if ae.metricsCancel != nil {
+		ae.metricsCancel()
+	}
+
+	ae.metricsWg.Wait()
+
 	if ae.cancel != nil {
 		ae.cancel()
 	}

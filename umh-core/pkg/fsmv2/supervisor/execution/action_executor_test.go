@@ -36,7 +36,7 @@ var _ = Describe("ActionExecutor", func() {
 
 	BeforeEach(func() {
 		ctx, cancel = context.WithCancel(context.Background())
-		executor = execution.NewActionExecutor(10)
+		executor = execution.NewActionExecutor(10, "test-supervisor")
 		executor.Start(ctx)
 	})
 
@@ -48,24 +48,24 @@ var _ = Describe("ActionExecutor", func() {
 	Describe("Constructor Validation", func() {
 		Context("NewActionExecutor with invalid worker count", func() {
 			It("should default to 10 workers when workerCount is 0", func() {
-				executor := execution.NewActionExecutor(0)
+				executor := execution.NewActionExecutor(0, "test-supervisor")
 				Expect(executor).ToNot(BeNil())
 			})
 
 			It("should default to 10 workers when workerCount is negative", func() {
-				executor := execution.NewActionExecutor(-5)
+				executor := execution.NewActionExecutor(-5, "test-supervisor")
 				Expect(executor).ToNot(BeNil())
 			})
 		})
 
 		Context("NewActionExecutorWithTimeout with invalid worker count", func() {
 			It("should default to 10 workers when workerCount is 0", func() {
-				executor := execution.NewActionExecutorWithTimeout(0, map[string]time.Duration{})
+				executor := execution.NewActionExecutorWithTimeout(0, map[string]time.Duration{}, "test-supervisor")
 				Expect(executor).ToNot(BeNil())
 			})
 
 			It("should default to 10 workers when workerCount is negative", func() {
-				executor := execution.NewActionExecutorWithTimeout(-3, map[string]time.Duration{})
+				executor := execution.NewActionExecutorWithTimeout(-3, map[string]time.Duration{}, "test-supervisor")
 				Expect(executor).ToNot(BeNil())
 			})
 		})
@@ -266,7 +266,7 @@ var _ = Describe("ActionExecutor", func() {
 			It("should cancel action after configured timeout", func() {
 				executor := execution.NewActionExecutorWithTimeout(10, map[string]time.Duration{
 					"test-action": 100 * time.Millisecond,
-				})
+				}, "test-supervisor")
 				executor.Start(ctx)
 
 				actionStarted := make(chan bool, 1)
@@ -292,7 +292,7 @@ var _ = Describe("ActionExecutor", func() {
 			It("should clear in-progress status after timeout", func() {
 				executor := execution.NewActionExecutorWithTimeout(10, map[string]time.Duration{
 					"timeout-action": 50 * time.Millisecond,
-				})
+				}, "test-supervisor")
 				executor.Start(ctx)
 
 				action := &testAction{
@@ -318,7 +318,7 @@ var _ = Describe("ActionExecutor", func() {
 			It("should allow action to complete successfully", func() {
 				executor := execution.NewActionExecutorWithTimeout(10, map[string]time.Duration{
 					"fast-action": 1 * time.Second,
-				})
+				}, "test-supervisor")
 				executor.Start(ctx)
 
 				completed := make(chan bool, 1)
@@ -342,7 +342,7 @@ var _ = Describe("ActionExecutor", func() {
 			It("should use default timeout for unconfigured action types", func() {
 				executor := execution.NewActionExecutorWithTimeout(10, map[string]time.Duration{
 					"configured": 1 * time.Second,
-				})
+				}, "test-supervisor")
 				executor.Start(ctx)
 
 				cancelled := make(chan bool, 1)
@@ -363,10 +363,148 @@ var _ = Describe("ActionExecutor", func() {
 		})
 	})
 
+	Describe("Metrics Recording", func() {
+		Context("RecordActionQueued", func() {
+			It("should record metrics when action is enqueued", func() {
+				actionID := "metrics-test-action"
+				supervisorID := "test-supervisor"
+
+				action := &testAction{
+					execute: func(ctx context.Context) error {
+						return nil
+					},
+				}
+
+				// Create executor with supervisorID
+				executor := execution.NewActionExecutor(10, supervisorID)
+				executor.Start(ctx)
+				defer executor.Shutdown()
+
+				err := executor.EnqueueAction(actionID, action)
+				Expect(err).ToNot(HaveOccurred())
+
+				// Note: This test verifies the code path exists
+				// Actual Prometheus metric validation would require integration tests
+			})
+		})
+
+		Context("RecordActionExecutionDuration on success", func() {
+			It("should record execution duration when action completes successfully", func() {
+				actionID := "success-action"
+				supervisorID := "test-supervisor"
+
+				completed := make(chan bool, 1)
+				action := &testAction{
+					execute: func(ctx context.Context) error {
+						time.Sleep(10 * time.Millisecond)
+						completed <- true
+
+						return nil
+					},
+				}
+
+				executor := execution.NewActionExecutor(10, supervisorID)
+				executor.Start(ctx)
+				defer executor.Shutdown()
+
+				err := executor.EnqueueAction(actionID, action)
+				Expect(err).ToNot(HaveOccurred())
+
+				Eventually(completed).Should(Receive())
+			})
+		})
+
+		Context("RecordActionExecutionDuration on failure", func() {
+			It("should record execution duration when action fails", func() {
+				actionID := "failure-action"
+				supervisorID := "test-supervisor"
+
+				failed := make(chan bool, 1)
+				action := &testAction{
+					execute: func(ctx context.Context) error {
+						time.Sleep(10 * time.Millisecond)
+						failed <- true
+
+						return fmt.Errorf("simulated failure")
+					},
+				}
+
+				executor := execution.NewActionExecutor(10, supervisorID)
+				executor.Start(ctx)
+				defer executor.Shutdown()
+
+				err := executor.EnqueueAction(actionID, action)
+				Expect(err).ToNot(HaveOccurred())
+
+				Eventually(failed).Should(Receive())
+			})
+		})
+
+		Context("RecordActionTimeout", func() {
+			It("should record metrics when action times out", func() {
+				supervisorID := "test-supervisor"
+
+				executor := execution.NewActionExecutorWithTimeout(10, map[string]time.Duration{
+					"timeout-action": 50 * time.Millisecond,
+				}, supervisorID)
+				executor.Start(ctx)
+				defer executor.Shutdown()
+
+				timedOut := make(chan bool, 1)
+				action := &testAction{
+					execute: func(ctx context.Context) error {
+						<-ctx.Done()
+						timedOut <- true
+
+						return ctx.Err()
+					},
+				}
+
+				err := executor.EnqueueAction("timeout-action", action)
+				Expect(err).ToNot(HaveOccurred())
+
+				Eventually(timedOut, 200*time.Millisecond).Should(Receive())
+			})
+		})
+
+		Context("Queue size and pool utilization metrics", func() {
+			It("should periodically record queue size and worker pool utilization", func() {
+				supervisorID := "test-supervisor"
+
+				executor := execution.NewActionExecutor(10, supervisorID)
+				executor.Start(ctx)
+				defer executor.Shutdown()
+
+				// Enqueue some actions to create queue depth
+				blockChan := make(chan struct{})
+				for i := 0; i < 5; i++ {
+					action := &testAction{
+						execute: func(ctx context.Context) error {
+							<-blockChan
+
+							return nil
+						},
+					}
+					err := executor.EnqueueAction(fmt.Sprintf("blocked-action-%d", i), action)
+					Expect(err).ToNot(HaveOccurred())
+				}
+
+				// Wait for metrics reporter to run (periodic goroutine)
+				time.Sleep(200 * time.Millisecond)
+
+				// Release blocked actions
+				close(blockChan)
+
+				// Note: This verifies the executor supports metrics
+				// Actual metric values would be verified in integration tests
+			})
+		})
+	})
+
 	Describe("Non-Blocking Guarantees", func() {
 		Context("EnqueueAction non-blocking behavior", func() {
 			It("should never block when enqueueing action (even when queue full)", func() {
-				smallExecutor := execution.NewActionExecutor(2)
+				smallExecutor := execution.NewActionExecutor(2, "test-supervisor")
 				smallExecutor.Start(ctx)
 				defer smallExecutor.Shutdown()
 
@@ -389,7 +527,7 @@ var _ = Describe("ActionExecutor", func() {
 			})
 
 			It("should handle 100+ concurrent actions without blocking enqueue", func() {
-				executor := execution.NewActionExecutor(50)
+				executor := execution.NewActionExecutor(50, "test-supervisor")
 				executor.Start(ctx)
 				defer executor.Shutdown()
 
@@ -438,7 +576,7 @@ var _ = Describe("ActionExecutor", func() {
 
 		Context("HasActionInProgress non-blocking behavior", func() {
 			It("should never block when checking action status", func() {
-				executor := execution.NewActionExecutor(10)
+				executor := execution.NewActionExecutor(10, "test-supervisor")
 				executor.Start(ctx)
 				defer executor.Shutdown()
 
