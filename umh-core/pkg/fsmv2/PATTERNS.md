@@ -16,6 +16,7 @@ If you're reviewing FSMv2 code or building workers, read this first to understan
 6. [StateMapping: FSM Coordination, Not Data Passing](#statemapping-fsm-coordination-not-data-passing)
 7. [BaseWorker Generic Pattern](#baseworker-generic-pattern)
 8. [User-Defined Config: map[string]any](#user-defined-config-mapstringany)
+9. [ChildSpec Validation: Fail-Fast Before Reconciliation](#childspec-validation-fail-fast-before-reconciliation)
 
 ---
 
@@ -603,6 +604,165 @@ Don't use `map[string]any` for:
 
 ---
 
+## ChildSpec Validation: Fail-Fast Before Reconciliation
+
+### Pattern
+
+ChildSpec validation happens **before reconciliation** in the supervisor's Tick() method, using a dedicated validation package. Invalid child specifications cause immediate errors with clear messages, preventing attempted creation of invalid workers.
+
+```go
+// Supervisor.Tick() validates before reconciling
+func (s *Supervisor) Tick(ctx context.Context) error {
+    // ... load snapshot from database
+
+    // Validate ChildSpec before attempting reconciliation
+    if err := childspec_validation.ValidateChildSpecs(
+        desiredState.ChildrenSpecs,
+        s.workerRegistry,
+    ); err != nil {
+        return fmt.Errorf("invalid child specifications: %w", err)
+    }
+
+    // Only proceed to reconciliation if validation passes
+    return s.reconcileChildren(ctx, worker, desiredState)
+}
+```
+
+### Why This Way
+
+**Fail-Fast Principle**: Catch configuration errors immediately before attempting any system changes. This prevents partial state corruption from failed child creation.
+
+**Clear Error Messages**: Validation returns specific errors (e.g., "child 'bridge-1' missing required field 'name'") instead of cryptic factory or database errors.
+
+**Prevents Invalid Work**: Supervisor never attempts to create workers that will fail. This avoids wasted reconciliation cycles and confusing error states.
+
+**Centralized Rules**: All ChildSpec validation logic lives in one package (`pkg/fsmv2/types/childspec_validation.go`), making validation rules easy to find and test.
+
+**Registry Integration**: Validation checks if WorkerType is registered before reconciliation tries to look it up. This provides better error context than "factory not found".
+
+### Validation Rules
+
+The validation enforces these requirements:
+
+1. **Name Required**: Every ChildSpec must have a non-empty Name field
+2. **WorkerType Required**: Every ChildSpec must have a non-empty WorkerType field
+3. **WorkerType Registered**: WorkerType must exist in the factory registry
+4. **No Duplicate Names**: Child names must be unique within a parent's ChildrenSpecs array
+
+```go
+// Example validation errors
+// Missing name
+return errors.New("child at index 0: name is required")
+
+// Missing WorkerType
+return errors.New("child 'mqtt-bridge': workerType is required")
+
+// Unregistered WorkerType
+return errors.New("child 'mqtt-bridge': unknown worker type 'invalid_type' (not registered in factory)")
+
+// Duplicate name
+return errors.New("duplicate child name 'mqtt-bridge' at indices 0 and 2")
+```
+
+### Integration Point
+
+Validation is called early in the supervisor tick cycle:
+
+```go
+func (s *Supervisor) Tick(ctx context.Context) error {
+    for _, worker := range s.workers {
+        // 1. Load desired state from database
+        desiredDoc, err := s.triangularStore.LoadDesired(ctx, s.id, worker.identity.ID)
+        if err != nil {
+            return fmt.Errorf("failed to load desired: %w", err)
+        }
+
+        var desiredState types.DesiredState
+        if err := convertDocToDesiredState(desiredDoc, &desiredState); err != nil {
+            return fmt.Errorf("failed to convert desired state: %w", err)
+        }
+
+        // 2. Validate ChildSpec BEFORE reconciliation (fail-fast)
+        if err := childspec_validation.ValidateChildSpecs(
+            desiredState.ChildrenSpecs,
+            s.workerRegistry,
+        ); err != nil {
+            return fmt.Errorf("invalid child specifications for worker %s: %w",
+                worker.identity.ID, err)
+        }
+
+        // 3. Only proceed to reconciliation if validation passes
+        if err := s.reconcileChildren(ctx, worker, desiredState); err != nil {
+            return err
+        }
+    }
+    return nil
+}
+```
+
+### When to Add Validation
+
+Add new validation rules when:
+- New ChildSpec fields are added that have required values
+- Structural constraints need enforcement (e.g., StateMapping format)
+- Configuration mistakes cause confusing runtime errors
+- Child creation fails predictably due to invalid specs
+
+### When NOT to Add Validation
+
+Don't add validation for:
+- **Optional fields** → Validation is for required constraints only
+- **Runtime state** → Validation checks configuration, not observed state
+- **Worker-specific logic** → That belongs in the worker's constructor
+- **User-defined data** → UserSpec contents are flexible, validate in templates instead
+
+### Testing Pattern
+
+ChildSpec validation follows Test-Driven Development (TDD):
+
+**Unit Tests** (`pkg/fsmv2/types/childspec_validation_test.go`):
+- Test each validation rule in isolation
+- Test edge cases (empty arrays, nil registry)
+- Test error message clarity
+
+**Integration Tests** (`pkg/fsmv2/supervisor/childspec_validation_test.go`):
+- Test validation integration with supervisor Tick()
+- Verify reconciliation only proceeds when validation passes
+- Test that validation errors propagate correctly
+
+```go
+// Integration test pattern
+It("should reject invalid ChildSpecs before reconciliation", func() {
+    // Setup: Worker with invalid ChildSpec (missing name)
+    mockWorker := &mockWorkerWithInvalidChildren{
+        childSpecs: []types.ChildSpec{
+            {WorkerType: "test_worker"}, // Missing Name - invalid
+        },
+    }
+
+    // Initialize supervisor and triangular store
+    sup.AddWorker(mockWorker.identity, mockWorker)
+    triangularStore.SaveDesired(ctx, "test_supervisor", mockWorker.identity.ID, desiredDoc)
+
+    // Call Tick() - should fail validation before reconciliation
+    err := sup.Tick(ctx)
+
+    // Verify: Validation error returned, reconciliation never attempted
+    Expect(err).To(HaveOccurred())
+    Expect(err.Error()).To(ContainSubstring("name is required"))
+})
+```
+
+### Related Code
+
+- `pkg/fsmv2/types/childspec_validation.go` - Validation logic implementation
+- `pkg/fsmv2/types/childspec_validation_test.go` - Unit tests for validation rules
+- `pkg/fsmv2/supervisor/childspec_validation_test.go` - Integration tests with supervisor
+- `pkg/fsmv2/supervisor/supervisor.go` - Validation integration point in Tick()
+- `pkg/fsmv2/types/childspec.go` - ChildSpec type definition
+
+---
+
 ## Summary
 
 These patterns are **intentional design decisions** based on Go idioms, type safety requirements, and real-world usage:
@@ -615,5 +775,6 @@ These patterns are **intentional design decisions** based on Go idioms, type saf
 6. **StateMapping: FSM Coordination** → Lifecycle synchronization
 7. **BaseWorker[D]: Generics** → Type-safe dependencies
 8. **map[string]any: User Config** → Runtime flexibility with template validation
+9. **ChildSpec Validation: Fail-Fast** → Pre-reconciliation error detection
 
 If a code review tool or external analysis suggests changing these patterns, **reference this document** to explain why they're correct as-is.
