@@ -763,6 +763,266 @@ It("should reject invalid ChildSpecs before reconciliation", func() {
 
 ---
 
+## Pattern 10: Variable Passing (Parent → Child)
+
+**Pattern**: Parent workers pass configuration data to child workers through VariableBundle, which child workers access via Snapshot
+
+**Why**: Hierarchical workers need to share configuration (IP addresses, ports, credentials) without tight coupling or global state
+
+### Cookbook Example: Database Connection Manager
+
+This example shows a parent worker managing multiple database connections, passing credentials to each child connection worker:
+
+```go
+// Parent worker: DatabaseManager
+type DatabaseManager struct {
+    fsmv2.BaseWorker[*Dependencies]
+}
+
+func (w *DatabaseManager) DeriveDesiredState(snapshot fsmv2.Snapshot) (fsmv2.State, error) {
+    // Parent creates children and passes variables to each
+    children := []fsmv2.ChildSpec{
+        {
+            Name: "postgres-primary",
+            WorkerFactory: "postgres-connection", // Registered factory
+            VariableBundle: fsmv2.NewVariableBundle(
+                // User variables: Configuration from external sources (YAML, API, etc.)
+                map[string]any{
+                    "host":     "db1.example.com",
+                    "port":     5432,
+                    "database": "production",
+                    "user":     "app_user",
+                },
+                // Global variables: Runtime context shared across hierarchy
+                map[string]any{
+                    "region":      "us-west-2",
+                    "environment": "production",
+                },
+                // Internal variables: FSM coordination data
+                map[string]any{
+                    "parent_state": "monitoring",
+                },
+            ),
+        },
+        {
+            Name: "postgres-replica",
+            WorkerFactory: "postgres-connection",
+            VariableBundle: fsmv2.NewVariableBundle(
+                map[string]any{
+                    "host":     "db2.example.com",
+                    "port":     5432,
+                    "database": "production",
+                    "user":     "readonly_user",
+                },
+                map[string]any{
+                    "region":      "us-west-2",
+                    "environment": "production",
+                },
+                map[string]any{
+                    "parent_state": "monitoring",
+                },
+            ),
+        },
+    }
+
+    return &StateMonitoring{
+        DesiredChildren: children,
+    }, nil
+}
+
+// Child worker: PostgresConnection
+type PostgresConnection struct {
+    fsmv2.BaseWorker[*ConnectionDependencies]
+}
+
+func (w *PostgresConnection) CollectObservedState(
+    ctx context.Context,
+    snapshot fsmv2.Snapshot,
+) (*ObservedState, error) {
+    // Access variables passed from parent via snapshot.VariableBundle
+    vars := snapshot.VariableBundle
+
+    // User variables: Connection configuration
+    host, _ := vars.User["host"].(string)
+    port, _ := vars.User["port"].(int)
+    database, _ := vars.User["database"].(string)
+
+    // Global variables: Runtime context
+    region, _ := vars.Global["region"].(string)
+    environment, _ := vars.Global["environment"].(string)
+
+    // Internal variables: FSM coordination
+    parentState, _ := vars.Internal["parent_state"].(string)
+
+    // Use variables to configure connection
+    connString := fmt.Sprintf("host=%s port=%d dbname=%s", host, port, database)
+
+    // Observe actual connection state
+    connected := w.deps.CheckConnection(connString)
+
+    return &ObservedState{
+        ConnectionString: connString,
+        Connected:        connected,
+        Region:           region,
+        Environment:      environment,
+        ParentState:      parentState,
+    }, nil
+}
+
+func (w *PostgresConnection) DeriveDesiredState(snapshot fsmv2.Snapshot) (fsmv2.State, error) {
+    obs := snapshot.ObservedState.(*ObservedState)
+    vars := snapshot.VariableBundle
+
+    // Decision: Only connect if parent is monitoring
+    parentState, _ := vars.Internal["parent_state"].(string)
+    if parentState != "monitoring" {
+        return &StateDisconnected{}, nil
+    }
+
+    // Decision: Connect to database
+    if !obs.Connected {
+        return &StateTryingToConnect{
+            ConnectionString: obs.ConnectionString,
+        }, nil
+    }
+
+    return &StateConnected{}, nil
+}
+```
+
+### Variable Namespaces in Practice
+
+**User Variables** (`vars.User`):
+- External configuration (YAML files, API requests, UI inputs)
+- Examples: IP addresses, ports, credentials, device IDs
+- Type assertion required: `host, ok := vars.User["host"].(string)`
+
+**Global Variables** (`vars.Global`):
+- Runtime context shared across entire hierarchy
+- Examples: Region, environment, cluster ID, tenant ID
+- Propagated unchanged through hierarchy levels
+
+**Internal Variables** (`vars.Internal`):
+- FSM coordination between parent and child
+- Examples: Parent state, lifecycle phase, dependency status
+- Used for StateMapping and conditional child behavior
+
+### Template Rendering with Variables
+
+If your child worker uses templates (e.g., for generating configuration files):
+
+```go
+func (w *PostgresConnection) DeriveDesiredState(snapshot fsmv2.Snapshot) (fsmv2.State, error) {
+    // Template uses variables from bundle
+    configTemplate := `
+host = "{{ .host }}"
+port = {{ .port }}
+database = "{{ .database }}"
+region = "{{ .region }}"
+`
+
+    // Flatten variable bundle for template rendering
+    flattenedVars := snapshot.VariableBundle.Flatten()
+
+    // Render template
+    renderedConfig, err := config.RenderTemplate(configTemplate, flattenedVars)
+    if err != nil {
+        return nil, fmt.Errorf("render config template: %w", err)
+    }
+
+    return &StateConfigured{
+        ConfigContent: renderedConfig,
+    }, nil
+}
+```
+
+**Key point**: `Flatten()` merges User, Global, and Internal variables into a single `map[string]any` where all keys become top-level template variables.
+
+### Common Patterns
+
+**Pattern 1: Static Configuration** (variables don't change):
+```go
+// Parent sets variables once in DeriveDesiredState
+VariableBundle: fsmv2.NewVariableBundle(
+    map[string]any{"host": "192.168.1.100", "port": 502},
+    map[string]any{},
+    map[string]any{},
+)
+```
+
+**Pattern 2: Dynamic Configuration** (variables change based on parent state):
+```go
+// Parent updates variables based on runtime conditions
+func (w *LoadBalancer) DeriveDesiredState(snapshot fsmv2.Snapshot) (fsmv2.State, error) {
+    activeBackend := w.selectActiveBackend(snapshot)
+
+    children := []fsmv2.ChildSpec{
+        {
+            Name: "http-client",
+            WorkerFactory: "http-client",
+            VariableBundle: fsmv2.NewVariableBundle(
+                map[string]any{
+                    "target_url": activeBackend.URL,  // Changes based on parent logic
+                },
+                map[string]any{},
+                map[string]any{},
+            ),
+        },
+    }
+
+    return &StateRouting{DesiredChildren: children}, nil
+}
+```
+
+**Pattern 3: Parent State Propagation** (child behavior depends on parent lifecycle):
+```go
+// Parent communicates its state to child via Internal variables
+func (w *ServiceManager) DeriveDesiredState(snapshot fsmv2.Snapshot) (fsmv2.State, error) {
+    currentPhase := w.determinePhase(snapshot)
+
+    children := []fsmv2.ChildSpec{
+        {
+            Name: "worker-1",
+            WorkerFactory: "worker",
+            VariableBundle: fsmv2.NewVariableBundle(
+                map[string]any{},
+                map[string]any{},
+                map[string]any{
+                    "parent_phase": currentPhase,  // "initializing", "running", "shutting_down"
+                },
+            ),
+        },
+    }
+
+    return &StateManaging{DesiredChildren: children}, nil
+}
+
+// Child uses parent phase to make decisions
+func (w *Worker) DeriveDesiredState(snapshot fsmv2.Snapshot) (fsmv2.State, error) {
+    parentPhase, _ := snapshot.VariableBundle.Internal["parent_phase"].(string)
+
+    switch parentPhase {
+    case "initializing":
+        return &StateWaiting{}, nil  // Don't start until parent is ready
+    case "running":
+        return &StateProcessing{}, nil  // Normal operation
+    case "shutting_down":
+        return &StateGracefulShutdown{}, nil  // Finish current work, then stop
+    default:
+        return &StateStopped{}, nil
+    }
+}
+```
+
+### Related Code
+
+- `pkg/fsmv2/types/variable_bundle.go` - VariableBundle type and Flatten() method
+- `pkg/fsmv2/config/template.go` - RenderTemplate() for template rendering
+- `pkg/fsmv2/supervisor/supervisor.go` - Variable propagation during child creation
+- `pkg/fsmv2/workers/*/` - Real-world examples of variable usage
+
+---
+
 ## Summary
 
 These patterns are **intentional design decisions** based on Go idioms, type safety requirements, and real-world usage:
@@ -776,5 +1036,6 @@ These patterns are **intentional design decisions** based on Go idioms, type saf
 7. **BaseWorker[D]: Generics** → Type-safe dependencies
 8. **map[string]any: User Config** → Runtime flexibility with template validation
 9. **ChildSpec Validation: Fail-Fast** → Pre-reconciliation error detection
+10. **Variable Passing: Parent → Child** → Configuration sharing without tight coupling
 
 If a code review tool or external analysis suggests changing these patterns, **reference this document** to explain why they're correct as-is.

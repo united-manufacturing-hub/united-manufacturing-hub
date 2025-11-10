@@ -35,29 +35,259 @@ A worker has an identity (unique ID, etc.), a desired state (that is derived fro
       (Make have = want)
 ```
 
+## Mental Models
+
+To work effectively with FSMv2, developers need to understand these core concepts that differ from traditional OOP patterns or string-based FSMs:
+
+### 1. States Are Structs, Not Strings
+
+**FSMv2 uses typed structs for states, not string constants or enums.**
+
+```go
+// FSMv2 approach (type-safe) ✅
+type RunningState struct{}
+type StoppedState struct{}
+
+func (s RunningState) Next(snapshot Snapshot) (State, Signal, Action) {
+    return StoppedState{}, SignalNone, nil  // Compiler enforces valid states
+}
+
+// String-based FSM (error-prone) ❌
+state := "runing"  // Typo not caught by compiler!
+```
+
+**Why this matters:**
+- **Compile-time safety**: Can't create invalid states like `"runing"` (typo)
+- **Explicit transitions**: All state transitions visible in code (grep for `return.*State{}`)
+- **State-specific logic**: Each state encapsulates its own behavior in `Next()` method
+
+**Contrast with string FSMs**: Most FSM libraries use `fsm.SetState("running")`. FSMv2 returns `RunningState{}` - the compiler prevents typos and invalid states.
+
+### 2. Snapshots Are Immutable by Value
+
+**Snapshots are passed by value to `State.Next()`, making them immutable through Go's value semantics.**
+
+```go
+func (s MyState) Next(snapshot Snapshot) (State, Signal, Action) {
+    // snapshot is a COPY - mutations only affect local copy
+    snapshot.Identity.Name = "modified"  // Safe, doesn't affect supervisor
+
+    // This is why FSMv2 doesn't need getters or defensive copying
+    return s, SignalNone, nil
+}
+```
+
+**Why this matters:**
+- **No getters needed**: Direct field access is safe (`snapshot.Identity.ID`)
+- **No defensive copying**: Language enforces immutability automatically
+- **Simpler code**: No `GetIdentity()` or `snapshot.Clone()` methods
+
+**Contrast with OOP**: Object-oriented patterns expect getters (`snapshot.GetIdentity().GetID()`) to prevent mutation. Go's pass-by-value eliminates this need.
+
+### 3. One Control Loop, No Races
+
+**The reconciliation loop is the ONLY place that modifies FSM state - single-threaded, deterministic, no locks needed.**
+
+```
+┌─────────────────────────────────────┐
+│         Supervisor Tick             │
+│     (Single-threaded loop)          │
+│                                     │
+│  1. CollectObservedState()          │
+│  2. DeriveDesiredState()            │
+│  3. state.Next(snapshot)            │
+│       ↓                             │
+│     (nextState, signal, action)     │
+│  4. Execute action (retry/backoff)  │
+│  5. Transition to nextState         │
+│  6. Process signal                  │
+│  7. Reconcile children              │
+└─────────────────────────────────────┘
+```
+
+**Why this matters:**
+- **Deterministic behavior**: Same inputs always produce same state transitions
+- **No race conditions**: Only one goroutine modifies state
+- **Easy debugging**: Single execution path, no concurrent mutations
+- **No locks required**: Workers don't need to implement synchronization
+
+**Contrast with concurrent designs**: Traditional FSMs often have multiple threads calling `SetState()` concurrently, requiring locks and complex synchronization.
+
+### 4. Actions Are Idempotent Operations
+
+**Actions MUST be idempotent - calling them multiple times has the same effect as calling once.**
+
+```go
+type StartProcessAction struct {
+    ProcessPath string
+}
+
+func (a *StartProcessAction) Execute(ctx context.Context) error {
+    // ✅ IDEMPOTENT: Check if already done
+    if processIsRunning(a.ProcessPath) {
+        return nil  // Already started, safe to call again
+    }
+    return startProcess(ctx, a.ProcessPath)
+}
+
+// ❌ NON-IDEMPOTENT: Calling twice starts process twice
+func (a *StartProcessAction) Execute(ctx context.Context) error {
+    return startProcess(ctx, a.ProcessPath)  // No check!
+}
+```
+
+**Why this matters:**
+- **Supervisor retries**: Failed actions are retried with exponential backoff
+- **Network issues**: Partial execution due to timeouts or connection loss
+- **Tick repeats**: State machine may tick multiple times in same state
+
+**Implementation pattern**:
+1. Check if work already done
+2. If yes, return `nil` (not an error)
+3. If no, perform work
+4. Return error only if work fails
+
+### 5. Declarative Child Management
+
+**Parents declare desired children via `ChildSpec` in `DeriveDesiredState()`. Supervisor handles creation, updates, and cleanup automatically (Kubernetes-style reconciliation).**
+
+```go
+func (w *ParentWorker) DeriveDesiredState(spec interface{}) (DesiredState, error) {
+    return DesiredState{
+        State: "running",
+        ChildrenSpecs: []ChildSpec{
+            {
+                Name:       "mqtt-connection",
+                WorkerType: "mqtt_client",
+                UserSpec:   UserSpec{Config: "url: tcp://localhost:1883"},
+                StateMapping: map[string]string{
+                    "active":  "connected",  // Parent state → child state
+                    "closing": "stopped",
+                },
+            },
+        },
+    }, nil
+}
+```
+
+**Why this matters:**
+- **No imperative creation**: Don't call `CreateChild()` or `DeleteChild()`
+- **Automatic reconciliation**: Supervisor diffs desired vs actual children
+- **Lifecycle management**: Supervisor handles creation, updates, graceful shutdown
+- **StateMapping coordinates FSMs**: Parent state triggers child state transitions (NOT data passing)
+
+**Contrast with imperative patterns**: Traditional code explicitly creates/deletes children. FSMv2 declares what children SHOULD exist, supervisor makes it so.
+
+**Note**: For passing configuration data to children, use `VariableBundle` (see Mental Model #6).
+
+### 6. Three Variable Tiers with Template Flattening
+
+**FSMv2 provides three variable namespaces for configuration, with special flattening for User variables in templates.**
+
+```go
+bundle := VariableBundle{
+    User: map[string]any{
+        "IP":   "192.168.1.100",
+        "PORT": 502,
+    },
+    Global: map[string]any{
+        "cluster_id": "prod",
+        "region":     "us-west",
+    },
+    Internal: map[string]any{
+        "timestamp": time.Now(),  // Runtime-only, not serialized
+    },
+}
+```
+
+**Template access (IMPORTANT - User variables are flattened):**
+
+```yaml
+# User variables: Top-level access (flattened)
+{{ .IP }}    # ✅ CORRECT (192.168.1.100)
+{{ .PORT }}  # ✅ CORRECT (502)
+
+# Global variables: Nested access
+{{ .global.cluster_id }}  # ✅ CORRECT (prod)
+{{ .global.region }}      # ✅ CORRECT (us-west)
+
+# Internal variables: Nested access
+{{ .internal.timestamp }}  # ✅ CORRECT (current time)
+
+# ❌ WRONG: Don't use nested access for User variables
+{{ .user.IP }}  # WRONG - User variables are flattened!
+```
+
+**Why this matters:**
+- **User ergonomics**: Top-level access (`{{ .IP }}`) is more intuitive than `{{ .user.IP }}`
+- **Namespace separation**: Global and Internal use nested access to avoid conflicts
+- **Serialization control**: Internal variables are runtime-only, never persisted
+
+**Variable lifecycle:**
+- **User**: Configuration from external sources (persisted in database)
+- **Global**: Fleet-wide settings (persisted in database)
+- **Internal**: Runtime metadata (NOT persisted, reconstructed on startup)
+
+### 7. Triangular Store Architecture
+
+**FSMv2 uses a three-collection persistence model that separates worker state into Identity, Desired, and Observed.**
+
+```
+        IDENTITY
+       (What it is)
+           /\
+          /  \
+    DESIRED  OBSERVED
+   (Want)     (Have)
+       \      /
+      RECONCILIATION
+```
+
+**Why three parts, not two:**
+
+1. **Identity** (immutable): Worker identification (ID, IP, hostname)
+   - Created once, never updated (`_version=1` forever)
+   - Enables worker tracking across restarts
+
+2. **Desired** (user intent): Configuration that SHOULD be deployed
+   - Derived from user config via `DeriveDesiredState(spec)`
+   - Versioned for optimistic locking (prevents lost updates from concurrent edits)
+
+3. **Observed** (system reality): Configuration that IS deployed
+   - Collected via `CollectObservedState()` polling external systems
+   - NOT versioned (ephemeral, constantly changing)
+   - Uses `_sync_id` (monotonic counter) instead
+
+**Atomic snapshots prevent race conditions:**
+
+```go
+snapshot, err := store.LoadSnapshot(ctx, "container", "worker-123")
+// All three parts loaded atomically via database transaction
+// FSM never sees mismatched state (e.g., old desired + new observed)
+```
+
+**Collection-based storage enables:**
+- **Delta sync**: "Give me all desired changes since sync_id=500"
+- **Role queries**: "Show all observed states for health dashboard"
+- **Independent versioning**: Desired participates in optimistic locking, observed doesn't
+
+**What breaks without this pattern:**
+- Can't detect config drift (desired ≠ observed)
+- Can't distinguish "user config" from "deployed config"
+- Race conditions in FSM (reading inconsistent snapshots)
+- Version conflicts on every observed state poll
+
+**Code reference**: See `pkg/cse/storage/triangular.go` for implementation details.
 
 ### Responsibilities of the worker
 
-The worker only consists the actual business logic, which the developer needs to satisfy by satisfying the interfaces for `worker` and `state`:
+The worker implements the `Worker` and `State` interfaces to provide business logic. See `doc.go` for complete interface definitions and API documentation.
 
-```
-type Worker interface {
-
-    CollectObservedState() (observed, error)  // Blocking- potentially long-running collector function that retrieves the observed state (so that it can be stored by the supervisor in the database)
-
-    DeriveDesiredState(spec) (desired, error)    // Pure function that takes in the spec, applies templating/variables, etc and derives the final desired state so that the supervsior can store it into the DB.
-
-    // Provide initial state only
-    GetInitialState() State
-}
-
-// State interface - where the logic lives
-type State interface {
-    Next(snapshot Snapshot) (State, Signal, Action)
-    String() string
-}
-
-```
+**Key responsibilities:**
+- `CollectObservedState()`: Gather current system state (potentially long-running, runs in separate goroutine)
+- `DeriveDesiredState(spec)`: Transform user config into desired state (pure function, no side effects)
+- `GetInitialState()`: Provide the starting state for the FSM
+- `State.Next(snapshot)`: Decision logic for state transitions and actions
 
 Each state MUST handle ShutdownRequested explicitly at the beginning of its Next() method. This makes shutdown paths visible and ensures proper cleanup sequencing.
 
@@ -154,24 +384,9 @@ FSM v2 uses a strict naming convention to make state behavior immediately obviou
 - **Always emit actions on every tick** until success
 - Examples: Authentication, initialization, cleanup operations
 
-**When to skip transition states:**
-- If transitioning requires NO work (no actions), skip the intermediate state
-- ❌ Bad: `Stopped` → `StartingState` (passive, no action) → `Active`
-- ✅ Good: `Stopped` → `Active` (direct transition)
-- ✅ Good: `Stopped` → `TryingToStartState` (emits `InitializeAction`) → `Active`
-
-**Examples:**
-```go
-// PASSIVE: Monitoring FSMs (Container, Agent)
-// No startup/shutdown work needed
-Stopped → Active → Degraded ↔ Active → Stopped
-
-// ACTIVE: Component FSMs (Communicator, Benthos)
-// Require actions with retry logic
-Stopped → TryingToAuthenticateState → TryingToConnectState → Active → TryingToStopState → Stopped
-```
-
 **Rule of thumb:** If the state name uses a gerund ("-ing") but doesn't emit actions, it's named wrong. Either add the action or rename to a descriptive noun.
+
+See `PATTERNS.md` for detailed state naming patterns, edge cases, and complete FSM examples.
 
 ## Testing Actions
 
@@ -218,3 +433,33 @@ make check-idempotency-tests
 ### Example
 
 See `pkg/fsmv2/supervisor/execution/action_idempotency_test.go` for complete examples of idempotent and non-idempotent actions.
+
+## Further Reading
+
+This README provides mental models and usage guidance for FSMv2. For deeper understanding, consult these resources:
+
+### Core Documentation
+
+- **`doc.go`** - Complete API reference and quick start guide
+  - Worker, State, and Action interfaces with detailed documentation
+  - Example code for common patterns
+  - Package-level overview and architectural concepts
+
+- **`PATTERNS.md`** - Design rationale and established patterns
+  - Why FSMv2 uses specific approaches (states as structs, pass-by-value immutability, etc.)
+  - Pattern catalog with implementation guidance
+  - Edge cases and advanced scenarios not covered in this README
+  - Variable passing between parent and child workers (Pattern 10)
+
+### Design Documents
+
+- **`docs/design/fsmv2-child-observed-state-usage.md`** - Child observed state architecture
+- **`docs/plans/fsmv2-package-restructuring.md`** - Complete restructuring plan and migration guide
+- **`docs/plans/fsmv2-unused-code-integration.md`** - Integration of previously unused code
+
+### Implementation Reference
+
+- **`pkg/fsmv2/supervisor/supervisor.go`** - Orchestration and lifecycle management
+- **`pkg/fsmv2/config/variables.go`** - Variable namespaces (User, Global, Internal)
+- **`pkg/fsmv2/config/childspec.go`** - Hierarchical composition and child management
+- **`pkg/cse/storage/triangular.go`** - Triangular store implementation (735 LOC)

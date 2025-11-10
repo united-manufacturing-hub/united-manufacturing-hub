@@ -234,13 +234,22 @@
 //	}
 //
 // StateMapping coordinates FSM states (NOT data passing). Use VariableBundle for data.
+//
+// For practical examples of passing configuration data from parent to child workers,
+// see PATTERNS.md "Pattern 10: Variable Passing (Parent → Child)" which includes
+// complete cookbook examples showing:
+//   - How to set variables in parent's ChildSpec
+//   - How child accesses variables via Snapshot
+//   - Template rendering with flattened variables
+//   - Common patterns (static config, dynamic config, parent state propagation)
+//
 // See PATTERNS.md for detailed explanation.
 //
 // # Architecture Documentation
 //
 // For detailed architecture explanations, see:
 //   - PATTERNS.md - Established patterns and design decisions
-//   - worker.go - Core interfaces (Worker, State, Action)
+//   - api.go - Core interfaces (Worker, State, Action)
 //   - supervisor/supervisor.go - Orchestration and lifecycle management
 //   - types/childspec.go - Hierarchical composition
 //   - types/variables.go - Variable namespaces
