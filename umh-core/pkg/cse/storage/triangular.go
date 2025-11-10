@@ -469,6 +469,98 @@ func (ts *TriangularStore) LoadObservedTyped(ctx context.Context, workerType str
 	return documentToStruct(doc, dest)
 }
 
+// SaveObservedIfChanged saves observed state only if it differs from the current state.
+//
+// DESIGN DECISION: Delta checking to reduce database writes
+// WHY: Observed state is polled frequently (100Hz), but rarely changes.
+// Writing on every poll wastes disk I/O and causes unnecessary sync traffic.
+//
+// TRADE-OFF: Additional read + comparison overhead, but saves 99% of writes.
+// Read is fast (in-memory or cached), comparison is cheap (reflect.DeepEqual).
+//
+// INSPIRED BY: React's virtual DOM diffing, Redux's shallow equality checks.
+//
+// Parameters:
+//   - ctx: Cancellation context
+//   - workerType: Worker type (e.g., "container")
+//   - id: Unique worker identifier
+//   - newState: New observed state to save (if changed)
+//
+// Returns:
+//   - changed: true if state was different and write occurred, false if unchanged
+//   - error: If read, comparison, or write fails
+//
+// Example:
+//
+//	state := ContainerObservedState{ID: "worker-123", Status: "running", CPU: 50}
+//	changed, err := ts.SaveObservedIfChanged(ctx, "container", "worker-123", state)
+//	if changed {
+//	    log.Info("State changed, database updated")
+//	} else {
+//	    log.Debug("State unchanged, skipped write")
+//	}
+func (ts *TriangularStore) SaveObservedIfChanged(ctx context.Context, workerType string, id string, newState interface{}) (changed bool, err error) {
+	_, _, observedMeta, err := ts.registry.GetTriangularCollections(workerType)
+	if err != nil {
+		return false, fmt.Errorf("worker type %q not registered: %w", workerType, err)
+	}
+
+	if observedMeta.ObservedType == nil {
+		return false, fmt.Errorf("ObservedType not registered for worker %s", workerType)
+	}
+
+	currentDoc, err := ts.LoadObserved(ctx, workerType, id)
+
+	if err != nil {
+		if errors.Is(err, persistence.ErrNotFound) {
+			return true, ts.SaveObserved(ctx, workerType, id, newState)
+		}
+
+		return false, fmt.Errorf("load current state: %w", err)
+	}
+
+	newDoc, err := ts.toDocument(newState)
+	if err != nil {
+		return false, fmt.Errorf("convert new state to document: %w", err)
+	}
+
+	currentFiltered := ts.filterCSEFields(currentDoc, observedMeta.CSEFields)
+	newFiltered := ts.filterCSEFields(newDoc, observedMeta.CSEFields)
+
+	if reflect.DeepEqual(currentFiltered, newFiltered) {
+		return false, nil
+	}
+
+	err = ts.SaveObserved(ctx, workerType, id, newState)
+	if err != nil {
+		return false, fmt.Errorf("save new state: %w", err)
+	}
+
+	return true, nil
+}
+
+func (ts *TriangularStore) filterCSEFields(doc persistence.Document, cseFields []string) persistence.Document {
+	filtered := make(persistence.Document)
+	for k, v := range doc {
+		isCSEField := false
+		for _, cseField := range cseFields {
+			if k == cseField {
+				isCSEField = true
+				break
+			}
+		}
+		if !isCSEField {
+			filtered[k] = v
+		}
+	}
+
+	return filtered
+}
+
+func observedCollectionName(workerType string) string {
+	return workerType + "_observed"
+}
+
 // Snapshot represents the complete state of a worker.
 //
 // DESIGN DECISION: Separate struct instead of map[string]Document

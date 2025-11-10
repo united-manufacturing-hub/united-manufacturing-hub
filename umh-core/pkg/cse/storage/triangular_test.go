@@ -30,6 +30,7 @@ package storage_test
 import (
 	"context"
 	"errors"
+	"reflect"
 	"sync"
 	"time"
 
@@ -249,6 +250,12 @@ func (tx *mockTx) Maintenance(ctx context.Context) error {
 	return tx.mockStore.Maintenance(ctx)
 }
 
+type TestObservedState struct {
+	ID     string `json:"id"`
+	Status string `json:"status"`
+	CPU    int64  `json:"cpu"`
+}
+
 func setupTestRegistry() *storage.Registry {
 	registry := storage.NewRegistry()
 
@@ -268,10 +275,12 @@ func setupTestRegistry() *storage.Registry {
 		IndexedFields: []string{storage.FieldSyncID},
 	})
 
+	observedType := reflect.TypeOf(TestObservedState{})
 	registry.Register(&storage.CollectionMetadata{
 		Name:          "container_observed",
 		WorkerType:    "container",
 		Role:          storage.RoleObserved,
+		ObservedType:  observedType,
 		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
 		IndexedFields: []string{storage.FieldSyncID},
 	})
@@ -673,12 +682,6 @@ var _ = Describe("TriangularStore", func() {
 	})
 
 	Describe("LoadObservedTyped", func() {
-		type TestObservedState struct {
-			ID     string `json:"id"`
-			Status string `json:"status"`
-			CPU    int64  `json:"cpu"`
-		}
-
 		It("should deserialize Document to typed struct", func() {
 			observed := persistence.Document{
 				"id":     "worker-123",
@@ -746,6 +749,29 @@ var _ = Describe("TriangularStore", func() {
 			Expect(result.Memory).To(BeNumerically("~", 45.8, 0.01))
 			Expect(result.IsHealthy).To(BeTrue())
 			Expect(result.UpdatedAt).To(BeTemporally("~", now, time.Millisecond))
+		})
+	})
+
+	Describe("SaveObservedIfChanged", func() {
+		It("should skip write when state unchanged", func() {
+			initialState := persistence.Document{
+				"id":     "worker-123",
+				"status": "running",
+				"cpu":    int64(50),
+			}
+
+			err := ts.SaveObserved(ctx, "container", "worker-123", initialState)
+			Expect(err).NotTo(HaveOccurred())
+
+			changed, err := ts.SaveObservedIfChanged(ctx, "container", "worker-123", initialState)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(changed).To(BeFalse(), "should not write when state unchanged")
+
+			loaded, err := ts.LoadObserved(ctx, "container", "worker-123")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(loaded["id"]).To(Equal("worker-123"))
+			Expect(loaded["status"]).To(Equal("running"))
+			Expect(loaded["cpu"]).To(Equal(int64(50)))
 		})
 	})
 })
