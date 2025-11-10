@@ -14,6 +14,187 @@ This guide provides comprehensive patterns for creating FSM v2 workers in umh-co
 - `/pkg/fsmv2/workers/example/example-parent/` - Parent worker managing children
 - `/pkg/fsmv2/workers/example/example-child/` - Child worker managing connections
 
+## Common Mistakes and How to Avoid Them
+
+**CRITICAL: Read this section first before implementing a worker!**
+
+These mistakes were discovered during implementation of example-parent and example-child workers. Each mistake prevented the worker from functioning at all. Future workers MUST avoid these patterns.
+
+### 1. GetInitialState() Returns Wrong Type (Critical - Worker Won't Work)
+
+**What went wrong:**
+```go
+// ❌ WRONG - Returns custom type instead of fsmv2.State
+func (w *ParentWorker) GetInitialState() state.BaseParentState {
+    return &state.StoppedState{}
+}
+```
+
+**Correct implementation:**
+```go
+// ✅ CORRECT - Must return fsmv2.State interface
+func (w *ParentWorker) GetInitialState() fsmv2.State {
+    return state.NewStoppedState(w.deps)
+}
+```
+
+**Why this matters:**
+- Worker factory registration fails (can't cast to fsmv2.Worker)
+- Supervisor can't integrate worker into system
+- Compilation error when verifying interface compliance: `var _ fsmv2.Worker = (*YourWorker)(nil)`
+
+**Severity:** P0 - Worker won't compile or register. Fix immediately.
+
+### 2. States Missing Dependencies Field (Critical - States Can't Create Actions)
+
+**What went wrong:**
+```go
+// ❌ WRONG - No way to create actions or access resources
+type StoppedState struct{}
+
+func (s *StoppedState) Next(snapshot fsmv2.Snapshot) (fsmv2.State, fsmv2.Signal, fsmv2.Action) {
+    // Can't create actions - no dependencies!
+    return &TryingToStartState{}, fsmv2.SignalNone, nil
+}
+```
+
+**Correct implementation:**
+```go
+// ✅ CORRECT - Dependencies field allows action creation
+type StoppedState struct {
+    deps snapshot.ParentDependencies  // Interface type
+}
+
+func NewStoppedState(deps snapshot.ParentDependencies) *StoppedState {
+    return &StoppedState{deps: deps}
+}
+
+func (s *StoppedState) Next(snapshot fsmv2.Snapshot) (fsmv2.State, fsmv2.Signal, fsmv2.Action) {
+    return s, fsmv2.SignalNone, action.NewStartAction(s.deps)
+}
+```
+
+**Why this matters:**
+- States can't create actions without dependencies
+- States can't access logger, config, or resources
+- Transitions break when actions are needed
+
+**Severity:** P0 - States can't function. Fix immediately.
+
+### 3. States Don't Implement All fsmv2.State Methods (Critical - Won't Compile)
+
+**What went wrong:**
+```go
+// ❌ WRONG - Only implemented Next(), missing String() and Reason()
+type StoppedState struct {
+    deps snapshot.ParentDependencies
+}
+
+func (s *StoppedState) Next(snapshot fsmv2.Snapshot) (fsmv2.State, fsmv2.Signal, fsmv2.Action) {
+    return s, fsmv2.SignalNone, nil
+}
+// Missing String() and Reason() - won't compile!
+```
+
+**Correct implementation:**
+```go
+// ✅ CORRECT - Implements all three required methods
+type StoppedState struct {
+    deps snapshot.ParentDependencies
+}
+
+func (s *StoppedState) Next(snapshot fsmv2.Snapshot) (fsmv2.State, fsmv2.Signal, fsmv2.Action) {
+    return s, fsmv2.SignalNone, nil
+}
+
+func (s *StoppedState) String() string {
+    return "Stopped"
+}
+
+func (s *StoppedState) Reason() string {
+    return "Worker is stopped"
+}
+```
+
+**Why this matters:**
+- Compilation fails: `state.StoppedState does not implement fsmv2.State`
+- Supervisor can't log state transitions
+- Tests can't verify state transitions
+
+**Severity:** P0 - Won't compile. Fix immediately.
+
+**Required methods:**
+- `Next(snapshot fsmv2.Snapshot) (fsmv2.State, fsmv2.Signal, fsmv2.Action)`
+- `String() string` - Returns state name like "Stopped"
+- `Reason() string` - Returns description like "Worker is stopped"
+
+### 4. State Transitions Don't Use Constructors (High - Breaks at Runtime)
+
+**What went wrong:**
+```go
+// ❌ WRONG - Direct struct creation loses dependencies
+func (s *StoppedState) Next(snapshot fsmv2.Snapshot) (fsmv2.State, fsmv2.Signal, fsmv2.Action) {
+    return &TryingToStartState{}, fsmv2.SignalNone, nil  // deps is nil!
+}
+```
+
+**Correct implementation:**
+```go
+// ✅ CORRECT - Use constructor to pass dependencies
+func (s *StoppedState) Next(snapshot fsmv2.Snapshot) (fsmv2.State, fsmv2.Signal, fsmv2.Action) {
+    return NewTryingToStartState(s.deps), fsmv2.SignalNone, nil
+}
+```
+
+**Why this matters:**
+- Dependency chain breaks
+- Next state can't create actions
+- Runtime panics when accessing nil dependencies
+
+**Severity:** P1 - Breaks at runtime. Fix before testing.
+
+### 5. Import Cycles with Concrete Dependency Types (Critical - Won't Compile)
+
+**What went wrong:**
+```go
+// ❌ WRONG - Direct import causes circular dependency
+// In state/state_stopped.go:
+import "pkg/fsmv2/workers/example/example-parent"
+
+type StoppedState struct {
+    deps *parent.ParentDependencies  // Concrete type
+}
+```
+
+**Correct implementation:**
+```go
+// ✅ CORRECT - Use interface from snapshot package
+// In state/state_stopped.go:
+import "pkg/fsmv2/workers/example/example-parent/snapshot"
+
+type StoppedState struct {
+    deps snapshot.ParentDependencies  // Interface type
+}
+```
+
+**Why this matters:**
+- Compilation fails: `import cycle not allowed`
+- State package imports worker package imports state package → cycle
+- Must use interfaces from snapshot package to break cycle
+
+**Severity:** P0 - Won't compile. Fix immediately.
+
+**Dependency package pattern:**
+```
+worker/
+├── snapshot/
+│   └── snapshot.go          # Interfaces for dependencies
+├── state/
+│   ├── state_stopped.go     # Uses snapshot.YourDependencies interface
+│   └── state_running.go
+└── worker.go                # Provides concrete dependency implementation
+```
+
 ## 1. Folder Structure Pattern
 
 Every FSM v2 worker follows this standard layout:
@@ -63,7 +244,35 @@ pkg/fsmv2/workers/
 
 ## 2. Worker Implementation
 
-### The Worker Interface
+### Worker Interface Requirements (EXACT SIGNATURES)
+
+**Your worker MUST implement these EXACT signatures:**
+
+```go
+// REQUIRED: Return fsmv2.State, NOT your custom type
+func (w *YourWorker) GetInitialState() fsmv2.State {
+    return state.NewStoppedState(w.deps)  // Use constructor
+}
+
+// REQUIRED: Return ObservedState interface
+func (w *YourWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedState, error) {
+    return snapshot.YourObservedState{...}, nil
+}
+
+// REQUIRED: Accept interface{}, return config.DesiredState
+func (w *YourWorker) DeriveDesiredState(spec interface{}) (config.DesiredState, error) {
+    return config.DesiredState{...}, nil
+}
+```
+
+**Common mistake:** Returning `state.BaseYourState` instead of `fsmv2.State` in GetInitialState().
+
+**Verification:** This MUST compile:
+```go
+var _ fsmv2.Worker = (*YourWorker)(nil)
+```
+
+### The Worker Interface Definition
 
 Every worker must implement `fsmv2.Worker`:
 
@@ -177,12 +386,15 @@ Returns the state the FSM starts in:
 
 ```go
 // GetInitialState returns the initial FSM state
-func (w *YourWorker) GetInitialState() state.BaseYourState {
-    return &state.StoppedState{}
+// IMPORTANT: Must return fsmv2.State, NOT custom type
+func (w *YourWorker) GetInitialState() fsmv2.State {
+    return state.NewStoppedState(w.deps)  // Use constructor
 }
 ```
 
 **Always starts in `StoppedState`** - the FSM will transition from there.
+
+**Critical:** Return type MUST be `fsmv2.State` (not `state.BaseYourState`). Use state constructor to pass dependencies.
 
 ### Factory Registration
 
@@ -299,6 +511,25 @@ type ConnectionPool interface {
 
 ## 4. State Machine Design
 
+### State Implementation Checklist
+
+**Before implementing a state, verify:**
+
+- [ ] State struct has `deps` field (type: interface from snapshot package, NOT concrete type)
+- [ ] State has constructor: `NewXXXState(deps YourDependencies) *XXXState`
+- [ ] State implements `Next(snapshot fsmv2.Snapshot) (fsmv2.State, fsmv2.Signal, fsmv2.Action)`
+- [ ] State implements `String() string` (returns state name like "Stopped")
+- [ ] State implements `Reason() string` (returns description like "Worker is stopped")
+- [ ] All state transitions use constructors: `return NewSomeState(s.deps), ...` (NEVER `&SomeState{}`)
+- [ ] State performs type assertions for Observed and Desired state from snapshot
+- [ ] Shutdown check comes FIRST in Next() method: `if snap.Desired.ShutdownRequested() { ... }`
+
+**Common mistakes to avoid:**
+- ❌ Forgetting String() or Reason() methods
+- ❌ Using concrete dependency types (causes import cycles)
+- ❌ Direct struct creation in transitions (`&State{}`)
+- ❌ Missing shutdown check or putting it after operational logic
+
 ### State Interface Pattern
 
 Define a base interface for all states in your worker:
@@ -317,7 +548,7 @@ type BaseYourState interface {
 
 ### State Struct Pattern
 
-Each state is a struct with a `Next()` method:
+Each state is a struct with dependencies and three required methods:
 
 ```go
 // state/state_stopped.go
@@ -330,23 +561,31 @@ import (
 
 // StoppedState represents the initial state before starting
 type StoppedState struct {
-    BaseYourState
+    deps snapshot.YourDependencies  // REQUIRED: Interface type from snapshot package
 }
 
-func (s *StoppedState) Next(snap snapshot.YourSnapshot) (BaseYourState, fsmv2.Signal, fsmv2.Action) {
+// Constructor to pass dependencies
+func NewStoppedState(deps snapshot.YourDependencies) *StoppedState {
+    return &StoppedState{deps: deps}
+}
+
+// REQUIRED: Next() determines state transitions
+func (s *StoppedState) Next(snap snapshot.YourSnapshot) (fsmv2.State, fsmv2.Signal, fsmv2.Action) {
     // ALWAYS check shutdown first
     if snap.Desired.ShutdownRequested() {
         return s, fsmv2.SignalNeedsRemoval, nil
     }
 
-    // Transition to next state
-    return &TryingToStartState{}, fsmv2.SignalNone, nil
+    // Transition to next state using constructor
+    return NewTryingToStartState(s.deps), fsmv2.SignalNone, nil
 }
 
+// REQUIRED: String() returns state name
 func (s *StoppedState) String() string {
     return "Stopped"
 }
 
+// REQUIRED: Reason() returns description
 func (s *StoppedState) Reason() string {
     return "Worker is stopped"
 }
@@ -1023,6 +1262,57 @@ Aim for high test coverage:
 go test -coverprofile=coverage.out ./...
 go tool cover -html=coverage.out
 ```
+
+### Pre-Integration Compilation Checklist
+
+**Before running integration tests, verify your worker compiles properly:**
+
+```bash
+# 1. Worker compiles
+go build ./pkg/fsmv2/workers/your-worker/...
+
+# 2. Worker implements fsmv2.Worker (this will fail if signatures are wrong)
+cd pkg/fsmv2/workers/your-worker
+cat > verify_interface.go << 'EOF'
+package yourworker
+import "pkg/fsmv2"
+var _ fsmv2.Worker = (*YourWorker)(nil)
+EOF
+go build .
+rm verify_interface.go
+
+# 3. All states implement fsmv2.State
+cd pkg/fsmv2/workers/your-worker/state
+cat > verify_states.go << 'EOF'
+package state
+import "pkg/fsmv2"
+var (
+    _ fsmv2.State = (*StoppedState)(nil)
+    _ fsmv2.State = (*TryingToStartState)(nil)
+    _ fsmv2.State = (*RunningState)(nil)
+    _ fsmv2.State = (*TryingToStopState)(nil)
+)
+EOF
+go build .
+rm verify_states.go
+
+# 4. All actions compile
+go build ./pkg/fsmv2/workers/your-worker/action/...
+
+# 5. Unit tests pass
+go test ./pkg/fsmv2/workers/your-worker/...
+```
+
+**If any of these fail, you have an API issue. Fix it before integration testing.**
+
+**Common compilation failures:**
+
+| Error | Cause | Fix |
+|-------|-------|-----|
+| `GetInitialState() has wrong signature` | Returning custom type | Return `fsmv2.State` |
+| `StoppedState does not implement fsmv2.State` | Missing String() or Reason() | Add all three methods |
+| `import cycle not allowed` | Using concrete dependency types | Use interfaces from snapshot package |
+| `undefined: NewTryingToStartState` | Missing state constructors | Add constructor for each state |
 
 ## 9. Common Patterns
 

@@ -59,6 +59,195 @@ This plan defines a systematic approach to building a comprehensive integration 
 
 ---
 
+## 1.5 Pre-Integration Verification
+
+**Before running integration tests, workers MUST pass these checks:**
+
+### API Compliance Check
+
+**Add this to your worker package and verify it compiles:**
+
+```go
+// verify_interface.go (temporary file for verification)
+package yourworker
+
+import "pkg/fsmv2"
+
+var (
+    // Verify worker implements fsmv2.Worker
+    _ fsmv2.Worker = (*YourWorker)(nil)
+)
+```
+
+**In your state package:**
+
+```go
+// verify_states.go (temporary file for verification)
+package state
+
+import "pkg/fsmv2"
+
+var (
+    // Verify all states implement fsmv2.State
+    _ fsmv2.State = (*StoppedState)(nil)
+    _ fsmv2.State = (*TryingToStartState)(nil)
+    _ fsmv2.State = (*RunningState)(nil)
+    _ fsmv2.State = (*TryingToStopState)(nil)
+)
+```
+
+**If these don't compile, you have an API mismatch. Fix it before integration tests.**
+
+### Common API Mismatches
+
+Based on issues found in example-parent and example-child workers:
+
+#### 1. GetInitialState() returns wrong type
+
+**Problem:** Returns custom type (`state.BaseYourState`) instead of `fsmv2.State`
+
+**Fix:**
+```go
+// ❌ WRONG
+func (w *YourWorker) GetInitialState() state.BaseYourState {
+    return &state.StoppedState{}
+}
+
+// ✅ CORRECT
+func (w *YourWorker) GetInitialState() fsmv2.State {
+    return state.NewStoppedState(w.deps)
+}
+```
+
+**Severity:** P0 - Worker won't register in factory, can't integrate with supervisor
+
+#### 2. States missing String()/Reason() methods
+
+**Problem:** Only implemented Next(), forgot String() and Reason()
+
+**Fix:**
+```go
+// ❌ WRONG - Missing methods
+type StoppedState struct {
+    deps snapshot.YourDependencies
+}
+
+func (s *StoppedState) Next(snap fsmv2.Snapshot) (fsmv2.State, fsmv2.Signal, fsmv2.Action) {
+    return s, fsmv2.SignalNone, nil
+}
+
+// ✅ CORRECT - All three methods
+type StoppedState struct {
+    deps snapshot.YourDependencies
+}
+
+func (s *StoppedState) Next(snap fsmv2.Snapshot) (fsmv2.State, fsmv2.Signal, fsmv2.Action) {
+    return s, fsmv2.SignalNone, nil
+}
+
+func (s *StoppedState) String() string {
+    return "Stopped"
+}
+
+func (s *StoppedState) Reason() string {
+    return "Worker is stopped"
+}
+```
+
+**Severity:** P0 - Won't compile
+
+#### 3. States missing dependencies
+
+**Problem:** State struct doesn't have deps field, can't create actions
+
+**Fix:**
+```go
+// ❌ WRONG - No dependencies
+type StoppedState struct{}
+
+// ✅ CORRECT - Has dependencies
+type StoppedState struct {
+    deps snapshot.YourDependencies  // Interface type
+}
+
+func NewStoppedState(deps snapshot.YourDependencies) *StoppedState {
+    return &StoppedState{deps: deps}
+}
+```
+
+**Severity:** P0 - States can't create actions, breaks at runtime
+
+#### 4. Import cycles
+
+**Problem:** Using concrete dependency types causes circular imports
+
+**Fix:**
+```go
+// ❌ WRONG - Concrete type causes import cycle
+import "pkg/fsmv2/workers/yourworker"
+
+type StoppedState struct {
+    deps *yourworker.YourDependencies
+}
+
+// ✅ CORRECT - Interface from snapshot package
+import "pkg/fsmv2/workers/yourworker/snapshot"
+
+type StoppedState struct {
+    deps snapshot.YourDependencies
+}
+```
+
+**Severity:** P0 - Won't compile
+
+### Pre-Integration Compilation Commands
+
+**Run these before integration tests:**
+
+```bash
+# 1. Worker compiles
+go build ./pkg/fsmv2/workers/your-worker/...
+
+# 2. Worker implements fsmv2.Worker
+cd pkg/fsmv2/workers/your-worker
+cat > verify_interface.go << 'EOF'
+package yourworker
+import "pkg/fsmv2"
+var _ fsmv2.Worker = (*YourWorker)(nil)
+EOF
+go build .
+rm verify_interface.go
+
+# 3. All states implement fsmv2.State
+cd pkg/fsmv2/workers/your-worker/state
+cat > verify_states.go << 'EOF'
+package state
+import "pkg/fsmv2"
+var (
+    _ fsmv2.State = (*StoppedState)(nil)
+    _ fsmv2.State = (*TryingToStartState)(nil)
+    _ fsmv2.State = (*RunningState)(nil)
+    _ fsmv2.State = (*TryingToStopState)(nil)
+)
+EOF
+go build .
+rm verify_states.go
+
+# 4. All actions compile
+go build ./pkg/fsmv2/workers/your-worker/action/...
+
+# 5. Unit tests pass
+go test ./pkg/fsmv2/workers/your-worker/...
+```
+
+**If any fail → API issue. Fix before integration tests.**
+
+### Quick Reference
+
+See `PATTERN.md` Section "Common Mistakes" for detailed fixes, or `API_REQUIREMENTS.md` for quick reference.
+
+---
+
 ## Example Workers Design
 
 ### example-parent Worker
