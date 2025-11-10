@@ -774,5 +774,38 @@ var _ = Describe("TriangularStore", func() {
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("type"))
 		})
+
+		It("returns ErrNotFound for missing documents", func() {
+			type MissingState struct {
+				ID string
+			}
+
+			observedType := reflect.TypeOf((*MissingState)(nil)).Elem()
+			testRegistry.Register(&storage.CollectionMetadata{
+				Name:         "missing_observed",
+				WorkerType:   "missing",
+				Role:         storage.RoleObserved,
+				ObservedType: observedType,
+				CSEFields:    []string{storage.FieldSyncID, storage.FieldVersion},
+			})
+
+			testRegistry.Register(&storage.CollectionMetadata{
+				Name:       "missing_identity",
+				WorkerType: "missing",
+				Role:       storage.RoleIdentity,
+				CSEFields:  []string{storage.FieldSyncID, storage.FieldVersion},
+			})
+
+			testRegistry.Register(&storage.CollectionMetadata{
+				Name:       "missing_desired",
+				WorkerType: "missing",
+				Role:       storage.RoleDesired,
+				CSEFields:  []string{storage.FieldSyncID, storage.FieldVersion},
+			})
+
+			var observed MissingState
+			err := testStore.LoadObservedTyped(ctx, "missing", "nonexistent", &observed)
+			Expect(err).To(MatchError(persistence.ErrNotFound))
+		})
 	})
 })
