@@ -716,5 +716,36 @@ var _ = Describe("TriangularStore", func() {
 			err := ts.LoadObservedTyped(ctx, "container", "nonexistent-worker", &result)
 			Expect(err).To(MatchError(persistence.ErrNotFound))
 		})
+
+		It("should handle complex field types (int64, float64, bool, time.Time)", func() {
+			type ComplexState struct {
+				ID        string    `json:"id"`
+				CPU       int64     `json:"cpu"`
+				Memory    float64   `json:"memory"`
+				IsHealthy bool      `json:"is_healthy"`
+				UpdatedAt time.Time `json:"updated_at"`
+			}
+
+			now := time.Now().UTC().Truncate(time.Millisecond)
+			observed := persistence.Document{
+				"id":         "worker-789",
+				"cpu":        int64(75),
+				"memory":     45.8,
+				"is_healthy": true,
+				"updated_at": now,
+			}
+			err := ts.SaveObserved(ctx, "container", "worker-789", observed)
+			Expect(err).NotTo(HaveOccurred())
+
+			var result ComplexState
+			err = ts.LoadObservedTyped(ctx, "container", "worker-789", &result)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(result.ID).To(Equal("worker-789"))
+			Expect(result.CPU).To(Equal(int64(75)))
+			Expect(result.Memory).To(BeNumerically("~", 45.8, 0.01))
+			Expect(result.IsHealthy).To(BeTrue())
+			Expect(result.UpdatedAt).To(BeTemporally("~", now, time.Millisecond))
+		})
 	})
 })
