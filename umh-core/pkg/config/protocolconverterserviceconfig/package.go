@@ -35,7 +35,6 @@ var (
 // This template form allows connection parameters (like port) to be templated
 // using expressions like "{{ .PORT }}" which are resolved during rendering.
 type ProtocolConverterServiceConfigTemplate struct {
-	DebugLevel bool `yaml:"debug_level,omitempty"`
 
 	// ConnectionServiceConfig describes how the converter connects to the
 	// underlying messaging infrastructure. Uses the template form to allow
@@ -53,6 +52,7 @@ type ProtocolConverterServiceConfigTemplate struct {
 	// of the converter.  Symmetrically to the read‑DFC we override
 	// `BenthosConfig.Input` so that it always consumes from UNS.
 	DataflowComponentWriteServiceConfig dataflowcomponentserviceconfig.DataflowComponentServiceConfig `yaml:"dataflowcomponent_write,omitempty"`
+	DebugLevel                          bool                                                          `yaml:"debug_level,omitempty"`
 }
 
 // ProtocolConverterServiceConfigRuntime is the **fully rendered** form of a
@@ -69,16 +69,17 @@ type ProtocolConverterServiceConfigTemplate struct {
 //   - `DataflowComponentWriteServiceConfig.BenthosConfig.Input` **is** UNS.
 //   - `ConnectionServiceConfig` has all template variables resolved with proper types.
 type ProtocolConverterServiceConfigRuntime struct {
-	DebugLevel bool `yaml:"debug_level,omitempty"`
+
+	// ConnectionServiceConfig is the fully rendered connection configuration
+	// with all template variables resolved and proper types enforced.
+	ConnectionServiceConfig connectionserviceconfig.ConnectionServiceConfigRuntime `yaml:"connection"`
 
 	// DataflowComponentReadServiceConfig and DataflowComponentWriteServiceConfig
 	// remain unchanged as they don't need the template/runtime split yet.
 	DataflowComponentReadServiceConfig  dataflowcomponentserviceconfig.DataflowComponentServiceConfig `yaml:"dataflowcomponent_read"`
 	DataflowComponentWriteServiceConfig dataflowcomponentserviceconfig.DataflowComponentServiceConfig `yaml:"dataflowcomponent_write"`
 
-	// ConnectionServiceConfig is the fully rendered connection configuration
-	// with all template variables resolved and proper types enforced.
-	ConnectionServiceConfig connectionserviceconfig.ConnectionServiceConfigRuntime `yaml:"connection"`
+	DebugLevel bool `yaml:"debug_level,omitempty"`
 }
 
 // ProtocolConverterServiceConfigSpec is the **user‑facing** wrapper that binds a

@@ -35,8 +35,8 @@ type BenthosConfig struct {
 
 // DataflowComponentServiceConfig represents the configuration for a DataFlowComponent.
 type DataflowComponentServiceConfig struct {
-	DebugLevel    bool          `yaml:"debug_level,omitempty"`
 	BenthosConfig BenthosConfig `yaml:"benthos"`
+	DebugLevel    bool          `yaml:"debug_level,omitempty"`
 }
 
 // Equal checks if two DataFlowComponentServiceConfigs are equal.
