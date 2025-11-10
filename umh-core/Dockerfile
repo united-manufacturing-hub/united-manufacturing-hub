@@ -135,6 +135,10 @@ RUN adduser -D -u 1000 -s /bin/sh umhuser && \
     mkdir -p /data/logs /data/logs/umh-core /data/services /data/benthos /data/redpanda/coredump && \
     chown -R umhuser:umhuser /data
 
+# Set ownership of S6 runtime directories for non-root operation
+RUN mkdir -p /run/s6 /var/run && \
+    chown -R umhuser:umhuser /run /var/run /etc/s6-overlay
+
 # Handle DEBUG mode - install Go and Delve when DEBUG=true
 # Delve is a debugger for Go (https://github.com/go-delve/delve/)
 # We can use it for remote debugging of the UMH Core
@@ -176,6 +180,9 @@ ENV S6_KEEP_ENV=1 \
     S6_LOGGING_SCRIPT="n5 s10000000 T" \
     PATH="/opt/redpanda/bin:$PATH"
 VOLUME ["/data"]
+
+# Switch to non-root user - S6 overlay will run as umhuser (UID 1000)
+USER umhuser:umhuser
 
 ENTRYPOINT ["/init"]
 CMD []
