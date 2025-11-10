@@ -149,8 +149,8 @@ flattened := bundle.Flatten()
 
 ### Related Code
 
-- `pkg/fsmv2/types/variables.go` - VariableBundle definition and Flatten()
-- `pkg/fsmv2/types/childspec.go` - UserSpec with VariableBundle
+- `pkg/fsmv2/config/variables.go` - VariableBundle definition and Flatten()
+- `pkg/fsmv2/config/childspec.go` - UserSpec with VariableBundle
 
 ---
 
@@ -441,7 +441,7 @@ DesiredState{
 
 ### Related Code
 
-- `pkg/fsmv2/types/childspec.go` - ChildSpec with StateMapping
+- `pkg/fsmv2/config/childspec.go` - ChildSpec with StateMapping
 - `pkg/fsmv2/supervisor/supervisor.go` - StateMapping application during reconciliation
 
 ---
@@ -598,8 +598,8 @@ Don't use `map[string]any` for:
 
 ### Related Code
 
-- `pkg/fsmv2/types/variables.go` - VariableBundle with map[string]any
-- `pkg/fsmv2/types/childspec.go` - UserSpec with VariableBundle
+- `pkg/fsmv2/config/variables.go` - VariableBundle with map[string]any
+- `pkg/fsmv2/config/childspec.go` - UserSpec with VariableBundle
 - Template rendering code - Golang template execution with variable validation
 
 ---
@@ -636,7 +636,7 @@ func (s *Supervisor) Tick(ctx context.Context) error {
 
 **Prevents Invalid Work**: Supervisor never attempts to create workers that will fail. This avoids wasted reconciliation cycles and confusing error states.
 
-**Centralized Rules**: All ChildSpec validation logic lives in one package (`pkg/fsmv2/types/childspec_validation.go`), making validation rules easy to find and test.
+**Centralized Rules**: All ChildSpec validation logic lives in one package (`pkg/fsmv2/config/childspec_validation.go`), making validation rules easy to find and test.
 
 **Registry Integration**: Validation checks if WorkerType is registered before reconciliation tries to look it up. This provides better error context than "factory not found".
 
@@ -720,7 +720,7 @@ Don't add validation for:
 
 ChildSpec validation follows Test-Driven Development (TDD):
 
-**Unit Tests** (`pkg/fsmv2/types/childspec_validation_test.go`):
+**Unit Tests** (`pkg/fsmv2/config/childspec_validation_test.go`):
 - Test each validation rule in isolation
 - Test edge cases (empty arrays, nil registry)
 - Test error message clarity
@@ -755,11 +755,11 @@ It("should reject invalid ChildSpecs before reconciliation", func() {
 
 ### Related Code
 
-- `pkg/fsmv2/types/childspec_validation.go` - Validation logic implementation
-- `pkg/fsmv2/types/childspec_validation_test.go` - Unit tests for validation rules
+- `pkg/fsmv2/config/childspec_validation.go` - Validation logic implementation
+- `pkg/fsmv2/config/childspec_validation_test.go` - Unit tests for validation rules
 - `pkg/fsmv2/supervisor/childspec_validation_test.go` - Integration tests with supervisor
 - `pkg/fsmv2/supervisor/supervisor.go` - Validation integration point in Tick()
-- `pkg/fsmv2/types/childspec.go` - ChildSpec type definition
+- `pkg/fsmv2/config/childspec.go` - ChildSpec type definition
 
 ---
 
