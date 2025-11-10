@@ -32,6 +32,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"sync/atomic"
 	"time"
 
@@ -430,6 +431,44 @@ func (ts *TriangularStore) LoadObserved(ctx context.Context, workerType string, 
 	return doc, nil
 }
 
+// LoadObservedTyped retrieves observed state and deserializes into a typed struct.
+//
+// DESIGN DECISION: Provide typed deserialization for type-safe FSM state handling
+// WHY: FSM workers need type-safe access to observed state fields (CPU, Status, etc.)
+// Eliminates type assertions and enables compile-time checking.
+//
+// TRADE-OFF: Slightly more complex than Document access, but much safer.
+// Type mismatches caught at load time, not during FSM execution.
+//
+// Parameters:
+//   - ctx: Cancellation context
+//   - workerType: Worker type (e.g., "container")
+//   - id: Unique worker identifier
+//   - dest: Pointer to destination struct (must have json tags matching document fields)
+//
+// Returns:
+//   - error: ErrNotFound if not found, or deserialization fails
+//
+// Example:
+//
+//	type ContainerObservedState struct {
+//	    ID     string `json:"id"`
+//	    Status string `json:"status"`
+//	    CPU    int64  `json:"cpu"`
+//	}
+//
+//	var state ContainerObservedState
+//	err := ts.LoadObservedTyped(ctx, "container", "worker-123", &state)
+//	// state.CPU is now type-safe int64, not interface{}
+func (ts *TriangularStore) LoadObservedTyped(ctx context.Context, workerType string, id string, dest interface{}) error {
+	doc, err := ts.LoadObserved(ctx, workerType, id)
+	if err != nil {
+		return err
+	}
+
+	return documentToStruct(doc, dest)
+}
+
 // Snapshot represents the complete state of a worker.
 //
 // DESIGN DECISION: Separate struct instead of map[string]Document
@@ -731,4 +770,63 @@ func (ts *TriangularStore) toDocument(v interface{}) (persistence.Document, erro
 	}
 
 	return doc, nil
+}
+
+// documentToStruct deserializes a Document into a typed struct.
+//
+// DESIGN DECISION: Use reflection for flexible type mapping
+// WHY: Supports any struct type without code generation or type-specific logic.
+// Maps document fields to struct fields using json tags.
+//
+// TRADE-OFF: Runtime reflection overhead vs compile-time type safety.
+// Acceptable because this is a persistence boundary operation (infrequent).
+//
+// INSPIRED BY: encoding/json Unmarshal, GORM scan pattern.
+//
+// Parameters:
+//   - doc: Source document (can be nil)
+//   - dest: Pointer to destination struct
+//
+// Returns:
+//   - error: If dest is not a pointer, type mismatch, or field assignment fails
+func documentToStruct(doc persistence.Document, dest interface{}) error {
+	if doc == nil {
+		return persistence.ErrNotFound
+	}
+
+	destVal := reflect.ValueOf(dest)
+	if destVal.Kind() != reflect.Ptr {
+		return fmt.Errorf("dest must be pointer, got %s", destVal.Kind())
+	}
+
+	destElem := destVal.Elem()
+	destType := destElem.Type()
+
+	for i := range destType.NumField() {
+		field := destType.Field(i)
+		jsonTag := field.Tag.Get("json")
+		if jsonTag == "" {
+			jsonTag = field.Name
+		}
+
+		docValue, exists := doc[jsonTag]
+		if !exists {
+			continue
+		}
+
+		fieldVal := destElem.Field(i)
+		if !fieldVal.CanSet() {
+			continue
+		}
+
+		docValueType := reflect.TypeOf(docValue)
+		if !docValueType.AssignableTo(field.Type) {
+			return fmt.Errorf("field %s: cannot assign %s to %s",
+				field.Name, docValueType, field.Type)
+		}
+
+		fieldVal.Set(reflect.ValueOf(docValue))
+	}
+
+	return nil
 }

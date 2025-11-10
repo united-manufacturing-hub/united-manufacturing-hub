@@ -671,4 +671,30 @@ var _ = Describe("TriangularStore", func() {
 			})
 		})
 	})
+
+	Describe("LoadObservedTyped", func() {
+		type TestObservedState struct {
+			ID     string `json:"id"`
+			Status string `json:"status"`
+			CPU    int64  `json:"cpu"`
+		}
+
+		It("should deserialize Document to typed struct", func() {
+			observed := persistence.Document{
+				"id":     "worker-123",
+				"status": "running",
+				"cpu":    int64(50),
+			}
+			err := ts.SaveObserved(ctx, "container", "worker-123", observed)
+			Expect(err).NotTo(HaveOccurred())
+
+			var result TestObservedState
+			err = ts.LoadObservedTyped(ctx, "container", "worker-123", &result)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(result.ID).To(Equal("worker-123"))
+			Expect(result.Status).To(Equal("running"))
+			Expect(result.CPU).To(Equal(int64(50)))
+		})
+	})
 })
