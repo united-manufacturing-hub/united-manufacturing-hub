@@ -15,148 +15,19 @@
 package dataflowcomponentserviceconfig_test
 
 import (
-	"testing"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
 )
 
-func TestDataFlowDebugLevel_EndToEnd_DebugEnabled(t *testing.T) {
-	// Test standalone data flow with debug_level: true
-	dfc := dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
-		DebugLevel: true,
-		BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
-			Input: map[string]interface{}{
-				"generate": map[string]interface{}{
-					"mapping": `root = "test"`,
-				},
-			},
-			Output: map[string]interface{}{
-				"drop": map[string]interface{}{},
-			},
-		},
-	}
-
-	// 1. Verify DebugLevel flag set
-	assert.True(t, dfc.DebugLevel)
-
-	// 2. Convert to BenthosServiceConfig
-	benthosConfig := dfc.GetBenthosServiceConfig()
-
-	// 3. Verify LogLevel set to DEBUG
-	assert.Equal(t, "DEBUG", benthosConfig.LogLevel)
-
-	// 4. Generate S6 config
-	benthosService := benthos.NewDefaultBenthosService("integration-test")
-	s6Config, err := benthosService.GenerateS6ConfigForBenthos(&benthosConfig, "test-dataflow")
-	require.NoError(t, err)
-
-	// 5. Verify OPC_DEBUG environment variable set
-	assert.Equal(t, "debug", s6Config.Env["OPC_DEBUG"])
-}
-
-func TestDataFlowDebugLevel_EndToEnd_DebugDisabled(t *testing.T) {
-	// Test standalone data flow with debug_level: false
-	dfc := dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
-		DebugLevel: false,
-		BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
-			Input: map[string]interface{}{
-				"generate": map[string]interface{}{
-					"mapping": `root = "test"`,
-				},
-			},
-			Output: map[string]interface{}{
-				"drop": map[string]interface{}{},
-			},
-		},
-	}
-
-	// 1. Verify DebugLevel flag set to false
-	assert.False(t, dfc.DebugLevel)
-
-	// 2. Convert to BenthosServiceConfig
-	benthosConfig := dfc.GetBenthosServiceConfig()
-
-	// 3. Verify LogLevel set to INFO (default)
-	assert.Equal(t, "INFO", benthosConfig.LogLevel)
-
-	// 4. Generate S6 config
-	benthosService := benthos.NewDefaultBenthosService("integration-test")
-	s6Config, err := benthosService.GenerateS6ConfigForBenthos(&benthosConfig, "test-dataflow")
-	require.NoError(t, err)
-
-	// 5. Verify OPC_DEBUG environment variable NOT set
-	_, opcDebugExists := s6Config.Env["OPC_DEBUG"]
-	assert.False(t, opcDebugExists, "OPC_DEBUG should not be set when LogLevel is INFO")
-}
-
-func TestDataFlowDebugLevel_EndToEnd_DebugOmitted(t *testing.T) {
-	// Test standalone data flow without debug_level field (should default to false/INFO)
-	dfc := dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
-		BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
-			Input: map[string]interface{}{
-				"generate": map[string]interface{}{
-					"mapping": `root = "test"`,
-				},
-			},
-			Output: map[string]interface{}{
-				"drop": map[string]interface{}{},
-			},
-		},
-	}
-
-	// 1. Verify DebugLevel defaults to false
-	assert.False(t, dfc.DebugLevel)
-
-	// 2. Convert to BenthosServiceConfig
-	benthosConfig := dfc.GetBenthosServiceConfig()
-
-	// 3. Verify LogLevel set to INFO (default)
-	assert.Equal(t, "INFO", benthosConfig.LogLevel)
-
-	// 4. Generate S6 config
-	benthosService := benthos.NewDefaultBenthosService("integration-test")
-	s6Config, err := benthosService.GenerateS6ConfigForBenthos(&benthosConfig, "test-dataflow")
-	require.NoError(t, err)
-
-	// 5. Verify OPC_DEBUG environment variable NOT set
-	_, opcDebugExists := s6Config.Env["OPC_DEBUG"]
-	assert.False(t, opcDebugExists, "OPC_DEBUG should not be set when LogLevel is INFO")
-}
-
-func TestDataFlowDebugLevel_EndToEnd_LogLevelMapping(t *testing.T) {
-	// Test explicit mapping between debug_level boolean and BenthosServiceConfig LogLevel string
-	testCases := []struct {
-		name               string
-		debugLevel         bool
-		expectedLogLevel   string
-		expectOpcDebugSet  bool
-		expectedOpcDebug   string
-	}{
-		{
-			name:              "debug_level true maps to LogLevel DEBUG",
-			debugLevel:        true,
-			expectedLogLevel:  "DEBUG",
-			expectOpcDebugSet: true,
-			expectedOpcDebug:  "debug",
-		},
-		{
-			name:              "debug_level false maps to LogLevel INFO",
-			debugLevel:        false,
-			expectedLogLevel:  "INFO",
-			expectOpcDebugSet: false,
-			expectedOpcDebug:  "",
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			// Create data flow component with programmatic debug_level
+var _ = Describe("DataflowComponentServiceConfig Integration", func() {
+	Context("debug_level flag", func() {
+		It("should enable OPC_DEBUG when debug_level is true", func() {
+			// Test standalone data flow with debug_level: true
 			dfc := dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
-				DebugLevel: tc.debugLevel,
+				DebugLevel: true,
 				BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 					Input: map[string]interface{}{
 						"generate": map[string]interface{}{
@@ -169,22 +40,133 @@ func TestDataFlowDebugLevel_EndToEnd_LogLevelMapping(t *testing.T) {
 				},
 			}
 
-			// Convert to BenthosServiceConfig
-			benthosConfig := dfc.GetBenthosServiceConfig()
-			assert.Equal(t, tc.expectedLogLevel, benthosConfig.LogLevel)
+			// 1. Verify DebugLevel flag set
+			Expect(dfc.DebugLevel).To(BeTrue())
 
-			// Generate S6 config
+			// 2. Convert to BenthosServiceConfig
+			benthosConfig := dfc.GetBenthosServiceConfig()
+
+			// 3. Verify LogLevel set to DEBUG
+			Expect(benthosConfig.LogLevel).To(Equal("DEBUG"))
+
+			// 4. Generate S6 config
 			benthosService := benthos.NewDefaultBenthosService("integration-test")
 			s6Config, err := benthosService.GenerateS6ConfigForBenthos(&benthosConfig, "test-dataflow")
-			require.NoError(t, err)
+			Expect(err).NotTo(HaveOccurred())
 
-			// Verify OPC_DEBUG environment variable
-			opcDebugValue, opcDebugExists := s6Config.Env["OPC_DEBUG"]
-			assert.Equal(t, tc.expectOpcDebugSet, opcDebugExists, "OPC_DEBUG existence should match expected")
-
-			if tc.expectOpcDebugSet {
-				assert.Equal(t, tc.expectedOpcDebug, opcDebugValue, "OPC_DEBUG value should match expected")
-			}
+			// 5. Verify OPC_DEBUG environment variable set
+			Expect(s6Config.Env["OPC_DEBUG"]).To(Equal("debug"))
 		})
-	}
-}
+
+		It("should not set OPC_DEBUG when debug_level is false", func() {
+			// Test standalone data flow with debug_level: false
+			dfc := dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+				DebugLevel: false,
+				BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
+					Input: map[string]interface{}{
+						"generate": map[string]interface{}{
+							"mapping": `root = "test"`,
+						},
+					},
+					Output: map[string]interface{}{
+						"drop": map[string]interface{}{},
+					},
+				},
+			}
+
+			// 1. Verify DebugLevel flag set to false
+			Expect(dfc.DebugLevel).To(BeFalse())
+
+			// 2. Convert to BenthosServiceConfig
+			benthosConfig := dfc.GetBenthosServiceConfig()
+
+			// 3. Verify LogLevel set to INFO (default)
+			Expect(benthosConfig.LogLevel).To(Equal("INFO"))
+
+			// 4. Generate S6 config
+			benthosService := benthos.NewDefaultBenthosService("integration-test")
+			s6Config, err := benthosService.GenerateS6ConfigForBenthos(&benthosConfig, "test-dataflow")
+			Expect(err).NotTo(HaveOccurred())
+
+			// 5. Verify OPC_DEBUG environment variable NOT set
+			_, opcDebugExists := s6Config.Env["OPC_DEBUG"]
+			Expect(opcDebugExists).To(BeFalse(), "OPC_DEBUG should not be set when LogLevel is INFO")
+		})
+
+		It("should default to INFO when debug_level is omitted", func() {
+			// Test standalone data flow without debug_level field (should default to false/INFO)
+			dfc := dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+				BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
+					Input: map[string]interface{}{
+						"generate": map[string]interface{}{
+							"mapping": `root = "test"`,
+						},
+					},
+					Output: map[string]interface{}{
+						"drop": map[string]interface{}{},
+					},
+				},
+			}
+
+			// 1. Verify DebugLevel defaults to false
+			Expect(dfc.DebugLevel).To(BeFalse())
+
+			// 2. Convert to BenthosServiceConfig
+			benthosConfig := dfc.GetBenthosServiceConfig()
+
+			// 3. Verify LogLevel set to INFO (default)
+			Expect(benthosConfig.LogLevel).To(Equal("INFO"))
+
+			// 4. Generate S6 config
+			benthosService := benthos.NewDefaultBenthosService("integration-test")
+			s6Config, err := benthosService.GenerateS6ConfigForBenthos(&benthosConfig, "test-dataflow")
+			Expect(err).NotTo(HaveOccurred())
+
+			// 5. Verify OPC_DEBUG environment variable NOT set
+			_, opcDebugExists := s6Config.Env["OPC_DEBUG"]
+			Expect(opcDebugExists).To(BeFalse(), "OPC_DEBUG should not be set when LogLevel is INFO")
+		})
+	})
+
+	Context("LogLevel mapping", func() {
+		DescribeTable("mapping debug_level boolean to LogLevel string",
+			func(debugLevel bool, expectedLogLevel string, expectOpcDebugSet bool, expectedOpcDebug string) {
+				// Create data flow component with programmatic debug_level
+				dfc := dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+					DebugLevel: debugLevel,
+					BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
+						Input: map[string]interface{}{
+							"generate": map[string]interface{}{
+								"mapping": `root = "test"`,
+							},
+						},
+						Output: map[string]interface{}{
+							"drop": map[string]interface{}{},
+						},
+					},
+				}
+
+				// Convert to BenthosServiceConfig
+				benthosConfig := dfc.GetBenthosServiceConfig()
+				Expect(benthosConfig.LogLevel).To(Equal(expectedLogLevel))
+
+				// Generate S6 config
+				benthosService := benthos.NewDefaultBenthosService("integration-test")
+				s6Config, err := benthosService.GenerateS6ConfigForBenthos(&benthosConfig, "test-dataflow")
+				Expect(err).NotTo(HaveOccurred())
+
+				// Verify OPC_DEBUG environment variable
+				opcDebugValue, opcDebugExists := s6Config.Env["OPC_DEBUG"]
+				Expect(opcDebugExists).To(Equal(expectOpcDebugSet), "OPC_DEBUG existence should match expected")
+
+				if expectOpcDebugSet {
+					Expect(opcDebugValue).To(Equal(expectedOpcDebug), "OPC_DEBUG value should match expected")
+				}
+			},
+			Entry("debug_level true maps to LogLevel DEBUG",
+				true, "DEBUG", true, "debug"),
+			Entry("debug_level false maps to LogLevel INFO",
+				false, "INFO", false, ""),
+		)
+	})
+})
