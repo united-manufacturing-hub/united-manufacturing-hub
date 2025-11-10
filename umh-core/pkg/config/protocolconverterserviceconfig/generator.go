@@ -81,6 +81,7 @@ func (g *Generator) configToMap(cfg ProtocolConverterServiceConfigSpec) map[stri
 	// Add template and variables to the root config
 	configMap["template"] = templateMap
 	configMap["variables"] = variableBundleConfigMap
+
 	configMap["location"] = cfg.Location
 	if cfg.DebugLevel {
 		configMap["debug_level"] = cfg.DebugLevel
