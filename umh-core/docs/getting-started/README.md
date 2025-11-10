@@ -46,7 +46,7 @@ Your instance will appear as **"Online"** in the Management Console within secon
 If you can't use the cloud Management Console:
 
 ```bash
-mkdir umh-data && cd umh-data
+mkdir umh-core-data && cd umh-core-data
 docker run -d --name umh-core \
   -v $(pwd):/data \
   management.umh.app/oci/united-manufacturing-hub/umh-core:latest
