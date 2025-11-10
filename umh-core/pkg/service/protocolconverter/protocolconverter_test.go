@@ -13,7 +13,6 @@
 // limitations under the License.
 
 //go:build test
-// +build test
 
 package protocolconverter
 
@@ -404,7 +403,7 @@ var _ = Describe("DataFlowComponentService", func() {
 
 			// Verify the connection desired state was changed to up
 			underlyingConnectionName := service.getUnderlyingConnectionName(protConvName)
-			
+
 			var foundConnUp bool
 			for _, config := range service.connectionConfig {
 				if config.Name == underlyingConnectionName {
@@ -438,7 +437,7 @@ var _ = Describe("DataFlowComponentService", func() {
 
 			// Verify the DFC desired state was changed based on config
 			underlyingDFCReadName := service.getUnderlyingDFCReadName(protConvName)
-			
+
 			// DFC should be active since it has input config
 			var foundDfcActive bool
 			for _, config := range service.dataflowComponentConfig {

@@ -40,12 +40,12 @@ func (c *Comparator) ConfigsEqual(desired, observed BenthosServiceConfig) (isEqu
 	normDesired := c.normalizer.NormalizeConfig(desired)
 	normObserved := c.normalizer.NormalizeConfig(observed)
 
-	defer func() {
+	defer func(normDesired, normObserved *BenthosServiceConfig) {
 		if !isEqual {
-			zap.S().Infof("Normalized desired:  %+v", normDesired)
-			zap.S().Infof("Normalized observed: %+v", normObserved)
+			zap.S().Debugf("Normalized desired:  %+v", normDesired)
+			zap.S().Debugf("Normalized observed: %+v", normObserved)
 		}
-	}()
+	}(&normDesired, &normObserved) // configs are passed as pointers to make the copy cheap
 
 	// Compare essential fields that must match exactly
 	// Ignoring MetricsPort since it's allocated by the port manager

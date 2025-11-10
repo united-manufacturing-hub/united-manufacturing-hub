@@ -13,7 +13,6 @@
 // limitations under the License.
 
 //go:build test
-// +build test
 
 package protocolconverter_test
 
@@ -1229,9 +1228,9 @@ var _ = Describe("ProtocolConverter FSM", func() {
 	Context("Configuration Validation", func() {
 		It("should continue reconciling despite configuration validation errors in UpdateObservedState", func() {
 			// ARCHITECTURAL DECISION: We now continue reconciling even when UpdateObservedState
-			// encounters configuration validation errors. This enables force-kill recovery scenarios 
+			// encounters configuration validation errors. This enables force-kill recovery scenarios
 			// where S6 services exist on filesystem but FSM managers lose their in-memory mappings.
-			// 
+			//
 			// The trade-off: Configuration errors during UpdateObservedState no longer block FSM progression.
 			// Invalid configurations will be logged but won't prevent the system from attempting
 			// to restore services after unexpected shutdowns/restarts.
@@ -1252,7 +1251,7 @@ var _ = Describe("ProtocolConverter FSM", func() {
 			// With the new architecture, the FSM should continue reconciling despite config errors
 			// The instance should progress to stopped state (since no service can be created with invalid config)
 			currentState := invalidInstance.GetCurrentFSMState()
-			Expect(currentState).To(Equal(protocolconverterfsm.OperationalStateStopped), 
+			Expect(currentState).To(Equal(protocolconverterfsm.OperationalStateStopped),
 				"FSM should progress to stopped state despite configuration validation errors in UpdateObservedState")
 
 			// The desired state should remain as intended
