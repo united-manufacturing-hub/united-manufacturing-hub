@@ -130,6 +130,11 @@ COPY --from=build /go/bin/umh-core /usr/local/bin/umh-core
 # Install coreutils (this allows date resolution beyond seconds)
 RUN apk add --no-cache coreutils
 
+# Create non-root user and set ownership at build-time
+RUN adduser -D -u 1000 -s /bin/sh umhuser && \
+    mkdir -p /data/logs /data/logs/umh-core /data/services /data/benthos /data/redpanda/coredump && \
+    chown -R umhuser:umhuser /data
+
 # Handle DEBUG mode - install Go and Delve when DEBUG=true
 # Delve is a debugger for Go (https://github.com/go-delve/delve/)
 # We can use it for remote debugging of the UMH Core
