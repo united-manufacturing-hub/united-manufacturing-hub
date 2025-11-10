@@ -148,7 +148,7 @@ var _ = Describe("DataflowComponentServiceConfig Integration", func() {
 
 				// Convert to BenthosServiceConfig
 				benthosConfig := dfc.GetBenthosServiceConfig()
-				Expect(benthosConfig.DebugLevel).To(Equal(expectedDebugLevel))
+				Expect(benthosConfig.DebugLevel).To(BeEquivalentTo(expectedDebugLevel))
 
 				// Generate S6 config
 				benthosService := benthos.NewDefaultBenthosService("integration-test")

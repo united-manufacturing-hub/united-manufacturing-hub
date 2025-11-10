@@ -52,8 +52,8 @@ func (g *Generator) RenderConfig(cfg DataflowComponentServiceConfig) (string, er
 func (g *Generator) ConfigToMap(cfg DataflowComponentServiceConfig) map[string]any {
 	// use generator to create a valid benthosConfigMap
 	generator := benthosserviceconfig.NewGenerator()
-	// generate BenthosServiceConfig (normalized) out of BenthosConfig
-	benthosServiceConfig := cfg.BenthosConfig.ToBenthosServiceConfig()
+	// generate BenthosServiceConfig (normalized) out of BenthosConfig with DebugLevel
+	benthosServiceConfig := cfg.GetBenthosServiceConfig()
 	benthosConfigMap := generator.ConfigToMap(benthosServiceConfig)
 
 	configMap := make(map[string]any)

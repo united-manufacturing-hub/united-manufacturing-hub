@@ -371,7 +371,7 @@ config:
 
 				// Test read DFC
 				readBenthos := runtime.DataflowComponentReadServiceConfig.GetBenthosServiceConfig()
-				Expect(readBenthos.DebugLevel).To(Equal(tc.expectedDebugLevel))
+				Expect(readBenthos.DebugLevel).To(BeEquivalentTo(tc.expectedDebugLevel))
 
 				benthosService := benthos.NewDefaultBenthosService("integration-test")
 				readS6, err := benthosService.GenerateS6ConfigForBenthos(&readBenthos, "test-read")
@@ -386,7 +386,7 @@ config:
 
 				// Test write DFC
 				writeBenthos := runtime.DataflowComponentWriteServiceConfig.GetBenthosServiceConfig()
-				Expect(writeBenthos.DebugLevel).To(Equal(tc.expectedDebugLevel))
+				Expect(writeBenthos.DebugLevel).To(BeEquivalentTo(tc.expectedDebugLevel))
 
 				writeS6, err := benthosService.GenerateS6ConfigForBenthos(&writeBenthos, "test-write")
 				Expect(err).NotTo(HaveOccurred())
