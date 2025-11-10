@@ -807,5 +807,60 @@ var _ = Describe("TriangularStore", func() {
 			err := testStore.LoadObservedTyped(ctx, "missing", "nonexistent", &observed)
 			Expect(err).To(MatchError(persistence.ErrNotFound))
 		})
+
+		It("handles complex field types (int64, float64, bool, time.Time)", func() {
+			type ComplexState struct {
+				ID          string
+				Count       int64
+				Temperature float64
+				Active      bool
+				UpdatedAt   time.Time
+			}
+
+			observedType := reflect.TypeOf((*ComplexState)(nil)).Elem()
+			testRegistry.Register(&storage.CollectionMetadata{
+				Name:         "complex_observed",
+				WorkerType:   "complex",
+				Role:         storage.RoleObserved,
+				ObservedType: observedType,
+				CSEFields:    []string{storage.FieldSyncID, storage.FieldVersion},
+			})
+
+			testRegistry.Register(&storage.CollectionMetadata{
+				Name:       "complex_identity",
+				WorkerType: "complex",
+				Role:       storage.RoleIdentity,
+				CSEFields:  []string{storage.FieldSyncID, storage.FieldVersion},
+			})
+
+			testRegistry.Register(&storage.CollectionMetadata{
+				Name:       "complex_desired",
+				WorkerType: "complex",
+				Role:       storage.RoleDesired,
+				CSEFields:  []string{storage.FieldSyncID, storage.FieldVersion},
+			})
+
+			now := time.Now().UTC().Truncate(time.Second)
+			observedDoc := persistence.Document{
+				"id":          "complex-123",
+				"ID":          "complex-123",
+				"Count":       int64(42),
+				"Temperature": float64(98.6),
+				"Active":      true,
+				"UpdatedAt":   now,
+			}
+			err := testStore.SaveObserved(ctx, "complex", "complex-123", observedDoc)
+			Expect(err).NotTo(HaveOccurred())
+
+			var observed ComplexState
+			err = testStore.LoadObservedTyped(ctx, "complex", "complex-123", &observed)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(observed.ID).To(Equal("complex-123"))
+			Expect(observed.Count).To(Equal(int64(42)))
+			Expect(observed.Temperature).To(Equal(98.6))
+			Expect(observed.Active).To(BeTrue())
+			Expect(observed.UpdatedAt).To(Equal(now))
+		})
 	})
 })
