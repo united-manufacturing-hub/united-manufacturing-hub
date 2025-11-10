@@ -342,8 +342,8 @@ var _ = Describe("S6 Run Script", func() {
 		})
 	})
 
-	Context("user and permission configuration", func() {
-		It("should use umhuser:umhuser instead of nobody in run script", func() {
+	Context("non-root container configuration", func() {
+		It("should NOT include privilege drops in run script", func() {
 			originalConfig := s6serviceconfig.S6ServiceConfig{
 				Command: []string{"/usr/local/bin/benthos", "-c", "/config/benthos.yaml"},
 			}
@@ -366,8 +366,34 @@ var _ = Describe("S6 Run Script", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			scriptContent := buf.String()
-			Expect(scriptContent).To(ContainSubstring("s6-setuidgid umhuser:umhuser"))
-			Expect(scriptContent).NotTo(ContainSubstring("s6-setuidgid nobody"))
+			Expect(scriptContent).NotTo(ContainSubstring("s6-setuidgid"))
+		})
+
+		It("should work without root privileges", func() {
+			originalConfig := s6serviceconfig.S6ServiceConfig{
+				Command: []string{"/usr/local/bin/benthos", "-c", "/config/benthos.yaml"},
+			}
+
+			tmpl, err := template.New("runscript").Parse(runScriptTemplate)
+			Expect(err).NotTo(HaveOccurred())
+
+			var buf bytes.Buffer
+			err = tmpl.Execute(&buf, struct {
+				Command     []string
+				Env         map[string]string
+				MemoryLimit int64
+				ServicePath string
+			}{
+				Command:     originalConfig.Command,
+				Env:         originalConfig.Env,
+				MemoryLimit: originalConfig.MemoryLimit,
+				ServicePath: servicePath,
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			scriptContent := buf.String()
+			Expect(scriptContent).NotTo(ContainSubstring("sudo"))
+			Expect(scriptContent).NotTo(ContainSubstring("chown"))
 		})
 
 		It("should not include chown in log run script", func() {
