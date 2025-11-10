@@ -60,6 +60,7 @@ package storage
 import (
 	"errors"
 	"fmt"
+	"reflect"
 	"sync"
 )
 
@@ -162,6 +163,46 @@ const (
 	RoleObserved = "observed"
 )
 
+// STUB types for future data access patterns
+// These types are defined now but will be fully implemented in later phases.
+type AccessPattern string
+
+const (
+	AccessInstant  AccessPattern = "instant"
+	AccessLazy     AccessPattern = "lazy"
+	AccessPartial  AccessPattern = "partial"
+	AccessExplicit AccessPattern = "explicit"
+)
+
+type RelationType string
+
+const (
+	RelationOneToOne  RelationType = "one_to_one"
+	RelationOneToMany RelationType = "one_to_many"
+)
+
+type Relationship struct {
+	TargetCollection string
+	Type             RelationType
+	ForeignKey       string
+	Inverse          string
+}
+
+type SyncPolicy struct {
+	Strategy string
+	CacheTTL int
+}
+
+type FieldMetadata struct {
+	Name          string
+	JSONName      string
+	GoType        string
+	AccessPattern AccessPattern
+	Relationship  *Relationship
+	SyncPolicy    SyncPolicy
+	Tags          map[string]string
+}
+
 // CollectionMetadata describes a CSE-aware collection's schema and sync configuration.
 //
 // Each collection in the triangular model (identity, desired, observed) has its own
@@ -205,6 +246,14 @@ type CollectionMetadata struct {
 	// RelatedTo is a list of related collection names.
 	// Example: container_identity relates to container_desired, container_observed.
 	RelatedTo []string
+
+	// Type Registry (implemented)
+	ObservedType reflect.Type
+	DesiredType  reflect.Type
+
+	// Data Access Patterns (stubs)
+	Fields      []FieldMetadata
+	TypeVersion string
 }
 
 // Registry tracks CSE-aware collections and their metadata.
