@@ -710,5 +710,11 @@ var _ = Describe("TriangularStore", func() {
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("cannot assign"))
 		})
+
+		It("should return ErrNotFound for non-existent document", func() {
+			var result TestObservedState
+			err := ts.LoadObservedTyped(ctx, "container", "nonexistent-worker", &result)
+			Expect(err).To(MatchError(persistence.ErrNotFound))
+		})
 	})
 })
