@@ -521,7 +521,12 @@ func (ts *TriangularStore) documentToStruct(doc persistence.Document, dest inter
 			continue
 		}
 
-		fieldValue.Set(reflect.ValueOf(docValue))
+		docValueReflect := reflect.ValueOf(docValue)
+		if !docValueReflect.Type().AssignableTo(fieldValue.Type()) {
+			return fmt.Errorf("field %q: cannot assign type %s to %s", field.Name, docValueReflect.Type(), fieldValue.Type())
+		}
+
+		fieldValue.Set(docValueReflect)
 	}
 
 	return nil

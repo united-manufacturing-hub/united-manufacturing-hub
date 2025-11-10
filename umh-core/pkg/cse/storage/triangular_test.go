@@ -731,5 +731,48 @@ var _ = Describe("TriangularStore", func() {
 			Expect(observed.Name).To(Equal("TestParent"))
 			Expect(observed.Status).To(Equal("Running"))
 		})
+
+		It("handles type mismatches gracefully", func() {
+			type TypeMismatchState struct {
+				ID    string
+				Count int64
+			}
+
+			observedType := reflect.TypeOf((*TypeMismatchState)(nil)).Elem()
+			testRegistry.Register(&storage.CollectionMetadata{
+				Name:         "typemismatch_observed",
+				WorkerType:   "typemismatch",
+				Role:         storage.RoleObserved,
+				ObservedType: observedType,
+				CSEFields:    []string{storage.FieldSyncID, storage.FieldVersion},
+			})
+
+			testRegistry.Register(&storage.CollectionMetadata{
+				Name:       "typemismatch_identity",
+				WorkerType: "typemismatch",
+				Role:       storage.RoleIdentity,
+				CSEFields:  []string{storage.FieldSyncID, storage.FieldVersion},
+			})
+
+			testRegistry.Register(&storage.CollectionMetadata{
+				Name:       "typemismatch_desired",
+				WorkerType: "typemismatch",
+				Role:       storage.RoleDesired,
+				CSEFields:  []string{storage.FieldSyncID, storage.FieldVersion},
+			})
+
+			observedDoc := persistence.Document{
+				"id":    "mismatch-123",
+				"ID":    "mismatch-123",
+				"Count": "not-a-number",
+			}
+			err := testStore.SaveObserved(ctx, "typemismatch", "mismatch-123", observedDoc)
+			Expect(err).NotTo(HaveOccurred())
+
+			var observed TypeMismatchState
+			err = testStore.LoadObservedTyped(ctx, "typemismatch", "mismatch-123", &observed)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("type"))
+		})
 	})
 })
