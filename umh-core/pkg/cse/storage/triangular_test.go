@@ -799,5 +799,23 @@ var _ = Describe("TriangularStore", func() {
 			Expect(loaded["status"]).To(Equal("stopped"))
 			Expect(loaded["cpu"]).To(Equal(int64(0)))
 		})
+
+		It("should handle first save (no existing state)", func() {
+			newState := persistence.Document{
+				"id":     "worker-789",
+				"status": "starting",
+				"cpu":    int64(0),
+			}
+
+			changed, err := ts.SaveObservedIfChanged(ctx, "container", "worker-789", newState)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(changed).To(BeTrue(), "should write on first save")
+
+			loaded, err := ts.LoadObserved(ctx, "container", "worker-789")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(loaded["id"]).To(Equal("worker-789"))
+			Expect(loaded["status"]).To(Equal("starting"))
+			Expect(loaded["cpu"]).To(Equal(int64(0)))
+		})
 	})
 })
