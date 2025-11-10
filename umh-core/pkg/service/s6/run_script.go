@@ -41,8 +41,7 @@ s6-softlimit -m {{ .MemoryLimit }}
 # Run s6-svwait as root since it needs access to supervise/control pipe
 foreground { s6-svwait -u {{ .ServicePath }}/log }
 
-# Drop privileges for the actual service
-s6-setuidgid umhuser:umhuser 
+# No privilege drop needed - service inherits non-root UID from container USER directive
 
 # Keep stderr and stdout separate but both visible in logs
 fdmove -c 2 1 
