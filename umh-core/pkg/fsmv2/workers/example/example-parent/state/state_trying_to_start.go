@@ -23,14 +23,25 @@ import (
 // TryingToStartState represents the state while loading config and spawning children
 type TryingToStartState struct {
 	BaseParentState
+	deps snapshot.ParentDependencies
 }
 
-func (s *TryingToStartState) Next(snap snapshot.ParentSnapshot) (BaseParentState, fsmv2.Signal, fsmv2.Action) {
-	if snap.Desired.ShutdownRequested() {
-		return &TryingToStopState{}, fsmv2.SignalNone, nil
+func NewTryingToStartState(deps snapshot.ParentDependencies) *TryingToStartState {
+	return &TryingToStartState{deps: deps}
+}
+
+func (s *TryingToStartState) Next(snap fsmv2.Snapshot) (fsmv2.State, fsmv2.Signal, fsmv2.Action) {
+	parentSnap := snapshot.ParentSnapshot{
+		Identity: snap.Identity,
+		Observed: snap.Observed.(snapshot.ParentObservedState),
+		Desired:  snap.Desired.(snapshot.ParentDesiredState),
 	}
 
-	return &RunningState{}, fsmv2.SignalNone, action.NewStartAction(snap.Desired.Dependencies)
+	if parentSnap.Desired.ShutdownRequested() {
+		return NewTryingToStopState(s.deps), fsmv2.SignalNone, nil
+	}
+
+	return NewRunningState(s.deps), fsmv2.SignalNone, action.NewStartAction(s.deps)
 }
 
 func (s *TryingToStartState) String() string {

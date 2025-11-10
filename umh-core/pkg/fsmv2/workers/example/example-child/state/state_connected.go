@@ -14,5 +14,43 @@
 
 package state
 
+import (
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/example-child/snapshot"
+)
+
 // ConnectedState represents the operational state where the worker has an active connection
-type ConnectedState struct{}
+type ConnectedState struct {
+	BaseChildState
+	deps snapshot.ChildDependencies
+}
+
+func NewConnectedState(deps snapshot.ChildDependencies) *ConnectedState {
+	return &ConnectedState{deps: deps}
+}
+
+func (s *ConnectedState) Next(snap fsmv2.Snapshot) (fsmv2.State, fsmv2.Signal, fsmv2.Action) {
+	childSnap := snapshot.ChildSnapshot{
+		Identity: snap.Identity,
+		Observed: snap.Observed.(snapshot.ChildObservedState),
+		Desired:  snap.Desired.(snapshot.ChildDesiredState),
+	}
+
+	if childSnap.Desired.ShutdownRequested() {
+		return NewTryingToStopState(s.deps), fsmv2.SignalNone, nil
+	}
+
+	if childSnap.Observed.ConnectionStatus == "disconnected" {
+		return NewDisconnectedState(s.deps), fsmv2.SignalNone, nil
+	}
+
+	return s, fsmv2.SignalNone, nil
+}
+
+func (s *ConnectedState) String() string {
+	return "Connected"
+}
+
+func (s *ConnectedState) Reason() string {
+	return "Active connection established"
+}

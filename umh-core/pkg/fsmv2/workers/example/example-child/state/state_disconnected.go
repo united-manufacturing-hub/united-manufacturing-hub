@@ -14,5 +14,39 @@
 
 package state
 
+import (
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/example-child/snapshot"
+)
+
 // DisconnectedState represents the state where connection has been lost and will be retried
-type DisconnectedState struct{}
+type DisconnectedState struct {
+	BaseChildState
+	deps snapshot.ChildDependencies
+}
+
+func NewDisconnectedState(deps snapshot.ChildDependencies) *DisconnectedState {
+	return &DisconnectedState{deps: deps}
+}
+
+func (s *DisconnectedState) Next(snap fsmv2.Snapshot) (fsmv2.State, fsmv2.Signal, fsmv2.Action) {
+	childSnap := snapshot.ChildSnapshot{
+		Identity: snap.Identity,
+		Observed: snap.Observed.(snapshot.ChildObservedState),
+		Desired:  snap.Desired.(snapshot.ChildDesiredState),
+	}
+
+	if childSnap.Desired.ShutdownRequested() {
+		return NewTryingToStopState(s.deps), fsmv2.SignalNone, nil
+	}
+
+	return NewTryingToConnectState(s.deps), fsmv2.SignalNone, nil
+}
+
+func (s *DisconnectedState) String() string {
+	return "Disconnected"
+}
+
+func (s *DisconnectedState) Reason() string {
+	return "Connection lost, will retry"
+}

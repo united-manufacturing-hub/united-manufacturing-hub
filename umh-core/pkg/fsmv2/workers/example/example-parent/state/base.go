@@ -14,6 +14,8 @@
 
 package state
 
-// BaseParentState defines the interface that all parent state implementations must satisfy
+// BaseParentState defines the interface that all parent state implementations must satisfy.
+// This is a marker interface used for type safety and compile-time checking.
+// All states must also implement fsmv2.State for FSM integration.
 type BaseParentState interface {
 }

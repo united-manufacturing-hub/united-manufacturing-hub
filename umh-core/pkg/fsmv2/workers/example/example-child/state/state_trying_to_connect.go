@@ -14,5 +14,40 @@
 
 package state
 
+import (
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/example-child/action"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/example-child/snapshot"
+)
+
 // TryingToConnectState represents the state where the worker is attempting to establish a connection
-type TryingToConnectState struct{}
+type TryingToConnectState struct {
+	BaseChildState
+	deps snapshot.ChildDependencies
+}
+
+func NewTryingToConnectState(deps snapshot.ChildDependencies) *TryingToConnectState {
+	return &TryingToConnectState{deps: deps}
+}
+
+func (s *TryingToConnectState) Next(snap fsmv2.Snapshot) (fsmv2.State, fsmv2.Signal, fsmv2.Action) {
+	childSnap := snapshot.ChildSnapshot{
+		Identity: snap.Identity,
+		Observed: snap.Observed.(snapshot.ChildObservedState),
+		Desired:  snap.Desired.(snapshot.ChildDesiredState),
+	}
+
+	if childSnap.Desired.ShutdownRequested() {
+		return NewTryingToStopState(s.deps), fsmv2.SignalNone, nil
+	}
+
+	return NewConnectedState(s.deps), fsmv2.SignalNone, action.NewConnectAction(s.deps)
+}
+
+func (s *TryingToConnectState) String() string {
+	return "TryingToConnect"
+}
+
+func (s *TryingToConnectState) Reason() string {
+	return "Attempting to establish connection"
+}

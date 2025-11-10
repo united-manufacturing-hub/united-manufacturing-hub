@@ -14,5 +14,39 @@
 
 package state
 
+import (
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/example-child/snapshot"
+)
+
 // StoppedState represents the initial state where the child worker is not connected
-type StoppedState struct{}
+type StoppedState struct {
+	BaseChildState
+	deps snapshot.ChildDependencies
+}
+
+func NewStoppedState(deps snapshot.ChildDependencies) *StoppedState {
+	return &StoppedState{deps: deps}
+}
+
+func (s *StoppedState) Next(snap fsmv2.Snapshot) (fsmv2.State, fsmv2.Signal, fsmv2.Action) {
+	childSnap := snapshot.ChildSnapshot{
+		Identity: snap.Identity,
+		Observed: snap.Observed.(snapshot.ChildObservedState),
+		Desired:  snap.Desired.(snapshot.ChildDesiredState),
+	}
+
+	if childSnap.Desired.ShutdownRequested() {
+		return s, fsmv2.SignalNeedsRemoval, nil
+	}
+
+	return NewTryingToConnectState(s.deps), fsmv2.SignalNone, nil
+}
+
+func (s *StoppedState) String() string {
+	return "Stopped"
+}
+
+func (s *StoppedState) Reason() string {
+	return "Child is stopped, no connection"
+}

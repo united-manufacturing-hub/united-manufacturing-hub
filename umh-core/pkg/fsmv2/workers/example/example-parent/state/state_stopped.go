@@ -22,14 +22,25 @@ import (
 // StoppedState represents the initial state before any children are spawned
 type StoppedState struct {
 	BaseParentState
+	deps snapshot.ParentDependencies
 }
 
-func (s *StoppedState) Next(snap snapshot.ParentSnapshot) (BaseParentState, fsmv2.Signal, fsmv2.Action) {
-	if snap.Desired.ShutdownRequested() {
+func NewStoppedState(deps snapshot.ParentDependencies) *StoppedState {
+	return &StoppedState{deps: deps}
+}
+
+func (s *StoppedState) Next(snap fsmv2.Snapshot) (fsmv2.State, fsmv2.Signal, fsmv2.Action) {
+	parentSnap := snapshot.ParentSnapshot{
+		Identity: snap.Identity,
+		Observed: snap.Observed.(snapshot.ParentObservedState),
+		Desired:  snap.Desired.(snapshot.ParentDesiredState),
+	}
+
+	if parentSnap.Desired.ShutdownRequested() {
 		return s, fsmv2.SignalNeedsRemoval, nil
 	}
 
-	return &TryingToStartState{}, fsmv2.SignalNone, nil
+	return NewTryingToStartState(s.deps), fsmv2.SignalNone, nil
 }
 
 func (s *StoppedState) String() string {

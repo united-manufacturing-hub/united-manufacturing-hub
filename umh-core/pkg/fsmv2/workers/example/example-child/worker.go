@@ -76,8 +76,8 @@ func (w *ChildWorker) DeriveDesiredState(spec interface{}) (fsmv2types.DesiredSt
 }
 
 // GetInitialState returns the state the FSM should start in
-func (w *ChildWorker) GetInitialState() state.BaseChildState {
-	return &state.StoppedState{}
+func (w *ChildWorker) GetInitialState() fsmv2.State {
+	return state.NewStoppedState(w.GetDependencies())
 }
 
 func (w *ChildWorker) getConnectionStatus() string {

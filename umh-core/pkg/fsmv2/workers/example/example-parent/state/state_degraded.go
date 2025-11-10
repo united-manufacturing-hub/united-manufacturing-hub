@@ -22,15 +22,26 @@ import (
 // DegradedState represents the state when some children have failed
 type DegradedState struct {
 	BaseParentState
+	deps snapshot.ParentDependencies
 }
 
-func (s *DegradedState) Next(snap snapshot.ParentSnapshot) (BaseParentState, fsmv2.Signal, fsmv2.Action) {
-	if snap.Desired.ShutdownRequested() {
-		return &TryingToStopState{}, fsmv2.SignalNone, nil
+func NewDegradedState(deps snapshot.ParentDependencies) *DegradedState {
+	return &DegradedState{deps: deps}
+}
+
+func (s *DegradedState) Next(snap fsmv2.Snapshot) (fsmv2.State, fsmv2.Signal, fsmv2.Action) {
+	parentSnap := snapshot.ParentSnapshot{
+		Identity: snap.Identity,
+		Observed: snap.Observed.(snapshot.ParentObservedState),
+		Desired:  snap.Desired.(snapshot.ParentDesiredState),
 	}
 
-	if snap.Observed.ChildrenUnhealthy == 0 {
-		return &RunningState{}, fsmv2.SignalNone, nil
+	if parentSnap.Desired.ShutdownRequested() {
+		return NewTryingToStopState(s.deps), fsmv2.SignalNone, nil
+	}
+
+	if parentSnap.Observed.ChildrenUnhealthy == 0 {
+		return NewRunningState(s.deps), fsmv2.SignalNone, nil
 	}
 
 	return s, fsmv2.SignalNone, nil

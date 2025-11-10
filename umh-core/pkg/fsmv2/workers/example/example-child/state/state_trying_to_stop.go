@@ -14,5 +14,30 @@
 
 package state
 
+import (
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/example-child/action"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/example-child/snapshot"
+)
+
 // TryingToStopState represents the shutdown state where the worker is closing connections
-type TryingToStopState struct{}
+type TryingToStopState struct {
+	BaseChildState
+	deps snapshot.ChildDependencies
+}
+
+func NewTryingToStopState(deps snapshot.ChildDependencies) *TryingToStopState {
+	return &TryingToStopState{deps: deps}
+}
+
+func (s *TryingToStopState) Next(_ fsmv2.Snapshot) (fsmv2.State, fsmv2.Signal, fsmv2.Action) {
+	return NewStoppedState(s.deps), fsmv2.SignalNone, action.NewDisconnectAction(s.deps)
+}
+
+func (s *TryingToStopState) String() string {
+	return "TryingToStop"
+}
+
+func (s *TryingToStopState) Reason() string {
+	return "Closing connections gracefully"
+}

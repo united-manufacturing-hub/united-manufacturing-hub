@@ -22,15 +22,26 @@ import (
 // RunningState represents normal operational state with all children healthy
 type RunningState struct {
 	BaseParentState
+	deps snapshot.ParentDependencies
 }
 
-func (s *RunningState) Next(snap snapshot.ParentSnapshot) (BaseParentState, fsmv2.Signal, fsmv2.Action) {
-	if snap.Desired.ShutdownRequested() {
-		return &TryingToStopState{}, fsmv2.SignalNone, nil
+func NewRunningState(deps snapshot.ParentDependencies) *RunningState {
+	return &RunningState{deps: deps}
+}
+
+func (s *RunningState) Next(snap fsmv2.Snapshot) (fsmv2.State, fsmv2.Signal, fsmv2.Action) {
+	parentSnap := snapshot.ParentSnapshot{
+		Identity: snap.Identity,
+		Observed: snap.Observed.(snapshot.ParentObservedState),
+		Desired:  snap.Desired.(snapshot.ParentDesiredState),
 	}
 
-	if snap.Observed.ChildrenUnhealthy > 0 {
-		return &DegradedState{}, fsmv2.SignalNone, nil
+	if parentSnap.Desired.ShutdownRequested() {
+		return NewTryingToStopState(s.deps), fsmv2.SignalNone, nil
+	}
+
+	if parentSnap.Observed.ChildrenUnhealthy > 0 {
+		return NewDegradedState(s.deps), fsmv2.SignalNone, nil
 	}
 
 	return s, fsmv2.SignalNone, nil
