@@ -29,6 +29,7 @@ package storage_test
 
 import (
 	"fmt"
+	"reflect"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -530,6 +531,37 @@ var _ = Describe("GlobalRegistry", func() {
 			Expect(identity.Name).To(Equal("global_triangular_identity"))
 			Expect(desired.Name).To(Equal("global_triangular_desired"))
 			Expect(observed.Name).To(Equal("global_triangular_observed"))
+		})
+	})
+})
+
+var _ = Describe("Registry with Type Metadata", func() {
+	var registry *storage.Registry
+
+	BeforeEach(func() {
+		registry = storage.NewRegistry()
+	})
+
+	Describe("Register with types", func() {
+		It("stores type metadata in CollectionMetadata", func() {
+			observedType := reflect.TypeOf((*ParentObservedState)(nil)).Elem()
+			desiredType := reflect.TypeOf((*ParentDesiredState)(nil)).Elem()
+
+			metadata := &storage.CollectionMetadata{
+				Name:         "parent_observed",
+				WorkerType:   "parent",
+				Role:         storage.RoleObserved,
+				ObservedType: observedType,
+				DesiredType:  desiredType,
+			}
+
+			err := registry.Register(metadata)
+			Expect(err).NotTo(HaveOccurred())
+
+			retrieved, err := registry.Get("parent_observed")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(retrieved.ObservedType).To(Equal(observedType))
+			Expect(retrieved.DesiredType).To(Equal(desiredType))
 		})
 	})
 })

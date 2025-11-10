@@ -60,8 +60,57 @@ package storage
 import (
 	"errors"
 	"fmt"
+	"reflect"
 	"sync"
 )
+
+// AccessPattern defines how data is loaded (Instant/Lazy/Partial/Explicit)
+// STUB: Not implemented yet, reserved for future CSE data access patterns
+type AccessPattern string
+
+const (
+	AccessInstant  AccessPattern = "instant"  // Main table columns, always cached
+	AccessLazy     AccessPattern = "lazy"     // 1:1 child tables, loaded on .include()
+	AccessPartial  AccessPattern = "partial"  // 1:many child tables, paginated
+	AccessExplicit AccessPattern = "explicit" // *_explicit suffix, manual request only
+)
+
+// RelationType defines the type of relationship between collections
+// STUB: Not implemented yet, reserved for future CSE relationship metadata
+type RelationType string
+
+const (
+	RelationOneToOne  RelationType = "one_to_one"  // 1:1 child table (PK=FK)
+	RelationOneToMany RelationType = "one_to_many" // 1:many child table
+)
+
+// Relationship describes a foreign key relationship to another collection
+// STUB: Not implemented yet, reserved for future CSE schema introspection
+type Relationship struct {
+	TargetCollection string       // Target collection name
+	Type             RelationType // Relationship type (1:1 or 1:many)
+	ForeignKey       string       // Foreign key column name
+	Inverse          string       // Inverse relationship name (for navigation)
+}
+
+// SyncPolicy defines when and how data is synchronized with frontend
+// STUB: Not implemented yet, reserved for future CSE sync optimization
+type SyncPolicy struct {
+	Strategy string // "instant", "lazy", or "explicit"
+	CacheTTL int    // Cache expiration in seconds (0 = forever)
+}
+
+// FieldMetadata describes a single field in a collection's schema
+// STUB: Not implemented yet, reserved for future CSE data access patterns
+type FieldMetadata struct {
+	Name          string        // Go struct field name
+	JSONName      string        // JSON/database column name
+	GoType        string        // Go type as string (e.g., "string", "int64")
+	AccessPattern AccessPattern // How this field is loaded
+	Relationship  *Relationship // Foreign key relationship (if applicable)
+	SyncPolicy    SyncPolicy    // Sync/cache strategy
+	Tags          map[string]string // Struct tags (e.g., json, db)
+}
 
 var (
 	// globalRegistry is the package-level default registry.
@@ -205,6 +254,26 @@ type CollectionMetadata struct {
 	// RelatedTo is a list of related collection names.
 	// Example: container_identity relates to container_desired, container_observed.
 	RelatedTo []string
+
+	// --- Type Registry Fields (Phase 1 - Implemented) ---
+
+	// ObservedType is the Go type for observed state (for deserialization)
+	// Used by TriangularStore to deserialize Documents to typed structs
+	ObservedType reflect.Type
+
+	// DesiredType is the Go type for desired state (for deserialization)
+	// Used by TriangularStore to deserialize Documents to typed structs
+	DesiredType reflect.Type
+
+	// --- Data Access Pattern Fields (Phase 1 - Stubs Only) ---
+
+	// Fields contains field-level metadata for data access patterns
+	// STUB: Empty slice for now, will be populated when implementing CSE features
+	Fields []FieldMetadata
+
+	// TypeVersion tracks the schema version for this specific type
+	// STUB: Empty string for now, separate from collection-level SchemaVersion
+	TypeVersion string
 }
 
 // Registry tracks CSE-aware collections and their metadata.
