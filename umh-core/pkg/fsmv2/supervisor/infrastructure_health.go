@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
 package supervisor
 
 import (
@@ -55,9 +54,11 @@ func (h *InfrastructureHealthChecker) CheckChildConsistency(children map[string]
 		if child == nil {
 			continue
 		}
+
 		if child.circuitOpen {
 			return &ChildHealthError{ChildName: name}
 		}
 	}
+
 	return nil
 }

@@ -25,7 +25,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
 package templating_test
 
 import (
@@ -192,7 +191,7 @@ line2`))
 				Path     string
 			}, 100)
 
-			for i := 0; i < 100; i++ {
+			for i := range 100 {
 				templateData[i] = struct {
 					Protocol string
 					IP       string
@@ -208,7 +207,7 @@ line2`))
 
 			start := time.Now()
 
-			for i := 0; i < 100; i++ {
+			for i := range 100 {
 				result, err := templating.RenderTemplate(tmpl, templateData[i])
 				Expect(err).NotTo(HaveOccurred())
 				Expect(result).To(Equal("mqtt://192.168.1.100:1883/data/sensors"))
@@ -250,7 +249,7 @@ line2`))
 			}
 
 			templateData := make([]ComplexData, 100)
-			for i := 0; i < 100; i++ {
+			for i := range 100 {
 				templateData[i] = ComplexData{
 					Protocol: "https",
 					Endpoint: Endpoint{Host: "api.example.com", Port: 443},
@@ -261,7 +260,7 @@ line2`))
 
 			start := time.Now()
 
-			for i := 0; i < 100; i++ {
+			for i := range 100 {
 				result, err := templating.RenderTemplate(tmpl, templateData[i])
 				Expect(err).NotTo(HaveOccurred())
 				Expect(result).To(ContainSubstring(`"protocol": "https"`))

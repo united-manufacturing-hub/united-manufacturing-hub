@@ -45,9 +45,9 @@ var _ = Describe("Collector WorkerType", func() {
 			registry := triangularStore.Registry()
 
 			s := supervisor.NewSupervisor(supervisor.Config{
-				WorkerType: workerType,
-				Store:      triangularStore,
-				Logger:     zap.NewNop().Sugar(),
+				WorkerType:      workerType,
+				Store:           triangularStore,
+				Logger:          zap.NewNop().Sugar(),
 				CollectorHealth: supervisor.CollectorHealthConfig{},
 			})
 
@@ -62,7 +62,7 @@ var _ = Describe("Collector WorkerType", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			observedDoc := persistence.Document{
-				"id":               identity.ID,
+				"id":                identity.ID,
 				"shutdownRequested": false,
 			}
 			err = triangularStore.SaveObserved(ctx, workerType, identity.ID, observedDoc)
@@ -75,7 +75,7 @@ var _ = Describe("Collector WorkerType", func() {
 			Expect(err).ToNot(HaveOccurred(), "should load observed state that was just saved")
 			Expect(doc).ToNot(BeNil())
 			Expect(doc["id"]).To(Equal(identity.ID))
-			Expect(doc["shutdownRequested"]).To(Equal(false))
+			Expect(doc["shutdownRequested"]).To(BeFalse())
 		})
 	})
 
@@ -105,9 +105,9 @@ var _ = Describe("Collector WorkerType", func() {
 				}
 
 				s := supervisor.NewSupervisor(supervisor.Config{
-					WorkerType: wt,
-					Store:      triangularStore,
-					Logger:     zap.NewNop().Sugar(),
+					WorkerType:      wt,
+					Store:           triangularStore,
+					Logger:          zap.NewNop().Sugar(),
 					CollectorHealth: supervisor.CollectorHealthConfig{},
 				})
 
@@ -122,7 +122,7 @@ var _ = Describe("Collector WorkerType", func() {
 				Expect(err).ToNot(HaveOccurred())
 
 				observedDoc := persistence.Document{
-					"id":               identity.ID,
+					"id":                identity.ID,
 					"shutdownRequested": false,
 				}
 				err = triangularStore.SaveObserved(ctx, wt, identity.ID, observedDoc)
@@ -131,7 +131,7 @@ var _ = Describe("Collector WorkerType", func() {
 				supervisors = append(supervisors, s)
 			}
 
-			Expect(len(supervisors)).To(Equal(len(workerTypes)))
+			Expect(supervisors).To(HaveLen(len(workerTypes)))
 
 			for _, wt := range workerTypes {
 				triangularStore := stores[wt]
@@ -145,7 +145,7 @@ var _ = Describe("Collector WorkerType", func() {
 				Expect(err).ToNot(HaveOccurred(), fmt.Sprintf("should load observed state from %s collection", wt))
 				Expect(doc).ToNot(BeNil())
 				Expect(doc["id"]).To(Equal(identity.ID))
-				Expect(doc["shutdownRequested"]).To(Equal(false))
+				Expect(doc["shutdownRequested"]).To(BeFalse())
 
 				otherWorkerType := "benthos"
 				if wt == "benthos" {

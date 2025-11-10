@@ -65,6 +65,7 @@ func validateContext(ctx context.Context) error {
 	if ctx == nil {
 		return errors.New("context cannot be nil")
 	}
+
 	return nil
 }
 
@@ -151,6 +152,7 @@ func (s *InMemoryStore) CreateCollection(ctx context.Context, name string, schem
 	}
 
 	s.collections[name] = make(map[string]persistence.Document)
+
 	return nil
 }
 
@@ -179,6 +181,7 @@ func (s *InMemoryStore) DropCollection(ctx context.Context, name string) error {
 	}
 
 	delete(s.collections, name)
+
 	return nil
 }
 
@@ -229,6 +232,7 @@ func (s *InMemoryStore) Insert(ctx context.Context, collection string, doc persi
 	}
 
 	coll[id] = docCopy
+
 	return id, nil
 }
 
@@ -315,6 +319,7 @@ func (s *InMemoryStore) Update(ctx context.Context, collection string, id string
 	}
 
 	coll[id] = docCopy
+
 	return nil
 }
 
@@ -349,6 +354,7 @@ func (s *InMemoryStore) Delete(ctx context.Context, collection string, id string
 	}
 
 	delete(coll, id)
+
 	return nil
 }
 
@@ -391,6 +397,7 @@ func (s *InMemoryStore) Find(ctx context.Context, collection string, query persi
 		for k, v := range doc {
 			docCopy[k] = v
 		}
+
 		results = append(results, docCopy)
 	}
 
@@ -446,11 +453,11 @@ func (s *InMemoryStore) BeginTx(ctx context.Context) (persistence.Tx, error) {
 	}
 
 	return &inMemoryTx{
-		store:     s,
-		committed: false,
+		store:      s,
+		committed:  false,
 		rolledBack: false,
-		changes:   make(map[string]map[string]*persistence.Document),
-		deletes:   make(map[string]map[string]bool),
+		changes:    make(map[string]map[string]*persistence.Document),
+		deletes:    make(map[string]map[string]bool),
 	}, nil
 }
 
@@ -473,6 +480,7 @@ func (s *InMemoryStore) Close(ctx context.Context) error {
 	defer s.mu.Unlock()
 
 	s.collections = make(map[string]map[string]persistence.Document)
+
 	return nil
 }
 
@@ -591,6 +599,7 @@ func (tx *inMemoryTx) Insert(ctx context.Context, collection string, doc persist
 	for k, v := range doc {
 		docCopy[k] = v
 	}
+
 	tx.changes[collection][id] = &docCopy
 
 	return id, nil
@@ -634,6 +643,7 @@ func (tx *inMemoryTx) Get(ctx context.Context, collection string, id string) (pe
 			for k, v := range *doc {
 				docCopy[k] = v
 			}
+
 			return docCopy, nil
 		}
 	}
@@ -681,6 +691,7 @@ func (tx *inMemoryTx) Update(ctx context.Context, collection string, id string, 
 	for k, v := range doc {
 		docCopy[k] = v
 	}
+
 	tx.changes[collection][id] = &docCopy
 
 	return nil
@@ -818,6 +829,7 @@ func (tx *inMemoryTx) Commit() error {
 	}
 
 	tx.committed = true
+
 	return nil
 }
 

@@ -30,7 +30,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence/memory"
 )
 
-// TestWorker is a test double for fsmv2.Worker that allows capturing DeriveDesiredState calls
+// TestWorker is a test double for fsmv2.Worker that allows capturing DeriveDesiredState calls.
 type TestWorker struct {
 	identity               fsmv2.Identity
 	initialState           fsmv2.State
@@ -54,6 +54,7 @@ func (t *TestWorker) DeriveDesiredState(spec interface{}) (types.DesiredState, e
 	if t.deriveDesiredStateFunc != nil {
 		return t.deriveDesiredStateFunc(userSpec)
 	}
+
 	return types.DesiredState{State: "running"}, nil
 }
 
@@ -61,7 +62,7 @@ func (t *TestWorker) GetInitialState() fsmv2.State {
 	return t.initialState
 }
 
-// TestObservedState is a test double for fsmv2.ObservedState
+// TestObservedState is a test double for fsmv2.ObservedState.
 type TestObservedState struct {
 	ID          string    `json:"id"`
 	CollectedAt time.Time `json:"collectedAt"`
@@ -75,7 +76,7 @@ func (t *TestObservedState) GetObservedDesiredState() fsmv2.DesiredState {
 	return &types.DesiredState{State: "running"}
 }
 
-// TestState is a test double for fsmv2.State
+// TestState is a test double for fsmv2.State.
 type TestState struct {
 	name   string
 	reason string
@@ -93,17 +94,18 @@ func (t *TestState) Reason() string {
 	if t.reason != "" {
 		return t.reason
 	}
+
 	return t.name
 }
 
 var _ = Describe("Variable Injection", func() {
 	var (
-		ctx          context.Context
-		store        storage.TriangularStoreInterface
-		testWorker   *TestWorker
-		identity     fsmv2.Identity
-		s            *supervisor.Supervisor
-		logger       *zap.SugaredLogger
+		ctx        context.Context
+		store      storage.TriangularStoreInterface
+		testWorker *TestWorker
+		identity   fsmv2.Identity
+		s          *supervisor.Supervisor
+		logger     *zap.SugaredLogger
 	)
 
 	BeforeEach(func() {
@@ -197,6 +199,7 @@ var _ = Describe("Variable Injection", func() {
 			var capturedSpec types.UserSpec
 			testWorker.deriveDesiredStateFunc = func(spec types.UserSpec) (types.DesiredState, error) {
 				capturedSpec = spec
+
 				return types.DesiredState{State: "running"}, nil
 			}
 
@@ -213,6 +216,7 @@ var _ = Describe("Variable Injection", func() {
 			var capturedSpec types.UserSpec
 			testWorker.deriveDesiredStateFunc = func(spec types.UserSpec) (types.DesiredState, error) {
 				capturedSpec = spec
+
 				return types.DesiredState{State: "running"}, nil
 			}
 
@@ -231,6 +235,7 @@ var _ = Describe("Variable Injection", func() {
 			var capturedSpec types.UserSpec
 			testWorker.deriveDesiredStateFunc = func(spec types.UserSpec) (types.DesiredState, error) {
 				capturedSpec = spec
+
 				return types.DesiredState{State: "running"}, nil
 			}
 
@@ -347,6 +352,7 @@ var _ = Describe("Variable Injection", func() {
 			var capturedSpec types.UserSpec
 			testWorker.deriveDesiredStateFunc = func(spec types.UserSpec) (types.DesiredState, error) {
 				capturedSpec = spec
+
 				return types.DesiredState{State: "running"}, nil
 			}
 
@@ -376,6 +382,7 @@ var _ = Describe("Variable Injection", func() {
 			var capturedSpec types.UserSpec
 			testWorker.deriveDesiredStateFunc = func(spec types.UserSpec) (types.DesiredState, error) {
 				capturedSpec = spec
+
 				return types.DesiredState{State: "running"}, nil
 			}
 

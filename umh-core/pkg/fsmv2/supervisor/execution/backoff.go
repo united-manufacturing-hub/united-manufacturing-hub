@@ -52,6 +52,7 @@ func (b *ExponentialBackoff) RecordFailure() {
 	if b.attempts == 0 {
 		b.startTime = time.Now()
 	}
+
 	b.attempts++
 }
 
@@ -64,6 +65,7 @@ func (b *ExponentialBackoff) GetTotalDowntime() time.Duration {
 	if b.attempts == 0 {
 		return 0
 	}
+
 	return time.Since(b.startTime)
 }
 

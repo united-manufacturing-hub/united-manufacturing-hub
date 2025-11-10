@@ -25,12 +25,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
 package storage
 
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -43,7 +43,7 @@ import (
 // DESIGN DECISION: Prefix with underscore to signal system collection
 // WHY: Prevents collision with user data, follows CSE metadata field convention
 // TRADE-OFF: Must create collection explicitly at startup
-// INSPIRED BY: MongoDB system collections (_id, _sync_id)
+// INSPIRED BY: MongoDB system collections (_id, _sync_id).
 const TxCacheCollection = "_tx_cache"
 
 // Operation type constants for transaction cache entries.
@@ -51,7 +51,7 @@ const TxCacheCollection = "_tx_cache"
 // DESIGN DECISION: String constants instead of iota enum
 // WHY: Serializes directly to JSON/storage without conversion, easier to debug
 // TRADE-OFF: No compiler enforcement of valid values, but simplifies storage
-// INSPIRED BY: HTTP method strings (GET/POST/PUT/DELETE), SQL operation names
+// INSPIRED BY: HTTP method strings (GET/POST/PUT/DELETE), SQL operation names.
 const (
 	OpTypeInsert = "insert"
 	OpTypeUpdate = "update"
@@ -64,7 +64,7 @@ const (
 // WHY: Balance between recovery window (can replay yesterday's transactions)
 // and storage overhead (don't accumulate stale data indefinitely)
 // TRADE-OFF: Must call Cleanup() periodically, or storage grows unbounded
-// INSPIRED BY: Database transaction logs (1-7 day retention), undo/redo logs
+// INSPIRED BY: Database transaction logs (1-7 day retention), undo/redo logs.
 const DefaultTxCacheTTL = 24 * time.Hour
 
 // TxStatus represents the lifecycle state of a cached transaction.
@@ -72,7 +72,7 @@ const DefaultTxCacheTTL = 24 * time.Hour
 // DESIGN DECISION: String type for status instead of int
 // WHY: Self-documenting in logs and storage, easier to debug than numeric codes
 // TRADE-OFF: Slightly more storage space than int, but negligible
-// INSPIRED BY: HTTP status codes (but as strings), database transaction states
+// INSPIRED BY: HTTP status codes (but as strings), database transaction states.
 type TxStatus string
 
 // Transaction status constants.
@@ -80,7 +80,7 @@ type TxStatus string
 // DESIGN DECISION: Three states (pending/committed/failed), no intermediate states
 // WHY: Simple state machine - transaction either in progress, succeeded, or failed
 // TRADE-OFF: Can't distinguish "aborting" vs "aborted", but not needed for cache
-// INSPIRED BY: Two-phase commit (prepare/commit/abort), database transaction lifecycle
+// INSPIRED BY: Two-phase commit (prepare/commit/abort), database transaction lifecycle.
 const (
 	// TxStatusPending indicates transaction is in progress, not yet committed or rolled back.
 	// Operations are being recorded but not yet finalized.
@@ -310,6 +310,7 @@ func (tc *TxCache) RecordOp(txID string, op CachedOp) error {
 	}
 
 	tx.Ops = append(tx.Ops, op)
+
 	return nil
 }
 
@@ -396,6 +397,7 @@ func (tc *TxCache) GetPending() ([]*CachedTx, error) {
 	defer tc.mu.RUnlock()
 
 	pending := make([]*CachedTx, 0)
+
 	for _, tx := range tc.cache {
 		if tx.Status == TxStatusPending {
 			pending = append(pending, tx)
@@ -437,7 +439,7 @@ func (tc *TxCache) Flush(ctx context.Context) error {
 		doc := tc.txToDocument(tx)
 
 		existing, err := tc.store.Get(ctx, TxCacheCollection, tx.TxID)
-		if err == persistence.ErrNotFound {
+		if errors.Is(err, persistence.ErrNotFound) {
 			_, err = tc.store.Insert(ctx, TxCacheCollection, doc)
 			if err != nil {
 				return fmt.Errorf("failed to insert transaction %s: %w", tx.TxID, err)
@@ -538,7 +540,7 @@ func (tc *TxCache) Cleanup(ctx context.Context, ttl time.Duration) error {
 	toDelete := make(map[string]bool)
 
 	docs, err := tc.store.Find(ctx, TxCacheCollection, persistence.Query{})
-	if err != nil && err != persistence.ErrNotFound {
+	if err != nil && !errors.Is(err, persistence.ErrNotFound) {
 		return fmt.Errorf("failed to find transactions in storage: %w", err)
 	}
 
@@ -557,7 +559,7 @@ func (tc *TxCache) Cleanup(ctx context.Context, ttl time.Duration) error {
 	for txID := range toDelete {
 		delete(tc.cache, txID)
 
-		if err := tc.store.Delete(ctx, TxCacheCollection, txID); err != nil && err != persistence.ErrNotFound {
+		if err := tc.store.Delete(ctx, TxCacheCollection, txID); err != nil && !errors.Is(err, persistence.ErrNotFound) {
 			return fmt.Errorf("failed to delete transaction %s: %w", txID, err)
 		}
 	}
@@ -609,6 +611,7 @@ func (tc *TxCache) txToDocument(tx *CachedTx) persistence.Document {
 
 		opsData[i] = opMap
 	}
+
 	doc["ops"] = opsData
 
 	return doc

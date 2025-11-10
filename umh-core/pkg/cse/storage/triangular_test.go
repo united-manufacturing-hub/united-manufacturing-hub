@@ -25,7 +25,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
 package storage_test
 
 import (
@@ -61,6 +60,7 @@ func (m *mockStore) CreateCollection(ctx context.Context, name string, schema *p
 	}
 
 	m.collections[name] = make(map[string]persistence.Document)
+
 	return nil
 }
 
@@ -73,6 +73,7 @@ func (m *mockStore) DropCollection(ctx context.Context, name string) error {
 	}
 
 	delete(m.collections, name)
+
 	return nil
 }
 
@@ -92,6 +93,7 @@ func (m *mockStore) Insert(ctx context.Context, collection string, doc persisten
 	}
 
 	m.collections[collection][id] = docCopy
+
 	return id, nil
 }
 
@@ -134,6 +136,7 @@ func (m *mockStore) Update(ctx context.Context, collection string, id string, do
 	}
 
 	m.collections[collection][id] = docCopy
+
 	return nil
 }
 
@@ -150,6 +153,7 @@ func (m *mockStore) Delete(ctx context.Context, collection string, id string) er
 	}
 
 	delete(m.collections[collection], id)
+
 	return nil
 }
 
@@ -167,6 +171,7 @@ func (m *mockStore) Find(ctx context.Context, collection string, query persisten
 		for k, v := range doc {
 			docCopy[k] = v
 		}
+
 		results = append(results, docCopy)
 	}
 
@@ -230,11 +235,13 @@ func (tx *mockTx) Commit() error {
 	if tx.rollback {
 		return errors.New("transaction already rolled back")
 	}
+
 	return nil
 }
 
 func (tx *mockTx) Rollback() error {
 	tx.rollback = true
+
 	return nil
 }
 

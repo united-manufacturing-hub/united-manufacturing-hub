@@ -49,14 +49,13 @@ var _ = Describe("ExponentialBackoff", func() {
 
 		It("caps delay at max", func() {
 			backoff := execution.NewExponentialBackoff(1*time.Second, 5*time.Second)
-			for i := 0; i < 10; i++ {
+			for range 10 {
 				backoff.RecordFailure()
 			}
 			delay := backoff.NextDelay()
 			Expect(delay).To(Equal(5 * time.Second))
 		})
 	})
-
 
 	Describe("Reset", func() {
 		It("resets delay to base", func() {

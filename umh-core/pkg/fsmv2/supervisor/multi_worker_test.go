@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
 package supervisor_test
 
 import (
@@ -33,9 +32,9 @@ import (
 
 var _ = Describe("Multi-Worker Supervisor", func() {
 	var (
-		s              *supervisor.Supervisor
+		s               *supervisor.Supervisor
 		triangularStore *storage.TriangularStore
-		basicStore     persistence.Store
+		basicStore      persistence.Store
 	)
 
 	BeforeEach(func() {
@@ -116,7 +115,7 @@ var _ = Describe("Multi-Worker Supervisor", func() {
 			Expect(workers).To(ContainElements("worker-1", "worker-2", "worker-3"))
 		})
 
-	It("should reject duplicate worker IDs", func() {
+		It("should reject duplicate worker IDs", func() {
 			identity := fsmv2.Identity{ID: "worker-1", Name: "Worker 1"}
 			worker1 := &mockWorker{observed: createMockObservedStateWithID("worker-1")}
 			worker2 := &mockWorker{observed: createMockObservedStateWithID("worker-1")}
@@ -130,7 +129,7 @@ var _ = Describe("Multi-Worker Supervisor", func() {
 		})
 	})
 
-Describe("RemoveWorker", func() {
+	Describe("RemoveWorker", func() {
 		It("should remove worker from registry and stop collector", func() {
 			identity := fsmv2.Identity{ID: "worker-1", Name: "Worker 1"}
 			worker := &mockWorker{observed: createMockObservedStateWithID("worker-1")}
@@ -155,7 +154,7 @@ Describe("RemoveWorker", func() {
 		})
 	})
 
-Describe("GetWorker", func() {
+	Describe("GetWorker", func() {
 		It("should return worker context for valid ID", func() {
 			identity := fsmv2.Identity{ID: "worker-1", Name: "Worker 1"}
 			worker := &mockWorker{observed: createMockObservedStateWithID("worker-1")}
@@ -176,7 +175,7 @@ Describe("GetWorker", func() {
 		})
 	})
 
-Describe("ListWorkers", func() {
+	Describe("ListWorkers", func() {
 		It("should return all worker IDs", func() {
 			identity1 := fsmv2.Identity{ID: "worker-1", Name: "Worker 1"}
 			identity2 := fsmv2.Identity{ID: "worker-2", Name: "Worker 2"}
@@ -201,7 +200,7 @@ Describe("ListWorkers", func() {
 		})
 	})
 
-Describe("GetWorkerState", func() {
+	Describe("GetWorkerState", func() {
 		It("should return state name and reason for a worker", func() {
 			identity := fsmv2.Identity{ID: "worker-1", Name: "Worker 1"}
 
@@ -228,7 +227,7 @@ Describe("GetWorkerState", func() {
 			Expect(reason).To(BeEmpty())
 		})
 
-It("should safely return state during concurrent tick operations", func() {
+		It("should safely return state during concurrent tick operations", func() {
 			identity := fsmv2.Identity{ID: "worker-1", Name: "Worker 1"}
 
 			stateWithReason := &mockState{}
@@ -244,14 +243,16 @@ It("should safely return state during concurrent tick operations", func() {
 			errorChan := make(chan error, 100)
 
 			go func() {
-				for i := 0; i < 100; i++ {
+				for range 100 {
 					stateName, reason, err := s.GetWorkerState("worker-1")
 					if err != nil {
 						errorChan <- err
+
 						return
 					}
 					if stateName == "" || reason == "" {
 						errorChan <- errors.New("empty state or reason")
+
 						return
 					}
 					time.Sleep(time.Millisecond)
@@ -269,8 +270,8 @@ It("should safely return state during concurrent tick operations", func() {
 		})
 	})
 
-Describe("TickAll", func() {
-It("should tick all workers in registry", func() {
+	Describe("TickAll", func() {
+		It("should tick all workers in registry", func() {
 			identity1 := fsmv2.Identity{ID: "worker-1", Name: "Worker 1"}
 			identity2 := fsmv2.Identity{ID: "worker-2", Name: "Worker 2"}
 			identity3 := fsmv2.Identity{ID: "worker-3", Name: "Worker 3"}
@@ -293,7 +294,7 @@ It("should tick all workers in registry", func() {
 			Expect(workers).To(ContainElements("worker-1", "worker-2", "worker-3"))
 		})
 
-It("should continue ticking other workers even if one fails", func() {
+		It("should continue ticking other workers even if one fails", func() {
 			identity1 := fsmv2.Identity{ID: "worker-1", Name: "Worker 1"}
 			identity2 := fsmv2.Identity{ID: "worker-2", Name: "Worker 2"}
 			identity3 := fsmv2.Identity{ID: "worker-3", Name: "Worker 3"}

@@ -20,6 +20,22 @@ package types
 // The three namespaces serve distinct purposes with different serialization
 // and template access patterns:
 //
+// WHY map[string]any INSTEAD OF TYPED STRUCTS:
+//
+// VariableBundle uses map[string]any because:
+//   1. Users define arbitrary config fields in YAML (cannot pre-type)
+//   2. Template variables are user-defined ({{ .CustomField }})
+//   3. Type safety enforced at template rendering (Golang templates validate)
+//
+// Example user YAML:
+//   variables:
+//     CustomIP: "192.168.1.100"      # User-defined field
+//     CustomPort: 502                # User-defined field
+//     MySpecialFlag: true            # User-defined field
+//
+// We CANNOT use structs because field names are user-controlled.
+// Type safety happens when template renders (undefined vars = error).
+//
 // User Namespace:
 //   - Contains: User-defined variables + parent state variables + computed values
 //   - Template access: Top-level ({{ .IP }}, {{ .PORT }})

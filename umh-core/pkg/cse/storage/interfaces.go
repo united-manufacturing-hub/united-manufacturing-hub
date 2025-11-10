@@ -70,5 +70,5 @@ type TriangularStoreInterface interface {
 	Registry() *Registry
 }
 
-// Compile-time check that TriangularStore implements TriangularStoreInterface
+// Compile-time check that TriangularStore implements TriangularStoreInterface.
 var _ TriangularStoreInterface = (*TriangularStore)(nil)

@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
 package supervisor_test
 
 import (
@@ -135,7 +134,7 @@ var _ = Describe("Multi-Worker Integration", func() {
 
 			go func() {
 				defer GinkgoRecover()
-				for i := 0; i < 10; i++ {
+				for range 10 {
 					identity := fsmv2.Identity{ID: "concurrent1", Name: "Concurrent Worker 1"}
 					worker := &mockWorker{
 						observed: &mockObservedState{ID: "concurrent1", CollectedAt: time.Now(), Desired: &mockDesiredState{}},
@@ -149,7 +148,7 @@ var _ = Describe("Multi-Worker Integration", func() {
 
 			go func() {
 				defer GinkgoRecover()
-				for i := 0; i < 10; i++ {
+				for range 10 {
 					identity := fsmv2.Identity{ID: "concurrent2", Name: "Concurrent Worker 2"}
 					worker := &mockWorker{
 						observed: &mockObservedState{ID: "concurrent2", CollectedAt: time.Now(), Desired: &mockDesiredState{}},

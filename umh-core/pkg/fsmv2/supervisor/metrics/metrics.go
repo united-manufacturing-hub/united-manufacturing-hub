@@ -204,6 +204,26 @@ var (
 		},
 		[]string{"supervisor_id"},
 	)
+
+	hierarchyDepth = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: namespace,
+			Subsystem: subsystem,
+			Name:      "hierarchy_depth",
+			Help:      "Depth of supervisor in hierarchy tree (0=root, 1=child, 2=grandchild, etc.)",
+		},
+		[]string{"supervisor_id"},
+	)
+
+	hierarchySize = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: namespace,
+			Subsystem: subsystem,
+			Name:      "hierarchy_size",
+			Help:      "Total number of supervisors in subtree (self + all descendants)",
+		},
+		[]string{"supervisor_id"},
+	)
 )
 
 func RecordCircuitOpen(supervisorID string, open bool) {
@@ -275,4 +295,26 @@ func RecordTemplateRenderingError(supervisorID, errorType string) {
 
 func RecordVariablePropagation(supervisorID string) {
 	variablePropagationTotal.WithLabelValues(supervisorID).Inc()
+}
+
+func RecordHierarchyDepth(supervisorID string, depth int) {
+	hierarchyDepth.WithLabelValues(supervisorID).Set(float64(depth))
+}
+
+func RecordHierarchySize(supervisorID string, size int) {
+	hierarchySize.WithLabelValues(supervisorID).Set(float64(size))
+}
+
+// GetHierarchyDepthGauge returns the hierarchy depth gauge for testing.
+// This function is exported to allow test code to read metric values via promtest.ToFloat64().
+// Production code should use RecordHierarchyDepth() instead.
+func GetHierarchyDepthGauge() *prometheus.GaugeVec {
+	return hierarchyDepth
+}
+
+// GetHierarchySizeGauge returns the hierarchy size gauge for testing.
+// This function is exported to allow test code to read metric values via promtest.ToFloat64().
+// Production code should use RecordHierarchySize() instead.
+func GetHierarchySizeGauge() *prometheus.GaugeVec {
+	return hierarchySize
 }

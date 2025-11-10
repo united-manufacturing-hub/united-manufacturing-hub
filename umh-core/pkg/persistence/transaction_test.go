@@ -152,10 +152,10 @@ func TestWithTransaction_Success(t *testing.T) {
 func TestWithTransaction_Error(t *testing.T) {
 	store := &mockStore{}
 	expectedErr := errors.New("transaction failed")
+
 	err := persistence.WithTransaction(context.Background(), store, func(tx persistence.Tx) error {
 		return expectedErr
 	})
-
 	if err == nil {
 		t.Error("WithTransaction() expected error, got nil")
 	} else if !errors.Is(err, expectedErr) && err.Error() != expectedErr.Error() {
@@ -279,7 +279,6 @@ func TestWithRetry_NonConflictError(t *testing.T) {
 
 		return otherErr
 	})
-
 	if err == nil {
 		t.Error("WithRetry() expected error, got nil")
 	} else if !errors.Is(err, otherErr) && err.Error() != otherErr.Error() {

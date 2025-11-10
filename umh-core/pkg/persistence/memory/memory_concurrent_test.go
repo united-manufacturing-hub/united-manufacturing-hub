@@ -61,7 +61,7 @@ var _ = Describe("Concurrent Operations", func() {
 				errors := make(chan error, numReaders)
 
 				wg.Add(numReaders)
-				for i := 0; i < numReaders; i++ {
+				for i := range numReaders {
 					go func(readerID int) {
 						defer GinkgoRecover()
 						defer wg.Done()
@@ -69,15 +69,18 @@ var _ = Describe("Concurrent Operations", func() {
 						doc, err := store.Get(ctx, "test_collection", "doc-1")
 						if err != nil {
 							errors <- fmt.Errorf("reader %d failed: %w", readerID, err)
+
 							return
 						}
 
 						if doc["name"] != "Test Document" {
 							errors <- fmt.Errorf("reader %d got corrupted data: %v", readerID, doc["name"])
+
 							return
 						}
 						if doc["value"] != 42 {
 							errors <- fmt.Errorf("reader %d got corrupted value: %v", readerID, doc["value"])
+
 							return
 						}
 					}(i)
@@ -93,7 +96,7 @@ var _ = Describe("Concurrent Operations", func() {
 		Context("different documents", func() {
 			BeforeEach(func() {
 				const numDocs = 20
-				for i := 0; i < numDocs; i++ {
+				for i := range numDocs {
 					_, err := store.Insert(ctx, "test_collection", persistence.Document{
 						"id":    fmt.Sprintf("doc-%d", i),
 						"value": i * 10,
@@ -109,7 +112,7 @@ var _ = Describe("Concurrent Operations", func() {
 				errors := make(chan error, numDocs*readersPerDoc)
 
 				for docID := 0; docID < numDocs; docID++ {
-					for reader := 0; reader < readersPerDoc; reader++ {
+					for reader := range readersPerDoc {
 						wg.Add(1)
 						go func(docIdx, readerIdx int) {
 							defer GinkgoRecover()
@@ -119,6 +122,7 @@ var _ = Describe("Concurrent Operations", func() {
 							doc, err := store.Get(ctx, "test_collection", docID)
 							if err != nil {
 								errors <- fmt.Errorf("doc %s reader %d failed: %w", docID, readerIdx, err)
+
 								return
 							}
 
@@ -126,6 +130,7 @@ var _ = Describe("Concurrent Operations", func() {
 							if doc["value"] != expectedValue {
 								errors <- fmt.Errorf("doc %s reader %d got wrong value: expected %d, got %v",
 									docID, readerIdx, expectedValue, doc["value"])
+
 								return
 							}
 						}(docID, reader)
@@ -148,7 +153,7 @@ var _ = Describe("Concurrent Operations", func() {
 				errors := make(chan error, numWriters)
 
 				wg.Add(numWriters)
-				for i := 0; i < numWriters; i++ {
+				for i := range numWriters {
 					go func(writerID int) {
 						defer GinkgoRecover()
 						defer wg.Done()
@@ -180,7 +185,7 @@ var _ = Describe("Concurrent Operations", func() {
 	Describe("Concurrent Updates", func() {
 		BeforeEach(func() {
 			const numDocs = 50
-			for i := 0; i < numDocs; i++ {
+			for i := range numDocs {
 				_, err := store.Insert(ctx, "test_collection", persistence.Document{
 					"id":    fmt.Sprintf("doc-%d", i),
 					"value": 0,
@@ -195,7 +200,7 @@ var _ = Describe("Concurrent Operations", func() {
 			errors := make(chan error, numDocs)
 
 			wg.Add(numDocs)
-			for i := 0; i < numDocs; i++ {
+			for i := range numDocs {
 				go func(docIdx int) {
 					defer GinkgoRecover()
 					defer wg.Done()
@@ -216,7 +221,7 @@ var _ = Describe("Concurrent Operations", func() {
 
 			Expect(errors).To(BeEmpty())
 
-			for i := 0; i < numDocs; i++ {
+			for i := range numDocs {
 				docID := fmt.Sprintf("doc-%d", i)
 				doc, err := store.Get(ctx, "test_collection", docID)
 				Expect(err).ToNot(HaveOccurred())
@@ -229,7 +234,7 @@ var _ = Describe("Concurrent Operations", func() {
 	Describe("Concurrent Deletes", func() {
 		BeforeEach(func() {
 			const numDocs = 50
-			for i := 0; i < numDocs; i++ {
+			for i := range numDocs {
 				_, err := store.Insert(ctx, "test_collection", persistence.Document{
 					"id":   fmt.Sprintf("doc-%d", i),
 					"data": fmt.Sprintf("Data %d", i),
@@ -244,7 +249,7 @@ var _ = Describe("Concurrent Operations", func() {
 			errors := make(chan error, numDocs)
 
 			wg.Add(numDocs)
-			for i := 0; i < numDocs; i++ {
+			for i := range numDocs {
 				go func(docIdx int) {
 					defer GinkgoRecover()
 					defer wg.Done()
@@ -271,7 +276,7 @@ var _ = Describe("Concurrent Operations", func() {
 	Describe("Mixed Read-Write Operations", func() {
 		BeforeEach(func() {
 			const numInitialDocs = 20
-			for i := 0; i < numInitialDocs; i++ {
+			for i := range numInitialDocs {
 				_, err := store.Insert(ctx, "test_collection", persistence.Document{
 					"id":    fmt.Sprintf("doc-%d", i),
 					"value": i,
@@ -289,7 +294,7 @@ var _ = Describe("Concurrent Operations", func() {
 			var wg sync.WaitGroup
 			errors := make(chan error, numReaders+numWriters+numUpdaters)
 
-			for i := 0; i < numReaders; i++ {
+			for i := range numReaders {
 				wg.Add(1)
 				go func(readerID int) {
 					defer GinkgoRecover()
@@ -299,6 +304,7 @@ var _ = Describe("Concurrent Operations", func() {
 					doc, err := store.Get(ctx, "test_collection", docID)
 					if err != nil {
 						errors <- fmt.Errorf("reader %d failed: %w", readerID, err)
+
 						return
 					}
 					if doc["id"] != docID {
@@ -307,7 +313,7 @@ var _ = Describe("Concurrent Operations", func() {
 				}(i)
 			}
 
-			for i := 0; i < numWriters; i++ {
+			for i := range numWriters {
 				wg.Add(1)
 				go func(writerID int) {
 					defer GinkgoRecover()
@@ -324,7 +330,7 @@ var _ = Describe("Concurrent Operations", func() {
 				}(i)
 			}
 
-			for i := 0; i < numUpdaters; i++ {
+			for i := range numUpdaters {
 				wg.Add(1)
 				go func(updaterID int) {
 					defer GinkgoRecover()
@@ -371,7 +377,7 @@ var _ = Describe("Concurrent Operations", func() {
 			var wg sync.WaitGroup
 			errors := make(chan error, numReaders+numWriters)
 
-			for i := 0; i < numReaders; i++ {
+			for i := range numReaders {
 				wg.Add(1)
 				go func(readerID int) {
 					defer GinkgoRecover()
@@ -380,6 +386,7 @@ var _ = Describe("Concurrent Operations", func() {
 					doc, err := store.Get(ctx, "test_collection", "doc-1")
 					if err != nil {
 						errors <- fmt.Errorf("reader %d failed: %w", readerID, err)
+
 						return
 					}
 
@@ -388,6 +395,7 @@ var _ = Describe("Concurrent Operations", func() {
 
 					if !ok1 || !ok2 {
 						errors <- fmt.Errorf("reader %d got non-int fields", readerID)
+
 						return
 					}
 
@@ -398,7 +406,7 @@ var _ = Describe("Concurrent Operations", func() {
 				}(i)
 			}
 
-			for i := 0; i < numWriters; i++ {
+			for i := range numWriters {
 				wg.Add(1)
 				go func(writerID int) {
 					defer GinkgoRecover()
@@ -431,7 +439,7 @@ var _ = Describe("Concurrent Operations", func() {
 				errors := make(chan error, numTransactions)
 
 				wg.Add(numTransactions)
-				for i := 0; i < numTransactions; i++ {
+				for i := range numTransactions {
 					go func(txID int) {
 						defer GinkgoRecover()
 						defer wg.Done()
@@ -439,6 +447,7 @@ var _ = Describe("Concurrent Operations", func() {
 						tx, err := store.BeginTx(ctx)
 						if err != nil {
 							errors <- fmt.Errorf("tx %d begin failed: %w", txID, err)
+
 							return
 						}
 
@@ -451,6 +460,7 @@ var _ = Describe("Concurrent Operations", func() {
 						if err != nil {
 							errors <- fmt.Errorf("tx %d insert failed: %w", txID, err)
 							tx.Rollback()
+
 							return
 						}
 
@@ -487,7 +497,7 @@ var _ = Describe("Concurrent Operations", func() {
 				var wg sync.WaitGroup
 				errors := make(chan error, numReaders+numWriters)
 
-				for i := 0; i < numReaders; i++ {
+				for i := range numReaders {
 					wg.Add(1)
 					go func(readerID int) {
 						defer GinkgoRecover()
@@ -496,6 +506,7 @@ var _ = Describe("Concurrent Operations", func() {
 						tx, err := store.BeginTx(ctx)
 						if err != nil {
 							errors <- fmt.Errorf("reader tx %d begin failed: %w", readerID, err)
+
 							return
 						}
 						defer tx.Rollback()
@@ -503,6 +514,7 @@ var _ = Describe("Concurrent Operations", func() {
 						doc, err := tx.Get(ctx, "test_collection", "shared-doc")
 						if err != nil {
 							errors <- fmt.Errorf("reader tx %d get failed: %w", readerID, err)
+
 							return
 						}
 
@@ -512,7 +524,7 @@ var _ = Describe("Concurrent Operations", func() {
 					}(i)
 				}
 
-				for i := 0; i < numWriters; i++ {
+				for i := range numWriters {
 					wg.Add(1)
 					go func(writerID int) {
 						defer GinkgoRecover()
@@ -521,6 +533,7 @@ var _ = Describe("Concurrent Operations", func() {
 						tx, err := store.BeginTx(ctx)
 						if err != nil {
 							errors <- fmt.Errorf("writer tx %d begin failed: %w", writerID, err)
+
 							return
 						}
 
@@ -531,6 +544,7 @@ var _ = Describe("Concurrent Operations", func() {
 						if err != nil {
 							errors <- fmt.Errorf("writer tx %d update failed: %w", writerID, err)
 							tx.Rollback()
+
 							return
 						}
 
@@ -560,7 +574,7 @@ var _ = Describe("Concurrent Operations", func() {
 				errors := make(chan error, numTransactions)
 
 				wg.Add(numTransactions)
-				for i := 0; i < numTransactions; i++ {
+				for i := range numTransactions {
 					go func(txID int) {
 						defer GinkgoRecover()
 						defer wg.Done()
@@ -568,6 +582,7 @@ var _ = Describe("Concurrent Operations", func() {
 						tx, err := store.BeginTx(ctx)
 						if err != nil {
 							errors <- fmt.Errorf("tx %d begin failed: %w", txID, err)
+
 							return
 						}
 
@@ -579,6 +594,7 @@ var _ = Describe("Concurrent Operations", func() {
 						if err != nil {
 							errors <- fmt.Errorf("tx %d insert failed: %w", txID, err)
 							tx.Rollback()
+
 							return
 						}
 
@@ -622,7 +638,7 @@ var _ = Describe("Concurrent Operations", func() {
 			var wg sync.WaitGroup
 			errors := make(chan error, numCollections*2)
 
-			for i := 0; i < numCollections; i++ {
+			for i := range numCollections {
 				wg.Add(1)
 				go func(collID int) {
 					defer GinkgoRecover()
@@ -638,7 +654,7 @@ var _ = Describe("Concurrent Operations", func() {
 
 			wg.Wait()
 
-			for i := 0; i < numCollections; i++ {
+			for i := range numCollections {
 				wg.Add(1)
 				go func(collID int) {
 					defer GinkgoRecover()
@@ -660,7 +676,7 @@ var _ = Describe("Concurrent Operations", func() {
 
 			Expect(errors).To(BeEmpty())
 
-			for i := 0; i < numCollections; i++ {
+			for i := range numCollections {
 				collName := fmt.Sprintf("collection-%d", i)
 				docs, err := store.Find(ctx, collName, persistence.Query{})
 				Expect(err).ToNot(HaveOccurred())
@@ -672,7 +688,7 @@ var _ = Describe("Concurrent Operations", func() {
 	Describe("Concurrent Collection Drop", func() {
 		BeforeEach(func() {
 			const numCollections = 20
-			for i := 0; i < numCollections; i++ {
+			for i := range numCollections {
 				collName := fmt.Sprintf("collection-%d", i)
 				err := store.CreateCollection(ctx, collName, nil)
 				Expect(err).ToNot(HaveOccurred())
@@ -690,7 +706,7 @@ var _ = Describe("Concurrent Operations", func() {
 			errors := make(chan error, numCollections)
 
 			wg.Add(numCollections)
-			for i := 0; i < numCollections; i++ {
+			for i := range numCollections {
 				go func(collID int) {
 					defer GinkgoRecover()
 					defer wg.Done()
@@ -708,7 +724,7 @@ var _ = Describe("Concurrent Operations", func() {
 
 			Expect(errors).To(BeEmpty())
 
-			for i := 0; i < numCollections; i++ {
+			for i := range numCollections {
 				collName := fmt.Sprintf("collection-%d", i)
 				_, err := store.Find(ctx, collName, persistence.Query{})
 				Expect(err).To(HaveOccurred())
@@ -726,13 +742,13 @@ var _ = Describe("Concurrent Operations", func() {
 			var wg sync.WaitGroup
 			errors := make(chan error, numGoroutines*operationsPerGoroutine)
 
-			for g := 0; g < numGoroutines; g++ {
+			for g := range numGoroutines {
 				wg.Add(1)
 				go func(goroutineID int) {
 					defer GinkgoRecover()
 					defer wg.Done()
 
-					for op := 0; op < operationsPerGoroutine; op++ {
+					for op := range operationsPerGoroutine {
 						docID := fmt.Sprintf("g%d-doc%d", goroutineID, op)
 
 						_, err := store.Insert(ctx, "test_collection", persistence.Document{
@@ -742,12 +758,14 @@ var _ = Describe("Concurrent Operations", func() {
 						})
 						if err != nil {
 							errors <- fmt.Errorf("g%d op%d insert failed: %w", goroutineID, op, err)
+
 							continue
 						}
 
 						_, err = store.Get(ctx, "test_collection", docID)
 						if err != nil {
 							errors <- fmt.Errorf("g%d op%d get failed: %w", goroutineID, op, err)
+
 							continue
 						}
 
@@ -759,6 +777,7 @@ var _ = Describe("Concurrent Operations", func() {
 						})
 						if err != nil {
 							errors <- fmt.Errorf("g%d op%d update failed: %w", goroutineID, op, err)
+
 							continue
 						}
 
@@ -808,7 +827,7 @@ var _ = Describe("Concurrent Operations", func() {
 			errors := make(chan error, numMutators)
 
 			wg.Add(numMutators)
-			for i := 0; i < numMutators; i++ {
+			for i := range numMutators {
 				go func(mutatorID int) {
 					defer GinkgoRecover()
 					defer wg.Done()
@@ -816,6 +835,7 @@ var _ = Describe("Concurrent Operations", func() {
 					doc, err := store.Get(ctx, "test_collection", "doc-1")
 					if err != nil {
 						errors <- fmt.Errorf("mutator %d get failed: %w", mutatorID, err)
+
 						return
 					}
 
@@ -825,6 +845,7 @@ var _ = Describe("Concurrent Operations", func() {
 					retrievedAgain, err := store.Get(ctx, "test_collection", "doc-1")
 					if err != nil {
 						errors <- fmt.Errorf("mutator %d second get failed: %w", mutatorID, err)
+
 						return
 					}
 

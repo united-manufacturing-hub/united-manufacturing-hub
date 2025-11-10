@@ -45,18 +45,21 @@ func newHierarchicalTickLogger() *hierarchicalTickLogger {
 func (h *hierarchicalTickLogger) Log(event string) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+
 	h.events = append(h.events, event)
 }
 
 func (h *hierarchicalTickLogger) GetEvents() []string {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+
 	return append([]string{}, h.events...)
 }
 
 func (h *hierarchicalTickLogger) Clear() {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+
 	h.events = make([]string, 0)
 }
 
@@ -83,11 +86,13 @@ func (m *mockHierarchicalWorker) CollectObservedState(ctx context.Context) (fsmv
 	if m.failAfterCall >= 0 && currentCall > m.failAfterCall && m.observedErr != nil {
 		return nil, m.observedErr
 	}
+
 	return m.observed, nil
 }
 
 func (m *mockHierarchicalWorker) DeriveDesiredState(spec interface{}) (types.DesiredState, error) {
-	m.logger.Log(fmt.Sprintf("DeriveDesiredState:%s", m.id))
+	m.logger.Log("DeriveDesiredState:" + m.id)
+
 	return types.DesiredState{
 		State:         m.stateName,
 		ChildrenSpecs: m.childrenSpecs,
@@ -101,6 +106,7 @@ func (m *mockHierarchicalWorker) GetInitialState() fsmv2.State {
 func (m *mockHierarchicalWorker) IncrementTickCount() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.tickCount++
 	m.logger.Log(fmt.Sprintf("Tick:%s:count=%d", m.id, m.tickCount))
 }
@@ -108,6 +114,7 @@ func (m *mockHierarchicalWorker) IncrementTickCount() {
 func (m *mockHierarchicalWorker) GetTickCount() int {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	return m.tickCount
 }
 
@@ -285,7 +292,7 @@ var _ = Describe("Integration: Hierarchical Composition (Task 0.7)", func() {
 			// Verify hierarchy structure: parent has child, child has grandchild
 			Expect(parentSup.GetChildren()).To(HaveKey("child"), "parent contains child")
 			Expect(childSup.GetChildren()).To(HaveKey("grandchild"), "child contains grandchild")
-			Expect(grandchildSup.GetChildren()).To(HaveLen(0), "grandchild has no children (leaf node)")
+			Expect(grandchildSup.GetChildren()).To(BeEmpty(), "grandchild has no children (leaf node)")
 		})
 	})
 

@@ -28,9 +28,9 @@ import (
 
 // TestObservedState is a mock ObservedState for testing subdirectories.
 type TestObservedState struct {
-	ID          string                `json:"id"`
-	CollectedAt time.Time             `json:"collectedAt"`
-	Desired     fsmv2.DesiredState    `json:"desired"`
+	ID          string             `json:"id"`
+	CollectedAt time.Time          `json:"collectedAt"`
+	Desired     fsmv2.DesiredState `json:"desired"`
 }
 
 func (t *TestObservedState) GetObservedDesiredState() fsmv2.DesiredState {
@@ -170,6 +170,7 @@ func CreateTestTriangularStore() *storage.TriangularStore {
 	}); err != nil {
 		panic(err)
 	}
+
 	if err := registry.Register(&storage.CollectionMetadata{
 		Name:          workerType + "_desired",
 		WorkerType:    workerType,
@@ -179,6 +180,7 @@ func CreateTestTriangularStore() *storage.TriangularStore {
 	}); err != nil {
 		panic(err)
 	}
+
 	if err := registry.Register(&storage.CollectionMetadata{
 		Name:          workerType + "_observed",
 		WorkerType:    workerType,
@@ -192,9 +194,11 @@ func CreateTestTriangularStore() *storage.TriangularStore {
 	if err := basicStore.CreateCollection(ctx, workerType+"_identity", nil); err != nil {
 		panic(fmt.Sprintf("failed to create identity collection: %v", err))
 	}
+
 	if err := basicStore.CreateCollection(ctx, workerType+"_desired", nil); err != nil {
 		panic(fmt.Sprintf("failed to create desired collection: %v", err))
 	}
+
 	if err := basicStore.CreateCollection(ctx, workerType+"_observed", nil); err != nil {
 		panic(fmt.Sprintf("failed to create observed collection: %v", err))
 	}
@@ -224,6 +228,7 @@ func CreateTestTriangularStoreForWorkerType(workerType string) *storage.Triangul
 	}); err != nil {
 		panic(err)
 	}
+
 	if err := registry.Register(&storage.CollectionMetadata{
 		Name:          workerType + "_desired",
 		WorkerType:    workerType,
@@ -233,6 +238,7 @@ func CreateTestTriangularStoreForWorkerType(workerType string) *storage.Triangul
 	}); err != nil {
 		panic(err)
 	}
+
 	if err := registry.Register(&storage.CollectionMetadata{
 		Name:          workerType + "_observed",
 		WorkerType:    workerType,
@@ -246,9 +252,11 @@ func CreateTestTriangularStoreForWorkerType(workerType string) *storage.Triangul
 	if err := basicStore.CreateCollection(ctx, workerType+"_identity", nil); err != nil {
 		panic(fmt.Sprintf("failed to create identity collection: %v", err))
 	}
+
 	if err := basicStore.CreateCollection(ctx, workerType+"_desired", nil); err != nil {
 		panic(fmt.Sprintf("failed to create desired collection: %v", err))
 	}
+
 	if err := basicStore.CreateCollection(ctx, workerType+"_observed", nil); err != nil {
 		panic(fmt.Sprintf("failed to create observed collection: %v", err))
 	}
@@ -276,5 +284,6 @@ func CreateTestSupervisorWithCircuitState(circuitOpen bool) *Supervisor {
 		CollectorHealth: CollectorHealthConfig{},
 	})
 	s.circuitOpen = circuitOpen
+
 	return s
 }

@@ -25,7 +25,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
 // Package storage provides CSE (Control Sync Engine) conventions for FSM v2 persistence.
 //
 // CSE is a three-tier sync system inspired by Linear's sync engine:
@@ -59,6 +58,7 @@
 package storage
 
 import (
+	"errors"
 	"fmt"
 	"sync"
 )
@@ -69,7 +69,7 @@ var (
 	// DESIGN DECISION: Global registry for convenience
 	// WHY: Most applications only need one registry, simplifies common case
 	// TRADE-OFF: Global state, but acceptable (registry is read-only after startup)
-	// INSPIRED BY: http.DefaultServeMux pattern in Go standard library
+	// INSPIRED BY: http.DefaultServeMux pattern in Go standard library.
 	globalRegistry = NewRegistry()
 )
 
@@ -114,15 +114,15 @@ func GetTriangularCollections(workerType string) (identity, desired, observed *C
 // DESIGN DECISION: Standardized field names with underscore prefix
 // WHY: Prevent naming collisions with user data, signal "system field"
 // TRADE-OFF: No flexibility in field naming, but consistency is critical for sync engine
-// INSPIRED BY: Linear's sync engine metadata field conventions (_sync_id, _version)
+// INSPIRED BY: Linear's sync engine metadata field conventions (_sync_id, _version).
 const (
 	// FieldSyncID is the global sync version, incremented on every change across all collections.
 	// Used for efficient "give me all changes since sync_id X" queries.
-	// Index this field for sync queries: WHERE _sync_id > last_synced
+	// Index this field for sync queries: WHERE _sync_id > last_synced.
 	FieldSyncID = "_sync_id"
 
 	// FieldVersion is the document version used for optimistic locking.
-	// Prevents lost updates: UPDATE ... WHERE _version = expected_version
+	// Prevents lost updates: UPDATE ... WHERE _version = expected_version.
 	FieldVersion = "_version"
 
 	// FieldCreatedAt is the creation timestamp.
@@ -147,10 +147,10 @@ const (
 // DESIGN DECISION: Three separate collections per worker type
 // WHY: Separates immutable identity, user intent, and system reality
 // TRADE-OFF: More collections to manage, but clearer separation of concerns
-// INSPIRED BY: FSM v2 triangular model architecture
+// INSPIRED BY: FSM v2 triangular model architecture.
 const (
 	// RoleIdentity represents immutable worker identity (IP, hostname, bootstrap config).
-	// Never changes after creation, establishes "what is this worker?"
+	// Never changes after creation, establishes "what is this worker?".
 	RoleIdentity = "identity"
 
 	// RoleDesired represents user intent and configuration.
@@ -300,6 +300,7 @@ func (r *Registry) Register(metadata *CollectionMetadata) error {
 	}
 
 	r.collections[metadata.Name] = metadata
+
 	return nil
 }
 
@@ -308,14 +309,14 @@ func (r *Registry) Register(metadata *CollectionMetadata) error {
 // DESIGN DECISION: Fail fast with validation at registration time
 // WHY: Catch configuration errors early (at startup), not during sync
 // TRADE-OFF: More upfront validation code, but prevents runtime errors
-// INSPIRED BY: "Parse, don't validate" principle - ensure valid state
+// INSPIRED BY: "Parse, don't validate" principle - ensure valid state.
 func validateMetadata(metadata *CollectionMetadata) error {
 	if metadata == nil {
-		return fmt.Errorf("metadata cannot be nil")
+		return errors.New("metadata cannot be nil")
 	}
 
 	if metadata.Name == "" {
-		return fmt.Errorf("collection name cannot be empty")
+		return errors.New("collection name cannot be empty")
 	}
 
 	if metadata.WorkerType == "" {
@@ -372,6 +373,7 @@ func (r *Registry) IsRegistered(collectionName string) bool {
 	defer r.mu.RUnlock()
 
 	_, exists := r.collections[collectionName]
+
 	return exists
 }
 
@@ -446,9 +448,11 @@ func (r *Registry) GetTriangularCollections(workerType string) (identity, desire
 	if foundIdentity == nil {
 		return nil, nil, nil, fmt.Errorf("identity collection not found for worker type %q", workerType)
 	}
+
 	if foundDesired == nil {
 		return nil, nil, nil, fmt.Errorf("desired collection not found for worker type %q", workerType)
 	}
+
 	if foundObserved == nil {
 		return nil, nil, nil, fmt.Errorf("observed collection not found for worker type %q", workerType)
 	}
@@ -484,6 +488,7 @@ func (r *Registry) RegisterVersion(workerType, role, version string) error {
 			meta.SchemaVersion = version
 		}
 	}
+
 	return nil
 }
 
@@ -497,6 +502,7 @@ func (r *Registry) GetVersion(collection string) string {
 	if meta, exists := r.collections[collection]; exists {
 		return meta.SchemaVersion
 	}
+
 	return ""
 }
 
@@ -509,11 +515,13 @@ func (r *Registry) GetAllVersions() map[string]string {
 	defer r.mu.RUnlock()
 
 	versions := make(map[string]string)
+
 	for name, meta := range r.collections {
 		if meta.SchemaVersion != "" {
 			versions[name] = meta.SchemaVersion
 		}
 	}
+
 	return versions
 }
 
@@ -532,13 +540,14 @@ func (r *Registry) GetAllVersions() map[string]string {
 //	registry.RegisterFeature("triangular_model", true)
 func (r *Registry) RegisterFeature(feature string, supported bool) error {
 	if feature == "" {
-		return fmt.Errorf("feature name cannot be empty")
+		return errors.New("feature name cannot be empty")
 	}
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
 	r.features[feature] = supported
+
 	return nil
 }
 
@@ -550,6 +559,7 @@ func (r *Registry) HasFeature(feature string) bool {
 	defer r.mu.RUnlock()
 
 	supported, exists := r.features[feature]
+
 	return exists && supported
 }
 
@@ -564,5 +574,6 @@ func (r *Registry) GetFeatures() map[string]bool {
 	for name, supported := range r.features {
 		features[name] = supported
 	}
+
 	return features
 }

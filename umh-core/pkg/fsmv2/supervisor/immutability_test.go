@@ -72,7 +72,7 @@ var _ = Describe("Snapshot Immutability (I9)", func() {
 				}
 
 				// Even after multiple invocations, original remains unchanged
-				for i := 0; i < 5; i++ {
+				for range 5 {
 					_, _, _ = mutatingState.Next(originalSnapshot)
 					Expect(originalSnapshot.Observed).ToNot(BeNil())
 				}

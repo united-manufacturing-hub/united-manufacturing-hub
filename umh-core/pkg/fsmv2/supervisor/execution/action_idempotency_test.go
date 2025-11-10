@@ -37,7 +37,7 @@ var _ = Describe("Action Idempotency Pattern (I10)", func() {
 		It("should show why non-idempotent actions fail", func() {
 			action := &exampleNonIdempotentAction{}
 
-			for i := 0; i < 3; i++ {
+			for range 3 {
 				_ = action.Execute(context.Background())
 			}
 

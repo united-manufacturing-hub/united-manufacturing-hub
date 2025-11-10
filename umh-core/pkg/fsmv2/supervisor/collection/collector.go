@@ -200,6 +200,7 @@ func (c *Collector) collectAndSaveObservedState(ctx context.Context) error {
 	observed, err := c.config.Worker.CollectObservedState(ctx)
 	if err != nil {
 		c.config.Logger.Debugf("[DataFreshness] Worker %s: Failed to collect observation: %v", c.config.Identity.ID, err)
+
 		return err
 	}
 
@@ -215,8 +216,10 @@ func (c *Collector) collectAndSaveObservedState(ctx context.Context) error {
 	}
 
 	saveStartTime := time.Now()
+
 	if err := c.config.Store.SaveObserved(ctx, c.config.WorkerType, c.config.Identity.ID, observed); err != nil {
 		c.config.Logger.Debugf("[DataFreshness] Worker %s: Failed to save observation: %v", c.config.Identity.ID, err)
+
 		return err
 	}
 

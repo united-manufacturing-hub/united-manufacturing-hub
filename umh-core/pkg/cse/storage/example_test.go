@@ -170,6 +170,7 @@ func Example_cseFieldConstants() {
 	}
 
 	fmt.Println("CSE metadata fields:")
+
 	for _, field := range fields {
 		fmt.Printf("- %s\n", field)
 	}
@@ -193,6 +194,7 @@ func Example_roleConstants() {
 	}
 
 	fmt.Println("Triangular model roles:")
+
 	for _, role := range roles {
 		fmt.Printf("- %s\n", role)
 	}

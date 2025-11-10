@@ -25,7 +25,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
 package storage_test
 
 import (
@@ -162,7 +161,7 @@ var _ = Describe("TxCache", func() {
 		})
 
 		It("should record multiple operations", func() {
-			for i := 0; i < 3; i++ {
+			for i := range 3 {
 				op := storage.CachedOp{
 					OpType:     "insert",
 					Collection: "test",
@@ -323,6 +322,7 @@ var _ = Describe("TxCache", func() {
 		It("should replay all operations", func() {
 			executor := func(op storage.CachedOp) error {
 				executedOps = append(executedOps, op)
+
 				return nil
 			}
 
@@ -334,6 +334,7 @@ var _ = Describe("TxCache", func() {
 		It("should replay operations in order", func() {
 			executor := func(op storage.CachedOp) error {
 				executedOps = append(executedOps, op)
+
 				return nil
 			}
 
@@ -345,7 +346,7 @@ var _ = Describe("TxCache", func() {
 
 		Context("when executor returns error", func() {
 			It("should fail replay", func() {
-				expectedErr := fmt.Errorf("executor failed")
+				expectedErr := errors.New("executor failed")
 				executor := func(op storage.CachedOp) error {
 					return expectedErr
 				}
@@ -435,7 +436,7 @@ var _ = Describe("TxCache", func() {
 		It("should handle concurrent transactions safely", func() {
 			done := make(chan bool)
 
-			for i := 0; i < 10; i++ {
+			for i := range 10 {
 				go func(id int) {
 					txID := "tx-" + string(rune('0'+id))
 					cache.BeginTx(txID, nil)
@@ -451,7 +452,7 @@ var _ = Describe("TxCache", func() {
 				}(i)
 			}
 
-			for i := 0; i < 10; i++ {
+			for range 10 {
 				<-done
 			}
 

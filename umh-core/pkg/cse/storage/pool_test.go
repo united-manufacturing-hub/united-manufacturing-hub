@@ -25,7 +25,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
 package storage_test
 
 import (
@@ -40,7 +39,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 )
 
-// Mock closeable object for testing
+// Mock closeable object for testing.
 type mockCloseable struct {
 	closed bool
 	mu     sync.Mutex
@@ -49,27 +48,31 @@ type mockCloseable struct {
 func (m *mockCloseable) Close() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.closed = true
+
 	return nil
 }
 
 func (m *mockCloseable) IsClosed() bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	return m.closed
 }
 
-// Mock closeable with error
+// Mock closeable with error.
 type mockCloseableWithError struct {
 	closed bool
 }
 
 func (m *mockCloseableWithError) Close() error {
 	m.closed = true
+
 	return errors.New("close error")
 }
 
-// Mock non-closeable object
+// Mock non-closeable object.
 type mockObject struct {
 	value string
 }
@@ -325,6 +328,7 @@ var _ = Describe("ObjectPool", func() {
 		factory := func() storage.Factory {
 			return func() (interface{}, error) {
 				factoryCalled = true
+
 				return factoryObj, nil
 			}
 		}
@@ -558,7 +562,7 @@ var _ = Describe("ObjectPool", func() {
 			done := make(chan bool, 10)
 
 			// Spawn 10 goroutines
-			for i := 0; i < 10; i++ {
+			for i := range 10 {
 				go func(id int) {
 					defer GinkgoRecover()
 
@@ -574,7 +578,7 @@ var _ = Describe("ObjectPool", func() {
 			}
 
 			// Wait for all goroutines
-			for i := 0; i < 10; i++ {
+			for range 10 {
 				<-done
 			}
 
@@ -590,7 +594,7 @@ var _ = Describe("ObjectPool", func() {
 			}
 
 			// Spawn 20 goroutines trying to create same 5 keys
-			for i := 0; i < 20; i++ {
+			for i := range 20 {
 				go func(id int) {
 					defer GinkgoRecover()
 
@@ -604,7 +608,7 @@ var _ = Describe("ObjectPool", func() {
 			}
 
 			// Wait for all goroutines
-			for i := 0; i < 20; i++ {
+			for range 20 {
 				<-done
 			}
 
@@ -619,7 +623,7 @@ var _ = Describe("ObjectPool", func() {
 			done := make(chan bool, 20)
 
 			// Spawn 10 acquirers and 10 releasers
-			for i := 0; i < 10; i++ {
+			for range 10 {
 				go func() {
 					defer GinkgoRecover()
 					pool.Acquire("test-key")
@@ -634,7 +638,7 @@ var _ = Describe("ObjectPool", func() {
 			}
 
 			// Wait for all goroutines
-			for i := 0; i < 20; i++ {
+			for range 20 {
 				<-done
 			}
 
@@ -645,14 +649,14 @@ var _ = Describe("ObjectPool", func() {
 
 		It("should handle concurrent Remove safely", func(ctx SpecContext) {
 			// Add 100 objects
-			for i := 0; i < 100; i++ {
+			for i := range 100 {
 				pool.Put(fmt.Sprintf("key-%d", i), &mockCloseable{})
 			}
 
 			done := make(chan bool, 50)
 
 			// Spawn 50 goroutines removing objects
-			for i := 0; i < 50; i++ {
+			for i := range 50 {
 				go func(id int) {
 					defer GinkgoRecover()
 					pool.Remove(fmt.Sprintf("key-%d", id))
@@ -661,7 +665,7 @@ var _ = Describe("ObjectPool", func() {
 			}
 
 			// Wait for all goroutines
-			for i := 0; i < 50; i++ {
+			for range 50 {
 				<-done
 			}
 

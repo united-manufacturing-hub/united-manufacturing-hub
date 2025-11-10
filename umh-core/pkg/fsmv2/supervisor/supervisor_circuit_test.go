@@ -60,7 +60,7 @@ var _ = Describe("Circuit Breaker Integration", func() {
 				// In Phase 3, we'll verify circuit breaker behavior when it fails
 
 				// Multiple ticks should not panic
-				for i := 0; i < 3; i++ {
+				for range 3 {
 					_ = sup.Tick(ctx)
 				}
 

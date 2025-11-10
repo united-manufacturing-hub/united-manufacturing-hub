@@ -43,12 +43,14 @@ func newTickLogger() *tickLogger {
 func (t *tickLogger) Log(event string) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
+
 	t.events = append(t.events, event)
 }
 
 func (t *tickLogger) GetEvents() []string {
 	t.mu.Lock()
 	defer t.mu.Unlock()
+
 	return append([]string{}, t.events...)
 }
 
@@ -65,6 +67,7 @@ func (h *hierarchicalWorker) CollectObservedState(ctx context.Context) (fsmv2.Ob
 
 func (h *hierarchicalWorker) DeriveDesiredState(spec interface{}) (types.DesiredState, error) {
 	h.logger.Log("DeriveDesiredState:" + h.id)
+
 	return types.DesiredState{
 		State:         "running",
 		ChildrenSpecs: h.childrenSpecs,

@@ -12,19 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
 // Package supervisor manages the lifecycle of workers in the FSM system.
 //
 // # Architecture Constraints
@@ -58,6 +45,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/collection"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/execution"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/health"
@@ -174,6 +162,14 @@ func (s *stubAction) Name() string {
 // State persistence uses TriangularStore, which currently assumes all workers
 // run in the same process and can share in-memory state. For distributed deployments,
 // the persistence layer would need to be replaced with a distributed storage backend.
+
+// factoryRegistryAdapter implements types.WorkerTypeChecker interface for validation
+type factoryRegistryAdapter struct{}
+
+func (f *factoryRegistryAdapter) ListRegisteredTypes() []string {
+	return factory.ListRegisteredTypes()
+}
+
 type Supervisor struct {
 	workerType            string                           // Type of workers managed (e.g., "container")
 	workers               map[string]*WorkerContext        // workerID → worker context
@@ -191,9 +187,12 @@ type Supervisor struct {
 	globalVars            map[string]any                   // Global variables (fleet-wide settings from management system)
 	createdAt             time.Time                        // Timestamp when supervisor was created
 	parentID              string                           // ID of parent supervisor (empty string for root supervisors)
+	parent                *Supervisor                      // Pointer to parent supervisor (nil for root supervisors)
 	healthChecker         *InfrastructureHealthChecker     // Infrastructure health monitoring
 	circuitOpen           bool                             // Circuit breaker state
 	actionExecutor        *execution.ActionExecutor        // Async action execution (Phase 2)
+	metricsStopChan       chan struct{}                    // Channel to stop metrics reporter
+	metricsReporterDone   chan struct{}                    // Channel signaling metrics reporter stopped
 }
 
 // WorkerContext encapsulates the runtime state for a single worker
@@ -400,7 +399,9 @@ func NewSupervisor(cfg Config) *Supervisor {
 		parentID:              "", // Root supervisor has empty parentID
 		healthChecker:         NewInfrastructureHealthChecker(DefaultMaxInfraRecoveryAttempts, DefaultRecoveryAttemptWindow),
 		circuitOpen:           false,
-		actionExecutor:        execution.NewActionExecutor(10),
+		actionExecutor:        execution.NewActionExecutor(10, cfg.WorkerType),
+		metricsStopChan:       make(chan struct{}),
+		metricsReporterDone:   make(chan struct{}),
 		collectorHealth: CollectorHealth{
 			staleThreshold:     staleThreshold,
 			timeout:            timeout,
@@ -482,7 +483,7 @@ func (s *Supervisor) AddWorker(identity fsmv2.Identity, worker fsmv2.Worker) err
 		WorkerType:          s.workerType,
 	})
 
-	executor := execution.NewActionExecutor(10)
+	executor := execution.NewActionExecutor(10, identity.ID)
 
 	s.workers[identity.ID] = &WorkerContext{
 		identity:     identity,
@@ -673,6 +674,8 @@ func (s *Supervisor) Start(ctx context.Context) <-chan struct{} {
 	s.logger.Debugf("Supervisor started for workerType: %s", s.workerType)
 
 	s.actionExecutor.Start(ctx)
+
+	s.startMetricsReporter(ctx)
 
 	// Start observation collectors and action executors for all workers
 	s.mu.RLock()
@@ -1113,6 +1116,23 @@ func (s *Supervisor) Tick(ctx context.Context) error {
 		"duration_ms", templateDuration.Milliseconds())
 	metrics.RecordTemplateRenderingDuration(s.workerType, "success", templateDuration)
 
+	// Validate ChildrenSpecs before reconciliation
+	if len(desired.ChildrenSpecs) > 0 {
+		registry := &factoryRegistryAdapter{}
+
+		if err := types.ValidateChildSpecs(desired.ChildrenSpecs, registry); err != nil {
+			s.logger.Error("child spec validation failed",
+				"supervisor_id", s.workerType,
+				"error", err.Error())
+
+			return fmt.Errorf("invalid child specifications: %w", err)
+		}
+
+		s.logger.Debug("child specs validated",
+			"supervisor_id", s.workerType,
+			"child_count", len(desired.ChildrenSpecs))
+	}
+
 	// 2. Reconcile children (propagate errors)
 	if err := s.reconcileChildren(desired.ChildrenSpecs); err != nil {
 		return fmt.Errorf("failed to reconcile children: %w", err)
@@ -1366,6 +1386,8 @@ func (s *Supervisor) reconcileChildren(specs []types.ChildSpec) error {
 			//   childConfig.Store = childStore
 			childSupervisor.UpdateUserSpec(spec.UserSpec)
 			childSupervisor.stateMapping = spec.StateMapping
+			childSupervisor.parentID = s.workerType
+			childSupervisor.parent = s
 
 			s.children[spec.Name] = childSupervisor
 		}
@@ -1414,6 +1436,11 @@ func (s *Supervisor) Shutdown() {
 	defer s.mu.Unlock()
 
 	s.logger.Infof("Shutting down supervisor for worker type: %s", s.workerType)
+
+	if s.metricsStopChan != nil {
+		close(s.metricsStopChan)
+		<-s.metricsReporterDone
+	}
 
 	s.actionExecutor.Shutdown()
 
@@ -1489,4 +1516,67 @@ func getString(doc interface{}, key string, defaultValue string) string {
 	}
 
 	return str
+}
+
+// calculateHierarchyDepth returns the depth of this supervisor in the hierarchy tree.
+// Root supervisors (parent == nil) have depth 0, their children have depth 1, etc.
+// Walks up the parent chain to calculate depth recursively.
+//
+// PERFORMANCE NOTE: Uses unbounded recursion. Safe for typical UMH hierarchies (2-4 levels).
+// Deep hierarchies (>1000 levels) may cause stack overflow, but this is not expected in practice.
+func (s *Supervisor) calculateHierarchyDepth() int {
+	if s.parent == nil {
+		return 0
+	}
+
+	return 1 + s.parent.calculateHierarchyDepth()
+}
+
+// calculateHierarchySize returns the total number of supervisors in this subtree.
+// This includes the supervisor itself plus all descendants (children, grandchildren, etc.).
+func (s *Supervisor) calculateHierarchySize() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	size := 1
+
+	for _, child := range s.children {
+		size += child.calculateHierarchySize()
+	}
+
+	return size
+}
+
+// startMetricsReporter starts a goroutine that periodically records hierarchy metrics.
+// Metrics are recorded every 10 seconds to avoid excessive Prometheus cardinality.
+// The goroutine stops when s.metricsStopChan is closed.
+func (s *Supervisor) startMetricsReporter(ctx context.Context) {
+	go func() {
+		defer close(s.metricsReporterDone)
+
+		ticker := time.NewTicker(10 * time.Second)
+		defer ticker.Stop()
+
+		s.recordHierarchyMetrics()
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-s.metricsStopChan:
+				return
+			case <-ticker.C:
+				s.recordHierarchyMetrics()
+			}
+		}
+	}()
+}
+
+// recordHierarchyMetrics records current hierarchy depth and size metrics.
+func (s *Supervisor) recordHierarchyMetrics() {
+	depth := s.calculateHierarchyDepth()
+	size := s.calculateHierarchySize()
+
+	metrics.RecordHierarchyDepth(s.workerType, depth)
+	metrics.RecordHierarchySize(s.workerType, size)
 }

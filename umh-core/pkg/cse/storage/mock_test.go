@@ -22,14 +22,14 @@ import (
 )
 
 type mockTriangularStore struct {
-	SaveIdentityErr  error
-	LoadIdentityErr  error
-	SaveDesiredErr   error
-	LoadDesiredErr   error
-	SaveObservedErr  error
-	LoadObservedErr  error
-	LoadSnapshotErr  error
-	DeleteWorkerErr  error
+	SaveIdentityErr error
+	LoadIdentityErr error
+	SaveDesiredErr  error
+	LoadDesiredErr  error
+	SaveObservedErr error
+	LoadObservedErr error
+	LoadSnapshotErr error
+	DeleteWorkerErr error
 
 	identity map[string]map[string]persistence.Document
 	desired  map[string]map[string]persistence.Document
@@ -59,7 +59,9 @@ func (m *mockTriangularStore) SaveIdentity(ctx context.Context, workerType strin
 	if m.identity[workerType] == nil {
 		m.identity[workerType] = make(map[string]persistence.Document)
 	}
+
 	m.identity[workerType][id] = identity
+
 	return nil
 }
 
@@ -71,10 +73,12 @@ func (m *mockTriangularStore) LoadIdentity(ctx context.Context, workerType strin
 	if m.identity[workerType] == nil {
 		return nil, persistence.ErrNotFound
 	}
+
 	doc, ok := m.identity[workerType][id]
 	if !ok {
 		return nil, persistence.ErrNotFound
 	}
+
 	return doc, nil
 }
 
@@ -88,7 +92,9 @@ func (m *mockTriangularStore) SaveDesired(ctx context.Context, workerType string
 	if m.desired[workerType] == nil {
 		m.desired[workerType] = make(map[string]persistence.Document)
 	}
+
 	m.desired[workerType][id] = desired
+
 	return nil
 }
 
@@ -102,10 +108,12 @@ func (m *mockTriangularStore) LoadDesired(ctx context.Context, workerType string
 	if m.desired[workerType] == nil {
 		return nil, persistence.ErrNotFound
 	}
+
 	doc, ok := m.desired[workerType][id]
 	if !ok {
 		return nil, persistence.ErrNotFound
 	}
+
 	return doc, nil
 }
 
@@ -128,6 +136,7 @@ func (m *mockTriangularStore) SaveObserved(ctx context.Context, workerType strin
 	}
 
 	m.observed[workerType][id] = doc
+
 	return nil
 }
 
@@ -141,10 +150,12 @@ func (m *mockTriangularStore) LoadObserved(ctx context.Context, workerType strin
 	if m.observed[workerType] == nil {
 		return nil, persistence.ErrNotFound
 	}
+
 	doc, ok := m.observed[workerType][id]
 	if !ok {
 		return nil, persistence.ErrNotFound
 	}
+
 	return doc, nil
 }
 
@@ -178,9 +189,11 @@ func (m *mockTriangularStore) DeleteWorker(ctx context.Context, workerType strin
 	if m.identity[workerType] != nil {
 		delete(m.identity[workerType], id)
 	}
+
 	if m.desired[workerType] != nil {
 		delete(m.desired[workerType], id)
 	}
+
 	if m.observed[workerType] != nil {
 		delete(m.observed[workerType], id)
 	}

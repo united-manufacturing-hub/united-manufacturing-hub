@@ -38,7 +38,7 @@ import (
 // DESIGN DECISION: Minimal interface with single Close() method
 // WHY: Compatible with standard library io.Closer and database/sql closeable types
 // TRADE-OFF: No Shutdown context support, but keeps interface simple
-// INSPIRED BY: io.Closer, database/sql.Rows, net.Conn
+// INSPIRED BY: io.Closer, database/sql.Rows, net.Conn.
 type Closeable interface {
 	Close() error
 }
@@ -48,7 +48,7 @@ type Closeable interface {
 // DESIGN DECISION: Return interface{} instead of generic type
 // WHY: Go 1.18+ generics not yet widely adopted in umh-core codebase
 // TRADE-OFF: Type assertions required, but simpler implementation
-// INSPIRED BY: sync.Pool New function, factory pattern in design patterns
+// INSPIRED BY: sync.Pool New function, factory pattern in design patterns.
 type Factory func() (interface{}, error)
 
 // ObjectPool manages a collection of reusable objects with reference counting.
@@ -71,7 +71,7 @@ type Factory func() (interface{}, error)
 //	pool := cse.NewObjectPool()
 //
 //	// Create database connection with factory
-//	factory := func() (interface{}, error) {
+//	:= func() (interface{}, error)
 //	    return sql.Open("sqlite3", "/data/db.sqlite")
 //	}
 //	conn, _ := pool.GetOrCreate("db-conn", factory)

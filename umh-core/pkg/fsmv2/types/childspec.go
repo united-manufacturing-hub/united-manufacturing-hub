@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
 // Package types provides common data structures for FSM v2 workers.
 // These types enable declarative child management and structured state representation.
 package types
@@ -35,7 +34,7 @@ import "encoding/json"
 //	        ↓ DeriveDesiredState()
 //	DesiredState{Host: "192.168.1.100", Port: 502}
 type UserSpec struct {
-	Config    string         `json:"config" yaml:"config"`       // Raw user-provided configuration (YAML, JSON, or other format)
+	Config    string         `json:"config"    yaml:"config"`    // Raw user-provided configuration (YAML, JSON, or other format)
 	Variables VariableBundle `json:"variables" yaml:"variables"` // Variable bundle (User, Global, Internal namespaces)
 }
 
@@ -47,20 +46,39 @@ type UserSpec struct {
 // Parents don't create/destroy children directly. Instead they declare what should exist,
 // and the supervisor handles creation, updates, and cleanup automatically:
 //
-//   1. Parent returns []ChildSpec in DesiredState.ChildrenSpecs
-//   2. Supervisor compares with actual children
-//   3. Supervisor creates missing children
-//   4. Supervisor updates changed children
-//   5. Supervisor removes extra children
+//  1. Parent returns []ChildSpec in DesiredState.ChildrenSpecs
+//  2. Supervisor compares with actual children
+//  3. Supervisor creates missing children
+//  4. Supervisor updates changed children
+//  5. Supervisor removes extra children
 //
 // This enables clean separation of concerns:
 //   - Parents focus on "what should exist"
 //   - Supervisor handles "how to make it exist"
 //   - Children run independently in their own FSMs
 //
-// STATE MAPPING (optional):
-// Parents can map their own state to child states. This allows parents to say
-// "when I'm in state X, my children should be in state Y":
+// STATE MAPPING: Parent State → Child State Coordination
+//
+// StateMapping allows parent FSM states to trigger child FSM state transitions.
+// This is NOT data passing - it's state synchronization.
+//
+// Example use case: When parent enters "Starting" state, force all children
+// to enter their "Initializing" state.
+//
+// Format:
+//   StateMapping: map[string]string{
+//       "ParentStateName": "ChildStateName",
+//   }
+//
+// When to use:
+// - Parent lifecycle controls child lifecycle (e.g., Stopping → Cleanup)
+// - Parent operational state affects child behavior (e.g., Paused → Idle)
+//
+// When NOT to use:
+// - Passing data between states (use VariableBundle instead)
+// - Triggering actions (use signals instead)
+//
+// Example:
 //
 //	StateMapping: map[string]string{
 //	    "running":  "active",   // When parent is running, children should be active
@@ -101,9 +119,9 @@ type UserSpec struct {
 //	    },
 //	}
 type ChildSpec struct {
-	Name         string            `json:"name"                   yaml:"name"`                    // Unique name for this child (within parent scope)
-	WorkerType   string            `json:"workerType"             yaml:"workerType"`              // Type of worker to create (registered worker factory key)
-	UserSpec     UserSpec          `json:"userSpec"               yaml:"userSpec"`                // Configuration for the child worker
+	Name         string            `json:"name"                   yaml:"name"`                   // Unique name for this child (within parent scope)
+	WorkerType   string            `json:"workerType"             yaml:"workerType"`             // Type of worker to create (registered worker factory key)
+	UserSpec     UserSpec          `json:"userSpec"               yaml:"userSpec"`               // Configuration for the child worker
 	StateMapping map[string]string `json:"stateMapping,omitempty" yaml:"stateMapping,omitempty"` // Optional parent→child state mapping
 }
 
@@ -153,11 +171,11 @@ type DesiredState struct {
 // This implements the fsmv2.DesiredState interface requirement.
 //
 // Shutdown flow:
-//   1. Supervisor sets State = "shutdown" in DesiredState
-//   2. State.Next() calls ShutdownRequested() → returns true
-//   3. State transitions to shutdown/cleanup states
-//   4. Eventually returns SignalNeedsRemoval
-//   5. Supervisor removes worker from system
+//  1. Supervisor sets State = "shutdown" in DesiredState
+//  2. State.Next() calls ShutdownRequested() → returns true
+//  3. State transitions to shutdown/cleanup states
+//  4. Eventually returns SignalNeedsRemoval
+//  5. Supervisor removes worker from system
 //
 // Example usage in State.Next():
 //

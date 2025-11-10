@@ -56,6 +56,7 @@ func (f *FreshnessChecker) extractTimestamp(snapshot *fsmv2.Snapshot) (time.Time
 		f.logger.Warnw("Observed state is neither GetTimestamp() nor Document, assuming fresh data",
 			"identity", snapshot.Identity,
 			"type", fmt.Sprintf("%T", snapshot.Observed))
+
 		return time.Time{}, false
 	}
 
@@ -63,6 +64,7 @@ func (f *FreshnessChecker) extractTimestamp(snapshot *fsmv2.Snapshot) (time.Time
 	if !exists {
 		f.logger.Warnw("Document does not have collectedAt field, assuming fresh data",
 			"identity", snapshot.Identity)
+
 		return time.Time{}, false
 	}
 
@@ -77,14 +79,17 @@ func (f *FreshnessChecker) extractTimestamp(snapshot *fsmv2.Snapshot) (time.Time
 				"identity", snapshot.Identity,
 				"value", timeStr,
 				"error", err)
+
 			return time.Time{}, false
 		}
+
 		return collectedAt, true
 	}
 
 	f.logger.Warnw("collectedAt field exists but is not time.Time or string",
 		"identity", snapshot.Identity,
 		"type", fmt.Sprintf("%T", ts))
+
 	return time.Time{}, false
 }
 

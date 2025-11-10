@@ -50,6 +50,7 @@ func TestSupervisorUsesTriangularStore(t *testing.T) {
 
 	// Create in-memory store for testing
 	basicStore := memory.NewInMemoryStore()
+
 	defer func() {
 		_ = basicStore.Close(ctx)
 	}()
@@ -79,14 +80,17 @@ func TestSupervisorUsesTriangularStore(t *testing.T) {
 
 	// Create collections in database
 	var err error
+
 	err = basicStore.CreateCollection(ctx, "test_identity", nil)
 	if err != nil {
 		t.Fatalf("Failed to create identity collection: %v", err)
 	}
+
 	err = basicStore.CreateCollection(ctx, "test_desired", nil)
 	if err != nil {
 		t.Fatalf("Failed to create desired collection: %v", err)
 	}
+
 	err = basicStore.CreateCollection(ctx, "test_observed", nil)
 	if err != nil {
 		t.Fatalf("Failed to create observed collection: %v", err)
@@ -321,6 +325,7 @@ func TestSupervisorSavesIdentityToTriangularStore(t *testing.T) {
 
 	// Create in-memory store for testing
 	basicStore := memory.NewInMemoryStore()
+
 	defer func() {
 		_ = basicStore.Close(ctx)
 	}()
@@ -350,14 +355,17 @@ func TestSupervisorSavesIdentityToTriangularStore(t *testing.T) {
 
 	// Create collections in database
 	var err error
+
 	err = basicStore.CreateCollection(ctx, "test_identity", nil)
 	if err != nil {
 		t.Fatalf("Failed to create identity collection: %v", err)
 	}
+
 	err = basicStore.CreateCollection(ctx, "test_desired", nil)
 	if err != nil {
 		t.Fatalf("Failed to create desired collection: %v", err)
 	}
+
 	err = basicStore.CreateCollection(ctx, "test_observed", nil)
 	if err != nil {
 		t.Fatalf("Failed to create observed collection: %v", err)
@@ -401,6 +409,7 @@ func TestSupervisorSavesIdentityToTriangularStore(t *testing.T) {
 	if loadedIdentity["id"] != "worker-1" {
 		t.Errorf("Expected identity id 'worker-1', got %v", loadedIdentity["id"])
 	}
+
 	if loadedIdentity["name"] != "Test Worker" {
 		t.Errorf("Expected identity name 'Test Worker', got %v", loadedIdentity["name"])
 	}
@@ -414,6 +423,7 @@ func TestSupervisorLoadsSnapshotFromTriangularStore(t *testing.T) {
 
 	// Create in-memory store for testing
 	basicStore := memory.NewInMemoryStore()
+
 	defer func() {
 		_ = basicStore.Close(ctx)
 	}()
@@ -443,14 +453,17 @@ func TestSupervisorLoadsSnapshotFromTriangularStore(t *testing.T) {
 
 	// Create collections in database
 	var err error
+
 	err = basicStore.CreateCollection(ctx, "test_identity", nil)
 	if err != nil {
 		t.Fatalf("Failed to create identity collection: %v", err)
 	}
+
 	err = basicStore.CreateCollection(ctx, "test_desired", nil)
 	if err != nil {
 		t.Fatalf("Failed to create desired collection: %v", err)
 	}
+
 	err = basicStore.CreateCollection(ctx, "test_observed", nil)
 	if err != nil {
 		t.Fatalf("Failed to create observed collection: %v", err)
@@ -570,6 +583,7 @@ func TestReconcileChildren_AddNewChildWhenNoneExist(t *testing.T) {
 	logger := zap.NewNop().Sugar()
 
 	basicStore := memory.NewInMemoryStore()
+
 	defer func() {
 		_ = basicStore.Close(ctx)
 	}()
@@ -638,6 +652,7 @@ func TestReconcileChildren_AddMultipleChildren(t *testing.T) {
 	logger := zap.NewNop().Sugar()
 
 	basicStore := memory.NewInMemoryStore()
+
 	defer func() {
 		_ = basicStore.Close(ctx)
 	}()
@@ -718,6 +733,7 @@ func TestReconcileChildren_SkipExistingChild(t *testing.T) {
 	logger := zap.NewNop().Sugar()
 
 	basicStore := memory.NewInMemoryStore()
+
 	defer func() {
 		_ = basicStore.Close(ctx)
 	}()
@@ -793,6 +809,7 @@ func TestReconcileChildren_UpdateUserSpec(t *testing.T) {
 	logger := zap.NewNop().Sugar()
 
 	basicStore := memory.NewInMemoryStore()
+
 	defer func() {
 		_ = basicStore.Close(ctx)
 	}()
@@ -864,6 +881,7 @@ func TestReconcileChildren_UpdateUserSpec(t *testing.T) {
 	if child == nil {
 		t.Fatal("Expected child-1 to exist")
 	}
+
 	if child.userSpec.Config != "url: tcp://remotehost:1883" {
 		t.Errorf("Expected UserSpec to be updated to 'url: tcp://remotehost:1883', got '%s'", child.userSpec.Config)
 	}
@@ -874,6 +892,7 @@ func TestReconcileChildren_UpdateStateMapping(t *testing.T) {
 	logger := zap.NewNop().Sugar()
 
 	basicStore := memory.NewInMemoryStore()
+
 	defer func() {
 		_ = basicStore.Close(ctx)
 	}()
@@ -952,9 +971,11 @@ func TestReconcileChildren_UpdateStateMapping(t *testing.T) {
 	if child == nil {
 		t.Fatal("Expected child-1 to exist")
 	}
+
 	if len(child.stateMapping) != 2 {
 		t.Errorf("Expected StateMapping to have 2 entries, got %d", len(child.stateMapping))
 	}
+
 	if child.stateMapping["stopping"] != "disconnected" {
 		t.Errorf("Expected stopping -> disconnected mapping, got %v", child.stateMapping["stopping"])
 	}
@@ -965,6 +986,7 @@ func TestReconcileChildren_RemoveChild(t *testing.T) {
 	logger := zap.NewNop().Sugar()
 
 	basicStore := memory.NewInMemoryStore()
+
 	defer func() {
 		_ = basicStore.Close(ctx)
 	}()
@@ -1059,6 +1081,7 @@ func TestReconcileChildren_MixedOperations(t *testing.T) {
 	logger := zap.NewNop().Sugar()
 
 	basicStore := memory.NewInMemoryStore()
+
 	defer func() {
 		_ = basicStore.Close(ctx)
 	}()
@@ -1162,6 +1185,7 @@ func TestReconcileChildren_EmptySpecs(t *testing.T) {
 	logger := zap.NewNop().Sugar()
 
 	basicStore := memory.NewInMemoryStore()
+
 	defer func() {
 		_ = basicStore.Close(ctx)
 	}()
@@ -1240,6 +1264,7 @@ func TestApplyStateMapping_WithMapping(t *testing.T) {
 	logger := zap.NewNop().Sugar()
 
 	basicStore := memory.NewInMemoryStore()
+
 	defer func() {
 		_ = basicStore.Close(ctx)
 	}()
@@ -1324,6 +1349,7 @@ func TestApplyStateMapping_WithMapping(t *testing.T) {
 	if child == nil {
 		t.Fatal("Expected child-1 to exist")
 	}
+
 	if child.mappedParentState != "stopped" {
 		t.Errorf("Expected child mappedParentState 'stopped', got '%s'", child.mappedParentState)
 	}
@@ -1334,6 +1360,7 @@ func TestApplyStateMapping_NoMapping(t *testing.T) {
 	logger := zap.NewNop().Sugar()
 
 	basicStore := memory.NewInMemoryStore()
+
 	defer func() {
 		_ = basicStore.Close(ctx)
 	}()
@@ -1414,6 +1441,7 @@ func TestApplyStateMapping_NoMapping(t *testing.T) {
 	if child == nil {
 		t.Fatal("Expected child-1 to exist")
 	}
+
 	if child.mappedParentState != "running" {
 		t.Errorf("Expected child mappedParentState 'running' (parent state), got '%s'", child.mappedParentState)
 	}
@@ -1424,6 +1452,7 @@ func TestApplyStateMapping_MissingStateInMapping(t *testing.T) {
 	logger := zap.NewNop().Sugar()
 
 	basicStore := memory.NewInMemoryStore()
+
 	defer func() {
 		_ = basicStore.Close(ctx)
 	}()
@@ -1508,6 +1537,7 @@ func TestApplyStateMapping_MissingStateInMapping(t *testing.T) {
 	if child == nil {
 		t.Fatal("Expected child-1 to exist")
 	}
+
 	if child.mappedParentState != "unknown" {
 		t.Errorf("Expected child mappedParentState 'unknown' (parent state when not in mapping), got '%s'", child.mappedParentState)
 	}
@@ -1518,6 +1548,7 @@ func TestApplyStateMapping_MultipleChildren(t *testing.T) {
 	logger := zap.NewNop().Sugar()
 
 	basicStore := memory.NewInMemoryStore()
+
 	defer func() {
 		_ = basicStore.Close(ctx)
 	}()
@@ -1616,6 +1647,7 @@ func TestApplyStateMapping_MultipleChildren(t *testing.T) {
 	if child1 == nil {
 		t.Fatal("Expected child-1 to exist")
 	}
+
 	if child1.mappedParentState != "connected" {
 		t.Errorf("Expected child-1 mappedParentState 'connected', got '%s'", child1.mappedParentState)
 	}
@@ -1624,6 +1656,7 @@ func TestApplyStateMapping_MultipleChildren(t *testing.T) {
 	if child2 == nil {
 		t.Fatal("Expected child-2 to exist")
 	}
+
 	if child2.mappedParentState != "polling" {
 		t.Errorf("Expected child-2 mappedParentState 'polling', got '%s'", child2.mappedParentState)
 	}
@@ -1632,6 +1665,7 @@ func TestApplyStateMapping_MultipleChildren(t *testing.T) {
 	if child3 == nil {
 		t.Fatal("Expected child-3 to exist")
 	}
+
 	if child3.mappedParentState != "active" {
 		t.Errorf("Expected child-3 mappedParentState 'active' (parent state, no mapping), got '%s'", child3.mappedParentState)
 	}
@@ -1642,6 +1676,7 @@ func TestApplyStateMapping_EmptyStateMapping(t *testing.T) {
 	logger := zap.NewNop().Sugar()
 
 	basicStore := memory.NewInMemoryStore()
+
 	defer func() {
 		_ = basicStore.Close(ctx)
 	}()
@@ -1723,6 +1758,7 @@ func TestApplyStateMapping_EmptyStateMapping(t *testing.T) {
 	if child == nil {
 		t.Fatal("Expected child-1 to exist")
 	}
+
 	if child.mappedParentState != "running" {
 		t.Errorf("Expected child mappedParentState 'running' (parent state with empty map), got '%s'", child.mappedParentState)
 	}
@@ -1733,6 +1769,7 @@ func TestApplyStateMapping_NilStateMapping(t *testing.T) {
 	logger := zap.NewNop().Sugar()
 
 	basicStore := memory.NewInMemoryStore()
+
 	defer func() {
 		_ = basicStore.Close(ctx)
 	}()
@@ -1814,6 +1851,7 @@ func TestApplyStateMapping_NilStateMapping(t *testing.T) {
 	if child == nil {
 		t.Fatal("Expected child-1 to exist")
 	}
+
 	if child.mappedParentState != "starting" {
 		t.Errorf("Expected child mappedParentState 'starting' (parent state with nil map), got '%s'", child.mappedParentState)
 	}

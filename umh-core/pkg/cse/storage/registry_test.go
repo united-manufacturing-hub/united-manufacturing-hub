@@ -25,7 +25,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
 package storage_test
 
 import (
@@ -234,7 +233,7 @@ var _ = Describe("Registry", func() {
 
 	Describe("ConcurrentAccess", func() {
 		BeforeEach(func() {
-			for i := 0; i < 10; i++ {
+			for i := range 10 {
 				registry.Register(&storage.CollectionMetadata{
 					Name:       fmt.Sprintf("collection_%d", i),
 					WorkerType: "test",
@@ -245,7 +244,7 @@ var _ = Describe("Registry", func() {
 
 		It("should handle concurrent reads safely", func() {
 			done := make(chan bool)
-			for i := 0; i < 100; i++ {
+			for range 100 {
 				go func() {
 					collections := registry.List()
 					Expect(collections).To(HaveLen(10))
@@ -253,14 +252,14 @@ var _ = Describe("Registry", func() {
 				}()
 			}
 
-			for i := 0; i < 100; i++ {
+			for range 100 {
 				<-done
 			}
 		})
 
 		It("should handle concurrent RegisterVersion calls safely", func() {
 			done := make(chan bool)
-			for i := 0; i < 10; i++ {
+			for i := range 10 {
 				go func(version int) {
 					err := registry.RegisterVersion("test", storage.RoleIdentity, fmt.Sprintf("v%d", version))
 					Expect(err).ToNot(HaveOccurred())
@@ -268,7 +267,7 @@ var _ = Describe("Registry", func() {
 				}(i)
 			}
 
-			for i := 0; i < 10; i++ {
+			for range 10 {
 				<-done
 			}
 
@@ -441,7 +440,7 @@ var _ = Describe("Feature Registry", func() {
 
 	It("should handle concurrent RegisterFeature calls safely", func() {
 		done := make(chan bool)
-		for i := 0; i < 10; i++ {
+		for i := range 10 {
 			go func(index int) {
 				featureName := fmt.Sprintf("feature_%d", index)
 				err := registry.RegisterFeature(featureName, true)
@@ -450,13 +449,13 @@ var _ = Describe("Feature Registry", func() {
 			}(i)
 		}
 
-		for i := 0; i < 10; i++ {
+		for range 10 {
 			<-done
 		}
 
 		features := registry.GetFeatures()
 		Expect(features).To(HaveLen(10))
-		for i := 0; i < 10; i++ {
+		for i := range 10 {
 			featureName := fmt.Sprintf("feature_%d", i)
 			Expect(registry.HasFeature(featureName)).To(BeTrue())
 		}

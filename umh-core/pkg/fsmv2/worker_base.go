@@ -20,16 +20,33 @@ package fsmv2
 //
 // Example usage:
 //
-//	type MyWorker struct {
-//	    *fsmv2.BaseWorker[*MyDependencies]
-//	    // other worker-specific fields
+// BaseWorker[D Dependencies]: Generic Worker Base Class
+//
+// USING GENERICS (added Nov 2, 2025)
+//
+// BaseWorker provides common worker functionality with type-safe dependencies:
+//
+// Example worker using BaseWorker:
+//
+//	type MyWorkerDeps struct {
+//	    Logger    *zap.Logger
+//	    APIClient *http.Client
 //	}
 //
-//	func NewMyWorker(dependencies *MyDependencies) *MyWorker {
+//	type MyWorker struct {
+//	    fsmv2.BaseWorker[MyWorkerDeps]
+//	}
+//
+//	func NewMyWorker(deps MyWorkerDeps) *MyWorker {
 //	    return &MyWorker{
-//	        BaseWorker: fsmv2.NewBaseWorker(dependencies),
+//	        BaseWorker: fsmv2.NewBaseWorker(deps),
 //	    }
 //	}
+//
+// Benefits:
+//   - Type-safe dependency access (deps.Logger, not interface{})
+//   - Common fields (Identity, etc.) inherited automatically
+//   - No casting required in worker methods
 type BaseWorker[D Dependencies] struct {
 	dependencies D
 }

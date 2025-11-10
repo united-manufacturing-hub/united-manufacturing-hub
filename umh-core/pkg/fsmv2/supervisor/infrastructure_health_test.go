@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
 package supervisor_test
 
 import (
+	"errors"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -33,7 +33,7 @@ var _ = Describe("InfrastructureHealthChecker", func() {
 	Describe("CheckChildConsistency", func() {
 		It("returns nil when no children provided", func() {
 			err := checker.CheckChildConsistency(nil)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 		})
 
 		It("returns nil when all children are healthy", func() {
@@ -46,7 +46,7 @@ var _ = Describe("InfrastructureHealthChecker", func() {
 			}
 
 			err := checker.CheckChildConsistency(children)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 		})
 
 		It("returns error when a child has circuit breaker open", func() {
@@ -59,12 +59,13 @@ var _ = Describe("InfrastructureHealthChecker", func() {
 			}
 
 			err := checker.CheckChildConsistency(children)
-			Expect(err).ToNot(BeNil())
+			Expect(err).To(HaveOccurred())
 
 			var childHealthErr *supervisor.ChildHealthError
 			Expect(err).To(BeAssignableToTypeOf(childHealthErr))
 
-			healthErr, ok := err.(*supervisor.ChildHealthError)
+			healthErr := &supervisor.ChildHealthError{}
+			ok := errors.As(err, &healthErr)
 			Expect(ok).To(BeTrue())
 			Expect(healthErr.ChildName).To(Equal("unhealthy"))
 		})
@@ -80,7 +81,11 @@ var _ = Describe("InfrastructureHealthChecker", func() {
 
 			Expect(err).To(HaveOccurred())
 			Expect(err).To(BeAssignableToTypeOf(&supervisor.ChildHealthError{}))
-			healthErr := err.(*supervisor.ChildHealthError)
+			healthErr := func() *supervisor.ChildHealthError {
+				target := &supervisor.ChildHealthError{}
+				_ = errors.As(err, &target)
+				return target
+			}()
 			Expect(healthErr.ChildName).To(Equal("unhealthy"))
 		})
 	})

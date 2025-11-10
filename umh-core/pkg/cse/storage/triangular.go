@@ -25,7 +25,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
 package storage
 
 import (
@@ -359,8 +358,9 @@ func (ts *TriangularStore) SaveObserved(ctx context.Context, workerType string, 
 	if err != nil {
 		return fmt.Errorf("failed to convert observed to document: %w", err)
 	}
+
 	if observedDoc == nil {
-		return fmt.Errorf("toDocument returned nil document")
+		return errors.New("toDocument returned nil document")
 	}
 
 	// Validate document has required fields
@@ -631,6 +631,7 @@ func (ts *TriangularStore) injectMetadata(doc persistence.Document, role string,
 				// If version field doesn't exist or wrong type, start at 1
 				currentVersion = 0
 			}
+
 			doc[FieldVersion] = currentVersion + 1
 		}
 	}
@@ -647,11 +648,11 @@ func (ts *TriangularStore) injectMetadata(doc persistence.Document, role string,
 // INSPIRED BY: "Parse, don't validate" principle - ensure valid state.
 func (ts *TriangularStore) validateDocument(doc persistence.Document) error {
 	if doc == nil {
-		return fmt.Errorf("document cannot be nil")
+		return errors.New("document cannot be nil")
 	}
 
 	if doc["id"] == nil {
-		return fmt.Errorf("document must have 'id' field")
+		return errors.New("document must have 'id' field")
 	}
 
 	return nil
@@ -663,6 +664,7 @@ func (ts *TriangularStore) GetLastSyncID(_ context.Context) (int64, error) {
 
 func (ts *TriangularStore) IncrementSyncID(_ context.Context) (int64, error) {
 	newID := ts.syncID.Add(1)
+
 	return newID, nil
 }
 
@@ -675,7 +677,7 @@ func (ts *TriangularStore) IncrementSyncID(_ context.Context) (int64, error) {
 //
 // TRADE-OFF: Exposes internal registry reference, but necessary for auto-registration pattern.
 //
-// INSPIRED BY: Dependency injection pattern, HTTP router registration (gin.Engine.Routes())
+// INSPIRED BY: Dependency injection pattern, HTTP router registration (gin.Engine.Routes()).
 func (ts *TriangularStore) Registry() *Registry {
 	return ts.registry
 }
@@ -683,6 +685,7 @@ func (ts *TriangularStore) Registry() *Registry {
 func (ts *TriangularStore) Close() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
+
 	return ts.store.Close(ctx)
 }
 
@@ -702,7 +705,7 @@ func (ts *TriangularStore) Close() error {
 //   - error: If conversion fails
 func (ts *TriangularStore) toDocument(v interface{}) (persistence.Document, error) {
 	if v == nil {
-		return nil, fmt.Errorf("cannot convert nil to document")
+		return nil, errors.New("cannot convert nil to document")
 	}
 
 	// Already a Document
