@@ -42,7 +42,7 @@ s6-softlimit -m {{ .MemoryLimit }}
 foreground { s6-svwait -u {{ .ServicePath }}/log }
 
 # Drop privileges for the actual service
-s6-setuidgid nobody 
+s6-setuidgid umhuser:umhuser 
 
 # Keep stderr and stdout separate but both visible in logs
 fdmove -c 2 1 
@@ -112,10 +112,9 @@ func getLogRunScript(config s6serviceconfig.S6ServiceConfig, logDir string) (str
 	logRunContent := fmt.Sprintf(`#!/command/execlineb -P
 fdmove -c 2 1
 foreground { mkdir -p %s }
-foreground { chown -R nobody:nobody %s }
 
 %s
-%s`, logDir, logDir, logutilEnv, logutilServiceCmd)
+%s`, logDir, logutilEnv, logutilServiceCmd)
 
 	return logRunContent, nil
 }
