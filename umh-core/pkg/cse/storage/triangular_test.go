@@ -696,5 +696,19 @@ var _ = Describe("TriangularStore", func() {
 			Expect(result.Status).To(Equal("running"))
 			Expect(result.CPU).To(Equal(int64(50)))
 		})
+
+		It("should return error for type mismatch", func() {
+			observed := persistence.Document{
+				"id":  "worker-456",
+				"cpu": "not-a-number",
+			}
+			err := ts.SaveObserved(ctx, "container", "worker-456", observed)
+			Expect(err).NotTo(HaveOccurred())
+
+			var result TestObservedState
+			err = ts.LoadObservedTyped(ctx, "container", "worker-456", &result)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("cannot assign"))
+		})
 	})
 })
