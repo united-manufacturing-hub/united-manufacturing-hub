@@ -37,7 +37,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/types"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence/memory"
 )
@@ -526,8 +526,8 @@ func (m *mockWorker) CollectObservedState(_ context.Context) (fsmv2.ObservedStat
 	}, nil
 }
 
-func (m *mockWorker) DeriveDesiredState(_ interface{}) (types.DesiredState, error) {
-	return types.DesiredState{State: "running"}, nil
+func (m *mockWorker) DeriveDesiredState(_ interface{}) (config.DesiredState, error) {
+	return config.DesiredState{State: "running"}, nil
 }
 
 func (m *mockWorker) GetInitialState() fsmv2.State {
@@ -625,11 +625,11 @@ func TestReconcileChildren_AddNewChildWhenNoneExist(t *testing.T) {
 
 	supervisor := NewSupervisor(supervisorCfg)
 
-	specs := []types.ChildSpec{
+	specs := []config.ChildSpec{
 		{
 			Name:       "child-1",
 			WorkerType: "mqtt_client",
-			UserSpec:   types.UserSpec{Config: "url: tcp://localhost:1883"},
+			UserSpec:   config.UserSpec{Config: "url: tcp://localhost:1883"},
 		},
 	}
 
@@ -694,21 +694,21 @@ func TestReconcileChildren_AddMultipleChildren(t *testing.T) {
 
 	supervisor := NewSupervisor(supervisorCfg)
 
-	specs := []types.ChildSpec{
+	specs := []config.ChildSpec{
 		{
 			Name:       "child-1",
 			WorkerType: "mqtt_client",
-			UserSpec:   types.UserSpec{Config: "url: tcp://localhost:1883"},
+			UserSpec:   config.UserSpec{Config: "url: tcp://localhost:1883"},
 		},
 		{
 			Name:       "child-2",
 			WorkerType: "modbus_client",
-			UserSpec:   types.UserSpec{Config: "address: 192.168.1.100:502"},
+			UserSpec:   config.UserSpec{Config: "address: 192.168.1.100:502"},
 		},
 		{
 			Name:       "child-3",
 			WorkerType: "opcua_client",
-			UserSpec:   types.UserSpec{Config: "endpoint: opc.tcp://localhost:4840"},
+			UserSpec:   config.UserSpec{Config: "endpoint: opc.tcp://localhost:4840"},
 		},
 	}
 
@@ -775,11 +775,11 @@ func TestReconcileChildren_SkipExistingChild(t *testing.T) {
 
 	supervisor := NewSupervisor(supervisorCfg)
 
-	specs := []types.ChildSpec{
+	specs := []config.ChildSpec{
 		{
 			Name:       "child-1",
 			WorkerType: "mqtt_client",
-			UserSpec:   types.UserSpec{Config: "url: tcp://localhost:1883"},
+			UserSpec:   config.UserSpec{Config: "url: tcp://localhost:1883"},
 		},
 	}
 
@@ -851,11 +851,11 @@ func TestReconcileChildren_UpdateUserSpec(t *testing.T) {
 
 	supervisor := NewSupervisor(supervisorCfg)
 
-	initialSpecs := []types.ChildSpec{
+	initialSpecs := []config.ChildSpec{
 		{
 			Name:       "child-1",
 			WorkerType: "mqtt_client",
-			UserSpec:   types.UserSpec{Config: "url: tcp://localhost:1883"},
+			UserSpec:   config.UserSpec{Config: "url: tcp://localhost:1883"},
 		},
 	}
 
@@ -864,11 +864,11 @@ func TestReconcileChildren_UpdateUserSpec(t *testing.T) {
 		t.Fatalf("Initial reconcileChildren failed: %v", err)
 	}
 
-	updatedSpecs := []types.ChildSpec{
+	updatedSpecs := []config.ChildSpec{
 		{
 			Name:       "child-1",
 			WorkerType: "mqtt_client",
-			UserSpec:   types.UserSpec{Config: "url: tcp://remotehost:1883"},
+			UserSpec:   config.UserSpec{Config: "url: tcp://remotehost:1883"},
 		},
 	}
 
@@ -934,11 +934,11 @@ func TestReconcileChildren_UpdateStateMapping(t *testing.T) {
 
 	supervisor := NewSupervisor(supervisorCfg)
 
-	initialSpecs := []types.ChildSpec{
+	initialSpecs := []config.ChildSpec{
 		{
 			Name:       "child-1",
 			WorkerType: "mqtt_client",
-			UserSpec:   types.UserSpec{Config: "url: tcp://localhost:1883"},
+			UserSpec:   config.UserSpec{Config: "url: tcp://localhost:1883"},
 			StateMapping: map[string]string{
 				"running": "connected",
 			},
@@ -950,11 +950,11 @@ func TestReconcileChildren_UpdateStateMapping(t *testing.T) {
 		t.Fatalf("Initial reconcileChildren failed: %v", err)
 	}
 
-	updatedSpecs := []types.ChildSpec{
+	updatedSpecs := []config.ChildSpec{
 		{
 			Name:       "child-1",
 			WorkerType: "mqtt_client",
-			UserSpec:   types.UserSpec{Config: "url: tcp://localhost:1883"},
+			UserSpec:   config.UserSpec{Config: "url: tcp://localhost:1883"},
 			StateMapping: map[string]string{
 				"running":  "connected",
 				"stopping": "disconnected",
@@ -1028,16 +1028,16 @@ func TestReconcileChildren_RemoveChild(t *testing.T) {
 
 	supervisor := NewSupervisor(supervisorCfg)
 
-	initialSpecs := []types.ChildSpec{
+	initialSpecs := []config.ChildSpec{
 		{
 			Name:       "child-1",
 			WorkerType: "mqtt_client",
-			UserSpec:   types.UserSpec{Config: "url: tcp://localhost:1883"},
+			UserSpec:   config.UserSpec{Config: "url: tcp://localhost:1883"},
 		},
 		{
 			Name:       "child-2",
 			WorkerType: "modbus_client",
-			UserSpec:   types.UserSpec{Config: "address: 192.168.1.100:502"},
+			UserSpec:   config.UserSpec{Config: "address: 192.168.1.100:502"},
 		},
 	}
 
@@ -1050,11 +1050,11 @@ func TestReconcileChildren_RemoveChild(t *testing.T) {
 		t.Errorf("Expected 2 children initially, got %d", len(supervisor.children))
 	}
 
-	updatedSpecs := []types.ChildSpec{
+	updatedSpecs := []config.ChildSpec{
 		{
 			Name:       "child-1",
 			WorkerType: "mqtt_client",
-			UserSpec:   types.UserSpec{Config: "url: tcp://localhost:1883"},
+			UserSpec:   config.UserSpec{Config: "url: tcp://localhost:1883"},
 		},
 	}
 
@@ -1123,16 +1123,16 @@ func TestReconcileChildren_MixedOperations(t *testing.T) {
 
 	supervisor := NewSupervisor(supervisorCfg)
 
-	initialSpecs := []types.ChildSpec{
+	initialSpecs := []config.ChildSpec{
 		{
 			Name:       "child-1",
 			WorkerType: "mqtt_client",
-			UserSpec:   types.UserSpec{Config: "url: tcp://localhost:1883"},
+			UserSpec:   config.UserSpec{Config: "url: tcp://localhost:1883"},
 		},
 		{
 			Name:       "child-2",
 			WorkerType: "modbus_client",
-			UserSpec:   types.UserSpec{Config: "address: 192.168.1.100:502"},
+			UserSpec:   config.UserSpec{Config: "address: 192.168.1.100:502"},
 		},
 	}
 
@@ -1141,16 +1141,16 @@ func TestReconcileChildren_MixedOperations(t *testing.T) {
 		t.Fatalf("Initial reconcileChildren failed: %v", err)
 	}
 
-	mixedSpecs := []types.ChildSpec{
+	mixedSpecs := []config.ChildSpec{
 		{
 			Name:       "child-1",
 			WorkerType: "mqtt_client",
-			UserSpec:   types.UserSpec{Config: "url: tcp://remotehost:1883"},
+			UserSpec:   config.UserSpec{Config: "url: tcp://remotehost:1883"},
 		},
 		{
 			Name:       "child-3",
 			WorkerType: "opcua_client",
-			UserSpec:   types.UserSpec{Config: "endpoint: opc.tcp://localhost:4840"},
+			UserSpec:   config.UserSpec{Config: "endpoint: opc.tcp://localhost:4840"},
 		},
 	}
 
@@ -1227,16 +1227,16 @@ func TestReconcileChildren_EmptySpecs(t *testing.T) {
 
 	supervisor := NewSupervisor(supervisorCfg)
 
-	initialSpecs := []types.ChildSpec{
+	initialSpecs := []config.ChildSpec{
 		{
 			Name:       "child-1",
 			WorkerType: "mqtt_client",
-			UserSpec:   types.UserSpec{Config: "url: tcp://localhost:1883"},
+			UserSpec:   config.UserSpec{Config: "url: tcp://localhost:1883"},
 		},
 		{
 			Name:       "child-2",
 			WorkerType: "modbus_client",
-			UserSpec:   types.UserSpec{Config: "address: 192.168.1.100:502"},
+			UserSpec:   config.UserSpec{Config: "address: 192.168.1.100:502"},
 		},
 	}
 
@@ -1249,7 +1249,7 @@ func TestReconcileChildren_EmptySpecs(t *testing.T) {
 		t.Errorf("Expected 2 children initially, got %d", len(supervisor.children))
 	}
 
-	err = supervisor.reconcileChildren([]types.ChildSpec{})
+	err = supervisor.reconcileChildren([]config.ChildSpec{})
 	if err != nil {
 		t.Fatalf("Empty reconcileChildren failed: %v", err)
 	}
@@ -1326,11 +1326,11 @@ func TestApplyStateMapping_WithMapping(t *testing.T) {
 		t.Fatalf("Failed to add parent worker: %v", err)
 	}
 
-	specs := []types.ChildSpec{
+	specs := []config.ChildSpec{
 		{
 			Name:       "child-1",
 			WorkerType: "mqtt_client",
-			UserSpec:   types.UserSpec{Config: "url: tcp://localhost:1883"},
+			UserSpec:   config.UserSpec{Config: "url: tcp://localhost:1883"},
 			StateMapping: map[string]string{
 				"idle":   "stopped",
 				"active": "connected",
@@ -1422,11 +1422,11 @@ func TestApplyStateMapping_NoMapping(t *testing.T) {
 		t.Fatalf("Failed to add parent worker: %v", err)
 	}
 
-	specs := []types.ChildSpec{
+	specs := []config.ChildSpec{
 		{
 			Name:       "child-1",
 			WorkerType: "mqtt_client",
-			UserSpec:   types.UserSpec{Config: "url: tcp://localhost:1883"},
+			UserSpec:   config.UserSpec{Config: "url: tcp://localhost:1883"},
 		},
 	}
 
@@ -1514,11 +1514,11 @@ func TestApplyStateMapping_MissingStateInMapping(t *testing.T) {
 		t.Fatalf("Failed to add parent worker: %v", err)
 	}
 
-	specs := []types.ChildSpec{
+	specs := []config.ChildSpec{
 		{
 			Name:       "child-1",
 			WorkerType: "mqtt_client",
-			UserSpec:   types.UserSpec{Config: "url: tcp://localhost:1883"},
+			UserSpec:   config.UserSpec{Config: "url: tcp://localhost:1883"},
 			StateMapping: map[string]string{
 				"idle":   "stopped",
 				"active": "connected",
@@ -1610,11 +1610,11 @@ func TestApplyStateMapping_MultipleChildren(t *testing.T) {
 		t.Fatalf("Failed to add parent worker: %v", err)
 	}
 
-	specs := []types.ChildSpec{
+	specs := []config.ChildSpec{
 		{
 			Name:       "child-1",
 			WorkerType: "mqtt_client",
-			UserSpec:   types.UserSpec{Config: "url: tcp://localhost:1883"},
+			UserSpec:   config.UserSpec{Config: "url: tcp://localhost:1883"},
 			StateMapping: map[string]string{
 				"active": "connected",
 				"idle":   "disconnected",
@@ -1623,7 +1623,7 @@ func TestApplyStateMapping_MultipleChildren(t *testing.T) {
 		{
 			Name:       "child-2",
 			WorkerType: "modbus_client",
-			UserSpec:   types.UserSpec{Config: "address: 192.168.1.100:502"},
+			UserSpec:   config.UserSpec{Config: "address: 192.168.1.100:502"},
 			StateMapping: map[string]string{
 				"active": "polling",
 				"idle":   "stopped",
@@ -1632,7 +1632,7 @@ func TestApplyStateMapping_MultipleChildren(t *testing.T) {
 		{
 			Name:       "child-3",
 			WorkerType: "opcua_client",
-			UserSpec:   types.UserSpec{Config: "endpoint: opc.tcp://localhost:4840"},
+			UserSpec:   config.UserSpec{Config: "endpoint: opc.tcp://localhost:4840"},
 		},
 	}
 
@@ -1738,11 +1738,11 @@ func TestApplyStateMapping_EmptyStateMapping(t *testing.T) {
 		t.Fatalf("Failed to add parent worker: %v", err)
 	}
 
-	specs := []types.ChildSpec{
+	specs := []config.ChildSpec{
 		{
 			Name:         "child-1",
 			WorkerType:   "mqtt_client",
-			UserSpec:     types.UserSpec{Config: "url: tcp://localhost:1883"},
+			UserSpec:     config.UserSpec{Config: "url: tcp://localhost:1883"},
 			StateMapping: map[string]string{},
 		},
 	}
@@ -1831,11 +1831,11 @@ func TestApplyStateMapping_NilStateMapping(t *testing.T) {
 		t.Fatalf("Failed to add parent worker: %v", err)
 	}
 
-	specs := []types.ChildSpec{
+	specs := []config.ChildSpec{
 		{
 			Name:         "child-1",
 			WorkerType:   "mqtt_client",
-			UserSpec:     types.UserSpec{Config: "url: tcp://localhost:1883"},
+			UserSpec:     config.UserSpec{Config: "url: tcp://localhost:1883"},
 			StateMapping: nil,
 		},
 	}

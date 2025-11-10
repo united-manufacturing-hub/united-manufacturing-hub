@@ -12,9 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package types provides common data structures for FSM v2 workers.
-// These types enable declarative child management and structured state representation.
-package types
+// Package config provides core configuration types for FSMv2, including child specifications, variables, templates, and location hierarchies.
+package config
 
 import "encoding/json"
 
@@ -66,9 +65,10 @@ type UserSpec struct {
 // to enter their "Initializing" state.
 //
 // Format:
-//   StateMapping: map[string]string{
-//       "ParentStateName": "ChildStateName",
-//   }
+//
+//	StateMapping: map[string]string{
+//	    "ParentStateName": "ChildStateName",
+//	}
 //
 // When to use:
 // - Parent lifecycle controls child lifecycle (e.g., Stopping → Cleanup)

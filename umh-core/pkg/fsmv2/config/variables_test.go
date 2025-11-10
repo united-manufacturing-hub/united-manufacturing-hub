@@ -12,8 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
-package types_test
+package config_test
 
 import (
 	"encoding/json"
@@ -22,13 +21,13 @@ import (
 	. "github.com/onsi/gomega"
 	"gopkg.in/yaml.v3"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/types"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 )
 
 var _ = Describe("VariableBundle", func() {
 	Describe("YAML serialization", func() {
 		It("should serialize User and Global, but exclude Internal", func() {
-			bundle := types.VariableBundle{
+			bundle := config.VariableBundle{
 				User: map[string]any{
 					"IP":   "192.168.1.100",
 					"PORT": 502,
@@ -64,7 +63,7 @@ user:
 global:
   api_endpoint: https://api.example.com
 `
-			var bundle types.VariableBundle
+			var bundle config.VariableBundle
 			err := yaml.Unmarshal([]byte(yamlData), &bundle)
 
 			Expect(err).ToNot(HaveOccurred())
@@ -75,7 +74,7 @@ global:
 		})
 
 		It("should handle empty VariableBundle correctly", func() {
-			bundle := types.VariableBundle{}
+			bundle := config.VariableBundle{}
 
 			data, err := yaml.Marshal(bundle)
 			Expect(err).ToNot(HaveOccurred())
@@ -85,7 +84,7 @@ global:
 		})
 
 		It("should round-trip through YAML correctly", func() {
-			original := types.VariableBundle{
+			original := config.VariableBundle{
 				User: map[string]any{
 					"IP":         "10.0.0.1",
 					"PORT":       8080,
@@ -104,7 +103,7 @@ global:
 			data, err := yaml.Marshal(original)
 			Expect(err).ToNot(HaveOccurred())
 
-			var roundtripped types.VariableBundle
+			var roundtripped config.VariableBundle
 			err = yaml.Unmarshal(data, &roundtripped)
 			Expect(err).ToNot(HaveOccurred())
 
@@ -120,7 +119,7 @@ global:
 
 	Describe("JSON serialization", func() {
 		It("should serialize User and Global, but exclude Internal", func() {
-			bundle := types.VariableBundle{
+			bundle := config.VariableBundle{
 				User: map[string]any{
 					"IP":   "192.168.1.100",
 					"PORT": 502,
@@ -149,7 +148,7 @@ global:
 		})
 
 		It("should round-trip through JSON correctly", func() {
-			original := types.VariableBundle{
+			original := config.VariableBundle{
 				User: map[string]any{
 					"IP":      "10.0.0.1",
 					"PORT":    float64(8080),
@@ -166,7 +165,7 @@ global:
 			data, err := json.Marshal(original)
 			Expect(err).ToNot(HaveOccurred())
 
-			var roundtripped types.VariableBundle
+			var roundtripped config.VariableBundle
 			err = json.Unmarshal(data, &roundtripped)
 			Expect(err).ToNot(HaveOccurred())
 
@@ -180,7 +179,7 @@ global:
 
 	Describe("Flatten", func() {
 		It("should promote User variables to top-level", func() {
-			bundle := types.VariableBundle{
+			bundle := config.VariableBundle{
 				User: map[string]any{
 					"IP":   "192.168.1.100",
 					"PORT": 502,
@@ -194,7 +193,7 @@ global:
 		})
 
 		It("should nest Global variables under 'global' key", func() {
-			bundle := types.VariableBundle{
+			bundle := config.VariableBundle{
 				Global: map[string]any{
 					"api_endpoint": "https://api.example.com",
 					"cluster_id":   "prod-123",
@@ -211,7 +210,7 @@ global:
 		})
 
 		It("should nest Internal variables under 'internal' key", func() {
-			bundle := types.VariableBundle{
+			bundle := config.VariableBundle{
 				Internal: map[string]any{
 					"id":        "internal-123",
 					"timestamp": 1234567890,
@@ -228,7 +227,7 @@ global:
 		})
 
 		It("should handle multiple User variables all promoted to top-level", func() {
-			bundle := types.VariableBundle{
+			bundle := config.VariableBundle{
 				User: map[string]any{
 					"IP":         "10.0.0.1",
 					"PORT":       8080,
@@ -248,7 +247,7 @@ global:
 		})
 
 		It("should handle all three namespaces together", func() {
-			bundle := types.VariableBundle{
+			bundle := config.VariableBundle{
 				User: map[string]any{
 					"IP":   "192.168.1.100",
 					"PORT": 502,
@@ -276,7 +275,7 @@ global:
 		})
 
 		It("should handle empty User map without breaking", func() {
-			bundle := types.VariableBundle{
+			bundle := config.VariableBundle{
 				User: map[string]any{},
 				Global: map[string]any{
 					"api_endpoint": "https://api.example.com",
@@ -291,7 +290,7 @@ global:
 		})
 
 		It("should handle nil User map without breaking", func() {
-			bundle := types.VariableBundle{
+			bundle := config.VariableBundle{
 				User: nil,
 				Global: map[string]any{
 					"api_endpoint": "https://api.example.com",
@@ -305,7 +304,7 @@ global:
 		})
 
 		It("should set global key to nil when Global map is nil", func() {
-			bundle := types.VariableBundle{
+			bundle := config.VariableBundle{
 				User: map[string]any{
 					"IP": "192.168.1.100",
 				},
@@ -320,7 +319,7 @@ global:
 		})
 
 		It("should set internal key to nil when Internal map is nil", func() {
-			bundle := types.VariableBundle{
+			bundle := config.VariableBundle{
 				User: map[string]any{
 					"IP": "192.168.1.100",
 				},
@@ -335,7 +334,7 @@ global:
 		})
 
 		It("should handle completely empty VariableBundle", func() {
-			bundle := types.VariableBundle{}
+			bundle := config.VariableBundle{}
 
 			result := bundle.Flatten()
 

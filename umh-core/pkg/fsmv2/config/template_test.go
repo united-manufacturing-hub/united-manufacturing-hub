@@ -25,22 +25,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package templating_test
+package config_test
 
 import (
-	"testing"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/templating"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 )
-
-func TestTemplating(t *testing.T) {
-	RegisterFailHandler(Fail)
-	RunSpecs(t, "FSMv2 Templating Suite")
-}
 
 var _ = Describe("RenderTemplate", func() {
 	Describe("Valid template rendering", func() {
@@ -48,7 +42,7 @@ var _ = Describe("RenderTemplate", func() {
 			tmpl := "Hello {{ .Name }}"
 			data := struct{ Name string }{Name: "World"}
 
-			result, err := templating.RenderTemplate(tmpl, data)
+			result, err := config.RenderTemplate(tmpl, data)
 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(Equal("Hello World"))
@@ -66,7 +60,7 @@ var _ = Describe("RenderTemplate", func() {
 				Port:     1883,
 			}
 
-			result, err := templating.RenderTemplate(tmpl, data)
+			result, err := config.RenderTemplate(tmpl, data)
 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(Equal("mqtt://192.168.1.100:1883"))
@@ -86,7 +80,7 @@ var _ = Describe("RenderTemplate", func() {
 				},
 			}
 
-			result, err := templating.RenderTemplate(tmpl, data)
+			result, err := config.RenderTemplate(tmpl, data)
 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(Equal("https://api.example.com/api"))
@@ -96,7 +90,7 @@ var _ = Describe("RenderTemplate", func() {
 			tmpl := ""
 			data := struct{ Name string }{Name: "World"}
 
-			result, err := templating.RenderTemplate(tmpl, data)
+			result, err := config.RenderTemplate(tmpl, data)
 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(Equal(""))
@@ -114,7 +108,7 @@ var _ = Describe("RenderTemplate", func() {
 				Newline: "line1\nline2",
 			}
 
-			result, err := templating.RenderTemplate(tmpl, data)
+			result, err := config.RenderTemplate(tmpl, data)
 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(Equal(`path=/data/logs, quote="test", newline=line1
@@ -127,7 +121,7 @@ line2`))
 			tmpl := "Hello {{ .TYPO }}"
 			data := struct{ Name string }{Name: "World"}
 
-			result, err := templating.RenderTemplate(tmpl, data)
+			result, err := config.RenderTemplate(tmpl, data)
 
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("execute template"))
@@ -150,7 +144,7 @@ line2`))
 				},
 			}
 
-			result, err := templating.RenderTemplate(tmpl, data)
+			result, err := config.RenderTemplate(tmpl, data)
 
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("execute template"))
@@ -163,7 +157,7 @@ line2`))
 			tmpl := "Hello {{ .Name }"
 			data := struct{ Name string }{Name: "World"}
 
-			result, err := templating.RenderTemplate(tmpl, data)
+			result, err := config.RenderTemplate(tmpl, data)
 
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("parse template"))
@@ -174,7 +168,7 @@ line2`))
 			tmpl := "{{ .Name"
 			data := struct{ Name string }{Name: "World"}
 
-			_, err := templating.RenderTemplate(tmpl, data)
+			_, err := config.RenderTemplate(tmpl, data)
 
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("parse template"))
@@ -208,7 +202,7 @@ line2`))
 			start := time.Now()
 
 			for i := range 100 {
-				result, err := templating.RenderTemplate(tmpl, templateData[i])
+				result, err := config.RenderTemplate(tmpl, templateData[i])
 				Expect(err).NotTo(HaveOccurred())
 				Expect(result).To(Equal("mqtt://192.168.1.100:1883/data/sensors"))
 			}
@@ -261,7 +255,7 @@ line2`))
 			start := time.Now()
 
 			for i := range 100 {
-				result, err := templating.RenderTemplate(tmpl, templateData[i])
+				result, err := config.RenderTemplate(tmpl, templateData[i])
 				Expect(err).NotTo(HaveOccurred())
 				Expect(result).To(ContainSubstring(`"protocol": "https"`))
 				Expect(result).To(ContainSubstring(`"endpoint": "api.example.com:443"`))

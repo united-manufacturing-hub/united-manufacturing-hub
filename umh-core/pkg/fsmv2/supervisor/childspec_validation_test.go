@@ -26,7 +26,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/types"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence/memory"
 )
@@ -150,11 +150,11 @@ var _ = Describe("ChildSpec Validation Integration", func() {
 					"id":     "worker-1",
 					"status": "running",
 				},
-				childSpecs: []types.ChildSpec{
+				childSpecs: []config.ChildSpec{
 					{
 						Name:       "child-1",
 						WorkerType: "valid_child",
-						UserSpec:   types.UserSpec{},
+						UserSpec:   config.UserSpec{},
 					},
 				},
 			}
@@ -204,11 +204,11 @@ var _ = Describe("ChildSpec Validation Integration", func() {
 					"id":     "worker-2",
 					"status": "running",
 				},
-				childSpecs: []types.ChildSpec{
+				childSpecs: []config.ChildSpec{
 					{
 						Name:       "",
 						WorkerType: "valid_child",
-						UserSpec:   types.UserSpec{},
+						UserSpec:   config.UserSpec{},
 					},
 				},
 			}
@@ -257,11 +257,11 @@ var _ = Describe("ChildSpec Validation Integration", func() {
 					"id":     "worker-3",
 					"status": "running",
 				},
-				childSpecs: []types.ChildSpec{
+				childSpecs: []config.ChildSpec{
 					{
 						Name:       "child-1",
 						WorkerType: "",
-						UserSpec:   types.UserSpec{},
+						UserSpec:   config.UserSpec{},
 					},
 				},
 			}
@@ -310,11 +310,11 @@ var _ = Describe("ChildSpec Validation Integration", func() {
 					"id":     "worker-4",
 					"status": "running",
 				},
-				childSpecs: []types.ChildSpec{
+				childSpecs: []config.ChildSpec{
 					{
 						Name:       "child-1",
 						WorkerType: "unknown_worker_type",
-						UserSpec:   types.UserSpec{},
+						UserSpec:   config.UserSpec{},
 					},
 				},
 			}
@@ -356,16 +356,16 @@ var _ = Describe("ChildSpec Validation Integration", func() {
 					"id":     "worker-5",
 					"status": "running",
 				},
-				childSpecs: []types.ChildSpec{
+				childSpecs: []config.ChildSpec{
 					{
 						Name:       "duplicate-child",
 						WorkerType: "valid_child",
-						UserSpec:   types.UserSpec{},
+						UserSpec:   config.UserSpec{},
 					},
 					{
 						Name:       "duplicate-child",
 						WorkerType: "another_child",
-						UserSpec:   types.UserSpec{},
+						UserSpec:   config.UserSpec{},
 					},
 				},
 			}
@@ -407,16 +407,16 @@ var _ = Describe("ChildSpec Validation Integration", func() {
 					"id":     "worker-6",
 					"status": "running",
 				},
-				childSpecs: []types.ChildSpec{
+				childSpecs: []config.ChildSpec{
 					{
 						Name:       "child-1",
 						WorkerType: "valid_child",
-						UserSpec:   types.UserSpec{},
+						UserSpec:   config.UserSpec{},
 					},
 					{
 						Name:       "",
 						WorkerType: "another_child",
-						UserSpec:   types.UserSpec{},
+						UserSpec:   config.UserSpec{},
 					},
 				},
 			}
@@ -460,11 +460,11 @@ var _ = Describe("ChildSpec Validation Integration", func() {
 					"status": "running",
 				},
 				callTracker: &callOrder,
-				childSpecs: []types.ChildSpec{
+				childSpecs: []config.ChildSpec{
 					{
 						Name:       "",
 						WorkerType: "valid_child",
-						UserSpec:   types.UserSpec{},
+						UserSpec:   config.UserSpec{},
 					},
 				},
 			}
@@ -510,11 +510,11 @@ var _ = Describe("ChildSpec Validation Integration", func() {
 					"status": "running",
 				},
 				callTracker: &callOrder,
-				childSpecs: []types.ChildSpec{
+				childSpecs: []config.ChildSpec{
 					{
 						Name:       "child-1",
 						WorkerType: "valid_child",
-						UserSpec:   types.UserSpec{},
+						UserSpec:   config.UserSpec{},
 					},
 				},
 			}
@@ -570,11 +570,11 @@ var _ = Describe("ChildSpec Validation Integration", func() {
 					"id":     "worker-9",
 					"status": "running",
 				},
-				childSpecs: []types.ChildSpec{
+				childSpecs: []config.ChildSpec{
 					{
 						Name:       "child-1",
 						WorkerType: "invalid_type",
-						UserSpec:   types.UserSpec{},
+						UserSpec:   config.UserSpec{},
 					},
 				},
 			}
@@ -616,11 +616,11 @@ var _ = Describe("ChildSpec Validation Integration", func() {
 					"id":     "worker-10",
 					"status": "running",
 				},
-				childSpecs: []types.ChildSpec{
+				childSpecs: []config.ChildSpec{
 					{
 						Name:       "child-with-userspec",
 						WorkerType: "valid_child",
-						UserSpec: types.UserSpec{
+						UserSpec: config.UserSpec{
 							Config: "value",
 						},
 					},
@@ -654,7 +654,7 @@ type validChildSpecMockWorker struct {
 	identity     fsmv2.Identity
 	initialState fsmv2.State
 	observed     persistence.Document
-	childSpecs   []types.ChildSpec
+	childSpecs   []config.ChildSpec
 }
 
 func (m *validChildSpecMockWorker) CollectObservedState(_ context.Context) (fsmv2.ObservedState, error) {
@@ -664,8 +664,8 @@ func (m *validChildSpecMockWorker) CollectObservedState(_ context.Context) (fsmv
 	}, nil
 }
 
-func (m *validChildSpecMockWorker) DeriveDesiredState(_ interface{}) (types.DesiredState, error) {
-	return types.DesiredState{
+func (m *validChildSpecMockWorker) DeriveDesiredState(_ interface{}) (config.DesiredState, error) {
+	return config.DesiredState{
 		State:         "running",
 		ChildrenSpecs: m.childSpecs,
 	}, nil
@@ -680,7 +680,7 @@ type trackedCallOrderMockWorker struct {
 	identity     fsmv2.Identity
 	initialState fsmv2.State
 	observed     persistence.Document
-	childSpecs   []types.ChildSpec
+	childSpecs   []config.ChildSpec
 	callTracker  *[]string
 }
 
@@ -691,9 +691,9 @@ func (m *trackedCallOrderMockWorker) CollectObservedState(_ context.Context) (fs
 	}, nil
 }
 
-func (m *trackedCallOrderMockWorker) DeriveDesiredState(_ interface{}) (types.DesiredState, error) {
+func (m *trackedCallOrderMockWorker) DeriveDesiredState(_ interface{}) (config.DesiredState, error) {
 	*m.callTracker = append(*m.callTracker, "derive")
-	return types.DesiredState{
+	return config.DesiredState{
 		State:         "running",
 		ChildrenSpecs: m.childSpecs,
 	}, nil

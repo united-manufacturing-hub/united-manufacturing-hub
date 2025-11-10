@@ -76,9 +76,9 @@
 //	    return &MyObservedState{...}, nil
 //	}
 //
-//	func (w *MyWorker) DeriveDesiredState(spec interface{}) (types.DesiredState, error) {
+//	func (w *MyWorker) DeriveDesiredState(spec interface{}) (config.DesiredState, error) {
 //	    // Transform user config into desired state
-//	    return types.DesiredState{State: "running"}, nil
+//	    return config.DesiredState{State: "running"}, nil
 //	}
 //
 //	func (w *MyWorker) GetInitialState() fsmv2.State {
@@ -197,7 +197,7 @@
 //
 // Example:
 //
-//	bundle := types.VariableBundle{
+//	bundle := config.VariableBundle{
 //	    User: map[string]any{"IP": "192.168.1.100", "PORT": 502},
 //	    Global: map[string]any{"cluster_id": "prod"},
 //	    Internal: map[string]any{"timestamp": time.Now()},
@@ -216,14 +216,14 @@
 // Parents declare children via ChildSpec in DeriveDesiredState().
 // Supervisor handles creation, updates, and cleanup automatically:
 //
-//	func (w *ParentWorker) DeriveDesiredState(spec interface{}) (types.DesiredState, error) {
-//	    return types.DesiredState{
+//	func (w *ParentWorker) DeriveDesiredState(spec interface{}) (config.DesiredState, error) {
+//	    return config.DesiredState{
 //	        State: "running",
-//	        ChildrenSpecs: []types.ChildSpec{
+//	        ChildrenSpecs: []config.ChildSpec{
 //	            {
 //	                Name:       "mqtt-connection",
 //	                WorkerType: "mqtt_client",
-//	                UserSpec:   types.UserSpec{Config: "url: tcp://localhost:1883"},
+//	                UserSpec:   config.UserSpec{Config: "url: tcp://localhost:1883"},
 //	                StateMapping: map[string]string{
 //	                    "active":  "connected",  // Parent state → child state
 //	                    "closing": "stopped",
@@ -263,7 +263,7 @@
 //
 //	func (s RunningState) Next(snapshot Snapshot) (State, Signal, Action) {
 //	    // ALWAYS check shutdown first
-//	    if snapshot.Desired.(types.DesiredState).ShutdownRequested() {
+//	    if snapshot.Desired.(config.DesiredState).ShutdownRequested() {
 //	        return StoppingState{}, SignalNone, nil
 //	    }
 //	    // ... rest of logic
@@ -298,7 +298,7 @@
 //	        snapshot := Snapshot{
 //	            Identity: Identity{ID: "test"},
 //	            Observed: &MyObservedState{Started: true},
-//	            Desired:  types.DesiredState{State: "running"},
+//	            Desired:  config.DesiredState{State: "running"},
 //	        }
 //	        nextState, signal, action := state.Next(snapshot)
 //	        Expect(nextState).To(BeAssignableToTypeOf(RunningState{}))

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package location provides hierarchical location computation for the FSM v2 system.
+// Package config provides core configuration types for FSMv2, including child specifications, variables, templates, and location hierarchies.
 //
 // The package supports flexible location hierarchies, with ISA-95 as the default standard:
 //
@@ -25,7 +25,7 @@
 //	ACME.Factory-1.Line-A.Cell-5
 //
 // Empty levels are filled but skipped in the path computation to avoid double dots.
-package location
+package config
 
 import (
 	"strings"

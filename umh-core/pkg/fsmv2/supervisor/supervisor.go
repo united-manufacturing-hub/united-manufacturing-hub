@@ -50,7 +50,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/execution"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/health"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/metrics"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/types"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 )
 
@@ -182,7 +182,7 @@ type Supervisor struct {
 	expectedObservedTypes map[string]reflect.Type          // workerID → expected ObservedState type
 	children              map[string]*Supervisor           // Child supervisors by name (hierarchical composition)
 	stateMapping          map[string]string                // Parent→child state mapping
-	userSpec              types.UserSpec                   // User-provided configuration for this supervisor
+	userSpec              config.UserSpec                   // User-provided configuration for this supervisor
 	mappedParentState     string                           // State mapped from parent (if this is a child supervisor)
 	globalVars            map[string]any                   // Global variables (fleet-wide settings from management system)
 	createdAt             time.Time                        // Timestamp when supervisor was created
@@ -1120,7 +1120,7 @@ func (s *Supervisor) Tick(ctx context.Context) error {
 	if len(desired.ChildrenSpecs) > 0 {
 		registry := &factoryRegistryAdapter{}
 
-		if err := types.ValidateChildSpecs(desired.ChildrenSpecs, registry); err != nil {
+		if err := config.ValidateChildSpecs(desired.ChildrenSpecs, registry); err != nil {
 			s.logger.Error("child spec validation failed",
 				"supervisor_id", s.workerType,
 				"error", err.Error())
@@ -1343,7 +1343,7 @@ func (s *Supervisor) GetChildren() map[string]*Supervisor {
 //
 // Error handling: Logs errors but continues reconciliation for remaining children.
 // This ensures partial failures don't block the entire reconciliation operation.
-func (s *Supervisor) reconcileChildren(specs []types.ChildSpec) error {
+func (s *Supervisor) reconcileChildren(specs []config.ChildSpec) error {
 	startTime := time.Now()
 
 	s.mu.Lock()
@@ -1422,7 +1422,7 @@ func (s *Supervisor) reconcileChildren(specs []types.ChildSpec) error {
 
 // UpdateUserSpec updates the user-provided configuration for this supervisor.
 // This method is called by parent supervisors during reconciliation to update child configuration.
-func (s *Supervisor) UpdateUserSpec(spec types.UserSpec) {
+func (s *Supervisor) UpdateUserSpec(spec config.UserSpec) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 

@@ -12,31 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
-package types_test
+package config_test
 
 import (
-	"testing"
-
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"gopkg.in/yaml.v3"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/types"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 )
-
-func TestTypes(t *testing.T) {
-	RegisterFailHandler(Fail)
-	RunSpecs(t, "FSMv2 Types Suite")
-}
 
 var _ = Describe("ChildSpec", func() {
 	Describe("YAML serialization", func() {
 		It("should serialize to YAML correctly", func() {
-			spec := types.ChildSpec{
+			spec := config.ChildSpec{
 				Name:       "connection",
 				WorkerType: "mqtt_connection",
-				UserSpec: types.UserSpec{
+				UserSpec: config.UserSpec{
 					Config: "mqtt:\n  url: tcp://localhost:1883",
 				},
 				StateMapping: map[string]string{
@@ -63,7 +55,7 @@ stateMapping:
   idle: stopped
   active: running
 `
-			var spec types.ChildSpec
+			var spec config.ChildSpec
 			err := yaml.Unmarshal([]byte(yamlData), &spec)
 
 			Expect(err).ToNot(HaveOccurred())
@@ -81,7 +73,7 @@ workerType: basic
 userSpec:
   config: "simple config"
 `
-			var spec types.ChildSpec
+			var spec config.ChildSpec
 			err := yaml.Unmarshal([]byte(yamlData), &spec)
 
 			Expect(err).ToNot(HaveOccurred())
@@ -92,10 +84,10 @@ userSpec:
 
 	Describe("JSON serialization", func() {
 		It("should serialize to JSON correctly", func() {
-			spec := types.ChildSpec{
+			spec := config.ChildSpec{
 				Name:       "dataflow",
 				WorkerType: "kafka_consumer",
-				UserSpec: types.UserSpec{
+				UserSpec: config.UserSpec{
 					Config: "topic: sensor-data",
 				},
 			}
@@ -111,13 +103,13 @@ userSpec:
 var _ = Describe("DesiredState", func() {
 	Describe("YAML serialization", func() {
 		It("should serialize to YAML correctly", func() {
-			desired := types.DesiredState{
+			desired := config.DesiredState{
 				State: "running",
-				ChildrenSpecs: []types.ChildSpec{
+				ChildrenSpecs: []config.ChildSpec{
 					{
 						Name:       "child1",
 						WorkerType: "worker_type_a",
-						UserSpec: types.UserSpec{
+						UserSpec: config.UserSpec{
 							Config: "config1",
 						},
 					},
@@ -144,7 +136,7 @@ childrenSpecs:
     userSpec:
       config: "processor config"
 `
-			var desired types.DesiredState
+			var desired config.DesiredState
 			err := yaml.Unmarshal([]byte(yamlData), &desired)
 
 			Expect(err).ToNot(HaveOccurred())
@@ -158,7 +150,7 @@ childrenSpecs:
 			yamlData := `
 state: stopped
 `
-			var desired types.DesiredState
+			var desired config.DesiredState
 			err := yaml.Unmarshal([]byte(yamlData), &desired)
 
 			Expect(err).ToNot(HaveOccurred())
@@ -169,7 +161,7 @@ state: stopped
 
 	Describe("ShutdownRequested interface", func() {
 		It("should return false when State is not 'shutdown'", func() {
-			desired := types.DesiredState{
+			desired := config.DesiredState{
 				State: "running",
 			}
 
@@ -177,7 +169,7 @@ state: stopped
 		})
 
 		It("should return true when State is 'shutdown'", func() {
-			desired := types.DesiredState{
+			desired := config.DesiredState{
 				State: "shutdown",
 			}
 

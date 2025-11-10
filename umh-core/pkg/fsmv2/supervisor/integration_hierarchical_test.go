@@ -27,7 +27,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/types"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 )
 
@@ -66,7 +66,7 @@ func (h *hierarchicalTickLogger) Clear() {
 type mockHierarchicalWorker struct {
 	id            string
 	logger        *hierarchicalTickLogger
-	childrenSpecs []types.ChildSpec
+	childrenSpecs []config.ChildSpec
 	observed      *mockObservedState
 	observedErr   error // Error to return from CollectObservedState (for testing failure scenarios)
 	callCount     int   // Track how many times CollectObservedState was called
@@ -90,10 +90,10 @@ func (m *mockHierarchicalWorker) CollectObservedState(ctx context.Context) (fsmv
 	return m.observed, nil
 }
 
-func (m *mockHierarchicalWorker) DeriveDesiredState(spec interface{}) (types.DesiredState, error) {
+func (m *mockHierarchicalWorker) DeriveDesiredState(spec interface{}) (config.DesiredState, error) {
 	m.logger.Log("DeriveDesiredState:" + m.id)
 
-	return types.DesiredState{
+	return config.DesiredState{
 		State:         m.stateName,
 		ChildrenSpecs: m.childrenSpecs,
 	}, nil
@@ -155,11 +155,11 @@ var _ = Describe("Integration: Hierarchical Composition (Task 0.7)", func() {
 			parentWorker := &mockHierarchicalWorker{
 				id:     "parent",
 				logger: tickLog,
-				childrenSpecs: []types.ChildSpec{
+				childrenSpecs: []config.ChildSpec{
 					{
 						Name:       "child",
 						WorkerType: "child",
-						UserSpec:   types.UserSpec{Config: "child-config"},
+						UserSpec:   config.UserSpec{Config: "child-config"},
 						StateMapping: map[string]string{
 							"running": "active",
 						},
@@ -187,7 +187,7 @@ var _ = Describe("Integration: Hierarchical Composition (Task 0.7)", func() {
 			err := parentSup.AddWorker(identity, parentWorker)
 			Expect(err).NotTo(HaveOccurred())
 
-			parentSup.UpdateUserSpec(types.UserSpec{Config: "parent-config"})
+			parentSup.UpdateUserSpec(config.UserSpec{Config: "parent-config"})
 
 			store.desired["parent"] = map[string]persistence.Document{
 				"parent-worker": {
@@ -227,11 +227,11 @@ var _ = Describe("Integration: Hierarchical Composition (Task 0.7)", func() {
 			childWorker := &mockHierarchicalWorker{
 				id:     "child-worker",
 				logger: tickLog,
-				childrenSpecs: []types.ChildSpec{
+				childrenSpecs: []config.ChildSpec{
 					{
 						Name:       "grandchild",
 						WorkerType: "grandchild",
-						UserSpec:   types.UserSpec{Config: "grandchild-config"},
+						UserSpec:   config.UserSpec{Config: "grandchild-config"},
 					},
 				},
 				stateName: "running",
@@ -246,7 +246,7 @@ var _ = Describe("Integration: Hierarchical Composition (Task 0.7)", func() {
 			err = childSup.AddWorker(childIdentity, childWorker)
 			Expect(err).NotTo(HaveOccurred())
 
-			childSup.UpdateUserSpec(types.UserSpec{Config: "child-config"})
+			childSup.UpdateUserSpec(config.UserSpec{Config: "child-config"})
 
 			// Setup store for child worker
 			store.desired["child"] = map[string]persistence.Document{
@@ -326,7 +326,7 @@ var _ = Describe("Integration: Hierarchical Composition (Task 0.7)", func() {
 			err := parentSup.AddWorker(identity, parentWorker)
 			Expect(err).NotTo(HaveOccurred())
 
-			parentSup.UpdateUserSpec(types.UserSpec{Config: "parent-config"})
+			parentSup.UpdateUserSpec(config.UserSpec{Config: "parent-config"})
 
 			store.desired["parent"] = map[string]persistence.Document{
 				"parent-worker": {
@@ -345,16 +345,16 @@ var _ = Describe("Integration: Hierarchical Composition (Task 0.7)", func() {
 			err = parentSup.Tick(ctx)
 			Expect(err).NotTo(HaveOccurred())
 
-			parentWorker.childrenSpecs = []types.ChildSpec{
+			parentWorker.childrenSpecs = []config.ChildSpec{
 				{
 					Name:       "child1",
 					WorkerType: "child",
-					UserSpec:   types.UserSpec{Config: "child1-config"},
+					UserSpec:   config.UserSpec{Config: "child1-config"},
 				},
 				{
 					Name:       "child2",
 					WorkerType: "child",
-					UserSpec:   types.UserSpec{Config: "child2-config"},
+					UserSpec:   config.UserSpec{Config: "child2-config"},
 				},
 			}
 
@@ -385,9 +385,9 @@ var _ = Describe("Integration: Hierarchical Composition (Task 0.7)", func() {
 			parentWorker := &mockHierarchicalWorker{
 				id:     "parent",
 				logger: tickLog,
-				childrenSpecs: []types.ChildSpec{
-					{Name: "child1", WorkerType: "child", UserSpec: types.UserSpec{Config: "child1"}},
-					{Name: "child2", WorkerType: "child", UserSpec: types.UserSpec{Config: "child2"}},
+				childrenSpecs: []config.ChildSpec{
+					{Name: "child1", WorkerType: "child", UserSpec: config.UserSpec{Config: "child1"}},
+					{Name: "child2", WorkerType: "child", UserSpec: config.UserSpec{Config: "child2"}},
 				},
 				stateName: "running",
 				observed: &mockObservedState{
@@ -411,7 +411,7 @@ var _ = Describe("Integration: Hierarchical Composition (Task 0.7)", func() {
 			err := parentSup.AddWorker(identity, parentWorker)
 			Expect(err).NotTo(HaveOccurred())
 
-			parentSup.UpdateUserSpec(types.UserSpec{Config: "parent-config"})
+			parentSup.UpdateUserSpec(config.UserSpec{Config: "parent-config"})
 
 			store.desired["parent"] = map[string]persistence.Document{
 				"parent-worker": {
@@ -441,7 +441,7 @@ var _ = Describe("Integration: Hierarchical Composition (Task 0.7)", func() {
 			childrenBefore := parentSup.GetChildren()
 			Expect(childrenBefore).To(HaveLen(2), "parent should have 2 children before removal")
 
-			parentWorker.childrenSpecs = []types.ChildSpec{}
+			parentWorker.childrenSpecs = []config.ChildSpec{}
 
 			tickLog.Clear()
 			err = parentSup.Tick(ctx)
@@ -461,11 +461,11 @@ var _ = Describe("Integration: Hierarchical Composition (Task 0.7)", func() {
 			parentWorker := &mockHierarchicalWorker{
 				id:     "parent",
 				logger: tickLog,
-				childrenSpecs: []types.ChildSpec{
+				childrenSpecs: []config.ChildSpec{
 					{
 						Name:       "child",
 						WorkerType: "child",
-						UserSpec:   types.UserSpec{Config: "child-config"},
+						UserSpec:   config.UserSpec{Config: "child-config"},
 						StateMapping: map[string]string{
 							"running": "active",
 						},
@@ -493,7 +493,7 @@ var _ = Describe("Integration: Hierarchical Composition (Task 0.7)", func() {
 			err := parentSup.AddWorker(identity, parentWorker)
 			Expect(err).NotTo(HaveOccurred())
 
-			parentSup.UpdateUserSpec(types.UserSpec{Config: "parent-config"})
+			parentSup.UpdateUserSpec(config.UserSpec{Config: "parent-config"})
 
 			store.desired["parent"] = map[string]persistence.Document{
 				"parent-worker": {
@@ -542,9 +542,9 @@ var _ = Describe("Integration: Hierarchical Composition (Task 0.7)", func() {
 			parentWorker := &mockHierarchicalWorker{
 				id:     "parent",
 				logger: tickLog,
-				childrenSpecs: []types.ChildSpec{
-					{Name: "failing-child", WorkerType: "failing", UserSpec: types.UserSpec{Config: "fail"}},
-					{Name: "working-child", WorkerType: "working", UserSpec: types.UserSpec{Config: "work"}},
+				childrenSpecs: []config.ChildSpec{
+					{Name: "failing-child", WorkerType: "failing", UserSpec: config.UserSpec{Config: "fail"}},
+					{Name: "working-child", WorkerType: "working", UserSpec: config.UserSpec{Config: "work"}},
 				},
 				stateName: "running",
 				observed: &mockObservedState{
@@ -568,7 +568,7 @@ var _ = Describe("Integration: Hierarchical Composition (Task 0.7)", func() {
 			err := parentSup.AddWorker(identity, parentWorker)
 			Expect(err).NotTo(HaveOccurred())
 
-			parentSup.UpdateUserSpec(types.UserSpec{Config: "parent-config"})
+			parentSup.UpdateUserSpec(config.UserSpec{Config: "parent-config"})
 
 			store.desired["parent"] = map[string]persistence.Document{
 				"parent-worker": {
@@ -695,8 +695,8 @@ var _ = Describe("Integration: Hierarchical Composition (Task 0.7)", func() {
 			parentWorker := &mockHierarchicalWorker{
 				id:     "parent",
 				logger: tickLog,
-				childrenSpecs: []types.ChildSpec{
-					{Name: "child", WorkerType: "type_a", UserSpec: types.UserSpec{Config: "config_a"}},
+				childrenSpecs: []config.ChildSpec{
+					{Name: "child", WorkerType: "type_a", UserSpec: config.UserSpec{Config: "config_a"}},
 				},
 				stateName: "running",
 				observed: &mockObservedState{
@@ -720,7 +720,7 @@ var _ = Describe("Integration: Hierarchical Composition (Task 0.7)", func() {
 			err := parentSup.AddWorker(identity, parentWorker)
 			Expect(err).NotTo(HaveOccurred())
 
-			parentSup.UpdateUserSpec(types.UserSpec{Config: "parent-config"})
+			parentSup.UpdateUserSpec(config.UserSpec{Config: "parent-config"})
 
 			store.desired["parent"] = map[string]persistence.Document{
 				"parent-worker": {
@@ -746,8 +746,8 @@ var _ = Describe("Integration: Hierarchical Composition (Task 0.7)", func() {
 			err = parentSup.Tick(ctx)
 			Expect(err).NotTo(HaveOccurred())
 
-			parentWorker.childrenSpecs = []types.ChildSpec{
-				{Name: "child", WorkerType: "type_b", UserSpec: types.UserSpec{Config: "config_b"}},
+			parentWorker.childrenSpecs = []config.ChildSpec{
+				{Name: "child", WorkerType: "type_b", UserSpec: config.UserSpec{Config: "config_b"}},
 			}
 
 			store.Observed["type_b"] = map[string]interface{}{
@@ -776,23 +776,23 @@ var _ = Describe("Integration: Hierarchical Composition (Task 0.7)", func() {
 			parentWorker := &mockHierarchicalWorker{
 				id:     "parent",
 				logger: tickLog,
-				childrenSpecs: []types.ChildSpec{
+				childrenSpecs: []config.ChildSpec{
 					{
 						Name:         "child1",
 						WorkerType:   "child",
-						UserSpec:     types.UserSpec{Config: "child1"},
+						UserSpec:     config.UserSpec{Config: "child1"},
 						StateMapping: map[string]string{"running": "active"},
 					},
 					{
 						Name:         "child2",
 						WorkerType:   "child",
-						UserSpec:     types.UserSpec{Config: "child2"},
+						UserSpec:     config.UserSpec{Config: "child2"},
 						StateMapping: map[string]string{"running": "connected"},
 					},
 					{
 						Name:       "child3",
 						WorkerType: "child",
-						UserSpec:   types.UserSpec{Config: "child3"},
+						UserSpec:   config.UserSpec{Config: "child3"},
 					},
 				},
 				stateName: "running",
@@ -817,7 +817,7 @@ var _ = Describe("Integration: Hierarchical Composition (Task 0.7)", func() {
 			err := parentSup.AddWorker(identity, parentWorker)
 			Expect(err).NotTo(HaveOccurred())
 
-			parentSup.UpdateUserSpec(types.UserSpec{Config: "parent-config"})
+			parentSup.UpdateUserSpec(config.UserSpec{Config: "parent-config"})
 
 			store.desired["parent"] = map[string]persistence.Document{
 				"parent-worker": {
@@ -860,11 +860,11 @@ var _ = Describe("Integration: Hierarchical Composition (Task 0.7)", func() {
 			parentWorker := &mockHierarchicalWorker{
 				id:     "parent",
 				logger: tickLog,
-				childrenSpecs: []types.ChildSpec{
+				childrenSpecs: []config.ChildSpec{
 					{
 						Name:       "child",
 						WorkerType: "child",
-						UserSpec:   types.UserSpec{},
+						UserSpec:   config.UserSpec{},
 					},
 				},
 				stateName: "running",
@@ -889,7 +889,7 @@ var _ = Describe("Integration: Hierarchical Composition (Task 0.7)", func() {
 			err := parentSup.AddWorker(identity, parentWorker)
 			Expect(err).NotTo(HaveOccurred())
 
-			parentSup.UpdateUserSpec(types.UserSpec{})
+			parentSup.UpdateUserSpec(config.UserSpec{})
 
 			store.desired["parent"] = map[string]persistence.Document{
 				"parent-worker": {

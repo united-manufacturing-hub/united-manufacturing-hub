@@ -12,23 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package types
+package config
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 )
 
-// WorkerTypeChecker interface for registry lookup (allows testing without full registry)
+// WorkerTypeChecker interface for registry lookup (allows testing without full registry).
 type WorkerTypeChecker interface {
 	ListRegisteredTypes() []string
 }
 
-// ValidateChildSpec validates a ChildSpec for common errors
+// ValidateChildSpec validates a ChildSpec for common errors.
 func ValidateChildSpec(spec ChildSpec, registry WorkerTypeChecker) error {
 	// Check Name (required for reconciliation)
 	if spec.Name == "" {
-		return fmt.Errorf("child spec name cannot be empty")
+		return errors.New("child spec name cannot be empty")
 	}
 
 	// Check WorkerType (required, must exist in registry)
@@ -39,12 +40,15 @@ func ValidateChildSpec(spec ChildSpec, registry WorkerTypeChecker) error {
 	// Verify WorkerType exists in registry
 	validTypes := registry.ListRegisteredTypes()
 	found := false
+
 	for _, t := range validTypes {
 		if t == spec.WorkerType {
 			found = true
+
 			break
 		}
 	}
+
 	if !found {
 		return fmt.Errorf("child spec %q: unknown worker type %q (available: %v)",
 			spec.Name, spec.WorkerType, validTypes)
@@ -58,7 +62,7 @@ func ValidateChildSpec(spec ChildSpec, registry WorkerTypeChecker) error {
 	return nil
 }
 
-// ValidateChildSpecs validates a slice of ChildSpecs (checks uniqueness too)
+// ValidateChildSpecs validates a slice of ChildSpecs (checks uniqueness too).
 func ValidateChildSpecs(specs []ChildSpec, registry WorkerTypeChecker) error {
 	names := make(map[string]bool)
 
@@ -72,6 +76,7 @@ func ValidateChildSpecs(specs []ChildSpec, registry WorkerTypeChecker) error {
 		if names[spec.Name] {
 			return fmt.Errorf("duplicate child spec name %q", spec.Name)
 		}
+
 		names[spec.Name] = true
 	}
 

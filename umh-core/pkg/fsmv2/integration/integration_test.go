@@ -19,15 +19,13 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/location"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/templating"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/types"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 )
 
 var _ = Describe("Phase 0.5 Integration Tests", func() {
 	Describe("Scenario 1: Variable Flattening", func() {
 		It("should promote User variables to top-level and nest Global and Internal", func() {
-			bundle := types.VariableBundle{
+			bundle := config.VariableBundle{
 				User: map[string]any{
 					"IP":   "192.168.1.100",
 					"PORT": 502,
@@ -65,7 +63,7 @@ var _ = Describe("Phase 0.5 Integration Tests", func() {
 port: {{ .PORT }}
 name: {{ .name }}`
 
-			bundle := types.VariableBundle{
+			bundle := config.VariableBundle{
 				User: map[string]any{
 					"IP":   "192.168.1.100",
 					"PORT": 502,
@@ -74,7 +72,7 @@ name: {{ .name }}`
 			}
 
 			flattened := bundle.Flatten()
-			rendered, err := templating.RenderTemplate(template, flattened)
+			rendered, err := config.RenderTemplate(template, flattened)
 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(rendered).To(ContainSubstring("host: 192.168.1.100"))
@@ -87,20 +85,20 @@ name: {{ .name }}`
 
 	Describe("Scenario 3: Location Computation", func() {
 		It("should merge parent and child locations into complete ISA-95 path", func() {
-			parentLocation := []location.LocationLevel{
+			parentLocation := []config.LocationLevel{
 				{Type: "enterprise", Value: "ACME"},
 				{Type: "site", Value: "Factory-1"},
 			}
 
-			childLocation := []location.LocationLevel{
+			childLocation := []config.LocationLevel{
 				{Type: "line", Value: "Line-A"},
 				{Type: "cell", Value: "Cell-5"},
 			}
 
-			merged := location.MergeLocations(parentLocation, childLocation)
+			merged := config.MergeLocations(parentLocation, childLocation)
 			Expect(merged).To(HaveLen(4))
 
-			filled := location.FillISA95Gaps(merged)
+			filled := config.FillISA95Gaps(merged)
 			Expect(filled).To(HaveLen(5))
 
 			Expect(filled[0].Type).To(Equal("enterprise"))
@@ -114,7 +112,7 @@ name: {{ .name }}`
 			Expect(filled[4].Type).To(Equal("cell"))
 			Expect(filled[4].Value).To(Equal("Cell-5"))
 
-			path := location.ComputeLocationPath(filled)
+			path := config.ComputeLocationPath(filled)
 			Expect(path).To(Equal("ACME.Factory-1.Line-A.Cell-5"))
 			Expect(path).NotTo(ContainSubstring(".."))
 		})
@@ -122,7 +120,7 @@ name: {{ .name }}`
 
 	Describe("Scenario 4: Variable Propagation", func() {
 		It("should make parent variables available to child workers via UserSpec", func() {
-			parentVariables := types.VariableBundle{
+			parentVariables := config.VariableBundle{
 				User: map[string]any{
 					"parent_ip":   "192.168.1.1",
 					"parent_port": 1883,
@@ -132,12 +130,12 @@ name: {{ .name }}`
 				},
 			}
 
-			childSpec := types.ChildSpec{
+			childSpec := config.ChildSpec{
 				Name:       "mqtt-connection",
 				WorkerType: "mqtt_client",
-				UserSpec: types.UserSpec{
+				UserSpec: config.UserSpec{
 					Config: "url: tcp://{{ .parent_ip }}:{{ .parent_port }}",
-					Variables: types.VariableBundle{
+					Variables: config.VariableBundle{
 						User: map[string]any{
 							"parent_ip":   parentVariables.User["parent_ip"],
 							"parent_port": parentVariables.User["parent_port"],
@@ -154,7 +152,7 @@ name: {{ .name }}`
 			Expect(childSpec.UserSpec.Variables.Global["cluster_id"]).To(Equal("prod-cluster"))
 
 			flattened := childSpec.UserSpec.Variables.Flatten()
-			rendered, err := templating.RenderTemplate(childSpec.UserSpec.Config, flattened)
+			rendered, err := config.RenderTemplate(childSpec.UserSpec.Config, flattened)
 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(rendered).To(ContainSubstring("url: tcp://192.168.1.1:1883"))
@@ -165,14 +163,14 @@ name: {{ .name }}`
 		It("should return error when template references missing variable", func() {
 			template := "host: {{ .IP }}\nport: {{ .MISSING_VAR }}"
 
-			bundle := types.VariableBundle{
+			bundle := config.VariableBundle{
 				User: map[string]any{
 					"IP": "192.168.1.100",
 				},
 			}
 
 			flattened := bundle.Flatten()
-			_, err := templating.RenderTemplate(template, flattened)
+			_, err := config.RenderTemplate(template, flattened)
 
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("MISSING_VAR"))
@@ -185,7 +183,7 @@ name: {{ .name }}`
 global_api: {{ .global.api_endpoint }}
 internal_id: {{ .internal.id }}`
 
-			bundle := types.VariableBundle{
+			bundle := config.VariableBundle{
 				User: map[string]any{
 					"IP": "192.168.1.100",
 				},
@@ -198,7 +196,7 @@ internal_id: {{ .internal.id }}`
 			}
 
 			flattened := bundle.Flatten()
-			rendered, err := templating.RenderTemplate(template, flattened)
+			rendered, err := config.RenderTemplate(template, flattened)
 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(rendered).To(ContainSubstring("user_ip: 192.168.1.100"))
@@ -209,12 +207,12 @@ internal_id: {{ .internal.id }}`
 
 	Describe("Scenario 7: Empty Locations", func() {
 		It("should fill missing ISA-95 levels with empty strings and skip in path", func() {
-			sparseLocation := []location.LocationLevel{
+			sparseLocation := []config.LocationLevel{
 				{Type: "enterprise", Value: "ACME"},
 				{Type: "line", Value: "Line-A"},
 			}
 
-			filled := location.FillISA95Gaps(sparseLocation)
+			filled := config.FillISA95Gaps(sparseLocation)
 
 			Expect(filled).To(HaveLen(5))
 			Expect(filled[0].Type).To(Equal("enterprise"))
@@ -228,7 +226,7 @@ internal_id: {{ .internal.id }}`
 			Expect(filled[4].Type).To(Equal("cell"))
 			Expect(filled[4].Value).To(Equal(""))
 
-			path := location.ComputeLocationPath(filled)
+			path := config.ComputeLocationPath(filled)
 			Expect(path).To(Equal("ACME.Line-A"))
 			Expect(path).NotTo(ContainSubstring(".."))
 		})

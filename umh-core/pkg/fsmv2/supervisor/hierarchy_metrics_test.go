@@ -27,7 +27,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/metrics"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/types"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 )
 
@@ -51,7 +51,7 @@ var _ = Describe("Hierarchy Metrics (Task 3)", func() {
 			parentWorker := &mockHierarchicalWorker{
 				id:            "root",
 				logger:        newHierarchicalTickLogger(),
-				childrenSpecs: []types.ChildSpec{},
+				childrenSpecs: []config.ChildSpec{},
 				stateName:     "running",
 				observed: &mockObservedState{
 					ID:          "root-worker",
@@ -101,11 +101,11 @@ var _ = Describe("Hierarchy Metrics (Task 3)", func() {
 			parentWorker := &mockHierarchicalWorker{
 				id:     "parent",
 				logger: newHierarchicalTickLogger(),
-				childrenSpecs: []types.ChildSpec{
+				childrenSpecs: []config.ChildSpec{
 					{
 						Name:       "child",
 						WorkerType: "child",
-						UserSpec:   types.UserSpec{Config: "child-config"},
+						UserSpec:   config.UserSpec{Config: "child-config"},
 					},
 				},
 				stateName: "running",
@@ -170,11 +170,11 @@ var _ = Describe("Hierarchy Metrics (Task 3)", func() {
 			parentWorker := &mockHierarchicalWorker{
 				id:     "parent",
 				logger: newHierarchicalTickLogger(),
-				childrenSpecs: []types.ChildSpec{
+				childrenSpecs: []config.ChildSpec{
 					{
 						Name:       "child",
 						WorkerType: "child",
-						UserSpec:   types.UserSpec{Config: "child-config"},
+						UserSpec:   config.UserSpec{Config: "child-config"},
 					},
 				},
 				stateName: "running",
@@ -228,11 +228,11 @@ var _ = Describe("Hierarchy Metrics (Task 3)", func() {
 			childWorker := &mockHierarchicalWorker{
 				id:     "child-worker",
 				logger: newHierarchicalTickLogger(),
-				childrenSpecs: []types.ChildSpec{
+				childrenSpecs: []config.ChildSpec{
 					{
 						Name:       "grandchild",
 						WorkerType: "grandchild",
-						UserSpec:   types.UserSpec{Config: "grandchild-config"},
+						UserSpec:   config.UserSpec{Config: "grandchild-config"},
 					},
 				},
 				stateName: "running",
@@ -246,7 +246,7 @@ var _ = Describe("Hierarchy Metrics (Task 3)", func() {
 			err = childSup.AddWorker(childIdentity, childWorker)
 			Expect(err).NotTo(HaveOccurred())
 
-			childSup.UpdateUserSpec(types.UserSpec{Config: "child-config"})
+			childSup.UpdateUserSpec(config.UserSpec{Config: "child-config"})
 
 			store.desired["child"] = map[string]persistence.Document{
 				"child-worker": {
@@ -293,7 +293,7 @@ var _ = Describe("Hierarchy Metrics (Task 3)", func() {
 			leafWorker := &mockHierarchicalWorker{
 				id:            "leaf",
 				logger:        newHierarchicalTickLogger(),
-				childrenSpecs: []types.ChildSpec{},
+				childrenSpecs: []config.ChildSpec{},
 				stateName:     "running",
 				observed: &mockObservedState{
 					ID:          "leaf-worker",
@@ -343,9 +343,9 @@ var _ = Describe("Hierarchy Metrics (Task 3)", func() {
 			parentWorker := &mockHierarchicalWorker{
 				id:     "parent",
 				logger: newHierarchicalTickLogger(),
-				childrenSpecs: []types.ChildSpec{
-					{Name: "child1", WorkerType: "child", UserSpec: types.UserSpec{}},
-					{Name: "child2", WorkerType: "child", UserSpec: types.UserSpec{}},
+				childrenSpecs: []config.ChildSpec{
+					{Name: "child1", WorkerType: "child", UserSpec: config.UserSpec{}},
+					{Name: "child2", WorkerType: "child", UserSpec: config.UserSpec{}},
 				},
 				stateName: "running",
 				observed: &mockObservedState{
@@ -403,7 +403,7 @@ var _ = Describe("Hierarchy Metrics (Task 3)", func() {
 			parentWorker := &mockHierarchicalWorker{
 				id:            "parent",
 				logger:        newHierarchicalTickLogger(),
-				childrenSpecs: []types.ChildSpec{},
+				childrenSpecs: []config.ChildSpec{},
 				stateName:     "running",
 				observed: &mockObservedState{
 					ID:          "parent-worker",
@@ -448,8 +448,8 @@ var _ = Describe("Hierarchy Metrics (Task 3)", func() {
 			initialSize := promtest.ToFloat64(metrics.GetHierarchySizeGauge().WithLabelValues("parent"))
 			Expect(initialSize).To(Equal(1.0), "parent should start with size=1")
 
-			parentWorker.childrenSpecs = []types.ChildSpec{
-				{Name: "child1", WorkerType: "child", UserSpec: types.UserSpec{}},
+			parentWorker.childrenSpecs = []config.ChildSpec{
+				{Name: "child1", WorkerType: "child", UserSpec: config.UserSpec{}},
 			}
 
 			store.Observed["child"] = map[string]interface{}{
@@ -472,8 +472,8 @@ var _ = Describe("Hierarchy Metrics (Task 3)", func() {
 			parentWorker := &mockHierarchicalWorker{
 				id:     "parent",
 				logger: newHierarchicalTickLogger(),
-				childrenSpecs: []types.ChildSpec{
-					{Name: "child1", WorkerType: "child", UserSpec: types.UserSpec{}},
+				childrenSpecs: []config.ChildSpec{
+					{Name: "child1", WorkerType: "child", UserSpec: config.UserSpec{}},
 				},
 				stateName: "running",
 				observed: &mockObservedState{
@@ -526,7 +526,7 @@ var _ = Describe("Hierarchy Metrics (Task 3)", func() {
 			initialSize := promtest.ToFloat64(metrics.GetHierarchySizeGauge().WithLabelValues("parent"))
 			Expect(initialSize).To(Equal(2.0), "parent should start with size=2")
 
-			parentWorker.childrenSpecs = []types.ChildSpec{}
+			parentWorker.childrenSpecs = []config.ChildSpec{}
 
 			err = parentSup.Tick(ctx)
 			Expect(err).NotTo(HaveOccurred())

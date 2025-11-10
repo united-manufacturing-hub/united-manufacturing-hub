@@ -21,7 +21,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/types"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence/memory"
 	"go.uber.org/zap"
 )
@@ -82,8 +82,8 @@ func (m *TestWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedSt
 	}, nil
 }
 
-func (m *TestWorker) DeriveDesiredState(spec interface{}) (types.DesiredState, error) {
-	return types.DesiredState{State: "running"}, nil
+func (m *TestWorker) DeriveDesiredState(spec interface{}) (config.DesiredState, error) {
+	return config.DesiredState{State: "running"}, nil
 }
 
 func (m *TestWorker) GetInitialState() fsmv2.State {

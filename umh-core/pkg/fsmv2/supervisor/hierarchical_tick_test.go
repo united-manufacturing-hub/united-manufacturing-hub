@@ -25,7 +25,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/types"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 )
 
@@ -57,7 +57,7 @@ func (t *tickLogger) GetEvents() []string {
 type hierarchicalWorker struct {
 	id            string
 	logger        *tickLogger
-	childrenSpecs []types.ChildSpec
+	childrenSpecs []config.ChildSpec
 	observed      *mockObservedState
 }
 
@@ -65,10 +65,10 @@ func (h *hierarchicalWorker) CollectObservedState(ctx context.Context) (fsmv2.Ob
 	return h.observed, nil
 }
 
-func (h *hierarchicalWorker) DeriveDesiredState(spec interface{}) (types.DesiredState, error) {
+func (h *hierarchicalWorker) DeriveDesiredState(spec interface{}) (config.DesiredState, error) {
 	h.logger.Log("DeriveDesiredState:" + h.id)
 
-	return types.DesiredState{
+	return config.DesiredState{
 		State:         "running",
 		ChildrenSpecs: h.childrenSpecs,
 	}, nil
@@ -102,7 +102,7 @@ var _ = Describe("Hierarchical Tick Propagation (Task 0.6)", func() {
 					CollectedAt: time.Now(),
 					Desired:     &mockDesiredState{},
 				},
-				childrenSpecs: []types.ChildSpec{},
+				childrenSpecs: []config.ChildSpec{},
 			}
 
 			parentSuper = supervisor.NewSupervisor(supervisor.Config{
@@ -119,7 +119,7 @@ var _ = Describe("Hierarchical Tick Propagation (Task 0.6)", func() {
 			err := parentSuper.AddWorker(identity, worker)
 			Expect(err).NotTo(HaveOccurred())
 
-			parentSuper.UpdateUserSpec(types.UserSpec{Config: "test-config"})
+			parentSuper.UpdateUserSpec(config.UserSpec{Config: "test-config"})
 
 			desiredDoc := persistence.Document{
 				"id":                identity.ID,
@@ -151,11 +151,11 @@ var _ = Describe("Hierarchical Tick Propagation (Task 0.6)", func() {
 					CollectedAt: time.Now(),
 					Desired:     &mockDesiredState{},
 				},
-				childrenSpecs: []types.ChildSpec{
+				childrenSpecs: []config.ChildSpec{
 					{
 						Name:       "child1",
 						WorkerType: "child",
-						UserSpec:   types.UserSpec{Config: "child-config"},
+						UserSpec:   config.UserSpec{Config: "child-config"},
 					},
 				},
 			}
@@ -174,7 +174,7 @@ var _ = Describe("Hierarchical Tick Propagation (Task 0.6)", func() {
 			err := parentSuper.AddWorker(identity, worker)
 			Expect(err).NotTo(HaveOccurred())
 
-			parentSuper.UpdateUserSpec(types.UserSpec{Config: "parent-config"})
+			parentSuper.UpdateUserSpec(config.UserSpec{Config: "parent-config"})
 
 			desiredDoc := persistence.Document{
 				"id":                identity.ID,
@@ -213,9 +213,9 @@ var _ = Describe("Hierarchical Tick Propagation (Task 0.6)", func() {
 					CollectedAt: time.Now(),
 					Desired:     &mockDesiredState{},
 				},
-				childrenSpecs: []types.ChildSpec{
-					{Name: "child1", WorkerType: "child1", UserSpec: types.UserSpec{}},
-					{Name: "child2", WorkerType: "child2", UserSpec: types.UserSpec{}},
+				childrenSpecs: []config.ChildSpec{
+					{Name: "child1", WorkerType: "child1", UserSpec: config.UserSpec{}},
+					{Name: "child2", WorkerType: "child2", UserSpec: config.UserSpec{}},
 				},
 			}
 
@@ -233,7 +233,7 @@ var _ = Describe("Hierarchical Tick Propagation (Task 0.6)", func() {
 			err := parentSuper.AddWorker(identity, worker)
 			Expect(err).NotTo(HaveOccurred())
 
-			parentSuper.UpdateUserSpec(types.UserSpec{Config: "config"})
+			parentSuper.UpdateUserSpec(config.UserSpec{Config: "config"})
 
 			desiredDoc := persistence.Document{
 				"id":                identity.ID,
@@ -265,11 +265,11 @@ var _ = Describe("Hierarchical Tick Propagation (Task 0.6)", func() {
 					CollectedAt: time.Now(),
 					Desired:     &mockDesiredState{},
 				},
-				childrenSpecs: []types.ChildSpec{
+				childrenSpecs: []config.ChildSpec{
 					{
 						Name:         "child1",
 						WorkerType:   "child",
-						UserSpec:     types.UserSpec{},
+						UserSpec:     config.UserSpec{},
 						StateMapping: map[string]string{"running": "active"},
 					},
 				},
@@ -289,7 +289,7 @@ var _ = Describe("Hierarchical Tick Propagation (Task 0.6)", func() {
 			err := parentSuper.AddWorker(identity, worker)
 			Expect(err).NotTo(HaveOccurred())
 
-			parentSuper.UpdateUserSpec(types.UserSpec{Config: "config"})
+			parentSuper.UpdateUserSpec(config.UserSpec{Config: "config"})
 
 			desiredDoc := persistence.Document{
 				"id":                identity.ID,
@@ -328,8 +328,8 @@ var _ = Describe("Hierarchical Tick Propagation (Task 0.6)", func() {
 					CollectedAt: time.Now(),
 					Desired:     &mockDesiredState{},
 				},
-				childrenSpecs: []types.ChildSpec{
-					{Name: "newChild", WorkerType: "child", UserSpec: types.UserSpec{}},
+				childrenSpecs: []config.ChildSpec{
+					{Name: "newChild", WorkerType: "child", UserSpec: config.UserSpec{}},
 				},
 			}
 
@@ -347,7 +347,7 @@ var _ = Describe("Hierarchical Tick Propagation (Task 0.6)", func() {
 			err := parentSuper.AddWorker(identity, worker)
 			Expect(err).NotTo(HaveOccurred())
 
-			parentSuper.UpdateUserSpec(types.UserSpec{Config: "config"})
+			parentSuper.UpdateUserSpec(config.UserSpec{Config: "config"})
 
 			desiredDoc := persistence.Document{
 				"id":                identity.ID,
@@ -386,8 +386,8 @@ var _ = Describe("Hierarchical Tick Propagation (Task 0.6)", func() {
 					CollectedAt: time.Now(),
 					Desired:     &mockDesiredState{},
 				},
-				childrenSpecs: []types.ChildSpec{
-					{Name: "child1", WorkerType: "child", UserSpec: types.UserSpec{}},
+				childrenSpecs: []config.ChildSpec{
+					{Name: "child1", WorkerType: "child", UserSpec: config.UserSpec{}},
 				},
 			}
 
@@ -405,7 +405,7 @@ var _ = Describe("Hierarchical Tick Propagation (Task 0.6)", func() {
 			err := parentSuper.AddWorker(identity, parentWorker)
 			Expect(err).NotTo(HaveOccurred())
 
-			parentSuper.UpdateUserSpec(types.UserSpec{Config: "config"})
+			parentSuper.UpdateUserSpec(config.UserSpec{Config: "config"})
 
 			desiredDoc := persistence.Document{
 				"id":                identity.ID,
