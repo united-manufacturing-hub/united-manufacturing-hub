@@ -59,6 +59,7 @@ func NewChildWorker(
 // CollectObservedState returns the current observed state of the child worker
 func (w *ChildWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedState, error) {
 	observed := snapshot.ChildObservedState{
+		ID:               w.identity.ID,
 		CollectedAt:      time.Now(),
 		ConnectionStatus: w.getConnectionStatus(),
 		ConnectionHealth: w.getConnectionHealth(),

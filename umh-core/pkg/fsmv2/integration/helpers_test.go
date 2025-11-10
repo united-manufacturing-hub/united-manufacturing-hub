@@ -23,6 +23,8 @@ import (
 
 	. "github.com/onsi/gomega"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
+	child "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/example-child"
 )
 
 func GetGoroutineCount() int {
@@ -324,4 +326,146 @@ func ExpectNoGoroutineLeaks(before int) {
 		runtime.GC()
 		return runtime.NumGoroutine()
 	}, "3s", "100ms").Should(BeNumerically("<=", before+5))
+}
+
+func GetWorkerStateName(sup *supervisor.Supervisor, workerID string) string {
+	stateName, _, err := sup.GetWorkerState(workerID)
+	if err != nil {
+		return ""
+	}
+	return stateName
+}
+
+func GetChildSupervisor(parentSup *supervisor.Supervisor, childName string) *supervisor.Supervisor {
+	children := parentSup.GetChildren()
+	for name, child := range children {
+		if name == childName {
+			return child
+		}
+	}
+	return nil
+}
+
+type StateHistoryCollector struct {
+	mu      sync.Mutex
+	history []string
+}
+
+func NewStateHistoryCollector() *StateHistoryCollector {
+	return &StateHistoryCollector{history: make([]string, 0)}
+}
+
+func (c *StateHistoryCollector) Record(stateName string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if len(c.history) == 0 || c.history[len(c.history)-1] != stateName {
+		c.history = append(c.history, stateName)
+	}
+}
+
+func (c *StateHistoryCollector) GetHistory() []string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	result := make([]string, len(c.history))
+	copy(result, c.history)
+	return result
+}
+
+func RunSupervisorWithTimeout(ctx context.Context, sup *supervisor.Supervisor, interval time.Duration) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			sup.Tick(ctx)
+		}
+	}
+}
+
+type MockConfigLoader struct {
+	childrenCount        int
+	useFailingConnection bool
+}
+
+func NewParentConfig() *MockConfigLoader {
+	return &MockConfigLoader{childrenCount: 1, useFailingConnection: false}
+}
+
+func (m *MockConfigLoader) WithChildren(count int) *MockConfigLoader {
+	m.childrenCount = count
+	return m
+}
+
+func (m *MockConfigLoader) WithFailingConnectionPool() *MockConfigLoader {
+	m.useFailingConnection = true
+	return m
+}
+
+func (m *MockConfigLoader) Build() *MockConfigLoader {
+	return m
+}
+
+func (m *MockConfigLoader) LoadConfig() (map[string]interface{}, error) {
+	return map[string]interface{}{
+		"example_config_key": "example_value",
+		"children_count":     m.childrenCount,
+	}, nil
+}
+
+type MockConnectionPool struct {
+	failureMode string
+	failCount   int
+	mu          sync.Mutex
+}
+
+func NewConnectionPool() *MockConnectionPool {
+	return &MockConnectionPool{failureMode: "none"}
+}
+
+func (m *MockConnectionPool) WithFailures(count int) *MockConnectionPool {
+	m.failureMode = "transient"
+	m.failCount = count
+	return m
+}
+
+func (m *MockConnectionPool) AlwaysFails() *MockConnectionPool {
+	m.failureMode = "always"
+	return m
+}
+
+func (m *MockConnectionPool) Build() *MockConnectionPool {
+	return m
+}
+
+func (m *MockConnectionPool) Acquire() (child.Connection, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if m.failureMode == "always" {
+		return nil, fmt.Errorf("connection pool exhausted")
+	}
+	if m.failureMode == "transient" && m.failCount > 0 {
+		m.failCount--
+		return nil, fmt.Errorf("transient connection error")
+	}
+	return &MockConnection{}, nil
+}
+
+func (m *MockConnectionPool) Release(conn child.Connection) error {
+	return nil
+}
+
+func (m *MockConnectionPool) HealthCheck(conn child.Connection) error {
+	return nil
+}
+
+type MockConnection struct{}
+
+func (m *MockConnection) IsHealthy() bool {
+	return true
 }

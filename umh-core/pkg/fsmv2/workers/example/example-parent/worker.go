@@ -16,6 +16,7 @@ package example_parent
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"go.uber.org/zap"
@@ -58,6 +59,7 @@ func NewParentWorker(
 // CollectObservedState returns the current observed state of the parent worker
 func (w *ParentWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedState, error) {
 	observed := snapshot.ParentObservedState{
+		ID:          w.identity.ID,
 		CollectedAt: time.Now(),
 	}
 
@@ -66,9 +68,31 @@ func (w *ParentWorker) CollectObservedState(ctx context.Context) (fsmv2.Observed
 
 // DeriveDesiredState determines what state the parent worker should be in
 func (w *ParentWorker) DeriveDesiredState(spec interface{}) (fsmv2types.DesiredState, error) {
+	config, err := w.GetDependencies().GetConfigLoader().LoadConfig()
+	if err != nil {
+		return fsmv2types.DesiredState{}, err
+	}
+
+	childrenCount, ok := config["children_count"].(int)
+	if !ok || childrenCount == 0 {
+		return fsmv2types.DesiredState{
+			State:         "running",
+			ChildrenSpecs: nil,
+		}, nil
+	}
+
+	childrenSpecs := make([]fsmv2types.ChildSpec, childrenCount)
+	for i := 0; i < childrenCount; i++ {
+		childrenSpecs[i] = fsmv2types.ChildSpec{
+			Name:       fmt.Sprintf("child-%d", i),
+			WorkerType: "example-child",
+			UserSpec:   fsmv2types.UserSpec{},
+		}
+	}
+
 	return fsmv2types.DesiredState{
 		State:         "running",
-		ChildrenSpecs: nil,
+		ChildrenSpecs: childrenSpecs,
 	}, nil
 }
 

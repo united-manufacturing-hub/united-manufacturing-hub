@@ -44,14 +44,15 @@ func (s *ChildDesiredState) ShutdownRequested() bool {
 
 // ChildObservedState represents the current state of the child worker
 type ChildObservedState struct {
-	CollectedAt time.Time
+	ID          string    `json:"id"`
+	CollectedAt time.Time `json:"collected_at"`
 
 	ChildDesiredState
 
-	ConnectionStatus  string
-	LastError         error
-	ConnectAttempts   int
-	ConnectionHealth  string
+	ConnectionStatus string `json:"connection_status"`
+	LastError        error  `json:"last_error,omitempty"`
+	ConnectAttempts  int    `json:"connect_attempts"`
+	ConnectionHealth string `json:"connection_health"`
 }
 
 func (o ChildObservedState) GetTimestamp() time.Time {

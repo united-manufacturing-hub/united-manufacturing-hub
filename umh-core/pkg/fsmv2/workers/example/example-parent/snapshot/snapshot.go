@@ -45,12 +45,13 @@ func (s *ParentDesiredState) ShutdownRequested() bool {
 
 // ParentObservedState represents the current state of the parent worker
 type ParentObservedState struct {
-	CollectedAt time.Time
+	ID          string    `json:"id"`
+	CollectedAt time.Time `json:"collected_at"`
 
 	ParentDesiredState
 
-	ChildrenHealthy   int
-	ChildrenUnhealthy int
+	ChildrenHealthy   int `json:"children_healthy"`
+	ChildrenUnhealthy int `json:"children_unhealthy"`
 }
 
 func (o ParentObservedState) GetTimestamp() time.Time {

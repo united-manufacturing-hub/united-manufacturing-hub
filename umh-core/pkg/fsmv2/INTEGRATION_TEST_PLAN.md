@@ -38,8 +38,10 @@ This plan defines a systematic approach to building a comprehensive integration 
 
 ### Estimated Timeline
 
-**Total: ~15 days (3 weeks)**
+**Total: ~20 days (4 weeks)**
 
+- **Phase -1 (Typed API Foundation):** 5 days (PREREQUISITE)
+- **Phase 0 (Basic Integration Tests):** 3 days
 - **Phase 1 (Critical Failures):** 4 days
 - **Phase 2 (High-Priority Edge Cases):** 5 days
 - **Phase 3 (Medium-Priority Edge Cases):** 4 days
@@ -49,6 +51,8 @@ This plan defines a systematic approach to building a comprehensive integration 
 
 ### Success Criteria
 
+- [ ] Phase -1: Typed API foundation complete (factory type registry + typed deserialization)
+- [ ] Phase 0: 10 basic happy path tests passing (using typed structs)
 - [ ] All 90 tests passing
 - [ ] >80% coverage on supervisor, action_executor, collector
 - [ ] No race conditions detected (`go test -race`)
@@ -245,6 +249,183 @@ go test ./pkg/fsmv2/workers/your-worker/...
 ### Quick Reference
 
 See `PATTERN.md` Section "Common Mistakes" for detailed fixes, or `API_REQUIREMENTS.md` for quick reference.
+
+---
+
+## Phase -1: Typed API Foundation (PREREQUISITE)
+
+> **Note:** This phase MUST be completed before any integration tests can run. Phase 0 tests were previously blocked by type assertion failures (`persistence.Document` is not `snapshot.ParentObservedState`).
+
+### Overview
+
+**Problem:** Current persistence layer returns `persistence.Document` (map-based), but FSM v2 requires typed structs (`snapshot.ParentObservedState`, `snapshot.ChildState`, etc.). This causes type assertion panics during snapshot loading.
+
+**Solution:** Implement typed API (Path B) with factory type registry and typed deserialization before integration tests.
+
+**Blocked Tests:** Phase 0 integration tests cannot proceed until this is complete.
+
+### Implementation Summary
+
+See `PATH_B_IMPLEMENTATION.md` for detailed 5-day implementation plan.
+
+**Days 1-2: Factory Type Registry**
+- Implement `SnapshotFactory` interface with type registration
+- Register all worker snapshot types (parent, child)
+- Add factory lookup by worker type name
+
+**Days 3-4: Typed Deserialization**
+- Update `persistence.Load()` to use factory for type-safe deserialization
+- Replace `map[string]interface{}` with concrete structs
+- Add validation and error handling
+
+**Day 5: Supervisor Integration**
+- Update `Supervisor.LoadSnapshot()` to use typed API
+- Modify state collection to work with typed structs
+- Add integration test to verify typed snapshot loading works
+
+### Success Criteria
+
+- [ ] Factory type registry implemented and tested
+- [ ] All worker types registered in factory
+- [ ] `persistence.Load()` returns typed structs (not `Document`)
+- [ ] Supervisor successfully loads typed snapshots
+- [ ] Type assertion panics eliminated
+- [ ] Unit tests pass for factory and deserialization
+- [ ] Basic integration test confirms typed snapshot roundtrip works
+
+### Dependencies
+
+**None** - Can start immediately. Does not depend on any other phase.
+
+### Deliverables
+
+1. **Factory Type Registry** (`pkg/fsmv2/factory/`)
+   - `factory.go` - Factory interface and registry
+   - `factory_test.go` - Factory unit tests
+
+2. **Typed Deserialization** (`pkg/fsmv2/persistence/`)
+   - Updated `persistence.go` with typed `Load()` method
+   - Updated `persistence_test.go` with typed tests
+
+3. **Supervisor Integration** (`pkg/fsmv2/`)
+   - Updated `supervisor.go` with typed snapshot loading
+   - Updated `supervisor_test.go` with typed tests
+
+4. **Documentation**
+   - `PATH_B_IMPLEMENTATION.md` - Detailed 5-day plan (already exists)
+   - Updated `PATTERN.md` with factory usage examples
+   - Updated `API_REQUIREMENTS.md` with typed API requirements
+
+### Timeline
+
+**Days 1-5 (Total: 24-40 hours)**
+
+| Day | Focus | Deliverables |
+|-----|-------|--------------|
+| 1 | Factory interface + registry | Factory compiles, basic tests pass |
+| 2 | Worker type registration | All workers registered, factory tests pass |
+| 3 | Typed deserialization | `persistence.Load()` returns typed structs |
+| 4 | Error handling + validation | Edge cases handled, all persistence tests pass |
+| 5 | Supervisor integration | Supervisor uses typed API, integration test passes |
+
+### Why This Unblocks Phase 0
+
+**Before Phase -1:**
+```go
+// persistence.Load() returns Document (map-based)
+doc, err := persistence.Load(ctx, store, key)
+
+// Type assertion fails!
+parentState := doc.State.(snapshot.ParentObservedState)  // PANIC!
+```
+
+**After Phase -1:**
+```go
+// persistence.Load() returns typed struct
+snapshot, err := persistence.Load(ctx, store, key, factory)
+
+// Type-safe access works
+parentState := snapshot.(*snapshot.ParentSnapshot)
+observedState := parentState.ObservedState  // Typed field access
+```
+
+**Impact:** Phase 0 tests can now verify full FSM lifecycle with real snapshots.
+
+---
+
+## Phase 0: Basic Integration Tests - Happy Path
+
+> **Prerequisites:** ✅ Phase -1 (Typed API Foundation) must be complete
+
+**Blocked reason (resolved):** Phase 0 tests were failing due to type assertion panic (`persistence.Document` is not `snapshot.ParentObservedState`). Phase -1 implements typed deserialization to resolve this.
+
+### Overview
+
+**Goal:** Verify basic FSM lifecycle with typed snapshots works end-to-end.
+
+**Estimated Time:** 3 days (Days 6-8)
+
+**Tests:** 10 basic happy path tests
+
+### Test Scenarios
+
+**0.1 Worker Start/Stop with Typed Snapshot**
+- Worker starts, state saved as typed snapshot, worker stops
+- Expected: Snapshot persisted as typed struct, not map
+
+**0.2 Supervisor Loads Typed Snapshot**
+- Save typed snapshot, restart supervisor, load snapshot
+- Expected: Supervisor loads typed struct without type assertion errors
+
+**0.3 Parent-Child with Typed Snapshots**
+- Parent spawns child, both save typed snapshots
+- Expected: Parent and child snapshots both typed, no map conversions
+
+**0.4 State Collection with Typed Structs**
+- Collect state from multiple workers with typed snapshots
+- Expected: All states returned as typed structs
+
+**0.5 Action Execution with Typed State**
+- Execute action, verify state updates are typed
+- Expected: Action sees typed state, produces typed state
+
+**0.6 Observer Notification with Typed State**
+- Register observer, verify notifications contain typed state
+- Expected: Observer receives typed structs, not maps
+
+**0.7 Factory Registration Validation**
+- Attempt to load snapshot for unregistered type
+- Expected: Clear error message, not panic
+
+**0.8 Factory Type Mismatch Detection**
+- Save snapshot with type A, attempt to load as type B
+- Expected: Type mismatch error, not silent corruption
+
+**0.9 Snapshot Roundtrip Validation**
+- Save typed snapshot, load it back, verify equality
+- Expected: Loaded snapshot matches original (no data loss)
+
+**0.10 Multiple Worker Types**
+- Register multiple worker types, load snapshots for each
+- Expected: Factory correctly dispatches to appropriate types
+
+### Success Criteria
+
+- [ ] All 10 Phase 0 tests passing
+- [ ] No type assertion panics in any test
+- [ ] Factory correctly handles all registered types
+- [ ] Supervisor loads typed snapshots successfully
+- [ ] Full FSM lifecycle works with typed API
+
+### Dependencies
+
+**Requires:** Phase -1 complete (factory + typed deserialization)
+
+### Daily Checkpoints
+
+- **Day 6:** Tests 0.1-0.4 passing (basic typed snapshot operations)
+- **Day 7:** Tests 0.5-0.7 passing (typed state in actions/observers)
+- **Day 8:** Tests 0.8-0.10 passing (factory validation + edge cases)
 
 ---
 
@@ -1368,7 +1549,7 @@ pkg/fsmv2/
 
 ## Phase Breakdown
 
-### Phase 1: Critical Failures (Days 1-4)
+### Phase 1: Critical Failures (Days 9-12)
 
 **Focus:** System hangs, deadlocks, resource leaks - the "never ship" bugs
 
@@ -1377,7 +1558,7 @@ pkg/fsmv2/
 **Tests:** 20 tests from Category 1
 
 **Implementation Order:**
-1. **Day 1: Deadlocks (Tests 1.1-1.6)**
+1. **Day 9: Deadlocks (Tests 1.1-1.6)**
    - 1.1 Action Never Completes (timeout)
    - 1.2 Action Timeout During Parent Stop
    - 1.3 State Deadlock (Circular Wait)
@@ -1385,7 +1566,7 @@ pkg/fsmv2/
    - 1.5 Channel Blocking (Buffer Full)
    - 1.6 Mutex Deadlock (Lock Order Violation)
 
-2. **Day 2: Goroutine Leaks (Tests 1.7-1.12)**
+2. **Day 10: Goroutine Leaks (Tests 1.7-1.12)**
    - 1.7 Goroutine Leak (Action Never Returns)
    - 1.8 Goroutine Leak (Forgotten Context Cancel)
    - 1.9 Supervisor Hang (Worker Never Responds)
@@ -1393,14 +1574,14 @@ pkg/fsmv2/
    - 1.11 Parent Shutdown Waits Forever
    - 1.12 Supervisor Restart Loop (Immediate Crash)
 
-3. **Day 3: Resource Leaks (Tests 1.13-1.17)**
+3. **Day 11: Resource Leaks (Tests 1.13-1.17)**
    - 1.13 Resource Leak (File Descriptors)
    - 1.14 Resource Leak (Memory)
    - 1.15 Double Stop Deadlock
    - 1.16 Race Condition (Shared State)
    - 1.17 Panic in Action (Not Recovered)
 
-4. **Day 4: Context and State (Tests 1.18-1.20)**
+4. **Day 12: Context and State (Tests 1.18-1.20)**
    - 1.18 Panic in Observer (Not Recovered)
    - 1.19 Context Cancelled But Action Continues
    - 1.20 Stuck in Transitional State Forever
@@ -1420,7 +1601,7 @@ pkg/fsmv2/
 
 ---
 
-### Phase 2: High-Priority Edge Cases (Days 5-9)
+### Phase 2: High-Priority Edge Cases (Days 13-17)
 
 **Focus:** Race conditions, timing issues, concurrent state changes
 
@@ -1429,35 +1610,35 @@ pkg/fsmv2/
 **Tests:** 25 tests from Category 2
 
 **Implementation Order:**
-1. **Day 5: Basic Race Conditions (Tests 2.1-2.5)**
+1. **Day 13: Basic Race Conditions (Tests 2.1-2.5)**
    - 2.1 Concurrent Start/Stop
    - 2.2 State Change During Action Execution
    - 2.3 Multiple Observers Racing to Update
    - 2.4 Parent Stop While Child Starting
    - 2.5 Child Crash During Parent State Collection
 
-2. **Day 6: State Transitions (Tests 2.6-2.10)**
+2. **Day 14: State Transitions (Tests 2.6-2.10)**
    - 2.6 Rapid State Transitions
    - 2.7 Action Queue Overflow
    - 2.8 Concurrent DeriveDesiredState Calls
    - 2.9 Observer Added During Notification
    - 2.10 Observer Removed During Notification
 
-3. **Day 7: Parent-Child Races (Tests 2.11-2.15)**
+3. **Day 15: Parent-Child Races (Tests 2.11-2.15)**
    - 2.11 Parent and Child Action Concurrent Execution
    - 2.12 State Collection During Supervisor Shutdown
    - 2.13 Action Submitted After Worker Stopped
    - 2.14 Child State Change Not Detected by Parent
    - 2.15 Double Start Race
 
-4. **Day 8: Snapshot and Context (Tests 2.16-2.20)**
+4. **Day 16: Snapshot and Context (Tests 2.16-2.20)**
    - 2.16 State Snapshot Inconsistency
    - 2.17 Action Context Cancelled Mid-Execution
    - 2.18 Parent Starts While Child Still Stopping
    - 2.19 Supervisor State Collection Timeout
    - 2.20 Concurrent Child Spawn and Despawn
 
-5. **Day 9: Complex Races (Tests 2.21-2.25)**
+5. **Day 17: Complex Races (Tests 2.21-2.25)**
    - 2.21 Observer Callback Modifies State During Notification
    - 2.22 Action Executor Stopped While Action Running
    - 2.23 Parent DeriveDesiredState Returns Different Children
@@ -1479,7 +1660,7 @@ pkg/fsmv2/
 
 ---
 
-### Phase 3: Medium-Priority Edge Cases (Days 10-13)
+### Phase 3: Medium-Priority Edge Cases (Days 18-21)
 
 **Focus:** Error propagation, recovery, state consistency
 
@@ -1488,28 +1669,28 @@ pkg/fsmv2/
 **Tests:** 20 tests from Category 3
 
 **Implementation Order:**
-1. **Day 10: Error Propagation (Tests 3.1-3.5)**
+1. **Day 18: Error Propagation (Tests 3.1-3.5)**
    - 3.1 Child Error Propagated to Parent
    - 3.2 Action Error Not Swallowed
    - 3.3 Dependency Failure During Start
    - 3.4 Partial Child Spawn Failure
    - 3.5 Observer Error Handling
 
-2. **Day 11: Error Context (Tests 3.6-3.10)**
+2. **Day 19: Error Context (Tests 3.6-3.10)**
    - 3.6 Action Timeout vs Cancellation
    - 3.7 Child Error Recovered by Retry
    - 3.8 Supervisor Error During State Collection
    - 3.9 Action Error Contains Stack Trace
    - 3.10 Dependency Injection Failure Detected Early
 
-3. **Day 12: State Validation (Tests 3.11-3.15)**
+3. **Day 20: State Validation (Tests 3.11-3.15)**
    - 3.11 Child State Invalid (Not in Enum)
    - 3.12 Parent Degraded→Stopped Transition
    - 3.13 Action Error Causes Retry Storm
    - 3.14 Supervisor Continues After Worker Unrecoverable Error
    - 3.15 Child Connection Lost, Auto-Reconnect
 
-4. **Day 13: Config and Context (Tests 3.16-3.20)**
+4. **Day 21: Config and Context (Tests 3.16-3.20)**
    - 3.16 Parent Config Reload Without Restart
    - 3.17 Action Error Includes Retry Attempt Number
    - 3.18 Supervisor State Inconsistent After Worker Removal
@@ -1531,7 +1712,7 @@ pkg/fsmv2/
 
 ---
 
-### Phase 4: Low-Priority Edge Cases (Days 14-16)
+### Phase 4: Low-Priority Edge Cases (Days 22-24)
 
 **Focus:** Observer notifications, metrics, observability
 
@@ -1540,21 +1721,21 @@ pkg/fsmv2/
 **Tests:** 15 tests from Category 4
 
 **Implementation Order:**
-1. **Day 14: Observer Behavior (Tests 4.1-4.5)**
+1. **Day 22: Observer Behavior (Tests 4.1-4.5)**
    - 4.1 Observer Receives All State Changes
    - 4.2 Observer Notification Order
    - 4.3 Observer Unregistered After First Notification
    - 4.4 Metrics Emitted for Every Action
    - 4.5 Metrics Include Worker ID and Type
 
-2. **Day 15: Metrics (Tests 4.6-4.10)**
+2. **Day 23: Metrics (Tests 4.6-4.10)**
    - 4.6 Supervisor Metrics for Child Count
    - 4.7 Action Duration Histogram Accurate
    - 4.8 Observer Notification Includes Previous State
    - 4.9 Supervisor Emits Health Check Metric
    - 4.10 Observer Slow (Blocks Notification)
 
-3. **Day 16: Advanced Metrics (Tests 4.11-4.15)**
+3. **Day 24: Advanced Metrics (Tests 4.11-4.15)**
    - 4.11 Metrics Emitted on Supervisor Start/Stop
    - 4.12 Action Retry Count Metric
    - 4.13 Observer Receives Error State with Error Details
@@ -1576,7 +1757,7 @@ pkg/fsmv2/
 
 ---
 
-### Phase 5: Integration & End-to-End (Days 17-18)
+### Phase 5: Integration & End-to-End (Days 25-26)
 
 **Focus:** Full system workflows, multi-worker scenarios
 
@@ -1585,14 +1766,14 @@ pkg/fsmv2/
 **Tests:** 10 tests from Category 5
 
 **Implementation Order:**
-1. **Day 17: Lifecycle Tests (Tests 5.1-5.5)**
+1. **Day 25: Lifecycle Tests (Tests 5.1-5.5)**
    - 5.1 Full Lifecycle: Start→Run→Stop
    - 5.2 Parent→Child Cascade Start
    - 5.3 Parent→Child Cascade Stop
    - 5.4 Child Failure Triggers Parent Degraded
    - 5.5 Child Recovery Triggers Parent Running
 
-2. **Day 18: Multi-Worker Tests (Tests 5.6-5.10)**
+2. **Day 26: Multi-Worker Tests (Tests 5.6-5.10)**
    - 5.6 Supervisor Manages 10 Workers Concurrently
    - 5.7 Supervisor Shuts Down Gracefully with Active Workers
    - 5.8 Collector Returns Consistent State During Transitions
@@ -2062,7 +2243,59 @@ Before marking this test plan as complete:
 
 ---
 
+## Related Documentation
+
+This integration test plan references several other key documents:
+
+### Primary References
+
+- **PATH_B_IMPLEMENTATION.md** - Detailed 5-day implementation plan for typed API foundation (Phase -1)
+  - Factory type registry design
+  - Typed deserialization approach
+  - Supervisor integration strategy
+  - Day-by-day implementation tasks with code examples
+
+- **PATTERN.md** - Worker structure patterns and best practices
+  - FSM worker architecture (machine.go, reconcile.go, actions.go, models.go)
+  - State transition patterns
+  - Action implementation guidelines
+  - Common mistakes and how to avoid them
+
+- **API_REQUIREMENTS.md** - Quick reference for fsmv2 interfaces
+  - `Worker` interface requirements
+  - `State` interface requirements (String(), Reason(), Next())
+  - `Action` interface requirements
+  - Factory registration requirements (added in Phase -1)
+
+### Supporting Documents
+
+- **INTEGRATION_PLAN_MOTIVATION.md** (if exists) - Why we need comprehensive integration tests
+- **PHASE0_BLOCKING_ISSUE.md** (if exists) - Analysis of the type assertion failure that blocks Phase 0
+
+### Cross-References
+
+- Phase -1 implementation details → `PATH_B_IMPLEMENTATION.md`
+- Worker API compliance checks → `API_REQUIREMENTS.md` + `PATTERN.md` Section 1.5
+- FSM architecture patterns → `PATTERN.md` Sections 2-4
+- Common API mismatches → `PATTERN.md` Section "Common Mistakes"
+
+---
+
 ## Changelog
+
+### 2025-11-10 18:30 - Added Phase -1 (Typed API Foundation) as prerequisite
+Integrated Path B typed API implementation plan as Phase -1:
+- **Why:** Phase 0 tests were blocked by type assertion failure (`persistence.Document` is not `snapshot.ParentObservedState`)
+- **Solution:** Implement factory type registry + typed deserialization before integration tests
+- **Impact:** All phase timelines shifted by +5 days (Phase 0 now Days 6-8, Phase 1 now Days 9-12, etc.)
+- **New total timeline:** 20 days (4 weeks) instead of 15 days
+- **Added sections:**
+  - Phase -1: Typed API Foundation (Days 1-5)
+  - Phase 0: Basic Integration Tests (Days 6-8) - now unblocked
+  - Related Documentation section with cross-references
+- **Updated success criteria:** Phase -1 foundation + Phase 0 typed tests must pass before continuing
+
+**Detailed Phase -1 plan:** See `PATH_B_IMPLEMENTATION.md` for 5-day implementation breakdown
 
 ### 2025-11-10 16:00 - Plan created
 Initial comprehensive integration test plan for FSM v2:

@@ -30,6 +30,7 @@ package storage_test
 import (
 	"context"
 	"errors"
+	"reflect"
 	"sync"
 	"time"
 
@@ -669,6 +670,66 @@ var _ = Describe("TriangularStore", func() {
 				})
 				Expect(err).To(HaveOccurred())
 			})
+		})
+	})
+
+	Describe("LoadObservedTyped", func() {
+		var (
+			testRegistry *storage.Registry
+			testStore    *storage.TriangularStore
+		)
+
+		BeforeEach(func() {
+			testRegistry = storage.NewRegistry()
+			testStore = storage.NewTriangularStore(store, testRegistry)
+		})
+
+		It("deserializes Document to typed struct", func() {
+			type ParentObservedState struct {
+				ID     string
+				Name   string
+				Status string
+			}
+
+			observedType := reflect.TypeOf((*ParentObservedState)(nil)).Elem()
+			testRegistry.Register(&storage.CollectionMetadata{
+				Name:         "parent_observed",
+				WorkerType:   "parent",
+				Role:         storage.RoleObserved,
+				ObservedType: observedType,
+				CSEFields:    []string{storage.FieldSyncID, storage.FieldVersion},
+			})
+
+			testRegistry.Register(&storage.CollectionMetadata{
+				Name:       "parent_identity",
+				WorkerType: "parent",
+				Role:       storage.RoleIdentity,
+				CSEFields:  []string{storage.FieldSyncID, storage.FieldVersion},
+			})
+
+			testRegistry.Register(&storage.CollectionMetadata{
+				Name:       "parent_desired",
+				WorkerType: "parent",
+				Role:       storage.RoleDesired,
+				CSEFields:  []string{storage.FieldSyncID, storage.FieldVersion},
+			})
+
+			observedDoc := persistence.Document{
+				"id":     "parent-123",
+				"ID":     "parent-123",
+				"Name":   "TestParent",
+				"Status": "Running",
+			}
+			err := testStore.SaveObserved(ctx, "parent", "parent-123", observedDoc)
+			Expect(err).NotTo(HaveOccurred())
+
+			var observed ParentObservedState
+			err = testStore.LoadObservedTyped(ctx, "parent", "parent-123", &observed)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(observed.ID).To(Equal("parent-123"))
+			Expect(observed.Name).To(Equal("TestParent"))
+			Expect(observed.Status).To(Equal("Running"))
 		})
 	})
 })
