@@ -34,7 +34,7 @@ var _ = Describe("Benthos YAML Comparator", func() {
 					},
 				},
 				MetricsPort: 4195,
-				LogLevel:    "INFO",
+				DebugLevel: false,
 			}
 
 			config2 := BenthosServiceConfig{
@@ -49,7 +49,7 @@ var _ = Describe("Benthos YAML Comparator", func() {
 					},
 				},
 				MetricsPort: 4195,
-				LogLevel:    "INFO",
+				DebugLevel: false,
 			}
 
 			comparator := NewComparator()
@@ -135,7 +135,7 @@ var _ = Describe("Benthos YAML Comparator", func() {
 			config1 := BenthosServiceConfig{
 				Input:       map[string]interface{}{},
 				MetricsPort: 4195,
-				LogLevel:    "INFO",
+				DebugLevel: false,
 			}
 
 			// Missing fields that should get default values
@@ -162,7 +162,7 @@ var _ = Describe("Benthos YAML Comparator", func() {
 					},
 				},
 				MetricsPort: 4195,
-				LogLevel:    "INFO",
+				DebugLevel: false,
 			}
 
 			config2 := BenthosServiceConfig{
@@ -177,7 +177,7 @@ var _ = Describe("Benthos YAML Comparator", func() {
 					},
 				},
 				MetricsPort: 5000,
-				LogLevel:    "DEBUG",
+				DebugLevel: true,
 			}
 
 			comparator := NewComparator()
@@ -187,9 +187,9 @@ var _ = Describe("Benthos YAML Comparator", func() {
 			Expect(diff).To(ContainSubstring("Want: 4195"))
 			Expect(diff).To(ContainSubstring("Have: 5000"))
 
-			Expect(diff).To(ContainSubstring("LogLevel"))
-			Expect(diff).To(ContainSubstring("Want: INFO"))
-			Expect(diff).To(ContainSubstring("Have: DEBUG"))
+			Expect(diff).To(ContainSubstring("DebugLevel"))
+			Expect(diff).To(ContainSubstring("Want: false"))
+			Expect(diff).To(ContainSubstring("Have: true"))
 
 			Expect(diff).To(ContainSubstring("Input config differences"))
 			Expect(diff).To(ContainSubstring("Input.mqtt differs"))

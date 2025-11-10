@@ -299,10 +299,6 @@ func (s *BenthosService) generateBenthosYaml(config *benthosserviceconfig.Bentho
 		return "", errors.New("config is nil")
 	}
 
-	if config.LogLevel == "" {
-		config.LogLevel = "INFO"
-	}
-
 	return benthosserviceconfig.RenderBenthosYAML(
 		config.Input,
 		config.Output,
@@ -311,7 +307,7 @@ func (s *BenthosService) generateBenthosYaml(config *benthosserviceconfig.Bentho
 		config.RateLimitResources,
 		config.Buffer,
 		config.MetricsPort,
-		config.LogLevel,
+		config.DebugLevel,
 	)
 }
 
@@ -334,7 +330,7 @@ func (s *BenthosService) GenerateS6ConfigForBenthos(benthosConfig *benthosservic
 	}
 
 	env := make(map[string]string)
-	if benthosConfig.LogLevel == constants.DebugBenthosLogLevel {
+	if benthosConfig.DebugLevel {
 		env[OPCDebugEnvVar] = "debug"
 	}
 
@@ -433,7 +429,7 @@ func (s *BenthosService) GetConfig(ctx context.Context, filesystemService filesy
 	// Safely extract log_level
 	if logger, ok := benthosConfig["logger"].(map[string]interface{}); ok {
 		if level, ok := logger["level"].(string); ok {
-			result.LogLevel = level
+			result.DebugLevel = (level == "DEBUG")
 		}
 	}
 

@@ -101,7 +101,7 @@ benthos:
 				}
 
 				benthosConfig := cfg.GetBenthosServiceConfig()
-				Expect(benthosConfig.LogLevel).To(Equal("DEBUG"))
+				Expect(benthosConfig.DebugLevel).To(BeTrue())
 			})
 		})
 
@@ -122,7 +122,7 @@ benthos:
 				}
 
 				benthosConfig := cfg.GetBenthosServiceConfig()
-				Expect(benthosConfig.LogLevel).To(Equal("INFO"))
+				Expect(benthosConfig.DebugLevel).To(BeFalse())
 			})
 		})
 	})

@@ -49,7 +49,7 @@ var _ = Describe("Benthos YAML Generator", func() {
 						"stdout": map[string]interface{}{},
 					},
 					MetricsPort: 4195,
-					LogLevel:    "INFO",
+					DebugLevel: false,
 				},
 				expected: []string{
 					"output:",
@@ -72,7 +72,7 @@ var _ = Describe("Benthos YAML Generator", func() {
 						},
 					},
 					MetricsPort: 4195,
-					LogLevel:    "INFO",
+					DebugLevel: false,
 				},
 				expected: []string{
 					"output:",
@@ -91,7 +91,7 @@ var _ = Describe("Benthos YAML Generator", func() {
 						"stdout": map[string]interface{}{},
 					},
 					MetricsPort: 4195,
-					LogLevel:    "INFO",
+					DebugLevel: false,
 				},
 				expected: []string{
 					"output:",
@@ -129,7 +129,7 @@ var _ = Describe("Benthos YAML Generator", func() {
 						},
 					},
 					MetricsPort: 4195,
-					LogLevel:    "INFO",
+					DebugLevel: false,
 				},
 				expected: []string{
 					"input:",
@@ -182,7 +182,7 @@ var _ = Describe("Benthos YAML Generator", func() {
 				nil,
 				nil,
 				4195,
-				"INFO",
+				false,
 			)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -191,7 +191,7 @@ var _ = Describe("Benthos YAML Generator", func() {
 				Input:       inputConfig,
 				Output:      outputConfig,
 				MetricsPort: 4195,
-				LogLevel:    "INFO",
+				DebugLevel: false,
 			}
 			generator := NewGenerator()
 			yamlStr2, err := generator.RenderConfig(cfg)

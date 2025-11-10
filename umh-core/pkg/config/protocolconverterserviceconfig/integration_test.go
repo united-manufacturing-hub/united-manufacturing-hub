@@ -79,8 +79,8 @@ config:
 			writeBenthos := writeDFC.GetBenthosServiceConfig()
 
 			// 8. Verify LogLevel set to DEBUG in BenthosServiceConfigs
-			Expect(readBenthos.LogLevel).To(Equal("DEBUG"))
-			Expect(writeBenthos.LogLevel).To(Equal("DEBUG"))
+			Expect(readBenthos.DebugLevel).To(BeTrue())
+			Expect(writeBenthos.DebugLevel).To(BeTrue())
 
 			// 9. Generate S6 configs using BenthosService
 			benthosService := benthos.NewDefaultBenthosService("integration-test")
@@ -150,8 +150,8 @@ config:
 			writeBenthos := writeDFC.GetBenthosServiceConfig()
 
 			// 8. Verify LogLevel set to INFO (default) in BenthosServiceConfigs
-			Expect(readBenthos.LogLevel).To(Equal("INFO"))
-			Expect(writeBenthos.LogLevel).To(Equal("INFO"))
+			Expect(readBenthos.DebugLevel).To(BeFalse())
+			Expect(writeBenthos.DebugLevel).To(BeFalse())
 
 			// 9. Generate S6 configs using BenthosService
 			benthosService := benthos.NewDefaultBenthosService("integration-test")
@@ -223,8 +223,8 @@ config:
 			writeBenthos := writeDFC.GetBenthosServiceConfig()
 
 			// 8. Verify LogLevel set to INFO (default) in BenthosServiceConfigs
-			Expect(readBenthos.LogLevel).To(Equal("INFO"))
-			Expect(writeBenthos.LogLevel).To(Equal("INFO"))
+			Expect(readBenthos.DebugLevel).To(BeFalse())
+			Expect(writeBenthos.DebugLevel).To(BeFalse())
 
 			// 9. Generate S6 configs using BenthosService
 			benthosService := benthos.NewDefaultBenthosService("integration-test")
@@ -293,7 +293,7 @@ config:
 
 				// Step 2: GetBenthosServiceConfig() returns config with DEBUG LogLevel
 				benthosConfig := readDFC.GetBenthosServiceConfig()
-				Expect(benthosConfig.LogLevel).To(Equal("DEBUG"), "LogLevel should be DEBUG in BenthosServiceConfig")
+				Expect(benthosConfig.DebugLevel).To(BeTrue(), "LogLevel should be DEBUG in BenthosServiceConfig")
 
 				// Step 3: GenerateS6ConfigForBenthos() sets OPC_DEBUG environment variable
 				benthosService := benthos.NewDefaultBenthosService("integration-test")
@@ -312,7 +312,7 @@ config:
 
 				// Step 2: GetBenthosServiceConfig() returns config with DEBUG LogLevel
 				benthosConfig := writeDFC.GetBenthosServiceConfig()
-				Expect(benthosConfig.LogLevel).To(Equal("DEBUG"), "LogLevel should be DEBUG in BenthosServiceConfig")
+				Expect(benthosConfig.DebugLevel).To(BeTrue(), "LogLevel should be DEBUG in BenthosServiceConfig")
 
 				// Step 3: GenerateS6ConfigForBenthos() sets OPC_DEBUG environment variable
 				benthosService := benthos.NewDefaultBenthosService("integration-test")
@@ -328,7 +328,7 @@ config:
 		type testCase struct {
 			name              string
 			debugLevel        bool
-			expectedLogLevel  string
+			expectedDebugLevel bool
 			expectOpcDebugSet bool
 			expectedOpcDebug  string
 		}
@@ -371,7 +371,7 @@ config:
 
 				// Test read DFC
 				readBenthos := runtime.DataflowComponentReadServiceConfig.GetBenthosServiceConfig()
-				Expect(readBenthos.LogLevel).To(Equal(tc.expectedLogLevel))
+				Expect(readBenthos.DebugLevel).To(Equal(tc.expectedDebugLevel))
 
 				benthosService := benthos.NewDefaultBenthosService("integration-test")
 				readS6, err := benthosService.GenerateS6ConfigForBenthos(&readBenthos, "test-read")
@@ -386,7 +386,7 @@ config:
 
 				// Test write DFC
 				writeBenthos := runtime.DataflowComponentWriteServiceConfig.GetBenthosServiceConfig()
-				Expect(writeBenthos.LogLevel).To(Equal(tc.expectedLogLevel))
+				Expect(writeBenthos.DebugLevel).To(Equal(tc.expectedDebugLevel))
 
 				writeS6, err := benthosService.GenerateS6ConfigForBenthos(&writeBenthos, "test-write")
 				Expect(err).NotTo(HaveOccurred())
@@ -400,19 +400,19 @@ config:
 			},
 			Entry("debug_level true maps to LogLevel DEBUG",
 				testCase{
-					name:              "debug_level true maps to LogLevel DEBUG",
-					debugLevel:        true,
-					expectedLogLevel:  "DEBUG",
-					expectOpcDebugSet: true,
-					expectedOpcDebug:  "debug",
+					name:               "debug_level true maps to LogLevel DEBUG",
+					debugLevel:         true,
+					expectedDebugLevel: true,
+					expectOpcDebugSet:  true,
+					expectedOpcDebug:   "debug",
 				}),
 			Entry("debug_level false maps to LogLevel INFO",
 				testCase{
-					name:              "debug_level false maps to LogLevel INFO",
-					debugLevel:        false,
-					expectedLogLevel:  "INFO",
-					expectOpcDebugSet: false,
-					expectedOpcDebug:  "",
+					name:               "debug_level false maps to LogLevel INFO",
+					debugLevel:         false,
+					expectedDebugLevel: false,
+					expectOpcDebugSet:  false,
+					expectedOpcDebug:   "",
 				}),
 		)
 	})

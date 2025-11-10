@@ -841,7 +841,8 @@ func (s *DefaultService) GetConfig(ctx context.Context, servicePath string, fsSe
 		observedS6ServiceConfig.ConfigFiles[entry.Name()] = string(content)
 	}
 
-	// Fetch environment variables from env/ directory
+	// Read environment variables from env/ directory if it exists (backward compatibility)
+	// Note: New services don't create env/ - variables are exported by run script template
 	envPath := filepath.Join(servicePath, "env")
 
 	envExists, err := fsService.FileExists(ctx, envPath)

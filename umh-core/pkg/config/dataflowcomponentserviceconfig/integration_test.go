@@ -47,7 +47,7 @@ var _ = Describe("DataflowComponentServiceConfig Integration", func() {
 			benthosConfig := dfc.GetBenthosServiceConfig()
 
 			// 3. Verify LogLevel set to DEBUG
-			Expect(benthosConfig.LogLevel).To(Equal("DEBUG"))
+			Expect(benthosConfig.DebugLevel).To(BeTrue())
 
 			// 4. Generate S6 config
 			benthosService := benthos.NewDefaultBenthosService("integration-test")
@@ -81,7 +81,7 @@ var _ = Describe("DataflowComponentServiceConfig Integration", func() {
 			benthosConfig := dfc.GetBenthosServiceConfig()
 
 			// 3. Verify LogLevel set to INFO (default)
-			Expect(benthosConfig.LogLevel).To(Equal("INFO"))
+			Expect(benthosConfig.DebugLevel).To(BeFalse())
 
 			// 4. Generate S6 config
 			benthosService := benthos.NewDefaultBenthosService("integration-test")
@@ -115,7 +115,7 @@ var _ = Describe("DataflowComponentServiceConfig Integration", func() {
 			benthosConfig := dfc.GetBenthosServiceConfig()
 
 			// 3. Verify LogLevel set to INFO (default)
-			Expect(benthosConfig.LogLevel).To(Equal("INFO"))
+			Expect(benthosConfig.DebugLevel).To(BeFalse())
 
 			// 4. Generate S6 config
 			benthosService := benthos.NewDefaultBenthosService("integration-test")
@@ -130,7 +130,7 @@ var _ = Describe("DataflowComponentServiceConfig Integration", func() {
 
 	Context("LogLevel mapping", func() {
 		DescribeTable("mapping debug_level boolean to LogLevel string",
-			func(debugLevel bool, expectedLogLevel string, expectOpcDebugSet bool, expectedOpcDebug string) {
+			func(debugLevel bool, expectedDebugLevel bool, expectOpcDebugSet bool, expectedOpcDebug string) {
 				// Create data flow component with programmatic debug_level
 				dfc := dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 					DebugLevel: debugLevel,
@@ -148,7 +148,7 @@ var _ = Describe("DataflowComponentServiceConfig Integration", func() {
 
 				// Convert to BenthosServiceConfig
 				benthosConfig := dfc.GetBenthosServiceConfig()
-				Expect(benthosConfig.LogLevel).To(Equal(expectedLogLevel))
+				Expect(benthosConfig.DebugLevel).To(Equal(expectedDebugLevel))
 
 				// Generate S6 config
 				benthosService := benthos.NewDefaultBenthosService("integration-test")
@@ -164,9 +164,9 @@ var _ = Describe("DataflowComponentServiceConfig Integration", func() {
 				}
 			},
 			Entry("debug_level true maps to LogLevel DEBUG",
-				true, "DEBUG", true, "debug"),
+				true, true, true, "debug"),
 			Entry("debug_level false maps to LogLevel INFO",
-				false, "INFO", false, ""),
+				false, false, false, ""),
 		)
 	})
 })
