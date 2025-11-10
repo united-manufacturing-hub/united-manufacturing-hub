@@ -773,5 +773,31 @@ var _ = Describe("TriangularStore", func() {
 			Expect(loaded["status"]).To(Equal("running"))
 			Expect(loaded["cpu"]).To(Equal(int64(50)))
 		})
+
+		It("should write when state changes", func() {
+			initialState := persistence.Document{
+				"id":     "worker-456",
+				"status": "running",
+				"cpu":    int64(50),
+			}
+
+			err := ts.SaveObserved(ctx, "container", "worker-456", initialState)
+			Expect(err).NotTo(HaveOccurred())
+
+			changedState := persistence.Document{
+				"id":     "worker-456",
+				"status": "stopped",
+				"cpu":    int64(0),
+			}
+
+			changed, err := ts.SaveObservedIfChanged(ctx, "container", "worker-456", changedState)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(changed).To(BeTrue(), "should write when state changes")
+
+			loaded, err := ts.LoadObserved(ctx, "container", "worker-456")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(loaded["status"]).To(Equal("stopped"))
+			Expect(loaded["cpu"]).To(Equal(int64(0)))
+		})
 	})
 })
