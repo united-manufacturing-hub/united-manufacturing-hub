@@ -1,4 +1,4 @@
 #!/command/execlineb -P
 cd /
 fdmove -c 2 1
-/root/go/bin/dlv --headless --listen=:40000 --api-version=2 --accept-multiclient exec /usr/local/bin/umh-core 
+s6-setuidgid umhuser:umhuser /root/go/bin/dlv --headless --listen=:40000 --api-version=2 --accept-multiclient exec /usr/local/bin/umh-core 
