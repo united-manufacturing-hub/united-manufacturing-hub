@@ -33,6 +33,14 @@ func (c ProtocolConverterServiceConfigSpec) GetDFCReadServiceConfig() dataflowco
 	// copy the config
 	dfcReadConfig := c.Config.DataflowComponentReadServiceConfig
 
+	// Propagate debug_level from Protocol Converter to DFC
+	// Spec-level debug_level takes precedence over Template-level
+	if c.DebugLevel {
+		dfcReadConfig.DebugLevel = c.DebugLevel
+	} else {
+		dfcReadConfig.DebugLevel = c.Config.DebugLevel
+	}
+
 	// Only append UNS output if there's an input config
 	if len(dfcReadConfig.BenthosConfig.Input) > 0 {
 		dfcReadConfig.BenthosConfig.Output = map[string]any{
@@ -50,6 +58,14 @@ func (c ProtocolConverterServiceConfigSpec) GetDFCReadServiceConfig() dataflowco
 // to be the UNS input config. This ensures protocol converters always read from the unified namespace.
 func (c ProtocolConverterServiceConfigSpec) GetDFCWriteServiceConfig() dataflowcomponentserviceconfig.DataflowComponentServiceConfig {
 	dfcWriteConfig := c.Config.DataflowComponentWriteServiceConfig
+
+	// Propagate debug_level from Protocol Converter to DFC
+	// Spec-level debug_level takes precedence over Template-level
+	if c.DebugLevel {
+		dfcWriteConfig.DebugLevel = c.DebugLevel
+	} else {
+		dfcWriteConfig.DebugLevel = c.Config.DebugLevel
+	}
 
 	// Only append UNS input if there's an output config
 	if len(dfcWriteConfig.BenthosConfig.Output) > 0 {

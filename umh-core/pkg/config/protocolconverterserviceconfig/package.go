@@ -103,6 +103,7 @@ type ProtocolConverterServiceConfigSpec struct {
 	Location    map[string]string                      `yaml:"location,omitempty"`
 	TemplateRef string                                 `yaml:"templateRef,omitempty"`
 	Config      ProtocolConverterServiceConfigTemplate `yaml:"config,omitempty"`
+	DebugLevel  bool                                   `yaml:"debug_level,omitempty"`
 }
 
 // Equal checks if two ProtocolConverterServiceConfigs are equal.

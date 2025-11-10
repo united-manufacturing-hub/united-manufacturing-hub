@@ -36,5 +36,8 @@ func (n *Normalizer) NormalizeConfig(cfg DataflowComponentServiceConfig) Dataflo
 	// Currently the BenthosConfig is the only underlying component of the DFCConfig
 	normalized.BenthosConfig = FromBenthosServiceConfig(normalizedBenthosConfig).BenthosConfig
 
+	// Preserve DebugLevel from the original input (lost during FromBenthosServiceConfig conversion)
+	normalized.DebugLevel = cfg.DebugLevel
+
 	return normalized
 }

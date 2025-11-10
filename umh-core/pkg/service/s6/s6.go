@@ -841,6 +841,38 @@ func (s *DefaultService) GetConfig(ctx context.Context, servicePath string, fsSe
 		observedS6ServiceConfig.ConfigFiles[entry.Name()] = string(content)
 	}
 
+	// Fetch environment variables from env/ directory
+	envPath := filepath.Join(servicePath, "env")
+
+	envExists, err := fsService.FileExists(ctx, envPath)
+	if err != nil {
+		return s6serviceconfig.S6ServiceConfig{}, fmt.Errorf("failed to check if env directory exists: %w", err)
+	}
+
+	if envExists {
+		envEntries, err := fsService.ReadDir(ctx, envPath)
+		if err != nil {
+			return s6serviceconfig.S6ServiceConfig{}, fmt.Errorf("failed to read env directory: %w", err)
+		}
+
+		// Extract environment variables from files
+		for _, entry := range envEntries {
+			if entry.IsDir() {
+				continue
+			}
+
+			envFilePath := filepath.Join(envPath, entry.Name())
+
+			envContent, err := fsService.ReadFile(ctx, envFilePath)
+			if err != nil {
+				return s6serviceconfig.S6ServiceConfig{}, fmt.Errorf("failed to read env file %s: %w", entry.Name(), err)
+			}
+
+			// Environment variable files contain the raw value (no quotes, no processing)
+			observedS6ServiceConfig.Env[entry.Name()] = string(envContent)
+		}
+	}
+
 	// Extract LogFilesize using regex
 	// Fetch run script
 	logServicePath := filepath.Join(servicePath, "log")

@@ -480,6 +480,14 @@ func (s *DefaultService) createS6FilesInRepository(ctx context.Context, reposito
 
 	createdFiles = append(createdFiles, configFiles...)
 
+	// Create environment variable files
+	envFiles, err := s.createS6EnvFiles(ctx, repositoryDir, fsService, config.Env)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create S6 env files: %w", err)
+	}
+
+	createdFiles = append(createdFiles, envFiles...)
+
 	// Create dependencies
 	dependenciesDPath := filepath.Join(repositoryDir, "dependencies.d")
 	if err := fsService.EnsureDirectory(ctx, dependenciesDPath); err != nil {
@@ -602,6 +610,55 @@ func (s *DefaultService) createS6ConfigFiles(ctx context.Context, servicePath st
 
 		// Track the created file using absolute path for consistency
 		createdFiles = append(createdFiles, path)
+	}
+
+	return createdFiles, nil
+}
+
+// createS6EnvFiles creates environment variable files for S6 services.
+// S6 supports environment variables via files in the env/ directory.
+// Each file is named after the variable (e.g., env/OPC_DEBUG) and contains the value.
+func (s *DefaultService) createS6EnvFiles(ctx context.Context, servicePath string, fsService filesystem.Service, env map[string]string) ([]string, error) {
+	if len(env) == 0 {
+		return nil, nil
+	}
+
+	envPath := filepath.Join(servicePath, "env")
+
+	var createdFiles []string
+
+	for varName, value := range env {
+		// Validate environment variable name
+		if strings.TrimSpace(varName) == "" {
+			return nil, errors.New("environment variable name cannot be empty")
+		}
+
+		// Prevent path traversal attacks
+		if strings.Contains(varName, "..") || strings.Contains(varName, "/") || strings.Contains(varName, "\\") {
+			return nil, fmt.Errorf("invalid environment variable name: %s", varName)
+		}
+
+		// Check for dangerous characters
+		if strings.ContainsAny(varName, "\x00\r\n") {
+			return nil, fmt.Errorf("environment variable name contains invalid characters: %s", varName)
+		}
+
+		// Build the full path to the env file
+		envFile := filepath.Join(envPath, varName)
+
+		// Create env directory if it doesn't exist (done lazily on first file)
+		dir := filepath.Dir(envFile)
+		if err := fsService.EnsureDirectory(ctx, dir); err != nil {
+			return nil, fmt.Errorf("failed to create env directory: %w", err)
+		}
+
+		// Write the environment variable value to the file
+		if err := fsService.WriteFile(ctx, envFile, []byte(value), 0644); err != nil {
+			return nil, fmt.Errorf("failed to write env file %s: %w", varName, err)
+		}
+
+		// Track the created file using absolute path
+		createdFiles = append(createdFiles, envFile)
 	}
 
 	return createdFiles, nil
