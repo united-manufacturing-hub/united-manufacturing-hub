@@ -1,4 +1,4 @@
 #!/command/execlineb -P
 cd /
 fdmove -c 2 1
-s6-setuidgid umhuser:umhuser /usr/local/bin/umh-core 
+/usr/local/bin/umh-core
