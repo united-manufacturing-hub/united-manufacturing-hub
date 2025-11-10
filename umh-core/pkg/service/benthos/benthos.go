@@ -48,6 +48,21 @@ import (
 )
 
 const (
+	// OPCDebugEnvVar is the environment variable name for enabling OPC UA debug logging.
+	//
+	// This variable is read by the gopcua library (github.com/gopcua/opcua/debug/debug.go)
+	// and accepts space-separated flag names to control different debug output levels:
+	//
+	//   - "debug"  : Enables general debug logging with file:line prefixes (debug.Printf)
+	//   - "codec"  : Prints detailed encoding/decoding information during binary marshaling
+	//   - "packet" : Prints raw packet data being sent/received over the wire
+	//
+	// Multiple flags can be combined: OPC_DEBUG="debug codec"
+	//
+	// When debug_level is enabled in config, this is automatically set to "debug" to enable
+	// general OPC UA debugging without the verbosity of codec/packet-level output.
+	//
+	// Reference: /Users/jeremytheocharis/umh-git/opcua/debug/debug.go
 	OPCDebugEnvVar = "OPC_DEBUG"
 )
 
