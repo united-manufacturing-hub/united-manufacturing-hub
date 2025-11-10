@@ -12,18 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package protocolconverterserviceconfig
+package protocolconverterserviceconfig_test
 
 import (
-	"testing"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
 	"gopkg.in/yaml.v3"
 )
 
-func TestProtocolConverterServiceConfigSpec_ParseYAML_DebugLevelTrue(t *testing.T) {
-	yamlData := `
+var _ = Describe("ProtocolConverterServiceConfigSpec DebugLevel", func() {
+	Describe("ParseYAML", func() {
+		Context("when debug_level is true", func() {
+			It("should parse DebugLevel as true", func() {
+				yamlData := `
 config:
   debug_level: true
   connection:
@@ -44,16 +46,17 @@ config:
         stdout: {}
 `
 
-	var spec ProtocolConverterServiceConfigSpec
+				var spec protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec
 
-	err := yaml.Unmarshal([]byte(yamlData), &spec)
-	require.NoError(t, err)
+				err := yaml.Unmarshal([]byte(yamlData), &spec)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(spec.Config.DebugLevel).To(BeTrue())
+			})
+		})
 
-	assert.True(t, spec.Config.DebugLevel)
-}
-
-func TestProtocolConverterServiceConfigSpec_ParseYAML_DebugLevelFalse(t *testing.T) {
-	yamlData := `
+		Context("when debug_level is false", func() {
+			It("should parse DebugLevel as false", func() {
+				yamlData := `
 config:
   debug_level: false
   connection:
@@ -74,16 +77,17 @@ config:
         stdout: {}
 `
 
-	var spec ProtocolConverterServiceConfigSpec
+				var spec protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec
 
-	err := yaml.Unmarshal([]byte(yamlData), &spec)
-	require.NoError(t, err)
+				err := yaml.Unmarshal([]byte(yamlData), &spec)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(spec.Config.DebugLevel).To(BeFalse())
+			})
+		})
 
-	assert.False(t, spec.Config.DebugLevel)
-}
-
-func TestProtocolConverterServiceConfigSpec_ParseYAML_DebugLevelOmitted(t *testing.T) {
-	yamlData := `
+		Context("when debug_level is omitted", func() {
+			It("should default DebugLevel to false", func() {
+				yamlData := `
 config:
   connection:
     name: "test-connection"
@@ -103,10 +107,12 @@ config:
         stdout: {}
 `
 
-	var spec ProtocolConverterServiceConfigSpec
+				var spec protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec
 
-	err := yaml.Unmarshal([]byte(yamlData), &spec)
-	require.NoError(t, err)
-
-	assert.False(t, spec.Config.DebugLevel)
-}
+				err := yaml.Unmarshal([]byte(yamlData), &spec)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(spec.Config.DebugLevel).To(BeFalse())
+			})
+		})
+	})
+})

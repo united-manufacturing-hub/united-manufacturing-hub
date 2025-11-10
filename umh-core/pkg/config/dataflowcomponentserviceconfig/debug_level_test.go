@@ -12,18 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package dataflowcomponentserviceconfig
+package dataflowcomponentserviceconfig_test
 
 import (
-	"testing"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"gopkg.in/yaml.v3"
 )
 
-func TestDataflowComponentServiceConfig_ParseYAML_DebugLevelTrue(t *testing.T) {
-	yamlData := `
+var _ = Describe("DataflowComponentServiceConfig DebugLevel", func() {
+	Describe("ParseYAML", func() {
+		Context("when debug_level is true", func() {
+			It("should parse DebugLevel as true", func() {
+				yamlData := `
 debug_level: true
 benthos:
   input:
@@ -33,16 +35,17 @@ benthos:
     stdout: {}
 `
 
-	var config DataflowComponentServiceConfig
+				var config dataflowcomponentserviceconfig.DataflowComponentServiceConfig
 
-	err := yaml.Unmarshal([]byte(yamlData), &config)
-	require.NoError(t, err)
+				err := yaml.Unmarshal([]byte(yamlData), &config)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(config.DebugLevel).To(BeTrue())
+			})
+		})
 
-	assert.True(t, config.DebugLevel)
-}
-
-func TestDataflowComponentServiceConfig_ParseYAML_DebugLevelFalse(t *testing.T) {
-	yamlData := `
+		Context("when debug_level is false", func() {
+			It("should parse DebugLevel as false", func() {
+				yamlData := `
 debug_level: false
 benthos:
   input:
@@ -52,16 +55,17 @@ benthos:
     stdout: {}
 `
 
-	var config DataflowComponentServiceConfig
+				var config dataflowcomponentserviceconfig.DataflowComponentServiceConfig
 
-	err := yaml.Unmarshal([]byte(yamlData), &config)
-	require.NoError(t, err)
+				err := yaml.Unmarshal([]byte(yamlData), &config)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(config.DebugLevel).To(BeFalse())
+			})
+		})
 
-	assert.False(t, config.DebugLevel)
-}
-
-func TestDataflowComponentServiceConfig_ParseYAML_DebugLevelOmitted(t *testing.T) {
-	yamlData := `
+		Context("when debug_level is omitted", func() {
+			It("should default DebugLevel to false", func() {
+				yamlData := `
 benthos:
   input:
     generate:
@@ -70,48 +74,56 @@ benthos:
     stdout: {}
 `
 
-	var config DataflowComponentServiceConfig
+				var config dataflowcomponentserviceconfig.DataflowComponentServiceConfig
 
-	err := yaml.Unmarshal([]byte(yamlData), &config)
-	require.NoError(t, err)
+				err := yaml.Unmarshal([]byte(yamlData), &config)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(config.DebugLevel).To(BeFalse())
+			})
+		})
+	})
 
-	assert.False(t, config.DebugLevel)
-}
+	Describe("GetBenthosServiceConfig", func() {
+		Context("when DebugLevel is true", func() {
+			It("should set LogLevel to DEBUG", func() {
+				cfg := dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+					DebugLevel: true,
+					BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
+						Input: map[string]any{
+							"generate": map[string]any{
+								"mapping": `root = ""`,
+							},
+						},
+						Output: map[string]any{
+							"stdout": map[string]any{},
+						},
+					},
+				}
 
-func TestDataflowComponentServiceConfig_GetBenthosServiceConfig_DebugLevelTrue(t *testing.T) {
-	cfg := DataflowComponentServiceConfig{
-		DebugLevel: true,
-		BenthosConfig: BenthosConfig{
-			Input: map[string]any{
-				"generate": map[string]any{
-					"mapping": `root = ""`,
-				},
-			},
-			Output: map[string]any{
-				"stdout": map[string]any{},
-			},
-		},
-	}
+				benthosConfig := cfg.GetBenthosServiceConfig()
+				Expect(benthosConfig.LogLevel).To(Equal("DEBUG"))
+			})
+		})
 
-	benthosConfig := cfg.GetBenthosServiceConfig()
-	assert.Equal(t, "DEBUG", benthosConfig.LogLevel)
-}
+		Context("when DebugLevel is false", func() {
+			It("should set LogLevel to INFO", func() {
+				cfg := dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+					DebugLevel: false,
+					BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
+						Input: map[string]any{
+							"generate": map[string]any{
+								"mapping": `root = ""`,
+							},
+						},
+						Output: map[string]any{
+							"stdout": map[string]any{},
+						},
+					},
+				}
 
-func TestDataflowComponentServiceConfig_GetBenthosServiceConfig_DebugLevelFalse(t *testing.T) {
-	cfg := DataflowComponentServiceConfig{
-		DebugLevel: false,
-		BenthosConfig: BenthosConfig{
-			Input: map[string]any{
-				"generate": map[string]any{
-					"mapping": `root = ""`,
-				},
-			},
-			Output: map[string]any{
-				"stdout": map[string]any{},
-			},
-		},
-	}
-
-	benthosConfig := cfg.GetBenthosServiceConfig()
-	assert.Equal(t, "INFO", benthosConfig.LogLevel)
-}
+				benthosConfig := cfg.GetBenthosServiceConfig()
+				Expect(benthosConfig.LogLevel).To(Equal("INFO"))
+			})
+		})
+	})
+})
