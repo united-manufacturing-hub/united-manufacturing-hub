@@ -353,7 +353,7 @@ func (ts *TriangularStore) LoadDesired(ctx context.Context, workerType string, i
 //
 // Returns:
 //   - error: If worker type not registered or save fails
-func (ts *TriangularStore) SaveObserved(ctx context.Context, workerType string, id string, observed interface{}) error {
+func (ts *TriangularStore) saveObservedInternal(ctx context.Context, workerType string, id string, observed interface{}) error {
 	// Convert observed to Document if needed
 	observedDoc, err := ts.toDocument(observed)
 	if err != nil {
@@ -405,6 +405,72 @@ func (ts *TriangularStore) SaveObserved(ctx context.Context, workerType string, 
 	}
 
 	return nil
+}
+
+// SaveObserved stores system reality with automatic delta checking.
+//
+// DESIGN DECISION: Built-in delta checking skips unchanged writes
+// WHY: Observed state is polled frequently (500ms default). Most polls
+// return the same data. Skipping redundant writes reduces database load
+// and prevents unnecessary sync_id increments.
+//
+// TRADE-OFF: Additional LoadObserved() call adds one database read per save.
+// Acceptable because in-memory reads are fast and writes are more expensive.
+//
+// Delta checking behavior:
+//   - First save (worker doesn't exist): Always writes, returns (true, nil)
+//   - Data changed: Writes to database, returns (true, nil)
+//   - Data unchanged: Skips write, returns (false, nil)
+//   - Error: Returns (false, err)
+//
+// CSE metadata fields (_sync_id, _version, _created_at, _updated_at) are
+// excluded from change detection. Only user data fields are compared.
+//
+// Parameters:
+//   - ctx: Cancellation context
+//   - workerType: Worker type
+//   - id: Unique worker identifier
+//   - observed: Observed state (persistence.Document or any struct/map)
+//
+// Returns:
+//   - changed: true if data was written to database, false if write was skipped
+//   - err: non-nil if operation failed (changed is always false when err != nil)
+func (ts *TriangularStore) SaveObserved(ctx context.Context, workerType string, id string, observed interface{}) (changed bool, err error) {
+	// Get collection metadata
+	_, _, observedMeta, err := ts.registry.GetTriangularCollections(workerType)
+	if err != nil {
+		return false, fmt.Errorf("worker type %q not registered: %w", workerType, err)
+	}
+
+	// Try to load current state
+	currentDoc, err := ts.LoadObserved(ctx, workerType, id)
+	if errors.Is(err, persistence.ErrNotFound) {
+		// First save - always write
+		err = ts.saveObservedInternal(ctx, workerType, id, observed)
+		return true, err
+	}
+	if err != nil {
+		return false, err
+	}
+
+	// Convert new state to Document
+	newDoc, err := ts.toDocument(observed)
+	if err != nil {
+		return false, err
+	}
+
+	// Filter CSE fields from both documents
+	currentFiltered := ts.filterCSEFields(currentDoc, observedMeta.CSEFields)
+	newFiltered := ts.filterCSEFields(newDoc, observedMeta.CSEFields)
+
+	// Compare filtered documents
+	if reflect.DeepEqual(currentFiltered, newFiltered) {
+		return false, nil // No changes, skip write
+	}
+
+	// Data changed, perform write
+	err = ts.saveObservedInternal(ctx, workerType, id, observed)
+	return true, err
 }
 
 // LoadObserved retrieves system reality.
@@ -467,76 +533,6 @@ func (ts *TriangularStore) LoadObservedTyped(ctx context.Context, workerType str
 	}
 
 	return documentToStruct(doc, dest)
-}
-
-// SaveObservedIfChanged saves observed state only if it differs from the current state.
-//
-// DESIGN DECISION: Delta checking to reduce database writes
-// WHY: Observed state is polled frequently (100Hz), but rarely changes.
-// Writing on every poll wastes disk I/O and causes unnecessary sync traffic.
-//
-// TRADE-OFF: Additional read + comparison overhead, but saves 99% of writes.
-// Read is fast (in-memory or cached), comparison is cheap (reflect.DeepEqual).
-//
-// INSPIRED BY: React's virtual DOM diffing, Redux's shallow equality checks.
-//
-// Parameters:
-//   - ctx: Cancellation context
-//   - workerType: Worker type (e.g., "container")
-//   - id: Unique worker identifier
-//   - newState: New observed state to save (if changed)
-//
-// Returns:
-//   - changed: true if state was different and write occurred, false if unchanged
-//   - error: If read, comparison, or write fails
-//
-// Example:
-//
-//	state := ContainerObservedState{ID: "worker-123", Status: "running", CPU: 50}
-//	changed, err := ts.SaveObservedIfChanged(ctx, "container", "worker-123", state)
-//	if changed {
-//	    log.Info("State changed, database updated")
-//	} else {
-//	    log.Debug("State unchanged, skipped write")
-//	}
-func (ts *TriangularStore) SaveObservedIfChanged(ctx context.Context, workerType string, id string, newState interface{}) (changed bool, err error) {
-	_, _, observedMeta, err := ts.registry.GetTriangularCollections(workerType)
-	if err != nil {
-		return false, fmt.Errorf("worker type %q not registered: %w", workerType, err)
-	}
-
-	if observedMeta.ObservedType == nil {
-		return false, fmt.Errorf("ObservedType not registered for worker %s", workerType)
-	}
-
-	currentDoc, err := ts.LoadObserved(ctx, workerType, id)
-
-	if err != nil {
-		if errors.Is(err, persistence.ErrNotFound) {
-			return true, ts.SaveObserved(ctx, workerType, id, newState)
-		}
-
-		return false, fmt.Errorf("load current state: %w", err)
-	}
-
-	newDoc, err := ts.toDocument(newState)
-	if err != nil {
-		return false, fmt.Errorf("convert new state to document: %w", err)
-	}
-
-	currentFiltered := ts.filterCSEFields(currentDoc, observedMeta.CSEFields)
-	newFiltered := ts.filterCSEFields(newDoc, observedMeta.CSEFields)
-
-	if reflect.DeepEqual(currentFiltered, newFiltered) {
-		return false, nil
-	}
-
-	err = ts.SaveObserved(ctx, workerType, id, newState)
-	if err != nil {
-		return false, fmt.Errorf("save new state: %w", err)
-	}
-
-	return true, nil
 }
 
 func (ts *TriangularStore) filterCSEFields(doc persistence.Document, cseFields []string) persistence.Document {
@@ -660,63 +656,6 @@ func (ts *TriangularStore) LoadSnapshot(ctx context.Context, workerType string, 
 		Desired:  desired,
 		Observed: observed,
 	}, nil
-}
-
-// DeleteWorker removes all three parts of the triangular model.
-//
-// DESIGN DECISION: Use transaction for atomic delete
-// WHY: Either delete all three parts or none. Partial deletion would leave
-// orphaned state (identity without observed, etc.) causing FSM errors.
-//
-// TRADE-OFF: Transaction overhead, but necessary for data consistency.
-//
-// INSPIRED BY: Database referential integrity (CASCADE DELETE),
-// Linear's entity deletion (removes all related records atomically).
-//
-// Parameters:
-//   - ctx: Cancellation context
-//   - workerType: Worker type
-//   - id: Unique worker identifier
-//
-// Returns:
-//   - error: If transaction fails or any deletion fails
-//
-// Example:
-//
-//	// User deletes worker in UI
-//	err := ts.DeleteWorker(ctx, "container", "worker-123")
-//	// All three collections cleaned up atomically
-func (ts *TriangularStore) DeleteWorker(ctx context.Context, workerType string, id string) error {
-	identityMeta, desiredMeta, observedMeta, err := ts.registry.GetTriangularCollections(workerType)
-	if err != nil {
-		return fmt.Errorf("worker type %q not registered: %w", workerType, err)
-	}
-
-	// Use transaction for atomic delete
-	tx, err := ts.store.BeginTx(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to begin transaction: %w", err)
-	}
-	defer tx.Rollback()
-
-	// Delete all three parts
-	if err := tx.Delete(ctx, identityMeta.Name, id); err != nil && !errors.Is(err, persistence.ErrNotFound) {
-		return fmt.Errorf("failed to delete identity: %w", err)
-	}
-
-	if err := tx.Delete(ctx, desiredMeta.Name, id); err != nil && !errors.Is(err, persistence.ErrNotFound) {
-		return fmt.Errorf("failed to delete desired: %w", err)
-	}
-
-	if err := tx.Delete(ctx, observedMeta.Name, id); err != nil && !errors.Is(err, persistence.ErrNotFound) {
-		return fmt.Errorf("failed to delete observed: %w", err)
-	}
-
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("failed to commit transaction: %w", err)
-	}
-
-	return nil
 }
 
 // injectMetadata adds or updates CSE metadata fields in a document.

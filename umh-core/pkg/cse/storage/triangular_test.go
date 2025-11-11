@@ -464,12 +464,12 @@ var _ = Describe("TriangularStore", func() {
 		})
 
 		It("should save observed successfully", func() {
-			err := ts.SaveObserved(ctx, "container", "worker-123", observed)
+			_, err := ts.SaveObserved(ctx, "container", "worker-123", observed)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		It("should set version to 1 on first save", func() {
-			err := ts.SaveObserved(ctx, "container", "worker-123", observed)
+			_, err := ts.SaveObserved(ctx, "container", "worker-123", observed)
 			Expect(err).NotTo(HaveOccurred())
 
 			saved, err := store.Get(ctx, "container_observed", "worker-123")
@@ -479,7 +479,7 @@ var _ = Describe("TriangularStore", func() {
 
 		Context("when updating observed state", func() {
 			BeforeEach(func() {
-				ts.SaveObserved(ctx, "container", "worker-123", observed)
+				_, _ = ts.SaveObserved(ctx, "container", "worker-123", observed)
 			})
 
 			It("should increment sync ID", func() {
@@ -487,7 +487,7 @@ var _ = Describe("TriangularStore", func() {
 				firstSyncID := saved[storage.FieldSyncID].(int64)
 
 				observed["cpu"] = 60
-				ts.SaveObserved(ctx, "container", "worker-123", observed)
+				_, _ = ts.SaveObserved(ctx, "container", "worker-123", observed)
 
 				saved, _ = store.Get(ctx, "container_observed", "worker-123")
 				secondSyncID := saved[storage.FieldSyncID].(int64)
@@ -497,13 +497,99 @@ var _ = Describe("TriangularStore", func() {
 
 			It("should NOT increment version", func() {
 				observed["cpu"] = 60
-				err := ts.SaveObserved(ctx, "container", "worker-123", observed)
+				_, err := ts.SaveObserved(ctx, "container", "worker-123", observed)
 				Expect(err).NotTo(HaveOccurred())
 
 				saved, err := store.Get(ctx, "container_observed", "worker-123")
 				Expect(err).NotTo(HaveOccurred())
 				Expect(saved[storage.FieldVersion]).To(Equal(int64(1)))
 			})
+		})
+
+		It("should skip unchanged writes by default", func() {
+			// Save initial observed state
+			_, err := ts.SaveObserved(ctx, "container", "worker-123", observed)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Get initial database state to verify write occurred
+			saved, err := store.Get(ctx, "container_observed", "worker-123")
+			Expect(err).NotTo(HaveOccurred())
+			firstSyncID := saved[storage.FieldSyncID].(int64)
+
+			// Save SAME observed state again (no changes)
+			changed, err := ts.SaveObserved(ctx, "container", "worker-123", observed)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(changed).To(BeFalse(), "SaveObserved should return changed=false when data is unchanged")
+
+			// Verify no database write occurred (sync_id should be unchanged)
+			saved, err = store.Get(ctx, "container_observed", "worker-123")
+			Expect(err).NotTo(HaveOccurred())
+			secondSyncID := saved[storage.FieldSyncID].(int64)
+			Expect(secondSyncID).To(Equal(firstSyncID), "sync_id should not change when no data changed")
+		})
+
+		It("should skip write when only CSE metadata changes", func() {
+			// Save initial observed state
+			_, err := ts.SaveObserved(ctx, "container", "worker-123", observed)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Get initial database state
+			saved, err := store.Get(ctx, "container_observed", "worker-123")
+			Expect(err).NotTo(HaveOccurred())
+			firstSyncID := saved[storage.FieldSyncID].(int64)
+
+			// Manually modify ONLY CSE metadata fields in database
+			saved[storage.FieldUpdatedAt] = time.Now().Add(10 * time.Hour)
+			saved[storage.FieldVersion] = 999
+			err = store.Update(ctx, "container_observed", "worker-123", saved)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Save same observed state again (user data unchanged, only CSE metadata differs)
+			changed, err := ts.SaveObserved(ctx, "container", "worker-123", observed)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(changed).To(BeFalse(), "SaveObserved should skip write when only CSE metadata changes")
+
+			// Verify no database write occurred (sync_id unchanged)
+			saved, err = store.Get(ctx, "container_observed", "worker-123")
+			Expect(err).NotTo(HaveOccurred())
+			secondSyncID := saved[storage.FieldSyncID].(int64)
+			Expect(secondSyncID).To(Equal(firstSyncID), "sync_id should not change when only CSE metadata differs")
+		})
+
+		It("should write when user data changes", func() {
+			observed := persistence.Document{
+				"id":     "worker-123",
+				"cpu":    50,
+				"memory": 4096,
+			}
+
+			// Save initial observed state
+			_, err := ts.SaveObserved(ctx, "container", "worker-123", observed)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Get initial database state
+			saved, err := store.Get(ctx, "container_observed", "worker-123")
+			Expect(err).NotTo(HaveOccurred())
+			firstSyncID := saved[storage.FieldSyncID].(int64)
+
+			// Modify user data (not CSE metadata)
+			observed["cpu"] = 75
+			observed["memory"] = 8192
+
+			// Save DIFFERENT observed state
+			changed, err := ts.SaveObserved(ctx, "container", "worker-123", observed)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(changed).To(BeTrue(), "SaveObserved should return changed=true when user data changes")
+
+			// Verify database write occurred (sync_id incremented)
+			saved, err = store.Get(ctx, "container_observed", "worker-123")
+			Expect(err).NotTo(HaveOccurred())
+			secondSyncID := saved[storage.FieldSyncID].(int64)
+			Expect(secondSyncID).To(BeNumerically(">", firstSyncID), "sync_id should increment when user data changes")
+
+			// Verify new data was actually saved
+			Expect(saved["cpu"]).To(Equal(75))
+			Expect(saved["memory"]).To(Equal(8192))
 		})
 	})
 
@@ -513,7 +599,7 @@ var _ = Describe("TriangularStore", func() {
 				"id":     "worker-123",
 				"status": "running",
 			}
-			ts.SaveObserved(ctx, "container", "worker-123", observed)
+			_, _ = ts.SaveObserved(ctx, "container", "worker-123", observed)
 		})
 
 		It("should load observed successfully", func() {
@@ -533,7 +619,7 @@ var _ = Describe("TriangularStore", func() {
 				"id":     "worker-123",
 				"config": "value",
 			})
-			ts.SaveObserved(ctx, "container", "worker-123", persistence.Document{
+			_, _ = ts.SaveObserved(ctx, "container", "worker-123", persistence.Document{
 				"id":     "worker-123",
 				"status": "running",
 			})
@@ -564,37 +650,6 @@ var _ = Describe("TriangularStore", func() {
 		})
 	})
 
-	Describe("DeleteWorker", func() {
-		BeforeEach(func() {
-			ts.SaveIdentity(ctx, "container", "worker-123", persistence.Document{
-				"id":   "worker-123",
-				"name": "Container A",
-			})
-			ts.SaveDesired(ctx, "container", "worker-123", persistence.Document{
-				"id":     "worker-123",
-				"config": "value",
-			})
-			ts.SaveObserved(ctx, "container", "worker-123", persistence.Document{
-				"id":     "worker-123",
-				"status": "running",
-			})
-		})
-
-		It("should delete all three parts", func() {
-			err := ts.DeleteWorker(ctx, "container", "worker-123")
-			Expect(err).NotTo(HaveOccurred())
-
-			_, err = store.Get(ctx, "container_identity", "worker-123")
-			Expect(err).To(MatchError(persistence.ErrNotFound))
-
-			_, err = store.Get(ctx, "container_desired", "worker-123")
-			Expect(err).To(MatchError(persistence.ErrNotFound))
-
-			_, err = store.Get(ctx, "container_observed", "worker-123")
-			Expect(err).To(MatchError(persistence.ErrNotFound))
-		})
-	})
-
 	Describe("GlobalSyncID", func() {
 		It("should increment across all operations", func() {
 			ts.SaveIdentity(ctx, "container", "worker-1", persistence.Document{
@@ -609,7 +664,7 @@ var _ = Describe("TriangularStore", func() {
 			desired2, _ := store.Get(ctx, "container_desired", "worker-2")
 			syncID2 := desired2[storage.FieldSyncID].(int64)
 
-			ts.SaveObserved(ctx, "container", "worker-3", persistence.Document{
+			_, _ = ts.SaveObserved(ctx, "container", "worker-3", persistence.Document{
 				"id": "worker-3",
 			})
 			observed3, _ := store.Get(ctx, "container_observed", "worker-3")
@@ -673,7 +728,7 @@ var _ = Describe("TriangularStore", func() {
 
 		Context("for observed state", func() {
 			It("should fail for document without id field", func() {
-				err := ts.SaveObserved(ctx, "container", "worker-123", persistence.Document{
+				_, err := ts.SaveObserved(ctx, "container", "worker-123", persistence.Document{
 					"status": "running",
 				})
 				Expect(err).To(HaveOccurred())
@@ -688,7 +743,7 @@ var _ = Describe("TriangularStore", func() {
 				"status": "running",
 				"cpu":    int64(50),
 			}
-			err := ts.SaveObserved(ctx, "container", "worker-123", observed)
+			_, err := ts.SaveObserved(ctx, "container", "worker-123", observed)
 			Expect(err).NotTo(HaveOccurred())
 
 			var result TestObservedState
@@ -705,7 +760,7 @@ var _ = Describe("TriangularStore", func() {
 				"id":  "worker-456",
 				"cpu": "not-a-number",
 			}
-			err := ts.SaveObserved(ctx, "container", "worker-456", observed)
+			_, err := ts.SaveObserved(ctx, "container", "worker-456", observed)
 			Expect(err).NotTo(HaveOccurred())
 
 			var result TestObservedState
@@ -737,7 +792,7 @@ var _ = Describe("TriangularStore", func() {
 				"is_healthy": true,
 				"updated_at": now,
 			}
-			err := ts.SaveObserved(ctx, "container", "worker-789", observed)
+			_, err := ts.SaveObserved(ctx, "container", "worker-789", observed)
 			Expect(err).NotTo(HaveOccurred())
 
 			var result ComplexState
@@ -752,70 +807,4 @@ var _ = Describe("TriangularStore", func() {
 		})
 	})
 
-	Describe("SaveObservedIfChanged", func() {
-		It("should skip write when state unchanged", func() {
-			initialState := persistence.Document{
-				"id":     "worker-123",
-				"status": "running",
-				"cpu":    int64(50),
-			}
-
-			err := ts.SaveObserved(ctx, "container", "worker-123", initialState)
-			Expect(err).NotTo(HaveOccurred())
-
-			changed, err := ts.SaveObservedIfChanged(ctx, "container", "worker-123", initialState)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(changed).To(BeFalse(), "should not write when state unchanged")
-
-			loaded, err := ts.LoadObserved(ctx, "container", "worker-123")
-			Expect(err).NotTo(HaveOccurred())
-			Expect(loaded["id"]).To(Equal("worker-123"))
-			Expect(loaded["status"]).To(Equal("running"))
-			Expect(loaded["cpu"]).To(Equal(int64(50)))
-		})
-
-		It("should write when state changes", func() {
-			initialState := persistence.Document{
-				"id":     "worker-456",
-				"status": "running",
-				"cpu":    int64(50),
-			}
-
-			err := ts.SaveObserved(ctx, "container", "worker-456", initialState)
-			Expect(err).NotTo(HaveOccurred())
-
-			changedState := persistence.Document{
-				"id":     "worker-456",
-				"status": "stopped",
-				"cpu":    int64(0),
-			}
-
-			changed, err := ts.SaveObservedIfChanged(ctx, "container", "worker-456", changedState)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(changed).To(BeTrue(), "should write when state changes")
-
-			loaded, err := ts.LoadObserved(ctx, "container", "worker-456")
-			Expect(err).NotTo(HaveOccurred())
-			Expect(loaded["status"]).To(Equal("stopped"))
-			Expect(loaded["cpu"]).To(Equal(int64(0)))
-		})
-
-		It("should handle first save (no existing state)", func() {
-			newState := persistence.Document{
-				"id":     "worker-789",
-				"status": "starting",
-				"cpu":    int64(0),
-			}
-
-			changed, err := ts.SaveObservedIfChanged(ctx, "container", "worker-789", newState)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(changed).To(BeTrue(), "should write on first save")
-
-			loaded, err := ts.LoadObserved(ctx, "container", "worker-789")
-			Expect(err).NotTo(HaveOccurred())
-			Expect(loaded["id"]).To(Equal("worker-789"))
-			Expect(loaded["status"]).To(Equal("starting"))
-			Expect(loaded["cpu"]).To(Equal(int64(0)))
-		})
-	})
 })
