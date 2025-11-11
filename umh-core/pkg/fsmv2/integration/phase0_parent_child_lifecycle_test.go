@@ -199,7 +199,7 @@ var _ = Describe("Phase 0: Parent-Child Lifecycle", func() {
 				ID:          "parent-001",
 				CollectedAt: time.Now(),
 			}
-			err = store.SaveObserved(ctx, parent.WorkerType, "parent-001", initialObserved)
+			_, err = store.SaveObserved(ctx, parent.WorkerType, "parent-001", initialObserved)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Starting supervisor properly (collectors + tick loops)")

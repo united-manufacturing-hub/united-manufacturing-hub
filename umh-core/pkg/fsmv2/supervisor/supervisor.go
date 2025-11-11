@@ -467,7 +467,8 @@ func (s *Supervisor) AddWorker(identity fsmv2.Identity, worker fsmv2.Worker) err
 	s.logger.Debugf("Saved identity for worker: %s", identity.ID)
 
 	// Save initial observation to database for immediate availability
-	if err := s.store.SaveObserved(ctx, s.workerType, identity.ID, observed); err != nil {
+	_, err = s.store.SaveObserved(ctx, s.workerType, identity.ID, observed)
+	if err != nil {
 		return fmt.Errorf("failed to save initial observation: %w", err)
 	}
 

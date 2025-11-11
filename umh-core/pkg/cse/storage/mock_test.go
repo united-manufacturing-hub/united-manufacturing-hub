@@ -29,7 +29,6 @@ type mockTriangularStore struct {
 	SaveObservedErr error
 	LoadObservedErr error
 	LoadSnapshotErr error
-	DeleteWorkerErr error
 
 	identity map[string]map[string]persistence.Document
 	desired  map[string]map[string]persistence.Document
@@ -117,11 +116,11 @@ func (m *mockTriangularStore) LoadDesired(ctx context.Context, workerType string
 	return doc, nil
 }
 
-func (m *mockTriangularStore) SaveObserved(ctx context.Context, workerType string, id string, observed interface{}) error {
+func (m *mockTriangularStore) SaveObserved(ctx context.Context, workerType string, id string, observed interface{}) (bool, error) {
 	m.SaveObservedCalled++
 
 	if m.SaveObservedErr != nil {
-		return m.SaveObservedErr
+		return false, m.SaveObservedErr
 	}
 
 	if m.observed[workerType] == nil {
@@ -137,7 +136,7 @@ func (m *mockTriangularStore) SaveObserved(ctx context.Context, workerType strin
 
 	m.observed[workerType][id] = doc
 
-	return nil
+	return true, nil
 }
 
 func (m *mockTriangularStore) LoadObserved(ctx context.Context, workerType string, id string) (persistence.Document, error) {
@@ -179,26 +178,6 @@ func (m *mockTriangularStore) LoadSnapshot(ctx context.Context, workerType strin
 	}
 
 	return snapshot, nil
-}
-
-func (m *mockTriangularStore) DeleteWorker(ctx context.Context, workerType string, id string) error {
-	if m.DeleteWorkerErr != nil {
-		return m.DeleteWorkerErr
-	}
-
-	if m.identity[workerType] != nil {
-		delete(m.identity[workerType], id)
-	}
-
-	if m.desired[workerType] != nil {
-		delete(m.desired[workerType], id)
-	}
-
-	if m.observed[workerType] != nil {
-		delete(m.observed[workerType], id)
-	}
-
-	return nil
 }
 
 func (m *mockTriangularStore) Registry() *storage.Registry {

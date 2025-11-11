@@ -250,6 +250,12 @@ func (tx *mockTx) Maintenance(ctx context.Context) error {
 	return tx.mockStore.Maintenance(ctx)
 }
 
+type TestObservedState struct {
+	ID     string `json:"id"`
+	Status string `json:"status"`
+	CPU    int64  `json:"cpu"`
+}
+
 func setupTestRegistry() *storage.Registry {
 	registry := storage.NewRegistry()
 
@@ -269,10 +275,12 @@ func setupTestRegistry() *storage.Registry {
 		IndexedFields: []string{storage.FieldSyncID},
 	})
 
+	observedType := reflect.TypeOf(TestObservedState{})
 	registry.Register(&storage.CollectionMetadata{
 		Name:          "container_observed",
 		WorkerType:    "container",
 		Role:          storage.RoleObserved,
+		ObservedType:  observedType,
 		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
 		IndexedFields: []string{storage.FieldSyncID},
 	})
@@ -456,12 +464,12 @@ var _ = Describe("TriangularStore", func() {
 		})
 
 		It("should save observed successfully", func() {
-			err := ts.SaveObserved(ctx, "container", "worker-123", observed)
+			_, err := ts.SaveObserved(ctx, "container", "worker-123", observed)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		It("should set version to 1 on first save", func() {
-			err := ts.SaveObserved(ctx, "container", "worker-123", observed)
+			_, err := ts.SaveObserved(ctx, "container", "worker-123", observed)
 			Expect(err).NotTo(HaveOccurred())
 
 			saved, err := store.Get(ctx, "container_observed", "worker-123")
@@ -471,7 +479,7 @@ var _ = Describe("TriangularStore", func() {
 
 		Context("when updating observed state", func() {
 			BeforeEach(func() {
-				ts.SaveObserved(ctx, "container", "worker-123", observed)
+				_, _ = ts.SaveObserved(ctx, "container", "worker-123", observed)
 			})
 
 			It("should increment sync ID", func() {
@@ -479,7 +487,7 @@ var _ = Describe("TriangularStore", func() {
 				firstSyncID := saved[storage.FieldSyncID].(int64)
 
 				observed["cpu"] = 60
-				ts.SaveObserved(ctx, "container", "worker-123", observed)
+				_, _ = ts.SaveObserved(ctx, "container", "worker-123", observed)
 
 				saved, _ = store.Get(ctx, "container_observed", "worker-123")
 				secondSyncID := saved[storage.FieldSyncID].(int64)
@@ -489,13 +497,99 @@ var _ = Describe("TriangularStore", func() {
 
 			It("should NOT increment version", func() {
 				observed["cpu"] = 60
-				err := ts.SaveObserved(ctx, "container", "worker-123", observed)
+				_, err := ts.SaveObserved(ctx, "container", "worker-123", observed)
 				Expect(err).NotTo(HaveOccurred())
 
 				saved, err := store.Get(ctx, "container_observed", "worker-123")
 				Expect(err).NotTo(HaveOccurred())
 				Expect(saved[storage.FieldVersion]).To(Equal(int64(1)))
 			})
+		})
+
+		It("should skip unchanged writes by default", func() {
+			// Save initial observed state
+			_, err := ts.SaveObserved(ctx, "container", "worker-123", observed)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Get initial database state to verify write occurred
+			saved, err := store.Get(ctx, "container_observed", "worker-123")
+			Expect(err).NotTo(HaveOccurred())
+			firstSyncID := saved[storage.FieldSyncID].(int64)
+
+			// Save SAME observed state again (no changes)
+			changed, err := ts.SaveObserved(ctx, "container", "worker-123", observed)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(changed).To(BeFalse(), "SaveObserved should return changed=false when data is unchanged")
+
+			// Verify no database write occurred (sync_id should be unchanged)
+			saved, err = store.Get(ctx, "container_observed", "worker-123")
+			Expect(err).NotTo(HaveOccurred())
+			secondSyncID := saved[storage.FieldSyncID].(int64)
+			Expect(secondSyncID).To(Equal(firstSyncID), "sync_id should not change when no data changed")
+		})
+
+		It("should skip write when only CSE metadata changes", func() {
+			// Save initial observed state
+			_, err := ts.SaveObserved(ctx, "container", "worker-123", observed)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Get initial database state
+			saved, err := store.Get(ctx, "container_observed", "worker-123")
+			Expect(err).NotTo(HaveOccurred())
+			firstSyncID := saved[storage.FieldSyncID].(int64)
+
+			// Manually modify ONLY CSE metadata fields in database
+			saved[storage.FieldUpdatedAt] = time.Now().Add(10 * time.Hour)
+			saved[storage.FieldVersion] = 999
+			err = store.Update(ctx, "container_observed", "worker-123", saved)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Save same observed state again (user data unchanged, only CSE metadata differs)
+			changed, err := ts.SaveObserved(ctx, "container", "worker-123", observed)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(changed).To(BeFalse(), "SaveObserved should skip write when only CSE metadata changes")
+
+			// Verify no database write occurred (sync_id unchanged)
+			saved, err = store.Get(ctx, "container_observed", "worker-123")
+			Expect(err).NotTo(HaveOccurred())
+			secondSyncID := saved[storage.FieldSyncID].(int64)
+			Expect(secondSyncID).To(Equal(firstSyncID), "sync_id should not change when only CSE metadata differs")
+		})
+
+		It("should write when user data changes", func() {
+			observed := persistence.Document{
+				"id":     "worker-123",
+				"cpu":    50,
+				"memory": 4096,
+			}
+
+			// Save initial observed state
+			_, err := ts.SaveObserved(ctx, "container", "worker-123", observed)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Get initial database state
+			saved, err := store.Get(ctx, "container_observed", "worker-123")
+			Expect(err).NotTo(HaveOccurred())
+			firstSyncID := saved[storage.FieldSyncID].(int64)
+
+			// Modify user data (not CSE metadata)
+			observed["cpu"] = 75
+			observed["memory"] = 8192
+
+			// Save DIFFERENT observed state
+			changed, err := ts.SaveObserved(ctx, "container", "worker-123", observed)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(changed).To(BeTrue(), "SaveObserved should return changed=true when user data changes")
+
+			// Verify database write occurred (sync_id incremented)
+			saved, err = store.Get(ctx, "container_observed", "worker-123")
+			Expect(err).NotTo(HaveOccurred())
+			secondSyncID := saved[storage.FieldSyncID].(int64)
+			Expect(secondSyncID).To(BeNumerically(">", firstSyncID), "sync_id should increment when user data changes")
+
+			// Verify new data was actually saved
+			Expect(saved["cpu"]).To(Equal(75))
+			Expect(saved["memory"]).To(Equal(8192))
 		})
 	})
 
@@ -505,7 +599,7 @@ var _ = Describe("TriangularStore", func() {
 				"id":     "worker-123",
 				"status": "running",
 			}
-			ts.SaveObserved(ctx, "container", "worker-123", observed)
+			_, _ = ts.SaveObserved(ctx, "container", "worker-123", observed)
 		})
 
 		It("should load observed successfully", func() {
@@ -525,7 +619,7 @@ var _ = Describe("TriangularStore", func() {
 				"id":     "worker-123",
 				"config": "value",
 			})
-			ts.SaveObserved(ctx, "container", "worker-123", persistence.Document{
+			_, _ = ts.SaveObserved(ctx, "container", "worker-123", persistence.Document{
 				"id":     "worker-123",
 				"status": "running",
 			})
@@ -556,37 +650,6 @@ var _ = Describe("TriangularStore", func() {
 		})
 	})
 
-	Describe("DeleteWorker", func() {
-		BeforeEach(func() {
-			ts.SaveIdentity(ctx, "container", "worker-123", persistence.Document{
-				"id":   "worker-123",
-				"name": "Container A",
-			})
-			ts.SaveDesired(ctx, "container", "worker-123", persistence.Document{
-				"id":     "worker-123",
-				"config": "value",
-			})
-			ts.SaveObserved(ctx, "container", "worker-123", persistence.Document{
-				"id":     "worker-123",
-				"status": "running",
-			})
-		})
-
-		It("should delete all three parts", func() {
-			err := ts.DeleteWorker(ctx, "container", "worker-123")
-			Expect(err).NotTo(HaveOccurred())
-
-			_, err = store.Get(ctx, "container_identity", "worker-123")
-			Expect(err).To(MatchError(persistence.ErrNotFound))
-
-			_, err = store.Get(ctx, "container_desired", "worker-123")
-			Expect(err).To(MatchError(persistence.ErrNotFound))
-
-			_, err = store.Get(ctx, "container_observed", "worker-123")
-			Expect(err).To(MatchError(persistence.ErrNotFound))
-		})
-	})
-
 	Describe("GlobalSyncID", func() {
 		It("should increment across all operations", func() {
 			ts.SaveIdentity(ctx, "container", "worker-1", persistence.Document{
@@ -601,7 +664,7 @@ var _ = Describe("TriangularStore", func() {
 			desired2, _ := store.Get(ctx, "container_desired", "worker-2")
 			syncID2 := desired2[storage.FieldSyncID].(int64)
 
-			ts.SaveObserved(ctx, "container", "worker-3", persistence.Document{
+			_, _ = ts.SaveObserved(ctx, "container", "worker-3", persistence.Document{
 				"id": "worker-3",
 			})
 			observed3, _ := store.Get(ctx, "container_observed", "worker-3")
@@ -665,7 +728,7 @@ var _ = Describe("TriangularStore", func() {
 
 		Context("for observed state", func() {
 			It("should fail for document without id field", func() {
-				err := ts.SaveObserved(ctx, "container", "worker-123", persistence.Document{
+				_, err := ts.SaveObserved(ctx, "container", "worker-123", persistence.Document{
 					"status": "running",
 				})
 				Expect(err).To(HaveOccurred())
@@ -674,193 +737,73 @@ var _ = Describe("TriangularStore", func() {
 	})
 
 	Describe("LoadObservedTyped", func() {
-		var (
-			testRegistry *storage.Registry
-			testStore    *storage.TriangularStore
-		)
+		It("should deserialize Document to typed struct", func() {
+			observed := persistence.Document{
+				"id":     "worker-123",
+				"status": "running",
+				"cpu":    int64(50),
+			}
+			_, err := ts.SaveObserved(ctx, "container", "worker-123", observed)
+			Expect(err).NotTo(HaveOccurred())
 
-		BeforeEach(func() {
-			testRegistry = storage.NewRegistry()
-			testStore = storage.NewTriangularStore(store, testRegistry)
+			var result TestObservedState
+			err = ts.LoadObservedTyped(ctx, "container", "worker-123", &result)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(result.ID).To(Equal("worker-123"))
+			Expect(result.Status).To(Equal("running"))
+			Expect(result.CPU).To(Equal(int64(50)))
 		})
 
-		It("deserializes Document to typed struct", func() {
-			type ParentObservedState struct {
-				ID     string
-				Name   string
-				Status string
+		It("should return error for type mismatch", func() {
+			observed := persistence.Document{
+				"id":  "worker-456",
+				"cpu": "not-a-number",
 			}
-
-			observedType := reflect.TypeOf((*ParentObservedState)(nil)).Elem()
-			testRegistry.Register(&storage.CollectionMetadata{
-				Name:         "parent_observed",
-				WorkerType:   "parent",
-				Role:         storage.RoleObserved,
-				ObservedType: observedType,
-				CSEFields:    []string{storage.FieldSyncID, storage.FieldVersion},
-			})
-
-			testRegistry.Register(&storage.CollectionMetadata{
-				Name:       "parent_identity",
-				WorkerType: "parent",
-				Role:       storage.RoleIdentity,
-				CSEFields:  []string{storage.FieldSyncID, storage.FieldVersion},
-			})
-
-			testRegistry.Register(&storage.CollectionMetadata{
-				Name:       "parent_desired",
-				WorkerType: "parent",
-				Role:       storage.RoleDesired,
-				CSEFields:  []string{storage.FieldSyncID, storage.FieldVersion},
-			})
-
-			observedDoc := persistence.Document{
-				"id":     "parent-123",
-				"ID":     "parent-123",
-				"Name":   "TestParent",
-				"Status": "Running",
-			}
-			err := testStore.SaveObserved(ctx, "parent", "parent-123", observedDoc)
+			_, err := ts.SaveObserved(ctx, "container", "worker-456", observed)
 			Expect(err).NotTo(HaveOccurred())
 
-			var observed ParentObservedState
-			err = testStore.LoadObservedTyped(ctx, "parent", "parent-123", &observed)
-			Expect(err).NotTo(HaveOccurred())
-
-			Expect(observed.ID).To(Equal("parent-123"))
-			Expect(observed.Name).To(Equal("TestParent"))
-			Expect(observed.Status).To(Equal("Running"))
-		})
-
-		It("handles type mismatches gracefully", func() {
-			type TypeMismatchState struct {
-				ID    string
-				Count int64
-			}
-
-			observedType := reflect.TypeOf((*TypeMismatchState)(nil)).Elem()
-			testRegistry.Register(&storage.CollectionMetadata{
-				Name:         "typemismatch_observed",
-				WorkerType:   "typemismatch",
-				Role:         storage.RoleObserved,
-				ObservedType: observedType,
-				CSEFields:    []string{storage.FieldSyncID, storage.FieldVersion},
-			})
-
-			testRegistry.Register(&storage.CollectionMetadata{
-				Name:       "typemismatch_identity",
-				WorkerType: "typemismatch",
-				Role:       storage.RoleIdentity,
-				CSEFields:  []string{storage.FieldSyncID, storage.FieldVersion},
-			})
-
-			testRegistry.Register(&storage.CollectionMetadata{
-				Name:       "typemismatch_desired",
-				WorkerType: "typemismatch",
-				Role:       storage.RoleDesired,
-				CSEFields:  []string{storage.FieldSyncID, storage.FieldVersion},
-			})
-
-			observedDoc := persistence.Document{
-				"id":    "mismatch-123",
-				"ID":    "mismatch-123",
-				"Count": "not-a-number",
-			}
-			err := testStore.SaveObserved(ctx, "typemismatch", "mismatch-123", observedDoc)
-			Expect(err).NotTo(HaveOccurred())
-
-			var observed TypeMismatchState
-			err = testStore.LoadObservedTyped(ctx, "typemismatch", "mismatch-123", &observed)
+			var result TestObservedState
+			err = ts.LoadObservedTyped(ctx, "container", "worker-456", &result)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("type"))
+			Expect(err.Error()).To(ContainSubstring("cannot assign"))
 		})
 
-		It("returns ErrNotFound for missing documents", func() {
-			type MissingState struct {
-				ID string
-			}
-
-			observedType := reflect.TypeOf((*MissingState)(nil)).Elem()
-			testRegistry.Register(&storage.CollectionMetadata{
-				Name:         "missing_observed",
-				WorkerType:   "missing",
-				Role:         storage.RoleObserved,
-				ObservedType: observedType,
-				CSEFields:    []string{storage.FieldSyncID, storage.FieldVersion},
-			})
-
-			testRegistry.Register(&storage.CollectionMetadata{
-				Name:       "missing_identity",
-				WorkerType: "missing",
-				Role:       storage.RoleIdentity,
-				CSEFields:  []string{storage.FieldSyncID, storage.FieldVersion},
-			})
-
-			testRegistry.Register(&storage.CollectionMetadata{
-				Name:       "missing_desired",
-				WorkerType: "missing",
-				Role:       storage.RoleDesired,
-				CSEFields:  []string{storage.FieldSyncID, storage.FieldVersion},
-			})
-
-			var observed MissingState
-			err := testStore.LoadObservedTyped(ctx, "missing", "nonexistent", &observed)
+		It("should return ErrNotFound for non-existent document", func() {
+			var result TestObservedState
+			err := ts.LoadObservedTyped(ctx, "container", "nonexistent-worker", &result)
 			Expect(err).To(MatchError(persistence.ErrNotFound))
 		})
 
-		It("handles complex field types (int64, float64, bool, time.Time)", func() {
+		It("should handle complex field types (int64, float64, bool, time.Time)", func() {
 			type ComplexState struct {
-				ID          string
-				Count       int64
-				Temperature float64
-				Active      bool
-				UpdatedAt   time.Time
+				ID        string    `json:"id"`
+				CPU       int64     `json:"cpu"`
+				Memory    float64   `json:"memory"`
+				IsHealthy bool      `json:"is_healthy"`
+				UpdatedAt time.Time `json:"updated_at"`
 			}
 
-			observedType := reflect.TypeOf((*ComplexState)(nil)).Elem()
-			testRegistry.Register(&storage.CollectionMetadata{
-				Name:         "complex_observed",
-				WorkerType:   "complex",
-				Role:         storage.RoleObserved,
-				ObservedType: observedType,
-				CSEFields:    []string{storage.FieldSyncID, storage.FieldVersion},
-			})
-
-			testRegistry.Register(&storage.CollectionMetadata{
-				Name:       "complex_identity",
-				WorkerType: "complex",
-				Role:       storage.RoleIdentity,
-				CSEFields:  []string{storage.FieldSyncID, storage.FieldVersion},
-			})
-
-			testRegistry.Register(&storage.CollectionMetadata{
-				Name:       "complex_desired",
-				WorkerType: "complex",
-				Role:       storage.RoleDesired,
-				CSEFields:  []string{storage.FieldSyncID, storage.FieldVersion},
-			})
-
-			now := time.Now().UTC().Truncate(time.Second)
-			observedDoc := persistence.Document{
-				"id":          "complex-123",
-				"ID":          "complex-123",
-				"Count":       int64(42),
-				"Temperature": float64(98.6),
-				"Active":      true,
-				"UpdatedAt":   now,
+			now := time.Now().UTC().Truncate(time.Millisecond)
+			observed := persistence.Document{
+				"id":         "worker-789",
+				"cpu":        int64(75),
+				"memory":     45.8,
+				"is_healthy": true,
+				"updated_at": now,
 			}
-			err := testStore.SaveObserved(ctx, "complex", "complex-123", observedDoc)
+			_, err := ts.SaveObserved(ctx, "container", "worker-789", observed)
 			Expect(err).NotTo(HaveOccurred())
 
-			var observed ComplexState
-			err = testStore.LoadObservedTyped(ctx, "complex", "complex-123", &observed)
+			var result ComplexState
+			err = ts.LoadObservedTyped(ctx, "container", "worker-789", &result)
 			Expect(err).NotTo(HaveOccurred())
 
-			Expect(observed.ID).To(Equal("complex-123"))
-			Expect(observed.Count).To(Equal(int64(42)))
-			Expect(observed.Temperature).To(Equal(98.6))
-			Expect(observed.Active).To(BeTrue())
-			Expect(observed.UpdatedAt).To(Equal(now))
+			Expect(result.ID).To(Equal("worker-789"))
+			Expect(result.CPU).To(Equal(int64(75)))
+			Expect(result.Memory).To(BeNumerically("~", 45.8, 0.01))
+			Expect(result.IsHealthy).To(BeTrue())
+			Expect(result.UpdatedAt).To(BeTemporally("~", now, time.Millisecond))
 		})
 	})
 })

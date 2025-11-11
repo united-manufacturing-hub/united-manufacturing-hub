@@ -463,6 +463,46 @@ var _ = Describe("Feature Registry", func() {
 	})
 })
 
+var _ = Describe("Registry with Type Metadata", func() {
+	var registry *storage.Registry
+
+	BeforeEach(func() {
+		registry = storage.NewRegistry()
+	})
+
+	Describe("CollectionMetadata type fields", func() {
+		It("stores type metadata in CollectionMetadata", func() {
+			type TestObservedState struct {
+				Name   string
+				Status string
+			}
+			type TestDesiredState struct {
+				Name    string
+				Command string
+			}
+
+			observedType := reflect.TypeOf((*TestObservedState)(nil)).Elem()
+			desiredType := reflect.TypeOf((*TestDesiredState)(nil)).Elem()
+
+			metadata := &storage.CollectionMetadata{
+				Name:         "test_observed",
+				WorkerType:   "test",
+				Role:         storage.RoleObserved,
+				ObservedType: observedType,
+				DesiredType:  desiredType,
+			}
+
+			err := registry.Register(metadata)
+			Expect(err).NotTo(HaveOccurred())
+
+			retrieved, err := registry.Get("test_observed")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(retrieved.ObservedType).To(Equal(observedType))
+			Expect(retrieved.DesiredType).To(Equal(desiredType))
+		})
+	})
+})
+
 var _ = Describe("GlobalRegistry", func() {
 	Describe("Register", func() {
 		It("should register collection in global registry", func() {

@@ -353,7 +353,7 @@ func (ts *TriangularStore) LoadDesired(ctx context.Context, workerType string, i
 //
 // Returns:
 //   - error: If worker type not registered or save fails
-func (ts *TriangularStore) SaveObserved(ctx context.Context, workerType string, id string, observed interface{}) error {
+func (ts *TriangularStore) saveObservedInternal(ctx context.Context, workerType string, id string, observed interface{}) error {
 	// Convert observed to Document if needed
 	observedDoc, err := ts.toDocument(observed)
 	if err != nil {
@@ -407,6 +407,72 @@ func (ts *TriangularStore) SaveObserved(ctx context.Context, workerType string, 
 	return nil
 }
 
+// SaveObserved stores system reality with automatic delta checking.
+//
+// DESIGN DECISION: Built-in delta checking skips unchanged writes
+// WHY: Observed state is polled frequently (500ms default). Most polls
+// return the same data. Skipping redundant writes reduces database load
+// and prevents unnecessary sync_id increments.
+//
+// TRADE-OFF: Additional LoadObserved() call adds one database read per save.
+// Acceptable because in-memory reads are fast and writes are more expensive.
+//
+// Delta checking behavior:
+//   - First save (worker doesn't exist): Always writes, returns (true, nil)
+//   - Data changed: Writes to database, returns (true, nil)
+//   - Data unchanged: Skips write, returns (false, nil)
+//   - Error: Returns (false, err)
+//
+// CSE metadata fields (_sync_id, _version, _created_at, _updated_at) are
+// excluded from change detection. Only user data fields are compared.
+//
+// Parameters:
+//   - ctx: Cancellation context
+//   - workerType: Worker type
+//   - id: Unique worker identifier
+//   - observed: Observed state (persistence.Document or any struct/map)
+//
+// Returns:
+//   - changed: true if data was written to database, false if write was skipped
+//   - err: non-nil if operation failed (changed is always false when err != nil)
+func (ts *TriangularStore) SaveObserved(ctx context.Context, workerType string, id string, observed interface{}) (changed bool, err error) {
+	// Get collection metadata
+	_, _, observedMeta, err := ts.registry.GetTriangularCollections(workerType)
+	if err != nil {
+		return false, fmt.Errorf("worker type %q not registered: %w", workerType, err)
+	}
+
+	// Try to load current state
+	currentDoc, err := ts.LoadObserved(ctx, workerType, id)
+	if errors.Is(err, persistence.ErrNotFound) {
+		// First save - always write
+		err = ts.saveObservedInternal(ctx, workerType, id, observed)
+		return true, err
+	}
+	if err != nil {
+		return false, err
+	}
+
+	// Convert new state to Document
+	newDoc, err := ts.toDocument(observed)
+	if err != nil {
+		return false, err
+	}
+
+	// Filter CSE fields from both documents
+	currentFiltered := ts.filterCSEFields(currentDoc, observedMeta.CSEFields)
+	newFiltered := ts.filterCSEFields(newDoc, observedMeta.CSEFields)
+
+	// Compare filtered documents
+	if reflect.DeepEqual(currentFiltered, newFiltered) {
+		return false, nil // No changes, skip write
+	}
+
+	// Data changed, perform write
+	err = ts.saveObservedInternal(ctx, workerType, id, observed)
+	return true, err
+}
+
 // LoadObserved retrieves system reality.
 //
 // Parameters:
@@ -431,105 +497,64 @@ func (ts *TriangularStore) LoadObserved(ctx context.Context, workerType string, 
 	return doc, nil
 }
 
-// LoadObservedTyped retrieves system reality and deserializes it to a typed struct.
+// LoadObservedTyped retrieves observed state and deserializes into a typed struct.
 //
-// DESIGN DECISION: Use reflection for deserialization
-// WHY: Enables type-safe delta checking (struct comparison is 10x faster than Document comparison)
-// Allows callers to work with typed structs instead of generic Documents.
+// DESIGN DECISION: Provide typed deserialization for type-safe FSM state handling
+// WHY: FSM workers need type-safe access to observed state fields (CPU, Status, etc.)
+// Eliminates type assertions and enables compile-time checking.
+//
+// TRADE-OFF: Slightly more complex than Document access, but much safer.
+// Type mismatches caught at load time, not during FSM execution.
 //
 // Parameters:
 //   - ctx: Cancellation context
-//   - workerType: Worker type
+//   - workerType: Worker type (e.g., "container")
 //   - id: Unique worker identifier
-//   - dest: Pointer to destination struct (must be non-nil pointer)
+//   - dest: Pointer to destination struct (must have json tags matching document fields)
 //
 // Returns:
-//   - error: If worker type not registered, document not found, or deserialization fails
+//   - error: ErrNotFound if not found, or deserialization fails
 //
 // Example:
 //
-//	type ParentObservedState struct {
-//	    ID     string
-//	    Name   string
-//	    Status string
+//	type ContainerObservedState struct {
+//	    ID     string `json:"id"`
+//	    Status string `json:"status"`
+//	    CPU    int64  `json:"cpu"`
 //	}
 //
-//	var observed ParentObservedState
-//	err := ts.LoadObservedTyped(ctx, "parent", "parent-123", &observed)
-//	if err != nil {
-//	    return err
-//	}
-//	fmt.Println(observed.Status) // Type-safe access
+//	var state ContainerObservedState
+//	err := ts.LoadObservedTyped(ctx, "container", "worker-123", &state)
+//	// state.CPU is now type-safe int64, not interface{}
 func (ts *TriangularStore) LoadObservedTyped(ctx context.Context, workerType string, id string, dest interface{}) error {
 	doc, err := ts.LoadObserved(ctx, workerType, id)
 	if err != nil {
 		return err
 	}
 
-	return ts.documentToStruct(doc, dest)
+	return documentToStruct(doc, dest)
 }
 
-// documentToStruct converts a Document map to a typed struct using reflection.
-//
-// DESIGN DECISION: Use reflection for flexible type conversion
-// WHY: Supports any struct type without manual marshaling code
-// Handles field mapping from Document keys to struct field names
-//
-// TRADE-OFF: Runtime overhead from reflection, but acceptable for delta checking use case
-// (saves 100x database writes, reflection cost is negligible)
-//
-// Supported types:
-//   - string, int64, float64, bool (basic types)
-//   - time.Time (handled by reflect.ValueOf)
-//   - Nested fields (recursively converted)
-//
-// Parameters:
-//   - doc: Source Document (map[string]interface{})
-//   - dest: Destination struct pointer (must be non-nil pointer to struct)
-//
-// Returns:
-//   - error: If dest is invalid or type conversion fails
-func (ts *TriangularStore) documentToStruct(doc persistence.Document, dest interface{}) error {
-	if doc == nil {
-		return errors.New("document cannot be nil")
+func (ts *TriangularStore) filterCSEFields(doc persistence.Document, cseFields []string) persistence.Document {
+	filtered := make(persistence.Document)
+	for k, v := range doc {
+		isCSEField := false
+		for _, cseField := range cseFields {
+			if k == cseField {
+				isCSEField = true
+				break
+			}
+		}
+		if !isCSEField {
+			filtered[k] = v
+		}
 	}
 
-	destValue := reflect.ValueOf(dest)
-	if destValue.Kind() != reflect.Ptr || destValue.IsNil() {
-		return errors.New("dest must be non-nil pointer to struct")
-	}
+	return filtered
+}
 
-	destElem := destValue.Elem()
-	if destElem.Kind() != reflect.Struct {
-		return errors.New("dest must point to struct")
-	}
-
-	for i := 0; i < destElem.NumField(); i++ {
-		field := destElem.Type().Field(i)
-		fieldValue := destElem.Field(i)
-
-		if !fieldValue.CanSet() {
-			continue
-		}
-
-		docValue, exists := doc[field.Name]
-		if !exists {
-			continue
-		}
-
-		if docValue == nil {
-			continue
-		}
-
-		docValueReflect := reflect.ValueOf(docValue)
-		if !docValueReflect.Type().AssignableTo(fieldValue.Type()) {
-			return fmt.Errorf("field %q: cannot assign type %s to %s", field.Name, docValueReflect.Type(), fieldValue.Type())
-		}
-
-		fieldValue.Set(docValueReflect)
-	}
-
-	return nil
+func observedCollectionName(workerType string) string {
+	return workerType + "_observed"
 }
 
 // Snapshot represents the complete state of a worker.
@@ -631,63 +656,6 @@ func (ts *TriangularStore) LoadSnapshot(ctx context.Context, workerType string, 
 		Desired:  desired,
 		Observed: observed,
 	}, nil
-}
-
-// DeleteWorker removes all three parts of the triangular model.
-//
-// DESIGN DECISION: Use transaction for atomic delete
-// WHY: Either delete all three parts or none. Partial deletion would leave
-// orphaned state (identity without observed, etc.) causing FSM errors.
-//
-// TRADE-OFF: Transaction overhead, but necessary for data consistency.
-//
-// INSPIRED BY: Database referential integrity (CASCADE DELETE),
-// Linear's entity deletion (removes all related records atomically).
-//
-// Parameters:
-//   - ctx: Cancellation context
-//   - workerType: Worker type
-//   - id: Unique worker identifier
-//
-// Returns:
-//   - error: If transaction fails or any deletion fails
-//
-// Example:
-//
-//	// User deletes worker in UI
-//	err := ts.DeleteWorker(ctx, "container", "worker-123")
-//	// All three collections cleaned up atomically
-func (ts *TriangularStore) DeleteWorker(ctx context.Context, workerType string, id string) error {
-	identityMeta, desiredMeta, observedMeta, err := ts.registry.GetTriangularCollections(workerType)
-	if err != nil {
-		return fmt.Errorf("worker type %q not registered: %w", workerType, err)
-	}
-
-	// Use transaction for atomic delete
-	tx, err := ts.store.BeginTx(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to begin transaction: %w", err)
-	}
-	defer tx.Rollback()
-
-	// Delete all three parts
-	if err := tx.Delete(ctx, identityMeta.Name, id); err != nil && !errors.Is(err, persistence.ErrNotFound) {
-		return fmt.Errorf("failed to delete identity: %w", err)
-	}
-
-	if err := tx.Delete(ctx, desiredMeta.Name, id); err != nil && !errors.Is(err, persistence.ErrNotFound) {
-		return fmt.Errorf("failed to delete desired: %w", err)
-	}
-
-	if err := tx.Delete(ctx, observedMeta.Name, id); err != nil && !errors.Is(err, persistence.ErrNotFound) {
-		return fmt.Errorf("failed to delete observed: %w", err)
-	}
-
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("failed to commit transaction: %w", err)
-	}
-
-	return nil
 }
 
 // injectMetadata adds or updates CSE metadata fields in a document.
@@ -833,4 +801,63 @@ func (ts *TriangularStore) toDocument(v interface{}) (persistence.Document, erro
 	}
 
 	return doc, nil
+}
+
+// documentToStruct deserializes a Document into a typed struct.
+//
+// DESIGN DECISION: Use reflection for flexible type mapping
+// WHY: Supports any struct type without code generation or type-specific logic.
+// Maps document fields to struct fields using json tags.
+//
+// TRADE-OFF: Runtime reflection overhead vs compile-time type safety.
+// Acceptable because this is a persistence boundary operation (infrequent).
+//
+// INSPIRED BY: encoding/json Unmarshal, GORM scan pattern.
+//
+// Parameters:
+//   - doc: Source document (can be nil)
+//   - dest: Pointer to destination struct
+//
+// Returns:
+//   - error: If dest is not a pointer, type mismatch, or field assignment fails
+func documentToStruct(doc persistence.Document, dest interface{}) error {
+	if doc == nil {
+		return persistence.ErrNotFound
+	}
+
+	destVal := reflect.ValueOf(dest)
+	if destVal.Kind() != reflect.Ptr {
+		return fmt.Errorf("dest must be pointer, got %s", destVal.Kind())
+	}
+
+	destElem := destVal.Elem()
+	destType := destElem.Type()
+
+	for i := range destType.NumField() {
+		field := destType.Field(i)
+		jsonTag := field.Tag.Get("json")
+		if jsonTag == "" {
+			jsonTag = field.Name
+		}
+
+		docValue, exists := doc[jsonTag]
+		if !exists {
+			continue
+		}
+
+		fieldVal := destElem.Field(i)
+		if !fieldVal.CanSet() {
+			continue
+		}
+
+		docValueType := reflect.TypeOf(docValue)
+		if !docValueType.AssignableTo(field.Type) {
+			return fmt.Errorf("field %s: cannot assign %s to %s",
+				field.Name, docValueType, field.Type)
+		}
+
+		fieldVal.Set(reflect.ValueOf(docValue))
+	}
+
+	return nil
 }

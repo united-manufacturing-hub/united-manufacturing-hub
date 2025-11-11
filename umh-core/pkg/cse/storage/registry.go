@@ -225,7 +225,6 @@ const (
 //	    Role:          RoleIdentity,
 //	    CSEFields:     []string{FieldSyncID, FieldVersion, FieldCreatedAt, FieldUpdatedAt},
 //	    IndexedFields: []string{FieldSyncID},
-//	    RelatedTo:     []string{"container_desired", "container_observed"},
 //	}
 type CollectionMetadata struct {
 	// Name is the collection name (e.g., "container_identity").
@@ -251,28 +250,12 @@ type CollectionMetadata struct {
 	// Typically includes _sync_id for "WHERE _sync_id > last_synced" queries.
 	IndexedFields []string
 
-	// RelatedTo is a list of related collection names.
-	// Example: container_identity relates to container_desired, container_observed.
-	RelatedTo []string
-
-	// --- Type Registry Fields (Phase 1 - Implemented) ---
-
-	// ObservedType is the Go type for observed state (for deserialization)
-	// Used by TriangularStore to deserialize Documents to typed structs
+	// Type Registry (implemented)
 	ObservedType reflect.Type
+	DesiredType  reflect.Type
 
-	// DesiredType is the Go type for desired state (for deserialization)
-	// Used by TriangularStore to deserialize Documents to typed structs
-	DesiredType reflect.Type
-
-	// --- Data Access Pattern Fields (Phase 1 - Stubs Only) ---
-
-	// Fields contains field-level metadata for data access patterns
-	// STUB: Empty slice for now, will be populated when implementing CSE features
-	Fields []FieldMetadata
-
-	// TypeVersion tracks the schema version for this specific type
-	// STUB: Empty string for now, separate from collection-level SchemaVersion
+	// Data Access Patterns (stubs)
+	Fields      []FieldMetadata
 	TypeVersion string
 }
 

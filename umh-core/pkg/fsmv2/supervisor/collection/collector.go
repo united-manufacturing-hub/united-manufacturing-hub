@@ -21,6 +21,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/metrics"
 	"go.uber.org/zap"
 )
 
@@ -217,15 +218,26 @@ func (c *Collector) collectAndSaveObservedState(ctx context.Context) error {
 
 	saveStartTime := time.Now()
 
-	if err := c.config.Store.SaveObserved(ctx, c.config.WorkerType, c.config.Identity.ID, observed); err != nil {
+	changed, err := c.config.Store.SaveObserved(ctx, c.config.WorkerType, c.config.Identity.ID, observed)
+	if err != nil {
 		c.config.Logger.Debugf("[DataFreshness] Worker %s: Failed to save observation: %v", c.config.Identity.ID, err)
 
 		return err
 	}
 
 	saveDuration := time.Since(saveStartTime)
-	c.config.Logger.Debugf("[DataFreshness] Worker %s: Successfully saved observation (save_duration=%v)",
-		c.config.Identity.ID, saveDuration)
+
+	// Record metrics
+	metrics.RecordObservationSave(c.config.WorkerType, changed, saveDuration)
+
+	// Log result
+	if changed {
+		c.config.Logger.Debugf("[DataFreshness] Worker %s: Successfully saved observation (save_duration=%v, changed=true)",
+			c.config.Identity.ID, saveDuration)
+	} else {
+		c.config.Logger.Debugf("[DataFreshness] Worker %s: Observation unchanged, skipped write (save_duration=%v, changed=false)",
+			c.config.Identity.ID, saveDuration)
+	}
 
 	return nil
 }

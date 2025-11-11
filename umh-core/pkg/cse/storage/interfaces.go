@@ -47,10 +47,11 @@ type TriangularStoreInterface interface {
 	// Returns persistence.ErrNotFound if desired state doesn't exist.
 	LoadDesired(ctx context.Context, workerType string, id string) (persistence.Document, error)
 
-	// SaveObserved stores system reality.
+	// SaveObserved stores system reality with delta checking.
 	// Auto-increments _sync_id for delta synchronization.
 	// Accepts interface{} to support both persistence.Document and typed FSM states.
-	SaveObserved(ctx context.Context, workerType string, id string, observed interface{}) error
+	// Returns (changed bool, error) where changed indicates if data was written.
+	SaveObserved(ctx context.Context, workerType string, id string, observed interface{}) (changed bool, err error)
 
 	// LoadObserved retrieves system state.
 	// Returns persistence.ErrNotFound if observed state doesn't exist.
@@ -60,10 +61,6 @@ type TriangularStoreInterface interface {
 	// Ensures consistent view of worker state at a single point in time.
 	// Returns nil for missing parts (e.g., Observed may be nil before first observation).
 	LoadSnapshot(ctx context.Context, workerType string, id string) (*Snapshot, error)
-
-	// DeleteWorker removes all three parts of a worker atomically.
-	// Used for cleanup when worker is permanently removed.
-	DeleteWorker(ctx context.Context, workerType string, id string) error
 
 	// Registry returns the collection registry for metadata access.
 	// Used for auto-registration and metadata queries.
