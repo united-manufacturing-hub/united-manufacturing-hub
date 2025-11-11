@@ -23,7 +23,8 @@ import (
 // TryingToConnectState represents the state where the worker is attempting to establish a connection
 type TryingToConnectState struct {
 	BaseChildState
-	deps snapshot.ChildDependencies
+	deps            snapshot.ChildDependencies
+	actionSubmitted bool
 }
 
 func NewTryingToConnectState(deps snapshot.ChildDependencies) *TryingToConnectState {
@@ -41,7 +42,12 @@ func (s *TryingToConnectState) Next(snap fsmv2.Snapshot) (fsmv2.State, fsmv2.Sig
 		return NewTryingToStopState(s.deps), fsmv2.SignalNone, nil
 	}
 
-	return NewConnectedState(s.deps), fsmv2.SignalNone, action.NewConnectAction(s.deps)
+	if !s.actionSubmitted {
+		s.actionSubmitted = true
+		return s, fsmv2.SignalNone, action.NewConnectAction(s.deps)
+	}
+
+	return NewConnectedState(s.deps), fsmv2.SignalNone, nil
 }
 
 func (s *TryingToConnectState) String() string {

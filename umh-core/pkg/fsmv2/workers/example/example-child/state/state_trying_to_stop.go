@@ -23,7 +23,8 @@ import (
 // TryingToStopState represents the shutdown state where the worker is closing connections
 type TryingToStopState struct {
 	BaseChildState
-	deps snapshot.ChildDependencies
+	deps            snapshot.ChildDependencies
+	actionSubmitted bool
 }
 
 func NewTryingToStopState(deps snapshot.ChildDependencies) *TryingToStopState {
@@ -31,7 +32,12 @@ func NewTryingToStopState(deps snapshot.ChildDependencies) *TryingToStopState {
 }
 
 func (s *TryingToStopState) Next(_ fsmv2.Snapshot) (fsmv2.State, fsmv2.Signal, fsmv2.Action) {
-	return NewStoppedState(s.deps), fsmv2.SignalNone, action.NewDisconnectAction(s.deps)
+	if !s.actionSubmitted {
+		s.actionSubmitted = true
+		return s, fsmv2.SignalNone, action.NewDisconnectAction(s.deps)
+	}
+
+	return NewStoppedState(s.deps), fsmv2.SignalNone, nil
 }
 
 func (s *TryingToStopState) String() string {

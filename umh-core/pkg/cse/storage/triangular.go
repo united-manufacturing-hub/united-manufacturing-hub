@@ -323,6 +323,32 @@ func (ts *TriangularStore) LoadDesired(ctx context.Context, workerType string, i
 	return doc, nil
 }
 
+// LoadDesiredTyped retrieves desired state and deserializes into a typed struct.
+//
+// DESIGN DECISION: Provide typed deserialization for type-safe FSM state handling
+// WHY: FSM workers need type-safe access to desired state fields
+// Eliminates type assertions and enables compile-time checking.
+//
+// TRADE-OFF: Slightly more complex than Document access, but much safer.
+// Type mismatches caught at load time, not during FSM execution.
+//
+// Parameters:
+//   - ctx: Cancellation context
+//   - workerType: Worker type (e.g., "container")
+//   - id: Unique worker identifier
+//   - dest: Pointer to destination struct (must have json tags matching document fields)
+//
+// Returns:
+//   - error: ErrNotFound if not found, or deserialization fails
+func (ts *TriangularStore) LoadDesiredTyped(ctx context.Context, workerType string, id string, dest interface{}) error {
+	doc, err := ts.LoadDesired(ctx, workerType, id)
+	if err != nil {
+		return err
+	}
+
+	return documentToStruct(doc, dest)
+}
+
 // SaveObserved stores system reality.
 //
 // DESIGN DECISION: Accept interface{} for flexibility with typed states
@@ -805,11 +831,11 @@ func (ts *TriangularStore) toDocument(v interface{}) (persistence.Document, erro
 
 // documentToStruct deserializes a Document into a typed struct.
 //
-// DESIGN DECISION: Use reflection for flexible type mapping
-// WHY: Supports any struct type without code generation or type-specific logic.
-// Maps document fields to struct fields using json tags.
+// DESIGN DECISION: Use JSON marshaling for proper type conversion
+// WHY: Handles complex types like time.Time, nested structs, and slices correctly.
+// JSON round-trip (Document → JSON → struct) ensures proper type conversion.
 //
-// TRADE-OFF: Runtime reflection overhead vs compile-time type safety.
+// TRADE-OFF: Slightly slower than direct field mapping, but much more robust.
 // Acceptable because this is a persistence boundary operation (infrequent).
 //
 // INSPIRED BY: encoding/json Unmarshal, GORM scan pattern.
@@ -819,7 +845,7 @@ func (ts *TriangularStore) toDocument(v interface{}) (persistence.Document, erro
 //   - dest: Pointer to destination struct
 //
 // Returns:
-//   - error: If dest is not a pointer, type mismatch, or field assignment fails
+//   - error: If dest is not a pointer, JSON marshaling fails, or unmarshal fails
 func documentToStruct(doc persistence.Document, dest interface{}) error {
 	if doc == nil {
 		return persistence.ErrNotFound
@@ -830,33 +856,15 @@ func documentToStruct(doc persistence.Document, dest interface{}) error {
 		return fmt.Errorf("dest must be pointer, got %s", destVal.Kind())
 	}
 
-	destElem := destVal.Elem()
-	destType := destElem.Type()
+	// Marshal Document to JSON, then unmarshal to typed struct
+	// This handles time.Time, nested structs, and complex types properly
+	jsonBytes, err := json.Marshal(doc)
+	if err != nil {
+		return fmt.Errorf("failed to marshal document to JSON: %w", err)
+	}
 
-	for i := range destType.NumField() {
-		field := destType.Field(i)
-		jsonTag := field.Tag.Get("json")
-		if jsonTag == "" {
-			jsonTag = field.Name
-		}
-
-		docValue, exists := doc[jsonTag]
-		if !exists {
-			continue
-		}
-
-		fieldVal := destElem.Field(i)
-		if !fieldVal.CanSet() {
-			continue
-		}
-
-		docValueType := reflect.TypeOf(docValue)
-		if !docValueType.AssignableTo(field.Type) {
-			return fmt.Errorf("field %s: cannot assign %s to %s",
-				field.Name, docValueType, field.Type)
-		}
-
-		fieldVal.Set(reflect.ValueOf(docValue))
+	if err := json.Unmarshal(jsonBytes, dest); err != nil {
+		return fmt.Errorf("failed to unmarshal JSON to struct: %w", err)
 	}
 
 	return nil

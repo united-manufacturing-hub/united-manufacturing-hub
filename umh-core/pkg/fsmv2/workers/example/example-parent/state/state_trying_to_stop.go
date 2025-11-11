@@ -23,7 +23,8 @@ import (
 // TryingToStopState represents the state during graceful shutdown
 type TryingToStopState struct {
 	BaseParentState
-	deps snapshot.ParentDependencies
+	deps            snapshot.ParentDependencies
+	actionSubmitted bool
 }
 
 func NewTryingToStopState(deps snapshot.ParentDependencies) *TryingToStopState {
@@ -31,7 +32,12 @@ func NewTryingToStopState(deps snapshot.ParentDependencies) *TryingToStopState {
 }
 
 func (s *TryingToStopState) Next(_ fsmv2.Snapshot) (fsmv2.State, fsmv2.Signal, fsmv2.Action) {
-	return NewStoppedState(s.deps), fsmv2.SignalNone, action.NewStopAction(s.deps)
+	if !s.actionSubmitted {
+		s.actionSubmitted = true
+		return s, fsmv2.SignalNone, action.NewStopAction(s.deps)
+	}
+
+	return NewStoppedState(s.deps), fsmv2.SignalNone, nil
 }
 
 func (s *TryingToStopState) String() string {

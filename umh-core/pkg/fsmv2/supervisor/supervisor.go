@@ -180,6 +180,7 @@ type Supervisor struct {
 	collectorHealth       CollectorHealth                  // Collector health tracking
 	freshnessChecker      *health.FreshnessChecker         // Data freshness validator
 	expectedObservedTypes map[string]reflect.Type          // workerID → expected ObservedState type
+	expectedDesiredTypes  map[string]reflect.Type          // workerID → expected DesiredState type
 	children              map[string]*Supervisor           // Child supervisors by name (hierarchical composition)
 	stateMapping          map[string]string                // Parent→child state mapping
 	userSpec              config.UserSpec                   // User-provided configuration for this supervisor
@@ -393,6 +394,7 @@ func NewSupervisor(cfg Config) *Supervisor {
 		tickInterval:          tickInterval,
 		freshnessChecker:      freshnessChecker,
 		expectedObservedTypes: make(map[string]reflect.Type),
+		expectedDesiredTypes:  make(map[string]reflect.Type),
 		children:              make(map[string]*Supervisor),
 		stateMapping:          make(map[string]string),
 		createdAt:             time.Now(),
@@ -449,10 +451,39 @@ func (s *Supervisor) AddWorker(identity fsmv2.Identity, worker fsmv2.Worker) err
 		return fmt.Errorf("failed to discover worker ObservedState type: %w", err)
 	}
 
-	expectedType := normalizeType(reflect.TypeOf(observed))
-	s.expectedObservedTypes[identity.ID] = expectedType
+	expectedObservedType := normalizeType(reflect.TypeOf(observed))
+	s.expectedObservedTypes[identity.ID] = expectedObservedType
 
-	s.logger.Infof("Registered ObservedState type for worker %s: %s", identity.ID, expectedType)
+	s.logger.Infof("Registered ObservedState type for worker %s: %s", identity.ID, expectedObservedType)
+
+	// Extract DesiredState type from ObservedState if it implements GetObservedDesiredState()
+	// This handles workers where desired state is embedded in observed state
+	var expectedDesiredType reflect.Type
+	if _, ok := expectedObservedType.MethodByName("GetObservedDesiredState"); ok {
+		// If GetObservedDesiredState method exists, look for embedded DesiredState struct
+		for i := 0; i < expectedObservedType.NumField(); i++ {
+			field := expectedObservedType.Field(i)
+			// Look for embedded DesiredState struct
+			if field.Anonymous && field.Type.Kind() == reflect.Struct {
+				// This is likely the embedded desired state
+				expectedDesiredType = normalizeType(field.Type)
+				break
+			}
+		}
+	}
+
+	// Fallback: use DeriveDesiredState if GetObservedDesiredState didn't work
+	if expectedDesiredType == nil {
+		desired, err := worker.DeriveDesiredState(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to derive desired state for type registration: %w", err)
+		}
+		expectedDesiredType = normalizeType(reflect.TypeOf(desired))
+	}
+
+	s.expectedDesiredTypes[identity.ID] = expectedDesiredType
+
+	s.logger.Infof("Registered DesiredState type for worker %s: %s", identity.ID, expectedDesiredType)
 
 	// Save identity to database
 	identityDoc := persistence.Document{
@@ -782,6 +813,38 @@ func (s *Supervisor) tickWorker(ctx context.Context, workerID string) error {
 		Observed: storageSnapshot.Observed, // Document used as ObservedState interface
 	}
 
+	// Convert Document to typed struct if worker expects typed observed state
+	s.mu.RLock()
+	expectedType, exists := s.expectedObservedTypes[workerID]
+	s.mu.RUnlock()
+
+	if exists && expectedType.String() != "persistence.Document" {
+		// Worker expects typed observed state, deserialize from Document
+		observedPtr := reflect.New(expectedType)
+		err := s.store.LoadObservedTyped(ctx, s.workerType, workerID, observedPtr.Interface())
+		if err != nil {
+			s.logger.Debugf("[DataFreshness] Worker %s: Failed to load typed observed state: %v", workerID, err)
+			return fmt.Errorf("failed to load typed observed state: %w", err)
+		}
+		snapshot.Observed = observedPtr.Elem().Interface()
+	}
+
+	// Convert Document to typed struct if worker expects typed desired state
+	s.mu.RLock()
+	expectedDesiredType, desiredExists := s.expectedDesiredTypes[workerID]
+	s.mu.RUnlock()
+
+	if desiredExists && expectedDesiredType.String() != "persistence.Document" {
+		// Worker expects typed desired state, deserialize from Document
+		desiredPtr := reflect.New(expectedDesiredType)
+		err := s.store.LoadDesiredTyped(ctx, s.workerType, workerID, desiredPtr.Interface())
+		if err != nil {
+			s.logger.Debugf("[DataFreshness] Worker %s: Failed to load typed desired state: %v", workerID, err)
+			return fmt.Errorf("failed to load typed desired state: %w", err)
+		}
+		snapshot.Desired = desiredPtr.Elem().Interface()
+	}
+
 	// Log loaded observation details
 	if snapshot.Observed == nil {
 		s.logger.Debugf("[DataFreshness] Worker %s: Loaded snapshot has nil Observed state", workerID)
@@ -795,27 +858,19 @@ func (s *Supervisor) tickWorker(ctx context.Context, workerID string) error {
 	// I16: Validate ObservedState type before calling state.Next()
 	// This is Layer 3.5: Supervisor-level type validation BEFORE state logic
 	// MUST happen before CheckDataFreshness because freshness check dereferences Observed
-	s.mu.RLock()
-	expectedType, exists := s.expectedObservedTypes[workerID]
-	s.mu.RUnlock()
+	// NOTE: Type validation is now implicit - LoadObservedTyped() already deserialized
+	// to the expected type above. This check verifies the type matches expectations.
+	if snapshot.Observed != nil {
+		s.mu.RLock()
+		expectedType, exists := s.expectedObservedTypes[workerID]
+		s.mu.RUnlock()
 
-	if exists {
-		if snapshot.Observed == nil {
-			panic(fmt.Sprintf("Invariant I16 violated: Worker %s returned nil ObservedState", workerID))
-		}
-
-		actualType := normalizeType(reflect.TypeOf(snapshot.Observed))
-		// Skip type check for Documents loaded from storage
-		//
-		// TYPE INFORMATION LOSS (Acceptable for MVP):
-		// TriangularStore.LoadSnapshot() returns persistence.Document, NOT typed structs.
-		// This is because we persist as JSON without type metadata for deserialization.
-		// Communicator can work with Documents via reflection, so this is acceptable.
-		//
-		// See pkg/cse/storage/triangular.go LoadSnapshot() documentation for full rationale.
-		if actualType.String() != "persistence.Document" && actualType != expectedType {
-			panic(fmt.Sprintf("Invariant I16 violated: Worker %s (type %s) returned ObservedState type %s, expected %s",
-				workerID, s.workerType, actualType, expectedType))
+		if exists {
+			actualType := normalizeType(reflect.TypeOf(snapshot.Observed))
+			if actualType != expectedType {
+				panic(fmt.Sprintf("Invariant I16 violated: Worker %s (type %s) has ObservedState type %s, expected %s",
+					workerID, s.workerType, actualType, expectedType))
+			}
 		}
 	}
 

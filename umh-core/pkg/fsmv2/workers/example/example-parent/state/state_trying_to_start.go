@@ -23,7 +23,8 @@ import (
 // TryingToStartState represents the state while loading config and spawning children
 type TryingToStartState struct {
 	BaseParentState
-	deps snapshot.ParentDependencies
+	deps            snapshot.ParentDependencies
+	actionSubmitted bool
 }
 
 func NewTryingToStartState(deps snapshot.ParentDependencies) *TryingToStartState {
@@ -41,7 +42,12 @@ func (s *TryingToStartState) Next(snap fsmv2.Snapshot) (fsmv2.State, fsmv2.Signa
 		return NewTryingToStopState(s.deps), fsmv2.SignalNone, nil
 	}
 
-	return NewRunningState(s.deps), fsmv2.SignalNone, action.NewStartAction(s.deps)
+	if !s.actionSubmitted {
+		s.actionSubmitted = true
+		return s, fsmv2.SignalNone, action.NewStartAction(s.deps)
+	}
+
+	return NewRunningState(s.deps), fsmv2.SignalNone, nil
 }
 
 func (s *TryingToStartState) String() string {
