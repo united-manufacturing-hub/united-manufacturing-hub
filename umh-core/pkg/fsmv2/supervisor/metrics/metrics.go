@@ -224,6 +224,27 @@ var (
 		},
 		[]string{"supervisor_id"},
 	)
+
+	observationSaveTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: namespace,
+			Subsystem: subsystem,
+			Name:      "observation_save_total",
+			Help:      "Total number of observation save attempts",
+		},
+		[]string{"worker_type", "changed"},
+	)
+
+	observationSaveDuration = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Namespace: namespace,
+			Subsystem: subsystem,
+			Name:      "observation_save_duration_seconds",
+			Help:      "Duration of observation save operations (including delta checking)",
+			Buckets:   prometheus.DefBuckets,
+		},
+		[]string{"worker_type", "changed"},
+	)
 )
 
 func RecordCircuitOpen(supervisorID string, open bool) {
@@ -303,6 +324,16 @@ func RecordHierarchyDepth(supervisorID string, depth int) {
 
 func RecordHierarchySize(supervisorID string, size int) {
 	hierarchySize.WithLabelValues(supervisorID).Set(float64(size))
+}
+
+func RecordObservationSave(workerType string, changed bool, duration time.Duration) {
+	changedStr := "false"
+	if changed {
+		changedStr = "true"
+	}
+
+	observationSaveTotal.WithLabelValues(workerType, changedStr).Inc()
+	observationSaveDuration.WithLabelValues(workerType, changedStr).Observe(duration.Seconds())
 }
 
 // GetHierarchyDepthGauge returns the hierarchy depth gauge for testing.
