@@ -240,22 +240,6 @@ func (m *mockStore) LoadSnapshot(ctx context.Context, workerType string, id stri
 	}, nil
 }
 
-func (m *mockStore) DeleteWorker(ctx context.Context, workerType string, id string) error {
-	if m.identity[workerType] != nil {
-		delete(m.identity[workerType], id)
-	}
-
-	if m.desired[workerType] != nil {
-		delete(m.desired[workerType], id)
-	}
-
-	if m.observed[workerType] != nil {
-		delete(m.observed[workerType], id)
-	}
-
-	return m.saveErr
-}
-
 func (m *mockStore) Registry() *storage.Registry {
 	return storage.NewRegistry()
 }
@@ -403,7 +387,6 @@ type mockTriangularStore struct {
 	SaveObservedErr error
 	LoadObservedErr error
 	LoadSnapshotErr error
-	DeleteWorkerErr error
 
 	identity map[string]map[string]persistence.Document
 	desired  map[string]map[string]persistence.Document
@@ -564,26 +547,6 @@ func (m *mockTriangularStore) LoadSnapshot(ctx context.Context, workerType strin
 	}
 
 	return snapshot, nil
-}
-
-func (m *mockTriangularStore) DeleteWorker(ctx context.Context, workerType string, id string) error {
-	if m.DeleteWorkerErr != nil {
-		return m.DeleteWorkerErr
-	}
-
-	if m.identity[workerType] != nil {
-		delete(m.identity[workerType], id)
-	}
-
-	if m.desired[workerType] != nil {
-		delete(m.desired[workerType], id)
-	}
-
-	if m.Observed[workerType] != nil {
-		delete(m.Observed[workerType], id)
-	}
-
-	return nil
 }
 
 func (m *mockTriangularStore) Registry() *storage.Registry {

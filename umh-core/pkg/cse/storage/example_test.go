@@ -44,7 +44,6 @@ func Example_basicUsage() {
 		Role:          storage.RoleIdentity,
 		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
 		IndexedFields: []string{storage.FieldSyncID},
-		RelatedTo:     []string{"container_desired", "container_observed"},
 	})
 	if err != nil {
 		log.Fatalf("Failed to register collection: %v", err)

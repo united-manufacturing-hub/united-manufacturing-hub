@@ -217,7 +217,6 @@ type FieldMetadata struct {
 //	    Role:          RoleIdentity,
 //	    CSEFields:     []string{FieldSyncID, FieldVersion, FieldCreatedAt, FieldUpdatedAt},
 //	    IndexedFields: []string{FieldSyncID},
-//	    RelatedTo:     []string{"container_desired", "container_observed"},
 //	}
 type CollectionMetadata struct {
 	// Name is the collection name (e.g., "container_identity").
@@ -242,10 +241,6 @@ type CollectionMetadata struct {
 	// IndexedFields are fields with database indexes for sync queries.
 	// Typically includes _sync_id for "WHERE _sync_id > last_synced" queries.
 	IndexedFields []string
-
-	// RelatedTo is a list of related collection names.
-	// Example: container_identity relates to container_desired, container_observed.
-	RelatedTo []string
 
 	// Type Registry (implemented)
 	ObservedType reflect.Type
