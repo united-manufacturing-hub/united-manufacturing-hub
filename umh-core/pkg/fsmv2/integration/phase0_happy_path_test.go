@@ -34,35 +34,43 @@ import (
 	child "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/example-child"
 )
 
-func setupTestStore(ctx context.Context, workerType string) *storage.TriangularStore {
+func setupTestStore(ctx context.Context, workerTypes ...string) *storage.TriangularStore {
 	basicStore := memory.NewInMemoryStore()
 
 	registry := storage.NewRegistry()
-	registry.Register(&storage.CollectionMetadata{
-		Name:          workerType + "_identity",
-		WorkerType:    workerType,
-		Role:          storage.RoleIdentity,
-		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt},
-		IndexedFields: []string{storage.FieldSyncID},
-	})
-	registry.Register(&storage.CollectionMetadata{
-		Name:          workerType + "_desired",
-		WorkerType:    workerType,
-		Role:          storage.RoleDesired,
-		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
-		IndexedFields: []string{storage.FieldSyncID},
-	})
-	registry.Register(&storage.CollectionMetadata{
-		Name:          workerType + "_observed",
-		WorkerType:    workerType,
-		Role:          storage.RoleObserved,
-		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
-		IndexedFields: []string{storage.FieldSyncID},
-	})
 
-	_ = basicStore.CreateCollection(ctx, workerType+"_identity", nil)
-	_ = basicStore.CreateCollection(ctx, workerType+"_desired", nil)
-	_ = basicStore.CreateCollection(ctx, workerType+"_observed", nil)
+	// If no worker types provided, default to parent.WorkerType
+	if len(workerTypes) == 0 {
+		workerTypes = []string{parent.WorkerType}
+	}
+
+	for _, workerType := range workerTypes {
+		registry.Register(&storage.CollectionMetadata{
+			Name:          workerType + "_identity",
+			WorkerType:    workerType,
+			Role:          storage.RoleIdentity,
+			CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt},
+			IndexedFields: []string{storage.FieldSyncID},
+		})
+		registry.Register(&storage.CollectionMetadata{
+			Name:          workerType + "_desired",
+			WorkerType:    workerType,
+			Role:          storage.RoleDesired,
+			CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
+			IndexedFields: []string{storage.FieldSyncID},
+		})
+		registry.Register(&storage.CollectionMetadata{
+			Name:          workerType + "_observed",
+			WorkerType:    workerType,
+			Role:          storage.RoleObserved,
+			CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
+			IndexedFields: []string{storage.FieldSyncID},
+		})
+
+		_ = basicStore.CreateCollection(ctx, workerType+"_identity", nil)
+		_ = basicStore.CreateCollection(ctx, workerType+"_desired", nil)
+		_ = basicStore.CreateCollection(ctx, workerType+"_observed", nil)
+	}
 
 	return storage.NewTriangularStore(basicStore, registry)
 }
@@ -101,7 +109,7 @@ var _ = Describe("Phase 0: Happy Path Integration", func() {
 			By("Step 1: Registering parent worker type in factory")
 
 			factory.RegisterWorkerType(parent.WorkerType, func(identity fsmv2.Identity) fsmv2.Worker {
-				mockConfigLoader := &MockConfigLoader{}
+				mockConfigLoader := NewParentConfig().WithChildren(1)
 				return parent.NewParentWorker(identity.ID, identity.Name, mockConfigLoader, logger)
 			})
 
@@ -124,7 +132,7 @@ var _ = Describe("Phase 0: Happy Path Integration", func() {
 
 			By("Step 3: Verifying worker has expected initial state")
 
-			mockStore := setupTestStore(ctx, parent.WorkerType)
+			mockStore := setupTestStore(ctx, parent.WorkerType, child.WorkerType)
 
 			parentSupervisor = supervisor.NewSupervisor(supervisor.Config{
 				WorkerType:   parent.WorkerType,
@@ -198,7 +206,7 @@ var _ = Describe("Phase 0: Happy Path Integration", func() {
 			By("Step 1: Registering child worker type in factory")
 
 			factory.RegisterWorkerType(parent.WorkerType, func(identity fsmv2.Identity) fsmv2.Worker {
-				mockConfigLoader := &MockConfigLoader{}
+				mockConfigLoader := NewParentConfig().WithChildren(1)
 				return parent.NewParentWorker(identity.ID, identity.Name, mockConfigLoader, logger)
 			})
 
@@ -219,7 +227,7 @@ var _ = Describe("Phase 0: Happy Path Integration", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(parentWorker).NotTo(BeNil())
 
-			mockStore := setupTestStore(ctx, parent.WorkerType)
+			mockStore := setupTestStore(ctx, parent.WorkerType, child.WorkerType)
 
 			parentSupervisor = supervisor.NewSupervisor(supervisor.Config{
 				WorkerType:   parent.WorkerType,
@@ -239,9 +247,10 @@ var _ = Describe("Phase 0: Happy Path Integration", func() {
 				return state
 			}, "5s", "100ms").Should(Equal("Running"))
 
-			By("Step 2: Requesting parent shutdown")
+			By("Step 2: Requesting parent shutdown via FSM")
 
-			parentSupervisor.Shutdown()
+			err = parentSupervisor.RequestShutdown(ctx, parentIdentity.ID, "test shutdown")
+			Expect(err).NotTo(HaveOccurred())
 
 			By("Step 3: Verifying parent transitions to Stopped")
 
