@@ -93,10 +93,10 @@ var _ = Describe("Phase 0: Happy Path Integration", func() {
 	})
 
 	AfterEach(func() {
+		cancel() // Cancel context FIRST so tick loop exits
 		if parentSupervisor != nil {
-			parentSupervisor.Shutdown()
+			parentSupervisor.Shutdown() // Then wait for shutdown
 		}
-		cancel()
 
 		Eventually(func() int {
 			runtime.GC()
