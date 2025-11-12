@@ -1436,12 +1436,14 @@ func (s *Supervisor) reconcileChildren(specs []config.ChildSpec) error {
 			// Use factory to create worker instance
 			childWorker, err := factory.NewWorker(spec.WorkerType, childIdentity)
 			if err != nil {
-				return fmt.Errorf("failed to create worker for child %s: %w", spec.Name, err)
+				s.logger.Errorf("Failed to create worker for child %s: %v (skipping)", spec.Name, err)
+				continue
 			}
 
 			// Add worker to child supervisor
 			if err := childSupervisor.AddWorker(childIdentity, childWorker); err != nil {
-				return fmt.Errorf("failed to add worker to child supervisor %s: %w", spec.Name, err)
+				s.logger.Errorf("Failed to add worker to child supervisor %s: %v (skipping)", spec.Name, err)
+				continue
 			}
 
 			// Save initial desired state for child (empty document to avoid nil on first tick)
@@ -1458,9 +1460,12 @@ func (s *Supervisor) reconcileChildren(specs []config.ChildSpec) error {
 			s.children[spec.Name] = childSupervisor
 
 			// Start child supervisor if parent is already started
-			if s.isStarted() {
-				childCtx := s.getContext()
-				childSupervisor.Start(childCtx)
+			if childCtx, started := s.getStartedContext(); started {
+				if childCtx.Err() == nil {
+					childSupervisor.Start(childCtx)
+				} else {
+					s.logger.Warnf("Parent context cancelled, skipping child start for %s", spec.Name)
+				}
 			}
 		}
 	}
@@ -1663,6 +1668,18 @@ func (s *Supervisor) getContext() context.Context {
 	s.ctxMu.RLock()
 	defer s.ctxMu.RUnlock()
 	return s.ctx
+}
+
+// getStartedContext atomically checks if started and returns context.
+// This prevents TOCTOU races between isStarted() and getContext() calls.
+func (s *Supervisor) getStartedContext() (context.Context, bool) {
+	s.ctxMu.RLock()
+	defer s.ctxMu.RUnlock()
+
+	if !s.started.Load() {
+		return nil, false
+	}
+	return s.ctx, true
 }
 
 // GetWorkers returns all worker IDs currently managed by this supervisor.
