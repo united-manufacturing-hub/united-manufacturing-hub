@@ -221,11 +221,16 @@ var _ = Describe("Phase 0: Parent-Child Lifecycle", func() {
 				return childSup
 			}, "10s", "100ms").ShouldNot(BeNil())
 
+			By("Verifying child supervisor has worker registered")
+			Expect(childSup).ToNot(BeNil(), "child supervisor should exist")
+			childWorkers := childSup.GetWorkers()
+			Expect(childWorkers).To(HaveLen(1), "child supervisor should have exactly one worker")
+
 			Eventually(func() string {
 				if childSup == nil {
 					return ""
 				}
-				return GetWorkerStateName(childSup, "child-001")
+				return GetWorkerStateName(childSup, "child-0-001")
 			}, "10s", "100ms").Should(Equal("Connected"))
 
 			By("Verifying both parent and child remain stable for 10 seconds")
@@ -238,7 +243,7 @@ var _ = Describe("Phase 0: Parent-Child Lifecycle", func() {
 				if childSup == nil {
 					return ""
 				}
-				return GetWorkerStateName(childSup, "child-001")
+				return GetWorkerStateName(childSup, "child-0-001")
 			}, "10s", "500ms").Should(Equal("Connected"))
 
 			By("Cancelling context for clean shutdown")

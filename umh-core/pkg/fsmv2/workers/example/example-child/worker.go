@@ -45,6 +45,11 @@ func NewChildWorker(
 ) *ChildWorker {
 	dependencies := NewChildDependencies(connectionPool, logger)
 
+	conn, err := connectionPool.Acquire()
+	if err != nil {
+		logger.Warnf("Failed to acquire initial connection: %v", err)
+	}
+
 	return &ChildWorker{
 		BaseWorker: fsmv2.NewBaseWorker(dependencies),
 		identity: fsmv2.Identity{
@@ -52,7 +57,8 @@ func NewChildWorker(
 			Name:       name,
 			WorkerType: WorkerType,
 		},
-		logger: logger,
+		logger:     logger,
+		connection: conn,
 	}
 }
 

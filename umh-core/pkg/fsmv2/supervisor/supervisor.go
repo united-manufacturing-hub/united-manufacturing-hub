@@ -194,6 +194,9 @@ type Supervisor struct {
 	actionExecutor        *execution.ActionExecutor        // Async action execution (Phase 2)
 	metricsStopChan       chan struct{}                    // Channel to stop metrics reporter
 	metricsReporterDone   chan struct{}                    // Channel signaling metrics reporter stopped
+	ctx                   context.Context                  // Context for supervisor lifecycle
+	ctxMu                 sync.RWMutex                     // Protects ctx access
+	started               atomic.Bool                      // Whether supervisor has been started
 }
 
 // WorkerContext encapsulates the runtime state for a single worker
@@ -703,6 +706,11 @@ func (s *Supervisor) CheckDataFreshness(snapshot *fsmv2.Snapshot) bool {
 func (s *Supervisor) Start(ctx context.Context) <-chan struct{} {
 	done := make(chan struct{})
 
+	s.ctxMu.Lock()
+	s.ctx = ctx
+	s.ctxMu.Unlock()
+	s.started.Store(true)
+
 	s.logger.Debugf("Supervisor started for workerType: %s", s.workerType)
 
 	s.actionExecutor.Start(ctx)
@@ -733,7 +741,7 @@ func (s *Supervisor) Start(ctx context.Context) <-chan struct{} {
 }
 
 // tickLoop is the main FSM loop.
-// Calls state.Next() and executes actions for all workers.
+// Calls Tick() which includes hierarchical composition (Phase 0) and worker state transitions.
 func (s *Supervisor) tickLoop(ctx context.Context) {
 	s.logger.Info("Starting tick loop for supervisor")
 
@@ -749,21 +757,8 @@ func (s *Supervisor) tickLoop(ctx context.Context) {
 
 			return
 		case <-ticker.C:
-			s.mu.RLock()
-
-			workerIDs := make([]string, 0, len(s.workers))
-			for id := range s.workers {
-				workerIDs = append(workerIDs, id)
-			}
-
-			s.mu.RUnlock()
-
-			s.logger.Debugf("Tick: processing %d workers", len(workerIDs))
-
-			for _, workerID := range workerIDs {
-				if err := s.tickWorker(ctx, workerID); err != nil {
-					s.logger.Errorf("Tick error for worker %s: %v", workerID, err)
-				}
+			if err := s.Tick(ctx); err != nil {
+				s.logger.Errorf("Tick error: %v", err)
 			}
 		}
 	}
@@ -1417,7 +1412,6 @@ func (s *Supervisor) reconcileChildren(specs []config.ChildSpec) error {
 			updatedCount++
 		} else {
 			s.logger.Infof("Adding child %s with worker type %s", spec.Name, spec.WorkerType)
-
 			addedCount++
 
 			childConfig := Config{
@@ -1426,26 +1420,48 @@ func (s *Supervisor) reconcileChildren(specs []config.ChildSpec) error {
 				Logger:     s.logger,
 			}
 
-			// TODO(ENG-3806): Use WorkerFactory for dynamic worker creation
-			// Currently using direct NewSupervisor() instantiation.
-			// When WorkerFactory is integrated (Phase 0.2), replace with:
-			//   worker, err := factory.NewWorker(spec.WorkerType, childIdentity)
-			//   if err != nil { return fmt.Errorf("failed to create worker: %w", err) }
-			//   childConfig.Worker = worker
 			childSupervisor := NewSupervisor(childConfig)
-
-			// TODO(ENG-3806): Implement storage isolation for children
-			// Each child should get isolated storage via s.store.ChildStore(spec.Name).
-			// Currently all children share parent's storage namespace.
-			// When ChildStore() is implemented, replace s.store with:
-			//   childStore := s.store.ChildStore(spec.Name)
-			//   childConfig.Store = childStore
 			childSupervisor.UpdateUserSpec(spec.UserSpec)
 			childSupervisor.stateMapping = spec.StateMapping
 			childSupervisor.parentID = s.workerType
 			childSupervisor.parent = s
 
+			// Create worker identity
+			childIdentity := fsmv2.Identity{
+				ID:         fmt.Sprintf("%s-001", spec.Name),
+				Name:       spec.Name,
+				WorkerType: spec.WorkerType,
+			}
+
+			// Use factory to create worker instance
+			childWorker, err := factory.NewWorker(spec.WorkerType, childIdentity)
+			if err != nil {
+				return fmt.Errorf("failed to create worker for child %s: %w", spec.Name, err)
+			}
+
+			// Add worker to child supervisor
+			if err := childSupervisor.AddWorker(childIdentity, childWorker); err != nil {
+				return fmt.Errorf("failed to add worker to child supervisor %s: %w", spec.Name, err)
+			}
+
+			// Save initial desired state for child (empty document to avoid nil on first tick)
+			childDesiredCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			desiredDoc := persistence.Document{
+				"id":                 childIdentity.ID,
+				"shutdownRequested": false,
+			}
+			if err := s.store.SaveDesired(childDesiredCtx, spec.WorkerType, childIdentity.ID, desiredDoc); err != nil {
+				s.logger.Warnf("Failed to save initial desired state for child %s: %v", spec.Name, err)
+			}
+			cancel()
+
 			s.children[spec.Name] = childSupervisor
+
+			// Start child supervisor if parent is already started
+			if s.isStarted() {
+				childCtx := s.getContext()
+				childSupervisor.Start(childCtx)
+			}
 		}
 	}
 
@@ -1635,4 +1651,32 @@ func (s *Supervisor) recordHierarchyMetrics() {
 
 	metrics.RecordHierarchyDepth(s.workerType, depth)
 	metrics.RecordHierarchySize(s.workerType, size)
+}
+
+// isStarted returns whether the supervisor has been started.
+func (s *Supervisor) isStarted() bool {
+	return s.started.Load()
+}
+
+// getContext returns the current context for the supervisor.
+func (s *Supervisor) getContext() context.Context {
+	s.ctxMu.RLock()
+	defer s.ctxMu.RUnlock()
+	return s.ctx
+}
+
+// GetWorkers returns all worker IDs currently managed by this supervisor.
+func (s *Supervisor) GetWorkers() []fsmv2.Identity {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	workers := make([]fsmv2.Identity, 0, len(s.workers))
+	for id := range s.workers {
+		workers = append(workers, fsmv2.Identity{
+			ID:         id,
+			Name:       s.workers[id].identity.Name,
+			WorkerType: s.workerType,
+		})
+	}
+	return workers
 }
