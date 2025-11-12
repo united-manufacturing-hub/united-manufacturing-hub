@@ -390,6 +390,9 @@ func (ts *TriangularStore) saveObservedInternal(ctx context.Context, workerType 
 		return errors.New("toDocument returned nil document")
 	}
 
+	// Add required 'id' field for document validation
+	observedDoc["id"] = id
+
 	// Validate document has required fields
 	if err := ts.validateDocument(observedDoc); err != nil {
 		return fmt.Errorf("invalid observed document: %w", err)

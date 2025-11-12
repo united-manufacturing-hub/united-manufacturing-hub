@@ -136,7 +136,8 @@ var _ = Describe("Phase 0: Happy Path Integration", func() {
 			err = parentSupervisor.AddWorker(parentIdentity, parentWorker)
 			Expect(err).NotTo(HaveOccurred())
 
-			<-parentSupervisor.Start(ctx)
+			done := parentSupervisor.Start(ctx)
+			Expect(done).NotTo(BeNil())
 
 			By("Step 4: Verifying parent transitions to Running")
 
@@ -230,7 +231,8 @@ var _ = Describe("Phase 0: Happy Path Integration", func() {
 			err = parentSupervisor.AddWorker(parentIdentity, parentWorker)
 			Expect(err).NotTo(HaveOccurred())
 
-			<-parentSupervisor.Start(ctx)
+			done := parentSupervisor.Start(ctx)
+			Expect(done).NotTo(BeNil())
 
 			Eventually(func() string {
 				state, _, _ := parentSupervisor.GetWorkerState(parentIdentity.ID)
@@ -294,7 +296,8 @@ var _ = Describe("Phase 0: Happy Path Integration", func() {
 			err = parentSupervisor.AddWorker(parentIdentity, parentWorker)
 			Expect(err).NotTo(HaveOccurred())
 
-			<-parentSupervisor.Start(ctx)
+			done := parentSupervisor.Start(ctx)
+			Expect(done).NotTo(BeNil())
 
 			By("Step 3: Waiting for parent and child to be Running/Connected")
 
@@ -307,7 +310,14 @@ var _ = Describe("Phase 0: Happy Path Integration", func() {
 
 			parentSupervisor.Shutdown()
 
+			// Cancel context to stop tick loop and wait for completion
+			cancel()
+			<-done
+
 			By("Step 5: Verifying no goroutine leaks")
+
+			// Recreate context for AfterEach
+			ctx, cancel = context.WithCancel(context.Background())
 
 			Eventually(func() int {
 				runtime.GC()
@@ -343,7 +353,8 @@ var _ = Describe("Phase 0: Happy Path Integration", func() {
 			err := parentSupervisor.AddWorker(testIdentity, testWorker)
 			Expect(err).NotTo(HaveOccurred())
 
-			<-parentSupervisor.Start(ctx)
+			done := parentSupervisor.Start(ctx)
+			Expect(done).NotTo(BeNil())
 
 			By("Step 3: Waiting for worker to reach Running state")
 

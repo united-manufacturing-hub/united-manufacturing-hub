@@ -34,6 +34,7 @@ package supervisor
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"reflect"
@@ -182,6 +183,7 @@ type Supervisor struct {
 	expectedObservedTypes map[string]reflect.Type          // workerID → expected ObservedState type
 	expectedDesiredTypes  map[string]reflect.Type          // workerID → expected DesiredState type
 	children              map[string]*Supervisor           // Child supervisors by name (hierarchical composition)
+	childDoneChans        map[string]<-chan struct{}       // Done channels for child supervisors
 	stateMapping          map[string]string                // Parent→child state mapping
 	userSpec              config.UserSpec                   // User-provided configuration for this supervisor
 	mappedParentState     string                           // State mapped from parent (if this is a child supervisor)
@@ -399,6 +401,7 @@ func NewSupervisor(cfg Config) *Supervisor {
 		expectedObservedTypes: make(map[string]reflect.Type),
 		expectedDesiredTypes:  make(map[string]reflect.Type),
 		children:              make(map[string]*Supervisor),
+		childDoneChans:        make(map[string]<-chan struct{}),
 		stateMapping:          make(map[string]string),
 		createdAt:             time.Now(),
 		parentID:              "", // Root supervisor has empty parentID
@@ -475,13 +478,24 @@ func (s *Supervisor) AddWorker(identity fsmv2.Identity, worker fsmv2.Worker) err
 		}
 	}
 
-	// Fallback: use DeriveDesiredState if GetObservedDesiredState didn't work
+	// Derive initial desired state using DeriveDesiredState (always, for both paths)
+	// This ensures we get the correct initial desired state, not zero values
+	var initialDesired fsmv2.DesiredState
 	if expectedDesiredType == nil {
-		desired, err := worker.DeriveDesiredState(ctx)
+		// Fallback path: no GetObservedDesiredState, use DeriveDesiredState for both type and value
+		desired, err := worker.DeriveDesiredState(nil)
 		if err != nil {
 			return fmt.Errorf("failed to derive desired state for type registration: %w", err)
 		}
 		expectedDesiredType = normalizeType(reflect.TypeOf(desired))
+		initialDesired = desired
+	} else {
+		// GetObservedDesiredState path: we have the type, now get the initial value
+		desired, err := worker.DeriveDesiredState(nil)
+		if err != nil {
+			return fmt.Errorf("failed to derive initial desired state: %w", err)
+		}
+		initialDesired = desired
 	}
 
 	s.expectedDesiredTypes[identity.ID] = expectedDesiredType
@@ -501,12 +515,50 @@ func (s *Supervisor) AddWorker(identity fsmv2.Identity, worker fsmv2.Worker) err
 	s.logger.Debugf("Saved identity for worker: %s", identity.ID)
 
 	// Save initial observation to database for immediate availability
-	_, err = s.store.SaveObserved(ctx, s.workerType, identity.ID, observed)
+	// Convert ObservedState to persistence.Document using JSON marshaling
+	observedJSON, err := json.Marshal(observed)
+	if err != nil {
+		return fmt.Errorf("failed to marshal observed state: %w", err)
+	}
+
+	var observedDoc persistence.Document
+	if err := json.Unmarshal(observedJSON, &observedDoc); err != nil {
+		return fmt.Errorf("failed to unmarshal observed state to document: %w", err)
+	}
+
+	// Add required 'id' field for document validation
+	observedDoc["id"] = identity.ID
+
+	_, err = s.store.SaveObserved(ctx, s.workerType, identity.ID, observedDoc)
 	if err != nil {
 		return fmt.Errorf("failed to save initial observation: %w", err)
 	}
 
 	s.logger.Debugf("Saved initial observation for worker: %s", identity.ID)
+
+	// Save initial desired state to database if we derived it
+	if initialDesired != nil {
+		// Convert DesiredState to persistence.Document using JSON marshaling
+		desiredJSON, err := json.Marshal(initialDesired)
+		if err != nil {
+			return fmt.Errorf("failed to marshal desired state: %w", err)
+		}
+
+		var desiredDoc persistence.Document
+		if err := json.Unmarshal(desiredJSON, &desiredDoc); err != nil {
+			return fmt.Errorf("failed to unmarshal desired state to document: %w", err)
+		}
+
+		// Add required 'id' field for document validation
+		desiredDoc["id"] = identity.ID
+
+		err = s.store.SaveDesired(ctx, s.workerType, identity.ID, desiredDoc)
+		if err != nil {
+			return fmt.Errorf("failed to save initial desired state: %w", err)
+		}
+
+		s.logger.Debugf("Saved initial desired state for worker: %s", identity.ID)
+	}
 
 	collector := collection.NewCollector(collection.CollectorConfig{
 		Worker:              worker,
@@ -1462,7 +1514,8 @@ func (s *Supervisor) reconcileChildren(specs []config.ChildSpec) error {
 			// Start child supervisor if parent is already started
 			if childCtx, started := s.getStartedContext(); started {
 				if childCtx.Err() == nil {
-					childSupervisor.Start(childCtx)
+					done := childSupervisor.Start(childCtx)
+					s.childDoneChans[spec.Name] = done
 				} else {
 					s.logger.Warnf("Parent context cancelled, skipping child start for %s", spec.Name)
 				}
@@ -1477,6 +1530,12 @@ func (s *Supervisor) reconcileChildren(specs []config.ChildSpec) error {
 			child := s.children[name]
 			if child != nil {
 				child.Shutdown()
+
+				// Wait for child to fully shut down before removing
+				if done, exists := s.childDoneChans[name]; exists {
+					<-done
+					delete(s.childDoneChans, name)
+				}
 			}
 
 			delete(s.children, name)
@@ -1508,15 +1567,24 @@ func (s *Supervisor) UpdateUserSpec(spec config.UserSpec) {
 
 // Shutdown gracefully shuts down this supervisor and all its workers.
 // This method is called when the supervisor is being removed from its parent.
+// This method is idempotent - calling it multiple times is safe.
 func (s *Supervisor) Shutdown() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
+	// Make idempotent - check if already shut down
+	if !s.started.Load() {
+		s.logger.Debugf("Supervisor already shut down for worker type: %s", s.workerType)
+		return
+	}
+	s.started.Store(false)
 
 	s.logger.Infof("Shutting down supervisor for worker type: %s", s.workerType)
 
 	if s.metricsStopChan != nil {
 		close(s.metricsStopChan)
 		<-s.metricsReporterDone
+		s.metricsStopChan = nil // Prevent double-close
 	}
 
 	s.actionExecutor.Shutdown()
@@ -1528,6 +1596,13 @@ func (s *Supervisor) Shutdown() {
 	for childName, child := range s.children {
 		s.logger.Debugf("Shutting down child: %s", childName)
 		child.Shutdown()
+
+		// Wait for child supervisor to fully shut down
+		if done, exists := s.childDoneChans[childName]; exists {
+			s.logger.Debugf("Waiting for child %s to complete shutdown", childName)
+			<-done
+			s.logger.Debugf("Child %s shutdown complete", childName)
+		}
 	}
 }
 
