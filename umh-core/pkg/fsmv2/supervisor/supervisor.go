@@ -1350,13 +1350,19 @@ func (s *Supervisor) RequestShutdown(ctx context.Context, workerID string, reaso
 	s.logger.Warnf("Requesting shutdown for worker %s: %s", workerID, reason)
 
 	// Load current desired state
-	desiredDoc, err := s.store.LoadDesired(ctx, s.workerType, workerID)
+	desiredInterface, err := s.store.LoadDesired(ctx, s.workerType, workerID)
 	if err != nil {
 		return fmt.Errorf("failed to load desired state for shutdown: %w", err)
 	}
 
+	// Type assert to Document - RequestShutdown requires map mutation
+	// LoadDesired returns interface{} which could be Document or typed struct
+	desiredDoc, ok := desiredInterface.(persistence.Document)
+	if !ok {
+		return fmt.Errorf("LoadDesired returned %T, expected persistence.Document for shutdown mutation", desiredInterface)
+	}
+
 	// Mutate document to set shutdown flag
-	// Note: desiredDoc is a basic.Document (map[string]interface{})
 	if desiredDoc == nil {
 		desiredDoc = make(map[string]interface{})
 	}

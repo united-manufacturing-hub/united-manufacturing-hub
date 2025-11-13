@@ -346,6 +346,45 @@ func (ts *TriangularStore) LoadDesired(ctx context.Context, workerType string, i
 	return destPtr.Elem().Interface(), nil
 }
 
+// LoadDesiredTyped loads desired state and deserializes into provided pointer.
+//
+// This method supports reflection-based code that doesn't know types at compile time.
+// For compile-time type safety, use LoadDesiredTyped[T]() package-level function instead.
+//
+// Parameters:
+//   - ctx: Cancellation context
+//   - workerType: Worker type (e.g., "parent")
+//   - id: Unique worker identifier
+//   - dest: Pointer to destination struct (will be populated via JSON deserialization)
+//
+// Returns:
+//   - error: ErrNotFound if not found, or deserialization error
+//
+// Example (reflection-based code):
+//
+//	var dest ParentDesiredState
+//	err := ts.LoadDesiredTyped(ctx, "parent", "parent-001", &dest)
+func (ts *TriangularStore) LoadDesiredTyped(ctx context.Context, workerType string, id string, dest interface{}) error {
+	result, err := ts.LoadDesired(ctx, workerType, id)
+	if err != nil {
+		return err
+	}
+
+	// If result is already the correct type, copy it
+	if reflect.TypeOf(result) == reflect.TypeOf(dest).Elem() {
+		reflect.ValueOf(dest).Elem().Set(reflect.ValueOf(result))
+		return nil
+	}
+
+	// Otherwise, deserialize Document to dest
+	doc, ok := result.(persistence.Document)
+	if !ok {
+		return fmt.Errorf("LoadDesired returned %T, cannot deserialize", result)
+	}
+
+	return documentToStruct(doc, dest)
+}
+
 // SaveObserved stores system reality.
 //
 // DESIGN DECISION: Accept interface{} for flexibility with typed states
@@ -541,6 +580,45 @@ func (ts *TriangularStore) LoadObserved(ctx context.Context, workerType string, 
 	}
 
 	return destPtr.Elem().Interface(), nil
+}
+
+// LoadObservedTyped loads observed state and deserializes into provided pointer.
+//
+// This method supports reflection-based code that doesn't know types at compile time.
+// For compile-time type safety, use LoadObservedTyped[T]() package-level function instead.
+//
+// Parameters:
+//   - ctx: Cancellation context
+//   - workerType: Worker type (e.g., "parent")
+//   - id: Unique worker identifier
+//   - dest: Pointer to destination struct (will be populated via JSON deserialization)
+//
+// Returns:
+//   - error: ErrNotFound if not found, or deserialization error
+//
+// Example (reflection-based code):
+//
+//	var dest ParentObservedState
+//	err := ts.LoadObservedTyped(ctx, "parent", "parent-001", &dest)
+func (ts *TriangularStore) LoadObservedTyped(ctx context.Context, workerType string, id string, dest interface{}) error {
+	result, err := ts.LoadObserved(ctx, workerType, id)
+	if err != nil {
+		return err
+	}
+
+	// If result is already the correct type, copy it
+	if reflect.TypeOf(result) == reflect.TypeOf(dest).Elem() {
+		reflect.ValueOf(dest).Elem().Set(reflect.ValueOf(result))
+		return nil
+	}
+
+	// Otherwise, deserialize Document to dest
+	doc, ok := result.(persistence.Document)
+	if !ok {
+		return fmt.Errorf("LoadObserved returned %T, cannot deserialize", result)
+	}
+
+	return documentToStruct(doc, dest)
 }
 
 func (ts *TriangularStore) filterCSEFields(doc persistence.Document, cseFields []string) persistence.Document {

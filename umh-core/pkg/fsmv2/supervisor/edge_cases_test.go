@@ -403,7 +403,7 @@ var _ = Describe("Edge Cases", func() {
 					CollectedAt: oldTimestamp,
 					Desired:     &mockDesiredState{},
 				}
-				err = mockStore.SaveObserved(context.Background(), "container", identity.ID, obs)
+				_, err = mockStore.SaveObserved(context.Background(), "container", identity.ID, obs)
 				Expect(err).ToNot(HaveOccurred())
 
 				s := supervisor.NewSupervisor(supervisor.Config{
@@ -455,7 +455,7 @@ var _ = Describe("Edge Cases", func() {
 					CollectedAt: oldTimestamp,
 					Desired:     &mockDesiredState{},
 				}
-				err = mockStore.SaveObserved(context.Background(), "container", identity.ID, obs)
+				_, err = mockStore.SaveObserved(context.Background(), "container", identity.ID, obs)
 				Expect(err).ToNot(HaveOccurred())
 
 				s := supervisor.NewSupervisor(supervisor.Config{
@@ -501,7 +501,7 @@ var _ = Describe("Edge Cases", func() {
 					CollectedAt: time.Now(),
 					Desired:     &mockDesiredState{},
 				}
-				err = mockStore.SaveObserved(context.Background(), "container", identity.ID, obs)
+				_, err = mockStore.SaveObserved(context.Background(), "container", identity.ID, obs)
 				Expect(err).ToNot(HaveOccurred())
 
 				s := supervisor.NewSupervisor(supervisor.Config{
@@ -663,7 +663,7 @@ var _ = Describe("Edge Cases", func() {
 					CollectedAt: oldTimestamp,
 					Desired:     &mockDesiredState{},
 				}
-				err = mockStore.SaveObserved(context.Background(), "container", identity.ID, obs)
+				_, err = mockStore.SaveObserved(context.Background(), "container", identity.ID, obs)
 				Expect(err).ToNot(HaveOccurred())
 
 				mockStore.SaveDesiredErr = errors.New("save failed")

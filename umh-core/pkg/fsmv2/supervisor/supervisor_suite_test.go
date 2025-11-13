@@ -124,7 +124,7 @@ type mockStore struct {
 	saveErr      error
 	loadSnapshot func(ctx context.Context, workerType string, id string) (*storage.Snapshot, error)
 	saveDesired  func(ctx context.Context, workerType string, id string, desired persistence.Document) error
-	saveObserved func(ctx context.Context, workerType string, id string, observed interface{}) error
+	saveObserved func(ctx context.Context, workerType string, id string, observed interface{}) (bool, error)
 }
 
 func newMockStore() *mockStore {
@@ -167,7 +167,7 @@ func (m *mockStore) SaveDesired(ctx context.Context, workerType string, id strin
 	return m.saveErr
 }
 
-func (m *mockStore) LoadDesired(ctx context.Context, workerType string, id string) (persistence.Document, error) {
+func (m *mockStore) LoadDesired(ctx context.Context, workerType string, id string) (interface{}, error) {
 	if m.desired[workerType] == nil || m.desired[workerType][id] == nil {
 		return nil, persistence.ErrNotFound
 	}
@@ -175,7 +175,22 @@ func (m *mockStore) LoadDesired(ctx context.Context, workerType string, id strin
 	return m.desired[workerType][id], nil
 }
 
-func (m *mockStore) SaveObserved(ctx context.Context, workerType string, id string, observed interface{}) error {
+func (m *mockStore) LoadDesiredTyped(ctx context.Context, workerType string, id string, dest interface{}) error {
+	result, err := m.LoadDesired(ctx, workerType, id)
+	if err != nil {
+		return err
+	}
+
+	doc, ok := result.(persistence.Document)
+	if !ok {
+		return fmt.Errorf("expected Document, got %T", result)
+	}
+
+	jsonBytes, _ := json.Marshal(doc)
+	return json.Unmarshal(jsonBytes, dest)
+}
+
+func (m *mockStore) SaveObserved(ctx context.Context, workerType string, id string, observed interface{}) (bool, error) {
 	if m.saveObserved != nil {
 		return m.saveObserved(ctx, workerType, id, observed)
 	}
@@ -195,15 +210,33 @@ func (m *mockStore) SaveObserved(ctx context.Context, workerType string, id stri
 
 	m.observed[workerType][id] = doc
 
-	return m.saveErr
+	if m.saveErr != nil {
+		return false, m.saveErr
+	}
+	return true, nil
 }
 
-func (m *mockStore) LoadObserved(ctx context.Context, workerType string, id string) (persistence.Document, error) {
+func (m *mockStore) LoadObserved(ctx context.Context, workerType string, id string) (interface{}, error) {
 	if m.observed[workerType] == nil || m.observed[workerType][id] == nil {
 		return nil, persistence.ErrNotFound
 	}
 
 	return m.observed[workerType][id], nil
+}
+
+func (m *mockStore) LoadObservedTyped(ctx context.Context, workerType string, id string, dest interface{}) error {
+	result, err := m.LoadObserved(ctx, workerType, id)
+	if err != nil {
+		return err
+	}
+
+	doc, ok := result.(persistence.Document)
+	if !ok {
+		return fmt.Errorf("expected Document, got %T", result)
+	}
+
+	jsonBytes, _ := json.Marshal(doc)
+	return json.Unmarshal(jsonBytes, dest)
 }
 
 func (m *mockStore) LoadSnapshot(ctx context.Context, workerType string, id string) (*storage.Snapshot, error) {
@@ -453,7 +486,7 @@ func (m *mockTriangularStore) SaveDesired(ctx context.Context, workerType string
 	return nil
 }
 
-func (m *mockTriangularStore) LoadDesired(ctx context.Context, workerType string, id string) (persistence.Document, error) {
+func (m *mockTriangularStore) LoadDesired(ctx context.Context, workerType string, id string) (interface{}, error) {
 	m.LoadDesiredCalled++
 
 	if m.LoadDesiredErr != nil {
@@ -472,11 +505,26 @@ func (m *mockTriangularStore) LoadDesired(ctx context.Context, workerType string
 	return doc, nil
 }
 
-func (m *mockTriangularStore) SaveObserved(ctx context.Context, workerType string, id string, observed interface{}) error {
+func (m *mockTriangularStore) LoadDesiredTyped(ctx context.Context, workerType string, id string, dest interface{}) error {
+	result, err := m.LoadDesired(ctx, workerType, id)
+	if err != nil {
+		return err
+	}
+
+	doc, ok := result.(persistence.Document)
+	if !ok {
+		return fmt.Errorf("expected Document, got %T", result)
+	}
+
+	jsonBytes, _ := json.Marshal(doc)
+	return json.Unmarshal(jsonBytes, dest)
+}
+
+func (m *mockTriangularStore) SaveObserved(ctx context.Context, workerType string, id string, observed interface{}) (bool, error) {
 	m.SaveObservedCalled++
 
 	if m.SaveObservedErr != nil {
-		return m.SaveObservedErr
+		return false, m.SaveObservedErr
 	}
 
 	if m.Observed[workerType] == nil {
@@ -489,20 +537,20 @@ func (m *mockTriangularStore) SaveObserved(ctx context.Context, workerType strin
 	} else {
 		jsonBytes, err := json.Marshal(observed)
 		if err != nil {
-			return err
+			return false, err
 		}
 
 		if err := json.Unmarshal(jsonBytes, &doc); err != nil {
-			return err
+			return false, err
 		}
 	}
 
 	m.Observed[workerType][id] = doc
 
-	return nil
+	return true, nil
 }
 
-func (m *mockTriangularStore) LoadObserved(ctx context.Context, workerType string, id string) (persistence.Document, error) {
+func (m *mockTriangularStore) LoadObserved(ctx context.Context, workerType string, id string) (interface{}, error) {
 	m.LoadObservedCalled++
 
 	if m.LoadObservedErr != nil {
@@ -524,6 +572,21 @@ func (m *mockTriangularStore) LoadObserved(ctx context.Context, workerType strin
 	}
 
 	return doc, nil
+}
+
+func (m *mockTriangularStore) LoadObservedTyped(ctx context.Context, workerType string, id string, dest interface{}) error {
+	result, err := m.LoadObserved(ctx, workerType, id)
+	if err != nil {
+		return err
+	}
+
+	doc, ok := result.(persistence.Document)
+	if !ok {
+		return fmt.Errorf("expected Document, got %T", result)
+	}
+
+	jsonBytes, _ := json.Marshal(doc)
+	return json.Unmarshal(jsonBytes, dest)
 }
 
 func (m *mockTriangularStore) LoadSnapshot(ctx context.Context, workerType string, id string) (*storage.Snapshot, error) {

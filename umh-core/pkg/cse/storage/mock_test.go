@@ -16,6 +16,8 @@ package storage_test
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
@@ -116,6 +118,26 @@ func (m *mockTriangularStore) LoadDesired(ctx context.Context, workerType string
 	return doc, nil
 }
 
+func (m *mockTriangularStore) LoadDesiredTyped(ctx context.Context, workerType string, id string, dest interface{}) error {
+	result, err := m.LoadDesired(ctx, workerType, id)
+	if err != nil {
+		return err
+	}
+
+	doc, ok := result.(persistence.Document)
+	if !ok {
+		return fmt.Errorf("expected Document, got %T", result)
+	}
+
+	// Simple JSON round-trip deserialization
+	jsonBytes, err := json.Marshal(doc)
+	if err != nil {
+		return err
+	}
+
+	return json.Unmarshal(jsonBytes, dest)
+}
+
 func (m *mockTriangularStore) SaveObserved(ctx context.Context, workerType string, id string, observed interface{}) (bool, error) {
 	m.SaveObservedCalled++
 
@@ -156,6 +178,26 @@ func (m *mockTriangularStore) LoadObserved(ctx context.Context, workerType strin
 	}
 
 	return doc, nil
+}
+
+func (m *mockTriangularStore) LoadObservedTyped(ctx context.Context, workerType string, id string, dest interface{}) error {
+	result, err := m.LoadObserved(ctx, workerType, id)
+	if err != nil {
+		return err
+	}
+
+	doc, ok := result.(persistence.Document)
+	if !ok {
+		return fmt.Errorf("expected Document, got %T", result)
+	}
+
+	// Simple JSON round-trip deserialization
+	jsonBytes, err := json.Marshal(doc)
+	if err != nil {
+		return err
+	}
+
+	return json.Unmarshal(jsonBytes, dest)
 }
 
 func (m *mockTriangularStore) LoadSnapshot(ctx context.Context, workerType string, id string) (*storage.Snapshot, error) {
