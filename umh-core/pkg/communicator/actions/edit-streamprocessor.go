@@ -152,7 +152,7 @@ func (a *EditStreamProcessorAction) Validate() error {
 		return errors.New("missing or invalid stream processor UUID")
 	}
 
-	if err := ValidateComponentName(a.name); err != nil {
+	if err := config.ValidateComponentName(a.name); err != nil {
 		return err
 	}
 

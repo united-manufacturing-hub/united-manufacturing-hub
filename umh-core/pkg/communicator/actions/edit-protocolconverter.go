@@ -204,7 +204,7 @@ func (a *EditProtocolConverterAction) Validate() error {
 		return errors.New("missing or invalid protocol converter UUID")
 	}
 
-	if err := ValidateComponentName(a.name); err != nil {
+	if err := config.ValidateComponentName(a.name); err != nil {
 		return err
 	}
 
