@@ -916,6 +916,67 @@ var _ = Describe("TriangularStore", func() {
 		})
 	})
 
+	Describe("SaveDesiredTyped[T]", func() {
+		BeforeEach(func() {
+			registry.Register(&storage.CollectionMetadata{
+				Name:          "parent_identity",
+				WorkerType:    "parent",
+				Role:          storage.RoleIdentity,
+				CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt},
+				IndexedFields: []string{storage.FieldSyncID},
+			})
+			registry.Register(&storage.CollectionMetadata{
+				Name:          "parent_desired",
+				WorkerType:    "parent",
+				Role:          storage.RoleDesired,
+				CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
+				IndexedFields: []string{storage.FieldSyncID},
+			})
+			registry.Register(&storage.CollectionMetadata{
+				Name:          "parent_observed",
+				WorkerType:    "parent",
+				Role:          storage.RoleObserved,
+				CSEFields:     []string{storage.FieldSyncID, storage.FieldCreatedAt, storage.FieldUpdatedAt},
+				IndexedFields: []string{storage.FieldSyncID},
+			})
+
+			desiredType := reflect.TypeOf(ParentDesiredState{})
+			ts.TypeRegistry().RegisterWorkerType("parent", nil, desiredType)
+		})
+
+		It("should derive table name from type and save typed desired state", func() {
+			desired := ParentDesiredState{
+				Name:    "ParentWorker",
+				Command: "start",
+			}
+
+			err := storage.SaveDesiredTyped[ParentDesiredState](ts, ctx, "parent-001", desired)
+			Expect(err).NotTo(HaveOccurred())
+
+			result, err := storage.LoadDesiredTyped[ParentDesiredState](ts, ctx, "parent-001")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.Name).To(Equal("ParentWorker"))
+			Expect(result.Command).To(Equal("start"))
+		})
+
+		It("should serialize struct to Document before saving", func() {
+			desired := ParentDesiredState{
+				Name:    "TestWorker",
+				Command: "stop",
+			}
+
+			err := storage.SaveDesiredTyped[ParentDesiredState](ts, ctx, "parent-002", desired)
+			Expect(err).NotTo(HaveOccurred())
+
+			doc, err := ts.LoadDesired(ctx, "parent", "parent-002")
+			Expect(err).NotTo(HaveOccurred())
+			docMap, ok := doc.(persistence.Document)
+			Expect(ok).To(BeTrue())
+			Expect(docMap["name"]).To(Equal("TestWorker"))
+			Expect(docMap["command"]).To(Equal("stop"))
+		})
+	})
+
 	Describe("LoadObserved with TypeRegistry", func() {
 		It("should return Document when no type registered", func() {
 			observed := persistence.Document{

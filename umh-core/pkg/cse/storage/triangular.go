@@ -930,6 +930,20 @@ func documentToStruct(doc persistence.Document, dest interface{}) error {
 	return nil
 }
 
+func structToDocument(v interface{}) (persistence.Document, error) {
+	jsonBytes, err := json.Marshal(v)
+	if err != nil {
+		return nil, err
+	}
+
+	var doc persistence.Document
+	if err := json.Unmarshal(jsonBytes, &doc); err != nil {
+		return nil, err
+	}
+
+	return doc, nil
+}
+
 // LoadDesired retrieves user intent/configuration using generic type parameter.
 //
 // This is a package-level generic function that provides type-safe access to desired state.
@@ -977,6 +991,40 @@ func LoadDesiredTyped[T any](ts *TriangularStore, ctx context.Context, id string
 	}
 
 	return dest, nil
+}
+
+// SaveDesiredTyped saves user intent/configuration using generic type parameter.
+//
+// This is a package-level generic function that provides type-safe saving of desired state.
+// It derives the workerType from the type parameter T and delegates to TriangularStore.SaveDesired.
+//
+// Type parameter T must be a struct ending in "DesiredState" (e.g., ParentDesiredState).
+// The workerType is derived by removing "DesiredState" suffix and lowercasing.
+//
+// Parameters:
+//   - ts: TriangularStore instance
+//   - ctx: Cancellation context
+//   - id: Unique worker identifier
+//   - desired: Desired state as typed struct
+//
+// Returns:
+//   - error: Serialization error or database error
+//
+// Example:
+//
+//	desired := ParentDesiredState{Name: "Worker1", Command: "start"}
+//	err := storage.SaveDesiredTyped[ParentDesiredState](ts, ctx, "parent-001", desired)
+func SaveDesiredTyped[T any](ts *TriangularStore, ctx context.Context, id string, desired T) error {
+	workerType := DeriveWorkerType[T]()
+
+	doc, err := structToDocument(desired)
+	if err != nil {
+		return fmt.Errorf("failed to serialize %T: %w", desired, err)
+	}
+
+	doc["id"] = id
+
+	return ts.SaveDesired(ctx, workerType, id, doc)
 }
 
 func DeriveWorkerType[T any]() string {

@@ -30,8 +30,8 @@ type ParentObservedState struct {
 }
 
 type ParentDesiredState struct {
-	Name    string
-	Command string
+	Name    string `json:"name"`
+	Command string `json:"command"`
 }
 
 var _ = Describe("TypeRegistry", func() {
