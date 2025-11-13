@@ -105,8 +105,8 @@ When troubleshooting connection or data issues, enable debug logging in your bri
 protocolConverter:
   - name: my-plc-bridge
     protocolConverterServiceConfig:
+      debug_level: true  # Enable detailed logging
       config:
-        debug_level: true  # Enable detailed logging
 ```
 
 Debug logging provides:
@@ -117,7 +117,7 @@ Debug logging provides:
 
 **Remember to disable debug logging** after troubleshooting - it generates significantly more log data.
 
-To view debug logs, right-click the bridge and select **Logs**.
+To view debug logs, go to the bridge and select **Logs**.
 
 ## Important: Data Types from Different Protocols
 

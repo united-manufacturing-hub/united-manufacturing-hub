@@ -94,8 +94,7 @@ dataFlow:
 - name: opcua-to-uns
   desiredState: active
   dataFlowComponentConfig:
-    config:
-      debug_level: false  # Enable detailed logging for troubleshooting
+    debug_level: false  # Enable detailed logging for troubleshooting
     benthos:
       input:
         opcua:
@@ -136,10 +135,10 @@ protocolConverter:
 - name: press-opcua
   desiredState: active
   protocolConverterServiceConfig:
+    debug_level: false  # Enable detailed logging for troubleshooting
     location:
       2: press1
     config:
-      debug_level: false  # Enable detailed logging for troubleshooting
       connection:
         nmap:
           target: "{{ .IP }}"
