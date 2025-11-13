@@ -197,6 +197,7 @@ type Supervisor struct {
 	metricsStopChan       chan struct{}                    // Channel to stop metrics reporter
 	metricsReporterDone   chan struct{}                    // Channel signaling metrics reporter stopped
 	ctx                   context.Context                  // Context for supervisor lifecycle
+	ctxCancel             context.CancelFunc               // Cancel function for supervisor context
 	ctxMu                 sync.RWMutex                     // Protects ctx access
 	started               atomic.Bool                      // Whether supervisor has been started
 }
@@ -758,26 +759,33 @@ func (s *Supervisor) CheckDataFreshness(snapshot *fsmv2.Snapshot) bool {
 func (s *Supervisor) Start(ctx context.Context) <-chan struct{} {
 	done := make(chan struct{})
 
+	// Create a child context that we can cancel in Shutdown()
+	// This allows Shutdown() to stop the tick loop even if parent context is still active
 	s.ctxMu.Lock()
-	s.ctx = ctx
+	s.ctx, s.ctxCancel = context.WithCancel(ctx)
 	s.ctxMu.Unlock()
 	s.started.Store(true)
 
 	s.logger.Debugf("Supervisor started for workerType: %s", s.workerType)
 
-	s.actionExecutor.Start(ctx)
+	// Use the child context for all goroutines so they stop when Shutdown() is called
+	s.ctxMu.RLock()
+	supervisorCtx := s.ctx
+	s.ctxMu.RUnlock()
 
-	s.startMetricsReporter(ctx)
+	s.actionExecutor.Start(supervisorCtx)
+
+	s.startMetricsReporter(supervisorCtx)
 
 	// Start observation collectors and action executors for all workers
 	s.mu.RLock()
 
 	for _, workerCtx := range s.workers {
-		if err := workerCtx.collector.Start(ctx); err != nil {
+		if err := workerCtx.collector.Start(supervisorCtx); err != nil {
 			s.logger.Errorf("Failed to start collector for worker %s: %v", workerCtx.identity.ID, err)
 		}
 
-		workerCtx.executor.Start(ctx)
+		workerCtx.executor.Start(supervisorCtx)
 	}
 
 	s.mu.RUnlock()
@@ -786,7 +794,7 @@ func (s *Supervisor) Start(ctx context.Context) <-chan struct{} {
 	go func() {
 		defer close(done)
 
-		s.tickLoop(ctx)
+		s.tickLoop(supervisorCtx)
 	}()
 
 	return done
@@ -1316,11 +1324,63 @@ func (s *Supervisor) processSignal(ctx context.Context, workerID string, signal 
 			return fmt.Errorf("worker %s not found in registry", workerID)
 		}
 
+		// Diagnostic logging: show children before removal
+		childCount := len(s.children)
+		childrenToCleanup := make(map[string]*Supervisor)
+		if childCount > 0 {
+			childNames := make([]string, 0, childCount)
+			for name, child := range s.children {
+				childNames = append(childNames, name)
+				childrenToCleanup[name] = child // Capture children for cleanup outside lock
+			}
+			s.logger.Warnf("Worker %s being removed still has %d children: %v - will clean up",
+				workerID, childCount, childNames)
+		}
+
 		delete(s.workers, workerID)
 		s.mu.Unlock()
 
+		// LOCK SAFETY: Clean up children OUTSIDE parent lock to avoid deadlock.
+		// Calling reconcileChildren() would re-acquire parent lock and call child.Shutdown()
+		// while holding it, which blocks any readers (GetChildren, calculateHierarchySize)
+		// indefinitely and risks deadlock if children try to access parent state.
+		//
+		// Instead, we call child.Shutdown() directly for each child, which:
+		// - Only acquires child's own lock (not parent's)
+		// - Allows parent lock to be acquired by other goroutines
+		// - Child supervisors handle their own cleanup recursively
+		//
+		// Implementation: Extract done channels first (under lock), then wait outside lock
+		doneChannels := make(map[string]<-chan struct{})
+		s.mu.Lock()
+		for name := range childrenToCleanup {
+			if done, exists := s.childDoneChans[name]; exists {
+				doneChannels[name] = done
+			}
+		}
+		s.mu.Unlock()
+
+		// Now shutdown children and wait for completion without holding parent lock
+		for name, child := range childrenToCleanup {
+			s.logger.Debugf("Shutting down child %s during parent removal", name)
+			child.Shutdown()
+
+			// Wait for child to fully shut down before proceeding
+			if done, exists := doneChannels[name]; exists {
+				<-done
+			}
+
+			// Remove from parent's children map (requires lock)
+			s.mu.Lock()
+			delete(s.children, name)
+			delete(s.childDoneChans, name)
+			s.mu.Unlock()
+		}
+
 		workerCtx.collector.Stop(ctx)
 		workerCtx.executor.Shutdown()
+
+		s.logger.Infof("Worker %s removed successfully (children cleaned: %d)", workerID, childCount)
 
 		return nil
 	case fsmv2.SignalNeedsRestart:
@@ -1576,10 +1636,10 @@ func (s *Supervisor) UpdateUserSpec(spec config.UserSpec) {
 // This method is idempotent - calling it multiple times is safe.
 func (s *Supervisor) Shutdown() {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 
 	// Make idempotent - check if already shut down
 	if !s.started.Load() {
+		s.mu.Unlock()
 		s.logger.Debugf("Supervisor already shut down for worker type: %s", s.workerType)
 		return
 	}
@@ -1587,24 +1647,66 @@ func (s *Supervisor) Shutdown() {
 
 	s.logger.Infof("Shutting down supervisor for worker type: %s", s.workerType)
 
+	// Cancel the supervisor's context to stop tick loop and all child goroutines
+	s.ctxMu.Lock()
+	if s.ctxCancel != nil {
+		s.ctxCancel()
+		s.ctxCancel = nil // Prevent double-cancel
+	}
+	s.ctxMu.Unlock()
+
+	// Stop metrics first (safe to do under lock - just closes channel)
 	if s.metricsStopChan != nil {
 		close(s.metricsStopChan)
-		<-s.metricsReporterDone
-		s.metricsStopChan = nil // Prevent double-close
+		// NOTE: Will wait for metricsReporterDone outside lock to avoid blocking readers
 	}
 
+	// Shutdown action executor (doesn't block)
 	s.actionExecutor.Shutdown()
 
+	// Log workers being shut down
 	for workerID := range s.workers {
 		s.logger.Debugf("Shutting down worker: %s", workerID)
 	}
 
-	for childName, child := range s.children {
+	// LOCK SAFETY: Extract children and done channels while holding lock,
+	// then release lock before recursively shutting down children.
+	// This prevents deadlock where:
+	// 1. Parent holds write lock
+	// 2. Parent calls child.Shutdown() which tries to acquire child's write lock
+	// 3. Child's Tick() goroutine is blocked waiting for parent's read lock
+	// By releasing parent lock before calling child.Shutdown(), we allow
+	// child Tick() goroutines to complete and exit cleanly.
+	childrenToShutdown := make(map[string]*Supervisor, len(s.children))
+	childDoneChans := make(map[string]<-chan struct{}, len(s.childDoneChans))
+	for name, child := range s.children {
+		childrenToShutdown[name] = child
+	}
+	for name, done := range s.childDoneChans {
+		childDoneChans[name] = done
+	}
+
+	// Need to wait for metrics reporter outside lock
+	metricsReporterDone := s.metricsReporterDone
+	metricsStopChanWasClosed := s.metricsStopChan != nil
+	if metricsStopChanWasClosed {
+		s.metricsStopChan = nil // Prevent double-close
+	}
+
+	s.mu.Unlock()
+
+	// Wait for metrics reporter to finish (outside lock)
+	if metricsStopChanWasClosed && metricsReporterDone != nil {
+		<-metricsReporterDone
+	}
+
+	// Now shutdown children recursively (outside lock)
+	for childName, child := range childrenToShutdown {
 		s.logger.Debugf("Shutting down child: %s", childName)
 		child.Shutdown()
 
 		// Wait for child supervisor to fully shut down
-		if done, exists := s.childDoneChans[childName]; exists {
+		if done, exists := childDoneChans[childName]; exists {
 			s.logger.Debugf("Waiting for child %s to complete shutdown", childName)
 			<-done
 			s.logger.Debugf("Child %s shutdown complete", childName)
