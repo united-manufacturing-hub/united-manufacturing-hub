@@ -256,6 +256,22 @@ type TestObservedState struct {
 	CPU    int64  `json:"cpu"`
 }
 
+type CommunicatorObservedState struct {
+	Name string
+}
+
+type ChildDesiredState struct {
+	Name string
+}
+
+type InvalidType struct {
+	Name string
+}
+
+type EmptyNameType struct {
+	Name string
+}
+
 func setupTestRegistry() *storage.Registry {
 	registry := storage.NewRegistry()
 
@@ -306,6 +322,18 @@ var _ = Describe("TriangularStore", func() {
 	Describe("NewTriangularStore", func() {
 		It("should create non-nil store", func() {
 			Expect(ts).NotTo(BeNil())
+		})
+
+		It("should create typeRegistry", func() {
+			typeRegistry := ts.TypeRegistry()
+			Expect(typeRegistry).NotTo(BeNil())
+		})
+	})
+
+	Describe("TypeRegistry", func() {
+		It("should return non-nil type registry", func() {
+			typeRegistry := ts.TypeRegistry()
+			Expect(typeRegistry).NotTo(BeNil())
 		})
 	})
 
@@ -445,10 +473,74 @@ var _ = Describe("TriangularStore", func() {
 			ts.SaveDesired(ctx, "container", "worker-123", desired)
 		})
 
-		It("should load desired successfully", func() {
-			loaded, err := ts.LoadDesired(ctx, "container", "worker-123")
-			Expect(err).NotTo(HaveOccurred())
-			Expect(loaded["config"]).To(Equal("value"))
+		Context("when no type is registered", func() {
+			It("should return Document", func() {
+				loaded, err := ts.LoadDesired(ctx, "container", "worker-123")
+				Expect(err).NotTo(HaveOccurred())
+
+				doc, ok := loaded.(persistence.Document)
+				Expect(ok).To(BeTrue(), "should return Document when no type registered")
+				Expect(doc["config"]).To(Equal("value"))
+			})
+		})
+
+		Context("when type is registered", func() {
+			var desiredType reflect.Type
+
+			BeforeEach(func() {
+				desiredType = reflect.TypeOf(ParentDesiredState{})
+				observedType := reflect.TypeOf(ParentObservedState{})
+
+				err := ts.TypeRegistry().RegisterWorkerType("worker-123", observedType, desiredType)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("should return typed struct", func() {
+				desired := persistence.Document{
+					"id":      "worker-123",
+					"name":    "parent-worker",
+					"command": "start",
+				}
+				err := ts.SaveDesired(ctx, "container", "worker-123", desired)
+				Expect(err).NotTo(HaveOccurred())
+
+				loaded, err := ts.LoadDesired(ctx, "container", "worker-123")
+				Expect(err).NotTo(HaveOccurred())
+
+				typedDesired, ok := loaded.(ParentDesiredState)
+				Expect(ok).To(BeTrue(), "should return typed struct when type registered")
+				Expect(typedDesired.Name).To(Equal("parent-worker"))
+				Expect(typedDesired.Command).To(Equal("start"))
+			})
+
+			It("should return error on invalid JSON", func() {
+				desired := persistence.Document{
+					"id":   "worker-123",
+					"data": make(chan int),
+				}
+				err := ts.SaveDesired(ctx, "container", "worker-123", desired)
+				Expect(err).NotTo(HaveOccurred())
+
+				_, err = ts.LoadDesired(ctx, "container", "worker-123")
+				Expect(err).To(HaveOccurred())
+			})
+		})
+
+		Context("when Document type explicitly registered", func() {
+			BeforeEach(func() {
+				docType := reflect.TypeOf(persistence.Document{})
+				err := ts.TypeRegistry().RegisterWorkerType("worker-123", docType, docType)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("should return Document", func() {
+				loaded, err := ts.LoadDesired(ctx, "container", "worker-123")
+				Expect(err).NotTo(HaveOccurred())
+
+				doc, ok := loaded.(persistence.Document)
+				Expect(ok).To(BeTrue(), "should return Document when Document type explicitly registered")
+				Expect(doc["config"]).To(Equal("value"))
+			})
 		})
 	})
 
@@ -605,7 +697,11 @@ var _ = Describe("TriangularStore", func() {
 		It("should load observed successfully", func() {
 			loaded, err := ts.LoadObserved(ctx, "container", "worker-123")
 			Expect(err).NotTo(HaveOccurred())
-			Expect(loaded["status"]).To(Equal("running"))
+
+			// LoadObserved returns interface{}, need to assert to Document
+			doc, ok := loaded.(persistence.Document)
+			Expect(ok).To(BeTrue())
+			Expect(doc["status"]).To(Equal("running"))
 		})
 	})
 
@@ -736,74 +832,104 @@ var _ = Describe("TriangularStore", func() {
 		})
 	})
 
-	Describe("LoadObservedTyped", func() {
-		It("should deserialize Document to typed struct", func() {
+	Describe("deriveWorkerType", func() {
+		It("should derive parent from ParentDesiredState", func() {
+			workerType := storage.DeriveWorkerType[ParentDesiredState]()
+			Expect(workerType).To(Equal("parent"))
+		})
+
+		It("should derive parent from ParentObservedState", func() {
+			workerType := storage.DeriveWorkerType[ParentObservedState]()
+			Expect(workerType).To(Equal("parent"))
+		})
+
+		It("should derive communicator from CommunicatorObservedState", func() {
+			workerType := storage.DeriveWorkerType[CommunicatorObservedState]()
+			Expect(workerType).To(Equal("communicator"))
+		})
+
+		It("should derive child from ChildDesiredState", func() {
+			workerType := storage.DeriveWorkerType[ChildDesiredState]()
+			Expect(workerType).To(Equal("child"))
+		})
+
+		It("should panic for type without DesiredState or ObservedState suffix", func() {
+			Expect(func() {
+				storage.DeriveWorkerType[InvalidType]()
+			}).To(Panic())
+		})
+
+		It("should panic for type with empty name", func() {
+			Expect(func() {
+				storage.DeriveWorkerType[EmptyNameType]()
+			}).To(Panic())
+		})
+	})
+
+	Describe("LoadObserved with TypeRegistry", func() {
+		It("should return Document when no type registered", func() {
 			observed := persistence.Document{
-				"id":     "worker-123",
+				"id":     "worker-no-type",
 				"status": "running",
 				"cpu":    int64(50),
 			}
-			_, err := ts.SaveObserved(ctx, "container", "worker-123", observed)
+			_, err := ts.SaveObserved(ctx, "container", "worker-no-type", observed)
 			Expect(err).NotTo(HaveOccurred())
 
-			var result TestObservedState
-			err = ts.LoadObservedTyped(ctx, "container", "worker-123", &result)
+			result, err := ts.LoadObserved(ctx, "container", "worker-no-type")
 			Expect(err).NotTo(HaveOccurred())
 
-			Expect(result.ID).To(Equal("worker-123"))
-			Expect(result.Status).To(Equal("running"))
-			Expect(result.CPU).To(Equal(int64(50)))
+			doc, ok := result.(persistence.Document)
+			Expect(ok).To(BeTrue())
+			Expect(doc["id"]).To(Equal("worker-no-type"))
+			Expect(doc["status"]).To(Equal("running"))
 		})
 
-		It("should return error for type mismatch", func() {
-			observed := persistence.Document{
-				"id":  "worker-456",
-				"cpu": "not-a-number",
+		It("should return typed struct when type registered", func() {
+			// Register type for this worker
+			observedType := reflect.TypeOf(TestObservedState{})
+			ts.TypeRegistry().RegisterWorkerType("worker-typed", nil, observedType)
+
+			observed := TestObservedState{
+				ID:     "worker-typed",
+				Status: "running",
+				CPU:    int64(75),
 			}
-			_, err := ts.SaveObserved(ctx, "container", "worker-456", observed)
+			_, err := ts.SaveObserved(ctx, "container", "worker-typed", observed)
 			Expect(err).NotTo(HaveOccurred())
 
-			var result TestObservedState
-			err = ts.LoadObservedTyped(ctx, "container", "worker-456", &result)
+			result, err := ts.LoadObserved(ctx, "container", "worker-typed")
+			Expect(err).NotTo(HaveOccurred())
+
+			typed, ok := result.(TestObservedState)
+			Expect(ok).To(BeTrue())
+			Expect(typed.ID).To(Equal("worker-typed"))
+			Expect(typed.Status).To(Equal("running"))
+			Expect(typed.CPU).To(Equal(int64(75)))
+		})
+
+		It("should return error on deserialization failure", func() {
+			// Register type
+			observedType := reflect.TypeOf(TestObservedState{})
+			ts.TypeRegistry().RegisterWorkerType("worker-bad-data", nil, observedType)
+
+			// Save invalid data (string instead of int64)
+			observed := persistence.Document{
+				"id":     "worker-bad-data",
+				"status": "running",
+				"cpu":    "not-a-number",
+			}
+			_, err := ts.SaveObserved(ctx, "container", "worker-bad-data", observed)
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = ts.LoadObserved(ctx, "container", "worker-bad-data")
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("cannot assign"))
+			Expect(err.Error()).To(ContainSubstring("failed to deserialize"))
 		})
 
 		It("should return ErrNotFound for non-existent document", func() {
-			var result TestObservedState
-			err := ts.LoadObservedTyped(ctx, "container", "nonexistent-worker", &result)
+			_, err := ts.LoadObserved(ctx, "container", "nonexistent-worker")
 			Expect(err).To(MatchError(persistence.ErrNotFound))
-		})
-
-		It("should handle complex field types (int64, float64, bool, time.Time)", func() {
-			type ComplexState struct {
-				ID        string    `json:"id"`
-				CPU       int64     `json:"cpu"`
-				Memory    float64   `json:"memory"`
-				IsHealthy bool      `json:"is_healthy"`
-				UpdatedAt time.Time `json:"updated_at"`
-			}
-
-			now := time.Now().UTC().Truncate(time.Millisecond)
-			observed := persistence.Document{
-				"id":         "worker-789",
-				"cpu":        int64(75),
-				"memory":     45.8,
-				"is_healthy": true,
-				"updated_at": now,
-			}
-			_, err := ts.SaveObserved(ctx, "container", "worker-789", observed)
-			Expect(err).NotTo(HaveOccurred())
-
-			var result ComplexState
-			err = ts.LoadObservedTyped(ctx, "container", "worker-789", &result)
-			Expect(err).NotTo(HaveOccurred())
-
-			Expect(result.ID).To(Equal("worker-789"))
-			Expect(result.CPU).To(Equal(int64(75)))
-			Expect(result.Memory).To(BeNumerically("~", 45.8, 0.01))
-			Expect(result.IsHealthy).To(BeTrue())
-			Expect(result.UpdatedAt).To(BeTemporally("~", now, time.Millisecond))
 		})
 	})
 })

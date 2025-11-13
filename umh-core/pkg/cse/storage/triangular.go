@@ -33,6 +33,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -101,9 +102,10 @@ import (
 //	snapshot, _ := ts.LoadSnapshot(ctx, "container", "worker-123")
 //	// Use snapshot.Identity, snapshot.Desired, snapshot.Observed for Next() decision
 type TriangularStore struct {
-	store    persistence.Store
-	registry *Registry
-	syncID   *atomic.Int64
+	store        persistence.Store
+	registry     *Registry
+	typeRegistry *TypeRegistry
+	syncID       *atomic.Int64
 }
 
 // NewTriangularStore creates a new TriangularStore.
@@ -124,10 +126,16 @@ type TriangularStore struct {
 //   - *TriangularStore: Ready-to-use triangular store instance
 func NewTriangularStore(store persistence.Store, registry *Registry) *TriangularStore {
 	return &TriangularStore{
-		store:    store,
-		registry: registry,
-		syncID:   &atomic.Int64{},
+		store:        store,
+		registry:     registry,
+		typeRegistry: NewTypeRegistry(),
+		syncID:       &atomic.Int64{},
 	}
+}
+
+// TypeRegistry returns the type registry for worker type registration.
+func (ts *TriangularStore) TypeRegistry() *TypeRegistry {
+	return ts.typeRegistry
 }
 
 // SaveIdentity stores immutable worker identity.
@@ -307,9 +315,9 @@ func (ts *TriangularStore) SaveDesired(ctx context.Context, workerType string, i
 //   - id: Unique worker identifier
 //
 // Returns:
-//   - persistence.Document: Desired state document with CSE metadata
+//   - interface{}: Desired state as Document or typed struct (based on TypeRegistry)
 //   - error: ErrNotFound if not found
-func (ts *TriangularStore) LoadDesired(ctx context.Context, workerType string, id string) (persistence.Document, error) {
+func (ts *TriangularStore) LoadDesired(ctx context.Context, workerType string, id string) (interface{}, error) {
 	_, desiredMeta, _, err := ts.registry.GetTriangularCollections(workerType)
 	if err != nil {
 		return nil, fmt.Errorf("worker type %q not registered: %w", workerType, err)
@@ -320,33 +328,22 @@ func (ts *TriangularStore) LoadDesired(ctx context.Context, workerType string, i
 		return nil, err
 	}
 
-	return doc, nil
-}
-
-// LoadDesiredTyped retrieves desired state and deserializes into a typed struct.
-//
-// DESIGN DECISION: Provide typed deserialization for type-safe FSM state handling
-// WHY: FSM workers need type-safe access to desired state fields
-// Eliminates type assertions and enables compile-time checking.
-//
-// TRADE-OFF: Slightly more complex than Document access, but much safer.
-// Type mismatches caught at load time, not during FSM execution.
-//
-// Parameters:
-//   - ctx: Cancellation context
-//   - workerType: Worker type (e.g., "container")
-//   - id: Unique worker identifier
-//   - dest: Pointer to destination struct (must have json tags matching document fields)
-//
-// Returns:
-//   - error: ErrNotFound if not found, or deserialization fails
-func (ts *TriangularStore) LoadDesiredTyped(ctx context.Context, workerType string, id string, dest interface{}) error {
-	doc, err := ts.LoadDesired(ctx, workerType, id)
-	if err != nil {
-		return err
+	desiredType := ts.typeRegistry.GetDesiredType(id)
+	if desiredType == nil {
+		return doc, nil
 	}
 
-	return documentToStruct(doc, dest)
+	docType := reflect.TypeOf(persistence.Document{})
+	if desiredType == docType || desiredType.String() == "persistence.Document" {
+		return doc, nil
+	}
+
+	destPtr := reflect.New(desiredType)
+	if err := documentToStruct(doc, destPtr.Interface()); err != nil {
+		return nil, fmt.Errorf("failed to deserialize to %s: %w", desiredType, err)
+	}
+
+	return destPtr.Elem().Interface(), nil
 }
 
 // SaveObserved stores system reality.
@@ -472,7 +469,7 @@ func (ts *TriangularStore) SaveObserved(ctx context.Context, workerType string, 
 	}
 
 	// Try to load current state
-	currentDoc, err := ts.LoadObserved(ctx, workerType, id)
+	currentState, err := ts.LoadObserved(ctx, workerType, id)
 	if errors.Is(err, persistence.ErrNotFound) {
 		// First save - always write
 		err = ts.saveObservedInternal(ctx, workerType, id, observed)
@@ -480,6 +477,12 @@ func (ts *TriangularStore) SaveObserved(ctx context.Context, workerType string, 
 	}
 	if err != nil {
 		return false, err
+	}
+
+	// Convert current state to Document (might be typed struct or Document)
+	currentDoc, err := ts.toDocument(currentState)
+	if err != nil {
+		return false, fmt.Errorf("failed to convert current state to document: %w", err)
 	}
 
 	// Convert new state to Document
@@ -512,7 +515,8 @@ func (ts *TriangularStore) SaveObserved(ctx context.Context, workerType string, 
 // Returns:
 //   - persistence.Document: Observed state document with CSE metadata
 //   - error: ErrNotFound if not found
-func (ts *TriangularStore) LoadObserved(ctx context.Context, workerType string, id string) (persistence.Document, error) {
+func (ts *TriangularStore) LoadObserved(ctx context.Context, workerType string, id string) (interface{}, error) {
+	// Load Document from database
 	_, _, observedMeta, err := ts.registry.GetTriangularCollections(workerType)
 	if err != nil {
 		return nil, fmt.Errorf("worker type %q not registered: %w", workerType, err)
@@ -523,45 +527,20 @@ func (ts *TriangularStore) LoadObserved(ctx context.Context, workerType string, 
 		return nil, err
 	}
 
-	return doc, nil
-}
-
-// LoadObservedTyped retrieves observed state and deserializes into a typed struct.
-//
-// DESIGN DECISION: Provide typed deserialization for type-safe FSM state handling
-// WHY: FSM workers need type-safe access to observed state fields (CPU, Status, etc.)
-// Eliminates type assertions and enables compile-time checking.
-//
-// TRADE-OFF: Slightly more complex than Document access, but much safer.
-// Type mismatches caught at load time, not during FSM execution.
-//
-// Parameters:
-//   - ctx: Cancellation context
-//   - workerType: Worker type (e.g., "container")
-//   - id: Unique worker identifier
-//   - dest: Pointer to destination struct (must have json tags matching document fields)
-//
-// Returns:
-//   - error: ErrNotFound if not found, or deserialization fails
-//
-// Example:
-//
-//	type ContainerObservedState struct {
-//	    ID     string `json:"id"`
-//	    Status string `json:"status"`
-//	    CPU    int64  `json:"cpu"`
-//	}
-//
-//	var state ContainerObservedState
-//	err := ts.LoadObservedTyped(ctx, "container", "worker-123", &state)
-//	// state.CPU is now type-safe int64, not interface{}
-func (ts *TriangularStore) LoadObservedTyped(ctx context.Context, workerType string, id string, dest interface{}) error {
-	doc, err := ts.LoadObserved(ctx, workerType, id)
-	if err != nil {
-		return err
+	// Check type registry for worker-specific type
+	observedType := ts.typeRegistry.GetObservedType(id)
+	if observedType == nil || observedType.String() == "persistence.Document" {
+		// No type registered or Document requested → return Document
+		return doc, nil
 	}
 
-	return documentToStruct(doc, dest)
+	// Deserialize to typed struct
+	destPtr := reflect.New(observedType)
+	if err := documentToStruct(doc, destPtr.Interface()); err != nil {
+		return nil, fmt.Errorf("failed to deserialize to %s: %w", observedType, err)
+	}
+
+	return destPtr.Elem().Interface(), nil
 }
 
 func (ts *TriangularStore) filterCSEFields(doc persistence.Document, cseFields []string) persistence.Document {
@@ -871,4 +850,25 @@ func documentToStruct(doc persistence.Document, dest interface{}) error {
 	}
 
 	return nil
+}
+
+func DeriveWorkerType[T any]() string {
+	var zero T
+	typeName := reflect.TypeOf(zero).Name()
+
+	if typeName == "" {
+		panic("deriveWorkerType: type has empty name")
+	}
+
+	if strings.HasSuffix(typeName, "DesiredState") {
+		workerType := strings.TrimSuffix(typeName, "DesiredState")
+		return strings.ToLower(workerType)
+	}
+
+	if strings.HasSuffix(typeName, "ObservedState") {
+		workerType := strings.TrimSuffix(typeName, "ObservedState")
+		return strings.ToLower(workerType)
+	}
+
+	panic(fmt.Sprintf("deriveWorkerType: type %q does not end with DesiredState or ObservedState", typeName))
 }
