@@ -110,7 +110,7 @@ RUN if [ "$DEBUG" = "true" ]; then \
     -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/version.AppVersion=${APP_VERSION}" \
     -o /go/bin/umh-core cmd/main.go; \
     else \
-    CGO_ENABLED=1 go build -mod=vendor  \
+    CGO_ENABLED=0 go build -mod=vendor  \
     -ldflags "-s -w \
     -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants.S6OverlayVersion=${S6_OVERLAY_VERSION} \
     -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants.BenthosVersion=${BENTHOS_UMH_VERSION} \
