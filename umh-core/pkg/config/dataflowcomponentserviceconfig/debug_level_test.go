@@ -85,7 +85,7 @@ benthos:
 
 	Describe("GetBenthosServiceConfig", func() {
 		Context("when DebugLevel is true", func() {
-			It("should set LogLevel to DEBUG", func() {
+			It("should enable DebugLevel", func() {
 				cfg := dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 					DebugLevel: true,
 					BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
@@ -106,7 +106,7 @@ benthos:
 		})
 
 		Context("when DebugLevel is false", func() {
-			It("should set LogLevel to INFO", func() {
+			It("should disable DebugLevel", func() {
 				cfg := dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 					DebugLevel: false,
 					BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{

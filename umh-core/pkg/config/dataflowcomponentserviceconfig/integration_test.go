@@ -46,7 +46,7 @@ var _ = Describe("DataflowComponentServiceConfig Integration", func() {
 			// 2. Convert to BenthosServiceConfig
 			benthosConfig := dfc.GetBenthosServiceConfig()
 
-			// 3. Verify LogLevel set to DEBUG
+			// 3. Verify DebugLevel enabled
 			Expect(benthosConfig.DebugLevel).To(BeTrue())
 
 			// 4. Generate S6 config
@@ -80,7 +80,7 @@ var _ = Describe("DataflowComponentServiceConfig Integration", func() {
 			// 2. Convert to BenthosServiceConfig
 			benthosConfig := dfc.GetBenthosServiceConfig()
 
-			// 3. Verify LogLevel set to INFO (default)
+			// 3. Verify DebugLevel disabled (default)
 			Expect(benthosConfig.DebugLevel).To(BeFalse())
 
 			// 4. Generate S6 config
@@ -90,7 +90,7 @@ var _ = Describe("DataflowComponentServiceConfig Integration", func() {
 
 			// 5. Verify OPC_DEBUG environment variable NOT set
 			_, opcDebugExists := s6Config.Env["OPC_DEBUG"]
-			Expect(opcDebugExists).To(BeFalse(), "OPC_DEBUG should not be set when LogLevel is INFO")
+			Expect(opcDebugExists).To(BeFalse(), "OPC_DEBUG should not be set when DebugLevel is false")
 		})
 
 		It("should default to INFO when debug_level is omitted", func() {
@@ -114,7 +114,7 @@ var _ = Describe("DataflowComponentServiceConfig Integration", func() {
 			// 2. Convert to BenthosServiceConfig
 			benthosConfig := dfc.GetBenthosServiceConfig()
 
-			// 3. Verify LogLevel set to INFO (default)
+			// 3. Verify DebugLevel disabled (default)
 			Expect(benthosConfig.DebugLevel).To(BeFalse())
 
 			// 4. Generate S6 config
@@ -124,12 +124,12 @@ var _ = Describe("DataflowComponentServiceConfig Integration", func() {
 
 			// 5. Verify OPC_DEBUG environment variable NOT set
 			_, opcDebugExists := s6Config.Env["OPC_DEBUG"]
-			Expect(opcDebugExists).To(BeFalse(), "OPC_DEBUG should not be set when LogLevel is INFO")
+			Expect(opcDebugExists).To(BeFalse(), "OPC_DEBUG should not be set when DebugLevel is false")
 		})
 	})
 
-	Context("LogLevel mapping", func() {
-		DescribeTable("mapping debug_level boolean to LogLevel string",
+	Context("DebugLevel mapping", func() {
+		DescribeTable("mapping debug_level boolean to DebugLevel and OPC_DEBUG",
 			func(debugLevel bool, expectedDebugLevel bool, expectOpcDebugSet bool, expectedOpcDebug string) {
 				// Create data flow component with programmatic debug_level
 				dfc := dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
@@ -163,9 +163,9 @@ var _ = Describe("DataflowComponentServiceConfig Integration", func() {
 					Expect(opcDebugValue).To(Equal(expectedOpcDebug), "OPC_DEBUG value should match expected")
 				}
 			},
-			Entry("debug_level true maps to LogLevel DEBUG",
+			Entry("debug_level true enables DebugLevel and sets OPC_DEBUG",
 				true, true, true, "debug"),
-			Entry("debug_level false maps to LogLevel INFO",
+			Entry("debug_level false disables DebugLevel and clears OPC_DEBUG",
 				false, false, false, ""),
 		)
 	})

@@ -156,8 +156,14 @@ func ConfigsEqualRuntime(desired, observed ProtocolConverterServiceConfigRuntime
 	// Convert runtime configs to spec configs for comparison
 	// This allows us to reuse the existing comparison logic that operates on specs
 	// The comparison will handle deep equality checking of all nested fields
-	desiredSpec := ProtocolConverterServiceConfigSpec{Config: protocolConverterDesiredTemplate}
-	observedSpec := ProtocolConverterServiceConfigSpec{Config: protocolConverterObservedTemplate}
+	desiredSpec := ProtocolConverterServiceConfigSpec{
+		DebugLevel: desired.DebugLevel,
+		Config:     protocolConverterDesiredTemplate,
+	}
+	observedSpec := ProtocolConverterServiceConfigSpec{
+		DebugLevel: observed.DebugLevel,
+		Config:     protocolConverterObservedTemplate,
+	}
 
 	return defaultComparator.ConfigsEqual(desiredSpec, observedSpec)
 }
@@ -170,8 +176,14 @@ func ConfigDiffRuntime(desired, observed ProtocolConverterServiceConfigRuntime) 
 	protocolConverterObservedTemplate := convertRuntimeToTemplate(observed)
 
 	// Convert to spec configs for diffing
-	desiredSpec := ProtocolConverterServiceConfigSpec{Config: protocolConverterDesiredTemplate}
-	observedSpec := ProtocolConverterServiceConfigSpec{Config: protocolConverterObservedTemplate}
+	desiredSpec := ProtocolConverterServiceConfigSpec{
+		DebugLevel: desired.DebugLevel,
+		Config:     protocolConverterDesiredTemplate,
+	}
+	observedSpec := ProtocolConverterServiceConfigSpec{
+		DebugLevel: observed.DebugLevel,
+		Config:     protocolConverterObservedTemplate,
+	}
 
 	return defaultComparator.ConfigDiff(desiredSpec, observedSpec)
 }
