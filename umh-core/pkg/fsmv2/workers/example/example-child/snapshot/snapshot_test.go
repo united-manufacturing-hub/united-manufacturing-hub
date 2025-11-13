@@ -58,8 +58,8 @@ func TestChildDesiredState_ShutdownRequested(t *testing.T) {
 				shutdownRequested: tt.shutdown,
 			}
 
-			if got := desired.ShutdownRequested(); got != tt.want {
-				t.Errorf("ShutdownRequested() = %v, want %v", got, tt.want)
+			if got := desired.IsShutdownRequested(); got != tt.want {
+				t.Errorf("IsShutdownRequested() = %v, want %v", got, tt.want)
 			}
 		})
 	}

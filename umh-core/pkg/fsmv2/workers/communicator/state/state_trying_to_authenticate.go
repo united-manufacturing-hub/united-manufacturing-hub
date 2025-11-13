@@ -86,7 +86,7 @@ func (s *TryingToAuthenticateState) Next(snapshot snapshot.CommunicatorSnapshot)
 	desired := snapshot.Desired
 	observed := snapshot.Observed
 
-	if desired.ShutdownRequested() {
+	if desired.IsShutdownRequested() {
 		return &StoppedState{}, fsmv2.SignalNone, nil
 	}
 

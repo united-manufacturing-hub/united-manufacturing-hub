@@ -46,7 +46,7 @@ type TestDesiredState struct {
 	ShutdownReq bool
 }
 
-func (t *TestDesiredState) ShutdownRequested() bool {
+func (t *TestDesiredState) IsShutdownRequested() bool {
 	return t.ShutdownReq
 }
 

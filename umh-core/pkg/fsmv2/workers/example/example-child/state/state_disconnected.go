@@ -36,7 +36,7 @@ func (s *DisconnectedState) Next(snap fsmv2.Snapshot) (fsmv2.State, fsmv2.Signal
 		Desired:  snap.Desired.(snapshot.ChildDesiredState),
 	}
 
-	if childSnap.Desired.ShutdownRequested() {
+	if childSnap.Desired.IsShutdownRequested() {
 		return NewTryingToStopState(s.deps), fsmv2.SignalNone, nil
 	}
 

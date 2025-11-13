@@ -57,7 +57,7 @@ type mockDesiredState struct {
 	shutdownRequested bool
 }
 
-func (m *mockDesiredState) ShutdownRequested() bool {
+func (m *mockDesiredState) IsShutdownRequested() bool {
 	return m.shutdownRequested
 }
 

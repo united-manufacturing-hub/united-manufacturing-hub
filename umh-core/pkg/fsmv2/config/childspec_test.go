@@ -165,7 +165,7 @@ state: stopped
 				State: "running",
 			}
 
-			Expect(desired.ShutdownRequested()).To(BeFalse())
+			Expect(desired.IsShutdownRequested()).To(BeFalse())
 		})
 
 		It("should return true when State is 'shutdown'", func() {
@@ -173,7 +173,7 @@ state: stopped
 				State: "shutdown",
 			}
 
-			Expect(desired.ShutdownRequested()).To(BeTrue())
+			Expect(desired.IsShutdownRequested()).To(BeTrue())
 		})
 	})
 })

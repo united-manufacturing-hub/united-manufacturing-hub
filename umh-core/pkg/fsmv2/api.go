@@ -74,9 +74,9 @@ type ObservedState interface {
 // Derived from user configuration via DeriveDesiredState().
 // The supervisor can inject shutdown requests here.
 type DesiredState interface {
-	// ShutdownRequested is set by supervisor to initiate graceful shutdown.
+	// IsShutdownRequested is set by supervisor to initiate graceful shutdown.
 	// States MUST check this first in their Next() method.
-	ShutdownRequested() bool
+	IsShutdownRequested() bool
 }
 
 // Snapshot is the complete view of the worker at a point in time.

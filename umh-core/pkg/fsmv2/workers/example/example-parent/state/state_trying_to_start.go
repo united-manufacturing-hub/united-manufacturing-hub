@@ -38,7 +38,7 @@ func (s *TryingToStartState) Next(snap fsmv2.Snapshot) (fsmv2.State, fsmv2.Signa
 		Desired:  snap.Desired.(snapshot.ParentDesiredState),
 	}
 
-	if parentSnap.Desired.ShutdownRequested() {
+	if parentSnap.Desired.IsShutdownRequested() {
 		return NewTryingToStopState(s.deps), fsmv2.SignalNone, nil
 	}
 

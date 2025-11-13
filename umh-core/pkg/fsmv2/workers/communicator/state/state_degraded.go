@@ -115,7 +115,7 @@ func (s *DegradedState) Next(snapshot snapshot.CommunicatorSnapshot) (BaseCommun
 	desired := snapshot.Desired
 	observed := snapshot.Observed
 
-	if desired.ShutdownRequested() {
+	if desired.IsShutdownRequested() {
 		return &StoppedState{}, fsmv2.SignalNone, nil
 	}
 

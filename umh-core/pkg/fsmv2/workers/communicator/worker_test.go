@@ -72,7 +72,7 @@ var _ = Describe("CommunicatorWorker", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(desired.State).To(Equal("running"))
-				Expect(desired.ShutdownRequested()).To(BeFalse())
+				Expect(desired.IsShutdownRequested()).To(BeFalse())
 				Expect(desired.ChildrenSpecs).To(BeNil())
 			})
 		})

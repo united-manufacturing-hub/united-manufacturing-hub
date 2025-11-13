@@ -187,6 +187,6 @@ type DesiredState struct {
 //	    }
 //	    // ... rest of logic
 //	}
-func (d DesiredState) ShutdownRequested() bool {
+func (d DesiredState) IsShutdownRequested() bool {
 	return d.State == "shutdown"
 }

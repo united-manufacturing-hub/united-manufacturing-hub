@@ -36,7 +36,7 @@ func (s *StoppedState) Next(snap fsmv2.Snapshot) (fsmv2.State, fsmv2.Signal, fsm
 		Desired:  snap.Desired.(snapshot.ParentDesiredState),
 	}
 
-	if parentSnap.Desired.ShutdownRequested() {
+	if parentSnap.Desired.IsShutdownRequested() {
 		return s, fsmv2.SignalNeedsRemoval, nil
 	}
 

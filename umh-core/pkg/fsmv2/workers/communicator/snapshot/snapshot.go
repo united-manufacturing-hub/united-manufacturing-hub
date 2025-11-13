@@ -92,7 +92,7 @@ type CommunicatorDesiredState struct {
 	Transport transport.Transport
 }
 
-func (s *CommunicatorDesiredState) ShutdownRequested() bool {
+func (s *CommunicatorDesiredState) IsShutdownRequested() bool {
 	return s.shutdownRequested
 }
 

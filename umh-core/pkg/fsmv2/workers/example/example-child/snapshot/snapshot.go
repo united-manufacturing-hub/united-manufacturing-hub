@@ -38,7 +38,7 @@ type ChildDesiredState struct {
 	Dependencies      ChildDependencies
 }
 
-func (s *ChildDesiredState) ShutdownRequested() bool {
+func (s *ChildDesiredState) IsShutdownRequested() bool {
 	return s.shutdownRequested
 }
 

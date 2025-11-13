@@ -554,7 +554,7 @@ func (m *mockObservedState) MarshalJSON() ([]byte, error) {
 
 type mockDesiredState struct{}
 
-func (m *mockDesiredState) ShutdownRequested() bool {
+func (m *mockDesiredState) IsShutdownRequested() bool {
 	return false
 }
 

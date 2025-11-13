@@ -74,7 +74,7 @@ type StoppedState struct {
 func (s *StoppedState) Next(snapshot snapshot.CommunicatorSnapshot) (BaseCommunicatorState, fsmv2.Signal, fsmv2.Action) {
 	desired := snapshot.Desired
 
-	if desired.ShutdownRequested() {
+	if desired.IsShutdownRequested() {
 		return s, fsmv2.SignalNeedsRemoval, nil
 	}
 

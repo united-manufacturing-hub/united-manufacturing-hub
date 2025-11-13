@@ -104,7 +104,7 @@ func (s *SyncingState) Next(snapshot snapshot.CommunicatorSnapshot) (BaseCommuni
 	desired := snapshot.Desired
 	observed := snapshot.Observed
 
-	if desired.ShutdownRequested() {
+	if desired.IsShutdownRequested() {
 		return &StoppedState{}, fsmv2.SignalNone, nil
 	}
 

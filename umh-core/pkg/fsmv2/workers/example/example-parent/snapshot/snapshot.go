@@ -34,13 +34,13 @@ type ParentSnapshot struct {
 
 // ParentDesiredState represents the target configuration for the parent worker
 type ParentDesiredState struct {
-	shutdownRequested bool
+	ShutdownRequested bool
 	ChildCount        int
 	Dependencies      ParentDependencies
 }
 
-func (s *ParentDesiredState) ShutdownRequested() bool {
-	return s.shutdownRequested
+func (s *ParentDesiredState) IsShutdownRequested() bool {
+	return s.ShutdownRequested
 }
 
 // ParentObservedState represents the current state of the parent worker
