@@ -1043,4 +1043,134 @@ var _ = Describe("TriangularStore", func() {
 			Expect(err).To(MatchError(persistence.ErrNotFound))
 		})
 	})
+
+	Describe("LoadObservedTyped[T]", func() {
+		BeforeEach(func() {
+			registry.Register(&storage.CollectionMetadata{
+				Name:          "parent_identity",
+				WorkerType:    "parent",
+				Role:          storage.RoleIdentity,
+				CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt},
+				IndexedFields: []string{storage.FieldSyncID},
+			})
+			registry.Register(&storage.CollectionMetadata{
+				Name:          "parent_desired",
+				WorkerType:    "parent",
+				Role:          storage.RoleDesired,
+				CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
+				IndexedFields: []string{storage.FieldSyncID},
+			})
+			registry.Register(&storage.CollectionMetadata{
+				Name:          "parent_observed",
+				WorkerType:    "parent",
+				Role:          storage.RoleObserved,
+				CSEFields:     []string{storage.FieldSyncID, storage.FieldCreatedAt, storage.FieldUpdatedAt},
+				IndexedFields: []string{storage.FieldSyncID},
+			})
+
+			observedType := reflect.TypeOf(ParentObservedState{})
+			ts.TypeRegistry().RegisterWorkerType("parent", observedType, nil)
+		})
+
+		It("should derive table name from type and load typed observed state", func() {
+			observed := persistence.Document{
+				"id":     "parent-001",
+				"name":   "ParentWorker",
+				"status": "running",
+			}
+			_, err := ts.SaveObserved(ctx, "parent", "parent-001", observed)
+			Expect(err).NotTo(HaveOccurred())
+
+			result, err := storage.LoadObservedTyped[ParentObservedState](ts, ctx, "parent-001")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result).To(BeAssignableToTypeOf(ParentObservedState{}))
+			Expect(result.Name).To(Equal("ParentWorker"))
+			Expect(result.Status).To(Equal("running"))
+		})
+
+		It("should return ErrNotFound for non-existent document", func() {
+			_, err := storage.LoadObservedTyped[ParentObservedState](ts, ctx, "non-existent")
+			Expect(err).To(Equal(persistence.ErrNotFound))
+		})
+	})
+
+	Describe("SaveObservedTyped[T]", func() {
+		BeforeEach(func() {
+			registry.Register(&storage.CollectionMetadata{
+				Name:          "parent_identity",
+				WorkerType:    "parent",
+				Role:          storage.RoleIdentity,
+				CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt},
+				IndexedFields: []string{storage.FieldSyncID},
+			})
+			registry.Register(&storage.CollectionMetadata{
+				Name:          "parent_desired",
+				WorkerType:    "parent",
+				Role:          storage.RoleDesired,
+				CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
+				IndexedFields: []string{storage.FieldSyncID},
+			})
+			registry.Register(&storage.CollectionMetadata{
+				Name:          "parent_observed",
+				WorkerType:    "parent",
+				Role:          storage.RoleObserved,
+				CSEFields:     []string{storage.FieldSyncID, storage.FieldCreatedAt, storage.FieldUpdatedAt},
+				IndexedFields: []string{storage.FieldSyncID},
+			})
+
+			observedType := reflect.TypeOf(ParentObservedState{})
+			ts.TypeRegistry().RegisterWorkerType("parent", observedType, nil)
+		})
+
+		It("should derive table name from type and save typed observed state", func() {
+			observed := ParentObservedState{
+				Name:   "ParentWorker",
+				Status: "running",
+			}
+
+			changed, err := storage.SaveObservedTyped[ParentObservedState](ts, ctx, "parent-001", observed)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(changed).To(BeTrue())
+
+			result, err := storage.LoadObservedTyped[ParentObservedState](ts, ctx, "parent-001")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.Name).To(Equal("ParentWorker"))
+			Expect(result.Status).To(Equal("running"))
+		})
+
+		It("should serialize struct to Document before saving", func() {
+			observed := ParentObservedState{
+				Name:   "TestWorker",
+				Status: "stopped",
+			}
+
+			changed, err := storage.SaveObservedTyped[ParentObservedState](ts, ctx, "parent-002", observed)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(changed).To(BeTrue())
+
+			doc, err := ts.LoadObserved(ctx, "parent", "parent-002")
+			Expect(err).NotTo(HaveOccurred())
+			docMap, ok := doc.(persistence.Document)
+			Expect(ok).To(BeTrue())
+			Expect(docMap["name"]).To(Equal("TestWorker"))
+			Expect(docMap["status"]).To(Equal("stopped"))
+		})
+
+		It("should detect no change when saving identical observed state", func() {
+			observed := ParentObservedState{
+				Name:   "SameWorker",
+				Status: "idle",
+			}
+
+			// First save
+			changed, err := storage.SaveObservedTyped[ParentObservedState](ts, ctx, "parent-003", observed)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(changed).To(BeTrue())
+
+			// Second save with same data
+			changed, err = storage.SaveObservedTyped[ParentObservedState](ts, ctx, "parent-003", observed)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(changed).To(BeFalse())
+		})
+	})
 })

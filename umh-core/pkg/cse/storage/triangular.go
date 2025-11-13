@@ -440,8 +440,15 @@ func (ts *TriangularStore) saveObservedInternal(ctx context.Context, workerType 
 	}
 
 	// Check if this is first save or update
-	_, err = ts.store.Get(ctx, observedMeta.Name, id)
+	currentDoc, err := ts.store.Get(ctx, observedMeta.Name, id)
 	isNew := err != nil && errors.Is(err, persistence.ErrNotFound)
+
+	// For updates, preserve the version field (observed state doesn't increment version)
+	if !isNew && currentDoc != nil {
+		if version, ok := currentDoc[FieldVersion]; ok {
+			observedDoc[FieldVersion] = version
+		}
+	}
 
 	// Inject CSE metadata (without sync ID - will be set after successful operation)
 	ts.injectMetadata(observedDoc, RoleObserved, isNew)
@@ -530,9 +537,15 @@ func (ts *TriangularStore) SaveObserved(ctx context.Context, workerType string, 
 		return false, err
 	}
 
-	// Filter CSE fields from both documents
+	// Filter CSE fields, ID, and version from both documents for comparison
+	// ID is excluded because it's an identifier, not part of the observed state data
+	// Version is excluded for observed state (it's not incremented, just preserved)
 	currentFiltered := ts.filterCSEFields(currentDoc, observedMeta.CSEFields)
+	delete(currentFiltered, "id")
+	delete(currentFiltered, FieldVersion)
 	newFiltered := ts.filterCSEFields(newDoc, observedMeta.CSEFields)
+	delete(newFiltered, "id")
+	delete(newFiltered, FieldVersion)
 
 	// Compare filtered documents
 	if reflect.DeepEqual(currentFiltered, newFiltered) {
@@ -1025,6 +1038,95 @@ func SaveDesiredTyped[T any](ts *TriangularStore, ctx context.Context, id string
 	doc["id"] = id
 
 	return ts.SaveDesired(ctx, workerType, id, doc)
+}
+
+// LoadObservedTyped retrieves system reality using generic type parameter.
+//
+// This is a package-level generic function that provides type-safe access to observed state.
+// It derives the workerType from the type parameter T and delegates to TriangularStore.LoadObserved.
+//
+// Type parameter T must be a struct ending in "ObservedState" (e.g., ParentObservedState).
+// The workerType is derived by removing "ObservedState" suffix and lowercasing.
+//
+// Parameters:
+//   - ts: TriangularStore instance
+//   - ctx: Cancellation context
+//   - id: Unique worker identifier
+//
+// Returns:
+//   - T: Observed state as typed struct
+//   - error: ErrNotFound if not found, or deserialization error
+//
+// Example:
+//
+//	result, err := storage.LoadObservedTyped[ParentObservedState](ts, ctx, "parent-001")
+//	// result is ParentObservedState (not interface{})
+func LoadObservedTyped[T any](ts *TriangularStore, ctx context.Context, id string) (T, error) {
+	var zero T
+	workerType := DeriveWorkerType[T]()
+
+	result, err := ts.LoadObserved(ctx, workerType, id)
+	if err != nil {
+		return zero, err
+	}
+
+	// If result is already the correct type, return it directly
+	if typed, ok := result.(T); ok {
+		return typed, nil
+	}
+
+	// Otherwise, deserialize Document to typed struct
+	doc, ok := result.(persistence.Document)
+	if !ok {
+		return zero, fmt.Errorf("expected persistence.Document but got %T", result)
+	}
+
+	var dest T
+	if err := documentToStruct(doc, &dest); err != nil {
+		return zero, fmt.Errorf("failed to deserialize to %T: %w", zero, err)
+	}
+
+	return dest, nil
+}
+
+// SaveObservedTyped saves system reality using generic type parameter.
+//
+// This is a package-level generic function that provides type-safe saving of observed state.
+// It derives the workerType from the type parameter T and delegates to TriangularStore.SaveObserved.
+//
+// Type parameter T must be a struct ending in "ObservedState" (e.g., ParentObservedState).
+// The workerType is derived by removing "ObservedState" suffix and lowercasing.
+//
+// SaveObserved implements delta detection: it only writes to the database if the observed state
+// has actually changed (excluding CSE metadata fields). This reduces unnecessary I/O and prevents
+// spurious updates in change-sensitive workflows.
+//
+// Parameters:
+//   - ts: TriangularStore instance
+//   - ctx: Cancellation context
+//   - id: Unique worker identifier
+//   - observed: Observed state as typed struct
+//
+// Returns:
+//   - changed: true if data was written (state changed), false if write was skipped (no change)
+//   - error: Serialization error or database error
+//
+// Example:
+//
+//	observed := ParentObservedState{Name: "Worker1", Status: "running"}
+//	changed, err := storage.SaveObservedTyped[ParentObservedState](ts, ctx, "parent-001", observed)
+//	// changed=true if this is a new write or data changed, false if identical to previous
+func SaveObservedTyped[T any](ts *TriangularStore, ctx context.Context, id string, observed T) (bool, error) {
+	workerType := DeriveWorkerType[T]()
+
+	doc, err := structToDocument(observed)
+	if err != nil {
+		return false, fmt.Errorf("failed to serialize %T: %w", observed, err)
+	}
+
+	doc["id"] = id
+
+	return ts.SaveObserved(ctx, workerType, id, doc)
 }
 
 func DeriveWorkerType[T any]() string {

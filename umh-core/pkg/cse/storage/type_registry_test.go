@@ -25,8 +25,8 @@ import (
 )
 
 type ParentObservedState struct {
-	Name   string
-	Status string
+	Name   string `json:"name"`
+	Status string `json:"status"`
 }
 
 type ParentDesiredState struct {
