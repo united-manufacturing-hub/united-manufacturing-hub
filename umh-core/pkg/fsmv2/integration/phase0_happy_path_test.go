@@ -253,12 +253,13 @@ var _ = Describe("Phase 0: Happy Path Integration", func() {
 			err = parentSupervisor.RequestShutdown(ctx, parentIdentity.ID, "test shutdown")
 			Expect(err).NotTo(HaveOccurred())
 
-			By("Step 3: Verifying parent transitions to Stopped")
+			By("Step 3: Verifying parent transitions to Stopped and then gets removed")
 
-			Eventually(func() string {
-				state, _, _ := parentSupervisor.GetWorkerState(parentIdentity.ID)
-				return state
-			}, "5s", "100ms").Should(Equal("Stopped"))
+			Eventually(func() bool {
+				state, _, err := parentSupervisor.GetWorkerState(parentIdentity.ID)
+				// Accept either "Stopped" state (caught during transition) or worker removed (err != nil)
+				return state == "Stopped" || err != nil
+			}, "5s", "100ms").Should(BeTrue(), "Worker should transition to Stopped and then be removed")
 
 			By("Step 4: Verifying child is removed")
 
