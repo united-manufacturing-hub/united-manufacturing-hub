@@ -826,9 +826,26 @@ func (s *Supervisor) tickLoop(ctx context.Context) {
 
 // tickWorker performs one FSM tick for a specific worker.
 func (s *Supervisor) tickWorker(ctx context.Context, workerID string) error {
+	s.logger.Debugw("lifecycle",
+		"lifecycle_event", "mutex_lock_acquire",
+		"mutex_name", "supervisor.mu",
+		"lock_type", "read",
+		"worker_id", workerID)
+
 	s.mu.RLock()
+
+	s.logger.Debugw("lifecycle",
+		"lifecycle_event", "mutex_lock_acquired",
+		"mutex_name", "supervisor.mu",
+		"worker_id", workerID)
+
 	workerCtx, exists := s.workers[workerID]
 	s.mu.RUnlock()
+
+	s.logger.Debugw("lifecycle",
+		"lifecycle_event", "mutex_unlock",
+		"mutex_name", "supervisor.mu",
+		"worker_id", workerID)
 
 	if !exists {
 		return fmt.Errorf("worker %s not found", workerID)
@@ -836,11 +853,18 @@ func (s *Supervisor) tickWorker(ctx context.Context, workerID string) error {
 
 	// Skip if tick already in progress
 	if !workerCtx.tickInProgress.CompareAndSwap(false, true) {
-		s.logger.Debugf("Skipping tick for %s (previous tick still running)", workerID)
+		s.logger.Debugw("lifecycle",
+			"lifecycle_event", "tick_skip",
+			"worker_id", workerID,
+			"reason", "previous_tick_in_progress")
 
 		return nil
 	}
 	defer workerCtx.tickInProgress.Store(false)
+
+	s.logger.Debugw("lifecycle",
+		"lifecycle_event", "tick_start",
+		"worker_id", workerID)
 
 	workerCtx.mu.RLock()
 	s.logger.Debugf("Ticking worker: %s, current state: %s", workerID, workerCtx.currentState.String())
@@ -1002,15 +1026,39 @@ func (s *Supervisor) tickWorker(ctx context.Context, workerID string) error {
 
 	// Transition to next state
 	if nextState != currentState {
+		s.logger.Debugw("lifecycle",
+			"lifecycle_event", "state_transition",
+			"worker_id", workerID,
+			"from_state", currentState.String(),
+			"to_state", nextState.String(),
+			"reason", nextState.Reason())
+
 		s.logger.Debugf("State transition for worker %s: %s → %s",
 			workerID, currentState.String(), nextState.String())
 
 		s.logger.Infof("State transition: %s -> %s (reason: %s)",
 			currentState.String(), nextState.String(), nextState.Reason())
 
+		s.logger.Debugw("lifecycle",
+			"lifecycle_event", "mutex_lock_acquire",
+			"mutex_name", "workerCtx.mu",
+			"lock_type", "write",
+			"worker_id", workerID)
+
 		workerCtx.mu.Lock()
+
+		s.logger.Debugw("lifecycle",
+			"lifecycle_event", "mutex_lock_acquired",
+			"mutex_name", "workerCtx.mu",
+			"worker_id", workerID)
+
 		workerCtx.currentState = nextState
 		workerCtx.mu.Unlock()
+
+		s.logger.Debugw("lifecycle",
+			"lifecycle_event", "mutex_unlock",
+			"mutex_name", "workerCtx.mu",
+			"worker_id", workerID)
 	} else {
 		s.logger.Debugf("State unchanged for worker %s: %s", workerID, currentState.String())
 	}
@@ -1019,6 +1067,11 @@ func (s *Supervisor) tickWorker(ctx context.Context, workerID string) error {
 	if err := s.processSignal(ctx, workerID, signal); err != nil {
 		return fmt.Errorf("signal processing failed: %w", err)
 	}
+
+	s.logger.Debugw("lifecycle",
+		"lifecycle_event", "tick_complete",
+		"worker_id", workerID,
+		"final_state", workerCtx.currentState.String())
 
 	return nil
 }
@@ -1308,6 +1361,11 @@ func (s *Supervisor) TickAll(ctx context.Context) error {
 
 // processSignal handles signals from states.
 func (s *Supervisor) processSignal(ctx context.Context, workerID string, signal fsmv2.Signal) error {
+	s.logger.Debugw("lifecycle",
+		"lifecycle_event", "signal_processing",
+		"worker_id", workerID,
+		"signal", int(signal))
+
 	switch signal {
 	case fsmv2.SignalNone:
 		// Normal operation
@@ -1525,10 +1583,21 @@ func (s *Supervisor) reconcileChildren(specs []config.ChildSpec) error {
 		specNames[spec.Name] = true
 
 		if child, exists := s.children[spec.Name]; exists {
+			s.logger.Debugw("lifecycle",
+				"lifecycle_event", "child_update",
+				"child_name", spec.Name,
+				"parent_worker_type", s.workerType)
+
 			child.UpdateUserSpec(spec.UserSpec)
 			child.stateMapping = spec.StateMapping
 			updatedCount++
 		} else {
+			s.logger.Debugw("lifecycle",
+				"lifecycle_event", "child_add_start",
+				"child_name", spec.Name,
+				"child_worker_type", spec.WorkerType,
+				"parent_worker_type", s.workerType)
+
 			s.logger.Infof("Adding child %s with worker type %s", spec.Name, spec.WorkerType)
 			addedCount++
 
@@ -1577,6 +1646,11 @@ func (s *Supervisor) reconcileChildren(specs []config.ChildSpec) error {
 
 			s.children[spec.Name] = childSupervisor
 
+			s.logger.Debugw("lifecycle",
+				"lifecycle_event", "child_add_complete",
+				"child_name", spec.Name,
+				"parent_worker_type", s.workerType)
+
 			// Start child supervisor if parent is already started
 			if childCtx, started := s.getStartedContext(); started {
 				if childCtx.Err() == nil {
@@ -1591,6 +1665,11 @@ func (s *Supervisor) reconcileChildren(specs []config.ChildSpec) error {
 
 	for name := range s.children {
 		if !specNames[name] {
+			s.logger.Debugw("lifecycle",
+				"lifecycle_event", "child_remove_start",
+				"child_name", name,
+				"parent_worker_type", s.workerType)
+
 			s.logger.Infof("Removing child %s (not in desired specs)", name)
 
 			child := s.children[name]
@@ -1605,6 +1684,11 @@ func (s *Supervisor) reconcileChildren(specs []config.ChildSpec) error {
 			}
 
 			delete(s.children, name)
+
+			s.logger.Debugw("lifecycle",
+				"lifecycle_event", "child_remove_complete",
+				"child_name", name,
+				"parent_worker_type", s.workerType)
 
 			removedCount++
 		}
@@ -1635,11 +1719,30 @@ func (s *Supervisor) UpdateUserSpec(spec config.UserSpec) {
 // This method is called when the supervisor is being removed from its parent.
 // This method is idempotent - calling it multiple times is safe.
 func (s *Supervisor) Shutdown() {
+	s.logger.Debugw("lifecycle",
+		"lifecycle_event", "shutdown_start",
+		"worker_type", s.workerType)
+
+	s.logger.Debugw("lifecycle",
+		"lifecycle_event", "mutex_lock_acquire",
+		"mutex_name", "supervisor.mu",
+		"lock_type", "write")
+
 	s.mu.Lock()
+
+	s.logger.Debugw("lifecycle",
+		"lifecycle_event", "mutex_lock_acquired",
+		"mutex_name", "supervisor.mu")
 
 	// Make idempotent - check if already shut down
 	if !s.started.Load() {
 		s.mu.Unlock()
+
+		s.logger.Debugw("lifecycle",
+			"lifecycle_event", "shutdown_skip",
+			"worker_type", s.workerType,
+			"reason", "already_shutdown")
+
 		s.logger.Debugf("Supervisor already shut down for worker type: %s", s.workerType)
 		return
 	}
@@ -1702,6 +1805,11 @@ func (s *Supervisor) Shutdown() {
 
 	// Now shutdown children recursively (outside lock)
 	for childName, child := range childrenToShutdown {
+		s.logger.Debugw("lifecycle",
+			"lifecycle_event", "child_shutdown_start",
+			"child_name", childName,
+			"parent_worker_type", s.workerType)
+
 		s.logger.Debugf("Shutting down child: %s", childName)
 		child.Shutdown()
 
@@ -1711,7 +1819,16 @@ func (s *Supervisor) Shutdown() {
 			<-done
 			s.logger.Debugf("Child %s shutdown complete", childName)
 		}
+
+		s.logger.Debugw("lifecycle",
+			"lifecycle_event", "child_shutdown_complete",
+			"child_name", childName,
+			"parent_worker_type", s.workerType)
 	}
+
+	s.logger.Debugw("lifecycle",
+		"lifecycle_event", "shutdown_complete",
+		"worker_type", s.workerType)
 }
 
 // applyStateMapping applies parent state mapping to all children.
