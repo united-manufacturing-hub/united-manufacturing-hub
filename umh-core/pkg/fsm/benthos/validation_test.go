@@ -27,31 +27,30 @@ var _ = Describe("Benthos FSM Path Traversal Protection (ENG-3869)", func() {
 			It("should reject path traversal with ../../../etc/passwd", func() {
 				err := config.ValidateComponentName("../../../etc/passwd")
 				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("only lowercase letters"))
+				Expect(err.Error()).To(ContainSubstring("only letters"))
 			})
 
 			It("should reject path traversal with ../../data/secrets", func() {
 				err := config.ValidateComponentName("../../data/secrets")
 				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("only lowercase letters"))
+				Expect(err.Error()).To(ContainSubstring("only letters"))
 			})
 
 			It("should reject path traversal with ./sensitive", func() {
 				err := config.ValidateComponentName("./sensitive")
 				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("only lowercase letters"))
+				Expect(err.Error()).To(ContainSubstring("only letters"))
 			})
 
-			It("should reject names with uppercase letters", func() {
+			It("should accept names with uppercase letters", func() {
 				err := config.ValidateComponentName("Bridge-One")
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("only lowercase letters"))
+				Expect(err).NotTo(HaveOccurred())
 			})
 
 			It("should reject names with special characters", func() {
 				err := config.ValidateComponentName("bridge@special")
 				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("only lowercase letters"))
+				Expect(err.Error()).To(ContainSubstring("only letters"))
 			})
 
 			It("should accept names with underscores", func() {
