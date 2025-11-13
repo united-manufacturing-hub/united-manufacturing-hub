@@ -52,7 +52,6 @@ type ProtocolConverterServiceConfigTemplate struct {
 	// of the converter.  Symmetrically to the read‑DFC we override
 	// `BenthosConfig.Input` so that it always consumes from UNS.
 	DataflowComponentWriteServiceConfig dataflowcomponentserviceconfig.DataflowComponentServiceConfig `yaml:"dataflowcomponent_write,omitempty"`
-	DebugLevel                          bool                                                          `yaml:"debug_level,omitempty"`
 }
 
 // ProtocolConverterServiceConfigRuntime is the **fully rendered** form of a
@@ -140,7 +139,6 @@ func convertRuntimeToTemplate(runtime ProtocolConverterServiceConfigRuntime) Pro
 	connectionTemplate := connectionserviceconfig.ConvertRuntimeToTemplate(runtime.ConnectionServiceConfig)
 
 	return ProtocolConverterServiceConfigTemplate{
-		DebugLevel:                          runtime.DebugLevel,
 		ConnectionServiceConfig:             connectionTemplate,
 		DataflowComponentReadServiceConfig:  runtime.DataflowComponentReadServiceConfig,
 		DataflowComponentWriteServiceConfig: runtime.DataflowComponentWriteServiceConfig,
@@ -190,16 +188,16 @@ func SpecToRuntime(spec ProtocolConverterServiceConfigSpec) (ProtocolConverterSe
 		return ProtocolConverterServiceConfigRuntime{}, fmt.Errorf("invalid connection configuration: %w", err)
 	}
 
-	// Propagate debug_level with priority: DFC level > Template level > Spec level
+	// Propagate debug_level with priority: DFC level > Spec level
 	// This ensures the most specific debug setting takes precedence
 	readDFC := spec.Config.DataflowComponentReadServiceConfig
-	readDFC.DebugLevel = readDFC.DebugLevel || spec.Config.DebugLevel || spec.DebugLevel
+	readDFC.DebugLevel = readDFC.DebugLevel || spec.DebugLevel
 
 	writeDFC := spec.Config.DataflowComponentWriteServiceConfig
-	writeDFC.DebugLevel = writeDFC.DebugLevel || spec.Config.DebugLevel || spec.DebugLevel
+	writeDFC.DebugLevel = writeDFC.DebugLevel || spec.DebugLevel
 
 	return ProtocolConverterServiceConfigRuntime{
-		DebugLevel:                          spec.Config.DebugLevel,
+		DebugLevel:                          spec.DebugLevel,
 		ConnectionServiceConfig:             connRuntime,
 		DataflowComponentReadServiceConfig:  readDFC,
 		DataflowComponentWriteServiceConfig: writeDFC,

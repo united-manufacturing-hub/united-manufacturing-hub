@@ -28,8 +28,8 @@ var _ = Describe("ProtocolConverterServiceConfig Integration", func() {
 		It("should enable OPC_DEBUG when debug_level is true", func() {
 			// Test the complete flow with debug_level: true
 			yamlData := `
+debug_level: true
 config:
-  debug_level: true
   connection:
     name: "test-connection"
     nmap:
@@ -57,7 +57,7 @@ config:
 			Expect(err).NotTo(HaveOccurred())
 
 			// 2. Verify debug_level parsed correctly
-			Expect(spec.Config.DebugLevel).To(BeTrue())
+			Expect(spec.DebugLevel).To(BeTrue())
 
 			// 3. Convert Spec to Runtime
 			runtime, err := protocolconverterserviceconfig.SpecToRuntime(spec)
@@ -99,8 +99,8 @@ config:
 		It("should not set OPC_DEBUG when debug_level is false", func() {
 			// Test the complete flow with debug_level: false
 			yamlData := `
+debug_level: false
 config:
-  debug_level: false
   connection:
     name: "test-connection"
     nmap:
@@ -128,7 +128,7 @@ config:
 			Expect(err).NotTo(HaveOccurred())
 
 			// 2. Verify debug_level parsed correctly
-			Expect(spec.Config.DebugLevel).To(BeFalse())
+			Expect(spec.DebugLevel).To(BeFalse())
 
 			// 3. Convert Spec to Runtime
 			runtime, err := protocolconverterserviceconfig.SpecToRuntime(spec)
@@ -201,7 +201,7 @@ config:
 			Expect(err).NotTo(HaveOccurred())
 
 			// 2. Verify debug_level defaults to false
-			Expect(spec.Config.DebugLevel).To(BeFalse())
+			Expect(spec.DebugLevel).To(BeFalse())
 
 			// 3. Convert Spec to Runtime
 			runtime, err := protocolconverterserviceconfig.SpecToRuntime(spec)
@@ -253,8 +253,8 @@ config:
 		BeforeEach(func() {
 			// Additional test to verify the complete integration chain explicitly
 			yamlData := `
+debug_level: true
 config:
-  debug_level: true
   connection:
     name: "integration-test"
     nmap:
@@ -363,7 +363,7 @@ config:
 				Expect(err).NotTo(HaveOccurred())
 
 				// Set debug_level programmatically
-				spec.Config.DebugLevel = tc.debugLevel
+				spec.DebugLevel = tc.debugLevel
 
 				// Convert to Runtime
 				runtime, err := protocolconverterserviceconfig.SpecToRuntime(spec)

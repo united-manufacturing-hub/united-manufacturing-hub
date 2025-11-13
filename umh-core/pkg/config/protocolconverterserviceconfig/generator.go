@@ -58,13 +58,13 @@ func (g *Generator) configToMap(cfg ProtocolConverterServiceConfigSpec) map[stri
 	variableBundleGenerator := variables.NewGenerator()
 
 	// Get the template configs with DebugLevel properly set
-	// Priority: DFC level (most specific) > Template level > Spec level (least specific)
+	// Priority: DFC level (most specific) > Spec level (least specific)
 	dfcReadConfig := cfg.Config.DataflowComponentReadServiceConfig
-	dfcReadConfig.DebugLevel = dfcReadConfig.DebugLevel || cfg.Config.DebugLevel || cfg.DebugLevel
+	dfcReadConfig.DebugLevel = dfcReadConfig.DebugLevel || cfg.DebugLevel
 	dfcReadConfigMap := dfcGenerator.ConfigToMap(dfcReadConfig)
 
 	dfcWriteConfig := cfg.Config.DataflowComponentWriteServiceConfig
-	dfcWriteConfig.DebugLevel = dfcWriteConfig.DebugLevel || cfg.Config.DebugLevel || cfg.DebugLevel
+	dfcWriteConfig.DebugLevel = dfcWriteConfig.DebugLevel || cfg.DebugLevel
 	dfcWriteConfigMap := dfcGenerator.ConfigToMap(dfcWriteConfig)
 	// Convert template to runtime for config map generation
 	connRuntime, err := connectionserviceconfig.ConvertTemplateToRuntime(cfg.Config.ConnectionServiceConfig)

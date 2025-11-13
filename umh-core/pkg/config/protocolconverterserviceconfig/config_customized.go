@@ -34,11 +34,9 @@ func (c ProtocolConverterServiceConfigSpec) GetDFCReadServiceConfig() dataflowco
 	dfcReadConfig := c.Config.DataflowComponentReadServiceConfig
 
 	// Propagate debug_level from Protocol Converter to DFC
-	// Spec-level debug_level takes precedence over Template-level
-	if c.DebugLevel {
+	// DFC-level takes precedence over Spec-level
+	if !dfcReadConfig.DebugLevel {
 		dfcReadConfig.DebugLevel = c.DebugLevel
-	} else {
-		dfcReadConfig.DebugLevel = c.Config.DebugLevel
 	}
 
 	// Only append UNS output if there's an input config
@@ -60,11 +58,9 @@ func (c ProtocolConverterServiceConfigSpec) GetDFCWriteServiceConfig() dataflowc
 	dfcWriteConfig := c.Config.DataflowComponentWriteServiceConfig
 
 	// Propagate debug_level from Protocol Converter to DFC
-	// Spec-level debug_level takes precedence over Template-level
-	if c.DebugLevel {
+	// DFC-level takes precedence over Spec-level
+	if !dfcWriteConfig.DebugLevel {
 		dfcWriteConfig.DebugLevel = c.DebugLevel
-	} else {
-		dfcWriteConfig.DebugLevel = c.Config.DebugLevel
 	}
 
 	// Only append UNS input if there's an output config

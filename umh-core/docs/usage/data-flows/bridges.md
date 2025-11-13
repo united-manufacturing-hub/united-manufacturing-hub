@@ -136,6 +136,7 @@ protocolConverter:
   - name: my-plc-bridge
     desiredState: active
     protocolConverterServiceConfig:
+      debug_level: false  # Direct child (matches standalone flows)
       location:
         2: "production-line"
         3: "plc-01"

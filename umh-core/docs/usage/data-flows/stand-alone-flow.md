@@ -86,7 +86,7 @@ Options include:
 
 ### Enable Debug Logging
 
-For troubleshooting data processing issues in stand-alone flows:
+For troubleshooting data processing issues in stand-alone flows, enable the `debug_level` configuration option:
 
 **Via YAML:**
 ```yaml
@@ -94,18 +94,20 @@ dataFlow:
   - name: custom-processor
     desiredState: active
     dataFlowComponentConfig:
-      config:
-        debug_level: true  # Enable detailed logging
+      debug_level: true  # Enable detailed logging (default: false)
       benthos:
         # ...
 ```
 
-Debug logging shows:
-- Detailed input/output operations
-- Processing step execution
-- Data transformation details
+**What it controls:**
+- Log level: DEBUG (when `true`) vs INFO (when `false`, default)
+- Detailed operational logging for input/output operations
+- Processing step execution details
+- Data transformation trace information
 
-**Disable after troubleshooting** to reduce log volume. View logs via right-click → **Logs**.
+**Important:** Debug logging generates significantly more log data and may impact performance. **Use only during active troubleshooting** and disable afterward.
+
+View logs via right-click → **Logs**. For comprehensive debug_level configuration reference, see [Configuration Reference](../../reference/configuration-reference.md).
 
 ## Configuration (YAML)
 

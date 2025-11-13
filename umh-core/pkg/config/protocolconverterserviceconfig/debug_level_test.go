@@ -26,8 +26,8 @@ var _ = Describe("ProtocolConverterServiceConfigSpec DebugLevel", func() {
 		Context("when debug_level is true", func() {
 			It("should parse DebugLevel as true", func() {
 				yamlData := `
+debug_level: true
 config:
-  debug_level: true
   connection:
     name: "test-connection"
   dataflowcomponent_read:
@@ -50,15 +50,15 @@ config:
 
 				err := yaml.Unmarshal([]byte(yamlData), &spec)
 				Expect(err).NotTo(HaveOccurred())
-				Expect(spec.Config.DebugLevel).To(BeTrue())
+				Expect(spec.DebugLevel).To(BeTrue())
 			})
 		})
 
 		Context("when debug_level is false", func() {
 			It("should parse DebugLevel as false", func() {
 				yamlData := `
+debug_level: false
 config:
-  debug_level: false
   connection:
     name: "test-connection"
   dataflowcomponent_read:
@@ -81,7 +81,7 @@ config:
 
 				err := yaml.Unmarshal([]byte(yamlData), &spec)
 				Expect(err).NotTo(HaveOccurred())
-				Expect(spec.Config.DebugLevel).To(BeFalse())
+				Expect(spec.DebugLevel).To(BeFalse())
 			})
 		})
 
@@ -111,7 +111,7 @@ config:
 
 				err := yaml.Unmarshal([]byte(yamlData), &spec)
 				Expect(err).NotTo(HaveOccurred())
-				Expect(spec.Config.DebugLevel).To(BeFalse())
+				Expect(spec.DebugLevel).To(BeFalse())
 			})
 		})
 	})
