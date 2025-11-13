@@ -200,14 +200,17 @@ func SpecToRuntime(spec ProtocolConverterServiceConfigSpec) (ProtocolConverterSe
 		return ProtocolConverterServiceConfigRuntime{}, fmt.Errorf("invalid connection configuration: %w", err)
 	}
 
-	// Propagate debug_level with priority: DFC level > Spec level
-	// This ensures the most specific debug setting takes precedence
+	// Propagate debug_level: DFC-level OR Spec-level (any true enables debug)
 	readDFC := spec.Config.DataflowComponentReadServiceConfig
 	readDFC.DebugLevel = readDFC.DebugLevel || spec.DebugLevel
 
 	writeDFC := spec.Config.DataflowComponentWriteServiceConfig
 	writeDFC.DebugLevel = writeDFC.DebugLevel || spec.DebugLevel
 
+	// Runtime config preserves both bridge-level and propagated DFC-level debug settings:
+	// - spec.DebugLevel: Bridge-level setting for config comparison (ConfigsEqualRuntime)
+	// - readDFC.DebugLevel/writeDFC.DebugLevel: Propagated settings for actual execution
+	// Both are needed: spec.DebugLevel detects config changes, DFC fields control runtime behavior
 	return ProtocolConverterServiceConfigRuntime{
 		DebugLevel:                          spec.DebugLevel,
 		ConnectionServiceConfig:             connRuntime,
