@@ -44,13 +44,9 @@ type TriangularStoreInterface interface {
 	SaveDesired(ctx context.Context, workerType string, id string, desired persistence.Document) error
 
 	// LoadDesired retrieves user intent.
+	// Returns persistence.Document or typed struct based on TypeRegistry.
 	// Returns persistence.ErrNotFound if desired state doesn't exist.
-	LoadDesired(ctx context.Context, workerType string, id string) (persistence.Document, error)
-
-	// LoadDesiredTyped retrieves desired state and deserializes into a typed struct.
-	// Eliminates type assertions and enables compile-time checking in FSM states.
-	// Returns persistence.ErrNotFound if desired state doesn't exist.
-	LoadDesiredTyped(ctx context.Context, workerType string, id string, dest interface{}) error
+	LoadDesired(ctx context.Context, workerType string, id string) (interface{}, error)
 
 	// SaveObserved stores system reality with delta checking.
 	// Auto-increments _sync_id for delta synchronization.
@@ -59,13 +55,9 @@ type TriangularStoreInterface interface {
 	SaveObserved(ctx context.Context, workerType string, id string, observed interface{}) (changed bool, err error)
 
 	// LoadObserved retrieves system state.
+	// Returns persistence.Document or typed struct based on TypeRegistry.
 	// Returns persistence.ErrNotFound if observed state doesn't exist.
-	LoadObserved(ctx context.Context, workerType string, id string) (persistence.Document, error)
-
-	// LoadObservedTyped retrieves observed state and deserializes into a typed struct.
-	// Eliminates type assertions and enables compile-time checking in FSM states.
-	// Returns persistence.ErrNotFound if observed state doesn't exist.
-	LoadObservedTyped(ctx context.Context, workerType string, id string, dest interface{}) error
+	LoadObserved(ctx context.Context, workerType string, id string) (interface{}, error)
 
 	// LoadSnapshot atomically loads all three parts of the triangular model.
 	// Ensures consistent view of worker state at a single point in time.

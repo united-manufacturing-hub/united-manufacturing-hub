@@ -97,7 +97,7 @@ func (m *mockTriangularStore) SaveDesired(ctx context.Context, workerType string
 	return nil
 }
 
-func (m *mockTriangularStore) LoadDesired(ctx context.Context, workerType string, id string) (persistence.Document, error) {
+func (m *mockTriangularStore) LoadDesired(ctx context.Context, workerType string, id string) (interface{}, error) {
 	m.LoadDesiredCalled++
 
 	if m.LoadDesiredErr != nil {
@@ -139,7 +139,7 @@ func (m *mockTriangularStore) SaveObserved(ctx context.Context, workerType strin
 	return true, nil
 }
 
-func (m *mockTriangularStore) LoadObserved(ctx context.Context, workerType string, id string) (persistence.Document, error) {
+func (m *mockTriangularStore) LoadObserved(ctx context.Context, workerType string, id string) (interface{}, error) {
 	m.LoadObservedCalled++
 
 	if m.LoadObservedErr != nil {

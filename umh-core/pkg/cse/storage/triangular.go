@@ -852,6 +852,55 @@ func documentToStruct(doc persistence.Document, dest interface{}) error {
 	return nil
 }
 
+// LoadDesired retrieves user intent/configuration using generic type parameter.
+//
+// This is a package-level generic function that provides type-safe access to desired state.
+// It derives the workerType from the type parameter T and delegates to TriangularStore.LoadDesired.
+//
+// Type parameter T must be a struct ending in "DesiredState" (e.g., ParentDesiredState).
+// The workerType is derived by removing "DesiredState" suffix and lowercasing.
+//
+// Parameters:
+//   - ts: TriangularStore instance
+//   - ctx: Cancellation context
+//   - id: Unique worker identifier
+//
+// Returns:
+//   - T: Desired state as typed struct
+//   - error: ErrNotFound if not found, or deserialization error
+//
+// Example:
+//
+//	result, err := storage.LoadDesired[ParentDesiredState](ts, ctx, "parent-001")
+//	// result is ParentDesiredState (not interface{})
+func LoadDesiredTyped[T any](ts *TriangularStore, ctx context.Context, id string) (T, error) {
+	var zero T
+	workerType := DeriveWorkerType[T]()
+
+	result, err := ts.LoadDesired(ctx, workerType, id)
+	if err != nil {
+		return zero, err
+	}
+
+	// If result is already the correct type, return it directly
+	if typed, ok := result.(T); ok {
+		return typed, nil
+	}
+
+	// Otherwise, deserialize Document to typed struct
+	doc, ok := result.(persistence.Document)
+	if !ok {
+		return zero, fmt.Errorf("expected persistence.Document but got %T", result)
+	}
+
+	var dest T
+	if err := documentToStruct(doc, &dest); err != nil {
+		return zero, fmt.Errorf("failed to deserialize to %T: %w", zero, err)
+	}
+
+	return dest, nil
+}
+
 func DeriveWorkerType[T any]() string {
 	var zero T
 	typeName := reflect.TypeOf(zero).Name()

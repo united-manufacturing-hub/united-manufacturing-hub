@@ -866,6 +866,56 @@ var _ = Describe("TriangularStore", func() {
 		})
 	})
 
+	Describe("LoadDesired[T]", func() {
+		BeforeEach(func() {
+			registry.Register(&storage.CollectionMetadata{
+				Name:          "parent_identity",
+				WorkerType:    "parent",
+				Role:          storage.RoleIdentity,
+				CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt},
+				IndexedFields: []string{storage.FieldSyncID},
+			})
+			registry.Register(&storage.CollectionMetadata{
+				Name:          "parent_desired",
+				WorkerType:    "parent",
+				Role:          storage.RoleDesired,
+				CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
+				IndexedFields: []string{storage.FieldSyncID},
+			})
+			registry.Register(&storage.CollectionMetadata{
+				Name:          "parent_observed",
+				WorkerType:    "parent",
+				Role:          storage.RoleObserved,
+				CSEFields:     []string{storage.FieldSyncID, storage.FieldCreatedAt, storage.FieldUpdatedAt},
+				IndexedFields: []string{storage.FieldSyncID},
+			})
+
+			desiredType := reflect.TypeOf(ParentDesiredState{})
+			ts.TypeRegistry().RegisterWorkerType("parent", nil, desiredType)
+		})
+
+		It("should derive table name from type and load typed desired state", func() {
+			desired := persistence.Document{
+				"id":      "parent-001",
+				"name":    "ParentWorker",
+				"command": "start",
+			}
+			err := ts.SaveDesired(ctx, "parent", "parent-001", desired)
+			Expect(err).NotTo(HaveOccurred())
+
+			result, err := storage.LoadDesiredTyped[ParentDesiredState](ts, ctx, "parent-001")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result).To(BeAssignableToTypeOf(ParentDesiredState{}))
+			Expect(result.Name).To(Equal("ParentWorker"))
+			Expect(result.Command).To(Equal("start"))
+		})
+
+		It("should return ErrNotFound for non-existent document", func() {
+			_, err := storage.LoadDesiredTyped[ParentDesiredState](ts, ctx, "non-existent")
+			Expect(err).To(Equal(persistence.ErrNotFound))
+		})
+	})
+
 	Describe("LoadObserved with TypeRegistry", func() {
 		It("should return Document when no type registered", func() {
 			observed := persistence.Document{
