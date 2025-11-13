@@ -59,7 +59,10 @@ func NewBenthosMonitorManager(name string) *BenthosMonitorManager {
 		},
 		// Create instance
 		func(fc config.BenthosMonitorConfig) (public_fsm.FSMInstance, error) {
-			inst := NewBenthosMonitorInstance(fc)
+			inst, err := NewBenthosMonitorInstance(fc)
+			if err != nil {
+				return nil, err
+			}
 
 			return inst, nil
 		},
