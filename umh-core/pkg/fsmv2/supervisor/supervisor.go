@@ -30,6 +30,29 @@
 //
 //	Tests may use direct storage access or mock implementations for
 //	test setup and verification purposes.
+//
+// # LOCK ORDER
+//
+// To prevent deadlocks, locks must be acquired in this order:
+//
+// 1. MANDATORY: Supervisor.mu → WorkerContext.mu
+//    - Always acquire Supervisor.mu first to lookup worker
+//    - Then acquire WorkerContext.mu to modify state
+//    - Violation risk: HIGH (immediate deadlock)
+//
+// 2. ADVISORY: Supervisor.mu → Supervisor.ctxMu
+//    - If both needed, acquire mu first
+//    - However, ctxMu is independent and can be acquired alone
+//    - Violation risk: LOW (rarely needed together)
+//
+// 3. CRITICAL: Never hold Supervisor.mu while calling child/worker methods
+//    - Extract data under lock, release, then call methods
+//    - Prevents circular dependencies in hierarchy
+//    - Current code already follows this (lines 1783-1791, 1420-1436)
+//
+// 4. WorkerContext.mu locks are independent
+//    - No ordering between different workers' locks
+//    - Enables true parallel worker processing
 package supervisor
 
 import (
@@ -118,6 +141,17 @@ func normalizeType(t reflect.Type) reflect.Type {
 	return t
 }
 
+// checkLockOrder is a placeholder for runtime lock order assertion.
+// This function will be implemented in Phase 3 to verify that locks
+// are acquired in the correct order as documented in the LOCK ORDER section.
+//
+// For now, this function exists to satisfy Phase 2 test requirements.
+// Future implementation will panic if locks are acquired out of order.
+func checkLockOrder() {
+	// Phase 2: Placeholder only
+	// Phase 3: Will implement runtime verification
+}
+
 // CollectorHealth tracks the health and restart state of the observation collector.
 // The collector runs in a separate goroutine and may fail due to network issues,
 // blocked operations, or other infrastructure problems.
@@ -172,9 +206,18 @@ func (f *factoryRegistryAdapter) ListRegisteredTypes() []string {
 }
 
 type Supervisor struct {
-	workerType            string                           // Type of workers managed (e.g., "container")
-	workers               map[string]*WorkerContext        // workerID → worker context
-	mu                    sync.RWMutex                     // Protects workers map
+	workerType string // Type of workers managed (e.g., "container")
+	workers    map[string]*WorkerContext // workerID → worker context
+	// mu Protects access to workers map, expectedObservedTypes, expectedDesiredTypes,
+	// children, childDoneChans, stateMapping, globalVars, and mappedParentState.
+	//
+	// This is a sync.RWMutex to allow concurrent reads from multiple goroutines
+	// (e.g., GetWorker, ListWorkers) while ensuring exclusive writes when modifying
+	// worker registry state (e.g., AddWorker, RemoveWorker).
+	//
+	// Lock Order: Must be acquired BEFORE WorkerContext.mu when both are needed.
+	// See package-level LOCK ORDER section for details.
+	mu sync.RWMutex
 	store                 storage.TriangularStoreInterface // State persistence layer (triangular model)
 	logger                *zap.SugaredLogger               // Logger for supervisor operations
 	tickInterval          time.Duration                    // How often to evaluate state transitions
@@ -194,12 +237,21 @@ type Supervisor struct {
 	healthChecker         *InfrastructureHealthChecker     // Infrastructure health monitoring
 	circuitOpen           bool                             // Circuit breaker state
 	actionExecutor        *execution.ActionExecutor        // Async action execution (Phase 2)
-	metricsStopChan       chan struct{}                    // Channel to stop metrics reporter
-	metricsReporterDone   chan struct{}                    // Channel signaling metrics reporter stopped
-	ctx                   context.Context                  // Context for supervisor lifecycle
-	ctxCancel             context.CancelFunc               // Cancel function for supervisor context
-	ctxMu                 sync.RWMutex                     // Protects ctx access
-	started               atomic.Bool                      // Whether supervisor has been started
+	metricsStopChan     chan struct{}      // Channel to stop metrics reporter
+	metricsReporterDone chan struct{}      // Channel signaling metrics reporter stopped
+	ctx                 context.Context    // Context for supervisor lifecycle
+	ctxCancel           context.CancelFunc // Cancel function for supervisor context
+	// ctxMu Protects ctx and ctxCancel to prevent TOCTOU races during shutdown.
+	//
+	// Without this lock, a goroutine could check ctx.Err() (finding it non-cancelled),
+	// then another goroutine calls ctxCancel(), then the first goroutine uses ctx
+	// assuming it's still valid. This lock ensures atomic read-check-use patterns.
+	//
+	// This lock is independent from Supervisor.mu and can be acquired separately.
+	// It can be acquired alone when checking context status, or after Supervisor.mu
+	// if both are needed (advisory order).
+	ctxMu   sync.RWMutex
+	started atomic.Bool // Whether supervisor has been started
 }
 
 // WorkerContext encapsulates the runtime state for a single worker
@@ -209,6 +261,17 @@ type Supervisor struct {
 // THREAD SAFETY: currentState is protected by mu. Always lock before accessing.
 // tickInProgress prevents concurrent ticks for the same worker.
 type WorkerContext struct {
+	// mu Protects currentState (per-worker FSM state).
+	//
+	// This is a sync.RWMutex because state is checked on every tick (frequent concurrent reads)
+	// but only written during state transitions (infrequent writes).
+	//
+	// Per-worker isolation: Each WorkerContext has its own independent mu lock,
+	// enabling true parallel processing of multiple workers without contention.
+	// There is no ordering between different workers' mu locks.
+	//
+	// Lock Order: This lock must be acquired AFTER Supervisor.mu when both are needed.
+	// See package-level LOCK ORDER section for details.
 	mu             sync.RWMutex
 	tickInProgress atomic.Bool
 	identity       fsmv2.Identity
