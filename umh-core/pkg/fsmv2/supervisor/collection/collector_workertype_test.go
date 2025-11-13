@@ -65,7 +65,7 @@ var _ = Describe("Collector WorkerType", func() {
 				"id":                identity.ID,
 				"shutdownRequested": false,
 			}
-			err = triangularStore.SaveObserved(ctx, workerType, identity.ID, observedDoc)
+			_, err = triangularStore.SaveObserved(ctx, workerType, identity.ID, observedDoc)
 			Expect(err).ToNot(HaveOccurred())
 
 			Expect(registry.IsRegistered("s6_observed")).To(BeTrue(), "should register s6_observed collection, not container_observed")
@@ -74,8 +74,10 @@ var _ = Describe("Collector WorkerType", func() {
 			doc, err := triangularStore.LoadObserved(ctx, "s6", identity.ID)
 			Expect(err).ToNot(HaveOccurred(), "should load observed state that was just saved")
 			Expect(doc).ToNot(BeNil())
-			Expect(doc["id"]).To(Equal(identity.ID))
-			Expect(doc["shutdownRequested"]).To(BeFalse())
+			docMap, ok := doc.(persistence.Document)
+			Expect(ok).To(BeTrue(), "LoadObserved should return persistence.Document")
+			Expect(docMap["id"]).To(Equal(identity.ID))
+			Expect(docMap["shutdownRequested"]).To(BeFalse())
 		})
 	})
 
@@ -125,7 +127,7 @@ var _ = Describe("Collector WorkerType", func() {
 					"id":                identity.ID,
 					"shutdownRequested": false,
 				}
-				err = triangularStore.SaveObserved(ctx, wt, identity.ID, observedDoc)
+				_, err = triangularStore.SaveObserved(ctx, wt, identity.ID, observedDoc)
 				Expect(err).ToNot(HaveOccurred())
 
 				supervisors = append(supervisors, s)
@@ -144,8 +146,10 @@ var _ = Describe("Collector WorkerType", func() {
 				doc, err := triangularStore.LoadObserved(ctx, wt, identity.ID)
 				Expect(err).ToNot(HaveOccurred(), fmt.Sprintf("should load observed state from %s collection", wt))
 				Expect(doc).ToNot(BeNil())
-				Expect(doc["id"]).To(Equal(identity.ID))
-				Expect(doc["shutdownRequested"]).To(BeFalse())
+				docMap, ok := doc.(persistence.Document)
+				Expect(ok).To(BeTrue(), "LoadObserved should return persistence.Document")
+				Expect(docMap["id"]).To(Equal(identity.ID))
+				Expect(docMap["shutdownRequested"]).To(BeFalse())
 
 				otherWorkerType := "benthos"
 				if wt == "benthos" {

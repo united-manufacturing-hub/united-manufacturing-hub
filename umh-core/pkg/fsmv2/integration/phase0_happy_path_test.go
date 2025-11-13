@@ -29,6 +29,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence/memory"
 	parent "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/example-parent"
 	child "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/example-child"
@@ -527,7 +528,12 @@ func (w *DeltaTestWorker) GetCurrentSyncID() int64 {
 		return 0
 	}
 
-	syncID, ok := doc["_sync_id"].(int64)
+	docMap, ok := doc.(persistence.Document)
+	if !ok {
+		return 0
+	}
+
+	syncID, ok := docMap["_sync_id"].(int64)
 	if !ok {
 		return 0
 	}
