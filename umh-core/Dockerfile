@@ -18,7 +18,7 @@ ARG ALPINE_VERSION=MUST_BE_SET_BY_MAKEFILE
 ARG NMAP_VERSION=MUST_BE_SET_BY_MAKEFILE
 
 # --- Cache Stage ---
-FROM scratch as cache
+FROM scratch AS cache
 COPY .docker-cache/s6-overlay/ /s6-overlay/
 COPY .docker-cache/benthos/ /benthos/
 COPY .docker-cache/redpanda/amd64/ /redpanda/amd64/
@@ -26,7 +26,7 @@ COPY .docker-cache/redpanda/arm64/ /redpanda/arm64/
 
 
 # --- Downloader Stage (using cached files) ---
-FROM alpine:${ALPINE_VERSION} as downloader
+FROM alpine:${ALPINE_VERSION} AS downloader
 RUN apk add --no-cache bash curl jq tzdata ca-certificates xz bc
 
 ARG S6_OVERLAY_VERSION=MUST_BE_SET_BY_MAKEFILE
@@ -74,7 +74,7 @@ RUN apk add --no-cache nmap=${NMAP_VERSION}
 # Cleanup all the files we don't need
 RUN rm -rf /s6-overlay /benthos /redpanda
 
-FROM golang:${GOLANG_VERSION}-alpine as build
+FROM golang:${GOLANG_VERSION}-alpine AS build
 ARG S6_OVERLAY_VERSION=MUST_BE_SET_BY_MAKEFILE
 ARG BENTHOS_UMH_VERSION=MUST_BE_SET_BY_MAKEFILE
 ARG REDPANDA_VERSION=MUST_BE_SET_BY_MAKEFILE
@@ -120,7 +120,7 @@ RUN if [ "$DEBUG" = "true" ]; then \
     fi
 
 # --- Final Stage ---
-FROM alpine:${ALPINE_VERSION} as runner
+FROM alpine:${ALPINE_VERSION} AS runner
 # Copy everything from the downloader stage
 COPY --from=downloader / /
 
