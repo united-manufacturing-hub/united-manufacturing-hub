@@ -17,7 +17,7 @@ package config
 import "errors"
 
 // ValidateComponentName validates that a component name contains only valid characters
-// and is not empty. Valid characters are lowercase letters (a-z), numbers (0-9), underscores (_) and hyphens (-).
+// and is not empty. Valid characters are letters (a-z, A-Z), numbers (0-9), underscores (_) and hyphens (-).
 func ValidateComponentName(name string) error {
 	if name == "" {
 		return errors.New("name cannot be empty")
@@ -28,8 +28,8 @@ func ValidateComponentName(name string) error {
 	}
 
 	for _, char := range name {
-		if (char < 'a' || char > 'z') && (char < '0' || char > '9') && char != '-' && char != '_' {
-			return errors.New("only lowercase letters, numbers, dashes and underscores are allowed")
+		if (char < 'a' || char > 'z') && (char < 'A' || char > 'Z') && (char < '0' || char > '9') && char != '-' && char != '_' {
+			return errors.New("only letters, numbers, dashes and underscores are allowed")
 		}
 	}
 
