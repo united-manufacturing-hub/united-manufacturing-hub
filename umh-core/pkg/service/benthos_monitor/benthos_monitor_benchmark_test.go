@@ -307,7 +307,10 @@ func BenchmarkCompleteProcessing(b *testing.B) {
 // BenchmarkParseBenthosLogs benchmarks the ParseBenthosLogs function.
 func BenchmarkParseBenthosLogsWithPercentiles(b *testing.B) {
 	// Create service and test data
-	service := NewBenthosMonitorService("test-benthos")
+	service, err := NewBenthosMonitorService("test-benthos")
+	if err != nil {
+		b.Fatalf("Failed to create service: %v", err)
+	}
 	logs := prepareSampleLogEntries()
 	ctx := context.Background()
 

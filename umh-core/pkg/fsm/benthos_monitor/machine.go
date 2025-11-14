@@ -31,10 +31,14 @@ import (
 )
 
 // NewBenthosMonitorInstance creates a new BenthosMonitorInstance with the standard transitions.
-func NewBenthosMonitorInstance(config config.BenthosMonitorConfig) *BenthosMonitorInstance {
-	return NewBenthosMonitorInstanceWithService(config, benthos_monitor.NewBenthosMonitorService(config.Name,
+func NewBenthosMonitorInstance(config config.BenthosMonitorConfig) (*BenthosMonitorInstance, error) {
+	service, err := benthos_monitor.NewBenthosMonitorService(config.Name,
 		benthos_monitor.WithS6Service(s6.NewDefaultService()),
-	))
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create benthos monitor service: %w", err)
+	}
+	return NewBenthosMonitorInstanceWithService(config, service), nil
 }
 
 // NewBenthosMonitorInstanceWithService creates a new BenthosMonitorInstance with a custom monitor service.

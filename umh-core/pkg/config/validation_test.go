@@ -12,181 +12,215 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package actions_test
+package config_test
 
 import (
 	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 )
 
 const (
 	errEmptyName         = "name cannot be empty"
 	errInvalidStartEnd   = "name has to start and end with a letter or number"
-	errInvalidCharacters = "only lowercase letters, numbers, dashes and underscores are allowed"
+	errInvalidCharacters = "only letters, numbers, dashes and underscores are allowed"
 )
 
 var _ = Describe("ValidateComponentName", func() {
 	Context("Valid component names", func() {
 		It("should accept lowercase letters only", func() {
-			err := actions.ValidateComponentName("validname")
+			err := config.ValidateComponentName("validname")
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should accept uppercase letters only", func() {
+			err := config.ValidateComponentName("VALIDNAME")
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should accept mixed case letters", func() {
+			err := config.ValidateComponentName("ValidName")
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		It("should accept numbers only", func() {
-			err := actions.ValidateComponentName("123456")
+			err := config.ValidateComponentName("123456")
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		It("should accept mix of lowercase letters and numbers", func() {
-			err := actions.ValidateComponentName("component123")
+			err := config.ValidateComponentName("component123")
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should accept mix of uppercase letters and numbers", func() {
+			err := config.ValidateComponentName("Component123")
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should accept mix of mixed case letters and numbers", func() {
+			err := config.ValidateComponentName("MyComponent123")
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		It("should accept hyphens in the middle", func() {
-			err := actions.ValidateComponentName("valid-name")
+			err := config.ValidateComponentName("valid-name")
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		It("should accept underscores in the middle", func() {
-			err := actions.ValidateComponentName("valid_name")
+			err := config.ValidateComponentName("valid_name")
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		It("should accept complex valid names", func() {
-			err := actions.ValidateComponentName("my-component_123")
+			err := config.ValidateComponentName("my-component_123")
 			Expect(err).NotTo(HaveOccurred())
 		})
 
-		It("should accept names starting with letters", func() {
-			err := actions.ValidateComponentName("a123")
+		It("should accept complex valid names with mixed case", func() {
+			err := config.ValidateComponentName("My-Component_123")
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should accept names starting with lowercase letters", func() {
+			err := config.ValidateComponentName("a123")
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should accept names starting with uppercase letters", func() {
+			err := config.ValidateComponentName("A123")
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		It("should accept names starting with numbers", func() {
-			err := actions.ValidateComponentName("1component")
+			err := config.ValidateComponentName("1component")
 			Expect(err).NotTo(HaveOccurred())
 		})
 
-		It("should accept names ending with letters", func() {
-			err := actions.ValidateComponentName("123a")
+		It("should accept names ending with lowercase letters", func() {
+			err := config.ValidateComponentName("123a")
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should accept names ending with uppercase letters", func() {
+			err := config.ValidateComponentName("123A")
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		It("should accept names ending with numbers", func() {
-			err := actions.ValidateComponentName("component1")
+			err := config.ValidateComponentName("component1")
 			Expect(err).NotTo(HaveOccurred())
 		})
 	})
 
 	Context("Invalid component names", func() {
 		It("should reject empty names", func() {
-			err := actions.ValidateComponentName("")
+			err := config.ValidateComponentName("")
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(Equal(errEmptyName))
 		})
 
 		It("should reject names starting with hyphen", func() {
-			err := actions.ValidateComponentName("-component")
+			err := config.ValidateComponentName("-component")
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(Equal(errInvalidStartEnd))
 		})
 
 		It("should reject names starting with underscore", func() {
-			err := actions.ValidateComponentName("_component")
+			err := config.ValidateComponentName("_component")
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(Equal(errInvalidStartEnd))
 		})
 
 		It("should reject names ending with hyphen", func() {
-			err := actions.ValidateComponentName("component-")
+			err := config.ValidateComponentName("component-")
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(Equal(errInvalidStartEnd))
 		})
 
 		It("should reject names ending with underscore", func() {
-			err := actions.ValidateComponentName("component_")
+			err := config.ValidateComponentName("component_")
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(Equal(errInvalidStartEnd))
 		})
 
-		It("should reject uppercase letters", func() {
-			err := actions.ValidateComponentName("Component")
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(Equal(errInvalidCharacters))
-		})
-
 		It("should reject special characters", func() {
-			err := actions.ValidateComponentName("component@123")
+			err := config.ValidateComponentName("component@123")
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(Equal(errInvalidCharacters))
 		})
 
 		It("should reject spaces", func() {
-			err := actions.ValidateComponentName("component name")
+			err := config.ValidateComponentName("component name")
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(Equal(errInvalidCharacters))
 		})
 
 		It("should reject dots", func() {
-			err := actions.ValidateComponentName("component.name")
+			err := config.ValidateComponentName("component.name")
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(Equal(errInvalidCharacters))
 		})
 
 		It("should reject slashes", func() {
-			err := actions.ValidateComponentName("component/name")
+			err := config.ValidateComponentName("component/name")
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(Equal(errInvalidCharacters))
 		})
 
 		It("should reject exclamation marks", func() {
-			err := actions.ValidateComponentName("component!")
+			err := config.ValidateComponentName("component!")
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(Equal(errInvalidCharacters))
 		})
 
 		It("should reject question marks", func() {
-			err := actions.ValidateComponentName("component?")
+			err := config.ValidateComponentName("component?")
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(Equal(errInvalidCharacters))
 		})
 
 		It("should reject hash symbols", func() {
-			err := actions.ValidateComponentName("component#123")
+			err := config.ValidateComponentName("component#123")
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(Equal(errInvalidCharacters))
 		})
 	})
 
 	Context("Edge cases", func() {
-		It("should accept single character names", func() {
-			err := actions.ValidateComponentName("a")
+		It("should accept single lowercase character names", func() {
+			err := config.ValidateComponentName("a")
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should accept single uppercase character names", func() {
+			err := config.ValidateComponentName("A")
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		It("should accept single digit names", func() {
-			err := actions.ValidateComponentName("1")
+			err := config.ValidateComponentName("1")
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		It("should reject single hyphen", func() {
-			err := actions.ValidateComponentName("-")
+			err := config.ValidateComponentName("-")
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(Equal(errInvalidStartEnd))
 		})
 
 		It("should reject single underscore", func() {
-			err := actions.ValidateComponentName("_")
+			err := config.ValidateComponentName("_")
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(Equal(errInvalidStartEnd))
 		})
 
-		It("should accept very long valid names", func() {
-			longName := strings.Repeat("a", 100)
-			err := actions.ValidateComponentName(longName)
+		It("should accept long names", func() {
+			longName := strings.Repeat("a", 255)
+			err := config.ValidateComponentName(longName)
 			Expect(err).NotTo(HaveOccurred())
 		})
 	})
