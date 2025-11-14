@@ -212,7 +212,7 @@ var _ = Describe("Supervisor Race Conditions", func() {
 					defer wg.Done()
 
 					for i := 0; i < 100; i++ {
-						err := s.Tick(ctx)
+						err := s.TestTick(ctx)
 						if err != nil {
 							By(fmt.Sprintf("Tick failed: %v", err))
 						}

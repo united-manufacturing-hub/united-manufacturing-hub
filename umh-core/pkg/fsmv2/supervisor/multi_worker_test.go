@@ -314,7 +314,7 @@ var _ = Describe("Multi-Worker Supervisor", func() {
 
 		It("should return no error when no workers exist", func() {
 			ctx := context.Background()
-			err := s.TickAll(ctx)
+			err := s.TestTickAll(ctx)
 			Expect(err).ToNot(HaveOccurred())
 		})
 	})

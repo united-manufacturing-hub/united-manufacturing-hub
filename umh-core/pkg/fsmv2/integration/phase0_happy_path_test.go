@@ -250,7 +250,7 @@ var _ = Describe("Phase 0: Happy Path Integration", func() {
 
 			By("Step 2: Requesting parent shutdown via FSM")
 
-			err = parentSupervisor.RequestShutdown(ctx, parentIdentity.ID, "test shutdown")
+			err = parentSupervisor.TestRequestShutdown(ctx, parentIdentity.ID, "test shutdown")
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Step 3: Verifying parent transitions to Stopped and then gets removed")

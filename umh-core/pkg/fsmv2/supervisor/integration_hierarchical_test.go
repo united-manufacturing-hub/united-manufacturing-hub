@@ -187,7 +187,7 @@ var _ = Describe("Integration: Hierarchical Composition (Task 0.7)", func() {
 			err := parentSup.AddWorker(identity, parentWorker)
 			Expect(err).NotTo(HaveOccurred())
 
-			parentSup.UpdateUserSpec(config.UserSpec{Config: "parent-config"})
+			parentSup.TestUpdateUserSpec(config.UserSpec{Config: "parent-config"})
 
 			store.desired["parent"] = map[string]persistence.Document{
 				"parent-worker": {
@@ -204,7 +204,7 @@ var _ = Describe("Integration: Hierarchical Composition (Task 0.7)", func() {
 			}
 
 			// First tick: parent creates child
-			err = parentSup.Tick(ctx)
+			err = parentSup.TestTick(ctx)
 			Expect(err).NotTo(HaveOccurred())
 
 			events := tickLog.GetEvents()
@@ -246,7 +246,7 @@ var _ = Describe("Integration: Hierarchical Composition (Task 0.7)", func() {
 			err = childSup.AddWorker(childIdentity, childWorker)
 			Expect(err).NotTo(HaveOccurred())
 
-			childSup.UpdateUserSpec(config.UserSpec{Config: "child-config"})
+			childSup.TestUpdateUserSpec(config.UserSpec{Config: "child-config"})
 
 			// Setup store for child worker
 			store.desired["child"] = map[string]persistence.Document{
@@ -273,7 +273,7 @@ var _ = Describe("Integration: Hierarchical Composition (Task 0.7)", func() {
 			tickLog.Clear()
 
 			// Second tick: parent ticks, which should tick child, which creates grandchild
-			err = parentSup.Tick(ctx)
+			err = parentSup.TestTick(ctx)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify all workers derived state
@@ -326,7 +326,7 @@ var _ = Describe("Integration: Hierarchical Composition (Task 0.7)", func() {
 			err := parentSup.AddWorker(identity, parentWorker)
 			Expect(err).NotTo(HaveOccurred())
 
-			parentSup.UpdateUserSpec(config.UserSpec{Config: "parent-config"})
+			parentSup.TestUpdateUserSpec(config.UserSpec{Config: "parent-config"})
 
 			store.desired["parent"] = map[string]persistence.Document{
 				"parent-worker": {
@@ -342,7 +342,7 @@ var _ = Describe("Integration: Hierarchical Composition (Task 0.7)", func() {
 				},
 			}
 
-			err = parentSup.Tick(ctx)
+			err = parentSup.TestTick(ctx)
 			Expect(err).NotTo(HaveOccurred())
 
 			parentWorker.childrenSpecs = []config.ChildSpec{
@@ -366,7 +366,7 @@ var _ = Describe("Integration: Hierarchical Composition (Task 0.7)", func() {
 			}
 
 			tickLog.Clear()
-			err = parentSup.Tick(ctx)
+			err = parentSup.TestTick(ctx)
 			Expect(err).NotTo(HaveOccurred())
 
 			events := tickLog.GetEvents()
@@ -411,7 +411,7 @@ var _ = Describe("Integration: Hierarchical Composition (Task 0.7)", func() {
 			err := parentSup.AddWorker(identity, parentWorker)
 			Expect(err).NotTo(HaveOccurred())
 
-			parentSup.UpdateUserSpec(config.UserSpec{Config: "parent-config"})
+			parentSup.TestUpdateUserSpec(config.UserSpec{Config: "parent-config"})
 
 			store.desired["parent"] = map[string]persistence.Document{
 				"parent-worker": {
@@ -434,7 +434,7 @@ var _ = Describe("Integration: Hierarchical Composition (Task 0.7)", func() {
 				},
 			}
 
-			err = parentSup.Tick(ctx)
+			err = parentSup.TestTick(ctx)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify children exist before removal
@@ -444,7 +444,7 @@ var _ = Describe("Integration: Hierarchical Composition (Task 0.7)", func() {
 			parentWorker.childrenSpecs = []config.ChildSpec{}
 
 			tickLog.Clear()
-			err = parentSup.Tick(ctx)
+			err = parentSup.TestTick(ctx)
 			Expect(err).NotTo(HaveOccurred())
 
 			events := tickLog.GetEvents()
@@ -493,7 +493,7 @@ var _ = Describe("Integration: Hierarchical Composition (Task 0.7)", func() {
 			err := parentSup.AddWorker(identity, parentWorker)
 			Expect(err).NotTo(HaveOccurred())
 
-			parentSup.UpdateUserSpec(config.UserSpec{Config: "parent-config"})
+			parentSup.TestUpdateUserSpec(config.UserSpec{Config: "parent-config"})
 
 			store.desired["parent"] = map[string]persistence.Document{
 				"parent-worker": {
@@ -509,7 +509,7 @@ var _ = Describe("Integration: Hierarchical Composition (Task 0.7)", func() {
 				},
 			}
 
-			err = parentSup.Tick(ctx)
+			err = parentSup.TestTick(ctx)
 			Expect(err).NotTo(HaveOccurred())
 
 			events := tickLog.GetEvents()
@@ -568,7 +568,7 @@ var _ = Describe("Integration: Hierarchical Composition (Task 0.7)", func() {
 			err := parentSup.AddWorker(identity, parentWorker)
 			Expect(err).NotTo(HaveOccurred())
 
-			parentSup.UpdateUserSpec(config.UserSpec{Config: "parent-config"})
+			parentSup.TestUpdateUserSpec(config.UserSpec{Config: "parent-config"})
 
 			store.desired["parent"] = map[string]persistence.Document{
 				"parent-worker": {
@@ -585,7 +585,7 @@ var _ = Describe("Integration: Hierarchical Composition (Task 0.7)", func() {
 			}
 
 			// First tick: Parent creates both child supervisors
-			err = parentSup.Tick(ctx)
+			err = parentSup.TestTick(ctx)
 			Expect(err).NotTo(HaveOccurred())
 
 			events := tickLog.GetEvents()
@@ -670,7 +670,7 @@ var _ = Describe("Integration: Hierarchical Composition (Task 0.7)", func() {
 			tickLog.Clear()
 
 			// Second tick: Failing child errors, but parent should continue
-			err = parentSup.Tick(ctx)
+			err = parentSup.TestTick(ctx)
 
 			// CRITICAL: Parent tick should SUCCEED despite child failure
 			// This is the core assertion - failure isolation means parent doesn't fail when child fails
@@ -720,7 +720,7 @@ var _ = Describe("Integration: Hierarchical Composition (Task 0.7)", func() {
 			err := parentSup.AddWorker(identity, parentWorker)
 			Expect(err).NotTo(HaveOccurred())
 
-			parentSup.UpdateUserSpec(config.UserSpec{Config: "parent-config"})
+			parentSup.TestUpdateUserSpec(config.UserSpec{Config: "parent-config"})
 
 			store.desired["parent"] = map[string]persistence.Document{
 				"parent-worker": {
@@ -743,7 +743,7 @@ var _ = Describe("Integration: Hierarchical Composition (Task 0.7)", func() {
 				},
 			}
 
-			err = parentSup.Tick(ctx)
+			err = parentSup.TestTick(ctx)
 			Expect(err).NotTo(HaveOccurred())
 
 			parentWorker.childrenSpecs = []config.ChildSpec{
@@ -758,7 +758,7 @@ var _ = Describe("Integration: Hierarchical Composition (Task 0.7)", func() {
 			}
 
 			tickLog.Clear()
-			err = parentSup.Tick(ctx)
+			err = parentSup.TestTick(ctx)
 			Expect(err).NotTo(HaveOccurred())
 
 			events := tickLog.GetEvents()
@@ -817,7 +817,7 @@ var _ = Describe("Integration: Hierarchical Composition (Task 0.7)", func() {
 			err := parentSup.AddWorker(identity, parentWorker)
 			Expect(err).NotTo(HaveOccurred())
 
-			parentSup.UpdateUserSpec(config.UserSpec{Config: "parent-config"})
+			parentSup.TestUpdateUserSpec(config.UserSpec{Config: "parent-config"})
 
 			store.desired["parent"] = map[string]persistence.Document{
 				"parent-worker": {
@@ -840,7 +840,7 @@ var _ = Describe("Integration: Hierarchical Composition (Task 0.7)", func() {
 				},
 			}
 
-			err = parentSup.Tick(ctx)
+			err = parentSup.TestTick(ctx)
 			Expect(err).NotTo(HaveOccurred())
 
 			events := tickLog.GetEvents()
@@ -889,7 +889,7 @@ var _ = Describe("Integration: Hierarchical Composition (Task 0.7)", func() {
 			err := parentSup.AddWorker(identity, parentWorker)
 			Expect(err).NotTo(HaveOccurred())
 
-			parentSup.UpdateUserSpec(config.UserSpec{})
+			parentSup.TestUpdateUserSpec(config.UserSpec{})
 
 			store.desired["parent"] = map[string]persistence.Document{
 				"parent-worker": {
@@ -912,7 +912,7 @@ var _ = Describe("Integration: Hierarchical Composition (Task 0.7)", func() {
 				},
 			}
 
-			err = parentSup.Tick(ctx)
+			err = parentSup.TestTick(ctx)
 			Expect(err).NotTo(HaveOccurred())
 
 			events := tickLog.GetEvents()

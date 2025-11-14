@@ -100,6 +100,78 @@ func (s *Supervisor) GetMappedParentState() string
 
 **Rationale**: Tests need to verify hierarchical composition and state mapping without exposing mutable internal state. These methods return copies or read-only views.
 
+## Testing Strategy
+
+The supervisor uses a hybrid testing approach that balances clean API boundaries with practical test complexity management:
+
+### White-Box Tests (package supervisor)
+
+These tests can access internal methods directly because they share the same package:
+
+- `supervisor_test.go` - Core unit tests for internal methods
+- `config_test.go` - Configuration validation tests
+- `childspec_validation_test.go` - Child specification validation
+
+**Benefits**: Direct access to internal methods, no need for test accessors, simple mocking
+
+### Black-Box Tests (package supervisor_test)
+
+These tests use the public API plus `Test*` accessor methods:
+
+- `edge_cases_test.go` - Complex edge case scenarios
+- `tick_test.go` - FSM tick cycle testing
+- `integration_test.go` - Multi-component integration tests
+- `hierarchical_tick_test.go` - Parent-child tick propagation
+- All other `*_test.go` files
+
+**Benefits**: Tests external behavior through public API, verifies encapsulation, catches API misuse
+
+### Test Accessors (Test* Methods)
+
+To support black-box testing without exposing internal implementation, the supervisor provides `Test*` prefixed methods:
+
+```go
+// TestTick exposes tick for testing. DO NOT USE in production code.
+func (s *Supervisor) TestTick(ctx context.Context) error
+
+// TestTickAll exposes tickAll for testing. DO NOT USE in production code.
+func (s *Supervisor) TestTickAll(ctx context.Context) error
+
+// TestRequestShutdown exposes requestShutdown for testing. DO NOT USE in production code.
+func (s *Supervisor) TestRequestShutdown(ctx context.Context, workerID string, reason string) error
+
+// TestCheckDataFreshness exposes checkDataFreshness for testing. DO NOT USE in production code.
+func (s *Supervisor) TestCheckDataFreshness(snapshot *fsmv2.Snapshot) bool
+
+// TestRestartCollector exposes restartCollector for testing. DO NOT USE in production code.
+func (s *Supervisor) TestRestartCollector(ctx context.Context, workerID string) error
+
+// TestUpdateUserSpec exposes updateUserSpec for testing. DO NOT USE in production code.
+func (s *Supervisor) TestUpdateUserSpec(spec config.UserSpec)
+
+// TestGetStaleThreshold exposes getStaleThreshold for testing. DO NOT USE in production code.
+func (s *Supervisor) TestGetStaleThreshold() time.Duration
+
+// TestGetRestartCount exposes getRestartCount for testing. DO NOT USE in production code.
+func (s *Supervisor) TestGetRestartCount() int
+
+// TestSetRestartCount exposes setRestartCount for testing. DO NOT USE in production code.
+func (s *Supervisor) TestSetRestartCount(count int)
+```
+
+**Design Rationale**:
+
+1. **Clearly marked as test-only**: `Test` prefix makes intent obvious
+2. **NOT part of public API**: Documented explicitly as test infrastructure
+3. **Can be changed freely**: No production code depends on these
+4. **Pragmatic compromise**: Avoids converting all tests to white-box (extensive mock changes)
+5. **Better than alternatives**:
+   - ✗ Converting all tests to white-box → requires extensive mock infrastructure rework
+   - ✗ Keeping methods exported → breaks encapsulation permanently
+   - ✓ Test accessors → clean separation, minimal coupling, clear intent
+
+**Verification**: The `api_boundary_test.go` file verifies that internal methods remain unexported and only `Test*` accessors are available for testing.
+
 ## Internal Implementation
 
 These methods are implementation details and should NOT be called from outside the supervisor package. They will be moved to the `internal/` package or made unexported.

@@ -62,7 +62,7 @@ var _ = Describe("Tick with Data Freshness", func() {
 				StaleThreshold: 10 * time.Second,
 			})
 
-			err := s.Tick(context.Background())
+			err := s.TestTick(context.Background())
 			Expect(err).ToNot(HaveOccurred())
 
 			Expect(s.GetCurrentState()).To(Equal(initialState.String()))
@@ -92,7 +92,7 @@ var _ = Describe("Tick with Data Freshness", func() {
 				StaleThreshold: 10 * time.Second,
 			})
 
-			err := s.Tick(context.Background())
+			err := s.TestTick(context.Background())
 			Expect(err).ToNot(HaveOccurred())
 
 			Expect(s.GetCurrentState()).To(Equal(nextState.String()))
@@ -126,7 +126,7 @@ var _ = Describe("Tick with Data Freshness", func() {
 			})
 
 			Expect(func() {
-				_ = s.Tick(context.Background())
+				_ = s.TestTick(context.Background())
 			}).Should(PanicWith(MatchRegexp("Invariant I16 violated.*nil ObservedState")))
 		})
 	})

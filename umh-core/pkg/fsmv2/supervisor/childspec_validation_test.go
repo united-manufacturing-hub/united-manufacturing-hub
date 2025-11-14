@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package supervisor_test
+package supervisor
 
 import (
 	"context"
@@ -25,7 +25,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence/memory"
@@ -129,13 +128,13 @@ var _ = Describe("ChildSpec Validation Integration", func() {
 	Context("when DeriveDesiredState returns valid ChildSpecs", func() {
 		It("should pass validation and proceed to reconciliation", func() {
 			// Create supervisor
-			supervisorCfg := supervisor.Config{
+			supervisorCfg := Config{
 				WorkerType: "test_supervisor",
 				Store:      triangularStore,
 				Logger:     logger,
 			}
 
-			sup := supervisor.NewSupervisor(supervisorCfg)
+			sup := NewSupervisor(supervisorCfg)
 			Expect(sup).NotTo(BeNil())
 
 			// Setup worker that returns valid ChildSpecs
@@ -173,7 +172,7 @@ var _ = Describe("ChildSpec Validation Integration", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Call supervisor.Tick()
-			err = sup.Tick(ctx)
+			err = sup.tick(ctx)
 
 			// Expect no validation errors (if validation passes, reconciliation proceeds)
 			Expect(err).NotTo(HaveOccurred())
@@ -183,13 +182,13 @@ var _ = Describe("ChildSpec Validation Integration", func() {
 	Context("when DeriveDesiredState returns invalid ChildSpecs", func() {
 		It("should fail validation with empty Name", func() {
 			// Create supervisor
-			supervisorCfg := supervisor.Config{
+			supervisorCfg := Config{
 				WorkerType: "test_supervisor",
 				Store:      triangularStore,
 				Logger:     logger,
 			}
 
-			sup := supervisor.NewSupervisor(supervisorCfg)
+			sup := NewSupervisor(supervisorCfg)
 			Expect(sup).NotTo(BeNil())
 
 			// Setup worker with ChildSpec{Name: "", ...}
@@ -227,7 +226,7 @@ var _ = Describe("ChildSpec Validation Integration", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Call supervisor.Tick()
-			err = sup.Tick(ctx)
+			err = sup.tick(ctx)
 
 			// Expect validation error (when validation fails, reconciliation doesn't proceed)
 			Expect(err).To(HaveOccurred(), "should fail with empty child name")
@@ -236,13 +235,13 @@ var _ = Describe("ChildSpec Validation Integration", func() {
 
 		It("should fail validation with empty WorkerType", func() {
 			// Create supervisor
-			supervisorCfg := supervisor.Config{
+			supervisorCfg := Config{
 				WorkerType: "test_supervisor",
 				Store:      triangularStore,
 				Logger:     logger,
 			}
 
-			sup := supervisor.NewSupervisor(supervisorCfg)
+			sup := NewSupervisor(supervisorCfg)
 			Expect(sup).NotTo(BeNil())
 
 			// Setup worker with empty WorkerType
@@ -280,7 +279,7 @@ var _ = Describe("ChildSpec Validation Integration", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Call supervisor.Tick()
-			err = sup.Tick(ctx)
+			err = sup.tick(ctx)
 
 			// Expect validation error about empty WorkerType
 			Expect(err).To(HaveOccurred(), "should fail with empty worker type")
@@ -289,13 +288,13 @@ var _ = Describe("ChildSpec Validation Integration", func() {
 
 		It("should fail validation with unknown WorkerType", func() {
 			// Create supervisor
-			supervisorCfg := supervisor.Config{
+			supervisorCfg := Config{
 				WorkerType: "test_supervisor",
 				Store:      triangularStore,
 				Logger:     logger,
 			}
 
-			sup := supervisor.NewSupervisor(supervisorCfg)
+			sup := NewSupervisor(supervisorCfg)
 			Expect(sup).NotTo(BeNil())
 
 			// Setup worker with unknown WorkerType
@@ -324,7 +323,7 @@ var _ = Describe("ChildSpec Validation Integration", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Call supervisor.Tick()
-			err = sup.Tick(ctx)
+			err = sup.tick(ctx)
 
 			// Expect error listing available types
 			Expect(err).To(HaveOccurred(), "should fail with unknown worker type")
@@ -335,13 +334,13 @@ var _ = Describe("ChildSpec Validation Integration", func() {
 
 		It("should fail validation with duplicate child names", func() {
 			// Create supervisor
-			supervisorCfg := supervisor.Config{
+			supervisorCfg := Config{
 				WorkerType: "test_supervisor",
 				Store:      triangularStore,
 				Logger:     logger,
 			}
 
-			sup := supervisor.NewSupervisor(supervisorCfg)
+			sup := NewSupervisor(supervisorCfg)
 			Expect(sup).NotTo(BeNil())
 
 			// Setup worker with duplicate child names
@@ -375,7 +374,7 @@ var _ = Describe("ChildSpec Validation Integration", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Call supervisor.Tick()
-			err = sup.Tick(ctx)
+			err = sup.tick(ctx)
 
 			// Expect duplicate detection error (reconciliation won't proceed)
 			Expect(err).To(HaveOccurred(), "should fail with duplicate child names")
@@ -386,13 +385,13 @@ var _ = Describe("ChildSpec Validation Integration", func() {
 	Context("when validation errors prevent reconciliation", func() {
 		It("should not create any children when validation fails", func() {
 			// Create supervisor
-			supervisorCfg := supervisor.Config{
+			supervisorCfg := Config{
 				WorkerType: "test_supervisor",
 				Store:      triangularStore,
 				Logger:     logger,
 			}
 
-			sup := supervisor.NewSupervisor(supervisorCfg)
+			sup := NewSupervisor(supervisorCfg)
 			Expect(sup).NotTo(BeNil())
 
 			// Multiple validation errors in different specs
@@ -426,7 +425,7 @@ var _ = Describe("ChildSpec Validation Integration", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Call supervisor.Tick()
-			err = sup.Tick(ctx)
+			err = sup.tick(ctx)
 
 			// Expect validation error (validation failed before reconciliation)
 			Expect(err).To(HaveOccurred())
@@ -436,13 +435,13 @@ var _ = Describe("ChildSpec Validation Integration", func() {
 	Context("validation order verification", func() {
 		It("should perform validation BEFORE reconciliation", func() {
 			// Create supervisor
-			supervisorCfg := supervisor.Config{
+			supervisorCfg := Config{
 				WorkerType: "test_supervisor",
 				Store:      triangularStore,
 				Logger:     logger,
 			}
 
-			sup := supervisor.NewSupervisor(supervisorCfg)
+			sup := NewSupervisor(supervisorCfg)
 			Expect(sup).NotTo(BeNil())
 
 			// Create a mock worker that tracks method call order
@@ -474,7 +473,7 @@ var _ = Describe("ChildSpec Validation Integration", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Call supervisor.Tick()
-			err = sup.Tick(ctx)
+			err = sup.tick(ctx)
 
 			// Expect validation error
 			Expect(err).To(HaveOccurred())
@@ -486,13 +485,13 @@ var _ = Describe("ChildSpec Validation Integration", func() {
 
 		It("should proceed to reconciliation only when validation passes", func() {
 			// Create supervisor
-			supervisorCfg := supervisor.Config{
+			supervisorCfg := Config{
 				WorkerType: "test_supervisor",
 				Store:      triangularStore,
 				Logger:     logger,
 			}
 
-			sup := supervisor.NewSupervisor(supervisorCfg)
+			sup := NewSupervisor(supervisorCfg)
 			Expect(sup).NotTo(BeNil())
 
 			// Create a mock worker that tracks method call order
@@ -533,7 +532,7 @@ var _ = Describe("ChildSpec Validation Integration", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Call supervisor.Tick()
-			err = sup.Tick(ctx)
+			err = sup.tick(ctx)
 
 			// Should succeed
 			Expect(err).NotTo(HaveOccurred())
@@ -549,13 +548,13 @@ var _ = Describe("ChildSpec Validation Integration", func() {
 	Context("complex validation scenarios", func() {
 		It("should validate all child specs even with multiple errors", func() {
 			// Create supervisor
-			supervisorCfg := supervisor.Config{
+			supervisorCfg := Config{
 				WorkerType: "test_supervisor",
 				Store:      triangularStore,
 				Logger:     logger,
 			}
 
-			sup := supervisor.NewSupervisor(supervisorCfg)
+			sup := NewSupervisor(supervisorCfg)
 			Expect(sup).NotTo(BeNil())
 
 			// Test that validation is comprehensive
@@ -584,7 +583,7 @@ var _ = Describe("ChildSpec Validation Integration", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Call supervisor.Tick()
-			err = sup.Tick(ctx)
+			err = sup.tick(ctx)
 
 			// Expect validation error
 			Expect(err).To(HaveOccurred())
@@ -595,13 +594,13 @@ var _ = Describe("ChildSpec Validation Integration", func() {
 
 		It("should accept valid ChildSpecs with UserSpec data", func() {
 			// Create supervisor
-			supervisorCfg := supervisor.Config{
+			supervisorCfg := Config{
 				WorkerType: "test_supervisor",
 				Store:      triangularStore,
 				Logger:     logger,
 			}
 
-			sup := supervisor.NewSupervisor(supervisorCfg)
+			sup := NewSupervisor(supervisorCfg)
 			Expect(sup).NotTo(BeNil())
 
 			// Setup worker with ChildSpec containing UserSpec data
@@ -641,7 +640,7 @@ var _ = Describe("ChildSpec Validation Integration", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Call supervisor.Tick()
-			err = sup.Tick(ctx)
+			err = sup.tick(ctx)
 
 			// Should succeed (validation passes, reconciliation proceeds)
 			Expect(err).NotTo(HaveOccurred())
@@ -659,8 +658,10 @@ type validChildSpecMockWorker struct {
 
 func (m *validChildSpecMockWorker) CollectObservedState(_ context.Context) (fsmv2.ObservedState, error) {
 	return &mockObservedState{
-		ID:          m.identity.ID,
-		CollectedAt: time.Now(),
+		doc: persistence.Document{
+			"id": m.identity.ID,
+		},
+		timestamp: time.Now(),
 	}, nil
 }
 
@@ -686,8 +687,10 @@ type trackedCallOrderMockWorker struct {
 
 func (m *trackedCallOrderMockWorker) CollectObservedState(_ context.Context) (fsmv2.ObservedState, error) {
 	return &mockObservedState{
-		ID:          m.identity.ID,
-		CollectedAt: time.Now(),
+		doc: persistence.Document{
+			"id": m.identity.ID,
+		},
+		timestamp: time.Now(),
 	}, nil
 }
 

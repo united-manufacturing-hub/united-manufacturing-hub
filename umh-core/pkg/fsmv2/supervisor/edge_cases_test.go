@@ -215,7 +215,7 @@ var _ = Describe("Edge Cases", func() {
 
 				s := newSupervisorWithWorker(&mockWorker{initialState: initialState}, nil, supervisor.CollectorHealthConfig{})
 
-				err := s.Tick(context.Background())
+				err := s.TestTick(context.Background())
 				Expect(err).ToNot(HaveOccurred())
 			})
 		})
@@ -256,7 +256,7 @@ var _ = Describe("Edge Cases", func() {
 				err = s.AddWorker(identity, worker)
 				Expect(err).ToNot(HaveOccurred())
 
-				err = s.RequestShutdown(context.Background(), identity.ID, "test reason")
+				err = s.TestRequestShutdown(context.Background(), identity.ID, "test reason")
 				Expect(err).ToNot(HaveOccurred())
 				Expect(mockStore.SaveDesiredCalled).To(BeNumerically(">", 1))
 			})
@@ -298,7 +298,7 @@ var _ = Describe("Edge Cases", func() {
 				err = s.AddWorker(identity, worker)
 				Expect(err).ToNot(HaveOccurred())
 
-				err = s.RequestShutdown(context.Background(), identity.ID, "test reason")
+				err = s.TestRequestShutdown(context.Background(), identity.ID, "test reason")
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("save"))
 			})
@@ -324,7 +324,7 @@ var _ = Describe("Edge Cases", func() {
 
 				s := newSupervisorWithWorker(&mockWorker{initialState: initialState}, nil, supervisor.CollectorHealthConfig{})
 
-				err := s.Tick(context.Background())
+				err := s.TestTick(context.Background())
 				Expect(err).ToNot(HaveOccurred())
 				Expect(callCount).To(Equal(1))
 			})
@@ -351,7 +351,7 @@ var _ = Describe("Edge Cases", func() {
 
 				s := newSupervisorWithWorker(&mockWorker{initialState: initialState}, nil, supervisor.CollectorHealthConfig{})
 
-				err := s.Tick(context.Background())
+				err := s.TestTick(context.Background())
 				Expect(err).ToNot(HaveOccurred())
 				Expect(callCount).To(Equal(2))
 			})
@@ -375,7 +375,7 @@ var _ = Describe("Edge Cases", func() {
 
 				s := newSupervisorWithWorker(&mockWorker{initialState: initialState}, nil, supervisor.CollectorHealthConfig{})
 
-				err := s.Tick(context.Background())
+				err := s.TestTick(context.Background())
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed after"))
 				Expect(callCount).To(Equal(3))
@@ -423,9 +423,9 @@ var _ = Describe("Edge Cases", func() {
 				err = s.AddWorker(identity, worker)
 				Expect(err).ToNot(HaveOccurred())
 
-				err = s.Tick(context.Background())
+				err = s.TestTick(context.Background())
 				Expect(err).ToNot(HaveOccurred())
-				Expect(s.GetRestartCount()).To(Equal(1))
+				Expect(s.TestGetRestartCount()).To(Equal(1))
 			})
 		})
 
@@ -475,9 +475,9 @@ var _ = Describe("Edge Cases", func() {
 				err = s.AddWorker(identity, worker)
 				Expect(err).ToNot(HaveOccurred())
 
-				s.SetRestartCount(3)
+				s.TestSetRestartCount(3)
 
-				err = s.Tick(context.Background())
+				err = s.TestTick(context.Background())
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("unresponsive"))
 			})
@@ -515,11 +515,11 @@ var _ = Describe("Edge Cases", func() {
 				err = s.AddWorker(identity, worker)
 				Expect(err).ToNot(HaveOccurred())
 
-				s.SetRestartCount(2)
+				s.TestSetRestartCount(2)
 
-				err = s.Tick(context.Background())
+				err = s.TestTick(context.Background())
 				Expect(err).ToNot(HaveOccurred())
-				Expect(s.GetRestartCount()).To(Equal(0))
+				Expect(s.TestGetRestartCount()).To(Equal(0))
 			})
 		})
 	})
@@ -550,7 +550,7 @@ var _ = Describe("Edge Cases", func() {
 				err = s.AddWorker(identity, worker)
 				Expect(err).ToNot(HaveOccurred())
 
-				err = s.Tick(context.Background())
+				err = s.TestTick(context.Background())
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("snapshot"))
 			})
@@ -629,7 +629,7 @@ var _ = Describe("Edge Cases", func() {
 				err = s.AddWorker(identity, worker)
 				Expect(err).ToNot(HaveOccurred())
 
-				err = s.RequestShutdown(context.Background(), identity.ID, "test reason")
+				err = s.TestRequestShutdown(context.Background(), identity.ID, "test reason")
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("load"))
 			})
@@ -685,9 +685,9 @@ var _ = Describe("Edge Cases", func() {
 				err = s.AddWorker(identity, worker)
 				Expect(err).ToNot(HaveOccurred())
 
-				s.SetRestartCount(3)
+				s.TestSetRestartCount(3)
 
-				err = s.Tick(context.Background())
+				err = s.TestTick(context.Background())
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("unresponsive"))
 			})
@@ -704,9 +704,9 @@ var _ = Describe("Edge Cases", func() {
 					MaxRestartAttempts: 3,
 				})
 
-				err := s.Tick(context.Background())
+				err := s.TestTick(context.Background())
 				Expect(err).ToNot(HaveOccurred())
-				Expect(s.GetRestartCount()).To(Equal(0))
+				Expect(s.TestGetRestartCount()).To(Equal(0))
 			})
 		})
 	})
@@ -793,7 +793,7 @@ var _ = Describe("Type Safety (Invariant I16)", func() {
 							panicMessage = fmt.Sprintf("%v", r)
 						}
 					}()
-					_ = s.Tick(context.Background())
+					_ = s.TestTick(context.Background())
 				}()
 
 				Expect(panicMessage).To(ContainSubstring("Invariant I16 violated"))
@@ -851,7 +851,7 @@ var _ = Describe("Type Safety (Invariant I16)", func() {
 							panicMessage = fmt.Sprintf("%v", r)
 						}
 					}()
-					_ = s.Tick(context.Background())
+					_ = s.TestTick(context.Background())
 				}()
 
 				Expect(panicMessage).To(ContainSubstring("Invariant I16 violated"))
@@ -868,7 +868,7 @@ var _ = Describe("Type Safety (Invariant I16)", func() {
 
 				s := newSupervisorWithWorker(worker, nil, supervisor.CollectorHealthConfig{})
 
-				err := s.Tick(context.Background())
+				err := s.TestTick(context.Background())
 				Expect(err).ToNot(HaveOccurred())
 			})
 		})
@@ -881,7 +881,7 @@ var _ = Describe("Type Safety (Invariant I16)", func() {
 
 				s := newSupervisorWithWorker(worker, nil, supervisor.CollectorHealthConfig{})
 
-				err := s.Tick(context.Background())
+				err := s.TestTick(context.Background())
 				Expect(err).ToNot(HaveOccurred())
 			})
 		})

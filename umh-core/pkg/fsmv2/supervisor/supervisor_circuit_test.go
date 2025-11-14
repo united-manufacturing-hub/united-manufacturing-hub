@@ -45,7 +45,7 @@ var _ = Describe("Circuit Breaker Integration", func() {
 				// This is structural verification for Phase 1
 
 				// Tick should not panic when calling healthChecker.CheckChildConsistency
-				err := sup.Tick(ctx)
+				err := sup.TestTick(ctx)
 
 				// May return "no workers" error (expected for empty supervisor)
 				// or nil if worker exists - both are valid
@@ -61,7 +61,7 @@ var _ = Describe("Circuit Breaker Integration", func() {
 
 				// Multiple ticks should not panic
 				for range 3 {
-					_ = sup.Tick(ctx)
+					_ = sup.TestTick(ctx)
 				}
 
 				// Test passes if no panic occurred
@@ -73,7 +73,7 @@ var _ = Describe("Circuit Breaker Integration", func() {
 				// In Phase 3, we'll add tests for circuit opening on failure
 
 				// Tick once (health check passes, circuit closes)
-				_ = sup.Tick(ctx)
+				_ = sup.TestTick(ctx)
 
 				// Test verifies circuit breaker logic executes without error
 				// Full behavior testing in Phase 3

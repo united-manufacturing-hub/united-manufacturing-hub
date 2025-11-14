@@ -382,7 +382,7 @@ func RunSupervisorWithTimeout(ctx context.Context, sup *supervisor.Supervisor, i
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			sup.Tick(ctx)
+			sup.TestTick(ctx)
 		}
 	}
 }

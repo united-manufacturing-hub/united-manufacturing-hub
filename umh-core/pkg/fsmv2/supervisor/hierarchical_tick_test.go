@@ -119,7 +119,7 @@ var _ = Describe("Hierarchical Tick Propagation (Task 0.6)", func() {
 			err := parentSuper.AddWorker(identity, worker)
 			Expect(err).NotTo(HaveOccurred())
 
-			parentSuper.UpdateUserSpec(config.UserSpec{Config: "test-config"})
+			parentSuper.TestUpdateUserSpec(config.UserSpec{Config: "test-config"})
 
 			desiredDoc := persistence.Document{
 				"id":                identity.ID,
@@ -135,7 +135,7 @@ var _ = Describe("Hierarchical Tick Propagation (Task 0.6)", func() {
 				},
 			}
 
-			err = parentSuper.Tick(ctx)
+			err = parentSuper.TestTick(ctx)
 			Expect(err).NotTo(HaveOccurred())
 
 			events := tickLog.GetEvents()
@@ -174,7 +174,7 @@ var _ = Describe("Hierarchical Tick Propagation (Task 0.6)", func() {
 			err := parentSuper.AddWorker(identity, worker)
 			Expect(err).NotTo(HaveOccurred())
 
-			parentSuper.UpdateUserSpec(config.UserSpec{Config: "parent-config"})
+			parentSuper.TestUpdateUserSpec(config.UserSpec{Config: "parent-config"})
 
 			desiredDoc := persistence.Document{
 				"id":                identity.ID,
@@ -197,7 +197,7 @@ var _ = Describe("Hierarchical Tick Propagation (Task 0.6)", func() {
 				},
 			}
 
-			err = parentSuper.Tick(ctx)
+			err = parentSuper.TestTick(ctx)
 			Expect(err).NotTo(HaveOccurred())
 
 			events := tickLog.GetEvents()
@@ -233,7 +233,7 @@ var _ = Describe("Hierarchical Tick Propagation (Task 0.6)", func() {
 			err := parentSuper.AddWorker(identity, worker)
 			Expect(err).NotTo(HaveOccurred())
 
-			parentSuper.UpdateUserSpec(config.UserSpec{Config: "config"})
+			parentSuper.TestUpdateUserSpec(config.UserSpec{Config: "config"})
 
 			desiredDoc := persistence.Document{
 				"id":                identity.ID,
@@ -249,7 +249,7 @@ var _ = Describe("Hierarchical Tick Propagation (Task 0.6)", func() {
 				},
 			}
 
-			err = parentSuper.Tick(ctx)
+			err = parentSuper.TestTick(ctx)
 			Expect(err).NotTo(HaveOccurred())
 
 			events := tickLog.GetEvents()
@@ -289,7 +289,7 @@ var _ = Describe("Hierarchical Tick Propagation (Task 0.6)", func() {
 			err := parentSuper.AddWorker(identity, worker)
 			Expect(err).NotTo(HaveOccurred())
 
-			parentSuper.UpdateUserSpec(config.UserSpec{Config: "config"})
+			parentSuper.TestUpdateUserSpec(config.UserSpec{Config: "config"})
 
 			desiredDoc := persistence.Document{
 				"id":                identity.ID,
@@ -312,7 +312,7 @@ var _ = Describe("Hierarchical Tick Propagation (Task 0.6)", func() {
 				},
 			}
 
-			err = parentSuper.Tick(ctx)
+			err = parentSuper.TestTick(ctx)
 			Expect(err).NotTo(HaveOccurred())
 
 			events := tickLog.GetEvents()
@@ -347,7 +347,7 @@ var _ = Describe("Hierarchical Tick Propagation (Task 0.6)", func() {
 			err := parentSuper.AddWorker(identity, worker)
 			Expect(err).NotTo(HaveOccurred())
 
-			parentSuper.UpdateUserSpec(config.UserSpec{Config: "config"})
+			parentSuper.TestUpdateUserSpec(config.UserSpec{Config: "config"})
 
 			desiredDoc := persistence.Document{
 				"id":                identity.ID,
@@ -370,7 +370,7 @@ var _ = Describe("Hierarchical Tick Propagation (Task 0.6)", func() {
 				},
 			}
 
-			err = parentSuper.Tick(ctx)
+			err = parentSuper.TestTick(ctx)
 			Expect(err).NotTo(HaveOccurred())
 
 			events := tickLog.GetEvents()
@@ -405,7 +405,7 @@ var _ = Describe("Hierarchical Tick Propagation (Task 0.6)", func() {
 			err := parentSuper.AddWorker(identity, parentWorker)
 			Expect(err).NotTo(HaveOccurred())
 
-			parentSuper.UpdateUserSpec(config.UserSpec{Config: "config"})
+			parentSuper.TestUpdateUserSpec(config.UserSpec{Config: "config"})
 
 			desiredDoc := persistence.Document{
 				"id":                identity.ID,
@@ -435,7 +435,7 @@ var _ = Describe("Hierarchical Tick Propagation (Task 0.6)", func() {
 				},
 			}
 
-			err = parentSuper.Tick(ctx)
+			err = parentSuper.TestTick(ctx)
 			Expect(err).NotTo(HaveOccurred())
 
 			events := tickLog.GetEvents()

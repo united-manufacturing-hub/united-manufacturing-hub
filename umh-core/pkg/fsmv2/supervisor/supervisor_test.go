@@ -507,7 +507,7 @@ func TestSupervisorLoadsSnapshotFromTriangularStore(t *testing.T) {
 		t.Fatalf("Failed to save desired: %v", err)
 	}
 
-	err = supervisor.Tick(ctx)
+	err = supervisor.tick(ctx)
 	if err != nil {
 		t.Fatalf("Failed to tick: %v", err)
 	}

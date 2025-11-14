@@ -88,7 +88,7 @@ var _ = Describe("Hierarchy Metrics (Task 3)", func() {
 				},
 			}
 
-			err = parentSup.Tick(ctx)
+			err = parentSup.TestTick(ctx)
 			Expect(err).NotTo(HaveOccurred())
 
 			time.Sleep(100 * time.Millisecond)
@@ -151,7 +151,7 @@ var _ = Describe("Hierarchy Metrics (Task 3)", func() {
 				},
 			}
 
-			err = parentSup.Tick(ctx)
+			err = parentSup.TestTick(ctx)
 			Expect(err).NotTo(HaveOccurred())
 
 			time.Sleep(100 * time.Millisecond)
@@ -213,7 +213,7 @@ var _ = Describe("Hierarchy Metrics (Task 3)", func() {
 				},
 			}
 
-			err = parentSup.Tick(ctx)
+			err = parentSup.TestTick(ctx)
 			Expect(err).NotTo(HaveOccurred())
 
 			children := parentSup.GetChildren()
@@ -246,7 +246,7 @@ var _ = Describe("Hierarchy Metrics (Task 3)", func() {
 			err = childSup.AddWorker(childIdentity, childWorker)
 			Expect(err).NotTo(HaveOccurred())
 
-			childSup.UpdateUserSpec(config.UserSpec{Config: "child-config"})
+			childSup.TestUpdateUserSpec(config.UserSpec{Config: "child-config"})
 
 			store.desired["child"] = map[string]persistence.Document{
 				"child-worker": {
@@ -269,7 +269,7 @@ var _ = Describe("Hierarchy Metrics (Task 3)", func() {
 				},
 			}
 
-			err = parentSup.Tick(ctx)
+			err = parentSup.TestTick(ctx)
 			Expect(err).NotTo(HaveOccurred())
 
 			time.Sleep(100 * time.Millisecond)
@@ -330,7 +330,7 @@ var _ = Describe("Hierarchy Metrics (Task 3)", func() {
 				},
 			}
 
-			err = leafSup.Tick(ctx)
+			err = leafSup.TestTick(ctx)
 			Expect(err).NotTo(HaveOccurred())
 
 			time.Sleep(100 * time.Millisecond)
@@ -390,7 +390,7 @@ var _ = Describe("Hierarchy Metrics (Task 3)", func() {
 				},
 			}
 
-			err = parentSup.Tick(ctx)
+			err = parentSup.TestTick(ctx)
 			Expect(err).NotTo(HaveOccurred())
 
 			time.Sleep(100 * time.Millisecond)
@@ -440,7 +440,7 @@ var _ = Describe("Hierarchy Metrics (Task 3)", func() {
 				},
 			}
 
-			err = parentSup.Tick(ctx)
+			err = parentSup.TestTick(ctx)
 			Expect(err).NotTo(HaveOccurred())
 
 			time.Sleep(100 * time.Millisecond)
@@ -459,7 +459,7 @@ var _ = Describe("Hierarchy Metrics (Task 3)", func() {
 				},
 			}
 
-			err = parentSup.Tick(ctx)
+			err = parentSup.TestTick(ctx)
 			Expect(err).NotTo(HaveOccurred())
 
 			time.Sleep(100 * time.Millisecond)
@@ -518,7 +518,7 @@ var _ = Describe("Hierarchy Metrics (Task 3)", func() {
 				},
 			}
 
-			err = parentSup.Tick(ctx)
+			err = parentSup.TestTick(ctx)
 			Expect(err).NotTo(HaveOccurred())
 
 			time.Sleep(100 * time.Millisecond)
@@ -528,7 +528,7 @@ var _ = Describe("Hierarchy Metrics (Task 3)", func() {
 
 			parentWorker.childrenSpecs = []config.ChildSpec{}
 
-			err = parentSup.Tick(ctx)
+			err = parentSup.TestTick(ctx)
 			Expect(err).NotTo(HaveOccurred())
 
 			time.Sleep(100 * time.Millisecond)

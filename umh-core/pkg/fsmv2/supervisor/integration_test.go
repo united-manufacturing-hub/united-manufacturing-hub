@@ -99,52 +99,52 @@ var _ = Describe("DataFreshness Full Cycle Integration", func() {
 		// Phase 1: Normal operation (fresh data)
 		By("Phase 1: Normal operation with fresh data")
 		snapshotTimestamp = time.Now()
-		err := s.Tick(ctx)
+		err := s.TestTick(ctx)
 		Expect(err).ToNot(HaveOccurred())
-		Expect(s.GetRestartCount()).To(Equal(0))
+		Expect(s.TestGetRestartCount()).To(Equal(0))
 
 		// Phase 2: Stale data (pause FSM, no restart yet)
 		By("Phase 2: Stale data (pause FSM)")
 		snapshotTimestamp = time.Now().Add(-7 * time.Second) // >5s but <10s
-		err = s.Tick(ctx)
+		err = s.TestTick(ctx)
 		Expect(err).ToNot(HaveOccurred())
-		Expect(s.GetRestartCount()).To(Equal(0), "should not restart for stale (but not timeout) data")
+		Expect(s.TestGetRestartCount()).To(Equal(0), "should not restart for stale (but not timeout) data")
 
 		// Phase 3: Timeout (trigger restarts)
 		By("Phase 3: Timeout triggers collector restarts")
 		snapshotTimestamp = time.Now().Add(-15 * time.Second) // >10s timeout
 
 		// First restart
-		err = s.Tick(ctx)
+		err = s.TestTick(ctx)
 		Expect(err).ToNot(HaveOccurred())
-		Expect(s.GetRestartCount()).To(Equal(1))
+		Expect(s.TestGetRestartCount()).To(Equal(1))
 
 		// Second restart
-		err = s.Tick(ctx)
+		err = s.TestTick(ctx)
 		Expect(err).ToNot(HaveOccurred())
-		Expect(s.GetRestartCount()).To(Equal(2))
+		Expect(s.TestGetRestartCount()).To(Equal(2))
 
 		// Third restart
-		err = s.Tick(ctx)
+		err = s.TestTick(ctx)
 		Expect(err).ToNot(HaveOccurred())
-		Expect(s.GetRestartCount()).To(Equal(3))
+		Expect(s.TestGetRestartCount()).To(Equal(3))
 
 		// Phase 4: Max restarts exceeded (trigger shutdown)
 		By("Phase 4: Max restarts exceeded triggers shutdown")
-		err = s.Tick(ctx)
+		err = s.TestTick(ctx)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("collector unresponsive"))
 		Expect(shutdownRequested).To(BeTrue(), "shutdown should be requested after max restart attempts")
 
 		// Phase 5: Collector recovers (reset counter)
 		By("Phase 5: Collector recovery resets counter")
-		s.SetRestartCount(2) // Had previous failures
+		s.TestSetRestartCount(2) // Had previous failures
 		shutdownRequested = false
 
 		snapshotTimestamp = time.Now() // Fresh data!
 
-		err = s.Tick(ctx)
+		err = s.TestTick(ctx)
 		Expect(err).ToNot(HaveOccurred())
-		Expect(s.GetRestartCount()).To(Equal(0), "restart counter should reset on recovery")
+		Expect(s.TestGetRestartCount()).To(Equal(0), "restart counter should reset on recovery")
 	})
 })

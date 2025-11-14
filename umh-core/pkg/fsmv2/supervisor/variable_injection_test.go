@@ -203,7 +203,7 @@ var _ = Describe("Variable Injection", func() {
 				return config.DesiredState{State: "running"}, nil
 			}
 
-			err := s.Tick(ctx)
+			err := s.TestTick(ctx)
 			Expect(err).ToNot(HaveOccurred())
 
 			// Verify Global variables were injected
@@ -220,7 +220,7 @@ var _ = Describe("Variable Injection", func() {
 				return config.DesiredState{State: "running"}, nil
 			}
 
-			err := s.Tick(ctx)
+			err := s.TestTick(ctx)
 			Expect(err).ToNot(HaveOccurred())
 
 			// Verify Global variables are either nil or empty
@@ -239,7 +239,7 @@ var _ = Describe("Variable Injection", func() {
 				return config.DesiredState{State: "running"}, nil
 			}
 
-			err := s.Tick(ctx)
+			err := s.TestTick(ctx)
 			Expect(err).ToNot(HaveOccurred())
 
 			// Verify Internal variables were injected
@@ -319,7 +319,7 @@ var _ = Describe("Variable Injection", func() {
 				return config.DesiredState{State: "running"}, nil
 			}
 
-			err = childSupervisor.Tick(ctx)
+			err = childSupervisor.TestTick(ctx)
 			Expect(err).ToNot(HaveOccurred())
 
 			// For child supervisor, bridged_by should be set to parent ID
@@ -342,7 +342,7 @@ var _ = Describe("Variable Injection", func() {
 				},
 			}
 
-			s.UpdateUserSpec(userSpec)
+			s.TestUpdateUserSpec(userSpec)
 
 			globalVars := map[string]any{
 				"api_endpoint": "https://api.example.com",
@@ -356,7 +356,7 @@ var _ = Describe("Variable Injection", func() {
 				return config.DesiredState{State: "running"}, nil
 			}
 
-			err := s.Tick(ctx)
+			err := s.TestTick(ctx)
 			Expect(err).ToNot(HaveOccurred())
 
 			// Verify User variables were preserved
@@ -372,7 +372,7 @@ var _ = Describe("Variable Injection", func() {
 		It("should handle case where userSpec has no existing variables", func() {
 			// userSpec with no Variables set
 			userSpec := config.UserSpec{}
-			s.UpdateUserSpec(userSpec)
+			s.TestUpdateUserSpec(userSpec)
 
 			globalVars := map[string]any{
 				"api_endpoint": "https://api.example.com",
@@ -386,7 +386,7 @@ var _ = Describe("Variable Injection", func() {
 				return config.DesiredState{State: "running"}, nil
 			}
 
-			err := s.Tick(ctx)
+			err := s.TestTick(ctx)
 			Expect(err).ToNot(HaveOccurred())
 
 			// Should not panic, variables should be initialized

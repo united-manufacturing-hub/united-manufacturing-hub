@@ -76,11 +76,11 @@ var _ = Describe("Supervisor Lifecycle", func() {
 					MaxRestartAttempts: 1,
 				})
 
-				s.SetRestartCount(1)
+				s.TestSetRestartCount(1)
 
 				store.SaveDesiredErr = errors.New("save error")
 
-				err := s.Tick(context.Background())
+				err := s.TestTick(context.Background())
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("unresponsive"))
 			})
@@ -102,7 +102,7 @@ var _ = Describe("Supervisor Lifecycle", func() {
 				s := newSupervisorWithWorker(&mockWorker{initialState: initialState}, store, supervisor.CollectorHealthConfig{})
 
 				Expect(func() {
-					_ = s.Tick(context.Background())
+					_ = s.TestTick(context.Background())
 				}).To(Panic())
 			})
 		})
@@ -177,7 +177,7 @@ var _ = Describe("Supervisor Lifecycle", func() {
 				workersBefore := s.ListWorkers()
 				Expect(workersBefore).To(HaveLen(1))
 
-				err := s.Tick(context.Background())
+				err := s.TestTick(context.Background())
 				Expect(err).ToNot(HaveOccurred())
 
 				workersAfter := s.ListWorkers()
@@ -198,9 +198,9 @@ var _ = Describe("Supervisor Lifecycle", func() {
 					MaxRestartAttempts: 3,
 				})
 
-				err := s.Tick(context.Background())
+				err := s.TestTick(context.Background())
 				Expect(err).ToNot(HaveOccurred())
-				Expect(s.GetRestartCount()).To(Equal(1))
+				Expect(s.TestGetRestartCount()).To(Equal(1))
 			})
 		})
 
@@ -215,7 +215,7 @@ var _ = Describe("Supervisor Lifecycle", func() {
 
 				s := newSupervisorWithWorker(&mockWorker{initialState: state}, store, supervisor.CollectorHealthConfig{})
 
-				err := s.Tick(context.Background())
+				err := s.TestTick(context.Background())
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("unknown signal"))
 			})

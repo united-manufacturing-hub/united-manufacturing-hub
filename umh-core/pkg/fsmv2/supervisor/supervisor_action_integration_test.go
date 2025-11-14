@@ -50,7 +50,7 @@ var _ = Describe("ActionExecutor Integration", func() {
 		It("should initialize ActionExecutor in constructor", func() {
 			Expect(sup).ToNot(BeNil())
 
-			err := sup.Tick(ctx)
+			err := sup.TestTick(ctx)
 			_ = err
 		})
 
@@ -58,7 +58,7 @@ var _ = Describe("ActionExecutor Integration", func() {
 			done := sup.Start(ctx)
 			Expect(done).ToNot(BeNil())
 
-			err := sup.Tick(ctx)
+			err := sup.TestTick(ctx)
 			_ = err
 		})
 
@@ -72,7 +72,7 @@ var _ = Describe("ActionExecutor Integration", func() {
 
 	Describe("Tick integration (stub)", func() {
 		It("should complete tick without panic when ActionExecutor present", func() {
-			err := sup.Tick(ctx)
+			err := sup.TestTick(ctx)
 			_ = err
 		})
 
@@ -80,7 +80,7 @@ var _ = Describe("ActionExecutor Integration", func() {
 			done := sup.Start(ctx)
 			Expect(done).ToNot(BeNil())
 
-			err := sup.Tick(ctx)
+			err := sup.TestTick(ctx)
 			_ = err
 		})
 	})

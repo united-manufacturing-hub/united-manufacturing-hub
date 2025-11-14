@@ -718,27 +718,27 @@ func (s *Supervisor) SetGlobalVariables(vars map[string]any) {
 	s.globalVars = vars
 }
 
-func (s *Supervisor) GetStaleThreshold() time.Duration {
+func (s *Supervisor) getStaleThreshold() time.Duration {
 	return s.collectorHealth.staleThreshold
 }
 
-func (s *Supervisor) GetCollectorTimeout() time.Duration {
+func (s *Supervisor) getCollectorTimeout() time.Duration {
 	return s.collectorHealth.timeout
 }
 
-func (s *Supervisor) GetMaxRestartAttempts() int {
+func (s *Supervisor) getMaxRestartAttempts() int {
 	return s.collectorHealth.maxRestartAttempts
 }
 
-func (s *Supervisor) GetRestartCount() int {
+func (s *Supervisor) getRestartCount() int {
 	return s.collectorHealth.restartCount
 }
 
-func (s *Supervisor) SetRestartCount(count int) {
+func (s *Supervisor) setRestartCount(count int) {
 	s.collectorHealth.restartCount = count
 }
 
-func (s *Supervisor) RestartCollector(ctx context.Context, workerID string) error {
+func (s *Supervisor) restartCollector(ctx context.Context, workerID string) error {
 	// I1 & I4: This should never be called with restartCount >= maxRestartAttempts.
 	// If it is, that's a programming error (bug in tick() logic).
 	if s.collectorHealth.restartCount >= s.collectorHealth.maxRestartAttempts {
@@ -770,7 +770,7 @@ func (s *Supervisor) RestartCollector(ctx context.Context, workerID string) erro
 	return nil
 }
 
-func (s *Supervisor) CheckDataFreshness(snapshot *fsmv2.Snapshot) bool {
+func (s *Supervisor) checkDataFreshness(snapshot *fsmv2.Snapshot) bool {
 	var (
 		age          time.Duration
 		collectedAt  time.Time
@@ -890,7 +890,7 @@ func (s *Supervisor) tickLoop(ctx context.Context) {
 
 			return
 		case <-ticker.C:
-			if err := s.Tick(ctx); err != nil {
+			if err := s.tick(ctx); err != nil {
 				s.logger.Errorf("Tick error: %v", err)
 			}
 		}
@@ -1028,14 +1028,14 @@ func (s *Supervisor) tickWorker(ctx context.Context, workerID string) error {
 
 	// I3: Check data freshness BEFORE calling state.Next()
 	// This is the trust boundary: states assume data is always fresh
-	if !s.CheckDataFreshness(snapshot) {
+	if !s.checkDataFreshness(snapshot) {
 		if s.freshnessChecker.IsTimeout(snapshot) {
 			// I4: Check if we've exhausted restart attempts
 			if s.collectorHealth.restartCount >= s.collectorHealth.maxRestartAttempts {
 				// Max attempts reached - escalate to shutdown (Layer 3)
 				s.logger.Errorf("Collector unresponsive after %d restart attempts", s.collectorHealth.maxRestartAttempts)
 
-				if shutdownErr := s.RequestShutdown(ctx, workerID,
+				if shutdownErr := s.requestShutdown(ctx, workerID,
 					fmt.Sprintf("collector unresponsive after %d restart attempts", s.collectorHealth.maxRestartAttempts)); shutdownErr != nil {
 					s.logger.Errorf("Failed to request shutdown: %v", shutdownErr)
 				}
@@ -1045,7 +1045,7 @@ func (s *Supervisor) tickWorker(ctx context.Context, workerID string) error {
 
 			// I4: Safe to restart (restartCount < maxRestartAttempts)
 			// RestartCollector will panic if invariant violated (defensive check)
-			if err := s.RestartCollector(ctx, workerID); err != nil {
+			if err := s.restartCollector(ctx, workerID); err != nil {
 				return fmt.Errorf("failed to restart collector: %w", err)
 			}
 		}
@@ -1208,7 +1208,7 @@ func (s *Supervisor) getEscalationSteps(childName string) string {
 // PHASE 3 STATUS: All infrastructure is complete. stubAction demonstrates async
 // execution without implementing full action derivation (Start/Stop/Restart based
 // on state transitions). Real action logic will be added in Phase 4.
-func (s *Supervisor) Tick(ctx context.Context) error {
+func (s *Supervisor) tick(ctx context.Context) error {
 	// PHASE 1: Infrastructure health check (priority 1)
 	if err := s.healthChecker.CheckChildConsistency(s.children); err != nil {
 		wasOpen := s.circuitOpen
@@ -1389,7 +1389,7 @@ func (s *Supervisor) Tick(ctx context.Context) error {
 	s.mu.RUnlock()
 
 	for _, child := range childrenToTick {
-		if err := child.Tick(ctx); err != nil {
+		if err := child.tick(ctx); err != nil {
 			s.logger.Errorf("Child tick failed: %v", err)
 			// Continue with other children
 		}
@@ -1402,7 +1402,7 @@ func (s *Supervisor) Tick(ctx context.Context) error {
 // TickAll performs one FSM tick for all workers in the registry.
 // Each worker is ticked independently. Errors from one worker do not stop others.
 // Returns an aggregated error containing all individual worker errors.
-func (s *Supervisor) TickAll(ctx context.Context) error {
+func (s *Supervisor) tickAll(ctx context.Context) error {
 	s.mu.RLock()
 
 	workerIDs := make([]string, 0, len(s.workers))
@@ -1517,7 +1517,7 @@ func (s *Supervisor) processSignal(ctx context.Context, workerID string, signal 
 	case fsmv2.SignalNeedsRestart:
 		s.logger.Infof("Worker %s signaled restart", workerID)
 
-		if err := s.RestartCollector(ctx, workerID); err != nil {
+		if err := s.restartCollector(ctx, workerID); err != nil {
 			return fmt.Errorf("failed to restart collector for worker %s: %w", workerID, err)
 		}
 
@@ -1537,7 +1537,7 @@ func (s *Supervisor) processSignal(ctx context.Context, workerID string, signal 
 // 1. Load current desired state
 // 2. Call SetShutdownRequested(true) if supported
 // 3. Save mutated desired state.
-func (s *Supervisor) RequestShutdown(ctx context.Context, workerID string, reason string) error {
+func (s *Supervisor) requestShutdown(ctx context.Context, workerID string, reason string) error {
 	s.logger.Warnf("Requesting shutdown for worker %s: %s", workerID, reason)
 
 	// Load current desired state
@@ -1661,7 +1661,7 @@ func (s *Supervisor) reconcileChildren(specs []config.ChildSpec) error {
 				"child_name", spec.Name,
 				"parent_worker_type", s.workerType)
 
-			child.UpdateUserSpec(spec.UserSpec)
+			child.updateUserSpec(spec.UserSpec)
 			child.stateMapping = spec.StateMapping
 			updatedCount++
 		} else {
@@ -1681,7 +1681,7 @@ func (s *Supervisor) reconcileChildren(specs []config.ChildSpec) error {
 			}
 
 			childSupervisor := NewSupervisor(childConfig)
-			childSupervisor.UpdateUserSpec(spec.UserSpec)
+			childSupervisor.updateUserSpec(spec.UserSpec)
 			childSupervisor.stateMapping = spec.StateMapping
 			childSupervisor.parentID = s.workerType
 			childSupervisor.parent = s
@@ -1781,7 +1781,7 @@ func (s *Supervisor) reconcileChildren(specs []config.ChildSpec) error {
 
 // UpdateUserSpec updates the user-provided configuration for this supervisor.
 // This method is called by parent supervisors during reconciliation to update child configuration.
-func (s *Supervisor) UpdateUserSpec(spec config.UserSpec) {
+func (s *Supervisor) updateUserSpec(spec config.UserSpec) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -2069,4 +2069,67 @@ func (s *Supervisor) GetWorkers() []fsmv2.Identity {
 		})
 	}
 	return workers
+}
+
+// =============================================================================
+// TEST ACCESSORS - DO NOT USE IN PRODUCTION CODE
+// =============================================================================
+//
+// These methods expose internal functionality exclusively for testing purposes.
+// They are NOT part of the public API contract and should NEVER be used in
+// production code. They exist to support black-box testing without converting
+// all test files to white-box testing (package supervisor).
+//
+// Naming Convention: All test accessor methods are prefixed with "Test" to
+// clearly indicate they are test-only and distinguish them from the public API.
+//
+// Why These Exist:
+// - Some test files are too complex to convert to white-box testing
+// - Converting would require extensive mock infrastructure changes
+// - Hybrid approach: simple tests use white-box, complex tests use accessors
+// - Clearly documented as test-only to prevent production usage
+
+// TestTick exposes tick for testing. DO NOT USE in production code.
+func (s *Supervisor) TestTick(ctx context.Context) error {
+	return s.tick(ctx)
+}
+
+// TestTickAll exposes tickAll for testing. DO NOT USE in production code.
+func (s *Supervisor) TestTickAll(ctx context.Context) error {
+	return s.tickAll(ctx)
+}
+
+// TestRequestShutdown exposes requestShutdown for testing. DO NOT USE in production code.
+func (s *Supervisor) TestRequestShutdown(ctx context.Context, workerID string, reason string) error {
+	return s.requestShutdown(ctx, workerID, reason)
+}
+
+// TestCheckDataFreshness exposes checkDataFreshness for testing. DO NOT USE in production code.
+func (s *Supervisor) TestCheckDataFreshness(snapshot *fsmv2.Snapshot) bool {
+	return s.checkDataFreshness(snapshot)
+}
+
+// TestRestartCollector exposes restartCollector for testing. DO NOT USE in production code.
+func (s *Supervisor) TestRestartCollector(ctx context.Context, workerID string) error {
+	return s.restartCollector(ctx, workerID)
+}
+
+// TestUpdateUserSpec exposes updateUserSpec for testing. DO NOT USE in production code.
+func (s *Supervisor) TestUpdateUserSpec(spec config.UserSpec) {
+	s.updateUserSpec(spec)
+}
+
+// TestGetStaleThreshold exposes getStaleThreshold for testing. DO NOT USE in production code.
+func (s *Supervisor) TestGetStaleThreshold() time.Duration {
+	return s.getStaleThreshold()
+}
+
+// TestGetRestartCount exposes getRestartCount for testing. DO NOT USE in production code.
+func (s *Supervisor) TestGetRestartCount() int {
+	return s.getRestartCount()
+}
+
+// TestSetRestartCount exposes setRestartCount for testing. DO NOT USE in production code.
+func (s *Supervisor) TestSetRestartCount(count int) {
+	s.setRestartCount(count)
 }
