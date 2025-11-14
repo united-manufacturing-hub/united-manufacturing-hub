@@ -32,6 +32,7 @@ import (
 	"errors"
 	"reflect"
 	"sync"
+	"testing"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -1174,3 +1175,80 @@ var _ = Describe("TriangularStore", func() {
 		})
 	})
 })
+
+// Benchmarks for SaveObserved delta checking
+
+func BenchmarkSaveObservedNoChange(b *testing.B) {
+	store := newMockStore()
+	registry := storage.NewRegistry()
+	ts := storage.NewTriangularStore(store, registry)
+	ctx := context.Background()
+
+	// Register collection
+	registry.Register(&storage.CollectionMetadata{
+		Name:       "benchmark_observed",
+		WorkerType: "benchmark",
+		Role:       storage.RoleObserved,
+		CSEFields:  []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
+	})
+
+	// Create initial document
+	doc := persistence.Document{
+		"id":     "worker-123",
+		"status": "running",
+		"cpu":    45.2,
+	}
+
+	_, _ = ts.SaveObserved(ctx, "benchmark", "worker-123", doc)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		// Same data - should detect no change
+		_, _ = ts.SaveObserved(ctx, "benchmark", "worker-123", doc)
+	}
+}
+
+func BenchmarkSaveObservedWithChange(b *testing.B) {
+	store := newMockStore()
+	registry := storage.NewRegistry()
+	ts := storage.NewTriangularStore(store, registry)
+	ctx := context.Background()
+
+	registry.Register(&storage.CollectionMetadata{
+		Name:       "benchmark_observed",
+		WorkerType: "benchmark",
+		Role:       storage.RoleObserved,
+		CSEFields:  []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
+	})
+
+	// Create initial document
+	doc := persistence.Document{
+		"id":     "worker-123",
+		"status": "running",
+		"cpu":    45.2,
+	}
+
+	_, _ = ts.SaveObserved(ctx, "benchmark", "worker-123", doc)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		// Changing data each iteration
+		doc["cpu"] = float64(i) * 0.1
+		_, _ = ts.SaveObserved(ctx, "benchmark", "worker-123", doc)
+	}
+}
+
+func BenchmarkRegistryLookup(b *testing.B) {
+	registry := storage.NewRegistry()
+	registry.Register(&storage.CollectionMetadata{
+		Name:       "benchmark_observed",
+		WorkerType: "benchmark",
+		Role:       storage.RoleObserved,
+		CSEFields:  []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
+	})
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, _, _, _ = registry.GetTriangularCollections("benchmark")
+	}
+}

@@ -1,0 +1,9 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage
+cpu: Apple M3 Pro
+BenchmarkSaveObservedNoChange-11      	 4005811	       287.1 ns/op	     256 B/op	       6 allocs/op
+BenchmarkSaveObservedWithChange-11    	 3888100	       311.8 ns/op	     264 B/op	       7 allocs/op
+BenchmarkRegistryLookup-11            	 7863925	       141.5 ns/op	      96 B/op	       3 allocs/op
+PASS
+ok  	github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage	4.441s
