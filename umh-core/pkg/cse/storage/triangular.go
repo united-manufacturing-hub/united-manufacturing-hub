@@ -426,6 +426,11 @@ func (ts *TriangularStore) saveObservedInternal(ctx context.Context, workerType 
 		return errors.New("toDocument returned nil document")
 	}
 
+	// Validate that 'id' field exists in the observed document
+	if _, hasID := observedDoc["id"]; !hasID {
+		return fmt.Errorf("observed document must have 'id' field")
+	}
+
 	// Add required 'id' field for document validation
 	observedDoc["id"] = id
 
