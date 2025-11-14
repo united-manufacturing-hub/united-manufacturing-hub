@@ -1036,27 +1036,32 @@ func LoadObservedTyped[T any](ts *TriangularStore, ctx context.Context, id strin
 	return result, nil
 }
 
-// SaveObservedTyped saves system reality using generic type parameter.
+// SaveObservedTyped saves observed state using generics (no registry dependency).
 //
-// This is a package-level generic function that provides type-safe saving of observed state.
-// It derives the workerType from the type parameter T and delegates to TriangularStore.SaveObserved.
+// DESIGN DECISION: Fully independent generic implementation
+// WHY: Type parameter T provides all information needed:
+//   - workerType from DeriveWorkerType[T]()
+//   - collectionName from DeriveCollectionName[T](RoleObserved)
+//   - CSE fields from getCSEFields(RoleObserved)
 //
-// Type parameter T must be a struct ending in "ObservedState" (e.g., ParentObservedState).
-// The workerType is derived by removing "ObservedState" suffix and lowercasing.
+// DELTA CHECKING: Compares new data against existing data (excluding CSE fields).
+// Returns true if business data changed, false if only CSE metadata updated.
 //
-// SaveObserved implements delta detection: it only writes to the database if the observed state
-// has actually changed (excluding CSE metadata fields). This reduces unnecessary I/O and prevents
-// spurious updates in change-sensitive workflows.
+// CSE metadata auto-injected:
+//   - _sync_id: Incremented after successful save
+//   - _version: Preserved from existing (observed doesn't increment version)
+//   - _created_at: Set on first save
+//   - _updated_at: Set on every save
 //
 // Parameters:
 //   - ts: TriangularStore instance
 //   - ctx: Cancellation context
 //   - id: Unique worker identifier
-//   - observed: Observed state as typed struct
+//   - observed: Observed state struct
 //
 // Returns:
-//   - changed: true if data was written (state changed), false if write was skipped (no change)
-//   - error: Serialization error or database error
+//   - changed: True if business data changed (not just CSE metadata)
+//   - error: If save fails
 //
 // Example:
 //
@@ -1064,16 +1069,84 @@ func LoadObservedTyped[T any](ts *TriangularStore, ctx context.Context, id strin
 //	changed, err := storage.SaveObservedTyped[ParentObservedState](ts, ctx, "parent-001", observed)
 //	// changed=true if this is a new write or data changed, false if identical to previous
 func SaveObservedTyped[T any](ts *TriangularStore, ctx context.Context, id string, observed T) (bool, error) {
-	workerType := DeriveWorkerType[T]()
+	collectionName := DeriveCollectionName[T](RoleObserved)
 
-	doc, err := structToDocument(observed)
+	// Marshal struct to Document
+	observedDoc, err := structToDocument(observed)
 	if err != nil {
 		return false, fmt.Errorf("failed to serialize %T: %w", observed, err)
 	}
 
-	doc["id"] = id
+	// Add ID if not present (convenience)
+	if _, ok := observedDoc["id"]; !ok {
+		observedDoc["id"] = id
+	}
 
-	return ts.SaveObserved(ctx, workerType, id, doc)
+	// Load existing document for delta checking
+	existing, err := ts.store.Get(ctx, collectionName, id)
+	isNew := err != nil && errors.Is(err, persistence.ErrNotFound)
+
+	if err != nil && !isNew {
+		return false, fmt.Errorf("failed to load existing observed state: %w", err)
+	}
+
+	// Delta check: Compare business data (exclude CSE fields)
+	cseFields := getCSEFields(RoleObserved)
+	changed := false
+
+	if isNew {
+		changed = true // New document = always changed
+	} else {
+		// Filter CSE fields and id/version from both documents
+		currentFiltered := ts.filterCSEFields(existing, cseFields)
+		delete(currentFiltered, "id")
+		delete(currentFiltered, FieldVersion)
+		newFiltered := ts.filterCSEFields(observedDoc, cseFields)
+		delete(newFiltered, "id")
+		delete(newFiltered, FieldVersion)
+
+		// Compare filtered documents
+		changed = !reflect.DeepEqual(currentFiltered, newFiltered)
+	}
+
+	// If no change, return early (don't write)
+	if !changed {
+		return false, nil
+	}
+
+	// Preserve version field from existing document (observed doesn't increment version)
+	if !isNew && existing != nil {
+		if version, ok := existing[FieldVersion]; ok {
+			observedDoc[FieldVersion] = version
+		}
+	}
+
+	// Inject CSE metadata
+	ts.injectMetadata(observedDoc, RoleObserved, isNew)
+
+	// Save or update
+	if isNew {
+		_, err = ts.store.Insert(ctx, collectionName, observedDoc)
+	} else {
+		err = ts.store.Update(ctx, collectionName, id, observedDoc)
+	}
+
+	if err != nil {
+		return false, fmt.Errorf("failed to save observed state: %w", err)
+	}
+
+	// Increment sync ID after successful save (prevents gaps)
+	syncID := ts.syncID.Add(1)
+	observedDoc[FieldSyncID] = syncID
+
+	// Update with sync ID
+	err = ts.store.Update(ctx, collectionName, id, observedDoc)
+	if err != nil {
+		// Non-fatal: document saved, but sync ID update failed
+		return changed, fmt.Errorf("failed to update sync ID: %w", err)
+	}
+
+	return changed, nil
 }
 
 func DeriveWorkerType[T any]() string {
