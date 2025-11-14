@@ -564,29 +564,14 @@ func (ts *TriangularStore) SaveObserved(ctx context.Context, workerType string, 
 //   - persistence.Document: Observed state document with CSE metadata
 //   - error: ErrNotFound if not found
 func (ts *TriangularStore) LoadObserved(ctx context.Context, workerType string, id string) (interface{}, error) {
-	// Collection name follows convention: {workerType}_observed
 	collectionName := workerType + "_observed"
 
-	// Load Document from database
 	doc, err := ts.store.Get(ctx, collectionName, id)
 	if err != nil {
 		return nil, err
 	}
 
-	// Check type registry for worker-specific type
-	observedType := ts.typeRegistry.GetObservedType(id)
-	if observedType == nil || observedType.String() == "persistence.Document" {
-		// No type registered or Document requested → return Document
-		return doc, nil
-	}
-
-	// Deserialize to typed struct
-	destPtr := reflect.New(observedType)
-	if err := documentToStruct(doc, destPtr.Interface()); err != nil {
-		return nil, fmt.Errorf("failed to deserialize to %s: %w", observedType, err)
-	}
-
-	return destPtr.Elem().Interface(), nil
+	return doc, nil
 }
 
 // LoadObservedTyped loads observed state and deserializes into provided pointer.

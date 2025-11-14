@@ -978,7 +978,28 @@ var _ = Describe("TriangularStore", func() {
 		})
 	})
 
-	Describe("LoadObserved with TypeRegistry", func() {
+	Describe("LoadObserved without TypeRegistry (TDD for Task 2.3)", func() {
+		It("should always return Document, never use TypeRegistry", func() {
+			observed := TestObservedState{
+				ID:     "worker-tdd-test",
+				Status: "running",
+				CPU:    int64(75),
+			}
+			_, err := ts.SaveObserved(ctx, "container", "worker-tdd-test", observed)
+			Expect(err).NotTo(HaveOccurred())
+
+			result, err := ts.LoadObserved(ctx, "container", "worker-tdd-test")
+			Expect(err).NotTo(HaveOccurred())
+
+			doc, ok := result.(persistence.Document)
+			Expect(ok).To(BeTrue(), "LoadObserved should return Document, not typed struct")
+			Expect(doc["id"]).To(Equal("worker-tdd-test"))
+			Expect(doc["status"]).To(Equal("running"))
+			Expect(doc["cpu"]).To(BeNumerically("==", 75))
+		})
+	})
+
+	Describe("LoadObserved with TypeRegistry (deprecated tests)", func() {
 		It("should return Document when no type registered", func() {
 			observed := persistence.Document{
 				"id":     "worker-no-type",
@@ -997,11 +1018,7 @@ var _ = Describe("TriangularStore", func() {
 			Expect(doc["status"]).To(Equal("running"))
 		})
 
-		It("should return typed struct when type registered", func() {
-			// Register type for this worker
-			observedType := reflect.TypeOf(TestObservedState{})
-			ts.TypeRegistry().RegisterWorkerType("worker-typed", nil, observedType)
-
+		It("should always return Document (TypeRegistry no longer used)", func() {
 			observed := TestObservedState{
 				ID:     "worker-typed",
 				Status: "running",
@@ -1013,19 +1030,14 @@ var _ = Describe("TriangularStore", func() {
 			result, err := ts.LoadObserved(ctx, "container", "worker-typed")
 			Expect(err).NotTo(HaveOccurred())
 
-			typed, ok := result.(TestObservedState)
-			Expect(ok).To(BeTrue())
-			Expect(typed.ID).To(Equal("worker-typed"))
-			Expect(typed.Status).To(Equal("running"))
-			Expect(typed.CPU).To(Equal(int64(75)))
+			doc, ok := result.(persistence.Document)
+			Expect(ok).To(BeTrue(), "LoadObserved always returns Document now")
+			Expect(doc["id"]).To(Equal("worker-typed"))
+			Expect(doc["status"]).To(Equal("running"))
+			Expect(doc["cpu"]).To(BeNumerically("==", 75))
 		})
 
-		It("should return error on deserialization failure", func() {
-			// Register type
-			observedType := reflect.TypeOf(TestObservedState{})
-			ts.TypeRegistry().RegisterWorkerType("worker-bad-data", nil, observedType)
-
-			// Save invalid data (string instead of int64)
+		It("should return Document with any data (no deserialization errors)", func() {
 			observed := persistence.Document{
 				"id":     "worker-bad-data",
 				"status": "running",
@@ -1034,9 +1046,12 @@ var _ = Describe("TriangularStore", func() {
 			_, err := ts.SaveObserved(ctx, "container", "worker-bad-data", observed)
 			Expect(err).NotTo(HaveOccurred())
 
-			_, err = ts.LoadObserved(ctx, "container", "worker-bad-data")
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("failed to deserialize"))
+			result, err := ts.LoadObserved(ctx, "container", "worker-bad-data")
+			Expect(err).NotTo(HaveOccurred())
+
+			doc, ok := result.(persistence.Document)
+			Expect(ok).To(BeTrue())
+			Expect(doc["cpu"]).To(Equal("not-a-number"))
 		})
 
 		It("should return ErrNotFound for non-existent document", func() {
