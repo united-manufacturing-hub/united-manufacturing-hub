@@ -916,13 +916,11 @@ func structToDocument(v interface{}) (persistence.Document, error) {
 	return doc, nil
 }
 
-// LoadDesired retrieves user intent/configuration using generic type parameter.
+// LoadDesiredTyped loads desired state using generics (no registry dependency).
 //
-// This is a package-level generic function that provides type-safe access to desired state.
-// It derives the workerType from the type parameter T and delegates to TriangularStore.LoadDesired.
-//
-// Type parameter T must be a struct ending in "DesiredState" (e.g., ParentDesiredState).
-// The workerType is derived by removing "DesiredState" suffix and lowercasing.
+// DESIGN DECISION: Fully independent generic implementation
+// WHY: Type parameter T provides collection name via DeriveCollectionName[T](RoleDesired).
+//      No registry lookup needed.
 //
 // Parameters:
 //   - ts: TriangularStore instance
@@ -930,73 +928,117 @@ func structToDocument(v interface{}) (persistence.Document, error) {
 //   - id: Unique worker identifier
 //
 // Returns:
-//   - T: Desired state as typed struct
-//   - error: ErrNotFound if not found, or deserialization error
+//   - Desired state struct (strongly typed)
+//   - error: ErrNotFound if worker doesn't exist
 //
 // Example:
 //
-//	result, err := storage.LoadDesired[ParentDesiredState](ts, ctx, "parent-001")
+//	result, err := storage.LoadDesiredTyped[ParentDesiredState](ts, ctx, "parent-001")
 //	// result is ParentDesiredState (not interface{})
 func LoadDesiredTyped[T any](ts *TriangularStore, ctx context.Context, id string) (T, error) {
-	var zero T
-	workerType := DeriveWorkerType[T]()
+	var result T
+	collectionName := DeriveCollectionName[T](RoleDesired)
 
-	result, err := ts.LoadDesired(ctx, workerType, id)
+	// Load from persistence
+	doc, err := ts.store.Get(ctx, collectionName, id)
 	if err != nil {
-		return zero, err
+		return result, err
 	}
 
-	// If result is already the correct type, return it directly
-	if typed, ok := result.(T); ok {
-		return typed, nil
+	// Unmarshal Document to typed struct
+	if err := documentToStruct(doc, &result); err != nil {
+		return result, fmt.Errorf("failed to unmarshal to type %T: %w", result, err)
 	}
 
-	// Otherwise, deserialize Document to typed struct
-	doc, ok := result.(persistence.Document)
-	if !ok {
-		return zero, fmt.Errorf("expected persistence.Document but got %T", result)
-	}
-
-	var dest T
-	if err := documentToStruct(doc, &dest); err != nil {
-		return zero, fmt.Errorf("failed to deserialize to %T: %w", zero, err)
-	}
-
-	return dest, nil
+	return result, nil
 }
 
-// SaveDesiredTyped saves user intent/configuration using generic type parameter.
+// SaveDesiredTyped saves desired state using generics (no registry dependency).
 //
-// This is a package-level generic function that provides type-safe saving of desired state.
-// It derives the workerType from the type parameter T and delegates to TriangularStore.SaveDesired.
+// DESIGN DECISION: Fully independent generic implementation
+// WHY: Type parameter T provides all information needed:
+//      - workerType from DeriveWorkerType[T]()
+//      - collectionName from DeriveCollectionName[T](RoleDesired)
+//      - CSE fields from getCSEFields(RoleDesired)
 //
-// Type parameter T must be a struct ending in "DesiredState" (e.g., ParentDesiredState).
-// The workerType is derived by removing "DesiredState" suffix and lowercasing.
+// NO DELTA CHECKING: Desired state represents user intent - always write.
+// Unlike observed state, we don't skip writes even if data hasn't changed.
+//
+// CSE metadata auto-injected:
+//   - _sync_id: Incremented after successful save
+//   - _version: Incremented on every update (optimistic locking)
+//   - _created_at: Set on first save
+//   - _updated_at: Set on every save
 //
 // Parameters:
 //   - ts: TriangularStore instance
 //   - ctx: Cancellation context
 //   - id: Unique worker identifier
-//   - desired: Desired state as typed struct
+//   - desired: Desired state struct
 //
 // Returns:
-//   - error: Serialization error or database error
+//   - error: If save fails
 //
 // Example:
 //
 //	desired := ParentDesiredState{Name: "Worker1", Command: "start"}
 //	err := storage.SaveDesiredTyped[ParentDesiredState](ts, ctx, "parent-001", desired)
 func SaveDesiredTyped[T any](ts *TriangularStore, ctx context.Context, id string, desired T) error {
-	workerType := DeriveWorkerType[T]()
+	collectionName := DeriveCollectionName[T](RoleDesired)
 
-	doc, err := structToDocument(desired)
+	// Marshal struct to Document
+	bytes, err := json.Marshal(desired)
 	if err != nil {
-		return fmt.Errorf("failed to serialize %T: %w", desired, err)
+		return fmt.Errorf("failed to marshal desired state: %w", err)
 	}
 
-	doc["id"] = id
+	var desiredDoc persistence.Document
+	if err := json.Unmarshal(bytes, &desiredDoc); err != nil {
+		return fmt.Errorf("failed to unmarshal to Document: %w", err)
+	}
 
-	return ts.SaveDesired(ctx, workerType, id, doc)
+	// Add ID if not present
+	if _, ok := desiredDoc["id"]; !ok {
+		desiredDoc["id"] = id
+	}
+
+	// Check if new or update
+	_, err = ts.store.Get(ctx, collectionName, id)
+	isNew := err != nil && errors.Is(err, persistence.ErrNotFound)
+
+	if err != nil && !isNew {
+		return fmt.Errorf("failed to check existing desired state: %w", err)
+	}
+
+	// Inject CSE metadata
+	ts.injectMetadata(desiredDoc, RoleDesired, isNew)
+
+	// Save or update
+	if isNew {
+		_, err = ts.store.Insert(ctx, collectionName, desiredDoc)
+	} else {
+		// Increment version on every update (optimistic locking)
+		if version, ok := desiredDoc[FieldVersion].(int64); ok {
+			desiredDoc[FieldVersion] = version + 1
+		}
+		err = ts.store.Update(ctx, collectionName, id, desiredDoc)
+	}
+
+	if err != nil {
+		return fmt.Errorf("failed to save desired state: %w", err)
+	}
+
+	// Increment sync ID after successful save
+	syncID := ts.syncID.Add(1)
+	desiredDoc[FieldSyncID] = syncID
+
+	// Update with sync ID
+	err = ts.store.Update(ctx, collectionName, id, desiredDoc)
+	if err != nil {
+		return fmt.Errorf("failed to update sync ID: %w", err)
+	}
+
+	return nil
 }
 
 // LoadObservedTyped loads observed state using generics (no registry dependency).
