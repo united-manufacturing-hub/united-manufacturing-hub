@@ -485,18 +485,8 @@ var _ = Describe("TriangularStore", func() {
 			})
 		})
 
-		Context("when type is registered", func() {
-			var desiredType reflect.Type
-
-			BeforeEach(func() {
-				desiredType = reflect.TypeOf(ParentDesiredState{})
-				observedType := reflect.TypeOf(ParentObservedState{})
-
-				err := ts.TypeRegistry().RegisterWorkerType("worker-123", observedType, desiredType)
-				Expect(err).NotTo(HaveOccurred())
-			})
-
-			It("should return typed struct", func() {
+		Context("after registry elimination (Task 2.4)", func() {
+			It("should always return Document regardless of TypeRegistry", func() {
 				desired := persistence.Document{
 					"id":      "worker-123",
 					"name":    "parent-worker",
@@ -508,13 +498,13 @@ var _ = Describe("TriangularStore", func() {
 				loaded, err := ts.LoadDesired(ctx, "container", "worker-123")
 				Expect(err).NotTo(HaveOccurred())
 
-				typedDesired, ok := loaded.(ParentDesiredState)
-				Expect(ok).To(BeTrue(), "should return typed struct when type registered")
-				Expect(typedDesired.Name).To(Equal("parent-worker"))
-				Expect(typedDesired.Command).To(Equal("start"))
+				doc, ok := loaded.(persistence.Document)
+				Expect(ok).To(BeTrue(), "LoadDesired always returns Document after registry elimination")
+				Expect(doc["name"]).To(Equal("parent-worker"))
+				Expect(doc["command"]).To(Equal("start"))
 			})
 
-			It("should return error on invalid JSON", func() {
+			It("should return Document even with channels in data", func() {
 				desired := persistence.Document{
 					"id":   "worker-123",
 					"data": make(chan int),
@@ -522,26 +512,75 @@ var _ = Describe("TriangularStore", func() {
 				err := ts.SaveDesired(ctx, "container", "worker-123", desired)
 				Expect(err).NotTo(HaveOccurred())
 
-				_, err = ts.LoadDesired(ctx, "container", "worker-123")
-				Expect(err).To(HaveOccurred())
-			})
-		})
-
-		Context("when Document type explicitly registered", func() {
-			BeforeEach(func() {
-				docType := reflect.TypeOf(persistence.Document{})
-				err := ts.TypeRegistry().RegisterWorkerType("worker-123", docType, docType)
-				Expect(err).NotTo(HaveOccurred())
-			})
-
-			It("should return Document", func() {
 				loaded, err := ts.LoadDesired(ctx, "container", "worker-123")
 				Expect(err).NotTo(HaveOccurred())
 
-				doc, ok := loaded.(persistence.Document)
-				Expect(ok).To(BeTrue(), "should return Document when Document type explicitly registered")
-				Expect(doc["config"]).To(Equal("value"))
+				_, ok := loaded.(persistence.Document)
+				Expect(ok).To(BeTrue(), "LoadDesired returns Document regardless of data types")
 			})
+		})
+	})
+
+	Describe("SaveDesired without registry (Task 2.4 TDD)", func() {
+		It("should work with convention-based collection names", func() {
+			doc := persistence.Document{
+				"id":     "worker-456",
+				"config": "test-value",
+			}
+
+			err := ts.SaveDesired(ctx, "testworker", "worker-456", doc)
+			Expect(err).NotTo(HaveOccurred())
+
+			saved, err := store.Get(ctx, "testworker_desired", "worker-456")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(saved["config"]).To(Equal("test-value"))
+		})
+
+		It("should inject CSE metadata using constants", func() {
+			doc := persistence.Document{
+				"id":    "worker-789",
+				"field": "value",
+			}
+
+			err := ts.SaveDesired(ctx, "testworker", "worker-789", doc)
+			Expect(err).NotTo(HaveOccurred())
+
+			loaded, err := store.Get(ctx, "testworker_desired", "worker-789")
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(loaded).To(HaveKey(storage.FieldSyncID))
+			Expect(loaded).To(HaveKey(storage.FieldVersion))
+			Expect(loaded).To(HaveKey(storage.FieldCreatedAt))
+			Expect(loaded[storage.FieldVersion]).To(Equal(int64(1)))
+
+			// Update to verify _updated_at is set on updates
+			doc["field"] = "updated-value"
+			err = ts.SaveDesired(ctx, "testworker", "worker-789", doc)
+			Expect(err).NotTo(HaveOccurred())
+
+			updated, err := store.Get(ctx, "testworker_desired", "worker-789")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(updated).To(HaveKey(storage.FieldUpdatedAt))
+			Expect(updated[storage.FieldVersion]).To(Equal(int64(2)))
+		})
+	})
+
+	Describe("LoadDesired without registry (Task 2.4 TDD)", func() {
+		BeforeEach(func() {
+			doc := persistence.Document{
+				"id":   "worker-999",
+				"data": "test-data",
+			}
+			ts.SaveDesired(ctx, "testworker", "worker-999", doc)
+		})
+
+		It("should always return Document using convention-based collection name", func() {
+			result, err := ts.LoadDesired(ctx, "testworker", "worker-999")
+			Expect(err).NotTo(HaveOccurred())
+
+			doc, ok := result.(persistence.Document)
+			Expect(ok).To(BeTrue(), "LoadDesired should always return Document")
+			Expect(doc["data"]).To(Equal("test-data"))
 		})
 	})
 

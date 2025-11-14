@@ -269,22 +269,20 @@ func (ts *TriangularStore) SaveDesired(ctx context.Context, workerType string, i
 		return fmt.Errorf("invalid desired document: %w", err)
 	}
 
-	_, desiredMeta, _, err := ts.registry.GetTriangularCollections(workerType)
-	if err != nil {
-		return fmt.Errorf("worker type %q not registered: %w", workerType, err)
-	}
+	// Collection name follows convention: {workerType}_desired
+	collectionName := workerType + "_desired"
 
 	// Check if this is first save or update
-	_, err = ts.store.Get(ctx, desiredMeta.Name, id)
+	_, err := ts.store.Get(ctx, collectionName, id)
 	isNew := err != nil && errors.Is(err, persistence.ErrNotFound)
 
 	// Inject CSE metadata (without sync ID - will be set after successful operation)
 	ts.injectMetadata(desired, RoleDesired, isNew)
 
 	if isNew {
-		_, err = ts.store.Insert(ctx, desiredMeta.Name, desired)
+		_, err = ts.store.Insert(ctx, collectionName, desired)
 	} else {
-		err = ts.store.Update(ctx, desiredMeta.Name, id, desired)
+		err = ts.store.Update(ctx, collectionName, id, desired)
 	}
 
 	if err != nil {
@@ -297,7 +295,7 @@ func (ts *TriangularStore) SaveDesired(ctx context.Context, workerType string, i
 	desired[FieldSyncID] = syncID
 
 	// Update the document in database with sync ID
-	err = ts.store.Update(ctx, desiredMeta.Name, id, desired)
+	err = ts.store.Update(ctx, collectionName, id, desired)
 	if err != nil {
 		// This is a critical error - document exists but we couldn't set sync ID
 		// The sync ID counter is already incremented, creating a gap
@@ -315,35 +313,17 @@ func (ts *TriangularStore) SaveDesired(ctx context.Context, workerType string, i
 //   - id: Unique worker identifier
 //
 // Returns:
-//   - interface{}: Desired state as Document or typed struct (based on TypeRegistry)
+//   - interface{}: Desired state as Document
 //   - error: ErrNotFound if not found
 func (ts *TriangularStore) LoadDesired(ctx context.Context, workerType string, id string) (interface{}, error) {
-	_, desiredMeta, _, err := ts.registry.GetTriangularCollections(workerType)
-	if err != nil {
-		return nil, fmt.Errorf("worker type %q not registered: %w", workerType, err)
-	}
+	collectionName := workerType + "_desired"
 
-	doc, err := ts.store.Get(ctx, desiredMeta.Name, id)
+	doc, err := ts.store.Get(ctx, collectionName, id)
 	if err != nil {
 		return nil, err
 	}
 
-	desiredType := ts.typeRegistry.GetDesiredType(id)
-	if desiredType == nil {
-		return doc, nil
-	}
-
-	docType := reflect.TypeOf(persistence.Document{})
-	if desiredType == docType || desiredType.String() == "persistence.Document" {
-		return doc, nil
-	}
-
-	destPtr := reflect.New(desiredType)
-	if err := documentToStruct(doc, destPtr.Interface()); err != nil {
-		return nil, fmt.Errorf("failed to deserialize to %s: %w", desiredType, err)
-	}
-
-	return destPtr.Elem().Interface(), nil
+	return doc, nil
 }
 
 // LoadDesiredTyped loads desired state and deserializes into provided pointer.
