@@ -999,13 +999,11 @@ func SaveDesiredTyped[T any](ts *TriangularStore, ctx context.Context, id string
 	return ts.SaveDesired(ctx, workerType, id, doc)
 }
 
-// LoadObservedTyped retrieves system reality using generic type parameter.
+// LoadObservedTyped loads observed state using generics (no registry dependency).
 //
-// This is a package-level generic function that provides type-safe access to observed state.
-// It derives the workerType from the type parameter T and delegates to TriangularStore.LoadObserved.
-//
-// Type parameter T must be a struct ending in "ObservedState" (e.g., ParentObservedState).
-// The workerType is derived by removing "ObservedState" suffix and lowercasing.
+// DESIGN DECISION: Fully independent generic implementation
+// WHY: Type parameter T provides collection name via DeriveCollectionName[T](RoleObserved).
+//      No registry lookup needed.
 //
 // Parameters:
 //   - ts: TriangularStore instance
@@ -1013,39 +1011,29 @@ func SaveDesiredTyped[T any](ts *TriangularStore, ctx context.Context, id string
 //   - id: Unique worker identifier
 //
 // Returns:
-//   - T: Observed state as typed struct
-//   - error: ErrNotFound if not found, or deserialization error
+//   - Observed state struct (strongly typed)
+//   - error: ErrNotFound if worker doesn't exist
 //
 // Example:
 //
 //	result, err := storage.LoadObservedTyped[ParentObservedState](ts, ctx, "parent-001")
 //	// result is ParentObservedState (not interface{})
 func LoadObservedTyped[T any](ts *TriangularStore, ctx context.Context, id string) (T, error) {
-	var zero T
-	workerType := DeriveWorkerType[T]()
+	var result T
+	collectionName := DeriveCollectionName[T](RoleObserved)
 
-	result, err := ts.LoadObserved(ctx, workerType, id)
+	// Load from persistence
+	doc, err := ts.store.Get(ctx, collectionName, id)
 	if err != nil {
-		return zero, err
+		return result, err
 	}
 
-	// If result is already the correct type, return it directly
-	if typed, ok := result.(T); ok {
-		return typed, nil
+	// Use documentToStruct helper for deserialization
+	if err := documentToStruct(doc, &result); err != nil {
+		return result, fmt.Errorf("failed to unmarshal to type %T: %w", result, err)
 	}
 
-	// Otherwise, deserialize Document to typed struct
-	doc, ok := result.(persistence.Document)
-	if !ok {
-		return zero, fmt.Errorf("expected persistence.Document but got %T", result)
-	}
-
-	var dest T
-	if err := documentToStruct(doc, &dest); err != nil {
-		return zero, fmt.Errorf("failed to deserialize to %T: %w", zero, err)
-	}
-
-	return dest, nil
+	return result, nil
 }
 
 // SaveObservedTyped saves system reality using generic type parameter.
