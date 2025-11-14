@@ -141,15 +141,77 @@ func normalizeType(t reflect.Type) reflect.Type {
 	return t
 }
 
-// checkLockOrder is a placeholder for runtime lock order assertion.
-// This function will be implemented in Phase 3 to verify that locks
-// are acquired in the correct order as documented in the LOCK ORDER section.
-//
-// For now, this function exists to satisfy Phase 2 test requirements.
-// Future implementation will panic if locks are acquired out of order.
-func checkLockOrder() {
-	// Phase 2: Placeholder only
-	// Phase 3: Will implement runtime verification
+// Lock acquisition wrappers for Supervisor.mu
+// These wrappers enforce lock order checking when ENABLE_LOCK_ORDER_CHECKS=1
+
+func (s *Supervisor) lockMu() {
+	checkLockOrder(lockNameSupervisorMu, lockLevelSupervisorMu)
+	s.mu.Lock()
+	recordLockAcquired(lockNameSupervisorMu, lockLevelSupervisorMu)
+}
+
+func (s *Supervisor) unlockMu() {
+	recordLockReleased(lockNameSupervisorMu)
+	s.mu.Unlock()
+}
+
+func (s *Supervisor) rLockMu() {
+	checkLockOrder(lockNameSupervisorMu, lockLevelSupervisorMu)
+	s.mu.RLock()
+	recordLockAcquired(lockNameSupervisorMu, lockLevelSupervisorMu)
+}
+
+func (s *Supervisor) rUnlockMu() {
+	recordLockReleased(lockNameSupervisorMu)
+	s.mu.RUnlock()
+}
+
+// Lock acquisition wrappers for Supervisor.ctxMu
+
+func (s *Supervisor) lockCtxMu() {
+	checkLockOrder(lockNameSupervisorCtxMu, lockLevelSupervisorCtxMu)
+	s.ctxMu.Lock()
+	recordLockAcquired(lockNameSupervisorCtxMu, lockLevelSupervisorCtxMu)
+}
+
+func (s *Supervisor) unlockCtxMu() {
+	recordLockReleased(lockNameSupervisorCtxMu)
+	s.ctxMu.Unlock()
+}
+
+func (s *Supervisor) rLockCtxMu() {
+	checkLockOrder(lockNameSupervisorCtxMu, lockLevelSupervisorCtxMu)
+	s.ctxMu.RLock()
+	recordLockAcquired(lockNameSupervisorCtxMu, lockLevelSupervisorCtxMu)
+}
+
+func (s *Supervisor) rUnlockCtxMu() {
+	recordLockReleased(lockNameSupervisorCtxMu)
+	s.ctxMu.RUnlock()
+}
+
+// Lock acquisition wrappers for WorkerContext.mu
+
+func (wc *WorkerContext) lockMu() {
+	checkLockOrder(lockNameWorkerContextMu, lockLevelWorkerContextMu)
+	wc.mu.Lock()
+	recordLockAcquired(lockNameWorkerContextMu, lockLevelWorkerContextMu)
+}
+
+func (wc *WorkerContext) unlockMu() {
+	recordLockReleased(lockNameWorkerContextMu)
+	wc.mu.Unlock()
+}
+
+func (wc *WorkerContext) rLockMu() {
+	checkLockOrder(lockNameWorkerContextMu, lockLevelWorkerContextMu)
+	wc.mu.RLock()
+	recordLockAcquired(lockNameWorkerContextMu, lockLevelWorkerContextMu)
+}
+
+func (wc *WorkerContext) rUnlockMu() {
+	recordLockReleased(lockNameWorkerContextMu)
+	wc.mu.RUnlock()
 }
 
 // CollectorHealth tracks the health and restart state of the observation collector.

@@ -437,3 +437,7 @@ var _ = Describe("Lock Analysis Report", func() {
 		Expect(len(locks)).To(BeNumerically(">", 0), "Should find at least one lock")
 	})
 })
+
+// NOTE: Runtime lock order assertion tests are in lock_order_test.go
+// (internal package) because they need direct access to Supervisor
+// and WorkerContext types.
