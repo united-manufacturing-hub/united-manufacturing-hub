@@ -27,6 +27,8 @@ package storage
 //            CSE metadata conventions are stable and don't vary per worker type.
 
 // Identity CSE fields (immutable, created once)
+// WARNING: This slice is exported for read-only access. DO NOT MODIFY.
+// Modifying this slice will break CSE metadata conventions across the system.
 var IdentityCSEFields = []string{
 	FieldSyncID,    // Global sync version for delta queries
 	FieldVersion,   // Always 1 for identity (never changes)
@@ -34,6 +36,8 @@ var IdentityCSEFields = []string{
 }
 
 // Desired CSE fields (user intent, versioned for optimistic locking)
+// WARNING: This slice is exported for read-only access. DO NOT MODIFY.
+// Modifying this slice will break CSE metadata conventions across the system.
 var DesiredCSEFields = []string{
 	FieldSyncID,    // Global sync version
 	FieldVersion,   // Increments on each update (optimistic locking)
@@ -42,6 +46,8 @@ var DesiredCSEFields = []string{
 }
 
 // Observed CSE fields (system reality, frequently updated)
+// WARNING: This slice is exported for read-only access. DO NOT MODIFY.
+// Modifying this slice will break CSE metadata conventions across the system.
 var ObservedCSEFields = []string{
 	FieldSyncID,    // Global sync version
 	FieldVersion,   // Increments on each update
