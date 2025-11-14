@@ -43,8 +43,8 @@ These APIs use reflection for collection name:
 ### Call Sites
 
 **Supervisor**
-- `/pkg/fsmv2/supervisor/supervisor.go:532` - SaveObserved for snapshot creation
-- Auto-registers collections in NewSupervisor() lines 344-391
+- `/pkg/fsmv2/supervisor/supervisor.go:605` - SaveObserved for snapshot creation
+- Auto-registers collections in NewSupervisor() lines 398-462
 
 **Collector**
 - `/pkg/fsmv2/supervisor/collection/collector.go:221` - SaveObserved for observed state
