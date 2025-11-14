@@ -906,6 +906,23 @@ var _ = Describe("TriangularStore", func() {
 		})
 	})
 
+	Describe("DeriveCollectionName", func() {
+		It("should derive collection name for identity role", func() {
+			name := storage.DeriveCollectionName[TestObservedState](storage.RoleIdentity)
+			Expect(name).To(Equal("test_identity"))
+		})
+
+		It("should derive collection name for desired role", func() {
+			name := storage.DeriveCollectionName[TestObservedState](storage.RoleDesired)
+			Expect(name).To(Equal("test_desired"))
+		})
+
+		It("should derive collection name for observed role", func() {
+			name := storage.DeriveCollectionName[TestObservedState](storage.RoleObserved)
+			Expect(name).To(Equal("test_observed"))
+		})
+	})
+
 	Describe("LoadDesired[T]", func() {
 		BeforeEach(func() {
 			registry.Register(&storage.CollectionMetadata{

@@ -1108,3 +1108,44 @@ func DeriveWorkerType[T any]() string {
 
 	panic(fmt.Sprintf("deriveWorkerType: type %q does not end with DesiredState or ObservedState", typeName))
 }
+
+// DeriveCollectionName derives the collection name for a given type and role.
+//
+// DESIGN DECISION: Use reflection to derive workerType, then apply naming convention
+// WHY: Type parameter T already identifies the worker type uniquely.
+//
+//	Convention-based naming eliminates need for registry lookup.
+//
+// CONVENTION: {workerType}_{role}
+//   - container_observed
+//   - relay_desired
+//   - communicator_identity
+//
+// Parameters:
+//   - role: The triangular role (identity, desired, observed)
+//
+// Returns:
+//   - Collection name following convention
+//
+// Example:
+//
+//	type ContainerObservedState struct { ... }
+//	collectionName := DeriveCollectionName[ContainerObservedState](RoleObserved)
+//	// Returns: "container_observed"
+func DeriveCollectionName[T any](role string) string {
+	workerType := DeriveWorkerType[T]()
+
+	var suffix string
+	switch role {
+	case RoleIdentity:
+		suffix = "_identity"
+	case RoleDesired:
+		suffix = "_desired"
+	case RoleObserved:
+		suffix = "_observed"
+	default:
+		panic("unknown role: " + role)
+	}
+
+	return workerType + suffix
+}
