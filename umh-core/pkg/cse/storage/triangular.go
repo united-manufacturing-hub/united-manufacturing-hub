@@ -434,13 +434,11 @@ func (ts *TriangularStore) saveObservedInternal(ctx context.Context, workerType 
 		return fmt.Errorf("invalid observed document: %w", err)
 	}
 
-	_, _, observedMeta, err := ts.registry.GetTriangularCollections(workerType)
-	if err != nil {
-		return fmt.Errorf("worker type %q not registered: %w", workerType, err)
-	}
+	// Collection name follows convention: {workerType}_observed
+	collectionName := workerType + "_observed"
 
 	// Check if this is first save or update
-	currentDoc, err := ts.store.Get(ctx, observedMeta.Name, id)
+	currentDoc, err := ts.store.Get(ctx, collectionName, id)
 	isNew := err != nil && errors.Is(err, persistence.ErrNotFound)
 
 	// For updates, preserve the version field (observed state doesn't increment version)
@@ -454,9 +452,9 @@ func (ts *TriangularStore) saveObservedInternal(ctx context.Context, workerType 
 	ts.injectMetadata(observedDoc, RoleObserved, isNew)
 
 	if isNew {
-		_, err = ts.store.Insert(ctx, observedMeta.Name, observedDoc)
+		_, err = ts.store.Insert(ctx, collectionName, observedDoc)
 	} else {
-		err = ts.store.Update(ctx, observedMeta.Name, id, observedDoc)
+		err = ts.store.Update(ctx, collectionName, id, observedDoc)
 	}
 
 	if err != nil {
@@ -469,7 +467,7 @@ func (ts *TriangularStore) saveObservedInternal(ctx context.Context, workerType 
 	observedDoc[FieldSyncID] = syncID
 
 	// Update the document in database with sync ID
-	err = ts.store.Update(ctx, observedMeta.Name, id, observedDoc)
+	err = ts.store.Update(ctx, collectionName, id, observedDoc)
 	if err != nil {
 		// This is a critical error - document exists but we couldn't set sync ID
 		// The sync ID counter is already incremented, creating a gap
@@ -508,12 +506,6 @@ func (ts *TriangularStore) saveObservedInternal(ctx context.Context, workerType 
 //   - changed: true if data was written to database, false if write was skipped
 //   - err: non-nil if operation failed (changed is always false when err != nil)
 func (ts *TriangularStore) SaveObserved(ctx context.Context, workerType string, id string, observed interface{}) (changed bool, err error) {
-	// Get collection metadata
-	_, _, observedMeta, err := ts.registry.GetTriangularCollections(workerType)
-	if err != nil {
-		return false, fmt.Errorf("worker type %q not registered: %w", workerType, err)
-	}
-
 	// Try to load current state
 	currentState, err := ts.LoadObserved(ctx, workerType, id)
 	if errors.Is(err, persistence.ErrNotFound) {
@@ -537,13 +529,12 @@ func (ts *TriangularStore) SaveObserved(ctx context.Context, workerType string, 
 		return false, err
 	}
 
-	// Filter CSE fields, ID, and version from both documents for comparison
-	// ID is excluded because it's an identifier, not part of the observed state data
-	// Version is excluded for observed state (it's not incremented, just preserved)
-	currentFiltered := ts.filterCSEFields(currentDoc, observedMeta.CSEFields)
+	// Filter CSE fields from observed data for comparison (using constants, not registry)
+	cseFields := getCSEFields(RoleObserved)
+	currentFiltered := ts.filterCSEFields(currentDoc, cseFields)
 	delete(currentFiltered, "id")
 	delete(currentFiltered, FieldVersion)
-	newFiltered := ts.filterCSEFields(newDoc, observedMeta.CSEFields)
+	newFiltered := ts.filterCSEFields(newDoc, cseFields)
 	delete(newFiltered, "id")
 	delete(newFiltered, FieldVersion)
 
@@ -568,13 +559,11 @@ func (ts *TriangularStore) SaveObserved(ctx context.Context, workerType string, 
 //   - persistence.Document: Observed state document with CSE metadata
 //   - error: ErrNotFound if not found
 func (ts *TriangularStore) LoadObserved(ctx context.Context, workerType string, id string) (interface{}, error) {
-	// Load Document from database
-	_, _, observedMeta, err := ts.registry.GetTriangularCollections(workerType)
-	if err != nil {
-		return nil, fmt.Errorf("worker type %q not registered: %w", workerType, err)
-	}
+	// Collection name follows convention: {workerType}_observed
+	collectionName := workerType + "_observed"
 
-	doc, err := ts.store.Get(ctx, observedMeta.Name, id)
+	// Load Document from database
+	doc, err := ts.store.Get(ctx, collectionName, id)
 	if err != nil {
 		return nil, err
 	}

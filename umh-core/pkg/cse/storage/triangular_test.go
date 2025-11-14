@@ -1174,6 +1174,57 @@ var _ = Describe("TriangularStore", func() {
 			Expect(changed).To(BeFalse())
 		})
 	})
+
+	Describe("SaveObserved without registry (Task 2.2 TDD)", func() {
+		BeforeEach(func() {
+			err := store.CreateCollection(ctx, "testworker_observed", nil)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should work with convention-based collection names and constant CSE fields", func() {
+			observed := persistence.Document{
+				"id":     "worker-456",
+				"status": "active",
+				"memory": 1024,
+			}
+
+			changed, err := ts.SaveObserved(ctx, "testworker", "worker-456", observed)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(changed).To(BeTrue())
+
+			saved, err := store.Get(ctx, "testworker_observed", "worker-456")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(saved["status"]).To(Equal("active"))
+			Expect(saved["memory"]).To(Equal(1024))
+
+			Expect(saved[storage.FieldSyncID]).NotTo(BeNil(), "sync_id should be set")
+			Expect(saved[storage.FieldVersion]).To(Equal(int64(1)), "version should be 1")
+			Expect(saved[storage.FieldCreatedAt]).NotTo(BeNil(), "created_at should be set")
+			_, hasUpdatedAt := saved[storage.FieldUpdatedAt]
+			Expect(hasUpdatedAt).To(BeFalse(), "updated_at should NOT be set on first save")
+		})
+
+		It("should perform delta checking using constant CSE fields", func() {
+			observed := persistence.Document{
+				"id":     "worker-789",
+				"status": "running",
+				"load":   50,
+			}
+
+			changed, err := ts.SaveObserved(ctx, "testworker", "worker-789", observed)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(changed).To(BeTrue())
+
+			changed, err = ts.SaveObserved(ctx, "testworker", "worker-789", observed)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(changed).To(BeFalse(), "Second save with same data should return changed=false")
+
+			observed["load"] = 75
+			changed, err = ts.SaveObserved(ctx, "testworker", "worker-789", observed)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(changed).To(BeTrue(), "Save with different data should return changed=true")
+		})
+	})
 })
 
 // Benchmarks for SaveObserved delta checking
