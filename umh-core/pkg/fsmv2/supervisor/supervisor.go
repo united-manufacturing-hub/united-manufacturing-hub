@@ -61,7 +61,6 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -75,6 +74,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/health"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/lockmanager"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 )
 
@@ -123,6 +123,20 @@ import (
 //
 // =============================================================================
 
+// Lock names for tracking
+const (
+	lockNameSupervisorMu    = "Supervisor.mu"
+	lockNameSupervisorCtxMu = "Supervisor.ctxMu"
+	lockNameWorkerContextMu = "WorkerContext.mu"
+)
+
+// Lock levels for ordering (lower number = must be acquired first)
+const (
+	lockLevelSupervisorMu    = 1
+	lockLevelSupervisorCtxMu = 2 // Can be acquired alone OR after Supervisor.mu
+	lockLevelWorkerContextMu = 3 // Must be acquired AFTER Supervisor.mu
+)
+
 // normalizeType strips pointer indirection to get the base struct type.
 // This ensures consistent type comparison regardless of whether a worker
 // returns *Type or Type.
@@ -141,78 +155,6 @@ func normalizeType(t reflect.Type) reflect.Type {
 	return t
 }
 
-// Lock acquisition wrappers for Supervisor.mu
-// These wrappers enforce lock order checking when ENABLE_LOCK_ORDER_CHECKS=1
-
-func (s *Supervisor) lockMu() {
-	checkLockOrder(lockNameSupervisorMu, lockLevelSupervisorMu)
-	s.mu.Lock()
-	recordLockAcquired(lockNameSupervisorMu, lockLevelSupervisorMu)
-}
-
-func (s *Supervisor) unlockMu() {
-	recordLockReleased(lockNameSupervisorMu)
-	s.mu.Unlock()
-}
-
-func (s *Supervisor) rLockMu() {
-	checkLockOrder(lockNameSupervisorMu, lockLevelSupervisorMu)
-	s.mu.RLock()
-	recordLockAcquired(lockNameSupervisorMu, lockLevelSupervisorMu)
-}
-
-func (s *Supervisor) rUnlockMu() {
-	recordLockReleased(lockNameSupervisorMu)
-	s.mu.RUnlock()
-}
-
-// Lock acquisition wrappers for Supervisor.ctxMu
-
-func (s *Supervisor) lockCtxMu() {
-	checkLockOrder(lockNameSupervisorCtxMu, lockLevelSupervisorCtxMu)
-	s.ctxMu.Lock()
-	recordLockAcquired(lockNameSupervisorCtxMu, lockLevelSupervisorCtxMu)
-}
-
-func (s *Supervisor) unlockCtxMu() {
-	recordLockReleased(lockNameSupervisorCtxMu)
-	s.ctxMu.Unlock()
-}
-
-func (s *Supervisor) rLockCtxMu() {
-	checkLockOrder(lockNameSupervisorCtxMu, lockLevelSupervisorCtxMu)
-	s.ctxMu.RLock()
-	recordLockAcquired(lockNameSupervisorCtxMu, lockLevelSupervisorCtxMu)
-}
-
-func (s *Supervisor) rUnlockCtxMu() {
-	recordLockReleased(lockNameSupervisorCtxMu)
-	s.ctxMu.RUnlock()
-}
-
-// Lock acquisition wrappers for WorkerContext.mu
-
-func (wc *WorkerContext) lockMu() {
-	checkLockOrder(lockNameWorkerContextMu, lockLevelWorkerContextMu)
-	wc.mu.Lock()
-	recordLockAcquired(lockNameWorkerContextMu, lockLevelWorkerContextMu)
-}
-
-func (wc *WorkerContext) unlockMu() {
-	recordLockReleased(lockNameWorkerContextMu)
-	wc.mu.Unlock()
-}
-
-func (wc *WorkerContext) rLockMu() {
-	checkLockOrder(lockNameWorkerContextMu, lockLevelWorkerContextMu)
-	wc.mu.RLock()
-	recordLockAcquired(lockNameWorkerContextMu, lockLevelWorkerContextMu)
-}
-
-func (wc *WorkerContext) rUnlockMu() {
-	recordLockReleased(lockNameWorkerContextMu)
-	wc.mu.RUnlock()
-}
 
 // CollectorHealth tracks the health and restart state of the observation collector.
 // The collector runs in a separate goroutine and may fail due to network issues,
@@ -273,13 +215,14 @@ type Supervisor struct {
 	// mu Protects access to workers map, expectedObservedTypes, expectedDesiredTypes,
 	// children, childDoneChans, stateMapping, globalVars, and mappedParentState.
 	//
-	// This is a sync.RWMutex to allow concurrent reads from multiple goroutines
+	// This is a lockmanager.Lock wrapping sync.RWMutex to allow concurrent reads from multiple goroutines
 	// (e.g., GetWorker, ListWorkers) while ensuring exclusive writes when modifying
 	// worker registry state (e.g., AddWorker, RemoveWorker).
 	//
 	// Lock Order: Must be acquired BEFORE WorkerContext.mu when both are needed.
 	// See package-level LOCK ORDER section for details.
-	mu sync.RWMutex
+	mu          *lockmanager.Lock
+	lockManager *lockmanager.LockManager
 	store                 storage.TriangularStoreInterface // State persistence layer (triangular model)
 	logger                *zap.SugaredLogger               // Logger for supervisor operations
 	tickInterval          time.Duration                    // How often to evaluate state transitions
@@ -312,7 +255,7 @@ type Supervisor struct {
 	// This lock is independent from Supervisor.mu and can be acquired separately.
 	// It can be acquired alone when checking context status, or after Supervisor.mu
 	// if both are needed (advisory order).
-	ctxMu   sync.RWMutex
+	ctxMu *lockmanager.Lock
 	started atomic.Bool // Whether supervisor has been started
 }
 
@@ -325,7 +268,7 @@ type Supervisor struct {
 type WorkerContext struct {
 	// mu Protects currentState (per-worker FSM state).
 	//
-	// This is a sync.RWMutex because state is checked on every tick (frequent concurrent reads)
+	// This is a lockmanager.Lock wrapping sync.RWMutex because state is checked on every tick (frequent concurrent reads)
 	// but only written during state transitions (infrequent writes).
 	//
 	// Per-worker isolation: Each WorkerContext has its own independent mu lock,
@@ -334,7 +277,7 @@ type WorkerContext struct {
 	//
 	// Lock Order: This lock must be acquired AFTER Supervisor.mu when both are needed.
 	// See package-level LOCK ORDER section for details.
-	mu             sync.RWMutex
+	mu *lockmanager.Lock
 	tickInProgress atomic.Bool
 	identity       fsmv2.Identity
 	worker         fsmv2.Worker
@@ -516,10 +459,14 @@ func NewSupervisor(cfg Config) *Supervisor {
 		cfg.Logger.Debugf("Auto-registered observed collection: %s", observedCollectionName)
 	}
 
+	lm := lockmanager.NewLockManager()
+
 	return &Supervisor{
 		workerType:            cfg.WorkerType,
 		workers:               make(map[string]*WorkerContext),
-		mu:                    sync.RWMutex{},
+		lockManager:           lm,
+		mu:                    lm.NewLock(lockNameSupervisorMu, lockLevelSupervisorMu),
+		ctxMu:                 lm.NewLock(lockNameSupervisorCtxMu, lockLevelSupervisorCtxMu),
 		store:                 cfg.Store,
 		logger:                cfg.Logger,
 		tickInterval:          tickInterval,
@@ -699,6 +646,7 @@ func (s *Supervisor) AddWorker(identity fsmv2.Identity, worker fsmv2.Worker) err
 	executor := execution.NewActionExecutor(10, identity.ID)
 
 	s.workers[identity.ID] = &WorkerContext{
+		mu:           s.lockManager.NewLock(lockNameWorkerContextMu, lockLevelWorkerContextMu),
 		identity:     identity,
 		worker:       worker,
 		currentState: worker.GetInitialState(),

@@ -16,67 +16,74 @@ package supervisor
 
 import (
 	"testing"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/lockmanager"
 )
 
 // BenchmarkLockAcquisitionWithoutChecks measures baseline lock performance
 // without lock order checking (ENABLE_LOCK_ORDER_CHECKS not set).
 func BenchmarkLockAcquisitionWithoutChecks(b *testing.B) {
-	s := &Supervisor{}
+	lm := lockmanager.NewLockManager()
+	lock := lm.NewLock("BenchLock", 1)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		s.lockMu()
-		s.unlockMu()
+		lock.Lock()
+		lock.Unlock()
 	}
 }
 
 // BenchmarkLockAcquisitionConcurrentWithoutChecks measures concurrent lock
 // performance without checking.
 func BenchmarkLockAcquisitionConcurrentWithoutChecks(b *testing.B) {
-	s := &Supervisor{}
+	lm := lockmanager.NewLockManager()
+	lock := lm.NewLock("BenchLock", 1)
 
 	b.ResetTimer()
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
-			s.lockMu()
-			s.unlockMu()
+			lock.Lock()
+			lock.Unlock()
 		}
 	})
 }
 
 // BenchmarkWorkerContextLockWithoutChecks measures WorkerContext lock performance.
 func BenchmarkWorkerContextLockWithoutChecks(b *testing.B) {
-	wc := &WorkerContext{}
+	lm := lockmanager.NewLockManager()
+	lock := lm.NewLock("WorkerLock", 1)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		wc.lockMu()
-		wc.unlockMu()
+		lock.Lock()
+		lock.Unlock()
 	}
 }
 
 // BenchmarkReadLockWithoutChecks measures RLock performance.
 func BenchmarkReadLockWithoutChecks(b *testing.B) {
-	s := &Supervisor{}
+	lm := lockmanager.NewLockManager()
+	lock := lm.NewLock("ReadLock", 1)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		s.rLockMu()
-		s.rUnlockMu()
+		lock.RLock()
+		lock.RUnlock()
 	}
 }
 
 // BenchmarkHierarchicalLockWithoutChecks measures performance of acquiring
 // Supervisor.mu then WorkerContext.mu in correct order.
 func BenchmarkHierarchicalLockWithoutChecks(b *testing.B) {
-	s := &Supervisor{}
-	wc := &WorkerContext{}
+	lm := lockmanager.NewLockManager()
+	supervisorLock := lm.NewLock("SupervisorLock", 1)
+	workerLock := lm.NewLock("WorkerLock", 2)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		s.lockMu()
-		wc.lockMu()
-		wc.unlockMu()
-		s.unlockMu()
+		supervisorLock.Lock()
+		workerLock.Lock()
+		workerLock.Unlock()
+		supervisorLock.Unlock()
 	}
 }

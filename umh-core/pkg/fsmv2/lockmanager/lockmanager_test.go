@@ -17,7 +17,6 @@ package lockmanager_test
 import (
 	"os"
 	"sync"
-	"testing"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -25,11 +24,6 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/lockmanager"
 )
-
-func TestLockManager(t *testing.T) {
-	RegisterFailHandler(Fail)
-	RunSpecs(t, "LockManager Suite")
-}
 
 var _ = Describe("LockManager", func() {
 	var (
