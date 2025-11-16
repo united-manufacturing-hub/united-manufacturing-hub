@@ -176,17 +176,14 @@ func (ts *TriangularStore) SaveIdentity(ctx context.Context, workerType string, 
 		return fmt.Errorf("invalid identity document: %w", err)
 	}
 
-	// Look up identity collection for this worker type
-	identityMeta, _, _, err := ts.registry.GetTriangularCollections(workerType)
-	if err != nil {
-		return fmt.Errorf("worker type %q not registered: %w", workerType, err)
-	}
+	// Collection name follows convention: {workerType}_identity
+	collectionName := workerType + "_identity"
 
 	// Inject CSE metadata (without sync ID - will be set after successful insert)
 	ts.injectMetadata(identity, RoleIdentity, true)
 
 	// Insert identity (first time creation)
-	_, err = ts.store.Insert(ctx, identityMeta.Name, identity)
+	_, err := ts.store.Insert(ctx, collectionName, identity)
 	if err != nil {
 		return fmt.Errorf("failed to save identity for %s/%s: %w", workerType, id, err)
 	}
@@ -198,7 +195,7 @@ func (ts *TriangularStore) SaveIdentity(ctx context.Context, workerType string, 
 
 	// Update the document in database with sync ID
 	// This is safe because we know the document exists (we just inserted it)
-	err = ts.store.Update(ctx, identityMeta.Name, id, identity)
+	err = ts.store.Update(ctx, collectionName, id, identity)
 	if err != nil {
 		// This is a critical error - document exists but we couldn't set sync ID
 		// The sync ID counter is already incremented, creating a gap
@@ -224,12 +221,10 @@ func (ts *TriangularStore) SaveIdentity(ctx context.Context, workerType string, 
 //   - persistence.Document: Identity document with CSE metadata
 //   - error: ErrNotFound if worker doesn't exist
 func (ts *TriangularStore) LoadIdentity(ctx context.Context, workerType string, id string) (persistence.Document, error) {
-	identityMeta, _, _, err := ts.registry.GetTriangularCollections(workerType)
-	if err != nil {
-		return nil, fmt.Errorf("worker type %q not registered: %w", workerType, err)
-	}
+	// Collection name follows convention: {workerType}_identity
+	collectionName := workerType + "_identity"
 
-	doc, err := ts.store.Get(ctx, identityMeta.Name, id)
+	doc, err := ts.store.Get(ctx, collectionName, id)
 	if err != nil {
 		return nil, err
 	}
@@ -713,10 +708,10 @@ type Snapshot struct {
 //	    // Transition to stopping state
 //	}
 func (ts *TriangularStore) LoadSnapshot(ctx context.Context, workerType string, id string) (*Snapshot, error) {
-	identityMeta, desiredMeta, observedMeta, err := ts.registry.GetTriangularCollections(workerType)
-	if err != nil {
-		return nil, fmt.Errorf("worker type %q not registered: %w", workerType, err)
-	}
+	// Collection names follow convention: {workerType}_{role}
+	identityCollectionName := workerType + "_identity"
+	desiredCollectionName := workerType + "_desired"
+	observedCollectionName := workerType + "_observed"
 
 	// Use transaction for atomic read
 	tx, err := ts.store.BeginTx(ctx)
@@ -726,17 +721,17 @@ func (ts *TriangularStore) LoadSnapshot(ctx context.Context, workerType string, 
 	defer tx.Rollback()
 
 	// Load all three parts
-	identity, err := tx.Get(ctx, identityMeta.Name, id)
+	identity, err := tx.Get(ctx, identityCollectionName, id)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load identity: %w", err)
 	}
 
-	desired, err := tx.Get(ctx, desiredMeta.Name, id)
+	desired, err := tx.Get(ctx, desiredCollectionName, id)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load desired: %w", err)
 	}
 
-	observed, err := tx.Get(ctx, observedMeta.Name, id)
+	observed, err := tx.Get(ctx, observedCollectionName, id)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load observed: %w", err)
 	}

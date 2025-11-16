@@ -811,15 +811,6 @@ var _ = Describe("TriangularStore", func() {
 		})
 	})
 
-	Describe("UnregisteredWorkerType", func() {
-		It("should fail for unregistered worker type", func() {
-			err := ts.SaveIdentity(ctx, "nonexistent", "worker-123", persistence.Document{
-				"id": "worker-123",
-			})
-			Expect(err).To(HaveOccurred())
-		})
-	})
-
 	Describe("TimestampProgression", func() {
 		It("should have updated_at after created_at", func() {
 			ts.SaveDesired(ctx, "container", "worker-123", persistence.Document{
