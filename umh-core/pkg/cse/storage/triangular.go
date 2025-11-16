@@ -1003,24 +1003,27 @@ func SaveDesiredTyped[T any](ts *TriangularStore, ctx context.Context, id string
 	}
 
 	// Check if new or update
-	_, err = ts.store.Get(ctx, collectionName, id)
+	existing, err := ts.store.Get(ctx, collectionName, id)
 	isNew := err != nil && errors.Is(err, persistence.ErrNotFound)
 
 	if err != nil && !isNew {
 		return fmt.Errorf("failed to check existing desired state: %w", err)
 	}
 
-	// Inject CSE metadata
+	// Preserve version from existing document (RoleDesired increments version)
+	if !isNew && existing != nil {
+		if version, ok := existing[FieldVersion].(int64); ok {
+			desiredDoc[FieldVersion] = version
+		}
+	}
+
+	// Inject CSE metadata (will increment preserved version for RoleDesired)
 	ts.injectMetadata(desiredDoc, RoleDesired, isNew)
 
 	// Save or update
 	if isNew {
 		_, err = ts.store.Insert(ctx, collectionName, desiredDoc)
 	} else {
-		// Increment version on every update (optimistic locking)
-		if version, ok := desiredDoc[FieldVersion].(int64); ok {
-			desiredDoc[FieldVersion] = version + 1
-		}
 		err = ts.store.Update(ctx, collectionName, id, desiredDoc)
 	}
 
