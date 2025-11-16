@@ -188,7 +188,7 @@ type CachedTx struct {
 //
 // Example:
 //
-//	cache := cse.NewTxCache(store, registry)
+//	cache := cse.NewTxCache(store)
 //
 //	// Start transaction
 //	cache.BeginTx("tx-001", map[string]interface{}{"source": "fsm"})
@@ -206,9 +206,6 @@ type TxCache struct {
 	// store is the persistent storage backend
 	store persistence.Store
 
-	// registry tracks CSE-aware collections (not currently used, reserved for future features)
-	registry *Registry
-
 	// cache is the in-memory map of transaction ID to cached transaction
 	cache map[string]*CachedTx
 
@@ -225,15 +222,13 @@ type TxCache struct {
 //
 // Parameters:
 //   - store: Backend storage for persistence
-//   - registry: Schema registry (reserved for future CSE-aware features)
 //
 // Returns:
 //   - *TxCache: Ready-to-use transaction cache instance
-func NewTxCache(store persistence.Store, registry *Registry) *TxCache {
+func NewTxCache(store persistence.Store) *TxCache {
 	return &TxCache{
-		store:    store,
-		registry: registry,
-		cache:    make(map[string]*CachedTx),
+		store: store,
+		cache: make(map[string]*CachedTx),
 	}
 }
 

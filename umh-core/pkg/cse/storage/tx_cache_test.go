@@ -42,17 +42,15 @@ import (
 
 var _ = Describe("TxCache", func() {
 	var (
-		store    *mockStore
-		registry *storage.Registry
-		cache    *storage.TxCache
-		ctx      context.Context
+		store *mockStore
+		cache *storage.TxCache
+		ctx   context.Context
 	)
 
 	BeforeEach(func() {
 		ctx = context.Background()
 		store = newMockStore()
-		registry = storage.NewRegistry()
-		cache = storage.NewTxCache(store, registry)
+		cache = storage.NewTxCache(store)
 	})
 
 	Describe("NewTxCache", func() {

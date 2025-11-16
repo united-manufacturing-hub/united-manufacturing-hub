@@ -35,7 +35,6 @@ type mockTriangularStore struct {
 	identity map[string]map[string]persistence.Document
 	desired  map[string]map[string]persistence.Document
 	observed map[string]map[string]persistence.Document
-	registry *storage.Registry
 
 	SaveDesiredCalled  int
 	LoadDesiredCalled  int
@@ -48,7 +47,6 @@ func NewMockTriangularStore() *mockTriangularStore {
 		identity: make(map[string]map[string]persistence.Document),
 		desired:  make(map[string]map[string]persistence.Document),
 		observed: make(map[string]map[string]persistence.Document),
-		registry: storage.NewRegistry(),
 	}
 }
 
@@ -220,10 +218,6 @@ func (m *mockTriangularStore) LoadSnapshot(ctx context.Context, workerType strin
 	}
 
 	return snapshot, nil
-}
-
-func (m *mockTriangularStore) Registry() *storage.Registry {
-	return m.registry
 }
 
 var _ storage.TriangularStoreInterface = (*mockTriangularStore)(nil)
