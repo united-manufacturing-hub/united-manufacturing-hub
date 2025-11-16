@@ -154,42 +154,12 @@ func TestIdentity() fsmv2.Identity {
 }
 
 // CreateTestTriangularStore creates a triangular store for subdirectory tests.
+// Collections follow naming convention: {workerType}_identity, {workerType}_desired, {workerType}_observed
 func CreateTestTriangularStore() *storage.TriangularStore {
 	ctx := context.Background()
 	basicStore := memory.NewInMemoryStore()
 
-	registry := storage.NewRegistry()
 	workerType := "container"
-
-	if err := registry.Register(&storage.CollectionMetadata{
-		Name:          workerType + "_identity",
-		WorkerType:    workerType,
-		Role:          storage.RoleIdentity,
-		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt},
-		IndexedFields: []string{storage.FieldSyncID},
-	}); err != nil {
-		panic(err)
-	}
-
-	if err := registry.Register(&storage.CollectionMetadata{
-		Name:          workerType + "_desired",
-		WorkerType:    workerType,
-		Role:          storage.RoleDesired,
-		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
-		IndexedFields: []string{storage.FieldSyncID},
-	}); err != nil {
-		panic(err)
-	}
-
-	if err := registry.Register(&storage.CollectionMetadata{
-		Name:          workerType + "_observed",
-		WorkerType:    workerType,
-		Role:          storage.RoleObserved,
-		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
-		IndexedFields: []string{storage.FieldSyncID},
-	}); err != nil {
-		panic(err)
-	}
 
 	if err := basicStore.CreateCollection(ctx, workerType+"_identity", nil); err != nil {
 		panic(fmt.Sprintf("failed to create identity collection: %v", err))
@@ -203,13 +173,13 @@ func CreateTestTriangularStore() *storage.TriangularStore {
 		panic(fmt.Sprintf("failed to create observed collection: %v", err))
 	}
 
-	return storage.NewTriangularStore(basicStore, registry)
+	return storage.NewTriangularStore(basicStore)
 }
 
 // CreateTestTriangularStoreForWorkerType creates a triangular store for a specific workerType.
 // This allows tests to work with different workerTypes (e.g., "s6", "container", "benthos").
 // The store is configured with three collections: {workerType}_identity, {workerType}_desired, {workerType}_observed.
-// Each collection has appropriate CSEFields for its role:
+// CSE fields are automatically injected by TriangularStore per role:
 //   - identity: FieldSyncID, FieldVersion, FieldCreatedAt (immutable)
 //   - desired: FieldSyncID, FieldVersion, FieldCreatedAt, FieldUpdatedAt (version increments)
 //   - observed: FieldSyncID, FieldVersion, FieldCreatedAt, FieldUpdatedAt (version doesn't increment)
@@ -217,38 +187,6 @@ func CreateTestTriangularStoreForWorkerType(workerType string) *storage.Triangul
 	ctx := context.Background()
 	basicStore := memory.NewInMemoryStore()
 
-	registry := storage.NewRegistry()
-
-	if err := registry.Register(&storage.CollectionMetadata{
-		Name:          workerType + "_identity",
-		WorkerType:    workerType,
-		Role:          storage.RoleIdentity,
-		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt},
-		IndexedFields: []string{storage.FieldSyncID},
-	}); err != nil {
-		panic(err)
-	}
-
-	if err := registry.Register(&storage.CollectionMetadata{
-		Name:          workerType + "_desired",
-		WorkerType:    workerType,
-		Role:          storage.RoleDesired,
-		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
-		IndexedFields: []string{storage.FieldSyncID},
-	}); err != nil {
-		panic(err)
-	}
-
-	if err := registry.Register(&storage.CollectionMetadata{
-		Name:          workerType + "_observed",
-		WorkerType:    workerType,
-		Role:          storage.RoleObserved,
-		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
-		IndexedFields: []string{storage.FieldSyncID},
-	}); err != nil {
-		panic(err)
-	}
-
 	if err := basicStore.CreateCollection(ctx, workerType+"_identity", nil); err != nil {
 		panic(fmt.Sprintf("failed to create identity collection: %v", err))
 	}
@@ -261,7 +199,7 @@ func CreateTestTriangularStoreForWorkerType(workerType string) *storage.Triangul
 		panic(fmt.Sprintf("failed to create observed collection: %v", err))
 	}
 
-	return storage.NewTriangularStore(basicStore, registry)
+	return storage.NewTriangularStore(basicStore)
 }
 
 // CreateTestObservedStateWithID creates a mock observed state with a specific ID.

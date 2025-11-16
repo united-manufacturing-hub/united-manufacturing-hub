@@ -395,69 +395,25 @@ func NewSupervisor(cfg Config) *Supervisor {
 
 	freshnessChecker := health.NewFreshnessChecker(staleThreshold, timeout, cfg.Logger)
 
-	// Auto-register triangular collections for this worker type.
-	// Collections follow convention: {workerType}_identity, {workerType}_desired, {workerType}_observed
-	// CSE fields standardized per role per FSM v2 contract.
+	// Collection Naming Convention
 	//
-	// DESIGN DECISION: Auto-registration by Supervisor at initialization
-	// WHY: Eliminates worker-specific registry boilerplate (86 LOC per worker).
+	// Collections MUST be registered in the TriangularStore before creating the Supervisor.
+	// Collection names follow strict convention: {workerType}_identity, {workerType}_desired, {workerType}_observed
+	// CSE fields standardized per role per FSM v2 contract:
+	//   - identity: FieldSyncID, FieldVersion, FieldCreatedAt (immutable)
+	//   - desired: FieldSyncID, FieldVersion, FieldCreatedAt, FieldUpdatedAt (version increments on updates)
+	//   - observed: FieldSyncID, FieldVersion, FieldCreatedAt, FieldUpdatedAt (version does NOT increment)
+	//
+	// RATIONALE: Convention-based naming eliminates need for explicit collection configuration.
 	// Workers focus purely on business logic per FSM v2 design goal.
 	//
-	// TRADE-OFF: Convention over configuration. Worker type MUST follow naming convention.
-	// If custom collection names needed, can still register manually before creating Supervisor.
+	// IMPLEMENTATION: Register collections when creating the TriangularStore:
+	//   - Production: Agent pre-registers all collections at startup
+	//   - Tests: Use CreateTestTriangularStoreForWorkerType(workerType) helper
 	//
-	// INSPIRED BY: Rails ActiveRecord conventions, HTTP router auto-registration patterns.
-	//
-	// Note: This uses storage.Registry from the CSE package for collection metadata,
-	// which is unrelated to fsmv2.Dependencies (worker dependency injection).
-	registry := cfg.Store.Registry()
-
-	identityCollectionName := cfg.WorkerType + "_identity"
-	desiredCollectionName := cfg.WorkerType + "_desired"
-	observedCollectionName := cfg.WorkerType + "_observed"
-
-	// Only register if not already registered (supports manual override)
-	if !registry.IsRegistered(identityCollectionName) {
-		if err := registry.Register(&storage.CollectionMetadata{
-			Name:          identityCollectionName,
-			WorkerType:    cfg.WorkerType,
-			Role:          storage.RoleIdentity,
-			CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt},
-			IndexedFields: []string{storage.FieldSyncID},
-		}); err != nil {
-			panic(fmt.Sprintf("failed to auto-register identity collection: %v", err))
-		}
-
-		cfg.Logger.Debugf("Auto-registered identity collection: %s", identityCollectionName)
-	}
-
-	if !registry.IsRegistered(desiredCollectionName) {
-		if err := registry.Register(&storage.CollectionMetadata{
-			Name:          desiredCollectionName,
-			WorkerType:    cfg.WorkerType,
-			Role:          storage.RoleDesired,
-			CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
-			IndexedFields: []string{storage.FieldSyncID},
-		}); err != nil {
-			panic(fmt.Sprintf("failed to auto-register desired collection: %v", err))
-		}
-
-		cfg.Logger.Debugf("Auto-registered desired collection: %s", desiredCollectionName)
-	}
-
-	if !registry.IsRegistered(observedCollectionName) {
-		if err := registry.Register(&storage.CollectionMetadata{
-			Name:          observedCollectionName,
-			WorkerType:    cfg.WorkerType,
-			Role:          storage.RoleObserved,
-			CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
-			IndexedFields: []string{storage.FieldSyncID},
-		}); err != nil {
-			panic(fmt.Sprintf("failed to auto-register observed collection: %v", err))
-		}
-
-		cfg.Logger.Debugf("Auto-registered observed collection: %s", observedCollectionName)
-	}
+	// Example:
+	//   For workerType "s6", collections are: "s6_identity", "s6_desired", "s6_observed"
+	//   For workerType "benthos", collections are: "benthos_identity", "benthos_desired", "benthos_observed"
 
 	lm := lockmanager.NewLockManager()
 

@@ -42,7 +42,6 @@ var _ = Describe("Collector WorkerType", func() {
 
 			triangularStore := supervisor.CreateTestTriangularStoreForWorkerType(workerType)
 			Expect(triangularStore).ToNot(BeNil())
-			registry := triangularStore.Registry()
 
 			s := supervisor.NewSupervisor(supervisor.Config{
 				WorkerType:      workerType,
@@ -68,16 +67,18 @@ var _ = Describe("Collector WorkerType", func() {
 			_, err = triangularStore.SaveObserved(ctx, workerType, identity.ID, observedDoc)
 			Expect(err).ToNot(HaveOccurred())
 
-			Expect(registry.IsRegistered("s6_observed")).To(BeTrue(), "should register s6_observed collection, not container_observed")
-			Expect(registry.IsRegistered("container_observed")).To(BeFalse(), "should not use hardcoded container workerType")
-
+			// Verify the correct workerType collection is used by loading the data back
 			doc, err := triangularStore.LoadObserved(ctx, "s6", identity.ID)
-			Expect(err).ToNot(HaveOccurred(), "should load observed state that was just saved")
+			Expect(err).ToNot(HaveOccurred(), "should load observed state from s6_observed collection")
 			Expect(doc).ToNot(BeNil())
 			docMap, ok := doc.(persistence.Document)
 			Expect(ok).To(BeTrue(), "LoadObserved should return persistence.Document")
 			Expect(docMap["id"]).To(Equal(identity.ID))
 			Expect(docMap["shutdownRequested"]).To(BeFalse())
+
+			// Verify container_observed collection is not used (should fail to load)
+			_, err = triangularStore.LoadObserved(ctx, "container", identity.ID)
+			Expect(err).To(HaveOccurred(), "should not find data in container_observed collection")
 		})
 	})
 
@@ -95,11 +96,7 @@ var _ = Describe("Collector WorkerType", func() {
 
 			for _, wt := range workerTypes {
 				triangularStore := stores[wt]
-				registry := triangularStore.Registry()
 
-				Expect(registry.IsRegistered(wt + "_identity")).To(BeTrue())
-				Expect(registry.IsRegistered(wt + "_desired")).To(BeTrue())
-				Expect(registry.IsRegistered(wt + "_observed")).To(BeTrue())
 				identity := fsmv2.Identity{
 					ID:         wt + "-worker",
 					Name:       wt + " Worker",

@@ -55,28 +55,6 @@ func TestSupervisorUsesTriangularStore(t *testing.T) {
 		_ = basicStore.Close(ctx)
 	}()
 
-	registry := storage.NewRegistry()
-	_ = registry.Register(&storage.CollectionMetadata{
-		Name:          "test_identity",
-		WorkerType:    "test",
-		Role:          storage.RoleIdentity,
-		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt},
-		IndexedFields: []string{storage.FieldSyncID},
-	})
-	_ = registry.Register(&storage.CollectionMetadata{
-		Name:          "test_desired",
-		WorkerType:    "test",
-		Role:          storage.RoleDesired,
-		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
-		IndexedFields: []string{storage.FieldSyncID},
-	})
-	_ = registry.Register(&storage.CollectionMetadata{
-		Name:          "test_observed",
-		WorkerType:    "test",
-		Role:          storage.RoleObserved,
-		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
-		IndexedFields: []string{storage.FieldSyncID},
-	})
 
 	// Create collections in database
 	var err error
@@ -96,7 +74,7 @@ func TestSupervisorUsesTriangularStore(t *testing.T) {
 		t.Fatalf("Failed to create observed collection: %v", err)
 	}
 
-	triangularStore := storage.NewTriangularStore(basicStore, registry)
+	triangularStore := storage.NewTriangularStore(basicStore)
 
 	supervisorCfg := Config{
 		WorkerType: "test",
@@ -330,28 +308,6 @@ func TestSupervisorSavesIdentityToTriangularStore(t *testing.T) {
 		_ = basicStore.Close(ctx)
 	}()
 
-	registry := storage.NewRegistry()
-	_ = registry.Register(&storage.CollectionMetadata{
-		Name:          "test_identity",
-		WorkerType:    "test",
-		Role:          storage.RoleIdentity,
-		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt},
-		IndexedFields: []string{storage.FieldSyncID},
-	})
-	_ = registry.Register(&storage.CollectionMetadata{
-		Name:          "test_desired",
-		WorkerType:    "test",
-		Role:          storage.RoleDesired,
-		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
-		IndexedFields: []string{storage.FieldSyncID},
-	})
-	_ = registry.Register(&storage.CollectionMetadata{
-		Name:          "test_observed",
-		WorkerType:    "test",
-		Role:          storage.RoleObserved,
-		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
-		IndexedFields: []string{storage.FieldSyncID},
-	})
 
 	// Create collections in database
 	var err error
@@ -371,7 +327,7 @@ func TestSupervisorSavesIdentityToTriangularStore(t *testing.T) {
 		t.Fatalf("Failed to create observed collection: %v", err)
 	}
 
-	triangularStore := storage.NewTriangularStore(basicStore, registry)
+	triangularStore := storage.NewTriangularStore(basicStore)
 
 	supervisorCfg := Config{
 		WorkerType: "test",
@@ -428,28 +384,6 @@ func TestSupervisorLoadsSnapshotFromTriangularStore(t *testing.T) {
 		_ = basicStore.Close(ctx)
 	}()
 
-	registry := storage.NewRegistry()
-	_ = registry.Register(&storage.CollectionMetadata{
-		Name:          "test_identity",
-		WorkerType:    "test",
-		Role:          storage.RoleIdentity,
-		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt},
-		IndexedFields: []string{storage.FieldSyncID},
-	})
-	_ = registry.Register(&storage.CollectionMetadata{
-		Name:          "test_desired",
-		WorkerType:    "test",
-		Role:          storage.RoleDesired,
-		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
-		IndexedFields: []string{storage.FieldSyncID},
-	})
-	_ = registry.Register(&storage.CollectionMetadata{
-		Name:          "test_observed",
-		WorkerType:    "test",
-		Role:          storage.RoleObserved,
-		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
-		IndexedFields: []string{storage.FieldSyncID},
-	})
 
 	// Create collections in database
 	var err error
@@ -469,7 +403,7 @@ func TestSupervisorLoadsSnapshotFromTriangularStore(t *testing.T) {
 		t.Fatalf("Failed to create observed collection: %v", err)
 	}
 
-	triangularStore := storage.NewTriangularStore(basicStore, registry)
+	triangularStore := storage.NewTriangularStore(basicStore)
 
 	supervisorCfg := Config{
 		WorkerType: "test",
@@ -588,34 +522,12 @@ func TestReconcileChildren_AddNewChildWhenNoneExist(t *testing.T) {
 		_ = basicStore.Close(ctx)
 	}()
 
-	registry := storage.NewRegistry()
-	_ = registry.Register(&storage.CollectionMetadata{
-		Name:          "parent_identity",
-		WorkerType:    "parent",
-		Role:          storage.RoleIdentity,
-		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt},
-		IndexedFields: []string{storage.FieldSyncID},
-	})
-	_ = registry.Register(&storage.CollectionMetadata{
-		Name:          "parent_desired",
-		WorkerType:    "parent",
-		Role:          storage.RoleDesired,
-		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
-		IndexedFields: []string{storage.FieldSyncID},
-	})
-	_ = registry.Register(&storage.CollectionMetadata{
-		Name:          "parent_observed",
-		WorkerType:    "parent",
-		Role:          storage.RoleObserved,
-		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
-		IndexedFields: []string{storage.FieldSyncID},
-	})
 
 	_ = basicStore.CreateCollection(ctx, "parent_identity", nil)
 	_ = basicStore.CreateCollection(ctx, "parent_desired", nil)
 	_ = basicStore.CreateCollection(ctx, "parent_observed", nil)
 
-	triangularStore := storage.NewTriangularStore(basicStore, registry)
+	triangularStore := storage.NewTriangularStore(basicStore)
 
 	supervisorCfg := Config{
 		WorkerType: "parent",
@@ -657,34 +569,12 @@ func TestReconcileChildren_AddMultipleChildren(t *testing.T) {
 		_ = basicStore.Close(ctx)
 	}()
 
-	registry := storage.NewRegistry()
-	_ = registry.Register(&storage.CollectionMetadata{
-		Name:          "parent_identity",
-		WorkerType:    "parent",
-		Role:          storage.RoleIdentity,
-		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt},
-		IndexedFields: []string{storage.FieldSyncID},
-	})
-	_ = registry.Register(&storage.CollectionMetadata{
-		Name:          "parent_desired",
-		WorkerType:    "parent",
-		Role:          storage.RoleDesired,
-		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
-		IndexedFields: []string{storage.FieldSyncID},
-	})
-	_ = registry.Register(&storage.CollectionMetadata{
-		Name:          "parent_observed",
-		WorkerType:    "parent",
-		Role:          storage.RoleObserved,
-		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
-		IndexedFields: []string{storage.FieldSyncID},
-	})
 
 	_ = basicStore.CreateCollection(ctx, "parent_identity", nil)
 	_ = basicStore.CreateCollection(ctx, "parent_desired", nil)
 	_ = basicStore.CreateCollection(ctx, "parent_observed", nil)
 
-	triangularStore := storage.NewTriangularStore(basicStore, registry)
+	triangularStore := storage.NewTriangularStore(basicStore)
 
 	supervisorCfg := Config{
 		WorkerType: "parent",
@@ -738,34 +628,12 @@ func TestReconcileChildren_SkipExistingChild(t *testing.T) {
 		_ = basicStore.Close(ctx)
 	}()
 
-	registry := storage.NewRegistry()
-	_ = registry.Register(&storage.CollectionMetadata{
-		Name:          "parent_identity",
-		WorkerType:    "parent",
-		Role:          storage.RoleIdentity,
-		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt},
-		IndexedFields: []string{storage.FieldSyncID},
-	})
-	_ = registry.Register(&storage.CollectionMetadata{
-		Name:          "parent_desired",
-		WorkerType:    "parent",
-		Role:          storage.RoleDesired,
-		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
-		IndexedFields: []string{storage.FieldSyncID},
-	})
-	_ = registry.Register(&storage.CollectionMetadata{
-		Name:          "parent_observed",
-		WorkerType:    "parent",
-		Role:          storage.RoleObserved,
-		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
-		IndexedFields: []string{storage.FieldSyncID},
-	})
 
 	_ = basicStore.CreateCollection(ctx, "parent_identity", nil)
 	_ = basicStore.CreateCollection(ctx, "parent_desired", nil)
 	_ = basicStore.CreateCollection(ctx, "parent_observed", nil)
 
-	triangularStore := storage.NewTriangularStore(basicStore, registry)
+	triangularStore := storage.NewTriangularStore(basicStore)
 
 	supervisorCfg := Config{
 		WorkerType: "parent",
@@ -814,34 +682,12 @@ func TestReconcileChildren_UpdateUserSpec(t *testing.T) {
 		_ = basicStore.Close(ctx)
 	}()
 
-	registry := storage.NewRegistry()
-	_ = registry.Register(&storage.CollectionMetadata{
-		Name:          "parent_identity",
-		WorkerType:    "parent",
-		Role:          storage.RoleIdentity,
-		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt},
-		IndexedFields: []string{storage.FieldSyncID},
-	})
-	_ = registry.Register(&storage.CollectionMetadata{
-		Name:          "parent_desired",
-		WorkerType:    "parent",
-		Role:          storage.RoleDesired,
-		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
-		IndexedFields: []string{storage.FieldSyncID},
-	})
-	_ = registry.Register(&storage.CollectionMetadata{
-		Name:          "parent_observed",
-		WorkerType:    "parent",
-		Role:          storage.RoleObserved,
-		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
-		IndexedFields: []string{storage.FieldSyncID},
-	})
 
 	_ = basicStore.CreateCollection(ctx, "parent_identity", nil)
 	_ = basicStore.CreateCollection(ctx, "parent_desired", nil)
 	_ = basicStore.CreateCollection(ctx, "parent_observed", nil)
 
-	triangularStore := storage.NewTriangularStore(basicStore, registry)
+	triangularStore := storage.NewTriangularStore(basicStore)
 
 	supervisorCfg := Config{
 		WorkerType: "parent",
@@ -897,34 +743,12 @@ func TestReconcileChildren_UpdateStateMapping(t *testing.T) {
 		_ = basicStore.Close(ctx)
 	}()
 
-	registry := storage.NewRegistry()
-	_ = registry.Register(&storage.CollectionMetadata{
-		Name:          "parent_identity",
-		WorkerType:    "parent",
-		Role:          storage.RoleIdentity,
-		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt},
-		IndexedFields: []string{storage.FieldSyncID},
-	})
-	_ = registry.Register(&storage.CollectionMetadata{
-		Name:          "parent_desired",
-		WorkerType:    "parent",
-		Role:          storage.RoleDesired,
-		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
-		IndexedFields: []string{storage.FieldSyncID},
-	})
-	_ = registry.Register(&storage.CollectionMetadata{
-		Name:          "parent_observed",
-		WorkerType:    "parent",
-		Role:          storage.RoleObserved,
-		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
-		IndexedFields: []string{storage.FieldSyncID},
-	})
 
 	_ = basicStore.CreateCollection(ctx, "parent_identity", nil)
 	_ = basicStore.CreateCollection(ctx, "parent_desired", nil)
 	_ = basicStore.CreateCollection(ctx, "parent_observed", nil)
 
-	triangularStore := storage.NewTriangularStore(basicStore, registry)
+	triangularStore := storage.NewTriangularStore(basicStore)
 
 	supervisorCfg := Config{
 		WorkerType: "parent",
@@ -991,34 +815,12 @@ func TestReconcileChildren_RemoveChild(t *testing.T) {
 		_ = basicStore.Close(ctx)
 	}()
 
-	registry := storage.NewRegistry()
-	_ = registry.Register(&storage.CollectionMetadata{
-		Name:          "parent_identity",
-		WorkerType:    "parent",
-		Role:          storage.RoleIdentity,
-		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt},
-		IndexedFields: []string{storage.FieldSyncID},
-	})
-	_ = registry.Register(&storage.CollectionMetadata{
-		Name:          "parent_desired",
-		WorkerType:    "parent",
-		Role:          storage.RoleDesired,
-		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
-		IndexedFields: []string{storage.FieldSyncID},
-	})
-	_ = registry.Register(&storage.CollectionMetadata{
-		Name:          "parent_observed",
-		WorkerType:    "parent",
-		Role:          storage.RoleObserved,
-		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
-		IndexedFields: []string{storage.FieldSyncID},
-	})
 
 	_ = basicStore.CreateCollection(ctx, "parent_identity", nil)
 	_ = basicStore.CreateCollection(ctx, "parent_desired", nil)
 	_ = basicStore.CreateCollection(ctx, "parent_observed", nil)
 
-	triangularStore := storage.NewTriangularStore(basicStore, registry)
+	triangularStore := storage.NewTriangularStore(basicStore)
 
 	supervisorCfg := Config{
 		WorkerType: "parent",
@@ -1086,34 +888,12 @@ func TestReconcileChildren_MixedOperations(t *testing.T) {
 		_ = basicStore.Close(ctx)
 	}()
 
-	registry := storage.NewRegistry()
-	_ = registry.Register(&storage.CollectionMetadata{
-		Name:          "parent_identity",
-		WorkerType:    "parent",
-		Role:          storage.RoleIdentity,
-		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt},
-		IndexedFields: []string{storage.FieldSyncID},
-	})
-	_ = registry.Register(&storage.CollectionMetadata{
-		Name:          "parent_desired",
-		WorkerType:    "parent",
-		Role:          storage.RoleDesired,
-		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
-		IndexedFields: []string{storage.FieldSyncID},
-	})
-	_ = registry.Register(&storage.CollectionMetadata{
-		Name:          "parent_observed",
-		WorkerType:    "parent",
-		Role:          storage.RoleObserved,
-		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
-		IndexedFields: []string{storage.FieldSyncID},
-	})
 
 	_ = basicStore.CreateCollection(ctx, "parent_identity", nil)
 	_ = basicStore.CreateCollection(ctx, "parent_desired", nil)
 	_ = basicStore.CreateCollection(ctx, "parent_observed", nil)
 
-	triangularStore := storage.NewTriangularStore(basicStore, registry)
+	triangularStore := storage.NewTriangularStore(basicStore)
 
 	supervisorCfg := Config{
 		WorkerType: "parent",
@@ -1190,34 +970,12 @@ func TestReconcileChildren_EmptySpecs(t *testing.T) {
 		_ = basicStore.Close(ctx)
 	}()
 
-	registry := storage.NewRegistry()
-	_ = registry.Register(&storage.CollectionMetadata{
-		Name:          "parent_identity",
-		WorkerType:    "parent",
-		Role:          storage.RoleIdentity,
-		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt},
-		IndexedFields: []string{storage.FieldSyncID},
-	})
-	_ = registry.Register(&storage.CollectionMetadata{
-		Name:          "parent_desired",
-		WorkerType:    "parent",
-		Role:          storage.RoleDesired,
-		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
-		IndexedFields: []string{storage.FieldSyncID},
-	})
-	_ = registry.Register(&storage.CollectionMetadata{
-		Name:          "parent_observed",
-		WorkerType:    "parent",
-		Role:          storage.RoleObserved,
-		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
-		IndexedFields: []string{storage.FieldSyncID},
-	})
 
 	_ = basicStore.CreateCollection(ctx, "parent_identity", nil)
 	_ = basicStore.CreateCollection(ctx, "parent_desired", nil)
 	_ = basicStore.CreateCollection(ctx, "parent_observed", nil)
 
-	triangularStore := storage.NewTriangularStore(basicStore, registry)
+	triangularStore := storage.NewTriangularStore(basicStore)
 
 	supervisorCfg := Config{
 		WorkerType: "parent",
@@ -1269,34 +1027,12 @@ func TestApplyStateMapping_WithMapping(t *testing.T) {
 		_ = basicStore.Close(ctx)
 	}()
 
-	registry := storage.NewRegistry()
-	_ = registry.Register(&storage.CollectionMetadata{
-		Name:          "parent_identity",
-		WorkerType:    "parent",
-		Role:          storage.RoleIdentity,
-		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt},
-		IndexedFields: []string{storage.FieldSyncID},
-	})
-	_ = registry.Register(&storage.CollectionMetadata{
-		Name:          "parent_desired",
-		WorkerType:    "parent",
-		Role:          storage.RoleDesired,
-		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
-		IndexedFields: []string{storage.FieldSyncID},
-	})
-	_ = registry.Register(&storage.CollectionMetadata{
-		Name:          "parent_observed",
-		WorkerType:    "parent",
-		Role:          storage.RoleObserved,
-		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
-		IndexedFields: []string{storage.FieldSyncID},
-	})
 
 	_ = basicStore.CreateCollection(ctx, "parent_identity", nil)
 	_ = basicStore.CreateCollection(ctx, "parent_desired", nil)
 	_ = basicStore.CreateCollection(ctx, "parent_observed", nil)
 
-	triangularStore := storage.NewTriangularStore(basicStore, registry)
+	triangularStore := storage.NewTriangularStore(basicStore)
 
 	supervisorCfg := Config{
 		WorkerType: "parent",
@@ -1365,34 +1101,12 @@ func TestApplyStateMapping_NoMapping(t *testing.T) {
 		_ = basicStore.Close(ctx)
 	}()
 
-	registry := storage.NewRegistry()
-	_ = registry.Register(&storage.CollectionMetadata{
-		Name:          "parent_identity",
-		WorkerType:    "parent",
-		Role:          storage.RoleIdentity,
-		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt},
-		IndexedFields: []string{storage.FieldSyncID},
-	})
-	_ = registry.Register(&storage.CollectionMetadata{
-		Name:          "parent_desired",
-		WorkerType:    "parent",
-		Role:          storage.RoleDesired,
-		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
-		IndexedFields: []string{storage.FieldSyncID},
-	})
-	_ = registry.Register(&storage.CollectionMetadata{
-		Name:          "parent_observed",
-		WorkerType:    "parent",
-		Role:          storage.RoleObserved,
-		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
-		IndexedFields: []string{storage.FieldSyncID},
-	})
 
 	_ = basicStore.CreateCollection(ctx, "parent_identity", nil)
 	_ = basicStore.CreateCollection(ctx, "parent_desired", nil)
 	_ = basicStore.CreateCollection(ctx, "parent_observed", nil)
 
-	triangularStore := storage.NewTriangularStore(basicStore, registry)
+	triangularStore := storage.NewTriangularStore(basicStore)
 
 	supervisorCfg := Config{
 		WorkerType: "parent",
@@ -1457,34 +1171,12 @@ func TestApplyStateMapping_MissingStateInMapping(t *testing.T) {
 		_ = basicStore.Close(ctx)
 	}()
 
-	registry := storage.NewRegistry()
-	_ = registry.Register(&storage.CollectionMetadata{
-		Name:          "parent_identity",
-		WorkerType:    "parent",
-		Role:          storage.RoleIdentity,
-		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt},
-		IndexedFields: []string{storage.FieldSyncID},
-	})
-	_ = registry.Register(&storage.CollectionMetadata{
-		Name:          "parent_desired",
-		WorkerType:    "parent",
-		Role:          storage.RoleDesired,
-		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
-		IndexedFields: []string{storage.FieldSyncID},
-	})
-	_ = registry.Register(&storage.CollectionMetadata{
-		Name:          "parent_observed",
-		WorkerType:    "parent",
-		Role:          storage.RoleObserved,
-		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
-		IndexedFields: []string{storage.FieldSyncID},
-	})
 
 	_ = basicStore.CreateCollection(ctx, "parent_identity", nil)
 	_ = basicStore.CreateCollection(ctx, "parent_desired", nil)
 	_ = basicStore.CreateCollection(ctx, "parent_observed", nil)
 
-	triangularStore := storage.NewTriangularStore(basicStore, registry)
+	triangularStore := storage.NewTriangularStore(basicStore)
 
 	supervisorCfg := Config{
 		WorkerType: "parent",
@@ -1553,34 +1245,12 @@ func TestApplyStateMapping_MultipleChildren(t *testing.T) {
 		_ = basicStore.Close(ctx)
 	}()
 
-	registry := storage.NewRegistry()
-	_ = registry.Register(&storage.CollectionMetadata{
-		Name:          "parent_identity",
-		WorkerType:    "parent",
-		Role:          storage.RoleIdentity,
-		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt},
-		IndexedFields: []string{storage.FieldSyncID},
-	})
-	_ = registry.Register(&storage.CollectionMetadata{
-		Name:          "parent_desired",
-		WorkerType:    "parent",
-		Role:          storage.RoleDesired,
-		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
-		IndexedFields: []string{storage.FieldSyncID},
-	})
-	_ = registry.Register(&storage.CollectionMetadata{
-		Name:          "parent_observed",
-		WorkerType:    "parent",
-		Role:          storage.RoleObserved,
-		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
-		IndexedFields: []string{storage.FieldSyncID},
-	})
 
 	_ = basicStore.CreateCollection(ctx, "parent_identity", nil)
 	_ = basicStore.CreateCollection(ctx, "parent_desired", nil)
 	_ = basicStore.CreateCollection(ctx, "parent_observed", nil)
 
-	triangularStore := storage.NewTriangularStore(basicStore, registry)
+	triangularStore := storage.NewTriangularStore(basicStore)
 
 	supervisorCfg := Config{
 		WorkerType: "parent",
@@ -1681,34 +1351,12 @@ func TestApplyStateMapping_EmptyStateMapping(t *testing.T) {
 		_ = basicStore.Close(ctx)
 	}()
 
-	registry := storage.NewRegistry()
-	_ = registry.Register(&storage.CollectionMetadata{
-		Name:          "parent_identity",
-		WorkerType:    "parent",
-		Role:          storage.RoleIdentity,
-		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt},
-		IndexedFields: []string{storage.FieldSyncID},
-	})
-	_ = registry.Register(&storage.CollectionMetadata{
-		Name:          "parent_desired",
-		WorkerType:    "parent",
-		Role:          storage.RoleDesired,
-		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
-		IndexedFields: []string{storage.FieldSyncID},
-	})
-	_ = registry.Register(&storage.CollectionMetadata{
-		Name:          "parent_observed",
-		WorkerType:    "parent",
-		Role:          storage.RoleObserved,
-		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
-		IndexedFields: []string{storage.FieldSyncID},
-	})
 
 	_ = basicStore.CreateCollection(ctx, "parent_identity", nil)
 	_ = basicStore.CreateCollection(ctx, "parent_desired", nil)
 	_ = basicStore.CreateCollection(ctx, "parent_observed", nil)
 
-	triangularStore := storage.NewTriangularStore(basicStore, registry)
+	triangularStore := storage.NewTriangularStore(basicStore)
 
 	supervisorCfg := Config{
 		WorkerType: "parent",
@@ -1774,34 +1422,12 @@ func TestApplyStateMapping_NilStateMapping(t *testing.T) {
 		_ = basicStore.Close(ctx)
 	}()
 
-	registry := storage.NewRegistry()
-	_ = registry.Register(&storage.CollectionMetadata{
-		Name:          "parent_identity",
-		WorkerType:    "parent",
-		Role:          storage.RoleIdentity,
-		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt},
-		IndexedFields: []string{storage.FieldSyncID},
-	})
-	_ = registry.Register(&storage.CollectionMetadata{
-		Name:          "parent_desired",
-		WorkerType:    "parent",
-		Role:          storage.RoleDesired,
-		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
-		IndexedFields: []string{storage.FieldSyncID},
-	})
-	_ = registry.Register(&storage.CollectionMetadata{
-		Name:          "parent_observed",
-		WorkerType:    "parent",
-		Role:          storage.RoleObserved,
-		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
-		IndexedFields: []string{storage.FieldSyncID},
-	})
 
 	_ = basicStore.CreateCollection(ctx, "parent_identity", nil)
 	_ = basicStore.CreateCollection(ctx, "parent_desired", nil)
 	_ = basicStore.CreateCollection(ctx, "parent_observed", nil)
 
-	triangularStore := storage.NewTriangularStore(basicStore, registry)
+	triangularStore := storage.NewTriangularStore(basicStore)
 
 	supervisorCfg := Config{
 		WorkerType: "parent",

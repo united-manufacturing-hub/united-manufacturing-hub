@@ -42,32 +42,9 @@ var _ = Describe("Multi-Worker Supervisor", func() {
 		var err error
 
 		basicStore = memory.NewInMemoryStore()
-		registry := storage.NewRegistry()
-
-		// Register collections for the container worker type
-		registry.Register(&storage.CollectionMetadata{
-			Name:          "container_identity",
-			WorkerType:    "container",
-			Role:          storage.RoleIdentity,
-			CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt},
-			IndexedFields: []string{storage.FieldSyncID},
-		})
-		registry.Register(&storage.CollectionMetadata{
-			Name:          "container_desired",
-			WorkerType:    "container",
-			Role:          storage.RoleDesired,
-			CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
-			IndexedFields: []string{storage.FieldSyncID},
-		})
-		registry.Register(&storage.CollectionMetadata{
-			Name:          "container_observed",
-			WorkerType:    "container",
-			Role:          storage.RoleObserved,
-			CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
-			IndexedFields: []string{storage.FieldSyncID},
-		})
 
 		// Create collections in database
+		// Collections follow convention: {workerType}_identity, {workerType}_desired, {workerType}_observed
 		err = basicStore.CreateCollection(ctx, "container_identity", nil)
 		Expect(err).ToNot(HaveOccurred())
 		err = basicStore.CreateCollection(ctx, "container_desired", nil)
@@ -75,7 +52,7 @@ var _ = Describe("Multi-Worker Supervisor", func() {
 		err = basicStore.CreateCollection(ctx, "container_observed", nil)
 		Expect(err).ToNot(HaveOccurred())
 
-		triangularStore = storage.NewTriangularStore(basicStore, registry)
+		triangularStore = storage.NewTriangularStore(basicStore)
 
 		s = supervisor.NewSupervisor(supervisor.Config{
 			WorkerType: "container",

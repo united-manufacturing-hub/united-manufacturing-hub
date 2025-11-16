@@ -113,7 +113,6 @@ var _ = Describe("Variable Injection", func() {
 		logger = zap.NewNop().Sugar()
 
 		basicStore := memory.NewInMemoryStore()
-		registry := storage.NewRegistry()
 
 		// Create collections for test worker type
 		var err error
@@ -124,7 +123,7 @@ var _ = Describe("Variable Injection", func() {
 		err = basicStore.CreateCollection(ctx, "test_observed", nil)
 		Expect(err).ToNot(HaveOccurred())
 
-		store = storage.NewTriangularStore(basicStore, registry)
+		store = storage.NewTriangularStore(basicStore)
 
 		identity = fsmv2.Identity{
 			ID:         "test-worker-1",

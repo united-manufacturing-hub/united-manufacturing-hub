@@ -31,61 +31,87 @@ var _ = Describe("Testing Helpers", func() {
 			store := supervisor.CreateTestTriangularStoreForWorkerType("s6")
 			Expect(store).ToNot(BeNil())
 
-			registry := store.Registry()
-			Expect(registry.IsRegistered("s6_identity")).To(BeTrue())
-			Expect(registry.IsRegistered("s6_desired")).To(BeTrue())
-			Expect(registry.IsRegistered("s6_observed")).To(BeTrue())
+			// Verify collections exist by attempting to save/load data
+			ctx := context.Background()
+			identity := map[string]interface{}{
+				"id":   "test-s6",
+				"name": "Test S6",
+			}
+			err := store.SaveIdentity(ctx, "s6", "test-s6", identity)
+			Expect(err).ToNot(HaveOccurred())
 		})
 
 		It("should create triangular store for container workerType", func() {
 			store := supervisor.CreateTestTriangularStoreForWorkerType("container")
 			Expect(store).ToNot(BeNil())
 
-			registry := store.Registry()
-			Expect(registry.IsRegistered("container_identity")).To(BeTrue())
-			Expect(registry.IsRegistered("container_desired")).To(BeTrue())
-			Expect(registry.IsRegistered("container_observed")).To(BeTrue())
+			// Verify collections exist by attempting to save/load data
+			ctx := context.Background()
+			identity := map[string]interface{}{
+				"id":   "test-container",
+				"name": "Test Container",
+			}
+			err := store.SaveIdentity(ctx, "container", "test-container", identity)
+			Expect(err).ToNot(HaveOccurred())
 		})
 
-		It("should use correct CSEFields for identity role", func() {
+		It("should inject correct CSE fields for identity role", func() {
+			ctx := context.Background()
 			store := supervisor.CreateTestTriangularStoreForWorkerType("test")
-			registry := store.Registry()
 
-			metadata, err := registry.Get("test_identity")
+			identity := map[string]interface{}{
+				"id":   "test-worker",
+				"name": "Test Worker",
+			}
+			err := store.SaveIdentity(ctx, "test", "test-worker", identity)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(metadata.CSEFields).To(ConsistOf(
-				storage.FieldSyncID,
-				storage.FieldVersion,
-				storage.FieldCreatedAt,
-			))
+
+			retrieved, err := store.LoadIdentity(ctx, "test", "test-worker")
+			Expect(err).ToNot(HaveOccurred())
+			// CSE fields are injected automatically
+			Expect(retrieved).To(HaveKey(storage.FieldSyncID))
+			Expect(retrieved).To(HaveKey(storage.FieldVersion))
+			Expect(retrieved).To(HaveKey(storage.FieldCreatedAt))
 		})
 
-		It("should use correct CSEFields for desired role", func() {
+		It("should inject correct CSE fields for desired role", func() {
+			ctx := context.Background()
 			store := supervisor.CreateTestTriangularStoreForWorkerType("test")
-			registry := store.Registry()
 
-			metadata, err := registry.Get("test_desired")
+			desired := map[string]interface{}{
+				"id":    "test-worker",
+				"state": "running",
+			}
+			err := store.SaveDesired(ctx, "test", "test-worker", desired)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(metadata.CSEFields).To(ConsistOf(
-				storage.FieldSyncID,
-				storage.FieldVersion,
-				storage.FieldCreatedAt,
-				storage.FieldUpdatedAt,
-			))
+
+			retrieved, err := store.LoadDesired(ctx, "test", "test-worker")
+			Expect(err).ToNot(HaveOccurred())
+			// CSE fields are injected automatically
+			Expect(retrieved).To(HaveKey(storage.FieldSyncID))
+			Expect(retrieved).To(HaveKey(storage.FieldVersion))
+			Expect(retrieved).To(HaveKey(storage.FieldCreatedAt))
+			Expect(retrieved).To(HaveKey(storage.FieldUpdatedAt))
 		})
 
-		It("should use correct CSEFields for observed role", func() {
+		It("should inject correct CSE fields for observed role", func() {
+			ctx := context.Background()
 			store := supervisor.CreateTestTriangularStoreForWorkerType("test")
-			registry := store.Registry()
 
-			metadata, err := registry.Get("test_observed")
+			observed := map[string]interface{}{
+				"id":    "test-worker",
+				"state": "running",
+			}
+			_, err := store.SaveObserved(ctx, "test", "test-worker", observed)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(metadata.CSEFields).To(ConsistOf(
-				storage.FieldSyncID,
-				storage.FieldVersion,
-				storage.FieldCreatedAt,
-				storage.FieldUpdatedAt,
-			))
+
+			retrieved, err := store.LoadObserved(ctx, "test", "test-worker")
+			Expect(err).ToNot(HaveOccurred())
+			// CSE fields are injected automatically
+			Expect(retrieved).To(HaveKey(storage.FieldSyncID))
+			Expect(retrieved).To(HaveKey(storage.FieldVersion))
+			Expect(retrieved).To(HaveKey(storage.FieldCreatedAt))
+			Expect(retrieved).To(HaveKey(storage.FieldUpdatedAt))
 		})
 
 		It("should allow storing and retrieving data", func() {

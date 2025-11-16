@@ -273,9 +273,6 @@ func (m *mockStore) LoadSnapshot(ctx context.Context, workerType string, id stri
 	}, nil
 }
 
-func (m *mockStore) Registry() *storage.Registry {
-	return storage.NewRegistry()
-}
 
 func mockIdentity() fsmv2.Identity {
 	return fsmv2.Identity{
@@ -295,29 +292,6 @@ func newSupervisorWithWorker(worker *mockWorker, customStore storage.TriangularS
 		triangularStore = customStore
 	} else {
 		basicStore := memory.NewInMemoryStore()
-		registry := storage.NewRegistry()
-
-		registry.Register(&storage.CollectionMetadata{
-			Name:          workerType + "_identity",
-			WorkerType:    workerType,
-			Role:          storage.RoleIdentity,
-			CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt},
-			IndexedFields: []string{storage.FieldSyncID},
-		})
-		registry.Register(&storage.CollectionMetadata{
-			Name:          workerType + "_desired",
-			WorkerType:    workerType,
-			Role:          storage.RoleDesired,
-			CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
-			IndexedFields: []string{storage.FieldSyncID},
-		})
-		registry.Register(&storage.CollectionMetadata{
-			Name:          workerType + "_observed",
-			WorkerType:    workerType,
-			Role:          storage.RoleObserved,
-			CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
-			IndexedFields: []string{storage.FieldSyncID},
-		})
 
 		if err := basicStore.CreateCollection(ctx, workerType+"_identity", nil); err != nil {
 			panic(fmt.Sprintf("failed to create identity collection: %v", err))
@@ -331,7 +305,7 @@ func newSupervisorWithWorker(worker *mockWorker, customStore storage.TriangularS
 			panic(fmt.Sprintf("failed to create observed collection: %v", err))
 		}
 
-		triangularStore = storage.NewTriangularStore(basicStore, registry)
+		triangularStore = storage.NewTriangularStore(basicStore)
 		if triangularStore == nil {
 			panic("triangular store is nil")
 		}
@@ -372,30 +346,7 @@ func createTestTriangularStore() *storage.TriangularStore {
 	ctx := context.Background()
 	basicStore := memory.NewInMemoryStore()
 
-	registry := storage.NewRegistry()
 	workerType := "container"
-
-	registry.Register(&storage.CollectionMetadata{
-		Name:          workerType + "_identity",
-		WorkerType:    workerType,
-		Role:          storage.RoleIdentity,
-		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt},
-		IndexedFields: []string{storage.FieldSyncID},
-	})
-	registry.Register(&storage.CollectionMetadata{
-		Name:          workerType + "_desired",
-		WorkerType:    workerType,
-		Role:          storage.RoleDesired,
-		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
-		IndexedFields: []string{storage.FieldSyncID},
-	})
-	registry.Register(&storage.CollectionMetadata{
-		Name:          workerType + "_observed",
-		WorkerType:    workerType,
-		Role:          storage.RoleObserved,
-		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
-		IndexedFields: []string{storage.FieldSyncID},
-	})
 
 	if err := basicStore.CreateCollection(ctx, workerType+"_identity", nil); err != nil {
 		panic(fmt.Sprintf("failed to create identity collection: %v", err))
@@ -409,7 +360,7 @@ func createTestTriangularStore() *storage.TriangularStore {
 		panic(fmt.Sprintf("failed to create observed collection: %v", err))
 	}
 
-	return storage.NewTriangularStore(basicStore, registry)
+	return storage.NewTriangularStore(basicStore)
 }
 
 type mockTriangularStore struct {
@@ -610,10 +561,6 @@ func (m *mockTriangularStore) LoadSnapshot(ctx context.Context, workerType strin
 	}
 
 	return snapshot, nil
-}
-
-func (m *mockTriangularStore) Registry() *storage.Registry {
-	return storage.NewRegistry()
 }
 
 var _ storage.TriangularStoreInterface = (*mockTriangularStore)(nil)

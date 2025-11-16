@@ -35,7 +35,6 @@ var _ = Describe("ChildSpec Validation Integration", func() {
 		ctx             context.Context
 		basicStore      persistence.Store
 		triangularStore *storage.TriangularStore
-		registry        *storage.Registry
 		logger          *zap.SugaredLogger
 	)
 
@@ -43,57 +42,9 @@ var _ = Describe("ChildSpec Validation Integration", func() {
 		ctx = context.Background()
 		logger = zap.NewNop().Sugar()
 		basicStore = memory.NewInMemoryStore()
-		registry = storage.NewRegistry()
-
-		// Register collections for supervisor
-		_ = registry.Register(&storage.CollectionMetadata{
-			Name:          "test_supervisor_identity",
-			WorkerType:    "test_supervisor",
-			Role:          storage.RoleIdentity,
-			CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt},
-			IndexedFields: []string{storage.FieldSyncID},
-		})
-		_ = registry.Register(&storage.CollectionMetadata{
-			Name:          "test_supervisor_desired",
-			WorkerType:    "test_supervisor",
-			Role:          storage.RoleDesired,
-			CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
-			IndexedFields: []string{storage.FieldSyncID},
-		})
-		_ = registry.Register(&storage.CollectionMetadata{
-			Name:          "test_supervisor_observed",
-			WorkerType:    "test_supervisor",
-			Role:          storage.RoleObserved,
-			CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
-			IndexedFields: []string{storage.FieldSyncID},
-		})
-
-		// Register collections for child worker types
-		for _, workerType := range []string{"valid_child", "another_child"} {
-			_ = registry.Register(&storage.CollectionMetadata{
-				Name:          workerType + "_identity",
-				WorkerType:    workerType,
-				Role:          storage.RoleIdentity,
-				CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt},
-				IndexedFields: []string{storage.FieldSyncID},
-			})
-			_ = registry.Register(&storage.CollectionMetadata{
-				Name:          workerType + "_desired",
-				WorkerType:    workerType,
-				Role:          storage.RoleDesired,
-				CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
-				IndexedFields: []string{storage.FieldSyncID},
-			})
-			_ = registry.Register(&storage.CollectionMetadata{
-				Name:          workerType + "_observed",
-				WorkerType:    workerType,
-				Role:          storage.RoleObserved,
-				CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
-				IndexedFields: []string{storage.FieldSyncID},
-			})
-		}
 
 		// Create collections in database
+		// Collections follow convention: {workerType}_identity, {workerType}_desired, {workerType}_observed
 		_ = basicStore.CreateCollection(ctx, "test_supervisor_identity", nil)
 		_ = basicStore.CreateCollection(ctx, "test_supervisor_desired", nil)
 		_ = basicStore.CreateCollection(ctx, "test_supervisor_observed", nil)
@@ -117,7 +68,7 @@ var _ = Describe("ChildSpec Validation Integration", func() {
 			}
 		})
 
-		triangularStore = storage.NewTriangularStore(basicStore, registry)
+		triangularStore = storage.NewTriangularStore(basicStore)
 	})
 
 	AfterEach(func() {

@@ -29,34 +29,11 @@ func setupTestStore(workerType string) *storage.TriangularStore {
 	ctx := context.Background()
 	basicStore := memory.NewInMemoryStore()
 
-	registry := storage.NewRegistry()
-	registry.Register(&storage.CollectionMetadata{
-		Name:          workerType + "_identity",
-		WorkerType:    workerType,
-		Role:          storage.RoleIdentity,
-		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt},
-		IndexedFields: []string{storage.FieldSyncID},
-	})
-	registry.Register(&storage.CollectionMetadata{
-		Name:          workerType + "_desired",
-		WorkerType:    workerType,
-		Role:          storage.RoleDesired,
-		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
-		IndexedFields: []string{storage.FieldSyncID},
-	})
-	registry.Register(&storage.CollectionMetadata{
-		Name:          workerType + "_observed",
-		WorkerType:    workerType,
-		Role:          storage.RoleObserved,
-		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
-		IndexedFields: []string{storage.FieldSyncID},
-	})
-
 	_ = basicStore.CreateCollection(ctx, workerType+"_identity", nil)
 	_ = basicStore.CreateCollection(ctx, workerType+"_desired", nil)
 	_ = basicStore.CreateCollection(ctx, workerType+"_observed", nil)
 
-	return storage.NewTriangularStore(basicStore, registry)
+	return storage.NewTriangularStore(basicStore)
 }
 
 var _ = Describe("Supervisor Configuration", func() {
