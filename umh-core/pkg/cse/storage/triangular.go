@@ -239,6 +239,19 @@ func (ts *TriangularStore) LoadIdentity(ctx context.Context, workerType string, 
 
 // SaveDesired stores user intent/configuration.
 //
+// DEPRECATED: Use SaveDesiredTyped[T]() instead for type safety and no registry dependency.
+// This method will be removed in a future version.
+//
+// Migration guide: pkg/cse/storage/MIGRATION.md
+//
+// Example:
+//
+//	// Old (deprecated):
+//	err := ts.SaveDesired(ctx, "container", id, doc)
+//
+//	// New (recommended):
+//	err := storage.SaveDesiredTyped[ContainerDesiredState](ts, ctx, id, desired)
+//
 // DESIGN DECISION: Increment _version for optimistic locking
 // WHY: Desired state represents user configuration. Version prevents lost updates
 // when multiple clients modify configuration concurrently.
@@ -306,6 +319,11 @@ func (ts *TriangularStore) SaveDesired(ctx context.Context, workerType string, i
 }
 
 // LoadDesired retrieves user intent/configuration.
+//
+// DEPRECATED: Use LoadDesiredTyped[T]() instead for type safety and no registry dependency.
+// This method will be removed in a future version.
+//
+// Migration guide: pkg/cse/storage/MIGRATION.md
 //
 // Parameters:
 //   - ctx: Cancellation context
@@ -464,6 +482,19 @@ func (ts *TriangularStore) saveObservedInternal(ctx context.Context, workerType 
 
 // SaveObserved stores system reality with automatic delta checking.
 //
+// DEPRECATED: Use SaveObservedTyped[T]() instead for type safety and no registry dependency.
+// This method will be removed in a future version.
+//
+// Migration guide: pkg/cse/storage/MIGRATION.md
+//
+// Example:
+//
+//	// Old (deprecated):
+//	changed, err := ts.SaveObserved(ctx, "container", id, doc)
+//
+//	// New (recommended):
+//	changed, err := storage.SaveObservedTyped[ContainerObservedState](ts, ctx, id, observed)
+//
 // DESIGN DECISION: Built-in delta checking skips unchanged writes
 // WHY: Observed state is polled frequently (500ms default). Most polls
 // return the same data. Skipping redundant writes reduces database load
@@ -534,6 +565,11 @@ func (ts *TriangularStore) SaveObserved(ctx context.Context, workerType string, 
 }
 
 // LoadObserved retrieves system reality.
+//
+// DEPRECATED: Use LoadObservedTyped[T]() instead for type safety and no registry dependency.
+// This method will be removed in a future version.
+//
+// Migration guide: pkg/cse/storage/MIGRATION.md
 //
 // Parameters:
 //   - ctx: Cancellation context
