@@ -102,41 +102,29 @@ import (
 //	snapshot, _ := ts.LoadSnapshot(ctx, "container", "worker-123")
 //	// Use snapshot.Identity, snapshot.Desired, snapshot.Observed for Next() decision
 type TriangularStore struct {
-	store        persistence.Store
-	registry     *Registry
-	typeRegistry *TypeRegistry
-	syncID       *atomic.Int64
+	store  persistence.Store
+	syncID *atomic.Int64
 }
 
 // NewTriangularStore creates a new TriangularStore.
 //
-// DESIGN DECISION: Require explicit registry injection
-// WHY: Makes dependencies explicit, supports testing with custom registries.
-// Registry defines which collections exist and their metadata conventions.
+// DESIGN DECISION: Convention-based system (no registry needed)
+// WHY: Collection names follow naming convention: {workerType}_{role}
 //
-// TRADE-OFF: More verbose than using global registry, but more testable.
-//
-// INSPIRED BY: Dependency injection pattern, avoiding global state in constructors.
+// CSE metadata fields are hardcoded constants (see getCSEFields()).
 //
 // Parameters:
 //   - store: Backend storage implementation (SQLite, Postgres, etc.)
-//   - registry: Schema registry with triangular collection metadata
 //
 // Returns:
 //   - *TriangularStore: Ready-to-use triangular store instance
-func NewTriangularStore(store persistence.Store, registry *Registry) *TriangularStore {
+func NewTriangularStore(store persistence.Store) *TriangularStore {
 	return &TriangularStore{
-		store:        store,
-		registry:     registry,
-		typeRegistry: NewTypeRegistry(),
-		syncID:       &atomic.Int64{},
+		store:  store,
+		syncID: &atomic.Int64{},
 	}
 }
 
-// TypeRegistry returns the type registry for worker type registration.
-func (ts *TriangularStore) TypeRegistry() *TypeRegistry {
-	return ts.typeRegistry
-}
 
 // SaveIdentity stores immutable worker identity.
 //
@@ -825,20 +813,6 @@ func (ts *TriangularStore) IncrementSyncID(_ context.Context) (int64, error) {
 	newID := ts.syncID.Add(1)
 
 	return newID, nil
-}
-
-// Registry returns the underlying registry for auto-registration.
-// Used by Supervisor to register worker types at initialization.
-//
-// DESIGN DECISION: Expose registry for auto-registration by Supervisor
-// WHY: Eliminates worker-specific registry boilerplate (e.g., communicator/registry.go)
-// Supervisor auto-registers collections at startup based on worker type.
-//
-// TRADE-OFF: Exposes internal registry reference, but necessary for auto-registration pattern.
-//
-// INSPIRED BY: Dependency injection pattern, HTTP router registration (gin.Engine.Routes()).
-func (ts *TriangularStore) Registry() *Registry {
-	return ts.registry
 }
 
 func (ts *TriangularStore) Close() error {

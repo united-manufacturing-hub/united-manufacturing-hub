@@ -30,7 +30,6 @@ package storage_test
 import (
 	"context"
 	"errors"
-	"reflect"
 	"sync"
 	"testing"
 	"time"
@@ -273,68 +272,22 @@ type EmptyNameType struct {
 	Name string
 }
 
-func setupTestRegistry() *storage.Registry {
-	registry := storage.NewRegistry()
-
-	registry.Register(&storage.CollectionMetadata{
-		Name:          "container_identity",
-		WorkerType:    "container",
-		Role:          storage.RoleIdentity,
-		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
-		IndexedFields: []string{storage.FieldSyncID},
-	})
-
-	registry.Register(&storage.CollectionMetadata{
-		Name:          "container_desired",
-		WorkerType:    "container",
-		Role:          storage.RoleDesired,
-		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
-		IndexedFields: []string{storage.FieldSyncID},
-	})
-
-	observedType := reflect.TypeOf(TestObservedState{})
-	registry.Register(&storage.CollectionMetadata{
-		Name:          "container_observed",
-		WorkerType:    "container",
-		Role:          storage.RoleObserved,
-		ObservedType:  observedType,
-		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
-		IndexedFields: []string{storage.FieldSyncID},
-	})
-
-	return registry
-}
-
 var _ = Describe("TriangularStore", func() {
 	var (
-		store    *mockStore
-		registry *storage.Registry
-		ts       *storage.TriangularStore
-		ctx      context.Context
+		store *mockStore
+		ts    *storage.TriangularStore
+		ctx   context.Context
 	)
 
 	BeforeEach(func() {
 		ctx = context.Background()
 		store = newMockStore()
-		registry = setupTestRegistry()
-		ts = storage.NewTriangularStore(store, registry)
+		ts = storage.NewTriangularStore(store)
 	})
 
 	Describe("NewTriangularStore", func() {
 		It("should create non-nil store", func() {
 			Expect(ts).NotTo(BeNil())
-		})
-
-		It("should create typeRegistry", func() {
-			typeRegistry := ts.TypeRegistry()
-			Expect(typeRegistry).NotTo(BeNil())
-		})
-	})
-
-	Describe("TypeRegistry", func() {
-		It("should return non-nil type registry", func() {
-			typeRegistry := ts.TypeRegistry()
-			Expect(typeRegistry).NotTo(BeNil())
 		})
 	})
 
@@ -774,7 +727,7 @@ var _ = Describe("TriangularStore", func() {
 
 		Context("when parts are missing", func() {
 			It("should fail when desired and observed are missing", func() {
-				ts := storage.NewTriangularStore(newMockStore(), registry)
+				ts := storage.NewTriangularStore(newMockStore())
 				ts.SaveIdentity(ctx, "container", "worker-456", persistence.Document{
 					"id":   "worker-456",
 					"name": "Container B",
@@ -915,33 +868,6 @@ var _ = Describe("TriangularStore", func() {
 	})
 
 	Describe("LoadDesired[T]", func() {
-		BeforeEach(func() {
-			registry.Register(&storage.CollectionMetadata{
-				Name:          "parent_identity",
-				WorkerType:    "parent",
-				Role:          storage.RoleIdentity,
-				CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt},
-				IndexedFields: []string{storage.FieldSyncID},
-			})
-			registry.Register(&storage.CollectionMetadata{
-				Name:          "parent_desired",
-				WorkerType:    "parent",
-				Role:          storage.RoleDesired,
-				CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
-				IndexedFields: []string{storage.FieldSyncID},
-			})
-			registry.Register(&storage.CollectionMetadata{
-				Name:          "parent_observed",
-				WorkerType:    "parent",
-				Role:          storage.RoleObserved,
-				CSEFields:     []string{storage.FieldSyncID, storage.FieldCreatedAt, storage.FieldUpdatedAt},
-				IndexedFields: []string{storage.FieldSyncID},
-			})
-
-			desiredType := reflect.TypeOf(ParentDesiredState{})
-			ts.TypeRegistry().RegisterWorkerType("parent", nil, desiredType)
-		})
-
 		It("should derive table name from type and load typed desired state", func() {
 			desired := persistence.Document{
 				"id":      "parent-001",
@@ -965,33 +891,6 @@ var _ = Describe("TriangularStore", func() {
 	})
 
 	Describe("SaveDesiredTyped[T]", func() {
-		BeforeEach(func() {
-			registry.Register(&storage.CollectionMetadata{
-				Name:          "parent_identity",
-				WorkerType:    "parent",
-				Role:          storage.RoleIdentity,
-				CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt},
-				IndexedFields: []string{storage.FieldSyncID},
-			})
-			registry.Register(&storage.CollectionMetadata{
-				Name:          "parent_desired",
-				WorkerType:    "parent",
-				Role:          storage.RoleDesired,
-				CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
-				IndexedFields: []string{storage.FieldSyncID},
-			})
-			registry.Register(&storage.CollectionMetadata{
-				Name:          "parent_observed",
-				WorkerType:    "parent",
-				Role:          storage.RoleObserved,
-				CSEFields:     []string{storage.FieldSyncID, storage.FieldCreatedAt, storage.FieldUpdatedAt},
-				IndexedFields: []string{storage.FieldSyncID},
-			})
-
-			desiredType := reflect.TypeOf(ParentDesiredState{})
-			ts.TypeRegistry().RegisterWorkerType("parent", nil, desiredType)
-		})
-
 		It("should derive table name from type and save typed desired state", func() {
 			desired := ParentDesiredState{
 				Name:    "ParentWorker",
@@ -1108,33 +1007,6 @@ var _ = Describe("TriangularStore", func() {
 	})
 
 	Describe("LoadObservedTyped[T]", func() {
-		BeforeEach(func() {
-			registry.Register(&storage.CollectionMetadata{
-				Name:          "parent_identity",
-				WorkerType:    "parent",
-				Role:          storage.RoleIdentity,
-				CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt},
-				IndexedFields: []string{storage.FieldSyncID},
-			})
-			registry.Register(&storage.CollectionMetadata{
-				Name:          "parent_desired",
-				WorkerType:    "parent",
-				Role:          storage.RoleDesired,
-				CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
-				IndexedFields: []string{storage.FieldSyncID},
-			})
-			registry.Register(&storage.CollectionMetadata{
-				Name:          "parent_observed",
-				WorkerType:    "parent",
-				Role:          storage.RoleObserved,
-				CSEFields:     []string{storage.FieldSyncID, storage.FieldCreatedAt, storage.FieldUpdatedAt},
-				IndexedFields: []string{storage.FieldSyncID},
-			})
-
-			observedType := reflect.TypeOf(ParentObservedState{})
-			ts.TypeRegistry().RegisterWorkerType("parent", observedType, nil)
-		})
-
 		It("should derive table name from type and load typed observed state", func() {
 			observed := persistence.Document{
 				"id":     "parent-001",
@@ -1158,33 +1030,6 @@ var _ = Describe("TriangularStore", func() {
 	})
 
 	Describe("SaveObservedTyped[T]", func() {
-		BeforeEach(func() {
-			registry.Register(&storage.CollectionMetadata{
-				Name:          "parent_identity",
-				WorkerType:    "parent",
-				Role:          storage.RoleIdentity,
-				CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt},
-				IndexedFields: []string{storage.FieldSyncID},
-			})
-			registry.Register(&storage.CollectionMetadata{
-				Name:          "parent_desired",
-				WorkerType:    "parent",
-				Role:          storage.RoleDesired,
-				CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
-				IndexedFields: []string{storage.FieldSyncID},
-			})
-			registry.Register(&storage.CollectionMetadata{
-				Name:          "parent_observed",
-				WorkerType:    "parent",
-				Role:          storage.RoleObserved,
-				CSEFields:     []string{storage.FieldSyncID, storage.FieldCreatedAt, storage.FieldUpdatedAt},
-				IndexedFields: []string{storage.FieldSyncID},
-			})
-
-			observedType := reflect.TypeOf(ParentObservedState{})
-			ts.TypeRegistry().RegisterWorkerType("parent", observedType, nil)
-		})
-
 		It("should derive table name from type and save typed observed state", func() {
 			observed := ParentObservedState{
 				Name:   "ParentWorker",
@@ -1293,17 +1138,8 @@ var _ = Describe("TriangularStore", func() {
 
 func BenchmarkSaveObservedNoChange(b *testing.B) {
 	store := newMockStore()
-	registry := storage.NewRegistry()
-	ts := storage.NewTriangularStore(store, registry)
+	ts := storage.NewTriangularStore(store)
 	ctx := context.Background()
-
-	// Register collection
-	registry.Register(&storage.CollectionMetadata{
-		Name:       "benchmark_observed",
-		WorkerType: "benchmark",
-		Role:       storage.RoleObserved,
-		CSEFields:  []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
-	})
 
 	// Create initial document
 	doc := persistence.Document{
@@ -1323,16 +1159,8 @@ func BenchmarkSaveObservedNoChange(b *testing.B) {
 
 func BenchmarkSaveObservedWithChange(b *testing.B) {
 	store := newMockStore()
-	registry := storage.NewRegistry()
-	ts := storage.NewTriangularStore(store, registry)
+	ts := storage.NewTriangularStore(store)
 	ctx := context.Background()
-
-	registry.Register(&storage.CollectionMetadata{
-		Name:       "benchmark_observed",
-		WorkerType: "benchmark",
-		Role:       storage.RoleObserved,
-		CSEFields:  []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
-	})
 
 	// Create initial document
 	doc := persistence.Document{
@@ -1348,20 +1176,5 @@ func BenchmarkSaveObservedWithChange(b *testing.B) {
 		// Changing data each iteration
 		doc["cpu"] = float64(i) * 0.1
 		_, _ = ts.SaveObserved(ctx, "benchmark", "worker-123", doc)
-	}
-}
-
-func BenchmarkRegistryLookup(b *testing.B) {
-	registry := storage.NewRegistry()
-	registry.Register(&storage.CollectionMetadata{
-		Name:       "benchmark_observed",
-		WorkerType: "benchmark",
-		Role:       storage.RoleObserved,
-		CSEFields:  []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
-	})
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		_, _, _, _ = registry.GetTriangularCollections("benchmark")
 	}
 }

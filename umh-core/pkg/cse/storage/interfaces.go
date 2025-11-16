@@ -71,10 +71,6 @@ type TriangularStoreInterface interface {
 	// Ensures consistent view of worker state at a single point in time.
 	// Returns nil for missing parts (e.g., Observed may be nil before first observation).
 	LoadSnapshot(ctx context.Context, workerType string, id string) (*Snapshot, error)
-
-	// Registry returns the collection registry for metadata access.
-	// Used for auto-registration and metadata queries.
-	Registry() *Registry
 }
 
 // Compile-time check that TriangularStore implements TriangularStoreInterface.
