@@ -28,6 +28,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
@@ -37,6 +38,50 @@ import (
 func TestSupervisor(t *testing.T) {
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "Supervisor Suite")
+}
+
+var _ = BeforeEach(func() {
+	registerTestWorkerFactories()
+})
+
+var _ = AfterEach(func() {
+	factory.ResetRegistry()
+})
+
+func registerTestWorkerFactories() {
+	workerTypes := []string{
+		"child",
+		"parent",
+		"mqtt_client",
+		"mqtt_broker",
+		"opcua_client",
+		"opcua_server",
+		"s7comm_client",
+		"modbus_client",
+		"http_client",
+		"child1",
+		"child2",
+		"grandchild",
+		"valid_child",
+		"another_child",
+		"working-child",
+		"failing-child",
+		"working",
+		"failing",
+	}
+
+	for _, workerType := range workerTypes {
+		wt := workerType
+		err := factory.RegisterFactoryByType(wt, func(identity fsmv2.Identity) fsmv2.Worker {
+			return &supervisor.TestWorkerWithType{
+				TestWorker: supervisor.TestWorker{},
+				WorkerType: wt,
+			}
+		})
+		if err != nil {
+			panic(fmt.Sprintf("failed to register test worker factory for %s: %v", wt, err))
+		}
+	}
 }
 
 type mockObservedState struct {
@@ -278,14 +323,14 @@ func mockIdentity() fsmv2.Identity {
 	return fsmv2.Identity{
 		ID:         "test-worker",
 		Name:       "Test Worker",
-		WorkerType: "container",
+		WorkerType: "test",
 	}
 }
 
-func newSupervisorWithWorker(worker *mockWorker, customStore storage.TriangularStoreInterface, cfg supervisor.CollectorHealthConfig) *supervisor.Supervisor {
+func newSupervisorWithWorker(worker *mockWorker, customStore storage.TriangularStoreInterface, cfg supervisor.CollectorHealthConfig) *supervisor.Supervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState] {
 	identity := mockIdentity()
 	ctx := context.Background()
-	workerType := "container"
+	workerType := "test"
 
 	var triangularStore storage.TriangularStoreInterface
 	if customStore != nil {
@@ -311,7 +356,7 @@ func newSupervisorWithWorker(worker *mockWorker, customStore storage.TriangularS
 		}
 	}
 
-	s := supervisor.NewSupervisor(supervisor.Config{
+	s := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 		WorkerType:      workerType,
 		Logger:          zap.NewNop().Sugar(),
 		CollectorHealth: cfg,
@@ -346,7 +391,7 @@ func createTestTriangularStore() *storage.TriangularStore {
 	ctx := context.Background()
 	basicStore := memory.NewInMemoryStore()
 
-	workerType := "container"
+	workerType := "test"
 
 	if err := basicStore.CreateCollection(ctx, workerType+"_identity", nil); err != nil {
 		panic(fmt.Sprintf("failed to create identity collection: %v", err))

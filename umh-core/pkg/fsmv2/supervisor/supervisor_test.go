@@ -38,9 +38,43 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence/memory"
 )
+
+func registerTestWorkerFactories() {
+	workerTypes := []string{
+		"child",
+		"parent",
+		"mqtt_client",
+		"mqtt_broker",
+		"opcua_client",
+		"opcua_server",
+		"s7comm_client",
+		"modbus_client",
+		"http_client",
+		"child1",
+		"child2",
+		"grandchild",
+		"valid_child",
+		"another_child",
+		"working-child",
+		"failing-child",
+		"working",
+		"failing",
+	}
+
+	for _, workerType := range workerTypes {
+		wt := workerType
+		_ = factory.RegisterFactoryByType(wt, func(identity fsmv2.Identity) fsmv2.Worker {
+			return &TestWorkerWithType{
+				TestWorker: TestWorker{},
+				WorkerType: wt,
+			}
+		})
+	}
+}
 
 // TestSupervisorUsesTriangularStore verifies that Supervisor uses TriangularStore instead of basic Store.
 // This test ensures the supervisor properly integrates with the triangular persistence model.
@@ -82,7 +116,7 @@ func TestSupervisorUsesTriangularStore(t *testing.T) {
 		Logger:     logger,
 	}
 
-	supervisor := NewSupervisor(supervisorCfg)
+	supervisor := NewSupervisor[*TestObservedState, *TestDesiredState](supervisorCfg)
 
 	if supervisor == nil {
 		t.Fatal("Expected supervisor to be created")
@@ -335,7 +369,7 @@ func TestSupervisorSavesIdentityToTriangularStore(t *testing.T) {
 		Logger:     logger,
 	}
 
-	supervisor := NewSupervisor(supervisorCfg)
+	supervisor := NewSupervisor[*TestObservedState, *TestDesiredState](supervisorCfg)
 
 	identity := fsmv2.Identity{
 		ID:         "worker-1",
@@ -411,7 +445,7 @@ func TestSupervisorLoadsSnapshotFromTriangularStore(t *testing.T) {
 		Logger:     logger,
 	}
 
-	supervisor := NewSupervisor(supervisorCfg)
+	supervisor := NewSupervisor[*TestObservedState, *TestDesiredState](supervisorCfg)
 
 	identity := fsmv2.Identity{
 		ID:         "worker-1",
@@ -512,525 +546,50 @@ func (m *mockState) Next(_ fsmv2.Snapshot) (fsmv2.State, fsmv2.Signal, fsmv2.Act
 	return m, fsmv2.SignalNone, nil
 }
 
-func TestReconcileChildren_AddNewChildWhenNoneExist(t *testing.T) {
-	ctx := context.Background()
-	logger := zap.NewNop().Sugar()
-
-	basicStore := memory.NewInMemoryStore()
-
-	defer func() {
-		_ = basicStore.Close(ctx)
-	}()
-
-
-	_ = basicStore.CreateCollection(ctx, "parent_identity", nil)
-	_ = basicStore.CreateCollection(ctx, "parent_desired", nil)
-	_ = basicStore.CreateCollection(ctx, "parent_observed", nil)
-
-	triangularStore := storage.NewTriangularStore(basicStore)
-
-	supervisorCfg := Config{
-		WorkerType: "parent",
-		Store:      triangularStore,
-		Logger:     logger,
-	}
-
-	supervisor := NewSupervisor(supervisorCfg)
-
-	specs := []config.ChildSpec{
-		{
-			Name:       "child-1",
-			WorkerType: "mqtt_client",
-			UserSpec:   config.UserSpec{Config: "url: tcp://localhost:1883"},
-		},
-	}
-
-	err := supervisor.reconcileChildren(specs)
-	if err != nil {
-		t.Fatalf("reconcileChildren failed: %v", err)
-	}
-
-	if len(supervisor.children) != 1 {
-		t.Errorf("Expected 1 child, got %d", len(supervisor.children))
-	}
-
-	if _, exists := supervisor.children["child-1"]; !exists {
-		t.Error("Expected child-1 to exist in children map")
-	}
+type mockWorkerWithChildren struct {
+	identity      fsmv2.Identity
+	initialState  fsmv2.State
+	observed      persistence.Document
+	childrenSpecs []config.ChildSpec
 }
 
-func TestReconcileChildren_AddMultipleChildren(t *testing.T) {
-	ctx := context.Background()
-	logger := zap.NewNop().Sugar()
-
-	basicStore := memory.NewInMemoryStore()
-
-	defer func() {
-		_ = basicStore.Close(ctx)
-	}()
-
-
-	_ = basicStore.CreateCollection(ctx, "parent_identity", nil)
-	_ = basicStore.CreateCollection(ctx, "parent_desired", nil)
-	_ = basicStore.CreateCollection(ctx, "parent_observed", nil)
-
-	triangularStore := storage.NewTriangularStore(basicStore)
-
-	supervisorCfg := Config{
-		WorkerType: "parent",
-		Store:      triangularStore,
-		Logger:     logger,
-	}
-
-	supervisor := NewSupervisor(supervisorCfg)
-
-	specs := []config.ChildSpec{
-		{
-			Name:       "child-1",
-			WorkerType: "mqtt_client",
-			UserSpec:   config.UserSpec{Config: "url: tcp://localhost:1883"},
-		},
-		{
-			Name:       "child-2",
-			WorkerType: "modbus_client",
-			UserSpec:   config.UserSpec{Config: "address: 192.168.1.100:502"},
-		},
-		{
-			Name:       "child-3",
-			WorkerType: "opcua_client",
-			UserSpec:   config.UserSpec{Config: "endpoint: opc.tcp://localhost:4840"},
-		},
-	}
-
-	err := supervisor.reconcileChildren(specs)
-	if err != nil {
-		t.Fatalf("reconcileChildren failed: %v", err)
-	}
-
-	if len(supervisor.children) != 3 {
-		t.Errorf("Expected 3 children, got %d", len(supervisor.children))
-	}
-
-	for _, spec := range specs {
-		if _, exists := supervisor.children[spec.Name]; !exists {
-			t.Errorf("Expected %s to exist in children map", spec.Name)
-		}
-	}
+func (m *mockWorkerWithChildren) CollectObservedState(_ context.Context) (fsmv2.ObservedState, error) {
+	return &mockObservedState{
+		doc:       m.observed,
+		timestamp: time.Now(),
+	}, nil
 }
 
-func TestReconcileChildren_SkipExistingChild(t *testing.T) {
-	ctx := context.Background()
-	logger := zap.NewNop().Sugar()
-
-	basicStore := memory.NewInMemoryStore()
-
-	defer func() {
-		_ = basicStore.Close(ctx)
-	}()
-
-
-	_ = basicStore.CreateCollection(ctx, "parent_identity", nil)
-	_ = basicStore.CreateCollection(ctx, "parent_desired", nil)
-	_ = basicStore.CreateCollection(ctx, "parent_observed", nil)
-
-	triangularStore := storage.NewTriangularStore(basicStore)
-
-	supervisorCfg := Config{
-		WorkerType: "parent",
-		Store:      triangularStore,
-		Logger:     logger,
-	}
-
-	supervisor := NewSupervisor(supervisorCfg)
-
-	specs := []config.ChildSpec{
-		{
-			Name:       "child-1",
-			WorkerType: "mqtt_client",
-			UserSpec:   config.UserSpec{Config: "url: tcp://localhost:1883"},
-		},
-	}
-
-	err := supervisor.reconcileChildren(specs)
-	if err != nil {
-		t.Fatalf("First reconcileChildren failed: %v", err)
-	}
-
-	firstChild := supervisor.children["child-1"]
-
-	err = supervisor.reconcileChildren(specs)
-	if err != nil {
-		t.Fatalf("Second reconcileChildren failed: %v", err)
-	}
-
-	if len(supervisor.children) != 1 {
-		t.Errorf("Expected 1 child after second reconciliation, got %d", len(supervisor.children))
-	}
-
-	if supervisor.children["child-1"] != firstChild {
-		t.Error("Expected child-1 to be the same instance after second reconciliation")
-	}
+func (m *mockWorkerWithChildren) DeriveDesiredState(_ interface{}) (config.DesiredState, error) {
+	return config.DesiredState{
+		State:         "running",
+		ChildrenSpecs: m.childrenSpecs,
+	}, nil
 }
 
-func TestReconcileChildren_UpdateUserSpec(t *testing.T) {
-	ctx := context.Background()
-	logger := zap.NewNop().Sugar()
-
-	basicStore := memory.NewInMemoryStore()
-
-	defer func() {
-		_ = basicStore.Close(ctx)
-	}()
-
-
-	_ = basicStore.CreateCollection(ctx, "parent_identity", nil)
-	_ = basicStore.CreateCollection(ctx, "parent_desired", nil)
-	_ = basicStore.CreateCollection(ctx, "parent_observed", nil)
-
-	triangularStore := storage.NewTriangularStore(basicStore)
-
-	supervisorCfg := Config{
-		WorkerType: "parent",
-		Store:      triangularStore,
-		Logger:     logger,
-	}
-
-	supervisor := NewSupervisor(supervisorCfg)
-
-	initialSpecs := []config.ChildSpec{
-		{
-			Name:       "child-1",
-			WorkerType: "mqtt_client",
-			UserSpec:   config.UserSpec{Config: "url: tcp://localhost:1883"},
-		},
-	}
-
-	err := supervisor.reconcileChildren(initialSpecs)
-	if err != nil {
-		t.Fatalf("Initial reconcileChildren failed: %v", err)
-	}
-
-	updatedSpecs := []config.ChildSpec{
-		{
-			Name:       "child-1",
-			WorkerType: "mqtt_client",
-			UserSpec:   config.UserSpec{Config: "url: tcp://remotehost:1883"},
-		},
-	}
-
-	err = supervisor.reconcileChildren(updatedSpecs)
-	if err != nil {
-		t.Fatalf("Update reconcileChildren failed: %v", err)
-	}
-
-	child := supervisor.children["child-1"]
-	if child == nil {
-		t.Fatal("Expected child-1 to exist")
-	}
-
-	if child.userSpec.Config != "url: tcp://remotehost:1883" {
-		t.Errorf("Expected UserSpec to be updated to 'url: tcp://remotehost:1883', got '%s'", child.userSpec.Config)
-	}
-}
-
-func TestReconcileChildren_UpdateStateMapping(t *testing.T) {
-	ctx := context.Background()
-	logger := zap.NewNop().Sugar()
-
-	basicStore := memory.NewInMemoryStore()
-
-	defer func() {
-		_ = basicStore.Close(ctx)
-	}()
-
-
-	_ = basicStore.CreateCollection(ctx, "parent_identity", nil)
-	_ = basicStore.CreateCollection(ctx, "parent_desired", nil)
-	_ = basicStore.CreateCollection(ctx, "parent_observed", nil)
-
-	triangularStore := storage.NewTriangularStore(basicStore)
-
-	supervisorCfg := Config{
-		WorkerType: "parent",
-		Store:      triangularStore,
-		Logger:     logger,
-	}
-
-	supervisor := NewSupervisor(supervisorCfg)
-
-	initialSpecs := []config.ChildSpec{
-		{
-			Name:       "child-1",
-			WorkerType: "mqtt_client",
-			UserSpec:   config.UserSpec{Config: "url: tcp://localhost:1883"},
-			StateMapping: map[string]string{
-				"running": "connected",
-			},
-		},
-	}
-
-	err := supervisor.reconcileChildren(initialSpecs)
-	if err != nil {
-		t.Fatalf("Initial reconcileChildren failed: %v", err)
-	}
-
-	updatedSpecs := []config.ChildSpec{
-		{
-			Name:       "child-1",
-			WorkerType: "mqtt_client",
-			UserSpec:   config.UserSpec{Config: "url: tcp://localhost:1883"},
-			StateMapping: map[string]string{
-				"running":  "connected",
-				"stopping": "disconnected",
-			},
-		},
-	}
-
-	err = supervisor.reconcileChildren(updatedSpecs)
-	if err != nil {
-		t.Fatalf("Update reconcileChildren failed: %v", err)
-	}
-
-	child := supervisor.children["child-1"]
-	if child == nil {
-		t.Fatal("Expected child-1 to exist")
-	}
-
-	if len(child.stateMapping) != 2 {
-		t.Errorf("Expected StateMapping to have 2 entries, got %d", len(child.stateMapping))
-	}
-
-	if child.stateMapping["stopping"] != "disconnected" {
-		t.Errorf("Expected stopping -> disconnected mapping, got %v", child.stateMapping["stopping"])
-	}
-}
-
-func TestReconcileChildren_RemoveChild(t *testing.T) {
-	ctx := context.Background()
-	logger := zap.NewNop().Sugar()
-
-	basicStore := memory.NewInMemoryStore()
-
-	defer func() {
-		_ = basicStore.Close(ctx)
-	}()
-
-
-	_ = basicStore.CreateCollection(ctx, "parent_identity", nil)
-	_ = basicStore.CreateCollection(ctx, "parent_desired", nil)
-	_ = basicStore.CreateCollection(ctx, "parent_observed", nil)
-
-	triangularStore := storage.NewTriangularStore(basicStore)
-
-	supervisorCfg := Config{
-		WorkerType: "parent",
-		Store:      triangularStore,
-		Logger:     logger,
-	}
-
-	supervisor := NewSupervisor(supervisorCfg)
-
-	initialSpecs := []config.ChildSpec{
-		{
-			Name:       "child-1",
-			WorkerType: "mqtt_client",
-			UserSpec:   config.UserSpec{Config: "url: tcp://localhost:1883"},
-		},
-		{
-			Name:       "child-2",
-			WorkerType: "modbus_client",
-			UserSpec:   config.UserSpec{Config: "address: 192.168.1.100:502"},
-		},
-	}
-
-	err := supervisor.reconcileChildren(initialSpecs)
-	if err != nil {
-		t.Fatalf("Initial reconcileChildren failed: %v", err)
-	}
-
-	if len(supervisor.children) != 2 {
-		t.Errorf("Expected 2 children initially, got %d", len(supervisor.children))
-	}
-
-	updatedSpecs := []config.ChildSpec{
-		{
-			Name:       "child-1",
-			WorkerType: "mqtt_client",
-			UserSpec:   config.UserSpec{Config: "url: tcp://localhost:1883"},
-		},
-	}
-
-	err = supervisor.reconcileChildren(updatedSpecs)
-	if err != nil {
-		t.Fatalf("Update reconcileChildren failed: %v", err)
-	}
-
-	if len(supervisor.children) != 1 {
-		t.Errorf("Expected 1 child after removal, got %d", len(supervisor.children))
-	}
-
-	if _, exists := supervisor.children["child-2"]; exists {
-		t.Error("Expected child-2 to be removed")
-	}
-
-	if _, exists := supervisor.children["child-1"]; !exists {
-		t.Error("Expected child-1 to still exist")
-	}
-}
-
-func TestReconcileChildren_MixedOperations(t *testing.T) {
-	ctx := context.Background()
-	logger := zap.NewNop().Sugar()
-
-	basicStore := memory.NewInMemoryStore()
-
-	defer func() {
-		_ = basicStore.Close(ctx)
-	}()
-
-
-	_ = basicStore.CreateCollection(ctx, "parent_identity", nil)
-	_ = basicStore.CreateCollection(ctx, "parent_desired", nil)
-	_ = basicStore.CreateCollection(ctx, "parent_observed", nil)
-
-	triangularStore := storage.NewTriangularStore(basicStore)
-
-	supervisorCfg := Config{
-		WorkerType: "parent",
-		Store:      triangularStore,
-		Logger:     logger,
-	}
-
-	supervisor := NewSupervisor(supervisorCfg)
-
-	initialSpecs := []config.ChildSpec{
-		{
-			Name:       "child-1",
-			WorkerType: "mqtt_client",
-			UserSpec:   config.UserSpec{Config: "url: tcp://localhost:1883"},
-		},
-		{
-			Name:       "child-2",
-			WorkerType: "modbus_client",
-			UserSpec:   config.UserSpec{Config: "address: 192.168.1.100:502"},
-		},
-	}
-
-	err := supervisor.reconcileChildren(initialSpecs)
-	if err != nil {
-		t.Fatalf("Initial reconcileChildren failed: %v", err)
-	}
-
-	mixedSpecs := []config.ChildSpec{
-		{
-			Name:       "child-1",
-			WorkerType: "mqtt_client",
-			UserSpec:   config.UserSpec{Config: "url: tcp://remotehost:1883"},
-		},
-		{
-			Name:       "child-3",
-			WorkerType: "opcua_client",
-			UserSpec:   config.UserSpec{Config: "endpoint: opc.tcp://localhost:4840"},
-		},
-	}
-
-	err = supervisor.reconcileChildren(mixedSpecs)
-	if err != nil {
-		t.Fatalf("Mixed reconcileChildren failed: %v", err)
-	}
-
-	if len(supervisor.children) != 2 {
-		t.Errorf("Expected 2 children after mixed operations, got %d", len(supervisor.children))
-	}
-
-	if _, exists := supervisor.children["child-1"]; !exists {
-		t.Error("Expected child-1 to exist after update")
-	}
-
-	if child := supervisor.children["child-1"]; child != nil && child.userSpec.Config != "url: tcp://remotehost:1883" {
-		t.Error("Expected child-1 UserSpec to be updated")
-	}
-
-	if _, exists := supervisor.children["child-2"]; exists {
-		t.Error("Expected child-2 to be removed")
-	}
-
-	if _, exists := supervisor.children["child-3"]; !exists {
-		t.Error("Expected child-3 to be added")
-	}
-}
-
-func TestReconcileChildren_EmptySpecs(t *testing.T) {
-	ctx := context.Background()
-	logger := zap.NewNop().Sugar()
-
-	basicStore := memory.NewInMemoryStore()
-
-	defer func() {
-		_ = basicStore.Close(ctx)
-	}()
-
-
-	_ = basicStore.CreateCollection(ctx, "parent_identity", nil)
-	_ = basicStore.CreateCollection(ctx, "parent_desired", nil)
-	_ = basicStore.CreateCollection(ctx, "parent_observed", nil)
-
-	triangularStore := storage.NewTriangularStore(basicStore)
-
-	supervisorCfg := Config{
-		WorkerType: "parent",
-		Store:      triangularStore,
-		Logger:     logger,
-	}
-
-	supervisor := NewSupervisor(supervisorCfg)
-
-	initialSpecs := []config.ChildSpec{
-		{
-			Name:       "child-1",
-			WorkerType: "mqtt_client",
-			UserSpec:   config.UserSpec{Config: "url: tcp://localhost:1883"},
-		},
-		{
-			Name:       "child-2",
-			WorkerType: "modbus_client",
-			UserSpec:   config.UserSpec{Config: "address: 192.168.1.100:502"},
-		},
-	}
-
-	err := supervisor.reconcileChildren(initialSpecs)
-	if err != nil {
-		t.Fatalf("Initial reconcileChildren failed: %v", err)
-	}
-
-	if len(supervisor.children) != 2 {
-		t.Errorf("Expected 2 children initially, got %d", len(supervisor.children))
-	}
-
-	err = supervisor.reconcileChildren([]config.ChildSpec{})
-	if err != nil {
-		t.Fatalf("Empty reconcileChildren failed: %v", err)
-	}
-
-	if len(supervisor.children) != 0 {
-		t.Errorf("Expected 0 children after empty reconciliation, got %d", len(supervisor.children))
-	}
+func (m *mockWorkerWithChildren) GetInitialState() fsmv2.State {
+	return m.initialState
 }
 
 func TestApplyStateMapping_WithMapping(t *testing.T) {
 	ctx := context.Background()
 	logger := zap.NewNop().Sugar()
 
+	registerTestWorkerFactories()
+	defer factory.ResetRegistry()
+
 	basicStore := memory.NewInMemoryStore()
 
 	defer func() {
 		_ = basicStore.Close(ctx)
 	}()
 
-
 	_ = basicStore.CreateCollection(ctx, "parent_identity", nil)
 	_ = basicStore.CreateCollection(ctx, "parent_desired", nil)
 	_ = basicStore.CreateCollection(ctx, "parent_observed", nil)
+	_ = basicStore.CreateCollection(ctx, "child-1_identity", nil)
+	_ = basicStore.CreateCollection(ctx, "child-1_desired", nil)
+	_ = basicStore.CreateCollection(ctx, "child-1_observed", nil)
 
 	triangularStore := storage.NewTriangularStore(basicStore)
 
@@ -1040,7 +599,7 @@ func TestApplyStateMapping_WithMapping(t *testing.T) {
 		Logger:     logger,
 	}
 
-	parent := NewSupervisor(supervisorCfg)
+	parent := NewSupervisor[*TestObservedState, *TestDesiredState](supervisorCfg)
 
 	identity := fsmv2.Identity{
 		ID:         "parent-1",
@@ -1048,24 +607,10 @@ func TestApplyStateMapping_WithMapping(t *testing.T) {
 		WorkerType: "parent",
 	}
 
-	worker := &mockWorker{
-		identity:     identity,
-		initialState: &mockState{name: "idle"},
-		observed: persistence.Document{
-			"id":     "parent-1",
-			"status": "idle",
-		},
-	}
-
-	err := parent.AddWorker(identity, worker)
-	if err != nil {
-		t.Fatalf("Failed to add parent worker: %v", err)
-	}
-
-	specs := []config.ChildSpec{
+	childSpecs := []config.ChildSpec{
 		{
 			Name:       "child-1",
-			WorkerType: "mqtt_client",
+			WorkerType: "child",
 			UserSpec:   config.UserSpec{Config: "url: tcp://localhost:1883"},
 			StateMapping: map[string]string{
 				"idle":   "stopped",
@@ -1074,20 +619,41 @@ func TestApplyStateMapping_WithMapping(t *testing.T) {
 		},
 	}
 
-	err = parent.reconcileChildren(specs)
-	if err != nil {
-		t.Fatalf("reconcileChildren failed: %v", err)
+	worker := &mockWorkerWithChildren{
+		identity:      identity,
+		initialState:  &mockState{name: "idle"},
+		observed:      persistence.Document{"id": "parent-1", "status": "idle"},
+		childrenSpecs: childSpecs,
 	}
 
-	parent.applyStateMapping()
+	err := parent.AddWorker(identity, worker)
+	if err != nil {
+		t.Fatalf("Failed to add parent worker: %v", err)
+	}
 
-	child := parent.children["child-1"]
-	if child == nil {
+	err = parent.tick(ctx)
+	if err != nil {
+		t.Fatalf("tick failed: %v", err)
+	}
+
+	children := parent.GetChildren()
+	if len(children) != 1 {
+		t.Fatalf("Expected 1 child, got %d", len(children))
+	}
+
+	child, exists := children["child-1"]
+	if !exists {
 		t.Fatal("Expected child-1 to exist")
 	}
 
-	if child.mappedParentState != "stopped" {
-		t.Errorf("Expected child mappedParentState 'stopped', got '%s'", child.mappedParentState)
+	typedChild, ok := child.(*Supervisor[*TestObservedState, *TestDesiredState])
+	if !ok {
+		t.Fatal("Child supervisor should be correct type")
+	}
+
+	mappedState := typedChild.GetMappedParentState()
+	if mappedState != "stopped" {
+		t.Errorf("Expected child mappedParentState 'stopped', got '%s'", mappedState)
 	}
 }
 
@@ -1095,16 +661,21 @@ func TestApplyStateMapping_NoMapping(t *testing.T) {
 	ctx := context.Background()
 	logger := zap.NewNop().Sugar()
 
+	registerTestWorkerFactories()
+	defer factory.ResetRegistry()
+
 	basicStore := memory.NewInMemoryStore()
 
 	defer func() {
 		_ = basicStore.Close(ctx)
 	}()
 
-
 	_ = basicStore.CreateCollection(ctx, "parent_identity", nil)
 	_ = basicStore.CreateCollection(ctx, "parent_desired", nil)
 	_ = basicStore.CreateCollection(ctx, "parent_observed", nil)
+	_ = basicStore.CreateCollection(ctx, "child-1_identity", nil)
+	_ = basicStore.CreateCollection(ctx, "child-1_desired", nil)
+	_ = basicStore.CreateCollection(ctx, "child-1_observed", nil)
 
 	triangularStore := storage.NewTriangularStore(basicStore)
 
@@ -1114,7 +685,7 @@ func TestApplyStateMapping_NoMapping(t *testing.T) {
 		Logger:     logger,
 	}
 
-	parent := NewSupervisor(supervisorCfg)
+	parent := NewSupervisor[*TestObservedState, *TestDesiredState](supervisorCfg)
 
 	identity := fsmv2.Identity{
 		ID:         "parent-1",
@@ -1122,13 +693,19 @@ func TestApplyStateMapping_NoMapping(t *testing.T) {
 		WorkerType: "parent",
 	}
 
-	worker := &mockWorker{
-		identity:     identity,
-		initialState: &mockState{name: "running"},
-		observed: persistence.Document{
-			"id":     "parent-1",
-			"status": "running",
+	childSpecs := []config.ChildSpec{
+		{
+			Name:       "child-1",
+			WorkerType: "child",
+			UserSpec:   config.UserSpec{Config: "url: tcp://localhost:1883"},
 		},
+	}
+
+	worker := &mockWorkerWithChildren{
+		identity:      identity,
+		initialState:  &mockState{name: "running"},
+		observed:      persistence.Document{"id": "parent-1", "status": "running"},
+		childrenSpecs: childSpecs,
 	}
 
 	err := parent.AddWorker(identity, worker)
@@ -1136,28 +713,25 @@ func TestApplyStateMapping_NoMapping(t *testing.T) {
 		t.Fatalf("Failed to add parent worker: %v", err)
 	}
 
-	specs := []config.ChildSpec{
-		{
-			Name:       "child-1",
-			WorkerType: "mqtt_client",
-			UserSpec:   config.UserSpec{Config: "url: tcp://localhost:1883"},
-		},
-	}
-
-	err = parent.reconcileChildren(specs)
+	err = parent.tick(ctx)
 	if err != nil {
-		t.Fatalf("reconcileChildren failed: %v", err)
+		t.Fatalf("tick failed: %v", err)
 	}
 
-	parent.applyStateMapping()
-
-	child := parent.children["child-1"]
-	if child == nil {
+	children := parent.GetChildren()
+	child, exists := children["child-1"]
+	if !exists {
 		t.Fatal("Expected child-1 to exist")
 	}
 
-	if child.mappedParentState != "running" {
-		t.Errorf("Expected child mappedParentState 'running' (parent state), got '%s'", child.mappedParentState)
+	typedChild, ok := child.(*Supervisor[*TestObservedState, *TestDesiredState])
+	if !ok {
+		t.Fatal("Child supervisor should be correct type")
+	}
+
+	mappedState := typedChild.GetMappedParentState()
+	if mappedState != "running" {
+		t.Errorf("Expected child mappedParentState 'running' (parent state), got '%s'", mappedState)
 	}
 }
 
@@ -1165,16 +739,21 @@ func TestApplyStateMapping_MissingStateInMapping(t *testing.T) {
 	ctx := context.Background()
 	logger := zap.NewNop().Sugar()
 
+	registerTestWorkerFactories()
+	defer factory.ResetRegistry()
+
 	basicStore := memory.NewInMemoryStore()
 
 	defer func() {
 		_ = basicStore.Close(ctx)
 	}()
 
-
 	_ = basicStore.CreateCollection(ctx, "parent_identity", nil)
 	_ = basicStore.CreateCollection(ctx, "parent_desired", nil)
 	_ = basicStore.CreateCollection(ctx, "parent_observed", nil)
+	_ = basicStore.CreateCollection(ctx, "child-1_identity", nil)
+	_ = basicStore.CreateCollection(ctx, "child-1_desired", nil)
+	_ = basicStore.CreateCollection(ctx, "child-1_observed", nil)
 
 	triangularStore := storage.NewTriangularStore(basicStore)
 
@@ -1184,7 +763,7 @@ func TestApplyStateMapping_MissingStateInMapping(t *testing.T) {
 		Logger:     logger,
 	}
 
-	parent := NewSupervisor(supervisorCfg)
+	parent := NewSupervisor[*TestObservedState, *TestDesiredState](supervisorCfg)
 
 	identity := fsmv2.Identity{
 		ID:         "parent-1",
@@ -1192,24 +771,10 @@ func TestApplyStateMapping_MissingStateInMapping(t *testing.T) {
 		WorkerType: "parent",
 	}
 
-	worker := &mockWorker{
-		identity:     identity,
-		initialState: &mockState{name: "unknown"},
-		observed: persistence.Document{
-			"id":     "parent-1",
-			"status": "unknown",
-		},
-	}
-
-	err := parent.AddWorker(identity, worker)
-	if err != nil {
-		t.Fatalf("Failed to add parent worker: %v", err)
-	}
-
-	specs := []config.ChildSpec{
+	childSpecs := []config.ChildSpec{
 		{
 			Name:       "child-1",
-			WorkerType: "mqtt_client",
+			WorkerType: "child",
 			UserSpec:   config.UserSpec{Config: "url: tcp://localhost:1883"},
 			StateMapping: map[string]string{
 				"idle":   "stopped",
@@ -1218,20 +783,37 @@ func TestApplyStateMapping_MissingStateInMapping(t *testing.T) {
 		},
 	}
 
-	err = parent.reconcileChildren(specs)
-	if err != nil {
-		t.Fatalf("reconcileChildren failed: %v", err)
+	worker := &mockWorkerWithChildren{
+		identity:      identity,
+		initialState:  &mockState{name: "unknown"},
+		observed:      persistence.Document{"id": "parent-1", "status": "unknown"},
+		childrenSpecs: childSpecs,
 	}
 
-	parent.applyStateMapping()
+	err := parent.AddWorker(identity, worker)
+	if err != nil {
+		t.Fatalf("Failed to add parent worker: %v", err)
+	}
 
-	child := parent.children["child-1"]
-	if child == nil {
+	err = parent.tick(ctx)
+	if err != nil {
+		t.Fatalf("tick failed: %v", err)
+	}
+
+	children := parent.GetChildren()
+	child, exists := children["child-1"]
+	if !exists {
 		t.Fatal("Expected child-1 to exist")
 	}
 
-	if child.mappedParentState != "unknown" {
-		t.Errorf("Expected child mappedParentState 'unknown' (parent state when not in mapping), got '%s'", child.mappedParentState)
+	typedChild, ok := child.(*Supervisor[*TestObservedState, *TestDesiredState])
+	if !ok {
+		t.Fatal("Child supervisor should be correct type")
+	}
+
+	mappedState := typedChild.GetMappedParentState()
+	if mappedState != "unknown" {
+		t.Errorf("Expected child mappedParentState 'unknown' (parent state when not in mapping), got '%s'", mappedState)
 	}
 }
 
@@ -1239,16 +821,27 @@ func TestApplyStateMapping_MultipleChildren(t *testing.T) {
 	ctx := context.Background()
 	logger := zap.NewNop().Sugar()
 
+	registerTestWorkerFactories()
+	defer factory.ResetRegistry()
+
 	basicStore := memory.NewInMemoryStore()
 
 	defer func() {
 		_ = basicStore.Close(ctx)
 	}()
 
-
 	_ = basicStore.CreateCollection(ctx, "parent_identity", nil)
 	_ = basicStore.CreateCollection(ctx, "parent_desired", nil)
 	_ = basicStore.CreateCollection(ctx, "parent_observed", nil)
+	_ = basicStore.CreateCollection(ctx, "child-1_identity", nil)
+	_ = basicStore.CreateCollection(ctx, "child-1_desired", nil)
+	_ = basicStore.CreateCollection(ctx, "child-1_observed", nil)
+	_ = basicStore.CreateCollection(ctx, "child-2_identity", nil)
+	_ = basicStore.CreateCollection(ctx, "child-2_desired", nil)
+	_ = basicStore.CreateCollection(ctx, "child-2_observed", nil)
+	_ = basicStore.CreateCollection(ctx, "child-3_identity", nil)
+	_ = basicStore.CreateCollection(ctx, "child-3_desired", nil)
+	_ = basicStore.CreateCollection(ctx, "child-3_observed", nil)
 
 	triangularStore := storage.NewTriangularStore(basicStore)
 
@@ -1258,7 +851,7 @@ func TestApplyStateMapping_MultipleChildren(t *testing.T) {
 		Logger:     logger,
 	}
 
-	parent := NewSupervisor(supervisorCfg)
+	parent := NewSupervisor[*TestObservedState, *TestDesiredState](supervisorCfg)
 
 	identity := fsmv2.Identity{
 		ID:         "parent-1",
@@ -1266,24 +859,10 @@ func TestApplyStateMapping_MultipleChildren(t *testing.T) {
 		WorkerType: "parent",
 	}
 
-	worker := &mockWorker{
-		identity:     identity,
-		initialState: &mockState{name: "active"},
-		observed: persistence.Document{
-			"id":     "parent-1",
-			"status": "active",
-		},
-	}
-
-	err := parent.AddWorker(identity, worker)
-	if err != nil {
-		t.Fatalf("Failed to add parent worker: %v", err)
-	}
-
-	specs := []config.ChildSpec{
+	childSpecs := []config.ChildSpec{
 		{
 			Name:       "child-1",
-			WorkerType: "mqtt_client",
+			WorkerType: "child",
 			UserSpec:   config.UserSpec{Config: "url: tcp://localhost:1883"},
 			StateMapping: map[string]string{
 				"active": "connected",
@@ -1292,7 +871,7 @@ func TestApplyStateMapping_MultipleChildren(t *testing.T) {
 		},
 		{
 			Name:       "child-2",
-			WorkerType: "modbus_client",
+			WorkerType: "child",
 			UserSpec:   config.UserSpec{Config: "address: 192.168.1.100:502"},
 			StateMapping: map[string]string{
 				"active": "polling",
@@ -1301,43 +880,67 @@ func TestApplyStateMapping_MultipleChildren(t *testing.T) {
 		},
 		{
 			Name:       "child-3",
-			WorkerType: "opcua_client",
+			WorkerType: "child",
 			UserSpec:   config.UserSpec{Config: "endpoint: opc.tcp://localhost:4840"},
 		},
 	}
 
-	err = parent.reconcileChildren(specs)
-	if err != nil {
-		t.Fatalf("reconcileChildren failed: %v", err)
+	worker := &mockWorkerWithChildren{
+		identity:      identity,
+		initialState:  &mockState{name: "active"},
+		observed:      persistence.Document{"id": "parent-1", "status": "active"},
+		childrenSpecs: childSpecs,
 	}
 
-	parent.applyStateMapping()
+	err := parent.AddWorker(identity, worker)
+	if err != nil {
+		t.Fatalf("Failed to add parent worker: %v", err)
+	}
 
-	child1 := parent.children["child-1"]
-	if child1 == nil {
+	err = parent.tick(ctx)
+	if err != nil {
+		t.Fatalf("tick failed: %v", err)
+	}
+
+	children := parent.GetChildren()
+	if len(children) != 3 {
+		t.Fatalf("Expected 3 children, got %d", len(children))
+	}
+
+	child1, exists := children["child-1"]
+	if !exists {
 		t.Fatal("Expected child-1 to exist")
 	}
-
-	if child1.mappedParentState != "connected" {
-		t.Errorf("Expected child-1 mappedParentState 'connected', got '%s'", child1.mappedParentState)
+	typedChild1, ok := child1.(*Supervisor[*TestObservedState, *TestDesiredState])
+	if !ok {
+		t.Fatal("Child-1 supervisor should be correct type")
+	}
+	if typedChild1.GetMappedParentState() != "connected" {
+		t.Errorf("Expected child-1 mappedParentState 'connected', got '%s'", typedChild1.GetMappedParentState())
 	}
 
-	child2 := parent.children["child-2"]
-	if child2 == nil {
+	child2, exists := children["child-2"]
+	if !exists {
 		t.Fatal("Expected child-2 to exist")
 	}
-
-	if child2.mappedParentState != "polling" {
-		t.Errorf("Expected child-2 mappedParentState 'polling', got '%s'", child2.mappedParentState)
+	typedChild2, ok := child2.(*Supervisor[*TestObservedState, *TestDesiredState])
+	if !ok {
+		t.Fatal("Child-2 supervisor should be correct type")
+	}
+	if typedChild2.GetMappedParentState() != "polling" {
+		t.Errorf("Expected child-2 mappedParentState 'polling', got '%s'", typedChild2.GetMappedParentState())
 	}
 
-	child3 := parent.children["child-3"]
-	if child3 == nil {
+	child3, exists := children["child-3"]
+	if !exists {
 		t.Fatal("Expected child-3 to exist")
 	}
-
-	if child3.mappedParentState != "active" {
-		t.Errorf("Expected child-3 mappedParentState 'active' (parent state, no mapping), got '%s'", child3.mappedParentState)
+	typedChild3, ok := child3.(*Supervisor[*TestObservedState, *TestDesiredState])
+	if !ok {
+		t.Fatal("Child-3 supervisor should be correct type")
+	}
+	if typedChild3.GetMappedParentState() != "active" {
+		t.Errorf("Expected child-3 mappedParentState 'active' (parent state, no mapping), got '%s'", typedChild3.GetMappedParentState())
 	}
 }
 
@@ -1345,16 +948,21 @@ func TestApplyStateMapping_EmptyStateMapping(t *testing.T) {
 	ctx := context.Background()
 	logger := zap.NewNop().Sugar()
 
+	registerTestWorkerFactories()
+	defer factory.ResetRegistry()
+
 	basicStore := memory.NewInMemoryStore()
 
 	defer func() {
 		_ = basicStore.Close(ctx)
 	}()
 
-
 	_ = basicStore.CreateCollection(ctx, "parent_identity", nil)
 	_ = basicStore.CreateCollection(ctx, "parent_desired", nil)
 	_ = basicStore.CreateCollection(ctx, "parent_observed", nil)
+	_ = basicStore.CreateCollection(ctx, "child-1_identity", nil)
+	_ = basicStore.CreateCollection(ctx, "child-1_desired", nil)
+	_ = basicStore.CreateCollection(ctx, "child-1_observed", nil)
 
 	triangularStore := storage.NewTriangularStore(basicStore)
 
@@ -1364,7 +972,7 @@ func TestApplyStateMapping_EmptyStateMapping(t *testing.T) {
 		Logger:     logger,
 	}
 
-	parent := NewSupervisor(supervisorCfg)
+	parent := NewSupervisor[*TestObservedState, *TestDesiredState](supervisorCfg)
 
 	identity := fsmv2.Identity{
 		ID:         "parent-1",
@@ -1372,21 +980,7 @@ func TestApplyStateMapping_EmptyStateMapping(t *testing.T) {
 		WorkerType: "parent",
 	}
 
-	worker := &mockWorker{
-		identity:     identity,
-		initialState: &mockState{name: "running"},
-		observed: persistence.Document{
-			"id":     "parent-1",
-			"status": "running",
-		},
-	}
-
-	err := parent.AddWorker(identity, worker)
-	if err != nil {
-		t.Fatalf("Failed to add parent worker: %v", err)
-	}
-
-	specs := []config.ChildSpec{
+	childSpecs := []config.ChildSpec{
 		{
 			Name:         "child-1",
 			WorkerType:   "mqtt_client",
@@ -1395,20 +989,37 @@ func TestApplyStateMapping_EmptyStateMapping(t *testing.T) {
 		},
 	}
 
-	err = parent.reconcileChildren(specs)
-	if err != nil {
-		t.Fatalf("reconcileChildren failed: %v", err)
+	worker := &mockWorkerWithChildren{
+		identity:      identity,
+		initialState:  &mockState{name: "running"},
+		observed:      persistence.Document{"id": "parent-1", "status": "running"},
+		childrenSpecs: childSpecs,
 	}
 
-	parent.applyStateMapping()
+	err := parent.AddWorker(identity, worker)
+	if err != nil {
+		t.Fatalf("Failed to add parent worker: %v", err)
+	}
 
-	child := parent.children["child-1"]
-	if child == nil {
+	err = parent.tick(ctx)
+	if err != nil {
+		t.Fatalf("tick failed: %v", err)
+	}
+
+	children := parent.GetChildren()
+	child, exists := children["child-1"]
+	if !exists {
 		t.Fatal("Expected child-1 to exist")
 	}
 
-	if child.mappedParentState != "running" {
-		t.Errorf("Expected child mappedParentState 'running' (parent state with empty map), got '%s'", child.mappedParentState)
+	typedChild, ok := child.(*Supervisor[*TestObservedState, *TestDesiredState])
+	if !ok {
+		t.Fatal("Child supervisor should be correct type")
+	}
+
+	mappedState := typedChild.GetMappedParentState()
+	if mappedState != "running" {
+		t.Errorf("Expected child mappedParentState 'running' (parent state with empty map), got '%s'", mappedState)
 	}
 }
 
@@ -1416,16 +1027,21 @@ func TestApplyStateMapping_NilStateMapping(t *testing.T) {
 	ctx := context.Background()
 	logger := zap.NewNop().Sugar()
 
+	registerTestWorkerFactories()
+	defer factory.ResetRegistry()
+
 	basicStore := memory.NewInMemoryStore()
 
 	defer func() {
 		_ = basicStore.Close(ctx)
 	}()
 
-
 	_ = basicStore.CreateCollection(ctx, "parent_identity", nil)
 	_ = basicStore.CreateCollection(ctx, "parent_desired", nil)
 	_ = basicStore.CreateCollection(ctx, "parent_observed", nil)
+	_ = basicStore.CreateCollection(ctx, "child-1_identity", nil)
+	_ = basicStore.CreateCollection(ctx, "child-1_desired", nil)
+	_ = basicStore.CreateCollection(ctx, "child-1_observed", nil)
 
 	triangularStore := storage.NewTriangularStore(basicStore)
 
@@ -1435,7 +1051,7 @@ func TestApplyStateMapping_NilStateMapping(t *testing.T) {
 		Logger:     logger,
 	}
 
-	parent := NewSupervisor(supervisorCfg)
+	parent := NewSupervisor[*TestObservedState, *TestDesiredState](supervisorCfg)
 
 	identity := fsmv2.Identity{
 		ID:         "parent-1",
@@ -1443,21 +1059,7 @@ func TestApplyStateMapping_NilStateMapping(t *testing.T) {
 		WorkerType: "parent",
 	}
 
-	worker := &mockWorker{
-		identity:     identity,
-		initialState: &mockState{name: "starting"},
-		observed: persistence.Document{
-			"id":     "parent-1",
-			"status": "starting",
-		},
-	}
-
-	err := parent.AddWorker(identity, worker)
-	if err != nil {
-		t.Fatalf("Failed to add parent worker: %v", err)
-	}
-
-	specs := []config.ChildSpec{
+	childSpecs := []config.ChildSpec{
 		{
 			Name:         "child-1",
 			WorkerType:   "mqtt_client",
@@ -1466,19 +1068,36 @@ func TestApplyStateMapping_NilStateMapping(t *testing.T) {
 		},
 	}
 
-	err = parent.reconcileChildren(specs)
-	if err != nil {
-		t.Fatalf("reconcileChildren failed: %v", err)
+	worker := &mockWorkerWithChildren{
+		identity:      identity,
+		initialState:  &mockState{name: "starting"},
+		observed:      persistence.Document{"id": "parent-1", "status": "starting"},
+		childrenSpecs: childSpecs,
 	}
 
-	parent.applyStateMapping()
+	err := parent.AddWorker(identity, worker)
+	if err != nil {
+		t.Fatalf("Failed to add parent worker: %v", err)
+	}
 
-	child := parent.children["child-1"]
-	if child == nil {
+	err = parent.tick(ctx)
+	if err != nil {
+		t.Fatalf("tick failed: %v", err)
+	}
+
+	children := parent.GetChildren()
+	child, exists := children["child-1"]
+	if !exists {
 		t.Fatal("Expected child-1 to exist")
 	}
 
-	if child.mappedParentState != "starting" {
-		t.Errorf("Expected child mappedParentState 'starting' (parent state with nil map), got '%s'", child.mappedParentState)
+	typedChild, ok := child.(*Supervisor[*TestObservedState, *TestDesiredState])
+	if !ok {
+		t.Fatal("Child supervisor should be correct type")
+	}
+
+	mappedState := typedChild.GetMappedParentState()
+	if mappedState != "starting" {
+		t.Errorf("Expected child mappedParentState 'starting' (parent state with nil map), got '%s'", mappedState)
 	}
 }
