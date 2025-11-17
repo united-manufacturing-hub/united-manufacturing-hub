@@ -22,6 +22,7 @@ import (
 	. "github.com/onsi/gomega"
 	"go.uber.org/zap"
 
+	fsmv2types "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	example_parent "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/example-parent"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/example-parent/state"
 )
@@ -61,11 +62,33 @@ var _ = Describe("ParentWorker", func() {
 	})
 
 	Describe("DeriveDesiredState", func() {
-		It("should return running state", func() {
-			desired, err := worker.DeriveDesiredState(nil)
+		It("should return running state with empty config", func() {
+			spec := fsmv2types.UserSpec{
+				Config:    "children_count: 0",
+				Variables: fsmv2types.VariableBundle{},
+			}
+
+			desired, err := worker.DeriveDesiredState(spec)
 
 			Expect(err).To(BeNil())
 			Expect(desired.State).To(Equal("running"))
+			Expect(desired.ChildrenSpecs).To(BeNil())
+		})
+
+		It("should create child specs when children_count is specified", func() {
+			spec := fsmv2types.UserSpec{
+				Config:    "children_count: 3",
+				Variables: fsmv2types.VariableBundle{},
+			}
+
+			desired, err := worker.DeriveDesiredState(spec)
+
+			Expect(err).To(BeNil())
+			Expect(desired.State).To(Equal("running"))
+			Expect(desired.ChildrenSpecs).To(HaveLen(3))
+			Expect(desired.ChildrenSpecs[0].Name).To(Equal("child-0"))
+			Expect(desired.ChildrenSpecs[1].Name).To(Equal("child-1"))
+			Expect(desired.ChildrenSpecs[2].Name).To(Equal("child-2"))
 		})
 	})
 

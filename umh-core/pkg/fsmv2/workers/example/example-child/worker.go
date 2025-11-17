@@ -16,9 +16,11 @@ package example_child
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"go.uber.org/zap"
+	"gopkg.in/yaml.v3"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
@@ -77,6 +79,18 @@ func (w *ChildWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedS
 
 // DeriveDesiredState determines what state the child worker should be in
 func (w *ChildWorker) DeriveDesiredState(spec interface{}) (fsmv2types.DesiredState, error) {
+	userSpec, ok := spec.(fsmv2types.UserSpec)
+	if !ok {
+		return fsmv2types.DesiredState{}, fmt.Errorf("invalid spec type: expected fsmv2types.UserSpec, got %T", spec)
+	}
+
+	var childSpec ChildUserSpec
+	if userSpec.Config != "" {
+		if err := yaml.Unmarshal([]byte(userSpec.Config), &childSpec); err != nil {
+			return fsmv2types.DesiredState{}, fmt.Errorf("failed to parse child spec: %w", err)
+		}
+	}
+
 	return fsmv2types.DesiredState{
 		State:         "connected",
 		ChildrenSpecs: nil,

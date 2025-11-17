@@ -608,7 +608,7 @@ type testAction struct {
 	name    string
 }
 
-func (t *testAction) Execute(ctx context.Context) error {
+func (t *testAction) Execute(ctx context.Context, deps any) error {
 	return t.execute(ctx)
 }
 
@@ -620,4 +620,4 @@ func (t *testAction) Name() string {
 	return t.name
 }
 
-var _ fsmv2.Action = (*testAction)(nil)
+var _ fsmv2.Action[any] = (*testAction)(nil)

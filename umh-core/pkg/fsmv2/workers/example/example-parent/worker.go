@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"go.uber.org/zap"
+	"gopkg.in/yaml.v3"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
@@ -69,21 +70,25 @@ func (w *ParentWorker) CollectObservedState(ctx context.Context) (fsmv2.Observed
 
 // DeriveDesiredState determines what state the parent worker should be in
 func (w *ParentWorker) DeriveDesiredState(spec interface{}) (fsmv2types.DesiredState, error) {
-	config, err := w.GetDependencies().GetConfigLoader().LoadConfig()
-	if err != nil {
-		return fsmv2types.DesiredState{}, err
+	userSpec, ok := spec.(fsmv2types.UserSpec)
+	if !ok {
+		return fsmv2types.DesiredState{}, fmt.Errorf("invalid spec type: expected fsmv2types.UserSpec, got %T", spec)
 	}
 
-	childrenCount, ok := config["children_count"].(int)
-	if !ok || childrenCount == 0 {
+	var parentSpec ParentUserSpec
+	if err := yaml.Unmarshal([]byte(userSpec.Config), &parentSpec); err != nil {
+		return fsmv2types.DesiredState{}, fmt.Errorf("failed to parse parent spec: %w", err)
+	}
+
+	if parentSpec.ChildrenCount == 0 {
 		return fsmv2types.DesiredState{
 			State:         "running",
 			ChildrenSpecs: nil,
 		}, nil
 	}
 
-	childrenSpecs := make([]fsmv2types.ChildSpec, childrenCount)
-	for i := 0; i < childrenCount; i++ {
+	childrenSpecs := make([]fsmv2types.ChildSpec, parentSpec.ChildrenCount)
+	for i := 0; i < parentSpec.ChildrenCount; i++ {
 		childrenSpecs[i] = fsmv2types.ChildSpec{
 			Name:       fmt.Sprintf("child-%d", i),
 			WorkerType: "child",

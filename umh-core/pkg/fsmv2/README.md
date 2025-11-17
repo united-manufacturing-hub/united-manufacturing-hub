@@ -279,6 +279,59 @@ snapshot, err := store.LoadSnapshot(ctx, "container", "worker-123")
 
 **Code reference**: See `pkg/cse/storage/triangular.go` for implementation details.
 
+## Type Safety with Generics
+
+FSMv2 uses Go generics for compile-time type safety across all components:
+
+- **Supervisor**: `Supervisor[TObserved, TDesired]` ensures all workers have consistent state types
+- **Collector**: `Collector[TObserved]` guarantees type-safe observation collection
+- **Factory**: `RegisterFactory[TObserved, TDesired]()` provides typed worker registration
+
+### Type Derivation
+
+Worker types are automatically derived from observed state type names:
+- `ParentObservedState` → `"parent"`
+- `ContainerObservedState` → `"container"`
+
+No manual WorkerType constants needed!
+
+### Example Usage
+
+```go
+// Before (reflection-based, error-prone)
+supervisor := NewSupervisor(Config{
+    WorkerType: "parent",  // String constant, no compile-time checking
+    // ...
+})
+collector := collection.NewCollector(collection.CollectorConfig{
+    WorkerType: "parent",  // Must match supervisor string exactly
+})
+factory.RegisterFactoryByType("parent", func(id Identity) Worker {
+    return NewParentWorker(id)
+})
+
+// After (generics-based, type-safe)
+supervisor := NewSupervisor[ParentObservedState, *ParentDesiredState](Config{
+    // WorkerType derived automatically from ParentObservedState
+    // ...
+})
+collector := collection.NewCollector[ParentObservedState](collection.CollectorConfig{
+    // Type parameter ensures matching with supervisor
+})
+factory.RegisterFactory[ParentObservedState, *ParentDesiredState](func(id Identity) Worker {
+    return NewParentWorker(id)
+})
+```
+
+**Benefits:**
+1. **Compile-time type safety** - No runtime type errors
+2. **IDE autocomplete** - Full type information in editors
+3. **Reduced boilerplate** - No manual WorkerType constants
+4. **Better refactoring** - Type changes caught at compile time
+5. **Zero reflection** - Improved performance and debuggability
+
+**Note:** DesiredState types often use pointer receivers for methods like `IsShutdownRequested()`, so use `*ParentDesiredState` as the type parameter.
+
 ### Responsibilities of the worker
 
 The worker implements the `Worker` and `State` interfaces to provide business logic. See `doc.go` for complete interface definitions and API documentation.

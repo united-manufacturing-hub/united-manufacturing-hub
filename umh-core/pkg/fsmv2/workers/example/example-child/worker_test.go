@@ -19,6 +19,8 @@ import (
 	"testing"
 
 	"go.uber.org/zap"
+
+	fsmv2types "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 )
 
 func TestNewChildWorker(t *testing.T) {
@@ -58,7 +60,12 @@ func TestChildWorker_DeriveDesiredState(t *testing.T) {
 
 	worker := NewChildWorker("test-id", "test-child", mockPool, logger)
 
-	desired, err := worker.DeriveDesiredState(nil)
+	spec := fsmv2types.UserSpec{
+		Config:    "",
+		Variables: fsmv2types.VariableBundle{},
+	}
+
+	desired, err := worker.DeriveDesiredState(spec)
 	if err != nil {
 		t.Fatalf("DeriveDesiredState() error = %v", err)
 	}

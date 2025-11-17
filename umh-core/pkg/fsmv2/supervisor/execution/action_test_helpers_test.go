@@ -23,7 +23,7 @@ import (
 // that allows tests in this package to use it without the package prefix.
 //
 // Deprecated: Use execution.VerifyActionIdempotency directly.
-func VerifyActionIdempotency(action fsmv2.Action, iterations int, verifyState func()) {
+func VerifyActionIdempotency(action fsmv2.Action[any], iterations int, verifyState func()) {
 	execution.VerifyActionIdempotency(action, iterations, verifyState)
 }
 
@@ -34,7 +34,7 @@ func VerifyActionIdempotency(action fsmv2.Action, iterations int, verifyState fu
 func VerifyActionIdempotencyWithSetup(
 	setup func(),
 	teardown func(),
-	action fsmv2.Action,
+	action fsmv2.Action[any],
 	iterations int,
 	verifyState func(),
 ) {

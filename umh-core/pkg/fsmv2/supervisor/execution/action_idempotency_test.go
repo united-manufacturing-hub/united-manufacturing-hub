@@ -52,7 +52,7 @@ type exampleIdempotentAction struct {
 	finalValue     int
 }
 
-func (a *exampleIdempotentAction) Execute(ctx context.Context) error {
+func (a *exampleIdempotentAction) Execute(ctx context.Context, deps any) error {
 	a.executionCount++
 
 	a.finalValue = a.value
