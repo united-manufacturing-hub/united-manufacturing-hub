@@ -58,7 +58,7 @@ func NewBlockingActionWithDuration(duration time.Duration) *BlockingAction {
 	return &BlockingAction{blockFor: duration}
 }
 
-func (a *BlockingAction) Execute(ctx context.Context) error {
+func (a *BlockingAction) Execute(ctx context.Context, deps any) error {
 	a.mu.Lock()
 	a.executed = true
 	a.mu.Unlock()
@@ -99,7 +99,7 @@ type PanicAction struct {
 	mu       sync.Mutex
 }
 
-func (a *PanicAction) Execute(ctx context.Context) error {
+func (a *PanicAction) Execute(ctx context.Context, deps any) error {
 	a.mu.Lock()
 	a.executed = true
 	a.mu.Unlock()
@@ -130,7 +130,7 @@ func NewSlowAction(duration time.Duration) *SlowAction {
 	return &SlowAction{duration: duration}
 }
 
-func (a *SlowAction) Execute(ctx context.Context) error {
+func (a *SlowAction) Execute(ctx context.Context, deps any) error {
 	a.mu.Lock()
 	a.executed = true
 	a.mu.Unlock()
@@ -159,9 +159,9 @@ func (a *SlowAction) WasExecuted() bool {
 
 type MockState struct {
 	name       string
-	nextState  fsmv2.State
+	nextState  fsmv2.State[any, any]
 	signal     fsmv2.Signal
-	action     fsmv2.Action
+	action     fsmv2.Action[any]
 	callCount  int
 	mu         sync.Mutex
 }
@@ -173,7 +173,7 @@ func NewMockState(name string) *MockState {
 	}
 }
 
-func (m *MockState) Next(snapshot fsmv2.Snapshot) (fsmv2.State, fsmv2.Signal, fsmv2.Action) {
+func (m *MockState) Next(snapshot any) (fsmv2.State[any, any], fsmv2.Signal, fsmv2.Action[any]) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.callCount++
@@ -192,7 +192,7 @@ func (m *MockState) Reason() string {
 	return fmt.Sprintf("MockState: %s", m.name)
 }
 
-func (m *MockState) SetTransition(nextState fsmv2.State, signal fsmv2.Signal, action fsmv2.Action) {
+func (m *MockState) SetTransition(nextState fsmv2.State[any, any], signal fsmv2.Signal, action fsmv2.Action[any]) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.nextState = nextState
@@ -208,7 +208,7 @@ func (m *MockState) GetCallCount() int {
 
 type MockWorker struct {
 	identity           fsmv2.Identity
-	initialState       fsmv2.State
+	initialState       fsmv2.State[any, any]
 	observedState      fsmv2.ObservedState
 	collectErr         error
 	collectBlockFor    time.Duration
@@ -231,7 +231,7 @@ func (m *MockWorker) GetIdentity() fsmv2.Identity {
 	return m.identity
 }
 
-func (m *MockWorker) GetInitialState() fsmv2.State {
+func (m *MockWorker) GetInitialState() fsmv2.State[any, any] {
 	return m.initialState
 }
 
@@ -328,7 +328,7 @@ func ExpectNoGoroutineLeaks(before int) {
 	}, "3s", "100ms").Should(BeNumerically("<=", before+5))
 }
 
-func GetWorkerStateName(sup *supervisor.Supervisor, workerID string) string {
+func GetWorkerStateName[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState](sup *supervisor.Supervisor[TObserved, TDesired], workerID string) string {
 	stateName, _, err := sup.GetWorkerState(workerID)
 	if err != nil {
 		return ""
@@ -336,11 +336,13 @@ func GetWorkerStateName(sup *supervisor.Supervisor, workerID string) string {
 	return stateName
 }
 
-func GetChildSupervisor(parentSup *supervisor.Supervisor, childName string) *supervisor.Supervisor {
+func GetChildSupervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState](parentSup *supervisor.Supervisor[TObserved, TDesired], childName string) *supervisor.Supervisor[TObserved, TDesired] {
 	children := parentSup.GetChildren()
 	for name, child := range children {
 		if name == childName {
-			return child
+			if typedChild, ok := child.(*supervisor.Supervisor[TObserved, TDesired]); ok {
+				return typedChild
+			}
 		}
 	}
 	return nil
@@ -373,7 +375,7 @@ func (c *StateHistoryCollector) GetHistory() []string {
 	return result
 }
 
-func RunSupervisorWithTimeout(ctx context.Context, sup *supervisor.Supervisor, interval time.Duration) {
+func RunSupervisorWithTimeout[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState](ctx context.Context, sup *supervisor.Supervisor[TObserved, TDesired], interval time.Duration) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
@@ -382,7 +384,8 @@ func RunSupervisorWithTimeout(ctx context.Context, sup *supervisor.Supervisor, i
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			sup.TestTick(ctx)
+			err := sup.TestTick(ctx)
+			Expect(err).ToNot(HaveOccurred())
 		}
 	}
 }

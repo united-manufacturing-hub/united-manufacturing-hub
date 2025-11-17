@@ -34,8 +34,9 @@ func newMockDeps() *mockDeps {
 
 func TestConnectAction_Execute_Success(t *testing.T) {
 	action := NewConnectAction()
+	var depsAny any = newMockDeps()
 
-	err := action.Execute(context.Background())
+	err := action.Execute(context.Background(), depsAny)
 	if err != nil {
 		t.Errorf("Execute() error = %v, want nil", err)
 	}
@@ -45,19 +46,20 @@ func TestConnectAction_Execute_WithFailures(t *testing.T) {
 	// Note: Retry logic will be handled by ActionExecutor in Phase 2C
 	// For now, this test just verifies the action can be created
 	action := NewConnectActionWithFailures(2)
+	var depsAny any = newMockDeps()
 
 	// All executions succeed (skeleton implementation)
-	err1 := action.Execute(context.Background())
+	err1 := action.Execute(context.Background(), depsAny)
 	if err1 != nil {
 		t.Errorf("Execute() error = %v, want nil (skeleton implementation)", err1)
 	}
 
-	err2 := action.Execute(context.Background())
+	err2 := action.Execute(context.Background(), depsAny)
 	if err2 != nil {
 		t.Errorf("Execute() error = %v, want nil (skeleton implementation)", err2)
 	}
 
-	err3 := action.Execute(context.Background())
+	err3 := action.Execute(context.Background(), depsAny)
 	if err3 != nil {
 		t.Errorf("Execute() error = %v, want nil (skeleton implementation)", err3)
 	}

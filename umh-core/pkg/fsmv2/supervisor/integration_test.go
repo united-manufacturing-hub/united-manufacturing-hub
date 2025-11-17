@@ -43,10 +43,10 @@ var _ = Describe("DataFreshness Full Cycle Integration", func() {
 
 		// Initialize the desired state in the store's internal map
 		// This is required because RequestShutdown calls LoadDesired first
-		if store.desired["container"] == nil {
-			store.desired["container"] = make(map[string]persistence.Document)
+		if store.desired["test"] == nil {
+			store.desired["test"] = make(map[string]persistence.Document)
 		}
-		store.desired["container"]["test-worker"] = persistence.Document{
+		store.desired["test"]["test-worker"] = persistence.Document{
 			"id":                "test-worker",
 			"shutdownRequested": false,
 		}

@@ -73,7 +73,7 @@ var _ = Describe("Edge Cases", func() {
 			It("should continue observation loop", func() {
 				var callCountMutex sync.Mutex
 				callCount := 0
-				collector := collection.NewCollector(collection.CollectorConfig{
+				collector := collection.NewCollector[mockObservedState](collection.CollectorConfig[mockObservedState]{
 					Worker: &mockWorker{
 						collectFunc: func(ctx context.Context) (fsmv2.ObservedState, error) {
 							callCountMutex.Lock()
@@ -118,7 +118,7 @@ var _ = Describe("Edge Cases", func() {
 				var saveCallCountMutex sync.Mutex
 				saveCallCount := 0
 
-				collector := collection.NewCollector(collection.CollectorConfig{
+				collector := collection.NewCollector[mockObservedState](collection.CollectorConfig[mockObservedState]{
 					Worker: &mockWorker{
 						collectFunc: func(ctx context.Context) (fsmv2.ObservedState, error) {
 							saveCallCountMutex.Lock()
@@ -155,7 +155,7 @@ var _ = Describe("Edge Cases", func() {
 
 		Context("when context is canceled during collection", func() {
 			It("should stop observation loop", func() {
-				collector := collection.NewCollector(collection.CollectorConfig{
+				collector := collection.NewCollector[mockObservedState](collection.CollectorConfig[mockObservedState]{
 					Worker:              &mockWorker{},
 					Identity:            mockIdentity(),
 					Store:               createTestTriangularStore(),
@@ -182,7 +182,7 @@ var _ = Describe("Edge Cases", func() {
 
 		Context("when Restart is called with pending restart", func() {
 			It("should not block", func() {
-				collector := collection.NewCollector(collection.CollectorConfig{
+				collector := collection.NewCollector[mockObservedState](collection.CollectorConfig[mockObservedState]{
 					Worker:              &mockWorker{},
 					Identity:            mockIdentity(),
 					Store:               createTestTriangularStore(),
@@ -242,7 +242,7 @@ var _ = Describe("Edge Cases", func() {
 				err = mockStore.SaveDesired(context.Background(), "container", identity.ID, desiredDoc)
 				Expect(err).ToNot(HaveOccurred())
 
-				s := supervisor.NewSupervisor(supervisor.Config{
+				s := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 					WorkerType: "container",
 					Store:      mockStore,
 					Logger:     zap.NewNop().Sugar(),
@@ -284,7 +284,7 @@ var _ = Describe("Edge Cases", func() {
 
 				mockStore.SaveDesiredErr = errors.New("save failed")
 
-				s := supervisor.NewSupervisor(supervisor.Config{
+				s := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 					WorkerType: "container",
 					Store:      mockStore,
 					Logger:     zap.NewNop().Sugar(),
@@ -310,7 +310,7 @@ var _ = Describe("Edge Cases", func() {
 			It("should execute without retry", func() {
 				callCount := 0
 				action := &mockAction{
-					executeFunc: func(ctx context.Context) error {
+					executeFunc: func(ctx context.Context, deps any) error {
 						callCount++
 
 						return nil
@@ -334,7 +334,7 @@ var _ = Describe("Edge Cases", func() {
 			It("should retry and succeed", func() {
 				callCount := 0
 				action := &mockAction{
-					executeFunc: func(ctx context.Context) error {
+					executeFunc: func(ctx context.Context, deps any) error {
 						callCount++
 						if callCount == 1 {
 							return errors.New("temporary error")
@@ -361,7 +361,7 @@ var _ = Describe("Edge Cases", func() {
 			It("should retry max times then fail", func() {
 				callCount := 0
 				action := &mockAction{
-					executeFunc: func(ctx context.Context) error {
+					executeFunc: func(ctx context.Context, deps any) error {
 						callCount++
 
 						return errors.New("persistent error")
@@ -406,7 +406,7 @@ var _ = Describe("Edge Cases", func() {
 				_, err = mockStore.SaveObserved(context.Background(), "container", identity.ID, obs)
 				Expect(err).ToNot(HaveOccurred())
 
-				s := supervisor.NewSupervisor(supervisor.Config{
+				s := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 					WorkerType: "container",
 					Store:      mockStore,
 					Logger:     zap.NewNop().Sugar(),
@@ -458,7 +458,7 @@ var _ = Describe("Edge Cases", func() {
 				_, err = mockStore.SaveObserved(context.Background(), "container", identity.ID, obs)
 				Expect(err).ToNot(HaveOccurred())
 
-				s := supervisor.NewSupervisor(supervisor.Config{
+				s := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 					WorkerType: "container",
 					Store:      mockStore,
 					Logger:     zap.NewNop().Sugar(),
@@ -504,7 +504,7 @@ var _ = Describe("Edge Cases", func() {
 				_, err = mockStore.SaveObserved(context.Background(), "container", identity.ID, obs)
 				Expect(err).ToNot(HaveOccurred())
 
-				s := supervisor.NewSupervisor(supervisor.Config{
+				s := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 					WorkerType:      "container",
 					Store:           mockStore,
 					Logger:          zap.NewNop().Sugar(),
@@ -539,7 +539,7 @@ var _ = Describe("Edge Cases", func() {
 				err := mockStore.SaveIdentity(context.Background(), "container", identity.ID, identityDoc)
 				Expect(err).ToNot(HaveOccurred())
 
-				s := supervisor.NewSupervisor(supervisor.Config{
+				s := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 					WorkerType:      "container",
 					Store:           mockStore,
 					Logger:          zap.NewNop().Sugar(),
@@ -615,7 +615,7 @@ var _ = Describe("Edge Cases", func() {
 				err := mockStore.SaveIdentity(context.Background(), "container", identity.ID, identityDoc)
 				Expect(err).ToNot(HaveOccurred())
 
-				s := supervisor.NewSupervisor(supervisor.Config{
+				s := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 					WorkerType: "container",
 					Store:      mockStore,
 					Logger:     zap.NewNop().Sugar(),
@@ -668,7 +668,7 @@ var _ = Describe("Edge Cases", func() {
 
 				mockStore.SaveDesiredErr = errors.New("save failed")
 
-				s := supervisor.NewSupervisor(supervisor.Config{
+				s := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 					WorkerType: "container",
 					Store:      mockStore,
 					Logger:     zap.NewNop().Sugar(),
@@ -713,13 +713,13 @@ var _ = Describe("Edge Cases", func() {
 })
 
 type mockAction struct {
-	executeFunc func(ctx context.Context) error
+	executeFunc func(ctx context.Context, deps any) error
 	name        string
 }
 
-func (m *mockAction) Execute(ctx context.Context) error {
+func (m *mockAction) Execute(ctx context.Context, deps any) error {
 	if m.executeFunc != nil {
-		return m.executeFunc(ctx)
+		return m.executeFunc(ctx, deps)
 	}
 
 	return nil
@@ -764,7 +764,7 @@ var _ = Describe("Type Safety (Invariant I16)", func() {
 				err = mockStore.SaveDesired(context.Background(), "container", identity.ID, desiredDoc)
 				Expect(err).ToNot(HaveOccurred())
 
-				s := supervisor.NewSupervisor(supervisor.Config{
+				s := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 					WorkerType: "container",
 					Store:      mockStore,
 					Logger:     zap.NewNop().Sugar(),
@@ -823,7 +823,7 @@ var _ = Describe("Type Safety (Invariant I16)", func() {
 				err = mockStore.SaveDesired(context.Background(), "container", identity.ID, desiredDoc)
 				Expect(err).ToNot(HaveOccurred())
 
-				s := supervisor.NewSupervisor(supervisor.Config{
+				s := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 					WorkerType: "container",
 					Store:      mockStore,
 					Logger:     zap.NewNop().Sugar(),

@@ -483,7 +483,7 @@ func TestSupervisorLoadsSnapshotFromTriangularStore(t *testing.T) {
 
 type mockWorker struct {
 	identity     fsmv2.Identity
-	initialState fsmv2.State
+	initialState fsmv2.State[any, any]
 	observed     persistence.Document
 }
 
@@ -498,7 +498,7 @@ func (m *mockWorker) DeriveDesiredState(_ interface{}) (config.DesiredState, err
 	return config.DesiredState{State: "running"}, nil
 }
 
-func (m *mockWorker) GetInitialState() fsmv2.State {
+func (m *mockWorker) GetInitialState() fsmv2.State[any, any] {
 	return m.initialState
 }
 
@@ -542,13 +542,13 @@ func (m *mockState) Reason() string {
 	return m.reason
 }
 
-func (m *mockState) Next(_ fsmv2.Snapshot) (fsmv2.State, fsmv2.Signal, fsmv2.Action) {
+func (m *mockState) Next(_ any) (fsmv2.State[any, any], fsmv2.Signal, fsmv2.Action[any]) {
 	return m, fsmv2.SignalNone, nil
 }
 
 type mockWorkerWithChildren struct {
 	identity      fsmv2.Identity
-	initialState  fsmv2.State
+	initialState  fsmv2.State[any, any]
 	observed      persistence.Document
 	childrenSpecs []config.ChildSpec
 }
@@ -567,7 +567,7 @@ func (m *mockWorkerWithChildren) DeriveDesiredState(_ interface{}) (config.Desir
 	}, nil
 }
 
-func (m *mockWorkerWithChildren) GetInitialState() fsmv2.State {
+func (m *mockWorkerWithChildren) GetInitialState() fsmv2.State[any, any] {
 	return m.initialState
 }
 

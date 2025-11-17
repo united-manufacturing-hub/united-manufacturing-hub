@@ -32,57 +32,37 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence/memory"
 	parent "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/example-parent"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/example-parent/snapshot"
 	child "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/example-child"
+	childSnapshot "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/example-child/snapshot"
 )
 
 func setupTestStore(ctx context.Context, workerTypes ...string) *storage.TriangularStore {
 	basicStore := memory.NewInMemoryStore()
 
-	registry := storage.NewRegistry()
-
-	// If no worker types provided, default to parent.WorkerType
+	// If no worker types provided, default to parent worker type
 	if len(workerTypes) == 0 {
-		workerTypes = []string{parent.WorkerType}
+		workerTypes = []string{storage.DeriveWorkerType[snapshot.ParentObservedState]()}
 	}
 
+	// Create collections following naming convention: {workerType}_{role}
 	for _, workerType := range workerTypes {
-		registry.Register(&storage.CollectionMetadata{
-			Name:          workerType + "_identity",
-			WorkerType:    workerType,
-			Role:          storage.RoleIdentity,
-			CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt},
-			IndexedFields: []string{storage.FieldSyncID},
-		})
-		registry.Register(&storage.CollectionMetadata{
-			Name:          workerType + "_desired",
-			WorkerType:    workerType,
-			Role:          storage.RoleDesired,
-			CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
-			IndexedFields: []string{storage.FieldSyncID},
-		})
-		registry.Register(&storage.CollectionMetadata{
-			Name:          workerType + "_observed",
-			WorkerType:    workerType,
-			Role:          storage.RoleObserved,
-			CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
-			IndexedFields: []string{storage.FieldSyncID},
-		})
-
 		_ = basicStore.CreateCollection(ctx, workerType+"_identity", nil)
 		_ = basicStore.CreateCollection(ctx, workerType+"_desired", nil)
 		_ = basicStore.CreateCollection(ctx, workerType+"_observed", nil)
 	}
 
-	return storage.NewTriangularStore(basicStore, registry)
+	return storage.NewTriangularStore(basicStore)
 }
 
 var _ = Describe("Phase 0: Happy Path Integration", func() {
 	var (
 		ctx               context.Context
 		cancel            context.CancelFunc
-		parentSupervisor  *supervisor.Supervisor
+		parentSupervisor  *supervisor.Supervisor[snapshot.ParentObservedState, *snapshot.ParentDesiredState]
 		logger            *zap.SugaredLogger
 		initialGoroutines int
+		err               error
 	)
 
 	BeforeEach(func() {
@@ -109,34 +89,36 @@ var _ = Describe("Phase 0: Happy Path Integration", func() {
 		It("should register parent worker type and create worker instances", func() {
 			By("Step 1: Registering parent worker type in factory")
 
-			factory.RegisterWorkerType(parent.WorkerType, func(identity fsmv2.Identity) fsmv2.Worker {
+			err = factory.RegisterFactory[snapshot.ParentObservedState, *snapshot.ParentDesiredState](func(identity fsmv2.Identity) fsmv2.Worker {
 				mockConfigLoader := NewParentConfig().WithChildren(1)
 				return parent.NewParentWorker(identity.ID, identity.Name, mockConfigLoader, logger)
 			})
+			Expect(err).ToNot(HaveOccurred())
 
-			factory.RegisterWorkerType(child.WorkerType, func(identity fsmv2.Identity) fsmv2.Worker {
+			err = factory.RegisterFactory[childSnapshot.ChildObservedState, *childSnapshot.ChildDesiredState](func(identity fsmv2.Identity) fsmv2.Worker {
 				mockConnectionPool := &MockConnectionPool{}
 				return child.NewChildWorker(identity.ID, identity.Name, mockConnectionPool, logger)
 			})
+			Expect(err).ToNot(HaveOccurred())
 
 			By("Step 2: Creating parent supervisor")
 
 			parentIdentity := fsmv2.Identity{
 				ID:         "parent-001",
 				Name:       "Example Parent",
-				WorkerType: parent.WorkerType,
+				WorkerType: storage.DeriveWorkerType[snapshot.ParentObservedState](),
 			}
 
-			parentWorker, err := factory.NewWorker(parent.WorkerType, parentIdentity)
-			Expect(err).NotTo(HaveOccurred())
+			mockConfigLoader := NewParentConfig().WithChildren(1)
+			parentWorker := parent.NewParentWorker(parentIdentity.ID, parentIdentity.Name, mockConfigLoader, logger)
 			Expect(parentWorker).NotTo(BeNil())
 
 			By("Step 3: Verifying worker has expected initial state")
 
-			mockStore := setupTestStore(ctx, parent.WorkerType, child.WorkerType)
+			mockStore := setupTestStore(ctx, storage.DeriveWorkerType[snapshot.ParentObservedState](), storage.DeriveWorkerType[childSnapshot.ChildObservedState]())
 
-			parentSupervisor = supervisor.NewSupervisor(supervisor.Config{
-				WorkerType:   parent.WorkerType,
+			parentSupervisor = supervisor.NewSupervisor[snapshot.ParentObservedState, *snapshot.ParentDesiredState](supervisor.Config{
+				WorkerType:   storage.DeriveWorkerType[snapshot.ParentObservedState](),
 				Store:        mockStore,
 				Logger:       logger,
 				TickInterval: 100 * time.Millisecond,
@@ -169,9 +151,13 @@ var _ = Describe("Phase 0: Happy Path Integration", func() {
 				if len(children) == 0 {
 					return ""
 				}
-				var childSupervisor *supervisor.Supervisor
+				var childSupervisor *supervisor.Supervisor[childSnapshot.ChildObservedState, *childSnapshot.ChildDesiredState]
 				for _, child := range children {
-					childSupervisor = child
+					var ok bool
+					childSupervisor, ok = child.(*supervisor.Supervisor[childSnapshot.ChildObservedState, *childSnapshot.ChildDesiredState])
+					if !ok {
+						return ""
+					}
 					break
 				}
 				workerIDs := childSupervisor.ListWorkers()
@@ -192,9 +178,13 @@ var _ = Describe("Phase 0: Happy Path Integration", func() {
 			children := parentSupervisor.GetChildren()
 			Expect(children).To(HaveLen(1))
 
-			var childSupervisor *supervisor.Supervisor
+			var childSupervisor *supervisor.Supervisor[childSnapshot.ChildObservedState, *childSnapshot.ChildDesiredState]
 			for _, child := range children {
-				childSupervisor = child
+				var ok bool
+				childSupervisor, ok = child.(*supervisor.Supervisor[childSnapshot.ChildObservedState, *childSnapshot.ChildDesiredState])
+				if !ok {
+					continue
+				}
 				break
 			}
 			childWorkerIDs := childSupervisor.ListWorkers()
@@ -206,32 +196,34 @@ var _ = Describe("Phase 0: Happy Path Integration", func() {
 		It("should register child worker type and create worker instances", func() {
 			By("Step 1: Registering child worker type in factory")
 
-			factory.RegisterWorkerType(parent.WorkerType, func(identity fsmv2.Identity) fsmv2.Worker {
+			err = factory.RegisterFactory[snapshot.ParentObservedState, *snapshot.ParentDesiredState](func(identity fsmv2.Identity) fsmv2.Worker {
 				mockConfigLoader := NewParentConfig().WithChildren(1)
 				return parent.NewParentWorker(identity.ID, identity.Name, mockConfigLoader, logger)
 			})
+			Expect(err).ToNot(HaveOccurred())
 
-			factory.RegisterWorkerType(child.WorkerType, func(identity fsmv2.Identity) fsmv2.Worker {
+			err = factory.RegisterFactory[childSnapshot.ChildObservedState, *childSnapshot.ChildDesiredState](func(identity fsmv2.Identity) fsmv2.Worker {
 				mockConnectionPool := &MockConnectionPool{}
 				return child.NewChildWorker(identity.ID, identity.Name, mockConnectionPool, logger)
 			})
+			Expect(err).ToNot(HaveOccurred())
 
 			By("Step 2: Creating child worker via factory")
 
 			parentIdentity := fsmv2.Identity{
 				ID:         "parent-002",
 				Name:       "Example Parent",
-				WorkerType: parent.WorkerType,
+				WorkerType: storage.DeriveWorkerType[snapshot.ParentObservedState](),
 			}
 
-			parentWorker, err := factory.NewWorker(parent.WorkerType, parentIdentity)
+			parentWorker, err := factory.NewWorkerByType(storage.DeriveWorkerType[snapshot.ParentObservedState](), parentIdentity)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(parentWorker).NotTo(BeNil())
 
-			mockStore := setupTestStore(ctx, parent.WorkerType, child.WorkerType)
+			mockStore := setupTestStore(ctx, storage.DeriveWorkerType[snapshot.ParentObservedState](), storage.DeriveWorkerType[childSnapshot.ChildObservedState]())
 
-			parentSupervisor = supervisor.NewSupervisor(supervisor.Config{
-				WorkerType:   parent.WorkerType,
+			parentSupervisor = supervisor.NewSupervisor[snapshot.ParentObservedState, *snapshot.ParentDesiredState](supervisor.Config{
+				WorkerType:   storage.DeriveWorkerType[snapshot.ParentObservedState](),
 				Store:        mockStore,
 				Logger:       logger,
 				TickInterval: 100 * time.Millisecond,
@@ -276,29 +268,31 @@ var _ = Describe("Phase 0: Happy Path Integration", func() {
 
 			By("Step 2: Creating and starting parent worker")
 
-			factory.RegisterWorkerType(parent.WorkerType, func(identity fsmv2.Identity) fsmv2.Worker {
+			err = factory.RegisterFactory[snapshot.ParentObservedState, *snapshot.ParentDesiredState](func(identity fsmv2.Identity) fsmv2.Worker {
 				mockConfigLoader := &MockConfigLoader{}
 				return parent.NewParentWorker(identity.ID, identity.Name, mockConfigLoader, logger)
 			})
+			Expect(err).ToNot(HaveOccurred())
 
-			factory.RegisterWorkerType(child.WorkerType, func(identity fsmv2.Identity) fsmv2.Worker {
+			err = factory.RegisterFactory[childSnapshot.ChildObservedState, *childSnapshot.ChildDesiredState](func(identity fsmv2.Identity) fsmv2.Worker {
 				mockConnectionPool := &MockConnectionPool{}
 				return child.NewChildWorker(identity.ID, identity.Name, mockConnectionPool, logger)
 			})
+			Expect(err).ToNot(HaveOccurred())
 
 			parentIdentity := fsmv2.Identity{
 				ID:         "parent-003",
 				Name:       "Example Parent",
-				WorkerType: parent.WorkerType,
+				WorkerType: storage.DeriveWorkerType[snapshot.ParentObservedState](),
 			}
 
-			parentWorker, err := factory.NewWorker(parent.WorkerType, parentIdentity)
+			parentWorker, err := factory.NewWorkerByType(storage.DeriveWorkerType[snapshot.ParentObservedState](), parentIdentity)
 			Expect(err).NotTo(HaveOccurred())
 
-			mockStore := setupTestStore(ctx, parent.WorkerType)
+			mockStore := setupTestStore(ctx, storage.DeriveWorkerType[snapshot.ParentObservedState]())
 
-			parentSupervisor = supervisor.NewSupervisor(supervisor.Config{
-				WorkerType:   parent.WorkerType,
+			parentSupervisor = supervisor.NewSupervisor[snapshot.ParentObservedState, *snapshot.ParentDesiredState](supervisor.Config{
+				WorkerType:   storage.DeriveWorkerType[snapshot.ParentObservedState](),
 				Store:        mockStore,
 				Logger:       logger,
 				TickInterval: 100 * time.Millisecond,
@@ -346,31 +340,32 @@ var _ = Describe("Phase 0: Happy Path Integration", func() {
 				WorkerType: "delta-test-worker",
 			}
 
-			factory.RegisterWorkerType("delta-test-worker", func(identity fsmv2.Identity) fsmv2.Worker {
+			err = factory.RegisterFactory[DeltaTestObservedState, *config.DesiredState](func(identity fsmv2.Identity) fsmv2.Worker {
 				return testWorker
 			})
+			Expect(err).ToNot(HaveOccurred())
 
 			By("Step 2: Creating supervisor with fast observation interval")
 
 			mockStore := setupTestStore(ctx, "delta-test-worker")
 
-			parentSupervisor = supervisor.NewSupervisor(supervisor.Config{
+			deltaTestSupervisor := supervisor.NewSupervisor[DeltaTestObservedState, *config.DesiredState](supervisor.Config{
 				WorkerType:   "delta-test-worker",
 				Store:        mockStore,
 				Logger:       logger,
 				TickInterval: 100 * time.Millisecond,
 			})
 
-			err := parentSupervisor.AddWorker(testIdentity, testWorker)
+			err = deltaTestSupervisor.AddWorker(testIdentity, testWorker)
 			Expect(err).NotTo(HaveOccurred())
 
-			done := parentSupervisor.Start(ctx)
+			done := deltaTestSupervisor.Start(ctx)
 			Expect(done).NotTo(BeNil())
 
 			By("Step 3: Waiting for worker to reach Running state")
 
 			Eventually(func() string {
-				state, _, _ := parentSupervisor.GetWorkerState(testIdentity.ID)
+				state, _, _ := deltaTestSupervisor.GetWorkerState(testIdentity.ID)
 				return state
 			}, "5s", "100ms").Should(Equal("Running"))
 
@@ -426,38 +421,23 @@ type DeltaTestObservedState struct {
 	Timestamp time.Time `bson:"timestamp" json:"timestamp"`
 }
 
-func (d *DeltaTestObservedState) GetTimestamp() time.Time {
+func (d DeltaTestObservedState) GetTimestamp() time.Time {
 	return d.Timestamp
 }
 
-func (d *DeltaTestObservedState) GetObservedDesiredState() fsmv2.DesiredState {
+func (d DeltaTestObservedState) GetObservedDesiredState() fsmv2.DesiredState {
 	return &config.DesiredState{}
 }
 
 func NewDeltaTestWorker(id, name string) *DeltaTestWorker {
 	ctx := context.Background()
 	basicStore := memory.NewInMemoryStore()
-	registry := storage.NewRegistry()
 
-	registry.Register(&storage.CollectionMetadata{
-		Name:          "delta-test-worker_identity",
-		WorkerType:    "delta-test-worker",
-		Role:          storage.RoleIdentity,
-		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt},
-		IndexedFields: []string{storage.FieldSyncID},
-	})
-	registry.Register(&storage.CollectionMetadata{
-		Name:          "delta-test-worker_observed",
-		WorkerType:    "delta-test-worker",
-		Role:          storage.RoleObserved,
-		CSEFields:     []string{storage.FieldSyncID, storage.FieldVersion, storage.FieldCreatedAt, storage.FieldUpdatedAt},
-		IndexedFields: []string{storage.FieldSyncID},
-	})
-
+	// Create collections following naming convention: {workerType}_{role}
 	_ = basicStore.CreateCollection(ctx, "delta-test-worker_identity", nil)
 	_ = basicStore.CreateCollection(ctx, "delta-test-worker_observed", nil)
 
-	store := storage.NewTriangularStore(basicStore, registry)
+	store := storage.NewTriangularStore(basicStore)
 
 	return &DeltaTestWorker{
 		id:            id,
@@ -500,11 +480,11 @@ func (w *DeltaTestWorker) DeriveDesiredState(spec interface{}) (config.DesiredSt
 	return config.DesiredState{}, nil
 }
 
-func (w *DeltaTestWorker) GetInitialState() fsmv2.State {
+func (w *DeltaTestWorker) GetInitialState() fsmv2.State[any, any] {
 	return &mockState{name: "Running"}
 }
 
-func (w *DeltaTestWorker) Next(ctx context.Context, current, parent string, observed interface{}) (string, fsmv2.Action, error) {
+func (w *DeltaTestWorker) Next(ctx context.Context, current, parent string, observed interface{}) (string, fsmv2.Action[any], error) {
 	return "Running", nil, nil
 }
 
@@ -562,6 +542,6 @@ func (m *mockState) Reason() string {
 	return ""
 }
 
-func (m *mockState) Next(snapshot fsmv2.Snapshot) (fsmv2.State, fsmv2.Signal, fsmv2.Action) {
+func (m *mockState) Next(snapshot any) (fsmv2.State[any, any], fsmv2.Signal, fsmv2.Action[any]) {
 	return m, fsmv2.SignalNone, nil
 }

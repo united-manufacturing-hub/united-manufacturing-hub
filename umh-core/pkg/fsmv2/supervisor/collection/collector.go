@@ -16,6 +16,7 @@ package collection
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
@@ -34,19 +35,20 @@ const (
 )
 
 // CollectorConfig provides configuration for observation data collection.
-type CollectorConfig struct {
+// The type parameter TObserved represents the observed state type for this collector.
+type CollectorConfig[TObserved any] struct {
 	Worker              fsmv2.Worker
 	Identity            fsmv2.Identity
 	Store               storage.TriangularStoreInterface
 	Logger              *zap.SugaredLogger
 	ObservationInterval time.Duration
 	ObservationTimeout  time.Duration
-	WorkerType          string
 }
 
 // Collector manages the observation loop lifecycle and data collection.
-type Collector struct {
-	config        CollectorConfig
+// The type parameter TObserved represents the observed state type for this collector.
+type Collector[TObserved any] struct {
+	config        CollectorConfig[TObserved]
 	state         collectorState
 	running       bool
 	mu            sync.RWMutex
@@ -58,8 +60,9 @@ type Collector struct {
 }
 
 // NewCollector creates a new collector with the given configuration.
-func NewCollector(config CollectorConfig) *Collector {
-	return &Collector{
+// The type parameter TObserved is inferred from the config parameter.
+func NewCollector[TObserved any](config CollectorConfig[TObserved]) *Collector[TObserved] {
+	return &Collector[TObserved]{
 		config:      config,
 		state:       collectorStateCreated,
 		restartChan: make(chan struct{}, 1),
@@ -68,7 +71,7 @@ func NewCollector(config CollectorConfig) *Collector {
 
 // Start launches the observation loop in a goroutine.
 // The loop runs until the context is cancelled.
-func (c *Collector) Start(ctx context.Context) error {
+func (c *Collector[TObserved]) Start(ctx context.Context) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -90,7 +93,7 @@ func (c *Collector) Start(ctx context.Context) error {
 }
 
 // IsRunning returns true if the observation loop is currently active.
-func (c *Collector) IsRunning() bool {
+func (c *Collector[TObserved]) IsRunning() bool {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
@@ -98,7 +101,7 @@ func (c *Collector) IsRunning() bool {
 }
 
 // Restart signals the observation loop to collect immediately.
-func (c *Collector) Restart() {
+func (c *Collector[TObserved]) Restart() {
 	c.mu.RLock()
 	running := c.state == collectorStateRunning
 	c.mu.RUnlock()
@@ -119,7 +122,7 @@ func (c *Collector) Restart() {
 	}
 }
 
-func (c *Collector) Stop(ctx context.Context) {
+func (c *Collector[TObserved]) Stop(ctx context.Context) {
 	c.mu.Lock()
 
 	if c.state != collectorStateRunning {
@@ -144,7 +147,7 @@ func (c *Collector) Stop(ctx context.Context) {
 	}
 }
 
-func (c *Collector) observationLoop() {
+func (c *Collector[TObserved]) observationLoop() {
 	defer func() {
 		c.mu.Lock()
 		c.state = collectorStateStopped
@@ -193,7 +196,7 @@ func (c *Collector) observationLoop() {
 	}
 }
 
-func (c *Collector) collectAndSaveObservedState(ctx context.Context) error {
+func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) error {
 	collectionStartTime := time.Now()
 	c.config.Logger.Debugf("[DataFreshness] Worker %s: Starting observation collection at %s",
 		c.config.Identity.ID, collectionStartTime.Format(time.RFC3339Nano))
@@ -218,7 +221,23 @@ func (c *Collector) collectAndSaveObservedState(ctx context.Context) error {
 
 	saveStartTime := time.Now()
 
-	changed, err := c.config.Store.SaveObserved(ctx, c.config.WorkerType, c.config.Identity.ID, observed)
+	// Type assert observed state to TObserved for compile-time type safety
+	observedTyped, ok := observed.(TObserved)
+	if !ok {
+		c.config.Logger.Errorf("[DataFreshness] Worker %s: observed state type mismatch: expected %T, got %T",
+			c.config.Identity.ID, *new(TObserved), observed)
+		return fmt.Errorf("observed state type mismatch: expected %T, got %T", *new(TObserved), observed)
+	}
+
+	// Use typed storage API - no workerType parameter needed, derived from TObserved
+	ts, ok := c.config.Store.(*storage.TriangularStore)
+	if !ok {
+		c.config.Logger.Errorf("[DataFreshness] Worker %s: store is not *TriangularStore, got %T",
+			c.config.Identity.ID, c.config.Store)
+		return fmt.Errorf("store is not *TriangularStore, got %T", c.config.Store)
+	}
+
+	changed, err := storage.SaveObservedTyped[TObserved](ts, ctx, c.config.Identity.ID, observedTyped)
 	if err != nil {
 		c.config.Logger.Debugf("[DataFreshness] Worker %s: Failed to save observation: %v", c.config.Identity.ID, err)
 
@@ -227,8 +246,11 @@ func (c *Collector) collectAndSaveObservedState(ctx context.Context) error {
 
 	saveDuration := time.Since(saveStartTime)
 
+	// Derive worker type from TObserved for metrics
+	workerType := storage.DeriveWorkerType[TObserved]()
+
 	// Record metrics
-	metrics.RecordObservationSave(c.config.WorkerType, changed, saveDuration)
+	metrics.RecordObservationSave(workerType, changed, saveDuration)
 
 	// Log result
 	if changed {

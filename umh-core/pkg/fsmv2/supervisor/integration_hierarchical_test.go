@@ -99,7 +99,7 @@ func (m *mockHierarchicalWorker) DeriveDesiredState(spec interface{}) (config.De
 	}, nil
 }
 
-func (m *mockHierarchicalWorker) GetInitialState() fsmv2.State {
+func (m *mockHierarchicalWorker) GetInitialState() fsmv2.State[any, any] {
 	return &mockStateWithName{name: m.stateName}
 }
 
@@ -122,7 +122,7 @@ type mockStateWithName struct {
 	name string
 }
 
-func (m *mockStateWithName) Next(snapshot fsmv2.Snapshot) (fsmv2.State, fsmv2.Signal, fsmv2.Action) {
+func (m *mockStateWithName) Next(snapshot any) (fsmv2.State[any, any], fsmv2.Signal, fsmv2.Action[any]) {
 	return m, fsmv2.SignalNone, nil
 }
 
@@ -140,7 +140,7 @@ var _ = Describe("Integration: Hierarchical Composition (Task 0.7)", func() {
 		store     *mockTriangularStore
 		logger    *zap.SugaredLogger
 		tickLog   *hierarchicalTickLogger
-		parentSup *supervisor.Supervisor
+		parentSup *supervisor.Supervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState]
 	)
 
 	BeforeEach(func() {
@@ -173,7 +173,7 @@ var _ = Describe("Integration: Hierarchical Composition (Task 0.7)", func() {
 				},
 			}
 
-			parentSup = supervisor.NewSupervisor(supervisor.Config{
+			parentSup = supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 				WorkerType: "parent",
 				Logger:     logger,
 				Store:      store,
@@ -218,6 +218,10 @@ var _ = Describe("Integration: Hierarchical Composition (Task 0.7)", func() {
 			childSup := children["child"]
 			Expect(childSup).NotTo(BeNil(), "child supervisor should not be nil")
 
+			// Type assert to access generic methods
+			typedChildSup, ok := childSup.(*supervisor.Supervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState])
+			Expect(ok).To(BeTrue(), "child supervisor should be correct type")
+
 			// Now add a worker to child so it can declare grandchildren
 			childIdentity := fsmv2.Identity{
 				ID:         "child-worker",
@@ -243,10 +247,10 @@ var _ = Describe("Integration: Hierarchical Composition (Task 0.7)", func() {
 			}
 
 			// Add worker to child supervisor
-			err = childSup.AddWorker(childIdentity, childWorker)
+			err = typedChildSup.AddWorker(childIdentity, childWorker)
 			Expect(err).NotTo(HaveOccurred())
 
-			childSup.TestUpdateUserSpec(config.UserSpec{Config: "child-config"})
+			typedChildSup.TestUpdateUserSpec(config.UserSpec{Config: "child-config"})
 
 			// Setup store for child worker
 			store.desired["child"] = map[string]persistence.Document{
@@ -312,7 +316,7 @@ var _ = Describe("Integration: Hierarchical Composition (Task 0.7)", func() {
 				},
 			}
 
-			parentSup = supervisor.NewSupervisor(supervisor.Config{
+			parentSup = supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 				WorkerType: "parent",
 				Logger:     logger,
 				Store:      store,
@@ -397,7 +401,7 @@ var _ = Describe("Integration: Hierarchical Composition (Task 0.7)", func() {
 				},
 			}
 
-			parentSup = supervisor.NewSupervisor(supervisor.Config{
+			parentSup = supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 				WorkerType: "parent",
 				Logger:     logger,
 				Store:      store,
@@ -479,7 +483,7 @@ var _ = Describe("Integration: Hierarchical Composition (Task 0.7)", func() {
 				},
 			}
 
-			parentSup = supervisor.NewSupervisor(supervisor.Config{
+			parentSup = supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 				WorkerType: "parent",
 				Logger:     logger,
 				Store:      store,
@@ -526,7 +530,11 @@ var _ = Describe("Integration: Hierarchical Composition (Task 0.7)", func() {
 			childSup := children["child"]
 			Expect(childSup).NotTo(BeNil(), "child supervisor should not be nil")
 
-			mappedState := childSup.GetMappedParentState()
+			// Type assert to access generic methods
+			typedChildSup, ok := childSup.(*supervisor.Supervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState])
+			Expect(ok).To(BeTrue(), "child supervisor should be correct type")
+
+			mappedState := typedChildSup.GetMappedParentState()
 			Expect(mappedState).To(Equal("active"),
 				"child should receive mapped state 'active' (from parent state 'running' via StateMapping), not parent state 'running'")
 
@@ -554,7 +562,7 @@ var _ = Describe("Integration: Hierarchical Composition (Task 0.7)", func() {
 				},
 			}
 
-			parentSup = supervisor.NewSupervisor(supervisor.Config{
+			parentSup = supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 				WorkerType: "parent",
 				Logger:     logger,
 				Store:      store,
@@ -628,12 +636,18 @@ var _ = Describe("Integration: Hierarchical Composition (Task 0.7)", func() {
 			failingChild := children["failing-child"]
 			workingChild := children["working-child"]
 
+			// Type assert to access generic methods
+			typedFailingChild, ok := failingChild.(*supervisor.Supervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState])
+			Expect(ok).To(BeTrue(), "failing child supervisor should be correct type")
+			typedWorkingChild, ok := workingChild.(*supervisor.Supervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState])
+			Expect(ok).To(BeTrue(), "working child supervisor should be correct type")
+
 			failingIdentity := fsmv2.Identity{
 				ID:         "failing-worker",
 				Name:       "Failing Worker",
 				WorkerType: "failing",
 			}
-			err = failingChild.AddWorker(failingIdentity, failingWorker)
+			err = typedFailingChild.AddWorker(failingIdentity, failingWorker)
 			Expect(err).NotTo(HaveOccurred())
 
 			workingIdentity := fsmv2.Identity{
@@ -641,7 +655,7 @@ var _ = Describe("Integration: Hierarchical Composition (Task 0.7)", func() {
 				Name:       "Working Worker",
 				WorkerType: "working",
 			}
-			err = workingChild.AddWorker(workingIdentity, workingWorker)
+			err = typedWorkingChild.AddWorker(workingIdentity, workingWorker)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Setup store for child workers
@@ -706,7 +720,7 @@ var _ = Describe("Integration: Hierarchical Composition (Task 0.7)", func() {
 				},
 			}
 
-			parentSup = supervisor.NewSupervisor(supervisor.Config{
+			parentSup = supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 				WorkerType: "parent",
 				Logger:     logger,
 				Store:      store,
@@ -803,7 +817,7 @@ var _ = Describe("Integration: Hierarchical Composition (Task 0.7)", func() {
 				},
 			}
 
-			parentSup = supervisor.NewSupervisor(supervisor.Config{
+			parentSup = supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 				WorkerType: "parent",
 				Logger:     logger,
 				Store:      store,
@@ -875,7 +889,7 @@ var _ = Describe("Integration: Hierarchical Composition (Task 0.7)", func() {
 				},
 			}
 
-			parentSup = supervisor.NewSupervisor(supervisor.Config{
+			parentSup = supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 				WorkerType: "parent",
 				Logger:     logger,
 				Store:      store,

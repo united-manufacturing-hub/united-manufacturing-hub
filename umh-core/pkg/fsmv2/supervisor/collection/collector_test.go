@@ -29,7 +29,7 @@ var _ = Describe("Collector", func() {
 Context("when starting collector", func() {
 		It("should start observation loop", func() {
 			worker := &supervisor.TestWorker{Observed: supervisor.CreateTestObservedStateWithID("test-worker")}
-			collector := collection.NewCollector(collection.CollectorConfig{
+			collector := collection.NewCollector[supervisor.TestObservedState](collection.CollectorConfig[supervisor.TestObservedState]{
 				Worker:              worker,
 				Identity:            supervisor.TestIdentity(),
 				Store:               supervisor.CreateTestTriangularStore(),
@@ -60,7 +60,7 @@ Context("when starting collector", func() {
 Context("when restarting collector", func() {
 		It("should stop old loop and start new one", func() {
 			worker := &supervisor.TestWorker{Observed: supervisor.CreateTestObservedStateWithID("test-worker")}
-			collector := collection.NewCollector(collection.CollectorConfig{
+			collector := collection.NewCollector[supervisor.TestObservedState](collection.CollectorConfig[supervisor.TestObservedState]{
 				Worker:              worker,
 				Identity:            supervisor.TestIdentity(),
 				Store:               supervisor.CreateTestTriangularStore(),
@@ -106,7 +106,7 @@ Context("when restarting collector", func() {
 
 	Context("Invariant I8: Collector lifecycle validation", func() {
 		It("should panic when Start() is called twice", func() {
-			collector := collection.NewCollector(collection.CollectorConfig{
+			collector := collection.NewCollector[supervisor.TestObservedState](collection.CollectorConfig[supervisor.TestObservedState]{
 				Worker:              &supervisor.TestWorker{},
 				Identity:            supervisor.TestIdentity(),
 				Store:               supervisor.CreateTestTriangularStore(),
@@ -132,7 +132,7 @@ Context("when restarting collector", func() {
 		})
 
 		It("should handle Restart() gracefully when called before Start()", func() {
-			collector := collection.NewCollector(collection.CollectorConfig{
+			collector := collection.NewCollector[supervisor.TestObservedState](collection.CollectorConfig[supervisor.TestObservedState]{
 				Worker:              &supervisor.TestWorker{},
 				Identity:            supervisor.TestIdentity(),
 				Store:               supervisor.CreateTestTriangularStore(),
@@ -145,7 +145,7 @@ Context("when restarting collector", func() {
 		})
 
 		It("should return false from IsRunning() before Start()", func() {
-			collector := collection.NewCollector(collection.CollectorConfig{
+			collector := collection.NewCollector[supervisor.TestObservedState](collection.CollectorConfig[supervisor.TestObservedState]{
 				Worker:              &supervisor.TestWorker{},
 				Identity:            supervisor.TestIdentity(),
 				Store:               supervisor.CreateTestTriangularStore(),
@@ -158,7 +158,7 @@ Context("when restarting collector", func() {
 		})
 
 		It("should track lifecycle correctly through normal flow", func() {
-			collector := collection.NewCollector(collection.CollectorConfig{
+			collector := collection.NewCollector[supervisor.TestObservedState](collection.CollectorConfig[supervisor.TestObservedState]{
 				Worker:              &supervisor.TestWorker{},
 				Identity:            supervisor.TestIdentity(),
 				Store:               supervisor.CreateTestTriangularStore(),
@@ -186,7 +186,7 @@ Context("when restarting collector", func() {
 })
 
 type testCollectorWithHangingLoop struct {
-	collection.Collector
+	collection.Collector[supervisor.TestObservedState]
 	parentCtx     context.Context
 	ctx           context.Context
 	cancel        context.CancelFunc

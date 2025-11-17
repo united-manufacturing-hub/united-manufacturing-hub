@@ -40,12 +40,12 @@ var _ = Describe("Supervisor Configuration", func() {
 	Context("when creating supervisor with default config", func() {
 		It("should use default collector health thresholds", func() {
 			cfg := Config{
-				WorkerType: "container",
-				Store:      setupTestStore("container"),
+				WorkerType: "test",
+				Store:      setupTestStore("test"),
 				Logger:     zap.NewNop().Sugar(),
 			}
 
-			s := NewSupervisor(cfg)
+			s := NewSupervisor[*TestObservedState, *TestDesiredState](cfg)
 
 			Expect(s.getStaleThreshold()).To(Equal(10 * time.Second))
 			Expect(s.getCollectorTimeout()).To(Equal(20 * time.Second))
@@ -56,8 +56,8 @@ var _ = Describe("Supervisor Configuration", func() {
 	Context("when creating supervisor with custom config", func() {
 		It("should use custom collector health thresholds", func() {
 			cfg := Config{
-				WorkerType: "container",
-				Store:      setupTestStore("container"),
+				WorkerType: "test",
+				Store:      setupTestStore("test"),
 				Logger:     zap.NewNop().Sugar(),
 				CollectorHealth: CollectorHealthConfig{
 					StaleThreshold:     5 * time.Second,
@@ -66,7 +66,7 @@ var _ = Describe("Supervisor Configuration", func() {
 				},
 			}
 
-			s := NewSupervisor(cfg)
+			s := NewSupervisor[*TestObservedState, *TestDesiredState](cfg)
 
 			Expect(s.getStaleThreshold()).To(Equal(5 * time.Second))
 			Expect(s.getCollectorTimeout()).To(Equal(15 * time.Second))
@@ -77,9 +77,9 @@ var _ = Describe("Supervisor Configuration", func() {
 	Context("when creating supervisor with invalid config", func() {
 		It("should panic when staleThreshold is negative", func() {
 			Expect(func() {
-				NewSupervisor(Config{
-					WorkerType: "container",
-					Store:      setupTestStore("container"),
+				NewSupervisor[*TestObservedState, *TestDesiredState](Config{
+					WorkerType: "test",
+					Store:      setupTestStore("test"),
 					Logger:     zap.NewNop().Sugar(),
 					CollectorHealth: CollectorHealthConfig{
 						StaleThreshold:     -5 * time.Second,
@@ -92,9 +92,9 @@ var _ = Describe("Supervisor Configuration", func() {
 
 		It("should panic when timeout equals staleThreshold", func() {
 			Expect(func() {
-				NewSupervisor(Config{
-					WorkerType: "container",
-					Store:      setupTestStore("container"),
+				NewSupervisor[*TestObservedState, *TestDesiredState](Config{
+					WorkerType: "test",
+					Store:      setupTestStore("test"),
 					Logger:     zap.NewNop().Sugar(),
 					CollectorHealth: CollectorHealthConfig{
 						StaleThreshold:     10 * time.Second,
@@ -107,9 +107,9 @@ var _ = Describe("Supervisor Configuration", func() {
 
 		It("should panic when timeout is less than staleThreshold", func() {
 			Expect(func() {
-				NewSupervisor(Config{
-					WorkerType: "container",
-					Store:      setupTestStore("container"),
+				NewSupervisor[*TestObservedState, *TestDesiredState](Config{
+					WorkerType: "test",
+					Store:      setupTestStore("test"),
 					Logger:     zap.NewNop().Sugar(),
 					CollectorHealth: CollectorHealthConfig{
 						StaleThreshold:     20 * time.Second,
@@ -122,9 +122,9 @@ var _ = Describe("Supervisor Configuration", func() {
 
 		It("should panic when maxRestartAttempts is negative", func() {
 			Expect(func() {
-				NewSupervisor(Config{
-					WorkerType: "container",
-					Store:      setupTestStore("container"),
+				NewSupervisor[*TestObservedState, *TestDesiredState](Config{
+					WorkerType: "test",
+					Store:      setupTestStore("test"),
 					Logger:     zap.NewNop().Sugar(),
 					CollectorHealth: CollectorHealthConfig{
 						StaleThreshold:     10 * time.Second,
@@ -139,9 +139,9 @@ var _ = Describe("Supervisor Configuration", func() {
 	Context("timeout ordering validation (I7)", func() {
 		It("should panic when ObservationTimeout >= StaleThreshold", func() {
 			Expect(func() {
-				NewSupervisor(Config{
-					WorkerType: "container",
-					Store:      setupTestStore("container"),
+				NewSupervisor[*TestObservedState, *TestDesiredState](Config{
+					WorkerType: "test",
+					Store:      setupTestStore("test"),
 					Logger:     zap.NewNop().Sugar(),
 					CollectorHealth: CollectorHealthConfig{
 						ObservationTimeout: 10 * time.Second,
@@ -155,9 +155,9 @@ var _ = Describe("Supervisor Configuration", func() {
 
 		It("should panic when StaleThreshold >= CollectorTimeout", func() {
 			Expect(func() {
-				NewSupervisor(Config{
-					WorkerType: "container",
-					Store:      setupTestStore("container"),
+				NewSupervisor[*TestObservedState, *TestDesiredState](Config{
+					WorkerType: "test",
+					Store:      setupTestStore("test"),
 					Logger:     zap.NewNop().Sugar(),
 					CollectorHealth: CollectorHealthConfig{
 						ObservationTimeout: 1 * time.Second,
@@ -171,9 +171,9 @@ var _ = Describe("Supervisor Configuration", func() {
 
 		It("should accept valid timeout ordering", func() {
 			Expect(func() {
-				NewSupervisor(Config{
-					WorkerType: "container",
-					Store:      setupTestStore("container"),
+				NewSupervisor[*TestObservedState, *TestDesiredState](Config{
+					WorkerType: "test",
+					Store:      setupTestStore("test"),
 					Logger:     zap.NewNop().Sugar(),
 					CollectorHealth: CollectorHealthConfig{
 						ObservationTimeout: 1 * time.Second,

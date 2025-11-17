@@ -38,7 +38,7 @@ func (m *mockWorker) DeriveDesiredState(spec interface{}) (config.DesiredState, 
 	return config.DesiredState{}, nil
 }
 
-func (m *mockWorker) GetInitialState() fsmv2.State {
+func (m *mockWorker) GetInitialState() fsmv2.State[any, any] {
 	return nil
 }
 
@@ -77,7 +77,7 @@ func TestRegisterWorkerType(t *testing.T) {
 				return &mockWorker{identity: id}
 			}
 
-			err := factory.RegisterWorkerType(tt.workerType, factoryFunc)
+			err := factory.RegisterFactoryByType(tt.workerType, factoryFunc)
 
 			if tt.wantErr {
 				if err == nil {
@@ -99,7 +99,7 @@ func TestNewWorker(t *testing.T) {
 	factory.ResetRegistry()
 
 	// Register a worker type for testing
-	err := factory.RegisterWorkerType("test_worker", func(id fsmv2.Identity) fsmv2.Worker {
+	err := factory.RegisterFactoryByType("test_worker", func(id fsmv2.Identity) fsmv2.Worker {
 		return &mockWorker{identity: id}
 	})
 	if err != nil {
@@ -141,7 +141,7 @@ func TestNewWorker(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			worker, err := factory.NewWorker(tt.workerType, tt.identity)
+			worker, err := factory.NewWorkerByType(tt.workerType, tt.identity)
 
 			if tt.wantErr {
 				if err == nil {
@@ -190,7 +190,7 @@ func TestConcurrentRegistration(t *testing.T) {
 			for j := range numWorkerTypes {
 				workerType := "worker_" + string(rune('A'+j))
 
-				err := factory.RegisterWorkerType(workerType, func(id fsmv2.Identity) fsmv2.Worker {
+				err := factory.RegisterFactoryByType(workerType, func(id fsmv2.Identity) fsmv2.Worker {
 					return &mockWorker{identity: id}
 				})
 				if err != nil {
@@ -224,7 +224,7 @@ func TestConcurrentCreation(t *testing.T) {
 	for i := range 3 {
 		workerType := "concurrent_worker_" + string(rune('A'+i))
 
-		err := factory.RegisterWorkerType(workerType, func(id fsmv2.Identity) fsmv2.Worker {
+		err := factory.RegisterFactoryByType(workerType, func(id fsmv2.Identity) fsmv2.Worker {
 			return &mockWorker{identity: id}
 		})
 		if err != nil {
@@ -253,7 +253,7 @@ func TestConcurrentCreation(t *testing.T) {
 				WorkerType: workerType,
 			}
 
-			worker, err := factory.NewWorker(workerType, identity)
+			worker, err := factory.NewWorkerByType(workerType, identity)
 			if err != nil {
 				errors <- err
 			} else {
@@ -323,7 +323,7 @@ func TestListRegisteredTypes_SingleRegistration(t *testing.T) {
 	factory.ResetRegistry()
 
 	// Register one worker type
-	err := factory.RegisterWorkerType("mqtt_client", func(id fsmv2.Identity) fsmv2.Worker {
+	err := factory.RegisterFactoryByType("mqtt_client", func(id fsmv2.Identity) fsmv2.Worker {
 		return &mockWorker{identity: id}
 	})
 	if err != nil {
@@ -349,7 +349,7 @@ func TestListRegisteredTypes_MultipleRegistrations(t *testing.T) {
 	workerTypes := []string{"mqtt_client", "modbus_server", "opcua_client"}
 
 	for _, wt := range workerTypes {
-		err := factory.RegisterWorkerType(wt, func(id fsmv2.Identity) fsmv2.Worker {
+		err := factory.RegisterFactoryByType(wt, func(id fsmv2.Identity) fsmv2.Worker {
 			return &mockWorker{identity: id}
 		})
 		if err != nil {
@@ -381,7 +381,7 @@ func TestListRegisteredTypes_ReturnsSliceCopy(t *testing.T) {
 	factory.ResetRegistry()
 
 	// Register a worker type
-	err := factory.RegisterWorkerType("test_worker", func(id fsmv2.Identity) fsmv2.Worker {
+	err := factory.RegisterFactoryByType("test_worker", func(id fsmv2.Identity) fsmv2.Worker {
 		return &mockWorker{identity: id}
 	})
 	if err != nil {
@@ -417,7 +417,7 @@ func TestListRegisteredTypes_ConcurrentCalls(t *testing.T) {
 	for i := range 5 {
 		workerType := "worker_" + string(rune('A'+i))
 
-		err := factory.RegisterWorkerType(workerType, func(id fsmv2.Identity) fsmv2.Worker {
+		err := factory.RegisterFactoryByType(workerType, func(id fsmv2.Identity) fsmv2.Worker {
 			return &mockWorker{identity: id}
 		})
 		if err != nil {

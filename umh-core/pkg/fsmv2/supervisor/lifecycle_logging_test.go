@@ -35,7 +35,7 @@ var _ = Describe("Lifecycle Logging", func() {
 		buf    *bytes.Buffer
 		logger *zap.SugaredLogger
 		store  *mockStore
-		sup    *supervisor.Supervisor
+		sup    *supervisor.Supervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState]
 		done   <-chan struct{}
 	)
 
@@ -77,7 +77,7 @@ var _ = Describe("Lifecycle Logging", func() {
 			Logger:       logger,
 			TickInterval: 100 * time.Millisecond,
 		}
-		sup = supervisor.NewSupervisor(cfg)
+		sup = supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](cfg)
 
 		identity := fsmv2.Identity{
 			ID:         "worker-1",

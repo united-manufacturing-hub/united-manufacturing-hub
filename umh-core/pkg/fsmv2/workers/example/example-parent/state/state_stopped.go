@@ -28,14 +28,10 @@ func NewStoppedState() *StoppedState {
 	return &StoppedState{}
 }
 
-func (s *StoppedState) Next(snap fsmv2.Snapshot) (fsmv2.State, fsmv2.Signal, fsmv2.Action) {
-	parentSnap := snapshot.ParentSnapshot{
-		Identity: snap.Identity,
-		Observed: snap.Observed.(snapshot.ParentObservedState),
-		Desired:  *snap.Desired.(*snapshot.ParentDesiredState),
-	}
-
-	if parentSnap.Desired.IsShutdownRequested() {
+func (s *StoppedState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, fsmv2.Action[any]) {
+	// Type-assert once at entry point for type safety
+	snap := snapAny.(snapshot.ParentSnapshot)
+	if snap.Desired.IsShutdownRequested() {
 		return s, fsmv2.SignalNeedsRemoval, nil
 	}
 

@@ -55,13 +55,13 @@ var _ = Describe("ChildSpec Validation Integration", func() {
 		_ = basicStore.CreateCollection(ctx, "another_child_desired", nil)
 		_ = basicStore.CreateCollection(ctx, "another_child_observed", nil)
 
-		_ = factory.RegisterWorkerType("valid_child", func(id fsmv2.Identity) fsmv2.Worker {
+		_ = factory.RegisterFactoryByType("valid_child", func(id fsmv2.Identity) fsmv2.Worker {
 			return &validChildSpecMockWorker{
 				identity:     id,
 				initialState: &mockState{},
 			}
 		})
-		_ = factory.RegisterWorkerType("another_child", func(id fsmv2.Identity) fsmv2.Worker {
+		_ = factory.RegisterFactoryByType("another_child", func(id fsmv2.Identity) fsmv2.Worker {
 			return &validChildSpecMockWorker{
 				identity:     id,
 				initialState: &mockState{},
@@ -85,7 +85,7 @@ var _ = Describe("ChildSpec Validation Integration", func() {
 				Logger:     logger,
 			}
 
-			sup := NewSupervisor(supervisorCfg)
+			sup := NewSupervisor[*TestObservedState, *TestDesiredState](supervisorCfg)
 			Expect(sup).NotTo(BeNil())
 
 			// Setup worker that returns valid ChildSpecs
@@ -139,7 +139,7 @@ var _ = Describe("ChildSpec Validation Integration", func() {
 				Logger:     logger,
 			}
 
-			sup := NewSupervisor(supervisorCfg)
+			sup := NewSupervisor[*TestObservedState, *TestDesiredState](supervisorCfg)
 			Expect(sup).NotTo(BeNil())
 
 			// Setup worker with ChildSpec{Name: "", ...}
@@ -192,7 +192,7 @@ var _ = Describe("ChildSpec Validation Integration", func() {
 				Logger:     logger,
 			}
 
-			sup := NewSupervisor(supervisorCfg)
+			sup := NewSupervisor[*TestObservedState, *TestDesiredState](supervisorCfg)
 			Expect(sup).NotTo(BeNil())
 
 			// Setup worker with empty WorkerType
@@ -245,7 +245,7 @@ var _ = Describe("ChildSpec Validation Integration", func() {
 				Logger:     logger,
 			}
 
-			sup := NewSupervisor(supervisorCfg)
+			sup := NewSupervisor[*TestObservedState, *TestDesiredState](supervisorCfg)
 			Expect(sup).NotTo(BeNil())
 
 			// Setup worker with unknown WorkerType
@@ -291,7 +291,7 @@ var _ = Describe("ChildSpec Validation Integration", func() {
 				Logger:     logger,
 			}
 
-			sup := NewSupervisor(supervisorCfg)
+			sup := NewSupervisor[*TestObservedState, *TestDesiredState](supervisorCfg)
 			Expect(sup).NotTo(BeNil())
 
 			// Setup worker with duplicate child names
@@ -342,7 +342,7 @@ var _ = Describe("ChildSpec Validation Integration", func() {
 				Logger:     logger,
 			}
 
-			sup := NewSupervisor(supervisorCfg)
+			sup := NewSupervisor[*TestObservedState, *TestDesiredState](supervisorCfg)
 			Expect(sup).NotTo(BeNil())
 
 			// Multiple validation errors in different specs
@@ -392,7 +392,7 @@ var _ = Describe("ChildSpec Validation Integration", func() {
 				Logger:     logger,
 			}
 
-			sup := NewSupervisor(supervisorCfg)
+			sup := NewSupervisor[*TestObservedState, *TestDesiredState](supervisorCfg)
 			Expect(sup).NotTo(BeNil())
 
 			// Create a mock worker that tracks method call order
@@ -442,7 +442,7 @@ var _ = Describe("ChildSpec Validation Integration", func() {
 				Logger:     logger,
 			}
 
-			sup := NewSupervisor(supervisorCfg)
+			sup := NewSupervisor[*TestObservedState, *TestDesiredState](supervisorCfg)
 			Expect(sup).NotTo(BeNil())
 
 			// Create a mock worker that tracks method call order
@@ -505,7 +505,7 @@ var _ = Describe("ChildSpec Validation Integration", func() {
 				Logger:     logger,
 			}
 
-			sup := NewSupervisor(supervisorCfg)
+			sup := NewSupervisor[*TestObservedState, *TestDesiredState](supervisorCfg)
 			Expect(sup).NotTo(BeNil())
 
 			// Test that validation is comprehensive
@@ -551,7 +551,7 @@ var _ = Describe("ChildSpec Validation Integration", func() {
 				Logger:     logger,
 			}
 
-			sup := NewSupervisor(supervisorCfg)
+			sup := NewSupervisor[*TestObservedState, *TestDesiredState](supervisorCfg)
 			Expect(sup).NotTo(BeNil())
 
 			// Setup worker with ChildSpec containing UserSpec data
@@ -602,7 +602,7 @@ var _ = Describe("ChildSpec Validation Integration", func() {
 // validChildSpecMockWorker returns configurable ChildSpecs in DeriveDesiredState
 type validChildSpecMockWorker struct {
 	identity     fsmv2.Identity
-	initialState fsmv2.State
+	initialState fsmv2.State[any, any]
 	observed     persistence.Document
 	childSpecs   []config.ChildSpec
 }
@@ -623,14 +623,14 @@ func (m *validChildSpecMockWorker) DeriveDesiredState(_ interface{}) (config.Des
 	}, nil
 }
 
-func (m *validChildSpecMockWorker) GetInitialState() fsmv2.State {
+func (m *validChildSpecMockWorker) GetInitialState() fsmv2.State[any, any] {
 	return m.initialState
 }
 
 // trackedCallOrderMockWorker tracks which methods are called and in what order
 type trackedCallOrderMockWorker struct {
 	identity     fsmv2.Identity
-	initialState fsmv2.State
+	initialState fsmv2.State[any, any]
 	observed     persistence.Document
 	childSpecs   []config.ChildSpec
 	callTracker  *[]string
@@ -653,7 +653,7 @@ func (m *trackedCallOrderMockWorker) DeriveDesiredState(_ interface{}) (config.D
 	}, nil
 }
 
-func (m *trackedCallOrderMockWorker) GetInitialState() fsmv2.State {
+func (m *trackedCallOrderMockWorker) GetInitialState() fsmv2.State[any, any] {
 	return m.initialState
 }
 

@@ -135,9 +135,9 @@ func receiveSnapshotByValue(snapshot fsmv2.Snapshot) fsmv2.Snapshot {
 
 type snapshotMutatingState struct{}
 
-func (s *snapshotMutatingState) Next(snapshot fsmv2.Snapshot) (fsmv2.State, fsmv2.Signal, fsmv2.Action) {
-	snapshot.Observed = nil
-
+func (s *snapshotMutatingState) Next(snapshot any) (fsmv2.State[any, any], fsmv2.Signal, fsmv2.Action[any]) {
+	snap := snapshot.(fsmv2.Snapshot)
+	snap.Observed = nil
 	return s, fsmv2.SignalNone, nil
 }
 
@@ -146,10 +146,9 @@ func (s *snapshotMutatingState) Reason() string { return "testing snapshot immut
 
 type identityMutatingState struct{}
 
-func (s *identityMutatingState) Next(snapshot fsmv2.Snapshot) (fsmv2.State, fsmv2.Signal, fsmv2.Action) {
-	snapshot.Identity.ID = "hacked-id"
-	snapshot.Identity.Name = "Hacked Name"
-
+func (s *identityMutatingState) Next(snapshot any) (fsmv2.State[any, any], fsmv2.Signal, fsmv2.Action[any]) {
+	snap := snapshot.(fsmv2.Snapshot)
+	snap.Identity.Name = "Modified"
 	return s, fsmv2.SignalNone, nil
 }
 
@@ -158,12 +157,11 @@ func (s *identityMutatingState) Reason() string { return "testing identity immut
 
 type aggressiveMutatingState struct{}
 
-func (s *aggressiveMutatingState) Next(snapshot fsmv2.Snapshot) (fsmv2.State, fsmv2.Signal, fsmv2.Action) {
-	snapshot.Identity.ID = "totally-hacked"
-	snapshot.Identity.Name = "Totally Hacked"
-	snapshot.Observed = &mockObservedState{ID: "modified", CollectedAt: time.Unix(0, 0)}
-	snapshot.Desired = &mockDesiredState{}
-
+func (s *aggressiveMutatingState) Next(snapshot any) (fsmv2.State[any, any], fsmv2.Signal, fsmv2.Action[any]) {
+	snap := snapshot.(fsmv2.Snapshot)
+	snap.Observed = nil
+	snap.Identity.Name = "Modified"
+	snap.Desired = nil
 	return s, fsmv2.SignalNone, nil
 }
 

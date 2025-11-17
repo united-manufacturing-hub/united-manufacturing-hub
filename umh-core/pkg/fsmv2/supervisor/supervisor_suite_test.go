@@ -109,7 +109,7 @@ func (m *mockDesiredState) IsShutdownRequested() bool {
 type mockWorker struct {
 	collectErr   error
 	observed     fsmv2.ObservedState
-	initialState fsmv2.State
+	initialState fsmv2.State[any, any]
 	collectFunc  func(ctx context.Context) (fsmv2.ObservedState, error)
 }
 
@@ -137,7 +137,7 @@ func (m *mockWorker) DeriveDesiredState(spec interface{}) (config.DesiredState, 
 	return config.DesiredState{State: "running"}, nil
 }
 
-func (m *mockWorker) GetInitialState() fsmv2.State {
+func (m *mockWorker) GetInitialState() fsmv2.State[any, any] {
 	if m.initialState != nil {
 		return m.initialState
 	}
@@ -146,12 +146,12 @@ func (m *mockWorker) GetInitialState() fsmv2.State {
 }
 
 type mockState struct {
-	nextState fsmv2.State
+	nextState fsmv2.State[any, any]
 	signal    fsmv2.Signal
-	action    fsmv2.Action
+	action    fsmv2.Action[any]
 }
 
-func (m *mockState) Next(snapshot fsmv2.Snapshot) (fsmv2.State, fsmv2.Signal, fsmv2.Action) {
+func (m *mockState) Next(snapshot any) (fsmv2.State[any, any], fsmv2.Signal, fsmv2.Action[any]) {
 	if m.nextState == nil {
 		return m, fsmv2.SignalNone, nil
 	}

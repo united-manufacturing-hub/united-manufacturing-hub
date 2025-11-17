@@ -27,7 +27,7 @@ import (
 
 var _ = Describe("Tick with Data Freshness", func() {
 	var (
-		s            *supervisor.Supervisor
+		s            *supervisor.Supervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState]
 		initialState *mockState
 		nextState    *mockState
 		store        *mockStore

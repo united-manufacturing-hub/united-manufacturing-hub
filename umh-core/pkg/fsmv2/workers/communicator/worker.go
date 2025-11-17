@@ -111,17 +111,13 @@ import (
 
 	"go.uber.org/zap"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/snapshot"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/state"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
 	fsmv2types "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 )
-
-// WorkerType identifies this worker in the FSM v2 system.
-// It is used to distinguish communicator workers from other worker types
-// (e.g., supervisor workers) in logging, metrics, and supervision contexts.
-const WorkerType = "communicator"
 
 // CommunicatorWorker implements the FSM v2 Worker interface for channel-based synchronization.
 //
@@ -211,7 +207,7 @@ func NewCommunicatorWorker(
 		identity: fsmv2.Identity{
 			ID:         id,
 			Name:       name,
-			WorkerType: WorkerType,
+			WorkerType: storage.DeriveWorkerType[snapshot.CommunicatorObservedState](),
 		},
 		logger: logger,
 	}

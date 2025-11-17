@@ -31,8 +31,8 @@ var _ = Describe("Multi-Worker Integration", func() {
 		It("should manage multiple workers independently in registry", func() {
 			triangularStore := createTestTriangularStore()
 
-			s := supervisor.NewSupervisor(supervisor.Config{
-				WorkerType: "container",
+			s := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
+				WorkerType: "test",
 				Store:      triangularStore,
 				Logger:     zap.NewNop().Sugar(),
 			})
@@ -77,8 +77,8 @@ var _ = Describe("Multi-Worker Integration", func() {
 
 			triangularStore := createTestTriangularStore()
 
-			s := supervisor.NewSupervisor(supervisor.Config{
-				WorkerType: "container",
+			s := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
+				WorkerType: "test",
 				Store:      triangularStore,
 				Logger:     zap.NewNop().Sugar(),
 			})
@@ -124,8 +124,8 @@ var _ = Describe("Multi-Worker Integration", func() {
 		It("should handle concurrent worker operations safely", func() {
 			triangularStore := createTestTriangularStore()
 
-			s := supervisor.NewSupervisor(supervisor.Config{
-				WorkerType: "container",
+			s := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
+				WorkerType: "test",
 				Store:      triangularStore,
 				Logger:     zap.NewNop().Sugar(),
 			})
@@ -172,8 +172,8 @@ var _ = Describe("Multi-Worker Integration", func() {
 		It("should maintain separate collectors for each worker", func() {
 			triangularStore := createTestTriangularStore()
 
-			s := supervisor.NewSupervisor(supervisor.Config{
-				WorkerType: "container",
+			s := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
+				WorkerType: "test",
 				Store:      triangularStore,
 				Logger:     zap.NewNop().Sugar(),
 			})

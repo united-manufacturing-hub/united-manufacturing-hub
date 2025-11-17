@@ -155,7 +155,7 @@ func NewAuthenticateAction(deps CommunicatorDependencies, relayURL, instanceUUID
 //	    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
 //	    "expiresAt": 1735689600
 //	}
-func (a *AuthenticateAction) Execute(ctx context.Context) error {
+func (a *AuthenticateAction) Execute(ctx context.Context, deps any) error {
 	authReq := transport.AuthRequest{
 		InstanceUUID: a.InstanceUUID,
 		Email:        a.AuthToken,

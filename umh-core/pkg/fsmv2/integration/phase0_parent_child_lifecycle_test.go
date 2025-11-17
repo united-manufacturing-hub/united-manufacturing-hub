@@ -32,13 +32,14 @@ import (
 	parent "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/example-parent"
 	parentSnapshot "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/example-parent/snapshot"
 	child "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/example-child"
+	childSnapshot "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/example-child/snapshot"
 )
 
 var _ = Describe("Phase 0: Parent-Child Lifecycle", func() {
 	var (
 		ctx               context.Context
 		cancel            context.CancelFunc
-		parentSup         *supervisor.Supervisor
+		parentSup         *supervisor.Supervisor[parentSnapshot.ParentObservedState, *parentSnapshot.ParentDesiredState]
 		logger            *zap.SugaredLogger
 		initialGoroutines int
 		store             storage.TriangularStoreInterface
@@ -50,89 +51,34 @@ var _ = Describe("Phase 0: Parent-Child Lifecycle", func() {
 		initialGoroutines = runtime.NumGoroutine()
 
 		basicStore := memory.NewInMemoryStore()
-		registry := storage.NewRegistry()
-		store = storage.NewTriangularStore(basicStore, registry)
 
-		ctx := context.Background()
-
-		err := basicStore.CreateCollection(ctx, parent.WorkerType+"_identity", nil)
+		// Create collections following naming convention: {workerType}_{role}
+		err := basicStore.CreateCollection(ctx, storage.DeriveWorkerType[parentSnapshot.ParentObservedState]()+"_identity", nil)
 		if err != nil {
 			panic(err)
 		}
-		err = basicStore.CreateCollection(ctx, parent.WorkerType+"_desired", nil)
+		err = basicStore.CreateCollection(ctx, storage.DeriveWorkerType[parentSnapshot.ParentObservedState]()+"_desired", nil)
 		if err != nil {
 			panic(err)
 		}
-		err = basicStore.CreateCollection(ctx, parent.WorkerType+"_observed", nil)
+		err = basicStore.CreateCollection(ctx, storage.DeriveWorkerType[parentSnapshot.ParentObservedState]()+"_observed", nil)
 		if err != nil {
 			panic(err)
 		}
-		err = basicStore.CreateCollection(ctx, child.WorkerType+"_identity", nil)
+		err = basicStore.CreateCollection(ctx, storage.DeriveWorkerType[childSnapshot.ChildObservedState]()+"_identity", nil)
 		if err != nil {
 			panic(err)
 		}
-		err = basicStore.CreateCollection(ctx, child.WorkerType+"_desired", nil)
+		err = basicStore.CreateCollection(ctx, storage.DeriveWorkerType[childSnapshot.ChildObservedState]()+"_desired", nil)
 		if err != nil {
 			panic(err)
 		}
-		err = basicStore.CreateCollection(ctx, child.WorkerType+"_observed", nil)
+		err = basicStore.CreateCollection(ctx, storage.DeriveWorkerType[childSnapshot.ChildObservedState]()+"_observed", nil)
 		if err != nil {
 			panic(err)
 		}
 
-		err = registry.Register(&storage.CollectionMetadata{
-			Name:       parent.WorkerType + "_identity",
-			WorkerType: parent.WorkerType,
-			Role:       storage.RoleIdentity,
-		})
-		if err != nil {
-			panic(err)
-		}
-
-		err = registry.Register(&storage.CollectionMetadata{
-			Name:       parent.WorkerType + "_desired",
-			WorkerType: parent.WorkerType,
-			Role:       storage.RoleDesired,
-		})
-		if err != nil {
-			panic(err)
-		}
-
-		err = registry.Register(&storage.CollectionMetadata{
-			Name:       parent.WorkerType + "_observed",
-			WorkerType: parent.WorkerType,
-			Role:       storage.RoleObserved,
-		})
-		if err != nil {
-			panic(err)
-		}
-
-		err = registry.Register(&storage.CollectionMetadata{
-			Name:       child.WorkerType + "_identity",
-			WorkerType: child.WorkerType,
-			Role:       storage.RoleIdentity,
-		})
-		if err != nil {
-			panic(err)
-		}
-
-		err = registry.Register(&storage.CollectionMetadata{
-			Name:       child.WorkerType + "_desired",
-			WorkerType: child.WorkerType,
-			Role:       storage.RoleDesired,
-		})
-		if err != nil {
-			panic(err)
-		}
-
-		err = registry.Register(&storage.CollectionMetadata{
-			Name:       child.WorkerType + "_observed",
-			WorkerType: child.WorkerType,
-			Role:       storage.RoleObserved,
-		})
-		if err != nil {
-			panic(err)
-		}
+		store = storage.NewTriangularStore(basicStore)
 
 		factory.ResetRegistry()
 	})
@@ -150,22 +96,22 @@ var _ = Describe("Phase 0: Parent-Child Lifecycle", func() {
 		It("should start parent and child, both reach operational states, and remain stable", func() {
 			By("Registering parent and child worker types")
 
-			err := factory.RegisterWorkerType(parent.WorkerType, func(identity fsmv2.Identity) fsmv2.Worker {
+			err := factory.RegisterFactory[parentSnapshot.ParentObservedState, *parentSnapshot.ParentDesiredState](func(identity fsmv2.Identity) fsmv2.Worker {
 				mockConfigLoader := NewParentConfig()
 				return parent.NewParentWorker(identity.ID, identity.Name, mockConfigLoader, logger)
 			})
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 
-			err = factory.RegisterWorkerType(child.WorkerType, func(identity fsmv2.Identity) fsmv2.Worker {
+			err = factory.RegisterFactory[childSnapshot.ChildObservedState, *childSnapshot.ChildDesiredState](func(identity fsmv2.Identity) fsmv2.Worker {
 				mockConnectionPool := NewConnectionPool()
 				return child.NewChildWorker(identity.ID, identity.Name, mockConnectionPool, logger)
 			})
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 
 			By("Creating parent supervisor")
 
-			parentSup = supervisor.NewSupervisor(supervisor.Config{
-				WorkerType: parent.WorkerType,
+			parentSup = supervisor.NewSupervisor[parentSnapshot.ParentObservedState, *parentSnapshot.ParentDesiredState](supervisor.Config{
+				WorkerType: storage.DeriveWorkerType[parentSnapshot.ParentObservedState](),
 				Store:      store,
 				Logger:     logger,
 			})
@@ -179,7 +125,7 @@ var _ = Describe("Phase 0: Parent-Child Lifecycle", func() {
 			identity := fsmv2.Identity{
 				ID:         "parent-001",
 				Name:       "Test Parent",
-				WorkerType: parent.WorkerType,
+				WorkerType: storage.DeriveWorkerType[parentSnapshot.ParentObservedState](),
 			}
 			err = parentSup.AddWorker(identity, parentWorker)
 			Expect(err).NotTo(HaveOccurred())
@@ -190,7 +136,7 @@ var _ = Describe("Phase 0: Parent-Child Lifecycle", func() {
 				"id":    "parent-001",
 				"state": "running",
 			}
-			err = store.SaveDesired(ctx, parent.WorkerType, "parent-001", desiredDoc)
+			err = store.SaveDesired(ctx, storage.DeriveWorkerType[parentSnapshot.ParentObservedState](), "parent-001", desiredDoc)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Saving initial observed state to database (to avoid Document vs typed struct panic)")
@@ -199,7 +145,7 @@ var _ = Describe("Phase 0: Parent-Child Lifecycle", func() {
 				ID:          "parent-001",
 				CollectedAt: time.Now(),
 			}
-			_, err = store.SaveObserved(ctx, parent.WorkerType, "parent-001", initialObserved)
+			_, err = store.SaveObserved(ctx, storage.DeriveWorkerType[parentSnapshot.ParentObservedState](), "parent-001", initialObserved)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Starting supervisor properly (collectors + tick loops)")
@@ -215,10 +161,18 @@ var _ = Describe("Phase 0: Parent-Child Lifecycle", func() {
 
 			By("Waiting for child supervisor to be created and child to reach Connected state")
 
-			var childSup *supervisor.Supervisor
-			Eventually(func() *supervisor.Supervisor {
-				childSup = GetChildSupervisor(parentSup, "child-0")
-				return childSup
+			var childSup *supervisor.Supervisor[childSnapshot.ChildObservedState, *childSnapshot.ChildDesiredState]
+			Eventually(func() interface{} {
+				children := parentSup.GetChildren()
+				for name, child := range children {
+					if name == "child-0" {
+						if typedChild, ok := child.(*supervisor.Supervisor[childSnapshot.ChildObservedState, *childSnapshot.ChildDesiredState]); ok {
+							childSup = typedChild
+							return childSup
+						}
+					}
+				}
+				return nil
 			}, "10s", "100ms").ShouldNot(BeNil())
 
 			By("Verifying child supervisor has worker registered")

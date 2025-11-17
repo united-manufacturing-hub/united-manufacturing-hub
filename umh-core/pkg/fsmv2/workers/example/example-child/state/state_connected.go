@@ -28,18 +28,14 @@ func NewConnectedState() *ConnectedState {
 	return &ConnectedState{}
 }
 
-func (s *ConnectedState) Next(snap fsmv2.Snapshot) (fsmv2.State, fsmv2.Signal, fsmv2.Action) {
-	childSnap := snapshot.ChildSnapshot{
-		Identity: snap.Identity,
-		Observed: snap.Observed.(snapshot.ChildObservedState),
-		Desired:  *snap.Desired.(*snapshot.ChildDesiredState),
-	}
-
-	if childSnap.Desired.IsShutdownRequested() {
+func (s *ConnectedState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, fsmv2.Action[any]) {
+	// Type-assert once at entry point for type safety
+	snap := snapAny.(snapshot.ChildSnapshot)
+	if snap.Desired.IsShutdownRequested() {
 		return NewTryingToStopState(), fsmv2.SignalNone, nil
 	}
 
-	if childSnap.Observed.ConnectionStatus == "disconnected" {
+	if snap.Observed.ConnectionStatus == "disconnected" {
 		return NewDisconnectedState(), fsmv2.SignalNone, nil
 	}
 

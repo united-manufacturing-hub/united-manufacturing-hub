@@ -33,7 +33,7 @@ import (
 // TestWorker is a test double for fsmv2.Worker that allows capturing DeriveDesiredState calls.
 type TestWorker struct {
 	identity               fsmv2.Identity
-	initialState           fsmv2.State
+	initialState           fsmv2.State[any, any]
 	deriveDesiredStateFunc func(spec config.UserSpec) (config.DesiredState, error)
 }
 
@@ -58,7 +58,7 @@ func (t *TestWorker) DeriveDesiredState(spec interface{}) (config.DesiredState, 
 	return config.DesiredState{State: "running"}, nil
 }
 
-func (t *TestWorker) GetInitialState() fsmv2.State {
+func (t *TestWorker) GetInitialState() fsmv2.State[any, any] {
 	return t.initialState
 }
 
@@ -82,7 +82,7 @@ type TestState struct {
 	reason string
 }
 
-func (t *TestState) Next(snapshot fsmv2.Snapshot) (fsmv2.State, fsmv2.Signal, fsmv2.Action) {
+func (t *TestState) Next(snapshot any) (fsmv2.State[any, any], fsmv2.Signal, fsmv2.Action[any]) {
 	return t, fsmv2.SignalNone, nil
 }
 
@@ -104,7 +104,7 @@ var _ = Describe("Variable Injection", func() {
 		store      storage.TriangularStoreInterface
 		testWorker *TestWorker
 		identity   fsmv2.Identity
-		s          *supervisor.Supervisor
+		s          *supervisor.Supervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState]
 		logger     *zap.SugaredLogger
 	)
 
@@ -138,7 +138,7 @@ var _ = Describe("Variable Injection", func() {
 			},
 		}
 
-		s = supervisor.NewSupervisor(supervisor.Config{
+		s = supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 			WorkerType:   "test",
 			Store:        store,
 			Logger:       logger,
@@ -269,7 +269,7 @@ var _ = Describe("Variable Injection", func() {
 				initialState: &TestState{name: "Initial"},
 			}
 
-			parentSupervisor := supervisor.NewSupervisor(supervisor.Config{
+			parentSupervisor := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 				WorkerType:   "test",
 				Store:        store,
 				Logger:       logger,
@@ -282,7 +282,7 @@ var _ = Describe("Variable Injection", func() {
 			// Create child supervisor with parentID set
 			// Note: This assumes there's a way to set parentID during supervisor creation
 			// Implementation details may vary
-			childSupervisor := supervisor.NewSupervisor(supervisor.Config{
+			childSupervisor := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 				WorkerType:   "test",
 				Store:        store,
 				Logger:       logger,

@@ -49,13 +49,19 @@ func NewInfrastructureHealthChecker(maxAttempts int, attemptWindow time.Duration
 	}
 }
 
-func (h *InfrastructureHealthChecker) CheckChildConsistency(children map[string]*Supervisor) error {
+func (h *InfrastructureHealthChecker) CheckChildConsistency(children map[string]SupervisorInterface) error {
 	for name, child := range children {
 		if child == nil {
 			continue
 		}
 
-		if child.circuitOpen {
+		// Type assert to access circuitOpen field (internal to package)
+		// We use interface{} because Supervisor has different type parameters per child
+		type circuitChecker interface {
+			isCircuitOpen() bool
+		}
+
+		if checker, ok := child.(circuitChecker); ok && checker.isCircuitOpen() {
 			return &ChildHealthError{ChildName: name}
 		}
 	}

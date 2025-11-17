@@ -17,6 +17,7 @@ package state
 import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/example-parent/action"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/example-parent/snapshot"
 )
 
 // TryingToStopState represents the state during graceful shutdown
@@ -28,7 +29,9 @@ func NewTryingToStopState() *TryingToStopState {
 	return &TryingToStopState{}
 }
 
-func (s *TryingToStopState) Next(snap fsmv2.Snapshot) (fsmv2.State, fsmv2.Signal, fsmv2.Action) {
+func (s *TryingToStopState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, fsmv2.Action[any]) {
+	// Type-assert once at entry point for type safety
+	_ = snapAny.(snapshot.ParentSnapshot)
 	return s, fsmv2.SignalNone, action.NewStopAction()
 }
 

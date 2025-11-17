@@ -93,7 +93,7 @@ func NewSyncAction(deps CommunicatorDependencies, jwtToken string) *SyncAction {
 //
 // Non-critical failures (e.g., channel full) are logged but not returned.
 // This allows the sync loop to continue even if some operations fail.
-func (a *SyncAction) Execute(ctx context.Context) error {
+func (a *SyncAction) Execute(ctx context.Context, deps any) error {
 	// 1. Pull messages from backend
 	messages, err := a.dependencies.GetTransport().Pull(ctx, a.JWTToken)
 	if err != nil {

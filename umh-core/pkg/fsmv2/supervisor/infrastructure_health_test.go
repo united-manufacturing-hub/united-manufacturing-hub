@@ -40,7 +40,7 @@ var _ = Describe("InfrastructureHealthChecker", func() {
 			healthyChild1 := supervisor.CreateTestSupervisorWithCircuitState(false)
 			healthyChild2 := supervisor.CreateTestSupervisorWithCircuitState(false)
 
-			children := map[string]*supervisor.Supervisor{
+			children := map[string]supervisor.SupervisorInterface{
 				"child1": healthyChild1,
 				"child2": healthyChild2,
 			}
@@ -53,7 +53,7 @@ var _ = Describe("InfrastructureHealthChecker", func() {
 			healthyChild := supervisor.CreateTestSupervisorWithCircuitState(false)
 			unhealthyChild := supervisor.CreateTestSupervisorWithCircuitState(true)
 
-			children := map[string]*supervisor.Supervisor{
+			children := map[string]supervisor.SupervisorInterface{
 				"healthy":   healthyChild,
 				"unhealthy": unhealthyChild,
 			}
@@ -71,7 +71,7 @@ var _ = Describe("InfrastructureHealthChecker", func() {
 		})
 
 		It("should skip nil children gracefully (defensive)", func() {
-			children := map[string]*supervisor.Supervisor{
+			children := map[string]supervisor.SupervisorInterface{
 				"healthy":   supervisor.CreateTestSupervisorWithCircuitState(false),
 				"nil":       nil,
 				"unhealthy": supervisor.CreateTestSupervisorWithCircuitState(true),

@@ -34,7 +34,7 @@ var _ = Describe("Supervisor Lifecycle", func() {
 			It("should run tick loop until context is cancelled", func() {
 				store := createTestTriangularStore()
 
-				s := supervisor.NewSupervisor(supervisor.Config{
+				s := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 					WorkerType:   "container",
 					Store:        store,
 					Logger:       zap.NewNop().Sugar(),
@@ -114,7 +114,7 @@ var _ = Describe("Supervisor Lifecycle", func() {
 				var collectCountMutex sync.Mutex
 				collectCount := 0
 				store := newMockTriangularStore()
-				collector := collection.NewCollector(collection.CollectorConfig{
+				collector := collection.NewCollector[mockObservedState](collection.CollectorConfig[mockObservedState]{
 					Worker: &mockWorker{
 						collectFunc: func(ctx context.Context) (fsmv2.ObservedState, error) {
 							collectCountMutex.Lock()
@@ -133,7 +133,6 @@ var _ = Describe("Supervisor Lifecycle", func() {
 					Logger:              zap.NewNop().Sugar(),
 					ObservationInterval: 5 * time.Second,
 					ObservationTimeout:  1 * time.Second,
-					WorkerType:          "container",
 				})
 
 				ctx, cancel := context.WithCancel(context.Background())

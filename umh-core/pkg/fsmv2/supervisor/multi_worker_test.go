@@ -32,7 +32,7 @@ import (
 
 var _ = Describe("Multi-Worker Supervisor", func() {
 	var (
-		s               *supervisor.Supervisor
+		s               *supervisor.Supervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState]
 		triangularStore *storage.TriangularStore
 		basicStore      persistence.Store
 	)
@@ -45,17 +45,17 @@ var _ = Describe("Multi-Worker Supervisor", func() {
 
 		// Create collections in database
 		// Collections follow convention: {workerType}_identity, {workerType}_desired, {workerType}_observed
-		err = basicStore.CreateCollection(ctx, "container_identity", nil)
+		err = basicStore.CreateCollection(ctx, "test_identity", nil)
 		Expect(err).ToNot(HaveOccurred())
-		err = basicStore.CreateCollection(ctx, "container_desired", nil)
+		err = basicStore.CreateCollection(ctx, "test_desired", nil)
 		Expect(err).ToNot(HaveOccurred())
-		err = basicStore.CreateCollection(ctx, "container_observed", nil)
+		err = basicStore.CreateCollection(ctx, "test_observed", nil)
 		Expect(err).ToNot(HaveOccurred())
 
 		triangularStore = storage.NewTriangularStore(basicStore)
 
-		s = supervisor.NewSupervisor(supervisor.Config{
-			WorkerType: "container",
+		s = supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
+			WorkerType: "test",
 			Store:      triangularStore,
 			Logger:     zap.NewNop().Sugar(),
 		})

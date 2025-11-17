@@ -30,7 +30,7 @@ import (
 
 var _ = Describe("Supervisor Race Conditions", func() {
 	var (
-		s    *supervisor.Supervisor
+		s    *supervisor.Supervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState]
 		ctx  context.Context
 		once sync.Once
 	)
@@ -39,8 +39,8 @@ var _ = Describe("Supervisor Race Conditions", func() {
 		ctx = context.Background()
 		triangularStore := createTestTriangularStore()
 
-		s = supervisor.NewSupervisor(supervisor.Config{
-			WorkerType: "container",
+		s = supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
+			WorkerType: "test",
 			Store:      triangularStore,
 			Logger:     zap.NewNop().Sugar(),
 		})
@@ -62,7 +62,7 @@ var _ = Describe("Supervisor Race Conditions", func() {
 						identity := fsmv2.Identity{
 							ID:         fmt.Sprintf("worker-%d", i),
 							Name:       fmt.Sprintf("Test Worker %d", i),
-							WorkerType: "container",
+							WorkerType: "test",
 						}
 
 						worker := &mockWorker{
@@ -144,7 +144,7 @@ var _ = Describe("Supervisor Race Conditions", func() {
 				identity := fsmv2.Identity{
 					ID:         "duplicate-worker",
 					Name:       "Duplicate Test Worker",
-					WorkerType: "container",
+					WorkerType: "test",
 				}
 
 				for i := 0; i < numGoroutines; i++ {
@@ -174,7 +174,7 @@ var _ = Describe("Supervisor Race Conditions", func() {
 				identity := fsmv2.Identity{
 					ID:         "state-test-worker",
 					Name:       "State Test Worker",
-					WorkerType: "container",
+					WorkerType: "test",
 				}
 
 				worker := &mockWorker{

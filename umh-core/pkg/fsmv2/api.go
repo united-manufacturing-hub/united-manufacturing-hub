@@ -166,10 +166,11 @@ type Snapshot struct {
 //   - Layer 4: ActionExecutor with exponential backoff validates this
 //
 // Example: StartProcess, StopProcess, CreateConfigFiles, CallAPI.
-type Action interface {
+type Action[TDeps any] interface {
 	// Execute performs the action. Can be blocking and long-running.
 	// Must handle context cancellation. Must be idempotent.
-	Execute(ctx context.Context) error
+	// Dependencies are injected via deps parameter at execution time.
+	Execute(ctx context.Context, deps TDeps) error
 	// Name returns a descriptive name for logging/debugging
 	Name() string
 }
@@ -215,7 +216,7 @@ type Action interface {
 //	    // Stay in current state
 //	    return s, SignalNone, nil
 //	}
-type State interface {
+type State[TSnapshot any, TDeps any] interface {
 	// Next evaluates the snapshot and returns the next transition.
 	// This is a pure function - no side effects, no external calls.
 	// The supervisor calls this on each tick (e.g., every second).
@@ -230,6 +231,11 @@ type State interface {
 	//   - Mutations to snapshot only affect this local copy
 	//   - The supervisor's snapshot remains unchanged
 	//   - No defensive copying or validation needed
+	//
+	// TYPE SAFETY (Invariant I11):
+	// The snapshot parameter uses the concrete TSnapshot type, eliminating
+	// runtime type assertions. The compiler enforces type safety at compile time.
+	// States receive correctly typed snapshots without manual casting.
 	//
 	// Returns:
 	//   - nextState: State to transition to (can return self to stay)
@@ -246,7 +252,7 @@ type State interface {
 	//   2. Transition to nextState
 	//   3. Process signal (e.g., remove worker if SignalNeedsRemoval)
 	//   4. Wait for next tick
-	Next(snapshot Snapshot) (State, Signal, Action)
+	Next(snapshot TSnapshot) (State[TSnapshot, TDeps], Signal, Action[TDeps])
 
 	// String returns the state name for logging/debugging
 	String() string
@@ -320,6 +326,9 @@ type Worker interface {
 	// GetInitialState returns the starting state for this worker.
 	// Called once during worker creation.
 	//
+	// Returns State[any, any] to allow supervisor to work with heterogeneous worker types.
+	// Concrete workers return their specific typed states which satisfy this interface.
+	//
 	// Example: return &InitializingState{} or &StoppedState{}
-	GetInitialState() State
+	GetInitialState() State[any, any]
 }

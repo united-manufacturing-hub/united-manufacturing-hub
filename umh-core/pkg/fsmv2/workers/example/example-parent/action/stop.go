@@ -16,6 +16,8 @@ package action
 
 import (
 	"context"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/example-parent/snapshot"
 )
 
 const StopActionName = "stop"
@@ -33,11 +35,11 @@ func NewStopAction() *StopAction {
 }
 
 // Execute stops all children gracefully
-// TEMPORARY LIMITATION: Cannot access dependencies until Phase 2C when Execute signature changes
-// to Execute(ctx context.Context, deps Dependencies) error
-func (a *StopAction) Execute(ctx context.Context) error {
-	// TODO(Phase 2C): Inject dependencies via Execute() parameter
-	// For now, this is a skeleton implementation
+// Dependencies are injected via deps parameter, enabling full action functionality.
+func (a *StopAction) Execute(ctx context.Context, depsAny any) error {
+	deps := depsAny.(snapshot.ParentDependencies)
+	logger := deps.GetLogger()
+	logger.Info("Stopping parent worker")
 	return nil
 }
 

@@ -82,7 +82,7 @@ type TryingToAuthenticateState struct {
 	BaseCommunicatorState
 }
 
-func (s *TryingToAuthenticateState) Next(snapshot snapshot.CommunicatorSnapshot) (BaseCommunicatorState, fsmv2.Signal, fsmv2.Action) {
+func (s *TryingToAuthenticateState) Next(snapshot snapshot.CommunicatorSnapshot) (BaseCommunicatorState, fsmv2.Signal, fsmv2.Action[any]) {
 	desired := snapshot.Desired
 	observed := snapshot.Observed
 

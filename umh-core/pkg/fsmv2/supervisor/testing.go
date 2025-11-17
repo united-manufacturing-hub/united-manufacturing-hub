@@ -58,7 +58,7 @@ func (t *TestDesiredState) SetShutdownRequested(requested bool) {
 type TestWorker struct {
 	CollectErr   error
 	Observed     fsmv2.ObservedState
-	InitialState fsmv2.State
+	InitialState fsmv2.State[any, any]
 	CollectFunc  func(ctx context.Context) (fsmv2.ObservedState, error)
 }
 
@@ -86,7 +86,7 @@ func (m *TestWorker) DeriveDesiredState(spec interface{}) (config.DesiredState, 
 	return config.DesiredState{State: "running"}, nil
 }
 
-func (m *TestWorker) GetInitialState() fsmv2.State {
+func (m *TestWorker) GetInitialState() fsmv2.State[any, any] {
 	if m.InitialState != nil {
 		return m.InitialState
 	}
@@ -128,12 +128,12 @@ func (m *TestWorkerWithType) CollectObservedState(ctx context.Context) (fsmv2.Ob
 
 // TestState is a mock State for testing subdirectories.
 type TestState struct {
-	NextState fsmv2.State
+	NextState fsmv2.State[any, any]
 	Signal    fsmv2.Signal
-	Action    fsmv2.Action
+	Action    fsmv2.Action[any]
 }
 
-func (m *TestState) Next(snapshot fsmv2.Snapshot) (fsmv2.State, fsmv2.Signal, fsmv2.Action) {
+func (m *TestState) Next(snapshot any) (fsmv2.State[any, any], fsmv2.Signal, fsmv2.Action[any]) {
 	if m.NextState == nil {
 		return m, fsmv2.SignalNone, nil
 	}
@@ -213,9 +213,9 @@ func CreateTestObservedStateWithID(id string) *TestObservedState {
 
 // CreateTestSupervisorWithCircuitState creates a test supervisor with a specific circuit breaker state.
 // This is used for testing infrastructure health checking.
-func CreateTestSupervisorWithCircuitState(circuitOpen bool) *Supervisor {
+func CreateTestSupervisorWithCircuitState(circuitOpen bool) *Supervisor[*TestObservedState, *TestDesiredState] {
 	logger := zap.NewNop().Sugar()
-	s := NewSupervisor(Config{
+	s := NewSupervisor[*TestObservedState, *TestDesiredState](Config{
 		WorkerType:      "test",
 		Store:           CreateTestTriangularStore(),
 		Logger:          logger,

@@ -17,12 +17,17 @@ package action
 import (
 	"context"
 	"testing"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/example-child/snapshot"
+	"go.uber.org/zap"
 )
 
 func TestDisconnectAction_Execute(t *testing.T) {
 	action := NewDisconnectAction()
+	var depsAny any = snapshot.ChildDependencies(fsmv2.NewBaseDependencies(zap.NewNop().Sugar()))
 
-	err := action.Execute(context.Background())
+	err := action.Execute(context.Background(), depsAny)
 	if err != nil {
 		t.Errorf("Execute() error = %v, want nil", err)
 	}

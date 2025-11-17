@@ -24,7 +24,7 @@ import (
 
 var _ = Describe("Circuit Breaker Integration", func() {
 	var (
-		sup    *supervisor.Supervisor
+		sup    *supervisor.Supervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState]
 		ctx    context.Context
 		worker *mockWorker
 		cfg    supervisor.CollectorHealthConfig

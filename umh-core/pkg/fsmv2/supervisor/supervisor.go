@@ -174,7 +174,7 @@ type CollectorHealth struct {
 // It exists to prevent EnqueueAction from being test-only.
 type stubAction struct{}
 
-func (s *stubAction) Execute(ctx context.Context) error {
+func (s *stubAction) Execute(ctx context.Context, deps any) error {
 	// No-op: Phase 2 stub, real actions in Phase 3
 	return nil
 }
@@ -298,7 +298,7 @@ type WorkerContext[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] s
 	tickInProgress atomic.Bool
 	identity       fsmv2.Identity
 	worker         fsmv2.Worker
-	currentState   fsmv2.State
+	currentState   fsmv2.State[any, any]
 	collector      *collection.Collector[TObserved]
 	executor       *execution.ActionExecutor
 }

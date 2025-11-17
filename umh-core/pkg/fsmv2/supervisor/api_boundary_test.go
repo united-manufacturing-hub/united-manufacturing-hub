@@ -33,7 +33,7 @@ var _ = Describe("Supervisor API Boundary", func() {
 	var supervisorType reflect.Type
 
 	BeforeEach(func() {
-		supervisorType = reflect.TypeOf(&supervisor.Supervisor{})
+		supervisorType = reflect.TypeOf(&supervisor.Supervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState]{})
 	})
 
 	Context("Public API methods", func() {

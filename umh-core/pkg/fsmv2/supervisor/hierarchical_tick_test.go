@@ -74,14 +74,14 @@ func (h *hierarchicalWorker) DeriveDesiredState(spec interface{}) (config.Desire
 	}, nil
 }
 
-func (h *hierarchicalWorker) GetInitialState() fsmv2.State {
+func (h *hierarchicalWorker) GetInitialState() fsmv2.State[any, any] {
 	return &mockState{}
 }
 
 var _ = Describe("Hierarchical Tick Propagation (Task 0.6)", func() {
 	var (
 		ctx         context.Context
-		parentSuper *supervisor.Supervisor
+		parentSuper *supervisor.Supervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState]
 		mockStore   *mockTriangularStore
 		tickLog     *tickLogger
 	)
@@ -105,7 +105,7 @@ var _ = Describe("Hierarchical Tick Propagation (Task 0.6)", func() {
 				childrenSpecs: []config.ChildSpec{},
 			}
 
-			parentSuper = supervisor.NewSupervisor(supervisor.Config{
+			parentSuper = supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 				WorkerType: "parent",
 				Logger:     zap.NewNop().Sugar(),
 				Store:      mockStore,
@@ -160,7 +160,7 @@ var _ = Describe("Hierarchical Tick Propagation (Task 0.6)", func() {
 				},
 			}
 
-			parentSuper = supervisor.NewSupervisor(supervisor.Config{
+			parentSuper = supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 				WorkerType: "parent",
 				Logger:     zap.NewNop().Sugar(),
 				Store:      mockStore,
@@ -219,7 +219,7 @@ var _ = Describe("Hierarchical Tick Propagation (Task 0.6)", func() {
 				},
 			}
 
-			parentSuper = supervisor.NewSupervisor(supervisor.Config{
+			parentSuper = supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 				WorkerType: "parent",
 				Logger:     zap.NewNop().Sugar(),
 				Store:      mockStore,
@@ -275,7 +275,7 @@ var _ = Describe("Hierarchical Tick Propagation (Task 0.6)", func() {
 				},
 			}
 
-			parentSuper = supervisor.NewSupervisor(supervisor.Config{
+			parentSuper = supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 				WorkerType: "parent",
 				Logger:     zap.NewNop().Sugar(),
 				Store:      mockStore,
@@ -333,7 +333,7 @@ var _ = Describe("Hierarchical Tick Propagation (Task 0.6)", func() {
 				},
 			}
 
-			parentSuper = supervisor.NewSupervisor(supervisor.Config{
+			parentSuper = supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 				WorkerType: "parent",
 				Logger:     zap.NewNop().Sugar(),
 				Store:      mockStore,
@@ -391,7 +391,7 @@ var _ = Describe("Hierarchical Tick Propagation (Task 0.6)", func() {
 				},
 			}
 
-			parentSuper = supervisor.NewSupervisor(supervisor.Config{
+			parentSuper = supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 				WorkerType: "parent",
 				Logger:     zap.NewNop().Sugar(),
 				Store:      mockStore,

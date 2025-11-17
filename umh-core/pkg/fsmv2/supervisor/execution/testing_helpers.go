@@ -39,11 +39,11 @@ import (
 //	        Expect(fileContent("test.txt")).To(Equal("expected"))
 //	    })
 //	})
-func VerifyActionIdempotency(action fsmv2.Action, iterations int, verifyState func()) {
+func VerifyActionIdempotency(action fsmv2.Action[any], iterations int, verifyState func()) {
 	ctx := context.Background()
 
 	for i := range iterations {
-		err := action.Execute(ctx)
+		err := action.Execute(ctx, nil)
 		Expect(err).ToNot(HaveOccurred(), "Action should succeed on iteration %d", i+1)
 	}
 
@@ -73,7 +73,7 @@ func VerifyActionIdempotency(action fsmv2.Action, iterations int, verifyState fu
 func VerifyActionIdempotencyWithSetup(
 	setup func(),
 	teardown func(),
-	action fsmv2.Action,
+	action fsmv2.Action[any],
 	iterations int,
 	verifyState func(),
 ) {

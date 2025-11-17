@@ -29,14 +29,10 @@ func NewTryingToStartState() *TryingToStartState {
 	return &TryingToStartState{}
 }
 
-func (s *TryingToStartState) Next(snap fsmv2.Snapshot) (fsmv2.State, fsmv2.Signal, fsmv2.Action) {
-	parentSnap := snapshot.ParentSnapshot{
-		Identity: snap.Identity,
-		Observed: snap.Observed.(snapshot.ParentObservedState),
-		Desired:  *snap.Desired.(*snapshot.ParentDesiredState),
-	}
-
-	if parentSnap.Desired.IsShutdownRequested() {
+func (s *TryingToStartState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, fsmv2.Action[any]) {
+	// Type-assert once at entry point for type safety
+	snap := snapAny.(snapshot.ParentSnapshot)
+	if snap.Desired.IsShutdownRequested() {
 		return NewTryingToStopState(), fsmv2.SignalNone, nil
 	}
 

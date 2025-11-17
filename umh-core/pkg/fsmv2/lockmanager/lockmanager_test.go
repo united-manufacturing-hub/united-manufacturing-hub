@@ -33,14 +33,16 @@ var _ = Describe("LockManager", func() {
 	)
 
 	BeforeEach(func() {
-		os.Setenv("ENABLE_LOCK_ORDER_CHECKS", "1")
+		err := os.Setenv("ENABLE_LOCK_ORDER_CHECKS", "1")
+		Expect(err).ToNot(HaveOccurred())
 		manager = lockmanager.NewLockManager()
 		lock1 = manager.NewLock("Lock1", 1)
 		lock2 = manager.NewLock("Lock2", 2)
 	})
 
 	AfterEach(func() {
-		os.Unsetenv("ENABLE_LOCK_ORDER_CHECKS")
+		err := os.Unsetenv("ENABLE_LOCK_ORDER_CHECKS")
+		Expect(err).ToNot(HaveOccurred())
 	})
 
 	Describe("Lock acquisition tracking", func() {
@@ -146,7 +148,8 @@ var _ = Describe("LockManager", func() {
 
 	Describe("Environment variable gating", func() {
 		It("should disable tracking when env var is not set", func() {
-			os.Unsetenv("ENABLE_LOCK_ORDER_CHECKS")
+			err := os.Unsetenv("ENABLE_LOCK_ORDER_CHECKS")
+			Expect(err).ToNot(HaveOccurred())
 			freshManager := lockmanager.NewLockManager()
 			freshLock1 := freshManager.NewLock("FreshLock1", 1)
 			freshLock2 := freshManager.NewLock("FreshLock2", 2)
@@ -161,7 +164,8 @@ var _ = Describe("LockManager", func() {
 		})
 
 		It("should have zero overhead when disabled", func() {
-			os.Unsetenv("ENABLE_LOCK_ORDER_CHECKS")
+			err := os.Unsetenv("ENABLE_LOCK_ORDER_CHECKS")
+			Expect(err).ToNot(HaveOccurred())
 			freshManager := lockmanager.NewLockManager()
 			freshLock := freshManager.NewLock("PerfLock", 1)
 

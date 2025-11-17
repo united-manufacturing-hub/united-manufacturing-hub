@@ -98,7 +98,7 @@ func (w *ParentWorker) DeriveDesiredState(spec interface{}) (fsmv2types.DesiredS
 }
 
 // GetInitialState returns the state the FSM should start in
-func (w *ParentWorker) GetInitialState() fsmv2.State {
+func (w *ParentWorker) GetInitialState() fsmv2.State[any, any] {
 	return state.NewStoppedState()
 }
 

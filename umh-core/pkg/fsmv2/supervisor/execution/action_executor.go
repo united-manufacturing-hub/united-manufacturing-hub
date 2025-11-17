@@ -42,7 +42,7 @@ type ActionExecutor struct {
 
 type actionWork struct {
 	actionID string
-	action   fsmv2.Action
+	action   fsmv2.Action[any]
 	timeout  time.Duration
 }
 
@@ -104,7 +104,7 @@ func (ae *ActionExecutor) worker() {
 			startTime := time.Now()
 			actionCtx, cancel := context.WithTimeout(ae.ctx, work.timeout)
 
-			err := work.action.Execute(actionCtx)
+			err := work.action.Execute(actionCtx, nil)
 			duration := time.Since(startTime)
 
 			status := "success"
@@ -135,7 +135,7 @@ func (ae *ActionExecutor) worker() {
 // Performance: <1ms latency, even under high load (100+ concurrent actions).
 //
 // Thread-safe: Multiple goroutines can call EnqueueAction concurrently.
-func (ae *ActionExecutor) EnqueueAction(actionID string, action fsmv2.Action) error {
+func (ae *ActionExecutor) EnqueueAction(actionID string, action fsmv2.Action[any]) error {
 	ae.mu.Lock()
 
 	if ae.inProgress[actionID] {

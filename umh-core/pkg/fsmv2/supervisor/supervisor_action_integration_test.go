@@ -25,7 +25,7 @@ import (
 
 var _ = Describe("ActionExecutor Integration", func() {
 	var (
-		sup    *supervisor.Supervisor
+		sup    *supervisor.Supervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState]
 		ctx    context.Context
 		cancel context.CancelFunc
 		worker *mockWorker
