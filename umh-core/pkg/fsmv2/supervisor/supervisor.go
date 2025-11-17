@@ -879,6 +879,11 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 		return fmt.Errorf("failed to load snapshot: %w", err)
 	}
 
+	// I16: Validate ObservedState is not nil from storage
+	if storageSnapshot.Observed == nil {
+		panic(fmt.Sprintf("Invariant I16 violated: storage returned nil ObservedState for worker %s", workerID))
+	}
+
 	// Load typed observed state
 	var observed TObserved
 	err = s.store.LoadObservedTyped(ctx, workerCtx.identity.WorkerType, workerID, &observed)
@@ -946,6 +951,11 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 	if s.collectorHealth.restartCount > 0 {
 		s.logger.Infof("Collector recovered after %d restart attempts", s.collectorHealth.restartCount)
 		s.collectorHealth.restartCount = 0
+	}
+
+	// I16: Validate ObservedState is not nil before progressing FSM
+	if snapshot.Observed == nil {
+		panic(fmt.Sprintf("Invariant I16 violated: attempted to progress FSM with nil ObservedState for worker %s", workerID))
 	}
 
 	// Data is fresh - safe to progress FSM
