@@ -22,25 +22,24 @@ import (
 // DisconnectedState represents the state where connection has been lost and will be retried
 type DisconnectedState struct {
 	BaseChildState
-	deps snapshot.ChildDependencies
 }
 
-func NewDisconnectedState(deps snapshot.ChildDependencies) *DisconnectedState {
-	return &DisconnectedState{deps: deps}
+func NewDisconnectedState() *DisconnectedState {
+	return &DisconnectedState{}
 }
 
 func (s *DisconnectedState) Next(snap fsmv2.Snapshot) (fsmv2.State, fsmv2.Signal, fsmv2.Action) {
 	childSnap := snapshot.ChildSnapshot{
 		Identity: snap.Identity,
 		Observed: snap.Observed.(snapshot.ChildObservedState),
-		Desired:  snap.Desired.(snapshot.ChildDesiredState),
+		Desired:  *snap.Desired.(*snapshot.ChildDesiredState),
 	}
 
 	if childSnap.Desired.IsShutdownRequested() {
-		return NewTryingToStopState(s.deps), fsmv2.SignalNone, nil
+		return NewTryingToStopState(), fsmv2.SignalNone, nil
 	}
 
-	return NewTryingToConnectState(s.deps), fsmv2.SignalNone, nil
+	return NewTryingToConnectState(), fsmv2.SignalNone, nil
 }
 
 func (s *DisconnectedState) String() string {

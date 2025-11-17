@@ -20,13 +20,14 @@ import (
 
 	"go.uber.org/zap"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	fsmv2types "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/example-child/snapshot"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/example-child/state"
 )
-
-const WorkerType = "example-child"
 
 // ChildWorker implements the FSM v2 Worker interface for resource management
 type ChildWorker struct {
@@ -55,7 +56,7 @@ func NewChildWorker(
 		identity: fsmv2.Identity{
 			ID:         id,
 			Name:       name,
-			WorkerType: WorkerType,
+			WorkerType: storage.DeriveWorkerType[snapshot.ChildObservedState](),
 		},
 		logger:     logger,
 		connection: conn,
@@ -84,7 +85,7 @@ func (w *ChildWorker) DeriveDesiredState(spec interface{}) (fsmv2types.DesiredSt
 
 // GetInitialState returns the state the FSM should start in
 func (w *ChildWorker) GetInitialState() fsmv2.State {
-	return state.NewStoppedState(w.GetDependencies())
+	return state.NewStoppedState()
 }
 
 func (w *ChildWorker) getConnectionStatus() string {
@@ -99,4 +100,12 @@ func (w *ChildWorker) getConnectionHealth() string {
 		return "no connection"
 	}
 	return "healthy"
+}
+
+func init() {
+	_ = factory.RegisterSupervisorFactory[snapshot.ChildObservedState, *snapshot.ChildDesiredState](
+		func(cfg interface{}) interface{} {
+			supervisorCfg := cfg.(supervisor.Config)
+			return supervisor.NewSupervisor[snapshot.ChildObservedState, *snapshot.ChildDesiredState](supervisorCfg)
+		})
 }

@@ -22,26 +22,25 @@ import (
 // ConnectedState represents the operational state where the worker has an active connection
 type ConnectedState struct {
 	BaseChildState
-	deps snapshot.ChildDependencies
 }
 
-func NewConnectedState(deps snapshot.ChildDependencies) *ConnectedState {
-	return &ConnectedState{deps: deps}
+func NewConnectedState() *ConnectedState {
+	return &ConnectedState{}
 }
 
 func (s *ConnectedState) Next(snap fsmv2.Snapshot) (fsmv2.State, fsmv2.Signal, fsmv2.Action) {
 	childSnap := snapshot.ChildSnapshot{
 		Identity: snap.Identity,
 		Observed: snap.Observed.(snapshot.ChildObservedState),
-		Desired:  snap.Desired.(snapshot.ChildDesiredState),
+		Desired:  *snap.Desired.(*snapshot.ChildDesiredState),
 	}
 
 	if childSnap.Desired.IsShutdownRequested() {
-		return NewTryingToStopState(s.deps), fsmv2.SignalNone, nil
+		return NewTryingToStopState(), fsmv2.SignalNone, nil
 	}
 
 	if childSnap.Observed.ConnectionStatus == "disconnected" {
-		return NewDisconnectedState(s.deps), fsmv2.SignalNone, nil
+		return NewDisconnectedState(), fsmv2.SignalNone, nil
 	}
 
 	return s, fsmv2.SignalNone, nil
