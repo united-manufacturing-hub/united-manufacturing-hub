@@ -39,6 +39,8 @@ func (bc BenthosConfig) ToBenthosServiceConfig() benthosserviceconfig.BenthosSer
 		Buffer:             bc.Buffer,
 		// Default values for advanced configuration
 		MetricsPort: 0, // Will be assigned dynamically by the port manager
+		// DebugLevel defaults to false - not propagated from templates. Debug settings
+		// are configured per-instance at DFC/ProtocolConverter spec level, not in reusable templates.
 		DebugLevel:  false,
 	}
 }

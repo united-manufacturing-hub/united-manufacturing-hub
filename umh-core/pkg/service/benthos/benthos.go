@@ -62,7 +62,7 @@ const (
 	// When debug_level is enabled in config, this is automatically set to "debug" to enable
 	// general OPC UA debugging without the verbosity of codec/packet-level output.
 	//
-	// Reference: /Users/jeremytheocharis/umh-git/opcua/debug/debug.go.
+	// Reference: https://github.com/gopcua/opcua/blob/main/debug/debug.go
 	OPCDebugEnvVar = "OPC_DEBUG"
 )
 
