@@ -40,7 +40,7 @@ func (s *TryingToStartState) Next(snap fsmv2.Snapshot) (fsmv2.State, fsmv2.Signa
 		return NewTryingToStopState(), fsmv2.SignalNone, nil
 	}
 
-	return s, fsmv2.SignalNone, action.NewStartAction(parentSnap.Desired.Dependencies)
+	return s, fsmv2.SignalNone, action.NewStartAction()
 }
 
 func (s *TryingToStartState) String() string {

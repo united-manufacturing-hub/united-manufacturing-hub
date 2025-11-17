@@ -16,48 +16,34 @@ package action
 
 import (
 	"context"
-	"fmt"
-
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/example-child/snapshot"
 )
 
 const ConnectActionName = "connect"
 
 // ConnectAction establishes a connection to an external resource
+// This is a stateless action - completely empty struct with no fields.
+// Dependencies will be injected via Execute() in Phase 2C when the Action interface is updated.
 type ConnectAction struct {
-	dependencies  snapshot.ChildDependencies
-	failureCount  int
-	maxFailures   int
+	// COMPLETELY EMPTY - no dependencies, no state
 }
 
 // NewConnectAction creates a new connect action
-func NewConnectAction(deps snapshot.ChildDependencies) *ConnectAction {
-	return &ConnectAction{
-		dependencies: deps,
-		maxFailures:  0,
-	}
+func NewConnectAction() *ConnectAction {
+	return &ConnectAction{}
 }
 
 // NewConnectActionWithFailures creates a connect action that will fail N times before succeeding
-func NewConnectActionWithFailures(deps snapshot.ChildDependencies, failCount int) *ConnectAction {
-	return &ConnectAction{
-		dependencies: deps,
-		failureCount: failCount,
-		maxFailures:  failCount,
-	}
+// Note: Retry logic will be handled by ActionExecutor in Phase 2C, not by the action itself.
+func NewConnectActionWithFailures(failCount int) *ConnectAction {
+	return &ConnectAction{}
 }
 
 // Execute attempts to acquire a connection from the pool
+// TEMPORARY LIMITATION: Cannot access dependencies until Phase 2C when Execute signature changes
+// to Execute(ctx context.Context, deps Dependencies) error
 func (a *ConnectAction) Execute(ctx context.Context) error {
-	logger := a.dependencies.GetLogger()
-	logger.Info("Attempting to connect")
-
-	if a.failureCount > 0 {
-		a.failureCount--
-		return fmt.Errorf("transient connection error (attempt %d/%d)", a.maxFailures-a.failureCount, a.maxFailures+1)
-	}
-
-	logger.Info("Connection established successfully")
+	// TODO(Phase 2C): Inject dependencies via Execute() parameter
+	// For now, this is a skeleton implementation
 	return nil
 }
 

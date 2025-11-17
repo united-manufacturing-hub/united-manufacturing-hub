@@ -295,13 +295,12 @@ import (
 
     "go.uber.org/zap"
 
+    "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
     "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
     fsmv2types "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
     "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/yourworker/snapshot"
     "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/yourworker/state"
 )
-
-const WorkerType = "your-worker"
 
 // YourWorker implements the FSM v2 Worker interface
 type YourWorker struct {
@@ -325,7 +324,7 @@ func NewYourWorker(
         identity: fsmv2.Identity{
             ID:         id,
             Name:       name,
-            WorkerType: WorkerType,
+            WorkerType: storage.DeriveWorkerType[snapshot.YourObservedState](),
         },
         logger: logger,
     }
@@ -1660,15 +1659,21 @@ type YourWorker struct {
 ```go
 type YourWorker struct {
     *fsmv2.BaseWorker[*YourDependencies]
+    identity fsmv2.Identity
 }
 
-const WorkerType = "your-worker"
+// Worker type is automatically derived from state types via storage.DeriveWorkerType
+// No need for WorkerType constant - it's computed from YourObservedState type name
 
-func init() {
-    fsmv2.RegisterWorkerFactory(WorkerType, func(spec interface{}) (fsmv2.Worker, error) {
-        // Parse spec and create worker
-        return NewYourWorker(id, name, logger), nil
-    })
+func NewYourWorker(id string, name string, logger *zap.SugaredLogger) *YourWorker {
+    return &YourWorker{
+        BaseWorker: fsmv2.NewBaseWorker(dependencies),
+        identity: fsmv2.Identity{
+            ID:         id,
+            Name:       name,
+            WorkerType: storage.DeriveWorkerType[snapshot.YourObservedState](),
+        },
+    }
 }
 ```
 
@@ -1681,7 +1686,6 @@ Use this checklist to ensure you implement all required components:
 **Setup:**
 - [ ] Create worker directory: `pkg/fsmv2/workers/yourworker/`
 - [ ] Create subdirectories: `state/`, `action/`, `snapshot/`
-- [ ] Define `WorkerType` constant
 
 **Worker Implementation:**
 - [ ] Create `worker.go` with worker struct
@@ -1748,7 +1752,11 @@ func NewYourWorker(id, name string, logger *zap.SugaredLogger) *YourWorker {
     dependencies := NewYourDependencies(logger)
     return &YourWorker{
         BaseWorker: fsmv2.NewBaseWorker(dependencies),
-        identity:   fsmv2.Identity{ID: id, Name: name, WorkerType: WorkerType},
+        identity:   fsmv2.Identity{
+            ID:         id,
+            Name:       name,
+            WorkerType: storage.DeriveWorkerType[snapshot.YourObservedState](),
+        },
         logger:     logger,
     }
 }

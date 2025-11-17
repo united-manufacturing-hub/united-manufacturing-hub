@@ -16,29 +16,28 @@ package action
 
 import (
 	"context"
-
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/example-parent/snapshot"
 )
 
 const StartActionName = "start"
 
 // StartAction loads configuration and spawns children
+// This is a stateless action - completely empty struct with no fields.
+// Dependencies will be injected via Execute() in Phase 2C when the Action interface is updated.
 type StartAction struct {
-	dependencies snapshot.ParentDependencies
+	// COMPLETELY EMPTY - no dependencies
 }
 
 // NewStartAction creates a new start action
-func NewStartAction(deps snapshot.ParentDependencies) *StartAction {
-	return &StartAction{
-		dependencies: deps,
-	}
+func NewStartAction() *StartAction {
+	return &StartAction{}
 }
 
 // Execute loads config and returns ChildrenSpecs for spawning
+// TEMPORARY LIMITATION: Cannot access dependencies until Phase 2C when Execute signature changes
+// to Execute(ctx context.Context, deps Dependencies) error
 func (a *StartAction) Execute(ctx context.Context) error {
-	logger := a.dependencies.GetLogger()
-	logger.Info("Starting parent worker")
-
+	// TODO(Phase 2C): Inject dependencies via Execute() parameter
+	// For now, this is a skeleton implementation
 	return nil
 }
 

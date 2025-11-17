@@ -16,29 +16,28 @@ package action
 
 import (
 	"context"
-
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/example-parent/snapshot"
 )
 
 const StopActionName = "stop"
 
 // StopAction gracefully stops all children and cleans up resources
+// This is a stateless action - completely empty struct with no fields.
+// Dependencies will be injected via Execute() in Phase 2C when the Action interface is updated.
 type StopAction struct {
-	dependencies snapshot.ParentDependencies
+	// COMPLETELY EMPTY - no dependencies
 }
 
 // NewStopAction creates a new stop action
-func NewStopAction(deps snapshot.ParentDependencies) *StopAction {
-	return &StopAction{
-		dependencies: deps,
-	}
+func NewStopAction() *StopAction {
+	return &StopAction{}
 }
 
 // Execute stops all children gracefully
+// TEMPORARY LIMITATION: Cannot access dependencies until Phase 2C when Execute signature changes
+// to Execute(ctx context.Context, deps Dependencies) error
 func (a *StopAction) Execute(ctx context.Context) error {
-	logger := a.dependencies.GetLogger()
-	logger.Info("Stopping parent worker")
-
+	// TODO(Phase 2C): Inject dependencies via Execute() parameter
+	// For now, this is a skeleton implementation
 	return nil
 }
 

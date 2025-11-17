@@ -20,8 +20,7 @@ import (
 )
 
 func TestDisconnectAction_Execute(t *testing.T) {
-	deps := newMockDeps()
-	action := NewDisconnectAction(deps)
+	action := NewDisconnectAction()
 
 	err := action.Execute(context.Background())
 	if err != nil {
@@ -30,8 +29,7 @@ func TestDisconnectAction_Execute(t *testing.T) {
 }
 
 func TestDisconnectAction_Name(t *testing.T) {
-	deps := newMockDeps()
-	action := NewDisconnectAction(deps)
+	action := NewDisconnectAction()
 
 	if action.Name() != DisconnectActionName {
 		t.Errorf("Name() = %v, want %v", action.Name(), DisconnectActionName)

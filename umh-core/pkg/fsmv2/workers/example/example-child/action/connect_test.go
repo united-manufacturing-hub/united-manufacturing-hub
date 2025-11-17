@@ -33,8 +33,7 @@ func newMockDeps() *mockDeps {
 }
 
 func TestConnectAction_Execute_Success(t *testing.T) {
-	deps := newMockDeps()
-	action := NewConnectAction(deps)
+	action := NewConnectAction()
 
 	err := action.Execute(context.Background())
 	if err != nil {
@@ -43,28 +42,29 @@ func TestConnectAction_Execute_Success(t *testing.T) {
 }
 
 func TestConnectAction_Execute_WithFailures(t *testing.T) {
-	deps := newMockDeps()
-	action := NewConnectActionWithFailures(deps, 2)
+	// Note: Retry logic will be handled by ActionExecutor in Phase 2C
+	// For now, this test just verifies the action can be created
+	action := NewConnectActionWithFailures(2)
 
+	// All executions succeed (skeleton implementation)
 	err1 := action.Execute(context.Background())
-	if err1 == nil {
-		t.Error("First Execute() should fail")
+	if err1 != nil {
+		t.Errorf("Execute() error = %v, want nil (skeleton implementation)", err1)
 	}
 
 	err2 := action.Execute(context.Background())
-	if err2 == nil {
-		t.Error("Second Execute() should fail")
+	if err2 != nil {
+		t.Errorf("Execute() error = %v, want nil (skeleton implementation)", err2)
 	}
 
 	err3 := action.Execute(context.Background())
 	if err3 != nil {
-		t.Errorf("Third Execute() error = %v, want nil", err3)
+		t.Errorf("Execute() error = %v, want nil (skeleton implementation)", err3)
 	}
 }
 
 func TestConnectAction_Name(t *testing.T) {
-	deps := newMockDeps()
-	action := NewConnectAction(deps)
+	action := NewConnectAction()
 
 	if action.Name() != ConnectActionName {
 		t.Errorf("Name() = %v, want %v", action.Name(), ConnectActionName)

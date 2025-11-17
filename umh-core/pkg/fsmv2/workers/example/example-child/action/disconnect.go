@@ -16,29 +16,28 @@ package action
 
 import (
 	"context"
-
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/example-child/snapshot"
 )
 
 const DisconnectActionName = "disconnect"
 
 // DisconnectAction closes the connection gracefully
+// This is a stateless action - completely empty struct with no fields.
+// Dependencies will be injected via Execute() in Phase 2C when the Action interface is updated.
 type DisconnectAction struct {
-	dependencies snapshot.ChildDependencies
+	// COMPLETELY EMPTY - no dependencies
 }
 
 // NewDisconnectAction creates a new disconnect action
-func NewDisconnectAction(deps snapshot.ChildDependencies) *DisconnectAction {
-	return &DisconnectAction{
-		dependencies: deps,
-	}
+func NewDisconnectAction() *DisconnectAction {
+	return &DisconnectAction{}
 }
 
 // Execute releases the connection back to the pool
+// TEMPORARY LIMITATION: Cannot access dependencies until Phase 2C when Execute signature changes
+// to Execute(ctx context.Context, deps Dependencies) error
 func (a *DisconnectAction) Execute(ctx context.Context) error {
-	logger := a.dependencies.GetLogger()
-	logger.Info("Disconnecting")
-
+	// TODO(Phase 2C): Inject dependencies via Execute() parameter
+	// For now, this is a skeleton implementation
 	return nil
 }
 
