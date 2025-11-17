@@ -12,31 +12,46 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package action
+package action_test
 
 import (
 	"context"
-	"testing"
+
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+	"go.uber.org/zap"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/example-child/action"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/example-child/snapshot"
-	"go.uber.org/zap"
 )
 
-func TestDisconnectAction_Execute(t *testing.T) {
-	action := NewDisconnectAction()
-	var depsAny any = snapshot.ChildDependencies(fsmv2.NewBaseDependencies(zap.NewNop().Sugar()))
+var _ = Describe("DisconnectAction", func() {
+	var (
+		ctx     context.Context
+		depsAny any
+	)
 
-	err := action.Execute(context.Background(), depsAny)
-	if err != nil {
-		t.Errorf("Execute() error = %v, want nil", err)
-	}
-}
+	BeforeEach(func() {
+		ctx = context.Background()
+		depsAny = snapshot.ChildDependencies(fsmv2.NewBaseDependencies(zap.NewNop().Sugar()))
+	})
 
-func TestDisconnectAction_Name(t *testing.T) {
-	action := NewDisconnectAction()
+	Describe("Execute", func() {
+		It("should complete without error", func() {
+			disconnectAction := action.NewDisconnectAction()
 
-	if action.Name() != DisconnectActionName {
-		t.Errorf("Name() = %v, want %v", action.Name(), DisconnectActionName)
-	}
-}
+			err := disconnectAction.Execute(ctx, depsAny)
+
+			Expect(err).To(BeNil())
+		})
+	})
+
+	Describe("Name", func() {
+		It("should return the correct action name", func() {
+			disconnectAction := action.NewDisconnectAction()
+
+			Expect(disconnectAction.Name()).To(Equal(action.DisconnectActionName))
+		})
+	})
+})

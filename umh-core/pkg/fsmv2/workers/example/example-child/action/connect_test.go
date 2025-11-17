@@ -12,14 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package action
+package action_test
 
 import (
 	"context"
-	"testing"
+
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+	"go.uber.org/zap"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"go.uber.org/zap"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/example-child/action"
 )
 
 type mockDeps struct {
@@ -32,43 +35,49 @@ func newMockDeps() *mockDeps {
 	}
 }
 
-func TestConnectAction_Execute_Success(t *testing.T) {
-	action := NewConnectAction()
-	var depsAny any = newMockDeps()
+var _ = Describe("ConnectAction", func() {
+	var (
+		ctx     context.Context
+		depsAny any
+	)
 
-	err := action.Execute(context.Background(), depsAny)
-	if err != nil {
-		t.Errorf("Execute() error = %v, want nil", err)
-	}
-}
+	BeforeEach(func() {
+		ctx = context.Background()
+		depsAny = newMockDeps()
+	})
 
-func TestConnectAction_Execute_WithFailures(t *testing.T) {
-	// Note: Retry logic will be handled by ActionExecutor in Phase 2C
-	// For now, this test just verifies the action can be created
-	action := NewConnectActionWithFailures(2)
-	var depsAny any = newMockDeps()
+	Describe("Execute", func() {
+		Context("when executing successfully", func() {
+			It("should complete without error", func() {
+				connectAction := action.NewConnectAction()
 
-	// All executions succeed (skeleton implementation)
-	err1 := action.Execute(context.Background(), depsAny)
-	if err1 != nil {
-		t.Errorf("Execute() error = %v, want nil (skeleton implementation)", err1)
-	}
+				err := connectAction.Execute(ctx, depsAny)
 
-	err2 := action.Execute(context.Background(), depsAny)
-	if err2 != nil {
-		t.Errorf("Execute() error = %v, want nil (skeleton implementation)", err2)
-	}
+				Expect(err).To(BeNil())
+			})
+		})
 
-	err3 := action.Execute(context.Background(), depsAny)
-	if err3 != nil {
-		t.Errorf("Execute() error = %v, want nil (skeleton implementation)", err3)
-	}
-}
+		Context("when created with failures", func() {
+			It("should succeed on all executions (skeleton implementation)", func() {
+				connectAction := action.NewConnectActionWithFailures(2)
 
-func TestConnectAction_Name(t *testing.T) {
-	action := NewConnectAction()
+				err1 := connectAction.Execute(ctx, depsAny)
+				Expect(err1).To(BeNil(), "first execution should succeed (skeleton implementation)")
 
-	if action.Name() != ConnectActionName {
-		t.Errorf("Name() = %v, want %v", action.Name(), ConnectActionName)
-	}
-}
+				err2 := connectAction.Execute(ctx, depsAny)
+				Expect(err2).To(BeNil(), "second execution should succeed (skeleton implementation)")
+
+				err3 := connectAction.Execute(ctx, depsAny)
+				Expect(err3).To(BeNil(), "third execution should succeed (skeleton implementation)")
+			})
+		})
+	})
+
+	Describe("Name", func() {
+		It("should return the correct action name", func() {
+			connectAction := action.NewConnectAction()
+
+			Expect(connectAction.Name()).To(Equal(action.ConnectActionName))
+		})
+	})
+})
