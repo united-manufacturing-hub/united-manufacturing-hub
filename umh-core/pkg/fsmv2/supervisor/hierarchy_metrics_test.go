@@ -36,7 +36,7 @@ var _ = Describe("Hierarchy Metrics (Task 3)", func() {
 		ctx       context.Context
 		store     *mockTriangularStore
 		logger    *zap.SugaredLogger
-		parentSup *supervisor.Supervisor
+		parentSup *supervisor.Supervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState]
 	)
 
 	BeforeEach(func() {
@@ -60,11 +60,12 @@ var _ = Describe("Hierarchy Metrics (Task 3)", func() {
 				},
 			}
 
-			parentSup = supervisor.NewSupervisor(supervisor.Config{
+			parentSup = supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 				WorkerType: "root",
 				Logger:     logger,
 				Store:      store,
 			})
+			defer parentSup.Shutdown()
 
 			identity := fsmv2.Identity{
 				ID:         "root-worker",
@@ -88,9 +89,7 @@ var _ = Describe("Hierarchy Metrics (Task 3)", func() {
 				},
 			}
 
-			err = parentSup.TestTick(ctx)
-			Expect(err).NotTo(HaveOccurred())
-
+			parentSup.Start(ctx)
 			time.Sleep(100 * time.Millisecond)
 
 			metricValue := promtest.ToFloat64(metrics.GetHierarchyDepthGauge().WithLabelValues("root"))
@@ -116,11 +115,12 @@ var _ = Describe("Hierarchy Metrics (Task 3)", func() {
 				},
 			}
 
-			parentSup = supervisor.NewSupervisor(supervisor.Config{
+			parentSup = supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 				WorkerType: "parent",
 				Logger:     logger,
 				Store:      store,
 			})
+			defer parentSup.Shutdown()
 
 			identity := fsmv2.Identity{
 				ID:         "parent-worker",
@@ -151,10 +151,8 @@ var _ = Describe("Hierarchy Metrics (Task 3)", func() {
 				},
 			}
 
-			err = parentSup.TestTick(ctx)
-			Expect(err).NotTo(HaveOccurred())
-
-			time.Sleep(100 * time.Millisecond)
+			parentSup.Start(ctx)
+			time.Sleep(1500 * time.Millisecond)
 
 			parentDepth := promtest.ToFloat64(metrics.GetHierarchyDepthGauge().WithLabelValues("parent"))
 			Expect(parentDepth).To(Equal(0.0), "parent supervisor should have depth=0")
@@ -185,11 +183,12 @@ var _ = Describe("Hierarchy Metrics (Task 3)", func() {
 				},
 			}
 
-			parentSup = supervisor.NewSupervisor(supervisor.Config{
+			parentSup = supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 				WorkerType: "parent",
 				Logger:     logger,
 				Store:      store,
 			})
+			defer parentSup.Shutdown()
 
 			identity := fsmv2.Identity{
 				ID:         "parent-worker",
@@ -213,12 +212,14 @@ var _ = Describe("Hierarchy Metrics (Task 3)", func() {
 				},
 			}
 
-			err = parentSup.TestTick(ctx)
-			Expect(err).NotTo(HaveOccurred())
+			parentSup.Start(ctx)
+			time.Sleep(1500 * time.Millisecond)
 
 			children := parentSup.GetChildren()
 			Expect(children).To(HaveKey("child"))
-			childSup := children["child"]
+			childSupInterface := children["child"]
+			childSup, ok := childSupInterface.(*supervisor.Supervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState])
+			Expect(ok).To(BeTrue(), "child supervisor should use TestObservedState/TestDesiredState types")
 
 			childIdentity := fsmv2.Identity{
 				ID:         "child-worker",
@@ -269,10 +270,7 @@ var _ = Describe("Hierarchy Metrics (Task 3)", func() {
 				},
 			}
 
-			err = parentSup.TestTick(ctx)
-			Expect(err).NotTo(HaveOccurred())
-
-			time.Sleep(100 * time.Millisecond)
+			time.Sleep(2000 * time.Millisecond)
 
 			parentDepth := promtest.ToFloat64(metrics.GetHierarchyDepthGauge().WithLabelValues("parent"))
 			Expect(parentDepth).To(Equal(0.0), "parent supervisor should have depth=0")
@@ -302,11 +300,12 @@ var _ = Describe("Hierarchy Metrics (Task 3)", func() {
 				},
 			}
 
-			leafSup := supervisor.NewSupervisor(supervisor.Config{
+			leafSup := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 				WorkerType: "leaf",
 				Logger:     logger,
 				Store:      store,
 			})
+			defer leafSup.Shutdown()
 
 			identity := fsmv2.Identity{
 				ID:         "leaf-worker",
@@ -330,9 +329,7 @@ var _ = Describe("Hierarchy Metrics (Task 3)", func() {
 				},
 			}
 
-			err = leafSup.TestTick(ctx)
-			Expect(err).NotTo(HaveOccurred())
-
+			leafSup.Start(ctx)
 			time.Sleep(100 * time.Millisecond)
 
 			metricValue := promtest.ToFloat64(metrics.GetHierarchySizeGauge().WithLabelValues("leaf"))
@@ -355,11 +352,12 @@ var _ = Describe("Hierarchy Metrics (Task 3)", func() {
 				},
 			}
 
-			parentSup = supervisor.NewSupervisor(supervisor.Config{
+			parentSup = supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 				WorkerType: "parent",
 				Logger:     logger,
 				Store:      store,
 			})
+			defer parentSup.Shutdown()
 
 			identity := fsmv2.Identity{
 				ID:         "parent-worker",
@@ -390,10 +388,8 @@ var _ = Describe("Hierarchy Metrics (Task 3)", func() {
 				},
 			}
 
-			err = parentSup.TestTick(ctx)
-			Expect(err).NotTo(HaveOccurred())
-
-			time.Sleep(100 * time.Millisecond)
+			parentSup.Start(ctx)
+			time.Sleep(1500 * time.Millisecond)
 
 			metricValue := promtest.ToFloat64(metrics.GetHierarchySizeGauge().WithLabelValues("parent"))
 			Expect(metricValue).To(Equal(3.0), "parent supervisor should have size=3 (self + 2 children)")
@@ -412,11 +408,12 @@ var _ = Describe("Hierarchy Metrics (Task 3)", func() {
 				},
 			}
 
-			parentSup = supervisor.NewSupervisor(supervisor.Config{
+			parentSup = supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 				WorkerType: "parent",
 				Logger:     logger,
 				Store:      store,
 			})
+			defer parentSup.Shutdown()
 
 			identity := fsmv2.Identity{
 				ID:         "parent-worker",
@@ -440,10 +437,8 @@ var _ = Describe("Hierarchy Metrics (Task 3)", func() {
 				},
 			}
 
-			err = parentSup.TestTick(ctx)
-			Expect(err).NotTo(HaveOccurred())
-
-			time.Sleep(100 * time.Millisecond)
+			parentSup.Start(ctx)
+			time.Sleep(1500 * time.Millisecond)
 
 			initialSize := promtest.ToFloat64(metrics.GetHierarchySizeGauge().WithLabelValues("parent"))
 			Expect(initialSize).To(Equal(1.0), "parent should start with size=1")
@@ -459,10 +454,7 @@ var _ = Describe("Hierarchy Metrics (Task 3)", func() {
 				},
 			}
 
-			err = parentSup.TestTick(ctx)
-			Expect(err).NotTo(HaveOccurred())
-
-			time.Sleep(100 * time.Millisecond)
+			time.Sleep(2000 * time.Millisecond)
 
 			updatedSize := promtest.ToFloat64(metrics.GetHierarchySizeGauge().WithLabelValues("parent"))
 			Expect(updatedSize).To(Equal(2.0), "parent should now have size=2 after adding child")
@@ -483,11 +475,12 @@ var _ = Describe("Hierarchy Metrics (Task 3)", func() {
 				},
 			}
 
-			parentSup = supervisor.NewSupervisor(supervisor.Config{
+			parentSup = supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 				WorkerType: "parent",
 				Logger:     logger,
 				Store:      store,
 			})
+			defer parentSup.Shutdown()
 
 			identity := fsmv2.Identity{
 				ID:         "parent-worker",
@@ -518,20 +511,15 @@ var _ = Describe("Hierarchy Metrics (Task 3)", func() {
 				},
 			}
 
-			err = parentSup.TestTick(ctx)
-			Expect(err).NotTo(HaveOccurred())
-
-			time.Sleep(100 * time.Millisecond)
+			parentSup.Start(ctx)
+			time.Sleep(1500 * time.Millisecond)
 
 			initialSize := promtest.ToFloat64(metrics.GetHierarchySizeGauge().WithLabelValues("parent"))
 			Expect(initialSize).To(Equal(2.0), "parent should start with size=2")
 
 			parentWorker.childrenSpecs = []config.ChildSpec{}
 
-			err = parentSup.TestTick(ctx)
-			Expect(err).NotTo(HaveOccurred())
-
-			time.Sleep(100 * time.Millisecond)
+			time.Sleep(2000 * time.Millisecond)
 
 			updatedSize := promtest.ToFloat64(metrics.GetHierarchySizeGauge().WithLabelValues("parent"))
 			Expect(updatedSize).To(Equal(1.0), "parent should now have size=1 after removing child")
