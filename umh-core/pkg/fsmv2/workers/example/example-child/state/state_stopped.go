@@ -25,13 +25,7 @@ type StoppedState struct {
 }
 
 func (s *StoppedState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, fsmv2.Action[any]) {
-	rawSnap := snapAny.(fsmv2.Snapshot)
-
-	snap := snapshot.ChildSnapshot{
-		Identity: rawSnap.Identity,
-		Observed: rawSnap.Observed.(snapshot.ChildObservedState),
-		Desired:  *rawSnap.Desired.(*snapshot.ChildDesiredState),
-	}
+	snap := fsmv2.ConvertSnapshot[snapshot.ChildObservedState, *snapshot.ChildDesiredState](snapAny)
 
 	if snap.Desired.IsShutdownRequested() {
 		return s, fsmv2.SignalNeedsRemoval, nil
@@ -41,7 +35,7 @@ func (s *StoppedState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, f
 }
 
 func (s *StoppedState) String() string {
-	return "Stopped"
+	return fsmv2.DeriveStateName(s)
 }
 
 func (s *StoppedState) Reason() string {

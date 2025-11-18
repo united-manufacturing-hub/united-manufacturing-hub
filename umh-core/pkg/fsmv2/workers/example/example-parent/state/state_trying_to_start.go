@@ -26,13 +26,7 @@ type TryingToStartState struct {
 }
 
 func (s *TryingToStartState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, fsmv2.Action[any]) {
-	rawSnap := snapAny.(fsmv2.Snapshot)
-
-	snap := snapshot.ParentSnapshot{
-		Identity: rawSnap.Identity,
-		Observed: rawSnap.Observed.(snapshot.ParentObservedState),
-		Desired:  *rawSnap.Desired.(*snapshot.ParentDesiredState),
-	}
+	snap := fsmv2.ConvertSnapshot[snapshot.ParentObservedState, *snapshot.ParentDesiredState](snapAny)
 
 	if snap.Desired.IsShutdownRequested() {
 		return &TryingToStopState{}, fsmv2.SignalNone, nil
@@ -42,7 +36,7 @@ func (s *TryingToStartState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Sig
 }
 
 func (s *TryingToStartState) String() string {
-	return "TryingToStart"
+	return fsmv2.DeriveStateName(s)
 }
 
 func (s *TryingToStartState) Reason() string {

@@ -30,7 +30,7 @@ func (s *TryingToStopState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Sign
 }
 
 func (s *TryingToStopState) String() string {
-	return "TryingToStop"
+	return fsmv2.DeriveStateName(s)
 }
 
 func (s *TryingToStopState) Reason() string {

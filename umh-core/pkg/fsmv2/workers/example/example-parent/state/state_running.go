@@ -25,13 +25,7 @@ type RunningState struct {
 }
 
 func (s *RunningState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, fsmv2.Action[any]) {
-	rawSnap := snapAny.(fsmv2.Snapshot)
-
-	snap := snapshot.ParentSnapshot{
-		Identity: rawSnap.Identity,
-		Observed: rawSnap.Observed.(snapshot.ParentObservedState),
-		Desired:  *rawSnap.Desired.(*snapshot.ParentDesiredState),
-	}
+	snap := fsmv2.ConvertSnapshot[snapshot.ParentObservedState, *snapshot.ParentDesiredState](snapAny)
 
 	if snap.Desired.IsShutdownRequested() {
 		return &TryingToStopState{}, fsmv2.SignalNone, nil
@@ -45,7 +39,7 @@ func (s *RunningState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, f
 }
 
 func (s *RunningState) String() string {
-	return "Running"
+	return fsmv2.DeriveStateName(s)
 }
 
 func (s *RunningState) Reason() string {
