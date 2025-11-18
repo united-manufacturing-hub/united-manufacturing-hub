@@ -24,18 +24,20 @@ type StoppedState struct {
 	BaseParentState
 }
 
-func NewStoppedState() *StoppedState {
-	return &StoppedState{}
-}
-
 func (s *StoppedState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, fsmv2.Action[any]) {
-	// Type-assert once at entry point for type safety
-	snap := snapAny.(snapshot.ParentSnapshot)
+	rawSnap := snapAny.(fsmv2.Snapshot)
+
+	snap := snapshot.ParentSnapshot{
+		Identity: rawSnap.Identity,
+		Observed: rawSnap.Observed.(snapshot.ParentObservedState),
+		Desired:  *rawSnap.Desired.(*snapshot.ParentDesiredState),
+	}
+
 	if snap.Desired.IsShutdownRequested() {
 		return s, fsmv2.SignalNeedsRemoval, nil
 	}
 
-	return NewTryingToStartState(), fsmv2.SignalNone, nil
+	return &TryingToStartState{}, fsmv2.SignalNone, nil
 }
 
 func (s *StoppedState) String() string {

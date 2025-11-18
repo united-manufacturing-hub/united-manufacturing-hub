@@ -63,15 +63,26 @@ func registerTestWorkerFactories() {
 		"failing-child",
 		"working",
 		"failing",
+		"container",
+		"s6_service",
+		"type_a",
+		"type_b",
 	}
 
 	for _, workerType := range workerTypes {
 		wt := workerType
+		// Register worker factory
 		_ = factory.RegisterFactoryByType(wt, func(identity fsmv2.Identity) fsmv2.Worker {
 			return &TestWorkerWithType{
 				TestWorker: TestWorker{},
 				WorkerType: wt,
 			}
+		})
+
+		// Register supervisor factory for hierarchical composition
+		_ = factory.RegisterSupervisorFactoryByType(wt, func(cfg interface{}) interface{} {
+			supervisorCfg := cfg.(Config)
+			return NewSupervisor[*TestObservedState, *TestDesiredState](supervisorCfg)
 		})
 	}
 }
@@ -587,9 +598,10 @@ func TestApplyStateMapping_WithMapping(t *testing.T) {
 	_ = basicStore.CreateCollection(ctx, "parent_identity", nil)
 	_ = basicStore.CreateCollection(ctx, "parent_desired", nil)
 	_ = basicStore.CreateCollection(ctx, "parent_observed", nil)
-	_ = basicStore.CreateCollection(ctx, "child-1_identity", nil)
-	_ = basicStore.CreateCollection(ctx, "child-1_desired", nil)
-	_ = basicStore.CreateCollection(ctx, "child-1_observed", nil)
+	// Collections are named after WorkerType, not child Name
+	_ = basicStore.CreateCollection(ctx, "child_identity", nil)
+	_ = basicStore.CreateCollection(ctx, "child_desired", nil)
+	_ = basicStore.CreateCollection(ctx, "child_observed", nil)
 
 	triangularStore := storage.NewTriangularStore(basicStore)
 
@@ -673,9 +685,10 @@ func TestApplyStateMapping_NoMapping(t *testing.T) {
 	_ = basicStore.CreateCollection(ctx, "parent_identity", nil)
 	_ = basicStore.CreateCollection(ctx, "parent_desired", nil)
 	_ = basicStore.CreateCollection(ctx, "parent_observed", nil)
-	_ = basicStore.CreateCollection(ctx, "child-1_identity", nil)
-	_ = basicStore.CreateCollection(ctx, "child-1_desired", nil)
-	_ = basicStore.CreateCollection(ctx, "child-1_observed", nil)
+	// Collections are named after WorkerType, not child Name
+	_ = basicStore.CreateCollection(ctx, "child_identity", nil)
+	_ = basicStore.CreateCollection(ctx, "child_desired", nil)
+	_ = basicStore.CreateCollection(ctx, "child_observed", nil)
 
 	triangularStore := storage.NewTriangularStore(basicStore)
 
@@ -751,9 +764,10 @@ func TestApplyStateMapping_MissingStateInMapping(t *testing.T) {
 	_ = basicStore.CreateCollection(ctx, "parent_identity", nil)
 	_ = basicStore.CreateCollection(ctx, "parent_desired", nil)
 	_ = basicStore.CreateCollection(ctx, "parent_observed", nil)
-	_ = basicStore.CreateCollection(ctx, "child-1_identity", nil)
-	_ = basicStore.CreateCollection(ctx, "child-1_desired", nil)
-	_ = basicStore.CreateCollection(ctx, "child-1_observed", nil)
+	// Collections are named after WorkerType, not child Name
+	_ = basicStore.CreateCollection(ctx, "child_identity", nil)
+	_ = basicStore.CreateCollection(ctx, "child_desired", nil)
+	_ = basicStore.CreateCollection(ctx, "child_observed", nil)
 
 	triangularStore := storage.NewTriangularStore(basicStore)
 
@@ -833,9 +847,10 @@ func TestApplyStateMapping_MultipleChildren(t *testing.T) {
 	_ = basicStore.CreateCollection(ctx, "parent_identity", nil)
 	_ = basicStore.CreateCollection(ctx, "parent_desired", nil)
 	_ = basicStore.CreateCollection(ctx, "parent_observed", nil)
-	_ = basicStore.CreateCollection(ctx, "child-1_identity", nil)
-	_ = basicStore.CreateCollection(ctx, "child-1_desired", nil)
-	_ = basicStore.CreateCollection(ctx, "child-1_observed", nil)
+	// Collections are named after WorkerType, not child Name
+	_ = basicStore.CreateCollection(ctx, "child_identity", nil)
+	_ = basicStore.CreateCollection(ctx, "child_desired", nil)
+	_ = basicStore.CreateCollection(ctx, "child_observed", nil)
 	_ = basicStore.CreateCollection(ctx, "child-2_identity", nil)
 	_ = basicStore.CreateCollection(ctx, "child-2_desired", nil)
 	_ = basicStore.CreateCollection(ctx, "child-2_observed", nil)
@@ -960,9 +975,10 @@ func TestApplyStateMapping_EmptyStateMapping(t *testing.T) {
 	_ = basicStore.CreateCollection(ctx, "parent_identity", nil)
 	_ = basicStore.CreateCollection(ctx, "parent_desired", nil)
 	_ = basicStore.CreateCollection(ctx, "parent_observed", nil)
-	_ = basicStore.CreateCollection(ctx, "child-1_identity", nil)
-	_ = basicStore.CreateCollection(ctx, "child-1_desired", nil)
-	_ = basicStore.CreateCollection(ctx, "child-1_observed", nil)
+	// Collections are named after WorkerType, not child Name
+	_ = basicStore.CreateCollection(ctx, "mqtt_client_identity", nil)
+	_ = basicStore.CreateCollection(ctx, "mqtt_client_desired", nil)
+	_ = basicStore.CreateCollection(ctx, "mqtt_client_observed", nil)
 
 	triangularStore := storage.NewTriangularStore(basicStore)
 
@@ -1039,9 +1055,10 @@ func TestApplyStateMapping_NilStateMapping(t *testing.T) {
 	_ = basicStore.CreateCollection(ctx, "parent_identity", nil)
 	_ = basicStore.CreateCollection(ctx, "parent_desired", nil)
 	_ = basicStore.CreateCollection(ctx, "parent_observed", nil)
-	_ = basicStore.CreateCollection(ctx, "child-1_identity", nil)
-	_ = basicStore.CreateCollection(ctx, "child-1_desired", nil)
-	_ = basicStore.CreateCollection(ctx, "child-1_observed", nil)
+	// Collections are named after WorkerType, not child Name
+	_ = basicStore.CreateCollection(ctx, "mqtt_client_identity", nil)
+	_ = basicStore.CreateCollection(ctx, "mqtt_client_desired", nil)
+	_ = basicStore.CreateCollection(ctx, "mqtt_client_observed", nil)
 
 	triangularStore := storage.NewTriangularStore(basicStore)
 

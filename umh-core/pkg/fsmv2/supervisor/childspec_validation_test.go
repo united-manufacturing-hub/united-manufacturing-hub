@@ -430,8 +430,9 @@ var _ = Describe("ChildSpec Validation Integration", func() {
 			Expect(err).To(HaveOccurred())
 
 			// Verify validation happened BEFORE reconciliation
-			Expect(callOrder).To(Equal([]string{"derive"}),
-				"only DeriveDesiredState should be called; reconciliation should not be attempted due to validation failure")
+			// DeriveDesiredState is called twice: once in AddWorker() for initial state, once in tick()
+			Expect(callOrder).To(Equal([]string{"derive", "derive"}),
+				"DeriveDesiredState called twice (AddWorker + tick); reconciliation should not be attempted due to validation failure")
 		})
 
 		It("should proceed to reconciliation only when validation passes", func() {

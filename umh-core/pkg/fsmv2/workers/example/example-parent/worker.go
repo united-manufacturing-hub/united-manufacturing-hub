@@ -42,10 +42,9 @@ type ParentWorker struct {
 func NewParentWorker(
 	id string,
 	name string,
-	configLoader ConfigLoader,
 	logger *zap.SugaredLogger,
 ) *ParentWorker {
-	dependencies := NewParentDependencies(configLoader, logger)
+	dependencies := NewParentDependencies(logger)
 
 	return &ParentWorker{
 		BaseWorker: fsmv2.NewBaseWorker(dependencies),
@@ -69,26 +68,41 @@ func (w *ParentWorker) CollectObservedState(ctx context.Context) (fsmv2.Observed
 }
 
 // DeriveDesiredState determines what state the parent worker should be in
+// This method must be PURE - it only uses the spec parameter, never dependencies
 func (w *ParentWorker) DeriveDesiredState(spec interface{}) (fsmv2types.DesiredState, error) {
-	userSpec, ok := spec.(fsmv2types.UserSpec)
-	if !ok {
-		return fsmv2types.DesiredState{}, fmt.Errorf("invalid spec type: expected fsmv2types.UserSpec, got %T", spec)
-	}
+	var childrenCount int
 
-	var parentSpec ParentUserSpec
-	if err := yaml.Unmarshal([]byte(userSpec.Config), &parentSpec); err != nil {
-		return fsmv2types.DesiredState{}, fmt.Errorf("failed to parse parent spec: %w", err)
-	}
-
-	if parentSpec.ChildrenCount == 0 {
+	// Handle nil spec - return default state with no children
+	if spec == nil {
 		return fsmv2types.DesiredState{
 			State:         "running",
 			ChildrenSpecs: nil,
 		}, nil
 	}
 
-	childrenSpecs := make([]fsmv2types.ChildSpec, parentSpec.ChildrenCount)
-	for i := 0; i < parentSpec.ChildrenCount; i++ {
+	userSpec, ok := spec.(fsmv2types.UserSpec)
+	if !ok {
+		return fsmv2types.DesiredState{}, fmt.Errorf("invalid spec type: expected fsmv2types.UserSpec, got %T", spec)
+	}
+
+	var parentSpec ParentUserSpec
+	if userSpec.Config != "" {
+		if err := yaml.Unmarshal([]byte(userSpec.Config), &parentSpec); err != nil {
+			return fsmv2types.DesiredState{}, fmt.Errorf("failed to parse parent spec: %w", err)
+		}
+	}
+
+	childrenCount = parentSpec.ChildrenCount
+
+	if childrenCount == 0 {
+		return fsmv2types.DesiredState{
+			State:         "running",
+			ChildrenSpecs: nil,
+		}, nil
+	}
+
+	childrenSpecs := make([]fsmv2types.ChildSpec, childrenCount)
+	for i := range childrenCount {
 		childrenSpecs[i] = fsmv2types.ChildSpec{
 			Name:       fmt.Sprintf("child-%d", i),
 			WorkerType: "child",
@@ -104,7 +118,7 @@ func (w *ParentWorker) DeriveDesiredState(spec interface{}) (fsmv2types.DesiredS
 
 // GetInitialState returns the state the FSM should start in
 func (w *ParentWorker) GetInitialState() fsmv2.State[any, any] {
-	return state.NewStoppedState()
+	return &state.StoppedState{}
 }
 
 func init() {

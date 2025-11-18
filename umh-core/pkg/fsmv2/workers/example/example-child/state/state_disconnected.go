@@ -19,23 +19,25 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/example-child/snapshot"
 )
 
-// DisconnectedState represents the state where connection has been lost and will be retried
+// DisconnectedState represents the state where connection has been lost and will be retried.
 type DisconnectedState struct {
 	BaseChildState
 }
 
-func NewDisconnectedState() *DisconnectedState {
-	return &DisconnectedState{}
-}
-
 func (s *DisconnectedState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, fsmv2.Action[any]) {
-	// Type-assert once at entry point for type safety
-	snap := snapAny.(snapshot.ChildSnapshot)
-	if snap.Desired.IsShutdownRequested() {
-		return NewTryingToStopState(), fsmv2.SignalNone, nil
+	rawSnap := snapAny.(fsmv2.Snapshot)
+
+	snap := snapshot.ChildSnapshot{
+		Identity: rawSnap.Identity,
+		Observed: rawSnap.Observed.(snapshot.ChildObservedState),
+		Desired:  *rawSnap.Desired.(*snapshot.ChildDesiredState),
 	}
 
-	return NewTryingToConnectState(), fsmv2.SignalNone, nil
+	if snap.Desired.IsShutdownRequested() {
+		return &TryingToStopState{}, fsmv2.SignalNone, nil
+	}
+
+	return &TryingToConnectState{}, fsmv2.SignalNone, nil
 }
 
 func (s *DisconnectedState) String() string {

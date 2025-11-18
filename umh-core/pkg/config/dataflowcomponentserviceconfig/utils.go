@@ -22,14 +22,7 @@ import (
 
 // GetBenthosServiceConfig converts the component config to a full BenthosServiceConfig.
 func (c DataflowComponentServiceConfig) GetBenthosServiceConfig() benthosserviceconfig.BenthosServiceConfig {
-	benthosConfig := c.BenthosConfig.ToBenthosServiceConfig()
-
-	// If DebugLevel is enabled, override the default log level
-	if c.DebugLevel {
-		benthosConfig.LogLevel = constants.DebugBenthosLogLevel
-	}
-
-	return benthosConfig
+	return c.BenthosConfig.ToBenthosServiceConfig()
 }
 
 // ToBenthosServiceConfig converts the simplified BenthosConfig to a full BenthosServiceConfig

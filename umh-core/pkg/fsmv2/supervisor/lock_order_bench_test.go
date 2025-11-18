@@ -17,7 +17,7 @@ package supervisor
 import (
 	"testing"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/lockmanager"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/lockmanager"
 )
 
 // BenchmarkLockAcquisitionWithoutChecks measures baseline lock performance
@@ -27,7 +27,7 @@ func BenchmarkLockAcquisitionWithoutChecks(b *testing.B) {
 	lock := lm.NewLock("BenchLock", 1)
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		lock.Lock()
 		lock.Unlock()
 	}
@@ -54,7 +54,7 @@ func BenchmarkWorkerContextLockWithoutChecks(b *testing.B) {
 	lock := lm.NewLock("WorkerLock", 1)
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		lock.Lock()
 		lock.Unlock()
 	}
@@ -66,7 +66,7 @@ func BenchmarkReadLockWithoutChecks(b *testing.B) {
 	lock := lm.NewLock("ReadLock", 1)
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		lock.RLock()
 		lock.RUnlock()
 	}
@@ -80,7 +80,7 @@ func BenchmarkHierarchicalLockWithoutChecks(b *testing.B) {
 	workerLock := lm.NewLock("WorkerLock", 2)
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		supervisorLock.Lock()
 		workerLock.Lock()
 		workerLock.Unlock()

@@ -19,24 +19,26 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/example-child/snapshot"
 )
 
-// ConnectedState represents the operational state where the worker has an active connection
+// ConnectedState represents the operational state where the worker has an active connection.
 type ConnectedState struct {
 	BaseChildState
 }
 
-func NewConnectedState() *ConnectedState {
-	return &ConnectedState{}
-}
-
 func (s *ConnectedState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, fsmv2.Action[any]) {
-	// Type-assert once at entry point for type safety
-	snap := snapAny.(snapshot.ChildSnapshot)
+	rawSnap := snapAny.(fsmv2.Snapshot)
+
+	snap := snapshot.ChildSnapshot{
+		Identity: rawSnap.Identity,
+		Observed: rawSnap.Observed.(snapshot.ChildObservedState),
+		Desired:  *rawSnap.Desired.(*snapshot.ChildDesiredState),
+	}
+
 	if snap.Desired.IsShutdownRequested() {
-		return NewTryingToStopState(), fsmv2.SignalNone, nil
+		return &TryingToStopState{}, fsmv2.SignalNone, nil
 	}
 
 	if snap.Observed.ConnectionStatus == "disconnected" {
-		return NewDisconnectedState(), fsmv2.SignalNone, nil
+		return &DisconnectedState{}, fsmv2.SignalNone, nil
 	}
 
 	return s, fsmv2.SignalNone, nil

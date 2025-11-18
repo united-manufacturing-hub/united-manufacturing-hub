@@ -20,19 +20,19 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 )
 
-// ChildDependencies interface to avoid import cycles
+// ChildDependencies interface to avoid import cycles.
 type ChildDependencies interface {
 	fsmv2.Dependencies
 }
 
-// ChildSnapshot represents a point-in-time view of the child worker state
+// ChildSnapshot represents a point-in-time view of the child worker state.
 type ChildSnapshot struct {
 	Identity fsmv2.Identity
 	Observed ChildObservedState
 	Desired  ChildDesiredState
 }
 
-// ChildDesiredState represents the target configuration for the child worker
+// ChildDesiredState represents the target configuration for the child worker.
 type ChildDesiredState struct {
 	shutdownRequested bool
 	Dependencies      ChildDependencies

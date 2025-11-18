@@ -24,19 +24,21 @@ type DegradedState struct {
 	BaseParentState
 }
 
-func NewDegradedState() *DegradedState {
-	return &DegradedState{}
-}
-
 func (s *DegradedState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, fsmv2.Action[any]) {
-	// Type-assert once at entry point for type safety
-	snap := snapAny.(snapshot.ParentSnapshot)
+	rawSnap := snapAny.(fsmv2.Snapshot)
+
+	snap := snapshot.ParentSnapshot{
+		Identity: rawSnap.Identity,
+		Observed: rawSnap.Observed.(snapshot.ParentObservedState),
+		Desired:  *rawSnap.Desired.(*snapshot.ParentDesiredState),
+	}
+
 	if snap.Desired.IsShutdownRequested() {
-		return NewTryingToStopState(), fsmv2.SignalNone, nil
+		return &TryingToStopState{}, fsmv2.SignalNone, nil
 	}
 
 	if snap.Observed.ChildrenUnhealthy == 0 {
-		return NewRunningState(), fsmv2.SignalNone, nil
+		return &RunningState{}, fsmv2.SignalNone, nil
 	}
 
 	return s, fsmv2.SignalNone, nil

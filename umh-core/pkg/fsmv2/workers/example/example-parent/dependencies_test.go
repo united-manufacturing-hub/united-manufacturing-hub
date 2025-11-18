@@ -24,52 +24,20 @@ import (
 
 var _ = Describe("ParentDependencies", func() {
 	var (
-		logger       *zap.SugaredLogger
-		configLoader *MockConfigLoader
-		deps         *example_parent.ParentDependencies
+		logger *zap.SugaredLogger
+		deps   *example_parent.ParentDependencies
 	)
 
 	BeforeEach(func() {
 		logger = zap.NewNop().Sugar()
-		configLoader = NewMockConfigLoader()
 	})
 
 	Describe("NewParentDependencies", func() {
 		It("should create dependencies with valid inputs", func() {
-			deps = example_parent.NewParentDependencies(configLoader, logger)
+			deps = example_parent.NewParentDependencies(logger)
 
 			Expect(deps).NotTo(BeNil())
-			Expect(deps.GetConfigLoader()).To(Equal(configLoader))
 			Expect(deps.GetLogger()).To(Equal(logger))
 		})
 	})
-
-	Describe("GetConfigLoader", func() {
-		BeforeEach(func() {
-			deps = example_parent.NewParentDependencies(configLoader, logger)
-		})
-
-		It("should return the config loader", func() {
-			result := deps.GetConfigLoader()
-			Expect(result).To(Equal(configLoader))
-		})
-	})
 })
-
-// MockConfigLoader implements ConfigLoader interface for testing
-type MockConfigLoader struct {
-	LoadConfigResult  map[string]interface{}
-	LoadConfigError   error
-	LoadConfigCalled  bool
-}
-
-func NewMockConfigLoader() *MockConfigLoader {
-	return &MockConfigLoader{
-		LoadConfigResult: make(map[string]interface{}),
-	}
-}
-
-func (m *MockConfigLoader) LoadConfig() (map[string]interface{}, error) {
-	m.LoadConfigCalled = true
-	return m.LoadConfigResult, m.LoadConfigError
-}

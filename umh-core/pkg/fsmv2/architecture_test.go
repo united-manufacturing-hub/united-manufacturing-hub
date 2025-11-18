@@ -19,6 +19,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"os"
 	"path/filepath"
 	"reflect"
 	"runtime"
@@ -92,6 +93,89 @@ var _ = Describe("FSMv2 Architecture Validation", func() {
 		})
 	})
 })
+
+// findStateFiles discovers all state files in the workers directory
+func findStateFiles(baseDir string) []string {
+	var files []string
+
+	_ = filepath.Walk(filepath.Join(baseDir, "workers"), func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		// Skip communicator worker
+		if strings.Contains(path, "workers/communicator/") {
+			return nil
+		}
+
+		// Include state_*.go files (not test files, not base.go)
+		if !info.IsDir() &&
+			strings.HasPrefix(filepath.Base(path), "state_") &&
+			!strings.HasSuffix(path, "_test.go") &&
+			!strings.HasSuffix(path, "base.go") &&
+			strings.HasSuffix(path, ".go") {
+			files = append(files, path)
+		}
+
+		return nil
+	})
+
+	return files
+}
+
+// findActionFiles discovers all action files in the workers directory
+func findActionFiles(baseDir string) []string {
+	var files []string
+
+	_ = filepath.Walk(filepath.Join(baseDir, "workers"), func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		// Skip communicator worker
+		if strings.Contains(path, "workers/communicator/") {
+			return nil
+		}
+
+		// Include files in action/ directories (not test files)
+		if !info.IsDir() &&
+			strings.Contains(path, "/action/") &&
+			!strings.HasSuffix(path, "_test.go") &&
+			strings.HasSuffix(path, ".go") {
+			files = append(files, path)
+		}
+
+		return nil
+	})
+
+	return files
+}
+
+// findWorkerFiles discovers all worker.go files in the workers directory
+func findWorkerFiles(baseDir string) []string {
+	var files []string
+
+	_ = filepath.Walk(filepath.Join(baseDir, "workers"), func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		// Skip communicator worker
+		if strings.Contains(path, "workers/communicator/") {
+			return nil
+		}
+
+		// Include worker.go files
+		if !info.IsDir() &&
+			filepath.Base(path) == "worker.go" {
+			files = append(files, path)
+		}
+
+		return nil
+	})
+
+	return files
+}
 
 // validateStateStructs checks that state structs have no fields (except base state)
 func validateStateStructs() []Violation {
@@ -167,18 +251,10 @@ func validateStateStructs() []Violation {
 func validateActionStructs() []Violation {
 	var violations []Violation
 
-	// This would use reflection to check action types
-	// For now, we'll use AST parsing of action files
-
 	_, filename, _, _ := runtime.Caller(0)
 	fsmv2Dir := filepath.Dir(filename)
 
-	actionFiles := []string{
-		filepath.Join(fsmv2Dir, "workers/example/example-child/action/connect.go"),
-		filepath.Join(fsmv2Dir, "workers/example/example-child/action/disconnect.go"),
-		filepath.Join(fsmv2Dir, "workers/example/example-parent/action/start.go"),
-		filepath.Join(fsmv2Dir, "workers/example/example-parent/action/stop.go"),
-	}
+	actionFiles := findActionFiles(fsmv2Dir)
 
 	for _, file := range actionFiles {
 		fileViolations := checkActionFile(file)
@@ -198,20 +274,7 @@ func validateNextMethodTypeAssertions() []Violation {
 	_, filename, _, _ := runtime.Caller(0)
 	fsmv2Dir := filepath.Dir(filename)
 
-	stateFiles := []string{
-		// Child states
-		filepath.Join(fsmv2Dir, "workers/example/example-child/state/state_trying_to_connect.go"),
-		filepath.Join(fsmv2Dir, "workers/example/example-child/state/state_connected.go"),
-		filepath.Join(fsmv2Dir, "workers/example/example-child/state/state_disconnected.go"),
-		filepath.Join(fsmv2Dir, "workers/example/example-child/state/state_stopped.go"),
-		filepath.Join(fsmv2Dir, "workers/example/example-child/state/state_trying_to_stop.go"),
-		// Parent states
-		filepath.Join(fsmv2Dir, "workers/example/example-parent/state/state_degraded.go"),
-		filepath.Join(fsmv2Dir, "workers/example/example-parent/state/state_stopped.go"),
-		filepath.Join(fsmv2Dir, "workers/example/example-parent/state/state_trying_to_start.go"),
-		filepath.Join(fsmv2Dir, "workers/example/example-parent/state/state_running.go"),
-		filepath.Join(fsmv2Dir, "workers/example/example-parent/state/state_trying_to_stop.go"),
-	}
+	stateFiles := findStateFiles(fsmv2Dir)
 
 	for _, file := range stateFiles {
 		fileViolations := checkSingleEntryPointPattern(file)
@@ -228,10 +291,7 @@ func validateDeriveDesiredState() []Violation {
 	_, filename, _, _ := runtime.Caller(0)
 	fsmv2Dir := filepath.Dir(filename)
 
-	workerFiles := []string{
-		filepath.Join(fsmv2Dir, "workers/example/example-child/worker.go"),
-		filepath.Join(fsmv2Dir, "workers/example/example-parent/worker.go"),
-	}
+	workerFiles := findWorkerFiles(fsmv2Dir)
 
 	for _, file := range workerFiles {
 		fileViolations := checkDeriveDesiredStateMethod(file)

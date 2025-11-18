@@ -90,8 +90,7 @@ var _ = Describe("Phase 0: Happy Path Integration", func() {
 			By("Step 1: Registering parent worker type in factory")
 
 			err = factory.RegisterFactory[snapshot.ParentObservedState, *snapshot.ParentDesiredState](func(identity fsmv2.Identity) fsmv2.Worker {
-				mockConfigLoader := NewParentConfig().WithChildren(1)
-				return parent.NewParentWorker(identity.ID, identity.Name, mockConfigLoader, logger)
+				return parent.NewParentWorker(identity.ID, identity.Name, logger)
 			})
 			Expect(err).ToNot(HaveOccurred())
 
@@ -109,8 +108,7 @@ var _ = Describe("Phase 0: Happy Path Integration", func() {
 				WorkerType: storage.DeriveWorkerType[snapshot.ParentObservedState](),
 			}
 
-			mockConfigLoader := NewParentConfig().WithChildren(1)
-			parentWorker := parent.NewParentWorker(parentIdentity.ID, parentIdentity.Name, mockConfigLoader, logger)
+			parentWorker := parent.NewParentWorker(parentIdentity.ID, parentIdentity.Name, logger)
 			Expect(parentWorker).NotTo(BeNil())
 
 			By("Step 3: Verifying worker has expected initial state")
@@ -125,6 +123,18 @@ var _ = Describe("Phase 0: Happy Path Integration", func() {
 			})
 
 			err = parentSupervisor.AddWorker(parentIdentity, parentWorker)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Step 3.5: Saving desired state with children_count spec")
+
+			desiredDoc := persistence.Document{
+				"id":    "parent-001",
+				"state": "running",
+				"spec": map[string]interface{}{
+					"config": "children_count: 1",
+				},
+			}
+			err = mockStore.SaveDesired(ctx, storage.DeriveWorkerType[snapshot.ParentObservedState](), "parent-001", desiredDoc)
 			Expect(err).NotTo(HaveOccurred())
 
 			done := parentSupervisor.Start(ctx)
@@ -197,8 +207,7 @@ var _ = Describe("Phase 0: Happy Path Integration", func() {
 			By("Step 1: Registering child worker type in factory")
 
 			err = factory.RegisterFactory[snapshot.ParentObservedState, *snapshot.ParentDesiredState](func(identity fsmv2.Identity) fsmv2.Worker {
-				mockConfigLoader := NewParentConfig().WithChildren(1)
-				return parent.NewParentWorker(identity.ID, identity.Name, mockConfigLoader, logger)
+				return parent.NewParentWorker(identity.ID, identity.Name, logger)
 			})
 			Expect(err).ToNot(HaveOccurred())
 
@@ -269,8 +278,7 @@ var _ = Describe("Phase 0: Happy Path Integration", func() {
 			By("Step 2: Creating and starting parent worker")
 
 			err = factory.RegisterFactory[snapshot.ParentObservedState, *snapshot.ParentDesiredState](func(identity fsmv2.Identity) fsmv2.Worker {
-				mockConfigLoader := &MockConfigLoader{}
-				return parent.NewParentWorker(identity.ID, identity.Name, mockConfigLoader, logger)
+				return parent.NewParentWorker(identity.ID, identity.Name, logger)
 			})
 			Expect(err).ToNot(HaveOccurred())
 
@@ -374,7 +382,7 @@ var _ = Describe("Phase 0: Happy Path Integration", func() {
 			initialSyncID := testWorker.GetCurrentSyncID()
 			syncIDChanges := []int64{initialSyncID}
 
-			for i := 0; i < 100; i++ {
+			for i := range 100 {
 				if i == 30 {
 					testWorker.SetCPU(75)
 				}

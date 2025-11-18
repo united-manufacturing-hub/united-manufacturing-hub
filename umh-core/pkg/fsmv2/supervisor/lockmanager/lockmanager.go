@@ -90,6 +90,7 @@ func (lm *LockManager) IsHeld(name string) bool {
 	}
 
 	gid := getGoroutineID()
+
 	lm.tracker.mu.RLock()
 	defer lm.tracker.mu.RUnlock()
 
@@ -99,6 +100,7 @@ func (lm *LockManager) IsHeld(name string) bool {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -108,6 +110,7 @@ func (lm *LockManager) checkLockOrder(lockName string, lockLevel int) {
 	}
 
 	gid := getGoroutineID()
+
 	lm.tracker.mu.RLock()
 	heldLocks := lm.tracker.locks[gid]
 	lm.tracker.mu.RUnlock()
@@ -137,6 +140,7 @@ func (lm *LockManager) recordLockAcquired(lockName string, lockLevel int) {
 	}
 
 	gid := getGoroutineID()
+
 	lm.tracker.mu.Lock()
 	defer lm.tracker.mu.Unlock()
 
@@ -152,6 +156,7 @@ func (lm *LockManager) recordLockReleased(lockName string) {
 	}
 
 	gid := getGoroutineID()
+
 	lm.tracker.mu.Lock()
 	defer lm.tracker.mu.Unlock()
 
@@ -170,8 +175,10 @@ func (lm *LockManager) recordLockReleased(lockName string) {
 
 func getGoroutineID() uint64 {
 	var buf [64]byte
+
 	n := runtime.Stack(buf[:], false)
 	idField := strings.Fields(string(buf[:n]))[1]
 	id, _ := strconv.ParseUint(idField, 10, 64)
+
 	return id
 }

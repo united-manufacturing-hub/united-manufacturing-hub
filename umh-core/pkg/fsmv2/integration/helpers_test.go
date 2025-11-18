@@ -16,6 +16,7 @@ package integration_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"runtime"
 	"sync"
@@ -189,7 +190,7 @@ func (m *MockState) String() string {
 }
 
 func (m *MockState) Reason() string {
-	return fmt.Sprintf("MockState: %s", m.name)
+	return "MockState: " + m.name
 }
 
 func (m *MockState) SetTransition(nextState fsmv2.State[any, any], signal fsmv2.Signal, action fsmv2.Action[any]) {
@@ -390,35 +391,6 @@ func RunSupervisorWithTimeout[TObserved fsmv2.ObservedState, TDesired fsmv2.Desi
 	}
 }
 
-type MockConfigLoader struct {
-	childrenCount        int
-	useFailingConnection bool
-}
-
-func NewParentConfig() *MockConfigLoader {
-	return &MockConfigLoader{childrenCount: 1, useFailingConnection: false}
-}
-
-func (m *MockConfigLoader) WithChildren(count int) *MockConfigLoader {
-	m.childrenCount = count
-	return m
-}
-
-func (m *MockConfigLoader) WithFailingConnectionPool() *MockConfigLoader {
-	m.useFailingConnection = true
-	return m
-}
-
-func (m *MockConfigLoader) Build() *MockConfigLoader {
-	return m
-}
-
-func (m *MockConfigLoader) LoadConfig() (map[string]interface{}, error) {
-	return map[string]interface{}{
-		"example_config_key": "example_value",
-		"children_count":     m.childrenCount,
-	}, nil
-}
 
 type MockConnectionPool struct {
 	failureMode string
@@ -450,7 +422,7 @@ func (m *MockConnectionPool) Acquire() (child.Connection, error) {
 	defer m.mu.Unlock()
 
 	if m.failureMode == "always" {
-		return nil, fmt.Errorf("connection pool exhausted")
+		return nil, errors.New("connection pool exhausted")
 	}
 	if m.failureMode == "transient" && m.failCount > 0 {
 		m.failCount--

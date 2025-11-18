@@ -23,17 +23,8 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/example-child/action"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/example-child/snapshot"
 )
-
-type mockDeps struct {
-	*fsmv2.BaseDependencies
-}
-
-func newMockDeps() *mockDeps {
-	return &mockDeps{
-		BaseDependencies: fsmv2.NewBaseDependencies(zap.NewNop().Sugar()),
-	}
-}
 
 var _ = Describe("ConnectAction", func() {
 	var (
@@ -43,17 +34,17 @@ var _ = Describe("ConnectAction", func() {
 
 	BeforeEach(func() {
 		ctx = context.Background()
-		depsAny = newMockDeps()
+		depsAny = snapshot.ChildDependencies(fsmv2.NewBaseDependencies(zap.NewNop().Sugar()))
 	})
 
 	Describe("Execute", func() {
 		Context("when executing successfully", func() {
 			It("should complete without error", func() {
-				connectAction := action.NewConnectAction()
+				connectAction := &action.ConnectAction{}
 
 				err := connectAction.Execute(ctx, depsAny)
 
-				Expect(err).To(BeNil())
+				Expect(err).ToNot(HaveOccurred())
 			})
 		})
 
@@ -62,20 +53,20 @@ var _ = Describe("ConnectAction", func() {
 				connectAction := action.NewConnectActionWithFailures(2)
 
 				err1 := connectAction.Execute(ctx, depsAny)
-				Expect(err1).To(BeNil(), "first execution should succeed (skeleton implementation)")
+				Expect(err1).ToNot(HaveOccurred(), "first execution should succeed (skeleton implementation)")
 
 				err2 := connectAction.Execute(ctx, depsAny)
-				Expect(err2).To(BeNil(), "second execution should succeed (skeleton implementation)")
+				Expect(err2).ToNot(HaveOccurred(), "second execution should succeed (skeleton implementation)")
 
 				err3 := connectAction.Execute(ctx, depsAny)
-				Expect(err3).To(BeNil(), "third execution should succeed (skeleton implementation)")
+				Expect(err3).ToNot(HaveOccurred(), "third execution should succeed (skeleton implementation)")
 			})
 		})
 	})
 
 	Describe("Name", func() {
 		It("should return the correct action name", func() {
-			connectAction := action.NewConnectAction()
+			connectAction := &action.ConnectAction{}
 
 			Expect(connectAction.Name()).To(Equal(action.ConnectActionName))
 		})

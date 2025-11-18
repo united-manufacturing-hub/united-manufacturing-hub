@@ -79,6 +79,14 @@ func (w *ChildWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedS
 
 // DeriveDesiredState determines what state the child worker should be in
 func (w *ChildWorker) DeriveDesiredState(spec interface{}) (fsmv2types.DesiredState, error) {
+	// Handle nil spec (used during initialization in AddWorker)
+	if spec == nil {
+		return fsmv2types.DesiredState{
+			State:         "connected",
+			ChildrenSpecs: nil,
+		}, nil
+	}
+
 	userSpec, ok := spec.(fsmv2types.UserSpec)
 	if !ok {
 		return fsmv2types.DesiredState{}, fmt.Errorf("invalid spec type: expected fsmv2types.UserSpec, got %T", spec)
@@ -99,7 +107,7 @@ func (w *ChildWorker) DeriveDesiredState(spec interface{}) (fsmv2types.DesiredSt
 
 // GetInitialState returns the state the FSM should start in
 func (w *ChildWorker) GetInitialState() fsmv2.State[any, any] {
-	return state.NewStoppedState()
+	return &state.StoppedState{}
 }
 
 func (w *ChildWorker) getConnectionStatus() string {

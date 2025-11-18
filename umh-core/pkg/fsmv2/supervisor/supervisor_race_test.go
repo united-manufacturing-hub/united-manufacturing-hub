@@ -58,7 +58,7 @@ var _ = Describe("Supervisor Race Conditions", func() {
 					defer GinkgoRecover()
 					defer wg.Done()
 
-					for i := 0; i < numWorkers; i++ {
+					for i := range numWorkers {
 						identity := fsmv2.Identity{
 							ID:         fmt.Sprintf("worker-%d", i),
 							Name:       fmt.Sprintf("Test Worker %d", i),
@@ -83,7 +83,7 @@ var _ = Describe("Supervisor Race Conditions", func() {
 					defer GinkgoRecover()
 					defer wg.Done()
 
-					for i := 0; i < numWorkers; i++ {
+					for i := range numWorkers {
 						workerID := fmt.Sprintf("worker-%d", i)
 						err := s.RemoveWorker(ctx, workerID)
 						if err != nil {
@@ -98,7 +98,7 @@ var _ = Describe("Supervisor Race Conditions", func() {
 					defer GinkgoRecover()
 					defer wg.Done()
 
-					for i := 0; i < numWorkers*2; i++ {
+					for i := range numWorkers * 2 {
 						workerID := fmt.Sprintf("worker-%d", i%numWorkers)
 						_, err := s.GetWorker(workerID)
 						if err != nil {
@@ -113,14 +113,14 @@ var _ = Describe("Supervisor Race Conditions", func() {
 					defer GinkgoRecover()
 					defer wg.Done()
 
-					for i := 0; i < numWorkers; i++ {
+					for i := range numWorkers {
 						workers := s.ListWorkers()
 						By(fmt.Sprintf("ListWorkers iteration %d: found %d workers", i, len(workers)))
 						time.Sleep(1 * time.Millisecond)
 					}
 				}
 
-				for i := 0; i < numGoroutinesPerOperation; i++ {
+				for range numGoroutinesPerOperation {
 					wg.Add(4)
 					go addWorkers()
 					go removeWorkers()
@@ -147,7 +147,7 @@ var _ = Describe("Supervisor Race Conditions", func() {
 					WorkerType: "test",
 				}
 
-				for i := 0; i < numGoroutines; i++ {
+				for range numGoroutines {
 					wg.Add(1)
 					go func() {
 						defer GinkgoRecover()
@@ -188,13 +188,13 @@ var _ = Describe("Supervisor Race Conditions", func() {
 				const numReaders = 10
 				var wg sync.WaitGroup
 
-				for i := 0; i < numReaders; i++ {
+				for range numReaders {
 					wg.Add(1)
 					go func() {
 						defer GinkgoRecover()
 						defer wg.Done()
 
-						for j := 0; j < 100; j++ {
+						for range 100 {
 							state, reason, err := s.GetWorkerState(identity.ID)
 							if err != nil {
 								By(fmt.Sprintf("GetWorkerState failed: %v", err))
@@ -211,7 +211,7 @@ var _ = Describe("Supervisor Race Conditions", func() {
 					defer GinkgoRecover()
 					defer wg.Done()
 
-					for i := 0; i < 100; i++ {
+					for range 100 {
 						err := s.TestTick(ctx)
 						if err != nil {
 							By(fmt.Sprintf("Tick failed: %v", err))
@@ -229,13 +229,13 @@ var _ = Describe("Supervisor Race Conditions", func() {
 				const numReaders = 10
 				var wg sync.WaitGroup
 
-				for i := 0; i < numReaders; i++ {
+				for range numReaders {
 					wg.Add(1)
 					go func() {
 						defer GinkgoRecover()
 						defer wg.Done()
 
-						for j := 0; j < 100; j++ {
+						for range 100 {
 							children := s.GetChildren()
 							By(fmt.Sprintf("Found %d children", len(children)))
 							time.Sleep(1 * time.Millisecond)

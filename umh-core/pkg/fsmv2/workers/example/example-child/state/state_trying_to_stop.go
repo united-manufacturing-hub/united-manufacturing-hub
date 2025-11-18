@@ -17,7 +17,6 @@ package state
 import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/example-child/action"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/example-child/snapshot"
 )
 
 // TryingToStopState represents the shutdown state where the worker is closing connections
@@ -25,14 +24,9 @@ type TryingToStopState struct {
 	BaseChildState
 }
 
-func NewTryingToStopState() *TryingToStopState {
-	return &TryingToStopState{}
-}
-
 func (s *TryingToStopState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, fsmv2.Action[any]) {
-	// Type-assert once at entry point for type safety
-	_ = snapAny.(snapshot.ChildSnapshot)
-	return s, fsmv2.SignalNone, action.NewDisconnectAction()
+	_ = snapAny.(fsmv2.Snapshot)
+	return s, fsmv2.SignalNone, &action.DisconnectAction{}
 }
 
 func (s *TryingToStopState) String() string {

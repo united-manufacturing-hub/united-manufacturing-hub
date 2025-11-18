@@ -25,18 +25,20 @@ type TryingToConnectState struct {
 	BaseChildState
 }
 
-func NewTryingToConnectState() *TryingToConnectState {
-	return &TryingToConnectState{}
-}
-
 func (s *TryingToConnectState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, fsmv2.Action[any]) {
-	// Type-assert once at entry point for type safety
-	snap := snapAny.(snapshot.ChildSnapshot)
-	if snap.Desired.IsShutdownRequested() {
-		return NewTryingToStopState(), fsmv2.SignalNone, nil
+	rawSnap := snapAny.(fsmv2.Snapshot)
+
+	snap := snapshot.ChildSnapshot{
+		Identity: rawSnap.Identity,
+		Observed: rawSnap.Observed.(snapshot.ChildObservedState),
+		Desired:  *rawSnap.Desired.(*snapshot.ChildDesiredState),
 	}
 
-	return s, fsmv2.SignalNone, action.NewConnectAction()
+	if snap.Desired.IsShutdownRequested() {
+		return &TryingToStopState{}, fsmv2.SignalNone, nil
+	}
+
+	return s, fsmv2.SignalNone, &action.ConnectAction{}
 }
 
 func (s *TryingToConnectState) String() string {

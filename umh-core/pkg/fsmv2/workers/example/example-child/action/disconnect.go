@@ -29,11 +29,6 @@ type DisconnectAction struct {
 	// COMPLETELY EMPTY - no dependencies
 }
 
-// NewDisconnectAction creates a new disconnect action
-func NewDisconnectAction() *DisconnectAction {
-	return &DisconnectAction{}
-}
-
 // Execute releases the connection back to the pool
 // Dependencies are injected via deps parameter, enabling full action functionality.
 func (a *DisconnectAction) Execute(ctx context.Context, depsAny any) error {

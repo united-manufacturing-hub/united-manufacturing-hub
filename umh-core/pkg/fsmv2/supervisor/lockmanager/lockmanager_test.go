@@ -22,7 +22,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/lockmanager"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/lockmanager"
 )
 
 var _ = Describe("LockManager", func() {
@@ -170,7 +170,7 @@ var _ = Describe("LockManager", func() {
 			freshLock := freshManager.NewLock("PerfLock", 1)
 
 			start := time.Now()
-			for i := 0; i < 10000; i++ {
+			for range 10000 {
 				freshLock.Lock()
 				freshLock.Unlock()
 			}

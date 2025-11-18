@@ -126,7 +126,10 @@ func NewTriangularStore(store persistence.Store) *TriangularStore {
 }
 
 
-// SaveIdentity stores immutable worker identity.
+// SaveIdentity stores immutable worker identity (runtime polymorphic API).
+//
+// CONVENTION-BASED NAMING: Collection name is derived from naming convention: {workerType}_identity
+// This allows supervisors to handle multiple worker types at runtime without type-specific code.
 //
 // DESIGN DECISION: Identity is created once and never updated
 // WHY: Identity fields (IP, hostname, bootstrap config) don't change.
@@ -151,7 +154,7 @@ func NewTriangularStore(store persistence.Store) *TriangularStore {
 // Returns:
 //   - error: If worker type not registered or insertion fails
 //
-// Example:
+// Example (runtime polymorphic code):
 //
 //	err := ts.SaveIdentity(ctx, "container", "worker-123", persistence.Document{
 //	    "id": "worker-123",
@@ -194,7 +197,10 @@ func (ts *TriangularStore) SaveIdentity(ctx context.Context, workerType string, 
 	return nil
 }
 
-// LoadIdentity retrieves worker identity.
+// LoadIdentity retrieves worker identity (runtime polymorphic API).
+//
+// CONVENTION-BASED NAMING: Collection name is derived from naming convention: {workerType}_identity
+// This allows supervisors to handle multiple worker types at runtime without type-specific code.
 //
 // DESIGN DECISION: Return ErrNotFound if worker doesn't exist
 // WHY: Explicit error handling - caller knows whether worker exists.
@@ -463,19 +469,21 @@ func (ts *TriangularStore) saveObservedInternal(ctx context.Context, workerType 
 	return nil
 }
 
-// SaveObserved stores system reality with automatic delta checking.
+// SaveObserved stores system reality with automatic delta checking (runtime polymorphic API).
 //
-// DEPRECATED: Use SaveObservedTyped[T]() instead for type safety and no registry dependency.
-// This method will be removed in a future version.
+// CONVENTION-BASED NAMING: Collection name is derived from naming convention: {workerType}_observed
+// This allows supervisors to handle multiple worker types at runtime without type-specific code.
+//
+// For compile-time type safety, use SaveObservedTyped[T]() instead.
 //
 // Migration guide: pkg/cse/storage/MIGRATION.md
 //
-// Example:
+// Example (runtime polymorphic code):
 //
-//	// Old (deprecated):
 //	changed, err := ts.SaveObserved(ctx, "container", id, doc)
 //
-//	// New (recommended):
+// Example (compile-time typed code):
+//
 //	changed, err := storage.SaveObservedTyped[ContainerObservedState](ts, ctx, id, observed)
 //
 // DESIGN DECISION: Built-in delta checking skips unchanged writes

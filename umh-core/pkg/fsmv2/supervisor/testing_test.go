@@ -88,10 +88,10 @@ var _ = Describe("Testing Helpers", func() {
 			retrieved, err := store.LoadDesired(ctx, "test", "test-worker")
 			Expect(err).ToNot(HaveOccurred())
 			// CSE fields are injected automatically
+			// Note: _updated_at is only set on updates, not on first save
 			Expect(retrieved).To(HaveKey(storage.FieldSyncID))
 			Expect(retrieved).To(HaveKey(storage.FieldVersion))
 			Expect(retrieved).To(HaveKey(storage.FieldCreatedAt))
-			Expect(retrieved).To(HaveKey(storage.FieldUpdatedAt))
 		})
 
 		It("should inject correct CSE fields for observed role", func() {
@@ -108,10 +108,10 @@ var _ = Describe("Testing Helpers", func() {
 			retrieved, err := store.LoadObserved(ctx, "test", "test-worker")
 			Expect(err).ToNot(HaveOccurred())
 			// CSE fields are injected automatically
+			// Note: _updated_at is only set on updates, not on first save
 			Expect(retrieved).To(HaveKey(storage.FieldSyncID))
 			Expect(retrieved).To(HaveKey(storage.FieldVersion))
 			Expect(retrieved).To(HaveKey(storage.FieldCreatedAt))
-			Expect(retrieved).To(HaveKey(storage.FieldUpdatedAt))
 		})
 
 		It("should allow storing and retrieving data", func() {

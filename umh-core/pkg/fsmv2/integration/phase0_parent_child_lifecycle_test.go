@@ -97,8 +97,7 @@ var _ = Describe("Phase 0: Parent-Child Lifecycle", func() {
 			By("Registering parent and child worker types")
 
 			err := factory.RegisterFactory[parentSnapshot.ParentObservedState, *parentSnapshot.ParentDesiredState](func(identity fsmv2.Identity) fsmv2.Worker {
-				mockConfigLoader := NewParentConfig()
-				return parent.NewParentWorker(identity.ID, identity.Name, mockConfigLoader, logger)
+				return parent.NewParentWorker(identity.ID, identity.Name, logger)
 			})
 			Expect(err).ToNot(HaveOccurred())
 
@@ -119,8 +118,7 @@ var _ = Describe("Phase 0: Parent-Child Lifecycle", func() {
 
 			By("Creating and adding parent worker instance to supervisor")
 
-			mockConfigLoader := NewParentConfig().WithChildren(1)
-			parentWorker := parent.NewParentWorker("parent-001", "Test Parent", mockConfigLoader, logger)
+			parentWorker := parent.NewParentWorker("parent-001", "Test Parent", logger)
 
 			identity := fsmv2.Identity{
 				ID:         "parent-001",
@@ -135,6 +133,9 @@ var _ = Describe("Phase 0: Parent-Child Lifecycle", func() {
 			desiredDoc := persistence.Document{
 				"id":    "parent-001",
 				"state": "running",
+				"spec": map[string]interface{}{
+					"config": "children_count: 1",
+				},
 			}
 			err = store.SaveDesired(ctx, storage.DeriveWorkerType[parentSnapshot.ParentObservedState](), "parent-001", desiredDoc)
 			Expect(err).NotTo(HaveOccurred())

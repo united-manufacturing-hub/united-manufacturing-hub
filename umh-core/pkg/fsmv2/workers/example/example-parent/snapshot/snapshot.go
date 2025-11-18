@@ -20,23 +20,17 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 )
 
-// ParentDependencies interface to avoid import cycles
-type ParentDependencies interface {
-	fsmv2.Dependencies
-}
-
-// ParentSnapshot represents a point-in-time view of the parent worker state
+// ParentSnapshot represents a point-in-time view of the parent worker state.
 type ParentSnapshot struct {
 	Identity fsmv2.Identity
 	Observed ParentObservedState
 	Desired  ParentDesiredState
 }
 
-// ParentDesiredState represents the target configuration for the parent worker
+// ParentDesiredState represents the target configuration for the parent worker.
 type ParentDesiredState struct {
 	ShutdownRequested bool
 	ChildCount        int
-	Dependencies      ParentDependencies
 }
 
 func (s *ParentDesiredState) IsShutdownRequested() bool {

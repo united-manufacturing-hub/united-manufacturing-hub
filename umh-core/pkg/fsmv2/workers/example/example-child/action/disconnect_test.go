@@ -39,17 +39,17 @@ var _ = Describe("DisconnectAction", func() {
 
 	Describe("Execute", func() {
 		It("should complete without error", func() {
-			disconnectAction := action.NewDisconnectAction()
+			disconnectAction := &action.DisconnectAction{}
 
 			err := disconnectAction.Execute(ctx, depsAny)
 
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 		})
 	})
 
 	Describe("Name", func() {
 		It("should return the correct action name", func() {
-			disconnectAction := action.NewDisconnectAction()
+			disconnectAction := &action.DisconnectAction{}
 
 			Expect(disconnectAction.Name()).To(Equal(action.DisconnectActionName))
 		})

@@ -102,6 +102,7 @@ func RegisterFactory[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState]
 	factoryFunc func(fsmv2.Identity) fsmv2.Worker,
 ) error {
 	workerType := storage.DeriveWorkerType[TObserved]()
+
 	return RegisterFactoryByType(workerType, factoryFunc)
 }
 
@@ -132,6 +133,41 @@ func RegisterSupervisorFactory[TObserved fsmv2.ObservedState, TDesired fsmv2.Des
 	factoryFunc func(interface{}) interface{},
 ) error {
 	workerType := storage.DeriveWorkerType[TObserved]()
+
+	supervisorRegistryMu.Lock()
+	defer supervisorRegistryMu.Unlock()
+
+	if _, exists := supervisorRegistry[workerType]; exists {
+		return fmt.Errorf("supervisor factory already registered for worker type: %s", workerType)
+	}
+
+	supervisorRegistry[workerType] = factoryFunc
+
+	return nil
+}
+
+// RegisterSupervisorFactoryByType adds a supervisor factory using a runtime string type name.
+// This is used for testing and cases where the worker type is determined at runtime.
+// For worker package initialization, use RegisterSupervisorFactory[TObserved, TDesired]() instead.
+//
+// THREAD SAFETY:
+// This function is thread-safe and can be called concurrently from multiple goroutines.
+// However, duplicate registrations will return an error.
+//
+// ERROR CONDITIONS:
+//   - Returns error if workerType is empty
+//   - Returns error if workerType is already registered
+//
+// Example usage (testing):
+//
+//	err := factory.RegisterSupervisorFactoryByType("child", func(cfg interface{}) interface{} {
+//	    supervisorCfg := cfg.(supervisor.Config)
+//	    return supervisor.NewSupervisor[*TestObservedState, *TestDesiredState](supervisorCfg)
+//	})
+func RegisterSupervisorFactoryByType(workerType string, factoryFunc func(interface{}) interface{}) error {
+	if workerType == "" {
+		return errors.New("worker type cannot be empty")
+	}
 
 	supervisorRegistryMu.Lock()
 	defer supervisorRegistryMu.Unlock()
@@ -209,17 +245,19 @@ func NewSupervisorByType(workerType string, config interface{}) (interface{}, er
 	}
 
 	supervisorRegistryMu.RLock()
-	factory, exists := supervisorRegistry[workerType]
+
+	factoryFunc, exists := supervisorRegistry[workerType]
+
 	supervisorRegistryMu.RUnlock()
 
 	if !exists {
 		return nil, fmt.Errorf("no supervisor factory registered for worker type: %s", workerType)
 	}
 
-	return factory(config), nil
+	return factoryFunc(config), nil
 }
 
-// ResetRegistry clears all registered worker types.
+// ResetRegistry clears all registered worker and supervisor factories.
 // This is primarily used for testing to ensure clean state between tests.
 //
 // THREAD SAFETY:
@@ -235,9 +273,16 @@ func NewSupervisorByType(workerType string, config interface{}) (interface{}, er
 //	}
 func ResetRegistry() {
 	registryMu.Lock()
-	defer registryMu.Unlock()
 
 	registry = make(map[string]func(fsmv2.Identity) fsmv2.Worker)
+
+	registryMu.Unlock()
+
+	supervisorRegistryMu.Lock()
+
+	supervisorRegistry = make(map[string]func(interface{}) interface{})
+
+	supervisorRegistryMu.Unlock()
 }
 
 // ListRegisteredTypes returns all registered worker type names.

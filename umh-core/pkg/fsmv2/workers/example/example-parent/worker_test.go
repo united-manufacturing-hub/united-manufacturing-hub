@@ -34,15 +34,13 @@ func TestExampleParent(t *testing.T) {
 
 var _ = Describe("ParentWorker", func() {
 	var (
-		worker       *example_parent.ParentWorker
-		logger       *zap.SugaredLogger
-		configLoader *MockConfigLoader
+		worker *example_parent.ParentWorker
+		logger *zap.SugaredLogger
 	)
 
 	BeforeEach(func() {
 		logger = zap.NewNop().Sugar()
-		configLoader = NewMockConfigLoader()
-		worker = example_parent.NewParentWorker("test-parent", "Test Parent", configLoader, logger)
+		worker = example_parent.NewParentWorker("test-parent", "Test Parent", logger)
 	})
 
 	Describe("NewParentWorker", func() {
@@ -55,7 +53,7 @@ var _ = Describe("ParentWorker", func() {
 		It("should return observed state with timestamp", func() {
 			observed, err := worker.CollectObservedState(context.Background())
 
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(observed).NotTo(BeNil())
 			Expect(observed.GetTimestamp()).NotTo(BeZero())
 		})
@@ -70,7 +68,7 @@ var _ = Describe("ParentWorker", func() {
 
 			desired, err := worker.DeriveDesiredState(spec)
 
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(desired.State).To(Equal("running"))
 			Expect(desired.ChildrenSpecs).To(BeNil())
 		})
@@ -83,7 +81,7 @@ var _ = Describe("ParentWorker", func() {
 
 			desired, err := worker.DeriveDesiredState(spec)
 
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(desired.State).To(Equal("running"))
 			Expect(desired.ChildrenSpecs).To(HaveLen(3))
 			Expect(desired.ChildrenSpecs[0].Name).To(Equal("child-0"))

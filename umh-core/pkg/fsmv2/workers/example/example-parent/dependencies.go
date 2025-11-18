@@ -19,27 +19,14 @@ import (
 	"go.uber.org/zap"
 )
 
-// ConfigLoader is a mock interface for loading configuration
-// In a real implementation, this would fetch config from a store
-type ConfigLoader interface {
-	LoadConfig() (map[string]interface{}, error)
-}
-
 // ParentDependencies provides access to tools needed by parent worker actions
 type ParentDependencies struct {
 	*fsmv2.BaseDependencies
-	configLoader ConfigLoader
 }
 
 // NewParentDependencies creates new dependencies for the parent worker
-func NewParentDependencies(configLoader ConfigLoader, logger *zap.SugaredLogger) *ParentDependencies {
+func NewParentDependencies(logger *zap.SugaredLogger) *ParentDependencies {
 	return &ParentDependencies{
 		BaseDependencies: fsmv2.NewBaseDependencies(logger),
-		configLoader:     configLoader,
 	}
-}
-
-// GetConfigLoader returns the config loader
-func (d *ParentDependencies) GetConfigLoader() ConfigLoader {
-	return d.configLoader
 }

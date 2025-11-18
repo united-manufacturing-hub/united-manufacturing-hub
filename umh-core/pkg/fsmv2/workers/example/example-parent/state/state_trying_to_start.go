@@ -25,18 +25,20 @@ type TryingToStartState struct {
 	BaseParentState
 }
 
-func NewTryingToStartState() *TryingToStartState {
-	return &TryingToStartState{}
-}
-
 func (s *TryingToStartState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, fsmv2.Action[any]) {
-	// Type-assert once at entry point for type safety
-	snap := snapAny.(snapshot.ParentSnapshot)
-	if snap.Desired.IsShutdownRequested() {
-		return NewTryingToStopState(), fsmv2.SignalNone, nil
+	rawSnap := snapAny.(fsmv2.Snapshot)
+
+	snap := snapshot.ParentSnapshot{
+		Identity: rawSnap.Identity,
+		Observed: rawSnap.Observed.(snapshot.ParentObservedState),
+		Desired:  *rawSnap.Desired.(*snapshot.ParentDesiredState),
 	}
 
-	return s, fsmv2.SignalNone, action.NewStartAction()
+	if snap.Desired.IsShutdownRequested() {
+		return &TryingToStopState{}, fsmv2.SignalNone, nil
+	}
+
+	return s, fsmv2.SignalNone, &action.StartAction{}
 }
 
 func (s *TryingToStartState) String() string {

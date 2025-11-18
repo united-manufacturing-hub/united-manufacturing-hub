@@ -16,18 +16,12 @@ package supervisor_test
 
 import (
 	"reflect"
-	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 )
-
-func TestAPIBoundary(t *testing.T) {
-	RegisterFailHandler(Fail)
-	RunSpecs(t, "Supervisor API Boundary Suite")
-}
 
 var _ = Describe("Supervisor API Boundary", func() {
 	var supervisorType reflect.Type

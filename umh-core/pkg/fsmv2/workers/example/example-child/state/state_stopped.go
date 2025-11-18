@@ -19,24 +19,25 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/example-child/snapshot"
 )
 
-// StoppedState represents the initial state where the child worker is not connected
+// StoppedState represents the initial state where the child worker is not connected.
 type StoppedState struct {
 	BaseChildState
 }
 
-func NewStoppedState() *StoppedState {
-	return &StoppedState{}
-}
-
 func (s *StoppedState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, fsmv2.Action[any]) {
-	// Type-assert once at entry point for type safety
-	snap := snapAny.(snapshot.ChildSnapshot)
+	rawSnap := snapAny.(fsmv2.Snapshot)
+
+	snap := snapshot.ChildSnapshot{
+		Identity: rawSnap.Identity,
+		Observed: rawSnap.Observed.(snapshot.ChildObservedState),
+		Desired:  *rawSnap.Desired.(*snapshot.ChildDesiredState),
+	}
 
 	if snap.Desired.IsShutdownRequested() {
 		return s, fsmv2.SignalNeedsRemoval, nil
 	}
 
-	return NewTryingToConnectState(), fsmv2.SignalNone, nil
+	return &TryingToConnectState{}, fsmv2.SignalNone, nil
 }
 
 func (s *StoppedState) String() string {

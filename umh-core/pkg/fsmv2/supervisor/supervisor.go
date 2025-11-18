@@ -91,7 +91,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/health"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/lockmanager"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/lockmanager"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 )
 
@@ -881,7 +881,7 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 
 	// I16: Validate ObservedState is not nil from storage
 	if storageSnapshot.Observed == nil {
-		panic(fmt.Sprintf("Invariant I16 violated: storage returned nil ObservedState for worker %s", workerID))
+		panic("Invariant I16 violated: storage returned nil ObservedState for worker " + workerID)
 	}
 
 	// Load typed observed state
@@ -955,7 +955,7 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 
 	// I16: Validate ObservedState is not nil before progressing FSM
 	if snapshot.Observed == nil {
-		panic(fmt.Sprintf("Invariant I16 violated: attempted to progress FSM with nil ObservedState for worker %s", workerID))
+		panic("Invariant I16 violated: attempted to progress FSM with nil ObservedState for worker " + workerID)
 	}
 
 	// Data is fresh - safe to progress FSM
@@ -1599,7 +1599,7 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 
 			// Create worker identity
 			childIdentity := fsmv2.Identity{
-				ID:         fmt.Sprintf("%s-001", spec.Name),
+				ID:         spec.Name + "-001",
 				Name:       spec.Name,
 				WorkerType: spec.WorkerType,
 			}
@@ -1944,11 +1944,15 @@ func (s *Supervisor[TObserved, TDesired]) recordHierarchyMetrics() {
 }
 
 // isStarted returns whether the supervisor has been started.
+//
+//nolint:unused // Part of API design, may be used in future
 func (s *Supervisor[TObserved, TDesired]) isStarted() bool {
 	return s.started.Load()
 }
 
 // getContext returns the current context for the supervisor.
+//
+//nolint:unused // Part of API design, may be used in future
 func (s *Supervisor[TObserved, TDesired]) getContext() context.Context {
 	s.ctxMu.RLock()
 	defer s.ctxMu.RUnlock()

@@ -29,11 +29,6 @@ type ConnectAction struct {
 	// COMPLETELY EMPTY - no dependencies, no state
 }
 
-// NewConnectAction creates a new connect action
-func NewConnectAction() *ConnectAction {
-	return &ConnectAction{}
-}
-
 // NewConnectActionWithFailures creates a connect action that will fail N times before succeeding
 // Note: Retry logic will be handled by ActionExecutor in Phase 2C, not by the action itself.
 func NewConnectActionWithFailures(failCount int) *ConnectAction {

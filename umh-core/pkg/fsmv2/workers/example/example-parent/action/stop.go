@@ -17,7 +17,7 @@ package action
 import (
 	"context"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/example-parent/snapshot"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 )
 
 const StopActionName = "stop"
@@ -29,17 +29,14 @@ type StopAction struct {
 	// COMPLETELY EMPTY - no dependencies
 }
 
-// NewStopAction creates a new stop action
-func NewStopAction() *StopAction {
-	return &StopAction{}
-}
-
 // Execute stops all children gracefully
 // Dependencies are injected via deps parameter, enabling full action functionality.
 func (a *StopAction) Execute(ctx context.Context, depsAny any) error {
-	deps := depsAny.(snapshot.ParentDependencies)
-	logger := deps.GetLogger()
-	logger.Info("Stopping parent worker")
+	if depsAny != nil {
+		deps := depsAny.(fsmv2.Dependencies)
+		logger := deps.GetLogger()
+		logger.Info("Stopping parent worker")
+	}
 	return nil
 }
 

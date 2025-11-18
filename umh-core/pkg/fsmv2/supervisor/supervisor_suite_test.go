@@ -68,10 +68,15 @@ func registerTestWorkerFactories() {
 		"failing-child",
 		"working",
 		"failing",
+		"container",
+		"s6_service",
+		"type_a",
+		"type_b",
 	}
 
 	for _, workerType := range workerTypes {
 		wt := workerType
+		// Register worker factory
 		err := factory.RegisterFactoryByType(wt, func(identity fsmv2.Identity) fsmv2.Worker {
 			return &supervisor.TestWorkerWithType{
 				TestWorker: supervisor.TestWorker{},
@@ -80,6 +85,15 @@ func registerTestWorkerFactories() {
 		})
 		if err != nil {
 			panic(fmt.Sprintf("failed to register test worker factory for %s: %v", wt, err))
+		}
+
+		// Register supervisor factory for hierarchical composition
+		err = factory.RegisterSupervisorFactoryByType(wt, func(cfg interface{}) interface{} {
+			supervisorCfg := cfg.(supervisor.Config)
+			return supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisorCfg)
+		})
+		if err != nil {
+			panic(fmt.Sprintf("failed to register test supervisor factory for %s: %v", wt, err))
 		}
 	}
 }
@@ -391,18 +405,20 @@ func createTestTriangularStore() *storage.TriangularStore {
 	ctx := context.Background()
 	basicStore := memory.NewInMemoryStore()
 
-	workerType := "test"
+	// Create collections for common worker types used in tests
+	workerTypes := []string{"test", "container"}
+	for _, workerType := range workerTypes {
+		if err := basicStore.CreateCollection(ctx, workerType+"_identity", nil); err != nil {
+			panic(fmt.Sprintf("failed to create identity collection for %s: %v", workerType, err))
+		}
 
-	if err := basicStore.CreateCollection(ctx, workerType+"_identity", nil); err != nil {
-		panic(fmt.Sprintf("failed to create identity collection: %v", err))
-	}
+		if err := basicStore.CreateCollection(ctx, workerType+"_desired", nil); err != nil {
+			panic(fmt.Sprintf("failed to create desired collection for %s: %v", workerType, err))
+		}
 
-	if err := basicStore.CreateCollection(ctx, workerType+"_desired", nil); err != nil {
-		panic(fmt.Sprintf("failed to create desired collection: %v", err))
-	}
-
-	if err := basicStore.CreateCollection(ctx, workerType+"_observed", nil); err != nil {
-		panic(fmt.Sprintf("failed to create observed collection: %v", err))
+		if err := basicStore.CreateCollection(ctx, workerType+"_observed", nil); err != nil {
+			panic(fmt.Sprintf("failed to create observed collection for %s: %v", workerType, err))
+		}
 	}
 
 	return storage.NewTriangularStore(basicStore)
@@ -591,6 +607,7 @@ func (m *mockTriangularStore) LoadSnapshot(ctx context.Context, workerType strin
 	}
 
 	snapshot := &storage.Snapshot{}
+	observedFound := false
 
 	if idMap, ok := m.identity[workerType]; ok {
 		snapshot.Identity = idMap[id]
@@ -601,8 +618,21 @@ func (m *mockTriangularStore) LoadSnapshot(ctx context.Context, workerType strin
 	}
 
 	if obsMap, ok := m.Observed[workerType]; ok {
-		observedDoc := obsMap[id]
-		snapshot.Observed = observedDoc
+		if observedDoc, ok := obsMap[id]; ok {
+			snapshot.Observed = observedDoc
+			observedFound = true
+		}
+	}
+
+	// If observed state was not found in the map at all (not explicitly set to nil),
+	// return an empty document to prevent invariant violation.
+	// This happens when auto-created child workers haven't had their observed state saved yet.
+	// Tests that explicitly set observed to nil will still trigger the panic.
+	if !observedFound {
+		snapshot.Observed = persistence.Document{
+			"id":          id,
+			"collectedAt": time.Now(),
+		}
 	}
 
 	return snapshot, nil

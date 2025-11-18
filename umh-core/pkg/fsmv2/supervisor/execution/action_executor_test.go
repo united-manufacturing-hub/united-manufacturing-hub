@@ -16,6 +16,7 @@ package execution_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync/atomic"
 	"time"
@@ -425,7 +426,7 @@ var _ = Describe("ActionExecutor", func() {
 						time.Sleep(10 * time.Millisecond)
 						failed <- true
 
-						return fmt.Errorf("simulated failure")
+						return errors.New("simulated failure")
 					},
 				}
 
@@ -477,7 +478,7 @@ var _ = Describe("ActionExecutor", func() {
 
 				// Enqueue some actions to create queue depth
 				blockChan := make(chan struct{})
-				for i := 0; i < 5; i++ {
+				for i := range 5 {
 					action := &testAction{
 						execute: func(ctx context.Context) error {
 							<-blockChan
