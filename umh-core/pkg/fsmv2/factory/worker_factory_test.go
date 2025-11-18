@@ -22,7 +22,6 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
 )
 
@@ -323,8 +322,8 @@ func TestListRegisteredTypes_SingleRegistration(t *testing.T) {
 	// Reset registry before test
 	factory.ResetRegistry()
 
-	// Register one worker type using constant for type safety
-	err := factory.RegisterFactoryByType(constants.WorkerTypeMQTTClient, func(id fsmv2.Identity) fsmv2.Worker {
+	// Register one worker type
+	err := factory.RegisterFactoryByType("mqtt_client", func(id fsmv2.Identity) fsmv2.Worker {
 		return &mockWorker{identity: id}
 	})
 	if err != nil {
@@ -337,8 +336,8 @@ func TestListRegisteredTypes_SingleRegistration(t *testing.T) {
 		t.Errorf("ListRegisteredTypes() returned %d types, want 1", len(types))
 	}
 
-	if types[0] != constants.WorkerTypeMQTTClient {
-		t.Errorf("ListRegisteredTypes() returned %q, want %q", types[0], constants.WorkerTypeMQTTClient)
+	if types[0] != "mqtt_client" {
+		t.Errorf("ListRegisteredTypes() returned %q, want %q", types[0], "mqtt_client")
 	}
 }
 

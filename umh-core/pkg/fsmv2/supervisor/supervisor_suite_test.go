@@ -29,7 +29,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
@@ -51,11 +50,11 @@ var _ = AfterEach(func() {
 
 func registerTestWorkerFactories() {
 	workerTypes := []string{
-		constants.WorkerTypeChild,
-		constants.WorkerTypeParent,
-		constants.WorkerTypeMQTTClient,
+		"child",
+		"parent",
+		"mqtt_client",
 		"mqtt_broker",
-		constants.WorkerTypeOPCUAClient,
+		"opcua_client",
 		"opcua_server",
 		"s7comm_client",
 		"modbus_client",
@@ -69,8 +68,8 @@ func registerTestWorkerFactories() {
 		"failing-child",
 		"working",
 		"failing",
-		constants.WorkerTypeContainer,
-		constants.WorkerTypeS6Service,
+		"container",
+		"s6_service",
 		"type_a",
 		"type_b",
 	}
