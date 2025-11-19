@@ -491,6 +491,20 @@ See `pkg/fsmv2/supervisor/execution/action_idempotency_test.go` for complete exa
 
 This README provides mental models and usage guidance for FSMv2. For deeper understanding, consult these resources:
 
+### Quick Start Guides
+
+- **`docs/getting-started.md`** - 5-minute introduction for new developers
+  - The Triangle Model (Identity + Desired + Observed)
+  - Step-by-step worker creation example
+  - Key interfaces and where to find examples
+
+- **`docs/common-patterns.md`** - Patterns that solve common problems
+  - Always check desired state before transitioning
+  - Shutdown priority in every state
+  - Parent-child coordination
+  - StateMappingRegistry usage
+  - DeriveDesiredState implementation
+
 ### Core Documentation
 
 - **`doc.go`** - Complete API reference and quick start guide

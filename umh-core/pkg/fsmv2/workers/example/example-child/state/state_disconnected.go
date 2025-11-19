@@ -31,7 +31,12 @@ func (s *DisconnectedState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Sign
 		return &TryingToStopState{}, fsmv2.SignalNone, nil
 	}
 
-	return &TryingToConnectState{}, fsmv2.SignalNone, nil
+	// Only attempt reconnection if desired state wants us running
+	if snap.Desired.ShouldBeRunning() {
+		return &TryingToConnectState{}, fsmv2.SignalNone, nil
+	}
+
+	return s, fsmv2.SignalNone, nil
 }
 
 func (s *DisconnectedState) String() string {

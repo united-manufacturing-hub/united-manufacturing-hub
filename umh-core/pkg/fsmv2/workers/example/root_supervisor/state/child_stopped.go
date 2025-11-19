@@ -16,33 +16,33 @@ package state
 
 import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/example-child/snapshot"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/root_supervisor/snapshot"
 )
 
-// StoppedState represents the initial state where the child worker is not connected.
-type StoppedState struct {
+// ChildStoppedState represents the initial state for a child worker.
+type ChildStoppedState struct {
 	BaseChildState
 }
 
-func (s *StoppedState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, fsmv2.Action[any]) {
+func (s *ChildStoppedState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, fsmv2.Action[any]) {
 	snap := fsmv2.ConvertSnapshot[snapshot.ChildObservedState, *snapshot.ChildDesiredState](snapAny)
 
 	if snap.Desired.IsShutdownRequested() {
 		return s, fsmv2.SignalNeedsRemoval, nil
 	}
 
-	// Only transition to connecting if desired state wants us running
+	// Only transition to connected if desired state wants us running
 	if snap.Desired.ShouldBeRunning() {
-		return &TryingToConnectState{}, fsmv2.SignalNone, nil
+		return &ChildConnectedState{}, fsmv2.SignalNone, nil
 	}
 
 	return s, fsmv2.SignalNone, nil
 }
 
-func (s *StoppedState) String() string {
+func (s *ChildStoppedState) String() string {
 	return fsmv2.DeriveStateName(s)
 }
 
-func (s *StoppedState) Reason() string {
-	return "Child is stopped, no connection"
+func (s *ChildStoppedState) Reason() string {
+	return "Child is stopped"
 }

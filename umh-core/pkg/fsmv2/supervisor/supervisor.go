@@ -866,7 +866,11 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 		"worker_id", workerID)
 
 	workerCtx.mu.RLock()
-	s.logger.Debugf("Ticking worker: %s, current state: %s", workerID, workerCtx.currentState.String())
+	currentStateStr := "nil"
+	if workerCtx.currentState != nil {
+		currentStateStr = workerCtx.currentState.String()
+	}
+	s.logger.Debugf("Ticking worker: %s, current state: %s", workerID, currentStateStr)
 	workerCtx.mu.RUnlock()
 
 	// Load latest snapshot from database
@@ -886,7 +890,7 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 
 	// Load typed observed state
 	var observed TObserved
-	err = s.store.LoadObservedTyped(ctx, workerCtx.identity.WorkerType, workerID, &observed)
+	err = s.store.LoadObservedTyped(ctx, s.workerType, workerID, &observed)
 	if err != nil {
 		s.logger.Debugf("[DataFreshness] Worker %s: Failed to load typed observed state: %v", workerID, err)
 		return fmt.Errorf("failed to load typed observed state: %w", err)
@@ -894,7 +898,7 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 
 	// Load typed desired state
 	var desired TDesired
-	err = s.store.LoadDesiredTyped(ctx, workerCtx.identity.WorkerType, workerID, &desired)
+	err = s.store.LoadDesiredTyped(ctx, s.workerType, workerID, &desired)
 	if err != nil {
 		s.logger.Debugf("[DataFreshness] Worker %s: Failed to load typed desired state: %v", workerID, err)
 		return fmt.Errorf("failed to load typed desired state: %w", err)
@@ -965,6 +969,12 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 	workerCtx.mu.RUnlock()
 
 	s.logger.Debugf("Evaluating state transition for worker: %s", workerID)
+
+	// Skip state transitions if worker has no FSM state machine
+	if currentState == nil {
+		s.logger.Debugf("Worker %s has no state machine, skipping state transition", workerID)
+		return nil
+	}
 
 	nextState, signal, action := currentState.Next(*snapshot)
 
@@ -1250,6 +1260,31 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 		"supervisor_id", s.workerType,
 		"duration_ms", templateDuration.Milliseconds())
 	metrics.RecordTemplateRenderingDuration(s.workerType, "success", templateDuration)
+
+	// Save derived desired state to database BEFORE tickWorker
+	// This ensures tickWorker loads the freshest desired state from the snapshot
+	desiredJSON, err := json.Marshal(desired)
+	if err != nil {
+		return fmt.Errorf("failed to marshal derived desired state: %w", err)
+	}
+
+	var desiredDoc persistence.Document
+	if err := json.Unmarshal(desiredJSON, &desiredDoc); err != nil {
+		return fmt.Errorf("failed to unmarshal derived desired state to document: %w", err)
+	}
+
+	desiredDoc["id"] = firstWorkerID
+
+	err = s.store.SaveDesired(ctx, s.workerType, firstWorkerID, desiredDoc)
+	if err != nil {
+		// Log the error but continue with the tick - the system can recover on the next tick
+		// The tickWorker will use the previously saved desired state
+		s.logger.Warnf("failed to save derived desired state (will use previous state): %v", err)
+	} else {
+		s.logger.Debug("derived desired state saved",
+			"supervisor_id", s.workerType,
+			"worker_id", firstWorkerID)
+	}
 
 	// Validate ChildrenSpecs before reconciliation
 	if len(desired.ChildrenSpecs) > 0 {

@@ -89,6 +89,7 @@ var _ = Describe("Phase 0: Happy Path Integration", func() {
 		It("should register parent worker type and create worker instances", func() {
 			By("Step 1: Registering parent worker type in factory")
 
+			// Register worker factories
 			err = factory.RegisterFactory[snapshot.ParentObservedState, *snapshot.ParentDesiredState](func(identity fsmv2.Identity) fsmv2.Worker {
 				return parent.NewParentWorker(identity.ID, identity.Name, logger)
 			})
@@ -98,6 +99,21 @@ var _ = Describe("Phase 0: Happy Path Integration", func() {
 				mockConnectionPool := &MockConnectionPool{}
 				return child.NewChildWorker(identity.ID, identity.Name, mockConnectionPool, logger)
 			})
+			Expect(err).ToNot(HaveOccurred())
+
+			// Register supervisor factories (needed for child creation via reconcileChildren)
+			err = factory.RegisterSupervisorFactory[snapshot.ParentObservedState, *snapshot.ParentDesiredState](
+				func(cfg interface{}) interface{} {
+					supervisorCfg := cfg.(supervisor.Config)
+					return supervisor.NewSupervisor[snapshot.ParentObservedState, *snapshot.ParentDesiredState](supervisorCfg)
+				})
+			Expect(err).ToNot(HaveOccurred())
+
+			err = factory.RegisterSupervisorFactory[childSnapshot.ChildObservedState, *childSnapshot.ChildDesiredState](
+				func(cfg interface{}) interface{} {
+					supervisorCfg := cfg.(supervisor.Config)
+					return supervisor.NewSupervisor[childSnapshot.ChildObservedState, *childSnapshot.ChildDesiredState](supervisorCfg)
+				})
 			Expect(err).ToNot(HaveOccurred())
 
 			By("Step 2: Creating parent supervisor")
@@ -125,16 +141,27 @@ var _ = Describe("Phase 0: Happy Path Integration", func() {
 			err = parentSupervisor.AddWorker(parentIdentity, parentWorker)
 			Expect(err).NotTo(HaveOccurred())
 
-			By("Step 3.5: Saving desired state with children_count spec")
+			By("Step 3.5: Setting UserSpec with children_count config")
+
+			// Set UserSpec on supervisor so DeriveDesiredState can generate ChildrenSpecs
+			parentSupervisor.TestUpdateUserSpec(config.UserSpec{
+				Config: "children_count: 1",
+			})
 
 			desiredDoc := persistence.Document{
 				"id":    "parent-001",
 				"state": "running",
-				"spec": map[string]interface{}{
-					"config": "children_count: 1",
-				},
 			}
 			err = mockStore.SaveDesired(ctx, storage.DeriveWorkerType[snapshot.ParentObservedState](), "parent-001", desiredDoc)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Step 3.6: Saving initial observed state with fresh timestamp")
+
+			initialObserved := snapshot.ParentObservedState{
+				ID:          "parent-001",
+				CollectedAt: time.Now(),
+			}
+			_, err = mockStore.SaveObserved(ctx, storage.DeriveWorkerType[snapshot.ParentObservedState](), "parent-001", initialObserved)
 			Expect(err).NotTo(HaveOccurred())
 
 			done := parentSupervisor.Start(ctx)
@@ -241,6 +268,15 @@ var _ = Describe("Phase 0: Happy Path Integration", func() {
 			err = parentSupervisor.AddWorker(parentIdentity, parentWorker)
 			Expect(err).NotTo(HaveOccurred())
 
+			By("Step 2.5: Saving initial observed state with fresh timestamp")
+
+			initialObserved := snapshot.ParentObservedState{
+				ID:          "parent-002",
+				CollectedAt: time.Now(),
+			}
+			_, err = mockStore.SaveObserved(ctx, storage.DeriveWorkerType[snapshot.ParentObservedState](), "parent-002", initialObserved)
+			Expect(err).NotTo(HaveOccurred())
+
 			done := parentSupervisor.Start(ctx)
 			Expect(done).NotTo(BeNil())
 
@@ -249,7 +285,7 @@ var _ = Describe("Phase 0: Happy Path Integration", func() {
 				return state
 			}, "5s", "100ms").Should(Equal("Running"))
 
-			By("Step 2: Requesting parent shutdown via FSM")
+			By("Step 3: Requesting parent shutdown via FSM")
 
 			err = parentSupervisor.TestRequestShutdown(ctx, parentIdentity.ID, "test shutdown")
 			Expect(err).NotTo(HaveOccurred())
@@ -307,6 +343,15 @@ var _ = Describe("Phase 0: Happy Path Integration", func() {
 			})
 
 			err = parentSupervisor.AddWorker(parentIdentity, parentWorker)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Step 2.5: Saving initial observed state with fresh timestamp")
+
+			initialObserved := snapshot.ParentObservedState{
+				ID:          "parent-003",
+				CollectedAt: time.Now(),
+			}
+			_, err = mockStore.SaveObserved(ctx, storage.DeriveWorkerType[snapshot.ParentObservedState](), "parent-003", initialObserved)
 			Expect(err).NotTo(HaveOccurred())
 
 			done := parentSupervisor.Start(ctx)

@@ -17,7 +17,6 @@ package supervisor_test
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -390,6 +389,19 @@ func newSupervisorWithWorker(worker *mockWorker, customStore storage.TriangularS
 		panic(fmt.Sprintf("failed to save initial desired state: %v", err))
 	}
 
+	// Save initial observed state so TestTick can load snapshot
+	// Use persistence.Document to avoid JSON unmarshal errors with interface fields
+	observedDoc := persistence.Document{
+		"id":          identity.ID,
+		"collectedAt": time.Now(),
+		"desired": persistence.Document{
+			"ShutdownReq": false,
+		},
+	}
+	if _, err := triangularStore.SaveObserved(ctx, workerType, identity.ID, observedDoc); err != nil {
+		panic(fmt.Sprintf("failed to save initial observed state: %v", err))
+	}
+
 	return s
 }
 
@@ -580,7 +592,13 @@ func (m *mockTriangularStore) LoadObserved(ctx context.Context, workerType strin
 
 	doc, ok := val.(persistence.Document)
 	if !ok {
-		return nil, errors.New("observed data is not a Document")
+		// I16: Type mismatch detected - this is a programming error
+		// The stored type doesn't match the expected Document type
+		resultType := fmt.Sprintf("%T", val)
+		if len(resultType) > 1 && resultType[0] == '*' {
+			resultType = resultType[1:]
+		}
+		panic(fmt.Sprintf("Invariant I16 violated: worker %s expected type *supervisor.TestObservedState but got %s", id, resultType))
 	}
 
 	return doc, nil
@@ -594,7 +612,19 @@ func (m *mockTriangularStore) LoadObservedTyped(ctx context.Context, workerType 
 
 	doc, ok := result.(persistence.Document)
 	if !ok {
-		return fmt.Errorf("expected Document, got %T", result)
+		// I16: Type mismatch detected - this is a programming error
+		// The stored type doesn't match the expected Document type
+		// Get the expected type name from dest
+		destType := fmt.Sprintf("%T", dest)
+		// Remove pointer prefix for cleaner display
+		if len(destType) > 1 && destType[0] == '*' {
+			destType = destType[1:]
+		}
+		resultType := fmt.Sprintf("%T", result)
+		if len(resultType) > 1 && resultType[0] == '*' {
+			resultType = resultType[1:]
+		}
+		panic(fmt.Sprintf("Invariant I16 violated: worker %s expected type %s but got %s", id, destType, resultType))
 	}
 
 	jsonBytes, _ := json.Marshal(doc)

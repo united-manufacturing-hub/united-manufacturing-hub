@@ -31,7 +31,12 @@ func (s *StoppedState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, f
 		return s, fsmv2.SignalNeedsRemoval, nil
 	}
 
-	return &TryingToStartState{}, fsmv2.SignalNone, nil
+	// Only transition to starting if desired state wants us running
+	if snap.Desired.ShouldBeRunning() {
+		return &TryingToStartState{}, fsmv2.SignalNone, nil
+	}
+
+	return s, fsmv2.SignalNone, nil
 }
 
 func (s *StoppedState) String() string {

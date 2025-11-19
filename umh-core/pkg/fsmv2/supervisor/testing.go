@@ -30,7 +30,7 @@ import (
 type TestObservedState struct {
 	ID          string             `json:"id"`
 	CollectedAt time.Time          `json:"collectedAt"`
-	Desired     fsmv2.DesiredState `json:"desired"`
+	Desired     fsmv2.DesiredState `json:"-"`
 }
 
 func (t *TestObservedState) GetObservedDesiredState() fsmv2.DesiredState {

@@ -130,6 +130,8 @@ var _ = Describe("Hierarchy Metrics (Task 3)", func() {
 			err := parentSup.AddWorker(identity, parentWorker)
 			Expect(err).NotTo(HaveOccurred())
 
+			parentSup.TestUpdateUserSpec(config.UserSpec{Config: "parent-config"})
+
 			store.desired["parent"] = map[string]persistence.Document{
 				"parent-worker": {
 					"id":                "parent-worker",
@@ -198,6 +200,8 @@ var _ = Describe("Hierarchy Metrics (Task 3)", func() {
 			err := parentSup.AddWorker(identity, parentWorker)
 			Expect(err).NotTo(HaveOccurred())
 
+			parentSup.TestUpdateUserSpec(config.UserSpec{Config: "parent-config"})
+
 			store.desired["parent"] = map[string]persistence.Document{
 				"parent-worker": {
 					"id":                "parent-worker",
@@ -263,14 +267,22 @@ var _ = Describe("Hierarchy Metrics (Task 3)", func() {
 				},
 			}
 
+			store.desired["grandchild"] = map[string]persistence.Document{
+				"grandchild-001": {
+					"id":                "grandchild-001",
+					"shutdownRequested": false,
+				},
+			}
+
 			store.Observed["grandchild"] = map[string]interface{}{
-				"grandchild-worker": persistence.Document{
-					"id":          "grandchild-worker",
+				"grandchild-001": persistence.Document{
+					"id":          "grandchild-001",
 					"collectedAt": time.Now(),
 				},
 			}
 
-			time.Sleep(2000 * time.Millisecond)
+			// Wait for first tick (1s) + metrics reporter interval (10s) + buffer
+		time.Sleep(12 * time.Second)
 
 			parentDepth := promtest.ToFloat64(metrics.GetHierarchyDepthGauge().WithLabelValues("parent"))
 			Expect(parentDepth).To(Equal(0.0), "parent supervisor should have depth=0")
@@ -314,6 +326,8 @@ var _ = Describe("Hierarchy Metrics (Task 3)", func() {
 			}
 			err := leafSup.AddWorker(identity, leafWorker)
 			Expect(err).NotTo(HaveOccurred())
+
+			leafSup.TestUpdateUserSpec(config.UserSpec{Config: "leaf-config"})
 
 			store.desired["leaf"] = map[string]persistence.Document{
 				"leaf-worker": {
@@ -367,6 +381,8 @@ var _ = Describe("Hierarchy Metrics (Task 3)", func() {
 			err := parentSup.AddWorker(identity, parentWorker)
 			Expect(err).NotTo(HaveOccurred())
 
+			parentSup.TestUpdateUserSpec(config.UserSpec{Config: "parent-config"})
+
 			store.desired["parent"] = map[string]persistence.Document{
 				"parent-worker": {
 					"id":                "parent-worker",
@@ -381,15 +397,31 @@ var _ = Describe("Hierarchy Metrics (Task 3)", func() {
 				},
 			}
 
+			store.desired["child"] = map[string]persistence.Document{
+				"child1-001": {
+					"id":                "child1-001",
+					"shutdownRequested": false,
+				},
+				"child2-001": {
+					"id":                "child2-001",
+					"shutdownRequested": false,
+				},
+			}
+
 			store.Observed["child"] = map[string]interface{}{
-				"child-worker": persistence.Document{
-					"id":          "child-worker",
+				"child1-001": persistence.Document{
+					"id":          "child1-001",
+					"collectedAt": time.Now(),
+				},
+				"child2-001": persistence.Document{
+					"id":          "child2-001",
 					"collectedAt": time.Now(),
 				},
 			}
 
 			parentSup.Start(ctx)
-			time.Sleep(1500 * time.Millisecond)
+			// Wait for first tick (1s) + metrics reporter interval (10s) + buffer
+			time.Sleep(12 * time.Second)
 
 			metricValue := promtest.ToFloat64(metrics.GetHierarchySizeGauge().WithLabelValues("parent"))
 			Expect(metricValue).To(Equal(3.0), "parent supervisor should have size=3 (self + 2 children)")
@@ -423,6 +455,8 @@ var _ = Describe("Hierarchy Metrics (Task 3)", func() {
 			err := parentSup.AddWorker(identity, parentWorker)
 			Expect(err).NotTo(HaveOccurred())
 
+			parentSup.TestUpdateUserSpec(config.UserSpec{Config: "parent-config"})
+
 			store.desired["parent"] = map[string]persistence.Document{
 				"parent-worker": {
 					"id":                "parent-worker",
@@ -447,14 +481,22 @@ var _ = Describe("Hierarchy Metrics (Task 3)", func() {
 				{Name: "child1", WorkerType: "child", UserSpec: config.UserSpec{}},
 			}
 
+			store.desired["child"] = map[string]persistence.Document{
+				"child1-001": {
+					"id":                "child1-001",
+					"shutdownRequested": false,
+				},
+			}
+
 			store.Observed["child"] = map[string]interface{}{
-				"child-worker": persistence.Document{
-					"id":          "child-worker",
+				"child1-001": persistence.Document{
+					"id":          "child1-001",
 					"collectedAt": time.Now(),
 				},
 			}
 
-			time.Sleep(2000 * time.Millisecond)
+			// Wait for first tick (1s) + metrics reporter interval (10s) + buffer
+			time.Sleep(12 * time.Second)
 
 			updatedSize := promtest.ToFloat64(metrics.GetHierarchySizeGauge().WithLabelValues("parent"))
 			Expect(updatedSize).To(Equal(2.0), "parent should now have size=2 after adding child")
@@ -490,6 +532,8 @@ var _ = Describe("Hierarchy Metrics (Task 3)", func() {
 			err := parentSup.AddWorker(identity, parentWorker)
 			Expect(err).NotTo(HaveOccurred())
 
+			parentSup.TestUpdateUserSpec(config.UserSpec{Config: "parent-config"})
+
 			store.desired["parent"] = map[string]persistence.Document{
 				"parent-worker": {
 					"id":                "parent-worker",
@@ -504,22 +548,31 @@ var _ = Describe("Hierarchy Metrics (Task 3)", func() {
 				},
 			}
 
+			store.desired["child"] = map[string]persistence.Document{
+				"child1-001": {
+					"id":                "child1-001",
+					"shutdownRequested": false,
+				},
+			}
+
 			store.Observed["child"] = map[string]interface{}{
-				"child-worker": persistence.Document{
-					"id":          "child-worker",
+				"child1-001": persistence.Document{
+					"id":          "child1-001",
 					"collectedAt": time.Now(),
 				},
 			}
 
 			parentSup.Start(ctx)
-			time.Sleep(1500 * time.Millisecond)
+			// Wait for first tick (1s) + metrics reporter interval (10s) + buffer
+			time.Sleep(12 * time.Second)
 
 			initialSize := promtest.ToFloat64(metrics.GetHierarchySizeGauge().WithLabelValues("parent"))
 			Expect(initialSize).To(Equal(2.0), "parent should start with size=2")
 
 			parentWorker.childrenSpecs = []config.ChildSpec{}
 
-			time.Sleep(2000 * time.Millisecond)
+			// Wait for first tick (1s) + metrics reporter interval (10s) + buffer
+			time.Sleep(12 * time.Second)
 
 			updatedSize := promtest.ToFloat64(metrics.GetHierarchySizeGauge().WithLabelValues("parent"))
 			Expect(updatedSize).To(Equal(1.0), "parent should now have size=1 after removing child")

@@ -32,6 +32,13 @@ func (s *TryingToStartState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Sig
 		return &TryingToStopState{}, fsmv2.SignalNone, nil
 	}
 
+	// Parent worker is "started" when it has a valid observed state with an ID
+	// The StartAction just logs that it's starting, so we can transition immediately
+	// to Running state where we monitor children health
+	if snap.Observed.ID != "" {
+		return &RunningState{}, fsmv2.SignalNone, nil
+	}
+
 	return s, fsmv2.SignalNone, &action.StartAction{}
 }
 

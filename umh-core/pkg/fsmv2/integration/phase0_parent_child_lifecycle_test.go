@@ -25,6 +25,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
@@ -96,6 +97,7 @@ var _ = Describe("Phase 0: Parent-Child Lifecycle", func() {
 		It("should start parent and child, both reach operational states, and remain stable", func() {
 			By("Registering parent and child worker types")
 
+			// Register worker factories
 			err := factory.RegisterFactory[parentSnapshot.ParentObservedState, *parentSnapshot.ParentDesiredState](func(identity fsmv2.Identity) fsmv2.Worker {
 				return parent.NewParentWorker(identity.ID, identity.Name, logger)
 			})
@@ -105,6 +107,21 @@ var _ = Describe("Phase 0: Parent-Child Lifecycle", func() {
 				mockConnectionPool := NewConnectionPool()
 				return child.NewChildWorker(identity.ID, identity.Name, mockConnectionPool, logger)
 			})
+			Expect(err).ToNot(HaveOccurred())
+
+			// Register supervisor factories (needed for child creation via reconcileChildren)
+			err = factory.RegisterSupervisorFactory[parentSnapshot.ParentObservedState, *parentSnapshot.ParentDesiredState](
+				func(cfg interface{}) interface{} {
+					supervisorCfg := cfg.(supervisor.Config)
+					return supervisor.NewSupervisor[parentSnapshot.ParentObservedState, *parentSnapshot.ParentDesiredState](supervisorCfg)
+				})
+			Expect(err).ToNot(HaveOccurred())
+
+			err = factory.RegisterSupervisorFactory[childSnapshot.ChildObservedState, *childSnapshot.ChildDesiredState](
+				func(cfg interface{}) interface{} {
+					supervisorCfg := cfg.(supervisor.Config)
+					return supervisor.NewSupervisor[childSnapshot.ChildObservedState, *childSnapshot.ChildDesiredState](supervisorCfg)
+				})
 			Expect(err).ToNot(HaveOccurred())
 
 			By("Creating parent supervisor")
@@ -130,12 +147,14 @@ var _ = Describe("Phase 0: Parent-Child Lifecycle", func() {
 
 			By("Saving initial desired state to database")
 
+			// Set UserSpec on supervisor so DeriveDesiredState can generate ChildrenSpecs
+			parentSup.TestUpdateUserSpec(config.UserSpec{
+				Config: "children_count: 1",
+			})
+
 			desiredDoc := persistence.Document{
 				"id":    "parent-001",
 				"state": "running",
-				"spec": map[string]interface{}{
-					"config": "children_count: 1",
-				},
 			}
 			err = store.SaveDesired(ctx, storage.DeriveWorkerType[parentSnapshot.ParentObservedState](), "parent-001", desiredDoc)
 			Expect(err).NotTo(HaveOccurred())

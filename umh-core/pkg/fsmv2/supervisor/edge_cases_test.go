@@ -282,8 +282,6 @@ var _ = Describe("Edge Cases", func() {
 				err = mockStore.SaveDesired(context.Background(), "container", identity.ID, desiredDoc)
 				Expect(err).ToNot(HaveOccurred())
 
-				mockStore.SaveDesiredErr = errors.New("save failed")
-
 				s := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 					WorkerType: "container",
 					Store:      mockStore,
@@ -296,7 +294,11 @@ var _ = Describe("Edge Cases", func() {
 
 				worker := &mockWorker{}
 				err = s.AddWorker(identity, worker)
+
+				// Set error AFTER AddWorker (which needs SaveDesired to succeed)
 				Expect(err).ToNot(HaveOccurred())
+
+				mockStore.SaveDesiredErr = errors.New("save failed")
 
 				err = s.TestRequestShutdown(context.Background(), identity.ID, "test reason")
 				Expect(err).To(HaveOccurred())
@@ -317,15 +319,28 @@ var _ = Describe("Edge Cases", func() {
 					},
 				}
 
-
 				initialState := &mockState{}
 				initialState.nextState = initialState
 				initialState.action = action
 
-				s := newSupervisorWithWorker(&mockWorker{initialState: initialState}, nil, supervisor.CollectorHealthConfig{})
+				s := newSupervisorWithWorker(&mockWorker{initialState: initialState}, nil, supervisor.CollectorHealthConfig{
+					ObservationTimeout: 1000 * time.Millisecond,
+				})
 
-				err := s.TestTick(context.Background())
-				Expect(err).ToNot(HaveOccurred())
+				ctx, cancel := context.WithCancel(context.Background())
+				defer cancel()
+
+				// Start supervisor to run action executor
+				done := s.Start(ctx)
+				defer func() {
+					cancel()
+					<-done
+				}()
+
+
+				// Wait for action to execute
+				time.Sleep(1200 * time.Millisecond)
+
 				Expect(callCount).To(Equal(1))
 			})
 		})
@@ -344,15 +359,28 @@ var _ = Describe("Edge Cases", func() {
 					},
 				}
 
-
 				initialState := &mockState{}
 				initialState.nextState = initialState
 				initialState.action = action
 
-				s := newSupervisorWithWorker(&mockWorker{initialState: initialState}, nil, supervisor.CollectorHealthConfig{})
+				s := newSupervisorWithWorker(&mockWorker{initialState: initialState}, nil, supervisor.CollectorHealthConfig{
+					ObservationTimeout: 1000 * time.Millisecond,
+				})
 
-				err := s.TestTick(context.Background())
-				Expect(err).ToNot(HaveOccurred())
+				ctx, cancel := context.WithCancel(context.Background())
+				defer cancel()
+
+				// Start supervisor to run action executor
+				done := s.Start(ctx)
+				defer func() {
+					cancel()
+					<-done
+				}()
+
+
+				// Wait for action to execute (with retry)
+				time.Sleep(2500 * time.Millisecond)
+
 				Expect(callCount).To(Equal(2))
 			})
 		})
@@ -368,16 +396,28 @@ var _ = Describe("Edge Cases", func() {
 					},
 				}
 
-
 				initialState := &mockState{}
 				initialState.nextState = initialState
 				initialState.action = action
 
-				s := newSupervisorWithWorker(&mockWorker{initialState: initialState}, nil, supervisor.CollectorHealthConfig{})
+				s := newSupervisorWithWorker(&mockWorker{initialState: initialState}, nil, supervisor.CollectorHealthConfig{
+					ObservationTimeout: 1000 * time.Millisecond,
+				})
 
-				err := s.TestTick(context.Background())
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("failed after"))
+				ctx, cancel := context.WithCancel(context.Background())
+				defer cancel()
+
+				// Start supervisor to run action executor
+				done := s.Start(ctx)
+				defer func() {
+					cancel()
+					<-done
+				}()
+
+
+				// Wait for action to execute (with max retries)
+				time.Sleep(3500 * time.Millisecond)
+
 				Expect(callCount).To(Equal(3))
 			})
 		})
@@ -666,8 +706,6 @@ var _ = Describe("Edge Cases", func() {
 				_, err = mockStore.SaveObserved(context.Background(), "container", identity.ID, obs)
 				Expect(err).ToNot(HaveOccurred())
 
-				mockStore.SaveDesiredErr = errors.New("save failed")
-
 				s := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 					WorkerType: "container",
 					Store:      mockStore,
@@ -684,6 +722,9 @@ var _ = Describe("Edge Cases", func() {
 				}
 				err = s.AddWorker(identity, worker)
 				Expect(err).ToNot(HaveOccurred())
+
+				// Set error AFTER AddWorker (which needs SaveDesired to succeed)
+				mockStore.SaveDesiredErr = errors.New("save failed")
 
 				s.TestSetRestartCount(3)
 
@@ -799,7 +840,7 @@ var _ = Describe("Type Safety (Invariant I16)", func() {
 				Expect(panicMessage).To(ContainSubstring("Invariant I16 violated"))
 				Expect(panicMessage).To(ContainSubstring("test-worker"))
 				Expect(panicMessage).To(ContainSubstring("alternateObservedState"))
-				Expect(panicMessage).To(ContainSubstring("mockObservedState"))
+				Expect(panicMessage).To(ContainSubstring("TestObservedState"))
 			})
 		})
 

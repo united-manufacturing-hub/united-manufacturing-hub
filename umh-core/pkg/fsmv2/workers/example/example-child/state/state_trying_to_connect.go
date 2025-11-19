@@ -32,6 +32,12 @@ func (s *TryingToConnectState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.S
 		return &TryingToStopState{}, fsmv2.SignalNone, nil
 	}
 
+	// Child worker is "connected" when observed state shows connected status
+	// After ConnectAction executes, we can transition to Connected
+	if snap.Observed.ConnectionStatus == "connected" {
+		return &ConnectedState{}, fsmv2.SignalNone, nil
+	}
+
 	return s, fsmv2.SignalNone, &action.ConnectAction{}
 }
 

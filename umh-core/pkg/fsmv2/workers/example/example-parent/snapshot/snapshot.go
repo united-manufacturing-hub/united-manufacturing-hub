@@ -37,6 +37,13 @@ func (s *ParentDesiredState) IsShutdownRequested() bool {
 	return s.ShutdownRequested
 }
 
+// ShouldBeRunning returns true if the parent should be in a running state.
+// This is the positive assertion that should be checked before transitioning
+// from stopped to starting states.
+func (s *ParentDesiredState) ShouldBeRunning() bool {
+	return !s.ShutdownRequested
+}
+
 // ParentObservedState represents the current state of the parent worker
 type ParentObservedState struct {
 	ID          string    `json:"id"`

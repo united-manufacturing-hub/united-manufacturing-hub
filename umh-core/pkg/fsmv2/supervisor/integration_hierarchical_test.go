@@ -222,14 +222,25 @@ var _ = Describe("Integration: Hierarchical Composition (Task 0.7)", func() {
 			typedChildSup, ok := childSup.(*supervisor.Supervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState])
 			Expect(ok).To(BeTrue(), "child supervisor should be correct type")
 
+			// The child supervisor was created by reconcileChildren with a worker ID "child-001"
+			// We need to remove that worker and add our own mockHierarchicalWorker
+			// that can declare grandchildren and log DeriveDesiredState calls
+
+			// First, get the worker ID that reconcileChildren created
+			childWorkerID := "child-001" // reconcileChildren uses spec.Name + "-001"
+
+			// Remove the factory-created worker so we can add our custom one
+			err = typedChildSup.RemoveWorker(ctx, childWorkerID)
+			Expect(err).NotTo(HaveOccurred())
+
 			// Now add a worker to child so it can declare grandchildren
 			childIdentity := fsmv2.Identity{
-				ID:         "child-worker",
+				ID:         childWorkerID,
 				Name:       "Child Worker",
 				WorkerType: "child",
 			}
 			childWorker := &mockHierarchicalWorker{
-				id:     "child-worker",
+				id:     childWorkerID,
 				logger: tickLog,
 				childrenSpecs: []config.ChildSpec{
 					{
@@ -240,7 +251,7 @@ var _ = Describe("Integration: Hierarchical Composition (Task 0.7)", func() {
 				},
 				stateName: "running",
 				observed: &mockObservedState{
-					ID:          "child-worker",
+					ID:          childWorkerID,
 					CollectedAt: time.Now(),
 					Desired:     &mockDesiredState{},
 				},
@@ -254,15 +265,15 @@ var _ = Describe("Integration: Hierarchical Composition (Task 0.7)", func() {
 
 			// Setup store for child worker
 			store.desired["child"] = map[string]persistence.Document{
-				"child-worker": {
-					"id":                "child-worker",
+				childWorkerID: {
+					"id":                childWorkerID,
 					"shutdownRequested": false,
 				},
 			}
 
 			store.Observed["child"] = map[string]interface{}{
-				"child-worker": persistence.Document{
-					"id":          "child-worker",
+				childWorkerID: persistence.Document{
+					"id":          childWorkerID,
 					"collectedAt": time.Now(),
 				},
 			}
@@ -283,7 +294,7 @@ var _ = Describe("Integration: Hierarchical Composition (Task 0.7)", func() {
 			// Verify all workers derived state
 			events = tickLog.GetEvents()
 			Expect(events).To(ContainElement("DeriveDesiredState:parent"), "parent should have derived state")
-			Expect(events).To(ContainElement("DeriveDesiredState:child-worker"), "child worker should have derived state")
+			Expect(events).To(ContainElement("DeriveDesiredState:child-001"), "child worker should have derived state")
 
 			// Verify grandchild exists (TRUE 3-level hierarchy)
 			grandchildren := childSup.GetChildren()

@@ -51,7 +51,17 @@ var _ = Describe("DataFreshness Full Cycle Integration", func() {
 			"shutdownRequested": false,
 		}
 
+		// Initialize the observed state in the store's internal map
+		// This is required because LoadObservedTyped reads from this map
+		if store.observed["test"] == nil {
+			store.observed["test"] = make(map[string]persistence.Document)
+		}
+
 		store.loadSnapshot = func(ctx context.Context, workerType string, id string) (*storage.Snapshot, error) {
+			// Also update the observed map for LoadObservedTyped
+			store.observed["test"]["test-worker"] = persistence.Document{
+				"collectedAt": snapshotTimestamp,
+			}
 			identity := persistence.Document{
 				"id":         "test-worker",
 				"name":       "Test Worker",

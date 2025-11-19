@@ -25,6 +25,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/collection"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 	"go.uber.org/zap"
 )
 
@@ -75,6 +76,16 @@ var _ = Describe("Supervisor Lifecycle", func() {
 					Timeout:            20 * time.Second,
 					MaxRestartAttempts: 1,
 				})
+
+				// Update the observed state in the store with stale data
+				// This is necessary because newSupervisorWithWorker saves fresh data
+				identity := mockIdentity()
+				store.Observed["test"] = map[string]interface{}{
+					identity.ID: persistence.Document{
+						"id":          identity.ID,
+						"collectedAt": time.Now().Add(-25 * time.Second),
+					},
+				}
 
 				s.TestSetRestartCount(1)
 

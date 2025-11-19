@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Package snapshot provides types for the example child worker.
+// Root types are not needed as we use the generic root package instead.
 package snapshot
 
 import (
@@ -19,11 +21,6 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 )
-
-// ChildDependencies interface to avoid import cycles.
-type ChildDependencies interface {
-	fsmv2.Dependencies
-}
 
 // ChildSnapshot represents a point-in-time view of the child worker state.
 type ChildSnapshot struct {
@@ -34,22 +31,22 @@ type ChildSnapshot struct {
 
 // ChildDesiredState represents the target configuration for the child worker.
 type ChildDesiredState struct {
-	shutdownRequested bool
-	Dependencies      ChildDependencies
+	ShutdownRequested bool
 }
 
+// IsShutdownRequested returns true if shutdown has been requested.
 func (s *ChildDesiredState) IsShutdownRequested() bool {
-	return s.shutdownRequested
+	return s.ShutdownRequested
 }
 
 // ShouldBeRunning returns true if the child should be in a running/connected state.
 // This is the positive assertion that should be checked before transitioning
 // from stopped to starting states.
 func (s *ChildDesiredState) ShouldBeRunning() bool {
-	return !s.shutdownRequested
+	return !s.ShutdownRequested
 }
 
-// ChildObservedState represents the current state of the child worker
+// ChildObservedState represents the current state of the child worker.
 type ChildObservedState struct {
 	ID          string    `json:"id"`
 	CollectedAt time.Time `json:"collected_at"`
@@ -62,10 +59,12 @@ type ChildObservedState struct {
 	ConnectionHealth string `json:"connection_health"`
 }
 
+// GetTimestamp returns the time when this observed state was collected.
 func (o ChildObservedState) GetTimestamp() time.Time {
 	return o.CollectedAt
 }
 
+// GetObservedDesiredState returns the desired state that is actually deployed.
 func (o ChildObservedState) GetObservedDesiredState() fsmv2.DesiredState {
 	return &o.ChildDesiredState
 }
