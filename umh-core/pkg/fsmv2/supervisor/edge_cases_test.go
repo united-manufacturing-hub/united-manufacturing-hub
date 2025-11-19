@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -310,10 +311,10 @@ var _ = Describe("Edge Cases", func() {
 	Describe("Action execution with retry", func() {
 		Context("when action succeeds on first try", func() {
 			It("should execute without retry", func() {
-				callCount := 0
+				var callCount int32
 				action := &mockAction{
 					executeFunc: func(ctx context.Context, deps any) error {
-						callCount++
+						atomic.AddInt32(&callCount, 1)
 
 						return nil
 					},
@@ -341,17 +342,17 @@ var _ = Describe("Edge Cases", func() {
 				// Wait for action to execute
 				time.Sleep(1200 * time.Millisecond)
 
-				Expect(callCount).To(Equal(1))
+				Expect(atomic.LoadInt32(&callCount)).To(Equal(int32(1)))
 			})
 		})
 
 		Context("when action fails once then succeeds", func() {
 			It("should retry and succeed", func() {
-				callCount := 0
+				var callCount int32
 				action := &mockAction{
 					executeFunc: func(ctx context.Context, deps any) error {
-						callCount++
-						if callCount == 1 {
+						count := atomic.AddInt32(&callCount, 1)
+						if count == 1 {
 							return errors.New("temporary error")
 						}
 
@@ -381,16 +382,16 @@ var _ = Describe("Edge Cases", func() {
 				// Wait for action to execute (with retry)
 				time.Sleep(2500 * time.Millisecond)
 
-				Expect(callCount).To(Equal(2))
+				Expect(atomic.LoadInt32(&callCount)).To(Equal(int32(2)))
 			})
 		})
 
 		Context("when action always fails", func() {
 			It("should retry max times then fail", func() {
-				callCount := 0
+				var callCount int32
 				action := &mockAction{
 					executeFunc: func(ctx context.Context, deps any) error {
-						callCount++
+						atomic.AddInt32(&callCount, 1)
 
 						return errors.New("persistent error")
 					},
@@ -418,7 +419,7 @@ var _ = Describe("Edge Cases", func() {
 				// Wait for action to execute (with max retries)
 				time.Sleep(3500 * time.Millisecond)
 
-				Expect(callCount).To(Equal(3))
+				Expect(atomic.LoadInt32(&callCount)).To(Equal(int32(3)))
 			})
 		})
 	})

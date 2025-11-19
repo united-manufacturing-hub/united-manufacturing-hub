@@ -328,9 +328,13 @@ var _ = Describe("Lock Documentation", func() {
 
 	Describe("Lock Order Runtime Assertions", func() {
 		It("should have an assertion function for verifying lock order", func() {
-			// Look for a function like checkLockOrder() or assertLockOrder()
+			// Look for a function like checkLockOrder() or assertLockOrder() in lockmanager
+			lockManagerFset := token.NewFileSet()
+			lockManagerFile, err := parser.ParseFile(lockManagerFset, "lockmanager/lockmanager.go", nil, parser.ParseComments)
+			Expect(err).NotTo(HaveOccurred(), "Failed to parse lockmanager/lockmanager.go")
+
 			var hasLockOrderAssertion bool
-			ast.Inspect(file, func(n ast.Node) bool {
+			ast.Inspect(lockManagerFile, func(n ast.Node) bool {
 				if funcDecl, ok := n.(*ast.FuncDecl); ok {
 					funcName := funcDecl.Name.Name
 					if strings.Contains(funcName, "LockOrder") ||
@@ -406,6 +410,20 @@ var _ = Describe("Lock Analysis Report", func() {
 				if structType, ok := typeSpec.Type.(*ast.StructType); ok {
 					structName := typeSpec.Name.Name
 					for _, field := range structType.Fields.List {
+						// Check for *lockmanager.Lock
+						if starExpr, ok := field.Type.(*ast.StarExpr); ok {
+							if selectorExpr, ok := starExpr.X.(*ast.SelectorExpr); ok {
+								if pkg, ok := selectorExpr.X.(*ast.Ident); ok {
+									if pkg.Name == "lockmanager" && selectorExpr.Sel.Name == "Lock" {
+										for _, name := range field.Names {
+											lockInfo := structName + "." + name.Name + " (*lockmanager.Lock)"
+											locks = append(locks, lockInfo)
+										}
+									}
+								}
+							}
+						}
+						// Check for sync.RWMutex or sync.Mutex (fallback)
 						if fieldType, ok := field.Type.(*ast.SelectorExpr); ok {
 							if pkg, ok := fieldType.X.(*ast.Ident); ok {
 								if pkg.Name == "sync" {

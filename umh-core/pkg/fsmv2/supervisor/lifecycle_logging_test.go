@@ -19,6 +19,7 @@ import (
 	"context"
 	"encoding/json"
 	"strings"
+	"sync"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -30,25 +31,53 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 )
 
+// syncBuffer is a thread-safe wrapper around bytes.Buffer for concurrent log writing
+type syncBuffer struct {
+	buf bytes.Buffer
+	mu  sync.Mutex
+}
+
+func (s *syncBuffer) Write(p []byte) (n int, err error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.buf.Write(p)
+}
+
+func (s *syncBuffer) String() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.buf.String()
+}
+
+func (s *syncBuffer) Sync() error {
+	return nil
+}
+
 var _ = Describe("Lifecycle Logging", func() {
 	var (
-		buf    *bytes.Buffer
+		buf    *syncBuffer
 		logger *zap.SugaredLogger
 		store  *mockStore
 		sup    *supervisor.Supervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState]
 		done   <-chan struct{}
+		mu     sync.Mutex
 	)
 
 	BeforeEach(func() {
-		buf = &bytes.Buffer{}
+		buf = &syncBuffer{}
 		store = newMockStore()
 	})
 
 	AfterEach(func() {
-		if sup != nil {
-			sup.Shutdown()
-			if done != nil {
-				<-done
+		mu.Lock()
+		localSup := sup
+		localDone := done
+		mu.Unlock()
+
+		if localSup != nil {
+			localSup.Shutdown()
+			if localDone != nil {
+				<-localDone
 			}
 		}
 	})
@@ -94,7 +123,10 @@ var _ = Describe("Lifecycle Logging", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 		defer cancel()
 
-		done = sup.Start(ctx)
+		startedDone := sup.Start(ctx)
+		mu.Lock()
+		done = startedDone
+		mu.Unlock()
 		time.Sleep(200 * time.Millisecond)
 	}
 

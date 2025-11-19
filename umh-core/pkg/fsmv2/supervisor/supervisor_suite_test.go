@@ -18,6 +18,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -437,6 +438,8 @@ func createTestTriangularStore() *storage.TriangularStore {
 }
 
 type mockTriangularStore struct {
+	mu sync.RWMutex
+
 	SaveIdentityErr error
 	LoadIdentityErr error
 	SaveDesiredErr  error
@@ -468,6 +471,9 @@ func (m *mockTriangularStore) SaveIdentity(ctx context.Context, workerType strin
 		return m.SaveIdentityErr
 	}
 
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	if m.identity[workerType] == nil {
 		m.identity[workerType] = make(map[string]persistence.Document)
 	}
@@ -482,6 +488,9 @@ func (m *mockTriangularStore) LoadIdentity(ctx context.Context, workerType strin
 		return nil, m.LoadIdentityErr
 	}
 
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
 	if m.identity[workerType] == nil {
 		return nil, persistence.ErrNotFound
 	}
@@ -495,11 +504,14 @@ func (m *mockTriangularStore) LoadIdentity(ctx context.Context, workerType strin
 }
 
 func (m *mockTriangularStore) SaveDesired(ctx context.Context, workerType string, id string, desired persistence.Document) error {
-	m.SaveDesiredCalled++
-
 	if m.SaveDesiredErr != nil {
 		return m.SaveDesiredErr
 	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.SaveDesiredCalled++
 
 	if m.desired[workerType] == nil {
 		m.desired[workerType] = make(map[string]persistence.Document)
@@ -511,11 +523,14 @@ func (m *mockTriangularStore) SaveDesired(ctx context.Context, workerType string
 }
 
 func (m *mockTriangularStore) LoadDesired(ctx context.Context, workerType string, id string) (interface{}, error) {
-	m.LoadDesiredCalled++
-
 	if m.LoadDesiredErr != nil {
 		return nil, m.LoadDesiredErr
 	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.LoadDesiredCalled++
 
 	if m.desired[workerType] == nil {
 		return nil, persistence.ErrNotFound
@@ -545,16 +560,11 @@ func (m *mockTriangularStore) LoadDesiredTyped(ctx context.Context, workerType s
 }
 
 func (m *mockTriangularStore) SaveObserved(ctx context.Context, workerType string, id string, observed interface{}) (bool, error) {
-	m.SaveObservedCalled++
-
 	if m.SaveObservedErr != nil {
 		return false, m.SaveObservedErr
 	}
 
-	if m.Observed[workerType] == nil {
-		m.Observed[workerType] = make(map[string]interface{})
-	}
-
+	// Do JSON marshaling before acquiring lock to minimize hold time
 	var doc persistence.Document
 	if observedDoc, ok := observed.(persistence.Document); ok {
 		doc = observedDoc
@@ -569,17 +579,29 @@ func (m *mockTriangularStore) SaveObserved(ctx context.Context, workerType strin
 		}
 	}
 
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.SaveObservedCalled++
+
+	if m.Observed[workerType] == nil {
+		m.Observed[workerType] = make(map[string]interface{})
+	}
+
 	m.Observed[workerType][id] = doc
 
 	return true, nil
 }
 
 func (m *mockTriangularStore) LoadObserved(ctx context.Context, workerType string, id string) (interface{}, error) {
-	m.LoadObservedCalled++
-
 	if m.LoadObservedErr != nil {
 		return nil, m.LoadObservedErr
 	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.LoadObservedCalled++
 
 	if m.Observed[workerType] == nil {
 		return nil, persistence.ErrNotFound
@@ -635,6 +657,9 @@ func (m *mockTriangularStore) LoadSnapshot(ctx context.Context, workerType strin
 	if m.LoadSnapshotErr != nil {
 		return nil, m.LoadSnapshotErr
 	}
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 
 	snapshot := &storage.Snapshot{}
 	observedFound := false
