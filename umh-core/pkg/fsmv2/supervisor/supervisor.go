@@ -78,6 +78,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -259,8 +260,7 @@ type Supervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] stru
 	healthChecker         *InfrastructureHealthChecker     // Infrastructure health monitoring
 	circuitOpen           bool                             // Circuit breaker state
 	actionExecutor        *execution.ActionExecutor        // Async action execution (Phase 2)
-	metricsStopChan     chan struct{}      // Channel to stop metrics reporter
-	metricsReporterDone chan struct{}      // Channel signaling metrics reporter stopped
+	metricsWg             sync.WaitGroup                   // WaitGroup for metrics reporter goroutine
 	ctx                 context.Context    // Context for supervisor lifecycle
 	ctxCancel           context.CancelFunc // Cancel function for supervisor context
 	// ctxMu Protects ctx and ctxCancel to prevent TOCTOU races during shutdown.
@@ -452,8 +452,6 @@ func NewSupervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState](c
 		healthChecker:         NewInfrastructureHealthChecker(DefaultMaxInfraRecoveryAttempts, DefaultRecoveryAttemptWindow),
 		circuitOpen:           false,
 		actionExecutor:        execution.NewActionExecutor(10, cfg.WorkerType),
-		metricsStopChan:       make(chan struct{}),
-		metricsReporterDone:   make(chan struct{}),
 		collectorHealth: CollectorHealth{
 			observationTimeout: observationTimeout,
 			staleThreshold:     staleThreshold,
@@ -1777,12 +1775,6 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 	}
 	s.ctxMu.Unlock()
 
-	// Stop metrics first (safe to do under lock - just closes channel)
-	if s.metricsStopChan != nil {
-		close(s.metricsStopChan)
-		// NOTE: Will wait for metricsReporterDone outside lock to avoid blocking readers
-	}
-
 	// Shutdown action executor (doesn't block)
 	s.actionExecutor.Shutdown()
 
@@ -1808,19 +1800,10 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 		childDoneChans[name] = done
 	}
 
-	// Need to wait for metrics reporter outside lock
-	metricsReporterDone := s.metricsReporterDone
-	metricsStopChanWasClosed := s.metricsStopChan != nil
-	if metricsStopChanWasClosed {
-		s.metricsStopChan = nil // Prevent double-close
-	}
-
 	s.mu.Unlock()
 
 	// Wait for metrics reporter to finish (outside lock)
-	if metricsStopChanWasClosed && metricsReporterDone != nil {
-		<-metricsReporterDone
-	}
+	s.metricsWg.Wait()
 
 	// Now shutdown children recursively (outside lock)
 	for childName, child := range childrenToShutdown {
@@ -1946,10 +1929,11 @@ func (s *Supervisor[TObserved, TDesired]) calculateHierarchySize() int {
 
 // startMetricsReporter starts a goroutine that periodically records hierarchy metrics.
 // Metrics are recorded every 10 seconds to avoid excessive Prometheus cardinality.
-// The goroutine stops when s.metricsStopChan is closed.
+// The goroutine stops when the context is cancelled.
 func (s *Supervisor[TObserved, TDesired]) startMetricsReporter(ctx context.Context) {
+	s.metricsWg.Add(1)
 	go func() {
-		defer close(s.metricsReporterDone)
+		defer s.metricsWg.Done()
 
 		ticker := time.NewTicker(10 * time.Second)
 		defer ticker.Stop()
@@ -1959,8 +1943,6 @@ func (s *Supervisor[TObserved, TDesired]) startMetricsReporter(ctx context.Conte
 		for {
 			select {
 			case <-ctx.Done():
-				return
-			case <-s.metricsStopChan:
 				return
 			case <-ticker.C:
 				s.recordHierarchyMetrics()
