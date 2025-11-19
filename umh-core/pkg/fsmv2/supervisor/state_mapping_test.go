@@ -12,20 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package fsmv2_test
+package supervisor_test
 
 import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 )
 
 var _ = Describe("StateMappingRegistry", func() {
-	var registry *fsmv2.StateMappingRegistry
+	var registry *supervisor.StateMappingRegistry
 
 	BeforeEach(func() {
-		registry = fsmv2.NewStateMappingRegistry()
+		registry = supervisor.NewStateMappingRegistry()
 	})
 
 	Describe("NewStateMappingRegistry", func() {
@@ -36,7 +36,7 @@ var _ = Describe("StateMappingRegistry", func() {
 
 	Describe("Register", func() {
 		It("should register a single mapping", func() {
-			mapping := fsmv2.StateMapping{
+			mapping := supervisor.StateMapping{
 				ParentState: "StartingChildren",
 				ChildDesired: map[string]string{
 					"child-1": "running",
@@ -44,19 +44,19 @@ var _ = Describe("StateMappingRegistry", func() {
 			}
 			registry.Register(mapping)
 
-			states := registry.DeriveChildDesiredStates("StartingChildren", fsmv2.Snapshot{})
+			states := registry.DeriveChildDesiredStates("StartingChildren", supervisor.Snapshot{})
 			Expect(states).To(HaveLen(1))
 			Expect(states["child-1"]).To(Equal("running"))
 		})
 
 		It("should register multiple mappings for same parent state", func() {
-			mapping1 := fsmv2.StateMapping{
+			mapping1 := supervisor.StateMapping{
 				ParentState: "StartingChildren",
 				ChildDesired: map[string]string{
 					"child-1": "running",
 				},
 			}
-			mapping2 := fsmv2.StateMapping{
+			mapping2 := supervisor.StateMapping{
 				ParentState: "StartingChildren",
 				ChildDesired: map[string]string{
 					"child-2": "running",
@@ -65,20 +65,20 @@ var _ = Describe("StateMappingRegistry", func() {
 			registry.Register(mapping1)
 			registry.Register(mapping2)
 
-			states := registry.DeriveChildDesiredStates("StartingChildren", fsmv2.Snapshot{})
+			states := registry.DeriveChildDesiredStates("StartingChildren", supervisor.Snapshot{})
 			Expect(states).To(HaveLen(2))
 			Expect(states["child-1"]).To(Equal("running"))
 			Expect(states["child-2"]).To(Equal("running"))
 		})
 
 		It("should register mappings for different parent states", func() {
-			mappingStart := fsmv2.StateMapping{
+			mappingStart := supervisor.StateMapping{
 				ParentState: "StartingChildren",
 				ChildDesired: map[string]string{
 					"child-1": "running",
 				},
 			}
-			mappingStop := fsmv2.StateMapping{
+			mappingStop := supervisor.StateMapping{
 				ParentState: "StoppingChildren",
 				ChildDesired: map[string]string{
 					"child-1": "stopped",
@@ -87,17 +87,17 @@ var _ = Describe("StateMappingRegistry", func() {
 			registry.Register(mappingStart)
 			registry.Register(mappingStop)
 
-			startStates := registry.DeriveChildDesiredStates("StartingChildren", fsmv2.Snapshot{})
+			startStates := registry.DeriveChildDesiredStates("StartingChildren", supervisor.Snapshot{})
 			Expect(startStates["child-1"]).To(Equal("running"))
 
-			stopStates := registry.DeriveChildDesiredStates("StoppingChildren", fsmv2.Snapshot{})
+			stopStates := registry.DeriveChildDesiredStates("StoppingChildren", supervisor.Snapshot{})
 			Expect(stopStates["child-1"]).To(Equal("stopped"))
 		})
 	})
 
 	Describe("DeriveChildDesiredStates", func() {
 		It("should return correct states for matching parent state", func() {
-			registry.Register(fsmv2.StateMapping{
+			registry.Register(supervisor.StateMapping{
 				ParentState: "StartingChildren",
 				ChildDesired: map[string]string{
 					"s6-service-1": "running",
@@ -105,37 +105,37 @@ var _ = Describe("StateMappingRegistry", func() {
 				},
 			})
 
-			states := registry.DeriveChildDesiredStates("StartingChildren", fsmv2.Snapshot{})
+			states := registry.DeriveChildDesiredStates("StartingChildren", supervisor.Snapshot{})
 			Expect(states).To(HaveLen(2))
 			Expect(states["s6-service-1"]).To(Equal("running"))
 			Expect(states["s6-service-2"]).To(Equal("running"))
 		})
 
 		It("should return empty map for unknown parent state", func() {
-			registry.Register(fsmv2.StateMapping{
+			registry.Register(supervisor.StateMapping{
 				ParentState: "StartingChildren",
 				ChildDesired: map[string]string{
 					"child-1": "running",
 				},
 			})
 
-			states := registry.DeriveChildDesiredStates("UnknownState", fsmv2.Snapshot{})
+			states := registry.DeriveChildDesiredStates("UnknownState", supervisor.Snapshot{})
 			Expect(states).To(BeEmpty())
 		})
 
 		It("should return empty map for empty registry", func() {
-			states := registry.DeriveChildDesiredStates("AnyState", fsmv2.Snapshot{})
+			states := registry.DeriveChildDesiredStates("AnyState", supervisor.Snapshot{})
 			Expect(states).To(BeEmpty())
 		})
 
 		It("should merge child desired states from multiple mappings", func() {
-			registry.Register(fsmv2.StateMapping{
+			registry.Register(supervisor.StateMapping{
 				ParentState: "Running",
 				ChildDesired: map[string]string{
 					"child-1": "active",
 				},
 			})
-			registry.Register(fsmv2.StateMapping{
+			registry.Register(supervisor.StateMapping{
 				ParentState: "Running",
 				ChildDesired: map[string]string{
 					"child-2": "active",
@@ -143,7 +143,7 @@ var _ = Describe("StateMappingRegistry", func() {
 				},
 			})
 
-			states := registry.DeriveChildDesiredStates("Running", fsmv2.Snapshot{})
+			states := registry.DeriveChildDesiredStates("Running", supervisor.Snapshot{})
 			Expect(states).To(HaveLen(3))
 			Expect(states["child-1"]).To(Equal("active"))
 			Expect(states["child-2"]).To(Equal("active"))
@@ -151,57 +151,57 @@ var _ = Describe("StateMappingRegistry", func() {
 		})
 
 		It("should allow later mappings to override earlier ones for same child", func() {
-			registry.Register(fsmv2.StateMapping{
+			registry.Register(supervisor.StateMapping{
 				ParentState: "Running",
 				ChildDesired: map[string]string{
 					"child-1": "initial",
 				},
 			})
-			registry.Register(fsmv2.StateMapping{
+			registry.Register(supervisor.StateMapping{
 				ParentState: "Running",
 				ChildDesired: map[string]string{
 					"child-1": "overridden",
 				},
 			})
 
-			states := registry.DeriveChildDesiredStates("Running", fsmv2.Snapshot{})
+			states := registry.DeriveChildDesiredStates("Running", supervisor.Snapshot{})
 			Expect(states["child-1"]).To(Equal("overridden"))
 		})
 	})
 
 	Describe("Condition functions", func() {
 		It("should apply mapping when condition returns true", func() {
-			registry.Register(fsmv2.StateMapping{
+			registry.Register(supervisor.StateMapping{
 				ParentState: "Running",
 				ChildDesired: map[string]string{
 					"child-1": "running",
 				},
-				Condition: func(parentSnapshot fsmv2.Snapshot) bool {
+				Condition: func(parentSnapshot supervisor.Snapshot) bool {
 					return true
 				},
 			})
 
-			states := registry.DeriveChildDesiredStates("Running", fsmv2.Snapshot{})
+			states := registry.DeriveChildDesiredStates("Running", supervisor.Snapshot{})
 			Expect(states["child-1"]).To(Equal("running"))
 		})
 
 		It("should skip mapping when condition returns false", func() {
-			registry.Register(fsmv2.StateMapping{
+			registry.Register(supervisor.StateMapping{
 				ParentState: "Running",
 				ChildDesired: map[string]string{
 					"child-1": "running",
 				},
-				Condition: func(parentSnapshot fsmv2.Snapshot) bool {
+				Condition: func(parentSnapshot supervisor.Snapshot) bool {
 					return false
 				},
 			})
 
-			states := registry.DeriveChildDesiredStates("Running", fsmv2.Snapshot{})
+			states := registry.DeriveChildDesiredStates("Running", supervisor.Snapshot{})
 			Expect(states).To(BeEmpty())
 		})
 
 		It("should apply mapping when condition is nil", func() {
-			registry.Register(fsmv2.StateMapping{
+			registry.Register(supervisor.StateMapping{
 				ParentState: "Running",
 				ChildDesired: map[string]string{
 					"child-1": "running",
@@ -209,25 +209,25 @@ var _ = Describe("StateMappingRegistry", func() {
 				Condition: nil,
 			})
 
-			states := registry.DeriveChildDesiredStates("Running", fsmv2.Snapshot{})
+			states := registry.DeriveChildDesiredStates("Running", supervisor.Snapshot{})
 			Expect(states["child-1"]).To(Equal("running"))
 		})
 
 		It("should pass parent snapshot to condition function", func() {
-			var capturedSnapshot fsmv2.Snapshot
-			registry.Register(fsmv2.StateMapping{
+			var capturedSnapshot supervisor.Snapshot
+			registry.Register(supervisor.StateMapping{
 				ParentState: "Running",
 				ChildDesired: map[string]string{
 					"child-1": "running",
 				},
-				Condition: func(parentSnapshot fsmv2.Snapshot) bool {
+				Condition: func(parentSnapshot supervisor.Snapshot) bool {
 					capturedSnapshot = parentSnapshot
 					return true
 				},
 			})
 
-			expectedSnapshot := fsmv2.Snapshot{
-				Identity: fsmv2.Identity{
+			expectedSnapshot := supervisor.Snapshot{
+				Identity: supervisor.Identity{
 					ID:   "parent-id",
 					Name: "parent-name",
 				},
@@ -239,28 +239,28 @@ var _ = Describe("StateMappingRegistry", func() {
 
 		It("should evaluate conditions independently for each mapping", func() {
 			callCount := 0
-			registry.Register(fsmv2.StateMapping{
+			registry.Register(supervisor.StateMapping{
 				ParentState: "Running",
 				ChildDesired: map[string]string{
 					"child-1": "running",
 				},
-				Condition: func(parentSnapshot fsmv2.Snapshot) bool {
+				Condition: func(parentSnapshot supervisor.Snapshot) bool {
 					callCount++
 					return callCount == 1 // true on first call
 				},
 			})
-			registry.Register(fsmv2.StateMapping{
+			registry.Register(supervisor.StateMapping{
 				ParentState: "Running",
 				ChildDesired: map[string]string{
 					"child-2": "running",
 				},
-				Condition: func(parentSnapshot fsmv2.Snapshot) bool {
+				Condition: func(parentSnapshot supervisor.Snapshot) bool {
 					callCount++
 					return callCount == 2 // true on second call
 				},
 			})
 
-			states := registry.DeriveChildDesiredStates("Running", fsmv2.Snapshot{})
+			states := registry.DeriveChildDesiredStates("Running", supervisor.Snapshot{})
 			Expect(states).To(HaveLen(2))
 			Expect(states["child-1"]).To(Equal("running"))
 			Expect(states["child-2"]).To(Equal("running"))
@@ -269,7 +269,7 @@ var _ = Describe("StateMappingRegistry", func() {
 
 	Describe("GetChildDesiredState", func() {
 		BeforeEach(func() {
-			registry.Register(fsmv2.StateMapping{
+			registry.Register(supervisor.StateMapping{
 				ParentState: "StartingChildren",
 				ChildDesired: map[string]string{
 					"s6-service-1": "running",
@@ -279,36 +279,36 @@ var _ = Describe("StateMappingRegistry", func() {
 		})
 
 		It("should return desired state for existing child", func() {
-			state, ok := registry.GetChildDesiredState("StartingChildren", "s6-service-1", fsmv2.Snapshot{})
+			state, ok := registry.GetChildDesiredState("StartingChildren", "s6-service-1", supervisor.Snapshot{})
 			Expect(ok).To(BeTrue())
 			Expect(state).To(Equal("running"))
 		})
 
 		It("should return false for non-existing child", func() {
-			state, ok := registry.GetChildDesiredState("StartingChildren", "non-existent", fsmv2.Snapshot{})
+			state, ok := registry.GetChildDesiredState("StartingChildren", "non-existent", supervisor.Snapshot{})
 			Expect(ok).To(BeFalse())
 			Expect(state).To(BeEmpty())
 		})
 
 		It("should return false for non-existing parent state", func() {
-			state, ok := registry.GetChildDesiredState("UnknownState", "s6-service-1", fsmv2.Snapshot{})
+			state, ok := registry.GetChildDesiredState("UnknownState", "s6-service-1", supervisor.Snapshot{})
 			Expect(ok).To(BeFalse())
 			Expect(state).To(BeEmpty())
 		})
 
 		It("should respect conditions", func() {
-			conditionRegistry := fsmv2.NewStateMappingRegistry()
-			conditionRegistry.Register(fsmv2.StateMapping{
+			conditionRegistry := supervisor.NewStateMappingRegistry()
+			conditionRegistry.Register(supervisor.StateMapping{
 				ParentState: "Running",
 				ChildDesired: map[string]string{
 					"child-1": "running",
 				},
-				Condition: func(parentSnapshot fsmv2.Snapshot) bool {
+				Condition: func(parentSnapshot supervisor.Snapshot) bool {
 					return false
 				},
 			})
 
-			state, ok := conditionRegistry.GetChildDesiredState("Running", "child-1", fsmv2.Snapshot{})
+			state, ok := conditionRegistry.GetChildDesiredState("Running", "child-1", supervisor.Snapshot{})
 			Expect(ok).To(BeFalse())
 			Expect(state).To(BeEmpty())
 		})
@@ -317,10 +317,10 @@ var _ = Describe("StateMappingRegistry", func() {
 	Describe("Example usage from plan", func() {
 		It("should support the example from the plan document", func() {
 			// Create registry
-			registry := fsmv2.NewStateMappingRegistry()
+			registry := supervisor.NewStateMappingRegistry()
 
 			// When parent is "StartingChildren", children should be "running"
-			registry.Register(fsmv2.StateMapping{
+			registry.Register(supervisor.StateMapping{
 				ParentState: "StartingChildren",
 				ChildDesired: map[string]string{
 					"s6-service-1": "running",
@@ -329,7 +329,7 @@ var _ = Describe("StateMappingRegistry", func() {
 			})
 
 			// When parent is "StoppingChildren", children should be "stopped"
-			registry.Register(fsmv2.StateMapping{
+			registry.Register(supervisor.StateMapping{
 				ParentState: "StoppingChildren",
 				ChildDesired: map[string]string{
 					"s6-service-1": "stopped",
@@ -338,14 +338,14 @@ var _ = Describe("StateMappingRegistry", func() {
 			})
 
 			// Query desired states for StartingChildren
-			states := registry.DeriveChildDesiredStates("StartingChildren", fsmv2.Snapshot{})
+			states := registry.DeriveChildDesiredStates("StartingChildren", supervisor.Snapshot{})
 			Expect(states).To(Equal(map[string]string{
 				"s6-service-1": "running",
 				"s6-service-2": "running",
 			}))
 
 			// Query desired states for StoppingChildren
-			states = registry.DeriveChildDesiredStates("StoppingChildren", fsmv2.Snapshot{})
+			states = registry.DeriveChildDesiredStates("StoppingChildren", supervisor.Snapshot{})
 			Expect(states).To(Equal(map[string]string{
 				"s6-service-1": "stopped",
 				"s6-service-2": "stopped",

@@ -12,7 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package fsmv2
+package supervisor
+
+// Snapshot is the complete view of the worker at a point in time.
+// This is a simplified version for state mapping purposes.
+type Snapshot struct {
+	Identity Identity    // Who am I?
+	Observed interface{} // What is the actual state?
+	Desired  interface{} // What should the state be?
+}
+
+// Identity uniquely identifies a worker instance.
+type Identity struct {
+	ID         string `json:"id"`         // Unique identifier (e.g., UUID)
+	Name       string `json:"name"`       // Human-readable name
+	WorkerType string `json:"workerType"` // Type of worker (e.g., "container", "pod")
+}
 
 // StateMapping defines how parent state maps to child desired states.
 // This enables parent FSMs to declaratively specify what state their
