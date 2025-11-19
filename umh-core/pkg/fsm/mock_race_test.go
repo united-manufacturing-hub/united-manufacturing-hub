@@ -43,10 +43,12 @@ func TestMockFSMManager_RaceCondition(t *testing.T) {
 	// Start multiple goroutines calling Reconcile() concurrently
 	// These goroutines will read ReconcileDelay and ReconcileError inside the mutex
 	numReaders := 10
-	for i := 0; i < numReaders; i++ {
+	for range numReaders {
 		wg.Add(1)
+
 		go func() {
 			defer wg.Done()
+
 			for {
 				select {
 				case <-ctx.Done():
@@ -62,7 +64,7 @@ func TestMockFSMManager_RaceCondition(t *testing.T) {
 	// Main goroutine writes to fields using thread-safe setter methods
 	// This should NOT create a race condition with the reads inside Reconcile()
 	numWrites := 1000
-	for i := 0; i < numWrites; i++ {
+	for i := range numWrites {
 		// Use thread-safe setter methods
 		mock.SetReconcileDelay(time.Duration(i) * time.Microsecond)
 		mock.SetReconcileError(errors.New("test error"))
@@ -93,8 +95,10 @@ func TestMockFSMManager_ConcurrentModification(t *testing.T) {
 
 	// Goroutine 1: Continuously calls Reconcile()
 	wg.Add(1)
+
 	go func() {
 		defer wg.Done()
+
 		for {
 			select {
 			case <-ctx.Done():
@@ -107,8 +111,10 @@ func TestMockFSMManager_ConcurrentModification(t *testing.T) {
 
 	// Goroutine 2: Continuously modifies ReconcileDelay using thread-safe setter
 	wg.Add(1)
+
 	go func() {
 		defer wg.Done()
+
 		for i := 0; ; i++ {
 			select {
 			case <-ctx.Done():
@@ -122,8 +128,10 @@ func TestMockFSMManager_ConcurrentModification(t *testing.T) {
 
 	// Goroutine 3: Continuously modifies ReconcileError using thread-safe setter
 	wg.Add(1)
+
 	go func() {
 		defer wg.Done()
+
 		for i := 0; ; i++ {
 			select {
 			case <-ctx.Done():
