@@ -86,6 +86,7 @@ A list of all [stand-alone flows](../usage/data-flows/stand-alone-flow.md) (UI: 
 | --------------------------------- | --------------------- | -------- | -------------------------------------------------- |
 | `name`                            | `string`              | ✔        | Unique within the file.                            |
 | `desiredState`                    | `active` \| `stopped` | ✔        | Agent will converge to this state.                 |
+| `dataFlowComponentConfig.debug_level` | `bool` | ✗ | Enable verbose logging. When `true`, enables DEBUG log level and detailed operational logging (e.g., input/output operations, processing steps, data transformations). When `false` (default), uses INFO log level. **Use only for troubleshooting** - debug logging generates significantly more log data and may impact performance. |
 | `dataFlowComponentConfig.benthos` | object                | ✔        | Inline Benthos config (inputs, pipeline, outputs). |
 
 ```yaml
@@ -93,6 +94,7 @@ dataFlow:
 - name: opcua-to-uns
   desiredState: active
   dataFlowComponentConfig:
+    debug_level: false  # Enable detailed logging for troubleshooting
     benthos:
       input:
         opcua:
@@ -133,8 +135,9 @@ protocolConverter:
 - name: press-opcua
   desiredState: active
   protocolConverterServiceConfig:
+    debug_level: false  # Enable detailed logging for troubleshooting
     location:
-      2: press1 
+      2: press1
     config:
       connection:
         nmap:
@@ -169,6 +172,7 @@ protocolConverter:
 | `name`                                     | Unique ID for this converter instance                                                       |
 | `desiredState`                             | `active` to run immediately, or `stopped` to keep it defined but off.                       |
 | `protocolConverterServiceConfig.location`  | Appended to the global `agent.location`. Optional, but useful to identify per-machine data. |
+| `protocolConverterServiceConfig.debug_level` | Enable verbose logging for troubleshooting. When `true`, enables DEBUG log level and protocol-specific debugging (e.g., OPC UA packet inspection via `OPC_DEBUG=1` environment variable, detailed connection diagnostics). When `false` (default), uses INFO log level. **Use only for troubleshooting** - debug logging generates significantly more log data and may impact performance. Disable after resolving issues. **Note:** Same structure as stand-alone flows - `debug_level` is a direct child of the service config, NOT inside `config:` wrapper. |
 | `template.connection.nmap`                 | TCP liveness check to decide if the device is reachable.                                    |
 | `template.dataflowcomponent_read.benthos`  | Benthos pipeline to pull and forward data.                                                  |
 | `template.dataflowcomponent_write.benthos` | Benthos pipeline to push and forward data.                                                  |

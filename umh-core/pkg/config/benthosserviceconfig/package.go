@@ -14,8 +14,6 @@
 
 package benthosserviceconfig
 
-import "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
-
 var (
 	defaultGenerator  = NewGenerator()
 	defaultNormalizer = NewNormalizer()
@@ -30,12 +28,12 @@ type BenthosServiceConfig struct {
 	Output   map[string]interface{} `yaml:"output"`
 	Buffer   map[string]interface{} `yaml:"buffer,omitempty"`
 
-	LogLevel           string                   `yaml:"log_level,omitempty"`
 	CacheResources     []map[string]interface{} `yaml:"cache_resources,omitempty"`
 	RateLimitResources []map[string]interface{} `yaml:"rate_limit_resources,omitempty"`
 
 	// Advanced configuration
 	MetricsPort uint16 `yaml:"metrics_port"`
+	DebugLevel  bool   `yaml:"debug_level,omitempty"`
 }
 
 // DefaultTopicBrowserBenthosServiceConfig is the default Benthos service config for the topic browser
@@ -60,7 +58,7 @@ var DefaultTopicBrowserBenthosServiceConfig = BenthosServiceConfig{
 	Output: map[string]any{
 		"stdout": map[string]any{},
 	},
-	LogLevel: constants.DefaultBenthosLogLevel,
+	DebugLevel: false,
 }
 
 // Equal checks if two BenthosServiceConfigs are equal.
@@ -69,11 +67,11 @@ func (c BenthosServiceConfig) Equal(other BenthosServiceConfig) bool {
 }
 
 // RenderBenthosYAML is a package-level function for easy YAML generation.
-func RenderBenthosYAML(input, output, pipeline, cacheResources, rateLimitResources, buffer interface{}, metricsPort uint16, logLevel string) (string, error) {
+func RenderBenthosYAML(input, output, pipeline, cacheResources, rateLimitResources, buffer interface{}, metricsPort uint16, debugLevel bool) (string, error) {
 	// Create a config object from the individual components
 	cfg := BenthosServiceConfig{
 		MetricsPort: metricsPort,
-		LogLevel:    logLevel,
+		DebugLevel:  debugLevel,
 	}
 
 	// Convert each section to the appropriate map

@@ -140,6 +140,31 @@ var _ = Describe("ProtocolConverter YAML Comparator", func() {
 			Expect(diff).To(ContainSubstring("Input.mqtt differs"))
 		})
 
+		It("should consider configs with different DebugLevel not equal", func() {
+			config1 := ProtocolConverterServiceConfigSpec{
+				Config: ProtocolConverterServiceConfigTemplate{
+					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{},
+				},
+				DebugLevel: false,
+			}
+
+			config2 := ProtocolConverterServiceConfigSpec{
+				Config: ProtocolConverterServiceConfigTemplate{
+					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{},
+				},
+				DebugLevel: true,
+			}
+
+			comparator := NewComparator()
+			equal := comparator.ConfigsEqual(config1, config2)
+
+			Expect(equal).To(BeFalse())
+			diff := comparator.ConfigDiff(config1, config2)
+			Expect(diff).To(ContainSubstring("DebugLevel"))
+			Expect(diff).To(ContainSubstring("Want: false"))
+			Expect(diff).To(ContainSubstring("Have: true"))
+		})
+
 		It("should consider configs with different output not equal", func() {
 
 			config1 := ProtocolConverterServiceConfigSpec{

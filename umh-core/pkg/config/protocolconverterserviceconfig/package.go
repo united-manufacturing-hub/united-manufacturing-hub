@@ -69,14 +69,16 @@ type ProtocolConverterServiceConfigTemplate struct {
 //   - `ConnectionServiceConfig` has all template variables resolved with proper types.
 type ProtocolConverterServiceConfigRuntime struct {
 
+	// ConnectionServiceConfig is the fully rendered connection configuration
+	// with all template variables resolved and proper types enforced.
+	ConnectionServiceConfig connectionserviceconfig.ConnectionServiceConfigRuntime `yaml:"connection"`
+
 	// DataflowComponentReadServiceConfig and DataflowComponentWriteServiceConfig
 	// remain unchanged as they don't need the template/runtime split yet.
 	DataflowComponentReadServiceConfig  dataflowcomponentserviceconfig.DataflowComponentServiceConfig `yaml:"dataflowcomponent_read"`
 	DataflowComponentWriteServiceConfig dataflowcomponentserviceconfig.DataflowComponentServiceConfig `yaml:"dataflowcomponent_write"`
 
-	// ConnectionServiceConfig is the fully rendered connection configuration
-	// with all template variables resolved and proper types enforced.
-	ConnectionServiceConfig connectionserviceconfig.ConnectionServiceConfigRuntime `yaml:"connection"`
+	DebugLevel bool `yaml:"debug_level,omitempty"`
 }
 
 // ProtocolConverterServiceConfigSpec is the **user‑facing** wrapper that binds a
@@ -100,6 +102,7 @@ type ProtocolConverterServiceConfigSpec struct {
 	Location    map[string]string                      `yaml:"location,omitempty"`
 	TemplateRef string                                 `yaml:"templateRef,omitempty"`
 	Config      ProtocolConverterServiceConfigTemplate `yaml:"config,omitempty"`
+	DebugLevel  bool                                   `yaml:"debug_level,omitempty"`
 }
 
 // Equal checks if two ProtocolConverterServiceConfigs are equal.
@@ -153,8 +156,14 @@ func ConfigsEqualRuntime(desired, observed ProtocolConverterServiceConfigRuntime
 	// Convert runtime configs to spec configs for comparison
 	// This allows us to reuse the existing comparison logic that operates on specs
 	// The comparison will handle deep equality checking of all nested fields
-	desiredSpec := ProtocolConverterServiceConfigSpec{Config: protocolConverterDesiredTemplate}
-	observedSpec := ProtocolConverterServiceConfigSpec{Config: protocolConverterObservedTemplate}
+	desiredSpec := ProtocolConverterServiceConfigSpec{
+		DebugLevel: desired.DebugLevel,
+		Config:     protocolConverterDesiredTemplate,
+	}
+	observedSpec := ProtocolConverterServiceConfigSpec{
+		DebugLevel: observed.DebugLevel,
+		Config:     protocolConverterObservedTemplate,
+	}
 
 	return defaultComparator.ConfigsEqual(desiredSpec, observedSpec)
 }
@@ -167,8 +176,14 @@ func ConfigDiffRuntime(desired, observed ProtocolConverterServiceConfigRuntime) 
 	protocolConverterObservedTemplate := convertRuntimeToTemplate(observed)
 
 	// Convert to spec configs for diffing
-	desiredSpec := ProtocolConverterServiceConfigSpec{Config: protocolConverterDesiredTemplate}
-	observedSpec := ProtocolConverterServiceConfigSpec{Config: protocolConverterObservedTemplate}
+	desiredSpec := ProtocolConverterServiceConfigSpec{
+		DebugLevel: desired.DebugLevel,
+		Config:     protocolConverterDesiredTemplate,
+	}
+	observedSpec := ProtocolConverterServiceConfigSpec{
+		DebugLevel: observed.DebugLevel,
+		Config:     protocolConverterObservedTemplate,
+	}
 
 	return defaultComparator.ConfigDiff(desiredSpec, observedSpec)
 }
@@ -185,9 +200,21 @@ func SpecToRuntime(spec ProtocolConverterServiceConfigSpec) (ProtocolConverterSe
 		return ProtocolConverterServiceConfigRuntime{}, fmt.Errorf("invalid connection configuration: %w", err)
 	}
 
+	// Propagate debug_level: DFC-level OR Spec-level (any true enables debug)
+	readDFC := spec.Config.DataflowComponentReadServiceConfig
+	readDFC.DebugLevel = readDFC.DebugLevel || spec.DebugLevel
+
+	writeDFC := spec.Config.DataflowComponentWriteServiceConfig
+	writeDFC.DebugLevel = writeDFC.DebugLevel || spec.DebugLevel
+
+	// Runtime config preserves both bridge-level and propagated DFC-level debug settings:
+	// - spec.DebugLevel: Bridge-level setting for config comparison (ConfigsEqualRuntime)
+	// - readDFC.DebugLevel/writeDFC.DebugLevel: Propagated settings for actual execution
+	// Both are needed: spec.DebugLevel detects config changes, DFC fields control runtime behavior
 	return ProtocolConverterServiceConfigRuntime{
+		DebugLevel:                          spec.DebugLevel,
 		ConnectionServiceConfig:             connRuntime,
-		DataflowComponentReadServiceConfig:  spec.Config.DataflowComponentReadServiceConfig,
-		DataflowComponentWriteServiceConfig: spec.Config.DataflowComponentWriteServiceConfig,
+		DataflowComponentReadServiceConfig:  readDFC,
+		DataflowComponentWriteServiceConfig: writeDFC,
 	}, nil
 }

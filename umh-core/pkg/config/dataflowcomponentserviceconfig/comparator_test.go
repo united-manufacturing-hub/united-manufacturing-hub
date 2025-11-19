@@ -60,7 +60,7 @@ var _ = Describe("DFC YAML Comparator", func() {
 
 		It("should consider configs with different input not equal", func() {
 			config1 := DataflowComponentServiceConfig{
-				BenthosConfig{
+				BenthosConfig: BenthosConfig{
 					Input: map[string]any{
 						"mqtt": map[string]any{
 							"topic": "test/topic",
@@ -75,7 +75,7 @@ var _ = Describe("DFC YAML Comparator", func() {
 			}
 
 			config2 := DataflowComponentServiceConfig{
-				BenthosConfig{
+				BenthosConfig: BenthosConfig{
 					Input: map[string]any{
 						"mqtt": map[string]any{
 							"topic": "different/topic",
@@ -101,7 +101,7 @@ var _ = Describe("DFC YAML Comparator", func() {
 		It("should consider configs with different output not equal", func() {
 
 			config1 := DataflowComponentServiceConfig{
-				BenthosConfig{
+				BenthosConfig: BenthosConfig{
 					Input: map[string]any{
 						"mqtt": map[string]any{
 							"topic": "test/topic",
@@ -116,7 +116,7 @@ var _ = Describe("DFC YAML Comparator", func() {
 			}
 
 			config2 := DataflowComponentServiceConfig{
-				BenthosConfig{
+				BenthosConfig: BenthosConfig{
 					Input: map[string]any{
 						"mqtt": map[string]any{
 							"topic": "test/topic",
@@ -143,7 +143,7 @@ var _ = Describe("DFC YAML Comparator", func() {
 	Describe("ConfigDiff", func() {
 		It("should generate readable diff for different configs", func() {
 			config1 := DataflowComponentServiceConfig{
-				BenthosConfig{
+				BenthosConfig: BenthosConfig{
 					Input: map[string]any{
 						"mqtt": map[string]any{
 							"topic": "test/topic",
@@ -158,7 +158,7 @@ var _ = Describe("DFC YAML Comparator", func() {
 			}
 
 			config2 := DataflowComponentServiceConfig{
-				BenthosConfig{
+				BenthosConfig: BenthosConfig{
 					Input: map[string]any{
 						"mqtt": map[string]any{
 							"topic": "different/topic",
@@ -187,7 +187,7 @@ var _ = Describe("DFC YAML Comparator", func() {
 	Describe("Package-level functions", func() {
 		It("ConfigsEqual should use default comparator", func() {
 			config1 := DataflowComponentServiceConfig{
-				BenthosConfig{
+				BenthosConfig: BenthosConfig{
 					Input: map[string]any{
 						"mqtt": map[string]any{
 							"topic": "test/topic",
@@ -197,7 +197,7 @@ var _ = Describe("DFC YAML Comparator", func() {
 			}
 
 			config2 := DataflowComponentServiceConfig{
-				BenthosConfig{
+				BenthosConfig: BenthosConfig{
 					Input: map[string]any{
 						"mqtt": map[string]any{
 							"topic": "test/topic",
@@ -218,7 +218,7 @@ var _ = Describe("DFC YAML Comparator", func() {
 
 		It("ConfigDiff should use default comparator", func() {
 			config1 := DataflowComponentServiceConfig{
-				BenthosConfig{
+				BenthosConfig: BenthosConfig{
 					Input: map[string]any{
 						"mqtt": map[string]any{
 							"topic": "test/topic",
@@ -228,7 +228,7 @@ var _ = Describe("DFC YAML Comparator", func() {
 			}
 
 			config2 := DataflowComponentServiceConfig{
-				BenthosConfig{
+				BenthosConfig: BenthosConfig{
 					Input: map[string]any{
 						"mqtt": map[string]any{
 							"topic": "different/topic",

@@ -167,6 +167,68 @@ var _ = Describe("BuildRuntimeConfig", func() {
 		})
 	})
 
+	Describe("debug_level propagation", func() {
+		It("should propagate debug_level from spec.DebugLevel to read and write DFCs", func() {
+			// Start with the example config and modify DebugLevel
+			testSpec := spec
+			testSpec.DebugLevel = true
+
+			result, err := runtime_config.BuildRuntimeConfig(testSpec, agentLocation, globalVars, nodeName, pcName)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(result.DebugLevel).To(BeTrue(), "Runtime config DebugLevel should be true")
+			Expect(result.DataflowComponentReadServiceConfig.DebugLevel).To(BeTrue(), "Read DFC DebugLevel should be true")
+			Expect(result.DataflowComponentWriteServiceConfig.DebugLevel).To(BeTrue(), "Write DFC DebugLevel should be true")
+		})
+
+		It("should respect debug_level priority: DFC level > Spec level", func() {
+			// Test priority: DFC-level overrides spec-level
+			testSpec := spec
+			testSpec.DebugLevel = false // Spec level = false
+			testSpec.Config.DataflowComponentReadServiceConfig.DebugLevel = true  // DFC level = true (higher priority)
+			testSpec.Config.DataflowComponentWriteServiceConfig.DebugLevel = true // DFC level = true (higher priority)
+
+			result, err := runtime_config.BuildRuntimeConfig(testSpec, agentLocation, globalVars, nodeName, pcName)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Runtime config uses spec.DebugLevel directly
+			Expect(result.DebugLevel).To(BeFalse(), "Runtime config should use spec.DebugLevel")
+			// Both DFCs should use their own DebugLevel (true) because DFC level takes precedence
+			Expect(result.DataflowComponentReadServiceConfig.DebugLevel).To(BeTrue(), "Read DFC should use its own DebugLevel (higher priority)")
+			Expect(result.DataflowComponentWriteServiceConfig.DebugLevel).To(BeTrue(), "Write DFC should use its own DebugLevel (higher priority)")
+		})
+
+		It("should default to false when debug_level is not set", func() {
+			// Start with the example config and ensure all DebugLevel fields are false
+			testSpec := spec
+			testSpec.DebugLevel = false
+			testSpec.Config.DataflowComponentReadServiceConfig.DebugLevel = false
+			testSpec.Config.DataflowComponentWriteServiceConfig.DebugLevel = false
+
+			result, err := runtime_config.BuildRuntimeConfig(testSpec, agentLocation, globalVars, nodeName, pcName)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(result.DebugLevel).To(BeFalse(), "Runtime config DebugLevel should default to false")
+			Expect(result.DataflowComponentReadServiceConfig.DebugLevel).To(BeFalse(), "Read DFC DebugLevel should default to false")
+			Expect(result.DataflowComponentWriteServiceConfig.DebugLevel).To(BeFalse(), "Write DFC DebugLevel should default to false")
+		})
+
+		It("should propagate debug_level from spec level when DFC level is false", func() {
+			// Start with the example config and set spec.DebugLevel
+			testSpec := spec
+			testSpec.DebugLevel = true  // Spec level = true
+			testSpec.Config.DataflowComponentReadServiceConfig.DebugLevel = false
+			testSpec.Config.DataflowComponentWriteServiceConfig.DebugLevel = false
+
+			result, err := runtime_config.BuildRuntimeConfig(testSpec, agentLocation, globalVars, nodeName, pcName)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(result.DebugLevel).To(BeTrue(), "Runtime config should use spec.DebugLevel")
+			Expect(result.DataflowComponentReadServiceConfig.DebugLevel).To(BeTrue(), "Read DFC should use spec.DebugLevel")
+			Expect(result.DataflowComponentWriteServiceConfig.DebugLevel).To(BeTrue(), "Write DFC should use spec.DebugLevel")
+		})
+	})
+
 	Describe("Downsampler injection", func() {
 		// Helper function to create a basic connection config for tests
 		createConnectionConfig := func() connectionserviceconfig.ConnectionServiceConfigTemplate {

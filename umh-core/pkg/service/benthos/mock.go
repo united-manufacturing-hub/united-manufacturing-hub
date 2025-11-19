@@ -191,7 +191,7 @@ func (m *MockBenthosService) GetConfig(ctx context.Context, filesystemService fi
 		Input:       map[string]interface{}{"type": "http_server"},
 		Output:      map[string]interface{}{"type": "http_client"},
 		Pipeline:    map[string]interface{}{"processors": []interface{}{}},
-		LogLevel:    "INFO",
+		DebugLevel:  false,
 		MetricsPort: 4195,
 	}, nil
 }

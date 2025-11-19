@@ -52,7 +52,7 @@ var _ = Describe("Benthos Service", func() {
 		// Add the service to the S6 manager
 		err := service.AddBenthosToS6Manager(context.Background(), mockSvcRegistry.GetFileSystem(), &benthosserviceconfig.BenthosServiceConfig{
 			MetricsPort: 4195,
-			LogLevel:    "info",
+			DebugLevel: false,
 		}, benthosName)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -113,7 +113,7 @@ var _ = Describe("Benthos Service", func() {
 			It("should generate valid YAML", func() {
 				cfg := &benthosserviceconfig.BenthosServiceConfig{
 					MetricsPort: 4195,
-					LogLevel:    "INFO",
+					DebugLevel: false,
 				}
 
 				s6Config, err := service.GenerateS6ConfigForBenthos(cfg, "test")
@@ -127,6 +127,41 @@ var _ = Describe("Benthos Service", func() {
 				Expect(yaml).To(ContainSubstring("processors: []"))
 				Expect(yaml).To(ContainSubstring("http:\n  address: 0.0.0.0:4195"))
 				Expect(yaml).To(ContainSubstring("logger:\n  level: INFO"))
+			})
+		})
+
+		Context("S6 environment variables for debug logging", func() {
+			It("should set OPC_DEBUG=debug when DebugLevel is true", func() {
+				cfg := &benthosserviceconfig.BenthosServiceConfig{
+					MetricsPort: 4195,
+					DebugLevel: true,
+				}
+
+				s6Config, err := service.GenerateS6ConfigForBenthos(cfg, "test-debug")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(s6Config.Env).To(HaveKeyWithValue("OPC_DEBUG", "debug"))
+			})
+
+			It("should not set OPC_DEBUG when DebugLevel is false", func() {
+				cfg := &benthosserviceconfig.BenthosServiceConfig{
+					MetricsPort: 4195,
+					DebugLevel: false,
+				}
+
+				s6Config, err := service.GenerateS6ConfigForBenthos(cfg, "test-info")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(s6Config.Env).NotTo(HaveKey("OPC_DEBUG"))
+			})
+
+			It("should not set OPC_DEBUG when DebugLevel is false (default)", func() {
+				cfg := &benthosserviceconfig.BenthosServiceConfig{
+					MetricsPort: 4195,
+					DebugLevel: false,
+				}
+
+				s6Config, err := service.GenerateS6ConfigForBenthos(cfg, "test-empty")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(s6Config.Env).NotTo(HaveKey("OPC_DEBUG"))
 			})
 		})
 
@@ -154,7 +189,7 @@ var _ = Describe("Benthos Service", func() {
 						"memory": map[string]interface{}{"limit": "10MB"},
 					},
 					MetricsPort: 4195,
-					LogLevel:    "INFO",
+					DebugLevel: false,
 				}
 
 				s6Config, err := service.GenerateS6ConfigForBenthos(cfg, "test")
@@ -571,14 +606,14 @@ var _ = Describe("Benthos Service", func() {
 			// Add the service to the S6 manager
 			err := service.AddBenthosToS6Manager(ctx, mockSvcRegistry.GetFileSystem(), &benthosserviceconfig.BenthosServiceConfig{
 				MetricsPort: 4195,
-				LogLevel:    "info",
+				DebugLevel: false,
 			}, benthosName)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Setup initial configuration
 			initialConfig = &benthosserviceconfig.BenthosServiceConfig{
 				MetricsPort: 4195,
-				LogLevel:    "info",
+				DebugLevel: false,
 				Input: map[string]interface{}{
 					"mqtt": map[string]interface{}{
 						"urls":   []string{"tcp://localhost:1883"},
@@ -593,7 +628,7 @@ var _ = Describe("Benthos Service", func() {
 			// Setup updated configuration with different input
 			updatedConfig = &benthosserviceconfig.BenthosServiceConfig{
 				MetricsPort: 4195,
-				LogLevel:    "info",
+				DebugLevel: false,
 				Input: map[string]interface{}{
 					"mqtt": map[string]interface{}{
 						"urls":   []string{"tcp://localhost:1883"},
@@ -794,7 +829,7 @@ logger:
 			// Add the service to the S6 manager
 			err := service.AddBenthosToS6Manager(ctx, mockSvcRegistry.GetFileSystem(), &benthosserviceconfig.BenthosServiceConfig{
 				MetricsPort: 4195,
-				LogLevel:    "info",
+				DebugLevel: false,
 			}, benthosName)
 			Expect(err).NotTo(HaveOccurred())
 
