@@ -1,5 +1,17 @@
 # Sizing Guide
 
+## Supported Architectures
+
+| Architecture | Status | Notes |
+|--------------|--------|-------|
+| x86_64 | ✅ Fully supported | Intel/AMD 64-bit processors |
+| ARM64 | ✅ Fully supported | 64-bit ARM processors (AWS Graviton, Apple Silicon, etc.) |
+| Raspberry Pi | ❌ Not supported | Redpanda requires 48-bit virtual address space; Raspberry Pi provides only 38-bit |
+
+**Why Raspberry Pi doesn't work:** Redpanda uses the Seastar framework which requires a 48-bit virtual address space. Raspberry Pi's ARM processors only provide 38-bit VA space, causing SIGABRT on startup. This is a fundamental hardware limitation documented in [Redpanda GitHub Issue #1542](https://github.com/redpanda-data/redpanda/issues/1542).
+
+## Recommended Starting Point
+
 **Start with → 2 vCPU · 4 GB RAM · 40 GB SSD**
 
 #### What that box handles

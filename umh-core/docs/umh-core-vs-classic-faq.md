@@ -4,7 +4,7 @@
 
 * **Enterprise deployment reality**
   * _In most enterprises_: **tight operating system images, firewalls, and network hoops** turn Kubernetes setup into friction. Custom load-balancers, network policies, storage classes, and custom upgrade paths create endless variables.
-  * _UMH Core_: **anything that runs Docker works** — from MacBook terminals to edge boxes to enterprise K8s clusters.
+  * _UMH Core_: **almost anything that runs Docker works** — from MacBook terminals to edge boxes to enterprise K8s clusters.
 * **Deployment complexity**
   * _UMH Classic_: many pods, sidecars, service meshes → a forest of YAML.
   * _UMH Core_: **one image, one command**, sub-second startup.
