@@ -59,15 +59,15 @@ func TestMockFSMManager_RaceCondition(t *testing.T) {
 		}()
 	}
 
-	// Main goroutine writes to fields without mutex protection
-	// This creates a race condition with the reads inside Reconcile()
+	// Main goroutine writes to fields using thread-safe setter methods
+	// This should NOT create a race condition with the reads inside Reconcile()
 	numWrites := 1000
 	for i := 0; i < numWrites; i++ {
-		// Direct field writes - these are not protected by mutex
-		mock.ReconcileDelay = time.Duration(i) * time.Microsecond
-		mock.ReconcileError = errors.New("test error")
+		// Use thread-safe setter methods
+		mock.SetReconcileDelay(time.Duration(i) * time.Microsecond)
+		mock.SetReconcileError(errors.New("test error"))
 
-		// Also test the builder methods which don't acquire mutex
+		// Also test the builder methods which now acquire mutex
 		mock.WithReconcileDelay(time.Duration(i) * time.Microsecond)
 		mock.WithReconcileError(errors.New("another error"))
 
@@ -105,7 +105,7 @@ func TestMockFSMManager_ConcurrentModification(t *testing.T) {
 		}
 	}()
 
-	// Goroutine 2: Continuously modifies ReconcileDelay
+	// Goroutine 2: Continuously modifies ReconcileDelay using thread-safe setter
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -114,13 +114,13 @@ func TestMockFSMManager_ConcurrentModification(t *testing.T) {
 			case <-ctx.Done():
 				return
 			default:
-				// This write is not protected by mutex
-				mock.ReconcileDelay = time.Duration(i%100) * time.Millisecond
+				// Use thread-safe setter method
+				mock.SetReconcileDelay(time.Duration(i%100) * time.Millisecond)
 			}
 		}
 	}()
 
-	// Goroutine 3: Continuously modifies ReconcileError
+	// Goroutine 3: Continuously modifies ReconcileError using thread-safe setter
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -129,11 +129,11 @@ func TestMockFSMManager_ConcurrentModification(t *testing.T) {
 			case <-ctx.Done():
 				return
 			default:
-				// This write is not protected by mutex
+				// Use thread-safe setter method
 				if i%2 == 0 {
-					mock.ReconcileError = errors.New("error")
+					mock.SetReconcileError(errors.New("error"))
 				} else {
-					mock.ReconcileError = nil
+					mock.SetReconcileError(nil)
 				}
 			}
 		}
