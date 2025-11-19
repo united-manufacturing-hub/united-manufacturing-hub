@@ -12,8 +12,8 @@
 #### Disk usage in practice
 
 Redpanda writes **128 MiB segments**; a segment can be deleted only after it is closed.\
-With Snappy compression, a typical 200 B JSON payload shrinks to ≈ 20 B.\
-Allowing a 5 GB safety buffer, a 40 GB SSD gives **≈ 35 GB usable history ≙ \~2.8 billion messages**.
+With Snappy compression, a typical 200 B JSON payload shrinks to ≈ 50–70 B (3–4× ratio).\
+Allowing a 5 GB safety buffer, a 40 GB SSD gives **≈ 35 GB usable history ≙ ~500–700 million messages**.
 
 _Need more?_\
 Shorten retention (either during install with `internal.redpanda.redpandaServiceConfig.defaultTopicRetentionMs` or later on the topic level using `rpk`) or enlarge the disk.
@@ -51,7 +51,7 @@ The system will prevent you from deploying new bridges if:
 This resource-based blocking is controlled by a feature flag and can be configured in your `config.yaml`:
 ```yaml
 agent:
-  enableResourceLimitBlocking: true  # Enable resource-based bridge blocking (default: false)
+  enableResourceLimitBlocking: false  # Disable resource-based bridge blocking (default: true)
 ```
 
 When enabled, this ensures system stability and prevents one bridge from impacting others. If you need more bridges, either:
