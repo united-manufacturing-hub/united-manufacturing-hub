@@ -38,7 +38,6 @@ ARG TARGETARCH=amd64
 
 # Copy cached files from cache stage
 COPY --from=cache /s6-overlay/s6-overlay-noarch.tar.xz /tmp/
-COPY --from=cache /s6-overlay/syslogd-overlay-noarch.tar.xz /tmp/
 
 # s6-overlay noarch
 RUN tar -C / -Jxpf /tmp/s6-overlay-noarch.tar.xz && rm /tmp/s6-overlay-noarch.tar.xz
@@ -50,8 +49,9 @@ RUN S6_ARCH=$([ "${TARGETARCH}" = "arm64" ] && echo "aarch64" || echo "x86_64") 
     cp /s6-overlay/s6-overlay-${S6_ARCH}.tar.xz /tmp/ && \
     tar -C / -Jxpf /tmp/s6-overlay-${S6_ARCH}.tar.xz && rm /tmp/s6-overlay-${S6_ARCH}.tar.xz
 
-# syslogd overlay
-RUN tar -C / -Jxpf /tmp/syslogd-overlay-noarch.tar.xz && rm /tmp/syslogd-overlay-noarch.tar.xz
+# Note: syslogd overlay is NOT installed because it requires root privileges
+# (creates /var/log/syslogd, drops privileges via s6-applyuidgid). umh-core
+# logs to stdout/stderr (container best practice), so syslog emulation is not needed.
 
 # Benthos installation
 COPY --from=cache /benthos/benthos-linux-amd64 /benthos/benthos-linux-amd64

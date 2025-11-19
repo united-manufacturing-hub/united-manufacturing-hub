@@ -56,25 +56,18 @@ var runScriptParser = regexp.MustCompile(`(?m)fdmove -c 2 1(?:\s+(.+)|$)`)
 var envVarParser = regexp.MustCompile(`export\s+(\w+)\s+(.+)`)
 
 // logFilesizeParser is a dedicated regexp to extract log filesize value from the log run script
-// It specifically matches the pattern "export S6_LOGGING_SCRIPT "n20 s1024 T"" and captures the filesize.
-var logFilesizeParser = regexp.MustCompile(`export\s+S6_LOGGING_SCRIPT\s+"n\d+\s+s(\d+)\s+T"`)
+// It matches the s6-log command format: "s6-log n20 s1024 T /path" and captures the filesize.
+var logFilesizeParser = regexp.MustCompile(`s6-log\s+n\d+\s+s(\d+)\s+T\s+\S+`)
 
 // memoryLimitParser is a regexp to extract the memory limit from the run script.
 var memoryLimitParser = regexp.MustCompile(`s6-softlimit -m\s+(\d+)`)
 
 func getLogRunScript(config s6serviceconfig.S6ServiceConfig, logDir string) (string, error) {
-	// Create logutil-service command line, see also https://skarnet.org/software/s6/s6-log.html
-	// logutil-service is a wrapper around s6_log and reads from the S6_LOGGING_SCRIPT environment variable
-	// We overwrite the default S6_LOGGING_SCRIPT with our own if config.LogFilesize is set
-	logutilServiceCmd := ""
+	// Build s6-log command directly, see https://skarnet.org/software/s6/s6-log.html
+	// Note: We use s6-log directly instead of logutil-service because logutil-service
+	// tries to drop privileges using s6-applyuidgid, which fails in non-root containers.
+	// s6-log runs as the invoking user (umhuser) without requiring privilege changes.
 
-	logutilEnv := ""
-	if config.LogFilesize > 0 {
-		// n20 is currently hardcoded to match the default defined in the Dockerfile
-		// using the same export method as in runScriptTemplate for env variables
-		// Important: This needs to be T (ISO 8861) as our time parser expects this format
-		logutilEnv = fmt.Sprintf("export S6_LOGGING_SCRIPT \"n%d s%d T\"", 20, config.LogFilesize)
-	}
 	// ----------  ⚠️ Logging caveat (2025-07-04)  ----------
 	//
 	// We observed occasional binary blobs in `docker logs ...` that also
@@ -83,37 +76,43 @@ func getLogRunScript(config s6serviceconfig.S6ServiceConfig, logDir string) (str
 	//   • s6-log writes only its own diagnostics to stderr; it never mirrors
 	//     service output to stdout unless the `1` directive is present.
 	//     Source: https://skarnet.org/software/s6/s6-log.html
-	//   • logutil-service passes exactly one action (the log directory), so
-	//     duplicate output is *not* expected. The blobs leak during the
-	//     few milliseconds before s6-log's pipe is ready (startup/rotation
-	//     race in s6-svscan).
+	//   • The blobs leak during the few milliseconds before s6-log's pipe
+	//     is ready (startup/rotation race in s6-svscan).
 	//   • We still *need* those stderr diagnostics because they include
 	//     fatal errors such as "unable to mkdir...", "disk full", and
 	//     "broken pipe" alerts.
 	//
-	// Mitigation: quarantine everything the logger writes **to stderr**
-	// into a side-channel file that does not pollute Docker logs but
-	// remains available for post-mortem analysis.
+	// Mitigation: fdmove -c 2 1 redirects stderr to stdout for logging.
 	//
 	// NOTE: Do **NOT** redirect to /dev/null — that would hide critical
 	// s6-log warnings.
 	//
 	// --------------------------------------------------------
 
-	// Keep stdout quiet (stops binary blob leakage), but leave stderr visible
-	// in Docker logs for s6-log diagnostics
-	logutilServiceCmd = fmt.Sprintf(
-		"logutil-service %s 1>/dev/null",
-		logDir,
-	)
+	// Build s6-log command with directives:
+	// n{count} - number of archived files to keep
+	// s{size} - rotate at this file size (only if LogFilesize > 0)
+	// T - ISO 8601 timestamps (required for our time parser)
+	// Important: This needs to be T (ISO 8861) as our time parser expects this format
+
+	// n20 is currently hardcoded to match the default defined in the Dockerfile
+	archiveCount := 20
+
+	var s6LogCmd string
+	if config.LogFilesize > 0 {
+		// Include explicit size directive when LogFilesize is set
+		s6LogCmd = fmt.Sprintf("s6-log n%d s%d T %s", archiveCount, config.LogFilesize, logDir)
+	} else {
+		// No size directive - s6-log uses its internal default
+		s6LogCmd = fmt.Sprintf("s6-log n%d T %s", archiveCount, logDir)
+	}
 
 	// Create log run script
 	logRunContent := fmt.Sprintf(`#!/command/execlineb -P
 fdmove -c 2 1
 foreground { mkdir -p %s }
 
-%s
-%s`, logDir, logutilEnv, logutilServiceCmd)
+%s`, logDir, s6LogCmd)
 
 	return logRunContent, nil
 }

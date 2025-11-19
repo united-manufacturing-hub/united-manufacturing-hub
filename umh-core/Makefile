@@ -101,7 +101,6 @@ download-docker-binaries:
 		rm -f .docker-cache/s6-overlay/*.tar.xz; \
 		echo "$(S6_OVERLAY_VERSION)" > .docker-cache/s6-overlay/version; \
 		wget -O .docker-cache/s6-overlay/s6-overlay-noarch.tar.xz "https://github.com/just-containers/s6-overlay/releases/download/v$(S6_OVERLAY_VERSION)/s6-overlay-noarch.tar.xz"; \
-		wget -O .docker-cache/s6-overlay/syslogd-overlay-noarch.tar.xz "https://github.com/just-containers/s6-overlay/releases/download/v$(S6_OVERLAY_VERSION)/syslogd-overlay-noarch.tar.xz"; \
 		wget -O .docker-cache/s6-overlay/s6-overlay-x86_64.tar.xz "https://github.com/just-containers/s6-overlay/releases/download/v$(S6_OVERLAY_VERSION)/s6-overlay-x86_64.tar.xz"; \
 		wget -O .docker-cache/s6-overlay/s6-overlay-aarch64.tar.xz "https://github.com/just-containers/s6-overlay/releases/download/v$(S6_OVERLAY_VERSION)/s6-overlay-aarch64.tar.xz"; \
 	fi
@@ -152,7 +151,6 @@ download-docker-binaries:
 		.docker-cache/s6-overlay/s6-overlay-noarch.tar.xz \
 		.docker-cache/s6-overlay/s6-overlay-x86_64.tar.xz \
 		.docker-cache/s6-overlay/s6-overlay-aarch64.tar.xz \
-		.docker-cache/s6-overlay/syslogd-overlay-noarch.tar.xz \
 		.docker-cache/benthos/benthos-linux-amd64 \
 		.docker-cache/benthos/benthos-linux-arm64; \
 	do \

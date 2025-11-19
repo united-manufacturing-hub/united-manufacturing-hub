@@ -1007,8 +1007,7 @@ func (s *DefaultService) IsKnownService(name string) bool {
 		"s6-linux-init-shutdownd",
 		"s6rc-fdholder",
 		"s6rc-oneshot-runner",
-		"syslogd",
-		"syslogd-log",
+		// Note: syslogd and syslogd-log removed for non-root container support
 		"umh-core",
 		// S6 internal directories
 		".s6-svscan",       // Special directory for s6-svscan control
