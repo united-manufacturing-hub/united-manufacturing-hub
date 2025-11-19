@@ -22,15 +22,15 @@ import (
 	"time"
 )
 
-// TestMockFSMManager_RaceCondition demonstrates the race condition between
-// concurrent writes to ReconcileDelay/ReconcileError and reads in Reconcile().
+// TestMockFSMManager_RaceCondition verifies that concurrent writes to
+// ReconcileDelay/ReconcileError and reads in Reconcile() are thread-safe.
 //
-// This test should FAIL with the race detector enabled (-race flag) because:
+// This test should PASS with the race detector enabled (-race flag) because:
 // - Reconcile() acquires mutex and reads ReconcileDelay and ReconcileError
-// - Direct writes to these public fields (or via WithReconcileDelay/WithReconcileError)
-//   do not acquire the mutex
+// - SetReconcileDelay/SetReconcileError and WithReconcileDelay/WithReconcileError
+//   all acquire the mutex before writing
 //
-// This is the RED phase of TDD - proving the race condition exists.
+// This is the GREEN phase of TDD - proving thread-safety is implemented.
 func TestMockFSMManager_RaceCondition(t *testing.T) {
 	mock := NewMockFSMManager()
 
