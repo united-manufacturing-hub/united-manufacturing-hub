@@ -23,7 +23,3 @@ Security considerations for the cloud-based Management Console platform.
 - Authentication and authorization
 - Cloud infrastructure security
 - API security
-
-## Contributing
-
-See [plan.md](./plan.md) for documentation guidelines and future topics.
