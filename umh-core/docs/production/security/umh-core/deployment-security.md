@@ -35,6 +35,27 @@ This model aligns with industry-standard edge gateway security - we secure our s
 
 ---
 
+## Deployment Model: Edge-Only Architecture
+
+umh-core is designed for **edge-only deployment**, which means:
+
+**Network architecture**:
+- ✅ **Outbound HTTPS** to `management.umh.app` (configuration sync, required)
+- ✅ **Outbound connections** to data sources (MQTT brokers, OPC UA servers, Modbus devices, APIs)
+- ❌ **No inbound internet connections** - no services designed for internet exposure
+- ❌ **No public-facing APIs** - GraphQL API is for local access only (localhost:8090)
+
+**Typical deployment location**: Factory floor, behind corporate firewall, on-premises
+
+**Why this matters for security**:
+- Attack surface reduced (no services listening for inbound internet connections)
+- Management Console cannot push commands; umh-core pulls configuration changes
+- Network segmentation best practice: umh-core sits between OT networks and IT infrastructure
+
+**Not "air-gapped"**: umh-core requires outbound internet access to function. It is not designed for fully air-gapped/disconnected environments.
+
+---
+
 ## What umh-core Accesses and Why
 
 ### Filesystem Access
@@ -92,40 +113,60 @@ See [Network Configuration](./network-configuration.md) for details on proxy set
 - Environment variable (`AUTH_TOKEN=xxx`)
 - Configuration file (`/data/config.yaml`)
 
-Both are readable by all processes running as umhuser (UID 1000).
+**Persistence behavior**: Setting `AUTH_TOKEN` via environment variable (`docker run -e AUTH_TOKEN=xxx`) writes it to `/data/config.yaml` **permanently**. On subsequent container restarts, the value from config.yaml is used even if the environment variable is not set.
 
-**Risk**: Malicious bridge configuration could exfiltrate AUTH_TOKEN.
+**Why this design**: Ensures configuration persists across container restarts without requiring environment variables every time. Once set via environment variable or Management Console, AUTH_TOKEN is stored in `/data/config.yaml` on the persistent volume.
+
+**Security implication**: Both storage locations are readable by all processes running as umhuser (UID 1000). This includes:
+- All bridges (protocol converters, data flows, stream processors)
+- Any process started within the container
+- Any code executed via bridge configurations
+
+**Risk**: Malicious bridge configuration could exfiltrate AUTH_TOKEN via outbound network requests.
 
 **What you should do**:
 1. **Accept the risk** if you control all bridge configurations (recommended for most deployments)
 2. **Monitor** network connections for unexpected outbound traffic (exfiltration attempts)
-3. **If compromised**: Create new instance in Management Console, copy new AUTH_TOKEN, update your deployment, remove old instance
+3. **Rotate if compromised**:
+   - Create new instance in Management Console
+   - Copy new AUTH_TOKEN to deployment configuration
+   - Update container environment variable or config.yaml
+   - Remove old instance from Management Console
 
 ---
 
-### No Per-Bridge Isolation
+### No User/Process Isolation Between Bridges
 
 **Category**: Accepted Risk (design trade-off)
 
+**What this means**: All bridges (protocol converters, data flows, stream processors) run as the same Linux user (UID 1000, umhuser). There is **no user-level or process-level isolation** between different bridges within the container.
+
+**What this does NOT mean**:
+- ❌ Bridges do NOT interfere with each other's data processing (Redpanda isolates message flows by topic)
+- ❌ Bridges are NOT resource-limited together (each bridge can have separate CPU/memory limits via s6-softlimit)
+- ❌ Data is NOT shared between bridges (each benthos instance has separate configuration and state)
+
 **Technical constraint**: Per-bridge user isolation is not possible in non-root containers. Process-level user switching requires CAP_SETUID and CAP_SETGID capabilities, which are only available to root processes.
 
-**Design decision**: Non-root container security prioritized over per-bridge isolation.
+**Design decision**: Non-root container security prioritized over per-bridge user isolation.
 
-**Security trade-off**:
-- ✅ Container cannot escalate to root privileges
-- ✅ Standard Docker security model
-- ✅ Compatible with restricted Kubernetes environments
-- ❌ No isolation between bridges within container
+**Security implications**:
 
-**Shared access within container**:
+**Shared access within container** (because all run as same user):
 - All bridges can read `/data/config.yaml` (contains AUTH_TOKEN)
 - All bridges share access to mounted directories
-- All bridges can see environment variables
+- All bridges can see each other's environment variables
+- All bridges can read each other's configuration files
 
 **Container boundary still enforced**:
 - Bridges cannot access host filesystem (except mounted paths)
 - Bridges cannot see host processes
 - Network isolation applies (unless using --network=host)
+
+**Why non-root is worth the trade-off**:
+- ✅ Container cannot escalate to root privileges (even if bridge is compromised)
+- ✅ Standard Docker security model (defense in depth)
+- ✅ Compatible with restricted Kubernetes environments (no special permissions needed)
 
 ---
 
@@ -172,7 +213,7 @@ Both are readable by all processes running as umhuser (UID 1000).
 - **Software supply chain** (container images, SBOM, vulnerability scanning via Aikido/FOSSA)
 - **Secure defaults** (non-root execution, TLS enabled by default, no default passwords)
 - **Clear documentation** of protocol limitations and security considerations
-- **Regular security updates** via CI/CD pipeline and documented release process
+- **Regular security updates** via our Docker registry and documented release process
 
 ### You are responsible for:
 - **Infrastructure and runtime** (Docker/Kubernetes configuration, host OS security, network architecture)
