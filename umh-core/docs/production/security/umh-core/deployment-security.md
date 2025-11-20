@@ -1,129 +1,231 @@
-# Deployment Security
+# umh-core Security
 
-Understanding what umh-core can access and why that's intentional.
+## Relevant OWASP Standards
 
-## The Core Principle
+For umh-core as software, the following OWASP standards are relevant:
 
-umh-core is an edge gateway that connects to your factory devices and data sources. To do its job, it NEEDS:
-- Network access to PLCs, SCADA systems, OPC UA servers, MQTT brokers
-- Filesystem access to read configuration files, CSV data, logs
+| Standard | Status | Implementation |
+|----------|--------|----------------|
+| **OWASP Docker Security #2** | ✅ Compliant | Non-root container (UID 1000, umhuser) |
+| **OWASP Docker Security #0** | ✅ Compliant | Regular updates via CI/CD pipeline |
+| **OWASP IoT Top 10 I1** | ✅ Compliant | No default passwords (AUTH_TOKEN user-configured) |
+| **OWASP IoT Top 10 I9** | ✅ Compliant | Secure defaults (TLS enabled, auth required) |
+| **OWASP OT Top 10 #9** | 📋 Documented | Protocol security limitations (Modbus, S7 lack encryption) |
+| **OWASP OT Top 10 #10** | ✅ Compliant | Non-root containers, minimal base image |
 
-## What Your Data Flows Actually Do
+**Supply chain security**: Container images scanned via Aikido, OSS licenses via FOSSA. ISO 27001 audit in progress. Status: https://trust.umh.app
 
-When you create a bridge or data flow, you're telling umh-core to connect to specific devices, files, or network services and pull data from them. This requires network and filesystem permissions.
+---
 
-## Container Isolation Model
+## What umh-core Accesses and Why
 
-umh-core runs in a Docker container with standard isolation.
+### Filesystem Access
 
-### What's Isolated
-- Separate process namespace (can't see host processes)
-- Isolated network namespace (unless you explicitly use `--network=host`)
-- Limited filesystem access (only what you mount)
+**Required**: `/data` directory (persistent storage)
+- Configuration files (config.yaml with AUTH_TOKEN)
+- Logs (rolling logs for all services)
+- Redpanda data (message broker storage)
+- Certificates (TLS certs for protocols)
 
-### What Data Flows CAN Access
+**Optional**: Customer-defined mounts for file-based inputs
+- CSV/JSON/XML data files from network shares
+- Log files from other systems
+- Production reports from local disks
 
-**Inside the container:**
-- Entire container filesystem (ephemeral, resets on restart)
-- `/data` directory (persistent storage for configs, logs, certificates)
-- Network connections as defined by your Docker network mode
+**Why**: Bridges need to read data files and persist configuration across container restarts.
 
-**Why this is necessary:**
+**Access pattern**: All processes run as UID 1000 (umhuser), read/write access to mounted paths.
 
-Bridges run as benthos-umh processes (see [Bridges documentation](../../../usage/data-flows/bridges.md)) that need:
+---
 
-- **File access**: Reading CSV/JSON/XML files requires mounted directories. See [Benthos-UMH inputs](https://docs.umh.app/benthos-umh/input) for supported file formats.
-- **Network access**: Industrial protocols like [OPC UA](https://docs.umh.app/benthos-umh/input/opc-ua-input), [Modbus](https://docs.umh.app/benthos-umh/input/modbus), and [Siemens S7](https://docs.umh.app/benthos-umh/input/siemens-s7) need TCP/IP connections to your equipment.
+### Network Access
 
-This is intentional - umh-core exists to connect your factory to the cloud.
+**Required outbound**: HTTPS to `management.umh.app` (port 443)
+- Configuration sync from Management Console
+- Status reporting and heartbeat
+- Action retrieval (deploy/update bridges)
 
-**Example use case:**
-```bash
-# User mounts a shared directory to read production reports
-docker run -v /mnt/production-data:/data/production umh-core:latest
-```
+**Data source connections** (customer-defined):
+- Industrial protocols: OPC UA, Modbus TCP, Siemens S7, MQTT
+- Network services: HTTP APIs, database servers
+- IP addresses and ports: Fully configurable per bridge
 
-Then creates a data flow that reads CSV files from `/data/production/*.csv` - this is intentional and documented.
+**Why**: umh-core is a protocol converter connecting factory devices to cloud. This is the product's purpose.
 
-### What Data Flows CANNOT Access
+**Inbound**: No services designed for internet exposure (edge-only deployment).
 
-In standard deployment (without `--network=host` or extra mounts):
-- Host filesystem outside mounted paths
-- Host process namespace
-- Host-only network interfaces (localhost services)
-- Docker socket or container management
+---
 
-## Process Isolation and Security Trade-offs
+### Process Model
 
-### How umh-core Runs
-
-All umh-core components run as a single non-root user (UID 1000, `umhuser`):
-- The main umh-core agent
-- All bridges (protocol converters)
+**All components run as single non-root user (UID 1000, umhuser)**:
+- Main umh-core agent
+- All bridges (benthos-umh instances)
 - All data flows
-- Redpanda and other services
+- Redpanda broker
+- Internal services
 
-### Why Not Per-Bridge Isolation?
+**Why non-root**: Container cannot escalate privileges, compatible with restricted Kubernetes environments, standard Docker security model.
 
-**Technical constraint**: Per-bridge user isolation is not possible in non-root containers. Process-level user switching requires CAP_SETUID and CAP_SETGID capabilities, which are only available to root processes. Adding these capabilities would partially defeat the security benefits of non-root containers.
+**Container isolation**: Separate process namespace (can't see host processes), isolated network namespace (unless `--network=host`), limited filesystem access (only mounted paths).
 
-**Security trade-off**: Non-root container security over per-bridge isolation:
+---
+
+## Known Limitations
+
+### AUTH_TOKEN in Environment Variable
+
+**Category**: Known Limitation (cannot fix in single-container architecture)
+
+**Issue**: AUTH_TOKEN shared secret is stored in:
+- Environment variable (`AUTH_TOKEN=xxx`)
+- Configuration file (`/data/config.yaml`)
+
+Both are readable by all processes running as umhuser (UID 1000).
+
+**Why this cannot be fixed**:
+- Per-process secrets require process isolation (see below)
+- External secrets managers add complexity unsuitable for edge devices
+- File-based secrets still readable by all processes in non-root container
+
+**Risk**: Malicious bridge configuration could exfiltrate AUTH_TOKEN.
+
+**Mitigation** (customer responsibility):
+- Only deploy trusted bridge configurations
+- Monitor network connections for unexpected destinations
+- Rotate AUTH_TOKEN periodically via Management Console
+- Use network segmentation to limit bridge internet access
+
+---
+
+### No Per-Bridge Isolation
+
+**Category**: Accepted Risk (design trade-off)
+
+**Technical constraint**: Per-bridge user isolation is not possible in non-root containers. Process-level user switching requires CAP_SETUID and CAP_SETGID capabilities, which are only available to root processes.
+
+**Design decision**: Non-root container security prioritized over per-bridge isolation.
+
+**Security trade-off**:
 - ✅ Container cannot escalate to root privileges
 - ✅ Standard Docker security model
 - ✅ Compatible with restricted Kubernetes environments
-- ❌ No isolation between bridges within the container
+- ❌ No isolation between bridges within container
 
-### What This Means for Security
-
-**Shared access within container:**
+**Shared access within container**:
 - All bridges can read `/data/config.yaml` (contains AUTH_TOKEN)
 - All bridges share access to mounted directories
 - All bridges can see environment variables
 
-**Container boundary still enforced:**
+**Container boundary still enforced**:
 - Bridges cannot access host filesystem (except mounted paths)
 - Bridges cannot see host processes
 - Network isolation applies (unless using --network=host)
 
-**Best practices:**
+**Mitigation** (customer responsibility):
 - Only deploy trusted bridge configurations
-- Use network segmentation at the infrastructure level
-- Mount only necessary directories with read-only where possible
+- Use network segmentation at infrastructure level
 - Monitor bridge activity through logs and metrics
+- Treat all bridges in an instance as same trust level
 
-## When to Mount Additional Paths
+---
 
-**Common scenarios where you SHOULD mount extra paths:**
-- Reading log files from other systems (`-v /var/log/plc:/data/plc-logs:ro`)
-- Importing data files from network shares (`-v /mnt/nas:/data/imports:ro`)
+### TLS Certificate Validation Can Be Disabled
 
-**Use read-only mounts when possible:** Add `:ro` suffix to prevent umh-core from writing to host
+**Category**: Accepted Risk (corporate firewall compatibility)
 
-## Network Modes
+**Issue**: `ALLOW_INSECURE_TLS=true` option disables certificate validation.
 
-**Standard mode (recommended)**: Container gets isolated network stack, reaches external IPs/hostnames via Docker networking. Use for TCP/IP protocols ([OPC UA](https://docs.umh.app/benthos-umh/input/opc-ua-input), [Modbus TCP](https://docs.umh.app/benthos-umh/input/modbus), MQTT, HTTP).
+**Why this option exists**: Corporate firewalls often perform TLS inspection (MITM), and adding corporate CA certificates is complex.
 
-**Host network mode** (`--network=host`): For rare cases requiring Layer 2 protocols, broadcast, or serial ports. Reduces network isolation.
+**Risk**: MITM attacks possible if misused in production.
+
+**Usage guidance**: Only use behind trusted corporate firewall. See [Network Configuration](./network-configuration.md) for details.
+
+---
 
 ## Security Best Practices
 
-**Network configuration**: See [Network Configuration](./network-configuration.md) for proxy settings, TLS inspection, and firewall requirements.
+### What to Mount
 
-### Do's
-- Mount only the paths you need
-- Use read-only mounts (`:ro`) when possible
-- Configure your firewall to only give the container access to the IP addresses it needs
-- Only deploy trusted bridge configurations (all bridges share the same user context)
-- Set `AUTH_TOKEN` environment variable for Management Console auth
-- Use standard network mode unless you specifically need host networking
+**Required**: `/data` for persistent storage (configs, logs, certificates)
 
-### Don'ts
-- Don't mount `/` (entire host filesystem) - there's no legitimate use case
-- Don't use `ALLOW_INSECURE_TLS=true` in production (unless behind corporate firewall)
-- Don't expose umh-core ports to the internet - it's designed as edge-only
+**Common additional mounts**:
+- Data files: Network shares with CSV/JSON/XML production data
+- Log files: From PLCs or other systems
+- Use read-only mounts when bridges only need to read
+
+### What NOT to Mount
+
+- Entire host filesystem (`/`)
+- Docker socket (`/var/run/docker.sock`)
+- Host `/etc` or `/var` directories
+
+### Network Configuration
+
+**Firewall requirements**: Allow outbound HTTPS to `management.umh.app`, connections to your data sources (PLCs, OPC UA servers, MQTT brokers).
+
+**Network segmentation**: Configure your firewall to only give the container access to necessary IP addresses.
+
+See [Network Configuration](./network-configuration.md) for proxy settings and TLS inspection handling.
+
+### Bridge Configuration Security
+
+**Critical**: All bridges run as same user (UID 1000) and can access AUTH_TOKEN.
+
+**Therefore**:
+- Only deploy trusted bridge configurations
+- Review configurations before deployment
+- Monitor bridge network connections
+- Use network-level restrictions (firewall rules, network policies)
+
+### Monitoring
+
+**What to monitor**:
+- Authentication failures to Management Console
+- Unexpected network connections from bridges
+- Resource constraint events (bridge creation blocked)
+- FSM state transition failures
+
+**Logs location**: `/data/logs/` (umh-core, benthos-*, redpanda)
+
+---
+
+## Customer Deployment Responsibilities
+
+The following security configurations are **customer's responsibility** during deployment:
+
+| OWASP Standard | Configuration | How to Implement |
+|----------------|---------------|------------------|
+| Container capabilities | Drop unnecessary capabilities | Docker: `--cap-drop=ALL`, Kubernetes: SecurityContext |
+| AppArmor/SELinux | Security profiles | Apply appropriate profiles for your environment |
+| Resource limits | CPU/memory constraints | Docker: `--memory`, `--cpus`, Kubernetes: resources |
+| Network policies | Restrict pod-to-pod communication | Kubernetes NetworkPolicies or firewall rules |
+| Secrets management | Protect AUTH_TOKEN at orchestrator level | Kubernetes Secrets with RBAC, Docker Secrets |
+| Volume encryption | Encrypt `/data` volume | Enable at host/storage layer |
+
+**Why these are excluded**: These require orchestration-level configuration (Docker runtime flags, Kubernetes manifests, host OS settings). umh-core provides secure **software**, but cannot enforce **deployment** security.
+
+**Deployment security guidance**:
+- [OWASP Docker Security Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Docker_Security_Cheat_Sheet.html)
+- [CIS Docker Benchmark](https://www.cisecurity.org/benchmark/docker)
+- [Kubernetes Security Best Practices](https://kubernetes.io/docs/concepts/security/)
+
+---
 
 ## Related Documentation
 
-- [Network Configuration](./network-configuration.md) - Firewalls, proxies, TLS inspection
+- [Network Configuration](./network-configuration.md) - Proxy settings, TLS inspection, firewall requirements
 - [Bridges Documentation](../../../usage/data-flows/bridges.md) - How bridges work
 - [Benthos-UMH Inputs](https://docs.umh.app/benthos-umh/input) - 50+ supported protocols
+- [Security Status](https://trust.umh.app) - ISO 27001 audit status, penetration testing, compliance
+
+---
+
+## Security Reporting
+
+**For security issues**: security@umh.app (responsible disclosure)
+
+**Do NOT**: Create public GitHub issues for security vulnerabilities
+
+**Timeline**: Acknowledgment within 48 hours, fix timeline within 1 week
