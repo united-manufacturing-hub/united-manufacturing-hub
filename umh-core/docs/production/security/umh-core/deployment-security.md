@@ -25,7 +25,10 @@ umh-core **primarily protects against**:
 - **Misconfiguration leading to internet exposure** by default (we design for edge-only deployment)
 
 umh-core **does not protect against**:
-- **A malicious operator** who can deploy arbitrary bridge configurations (they can use bridges to compromise external systems or exfiltrate AUTH_TOKEN)
+- **A malicious operator with configuration access** (Management Console UI or filesystem access to config.yaml) who deploys bridge configurations that:
+  - Connect to and compromise external industrial systems
+  - Exfiltrate AUTH_TOKEN via outbound network requests
+  - Read sensitive data from mounted volumes
 - **Compromise of the container runtime, host OS, or Kubernetes control plane**
 
 This model aligns with industry-standard edge gateway security - we secure our software, you secure your infrastructure.
@@ -130,13 +133,17 @@ Both are readable by all processes running as umhuser (UID 1000).
 
 **Category**: Accepted Risk (corporate firewall compatibility)
 
-**Issue**: `ALLOW_INSECURE_TLS=true` option disables certificate validation.
+**Issue**: `ALLOW_INSECURE_TLS=true` option disables certificate validation for:
+- **Connection to management.umh.app** (configuration sync and status reporting)
+- **Bridge connections** to data sources (HTTPS APIs, MQTTS brokers, etc.)
 
 **Why this option exists**: Corporate firewalls often perform TLS inspection (MITM), and adding corporate CA certificates is complex.
 
-**Risk**: MITM attacks possible if misused in production.
+**Risk**: MITM attacks possible if misused:
+- **Management connection**: Attacker could intercept AUTH_TOKEN during transmission
+- **Bridge connections**: Attacker could intercept or modify industrial data in transit
 
-**Usage guidance**: Only use behind trusted corporate firewall. See [Network Configuration](./network-configuration.md) for details.
+**Usage guidance**: Only use behind trusted corporate firewall where TLS inspection is performed. See [Network Configuration](./network-configuration.md) for details on adding corporate CA certificates (preferred) vs using `ALLOW_INSECURE_TLS=true`.
 
 ---
 
@@ -180,37 +187,3 @@ Both are readable by all processes running as umhuser (UID 1000).
 - [OWASP Docker Security Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Docker_Security_Cheat_Sheet.html)
 - [CIS Docker Benchmark](https://www.cisecurity.org/benchmark/docker)
 - [Kubernetes Security Best Practices](https://kubernetes.io/docs/concepts/security/)
-
----
-
-## Summary: What umh-core Implements
-
-The following are umh-core's security implementations (NOT customer responsibilities):
-
-- Docker Security #2: Non-root container execution (UID 1000, umhuser)
-- Docker Security #0: Regular updates via CI/CD pipeline and documented update process
-- Docker Security #11: Run as non-root user (UID 1000)
-- IoT Top 10 I1: No default passwords (AUTH_TOKEN is user-configured, no hardcoded credentials)
-- IoT Top 10 I9: Secure defaults (TLS enabled, authentication required, minimal attack surface)
-- OT Top 10 #8: Supply chain security (container images scanned via Aikido, OSS licenses via FOSSA, SBOM provided upon request)
-- OT Top 10 #9: Protocol security limitations documented (Modbus, S7 lack encryption is documented)
-- OT Top 10 #10: Minimal attack surface (non-root, Alpine base image, no unnecessary services)
-
----
-
-## Related Documentation
-
-- [Network Configuration](./network-configuration.md) - Proxy settings, TLS inspection, firewall requirements
-- [Bridges Documentation](../../../usage/data-flows/bridges.md) - How bridges work
-- [Benthos-UMH Inputs](https://docs.umh.app/benthos-umh/input) - 50+ supported protocols
-- [Security Status](https://trust.umh.app) - ISO 27001 audit status, penetration testing, compliance
-
----
-
-## Security Reporting
-
-**For security issues**: security@umh.app (responsible disclosure)
-
-**Do NOT**: Create public GitHub issues for security vulnerabilities
-
-**Timeline**: Acknowledgment within 48 hours, fix timeline within 1 week
