@@ -10,7 +10,7 @@ umh-core is an edge gateway that connects to your factory devices and data sourc
 
 ## What Your Data Flows Actually Do
 
-When you create a bridge (protocol converter) or data flow, you're telling umh-core to connect to specific devices, files, or network services and pull data from them. This requires network and filesystem permissions.
+When you create a bridge or data flow, you're telling umh-core to connect to specific devices, files, or network services and pull data from them. This requires network and filesystem permissions.
 
 ## Container Isolation Model
 
@@ -34,7 +34,6 @@ Bridges run as benthos-umh processes (see [Bridges documentation](../../../usage
 
 - **File access**: Reading CSV/JSON/XML files requires mounted directories. See [Benthos-UMH inputs](https://docs.umh.app/benthos-umh/input) for supported file formats.
 - **Network access**: Industrial protocols like [OPC UA](https://docs.umh.app/benthos-umh/input/opc-ua-input), [Modbus](https://docs.umh.app/benthos-umh/input/modbus), and [Siemens S7](https://docs.umh.app/benthos-umh/input/siemens-s7) need TCP/IP connections to your equipment.
-- **Certificate handling**: Security protocols need access to certificate files for authentication.
 
 This is intentional - umh-core exists to connect your factory to the cloud.
 
@@ -66,12 +65,9 @@ All umh-core components run as a single non-root user (UID 1000, `umhuser`):
 
 ### Why Not Per-Bridge Isolation?
 
-**Technical constraint**: In non-root containers, processes cannot switch users. This PR investigated privilege dropping but found:
-- s6-setuidgid requires CAP_SETUID capability (only available to root)
-- s6-applyuidgid requires CAP_SETGID capability (only available to root)
-- Adding these capabilities would partially defeat the security benefits of non-root containers
+**Technical constraint**: Per-bridge user isolation is not possible in non-root containers. Process-level user switching requires CAP_SETUID and CAP_SETGID capabilities, which are only available to root processes. Adding these capabilities would partially defeat the security benefits of non-root containers.
 
-**Security trade-off**: We chose non-root container security over per-bridge isolation:
+**Security trade-off**: Non-root container security over per-bridge isolation:
 - ✅ Container cannot escalate to root privileges
 - ✅ Standard Docker security model
 - ✅ Compatible with restricted Kubernetes environments
@@ -103,72 +99,15 @@ All umh-core components run as a single non-root user (UID 1000, `umhuser`):
 
 **Use read-only mounts when possible:** Add `:ro` suffix to prevent umh-core from writing to host
 
-## Network Modes Explained
+## Network Modes
 
-### Standard Mode (Recommended)
+**Standard mode (recommended)**: Container gets isolated network stack, reaches external IPs/hostnames via Docker networking. Use for TCP/IP protocols ([OPC UA](https://docs.umh.app/benthos-umh/input/opc-ua-input), [Modbus TCP](https://docs.umh.app/benthos-umh/input/modbus), MQTT, HTTP).
 
-```bash
-docker run -v /data:/data umh-core:latest
-```
-
-**What it does:**
-- Container gets its own network stack
-- Can reach external IPs/hostnames through Docker networking
-- Cannot access host-only services (e.g., `localhost:5000`)
-
-**Use for:**
-- TCP/IP protocols: [OPC UA](https://docs.umh.app/benthos-umh/input/opc-ua-input), [Modbus TCP](https://docs.umh.app/benthos-umh/input/modbus), HTTP, MQTT
-- Cloud services
-- Network-attached devices with routable IPs
-
-### Host Network Mode (Special Cases)
-
-```bash
-docker run --network=host -v /data:/data umh-core:latest
-```
-
-**What it does:**
-- Container shares host network stack
-- Can access host-only services
-- Can use Layer 2 protocols (MAC addresses, broadcast)
-
-**Use for:**
-- Modbus RTU over serial ports
-- Protocols requiring broadcast (some industrial protocols)
-- Services only listening on `localhost`
-
-**Trade-off:** Reduces network isolation, but necessary for certain protocols
-
-## Environment Variables
-
-### AUTH_TOKEN
-**Required** for connecting to Management Console:
-```bash
--e AUTH_TOKEN=your_token_here
-```
-
-### ALLOW_INSECURE_TLS
-**Only use behind corporate firewalls** that perform TLS inspection:
-```bash
--e ALLOW_INSECURE_TLS=true
-```
-
-⚠️ **Warning:** This disables certificate validation. Only use if you trust your corporate firewall and cannot add corporate CA certificates.
-
-### Proxy Configuration
-If your network requires a proxy:
-```bash
--e HTTP_PROXY=http://proxy.company.com:8080 \
--e HTTPS_PROXY=https://proxy.company.com:8080 \
--e NO_PROXY=localhost,127.0.0.1,.local
-```
-
-For authenticated proxies:
-```bash
--e HTTP_PROXY=http://username:password@proxy.company.com:8080
-```
+**Host network mode** (`--network=host`): For rare cases requiring Layer 2 protocols, broadcast, or serial ports. Reduces network isolation.
 
 ## Security Best Practices
+
+**Network configuration**: See [Network Configuration](./network-configuration.md) for proxy settings, TLS inspection, and firewall requirements.
 
 ### Do's
 - Mount only the paths you need
@@ -182,20 +121,6 @@ For authenticated proxies:
 - Don't mount `/` (entire host filesystem) - there's no legitimate use case
 - Don't use `ALLOW_INSECURE_TLS=true` in production (unless behind corporate firewall)
 - Don't expose umh-core ports to the internet - it's designed as edge-only
-
-## FAQ
-
-**Q: Why does the security scanner flag network access?**
-A: Because umh-core has network capabilities. That's intentional - it's an edge gateway that connects to factory equipment.
-
-**Q: Should I be concerned about filesystem access?**
-A: Only mount what you need. If you're mounting `/data` and a CSV import directory, that's normal and safe.
-
-**Q: Is `--network=host` dangerous?**
-A: It reduces isolation, but it's necessary for certain protocols. If you need Modbus RTU or Layer 2 protocols, use it. Otherwise, stick with standard mode.
-
-**Q: Can data flows access my host system?**
-A: Only through paths you explicitly mount and network interfaces you explicitly enable. Docker isolation is still active.
 
 ## Related Documentation
 
