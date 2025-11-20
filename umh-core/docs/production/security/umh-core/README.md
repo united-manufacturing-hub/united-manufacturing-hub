@@ -1,12 +1,5 @@
 # umh-core Security
 
-Security documentation for umh-core edge deployments.
-
-## Topics
-
-- [Deployment Security](./deployment-security.md) - Container isolation, volume mounts, network modes
-- [Network Configuration](./network-configuration.md) - Corporate firewalls and proxies
-
 ## Quick Checklist
 
 Things to keep in mind when deploying umh-core:
