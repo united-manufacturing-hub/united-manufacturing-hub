@@ -75,6 +75,7 @@ var _ = Describe("Hierarchy Metrics (Task 3)", func() {
 			err := parentSup.AddWorker(identity, parentWorker)
 			Expect(err).NotTo(HaveOccurred())
 
+			store.mu.Lock()
 			store.desired["root"] = map[string]persistence.Document{
 				"root-worker": {
 					"id":                "root-worker",
@@ -88,6 +89,7 @@ var _ = Describe("Hierarchy Metrics (Task 3)", func() {
 					"collectedAt": time.Now(),
 				},
 			}
+			store.mu.Unlock()
 
 			parentSup.Start(ctx)
 			time.Sleep(100 * time.Millisecond)
@@ -132,6 +134,7 @@ var _ = Describe("Hierarchy Metrics (Task 3)", func() {
 
 			parentSup.TestUpdateUserSpec(config.UserSpec{Config: "parent-config"})
 
+			store.mu.Lock()
 			store.desired["parent"] = map[string]persistence.Document{
 				"parent-worker": {
 					"id":                "parent-worker",
@@ -153,6 +156,7 @@ var _ = Describe("Hierarchy Metrics (Task 3)", func() {
 				},
 			}
 
+			store.mu.Unlock()
 			parentSup.Start(ctx)
 			time.Sleep(1500 * time.Millisecond)
 
@@ -202,6 +206,7 @@ var _ = Describe("Hierarchy Metrics (Task 3)", func() {
 
 			parentSup.TestUpdateUserSpec(config.UserSpec{Config: "parent-config"})
 
+			store.mu.Lock()
 			store.desired["parent"] = map[string]persistence.Document{
 				"parent-worker": {
 					"id":                "parent-worker",
@@ -216,6 +221,7 @@ var _ = Describe("Hierarchy Metrics (Task 3)", func() {
 				},
 			}
 
+			store.mu.Unlock()
 			parentSup.Start(ctx)
 			time.Sleep(1500 * time.Millisecond)
 
@@ -252,6 +258,7 @@ var _ = Describe("Hierarchy Metrics (Task 3)", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			childSup.TestUpdateUserSpec(config.UserSpec{Config: "child-config"})
+store.mu.Lock()
 
 			store.desired["child"] = map[string]persistence.Document{
 				"child-worker": {
@@ -281,6 +288,7 @@ var _ = Describe("Hierarchy Metrics (Task 3)", func() {
 				},
 			}
 
+store.mu.Unlock()
 			// Wait for first tick (1s) + metrics reporter interval (10s) + buffer
 		time.Sleep(12 * time.Second)
 
@@ -329,6 +337,7 @@ var _ = Describe("Hierarchy Metrics (Task 3)", func() {
 
 			leafSup.TestUpdateUserSpec(config.UserSpec{Config: "leaf-config"})
 
+			store.mu.Lock()
 			store.desired["leaf"] = map[string]persistence.Document{
 				"leaf-worker": {
 					"id":                "leaf-worker",
@@ -343,6 +352,7 @@ var _ = Describe("Hierarchy Metrics (Task 3)", func() {
 				},
 			}
 
+			store.mu.Unlock()
 			leafSup.Start(ctx)
 			time.Sleep(100 * time.Millisecond)
 
@@ -383,6 +393,7 @@ var _ = Describe("Hierarchy Metrics (Task 3)", func() {
 
 			parentSup.TestUpdateUserSpec(config.UserSpec{Config: "parent-config"})
 
+			store.mu.Lock()
 			store.desired["parent"] = map[string]persistence.Document{
 				"parent-worker": {
 					"id":                "parent-worker",
@@ -419,6 +430,7 @@ var _ = Describe("Hierarchy Metrics (Task 3)", func() {
 				},
 			}
 
+			store.mu.Unlock()
 			parentSup.Start(ctx)
 			// Wait for first tick (1s) + metrics reporter interval (10s) + buffer
 			time.Sleep(12 * time.Second)
@@ -457,6 +469,7 @@ var _ = Describe("Hierarchy Metrics (Task 3)", func() {
 
 			parentSup.TestUpdateUserSpec(config.UserSpec{Config: "parent-config"})
 
+			store.mu.Lock()
 			store.desired["parent"] = map[string]persistence.Document{
 				"parent-worker": {
 					"id":                "parent-worker",
@@ -470,6 +483,7 @@ var _ = Describe("Hierarchy Metrics (Task 3)", func() {
 					"collectedAt": time.Now(),
 				},
 			}
+			store.mu.Unlock()
 
 			parentSup.Start(ctx)
 			time.Sleep(1500 * time.Millisecond)
@@ -477,10 +491,13 @@ var _ = Describe("Hierarchy Metrics (Task 3)", func() {
 			initialSize := promtest.ToFloat64(metrics.GetHierarchySizeGauge().WithLabelValues("parent"))
 			Expect(initialSize).To(Equal(1.0), "parent should start with size=1")
 
+			parentWorker.mu.Lock()
 			parentWorker.childrenSpecs = []config.ChildSpec{
 				{Name: "child1", WorkerType: "child", UserSpec: config.UserSpec{}},
 			}
+			parentWorker.mu.Unlock()
 
+			store.mu.Lock()
 			store.desired["child"] = map[string]persistence.Document{
 				"child1-001": {
 					"id":                "child1-001",
@@ -494,6 +511,7 @@ var _ = Describe("Hierarchy Metrics (Task 3)", func() {
 					"collectedAt": time.Now(),
 				},
 			}
+			store.mu.Unlock()
 
 			// Wait for first tick (1s) + metrics reporter interval (10s) + buffer
 			time.Sleep(12 * time.Second)
@@ -534,6 +552,7 @@ var _ = Describe("Hierarchy Metrics (Task 3)", func() {
 
 			parentSup.TestUpdateUserSpec(config.UserSpec{Config: "parent-config"})
 
+			store.mu.Lock()
 			store.desired["parent"] = map[string]persistence.Document{
 				"parent-worker": {
 					"id":                "parent-worker",
@@ -562,6 +581,7 @@ var _ = Describe("Hierarchy Metrics (Task 3)", func() {
 				},
 			}
 
+			store.mu.Unlock()
 			parentSup.Start(ctx)
 			// Wait for first tick (1s) + metrics reporter interval (10s) + buffer
 			time.Sleep(12 * time.Second)
@@ -569,7 +589,9 @@ var _ = Describe("Hierarchy Metrics (Task 3)", func() {
 			initialSize := promtest.ToFloat64(metrics.GetHierarchySizeGauge().WithLabelValues("parent"))
 			Expect(initialSize).To(Equal(2.0), "parent should start with size=2")
 
+			parentWorker.mu.Lock()
 			parentWorker.childrenSpecs = []config.ChildSpec{}
+			parentWorker.mu.Unlock()
 
 			// Wait for first tick (1s) + metrics reporter interval (10s) + buffer
 			time.Sleep(12 * time.Second)

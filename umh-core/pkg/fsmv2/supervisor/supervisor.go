@@ -258,7 +258,7 @@ type Supervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] stru
 	parentID              string                           // ID of parent supervisor (empty string for root supervisors)
 	parent                SupervisorInterface              // Pointer to parent supervisor (nil for root supervisors)
 	healthChecker         *InfrastructureHealthChecker     // Infrastructure health monitoring
-	circuitOpen           bool                             // Circuit breaker state
+	circuitOpen           atomic.Bool                      // Circuit breaker state (atomic for concurrent access)
 	actionExecutor        *execution.ActionExecutor        // Async action execution (Phase 2)
 	metricsWg             sync.WaitGroup                   // WaitGroup for metrics reporter goroutine
 	ctx                 context.Context    // Context for supervisor lifecycle
@@ -450,7 +450,7 @@ func NewSupervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState](c
 		createdAt:             time.Now(),
 		parentID:              "", // Root supervisor has empty parentID
 		healthChecker:         NewInfrastructureHealthChecker(DefaultMaxInfraRecoveryAttempts, DefaultRecoveryAttemptWindow),
-		circuitOpen:           false,
+		// circuitOpen is atomic.Bool, zero-initialized to false
 		actionExecutor:        execution.NewActionExecutor(10, cfg.WorkerType),
 		collectorHealth: CollectorHealth{
 			observationTimeout: observationTimeout,
@@ -1116,9 +1116,17 @@ func (s *Supervisor[TObserved, TDesired]) getEscalationSteps(childName string) s
 // on state transitions). Real action logic will be added in Phase 4.
 func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 	// PHASE 1: Infrastructure health check (priority 1)
-	if err := s.healthChecker.CheckChildConsistency(s.children); err != nil {
-		wasOpen := s.circuitOpen
-		s.circuitOpen = true
+	// Copy children map under lock to avoid race with reconcileChildren
+	s.mu.RLock()
+	childrenCopy := make(map[string]SupervisorInterface, len(s.children))
+	for k, v := range s.children {
+		childrenCopy[k] = v
+	}
+	s.mu.RUnlock()
+
+	if err := s.healthChecker.CheckChildConsistency(childrenCopy); err != nil {
+		wasOpen := s.circuitOpen.Load()
+		s.circuitOpen.Store(true)
 
 		if !wasOpen {
 			s.logger.Error("circuit breaker opened",
@@ -1165,7 +1173,7 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 		return nil
 	}
 
-	if s.circuitOpen {
+	if s.circuitOpen.Load() {
 		downtime := time.Since(s.healthChecker.backoff.GetStartTime())
 		s.logger.Info("Infrastructure recovered, closing circuit breaker",
 			"supervisor_id", s.workerType,
@@ -1174,7 +1182,7 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 		metrics.RecordInfrastructureRecovery(s.workerType, downtime)
 	}
 
-	s.circuitOpen = false
+	s.circuitOpen.Store(false)
 
 	// PHASE 2: Action execution (priority 2)
 	if !s.actionExecutor.HasActionInProgress(s.workerType) {
@@ -2070,7 +2078,7 @@ func (s *Supervisor[TObserved, TDesired]) TestSetRestartCount(count int) {
 // isCircuitOpen returns the circuit breaker state.
 // Used by InfrastructureHealthChecker to check child supervisor health.
 func (s *Supervisor[TObserved, TDesired]) isCircuitOpen() bool {
-	return s.circuitOpen
+	return s.circuitOpen.Load()
 }
 
 // getStateMapping returns a copy of the state mapping.

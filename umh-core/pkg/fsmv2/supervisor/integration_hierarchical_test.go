@@ -93,6 +93,9 @@ func (m *mockHierarchicalWorker) CollectObservedState(ctx context.Context) (fsmv
 func (m *mockHierarchicalWorker) DeriveDesiredState(spec interface{}) (config.DesiredState, error) {
 	m.logger.Log("DeriveDesiredState:" + m.id)
 
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	return config.DesiredState{
 		State:         m.stateName,
 		ChildrenSpecs: m.childrenSpecs,

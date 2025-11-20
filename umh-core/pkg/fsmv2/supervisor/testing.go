@@ -221,7 +221,7 @@ func CreateTestSupervisorWithCircuitState(circuitOpen bool) *Supervisor[*TestObs
 		Logger:          logger,
 		CollectorHealth: CollectorHealthConfig{},
 	})
-	s.circuitOpen = circuitOpen
+	s.circuitOpen.Store(circuitOpen)
 
 	return s
 }
