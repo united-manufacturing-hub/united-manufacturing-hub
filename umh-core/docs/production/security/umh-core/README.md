@@ -2,30 +2,27 @@
 
 Security documentation for umh-core edge deployments.
 
-## Documentation
+## Topics
 
-| Document | Description |
-|----------|-------------|
-| [deployment-security.md](./deployment-security.md) | Container isolation, volume mounts, environment variables |
-| [bridge-access-model.md](./bridge-access-model.md) | Bridge permissions, deployment modes, protocol considerations |
-| [network-configuration.md](./network-configuration.md) | Outbound connections, corporate firewalls, proxy settings |
+- [Deployment Security](./deployment-security.md) - Container isolation, volume mounts, network modes
+- [Network Configuration](./network-configuration.md) - Corporate firewalls and proxies
 
-## Quick Security Checklist
+## Quick Checklist
 
-### Container Deployment
+Things to keep in mind when deploying umh-core:
 
-- [ ] Mount only `/data` volume (avoid mounting additional host paths)
-- [ ] Use standard network mode (not `--network=host`) unless Layer 2 protocols required
-- [ ] Set `AUTH_TOKEN` environment variable for Management Console authentication
-- [ ] Never set `ALLOW_INSECURE_TLS=true` in production unless behind trusted corporate firewall
+**Container Setup:**
+- Mount `/data` for persistent storage - mount extra paths only when you need them
+- Use standard network mode unless you're doing Modbus RTU or other Layer 2 protocols
+- Set `AUTH_TOKEN` for Management Console connection
+- Only use `ALLOW_INSECURE_TLS=true` if you're behind a corporate firewall with TLS inspection
 
-### Network Configuration
+**Network:**
+- Allow outbound HTTPS to `management.umh.app`
+- Configure proxy if needed (`HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY`)
+- Add corporate CA certs if your firewall does TLS inspection
 
-- [ ] Allow outbound HTTPS to `management.umh.app`
-- [ ] Configure proxy settings if required (`HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY`)
-- [ ] Add corporate CA certificates if TLS inspection is performed
-
-### Bridge Configuration
-
-- [ ] Review bridge access requirements before enabling host network mode
-- [ ] Understand protocol-specific security implications (OPC UA certificates, Modbus network access)
+**Protocols:**
+- OPC UA needs certificate files mounted
+- Modbus RTU needs host network mode
+- Most TCP/IP protocols work in standard mode

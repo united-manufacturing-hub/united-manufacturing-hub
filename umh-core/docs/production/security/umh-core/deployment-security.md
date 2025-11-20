@@ -1,65 +1,174 @@
 # Deployment Security
 
-Container isolation and security boundaries for umh-core deployments.
+Understanding what umh-core can access and why that's intentional.
+
+## The Core Principle
+
+umh-core is an edge gateway that connects to your factory devices and data sources. To do its job, it NEEDS:
+- Network access to PLCs, SCADA systems, OPC UA servers, MQTT brokers
+- Filesystem access to read configuration files, CSV data, logs
+- The ability to run protocol converters (bridges) that talk to your equipment
+
+This isn't a security vulnerability - it's the product working as designed.
+
+## What Your Data Flows Actually Do
+
+When you create a bridge (protocol converter) or data flow, you're telling umh-core:
+"Connect to this device/file/network service and pull data from it."
+
+Examples of intentional access:
+- **Reading from Modbus TCP PLC** → Needs network socket to IP:port
+- **Importing CSV files** → Needs filesystem mount to read directory
+- **Connecting to OPC UA server** → Needs network access + certificate handling
+- **Forwarding MQTT data** → Needs to connect to broker
+
+All of this requires permissions. That's normal and expected.
 
 ## Container Isolation Model
 
-umh-core uses standard Docker container isolation:
+umh-core runs in a Docker container with standard isolation.
 
-- Separate process namespace
-- Isolated network namespace (unless `--network=host`)
-- Limited filesystem access through volume mounts
+### What's Isolated
+- Separate process namespace (can't see host processes)
+- Isolated network namespace (unless you explicitly use `--network=host`)
+- Limited filesystem access (only what you mount)
 
-## Volume Mounts
+### What Data Flows CAN Access
 
-### Standard Deployment
+**Inside the container:**
+- Entire container filesystem (ephemeral, resets on restart)
+- `/data` directory (persistent storage for configs, logs, certificates)
+- Network connections as defined by your Docker network mode
 
-Only the `/data` volume is mounted:
+**Why this is necessary:**
 
+Bridges run as benthos-umh processes (see [Bridges documentation](../../../usage/data-flows/bridges.md)) that need:
+
+- **File access**: Reading CSV/JSON/XML files requires mounted directories. See [Benthos-UMH inputs](https://docs.umh.app/benthos-umh/input) for supported file formats.
+- **Network access**: Industrial protocols like [OPC UA](https://docs.umh.app/benthos-umh/input/opc-ua-input), [Modbus](https://docs.umh.app/benthos-umh/input/modbus), and [Siemens S7](https://docs.umh.app/benthos-umh/input/siemens-s7) need TCP/IP connections to your equipment.
+- **Certificate handling**: Security protocols need access to certificate files for authentication.
+
+This is intentional - umh-core exists to connect your factory to the cloud.
+
+**Example use case:**
 ```bash
-docker run -v /path/on/host:/data umh-core:latest
+# User mounts a shared directory to read production reports
+docker run -v /mnt/production-data:/data/production umh-core:latest
 ```
 
-### What Bridges CAN Access
+Then creates a data flow that reads CSV files from `/data/production/*.csv` - this is intentional and documented.
 
-Bridges (Benthos processes) run inside the container and can access:
+### What Data Flows CANNOT Access
 
-- Entire container filesystem
-- `/data` directory (persistent storage, config files, logs)
-- Network connections as defined by container network mode
-
-### What Bridges CANNOT Access
-
-In standard deployment, bridges cannot access:
-
-- Host filesystem outside the `/data` mount
+In standard deployment (without `--network=host` or extra mounts):
+- Host filesystem outside mounted paths
 - Host process namespace
-- Host network interfaces (unless `--network=host` is used)
+- Host-only network interfaces (localhost services)
+- Docker socket or container management
 
-**Important:** Avoid mounting additional host paths unless absolutely necessary. Each additional mount expands the container's access to the host system.
+## When to Mount Additional Paths
+
+**Common scenarios where you SHOULD mount extra paths:**
+- Reading log files from other systems (`-v /var/log/plc:/data/plc-logs:ro`)
+- Importing data files from network shares (`-v /mnt/nas:/data/imports:ro`)
+- Storing certificates for OPC UA/TLS (`-v /etc/ssl/certs:/data/certs:ro`)
+
+**Use read-only mounts when possible:** Add `:ro` suffix to prevent umh-core from writing to host
+
+## Network Modes Explained
+
+### Standard Mode (Recommended)
+
+```bash
+docker run -v /data:/data umh-core:latest
+```
+
+**What it does:**
+- Container gets its own network stack
+- Can reach external IPs/hostnames through Docker networking
+- Cannot access host-only services (e.g., `localhost:5000`)
+
+**Use for:**
+- TCP/IP protocols: [OPC UA](https://docs.umh.app/benthos-umh/input/opc-ua-input), [Modbus TCP](https://docs.umh.app/benthos-umh/input/modbus), HTTP, MQTT
+- Cloud services
+- Network-attached devices with routable IPs
+
+### Host Network Mode (Special Cases)
+
+```bash
+docker run --network=host -v /data:/data umh-core:latest
+```
+
+**What it does:**
+- Container shares host network stack
+- Can access host-only services
+- Can use Layer 2 protocols (MAC addresses, broadcast)
+
+**Use for:**
+- Modbus RTU over serial ports
+- Protocols requiring broadcast (some industrial protocols)
+- Services only listening on `localhost`
+
+**Trade-off:** Reduces network isolation, but necessary for certain protocols
 
 ## Environment Variables
 
-| Variable | Purpose | Security Notes |
-|----------|---------|----------------|
-| `AUTH_TOKEN` | Management Console authentication | Keep secret, do not log |
-| `ALLOW_INSECURE_TLS` | Disable TLS certificate validation | Only for trusted corporate firewalls |
-| `HTTP_PROXY` / `HTTPS_PROXY` | Proxy configuration | May contain credentials |
-| `LOG_LEVEL` | Logging verbosity | Debug level may expose sensitive data |
-
-### Setting Environment Variables
-
+### AUTH_TOKEN
+**Required** for connecting to Management Console:
 ```bash
-docker run \
-  -e AUTH_TOKEN=your-secret-token \
-  -v /path/on/host:/data \
-  umh-core:latest
+-e AUTH_TOKEN=your_token_here
 ```
 
-## Recommendations
+### ALLOW_INSECURE_TLS
+**Only use behind corporate firewalls** that perform TLS inspection:
+```bash
+-e ALLOW_INSECURE_TLS=true
+```
 
-1. **Minimal mounts** - Only mount `/data`, avoid additional host paths
-2. **Protect AUTH_TOKEN** - Use secrets management, don't hardcode in scripts
-3. **Avoid insecure TLS** - Only use `ALLOW_INSECURE_TLS` when necessary and understood
-4. **Review log levels** - Debug logging may expose sensitive information
-5. **Use standard network mode** - Only use `--network=host` when required for Layer 2 protocols
+⚠️ **Warning:** This disables certificate validation. Only use if you trust your corporate firewall and cannot add corporate CA certificates.
+
+### Proxy Configuration
+If your network requires a proxy:
+```bash
+-e HTTP_PROXY=http://proxy.company.com:8080 \
+-e HTTPS_PROXY=https://proxy.company.com:8080 \
+-e NO_PROXY=localhost,127.0.0.1,.local
+```
+
+For authenticated proxies:
+```bash
+-e HTTP_PROXY=http://username:password@proxy.company.com:8080
+```
+
+## Security Best Practices
+
+### Do's
+- Mount only the paths you need
+- Use read-only mounts (`:ro`) when possible
+- Set `AUTH_TOKEN` environment variable for Management Console auth
+- Use standard network mode unless you specifically need host networking
+
+### Don'ts
+- Don't mount `/` (entire host filesystem) - there's no legitimate use case
+- Don't use `ALLOW_INSECURE_TLS=true` in production (unless behind corporate firewall)
+- Don't expose umh-core ports to the internet - it's designed as edge-only
+
+## FAQ
+
+**Q: Why does the security scanner flag network access?**
+A: Because umh-core has network capabilities. That's intentional - it's an edge gateway that connects to factory equipment.
+
+**Q: Should I be concerned about filesystem access?**
+A: Only mount what you need. If you're mounting `/data` and a CSV import directory, that's normal and safe.
+
+**Q: Is `--network=host` dangerous?**
+A: It reduces isolation, but it's necessary for certain protocols. If you need Modbus RTU or Layer 2 protocols, use it. Otherwise, stick with standard mode.
+
+**Q: Can data flows access my host system?**
+A: Only through paths you explicitly mount and network interfaces you explicitly enable. Docker isolation is still active.
+
+## Related Documentation
+
+- [Network Configuration](./network-configuration.md) - Firewalls, proxies, TLS inspection
+- [Bridges Documentation](../../../usage/data-flows/bridges.md) - How bridges work
+- [Benthos-UMH Inputs](https://docs.umh.app/benthos-umh/input) - 50+ supported protocols
