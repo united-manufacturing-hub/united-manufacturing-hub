@@ -6,14 +6,29 @@ For umh-core as software, the following OWASP standards are relevant:
 
 | Standard | Status | Implementation |
 |----------|--------|----------------|
-| **OWASP Docker Security #2** | ✅ Compliant | Non-root container (UID 1000, umhuser) |
-| **OWASP Docker Security #0** | ✅ Compliant | Regular updates via CI/CD pipeline |
-| **OWASP IoT Top 10 I1** | ✅ Compliant | No default passwords (AUTH_TOKEN user-configured) |
-| **OWASP IoT Top 10 I9** | ✅ Compliant | Secure defaults (TLS enabled, auth required) |
-| **OWASP OT Top 10 #9** | 📋 Documented | Protocol security limitations (Modbus, S7 lack encryption) |
-| **OWASP OT Top 10 #10** | ✅ Compliant | Non-root containers, minimal base image |
+| **OWASP Docker Security #2** | ✅ Compliant (2025-02) | Non-root container (UID 1000, umhuser) |
+| **OWASP Docker Security #0** | ✅ Compliant (2025-02) | Regular updates via CI/CD pipeline |
+| **OWASP IoT Top 10 I1** | ✅ Compliant (2025-02) | No default passwords (AUTH_TOKEN user-configured) |
+| **OWASP IoT Top 10 I9** | ✅ Compliant (2025-02) | Secure defaults (TLS enabled, auth required) |
+| **OWASP OT Top 10 #9** | 📋 Documented (2025-02) | Protocol security limitations (Modbus, S7 lack encryption) |
+| **OWASP OT Top 10 #10** | ✅ Compliant (2025-02) | Non-root containers, minimal base image |
 
 **Supply chain security**: Container images scanned via Aikido, OSS licenses via FOSSA. ISO 27001 audit in progress. Status: https://trust.umh.app
+
+---
+
+## Threat Model (Simplified)
+
+umh-core **primarily protects against**:
+- **Unintentional compromise of external industrial systems** due to vulnerabilities in our software (we don't run as root, minimal network attack surface, TLS by default)
+- **Supply chain risks** (signed images, vulnerability scanning, SBOM)
+- **Misconfiguration leading to internet exposure** by default (we design for edge-only deployment)
+
+umh-core **does not protect against**:
+- **A malicious operator** who can deploy arbitrary bridge configurations (they can use bridges to compromise external systems or exfiltrate AUTH_TOKEN)
+- **Compromise of the container runtime, host OS, or Kubernetes control plane**
+
+This model aligns with industry-standard edge gateway security - we secure our software, you secure your infrastructure.
 
 ---
 
@@ -25,7 +40,6 @@ For umh-core as software, the following OWASP standards are relevant:
 - Configuration files (config.yaml with AUTH_TOKEN)
 - Logs (rolling logs for all services)
 - Redpanda data (message broker storage)
-- Certificates (TLS certs for protocols)
 
 **Optional**: Customer-defined mounts for file-based inputs
 - CSV/JSON/XML data files from network shares
@@ -34,23 +48,17 @@ For umh-core as software, the following OWASP standards are relevant:
 
 **Why**: Bridges need to read data files and persist configuration across container restarts.
 
-**Access pattern**: All processes run as UID 1000 (umhuser), read/write access to mounted paths.
+**Access pattern**: Access depends on mount configuration (e.g., `:ro` for read-only, `:rw` for read-write).
 
 ---
 
 ### Network Access
 
-**Required outbound**: HTTPS to `management.umh.app` (port 443)
-- Configuration sync from Management Console
-- Status reporting and heartbeat
-- Action retrieval (deploy/update bridges)
+**Required outbound**: HTTPS to `management.umh.app` for configuration sync and status reporting.
 
-**Data source connections** (customer-defined):
-- Industrial protocols: OPC UA, Modbus TCP, Siemens S7, MQTT
-- Network services: HTTP APIs, database servers
-- IP addresses and ports: Fully configurable per bridge
+See [Network Configuration](./network-configuration.md) for details on proxy settings and TLS inspection.
 
-**Why**: umh-core is a protocol converter connecting factory devices to cloud. This is the product's purpose.
+**Data source connections**: Customer-defined connections to industrial devices and data sources.
 
 **Inbound**: No services designed for internet exposure (edge-only deployment).
 
@@ -83,18 +91,12 @@ For umh-core as software, the following OWASP standards are relevant:
 
 Both are readable by all processes running as umhuser (UID 1000).
 
-**Why this cannot be fixed**:
-- Per-process secrets require process isolation (see below)
-- External secrets managers add complexity unsuitable for edge devices
-- File-based secrets still readable by all processes in non-root container
-
 **Risk**: Malicious bridge configuration could exfiltrate AUTH_TOKEN.
 
-**Mitigation** (customer responsibility):
-- Only deploy trusted bridge configurations
-- Monitor network connections for unexpected destinations
-- Rotate AUTH_TOKEN periodically via Management Console
-- Use network segmentation to limit bridge internet access
+**What you should do**:
+1. **Accept the risk** if you control all bridge configurations (recommended for most deployments)
+2. **Monitor** network connections for unexpected outbound traffic (exfiltration attempts)
+3. **If compromised**: Create new instance in Management Console, copy new AUTH_TOKEN, update your deployment, remove old instance
 
 ---
 
@@ -121,12 +123,6 @@ Both are readable by all processes running as umhuser (UID 1000).
 - Bridges cannot access host filesystem (except mounted paths)
 - Bridges cannot see host processes
 - Network isolation applies (unless using --network=host)
-
-**Mitigation** (customer responsibility):
-- Only deploy trusted bridge configurations
-- Use network segmentation at infrastructure level
-- Monitor bridge activity through logs and metrics
-- Treat all bridges in an instance as same trust level
 
 ---
 
@@ -161,55 +157,44 @@ Both are readable by all processes running as umhuser (UID 1000).
 - Docker socket (`/var/run/docker.sock`)
 - Host `/etc` or `/var` directories
 
-### Network Configuration
-
-**Firewall requirements**: Allow outbound HTTPS to `management.umh.app`, connections to your data sources (PLCs, OPC UA servers, MQTT brokers).
-
-**Network segmentation**: Configure your firewall to only give the container access to necessary IP addresses.
-
-See [Network Configuration](./network-configuration.md) for proxy settings and TLS inspection handling.
-
-### Bridge Configuration Security
-
-**Critical**: All bridges run as same user (UID 1000) and can access AUTH_TOKEN.
-
-**Therefore**:
-- Only deploy trusted bridge configurations
-- Review configurations before deployment
-- Monitor bridge network connections
-- Use network-level restrictions (firewall rules, network policies)
-
-### Monitoring
-
-**What to monitor**:
-- Authentication failures to Management Console
-- Unexpected network connections from bridges
-- Resource constraint events (bridge creation blocked)
-- FSM state transition failures
-
-**Logs location**: `/data/logs/` (umh-core, benthos-*, redpanda)
-
 ---
 
-## Customer Deployment Responsibilities
+## Shared Responsibility Model
 
-The following security configurations are **customer's responsibility** during deployment:
+### We are responsible for:
+- **Software supply chain** (container images, SBOM, vulnerability scanning via Aikido/FOSSA)
+- **Secure defaults** (non-root execution, TLS enabled by default, no default passwords)
+- **Clear documentation** of protocol limitations and security considerations
+- **Regular security updates** via CI/CD pipeline and documented release process
 
-| OWASP Standard | Configuration | How to Implement |
-|----------------|---------------|------------------|
-| Container capabilities | Drop unnecessary capabilities | Docker: `--cap-drop=ALL`, Kubernetes: SecurityContext |
-| AppArmor/SELinux | Security profiles | Apply appropriate profiles for your environment |
-| Resource limits | CPU/memory constraints | Docker: `--memory`, `--cpus`, Kubernetes: resources |
-| Network policies | Restrict pod-to-pod communication | Kubernetes NetworkPolicies or firewall rules |
-| Secrets management | Protect AUTH_TOKEN at orchestrator level | Kubernetes Secrets with RBAC, Docker Secrets |
-| Volume encryption | Encrypt `/data` volume | Enable at host/storage layer |
+### You are responsible for:
+- **Infrastructure and runtime** (Docker/Kubernetes configuration, host OS security, network architecture)
+- **Secrets lifecycle** (AUTH_TOKEN storage, rotation, access controls)
+- **Monitoring and incident response** (log aggregation, security monitoring, forensics)
+- **Deployment security** (capabilities, AppArmor/SELinux, resource limits, network policies)
+- **Reading this documentation** - we provide secure software, you must deploy it securely
 
-**Why these are excluded**: These require orchestration-level configuration (Docker runtime flags, Kubernetes manifests, host OS settings). umh-core provides secure **software**, but cannot enforce **deployment** security.
+**This aligns with cloud vendor models** - we secure the software, you secure the deployment environment.
 
-**Deployment security guidance**:
+**For detailed OWASP/CIS compliance guidance**, see:
 - [OWASP Docker Security Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Docker_Security_Cheat_Sheet.html)
 - [CIS Docker Benchmark](https://www.cisecurity.org/benchmark/docker)
 - [Kubernetes Security Best Practices](https://kubernetes.io/docs/concepts/security/)
+
+---
+
+## Summary: What umh-core Implements
+
+The following are umh-core's security implementations (NOT customer responsibilities):
+
+- Docker Security #2: Non-root container execution (UID 1000, umhuser)
+- Docker Security #0: Regular updates via CI/CD pipeline and documented update process
+- Docker Security #11: Run as non-root user (UID 1000)
+- IoT Top 10 I1: No default passwords (AUTH_TOKEN is user-configured, no hardcoded credentials)
+- IoT Top 10 I9: Secure defaults (TLS enabled, authentication required, minimal attack surface)
+- OT Top 10 #8: Supply chain security (container images scanned via Aikido, OSS licenses via FOSSA, SBOM provided upon request)
+- OT Top 10 #9: Protocol security limitations documented (Modbus, S7 lack encryption is documented)
+- OT Top 10 #10: Minimal attack surface (non-root, Alpine base image, no unnecessary services)
 
 ---
 
