@@ -7,22 +7,10 @@ Understanding what umh-core can access and why that's intentional.
 umh-core is an edge gateway that connects to your factory devices and data sources. To do its job, it NEEDS:
 - Network access to PLCs, SCADA systems, OPC UA servers, MQTT brokers
 - Filesystem access to read configuration files, CSV data, logs
-- The ability to run protocol converters (bridges) that talk to your equipment
-
-This isn't a security vulnerability - it's the product working as designed.
 
 ## What Your Data Flows Actually Do
 
-When you create a bridge (protocol converter) or data flow, you're telling umh-core:
-"Connect to this device/file/network service and pull data from it."
-
-Examples of intentional access:
-- **Reading from Modbus TCP PLC** → Needs network socket to IP:port
-- **Importing CSV files** → Needs filesystem mount to read directory
-- **Connecting to OPC UA server** → Needs network access + certificate handling
-- **Forwarding MQTT data** → Needs to connect to broker
-
-All of this requires permissions. That's normal and expected.
+When you create a bridge (protocol converter) or data flow, you're telling umh-core to connect to specific devices, files, or network services and pull data from them. This requires network and filesystem permissions.
 
 ## Container Isolation Model
 
@@ -66,12 +54,52 @@ In standard deployment (without `--network=host` or extra mounts):
 - Host-only network interfaces (localhost services)
 - Docker socket or container management
 
+## Process Isolation and Security Trade-offs
+
+### How umh-core Runs
+
+All umh-core components run as a single non-root user (UID 1000, `umhuser`):
+- The main umh-core agent
+- All bridges (protocol converters)
+- All data flows
+- Redpanda and other services
+
+### Why Not Per-Bridge Isolation?
+
+**Technical constraint**: In non-root containers, processes cannot switch users. This PR investigated privilege dropping but found:
+- s6-setuidgid requires CAP_SETUID capability (only available to root)
+- s6-applyuidgid requires CAP_SETGID capability (only available to root)
+- Adding these capabilities would partially defeat the security benefits of non-root containers
+
+**Security trade-off**: We chose non-root container security over per-bridge isolation:
+- ✅ Container cannot escalate to root privileges
+- ✅ Standard Docker security model
+- ✅ Compatible with restricted Kubernetes environments
+- ❌ No isolation between bridges within the container
+
+### What This Means for Security
+
+**Shared access within container:**
+- All bridges can read `/data/config.yaml` (contains AUTH_TOKEN)
+- All bridges share access to mounted directories
+- All bridges can see environment variables
+
+**Container boundary still enforced:**
+- Bridges cannot access host filesystem (except mounted paths)
+- Bridges cannot see host processes
+- Network isolation applies (unless using --network=host)
+
+**Best practices:**
+- Only deploy trusted bridge configurations
+- Use network segmentation at the infrastructure level
+- Mount only necessary directories with read-only where possible
+- Monitor bridge activity through logs and metrics
+
 ## When to Mount Additional Paths
 
 **Common scenarios where you SHOULD mount extra paths:**
 - Reading log files from other systems (`-v /var/log/plc:/data/plc-logs:ro`)
 - Importing data files from network shares (`-v /mnt/nas:/data/imports:ro`)
-- Storing certificates for OPC UA/TLS (`-v /etc/ssl/certs:/data/certs:ro`)
 
 **Use read-only mounts when possible:** Add `:ro` suffix to prevent umh-core from writing to host
 
@@ -145,6 +173,8 @@ For authenticated proxies:
 ### Do's
 - Mount only the paths you need
 - Use read-only mounts (`:ro`) when possible
+- Configure your firewall to only give the container access to the IP addresses it needs
+- Only deploy trusted bridge configurations (all bridges share the same user context)
 - Set `AUTH_TOKEN` environment variable for Management Console auth
 - Use standard network mode unless you specifically need host networking
 

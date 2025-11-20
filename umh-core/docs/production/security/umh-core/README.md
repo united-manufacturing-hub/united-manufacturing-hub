@@ -13,7 +13,7 @@ Things to keep in mind when deploying umh-core:
 
 **Container Setup:**
 - Mount `/data` for persistent storage - mount extra paths only when you need them
-- Use standard network mode unless you're doing Modbus RTU or other Layer 2 protocols
+- Configure your firewall to only give the container access to the IP addresses it needs
 - Set `AUTH_TOKEN` for Management Console connection
 - Only use `ALLOW_INSECURE_TLS=true` if you're behind a corporate firewall with TLS inspection
 
@@ -21,8 +21,3 @@ Things to keep in mind when deploying umh-core:
 - Allow outbound HTTPS to `management.umh.app`
 - Configure proxy if needed (`HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY`)
 - Add corporate CA certs if your firewall does TLS inspection
-
-**Protocols:**
-- OPC UA needs certificate files mounted
-- Modbus RTU needs host network mode
-- Most TCP/IP protocols work in standard mode
