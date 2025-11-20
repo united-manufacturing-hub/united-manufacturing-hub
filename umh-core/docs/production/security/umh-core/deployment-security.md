@@ -1,19 +1,115 @@
 # umh-core Security
 
-## Relevant OWASP Standards
+## Relevant Standards
 
-For umh-core as software, the following OWASP standards are relevant:
+### Non-Root Container Execution
+- **OWASP Docker Security #2**: Non-root user (UID 1000)
+- **NIST SP 800-190**: Least privilege principle for containers
+- **IEC 62443-4-2 CR 2.1**: Authorization enforcement, least privilege (SL 2)
 
-| Standard | Status | Implementation |
-|----------|--------|----------------|
-| **OWASP Docker Security #2** | ✅ Compliant (2025-02) | Non-root container (UID 1000, umhuser) |
-| **OWASP Docker Security #0** | ✅ Compliant (2025-02) | Regular updates via CI/CD pipeline |
-| **OWASP IoT Top 10 I1** | ✅ Compliant (2025-02) | No default passwords (AUTH_TOKEN user-configured) |
-| **OWASP IoT Top 10 I9** | ✅ Compliant (2025-02) | Secure defaults (TLS enabled, auth required) |
-| **OWASP OT Top 10 #9** | 📋 Documented (2025-02) | Protocol security limitations (Modbus, S7 lack encryption) |
-| **OWASP OT Top 10 #10** | ✅ Compliant (2025-02) | Non-root containers, minimal base image |
+**Status**: ✅ Compliant (2025-02)
+**Implementation**: All processes run as umhuser (UID 1000), no privilege escalation possible
 
-**Supply chain security**: Container images scanned via Aikido, OSS licenses via FOSSA. ISO 27001 audit in progress. Status: https://trust.umh.app
+---
+
+### Supply Chain Security
+- **OWASP Docker Security #0**: Regular image updates, vulnerability scanning
+- **NIST SP 800-161**: SBOM generation, vulnerability management, supply chain risk controls
+- **IEC 62443-4-1 SR-5**: Defect management and security vulnerability tracking
+
+**Status**: ✅ Compliant (2025-02)
+**Implementation**: Aikido/FOSSA scanning, SBOM generation, signed images, automated CI/CD pipeline. Trust dashboard: https://trust.umh.app
+
+---
+
+### Secure Defaults and Configuration
+- **OWASP IoT Top 10 I1**: No default passwords
+- **OWASP IoT Top 10 I9**: Secure defaults
+- **NIST SP 800-53 CM-7**: Least functionality principle
+- **IEC 62443-4-2 CR 2.1**: Secure by default configuration
+
+**Status**: ✅ Compliant (2025-02)
+**Implementation**: AUTH_TOKEN user-configured (no defaults), TLS enabled by default, authentication required, minimal base image
+
+---
+
+### Industrial Protocol Security
+- **OWASP OT Top 10 #9**: Legacy protocol security limitations
+- **IEC 62443-3-3 SR 5.1**: Network segmentation for OT protocols
+- **IEC 62443-4-2 CR 3.1**: Communication integrity requirements
+
+**Status**: 📋 Known Limitation (2025-02)
+**Implementation**: Modbus TCP and S7 protocols lack native encryption (protocol design limitation). Compensating controls: network segmentation (OT zone isolated from IT/internet), physical security, firewall rules restrict protocol access by IP. See Known Limitations section for details.
+
+---
+
+### Logging and Audit Trail
+- **NIST SP 800-53 AU-2/AU-3**: Comprehensive audit logging with timestamps, event types, outcomes
+- **NIST SP 800-92**: Log generation, storage, and protection
+- **IEC 62443-4-2 CR 2.8**: Auditable events for security-relevant actions
+
+**Status**: ✅ Compliant (2025-02)
+**Implementation**: All services log to /data/logs/ with S6 supervision, TAI64N timestamps, FSM state transitions tracked, rolling logs with rotation
+
+---
+
+### Network Security and Segmentation
+- **NIST SP 800-82**: Defense in depth for OT/ICS environments, network segmentation
+- **IEC 62443-3-3 SR 5.1**: Zone and conduit architecture (edge gateway deployment)
+- **IEC 62443-4-2 CR 5.1**: Network segmentation support
+
+**Status**: ✅ Compliant (2025-02)
+**Implementation**: Edge-only architecture (outbound HTTPS only), no inbound internet services, designed for deployment at OT/IT boundary (Purdue Level 3.5)
+
+---
+
+### TLS and Cryptography
+- **NIST SP 800-52**: TLS 1.2+ configuration with modern cipher suites
+- **NIST SP 800-53 SC-8**: Transmission confidentiality and integrity
+- **IEC 62443-4-2 CR 4.3**: Use of industry-standard cryptography
+
+**Status**: ✅ Compliant (2025-02)
+**Implementation**: TLS 1.2+ for management.umh.app connections, AES-GCM and ChaCha20-Poly1305 cipher suites, Go standard library crypto. Certificate validation enabled by default (ALLOW_INSECURE_TLS option documented with warnings for corporate TLS inspection scenarios).
+
+---
+
+### Container Isolation and Integrity
+- **OWASP Docker Security #10**: Minimal attack surface
+- **NIST SP 800-190**: Container isolation (separate namespaces)
+- **IEC 62443-4-2 CR 3.4**: Software and information integrity
+
+**Status**: ✅ Compliant (2025-02)
+**Implementation**: Separate process namespace (cannot see host processes), isolated network namespace, limited filesystem access (only mounted paths), minimal base image reduces attack surface
+
+---
+
+### Access Control and Authentication
+- **NIST SP 800-53 AC-6**: Least privilege access
+- **IEC 62443-4-2 CR 1.2**: Software process and device identification/authentication
+- **NIST SP 800-171 IA-2**: Identification and authentication
+
+**Status**: ✅ Compliant (2025-02)
+**Implementation**: AUTH_TOKEN shared secret for instance authentication, InstanceUUID unique per instance, Management Console provides user authentication layer
+
+---
+
+### Vulnerability Management and Patching
+- **NIST SP 800-53 SI-2**: Flaw remediation and security updates
+- **IEC 62443-4-1 SR-6**: Patch management process
+- **IEC 62443-2-3**: Patch management in IACS environments
+
+**Status**: ✅ Compliant (2025-02)
+**Implementation**: Aikido vulnerability scanning (container images), regular container image updates via CI/CD, documented update process, version-controlled releases
+
+---
+
+### Availability and Recovery
+- **NIST CSF RC**: Recovery function (restore capabilities after incidents)
+- **IEC 62443-4-2 CR 7.3/CR 7.4**: Control system backup and recovery
+- **NIST SP 800-53 CP-10**: System recovery and reconstitution
+
+**Status**: ✅ Compliant (2025-02)
+**Implementation**: FSM automatic retry and recovery, S6 supervision with automatic process restart, persistent storage (/data) for configuration, immutable container images enable reliable recovery
 
 ---
 
@@ -220,6 +316,12 @@ See [Network Configuration](./network-configuration.md) for details on proxy set
 - **Secrets lifecycle** (AUTH_TOKEN storage, rotation, access controls)
 - **Monitoring and incident response** (log aggregation, security monitoring, forensics)
 - **Deployment security** (capabilities, AppArmor/SELinux, resource limits, network policies)
+- **Network segmentation and zone placement** (IEC 62443-3-3 compliant architecture, firewall rules for OT/IT boundaries)
+- **Physical security** (secure location for umh-core hardware, restricted physical access)
+- **Backup and disaster recovery** (configuration backups, persistent volume snapshots, tested restore procedures)
+- **High availability** (deploying multiple instances if required for critical production lines)
+- **Security event monitoring** (SIEM integration if required, intrusion detection systems)
+- **Corporate CA certificate management** (adding certificates for TLS inspection scenarios)
 - **Reading this documentation** - we provide secure software, you must deploy it securely
 
 **This aligns with cloud vendor models** - we secure the software, you secure the deployment environment.
