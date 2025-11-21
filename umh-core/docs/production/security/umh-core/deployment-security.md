@@ -30,7 +30,7 @@ This section documents umh-core's security features across container security, a
 
 **Implementation**: Each umh-core instance authenticates to the Management Console using a unique AUTH_TOKEN shared secret combined with a per-instance InstanceUUID. The AUTH_TOKEN is user-configured with no default values, and Management Console provides the user authentication layer for operator access. TLS encryption protects authentication tokens during transmission to management.umh.app.
 
-**Known Limitations**: The current AUTH_TOKEN is instance-level and shared across all components within the container. Future releases will implement per-message authentication to enable fine-grained access control and authorization for individual bridges and data flows.
+**Known Limitations**: The current AUTH_TOKEN is instance-level and shared across all components within the container. Future releases will implement per-message authentication to enable fine-grained access control and authorization.
 
 ---
 
@@ -38,7 +38,9 @@ This section documents umh-core's security features across container security, a
 
 **Applicable Standards**: NIST SP 800-82 (defense in depth for OT/ICS environments and network segmentation), IEC 62443-3-3 SR 5.1 (zone and conduit architecture for edge gateway deployment), IEC 62443-4-2 CR 5.1 (network segmentation support)
 
-**Implementation**: umh-core follows an edge-only architecture designed for deployment at the OT/IT boundary (Purdue Level 3.5), with outbound HTTPS connections only to management.umh.app for configuration synchronization. No services are designed for inbound internet connections, and the local GraphQL API is restricted to localhost access only. Network isolation is enforced through separate network namespaces unless explicitly configured otherwise.
+**Implementation**: umh-core follows an edge-only architecture designed for deployment at the OT/IT boundary (Purdue Level 3.5), with outbound HTTPS connections only to management.umh.app for configuration synchronization. By default, no services listen for inbound internet connections. However, customers can configure data flows with HTTP server inputs that expose ports within the container. Network isolation is enforced through separate network namespaces unless explicitly configured otherwise.
+
+**Customer-Configured HTTP Servers**: When customers configure data flows with HTTP server inputs (for example, an HTTP input listening on 0.0.0.0:8080 to receive data from external systems), these endpoints create network attack surface outside the standard edge-only security model. Customers are responsible for securing these endpoints through firewall rules to restrict access to HTTP endpoints, implementing authentication and authorization for HTTP inputs, setting up rate limiting to prevent denial of service attacks, validating and sanitizing all data received via HTTP, ensuring network segmentation isolates HTTP endpoints from critical systems, and monitoring for attacks on exposed ports. umh-core does not provide built-in authentication, authorization, or rate limiting for customer-configured HTTP inputs. It is strongly recommended to deploy a reverse proxy in front of HTTP server inputs that provides TLS termination, authentication, and authorization controls.
 
 **Known Limitations**: The edge-only design requires outbound internet access to function and is not suitable for air-gapped or fully disconnected environments. Network segmentation and firewall rules must be configured properly by the customer to achieve defense in depth.
 
@@ -50,7 +52,7 @@ This section documents umh-core's security features across container security, a
 
 **Implementation**: All connections to management.umh.app use TLS 1.2 or higher with modern cipher suites including AES-GCM and ChaCha20-Poly1305. Certificate validation is enabled by default using Go's standard library crypto packages, and all cryptographic operations follow current industry standards for secure communications.
 
-**Known Limitations**: An ALLOW_INSECURE_TLS configuration option is available for corporate environments with TLS inspection, which disables certificate validation when enabled. This option should only be used behind trusted corporate firewalls where inspection is performed, as it makes the system vulnerable to man-in-the-middle attacks.
+**Known Limitations**: An ALLOW_INSECURE_TLS configuration option is available for corporate environments with TLS inspection, which disables certificate validation when enabled. This option should only be used behind trusted corporate firewalls where inspection is performed, as it makes the system vulnerable to man-in-the-middle attacks. When ALLOW_INSECURE_TLS is enabled, the minimum TLS version is reduced to TLS 1.0 to maximize compatibility with corporate TLS inspection proxies, which does not meet the SSLabs Grade B standard. This setting should only be used behind trusted corporate firewalls.
 
 ---
 
@@ -58,7 +60,7 @@ This section documents umh-core's security features across container security, a
 
 **Applicable Standards**: OWASP Docker Security Cheat Sheet requirement 0 (regular image updates and vulnerability scanning), NIST SP 800-161 (SBOM generation, vulnerability management, and supply chain risk controls), IEC 62443-4-1 SR-5 (product defect management and security vulnerability tracking)
 
-**Implementation**: All container images undergo automated vulnerability scanning with Aikido and FOSSA tools in the CI/CD pipeline. Software Bill of Materials documents are generated for every release, and container images are cryptographically signed for integrity verification. The trust dashboard at trust.umh.app provides transparency into security scanning results and dependency management practices.
+**Implementation**: All container images undergo automated vulnerability scanning with Aikido and FOSSA tools in the CI/CD pipeline. Software Bill of Materials (SBOM) documents are tracked through dependency management tools. The compliance dashboard at trust.umh.app tracks ISO 27001 and NIST standards alignment through Vanta.
 
 **Known Limitations**: Supply chain security depends on timely updates from upstream dependencies and proper image verification during deployment.
 
@@ -76,7 +78,7 @@ This section documents umh-core's security features across container security, a
 
 ## Threat Model (Simplified)
 
-umh-core primarily protects against unintentional compromise of external industrial systems due to vulnerabilities in our software. The non-root execution model prevents privilege escalation, the minimal network attack surface reduces exposure, and TLS is enabled by default for all external communications. Supply chain risks are mitigated through signed images, vulnerability scanning, and SBOM generation. The edge-only architecture design prevents misconfiguration that could lead to internet exposure of industrial protocols.
+umh-core primarily protects against unintentional compromise of external industrial systems due to vulnerabilities in our software. The non-root execution model prevents privilege escalation, the minimal network attack surface reduces exposure, and TLS is enabled by default for all external communications. Supply chain risks are mitigated through vulnerability scanning and dependency tracking. The edge-only architecture design prevents misconfiguration that could lead to internet exposure of industrial protocols.
 
 umh-core does not protect against malicious operators with configuration access. An operator with access to the Management Console UI or direct filesystem access to config.yaml can deploy bridge configurations that connect to external industrial systems, exfiltrate the AUTH_TOKEN via outbound network requests, or read sensitive data from mounted volumes. Similarly, the system cannot protect against compromise of the underlying container runtime, host operating system, or Kubernetes control plane.
 
@@ -86,9 +88,9 @@ This model aligns with industry-standard edge gateway security - we secure our s
 
 ## Deployment Model: Edge-Only Architecture
 
-umh-core is designed for edge-only deployment with a specific network architecture. The system requires outbound HTTPS connections to management.umh.app for configuration synchronization and supports outbound connections to data sources including MQTT brokers, OPC UA servers, Modbus devices, and APIs. No services are designed for inbound internet connections, and the GraphQL API is restricted to local access only via localhost:8090.
+umh-core is designed for edge-only deployment with a specific network architecture. The system requires outbound HTTPS connections to management.umh.app for configuration synchronization and supports outbound connections to data sources including MQTT brokers, OPC UA servers, Modbus devices, and APIs. No services are designed for inbound internet connections.
 
-The typical deployment location is on the factory floor, behind corporate firewall, on-premises at customer sites. This architecture reduces the attack surface by eliminating services that listen for inbound internet connections. The Management Console cannot push commands to instances; instead, umh-core pulls configuration changes on its own schedule. This aligns with network segmentation best practices where umh-core sits between OT networks and IT infrastructure at the boundary layer.
+The typical deployment location is on the factory floor, behind corporate firewall, on-premises at customer sites. This architecture reduces the attack surface by eliminating services that listen for inbound internet connections. The Management Console queues configuration changes that umh-core instances pull on their own schedule for execution. This aligns with network segmentation best practices where umh-core sits between OT networks and IT infrastructure at the boundary layer.
 
 The system is not designed for air-gapped environments. umh-core requires outbound internet access to management.umh.app to function and cannot operate in fully disconnected deployments.
 
@@ -132,7 +134,7 @@ All components run as single non-root user with UID 1000 named umhuser. This inc
 
 The non-root execution model ensures the container cannot escalate privileges even if compromised. This design is compatible with restricted Kubernetes environments that prohibit privileged containers and follows the standard Docker security model for production deployments.
 
-Container isolation is enforced through several mechanisms. Each container operates in a separate process namespace that prevents visibility of host processes. Network isolation is maintained through isolated network namespaces unless explicitly configured with host networking mode. Filesystem access is limited to explicitly mounted paths only, with no access to the broader host filesystem.
+Container isolation is enforced through several mechanisms. The umh-core container operates in a separate process namespace that prevents visibility of host processes. Network isolation is maintained through isolated network namespaces unless explicitly configured with host networking mode. Filesystem access is limited to explicitly mounted paths only, with no access to the broader host filesystem.
 
 ---
 
@@ -244,10 +246,6 @@ Non-root execution provides security benefits that justify this trade-off. The c
 - **Security event monitoring** (SIEM integration if required, intrusion detection systems)
 - **Corporate CA certificate management** (adding certificates for TLS inspection scenarios)
 - **Reading this documentation** - we provide secure software, you must deploy it securely
-
-### Customer-Created Network Exposures
-
-Customers can configure data flows with HTTP server inputs that expose ports within the container (for example, an HTTP input listening on 0.0.0.0:8080 to receive data from external systems). When creating such configurations, you are responsible for securing these endpoints as they create network attack surface outside our edge-only security model. This includes configuring firewall rules to restrict access to HTTP endpoints, implementing authentication and authorization for HTTP inputs, setting up rate limiting to prevent denial of service attacks, validating and sanitizing all data received via HTTP, ensuring network segmentation isolates HTTP endpoints from critical systems, and monitoring for attacks on exposed ports. umh-core does not provide built-in authentication, authorization, or rate limiting for customer-configured HTTP inputs.
 
 **This aligns with cloud vendor models** - we secure the software, you secure the deployment environment.
 
