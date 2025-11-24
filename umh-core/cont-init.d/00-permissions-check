@@ -13,7 +13,7 @@ To fix this, run on your host:
   sudo chown -R 1000:1000 <your-data-directory>
 
 For details, see:
-https://docs.umh.app
+https://docs.umh.app/production/security/umh-core/deployment-security#filesystem-access
 
 ================================================================================
 EOF
