@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package root
+package snapshot
 
 import (
 	"testing"
@@ -30,12 +30,12 @@ func TestRoot(t *testing.T) {
 }
 
 // Compile-time interface verification.
-var _ fsmv2.ObservedState = (*PassthroughObservedState)(nil)
-var _ fsmv2.DesiredState = (*PassthroughDesiredState)(nil)
+var _ fsmv2.ObservedState = (*ApplicationObservedState)(nil)
+var _ fsmv2.DesiredState = (*ApplicationDesiredState)(nil)
 
-var _ = Describe("PassthroughObservedState", func() {
+var _ = Describe("ApplicationObservedState", func() {
 	It("should implement fsmv2.ObservedState interface", func() {
-		obs := &PassthroughObservedState{
+		obs := &ApplicationObservedState{
 			CollectedAt: time.Now(),
 			Name:        "test-root",
 		}
@@ -50,16 +50,16 @@ var _ = Describe("PassthroughObservedState", func() {
 
 	It("should return the correct timestamp", func() {
 		now := time.Now()
-		obs := &PassthroughObservedState{
+		obs := &ApplicationObservedState{
 			CollectedAt: now,
 		}
 		Expect(obs.GetTimestamp()).To(Equal(now))
 	})
 })
 
-var _ = Describe("PassthroughDesiredState", func() {
+var _ = Describe("ApplicationDesiredState", func() {
 	It("should implement fsmv2.DesiredState interface", func() {
-		desired := &PassthroughDesiredState{
+		desired := &ApplicationDesiredState{
 			DesiredState: config.DesiredState{
 				State: "running",
 			},
@@ -71,7 +71,7 @@ var _ = Describe("PassthroughDesiredState", func() {
 	})
 
 	It("should return true for shutdown state", func() {
-		desired := &PassthroughDesiredState{
+		desired := &ApplicationDesiredState{
 			DesiredState: config.DesiredState{
 				State: "shutdown",
 			},
@@ -91,7 +91,7 @@ var _ = Describe("PassthroughDesiredState", func() {
 			},
 		}
 
-		desired := &PassthroughDesiredState{
+		desired := &ApplicationDesiredState{
 			DesiredState: config.DesiredState{
 				State:         "running",
 				ChildrenSpecs: children,

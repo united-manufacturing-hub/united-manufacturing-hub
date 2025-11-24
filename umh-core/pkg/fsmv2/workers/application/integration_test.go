@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package root_test
+package application_test
 
 import (
 	"context"
@@ -27,7 +27,8 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/root"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application/snapshot"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence/memory"
 )
@@ -102,7 +103,7 @@ var _ = Describe("Root Package Integration", func() {
 		logger            *zap.SugaredLogger
 		initialGoroutines int
 		err               error
-		rootSupervisor    *supervisor.Supervisor[root.PassthroughObservedState, *root.PassthroughDesiredState]
+		rootSupervisor    *supervisor.Supervisor[snapshot.ApplicationObservedState, *snapshot.ApplicationDesiredState]
 		mockStore         *storage.TriangularStore
 	)
 
@@ -115,9 +116,9 @@ var _ = Describe("Root Package Integration", func() {
 		factory.ResetRegistry()
 
 		// Register passthrough root worker factory
-		err = factory.RegisterFactory[root.PassthroughObservedState, *root.PassthroughDesiredState](
+		err = factory.RegisterFactory[snapshot.ApplicationObservedState, *snapshot.ApplicationDesiredState](
 			func(identity fsmv2.Identity) fsmv2.Worker {
-				return root.NewPassthroughWorker(identity.ID, identity.Name)
+				return application.NewApplicationWorker(identity.ID, identity.Name)
 			})
 		Expect(err).ToNot(HaveOccurred())
 
@@ -129,11 +130,11 @@ var _ = Describe("Root Package Integration", func() {
 		Expect(err).ToNot(HaveOccurred())
 
 		// Register supervisor factories
-		err = factory.RegisterSupervisorFactory[root.PassthroughObservedState, *root.PassthroughDesiredState](
+		err = factory.RegisterSupervisorFactory[snapshot.ApplicationObservedState, *snapshot.ApplicationDesiredState](
 			func(cfg interface{}) interface{} {
 				supervisorCfg := cfg.(supervisor.Config)
 
-				return supervisor.NewSupervisor[root.PassthroughObservedState, *root.PassthroughDesiredState](supervisorCfg)
+				return supervisor.NewSupervisor[snapshot.ApplicationObservedState, *snapshot.ApplicationDesiredState](supervisorCfg)
 			})
 		Expect(err).ToNot(HaveOccurred())
 
@@ -146,7 +147,7 @@ var _ = Describe("Root Package Integration", func() {
 		Expect(err).ToNot(HaveOccurred())
 
 		// Setup store with collections for both worker types
-		rootWorkerType := storage.DeriveWorkerType[root.PassthroughObservedState]()
+		rootWorkerType := storage.DeriveWorkerType[snapshot.ApplicationObservedState]()
 		childWorkerType := storage.DeriveWorkerType[TestChildObservedState]()
 		mockStore = setupTestStore(ctx, rootWorkerType, childWorkerType)
 	})
@@ -165,11 +166,11 @@ var _ = Describe("Root Package Integration", func() {
 		}, "5s", "100ms").Should(BeNumerically("<=", initialGoroutines+5))
 	})
 
-	Context("NewRootSupervisor Setup Helper", func() {
-		It("should create supervisor with root worker using NewRootSupervisor", func() {
+	Context("NewApplicationSupervisor Setup Helper", func() {
+		It("should create supervisor with root worker using NewApplicationSupervisor", func() {
 			By("Creating root supervisor using setup helper")
 
-			rootSupervisor, err = root.NewRootSupervisor(root.SupervisorConfig{
+			rootSupervisor, err = application.NewApplicationSupervisor(application.SupervisorConfig{
 				ID:           "root-001",
 				Name:         "Test Root Supervisor",
 				Store:        mockStore,
@@ -187,7 +188,7 @@ var _ = Describe("Root Package Integration", func() {
 		})
 
 		It("should use default tick interval when not specified", func() {
-			rootSupervisor, err = root.NewRootSupervisor(root.SupervisorConfig{
+			rootSupervisor, err = application.NewApplicationSupervisor(application.SupervisorConfig{
 				ID:     "root-002",
 				Name:   "Test Default Interval",
 				Store:  mockStore,
@@ -202,7 +203,7 @@ var _ = Describe("Root Package Integration", func() {
 		It("should parse children from YAML config and create ChildrenSpecs", func() {
 			By("Creating root supervisor")
 
-			rootSupervisor, err = root.NewRootSupervisor(root.SupervisorConfig{
+			rootSupervisor, err = application.NewApplicationSupervisor(application.SupervisorConfig{
 				ID:           "root-003",
 				Name:         "Test YAML Parsing",
 				Store:        mockStore,
@@ -233,8 +234,8 @@ children:
 
 			By("Saving initial observed state")
 
-			rootWorkerType := storage.DeriveWorkerType[root.PassthroughObservedState]()
-			initialObserved := root.PassthroughObservedState{
+			rootWorkerType := storage.DeriveWorkerType[snapshot.ApplicationObservedState]()
+			initialObserved := snapshot.ApplicationObservedState{
 				ID:          "root-003",
 				CollectedAt: time.Now(),
 				Name:        "Test YAML Parsing",
@@ -272,7 +273,7 @@ children:
 
 			childWorkerType := storage.DeriveWorkerType[TestChildObservedState]()
 
-			rootSupervisor, err = root.NewRootSupervisor(root.SupervisorConfig{
+			rootSupervisor, err = application.NewApplicationSupervisor(application.SupervisorConfig{
 				ID:           "root-004",
 				Name:         "Test Dynamic Children",
 				Store:        mockStore,
@@ -290,8 +291,8 @@ children:
 				Config: yamlConfig,
 			})
 
-			rootWorkerType := storage.DeriveWorkerType[root.PassthroughObservedState]()
-			initialObserved := root.PassthroughObservedState{
+			rootWorkerType := storage.DeriveWorkerType[snapshot.ApplicationObservedState]()
+			initialObserved := snapshot.ApplicationObservedState{
 				ID:          "root-004",
 				CollectedAt: time.Now(),
 				Name:        "Test Dynamic Children",
@@ -337,7 +338,7 @@ children:
 
 			childWorkerType := storage.DeriveWorkerType[TestChildObservedState]()
 
-			rootSupervisor, err = root.NewRootSupervisor(root.SupervisorConfig{
+			rootSupervisor, err = application.NewApplicationSupervisor(application.SupervisorConfig{
 				ID:           "root-005",
 				Name:         "Test Remove Children",
 				Store:        mockStore,
@@ -357,8 +358,8 @@ children:
 				Config: yamlConfig,
 			})
 
-			rootWorkerType := storage.DeriveWorkerType[root.PassthroughObservedState]()
-			initialObserved := root.PassthroughObservedState{
+			rootWorkerType := storage.DeriveWorkerType[snapshot.ApplicationObservedState]()
+			initialObserved := snapshot.ApplicationObservedState{
 				ID:          "root-005",
 				CollectedAt: time.Now(),
 				Name:        "Test Remove Children",
@@ -397,7 +398,7 @@ children:
 		It("should handle empty children array", func() {
 			By("Creating supervisor with empty children")
 
-			rootSupervisor, err = root.NewRootSupervisor(root.SupervisorConfig{
+			rootSupervisor, err = application.NewApplicationSupervisor(application.SupervisorConfig{
 				ID:           "root-006",
 				Name:         "Test Empty Children",
 				Store:        mockStore,
@@ -410,8 +411,8 @@ children:
 				Config: "children: []",
 			})
 
-			rootWorkerType := storage.DeriveWorkerType[root.PassthroughObservedState]()
-			initialObserved := root.PassthroughObservedState{
+			rootWorkerType := storage.DeriveWorkerType[snapshot.ApplicationObservedState]()
+			initialObserved := snapshot.ApplicationObservedState{
 				ID:          "root-006",
 				CollectedAt: time.Now(),
 				Name:        "Test Empty Children",
@@ -434,7 +435,7 @@ children:
 		It("should handle empty config string", func() {
 			By("Creating supervisor with empty config")
 
-			rootSupervisor, err = root.NewRootSupervisor(root.SupervisorConfig{
+			rootSupervisor, err = application.NewApplicationSupervisor(application.SupervisorConfig{
 				ID:           "root-007",
 				Name:         "Test Empty Config",
 				Store:        mockStore,
@@ -447,8 +448,8 @@ children:
 				Config: "",
 			})
 
-			rootWorkerType := storage.DeriveWorkerType[root.PassthroughObservedState]()
-			initialObserved := root.PassthroughObservedState{
+			rootWorkerType := storage.DeriveWorkerType[snapshot.ApplicationObservedState]()
+			initialObserved := snapshot.ApplicationObservedState{
 				ID:          "root-007",
 				CollectedAt: time.Now(),
 				Name:        "Test Empty Config",
@@ -473,7 +474,7 @@ children:
 		It("should handle invalid YAML config gracefully", func() {
 			By("Creating supervisor with invalid YAML")
 
-			rootSupervisor, err = root.NewRootSupervisor(root.SupervisorConfig{
+			rootSupervisor, err = application.NewApplicationSupervisor(application.SupervisorConfig{
 				ID:           "root-008",
 				Name:         "Test Invalid YAML",
 				Store:        mockStore,
@@ -483,7 +484,7 @@ children:
 			Expect(err).ToNot(HaveOccurred())
 
 			// Test that DeriveDesiredState returns error for invalid YAML
-			worker := root.NewPassthroughWorker("test", "test")
+			worker := application.NewApplicationWorker("test", "test")
 			userSpec := config.UserSpec{
 				Config: "invalid: yaml: content: [",
 			}
@@ -500,7 +501,7 @@ children:
 
 			childWorkerType := storage.DeriveWorkerType[TestChildObservedState]()
 
-			rootSupervisor, err = root.NewRootSupervisor(root.SupervisorConfig{
+			rootSupervisor, err = application.NewApplicationSupervisor(application.SupervisorConfig{
 				ID:           "root-009",
 				Name:         "Test Lifecycle",
 				Store:        mockStore,
@@ -518,8 +519,8 @@ children:
 				Config: yamlConfig,
 			})
 
-			rootWorkerType := storage.DeriveWorkerType[root.PassthroughObservedState]()
-			initialObserved := root.PassthroughObservedState{
+			rootWorkerType := storage.DeriveWorkerType[snapshot.ApplicationObservedState]()
+			initialObserved := snapshot.ApplicationObservedState{
 				ID:          "root-009",
 				CollectedAt: time.Now(),
 				Name:        "Test Lifecycle",

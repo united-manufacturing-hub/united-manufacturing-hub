@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package root
+package application
 
 import (
 	"context"
@@ -22,16 +22,17 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application/snapshot"
 )
 
 // Compile-time interface verification.
-var _ fsmv2.Worker = (*PassthroughWorker)(nil)
+var _ fsmv2.Worker = (*ApplicationWorker)(nil)
 
-var _ = Describe("PassthroughWorker", func() {
-	var worker *PassthroughWorker
+var _ = Describe("ApplicationWorker", func() {
+	var worker *ApplicationWorker
 
 	BeforeEach(func() {
-		worker = NewPassthroughWorker("root-1", "test-root")
+		worker = NewApplicationWorker("root-1", "test-root")
 	})
 
 	Describe("CollectObservedState", func() {
@@ -41,7 +42,7 @@ var _ = Describe("PassthroughWorker", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(obs).NotTo(BeNil())
 
-			typedObs, ok := obs.(*PassthroughObservedState)
+			typedObs, ok := obs.(*snapshot.ApplicationObservedState)
 			Expect(ok).To(BeTrue())
 			Expect(typedObs.GetTimestamp()).NotTo(BeZero())
 			Expect(typedObs.Name).To(Equal("test-root"))

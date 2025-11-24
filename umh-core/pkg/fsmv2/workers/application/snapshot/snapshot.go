@@ -12,10 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package root provides a generic passthrough root supervisor for FSMv2.
-// The root supervisor dynamically creates children based on YAML configuration,
-// allowing any registered worker type to be instantiated as a child.
-package root
+// Package snapshot provides snapshot state types for the application worker.
+package snapshot
 
 import (
 	"time"
@@ -24,61 +22,43 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 )
 
-// PassthroughObservedState represents the minimal observed state for a root supervisor.
+// ApplicationObservedState represents the minimal observed state for an application supervisor.
 // It embeds the desired state to track what was actually deployed.
-type PassthroughObservedState struct {
+type ApplicationObservedState struct {
 	ID          string    `json:"id"`
 	CollectedAt time.Time `json:"collected_at"`
 	Name        string    `json:"name"`
 
-	// DeployedDesiredState is what was last deployed to this root.
-	DeployedDesiredState PassthroughDesiredState `json:"deployed_desired_state"`
+	// DeployedDesiredState is what was last deployed to this application.
+	DeployedDesiredState ApplicationDesiredState `json:"deployed_desired_state"`
 }
 
 // GetTimestamp returns the time when this observed state was collected.
-func (o PassthroughObservedState) GetTimestamp() time.Time {
+func (o ApplicationObservedState) GetTimestamp() time.Time {
 	return o.CollectedAt
 }
 
 // GetObservedDesiredState returns the desired state that was actually deployed.
-func (o PassthroughObservedState) GetObservedDesiredState() fsmv2.DesiredState {
+func (o ApplicationObservedState) GetObservedDesiredState() fsmv2.DesiredState {
 	return &o.DeployedDesiredState
 }
 
-// PassthroughDesiredState represents the desired state for a root supervisor.
+// ApplicationDesiredState represents the desired state for an application supervisor.
 // It embeds config.DesiredState to get ChildrenSpecs and IsShutdownRequested().
-type PassthroughDesiredState struct {
+type ApplicationDesiredState struct {
 	config.DesiredState
 
-	// Name is the identifier for this root supervisor.
+	// Name is the identifier for this application supervisor.
 	Name string `json:"name"`
 }
 
 // IsShutdownRequested returns true if shutdown has been requested.
 // This delegates to the embedded config.DesiredState.
-func (d *PassthroughDesiredState) IsShutdownRequested() bool {
+func (d *ApplicationDesiredState) IsShutdownRequested() bool {
 	return d.DesiredState.IsShutdownRequested()
 }
 
 // GetChildrenSpecs returns the children specifications from the embedded DesiredState.
-func (d *PassthroughDesiredState) GetChildrenSpecs() []config.ChildSpec {
+func (d *ApplicationDesiredState) GetChildrenSpecs() []config.ChildSpec {
 	return d.ChildrenSpecs
-}
-
-// Config holds the configuration for creating a root supervisor.
-type Config struct {
-	// Name is the identifier for this root supervisor instance.
-	Name string
-
-	// YAMLConfig is the raw YAML configuration containing children specifications.
-	// The root supervisor parses this to extract the children array.
-	//
-	// Example:
-	//   children:
-	//     - name: "child-1"
-	//       workerType: "example-child"
-	//       userSpec:
-	//         config: |
-	//           value: 10
-	YAMLConfig string
 }

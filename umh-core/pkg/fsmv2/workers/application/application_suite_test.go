@@ -12,10 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package state
+package application_test
 
-// BaseChildState defines the interface that all child state implementations must satisfy.
-// This is a marker interface used for type safety and compile-time checking.
-// All states must also implement fsmv2.State for FSM integration.
-type BaseChildState interface {
+import (
+	"testing"
+
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+)
+
+func TestApplication(t *testing.T) {
+	RegisterFailHandler(Fail)
+	RunSpecs(t, "Application Suite")
 }
