@@ -525,7 +525,7 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity fsmv2.Identity, wor
 		return fmt.Errorf("failed to marshal observed state: %w", err)
 	}
 
-	var observedDoc persistence.Document
+	observedDoc := make(persistence.Document)
 	if err := json.Unmarshal(observedJSON, &observedDoc); err != nil {
 		return fmt.Errorf("failed to unmarshal observed state to document: %w", err)
 	}
@@ -545,7 +545,7 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity fsmv2.Identity, wor
 		return fmt.Errorf("failed to marshal desired state: %w", err)
 	}
 
-	var desiredDoc persistence.Document
+	desiredDoc := make(persistence.Document)
 	if err := json.Unmarshal(desiredJSON, &desiredDoc); err != nil {
 		return fmt.Errorf("failed to unmarshal desired state to document: %w", err)
 	}
@@ -1274,7 +1274,7 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 		return fmt.Errorf("failed to marshal derived desired state: %w", err)
 	}
 
-	var desiredDoc persistence.Document
+	desiredDoc := make(persistence.Document)
 	if err := json.Unmarshal(desiredJSON, &desiredDoc); err != nil {
 		return fmt.Errorf("failed to unmarshal derived desired state to document: %w", err)
 	}
@@ -2002,10 +2002,13 @@ func (s *Supervisor[TObserved, TDesired]) GetWorkers() []fsmv2.Identity {
 	defer s.mu.RUnlock()
 
 	workers := make([]fsmv2.Identity, 0, len(s.workers))
-	for id := range s.workers {
+	for id, worker := range s.workers {
+		if worker == nil {
+			continue
+		}
 		workers = append(workers, fsmv2.Identity{
 			ID:         id,
-			Name:       s.workers[id].identity.Name,
+			Name:       worker.identity.Name,
 			WorkerType: s.workerType,
 		})
 	}

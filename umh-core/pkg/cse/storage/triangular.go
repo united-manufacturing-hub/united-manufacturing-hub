@@ -266,6 +266,10 @@ func (ts *TriangularStore) LoadIdentity(ctx context.Context, workerType string, 
 // Returns:
 //   - error: If worker type not registered or save fails
 func (ts *TriangularStore) SaveDesired(ctx context.Context, workerType string, id string, desired persistence.Document) error {
+	if desired == nil {
+		return fmt.Errorf("desired document cannot be nil")
+	}
+
 	// Validate document has required fields
 	if err := ts.validateDocument(desired); err != nil {
 		return fmt.Errorf("invalid desired document: %w", err)
@@ -768,6 +772,10 @@ func (ts *TriangularStore) LoadSnapshot(ctx context.Context, workerType string, 
 //   - role: Triangular model role (identity, desired, observed)
 //   - isNew: True if first save, false if update
 func (ts *TriangularStore) injectMetadata(doc persistence.Document, role string, isNew bool) {
+	if doc == nil {
+		return
+	}
+
 	now := time.Now().UTC()
 
 	if isNew {
@@ -1005,7 +1013,7 @@ func SaveDesiredTyped[T any](ts *TriangularStore, ctx context.Context, id string
 		return fmt.Errorf("failed to marshal desired state: %w", err)
 	}
 
-	var desiredDoc persistence.Document
+	desiredDoc := make(persistence.Document)
 	if err := json.Unmarshal(bytes, &desiredDoc); err != nil {
 		return fmt.Errorf("failed to unmarshal to Document: %w", err)
 	}
@@ -1130,9 +1138,13 @@ func SaveObservedTyped[T any](ts *TriangularStore, ctx context.Context, id strin
 	collectionName := DeriveCollectionName[T](RoleObserved)
 
 	// Marshal struct to Document
-	observedDoc, err := structToDocument(observed)
+	observedDoc := make(persistence.Document)
+	bytes, err := json.Marshal(observed)
 	if err != nil {
-		return false, fmt.Errorf("failed to serialize %T: %w", observed, err)
+		return false, fmt.Errorf("failed to marshal observed state: %w", err)
+	}
+	if err := json.Unmarshal(bytes, &observedDoc); err != nil {
+		return false, fmt.Errorf("failed to unmarshal to Document: %w", err)
 	}
 
 	// Add ID if not present (convenience)
