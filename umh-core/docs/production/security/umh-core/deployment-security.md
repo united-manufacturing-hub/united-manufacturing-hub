@@ -12,6 +12,8 @@ This section documents umh-core's security features across container security, a
 
 **Deployment Considerations**: All bridges and [data flows](../../../usage/data-flows/) run as the same Linux user within the container, with no per-component user isolation. This design prioritizes non-root security over internal process isolation, as user switching requires root capabilities unavailable in non-root containers.
 
+**Note**: Mounted volumes must be writable by UID 1000. See [Filesystem Access](#filesystem-access).
+
 ⚠️ **Safety System Warning**: umh-core is NOT SIL-rated and must not be used in safety-instrumented systems. Refer to IEC 61508/61511 for safety requirements.
 
 ---
@@ -123,6 +125,13 @@ The system is not designed for air-gapped environments. umh-core requires outbou
 **Why**: Bridges need to read data files and persist configuration across container restarts.
 
 **Access pattern**: Access depends on mount configuration (e.g., `:ro` for read-only, `:rw` for read-write).
+
+#### Volume Permission Requirements
+
+The `/data` directory must be writable by UID 1000 (umhuser). Set ownership before starting:
+```bash
+sudo chown -R 1000:1000 /path/to/data
+```
 
 ---
 
@@ -256,6 +265,7 @@ Non-root execution provides security benefits that justify this trade-off. The c
 ### You are responsible for:
 - **Infrastructure and runtime** (Docker/Kubernetes configuration, host OS security, network architecture)
 - **Secrets lifecycle** (AUTH_TOKEN storage, rotation, access controls)
+- **Volume permissions** (ensuring `/data` is writable by UID 1000)
 - **Monitoring and incident response** (log aggregation, security monitoring, forensics)
 - **Deployment security** (capabilities, AppArmor/SELinux, resource limits, network policies)
 - **Network segmentation and zone placement** (deploy at Purdue Level 3 per IEC 62443-3-3 zone architecture, firewall rules for OT/IT boundaries)

@@ -1,0 +1,25 @@
+#!/command/with-contenv sh
+# Verify /data is writable by umhuser (UID 1000) as documented in security model
+
+if ! touch /data/.write-test 2>/dev/null; then
+    cat >&2 <<EOF
+================================================================================
+ERROR: Cannot write to /data directory
+
+The umh-core container runs as non-root user 'umhuser' (UID 1000) for security.
+The mounted /data directory must be writable by this user.
+
+To fix this, run on your host:
+  sudo chown -R 1000:1000 <your-data-directory>
+
+For details, see:
+https://docs.umh.app
+
+================================================================================
+EOF
+    exit 1
+fi
+rm -f /data/.write-test
+
+# Ensure required directories exist
+mkdir -p /data/logs /data/services /data/redpanda 2>/dev/null || true

@@ -156,6 +156,9 @@ RUN chmod +x /usr/local/bin/umh-core && \
 # Copy s6 service configuration
 COPY ./s6-base/s6-rc.d /etc/s6-overlay/s6-rc.d/
 
+# Copy S6 initialization scripts for permission checks
+COPY ./cont-init.d /etc/cont-init.d/
+
 # Use either standard or debug service based on DEBUG flag
 ARG DEBUG=false
 RUN if [ "$DEBUG" = "true" ]; then \
