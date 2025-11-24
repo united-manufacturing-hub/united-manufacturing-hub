@@ -53,6 +53,7 @@ var _ = Describe("Transaction Support", func() {
 
 		Context("when context is nil", func() {
 			It("should return an error", func() {
+				//nolint:staticcheck // testing nil context behavior
 				tx, err := store.BeginTx(nil)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("context cannot be nil"))

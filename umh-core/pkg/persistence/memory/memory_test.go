@@ -456,6 +456,7 @@ var _ = Describe("InMemoryStore", func() {
 
 		Context("when context is nil", func() {
 			It("should return an error", func() {
+				//nolint:staticcheck // testing nil context behavior
 				_, err := store.Find(nil, "test_collection", persistence.Query{})
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("context cannot be nil"))

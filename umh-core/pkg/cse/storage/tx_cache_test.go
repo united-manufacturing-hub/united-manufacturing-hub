@@ -84,21 +84,24 @@ var _ = Describe("TxCache", func() {
 		})
 
 		It("should preserve transaction ID", func() {
-			cache.BeginTx("tx-123", metadata)
+			err := cache.BeginTx("tx-123", metadata)
+			Expect(err).ToNot(HaveOccurred())
 
 			pending, _ := cache.GetPending()
 			Expect(pending[0].TxID).To(Equal("tx-123"))
 		})
 
 		It("should set status to pending", func() {
-			cache.BeginTx("tx-123", metadata)
+			err := cache.BeginTx("tx-123", metadata)
+			Expect(err).ToNot(HaveOccurred())
 
 			pending, _ := cache.GetPending()
 			Expect(pending[0].Status).To(Equal(storage.TxStatusPending))
 		})
 
 		It("should preserve metadata", func() {
-			cache.BeginTx("tx-123", metadata)
+			err := cache.BeginTx("tx-123", metadata)
+			Expect(err).ToNot(HaveOccurred())
 
 			pending, _ := cache.GetPending()
 			Expect(pending[0].Metadata["saga_type"]).To(Equal("deploy_bridge"))
@@ -109,7 +112,8 @@ var _ = Describe("TxCache", func() {
 		var op storage.CachedOp
 
 		BeforeEach(func() {
-			cache.BeginTx("tx-123", nil)
+			err := cache.BeginTx("tx-123", nil)
+			Expect(err).ToNot(HaveOccurred())
 			op = storage.CachedOp{
 				OpType:     "insert",
 				Collection: "container_desired",
@@ -125,21 +129,24 @@ var _ = Describe("TxCache", func() {
 		})
 
 		It("should add operation to transaction", func() {
-			cache.RecordOp("tx-123", op)
+			err := cache.RecordOp("tx-123", op)
+			Expect(err).ToNot(HaveOccurred())
 
 			pending, _ := cache.GetPending()
 			Expect(pending[0].Ops).To(HaveLen(1))
 		})
 
 		It("should preserve operation type", func() {
-			cache.RecordOp("tx-123", op)
+			err := cache.RecordOp("tx-123", op)
+			Expect(err).ToNot(HaveOccurred())
 
 			pending, _ := cache.GetPending()
 			Expect(pending[0].Ops[0].OpType).To(Equal("insert"))
 		})
 
 		It("should preserve collection name", func() {
-			cache.RecordOp("tx-123", op)
+			err := cache.RecordOp("tx-123", op)
+			Expect(err).ToNot(HaveOccurred())
 
 			pending, _ := cache.GetPending()
 			Expect(pending[0].Ops[0].Collection).To(Equal("container_desired"))
@@ -155,7 +162,8 @@ var _ = Describe("TxCache", func() {
 
 	Describe("RecordMultipleOps", func() {
 		BeforeEach(func() {
-			cache.BeginTx("tx-123", nil)
+			err := cache.BeginTx("tx-123", nil)
+			Expect(err).ToNot(HaveOccurred())
 		})
 
 		It("should record multiple operations", func() {
@@ -167,7 +175,8 @@ var _ = Describe("TxCache", func() {
 					Data:       persistence.Document{"value": i},
 					Timestamp:  time.Now(),
 				}
-				cache.RecordOp("tx-123", op)
+				err := cache.RecordOp("tx-123", op)
+				Expect(err).ToNot(HaveOccurred())
 			}
 
 			pending, _ := cache.GetPending()
@@ -177,14 +186,16 @@ var _ = Describe("TxCache", func() {
 
 	Describe("Commit", func() {
 		BeforeEach(func() {
-			cache.BeginTx("tx-123", nil)
-			cache.RecordOp("tx-123", storage.CachedOp{
+			err := cache.BeginTx("tx-123", nil)
+			Expect(err).ToNot(HaveOccurred())
+			err = cache.RecordOp("tx-123", storage.CachedOp{
 				OpType:     "insert",
 				Collection: "test",
 				ID:         "doc-1",
 				Data:       persistence.Document{"value": 123},
 				Timestamp:  time.Now(),
 			})
+			Expect(err).ToNot(HaveOccurred())
 		})
 
 		It("should commit transaction successfully", func() {
@@ -193,7 +204,8 @@ var _ = Describe("TxCache", func() {
 		})
 
 		It("should remove transaction from pending", func() {
-			cache.Commit("tx-123")
+			err := cache.Commit("tx-123")
+			Expect(err).ToNot(HaveOccurred())
 
 			pending, _ := cache.GetPending()
 			Expect(pending).To(BeEmpty())
@@ -209,14 +221,16 @@ var _ = Describe("TxCache", func() {
 
 	Describe("Rollback", func() {
 		BeforeEach(func() {
-			cache.BeginTx("tx-123", nil)
-			cache.RecordOp("tx-123", storage.CachedOp{
+			err := cache.BeginTx("tx-123", nil)
+			Expect(err).ToNot(HaveOccurred())
+			err = cache.RecordOp("tx-123", storage.CachedOp{
 				OpType:     "insert",
 				Collection: "test",
 				ID:         "doc-1",
 				Data:       persistence.Document{"value": 123},
 				Timestamp:  time.Now(),
 			})
+			Expect(err).ToNot(HaveOccurred())
 		})
 
 		It("should rollback transaction successfully", func() {
@@ -225,7 +239,8 @@ var _ = Describe("TxCache", func() {
 		})
 
 		It("should remove transaction from pending", func() {
-			cache.Rollback("tx-123")
+			err := cache.Rollback("tx-123")
+			Expect(err).ToNot(HaveOccurred())
 
 			pending, _ := cache.GetPending()
 			Expect(pending).To(BeEmpty())
@@ -234,15 +249,18 @@ var _ = Describe("TxCache", func() {
 
 	Describe("Flush", func() {
 		BeforeEach(func() {
-			store.CreateCollection(ctx, "_tx_cache", nil)
-			cache.BeginTx("tx-123", map[string]interface{}{"saga_type": "deploy"})
-			cache.RecordOp("tx-123", storage.CachedOp{
+			err := store.CreateCollection(ctx, "_tx_cache", nil)
+			Expect(err).ToNot(HaveOccurred())
+			err = cache.BeginTx("tx-123", map[string]interface{}{"saga_type": "deploy"})
+			Expect(err).ToNot(HaveOccurred())
+			err = cache.RecordOp("tx-123", storage.CachedOp{
 				OpType:     "insert",
 				Collection: "test",
 				ID:         "doc-1",
 				Data:       persistence.Document{"value": 123},
 				Timestamp:  time.Now(),
 			})
+			Expect(err).ToNot(HaveOccurred())
 		})
 
 		It("should flush to storage successfully", func() {
@@ -251,7 +269,8 @@ var _ = Describe("TxCache", func() {
 		})
 
 		It("should write transaction to storage", func() {
-			cache.Flush(ctx)
+			err := cache.Flush(ctx)
+			Expect(err).ToNot(HaveOccurred())
 
 			docs, err := store.Find(ctx, "_tx_cache", persistence.Query{})
 			Expect(err).NotTo(HaveOccurred())
@@ -259,14 +278,16 @@ var _ = Describe("TxCache", func() {
 		})
 
 		It("should preserve transaction ID in storage", func() {
-			cache.Flush(ctx)
+			err := cache.Flush(ctx)
+			Expect(err).ToNot(HaveOccurred())
 
 			docs, _ := store.Find(ctx, "_tx_cache", persistence.Query{})
 			Expect(docs[0]["id"]).To(Equal("tx-123"))
 		})
 
 		It("should preserve transaction status", func() {
-			cache.Flush(ctx)
+			err := cache.Flush(ctx)
+			Expect(err).ToNot(HaveOccurred())
 
 			docs, _ := store.Find(ctx, "_tx_cache", persistence.Query{})
 			Expect(docs[0]["status"]).To(Equal(string(storage.TxStatusPending)))
@@ -274,11 +295,13 @@ var _ = Describe("TxCache", func() {
 
 		Context("when transaction is committed", func() {
 			BeforeEach(func() {
-				cache.Commit("tx-123")
+				err := cache.Commit("tx-123")
+				Expect(err).ToNot(HaveOccurred())
 			})
 
 			It("should persist committed status", func() {
-				cache.Flush(ctx)
+				err := cache.Flush(ctx)
+				Expect(err).ToNot(HaveOccurred())
 
 				docs, _ := store.Find(ctx, "_tx_cache", persistence.Query{})
 				Expect(docs).To(HaveLen(1))
@@ -286,7 +309,8 @@ var _ = Describe("TxCache", func() {
 			})
 
 			It("should set finished_at timestamp", func() {
-				cache.Flush(ctx)
+				err := cache.Flush(ctx)
+				Expect(err).ToNot(HaveOccurred())
 
 				docs, _ := store.Find(ctx, "_tx_cache", persistence.Query{})
 				Expect(docs[0]["finished_at"]).NotTo(BeNil())
@@ -298,21 +322,24 @@ var _ = Describe("TxCache", func() {
 		var executedOps []storage.CachedOp
 
 		BeforeEach(func() {
-			cache.BeginTx("tx-123", nil)
-			cache.RecordOp("tx-123", storage.CachedOp{
+			err := cache.BeginTx("tx-123", nil)
+			Expect(err).ToNot(HaveOccurred())
+			err = cache.RecordOp("tx-123", storage.CachedOp{
 				OpType:     "insert",
 				Collection: "test",
 				ID:         "doc-1",
 				Data:       persistence.Document{"value": 123},
 				Timestamp:  time.Now(),
 			})
-			cache.RecordOp("tx-123", storage.CachedOp{
+			Expect(err).ToNot(HaveOccurred())
+			err = cache.RecordOp("tx-123", storage.CachedOp{
 				OpType:     "update",
 				Collection: "test",
 				ID:         "doc-2",
 				Data:       persistence.Document{"value": 456},
 				Timestamp:  time.Now(),
 			})
+			Expect(err).ToNot(HaveOccurred())
 
 			executedOps = []storage.CachedOp{}
 		})
@@ -336,7 +363,8 @@ var _ = Describe("TxCache", func() {
 				return nil
 			}
 
-			cache.Replay(ctx, "tx-123", executor)
+			err := cache.Replay(ctx, "tx-123", executor)
+			Expect(err).ToNot(HaveOccurred())
 
 			Expect(executedOps[0].ID).To(Equal("doc-1"))
 			Expect(executedOps[1].ID).To(Equal("doc-2"))
@@ -357,25 +385,33 @@ var _ = Describe("TxCache", func() {
 
 	Describe("Cleanup", func() {
 		BeforeEach(func() {
-			store.CreateCollection(ctx, "_tx_cache", nil)
+			err := store.CreateCollection(ctx, "_tx_cache", nil)
+			Expect(err).ToNot(HaveOccurred())
 		})
 
 		Context("with old committed transaction", func() {
 			BeforeEach(func() {
-				cache.BeginTx("tx-old", nil)
-				cache.Commit("tx-old")
+				err := cache.BeginTx("tx-old", nil)
+				Expect(err).ToNot(HaveOccurred())
+				err = cache.Commit("tx-old")
+				Expect(err).ToNot(HaveOccurred())
 
-				cache.BeginTx("tx-new", nil)
-				cache.Commit("tx-new")
+				err = cache.BeginTx("tx-new", nil)
+				Expect(err).ToNot(HaveOccurred())
+				err = cache.Commit("tx-new")
+				Expect(err).ToNot(HaveOccurred())
 
-				cache.BeginTx("tx-pending", nil)
+				err = cache.BeginTx("tx-pending", nil)
+				Expect(err).ToNot(HaveOccurred())
 
-				cache.Flush(ctx)
+				err = cache.Flush(ctx)
+				Expect(err).ToNot(HaveOccurred())
 
 				oldTime := time.Now().Add(-25 * time.Hour)
 				oldDoc, _ := store.Get(ctx, "_tx_cache", "tx-old")
 				oldDoc["finished_at"] = oldTime.Format(time.RFC3339)
-				store.Update(ctx, "_tx_cache", "tx-old", oldDoc)
+				err = store.Update(ctx, "_tx_cache", "tx-old", oldDoc)
+				Expect(err).ToNot(HaveOccurred())
 			})
 
 			It("should remove old transactions", func() {
@@ -387,23 +423,26 @@ var _ = Describe("TxCache", func() {
 			})
 
 			It("should not remove recent transactions", func() {
-				cache.Cleanup(ctx, 24*time.Hour)
+				err := cache.Cleanup(ctx, 24*time.Hour)
+				Expect(err).ToNot(HaveOccurred())
 
-				_, err := store.Get(ctx, "_tx_cache", "tx-new")
+				_, err = store.Get(ctx, "_tx_cache", "tx-new")
 				Expect(err).NotTo(HaveOccurred())
 			})
 
 			It("should not remove pending transactions", func() {
-				cache.Cleanup(ctx, 24*time.Hour)
+				err := cache.Cleanup(ctx, 24*time.Hour)
+				Expect(err).ToNot(HaveOccurred())
 
-				_, err := store.Get(ctx, "_tx_cache", "tx-pending")
+				_, err = store.Get(ctx, "_tx_cache", "tx-pending")
 				Expect(err).NotTo(HaveOccurred())
 			})
 
 			It("should remove old transaction", func() {
-				cache.Cleanup(ctx, 24*time.Hour)
+				err := cache.Cleanup(ctx, 24*time.Hour)
+				Expect(err).ToNot(HaveOccurred())
 
-				_, err := store.Get(ctx, "_tx_cache", "tx-old")
+				_, err = store.Get(ctx, "_tx_cache", "tx-old")
 				Expect(err).To(MatchError(persistence.ErrNotFound))
 			})
 		})
@@ -411,11 +450,16 @@ var _ = Describe("TxCache", func() {
 
 	Describe("GetPending", func() {
 		BeforeEach(func() {
-			cache.BeginTx("tx-pending", nil)
-			cache.BeginTx("tx-committed", nil)
-			cache.Commit("tx-committed")
-			cache.BeginTx("tx-failed", nil)
-			cache.Rollback("tx-failed")
+			err := cache.BeginTx("tx-pending", nil)
+			Expect(err).ToNot(HaveOccurred())
+			err = cache.BeginTx("tx-committed", nil)
+			Expect(err).ToNot(HaveOccurred())
+			err = cache.Commit("tx-committed")
+			Expect(err).ToNot(HaveOccurred())
+			err = cache.BeginTx("tx-failed", nil)
+			Expect(err).ToNot(HaveOccurred())
+			err = cache.Rollback("tx-failed")
+			Expect(err).ToNot(HaveOccurred())
 		})
 
 		It("should return only pending transactions", func() {
@@ -437,15 +481,18 @@ var _ = Describe("TxCache", func() {
 			for i := range 10 {
 				go func(id int) {
 					txID := "tx-" + string(rune('0'+id))
-					cache.BeginTx(txID, nil)
-					cache.RecordOp(txID, storage.CachedOp{
+					err := cache.BeginTx(txID, nil)
+					Expect(err).ToNot(HaveOccurred())
+					err = cache.RecordOp(txID, storage.CachedOp{
 						OpType:     "insert",
 						Collection: "test",
 						ID:         "doc-" + string(rune('0'+id)),
 						Data:       persistence.Document{"value": id},
 						Timestamp:  time.Now(),
 					})
-					cache.Commit(txID)
+					Expect(err).ToNot(HaveOccurred())
+					err = cache.Commit(txID)
+					Expect(err).ToNot(HaveOccurred())
 					done <- true
 				}(i)
 			}

@@ -71,7 +71,7 @@ var _ = Describe("TypeRegistry", func() {
 			var wg sync.WaitGroup
 			errors := make([]error, 10)
 
-			for i := 0; i < 10; i++ {
+			for i := range 10 {
 				wg.Add(1)
 				go func(idx int) {
 					defer wg.Done()
@@ -88,7 +88,7 @@ var _ = Describe("TypeRegistry", func() {
 				Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("worker%d registration failed", i))
 			}
 
-			for i := 0; i < 10; i++ {
+			for i := range 10 {
 				workerType := fmt.Sprintf("worker%d", i)
 				observedType := registry.GetObservedType(workerType)
 				Expect(observedType).NotTo(BeNil())

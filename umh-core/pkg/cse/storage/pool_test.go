@@ -110,9 +110,12 @@ var _ = Describe("ObjectPool", func() {
 			obj2 := &mockCloseable{}
 			obj3 := &mockCloseable{}
 
-			pool.Put("key1", obj1)
-			pool.Put("key2", obj2)
-			pool.Put("key3", obj3)
+			err := pool.Put("key1", obj1)
+			Expect(err).NotTo(HaveOccurred())
+			err = pool.Put("key2", obj2)
+			Expect(err).NotTo(HaveOccurred())
+			err = pool.Put("key3", obj3)
+			Expect(err).NotTo(HaveOccurred())
 
 			retrieved1, _ := pool.Get("key1")
 			retrieved2, _ := pool.Get("key2")
@@ -127,8 +130,10 @@ var _ = Describe("ObjectPool", func() {
 			obj1 := &mockCloseable{}
 			obj2 := &mockCloseable{}
 
-			pool.Put("test-key", obj1)
-			pool.Put("test-key", obj2)
+			err := pool.Put("test-key", obj1)
+			Expect(err).NotTo(HaveOccurred())
+			err = pool.Put("test-key", obj2)
+			Expect(err).NotTo(HaveOccurred())
 
 			retrieved, _ := pool.Get("test-key")
 			Expect(retrieved).To(BeIdenticalTo(obj2))
@@ -161,7 +166,8 @@ var _ = Describe("ObjectPool", func() {
 
 	Describe("Has", func() {
 		BeforeEach(func() {
-			pool.Put("test-key", &mockCloseable{})
+			err := pool.Put("test-key", &mockCloseable{})
+			Expect(err).NotTo(HaveOccurred())
 		})
 
 		It("should return true for existing keys", func() {
@@ -183,25 +189,26 @@ var _ = Describe("ObjectPool", func() {
 		})
 
 		It("should return correct size after adding objects", func() {
-			pool.Put("key1", &mockCloseable{})
-			pool.Put("key2", &mockCloseable{})
-			pool.Put("key3", &mockCloseable{})
+			_ = pool.Put("key1", &mockCloseable{})
+			_ = pool.Put("key2", &mockCloseable{})
+			_ = pool.Put("key3", &mockCloseable{})
 
 			Expect(pool.Size()).To(Equal(3))
 		})
 
 		It("should not change size when overwriting key", func() {
-			pool.Put("test-key", &mockCloseable{})
-			pool.Put("test-key", &mockCloseable{})
+			_ = pool.Put("test-key", &mockCloseable{})
+			_ = pool.Put("test-key", &mockCloseable{})
 
 			Expect(pool.Size()).To(Equal(1))
 		})
 
 		It("should decrease after removing object", func() {
-			pool.Put("key1", &mockCloseable{})
-			pool.Put("key2", &mockCloseable{})
+			_ = pool.Put("key1", &mockCloseable{})
+			_ = pool.Put("key2", &mockCloseable{})
 
-			pool.Remove("key1")
+			err := pool.Remove("key1")
+			Expect(err).NotTo(HaveOccurred())
 
 			Expect(pool.Size()).To(Equal(1))
 		})
@@ -212,7 +219,8 @@ var _ = Describe("ObjectPool", func() {
 
 		BeforeEach(func() {
 			obj = &mockCloseable{}
-			pool.Put("test-key", obj)
+			err := pool.Put("test-key", obj)
+			Expect(err).NotTo(HaveOccurred())
 		})
 
 		It("should remove object from pool", func() {
@@ -222,15 +230,17 @@ var _ = Describe("ObjectPool", func() {
 		})
 
 		It("should close Closeable objects", func() {
-			pool.Remove("test-key")
+			err := pool.Remove("test-key")
+			Expect(err).NotTo(HaveOccurred())
 			Expect(obj.IsClosed()).To(BeTrue())
 		})
 
 		It("should not close non-Closeable objects", func() {
 			nonCloseable := &mockObject{value: "test"}
-			pool.Put("non-closeable", nonCloseable)
+			err := pool.Put("non-closeable", nonCloseable)
+			Expect(err).NotTo(HaveOccurred())
 
-			err := pool.Remove("non-closeable")
+			err = pool.Remove("non-closeable")
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -244,18 +254,20 @@ var _ = Describe("ObjectPool", func() {
 		Context("when Close returns error", func() {
 			It("should return the error", func() {
 				errObj := &mockCloseableWithError{}
-				pool.Put("error-key", errObj)
+				err := pool.Put("error-key", errObj)
+				Expect(err).NotTo(HaveOccurred())
 
-				err := pool.Remove("error-key")
+				err = pool.Remove("error-key")
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("close error"))
 			})
 
 			It("should still remove object from pool", func() {
 				errObj := &mockCloseableWithError{}
-				pool.Put("error-key", errObj)
+				err := pool.Put("error-key", errObj)
+				Expect(err).NotTo(HaveOccurred())
 
-				pool.Remove("error-key")
+				_ = pool.Remove("error-key")
 				Expect(pool.Has("error-key")).To(BeFalse())
 			})
 		})
@@ -270,9 +282,9 @@ var _ = Describe("ObjectPool", func() {
 			obj1 = &mockCloseable{}
 			obj2 = &mockCloseable{}
 			obj3 = &mockCloseable{}
-			pool.Put("key1", obj1)
-			pool.Put("key2", obj2)
-			pool.Put("key3", obj3)
+			_ = pool.Put("key1", obj1)
+			_ = pool.Put("key2", obj2)
+			_ = pool.Put("key3", obj3)
 		})
 
 		It("should remove all objects", func() {
@@ -282,7 +294,8 @@ var _ = Describe("ObjectPool", func() {
 		})
 
 		It("should close all Closeable objects", func() {
-			pool.Clear()
+			err := pool.Clear()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(obj1.IsClosed()).To(BeTrue())
 			Expect(obj2.IsClosed()).To(BeTrue())
 			Expect(obj3.IsClosed()).To(BeTrue())
@@ -298,17 +311,19 @@ var _ = Describe("ObjectPool", func() {
 		Context("when some Close calls fail", func() {
 			It("should return combined error", func() {
 				errObj := &mockCloseableWithError{}
-				pool.Put("error-key", errObj)
+				err := pool.Put("error-key", errObj)
+				Expect(err).NotTo(HaveOccurred())
 
-				err := pool.Clear()
+				err = pool.Clear()
 				Expect(err).To(HaveOccurred())
 			})
 
 			It("should still remove all objects", func() {
 				errObj := &mockCloseableWithError{}
-				pool.Put("error-key", errObj)
+				err := pool.Put("error-key", errObj)
+				Expect(err).NotTo(HaveOccurred())
 
-				pool.Clear()
+				_ = pool.Clear()
 				Expect(pool.Size()).To(Equal(0))
 			})
 		})
@@ -343,10 +358,11 @@ var _ = Describe("ObjectPool", func() {
 			})
 
 			It("should initialize reference count to 1", func() {
-				pool.GetOrCreate("test-key", factory())
+				_, err := pool.GetOrCreate("test-key", factory())
+				Expect(err).NotTo(HaveOccurred())
 
 				// Release once should remove it
-				err := pool.Release("test-key")
+				err = pool.Release("test-key")
 				Expect(err).NotTo(HaveOccurred())
 				Expect(pool.Has("test-key")).To(BeFalse())
 			})
@@ -357,7 +373,8 @@ var _ = Describe("ObjectPool", func() {
 
 			BeforeEach(func() {
 				existingObj = &mockCloseable{}
-				pool.Put("test-key", existingObj)
+				err := pool.Put("test-key", existingObj)
+				Expect(err).NotTo(HaveOccurred())
 			})
 
 			It("should return existing object without calling factory", func() {
@@ -414,7 +431,8 @@ var _ = Describe("ObjectPool", func() {
 
 	Describe("Reference counting", func() {
 		BeforeEach(func() {
-			pool.Put("test-key", &mockCloseable{})
+			err := pool.Put("test-key", &mockCloseable{})
+			Expect(err).NotTo(HaveOccurred())
 		})
 
 		Describe("Acquire", func() {
@@ -426,23 +444,31 @@ var _ = Describe("ObjectPool", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				// Object should still exist after one Release
-				pool.Release("test-key")
+				err = pool.Release("test-key")
+				Expect(err).NotTo(HaveOccurred())
 				Expect(pool.Has("test-key")).To(BeTrue())
 			})
 
 			It("should allow multiple acquires", func() {
-				pool.Acquire("test-key")
-				pool.Acquire("test-key")
-				pool.Acquire("test-key")
+				err := pool.Acquire("test-key")
+				Expect(err).NotTo(HaveOccurred())
+				err = pool.Acquire("test-key")
+				Expect(err).NotTo(HaveOccurred())
+				err = pool.Acquire("test-key")
+				Expect(err).NotTo(HaveOccurred())
 
 				// Need 3 releases (plus 1 for initial ref) = 4 total
-				pool.Release("test-key")
-				pool.Release("test-key")
-				pool.Release("test-key")
+				err = pool.Release("test-key")
+				Expect(err).NotTo(HaveOccurred())
+				err = pool.Release("test-key")
+				Expect(err).NotTo(HaveOccurred())
+				err = pool.Release("test-key")
+				Expect(err).NotTo(HaveOccurred())
 				Expect(pool.Has("test-key")).To(BeTrue())
 
 				// Final release removes it
-				pool.Release("test-key")
+				err = pool.Release("test-key")
+				Expect(err).NotTo(HaveOccurred())
 				Expect(pool.Has("test-key")).To(BeFalse())
 			})
 
@@ -465,11 +491,13 @@ var _ = Describe("ObjectPool", func() {
 
 		Describe("Release", func() {
 			It("should decrement reference count", func() {
-				pool.Acquire("test-key")
-				pool.Acquire("test-key")
+				err := pool.Acquire("test-key")
+				Expect(err).NotTo(HaveOccurred())
+				err = pool.Acquire("test-key")
+				Expect(err).NotTo(HaveOccurred())
 
 				// First release: refs=2, object stays
-				err := pool.Release("test-key")
+				err = pool.Release("test-key")
 				Expect(err).NotTo(HaveOccurred())
 				Expect(pool.Has("test-key")).To(BeTrue())
 
@@ -486,9 +514,10 @@ var _ = Describe("ObjectPool", func() {
 
 			It("should close object when reference count reaches zero", func() {
 				obj := &mockCloseable{}
-				pool.Put("test-key", obj)
+				err := pool.Put("test-key", obj)
+				Expect(err).NotTo(HaveOccurred())
 
-				err := pool.Release("test-key")
+				err = pool.Release("test-key")
 				Expect(err).NotTo(HaveOccurred())
 				Expect(obj.IsClosed()).To(BeTrue())
 			})
@@ -512,18 +541,20 @@ var _ = Describe("ObjectPool", func() {
 			Context("when Close returns error", func() {
 				It("should return the error", func() {
 					errObj := &mockCloseableWithError{}
-					pool.Put("error-key", errObj)
+					err := pool.Put("error-key", errObj)
+					Expect(err).NotTo(HaveOccurred())
 
-					err := pool.Release("error-key")
+					err = pool.Release("error-key")
 					Expect(err).To(HaveOccurred())
 					Expect(err.Error()).To(ContainSubstring("close error"))
 				})
 
 				It("should still remove object from pool", func() {
 					errObj := &mockCloseableWithError{}
-					pool.Put("error-key", errObj)
+					err := pool.Put("error-key", errObj)
+					Expect(err).NotTo(HaveOccurred())
 
-					pool.Release("error-key")
+					_ = pool.Release("error-key")
 					Expect(pool.Has("error-key")).To(BeFalse())
 				})
 			})
@@ -533,24 +564,29 @@ var _ = Describe("ObjectPool", func() {
 			It("should handle realistic usage pattern", func() {
 				// Initial put: ref=1
 				obj := &mockCloseable{}
-				pool.Put("worker-123", obj)
+				_ = pool.Put("worker-123", obj)
 
 				// First consumer acquires: ref=2
-				pool.Acquire("worker-123")
+				err := pool.Acquire("worker-123")
+				Expect(err).NotTo(HaveOccurred())
 
 				// Second consumer acquires: ref=3
-				pool.Acquire("worker-123")
+				err = pool.Acquire("worker-123")
+				Expect(err).NotTo(HaveOccurred())
 
 				// First consumer releases: ref=2
-				pool.Release("worker-123")
+				err = pool.Release("worker-123")
+				Expect(err).NotTo(HaveOccurred())
 				Expect(pool.Has("worker-123")).To(BeTrue())
 
 				// Second consumer releases: ref=1
-				pool.Release("worker-123")
+				err = pool.Release("worker-123")
+				Expect(err).NotTo(HaveOccurred())
 				Expect(pool.Has("worker-123")).To(BeTrue())
 
 				// Original owner releases: ref=0, removed
-				pool.Release("worker-123")
+				err = pool.Release("worker-123")
+				Expect(err).NotTo(HaveOccurred())
 				Expect(pool.Has("worker-123")).To(BeFalse())
 				Expect(obj.IsClosed()).To(BeTrue())
 			})
@@ -569,7 +605,7 @@ var _ = Describe("ObjectPool", func() {
 					key := fmt.Sprintf("key-%d", id)
 					obj := &mockCloseable{}
 
-					pool.Put(key, obj)
+					_ = pool.Put(key, obj)
 					retrieved, _ := pool.Get(key)
 					Expect(retrieved).To(BeIdenticalTo(obj))
 
@@ -618,7 +654,7 @@ var _ = Describe("ObjectPool", func() {
 
 		It("should handle concurrent Acquire/Release safely", func(ctx SpecContext) {
 			obj := &mockCloseable{}
-			pool.Put("test-key", obj)
+			_ = pool.Put("test-key", obj)
 
 			done := make(chan bool, 20)
 
@@ -626,13 +662,13 @@ var _ = Describe("ObjectPool", func() {
 			for range 10 {
 				go func() {
 					defer GinkgoRecover()
-					pool.Acquire("test-key")
+					_ = pool.Acquire("test-key")
 					done <- true
 				}()
 
 				go func() {
 					defer GinkgoRecover()
-					pool.Release("test-key")
+					_ = pool.Release("test-key")
 					done <- true
 				}()
 			}
@@ -650,7 +686,7 @@ var _ = Describe("ObjectPool", func() {
 		It("should handle concurrent Remove safely", func(ctx SpecContext) {
 			// Add 100 objects
 			for i := range 100 {
-				pool.Put(fmt.Sprintf("key-%d", i), &mockCloseable{})
+				_ = pool.Put(fmt.Sprintf("key-%d", i), &mockCloseable{})
 			}
 
 			done := make(chan bool, 50)
@@ -659,7 +695,7 @@ var _ = Describe("ObjectPool", func() {
 			for i := range 50 {
 				go func(id int) {
 					defer GinkgoRecover()
-					pool.Remove(fmt.Sprintf("key-%d", id))
+					_ = pool.Remove(fmt.Sprintf("key-%d", id))
 					done <- true
 				}(i)
 			}

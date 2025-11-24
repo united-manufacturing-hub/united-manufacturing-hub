@@ -337,7 +337,8 @@ var _ = Describe("TriangularStore", func() {
 				"id":   "worker-123",
 				"name": "Container A",
 			}
-			ts.SaveIdentity(ctx, "container", "worker-123", identity)
+			err := ts.SaveIdentity(ctx, "container", "worker-123", identity)
+			Expect(err).ToNot(HaveOccurred())
 		})
 
 		It("should load identity successfully", func() {
@@ -380,7 +381,8 @@ var _ = Describe("TriangularStore", func() {
 
 		Context("when updating desired state", func() {
 			BeforeEach(func() {
-				ts.SaveDesired(ctx, "container", "worker-123", desired)
+				err := ts.SaveDesired(ctx, "container", "worker-123", desired)
+				Expect(err).ToNot(HaveOccurred())
 			})
 
 			It("should increment sync ID", func() {
@@ -388,7 +390,8 @@ var _ = Describe("TriangularStore", func() {
 				firstSyncID := saved[storage.FieldSyncID].(int64)
 
 				desired["config"] = "value2"
-				ts.SaveDesired(ctx, "container", "worker-123", desired)
+				err := ts.SaveDesired(ctx, "container", "worker-123", desired)
+				Expect(err).ToNot(HaveOccurred())
 
 				saved, _ = store.Get(ctx, "container_desired", "worker-123")
 				secondSyncID := saved[storage.FieldSyncID].(int64)
@@ -424,7 +427,8 @@ var _ = Describe("TriangularStore", func() {
 				"id":     "worker-123",
 				"config": "value",
 			}
-			ts.SaveDesired(ctx, "container", "worker-123", desired)
+			err := ts.SaveDesired(ctx, "container", "worker-123", desired)
+			Expect(err).ToNot(HaveOccurred())
 		})
 
 		Context("when no type is registered", func() {
@@ -524,7 +528,8 @@ var _ = Describe("TriangularStore", func() {
 				"id":   "worker-999",
 				"data": "test-data",
 			}
-			ts.SaveDesired(ctx, "testworker", "worker-999", doc)
+			err := ts.SaveDesired(ctx, "testworker", "worker-999", doc)
+			Expect(err).NotTo(HaveOccurred())
 		})
 
 		It("should always return Document using convention-based collection name", func() {
@@ -700,14 +705,16 @@ var _ = Describe("TriangularStore", func() {
 
 	Describe("LoadSnapshot", func() {
 		BeforeEach(func() {
-			ts.SaveIdentity(ctx, "container", "worker-123", persistence.Document{
+			err := ts.SaveIdentity(ctx, "container", "worker-123", persistence.Document{
 				"id":   "worker-123",
 				"name": "Container A",
 			})
-			ts.SaveDesired(ctx, "container", "worker-123", persistence.Document{
+			Expect(err).ToNot(HaveOccurred())
+			err = ts.SaveDesired(ctx, "container", "worker-123", persistence.Document{
 				"id":     "worker-123",
 				"config": "value",
 			})
+			Expect(err).ToNot(HaveOccurred())
 			_, _ = ts.SaveObserved(ctx, "container", "worker-123", persistence.Document{
 				"id":     "worker-123",
 				"status": "running",
@@ -728,12 +735,13 @@ var _ = Describe("TriangularStore", func() {
 		Context("when parts are missing", func() {
 			It("should fail when desired and observed are missing", func() {
 				ts := storage.NewTriangularStore(newMockStore())
-				ts.SaveIdentity(ctx, "container", "worker-456", persistence.Document{
+				err := ts.SaveIdentity(ctx, "container", "worker-456", persistence.Document{
 					"id":   "worker-456",
 					"name": "Container B",
 				})
+				Expect(err).ToNot(HaveOccurred())
 
-				_, err := ts.LoadSnapshot(ctx, "container", "worker-456")
+				_, err = ts.LoadSnapshot(ctx, "container", "worker-456")
 				Expect(err).To(HaveOccurred())
 			})
 		})
@@ -741,15 +749,17 @@ var _ = Describe("TriangularStore", func() {
 
 	Describe("GlobalSyncID", func() {
 		It("should increment across all operations", func() {
-			ts.SaveIdentity(ctx, "container", "worker-1", persistence.Document{
+			err := ts.SaveIdentity(ctx, "container", "worker-1", persistence.Document{
 				"id": "worker-1",
 			})
+			Expect(err).NotTo(HaveOccurred())
 			identity1, _ := store.Get(ctx, "container_identity", "worker-1")
 			syncID1 := identity1[storage.FieldSyncID].(int64)
 
-			ts.SaveDesired(ctx, "container", "worker-2", persistence.Document{
+			err = ts.SaveDesired(ctx, "container", "worker-2", persistence.Document{
 				"id": "worker-2",
 			})
+			Expect(err).NotTo(HaveOccurred())
 			desired2, _ := store.Get(ctx, "container_desired", "worker-2")
 			syncID2 := desired2[storage.FieldSyncID].(int64)
 
@@ -766,17 +776,19 @@ var _ = Describe("TriangularStore", func() {
 
 	Describe("TimestampProgression", func() {
 		It("should have updated_at after created_at", func() {
-			ts.SaveDesired(ctx, "container", "worker-123", persistence.Document{
+			err := ts.SaveDesired(ctx, "container", "worker-123", persistence.Document{
 				"id": "worker-123",
 			})
+			Expect(err).NotTo(HaveOccurred())
 			first, _ := store.Get(ctx, "container_desired", "worker-123")
 			createdAt := first[storage.FieldCreatedAt].(time.Time)
 
 			time.Sleep(10 * time.Millisecond)
 
-			ts.SaveDesired(ctx, "container", "worker-123", persistence.Document{
+			err = ts.SaveDesired(ctx, "container", "worker-123", persistence.Document{
 				"id": "worker-123",
 			})
+			Expect(err).NotTo(HaveOccurred())
 			second, _ := store.Get(ctx, "container_desired", "worker-123")
 			updatedAt := second[storage.FieldUpdatedAt].(time.Time)
 
@@ -1151,7 +1163,8 @@ func BenchmarkSaveObservedNoChange(b *testing.B) {
 	_, _ = ts.SaveObserved(ctx, "benchmark", "worker-123", doc)
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		// Same data - should detect no change
 		_, _ = ts.SaveObserved(ctx, "benchmark", "worker-123", doc)
 	}
@@ -1172,7 +1185,8 @@ func BenchmarkSaveObservedWithChange(b *testing.B) {
 	_, _ = ts.SaveObserved(ctx, "benchmark", "worker-123", doc)
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for i := range b.N {
 		// Changing data each iteration
 		doc["cpu"] = float64(i) * 0.1
 		_, _ = ts.SaveObserved(ctx, "benchmark", "worker-123", doc)

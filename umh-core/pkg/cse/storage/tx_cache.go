@@ -434,14 +434,15 @@ func (tc *TxCache) Flush(ctx context.Context) error {
 		doc := tc.txToDocument(tx)
 
 		existing, err := tc.store.Get(ctx, TxCacheCollection, tx.TxID)
-		if errors.Is(err, persistence.ErrNotFound) {
+		switch {
+		case errors.Is(err, persistence.ErrNotFound):
 			_, err = tc.store.Insert(ctx, TxCacheCollection, doc)
 			if err != nil {
 				return fmt.Errorf("failed to insert transaction %s: %w", tx.TxID, err)
 			}
-		} else if err != nil {
+		case err != nil:
 			return fmt.Errorf("failed to check existing transaction %s: %w", tx.TxID, err)
-		} else if existing != nil {
+		case existing != nil:
 			err = tc.store.Update(ctx, TxCacheCollection, tx.TxID, doc)
 			if err != nil {
 				return fmt.Errorf("failed to update transaction %s: %w", tx.TxID, err)

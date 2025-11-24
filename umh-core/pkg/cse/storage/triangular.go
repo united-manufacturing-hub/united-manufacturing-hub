@@ -125,7 +125,6 @@ func NewTriangularStore(store persistence.Store) *TriangularStore {
 	}
 }
 
-
 // SaveIdentity stores immutable worker identity (runtime polymorphic API).
 //
 // CONVENTION-BASED NAMING: Collection name is derived from naming convention: {workerType}_identity
@@ -228,7 +227,7 @@ func (ts *TriangularStore) LoadIdentity(ctx context.Context, workerType string, 
 
 // SaveDesired stores user intent/configuration.
 //
-// DEPRECATED: Use SaveDesiredTyped[T]() instead for type safety and no registry dependency.
+// Deprecated: Use SaveDesiredTyped[T]() instead for type safety and no registry dependency.
 // This method will be removed in a future version.
 //
 // Migration guide: pkg/cse/storage/MIGRATION.md
@@ -267,7 +266,7 @@ func (ts *TriangularStore) LoadIdentity(ctx context.Context, workerType string, 
 //   - error: If worker type not registered or save fails
 func (ts *TriangularStore) SaveDesired(ctx context.Context, workerType string, id string, desired persistence.Document) error {
 	if desired == nil {
-		return fmt.Errorf("desired document cannot be nil")
+		return errors.New("desired document cannot be nil")
 	}
 
 	// Validate document has required fields
@@ -313,7 +312,7 @@ func (ts *TriangularStore) SaveDesired(ctx context.Context, workerType string, i
 
 // LoadDesired retrieves user intent/configuration.
 //
-// DEPRECATED: Use LoadDesiredTyped[T]() instead for type safety and no registry dependency.
+// Deprecated: Use LoadDesiredTyped[T]() instead for type safety and no registry dependency.
 // This method will be removed in a future version.
 //
 // Migration guide: pkg/cse/storage/MIGRATION.md
@@ -364,6 +363,7 @@ func (ts *TriangularStore) LoadDesiredTyped(ctx context.Context, workerType stri
 	// If result is already the correct type, copy it
 	if reflect.TypeOf(result) == reflect.TypeOf(dest).Elem() {
 		reflect.ValueOf(dest).Elem().Set(reflect.ValueOf(result))
+
 		return nil
 	}
 
@@ -419,7 +419,7 @@ func (ts *TriangularStore) saveObservedInternal(ctx context.Context, workerType 
 
 	// Validate that 'id' field exists in the observed document
 	if _, hasID := observedDoc["id"]; !hasID {
-		return fmt.Errorf("observed document must have 'id' field")
+		return errors.New("observed document must have 'id' field")
 	}
 
 	// Add required 'id' field for document validation
@@ -522,8 +522,10 @@ func (ts *TriangularStore) SaveObserved(ctx context.Context, workerType string, 
 	if errors.Is(err, persistence.ErrNotFound) {
 		// First save - always write
 		err = ts.saveObservedInternal(ctx, workerType, id, observed)
+
 		return true, err
 	}
+
 	if err != nil {
 		return false, err
 	}
@@ -545,6 +547,7 @@ func (ts *TriangularStore) SaveObserved(ctx context.Context, workerType string, 
 	currentFiltered := ts.filterCSEFields(currentDoc, cseFields)
 	delete(currentFiltered, "id")
 	delete(currentFiltered, FieldVersion)
+
 	newFiltered := ts.filterCSEFields(newDoc, cseFields)
 	delete(newFiltered, "id")
 	delete(newFiltered, FieldVersion)
@@ -556,12 +559,13 @@ func (ts *TriangularStore) SaveObserved(ctx context.Context, workerType string, 
 
 	// Data changed, perform write
 	err = ts.saveObservedInternal(ctx, workerType, id, observed)
+
 	return true, err
 }
 
 // LoadObserved retrieves system reality.
 //
-// DEPRECATED: Use LoadObservedTyped[T]() instead for type safety and no registry dependency.
+// Deprecated: Use LoadObservedTyped[T]() instead for type safety and no registry dependency.
 // This method will be removed in a future version.
 //
 // Migration guide: pkg/cse/storage/MIGRATION.md
@@ -612,6 +616,7 @@ func (ts *TriangularStore) LoadObservedTyped(ctx context.Context, workerType str
 	// If result is already the correct type, copy it
 	if reflect.TypeOf(result) == reflect.TypeOf(dest).Elem() {
 		reflect.ValueOf(dest).Elem().Set(reflect.ValueOf(result))
+
 		return nil
 	}
 
@@ -626,24 +631,24 @@ func (ts *TriangularStore) LoadObservedTyped(ctx context.Context, workerType str
 
 func (ts *TriangularStore) filterCSEFields(doc persistence.Document, cseFields []string) persistence.Document {
 	filtered := make(persistence.Document)
+
 	for k, v := range doc {
 		isCSEField := false
+
 		for _, cseField := range cseFields {
 			if k == cseField {
 				isCSEField = true
+
 				break
 			}
 		}
+
 		if !isCSEField {
 			filtered[k] = v
 		}
 	}
 
 	return filtered
-}
-
-func observedCollectionName(workerType string) string {
-	return workerType + "_observed"
 }
 
 // Snapshot represents the complete state of a worker.
@@ -718,7 +723,8 @@ func (ts *TriangularStore) LoadSnapshot(ctx context.Context, workerType string, 
 	if err != nil {
 		return nil, fmt.Errorf("failed to begin transaction: %w", err)
 	}
-	defer tx.Rollback()
+
+	defer func() { _ = tx.Rollback() }()
 
 	// Load all three parts
 	identity, err := tx.Get(ctx, identityCollectionName, id)
@@ -923,25 +929,12 @@ func documentToStruct(doc persistence.Document, dest interface{}) error {
 	return nil
 }
 
-func structToDocument(v interface{}) (persistence.Document, error) {
-	jsonBytes, err := json.Marshal(v)
-	if err != nil {
-		return nil, err
-	}
-
-	var doc persistence.Document
-	if err := json.Unmarshal(jsonBytes, &doc); err != nil {
-		return nil, err
-	}
-
-	return doc, nil
-}
-
 // LoadDesiredTyped loads desired state using generics (no registry dependency).
 //
 // DESIGN DECISION: Fully independent generic implementation
 // WHY: Type parameter T provides collection name via DeriveCollectionName[T](RoleDesired).
-//      No registry lookup needed.
+//
+//	No registry lookup needed.
 //
 // Parameters:
 //   - ts: TriangularStore instance
@@ -958,6 +951,7 @@ func structToDocument(v interface{}) (persistence.Document, error) {
 //	// result is ParentDesiredState (not interface{})
 func LoadDesiredTyped[T any](ts *TriangularStore, ctx context.Context, id string) (T, error) {
 	var result T
+
 	collectionName := DeriveCollectionName[T](RoleDesired)
 
 	// Load from persistence
@@ -978,9 +972,9 @@ func LoadDesiredTyped[T any](ts *TriangularStore, ctx context.Context, id string
 //
 // DESIGN DECISION: Fully independent generic implementation
 // WHY: Type parameter T provides all information needed:
-//      - workerType from DeriveWorkerType[T]()
-//      - collectionName from DeriveCollectionName[T](RoleDesired)
-//      - CSE fields from getCSEFields(RoleDesired)
+//   - workerType from DeriveWorkerType[T]()
+//   - collectionName from DeriveCollectionName[T](RoleDesired)
+//   - CSE fields from getCSEFields(RoleDesired)
 //
 // NO DELTA CHECKING: Desired state represents user intent - always write.
 // Unlike observed state, we don't skip writes even if data hasn't changed.
@@ -1069,7 +1063,8 @@ func SaveDesiredTyped[T any](ts *TriangularStore, ctx context.Context, id string
 //
 // DESIGN DECISION: Fully independent generic implementation
 // WHY: Type parameter T provides collection name via DeriveCollectionName[T](RoleObserved).
-//      No registry lookup needed.
+//
+//	No registry lookup needed.
 //
 // Parameters:
 //   - ts: TriangularStore instance
@@ -1086,6 +1081,7 @@ func SaveDesiredTyped[T any](ts *TriangularStore, ctx context.Context, id string
 //	// result is ParentObservedState (not interface{})
 func LoadObservedTyped[T any](ts *TriangularStore, ctx context.Context, id string) (T, error) {
 	var result T
+
 	collectionName := DeriveCollectionName[T](RoleObserved)
 
 	// Load from persistence
@@ -1139,10 +1135,12 @@ func SaveObservedTyped[T any](ts *TriangularStore, ctx context.Context, id strin
 
 	// Marshal struct to Document
 	observedDoc := make(persistence.Document)
+
 	bytes, err := json.Marshal(observed)
 	if err != nil {
 		return false, fmt.Errorf("failed to marshal observed state: %w", err)
 	}
+
 	if err := json.Unmarshal(bytes, &observedDoc); err != nil {
 		return false, fmt.Errorf("failed to unmarshal to Document: %w", err)
 	}
@@ -1171,6 +1169,7 @@ func SaveObservedTyped[T any](ts *TriangularStore, ctx context.Context, id strin
 		currentFiltered := ts.filterCSEFields(existing, cseFields)
 		delete(currentFiltered, "id")
 		delete(currentFiltered, FieldVersion)
+
 		newFiltered := ts.filterCSEFields(observedDoc, cseFields)
 		delete(newFiltered, "id")
 		delete(newFiltered, FieldVersion)
@@ -1221,6 +1220,7 @@ func SaveObservedTyped[T any](ts *TriangularStore, ctx context.Context, id strin
 
 func DeriveWorkerType[T any]() string {
 	var zero T
+
 	typeName := reflect.TypeOf(zero).Name()
 
 	if typeName == "" {
@@ -1229,11 +1229,13 @@ func DeriveWorkerType[T any]() string {
 
 	if strings.HasSuffix(typeName, "DesiredState") {
 		workerType := strings.TrimSuffix(typeName, "DesiredState")
+
 		return strings.ToLower(workerType)
 	}
 
 	if strings.HasSuffix(typeName, "ObservedState") {
 		workerType := strings.TrimSuffix(typeName, "ObservedState")
+
 		return strings.ToLower(workerType)
 	}
 
@@ -1267,6 +1269,7 @@ func DeriveCollectionName[T any](role string) string {
 	workerType := DeriveWorkerType[T]()
 
 	var suffix string
+
 	switch role {
 	case RoleIdentity:
 		suffix = "_identity"

@@ -20,14 +20,14 @@ import (
 	"sync"
 )
 
-// TypeRegistry stores reflect.Type metadata for worker types
+// TypeRegistry stores reflect.Type metadata for worker types.
 type TypeRegistry struct {
 	mu       sync.RWMutex
 	observed map[string]reflect.Type
 	desired  map[string]reflect.Type
 }
 
-// NewTypeRegistry creates a new type registry
+// NewTypeRegistry creates a new type registry.
 func NewTypeRegistry() *TypeRegistry {
 	return &TypeRegistry{
 		observed: make(map[string]reflect.Type),
@@ -35,7 +35,7 @@ func NewTypeRegistry() *TypeRegistry {
 	}
 }
 
-// RegisterWorkerType stores type metadata for a worker
+// RegisterWorkerType stores type metadata for a worker.
 func (r *TypeRegistry) RegisterWorkerType(workerType string, observedType, desiredType reflect.Type) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -46,19 +46,22 @@ func (r *TypeRegistry) RegisterWorkerType(workerType string, observedType, desir
 
 	r.observed[workerType] = observedType
 	r.desired[workerType] = desiredType
+
 	return nil
 }
 
-// GetObservedType retrieves observed type for a worker
+// GetObservedType retrieves observed type for a worker.
 func (r *TypeRegistry) GetObservedType(workerType string) reflect.Type {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
+
 	return r.observed[workerType]
 }
 
-// GetDesiredType retrieves desired type for a worker
+// GetDesiredType retrieves desired type for a worker.
 func (r *TypeRegistry) GetDesiredType(workerType string) reflect.Type {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
+
 	return r.desired[workerType]
 }
