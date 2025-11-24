@@ -40,7 +40,7 @@ var _ = Describe("Concurrent Operations", func() {
 
 	AfterEach(func() {
 		if store != nil {
-			store.Close(ctx)
+			defer func() { _ = store.Close(ctx) }()
 		}
 	})
 
@@ -459,7 +459,7 @@ var _ = Describe("Concurrent Operations", func() {
 						})
 						if err != nil {
 							errors <- fmt.Errorf("tx %d insert failed: %w", txID, err)
-							tx.Rollback()
+							defer func() { _ = tx.Rollback() }()
 
 							return
 						}
@@ -509,7 +509,7 @@ var _ = Describe("Concurrent Operations", func() {
 
 							return
 						}
-						defer tx.Rollback()
+						defer func() { _ = tx.Rollback() }()
 
 						doc, err := tx.Get(ctx, "test_collection", "shared-doc")
 						if err != nil {
@@ -543,7 +543,7 @@ var _ = Describe("Concurrent Operations", func() {
 						})
 						if err != nil {
 							errors <- fmt.Errorf("writer tx %d update failed: %w", writerID, err)
-							tx.Rollback()
+							defer func() { _ = tx.Rollback() }()
 
 							return
 						}
@@ -593,7 +593,7 @@ var _ = Describe("Concurrent Operations", func() {
 						})
 						if err != nil {
 							errors <- fmt.Errorf("tx %d insert failed: %w", txID, err)
-							tx.Rollback()
+							defer func() { _ = tx.Rollback() }()
 
 							return
 						}

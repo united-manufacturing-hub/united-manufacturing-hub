@@ -38,7 +38,7 @@ var _ = Describe("Transaction Support", func() {
 
 	AfterEach(func() {
 		if store != nil {
-			store.Close(ctx)
+			defer func() { _ = store.Close(ctx) }()
 		}
 	})
 

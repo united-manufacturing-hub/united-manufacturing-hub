@@ -36,7 +36,7 @@ var _ = Describe("InMemoryStore", func() {
 
 	AfterEach(func() {
 		if store != nil {
-			store.Close(ctx)
+			defer func() { _ = store.Close(ctx) }()
 		}
 	})
 
@@ -79,6 +79,7 @@ var _ = Describe("InMemoryStore", func() {
 
 		Context("when context is nil", func() {
 			It("should return an error", func() {
+				//nolint:staticcheck // testing nil context behavior
 				err := store.CreateCollection(nil, "test_collection", nil)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("context cannot be nil"))
@@ -116,6 +117,7 @@ var _ = Describe("InMemoryStore", func() {
 			})
 
 			It("should return an error", func() {
+				//nolint:staticcheck // testing nil context behavior
 				err := store.DropCollection(nil, "test_collection")
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("context cannot be nil"))
@@ -216,6 +218,7 @@ var _ = Describe("InMemoryStore", func() {
 					"id":   "doc-1",
 					"name": "Test",
 				}
+				//nolint:staticcheck // testing nil context behavior
 				_, err := store.Insert(nil, "test_collection", doc)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("context cannot be nil"))
@@ -267,6 +270,7 @@ var _ = Describe("InMemoryStore", func() {
 
 		Context("when context is nil", func() {
 			It("should return an error", func() {
+				//nolint:staticcheck // testing nil context behavior
 				_, err := store.Get(nil, "test_collection", "doc-1")
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("context cannot be nil"))
@@ -346,6 +350,7 @@ var _ = Describe("InMemoryStore", func() {
 					"id":   "doc-1",
 					"name": "Updated",
 				}
+				//nolint:staticcheck // testing nil context behavior
 				err := store.Update(nil, "test_collection", "doc-1", doc)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("context cannot be nil"))
@@ -405,6 +410,7 @@ var _ = Describe("InMemoryStore", func() {
 			})
 
 			It("should return an error", func() {
+				//nolint:staticcheck // testing nil context behavior
 				err := store.Delete(nil, "test_collection", "doc-1")
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("context cannot be nil"))
@@ -458,6 +464,24 @@ var _ = Describe("InMemoryStore", func() {
 			It("should return an error", func() {
 				//nolint:staticcheck // testing nil context behavior
 				_, err := store.Find(nil, "test_collection", persistence.Query{})
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("context cannot be nil"))
+			})
+		})
+
+		Context("when context is nil (delete)", func() {
+			BeforeEach(func() {
+				doc := persistence.Document{
+					"id":   "doc-1",
+					"name": "Test",
+				}
+				_, err := store.Insert(ctx, "test_collection", doc)
+				Expect(err).ToNot(HaveOccurred())
+			})
+
+			It("should return an error", func() {
+				//nolint:staticcheck // testing nil context behavior
+				err := store.Delete(nil, "test_collection", "doc-1")
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("context cannot be nil"))
 			})
