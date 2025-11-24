@@ -56,7 +56,7 @@ TARGETARCH := $(shell go env GOARCH)
 
 # Default values for go tools
 GINKGO_VERSION = v2.23.4
-NILWAY_VERSION = latest
+NILAWAY_VERSION = v0.0.0-20251119034912-44f92224c998
 LEFTHOOK_VERSION = v1.13.2
 GOLANGCI_LINT_VERSION = v2.5.0
 BETTERALIGN_VERSION = v0.7.1
@@ -86,7 +86,7 @@ VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "0.0
 install:
 	sudo chown vscode:vscode data || true
 	sudo chown vscode:vscode tmp || true
-	go install go.uber.org/nilaway/cmd/nilaway@$(NILWAY_VERSION)
+	go install go.uber.org/nilaway/cmd/nilaway@$(NILAWAY_VERSION)
 	go install github.com/onsi/ginkgo/v2/ginkgo@$(GINKGO_VERSION)
 	go install github.com/evilmartians/lefthook@$(LEFTHOOK_VERSION)
 	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
