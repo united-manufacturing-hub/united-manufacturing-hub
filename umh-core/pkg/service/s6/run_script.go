@@ -21,6 +21,14 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
 )
 
+const (
+	// DefaultLogArchiveCount is the number of archived log files to keep
+	// for dynamically created services. We use 20 to provide adequate history
+	// while limiting disk usage. Static services like umh-core use n5
+	// (configured in s6-rc.d/umh-core-log/run) for lower retention.
+	DefaultLogArchiveCount = 20
+)
+
 // runScriptTemplate is the template for the S6 run script.
 const runScriptTemplate = `#!/command/execlineb -P
 
@@ -95,8 +103,10 @@ func getLogRunScript(config s6serviceconfig.S6ServiceConfig, logDir string) (str
 	// T - ISO 8601 timestamps (required for our time parser)
 	// Important: This needs to be T (ISO 8861) as our time parser expects this format
 
-	// n20 is currently hardcoded to match the default defined in the Dockerfile
-	archiveCount := 20
+	// Use our default archive count for dynamic services.
+	// Static services like umh-core use n5 (configured in s6-rc.d/umh-core-log/run)
+	// for lower retention since the main agent has more verbose logging.
+	archiveCount := DefaultLogArchiveCount
 
 	var s6LogCmd string
 	if config.LogFilesize > 0 {

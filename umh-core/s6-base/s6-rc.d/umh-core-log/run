@@ -1,6 +1,6 @@
 #!/command/execlineb -P
 # Note: Using s6-log directly instead of logutil-service for non-root container support
-# n5 - keep 5 archived files (matches Dockerfile S6_LOGGING_SCRIPT default)
-# s10000000 - rotate at 10MB (matches Dockerfile S6_LOGGING_SCRIPT default)
+# n5 - keep 5 archived files (lower than dynamic services since umh-core is verbose)
+# s10000000 - rotate at 10MB
 # T - ISO 8601 timestamps (required for our time parser)
 s6-log n5 s10000000 T /data/logs/umh-core
