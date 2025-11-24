@@ -58,6 +58,9 @@ func (m *MockFSMManager) Reconcile(ctx context.Context, snapshot SystemSnapshot,
 
 // WithReconcileError configures the mock to return the given error.
 func (m *MockFSMManager) WithReconcileError(err error) *MockFSMManager {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+
 	m.ReconcileError = err
 
 	return m
@@ -65,9 +68,28 @@ func (m *MockFSMManager) WithReconcileError(err error) *MockFSMManager {
 
 // WithReconcileDelay configures the mock to delay for the given duration.
 func (m *MockFSMManager) WithReconcileDelay(delay time.Duration) *MockFSMManager {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+
 	m.ReconcileDelay = delay
 
 	return m
+}
+
+// SetReconcileDelay sets the reconcile delay in a thread-safe manner.
+func (m *MockFSMManager) SetReconcileDelay(d time.Duration) {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+
+	m.ReconcileDelay = d
+}
+
+// SetReconcileError sets the reconcile error in a thread-safe manner.
+func (m *MockFSMManager) SetReconcileError(err error) {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+
+	m.ReconcileError = err
 }
 
 // ResetCalls clears the called flags for testing multiple calls.
