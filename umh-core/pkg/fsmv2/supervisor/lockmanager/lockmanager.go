@@ -160,7 +160,11 @@ func (lm *LockManager) recordLockReleased(lockName string) {
 	lm.tracker.mu.Lock()
 	defer lm.tracker.mu.Unlock()
 
-	locks := lm.tracker.locks[gid]
+	locks, exists := lm.tracker.locks[gid]
+	if !exists {
+		return
+	}
+
 	for i := len(locks) - 1; i >= 0; i-- {
 		if locks[i].name == lockName {
 			lm.tracker.locks[gid] = append(locks[:i], locks[i+1:]...)
