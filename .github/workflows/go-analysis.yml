@@ -28,7 +28,7 @@ jobs:
         working-directory: ./umh-core
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       - name: Get Go version from Makefile
         id: go_version
@@ -51,7 +51,7 @@ jobs:
         working-directory: ./umh-core
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       - name: Get Go version from Makefile
         id: go_version
