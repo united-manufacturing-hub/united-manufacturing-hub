@@ -20,13 +20,25 @@ if ! touch /data/.write-test 2>/dev/null; then
 ================================================================================
 ERROR: Cannot write to /data directory
 
-The umh-core container runs as non-root user 'umhuser' (UID 1000) for security.
-The mounted /data directory must be writable by this user.
+SECURITY CHANGE: umh-core runs as non-root user 'umhuser' (UID 1000) for
+enhanced security. The /data directory must be writable by this user.
+
+Current issue: The /data directory exists but is not writable by UID 1000.
+This could be due to:
+- Directory owned by root (common after upgrades)
+- Directory owned by another user
+- Restrictive file permissions
+- SELinux/AppArmor policies
 
 To fix this, run on your host:
   sudo chown -R 1000:1000 <your-data-directory>
 
-For details, see:
+Note: If using SELinux, you may also need:
+  sudo chcon -R -t container_file_t <your-data-directory>
+
+After fixing permissions, restart the container.
+
+For details and rollback options, see:
 https://docs.umh.app/production/security/umh-core/deployment-security#filesystem-access
 
 ================================================================================
