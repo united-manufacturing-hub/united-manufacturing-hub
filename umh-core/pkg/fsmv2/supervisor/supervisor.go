@@ -1210,7 +1210,7 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 
 		if !wasOpen {
 			s.logger.Error("circuit breaker opened",
-				"supervisor_id", s.workerType,
+				"worker_type", s.workerType,
 				"error", err.Error(),
 				"error_scope", "infrastructure",
 				"impact", "all_workers")
@@ -1223,7 +1223,7 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 			nextDelay := s.healthChecker.backoff.NextDelay()
 
 			s.logger.Warn("Circuit breaker open, retrying infrastructure checks",
-				"supervisor_id", s.workerType,
+				"worker_type", s.workerType,
 				"failed_child", childErr.ChildName,
 				"retry_attempt", attempts,
 				"max_attempts", s.healthChecker.maxAttempts,
@@ -1233,7 +1233,7 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 
 			if attempts == 4 {
 				s.logger.Warn("WARNING: One retry attempt remaining before escalation",
-					"supervisor_id", s.workerType,
+					"worker_type", s.workerType,
 					"child_name", childErr.ChildName,
 					"attempts_remaining", 1,
 					"total_downtime", s.healthChecker.backoff.GetTotalDowntime().String())
@@ -1241,7 +1241,7 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 
 			if attempts >= 5 {
 				s.logger.Error("ESCALATION REQUIRED: Infrastructure failure after max retry attempts. Manual intervention needed.",
-					"supervisor_id", s.workerType,
+					"worker_type", s.workerType,
 					"child_name", childErr.ChildName,
 					"max_attempts", 5,
 					"total_downtime", s.healthChecker.backoff.GetTotalDowntime().String(),
@@ -1256,7 +1256,7 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 	if s.circuitOpen.Load() {
 		downtime := time.Since(s.healthChecker.backoff.GetStartTime())
 		s.logger.Infow("Infrastructure recovered, closing circuit breaker",
-			"supervisor_id", s.workerType,
+			"worker_type", s.workerType,
 			"total_downtime", downtime.String())
 		metrics.RecordCircuitOpen(s.workerType, false)
 		metrics.RecordInfrastructureRecovery(s.workerType, downtime)
@@ -1320,7 +1320,7 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 
 	userVarCount := len(userSpecWithVars.Variables.User)
 	s.logger.Debugw("variables propagated",
-		"supervisor_id", s.workerType,
+		"worker_type", s.workerType,
 		"user_vars", userVarCount,
 		"global_vars", globalVarCount)
 	metrics.RecordVariablePropagation(s.workerType)
@@ -1333,7 +1333,7 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 
 	if err != nil {
 		s.logger.Error("template rendering failed",
-			"supervisor_id", s.workerType,
+			"worker_type", s.workerType,
 			"error", err.Error(),
 			"duration_ms", templateDuration.Milliseconds())
 		metrics.RecordTemplateRenderingDuration(s.workerType, "error", templateDuration)
@@ -1343,7 +1343,7 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 	}
 
 	s.logger.Debugw("template rendered",
-		"supervisor_id", s.workerType,
+		"worker_type", s.workerType,
 		"duration_ms", templateDuration.Milliseconds())
 	metrics.RecordTemplateRenderingDuration(s.workerType, "success", templateDuration)
 
@@ -1368,7 +1368,7 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 		s.logger.Warnf("failed to save derived desired state (will use previous state): %v", err)
 	} else {
 		s.logger.Debugw("derived desired state saved",
-			"supervisor_id", s.workerType,
+			"worker_type", s.workerType,
 			"worker_id", firstWorkerID)
 	}
 
@@ -1378,14 +1378,14 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 
 		if err := config.ValidateChildSpecs(desired.ChildrenSpecs, registry); err != nil {
 			s.logger.Error("child spec validation failed",
-				"supervisor_id", s.workerType,
+				"worker_type", s.workerType,
 				"error", err.Error())
 
 			return fmt.Errorf("invalid child specifications: %w", err)
 		}
 
 		s.logger.Debugw("child specs validated",
-			"supervisor_id", s.workerType,
+			"worker_type", s.workerType,
 			"child_count", len(desired.ChildrenSpecs))
 	}
 
@@ -1824,7 +1824,7 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 
 	duration := time.Since(startTime)
 	s.logger.Infow("child reconciliation completed",
-		"supervisor_id", s.workerType,
+		"worker_type", s.workerType,
 		"added", addedCount,
 		"updated", updatedCount,
 		"removed", removedCount,

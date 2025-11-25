@@ -32,7 +32,7 @@ var (
 			Name:      "circuit_open",
 			Help:      "Circuit breaker state (0=closed, 1=open)",
 		},
-		[]string{"supervisor_id"},
+		[]string{"worker_type"},
 	)
 
 	infrastructureRecoveryTotal = promauto.NewCounterVec(
@@ -42,7 +42,7 @@ var (
 			Name:      "infrastructure_recovery_total",
 			Help:      "Total number of infrastructure recovery events",
 		},
-		[]string{"supervisor_id"},
+		[]string{"worker_type"},
 	)
 
 	infrastructureRecoveryDuration = promauto.NewHistogramVec(
@@ -52,7 +52,7 @@ var (
 			Name:      "infrastructure_recovery_duration_seconds",
 			Help:      "Duration of infrastructure recovery in seconds",
 		},
-		[]string{"supervisor_id"},
+		[]string{"worker_type"},
 	)
 
 	childHealthCheckTotal = promauto.NewCounterVec(
@@ -62,7 +62,7 @@ var (
 			Name:      "child_health_check_total",
 			Help:      "Total number of child health checks by status",
 		},
-		[]string{"supervisor_id", "child_name", "status"},
+		[]string{"worker_type", "child_name", "status"},
 	)
 
 	actionQueuedTotal = promauto.NewCounterVec(
@@ -72,7 +72,7 @@ var (
 			Name:      "action_queued_total",
 			Help:      "Total number of actions queued",
 		},
-		[]string{"supervisor_id", "action_type"},
+		[]string{"worker_type", "action_type"},
 	)
 
 	actionQueueSize = promauto.NewGaugeVec(
@@ -82,7 +82,7 @@ var (
 			Name:      "action_queue_size",
 			Help:      "Current size of the action queue",
 		},
-		[]string{"supervisor_id"},
+		[]string{"worker_type"},
 	)
 
 	actionExecutionDuration = promauto.NewHistogramVec(
@@ -92,7 +92,7 @@ var (
 			Name:      "action_execution_duration_seconds",
 			Help:      "Duration of action execution in seconds",
 		},
-		[]string{"supervisor_id", "action_type", "status"},
+		[]string{"worker_type", "action_type", "status"},
 	)
 
 	actionTimeoutTotal = promauto.NewCounterVec(
@@ -102,7 +102,7 @@ var (
 			Name:      "action_timeout_total",
 			Help:      "Total number of action timeouts",
 		},
-		[]string{"supervisor_id", "action_type"},
+		[]string{"worker_type", "action_type"},
 	)
 
 	workerPoolUtilization = promauto.NewGaugeVec(
@@ -132,7 +132,7 @@ var (
 			Name:      "child_count",
 			Help:      "Current number of child supervisors",
 		},
-		[]string{"supervisor_id"},
+		[]string{"worker_type"},
 	)
 
 	reconciliationTotal = promauto.NewCounterVec(
@@ -142,7 +142,7 @@ var (
 			Name:      "reconciliation_total",
 			Help:      "Total number of reconciliation cycles",
 		},
-		[]string{"supervisor_id", "result"},
+		[]string{"worker_type", "result"},
 	)
 
 	reconciliationDuration = promauto.NewHistogramVec(
@@ -152,7 +152,7 @@ var (
 			Name:      "reconciliation_duration_seconds",
 			Help:      "Duration of reconciliation cycles in seconds",
 		},
-		[]string{"supervisor_id"},
+		[]string{"worker_type"},
 	)
 
 	tickPropagationDepth = promauto.NewGaugeVec(
@@ -162,7 +162,7 @@ var (
 			Name:      "tick_propagation_depth",
 			Help:      "Depth of tick propagation in supervisor hierarchy",
 		},
-		[]string{"supervisor_id"},
+		[]string{"worker_type"},
 	)
 
 	tickPropagationDuration = promauto.NewHistogramVec(
@@ -172,7 +172,7 @@ var (
 			Name:      "tick_propagation_duration_seconds",
 			Help:      "Duration of tick propagation in seconds",
 		},
-		[]string{"supervisor_id"},
+		[]string{"worker_type"},
 	)
 
 	templateRenderingDuration = promauto.NewHistogramVec(
@@ -182,7 +182,7 @@ var (
 			Name:      "template_rendering_duration_seconds",
 			Help:      "Duration of template rendering in seconds",
 		},
-		[]string{"supervisor_id", "status"},
+		[]string{"worker_type", "status"},
 	)
 
 	templateRenderingErrorsTotal = promauto.NewCounterVec(
@@ -192,7 +192,7 @@ var (
 			Name:      "template_rendering_errors_total",
 			Help:      "Total number of template rendering errors",
 		},
-		[]string{"supervisor_id", "error_type"},
+		[]string{"worker_type", "error_type"},
 	)
 
 	variablePropagationTotal = promauto.NewCounterVec(
@@ -202,7 +202,7 @@ var (
 			Name:      "variable_propagation_total",
 			Help:      "Total number of variable propagation events",
 		},
-		[]string{"supervisor_id"},
+		[]string{"worker_type"},
 	)
 
 	hierarchyDepth = promauto.NewGaugeVec(
@@ -212,7 +212,7 @@ var (
 			Name:      "hierarchy_depth",
 			Help:      "Depth of supervisor in hierarchy tree (0=root, 1=child, 2=grandchild, etc.)",
 		},
-		[]string{"supervisor_id"},
+		[]string{"worker_type"},
 	)
 
 	hierarchySize = promauto.NewGaugeVec(
@@ -222,7 +222,7 @@ var (
 			Name:      "hierarchy_size",
 			Help:      "Total number of supervisors in subtree (self + all descendants)",
 		},
-		[]string{"supervisor_id"},
+		[]string{"worker_type"},
 	)
 
 	observationSaveTotal = promauto.NewCounterVec(
