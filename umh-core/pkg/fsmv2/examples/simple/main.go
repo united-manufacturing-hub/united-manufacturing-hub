@@ -49,7 +49,6 @@ func main() {
 	sugar.Info("")
 
 	sugar.Info("Step 1: Creating storage...")
-	ctx := context.Background()
 	basicStore := memory.NewInMemoryStore()
 
 	// NOTE: InMemoryStore automatically creates collections on first write.
