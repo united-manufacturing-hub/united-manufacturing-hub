@@ -19,7 +19,7 @@ The legacy method uses email and password for login. This method is deprecated a
 - Each email can only be assigned to one company
 - Email addresses are not validated for existence
 - Multi-factor authentication is not available
-- Password complexity requirements apply
+- Password complexity requirements apply (minimum 12 characters, at least one uppercase letter, one digit, and one symbol)
 
 ### Auth0 Authentication
 
@@ -40,9 +40,11 @@ A UMH Instance authenticates using an AUTH_TOKEN that is generated during the in
 
 ### AUTH_TOKEN
 
+The AUTH_TOKEN is a cryptographically secure random token displayed once during instance creation. The user must copy this token and configure it in the UMH Instance.
+
 The AUTH_TOKEN serves two purposes:
 
-- **Layer 1**: A hash of the AUTH_TOKEN is used as a secret to authenticate the instance against the ManagementConsole backend
-- **Layer 2**: The AUTH_TOKEN is also used for certificate operations
+- **Layer 1**: A double-hash of the AUTH_TOKEN is stored in ManagementConsole for authentication. The instance sends the double-hash to prove its identity.
+- **Layer 2**: A single-hash of the AUTH_TOKEN is used to encrypt the instance's certificate private key. This allows the instance to decrypt its own private key, while ManagementConsole (which only has the double-hash) cannot.
 
-When a UMH Instance starts, it uses the AUTH_TOKEN to authenticate against the ManagementConsole backend and receives a JWT token for subsequent communication 
+When a UMH Instance starts, it uses the AUTH_TOKEN to authenticate against ManagementConsole and receives a JWT token for subsequent communication.
