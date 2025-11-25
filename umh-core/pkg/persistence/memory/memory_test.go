@@ -264,10 +264,10 @@ var _ = Describe("InMemoryStore", func() {
 		})
 
 		Context("when getting from non-existent collection", func() {
-			It("should return an error", func() {
-				_, err := store.Get(ctx, "missing_collection", "doc-1")
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("does not exist"))
+			It("should return ErrNotFound", func() {
+				doc, err := store.Get(ctx, "missing_collection", "doc-1")
+				Expect(err).To(Equal(persistence.ErrNotFound))
+				Expect(doc).To(BeNil())
 			})
 		})
 
@@ -460,10 +460,10 @@ var _ = Describe("InMemoryStore", func() {
 		})
 
 		Context("when finding in non-existent collection", func() {
-			It("should return an error", func() {
-				_, err := store.Find(ctx, "missing_collection", persistence.Query{})
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("does not exist"))
+			It("should return ErrNotFound", func() {
+				docs, err := store.Find(ctx, "missing_collection", persistence.Query{})
+				Expect(err).To(Equal(persistence.ErrNotFound))
+				Expect(docs).To(BeNil())
 			})
 		})
 
@@ -614,10 +614,10 @@ var _ = Describe("InMemoryStore", func() {
 		})
 
 		Describe("Get", func() {
-			It("should still fail on non-existent collection", func() {
-				_, err := store.Get(ctx, "non_existent_collection", "doc-1")
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("does not exist"))
+			It("should return ErrNotFound for non-existent collection", func() {
+				doc, err := store.Get(ctx, "non_existent_collection", "doc-1")
+				Expect(err).To(Equal(persistence.ErrNotFound))
+				Expect(doc).To(BeNil())
 
 				_, exists := store.collections["non_existent_collection"]
 				Expect(exists).To(BeFalse())

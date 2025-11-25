@@ -253,7 +253,7 @@ func (s *InMemoryStore) Insert(ctx context.Context, collection string, doc persi
 //   - The document on success
 //   - An error if:
 //   - ctx is nil
-//   - Collection does not exist
+//   - Collection does not exist (returns persistence.ErrNotFound)
 //   - Document with this ID does not exist (returns persistence.ErrNotFound)
 //
 // Thread-safe: Acquires read lock during operation (allows concurrent reads).
@@ -267,7 +267,7 @@ func (s *InMemoryStore) Get(ctx context.Context, collection string, id string) (
 
 	coll, exists := s.collections[collection]
 	if !exists {
-		return nil, fmt.Errorf("collection %q does not exist", collection)
+		return nil, persistence.ErrNotFound
 	}
 
 	doc, exists := coll[id]
@@ -380,7 +380,7 @@ func (s *InMemoryStore) Delete(ctx context.Context, collection string, id string
 //   - Slice of all documents in the collection
 //   - An error if:
 //   - ctx is nil
-//   - Collection does not exist
+//   - Collection does not exist (returns persistence.ErrNotFound)
 //
 // Thread-safe: Acquires read lock during operation (allows concurrent reads).
 //
@@ -396,7 +396,7 @@ func (s *InMemoryStore) Find(ctx context.Context, collection string, query persi
 
 	coll, exists := s.collections[collection]
 	if !exists {
-		return nil, fmt.Errorf("collection %q does not exist", collection)
+		return nil, persistence.ErrNotFound
 	}
 
 	var results []persistence.Document
