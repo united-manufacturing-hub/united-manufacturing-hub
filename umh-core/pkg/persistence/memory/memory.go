@@ -40,9 +40,10 @@
 //
 // # Collection Auto-Registration
 //
-// Collections must be explicitly created with CreateCollection() before use. Operations on
-// non-existent collections return errors. The Schema parameter in CreateCollection() is
-// currently ignored (in-memory store does not validate schemas).
+// Collections are automatically created when documents are inserted, updated, or deleted.
+// Explicit CreateCollection() calls are optional but still supported. Read operations (Get, Find)
+// do not auto-create collections. The Schema parameter in CreateCollection() is currently
+// ignored (in-memory store does not validate schemas).
 //
 // # Single-Node Assumption
 //
@@ -111,13 +112,15 @@ type InMemoryStore struct {
 
 // NewInMemoryStore creates a new empty in-memory document store.
 //
-// The returned store is ready for use but contains no collections. Collections must be
-// explicitly created using CreateCollection() before documents can be inserted.
+// The returned store is ready for use. Collections are automatically created when
+// documents are inserted, updated, or deleted, so explicit CreateCollection() calls
+// are optional.
 //
 // Example:
 //
 //	store := memory.NewInMemoryStore()
-//	err := store.CreateCollection(ctx, "users", nil)
+//	doc := persistence.Document{"id": "user-1", "name": "Alice"}
+//	_, err := store.Insert(ctx, "users", doc) // Creates "users" collection automatically
 //	if err != nil {
 //	    log.Fatal(err)
 //	}
@@ -189,6 +192,7 @@ func (s *InMemoryStore) DropCollection(ctx context.Context, name string) error {
 //
 // The document must contain an "id" field with a non-empty string value. The document is
 // deep-copied before storage, so external modifications will not affect the stored version.
+// If the collection does not exist, it is automatically created.
 //
 // Parameters:
 //   - ctx: Context for the operation (must not be nil)
@@ -200,7 +204,6 @@ func (s *InMemoryStore) DropCollection(ctx context.Context, name string) error {
 //   - An error if:
 //   - ctx is nil
 //   - Document has no "id" field or "id" is empty
-//   - Collection does not exist
 //   - Document with this ID already exists (returns persistence.ErrConflict)
 //
 // Thread-safe: Acquires exclusive write lock during operation.
@@ -219,7 +222,8 @@ func (s *InMemoryStore) Insert(ctx context.Context, collection string, doc persi
 
 	coll, exists := s.collections[collection]
 	if !exists {
-		return "", fmt.Errorf("collection %q does not exist", collection)
+		s.collections[collection] = make(map[string]persistence.Document)
+		coll = s.collections[collection]
 	}
 
 	if _, exists := coll[id]; exists {
@@ -282,7 +286,8 @@ func (s *InMemoryStore) Get(ctx context.Context, collection string, id string) (
 // Update replaces an existing document with a new version.
 //
 // The document is deep-copied before storage, so external modifications will not affect
-// the stored version.
+// the stored version. If the collection does not exist, it is automatically created, but
+// the update will return persistence.ErrNotFound since the document doesn't exist.
 //
 // Parameters:
 //   - ctx: Context for the operation (must not be nil)
@@ -292,7 +297,6 @@ func (s *InMemoryStore) Get(ctx context.Context, collection string, id string) (
 //
 // Returns an error if:
 //   - ctx is nil
-//   - Collection does not exist
 //   - Document with this ID does not exist (returns persistence.ErrNotFound)
 //
 // Thread-safe: Acquires exclusive write lock during operation.
@@ -306,7 +310,8 @@ func (s *InMemoryStore) Update(ctx context.Context, collection string, id string
 
 	coll, exists := s.collections[collection]
 	if !exists {
-		return fmt.Errorf("collection %q does not exist", collection)
+		s.collections[collection] = make(map[string]persistence.Document)
+		coll = s.collections[collection]
 	}
 
 	if _, exists := coll[id]; !exists {
@@ -325,6 +330,9 @@ func (s *InMemoryStore) Update(ctx context.Context, collection string, id string
 
 // Delete removes a document from the specified collection.
 //
+// If the collection does not exist, it is automatically created, but the delete will
+// return persistence.ErrNotFound since the document doesn't exist.
+//
 // Parameters:
 //   - ctx: Context for the operation (must not be nil)
 //   - collection: Name of the collection containing the document
@@ -332,7 +340,6 @@ func (s *InMemoryStore) Update(ctx context.Context, collection string, id string
 //
 // Returns an error if:
 //   - ctx is nil
-//   - Collection does not exist
 //   - Document with this ID does not exist (returns persistence.ErrNotFound)
 //
 // Thread-safe: Acquires exclusive write lock during operation.
@@ -346,7 +353,8 @@ func (s *InMemoryStore) Delete(ctx context.Context, collection string, id string
 
 	coll, exists := s.collections[collection]
 	if !exists {
-		return fmt.Errorf("collection %q does not exist", collection)
+		s.collections[collection] = make(map[string]persistence.Document)
+		coll = s.collections[collection]
 	}
 
 	if _, exists := coll[id]; !exists {
@@ -776,17 +784,17 @@ func (tx *inMemoryTx) Close(ctx context.Context) error {
 //
 // The commit process:
 //  1. Acquires exclusive write lock on the store
-//  2. Applies all buffered changes (inserts and updates)
-//  3. Applies all buffered deletes
-//  4. Marks transaction as committed
-//  5. Releases lock
+//  2. Auto-creates any missing collections
+//  3. Applies all buffered changes (inserts and updates)
+//  4. Applies all buffered deletes
+//  5. Marks transaction as committed
+//  6. Releases lock
 //
-// If any collection referenced in changes does not exist, the commit fails with an
-// error and NO changes are applied (atomic failure).
+// Collections are automatically created during commit if they don't exist, ensuring
+// transactional operations succeed without requiring explicit CreateCollection() calls.
 //
 // Returns an error if:
 //   - Transaction was already rolled back
-//   - Any referenced collection does not exist
 //
 // Calling Commit multiple times is safe - subsequent calls return nil immediately.
 //
@@ -810,7 +818,7 @@ func (tx *inMemoryTx) Commit() error {
 
 	for collection, changes := range tx.changes {
 		if _, exists := tx.store.collections[collection]; !exists {
-			return fmt.Errorf("collection %q does not exist", collection)
+			tx.store.collections[collection] = make(map[string]persistence.Document)
 		}
 
 		for id, doc := range changes {
@@ -820,7 +828,7 @@ func (tx *inMemoryTx) Commit() error {
 
 	for collection, deletes := range tx.deletes {
 		if _, exists := tx.store.collections[collection]; !exists {
-			continue
+			tx.store.collections[collection] = make(map[string]persistence.Document)
 		}
 
 		for id := range deletes {

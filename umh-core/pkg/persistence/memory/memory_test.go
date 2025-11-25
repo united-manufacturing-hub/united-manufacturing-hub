@@ -16,6 +16,7 @@ package memory
 
 import (
 	"context"
+	"fmt"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -166,14 +167,16 @@ var _ = Describe("InMemoryStore", func() {
 		})
 
 		Context("when inserting into non-existent collection", func() {
-			It("should return an error", func() {
+			It("should auto-create the collection", func() {
 				doc := persistence.Document{
 					"id":   "doc-1",
 					"name": "Test",
 				}
 				_, err := store.Insert(ctx, "missing_collection", doc)
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("does not exist"))
+				Expect(err).ToNot(HaveOccurred())
+
+				_, exists := store.collections["missing_collection"]
+				Expect(exists).To(BeTrue())
 			})
 		})
 
@@ -324,14 +327,16 @@ var _ = Describe("InMemoryStore", func() {
 		})
 
 		Context("when updating in non-existent collection", func() {
-			It("should return an error", func() {
+			It("should auto-create collection but return ErrNotFound", func() {
 				doc := persistence.Document{
 					"id":   "doc-1",
 					"name": "Test",
 				}
 				err := store.Update(ctx, "missing_collection", "doc-1", doc)
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("does not exist"))
+				Expect(err).To(Equal(persistence.ErrNotFound))
+
+				_, exists := store.collections["missing_collection"]
+				Expect(exists).To(BeTrue())
 			})
 		})
 
@@ -392,10 +397,12 @@ var _ = Describe("InMemoryStore", func() {
 		})
 
 		Context("when deleting from non-existent collection", func() {
-			It("should return an error", func() {
+			It("should auto-create collection but return ErrNotFound", func() {
 				err := store.Delete(ctx, "missing_collection", "doc-1")
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("does not exist"))
+				Expect(err).To(Equal(persistence.ErrNotFound))
+
+				_, exists := store.collections["missing_collection"]
+				Expect(exists).To(BeTrue())
 			})
 		})
 
@@ -557,6 +564,132 @@ var _ = Describe("InMemoryStore", func() {
 			err := store.Close(ctx)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(store.collections).To(BeEmpty())
+		})
+	})
+
+	Describe("Auto-Collection Creation", func() {
+		Describe("Insert", func() {
+			It("should auto-create collection on insert", func() {
+				doc := persistence.Document{
+					"id":   "doc-1",
+					"name": "Test Document",
+				}
+
+				id, err := store.Insert(ctx, "auto_created_collection", doc)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(id).To(Equal("doc-1"))
+
+				_, exists := store.collections["auto_created_collection"]
+				Expect(exists).To(BeTrue())
+
+				retrievedDoc, err := store.Get(ctx, "auto_created_collection", "doc-1")
+				Expect(err).ToNot(HaveOccurred())
+				Expect(retrievedDoc["name"]).To(Equal("Test Document"))
+			})
+		})
+
+		Describe("Update", func() {
+			It("should auto-create collection but return ErrNotFound", func() {
+				doc := persistence.Document{
+					"id":   "doc-1",
+					"name": "Updated Document",
+				}
+
+				err := store.Update(ctx, "auto_created_collection", "doc-1", doc)
+				Expect(err).To(Equal(persistence.ErrNotFound))
+
+				_, exists := store.collections["auto_created_collection"]
+				Expect(exists).To(BeTrue())
+			})
+		})
+
+		Describe("Delete", func() {
+			It("should auto-create collection but return ErrNotFound", func() {
+				err := store.Delete(ctx, "auto_created_collection", "doc-1")
+				Expect(err).To(Equal(persistence.ErrNotFound))
+
+				_, exists := store.collections["auto_created_collection"]
+				Expect(exists).To(BeTrue())
+			})
+		})
+
+		Describe("Get", func() {
+			It("should still fail on non-existent collection", func() {
+				_, err := store.Get(ctx, "non_existent_collection", "doc-1")
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("does not exist"))
+
+				_, exists := store.collections["non_existent_collection"]
+				Expect(exists).To(BeFalse())
+			})
+		})
+
+		Describe("Transaction", func() {
+			It("should auto-create collections on commit", func() {
+				tx, err := store.BeginTx(ctx)
+				Expect(err).ToNot(HaveOccurred())
+
+				doc1 := persistence.Document{
+					"id":   "doc-1",
+					"name": "Transaction Doc 1",
+				}
+				_, err = tx.Insert(ctx, "tx_collection_1", doc1)
+				Expect(err).ToNot(HaveOccurred())
+
+				doc2 := persistence.Document{
+					"id":   "doc-2",
+					"name": "Transaction Doc 2",
+				}
+				_, err = tx.Insert(ctx, "tx_collection_2", doc2)
+				Expect(err).ToNot(HaveOccurred())
+
+				err = tx.Commit()
+				Expect(err).ToNot(HaveOccurred())
+
+				_, exists1 := store.collections["tx_collection_1"]
+				Expect(exists1).To(BeTrue())
+
+				_, exists2 := store.collections["tx_collection_2"]
+				Expect(exists2).To(BeTrue())
+
+				retrievedDoc1, err := store.Get(ctx, "tx_collection_1", "doc-1")
+				Expect(err).ToNot(HaveOccurred())
+				Expect(retrievedDoc1["name"]).To(Equal("Transaction Doc 1"))
+
+				retrievedDoc2, err := store.Get(ctx, "tx_collection_2", "doc-2")
+				Expect(err).ToNot(HaveOccurred())
+				Expect(retrievedDoc2["name"]).To(Equal("Transaction Doc 2"))
+			})
+		})
+
+		Describe("Concurrent Access", func() {
+			It("should handle concurrent inserts to same non-existent collection", func() {
+				const numGoroutines = 10
+				done := make(chan bool, numGoroutines)
+
+				for i := 0; i < numGoroutines; i++ {
+					go func(idx int) {
+						doc := persistence.Document{
+							"id":    fmt.Sprintf("doc-%d", idx),
+							"value": idx,
+						}
+						_, err := store.Insert(ctx, "concurrent_collection", doc)
+						Expect(err).ToNot(HaveOccurred())
+						done <- true
+					}(i)
+				}
+
+				for i := 0; i < numGoroutines; i++ {
+					<-done
+				}
+
+				_, exists := store.collections["concurrent_collection"]
+				Expect(exists).To(BeTrue())
+
+				docs, err := store.Find(ctx, "concurrent_collection", persistence.Query{})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(len(docs)).To(Equal(numGoroutines))
+			})
 		})
 	})
 })

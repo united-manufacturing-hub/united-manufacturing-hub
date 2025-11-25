@@ -605,7 +605,7 @@ var _ = Describe("Transaction Support", func() {
 	})
 
 	Describe("Transaction Edge Cases", func() {
-		It("should error committing to non-existent collection", func() {
+		It("should auto-create collection on commit", func() {
 			tx, err := store.BeginTx(ctx)
 			Expect(err).ToNot(HaveOccurred())
 
@@ -616,8 +616,14 @@ var _ = Describe("Transaction Support", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			err = tx.Commit()
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("does not exist"))
+			Expect(err).ToNot(HaveOccurred())
+
+			_, exists := store.collections["missing_collection"]
+			Expect(exists).To(BeTrue())
+
+			doc, err := store.Get(ctx, "missing_collection", "doc-1")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(doc["name"]).To(Equal("Test"))
 		})
 
 		Context("delete then insert same ID", func() {
