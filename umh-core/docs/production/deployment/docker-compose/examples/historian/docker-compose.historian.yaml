@@ -5,13 +5,15 @@
 #
 # IMPORTANT: This requires the core umh-core deployment to be running first
 # See: ../../docker-compose.yaml
+#
+# NOTE: Image names use docker.io/ prefix for Podman compatibility
 
 services:
   # ============================================================================
   # TimescaleDB - Time-Series Database
   # ============================================================================
   timescaledb:
-    image: timescale/timescaledb:latest-pg16
+    image: docker.io/timescale/timescaledb:latest-pg16
     container_name: timescaledb
     restart: unless-stopped
 
@@ -56,7 +58,7 @@ services:
   # Grafana - Visualization Platform
   # ============================================================================
   grafana:
-    image: grafana/grafana:latest
+    image: docker.io/grafana/grafana:latest
     container_name: grafana
     restart: unless-stopped
 

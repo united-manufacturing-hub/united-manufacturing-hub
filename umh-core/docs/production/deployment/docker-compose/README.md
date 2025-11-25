@@ -189,7 +189,6 @@ Once your UMH Core instance is online:
 3. **Set up webhook integrations** (requires NGINX to be deployed):
    - External systems can send data to `http://localhost:8081/webhook/<your-webhook-name>`
    - Configure webhooks via Management Console
-   - See [webhook documentation](../../features/webhooks.md) for details
 
 4. **Monitor your instance** through the Management Console dashboard
 

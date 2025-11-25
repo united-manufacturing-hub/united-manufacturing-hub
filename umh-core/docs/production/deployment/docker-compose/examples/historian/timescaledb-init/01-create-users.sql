@@ -21,6 +21,13 @@ CREATE USER kafkatopostgresqlv2 WITH PASSWORD 'changeme';
 CREATE USER grafanareader WITH PASSWORD 'changeme';
 
 -- ==============================================================================
+-- Enable TimescaleDB Extension
+-- ==============================================================================
+-- Must be enabled before creating hypertables
+
+CREATE EXTENSION IF NOT EXISTS timescaledb;
+
+-- ==============================================================================
 -- Create Schema
 -- ==============================================================================
 
