@@ -529,7 +529,8 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity fsmv2.Identity, wor
 		return fmt.Errorf("failed to save identity: %w", err)
 	}
 
-	s.logger.Debugf("Saved identity for worker: %s", identity.ID)
+	s.logger.Debugw("identity_saved",
+		"worker_id", identity.ID)
 
 	// Save initial observation to database for immediate availability
 	observedJSON, err := json.Marshal(observed)
@@ -549,7 +550,8 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity fsmv2.Identity, wor
 		return fmt.Errorf("failed to save initial observation: %w", err)
 	}
 
-	s.logger.Debugf("Saved initial observation for worker: %s", identity.ID)
+	s.logger.Debugw("initial_observation_saved",
+		"worker_id", identity.ID)
 
 	// Save initial desired state to database
 	desiredJSON, err := json.Marshal(initialDesired)
@@ -569,7 +571,8 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity fsmv2.Identity, wor
 		return fmt.Errorf("failed to save initial desired state: %w", err)
 	}
 
-	s.logger.Debugf("Saved initial desired state for worker: %s", identity.ID)
+	s.logger.Debugw("initial_desired_state_saved",
+		"worker_id", identity.ID)
 
 	collector := collection.NewCollector[TObserved](collection.CollectorConfig[TObserved]{
 		Worker:              worker,
@@ -781,7 +784,8 @@ func (s *Supervisor[TObserved, TDesired]) Start(ctx context.Context) <-chan stru
 	s.ctxMu.Unlock()
 	s.started.Store(true)
 
-	s.logger.Debugf("Supervisor started for workerType: %s", s.workerType)
+	s.logger.Debugw("supervisor_started",
+		"worker_type", s.workerType)
 
 	// Use the child context for all goroutines so they stop when Shutdown() is called
 	s.ctxMu.RLock()
@@ -823,7 +827,8 @@ func (s *Supervisor[TObserved, TDesired]) tickLoop(ctx context.Context) {
 	ticker := time.NewTicker(s.tickInterval)
 	defer ticker.Stop()
 
-	s.logger.Debugf("Tick loop started, interval: %v", s.tickInterval)
+	s.logger.Debugw("tick_loop_started",
+		"interval", s.tickInterval)
 
 	for {
 		select {
@@ -888,15 +893,22 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 		currentStateStr = workerCtx.currentState.String()
 	}
 
-	s.logger.Debugf("Ticking worker: %s, current state: %s", workerID, currentStateStr)
+	s.logger.Debugw("tick_worker",
+		"worker_id", workerID,
+		"current_state", currentStateStr)
 	workerCtx.mu.RUnlock()
 
 	// Load latest snapshot from database
-	s.logger.Debugf("[DataFreshness] Worker %s: Loading snapshot from database", workerID)
+	s.logger.Debugw("loading_snapshot",
+		"worker_id", workerID,
+		"stage", "data_freshness")
 
 	storageSnapshot, err := s.store.LoadSnapshot(ctx, s.workerType, workerID)
 	if err != nil {
-		s.logger.Debugf("[DataFreshness] Worker %s: Failed to load snapshot: %v", workerID, err)
+		s.logger.Debugw("load_snapshot_failed",
+			"worker_id", workerID,
+			"stage", "data_freshness",
+			"error", err)
 
 		return fmt.Errorf("failed to load snapshot: %w", err)
 	}
@@ -911,7 +923,10 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 
 	err = s.store.LoadObservedTyped(ctx, s.workerType, workerID, &observed)
 	if err != nil {
-		s.logger.Debugf("[DataFreshness] Worker %s: Failed to load typed observed state: %v", workerID, err)
+		s.logger.Debugw("load_observed_state_failed",
+			"worker_id", workerID,
+			"stage", "data_freshness",
+			"error", err)
 
 		return fmt.Errorf("failed to load typed observed state: %w", err)
 	}
@@ -921,7 +936,10 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 
 	err = s.store.LoadDesiredTyped(ctx, s.workerType, workerID, &desired)
 	if err != nil {
-		s.logger.Debugf("[DataFreshness] Worker %s: Failed to load typed desired state: %v", workerID, err)
+		s.logger.Debugw("load_desired_state_failed",
+			"worker_id", workerID,
+			"stage", "data_freshness",
+			"error", err)
 
 		return fmt.Errorf("failed to load typed desired state: %w", err)
 	}
@@ -940,9 +958,15 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 	// Log loaded observation details
 	if timestampProvider, ok := any(observed).(interface{ GetTimestamp() time.Time }); ok {
 		observationTimestamp := timestampProvider.GetTimestamp()
-		s.logger.Debugf("[DataFreshness] Worker %s: Loaded observation timestamp=%s", workerID, observationTimestamp.Format(time.RFC3339Nano))
+		s.logger.Debugw("observation_timestamp_loaded",
+			"worker_id", workerID,
+			"stage", "data_freshness",
+			"timestamp", observationTimestamp.Format(time.RFC3339Nano))
 	} else {
-		s.logger.Debugf("[DataFreshness] Worker %s: Loaded observation does not implement GetTimestamp() (type: %T)", workerID, observed)
+		s.logger.Debugw("observation_no_timestamp",
+			"worker_id", workerID,
+			"stage", "data_freshness",
+			"type", fmt.Sprintf("%T", observed))
 	}
 
 	// I3: Check data freshness BEFORE calling state.Next()
@@ -990,11 +1014,14 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 	currentState := workerCtx.currentState
 	workerCtx.mu.RUnlock()
 
-	s.logger.Debugf("Evaluating state transition for worker: %s", workerID)
+	s.logger.Debugw("evaluating_state_transition",
+		"worker_id", workerID)
 
 	// Skip state transitions if worker has no FSM state machine
 	if currentState == nil {
-		s.logger.Debugf("Worker %s has no state machine, skipping state transition", workerID)
+		s.logger.Debugw("no_state_machine",
+			"worker_id", workerID,
+			"action", "skipping_state_transition")
 
 		return nil
 	}
@@ -1002,8 +1029,11 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 	nextState, signal, action := currentState.Next(*snapshot)
 
 	hasAction := action != nil
-	s.logger.Debugf("State evaluation result for worker %s - nextState: %s, signal: %d, hasAction: %t",
-		workerID, nextState.String(), signal, hasAction)
+	s.logger.Debugw("state_evaluation",
+		"worker_id", workerID,
+		"next_state", nextState.String(),
+		"signal", int(signal),
+		"has_action", hasAction)
 
 	// VALIDATION: Cannot switch state AND emit action simultaneously
 	if nextState != currentState && action != nil {
@@ -1016,7 +1046,10 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 		actionID := action.Name()
 
 		if workerCtx.executor.HasActionInProgress(actionID) {
-			s.logger.Debugf("Skipping action %s for worker %s (already in progress)", actionID, workerID)
+			s.logger.Debugw("action_skipped",
+				"action_id", actionID,
+				"worker_id", workerID,
+				"reason", "already_in_progress")
 
 			return nil
 		}
@@ -1043,8 +1076,10 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 			"to_state", nextState.String(),
 			"reason", nextState.Reason())
 
-		s.logger.Debugf("State transition for worker %s: %s → %s",
-			workerID, currentState.String(), nextState.String())
+		s.logger.Debugw("state_transition",
+			"worker_id", workerID,
+			"from_state", currentState.String(),
+			"to_state", nextState.String())
 
 		s.logger.Infof("State transition: %s -> %s (reason: %s)",
 			currentState.String(), nextState.String(), nextState.Reason())
@@ -1070,7 +1105,9 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 			"mutex_name", "workerCtx.mu",
 			"worker_id", workerID)
 	} else {
-		s.logger.Debugf("State unchanged for worker %s: %s", workerID, currentState.String())
+		s.logger.Debugw("state_unchanged",
+			"worker_id", workerID,
+			"state", currentState.String())
 	}
 
 	// Process signal
@@ -1473,7 +1510,9 @@ func (s *Supervisor[TObserved, TDesired]) processSignal(ctx context.Context, wor
 
 		// Now shutdown children and wait for completion without holding parent lock
 		for name, child := range childrenToCleanup {
-			s.logger.Debugf("Shutting down child %s during parent removal", name)
+			s.logger.Debugw("child_shutdown_during_removal",
+				"child_name", name,
+				"context", "parent_removal")
 			child.Shutdown()
 
 			// Wait for child to fully shut down before proceeding
@@ -1815,7 +1854,8 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 			"worker_type", s.workerType,
 			"reason", "already_shutdown")
 
-		s.logger.Debugf("Supervisor already shut down for worker type: %s", s.workerType)
+		s.logger.Debugw("supervisor_already_shutdown",
+			"worker_type", s.workerType)
 
 		return
 	}
@@ -1839,7 +1879,8 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 
 	// Log workers being shut down
 	for workerID := range s.workers {
-		s.logger.Debugf("Shutting down worker: %s", workerID)
+		s.logger.Debugw("worker_shutting_down",
+			"worker_id", workerID)
 	}
 
 	// LOCK SAFETY: Extract children and done channels while holding lock,
@@ -1873,14 +1914,17 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 			"child_name", childName,
 			"parent_worker_type", s.workerType)
 
-		s.logger.Debugf("Shutting down child: %s", childName)
+		s.logger.Debugw("child_shutting_down",
+			"child_name", childName)
 		child.Shutdown()
 
 		// Wait for child supervisor to fully shut down
 		if done, exists := childDoneChans[childName]; exists {
-			s.logger.Debugf("Waiting for child %s to complete shutdown", childName)
+			s.logger.Debugw("waiting_child_shutdown",
+				"child_name", childName)
 			<-done
-			s.logger.Debugf("Child %s shutdown complete", childName)
+			s.logger.Debugw("child_shutdown_complete",
+				"child_name", childName)
 		}
 
 		s.logLifecycle("lifecycle",
@@ -1931,7 +1975,10 @@ func (s *Supervisor[TObserved, TDesired]) applyStateMapping() {
 		}
 
 		child.setMappedParentState(mappedState)
-		s.logger.Debugf("Child %s: parent state '%s' mapped to '%s'", childName, parentState, mappedState)
+		s.logger.Debugw("state_mapped",
+			"child_name", childName,
+			"parent_state", parentState,
+			"mapped_state", mappedState)
 	}
 }
 
