@@ -165,10 +165,27 @@ var _ = Describe("Lifecycle Logging", func() {
 	Describe("Debug Level", func() {
 		BeforeEach(func() {
 			setupLogger(zapcore.DebugLevel)
-			setupSupervisor()
 		})
 
 		It("should log tick_start with worker_id", func() {
+			cfg := supervisor.Config{
+				WorkerType:              "test",
+				Store:                   store,
+				Logger:                  logger,
+				TickInterval:            100 * time.Millisecond,
+				EnableLifecycleLogging:  true,
+			}
+			sup = supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](cfg)
+
+			identity := fsmv2.Identity{
+				ID:         "worker-1",
+				Name:       "Test Worker",
+				WorkerType: "test",
+			}
+			worker := &mockWorker{}
+
+			err := sup.AddWorker(identity, worker)
+			Expect(err).ToNot(HaveOccurred())
 			runSupervisor()
 
 			entries := parseLogEntries()
@@ -179,6 +196,25 @@ var _ = Describe("Lifecycle Logging", func() {
 		})
 
 		It("should log mutex_lock_acquire", func() {
+			cfg := supervisor.Config{
+				WorkerType:              "test",
+				Store:                   store,
+				Logger:                  logger,
+				TickInterval:            100 * time.Millisecond,
+				EnableLifecycleLogging:  true,
+			}
+			sup = supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](cfg)
+
+			identity := fsmv2.Identity{
+				ID:         "worker-1",
+				Name:       "Test Worker",
+				WorkerType: "test",
+			}
+			worker := &mockWorker{}
+
+			err := sup.AddWorker(identity, worker)
+			Expect(err).ToNot(HaveOccurred())
+
 			runSupervisor()
 
 			entries := parseLogEntries()
@@ -188,6 +224,25 @@ var _ = Describe("Lifecycle Logging", func() {
 		})
 
 		It("should log mutex_lock_acquired", func() {
+			cfg := supervisor.Config{
+				WorkerType:              "test",
+				Store:                   store,
+				Logger:                  logger,
+				TickInterval:            100 * time.Millisecond,
+				EnableLifecycleLogging:  true,
+			}
+			sup = supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](cfg)
+
+			identity := fsmv2.Identity{
+				ID:         "worker-1",
+				Name:       "Test Worker",
+				WorkerType: "test",
+			}
+			worker := &mockWorker{}
+
+			err := sup.AddWorker(identity, worker)
+			Expect(err).ToNot(HaveOccurred())
+
 			runSupervisor()
 
 			entries := parseLogEntries()
@@ -213,6 +268,87 @@ var _ = Describe("Lifecycle Logging", func() {
 					"Found lifecycle_event in info-level logs: %v (should only appear at debug level)",
 					entry["lifecycle_event"])
 			}
+		})
+	})
+
+	Describe("logLifecycle helper method", func() {
+		Context("when enableLifecycleLogging is true", func() {
+			BeforeEach(func() {
+				setupLogger(zapcore.DebugLevel)
+			})
+
+			It("should emit log at debug level", func() {
+				cfg := supervisor.Config{
+					WorkerType:              "test",
+					Store:                   store,
+					Logger:                  logger,
+					TickInterval:            100 * time.Millisecond,
+					EnableLifecycleLogging:  true,
+				}
+				sup = supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](cfg)
+
+				identity := fsmv2.Identity{
+					ID:         "worker-1",
+					Name:       "Test Worker",
+					WorkerType: "test",
+				}
+				worker := &mockWorker{}
+
+				err := sup.AddWorker(identity, worker)
+				Expect(err).ToNot(HaveOccurred())
+
+				runSupervisor()
+
+				entries := parseLogEntries()
+				Expect(len(entries)).To(BeNumerically(">", 0), "Expected log entries to be emitted")
+
+				foundDebugEntry := false
+				for _, entry := range entries {
+					if entry["level"] == "debug" {
+						foundDebugEntry = true
+						break
+					}
+				}
+
+				Expect(foundDebugEntry).To(BeTrue(), "Expected at least one debug log entry")
+			})
+		})
+
+		Context("when enableLifecycleLogging is false", func() {
+			BeforeEach(func() {
+				setupLogger(zapcore.DebugLevel)
+			})
+
+			It("should not emit lifecycle logs", func() {
+				cfg := supervisor.Config{
+					WorkerType:              "test",
+					Store:                   store,
+					Logger:                  logger,
+					TickInterval:            100 * time.Millisecond,
+					EnableLifecycleLogging:  false,
+				}
+				sup = supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](cfg)
+
+				identity := fsmv2.Identity{
+					ID:         "worker-1",
+					Name:       "Test Worker",
+					WorkerType: "test",
+				}
+				worker := &mockWorker{}
+
+				err := sup.AddWorker(identity, worker)
+				Expect(err).ToNot(HaveOccurred())
+
+				runSupervisor()
+
+				entries := parseLogEntries()
+
+				for _, entry := range entries {
+					Expect(entry).ToNot(HaveKey("lifecycle_event"),
+						"Found lifecycle_event when enableLifecycleLogging=false: %v",
+						entry["lifecycle_event"])
+				}
+			})
 		})
 	})
 })
