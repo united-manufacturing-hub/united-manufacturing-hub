@@ -50,3 +50,27 @@ The AUTH_TOKEN serves two purposes:
 - **Layer 2**: A single-hash of the AUTH_TOKEN is used to encrypt the instance's certificate private key. This allows the instance to decrypt its own private key, while ManagementConsole (which only has the double-hash) cannot.
 
 When a UMH Instance starts, it uses the AUTH_TOKEN to authenticate against ManagementConsole and receives a JWT token for subsequent communication.
+
+## Permission System
+
+Layer 2 uses a hierarchical permission system where each user and instance has a defined role at specific locations within a company.
+
+### Locations
+
+Locations represent positions in an organizational tree structure. For example, a company might organize its facilities as `Factory.Line1.Cell5`. This flexible path format allows unlimited depth to match your actual organization.
+
+Permissions are inherited downward: a user with access at `Factory.Line1` automatically has access to everything within that line, such as `Factory.Line1.Cell5`. You can also define exceptions to override inherited permissions. For example, a user could have Viewer access at `Factory.Line1` but Admin access specifically at `Factory.Line1.Cell5`.
+
+### Roles
+
+Three roles control what actions users and instances can perform at their assigned locations:
+
+- **Admin**: Full control including the ability to invite other users
+- **Editor**: Can create and modify resources but cannot manage users
+- **Viewer**: Read-only access
+
+Users can have different roles at different locations. For example, a user can be an Admin at `Factory.Line1` but only a Viewer at `Factory.Line2`.
+
+### Delegation
+
+Admins can invite new users and grant them permissions, but only for locations where they themselves have admin access. This prevents privilege escalation and ensures that permissions flow naturally through the organization.
