@@ -47,6 +47,25 @@ import (
 	"github.com/cespare/xxhash/v2"
 )
 
+const (
+	// OPCDebugEnvVar is the environment variable name for enabling OPC UA debug logging.
+	//
+	// This variable is read by the gopcua library (github.com/gopcua/opcua/debug/debug.go)
+	// and accepts space-separated flag names to control different debug output levels:
+	//
+	//   - "debug"  : Enables general debug logging with file:line prefixes (debug.Printf)
+	//   - "codec"  : Prints detailed encoding/decoding information during binary marshaling
+	//   - "packet" : Prints raw packet data being sent/received over the wire
+	//
+	// Multiple flags can be combined: OPC_DEBUG="debug codec"
+	//
+	// When debug_level is enabled in config, this is automatically set to "debug" to enable
+	// general OPC UA debugging without the verbosity of codec/packet-level output.
+	//
+	// Reference: https://github.com/gopcua/opcua/blob/main/debug/debug.go
+	OPCDebugEnvVar = "OPC_DEBUG"
+)
+
 // IBenthosService is the interface for managing Benthos services.
 type IBenthosService interface {
 	// GenerateS6ConfigForBenthos generates a S6 config for a given benthos instance
@@ -280,10 +299,6 @@ func (s *BenthosService) generateBenthosYaml(config *benthosserviceconfig.Bentho
 		return "", errors.New("config is nil")
 	}
 
-	if config.LogLevel == "" {
-		config.LogLevel = "INFO"
-	}
-
 	return benthosserviceconfig.RenderBenthosYAML(
 		config.Input,
 		config.Output,
@@ -292,7 +307,7 @@ func (s *BenthosService) generateBenthosYaml(config *benthosserviceconfig.Bentho
 		config.RateLimitResources,
 		config.Buffer,
 		config.MetricsPort,
-		config.LogLevel,
+		config.DebugLevel,
 	)
 }
 
@@ -314,13 +329,18 @@ func (s *BenthosService) GenerateS6ConfigForBenthos(benthosConfig *benthosservic
 		return s6serviceconfig.S6ServiceConfig{}, err
 	}
 
+	env := make(map[string]string)
+	if benthosConfig.DebugLevel {
+		env[OPCDebugEnvVar] = "debug"
+	}
+
 	s6Config = s6serviceconfig.S6ServiceConfig{
 		Command: []string{
 			"/usr/local/bin/benthos",
 			"-c",
 			configPath,
 		},
-		Env: map[string]string{},
+		Env: env,
 		ConfigFiles: map[string]string{
 			constants.BenthosConfigFileName: yamlConfig,
 		},
@@ -409,7 +429,7 @@ func (s *BenthosService) GetConfig(ctx context.Context, filesystemService filesy
 	// Safely extract log_level
 	if logger, ok := benthosConfig["logger"].(map[string]interface{}); ok {
 		if level, ok := logger["level"].(string); ok {
-			result.LogLevel = level
+			result.DebugLevel = (level == "DEBUG")
 		}
 	}
 

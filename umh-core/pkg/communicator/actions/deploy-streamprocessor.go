@@ -135,7 +135,7 @@ func (a *DeployStreamProcessorAction) Validate() error {
 		return errors.New("missing required field Model.Version")
 	}
 
-	if err := ValidateComponentName(a.payload.Name); err != nil {
+	if err := config.ValidateComponentName(a.payload.Name); err != nil {
 		return err
 	}
 

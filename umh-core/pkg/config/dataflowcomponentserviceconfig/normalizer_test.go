@@ -34,7 +34,7 @@ var _ = Describe("DFC YAML Normalizer", func() {
 
 		It("should preserve existing values", func() {
 			config := DataflowComponentServiceConfig{
-				BenthosConfig{
+				BenthosConfig: BenthosConfig{
 					Input: map[string]any{
 						"mqtt": map[string]any{
 							"topic": "test/topic",
@@ -78,7 +78,7 @@ var _ = Describe("DFC YAML Normalizer", func() {
 
 		It("should normalize maps by ensuring they're not nil", func() {
 			config := DataflowComponentServiceConfig{
-				BenthosConfig{
+				BenthosConfig: BenthosConfig{
 					// Input is nil
 					// Output is nil
 					Pipeline: map[string]any{}, // Empty but not nil

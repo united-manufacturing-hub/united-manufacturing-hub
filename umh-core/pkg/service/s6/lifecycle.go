@@ -480,6 +480,8 @@ func (s *DefaultService) createS6FilesInRepository(ctx context.Context, reposito
 
 	createdFiles = append(createdFiles, configFiles...)
 
+	// Environment variables are handled by run script template (no env/ directory needed)
+
 	// Create dependencies
 	dependenciesDPath := filepath.Join(repositoryDir, "dependencies.d")
 	if err := fsService.EnsureDirectory(ctx, dependenciesDPath); err != nil {

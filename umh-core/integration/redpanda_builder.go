@@ -136,7 +136,7 @@ func (b *RedpandaBuilder) AddBenthosProducer(name string, productionInterval str
 					},
 				},
 			},
-			LogLevel: "INFO",
+			DebugLevel: false,
 		},
 	}
 

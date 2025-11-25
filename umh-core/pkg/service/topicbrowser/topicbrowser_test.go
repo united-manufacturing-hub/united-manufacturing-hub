@@ -94,7 +94,7 @@ var _ = Describe("TopicBrowserService", func() {
 				Output: map[string]any{
 					"stdout": map[string]any{},
 				},
-				LogLevel: constants.DefaultBenthosLogLevel,
+				DebugLevel: false,
 			}
 
 			// Set up mock to return a valid BenthosServiceConfig when generating config
@@ -178,7 +178,7 @@ var _ = Describe("TopicBrowserService", func() {
 				Output: map[string]any{
 					"stdout": map[string]any{},
 				},
-				LogLevel: constants.DefaultBenthosLogLevel,
+				DebugLevel: false,
 			}
 
 			// Use the official mock manager from the FSM package
@@ -352,7 +352,7 @@ var _ = Describe("TopicBrowserService", func() {
 				Output: map[string]any{
 					"stdout": map[string]any{},
 				},
-				LogLevel: constants.DefaultBenthosLogLevel,
+				DebugLevel: false,
 			}
 
 			// Updated config with different settings
@@ -375,7 +375,7 @@ var _ = Describe("TopicBrowserService", func() {
 				Output: map[string]any{
 					"stdout": map[string]any{},
 				},
-				LogLevel: constants.DefaultBenthosLogLevel,
+				DebugLevel: false,
 			}
 
 			// Add the component first
@@ -437,7 +437,7 @@ var _ = Describe("TopicBrowserService", func() {
 				Output: map[string]any{
 					"stdout": map[string]any{},
 				},
-				LogLevel: constants.DefaultBenthosLogLevel,
+				DebugLevel: false,
 			}
 
 			// Add the component first
@@ -515,7 +515,7 @@ var _ = Describe("TopicBrowserService", func() {
 				Output: map[string]any{
 					"stdout": map[string]any{},
 				},
-				LogLevel: constants.DefaultBenthosLogLevel,
+				DebugLevel: false,
 			}
 
 			// Add the topic browser first
@@ -567,7 +567,7 @@ var _ = Describe("TopicBrowserService", func() {
 				Output: map[string]any{
 					"stdout": map[string]any{},
 				},
-				LogLevel: constants.DefaultBenthosLogLevel,
+				DebugLevel: false,
 			}
 
 			err := service.AddToManager(ctx, mockSvcRegistry.GetFileSystem(), cfg, tbName)
@@ -622,7 +622,7 @@ var _ = Describe("TopicBrowserService", func() {
 				Output: map[string]any{
 					"stdout": map[string]any{},
 				},
-				LogLevel: constants.DefaultBenthosLogLevel,
+				DebugLevel: false,
 			}
 
 			err := testService.AddToManager(ctx, mockSvcRegistry.GetFileSystem(), cfg, testComponentName)

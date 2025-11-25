@@ -58,6 +58,10 @@ func NewBenthosManager(name string) *BenthosManager {
 		},
 		// Get name from Benthos config
 		func(cfg config.BenthosConfig) (string, error) {
+			if err := config.ValidateComponentName(cfg.Name); err != nil {
+				return "", fmt.Errorf("invalid benthos service name: %w", err)
+			}
+
 			return cfg.Name, nil
 		},
 		// Get desired state from Benthos config

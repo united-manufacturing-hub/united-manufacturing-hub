@@ -20,7 +20,6 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 )
 
 var _ = Describe("DataFlowComponentConfig", func() {
@@ -55,8 +54,8 @@ var _ = Describe("DataFlowComponentConfig", func() {
 			Expect(fullConfig.Input).To(Equal(benthos.Input))
 			Expect(fullConfig.Pipeline).To(Equal(benthos.Pipeline))
 			Expect(fullConfig.Output).To(Equal(benthos.Output))
-			Expect(fullConfig.MetricsPort).To(Equal(uint16(0)))                     // Default value
-			Expect(fullConfig.LogLevel).To(Equal(constants.DefaultBenthosLogLevel)) // Default value
+			Expect(fullConfig.MetricsPort).To(Equal(uint16(0))) // Default value
+			Expect(fullConfig.DebugLevel).To(BeFalse())         // Default value
 		})
 
 		It("should convert BenthosServiceConfig to BenthosConfig, ignoring advanced fields", func() {
@@ -71,8 +70,8 @@ var _ = Describe("DataFlowComponentConfig", func() {
 				Output: map[string]interface{}{
 					"stdout": map[string]interface{}{},
 				},
-				MetricsPort: 8080,    // This should be ignored in conversion
-				LogLevel:    "DEBUG", // This should be ignored in conversion
+				MetricsPort: 8080, // This should be ignored in conversion
+				DebugLevel:  true, // This should be ignored in conversion
 			}
 
 			// Convert to simplified BenthosConfig
@@ -86,8 +85,8 @@ var _ = Describe("DataFlowComponentConfig", func() {
 			convertedBack := simplified.GetBenthosServiceConfig()
 
 			// Verify advanced fields use defaults, not original values
-			Expect(convertedBack.MetricsPort).To(Equal(uint16(0)))                     // Default, not 8080
-			Expect(convertedBack.LogLevel).To(Equal(constants.DefaultBenthosLogLevel)) // Default, not DEBUG
+			Expect(convertedBack.MetricsPort).To(Equal(uint16(0))) // Default, not 8080
+			Expect(convertedBack.DebugLevel).To(BeFalse())         // Default, not DEBUG
 		})
 	})
 

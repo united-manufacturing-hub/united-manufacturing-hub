@@ -96,6 +96,29 @@ Track performance and throughput:
 
 ![Bridge Metrics](./images/bridges-metrics.png)
 
+### Enable Debug Logging
+
+When troubleshooting connection or data issues, enable debug logging in your bridge configuration:
+
+**Via YAML:**
+```yaml
+protocolConverter:
+  - name: my-plc-bridge
+    protocolConverterServiceConfig:
+      debug_level: true  # Enable detailed logging
+      config:
+```
+
+Debug logging provides:
+- Detailed protocol communication logs
+- Connection state transitions
+- Data parsing details
+- For OPC UA: Sets `OPC_DEBUG` environment variable for protocol-level debugging
+
+**Remember to disable debug logging** after troubleshooting - it generates significantly more log data.
+
+To view debug logs, go to the bridge and select **Logs**.
+
 ## Important: Data Types from Different Protocols
 
 **Industrial protocols (OPC UA, Modbus, S7) only provide time-series data** - snapshots of values at points in time. They cannot directly provide relational records.
@@ -113,6 +136,7 @@ protocolConverter:
   - name: my-plc-bridge
     desiredState: active
     protocolConverterServiceConfig:
+      debug_level: false  # Direct child (matches standalone flows)
       location:
         2: "production-line"
         3: "plc-01"

@@ -16,7 +16,7 @@ This repository contains:
 - **Benthos-UMH** – a high-throughput streaming engine; every pipeline you define is called a **Data Flow Component (DFC)**.
 - **Redpanda** – a Kafka-compatible broker that buffers data locally whenever the network blinks.
 
-Deploy UMH Core on any device that runs Docker (Raspberry Pi, industrial PC, cloud VM – **no Kubernetes required**).
+Deploy UMH Core on any device that runs Docker (industrial PC, cloud VM, ARM64 gateway – **no Kubernetes required**).
 
 ### Quick Start
 

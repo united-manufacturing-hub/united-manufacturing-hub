@@ -36,10 +36,6 @@ func NewGenerator() *Generator {
 
 // RenderConfig generates a Benthos YAML configuration from a BenthosServiceConfig.
 func (g *Generator) RenderConfig(cfg BenthosServiceConfig) (string, error) {
-	if cfg.LogLevel == "" {
-		cfg.LogLevel = "INFO"
-	}
-
 	// Convert the config to a normalized map
 	configMap := g.ConfigToMap(cfg)
 	normalizedMap := NormalizeConfig(configMap)
@@ -102,9 +98,14 @@ func (g *Generator) ConfigToMap(cfg BenthosServiceConfig) map[string]interface{}
 		"address": fmt.Sprintf("0.0.0.0:%d", cfg.MetricsPort),
 	}
 
-	// Add logger section with log level
+	// Add logger section with log level computed from DebugLevel
+	logLevel := "INFO"
+	if cfg.DebugLevel {
+		logLevel = "DEBUG"
+	}
+
 	configMap["logger"] = map[string]interface{}{
-		"level": cfg.LogLevel,
+		"level": logLevel,
 	}
 
 	return configMap

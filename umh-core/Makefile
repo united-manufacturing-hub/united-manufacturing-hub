@@ -56,7 +56,7 @@ TARGETARCH := $(shell go env GOARCH)
 
 # Default values for go tools
 GINKGO_VERSION = v2.23.4
-NILWAY_VERSION = latest
+NILAWAY_VERSION = v0.0.0-20251119034912-44f92224c998
 LEFTHOOK_VERSION = v1.13.2
 GOLANGCI_LINT_VERSION = v2.5.0
 BETTERALIGN_VERSION = v0.7.1
@@ -69,7 +69,7 @@ NMAP_VERSION = 7.97-r0
 S6_OVERLAY_VERSION = 3.2.0.2
 REDPANDA_VERSION = 24.3.18
 ## Benthos version is a tag or a sha-<commit hash> (e.g. 0.9.4 or sha-a51a685) to be used in the docker image
-BENTHOS_UMH_VERSION = 0.11.11
+BENTHOS_UMH_VERSION = 0.11.12
 BUF_VERSION = 1.55.1
 PROTOC_GEN_GO_VERSION = 1.36.6
 
@@ -86,7 +86,7 @@ VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "0.0
 install:
 	sudo chown vscode:vscode data || true
 	sudo chown vscode:vscode tmp || true
-	go install go.uber.org/nilaway/cmd/nilaway@$(NILWAY_VERSION)
+	go install go.uber.org/nilaway/cmd/nilaway@$(NILAWAY_VERSION)
 	go install github.com/onsi/ginkgo/v2/ginkgo@$(GINKGO_VERSION)
 	go install github.com/evilmartians/lefthook@$(LEFTHOOK_VERSION)
 	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)

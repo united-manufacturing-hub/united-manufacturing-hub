@@ -2,7 +2,7 @@
 
 **60 seconds — that's all it takes to launch UMH Core.**
 
-No kubectl, no Kubernetes setup, just a single Docker container. Anything that runs Docker works — from your MacBook terminal to enterprise edge boxes.
+No kubectl, no Kubernetes setup, just a single Docker container. Almost anything that runs Docker works — from your MacBook to enterprise edge boxes.
 
 > **Note:** This getting-started guide follows the common PLC/sensor path (raw → device models). For ERP integration and other patterns, see the [Data Modeling documentation](../usage/data-modeling/).
 
@@ -13,6 +13,11 @@ No kubectl, no Kubernetes setup, just a single Docker container. Anything that r
 * 2 vCPU
 * 4 GB RAM
 * 40 GB SSD
+
+**Architecture:**
+
+* x86_64 (Intel/AMD 64-bit)
+* ARM64 (64-bit ARM, but NOT Raspberry Pi - Redpanda requires 48-bit virtual address space)
 
 For detailed sizing recommendations, see the [Sizing Guide](../production/sizing-guide.md).
 

@@ -303,12 +303,20 @@ func renderConfig(
 		read = appendDownsampler(read)
 	}
 
+	// Propagate debug_level with priority: DFC level > Spec level
+	// This ensures the most specific debug setting takes precedence
+	read.DebugLevel = read.DebugLevel || spec.DebugLevel
+
 	write, err := config.RenderTemplate(spec.GetDFCWriteServiceConfig(), scope)
 	if err != nil {
 		return protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime{}, err
 	}
 
+	// Propagate debug_level with priority: DFC level > Spec level
+	write.DebugLevel = write.DebugLevel || spec.DebugLevel
+
 	return protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime{
+		DebugLevel:                          spec.DebugLevel,
 		ConnectionServiceConfig:             connRuntime,
 		DataflowComponentReadServiceConfig:  read,
 		DataflowComponentWriteServiceConfig: write,
