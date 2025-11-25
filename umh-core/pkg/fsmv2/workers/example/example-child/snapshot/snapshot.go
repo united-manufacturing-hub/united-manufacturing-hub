@@ -49,7 +49,7 @@ func (s *ChildDesiredState) ShouldBeRunning() bool {
 	return !s.shutdownRequested
 }
 
-// ChildObservedState represents the current state of the child worker
+// ChildObservedState represents the current state of the child worker.
 type ChildObservedState struct {
 	ID          string    `json:"id"`
 	CollectedAt time.Time `json:"collected_at"`

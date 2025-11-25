@@ -29,9 +29,9 @@ import (
 
 var _ = Describe("SyncAction", func() {
 	var (
-		act          *action.SyncAction
-		dependencies *communicator.CommunicatorDependencies
-		logger       *zap.SugaredLogger
+		act           *action.SyncAction
+		dependencies  *communicator.CommunicatorDependencies
+		logger        *zap.SugaredLogger
 		mockTransport *mockSyncTransport
 	)
 
@@ -78,11 +78,13 @@ func (m *mockSyncTransport) Authenticate(ctx context.Context, req transport.Auth
 
 func (m *mockSyncTransport) Pull(ctx context.Context, jwtToken string) ([]*transport.UMHMessage, error) {
 	m.pullCallCount++
+
 	return nil, nil
 }
 
 func (m *mockSyncTransport) Push(ctx context.Context, jwtToken string, messages []*transport.UMHMessage) error {
 	m.pushCallCount++
+
 	return nil
 }
 

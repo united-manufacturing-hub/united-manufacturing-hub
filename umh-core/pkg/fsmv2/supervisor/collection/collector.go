@@ -226,6 +226,7 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 	if !ok {
 		c.config.Logger.Errorf("[DataFreshness] Worker %s: observed state type mismatch: expected %T, got %T",
 			c.config.Identity.ID, *new(TObserved), observed)
+
 		return fmt.Errorf("observed state type mismatch: expected %T, got %T", *new(TObserved), observed)
 	}
 
@@ -234,6 +235,7 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 	if !ok {
 		c.config.Logger.Errorf("[DataFreshness] Worker %s: store is not *TriangularStore, got %T",
 			c.config.Identity.ID, c.config.Store)
+
 		return fmt.Errorf("store is not *TriangularStore, got %T", c.config.Store)
 	}
 

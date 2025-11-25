@@ -27,12 +27,12 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 
-	// Import state packages to scan for violations
+	// Import state packages to scan for violations.
 	childState "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/example-child/state"
 	parentState "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/example-parent/state"
 )
 
-// Violation represents an architectural violation found in code
+// Violation represents an architectural violation found in code.
 type Violation struct {
 	File    string
 	Line    int
@@ -94,7 +94,7 @@ var _ = Describe("FSMv2 Architecture Validation", func() {
 	})
 })
 
-// findStateFiles discovers all state files in the workers directory
+// findStateFiles discovers all state files in the workers directory.
 func findStateFiles(baseDir string) []string {
 	var files []string
 
@@ -123,7 +123,7 @@ func findStateFiles(baseDir string) []string {
 	return files
 }
 
-// findActionFiles discovers all action files in the workers directory
+// findActionFiles discovers all action files in the workers directory.
 func findActionFiles(baseDir string) []string {
 	var files []string
 
@@ -151,7 +151,7 @@ func findActionFiles(baseDir string) []string {
 	return files
 }
 
-// findWorkerFiles discovers all worker.go files in the workers directory
+// findWorkerFiles discovers all worker.go files in the workers directory.
 func findWorkerFiles(baseDir string) []string {
 	var files []string
 
@@ -177,7 +177,7 @@ func findWorkerFiles(baseDir string) []string {
 	return files
 }
 
-// validateStateStructs checks that state structs have no fields (except base state)
+// validateStateStructs checks that state structs have no fields (except base state).
 func validateStateStructs() []Violation {
 	var violations []Violation
 
@@ -247,7 +247,7 @@ func validateStateStructs() []Violation {
 	return violations
 }
 
-// validateActionStructs checks that action structs have no mutable state
+// validateActionStructs checks that action structs have no mutable state.
 func validateActionStructs() []Violation {
 	var violations []Violation
 
@@ -284,7 +284,7 @@ func validateNextMethodTypeAssertions() []Violation {
 	return violations
 }
 
-// validateDeriveDesiredState checks that DeriveDesiredState doesn't access dependencies
+// validateDeriveDesiredState checks that DeriveDesiredState doesn't access dependencies.
 func validateDeriveDesiredState() []Violation {
 	var violations []Violation
 
@@ -301,11 +301,12 @@ func validateDeriveDesiredState() []Violation {
 	return violations
 }
 
-// checkActionFile parses an action file and looks for mutable state fields
+// checkActionFile parses an action file and looks for mutable state fields.
 func checkActionFile(filename string) []Violation {
 	var violations []Violation
 
 	fset := token.NewFileSet()
+
 	node, err := parser.ParseFile(fset, filename, nil, parser.ParseComments)
 	if err != nil {
 		return violations
@@ -337,7 +338,6 @@ func checkActionFile(filename string) []Violation {
 				strings.Contains(strings.ToLower(fieldName), "failure") ||
 				strings.Contains(strings.ToLower(fieldName), "count") ||
 				strings.Contains(strings.ToLower(fieldName), "max") {
-
 				pos := fset.Position(field.Pos())
 				violations = append(violations, Violation{
 					File:    filename,
@@ -354,11 +354,12 @@ func checkActionFile(filename string) []Violation {
 	return violations
 }
 
-// checkNextMethodTypeAssertions parses a state file and looks for type assertions in Next()
+// checkNextMethodTypeAssertions parses a state file and looks for type assertions in Next().
 func checkSingleEntryPointPattern(filename string) []Violation {
 	var violations []Violation
 
 	fset := token.NewFileSet()
+
 	node, err := parser.ParseFile(fset, filename, nil, parser.ParseComments)
 	if err != nil {
 		return violations
@@ -372,10 +373,13 @@ func checkSingleEntryPointPattern(filename string) []Violation {
 		}
 
 		// Count type assertions and check their location
-		var typeAssertions []int
-		var firstStatementLine int
+		var (
+			typeAssertions     []int
+			firstStatementLine int
+		)
 
 		// Get line number of first statement
+
 		if funcDecl.Body != nil && len(funcDecl.Body.List) > 0 {
 			firstStatementLine = fset.Position(funcDecl.Body.List[0].Pos()).Line
 		}
@@ -388,6 +392,7 @@ func checkSingleEntryPointPattern(filename string) []Violation {
 
 			pos := fset.Position(typeAssert.Pos())
 			typeAssertions = append(typeAssertions, pos.Line)
+
 			return true
 		})
 
@@ -421,11 +426,12 @@ func checkSingleEntryPointPattern(filename string) []Violation {
 	return violations
 }
 
-// checkDeriveDesiredStateMethod parses a worker file and checks DeriveDesiredState
+// checkDeriveDesiredStateMethod parses a worker file and checks DeriveDesiredState.
 func checkDeriveDesiredStateMethod(filename string) []Violation {
 	var violations []Violation
 
 	fset := token.NewFileSet()
+
 	node, err := parser.ParseFile(fset, filename, nil, parser.ParseComments)
 	if err != nil {
 		return violations
@@ -475,6 +481,7 @@ func getStateFilePath(fsmv2Dir, typeName string) string {
 	fileName := strings.ToLower(strings.ReplaceAll(typeName, "State", ""))
 	fileName = "state_" + strings.ToLower(strings.ReplaceAll(fileName, "TryingTo", "trying_to_"))
 	fileName = strings.ReplaceAll(fileName, "__", "_")
+
 	return filepath.Join(fsmv2Dir, "workers", "example", fileName+".go")
 }
 

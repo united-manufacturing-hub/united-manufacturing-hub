@@ -20,7 +20,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/example-parent/snapshot"
 )
 
-// TryingToStopState represents the state during graceful shutdown
+// TryingToStopState represents the state during graceful shutdown.
 type TryingToStopState struct {
 	BaseParentState
 }

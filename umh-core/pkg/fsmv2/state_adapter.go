@@ -88,13 +88,17 @@ func ConvertSnapshot[O any, D any](snapAny any) TypedSnapshot[O, D] {
 	var observed O
 	if raw.Observed == nil {
 		var zero O
+
 		expectedType := reflect.TypeOf(zero)
 		panic(fmt.Sprintf("ConvertSnapshot: Observed is nil, expected %v", expectedType))
 	}
+
 	observed, ok = raw.Observed.(O)
 	if !ok {
 		actualType := reflect.TypeOf(raw.Observed)
+
 		var zero O
+
 		expectedType := reflect.TypeOf(zero)
 		panic(fmt.Sprintf("ConvertSnapshot: Observed type mismatch - expected %v, got %v", expectedType, actualType))
 	}
@@ -103,13 +107,17 @@ func ConvertSnapshot[O any, D any](snapAny any) TypedSnapshot[O, D] {
 	var desired D
 	if raw.Desired == nil {
 		var zero D
+
 		expectedType := reflect.TypeOf(zero)
 		panic(fmt.Sprintf("ConvertSnapshot: Desired is nil, expected %v", expectedType))
 	}
+
 	desired, ok = raw.Desired.(D)
 	if !ok {
 		actualType := reflect.TypeOf(raw.Desired)
+
 		var zero D
+
 		expectedType := reflect.TypeOf(zero)
 		panic(fmt.Sprintf("ConvertSnapshot: Desired type mismatch - expected %v, got %v", expectedType, actualType))
 	}

@@ -222,6 +222,7 @@ var _ = Describe("StateMappingRegistry", func() {
 				},
 				Condition: func(parentSnapshot supervisor.Snapshot) bool {
 					capturedSnapshot = parentSnapshot
+
 					return true
 				},
 			})
@@ -246,6 +247,7 @@ var _ = Describe("StateMappingRegistry", func() {
 				},
 				Condition: func(parentSnapshot supervisor.Snapshot) bool {
 					callCount++
+
 					return callCount == 1 // true on first call
 				},
 			})
@@ -256,6 +258,7 @@ var _ = Describe("StateMappingRegistry", func() {
 				},
 				Condition: func(parentSnapshot supervisor.Snapshot) bool {
 					callCount++
+
 					return callCount == 2 // true on second call
 				},
 			})

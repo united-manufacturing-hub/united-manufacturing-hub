@@ -82,6 +82,7 @@ func registerTestWorkerFactories() {
 		// Register supervisor factory for hierarchical composition
 		_ = factory.RegisterSupervisorFactoryByType(wt, func(cfg interface{}) interface{} {
 			supervisorCfg := cfg.(Config)
+
 			return NewSupervisor[*TestObservedState, *TestDesiredState](supervisorCfg)
 		})
 	}
@@ -99,7 +100,6 @@ func TestSupervisorUsesTriangularStore(t *testing.T) {
 	defer func() {
 		_ = basicStore.Close(ctx)
 	}()
-
 
 	// Create collections in database
 	var err error
@@ -353,7 +353,6 @@ func TestSupervisorSavesIdentityToTriangularStore(t *testing.T) {
 		_ = basicStore.Close(ctx)
 	}()
 
-
 	// Create collections in database
 	var err error
 
@@ -428,7 +427,6 @@ func TestSupervisorLoadsSnapshotFromTriangularStore(t *testing.T) {
 	defer func() {
 		_ = basicStore.Close(ctx)
 	}()
-
 
 	// Create collections in database
 	var err error
@@ -587,6 +585,7 @@ func TestApplyStateMapping_WithMapping(t *testing.T) {
 	logger := zap.NewNop().Sugar()
 
 	registerTestWorkerFactories()
+
 	defer factory.ResetRegistry()
 
 	basicStore := memory.NewInMemoryStore()
@@ -674,6 +673,7 @@ func TestApplyStateMapping_NoMapping(t *testing.T) {
 	logger := zap.NewNop().Sugar()
 
 	registerTestWorkerFactories()
+
 	defer factory.ResetRegistry()
 
 	basicStore := memory.NewInMemoryStore()
@@ -732,6 +732,7 @@ func TestApplyStateMapping_NoMapping(t *testing.T) {
 	}
 
 	children := parent.GetChildren()
+
 	child, exists := children["child-1"]
 	if !exists {
 		t.Fatal("Expected child-1 to exist")
@@ -753,6 +754,7 @@ func TestApplyStateMapping_MissingStateInMapping(t *testing.T) {
 	logger := zap.NewNop().Sugar()
 
 	registerTestWorkerFactories()
+
 	defer factory.ResetRegistry()
 
 	basicStore := memory.NewInMemoryStore()
@@ -815,6 +817,7 @@ func TestApplyStateMapping_MissingStateInMapping(t *testing.T) {
 	}
 
 	children := parent.GetChildren()
+
 	child, exists := children["child-1"]
 	if !exists {
 		t.Fatal("Expected child-1 to exist")
@@ -836,6 +839,7 @@ func TestApplyStateMapping_MultipleChildren(t *testing.T) {
 	logger := zap.NewNop().Sugar()
 
 	registerTestWorkerFactories()
+
 	defer factory.ResetRegistry()
 
 	basicStore := memory.NewInMemoryStore()
@@ -926,10 +930,12 @@ func TestApplyStateMapping_MultipleChildren(t *testing.T) {
 	if !exists {
 		t.Fatal("Expected child-1 to exist")
 	}
+
 	typedChild1, ok := child1.(*Supervisor[*TestObservedState, *TestDesiredState])
 	if !ok {
 		t.Fatal("Child-1 supervisor should be correct type")
 	}
+
 	if typedChild1.GetMappedParentState() != "connected" {
 		t.Errorf("Expected child-1 mappedParentState 'connected', got '%s'", typedChild1.GetMappedParentState())
 	}
@@ -938,10 +944,12 @@ func TestApplyStateMapping_MultipleChildren(t *testing.T) {
 	if !exists {
 		t.Fatal("Expected child-2 to exist")
 	}
+
 	typedChild2, ok := child2.(*Supervisor[*TestObservedState, *TestDesiredState])
 	if !ok {
 		t.Fatal("Child-2 supervisor should be correct type")
 	}
+
 	if typedChild2.GetMappedParentState() != "polling" {
 		t.Errorf("Expected child-2 mappedParentState 'polling', got '%s'", typedChild2.GetMappedParentState())
 	}
@@ -950,10 +958,12 @@ func TestApplyStateMapping_MultipleChildren(t *testing.T) {
 	if !exists {
 		t.Fatal("Expected child-3 to exist")
 	}
+
 	typedChild3, ok := child3.(*Supervisor[*TestObservedState, *TestDesiredState])
 	if !ok {
 		t.Fatal("Child-3 supervisor should be correct type")
 	}
+
 	if typedChild3.GetMappedParentState() != "active" {
 		t.Errorf("Expected child-3 mappedParentState 'active' (parent state, no mapping), got '%s'", typedChild3.GetMappedParentState())
 	}
@@ -964,6 +974,7 @@ func TestApplyStateMapping_EmptyStateMapping(t *testing.T) {
 	logger := zap.NewNop().Sugar()
 
 	registerTestWorkerFactories()
+
 	defer factory.ResetRegistry()
 
 	basicStore := memory.NewInMemoryStore()
@@ -1023,6 +1034,7 @@ func TestApplyStateMapping_EmptyStateMapping(t *testing.T) {
 	}
 
 	children := parent.GetChildren()
+
 	child, exists := children["child-1"]
 	if !exists {
 		t.Fatal("Expected child-1 to exist")
@@ -1044,6 +1056,7 @@ func TestApplyStateMapping_NilStateMapping(t *testing.T) {
 	logger := zap.NewNop().Sugar()
 
 	registerTestWorkerFactories()
+
 	defer factory.ResetRegistry()
 
 	basicStore := memory.NewInMemoryStore()
@@ -1103,6 +1116,7 @@ func TestApplyStateMapping_NilStateMapping(t *testing.T) {
 	}
 
 	children := parent.GetChildren()
+
 	child, exists := children["child-1"]
 	if !exists {
 		t.Fatal("Expected child-1 to exist")

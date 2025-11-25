@@ -20,7 +20,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/example-child/snapshot"
 )
 
-// TryingToConnectState represents the state where the worker is attempting to establish a connection
+// TryingToConnectState represents the state where the worker is attempting to establish a connection.
 type TryingToConnectState struct {
 	BaseChildState
 }

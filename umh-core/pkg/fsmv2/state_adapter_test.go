@@ -19,7 +19,7 @@ import (
 	"time"
 )
 
-// Test types for the state adapter tests
+// Test types for the state adapter tests.
 type testObserved struct {
 	Value     string
 	Timestamp time.Time
@@ -87,15 +87,19 @@ func TestConvertSnapshot_SuccessfulConversion(t *testing.T) {
 	if typedSnap.Identity.ID != identity.ID {
 		t.Errorf("Expected Identity.ID %s, got %s", identity.ID, typedSnap.Identity.ID)
 	}
+
 	if typedSnap.Identity.Name != identity.Name {
 		t.Errorf("Expected Identity.Name %s, got %s", identity.Name, typedSnap.Identity.Name)
 	}
+
 	if typedSnap.Identity.WorkerType != identity.WorkerType {
 		t.Errorf("Expected Identity.WorkerType %s, got %s", identity.WorkerType, typedSnap.Identity.WorkerType)
 	}
+
 	if typedSnap.Observed.Value != observed.Value {
 		t.Errorf("Expected Observed.Value %s, got %s", observed.Value, typedSnap.Observed.Value)
 	}
+
 	if !typedSnap.Desired.IsShutdownRequested() {
 		t.Error("Expected Desired.IsShutdownRequested() to be true")
 	}
@@ -155,6 +159,7 @@ func TestConvertSnapshot_PointerTypeDesired(t *testing.T) {
 	if typedSnap.Desired == nil {
 		t.Error("Expected Desired to not be nil")
 	}
+
 	if !typedSnap.Desired.IsShutdownRequested() {
 		t.Error("Expected Desired.IsShutdownRequested() to be true")
 	}
@@ -181,13 +186,17 @@ func TestConvertSnapshot_PanicOnWrongObservedType(t *testing.T) {
 		r := recover()
 		if r == nil {
 			t.Error("Expected panic for wrong observed type")
+
 			return
 		}
+
 		panicMsg, ok := r.(string)
 		if !ok {
 			t.Errorf("Expected panic message to be string, got %T", r)
+
 			return
 		}
+
 		if panicMsg == "" {
 			t.Error("Expected non-empty panic message")
 		}
@@ -221,13 +230,17 @@ func TestConvertSnapshot_PanicOnWrongDesiredType(t *testing.T) {
 		r := recover()
 		if r == nil {
 			t.Error("Expected panic for wrong desired type")
+
 			return
 		}
+
 		panicMsg, ok := r.(string)
 		if !ok {
 			t.Errorf("Expected panic message to be string, got %T", r)
+
 			return
 		}
+
 		if panicMsg == "" {
 			t.Error("Expected non-empty panic message")
 		}
@@ -249,13 +262,17 @@ func TestConvertSnapshot_PanicOnNonSnapshotInput(t *testing.T) {
 		r := recover()
 		if r == nil {
 			t.Error("Expected panic for non-Snapshot input")
+
 			return
 		}
+
 		panicMsg, ok := r.(string)
 		if !ok {
 			t.Errorf("Expected panic message to be string, got %T", r)
+
 			return
 		}
+
 		if !containsSubstring(panicMsg, "Snapshot") {
 			t.Errorf("Expected panic message to mention 'Snapshot', got: %s", panicMsg)
 		}
@@ -284,13 +301,17 @@ func TestConvertSnapshot_NilObserved(t *testing.T) {
 		r := recover()
 		if r == nil {
 			t.Error("Expected panic for nil observed")
+
 			return
 		}
+
 		panicMsg, ok := r.(string)
 		if !ok {
 			t.Errorf("Expected panic message to be string, got %T", r)
+
 			return
 		}
+
 		if !containsSubstring(panicMsg, "Observed") {
 			t.Errorf("Expected panic message to mention 'Observed', got: %s", panicMsg)
 		}
@@ -319,13 +340,17 @@ func TestConvertSnapshot_NilDesired(t *testing.T) {
 		r := recover()
 		if r == nil {
 			t.Error("Expected panic for nil desired")
+
 			return
 		}
+
 		panicMsg, ok := r.(string)
 		if !ok {
 			t.Errorf("Expected panic message to be string, got %T", r)
+
 			return
 		}
+
 		if !containsSubstring(panicMsg, "Desired") {
 			t.Errorf("Expected panic message to mention 'Desired', got: %s", panicMsg)
 		}
@@ -357,15 +382,17 @@ func TestTypedSnapshot_DirectFieldAccess(t *testing.T) {
 	if typedSnap.Identity.ID != "test-id" {
 		t.Errorf("Expected Identity.ID 'test-id', got %s", typedSnap.Identity.ID)
 	}
+
 	if typedSnap.Observed.Value != "direct-access-test" {
 		t.Errorf("Expected Observed.Value 'direct-access-test', got %s", typedSnap.Observed.Value)
 	}
+
 	if !typedSnap.Desired.IsShutdownRequested() {
 		t.Error("Expected Desired.IsShutdownRequested() to be true")
 	}
 }
 
-// containsSubstring is a helper function to check if a string contains a substring
+// containsSubstring is a helper function to check if a string contains a substring.
 func containsSubstring(s, substr string) bool {
 	return len(s) >= len(substr) && (s == substr || len(s) > 0 && containsSubstringHelper(s, substr))
 }
@@ -376,5 +403,6 @@ func containsSubstringHelper(s, substr string) bool {
 			return true
 		}
 	}
+
 	return false
 }

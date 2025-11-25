@@ -31,7 +31,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 )
 
-// syncBuffer is a thread-safe wrapper around bytes.Buffer for concurrent log writing
+// syncBuffer is a thread-safe wrapper around bytes.Buffer for concurrent log writing.
 type syncBuffer struct {
 	buf bytes.Buffer
 	mu  sync.Mutex
@@ -40,12 +40,14 @@ type syncBuffer struct {
 func (s *syncBuffer) Write(p []byte) (n int, err error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
 	return s.buf.Write(p)
 }
 
 func (s *syncBuffer) String() string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
 	return s.buf.String()
 }
 
@@ -156,6 +158,7 @@ var _ = Describe("Lifecycle Logging", func() {
 				return entry
 			}
 		}
+
 		return nil
 	}
 

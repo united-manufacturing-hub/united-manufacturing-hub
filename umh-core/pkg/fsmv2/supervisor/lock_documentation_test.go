@@ -66,10 +66,12 @@ var _ = Describe("Lock Documentation", func() {
 					if typeSpec.Name.Name == "Supervisor" {
 						if structType, ok := typeSpec.Type.(*ast.StructType); ok {
 							supervisorStruct = structType
+
 							return false // Stop searching
 						}
 					}
 				}
+
 				return true
 			})
 
@@ -85,6 +87,7 @@ var _ = Describe("Lock Documentation", func() {
 						if field.Doc != nil {
 							muFieldDoc = field.Doc.Text()
 						}
+
 						break
 					}
 				}
@@ -119,6 +122,7 @@ var _ = Describe("Lock Documentation", func() {
 								for _, name := range field.Names {
 									if name.Name == "mu" && field.Doc != nil {
 										muFieldDoc = field.Doc.Text()
+
 										return false
 									}
 								}
@@ -126,6 +130,7 @@ var _ = Describe("Lock Documentation", func() {
 						}
 					}
 				}
+
 				return true
 			})
 
@@ -146,6 +151,7 @@ var _ = Describe("Lock Documentation", func() {
 								for _, name := range field.Names {
 									if name.Name == "ctxMu" && field.Doc != nil {
 										ctxMuFieldDoc = field.Doc.Text()
+
 										return false
 									}
 								}
@@ -153,6 +159,7 @@ var _ = Describe("Lock Documentation", func() {
 						}
 					}
 				}
+
 				return true
 			})
 
@@ -172,6 +179,7 @@ var _ = Describe("Lock Documentation", func() {
 								for _, name := range field.Names {
 									if name.Name == "ctxMu" && field.Doc != nil {
 										ctxMuFieldDoc = field.Doc.Text()
+
 										return false
 									}
 								}
@@ -179,6 +187,7 @@ var _ = Describe("Lock Documentation", func() {
 						}
 					}
 				}
+
 				return true
 			})
 
@@ -199,6 +208,7 @@ var _ = Describe("Lock Documentation", func() {
 								for _, name := range field.Names {
 									if name.Name == "mu" && field.Doc != nil {
 										workerCtxFieldDoc = field.Doc.Text()
+
 										return false
 									}
 								}
@@ -206,6 +216,7 @@ var _ = Describe("Lock Documentation", func() {
 						}
 					}
 				}
+
 				return true
 			})
 
@@ -225,6 +236,7 @@ var _ = Describe("Lock Documentation", func() {
 								for _, name := range field.Names {
 									if name.Name == "mu" && field.Doc != nil {
 										workerCtxFieldDoc = field.Doc.Text()
+
 										return false
 									}
 								}
@@ -232,6 +244,7 @@ var _ = Describe("Lock Documentation", func() {
 						}
 					}
 				}
+
 				return true
 			})
 
@@ -251,6 +264,7 @@ var _ = Describe("Lock Documentation", func() {
 					strings.Contains(commentText, "Lock Order") ||
 					strings.Contains(commentText, "Lock Acquisition Order") {
 					lockOrderDoc = commentText
+
 					break
 				}
 			}
@@ -267,6 +281,7 @@ var _ = Describe("Lock Documentation", func() {
 				if strings.Contains(commentText, "LOCK ORDER") ||
 					strings.Contains(commentText, "Lock Order") {
 					lockOrderDoc = commentText
+
 					break
 				}
 			}
@@ -295,6 +310,7 @@ var _ = Describe("Lock Documentation", func() {
 				if strings.Contains(commentText, "LOCK ORDER") ||
 					strings.Contains(commentText, "Lock Order") {
 					lockOrderDoc = commentText
+
 					break
 				}
 			}
@@ -316,6 +332,7 @@ var _ = Describe("Lock Documentation", func() {
 				if strings.Contains(commentText, "LOCK ORDER") ||
 					strings.Contains(commentText, "Lock Order") {
 					lockOrderDoc = commentText
+
 					break
 				}
 			}
@@ -340,9 +357,11 @@ var _ = Describe("Lock Documentation", func() {
 					if strings.Contains(funcName, "LockOrder") ||
 						strings.Contains(funcName, "lockOrder") {
 						hasLockOrderAssertion = true
+
 						return false
 					}
 				}
+
 				return true
 			})
 
@@ -440,6 +459,7 @@ var _ = Describe("Lock Analysis Report", func() {
 					}
 				}
 			}
+
 			return true
 		})
 
@@ -452,7 +472,7 @@ var _ = Describe("Lock Analysis Report", func() {
 		GinkgoWriter.Printf("============================\n\n")
 
 		// This is an informational test - always passes
-		Expect(len(locks)).To(BeNumerically(">", 0), "Should find at least one lock")
+		Expect(locks).ToNot(BeEmpty(), "Should find at least one lock")
 	})
 })
 

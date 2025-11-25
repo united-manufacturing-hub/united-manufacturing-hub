@@ -35,6 +35,7 @@ func (a *DisconnectAction) Execute(ctx context.Context, depsAny any) error {
 	deps := depsAny.(snapshot.ChildDependencies)
 	logger := deps.GetLogger()
 	logger.Info("Disconnecting")
+
 	return nil
 }
 

@@ -108,9 +108,11 @@ func (ae *ActionExecutor) worker() {
 			duration := time.Since(startTime)
 
 			status := "success"
+
 			if err != nil {
 				if errors.Is(err, context.DeadlineExceeded) {
 					metrics.RecordActionTimeout(ae.supervisorID, work.action.Name())
+
 					status = "timeout"
 				} else {
 					status = "error"

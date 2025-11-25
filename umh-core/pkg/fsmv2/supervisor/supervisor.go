@@ -54,23 +54,23 @@
 // To prevent deadlocks, locks must be acquired in this order:
 //
 // 1. MANDATORY: Supervisor.mu → WorkerContext.mu
-//    - Always acquire Supervisor.mu first to lookup worker
-//    - Then acquire WorkerContext.mu to modify state
-//    - Violation risk: HIGH (immediate deadlock)
+//   - Always acquire Supervisor.mu first to lookup worker
+//   - Then acquire WorkerContext.mu to modify state
+//   - Violation risk: HIGH (immediate deadlock)
 //
 // 2. ADVISORY: Supervisor.mu → Supervisor.ctxMu
-//    - If both needed, acquire mu first
-//    - However, ctxMu is independent and can be acquired alone
-//    - Violation risk: LOW (rarely needed together)
+//   - If both needed, acquire mu first
+//   - However, ctxMu is independent and can be acquired alone
+//   - Violation risk: LOW (rarely needed together)
 //
 // 3. CRITICAL: Never hold Supervisor.mu while calling child/worker methods
-//    - Extract data under lock, release, then call methods
-//    - Prevents circular dependencies in hierarchy
-//    - Current code already follows this (lines 1783-1791, 1420-1436)
+//   - Extract data under lock, release, then call methods
+//   - Prevents circular dependencies in hierarchy
+//   - Current code already follows this (lines 1783-1791, 1420-1436)
 //
 // 4. WorkerContext.mu locks are independent
-//    - No ordering between different workers' locks
-//    - Enables true parallel worker processing
+//   - No ordering between different workers' locks
+//   - Enables true parallel worker processing
 package supervisor
 
 import (
@@ -86,13 +86,13 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/collection"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/execution"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/health"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/metrics"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/lockmanager"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 )
 
@@ -141,14 +141,14 @@ import (
 //
 // =============================================================================
 
-// Lock names for tracking
+// Lock names for tracking.
 const (
 	lockNameSupervisorMu    = "Supervisor.mu"
 	lockNameSupervisorCtxMu = "Supervisor.ctxMu"
 	lockNameWorkerContextMu = "WorkerContext.mu"
 )
 
-// Lock levels for ordering (lower number = must be acquired first)
+// Lock levels for ordering (lower number = must be acquired first).
 const (
 	lockLevelSupervisorMu    = 1
 	lockLevelSupervisorCtxMu = 2 // Can be acquired alone OR after Supervisor.mu
@@ -202,13 +202,12 @@ func (s *stubAction) Name() string {
 // run in the same process and can share in-memory state. For distributed deployments,
 // the persistence layer would need to be replaced with a distributed storage backend.
 
-// factoryRegistryAdapter implements types.WorkerTypeChecker interface for validation
+// factoryRegistryAdapter implements types.WorkerTypeChecker interface for validation.
 type factoryRegistryAdapter struct{}
 
 func (f *factoryRegistryAdapter) ListRegisteredTypes() []string {
 	return factory.ListRegisteredTypes()
 }
-
 
 // SupervisorInterface provides a type-erased interface for hierarchical supervisor composition.
 // This allows a parent Supervisor[TObserved, TDesired] to manage children of different types.
@@ -231,7 +230,7 @@ type SupervisorInterface interface {
 }
 
 type Supervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] struct {
-	workerType string                                          // Type of workers managed (e.g., "container") - for storage collection naming
+	workerType string                                         // Type of workers managed (e.g., "container") - for storage collection naming
 	workers    map[string]*WorkerContext[TObserved, TDesired] // workerID → worker context
 	// mu Protects access to workers map, children, childDoneChans, stateMapping, globalVars, and mappedParentState.
 	//
@@ -241,28 +240,28 @@ type Supervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] stru
 	//
 	// Lock Order: Must be acquired BEFORE WorkerContext.mu when both are needed.
 	// See package-level LOCK ORDER section for details.
-	mu          *lockmanager.Lock
-	lockManager *lockmanager.LockManager
-	store                 storage.TriangularStoreInterface // State persistence layer (triangular model)
-	logger                *zap.SugaredLogger               // Logger for supervisor operations
-	tickInterval          time.Duration                    // How often to evaluate state transitions
-	collectorHealth       CollectorHealth                  // Collector health tracking
-	freshnessChecker      *health.FreshnessChecker         // Data freshness validator
-	children              map[string]SupervisorInterface   // Child supervisors by name (hierarchical composition)
-	childDoneChans        map[string]<-chan struct{}       // Done channels for child supervisors
-	stateMapping          map[string]string                // Parent→child state mapping
-	userSpec              config.UserSpec                   // User-provided configuration for this supervisor
-	mappedParentState     string                           // State mapped from parent (if this is a child supervisor)
-	globalVars            map[string]any                   // Global variables (fleet-wide settings from management system)
-	createdAt             time.Time                        // Timestamp when supervisor was created
-	parentID              string                           // ID of parent supervisor (empty string for root supervisors)
-	parent                SupervisorInterface              // Pointer to parent supervisor (nil for root supervisors)
-	healthChecker         *InfrastructureHealthChecker     // Infrastructure health monitoring
-	circuitOpen           atomic.Bool                      // Circuit breaker state (atomic for concurrent access)
-	actionExecutor        *execution.ActionExecutor        // Async action execution (Phase 2)
-	metricsWg             sync.WaitGroup                   // WaitGroup for metrics reporter goroutine
-	ctx                 context.Context    // Context for supervisor lifecycle
-	ctxCancel           context.CancelFunc // Cancel function for supervisor context
+	mu                *lockmanager.Lock
+	lockManager       *lockmanager.LockManager
+	store             storage.TriangularStoreInterface // State persistence layer (triangular model)
+	logger            *zap.SugaredLogger               // Logger for supervisor operations
+	tickInterval      time.Duration                    // How often to evaluate state transitions
+	collectorHealth   CollectorHealth                  // Collector health tracking
+	freshnessChecker  *health.FreshnessChecker         // Data freshness validator
+	children          map[string]SupervisorInterface   // Child supervisors by name (hierarchical composition)
+	childDoneChans    map[string]<-chan struct{}       // Done channels for child supervisors
+	stateMapping      map[string]string                // Parent→child state mapping
+	userSpec          config.UserSpec                  // User-provided configuration for this supervisor
+	mappedParentState string                           // State mapped from parent (if this is a child supervisor)
+	globalVars        map[string]any                   // Global variables (fleet-wide settings from management system)
+	createdAt         time.Time                        // Timestamp when supervisor was created
+	parentID          string                           // ID of parent supervisor (empty string for root supervisors)
+	parent            SupervisorInterface              // Pointer to parent supervisor (nil for root supervisors)
+	healthChecker     *InfrastructureHealthChecker     // Infrastructure health monitoring
+	circuitOpen       atomic.Bool                      // Circuit breaker state (atomic for concurrent access)
+	actionExecutor    *execution.ActionExecutor        // Async action execution (Phase 2)
+	metricsWg         sync.WaitGroup                   // WaitGroup for metrics reporter goroutine
+	ctx               context.Context                  // Context for supervisor lifecycle
+	ctxCancel         context.CancelFunc               // Cancel function for supervisor context
 	// ctxMu Protects ctx and ctxCancel to prevent TOCTOU races during shutdown.
 	//
 	// Without this lock, a goroutine could check ctx.Err() (finding it non-cancelled),
@@ -272,7 +271,7 @@ type Supervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] stru
 	// This lock is independent from Supervisor.mu and can be acquired separately.
 	// It can be acquired alone when checking context status, or after Supervisor.mu
 	// if both are needed (advisory order).
-	ctxMu *lockmanager.Lock
+	ctxMu   *lockmanager.Lock
 	started atomic.Bool // Whether supervisor has been started
 }
 
@@ -294,7 +293,7 @@ type WorkerContext[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] s
 	//
 	// Lock Order: This lock must be acquired AFTER Supervisor.mu when both are needed.
 	// See package-level LOCK ORDER section for details.
-	mu *lockmanager.Lock
+	mu             *lockmanager.Lock
 	tickInProgress atomic.Bool
 	identity       fsmv2.Identity
 	worker         fsmv2.Worker
@@ -354,6 +353,11 @@ type Config struct {
 	// CollectorHealth configures observation collector monitoring.
 	// Optional - all fields default to values in constants.go.
 	CollectorHealth CollectorHealthConfig
+
+	// UserSpec provides initial user configuration for the supervisor.
+	// This is optional for supervisors created by parents (they receive config via updateUserSpec).
+	// For root supervisors (like application supervisors), this provides the initial configuration.
+	UserSpec config.UserSpec
 }
 
 func NewSupervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState](cfg Config) *Supervisor[TObserved, TDesired] {
@@ -435,23 +439,23 @@ func NewSupervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState](c
 	lm := lockmanager.NewLockManager()
 
 	return &Supervisor[TObserved, TDesired]{
-		workerType:            cfg.WorkerType,
-		workers:               make(map[string]*WorkerContext[TObserved, TDesired]),
-		lockManager:           lm,
-		mu:                    lm.NewLock(lockNameSupervisorMu, lockLevelSupervisorMu),
-		ctxMu:                 lm.NewLock(lockNameSupervisorCtxMu, lockLevelSupervisorCtxMu),
-		store:                 cfg.Store,
-		logger:                cfg.Logger,
-		tickInterval:          tickInterval,
-		freshnessChecker:      freshnessChecker,
-		children:              make(map[string]SupervisorInterface),
-		childDoneChans:        make(map[string]<-chan struct{}),
-		stateMapping:          make(map[string]string),
-		createdAt:             time.Now(),
-		parentID:              "", // Root supervisor has empty parentID
-		healthChecker:         NewInfrastructureHealthChecker(DefaultMaxInfraRecoveryAttempts, DefaultRecoveryAttemptWindow),
+		workerType:       cfg.WorkerType,
+		workers:          make(map[string]*WorkerContext[TObserved, TDesired]),
+		lockManager:      lm,
+		mu:               lm.NewLock(lockNameSupervisorMu, lockLevelSupervisorMu),
+		ctxMu:            lm.NewLock(lockNameSupervisorCtxMu, lockLevelSupervisorCtxMu),
+		store:            cfg.Store,
+		logger:           cfg.Logger,
+		tickInterval:     tickInterval,
+		freshnessChecker: freshnessChecker,
+		children:         make(map[string]SupervisorInterface),
+		childDoneChans:   make(map[string]<-chan struct{}),
+		stateMapping:     make(map[string]string),
+		createdAt:        time.Now(),
+		parentID:         "", // Root supervisor has empty parentID
+		healthChecker:    NewInfrastructureHealthChecker(DefaultMaxInfraRecoveryAttempts, DefaultRecoveryAttemptWindow),
 		// circuitOpen is atomic.Bool, zero-initialized to false
-		actionExecutor:        execution.NewActionExecutor(10, cfg.WorkerType),
+		actionExecutor: execution.NewActionExecutor(10, cfg.WorkerType),
 		collectorHealth: CollectorHealth{
 			observationTimeout: observationTimeout,
 			staleThreshold:     staleThreshold,
@@ -459,6 +463,7 @@ func NewSupervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState](c
 			maxRestartAttempts: maxRestartAttempts,
 			restartCount:       0,
 		},
+		userSpec: cfg.UserSpec,
 	}
 }
 
@@ -864,10 +869,12 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 		"worker_id", workerID)
 
 	workerCtx.mu.RLock()
+
 	currentStateStr := "nil"
 	if workerCtx.currentState != nil {
 		currentStateStr = workerCtx.currentState.String()
 	}
+
 	s.logger.Debugf("Ticking worker: %s, current state: %s", workerID, currentStateStr)
 	workerCtx.mu.RUnlock()
 
@@ -888,17 +895,21 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 
 	// Load typed observed state
 	var observed TObserved
+
 	err = s.store.LoadObservedTyped(ctx, s.workerType, workerID, &observed)
 	if err != nil {
 		s.logger.Debugf("[DataFreshness] Worker %s: Failed to load typed observed state: %v", workerID, err)
+
 		return fmt.Errorf("failed to load typed observed state: %w", err)
 	}
 
 	// Load typed desired state
 	var desired TDesired
+
 	err = s.store.LoadDesiredTyped(ctx, s.workerType, workerID, &desired)
 	if err != nil {
 		s.logger.Debugf("[DataFreshness] Worker %s: Failed to load typed desired state: %v", workerID, err)
+
 		return fmt.Errorf("failed to load typed desired state: %w", err)
 	}
 
@@ -971,6 +982,7 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 	// Skip state transitions if worker has no FSM state machine
 	if currentState == nil {
 		s.logger.Debugf("Worker %s has no state machine, skipping state transition", workerID)
+
 		return nil
 	}
 
@@ -1118,10 +1130,12 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 	// PHASE 1: Infrastructure health check (priority 1)
 	// Copy children map under lock to avoid race with reconcileChildren
 	s.mu.RLock()
+
 	childrenCopy := make(map[string]SupervisorInterface, len(s.children))
 	for k, v := range s.children {
 		childrenCopy[k] = v
 	}
+
 	s.mu.RUnlock()
 
 	if err := s.healthChecker.CheckChildConsistency(childrenCopy); err != nil {
@@ -1374,7 +1388,6 @@ func (s *Supervisor[TObserved, TDesired]) tickAll(ctx context.Context) error {
 	return nil
 }
 
-
 // processSignal handles signals from states.
 func (s *Supervisor[TObserved, TDesired]) processSignal(ctx context.Context, workerID string, signal fsmv2.Signal) error {
 	s.logger.Debugw("lifecycle",
@@ -1400,6 +1413,7 @@ func (s *Supervisor[TObserved, TDesired]) processSignal(ctx context.Context, wor
 
 		// Diagnostic logging: show children before removal
 		childCount := len(s.children)
+
 		childrenToCleanup := make(map[string]SupervisorInterface)
 		if childCount > 0 {
 			childNames := make([]string, 0, childCount)
@@ -1407,6 +1421,7 @@ func (s *Supervisor[TObserved, TDesired]) processSignal(ctx context.Context, wor
 				childNames = append(childNames, name)
 				childrenToCleanup[name] = child // Capture children for cleanup outside lock
 			}
+
 			s.logger.Warnf("Worker %s being removed still has %d children: %v - will clean up",
 				workerID, childCount, childNames)
 		}
@@ -1426,12 +1441,15 @@ func (s *Supervisor[TObserved, TDesired]) processSignal(ctx context.Context, wor
 		//
 		// Implementation: Extract done channels first (under lock), then wait outside lock
 		doneChannels := make(map[string]<-chan struct{})
+
 		s.mu.Lock()
+
 		for name := range childrenToCleanup {
 			if done, exists := s.childDoneChans[name]; exists {
 				doneChannels[name] = done
 			}
 		}
+
 		s.mu.Unlock()
 
 		// Now shutdown children and wait for completion without holding parent lock
@@ -1606,6 +1624,7 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 
 			child.updateUserSpec(spec.UserSpec)
 			child.setStateMapping(spec.StateMapping)
+
 			updatedCount++
 		} else {
 			s.logger.Debugw("lifecycle",
@@ -1615,6 +1634,7 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 				"parent_worker_type", s.workerType)
 
 			s.logger.Infof("Adding child %s with worker type %s", spec.Name, spec.WorkerType)
+
 			addedCount++
 
 			childConfig := Config{
@@ -1627,13 +1647,17 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 			rawSupervisor, err := factory.NewSupervisorByType(spec.WorkerType, childConfig)
 			if err != nil {
 				s.logger.Errorf("Failed to create child supervisor for %s: %v", spec.Name, err)
+
 				continue
 			}
+
 			childSupervisor, ok := rawSupervisor.(SupervisorInterface)
 			if !ok {
 				s.logger.Errorf("Factory returned invalid supervisor type for %s", spec.Name)
+
 				continue
 			}
+
 			childSupervisor.updateUserSpec(spec.UserSpec)
 			childSupervisor.setStateMapping(spec.StateMapping)
 			childSupervisor.setParent(s, s.workerType)
@@ -1649,24 +1673,28 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 			childWorker, err := factory.NewWorkerByType(spec.WorkerType, childIdentity)
 			if err != nil {
 				s.logger.Errorf("Failed to create worker for child %s: %v (skipping)", spec.Name, err)
+
 				continue
 			}
 
 			// Add worker to child supervisor
 			if err := childSupervisor.AddWorker(childIdentity, childWorker); err != nil {
 				s.logger.Errorf("Failed to add worker to child supervisor %s: %v (skipping)", spec.Name, err)
+
 				continue
 			}
 
 			// Save initial desired state for child (empty document to avoid nil on first tick)
 			childDesiredCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+
 			desiredDoc := persistence.Document{
-				"id":                 childIdentity.ID,
+				"id":                childIdentity.ID,
 				"shutdownRequested": false,
 			}
 			if err := s.store.SaveDesired(childDesiredCtx, spec.WorkerType, childIdentity.ID, desiredDoc); err != nil {
 				s.logger.Warnf("Failed to save initial desired state for child %s: %v", spec.Name, err)
 			}
+
 			cancel()
 
 			s.children[spec.Name] = childSupervisor
@@ -1769,18 +1797,22 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 			"reason", "already_shutdown")
 
 		s.logger.Debugf("Supervisor already shut down for worker type: %s", s.workerType)
+
 		return
 	}
+
 	s.started.Store(false)
 
 	s.logger.Infof("Shutting down supervisor for worker type: %s", s.workerType)
 
 	// Cancel the supervisor's context to stop tick loop and all child goroutines
 	s.ctxMu.Lock()
+
 	if s.ctxCancel != nil {
 		s.ctxCancel()
 		s.ctxCancel = nil // Prevent double-cancel
 	}
+
 	s.ctxMu.Unlock()
 
 	// Shutdown action executor (doesn't block)
@@ -1800,10 +1832,12 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 	// By releasing parent lock before calling child.Shutdown(), we allow
 	// child Tick() goroutines to complete and exit cleanly.
 	childrenToShutdown := make(map[string]SupervisorInterface, len(s.children))
+
 	childDoneChans := make(map[string]<-chan struct{}, len(s.childDoneChans))
 	for name, child := range s.children {
 		childrenToShutdown[name] = child
 	}
+
 	for name, done := range s.childDoneChans {
 		childDoneChans[name] = done
 	}
@@ -1940,6 +1974,7 @@ func (s *Supervisor[TObserved, TDesired]) calculateHierarchySize() int {
 // The goroutine stops when the context is cancelled.
 func (s *Supervisor[TObserved, TDesired]) startMetricsReporter(ctx context.Context) {
 	s.metricsWg.Add(1)
+
 	go func() {
 		defer s.metricsWg.Done()
 
@@ -1981,6 +2016,7 @@ func (s *Supervisor[TObserved, TDesired]) isStarted() bool {
 func (s *Supervisor[TObserved, TDesired]) getContext() context.Context {
 	s.ctxMu.RLock()
 	defer s.ctxMu.RUnlock()
+
 	return s.ctx
 }
 
@@ -1993,6 +2029,7 @@ func (s *Supervisor[TObserved, TDesired]) getStartedContext() (context.Context, 
 	if !s.started.Load() {
 		return nil, false
 	}
+
 	return s.ctx, true
 }
 
@@ -2006,12 +2043,14 @@ func (s *Supervisor[TObserved, TDesired]) GetWorkers() []fsmv2.Identity {
 		if worker == nil {
 			continue
 		}
+
 		workers = append(workers, fsmv2.Identity{
 			ID:         id,
 			Name:       worker.identity.Name,
 			WorkerType: s.workerType,
 		})
 	}
+
 	return workers
 }
 
@@ -2093,6 +2132,7 @@ func (s *Supervisor[TObserved, TDesired]) getStateMapping() map[string]string {
 	for k, v := range s.stateMapping {
 		mapping[k] = v
 	}
+
 	return mapping
 }
 

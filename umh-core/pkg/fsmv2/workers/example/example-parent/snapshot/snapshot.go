@@ -44,7 +44,7 @@ func (s *ParentDesiredState) ShouldBeRunning() bool {
 	return !s.ShutdownRequested
 }
 
-// ParentObservedState represents the current state of the parent worker
+// ParentObservedState represents the current state of the parent worker.
 type ParentObservedState struct {
 	ID          string    `json:"id"`
 	CollectedAt time.Time `json:"collected_at"`

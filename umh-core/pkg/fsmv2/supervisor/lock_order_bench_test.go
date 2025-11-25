@@ -27,6 +27,7 @@ func BenchmarkLockAcquisitionWithoutChecks(b *testing.B) {
 	lock := lm.NewLock("BenchLock", 1)
 
 	b.ResetTimer()
+
 	for range b.N {
 		lock.Lock()
 		lock.Unlock()
@@ -54,6 +55,7 @@ func BenchmarkWorkerContextLockWithoutChecks(b *testing.B) {
 	lock := lm.NewLock("WorkerLock", 1)
 
 	b.ResetTimer()
+
 	for range b.N {
 		lock.Lock()
 		lock.Unlock()
@@ -66,6 +68,7 @@ func BenchmarkReadLockWithoutChecks(b *testing.B) {
 	lock := lm.NewLock("ReadLock", 1)
 
 	b.ResetTimer()
+
 	for range b.N {
 		lock.RLock()
 		lock.RUnlock()
@@ -80,6 +83,7 @@ func BenchmarkHierarchicalLockWithoutChecks(b *testing.B) {
 	workerLock := lm.NewLock("WorkerLock", 2)
 
 	b.ResetTimer()
+
 	for range b.N {
 		supervisorLock.Lock()
 		workerLock.Lock()

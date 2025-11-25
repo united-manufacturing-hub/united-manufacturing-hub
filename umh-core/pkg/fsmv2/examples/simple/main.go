@@ -42,6 +42,7 @@ func main() {
 		sugar.Errorf("Failed to create logger: %v", err)
 		os.Exit(1)
 	}
+
 	sugar := logger.Sugar()
 	defer logger.Sync()
 
@@ -49,6 +50,7 @@ func main() {
 	sugar.Info("")
 
 	sugar.Info("Step 1: Creating storage...")
+
 	basicStore := memory.NewInMemoryStore()
 
 	// NOTE: InMemoryStore automatically creates collections on first write.
@@ -56,6 +58,7 @@ func main() {
 	// automatically when workers insert their identity, desired, and observed state documents.
 
 	store := storage.NewTriangularStore(basicStore)
+
 	sugar.Info("Storage created successfully")
 	sugar.Info("")
 
@@ -70,6 +73,7 @@ children:
 
 	sugar.Info("Step 2: Creating application supervisor...")
 	sugar.Info("This supervisor will manage a parent worker with 2 child workers")
+
 	sup, err := application.NewApplicationSupervisor(application.SupervisorConfig{
 		ID:           "app-001",
 		Name:         "Simple Application",
@@ -82,10 +86,12 @@ children:
 		sugar.Errorf("Failed to create application supervisor: %v", err)
 		os.Exit(1)
 	}
+
 	sugar.Info("Application supervisor created successfully")
 	sugar.Info("")
 
 	sugar.Info("Step 3: Starting the application worker...")
+
 	runCtx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -127,10 +133,12 @@ children:
 			sugar.Info("  - Check the FSM v2 documentation: pkg/fsmv2/README.md")
 			sugar.Info("  - Explore example workers: pkg/fsmv2/workers/example/")
 			sugar.Info("  - Build your own worker based on the patterns shown")
+
 			return
 
 		case <-done:
 			sugar.Warn("Application stopped unexpectedly")
+
 			return
 		}
 	}

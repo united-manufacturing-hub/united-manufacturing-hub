@@ -56,6 +56,7 @@ var _ = Describe("DeriveDesiredState saves to store", func() {
 				store.desired[wt] = make(map[string]persistence.Document)
 			}
 			store.desired[wt][id] = desired
+
 			return nil
 		}
 
@@ -113,6 +114,7 @@ var _ = Describe("DeriveDesiredState saves to store", func() {
 				store.desired[wt] = make(map[string]persistence.Document)
 			}
 			store.desired[wt][id] = desired
+
 			return nil
 		}
 
@@ -131,6 +133,7 @@ var _ = Describe("DeriveDesiredState saves to store", func() {
 				"id":          id,
 				"collectedAt": time.Now(),
 			}
+
 			return &storage.Snapshot{
 				Identity: identity,
 				Desired:  desired,
@@ -201,6 +204,7 @@ var _ = Describe("DeriveDesiredState saves to store", func() {
 				store.desired[wt] = make(map[string]persistence.Document)
 			}
 			store.desired[wt][id] = desired
+
 			return nil
 		}
 
@@ -219,6 +223,7 @@ var _ = Describe("DeriveDesiredState saves to store", func() {
 				"id":          id,
 				"collectedAt": time.Now(),
 			}
+
 			return &storage.Snapshot{
 				Identity: identity,
 				Desired:  desired,
@@ -261,7 +266,7 @@ var _ = Describe("DeriveDesiredState saves to store", func() {
 	})
 })
 
-// trackingWorker is a mock worker that tracks DeriveDesiredState calls
+// trackingWorker is a mock worker that tracks DeriveDesiredState calls.
 type trackingWorker struct {
 	deriveFunc func(spec interface{}) (config.DesiredState, error)
 }
@@ -278,6 +283,7 @@ func (w *trackingWorker) DeriveDesiredState(spec interface{}) (config.DesiredSta
 	if w.deriveFunc != nil {
 		return w.deriveFunc(spec)
 	}
+
 	return config.DesiredState{State: "running"}, nil
 }
 

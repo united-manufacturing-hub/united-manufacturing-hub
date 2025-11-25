@@ -24,8 +24,8 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence/memory"
 )
@@ -115,9 +115,9 @@ var _ = Describe("ChildSpec Validation Integration", func() {
 
 			// Initialize desired state (required by Tick - AddWorker doesn't do this)
 			desiredDoc := persistence.Document{
-				"id":             mockWorker.identity.ID,
-				"state":          "running",
-				"childrenSpecs":  mockWorker.childSpecs,
+				"id":            mockWorker.identity.ID,
+				"state":         "running",
+				"childrenSpecs": mockWorker.childSpecs,
 			}
 			err = triangularStore.SaveDesired(ctx, "test_supervisor", mockWorker.identity.ID, desiredDoc)
 			Expect(err).NotTo(HaveOccurred())
@@ -169,9 +169,9 @@ var _ = Describe("ChildSpec Validation Integration", func() {
 
 			// Initialize desired state (required by Tick - AddWorker doesn't do this)
 			desiredDoc := persistence.Document{
-				"id":             mockWorker.identity.ID,
-				"state":          "running",
-				"childrenSpecs":  mockWorker.childSpecs,
+				"id":            mockWorker.identity.ID,
+				"state":         "running",
+				"childrenSpecs": mockWorker.childSpecs,
 			}
 			err = triangularStore.SaveDesired(ctx, "test_supervisor", mockWorker.identity.ID, desiredDoc)
 			Expect(err).NotTo(HaveOccurred())
@@ -222,9 +222,9 @@ var _ = Describe("ChildSpec Validation Integration", func() {
 
 			// Initialize desired state (required by Tick - AddWorker doesn't do this)
 			desiredDoc := persistence.Document{
-				"id":             mockWorker.identity.ID,
-				"state":          "running",
-				"childrenSpecs":  mockWorker.childSpecs,
+				"id":            mockWorker.identity.ID,
+				"state":         "running",
+				"childrenSpecs": mockWorker.childSpecs,
 			}
 			err = triangularStore.SaveDesired(ctx, "test_supervisor", mockWorker.identity.ID, desiredDoc)
 			Expect(err).NotTo(HaveOccurred())
@@ -600,7 +600,7 @@ var _ = Describe("ChildSpec Validation Integration", func() {
 	})
 })
 
-// validChildSpecMockWorker returns configurable ChildSpecs in DeriveDesiredState
+// validChildSpecMockWorker returns configurable ChildSpecs in DeriveDesiredState.
 type validChildSpecMockWorker struct {
 	identity     fsmv2.Identity
 	initialState fsmv2.State[any, any]
@@ -628,7 +628,7 @@ func (m *validChildSpecMockWorker) GetInitialState() fsmv2.State[any, any] {
 	return m.initialState
 }
 
-// trackedCallOrderMockWorker tracks which methods are called and in what order
+// trackedCallOrderMockWorker tracks which methods are called and in what order.
 type trackedCallOrderMockWorker struct {
 	identity     fsmv2.Identity
 	initialState fsmv2.State[any, any]
@@ -648,6 +648,7 @@ func (m *trackedCallOrderMockWorker) CollectObservedState(_ context.Context) (fs
 
 func (m *trackedCallOrderMockWorker) DeriveDesiredState(_ interface{}) (config.DesiredState, error) {
 	*m.callTracker = append(*m.callTracker, "derive")
+
 	return config.DesiredState{
 		State:         "running",
 		ChildrenSpecs: m.childSpecs,
@@ -657,4 +658,3 @@ func (m *trackedCallOrderMockWorker) DeriveDesiredState(_ interface{}) (config.D
 func (m *trackedCallOrderMockWorker) GetInitialState() fsmv2.State[any, any] {
 	return m.initialState
 }
-

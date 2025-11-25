@@ -21,12 +21,12 @@ import (
 	"go.uber.org/zap"
 )
 
-// MockConnectionPool is a mock implementation of ConnectionPool for testing
+// MockConnectionPool is a mock implementation of ConnectionPool for testing.
 type MockConnectionPool struct {
-	acquireErr    error
-	releaseErr    error
+	acquireErr     error
+	releaseErr     error
 	healthCheckErr error
-	connections   map[string]*MockConnection
+	connections    map[string]*MockConnection
 }
 
 type MockConnection struct {
@@ -44,8 +44,10 @@ func (m *MockConnectionPool) Acquire() (Connection, error) {
 	if m.acquireErr != nil {
 		return nil, m.acquireErr
 	}
+
 	conn := &MockConnection{ID: "test-conn-1", Active: true}
 	m.connections[conn.ID] = conn
+
 	return conn, nil
 }
 
@@ -53,12 +55,15 @@ func (m *MockConnectionPool) Release(conn Connection) error {
 	if m.releaseErr != nil {
 		return m.releaseErr
 	}
+
 	if mockConn, ok := conn.(*MockConnection); ok {
 		if c, exists := m.connections[mockConn.ID]; exists {
 			c.Active = false
+
 			delete(m.connections, mockConn.ID)
 		}
 	}
+
 	return nil
 }
 
@@ -66,11 +71,13 @@ func (m *MockConnectionPool) HealthCheck(conn Connection) error {
 	if m.healthCheckErr != nil {
 		return m.healthCheckErr
 	}
+
 	if mockConn, ok := conn.(*MockConnection); ok {
 		if !mockConn.Active {
 			return errors.New("connection inactive")
 		}
 	}
+
 	return nil
 }
 

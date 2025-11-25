@@ -19,7 +19,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/example-parent/snapshot"
 )
 
-// RunningState represents normal operational state with all children healthy
+// RunningState represents normal operational state with all children healthy.
 type RunningState struct {
 	BaseParentState
 }

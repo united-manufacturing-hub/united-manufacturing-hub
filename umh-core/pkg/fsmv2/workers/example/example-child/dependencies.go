@@ -19,24 +19,24 @@ import (
 	"go.uber.org/zap"
 )
 
-// Connection represents a connection to an external resource
+// Connection represents a connection to an external resource.
 type Connection interface{}
 
 // ConnectionPool is a mock interface for managing connections
-// In a real implementation, this would manage actual network connections
+// In a real implementation, this would manage actual network connections.
 type ConnectionPool interface {
 	Acquire() (Connection, error)
 	Release(Connection) error
 	HealthCheck(Connection) error
 }
 
-// ChildDependencies provides access to tools needed by child worker actions
+// ChildDependencies provides access to tools needed by child worker actions.
 type ChildDependencies struct {
 	*fsmv2.BaseDependencies
 	connectionPool ConnectionPool
 }
 
-// NewChildDependencies creates new dependencies for the child worker
+// NewChildDependencies creates new dependencies for the child worker.
 func NewChildDependencies(connectionPool ConnectionPool, logger *zap.SugaredLogger) *ChildDependencies {
 	return &ChildDependencies{
 		BaseDependencies: fsmv2.NewBaseDependencies(logger),
@@ -44,7 +44,7 @@ func NewChildDependencies(connectionPool ConnectionPool, logger *zap.SugaredLogg
 	}
 }
 
-// GetConnectionPool returns the connection pool
+// GetConnectionPool returns the connection pool.
 func (d *ChildDependencies) GetConnectionPool() ConnectionPool {
 	return d.connectionPool
 }

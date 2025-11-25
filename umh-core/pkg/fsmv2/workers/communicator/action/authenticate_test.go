@@ -68,6 +68,7 @@ type mockTransport struct {
 
 func (m *mockTransport) Authenticate(ctx context.Context, req transport.AuthRequest) (transport.AuthResponse, error) {
 	m.authCallCount++
+
 	return transport.AuthResponse{}, nil
 }
 

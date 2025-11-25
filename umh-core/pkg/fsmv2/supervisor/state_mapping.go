@@ -100,5 +100,6 @@ func (r *StateMappingRegistry) GetChildDesiredState(
 ) (string, bool) {
 	states := r.DeriveChildDesiredStates(parentState, parentSnapshot)
 	state, ok := states[childID]
+
 	return state, ok
 }

@@ -84,6 +84,7 @@ var _ = Describe("InfrastructureHealthChecker", func() {
 			healthErr := func() *supervisor.ChildHealthError {
 				target := &supervisor.ChildHealthError{}
 				_ = errors.As(err, &target)
+
 				return target
 			}()
 			Expect(healthErr.ChildName).To(Equal("unhealthy"))

@@ -37,6 +37,7 @@ func (a *StartAction) Execute(ctx context.Context, depsAny any) error {
 		logger := deps.GetLogger()
 		logger.Info("Starting parent worker")
 	}
+
 	return nil
 }
 

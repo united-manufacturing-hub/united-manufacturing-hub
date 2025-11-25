@@ -19,7 +19,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/example-parent/snapshot"
 )
 
-// DegradedState represents the state when some children have failed
+// DegradedState represents the state when some children have failed.
 type DegradedState struct {
 	BaseParentState
 }

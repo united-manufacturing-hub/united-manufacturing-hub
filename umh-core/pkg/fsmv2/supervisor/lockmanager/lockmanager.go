@@ -168,6 +168,7 @@ func (lm *LockManager) recordLockReleased(lockName string) {
 	for i := len(locks) - 1; i >= 0; i-- {
 		if locks[i].name == lockName {
 			lm.tracker.locks[gid] = append(locks[:i], locks[i+1:]...)
+
 			break
 		}
 	}

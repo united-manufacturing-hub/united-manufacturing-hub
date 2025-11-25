@@ -154,7 +154,7 @@ func TestIdentity() fsmv2.Identity {
 }
 
 // CreateTestTriangularStore creates a triangular store for subdirectory tests.
-// Collections follow naming convention: {workerType}_identity, {workerType}_desired, {workerType}_observed
+// Collections follow naming convention: {workerType}_identity, {workerType}_desired, {workerType}_observed.
 func CreateTestTriangularStore() *storage.TriangularStore {
 	ctx := context.Background()
 	basicStore := memory.NewInMemoryStore()

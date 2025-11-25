@@ -19,12 +19,12 @@ import (
 	"go.uber.org/zap"
 )
 
-// ParentDependencies provides access to tools needed by parent worker actions
+// ParentDependencies provides access to tools needed by parent worker actions.
 type ParentDependencies struct {
 	*fsmv2.BaseDependencies
 }
 
-// NewParentDependencies creates new dependencies for the parent worker
+// NewParentDependencies creates new dependencies for the parent worker.
 func NewParentDependencies(logger *zap.SugaredLogger) *ParentDependencies {
 	return &ParentDependencies{
 		BaseDependencies: fsmv2.NewBaseDependencies(logger),

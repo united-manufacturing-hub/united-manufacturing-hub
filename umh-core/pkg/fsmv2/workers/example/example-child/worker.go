@@ -31,7 +31,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/example-child/state"
 )
 
-// ChildWorker implements the FSM v2 Worker interface for resource management
+// ChildWorker implements the FSM v2 Worker interface for resource management.
 type ChildWorker struct {
 	*fsmv2.BaseWorker[*ChildDependencies]
 	identity   fsmv2.Identity
@@ -39,7 +39,7 @@ type ChildWorker struct {
 	connection Connection
 }
 
-// NewChildWorker creates a new example child worker
+// NewChildWorker creates a new example child worker.
 func NewChildWorker(
 	id string,
 	name string,
@@ -65,7 +65,7 @@ func NewChildWorker(
 	}
 }
 
-// CollectObservedState returns the current observed state of the child worker
+// CollectObservedState returns the current observed state of the child worker.
 func (w *ChildWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedState, error) {
 	observed := snapshot.ChildObservedState{
 		ID:               w.identity.ID,
@@ -77,7 +77,7 @@ func (w *ChildWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedS
 	return observed, nil
 }
 
-// DeriveDesiredState determines what state the child worker should be in
+// DeriveDesiredState determines what state the child worker should be in.
 func (w *ChildWorker) DeriveDesiredState(spec interface{}) (fsmv2types.DesiredState, error) {
 	// Handle nil spec (used during initialization in AddWorker)
 	if spec == nil {
@@ -105,7 +105,7 @@ func (w *ChildWorker) DeriveDesiredState(spec interface{}) (fsmv2types.DesiredSt
 	}, nil
 }
 
-// GetInitialState returns the state the FSM should start in
+// GetInitialState returns the state the FSM should start in.
 func (w *ChildWorker) GetInitialState() fsmv2.State[any, any] {
 	return &state.StoppedState{}
 }
@@ -114,6 +114,7 @@ func (w *ChildWorker) getConnectionStatus() string {
 	if w.connection != nil {
 		return "connected"
 	}
+
 	return "disconnected"
 }
 
@@ -121,6 +122,7 @@ func (w *ChildWorker) getConnectionHealth() string {
 	if w.connection == nil {
 		return "no connection"
 	}
+
 	return "healthy"
 }
 
@@ -128,6 +130,7 @@ func init() {
 	_ = factory.RegisterSupervisorFactory[snapshot.ChildObservedState, *snapshot.ChildDesiredState](
 		func(cfg interface{}) interface{} {
 			supervisorCfg := cfg.(supervisor.Config)
+
 			return supervisor.NewSupervisor[snapshot.ChildObservedState, *snapshot.ChildDesiredState](supervisorCfg)
 		})
 }

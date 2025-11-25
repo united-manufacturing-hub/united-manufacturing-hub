@@ -19,7 +19,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/example-parent/snapshot"
 )
 
-// StoppedState represents the initial state before any children are spawned
+// StoppedState represents the initial state before any children are spawned.
 type StoppedState struct {
 	BaseParentState
 }

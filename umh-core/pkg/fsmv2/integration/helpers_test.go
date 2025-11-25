@@ -39,8 +39,10 @@ func WaitForGoroutineCount(expected int, timeout time.Duration) error {
 		if current <= expected+5 {
 			return nil
 		}
+
 		time.Sleep(50 * time.Millisecond)
 	}
+
 	return fmt.Errorf("timeout waiting for goroutine count to reach %d (within 5), current: %d", expected, runtime.NumGoroutine())
 }
 
@@ -66,6 +68,7 @@ func (a *BlockingAction) Execute(ctx context.Context, deps any) error {
 
 	if a.blockForever {
 		<-ctx.Done()
+
 		return ctx.Err()
 	}
 
@@ -92,6 +95,7 @@ func (a *BlockingAction) Name() string {
 func (a *BlockingAction) WasExecuted() bool {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+
 	return a.executed
 }
 
@@ -118,6 +122,7 @@ func (a *PanicAction) Name() string {
 func (a *PanicAction) WasExecuted() bool {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+
 	return a.executed
 }
 
@@ -155,16 +160,17 @@ func (a *SlowAction) Name() string {
 func (a *SlowAction) WasExecuted() bool {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+
 	return a.executed
 }
 
 type MockState struct {
-	name       string
-	nextState  fsmv2.State[any, any]
-	signal     fsmv2.Signal
-	action     fsmv2.Action[any]
-	callCount  int
-	mu         sync.Mutex
+	name      string
+	nextState fsmv2.State[any, any]
+	signal    fsmv2.Signal
+	action    fsmv2.Action[any]
+	callCount int
+	mu        sync.Mutex
 }
 
 func NewMockState(name string) *MockState {
@@ -177,11 +183,13 @@ func NewMockState(name string) *MockState {
 func (m *MockState) Next(snapshot any) (fsmv2.State[any, any], fsmv2.Signal, fsmv2.Action[any]) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.callCount++
 
 	if m.nextState == nil {
 		return m, m.signal, m.action
 	}
+
 	return m.nextState, m.signal, m.action
 }
 
@@ -196,6 +204,7 @@ func (m *MockState) Reason() string {
 func (m *MockState) SetTransition(nextState fsmv2.State[any, any], signal fsmv2.Signal, action fsmv2.Action[any]) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.nextState = nextState
 	m.signal = signal
 	m.action = action
@@ -204,18 +213,19 @@ func (m *MockState) SetTransition(nextState fsmv2.State[any, any], signal fsmv2.
 func (m *MockState) GetCallCount() int {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	return m.callCount
 }
 
 type MockWorker struct {
-	identity           fsmv2.Identity
-	initialState       fsmv2.State[any, any]
-	observedState      fsmv2.ObservedState
-	collectErr         error
-	collectBlockFor    time.Duration
-	collectCallCount   int
-	collectPanic       bool
-	mu                 sync.RWMutex
+	identity         fsmv2.Identity
+	initialState     fsmv2.State[any, any]
+	observedState    fsmv2.ObservedState
+	collectErr       error
+	collectBlockFor  time.Duration
+	collectCallCount int
+	collectPanic     bool
+	mu               sync.RWMutex
 }
 
 func NewMockWorker(id string) *MockWorker {
@@ -273,30 +283,34 @@ func (m *MockWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedSt
 func (m *MockWorker) SetCollectError(err error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.collectErr = err
 }
 
 func (m *MockWorker) SetCollectBlockFor(duration time.Duration) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.collectBlockFor = duration
 }
 
 func (m *MockWorker) SetCollectPanic(shouldPanic bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.collectPanic = shouldPanic
 }
 
 func (m *MockWorker) GetCollectCallCount() int {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+
 	return m.collectCallCount
 }
 
 type MockObservedState struct {
-	timestamp     time.Time
-	desiredState  fsmv2.DesiredState
+	timestamp    time.Time
+	desiredState fsmv2.DesiredState
 }
 
 func (m *MockObservedState) GetTimestamp() time.Time {
@@ -307,6 +321,7 @@ func (m *MockObservedState) GetObservedDesiredState() fsmv2.DesiredState {
 	if m.desiredState != nil {
 		return m.desiredState
 	}
+
 	return &MockDesiredState{}
 }
 
@@ -325,6 +340,7 @@ func (m *MockDesiredState) SetShutdownRequested(requested bool) {
 func ExpectNoGoroutineLeaks(before int) {
 	Eventually(func() int {
 		runtime.GC()
+
 		return runtime.NumGoroutine()
 	}, "3s", "100ms").Should(BeNumerically("<=", before+5))
 }
@@ -334,6 +350,7 @@ func GetWorkerStateName[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredSta
 	if err != nil {
 		return ""
 	}
+
 	return stateName
 }
 
@@ -346,6 +363,7 @@ func GetChildSupervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredSta
 			}
 		}
 	}
+
 	return nil
 }
 
@@ -373,6 +391,7 @@ func (c *StateHistoryCollector) GetHistory() []string {
 
 	result := make([]string, len(c.history))
 	copy(result, c.history)
+
 	return result
 }
 
@@ -391,7 +410,6 @@ func RunSupervisorWithTimeout[TObserved fsmv2.ObservedState, TDesired fsmv2.Desi
 	}
 }
 
-
 type MockConnectionPool struct {
 	failureMode string
 	failCount   int
@@ -405,11 +423,13 @@ func NewConnectionPool() *MockConnectionPool {
 func (m *MockConnectionPool) WithFailures(count int) *MockConnectionPool {
 	m.failureMode = "transient"
 	m.failCount = count
+
 	return m
 }
 
 func (m *MockConnectionPool) AlwaysFails() *MockConnectionPool {
 	m.failureMode = "always"
+
 	return m
 }
 
@@ -424,10 +444,13 @@ func (m *MockConnectionPool) Acquire() (child.Connection, error) {
 	if m.failureMode == "always" {
 		return nil, errors.New("connection pool exhausted")
 	}
+
 	if m.failureMode == "transient" && m.failCount > 0 {
 		m.failCount--
-		return nil, fmt.Errorf("transient connection error")
+
+		return nil, errors.New("transient connection error")
 	}
+
 	return &MockConnection{}, nil
 }
 

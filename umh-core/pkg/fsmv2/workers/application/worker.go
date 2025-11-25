@@ -215,6 +215,7 @@ func NewApplicationSupervisor(cfg SupervisorConfig) (*supervisor.Supervisor[snap
 		Store:        cfg.Store,
 		Logger:       cfg.Logger,
 		TickInterval: tickInterval,
+		UserSpec:     config.UserSpec{Config: cfg.YAMLConfig},
 	})
 
 	// Create application worker identity.

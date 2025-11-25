@@ -41,6 +41,7 @@ func (a *ConnectAction) Execute(ctx context.Context, depsAny any) error {
 	deps := depsAny.(snapshot.ChildDependencies)
 	logger := deps.GetLogger()
 	logger.Info("Attempting to connect")
+
 	return nil
 }
 

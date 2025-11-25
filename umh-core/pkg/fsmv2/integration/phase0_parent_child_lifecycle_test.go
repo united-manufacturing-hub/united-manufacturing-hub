@@ -28,12 +28,12 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence/memory"
-	parent "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/example-parent"
-	parentSnapshot "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/example-parent/snapshot"
 	child "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/example-child"
 	childSnapshot "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/example-child/snapshot"
+	parent "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/example-parent"
+	parentSnapshot "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/example-parent/snapshot"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence/memory"
 )
 
 var _ = Describe("Phase 0: Parent-Child Lifecycle", func() {
@@ -89,6 +89,7 @@ var _ = Describe("Phase 0: Parent-Child Lifecycle", func() {
 
 		Eventually(func() int {
 			runtime.GC()
+
 			return runtime.NumGoroutine()
 		}, "5s", "100ms").Should(BeNumerically("<=", initialGoroutines+5))
 	})
@@ -105,6 +106,7 @@ var _ = Describe("Phase 0: Parent-Child Lifecycle", func() {
 
 			err = factory.RegisterFactory[childSnapshot.ChildObservedState, *childSnapshot.ChildDesiredState](func(identity fsmv2.Identity) fsmv2.Worker {
 				mockConnectionPool := NewConnectionPool()
+
 				return child.NewChildWorker(identity.ID, identity.Name, mockConnectionPool, logger)
 			})
 			Expect(err).ToNot(HaveOccurred())
@@ -113,6 +115,7 @@ var _ = Describe("Phase 0: Parent-Child Lifecycle", func() {
 			err = factory.RegisterSupervisorFactory[parentSnapshot.ParentObservedState, *parentSnapshot.ParentDesiredState](
 				func(cfg interface{}) interface{} {
 					supervisorCfg := cfg.(supervisor.Config)
+
 					return supervisor.NewSupervisor[parentSnapshot.ParentObservedState, *parentSnapshot.ParentDesiredState](supervisorCfg)
 				})
 			Expect(err).ToNot(HaveOccurred())
@@ -120,6 +123,7 @@ var _ = Describe("Phase 0: Parent-Child Lifecycle", func() {
 			err = factory.RegisterSupervisorFactory[childSnapshot.ChildObservedState, *childSnapshot.ChildDesiredState](
 				func(cfg interface{}) interface{} {
 					supervisorCfg := cfg.(supervisor.Config)
+
 					return supervisor.NewSupervisor[childSnapshot.ChildObservedState, *childSnapshot.ChildDesiredState](supervisorCfg)
 				})
 			Expect(err).ToNot(HaveOccurred())
@@ -188,10 +192,12 @@ var _ = Describe("Phase 0: Parent-Child Lifecycle", func() {
 					if name == "child-0" {
 						if typedChild, ok := child.(*supervisor.Supervisor[childSnapshot.ChildObservedState, *childSnapshot.ChildDesiredState]); ok {
 							childSup = typedChild
+
 							return childSup
 						}
 					}
 				}
+
 				return nil
 			}, "10s", "100ms").ShouldNot(BeNil())
 
@@ -204,6 +210,7 @@ var _ = Describe("Phase 0: Parent-Child Lifecycle", func() {
 				if childSup == nil {
 					return ""
 				}
+
 				return GetWorkerStateName(childSup, "child-0-001")
 			}, "10s", "100ms").Should(Equal("Connected"))
 
@@ -217,6 +224,7 @@ var _ = Describe("Phase 0: Parent-Child Lifecycle", func() {
 				if childSup == nil {
 					return ""
 				}
+
 				return GetWorkerStateName(childSup, "child-0-001")
 			}, "10s", "500ms").Should(Equal("Connected"))
 

@@ -37,6 +37,7 @@ func (a *StopAction) Execute(ctx context.Context, depsAny any) error {
 		logger := deps.GetLogger()
 		logger.Info("Stopping parent worker")
 	}
+
 	return nil
 }
 

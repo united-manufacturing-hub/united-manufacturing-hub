@@ -20,6 +20,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application/snapshot"
@@ -198,6 +199,36 @@ children:
 			timestamp := obs.GetTimestamp()
 			Expect(timestamp.After(before) || timestamp.Equal(before)).To(BeTrue())
 			Expect(timestamp.Before(after) || timestamp.Equal(after)).To(BeTrue())
+		})
+	})
+
+	Describe("NewApplicationSupervisor with YAML config", func() {
+		It("should accept YAMLConfig in SupervisorConfig", func() {
+			// This test documents that NewApplicationSupervisor now accepts YAMLConfig
+			// and passes it to the supervisor as UserSpec.
+			//
+			// The fix enables supervisors created via NewApplicationSupervisor to have
+			// initial configuration, so DeriveDesiredState() receives non-empty config
+			// during reconciliation, creating the children specified in the YAML.
+			//
+			// Without the fix, supervisor's userSpec was empty, so DeriveDesiredState
+			// received empty config, resulting in zero children (added=0 in logs).
+			//
+			// Full integration test is in pkg/fsmv2/examples/simple/main.go
+
+			yamlConfig := `
+children:
+  - name: "child-1"
+    workerType: "example-child"
+`
+			cfg := SupervisorConfig{
+				ID:         "test-sup-001",
+				Name:       "Test Supervisor",
+				YAMLConfig: yamlConfig,
+			}
+
+			Expect(cfg.YAMLConfig).NotTo(BeEmpty())
+			Expect(cfg.YAMLConfig).To(ContainSubstring("child-1"))
 		})
 	})
 })

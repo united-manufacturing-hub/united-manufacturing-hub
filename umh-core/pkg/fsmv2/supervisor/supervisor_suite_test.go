@@ -90,6 +90,7 @@ func registerTestWorkerFactories() {
 		// Register supervisor factory for hierarchical composition
 		err = factory.RegisterSupervisorFactoryByType(wt, func(cfg interface{}) interface{} {
 			supervisorCfg := cfg.(supervisor.Config)
+
 			return supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisorCfg)
 		})
 		if err != nil {
@@ -246,6 +247,7 @@ func (m *mockStore) LoadDesiredTyped(ctx context.Context, workerType string, id 
 	}
 
 	jsonBytes, _ := json.Marshal(doc)
+
 	return json.Unmarshal(jsonBytes, dest)
 }
 
@@ -272,6 +274,7 @@ func (m *mockStore) SaveObserved(ctx context.Context, workerType string, id stri
 	if m.saveErr != nil {
 		return false, m.saveErr
 	}
+
 	return true, nil
 }
 
@@ -295,6 +298,7 @@ func (m *mockStore) LoadObservedTyped(ctx context.Context, workerType string, id
 	}
 
 	jsonBytes, _ := json.Marshal(doc)
+
 	return json.Unmarshal(jsonBytes, dest)
 }
 
@@ -331,7 +335,6 @@ func (m *mockStore) LoadSnapshot(ctx context.Context, workerType string, id stri
 		Observed: observed,
 	}, nil
 }
-
 
 func mockIdentity() fsmv2.Identity {
 	return fsmv2.Identity{
@@ -556,6 +559,7 @@ func (m *mockTriangularStore) LoadDesiredTyped(ctx context.Context, workerType s
 	}
 
 	jsonBytes, _ := json.Marshal(doc)
+
 	return json.Unmarshal(jsonBytes, dest)
 }
 
@@ -620,6 +624,7 @@ func (m *mockTriangularStore) LoadObserved(ctx context.Context, workerType strin
 		if len(resultType) > 1 && resultType[0] == '*' {
 			resultType = resultType[1:]
 		}
+
 		panic(fmt.Sprintf("Invariant I16 violated: worker %s expected type *supervisor.TestObservedState but got %s", id, resultType))
 	}
 
@@ -642,14 +647,17 @@ func (m *mockTriangularStore) LoadObservedTyped(ctx context.Context, workerType 
 		if len(destType) > 1 && destType[0] == '*' {
 			destType = destType[1:]
 		}
+
 		resultType := fmt.Sprintf("%T", result)
 		if len(resultType) > 1 && resultType[0] == '*' {
 			resultType = resultType[1:]
 		}
+
 		panic(fmt.Sprintf("Invariant I16 violated: worker %s expected type %s but got %s", id, destType, resultType))
 	}
 
 	jsonBytes, _ := json.Marshal(doc)
+
 	return json.Unmarshal(jsonBytes, dest)
 }
 

@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
 // Package factory provides a registry-based worker factory for dynamic FSM v2 worker creation.
 // This enables hierarchical composition where parent workers can create child workers by type name.
 package factory
@@ -340,5 +339,6 @@ func GetFactory[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState]() (f
 	defer registryMu.RUnlock()
 
 	factoryFunc, exists := registry[workerType]
+
 	return factoryFunc, exists
 }

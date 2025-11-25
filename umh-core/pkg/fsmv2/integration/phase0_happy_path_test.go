@@ -29,12 +29,12 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence/memory"
-	parent "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/example-parent"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/example-parent/snapshot"
 	child "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/example-child"
 	childSnapshot "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/example-child/snapshot"
+	parent "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/example-parent"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/example-parent/snapshot"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence/memory"
 )
 
 func setupTestStore(ctx context.Context, workerTypes ...string) *storage.TriangularStore {
@@ -81,6 +81,7 @@ var _ = Describe("Phase 0: Happy Path Integration", func() {
 
 		Eventually(func() int {
 			runtime.GC()
+
 			return runtime.NumGoroutine()
 		}, "5s", "100ms").Should(BeNumerically("<=", initialGoroutines+5))
 	})
@@ -97,6 +98,7 @@ var _ = Describe("Phase 0: Happy Path Integration", func() {
 
 			err = factory.RegisterFactory[childSnapshot.ChildObservedState, *childSnapshot.ChildDesiredState](func(identity fsmv2.Identity) fsmv2.Worker {
 				mockConnectionPool := &MockConnectionPool{}
+
 				return child.NewChildWorker(identity.ID, identity.Name, mockConnectionPool, logger)
 			})
 			Expect(err).ToNot(HaveOccurred())
@@ -105,6 +107,7 @@ var _ = Describe("Phase 0: Happy Path Integration", func() {
 			err = factory.RegisterSupervisorFactory[snapshot.ParentObservedState, *snapshot.ParentDesiredState](
 				func(cfg interface{}) interface{} {
 					supervisorCfg := cfg.(supervisor.Config)
+
 					return supervisor.NewSupervisor[snapshot.ParentObservedState, *snapshot.ParentDesiredState](supervisorCfg)
 				})
 			Expect(err).ToNot(HaveOccurred())
@@ -112,6 +115,7 @@ var _ = Describe("Phase 0: Happy Path Integration", func() {
 			err = factory.RegisterSupervisorFactory[childSnapshot.ChildObservedState, *childSnapshot.ChildDesiredState](
 				func(cfg interface{}) interface{} {
 					supervisorCfg := cfg.(supervisor.Config)
+
 					return supervisor.NewSupervisor[childSnapshot.ChildObservedState, *childSnapshot.ChildDesiredState](supervisorCfg)
 				})
 			Expect(err).ToNot(HaveOccurred())
@@ -171,6 +175,7 @@ var _ = Describe("Phase 0: Happy Path Integration", func() {
 
 			Eventually(func() string {
 				state, _, _ := parentSupervisor.GetWorkerState(parentIdentity.ID)
+
 				return state
 			}, "5s", "100ms").Should(Equal("Running"))
 
@@ -178,6 +183,7 @@ var _ = Describe("Phase 0: Happy Path Integration", func() {
 
 			Eventually(func() int {
 				children := parentSupervisor.GetChildren()
+
 				return len(children)
 			}, "5s", "100ms").Should(Equal(1))
 
@@ -195,6 +201,7 @@ var _ = Describe("Phase 0: Happy Path Integration", func() {
 					if !ok {
 						return ""
 					}
+
 					break
 				}
 				workerIDs := childSupervisor.ListWorkers()
@@ -202,6 +209,7 @@ var _ = Describe("Phase 0: Happy Path Integration", func() {
 					return ""
 				}
 				state, _, _ := childSupervisor.GetWorkerState(workerIDs[0])
+
 				return state
 			}, "5s", "100ms").Should(Equal("Connected"))
 
@@ -222,6 +230,7 @@ var _ = Describe("Phase 0: Happy Path Integration", func() {
 				if !ok {
 					continue
 				}
+
 				break
 			}
 			childWorkerIDs := childSupervisor.ListWorkers()
@@ -240,6 +249,7 @@ var _ = Describe("Phase 0: Happy Path Integration", func() {
 
 			err = factory.RegisterFactory[childSnapshot.ChildObservedState, *childSnapshot.ChildDesiredState](func(identity fsmv2.Identity) fsmv2.Worker {
 				mockConnectionPool := &MockConnectionPool{}
+
 				return child.NewChildWorker(identity.ID, identity.Name, mockConnectionPool, logger)
 			})
 			Expect(err).ToNot(HaveOccurred())
@@ -282,6 +292,7 @@ var _ = Describe("Phase 0: Happy Path Integration", func() {
 
 			Eventually(func() string {
 				state, _, _ := parentSupervisor.GetWorkerState(parentIdentity.ID)
+
 				return state
 			}, "5s", "100ms").Should(Equal("Running"))
 
@@ -302,6 +313,7 @@ var _ = Describe("Phase 0: Happy Path Integration", func() {
 
 			Eventually(func() int {
 				children := parentSupervisor.GetChildren()
+
 				return len(children)
 			}, "5s", "100ms").Should(Equal(0))
 		})
@@ -320,6 +332,7 @@ var _ = Describe("Phase 0: Happy Path Integration", func() {
 
 			err = factory.RegisterFactory[childSnapshot.ChildObservedState, *childSnapshot.ChildDesiredState](func(identity fsmv2.Identity) fsmv2.Worker {
 				mockConnectionPool := &MockConnectionPool{}
+
 				return child.NewChildWorker(identity.ID, identity.Name, mockConnectionPool, logger)
 			})
 			Expect(err).ToNot(HaveOccurred())
@@ -361,6 +374,7 @@ var _ = Describe("Phase 0: Happy Path Integration", func() {
 
 			Eventually(func() string {
 				state, _, _ := parentSupervisor.GetWorkerState(parentIdentity.ID)
+
 				return state
 			}, "5s", "100ms").Should(Equal("Running"))
 
@@ -379,6 +393,7 @@ var _ = Describe("Phase 0: Happy Path Integration", func() {
 
 			Eventually(func() int {
 				runtime.GC()
+
 				return runtime.NumGoroutine()
 			}, "5s", "100ms").Should(BeNumerically("<=", beforeGoroutines+5))
 		})
@@ -419,6 +434,7 @@ var _ = Describe("Phase 0: Happy Path Integration", func() {
 
 			Eventually(func() string {
 				state, _, _ := deltaTestSupervisor.GetWorkerState(testIdentity.ID)
+
 				return state
 			}, "5s", "100ms").Should(Equal("Running"))
 
@@ -458,19 +474,19 @@ var _ = Describe("Phase 0: Happy Path Integration", func() {
 })
 
 type DeltaTestWorker struct {
-	id             string
-	name           string
-	cpu            int
-	memory         int
-	currentSyncID  int64
-	mu             sync.RWMutex
-	store          *storage.TriangularStore
-	observedState  *DeltaTestObservedState
+	id            string
+	name          string
+	cpu           int
+	memory        int
+	currentSyncID int64
+	mu            sync.RWMutex
+	store         *storage.TriangularStore
+	observedState *DeltaTestObservedState
 }
 
 type DeltaTestObservedState struct {
-	CPU       int       `bson:"cpu" json:"cpu"`
-	Memory    int       `bson:"memory" json:"memory"`
+	CPU       int       `bson:"cpu"       json:"cpu"`
+	Memory    int       `bson:"memory"    json:"memory"`
 	Timestamp time.Time `bson:"timestamp" json:"timestamp"`
 }
 
@@ -526,6 +542,7 @@ func (w *DeltaTestWorker) CollectObservedState(ctx context.Context) (fsmv2.Obser
 	}
 
 	w.observedState = observed
+
 	return observed, nil
 }
 
@@ -544,12 +561,14 @@ func (w *DeltaTestWorker) Next(ctx context.Context, current, parent string, obse
 func (w *DeltaTestWorker) SetCPU(cpu int) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
+
 	w.cpu = cpu
 }
 
 func (w *DeltaTestWorker) SetMemory(memory int) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
+
 	w.memory = memory
 }
 

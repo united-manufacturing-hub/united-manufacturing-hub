@@ -667,7 +667,7 @@ var _ = Describe("InMemoryStore", func() {
 				const numGoroutines = 10
 				done := make(chan bool, numGoroutines)
 
-				for i := 0; i < numGoroutines; i++ {
+				for i := range numGoroutines {
 					go func(idx int) {
 						doc := persistence.Document{
 							"id":    fmt.Sprintf("doc-%d", idx),
@@ -679,7 +679,7 @@ var _ = Describe("InMemoryStore", func() {
 					}(i)
 				}
 
-				for i := 0; i < numGoroutines; i++ {
+				for range numGoroutines {
 					<-done
 				}
 
@@ -688,7 +688,7 @@ var _ = Describe("InMemoryStore", func() {
 
 				docs, err := store.Find(ctx, "concurrent_collection", persistence.Query{})
 				Expect(err).ToNot(HaveOccurred())
-				Expect(len(docs)).To(Equal(numGoroutines))
+				Expect(docs).To(HaveLen(numGoroutines))
 			})
 		})
 	})

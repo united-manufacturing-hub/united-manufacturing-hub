@@ -138,6 +138,7 @@ type snapshotMutatingState struct{}
 func (s *snapshotMutatingState) Next(snapshot any) (fsmv2.State[any, any], fsmv2.Signal, fsmv2.Action[any]) {
 	snap := snapshot.(fsmv2.Snapshot)
 	snap.Observed = nil
+
 	return s, fsmv2.SignalNone, nil
 }
 
@@ -149,6 +150,7 @@ type identityMutatingState struct{}
 func (s *identityMutatingState) Next(snapshot any) (fsmv2.State[any, any], fsmv2.Signal, fsmv2.Action[any]) {
 	snap := snapshot.(fsmv2.Snapshot)
 	snap.Identity.Name = "Modified"
+
 	return s, fsmv2.SignalNone, nil
 }
 
@@ -162,6 +164,7 @@ func (s *aggressiveMutatingState) Next(snapshot any) (fsmv2.State[any, any], fsm
 	snap.Observed = nil
 	snap.Identity.Name = "Modified"
 	snap.Desired = nil
+
 	return s, fsmv2.SignalNone, nil
 }
 

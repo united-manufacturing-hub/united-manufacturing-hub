@@ -31,14 +31,14 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/example-parent/state"
 )
 
-// ParentWorker implements the FSM v2 Worker interface for parent-child relationships
+// ParentWorker implements the FSM v2 Worker interface for parent-child relationships.
 type ParentWorker struct {
 	*fsmv2.BaseWorker[*ParentDependencies]
 	identity fsmv2.Identity
 	logger   *zap.SugaredLogger
 }
 
-// NewParentWorker creates a new example parent worker
+// NewParentWorker creates a new example parent worker.
 func NewParentWorker(
 	id string,
 	name string,
@@ -57,7 +57,7 @@ func NewParentWorker(
 	}
 }
 
-// CollectObservedState returns the current observed state of the parent worker
+// CollectObservedState returns the current observed state of the parent worker.
 func (w *ParentWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedState, error) {
 	observed := snapshot.ParentObservedState{
 		ID:          w.identity.ID,
@@ -68,7 +68,7 @@ func (w *ParentWorker) CollectObservedState(ctx context.Context) (fsmv2.Observed
 }
 
 // DeriveDesiredState determines what state the parent worker should be in
-// This method must be PURE - it only uses the spec parameter, never dependencies
+// This method must be PURE - it only uses the spec parameter, never dependencies.
 func (w *ParentWorker) DeriveDesiredState(spec interface{}) (fsmv2types.DesiredState, error) {
 	var childrenCount int
 
@@ -116,7 +116,7 @@ func (w *ParentWorker) DeriveDesiredState(spec interface{}) (fsmv2types.DesiredS
 	}, nil
 }
 
-// GetInitialState returns the state the FSM should start in
+// GetInitialState returns the state the FSM should start in.
 func (w *ParentWorker) GetInitialState() fsmv2.State[any, any] {
 	return &state.StoppedState{}
 }
@@ -125,6 +125,7 @@ func init() {
 	_ = factory.RegisterSupervisorFactory[snapshot.ParentObservedState, *snapshot.ParentDesiredState](
 		func(cfg interface{}) interface{} {
 			supervisorCfg := cfg.(supervisor.Config)
+
 			return supervisor.NewSupervisor[snapshot.ParentObservedState, *snapshot.ParentDesiredState](supervisorCfg)
 		})
 }

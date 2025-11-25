@@ -20,7 +20,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/example-parent/snapshot"
 )
 
-// TryingToStartState represents the state while loading config and spawning children
+// TryingToStartState represents the state while loading config and spawning children.
 type TryingToStartState struct {
 	BaseParentState
 }
