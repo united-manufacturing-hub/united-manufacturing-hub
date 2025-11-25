@@ -1342,9 +1342,6 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 		return fmt.Errorf("failed to derive desired state: %w", err)
 	}
 
-	s.logger.Debugw("template rendered",
-		"worker_type", s.workerType,
-		"duration_ms", templateDuration.Milliseconds())
 	metrics.RecordTemplateRenderingDuration(s.workerType, "success", templateDuration)
 
 	// Save derived desired state to database BEFORE tickWorker
