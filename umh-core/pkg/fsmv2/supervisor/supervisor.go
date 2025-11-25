@@ -271,8 +271,9 @@ type Supervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] stru
 	// This lock is independent from Supervisor.mu and can be acquired separately.
 	// It can be acquired alone when checking context status, or after Supervisor.mu
 	// if both are needed (advisory order).
-	ctxMu   *lockmanager.Lock
-	started atomic.Bool // Whether supervisor has been started
+	ctxMu                  *lockmanager.Lock
+	started                atomic.Bool // Whether supervisor has been started
+	enableLifecycleLogging bool        // Whether to emit verbose lifecycle logs (mutex, tick events)
 }
 
 // WorkerContext encapsulates the runtime state for a single worker
@@ -358,6 +359,11 @@ type Config struct {
 	// This is optional for supervisors created by parents (they receive config via updateUserSpec).
 	// For root supervisors (like application supervisors), this provides the initial configuration.
 	UserSpec config.UserSpec
+
+	// EnableLifecycleLogging enables verbose lifecycle event logging (mutex locks, tick events, etc.)
+	// Optional - defaults to false. Set ENABLE_LIFECYCLE_LOGGING=true for deep debugging.
+	// When false, these high-frequency internal logs are suppressed to improve signal-to-noise ratio.
+	EnableLifecycleLogging bool
 }
 
 func NewSupervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState](cfg Config) *Supervisor[TObserved, TDesired] {
@@ -463,7 +469,8 @@ func NewSupervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState](c
 			maxRestartAttempts: maxRestartAttempts,
 			restartCount:       0,
 		},
-		userSpec: cfg.UserSpec,
+		userSpec:               cfg.UserSpec,
+		enableLifecycleLogging: cfg.EnableLifecycleLogging,
 	}
 }
 
@@ -1008,9 +1015,15 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 			return nil
 		}
 
+		// Get dependencies from worker if it implements DependencyProvider
+		var deps any
+		if provider, ok := workerCtx.worker.(fsmv2.DependencyProvider); ok {
+			deps = provider.GetDependenciesAny()
+		}
+
 		s.logger.Infof("Enqueuing action: %s", actionID)
 
-		if err := workerCtx.executor.EnqueueAction(actionID, action); err != nil {
+		if err := workerCtx.executor.EnqueueAction(actionID, action, deps); err != nil {
 			return fmt.Errorf("failed to enqueue action: %w", err)
 		}
 	}
@@ -1203,7 +1216,7 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 		// stubAction demonstrates async execution infrastructure
 		// Real action derivation (Start/Stop/Restart) will be added in Phase 4
 		action := &stubAction{}
-		_ = s.actionExecutor.EnqueueAction(s.workerType, action)
+		_ = s.actionExecutor.EnqueueAction(s.workerType, action, nil) // nil deps for stub action
 	}
 
 	// For backwards compatibility, tick the first worker
