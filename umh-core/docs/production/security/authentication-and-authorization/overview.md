@@ -4,7 +4,9 @@ For authorization and authentication, we use a 2-layer solution. This separation
 
 - **Layer 1**: Users and UMH Instances authenticate here either against the backend or a third party auth provider such as SAML, SSO or social login. Each user and each instance belongs to a company. This layer ensures that users can only send and receive messages to/from instances within their company.
 
-- **Layer 2**: In addition to the cross-company protection of Layer 1, this layer provides fine-grained authorization. Each user and UMH Instance verifies incoming messages before interpreting them, ensuring that the message actually comes from the sender and that the sender has the needed permissions to execute the requested action. This verification happens locally in the user's browser as well as in UMH Core. The ManagementConsole backend is restricted to Layer 1 and does not read or execute user/instance messages.
+- **Layer 2**: In addition to the cross-company protection of Layer 1, this layer provides fine-grained authorization. Each user and UMH Instance verifies incoming messages before interpreting them, ensuring that the message actually comes from the sender and that the sender has the needed permissions to execute the requested action. This verification happens locally in the UMH Instance. The ManagementConsole backend is restricted to Layer 1 and does not read or execute user/instance messages.
+
+**Deployment Considerations**: Layer 2 permission validation is currently implemented in UMH Classic but not yet in UMH Core. Within a company, all users can execute all actions on UMH Core instances. The certificate infrastructure exists and controls what users see in ManagementConsole, but UMH Core does not yet validate individual user permissions when executing commands.
 
 ## User Authentication
 
