@@ -71,6 +71,8 @@ Three roles control what actions users and instances can perform at their assign
 
 Users can have different roles at different locations. For example, a user can be an Admin at `Factory.Line1` but only a Viewer at `Factory.Line2`.
 
-### Delegation
+### User and Instance Management
 
-Admins can invite new users and grant them permissions, but only for locations where they themselves have admin access. This prevents privilege escalation and ensures that permissions flow naturally through the organization.
+Only admins and the company owner can invite new users and add instances. When inviting users, admins can only grant permissions for locations where they themselves have admin access. This prevents privilege escalation and ensures that permissions flow naturally through the organization.
+
+**Deployment Considerations**: The legacy permission system (V1) restricts user invitations and instance creation to the company owner only. The current system (V2) allows all admins to perform these actions.
