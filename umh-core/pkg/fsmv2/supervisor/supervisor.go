@@ -417,8 +417,10 @@ func NewSupervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState](c
 		panic(fmt.Sprintf("supervisor config error: staleThreshold (%v) must be less than collectorTimeout (%v)", staleThreshold, timeout))
 	}
 
-	cfg.Logger.Infof("Supervisor timeout configuration: ObservationTimeout=%v, StaleThreshold=%v, CollectorTimeout=%v",
-		observationTimeout, staleThreshold, timeout)
+	cfg.Logger.Infow("timeout_configuration",
+		"observation_timeout", observationTimeout,
+		"stale_threshold", staleThreshold,
+		"collector_timeout", timeout)
 
 	freshnessChecker := health.NewFreshnessChecker(staleThreshold, timeout, cfg.Logger)
 
@@ -594,7 +596,8 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity fsmv2.Identity, wor
 		executor:     executor,
 	}
 
-	s.logger.Infof("Added worker %s to supervisor", identity.ID)
+	s.logger.Infow("worker_added",
+		"worker_id", identity.ID)
 
 	return nil
 }
@@ -616,7 +619,8 @@ func (s *Supervisor[TObserved, TDesired]) RemoveWorker(ctx context.Context, work
 	workerCtx.collector.Stop(ctx)
 	workerCtx.executor.Shutdown()
 
-	s.logger.Infof("Removed worker %s from supervisor", workerID)
+	s.logger.Infow("worker_removed",
+		"worker_id", workerID)
 
 	return nil
 }
@@ -999,7 +1003,8 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 	}
 
 	if s.collectorHealth.restartCount > 0 {
-		s.logger.Infof("Collector recovered after %d restart attempts", s.collectorHealth.restartCount)
+		s.logger.Infow("collector_recovered",
+			"restart_attempts", s.collectorHealth.restartCount)
 		s.collectorHealth.restartCount = 0
 	}
 
@@ -1060,7 +1065,9 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 			deps = provider.GetDependenciesAny()
 		}
 
-		s.logger.Infof("Enqueuing action: %s", actionID)
+		s.logger.Infow("action_enqueued",
+			"action_id", actionID,
+			"worker_id", workerID)
 
 		if err := workerCtx.executor.EnqueueAction(actionID, action, deps); err != nil {
 			return fmt.Errorf("failed to enqueue action: %w", err)
@@ -1081,8 +1088,11 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 			"from_state", currentState.String(),
 			"to_state", nextState.String())
 
-		s.logger.Infof("State transition: %s -> %s (reason: %s)",
-			currentState.String(), nextState.String(), nextState.Reason())
+		s.logger.Infow("state_transition",
+			"worker_id", workerID,
+			"from_state", currentState.String(),
+			"to_state", nextState.String(),
+			"reason", nextState.Reason())
 
 		s.logLifecycle("lifecycle",
 			"lifecycle_event", "mutex_lock_acquire",
@@ -1456,7 +1466,8 @@ func (s *Supervisor[TObserved, TDesired]) processSignal(ctx context.Context, wor
 		// Normal operation
 		return nil
 	case fsmv2.SignalNeedsRemoval:
-		s.logger.Infof("Worker %s signaled removal, removing from registry", workerID)
+		s.logger.Infow("worker_removal_signaled",
+			"worker_id", workerID)
 
 		s.mu.Lock()
 
@@ -1530,11 +1541,14 @@ func (s *Supervisor[TObserved, TDesired]) processSignal(ctx context.Context, wor
 		workerCtx.collector.Stop(ctx)
 		workerCtx.executor.Shutdown()
 
-		s.logger.Infof("Worker %s removed successfully (children cleaned: %d)", workerID, childCount)
+		s.logger.Infow("worker_removed_successfully",
+			"worker_id", workerID,
+			"children_cleaned", childCount)
 
 		return nil
 	case fsmv2.SignalNeedsRestart:
-		s.logger.Infof("Worker %s signaled restart", workerID)
+		s.logger.Infow("worker_restart_signaled",
+			"worker_id", workerID)
 
 		if err := s.restartCollector(ctx, workerID); err != nil {
 			return fmt.Errorf("failed to restart collector for worker %s: %w", workerID, err)
@@ -1691,7 +1705,9 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 				"child_worker_type", spec.WorkerType,
 				"parent_worker_type", s.workerType)
 
-			s.logger.Infof("Adding child %s with worker type %s", spec.Name, spec.WorkerType)
+			s.logger.Infow("child_adding",
+				"child_name", spec.Name,
+				"worker_type", spec.WorkerType)
 
 			addedCount++
 
@@ -1781,7 +1797,8 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 				"child_name", name,
 				"parent_worker_type", s.workerType)
 
-			s.logger.Infof("Removing child %s (not in desired specs)", name)
+			s.logger.Infow("child_removing",
+				"child_name", name)
 
 			child := s.children[name]
 			if child != nil {
@@ -1862,7 +1879,8 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 
 	s.started.Store(false)
 
-	s.logger.Infof("Shutting down supervisor for worker type: %s", s.workerType)
+	s.logger.Infow("supervisor_shutting_down",
+		"worker_type", s.workerType)
 
 	// Cancel the supervisor's context to stop tick loop and all child goroutines
 	s.ctxMu.Lock()
