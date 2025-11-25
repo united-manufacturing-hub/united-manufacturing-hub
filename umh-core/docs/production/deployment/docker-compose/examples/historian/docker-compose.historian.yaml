@@ -1,0 +1,122 @@
+# UMH Core Historian Addon
+# Adds local time-series storage with TimescaleDB + Grafana visualization
+#
+# Usage: docker compose -f ../../docker-compose.yaml -f docker-compose.historian.yaml up
+#
+# IMPORTANT: This requires the core umh-core deployment to be running first
+# See: ../../docker-compose.yaml
+
+services:
+  # ============================================================================
+  # TimescaleDB - Time-Series Database
+  # ============================================================================
+  timescaledb:
+    image: timescale/timescaledb:latest-pg16
+    container_name: timescaledb
+    restart: unless-stopped
+
+    environment:
+      # Database credentials
+      # SECURITY: Change POSTGRES_PASSWORD in production
+      # Generate: openssl rand -base64 32
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-changeme}
+      - POSTGRES_DB=${POSTGRES_DB:-umh_v2}
+
+      # TimescaleDB tuning
+      - TIMESCALEDB_TELEMETRY=off
+      - TS_TUNE_MEMORY=${TS_TUNE_MEMORY:-4GB}
+      - TS_TUNE_NUM_CPUS=${TS_TUNE_NUM_CPUS:-2}
+
+    volumes:
+      # Database storage
+      - timescaledb_data:/var/lib/postgresql/data
+
+      # Initialization scripts (create users, schema, hypertables)
+      - ./timescaledb-init:/docker-entrypoint-initdb.d
+
+    networks:
+      - umh-network
+
+    # Port 5432: PostgreSQL protocol
+    # WARNING: Do not expose to public networks in production
+    # Use SSH tunnel or VPN for remote access
+    ports:
+      - "5432:5432"
+
+    # Healthcheck: Verify database accepts connections
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-umh_v2}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # ============================================================================
+  # Grafana - Visualization Platform
+  # ============================================================================
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    restart: unless-stopped
+
+    environment:
+      # Admin credentials (change on first login)
+      - GF_SECURITY_ADMIN_USER=${GF_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GF_ADMIN_PASSWORD:-admin}
+
+      # TimescaleDB datasource (pre-configured)
+      - GF_DATASOURCES_TIMESCALEDB_URL=timescaledb:5432
+      - GF_DATASOURCES_TIMESCALEDB_USER=${POSTGRES_USER:-postgres}
+      - GF_DATASOURCES_TIMESCALEDB_PASSWORD=${POSTGRES_PASSWORD:-changeme}
+      - GF_DATASOURCES_TIMESCALEDB_DATABASE=${POSTGRES_DB:-umh_v2}
+
+      # UI settings
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_AUTH_ANONYMOUS_ENABLED=false
+
+    volumes:
+      # Dashboard and user settings
+      - grafana_data:/var/lib/grafana
+
+    networks:
+      - umh-network
+
+    # Port 3000: Web UI
+    ports:
+      - "3000:3000"
+
+    # Dependency: Wait for TimescaleDB to be healthy
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+
+    # Healthcheck: Verify web UI responds
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+# ==============================================================================
+# Networks
+# ==============================================================================
+# Uses the umh-network from the core docker-compose.yaml
+networks:
+  umh-network:
+    external: true
+
+# ==============================================================================
+# Volumes
+# ==============================================================================
+volumes:
+  timescaledb_data:
+    # TimescaleDB persistent storage
+    # Backup: docker compose exec timescaledb pg_dump -U postgres umh_v2 | gzip > backup.sql.gz
+    driver: local
+
+  grafana_data:
+    # Grafana dashboards and settings
+    # Backup: docker compose exec grafana tar -czf - /var/lib/grafana > backup.tar.gz
+    driver: local

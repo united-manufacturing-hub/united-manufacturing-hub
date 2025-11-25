@@ -1,0 +1,64 @@
+# UMH Core Docker Compose - Core Deployment
+# For optional addons (historian, cloud forwarding, etc.):
+# See examples/ directory
+
+services:
+  # ============================================================================
+  # UMH Core - Edge Gateway
+  # ============================================================================
+  umh-core:
+    image: management.umh.app/oci/united-manufacturing-hub/umh-core:${UMH_VERSION}
+    container_name: umh-core
+    restart: unless-stopped
+
+    # Security: Run as non-root user (UID 1000)
+    # See: docs/production/security/umh-core/deployment-security.md
+    user: "1000:1000"
+
+    environment:
+      # Required: Authentication token from Management Console
+      - AUTH_TOKEN=${AUTH_TOKEN:?AUTH_TOKEN is required}
+
+      # Required: Release channel and API endpoint
+      - RELEASE_CHANNEL=${RELEASE_CHANNEL:-stable}
+      - API_URL=${API_URL:-https://management.umh.app/api}
+
+      # Optional: Organization location hierarchy
+      # Used to construct UNS topic paths: umh.v1.<location0>.<location1>...
+      - LOCATION_0=${LOCATION_0:-enterprise}
+      - LOCATION_1=${LOCATION_1:-}
+      - LOCATION_2=${LOCATION_2:-}
+
+    volumes:
+      # Data directory: configuration, logs, Redpanda state
+      # CRITICAL: Must be writable by UID 1000
+      # Setup: sudo mkdir -p ./data && sudo chown -R 1000:1000 ./data
+      - ./data:/data
+
+    networks:
+      - umh-network
+
+  # ============================================================================
+  # NGINX - Reverse Proxy
+  # ============================================================================
+  # Optional in dev, recommended for production (security layer + webhook routing)
+  nginx:
+    image: docker.io/library/nginx:alpine
+    container_name: nginx
+    restart: unless-stopped
+
+    ports:
+      - "8081:8080"  # Expose for webhook access
+
+    volumes:
+      - ./configs/nginx.conf:/etc/nginx/nginx.conf:ro
+
+    networks:
+      - umh-network
+
+    depends_on:
+      - umh-core
+
+networks:
+  umh-network:
+    driver: bridge
