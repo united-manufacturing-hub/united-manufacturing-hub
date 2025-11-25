@@ -166,6 +166,11 @@ type SupervisorConfig struct {
 	//         config: |
 	//           value: 10
 	YAMLConfig string
+
+	// EnableLifecycleLogging enables verbose lifecycle event logging (mutex locks, tick events, etc.)
+	// Optional - defaults to false. Set ENABLE_LIFECYCLE_LOGGING=true for deep debugging.
+	// When false, these high-frequency internal logs are suppressed to improve signal-to-noise ratio.
+	EnableLifecycleLogging bool
 }
 
 // NewApplicationSupervisor creates a supervisor with an application worker already added.
@@ -211,11 +216,12 @@ func NewApplicationSupervisor(cfg SupervisorConfig) (*supervisor.Supervisor[snap
 
 	// Create supervisor.
 	sup := supervisor.NewSupervisor[snapshot.ApplicationObservedState, *snapshot.ApplicationDesiredState](supervisor.Config{
-		WorkerType:   appWorkerType,
-		Store:        cfg.Store,
-		Logger:       cfg.Logger,
-		TickInterval: tickInterval,
-		UserSpec:     config.UserSpec{Config: cfg.YAMLConfig},
+		WorkerType:             appWorkerType,
+		Store:                  cfg.Store,
+		Logger:                 cfg.Logger,
+		TickInterval:           tickInterval,
+		UserSpec:               config.UserSpec{Config: cfg.YAMLConfig},
+		EnableLifecycleLogging: cfg.EnableLifecycleLogging,
 	})
 
 	// Create application worker identity.

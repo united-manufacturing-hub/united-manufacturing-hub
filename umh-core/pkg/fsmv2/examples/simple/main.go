@@ -24,6 +24,7 @@ package main
 import (
 	"context"
 	"os"
+	"strconv"
 	"time"
 
 	"go.uber.org/zap"
@@ -74,13 +75,28 @@ children:
 	sugar.Info("Step 2: Creating application supervisor...")
 	sugar.Info("This supervisor will manage a parent worker with 2 child workers")
 
+	// Read ENABLE_LIFECYCLE_LOGGING environment variable
+	enableLifecycleLogging := false
+	if envVal := os.Getenv("ENABLE_LIFECYCLE_LOGGING"); envVal != "" {
+		if parsed, err := strconv.ParseBool(envVal); err == nil {
+			enableLifecycleLogging = parsed
+		}
+	}
+
+	if enableLifecycleLogging {
+		sugar.Info("Lifecycle logging ENABLED - verbose mutex/tick logs will be shown")
+	} else {
+		sugar.Info("Lifecycle logging DISABLED - clean logs for normal operation")
+	}
+
 	sup, err := application.NewApplicationSupervisor(application.SupervisorConfig{
-		ID:           "app-001",
-		Name:         "Simple Application",
-		Store:        store,
-		Logger:       sugar,
-		TickInterval: 100 * time.Millisecond,
-		YAMLConfig:   yamlConfig,
+		ID:                     "app-001",
+		Name:                   "Simple Application",
+		Store:                  store,
+		Logger:                 sugar,
+		TickInterval:           100 * time.Millisecond,
+		YAMLConfig:             yamlConfig,
+		EnableLifecycleLogging: enableLifecycleLogging,
 	})
 	if err != nil {
 		sugar.Errorf("Failed to create application supervisor: %v", err)
