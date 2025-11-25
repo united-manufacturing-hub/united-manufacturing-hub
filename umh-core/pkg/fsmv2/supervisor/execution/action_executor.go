@@ -21,6 +21,8 @@ import (
 	"sync"
 	"time"
 
+	"go.uber.org/zap"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/metrics"
 )
@@ -38,15 +40,17 @@ type ActionExecutor struct {
 	defaultTimeout time.Duration
 	metricsCancel  context.CancelFunc
 	metricsWg      sync.WaitGroup
+	logger         *zap.SugaredLogger
 }
 
 type actionWork struct {
 	actionID string
 	action   fsmv2.Action[any]
 	timeout  time.Duration
+	deps     any // Dependencies to pass to the action
 }
 
-func NewActionExecutor(workerCount int, supervisorID string) *ActionExecutor {
+func NewActionExecutor(workerCount int, supervisorID string, logger *zap.SugaredLogger) *ActionExecutor {
 	if workerCount <= 0 {
 		workerCount = 10
 	}
@@ -58,10 +62,11 @@ func NewActionExecutor(workerCount int, supervisorID string) *ActionExecutor {
 		inProgress:     make(map[string]bool),
 		timeouts:       make(map[string]time.Duration),
 		defaultTimeout: 30 * time.Second,
+		logger:         logger,
 	}
 }
 
-func NewActionExecutorWithTimeout(workerCount int, timeouts map[string]time.Duration, supervisorID string) *ActionExecutor {
+func NewActionExecutorWithTimeout(workerCount int, timeouts map[string]time.Duration, supervisorID string, logger *zap.SugaredLogger) *ActionExecutor {
 	if workerCount <= 0 {
 		workerCount = 10
 	}
@@ -73,6 +78,7 @@ func NewActionExecutorWithTimeout(workerCount int, timeouts map[string]time.Dura
 		inProgress:     make(map[string]bool),
 		timeouts:       timeouts,
 		defaultTimeout: 30 * time.Second,
+		logger:         logger,
 	}
 }
 
@@ -104,7 +110,7 @@ func (ae *ActionExecutor) worker() {
 			startTime := time.Now()
 			actionCtx, cancel := context.WithTimeout(ae.ctx, work.timeout)
 
-			err := work.action.Execute(actionCtx, nil)
+			err := work.action.Execute(actionCtx, work.deps)
 			duration := time.Since(startTime)
 
 			status := "success"
@@ -114,9 +120,28 @@ func (ae *ActionExecutor) worker() {
 					metrics.RecordActionTimeout(ae.supervisorID, work.action.Name())
 
 					status = "timeout"
+
+					ae.logger.Errorw("action_failed",
+						"worker_id", ae.supervisorID,
+						"action", work.action.Name(),
+						"error", "timeout",
+						"duration_ms", duration.Milliseconds(),
+						"timeout_ms", work.timeout.Milliseconds())
 				} else {
 					status = "error"
+
+					ae.logger.Errorw("action_failed",
+						"worker_id", ae.supervisorID,
+						"action", work.action.Name(),
+						"error", err.Error(),
+						"duration_ms", duration.Milliseconds())
 				}
+			} else {
+				ae.logger.Infow("action_completed",
+					"worker_id", ae.supervisorID,
+					"action", work.action.Name(),
+					"duration_ms", duration.Milliseconds(),
+					"success", true)
 			}
 
 			metrics.RecordActionExecutionDuration(ae.supervisorID, work.action.Name(), status, duration)
@@ -134,10 +159,13 @@ func (ae *ActionExecutor) worker() {
 // It uses a buffered channel with select/default to ensure non-blocking behavior.
 // If the queue is full, it returns an error immediately without waiting.
 //
+// The deps parameter provides worker dependencies to the action during execution.
+// If deps is nil, the action's Execute method will receive nil (useful for stub actions).
+//
 // Performance: <1ms latency, even under high load (100+ concurrent actions).
 //
 // Thread-safe: Multiple goroutines can call EnqueueAction concurrently.
-func (ae *ActionExecutor) EnqueueAction(actionID string, action fsmv2.Action[any]) error {
+func (ae *ActionExecutor) EnqueueAction(actionID string, action fsmv2.Action[any], deps any) error {
 	ae.mu.Lock()
 
 	if ae.inProgress[actionID] {
@@ -158,6 +186,7 @@ func (ae *ActionExecutor) EnqueueAction(actionID string, action fsmv2.Action[any
 		actionID: actionID,
 		action:   action,
 		timeout:  timeout,
+		deps:     deps,
 	}
 
 	select {

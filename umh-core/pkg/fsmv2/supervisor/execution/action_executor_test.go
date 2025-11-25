@@ -23,6 +23,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"go.uber.org/zap"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/execution"
@@ -33,11 +34,13 @@ var _ = Describe("ActionExecutor", func() {
 		executor *execution.ActionExecutor
 		ctx      context.Context
 		cancel   context.CancelFunc
+		logger   *zap.SugaredLogger
 	)
 
 	BeforeEach(func() {
 		ctx, cancel = context.WithCancel(context.Background())
-		executor = execution.NewActionExecutor(10, "test-supervisor")
+		logger = zap.NewNop().Sugar()
+		executor = execution.NewActionExecutor(10, "test-supervisor", logger)
 		executor.Start(ctx)
 	})
 
@@ -49,24 +52,24 @@ var _ = Describe("ActionExecutor", func() {
 	Describe("Constructor Validation", func() {
 		Context("NewActionExecutor with invalid worker count", func() {
 			It("should default to 10 workers when workerCount is 0", func() {
-				executor := execution.NewActionExecutor(0, "test-supervisor")
+				executor := execution.NewActionExecutor(0, "test-supervisor", zap.NewNop().Sugar())
 				Expect(executor).ToNot(BeNil())
 			})
 
 			It("should default to 10 workers when workerCount is negative", func() {
-				executor := execution.NewActionExecutor(-5, "test-supervisor")
+				executor := execution.NewActionExecutor(-5, "test-supervisor", zap.NewNop().Sugar())
 				Expect(executor).ToNot(BeNil())
 			})
 		})
 
 		Context("NewActionExecutorWithTimeout with invalid worker count", func() {
 			It("should default to 10 workers when workerCount is 0", func() {
-				executor := execution.NewActionExecutorWithTimeout(0, map[string]time.Duration{}, "test-supervisor")
+				executor := execution.NewActionExecutorWithTimeout(0, map[string]time.Duration{}, "test-supervisor", zap.NewNop().Sugar())
 				Expect(executor).ToNot(BeNil())
 			})
 
 			It("should default to 10 workers when workerCount is negative", func() {
-				executor := execution.NewActionExecutorWithTimeout(-3, map[string]time.Duration{}, "test-supervisor")
+				executor := execution.NewActionExecutorWithTimeout(-3, map[string]time.Duration{}, "test-supervisor", zap.NewNop().Sugar())
 				Expect(executor).ToNot(BeNil())
 			})
 		})
@@ -85,7 +88,7 @@ var _ = Describe("ActionExecutor", func() {
 				},
 			}
 
-			err := executor.EnqueueAction(actionID, action)
+			err := executor.EnqueueAction(actionID, action, nil)
 			Expect(err).ToNot(HaveOccurred())
 
 			Eventually(executed).Should(Receive())
@@ -103,10 +106,10 @@ var _ = Describe("ActionExecutor", func() {
 				},
 			}
 
-			err := executor.EnqueueAction(actionID, action)
+			err := executor.EnqueueAction(actionID, action, nil)
 			Expect(err).ToNot(HaveOccurred())
 
-			err = executor.EnqueueAction(actionID, action)
+			err = executor.EnqueueAction(actionID, action, nil)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("already in progress"))
 
@@ -129,7 +132,7 @@ var _ = Describe("ActionExecutor", func() {
 
 			var lastErr error
 			for i := range totalCapacity + 2 {
-				err := executor.EnqueueAction(fmt.Sprintf("action-%d", i), blockingAction)
+				err := executor.EnqueueAction(fmt.Sprintf("action-%d", i), blockingAction, nil)
 				if err != nil {
 					lastErr = err
 
@@ -157,7 +160,7 @@ var _ = Describe("ActionExecutor", func() {
 				},
 			}
 
-			err := executor.EnqueueAction(actionID, action)
+			err := executor.EnqueueAction(actionID, action, nil)
 			Expect(err).ToNot(HaveOccurred())
 
 			Expect(executor.HasActionInProgress(actionID)).To(BeTrue())
@@ -174,7 +177,7 @@ var _ = Describe("ActionExecutor", func() {
 				},
 			}
 
-			err := executor.EnqueueAction(actionID, action)
+			err := executor.EnqueueAction(actionID, action, nil)
 			Expect(err).ToNot(HaveOccurred())
 
 			Eventually(func() bool {
@@ -202,7 +205,7 @@ var _ = Describe("ActionExecutor", func() {
 			}
 
 			for i := range actionCount {
-				err := executor.EnqueueAction(fmt.Sprintf("action-%d", i), action)
+				err := executor.EnqueueAction(fmt.Sprintf("action-%d", i), action, nil)
 				Expect(err).ToNot(HaveOccurred())
 			}
 
@@ -230,7 +233,7 @@ var _ = Describe("ActionExecutor", func() {
 				},
 			}
 
-			err := executor.EnqueueAction(actionID, action)
+			err := executor.EnqueueAction(actionID, action, nil)
 			Expect(err).ToNot(HaveOccurred())
 
 			cancel()
@@ -253,7 +256,7 @@ var _ = Describe("ActionExecutor", func() {
 				},
 			}
 
-			err := executor.EnqueueAction(actionID, action)
+			err := executor.EnqueueAction(actionID, action, nil)
 			Expect(err).ToNot(HaveOccurred())
 
 			go executor.Shutdown()
@@ -267,7 +270,7 @@ var _ = Describe("ActionExecutor", func() {
 			It("should cancel action after configured timeout", func() {
 				executor := execution.NewActionExecutorWithTimeout(10, map[string]time.Duration{
 					"test-action": 100 * time.Millisecond,
-				}, "test-supervisor")
+				}, "test-supervisor", zap.NewNop().Sugar())
 				executor.Start(ctx)
 
 				actionStarted := make(chan bool, 1)
@@ -283,7 +286,7 @@ var _ = Describe("ActionExecutor", func() {
 					},
 				}
 
-				err := executor.EnqueueAction("test-action", action)
+				err := executor.EnqueueAction("test-action", action, nil)
 				Expect(err).ToNot(HaveOccurred())
 
 				Eventually(actionStarted).Should(Receive())
@@ -293,7 +296,7 @@ var _ = Describe("ActionExecutor", func() {
 			It("should clear in-progress status after timeout", func() {
 				executor := execution.NewActionExecutorWithTimeout(10, map[string]time.Duration{
 					"timeout-action": 50 * time.Millisecond,
-				}, "test-supervisor")
+				}, "test-supervisor", zap.NewNop().Sugar())
 				executor.Start(ctx)
 
 				action := &testAction{
@@ -304,7 +307,7 @@ var _ = Describe("ActionExecutor", func() {
 					},
 				}
 
-				err := executor.EnqueueAction("timeout-action", action)
+				err := executor.EnqueueAction("timeout-action", action, nil)
 				Expect(err).ToNot(HaveOccurred())
 
 				Expect(executor.HasActionInProgress("timeout-action")).To(BeTrue())
@@ -319,7 +322,7 @@ var _ = Describe("ActionExecutor", func() {
 			It("should allow action to complete successfully", func() {
 				executor := execution.NewActionExecutorWithTimeout(10, map[string]time.Duration{
 					"fast-action": 1 * time.Second,
-				}, "test-supervisor")
+				}, "test-supervisor", zap.NewNop().Sugar())
 				executor.Start(ctx)
 
 				completed := make(chan bool, 1)
@@ -332,7 +335,7 @@ var _ = Describe("ActionExecutor", func() {
 					},
 				}
 
-				err := executor.EnqueueAction("fast-action", action)
+				err := executor.EnqueueAction("fast-action", action, nil)
 				Expect(err).ToNot(HaveOccurred())
 
 				Eventually(completed).Should(Receive())
@@ -343,7 +346,7 @@ var _ = Describe("ActionExecutor", func() {
 			It("should use default timeout for unconfigured action types", func() {
 				executor := execution.NewActionExecutorWithTimeout(10, map[string]time.Duration{
 					"configured": 1 * time.Second,
-				}, "test-supervisor")
+				}, "test-supervisor", zap.NewNop().Sugar())
 				executor.Start(ctx)
 
 				cancelled := make(chan bool, 1)
@@ -356,7 +359,7 @@ var _ = Describe("ActionExecutor", func() {
 					},
 				}
 
-				err := executor.EnqueueAction("unconfigured-action", action)
+				err := executor.EnqueueAction("unconfigured-action", action, nil)
 				Expect(err).ToNot(HaveOccurred())
 
 				Eventually(cancelled, 35*time.Second).Should(Receive())
@@ -377,11 +380,11 @@ var _ = Describe("ActionExecutor", func() {
 				}
 
 				// Create executor with supervisorID
-				executor := execution.NewActionExecutor(10, supervisorID)
+				executor := execution.NewActionExecutor(10, supervisorID, zap.NewNop().Sugar())
 				executor.Start(ctx)
 				defer executor.Shutdown()
 
-				err := executor.EnqueueAction(actionID, action)
+				err := executor.EnqueueAction(actionID, action, nil)
 				Expect(err).ToNot(HaveOccurred())
 
 				// Note: This test verifies the code path exists
@@ -404,11 +407,11 @@ var _ = Describe("ActionExecutor", func() {
 					},
 				}
 
-				executor := execution.NewActionExecutor(10, supervisorID)
+				executor := execution.NewActionExecutor(10, supervisorID, zap.NewNop().Sugar())
 				executor.Start(ctx)
 				defer executor.Shutdown()
 
-				err := executor.EnqueueAction(actionID, action)
+				err := executor.EnqueueAction(actionID, action, nil)
 				Expect(err).ToNot(HaveOccurred())
 
 				Eventually(completed).Should(Receive())
@@ -430,11 +433,11 @@ var _ = Describe("ActionExecutor", func() {
 					},
 				}
 
-				executor := execution.NewActionExecutor(10, supervisorID)
+				executor := execution.NewActionExecutor(10, supervisorID, zap.NewNop().Sugar())
 				executor.Start(ctx)
 				defer executor.Shutdown()
 
-				err := executor.EnqueueAction(actionID, action)
+				err := executor.EnqueueAction(actionID, action, nil)
 				Expect(err).ToNot(HaveOccurred())
 
 				Eventually(failed).Should(Receive())
@@ -447,7 +450,7 @@ var _ = Describe("ActionExecutor", func() {
 
 				executor := execution.NewActionExecutorWithTimeout(10, map[string]time.Duration{
 					"timeout-action": 50 * time.Millisecond,
-				}, supervisorID)
+				}, supervisorID, zap.NewNop().Sugar())
 				executor.Start(ctx)
 				defer executor.Shutdown()
 
@@ -461,7 +464,7 @@ var _ = Describe("ActionExecutor", func() {
 					},
 				}
 
-				err := executor.EnqueueAction("timeout-action", action)
+				err := executor.EnqueueAction("timeout-action", action, nil)
 				Expect(err).ToNot(HaveOccurred())
 
 				Eventually(timedOut, 200*time.Millisecond).Should(Receive())
@@ -472,7 +475,7 @@ var _ = Describe("ActionExecutor", func() {
 			It("should periodically record queue size and worker pool utilization", func() {
 				supervisorID := "test-supervisor"
 
-				executor := execution.NewActionExecutor(10, supervisorID)
+				executor := execution.NewActionExecutor(10, supervisorID, zap.NewNop().Sugar())
 				executor.Start(ctx)
 				defer executor.Shutdown()
 
@@ -486,7 +489,7 @@ var _ = Describe("ActionExecutor", func() {
 							return nil
 						},
 					}
-					err := executor.EnqueueAction(fmt.Sprintf("blocked-action-%d", i), action)
+					err := executor.EnqueueAction(fmt.Sprintf("blocked-action-%d", i), action, nil)
 					Expect(err).ToNot(HaveOccurred())
 				}
 
@@ -505,7 +508,7 @@ var _ = Describe("ActionExecutor", func() {
 	Describe("Non-Blocking Guarantees", func() {
 		Context("EnqueueAction non-blocking behavior", func() {
 			It("should never block when enqueueing action (even when queue full)", func() {
-				smallExecutor := execution.NewActionExecutor(2, "test-supervisor")
+				smallExecutor := execution.NewActionExecutor(2, "test-supervisor", zap.NewNop().Sugar())
 				smallExecutor.Start(ctx)
 				defer smallExecutor.Shutdown()
 
@@ -519,7 +522,7 @@ var _ = Describe("ActionExecutor", func() {
 
 				for i := range 100 {
 					start := time.Now()
-					_ = smallExecutor.EnqueueAction(fmt.Sprintf("action-%d", i), blockingAction)
+					_ = smallExecutor.EnqueueAction(fmt.Sprintf("action-%d", i), blockingAction, nil)
 					duration := time.Since(start)
 
 					Expect(duration).To(BeNumerically("<", 1*time.Millisecond),
@@ -528,7 +531,7 @@ var _ = Describe("ActionExecutor", func() {
 			})
 
 			It("should handle 100+ concurrent actions without blocking enqueue", func() {
-				executor := execution.NewActionExecutor(50, "test-supervisor")
+				executor := execution.NewActionExecutor(50, "test-supervisor", zap.NewNop().Sugar())
 				executor.Start(ctx)
 				defer executor.Shutdown()
 
@@ -546,7 +549,7 @@ var _ = Describe("ActionExecutor", func() {
 					}
 
 					start := time.Now()
-					err := executor.EnqueueAction(actionID, action)
+					err := executor.EnqueueAction(actionID, action, nil)
 					duration := time.Since(start)
 
 					Expect(duration).To(BeNumerically("<", 1*time.Millisecond),
@@ -577,7 +580,7 @@ var _ = Describe("ActionExecutor", func() {
 
 		Context("HasActionInProgress non-blocking behavior", func() {
 			It("should never block when checking action status", func() {
-				executor := execution.NewActionExecutor(10, "test-supervisor")
+				executor := execution.NewActionExecutor(10, "test-supervisor", zap.NewNop().Sugar())
 				executor.Start(ctx)
 				defer executor.Shutdown()
 
@@ -588,7 +591,7 @@ var _ = Describe("ActionExecutor", func() {
 
 							return nil
 						},
-					})
+					}, nil)
 				}
 
 				for range 1000 {

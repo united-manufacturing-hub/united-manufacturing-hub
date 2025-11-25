@@ -463,7 +463,7 @@ func NewSupervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState](c
 		parentID:         "", // Root supervisor has empty parentID
 		healthChecker:    NewInfrastructureHealthChecker(DefaultMaxInfraRecoveryAttempts, DefaultRecoveryAttemptWindow),
 		// circuitOpen is atomic.Bool, zero-initialized to false
-		actionExecutor: execution.NewActionExecutor(10, cfg.WorkerType),
+		actionExecutor: execution.NewActionExecutor(10, cfg.WorkerType, cfg.Logger),
 		collectorHealth: CollectorHealth{
 			observationTimeout: observationTimeout,
 			staleThreshold:     staleThreshold,
@@ -585,7 +585,7 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity fsmv2.Identity, wor
 		ObservationTimeout:  s.collectorHealth.observationTimeout,
 	})
 
-	executor := execution.NewActionExecutor(10, identity.ID)
+	executor := execution.NewActionExecutor(10, identity.ID, s.logger)
 
 	s.workers[identity.ID] = &WorkerContext[TObserved, TDesired]{
 		mu:           s.lockManager.NewLock(lockNameWorkerContextMu, lockLevelWorkerContextMu),
