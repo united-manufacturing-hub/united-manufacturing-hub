@@ -1208,7 +1208,7 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 
 	if s.circuitOpen.Load() {
 		downtime := time.Since(s.healthChecker.backoff.GetStartTime())
-		s.logger.Info("Infrastructure recovered, closing circuit breaker",
+		s.logger.Infow("Infrastructure recovered, closing circuit breaker",
 			"supervisor_id", s.workerType,
 			"total_downtime", downtime.String())
 		metrics.RecordCircuitOpen(s.workerType, false)
@@ -1272,7 +1272,7 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 	}
 
 	userVarCount := len(userSpecWithVars.Variables.User)
-	s.logger.Debug("variables propagated",
+	s.logger.Debugw("variables propagated",
 		"supervisor_id", s.workerType,
 		"user_vars", userVarCount,
 		"global_vars", globalVarCount)
@@ -1295,7 +1295,7 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 		return fmt.Errorf("failed to derive desired state: %w", err)
 	}
 
-	s.logger.Debug("template rendered",
+	s.logger.Debugw("template rendered",
 		"supervisor_id", s.workerType,
 		"duration_ms", templateDuration.Milliseconds())
 	metrics.RecordTemplateRenderingDuration(s.workerType, "success", templateDuration)
@@ -1320,7 +1320,7 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 		// The tickWorker will use the previously saved desired state
 		s.logger.Warnf("failed to save derived desired state (will use previous state): %v", err)
 	} else {
-		s.logger.Debug("derived desired state saved",
+		s.logger.Debugw("derived desired state saved",
 			"supervisor_id", s.workerType,
 			"worker_id", firstWorkerID)
 	}
@@ -1337,7 +1337,7 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 			return fmt.Errorf("invalid child specifications: %w", err)
 		}
 
-		s.logger.Debug("child specs validated",
+		s.logger.Debugw("child specs validated",
 			"supervisor_id", s.workerType,
 			"child_count", len(desired.ChildrenSpecs))
 	}
@@ -1767,7 +1767,7 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 	}
 
 	duration := time.Since(startTime)
-	s.logger.Info("child reconciliation completed",
+	s.logger.Infow("child reconciliation completed",
 		"supervisor_id", s.workerType,
 		"added", addedCount,
 		"updated", updatedCount,
