@@ -277,23 +277,6 @@ These blank imports trigger `init()` functions that register the workers with th
 
 Increase log verbosity or add debug output to `CollectObservedState()` and `DeriveDesiredState()`.
 
-## Known Issues
-
-This example currently shows a type mismatch error in the logs:
-
-```
-ERROR: observed state type mismatch: expected snapshot.ApplicationObservedState, got *snapshot.ApplicationObservedState
-```
-
-This is a known issue in the application worker's snapshot types where the interface methods are defined on value receivers instead of pointer receivers. This doesn't affect the core demonstration of how to use the application worker pattern. The application worker still manages lifecycle correctly, and the example demonstrates:
-
-1. How to create storage and collections
-2. How to define YAML configuration
-3. How to create an application supervisor
-4. How to start and stop the FSM
-
-For production use, this type mismatch would need to be fixed in the application worker's snapshot package. The pattern demonstrated here is correct.
-
 ## Summary
 
 This example demonstrates the **application worker pattern**, which is the production pattern used in UMH Core. The key insight is:

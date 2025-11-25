@@ -64,7 +64,7 @@ func (w *ApplicationWorker) CollectObservedState(ctx context.Context) (fsmv2.Obs
 	default:
 	}
 
-	return &snapshot.ApplicationObservedState{
+	return snapshot.ApplicationObservedState{
 		ID:          w.id,
 		CollectedAt: time.Now(),
 		Name:        w.name,

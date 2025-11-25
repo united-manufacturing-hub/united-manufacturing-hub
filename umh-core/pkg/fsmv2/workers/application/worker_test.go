@@ -36,13 +36,25 @@ var _ = Describe("ApplicationWorker", func() {
 	})
 
 	Describe("CollectObservedState", func() {
+		It("should return value type not pointer type", func() {
+			ctx := context.Background()
+			obs, err := worker.CollectObservedState(ctx)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(obs).NotTo(BeNil())
+
+			typedObs, ok := obs.(snapshot.ApplicationObservedState)
+			Expect(ok).To(BeTrue(), "Expected value type ApplicationObservedState, got %T", obs)
+			Expect(typedObs.GetTimestamp()).NotTo(BeZero())
+			Expect(typedObs.Name).To(Equal("test-root"))
+		})
+
 		It("should return observed state with timestamp", func() {
 			ctx := context.Background()
 			obs, err := worker.CollectObservedState(ctx)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(obs).NotTo(BeNil())
 
-			typedObs, ok := obs.(*snapshot.ApplicationObservedState)
+			typedObs, ok := obs.(snapshot.ApplicationObservedState)
 			Expect(ok).To(BeTrue())
 			Expect(typedObs.GetTimestamp()).NotTo(BeZero())
 			Expect(typedObs.Name).To(Equal("test-root"))
