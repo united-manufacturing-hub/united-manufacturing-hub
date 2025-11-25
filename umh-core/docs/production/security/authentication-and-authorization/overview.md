@@ -76,3 +76,9 @@ Users can have different roles at different locations. For example, a user can b
 Only admins and the company owner can invite new users and add instances. When inviting users, admins can only grant permissions for locations where they themselves have admin access. This prevents privilege escalation and ensures that permissions flow naturally through the organization.
 
 **Deployment Considerations**: The legacy permission system (V1) restricts user invitations and instance creation to the company owner only. The current system (V2) allows all admins to perform these actions.
+
+### User Invitation Process
+
+To invite a new user, an admin specifies the user's email address, their role, and the locations they should have access to. The system generates an invite link and a separate invite key. The invited user receives the link and must enter the invite key to accept the invitation. During acceptance, the user sets their own passphrase for future logins. The invite key can only be used once.
+
+For Auth0 companies, the invite link is sent automatically via email. The invite key is shown to the inviting admin, who must pass it to the invitee through a separate channel.
