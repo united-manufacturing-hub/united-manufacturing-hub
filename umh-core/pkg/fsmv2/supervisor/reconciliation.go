@@ -281,7 +281,9 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 
 		// Get dependencies from worker if it implements DependencyProvider
 		var deps any
-		_ = deps
+		if provider, ok := workerCtx.worker.(fsmv2.DependencyProvider); ok {
+			deps = provider.GetDependenciesAny()
+		}
 
 		// Action enqueued at DEBUG - low signal for operators
 		s.logger.Debugw("action_enqueued",

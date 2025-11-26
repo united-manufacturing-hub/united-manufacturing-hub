@@ -292,6 +292,12 @@ func (s *Supervisor[TObserved, TDesired]) getMappedParentState() string {
 	return s.GetMappedParentState()
 }
 
+// isCircuitOpen returns true if the circuit breaker is open for this supervisor.
+// Used by InfrastructureHealthChecker.CheckChildConsistency() to detect unhealthy children.
+func (s *Supervisor[TObserved, TDesired]) isCircuitOpen() bool {
+	return s.circuitOpen.Load()
+}
+
 // setMappedParentState implements SupervisorInterface.
 func (s *Supervisor[TObserved, TDesired]) setMappedParentState(state string) {
 	s.mu.Lock()

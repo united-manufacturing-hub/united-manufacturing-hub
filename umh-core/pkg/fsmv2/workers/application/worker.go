@@ -147,6 +147,13 @@ func (w *ApplicationWorker) GetInitialState() fsmv2.State[any, any] {
 func (w *ApplicationWorker) RequestShutdown() {
 }
 
+// GetDependenciesAny implements fsmv2.DependencyProvider.
+// ApplicationWorker currently has no dependencies, so this returns nil.
+// Actions emitted by ApplicationWorker will receive nil deps.
+func (w *ApplicationWorker) GetDependenciesAny() any {
+	return nil
+}
+
 // SupervisorConfig contains configuration for creating an application supervisor.
 type SupervisorConfig struct {
 	// ID is the unique identifier for the application worker.
