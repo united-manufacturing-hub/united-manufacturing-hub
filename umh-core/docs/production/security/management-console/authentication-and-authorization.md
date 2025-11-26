@@ -1,4 +1,4 @@
-# UMH Authentication and Permission System
+# ManagementConsole Authentication and Authorization
 
 For authorization and authentication, we use a 2-layer solution:
 - **Layer 1**: Identity and company access (session token) - who you are and which company's instances you can access
@@ -6,9 +6,13 @@ For authorization and authentication, we use a 2-layer solution:
 
 This separation provides clear boundaries in our distributed, multi-tenant system. Layer 1 ensures users can only communicate with instances within their company, while Layer 2 provides fine-grained authorization within that company.
 
+---
+
 ## How It Works
 
 ### Layer 1: Identity and Company Access
+
+**Applicable Standards**: NIST SP 800-63B (Digital Identity Guidelines), IEC 62443-4-2 CR 1.1 (Human User Identification and Authentication), OWASP Authentication Cheat Sheet
 
 Layer 1 handles authentication - proving who you are and which company you belong to. Both users and UMH instances authenticate at this layer.
 
@@ -49,7 +53,7 @@ A UMH instance authenticates using an AUTH_TOKEN that is generated during the in
 
 The AUTH_TOKEN is a cryptographically secure random token displayed once during instance creation. The user must copy this token and configure it in the UMH instance.
 
-**Security Note**: The user who creates an instance has one-time visibility of the AUTH_TOKEN.
+**Security Note**: The user who creates an instance has one-time visibility of the AUTH_TOKEN. For secure AUTH_TOKEN storage and rotation procedures at the instance level, see [umh-core deployment security](../umh-core/deployment-security.md#auth_token-in-environment-variable).
 
 The AUTH_TOKEN serves two purposes:
 
@@ -57,6 +61,8 @@ The AUTH_TOKEN serves two purposes:
 - **Layer 2 credential encryption**: A single-hash of the AUTH_TOKEN is used as the credential encryption key. This allows the instance to decrypt its own credentials, while ManagementConsole (which only has the double-hash) cannot.
 
 ### Layer 2: Permissions Within Your Company
+
+**Applicable Standards**: NIST SP 800-53 AC-3 (Access Enforcement), NIST SP 800-53 AC-6 (Least Privilege), IEC 62443-4-2 CR 2.1 (Authorization Enforcement), OWASP Authorization Cheat Sheet
 
 Layer 2 uses a hierarchical permission system where each user and instance has a defined role at specific locations within a company.
 
@@ -67,7 +73,12 @@ The first user who creates a company becomes the **Account Owner**. This role ha
 - The Account Owner cannot be changed or transferred
 - Has Admin access to all locations within the company
 - Can perform all administrative actions including user invitation and instance creation
-- In production environments, treat the Account Owner as a "break-glass" account - use it only for initial setup and emergency access
+
+> **Design Trade-off: Account Owner Cannot Be Removed**
+>
+> The Account Owner has permanent Admin access and cannot be transferred or demoted. This ensures a guaranteed recovery path if other admins lose access.
+>
+> **Best practice:** Treat Account Owner as a break-glass account - use only for initial setup and emergency access. Enable MFA via Auth0, store credentials in a secure password manager, and create separate admin accounts for daily work.
 
 **Why this design**: The Account Owner provides a guaranteed recovery path if other admins lose access or permissions become misconfigured. Since it cannot be removed or demoted, it ensures at least one account always has full control.
 
@@ -108,19 +119,95 @@ Only admins and the Account Owner can invite new users and add instances. When i
 
 ### Access Revocation
 
+**Applicable Standards**: NIST SP 800-53 AC-2 (Account Management), OWASP Session Management Cheat Sheet
+
 Access revocation happens at Layer 1 (session invalidation), not through permission grant expiration:
 
 - **User removal**: When a user is removed from ManagementConsole, their session token is invalidated immediately - they can no longer authenticate
 - **Permission updates**: Admins can update user permissions at any time. ManagementConsole validates the user's current permissions from the database on each request, so changes take effect quickly (within the cache window of up to 10 minutes)
 - **Instance removal**: Removing an instance from ManagementConsole denies all further communication
 
-**Accepted risk**: Permission updates require the user to accept the new certificate. A malicious user could refuse to apply permission patches, retaining their original privileges. Additionally, old permission grants are not cryptographically revoked. **To reliably revoke access or demote a user, remove them entirely** - this invalidates their session immediately without requiring their cooperation.
+> **Design Trade-off: Permission Updates Require User Cooperation**
+>
+> When an admin updates a user's permissions, the user must accept the new permission certificate. If a user doesn't accept the update, they retain their original privileges until they do.
+>
+> **Best practice:** To immediately revoke access or demote a user, **remove them entirely** - this invalidates their session without requiring their cooperation. You can then re-invite them with the correct permissions.
 
 **What happens when users leave**: When you remove a user, they immediately lose access (session invalidated). Resources they created and users they invited remain - permission grants represent organizational decisions, not personal relationships.
 
+### Session Management
+
+**Applicable Standards**: OWASP Session Management Cheat Sheet, NIST SP 800-63B (Session Binding)
+
+ManagementConsole manages user sessions independently from Auth0 using JWT cookies signed with `JWT_SECRET_KEY`.
+
+**Session Lifecycle**:
+- **Creation**: Session token issued after successful Auth0 authentication
+- **Storage**: HTTPOnly cookie with Secure and SameSite=Strict attributes
+- **Duration**: 14-day sliding window (extends on activity), 30-day absolute maximum
+- **Termination**: Explicit logout, absolute timeout, or user removal from company
+
+**Session Policies**:
+- **Concurrent sessions**: Multiple sessions from different devices are permitted
+- **Token refresh**: Session extends automatically on API activity within the 14-day window
+- **Cross-device**: Each device maintains its own independent session
+
+> **Current Limitation: No Idle Timeout**
+>
+> ManagementConsole uses a 30-day absolute timeout but does not currently implement idle timeout (automatic logout after inactivity). Sessions remain active until the user logs out or the 30-day limit is reached.
+>
+> **Best practice:** Log out when leaving your workstation. For environments requiring shorter session lifetimes, consider enterprise SSO with your own timeout policies.
+
+**Forced Logout**: Currently, individual session termination requires user removal and re-invitation. Bulk session revocation for specific users is planned for a future release.
+
+---
+
+## Threat Model
+
+ManagementConsole's authentication system is designed to protect against specific threat actors while accepting certain risks as design trade-offs.
+
+### Trust Boundaries
+
+The authentication system operates across three trust boundaries:
+
+1. **User Browser ↔ ManagementConsole**: TLS-encrypted connections with session tokens stored as HTTPOnly cookies
+2. **ManagementConsole ↔ Auth0**: OAuth 2.0 flow for user authentication, with Auth0 handling credential storage and MFA
+3. **ManagementConsole ↔ umh-core Instances**: AUTH_TOKEN-based authentication for instance identity, with permission certificates for authorization
+
+### Threat Actors and Protection
+
+| Threat Actor | Capabilities | Protection Level |
+|--------------|--------------|------------------|
+| **External Attacker** | Credential stuffing, phishing, brute force | **Protected** - Auth0 provides rate limiting, anomaly detection, MFA |
+| **Compromised User** | Access to company data at their permission level | **Protected** - Session timeout, per-request permission validation, removal invalidates session immediately |
+| **Malicious Insider** | Permission escalation attempts, invite key interception | **Partially Protected** - Backend enforces admin-location rules; two-channel invite delivery |
+| **Account Owner Compromise** | Complete company takeover | **Design trade-off** - See Account Owner section above |
+
+### Attack Scenarios and Mitigations
+
+**Credential Attacks**: Auth0 protects against credential stuffing and brute force through automatic rate limiting and anomaly detection. For enterprise customers, MFA can be enforced for all users.
+
+**Session Hijacking**: Session tokens are stored in HTTPOnly cookies (not accessible via JavaScript), preventing XSS-based token theft. All connections use TLS encryption.
+
+**Cross-Company Access**: Each company is isolated through Auth0 organizations. Users authenticate to specific companies and cannot access data from other organizations.
+
+**Privilege Escalation**: Admins can only grant permissions for locations where they have admin access. The backend validates all permission operations, preventing UI-based manipulation.
+
+**Phishing Attacks**: The two-channel invite system (email link + separate invite key) prevents email-only attacks. Users must have both pieces to join a company.
+
+### Out of Scope
+
+ManagementConsole authentication does NOT protect against:
+
+- **Compromised umh-core instances**: Instance-level security is covered in [umh-core deployment security](../umh-core/deployment-security.md#threat-model-simplified)
+- **Physical access to user devices**: Users are responsible for device security
+- **Auth0 infrastructure compromise**: Auth0 is responsible for their platform security (see Shared Responsibility Model)
+
+---
+
 ## Shared Responsibility Model
 
-Security is a shared responsibility between UMH and our customers. This section clarifies who is responsible for what.
+Security is a shared responsibility between UMH and our customers. This section clarifies who is responsible for what. For instance-level security responsibilities, see [umh-core deployment security - Shared Responsibility Model](../umh-core/deployment-security.md#shared-responsibility-model).
 
 ### We (UMH) Are Responsible For
 
@@ -130,7 +217,11 @@ Security is a shared responsibility between UMH and our customers. This section 
 | Authorization Framework | RBAC system, permission inheritance, location-based access control |
 | Secure Defaults | Password complexity requirements, invite key separation, double-hash storage |
 | Platform Security | ManagementConsole application security, API security, session management |
-| Audit Logging | Recording authentication events and permission changes |
+| Audit Logging | Recording authentication events and permission changes (see note below) |
+
+> **Known Limitation: Audit Logging**
+>
+> Comprehensive audit logging with user-accessible logs, configurable retention, and SIEM integration is planned but not yet fully implemented. Currently, authentication events are logged internally but not exposed through a user interface. Enterprise customers requiring detailed audit trails should contact UMH support to discuss available options.
 
 ### You (Customer) Are Responsible For
 
@@ -150,6 +241,8 @@ Security is a shared responsibility between UMH and our customers. This section 
 | Permission Design | UMH provides the RBAC framework; you define appropriate roles per location |
 | Incident Response | UMH monitors platform; you monitor for compromised credentials |
 | Compliance | UMH provides security controls; you ensure usage meets your compliance requirements |
+
+---
 
 ## Compliance Alignment
 
@@ -200,6 +293,8 @@ ManagementConsole targets **IEC 62443 Security Level 2 (SL2)**, appropriate for:
 
 For critical infrastructure requiring SL3+, contact UMH for enterprise security options.
 
+---
+
 ### References
 
 - [OWASP Authentication Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html)
@@ -207,6 +302,8 @@ For critical infrastructure requiring SL3+, contact UMH for enterprise security 
 - [NIST SP 800-63B Digital Identity Guidelines](https://pages.nist.gov/800-63-4/sp800-63b.html)
 - [NIST SP 800-53 Access Control](https://csrc.nist.gov/pubs/sp/800/53/r5/upd1/final)
 - [IEC 62443-3-3 System Security Requirements](https://www.iec.ch/iec-62443)
+
+---
 
 ## Reference
 
