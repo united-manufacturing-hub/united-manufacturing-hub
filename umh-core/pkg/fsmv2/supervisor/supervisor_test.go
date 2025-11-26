@@ -74,7 +74,6 @@ func registerTestWorkerFactories() {
 		// Register worker factory
 		_ = factory.RegisterFactoryByType(wt, func(identity fsmv2.Identity) fsmv2.Worker {
 			return &TestWorkerWithType{
-				TestWorker: TestWorker{},
 				WorkerType: wt,
 			}
 		})
@@ -119,7 +118,7 @@ func TestSupervisorUsesTriangularStore(t *testing.T) {
 		t.Fatalf("Failed to create observed collection: %v", err)
 	}
 
-	triangularStore := storage.NewTriangularStore(basicStore)
+	triangularStore := storage.NewTriangularStore(basicStore, logger)
 
 	supervisorCfg := Config{
 		WorkerType: "test",
@@ -371,7 +370,7 @@ func TestSupervisorSavesIdentityToTriangularStore(t *testing.T) {
 		t.Fatalf("Failed to create observed collection: %v", err)
 	}
 
-	triangularStore := storage.NewTriangularStore(basicStore)
+	triangularStore := storage.NewTriangularStore(basicStore, logger)
 
 	supervisorCfg := Config{
 		WorkerType: "test",
@@ -446,7 +445,7 @@ func TestSupervisorLoadsSnapshotFromTriangularStore(t *testing.T) {
 		t.Fatalf("Failed to create observed collection: %v", err)
 	}
 
-	triangularStore := storage.NewTriangularStore(basicStore)
+	triangularStore := storage.NewTriangularStore(basicStore, logger)
 
 	supervisorCfg := Config{
 		WorkerType: "test",
@@ -602,7 +601,7 @@ func TestApplyStateMapping_WithMapping(t *testing.T) {
 	_ = basicStore.CreateCollection(ctx, "child_desired", nil)
 	_ = basicStore.CreateCollection(ctx, "child_observed", nil)
 
-	triangularStore := storage.NewTriangularStore(basicStore)
+	triangularStore := storage.NewTriangularStore(basicStore, logger)
 
 	supervisorCfg := Config{
 		WorkerType: "parent",
@@ -690,7 +689,7 @@ func TestApplyStateMapping_NoMapping(t *testing.T) {
 	_ = basicStore.CreateCollection(ctx, "child_desired", nil)
 	_ = basicStore.CreateCollection(ctx, "child_observed", nil)
 
-	triangularStore := storage.NewTriangularStore(basicStore)
+	triangularStore := storage.NewTriangularStore(basicStore, logger)
 
 	supervisorCfg := Config{
 		WorkerType: "parent",
@@ -771,7 +770,7 @@ func TestApplyStateMapping_MissingStateInMapping(t *testing.T) {
 	_ = basicStore.CreateCollection(ctx, "child_desired", nil)
 	_ = basicStore.CreateCollection(ctx, "child_observed", nil)
 
-	triangularStore := storage.NewTriangularStore(basicStore)
+	triangularStore := storage.NewTriangularStore(basicStore, logger)
 
 	supervisorCfg := Config{
 		WorkerType: "parent",
@@ -862,7 +861,7 @@ func TestApplyStateMapping_MultipleChildren(t *testing.T) {
 	_ = basicStore.CreateCollection(ctx, "child-3_desired", nil)
 	_ = basicStore.CreateCollection(ctx, "child-3_observed", nil)
 
-	triangularStore := storage.NewTriangularStore(basicStore)
+	triangularStore := storage.NewTriangularStore(basicStore, logger)
 
 	supervisorCfg := Config{
 		WorkerType: "parent",
@@ -991,7 +990,7 @@ func TestApplyStateMapping_EmptyStateMapping(t *testing.T) {
 	_ = basicStore.CreateCollection(ctx, "mqtt_client_desired", nil)
 	_ = basicStore.CreateCollection(ctx, "mqtt_client_observed", nil)
 
-	triangularStore := storage.NewTriangularStore(basicStore)
+	triangularStore := storage.NewTriangularStore(basicStore, logger)
 
 	supervisorCfg := Config{
 		WorkerType: "parent",
@@ -1073,7 +1072,7 @@ func TestApplyStateMapping_NilStateMapping(t *testing.T) {
 	_ = basicStore.CreateCollection(ctx, "mqtt_client_desired", nil)
 	_ = basicStore.CreateCollection(ctx, "mqtt_client_observed", nil)
 
-	triangularStore := storage.NewTriangularStore(basicStore)
+	triangularStore := storage.NewTriangularStore(basicStore, logger)
 
 	supervisorCfg := Config{
 		WorkerType: "parent",

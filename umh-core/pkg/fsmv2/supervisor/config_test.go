@@ -33,7 +33,7 @@ func setupTestStore(workerType string) *storage.TriangularStore {
 	_ = basicStore.CreateCollection(ctx, workerType+"_desired", nil)
 	_ = basicStore.CreateCollection(ctx, workerType+"_observed", nil)
 
-	return storage.NewTriangularStore(basicStore)
+	return storage.NewTriangularStore(basicStore, zap.NewNop().Sugar())
 }
 
 var _ = Describe("Supervisor Configuration", func() {
@@ -47,9 +47,9 @@ var _ = Describe("Supervisor Configuration", func() {
 
 			s := NewSupervisor[*TestObservedState, *TestDesiredState](cfg)
 
-			Expect(s.getStaleThreshold()).To(Equal(10 * time.Second))
-			Expect(s.getCollectorTimeout()).To(Equal(20 * time.Second))
-			Expect(s.getMaxRestartAttempts()).To(Equal(3))
+			Expect(s.collectorHealth.staleThreshold).To(Equal(10 * time.Second))
+			Expect(s.collectorHealth.timeout).To(Equal(20 * time.Second))
+			Expect(s.collectorHealth.maxRestartAttempts).To(Equal(3))
 		})
 	})
 
@@ -68,9 +68,9 @@ var _ = Describe("Supervisor Configuration", func() {
 
 			s := NewSupervisor[*TestObservedState, *TestDesiredState](cfg)
 
-			Expect(s.getStaleThreshold()).To(Equal(5 * time.Second))
-			Expect(s.getCollectorTimeout()).To(Equal(15 * time.Second))
-			Expect(s.getMaxRestartAttempts()).To(Equal(5))
+			Expect(s.collectorHealth.staleThreshold).To(Equal(5 * time.Second))
+			Expect(s.collectorHealth.timeout).To(Equal(15 * time.Second))
+			Expect(s.collectorHealth.maxRestartAttempts).To(Equal(5))
 		})
 	})
 

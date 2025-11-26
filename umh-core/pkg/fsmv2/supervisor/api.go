@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/internal/collection"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/internal/execution"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
@@ -284,6 +285,69 @@ func (s *Supervisor[TObserved, TDesired]) GetMappedParentState() string {
 	defer s.mu.RUnlock()
 
 	return s.mappedParentState
+}
+
+// getMappedParentState implements SupervisorInterface.
+func (s *Supervisor[TObserved, TDesired]) getMappedParentState() string {
+	return s.GetMappedParentState()
+}
+
+// setMappedParentState implements SupervisorInterface.
+func (s *Supervisor[TObserved, TDesired]) setMappedParentState(state string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.mappedParentState = state
+}
+
+// getStateMapping implements SupervisorInterface.
+func (s *Supervisor[TObserved, TDesired]) getStateMapping() map[string]string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if s.stateMapping == nil {
+		return nil
+	}
+
+	mapping := make(map[string]string, len(s.stateMapping))
+	for k, v := range s.stateMapping {
+		mapping[k] = v
+	}
+
+	return mapping
+}
+
+// setStateMapping implements SupervisorInterface.
+func (s *Supervisor[TObserved, TDesired]) setStateMapping(mapping map[string]string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.stateMapping = mapping
+}
+
+// updateUserSpec implements SupervisorInterface.
+func (s *Supervisor[TObserved, TDesired]) updateUserSpec(spec config.UserSpec) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.userSpec = spec
+}
+
+// getUserSpec implements SupervisorInterface.
+func (s *Supervisor[TObserved, TDesired]) getUserSpec() config.UserSpec {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	return s.userSpec
+}
+
+// setParent implements SupervisorInterface.
+func (s *Supervisor[TObserved, TDesired]) setParent(parent SupervisorInterface, parentID string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.parent = parent
+	s.parentID = parentID
 }
 
 // GetChildren returns a copy of the children map for inspection.

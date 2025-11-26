@@ -68,7 +68,7 @@ var _ = Describe("ChildSpec Validation Integration", func() {
 			}
 		})
 
-		triangularStore = storage.NewTriangularStore(basicStore)
+		triangularStore = storage.NewTriangularStore(basicStore, zap.NewNop().Sugar())
 	})
 
 	AfterEach(func() {
