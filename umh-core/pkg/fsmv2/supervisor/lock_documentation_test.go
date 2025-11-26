@@ -47,6 +47,7 @@ var _ = Describe("Lock Documentation", func() {
 	var (
 		fset       *token.FileSet
 		file       *ast.File
+		typesFile  *ast.File
 		parseError error
 	)
 
@@ -55,6 +56,9 @@ var _ = Describe("Lock Documentation", func() {
 		fset = token.NewFileSet()
 		file, parseError = parser.ParseFile(fset, "supervisor.go", nil, parser.ParseComments)
 		Expect(parseError).NotTo(HaveOccurred(), "Failed to parse supervisor.go")
+		// Parse types.go for WorkerContext
+		typesFile, parseError = parser.ParseFile(fset, "types.go", nil, parser.ParseComments)
+		Expect(parseError).NotTo(HaveOccurred(), "Failed to parse types.go")
 	})
 
 	Describe("Supervisor.mu Lock", func() {
@@ -200,7 +204,7 @@ var _ = Describe("Lock Documentation", func() {
 	Describe("WorkerContext.mu Lock", func() {
 		It("should have godoc comment describing what it protects", func() {
 			var workerCtxFieldDoc string
-			ast.Inspect(file, func(n ast.Node) bool {
+			ast.Inspect(typesFile, func(n ast.Node) bool {
 				if typeSpec, ok := n.(*ast.TypeSpec); ok {
 					if typeSpec.Name.Name == "WorkerContext" {
 						if structType, ok := typeSpec.Type.(*ast.StructType); ok {
@@ -220,7 +224,7 @@ var _ = Describe("Lock Documentation", func() {
 				return true
 			})
 
-			// WILL FAIL: No documentation exists yet
+			// WorkerContext.mu documentation should describe what it protects
 			Expect(workerCtxFieldDoc).NotTo(BeEmpty(), "WorkerContext.mu has no godoc comment")
 			Expect(workerCtxFieldDoc).To(ContainSubstring("currentState"),
 				"WorkerContext.mu should mention it protects currentState")
@@ -228,7 +232,7 @@ var _ = Describe("Lock Documentation", func() {
 
 		It("should document that it's independent from Supervisor.mu", func() {
 			var workerCtxFieldDoc string
-			ast.Inspect(file, func(n ast.Node) bool {
+			ast.Inspect(typesFile, func(n ast.Node) bool {
 				if typeSpec, ok := n.(*ast.TypeSpec); ok {
 					if typeSpec.Name.Name == "WorkerContext" {
 						if structType, ok := typeSpec.Type.(*ast.StructType); ok {
@@ -248,7 +252,7 @@ var _ = Describe("Lock Documentation", func() {
 				return true
 			})
 
-			// WILL FAIL: Documentation doesn't explain lock independence
+			// WorkerContext.mu documentation should explain lock independence
 			Expect(workerCtxFieldDoc).To(MatchRegexp(`(?i)(independent|per-worker|separate)`),
 				"WorkerContext.mu should explain that it's independent from Supervisor.mu")
 		})
