@@ -959,9 +959,212 @@ func (s *Supervisor[TObserved, TDesired]) getEscalationSteps(childName string) s
 }
 
 func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.ChildSpec) error {
-	panic("reconcileChildren not yet implemented in refactored code")
+	startTime := time.Now()
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	var addedCount, updatedCount, removedCount int
+
+	specNames := make(map[string]bool)
+	for _, spec := range specs {
+		specNames[spec.Name] = true
+
+		if child, exists := s.children[spec.Name]; exists {
+			s.logTrace("lifecycle",
+				"lifecycle_event", "child_update",
+				"child_name", spec.Name,
+				"parent_worker_type", s.workerType)
+
+			child.updateUserSpec(spec.UserSpec)
+			child.setStateMapping(spec.StateMapping)
+
+			updatedCount++
+		} else {
+			s.logTrace("lifecycle",
+				"lifecycle_event", "child_add_start",
+				"child_name", spec.Name,
+				"child_worker_type", spec.WorkerType,
+				"parent_worker_type", s.workerType)
+
+			s.logger.Infow("child_adding",
+				"worker_type", s.workerType,
+				"child_name", spec.Name,
+				"child_worker_type", spec.WorkerType)
+
+			addedCount++
+
+			childConfig := Config{
+				WorkerType: spec.WorkerType,
+				Store:      s.store,
+				Logger:     s.logger,
+			}
+
+			// Use factory to create child supervisor with proper type
+			rawSupervisor, err := factory.NewSupervisorByType(spec.WorkerType, childConfig)
+			if err != nil {
+				s.logger.Errorf("Failed to create child supervisor for %s: %v", spec.Name, err)
+
+				continue
+			}
+
+			childSupervisor, ok := rawSupervisor.(SupervisorInterface)
+			if !ok {
+				s.logger.Errorf("Factory returned invalid supervisor type for %s", spec.Name)
+
+				continue
+			}
+
+			childSupervisor.updateUserSpec(spec.UserSpec)
+			childSupervisor.setStateMapping(spec.StateMapping)
+			childSupervisor.setParent(s, s.workerType)
+
+			// Create worker identity
+			childIdentity := fsmv2.Identity{
+				ID:         spec.Name + "-001",
+				Name:       spec.Name,
+				WorkerType: spec.WorkerType,
+			}
+
+			// Use factory to create worker instance
+			childWorker, err := factory.NewWorkerByType(spec.WorkerType, childIdentity)
+			if err != nil {
+				s.logger.Errorf("Failed to create worker for child %s: %v (skipping)", spec.Name, err)
+
+				continue
+			}
+
+			// Add worker to child supervisor
+			if err := childSupervisor.AddWorker(childIdentity, childWorker); err != nil {
+				s.logger.Errorf("Failed to add worker to child supervisor %s: %v (skipping)", spec.Name, err)
+
+				continue
+			}
+
+			// Save initial desired state for child (empty document to avoid nil on first tick)
+			childDesiredCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+
+			desiredDoc := persistence.Document{
+				"id":                childIdentity.ID,
+				"shutdownRequested": false,
+			}
+			if err := s.store.SaveDesired(childDesiredCtx, spec.WorkerType, childIdentity.ID, desiredDoc); err != nil {
+				s.logger.Warnf("Failed to save initial desired state for child %s: %v", spec.Name, err)
+			}
+
+			cancel()
+
+			s.children[spec.Name] = childSupervisor
+
+			s.logTrace("lifecycle",
+				"lifecycle_event", "child_add_complete",
+				"child_name", spec.Name,
+				"parent_worker_type", s.workerType)
+
+			// Start child supervisor if parent is already started
+			if childCtx, started := s.getStartedContext(); started {
+				if childCtx.Err() == nil {
+					done := childSupervisor.Start(childCtx)
+					s.childDoneChans[spec.Name] = done
+				} else {
+					s.logger.Warnf("Parent context cancelled, skipping child start for %s", spec.Name)
+				}
+			}
+		}
+	}
+
+	for name := range s.children {
+		if !specNames[name] {
+			s.logTrace("lifecycle",
+				"lifecycle_event", "child_remove_start",
+				"child_name", name,
+				"parent_worker_type", s.workerType)
+
+			s.logger.Infow("child_removing",
+				"worker_type", s.workerType,
+				"child_name", name)
+
+			child := s.children[name]
+			if child != nil {
+				child.Shutdown()
+
+				// Wait for child to fully shut down before removing
+				if done, exists := s.childDoneChans[name]; exists {
+					<-done
+					delete(s.childDoneChans, name)
+				}
+			}
+
+			delete(s.children, name)
+
+			s.logTrace("lifecycle",
+				"lifecycle_event", "child_remove_complete",
+				"child_name", name,
+				"parent_worker_type", s.workerType)
+
+			removedCount++
+		}
+	}
+
+	duration := time.Since(startTime)
+	// Log at INFO when topology changes (add/remove), DEBUG for updates only
+	if addedCount > 0 || removedCount > 0 {
+		// Topology changed - INFO level for operators
+		s.logger.Infow("child_reconciliation_completed",
+			"worker_type", s.workerType,
+			"added", addedCount,
+			"updated", updatedCount,
+			"removed", removedCount,
+			"duration_ms", duration.Milliseconds())
+	} else if updatedCount > 0 {
+		// Updates only - DEBUG level (per-tick noise)
+		s.logger.Debugw("child_reconciliation_completed",
+			"worker_type", s.workerType,
+			"updated", updatedCount,
+			"duration_ms", duration.Milliseconds())
+	}
+	metrics.RecordReconciliation(s.workerType, "success", duration)
+
+	return nil
 }
 
 func (s *Supervisor[TObserved, TDesired]) applyStateMapping() {
-	panic("applyStateMapping not yet implemented in refactored code")
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if len(s.workers) == 0 {
+		return
+	}
+
+	var parentState string
+
+	for _, workerCtx := range s.workers {
+		workerCtx.mu.RLock()
+
+		if workerCtx.currentState != nil {
+			parentState = workerCtx.currentState.String()
+		}
+
+		workerCtx.mu.RUnlock()
+
+		break
+	}
+
+	for childName, child := range s.children {
+		mappedState := parentState
+
+		stateMapping := child.getStateMapping()
+		if len(stateMapping) > 0 {
+			if mapped, exists := stateMapping[parentState]; exists {
+				mappedState = mapped
+			}
+		}
+
+		child.setMappedParentState(mappedState)
+		s.logTrace("state_mapped",
+			"worker_type", s.workerType,
+			"child_name", childName,
+			"parent_state", parentState,
+			"mapped_state", mappedState)
+	}
 }
