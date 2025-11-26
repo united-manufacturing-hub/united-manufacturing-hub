@@ -894,14 +894,30 @@ func (s *Supervisor[TObserved, TDesired]) checkDataFreshness(snapshot *fsmv2.Sna
 
 	age = time.Since(collectedAt)
 
+	// During shutdown, log at DEBUG instead of WARN to avoid noisy logs
+	// when collectors are already stopped and data is expected to be stale.
+	isShuttingDown := !s.started.Load()
+
 	if s.freshnessChecker.IsTimeout(snapshot) {
-		s.logger.Warnf("Data timeout: observation is %v old (threshold: %v)", age, s.collectorHealth.timeout)
+		if isShuttingDown {
+			s.logger.Debugw("data_timeout_during_shutdown",
+				"age", age,
+				"threshold", s.collectorHealth.timeout)
+		} else {
+			s.logger.Warnf("Data timeout: observation is %v old (threshold: %v)", age, s.collectorHealth.timeout)
+		}
 
 		return false
 	}
 
 	if !s.freshnessChecker.Check(snapshot) {
-		s.logger.Warnf("Data stale: observation is %v old (threshold: %v)", age, s.collectorHealth.staleThreshold)
+		if isShuttingDown {
+			s.logger.Debugw("data_stale_during_shutdown",
+				"age", age,
+				"threshold", s.collectorHealth.staleThreshold)
+		} else {
+			s.logger.Warnf("Data stale: observation is %v old (threshold: %v)", age, s.collectorHealth.staleThreshold)
+		}
 
 		return false
 	}
