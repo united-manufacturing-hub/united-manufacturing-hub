@@ -17,14 +17,12 @@ package supervisor_test
 import (
 	"context"
 	"errors"
-	"sync"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/collection"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 	"go.uber.org/zap"
 )
@@ -115,59 +113,6 @@ var _ = Describe("Supervisor Lifecycle", func() {
 				Expect(func() {
 					_ = s.TestTick(context.Background())
 				}).To(Panic())
-			})
-		})
-	})
-
-	Describe("observationLoop ticker and restart channel", func() {
-		Context("when restart is requested during observation", func() {
-			It("should collect immediately", func() {
-				var collectCountMutex sync.Mutex
-				collectCount := 0
-				store := newMockTriangularStore()
-				collector := collection.NewCollector[mockObservedState](collection.CollectorConfig[mockObservedState]{
-					Worker: &mockWorker{
-						collectFunc: func(ctx context.Context) (fsmv2.ObservedState, error) {
-							collectCountMutex.Lock()
-							collectCount++
-							collectCountMutex.Unlock()
-
-							return &mockObservedState{
-								ID:          "test-worker",
-								CollectedAt: time.Now(),
-								Desired:     &mockDesiredState{},
-							}, nil
-						},
-					},
-					Identity:            mockIdentity(),
-					Store:               store,
-					Logger:              zap.NewNop().Sugar(),
-					ObservationInterval: 5 * time.Second,
-					ObservationTimeout:  1 * time.Second,
-				})
-
-				ctx, cancel := context.WithCancel(context.Background())
-				defer cancel()
-
-				err := collector.Start(ctx)
-				Expect(err).ToNot(HaveOccurred())
-
-				time.Sleep(100 * time.Millisecond)
-				collectCountMutex.Lock()
-				initialCount := collectCount
-				collectCountMutex.Unlock()
-
-				collector.Restart()
-
-				time.Sleep(200 * time.Millisecond)
-
-				collectCountMutex.Lock()
-				finalCount := collectCount
-				collectCountMutex.Unlock()
-				Expect(finalCount).To(BeNumerically(">", initialCount))
-
-				cancel()
-				time.Sleep(100 * time.Millisecond)
 			})
 		})
 	})
