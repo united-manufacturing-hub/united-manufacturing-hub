@@ -173,7 +173,7 @@ func CreateTestTriangularStore() *storage.TriangularStore {
 		panic(fmt.Sprintf("failed to create observed collection: %v", err))
 	}
 
-	return storage.NewTriangularStore(basicStore)
+	return storage.NewTriangularStore(basicStore, nil)
 }
 
 // CreateTestTriangularStoreForWorkerType creates a triangular store for a specific workerType.
@@ -199,7 +199,7 @@ func CreateTestTriangularStoreForWorkerType(workerType string) *storage.Triangul
 		panic(fmt.Sprintf("failed to create observed collection: %v", err))
 	}
 
-	return storage.NewTriangularStore(basicStore)
+	return storage.NewTriangularStore(basicStore, nil)
 }
 
 // CreateTestObservedStateWithID creates a mock observed state with a specific ID.
