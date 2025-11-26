@@ -151,6 +151,63 @@ Security is a shared responsibility between UMH and our customers. This section 
 | Incident Response | UMH monitors platform; you monitor for compromised credentials |
 | Compliance | UMH provides security controls; you ensure usage meets your compliance requirements |
 
+## Compliance Alignment
+
+This section maps ManagementConsole security controls to industry standards.
+
+### Authentication Standards
+
+| Standard | Requirement | Implementation |
+|----------|-------------|----------------|
+| OWASP Authentication | MFA, brute force protection, secure session management | Auth0 provides all authentication controls |
+| NIST SP 800-63B AAL2 | Multi-factor authentication, session timeout ≤24hr | Auth0 MFA + configurable session lifetime |
+| IEC 62443 SR 1.1 | Human user identification and authentication | Auth0 unique user IDs + authentication |
+| IEC 62443 SR 1.1 RE 2 | MFA for untrusted networks (SL2+) | Auth0 MFA enforced for all external access |
+
+### Authorization Standards
+
+| Standard | Requirement | Implementation |
+|----------|-------------|----------------|
+| OWASP Authorization | Least privilege, deny by default, RBAC | Platform implements role-based access control |
+| NIST SP 800-53 AC-3 | Access enforcement at all access points | ManagementConsole enforces via database lookups |
+| NIST SP 800-53 AC-6 | Least privilege | Viewer/Editor/Admin roles with minimal permissions |
+| IEC 62443 SR 2.1 | Authorization enforcement for all users | Platform validates permissions on each request |
+
+### Session Management
+
+| Standard | Requirement | Implementation |
+|----------|-------------|----------------|
+| OWASP Session | Token rotation, secure cookies, logout | Backend issues HTTPOnly JWT cookies (14-day sliding window, 30-day absolute) |
+| NIST SP 800-63B | Idle timeout ≤1hr (AAL2) | Not yet implemented (30-day absolute timeout only) |
+
+**Note**: Auth0 handles authentication only. ManagementConsole backend manages sessions independently using its own JWT cookies signed with `JWT_SECRET_KEY`.
+
+### Accepted Limitations
+
+| Standard | Requirement | Current Status |
+|----------|-------------|----------------|
+| NIST SP 800-63B AAL2 | Idle timeout ≤1hr | Not implemented (30-day absolute timeout only) |
+| NIST AC-2(3) | Disable dormant accounts | Not implemented (manual process) |
+| IEC 62443 SL3 | MFA for all interfaces | MFA for external only (SL2 compliant) |
+| OWASP | Immediate permission revocation | Permission updates require user acceptance |
+
+### Target Security Level
+
+ManagementConsole targets **IEC 62443 Security Level 2 (SL2)**, appropriate for:
+- Protection against intentional violation using simple means
+- Cybercrime-level threat actors with generic skills
+- Standard manufacturing and industrial operations
+
+For critical infrastructure requiring SL3+, contact UMH for enterprise security options.
+
+### References
+
+- [OWASP Authentication Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html)
+- [OWASP Authorization Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Authorization_Cheat_Sheet.html)
+- [NIST SP 800-63B Digital Identity Guidelines](https://pages.nist.gov/800-63-4/sp800-63b.html)
+- [NIST SP 800-53 Access Control](https://csrc.nist.gov/pubs/sp/800/53/r5/upd1/final)
+- [IEC 62443-3-3 System Security Requirements](https://www.iec.ch/iec-62443)
+
 ## Reference
 
 ### User Invitation Process
