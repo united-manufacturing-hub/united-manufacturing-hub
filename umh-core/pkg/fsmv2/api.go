@@ -12,20 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
-
 package fsmv2
 
 import (
@@ -79,6 +65,19 @@ type DesiredState interface {
 	IsShutdownRequested() bool
 }
 
+// ShutdownRequestable allows setting the shutdown flag on any DesiredState.
+// All DesiredState types should embed helpers.BaseDesiredState to satisfy this interface.
+// This enables type-safe shutdown request propagation from supervisor to workers.
+//
+// Example usage:
+//
+//	if sr, ok := any(desired).(fsmv2.ShutdownRequestable); ok {
+//	    sr.SetShutdownRequested(true)
+//	}
+type ShutdownRequestable interface {
+	SetShutdownRequested(bool)
+}
+
 // Snapshot is the complete view of the worker at a point in time.
 // The supervisor assembles this from the database and passes it to State.Next().
 // This enables pure functional state transitions based on complete information.
@@ -89,9 +88,9 @@ type DesiredState interface {
 // This guarantees that state transitions are pure functions without side effects.
 //
 // We do NOT use getters because:
-//   1. Pass-by-value makes mutation impossible (copies on assignment)
-//   2. Getters add boilerplate without adding safety
-//   3. Go convention favors simple field access over accessors (see time.Time, net.IP)
+//  1. Pass-by-value makes mutation impossible (copies on assignment)
+//  2. Getters add boilerplate without adding safety
+//  3. Go convention favors simple field access over accessors (see time.Time, net.IP)
 //
 // This is the idiomatic Go approach: Use value semantics for immutability,
 // not OOP patterns like getters/setters.
@@ -128,24 +127,32 @@ type Snapshot struct {
 //
 // IDEMPOTENCY REQUIREMENT (Invariant I10):
 // Actions MUST be safe to call multiple times. Each action implementation should:
-//   1. Check if work is already done before performing it
-//   2. Produce the same final state whether called once or multiple times
-//   3. Handle partial completion gracefully (retry from checkpoint)
+//  1. Check if work is already done before performing it
+//  2. Produce the same final state whether called once or multiple times
+//  3. Handle partial completion gracefully (retry from checkpoint)
 //
-// Example idempotent action:
+// Example idempotent action (empty struct, deps injected):
 //
-//	func (a *CreateFileAction) Execute(ctx context.Context) error {
-//	    // Check if already done
-//	    if fileExists(a.path) {
-//	        return nil  // Already created, idempotent
+//	func (a *ConnectAction) Execute(ctx context.Context, depsAny any) error {
+//	    // ALWAYS check context cancellation first
+//	    select {
+//	    case <-ctx.Done():
+//	        return ctx.Err()
+//	    default:
 //	    }
-//	    return createFile(a.path, a.content)
+//	    deps := depsAny.(MyDependencies)
+//	    // Check if already done (idempotency)
+//	    if deps.IsConnected() {
+//	        return nil  // Already connected, idempotent
+//	    }
+//	    return deps.Connect(ctx)
 //	}
 //
 // Example NON-idempotent action (DO NOT DO THIS):
 //
-//	func (a *IncrementCounterAction) Execute(ctx context.Context) error {
-//	    counter++  // WRONG! Multiple calls increment multiple times
+//	func (a *IncrementCounterAction) Execute(ctx context.Context, depsAny any) error {
+//	    deps := depsAny.(MyDependencies)
+//	    deps.IncrementCounter()  // WRONG! Multiple calls increment multiple times
 //	    return nil
 //	}
 //
@@ -198,9 +205,10 @@ type Action[TDeps any] interface {
 //
 // TODO: Consider previous state tracking in Snapshot for debugging
 // TODO: Clarify naming to avoid confusion between "trying" vs "confirming"
-//       (e.g., ConfirmingStartState vs TryingToStartState)
-//       Option: Use "Ensuring" pattern - EnsuringStartedState, EnsuringStoppedState
-//       This captures both action and verification in one word (doing + confirming)
+//
+//	(e.g., ConfirmingStartState vs TryingToStartState)
+//	Option: Use "Ensuring" pattern - EnsuringStartedState, EnsuringStoppedState
+//	This captures both action and verification in one word (doing + confirming)
 //
 // Example implementation:
 //
@@ -331,4 +339,25 @@ type Worker interface {
 	//
 	// Example: return &InitializingState{} or &StoppedState{}
 	GetInitialState() State[any, any]
+
+	// RequestShutdown sets the ShutdownRequested flag on the worker's desired state.
+	// Called by supervisor to initiate graceful shutdown.
+	// The worker is responsible for propagating this to its internal desired state.
+	RequestShutdown()
+}
+
+// DependencyProvider is an optional interface that workers can implement
+// to expose their dependencies for action execution.
+// Workers that embed helpers.BaseWorker automatically satisfy this interface.
+//
+// Example usage:
+//
+//	if provider, ok := worker.(DependencyProvider); ok {
+//	    deps := provider.GetDependenciesAny()
+//	    action.Execute(ctx, deps)
+//	}
+type DependencyProvider interface {
+	// GetDependenciesAny returns the worker's dependencies as any.
+	// This is used by the ActionExecutor to pass dependencies to actions.
+	GetDependenciesAny() any
 }

@@ -16,6 +16,7 @@ package state
 
 import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/example-parent/action"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/example-parent/snapshot"
 )
@@ -26,7 +27,7 @@ type TryingToStopState struct {
 }
 
 func (s *TryingToStopState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, fsmv2.Action[any]) {
-	snap := fsmv2.ConvertSnapshot[snapshot.ParentObservedState, *snapshot.ParentDesiredState](snapAny)
+	snap := helpers.ConvertSnapshot[snapshot.ParentObservedState, *snapshot.ParentDesiredState](snapAny)
 
 	// Parent worker is considered "stopped" when we have valid observed state
 	// After StopAction executes, we can transition to Stopped
@@ -38,7 +39,7 @@ func (s *TryingToStopState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Sign
 }
 
 func (s *TryingToStopState) String() string {
-	return fsmv2.DeriveStateName(s)
+	return helpers.DeriveStateName(s)
 }
 
 func (s *TryingToStopState) Reason() string {

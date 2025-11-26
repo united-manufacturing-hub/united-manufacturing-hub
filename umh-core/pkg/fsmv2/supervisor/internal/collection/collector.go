@@ -34,6 +34,20 @@ const (
 	collectorStateStopped
 )
 
+// String returns a human-readable name for the collector state.
+func (s collectorState) String() string {
+	switch s {
+	case collectorStateCreated:
+		return "created"
+	case collectorStateRunning:
+		return "running"
+	case collectorStateStopped:
+		return "stopped"
+	default:
+		return fmt.Sprintf("unknown(%d)", s)
+	}
+}
+
 // CollectorConfig provides configuration for observation data collection.
 // The type parameter TObserved represents the observed state type for this collector.
 type CollectorConfig[TObserved any] struct {
@@ -43,6 +57,7 @@ type CollectorConfig[TObserved any] struct {
 	Logger              *zap.SugaredLogger
 	ObservationInterval time.Duration
 	ObservationTimeout  time.Duration
+	EnableTraceLogging  bool // Whether to emit verbose per-collection logs
 }
 
 // Collector manages the observation loop lifecycle and data collection.
@@ -69,6 +84,14 @@ func NewCollector[TObserved any](config CollectorConfig[TObserved]) *Collector[T
 	}
 }
 
+// logTrace logs a message only when trace logging is enabled.
+// Used for per-collection verbose logs to reduce noise at scale.
+func (c *Collector[TObserved]) logTrace(format string, args ...any) {
+	if c.config.EnableTraceLogging {
+		c.config.Logger.Debugf(format, args...)
+	}
+}
+
 // Start launches the observation loop in a goroutine.
 // The loop runs until the context is cancelled.
 func (c *Collector[TObserved]) Start(ctx context.Context) error {
@@ -79,7 +102,9 @@ func (c *Collector[TObserved]) Start(ctx context.Context) error {
 		panic("Invariant I8 violated: collector already started. Collector.Start() must not be called twice. Check lifecycle management in supervisor code.")
 	}
 
-	c.config.Logger.Infof("Starting collector, transitioning from state %d to running", c.state)
+	c.config.Logger.Infow("collector_starting",
+		"from_state", c.state.String(),
+		"to_state", "running")
 
 	c.state = collectorStateRunning
 	c.parentCtx = ctx
@@ -107,18 +132,23 @@ func (c *Collector[TObserved]) Restart() {
 	c.mu.RUnlock()
 
 	if !running {
-		c.config.Logger.Errorf("Cannot restart collector: not running (current state: %d)", c.state)
+		c.config.Logger.Errorw("collector_restart_failed",
+			"reason", "not_running",
+			"current_state", c.state.String())
 
 		return
 	}
 
-	c.config.Logger.Info("Collector restart requested, collecting immediately")
+	c.config.Logger.Infow("collector_restart_requested",
+		"worker_id", c.config.Identity.ID)
 
 	select {
 	case c.restartChan <- struct{}{}:
-		c.config.Logger.Debug("Collector restart signal sent")
+		c.config.Logger.Debugw("collector_restart_signal_sent",
+			"worker_id", c.config.Identity.ID)
 	default:
-		c.config.Logger.Debug("Collector restart already pending")
+		c.config.Logger.Debugw("collector_restart_already_pending",
+			"worker_id", c.config.Identity.ID)
 	}
 }
 
@@ -126,24 +156,33 @@ func (c *Collector[TObserved]) Stop(ctx context.Context) {
 	c.mu.Lock()
 
 	if c.state != collectorStateRunning {
-		c.config.Logger.Warnf("Collector not running, cannot stop (current state: %d)", c.state)
+		c.config.Logger.Warnw("collector_stop_skipped",
+			"reason", "not_running",
+			"current_state", c.state.String())
 		c.mu.Unlock()
 
 		return
 	}
 
-	c.config.Logger.Info("Stopping collector")
+	c.config.Logger.Infow("collector_stopping",
+		"worker_id", c.config.Identity.ID)
 	c.cancel()
 	doneChan := c.goroutineDone
 	c.mu.Unlock()
 
 	select {
 	case <-doneChan:
-		c.config.Logger.Info("Collector stopped successfully")
+		c.config.Logger.Infow("collector_stopped",
+			"worker_id", c.config.Identity.ID,
+			"result", "success")
 	case <-ctx.Done():
-		c.config.Logger.Warn("Context cancelled while waiting for collector to stop")
+		c.config.Logger.Warnw("collector_stopped",
+			"worker_id", c.config.Identity.ID,
+			"result", "context_cancelled")
 	case <-time.After(5 * time.Second):
-		c.config.Logger.Error("Timeout waiting for collector to stop")
+		c.config.Logger.Errorw("collector_stopped",
+			"worker_id", c.config.Identity.ID,
+			"result", "timeout")
 	}
 }
 
@@ -154,7 +193,9 @@ func (c *Collector[TObserved]) observationLoop() {
 		c.running = false
 		close(c.goroutineDone)
 		c.mu.Unlock()
-		c.config.Logger.Info("Collector observation loop stopped, state set to stopped")
+		c.config.Logger.Infow("collector_loop_stopped",
+			"worker_id", c.config.Identity.ID,
+			"final_state", c.state.String())
 	}()
 
 	c.mu.RLock()
@@ -163,7 +204,10 @@ func (c *Collector[TObserved]) observationLoop() {
 	timeout := c.config.ObservationTimeout
 	c.mu.RUnlock()
 
-	c.config.Logger.Infof("Starting observation loop for worker %s", c.config.Identity.ID)
+	c.config.Logger.Infow("collector_loop_starting",
+		"worker_id", c.config.Identity.ID,
+		"interval", interval.String(),
+		"timeout", timeout.String())
 
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
@@ -171,16 +215,21 @@ func (c *Collector[TObserved]) observationLoop() {
 	for {
 		select {
 		case <-ctx.Done():
-			c.config.Logger.Infof("Observation loop stopped for worker %s", c.config.Identity.ID)
+			c.config.Logger.Infow("collector_loop_context_done",
+				"worker_id", c.config.Identity.ID)
 
 			return
 
 		case <-c.restartChan:
-			c.config.Logger.Info("Collector restart requested, collecting immediately")
+			c.config.Logger.Debugw("collector_restart_triggered",
+				"worker_id", c.config.Identity.ID)
 
 			collectCtx, cancel := context.WithTimeout(ctx, timeout)
 			if err := c.collectAndSaveObservedState(collectCtx); err != nil {
-				c.config.Logger.Errorf("Failed to collect observed state after restart: %v", err)
+				c.config.Logger.Errorw("collector_observation_failed",
+					"worker_id", c.config.Identity.ID,
+					"trigger", "restart",
+					"error", err)
 			}
 
 			cancel()
@@ -188,7 +237,10 @@ func (c *Collector[TObserved]) observationLoop() {
 		case <-ticker.C:
 			collectCtx, cancel := context.WithTimeout(ctx, timeout)
 			if err := c.collectAndSaveObservedState(collectCtx); err != nil {
-				c.config.Logger.Errorf("Failed to collect observed state: %v", err)
+				c.config.Logger.Errorw("collector_observation_failed",
+					"worker_id", c.config.Identity.ID,
+					"trigger", "ticker",
+					"error", err)
 			}
 
 			cancel()
@@ -198,12 +250,16 @@ func (c *Collector[TObserved]) observationLoop() {
 
 func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) error {
 	collectionStartTime := time.Now()
-	c.config.Logger.Debugf("[DataFreshness] Worker %s: Starting observation collection at %s",
+	// Per-collection log moved to TRACE for scalability
+	c.logTrace("[DataFreshness] Worker %s: Starting observation collection at %s",
 		c.config.Identity.ID, collectionStartTime.Format(time.RFC3339Nano))
 
 	observed, err := c.config.Worker.CollectObservedState(ctx)
 	if err != nil {
-		c.config.Logger.Debugf("[DataFreshness] Worker %s: Failed to collect observation: %v", c.config.Identity.ID, err)
+		// Keep error logs at DEBUG for debugging
+		c.config.Logger.Debugw("collector_collect_failed",
+			"worker_id", c.config.Identity.ID,
+			"error", err)
 
 		return err
 	}
@@ -212,10 +268,12 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 	var observationTimestamp time.Time
 	if timestampProvider, ok := observed.(interface{ GetTimestamp() time.Time }); ok {
 		observationTimestamp = timestampProvider.GetTimestamp()
-		c.config.Logger.Debugf("[DataFreshness] Worker %s: Collected observation with timestamp=%s",
+		// Per-collection log moved to TRACE for scalability
+		c.logTrace("[DataFreshness] Worker %s: Collected observation with timestamp=%s",
 			c.config.Identity.ID, observationTimestamp.Format(time.RFC3339Nano))
 	} else {
-		c.config.Logger.Debugf("[DataFreshness] Worker %s: Collected observation does not implement GetTimestamp() (type: %T)",
+		// Per-collection log moved to TRACE for scalability
+		c.logTrace("[DataFreshness] Worker %s: Collected observation does not implement GetTimestamp() (type: %T)",
 			c.config.Identity.ID, observed)
 	}
 
@@ -224,8 +282,10 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 	// Type assert observed state to TObserved for compile-time type safety
 	observedTyped, ok := observed.(TObserved)
 	if !ok {
-		c.config.Logger.Errorf("[DataFreshness] Worker %s: observed state type mismatch: expected %T, got %T",
-			c.config.Identity.ID, *new(TObserved), observed)
+		c.config.Logger.Errorw("collector_type_mismatch",
+			"worker_id", c.config.Identity.ID,
+			"expected_type", fmt.Sprintf("%T", *new(TObserved)),
+			"actual_type", fmt.Sprintf("%T", observed))
 
 		return fmt.Errorf("observed state type mismatch: expected %T, got %T", *new(TObserved), observed)
 	}
@@ -233,15 +293,19 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 	// Use typed storage API - no workerType parameter needed, derived from TObserved
 	ts, ok := c.config.Store.(*storage.TriangularStore)
 	if !ok {
-		c.config.Logger.Errorf("[DataFreshness] Worker %s: store is not *TriangularStore, got %T",
-			c.config.Identity.ID, c.config.Store)
+		c.config.Logger.Errorw("collector_store_type_mismatch",
+			"worker_id", c.config.Identity.ID,
+			"expected_type", "*storage.TriangularStore",
+			"actual_type", fmt.Sprintf("%T", c.config.Store))
 
 		return fmt.Errorf("store is not *TriangularStore, got %T", c.config.Store)
 	}
 
 	changed, err := storage.SaveObservedTyped[TObserved](ts, ctx, c.config.Identity.ID, observedTyped)
 	if err != nil {
-		c.config.Logger.Debugf("[DataFreshness] Worker %s: Failed to save observation: %v", c.config.Identity.ID, err)
+		c.config.Logger.Debugw("collector_save_failed",
+			"worker_id", c.config.Identity.ID,
+			"error", err)
 
 		return err
 	}
@@ -254,12 +318,12 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 	// Record metrics
 	metrics.RecordObservationSave(workerType, changed, saveDuration)
 
-	// Log result
+	// Log result - per-collection logs moved to TRACE for scalability
 	if changed {
-		c.config.Logger.Debugf("[DataFreshness] Worker %s: Successfully saved observation (save_duration=%v, changed=true)",
+		c.logTrace("[DataFreshness] Worker %s: Successfully saved observation (save_duration=%v, changed=true)",
 			c.config.Identity.ID, saveDuration)
 	} else {
-		c.config.Logger.Debugf("[DataFreshness] Worker %s: Observation unchanged, skipped write (save_duration=%v, changed=false)",
+		c.logTrace("[DataFreshness] Worker %s: Observation unchanged, skipped write (save_duration=%v, changed=false)",
 			c.config.Identity.ID, saveDuration)
 	}
 

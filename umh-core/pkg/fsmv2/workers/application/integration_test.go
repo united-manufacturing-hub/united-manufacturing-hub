@@ -27,9 +27,9 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application/snapshot"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence/memory"
 )
 
@@ -93,7 +93,7 @@ func setupTestStore(ctx context.Context, workerTypes ...string) *storage.Triangu
 		_ = basicStore.CreateCollection(ctx, workerType+"_observed", nil)
 	}
 
-	return storage.NewTriangularStore(basicStore)
+	return storage.NewTriangularStore(basicStore, zap.NewNop().Sugar())
 }
 
 var _ = Describe("Root Package Integration", func() {

@@ -18,35 +18,38 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 )
 
 // ChildDependencies interface to avoid import cycles.
+// Includes methods for connection state management used by actions.
 type ChildDependencies interface {
 	fsmv2.Dependencies
+	// SetConnected updates the connection state. Called by ConnectAction/DisconnectAction.
+	SetConnected(connected bool)
+	// IsConnected returns the current connection state. Called by CollectObservedState.
+	IsConnected() bool
 }
 
 // ChildSnapshot represents a point-in-time view of the child worker state.
+// This is the combined snapshot type for type assertions in Next() methods.
 type ChildSnapshot struct {
 	Identity fsmv2.Identity
 	Observed ChildObservedState
-	Desired  ChildDesiredState
+	Desired  *ChildDesiredState
 }
 
 // ChildDesiredState represents the target configuration for the child worker.
 type ChildDesiredState struct {
-	shutdownRequested bool
-	Dependencies      ChildDependencies
-}
-
-func (s *ChildDesiredState) IsShutdownRequested() bool {
-	return s.shutdownRequested
+	helpers.BaseDesiredState          // Provides ShutdownRequested + IsShutdownRequested() + SetShutdownRequested()
+	Dependencies             ChildDependencies
 }
 
 // ShouldBeRunning returns true if the child should be in a running/connected state.
 // This is the positive assertion that should be checked before transitioning
 // from stopped to starting states.
 func (s *ChildDesiredState) ShouldBeRunning() bool {
-	return !s.shutdownRequested
+	return !s.ShutdownRequested
 }
 
 // ChildObservedState represents the current state of the child worker.

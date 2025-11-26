@@ -16,33 +16,18 @@ package fsmv2_test
 
 import (
 	"fmt"
-	"go/ast"
-	"go/parser"
-	"go/token"
-	"os"
 	"path/filepath"
 	"reflect"
 	"runtime"
-	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/validator"
 
 	// Import state packages to scan for violations.
 	childState "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/example-child/state"
 	parentState "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/example-parent/state"
 )
-
-// Violation represents an architectural violation found in code.
-type Violation struct {
-	File    string
-	Line    int
-	Type    string
-	Message string
-}
-
-func (v Violation) String() string {
-	return fmt.Sprintf("%s:%d [%s] %s", v.File, v.Line, v.Type, v.Message)
-}
 
 var _ = Describe("FSMv2 Architecture Validation", func() {
 
@@ -53,7 +38,7 @@ var _ = Describe("FSMv2 Architecture Validation", func() {
 				violations := validateStateStructs()
 
 				if len(violations) > 0 {
-					message := formatViolations("Empty State Violations", violations)
+					message := validator.FormatViolations("Empty State Violations", violations)
 					Fail(message)
 				}
 			})
@@ -61,10 +46,10 @@ var _ = Describe("FSMv2 Architecture Validation", func() {
 
 		Describe("Stateless Actions (Invariant: Actions are Idempotent Commands)", func() {
 			It("should have no mutable state fields", func() {
-				violations := validateActionStructs()
+				violations := validator.ValidateActionStructs(getFsmv2Dir())
 
 				if len(violations) > 0 {
-					message := formatViolations("Stateless Action Violations", violations)
+					message := validator.FormatViolations("Stateless Action Violations", violations)
 					Fail(message)
 				}
 			})
@@ -72,10 +57,10 @@ var _ = Describe("FSMv2 Architecture Validation", func() {
 
 		Describe("Type Assertions in Next() Methods (Invariant: Single Entry-Point Pattern)", func() {
 			It("should have exactly one type assertion at method entry", func() {
-				violations := validateNextMethodTypeAssertions()
+				violations := validator.ValidateNextMethodTypeAssertions(getFsmv2Dir())
 
 				if len(violations) > 0 {
-					message := formatViolations("Type Assertion Pattern Violations", violations)
+					message := validator.FormatViolations("Type Assertion Pattern Violations", violations)
 					Fail(message)
 				}
 			})
@@ -83,10 +68,197 @@ var _ = Describe("FSMv2 Architecture Validation", func() {
 
 		Describe("Pure DeriveDesiredState() Methods (Invariant: No External Dependencies)", func() {
 			It("should not access dependencies directly", func() {
-				violations := validateDeriveDesiredState()
+				violations := validator.ValidateDeriveDesiredState(getFsmv2Dir())
 
 				if len(violations) > 0 {
-					message := formatViolations("DeriveDesiredState Violations", violations)
+					message := validator.FormatViolations("DeriveDesiredState Violations", violations)
+					Fail(message)
+				}
+			})
+		})
+
+		Describe("Shutdown Check First in Next() (Invariant: Lifecycle Overrides Operational)", func() {
+			It("should check IsShutdownRequested as first conditional after type assertion", func() {
+				violations := validator.ValidateShutdownCheckFirst(getFsmv2Dir())
+
+				if len(violations) > 0 {
+					message := validator.FormatViolationsWithPattern("Shutdown Check Violations", violations, "SHUTDOWN_CHECK_NOT_FIRST")
+					Fail(message)
+				}
+			})
+		})
+
+		Describe("State Change XOR Action (Invariant: Deterministic Transitions)", func() {
+			It("should return either a new state or an action, never both", func() {
+				violations := validator.ValidateStateXORAction(getFsmv2Dir())
+
+				if len(violations) > 0 {
+					message := validator.FormatViolationsWithPattern("State XOR Action Violations", violations, "STATE_AND_ACTION")
+					Fail(message)
+				}
+			})
+		})
+
+		Describe("ObservedState CollectedAt Timestamp (Invariant: Staleness Detection)", func() {
+			It("should have CollectedAt time.Time field", func() {
+				violations := validator.ValidateObservedStateTimestamp(getFsmv2Dir())
+
+				if len(violations) > 0 {
+					message := validator.FormatViolationsWithPattern("CollectedAt Timestamp Violations", violations, "MISSING_COLLECTED_AT")
+					Fail(message)
+				}
+			})
+		})
+
+		Describe("DesiredState IsShutdownRequested Method (Invariant: Graceful Shutdown)", func() {
+			It("should implement IsShutdownRequested() bool", func() {
+				violations := validator.ValidateDesiredStateShutdownMethod(getFsmv2Dir())
+
+				if len(violations) > 0 {
+					message := validator.FormatViolationsWithPattern("IsShutdownRequested Method Violations", violations, "MISSING_IS_SHUTDOWN_REQUESTED")
+					Fail(message)
+				}
+			})
+		})
+
+		Describe("State String() and Reason() Methods (Invariant: Debuggability)", func() {
+			It("should have both String() and Reason() methods", func() {
+				violations := validator.ValidateStateStringAndReason(getFsmv2Dir())
+				if len(violations) > 0 {
+					message := validator.FormatViolationsWithPattern("State Method Violations", violations, "STATE_MISSING_STRING_METHOD")
+					Fail(message)
+				}
+			})
+		})
+
+		Describe("No Nil State Returns (Invariant: Non-Nil State Guarantee)", func() {
+			It("should never return nil as state in Next()", func() {
+				violations := validator.ValidateNoNilStateReturns(getFsmv2Dir())
+				if len(violations) > 0 {
+					message := validator.FormatViolationsWithPattern("Nil State Violations", violations, "NIL_STATE_RETURN")
+					Fail(message)
+				}
+			})
+		})
+
+		Describe("Signal-State Mutual Exclusion (Invariant: Clear Signal Semantics)", func() {
+			It("should only send signals with same-state returns", func() {
+				violations := validator.ValidateSignalStateMutualExclusion(getFsmv2Dir())
+				if len(violations) > 0 {
+					message := validator.FormatViolationsWithPattern("Signal State Violations", violations, "SIGNAL_STATE_MISMATCH")
+					Fail(message)
+				}
+			})
+		})
+
+		Describe("Context Cancellation in CollectObservedState (Invariant: Responsive Shutdown)", func() {
+			It("should handle ctx.Done() for cancellation", func() {
+				violations := validator.ValidateContextCancellationInCollect(getFsmv2Dir())
+				if len(violations) > 0 {
+					message := validator.FormatViolationsWithPattern("Context Cancellation Violations", violations, "MISSING_CONTEXT_CANCELLATION_COLLECT")
+					Fail(message)
+				}
+			})
+		})
+
+		Describe("Nil Spec Handling in DeriveDesiredState (Invariant: Defensive Programming)", func() {
+			It("should check if spec == nil before type casting", func() {
+				violations := validator.ValidateNilSpecHandling(getFsmv2Dir())
+				if len(violations) > 0 {
+					message := validator.FormatViolationsWithPattern("Nil Spec Handling Violations", violations, "MISSING_NIL_SPEC_CHECK")
+					Fail(message)
+				}
+			})
+		})
+
+		Describe("Context Cancellation in Actions (Invariant: Abortable Operations)", func() {
+			It("should check ctx.Done() in Execute() methods", func() {
+				violations := validator.ValidateContextCancellationInActions(getFsmv2Dir())
+				if len(violations) > 0 {
+					message := validator.FormatViolationsWithPattern("Action Context Violations", violations, "MISSING_CONTEXT_CANCELLATION_ACTION")
+					Fail(message)
+				}
+			})
+		})
+
+		Describe("No Internal Retry Loops in Actions (Invariant: Supervisor Manages Retries)", func() {
+			It("should not have for loops with error handling in Execute()", func() {
+				violations := validator.ValidateNoInternalRetryLoops(getFsmv2Dir())
+				if len(violations) > 0 {
+					message := validator.FormatViolationsWithPattern("Internal Retry Loop Violations", violations, "INTERNAL_RETRY_LOOP")
+					Fail(message)
+				}
+			})
+		})
+
+		Describe("Pointer Receivers on Workers (Invariant: Consistent Interface)", func() {
+			It("should use pointer receivers (*T) for all Worker methods", func() {
+				violations := validator.ValidatePointerReceivers(getFsmv2Dir())
+				if len(violations) > 0 {
+					message := validator.FormatViolationsWithPattern("Pointer Receiver Violations", violations, "VALUE_RECEIVER_ON_WORKER")
+					Fail(message)
+				}
+			})
+		})
+	})
+
+	Context("🟡 PHASE 2: Additional Architectural Patterns", func() {
+
+		Describe("TryingTo States Return Actions (Invariant: Active State Semantics)", func() {
+			It("should return non-nil actions in at least one code path", func() {
+				violations := validator.ValidateTryingToStatesReturnActions(getFsmv2Dir())
+				if len(violations) > 0 {
+					message := validator.FormatViolationsWithPattern("TryingTo State Action Violations", violations, "TRYINGTO_NO_ACTION")
+					Fail(message)
+				}
+			})
+		})
+
+		Describe("Exhaustive Transition Coverage (Invariant: Complete State Handling)", func() {
+			It("should end with catch-all return: return s, SignalNone, nil", func() {
+				violations := validator.ValidateExhaustiveTransitionCoverage(getFsmv2Dir())
+				if len(violations) > 0 {
+					message := validator.FormatViolationsWithPattern("Catch-All Return Violations", violations, "MISSING_CATCHALL_RETURN")
+					Fail(message)
+				}
+			})
+		})
+
+		Describe("Base State Type Embedding (Invariant: Type Hierarchy)", func() {
+			It("should embed exactly one Base*State type", func() {
+				violations := validator.ValidateBaseStateEmbedding(getFsmv2Dir())
+				if len(violations) > 0 {
+					message := validator.FormatViolationsWithPattern("Base State Embedding Violations", violations, "MISSING_BASE_STATE")
+					Fail(message)
+				}
+			})
+		})
+
+		Describe("Dependency Validation in Constructors (Invariant: Fail-Fast)", func() {
+			It("should validate required dependencies are non-nil", func() {
+				violations := validator.ValidateDependencyValidation(getFsmv2Dir())
+				if len(violations) > 0 {
+					message := validator.FormatViolationsWithPattern("Dependency Validation Violations", violations, "MISSING_DEPENDENCY_VALIDATION")
+					Fail(message)
+				}
+			})
+		})
+
+		Describe("Child Spec Validation (Invariant: Early Validation)", func() {
+			It("should validate ChildrenSpecs before returning them", func() {
+				violations := validator.ValidateChildSpecValidation(getFsmv2Dir())
+				if len(violations) > 0 {
+					message := validator.FormatViolationsWithPattern("Child Spec Validation Violations", violations, "MISSING_CHILDSPEC_VALIDATION")
+					Fail(message)
+				}
+			})
+		})
+
+		Describe("No Channel Operations in Actions (Invariant: Synchronous Actions)", func() {
+			It("should not use goroutines, channels, or channel operations", func() {
+				violations := validator.ValidateNoChannelOperations(getFsmv2Dir())
+				if len(violations) > 0 {
+					message := validator.FormatViolationsWithPattern("Channel Operation Violations", violations, "CHANNEL_OPERATION_IN_ACTION")
 					Fail(message)
 				}
 			})
@@ -94,96 +266,19 @@ var _ = Describe("FSMv2 Architecture Validation", func() {
 	})
 })
 
-// findStateFiles discovers all state files in the workers directory.
-func findStateFiles(baseDir string) []string {
-	var files []string
-
-	_ = filepath.Walk(filepath.Join(baseDir, "workers"), func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-
-		// Skip communicator worker
-		if strings.Contains(path, "workers/communicator/") {
-			return nil
-		}
-
-		// Include state_*.go files (not test files, not base.go)
-		if !info.IsDir() &&
-			strings.HasPrefix(filepath.Base(path), "state_") &&
-			!strings.HasSuffix(path, "_test.go") &&
-			!strings.HasSuffix(path, "base.go") &&
-			strings.HasSuffix(path, ".go") {
-			files = append(files, path)
-		}
-
-		return nil
-	})
-
-	return files
-}
-
-// findActionFiles discovers all action files in the workers directory.
-func findActionFiles(baseDir string) []string {
-	var files []string
-
-	_ = filepath.Walk(filepath.Join(baseDir, "workers"), func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-
-		// Skip communicator worker
-		if strings.Contains(path, "workers/communicator/") {
-			return nil
-		}
-
-		// Include files in action/ directories (not test files)
-		if !info.IsDir() &&
-			strings.Contains(path, "/action/") &&
-			!strings.HasSuffix(path, "_test.go") &&
-			strings.HasSuffix(path, ".go") {
-			files = append(files, path)
-		}
-
-		return nil
-	})
-
-	return files
-}
-
-// findWorkerFiles discovers all worker.go files in the workers directory.
-func findWorkerFiles(baseDir string) []string {
-	var files []string
-
-	_ = filepath.Walk(filepath.Join(baseDir, "workers"), func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-
-		// Skip communicator worker
-		if strings.Contains(path, "workers/communicator/") {
-			return nil
-		}
-
-		// Include worker.go files
-		if !info.IsDir() &&
-			filepath.Base(path) == "worker.go" {
-			files = append(files, path)
-		}
-
-		return nil
-	})
-
-	return files
+// getFsmv2Dir returns the path to the fsmv2 package directory.
+func getFsmv2Dir() string {
+	_, filename, _, _ := runtime.Caller(0)
+	return filepath.Dir(filename)
 }
 
 // validateStateStructs checks that state structs have no fields (except base state).
-func validateStateStructs() []Violation {
-	var violations []Violation
+// This function must remain in the test file because it uses reflection on imported
+// state packages, which would create import cycles if moved to the validator package.
+func validateStateStructs() []validator.Violation {
+	var violations []validator.Violation
 
-	// Get package path for file locations
-	_, filename, _, _ := runtime.Caller(0)
-	fsmv2Dir := filepath.Dir(filename)
+	fsmv2Dir := getFsmv2Dir()
 
 	// Check example-child states
 	childStates := []interface{}{
@@ -207,8 +302,8 @@ func validateStateStructs() []Violation {
 			}
 
 			// Found a violation: state has a field
-			violations = append(violations, Violation{
-				File:    getStateFilePath(fsmv2Dir, t.Name()),
+			violations = append(violations, validator.Violation{
+				File:    validator.GetStateFilePath(fsmv2Dir, t.Name()),
 				Line:    0, // Would need source parsing to get exact line
 				Type:    "EMPTY_STATE",
 				Message: fmt.Sprintf("State %s has field '%s %s' (should be empty)", t.Name(), field.Name, field.Type),
@@ -235,8 +330,8 @@ func validateStateStructs() []Violation {
 				continue
 			}
 
-			violations = append(violations, Violation{
-				File:    getStateFilePath(fsmv2Dir, t.Name()),
+			violations = append(violations, validator.Violation{
+				File:    validator.GetStateFilePath(fsmv2Dir, t.Name()),
 				Line:    0,
 				Type:    "EMPTY_STATE",
 				Message: fmt.Sprintf("State %s has field '%s %s' (should be empty)", t.Name(), field.Name, field.Type),
@@ -245,264 +340,4 @@ func validateStateStructs() []Violation {
 	}
 
 	return violations
-}
-
-// validateActionStructs checks that action structs have no mutable state.
-func validateActionStructs() []Violation {
-	var violations []Violation
-
-	_, filename, _, _ := runtime.Caller(0)
-	fsmv2Dir := filepath.Dir(filename)
-
-	actionFiles := findActionFiles(fsmv2Dir)
-
-	for _, file := range actionFiles {
-		fileViolations := checkActionFile(file)
-		violations = append(violations, fileViolations...)
-	}
-
-	return violations
-}
-
-// validateNextMethodTypeAssertions checks that Next() methods use the single entry-point type assertion pattern
-// Pattern: ONE type assertion at the start of Next(), zero elsewhere
-// Rationale: Go doesn't support covariance, so State[any, any] is required for Worker interface.
-// States must accept `any` and type-assert to concrete type once at entry point.
-func validateNextMethodTypeAssertions() []Violation {
-	var violations []Violation
-
-	_, filename, _, _ := runtime.Caller(0)
-	fsmv2Dir := filepath.Dir(filename)
-
-	stateFiles := findStateFiles(fsmv2Dir)
-
-	for _, file := range stateFiles {
-		fileViolations := checkSingleEntryPointPattern(file)
-		violations = append(violations, fileViolations...)
-	}
-
-	return violations
-}
-
-// validateDeriveDesiredState checks that DeriveDesiredState doesn't access dependencies.
-func validateDeriveDesiredState() []Violation {
-	var violations []Violation
-
-	_, filename, _, _ := runtime.Caller(0)
-	fsmv2Dir := filepath.Dir(filename)
-
-	workerFiles := findWorkerFiles(fsmv2Dir)
-
-	for _, file := range workerFiles {
-		fileViolations := checkDeriveDesiredStateMethod(file)
-		violations = append(violations, fileViolations...)
-	}
-
-	return violations
-}
-
-// checkActionFile parses an action file and looks for mutable state fields.
-func checkActionFile(filename string) []Violation {
-	var violations []Violation
-
-	fset := token.NewFileSet()
-
-	node, err := parser.ParseFile(fset, filename, nil, parser.ParseComments)
-	if err != nil {
-		return violations
-	}
-
-	// Look for struct declarations with "Action" in the name
-	ast.Inspect(node, func(n ast.Node) bool {
-		typeSpec, ok := n.(*ast.TypeSpec)
-		if !ok || !strings.Contains(typeSpec.Name.Name, "Action") {
-			return true
-		}
-
-		structType, ok := typeSpec.Type.(*ast.StructType)
-		if !ok {
-			return true
-		}
-
-		// Check each field
-		for _, field := range structType.Fields.List {
-			// Skip embedded types
-			if len(field.Names) == 0 {
-				continue
-			}
-
-			fieldName := field.Names[0].Name
-
-			// Check for violation patterns
-			if strings.Contains(strings.ToLower(fieldName), "dependencies") ||
-				strings.Contains(strings.ToLower(fieldName), "failure") ||
-				strings.Contains(strings.ToLower(fieldName), "count") ||
-				strings.Contains(strings.ToLower(fieldName), "max") {
-				pos := fset.Position(field.Pos())
-				violations = append(violations, Violation{
-					File:    filename,
-					Line:    pos.Line,
-					Type:    "STATELESS_ACTION",
-					Message: fmt.Sprintf("Action %s has mutable field '%s' (actions should be stateless)", typeSpec.Name.Name, fieldName),
-				})
-			}
-		}
-
-		return true
-	})
-
-	return violations
-}
-
-// checkNextMethodTypeAssertions parses a state file and looks for type assertions in Next().
-func checkSingleEntryPointPattern(filename string) []Violation {
-	var violations []Violation
-
-	fset := token.NewFileSet()
-
-	node, err := parser.ParseFile(fset, filename, nil, parser.ParseComments)
-	if err != nil {
-		return violations
-	}
-
-	// Look for Next() method
-	ast.Inspect(node, func(n ast.Node) bool {
-		funcDecl, ok := n.(*ast.FuncDecl)
-		if !ok || funcDecl.Name.Name != "Next" {
-			return true
-		}
-
-		// Count type assertions and check their location
-		var (
-			typeAssertions     []int
-			firstStatementLine int
-		)
-
-		// Get line number of first statement
-
-		if funcDecl.Body != nil && len(funcDecl.Body.List) > 0 {
-			firstStatementLine = fset.Position(funcDecl.Body.List[0].Pos()).Line
-		}
-
-		ast.Inspect(funcDecl.Body, func(bodyNode ast.Node) bool {
-			typeAssert, ok := bodyNode.(*ast.TypeAssertExpr)
-			if !ok {
-				return true
-			}
-
-			pos := fset.Position(typeAssert.Pos())
-			typeAssertions = append(typeAssertions, pos.Line)
-
-			return true
-		})
-
-		// Check pattern: exactly 1 assertion, at first statement
-		if len(typeAssertions) == 0 {
-			violations = append(violations, Violation{
-				File:    filename,
-				Line:    fset.Position(funcDecl.Pos()).Line,
-				Type:    "MISSING_ENTRY_ASSERTION",
-				Message: "Next() method missing entry-point type assertion (should assert parameter to concrete snapshot type)",
-			})
-		} else if len(typeAssertions) > 1 {
-			violations = append(violations, Violation{
-				File:    filename,
-				Line:    typeAssertions[1],
-				Type:    "MULTIPLE_ASSERTIONS",
-				Message: fmt.Sprintf("Next() method has %d type assertions (should have exactly 1 at entry)", len(typeAssertions)),
-			})
-		} else if typeAssertions[0] != firstStatementLine {
-			violations = append(violations, Violation{
-				File:    filename,
-				Line:    typeAssertions[0],
-				Type:    "ASSERTION_NOT_AT_ENTRY",
-				Message: "Type assertion should be first statement in Next() method",
-			})
-		}
-
-		return true
-	})
-
-	return violations
-}
-
-// checkDeriveDesiredStateMethod parses a worker file and checks DeriveDesiredState.
-func checkDeriveDesiredStateMethod(filename string) []Violation {
-	var violations []Violation
-
-	fset := token.NewFileSet()
-
-	node, err := parser.ParseFile(fset, filename, nil, parser.ParseComments)
-	if err != nil {
-		return violations
-	}
-
-	// Look for DeriveDesiredState() method
-	ast.Inspect(node, func(n ast.Node) bool {
-		funcDecl, ok := n.(*ast.FuncDecl)
-		if !ok || funcDecl.Name.Name != "DeriveDesiredState" {
-			return true
-		}
-
-		// Look for GetDependencies() calls in the method body
-		ast.Inspect(funcDecl.Body, func(bodyNode ast.Node) bool {
-			callExpr, ok := bodyNode.(*ast.CallExpr)
-			if !ok {
-				return true
-			}
-
-			// Check for method calls on receiver
-			if selExpr, ok := callExpr.Fun.(*ast.SelectorExpr); ok {
-				if selExpr.Sel.Name == "GetDependencies" {
-					pos := fset.Position(callExpr.Pos())
-					violations = append(violations, Violation{
-						File:    filename,
-						Line:    pos.Line,
-						Type:    "PURE_DERIVE",
-						Message: "DeriveDesiredState() accesses dependencies (should use typed UserSpec parameter)",
-					})
-				}
-			}
-
-			return true
-		})
-
-		return true
-	})
-
-	return violations
-}
-
-// Helper functions
-
-func getStateFilePath(fsmv2Dir, typeName string) string {
-	// Convert type name to file name
-	// e.g., "TryingToConnectState" -> "state_trying_to_connect.go"
-	fileName := strings.ToLower(strings.ReplaceAll(typeName, "State", ""))
-	fileName = "state_" + strings.ToLower(strings.ReplaceAll(fileName, "TryingTo", "trying_to_"))
-	fileName = strings.ReplaceAll(fileName, "__", "_")
-
-	return filepath.Join(fsmv2Dir, "workers", "example", fileName+".go")
-}
-
-func formatViolations(title string, violations []Violation) string {
-	var sb strings.Builder
-
-	sb.WriteString("\n\n")
-	sb.WriteString("╔════════════════════════════════════════════════════════════════╗\n")
-	sb.WriteString("║  " + title + strings.Repeat(" ", 62-len(title)) + "║\n")
-	sb.WriteString("╠════════════════════════════════════════════════════════════════╣\n")
-	sb.WriteString("║                                                                ║\n")
-	sb.WriteString("║  These tests document CURRENT architectural violations.       ║\n")
-	sb.WriteString("║  Fix these violations to make the tests pass.                 ║\n")
-	sb.WriteString("║                                                                ║\n")
-	sb.WriteString("╚════════════════════════════════════════════════════════════════╝\n\n")
-
-	for i, v := range violations {
-		sb.WriteString(fmt.Sprintf("%d. %s\n", i+1, v))
-	}
-
-	sb.WriteString(fmt.Sprintf("\n📊 Total violations found: %d\n\n", len(violations)))
-
-	return sb.String()
 }

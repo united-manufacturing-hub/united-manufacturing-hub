@@ -15,6 +15,8 @@
 package example_child
 
 import (
+	"sync"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"go.uber.org/zap"
 )
@@ -30,21 +32,61 @@ type ConnectionPool interface {
 	HealthCheck(Connection) error
 }
 
+// DefaultConnectionPool is a no-op connection pool used for factory registration.
+// It always returns a nil connection successfully, suitable for testing and examples.
+type DefaultConnectionPool struct{}
+
+// Acquire returns a nil connection (no-op implementation).
+func (d *DefaultConnectionPool) Acquire() (Connection, error) {
+	return nil, nil
+}
+
+// Release is a no-op.
+func (d *DefaultConnectionPool) Release(_ Connection) error {
+	return nil
+}
+
+// HealthCheck always returns success (no-op implementation).
+func (d *DefaultConnectionPool) HealthCheck(_ Connection) error {
+	return nil
+}
+
 // ChildDependencies provides access to tools needed by child worker actions.
+// The isConnected flag is shared between actions and CollectObservedState.
 type ChildDependencies struct {
 	*fsmv2.BaseDependencies
 	connectionPool ConnectionPool
+
+	// isConnected tracks connection state, updated by ConnectAction/DisconnectAction
+	// and read by CollectObservedState. Protected by mu.
+	mu          sync.RWMutex
+	isConnected bool
 }
 
 // NewChildDependencies creates new dependencies for the child worker.
-func NewChildDependencies(connectionPool ConnectionPool, logger *zap.SugaredLogger) *ChildDependencies {
+func NewChildDependencies(connectionPool ConnectionPool, logger *zap.SugaredLogger, workerType, workerID string) *ChildDependencies {
 	return &ChildDependencies{
-		BaseDependencies: fsmv2.NewBaseDependencies(logger),
+		BaseDependencies: fsmv2.NewBaseDependencies(logger, workerType, workerID),
 		connectionPool:   connectionPool,
+		isConnected:      false,
 	}
 }
 
 // GetConnectionPool returns the connection pool.
 func (d *ChildDependencies) GetConnectionPool() ConnectionPool {
 	return d.connectionPool
+}
+
+// SetConnected updates the connection state. Called by ConnectAction/DisconnectAction.
+func (d *ChildDependencies) SetConnected(connected bool) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.isConnected = connected
+}
+
+// IsConnected returns the current connection state. Called by CollectObservedState.
+func (d *ChildDependencies) IsConnected() bool {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	return d.isConnected
 }

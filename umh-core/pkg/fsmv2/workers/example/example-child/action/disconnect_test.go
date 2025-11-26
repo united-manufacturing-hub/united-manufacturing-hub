@@ -21,9 +21,8 @@ import (
 	. "github.com/onsi/gomega"
 	"go.uber.org/zap"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	example_child "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/example-child"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/example-child/action"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/example-child/snapshot"
 )
 
 var _ = Describe("DisconnectAction", func() {
@@ -34,7 +33,7 @@ var _ = Describe("DisconnectAction", func() {
 
 	BeforeEach(func() {
 		ctx = context.Background()
-		depsAny = snapshot.ChildDependencies(fsmv2.NewBaseDependencies(zap.NewNop().Sugar()))
+		depsAny = example_child.NewChildDependencies(&example_child.DefaultConnectionPool{}, zap.NewNop().Sugar(), "child", "test-id")
 	})
 
 	Describe("Execute", func() {

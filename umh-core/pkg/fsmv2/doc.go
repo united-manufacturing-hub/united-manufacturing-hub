@@ -17,6 +17,8 @@
 //
 // # Overview
 //
+// For the conceptual overview and Triangle Model diagram, see README.md.
+//
 // FSMv2 separates concerns into three layers:
 //   - Worker: Business logic implementation (what the worker does)
 //   - State: Decision logic (when to transition, what actions to take)
@@ -30,150 +32,44 @@
 //
 // # Quick Start
 //
-// ## 1. Define Dependencies
-//
-//	type MyWorkerDeps struct {
-//	    Logger *zap.Logger
-//	    Config *MyConfig
-//	}
-//
-// ## 2. Define States
-//
-//	type InitializingState struct{}
-//	type RunningState struct{}
-//	type StoppingState struct{}
-//
-//	func (s InitializingState) Next(snapshot fsmv2.Snapshot) (fsmv2.State, fsmv2.Signal, fsmv2.Action) {
-//	    if snapshot.Desired.ShutdownRequested() {
-//	        return StoppingState{}, fsmv2.SignalNone, nil
-//	    }
-//	    // Check if initialization complete
-//	    return s, fsmv2.SignalNone, &InitializeAction{}
-//	}
-//
-//	func (s RunningState) Next(snapshot fsmv2.Snapshot) (fsmv2.State, fsmv2.Signal, fsmv2.Action) {
-//	    if snapshot.Desired.ShutdownRequested() {
-//	        return StoppingState{}, fsmv2.SignalNone, nil
-//	    }
-//	    // Monitor and maintain running state
-//	    return s, fsmv2.SignalNone, nil
-//	}
-//
-//	func (s StoppingState) Next(snapshot fsmv2.Snapshot) (fsmv2.State, fsmv2.Signal, fsmv2.Action) {
-//	    // Cleanup complete, signal removal
-//	    return s, fsmv2.SignalNeedsRemoval, nil
-//	}
-//
-// ## 3. Implement Worker
-//
-//	type MyWorker struct {
-//	    fsmv2.BaseWorker[MyWorkerDeps]
-//	}
-//
-//	func (w *MyWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedState, error) {
-//	    deps := w.GetDependencies()
-//	    // Collect actual system state (process status, metrics, etc.)
-//	    return &MyObservedState{...}, nil
-//	}
-//
-//	func (w *MyWorker) DeriveDesiredState(spec interface{}) (config.DesiredState, error) {
-//	    // Transform user config into desired state
-//	    return config.DesiredState{State: "running"}, nil
-//	}
-//
-//	func (w *MyWorker) GetInitialState() fsmv2.State {
-//	    return InitializingState{}
-//	}
-//
-// ## 4. Create and Run Supervisor
-//
-//	deps := MyWorkerDeps{Logger: logger, Config: config}
-//	worker := &MyWorker{BaseWorker: fsmv2.NewBaseWorker(deps)}
-//
-//	supervisor := supervisor.NewSupervisor(
-//	    fsmv2.Identity{ID: "worker-1", Name: "My Worker", WorkerType: "my_type"},
-//	    worker,
-//	    deps,
-//	    supervisor.WithTickInterval(1*time.Second),
-//	)
-//
-//	ctx := context.Background()
-//	if err := supervisor.Start(ctx); err != nil {
-//	    log.Fatal(err)
-//	}
+// For complete working examples, see:
+//   - workers/example/example-child/worker.go - Child worker implementation
+//   - workers/example/example-child/state/ - State definitions and transitions
+//   - workers/example/example-child/action/ - Idempotent actions
+//   - workers/example/example-parent/worker.go - Parent with child management
+//   - examples/simple/main.go - Runnable example with YAML config
 //
 // # Key Concepts
 //
-// ## State Machine Flow
-//
-// The supervisor orchestrates worker lifecycle through a tick loop:
-//
-//	┌─────────────────────────────────────────────────────┐
-//	│                   Tick Loop                         │
-//	│                                                     │
-//	│  1. CollectObservedState() → Database               │
-//	│  2. DeriveDesiredState() → Snapshot                 │
-//	│  3. currentState.Next(snapshot)                     │
-//	│       ↓                                             │
-//	│     (nextState, signal, action)                     │
-//	│  4. Execute action (with retry/backoff)             │
-//	│  5. Transition to nextState                         │
-//	│  6. Process signal (remove/restart)                 │
-//	│  7. Reconcile children (if parent worker)           │
-//	│                                                     │
-//	└─────────────────────────────────────────────────────┘
+// For the Triangle Model and Tick Loop diagram, see README.md.
 //
 // ## States: Structs, Not Strings
 //
-// States are concrete types implementing the State interface, providing:
-//   - Compile-time type safety (no invalid states)
+// States are concrete Go types implementing the State interface, providing:
+//   - Compile-time type safety (returning wrong type won't compile)
 //   - Explicit transitions (visible in code)
 //   - Encapsulated logic (each state is self-contained)
 //
-// Example:
-//
-//	// Type-safe transition ✅
-//	return RunningState{}, fsmv2.SignalNone, nil
-//
-//	// Would not compile ❌
-//	return "running", fsmv2.SignalNone, nil
-//
-// See PATTERNS.md for detailed explanation.
+// See workers/example/example-child/state/ for state implementations.
 //
 // ## Immutability: Pass-by-Value
 //
 // Snapshots are passed by value to State.Next(), making them inherently immutable.
-// Go's pass-by-value semantics guarantee that states cannot modify the supervisor's data:
-//
-//	func (s MyState) Next(snapshot Snapshot) (State, Signal, Action) {
-//	    // snapshot is a COPY - mutations only affect local copy
-//	    snapshot.Identity.Name = "modified"  // Safe, doesn't affect supervisor
-//	    return s, SignalNone, nil
-//	}
-//
+// Go's pass-by-value semantics guarantee states cannot modify the supervisor's data.
 // No getters or defensive copying needed - the language enforces immutability.
-// See PATTERNS.md for detailed explanation.
+// See internal/helpers/state_adapter.go for ConvertSnapshot helper that provides type-safe access.
 //
 // ## Actions: Idempotent Operations
 //
 // Actions represent side effects that transition the system between states.
-// All actions MUST be idempotent - safe to retry after partial completion:
+// All actions MUST be idempotent - safe to retry after partial completion.
 //
-//	type StartProcessAction struct {
-//	    ProcessPath string
-//	}
+// Key requirements:
+//   - Actions are EMPTY STRUCTS - dependencies injected via Execute(ctx, depsAny)
+//   - ALWAYS check ctx.Done() first for cancellation
+//   - Check if work already done before performing it (idempotency)
 //
-//	func (a *StartProcessAction) Execute(ctx context.Context) error {
-//	    // Check if already done (idempotency)
-//	    if processIsRunning(a.ProcessPath) {
-//	        return nil  // Already started, safe to call again
-//	    }
-//	    return startProcess(ctx, a.ProcessPath)
-//	}
-//
-//	func (a *StartProcessAction) Name() string {
-//	    return "StartProcess"
-//	}
+// See workers/example/example-child/action/connect.go for a complete example.
 //
 // The supervisor retries failed actions with exponential backoff, so idempotency is critical.
 //
@@ -186,73 +82,46 @@
 //   - Layer 4: Worker constructor (NewMyWorker) - Business logic validation
 //
 // This is intentional, not redundant. Each layer defends against different failure modes.
-// See PATTERNS.md for detailed explanation.
 //
 // ## Variables: Three-Tier Namespace
 //
 // VariableBundle provides three namespaces for configuration:
-//   - User: Top-level template access ({{ .IP }}, {{ .PORT }})
-//   - Global: Fleet-wide settings ({{ .global.cluster_id }})
-//   - Internal: Runtime metadata ({{ .internal.timestamp }}) - NOT serialized
+//   - User: Top-level template access (flattened, e.g., {{ .IP }})
+//   - Global: Fleet-wide settings (nested, e.g., {{ .global.cluster_id }})
+//   - Internal: Runtime metadata (nested) - NOT serialized
 //
-// Example:
-//
-//	bundle := config.VariableBundle{
-//	    User: map[string]any{"IP": "192.168.1.100", "PORT": 502},
-//	    Global: map[string]any{"cluster_id": "prod"},
-//	    Internal: map[string]any{"timestamp": time.Now()},
-//	}
-//
-//	// Template rendering:
-//	// {{ .IP }}                 → "192.168.1.100"
-//	// {{ .global.cluster_id }}  → "prod"
-//	// {{ .internal.timestamp }} → current time
-//
-// User and Global are serialized (persisted). Internal is runtime-only.
-// See PATTERNS.md for detailed explanation.
+// User and Global are persisted. Internal is runtime-only.
+// See config/variables.go for the VariableBundle struct definition.
 //
 // ## Hierarchical Composition: Parent-Child Workers
 //
 // Parents declare children via ChildSpec in DeriveDesiredState().
-// Supervisor handles creation, updates, and cleanup automatically:
+// Supervisor handles creation, updates, and cleanup automatically.
 //
-//	func (w *ParentWorker) DeriveDesiredState(spec interface{}) (config.DesiredState, error) {
-//	    return config.DesiredState{
-//	        State: "running",
-//	        ChildrenSpecs: []config.ChildSpec{
-//	            {
-//	                Name:       "mqtt-connection",
-//	                WorkerType: "mqtt_client",
-//	                UserSpec:   config.UserSpec{Config: "url: tcp://localhost:1883"},
-//	                StateMapping: map[string]string{
-//	                    "active":  "connected",  // Parent state → child state
-//	                    "closing": "stopped",
-//	                },
-//	            },
-//	        },
-//	    }, nil
-//	}
+// Key concepts:
+//   - Parent returns ChildrenSpecs in DeriveDesiredState()
+//   - StateMapping coordinates FSM states (NOT data passing)
+//   - Use VariableBundle for passing data to children
 //
-// StateMapping coordinates FSM states (NOT data passing). Use VariableBundle for data.
-//
-// For practical examples of passing configuration data from parent to child workers,
-// see PATTERNS.md "Pattern 10: Variable Passing (Parent → Child)" which includes
-// complete cookbook examples showing:
-//   - How to set variables in parent's ChildSpec
-//   - How child accesses variables via Snapshot
-//   - Template rendering with flattened variables
-//   - Common patterns (static config, dynamic config, parent state propagation)
-//
-// See PATTERNS.md for detailed explanation.
+// See workers/example/example-parent/worker.go for complete parent-child example.
 //
 // # Architecture Documentation
 //
 // For detailed architecture explanations, see:
-//   - PATTERNS.md - Established patterns and design decisions
+//   - architecture_test.go - Patterns enforced by tests (run with -v for WHY explanations)
 //   - api.go - Core interfaces (Worker, State, Action)
+//   - internal/helpers/ - Convenience helpers (BaseState, BaseWorker, ConvertSnapshot)
 //   - supervisor/supervisor.go - Orchestration and lifecycle management
-//   - types/childspec.go - Hierarchical composition
-//   - types/variables.go - Variable namespaces
+//   - config/childspec.go - Hierarchical composition
+//   - config/variables.go - Variable namespaces
+//
+// # Architecture Validation
+//
+// Run architecture tests to validate all patterns:
+//
+//	ginkgo run --focus="Architecture" -v ./pkg/fsmv2/
+//
+// Tests enforce: immutability, shutdown handling, state naming, idempotency.
 //
 // # Common Patterns
 //
@@ -268,53 +137,24 @@
 //
 // ## Shutdown Handling
 //
-// States MUST check ShutdownRequested() first in Next():
-//
-//	func (s RunningState) Next(snapshot Snapshot) (State, Signal, Action) {
-//	    // ALWAYS check shutdown first
-//	    if snapshot.Desired.(config.DesiredState).ShutdownRequested() {
-//	        return StoppingState{}, SignalNone, nil
-//	    }
-//	    // ... rest of logic
-//	}
+// States MUST check IsShutdownRequested() as their first conditional in Next().
+// See workers/example/example-child/state/ for examples of proper shutdown handling.
 //
 // ## Type-Safe Dependencies
 //
-// Use BaseWorker[D] for type-safe dependency access:
-//
-//	type MyWorker struct {
-//	    fsmv2.BaseWorker[MyWorkerDeps]
-//	}
-//
-//	func (w *MyWorker) someMethod() {
-//	    deps := w.GetDependencies()
-//	    deps.Logger.Info("...")  // Type-safe, no casting
-//	}
+// Use BaseWorker[D] for type-safe dependency access without casting.
+// See workers/example/example-child/dependencies.go for dependency pattern.
 //
 // # Testing
 //
 // Test FSM workers by:
-//   1. Creating test states and actions
-//   2. Calling Next() with test snapshots
-//   3. Verifying returned state, signal, and action
-//   4. Testing action idempotency with VerifyActionIdempotency helper
+//  1. Creating test states and actions
+//  2. Calling Next() with test snapshots
+//  3. Verifying returned state, signal, and action
+//  4. Testing action idempotency with VerifyActionIdempotency helper
 //
-// Example:
-//
-//	var _ = Describe("MyWorker", func() {
-//	    It("transitions to running when started", func() {
-//	        state := InitializingState{}
-//	        snapshot := Snapshot{
-//	            Identity: Identity{ID: "test"},
-//	            Observed: &MyObservedState{Started: true},
-//	            Desired:  config.DesiredState{State: "running"},
-//	        }
-//	        nextState, signal, action := state.Next(snapshot)
-//	        Expect(nextState).To(BeAssignableToTypeOf(RunningState{}))
-//	        Expect(signal).To(Equal(SignalNone))
-//	        Expect(action).To(BeNil())
-//	    })
-//	})
+// See workers/example/example-child/state/*_test.go for state transition tests.
+// See workers/example/example-child/action/*_test.go for action idempotency tests.
 //
 // # Thread Safety
 //
@@ -334,11 +174,4 @@
 //   - Return action OR transition, not both simultaneously
 //   - Handle context cancellation in all async operations
 //   - Test action idempotency with VerifyActionIdempotency helper
-//
-// # Related Packages
-//
-//   - pkg/fsmv2/types - Common data structures (ChildSpec, DesiredState, VariableBundle)
-//   - pkg/fsmv2/supervisor - Supervisor implementation and orchestration
-//   - pkg/fsm/benthos - Example FSM worker implementation
-//   - pkg/fsm/redpanda - Example FSM worker implementation
 package fsmv2

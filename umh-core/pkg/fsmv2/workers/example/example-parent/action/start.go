@@ -32,6 +32,11 @@ type StartAction struct {
 // Execute loads config and returns ChildrenSpecs for spawning
 // Dependencies are injected via deps parameter, enabling full action functionality.
 func (a *StartAction) Execute(ctx context.Context, depsAny any) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
 	if depsAny != nil {
 		deps := depsAny.(fsmv2.Dependencies)
 		logger := deps.GetLogger()

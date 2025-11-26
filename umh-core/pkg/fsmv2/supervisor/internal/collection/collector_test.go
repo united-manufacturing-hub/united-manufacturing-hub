@@ -21,7 +21,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/collection"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/internal/collection"
 	"go.uber.org/zap"
 )
 
@@ -141,7 +141,26 @@ Context("when restarting collector", func() {
 				ObservationTimeout:  3 * time.Second,
 			})
 
+			// Should not panic - logs error and returns
 			collector.Restart()
+		})
+
+		It("should handle Stop() gracefully when called before Start()", func() {
+			collector := collection.NewCollector[supervisor.TestObservedState](collection.CollectorConfig[supervisor.TestObservedState]{
+				Worker:              &supervisor.TestWorker{},
+				Identity:            supervisor.TestIdentity(),
+				Store:               supervisor.CreateTestTriangularStore(),
+				Logger:              zap.NewNop().Sugar(),
+				ObservationInterval: 1 * time.Second,
+				ObservationTimeout:  3 * time.Second,
+			})
+
+			// Should not panic - logs warning and returns
+			ctx := context.Background()
+			collector.Stop(ctx)
+
+			// Collector should still be in created state (not running)
+			Expect(collector.IsRunning()).To(BeFalse())
 		})
 
 		It("should return false from IsRunning() before Start()", func() {
@@ -181,6 +200,62 @@ Context("when restarting collector", func() {
 			cancel()
 			time.Sleep(100 * time.Millisecond)
 			Expect(collector.IsRunning()).To(BeFalse())
+		})
+	})
+
+	Context("when context is cancelled during collection", func() {
+		It("should stop gracefully and mark as not running", func() {
+			worker := &supervisor.TestWorker{Observed: supervisor.CreateTestObservedStateWithID("test-worker")}
+			collector := collection.NewCollector[supervisor.TestObservedState](collection.CollectorConfig[supervisor.TestObservedState]{
+				Worker:              worker,
+				Identity:            supervisor.TestIdentity(),
+				Store:               supervisor.CreateTestTriangularStore(),
+				Logger:              zap.NewNop().Sugar(),
+				ObservationInterval: 50 * time.Millisecond, // Short interval for fast test
+				ObservationTimeout:  1 * time.Second,
+			})
+
+			ctx, cancel := context.WithCancel(context.Background())
+
+			err := collector.Start(ctx)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Wait for at least one collection cycle to start
+			time.Sleep(100 * time.Millisecond)
+			Expect(collector.IsRunning()).To(BeTrue())
+
+			// Cancel context while collection loop is running
+			cancel()
+
+			// Collector should stop within reasonable time
+			Eventually(func() bool {
+				return collector.IsRunning()
+			}, 2*time.Second, 50*time.Millisecond).Should(BeFalse())
+		})
+
+		It("should handle immediate cancellation after start", func() {
+			worker := &supervisor.TestWorker{Observed: supervisor.CreateTestObservedStateWithID("test-worker")}
+			collector := collection.NewCollector[supervisor.TestObservedState](collection.CollectorConfig[supervisor.TestObservedState]{
+				Worker:              worker,
+				Identity:            supervisor.TestIdentity(),
+				Store:               supervisor.CreateTestTriangularStore(),
+				Logger:              zap.NewNop().Sugar(),
+				ObservationInterval: 1 * time.Second,
+				ObservationTimeout:  3 * time.Second,
+			})
+
+			ctx, cancel := context.WithCancel(context.Background())
+
+			err := collector.Start(ctx)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Cancel immediately after start (before first collection completes)
+			cancel()
+
+			// Collector should stop gracefully
+			Eventually(func() bool {
+				return collector.IsRunning()
+			}, 2*time.Second, 50*time.Millisecond).Should(BeFalse())
 		})
 	})
 })

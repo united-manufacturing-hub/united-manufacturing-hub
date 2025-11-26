@@ -38,9 +38,18 @@ func NewConnectActionWithFailures(failCount int) *ConnectAction {
 // Execute attempts to acquire a connection from the pool
 // Dependencies are injected via deps parameter, enabling full action functionality.
 func (a *ConnectAction) Execute(ctx context.Context, depsAny any) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
 	deps := depsAny.(snapshot.ChildDependencies)
-	logger := deps.GetLogger()
+	logger := deps.ActionLogger(ConnectActionName)
 	logger.Info("Attempting to connect")
+
+	// Mark as connected - this will be read by CollectObservedState
+	deps.SetConnected(true)
+	logger.Info("Connection established")
 
 	return nil
 }

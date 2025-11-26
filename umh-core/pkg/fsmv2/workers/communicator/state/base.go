@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
 package state
 
 // BaseCommunicatorState defines the interface that all communicator state implementations must satisfy.

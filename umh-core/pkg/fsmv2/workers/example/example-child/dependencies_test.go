@@ -85,7 +85,7 @@ func TestNewChildDependencies(t *testing.T) {
 	logger := zap.NewNop().Sugar()
 	mockPool := NewMockConnectionPool()
 
-	deps := NewChildDependencies(mockPool, logger)
+	deps := NewChildDependencies(mockPool, logger, "child", "test-id")
 
 	if deps == nil {
 		t.Fatal("NewChildDependencies returned nil")
@@ -108,7 +108,7 @@ func TestChildDependencies_GetConnectionPool(t *testing.T) {
 	logger := zap.NewNop().Sugar()
 	mockPool := NewMockConnectionPool()
 
-	deps := NewChildDependencies(mockPool, logger)
+	deps := NewChildDependencies(mockPool, logger, "child", "test-id")
 
 	pool := deps.GetConnectionPool()
 	if mockPoolTyped, ok := pool.(*MockConnectionPool); !ok || mockPoolTyped != mockPool {

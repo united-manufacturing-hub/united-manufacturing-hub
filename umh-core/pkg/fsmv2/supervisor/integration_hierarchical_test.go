@@ -106,6 +106,8 @@ func (m *mockHierarchicalWorker) GetInitialState() fsmv2.State[any, any] {
 	return &mockStateWithName{name: m.stateName}
 }
 
+func (m *mockHierarchicalWorker) RequestShutdown() {}
+
 func (m *mockHierarchicalWorker) IncrementTickCount() {
 	m.mu.Lock()
 	defer m.mu.Unlock()

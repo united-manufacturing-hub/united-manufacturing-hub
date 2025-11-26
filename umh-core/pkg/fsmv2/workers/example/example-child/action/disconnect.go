@@ -32,9 +32,18 @@ type DisconnectAction struct {
 // Execute releases the connection back to the pool
 // Dependencies are injected via deps parameter, enabling full action functionality.
 func (a *DisconnectAction) Execute(ctx context.Context, depsAny any) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
 	deps := depsAny.(snapshot.ChildDependencies)
 	logger := deps.GetLogger()
 	logger.Info("Disconnecting")
+
+	// Mark as disconnected - this will be read by CollectObservedState
+	deps.SetConnected(false)
+	logger.Info("Disconnected")
 
 	return nil
 }

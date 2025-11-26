@@ -137,7 +137,8 @@ func (ae *ActionExecutor) worker() {
 						"duration_ms", duration.Milliseconds())
 				}
 			} else {
-				ae.logger.Infow("action_completed",
+				// Success logs at DEBUG - operators only need failures, not routine success
+				ae.logger.Debugw("action_completed",
 					"worker_id", ae.supervisorID,
 					"action", work.action.Name(),
 					"duration_ms", duration.Milliseconds(),
@@ -238,6 +239,17 @@ func (ae *ActionExecutor) HasActionInProgress(actionID string) bool {
 	defer ae.mu.RUnlock()
 
 	return ae.inProgress[actionID]
+}
+
+// GetActiveActionCount returns the number of actions currently in progress.
+// This is used for heartbeat logging to show system activity.
+//
+// Thread-safe: Uses read lock for concurrent access.
+func (ae *ActionExecutor) GetActiveActionCount() int {
+	ae.mu.RLock()
+	defer ae.mu.RUnlock()
+
+	return len(ae.inProgress)
 }
 
 func (ae *ActionExecutor) Shutdown() {

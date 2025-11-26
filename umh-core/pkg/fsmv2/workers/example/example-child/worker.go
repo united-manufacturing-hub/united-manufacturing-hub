@@ -16,6 +16,7 @@ package example_child
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -26,6 +27,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	fsmv2types "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/example-child/snapshot"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/example-child/state"
@@ -33,7 +35,7 @@ import (
 
 // ChildWorker implements the FSM v2 Worker interface for resource management.
 type ChildWorker struct {
-	*fsmv2.BaseWorker[*ChildDependencies]
+	*helpers.BaseWorker[*ChildDependencies]
 	identity   fsmv2.Identity
 	logger     *zap.SugaredLogger
 	connection Connection
@@ -45,8 +47,16 @@ func NewChildWorker(
 	name string,
 	connectionPool ConnectionPool,
 	logger *zap.SugaredLogger,
-) *ChildWorker {
-	dependencies := NewChildDependencies(connectionPool, logger)
+) (*ChildWorker, error) {
+	if connectionPool == nil {
+		return nil, errors.New("connectionPool must not be nil")
+	}
+	if logger == nil {
+		return nil, errors.New("logger must not be nil")
+	}
+
+	workerType := storage.DeriveWorkerType[snapshot.ChildObservedState]()
+	dependencies := NewChildDependencies(connectionPool, logger, workerType, id)
 
 	conn, err := connectionPool.Acquire()
 	if err != nil {
@@ -54,24 +64,39 @@ func NewChildWorker(
 	}
 
 	return &ChildWorker{
-		BaseWorker: fsmv2.NewBaseWorker(dependencies),
+		BaseWorker: helpers.NewBaseWorker(dependencies),
 		identity: fsmv2.Identity{
 			ID:         id,
 			Name:       name,
-			WorkerType: storage.DeriveWorkerType[snapshot.ChildObservedState](),
+			WorkerType: workerType,
 		},
 		logger:     logger,
 		connection: conn,
-	}
+	}, nil
 }
 
 // CollectObservedState returns the current observed state of the child worker.
 func (w *ChildWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedState, error) {
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
+
+	// Get connection status from dependencies (updated by ConnectAction/DisconnectAction)
+	deps := w.GetDependencies()
+	connectionStatus := "disconnected"
+	connectionHealth := "no connection"
+	if deps.IsConnected() {
+		connectionStatus = "connected"
+		connectionHealth = "healthy"
+	}
+
 	observed := snapshot.ChildObservedState{
 		ID:               w.identity.ID,
 		CollectedAt:      time.Now(),
-		ConnectionStatus: w.getConnectionStatus(),
-		ConnectionHealth: w.getConnectionHealth(),
+		ConnectionStatus: connectionStatus,
+		ConnectionHealth: connectionHealth,
 	}
 
 	return observed, nil
@@ -110,27 +135,24 @@ func (w *ChildWorker) GetInitialState() fsmv2.State[any, any] {
 	return &state.StoppedState{}
 }
 
-func (w *ChildWorker) getConnectionStatus() string {
-	if w.connection != nil {
-		return "connected"
-	}
-
-	return "disconnected"
-}
-
-func (w *ChildWorker) getConnectionHealth() string {
-	if w.connection == nil {
-		return "no connection"
-	}
-
-	return "healthy"
-}
-
 func init() {
+	// Register supervisor factory for creating child supervisors
 	_ = factory.RegisterSupervisorFactory[snapshot.ChildObservedState, *snapshot.ChildDesiredState](
 		func(cfg interface{}) interface{} {
 			supervisorCfg := cfg.(supervisor.Config)
 
 			return supervisor.NewSupervisor[snapshot.ChildObservedState, *snapshot.ChildDesiredState](supervisorCfg)
 		})
+
+	// Register worker factory for ApplicationWorker to create child workers via YAML config
+	_ = factory.RegisterFactoryByType("child", func(identity fsmv2.Identity) fsmv2.Worker {
+		// Use a development logger for visibility in examples
+		cfg := zap.NewDevelopmentConfig()
+		cfg.Level = zap.NewAtomicLevelAt(zap.InfoLevel)
+		zapLogger, _ := cfg.Build()
+		logger := zapLogger.Sugar()
+		pool := &DefaultConnectionPool{}
+		worker, _ := NewChildWorker(identity.ID, identity.Name, pool, logger)
+		return worker
+	})
 }

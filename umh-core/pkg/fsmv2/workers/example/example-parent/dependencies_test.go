@@ -34,10 +34,11 @@ var _ = Describe("ParentDependencies", func() {
 
 	Describe("NewParentDependencies", func() {
 		It("should create dependencies with valid inputs", func() {
-			deps = example_parent.NewParentDependencies(logger)
+			deps = example_parent.NewParentDependencies(logger, "parent", "test-id")
 
 			Expect(deps).NotTo(BeNil())
-			Expect(deps.GetLogger()).To(Equal(logger))
+			// Logger is enriched with worker context
+			Expect(deps.GetLogger()).NotTo(BeNil())
 		})
 	})
 })

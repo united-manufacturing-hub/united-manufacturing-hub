@@ -40,7 +40,9 @@ var _ = Describe("ParentWorker", func() {
 
 	BeforeEach(func() {
 		logger = zap.NewNop().Sugar()
-		worker = example_parent.NewParentWorker("test-parent", "Test Parent", logger)
+		var err error
+		worker, err = example_parent.NewParentWorker("test-parent", "Test Parent", logger)
+		Expect(err).ToNot(HaveOccurred())
 	})
 
 	Describe("NewParentWorker", func() {

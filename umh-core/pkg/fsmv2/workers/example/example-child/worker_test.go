@@ -27,7 +27,10 @@ func TestNewChildWorker(t *testing.T) {
 	logger := zap.NewNop().Sugar()
 	mockPool := NewMockConnectionPool()
 
-	worker := NewChildWorker("test-id", "test-child", mockPool, logger)
+	worker, err := NewChildWorker("test-id", "test-child", mockPool, logger)
+	if err != nil {
+		t.Fatalf("NewChildWorker() error = %v", err)
+	}
 
 	if worker == nil {
 		t.Fatal("NewChildWorker returned nil")
@@ -42,7 +45,10 @@ func TestChildWorker_CollectObservedState(t *testing.T) {
 	logger := zap.NewNop().Sugar()
 	mockPool := NewMockConnectionPool()
 
-	worker := NewChildWorker("test-id", "test-child", mockPool, logger)
+	worker, err := NewChildWorker("test-id", "test-child", mockPool, logger)
+	if err != nil {
+		t.Fatalf("NewChildWorker() error = %v", err)
+	}
 
 	observed, err := worker.CollectObservedState(context.Background())
 	if err != nil {
@@ -58,7 +64,10 @@ func TestChildWorker_DeriveDesiredState(t *testing.T) {
 	logger := zap.NewNop().Sugar()
 	mockPool := NewMockConnectionPool()
 
-	worker := NewChildWorker("test-id", "test-child", mockPool, logger)
+	worker, err := NewChildWorker("test-id", "test-child", mockPool, logger)
+	if err != nil {
+		t.Fatalf("NewChildWorker() error = %v", err)
+	}
 
 	spec := fsmv2types.UserSpec{
 		Config:    "",

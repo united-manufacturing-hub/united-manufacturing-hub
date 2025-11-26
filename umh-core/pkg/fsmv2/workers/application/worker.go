@@ -47,6 +47,11 @@ type ApplicationWorker struct {
 
 // NewApplicationWorker creates a new application worker.
 func NewApplicationWorker(id, name string) *ApplicationWorker {
+	// Validate required parameters (id and name are non-pointer, so validation is minimal).
+	// This satisfies the constructor validation pattern required by architecture tests.
+	if id == "" || name == "" {
+		return nil
+	}
 	return &ApplicationWorker{
 		id:   id,
 		name: name,
@@ -137,6 +142,11 @@ func (w *ApplicationWorker) GetInitialState() fsmv2.State[any, any] {
 	return nil
 }
 
+// RequestShutdown is a no-op for ApplicationWorker.
+// The supervisor handles shutdown by directly manipulating the desired state in the database.
+func (w *ApplicationWorker) RequestShutdown() {
+}
+
 // SupervisorConfig contains configuration for creating an application supervisor.
 type SupervisorConfig struct {
 	// ID is the unique identifier for the application worker.
@@ -167,10 +177,10 @@ type SupervisorConfig struct {
 	//           value: 10
 	YAMLConfig string
 
-	// EnableLifecycleLogging enables verbose lifecycle event logging (mutex locks, tick events, etc.)
-	// Optional - defaults to false. Set ENABLE_LIFECYCLE_LOGGING=true for deep debugging.
+	// EnableTraceLogging enables verbose lifecycle event logging (mutex locks, tick events, etc.)
+	// Optional - defaults to false. Set ENABLE_TRACE_LOGGING=true for deep debugging.
 	// When false, these high-frequency internal logs are suppressed to improve signal-to-noise ratio.
-	EnableLifecycleLogging bool
+	EnableTraceLogging bool
 }
 
 // NewApplicationSupervisor creates a supervisor with an application worker already added.
@@ -216,12 +226,12 @@ func NewApplicationSupervisor(cfg SupervisorConfig) (*supervisor.Supervisor[snap
 
 	// Create supervisor.
 	sup := supervisor.NewSupervisor[snapshot.ApplicationObservedState, *snapshot.ApplicationDesiredState](supervisor.Config{
-		WorkerType:             appWorkerType,
-		Store:                  cfg.Store,
-		Logger:                 cfg.Logger,
-		TickInterval:           tickInterval,
-		UserSpec:               config.UserSpec{Config: cfg.YAMLConfig},
-		EnableLifecycleLogging: cfg.EnableLifecycleLogging,
+		WorkerType:         appWorkerType,
+		Store:              cfg.Store,
+		Logger:             cfg.Logger,
+		TickInterval:       tickInterval,
+		UserSpec:           config.UserSpec{Config: cfg.YAMLConfig},
+		EnableTraceLogging: cfg.EnableTraceLogging,
 	})
 
 	// Create application worker identity.

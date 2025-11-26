@@ -32,6 +32,11 @@ type StopAction struct {
 // Execute stops all children gracefully
 // Dependencies are injected via deps parameter, enabling full action functionality.
 func (a *StopAction) Execute(ctx context.Context, depsAny any) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
 	if depsAny != nil {
 		deps := depsAny.(fsmv2.Dependencies)
 		logger := deps.GetLogger()

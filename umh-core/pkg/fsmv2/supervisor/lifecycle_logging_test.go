@@ -173,7 +173,7 @@ var _ = Describe("Lifecycle Logging", func() {
 				Store:                   store,
 				Logger:                  logger,
 				TickInterval:            100 * time.Millisecond,
-				EnableLifecycleLogging:  true,
+				EnableTraceLogging:  true,
 			}
 			sup = supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](cfg)
 
@@ -201,7 +201,7 @@ var _ = Describe("Lifecycle Logging", func() {
 				Store:                   store,
 				Logger:                  logger,
 				TickInterval:            100 * time.Millisecond,
-				EnableLifecycleLogging:  true,
+				EnableTraceLogging:  true,
 			}
 			sup = supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](cfg)
 
@@ -229,7 +229,7 @@ var _ = Describe("Lifecycle Logging", func() {
 				Store:                   store,
 				Logger:                  logger,
 				TickInterval:            100 * time.Millisecond,
-				EnableLifecycleLogging:  true,
+				EnableTraceLogging:  true,
 			}
 			sup = supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](cfg)
 
@@ -271,8 +271,8 @@ var _ = Describe("Lifecycle Logging", func() {
 		})
 	})
 
-	Describe("logLifecycle helper method", func() {
-		Context("when enableLifecycleLogging is true", func() {
+	Describe("logTrace helper method", func() {
+		Context("when enableTraceLogging is true", func() {
 			BeforeEach(func() {
 				setupLogger(zapcore.DebugLevel)
 			})
@@ -283,7 +283,7 @@ var _ = Describe("Lifecycle Logging", func() {
 					Store:                   store,
 					Logger:                  logger,
 					TickInterval:            100 * time.Millisecond,
-					EnableLifecycleLogging:  true,
+					EnableTraceLogging:  true,
 				}
 				sup = supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](cfg)
 
@@ -314,7 +314,7 @@ var _ = Describe("Lifecycle Logging", func() {
 			})
 		})
 
-		Context("when enableLifecycleLogging is false", func() {
+		Context("when enableTraceLogging is false", func() {
 			BeforeEach(func() {
 				setupLogger(zapcore.DebugLevel)
 			})
@@ -325,7 +325,7 @@ var _ = Describe("Lifecycle Logging", func() {
 					Store:                   store,
 					Logger:                  logger,
 					TickInterval:            100 * time.Millisecond,
-					EnableLifecycleLogging:  false,
+					EnableTraceLogging:  false,
 				}
 				sup = supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](cfg)
 
@@ -345,7 +345,7 @@ var _ = Describe("Lifecycle Logging", func() {
 
 				for _, entry := range entries {
 					Expect(entry).ToNot(HaveKey("lifecycle_event"),
-						"Found lifecycle_event when enableLifecycleLogging=false: %v",
+						"Found lifecycle_event when enableTraceLogging=false: %v",
 						entry["lifecycle_event"])
 				}
 			})

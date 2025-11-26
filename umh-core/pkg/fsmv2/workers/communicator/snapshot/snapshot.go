@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
 )
 
@@ -73,8 +74,7 @@ type CommunicatorSnapshot struct {
 // This struct is immutable after creation. Desired state changes require
 // new Worker instance or spec updates (future).
 type CommunicatorDesiredState struct {
-	// Boilerplate
-	shutdownRequested bool
+	helpers.BaseDesiredState          // Provides ShutdownRequested + IsShutdownRequested() + SetShutdownRequested()
 
 	// Authentication
 	InstanceUUID string
@@ -90,10 +90,6 @@ type CommunicatorDesiredState struct {
 	// Transport (passed from worker to states for action creation)
 	// Deprecated: Use Dependencies instead
 	Transport transport.Transport
-}
-
-func (s *CommunicatorDesiredState) IsShutdownRequested() bool {
-	return s.shutdownRequested
 }
 
 // CommunicatorObservedState represents the current state of the communicator.

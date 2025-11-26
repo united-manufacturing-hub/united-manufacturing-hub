@@ -94,6 +94,8 @@ func (m *TestWorker) GetInitialState() fsmv2.State[any, any] {
 	return &TestState{}
 }
 
+func (m *TestWorker) RequestShutdown() {}
+
 // TestWorkerWithType extends TestWorker to support workerType-specific test data.
 // This allows tests to create workers that return observed states appropriate for
 // different workerTypes (e.g., "s6", "container", "benthos").
@@ -173,7 +175,8 @@ func CreateTestTriangularStore() *storage.TriangularStore {
 		panic(fmt.Sprintf("failed to create observed collection: %v", err))
 	}
 
-	return storage.NewTriangularStore(basicStore)
+	logger := zap.NewNop().Sugar()
+	return storage.NewTriangularStore(basicStore, logger)
 }
 
 // CreateTestTriangularStoreForWorkerType creates a triangular store for a specific workerType.
@@ -199,7 +202,8 @@ func CreateTestTriangularStoreForWorkerType(workerType string) *storage.Triangul
 		panic(fmt.Sprintf("failed to create observed collection: %v", err))
 	}
 
-	return storage.NewTriangularStore(basicStore)
+	logger := zap.NewNop().Sugar()
+	return storage.NewTriangularStore(basicStore, logger)
 }
 
 // CreateTestObservedStateWithID creates a mock observed state with a specific ID.

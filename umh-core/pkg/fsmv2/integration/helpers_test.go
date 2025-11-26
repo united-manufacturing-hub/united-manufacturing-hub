@@ -23,9 +23,15 @@ import (
 	"time"
 
 	. "github.com/onsi/gomega"
+	"go.uber.org/zap"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application/snapshot"
 	child "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/example-child"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence/memory"
 )
 
 func GetGoroutineCount() int {
@@ -466,4 +472,31 @@ type MockConnection struct{}
 
 func (m *MockConnection) IsHealthy() bool {
 	return true
+}
+
+func NewTestApplicationSupervisor(yamlConfig string, logger *zap.SugaredLogger) (*supervisor.Supervisor[snapshot.ApplicationObservedState, *snapshot.ApplicationDesiredState], error) {
+	ctx := context.Background()
+
+	basicStore := memory.NewInMemoryStore()
+
+	applicationWorkerType := storage.DeriveWorkerType[snapshot.ApplicationObservedState]()
+	_ = basicStore.CreateCollection(ctx, applicationWorkerType+"_identity", nil)
+	_ = basicStore.CreateCollection(ctx, applicationWorkerType+"_desired", nil)
+	_ = basicStore.CreateCollection(ctx, applicationWorkerType+"_observed", nil)
+
+	triangularStore := storage.NewTriangularStore(basicStore, logger)
+
+	sup, err := application.NewApplicationSupervisor(application.SupervisorConfig{
+		ID:           "test-app-001",
+		Name:         "Test Application Supervisor",
+		Store:        triangularStore,
+		Logger:       logger,
+		TickInterval: 100 * time.Millisecond,
+		YAMLConfig:   yamlConfig,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create application supervisor: %w", err)
+	}
+
+	return sup, nil
 }

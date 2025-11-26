@@ -48,7 +48,7 @@ var _ = Describe("DataFreshness Full Cycle Integration", func() {
 		}
 		store.desired["test"]["test-worker"] = persistence.Document{
 			"id":                "test-worker",
-			"shutdownRequested": false,
+			"ShutdownRequested": false,
 		}
 
 		// Initialize the observed state in the store's internal map
@@ -70,7 +70,7 @@ var _ = Describe("DataFreshness Full Cycle Integration", func() {
 
 			desired := persistence.Document{
 				"id":                "test-worker",
-				"shutdownRequested": shutdownRequested,
+				"ShutdownRequested": shutdownRequested,
 			}
 
 			observed := persistence.Document{
@@ -91,7 +91,7 @@ var _ = Describe("DataFreshness Full Cycle Integration", func() {
 			store.desired[workerType][id] = desired
 
 			// Update closure variable for test assertions
-			if shutdown, ok := desired["shutdownRequested"].(bool); ok {
+			if shutdown, ok := desired["ShutdownRequested"].(bool); ok {
 				shutdownRequested = shutdown
 			}
 

@@ -54,9 +54,8 @@ func TestChildDesiredState_ShutdownRequested(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			desired := &ChildDesiredState{
-				shutdownRequested: tt.shutdown,
-			}
+			desired := &ChildDesiredState{}
+			desired.SetShutdownRequested(tt.shutdown)
 
 			if got := desired.IsShutdownRequested(); got != tt.want {
 				t.Errorf("IsShutdownRequested() = %v, want %v", got, tt.want)

@@ -29,11 +29,13 @@ func setupTestStore(workerType string) *storage.TriangularStore {
 	ctx := context.Background()
 	basicStore := memory.NewInMemoryStore()
 
+	// TODO: i dont htink this is required anymore, the createColelction
+
 	_ = basicStore.CreateCollection(ctx, workerType+"_identity", nil)
 	_ = basicStore.CreateCollection(ctx, workerType+"_desired", nil)
 	_ = basicStore.CreateCollection(ctx, workerType+"_observed", nil)
 
-	return storage.NewTriangularStore(basicStore)
+	return storage.NewTriangularStore(basicStore, zap.NewNop().Sugar())
 }
 
 var _ = Describe("Supervisor Configuration", func() {

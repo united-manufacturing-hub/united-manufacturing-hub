@@ -28,9 +28,9 @@ type CommunicatorDependencies struct {
 }
 
 // NewCommunicatorDependencies creates a new dependencies for the communicator worker.
-func NewCommunicatorDependencies(transport transport.Transport, logger *zap.SugaredLogger) *CommunicatorDependencies {
+func NewCommunicatorDependencies(transport transport.Transport, logger *zap.SugaredLogger, workerType, workerID string) *CommunicatorDependencies {
 	return &CommunicatorDependencies{
-		BaseDependencies: fsmv2.NewBaseDependencies(logger),
+		BaseDependencies: fsmv2.NewBaseDependencies(logger, workerType, workerID),
 		transport:        transport,
 	}
 }

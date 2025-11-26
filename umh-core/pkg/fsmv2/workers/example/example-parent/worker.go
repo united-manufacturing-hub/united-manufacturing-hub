@@ -16,6 +16,7 @@ package example_parent
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -26,6 +27,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	fsmv2types "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/example-parent/snapshot"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/example-parent/state"
@@ -33,7 +35,7 @@ import (
 
 // ParentWorker implements the FSM v2 Worker interface for parent-child relationships.
 type ParentWorker struct {
-	*fsmv2.BaseWorker[*ParentDependencies]
+	*helpers.BaseWorker[*ParentDependencies]
 	identity fsmv2.Identity
 	logger   *zap.SugaredLogger
 }
@@ -43,22 +45,33 @@ func NewParentWorker(
 	id string,
 	name string,
 	logger *zap.SugaredLogger,
-) *ParentWorker {
-	dependencies := NewParentDependencies(logger)
+) (*ParentWorker, error) {
+	if logger == nil {
+		return nil, errors.New("logger must not be nil")
+	}
+
+	workerType := storage.DeriveWorkerType[snapshot.ParentObservedState]()
+	dependencies := NewParentDependencies(logger, workerType, id)
 
 	return &ParentWorker{
-		BaseWorker: fsmv2.NewBaseWorker(dependencies),
+		BaseWorker: helpers.NewBaseWorker(dependencies),
 		identity: fsmv2.Identity{
 			ID:         id,
 			Name:       name,
-			WorkerType: storage.DeriveWorkerType[snapshot.ParentObservedState](),
+			WorkerType: workerType,
 		},
 		logger: logger,
-	}
+	}, nil
 }
 
 // CollectObservedState returns the current observed state of the parent worker.
 func (w *ParentWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedState, error) {
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
+
 	observed := snapshot.ParentObservedState{
 		ID:          w.identity.ID,
 		CollectedAt: time.Now(),
@@ -122,10 +135,18 @@ func (w *ParentWorker) GetInitialState() fsmv2.State[any, any] {
 }
 
 func init() {
+	// Register supervisor factory for creating child supervisors
 	_ = factory.RegisterSupervisorFactory[snapshot.ParentObservedState, *snapshot.ParentDesiredState](
 		func(cfg interface{}) interface{} {
 			supervisorCfg := cfg.(supervisor.Config)
 
 			return supervisor.NewSupervisor[snapshot.ParentObservedState, *snapshot.ParentDesiredState](supervisorCfg)
 		})
+
+	// Register worker factory for ApplicationWorker to create parent workers via YAML config
+	_ = factory.RegisterFactoryByType("parent", func(identity fsmv2.Identity) fsmv2.Worker {
+		logger := zap.NewNop().Sugar()
+		worker, _ := NewParentWorker(identity.ID, identity.Name, logger)
+		return worker
+	})
 }

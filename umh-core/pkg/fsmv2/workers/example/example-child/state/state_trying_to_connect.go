@@ -16,6 +16,7 @@ package state
 
 import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/example-child/action"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/example-child/snapshot"
 )
@@ -26,7 +27,7 @@ type TryingToConnectState struct {
 }
 
 func (s *TryingToConnectState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, fsmv2.Action[any]) {
-	snap := fsmv2.ConvertSnapshot[snapshot.ChildObservedState, *snapshot.ChildDesiredState](snapAny)
+	snap := helpers.ConvertSnapshot[snapshot.ChildObservedState, *snapshot.ChildDesiredState](snapAny)
 
 	if snap.Desired.IsShutdownRequested() {
 		return &TryingToStopState{}, fsmv2.SignalNone, nil
@@ -42,7 +43,7 @@ func (s *TryingToConnectState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.S
 }
 
 func (s *TryingToConnectState) String() string {
-	return fsmv2.DeriveStateName(s)
+	return helpers.DeriveStateName(s)
 }
 
 func (s *TryingToConnectState) Reason() string {

@@ -39,25 +39,34 @@ var _ = Describe("BaseDependencies", func() {
 
 	Describe("NewBaseDependencies", func() {
 		It("should create a non-nil dependencies", func() {
-			dependencies := fsmv2.NewBaseDependencies(logger)
+			dependencies := fsmv2.NewBaseDependencies(logger, "test-worker", "test-id")
 			Expect(dependencies).NotTo(BeNil())
 		})
 
 		It("should return the logger passed to constructor", func() {
-			dependencies := fsmv2.NewBaseDependencies(logger)
-			Expect(dependencies.GetLogger()).To(Equal(logger))
+			dependencies := fsmv2.NewBaseDependencies(logger, "test-worker", "test-id")
+			// Logger will be enriched with worker context
+			Expect(dependencies.GetLogger()).NotTo(BeNil())
 		})
 
 		It("should panic when logger is nil", func() {
 			Expect(func() {
-				fsmv2.NewBaseDependencies(nil)
+				fsmv2.NewBaseDependencies(nil, "test-worker", "test-id")
 			}).To(Panic())
+		})
+	})
+
+	Describe("ActionLogger", func() {
+		It("should return a logger enriched with action context", func() {
+			dependencies := fsmv2.NewBaseDependencies(logger, "test-worker", "test-id")
+			actionLog := dependencies.ActionLogger("test-action")
+			Expect(actionLog).NotTo(BeNil())
 		})
 	})
 
 	Describe("Dependencies interface compliance", func() {
 		It("should implement Dependencies interface", func() {
-			dependencies := fsmv2.NewBaseDependencies(logger)
+			dependencies := fsmv2.NewBaseDependencies(logger, "test-worker", "test-id")
 			var _ fsmv2.Dependencies = dependencies
 		})
 	})

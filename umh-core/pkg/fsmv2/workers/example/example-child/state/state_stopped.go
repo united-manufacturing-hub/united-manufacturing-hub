@@ -16,6 +16,7 @@ package state
 
 import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/example-child/snapshot"
 )
 
@@ -25,7 +26,7 @@ type StoppedState struct {
 }
 
 func (s *StoppedState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, fsmv2.Action[any]) {
-	snap := fsmv2.ConvertSnapshot[snapshot.ChildObservedState, *snapshot.ChildDesiredState](snapAny)
+	snap := helpers.ConvertSnapshot[snapshot.ChildObservedState, *snapshot.ChildDesiredState](snapAny)
 
 	if snap.Desired.IsShutdownRequested() {
 		return s, fsmv2.SignalNeedsRemoval, nil
@@ -40,7 +41,7 @@ func (s *StoppedState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, f
 }
 
 func (s *StoppedState) String() string {
-	return fsmv2.DeriveStateName(s)
+	return helpers.DeriveStateName(s)
 }
 
 func (s *StoppedState) Reason() string {

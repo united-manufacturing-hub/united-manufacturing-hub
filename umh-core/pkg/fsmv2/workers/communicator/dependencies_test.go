@@ -55,39 +55,41 @@ var _ = Describe("CommunicatorDependencies", func() {
 	Describe("NewCommunicatorDependencies", func() {
 		Context("when creating a new dependencies", func() {
 			It("should return a non-nil dependencies", func() {
-				deps := communicator.NewCommunicatorDependencies(mt, logger)
+				deps := communicator.NewCommunicatorDependencies(mt, logger, "communicator", "test-id")
 				Expect(deps).NotTo(BeNil())
 			})
 
 			It("should store the transport", func() {
-				deps := communicator.NewCommunicatorDependencies(mt, logger)
+				deps := communicator.NewCommunicatorDependencies(mt, logger, "communicator", "test-id")
 				Expect(deps.GetTransport()).To(Equal(mt))
 			})
 
 			It("should store the logger", func() {
-				deps := communicator.NewCommunicatorDependencies(mt, logger)
-				Expect(deps.GetLogger()).To(Equal(logger))
+				deps := communicator.NewCommunicatorDependencies(mt, logger, "communicator", "test-id")
+				// Logger is enriched with worker context, so it won't equal original
+				Expect(deps.GetLogger()).NotTo(BeNil())
 			})
 		})
 	})
 
 	Describe("GetTransport", func() {
 		It("should return the transport passed to the constructor", func() {
-			deps := communicator.NewCommunicatorDependencies(mt, logger)
+			deps := communicator.NewCommunicatorDependencies(mt, logger, "communicator", "test-id")
 			Expect(deps.GetTransport()).To(Equal(mt))
 		})
 	})
 
 	Describe("GetLogger", func() {
 		It("should return the logger inherited from BaseDependencies", func() {
-			deps := communicator.NewCommunicatorDependencies(mt, logger)
-			Expect(deps.GetLogger()).To(Equal(logger))
+			deps := communicator.NewCommunicatorDependencies(mt, logger, "communicator", "test-id")
+			// Logger is enriched with worker context
+			Expect(deps.GetLogger()).NotTo(BeNil())
 		})
 	})
 
 	Describe("Dependencies interface implementation", func() {
 		It("should implement fsmv2.Dependencies interface", func() {
-			deps := communicator.NewCommunicatorDependencies(mt, logger)
+			deps := communicator.NewCommunicatorDependencies(mt, logger, "communicator", "test-id")
 			var _ fsmv2.Dependencies = deps
 			Expect(deps).To(Satisfy(func(d interface{}) bool {
 				_, ok := d.(fsmv2.Dependencies)

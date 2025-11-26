@@ -113,10 +113,11 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	fsmv2types "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/snapshot"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/state"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
-	fsmv2types "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 )
 
 // CommunicatorWorker implements the FSM v2 Worker interface for channel-based synchronization.
@@ -162,7 +163,7 @@ import (
 //
 // These dependencies are passed to actions when created by states.
 type CommunicatorWorker struct {
-	*fsmv2.BaseWorker[*CommunicatorDependencies]
+	*helpers.BaseWorker[*CommunicatorDependencies]
 	identity fsmv2.Identity
 
 	// Temporary State
@@ -200,14 +201,15 @@ func NewCommunicatorWorker(
 	transportParam transport.Transport,
 	logger *zap.SugaredLogger,
 ) *CommunicatorWorker {
-	dependencies := NewCommunicatorDependencies(transportParam, logger)
+	workerType := storage.DeriveWorkerType[snapshot.CommunicatorObservedState]()
+	dependencies := NewCommunicatorDependencies(transportParam, logger, workerType, id)
 
 	return &CommunicatorWorker{
-		BaseWorker: fsmv2.NewBaseWorker(dependencies),
+		BaseWorker: helpers.NewBaseWorker(dependencies),
 		identity: fsmv2.Identity{
 			ID:         id,
 			Name:       name,
-			WorkerType: storage.DeriveWorkerType[snapshot.CommunicatorObservedState](),
+			WorkerType: workerType,
 		},
 		logger: logger,
 	}
