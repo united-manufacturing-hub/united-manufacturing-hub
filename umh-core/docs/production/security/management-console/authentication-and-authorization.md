@@ -111,10 +111,10 @@ Only admins and the Account Owner can invite new users and add instances. When i
 Access revocation happens at Layer 1 (session invalidation), not through permission grant expiration:
 
 - **User removal**: When a user is removed from ManagementConsole, their session token is invalidated immediately - they can no longer authenticate
-- **Permission updates**: Admins can update user permissions at any time, which takes effect on next authentication
+- **Permission updates**: Admins can update user permissions at any time. ManagementConsole validates the user's current permissions from the database on each request, so changes take effect quickly (within the cache window of up to 10 minutes)
 - **Instance removal**: Removing an instance from ManagementConsole denies all further communication
 
-**Security implication**: If credentials are compromised, revoke access by removing the user in ManagementConsole. This invalidates their session and denies further authentication.
+**Accepted risk**: Permission updates require the user to accept the new certificate. A malicious user could refuse to apply permission patches, retaining their original privileges. Additionally, old permission grants are not cryptographically revoked. **To reliably revoke access or demote a user, remove them entirely** - this invalidates their session immediately without requiring their cooperation.
 
 **What happens when users leave**: When you remove a user, they immediately lose access (session invalidated). Resources they created and users they invited remain - permission grants represent organizational decisions, not personal relationships.
 
