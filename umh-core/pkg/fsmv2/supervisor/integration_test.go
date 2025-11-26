@@ -35,6 +35,9 @@ var _ = Describe("DataFreshness Full Cycle Integration", func() {
 			collectFunc: func(ctx context.Context) (fsmv2.ObservedState, error) {
 				return &mockObservedState{CollectedAt: snapshotTimestamp}, nil
 			},
+			requestShutdownFunc: func() {
+				shutdownRequested = true
+			},
 		}
 
 		worker.initialState = &mockState{}

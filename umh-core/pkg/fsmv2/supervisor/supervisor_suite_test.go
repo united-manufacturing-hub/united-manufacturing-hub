@@ -122,10 +122,11 @@ func (m *mockDesiredState) IsShutdownRequested() bool {
 }
 
 type mockWorker struct {
-	collectErr   error
-	observed     fsmv2.ObservedState
-	initialState fsmv2.State[any, any]
-	collectFunc  func(ctx context.Context) (fsmv2.ObservedState, error)
+	collectErr          error
+	observed            fsmv2.ObservedState
+	initialState        fsmv2.State[any, any]
+	collectFunc         func(ctx context.Context) (fsmv2.ObservedState, error)
+	requestShutdownFunc func() // Callback for when RequestShutdown is called
 }
 
 func (m *mockWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedState, error) {
@@ -160,7 +161,11 @@ func (m *mockWorker) GetInitialState() fsmv2.State[any, any] {
 	return &mockState{}
 }
 
-func (m *mockWorker) RequestShutdown() {}
+func (m *mockWorker) RequestShutdown() {
+	if m.requestShutdownFunc != nil {
+		m.requestShutdownFunc()
+	}
+}
 
 type mockState struct {
 	nextState fsmv2.State[any, any]

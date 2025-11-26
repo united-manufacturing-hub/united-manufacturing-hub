@@ -263,25 +263,11 @@ var _ = Describe("Edge Cases", func() {
 			})
 		})
 
-		Context("when SaveDesired fails", func() {
+		Context("when worker does not exist", func() {
 			It("should return error", func() {
 				mockStore := newMockTriangularStore()
 
 				identity := mockIdentity()
-				identityDoc := persistence.Document{
-					"id":         identity.ID,
-					"name":       identity.Name,
-					"workerType": identity.WorkerType,
-				}
-				err := mockStore.SaveIdentity(context.Background(), "container", identity.ID, identityDoc)
-				Expect(err).ToNot(HaveOccurred())
-
-				desiredDoc := persistence.Document{
-					"id":               identity.ID,
-					"shutdownRequested": false,
-				}
-				_, err = mockStore.SaveDesired(context.Background(), "container", identity.ID, desiredDoc)
-				Expect(err).ToNot(HaveOccurred())
 
 				s := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 					WorkerType: "container",
@@ -293,17 +279,10 @@ var _ = Describe("Edge Cases", func() {
 					},
 				})
 
-				worker := &mockWorker{}
-				err = s.AddWorker(identity, worker)
-
-				// Set error AFTER AddWorker (which needs SaveDesired to succeed)
-				Expect(err).ToNot(HaveOccurred())
-
-				mockStore.SaveDesiredErr = errors.New("save failed")
-
-				err = s.TestRequestShutdown(context.Background(), identity.ID, "test reason")
+				// Don't add worker - test that requestShutdown fails for non-existent worker
+				err := s.TestRequestShutdown(context.Background(), identity.ID, "test reason")
 				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("save"))
+				Expect(err.Error()).To(ContainSubstring("not found"))
 			})
 		})
 	})
@@ -641,11 +620,13 @@ var _ = Describe("Edge Cases", func() {
 		})
 	})
 
-	Describe("RequestShutdown LoadDesired error", func() {
-		Context("when LoadDesired fails", func() {
-			It("should return error", func() {
+	Describe("RequestShutdown with valid worker", func() {
+		Context("when worker exists", func() {
+			It("should succeed without interacting with persistence", func() {
 				mockStore := newMockTriangularStore()
+				// Set persistence errors to verify they don't affect RequestShutdown
 				mockStore.LoadDesiredErr = errors.New("load desired failed")
+				mockStore.SaveDesiredErr = errors.New("save desired failed")
 
 				identity := mockIdentity()
 				identityDoc := persistence.Document{
@@ -655,6 +636,9 @@ var _ = Describe("Edge Cases", func() {
 				}
 				err := mockStore.SaveIdentity(context.Background(), "container", identity.ID, identityDoc)
 				Expect(err).ToNot(HaveOccurred())
+
+				// Clear errors for AddWorker to succeed
+				mockStore.SaveDesiredErr = nil
 
 				s := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 					WorkerType: "container",
@@ -670,9 +654,14 @@ var _ = Describe("Edge Cases", func() {
 				err = s.AddWorker(identity, worker)
 				Expect(err).ToNot(HaveOccurred())
 
+				// Re-set persistence errors
+				mockStore.LoadDesiredErr = errors.New("load desired failed")
+				mockStore.SaveDesiredErr = errors.New("save desired failed")
+
+				// RequestShutdown should succeed because it uses worker.RequestShutdown()
+				// instead of persistence operations
 				err = s.TestRequestShutdown(context.Background(), identity.ID, "test reason")
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("load"))
+				Expect(err).ToNot(HaveOccurred())
 			})
 		})
 	})

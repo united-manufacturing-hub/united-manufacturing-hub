@@ -263,6 +263,16 @@ var _ = Describe("FSMv2 Architecture Validation", func() {
 				}
 			})
 		})
+
+		Describe("No Direct Document Manipulation (Invariant: Type-Safe Boundaries)", func() {
+			It("should not type-assert to persistence.Document in supervisor", func() {
+				violations := validator.ValidateNoDirectDocumentManipulation(getFsmv2Dir())
+				if len(violations) > 0 {
+					message := validator.FormatViolationsWithPattern("Direct Document Manipulation Violations", violations, "DIRECT_DOCUMENT_ASSERTION")
+					Fail(message)
+				}
+			})
+		})
 	})
 })
 

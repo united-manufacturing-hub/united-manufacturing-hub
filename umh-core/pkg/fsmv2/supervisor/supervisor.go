@@ -770,27 +770,15 @@ func (s *Supervisor[TObserved, TDesired]) checkDataFreshness(snapshot *fsmv2.Sna
 		hasTimestamp bool
 	)
 
-	if timestampProvider, ok := snapshot.Observed.(interface{ GetTimestamp() time.Time }); ok {
-		collectedAt = timestampProvider.GetTimestamp()
-		hasTimestamp = true
-	} else if doc, ok := snapshot.Observed.(persistence.Document); ok {
-		if ts, exists := doc["collectedAt"]; exists {
-			if timestamp, ok := ts.(time.Time); ok {
-				collectedAt = timestamp
-				hasTimestamp = true
-			} else if timeStr, ok := ts.(string); ok {
-				var err error
-
-				collectedAt, err = time.Parse(time.RFC3339Nano, timeStr)
-				if err == nil {
-					hasTimestamp = true
-				}
-			}
-		}
+	// Use typed interface to get timestamp - ObservedState requires GetTimestamp()
+	// This avoids direct document manipulation which bypasses type safety
+	if observedState, ok := snapshot.Observed.(fsmv2.ObservedState); ok {
+		collectedAt = observedState.GetTimestamp()
+		hasTimestamp = !collectedAt.IsZero()
 	}
 
 	if !hasTimestamp {
-		s.logger.Warn("Snapshot.Observed does not implement GetTimestamp() or have collectedAt field, cannot check freshness")
+		s.logger.Warn("Snapshot.Observed does not implement ObservedState interface or GetTimestamp() returned zero, cannot check freshness")
 
 		return true
 	}
@@ -1426,9 +1414,10 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 	// the ShutdownRequested flag if present.
 	existingDesired, err := s.store.LoadDesired(ctx, s.workerType, firstWorkerID)
 	if err == nil {
-		if existingDoc, ok := existingDesired.(persistence.Document); ok {
-			if shutdownRequested, exists := existingDoc["ShutdownRequested"]; exists {
-				desiredDoc["ShutdownRequested"] = shutdownRequested
+		// Use typed interface to check shutdown status instead of direct document manipulation
+		if ds, ok := existingDesired.(fsmv2.DesiredState); ok {
+			if ds.IsShutdownRequested() {
+				desiredDoc["ShutdownRequested"] = true
 			}
 		}
 	}
@@ -1650,36 +1639,23 @@ func (s *Supervisor[TObserved, TDesired]) processSignal(ctx context.Context, wor
 //
 // IMPLEMENTATION: Load → Mutate → Save pattern
 // 1. Load current desired state
-// 2. Call SetShutdownRequested(true) if supported
-// 3. Save mutated desired state.
+// 2. Call worker.RequestShutdown(ctx) to set the flag via typed interface
+// 3. The worker handles persistence internally
 func (s *Supervisor[TObserved, TDesired]) requestShutdown(ctx context.Context, workerID string, reason string) error {
 	s.logger.Warnf("Requesting shutdown for worker %s: %s", workerID, reason)
 
-	// Load current desired state
-	desiredInterface, err := s.store.LoadDesired(ctx, s.workerType, workerID)
-	if err != nil {
-		return fmt.Errorf("failed to load desired state for shutdown: %w", err)
+	// Get the worker from the workers map
+	s.mu.RLock()
+	workerCtx, exists := s.workers[workerID]
+	s.mu.RUnlock()
+
+	if !exists {
+		return fmt.Errorf("worker %s not found", workerID)
 	}
 
-	// Type assert to Document - RequestShutdown requires map mutation
-	// LoadDesired returns interface{} which could be Document or typed struct
-	desiredDoc, ok := desiredInterface.(persistence.Document)
-	if !ok {
-		return fmt.Errorf("LoadDesired returned %T, expected persistence.Document for shutdown mutation", desiredInterface)
-	}
-
-	// Mutate document to set shutdown flag
-	if desiredDoc == nil {
-		desiredDoc = make(map[string]interface{})
-	}
-
-	desiredDoc["ShutdownRequested"] = true
-	desiredDoc["id"] = workerID // Ensure ID is present
-
-	// Save mutated desired state
-	if _, err := s.store.SaveDesired(ctx, s.workerType, workerID, desiredDoc); err != nil {
-		return fmt.Errorf("failed to save shutdown desired state: %w", err)
-	}
+	// Use the typed interface to request shutdown
+	// This delegates to the worker's RequestShutdown method which uses SetShutdownRequested
+	workerCtx.worker.RequestShutdown()
 
 	return nil
 }
