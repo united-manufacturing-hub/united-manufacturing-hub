@@ -16,12 +16,14 @@ package testutil
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence/memory"
 )
 
@@ -186,4 +188,148 @@ func CreateObservedStateWithID(id string) *ObservedState {
 		CollectedAt: time.Now(),
 		Desired:     &DesiredState{},
 	}
+}
+
+type Store struct {
+	Identity         map[string]map[string]persistence.Document
+	Desired          map[string]map[string]persistence.Document
+	Observed         map[string]map[string]persistence.Document
+	SaveErr          error
+	LoadSnapshotFunc func(ctx context.Context, workerType string, id string) (*storage.Snapshot, error)
+	SaveDesiredFunc  func(ctx context.Context, workerType string, id string, desired persistence.Document) error
+	SaveObservedFunc func(ctx context.Context, workerType string, id string, observed interface{}) (bool, error)
+}
+
+func NewStore() *Store {
+	return &Store{
+		Identity: make(map[string]map[string]persistence.Document),
+		Desired:  make(map[string]map[string]persistence.Document),
+		Observed: make(map[string]map[string]persistence.Document),
+	}
+}
+
+func (s *Store) SaveIdentity(ctx context.Context, workerType string, id string, identity persistence.Document) error {
+	if s.Identity[workerType] == nil {
+		s.Identity[workerType] = make(map[string]persistence.Document)
+	}
+	s.Identity[workerType][id] = identity
+	return s.SaveErr
+}
+
+func (s *Store) LoadIdentity(ctx context.Context, workerType string, id string) (persistence.Document, error) {
+	if s.Identity[workerType] == nil || s.Identity[workerType][id] == nil {
+		return nil, persistence.ErrNotFound
+	}
+	return s.Identity[workerType][id], nil
+}
+
+func (s *Store) SaveDesired(ctx context.Context, workerType string, id string, desired persistence.Document) error {
+	if s.SaveDesiredFunc != nil {
+		return s.SaveDesiredFunc(ctx, workerType, id, desired)
+	}
+	if s.Desired[workerType] == nil {
+		s.Desired[workerType] = make(map[string]persistence.Document)
+	}
+	s.Desired[workerType][id] = desired
+	return s.SaveErr
+}
+
+func (s *Store) LoadDesired(ctx context.Context, workerType string, id string) (interface{}, error) {
+	if s.Desired[workerType] == nil || s.Desired[workerType][id] == nil {
+		return nil, persistence.ErrNotFound
+	}
+	return s.Desired[workerType][id], nil
+}
+
+func (s *Store) LoadDesiredTyped(ctx context.Context, workerType string, id string, dest interface{}) error {
+	result, err := s.LoadDesired(ctx, workerType, id)
+	if err != nil {
+		return err
+	}
+	doc, ok := result.(persistence.Document)
+	if !ok {
+		return fmt.Errorf("expected Document, got %T", result)
+	}
+	jsonBytes, _ := json.Marshal(doc)
+	return json.Unmarshal(jsonBytes, dest)
+}
+
+func (s *Store) SaveObserved(ctx context.Context, workerType string, id string, observed interface{}) (bool, error) {
+	if s.SaveObservedFunc != nil {
+		return s.SaveObservedFunc(ctx, workerType, id, observed)
+	}
+	if s.Observed[workerType] == nil {
+		s.Observed[workerType] = make(map[string]persistence.Document)
+	}
+	var doc persistence.Document
+	if observedDoc, ok := observed.(persistence.Document); ok {
+		doc = observedDoc
+	} else {
+		doc = persistence.Document{"data": observed, "collectedAt": time.Now()}
+	}
+	s.Observed[workerType][id] = doc
+	if s.SaveErr != nil {
+		return false, s.SaveErr
+	}
+	return true, nil
+}
+
+func (s *Store) LoadObserved(ctx context.Context, workerType string, id string) (interface{}, error) {
+	if s.Observed[workerType] == nil || s.Observed[workerType][id] == nil {
+		return nil, persistence.ErrNotFound
+	}
+	return s.Observed[workerType][id], nil
+}
+
+func (s *Store) LoadObservedTyped(ctx context.Context, workerType string, id string, dest interface{}) error {
+	result, err := s.LoadObserved(ctx, workerType, id)
+	if err != nil {
+		return err
+	}
+	doc, ok := result.(persistence.Document)
+	if !ok {
+		return fmt.Errorf("expected Document, got %T", result)
+	}
+	jsonBytes, _ := json.Marshal(doc)
+	return json.Unmarshal(jsonBytes, dest)
+}
+
+func (s *Store) LoadSnapshot(ctx context.Context, workerType string, id string) (*storage.Snapshot, error) {
+	if s.LoadSnapshotFunc != nil {
+		return s.LoadSnapshotFunc(ctx, workerType, id)
+	}
+	identity := persistence.Document{
+		"id":         id,
+		"name":       "Test Worker",
+		"workerType": workerType,
+	}
+	desired := persistence.Document{}
+	observed := persistence.Document{"collectedAt": time.Now()}
+	if s.Identity[workerType] != nil && s.Identity[workerType][id] != nil {
+		identity = s.Identity[workerType][id]
+	}
+	if s.Desired[workerType] != nil && s.Desired[workerType][id] != nil {
+		desired = s.Desired[workerType][id]
+	}
+	if s.Observed[workerType] != nil && s.Observed[workerType][id] != nil {
+		observed = s.Observed[workerType][id]
+	}
+	return &storage.Snapshot{
+		Identity: identity,
+		Desired:  desired,
+		Observed: observed,
+	}, nil
+}
+
+type Action struct {
+	ExecuteFunc func(ctx context.Context, snapshot any) error
+	Executed    bool
+}
+
+func (a *Action) Execute(ctx context.Context, snapshot any) error {
+	a.Executed = true
+	if a.ExecuteFunc != nil {
+		return a.ExecuteFunc(ctx, snapshot)
+	}
+	return nil
 }
