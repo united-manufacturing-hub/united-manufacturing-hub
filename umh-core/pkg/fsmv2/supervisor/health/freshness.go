@@ -53,17 +53,19 @@ func (f *FreshnessChecker) extractTimestamp(snapshot *fsmv2.Snapshot) (time.Time
 
 	doc, ok := snapshot.Observed.(persistence.Document)
 	if !ok {
-		f.logger.Warnw("Observed state is neither GetTimestamp() nor Document, assuming fresh data",
+		f.logger.Warnw("observed_state_type_unknown",
 			"identity", snapshot.Identity,
-			"type", fmt.Sprintf("%T", snapshot.Observed))
+			"type", fmt.Sprintf("%T", snapshot.Observed),
+			"action", "assuming_fresh")
 
 		return time.Time{}, false
 	}
 
 	ts, exists := doc["collectedAt"]
 	if !exists {
-		f.logger.Warnw("Document does not have collectedAt field, assuming fresh data",
-			"identity", snapshot.Identity)
+		f.logger.Warnw("observed_state_missing_timestamp",
+			"identity", snapshot.Identity,
+			"action", "assuming_fresh")
 
 		return time.Time{}, false
 	}
@@ -75,7 +77,7 @@ func (f *FreshnessChecker) extractTimestamp(snapshot *fsmv2.Snapshot) (time.Time
 	if timeStr, ok := ts.(string); ok {
 		collectedAt, err := time.Parse(time.RFC3339Nano, timeStr)
 		if err != nil {
-			f.logger.Warnw("collectedAt field is string but cannot parse as RFC3339",
+			f.logger.Warnw("observed_state_timestamp_parse_error",
 				"identity", snapshot.Identity,
 				"value", timeStr,
 				"error", err)
@@ -86,7 +88,7 @@ func (f *FreshnessChecker) extractTimestamp(snapshot *fsmv2.Snapshot) (time.Time
 		return collectedAt, true
 	}
 
-	f.logger.Warnw("collectedAt field exists but is not time.Time or string",
+	f.logger.Warnw("observed_state_timestamp_invalid_type",
 		"identity", snapshot.Identity,
 		"type", fmt.Sprintf("%T", ts))
 
@@ -109,7 +111,7 @@ func (f *FreshnessChecker) Check(snapshot *fsmv2.Snapshot) bool {
 	isFresh := age < f.staleThreshold
 
 	if !isFresh {
-		f.logger.Debugw("Observed state is stale",
+		f.logger.Debugw("observed_state_stale",
 			"identity", snapshot.Identity,
 			"age", age,
 			"threshold", f.staleThreshold)
@@ -130,7 +132,7 @@ func (f *FreshnessChecker) IsTimeout(snapshot *fsmv2.Snapshot) bool {
 	isTimedOut := age >= f.timeout
 
 	if isTimedOut {
-		f.logger.Warnw("Observed state has timed out",
+		f.logger.Warnw("observed_state_timeout",
 			"identity", snapshot.Identity,
 			"age", age,
 			"threshold", f.timeout)

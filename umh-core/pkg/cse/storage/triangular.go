@@ -37,6 +37,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"go.uber.org/zap"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 )
 
@@ -76,7 +78,7 @@ import (
 //
 // Example usage:
 //
-//	ts := cse.NewTriangularStore(sqliteStore, globalRegistry)
+//	ts := cse.NewTriangularStore(sqliteStore, logger)
 //
 //	// Create worker
 //	ts.SaveIdentity(ctx, "container", "worker-123", persistence.Document{
@@ -104,6 +106,7 @@ import (
 type TriangularStore struct {
 	store  persistence.Store
 	syncID *atomic.Int64
+	logger *zap.SugaredLogger
 }
 
 // NewTriangularStore creates a new TriangularStore.
@@ -115,13 +118,15 @@ type TriangularStore struct {
 //
 // Parameters:
 //   - store: Backend storage implementation (SQLite, Postgres, etc.)
+//   - logger: Logger for observation change logging (use zap.NewNop().Sugar() for tests)
 //
 // Returns:
 //   - *TriangularStore: Ready-to-use triangular store instance
-func NewTriangularStore(store persistence.Store) *TriangularStore {
+func NewTriangularStore(store persistence.Store, logger *zap.SugaredLogger) *TriangularStore {
 	return &TriangularStore{
 		store:  store,
 		syncID: &atomic.Int64{},
+		logger: logger,
 	}
 }
 
@@ -277,9 +282,31 @@ func (ts *TriangularStore) SaveDesired(ctx context.Context, workerType string, i
 	// Collection name follows convention: {workerType}_desired
 	collectionName := workerType + "_desired"
 
-	// Check if this is first save or update
-	_, err := ts.store.Get(ctx, collectionName, id)
+	// Check if this is first save or update, and get current state for diff logging
+	currentDoc, err := ts.store.Get(ctx, collectionName, id)
 	isNew := err != nil && errors.Is(err, persistence.ErrNotFound)
+
+	// Log desired state changes when updating existing document
+	if !isNew && err == nil {
+		// Filter CSE fields for comparison
+		cseFields := getCSEFields(RoleDesired)
+		currentFiltered := ts.filterCSEFields(currentDoc, cseFields)
+		delete(currentFiltered, "id")
+		delete(currentFiltered, FieldVersion)
+
+		newFiltered := ts.filterCSEFields(desired, cseFields)
+		delete(newFiltered, "id")
+		delete(newFiltered, FieldVersion)
+
+		// Calculate and log changed fields with values
+		changes := ts.getChangedFieldsWithValues(currentFiltered, newFiltered)
+		if len(changes) > 0 {
+			ts.logger.Infow("desired_changed",
+				"worker_type", workerType,
+				"worker_id", id,
+				"changes", changes)
+		}
+	}
 
 	// Inject CSE metadata (without sync ID - will be set after successful operation)
 	ts.injectMetadata(desired, RoleDesired, isNew)
@@ -473,6 +500,105 @@ func (ts *TriangularStore) saveObservedInternal(ctx context.Context, workerType 
 	return nil
 }
 
+// diffExcludedFields are timestamp fields that change every tick and should not trigger
+// diff logging (they add noise without meaningful observability value)
+var diffExcludedFields = map[string]bool{
+	"collected_at":      true,
+	"_cse_collected_at": true,
+}
+
+// FieldChange represents a single field change for logging.
+// CSE semantics: Fields are never removed, only "added" or "modified".
+// old=nil means this is a new field being added for the first time.
+type FieldChange struct {
+	Field      string      `json:"field"`
+	ChangeType string      `json:"change_type"` // "added" or "modified" (CSE never removes fields)
+	Old        interface{} `json:"old"`
+	New        interface{} `json:"new"`
+}
+
+// formatValueForLog safely formats a value for logging with truncation
+func formatValueForLog(v interface{}) interface{} {
+	if v == nil {
+		return nil
+	}
+	s := fmt.Sprintf("%v", v)
+	if len(s) > 100 {
+		return s[:97] + "..."
+	}
+	return v
+}
+
+// getChangedFields returns the names of fields that differ between two documents,
+// excluding timestamp fields that change every tick (collected_at, _cse_collected_at)
+func (ts *TriangularStore) getChangedFields(current, new persistence.Document) []string {
+	var changed []string
+
+	// Fields added or modified
+	for k, newVal := range new {
+		if diffExcludedFields[k] {
+			continue // Skip timestamp fields that change every tick
+		}
+		if currentVal, exists := current[k]; !exists || !reflect.DeepEqual(currentVal, newVal) {
+			changed = append(changed, k)
+		}
+	}
+
+	// Fields removed
+	for k := range current {
+		if diffExcludedFields[k] {
+			continue // Skip timestamp fields
+		}
+		if _, exists := new[k]; !exists {
+			changed = append(changed, k)
+		}
+	}
+
+	return changed
+}
+
+// getChangedFieldsWithValues returns detailed field changes with old and new values,
+// excluding timestamp fields that change every tick.
+// Each change includes a change_type: "added" or "modified".
+//
+// CSE SEMANTICS: Fields are NEVER removed in CSE - only added or modified.
+// If a field is missing from the new document, it means the field was not included
+// in this update, NOT that it should be deleted. The triangular store preserves
+// existing field values when they're not included in an update.
+// This is fundamental to CSE's schema evolution model.
+func (ts *TriangularStore) getChangedFieldsWithValues(current, new persistence.Document) []FieldChange {
+	var changes []FieldChange
+
+	// Fields added or modified
+	// Note: We only track fields present in 'new' because CSE never removes fields.
+	// Fields missing from 'new' retain their existing values in the store.
+	for k, newVal := range new {
+		if diffExcludedFields[k] {
+			continue // Skip timestamp fields that change every tick
+		}
+		oldVal, exists := current[k]
+		if !exists {
+			// Field is new (added)
+			changes = append(changes, FieldChange{
+				Field:      k,
+				ChangeType: "added",
+				Old:        nil,
+				New:        formatValueForLog(newVal),
+			})
+		} else if !reflect.DeepEqual(oldVal, newVal) {
+			// Field exists but value changed (modified)
+			changes = append(changes, FieldChange{
+				Field:      k,
+				ChangeType: "modified",
+				Old:        formatValueForLog(oldVal),
+				New:        formatValueForLog(newVal),
+			})
+		}
+	}
+
+	return changes
+}
+
 // SaveObserved stores system reality with automatic delta checking (runtime polymorphic API).
 //
 // CONVENTION-BASED NAMING: Collection name is derived from naming convention: {workerType}_observed
@@ -552,10 +678,17 @@ func (ts *TriangularStore) SaveObserved(ctx context.Context, workerType string, 
 	delete(newFiltered, "id")
 	delete(newFiltered, FieldVersion)
 
-	// Compare filtered documents
-	if reflect.DeepEqual(currentFiltered, newFiltered) {
+	// Calculate changed fields with values
+	changes := ts.getChangedFieldsWithValues(currentFiltered, newFiltered)
+	if len(changes) == 0 {
 		return false, nil // No changes, skip write
 	}
+
+	// Log observation diff at INFO level
+	ts.logger.Infow("observation_changed",
+		"worker_type", workerType,
+		"worker_id", id,
+		"changes", changes)
 
 	// Data changed, perform write
 	err = ts.saveObservedInternal(ctx, workerType, id, observed)
@@ -1030,6 +1163,25 @@ func SaveDesiredTyped[T any](ts *TriangularStore, ctx context.Context, id string
 		if version, ok := existing[FieldVersion].(int64); ok {
 			desiredDoc[FieldVersion] = version
 		}
+
+		// Log desired state changes when updating existing document
+		cseFields := getCSEFields(RoleDesired)
+		currentFiltered := ts.filterCSEFields(existing, cseFields)
+		delete(currentFiltered, "id")
+		delete(currentFiltered, FieldVersion)
+
+		newFiltered := ts.filterCSEFields(desiredDoc, cseFields)
+		delete(newFiltered, "id")
+		delete(newFiltered, FieldVersion)
+
+		changes := ts.getChangedFieldsWithValues(currentFiltered, newFiltered)
+		if len(changes) > 0 {
+			workerType := DeriveWorkerType[T]()
+			ts.logger.Infow("desired_changed",
+				"worker_type", workerType,
+				"worker_id", id,
+				"changes", changes)
+		}
 	}
 
 	// Inject CSE metadata (will increment preserved version for RoleDesired)
@@ -1174,8 +1326,18 @@ func SaveObservedTyped[T any](ts *TriangularStore, ctx context.Context, id strin
 		delete(newFiltered, "id")
 		delete(newFiltered, FieldVersion)
 
-		// Compare filtered documents
-		changed = !reflect.DeepEqual(currentFiltered, newFiltered)
+		// Compare filtered documents and get changed fields with values
+		changes := ts.getChangedFieldsWithValues(currentFiltered, newFiltered)
+		changed = len(changes) > 0
+
+		if changed {
+			// Log observation diff at INFO level
+			workerType := DeriveWorkerType[T]()
+			ts.logger.Infow("observation_changed",
+				"worker_type", workerType,
+				"worker_id", id,
+				"changes", changes)
+		}
 	}
 
 	// If no change, return early (don't write)
