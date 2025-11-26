@@ -32,13 +32,24 @@ Users authenticate to verify their identity and their access rights to a company
 
 Once logged in, the user remains authenticated until the session token expires.
 
+#### Security Controls
+
+Authentication security is provided by Auth0, which implements:
+
+- **Brute force protection**: Automatic rate limiting and account lockout after failed attempts
+- **Credential stuffing detection**: Anomaly detection for automated attacks
+- **Session management**: Configurable idle and absolute timeout policies
+- **Adaptive MFA**: Risk-based authentication challenges
+
+For enterprise customers with custom Auth0 tenants, additional controls can be configured through the Auth0 dashboard. See [Auth0 Security Documentation](https://auth0.com/docs/secure) for details.
+
 #### Instance Authentication
 
 A UMH instance authenticates using an AUTH_TOKEN that is generated during the initial setup process by the user who creates the instance.
 
 The AUTH_TOKEN is a cryptographically secure random token displayed once during instance creation. The user must copy this token and configure it in the UMH instance.
 
-**Security Note**: The admin who creates an instance has one-time visibility of the AUTH_TOKEN. This follows standard shared-secret patterns - treat the token like a password and share it securely with whoever configures the instance.
+**Security Note**: The user who creates an instance has one-time visibility of the AUTH_TOKEN.
 
 The AUTH_TOKEN serves two purposes:
 
@@ -83,6 +94,8 @@ Three roles control what actions users and instances can perform at their assign
 
 Users can have different roles at different locations. For example, a user can be an Admin at `ACME.Munich.Assembly.Line1` but only a Viewer at `ACME.Munich.Assembly.Line2`.
 
+**Security context**: These roles control ManagementConsole actions. At the instance level, anyone with write access (Editor or Admin) can deploy bridge configurations that have full access to all instance resources - see [umh-core deployment security](../umh-core/deployment-security.md) for details. The meaningful security boundary is between read-only (Viewer) and write access (Editor/Admin).
+
 #### Permission Inheritance
 
 Permissions are inherited downward: a user with access at `ACME.Munich` automatically has access to everything within Munich, such as `ACME.Munich.Assembly.Line1.Cell5`.
@@ -93,26 +106,50 @@ You can also define exceptions to override inherited permissions. For example, a
 
 Only admins and the Account Owner can invite new users and add instances. When inviting users, admins can only grant permissions for locations where they themselves have admin access. This prevents privilege escalation and ensures that permissions flow naturally through the organization.
 
-### Permission Grant Lifecycle
+### Access Revocation
 
-Permission grants are created during invitation (for users) or instance registration (for instances).
+Access revocation happens at Layer 1 (session invalidation), not through permission grant expiration:
 
-**Deployment Consideration**: Permission grants are valid indefinitely and are NOT revoked through expiration mechanisms.
+- **User removal**: When a user is removed from ManagementConsole, their session token is invalidated immediately - they can no longer authenticate
+- **Permission updates**: Admins can update user permissions at any time, which takes effect on next authentication
+- **Instance removal**: Removing an instance from ManagementConsole denies all further communication
 
-**Why this design**: This simplifies the permission model by separating identity from access control:
-- Permission grants prove identity and the permissions that were granted at creation time
-- Layer 1 (session token/backend) controls current access rights
-- Access denial happens by removing the user or instance, not by expiring permission grants
+**Security implication**: If credentials are compromised, revoke access by removing the user in ManagementConsole. This invalidates their session and denies further authentication.
 
-**Compensating controls**:
+**What happens when users leave**: When you remove a user, they immediately lose access (session invalidated). Resources they created and users they invited remain - permission grants represent organizational decisions, not personal relationships.
 
-1. **Layer 1 enforcement**: When a user is removed from ManagementConsole, their session token is invalidated and they can no longer authenticate
-2. **Permission updates**: Admins can update user permissions, which creates a new permission grant
-3. **Instance removal**: Removing an instance from ManagementConsole denies all further communication
+## Shared Responsibility Model
 
-**Security implication**: If credentials are compromised, access denial requires action in Layer 1 (user removal or permission update through ManagementConsole). The permission grant alone does not grant access - a valid session token is also required.
+Security is a shared responsibility between UMH and our customers. This section clarifies who is responsible for what.
 
-**What happens when users leave**: When a user is removed from ManagementConsole, their session token is invalidated and they lose access. However, resources they created and users they invited remain in the system. Invited users retain their permissions (which came from the admin who invited them, not the removed user). This is intentional - permission grants represent organizational decisions, not personal relationships.
+### We (UMH) Are Responsible For
+
+| Area | Our Responsibility |
+|------|-------------------|
+| Authentication Infrastructure | Auth0 integration, session token generation, secure credential hashing |
+| Authorization Framework | RBAC system, permission inheritance, location-based access control |
+| Secure Defaults | Password complexity requirements, invite key separation, double-hash storage |
+| Platform Security | ManagementConsole application security, API security, session management |
+| Audit Logging | Recording authentication events and permission changes |
+
+### You (Customer) Are Responsible For
+
+| Area | Your Responsibility |
+|------|---------------------|
+| Account Owner Security | Protecting the Account Owner credentials (recovery account) |
+| AUTH_TOKEN Management | Secure storage and transmission of instance AUTH_TOKENs |
+| Invite Key Distribution | Sharing invite keys through secure out-of-band channels |
+| User Lifecycle | Promptly removing users who leave your organization |
+| Access Reviews | Periodic review of user permissions and access levels |
+| Enterprise SSO | Configuration and security of your SAML/SSO identity provider |
+
+### Shared Responsibilities
+
+| Area | Details |
+|------|---------|
+| Permission Design | UMH provides the RBAC framework; you define appropriate roles per location |
+| Incident Response | UMH monitors platform; you monitor for compromised credentials |
+| Compliance | UMH provides security controls; you ensure usage meets your compliance requirements |
 
 ## Reference
 
