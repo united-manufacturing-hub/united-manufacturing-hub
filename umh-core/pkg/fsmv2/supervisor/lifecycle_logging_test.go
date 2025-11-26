@@ -169,11 +169,10 @@ var _ = Describe("Lifecycle Logging", func() {
 
 		It("should log tick_start with worker_id", func() {
 			cfg := supervisor.Config{
-				WorkerType:              "test",
-				Store:                   store,
-				Logger:                  logger,
-				TickInterval:            100 * time.Millisecond,
-				EnableLifecycleLogging:  true,
+				WorkerType:   "test",
+				Store:        store,
+				Logger:       logger,
+				TickInterval: 100 * time.Millisecond,
 			}
 			sup = supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](cfg)
 
@@ -197,11 +196,10 @@ var _ = Describe("Lifecycle Logging", func() {
 
 		It("should log mutex_lock_acquire", func() {
 			cfg := supervisor.Config{
-				WorkerType:              "test",
-				Store:                   store,
-				Logger:                  logger,
-				TickInterval:            100 * time.Millisecond,
-				EnableLifecycleLogging:  true,
+				WorkerType:   "test",
+				Store:        store,
+				Logger:       logger,
+				TickInterval: 100 * time.Millisecond,
 			}
 			sup = supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](cfg)
 
@@ -225,11 +223,10 @@ var _ = Describe("Lifecycle Logging", func() {
 
 		It("should log mutex_lock_acquired", func() {
 			cfg := supervisor.Config{
-				WorkerType:              "test",
-				Store:                   store,
-				Logger:                  logger,
-				TickInterval:            100 * time.Millisecond,
-				EnableLifecycleLogging:  true,
+				WorkerType:   "test",
+				Store:        store,
+				Logger:       logger,
+				TickInterval: 100 * time.Millisecond,
 			}
 			sup = supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](cfg)
 
@@ -283,7 +280,6 @@ var _ = Describe("Lifecycle Logging", func() {
 					Store:                   store,
 					Logger:                  logger,
 					TickInterval:            100 * time.Millisecond,
-					EnableLifecycleLogging:  true,
 				}
 				sup = supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](cfg)
 
@@ -325,7 +321,6 @@ var _ = Describe("Lifecycle Logging", func() {
 					Store:                   store,
 					Logger:                  logger,
 					TickInterval:            100 * time.Millisecond,
-					EnableLifecycleLogging:  false,
 				}
 				sup = supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](cfg)
 

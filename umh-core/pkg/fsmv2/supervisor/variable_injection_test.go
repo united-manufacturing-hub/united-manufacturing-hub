@@ -123,7 +123,7 @@ var _ = Describe("Variable Injection", func() {
 		err = basicStore.CreateCollection(ctx, "test_observed", nil)
 		Expect(err).ToNot(HaveOccurred())
 
-		store = storage.NewTriangularStore(basicStore)
+		store = storage.NewTriangularStore(basicStore, nil)
 
 		identity = fsmv2.Identity{
 			ID:         "test-worker-1",

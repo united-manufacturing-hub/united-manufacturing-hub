@@ -136,6 +136,7 @@ var _ = Describe("Testing Helpers", func() {
 		It("should return workerType-specific observed state", func() {
 			ctx := context.Background()
 			worker := &supervisor.TestWorkerWithType{
+				Worker:     supervisor.TestWorker{},
 				WorkerType: "s6",
 			}
 
@@ -151,7 +152,7 @@ var _ = Describe("Testing Helpers", func() {
 			}
 
 			worker := &supervisor.TestWorkerWithType{
-				TestWorker: supervisor.TestWorker{
+				Worker: supervisor.TestWorker{
 					CollectFunc: func(ctx context.Context) (fsmv2.ObservedState, error) {
 						return customObserved, nil
 					},

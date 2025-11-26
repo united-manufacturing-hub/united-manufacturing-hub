@@ -79,7 +79,7 @@ func registerTestWorkerFactories() {
 		// Register worker factory
 		err := factory.RegisterFactoryByType(wt, func(identity fsmv2.Identity) fsmv2.Worker {
 			return &supervisor.TestWorkerWithType{
-				TestWorker: supervisor.TestWorker{},
+				Worker:     supervisor.TestWorker{},
 				WorkerType: wt,
 			}
 		})
@@ -367,7 +367,7 @@ func newSupervisorWithWorker(worker *mockWorker, customStore storage.TriangularS
 			panic(fmt.Sprintf("failed to create observed collection: %v", err))
 		}
 
-		triangularStore = storage.NewTriangularStore(basicStore)
+		triangularStore = storage.NewTriangularStore(basicStore, nil)
 		if triangularStore == nil {
 			panic("triangular store is nil")
 		}
@@ -437,7 +437,7 @@ func createTestTriangularStore() *storage.TriangularStore {
 		}
 	}
 
-	return storage.NewTriangularStore(basicStore)
+	return storage.NewTriangularStore(basicStore, nil)
 }
 
 type mockTriangularStore struct {

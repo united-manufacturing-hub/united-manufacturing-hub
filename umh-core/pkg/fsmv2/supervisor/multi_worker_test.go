@@ -52,7 +52,7 @@ var _ = Describe("Multi-Worker Supervisor", func() {
 		err = basicStore.CreateCollection(ctx, "test_observed", nil)
 		Expect(err).ToNot(HaveOccurred())
 
-		triangularStore = storage.NewTriangularStore(basicStore)
+		triangularStore = storage.NewTriangularStore(basicStore, nil)
 
 		s = supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 			WorkerType: "test",
