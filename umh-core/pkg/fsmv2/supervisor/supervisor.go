@@ -88,9 +88,9 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/collection"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/execution"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/health"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/internal/collection"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/internal/execution"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/internal/health"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/lockmanager"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
@@ -576,7 +576,7 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity fsmv2.Identity, wor
 
 	desiredDoc["id"] = identity.ID
 
-	err = s.store.SaveDesired(ctx, s.workerType, identity.ID, desiredDoc)
+	_, err = s.store.SaveDesired(ctx, s.workerType, identity.ID, desiredDoc)
 	if err != nil {
 		return fmt.Errorf("failed to save initial desired state: %w", err)
 	}
@@ -1433,7 +1433,7 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 		}
 	}
 
-	err = s.store.SaveDesired(ctx, s.workerType, firstWorkerID, desiredDoc)
+	_, err = s.store.SaveDesired(ctx, s.workerType, firstWorkerID, desiredDoc)
 	if err != nil {
 		// Log the error but continue with the tick - the system can recover on the next tick
 		// The tickWorker will use the previously saved desired state
@@ -1677,7 +1677,7 @@ func (s *Supervisor[TObserved, TDesired]) requestShutdown(ctx context.Context, w
 	desiredDoc["id"] = workerID // Ensure ID is present
 
 	// Save mutated desired state
-	if err := s.store.SaveDesired(ctx, s.workerType, workerID, desiredDoc); err != nil {
+	if _, err := s.store.SaveDesired(ctx, s.workerType, workerID, desiredDoc); err != nil {
 		return fmt.Errorf("failed to save shutdown desired state: %w", err)
 	}
 
@@ -1848,7 +1848,7 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 				"id":                childIdentity.ID,
 				"shutdownRequested": false,
 			}
-			if err := s.store.SaveDesired(childDesiredCtx, spec.WorkerType, childIdentity.ID, desiredDoc); err != nil {
+			if _, err := s.store.SaveDesired(childDesiredCtx, spec.WorkerType, childIdentity.ID, desiredDoc); err != nil {
 				s.logger.Warnf("Failed to save initial desired state for child %s: %v", spec.Name, err)
 			}
 

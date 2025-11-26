@@ -79,7 +79,7 @@ var _ = Describe("Phase 0: Parent-Child Lifecycle", func() {
 			panic(err)
 		}
 
-		store = storage.NewTriangularStore(basicStore)
+		store = storage.NewTriangularStore(basicStore, logger)
 
 		factory.ResetRegistry()
 	})
@@ -100,14 +100,22 @@ var _ = Describe("Phase 0: Parent-Child Lifecycle", func() {
 
 			// Register worker factories
 			err := factory.RegisterFactory[parentSnapshot.ParentObservedState, *parentSnapshot.ParentDesiredState](func(identity fsmv2.Identity) fsmv2.Worker {
-				return parent.NewParentWorker(identity.ID, identity.Name, logger)
+				worker, err := parent.NewParentWorker(identity.ID, identity.Name, logger)
+				if err != nil {
+					panic(err)
+				}
+				return worker
 			})
 			Expect(err).ToNot(HaveOccurred())
 
 			err = factory.RegisterFactory[childSnapshot.ChildObservedState, *childSnapshot.ChildDesiredState](func(identity fsmv2.Identity) fsmv2.Worker {
 				mockConnectionPool := NewConnectionPool()
 
-				return child.NewChildWorker(identity.ID, identity.Name, mockConnectionPool, logger)
+				worker, err := child.NewChildWorker(identity.ID, identity.Name, mockConnectionPool, logger)
+				if err != nil {
+					panic(err)
+				}
+				return worker
 			})
 			Expect(err).ToNot(HaveOccurred())
 
@@ -139,7 +147,8 @@ var _ = Describe("Phase 0: Parent-Child Lifecycle", func() {
 
 			By("Creating and adding parent worker instance to supervisor")
 
-			parentWorker := parent.NewParentWorker("parent-001", "Test Parent", logger)
+			parentWorker, err := parent.NewParentWorker("parent-001", "Test Parent", logger)
+			Expect(err).NotTo(HaveOccurred())
 
 			identity := fsmv2.Identity{
 				ID:         "parent-001",
@@ -160,7 +169,7 @@ var _ = Describe("Phase 0: Parent-Child Lifecycle", func() {
 				"id":    "parent-001",
 				"state": "running",
 			}
-			err = store.SaveDesired(ctx, storage.DeriveWorkerType[parentSnapshot.ParentObservedState](), "parent-001", desiredDoc)
+			_, err = store.SaveDesired(ctx, storage.DeriveWorkerType[parentSnapshot.ParentObservedState](), "parent-001", desiredDoc)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Saving initial observed state to database (to avoid Document vs typed struct panic)")

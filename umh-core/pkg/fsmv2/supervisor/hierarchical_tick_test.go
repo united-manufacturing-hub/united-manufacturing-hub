@@ -78,6 +78,8 @@ func (h *hierarchicalWorker) GetInitialState() fsmv2.State[any, any] {
 	return &mockState{}
 }
 
+func (h *hierarchicalWorker) RequestShutdown() {}
+
 var _ = Describe("Hierarchical Tick Propagation (Task 0.6)", func() {
 	var (
 		ctx         context.Context
@@ -125,7 +127,7 @@ var _ = Describe("Hierarchical Tick Propagation (Task 0.6)", func() {
 				"id":                identity.ID,
 				"shutdownRequested": false,
 			}
-			err = mockStore.SaveDesired(ctx, "parent", identity.ID, desiredDoc)
+			_, err = mockStore.SaveDesired(ctx, "parent", identity.ID, desiredDoc)
 			Expect(err).NotTo(HaveOccurred())
 
 			mockStore.Observed["parent"] = map[string]interface{}{
@@ -180,7 +182,7 @@ var _ = Describe("Hierarchical Tick Propagation (Task 0.6)", func() {
 				"id":                identity.ID,
 				"shutdownRequested": false,
 			}
-			err = mockStore.SaveDesired(ctx, "parent", identity.ID, desiredDoc)
+			_, err = mockStore.SaveDesired(ctx, "parent", identity.ID, desiredDoc)
 			Expect(err).NotTo(HaveOccurred())
 
 			mockStore.Observed["parent"] = map[string]interface{}{
@@ -239,7 +241,7 @@ var _ = Describe("Hierarchical Tick Propagation (Task 0.6)", func() {
 				"id":                identity.ID,
 				"shutdownRequested": false,
 			}
-			err = mockStore.SaveDesired(ctx, "parent", identity.ID, desiredDoc)
+			_, err = mockStore.SaveDesired(ctx, "parent", identity.ID, desiredDoc)
 			Expect(err).NotTo(HaveOccurred())
 
 			mockStore.Observed["parent"] = map[string]interface{}{
@@ -295,7 +297,7 @@ var _ = Describe("Hierarchical Tick Propagation (Task 0.6)", func() {
 				"id":                identity.ID,
 				"shutdownRequested": false,
 			}
-			err = mockStore.SaveDesired(ctx, "parent", identity.ID, desiredDoc)
+			_, err = mockStore.SaveDesired(ctx, "parent", identity.ID, desiredDoc)
 			Expect(err).NotTo(HaveOccurred())
 
 			mockStore.Observed["parent"] = map[string]interface{}{
@@ -353,7 +355,7 @@ var _ = Describe("Hierarchical Tick Propagation (Task 0.6)", func() {
 				"id":                identity.ID,
 				"shutdownRequested": false,
 			}
-			err = mockStore.SaveDesired(ctx, "parent", identity.ID, desiredDoc)
+			_, err = mockStore.SaveDesired(ctx, "parent", identity.ID, desiredDoc)
 			Expect(err).NotTo(HaveOccurred())
 
 			mockStore.Observed["parent"] = map[string]interface{}{
@@ -411,7 +413,7 @@ var _ = Describe("Hierarchical Tick Propagation (Task 0.6)", func() {
 				"id":                identity.ID,
 				"shutdownRequested": false,
 			}
-			err = mockStore.SaveDesired(ctx, "parent", identity.ID, desiredDoc)
+			_, err = mockStore.SaveDesired(ctx, "parent", identity.ID, desiredDoc)
 			Expect(err).NotTo(HaveOccurred())
 
 			mockStore.Observed["parent"] = map[string]interface{}{

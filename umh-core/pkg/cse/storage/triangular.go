@@ -67,7 +67,7 @@ import (
 // a distributed store that maintains collection-based organization.
 //
 // The triangular model separates each worker into three parts:
-//   - Identity: Immutable worker identification (ID, Name, IP)
+//   - Identity: Immutable worker identification (ID, Name, WorkerType)
 //   - Desired: User intent / configuration (what we want)
 //   - Observed: System reality (what actually exists)
 //
@@ -84,7 +84,7 @@ import (
 //	ts.SaveIdentity(ctx, "container", "worker-123", persistence.Document{
 //	    "id": "worker-123",
 //	    "name": "Container A",
-//	    "ip": "192.168.1.100",
+//	    "workerType": "container",
 //	})
 //
 //	// Save user intent
@@ -136,7 +136,7 @@ func NewTriangularStore(store persistence.Store, logger *zap.SugaredLogger) *Tri
 // This allows supervisors to handle multiple worker types at runtime without type-specific code.
 //
 // DESIGN DECISION: Identity is created once and never updated
-// WHY: Identity fields (IP, hostname, bootstrap config) don't change.
+// WHY: Identity fields (ID, name, worker type) don't change.
 // Immutability simplifies reasoning about worker lifecycle.
 //
 // TRADE-OFF: Can't update identity after creation. If identity needs to change,
@@ -153,7 +153,7 @@ func NewTriangularStore(store persistence.Store, logger *zap.SugaredLogger) *Tri
 //   - ctx: Cancellation context
 //   - workerType: Worker type (e.g., "container", "relay")
 //   - id: Unique worker identifier
-//   - identity: Identity document (id, name, ip, etc.)
+//   - identity: Identity document (id, name, workerType)
 //
 // Returns:
 //   - error: If worker type not registered or insertion fails
@@ -163,7 +163,7 @@ func NewTriangularStore(store persistence.Store, logger *zap.SugaredLogger) *Tri
 //	err := ts.SaveIdentity(ctx, "container", "worker-123", persistence.Document{
 //	    "id": "worker-123",
 //	    "name": "Container A",
-//	    "ip": "192.168.1.100",
+//	    "workerType": "container",
 //	})
 func (ts *TriangularStore) SaveIdentity(ctx context.Context, workerType string, id string, identity persistence.Document) error {
 	// Validate document has required fields
@@ -230,36 +230,46 @@ func (ts *TriangularStore) LoadIdentity(ctx context.Context, workerType string, 
 	return doc, nil
 }
 
-// SaveDesired stores user intent/configuration.
+// SaveDesired stores user intent/configuration with automatic delta checking (runtime polymorphic API).
 //
-// Deprecated: Use SaveDesiredTyped[T]() instead for type safety and no registry dependency.
-// This method will be removed in a future version.
+// CONVENTION-BASED NAMING: Collection name is derived from naming convention: {workerType}_desired
+// This allows supervisors to handle multiple worker types at runtime without type-specific code.
+//
+// For compile-time type safety, use SaveDesiredTyped[T]() instead.
 //
 // Migration guide: pkg/cse/storage/MIGRATION.md
 //
-// Example:
+// Example (runtime polymorphic code):
 //
-//	// Old (deprecated):
-//	err := ts.SaveDesired(ctx, "container", id, doc)
+//	changed, err := ts.SaveDesired(ctx, "container", id, doc)
 //
-//	// New (recommended):
-//	err := storage.SaveDesiredTyped[ContainerDesiredState](ts, ctx, id, desired)
+// Example (compile-time typed code):
+//
+//	changed, err := storage.SaveDesiredTyped[ContainerDesiredState](ts, ctx, id, desired)
+//
+// DESIGN DECISION: Built-in delta checking skips unchanged writes
+// WHY: Desired state can be written frequently. Skipping redundant writes reduces
+// database load and prevents unnecessary sync_id increments, enabling efficient
+// delta streaming to clients.
 //
 // DESIGN DECISION: Increment _version for optimistic locking
 // WHY: Desired state represents user configuration. Version prevents lost updates
 // when multiple clients modify configuration concurrently.
 //
-// TRADE-OFF: Callers must handle version conflicts (retry logic).
-// Alternative would be last-write-wins, but that loses concurrent updates.
+// TRADE-OFF: Additional LoadDesired() call adds one database read per save.
+// Acceptable because in-memory reads are fast and writes are more expensive.
 //
 // INSPIRED BY: Optimistic locking in ORMs (Hibernate, Entity Framework),
 // Linear's version-based conflict resolution.
 //
-// CSE metadata injected/updated:
-//   - _sync_id: Incremented (for delta sync)
-//   - _version: Incremented (for optimistic locking)
-//   - _updated_at: Current timestamp
-//   - _created_at: Set if first save
+// Delta checking behavior:
+//   - First save (worker doesn't exist): Always writes, returns (true, nil)
+//   - Data changed: Writes to database, returns (true, nil)
+//   - Data unchanged: Skips write, returns (false, nil)
+//   - Error: Returns (false, err)
+//
+// CSE metadata fields (_sync_id, _version, _created_at, _updated_at) are
+// excluded from change detection. Only user data fields are compared.
 //
 // Parameters:
 //   - ctx: Cancellation context
@@ -268,25 +278,26 @@ func (ts *TriangularStore) LoadIdentity(ctx context.Context, workerType string, 
 //   - desired: Desired state document
 //
 // Returns:
-//   - error: If worker type not registered or save fails
-func (ts *TriangularStore) SaveDesired(ctx context.Context, workerType string, id string, desired persistence.Document) error {
+//   - changed: true if data was written to database, false if write was skipped
+//   - err: non-nil if operation failed (changed is always false when err != nil)
+func (ts *TriangularStore) SaveDesired(ctx context.Context, workerType string, id string, desired persistence.Document) (changed bool, err error) {
 	if desired == nil {
-		return errors.New("desired document cannot be nil")
+		return false, errors.New("desired document cannot be nil")
 	}
 
 	// Validate document has required fields
 	if err := ts.validateDocument(desired); err != nil {
-		return fmt.Errorf("invalid desired document: %w", err)
+		return false, fmt.Errorf("invalid desired document: %w", err)
 	}
 
 	// Collection name follows convention: {workerType}_desired
 	collectionName := workerType + "_desired"
 
-	// Check if this is first save or update, and get current state for diff logging
+	// Check if this is first save or update, and get current state for delta checking
 	currentDoc, err := ts.store.Get(ctx, collectionName, id)
 	isNew := err != nil && errors.Is(err, persistence.ErrNotFound)
 
-	// Log desired state changes when updating existing document
+	// Delta checking: skip write if data hasn't changed
 	if !isNew && err == nil {
 		// Filter CSE fields for comparison
 		cseFields := getCSEFields(RoleDesired)
@@ -298,14 +309,17 @@ func (ts *TriangularStore) SaveDesired(ctx context.Context, workerType string, i
 		delete(newFiltered, "id")
 		delete(newFiltered, FieldVersion)
 
-		// Calculate and log changed fields with values
+		// Calculate changed fields with values
 		changes := ts.getChangedFieldsWithValues(currentFiltered, newFiltered)
-		if len(changes) > 0 {
-			ts.logger.Infow("desired_changed",
-				"worker_type", workerType,
-				"worker_id", id,
-				"changes", changes)
+		if len(changes) == 0 {
+			return false, nil // No changes, skip write
 		}
+
+		// Log desired state changes
+		ts.logger.Infow("desired_changed",
+			"worker_type", workerType,
+			"worker_id", id,
+			"changes", changes)
 	}
 
 	// Inject CSE metadata (without sync ID - will be set after successful operation)
@@ -318,7 +332,7 @@ func (ts *TriangularStore) SaveDesired(ctx context.Context, workerType string, i
 	}
 
 	if err != nil {
-		return fmt.Errorf("failed to save desired for %s/%s: %w", workerType, id, err)
+		return false, fmt.Errorf("failed to save desired for %s/%s: %w", workerType, id, err)
 	}
 
 	// Increment sync ID ONLY after successful database commit
@@ -331,10 +345,10 @@ func (ts *TriangularStore) SaveDesired(ctx context.Context, workerType string, i
 	if err != nil {
 		// This is a critical error - document exists but we couldn't set sync ID
 		// The sync ID counter is already incremented, creating a gap
-		return fmt.Errorf("failed to set sync ID after desired save for %s/%s: %w", workerType, id, err)
+		return false, fmt.Errorf("failed to set sync ID after desired save for %s/%s: %w", workerType, id, err)
 	}
 
-	return nil
+	return true, nil
 }
 
 // LoadDesired retrieves user intent/configuration.
@@ -501,7 +515,7 @@ func (ts *TriangularStore) saveObservedInternal(ctx context.Context, workerType 
 }
 
 // diffExcludedFields are timestamp fields that change every tick and should not trigger
-// diff logging (they add noise without meaningful observability value)
+// diff logging (they add noise without meaningful observability value).
 var diffExcludedFields = map[string]bool{
 	"collected_at":      true,
 	"_cse_collected_at": true,
@@ -517,44 +531,18 @@ type FieldChange struct {
 	New        interface{} `json:"new"`
 }
 
-// formatValueForLog safely formats a value for logging with truncation
+// formatValueForLog safely formats a value for logging with truncation.
 func formatValueForLog(v interface{}) interface{} {
 	if v == nil {
 		return nil
 	}
+
 	s := fmt.Sprintf("%v", v)
 	if len(s) > 100 {
 		return s[:97] + "..."
 	}
+
 	return v
-}
-
-// getChangedFields returns the names of fields that differ between two documents,
-// excluding timestamp fields that change every tick (collected_at, _cse_collected_at)
-func (ts *TriangularStore) getChangedFields(current, new persistence.Document) []string {
-	var changed []string
-
-	// Fields added or modified
-	for k, newVal := range new {
-		if diffExcludedFields[k] {
-			continue // Skip timestamp fields that change every tick
-		}
-		if currentVal, exists := current[k]; !exists || !reflect.DeepEqual(currentVal, newVal) {
-			changed = append(changed, k)
-		}
-	}
-
-	// Fields removed
-	for k := range current {
-		if diffExcludedFields[k] {
-			continue // Skip timestamp fields
-		}
-		if _, exists := new[k]; !exists {
-			changed = append(changed, k)
-		}
-	}
-
-	return changed
 }
 
 // getChangedFieldsWithValues returns detailed field changes with old and new values,
@@ -576,6 +564,7 @@ func (ts *TriangularStore) getChangedFieldsWithValues(current, new persistence.D
 		if diffExcludedFields[k] {
 			continue // Skip timestamp fields that change every tick
 		}
+
 		oldVal, exists := current[k]
 		if !exists {
 			// Field is new (added)
@@ -1101,7 +1090,7 @@ func LoadDesiredTyped[T any](ts *TriangularStore, ctx context.Context, id string
 	return result, nil
 }
 
-// SaveDesiredTyped saves desired state using generics (no registry dependency).
+// SaveDesiredTyped saves desired state with delta checking using generics (no registry dependency).
 //
 // DESIGN DECISION: Fully independent generic implementation
 // WHY: Type parameter T provides all information needed:
@@ -1109,10 +1098,18 @@ func LoadDesiredTyped[T any](ts *TriangularStore, ctx context.Context, id string
 //   - collectionName from DeriveCollectionName[T](RoleDesired)
 //   - CSE fields from getCSEFields(RoleDesired)
 //
-// NO DELTA CHECKING: Desired state represents user intent - always write.
-// Unlike observed state, we don't skip writes even if data hasn't changed.
+// DESIGN DECISION: Built-in delta checking skips unchanged writes
+// WHY: Desired state can be written frequently. Skipping redundant writes reduces
+// database load and prevents unnecessary sync_id increments, enabling efficient
+// delta streaming to clients.
 //
-// CSE metadata auto-injected:
+// Delta checking behavior:
+//   - First save (worker doesn't exist): Always writes, returns (true, nil)
+//   - Data changed: Writes to database, returns (true, nil)
+//   - Data unchanged: Skips write, returns (false, nil)
+//   - Error: Returns (false, err)
+//
+// CSE metadata auto-injected (only when data changes):
 //   - _sync_id: Incremented after successful save
 //   - _version: Incremented on every update (optimistic locking)
 //   - _created_at: Set on first save
@@ -1125,24 +1122,25 @@ func LoadDesiredTyped[T any](ts *TriangularStore, ctx context.Context, id string
 //   - desired: Desired state struct
 //
 // Returns:
-//   - error: If save fails
+//   - changed: true if data was written to database, false if write was skipped
+//   - err: non-nil if operation failed (changed is always false when err != nil)
 //
 // Example:
 //
 //	desired := ParentDesiredState{Name: "Worker1", Command: "start"}
-//	err := storage.SaveDesiredTyped[ParentDesiredState](ts, ctx, "parent-001", desired)
-func SaveDesiredTyped[T any](ts *TriangularStore, ctx context.Context, id string, desired T) error {
+//	changed, err := storage.SaveDesiredTyped[ParentDesiredState](ts, ctx, "parent-001", desired)
+func SaveDesiredTyped[T any](ts *TriangularStore, ctx context.Context, id string, desired T) (changed bool, err error) {
 	collectionName := DeriveCollectionName[T](RoleDesired)
 
 	// Marshal struct to Document
 	bytes, err := json.Marshal(desired)
 	if err != nil {
-		return fmt.Errorf("failed to marshal desired state: %w", err)
+		return false, fmt.Errorf("failed to marshal desired state: %w", err)
 	}
 
 	desiredDoc := make(persistence.Document)
 	if err := json.Unmarshal(bytes, &desiredDoc); err != nil {
-		return fmt.Errorf("failed to unmarshal to Document: %w", err)
+		return false, fmt.Errorf("failed to unmarshal to Document: %w", err)
 	}
 
 	// Add ID if not present
@@ -1155,16 +1153,16 @@ func SaveDesiredTyped[T any](ts *TriangularStore, ctx context.Context, id string
 	isNew := err != nil && errors.Is(err, persistence.ErrNotFound)
 
 	if err != nil && !isNew {
-		return fmt.Errorf("failed to check existing desired state: %w", err)
+		return false, fmt.Errorf("failed to check existing desired state: %w", err)
 	}
 
-	// Preserve version from existing document (RoleDesired increments version)
+	// Delta checking: skip write if data hasn't changed
 	if !isNew && existing != nil {
 		if version, ok := existing[FieldVersion].(int64); ok {
 			desiredDoc[FieldVersion] = version
 		}
 
-		// Log desired state changes when updating existing document
+		// Filter CSE fields for comparison
 		cseFields := getCSEFields(RoleDesired)
 		currentFiltered := ts.filterCSEFields(existing, cseFields)
 		delete(currentFiltered, "id")
@@ -1174,14 +1172,18 @@ func SaveDesiredTyped[T any](ts *TriangularStore, ctx context.Context, id string
 		delete(newFiltered, "id")
 		delete(newFiltered, FieldVersion)
 
+		// Calculate changed fields
 		changes := ts.getChangedFieldsWithValues(currentFiltered, newFiltered)
-		if len(changes) > 0 {
-			workerType := DeriveWorkerType[T]()
-			ts.logger.Infow("desired_changed",
-				"worker_type", workerType,
-				"worker_id", id,
-				"changes", changes)
+		if len(changes) == 0 {
+			return false, nil // No changes, skip write
 		}
+
+		// Log desired state changes
+		workerType := DeriveWorkerType[T]()
+		ts.logger.Infow("desired_changed",
+			"worker_type", workerType,
+			"worker_id", id,
+			"changes", changes)
 	}
 
 	// Inject CSE metadata (will increment preserved version for RoleDesired)
@@ -1195,7 +1197,7 @@ func SaveDesiredTyped[T any](ts *TriangularStore, ctx context.Context, id string
 	}
 
 	if err != nil {
-		return fmt.Errorf("failed to save desired state: %w", err)
+		return false, fmt.Errorf("failed to save desired state: %w", err)
 	}
 
 	// Increment sync ID after successful save
@@ -1205,10 +1207,10 @@ func SaveDesiredTyped[T any](ts *TriangularStore, ctx context.Context, id string
 	// Update with sync ID
 	err = ts.store.Update(ctx, collectionName, id, desiredDoc)
 	if err != nil {
-		return fmt.Errorf("failed to update sync ID: %w", err)
+		return false, fmt.Errorf("failed to update sync ID: %w", err)
 	}
 
-	return nil
+	return true, nil
 }
 
 // LoadObservedTyped loads observed state using generics (no registry dependency).

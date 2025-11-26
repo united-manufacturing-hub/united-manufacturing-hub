@@ -62,6 +62,8 @@ func (t *TestWorker) GetInitialState() fsmv2.State[any, any] {
 	return t.initialState
 }
 
+func (t *TestWorker) RequestShutdown() {}
+
 // TestObservedState is a test double for fsmv2.ObservedState.
 type TestObservedState struct {
 	ID          string    `json:"id"`
@@ -123,7 +125,7 @@ var _ = Describe("Variable Injection", func() {
 		err = basicStore.CreateCollection(ctx, "test_observed", nil)
 		Expect(err).ToNot(HaveOccurred())
 
-		store = storage.NewTriangularStore(basicStore)
+		store = storage.NewTriangularStore(basicStore, zap.NewNop().Sugar())
 
 		identity = fsmv2.Identity{
 			ID:         "test-worker-1",
@@ -153,7 +155,7 @@ var _ = Describe("Variable Injection", func() {
 			"id":    identity.ID,
 			"state": "running",
 		}
-		err = store.SaveDesired(ctx, "test", identity.ID, initialDesired)
+		_, err = store.SaveDesired(ctx, "test", identity.ID, initialDesired)
 		Expect(err).ToNot(HaveOccurred())
 	})
 
@@ -310,7 +312,7 @@ var _ = Describe("Variable Injection", func() {
 				"id":    childIdentity.ID,
 				"state": "running",
 			}
-			err = store.SaveDesired(ctx, "test", childIdentity.ID, childDesired)
+			_, err = store.SaveDesired(ctx, "test", childIdentity.ID, childDesired)
 			Expect(err).ToNot(HaveOccurred())
 
 			childWorker.deriveDesiredStateFunc = func(spec config.UserSpec) (config.DesiredState, error) {

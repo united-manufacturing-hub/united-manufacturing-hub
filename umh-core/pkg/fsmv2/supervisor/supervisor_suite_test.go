@@ -160,6 +160,8 @@ func (m *mockWorker) GetInitialState() fsmv2.State[any, any] {
 	return &mockState{}
 }
 
+func (m *mockWorker) RequestShutdown() {}
+
 type mockState struct {
 	nextState fsmv2.State[any, any]
 	signal    fsmv2.Signal
@@ -213,9 +215,9 @@ func (m *mockStore) LoadIdentity(ctx context.Context, workerType string, id stri
 	return m.identity[workerType][id], nil
 }
 
-func (m *mockStore) SaveDesired(ctx context.Context, workerType string, id string, desired persistence.Document) error {
+func (m *mockStore) SaveDesired(ctx context.Context, workerType string, id string, desired persistence.Document) (bool, error) {
 	if m.saveDesired != nil {
-		return m.saveDesired(ctx, workerType, id, desired)
+		return true, m.saveDesired(ctx, workerType, id, desired)
 	}
 
 	if m.desired[workerType] == nil {
@@ -224,7 +226,7 @@ func (m *mockStore) SaveDesired(ctx context.Context, workerType string, id strin
 
 	m.desired[workerType][id] = desired
 
-	return m.saveErr
+	return true, m.saveErr
 }
 
 func (m *mockStore) LoadDesired(ctx context.Context, workerType string, id string) (interface{}, error) {
@@ -367,7 +369,7 @@ func newSupervisorWithWorker(worker *mockWorker, customStore storage.TriangularS
 			panic(fmt.Sprintf("failed to create observed collection: %v", err))
 		}
 
-		triangularStore = storage.NewTriangularStore(basicStore)
+		triangularStore = storage.NewTriangularStore(basicStore, zap.NewNop().Sugar())
 		if triangularStore == nil {
 			panic("triangular store is nil")
 		}
@@ -389,7 +391,7 @@ func newSupervisorWithWorker(worker *mockWorker, customStore storage.TriangularS
 		"id":                identity.ID,
 		"shutdownRequested": false,
 	}
-	if err := triangularStore.SaveDesired(ctx, workerType, identity.ID, desiredDoc); err != nil {
+	if _, err := triangularStore.SaveDesired(ctx, workerType, identity.ID, desiredDoc); err != nil {
 		panic(fmt.Sprintf("failed to save initial desired state: %v", err))
 	}
 
@@ -437,7 +439,7 @@ func createTestTriangularStore() *storage.TriangularStore {
 		}
 	}
 
-	return storage.NewTriangularStore(basicStore)
+	return storage.NewTriangularStore(basicStore, zap.NewNop().Sugar())
 }
 
 type mockTriangularStore struct {
@@ -506,9 +508,9 @@ func (m *mockTriangularStore) LoadIdentity(ctx context.Context, workerType strin
 	return doc, nil
 }
 
-func (m *mockTriangularStore) SaveDesired(ctx context.Context, workerType string, id string, desired persistence.Document) error {
+func (m *mockTriangularStore) SaveDesired(ctx context.Context, workerType string, id string, desired persistence.Document) (bool, error) {
 	if m.SaveDesiredErr != nil {
-		return m.SaveDesiredErr
+		return false, m.SaveDesiredErr
 	}
 
 	m.mu.Lock()
@@ -522,7 +524,7 @@ func (m *mockTriangularStore) SaveDesired(ctx context.Context, workerType string
 
 	m.desired[workerType][id] = desired
 
-	return nil
+	return true, nil
 }
 
 func (m *mockTriangularStore) LoadDesired(ctx context.Context, workerType string, id string) (interface{}, error) {

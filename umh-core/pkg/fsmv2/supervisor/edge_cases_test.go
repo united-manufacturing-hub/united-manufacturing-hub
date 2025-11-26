@@ -26,8 +26,8 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/collection"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/health"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/internal/collection"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/internal/health"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 	"go.uber.org/zap"
 )
@@ -240,7 +240,7 @@ var _ = Describe("Edge Cases", func() {
 					"id":               identity.ID,
 					"shutdownRequested": false,
 				}
-				err = mockStore.SaveDesired(context.Background(), "container", identity.ID, desiredDoc)
+				_, err = mockStore.SaveDesired(context.Background(), "container", identity.ID, desiredDoc)
 				Expect(err).ToNot(HaveOccurred())
 
 				s := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
@@ -280,7 +280,7 @@ var _ = Describe("Edge Cases", func() {
 					"id":               identity.ID,
 					"shutdownRequested": false,
 				}
-				err = mockStore.SaveDesired(context.Background(), "container", identity.ID, desiredDoc)
+				_, err = mockStore.SaveDesired(context.Background(), "container", identity.ID, desiredDoc)
 				Expect(err).ToNot(HaveOccurred())
 
 				s := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
@@ -487,7 +487,7 @@ var _ = Describe("Edge Cases", func() {
 					"id":               identity.ID,
 					"shutdownRequested": false,
 				}
-				err = mockStore.SaveDesired(context.Background(), "container", identity.ID, desiredDoc)
+				_, err = mockStore.SaveDesired(context.Background(), "container", identity.ID, desiredDoc)
 				Expect(err).ToNot(HaveOccurred())
 
 				oldTimestamp := time.Now().Add(-30 * time.Second)
@@ -695,7 +695,7 @@ var _ = Describe("Edge Cases", func() {
 					"id":               identity.ID,
 					"shutdownRequested": false,
 				}
-				err = mockStore.SaveDesired(context.Background(), "container", identity.ID, desiredDoc)
+				_, err = mockStore.SaveDesired(context.Background(), "container", identity.ID, desiredDoc)
 				Expect(err).ToNot(HaveOccurred())
 
 				oldTimestamp := time.Now().Add(-30 * time.Second)
@@ -803,7 +803,7 @@ var _ = Describe("Type Safety (Invariant I16)", func() {
 					"id":               identity.ID,
 					"shutdownRequested": false,
 				}
-				err = mockStore.SaveDesired(context.Background(), "container", identity.ID, desiredDoc)
+				_, err = mockStore.SaveDesired(context.Background(), "container", identity.ID, desiredDoc)
 				Expect(err).ToNot(HaveOccurred())
 
 				s := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
@@ -862,7 +862,7 @@ var _ = Describe("Type Safety (Invariant I16)", func() {
 					"id":               identity.ID,
 					"shutdownRequested": false,
 				}
-				err = mockStore.SaveDesired(context.Background(), "container", identity.ID, desiredDoc)
+				_, err = mockStore.SaveDesired(context.Background(), "container", identity.ID, desiredDoc)
 				Expect(err).ToNot(HaveOccurred())
 
 				s := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{

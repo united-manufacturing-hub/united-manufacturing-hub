@@ -119,7 +119,7 @@ func TestSupervisorUsesTriangularStore(t *testing.T) {
 		t.Fatalf("Failed to create observed collection: %v", err)
 	}
 
-	triangularStore := storage.NewTriangularStore(basicStore)
+	triangularStore := storage.NewTriangularStore(basicStore, zap.NewNop().Sugar())
 
 	supervisorCfg := Config{
 		WorkerType: "test",
@@ -371,7 +371,7 @@ func TestSupervisorSavesIdentityToTriangularStore(t *testing.T) {
 		t.Fatalf("Failed to create observed collection: %v", err)
 	}
 
-	triangularStore := storage.NewTriangularStore(basicStore)
+	triangularStore := storage.NewTriangularStore(basicStore, zap.NewNop().Sugar())
 
 	supervisorCfg := Config{
 		WorkerType: "test",
@@ -446,7 +446,7 @@ func TestSupervisorLoadsSnapshotFromTriangularStore(t *testing.T) {
 		t.Fatalf("Failed to create observed collection: %v", err)
 	}
 
-	triangularStore := storage.NewTriangularStore(basicStore)
+	triangularStore := storage.NewTriangularStore(basicStore, zap.NewNop().Sugar())
 
 	supervisorCfg := Config{
 		WorkerType: "test",
@@ -476,7 +476,7 @@ func TestSupervisorLoadsSnapshotFromTriangularStore(t *testing.T) {
 		t.Fatalf("Failed to add worker: %v", err)
 	}
 
-	err = triangularStore.SaveDesired(ctx, "test", "worker-1", persistence.Document{
+	_, err = triangularStore.SaveDesired(ctx, "test", "worker-1", persistence.Document{
 		"id":     "worker-1",
 		"config": "production",
 	})
@@ -510,6 +510,8 @@ func (m *mockWorker) DeriveDesiredState(_ interface{}) (config.DesiredState, err
 func (m *mockWorker) GetInitialState() fsmv2.State[any, any] {
 	return m.initialState
 }
+
+func (m *mockWorker) RequestShutdown() {}
 
 type mockObservedState struct {
 	doc       persistence.Document
@@ -580,6 +582,8 @@ func (m *mockWorkerWithChildren) GetInitialState() fsmv2.State[any, any] {
 	return m.initialState
 }
 
+func (m *mockWorkerWithChildren) RequestShutdown() {}
+
 func TestApplyStateMapping_WithMapping(t *testing.T) {
 	ctx := context.Background()
 	logger := zap.NewNop().Sugar()
@@ -602,7 +606,7 @@ func TestApplyStateMapping_WithMapping(t *testing.T) {
 	_ = basicStore.CreateCollection(ctx, "child_desired", nil)
 	_ = basicStore.CreateCollection(ctx, "child_observed", nil)
 
-	triangularStore := storage.NewTriangularStore(basicStore)
+	triangularStore := storage.NewTriangularStore(basicStore, zap.NewNop().Sugar())
 
 	supervisorCfg := Config{
 		WorkerType: "parent",
@@ -690,7 +694,7 @@ func TestApplyStateMapping_NoMapping(t *testing.T) {
 	_ = basicStore.CreateCollection(ctx, "child_desired", nil)
 	_ = basicStore.CreateCollection(ctx, "child_observed", nil)
 
-	triangularStore := storage.NewTriangularStore(basicStore)
+	triangularStore := storage.NewTriangularStore(basicStore, zap.NewNop().Sugar())
 
 	supervisorCfg := Config{
 		WorkerType: "parent",
@@ -771,7 +775,7 @@ func TestApplyStateMapping_MissingStateInMapping(t *testing.T) {
 	_ = basicStore.CreateCollection(ctx, "child_desired", nil)
 	_ = basicStore.CreateCollection(ctx, "child_observed", nil)
 
-	triangularStore := storage.NewTriangularStore(basicStore)
+	triangularStore := storage.NewTriangularStore(basicStore, zap.NewNop().Sugar())
 
 	supervisorCfg := Config{
 		WorkerType: "parent",
@@ -862,7 +866,7 @@ func TestApplyStateMapping_MultipleChildren(t *testing.T) {
 	_ = basicStore.CreateCollection(ctx, "child-3_desired", nil)
 	_ = basicStore.CreateCollection(ctx, "child-3_observed", nil)
 
-	triangularStore := storage.NewTriangularStore(basicStore)
+	triangularStore := storage.NewTriangularStore(basicStore, zap.NewNop().Sugar())
 
 	supervisorCfg := Config{
 		WorkerType: "parent",
@@ -991,7 +995,7 @@ func TestApplyStateMapping_EmptyStateMapping(t *testing.T) {
 	_ = basicStore.CreateCollection(ctx, "mqtt_client_desired", nil)
 	_ = basicStore.CreateCollection(ctx, "mqtt_client_observed", nil)
 
-	triangularStore := storage.NewTriangularStore(basicStore)
+	triangularStore := storage.NewTriangularStore(basicStore, zap.NewNop().Sugar())
 
 	supervisorCfg := Config{
 		WorkerType: "parent",
@@ -1073,7 +1077,7 @@ func TestApplyStateMapping_NilStateMapping(t *testing.T) {
 	_ = basicStore.CreateCollection(ctx, "mqtt_client_desired", nil)
 	_ = basicStore.CreateCollection(ctx, "mqtt_client_observed", nil)
 
-	triangularStore := storage.NewTriangularStore(basicStore)
+	triangularStore := storage.NewTriangularStore(basicStore, zap.NewNop().Sugar())
 
 	supervisorCfg := Config{
 		WorkerType: "parent",

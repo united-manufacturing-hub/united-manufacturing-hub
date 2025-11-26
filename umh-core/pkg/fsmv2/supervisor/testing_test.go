@@ -82,7 +82,7 @@ var _ = Describe("Testing Helpers", func() {
 				"id":    "test-worker",
 				"state": "running",
 			}
-			err := store.SaveDesired(ctx, "test", "test-worker", desired)
+			_, err := store.SaveDesired(ctx, "test", "test-worker", desired)
 			Expect(err).ToNot(HaveOccurred())
 
 			retrieved, err := store.LoadDesired(ctx, "test", "test-worker")

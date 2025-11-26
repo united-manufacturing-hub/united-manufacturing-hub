@@ -81,11 +81,11 @@ func (m *mockTriangularStore) LoadIdentity(ctx context.Context, workerType strin
 	return doc, nil
 }
 
-func (m *mockTriangularStore) SaveDesired(ctx context.Context, workerType string, id string, desired persistence.Document) error {
+func (m *mockTriangularStore) SaveDesired(ctx context.Context, workerType string, id string, desired persistence.Document) (bool, error) {
 	m.SaveDesiredCalled++
 
 	if m.SaveDesiredErr != nil {
-		return m.SaveDesiredErr
+		return false, m.SaveDesiredErr
 	}
 
 	if m.desired[workerType] == nil {
@@ -94,7 +94,7 @@ func (m *mockTriangularStore) SaveDesired(ctx context.Context, workerType string
 
 	m.desired[workerType][id] = desired
 
-	return nil
+	return true, nil
 }
 
 func (m *mockTriangularStore) LoadDesired(ctx context.Context, workerType string, id string) (interface{}, error) {

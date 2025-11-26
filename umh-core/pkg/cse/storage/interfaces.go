@@ -78,12 +78,14 @@ type TriangularStoreInterface interface {
 	// Returns persistence.ErrNotFound if identity doesn't exist.
 	LoadIdentity(ctx context.Context, workerType string, id string) (persistence.Document, error)
 
-	// SaveDesired stores user intent/configuration (runtime polymorphic API).
+	// SaveDesired stores user intent/configuration with delta checking (runtime polymorphic API).
 	// Use when worker type is determined at runtime (supervisors, factories).
 	// For compile-time type-safe code, use SaveDesiredTyped[T]() instead.
 	//
-	// Auto-increments _version on each save for optimistic concurrency control.
-	SaveDesired(ctx context.Context, workerType string, id string, desired persistence.Document) error
+	// Includes built-in delta checking that skips writes when data hasn't changed.
+	// Auto-increments _version and _sync_id only when data actually changes.
+	// Returns (changed bool, error) where changed indicates if data was written.
+	SaveDesired(ctx context.Context, workerType string, id string, desired persistence.Document) (changed bool, err error)
 
 	// LoadDesired retrieves user intent (runtime polymorphic API).
 	// Use when worker type is determined at runtime (supervisors, factories).

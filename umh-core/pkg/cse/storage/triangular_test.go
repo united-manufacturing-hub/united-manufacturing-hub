@@ -36,6 +36,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"go.uber.org/zap"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
@@ -282,7 +283,7 @@ var _ = Describe("TriangularStore", func() {
 	BeforeEach(func() {
 		ctx = context.Background()
 		store = newMockStore()
-		ts = storage.NewTriangularStore(store)
+		ts = storage.NewTriangularStore(store, zap.NewNop().Sugar())
 	})
 
 	Describe("NewTriangularStore", func() {
@@ -366,12 +367,12 @@ var _ = Describe("TriangularStore", func() {
 		})
 
 		It("should save desired successfully", func() {
-			err := ts.SaveDesired(ctx, "container", "worker-123", desired)
+			_, err := ts.SaveDesired(ctx, "container", "worker-123", desired)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		It("should set version to 1 on first save", func() {
-			err := ts.SaveDesired(ctx, "container", "worker-123", desired)
+			_, err := ts.SaveDesired(ctx, "container", "worker-123", desired)
 			Expect(err).NotTo(HaveOccurred())
 
 			saved, err := store.Get(ctx, "container_desired", "worker-123")
@@ -381,7 +382,7 @@ var _ = Describe("TriangularStore", func() {
 
 		Context("when updating desired state", func() {
 			BeforeEach(func() {
-				err := ts.SaveDesired(ctx, "container", "worker-123", desired)
+				_, err := ts.SaveDesired(ctx, "container", "worker-123", desired)
 				Expect(err).ToNot(HaveOccurred())
 			})
 
@@ -390,7 +391,7 @@ var _ = Describe("TriangularStore", func() {
 				firstSyncID := saved[storage.FieldSyncID].(int64)
 
 				desired["config"] = "value2"
-				err := ts.SaveDesired(ctx, "container", "worker-123", desired)
+				_, err := ts.SaveDesired(ctx, "container", "worker-123", desired)
 				Expect(err).ToNot(HaveOccurred())
 
 				saved, _ = store.Get(ctx, "container_desired", "worker-123")
@@ -401,7 +402,7 @@ var _ = Describe("TriangularStore", func() {
 
 			It("should increment version", func() {
 				desired["config"] = "value2"
-				err := ts.SaveDesired(ctx, "container", "worker-123", desired)
+				_, err := ts.SaveDesired(ctx, "container", "worker-123", desired)
 				Expect(err).NotTo(HaveOccurred())
 
 				saved, err := store.Get(ctx, "container_desired", "worker-123")
@@ -411,7 +412,7 @@ var _ = Describe("TriangularStore", func() {
 
 			It("should set updated_at timestamp", func() {
 				desired["config"] = "value2"
-				err := ts.SaveDesired(ctx, "container", "worker-123", desired)
+				_, err := ts.SaveDesired(ctx, "container", "worker-123", desired)
 				Expect(err).NotTo(HaveOccurred())
 
 				saved, err := store.Get(ctx, "container_desired", "worker-123")
@@ -427,7 +428,7 @@ var _ = Describe("TriangularStore", func() {
 				"id":     "worker-123",
 				"config": "value",
 			}
-			err := ts.SaveDesired(ctx, "container", "worker-123", desired)
+			_, err := ts.SaveDesired(ctx, "container", "worker-123", desired)
 			Expect(err).ToNot(HaveOccurred())
 		})
 
@@ -449,7 +450,7 @@ var _ = Describe("TriangularStore", func() {
 					"name":    "parent-worker",
 					"command": "start",
 				}
-				err := ts.SaveDesired(ctx, "container", "worker-123", desired)
+				_, err := ts.SaveDesired(ctx, "container", "worker-123", desired)
 				Expect(err).NotTo(HaveOccurred())
 
 				loaded, err := ts.LoadDesired(ctx, "container", "worker-123")
@@ -466,7 +467,7 @@ var _ = Describe("TriangularStore", func() {
 					"id":   "worker-123",
 					"data": make(chan int),
 				}
-				err := ts.SaveDesired(ctx, "container", "worker-123", desired)
+				_, err := ts.SaveDesired(ctx, "container", "worker-123", desired)
 				Expect(err).NotTo(HaveOccurred())
 
 				loaded, err := ts.LoadDesired(ctx, "container", "worker-123")
@@ -485,7 +486,7 @@ var _ = Describe("TriangularStore", func() {
 				"config": "test-value",
 			}
 
-			err := ts.SaveDesired(ctx, "testworker", "worker-456", doc)
+			_, err := ts.SaveDesired(ctx, "testworker", "worker-456", doc)
 			Expect(err).NotTo(HaveOccurred())
 
 			saved, err := store.Get(ctx, "testworker_desired", "worker-456")
@@ -499,7 +500,7 @@ var _ = Describe("TriangularStore", func() {
 				"field": "value",
 			}
 
-			err := ts.SaveDesired(ctx, "testworker", "worker-789", doc)
+			_, err := ts.SaveDesired(ctx, "testworker", "worker-789", doc)
 			Expect(err).NotTo(HaveOccurred())
 
 			loaded, err := store.Get(ctx, "testworker_desired", "worker-789")
@@ -512,7 +513,7 @@ var _ = Describe("TriangularStore", func() {
 
 			// Update to verify _updated_at is set on updates
 			doc["field"] = "updated-value"
-			err = ts.SaveDesired(ctx, "testworker", "worker-789", doc)
+			_, err = ts.SaveDesired(ctx, "testworker", "worker-789", doc)
 			Expect(err).NotTo(HaveOccurred())
 
 			updated, err := store.Get(ctx, "testworker_desired", "worker-789")
@@ -528,7 +529,7 @@ var _ = Describe("TriangularStore", func() {
 				"id":   "worker-999",
 				"data": "test-data",
 			}
-			err := ts.SaveDesired(ctx, "testworker", "worker-999", doc)
+			_, err := ts.SaveDesired(ctx, "testworker", "worker-999", doc)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -710,7 +711,7 @@ var _ = Describe("TriangularStore", func() {
 				"name": "Container A",
 			})
 			Expect(err).ToNot(HaveOccurred())
-			err = ts.SaveDesired(ctx, "container", "worker-123", persistence.Document{
+			_, err = ts.SaveDesired(ctx, "container", "worker-123", persistence.Document{
 				"id":     "worker-123",
 				"config": "value",
 			})
@@ -734,7 +735,7 @@ var _ = Describe("TriangularStore", func() {
 
 		Context("when parts are missing", func() {
 			It("should fail when desired and observed are missing", func() {
-				ts := storage.NewTriangularStore(newMockStore())
+				ts := storage.NewTriangularStore(newMockStore(), zap.NewNop().Sugar())
 				err := ts.SaveIdentity(ctx, "container", "worker-456", persistence.Document{
 					"id":   "worker-456",
 					"name": "Container B",
@@ -756,7 +757,7 @@ var _ = Describe("TriangularStore", func() {
 			identity1, _ := store.Get(ctx, "container_identity", "worker-1")
 			syncID1 := identity1[storage.FieldSyncID].(int64)
 
-			err = ts.SaveDesired(ctx, "container", "worker-2", persistence.Document{
+			_, err = ts.SaveDesired(ctx, "container", "worker-2", persistence.Document{
 				"id": "worker-2",
 			})
 			Expect(err).NotTo(HaveOccurred())
@@ -776,7 +777,7 @@ var _ = Describe("TriangularStore", func() {
 
 	Describe("TimestampProgression", func() {
 		It("should have updated_at after created_at", func() {
-			err := ts.SaveDesired(ctx, "container", "worker-123", persistence.Document{
+			_, err := ts.SaveDesired(ctx, "container", "worker-123", persistence.Document{
 				"id": "worker-123",
 			})
 			Expect(err).NotTo(HaveOccurred())
@@ -785,8 +786,10 @@ var _ = Describe("TriangularStore", func() {
 
 			time.Sleep(10 * time.Millisecond)
 
-			err = ts.SaveDesired(ctx, "container", "worker-123", persistence.Document{
-				"id": "worker-123",
+			// Add a field change so delta checking allows the update
+			_, err = ts.SaveDesired(ctx, "container", "worker-123", persistence.Document{
+				"id":      "worker-123",
+				"updated": true,
 			})
 			Expect(err).NotTo(HaveOccurred())
 			second, _ := store.Get(ctx, "container_desired", "worker-123")
@@ -811,7 +814,7 @@ var _ = Describe("TriangularStore", func() {
 
 		Context("for desired state", func() {
 			It("should fail for document without id field", func() {
-				err := ts.SaveDesired(ctx, "container", "worker-123", persistence.Document{
+				_, err := ts.SaveDesired(ctx, "container", "worker-123", persistence.Document{
 					"config": "value",
 				})
 				Expect(err).To(HaveOccurred())
@@ -886,7 +889,7 @@ var _ = Describe("TriangularStore", func() {
 				"name":    "ParentWorker",
 				"command": "start",
 			}
-			err := ts.SaveDesired(ctx, "parent", "parent-001", desired)
+			_, err := ts.SaveDesired(ctx, "parent", "parent-001", desired)
 			Expect(err).NotTo(HaveOccurred())
 
 			result, err := storage.LoadDesiredTyped[ParentDesiredState](ts, ctx, "parent-001")
@@ -909,7 +912,7 @@ var _ = Describe("TriangularStore", func() {
 				Command: "start",
 			}
 
-			err := storage.SaveDesiredTyped[ParentDesiredState](ts, ctx, "parent-001", desired)
+			_, err := storage.SaveDesiredTyped[ParentDesiredState](ts, ctx, "parent-001", desired)
 			Expect(err).NotTo(HaveOccurred())
 
 			result, err := storage.LoadDesiredTyped[ParentDesiredState](ts, ctx, "parent-001")
@@ -924,7 +927,7 @@ var _ = Describe("TriangularStore", func() {
 				Command: "stop",
 			}
 
-			err := storage.SaveDesiredTyped[ParentDesiredState](ts, ctx, "parent-002", desired)
+			_, err := storage.SaveDesiredTyped[ParentDesiredState](ts, ctx, "parent-002", desired)
 			Expect(err).NotTo(HaveOccurred())
 
 			doc, err := ts.LoadDesired(ctx, "parent", "parent-002")
@@ -1150,7 +1153,7 @@ var _ = Describe("TriangularStore", func() {
 
 func BenchmarkSaveObservedNoChange(b *testing.B) {
 	store := newMockStore()
-	ts := storage.NewTriangularStore(store)
+	ts := storage.NewTriangularStore(store, zap.NewNop().Sugar())
 	ctx := context.Background()
 
 	// Create initial document
@@ -1172,7 +1175,7 @@ func BenchmarkSaveObservedNoChange(b *testing.B) {
 
 func BenchmarkSaveObservedWithChange(b *testing.B) {
 	store := newMockStore()
-	ts := storage.NewTriangularStore(store)
+	ts := storage.NewTriangularStore(store, zap.NewNop().Sugar())
 	ctx := context.Background()
 
 	// Create initial document

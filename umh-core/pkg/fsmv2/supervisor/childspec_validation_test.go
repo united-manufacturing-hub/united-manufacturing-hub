@@ -44,6 +44,7 @@ var _ = Describe("ChildSpec Validation Integration", func() {
 		basicStore = memory.NewInMemoryStore()
 
 		// Create collections in database
+		// TODO: remove this, this is not required anymore
 		// Collections follow convention: {workerType}_identity, {workerType}_desired, {workerType}_observed
 		_ = basicStore.CreateCollection(ctx, "test_supervisor_identity", nil)
 		_ = basicStore.CreateCollection(ctx, "test_supervisor_desired", nil)
@@ -68,7 +69,7 @@ var _ = Describe("ChildSpec Validation Integration", func() {
 			}
 		})
 
-		triangularStore = storage.NewTriangularStore(basicStore)
+		triangularStore = storage.NewTriangularStore(basicStore, zap.NewNop().Sugar())
 	})
 
 	AfterEach(func() {
@@ -119,7 +120,7 @@ var _ = Describe("ChildSpec Validation Integration", func() {
 				"state":         "running",
 				"childrenSpecs": mockWorker.childSpecs,
 			}
-			err = triangularStore.SaveDesired(ctx, "test_supervisor", mockWorker.identity.ID, desiredDoc)
+			_, err = triangularStore.SaveDesired(ctx, "test_supervisor", mockWorker.identity.ID, desiredDoc)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Call supervisor.Tick()
@@ -173,7 +174,7 @@ var _ = Describe("ChildSpec Validation Integration", func() {
 				"state":         "running",
 				"childrenSpecs": mockWorker.childSpecs,
 			}
-			err = triangularStore.SaveDesired(ctx, "test_supervisor", mockWorker.identity.ID, desiredDoc)
+			_, err = triangularStore.SaveDesired(ctx, "test_supervisor", mockWorker.identity.ID, desiredDoc)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Call supervisor.Tick()
@@ -226,7 +227,7 @@ var _ = Describe("ChildSpec Validation Integration", func() {
 				"state":         "running",
 				"childrenSpecs": mockWorker.childSpecs,
 			}
-			err = triangularStore.SaveDesired(ctx, "test_supervisor", mockWorker.identity.ID, desiredDoc)
+			_, err = triangularStore.SaveDesired(ctx, "test_supervisor", mockWorker.identity.ID, desiredDoc)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Call supervisor.Tick()
@@ -480,7 +481,7 @@ var _ = Describe("ChildSpec Validation Integration", func() {
 				"state":         "running",
 				"childrenSpecs": mockWorker.childSpecs,
 			}
-			err = triangularStore.SaveDesired(ctx, "test_supervisor", mockWorker.identity.ID, desiredDoc)
+			_, err = triangularStore.SaveDesired(ctx, "test_supervisor", mockWorker.identity.ID, desiredDoc)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Call supervisor.Tick()
@@ -588,7 +589,7 @@ var _ = Describe("ChildSpec Validation Integration", func() {
 				"state":         "running",
 				"childrenSpecs": mockWorker.childSpecs,
 			}
-			err = triangularStore.SaveDesired(ctx, "test_supervisor", mockWorker.identity.ID, desiredDoc)
+			_, err = triangularStore.SaveDesired(ctx, "test_supervisor", mockWorker.identity.ID, desiredDoc)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Call supervisor.Tick()
@@ -628,6 +629,8 @@ func (m *validChildSpecMockWorker) GetInitialState() fsmv2.State[any, any] {
 	return m.initialState
 }
 
+func (m *validChildSpecMockWorker) RequestShutdown() {}
+
 // trackedCallOrderMockWorker tracks which methods are called and in what order.
 type trackedCallOrderMockWorker struct {
 	identity     fsmv2.Identity
@@ -658,3 +661,5 @@ func (m *trackedCallOrderMockWorker) DeriveDesiredState(_ interface{}) (config.D
 func (m *trackedCallOrderMockWorker) GetInitialState() fsmv2.State[any, any] {
 	return m.initialState
 }
+
+func (m *trackedCallOrderMockWorker) RequestShutdown() {}

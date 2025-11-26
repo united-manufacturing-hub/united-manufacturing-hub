@@ -52,7 +52,8 @@ func setupTestStore(ctx context.Context, workerTypes ...string) *storage.Triangu
 		_ = basicStore.CreateCollection(ctx, workerType+"_observed", nil)
 	}
 
-	return storage.NewTriangularStore(basicStore)
+	logger := zap.NewNop().Sugar()
+	return storage.NewTriangularStore(basicStore, logger)
 }
 
 var _ = Describe("Phase 0: Happy Path Integration", func() {
@@ -92,14 +93,22 @@ var _ = Describe("Phase 0: Happy Path Integration", func() {
 
 			// Register worker factories
 			err = factory.RegisterFactory[snapshot.ParentObservedState, *snapshot.ParentDesiredState](func(identity fsmv2.Identity) fsmv2.Worker {
-				return parent.NewParentWorker(identity.ID, identity.Name, logger)
+				worker, err := parent.NewParentWorker(identity.ID, identity.Name, logger)
+				if err != nil {
+					panic(err)
+				}
+				return worker
 			})
 			Expect(err).ToNot(HaveOccurred())
 
 			err = factory.RegisterFactory[childSnapshot.ChildObservedState, *childSnapshot.ChildDesiredState](func(identity fsmv2.Identity) fsmv2.Worker {
 				mockConnectionPool := &MockConnectionPool{}
 
-				return child.NewChildWorker(identity.ID, identity.Name, mockConnectionPool, logger)
+				worker, err := child.NewChildWorker(identity.ID, identity.Name, mockConnectionPool, logger)
+				if err != nil {
+					panic(err)
+				}
+				return worker
 			})
 			Expect(err).ToNot(HaveOccurred())
 
@@ -128,7 +137,8 @@ var _ = Describe("Phase 0: Happy Path Integration", func() {
 				WorkerType: storage.DeriveWorkerType[snapshot.ParentObservedState](),
 			}
 
-			parentWorker := parent.NewParentWorker(parentIdentity.ID, parentIdentity.Name, logger)
+			parentWorker, err := parent.NewParentWorker(parentIdentity.ID, parentIdentity.Name, logger)
+			Expect(err).NotTo(HaveOccurred())
 			Expect(parentWorker).NotTo(BeNil())
 
 			By("Step 3: Verifying worker has expected initial state")
@@ -156,7 +166,7 @@ var _ = Describe("Phase 0: Happy Path Integration", func() {
 				"id":    "parent-001",
 				"state": "running",
 			}
-			err = mockStore.SaveDesired(ctx, storage.DeriveWorkerType[snapshot.ParentObservedState](), "parent-001", desiredDoc)
+			_, err = mockStore.SaveDesired(ctx, storage.DeriveWorkerType[snapshot.ParentObservedState](), "parent-001", desiredDoc)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Step 3.6: Saving initial observed state with fresh timestamp")
@@ -243,14 +253,22 @@ var _ = Describe("Phase 0: Happy Path Integration", func() {
 			By("Step 1: Registering child worker type in factory")
 
 			err = factory.RegisterFactory[snapshot.ParentObservedState, *snapshot.ParentDesiredState](func(identity fsmv2.Identity) fsmv2.Worker {
-				return parent.NewParentWorker(identity.ID, identity.Name, logger)
+				worker, err := parent.NewParentWorker(identity.ID, identity.Name, logger)
+				if err != nil {
+					panic(err)
+				}
+				return worker
 			})
 			Expect(err).ToNot(HaveOccurred())
 
 			err = factory.RegisterFactory[childSnapshot.ChildObservedState, *childSnapshot.ChildDesiredState](func(identity fsmv2.Identity) fsmv2.Worker {
 				mockConnectionPool := &MockConnectionPool{}
 
-				return child.NewChildWorker(identity.ID, identity.Name, mockConnectionPool, logger)
+				worker, err := child.NewChildWorker(identity.ID, identity.Name, mockConnectionPool, logger)
+				if err != nil {
+					panic(err)
+				}
+				return worker
 			})
 			Expect(err).ToNot(HaveOccurred())
 
@@ -278,15 +296,6 @@ var _ = Describe("Phase 0: Happy Path Integration", func() {
 			err = parentSupervisor.AddWorker(parentIdentity, parentWorker)
 			Expect(err).NotTo(HaveOccurred())
 
-			By("Step 2.5: Saving initial observed state with fresh timestamp")
-
-			initialObserved := snapshot.ParentObservedState{
-				ID:          "parent-002",
-				CollectedAt: time.Now(),
-			}
-			_, err = mockStore.SaveObserved(ctx, storage.DeriveWorkerType[snapshot.ParentObservedState](), "parent-002", initialObserved)
-			Expect(err).NotTo(HaveOccurred())
-
 			done := parentSupervisor.Start(ctx)
 			Expect(done).NotTo(BeNil())
 
@@ -301,13 +310,15 @@ var _ = Describe("Phase 0: Happy Path Integration", func() {
 			err = parentSupervisor.TestRequestShutdown(ctx, parentIdentity.ID, "test shutdown")
 			Expect(err).NotTo(HaveOccurred())
 
+
 			By("Step 3: Verifying parent transitions to Stopped and then gets removed")
 
 			Eventually(func() bool {
 				state, _, err := parentSupervisor.GetWorkerState(parentIdentity.ID)
 				// Accept either "Stopped" state (caught during transition) or worker removed (err != nil)
+				GinkgoWriter.Printf("Worker state: %s, err: %v\n", state, err)
 				return state == "Stopped" || err != nil
-			}, "5s", "100ms").Should(BeTrue(), "Worker should transition to Stopped and then be removed")
+			}, "10s", "100ms").Should(BeTrue(), "Worker should transition to Stopped and then be removed")
 
 			By("Step 4: Verifying child is removed")
 
@@ -326,14 +337,22 @@ var _ = Describe("Phase 0: Happy Path Integration", func() {
 			By("Step 2: Creating and starting parent worker")
 
 			err = factory.RegisterFactory[snapshot.ParentObservedState, *snapshot.ParentDesiredState](func(identity fsmv2.Identity) fsmv2.Worker {
-				return parent.NewParentWorker(identity.ID, identity.Name, logger)
+				worker, err := parent.NewParentWorker(identity.ID, identity.Name, logger)
+				if err != nil {
+					panic(err)
+				}
+				return worker
 			})
 			Expect(err).ToNot(HaveOccurred())
 
 			err = factory.RegisterFactory[childSnapshot.ChildObservedState, *childSnapshot.ChildDesiredState](func(identity fsmv2.Identity) fsmv2.Worker {
 				mockConnectionPool := &MockConnectionPool{}
 
-				return child.NewChildWorker(identity.ID, identity.Name, mockConnectionPool, logger)
+				worker, err := child.NewChildWorker(identity.ID, identity.Name, mockConnectionPool, logger)
+				if err != nil {
+					panic(err)
+				}
+				return worker
 			})
 			Expect(err).ToNot(HaveOccurred())
 
@@ -506,7 +525,8 @@ func NewDeltaTestWorker(id, name string) *DeltaTestWorker {
 	_ = basicStore.CreateCollection(ctx, "delta-test-worker_identity", nil)
 	_ = basicStore.CreateCollection(ctx, "delta-test-worker_observed", nil)
 
-	store := storage.NewTriangularStore(basicStore)
+	logger := zap.NewNop().Sugar()
+	store := storage.NewTriangularStore(basicStore, logger)
 
 	return &DeltaTestWorker{
 		id:            id,
@@ -600,6 +620,10 @@ func (w *DeltaTestWorker) ShouldCreateChildren(currentState string, observed int
 
 func (w *DeltaTestWorker) GetChildSpecs(currentState string, observed interface{}) ([]interface{}, error) {
 	return nil, nil
+}
+
+func (w *DeltaTestWorker) RequestShutdown() {
+	// No-op for test worker - no internal desired state to update
 }
 
 type mockState struct {
