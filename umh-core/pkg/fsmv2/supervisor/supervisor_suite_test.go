@@ -79,7 +79,7 @@ func registerTestWorkerFactories() {
 		// Register worker factory
 		err := factory.RegisterFactoryByType(wt, func(identity fsmv2.Identity) fsmv2.Worker {
 			return &supervisor.TestWorkerWithType{
-				TestWorker: supervisor.TestWorker{},
+				Worker:     supervisor.TestWorker{},
 				WorkerType: wt,
 			}
 		})

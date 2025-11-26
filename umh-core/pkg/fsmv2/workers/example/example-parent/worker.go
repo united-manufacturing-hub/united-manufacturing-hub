@@ -82,6 +82,7 @@ func (w *ParentWorker) CollectObservedState(ctx context.Context) (fsmv2.Observed
 
 // DeriveDesiredState determines what state the parent worker should be in
 // This method must be PURE - it only uses the spec parameter, never dependencies.
+// TODO: check why spec interface{} and not spec fsmv2types.UserSpec
 func (w *ParentWorker) DeriveDesiredState(spec interface{}) (fsmv2types.DesiredState, error) {
 	var childrenCount int
 

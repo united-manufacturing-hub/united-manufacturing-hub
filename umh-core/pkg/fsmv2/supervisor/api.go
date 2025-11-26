@@ -1,0 +1,365 @@
+// Copyright 2025 UMH Systems GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package supervisor
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"time"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/internal/collection"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/internal/execution"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
+)
+
+// AddWorker adds a new worker to the supervisor's registry.
+// Returns error if worker with same ID already exists.
+// DEFENSE-IN-DEPTH VALIDATION STRATEGY:
+//
+// FSMv2 validates data at MULTIPLE layers (not one centralized validator).
+// This is intentional, not redundant:
+//
+// Layer 1: API entry (AddWorker) - Fast fail on obvious errors
+// Layer 2: Reconciliation entry (reconcileChildren) - Catch runtime edge cases
+// Layer 3: Factory (worker creation) - Validate WorkerType exists
+// Layer 4: Worker constructor - Validate dependencies
+//
+// WHY multiple layers:
+//   - Security: Never trust data, even from internal callers
+//   - Debuggability: Errors caught closest to source
+//   - Robustness: One layer failing doesn't compromise system
+//
+// Each layer has different validation concerns:
+//   - Layer 1: Public API validation (protect against bad calls)
+//   - Layer 2: Runtime state validation (data evolved since layer 1)
+//   - Layer 3: Registry validation (WorkerType registered?)
+//   - Layer 4: Logical validation (dependencies compatible?)
+func (s *Supervisor[TObserved, TDesired]) AddWorker(identity fsmv2.Identity, worker fsmv2.Worker) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if _, exists := s.workers[identity.ID]; exists {
+		return fmt.Errorf("worker %s already exists", identity.ID)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Collect initial observation
+	observed, err := worker.CollectObservedState(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to collect initial observed state: %w", err)
+	}
+
+	// Derive initial desired state
+	initialDesired, err := worker.DeriveDesiredState(nil)
+	if err != nil {
+		return fmt.Errorf("failed to derive initial desired state: %w", err)
+	}
+
+	// Save identity to database
+	identityDoc := persistence.Document{
+		"id":          identity.ID,
+		"name":        identity.Name,
+		"worker_type": identity.WorkerType,
+	}
+	if err := s.store.SaveIdentity(ctx, s.workerType, identity.ID, identityDoc); err != nil {
+		return fmt.Errorf("failed to save identity: %w", err)
+	}
+
+	s.logger.Debugw("identity_saved",
+		"worker_type", s.workerType,
+		"worker_id", identity.ID)
+
+	// Save initial observation to database for immediate availability
+	observedJSON, err := json.Marshal(observed)
+	if err != nil {
+		return fmt.Errorf("failed to marshal observed state: %w", err)
+	}
+
+	observedDoc := make(persistence.Document)
+	if err := json.Unmarshal(observedJSON, &observedDoc); err != nil {
+		return fmt.Errorf("failed to unmarshal observed state to document: %w", err)
+	}
+
+	observedDoc["id"] = identity.ID
+
+	_, err = s.store.SaveObserved(ctx, s.workerType, identity.ID, observedDoc)
+	if err != nil {
+		return fmt.Errorf("failed to save initial observation: %w", err)
+	}
+
+	s.logger.Debugw("initial_observation_saved",
+		"worker_type", s.workerType,
+		"worker_id", identity.ID)
+
+	// Save initial desired state to database
+	desiredJSON, err := json.Marshal(initialDesired)
+	if err != nil {
+		return fmt.Errorf("failed to marshal desired state: %w", err)
+	}
+
+	desiredDoc := make(persistence.Document)
+	if err := json.Unmarshal(desiredJSON, &desiredDoc); err != nil {
+		return fmt.Errorf("failed to unmarshal desired state to document: %w", err)
+	}
+
+	desiredDoc["id"] = identity.ID
+
+	_, err = s.store.SaveDesired(ctx, s.workerType, identity.ID, desiredDoc)
+	if err != nil {
+		return fmt.Errorf("failed to save initial desired state: %w", err)
+	}
+
+	s.logger.Debugw("initial_desired_state_saved",
+		"worker_type", s.workerType,
+		"worker_id", identity.ID)
+
+	collector := collection.NewCollector[TObserved](collection.CollectorConfig[TObserved]{
+		Worker:              worker,
+		Identity:            identity,
+		Store:               s.store,
+		Logger:              s.logger,
+		ObservationInterval: DefaultObservationInterval,
+		ObservationTimeout:  s.collectorHealth.observationTimeout,
+	})
+
+	executor := execution.NewActionExecutor(10, identity.ID, s.logger)
+
+	s.workers[identity.ID] = &WorkerContext[TObserved, TDesired]{
+		mu:           s.lockManager.NewLock(lockNameWorkerContextMu, lockLevelWorkerContextMu),
+		identity:     identity,
+		worker:       worker,
+		currentState: worker.GetInitialState(),
+		collector:    collector,
+		executor:     executor,
+	}
+
+	s.logger.Infow("worker_added",
+		"worker_type", s.workerType,
+		"worker_id", identity.ID)
+
+	return nil
+}
+
+// RemoveWorker removes a worker from the registry.
+func (s *Supervisor[TObserved, TDesired]) RemoveWorker(ctx context.Context, workerID string) error {
+	s.mu.Lock()
+
+	workerCtx, exists := s.workers[workerID]
+	if !exists {
+		s.mu.Unlock()
+
+		return fmt.Errorf("worker %s not found", workerID)
+	}
+
+	delete(s.workers, workerID)
+	s.mu.Unlock()
+
+	workerCtx.collector.Stop(ctx)
+	workerCtx.executor.Shutdown()
+
+	s.logger.Infow("worker_removed",
+		"worker_type", s.workerType,
+		"worker_id", workerID)
+
+	return nil
+}
+
+// GetWorker returns the worker context for the given ID.
+func (s *Supervisor[TObserved, TDesired]) GetWorker(workerID string) (*WorkerContext[TObserved, TDesired], error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	ctx, exists := s.workers[workerID]
+	if !exists {
+		return nil, fmt.Errorf("worker %s not found", workerID)
+	}
+
+	return ctx, nil
+}
+
+// ListWorkers returns all worker IDs currently managed by this supervisor.
+func (s *Supervisor[TObserved, TDesired]) ListWorkers() []string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	ids := make([]string, 0, len(s.workers))
+	for id := range s.workers {
+		ids = append(ids, id)
+	}
+
+	return ids
+}
+
+// SetGlobalVariables sets the global variables for this supervisor.
+// Global variables come from the management system and are fleet-wide settings.
+// They are injected into UserSpec.Variables.Global before DeriveDesiredState() is called.
+func (s *Supervisor[TObserved, TDesired]) SetGlobalVariables(vars map[string]any) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.globalVars = vars
+}
+
+// GetWorkers returns all worker IDs currently managed by this supervisor.
+func (s *Supervisor[TObserved, TDesired]) GetWorkers() []fsmv2.Identity {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	workers := make([]fsmv2.Identity, 0, len(s.workers))
+	for id, worker := range s.workers {
+		if worker == nil {
+			continue
+		}
+
+		workers = append(workers, fsmv2.Identity{
+			ID:         id,
+			Name:       worker.identity.Name,
+			WorkerType: s.workerType,
+		})
+	}
+
+	return workers
+}
+
+// GetCurrentState returns the current state name for the first worker (backwards compatibility).
+func (s *Supervisor[TObserved, TDesired]) GetCurrentState() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	for _, workerCtx := range s.workers {
+		workerCtx.mu.RLock()
+		state := workerCtx.currentState.String()
+		workerCtx.mu.RUnlock()
+
+		return state
+	}
+
+	return "no workers"
+}
+
+// GetWorkerState returns the current state name and reason for a worker.
+// This method is thread-safe and can be safely called concurrently with tick operations.
+// Returns "Unknown" state with reason "current state is nil" if the worker's state is nil.
+// Returns an error if the worker is not found.
+func (s *Supervisor[TObserved, TDesired]) GetWorkerState(workerID string) (string, string, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	workerCtx, exists := s.workers[workerID]
+	if !exists {
+		return "", "", fmt.Errorf("worker %s not found", workerID)
+	}
+
+	workerCtx.mu.RLock()
+	defer workerCtx.mu.RUnlock()
+
+	if workerCtx.currentState == nil {
+		return "Unknown", "current state is nil", nil
+	}
+
+	return workerCtx.currentState.String(), workerCtx.currentState.Reason(), nil
+}
+
+// GetMappedParentState returns the mapped parent state for this supervisor.
+// Returns empty string if this supervisor has no parent or no mapping has been applied.
+// This method is primarily used for testing hierarchical state mapping.
+func (s *Supervisor[TObserved, TDesired]) GetMappedParentState() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	return s.mappedParentState
+}
+
+// getMappedParentState implements SupervisorInterface.
+func (s *Supervisor[TObserved, TDesired]) getMappedParentState() string {
+	return s.GetMappedParentState()
+}
+
+// setMappedParentState implements SupervisorInterface.
+func (s *Supervisor[TObserved, TDesired]) setMappedParentState(state string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.mappedParentState = state
+}
+
+// getStateMapping implements SupervisorInterface.
+func (s *Supervisor[TObserved, TDesired]) getStateMapping() map[string]string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if s.stateMapping == nil {
+		return nil
+	}
+
+	mapping := make(map[string]string, len(s.stateMapping))
+	for k, v := range s.stateMapping {
+		mapping[k] = v
+	}
+
+	return mapping
+}
+
+// setStateMapping implements SupervisorInterface.
+func (s *Supervisor[TObserved, TDesired]) setStateMapping(mapping map[string]string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.stateMapping = mapping
+}
+
+// updateUserSpec implements SupervisorInterface.
+func (s *Supervisor[TObserved, TDesired]) updateUserSpec(spec config.UserSpec) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.userSpec = spec
+}
+
+// getUserSpec implements SupervisorInterface.
+func (s *Supervisor[TObserved, TDesired]) getUserSpec() config.UserSpec {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	return s.userSpec
+}
+
+// setParent implements SupervisorInterface.
+func (s *Supervisor[TObserved, TDesired]) setParent(parent SupervisorInterface, parentID string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.parent = parent
+	s.parentID = parentID
+}
+
+// GetChildren returns a copy of the children map for inspection.
+// This method is thread-safe and can be used in tests to verify hierarchical composition.
+func (s *Supervisor[TObserved, TDesired]) GetChildren() map[string]SupervisorInterface {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	children := make(map[string]SupervisorInterface, len(s.children))
+	for name, child := range s.children {
+		children[name] = child
+	}
+
+	return children
+}

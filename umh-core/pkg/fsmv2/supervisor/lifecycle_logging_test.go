@@ -169,11 +169,11 @@ var _ = Describe("Lifecycle Logging", func() {
 
 		It("should log tick_start with worker_id", func() {
 			cfg := supervisor.Config{
-				WorkerType:              "test",
-				Store:                   store,
-				Logger:                  logger,
-				TickInterval:            100 * time.Millisecond,
-				EnableTraceLogging:  true,
+				WorkerType:         "test",
+				Store:              store,
+				Logger:             logger,
+				TickInterval:       100 * time.Millisecond,
+				EnableTraceLogging: true,
 			}
 			sup = supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](cfg)
 
@@ -197,11 +197,11 @@ var _ = Describe("Lifecycle Logging", func() {
 
 		It("should log mutex_lock_acquire", func() {
 			cfg := supervisor.Config{
-				WorkerType:              "test",
-				Store:                   store,
-				Logger:                  logger,
-				TickInterval:            100 * time.Millisecond,
-				EnableTraceLogging:  true,
+				WorkerType:         "test",
+				Store:              store,
+				Logger:             logger,
+				TickInterval:       100 * time.Millisecond,
+				EnableTraceLogging: true,
 			}
 			sup = supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](cfg)
 
@@ -225,11 +225,11 @@ var _ = Describe("Lifecycle Logging", func() {
 
 		It("should log mutex_lock_acquired", func() {
 			cfg := supervisor.Config{
-				WorkerType:              "test",
-				Store:                   store,
-				Logger:                  logger,
-				TickInterval:            100 * time.Millisecond,
-				EnableTraceLogging:  true,
+				WorkerType:         "test",
+				Store:              store,
+				Logger:             logger,
+				TickInterval:       100 * time.Millisecond,
+				EnableTraceLogging: true,
 			}
 			sup = supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](cfg)
 
@@ -279,11 +279,11 @@ var _ = Describe("Lifecycle Logging", func() {
 
 			It("should emit log at debug level", func() {
 				cfg := supervisor.Config{
-					WorkerType:              "test",
-					Store:                   store,
-					Logger:                  logger,
-					TickInterval:            100 * time.Millisecond,
-					EnableTraceLogging:  true,
+					WorkerType:         "test",
+					Store:              store,
+					Logger:             logger,
+					TickInterval:       100 * time.Millisecond,
+					EnableTraceLogging: true,
 				}
 				sup = supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](cfg)
 
@@ -321,11 +321,11 @@ var _ = Describe("Lifecycle Logging", func() {
 
 			It("should not emit lifecycle logs", func() {
 				cfg := supervisor.Config{
-					WorkerType:              "test",
-					Store:                   store,
-					Logger:                  logger,
-					TickInterval:            100 * time.Millisecond,
-					EnableTraceLogging:  false,
+					WorkerType:         "test",
+					Store:              store,
+					Logger:             logger,
+					TickInterval:       100 * time.Millisecond,
+					EnableTraceLogging: false,
 				}
 				sup = supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](cfg)
 

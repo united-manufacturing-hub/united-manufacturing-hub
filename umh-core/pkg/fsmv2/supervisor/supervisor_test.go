@@ -74,7 +74,6 @@ func registerTestWorkerFactories() {
 		// Register worker factory
 		_ = factory.RegisterFactoryByType(wt, func(identity fsmv2.Identity) fsmv2.Worker {
 			return &TestWorkerWithType{
-				TestWorker: TestWorker{},
 				WorkerType: wt,
 			}
 		})

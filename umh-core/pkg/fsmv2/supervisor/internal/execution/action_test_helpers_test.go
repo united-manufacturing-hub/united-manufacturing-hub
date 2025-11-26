@@ -16,21 +16,17 @@ package execution_test
 
 import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/testutil"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/internal/execution"
 )
 
-// VerifyActionIdempotency is a convenience wrapper for testutil.VerifyActionIdempotency
+// VerifyActionIdempotency is a convenience wrapper for execution.VerifyActionIdempotency
 // that allows tests in this package to use it without the package prefix.
-//
-// Deprecated: Use testutil.VerifyActionIdempotency directly.
 func VerifyActionIdempotency(action fsmv2.Action[any], iterations int, verifyState func()) {
-	testutil.VerifyActionIdempotency(action, iterations, verifyState)
+	execution.VerifyActionIdempotency(action, iterations, verifyState)
 }
 
-// VerifyActionIdempotencyWithSetup is a convenience wrapper for testutil.VerifyActionIdempotencyWithSetup
+// VerifyActionIdempotencyWithSetup is a convenience wrapper for execution.VerifyActionIdempotencyWithSetup
 // that allows tests in this package to use it without the package prefix.
-//
-// Deprecated: Use testutil.VerifyActionIdempotencyWithSetup directly.
 func VerifyActionIdempotencyWithSetup(
 	setup func(),
 	teardown func(),
@@ -38,5 +34,5 @@ func VerifyActionIdempotencyWithSetup(
 	iterations int,
 	verifyState func(),
 ) {
-	testutil.VerifyActionIdempotencyWithSetup(setup, teardown, action, iterations, verifyState)
+	execution.VerifyActionIdempotencyWithSetup(setup, teardown, action, iterations, verifyState)
 }
