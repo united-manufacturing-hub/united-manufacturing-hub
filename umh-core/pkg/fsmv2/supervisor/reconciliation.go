@@ -1013,9 +1013,10 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 			addedCount++
 
 			childConfig := Config{
-				WorkerType: spec.WorkerType,
-				Store:      s.store,
-				Logger:     s.logger,
+				WorkerType:              spec.WorkerType,
+				Store:                   s.store,
+				Logger:                  s.logger,
+				GracefulShutdownTimeout: s.gracefulShutdownTimeout,
 			}
 
 			// Use factory to create child supervisor with proper type

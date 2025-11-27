@@ -100,7 +100,14 @@ func ValidateDesiredStateShutdownMethod(baseDir string) []Violation {
 	return violations
 }
 
+// desiredStateInfo holds information about a DesiredState type for validation.
+type desiredStateInfo struct {
+	pos               token.Pos
+	embedsBaseDesired bool
+}
+
 // checkDesiredStateShutdownMethod parses a snapshot file and checks for IsShutdownRequested method.
+// Types that embed config.BaseDesiredState are considered valid since they inherit the method.
 func checkDesiredStateShutdownMethod(filename string) []Violation {
 	var violations []Violation
 
@@ -111,18 +118,35 @@ func checkDesiredStateShutdownMethod(filename string) []Violation {
 		return violations
 	}
 
-	// Collect all DesiredState types
-	desiredStateTypes := make(map[string]token.Pos)
+	// Collect all DesiredState types with embedding info
+	desiredStateTypes := make(map[string]desiredStateInfo)
 	ast.Inspect(node, func(n ast.Node) bool {
 		typeSpec, ok := n.(*ast.TypeSpec)
 		if !ok || !strings.Contains(typeSpec.Name.Name, "DesiredState") {
 			return true
 		}
-		desiredStateTypes[typeSpec.Name.Name] = typeSpec.Pos()
+
+		info := desiredStateInfo{pos: typeSpec.Pos()}
+
+		// Check if struct embeds BaseDesiredState (directly or via config.BaseDesiredState)
+		if structType, ok := typeSpec.Type.(*ast.StructType); ok {
+			for _, field := range structType.Fields.List {
+				// Anonymous/embedded fields have no names
+				if len(field.Names) == 0 {
+					embedName := getEmbeddedTypeName(field.Type)
+					if strings.Contains(embedName, "BaseDesiredState") {
+						info.embedsBaseDesired = true
+						break
+					}
+				}
+			}
+		}
+
+		desiredStateTypes[typeSpec.Name.Name] = info
 		return true
 	})
 
-	// Collect all types that have IsShutdownRequested method
+	// Collect all types that have IsShutdownRequested method declared explicitly
 	typesWithMethod := make(map[string]bool)
 	ast.Inspect(node, func(n ast.Node) bool {
 		funcDecl, ok := n.(*ast.FuncDecl)
@@ -151,17 +175,31 @@ func checkDesiredStateShutdownMethod(filename string) []Violation {
 		return true
 	})
 
-	// Check for violations
-	for typeName, pos := range desiredStateTypes {
-		if !typesWithMethod[typeName] {
+	// Check for violations - only if NEITHER embedded NOR explicit method
+	for typeName, info := range desiredStateTypes {
+		if !typesWithMethod[typeName] && !info.embedsBaseDesired {
 			violations = append(violations, Violation{
 				File:    filename,
-				Line:    fset.Position(pos).Line,
+				Line:    fset.Position(info.pos).Line,
 				Type:    "MISSING_IS_SHUTDOWN_REQUESTED",
-				Message: fmt.Sprintf("DesiredState %s missing IsShutdownRequested() bool method", typeName),
+				Message: fmt.Sprintf("DesiredState %s missing IsShutdownRequested() - embed config.BaseDesiredState or add method", typeName),
 			})
 		}
 	}
 
 	return violations
+}
+
+// getEmbeddedTypeName extracts the type name from an embedded field expression.
+func getEmbeddedTypeName(expr ast.Expr) string {
+	switch t := expr.(type) {
+	case *ast.Ident:
+		return t.Name
+	case *ast.SelectorExpr:
+		// For qualified names like config.BaseDesiredState
+		if x, ok := t.X.(*ast.Ident); ok {
+			return x.Name + "." + t.Sel.Name
+		}
+	}
+	return ""
 }

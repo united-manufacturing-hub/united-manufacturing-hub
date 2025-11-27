@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// TODO: move to ginkgo/gomega
 
 package factory_test
 
@@ -455,4 +456,3 @@ func TestListRegisteredTypes_ConcurrentCalls(t *testing.T) {
 		}
 	}
 }
-

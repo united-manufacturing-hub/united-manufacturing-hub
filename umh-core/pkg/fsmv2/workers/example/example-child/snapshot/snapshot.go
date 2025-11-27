@@ -18,7 +18,7 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 )
 
 // ChildDependencies interface to avoid import cycles.
@@ -41,8 +41,8 @@ type ChildSnapshot struct {
 
 // ChildDesiredState represents the target configuration for the child worker.
 type ChildDesiredState struct {
-	helpers.BaseDesiredState          // Provides ShutdownRequested + IsShutdownRequested() + SetShutdownRequested()
-	Dependencies             ChildDependencies
+	config.BaseDesiredState          // Provides ShutdownRequested + IsShutdownRequested() + SetShutdownRequested()
+	Dependencies        ChildDependencies
 }
 
 // ShouldBeRunning returns true if the child should be in a running/connected state.

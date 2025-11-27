@@ -42,7 +42,7 @@ func (t *ObservedState) GetTimestamp() time.Time {
 }
 
 type DesiredState struct {
-	ShutdownReq bool
+	ShutdownReq bool `json:"ShutdownRequested"`
 }
 
 func (t *DesiredState) IsShutdownRequested() bool {
@@ -90,10 +90,6 @@ func (m *Worker) GetInitialState() fsmv2.State[any, any] {
 	}
 
 	return &State{}
-}
-
-func (m *Worker) RequestShutdown() {
-	// No-op for test worker - shutdown is handled by supervisor
 }
 
 type WorkerWithType struct {
@@ -336,4 +332,20 @@ func (a *Action) Execute(ctx context.Context, snapshot any) error {
 		return a.ExecuteFunc(ctx, snapshot)
 	}
 	return nil
+}
+
+// VerifyActionIdempotency tests that an action is idempotent by executing it
+// multiple times and verifying the result is the same as executing it once.
+// Re-exported from execution package for external test usage.
+func VerifyActionIdempotency(action fsmv2.Action[any], iterations int, verifyState func()) {
+	ctx := context.Background()
+
+	for i := range iterations {
+		err := action.Execute(ctx, nil)
+		if err != nil {
+			panic(fmt.Sprintf("Action should succeed on iteration %d: %v", i+1, err))
+		}
+	}
+
+	verifyState()
 }

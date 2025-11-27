@@ -290,5 +290,3 @@ func (w *trackingWorker) DeriveDesiredState(spec interface{}) (config.DesiredSta
 func (w *trackingWorker) GetInitialState() fsmv2.State[any, any] {
 	return &supervisor.TestState{}
 }
-
-func (w *trackingWorker) RequestShutdown() {}

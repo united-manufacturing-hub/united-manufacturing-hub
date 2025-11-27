@@ -16,10 +16,14 @@ package supervisor
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/metrics"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 )
 
 // Start starts the supervisor goroutines.
@@ -169,7 +173,7 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 
 		// Wait for workers to complete graceful shutdown (with timeout)
 		// The tick loop is still running, so workers can process their state machines
-		gracefulTimeout := 5 * time.Second
+		gracefulTimeout := s.gracefulShutdownTimeout
 		ticker := time.NewTicker(100 * time.Millisecond)
 		timeoutCh := time.After(gracefulTimeout)
 
@@ -212,11 +216,19 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 	// Shutdown action executor (doesn't block)
 	s.actionExecutor.Shutdown()
 
-	// Log workers being shut down (any remaining after graceful shutdown)
-	for workerID := range s.workers {
+	// Shutdown all per-worker executors and collectors (any remaining after graceful shutdown)
+	// These have their own goroutines that need to be stopped to prevent leaks.
+	shutdownCtx := context.Background()
+	for workerID, workerCtx := range s.workers {
 		s.logger.Debugw("worker_shutting_down",
 			"worker_type", s.workerType,
 			"worker_id", workerID)
+
+		// Stop the collector's observation loop
+		workerCtx.collector.Stop(shutdownCtx)
+
+		// Shutdown the per-worker action executor
+		workerCtx.executor.Shutdown()
 	}
 
 	// LOCK SAFETY: Extract children and done channels while holding lock,
@@ -372,14 +384,47 @@ func (s *Supervisor[TObserved, TDesired]) requestShutdown(ctx context.Context, w
 	s.logger.Warnf("Requesting shutdown for worker %s: %s", workerID, reason)
 
 	s.mu.RLock()
-	workerCtx, exists := s.workers[workerID]
+	_, exists := s.workers[workerID]
 	s.mu.RUnlock()
 
 	if !exists {
 		return fmt.Errorf("worker %s not found", workerID)
 	}
 
-	workerCtx.worker.RequestShutdown()
+	// Load current desired state from database
+	var desired TDesired
+	err := s.store.LoadDesiredTyped(ctx, s.workerType, workerID, &desired)
+	if err != nil {
+		if !errors.Is(err, persistence.ErrNotFound) {
+			return fmt.Errorf("failed to load desired state: %w", err)
+		}
+		// No desired state in DB yet, nothing to update
+		return nil
+	}
+
+	// Set ShutdownRequested=true using the ShutdownRequestable interface
+	if sr, ok := any(desired).(fsmv2.ShutdownRequestable); ok {
+		sr.SetShutdownRequested(true)
+	} else if sr, ok := any(&desired).(fsmv2.ShutdownRequestable); ok {
+		sr.SetShutdownRequested(true)
+	} else {
+		return fmt.Errorf("desired state type %T does not implement ShutdownRequestable", desired)
+	}
+
+	// Convert to Document via JSON marshaling (required by SaveDesired)
+	desiredJSON, err := json.Marshal(desired)
+	if err != nil {
+		return fmt.Errorf("failed to marshal desired state: %w", err)
+	}
+	desiredDoc := make(persistence.Document)
+	if err := json.Unmarshal(desiredJSON, &desiredDoc); err != nil {
+		return fmt.Errorf("failed to unmarshal to document: %w", err)
+	}
+
+	// Save updated desired state back to database
+	if _, err := s.store.SaveDesired(ctx, s.workerType, workerID, desiredDoc); err != nil {
+		return fmt.Errorf("failed to save desired state with shutdown request: %w", err)
+	}
 
 	return nil
 }

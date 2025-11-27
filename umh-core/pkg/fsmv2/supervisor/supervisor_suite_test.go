@@ -161,12 +161,6 @@ func (m *mockWorker) GetInitialState() fsmv2.State[any, any] {
 	return &mockState{}
 }
 
-func (m *mockWorker) RequestShutdown() {
-	if m.requestShutdownFunc != nil {
-		m.requestShutdownFunc()
-	}
-}
-
 type mockState struct {
 	nextState fsmv2.State[any, any]
 	signal    fsmv2.Signal
@@ -381,10 +375,11 @@ func newSupervisorWithWorker(worker *mockWorker, customStore storage.TriangularS
 	}
 
 	s := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
-		WorkerType:      workerType,
-		Logger:          zap.NewNop().Sugar(),
-		CollectorHealth: cfg,
-		Store:           triangularStore,
+		WorkerType:              workerType,
+		Logger:                  zap.NewNop().Sugar(),
+		CollectorHealth:         cfg,
+		Store:                   triangularStore,
+		GracefulShutdownTimeout: 100 * time.Millisecond, // Short timeout for tests
 	})
 
 	err := s.AddWorker(identity, worker)

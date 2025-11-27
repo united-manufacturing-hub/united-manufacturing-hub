@@ -103,10 +103,11 @@ var _ = Describe("Lifecycle Logging", func() {
 
 	setupSupervisor := func() {
 		cfg := supervisor.Config{
-			WorkerType:   "test",
-			Store:        store,
-			Logger:       logger,
-			TickInterval: 100 * time.Millisecond,
+			WorkerType:              "test",
+			Store:                   store,
+			Logger:                  logger,
+			TickInterval:            100 * time.Millisecond,
+			GracefulShutdownTimeout: 100 * time.Millisecond, // Short timeout for tests
 		}
 		sup = supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](cfg)
 
@@ -169,11 +170,12 @@ var _ = Describe("Lifecycle Logging", func() {
 
 		It("should log tick_start with worker_id", func() {
 			cfg := supervisor.Config{
-				WorkerType:         "test",
-				Store:              store,
-				Logger:             logger,
-				TickInterval:       100 * time.Millisecond,
-				EnableTraceLogging: true,
+				WorkerType:              "test",
+				Store:                   store,
+				Logger:                  logger,
+				TickInterval:            100 * time.Millisecond,
+				EnableTraceLogging:      true,
+				GracefulShutdownTimeout: 100 * time.Millisecond,
 			}
 			sup = supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](cfg)
 
@@ -197,11 +199,12 @@ var _ = Describe("Lifecycle Logging", func() {
 
 		It("should log mutex_lock_acquire", func() {
 			cfg := supervisor.Config{
-				WorkerType:         "test",
-				Store:              store,
-				Logger:             logger,
-				TickInterval:       100 * time.Millisecond,
-				EnableTraceLogging: true,
+				WorkerType:              "test",
+				Store:                   store,
+				Logger:                  logger,
+				TickInterval:            100 * time.Millisecond,
+				EnableTraceLogging:      true,
+				GracefulShutdownTimeout: 100 * time.Millisecond,
 			}
 			sup = supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](cfg)
 
@@ -225,11 +228,12 @@ var _ = Describe("Lifecycle Logging", func() {
 
 		It("should log mutex_lock_acquired", func() {
 			cfg := supervisor.Config{
-				WorkerType:         "test",
-				Store:              store,
-				Logger:             logger,
-				TickInterval:       100 * time.Millisecond,
-				EnableTraceLogging: true,
+				WorkerType:              "test",
+				Store:                   store,
+				Logger:                  logger,
+				TickInterval:            100 * time.Millisecond,
+				EnableTraceLogging:      true,
+				GracefulShutdownTimeout: 100 * time.Millisecond,
 			}
 			sup = supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](cfg)
 
@@ -279,11 +283,12 @@ var _ = Describe("Lifecycle Logging", func() {
 
 			It("should emit log at debug level", func() {
 				cfg := supervisor.Config{
-					WorkerType:         "test",
-					Store:              store,
-					Logger:             logger,
-					TickInterval:       100 * time.Millisecond,
-					EnableTraceLogging: true,
+					WorkerType:              "test",
+					Store:                   store,
+					Logger:                  logger,
+					TickInterval:            100 * time.Millisecond,
+					EnableTraceLogging:      true,
+					GracefulShutdownTimeout: 100 * time.Millisecond,
 				}
 				sup = supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](cfg)
 
@@ -321,11 +326,12 @@ var _ = Describe("Lifecycle Logging", func() {
 
 			It("should not emit lifecycle logs", func() {
 				cfg := supervisor.Config{
-					WorkerType:         "test",
-					Store:              store,
-					Logger:             logger,
-					TickInterval:       100 * time.Millisecond,
-					EnableTraceLogging: false,
+					WorkerType:              "test",
+					Store:                   store,
+					Logger:                  logger,
+					TickInterval:            100 * time.Millisecond,
+					EnableTraceLogging:      false,
+					GracefulShutdownTimeout: 100 * time.Millisecond,
 				}
 				sup = supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](cfg)
 

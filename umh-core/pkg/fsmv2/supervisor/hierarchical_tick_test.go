@@ -78,8 +78,6 @@ func (h *hierarchicalWorker) GetInitialState() fsmv2.State[any, any] {
 	return &mockState{}
 }
 
-func (h *hierarchicalWorker) RequestShutdown() {}
-
 var _ = Describe("Hierarchical Tick Propagation (Task 0.6)", func() {
 	var (
 		ctx         context.Context

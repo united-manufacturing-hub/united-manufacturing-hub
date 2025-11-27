@@ -18,7 +18,7 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 )
 
 // FailingDependencies interface to avoid import cycles.
@@ -36,9 +36,9 @@ type FailingSnapshot struct {
 
 // FailingDesiredState represents the target configuration for the failing worker.
 type FailingDesiredState struct {
-	helpers.BaseDesiredState        // Provides ShutdownRequested + IsShutdownRequested() + SetShutdownRequested()
-	ShouldFail               bool `json:"ShouldFail"`
-	Dependencies             FailingDependencies
+	config.BaseDesiredState        // Provides ShutdownRequested + IsShutdownRequested() + SetShutdownRequested()
+	ShouldFail          bool `json:"ShouldFail"`
+	Dependencies        FailingDependencies
 }
 
 // ShouldBeRunning returns true if the failing worker should be in a running/connected state.

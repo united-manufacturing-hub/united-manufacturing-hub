@@ -34,16 +34,18 @@ var _ = Describe("Supervisor Lifecycle", func() {
 				store := createTestTriangularStore()
 
 				s := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
-					WorkerType:   "container",
-					Store:        store,
-					Logger:       zap.NewNop().Sugar(),
-					TickInterval: 50 * time.Millisecond,
+					WorkerType:              "container",
+					Store:                   store,
+					Logger:                  zap.NewNop().Sugar(),
+					TickInterval:            50 * time.Millisecond,
+					GracefulShutdownTimeout: 100 * time.Millisecond, // Short timeout for tests
 				})
 
 				identity := mockIdentity()
 				worker := &mockWorker{}
 				err := s.AddWorker(identity, worker)
 				Expect(err).ToNot(HaveOccurred())
+				defer s.Shutdown()
 
 				ctx, cancel := context.WithCancel(context.Background())
 

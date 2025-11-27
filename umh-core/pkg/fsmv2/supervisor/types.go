@@ -168,4 +168,11 @@ type Config struct {
 	// Optional - defaults to false. Set ENABLE_TRACE_LOGGING=true for deep debugging.
 	// When false, these high-frequency internal logs are suppressed to improve signal-to-noise ratio.
 	EnableTraceLogging bool
+
+	// GracefulShutdownTimeout is how long to wait for workers to complete graceful shutdown.
+	// During shutdown, the supervisor requests graceful shutdown on all workers and waits
+	// for them to be removed from the workers map (by emitting SignalNeedsRemoval).
+	// If this timeout is reached, the supervisor proceeds with forced shutdown.
+	// Optional - defaults to 5 seconds.
+	GracefulShutdownTimeout time.Duration
 }

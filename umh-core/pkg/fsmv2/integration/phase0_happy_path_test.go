@@ -622,10 +622,6 @@ func (w *DeltaTestWorker) GetChildSpecs(currentState string, observed interface{
 	return nil, nil
 }
 
-func (w *DeltaTestWorker) RequestShutdown() {
-	// No-op for test worker - no internal desired state to update
-}
-
 type mockState struct {
 	name string
 }

@@ -44,21 +44,23 @@ func (o ApplicationObservedState) GetObservedDesiredState() fsmv2.DesiredState {
 }
 
 // ApplicationDesiredState represents the desired state for an application supervisor.
-// It embeds config.DesiredState to get ChildrenSpecs and IsShutdownRequested().
+// It embeds config.BaseDesiredState directly (consistent with ALL other workers)
+// and declares ChildrenSpecs as a named field.
 type ApplicationDesiredState struct {
-	config.DesiredState
+	config.BaseDesiredState `json:",inline"`
 
 	// Name is the identifier for this application supervisor.
 	Name string `json:"name"`
+
+	// ChildrenSpecs declares the children this application supervisor should manage.
+	// Supervisor propagates shutdown to children via database mechanism.
+	ChildrenSpecs []config.ChildSpec `json:"childrenSpecs,omitempty"`
 }
 
-// IsShutdownRequested returns true if shutdown has been requested.
-// This delegates to the embedded config.DesiredState.
-func (d *ApplicationDesiredState) IsShutdownRequested() bool {
-	return d.DesiredState.IsShutdownRequested()
-}
-
-// GetChildrenSpecs returns the children specifications from the embedded DesiredState.
+// GetChildrenSpecs returns the children specifications.
 func (d *ApplicationDesiredState) GetChildrenSpecs() []config.ChildSpec {
 	return d.ChildrenSpecs
 }
+
+// NOTE: IsShutdownRequested() and SetShutdownRequested() are provided by embedded BaseDesiredState.
+// No delegation methods needed - this is consistent with all other workers.

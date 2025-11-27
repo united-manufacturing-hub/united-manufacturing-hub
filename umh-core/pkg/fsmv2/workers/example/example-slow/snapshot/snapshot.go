@@ -18,7 +18,7 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 )
 
 type SlowDependencies interface {
@@ -32,10 +32,10 @@ type SlowSnapshot struct {
 }
 
 type SlowDesiredState struct {
-	helpers.BaseDesiredState          // Provides ShutdownRequested + IsShutdownRequested() + SetShutdownRequested()
-	ShouldRun            bool
-	DelaySeconds         int
-	Dependencies         SlowDependencies
+	config.BaseDesiredState          // Provides ShutdownRequested + IsShutdownRequested() + SetShutdownRequested()
+	ShouldRun           bool
+	DelaySeconds        int
+	Dependencies        SlowDependencies
 }
 
 func (s *SlowDesiredState) ShouldBeRunning() bool {

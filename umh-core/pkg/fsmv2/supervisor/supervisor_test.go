@@ -510,8 +510,6 @@ func (m *mockWorker) GetInitialState() fsmv2.State[any, any] {
 	return m.initialState
 }
 
-func (m *mockWorker) RequestShutdown() {}
-
 type mockObservedState struct {
 	doc       persistence.Document
 	timestamp time.Time
@@ -580,8 +578,6 @@ func (m *mockWorkerWithChildren) DeriveDesiredState(_ interface{}) (config.Desir
 func (m *mockWorkerWithChildren) GetInitialState() fsmv2.State[any, any] {
 	return m.initialState
 }
-
-func (m *mockWorkerWithChildren) RequestShutdown() {}
 
 func TestApplyStateMapping_WithMapping(t *testing.T) {
 	ctx := context.Background()

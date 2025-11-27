@@ -62,8 +62,6 @@ func (t *TestWorker) GetInitialState() fsmv2.State[any, any] {
 	return t.initialState
 }
 
-func (t *TestWorker) RequestShutdown() {}
-
 // TestObservedState is a test double for fsmv2.ObservedState.
 type TestObservedState struct {
 	ID          string    `json:"id"`

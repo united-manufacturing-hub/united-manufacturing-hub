@@ -18,7 +18,7 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 )
 
 type PanicDependencies interface {
@@ -32,9 +32,9 @@ type PanicSnapshot struct {
 }
 
 type PanicDesiredState struct {
-	helpers.BaseDesiredState          // Provides ShutdownRequested + IsShutdownRequested() + SetShutdownRequested()
-	ShouldPanic       bool `json:"ShouldPanic"`
-	Dependencies      PanicDependencies
+	config.BaseDesiredState          // Provides ShutdownRequested + IsShutdownRequested() + SetShutdownRequested()
+	ShouldPanic      bool `json:"ShouldPanic"`
+	Dependencies     PanicDependencies
 }
 
 func (s *PanicDesiredState) ShouldBeRunning() bool {

@@ -213,10 +213,11 @@ type Supervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] stru
 	// It can be acquired alone when checking context status, or after Supervisor.mu
 	// if both are needed (advisory order).
 	ctxMu                    *lockmanager.Lock
-	started                  atomic.Bool  // Whether supervisor has been started
-	enableTraceLogging       bool         // Whether to emit verbose lifecycle logs (mutex, tick events)
-	noStateMachineLoggedOnce sync.Map     // Tracks workers that have logged no_state_machine (workerID → true)
-	tickCount                uint64       // Counter for ticks, used for periodic heartbeat logging
+	started                  atomic.Bool    // Whether supervisor has been started
+	enableTraceLogging       bool           // Whether to emit verbose lifecycle logs (mutex, tick events)
+	noStateMachineLoggedOnce sync.Map       // Tracks workers that have logged no_state_machine (workerID → true)
+	tickCount                uint64         // Counter for ticks, used for periodic heartbeat logging
+	gracefulShutdownTimeout  time.Duration  // How long to wait for workers to shutdown gracefully
 }
 
 func NewSupervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState](cfg Config) *Supervisor[TObserved, TDesired] {
@@ -274,6 +275,11 @@ func NewSupervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState](c
 
 	lm := lockmanager.NewLockManager()
 
+	gracefulShutdownTimeout := cfg.GracefulShutdownTimeout
+	if gracefulShutdownTimeout == 0 {
+		gracefulShutdownTimeout = DefaultGracefulShutdownTimeout
+	}
+
 	return &Supervisor[TObserved, TDesired]{
 		workerType:       cfg.WorkerType,
 		workers:          make(map[string]*WorkerContext[TObserved, TDesired]),
@@ -298,7 +304,8 @@ func NewSupervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState](c
 			maxRestartAttempts: maxRestartAttempts,
 			restartCount:       0,
 		},
-		userSpec:           cfg.UserSpec,
-		enableTraceLogging: cfg.EnableTraceLogging,
+		userSpec:                cfg.UserSpec,
+		enableTraceLogging:      cfg.EnableTraceLogging,
+		gracefulShutdownTimeout: gracefulShutdownTimeout,
 	}
 }

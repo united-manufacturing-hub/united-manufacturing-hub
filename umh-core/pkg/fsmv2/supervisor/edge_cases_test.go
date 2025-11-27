@@ -130,13 +130,12 @@ var _ = Describe("Edge Cases", func() {
 					ObservationTimeout: 1000 * time.Millisecond,
 				})
 
-				ctx, cancel := context.WithCancel(context.Background())
-				defer cancel()
+				ctx := context.Background()
 
 				// Start supervisor to run action executor
 				done := s.Start(ctx)
 				defer func() {
-					cancel()
+					s.Shutdown()
 					<-done
 				}()
 
@@ -172,13 +171,12 @@ var _ = Describe("Edge Cases", func() {
 					ObservationTimeout: 1000 * time.Millisecond,
 				})
 
-				ctx, cancel := context.WithCancel(context.Background())
-				defer cancel()
+				ctx := context.Background()
 
 				// Start supervisor to run action executor
 				done := s.Start(ctx)
 				defer func() {
-					cancel()
+					s.Shutdown()
 					<-done
 				}()
 
@@ -211,13 +209,12 @@ var _ = Describe("Edge Cases", func() {
 					ObservationTimeout: 1000 * time.Millisecond,
 				})
 
-				ctx, cancel := context.WithCancel(context.Background())
-				defer cancel()
+				ctx := context.Background()
 
 				// Start supervisor to run action executor
 				done := s.Start(ctx)
 				defer func() {
-					cancel()
+					s.Shutdown()
 					<-done
 				}()
 
@@ -414,6 +411,7 @@ var _ = Describe("Edge Cases", func() {
 					Timeout:            20 * time.Second,
 					MaxRestartAttempts: 3,
 				})
+				defer s.Shutdown()
 
 				ctx, cancel := context.WithCancel(context.Background())
 
@@ -436,6 +434,7 @@ var _ = Describe("Edge Cases", func() {
 					Timeout:            20 * time.Second,
 					MaxRestartAttempts: 3,
 				})
+				defer s.Shutdown()
 
 				ctx, cancel := context.WithCancel(context.Background())
 				cancel()
@@ -449,11 +448,8 @@ var _ = Describe("Edge Cases", func() {
 
 	Describe("RequestShutdown with valid worker", func() {
 		Context("when worker exists", func() {
-			It("should succeed without interacting with persistence", func() {
+			It("should set ShutdownRequested in persistence when desired state exists", func() {
 				mockStore := newMockTriangularStore()
-				// Set persistence errors to verify they don't affect RequestShutdown
-				mockStore.LoadDesiredErr = errors.New("load desired failed")
-				mockStore.SaveDesiredErr = errors.New("save desired failed")
 
 				identity := mockIdentity()
 				identityDoc := persistence.Document{
@@ -464,8 +460,12 @@ var _ = Describe("Edge Cases", func() {
 				err := mockStore.SaveIdentity(context.Background(), "container", identity.ID, identityDoc)
 				Expect(err).ToNot(HaveOccurred())
 
-				// Clear errors for AddWorker to succeed
-				mockStore.SaveDesiredErr = nil
+				// Save a desired state that requestShutdown can load and modify
+				desiredDoc := persistence.Document{
+					"ShutdownRequested": false,
+				}
+				_, err = mockStore.SaveDesired(context.Background(), "container", identity.ID, desiredDoc)
+				Expect(err).ToNot(HaveOccurred())
 
 				s := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 					WorkerType: "container",
@@ -481,12 +481,49 @@ var _ = Describe("Edge Cases", func() {
 				err = s.AddWorker(identity, worker)
 				Expect(err).ToNot(HaveOccurred())
 
-				// Re-set persistence errors
-				mockStore.LoadDesiredErr = errors.New("load desired failed")
-				mockStore.SaveDesiredErr = errors.New("save desired failed")
+				// RequestShutdown should succeed and update persistence
+				err = s.TestRequestShutdown(context.Background(), identity.ID, "test reason")
+				Expect(err).ToNot(HaveOccurred())
 
-				// RequestShutdown should succeed because it uses worker.RequestShutdown()
-				// instead of persistence operations
+				// Verify ShutdownRequested was set in the store
+				savedDesired, loadErr := mockStore.LoadDesired(context.Background(), "container", identity.ID)
+				Expect(loadErr).ToNot(HaveOccurred())
+				savedDoc, ok := savedDesired.(persistence.Document)
+				Expect(ok).To(BeTrue())
+				Expect(savedDoc["ShutdownRequested"]).To(BeTrue())
+			})
+		})
+
+		Context("when desired state does not exist", func() {
+			It("should return nil (no desired state to update)", func() {
+				mockStore := newMockTriangularStore()
+
+				identity := mockIdentity()
+				identityDoc := persistence.Document{
+					"id":         identity.ID,
+					"name":       identity.Name,
+					"workerType": identity.WorkerType,
+				}
+				err := mockStore.SaveIdentity(context.Background(), "container", identity.ID, identityDoc)
+				Expect(err).ToNot(HaveOccurred())
+
+				// Don't save any desired state - requestShutdown should return nil
+
+				s := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
+					WorkerType: "container",
+					Store:      mockStore,
+					Logger:     zap.NewNop().Sugar(),
+					CollectorHealth: supervisor.CollectorHealthConfig{
+						StaleThreshold: 10 * time.Second,
+						Timeout:        20 * time.Second,
+					},
+				})
+
+				worker := &mockWorker{}
+				err = s.AddWorker(identity, worker)
+				Expect(err).ToNot(HaveOccurred())
+
+				// RequestShutdown should return nil when no desired state exists
 				err = s.TestRequestShutdown(context.Background(), identity.ID, "test reason")
 				Expect(err).ToNot(HaveOccurred())
 			})

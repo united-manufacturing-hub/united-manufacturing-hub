@@ -629,8 +629,6 @@ func (m *validChildSpecMockWorker) GetInitialState() fsmv2.State[any, any] {
 	return m.initialState
 }
 
-func (m *validChildSpecMockWorker) RequestShutdown() {}
-
 // trackedCallOrderMockWorker tracks which methods are called and in what order.
 type trackedCallOrderMockWorker struct {
 	identity     fsmv2.Identity
@@ -661,5 +659,3 @@ func (m *trackedCallOrderMockWorker) DeriveDesiredState(_ interface{}) (config.D
 func (m *trackedCallOrderMockWorker) GetInitialState() fsmv2.State[any, any] {
 	return m.initialState
 }
-
-func (m *trackedCallOrderMockWorker) RequestShutdown() {}

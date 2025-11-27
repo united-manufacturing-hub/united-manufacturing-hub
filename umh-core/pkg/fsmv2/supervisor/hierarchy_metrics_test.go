@@ -61,9 +61,10 @@ var _ = Describe("Hierarchy Metrics (Task 3)", func() {
 			}
 
 			parentSup = supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
-				WorkerType: "root",
-				Logger:     logger,
-				Store:      store,
+				WorkerType:              "root",
+				Logger:                  logger,
+				Store:                   store,
+				GracefulShutdownTimeout: 100 * time.Millisecond,
 			})
 			defer parentSup.Shutdown()
 
@@ -118,9 +119,10 @@ var _ = Describe("Hierarchy Metrics (Task 3)", func() {
 			}
 
 			parentSup = supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
-				WorkerType: "parent",
-				Logger:     logger,
-				Store:      store,
+				WorkerType:              "parent",
+				Logger:                  logger,
+				Store:                   store,
+				GracefulShutdownTimeout: 100 * time.Millisecond,
 			})
 			defer parentSup.Shutdown()
 
@@ -190,9 +192,10 @@ var _ = Describe("Hierarchy Metrics (Task 3)", func() {
 			}
 
 			parentSup = supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
-				WorkerType: "parent",
-				Logger:     logger,
-				Store:      store,
+				WorkerType:              "parent",
+				Logger:                  logger,
+				Store:                   store,
+				GracefulShutdownTimeout: 100 * time.Millisecond,
 			})
 			defer parentSup.Shutdown()
 
@@ -321,9 +324,10 @@ store.mu.Unlock()
 			}
 
 			leafSup := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
-				WorkerType: "leaf",
-				Logger:     logger,
-				Store:      store,
+				WorkerType:              "leaf",
+				Logger:                  logger,
+				Store:                   store,
+				GracefulShutdownTimeout: 100 * time.Millisecond,
 			})
 			defer leafSup.Shutdown()
 
@@ -377,9 +381,10 @@ store.mu.Unlock()
 			}
 
 			parentSup = supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
-				WorkerType: "parent",
-				Logger:     logger,
-				Store:      store,
+				WorkerType:              "parent",
+				Logger:                  logger,
+				Store:                   store,
+				GracefulShutdownTimeout: 100 * time.Millisecond,
 			})
 			defer parentSup.Shutdown()
 
@@ -453,9 +458,10 @@ store.mu.Unlock()
 			}
 
 			parentSup = supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
-				WorkerType: "parent",
-				Logger:     logger,
-				Store:      store,
+				WorkerType:              "parent",
+				Logger:                  logger,
+				Store:                   store,
+				GracefulShutdownTimeout: 100 * time.Millisecond,
 			})
 			defer parentSup.Shutdown()
 
@@ -536,9 +542,10 @@ store.mu.Unlock()
 			}
 
 			parentSup = supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
-				WorkerType: "parent",
-				Logger:     logger,
-				Store:      store,
+				WorkerType:              "parent",
+				Logger:                  logger,
+				Store:                   store,
+				GracefulShutdownTimeout: 100 * time.Millisecond,
 			})
 			defer parentSup.Shutdown()
 

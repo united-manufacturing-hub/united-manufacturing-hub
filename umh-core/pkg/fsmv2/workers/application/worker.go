@@ -74,10 +74,8 @@ func (w *ApplicationWorker) CollectObservedState(ctx context.Context) (fsmv2.Obs
 		CollectedAt: time.Now(),
 		Name:        w.name,
 		DeployedDesiredState: snapshot.ApplicationDesiredState{
-			DesiredState: config.DesiredState{
-				State: "running",
-			},
 			Name: w.name,
+			// BaseDesiredState and ChildrenSpecs default to zero values
 		},
 	}, nil
 }
@@ -140,11 +138,6 @@ func (w *ApplicationWorker) GetInitialState() fsmv2.State[any, any] {
 	// Return nil for now - state machine will be implemented later.
 	// The supervisor can handle nil initial state gracefully.
 	return nil
-}
-
-// RequestShutdown is a no-op for ApplicationWorker.
-// The supervisor handles shutdown by directly manipulating the desired state in the database.
-func (w *ApplicationWorker) RequestShutdown() {
 }
 
 // GetDependenciesAny implements fsmv2.DependencyProvider.

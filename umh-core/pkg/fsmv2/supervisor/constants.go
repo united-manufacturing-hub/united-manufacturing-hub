@@ -68,4 +68,9 @@ const (
 	// This ordering ensures observation failures don't trigger stale detection,
 	// and stale detection occurs before collector restart.
 	DefaultObservationTimeout = DefaultObservationInterval + MaxCgroupThrottlePeriod + 1*time.Second
+
+	// DefaultGracefulShutdownTimeout is the default time to wait for workers to complete
+	// graceful shutdown during Shutdown(). Workers have this time to process their shutdown
+	// state machines and emit SignalNeedsRemoval before forced shutdown proceeds.
+	DefaultGracefulShutdownTimeout = 5 * time.Second
 )

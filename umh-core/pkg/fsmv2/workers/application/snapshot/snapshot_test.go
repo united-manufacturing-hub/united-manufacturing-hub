@@ -60,26 +60,20 @@ var _ = Describe("ApplicationObservedState", func() {
 var _ = Describe("ApplicationDesiredState", func() {
 	It("should implement fsmv2.DesiredState interface", func() {
 		desired := &ApplicationDesiredState{
-			DesiredState: config.DesiredState{
-				State: "running",
-			},
 			Name: "test-root",
 		}
 
-		// IsShutdownRequested should return false for "running" state.
+		// IsShutdownRequested should return false by default.
 		Expect(desired.IsShutdownRequested()).To(BeFalse())
 	})
 
-	It("should return true for shutdown state", func() {
-		desired := &ApplicationDesiredState{
-			DesiredState: config.DesiredState{
-				State: "shutdown",
-			},
-		}
+	It("should return true when shutdown is requested", func() {
+		desired := &ApplicationDesiredState{}
+		desired.SetShutdownRequested(true)
 		Expect(desired.IsShutdownRequested()).To(BeTrue())
 	})
 
-	It("should return children specs from embedded DesiredState", func() {
+	It("should return children specs from named field", func() {
 		children := []config.ChildSpec{
 			{
 				Name:       "child-1",
@@ -91,11 +85,10 @@ var _ = Describe("ApplicationDesiredState", func() {
 			},
 		}
 
+		// New flat structure - ChildrenSpecs is a direct field, not embedded
 		desired := &ApplicationDesiredState{
-			DesiredState: config.DesiredState{
-				State:         "running",
-				ChildrenSpecs: children,
-			},
+			Name:          "test-root",
+			ChildrenSpecs: children,
 		}
 
 		specs := desired.GetChildrenSpecs()

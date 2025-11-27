@@ -20,7 +20,7 @@ package helpers
 // Example:
 //
 //	type MyDesiredState struct {
-//	    helpers.BaseDesiredState
+//	    config.BaseDesiredState
 //	    // ... other fields
 //	}
 //

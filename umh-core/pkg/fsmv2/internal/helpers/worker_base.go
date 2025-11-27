@@ -52,15 +52,3 @@ func (w *BaseWorker[D]) GetDependenciesAny() any {
 	return w.dependencies
 }
 
-// RequestShutdown is a default no-op implementation of the Worker.RequestShutdown method.
-// Workers that need to handle shutdown requests should override this method.
-//
-// In the current FSMv2 architecture, desired state is persisted in the database
-// and workers don't maintain in-memory desired state references. Therefore, this
-// default implementation does nothing. The supervisor will handle setting the
-// ShutdownRequested flag through the persistence layer.
-//
-// Future workers that maintain their own desired state can override this to
-// propagate shutdown requests properly.
-func (w *BaseWorker[D]) RequestShutdown() {
-}

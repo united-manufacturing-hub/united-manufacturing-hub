@@ -66,7 +66,7 @@ type DesiredState interface {
 }
 
 // ShutdownRequestable allows setting the shutdown flag on any DesiredState.
-// All DesiredState types should embed helpers.BaseDesiredState to satisfy this interface.
+// All DesiredState types should embed config.BaseDesiredState to satisfy this interface.
 // This enables type-safe shutdown request propagation from supervisor to workers.
 //
 // Example usage:
@@ -340,10 +340,9 @@ type Worker interface {
 	// Example: return &InitializingState{} or &StoppedState{}
 	GetInitialState() State[any, any]
 
-	// RequestShutdown sets the ShutdownRequested flag on the worker's desired state.
-	// Called by supervisor to initiate graceful shutdown.
-	// The worker is responsible for propagating this to its internal desired state.
-	RequestShutdown()
+	// NOTE: Shutdown is managed by the supervisor via database updates.
+	// The supervisor sets ShutdownRequested=true in the desired state using SetShutdownRequested().
+	// Workers check IsShutdownRequested() in their state transitions.
 }
 
 // DependencyProvider is an optional interface that workers can implement

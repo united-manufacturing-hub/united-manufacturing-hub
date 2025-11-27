@@ -17,6 +17,33 @@ package config
 
 import "encoding/json"
 
+// BaseDesiredState provides common shutdown functionality for all DesiredState types.
+// Workers embed this struct to get consistent shutdown handling without boilerplate.
+//
+// Example:
+//
+//	type MyDesiredState struct {
+//	    config.BaseDesiredState
+//	    // ... other fields
+//	}
+//
+// Workers embedding BaseDesiredState automatically satisfy the DesiredState interface's
+// IsShutdownRequested() method and the ShutdownRequestable interface's SetShutdownRequested() method.
+type BaseDesiredState struct {
+	ShutdownRequested bool `json:"ShutdownRequested"`
+}
+
+// IsShutdownRequested returns whether shutdown has been requested for this worker.
+func (b *BaseDesiredState) IsShutdownRequested() bool {
+	return b.ShutdownRequested
+}
+
+// SetShutdownRequested sets the shutdown requested flag.
+// This satisfies the ShutdownRequestable interface.
+func (b *BaseDesiredState) SetShutdownRequested(v bool) {
+	b.ShutdownRequested = v
+}
+
 // UserSpec contains user-provided configuration for a worker.
 // This is the "raw" configuration that users write, before templating or transformation.
 //
@@ -161,18 +188,17 @@ func (c *ChildSpec) MarshalJSON() ([]byte, error) {
 //	    ChildrenSpecs: nil,         // Children removed during shutdown
 //	}
 type DesiredState struct {
-	State         string      `json:"state"                   yaml:"state"`                   // Current desired state ("running", "stopped", "shutdown", etc.)
-	ChildrenSpecs []ChildSpec `json:"childrenSpecs,omitempty" yaml:"childrenSpecs,omitempty"` // Declarative specification of child workers
+	BaseDesiredState                                                                   // Provides ShutdownRequested field and methods (IsShutdownRequested, SetShutdownRequested)
+	State            string      `json:"state"                   yaml:"state"`          // Current desired state ("running", "stopped", "shutdown", etc.)
+	ChildrenSpecs    []ChildSpec `json:"childrenSpecs,omitempty" yaml:"childrenSpecs,omitempty"` // Declarative specification of child workers
 }
 
-// ShutdownRequested returns true if graceful shutdown has been requested.
-// States MUST check this first in their Next() method before any other logic.
-//
-// This implements the fsmv2.DesiredState interface requirement.
+// NOTE: IsShutdownRequested() and SetShutdownRequested() are provided by embedded BaseDesiredState.
+// The ShutdownRequested field is the canonical source of truth for shutdown state.
 //
 // Shutdown flow:
-//  1. Supervisor sets State = "shutdown" in DesiredState
-//  2. State.Next() calls ShutdownRequested() → returns true
+//  1. Supervisor sets ShutdownRequested = true via SetShutdownRequested()
+//  2. State.Next() calls IsShutdownRequested() → returns true
 //  3. State transitions to shutdown/cleanup states
 //  4. Eventually returns SignalNeedsRemoval
 //  5. Supervisor removes worker from system
@@ -182,11 +208,8 @@ type DesiredState struct {
 //	func (s RunningState) Next(snapshot fsmv2.Snapshot) (State, Signal, Action) {
 //	    desired := snapshot.Desired.(types.DesiredState)
 //	    // ALWAYS check shutdown first
-//	    if desired.ShutdownRequested() {
+//	    if desired.IsShutdownRequested() {
 //	        return StoppingState{}, fsmv2.SignalNone, nil
 //	    }
 //	    // ... rest of logic
 //	}
-func (d DesiredState) IsShutdownRequested() bool {
-	return d.State == "shutdown"
-}

@@ -18,7 +18,7 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 )
 
 // ParentSnapshot represents a point-in-time view of the parent worker state.
@@ -30,8 +30,8 @@ type ParentSnapshot struct {
 
 // ParentDesiredState represents the target configuration for the parent worker.
 type ParentDesiredState struct {
-	helpers.BaseDesiredState        // Provides ShutdownRequested + IsShutdownRequested() + SetShutdownRequested()
-	ChildCount               int `json:"ChildCount"`
+	config.BaseDesiredState        // Provides ShutdownRequested + IsShutdownRequested() + SetShutdownRequested()
+	ChildCount          int `json:"ChildCount"`
 }
 
 // ShouldBeRunning returns true if the parent should be in a running state.

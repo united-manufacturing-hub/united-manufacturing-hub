@@ -168,10 +168,9 @@ state: stopped
 			Expect(desired.IsShutdownRequested()).To(BeFalse())
 		})
 
-		It("should return true when State is 'shutdown'", func() {
-			desired := config.DesiredState{
-				State: "shutdown",
-			}
+		It("should return true when ShutdownRequested is set", func() {
+			desired := config.DesiredState{}
+			desired.SetShutdownRequested(true)
 
 			Expect(desired.IsShutdownRequested()).To(BeTrue())
 		})

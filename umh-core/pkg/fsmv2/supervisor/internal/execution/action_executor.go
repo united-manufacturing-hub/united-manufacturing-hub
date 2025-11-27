@@ -41,6 +41,7 @@ type ActionExecutor struct {
 	metricsCancel  context.CancelFunc
 	metricsWg      sync.WaitGroup
 	logger         *zap.SugaredLogger
+	closeOnce      sync.Once // Ensures actionQueue is closed only once
 }
 
 type actionWork struct {
@@ -106,7 +107,11 @@ func (ae *ActionExecutor) worker() {
 		case <-ae.ctx.Done():
 			return
 
-		case work := <-ae.actionQueue:
+		case work, ok := <-ae.actionQueue:
+			if !ok {
+				// Channel closed, exit gracefully
+				return
+			}
 			startTime := time.Now()
 			actionCtx, cancel := context.WithTimeout(ae.ctx, work.timeout)
 
@@ -258,6 +263,13 @@ func (ae *ActionExecutor) Shutdown() {
 	}
 
 	ae.metricsWg.Wait()
+
+	// Close the action queue to wake blocked workers.
+	// Workers receiving on a closed channel get the zero value and ok=false.
+	// Use sync.Once to ensure idempotency - Shutdown may be called multiple times.
+	ae.closeOnce.Do(func() {
+		close(ae.actionQueue)
+	})
 
 	if ae.cancel != nil {
 		ae.cancel()
