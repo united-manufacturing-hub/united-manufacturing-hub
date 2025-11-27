@@ -421,6 +421,10 @@ func (s *Supervisor[TObserved, TDesired]) requestShutdown(ctx context.Context, w
 		return fmt.Errorf("failed to unmarshal to document: %w", err)
 	}
 
+	// Add 'id' field required by TriangularStore validation
+	// JSON marshaling doesn't preserve this field since typed structs don't have an 'id' field
+	desiredDoc["id"] = workerID
+
 	// Save updated desired state back to database
 	if _, err := s.store.SaveDesired(ctx, s.workerType, workerID, desiredDoc); err != nil {
 		return fmt.Errorf("failed to save desired state with shutdown request: %w", err)

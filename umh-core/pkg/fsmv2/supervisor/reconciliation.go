@@ -572,13 +572,14 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 
 	// CRITICAL: Preserve ShutdownRequested field if it was set by requestShutdown
 	// DeriveDesiredState returns user-derived config, but shutdown is a supervisor operation
-	// that must override user config. We load the existing desired state and carry over
-	// the ShutdownRequested flag if present.
-	existingDesired, err := s.store.LoadDesired(ctx, s.workerType, firstWorkerID)
-	if err == nil {
-		if existingDoc, ok := existingDesired.(persistence.Document); ok {
-			if shutdownRequested, exists := existingDoc["ShutdownRequested"]; exists {
-				desiredDoc["ShutdownRequested"] = shutdownRequested
+	// that must override user config. We load the existing desired state as typed struct
+	// and check via DesiredState interface.
+	var existingDesiredTyped TDesired
+	if err := s.store.LoadDesiredTyped(ctx, s.workerType, firstWorkerID, &existingDesiredTyped); err == nil {
+		// Check if existing state had shutdown requested via interface
+		if ds, ok := any(existingDesiredTyped).(fsmv2.DesiredState); ok {
+			if ds.IsShutdownRequested() {
+				desiredDoc["ShutdownRequested"] = true
 			}
 		}
 	}
@@ -867,27 +868,14 @@ func (s *Supervisor[TObserved, TDesired]) checkDataFreshness(snapshot *fsmv2.Sna
 		hasTimestamp bool
 	)
 
+	// ObservedState interface requires GetTimestamp() - no Document fallback needed
 	if timestampProvider, ok := snapshot.Observed.(interface{ GetTimestamp() time.Time }); ok {
 		collectedAt = timestampProvider.GetTimestamp()
 		hasTimestamp = true
-	} else if doc, ok := snapshot.Observed.(persistence.Document); ok {
-		if ts, exists := doc["collectedAt"]; exists {
-			if timestamp, ok := ts.(time.Time); ok {
-				collectedAt = timestamp
-				hasTimestamp = true
-			} else if timeStr, ok := ts.(string); ok {
-				var err error
-
-				collectedAt, err = time.Parse(time.RFC3339Nano, timeStr)
-				if err == nil {
-					hasTimestamp = true
-				}
-			}
-		}
 	}
 
 	if !hasTimestamp {
-		s.logger.Warn("Snapshot.Observed does not implement GetTimestamp() or have collectedAt field, cannot check freshness")
+		s.logger.Warn("Snapshot.Observed does not implement GetTimestamp(), cannot check freshness")
 
 		return true
 	}
@@ -1016,6 +1004,7 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 				WorkerType:              spec.WorkerType,
 				Store:                   s.store,
 				Logger:                  s.logger,
+				TickInterval:            s.tickInterval,
 				GracefulShutdownTimeout: s.gracefulShutdownTimeout,
 			}
 
