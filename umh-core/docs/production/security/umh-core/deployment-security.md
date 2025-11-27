@@ -1,8 +1,41 @@
 # umh-core Security
 
+## Shared Responsibility Model
+
+### We are responsible for:
+- **Software supply chain** (container images, SBOM, vulnerability scanning via Aikido/FOSSA)
+- **Secure defaults** (non-root execution, TLS enabled by default, no default passwords)
+- **Clear documentation** of protocol limitations and security considerations
+- **Regular security updates** via our Docker registry and documented release process
+
+### You are responsible for:
+- **Infrastructure and runtime** (Docker/Kubernetes configuration, host OS security, network architecture)
+- **Secrets lifecycle** (AUTH_TOKEN storage, rotation, access controls)
+- **Volume permissions** (ensuring `/data` is writable by UID 1000)
+- **Monitoring and incident response** (log aggregation, security monitoring, forensics)
+- **Deployment security** (capabilities, AppArmor/SELinux, resource limits, network policies)
+- **Network segmentation and zone placement** (deploy at Purdue Level 3 per IEC 62443-3-3 zone architecture, firewall rules for OT/IT boundaries)
+- **PLC polling rate configuration** (configure polling intervals per device specifications to prevent overload)
+- **Physical security** (secure deployment locations and restrict physical access per IEC 62443-3-3 SR 5.1)
+- **OT safety systems** (umh-core must not be integrated into safety-instrumented systems; see IEC 61508/61511)
+- **Backup and disaster recovery** (configuration backups, persistent volume snapshots, tested restore procedures per business continuity requirements)
+- **High availability** (deploying multiple instances if required for critical production lines)
+- **Security event monitoring** (SIEM integration if required, intrusion detection systems)
+- **Corporate CA certificate management** (adding certificates for TLS inspection scenarios)
+- **Reading this documentation** - we provide secure software, you must deploy it securely
+
+**This aligns with cloud vendor models** - we secure the software, you secure the deployment environment.
+
+**For detailed OWASP/CIS compliance guidance**, see:
+- [OWASP Docker Security Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Docker_Security_Cheat_Sheet.html)
+- [CIS Docker Benchmark](https://www.cisecurity.org/benchmark/docker)
+- [Kubernetes Security Best Practices](https://kubernetes.io/docs/concepts/security/)
+
+---
+
 ## Security Capabilities
 
-This section documents umh-core's security features across container security, access control, network architecture, cryptography, supply chain integrity, and industrial protocol handling. Each capability is mapped to applicable industry standards (NIST, IEC 62443, OWASP) with implementation details and known limitations. The final section defines our shared responsibility model - what we secure in the software versus what you must secure in your deployment environment.
+This section documents umh-core's security features across container security, access control, network architecture, cryptography, supply chain integrity, and industrial protocol handling. Each capability is mapped to applicable industry standards (NIST, IEC 62443, OWASP) with implementation details and known limitations.
 
 ## Container Security
 
@@ -92,7 +125,7 @@ Deploy umh-core in a DMZ with firewalls on both OT and IT boundaries. See IEC 62
 
 umh-core primarily protects against unintentional compromise of external industrial systems due to vulnerabilities in our software. The non-root execution model prevents privilege escalation, the minimal network attack surface reduces exposure, and TLS is enabled by default for all external communications. Supply chain risks are mitigated through vulnerability scanning and dependency tracking. The pull-based deployment model (see Deployment Model below) prevents misconfiguration that could expose industrial protocols to the internet.
 
-umh-core does not protect against malicious operators with configuration access. An operator with access to the ManagementConsole UI or direct filesystem access to config.yaml can deploy bridge configurations that connect to external industrial systems, exfiltrate the AUTH_TOKEN via outbound network requests, or read sensitive data from mounted volumes. Similarly, the system cannot protect against compromise of the underlying container runtime, host operating system, or Kubernetes control plane.
+umh-core does not protect against malicious operators or accidental misconfiguration. An operator with access to the ManagementConsole UI or direct filesystem access to config.yaml can deploy bridge configurations that connect to external industrial systems, exfiltrate the AUTH_TOKEN via outbound network requests, or read sensitive data from mounted volumes. Accidental misconfiguration poses similar risks - operators copying configuration snippets from the internet (blog posts, forums, examples) may inadvertently expose ports, enable insecure settings, or introduce vulnerable patterns without understanding the security implications. Similarly, the system cannot protect against compromise of the underlying container runtime, host operating system, or Kubernetes control plane.
 
 This model aligns with industry-standard edge gateway security - we secure our software, you secure your infrastructure.
 
@@ -251,39 +284,6 @@ Non-root execution provides security benefits that justify this trade-off. The c
 - Entire host filesystem (`/`)
 - Docker socket (`/var/run/docker.sock`)
 - Host `/etc` or `/var` directories
-
----
-
-## Shared Responsibility Model
-
-### We are responsible for:
-- **Software supply chain** (container images, SBOM, vulnerability scanning via Aikido/FOSSA)
-- **Secure defaults** (non-root execution, TLS enabled by default, no default passwords)
-- **Clear documentation** of protocol limitations and security considerations
-- **Regular security updates** via our Docker registry and documented release process
-
-### You are responsible for:
-- **Infrastructure and runtime** (Docker/Kubernetes configuration, host OS security, network architecture)
-- **Secrets lifecycle** (AUTH_TOKEN storage, rotation, access controls)
-- **Volume permissions** (ensuring `/data` is writable by UID 1000)
-- **Monitoring and incident response** (log aggregation, security monitoring, forensics)
-- **Deployment security** (capabilities, AppArmor/SELinux, resource limits, network policies)
-- **Network segmentation and zone placement** (deploy at Purdue Level 3 per IEC 62443-3-3 zone architecture, firewall rules for OT/IT boundaries)
-- **PLC polling rate configuration** (configure polling intervals per device specifications to prevent overload)
-- **Physical security** (secure deployment locations and restrict physical access per IEC 62443-3-3 SR 5.1)
-- **OT safety systems** (umh-core must not be integrated into safety-instrumented systems; see IEC 61508/61511)
-- **Backup and disaster recovery** (configuration backups, persistent volume snapshots, tested restore procedures per business continuity requirements)
-- **High availability** (deploying multiple instances if required for critical production lines)
-- **Security event monitoring** (SIEM integration if required, intrusion detection systems)
-- **Corporate CA certificate management** (adding certificates for TLS inspection scenarios)
-- **Reading this documentation** - we provide secure software, you must deploy it securely
-
-**This aligns with cloud vendor models** - we secure the software, you secure the deployment environment.
-
-**For detailed OWASP/CIS compliance guidance**, see:
-- [OWASP Docker Security Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Docker_Security_Cheat_Sheet.html)
-- [CIS Docker Benchmark](https://www.cisecurity.org/benchmark/docker)
-- [Kubernetes Security Best Practices](https://kubernetes.io/docs/concepts/security/)
 
 ---
 

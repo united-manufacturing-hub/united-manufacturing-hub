@@ -18,7 +18,7 @@ Security scope:
 - Supply chain security (vulnerability scanning, dependencies)
 - Industrial protocol handling (OPC UA, Modbus, S7, MQTT)
 
-### ManagementConsole (Cloud/On-Premises Platform)
+### ManagementConsole (Cloud Platform)
 **Documentation**: `management-console/` (separate repository)
 
 Security scope:
