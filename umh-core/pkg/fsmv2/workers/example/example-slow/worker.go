@@ -85,7 +85,6 @@ func (w *SlowWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedSt
 	observed := snapshot.SlowObservedState{
 		ID:               w.identity.ID,
 		CollectedAt:      time.Now(),
-		ConnectionStatus: w.getConnectionStatus(),
 		ConnectionHealth: w.getConnectionHealth(),
 	}
 
@@ -120,14 +119,6 @@ func (w *SlowWorker) DeriveDesiredState(spec interface{}) (fsmv2types.DesiredSta
 
 func (w *SlowWorker) GetInitialState() fsmv2.State[any, any] {
 	return &state.StoppedState{}
-}
-
-func (w *SlowWorker) getConnectionStatus() string {
-	if w.connection != nil {
-		return "connected"
-	}
-
-	return "disconnected"
 }
 
 func (w *SlowWorker) getConnectionHealth() string {

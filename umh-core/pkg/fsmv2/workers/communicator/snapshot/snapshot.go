@@ -131,7 +131,9 @@ type CommunicatorObservedState struct {
 	CollectedAt time.Time
 
 	// DesiredState
-	CommunicatorDesiredState
+	CommunicatorDesiredState `json:",inline"`
+
+	State string `json:"state"` // Observed lifecycle state (e.g., "running_connected")
 
 	// Authentication
 	Authenticated bool

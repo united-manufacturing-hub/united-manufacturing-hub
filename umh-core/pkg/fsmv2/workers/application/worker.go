@@ -74,7 +74,7 @@ func (w *ApplicationWorker) CollectObservedState(ctx context.Context) (fsmv2.Obs
 		ID:          w.id,
 		CollectedAt: time.Now(),
 		Name:        w.name,
-		DeployedDesiredState: snapshot.ApplicationDesiredState{
+		ApplicationDesiredState: snapshot.ApplicationDesiredState{
 			Name: w.name,
 			// BaseDesiredState and ChildrenSpecs default to zero values
 		},

@@ -127,7 +127,6 @@ func (ae *ActionExecutor) worker() {
 					status = "timeout"
 
 					ae.logger.Errorw("action_failed",
-						"worker_id", ae.supervisorID,
 						"action", work.action.Name(),
 						"error", "timeout",
 						"duration_ms", duration.Milliseconds(),
@@ -136,7 +135,6 @@ func (ae *ActionExecutor) worker() {
 					status = "error"
 
 					ae.logger.Errorw("action_failed",
-						"worker_id", ae.supervisorID,
 						"action", work.action.Name(),
 						"error", err.Error(),
 						"duration_ms", duration.Milliseconds())
@@ -144,7 +142,6 @@ func (ae *ActionExecutor) worker() {
 			} else {
 				// Success logs at DEBUG - operators only need failures, not routine success
 				ae.logger.Debugw("action_completed",
-					"worker_id", ae.supervisorID,
 					"action", work.action.Name(),
 					"duration_ms", duration.Milliseconds(),
 					"success", true)

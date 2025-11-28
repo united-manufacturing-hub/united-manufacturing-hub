@@ -16,6 +16,7 @@ package state
 
 import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application/snapshot"
 )
@@ -29,6 +30,7 @@ type RunningState struct {
 
 func (s *RunningState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, fsmv2.Action[any]) {
 	snap := helpers.ConvertSnapshot[snapshot.ApplicationObservedState, *snapshot.ApplicationDesiredState](snapAny)
+	snap.Observed.State = config.MakeState(config.PrefixRunning, "managing")
 
 	if snap.Desired.IsShutdownRequested() {
 		return &StoppedState{}, fsmv2.SignalNone, nil

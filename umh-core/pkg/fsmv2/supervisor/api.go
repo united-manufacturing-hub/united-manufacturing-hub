@@ -125,16 +125,22 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity fsmv2.Identity, wor
 
 	s.logger.Debugw("initial_desired_state_saved")
 
+	// Create worker-enriched logger for collector and executor.
+	// CRITICAL: Use baseLogger (un-enriched) to prevent duplicate "worker" fields.
+	// Format: "workerID(workerType)/childID(childType)/..."
+	// Example: "scenario123(application)/parent-123(parent)/child001(child)"
+	workerLogger := s.baseLogger.With("worker", identity.HierarchyPath)
+
 	collector := collection.NewCollector[TObserved](collection.CollectorConfig[TObserved]{
 		Worker:              worker,
 		Identity:            identity,
 		Store:               s.store,
-		Logger:              s.logger,
+		Logger:              workerLogger,
 		ObservationInterval: DefaultObservationInterval,
 		ObservationTimeout:  s.collectorHealth.observationTimeout,
 	})
 
-	executor := execution.NewActionExecutor(10, identity.ID, s.logger)
+	executor := execution.NewActionExecutor(10, identity.ID, workerLogger)
 
 	s.workers[identity.ID] = &WorkerContext[TObserved, TDesired]{
 		mu:           s.lockManager.NewLock(lockNameWorkerContextMu, lockLevelWorkerContextMu),
@@ -145,13 +151,9 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity fsmv2.Identity, wor
 		executor:     executor,
 	}
 
-	// Enrich supervisor logger with worker path from Identity.
-	// CRITICAL: Use baseLogger (un-enriched) to prevent duplicate "worker" fields.
-	// Each entity creates its own logger from Identity.HierarchyPath - no inheritance.
-	// Format: "workerID(workerType)/childID(childType)/..."
-	// Example: "scenario123(application)/parent-123(parent)/child001(child)"
+	// Enrich supervisor's own logger with worker path from Identity.
 	if len(s.workers) == 1 && identity.HierarchyPath != "" {
-		s.logger = s.baseLogger.With("worker", identity.HierarchyPath)
+		s.logger = workerLogger
 	}
 
 	s.logger.Infow("worker_added")

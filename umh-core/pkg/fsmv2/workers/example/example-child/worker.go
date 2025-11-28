@@ -85,19 +85,16 @@ func (w *ChildWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedS
 	default:
 	}
 
-	// Get connection status from dependencies (updated by ConnectAction/DisconnectAction)
+	// Get connection health from dependencies (updated by ConnectAction/DisconnectAction)
 	deps := w.GetDependencies()
-	connectionStatus := "disconnected"
 	connectionHealth := "no connection"
 	if deps.IsConnected() {
-		connectionStatus = "connected"
 		connectionHealth = "healthy"
 	}
 
 	observed := snapshot.ChildObservedState{
 		ID:               w.identity.ID,
 		CollectedAt:      time.Now(),
-		ConnectionStatus: connectionStatus,
 		ConnectionHealth: connectionHealth,
 	}
 

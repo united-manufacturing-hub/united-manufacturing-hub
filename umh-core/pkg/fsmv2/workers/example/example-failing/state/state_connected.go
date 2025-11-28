@@ -16,6 +16,7 @@ package state
 
 import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/example-failing/snapshot"
 )
@@ -27,13 +28,14 @@ type ConnectedState struct {
 
 func (s *ConnectedState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, fsmv2.Action[any]) {
 	snap := helpers.ConvertSnapshot[snapshot.FailingObservedState, *snapshot.FailingDesiredState](snapAny)
+	snap.Observed.State = config.MakeState(config.PrefixRunning, "connected")
 
 	if snap.Desired.IsShutdownRequested() || !snap.Desired.ShouldBeRunning() {
 		return &TryingToStopState{}, fsmv2.SignalNone, nil
 	}
 
 	// Check if we lost the connection
-	if snap.Observed.ConnectionStatus != "connected" {
+	if snap.Observed.ConnectionHealth == "no connection" {
 		return &DisconnectedState{}, fsmv2.SignalNone, nil
 	}
 

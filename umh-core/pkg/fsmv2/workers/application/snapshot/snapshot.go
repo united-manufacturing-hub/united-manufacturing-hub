@@ -30,7 +30,9 @@ type ApplicationObservedState struct {
 	Name        string    `json:"name"`
 
 	// DeployedDesiredState is what was last deployed to this application.
-	DeployedDesiredState ApplicationDesiredState `json:"deployed_desired_state"`
+	ApplicationDesiredState `json:",inline"`
+
+	State string `json:"state"` // Observed lifecycle state (e.g., "running_connected")
 }
 
 // GetTimestamp returns the time when this observed state was collected.
@@ -40,7 +42,7 @@ func (o ApplicationObservedState) GetTimestamp() time.Time {
 
 // GetObservedDesiredState returns the desired state that was actually deployed.
 func (o ApplicationObservedState) GetObservedDesiredState() fsmv2.DesiredState {
-	return &o.DeployedDesiredState
+	return &o.ApplicationDesiredState
 }
 
 // ApplicationDesiredState represents the desired state for an application supervisor.

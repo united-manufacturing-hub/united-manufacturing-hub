@@ -153,8 +153,9 @@ func (ts *TriangularStore) saveWithDelta(
 			if !hasChanges {
 				// No business data changed
 				if opts.UpdateTimestampOnNoChange && existing != nil {
-					// Update _updated_at for staleness detection (observed state)
-					existing[FieldUpdatedAt] = time.Now().UnixMilli()
+					// Update CSE timestamp for staleness detection (observed state)
+					now := time.Now().UnixMilli()
+					existing[FieldUpdatedAt] = now
 
 					err = ts.store.Update(ctx, collectionName, id, existing)
 					if err != nil {
@@ -273,6 +274,7 @@ func (ts *TriangularStore) injectMetadataWithOptions(doc persistence.Document, o
 			doc[FieldVersion] = currentVersion + 1
 		}
 	}
+	// NOTE: collected_at is a business field set by FSM v2 workers, not injected by CSE.
 }
 
 // computeCreatedDiff creates a Diff representing document creation.

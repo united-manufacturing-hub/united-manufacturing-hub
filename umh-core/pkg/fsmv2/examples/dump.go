@@ -25,6 +25,15 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 )
 
+// ANSI color codes for terminal output.
+const (
+	colorReset  = "\033[0m"
+	colorGreen  = "\033[32m" // Added fields (+)
+	colorYellow = "\033[33m" // Modified fields (~)
+	colorRed    = "\033[31m" // Removed fields (-)
+	colorCyan   = "\033[36m" // Headers/metadata
+)
+
 // ScenarioDump captures the complete state and history of a scenario run.
 // It includes both the delta history (what changed) and final state (current values).
 type ScenarioDump struct {
@@ -148,19 +157,38 @@ func (d *ScenarioDump) FormatHuman() string {
 			i+1, ts, delta.WorkerType, delta.WorkerID, delta.Role))
 
 		if delta.Changes != nil {
-			// Added fields
-			for field, value := range delta.Changes.Added {
-				sb.WriteString(fmt.Sprintf("    + %s: %v\n", field, formatValue(value)))
+			// Sort and display Added fields (green)
+			var addedKeys []string
+			for field := range delta.Changes.Added {
+				addedKeys = append(addedKeys, field)
 			}
 
-			// Modified fields
-			for field, mod := range delta.Changes.Modified {
-				sb.WriteString(fmt.Sprintf("    ~ %s: %v → %v\n", field, formatValue(mod.Old), formatValue(mod.New)))
+			sort.Strings(addedKeys)
+
+			for _, field := range addedKeys {
+				sb.WriteString(fmt.Sprintf("    %s+%s %s: %v\n", colorGreen, colorReset, field, formatValue(delta.Changes.Added[field])))
 			}
 
-			// Removed fields
-			for _, field := range delta.Changes.Removed {
-				sb.WriteString(fmt.Sprintf("    - %s\n", field))
+			// Sort and display Modified fields (yellow)
+			var modifiedKeys []string
+			for field := range delta.Changes.Modified {
+				modifiedKeys = append(modifiedKeys, field)
+			}
+
+			sort.Strings(modifiedKeys)
+
+			for _, field := range modifiedKeys {
+				mod := delta.Changes.Modified[field]
+				sb.WriteString(fmt.Sprintf("    %s~%s %s: %v → %v\n", colorYellow, colorReset, field, formatValue(mod.Old), formatValue(mod.New)))
+			}
+
+			// Sort and display Removed fields (red)
+			sortedRemoved := make([]string, len(delta.Changes.Removed))
+			copy(sortedRemoved, delta.Changes.Removed)
+			sort.Strings(sortedRemoved)
+
+			for _, field := range sortedRemoved {
+				sb.WriteString(fmt.Sprintf("    %s-%s %s\n", colorRed, colorReset, field))
 			}
 		}
 

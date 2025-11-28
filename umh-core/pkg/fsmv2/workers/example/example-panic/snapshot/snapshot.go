@@ -45,13 +45,20 @@ func (s *PanicDesiredState) IsShouldPanic() bool {
 	return s.ShouldPanic
 }
 
+// InjectDependencies implements fsmv2.DependencyInjector.
+func (s *PanicDesiredState) InjectDependencies(deps any) {
+	if typedDeps, ok := deps.(PanicDependencies); ok {
+		s.Dependencies = typedDeps
+	}
+}
+
 type PanicObservedState struct {
 	ID          string    `json:"id"`
 	CollectedAt time.Time `json:"collected_at"`
 
-	PanicDesiredState
+	PanicDesiredState `json:",inline"`
 
-	ConnectionStatus string `json:"connection_status"`
+	State            string `json:"state"` // Observed lifecycle state (e.g., "running_connected")
 	LastError        error  `json:"last_error,omitempty"`
 	ConnectAttempts  int    `json:"connect_attempts"`
 	ConnectionHealth string `json:"connection_health"`

@@ -61,10 +61,12 @@ func checkObservedStateTimestamp(filename string) []Violation {
 
 		// Check for CollectedAt field
 		hasCollectedAt := false
+
 		for _, field := range structType.Fields.List {
 			for _, name := range field.Names {
 				if name.Name == "CollectedAt" {
 					hasCollectedAt = true
+
 					break
 				}
 			}
@@ -120,6 +122,7 @@ func checkDesiredStateShutdownMethod(filename string) []Violation {
 
 	// Collect all DesiredState types with embedding info
 	desiredStateTypes := make(map[string]desiredStateInfo)
+
 	ast.Inspect(node, func(n ast.Node) bool {
 		typeSpec, ok := n.(*ast.TypeSpec)
 		if !ok || !strings.Contains(typeSpec.Name.Name, "DesiredState") {
@@ -136,6 +139,7 @@ func checkDesiredStateShutdownMethod(filename string) []Violation {
 					embedName := getEmbeddedTypeName(field.Type)
 					if strings.Contains(embedName, "BaseDesiredState") {
 						info.embedsBaseDesired = true
+
 						break
 					}
 				}
@@ -148,17 +152,20 @@ func checkDesiredStateShutdownMethod(filename string) []Violation {
 
 	// Collect all types that have IsShutdownRequested method declared explicitly
 	typesWithMethod := make(map[string]bool)
+
 	ast.Inspect(node, func(n ast.Node) bool {
 		funcDecl, ok := n.(*ast.FuncDecl)
 		if !ok || funcDecl.Name.Name != "IsShutdownRequested" {
 			return true
 		}
+
 		if funcDecl.Recv == nil || len(funcDecl.Recv.List) == 0 {
 			return true
 		}
 
 		// Get receiver type name
 		var typeName string
+
 		switch recvType := funcDecl.Recv.List[0].Type.(type) {
 		case *ast.StarExpr:
 			if ident, ok := recvType.X.(*ast.Ident); ok {
@@ -202,4 +209,281 @@ func getEmbeddedTypeName(expr ast.Expr) string {
 		}
 	}
 	return ""
+}
+
+// ValidateObservedStateEmbedsDesired checks that ObservedState structs embed their DesiredState with json:",inline" tag.
+func ValidateObservedStateEmbedsDesired(baseDir string) []Violation {
+	var violations []Violation
+
+	snapshotFiles := FindSnapshotFiles(baseDir)
+
+	for _, file := range snapshotFiles {
+		fileViolations := checkObservedStateEmbedsDesired(file)
+		violations = append(violations, fileViolations...)
+	}
+
+	return violations
+}
+
+// checkObservedStateEmbedsDesired parses a snapshot file and checks that ObservedState structs
+// embed their corresponding DesiredState type anonymously with json:",inline" tag.
+func checkObservedStateEmbedsDesired(filename string) []Violation {
+	var violations []Violation
+
+	fset := token.NewFileSet()
+
+	node, err := parser.ParseFile(fset, filename, nil, parser.ParseComments)
+	if err != nil {
+		return violations
+	}
+
+	// Look for structs with "ObservedState" in the name
+	ast.Inspect(node, func(n ast.Node) bool {
+		typeSpec, ok := n.(*ast.TypeSpec)
+		if !ok || !strings.Contains(typeSpec.Name.Name, "ObservedState") {
+			return true
+		}
+
+		structType, ok := typeSpec.Type.(*ast.StructType)
+		if !ok {
+			return true
+		}
+
+		// Check for embedded DesiredState field
+		hasEmbeddedDesired := false
+		hasInlineTag := false
+
+		var embeddedFieldPos token.Pos
+
+		for _, field := range structType.Fields.List {
+			// Anonymous/embedded fields have no names
+			if len(field.Names) == 0 {
+				embedName := getEmbeddedTypeName(field.Type)
+				if strings.Contains(embedName, "DesiredState") {
+					hasEmbeddedDesired = true
+					embeddedFieldPos = field.Pos()
+
+					// Check for json:",inline" tag
+					if field.Tag != nil {
+						tagValue := field.Tag.Value
+						// Tag value includes quotes, e.g., `json:"field_name"`
+						if strings.Contains(tagValue, `json:`) && strings.Contains(tagValue, `,inline`) {
+							hasInlineTag = true
+						}
+					}
+
+					break
+				}
+			}
+
+			// Also check for named DesiredState field (which is WRONG)
+			for _, name := range field.Names {
+				if strings.Contains(name.Name, "DesiredState") {
+					pos := fset.Position(field.Pos())
+					violations = append(violations, Violation{
+						File:    filename,
+						Line:    pos.Line,
+						Type:    "OBSERVED_STATE_NOT_EMBEDDING_DESIRED",
+						Message: fmt.Sprintf("ObservedState %s has named field %s - should embed anonymously with json:\",inline\" tag", typeSpec.Name.Name, name.Name),
+					})
+					return true
+				}
+			}
+		}
+
+		if !hasEmbeddedDesired {
+			pos := fset.Position(typeSpec.Pos())
+			violations = append(violations, Violation{
+				File:    filename,
+				Line:    pos.Line,
+				Type:    "OBSERVED_STATE_NOT_EMBEDDING_DESIRED",
+				Message: fmt.Sprintf("ObservedState %s missing embedded DesiredState - should embed anonymously with json:\",inline\" tag", typeSpec.Name.Name),
+			})
+		} else if !hasInlineTag {
+			pos := fset.Position(embeddedFieldPos)
+			violations = append(violations, Violation{
+				File:    filename,
+				Line:    pos.Line,
+				Type:    "OBSERVED_STATE_NOT_EMBEDDING_DESIRED",
+				Message: fmt.Sprintf("ObservedState %s embeds DesiredState but missing json:\",inline\" tag", typeSpec.Name.Name),
+			})
+		}
+
+		return true
+	})
+
+	return violations
+}
+
+// ValidateStateFieldExists checks that both DesiredState and ObservedState have a State string field.
+func ValidateStateFieldExists(baseDir string) []Violation {
+	var violations []Violation
+
+	snapshotFiles := FindSnapshotFiles(baseDir)
+
+	for _, file := range snapshotFiles {
+		fileViolations := checkStateFieldExists(file)
+		violations = append(violations, fileViolations...)
+	}
+
+	return violations
+}
+
+// checkStateFieldExists parses a snapshot file and checks for State string field in both
+// DesiredState and ObservedState structs.
+// For DesiredState structs, State is inherited from embedded BaseDesiredState.
+// For ObservedState structs, State must be an explicit field (not inherited from DesiredState).
+func checkStateFieldExists(filename string) []Violation {
+	var violations []Violation
+
+	fset := token.NewFileSet()
+
+	node, err := parser.ParseFile(fset, filename, nil, parser.ParseComments)
+	if err != nil {
+		return violations
+	}
+
+	// Look for structs with "DesiredState" or "ObservedState" in the name
+	ast.Inspect(node, func(n ast.Node) bool {
+		typeSpec, ok := n.(*ast.TypeSpec)
+		if !ok {
+			return true
+		}
+
+		isDesiredState := strings.Contains(typeSpec.Name.Name, "DesiredState")
+		isObservedState := strings.Contains(typeSpec.Name.Name, "ObservedState")
+
+		if !isDesiredState && !isObservedState {
+			return true
+		}
+
+		structType, ok := typeSpec.Type.(*ast.StructType)
+		if !ok {
+			return true
+		}
+
+		// Check for State string field (explicit or inherited)
+		hasStateField := false
+		embedsBaseDesiredState := false
+
+		for _, field := range structType.Fields.List {
+			// Check for explicit State field
+			for _, name := range field.Names {
+				if name.Name == "State" {
+					// Verify it's a string type
+					if ident, ok := field.Type.(*ast.Ident); ok && ident.Name == "string" {
+						hasStateField = true
+
+						break
+					}
+				}
+			}
+
+			// Check for embedded BaseDesiredState (anonymous field)
+			if len(field.Names) == 0 {
+				embedName := getEmbeddedTypeName(field.Type)
+				if strings.Contains(embedName, "BaseDesiredState") {
+					embedsBaseDesiredState = true
+				}
+			}
+		}
+
+		// For DesiredState structs, State is inherited from BaseDesiredState
+		if isDesiredState && embedsBaseDesiredState {
+			hasStateField = true
+		}
+
+		// For ObservedState, State must be explicit (not inherited from embedded DesiredState)
+		// because the ObservedState.State has different semantics (lifecycle state)
+
+		if !hasStateField {
+			pos := fset.Position(typeSpec.Pos())
+			violations = append(violations, Violation{
+				File:    filename,
+				Line:    pos.Line,
+				Type:    "MISSING_STATE_FIELD",
+				Message: typeSpec.Name.Name + " missing State string field",
+			})
+		}
+
+		return true
+	})
+
+	return violations
+}
+
+// ValidateDesiredStateValues checks that DesiredState.State field only contains "stopped" or "running".
+func ValidateDesiredStateValues(baseDir string) []Violation {
+	var violations []Violation
+
+	snapshotFiles := FindSnapshotFiles(baseDir)
+
+	for _, file := range snapshotFiles {
+		fileViolations := checkDesiredStateValues(file)
+		violations = append(violations, fileViolations...)
+	}
+
+	return violations
+}
+
+// checkDesiredStateValues parses a snapshot file and checks that DesiredState.State field
+// is only assigned "stopped" or "running" values. This is a simpler check that looks for
+// string literal assignments to the State field.
+func checkDesiredStateValues(filename string) []Violation {
+	var violations []Violation
+
+	fset := token.NewFileSet()
+
+	node, err := parser.ParseFile(fset, filename, nil, parser.ParseComments)
+	if err != nil {
+		return violations
+	}
+
+	// Track DesiredState type names
+	desiredStateTypes := make(map[string]bool)
+	ast.Inspect(node, func(n ast.Node) bool {
+		typeSpec, ok := n.(*ast.TypeSpec)
+		if ok && strings.Contains(typeSpec.Name.Name, "DesiredState") {
+			desiredStateTypes[typeSpec.Name.Name] = true
+		}
+		return true
+	})
+
+	// Look for assignments to .State field on DesiredState types
+	ast.Inspect(node, func(n ast.Node) bool {
+		assignStmt, ok := n.(*ast.AssignStmt)
+		if !ok {
+			return true
+		}
+
+		for i, lhs := range assignStmt.Lhs {
+			selectorExpr, ok := lhs.(*ast.SelectorExpr)
+			if !ok || selectorExpr.Sel.Name != "State" {
+				continue
+			}
+
+			// Check if RHS is a string literal
+			if i >= len(assignStmt.Rhs) {
+				continue
+			}
+
+			rhs := assignStmt.Rhs[i]
+			if basicLit, ok := rhs.(*ast.BasicLit); ok && basicLit.Kind == token.STRING {
+				value := strings.Trim(basicLit.Value, `"`)
+				if value != "stopped" && value != "running" {
+					pos := fset.Position(assignStmt.Pos())
+					violations = append(violations, Violation{
+						File:    filename,
+						Line:    pos.Line,
+						Type:    "INVALID_DESIRED_STATE_VALUE",
+						Message: fmt.Sprintf("DesiredState.State assigned invalid value %q - should be \"stopped\" or \"running\"", value),
+					})
+				}
+			}
+		}
+
+		return true
+	})
+
+	return violations
 }

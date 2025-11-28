@@ -114,6 +114,15 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 		return fmt.Errorf("failed to load typed desired state: %w", err)
 	}
 
+	// Inject dependencies into desired state if both worker and desired state support it
+	// Dependencies (interfaces) can't be serialized, so they must be injected at runtime
+	if provider, ok := workerCtx.worker.(fsmv2.DependencyProvider); ok {
+		deps := provider.GetDependenciesAny()
+		if injector, ok := any(desired).(fsmv2.DependencyInjector); ok {
+			injector.InjectDependencies(deps)
+		}
+	}
+
 	// Build snapshot with typed states
 	snapshot := &fsmv2.Snapshot{
 		Identity: fsmv2.Identity{
@@ -658,7 +667,7 @@ func (s *Supervisor[TObserved, TDesired]) processSignal(ctx context.Context, wor
 		// Normal operation
 		return nil
 	case fsmv2.SignalNeedsRemoval:
-		s.logger.Infow("worker_removal_signaled")
+		s.logger.Debugw("worker_removal_signaled")
 
 		s.mu.Lock()
 
@@ -747,7 +756,7 @@ func (s *Supervisor[TObserved, TDesired]) processSignal(ctx context.Context, wor
 		workerCtx.collector.Stop(ctx)
 		workerCtx.executor.Shutdown()
 
-		s.logger.Infow("worker_removed_successfully",
+		s.logger.Debugw("worker_removed_successfully",
 			"children_cleaned", childCount)
 
 		return nil
@@ -1077,7 +1086,7 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 				"child_name", name,
 				"parent_worker_type", s.workerType)
 
-			s.logger.Infow("child_shutdown_requesting",
+			s.logger.Debugw("child_shutdown_requesting",
 				"child_name", name)
 
 			// Mark child as pending removal
@@ -1113,7 +1122,7 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 				"child_name", name,
 				"parent_worker_type", s.workerType)
 
-			s.logger.Infow("child_shutdown_complete",
+			s.logger.Debugw("child_shutdown_complete",
 				"child_name", name)
 
 			// Now safe to fully shut down and remove
@@ -1135,10 +1144,10 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 	}
 
 	duration := time.Since(startTime)
-	// Log at INFO when topology changes (add/remove), DEBUG for updates only
+	// Log at DEBUG for all reconciliation completions
 	if addedCount > 0 || removedCount > 0 {
-		// Topology changed - INFO level for operators
-		s.logger.Infow("child_reconciliation_completed",
+		// Topology changed
+		s.logger.Debugw("child_reconciliation_completed",
 			"added", addedCount,
 			"updated", updatedCount,
 			"removed", removedCount,

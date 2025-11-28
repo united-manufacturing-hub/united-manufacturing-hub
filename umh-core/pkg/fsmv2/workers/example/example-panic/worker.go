@@ -85,7 +85,6 @@ func (w *PanicWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedS
 	observed := snapshot.PanicObservedState{
 		ID:               w.identity.ID,
 		CollectedAt:      time.Now(),
-		ConnectionStatus: w.getConnectionStatus(),
 		ConnectionHealth: w.getConnectionHealth(),
 	}
 
@@ -120,14 +119,6 @@ func (w *PanicWorker) DeriveDesiredState(spec interface{}) (fsmv2types.DesiredSt
 
 func (w *PanicWorker) GetInitialState() fsmv2.State[any, any] {
 	return &state.StoppedState{}
-}
-
-func (w *PanicWorker) getConnectionStatus() string {
-	if w.connection != nil {
-		return "connected"
-	}
-
-	return "disconnected"
 }
 
 func (w *PanicWorker) getConnectionHealth() string {

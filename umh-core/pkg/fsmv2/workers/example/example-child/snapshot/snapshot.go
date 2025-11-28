@@ -52,14 +52,23 @@ func (s *ChildDesiredState) ShouldBeRunning() bool {
 	return !s.ShutdownRequested
 }
 
+// InjectDependencies implements fsmv2.DependencyInjector.
+// This is called by the supervisor after loading the desired state from storage
+// to inject runtime dependencies that cannot be serialized.
+func (s *ChildDesiredState) InjectDependencies(deps any) {
+	if typedDeps, ok := deps.(ChildDependencies); ok {
+		s.Dependencies = typedDeps
+	}
+}
+
 // ChildObservedState represents the current state of the child worker.
 type ChildObservedState struct {
 	ID          string    `json:"id"`
 	CollectedAt time.Time `json:"collected_at"`
 
-	ChildDesiredState
+	ChildDesiredState `json:",inline"`
 
-	ConnectionStatus string `json:"connection_status"`
+	State            string `json:"state"` // Observed lifecycle state (e.g., "running_connected")
 	LastError        error  `json:"last_error,omitempty"`
 	ConnectAttempts  int    `json:"connect_attempts"`
 	ConnectionHealth string `json:"connection_health"`

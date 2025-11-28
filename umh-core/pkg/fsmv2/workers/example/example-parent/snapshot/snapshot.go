@@ -46,10 +46,11 @@ type ParentObservedState struct {
 	ID          string    `json:"id"`
 	CollectedAt time.Time `json:"collected_at"`
 
-	ParentDesiredState
+	ParentDesiredState `json:",inline"`
 
-	ChildrenHealthy   int `json:"children_healthy"`
-	ChildrenUnhealthy int `json:"children_unhealthy"`
+	State             string `json:"state"` // Observed lifecycle state (e.g., "running_connected")
+	ChildrenHealthy   int    `json:"children_healthy"`
+	ChildrenUnhealthy int    `json:"children_unhealthy"`
 }
 
 func (o ParentObservedState) GetTimestamp() time.Time {

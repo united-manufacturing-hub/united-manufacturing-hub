@@ -16,6 +16,7 @@ package state
 
 import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/action"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/snapshot"
 )
@@ -83,6 +84,7 @@ type TryingToAuthenticateState struct {
 }
 
 func (s *TryingToAuthenticateState) Next(snapshot snapshot.CommunicatorSnapshot) (BaseCommunicatorState, fsmv2.Signal, fsmv2.Action[any]) {
+	snapshot.Observed.State = config.MakeState(config.PrefixTryingToStart, "authentication")
 	desired := snapshot.Desired
 	observed := snapshot.Observed
 

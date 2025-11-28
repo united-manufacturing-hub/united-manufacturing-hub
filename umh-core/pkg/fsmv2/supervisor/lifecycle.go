@@ -86,7 +86,7 @@ func (s *Supervisor[TObserved, TDesired]) tickLoop(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			s.logger.Infow("tick_loop_stopped")
+			s.logger.Debugw("tick_loop_stopped")
 
 			return
 		case <-ticker.C:
@@ -170,7 +170,7 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 	// before cancelling our context, children can still tick and process their
 	// graceful shutdown (FSM transitions, disconnect actions, emit SignalNeedsRemoval).
 	if len(childrenToShutdown) > 0 {
-		s.logger.Infow("graceful_shutdown_children_starting",
+		s.logger.Debugw("graceful_shutdown_children_starting",
 			"child_count", len(childrenToShutdown))
 
 		for childName, child := range childrenToShutdown {
@@ -203,14 +203,14 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 				"parent_worker_type", s.workerType)
 		}
 
-		s.logger.Infow("graceful_shutdown_children_complete")
+		s.logger.Debugw("graceful_shutdown_children_complete")
 	}
 
 	// GRACEFUL SHUTDOWN PHASE 2: Request graceful shutdown on OWN workers
 	// Now that children are done, handle our own workers.
 	// The tick loop is still running, so workers can process their state machines.
 	if len(workerIDs) > 0 {
-		s.logger.Infow("graceful_shutdown_workers_starting",
+		s.logger.Debugw("graceful_shutdown_workers_starting",
 			"worker_count", len(workerIDs))
 
 		// Request graceful shutdown on all workers
@@ -239,7 +239,7 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 				s.mu.RUnlock()
 
 				if remaining == 0 {
-					s.logger.Infow("graceful_shutdown_workers_removed")
+					s.logger.Debugw("graceful_shutdown_workers_removed")
 					break gracefulWaitLoop
 				}
 			}
@@ -378,7 +378,7 @@ func (s *Supervisor[TObserved, TDesired]) logTrace(msg string, fields ...interfa
 }
 
 func (s *Supervisor[TObserved, TDesired]) requestShutdown(ctx context.Context, workerID string, reason string) error {
-	s.logger.Warnw("shutdown_requested", "reason", reason)
+	s.logger.Infow("shutdown_requested", "reason", reason)
 
 	s.mu.RLock()
 	_, exists := s.workers[workerID]

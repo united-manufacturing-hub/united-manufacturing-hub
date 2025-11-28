@@ -204,6 +204,39 @@ var _ = Describe("FSMv2 Architecture Validation", func() {
 
 	Context("🟡 PHASE 2: Additional Architectural Patterns", func() {
 
+		Describe("ObservedState Embeds DesiredState (Invariant: State Consistency)", func() {
+			It("should embed DesiredState anonymously with json:\",inline\" tag", func() {
+				violations := validator.ValidateObservedStateEmbedsDesired(getFsmv2Dir())
+
+				if len(violations) > 0 {
+					message := validator.FormatViolationsWithPattern("ObservedState Embedding Violations", violations, "OBSERVED_STATE_NOT_EMBEDDING_DESIRED")
+					Fail(message)
+				}
+			})
+		})
+
+		Describe("State Field Exists (Invariant: FSM State Tracking)", func() {
+			It("should have State string field in both DesiredState and ObservedState", func() {
+				violations := validator.ValidateStateFieldExists(getFsmv2Dir())
+
+				if len(violations) > 0 {
+					message := validator.FormatViolationsWithPattern("State Field Violations", violations, "MISSING_STATE_FIELD")
+					Fail(message)
+				}
+			})
+		})
+
+		Describe("DesiredState.State Values (Invariant: Valid Lifecycle States)", func() {
+			It("should only use \"stopped\" or \"running\" as values", func() {
+				violations := validator.ValidateDesiredStateValues(getFsmv2Dir())
+
+				if len(violations) > 0 {
+					message := validator.FormatViolationsWithPattern("Invalid State Value Violations", violations, "INVALID_DESIRED_STATE_VALUE")
+					Fail(message)
+				}
+			})
+		})
+
 		Describe("TryingTo States Return Actions (Invariant: Active State Semantics)", func() {
 			It("should return non-nil actions in at least one code path", func() {
 				violations := validator.ValidateTryingToStatesReturnActions(getFsmv2Dir())

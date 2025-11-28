@@ -46,9 +46,9 @@ type SlowObservedState struct {
 	ID          string    `json:"id"`
 	CollectedAt time.Time `json:"collected_at"`
 
-	SlowDesiredState
+	SlowDesiredState `json:",inline"`
 
-	ConnectionStatus string `json:"connection_status"`
+	State            string `json:"state"` // Observed lifecycle state (e.g., "running_connected")
 	LastError        error  `json:"last_error,omitempty"`
 	ConnectAttempts  int    `json:"connect_attempts"`
 	ConnectionHealth string `json:"connection_health"`

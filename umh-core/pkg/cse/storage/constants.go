@@ -101,6 +101,7 @@ var DesiredCSEFields = []string{
 // Observed CSE fields (system reality, frequently updated)
 // WARNING: This slice is exported for read-only access. DO NOT MODIFY.
 // Modifying this slice will break CSE metadata conventions across the system.
+// NOTE: collected_at is NOT a CSE field - it's a business field set by FSM v2 workers.
 var ObservedCSEFields = []string{
 	FieldSyncID,    // Global sync version
 	FieldVersion,   // Increments on each update

@@ -42,15 +42,19 @@ func NewFreshnessChecker(staleThreshold, timeout time.Duration, logger *zap.Suga
 // extractTimestamp extracts the collection timestamp from snapshot.Observed.
 // Returns (timestamp, true) if extraction succeeds, (zero, false) otherwise.
 // Handles both GetTimestamp() interface and persistence.Document formats.
+//
+// NOTE: collected_at is a business field set by FSM v2 workers, not a CSE field.
 func (f *FreshnessChecker) extractTimestamp(snapshot *fsmv2.Snapshot) (time.Time, bool) {
 	if snapshot.Observed == nil {
 		return time.Time{}, false
 	}
 
+	// Prefer typed interface (returns struct's CollectedAt field)
 	if timestampProvider, ok := snapshot.Observed.(interface{ GetTimestamp() time.Time }); ok {
 		return timestampProvider.GetTimestamp(), true
 	}
 
+	// Fall back to Document lookup for raw document access
 	doc, ok := snapshot.Observed.(persistence.Document)
 	if !ok {
 		f.logger.Warnw("observed_state_type_unknown",
@@ -61,7 +65,8 @@ func (f *FreshnessChecker) extractTimestamp(snapshot *fsmv2.Snapshot) (time.Time
 		return time.Time{}, false
 	}
 
-	ts, exists := doc["collectedAt"]
+	// Check collected_at field (JSON-serialized from struct's CollectedAt)
+	ts, exists := doc["collected_at"]
 	if !exists {
 		f.logger.Warnw("observed_state_missing_timestamp",
 			"identity", snapshot.Identity,
@@ -70,29 +75,33 @@ func (f *FreshnessChecker) extractTimestamp(snapshot *fsmv2.Snapshot) (time.Time
 		return time.Time{}, false
 	}
 
-	if timestamp, ok := ts.(time.Time); ok {
-		return timestamp, true
-	}
-
-	if timeStr, ok := ts.(string); ok {
-		collectedAt, err := time.Parse(time.RFC3339Nano, timeStr)
+	switch v := ts.(type) {
+	case time.Time:
+		return v, true
+	case int64:
+		return time.UnixMilli(v), true
+	case float64:
+		return time.UnixMilli(int64(v)), true
+	case string:
+		collectedAt, err := time.Parse(time.RFC3339Nano, v)
 		if err != nil {
-			f.logger.Warnw("observed_state_timestamp_parse_error",
+			f.logger.Warnw("observed_state_invalid_timestamp",
 				"identity", snapshot.Identity,
-				"value", timeStr,
-				"error", err)
+				"value", v,
+				"action", "assuming_fresh")
 
 			return time.Time{}, false
 		}
 
 		return collectedAt, true
+	default:
+		f.logger.Warnw("observed_state_unknown_timestamp_type",
+			"identity", snapshot.Identity,
+			"type", fmt.Sprintf("%T", v),
+			"action", "assuming_fresh")
+
+		return time.Time{}, false
 	}
-
-	f.logger.Warnw("observed_state_timestamp_invalid_type",
-		"identity", snapshot.Identity,
-		"type", fmt.Sprintf("%T", ts))
-
-	return time.Time{}, false
 }
 
 // Check validates observation freshness.

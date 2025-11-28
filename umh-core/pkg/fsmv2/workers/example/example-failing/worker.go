@@ -88,7 +88,6 @@ func (w *FailingWorker) CollectObservedState(ctx context.Context) (fsmv2.Observe
 	observed := snapshot.FailingObservedState{
 		ID:               w.identity.ID,
 		CollectedAt:      time.Now(),
-		ConnectionStatus: w.getConnectionStatus(),
 		ConnectionHealth: w.getConnectionHealth(),
 	}
 
@@ -126,14 +125,6 @@ func (w *FailingWorker) DeriveDesiredState(spec interface{}) (fsmv2types.Desired
 // GetInitialState returns the state the FSM should start in.
 func (w *FailingWorker) GetInitialState() fsmv2.State[any, any] {
 	return &state.StoppedState{}
-}
-
-func (w *FailingWorker) getConnectionStatus() string {
-	if w.connection != nil {
-		return "connected"
-	}
-
-	return "disconnected"
 }
 
 func (w *FailingWorker) getConnectionHealth() string {

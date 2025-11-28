@@ -76,6 +76,9 @@ var _ = Describe("Simple Scenario Integration", func() {
 
 		By("Verifying shutdown order: children stop before parent")
 		verifyShutdownOrder(testLogger)
+
+		By("Verifying all logs have worker field")
+		verifyAllLogsHaveWorkerField(testLogger)
 	})
 })
 
@@ -175,6 +178,21 @@ func verifyShutdownOrder(t *integration.TestLogger) {
 
 	GinkgoWriter.Printf("✓ Tick loops started for workers (count: %d, types: %v)\n",
 		len(tickLoopStartedLogs), workerTypes)
+}
+
+func verifyAllLogsHaveWorkerField(t *integration.TestLogger) {
+	logsMissingWorker := t.GetLogsMissingField("worker")
+
+	if len(logsMissingWorker) > 0 {
+		var messages []string
+		for _, entry := range logsMissingWorker {
+			messages = append(messages, entry.Message)
+		}
+		Fail(fmt.Sprintf("Found %d log entries missing 'worker' field: %v",
+			len(logsMissingWorker), messages))
+	}
+
+	GinkgoWriter.Printf("✓ All logs have 'worker' field\n")
 }
 
 func setupTestStoreForScenario(logger *zap.SugaredLogger) storage.TriangularStoreInterface {

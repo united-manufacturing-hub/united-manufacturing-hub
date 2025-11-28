@@ -32,8 +32,8 @@ func TestChildObservedState_GetTimestamp(t *testing.T) {
 
 func TestChildObservedState_GetObservedDesiredState(t *testing.T) {
 	observed := ChildObservedState{
-		CollectedAt:      time.Now(),
-		ConnectionStatus: "connected",
+		CollectedAt: time.Now(),
+		State:       "running_connected",
 	}
 
 	desired := observed.GetObservedDesiredState()

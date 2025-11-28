@@ -146,5 +146,31 @@ func (tl *TestLogger) GetLogsWithFieldContaining(key, valueSubstring string) []o
 			}
 		}
 	}
+
 	return matching
+}
+
+// GetLogsMissingField returns all log entries that are missing the specified field.
+// Useful for verifying that all logs have required context fields like "worker".
+func (tl *TestLogger) GetLogsMissingField(key string) []observer.LoggedEntry {
+	tl.mu.RLock()
+	defer tl.mu.RUnlock()
+
+	var missing []observer.LoggedEntry
+	entries := tl.Logs.All()
+
+	for _, entry := range entries {
+		hasField := false
+		for _, field := range entry.Context {
+			if field.Key == key {
+				hasField = true
+				break
+			}
+		}
+		if !hasField {
+			missing = append(missing, entry)
+		}
+	}
+
+	return missing
 }

@@ -139,16 +139,13 @@ func (c *Collector[TObserved]) Restart() {
 		return
 	}
 
-	c.config.Logger.Infow("collector_restart_requested",
-		"worker_id", c.config.Identity.ID)
+	c.config.Logger.Infow("collector_restart_requested")
 
 	select {
 	case c.restartChan <- struct{}{}:
-		c.config.Logger.Debugw("collector_restart_signal_sent",
-			"worker_id", c.config.Identity.ID)
+		c.config.Logger.Debugw("collector_restart_signal_sent")
 	default:
-		c.config.Logger.Debugw("collector_restart_already_pending",
-			"worker_id", c.config.Identity.ID)
+		c.config.Logger.Debugw("collector_restart_already_pending")
 	}
 }
 
@@ -164,24 +161,20 @@ func (c *Collector[TObserved]) Stop(ctx context.Context) {
 		return
 	}
 
-	c.config.Logger.Infow("collector_stopping",
-		"worker_id", c.config.Identity.ID)
+	c.config.Logger.Debugw("collector_stopping")
 	c.cancel()
 	doneChan := c.goroutineDone
 	c.mu.Unlock()
 
 	select {
 	case <-doneChan:
-		c.config.Logger.Infow("collector_stopped",
-			"worker_id", c.config.Identity.ID,
+		c.config.Logger.Debugw("collector_stopped",
 			"result", "success")
 	case <-ctx.Done():
 		c.config.Logger.Warnw("collector_stopped",
-			"worker_id", c.config.Identity.ID,
 			"result", "context_cancelled")
 	case <-time.After(5 * time.Second):
 		c.config.Logger.Errorw("collector_stopped",
-			"worker_id", c.config.Identity.ID,
 			"result", "timeout")
 	}
 }
@@ -193,8 +186,7 @@ func (c *Collector[TObserved]) observationLoop() {
 		c.running = false
 		close(c.goroutineDone)
 		c.mu.Unlock()
-		c.config.Logger.Infow("collector_loop_stopped",
-			"worker_id", c.config.Identity.ID,
+		c.config.Logger.Debugw("collector_loop_stopped",
 			"final_state", c.state.String())
 	}()
 
@@ -205,7 +197,6 @@ func (c *Collector[TObserved]) observationLoop() {
 	c.mu.RUnlock()
 
 	c.config.Logger.Infow("collector_loop_starting",
-		"worker_id", c.config.Identity.ID,
 		"interval", interval.String(),
 		"timeout", timeout.String())
 
@@ -215,19 +206,16 @@ func (c *Collector[TObserved]) observationLoop() {
 	for {
 		select {
 		case <-ctx.Done():
-			c.config.Logger.Infow("collector_loop_context_done",
-				"worker_id", c.config.Identity.ID)
+			c.config.Logger.Debugw("collector_loop_context_done")
 
 			return
 
 		case <-c.restartChan:
-			c.config.Logger.Debugw("collector_restart_triggered",
-				"worker_id", c.config.Identity.ID)
+			c.config.Logger.Debugw("collector_restart_triggered")
 
 			collectCtx, cancel := context.WithTimeout(ctx, timeout)
 			if err := c.collectAndSaveObservedState(collectCtx); err != nil {
 				c.config.Logger.Errorw("collector_observation_failed",
-					"worker_id", c.config.Identity.ID,
 					"trigger", "restart",
 					"error", err)
 			}
@@ -238,7 +226,6 @@ func (c *Collector[TObserved]) observationLoop() {
 			collectCtx, cancel := context.WithTimeout(ctx, timeout)
 			if err := c.collectAndSaveObservedState(collectCtx); err != nil {
 				c.config.Logger.Errorw("collector_observation_failed",
-					"worker_id", c.config.Identity.ID,
 					"trigger", "ticker",
 					"error", err)
 			}
@@ -258,7 +245,6 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 	if err != nil {
 		// Keep error logs at DEBUG for debugging
 		c.config.Logger.Debugw("collector_collect_failed",
-			"worker_id", c.config.Identity.ID,
 			"error", err)
 
 		return err
@@ -283,7 +269,6 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 	observedTyped, ok := observed.(TObserved)
 	if !ok {
 		c.config.Logger.Errorw("collector_type_mismatch",
-			"worker_id", c.config.Identity.ID,
 			"expected_type", fmt.Sprintf("%T", *new(TObserved)),
 			"actual_type", fmt.Sprintf("%T", observed))
 
@@ -294,7 +279,6 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 	ts, ok := c.config.Store.(*storage.TriangularStore)
 	if !ok {
 		c.config.Logger.Errorw("collector_store_type_mismatch",
-			"worker_id", c.config.Identity.ID,
 			"expected_type", "*storage.TriangularStore",
 			"actual_type", fmt.Sprintf("%T", c.config.Store))
 
@@ -304,7 +288,6 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 	changed, err := storage.SaveObservedTyped[TObserved](ts, ctx, c.config.Identity.ID, observedTyped)
 	if err != nil {
 		c.config.Logger.Debugw("collector_save_failed",
-			"worker_id", c.config.Identity.ID,
 			"error", err)
 
 		return err

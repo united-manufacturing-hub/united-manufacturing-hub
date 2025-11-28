@@ -269,6 +269,7 @@ func NewSupervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState](c
 	}
 
 	cfg.Logger.Infow("timeout_configuration",
+		"worker", cfg.WorkerType,
 		"observation_timeout", observationTimeout,
 		"stale_threshold", staleThreshold,
 		"collector_timeout", timeout)

@@ -16,6 +16,7 @@ package state
 
 import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/example-failing/action"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/example-failing/snapshot"
@@ -28,9 +29,10 @@ type TryingToStopState struct {
 
 func (s *TryingToStopState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, fsmv2.Action[any]) {
 	snap := helpers.ConvertSnapshot[snapshot.FailingObservedState, *snapshot.FailingDesiredState](snapAny)
+	snap.Observed.State = config.MakeState(config.PrefixTryingToStop, "connection")
 
 	// If we're fully disconnected, transition to stopped
-	if snap.Observed.ConnectionStatus == "disconnected" {
+	if snap.Observed.ConnectionHealth == "no connection" {
 		return &StoppedState{}, fsmv2.SignalNone, nil
 	}
 

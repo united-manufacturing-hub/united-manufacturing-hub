@@ -396,6 +396,67 @@ func (a *Action) Execute(ctx context.Context) error {
 }`,
 		ReferenceFile: "example-child/action/connect.go",
 	},
+	"OBSERVED_STATE_NOT_EMBEDDING_DESIRED": {
+		Name: "ObservedState Must Embed DesiredState",
+		Why: `ObservedState structs must embed their DesiredState type anonymously with json:",inline" tag.
+WHY: This ensures that all desired state fields are automatically included in the observed
+state, maintaining consistency between what is desired and what is observed. The inline
+tag prevents nested JSON structure and keeps the serialized format flat. Using named fields
+instead of embedding leads to duplication and potential inconsistency.`,
+		CorrectCode: `type MyObservedState struct {
+    CollectedAt time.Time ` + "`json:\"collected_at\"`" + `
+
+    MyDesiredState ` + "`json:\",inline\"`" + `  // REQUIRED: anonymous embedding with inline tag
+
+    // Observed-only fields
+    ActualValue int ` + "`json:\"actual_value\"`" + `
+}
+
+// WRONG: named field instead of embedding
+type MyObservedState struct {
+    Desired MyDesiredState  // This is wrong - should be anonymous
+}`,
+		ReferenceFile: "example-child/snapshot/snapshot.go",
+	},
+	"MISSING_STATE_FIELD": {
+		Name: "State Field Required in DesiredState and ObservedState",
+		Why: `Both DesiredState and ObservedState structs must have a State string field.
+WHY: The State field represents the current lifecycle state of the worker (e.g., "running",
+"stopped"). This field is essential for FSM coordination and state tracking. Without it,
+the supervisor cannot determine what state the worker should be in (desired) or what state
+it is currently in (observed). This field enables the FSM to make correct state transition
+decisions.`,
+		CorrectCode: `type MyDesiredState struct {
+    config.BaseDesiredState
+    State string ` + "`json:\"state\"`" + `  // REQUIRED: lifecycle state
+    // Other desired fields...
+}
+
+type MyObservedState struct {
+    CollectedAt time.Time ` + "`json:\"collected_at\"`" + `
+    MyDesiredState ` + "`json:\",inline\"`" + `
+    State string ` + "`json:\"state\"`" + `  // REQUIRED: current state
+    // Other observed fields...
+}`,
+		ReferenceFile: "example-child/snapshot/snapshot.go",
+	},
+	"INVALID_DESIRED_STATE_VALUE": {
+		Name: "DesiredState.State Must Be 'stopped' or 'running'",
+		Why: `The DesiredState.State field should only contain "stopped" or "running".
+WHY: These two values represent the valid lifecycle states that can be desired for a worker.
+"running" means the worker should be actively operating, "stopped" means it should be
+inactive. Any other value indicates incorrect state management and will cause FSM
+transition errors. This constraint ensures predictable lifecycle behavior.`,
+		CorrectCode: `// Correct: valid state values
+desired.State = "running"
+desired.State = "stopped"
+
+// WRONG: invalid state values
+desired.State = "starting"  // Should use "running"
+desired.State = "active"    // Should use "running"
+desired.State = "inactive"  // Should use "stopped"`,
+		ReferenceFile: "example-child/snapshot/snapshot.go",
+	},
 }
 
 // GetPattern returns pattern info for a violation type.

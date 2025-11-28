@@ -30,7 +30,8 @@ import "encoding/json"
 // Workers embedding BaseDesiredState automatically satisfy the DesiredState interface's
 // IsShutdownRequested() method and the ShutdownRequestable interface's SetShutdownRequested() method.
 type BaseDesiredState struct {
-	ShutdownRequested bool `json:"ShutdownRequested"`
+	ShutdownRequested bool   `json:"ShutdownRequested"`
+	State             string `json:"state"` // "stopped" or "running" - user intent
 }
 
 // IsShutdownRequested returns whether shutdown has been requested for this worker.

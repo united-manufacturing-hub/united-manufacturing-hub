@@ -16,6 +16,7 @@ package state
 
 import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/example-child/action"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/example-child/snapshot"
@@ -28,10 +29,11 @@ type TryingToStopState struct {
 
 func (s *TryingToStopState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, fsmv2.Action[any]) {
 	snap := helpers.ConvertSnapshot[snapshot.ChildObservedState, *snapshot.ChildDesiredState](snapAny)
+	snap.Observed.State = config.MakeState(config.PrefixTryingToStop, "connection")
 
-	// Child worker is "stopped" when observed state shows disconnected status
+	// Child worker is "stopped" when dependencies report disconnected status
 	// After DisconnectAction executes, we can transition to Stopped
-	if snap.Observed.ConnectionStatus == "disconnected" || snap.Observed.ConnectionStatus == "" {
+	if !snap.Desired.Dependencies.IsConnected() {
 		return &StoppedState{}, fsmv2.SignalNone, nil
 	}
 

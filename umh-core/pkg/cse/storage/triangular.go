@@ -335,11 +335,13 @@ func (ts *TriangularStore) LoadDesiredTyped(ctx context.Context, workerType stri
 	return documentToStruct(doc, dest)
 }
 
-// diffExcludedFields are timestamp fields that change every tick and should not trigger
+// diffExcludedFields are CSE-internal timestamp fields that should not trigger
 // diff logging (they add noise without meaningful observability value).
+// NOTE: collected_at is NOT excluded - it's a business field from FSM v2 workers,
+// and changes to it SHOULD trigger deltas for frontend sync.
 var diffExcludedFields = map[string]bool{
-	"collected_at":      true,
-	"_cse_collected_at": true,
+	// Dependencies only contains pointers and shouldn't trigger deltas.
+	"Dependencies": true,
 }
 
 // FieldChange represents a single field change for logging.

@@ -361,3 +361,23 @@ type DependencyProvider interface {
 	// This is used by the ActionExecutor to pass dependencies to actions.
 	GetDependenciesAny() any
 }
+
+// DependencyInjector is an optional interface that desired state types can implement
+// to receive runtime dependencies after being loaded from storage.
+//
+// Dependencies (interfaces with methods) cannot be serialized to storage, so they
+// must be injected at runtime. The supervisor calls InjectDependencies after loading
+// the desired state and before passing it to state.Next().
+//
+// Example implementation:
+//
+//	func (d *MyDesiredState) InjectDependencies(deps any) {
+//	    if typedDeps, ok := deps.(MyDependencies); ok {
+//	        d.Dependencies = typedDeps
+//	    }
+//	}
+type DependencyInjector interface {
+	// InjectDependencies receives the worker's dependencies for runtime use.
+	// The deps parameter is the same value returned by DependencyProvider.GetDependenciesAny().
+	InjectDependencies(deps any)
+}
