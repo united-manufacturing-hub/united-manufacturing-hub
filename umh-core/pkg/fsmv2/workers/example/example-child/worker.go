@@ -43,8 +43,7 @@ type ChildWorker struct {
 
 // NewChildWorker creates a new example child worker.
 func NewChildWorker(
-	id string,
-	name string,
+	identity fsmv2.Identity,
 	connectionPool ConnectionPool,
 	logger *zap.SugaredLogger,
 ) (*ChildWorker, error) {
@@ -55,21 +54,20 @@ func NewChildWorker(
 		return nil, errors.New("logger must not be nil")
 	}
 
-	workerType := storage.DeriveWorkerType[snapshot.ChildObservedState]()
-	dependencies := NewChildDependencies(connectionPool, logger, workerType, id)
+	// Set workerType if not already set (derive from snapshot type)
+	if identity.WorkerType == "" {
+		identity.WorkerType = storage.DeriveWorkerType[snapshot.ChildObservedState]()
+	}
+	dependencies := NewChildDependencies(connectionPool, logger, identity)
 
 	conn, err := connectionPool.Acquire()
 	if err != nil {
-		logger.Warnf("Failed to acquire initial connection: %v", err)
+		logger.Warnw("Failed to acquire initial connection", "error", err)
 	}
 
 	return &ChildWorker{
 		BaseWorker: helpers.NewBaseWorker(dependencies),
-		identity: fsmv2.Identity{
-			ID:         id,
-			Name:       name,
-			WorkerType: workerType,
-		},
+		identity:   identity,
 		logger:     logger,
 		connection: conn,
 	}, nil
@@ -145,14 +143,9 @@ func init() {
 		})
 
 	// Register worker factory for ApplicationWorker to create child workers via YAML config
-	_ = factory.RegisterFactoryByType("child", func(identity fsmv2.Identity) fsmv2.Worker {
-		// Use a development logger for visibility in examples
-		cfg := zap.NewDevelopmentConfig()
-		cfg.Level = zap.NewAtomicLevelAt(zap.InfoLevel)
-		zapLogger, _ := cfg.Build()
-		logger := zapLogger.Sugar()
+	_ = factory.RegisterFactoryByType("child", func(identity fsmv2.Identity, logger *zap.SugaredLogger) fsmv2.Worker {
 		pool := &DefaultConnectionPool{}
-		worker, _ := NewChildWorker(identity.ID, identity.Name, pool, logger)
+		worker, _ := NewChildWorker(identity, pool, logger)
 		return worker
 	})
 }

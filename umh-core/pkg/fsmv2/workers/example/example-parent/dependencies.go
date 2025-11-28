@@ -25,8 +25,8 @@ type ParentDependencies struct {
 }
 
 // NewParentDependencies creates new dependencies for the parent worker.
-func NewParentDependencies(logger *zap.SugaredLogger, workerType, workerID string) *ParentDependencies {
+func NewParentDependencies(logger *zap.SugaredLogger, identity fsmv2.Identity) *ParentDependencies {
 	return &ParentDependencies{
-		BaseDependencies: fsmv2.NewBaseDependencies(logger, workerType, workerID),
+		BaseDependencies: fsmv2.NewBaseDependencies(logger, identity),
 	}
 }

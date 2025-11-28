@@ -21,13 +21,16 @@ import (
 	"fmt"
 	"sync"
 
+	"go.uber.org/zap"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 )
 
 var (
 	// registry maps worker type names to factory functions.
-	registry = make(map[string]func(fsmv2.Identity) fsmv2.Worker)
+	// Factory functions receive Identity and Logger to create properly-configured workers.
+	registry = make(map[string]func(fsmv2.Identity, *zap.SugaredLogger) fsmv2.Worker)
 	// registryMu protects concurrent access to the registry.
 	registryMu sync.RWMutex
 
@@ -44,6 +47,9 @@ var (
 // This is used for supervisor internals that work with children polymorphically.
 // For worker package initialization, use RegisterFactory[TObserved, TDesired]() instead.
 //
+// The factory function receives the supervisor's logger, allowing workers to use consistent
+// structured logging throughout the worker hierarchy.
+//
 // THREAD SAFETY:
 // This function is thread-safe and can be called concurrently from multiple goroutines.
 // However, duplicate registrations will return an error.
@@ -54,10 +60,10 @@ var (
 //
 // Example usage (supervisor internals):
 //
-//	err := factory.RegisterFactoryByType("mqtt_client", func(id fsmv2.Identity) fsmv2.Worker {
-//	    return &MQTTWorker{identity: id}
+//	err := factory.RegisterFactoryByType("mqtt_client", func(id fsmv2.Identity, logger *zap.SugaredLogger) fsmv2.Worker {
+//	    return NewMQTTWorker(id, logger)
 //	})
-func RegisterFactoryByType(workerType string, factoryFunc func(fsmv2.Identity) fsmv2.Worker) error {
+func RegisterFactoryByType(workerType string, factoryFunc func(fsmv2.Identity, *zap.SugaredLogger) fsmv2.Worker) error {
 	if workerType == "" {
 		return errors.New("worker type cannot be empty")
 	}
@@ -78,6 +84,9 @@ func RegisterFactoryByType(workerType string, factoryFunc func(fsmv2.Identity) f
 // This is the recommended API for worker packages registering themselves during initialization.
 // The workerType is automatically derived from the TObserved type parameter.
 //
+// The factory function receives the supervisor's logger, allowing workers to use consistent
+// structured logging throughout the worker hierarchy.
+//
 // THREAD SAFETY:
 // This function is thread-safe and can be called concurrently from multiple goroutines.
 // However, duplicate registrations will return an error.
@@ -90,15 +99,15 @@ func RegisterFactoryByType(workerType string, factoryFunc func(fsmv2.Identity) f
 //
 //	func init() {
 //	    err := factory.RegisterFactory[ContainerObservedState, ContainerDesiredState](
-//	        func(id fsmv2.Identity) fsmv2.Worker {
-//	            return &ContainerWorker{identity: id}
+//	        func(id fsmv2.Identity, logger *zap.SugaredLogger) fsmv2.Worker {
+//	            return NewContainerWorker(id, logger)
 //	        })
 //	    if err != nil {
 //	        panic(err)
 //	    }
 //	}
 func RegisterFactory[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState](
-	factoryFunc func(fsmv2.Identity) fsmv2.Worker,
+	factoryFunc func(fsmv2.Identity, *zap.SugaredLogger) fsmv2.Worker,
 ) error {
 	workerType := storage.DeriveWorkerType[TObserved]()
 
@@ -184,6 +193,9 @@ func RegisterSupervisorFactoryByType(workerType string, factoryFunc func(interfa
 // This is used by supervisors during hierarchical child instantiation (runtime polymorphism).
 // For compile-time type-safe worker creation, use GetFactory[TObserved, TDesired]() instead.
 //
+// The logger parameter is passed to the factory function, allowing workers to receive
+// the supervisor's logger for consistent structured logging throughout the hierarchy.
+//
 // THREAD SAFETY:
 // This function is thread-safe and can be called concurrently from multiple goroutines.
 // The registry is protected by a read-write mutex.
@@ -194,11 +206,11 @@ func RegisterSupervisorFactoryByType(workerType string, factoryFunc func(interfa
 //
 // Example usage in supervisor (processing ChildSpec):
 //
-//	worker, err := factory.NewWorkerByType(spec.WorkerType, identity)
+//	worker, err := factory.NewWorkerByType(spec.WorkerType, identity, s.logger)
 //	if err != nil {
 //	    return fmt.Errorf("failed to create child worker: %w", err)
 //	}
-func NewWorkerByType(workerType string, identity fsmv2.Identity) (fsmv2.Worker, error) {
+func NewWorkerByType(workerType string, identity fsmv2.Identity, logger *zap.SugaredLogger) (fsmv2.Worker, error) {
 	if workerType == "" {
 		return nil, errors.New("worker type cannot be empty")
 	}
@@ -213,7 +225,7 @@ func NewWorkerByType(workerType string, identity fsmv2.Identity) (fsmv2.Worker, 
 		return nil, errors.New("unknown worker type: " + workerType)
 	}
 
-	return factoryFunc(identity), nil
+	return factoryFunc(identity, logger), nil
 }
 
 // NewSupervisorByType creates a supervisor for the given worker type.
@@ -273,7 +285,7 @@ func NewSupervisorByType(workerType string, config interface{}) (interface{}, er
 func ResetRegistry() {
 	registryMu.Lock()
 
-	registry = make(map[string]func(fsmv2.Identity) fsmv2.Worker)
+	registry = make(map[string]func(fsmv2.Identity, *zap.SugaredLogger) fsmv2.Worker)
 
 	registryMu.Unlock()
 
@@ -331,8 +343,8 @@ func ListRegisteredTypes() []string {
 //	if !ok {
 //	    return fmt.Errorf("container worker type not registered")
 //	}
-//	worker := factory(identity)
-func GetFactory[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState]() (func(fsmv2.Identity) fsmv2.Worker, bool) {
+//	worker := factory(identity, logger)
+func GetFactory[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState]() (func(fsmv2.Identity, *zap.SugaredLogger) fsmv2.Worker, bool) {
 	workerType := storage.DeriveWorkerType[TObserved]()
 
 	registryMu.RLock()

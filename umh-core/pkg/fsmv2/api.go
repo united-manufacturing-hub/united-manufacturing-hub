@@ -37,9 +37,10 @@ const (
 // Identity uniquely identifies a worker instance.
 // This is immutable for the lifetime of the worker.
 type Identity struct {
-	ID         string `json:"id"`         // Unique identifier (e.g., UUID)
-	Name       string `json:"name"`       // Human-readable name
-	WorkerType string `json:"workerType"` // Type of worker (e.g., "container", "pod")
+	ID            string `json:"id"`            // Unique identifier (e.g., UUID)
+	Name          string `json:"name"`          // Human-readable name
+	WorkerType    string `json:"workerType"`    // Type of worker (e.g., "container", "pod")
+	HierarchyPath string `json:"hierarchyPath"` // Full path from root: "scenario123(application)/parent-123(parent)/child001(child)"
 }
 
 // ObservedState represents the actual state gathered from monitoring the system.

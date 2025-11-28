@@ -42,24 +42,22 @@ type ParentWorker struct {
 
 // NewParentWorker creates a new example parent worker.
 func NewParentWorker(
-	id string,
-	name string,
+	identity fsmv2.Identity,
 	logger *zap.SugaredLogger,
 ) (*ParentWorker, error) {
 	if logger == nil {
 		return nil, errors.New("logger must not be nil")
 	}
 
-	workerType := storage.DeriveWorkerType[snapshot.ParentObservedState]()
-	dependencies := NewParentDependencies(logger, workerType, id)
+	// Set workerType if not already set (derive from snapshot type)
+	if identity.WorkerType == "" {
+		identity.WorkerType = storage.DeriveWorkerType[snapshot.ParentObservedState]()
+	}
+	dependencies := NewParentDependencies(logger, identity)
 
 	return &ParentWorker{
 		BaseWorker: helpers.NewBaseWorker(dependencies),
-		identity: fsmv2.Identity{
-			ID:         id,
-			Name:       name,
-			WorkerType: workerType,
-		},
+		identity:   identity,
 		logger: logger,
 	}, nil
 }
@@ -145,9 +143,8 @@ func init() {
 		})
 
 	// Register worker factory for ApplicationWorker to create parent workers via YAML config
-	_ = factory.RegisterFactoryByType("parent", func(identity fsmv2.Identity) fsmv2.Worker {
-		logger := zap.NewNop().Sugar()
-		worker, _ := NewParentWorker(identity.ID, identity.Name, logger)
+	_ = factory.RegisterFactoryByType("parent", func(identity fsmv2.Identity, logger *zap.SugaredLogger) fsmv2.Worker {
+		worker, _ := NewParentWorker(identity, logger)
 		return worker
 	})
 }

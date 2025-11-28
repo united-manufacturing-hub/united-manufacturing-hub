@@ -77,7 +77,7 @@ func registerTestWorkerFactories() {
 	for _, workerType := range workerTypes {
 		wt := workerType
 		// Register worker factory
-		err := factory.RegisterFactoryByType(wt, func(identity fsmv2.Identity) fsmv2.Worker {
+		err := factory.RegisterFactoryByType(wt, func(identity fsmv2.Identity, _ *zap.SugaredLogger) fsmv2.Worker {
 			return &supervisor.TestWorkerWithType{
 				Worker:     supervisor.TestWorker{},
 				WorkerType: wt,
@@ -114,11 +114,11 @@ func (m *mockObservedState) GetTimestamp() time.Time {
 }
 
 type mockDesiredState struct {
-	shutdownRequested bool
+	ShutdownRequested bool
 }
 
 func (m *mockDesiredState) IsShutdownRequested() bool {
-	return m.shutdownRequested
+	return m.ShutdownRequested
 }
 
 type mockWorker struct {
@@ -337,6 +337,18 @@ func (m *mockStore) LoadSnapshot(ctx context.Context, workerType string, id stri
 	}, nil
 }
 
+func (m *mockStore) GetChangesSince(ctx context.Context, sinceSyncID int64, limit int) ([]storage.Event, error) {
+	return []storage.Event{}, nil
+}
+
+func (m *mockStore) GetLatestSyncID(ctx context.Context) (int64, error) {
+	return 0, nil
+}
+
+func (m *mockStore) GetDeltas(ctx context.Context, sub storage.Subscription) (storage.DeltasResponse, error) {
+	return storage.DeltasResponse{}, nil
+}
+
 func mockIdentity() fsmv2.Identity {
 	return fsmv2.Identity{
 		ID:         "test-worker",
@@ -389,7 +401,7 @@ func newSupervisorWithWorker(worker *mockWorker, customStore storage.TriangularS
 
 	desiredDoc := persistence.Document{
 		"id":                identity.ID,
-		"shutdownRequested": false,
+		"ShutdownRequested": false,
 	}
 	if _, err := triangularStore.SaveDesired(ctx, workerType, identity.ID, desiredDoc); err != nil {
 		panic(fmt.Sprintf("failed to save initial desired state: %v", err))
@@ -701,6 +713,18 @@ func (m *mockTriangularStore) LoadSnapshot(ctx context.Context, workerType strin
 	}
 
 	return snapshot, nil
+}
+
+func (m *mockTriangularStore) GetChangesSince(ctx context.Context, sinceSyncID int64, limit int) ([]storage.Event, error) {
+	return []storage.Event{}, nil
+}
+
+func (m *mockTriangularStore) GetLatestSyncID(ctx context.Context) (int64, error) {
+	return 0, nil
+}
+
+func (m *mockTriangularStore) GetDeltas(ctx context.Context, sub storage.Subscription) (storage.DeltasResponse, error) {
+	return storage.DeltasResponse{}, nil
 }
 
 var _ storage.TriangularStoreInterface = (*mockTriangularStore)(nil)

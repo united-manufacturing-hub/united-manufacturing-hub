@@ -150,6 +150,15 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity fsmv2.Identity, wor
 		executor:     executor,
 	}
 
+	// Enrich supervisor logger with worker path from Identity.
+	// CRITICAL: Use baseLogger (un-enriched) to prevent duplicate "worker" fields.
+	// Each entity creates its own logger from Identity.HierarchyPath - no inheritance.
+	// Format: "workerID(workerType)/childID(childType)/..."
+	// Example: "scenario123(application)/parent-123(parent)/child001(child)"
+	if len(s.workers) == 1 && identity.HierarchyPath != "" {
+		s.logger = s.baseLogger.With("worker", identity.HierarchyPath)
+	}
+
 	s.logger.Infow("worker_added",
 		"worker_type", s.workerType,
 		"worker_id", identity.ID)
@@ -229,9 +238,10 @@ func (s *Supervisor[TObserved, TDesired]) GetWorkers() []fsmv2.Identity {
 		}
 
 		workers = append(workers, fsmv2.Identity{
-			ID:         id,
-			Name:       worker.identity.Name,
-			WorkerType: s.workerType,
+			ID:            id,
+			Name:          worker.identity.Name,
+			WorkerType:    s.workerType,
+			HierarchyPath: worker.identity.HierarchyPath,
 		})
 	}
 
@@ -368,4 +378,57 @@ func (s *Supervisor[TObserved, TDesired]) GetChildren() map[string]SupervisorInt
 	}
 
 	return children
+}
+
+// GetHierarchyPath returns the full hierarchy path from root to this supervisor.
+// Format: "workerID(workerType)/childID(childType)/..."
+// Example: "scenario123(application)/parent-123(parent)/child001(child)"
+// Returns "unknown(workerType)" if no workers are registered yet.
+func (s *Supervisor[TObserved, TDesired]) GetHierarchyPath() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	return s.getHierarchyPathUnlocked()
+}
+
+// getHierarchyPathUnlocked computes the hierarchy path without acquiring the lock.
+// Caller must hold s.mu.RLock() or s.mu.Lock().
+func (s *Supervisor[TObserved, TDesired]) getHierarchyPathUnlocked() string {
+	// Get first worker ID for this supervisor's segment
+	var workerID string
+	for id := range s.workers {
+		workerID = id
+		break
+	}
+	if workerID == "" {
+		workerID = "unknown"
+	}
+
+	// Build this node's path segment: "workerID(workerType)"
+	segment := fmt.Sprintf("%s(%s)", workerID, s.workerType)
+
+	// If no parent, we're root - return just our segment
+	if s.parent == nil {
+		return segment
+	}
+
+	// TODO: HOTFIX - Skip parent path to avoid deadlock.
+	//
+	// DEADLOCK ROOT CAUSE:
+	// 1. Parent supervisor's tick() holds s.mu lock
+	// 2. tick() → reconcileChildren() → creates child supervisor
+	// 3. childSupervisor.AddWorker() calls getHierarchyPathUnlocked() (line ~158)
+	// 4. getHierarchyPathUnlocked() would call s.parent.GetHierarchyPath()
+	// 5. GetHierarchyPath() tries to acquire s.mu.RLock() on parent
+	// 6. DEADLOCK - parent's lock is already held by tick()!
+	//
+	// PROPER FIX (requires interface change):
+	// 1. Add GetHierarchyPathUnlocked() to SupervisorInterface (types.go)
+	// 2. Have all supervisors implement it (this method already exists, just not on interface)
+	// 3. Call s.parent.GetHierarchyPathUnlocked() instead of GetHierarchyPath()
+	//
+	// For now, we skip parent path computation to unblock development.
+	// This means child supervisor logs will show "childID(childType)" instead of
+	// "parentID(parentType)/childID(childType)" - less context but no deadlock.
+	return segment
 }

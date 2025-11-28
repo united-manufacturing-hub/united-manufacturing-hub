@@ -21,6 +21,7 @@ import (
 	. "github.com/onsi/gomega"
 	"go.uber.org/zap"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/testutil"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/action"
@@ -38,7 +39,8 @@ var _ = Describe("AuthenticateAction", func() {
 	BeforeEach(func() {
 		logger = zap.NewNop().Sugar()
 		transport = &mockTransport{}
-		dependencies = communicator.NewCommunicatorDependencies(transport, logger, "communicator", "test-id")
+		identity := fsmv2.Identity{ID: "test-id", WorkerType: "communicator"}
+		dependencies = communicator.NewCommunicatorDependencies(transport, logger, identity)
 		act = action.NewAuthenticateAction(
 			dependencies,
 			"https://relay.example.com",

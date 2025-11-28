@@ -61,7 +61,7 @@ var _ = Describe("Edge Cases", func() {
 
 				desiredDoc := persistence.Document{
 					"id":               identity.ID,
-					"shutdownRequested": false,
+					"ShutdownRequested": false,
 				}
 				_, err = mockStore.SaveDesired(context.Background(), "container", identity.ID, desiredDoc)
 				Expect(err).ToNot(HaveOccurred())
@@ -288,7 +288,7 @@ var _ = Describe("Edge Cases", func() {
 
 				desiredDoc := persistence.Document{
 					"id":               identity.ID,
-					"shutdownRequested": false,
+					"ShutdownRequested": false,
 				}
 				_, err = mockStore.SaveDesired(context.Background(), "container", identity.ID, desiredDoc)
 				Expect(err).ToNot(HaveOccurred())
@@ -461,6 +461,7 @@ var _ = Describe("Edge Cases", func() {
 				Expect(err).ToNot(HaveOccurred())
 
 				// Save a desired state that requestShutdown can load and modify
+				// Note: JSON key is "ShutdownRequested" (PascalCase) per the struct tag in testutil.DesiredState
 				desiredDoc := persistence.Document{
 					"ShutdownRequested": false,
 				}
@@ -546,7 +547,7 @@ var _ = Describe("Edge Cases", func() {
 
 				desiredDoc := persistence.Document{
 					"id":               identity.ID,
-					"shutdownRequested": false,
+					"ShutdownRequested": false,
 				}
 				_, err = mockStore.SaveDesired(context.Background(), "container", identity.ID, desiredDoc)
 				Expect(err).ToNot(HaveOccurred())
@@ -654,7 +655,7 @@ var _ = Describe("Type Safety (Invariant I16)", func() {
 
 				desiredDoc := persistence.Document{
 					"id":               identity.ID,
-					"shutdownRequested": false,
+					"ShutdownRequested": false,
 				}
 				_, err = mockStore.SaveDesired(context.Background(), "container", identity.ID, desiredDoc)
 				Expect(err).ToNot(HaveOccurred())
@@ -713,7 +714,7 @@ var _ = Describe("Type Safety (Invariant I16)", func() {
 
 				desiredDoc := persistence.Document{
 					"id":               identity.ID,
-					"shutdownRequested": false,
+					"ShutdownRequested": false,
 				}
 				_, err = mockStore.SaveDesired(context.Background(), "container", identity.ID, desiredDoc)
 				Expect(err).ToNot(HaveOccurred())

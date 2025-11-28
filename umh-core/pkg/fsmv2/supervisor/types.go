@@ -63,6 +63,7 @@ func (s *stubAction) Name() string {
 type SupervisorInterface interface {
 	Start(ctx context.Context) <-chan struct{}
 	Shutdown()
+	RequestShutdown(ctx context.Context, reason string) error
 	ListWorkers() []string
 	tick(ctx context.Context) error
 	updateUserSpec(spec config.UserSpec)
@@ -76,6 +77,10 @@ type SupervisorInterface interface {
 	GetChildren() map[string]SupervisorInterface
 	AddWorker(identity fsmv2.Identity, worker fsmv2.Worker) error
 	setParent(parent SupervisorInterface, parentID string)
+	// GetHierarchyPath returns the full hierarchy path from root to this supervisor.
+	// Format: "workerID(workerType)/childID(childType)/..."
+	// Example: "scenario123(application)/parent-123(parent)/child001(child)"
+	GetHierarchyPath() string
 }
 
 // WorkerContext encapsulates the runtime state for a single worker

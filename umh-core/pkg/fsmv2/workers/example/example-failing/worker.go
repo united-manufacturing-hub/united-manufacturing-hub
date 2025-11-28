@@ -43,8 +43,7 @@ type FailingWorker struct {
 
 // NewFailingWorker creates a new example failing worker.
 func NewFailingWorker(
-	id string,
-	name string,
+	identity fsmv2.Identity,
 	connectionPool ConnectionPool,
 	logger *zap.SugaredLogger,
 ) (*FailingWorker, error) {
@@ -55,21 +54,20 @@ func NewFailingWorker(
 		return nil, errors.New("logger must not be nil")
 	}
 
-	workerType := storage.DeriveWorkerType[snapshot.FailingObservedState]()
-	dependencies := NewFailingDependencies(connectionPool, logger, workerType, id)
+	// Set workerType if not already set (derive from snapshot type)
+	if identity.WorkerType == "" {
+		identity.WorkerType = storage.DeriveWorkerType[snapshot.FailingObservedState]()
+	}
+	dependencies := NewFailingDependencies(connectionPool, logger, identity)
 
 	conn, err := connectionPool.Acquire()
 	if err != nil {
-		logger.Warnf("Failed to acquire initial connection: %v", err)
+		logger.Warnw("Failed to acquire initial connection", "error", err)
 	}
 
 	return &FailingWorker{
 		BaseWorker: helpers.NewBaseWorker(dependencies),
-		identity: fsmv2.Identity{
-			ID:         id,
-			Name:       name,
-			WorkerType: workerType,
-		},
+		identity:   identity,
 		logger:     logger,
 		connection: conn,
 	}, nil
@@ -152,10 +150,9 @@ func init() {
 		})
 
 	// Register worker factory for ApplicationWorker to create failing workers via YAML config
-	_ = factory.RegisterFactoryByType("failing", func(identity fsmv2.Identity) fsmv2.Worker {
-		logger := zap.NewNop().Sugar()
+	_ = factory.RegisterFactoryByType("failing", func(identity fsmv2.Identity, logger *zap.SugaredLogger) fsmv2.Worker {
 		pool := &DefaultConnectionPool{}
-		worker, _ := NewFailingWorker(identity.ID, identity.Name, pool, logger)
+		worker, _ := NewFailingWorker(identity, pool, logger)
 		return worker
 	})
 }

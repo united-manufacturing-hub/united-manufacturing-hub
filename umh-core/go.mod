@@ -17,8 +17,6 @@ require (
 	github.com/h2non/gock v1.2.0
 	github.com/klauspost/compress v1.18.0
 	github.com/looplab/fsm v1.0.3
-	github.com/mattn/go-sqlite3 v1.14.32
-	github.com/mitchellh/mapstructure v1.5.0
 	github.com/onsi/ginkgo/v2 v2.25.1
 	github.com/onsi/gomega v1.38.1
 	github.com/prometheus/client_golang v1.23.0
@@ -26,7 +24,6 @@ require (
 	github.com/prometheus/common v0.65.0
 	github.com/prometheus/prometheus v0.305.0
 	github.com/shirou/gopsutil/v3 v3.24.5
-	github.com/stretchr/testify v1.10.0
 	github.com/testcontainers/testcontainers-go/modules/redpanda v0.37.0
 	github.com/tiendc/go-deepcopy v1.6.1
 	github.com/united-manufacturing-hub/expiremap/v2 v2.1.0
@@ -110,6 +107,7 @@ require (
 	github.com/shoenig/go-m1cpu v0.1.6 // indirect
 	github.com/sirupsen/logrus v1.9.3 // indirect
 	github.com/sosodev/duration v1.3.1 // indirect
+	github.com/stretchr/testify v1.10.0 // indirect
 	github.com/testcontainers/testcontainers-go v0.37.0 // indirect
 	github.com/tklauser/go-sysconf v0.3.15 // indirect
 	github.com/tklauser/numcpus v0.10.0 // indirect

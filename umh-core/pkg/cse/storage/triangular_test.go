@@ -822,11 +822,12 @@ var _ = Describe("TriangularStore", func() {
 		})
 
 		Context("for observed state", func() {
-			It("should fail for document without id field", func() {
+			It("should succeed for document without id field (id is auto-injected from parameter)", func() {
+				// SaveObserved auto-injects id from the function parameter
 				_, err := ts.SaveObserved(ctx, "container", "worker-123", persistence.Document{
 					"status": "running",
 				})
-				Expect(err).To(HaveOccurred())
+				Expect(err).NotTo(HaveOccurred())
 			})
 		})
 	})
@@ -1145,6 +1146,143 @@ var _ = Describe("TriangularStore", func() {
 			changed, err = ts.SaveObserved(ctx, "testworker", "worker-789", observed)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(changed).To(BeTrue(), "Save with different data should return changed=true")
+		})
+	})
+
+	Describe("Creation Deltas", func() {
+		Context("SaveDesired on new document", func() {
+			It("should emit a creation delta to the delta store", func() {
+				desired := persistence.Document{
+					"id":     "new-worker-001",
+					"config": "value1",
+					"port":   8080,
+					"name":   "TestWorker",
+				}
+
+				changed, err := ts.SaveDesired(ctx, "container", "new-worker-001", desired)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(changed).To(BeTrue(), "First save should return changed=true")
+
+				// Check delta was stored in _deltas collection
+				deltas, err := store.Find(ctx, storage.DeltaCollectionName, persistence.Query{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(len(deltas)).To(BeNumerically(">=", 1), "Delta should be stored")
+
+				// Find the delta for our worker
+				var foundDelta persistence.Document
+				for _, d := range deltas {
+					if d["worker_id"] == "new-worker-001" && d["role"] == "desired" {
+						foundDelta = d
+						break
+					}
+				}
+				Expect(foundDelta).NotTo(BeNil(), "Delta for new-worker-001 should exist")
+				Expect(foundDelta["worker_type"]).To(Equal("container"))
+				Expect(foundDelta["changes"]).NotTo(BeEmpty(), "Changes should be recorded")
+			})
+		})
+
+		Context("SaveObserved on new document", func() {
+			It("should emit a creation delta to the delta store", func() {
+				observed := persistence.Document{
+					"id":     "new-worker-002",
+					"status": "running",
+					"cpu":    75,
+				}
+
+				changed, err := ts.SaveObserved(ctx, "container", "new-worker-002", observed)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(changed).To(BeTrue(), "First save should return changed=true")
+
+				// Check delta was stored
+				deltas, err := store.Find(ctx, storage.DeltaCollectionName, persistence.Query{})
+				Expect(err).NotTo(HaveOccurred())
+
+				var foundDelta persistence.Document
+				for _, d := range deltas {
+					if d["worker_id"] == "new-worker-002" && d["role"] == "observed" {
+						foundDelta = d
+						break
+					}
+				}
+				Expect(foundDelta).NotTo(BeNil(), "Delta for new-worker-002 should exist")
+				Expect(foundDelta["changes"]).NotTo(BeEmpty(), "Changes should be recorded")
+			})
+		})
+
+		Context("SaveIdentity on new document", func() {
+			It("should emit a creation delta to the delta store", func() {
+				identity := persistence.Document{
+					"id":   "new-worker-003",
+					"name": "Container A",
+					"ip":   "192.168.1.100",
+				}
+
+				err := ts.SaveIdentity(ctx, "container", "new-worker-003", identity)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Check delta was stored (identity now emits deltas)
+				deltas, err := store.Find(ctx, storage.DeltaCollectionName, persistence.Query{})
+				Expect(err).NotTo(HaveOccurred())
+
+				var foundDelta persistence.Document
+				for _, d := range deltas {
+					if d["worker_id"] == "new-worker-003" && d["role"] == "identity" {
+						foundDelta = d
+						break
+					}
+				}
+				Expect(foundDelta).NotTo(BeNil(), "Identity delta for new-worker-003 should exist")
+				Expect(foundDelta["changes"]).NotTo(BeEmpty(), "Changes should be recorded")
+			})
+		})
+
+		Context("subsequent saves after creation", func() {
+			It("should emit update deltas, not creation deltas", func() {
+				desired := persistence.Document{
+					"id":     "worker-update-test",
+					"config": "initial",
+				}
+
+				// First save - creation delta
+				changed1, err := ts.SaveDesired(ctx, "container", "worker-update-test", desired)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(changed1).To(BeTrue())
+
+				// Get delta count after first save
+				deltas1, _ := store.Find(ctx, storage.DeltaCollectionName, persistence.Query{})
+				count1 := len(deltas1)
+
+				// Second save with changed data - update delta
+				desired["config"] = "updated"
+				changed2, err := ts.SaveDesired(ctx, "container", "worker-update-test", desired)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(changed2).To(BeTrue())
+
+				// Verify new delta was added
+				deltas2, _ := store.Find(ctx, storage.DeltaCollectionName, persistence.Query{})
+				Expect(len(deltas2)).To(BeNumerically(">", count1), "Update should create new delta")
+			})
+		})
+
+		Context("document with no business fields", func() {
+			It("should not emit a delta", func() {
+				// Get initial delta count
+				deltasBefore, _ := store.Find(ctx, storage.DeltaCollectionName, persistence.Query{})
+				countBefore := len(deltasBefore)
+
+				observed := persistence.Document{
+					"id": "empty-worker",
+				}
+
+				changed, err := ts.SaveObserved(ctx, "container", "empty-worker", observed)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(changed).To(BeTrue(), "First save should still return changed=true")
+
+				// Verify no new delta was added (no business fields to record)
+				deltasAfter, _ := store.Find(ctx, storage.DeltaCollectionName, persistence.Query{})
+				Expect(len(deltasAfter)).To(Equal(countBefore), "No delta should be added for document with only id")
+			})
 		})
 	})
 })

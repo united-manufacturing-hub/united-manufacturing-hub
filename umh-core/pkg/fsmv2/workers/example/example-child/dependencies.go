@@ -64,9 +64,9 @@ type ChildDependencies struct {
 }
 
 // NewChildDependencies creates new dependencies for the child worker.
-func NewChildDependencies(connectionPool ConnectionPool, logger *zap.SugaredLogger, workerType, workerID string) *ChildDependencies {
+func NewChildDependencies(connectionPool ConnectionPool, logger *zap.SugaredLogger, identity fsmv2.Identity) *ChildDependencies {
 	return &ChildDependencies{
-		BaseDependencies: fsmv2.NewBaseDependencies(logger, workerType, workerID),
+		BaseDependencies: fsmv2.NewBaseDependencies(logger, identity),
 		connectionPool:   connectionPool,
 		isConnected:      false,
 	}

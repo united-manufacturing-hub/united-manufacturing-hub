@@ -19,6 +19,8 @@ import (
 	"testing"
 
 	"go.uber.org/zap"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 )
 
 // MockConnectionPool is a mock implementation of ConnectionPool for testing.
@@ -84,8 +86,9 @@ func (m *MockConnectionPool) HealthCheck(conn Connection) error {
 func TestNewChildDependencies(t *testing.T) {
 	logger := zap.NewNop().Sugar()
 	mockPool := NewMockConnectionPool()
+	identity := fsmv2.Identity{ID: "test-id", WorkerType: "child"}
 
-	deps := NewChildDependencies(mockPool, logger, "child", "test-id")
+	deps := NewChildDependencies(mockPool, logger, identity)
 
 	if deps == nil {
 		t.Fatal("NewChildDependencies returned nil")
@@ -107,8 +110,9 @@ func TestNewChildDependencies(t *testing.T) {
 func TestChildDependencies_GetConnectionPool(t *testing.T) {
 	logger := zap.NewNop().Sugar()
 	mockPool := NewMockConnectionPool()
+	identity := fsmv2.Identity{ID: "test-id", WorkerType: "child"}
 
-	deps := NewChildDependencies(mockPool, logger, "child", "test-id")
+	deps := NewChildDependencies(mockPool, logger, identity)
 
 	pool := deps.GetConnectionPool()
 	if mockPoolTyped, ok := pool.(*MockConnectionPool); !ok || mockPoolTyped != mockPool {

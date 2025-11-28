@@ -305,10 +305,6 @@ github.com/magiconair/properties
 # github.com/mattn/go-isatty v0.0.20
 ## explicit; go 1.15
 github.com/mattn/go-isatty
-# github.com/mattn/go-sqlite3 v1.14.32
-## explicit; go 1.19
-# github.com/mitchellh/mapstructure v1.5.0
-## explicit; go 1.14
 # github.com/moby/docker-image-spec v1.3.1
 ## explicit; go 1.18
 github.com/moby/docker-image-spec/specs-go/v1
@@ -594,6 +590,7 @@ go.uber.org/zap/internal/stacktrace
 go.uber.org/zap/internal/ztest
 go.uber.org/zap/zapcore
 go.uber.org/zap/zaptest
+go.uber.org/zap/zaptest/observer
 # go.yaml.in/yaml/v3 v3.0.4
 ## explicit; go 1.16
 go.yaml.in/yaml/v3

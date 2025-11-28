@@ -20,14 +20,16 @@ import (
 
 	"go.uber.org/zap"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	fsmv2types "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 )
 
 func TestNewChildWorker(t *testing.T) {
 	logger := zap.NewNop().Sugar()
 	mockPool := NewMockConnectionPool()
+	identity := fsmv2.Identity{ID: "test-id", Name: "test-child"}
 
-	worker, err := NewChildWorker("test-id", "test-child", mockPool, logger)
+	worker, err := NewChildWorker(identity, mockPool, logger)
 	if err != nil {
 		t.Fatalf("NewChildWorker() error = %v", err)
 	}
@@ -44,8 +46,9 @@ func TestNewChildWorker(t *testing.T) {
 func TestChildWorker_CollectObservedState(t *testing.T) {
 	logger := zap.NewNop().Sugar()
 	mockPool := NewMockConnectionPool()
+	identity := fsmv2.Identity{ID: "test-id", Name: "test-child"}
 
-	worker, err := NewChildWorker("test-id", "test-child", mockPool, logger)
+	worker, err := NewChildWorker(identity, mockPool, logger)
 	if err != nil {
 		t.Fatalf("NewChildWorker() error = %v", err)
 	}
@@ -63,8 +66,9 @@ func TestChildWorker_CollectObservedState(t *testing.T) {
 func TestChildWorker_DeriveDesiredState(t *testing.T) {
 	logger := zap.NewNop().Sugar()
 	mockPool := NewMockConnectionPool()
+	identity := fsmv2.Identity{ID: "test-id", Name: "test-child"}
 
-	worker, err := NewChildWorker("test-id", "test-child", mockPool, logger)
+	worker, err := NewChildWorker(identity, mockPool, logger)
 	if err != nil {
 		t.Fatalf("NewChildWorker() error = %v", err)
 	}

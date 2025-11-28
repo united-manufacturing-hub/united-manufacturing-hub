@@ -202,16 +202,22 @@ func NewCommunicatorWorker(
 	logger *zap.SugaredLogger,
 ) *CommunicatorWorker {
 	workerType := storage.DeriveWorkerType[snapshot.CommunicatorObservedState]()
-	dependencies := NewCommunicatorDependencies(transportParam, logger, workerType, id)
+
+	// Create identity first so it can be used for dependency logging
+	identity := fsmv2.Identity{
+		ID:         id,
+		Name:       name,
+		WorkerType: workerType,
+		// HierarchyPath will be empty here - it's set by the supervisor when adding
+		// workers via factory. For directly constructed workers, fallback logging is used.
+	}
+
+	dependencies := NewCommunicatorDependencies(transportParam, logger, identity)
 
 	return &CommunicatorWorker{
 		BaseWorker: helpers.NewBaseWorker(dependencies),
-		identity: fsmv2.Identity{
-			ID:         id,
-			Name:       name,
-			WorkerType: workerType,
-		},
-		logger: logger,
+		identity:   identity,
+		logger:     logger,
 	}
 }
 

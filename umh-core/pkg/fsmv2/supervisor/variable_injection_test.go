@@ -230,7 +230,7 @@ var _ = Describe("Variable Injection", func() {
 	})
 
 	Describe("Internal Variables Injection in Tick", func() {
-		It("should inject Internal variables with id, created_at, and empty bridged_by for root supervisor", func() {
+		It("should inject Internal variables with id, _created_at, and empty parent_id for root supervisor", func() {
 			var capturedSpec config.UserSpec
 			testWorker.deriveDesiredStateFunc = func(spec config.UserSpec) (config.DesiredState, error) {
 				capturedSpec = spec
@@ -243,21 +243,21 @@ var _ = Describe("Variable Injection", func() {
 
 			// Verify Internal variables were injected
 			Expect(capturedSpec.Variables.Internal).ToNot(BeNil())
-			Expect(capturedSpec.Variables.Internal["id"]).To(Equal(identity.ID))
-			Expect(capturedSpec.Variables.Internal["created_at"]).ToNot(BeNil())
+			Expect(capturedSpec.Variables.Internal[supervisor.FieldID]).To(Equal(identity.ID))
+			Expect(capturedSpec.Variables.Internal[storage.FieldCreatedAt]).ToNot(BeNil())
 
-			createdAt, ok := capturedSpec.Variables.Internal["created_at"].(time.Time)
+			createdAt, ok := capturedSpec.Variables.Internal[storage.FieldCreatedAt].(time.Time)
 			Expect(ok).To(BeTrue())
 			Expect(createdAt).ToNot(BeZero())
 
-			// For root supervisor, bridged_by should be empty
-			bridgedBy, exists := capturedSpec.Variables.Internal["bridged_by"]
+			// For root supervisor, parent_id should be empty
+			parentID, exists := capturedSpec.Variables.Internal[supervisor.FieldParentID]
 			if exists {
-				Expect(bridgedBy).To(Equal(""))
+				Expect(parentID).To(Equal(""))
 			}
 		})
 
-		It("should inject bridged_by for child supervisor", func() {
+		It("should inject parent_id for child supervisor", func() {
 			// Create parent supervisor
 			parentIdentity := fsmv2.Identity{
 				ID:         "parent-worker",
@@ -321,7 +321,7 @@ var _ = Describe("Variable Injection", func() {
 			err = childSupervisor.TestTick(ctx)
 			Expect(err).ToNot(HaveOccurred())
 
-			// For child supervisor, bridged_by should be set to parent ID
+			// For child supervisor, parent_id should be set to parent's worker type
 			// This test will need adjustment based on actual implementation
 			Skip("Pending implementation of parentID mechanism")
 		})

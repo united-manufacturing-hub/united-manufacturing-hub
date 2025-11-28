@@ -19,6 +19,7 @@ import (
 	. "github.com/onsi/gomega"
 	"go.uber.org/zap"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	example_parent "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/example-parent"
 )
 
@@ -34,7 +35,8 @@ var _ = Describe("ParentDependencies", func() {
 
 	Describe("NewParentDependencies", func() {
 		It("should create dependencies with valid inputs", func() {
-			deps = example_parent.NewParentDependencies(logger, "parent", "test-id")
+			identity := fsmv2.Identity{ID: "test-id", WorkerType: "parent"}
+			deps = example_parent.NewParentDependencies(logger, identity)
 
 			Expect(deps).NotTo(BeNil())
 			// Logger is enriched with worker context

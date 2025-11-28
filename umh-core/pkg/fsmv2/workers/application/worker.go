@@ -235,10 +235,12 @@ func NewApplicationSupervisor(cfg SupervisorConfig) (*supervisor.Supervisor[snap
 	})
 
 	// Create application worker identity.
+	// For root supervisors, HierarchyPath is just the single segment: "id(workerType)"
 	appIdentity := fsmv2.Identity{
-		ID:         cfg.ID,
-		Name:       cfg.Name,
-		WorkerType: appWorkerType,
+		ID:            cfg.ID,
+		Name:          cfg.Name,
+		WorkerType:    appWorkerType,
+		HierarchyPath: fmt.Sprintf("%s(%s)", cfg.ID, appWorkerType),
 	}
 
 	// Create application worker.
@@ -264,7 +266,7 @@ func init() {
 	// Register ApplicationWorker factory.
 	// This allows creating application workers via factory.NewWorkerByType().
 	if err := factory.RegisterFactory[snapshot.ApplicationObservedState, *snapshot.ApplicationDesiredState](
-		func(identity fsmv2.Identity) fsmv2.Worker {
+		func(identity fsmv2.Identity, _ *zap.SugaredLogger) fsmv2.Worker {
 			return NewApplicationWorker(identity.ID, identity.Name)
 		}); err != nil {
 		panic(fmt.Sprintf("failed to register ApplicationWorker factory: %v", err))

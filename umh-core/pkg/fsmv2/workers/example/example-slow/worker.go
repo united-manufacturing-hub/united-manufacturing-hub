@@ -41,8 +41,7 @@ type SlowWorker struct {
 }
 
 func NewSlowWorker(
-	id string,
-	name string,
+	identity fsmv2.Identity,
 	connectionPool ConnectionPool,
 	logger *zap.SugaredLogger,
 ) (*SlowWorker, error) {
@@ -53,21 +52,20 @@ func NewSlowWorker(
 		return nil, errors.New("logger must not be nil")
 	}
 
-	workerType := storage.DeriveWorkerType[snapshot.SlowObservedState]()
-	dependencies := NewSlowDependencies(connectionPool, logger, workerType, id)
+	// Set workerType if not already set (derive from snapshot type)
+	if identity.WorkerType == "" {
+		identity.WorkerType = storage.DeriveWorkerType[snapshot.SlowObservedState]()
+	}
+	dependencies := NewSlowDependencies(connectionPool, logger, identity)
 
 	conn, err := connectionPool.Acquire()
 	if err != nil {
-		logger.Warnf("Failed to acquire initial connection: %v", err)
+		logger.Warnw("Failed to acquire initial connection", "error", err)
 	}
 
 	return &SlowWorker{
 		BaseWorker: helpers.NewBaseWorker(dependencies),
-		identity: fsmv2.Identity{
-			ID:         id,
-			Name:       name,
-			WorkerType: workerType,
-		},
+		identity:   identity,
 		logger:     logger,
 		connection: conn,
 	}, nil
@@ -144,10 +142,9 @@ func init() {
 			return supervisor.NewSupervisor[snapshot.SlowObservedState, *snapshot.SlowDesiredState](supervisorCfg)
 		})
 
-	_ = factory.RegisterFactoryByType("slow", func(identity fsmv2.Identity) fsmv2.Worker {
-		logger := zap.NewNop().Sugar()
+	_ = factory.RegisterFactoryByType("slow", func(identity fsmv2.Identity, logger *zap.SugaredLogger) fsmv2.Worker {
 		pool := &DefaultConnectionPool{}
-		worker, _ := NewSlowWorker(identity.ID, identity.Name, pool, logger)
+		worker, _ := NewSlowWorker(identity, pool, logger)
 		return worker
 	})
 }

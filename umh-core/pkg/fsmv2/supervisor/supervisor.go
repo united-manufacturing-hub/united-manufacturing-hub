@@ -184,12 +184,14 @@ type Supervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] stru
 	mu                *lockmanager.Lock
 	lockManager       *lockmanager.LockManager
 	store             storage.TriangularStoreInterface // State persistence layer (triangular model)
-	logger            *zap.SugaredLogger               // Logger for supervisor operations
+	logger            *zap.SugaredLogger               // Logger for supervisor operations (enriched with worker path)
+	baseLogger        *zap.SugaredLogger               // Original logger without worker enrichment (for child supervisors)
 	tickInterval      time.Duration                    // How often to evaluate state transitions
 	collectorHealth   CollectorHealth                  // Collector health tracking
 	freshnessChecker  *health.FreshnessChecker         // Data freshness validator
 	children          map[string]SupervisorInterface   // Child supervisors by name (hierarchical composition)
 	childDoneChans    map[string]<-chan struct{}       // Done channels for child supervisors
+	pendingRemoval    map[string]bool                  // Children pending graceful shutdown (waiting for SignalNeedsRemoval)
 	stateMapping      map[string]string                // Parent→child state mapping
 	userSpec          config.UserSpec                  // User-provided configuration for this supervisor
 	mappedParentState string                           // State mapped from parent (if this is a child supervisor)
@@ -288,10 +290,12 @@ func NewSupervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState](c
 		ctxMu:            lm.NewLock(lockNameSupervisorCtxMu, lockLevelSupervisorCtxMu),
 		store:            cfg.Store,
 		logger:           cfg.Logger,
+		baseLogger:       cfg.Logger, // Store un-enriched logger for passing to child supervisors
 		tickInterval:     tickInterval,
 		freshnessChecker: freshnessChecker,
 		children:         make(map[string]SupervisorInterface),
 		childDoneChans:   make(map[string]<-chan struct{}),
+		pendingRemoval:   make(map[string]bool),
 		stateMapping:     make(map[string]string),
 		createdAt:        time.Now(),
 		parentID:         "",

@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
@@ -130,9 +131,10 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 	// Build snapshot with typed states
 	snapshot := &fsmv2.Snapshot{
 		Identity: fsmv2.Identity{
-			ID:         workerID,
-			Name:       getString(storageSnapshot.Identity, "name", workerID),
-			WorkerType: workerCtx.identity.WorkerType,
+			ID:            workerID,
+			Name:          getString(storageSnapshot.Identity, FieldName, workerID),
+			WorkerType:    workerCtx.identity.WorkerType,
+			HierarchyPath: workerCtx.identity.HierarchyPath,
 		},
 		Observed: observed,
 		Desired:  desired,
@@ -154,9 +156,19 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 			"type", fmt.Sprintf("%T", observed))
 	}
 
+	// SHUTDOWN BYPASS: Allow FSM to process shutdown even with stale data.
+	// During graceful shutdown, child supervisors shut down first (correct order),
+	// which causes parent's observation to become stale (collectors can't observe gone children).
+	// The shutdown transition only needs the ShutdownRequested flag, not fresh observation data.
+	var isShutdownRequested bool
+	if ds, ok := any(snapshot.Desired).(fsmv2.DesiredState); ok {
+		isShutdownRequested = ds.IsShutdownRequested()
+	}
+
 	// I3: Check data freshness BEFORE calling state.Next()
 	// This is the trust boundary: states assume data is always fresh
-	if !s.checkDataFreshness(snapshot) {
+	// EXCEPT when shutdown is requested - shutdown doesn't need fresh observation
+	if !isShutdownRequested && !s.checkDataFreshness(snapshot) {
 		if s.freshnessChecker.IsTimeout(snapshot) {
 			// I4: Check if we've exhausted restart attempts
 			if s.collectorHealth.restartCount >= s.collectorHealth.maxRestartAttempts {
@@ -501,6 +513,11 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 	s.mu.RUnlock()
 
 	if firstWorkerID == "" {
+		// During shutdown (started=false), having no workers is expected.
+		// Return nil to allow tick loop to exit gracefully when context is cancelled.
+		if !s.started.Load() {
+			return nil
+		}
 		return errors.New("no workers in supervisor")
 	}
 
@@ -522,9 +539,9 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 	s.mu.RUnlock()
 
 	userSpecWithVars.Variables.Internal = map[string]any{
-		"id":         firstWorkerID,
-		"created_at": s.createdAt,
-		"bridged_by": s.parentID,
+		FieldID:                firstWorkerID,
+		storage.FieldCreatedAt: s.createdAt,
+		FieldParentID:          s.parentID,
 	}
 
 	userVarCount := len(userSpecWithVars.Variables.User)
@@ -568,7 +585,7 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 		return fmt.Errorf("failed to unmarshal derived desired state to document: %w", err)
 	}
 
-	desiredDoc["id"] = firstWorkerID
+	desiredDoc[FieldID] = firstWorkerID
 
 	// CRITICAL: Preserve ShutdownRequested field if it was set by requestShutdown
 	// DeriveDesiredState returns user-derived config, but shutdown is a supervisor operation
@@ -579,7 +596,7 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 		// Check if existing state had shutdown requested via interface
 		if ds, ok := any(existingDesiredTyped).(fsmv2.DesiredState); ok {
 			if ds.IsShutdownRequested() {
-				desiredDoc["ShutdownRequested"] = true
+				desiredDoc[FieldShutdownRequested] = true
 			}
 		}
 	}
@@ -622,7 +639,15 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 	}
 
 	// 3. Reconcile children (propagate errors)
-	if err := s.reconcileChildren(desired.ChildrenSpecs); err != nil {
+	// SHUTDOWN HANDLING: When ShutdownRequested=true, pass nil childrenSpecs.
+	// This tells reconcileChildren that no children are desired, triggering graceful
+	// shutdown via RequestShutdown() on each existing child. Without this, DeriveDesiredState
+	// would return childrenSpecs based on config, causing children to be re-created during shutdown.
+	childrenSpecs := desired.ChildrenSpecs
+	if desiredDoc[FieldShutdownRequested] == true {
+		childrenSpecs = nil
+	}
+	if err := s.reconcileChildren(childrenSpecs); err != nil {
 		return fmt.Errorf("failed to reconcile children: %w", err)
 	}
 
@@ -892,7 +917,9 @@ func (s *Supervisor[TObserved, TDesired]) checkDataFreshness(snapshot *fsmv2.Sna
 				"age", age,
 				"threshold", s.collectorHealth.timeout)
 		} else {
-			s.logger.Warnf("Data timeout: observation is %v old (threshold: %v)", age, s.collectorHealth.timeout)
+			s.logger.Warnw("data_timeout",
+				"age", age,
+				"threshold", s.collectorHealth.timeout)
 		}
 
 		return false
@@ -904,7 +931,9 @@ func (s *Supervisor[TObserved, TDesired]) checkDataFreshness(snapshot *fsmv2.Sna
 				"age", age,
 				"threshold", s.collectorHealth.staleThreshold)
 		} else {
-			s.logger.Warnf("Data stale: observation is %v old (threshold: %v)", age, s.collectorHealth.staleThreshold)
+			s.logger.Warnw("data_stale",
+				"age", age,
+				"threshold", s.collectorHealth.staleThreshold)
 		}
 
 		return false
@@ -1027,15 +1056,21 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 			childSupervisor.setStateMapping(spec.StateMapping)
 			childSupervisor.setParent(s, s.workerType)
 
-			// Create worker identity
+			// Compute child's hierarchy path: parent path + child segment
+			// Format: "parentID(parentType)/childID(childType)"
+			childID := spec.Name + "-001"
+			childPath := fmt.Sprintf("%s/%s(%s)", s.getHierarchyPathUnlocked(), childID, spec.WorkerType)
+
+			// Create worker identity with hierarchy path for logging context
 			childIdentity := fsmv2.Identity{
-				ID:         spec.Name + "-001",
-				Name:       spec.Name,
-				WorkerType: spec.WorkerType,
+				ID:            childID,
+				Name:          spec.Name,
+				WorkerType:    spec.WorkerType,
+				HierarchyPath: childPath,
 			}
 
-			// Use factory to create worker instance
-			childWorker, err := factory.NewWorkerByType(spec.WorkerType, childIdentity)
+			// Use factory to create worker instance with supervisor's logger
+			childWorker, err := factory.NewWorkerByType(spec.WorkerType, childIdentity, s.logger)
 			if err != nil {
 				s.logger.Errorf("Failed to create worker for child %s: %v (skipping)", spec.Name, err)
 
@@ -1053,8 +1088,8 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 			childDesiredCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 
 			desiredDoc := persistence.Document{
-				"id":                childIdentity.ID,
-				"shutdownRequested": false,
+				FieldID:                childIdentity.ID,
+				FieldShutdownRequested: false,
 			}
 			if _, err := s.store.SaveDesired(childDesiredCtx, spec.WorkerType, childIdentity.ID, desiredDoc); err != nil {
 				s.logger.Warnf("Failed to save initial desired state for child %s: %v", spec.Name, err)
@@ -1081,29 +1116,61 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 		}
 	}
 
+	// Phase 1: Request shutdown for children not in specs (mark as pendingRemoval)
 	for name := range s.children {
-		if !specNames[name] {
+		if !specNames[name] && !s.pendingRemoval[name] {
+			s.logTrace("lifecycle",
+				"lifecycle_event", "child_shutdown_requested",
+				"child_name", name,
+				"parent_worker_type", s.workerType)
+
+			s.logger.Infow("child_shutdown_requesting",
+				"worker_type", s.workerType,
+				"child_name", name)
+
+			// Mark child as pending removal
+			s.pendingRemoval[name] = true
+
+			child := s.children[name]
+			if child != nil {
+				// Request shutdown - sets ShutdownRequested=true on child's workers
+				// Child continues ticking and will emit SignalNeedsRemoval when ready
+				ctx := context.Background()
+				if err := child.RequestShutdown(ctx, "removed_from_specs"); err != nil {
+					s.logger.Warnf("Failed to request shutdown for child %s: %v", name, err)
+				}
+			}
+			// DON'T delete here - wait for child's workers to complete shutdown
+		}
+	}
+
+	// Phase 2: Complete removal of children that have finished shutdown
+	for name := range s.pendingRemoval {
+		child := s.children[name]
+		if child == nil {
+			delete(s.pendingRemoval, name)
+			continue
+		}
+
+		// Check if child has no more workers (all emitted SignalNeedsRemoval)
+		if len(child.ListWorkers()) == 0 {
 			s.logTrace("lifecycle",
 				"lifecycle_event", "child_remove_start",
 				"child_name", name,
 				"parent_worker_type", s.workerType)
 
-			s.logger.Infow("child_removing",
+			s.logger.Infow("child_shutdown_complete",
 				"worker_type", s.workerType,
 				"child_name", name)
 
-			child := s.children[name]
-			if child != nil {
-				child.Shutdown()
-
-				// Wait for child to fully shut down before removing
-				if done, exists := s.childDoneChans[name]; exists {
-					<-done
-					delete(s.childDoneChans, name)
-				}
+			// Now safe to fully shut down and remove
+			child.Shutdown()
+			if done, exists := s.childDoneChans[name]; exists {
+				<-done
+				delete(s.childDoneChans, name)
 			}
-
 			delete(s.children, name)
+			delete(s.pendingRemoval, name)
 
 			s.logTrace("lifecycle",
 				"lifecycle_event", "child_remove_complete",

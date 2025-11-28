@@ -46,9 +46,9 @@ type SlowDependencies struct {
 	connectionPool ConnectionPool
 }
 
-func NewSlowDependencies(connectionPool ConnectionPool, logger *zap.SugaredLogger, workerType, workerID string) *SlowDependencies {
+func NewSlowDependencies(connectionPool ConnectionPool, logger *zap.SugaredLogger, identity fsmv2.Identity) *SlowDependencies {
 	return &SlowDependencies{
-		BaseDependencies: fsmv2.NewBaseDependencies(logger, workerType, workerID),
+		BaseDependencies: fsmv2.NewBaseDependencies(logger, identity),
 		connectionPool:   connectionPool,
 	}
 }
