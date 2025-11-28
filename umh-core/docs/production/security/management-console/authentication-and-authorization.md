@@ -1,6 +1,7 @@
 # ManagementConsole Authentication and Authorization
 
 For authorization and authentication, we use a 2-layer solution:
+
 - **Layer 1**: Identity and company access (session token) - who you are and which company's instances you can access
 - **Layer 2**: Permissions (permission grants) - what you can do within that company
 
@@ -21,6 +22,7 @@ Layer 1 handles authentication - proving who you are and which company you belon
 Users authenticate to verify their identity and their access rights to a company. Both authentication methods result in a session token that identifies you and your company:
 
 **Auth0**: Modern authentication that simplifies login and enables integration with enterprise systems such as SAML:
+
 - Each email can be assigned to multiple companies (configured in Auth0)
 - Default login uses a one-time password sent via email
 - Enterprise customers can customize the login experience:
@@ -29,6 +31,7 @@ Users authenticate to verify their identity and their access rights to a company
 - The user is redirected to Auth0 to complete the authentication process
 
 **Legacy**: Email and password authentication (deprecated):
+
 - Each email can only be assigned to one company
 - Email addresses are not validated for existence
 - Multi-factor authentication is not available
@@ -87,6 +90,7 @@ The first user who creates a company becomes the **Account Owner**. This role ha
 Locations represent positions in an organizational tree structure. This flexible path format allows unlimited depth to match your actual organization. You can use ISA-95, KKS, or any organizational naming standard - level 0 (enterprise) is the only required level.
 
 Location paths use the same dot-separated format as [topic paths](../../usage/unified-namespace/topic-convention.md):
+
 - `ACME` (enterprise only)
 - `ACME.Munich` (enterprise.site)
 - `ACME.Munich.Assembly` (enterprise.site.area)
@@ -97,11 +101,11 @@ Location paths use the same dot-separated format as [topic paths](../../usage/un
 
 Three roles control what actions users and instances can perform at their assigned locations:
 
-| Role | Capabilities |
-|------|-------------|
-| Admin | Full control including the ability to invite other users at their locations |
-| Editor | Can create and modify resources but cannot manage users |
-| Viewer | Read-only access |
+| Role   | Capabilities                                                                |
+| ------ | --------------------------------------------------------------------------- |
+| Admin  | Full control including the ability to invite other users at their locations |
+| Editor | Can create and modify resources but cannot manage users                     |
+| Viewer | Read-only access                                                            |
 
 Users can have different roles at different locations. For example, a user can be an Admin at `ACME.Munich.Assembly.Line1` but only a Viewer at `ACME.Munich.Assembly.Line2`.
 
@@ -125,7 +129,7 @@ Access revocation happens at Layer 1 (session invalidation), not through permiss
 
 - **User removal**: When a user is removed from ManagementConsole, their session token is invalidated immediately - they can no longer authenticate
 - **Permission updates**: Admins can update user permissions at any time. ManagementConsole validates the user's current permissions from the database on each request, so changes take effect quickly (within the cache window of up to 10 minutes)
-- **Instance removal**: Removing an instance from ManagementConsole denies all further communication
+- **Instance removal**: Removing an instance from ManagementConsole denies all further communication as authentication in layer 1 fails
 
 > **Design Trade-off: Permission Updates Require Active Session**
 >
@@ -142,12 +146,14 @@ Access revocation happens at Layer 1 (session invalidation), not through permiss
 ManagementConsole manages user sessions independently from Auth0 using JWT cookies signed with `JWT_SECRET_KEY`.
 
 **Session Lifecycle**:
+
 - **Creation**: Session token issued after successful Auth0 authentication
 - **Storage**: HTTPOnly cookie with Secure and SameSite=Strict attributes
 - **Duration**: 14-day sliding window (extends on activity), 30-day absolute maximum
 - **Termination**: Explicit logout, absolute timeout, or user removal from company
 
 **Session Policies**:
+
 - **Concurrent sessions**: Multiple sessions from different devices are permitted
 - **Token refresh**: Session extends automatically on API activity within the 14-day window
 - **Cross-device**: Each device maintains its own independent session
@@ -176,12 +182,12 @@ The authentication system operates across three trust boundaries:
 
 ### Threat Actors and Protection
 
-| Threat Actor | Capabilities | Protection Level |
-|--------------|--------------|------------------|
-| **External Attacker** | Credential stuffing, phishing, brute force | **Protected** - Auth0 provides rate limiting, anomaly detection, MFA |
-| **Compromised User** | Access to company data at their permission level | **Protected** - Session timeout, per-request permission validation, removal invalidates session immediately |
-| **Malicious Insider** | Permission escalation attempts, invite key interception | **Partially Protected** - Backend enforces admin-location rules; two-channel invite delivery |
-| **Account Owner Compromise** | Complete company takeover | **Design trade-off** - See Account Owner section above |
+| Threat Actor                 | Capabilities                                            | Protection Level                                                                                            |
+| ---------------------------- | ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| **External Attacker**        | Credential stuffing, phishing, brute force              | **Protected** - Auth0 provides rate limiting, anomaly detection, MFA                                        |
+| **Compromised User**         | Access to company data at their permission level        | **Protected** - Session timeout, per-request permission validation, removal invalidates session immediately |
+| **Malicious Insider**        | Permission escalation attempts, invite key interception | **Partially Protected** - Backend enforces admin-location rules; two-channel invite delivery                |
+| **Account Owner Compromise** | Complete company takeover                               | **Design trade-off** - See Account Owner section above                                                      |
 
 ### Attack Scenarios and Mitigations
 
@@ -211,13 +217,13 @@ Security is a shared responsibility between UMH and our customers. This section 
 
 ### We (UMH) Are Responsible For
 
-| Area | Our Responsibility |
-|------|-------------------|
-| Authentication Infrastructure | Auth0 integration, session token generation, secure credential hashing |
-| Authorization Framework | RBAC system, permission inheritance, location-based access control |
-| Secure Defaults | Password complexity requirements, invite key separation, double-hash storage |
-| Platform Security | ManagementConsole application security, API security, session management |
-| Audit Logging | Recording authentication events and permission changes (see note below) |
+| Area                          | Our Responsibility                                                           |
+| ----------------------------- | ---------------------------------------------------------------------------- |
+| Authentication Infrastructure | Auth0 integration, session token generation, secure credential hashing       |
+| Authorization Framework       | RBAC system, permission inheritance, location-based access control           |
+| Secure Defaults               | Password complexity requirements, invite key separation, double-hash storage |
+| Platform Security             | ManagementConsole application security, API security, session management     |
+| Audit Logging                 | Recording authentication events and permission changes (see note below)      |
 
 > **Known Limitation: Audit Logging**
 >
@@ -225,22 +231,22 @@ Security is a shared responsibility between UMH and our customers. This section 
 
 ### You (Customer) Are Responsible For
 
-| Area | Your Responsibility |
-|------|---------------------|
-| Account Owner Security | Protecting the Account Owner credentials (recovery account) |
-| AUTH_TOKEN Management | Secure storage and transmission of instance AUTH_TOKENs |
-| Invite Key Distribution | Sharing invite keys through secure out-of-band channels |
-| User Lifecycle | Promptly removing users who leave your organization |
-| Access Reviews | Periodic review of user permissions and access levels |
-| Enterprise SSO | Configuration and security of your SAML/SSO identity provider |
+| Area                    | Your Responsibility                                           |
+| ----------------------- | ------------------------------------------------------------- |
+| Account Owner Security  | Protecting the Account Owner credentials (recovery account)   |
+| AUTH_TOKEN Management   | Secure storage and transmission of instance AUTH_TOKENs       |
+| Invite Key Distribution | Sharing invite keys through secure out-of-band channels       |
+| User Lifecycle          | Promptly removing users who leave your organization           |
+| Access Reviews          | Periodic review of user permissions and access levels         |
+| Enterprise SSO          | Configuration and security of your SAML/SSO identity provider |
 
 ### Shared Responsibilities
 
-| Area | Details |
-|------|---------|
-| Permission Design | UMH provides the RBAC framework; you define appropriate roles per location |
-| Incident Response | UMH monitors platform; you monitor for compromised credentials |
-| Compliance | UMH provides security controls; you ensure usage meets your compliance requirements |
+| Area              | Details                                                                             |
+| ----------------- | ----------------------------------------------------------------------------------- |
+| Permission Design | UMH provides the RBAC framework; you define appropriate roles per location          |
+| Incident Response | UMH monitors platform; you monitor for compromised credentials                      |
+| Compliance        | UMH provides security controls; you ensure usage meets your compliance requirements |
 
 ---
 
@@ -250,43 +256,44 @@ This section maps ManagementConsole security controls to industry standards.
 
 ### Authentication Standards
 
-| Standard | Requirement | Implementation |
-|----------|-------------|----------------|
-| OWASP Authentication | MFA, brute force protection, secure session management | Auth0 provides all authentication controls |
-| NIST SP 800-63B AAL2 | Multi-factor authentication, session timeout ≤24hr | Auth0 MFA + configurable session lifetime |
-| IEC 62443 SR 1.1 | Human user identification and authentication | Auth0 unique user IDs + authentication |
-| IEC 62443 SR 1.1 RE 2 | MFA for untrusted networks (SL2+) | Auth0 MFA enforced for all external access |
+| Standard              | Requirement                                            | Implementation                             |
+| --------------------- | ------------------------------------------------------ | ------------------------------------------ |
+| OWASP Authentication  | MFA, brute force protection, secure session management | Auth0 provides all authentication controls |
+| NIST SP 800-63B AAL2  | Multi-factor authentication, session timeout ≤24hr     | Auth0 MFA + configurable session lifetime  |
+| IEC 62443 SR 1.1      | Human user identification and authentication           | Auth0 unique user IDs + authentication     |
+| IEC 62443 SR 1.1 RE 2 | MFA for untrusted networks (SL2+)                      | Auth0 MFA enforced for all external access |
 
 ### Authorization Standards
 
-| Standard | Requirement | Implementation |
-|----------|-------------|----------------|
-| OWASP Authorization | Least privilege, deny by default, RBAC | Platform implements role-based access control |
-| NIST SP 800-53 AC-3 | Access enforcement at all access points | ManagementConsole enforces via database lookups |
-| NIST SP 800-53 AC-6 | Least privilege | Viewer/Editor/Admin roles with minimal permissions |
-| IEC 62443 SR 2.1 | Authorization enforcement for all users | Platform validates permissions on each request |
+| Standard            | Requirement                             | Implementation                                     |
+| ------------------- | --------------------------------------- | -------------------------------------------------- |
+| OWASP Authorization | Least privilege, deny by default, RBAC  | Platform implements role-based access control      |
+| NIST SP 800-53 AC-3 | Access enforcement at all access points | ManagementConsole enforces via database lookups    |
+| NIST SP 800-53 AC-6 | Least privilege                         | Viewer/Editor/Admin roles with minimal permissions |
+| IEC 62443 SR 2.1    | Authorization enforcement for all users | Platform validates permissions on each request     |
 
 ### Session Management
 
-| Standard | Requirement | Implementation |
-|----------|-------------|----------------|
-| OWASP Session | Token rotation, secure cookies, logout | Backend issues HTTPOnly JWT cookies (14-day sliding window, 30-day absolute) |
-| NIST SP 800-63B | Idle timeout ≤1hr (AAL2) | Not yet implemented (30-day absolute timeout only) |
+| Standard        | Requirement                            | Implementation                                                               |
+| --------------- | -------------------------------------- | ---------------------------------------------------------------------------- |
+| OWASP Session   | Token rotation, secure cookies, logout | Backend issues HTTPOnly JWT cookies (14-day sliding window, 30-day absolute) |
+| NIST SP 800-63B | Idle timeout ≤1hr (AAL2)               | Not yet implemented (30-day absolute timeout only)                           |
 
 **Note**: Auth0 handles authentication only. ManagementConsole backend manages sessions independently using its own JWT cookies signed with `JWT_SECRET_KEY`.
 
 ### Accepted Limitations
 
-| Standard | Requirement | Current Status |
-|----------|-------------|----------------|
-| NIST SP 800-63B AAL2 | Idle timeout ≤1hr | Not implemented (30-day absolute timeout only) |
-| NIST AC-2(3) | Disable dormant accounts | Not implemented (manual process) |
-| IEC 62443 SL3 | MFA for all interfaces | MFA for external only (SL2 compliant) |
-| OWASP | Immediate permission revocation | Permission updates require user acceptance |
+| Standard             | Requirement                     | Current Status                                 |
+| -------------------- | ------------------------------- | ---------------------------------------------- |
+| NIST SP 800-63B AAL2 | Idle timeout ≤1hr               | Not implemented (30-day absolute timeout only) |
+| NIST AC-2(3)         | Disable dormant accounts        | Not implemented (manual process)               |
+| IEC 62443 SL3        | MFA for all interfaces          | MFA for external only (SL2 compliant)          |
+| OWASP                | Immediate permission revocation | Permission updates require user acceptance     |
 
 ### Target Security Level
 
 ManagementConsole targets **IEC 62443 Security Level 2 (SL2)**, appropriate for:
+
 - Protection against intentional violation using simple means
 - Cybercrime-level threat actors with generic skills
 - Standard manufacturing and industrial operations
@@ -330,6 +337,7 @@ The permission system provides fine-grained authorization that is ready for enfo
 ### Auth0 Organization Linking
 
 Each company can be linked to an Auth0 organization, enabling:
+
 - Single sign-on through your corporate identity provider
 - Centralized user management in Auth0
 - Multi-company access with one email (each company links to its own Auth0 org)
