@@ -127,11 +127,11 @@ Access revocation happens at Layer 1 (session invalidation), not through permiss
 - **Permission updates**: Admins can update user permissions at any time. ManagementConsole validates the user's current permissions from the database on each request, so changes take effect quickly (within the cache window of up to 10 minutes)
 - **Instance removal**: Removing an instance from ManagementConsole denies all further communication
 
-> **Design Trade-off: Permission Updates Require User Cooperation**
+> **Design Trade-off: Permission Updates Require Active Session**
 >
-> When an admin updates a user's permissions, the user must accept the new permission certificate. If a user doesn't accept the update, they retain their original privileges until they do.
+> When an admin updates a user's permissions, the new permission certificate is automatically applied in the background by the user's frontend worker. However, this only happens while the user is logged in. If the user is offline, they retain their original privileges until their next login.
 >
-> **Best practice:** To immediately revoke access or demote a user, **remove them entirely** - this invalidates their session without requiring their cooperation. You can then re-invite them with the correct permissions.
+> **Best practice:** To immediately revoke access or demote a user, **remove them entirely** - this invalidates their session without requiring them to be online. You can then re-invite them with the correct permissions.
 
 **What happens when users leave**: When you remove a user, they immediately lose access (session invalidated). Resources they created and users they invited remain - permission grants represent organizational decisions, not personal relationships.
 
