@@ -150,7 +150,7 @@ ManagementConsole manages user sessions independently from Auth0 using JWT cooki
 
 - **Creation**: Session token issued after successful Auth0 authentication
 - **Storage**: HTTPOnly cookie with Secure and SameSite=Strict attributes
-- **Duration**: 14-day sliding window (extends on activity), 30-day absolute maximum
+- **Duration**: 14-day sliding window (extends on activity during the last 7 days of the 14-day window), 30-day absolute maximum
 - **Termination**: Explicit logout, absolute timeout, or user removal from company
 
 **Session Policies**:
