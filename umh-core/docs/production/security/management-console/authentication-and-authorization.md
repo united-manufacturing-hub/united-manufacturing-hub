@@ -301,7 +301,7 @@ For critical infrastructure requiring SL3+, contact UMH for enterprise security 
 - [OWASP Authorization Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Authorization_Cheat_Sheet.html)
 - [NIST SP 800-63B Digital Identity Guidelines](https://pages.nist.gov/800-63-4/sp800-63b.html)
 - [NIST SP 800-53 Access Control](https://csrc.nist.gov/pubs/sp/800/53/r5/upd1/final)
-- [IEC 62443-3-3 System Security Requirements](https://www.iec.ch/iec-62443)
+- [ISA/IEC 62443 Series of Standards](https://www.isa.org/standards-and-publications/isa-standards/isa-iec-62443-series-of-standards)
 
 ---
 
