@@ -177,7 +177,7 @@ ManagementConsole's authentication system is designed to protect against specifi
 
 The authentication system operates across three trust boundaries:
 
-1. **User Browser ↔ ManagementConsole**: TLS-encrypted connections with session tokens stored as HTTPOnly cookies
+1. **User Browser ↔ ManagementConsole**: TLS-encrypted connections with session tokens stored as HTTPOnly cookies (stateless authentication)
 2. **ManagementConsole ↔ Auth0**: OAuth 2.0 flow for user authentication, with Auth0 handling credential storage and MFA
 3. **ManagementConsole ↔ umh-core Instances**: AUTH_TOKEN-based authentication for instance identity, with permission certificates for authorization
 
