@@ -38,8 +38,7 @@ func (s *Supervisor[TObserved, TDesired]) Start(ctx context.Context) <-chan stru
 	s.ctxMu.Unlock()
 	s.started.Store(true)
 
-	s.logger.Debugw("supervisor_started",
-		"worker_type", s.workerType)
+	s.logger.Debugw("supervisor_started")
 
 	// Use the child context for all goroutines so they stop when Shutdown() is called
 	s.ctxMu.RLock()
@@ -55,7 +54,7 @@ func (s *Supervisor[TObserved, TDesired]) Start(ctx context.Context) <-chan stru
 
 	for _, workerCtx := range s.workers {
 		if err := workerCtx.collector.Start(supervisorCtx); err != nil {
-			s.logger.Errorf("Failed to start collector for worker %s: %v", workerCtx.identity.ID, err)
+			s.logger.Errorw("collector_start_failed", "error", err)
 		}
 
 		workerCtx.executor.Start(supervisorCtx)
@@ -87,13 +86,12 @@ func (s *Supervisor[TObserved, TDesired]) tickLoop(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			s.logger.Infow("tick_loop_stopped",
-				"worker_type", s.workerType)
+			s.logger.Infow("tick_loop_stopped")
 
 			return
 		case <-ticker.C:
 			if err := s.tick(ctx); err != nil {
-				s.logger.Errorf("Tick error: %v", err)
+				s.logger.Errorw("tick_error", "error", err)
 			}
 		}
 	}
@@ -108,21 +106,18 @@ func (s *Supervisor[TObserved, TDesired]) tickLoop(ctx context.Context) {
 // the parent's context is still active.
 func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 	s.logTrace("lifecycle",
-		"lifecycle_event", "shutdown_start",
-		"worker_type", s.workerType)
+		"lifecycle_event", "shutdown_start")
 
 	s.logTrace("lifecycle",
 		"lifecycle_event", "mutex_lock_acquire",
 		"mutex_name", "supervisor.mu",
-		"lock_type", "write",
-		"worker_type", s.workerType)
+		"lock_type", "write")
 
 	s.mu.Lock()
 
 	s.logTrace("lifecycle",
 		"lifecycle_event", "mutex_lock_acquired",
-		"mutex_name", "supervisor.mu",
-		"worker_type", s.workerType)
+		"mutex_name", "supervisor.mu")
 
 	// Make idempotent - check if already shut down
 	if !s.started.Load() {
@@ -130,19 +125,16 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 
 		s.logTrace("lifecycle",
 			"lifecycle_event", "shutdown_skip",
-			"worker_type", s.workerType,
 			"reason", "already_shutdown")
 
-		s.logger.Debugw("supervisor_already_shutdown",
-			"worker_type", s.workerType)
+		s.logger.Debugw("supervisor_already_shutdown")
 
 		return
 	}
 
 	s.started.Store(false)
 
-	s.logger.Infow("supervisor_shutting_down",
-		"worker_type", s.workerType)
+	s.logger.Infow("supervisor_shutting_down")
 
 	// We use a temporary context that won't be cancelled during graceful shutdown.
 	gracefulCtx := context.Background()
@@ -179,7 +171,6 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 	// graceful shutdown (FSM transitions, disconnect actions, emit SignalNeedsRemoval).
 	if len(childrenToShutdown) > 0 {
 		s.logger.Infow("graceful_shutdown_children_starting",
-			"worker_type", s.workerType,
 			"child_count", len(childrenToShutdown))
 
 		for childName, child := range childrenToShutdown {
@@ -189,7 +180,6 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 				"parent_worker_type", s.workerType)
 
 			s.logger.Debugw("child_shutting_down",
-				"worker_type", s.workerType,
 				"child_name", childName)
 
 			// child.Shutdown() will recursively:
@@ -201,11 +191,9 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 			// Wait for child supervisor to fully shut down
 			if done, exists := childDoneChans[childName]; exists {
 				s.logger.Debugw("waiting_child_shutdown",
-					"worker_type", s.workerType,
 					"child_name", childName)
 				<-done
 				s.logger.Debugw("child_shutdown_complete",
-					"worker_type", s.workerType,
 					"child_name", childName)
 			}
 
@@ -215,8 +203,7 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 				"parent_worker_type", s.workerType)
 		}
 
-		s.logger.Infow("graceful_shutdown_children_complete",
-			"worker_type", s.workerType)
+		s.logger.Infow("graceful_shutdown_children_complete")
 	}
 
 	// GRACEFUL SHUTDOWN PHASE 2: Request graceful shutdown on OWN workers
@@ -224,15 +211,12 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 	// The tick loop is still running, so workers can process their state machines.
 	if len(workerIDs) > 0 {
 		s.logger.Infow("graceful_shutdown_workers_starting",
-			"worker_type", s.workerType,
 			"worker_count", len(workerIDs))
 
 		// Request graceful shutdown on all workers
 		for _, workerID := range workerIDs {
 			if err := s.requestShutdown(gracefulCtx, workerID, "supervisor_shutdown"); err != nil {
 				s.logger.Warnw("graceful_shutdown_request_failed",
-					"worker_type", s.workerType,
-					"worker_id", workerID,
 					"error", err)
 			}
 		}
@@ -247,7 +231,6 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 			select {
 			case <-timeoutCh:
 				s.logger.Warnw("graceful_shutdown_timeout",
-					"worker_type", s.workerType,
 					"timeout", gracefulTimeout)
 				break gracefulWaitLoop
 			case <-ticker.C:
@@ -256,8 +239,7 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 				s.mu.RUnlock()
 
 				if remaining == 0 {
-					s.logger.Infow("graceful_shutdown_workers_removed",
-						"worker_type", s.workerType)
+					s.logger.Infow("graceful_shutdown_workers_removed")
 					break gracefulWaitLoop
 				}
 			}
@@ -288,10 +270,8 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 	// Shutdown all per-worker executors and collectors (any remaining after graceful shutdown)
 	// These have their own goroutines that need to be stopped to prevent leaks.
 	shutdownCtx := context.Background()
-	for workerID, workerCtx := range s.workers {
-		s.logger.Debugw("worker_shutting_down",
-			"worker_type", s.workerType,
-			"worker_id", workerID)
+	for _, workerCtx := range s.workers {
+		s.logger.Debugw("worker_shutting_down")
 
 		// Stop the collector's observation loop
 		workerCtx.collector.Stop(shutdownCtx)
@@ -303,8 +283,7 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 	s.mu.Unlock()
 
 	s.logTrace("lifecycle",
-		"lifecycle_event", "shutdown_complete",
-		"worker_type", s.workerType)
+		"lifecycle_event", "shutdown_complete")
 }
 
 // startMetricsReporter starts a goroutine that periodically records hierarchy metrics.
@@ -399,7 +378,7 @@ func (s *Supervisor[TObserved, TDesired]) logTrace(msg string, fields ...interfa
 }
 
 func (s *Supervisor[TObserved, TDesired]) requestShutdown(ctx context.Context, workerID string, reason string) error {
-	s.logger.Warnf("Requesting shutdown for worker %s: %s", workerID, reason)
+	s.logger.Warnw("shutdown_requested", "reason", reason)
 
 	s.mu.RLock()
 	_, exists := s.workers[workerID]
@@ -467,7 +446,7 @@ func (s *Supervisor[TObserved, TDesired]) RequestShutdown(ctx context.Context, r
 
 	for _, workerID := range workerIDs {
 		if err := s.requestShutdown(ctx, workerID, reason); err != nil {
-			s.logger.Warnf("Failed to request shutdown for worker %s: %v", workerID, err)
+			s.logger.Warnw("shutdown_request_failed", "error", err)
 		}
 	}
 	return nil

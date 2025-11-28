@@ -168,7 +168,7 @@ var _ = Describe("Lifecycle Logging", func() {
 			setupLogger(zapcore.DebugLevel)
 		})
 
-		It("should log tick_start with worker_id", func() {
+		It("should log tick_start with worker info", func() {
 			cfg := supervisor.Config{
 				WorkerType:              "test",
 				Store:                   store,
@@ -180,9 +180,10 @@ var _ = Describe("Lifecycle Logging", func() {
 			sup = supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](cfg)
 
 			identity := fsmv2.Identity{
-				ID:         "worker-1",
-				Name:       "Test Worker",
-				WorkerType: "test",
+				ID:            "worker-1",
+				Name:          "Test Worker",
+				WorkerType:    "test",
+				HierarchyPath: "worker-1(test)",
 			}
 			worker := &mockWorker{}
 
@@ -194,7 +195,8 @@ var _ = Describe("Lifecycle Logging", func() {
 			tickStart := findLogEntry(entries, "debug", "tick_start")
 
 			Expect(tickStart).ToNot(BeNil(), "Expected to find 'tick_start' lifecycle event in debug logs")
-			Expect(tickStart["worker_id"]).To(Equal("worker-1"))
+			// Worker field has format "worker-id(worker-type)" from HierarchyPath
+			Expect(tickStart["worker"]).To(ContainSubstring("worker-1"))
 		})
 
 		It("should log mutex_lock_acquire", func() {

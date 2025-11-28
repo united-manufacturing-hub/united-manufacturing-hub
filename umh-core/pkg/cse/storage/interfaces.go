@@ -70,8 +70,6 @@ import (
 // coexist intentionally. The interface methods are NOT deprecated - they serve the runtime
 // polymorphic use case. Use the typed functions for compile-time type safety when the
 // worker type is known.
-//
-// See MIGRATION.md for detailed examples and migration patterns.
 type TriangularStoreInterface interface {
 	// SaveIdentity stores immutable worker identity (runtime polymorphic API).
 	// Use when worker type is determined at runtime (supervisors, factories).

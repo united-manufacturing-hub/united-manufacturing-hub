@@ -37,7 +37,7 @@ func (a *ConnectAction) Execute(ctx context.Context, depsAny any) error {
 	deps := depsAny.(snapshot.SlowDependencies)
 	logger := deps.GetLogger()
 
-	logger.Infof("Attempting to connect with %d second delay", a.DelaySeconds)
+	logger.Infow("connect_attempting", "delay_seconds", a.DelaySeconds)
 
 	if a.DelaySeconds > 0 {
 		select {

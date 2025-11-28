@@ -734,7 +734,7 @@ var _ = Describe("TriangularStore", func() {
 		})
 
 		Context("when parts are missing", func() {
-			It("should fail when desired and observed are missing", func() {
+			It("should succeed with nil desired and observed when only identity exists", func() {
 				ts := storage.NewTriangularStore(newMockStore(), zap.NewNop().Sugar())
 				err := ts.SaveIdentity(ctx, "container", "worker-456", persistence.Document{
 					"id":   "worker-456",
@@ -742,8 +742,12 @@ var _ = Describe("TriangularStore", func() {
 				})
 				Expect(err).ToNot(HaveOccurred())
 
-				_, err = ts.LoadSnapshot(ctx, "container", "worker-456")
-				Expect(err).To(HaveOccurred())
+				snapshot, err := ts.LoadSnapshot(ctx, "container", "worker-456")
+				Expect(err).ToNot(HaveOccurred())
+				Expect(snapshot.Identity).ToNot(BeNil())
+				Expect(snapshot.Identity["name"]).To(Equal("Container B"))
+				Expect(snapshot.Desired).To(BeNil())
+				Expect(snapshot.Observed).To(BeNil())
 			})
 		})
 	})
@@ -834,51 +838,60 @@ var _ = Describe("TriangularStore", func() {
 
 	Describe("deriveWorkerType", func() {
 		It("should derive parent from ParentDesiredState", func() {
-			workerType := storage.DeriveWorkerType[ParentDesiredState]()
+			workerType, err := storage.DeriveWorkerType[ParentDesiredState]()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(workerType).To(Equal("parent"))
 		})
 
 		It("should derive parent from ParentObservedState", func() {
-			workerType := storage.DeriveWorkerType[ParentObservedState]()
+			workerType, err := storage.DeriveWorkerType[ParentObservedState]()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(workerType).To(Equal("parent"))
 		})
 
 		It("should derive communicator from CommunicatorObservedState", func() {
-			workerType := storage.DeriveWorkerType[CommunicatorObservedState]()
+			workerType, err := storage.DeriveWorkerType[CommunicatorObservedState]()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(workerType).To(Equal("communicator"))
 		})
 
 		It("should derive child from ChildDesiredState", func() {
-			workerType := storage.DeriveWorkerType[ChildDesiredState]()
+			workerType, err := storage.DeriveWorkerType[ChildDesiredState]()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(workerType).To(Equal("child"))
 		})
 
-		It("should panic for type without DesiredState or ObservedState suffix", func() {
-			Expect(func() {
-				storage.DeriveWorkerType[InvalidType]()
-			}).To(Panic())
+		It("should return error for type without DesiredState or ObservedState suffix", func() {
+			_, err := storage.DeriveWorkerType[InvalidType]()
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("does not end with DesiredState or ObservedState"))
 		})
 
-		It("should panic for type with empty name", func() {
-			Expect(func() {
-				storage.DeriveWorkerType[EmptyNameType]()
-			}).To(Panic())
+		It("should return error for type without state suffix (EmptyNameType)", func() {
+			// EmptyNameType has a name but doesn't end with DesiredState or ObservedState
+			// This tests the same path as InvalidType - types that don't follow the naming convention
+			_, err := storage.DeriveWorkerType[EmptyNameType]()
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("does not end with DesiredState or ObservedState"))
 		})
 	})
 
 	Describe("DeriveCollectionName", func() {
 		It("should derive collection name for identity role", func() {
-			name := storage.DeriveCollectionName[TestObservedState](storage.RoleIdentity)
+			name, err := storage.DeriveCollectionName[TestObservedState](storage.RoleIdentity)
+			Expect(err).NotTo(HaveOccurred())
 			Expect(name).To(Equal("test_identity"))
 		})
 
 		It("should derive collection name for desired role", func() {
-			name := storage.DeriveCollectionName[TestObservedState](storage.RoleDesired)
+			name, err := storage.DeriveCollectionName[TestObservedState](storage.RoleDesired)
+			Expect(err).NotTo(HaveOccurred())
 			Expect(name).To(Equal("test_desired"))
 		})
 
 		It("should derive collection name for observed role", func() {
-			name := storage.DeriveCollectionName[TestObservedState](storage.RoleObserved)
+			name, err := storage.DeriveCollectionName[TestObservedState](storage.RoleObserved)
+			Expect(err).NotTo(HaveOccurred())
 			Expect(name).To(Equal("test_observed"))
 		})
 	})

@@ -185,7 +185,8 @@ children:
 		It("should return RunningState for graceful shutdown support", func() {
 			s := worker.GetInitialState()
 			Expect(s).NotTo(BeNil())
-			Expect(s.String()).To(Equal("RunningState"))
+			// DeriveStateName strips "State" suffix, so "RunningState" becomes "Running"
+			Expect(s.String()).To(Equal("Running"))
 		})
 	})
 

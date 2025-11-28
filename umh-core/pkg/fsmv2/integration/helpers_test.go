@@ -307,7 +307,10 @@ func NewTestApplicationSupervisor(yamlConfig string, logger *zap.SugaredLogger) 
 
 	basicStore := memory.NewInMemoryStore()
 
-	applicationWorkerType := storage.DeriveWorkerType[snapshot.ApplicationObservedState]()
+	applicationWorkerType, err := storage.DeriveWorkerType[snapshot.ApplicationObservedState]()
+	if err != nil {
+		return nil, fmt.Errorf("failed to derive worker type: %w", err)
+	}
 	_ = basicStore.CreateCollection(ctx, applicationWorkerType+"_identity", nil)
 	_ = basicStore.CreateCollection(ctx, applicationWorkerType+"_desired", nil)
 	_ = basicStore.CreateCollection(ctx, applicationWorkerType+"_observed", nil)

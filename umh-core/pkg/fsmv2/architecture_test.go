@@ -273,6 +273,16 @@ var _ = Describe("FSMv2 Architecture Validation", func() {
 				}
 			})
 		})
+
+		Describe("Structured Logging Only (Invariant: Consistent Log Format)", func() {
+			It("should use structured logging (Warnw/Errorw/Infow) not format-based (Warnf/Errorf/Infof)", func() {
+				violations := validator.ValidateStructuredLogging(getFsmv2Dir())
+				if len(violations) > 0 {
+					message := validator.FormatViolationsWithPattern("Non-Structured Logging Violations", violations, "NON_STRUCTURED_LOGGING")
+					Fail(message)
+				}
+			})
+		})
 	})
 })
 

@@ -56,7 +56,11 @@ func NewFailingWorker(
 
 	// Set workerType if not already set (derive from snapshot type)
 	if identity.WorkerType == "" {
-		identity.WorkerType = storage.DeriveWorkerType[snapshot.FailingObservedState]()
+		workerType, err := storage.DeriveWorkerType[snapshot.FailingObservedState]()
+		if err != nil {
+			return nil, fmt.Errorf("failed to derive worker type: %w", err)
+		}
+		identity.WorkerType = workerType
 	}
 	dependencies := NewFailingDependencies(connectionPool, logger, identity)
 

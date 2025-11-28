@@ -100,6 +100,11 @@ type TriangularStore struct {
 	// Memory cache for hot path performance (LoadSnapshot is called 100-1000+ times/sec)
 	snapshotCache map[string]*cachedSnapshot // key: "{workerType}_{id}"
 	cacheMutex    sync.RWMutex
+
+	// Known worker types - automatically populated as workers are saved
+	// Used by buildBootstrap to discover all worker types for full state sync
+	knownWorkerTypes   map[string]struct{}
+	knownWorkerTypesMu sync.RWMutex
 }
 
 // cachedSnapshot stores a snapshot with its syncID for cache invalidation.
@@ -123,12 +128,21 @@ type cachedSnapshot struct {
 //   - *TriangularStore: Ready-to-use triangular store instance
 func NewTriangularStore(store persistence.Store, logger *zap.SugaredLogger) *TriangularStore {
 	return &TriangularStore{
-		store:         store,
-		syncID:        &atomic.Int64{},
-		logger:        logger,
-		deltaStore:    NewDeltaStore(store),
-		snapshotCache: make(map[string]*cachedSnapshot),
+		store:            store,
+		syncID:           &atomic.Int64{},
+		logger:           logger,
+		deltaStore:       NewDeltaStore(store),
+		snapshotCache:    make(map[string]*cachedSnapshot),
+		knownWorkerTypes: make(map[string]struct{}),
 	}
+}
+
+// registerWorkerType records a worker type for use in bootstrap.
+// Called automatically during Save operations.
+func (ts *TriangularStore) registerWorkerType(workerType string) {
+	ts.knownWorkerTypesMu.Lock()
+	ts.knownWorkerTypes[workerType] = struct{}{}
+	ts.knownWorkerTypesMu.Unlock()
 }
 
 
@@ -168,6 +182,7 @@ func NewTriangularStore(store persistence.Store, logger *zap.SugaredLogger) *Tri
 //	    "workerType": "container",
 //	})
 func (ts *TriangularStore) SaveIdentity(ctx context.Context, workerType string, id string, identity persistence.Document) error {
+	ts.registerWorkerType(workerType)
 	_, _, err := ts.saveWithDelta(ctx, workerType, id, identity, IdentitySaveOptions)
 
 	return err
@@ -208,8 +223,6 @@ func (ts *TriangularStore) LoadIdentity(ctx context.Context, workerType string, 
 // This allows supervisors to handle multiple worker types at runtime without type-specific code.
 //
 // For compile-time type safety, use SaveDesiredTyped[T]() instead.
-//
-// Migration guide: pkg/cse/storage/MIGRATION.md
 //
 // Example (runtime polymorphic code):
 //
@@ -262,8 +275,6 @@ func (ts *TriangularStore) SaveDesired(ctx context.Context, workerType string, i
 //
 // Deprecated: Use LoadDesiredTyped[T]() instead for type safety and no registry dependency.
 // This method will be removed in a future version.
-//
-// Migration guide: pkg/cse/storage/MIGRATION.md
 //
 // Parameters:
 //   - ctx: Cancellation context
@@ -405,8 +416,6 @@ func (ts *TriangularStore) getChangedFieldsWithValues(current, new persistence.D
 //
 // For compile-time type safety, use SaveObservedTyped[T]() instead.
 //
-// Migration guide: pkg/cse/storage/MIGRATION.md
-//
 // Example (runtime polymorphic code):
 //
 //	changed, err := ts.SaveObserved(ctx, "container", id, doc)
@@ -460,8 +469,6 @@ func (ts *TriangularStore) SaveObserved(ctx context.Context, workerType string, 
 //
 // Deprecated: Use LoadObservedTyped[T]() instead for type safety and no registry dependency.
 // This method will be removed in a future version.
-//
-// Migration guide: pkg/cse/storage/MIGRATION.md
 //
 // Parameters:
 //   - ctx: Cancellation context
@@ -674,12 +681,12 @@ func (ts *TriangularStore) LoadSnapshot(ctx context.Context, workerType string, 
 	}
 
 	desired, err := tx.Get(ctx, desiredCollectionName, id)
-	if err != nil {
+	if err != nil && !errors.Is(err, persistence.ErrNotFound) {
 		return nil, fmt.Errorf("failed to load desired: %w", err)
 	}
 
 	observed, err := tx.Get(ctx, observedCollectionName, id)
-	if err != nil {
+	if err != nil && !errors.Is(err, persistence.ErrNotFound) {
 		return nil, fmt.Errorf("failed to load observed: %w", err)
 	}
 
@@ -693,10 +700,14 @@ func (ts *TriangularStore) LoadSnapshot(ctx context.Context, workerType string, 
 		Observed: observed,
 	}
 
+	// Capture syncID AFTER loading data to avoid TOCTOU race.
+	// If we use the syncID captured before loading, it may be stale by now.
+	syncIDAtCacheTime := ts.syncID.Load()
+
 	ts.cacheMutex.Lock()
 	ts.snapshotCache[cacheKey] = &cachedSnapshot{
 		snapshot: snapshot,
-		syncID:   currentSyncID,
+		syncID:   syncIDAtCacheTime,
 	}
 	ts.cacheMutex.Unlock()
 
@@ -828,7 +839,10 @@ func documentToStruct(doc persistence.Document, dest interface{}) error {
 func LoadDesiredTyped[T any](ts *TriangularStore, ctx context.Context, id string) (T, error) {
 	var result T
 
-	collectionName := DeriveCollectionName[T](RoleDesired)
+	collectionName, err := DeriveCollectionName[T](RoleDesired)
+	if err != nil {
+		return result, fmt.Errorf("failed to derive collection name: %w", err)
+	}
 
 	// Load from persistence
 	doc, err := ts.store.Get(ctx, collectionName, id)
@@ -900,7 +914,11 @@ func SaveDesiredTyped[T any](ts *TriangularStore, ctx context.Context, id string
 		desiredDoc["id"] = id
 	}
 
-	workerType := DeriveWorkerType[T]()
+	workerType, err := DeriveWorkerType[T]()
+	if err != nil {
+		return false, fmt.Errorf("failed to derive worker type: %w", err)
+	}
+
 	changed, _, err = ts.saveWithDelta(ctx, workerType, id, desiredDoc, DesiredSaveOptions)
 
 	return changed, err
@@ -929,7 +947,10 @@ func SaveDesiredTyped[T any](ts *TriangularStore, ctx context.Context, id string
 func LoadObservedTyped[T any](ts *TriangularStore, ctx context.Context, id string) (T, error) {
 	var result T
 
-	collectionName := DeriveCollectionName[T](RoleObserved)
+	collectionName, err := DeriveCollectionName[T](RoleObserved)
+	if err != nil {
+		return result, fmt.Errorf("failed to derive collection name: %w", err)
+	}
 
 	// Load from persistence
 	doc, err := ts.store.Get(ctx, collectionName, id)
@@ -996,34 +1017,38 @@ func SaveObservedTyped[T any](ts *TriangularStore, ctx context.Context, id strin
 	}
 
 	// Use unified write path with observed-specific options
-	workerType := DeriveWorkerType[T]()
+	workerType, err := DeriveWorkerType[T]()
+	if err != nil {
+		return false, fmt.Errorf("failed to derive worker type: %w", err)
+	}
+
 	changed, _, err := ts.saveWithDelta(ctx, workerType, id, observedDoc, ObservedSaveOptions)
 
 	return changed, err
 }
 
-func DeriveWorkerType[T any]() string {
+func DeriveWorkerType[T any]() (string, error) {
 	var zero T
 
 	typeName := reflect.TypeOf(zero).Name()
 
 	if typeName == "" {
-		panic("deriveWorkerType: type has empty name")
+		return "", errors.New("deriveWorkerType: type has empty name")
 	}
 
 	if strings.HasSuffix(typeName, "DesiredState") {
 		workerType := strings.TrimSuffix(typeName, "DesiredState")
 
-		return strings.ToLower(workerType)
+		return strings.ToLower(workerType), nil
 	}
 
 	if strings.HasSuffix(typeName, "ObservedState") {
 		workerType := strings.TrimSuffix(typeName, "ObservedState")
 
-		return strings.ToLower(workerType)
+		return strings.ToLower(workerType), nil
 	}
 
-	panic(fmt.Sprintf("deriveWorkerType: type %q does not end with DesiredState or ObservedState", typeName))
+	return "", fmt.Errorf("deriveWorkerType: type %q does not end with DesiredState or ObservedState", typeName)
 }
 
 // DeriveCollectionName derives the collection name for a given type and role.
@@ -1047,10 +1072,13 @@ func DeriveWorkerType[T any]() string {
 // Example:
 //
 //	type ContainerObservedState struct { ... }
-//	collectionName := DeriveCollectionName[ContainerObservedState](RoleObserved)
-//	// Returns: "container_observed"
-func DeriveCollectionName[T any](role string) string {
-	workerType := DeriveWorkerType[T]()
+//	collectionName, err := DeriveCollectionName[ContainerObservedState](RoleObserved)
+//	// Returns: "container_observed", nil
+func DeriveCollectionName[T any](role string) (string, error) {
+	workerType, err := DeriveWorkerType[T]()
+	if err != nil {
+		return "", err
+	}
 
 	var suffix string
 
@@ -1062,10 +1090,10 @@ func DeriveCollectionName[T any](role string) string {
 	case RoleObserved:
 		suffix = "_observed"
 	default:
-		panic("unknown role: " + role)
+		return "", fmt.Errorf("unknown role: %s", role)
 	}
 
-	return workerType + suffix
+	return workerType + suffix, nil
 }
 
 // GetDeltas returns delta changes for sync clients.
@@ -1144,12 +1172,62 @@ func (ts *TriangularStore) GetDeltas(ctx context.Context, sub Subscription) (Del
 }
 
 // buildBootstrap creates full state snapshot for clients that need to re-sync.
+// It iterates over all known worker types and builds a complete snapshot of each worker.
 func (ts *TriangularStore) buildBootstrap(ctx context.Context, atSyncID int64) (*BootstrapData, error) {
-	// For now, return empty bootstrap
-	// Full implementation requires knowing all worker types to iterate
-	// This will be populated when we implement the full communicator_cse
+	workers := make([]WorkerSnapshot, 0)
+
+	// Get a copy of known worker types to avoid holding the lock during DB operations
+	ts.knownWorkerTypesMu.RLock()
+	workerTypes := make([]string, 0, len(ts.knownWorkerTypes))
+	for wt := range ts.knownWorkerTypes {
+		workerTypes = append(workerTypes, wt)
+	}
+	ts.knownWorkerTypesMu.RUnlock()
+
+	// Iterate over all known worker types
+	for _, workerType := range workerTypes {
+		// Query identity collection to get all worker IDs for this type
+		identityCollection := workerType + "_identity"
+		identityDocs, err := ts.store.Find(ctx, identityCollection, persistence.Query{})
+		if err != nil {
+			// Collection may not exist or be empty - skip silently
+			continue
+		}
+
+		// Build snapshot for each worker
+		for _, identityDoc := range identityDocs {
+			id, ok := identityDoc["id"].(string)
+			if !ok {
+				continue // Skip invalid documents
+			}
+
+			// Load the full snapshot (includes identity, desired, observed)
+			snapshot, err := ts.LoadSnapshot(ctx, workerType, id)
+			if err != nil {
+				// Skip workers that can't be loaded
+				continue
+			}
+
+			// Convert Observed to persistence.Document (may be nil or interface{})
+			var observedDoc persistence.Document
+			if snapshot.Observed != nil {
+				if doc, ok := snapshot.Observed.(persistence.Document); ok {
+					observedDoc = doc
+				}
+			}
+
+			workers = append(workers, WorkerSnapshot{
+				WorkerType: workerType,
+				WorkerID:   id,
+				Identity:   snapshot.Identity,
+				Desired:    snapshot.Desired,
+				Observed:   observedDoc,
+			})
+		}
+	}
+
 	return &BootstrapData{
-		Workers:     []WorkerSnapshot{},
+		Workers:     workers,
 		AtSyncID:    atSyncID,
 		TimestampMs: time.Now().UnixMilli(),
 	}, nil

@@ -54,7 +54,11 @@ func NewSlowWorker(
 
 	// Set workerType if not already set (derive from snapshot type)
 	if identity.WorkerType == "" {
-		identity.WorkerType = storage.DeriveWorkerType[snapshot.SlowObservedState]()
+		workerType, err := storage.DeriveWorkerType[snapshot.SlowObservedState]()
+		if err != nil {
+			return nil, fmt.Errorf("failed to derive worker type: %w", err)
+		}
+		identity.WorkerType = workerType
 	}
 	dependencies := NewSlowDependencies(connectionPool, logger, identity)
 

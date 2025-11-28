@@ -107,6 +107,7 @@ package communicator
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"go.uber.org/zap"
@@ -187,12 +188,15 @@ type CommunicatorWorker struct {
 // Example:
 //
 //	httpTransport := transport.NewHTTPTransport("https://relay.umh.app")
-//	worker := NewCommunicatorWorker(
+//	worker, err := NewCommunicatorWorker(
 //	    "communicator-1",
 //	    "Communicator Worker",
 //	    httpTransport,
 //	    logger,
 //	)
+//	if err != nil {
+//	    return fmt.Errorf("failed to create communicator worker: %w", err)
+//	}
 //	supervisor := fsmv2.NewSupervisor(worker, logger)
 //	supervisor.Start(ctx)
 func NewCommunicatorWorker(
@@ -200,8 +204,11 @@ func NewCommunicatorWorker(
 	name string,
 	transportParam transport.Transport,
 	logger *zap.SugaredLogger,
-) *CommunicatorWorker {
-	workerType := storage.DeriveWorkerType[snapshot.CommunicatorObservedState]()
+) (*CommunicatorWorker, error) {
+	workerType, err := storage.DeriveWorkerType[snapshot.CommunicatorObservedState]()
+	if err != nil {
+		return nil, fmt.Errorf("failed to derive worker type: %w", err)
+	}
 
 	// Create identity first so it can be used for dependency logging
 	identity := fsmv2.Identity{
@@ -218,7 +225,7 @@ func NewCommunicatorWorker(
 		BaseWorker: helpers.NewBaseWorker(dependencies),
 		identity:   identity,
 		logger:     logger,
-	}
+	}, nil
 }
 
 // CollectObservedState returns the current observed state of the communicator.

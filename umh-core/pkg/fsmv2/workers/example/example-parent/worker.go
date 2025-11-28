@@ -51,7 +51,11 @@ func NewParentWorker(
 
 	// Set workerType if not already set (derive from snapshot type)
 	if identity.WorkerType == "" {
-		identity.WorkerType = storage.DeriveWorkerType[snapshot.ParentObservedState]()
+		workerType, err := storage.DeriveWorkerType[snapshot.ParentObservedState]()
+		if err != nil {
+			return nil, fmt.Errorf("failed to derive worker type: %w", err)
+		}
+		identity.WorkerType = workerType
 	}
 	dependencies := NewParentDependencies(logger, identity)
 

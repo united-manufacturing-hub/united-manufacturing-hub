@@ -222,7 +222,10 @@ func NewApplicationSupervisor(cfg SupervisorConfig) (*supervisor.Supervisor[snap
 	}
 
 	// Derive worker type from observed state type.
-	appWorkerType := storage.DeriveWorkerType[snapshot.ApplicationObservedState]()
+	appWorkerType, err := storage.DeriveWorkerType[snapshot.ApplicationObservedState]()
+	if err != nil {
+		return nil, fmt.Errorf("failed to derive worker type: %w", err)
+	}
 
 	// Create supervisor.
 	sup := supervisor.NewSupervisor[snapshot.ApplicationObservedState, *snapshot.ApplicationDesiredState](supervisor.Config{
@@ -249,7 +252,7 @@ func NewApplicationSupervisor(cfg SupervisorConfig) (*supervisor.Supervisor[snap
 	// KEY PATTERN: Application workers need explicit AddWorker().
 	// Child workers are created automatically via reconcileChildren().
 	// This is the fundamental asymmetry that this setup helper encapsulates.
-	err := sup.AddWorker(appIdentity, appWorker)
+	err = sup.AddWorker(appIdentity, appWorker)
 	if err != nil {
 		return nil, err
 	}

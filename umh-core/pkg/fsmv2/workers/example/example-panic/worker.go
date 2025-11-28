@@ -54,7 +54,11 @@ func NewPanicWorker(
 
 	// Set workerType if not already set (derive from snapshot type)
 	if identity.WorkerType == "" {
-		identity.WorkerType = storage.DeriveWorkerType[snapshot.PanicObservedState]()
+		workerType, err := storage.DeriveWorkerType[snapshot.PanicObservedState]()
+		if err != nil {
+			return nil, fmt.Errorf("failed to derive worker type: %w", err)
+		}
+		identity.WorkerType = workerType
 	}
 	dependencies := NewPanicDependencies(connectionPool, logger, identity)
 

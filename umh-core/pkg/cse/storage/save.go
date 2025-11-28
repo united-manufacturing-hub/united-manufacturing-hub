@@ -165,10 +165,17 @@ func (ts *TriangularStore) saveWithDelta(
 		}
 	}
 
-	// Step 4: Inject CSE metadata
+	// Step 4: Assign sync ID BEFORE any database write
+	// This ensures the sync ID is included atomically in the single write operation.
+	// If we assigned it after the write, a crash between write and sync ID update
+	// would leave the document without a sync ID.
+	syncID := ts.syncID.Add(1)
+	doc[FieldSyncID] = syncID
+
+	// Step 5: Inject CSE metadata (version, timestamps)
 	ts.injectMetadataWithOptions(doc, opts, isNew)
 
-	// Step 5: Save to persistence
+	// Step 6: Save to persistence (single atomic write with sync ID already set)
 	if isNew {
 		_, err = ts.store.Insert(ctx, collectionName, doc)
 	} else {
@@ -177,16 +184,6 @@ func (ts *TriangularStore) saveWithDelta(
 
 	if err != nil {
 		return false, nil, fmt.Errorf("failed to save %s for %s/%s: %w", opts.Role, workerType, id, err)
-	}
-
-	// Step 6: Increment sync ID AFTER successful database commit
-	// This prevents gaps in sync ID sequence when operations fail
-	syncID := ts.syncID.Add(1)
-	doc[FieldSyncID] = syncID
-
-	err = ts.store.Update(ctx, collectionName, id, doc)
-	if err != nil {
-		return false, nil, fmt.Errorf("failed to set sync ID after %s save for %s/%s: %w", opts.Role, workerType, id, err)
 	}
 
 	// Step 7: Append to delta store if there are changes

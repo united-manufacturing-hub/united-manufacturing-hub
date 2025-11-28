@@ -44,12 +44,14 @@ var _ = Describe("CommunicatorWorker", func() {
 		ctx = context.Background()
 		logger = zap.NewNop().Sugar()
 		mockTransport = NewMockTransport()
-		worker = communicator.NewCommunicatorWorker(
+		var err error
+		worker, err = communicator.NewCommunicatorWorker(
 			"test-id",
 			"Test Communicator",
 			mockTransport,
 			logger,
 		)
+		Expect(err).ToNot(HaveOccurred())
 	})
 
 	Describe("Worker interface implementation", func() {

@@ -109,7 +109,10 @@ func RegisterFactoryByType(workerType string, factoryFunc func(fsmv2.Identity, *
 func RegisterFactory[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState](
 	factoryFunc func(fsmv2.Identity, *zap.SugaredLogger) fsmv2.Worker,
 ) error {
-	workerType := storage.DeriveWorkerType[TObserved]()
+	workerType, err := storage.DeriveWorkerType[TObserved]()
+	if err != nil {
+		return fmt.Errorf("failed to derive worker type: %w", err)
+	}
 
 	return RegisterFactoryByType(workerType, factoryFunc)
 }
@@ -140,7 +143,10 @@ func RegisterFactory[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState]
 func RegisterSupervisorFactory[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState](
 	factoryFunc func(interface{}) interface{},
 ) error {
-	workerType := storage.DeriveWorkerType[TObserved]()
+	workerType, err := storage.DeriveWorkerType[TObserved]()
+	if err != nil {
+		return fmt.Errorf("failed to derive worker type: %w", err)
+	}
 
 	supervisorRegistryMu.Lock()
 	defer supervisorRegistryMu.Unlock()
@@ -339,18 +345,24 @@ func ListRegisteredTypes() []string {
 //
 // Example usage:
 //
-//	factory, ok := factory.GetFactory[ContainerObservedState, ContainerDesiredState]()
+//	factory, ok, err := factory.GetFactory[ContainerObservedState, ContainerDesiredState]()
+//	if err != nil {
+//	    return fmt.Errorf("failed to derive worker type: %w", err)
+//	}
 //	if !ok {
 //	    return fmt.Errorf("container worker type not registered")
 //	}
 //	worker := factory(identity, logger)
-func GetFactory[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState]() (func(fsmv2.Identity, *zap.SugaredLogger) fsmv2.Worker, bool) {
-	workerType := storage.DeriveWorkerType[TObserved]()
+func GetFactory[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState]() (func(fsmv2.Identity, *zap.SugaredLogger) fsmv2.Worker, bool, error) {
+	workerType, err := storage.DeriveWorkerType[TObserved]()
+	if err != nil {
+		return nil, false, fmt.Errorf("failed to derive worker type: %w", err)
+	}
 
 	registryMu.RLock()
 	defer registryMu.RUnlock()
 
 	factoryFunc, exists := registry[workerType]
 
-	return factoryFunc, exists
+	return factoryFunc, exists, nil
 }

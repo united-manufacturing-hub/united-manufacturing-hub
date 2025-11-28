@@ -84,11 +84,11 @@ func NewCollector[TObserved any](config CollectorConfig[TObserved]) *Collector[T
 	}
 }
 
-// logTrace logs a message only when trace logging is enabled.
+// logTrace logs a structured message only when trace logging is enabled.
 // Used for per-collection verbose logs to reduce noise at scale.
-func (c *Collector[TObserved]) logTrace(format string, args ...any) {
+func (c *Collector[TObserved]) logTrace(msg string, keysAndValues ...any) {
 	if c.config.EnableTraceLogging {
-		c.config.Logger.Debugf(format, args...)
+		c.config.Logger.Debugw(msg, keysAndValues...)
 	}
 }
 
@@ -251,8 +251,8 @@ func (c *Collector[TObserved]) observationLoop() {
 func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) error {
 	collectionStartTime := time.Now()
 	// Per-collection log moved to TRACE for scalability
-	c.logTrace("[DataFreshness] Worker %s: Starting observation collection at %s",
-		c.config.Identity.ID, collectionStartTime.Format(time.RFC3339Nano))
+	c.logTrace("observation_collection_starting",
+		"collection_start_time", collectionStartTime.Format(time.RFC3339Nano))
 
 	observed, err := c.config.Worker.CollectObservedState(ctx)
 	if err != nil {
@@ -269,12 +269,12 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 	if timestampProvider, ok := observed.(interface{ GetTimestamp() time.Time }); ok {
 		observationTimestamp = timestampProvider.GetTimestamp()
 		// Per-collection log moved to TRACE for scalability
-		c.logTrace("[DataFreshness] Worker %s: Collected observation with timestamp=%s",
-			c.config.Identity.ID, observationTimestamp.Format(time.RFC3339Nano))
+		c.logTrace("observation_collected",
+			"observation_timestamp", observationTimestamp.Format(time.RFC3339Nano))
 	} else {
 		// Per-collection log moved to TRACE for scalability
-		c.logTrace("[DataFreshness] Worker %s: Collected observation does not implement GetTimestamp() (type: %T)",
-			c.config.Identity.ID, observed)
+		c.logTrace("observation_collected_no_timestamp",
+			"actual_type", fmt.Sprintf("%T", observed))
 	}
 
 	saveStartTime := time.Now()
@@ -313,18 +313,23 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 	saveDuration := time.Since(saveStartTime)
 
 	// Derive worker type from TObserved for metrics
-	workerType := storage.DeriveWorkerType[TObserved]()
+	workerType, err := storage.DeriveWorkerType[TObserved]()
+	if err != nil {
+		return fmt.Errorf("failed to derive worker type for metrics: %w", err)
+	}
 
 	// Record metrics
 	metrics.RecordObservationSave(workerType, changed, saveDuration)
 
 	// Log result - per-collection logs moved to TRACE for scalability
 	if changed {
-		c.logTrace("[DataFreshness] Worker %s: Successfully saved observation (save_duration=%v, changed=true)",
-			c.config.Identity.ID, saveDuration)
+		c.logTrace("observation_saved",
+			"save_duration", saveDuration,
+			"changed", true)
 	} else {
-		c.logTrace("[DataFreshness] Worker %s: Observation unchanged, skipped write (save_duration=%v, changed=false)",
-			c.config.Identity.ID, saveDuration)
+		c.logTrace("observation_unchanged",
+			"save_duration", saveDuration,
+			"changed", false)
 	}
 
 	return nil
