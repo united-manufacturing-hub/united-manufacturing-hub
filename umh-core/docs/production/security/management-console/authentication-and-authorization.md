@@ -150,18 +150,23 @@ ManagementConsole manages user sessions independently from Auth0 using JWT cooki
 
 - **Creation**: Session token issued after successful Auth0 authentication
 - **Storage**: HTTPOnly cookie with Secure and SameSite=Strict attributes
-- **Duration**: 14-day sliding window (extends on activity during the last 7 days of the 14-day window), 30-day absolute maximum
+- **Token Validity**: Each JWT token is valid for **14 days**
+- **Sliding Window Refresh**: When a token is within **7 days of expiring** and the user is active (e.g., page load), a fresh 14-day token is issued automatically
+- **Absolute Session Limit**: Regardless of activity, users must re-authenticate after **30 days** from their original login
 - **Termination**: Explicit logout, absolute timeout, or user removal from company
 
 **Session Policies**:
 
 - **Concurrent sessions**: Multiple sessions from different devices are permitted
-- **Token refresh**: Session extends automatically on API activity within the 14-day window
+- **Token refresh**: Session extends automatically on API activity when within the last 7 days of the 14-day token validity
 - **Cross-device**: Each device maintains its own independent session
 
 > **Current Limitation: No Idle Timeout**
 >
-> ManagementConsole uses a 30-day absolute timeout but does not currently implement idle timeout (automatic logout after inactivity). Sessions remain active until the user logs out or the 30-day limit is reached.
+> There is no automatic logout after periods of inactivity. A session remains valid as long as:
+>
+> 1. The token hasn't expired (14 days without activity), AND
+> 2. The 30-day absolute limit hasn't been reached
 >
 > **Best practice:** Log out when leaving your workstation. For environments requiring shorter session lifetimes, consider enterprise SSO with your own timeout policies.
 
