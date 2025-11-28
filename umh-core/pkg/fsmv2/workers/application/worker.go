@@ -31,6 +31,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application/snapshot"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application/state"
 )
 
 // ApplicationWorker is a generic application worker that parses YAML configuration
@@ -132,12 +133,11 @@ func (w *ApplicationWorker) DeriveDesiredState(spec interface{}) (config.Desired
 }
 
 // GetInitialState returns the starting state for this application worker.
-// Currently returns nil as the state machine is not yet implemented.
-// TODO: Implement state machine for application supervisor.
+// The application supervisor uses a minimal 2-state FSM:
+// - RunningState: Normal operation, transitions to StoppedState when ShutdownRequested=true
+// - StoppedState: Emits SignalNeedsRemoval to indicate ready for removal
 func (w *ApplicationWorker) GetInitialState() fsmv2.State[any, any] {
-	// Return nil for now - state machine will be implemented later.
-	// The supervisor can handle nil initial state gracefully.
-	return nil
+	return &state.RunningState{}
 }
 
 // GetDependenciesAny implements fsmv2.DependencyProvider.

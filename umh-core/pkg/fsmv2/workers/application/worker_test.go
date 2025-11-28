@@ -182,9 +182,10 @@ children:
 	})
 
 	Describe("GetInitialState", func() {
-		It("should return nil (placeholder for future state machine)", func() {
-			state := worker.GetInitialState()
-			Expect(state).To(BeNil())
+		It("should return RunningState for graceful shutdown support", func() {
+			s := worker.GetInitialState()
+			Expect(s).NotTo(BeNil())
+			Expect(s.String()).To(Equal("RunningState"))
 		})
 	})
 

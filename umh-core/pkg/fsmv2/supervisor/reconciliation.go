@@ -1032,7 +1032,7 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 			childConfig := Config{
 				WorkerType:              spec.WorkerType,
 				Store:                   s.store,
-				Logger:                  s.logger,
+				Logger:                  s.baseLogger, // CRITICAL: Use un-enriched logger to prevent duplicate "worker" fields
 				TickInterval:            s.tickInterval,
 				GracefulShutdownTimeout: s.gracefulShutdownTimeout,
 			}
@@ -1069,8 +1069,9 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 				HierarchyPath: childPath,
 			}
 
-			// Use factory to create worker instance with supervisor's logger
-			childWorker, err := factory.NewWorkerByType(spec.WorkerType, childIdentity, s.logger)
+			// Use factory to create worker instance with un-enriched logger
+			// CRITICAL: Pass baseLogger to prevent duplicate "worker" fields
+			childWorker, err := factory.NewWorkerByType(spec.WorkerType, childIdentity, s.baseLogger)
 			if err != nil {
 				s.logger.Errorf("Failed to create worker for child %s: %v (skipping)", spec.Name, err)
 

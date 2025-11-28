@@ -82,9 +82,7 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity fsmv2.Identity, wor
 		return fmt.Errorf("failed to save identity: %w", err)
 	}
 
-	s.logger.Debugw("identity_saved",
-		"worker_type", s.workerType,
-		"worker_id", identity.ID)
+	s.logger.Debugw("identity_saved")
 
 	// Save initial observation to database for immediate availability
 	observedJSON, err := json.Marshal(observed)
@@ -104,9 +102,7 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity fsmv2.Identity, wor
 		return fmt.Errorf("failed to save initial observation: %w", err)
 	}
 
-	s.logger.Debugw("initial_observation_saved",
-		"worker_type", s.workerType,
-		"worker_id", identity.ID)
+	s.logger.Debugw("initial_observation_saved")
 
 	// Save initial desired state to database
 	desiredJSON, err := json.Marshal(initialDesired)
@@ -126,9 +122,7 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity fsmv2.Identity, wor
 		return fmt.Errorf("failed to save initial desired state: %w", err)
 	}
 
-	s.logger.Debugw("initial_desired_state_saved",
-		"worker_type", s.workerType,
-		"worker_id", identity.ID)
+	s.logger.Debugw("initial_desired_state_saved")
 
 	collector := collection.NewCollector[TObserved](collection.CollectorConfig[TObserved]{
 		Worker:              worker,
@@ -159,9 +153,7 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity fsmv2.Identity, wor
 		s.logger = s.baseLogger.With("worker", identity.HierarchyPath)
 	}
 
-	s.logger.Infow("worker_added",
-		"worker_type", s.workerType,
-		"worker_id", identity.ID)
+	s.logger.Infow("worker_added")
 
 	return nil
 }
@@ -183,9 +175,7 @@ func (s *Supervisor[TObserved, TDesired]) RemoveWorker(ctx context.Context, work
 	workerCtx.collector.Stop(ctx)
 	workerCtx.executor.Shutdown()
 
-	s.logger.Infow("worker_removed",
-		"worker_type", s.workerType,
-		"worker_id", workerID)
+	s.logger.Infow("worker_removed")
 
 	return nil
 }
