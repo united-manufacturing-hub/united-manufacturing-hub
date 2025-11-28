@@ -95,7 +95,8 @@ Location paths use the same dot-separated format as [topic paths](../../usage/un
 - `ACME.Munich` (enterprise.site)
 - `ACME.Munich.Assembly` (enterprise.site.area)
 - `ACME.Munich.Assembly.Line1` (enterprise.site.area.line)
-- `ACME.Munich.Assembly.Line1.Cell5` (full path)
+- `ACME.Munich.Assembly.Line1.Cell5` (enterprise.site.area.line.workcell)
+- can be extended up to more location levels than 5
 
 #### Roles
 
