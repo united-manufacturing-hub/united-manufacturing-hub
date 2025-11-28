@@ -220,4 +220,15 @@ func (m *mockTriangularStore) LoadSnapshot(ctx context.Context, workerType strin
 	return snapshot, nil
 }
 
+func (m *mockTriangularStore) GetLatestSyncID(ctx context.Context) (int64, error) {
+	return 0, nil
+}
+
+func (m *mockTriangularStore) GetDeltas(ctx context.Context, sub storage.Subscription) (storage.DeltasResponse, error) {
+	return storage.DeltasResponse{
+		Deltas:       []storage.Delta{},
+		LatestSyncID: 0,
+	}, nil
+}
+
 var _ storage.TriangularStoreInterface = (*mockTriangularStore)(nil)

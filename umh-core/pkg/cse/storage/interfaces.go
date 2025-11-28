@@ -57,6 +57,15 @@ import (
 // Both patterns use the same underlying convention-based naming: {workerType}_{role}
 // (e.g., "container_observed", "relay_desired").
 //
+// WORKER TYPE NAMING:
+//
+// The workerType string follows convention-based naming for storage collections:
+//   - "container" → container_identity, container_desired, container_observed
+//   - "relay" → relay_identity, relay_desired, relay_observed
+//   - "benthos" → benthos_identity, benthos_desired, benthos_observed
+//
+// Use lowercase, singular nouns. Avoid special characters.
+//
 // MIGRATION STATUS: The API migration is complete. Both patterns are fully supported and
 // coexist intentionally. The interface methods are NOT deprecated - they serve the runtime
 // polymorphic use case. Use the typed functions for compile-time type safety when the
@@ -69,6 +78,13 @@ type TriangularStoreInterface interface {
 	// For compile-time type-safe code, use SaveIdentityTyped[T]() instead.
 	//
 	// Identity is created once and never updated.
+	//
+	// Unlike SaveDesired/SaveObserved, this returns only `error` (not `changed`) because:
+	//   - Identity is write-once: Creating the same identity twice is idempotent
+	//   - No delta tracking: Identity changes don't generate sync events
+	//   - Idempotency: If identity already exists with same content, succeeds silently
+	//
+	// Returns error if identity exists with DIFFERENT content (immutability violation).
 	SaveIdentity(ctx context.Context, workerType string, id string, identity persistence.Document) error
 
 	// LoadIdentity retrieves worker identity (runtime polymorphic API).
@@ -84,7 +100,15 @@ type TriangularStoreInterface interface {
 	//
 	// Includes built-in delta checking that skips writes when data hasn't changed.
 	// Auto-increments _version and _sync_id only when data actually changes.
-	// Returns (changed bool, error) where changed indicates if data was written.
+	//
+	// Returns (changed bool, error) where:
+	//   - changed=true: Data was different from existing, delta was recorded, sync_id incremented
+	//   - changed=false: Data identical to existing, no write occurred, no delta created
+	//
+	// Use cases for checking `changed`:
+	//   - Avoid redundant downstream notifications when nothing changed
+	//   - Track actual modification frequency for monitoring
+	//   - Optimize sync by skipping unchanged workers
 	SaveDesired(ctx context.Context, workerType string, id string, desired persistence.Document) (changed bool, err error)
 
 	// LoadDesired retrieves user intent (runtime polymorphic API).
@@ -95,9 +119,21 @@ type TriangularStoreInterface interface {
 	// Returns persistence.ErrNotFound if desired state doesn't exist.
 	LoadDesired(ctx context.Context, workerType string, id string) (interface{}, error)
 
-	// LoadDesiredTyped loads desired state and deserializes into provided pointer.
-	// This method supports reflection-based code that doesn't know types at compile time.
-	// For compile-time type safety, use LoadDesiredTyped[T]() package-level function instead.
+	// LoadDesiredTyped (interface method) loads desired state into the provided pointer.
+	//
+	// NOTE: This is the INTERFACE METHOD (uses reflection). There is also a GENERIC FUNCTION
+	// with the same name: LoadDesiredTyped[T](). Choose based on your use case:
+	//
+	//   - Interface method (this): Use for runtime polymorphic code where types aren't
+	//     known at compile time (e.g., generic supervisors iterating over worker types)
+	//
+	//   - Generic function LoadDesiredTyped[T](): Use when type is known at compile time
+	//     for type safety, better performance, and IDE autocomplete
+	//
+	// Example (interface method):
+	//
+	//	var desired MyDesiredState
+	//	err := store.LoadDesiredTyped(ctx, workerType, id, &desired)
 	LoadDesiredTyped(ctx context.Context, workerType string, id string, dest interface{}) error
 
 	// SaveObserved stores system reality with delta checking (runtime polymorphic API).
@@ -106,7 +142,15 @@ type TriangularStoreInterface interface {
 	//
 	// Auto-increments _sync_id for delta synchronization.
 	// Accepts interface{} to support both persistence.Document and typed FSM states.
-	// Returns (changed bool, error) where changed indicates if data was written.
+	//
+	// Returns (changed bool, error) where:
+	//   - changed=true: Data was different from existing, delta was recorded, sync_id incremented
+	//   - changed=false: Data identical to existing, no write occurred, no delta created
+	//
+	// Use cases for checking `changed`:
+	//   - Avoid redundant downstream notifications when nothing changed
+	//   - Track actual modification frequency for monitoring
+	//   - Optimize sync by skipping unchanged workers
 	SaveObserved(ctx context.Context, workerType string, id string, observed interface{}) (changed bool, err error)
 
 	// LoadObserved retrieves system state (runtime polymorphic API).
@@ -117,9 +161,21 @@ type TriangularStoreInterface interface {
 	// Returns persistence.ErrNotFound if observed state doesn't exist.
 	LoadObserved(ctx context.Context, workerType string, id string) (interface{}, error)
 
-	// LoadObservedTyped loads observed state and deserializes into provided pointer.
-	// This method supports reflection-based code that doesn't know types at compile time.
-	// For compile-time type safety, use LoadObservedTyped[T]() package-level function instead.
+	// LoadObservedTyped (interface method) loads observed state into the provided pointer.
+	//
+	// NOTE: This is the INTERFACE METHOD (uses reflection). There is also a GENERIC FUNCTION
+	// with the same name: LoadObservedTyped[T](). Choose based on your use case:
+	//
+	//   - Interface method (this): Use for runtime polymorphic code where types aren't
+	//     known at compile time (e.g., generic supervisors iterating over worker types)
+	//
+	//   - Generic function LoadObservedTyped[T](): Use when type is known at compile time
+	//     for type safety, better performance, and IDE autocomplete
+	//
+	// Example (interface method):
+	//
+	//	var observed MyObservedState
+	//	err := store.LoadObservedTyped(ctx, workerType, id, &observed)
 	LoadObservedTyped(ctx context.Context, workerType string, id string, dest interface{}) error
 
 	// LoadSnapshot atomically loads all three parts of the triangular model (runtime polymorphic API).
@@ -127,8 +183,32 @@ type TriangularStoreInterface interface {
 	// For compile-time type-safe code, use LoadSnapshotTyped[T]() instead (if available).
 	//
 	// Ensures consistent view of worker state at a single point in time.
-	// Returns nil for missing parts (e.g., Observed may be nil before first observation).
+	//
+	// IMPORTANT: Check for nil before accessing snapshot fields:
+	//   - Identity: Always present if worker exists
+	//   - Desired: May be nil before first SaveDesired call
+	//   - Observed: May be nil before first SaveObserved call
+	//
+	// Example (safe access):
+	//
+	//	snapshot, err := store.LoadSnapshot(ctx, "container", id)
+	//	if snapshot.Observed != nil {
+	//	    observedDoc := snapshot.Observed.(persistence.Document)
+	//	    cpu := observedDoc["cpu"]
+	//	}
+	//
+	// Returns persistence.ErrNotFound if the worker doesn't exist at all.
 	LoadSnapshot(ctx context.Context, workerType string, id string) (*Snapshot, error)
+
+	// GetLatestSyncID returns the current sync_id (latest event sequence number).
+	// This can be used by clients to establish their initial sync position.
+	GetLatestSyncID(ctx context.Context) (int64, error)
+
+	// GetDeltas returns delta changes for sync clients.
+	// Returns DeltasResponse containing either:
+	//   - Incremental deltas if client is recent enough
+	//   - Full bootstrap data if client is too far behind
+	GetDeltas(ctx context.Context, sub Subscription) (DeltasResponse, error)
 }
 
 // Compile-time check that TriangularStore implements TriangularStoreInterface.
