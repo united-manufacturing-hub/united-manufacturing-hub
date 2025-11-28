@@ -331,9 +331,9 @@ The invite key can only be used once and enables secure key exchange without the
 
 ### Deployment Considerations
 
-The permission infrastructure exists and controls what users see in ManagementConsole, but UMH Core does not yet validate individual user permissions when executing commands. This means that within a company, all authenticated users can execute all actions on UMH Core instances, regardless of their assigned role or location permissions.
+The permission infrastructure exists and controls what users see in ManagementConsole, but UMH Core does not yet validate individual user permissions when executing commands. Similarly, users accept messages from all instances within their company without per-instance verification. This means that within a company, all authenticated users can execute all actions on UMH Core instances, regardless of their assigned role or location permissions.
 
-The permission system provides fine-grained authorization that is ready for enforcement once validation is implemented in UMH Core.
+The permission system provides fine-grained authorization that is ready for enforcement once validation is implemented.
 
 ### Auth0 Organization Linking
 
