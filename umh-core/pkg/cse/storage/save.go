@@ -126,10 +126,25 @@ func (ts *TriangularStore) saveWithDelta(
 			// For new documents, create a "created" delta with all business fields as "added"
 			diff = ts.computeCreatedDiff(doc, opts.Role)
 
+			// Get hierarchy path for unified logging
+			// For identity saves, use hierarchy_path from doc being saved
+			// For desired/observed, load identity to get hierarchy_path
+			var hierarchyPath string
+			if opts.Role == RoleIdentity {
+				if hp, ok := doc["hierarchy_path"].(string); ok {
+					hierarchyPath = hp
+				}
+			} else {
+				if identity, err := ts.LoadIdentity(ctx, workerType, id); err == nil {
+					if hp, ok := identity["hierarchy_path"].(string); ok {
+						hierarchyPath = hp
+					}
+				}
+			}
+
 			// Log creation for observability
 			ts.logger.Infow(opts.Role+"_created",
-				"worker_type", workerType,
-				"worker_id", id)
+				"worker", hierarchyPath)
 		} else {
 			var hasChanges bool
 
@@ -150,10 +165,17 @@ func (ts *TriangularStore) saveWithDelta(
 				return false, nil, nil
 			}
 
+			// Get hierarchy path for unified logging
+			var hierarchyPath string
+			if identity, err := ts.LoadIdentity(ctx, workerType, id); err == nil {
+				if hp, ok := identity["hierarchy_path"].(string); ok {
+					hierarchyPath = hp
+				}
+			}
+
 			// Log changes for observability
 			ts.logger.Infow(opts.Role+"_changed",
-				"worker_type", workerType,
-				"worker_id", id,
+				"worker", hierarchyPath,
 				"changes", changes)
 		}
 	}
@@ -198,10 +220,17 @@ func (ts *TriangularStore) saveWithDelta(
 		}
 
 		if appendErr := ts.deltaStore.Append(ctx, entry); appendErr != nil {
+			// Get hierarchy path for unified logging
+			var hierarchyPath string
+			if identity, loadErr := ts.LoadIdentity(ctx, workerType, id); loadErr == nil {
+				if hp, ok := identity["hierarchy_path"].(string); ok {
+					hierarchyPath = hp
+				}
+			}
+
 			// Log but don't fail the operation - snapshot was saved successfully
 			ts.logger.Warnw("failed to append delta",
-				"worker_type", workerType,
-				"worker_id", id,
+				"worker", hierarchyPath,
 				"role", opts.Role,
 				"error", appendErr)
 		}

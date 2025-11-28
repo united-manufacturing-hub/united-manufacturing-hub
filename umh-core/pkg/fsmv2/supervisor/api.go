@@ -74,9 +74,10 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity fsmv2.Identity, wor
 
 	// Save identity to database
 	identityDoc := persistence.Document{
-		"id":          identity.ID,
-		"name":        identity.Name,
-		"worker_type": identity.WorkerType,
+		"id":             identity.ID,
+		"name":           identity.Name,
+		"worker_type":    identity.WorkerType,
+		"hierarchy_path": identity.HierarchyPath,
 	}
 	if err := s.store.SaveIdentity(ctx, s.workerType, identity.ID, identityDoc); err != nil {
 		return fmt.Errorf("failed to save identity: %w", err)
