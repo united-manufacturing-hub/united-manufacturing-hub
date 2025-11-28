@@ -157,7 +157,7 @@ ManagementConsole manages user sessions independently from Auth0 using JWT cooki
 
 **Session Policies**:
 
-- **Concurrent sessions**: Multiple sessions from different devices are permitted
+- **Concurrent sessions**: Multiple sessions from different devices are permitted but may lead to unreliable connections. For devices requiring simultaneous access, create separate user accounts
 - **Token refresh**: Session extends automatically on API activity when within the last 7 days of the 14-day token validity
 - **Cross-device**: Each device maintains its own independent session
 
