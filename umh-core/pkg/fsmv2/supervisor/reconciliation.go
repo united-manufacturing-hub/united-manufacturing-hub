@@ -114,15 +114,6 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 		return fmt.Errorf("failed to load typed desired state: %w", err)
 	}
 
-	// Inject dependencies into desired state if both worker and desired state support it
-	// Dependencies (interfaces) can't be serialized, so they must be injected at runtime
-	if provider, ok := workerCtx.worker.(fsmv2.DependencyProvider); ok {
-		deps := provider.GetDependenciesAny()
-		if injector, ok := any(desired).(fsmv2.DependencyInjector); ok {
-			injector.InjectDependencies(deps)
-		}
-	}
-
 	// Build snapshot with typed states
 	snapshot := &fsmv2.Snapshot{
 		Identity: fsmv2.Identity{

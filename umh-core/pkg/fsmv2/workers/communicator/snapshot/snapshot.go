@@ -52,8 +52,6 @@ type CommunicatorSnapshot struct {
 //	InstanceUUID: Set at startup, never changes
 //	AuthToken: Set at startup, never changes
 //	MessagesToBeSent: Updated by agent when config changes need to be sent
-//	Dependencies: Set at startup, never changes
-//	Transport: DEPRECATED (use Dependencies.GetTransport() instead)
 //
 // # Field Validation
 //
@@ -61,20 +59,24 @@ type CommunicatorSnapshot struct {
 //   - InstanceUUID: MUST be non-empty UUID (enforced: Worker constructor validates)
 //   - AuthToken: MUST be non-empty string (enforced: Worker constructor validates)
 //   - MessagesToBeSent: May be empty array, elements must be valid UMHMessage
-//   - Dependencies: MUST NOT be nil (enforced: C3 invariant)
-//   - Transport: Deprecated, may be nil (use Dependencies.GetTransport())
 //
 // # Invariants
 //
-//   - Related to C3 (transport lifecycle): Dependencies must not be nil
 //   - Related to C1 (auth precedence): RelayURL/AuthToken required for auth
+//
+// # Architecture Note
+//
+// Dependencies are NOT stored in DesiredState. They are injected via Execute()
+// parameter by the supervisor (see reconciliation.go). This ensures actions
+// work correctly after DesiredState is loaded from storage (Dependencies can't
+// be serialized).
 //
 // # Immutability
 //
 // This struct is immutable after creation. Desired state changes require
 // new Worker instance or spec updates (future).
 type CommunicatorDesiredState struct {
-	config.BaseDesiredState          // Provides ShutdownRequested + IsShutdownRequested() + SetShutdownRequested()
+	config.BaseDesiredState // Provides ShutdownRequested + IsShutdownRequested() + SetShutdownRequested()
 
 	// Authentication
 	InstanceUUID string
@@ -83,13 +85,7 @@ type CommunicatorDesiredState struct {
 
 	// Messages
 	MessagesToBeSent []transport.UMHMessage
-
-	// Dependencies (passed from worker to states for action creation)
-	Dependencies CommunicatorDependencies
-
-	// Transport (passed from worker to states for action creation)
-	// Deprecated: Use Dependencies instead
-	Transport transport.Transport
+	// Dependencies removed: Actions receive deps via Execute() parameter, not DesiredState
 }
 
 // CommunicatorObservedState represents the current state of the communicator.

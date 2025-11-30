@@ -40,9 +40,10 @@ type ChildSnapshot struct {
 }
 
 // ChildDesiredState represents the target configuration for the child worker.
+// NOTE: Dependencies are NOT stored here - they belong in the Worker struct.
+// See fsmv2.DesiredState documentation for the architectural invariant.
 type ChildDesiredState struct {
-	config.BaseDesiredState          // Provides ShutdownRequested + IsShutdownRequested() + SetShutdownRequested()
-	Dependencies        ChildDependencies
+	config.BaseDesiredState // Provides ShutdownRequested + IsShutdownRequested() + SetShutdownRequested()
 }
 
 // ShouldBeRunning returns true if the child should be in a running/connected state.
@@ -50,15 +51,6 @@ type ChildDesiredState struct {
 // from stopped to starting states.
 func (s *ChildDesiredState) ShouldBeRunning() bool {
 	return !s.ShutdownRequested
-}
-
-// InjectDependencies implements fsmv2.DependencyInjector.
-// This is called by the supervisor after loading the desired state from storage
-// to inject runtime dependencies that cannot be serialized.
-func (s *ChildDesiredState) InjectDependencies(deps any) {
-	if typedDeps, ok := deps.(ChildDependencies); ok {
-		s.Dependencies = typedDeps
-	}
 }
 
 // ChildObservedState represents the current state of the child worker.

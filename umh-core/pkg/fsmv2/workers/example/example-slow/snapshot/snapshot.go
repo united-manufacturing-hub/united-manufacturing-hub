@@ -32,10 +32,10 @@ type SlowSnapshot struct {
 }
 
 type SlowDesiredState struct {
-	config.BaseDesiredState          // Provides ShutdownRequested + IsShutdownRequested() + SetShutdownRequested()
-	ShouldRun           bool
-	DelaySeconds        int
-	Dependencies        SlowDependencies
+	config.BaseDesiredState // Provides ShutdownRequested + IsShutdownRequested() + SetShutdownRequested()
+	ShouldRun    bool
+	DelaySeconds int
+	// Dependencies removed: Actions receive deps via Execute() parameter, not DesiredState
 }
 
 func (s *SlowDesiredState) ShouldBeRunning() bool {

@@ -22,7 +22,6 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/testutil"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/action"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
@@ -41,8 +40,8 @@ var _ = Describe("AuthenticateAction", func() {
 		transport = &mockTransport{}
 		identity := fsmv2.Identity{ID: "test-id", WorkerType: "communicator"}
 		dependencies = communicator.NewCommunicatorDependencies(transport, logger, identity)
+		// Dependencies now passed to Execute(), not constructor
 		act = action.NewAuthenticateAction(
-			dependencies,
 			"https://relay.example.com",
 			"test-uuid",
 			"test-token",
@@ -57,9 +56,12 @@ var _ = Describe("AuthenticateAction", func() {
 
 	Describe("Idempotency (Invariant I10)", func() {
 		It("should be idempotent when authentication succeeds", func() {
-			testutil.VerifyActionIdempotency(act, 3, func() {
-				Expect(transport.authCallCount).To(Equal(3))
-			})
+			ctx := context.Background()
+			for range 3 {
+				err := act.Execute(ctx, dependencies)
+				Expect(err).NotTo(HaveOccurred())
+			}
+			Expect(transport.authCallCount).To(Equal(3))
 		})
 	})
 })

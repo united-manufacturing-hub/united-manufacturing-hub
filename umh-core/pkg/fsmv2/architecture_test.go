@@ -316,6 +316,16 @@ var _ = Describe("FSMv2 Architecture Validation", func() {
 				}
 			})
 		})
+
+		Describe("DesiredState Has No Dependencies (Invariant: Serializable Configuration)", func() {
+			It("should not have Dependencies field in any DesiredState struct", func() {
+				violations := validator.ValidateDesiredStateHasNoDependencies(getFsmv2Dir())
+				if len(violations) > 0 {
+					message := validator.FormatViolationsWithPattern("Dependencies in DesiredState Violations", violations, "DEPENDENCIES_IN_DESIRED_STATE")
+					Fail(message)
+				}
+			})
+		})
 	})
 })
 

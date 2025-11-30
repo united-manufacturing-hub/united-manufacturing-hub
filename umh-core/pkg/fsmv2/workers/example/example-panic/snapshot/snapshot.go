@@ -31,10 +31,12 @@ type PanicSnapshot struct {
 	Desired  PanicDesiredState
 }
 
+// PanicDesiredState represents the target configuration for the panic worker.
+// NOTE: Dependencies are NOT stored here - they belong in the Worker struct.
+// See fsmv2.DesiredState documentation for the architectural invariant.
 type PanicDesiredState struct {
-	config.BaseDesiredState          // Provides ShutdownRequested + IsShutdownRequested() + SetShutdownRequested()
-	ShouldPanic      bool `json:"ShouldPanic"`
-	Dependencies     PanicDependencies
+	config.BaseDesiredState // Provides ShutdownRequested + IsShutdownRequested() + SetShutdownRequested()
+	ShouldPanic             bool `json:"ShouldPanic"`
 }
 
 func (s *PanicDesiredState) ShouldBeRunning() bool {
@@ -43,13 +45,6 @@ func (s *PanicDesiredState) ShouldBeRunning() bool {
 
 func (s *PanicDesiredState) IsShouldPanic() bool {
 	return s.ShouldPanic
-}
-
-// InjectDependencies implements fsmv2.DependencyInjector.
-func (s *PanicDesiredState) InjectDependencies(deps any) {
-	if typedDeps, ok := deps.(PanicDependencies); ok {
-		s.Dependencies = typedDeps
-	}
 }
 
 type PanicObservedState struct {

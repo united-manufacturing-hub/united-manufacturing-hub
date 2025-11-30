@@ -35,10 +35,11 @@ type FailingSnapshot struct {
 }
 
 // FailingDesiredState represents the target configuration for the failing worker.
+// NOTE: Dependencies are NOT stored here - they belong in the Worker struct.
+// See fsmv2.DesiredState documentation for the architectural invariant.
 type FailingDesiredState struct {
 	config.BaseDesiredState        // Provides ShutdownRequested + IsShutdownRequested() + SetShutdownRequested()
 	ShouldFail          bool `json:"ShouldFail"`
-	Dependencies        FailingDependencies
 }
 
 // ShouldBeRunning returns true if the failing worker should be in a running/connected state.
@@ -50,13 +51,6 @@ func (s *FailingDesiredState) ShouldBeRunning() bool {
 
 func (s *FailingDesiredState) IsShouldFail() bool {
 	return s.ShouldFail
-}
-
-// InjectDependencies implements fsmv2.DependencyInjector.
-func (s *FailingDesiredState) InjectDependencies(deps any) {
-	if typedDeps, ok := deps.(FailingDependencies); ok {
-		s.Dependencies = typedDeps
-	}
 }
 
 // FailingObservedState represents the current state of the failing worker.

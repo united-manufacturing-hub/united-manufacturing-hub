@@ -125,8 +125,8 @@ func (s *DegradedState) Next(snapshot snapshot.CommunicatorSnapshot) (BaseCommun
 		return &SyncingState{}, fsmv2.SignalNone, nil
 	}
 
-	// Create SyncAction with registry (retry sync in degraded state)
-	syncAction := action.NewSyncAction(desired.Dependencies, observed.JWTToken)
+	// Create SyncAction - deps injected via Execute() by supervisor
+	syncAction := action.NewSyncAction(observed.JWTToken)
 
 	return s, fsmv2.SignalNone, syncAction
 }

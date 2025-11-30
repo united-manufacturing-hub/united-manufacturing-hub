@@ -22,7 +22,6 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/testutil"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/action"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
@@ -41,7 +40,8 @@ var _ = Describe("SyncAction", func() {
 		mockTransport = &mockSyncTransport{}
 		identity := fsmv2.Identity{ID: "test-id", WorkerType: "communicator"}
 		dependencies = communicator.NewCommunicatorDependencies(mockTransport, logger, identity)
-		act = action.NewSyncAction(dependencies, "test-jwt-token")
+		// Dependencies now passed to Execute(), not constructor
+		act = action.NewSyncAction("test-jwt-token")
 	})
 
 	PIt("should execute sync operation", func() {
@@ -50,21 +50,27 @@ var _ = Describe("SyncAction", func() {
 
 	Describe("Idempotency (Invariant I10)", func() {
 		It("should be idempotent when sync succeeds", func() {
-			testutil.VerifyActionIdempotency(act, 3, func() {
-				Expect(mockTransport.pullCallCount).To(Equal(3))
-				Expect(mockTransport.pushCallCount).To(Equal(0))
-			})
+			ctx := context.Background()
+			for range 3 {
+				err := act.Execute(ctx, dependencies)
+				Expect(err).NotTo(HaveOccurred())
+			}
+			Expect(mockTransport.pullCallCount).To(Equal(3))
+			Expect(mockTransport.pushCallCount).To(Equal(0))
 		})
 
 		It("should be idempotent when pushing messages", func() {
+			ctx := context.Background()
 			act.MessagesToBePushed = []*transport.UMHMessage{
 				{Email: "test@example.com", InstanceUUID: "uuid", Content: "msg1"},
 			}
 
-			testutil.VerifyActionIdempotency(act, 3, func() {
-				Expect(mockTransport.pullCallCount).To(Equal(3))
-				Expect(mockTransport.pushCallCount).To(Equal(3))
-			})
+			for range 3 {
+				err := act.Execute(ctx, dependencies)
+				Expect(err).NotTo(HaveOccurred())
+			}
+			Expect(mockTransport.pullCallCount).To(Equal(3))
+			Expect(mockTransport.pushCallCount).To(Equal(3))
 		})
 	})
 })

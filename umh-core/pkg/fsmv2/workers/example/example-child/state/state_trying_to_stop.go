@@ -31,9 +31,9 @@ func (s *TryingToStopState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Sign
 	snap := helpers.ConvertSnapshot[snapshot.ChildObservedState, *snapshot.ChildDesiredState](snapAny)
 	snap.Observed.State = config.MakeState(config.PrefixTryingToStop, "connection")
 
-	// Child worker is "stopped" when dependencies report disconnected status
-	// After DisconnectAction executes, we can transition to Stopped
-	if !snap.Desired.Dependencies.IsConnected() {
+	// Child worker is "stopped" when connection health shows not healthy (disconnected)
+	// After DisconnectAction executes and collector runs, ConnectionHealth will show "no connection"
+	if snap.Observed.ConnectionHealth != "healthy" {
 		return &StoppedState{}, fsmv2.SignalNone, nil
 	}
 

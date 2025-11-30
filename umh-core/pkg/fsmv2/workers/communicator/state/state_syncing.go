@@ -122,8 +122,7 @@ func (s *SyncingState) Next(snapshot snapshot.CommunicatorSnapshot) (BaseCommuni
 		return &DegradedState{}, fsmv2.SignalNone, nil
 	}
 
-	syncAction := action.NewSyncAction(
-		desired.Dependencies, observed.JWTToken)
+	syncAction := action.NewSyncAction(observed.JWTToken)
 
 	return s, fsmv2.SignalNone, syncAction
 }

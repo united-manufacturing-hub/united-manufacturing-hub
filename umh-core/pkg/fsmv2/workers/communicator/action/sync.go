@@ -48,10 +48,9 @@ const SyncActionName = "sync"
 //   - JWT token management (refresh on 401)
 //   - Network error handling and exponential backoff
 type SyncAction struct {
-	JWTToken string
-
+	JWTToken           string
 	MessagesToBePushed []*transport.UMHMessage
-	dependencies       CommunicatorDependencies
+	// Dependencies are received via Execute() parameter, not stored in struct
 }
 
 // TODO: docstring.
@@ -60,15 +59,17 @@ type SyncActionResult struct {
 	PulledMessages []*transport.UMHMessage
 }
 
-// NewSyncAction creates a new sync action with the given dependencies.
+// NewSyncAction creates a new sync action.
 //
 // Parameters:
-//   - dependencies: Dependencies providing access to transport and other tools
 //   - jwtToken: JWT token for authentication
-func NewSyncAction(deps CommunicatorDependencies, jwtToken string) *SyncAction {
+//
+// Dependencies are injected via Execute() parameter by the supervisor,
+// not passed to constructor. This ensures actions work correctly after
+// DesiredState is loaded from storage (Dependencies can't be serialized).
+func NewSyncAction(jwtToken string) *SyncAction {
 	return &SyncAction{
-		dependencies: deps,
-		JWTToken:     jwtToken,
+		JWTToken: jwtToken,
 	}
 }
 
@@ -93,9 +94,12 @@ func NewSyncAction(deps CommunicatorDependencies, jwtToken string) *SyncAction {
 //
 // Non-critical failures (e.g., channel full) are logged but not returned.
 // This allows the sync loop to continue even if some operations fail.
-func (a *SyncAction) Execute(ctx context.Context, deps any) error {
+func (a *SyncAction) Execute(ctx context.Context, depsAny any) error {
+	// Cast dependencies from supervisor-injected parameter
+	deps := depsAny.(CommunicatorDependencies)
+
 	// 1. Pull messages from backend
-	messages, err := a.dependencies.GetTransport().Pull(ctx, a.JWTToken)
+	messages, err := deps.GetTransport().Pull(ctx, a.JWTToken)
 	if err != nil {
 		return fmt.Errorf("pull failed: %w", err)
 	}
@@ -105,7 +109,7 @@ func (a *SyncAction) Execute(ctx context.Context, deps any) error {
 
 	// 3. Push batch to backend if we have messages
 	if len(a.MessagesToBePushed) > 0 {
-		if err := a.dependencies.GetTransport().Push(ctx, a.JWTToken, a.MessagesToBePushed); err != nil {
+		if err := deps.GetTransport().Push(ctx, a.JWTToken, a.MessagesToBePushed); err != nil {
 			return fmt.Errorf("push failed: %w", err)
 		}
 	}

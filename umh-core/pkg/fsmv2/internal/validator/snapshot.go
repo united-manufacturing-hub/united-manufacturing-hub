@@ -487,3 +487,68 @@ func checkDesiredStateValues(filename string) []Violation {
 
 	return violations
 }
+
+// ValidateDesiredStateHasNoDependencies checks that DesiredState structs do NOT have a Dependencies field.
+// This is an architectural invariant: DesiredState is pure configuration that can be serialized.
+// Dependencies are runtime interfaces that belong in Worker, not in DesiredState.
+// See fsmv2.DesiredState documentation for the complete rationale.
+func ValidateDesiredStateHasNoDependencies(baseDir string) []Violation {
+	var violations []Violation
+
+	snapshotFiles := FindSnapshotFiles(baseDir)
+
+	for _, file := range snapshotFiles {
+		fileViolations := checkDesiredStateHasNoDependencies(file)
+		violations = append(violations, fileViolations...)
+	}
+
+	return violations
+}
+
+// checkDesiredStateHasNoDependencies parses a snapshot file and checks that DesiredState structs
+// do not have any field with "Dependencies" in the name.
+func checkDesiredStateHasNoDependencies(filename string) []Violation {
+	var violations []Violation
+
+	fset := token.NewFileSet()
+
+	node, err := parser.ParseFile(fset, filename, nil, parser.ParseComments)
+	if err != nil {
+		return violations
+	}
+
+	// Look for structs with "DesiredState" in the name
+	ast.Inspect(node, func(n ast.Node) bool {
+		typeSpec, ok := n.(*ast.TypeSpec)
+		if !ok || !strings.Contains(typeSpec.Name.Name, "DesiredState") {
+			return true
+		}
+
+		structType, ok := typeSpec.Type.(*ast.StructType)
+		if !ok {
+			return true
+		}
+
+		// Check for Dependencies field (any field with "Dependencies" in name)
+		for _, field := range structType.Fields.List {
+			for _, name := range field.Names {
+				if strings.Contains(name.Name, "Dependencies") {
+					pos := fset.Position(field.Pos())
+					violations = append(violations, Violation{
+						File: filename,
+						Line: pos.Line,
+						Type: "DEPENDENCIES_IN_DESIRED_STATE",
+						Message: fmt.Sprintf("DesiredState %s has forbidden field '%s' - "+
+							"dependencies belong in Worker, not DesiredState. "+
+							"See fsmv2.DesiredState documentation for the architectural invariant.",
+							typeSpec.Name.Name, name.Name),
+					})
+				}
+			}
+		}
+
+		return true
+	})
+
+	return violations
+}

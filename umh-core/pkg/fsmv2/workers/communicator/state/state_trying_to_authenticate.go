@@ -96,9 +96,8 @@ func (s *TryingToAuthenticateState) Next(snapshot snapshot.CommunicatorSnapshot)
 		return &SyncingState{}, fsmv2.SignalNone, nil
 	}
 
-	// Create AuthenticateAction with registry from snapshot
+	// Create AuthenticateAction - deps injected via Execute() by supervisor
 	authenticateAction := action.NewAuthenticateAction(
-		desired.Dependencies,
 		desired.RelayURL,
 		desired.InstanceUUID,
 		desired.AuthToken,

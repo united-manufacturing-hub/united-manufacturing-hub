@@ -34,7 +34,9 @@ func (s *ConnectedState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal,
 		return &TryingToStopState{}, fsmv2.SignalNone, nil
 	}
 
-	if !snap.Desired.Dependencies.IsConnected() {
+	// Check connection health from observed state (populated by collector)
+	// This is the correct pattern - states examine ObservedState, not Dependencies
+	if snap.Observed.ConnectionHealth != "healthy" {
 		return &DisconnectedState{}, fsmv2.SignalNone, nil
 	}
 

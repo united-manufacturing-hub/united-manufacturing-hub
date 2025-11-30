@@ -89,8 +89,7 @@ type AuthenticateAction struct {
 	RelayURL     string
 	InstanceUUID string
 	AuthToken    string
-
-	dependencies CommunicatorDependencies
+	// Dependencies are received via Execute() parameter, not stored in struct
 }
 
 type AuthenticateActionResult struct {
@@ -101,19 +100,18 @@ type AuthenticateActionResult struct {
 // NewAuthenticateAction creates a new authentication action.
 //
 // Parameters:
-//   - dependencies: Dependencies providing access to transport and other tools
 //   - relayURL: Relay server endpoint (e.g., "https://relay.umh.app")
 //   - instanceUUID: Identifies this Edge instance (from config)
 //   - authToken: Pre-shared secret for authentication (from config)
 //
-// The HTTP client is configured with a 30-second timeout to prevent
-// indefinite hangs during authentication.
-func NewAuthenticateAction(deps CommunicatorDependencies, relayURL, instanceUUID, authToken string) *AuthenticateAction {
+// Dependencies are injected via Execute() parameter by the supervisor,
+// not passed to constructor. This ensures actions work correctly after
+// DesiredState is loaded from storage (Dependencies can't be serialized).
+func NewAuthenticateAction(relayURL, instanceUUID, authToken string) *AuthenticateAction {
 	return &AuthenticateAction{
 		RelayURL:     relayURL,
 		InstanceUUID: instanceUUID,
 		AuthToken:    authToken,
-		dependencies: deps,
 	}
 }
 
@@ -155,13 +153,16 @@ func NewAuthenticateAction(deps CommunicatorDependencies, relayURL, instanceUUID
 //	    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
 //	    "expiresAt": 1735689600
 //	}
-func (a *AuthenticateAction) Execute(ctx context.Context, deps any) error {
+func (a *AuthenticateAction) Execute(ctx context.Context, depsAny any) error {
+	// Cast dependencies from supervisor-injected parameter
+	deps := depsAny.(CommunicatorDependencies)
+
 	authReq := transport.AuthRequest{
 		InstanceUUID: a.InstanceUUID,
 		Email:        a.AuthToken,
 	}
 
-	authResp, err := a.dependencies.GetTransport().Authenticate(ctx, authReq)
+	authResp, err := deps.GetTransport().Authenticate(ctx, authReq)
 	if err != nil {
 		return err
 	}

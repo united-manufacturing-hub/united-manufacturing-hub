@@ -60,6 +60,45 @@ type ObservedState interface {
 // DesiredState represents what we want the system to be.
 // Derived from user configuration via DeriveDesiredState().
 // The supervisor can inject shutdown requests here.
+//
+// ARCHITECTURAL INVARIANT: DesiredState must NEVER contain a Dependencies field.
+//
+// Why? Dependencies are runtime interfaces (connections, pools, loggers) that:
+//  1. Cannot be JSON-serialized (interfaces have no data)
+//  2. Must not be accessed from State.Next() (states are pure functions)
+//  3. Belong to the Worker struct, not configuration
+//
+// Where dependencies ARE used:
+//   - Actions: Receive deps via Execute(ctx, depsAny any) parameter
+//   - Collector: Access via worker.GetDependencies()
+//   - ObservedState: Collector converts deps data into serializable fields
+//
+// If you need state to check a runtime condition (like IsConnected()):
+//  1. Have the Collector read it from dependencies
+//  2. Write it to an ObservedState field (like ConnectionHealth)
+//  3. State.Next() checks the ObservedState field
+//
+// Example:
+//
+//	// WRONG - don't do this:
+//	type MyDesiredState struct {
+//	    Dependencies MyDependencies  // FORBIDDEN
+//	}
+//
+//	// RIGHT - collector populates observed state:
+//	func (w *MyWorker) CollectObservedState(ctx context.Context) {
+//	    deps := w.GetDependencies()
+//	    return MyObservedState{
+//	        ConnectionHealth: deps.IsConnected() ? "healthy" : "disconnected",
+//	    }
+//	}
+//
+//	// RIGHT - state checks observed state:
+//	func (s *MyState) Next(snap MySnapshot) (...) {
+//	    if snap.Observed.ConnectionHealth == "healthy" {  // Correct
+//	        ...
+//	    }
+//	}
 type DesiredState interface {
 	// IsShutdownRequested is set by supervisor to initiate graceful shutdown.
 	// States MUST check this first in their Next() method.
@@ -362,22 +401,3 @@ type DependencyProvider interface {
 	GetDependenciesAny() any
 }
 
-// DependencyInjector is an optional interface that desired state types can implement
-// to receive runtime dependencies after being loaded from storage.
-//
-// Dependencies (interfaces with methods) cannot be serialized to storage, so they
-// must be injected at runtime. The supervisor calls InjectDependencies after loading
-// the desired state and before passing it to state.Next().
-//
-// Example implementation:
-//
-//	func (d *MyDesiredState) InjectDependencies(deps any) {
-//	    if typedDeps, ok := deps.(MyDependencies); ok {
-//	        d.Dependencies = typedDeps
-//	    }
-//	}
-type DependencyInjector interface {
-	// InjectDependencies receives the worker's dependencies for runtime use.
-	// The deps parameter is the same value returned by DependencyProvider.GetDependenciesAny().
-	InjectDependencies(deps any)
-}
