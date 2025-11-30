@@ -29,6 +29,19 @@ Every worker in FSMv2 is represented by three components:
 
 The supervisor runs a single-threaded reconciliation loop that makes observed state match desired state.
 
+### Why This Model?
+
+The Triangle Model aligns with the Control Sync Engine (CSE) storage pattern used throughout UMH.
+CSE separates each worker into three parts with different lifecycles:
+- **Identity**: Write-once, immutable (ID, name, type)
+- **Desired**: Versioned with optimistic locking (user intent)
+- **Observed**: Ephemeral, reconstructed by polling (system reality)
+
+This enables delta streaming to clients - only actual changes increment sync IDs, so clients
+requesting "changes since sync_id X" receive only meaningful updates.
+
+See `pkg/cse/storage/doc.go` for full CSE documentation.
+
 ## Quick Start
 
 ```bash
@@ -89,6 +102,9 @@ func (w *MyWorker) GetInitialState() fsmv2.State {
     return StoppedState{}
 }
 ```
+
+**Tip:** For production code, use `helpers.ConvertSnapshot[O, D](snapAny)` instead of manual
+type assertions. See `internal/helpers/state_adapter.go` for the pattern used in real workers.
 
 **Next steps:**
 - Read `doc.go` for interface contracts and detailed patterns
@@ -189,7 +205,9 @@ return NewState{}, SignalNone, nil
 return NewState{}, SignalNone, &SomeAction{}  // Don't do this
 ```
 
-**Rationale**: Clear separation of concerns - transition logic vs side effects.
+**Rationale**: There should be one way to progress: emit action → observe result → then transition.
+Allowing both creates confusion about the intended flow. The supervisor enforces this by panicking
+if both are returned - this catches logic errors during development.
 
 ## Key Interfaces
 

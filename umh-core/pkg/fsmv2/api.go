@@ -154,6 +154,10 @@ type ShutdownRequestable interface {
 //   - Layer 1: Pass-by-value (Go language design)
 //   - Layer 2: Documentation (this godoc)
 //   - Layer 3: Tests demonstrating immutability (supervisor/immutability_test.go)
+//
+// For type-safe access in State.Next(), use helpers.ConvertSnapshot[O, D](snapAny)
+// which returns a TypedSnapshot with typed Observed and Desired fields.
+// See internal/helpers/state_adapter.go for usage patterns.
 type Snapshot struct {
 	Identity Identity    // Who am I?
 	Observed interface{} // What is the actual state? (ObservedState or basic.Document)
@@ -206,6 +210,21 @@ type Snapshot struct {
 // REQUIREMENT (FSM v2): Every Action implementation MUST have an idempotency test.
 // Code reviewers: Check that action_*_test.go files use VerifyActionIdempotency.
 //
+// Partial completion example (deploy 5 files, 3 succeed before failure):
+//
+//	func (a *DeployFilesAction) Execute(ctx context.Context, deps TDeps) error {
+//	    for _, file := range a.Files {
+//	        // Check if already deployed (idempotent - skip completed work)
+//	        if deps.FileExists(file.Path) {
+//	            continue  // Already done, move to next
+//	        }
+//	        if err := deps.WriteFile(file.Path, file.Content); err != nil {
+//	            return err  // Retry will resume from here
+//	        }
+//	    }
+//	    return nil
+//	}
+//
 // Defense-in-depth layers:
 //   - Layer 1: Document requirement in Action interface
 //   - Layer 2: Provide test helpers for verification
@@ -244,11 +263,6 @@ type Action[TDeps any] interface {
 //   - Represent stable conditions where no action needed
 //
 // TODO: Consider previous state tracking in Snapshot for debugging
-// TODO: Clarify naming to avoid confusion between "trying" vs "confirming"
-//
-//	(e.g., ConfirmingStartState vs TryingToStartState)
-//	Option: Use "Ensuring" pattern - EnsuringStartedState, EnsuringStoppedState
-//	This captures both action and verification in one word (doing + confirming)
 //
 // Example implementation:
 //
@@ -263,6 +277,16 @@ type Action[TDeps any] interface {
 //	    }
 //	    // Stay in current state
 //	    return s, SignalNone, nil
+//	}
+//
+// Multi-tick shutdown example:
+//
+//	func (s ShuttingDownState) Next(snap Snapshot) (...) {
+//	    if snap.Observed.CleanupComplete {
+//	        return StoppedState{}, SignalNeedsRemoval, nil
+//	    }
+//	    // Keep emitting cleanup action until observed state shows completion
+//	    return s, SignalNone, &CleanupAction{}
 //	}
 type State[TSnapshot any, TDeps any] interface {
 	// Next evaluates the snapshot and returns the next transition.
@@ -291,7 +315,10 @@ type State[TSnapshot any, TDeps any] interface {
 	//   - action: Optional action to execute before next tick (can be nil)
 	//
 	// Only returns new state when all conditions are met.
-	// Should not switch the state and emit an action at the same time (supervisor should check for this and panic if this happens as this is an application logic issue).
+	// Should not switch the state and emit an action at the same time. There should
+	// be one way to progress: emit action → observe result → then transition.
+	// Allowing both creates confusion about the intended flow. Supervisor panics if
+	// both are returned (this is an application logic issue).
 	//
 	// Supervisor will only call Next() if there is no ongoing action (to prevent multiple actions).
 	//

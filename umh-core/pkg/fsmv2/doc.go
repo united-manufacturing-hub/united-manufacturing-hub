@@ -73,6 +73,42 @@
 //
 // The supervisor retries failed actions with exponential backoff, so idempotency is critical.
 //
+// ## Retry and Backoff Configuration
+//
+// FSMv2 automatically retries failed actions with exponential backoff to handle transient failures.
+//
+// Action Execution Retry (per-action):
+//   - Base delay: 1 second
+//   - Max delay: 60 seconds
+//   - Formula: delay = min(2^attempts × baseDelay, maxDelay)
+//   - Default timeout: 30 seconds per action attempt
+//   - No max attempts limit (retries until action succeeds or supervisor shuts down)
+//
+// Infrastructure Health Circuit Breaker (infrastructure failures):
+//   - Max attempts: 5 (DefaultMaxInfraRecoveryAttempts)
+//   - Attempt window: 5 minutes (DefaultRecoveryAttemptWindow)
+//   - Backoff range: 1s → 60s (exponential)
+//   - Escalation after 5 failed attempts (logs manual intervention required)
+//
+// Example action retry sequence:
+//   Attempt 1: Execute immediately
+//   Attempt 2: Wait 1s, execute
+//   Attempt 3: Wait 2s, execute
+//   Attempt 4: Wait 4s, execute
+//   Attempt 5: Wait 8s, execute
+//   Attempt 6+: Wait 60s, execute (capped at maxDelay)
+//
+// Circuit Breaker Escalation Flow:
+//   Attempts 1-3: Log warnings with retry countdown
+//   Attempt 4: "WARNING: One retry attempt remaining before escalation"
+//   Attempt 5: "ESCALATION REQUIRED: Manual intervention needed"
+//   Runbook: https://docs.umh.app/runbooks/supervisor-escalation
+//
+// Implementation details in:
+//   - supervisor/internal/execution/backoff.go (ExponentialBackoff implementation)
+//   - supervisor/infrastructure_health.go (circuit breaker constants)
+//   - supervisor/reconciliation.go (retry logic and escalation)
+//
 // ## Validation: Defense-in-Depth
 //
 // FSMv2 validates data at multiple layers (not centralized) for robustness:
