@@ -59,6 +59,7 @@ type CollectorConfig[TObserved any] struct {
 	ObservationTimeout  time.Duration
 	EnableTraceLogging  bool         // Whether to emit verbose per-collection logs
 	StateProvider       func() string // Returns current FSM state name (injected by supervisor)
+	ShutdownRequestedProvider func() bool // Returns current shutdown requested status (injected by supervisor)
 }
 
 // Collector manages the observation loop lifecycle and data collection.
@@ -180,6 +181,37 @@ func (c *Collector[TObserved]) Stop(ctx context.Context) {
 	}
 }
 
+// CollectFinalObservation triggers one final observation synchronously before shutdown.
+// This ensures the terminal FSM state (e.g., "Stopped") is captured in the database
+// before the collector is stopped. Without this, the last observation may show
+// an intermediate state like "TryingToStop" instead of the final state.
+//
+// This method is safe to call even if the collector is not running (returns error).
+// The caller should handle errors gracefully - a failed final observation is not fatal.
+func (c *Collector[TObserved]) CollectFinalObservation(ctx context.Context) error {
+	c.mu.RLock()
+	if c.state != collectorStateRunning {
+		c.mu.RUnlock()
+		return fmt.Errorf("collector not running (state: %s)", c.state.String())
+	}
+	timeout := c.config.ObservationTimeout
+	c.mu.RUnlock()
+
+	collectCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	c.config.Logger.Debugw("collector_final_observation_starting")
+
+	err := c.collectAndSaveObservedState(collectCtx)
+	if err != nil {
+		c.config.Logger.Warnw("collector_final_observation_failed", "error", err)
+		return err
+	}
+
+	c.config.Logger.Debugw("collector_final_observation_completed")
+	return nil
+}
+
 func (c *Collector[TObserved]) observationLoop() {
 	defer func() {
 		c.mu.Lock()
@@ -259,6 +291,17 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 		stateName := c.config.StateProvider()
 		if setter, ok := observed.(interface{ SetState(string) fsmv2.ObservedState }); ok {
 			observed = setter.SetState(stateName)
+		}
+	}
+
+	// Inject shutdown requested status into observed state.
+	// The ShutdownRequestedProvider callback is injected by the supervisor and returns the
+	// current shutdown requested status from the desired state. This ensures OBSERVED snapshot
+	// accurately reflects whether shutdown has been requested.
+	if c.config.ShutdownRequestedProvider != nil {
+		shutdownRequested := c.config.ShutdownRequestedProvider()
+		if setter, ok := observed.(interface{ SetShutdownRequested(bool) fsmv2.ObservedState }); ok {
+			observed = setter.SetShutdownRequested(shutdownRequested)
 		}
 	}
 

@@ -52,6 +52,13 @@ func (o ApplicationObservedState) SetState(s string) fsmv2.ObservedState {
 	return o
 }
 
+// SetShutdownRequested sets the shutdown requested status on this observed state.
+// Called by Collector when ShutdownRequestedProvider callback is configured.
+func (o ApplicationObservedState) SetShutdownRequested(v bool) fsmv2.ObservedState {
+	o.ApplicationDesiredState.ShutdownRequested = v
+	return o
+}
+
 // ApplicationDesiredState represents the desired state for an application supervisor.
 // It embeds config.BaseDesiredState directly (consistent with ALL other workers)
 // and declares ChildrenSpecs as a named field.

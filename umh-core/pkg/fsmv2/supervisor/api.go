@@ -156,6 +156,20 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity fsmv2.Identity, wor
 			}
 			return workerCtx.currentState.String()
 		},
+		// ShutdownRequestedProvider returns the current shutdown status from the desired state.
+		// It loads the desired state from the database and checks IsShutdownRequested().
+		// The closure captures identity.ID and s.store for database access.
+		ShutdownRequestedProvider: func() bool {
+			ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+			defer cancel()
+
+			var desired TDesired
+			if err := s.store.LoadDesiredTyped(ctx, s.workerType, identity.ID, &desired); err != nil {
+				return false
+			}
+
+			return desired.IsShutdownRequested()
+		},
 	})
 
 	executor := execution.NewActionExecutor(10, identity.ID, workerLogger)

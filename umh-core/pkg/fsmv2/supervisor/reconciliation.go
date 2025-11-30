@@ -744,6 +744,15 @@ func (s *Supervisor[TObserved, TDesired]) processSignal(ctx context.Context, wor
 			s.mu.Unlock()
 		}
 
+		// Collect final observation to capture terminal state (e.g., "Stopped") before shutdown.
+		// This ensures the OBSERVED snapshot shows the correct final state instead of an
+		// intermediate state like "TryingToStop". Errors are logged but not fatal.
+		if workerCtx.collector.IsRunning() {
+			collectCtx, cancel := context.WithTimeout(ctx, s.collectorHealth.observationTimeout)
+			_ = workerCtx.collector.CollectFinalObservation(collectCtx)
+			cancel()
+		}
+
 		workerCtx.collector.Stop(ctx)
 		workerCtx.executor.Shutdown()
 

@@ -80,3 +80,10 @@ func (o FailingObservedState) SetState(s string) fsmv2.ObservedState {
 	o.State = s
 	return o
 }
+
+// SetShutdownRequested sets the shutdown requested status on this observed state.
+// Called by Collector when ShutdownRequestedProvider callback is configured.
+func (o FailingObservedState) SetShutdownRequested(v bool) fsmv2.ObservedState {
+	o.FailingDesiredState.ShutdownRequested = v
+	return o
+}
