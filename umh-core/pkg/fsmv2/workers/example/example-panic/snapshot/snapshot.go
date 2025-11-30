@@ -66,3 +66,10 @@ func (o PanicObservedState) GetTimestamp() time.Time {
 func (o PanicObservedState) GetObservedDesiredState() fsmv2.DesiredState {
 	return &o.PanicDesiredState
 }
+
+// SetState sets the FSM state name on this observed state.
+// Called by Collector when StateProvider callback is configured.
+func (o PanicObservedState) SetState(s string) fsmv2.ObservedState {
+	o.State = s
+	return o
+}

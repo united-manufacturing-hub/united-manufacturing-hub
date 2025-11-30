@@ -57,7 +57,8 @@ type CollectorConfig[TObserved any] struct {
 	Logger              *zap.SugaredLogger
 	ObservationInterval time.Duration
 	ObservationTimeout  time.Duration
-	EnableTraceLogging  bool // Whether to emit verbose per-collection logs
+	EnableTraceLogging  bool         // Whether to emit verbose per-collection logs
+	StateProvider       func() string // Returns current FSM state name (injected by supervisor)
 }
 
 // Collector manages the observation loop lifecycle and data collection.
@@ -248,6 +249,17 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 			"error", err)
 
 		return err
+	}
+
+	// Inject FSM state name into observed state.
+	// The StateProvider callback is injected by the supervisor and returns the current
+	// state machine state. This preserves the "Collector-only writes ObservedState" boundary
+	// while allowing FSM state to be observed.
+	if c.config.StateProvider != nil {
+		stateName := c.config.StateProvider()
+		if setter, ok := observed.(interface{ SetState(string) fsmv2.ObservedState }); ok {
+			observed = setter.SetState(stateName)
+		}
 	}
 
 	// Extract and log observation timestamp

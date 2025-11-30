@@ -226,6 +226,17 @@ var _ = Describe("FSMv2 Architecture Validation", func() {
 			})
 		})
 
+		Describe("ObservedState SetState Method (Invariant: StateProvider Callback)", func() {
+			It("should have SetState(string) method for StateProvider injection", func() {
+				violations := validator.ValidateObservedStateHasSetState(getFsmv2Dir())
+
+				if len(violations) > 0 {
+					message := validator.FormatViolationsWithPattern("SetState Method Violations", violations, "MISSING_SET_STATE_METHOD")
+					Fail(message)
+				}
+			})
+		})
+
 		Describe("DesiredState.State Values (Invariant: Valid Lifecycle States)", func() {
 			It("should only use \"stopped\" or \"running\" as values", func() {
 				violations := validator.ValidateDesiredStateValues(getFsmv2Dir())

@@ -45,6 +45,13 @@ func (o ApplicationObservedState) GetObservedDesiredState() fsmv2.DesiredState {
 	return &o.ApplicationDesiredState
 }
 
+// SetState sets the FSM state name on this observed state.
+// Called by Collector when StateProvider callback is configured.
+func (o ApplicationObservedState) SetState(s string) fsmv2.ObservedState {
+	o.State = s
+	return o
+}
+
 // ApplicationDesiredState represents the desired state for an application supervisor.
 // It embeds config.BaseDesiredState directly (consistent with ALL other workers)
 // and declares ChildrenSpecs as a named field.

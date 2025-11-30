@@ -159,3 +159,10 @@ func (o CommunicatorObservedState) GetObservedDesiredState() fsmv2.DesiredState 
 func (o CommunicatorObservedState) GetTimestamp() time.Time {
 	return o.CollectedAt
 }
+
+// SetState sets the FSM state name on this observed state.
+// Called by Collector when StateProvider callback is configured.
+func (o CommunicatorObservedState) SetState(s string) fsmv2.ObservedState {
+	o.State = s
+	return o
+}

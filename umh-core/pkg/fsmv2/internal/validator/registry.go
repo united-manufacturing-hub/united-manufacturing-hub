@@ -457,6 +457,27 @@ desired.State = "active"    // Should use "running"
 desired.State = "inactive"  // Should use "stopped"`,
 		ReferenceFile: "example-child/snapshot/snapshot.go",
 	},
+	"MISSING_SET_STATE_METHOD": {
+		Name: "ObservedState Must Have SetState Method",
+		Why: `ObservedState types must implement SetState(string) method.
+WHY: The Supervisor injects a StateProvider callback into the Collector. When collecting
+observed state, the Collector calls StateProvider to get the current FSM state name, then
+calls SetState on the observed state to inject it. Without this method, the State field
+in ObservedState remains empty - the "observed state is only in collector" boundary is
+preserved while still allowing FSM state to be observed.`,
+		CorrectCode: `type MyObservedState struct {
+    CollectedAt time.Time ` + "`json:\"collected_at\"`" + `
+    State       string    ` + "`json:\"state\"`" + `
+    // ... other fields
+}
+
+// SetState sets the FSM state name on this observed state.
+// Called by Collector when StateProvider callback is configured.
+func (o *MyObservedState) SetState(s string) {
+    o.State = s
+}`,
+		ReferenceFile: "workers/application/snapshot/snapshot.go",
+	},
 }
 
 // GetPattern returns pattern info for a violation type.

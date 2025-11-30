@@ -131,6 +131,10 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity fsmv2.Identity, wor
 	// Example: "scenario123(application)/parent-123(parent)/child001(child)"
 	workerLogger := s.baseLogger.With("worker", identity.HierarchyPath)
 
+	// Declare workerCtx early so the closure can capture it.
+	// This enables StateProvider to access the FSM state safely.
+	var workerCtx *WorkerContext[TObserved, TDesired]
+
 	collector := collection.NewCollector[TObserved](collection.CollectorConfig[TObserved]{
 		Worker:              worker,
 		Identity:            identity,
@@ -138,11 +142,25 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity fsmv2.Identity, wor
 		Logger:              workerLogger,
 		ObservationInterval: DefaultObservationInterval,
 		ObservationTimeout:  s.collectorHealth.observationTimeout,
+		// StateProvider returns the current FSM state name.
+		// The closure captures workerCtx by reference; workerCtx is assigned below
+		// before the collector is started (in supervisor.Start), ensuring thread safety.
+		StateProvider: func() string {
+			if workerCtx == nil {
+				return "unknown"
+			}
+			workerCtx.mu.RLock()
+			defer workerCtx.mu.RUnlock()
+			if workerCtx.currentState == nil {
+				return "unknown"
+			}
+			return workerCtx.currentState.String()
+		},
 	})
 
 	executor := execution.NewActionExecutor(10, identity.ID, workerLogger)
 
-	s.workers[identity.ID] = &WorkerContext[TObserved, TDesired]{
+	workerCtx = &WorkerContext[TObserved, TDesired]{
 		mu:           s.lockManager.NewLock(lockNameWorkerContextMu, lockLevelWorkerContextMu),
 		identity:     identity,
 		worker:       worker,
@@ -150,6 +168,7 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity fsmv2.Identity, wor
 		collector:    collector,
 		executor:     executor,
 	}
+	s.workers[identity.ID] = workerCtx
 
 	// Enrich supervisor's own logger with worker path from Identity.
 	if len(s.workers) == 1 && identity.HierarchyPath != "" {

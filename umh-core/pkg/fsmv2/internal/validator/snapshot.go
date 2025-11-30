@@ -488,6 +488,91 @@ func checkDesiredStateValues(filename string) []Violation {
 	return violations
 }
 
+// ValidateObservedStateHasSetState checks that ObservedState types have a SetState(string) method.
+// This is required for the StateProvider callback mechanism: the Collector calls StateProvider
+// to get the current FSM state name, then calls SetState on the observed state to inject it.
+// Without this method, the State field in ObservedState would remain empty.
+func ValidateObservedStateHasSetState(baseDir string) []Violation {
+	var violations []Violation
+
+	snapshotFiles := FindSnapshotFiles(baseDir)
+
+	for _, file := range snapshotFiles {
+		fileViolations := checkObservedStateHasSetState(file)
+		violations = append(violations, fileViolations...)
+	}
+
+	return violations
+}
+
+// checkObservedStateHasSetState parses a snapshot file and checks that ObservedState types
+// have a SetState(string) method defined.
+func checkObservedStateHasSetState(filename string) []Violation {
+	var violations []Violation
+
+	fset := token.NewFileSet()
+
+	node, err := parser.ParseFile(fset, filename, nil, parser.ParseComments)
+	if err != nil {
+		return violations
+	}
+
+	// Collect all ObservedState type names
+	observedStateTypes := make(map[string]token.Pos)
+	ast.Inspect(node, func(n ast.Node) bool {
+		typeSpec, ok := n.(*ast.TypeSpec)
+		if !ok || !strings.Contains(typeSpec.Name.Name, "ObservedState") {
+			return true
+		}
+		observedStateTypes[typeSpec.Name.Name] = typeSpec.Pos()
+		return true
+	})
+
+	// Collect all types that have SetState method defined
+	typesWithSetState := make(map[string]bool)
+	ast.Inspect(node, func(n ast.Node) bool {
+		funcDecl, ok := n.(*ast.FuncDecl)
+		if !ok || funcDecl.Name.Name != "SetState" {
+			return true
+		}
+
+		if funcDecl.Recv == nil || len(funcDecl.Recv.List) == 0 {
+			return true
+		}
+
+		// Get receiver type name
+		var typeName string
+		switch recvType := funcDecl.Recv.List[0].Type.(type) {
+		case *ast.StarExpr:
+			if ident, ok := recvType.X.(*ast.Ident); ok {
+				typeName = ident.Name
+			}
+		case *ast.Ident:
+			typeName = recvType.Name
+		}
+
+		if typeName != "" {
+			typesWithSetState[typeName] = true
+		}
+
+		return true
+	})
+
+	// Check for violations: ObservedState types that don't have SetState method
+	for typeName, pos := range observedStateTypes {
+		if !typesWithSetState[typeName] {
+			violations = append(violations, Violation{
+				File:    filename,
+				Line:    fset.Position(pos).Line,
+				Type:    "MISSING_SET_STATE_METHOD",
+				Message: fmt.Sprintf("ObservedState %s missing SetState(string) method - required for StateProvider callback", typeName),
+			})
+		}
+	}
+
+	return violations
+}
+
 // ValidateDesiredStateHasNoDependencies checks that DesiredState structs do NOT have a Dependencies field.
 // This is an architectural invariant: DesiredState is pure configuration that can be serialized.
 // Dependencies are runtime interfaces that belong in Worker, not in DesiredState.

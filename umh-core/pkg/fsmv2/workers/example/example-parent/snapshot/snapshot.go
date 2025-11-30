@@ -60,3 +60,10 @@ func (o ParentObservedState) GetTimestamp() time.Time {
 func (o ParentObservedState) GetObservedDesiredState() fsmv2.DesiredState {
 	return &o.ParentDesiredState
 }
+
+// SetState sets the FSM state name on this observed state.
+// Called by Collector when StateProvider callback is configured.
+func (o ParentObservedState) SetState(s string) fsmv2.ObservedState {
+	o.State = s
+	return o
+}

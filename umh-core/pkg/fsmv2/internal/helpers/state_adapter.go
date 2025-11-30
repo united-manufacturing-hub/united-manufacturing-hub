@@ -97,12 +97,24 @@ func ConvertSnapshot[O any, D any](snapAny any) TypedSnapshot[O, D] {
 
 	observed, ok = raw.Observed.(O)
 	if !ok {
-		actualType := reflect.TypeOf(raw.Observed)
+		// Handle case where O is value type but raw.Observed is pointer type
+		// Try to dereference if raw.Observed is a pointer to O
+		actualVal := reflect.ValueOf(raw.Observed)
+		if actualVal.Kind() == reflect.Ptr && !actualVal.IsNil() {
+			elem := actualVal.Elem()
+			if elem.Type() == reflect.TypeOf(observed) {
+				observed = elem.Interface().(O)
+				ok = true
+			}
+		}
+		if !ok {
+			actualType := reflect.TypeOf(raw.Observed)
 
-		var zero O
+			var zero O
 
-		expectedType := reflect.TypeOf(zero)
-		panic(fmt.Sprintf("ConvertSnapshot: Observed type mismatch - expected %v, got %v", expectedType, actualType))
+			expectedType := reflect.TypeOf(zero)
+			panic(fmt.Sprintf("ConvertSnapshot: Observed type mismatch - expected %v, got %v", expectedType, actualType))
+		}
 	}
 
 	// Convert Desired with descriptive error

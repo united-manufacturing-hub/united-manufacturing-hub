@@ -37,7 +37,7 @@ var _ = Describe("ApplicationWorker", func() {
 	})
 
 	Describe("CollectObservedState", func() {
-		It("should return value type not pointer type", func() {
+		It("should return observed state with timestamp", func() {
 			ctx := context.Background()
 			obs, err := worker.CollectObservedState(ctx)
 			Expect(err).ToNot(HaveOccurred())

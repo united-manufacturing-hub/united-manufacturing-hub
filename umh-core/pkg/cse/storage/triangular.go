@@ -1030,9 +1030,14 @@ func SaveObservedTyped[T any](ts *TriangularStore, ctx context.Context, id strin
 }
 
 func DeriveWorkerType[T any]() (string, error) {
-	var zero T
+	// Use TypeOf on interface to avoid nil pointer issues with pointer types
+	t := reflect.TypeOf((*T)(nil)).Elem()
+	// Handle pointer types by getting the element type
+	if t.Kind() == reflect.Ptr {
+		t = t.Elem()
+	}
 
-	typeName := reflect.TypeOf(zero).Name()
+	typeName := t.Name()
 
 	if typeName == "" {
 		return "", errors.New("deriveWorkerType: type has empty name")
