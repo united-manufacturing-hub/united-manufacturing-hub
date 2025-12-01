@@ -85,5 +85,6 @@ func FromConnectionAndDFCServiceConfig(
 		ConnectionServiceConfig:             connection,
 		DataflowComponentReadServiceConfig:  dfcRead,
 		DataflowComponentWriteServiceConfig: dfcWrite,
+		DebugLevel:                          dfcRead.DebugLevel,
 	}
 }
