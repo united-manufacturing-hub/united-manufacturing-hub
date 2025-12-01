@@ -57,7 +57,16 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 		"mutex_name", "supervisor.mu")
 
 	if !exists {
-		return fmt.Errorf("worker %s not found", workerID)
+		// Worker was removed via SignalNeedsRemoval during concurrent tick.
+		// This race can happen during:
+		// 1. Shutdown() (s.started == false)
+		// 2. RequestShutdown() from reconcileChildren (s.started == true)
+		// WorkerIDs are always obtained from iterating s.workers, so
+		// "not found" is only possible due to this benign race condition.
+		s.logger.Debugw("tick_worker_skip",
+			"reason", "worker_removed_during_shutdown",
+			"worker_id", workerID)
+		return nil
 	}
 
 	// Skip if tick already in progress
