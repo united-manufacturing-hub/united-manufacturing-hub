@@ -22,17 +22,17 @@
 //
 // This package contains several example workers demonstrating FSMv2 patterns:
 //
-//   - example-parent/ - Parent worker with child management (hierarchical composition)
-//   - example-child/ - Child worker with states, actions, and dependencies
-//   - example-failing/ - Worker that simulates failures (for testing retry logic)
-//   - example-slow/ - Worker with slow operations (for testing timeouts)
-//   - example-panic/ - Worker that panics (for testing panic recovery)
+//   - exampleparent/ - Parent worker with child management (hierarchical composition)
+//   - child/ - Child worker with states, actions, and dependencies
+//   - failing/ - Worker that simulates failures (for testing retry logic)
+//   - slow/ - Worker with slow operations (for testing timeouts)
+//   - panic/ - Worker that panics (for testing panic recovery)
 //
 // # Directory Structure
 //
 // Each worker follows a consistent structure:
 //
-//	example-child/
+//	child/
 //	├── worker.go           # Worker implementation (CollectObservedState, DeriveDesiredState)
 //	├── dependencies.go     # Dependency injection struct
 //	├── userspec.go         # User configuration parsing
@@ -47,22 +47,22 @@
 //
 // # Key Patterns Demonstrated
 //
-// States: See example-child/state/ for:
+// States: See child/state/ for:
 //   - Shutdown handling (always check IsShutdownRequested() first)
 //   - State naming conventions (TryingTo* for active, descriptive nouns for passive)
 //   - State transitions returning (State, Signal, Action)
 //
-// Actions: See example-child/action/connect.go for:
+// Actions: See child/action/connect.go for:
 //   - Empty struct pattern (no fields, deps injected via Execute)
 //   - Context cancellation check (select on ctx.Done() first)
 //   - Idempotency (check if work already done)
 //
-// Parent-Child: See example-parent/worker.go for:
+// Parent-Child: See exampleparent/worker.go for:
 //   - Returning ChildrenSpecs in DeriveDesiredState()
 //   - StateMapping for FSM state coordination
 //   - VariableBundle for passing data to children
 //
-// Testing: See example-child/action/*_test.go for:
+// Testing: See child/action/*_test.go for:
 //   - Action idempotency verification
 //   - State transition testing patterns
 package example

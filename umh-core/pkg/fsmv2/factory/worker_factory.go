@@ -366,3 +366,129 @@ func GetFactory[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState]() (f
 
 	return factoryFunc, exists, nil
 }
+
+// RegisterWorkerAndSupervisorFactoryByType atomically registers both worker and supervisor factories
+// using the same worker type name. This ensures both registries stay synchronized.
+// If supervisor registration fails, the worker registration is rolled back.
+//
+// THREAD SAFETY:
+// This function is thread-safe and can be called concurrently from multiple goroutines.
+//
+// ERROR CONDITIONS:
+//   - Returns error if workerType is empty
+//   - Returns error if workerType is already registered in either registry
+//   - Rolls back worker registration if supervisor registration fails
+//
+// Example usage:
+//
+//	err := factory.RegisterWorkerAndSupervisorFactoryByType(
+//	    "mqtt_client",
+//	    func(id fsmv2.Identity, logger *zap.SugaredLogger) fsmv2.Worker {
+//	        return NewMQTTWorker(id, logger)
+//	    },
+//	    func(cfg interface{}) interface{} {
+//	        supervisorCfg := cfg.(supervisor.Config)
+//	        return supervisor.New[MQTTObservedState, MQTTDesiredState](supervisorCfg)
+//	    },
+//	)
+func RegisterWorkerAndSupervisorFactoryByType(
+	workerType string,
+	workerFactory func(fsmv2.Identity, *zap.SugaredLogger) fsmv2.Worker,
+	supervisorFactory func(interface{}) interface{},
+) error {
+	if workerType == "" {
+		return errors.New("worker type cannot be empty")
+	}
+
+	if err := RegisterFactoryByType(workerType, workerFactory); err != nil {
+		return fmt.Errorf("failed to register worker factory: %w", err)
+	}
+
+	if err := RegisterSupervisorFactoryByType(workerType, supervisorFactory); err != nil {
+		registryMu.Lock()
+		delete(registry, workerType)
+		registryMu.Unlock()
+		return fmt.Errorf("failed to register supervisor factory: %w", err)
+	}
+
+	return nil
+}
+
+// ValidateRegistryConsistency checks for mismatches between worker and supervisor registries.
+// Returns two slices: worker types without supervisors, and supervisor types without workers.
+// Empty slices indicate consistent registries.
+//
+// THREAD SAFETY:
+// This function is thread-safe and can be called concurrently from multiple goroutines.
+//
+// Return values:
+//   - workerOnly: Worker types registered without corresponding supervisor factories
+//   - supervisorOnly: Supervisor types registered without corresponding worker factories
+//
+// Example usage:
+//
+//	workerOnly, supervisorOnly := factory.ValidateRegistryConsistency()
+//	if len(workerOnly) > 0 {
+//	    log.Warnf("Worker types without supervisors: %v", workerOnly)
+//	}
+//	if len(supervisorOnly) > 0 {
+//	    log.Warnf("Supervisor types without workers: %v", supervisorOnly)
+//	}
+func ValidateRegistryConsistency() (workerOnly []string, supervisorOnly []string) {
+	registryMu.RLock()
+	workerTypes := make(map[string]bool, len(registry))
+	for workerType := range registry {
+		workerTypes[workerType] = true
+	}
+	registryMu.RUnlock()
+
+	supervisorRegistryMu.RLock()
+	supervisorTypes := make(map[string]bool, len(supervisorRegistry))
+	for supervisorType := range supervisorRegistry {
+		supervisorTypes[supervisorType] = true
+	}
+	supervisorRegistryMu.RUnlock()
+
+	for workerType := range workerTypes {
+		if !supervisorTypes[workerType] {
+			workerOnly = append(workerOnly, workerType)
+		}
+	}
+
+	for supervisorType := range supervisorTypes {
+		if !workerTypes[supervisorType] {
+			supervisorOnly = append(supervisorOnly, supervisorType)
+		}
+	}
+
+	return workerOnly, supervisorOnly
+}
+
+// ListSupervisorTypes returns all registered supervisor type names.
+// This is the companion function to ListRegisteredTypes() for supervisor factories.
+//
+// THREAD SAFETY:
+// This function is thread-safe and can be called concurrently from multiple goroutines.
+// The returned slice is a copy, so modifying it does not affect the registry.
+//
+// Return value:
+// A slice of registered supervisor type names. Returns an empty (non-nil) slice if no types are registered.
+// The order of types in the slice is not guaranteed.
+//
+// Example usage:
+//
+//	types := factory.ListSupervisorTypes()
+//	if !contains(types, "mqtt_client") {
+//	    return fmt.Errorf("mqtt_client supervisor type not registered")
+//	}
+func ListSupervisorTypes() []string {
+	supervisorRegistryMu.RLock()
+	defer supervisorRegistryMu.RUnlock()
+
+	types := make([]string, 0, len(supervisorRegistry))
+	for supervisorType := range supervisorRegistry {
+		types = append(types, supervisorType)
+	}
+
+	return types
+}

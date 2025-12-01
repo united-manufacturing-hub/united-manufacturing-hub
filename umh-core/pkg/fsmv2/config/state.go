@@ -14,7 +14,10 @@
 
 package config
 
-import "strings"
+import (
+	"fmt"
+	"strings"
+)
 
 // DesiredStateValues - what users can set in DesiredState.State.
 const (
@@ -34,6 +37,31 @@ const (
 // IsValidDesiredState returns true if the state is a valid desired state value.
 func IsValidDesiredState(state string) bool {
 	return state == DesiredStateStopped || state == DesiredStateRunning
+}
+
+// ValidateDesiredState checks that state is "stopped" or "running".
+// Returns a user-friendly error per UX_STANDARDS.md Error Excellence.
+//
+// This validation runs at runtime when DeriveDesiredState returns, catching:
+//   - Developer mistakes (hardcoded wrong values in worker.go)
+//   - User configuration mistakes (wrong state: value in YAML config)
+func ValidateDesiredState(state string) error {
+	if IsValidDesiredState(state) {
+		return nil
+	}
+
+	// Determine likely intent for actionable guidance
+	var hint string
+	switch state {
+	case "starting", "active", "connected", "running_connected":
+		hint = "Use 'running' for components that should be active."
+	case "stopping", "inactive", "stopped_disconnected", "disconnected":
+		hint = "Use 'stopped' for components that should be inactive."
+	default:
+		hint = "Use 'running' for active components or 'stopped' for inactive ones."
+	}
+
+	return fmt.Errorf("invalid desired state '%s' - only 'stopped' or 'running' are allowed. %s", state, hint)
 }
 
 // GetLifecyclePhase returns the lifecycle prefix from a state.

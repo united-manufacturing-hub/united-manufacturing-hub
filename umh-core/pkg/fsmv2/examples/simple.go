@@ -124,7 +124,7 @@ package examples
 // Workers are automatically registered when their package is imported:
 //
 //	import (
-//	    _ "github.com/.../fsmv2/workers/example/example-parent"
+//	    _ "github.com/.../fsmv2/workers/example/exampleparent"
 //	    _ "github.com/.../fsmv2/workers/example/example-child"
 //	)
 //
@@ -245,7 +245,7 @@ package examples
 //
 //	children:
 //	  - name: "parent-1"              # Unique ID for this worker
-//	    workerType: "parent"          # References example-parent worker
+//	    workerType: "exampleparent"   # References exampleparent worker
 //	    userSpec:
 //	      config: |
 //	        children_count: 2         # ParentUserSpec.ChildrenCount = 2
@@ -254,7 +254,7 @@ package examples
 //
 // 1. ApplicationSupervisor parses YAMLConfig and finds one child: "parent-1"
 //
-// 2. It looks up "parent" worker type in the registry (registered by example-parent's init())
+// 2. It looks up "exampleparent" worker type in the registry (registered by exampleparent's init())
 //
 // 3. It calls ParentWorker.ParseUserSpec() with config: "children_count: 2"
 //    This returns ParentUserSpec{ChildrenCount: 2}
@@ -349,15 +349,15 @@ package examples
 //   - State persistence in triangular store
 //
 // Worker Types Used:
-//   - "parent": example-parent worker (creates N children based on config)
-//   - "child": example-child worker (no children, just demonstrates lifecycle)
+//   - "exampleparent": exampleparent worker (creates N children based on config)
+//   - "examplechild": examplechild worker (no children, just demonstrates lifecycle)
 //
 // Expected Behavior:
-//   1. ApplicationSupervisor creates parent-1
-//   2. parent-1 creates parent-1-child-1 and parent-1-child-2
-//   3. All workers transition through FSM states (starting → running)
-//   4. Workers persist state to triangular store
-//   5. On shutdown, all workers transition to stopped
+//  1. ApplicationSupervisor creates parent-1
+//  2. parent-1 creates parent-1-child-1 and parent-1-child-2
+//  3. All workers transition through FSM states (starting → running)
+//  4. Workers persist state to triangular store
+//  5. On shutdown, all workers transition to stopped
 //
 // Usage in Tests:
 //
@@ -397,11 +397,11 @@ var SimpleScenario = Scenario{
 	//
 	// In this scenario:
 	// - We create 1 root worker named "parent-1"
-	// - It has workerType "parent", which maps to example-parent worker
+	// - It has workerType "exampleparent", which maps to exampleparent worker
 	// - Its userSpec.config contains "children_count: 2"
 	// - The parent worker parses this into ParentUserSpec{ChildrenCount: 2}
 	// - The parent's GetChildSpecs() method returns 2 ChildSpec entries
-	// - Each child has workerType "child", which maps to example-child worker
+	// - Each child has workerType "examplechild", which maps to examplechild worker
 	//
 	// The result is a 3-worker hierarchy:
 	//   app-001
@@ -411,7 +411,7 @@ var SimpleScenario = Scenario{
 	YAMLConfig: `
 children:
   - name: "parent-1"
-    workerType: "parent"
+    workerType: "exampleparent"
     userSpec:
       config: |
         children_count: 2

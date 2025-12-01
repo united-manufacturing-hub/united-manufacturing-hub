@@ -458,3 +458,286 @@ func TestListRegisteredTypes_ConcurrentCalls(t *testing.T) {
 		}
 	}
 }
+
+func TestRegisterWorkerAndSupervisorFactory(t *testing.T) {
+	// Reset registry before test
+	factory.ResetRegistry()
+
+	tests := []struct {
+		name          string
+		setupRegistry func() // Optional: pre-register conflicting entries
+		wantErr       bool
+		errContains   string
+	}{
+		{
+			name:        "register both worker and supervisor successfully",
+			wantErr:     false,
+			errContains: "",
+		},
+		{
+			name: "fail when worker already registered",
+			setupRegistry: func() {
+				factory.RegisterFactoryByType("test_worker", func(id fsmv2.Identity, _ *zap.SugaredLogger) fsmv2.Worker {
+					return &mockWorker{identity: id}
+				})
+			},
+			wantErr:     true,
+			errContains: "failed to register worker factory",
+		},
+		{
+			name: "fail when supervisor already registered and rollback worker",
+			setupRegistry: func() {
+				factory.RegisterSupervisorFactoryByType("test_worker", func(cfg interface{}) interface{} {
+					return nil
+				})
+			},
+			wantErr:     true,
+			errContains: "failed to register supervisor factory",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			factory.ResetRegistry()
+
+			if tt.setupRegistry != nil {
+				tt.setupRegistry()
+			}
+
+			err := factory.RegisterWorkerAndSupervisorFactoryByType(
+				"test_worker",
+				func(id fsmv2.Identity, _ *zap.SugaredLogger) fsmv2.Worker {
+					return &mockWorker{identity: id}
+				},
+				func(cfg interface{}) interface{} {
+					return nil
+				},
+			)
+
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("RegisterWorkerAndSupervisorFactory() expected error containing %q, got nil", tt.errContains)
+				} else if tt.errContains != "" && !contains(err.Error(), tt.errContains) {
+					t.Errorf("RegisterWorkerAndSupervisorFactory() error = %v, want error containing %q", err, tt.errContains)
+				}
+
+				// If supervisor registration failed, verify worker was rolled back
+				if contains(err.Error(), "failed to register supervisor factory") {
+					types := factory.ListRegisteredTypes()
+					for _, typ := range types {
+						if typ == "test_worker" {
+							t.Errorf("Worker factory was not rolled back after supervisor registration failure")
+						}
+					}
+				}
+			} else {
+				if err != nil {
+					t.Errorf("RegisterWorkerAndSupervisorFactory() unexpected error = %v", err)
+				}
+
+				// Verify both worker and supervisor were registered
+				types := factory.ListRegisteredTypes()
+				foundWorker := false
+				for _, typ := range types {
+					if typ == "test_worker" {
+						foundWorker = true
+						break
+					}
+				}
+				if !foundWorker {
+					t.Error("Worker factory was not registered")
+				}
+
+				supervisorTypes := factory.ListSupervisorTypes()
+				foundSupervisor := false
+				for _, typ := range supervisorTypes {
+					if typ == "test_worker" {
+						foundSupervisor = true
+						break
+					}
+				}
+				if !foundSupervisor {
+					t.Error("Supervisor factory was not registered")
+				}
+			}
+		})
+	}
+}
+
+func TestValidateRegistryConsistency(t *testing.T) {
+	tests := []struct {
+		name                string
+		setupRegistry       func()
+		wantWorkerOnly      []string
+		wantSupervisorOnly  []string
+	}{
+		{
+			name: "empty registries",
+			setupRegistry: func() {
+				factory.ResetRegistry()
+			},
+			wantWorkerOnly:     []string{},
+			wantSupervisorOnly: []string{},
+		},
+		{
+			name: "consistent registries",
+			setupRegistry: func() {
+				factory.ResetRegistry()
+				factory.RegisterFactoryByType("worker_a", func(id fsmv2.Identity, _ *zap.SugaredLogger) fsmv2.Worker {
+					return &mockWorker{identity: id}
+				})
+				factory.RegisterSupervisorFactoryByType("worker_a", func(cfg interface{}) interface{} {
+					return nil
+				})
+			},
+			wantWorkerOnly:     []string{},
+			wantSupervisorOnly: []string{},
+		},
+		{
+			name: "worker registered but not supervisor",
+			setupRegistry: func() {
+				factory.ResetRegistry()
+				factory.RegisterFactoryByType("orphan_worker", func(id fsmv2.Identity, _ *zap.SugaredLogger) fsmv2.Worker {
+					return &mockWorker{identity: id}
+				})
+			},
+			wantWorkerOnly:     []string{"orphan_worker"},
+			wantSupervisorOnly: []string{},
+		},
+		{
+			name: "supervisor registered but not worker",
+			setupRegistry: func() {
+				factory.ResetRegistry()
+				factory.RegisterSupervisorFactoryByType("orphan_supervisor", func(cfg interface{}) interface{} {
+					return nil
+				})
+			},
+			wantWorkerOnly:     []string{},
+			wantSupervisorOnly: []string{"orphan_supervisor"},
+		},
+		{
+			name: "mixed inconsistencies",
+			setupRegistry: func() {
+				factory.ResetRegistry()
+				// Both registered
+				factory.RegisterFactoryByType("consistent", func(id fsmv2.Identity, _ *zap.SugaredLogger) fsmv2.Worker {
+					return &mockWorker{identity: id}
+				})
+				factory.RegisterSupervisorFactoryByType("consistent", func(cfg interface{}) interface{} {
+					return nil
+				})
+				// Worker only
+				factory.RegisterFactoryByType("worker_only", func(id fsmv2.Identity, _ *zap.SugaredLogger) fsmv2.Worker {
+					return &mockWorker{identity: id}
+				})
+				// Supervisor only
+				factory.RegisterSupervisorFactoryByType("supervisor_only", func(cfg interface{}) interface{} {
+					return nil
+				})
+			},
+			wantWorkerOnly:     []string{"worker_only"},
+			wantSupervisorOnly: []string{"supervisor_only"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.setupRegistry()
+
+			workerOnly, supervisorOnly := factory.ValidateRegistryConsistency()
+
+			// Check worker-only types
+			if len(workerOnly) != len(tt.wantWorkerOnly) {
+				t.Errorf("ValidateRegistryConsistency() workerOnly count = %d, want %d", len(workerOnly), len(tt.wantWorkerOnly))
+			}
+			workerOnlyMap := make(map[string]bool)
+			for _, w := range workerOnly {
+				workerOnlyMap[w] = true
+			}
+			for _, want := range tt.wantWorkerOnly {
+				if !workerOnlyMap[want] {
+					t.Errorf("ValidateRegistryConsistency() missing worker-only type %q", want)
+				}
+			}
+
+			// Check supervisor-only types
+			if len(supervisorOnly) != len(tt.wantSupervisorOnly) {
+				t.Errorf("ValidateRegistryConsistency() supervisorOnly count = %d, want %d", len(supervisorOnly), len(tt.wantSupervisorOnly))
+			}
+			supervisorOnlyMap := make(map[string]bool)
+			for _, s := range supervisorOnly {
+				supervisorOnlyMap[s] = true
+			}
+			for _, want := range tt.wantSupervisorOnly {
+				if !supervisorOnlyMap[want] {
+					t.Errorf("ValidateRegistryConsistency() missing supervisor-only type %q", want)
+				}
+			}
+		})
+	}
+}
+
+func TestListSupervisorTypes(t *testing.T) {
+	tests := []struct {
+		name          string
+		setupRegistry func()
+		wantTypes     []string
+	}{
+		{
+			name: "empty registry",
+			setupRegistry: func() {
+				factory.ResetRegistry()
+			},
+			wantTypes: []string{},
+		},
+		{
+			name: "single supervisor",
+			setupRegistry: func() {
+				factory.ResetRegistry()
+				factory.RegisterSupervisorFactoryByType("supervisor_a", func(cfg interface{}) interface{} {
+					return nil
+				})
+			},
+			wantTypes: []string{"supervisor_a"},
+		},
+		{
+			name: "multiple supervisors",
+			setupRegistry: func() {
+				factory.ResetRegistry()
+				factory.RegisterSupervisorFactoryByType("supervisor_a", func(cfg interface{}) interface{} {
+					return nil
+				})
+				factory.RegisterSupervisorFactoryByType("supervisor_b", func(cfg interface{}) interface{} {
+					return nil
+				})
+				factory.RegisterSupervisorFactoryByType("supervisor_c", func(cfg interface{}) interface{} {
+					return nil
+				})
+			},
+			wantTypes: []string{"supervisor_a", "supervisor_b", "supervisor_c"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.setupRegistry()
+
+			types := factory.ListSupervisorTypes()
+
+			if len(types) != len(tt.wantTypes) {
+				t.Errorf("ListSupervisorTypes() returned %d types, want %d", len(types), len(tt.wantTypes))
+			}
+
+			typeMap := make(map[string]bool)
+			for _, typ := range types {
+				typeMap[typ] = true
+			}
+
+			for _, want := range tt.wantTypes {
+				if !typeMap[want] {
+					t.Errorf("ListSupervisorTypes() missing type %q", want)
+				}
+			}
+		})
+	}
+}

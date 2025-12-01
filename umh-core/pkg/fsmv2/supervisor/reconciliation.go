@@ -516,6 +516,19 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 		return fmt.Errorf("failed to derive desired state: %w", err)
 	}
 
+	// Validate DesiredState.State is a valid lifecycle state ("stopped" or "running")
+	// This catches both developer mistakes (hardcoded wrong values) and user config mistakes
+	if valErr := config.ValidateDesiredState(desired.State); valErr != nil {
+		s.logger.Error("invalid desired state from DeriveDesiredState",
+			"state", desired.State,
+			"worker_id", firstWorkerID,
+			"error", valErr)
+		metrics.RecordTemplateRenderingDuration(s.workerType, "error", templateDuration)
+		metrics.RecordTemplateRenderingError(s.workerType, "invalid_state_value")
+
+		return fmt.Errorf("failed to derive desired state: %w", valErr)
+	}
+
 	metrics.RecordTemplateRenderingDuration(s.workerType, "success", templateDuration)
 
 	// Save derived desired state to database BEFORE tickWorker

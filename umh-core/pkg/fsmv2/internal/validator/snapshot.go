@@ -19,6 +19,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"path/filepath"
 	"strings"
 )
 
@@ -586,6 +587,71 @@ func ValidateDesiredStateHasNoDependencies(baseDir string) []Violation {
 		fileViolations := checkDesiredStateHasNoDependencies(file)
 		violations = append(violations, fileViolations...)
 	}
+
+	return violations
+}
+
+// ValidateFolderMatchesWorkerType checks that worker folder names match their derived worker types.
+// This ensures consistency between folder names and type names, preventing registration mismatches.
+func ValidateFolderMatchesWorkerType(baseDir string) []Violation {
+	var violations []Violation
+
+	snapshotFiles := FindSnapshotFiles(baseDir)
+
+	for _, file := range snapshotFiles {
+		fileViolations := checkFolderMatchesWorkerType(file)
+		violations = append(violations, fileViolations...)
+	}
+
+	return violations
+}
+
+// checkFolderMatchesWorkerType parses a snapshot file, derives the worker type from the
+// ObservedState type name, and compares it to the folder name.
+// The derivation follows the same logic as storage.DeriveWorkerType:
+// strip "ObservedState" suffix and lowercase.
+func checkFolderMatchesWorkerType(filename string) []Violation {
+	var violations []Violation
+
+	fset := token.NewFileSet()
+
+	node, err := parser.ParseFile(fset, filename, nil, parser.ParseComments)
+	if err != nil {
+		return violations
+	}
+
+	// Get the worker folder name (parent of snapshot/ directory)
+	// Path structure: .../workers/example/examplechild/snapshot/snapshot.go
+	// We want "examplechild" (the parent of "snapshot")
+	dir := filepath.Dir(filename)            // .../snapshot
+	workerDir := filepath.Dir(dir)           // .../examplechild
+	folderName := filepath.Base(workerDir)   // examplechild
+
+	// Look for structs with "ObservedState" in the name
+	ast.Inspect(node, func(n ast.Node) bool {
+		typeSpec, ok := n.(*ast.TypeSpec)
+		if !ok || !strings.HasSuffix(typeSpec.Name.Name, "ObservedState") {
+			return true
+		}
+
+		// Derive worker type using same logic as storage.DeriveWorkerType
+		typeName := typeSpec.Name.Name
+		workerType := strings.TrimSuffix(typeName, "ObservedState")
+		workerType = strings.ToLower(workerType)
+
+		// Compare to folder name
+		if folderName != workerType {
+			pos := fset.Position(typeSpec.Pos())
+			violations = append(violations, Violation{
+				File:    filename,
+				Line:    pos.Line,
+				Type:    "FOLDER_WORKER_TYPE_MISMATCH",
+				Message: fmt.Sprintf("Folder name %q does not match derived worker type %q (from %s). Rename folder to %q to match.", folderName, workerType, typeName, workerType),
+			})
+		}
+
+		return true
+	})
 
 	return violations
 }

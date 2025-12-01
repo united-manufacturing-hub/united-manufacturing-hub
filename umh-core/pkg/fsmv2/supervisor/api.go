@@ -72,6 +72,11 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity fsmv2.Identity, wor
 		return fmt.Errorf("failed to derive initial desired state: %w", err)
 	}
 
+	// Validate DesiredState.State is a valid lifecycle state ("stopped" or "running")
+	if valErr := config.ValidateDesiredState(initialDesired.State); valErr != nil {
+		return fmt.Errorf("failed to derive initial desired state: %w", valErr)
+	}
+
 	// Save identity to database
 	identityDoc := persistence.Document{
 		"id":             identity.ID,

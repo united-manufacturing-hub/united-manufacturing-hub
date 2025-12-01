@@ -25,8 +25,8 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/validator"
 
 	// Import state packages to scan for violations.
-	childState "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/example-child/state"
-	parentState "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/example-parent/state"
+	childState "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplechild/state"
+	parentState "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent/state"
 )
 
 var _ = Describe("FSMv2 Architecture Validation", func() {
@@ -248,6 +248,17 @@ var _ = Describe("FSMv2 Architecture Validation", func() {
 			})
 		})
 
+		Describe("DeriveDesiredState Returns (Invariant: Valid Lifecycle States)", func() {
+			It("should only return \"stopped\" or \"running\" in State field", func() {
+				violations := validator.ValidateDeriveDesiredStateReturns(getFsmv2Dir())
+
+				if len(violations) > 0 {
+					message := validator.FormatViolationsWithPattern("DeriveDesiredState State Value Violations", violations, "INVALID_DESIRED_STATE_VALUE")
+					Fail(message)
+				}
+			})
+		})
+
 		Describe("TryingTo States Return Actions (Invariant: Active State Semantics)", func() {
 			It("should return non-nil actions in at least one code path", func() {
 				violations := validator.ValidateTryingToStatesReturnActions(getFsmv2Dir())
@@ -337,6 +348,16 @@ var _ = Describe("FSMv2 Architecture Validation", func() {
 				}
 			})
 		})
+
+		Describe("Worker Folder Naming (Invariant: Folder = Worker Type)", func() {
+			It("should have folder name equal to derived worker type", func() {
+				violations := validator.ValidateFolderMatchesWorkerType(getFsmv2Dir())
+				if len(violations) > 0 {
+					message := validator.FormatViolationsWithPattern("Folder Naming Violations", violations, "FOLDER_WORKER_TYPE_MISMATCH")
+					Fail(message)
+				}
+			})
+		})
 	})
 })
 
@@ -385,7 +406,7 @@ func validateStateStructs() []validator.Violation {
 		}
 	}
 
-	// Check example-parent states
+	// Check exampleparent states
 	parentStates := []interface{}{
 		&parentState.TryingToStartState{},
 		&parentState.RunningState{},

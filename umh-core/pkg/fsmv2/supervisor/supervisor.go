@@ -23,11 +23,11 @@
 //
 // Example usage:
 //
-//	supervisor := NewSupervisor[ParentObservedState, *ParentDesiredState](config)
+//	supervisor := NewSupervisor[ExampleparentObservedState, *ExampleparentDesiredState](config)
 //	supervisor.AddWorker(identity, worker)
 //
 // Worker types are automatically derived from the observed state type name:
-//   - ParentObservedState -> "parent"
+//   - ExampleparentObservedState -> "exampleparent"
 //   - ContainerObservedState -> "container"
 //
 // This eliminates manual WorkerType constants and provides compile-time validation.

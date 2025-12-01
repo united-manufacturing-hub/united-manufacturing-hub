@@ -36,7 +36,7 @@
 //   - workers/example/example-child/worker.go - Child worker implementation
 //   - workers/example/example-child/state/ - State definitions and transitions
 //   - workers/example/example-child/action/ - Idempotent actions
-//   - workers/example/example-parent/worker.go - Parent with child management
+//   - workers/example/exampleparent/worker.go - Parent with child management
 //   - examples/simple/main.go - Runnable example with YAML config
 //
 // # Key Concepts
@@ -139,7 +139,7 @@
 //   - StateMapping coordinates FSM states (NOT data passing)
 //   - Use VariableBundle for passing data to children
 //
-// See workers/example/example-parent/worker.go for complete parent-child example.
+// See workers/example/exampleparent/worker.go for complete parent-child example.
 //
 // # Architecture Documentation
 //

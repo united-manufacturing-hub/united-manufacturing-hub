@@ -454,3 +454,103 @@ func checkChildSpecValidation(filename string) []Violation {
 
 	return violations
 }
+
+// ValidateDeriveDesiredStateReturns checks that DeriveDesiredState returns valid State values.
+// The State field in DesiredState must be "stopped" or "running" (config.DesiredState* constants).
+// This is validated at test-time via AST parsing to catch hardcoded invalid values.
+func ValidateDeriveDesiredStateReturns(baseDir string) []Violation {
+	var violations []Violation
+
+	workerFiles := FindWorkerFiles(baseDir)
+
+	for _, file := range workerFiles {
+		fileViolations := checkDeriveDesiredStateReturns(file)
+		violations = append(violations, fileViolations...)
+	}
+
+	return violations
+}
+
+// checkDeriveDesiredStateReturns parses a worker file and checks that DeriveDesiredState
+// returns valid State values ("stopped" or "running").
+func checkDeriveDesiredStateReturns(filename string) []Violation {
+	var violations []Violation
+
+	fset := token.NewFileSet()
+
+	node, err := parser.ParseFile(fset, filename, nil, parser.ParseComments)
+	if err != nil {
+		return violations
+	}
+
+	// Valid desired state values
+	validStates := map[string]bool{
+		"stopped": true,
+		"running": true,
+	}
+
+	// Look for DeriveDesiredState() method
+	ast.Inspect(node, func(n ast.Node) bool {
+		funcDecl, ok := n.(*ast.FuncDecl)
+		if !ok || funcDecl.Name.Name != "DeriveDesiredState" {
+			return true
+		}
+
+		// Find all return statements in the method
+		ast.Inspect(funcDecl.Body, func(bodyNode ast.Node) bool {
+			retStmt, ok := bodyNode.(*ast.ReturnStmt)
+			if !ok || len(retStmt.Results) == 0 {
+				return true
+			}
+
+			// Check first return value (DesiredState)
+			firstResult := retStmt.Results[0]
+
+			// Handle &Type{} or Type{} composite literals
+			var compLit *ast.CompositeLit
+			if unaryExpr, ok := firstResult.(*ast.UnaryExpr); ok {
+				compLit, _ = unaryExpr.X.(*ast.CompositeLit)
+			} else {
+				compLit, _ = firstResult.(*ast.CompositeLit)
+			}
+
+			if compLit == nil {
+				return true
+			}
+
+			// Find State field in composite literal
+			for _, elt := range compLit.Elts {
+				kvExpr, ok := elt.(*ast.KeyValueExpr)
+				if !ok {
+					continue
+				}
+
+				keyIdent, ok := kvExpr.Key.(*ast.Ident)
+				if !ok || keyIdent.Name != "State" {
+					continue
+				}
+
+				// Check if value is a string literal
+				if basicLit, ok := kvExpr.Value.(*ast.BasicLit); ok && basicLit.Kind == token.STRING {
+					value := strings.Trim(basicLit.Value, `"`)
+					if !validStates[value] {
+						pos := fset.Position(kvExpr.Pos())
+						violations = append(violations, Violation{
+							File:    filename,
+							Line:    pos.Line,
+							Type:    "INVALID_DESIRED_STATE_VALUE",
+							Message: fmt.Sprintf("DeriveDesiredState returns invalid State value %q - must be \"stopped\" or \"running\"", value),
+						})
+					}
+				}
+				// Note: We don't flag config.DesiredState* constants as they're valid
+			}
+
+			return true
+		})
+
+		return true
+	})
+
+	return violations
+}

@@ -375,9 +375,9 @@ func verifyStateFieldsAreValid(store storage.TriangularStoreInterface) {
 
 		var validStates map[string]bool
 		switch w.WorkerType {
-		case "child":
+		case "examplechild":
 			validStates = validChildStates
-		case "parent":
+		case "exampleparent":
 			validStates = validParentStates
 		case "application":
 			validStates = validApplicationStates
@@ -537,7 +537,7 @@ func verifyHierarchyPathCorrect(store storage.TriangularStoreInterface) {
 	workers := getWorkersFromStore(store)
 
 	for _, w := range workers {
-		if w.WorkerType != "child" {
+		if w.WorkerType != "examplechild" {
 			continue
 		}
 
@@ -549,13 +549,13 @@ func verifyHierarchyPathCorrect(store storage.TriangularStoreInterface) {
 		Expect(hasPath).To(BeTrue(),
 			fmt.Sprintf("Child %s missing hierarchy_path", w.WorkerID))
 
-		// Path should contain (parent) indicating parent worker
-		Expect(path).To(ContainSubstring("(parent)"),
-			fmt.Sprintf("Child %s hierarchy_path missing parent: %s", w.WorkerID, path))
+		// Path should contain (exampleparent) indicating parent worker
+		Expect(path).To(ContainSubstring("(exampleparent)"),
+			fmt.Sprintf("Child %s hierarchy_path missing exampleparent: %s", w.WorkerID, path))
 
-		// Path should contain (child) indicating child type
-		Expect(path).To(ContainSubstring("(child)"),
-			fmt.Sprintf("Child %s hierarchy_path missing child type: %s", w.WorkerID, path))
+		// Path should contain (examplechild) indicating child type
+		Expect(path).To(ContainSubstring("(examplechild)"),
+			fmt.Sprintf("Child %s hierarchy_path missing examplechild type: %s", w.WorkerID, path))
 	}
 
 	GinkgoWriter.Printf("✓ Hierarchy paths are correct\n")
@@ -568,9 +568,9 @@ func verifyChildCountMatches(store storage.TriangularStoreInterface) {
 	// Separate parents and children
 	var parents, children []examples.WorkerSnapshot
 	for _, w := range workers {
-		if w.WorkerType == "parent" {
+		if w.WorkerType == "exampleparent" {
 			parents = append(parents, w)
-		} else if w.WorkerType == "child" {
+		} else if w.WorkerType == "examplechild" {
 			children = append(children, w)
 		}
 	}

@@ -375,7 +375,7 @@ partial deployments where some children fail.`,
     }
     return &DesiredState{Children: spec.Children}, nil
 }`,
-		ReferenceFile: "example-parent/worker.go",
+		ReferenceFile: "exampleparent/worker.go",
 	},
 	"CHANNEL_OPERATION_IN_ACTION": {
 		Name: "No Channel Operations in Actions",
@@ -442,20 +442,36 @@ type MyObservedState struct {
 	},
 	"INVALID_DESIRED_STATE_VALUE": {
 		Name: "DesiredState.State Must Be 'stopped' or 'running'",
-		Why: `The DesiredState.State field should only contain "stopped" or "running".
-WHY: These two values represent the valid lifecycle states that can be desired for a worker.
-"running" means the worker should be actively operating, "stopped" means it should be
-inactive. Any other value indicates incorrect state management and will cause FSM
-transition errors. This constraint ensures predictable lifecycle behavior.`,
-		CorrectCode: `// Correct: valid state values
-desired.State = "running"
-desired.State = "stopped"
+		Why: `DesiredState.State MUST only be "stopped" or "running".
+
+WHY: These represent user INTENT (lifecycle commands), not current state.
+- "running": User wants the component active
+- "stopped": User wants the component inactive
+
+Any other value (like "connected", "starting") confuses DESIRED state
+(what we want) with OBSERVED state (what we have). This causes FSM errors
+and unpredictable behavior.
+
+NOTE: This is validated BOTH at test-time (AST checks in worker.go DeriveDesiredState)
+AND at runtime (user YAML config validation). Runtime errors are user-facing
+and follow UX_STANDARDS.md Error Excellence - provide actionable guidance.`,
+		CorrectCode: `// Correct: use constants in DeriveDesiredState
+return config.DesiredState{
+    State: config.DesiredStateRunning,  // Use constants!
+}
+
+// Also valid: literal strings
+return config.DesiredState{
+    State: "running",  // OK but prefer constants
+}
 
 // WRONG: invalid state values
-desired.State = "starting"  // Should use "running"
-desired.State = "active"    // Should use "running"
-desired.State = "inactive"  // Should use "stopped"`,
-		ReferenceFile: "example-child/snapshot/snapshot.go",
+return config.DesiredState{
+    State: "connected",  // FSM operational state, not lifecycle intent
+    State: "starting",   // Transitional state, not user intent
+    State: "active",     // Ambiguous, use "running" instead
+}`,
+		ReferenceFile: "workers/example/examplechild/worker.go",
 	},
 	"MISSING_SET_STATE_METHOD": {
 		Name: "ObservedState Must Have SetState Method",
@@ -477,6 +493,48 @@ func (o *MyObservedState) SetState(s string) {
     o.State = s
 }`,
 		ReferenceFile: "workers/application/snapshot/snapshot.go",
+	},
+	"FOLDER_WORKER_TYPE_MISMATCH": {
+		Name: "Folder Name Must Match Worker Type",
+		Why: `Worker folder names must exactly match the derived worker type.
+WHY: The factory registration system uses type names to derive worker types:
+"ExamplechildObservedState" → "examplechild". If the folder is named differently (e.g., "example-child"),
+it creates confusion and enables registration mismatches where supervisor factory
+registers as "examplechild" but worker factory registers manually as "example-child".
+Go type names cannot contain hyphens, so hyphenated folder names can NEVER match.`,
+		CorrectCode: `// Folder "examplechild" with type ExamplechildObservedState → worker type "examplechild" ✓
+workers/example/examplechild/snapshot/snapshot.go:
+    type ExamplechildObservedState struct { ... }
+
+// Folder "exampleparent" with type ExampleparentObservedState → "exampleparent" ✓
+workers/example/exampleparent/snapshot/snapshot.go:
+    type ExampleparentObservedState struct { ... }
+
+// WRONG: Folder "example-child" can never match (hyphens invalid in Go types)`,
+		ReferenceFile: "workers/example/examplechild/snapshot/snapshot.go",
+	},
+	"DEPENDENCIES_IN_DESIRED_STATE": {
+		Name: "Dependencies Not Allowed in DesiredState",
+		Why: `DesiredState structs must NOT have a Dependencies field.
+WHY: DesiredState is pure configuration that can be serialized to JSON/YAML.
+Dependencies are runtime interfaces (loggers, clients, services) that belong
+in Worker, not in DesiredState. Including dependencies in DesiredState breaks
+serialization and creates tight coupling between configuration and runtime.`,
+		CorrectCode: `// Correct: Dependencies in Worker, not DesiredState
+type MyWorker struct {
+    deps Dependencies  // Runtime dependencies here
+}
+
+type MyDesiredState struct {
+    config.BaseDesiredState
+    State string  // Configuration only
+}
+
+// WRONG: Dependencies in DesiredState
+type MyDesiredState struct {
+    Dependencies *Dependencies  // This is forbidden
+}`,
+		ReferenceFile: "example-child/snapshot/snapshot.go",
 	},
 }
 
