@@ -135,9 +135,9 @@ RUN adduser -D -u 1000 -s /bin/sh umhuser && \
     mkdir -p /data/logs /data/logs/umh-core /data/services /data/benthos /data/redpanda/coredump && \
     chown -R umhuser:umhuser /data
 
-# Set ownership of S6 runtime directories for non-root operation
-RUN mkdir -p /run/s6 /var/run && \
-    chown -R umhuser:umhuser /run /var/run /etc/s6-overlay
+# Set ownership of S6 overlay config for non-root operation
+# Note: /run permissions handled by S6_YES_I_WANT_A_WORLD_WRITABLE_RUN_BECAUSE_KUBERNETES=1
+RUN chown -R umhuser:umhuser /etc/s6-overlay
 
 # Handle DEBUG mode - install Go and Delve when DEBUG=true
 # Delve is a debugger for Go (https://github.com/go-delve/delve/)

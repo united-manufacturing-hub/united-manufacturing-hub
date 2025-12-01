@@ -101,7 +101,7 @@ func getLogRunScript(config s6serviceconfig.S6ServiceConfig, logDir string) (str
 	// n{count} - number of archived files to keep
 	// s{size} - rotate at this file size (only if LogFilesize > 0)
 	// T - ISO 8601 timestamps (required for our time parser)
-	// Important: This needs to be T (ISO 8861) as our time parser expects this format
+	// Important: This needs to be T (ISO 8601) as our time parser expects this format
 
 	// Use our default archive count for dynamic services.
 	// Static services like umh-core use n5 (configured in s6-rc.d/umh-core-log/run)

@@ -34,7 +34,7 @@ agent:
 Or via environment variable:
 
 ```bash
-docker run -e ALLOW_INSECURE_TLS=true umh-core:latest
+docker run -e ALLOW_INSECURE_TLS=true management.umh.app/oci/united-manufacturing-hub/umh-core:latest
 ```
 
 **Security Warning:** The `allowInsecureTLS` option disables certificate validation. Only use this if:

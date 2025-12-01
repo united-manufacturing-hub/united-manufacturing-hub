@@ -48,4 +48,4 @@ fi
 rm -f /data/.write-test
 
 # Ensure required directories exist
-mkdir -p /data/logs /data/services /data/redpanda 2>/dev/null || true
+mkdir -p /data/logs /data/services /data/redpanda 2>/dev/null
