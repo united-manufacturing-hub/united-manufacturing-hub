@@ -52,7 +52,7 @@ docker run \
   -e HTTP_PROXY=http://proxy.company.com:8080 \
   -e HTTPS_PROXY=https://proxy.company.com:8080 \
   -e NO_PROXY=localhost,127.0.0.1,.local \
-  umh-core:latest
+  management.umh.app/oci/united-manufacturing-hub/umh-core:latest
 ```
 
 Supported environment variables: `HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY` (and their lowercase variants).
