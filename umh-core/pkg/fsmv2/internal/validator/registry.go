@@ -536,6 +536,30 @@ type MyDesiredState struct {
 }`,
 		ReferenceFile: "example-child/snapshot/snapshot.go",
 	},
+	"REGISTRY_MISMATCH": {
+		Name: "Worker/Supervisor Registry Mismatch",
+		Why: `Worker and supervisor registries must contain the same type names.
+WHY: Every worker type needs both a worker factory (creates Worker instances) and
+a supervisor factory (creates Supervisor instances). If only one is registered,
+the FSM system will panic at runtime when trying to create the missing component.
+Use RegisterWorkerType[TObserved, TDesired]() to register both atomically.`,
+		CorrectCode: `func init() {
+    err := factory.RegisterWorkerType[snapshot.MyObservedState, *snapshot.MyDesiredState](
+        func(id fsmv2.Identity, logger *zap.SugaredLogger) fsmv2.Worker {
+            worker, _ := NewMyWorker(id, logger)
+            return worker
+        },
+        func(cfg interface{}) interface{} {
+            return supervisor.NewSupervisor[snapshot.MyObservedState, *snapshot.MyDesiredState](
+                cfg.(supervisor.Config))
+        },
+    )
+    if err != nil {
+        panic(err)
+    }
+}`,
+		ReferenceFile: "factory/worker_factory.go:451-461",
+	},
 }
 
 // GetPattern returns pattern info for a violation type.

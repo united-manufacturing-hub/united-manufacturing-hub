@@ -414,6 +414,52 @@ func RegisterWorkerAndSupervisorFactoryByType(
 	return nil
 }
 
+// RegisterWorkerType atomically registers both worker and supervisor factories using
+// compile-time type parameters. The worker type is automatically derived from TObserved,
+// ensuring consistency between worker and supervisor registrations.
+//
+// This is the PREFERRED registration API for worker packages. It combines the benefits of:
+//   - Compile-time type safety from type parameters
+//   - Automatic worker type derivation (no manual string matching)
+//   - Atomic registration with rollback on failure
+//
+// THREAD SAFETY:
+// This function is thread-safe and can be called concurrently from multiple goroutines.
+//
+// ERROR CONDITIONS:
+//   - Returns error if workerType derivation fails
+//   - Returns error if workerType is already registered in either registry
+//   - Rolls back worker registration if supervisor registration fails
+//
+// Example usage:
+//
+//	func init() {
+//	    err := factory.RegisterWorkerType[snapshot.MyObservedState, *snapshot.MyDesiredState](
+//	        func(id fsmv2.Identity, logger *zap.SugaredLogger) fsmv2.Worker {
+//	            worker, _ := NewMyWorker(id, logger)
+//	            return worker
+//	        },
+//	        func(cfg interface{}) interface{} {
+//	            supervisorCfg := cfg.(supervisor.Config)
+//	            return supervisor.NewSupervisor[snapshot.MyObservedState, *snapshot.MyDesiredState](supervisorCfg)
+//	        },
+//	    )
+//	    if err != nil {
+//	        panic(err)
+//	    }
+//	}
+func RegisterWorkerType[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState](
+	workerFactory func(fsmv2.Identity, *zap.SugaredLogger) fsmv2.Worker,
+	supervisorFactory func(interface{}) interface{},
+) error {
+	workerType, err := storage.DeriveWorkerType[TObserved]()
+	if err != nil {
+		return fmt.Errorf("failed to derive worker type: %w", err)
+	}
+
+	return RegisterWorkerAndSupervisorFactoryByType(workerType, workerFactory, supervisorFactory)
+}
+
 // ValidateRegistryConsistency checks for mismatches between worker and supervisor registries.
 // Returns two slices: worker types without supervisors, and supervisor types without workers.
 // Empty slices indicate consistent registries.

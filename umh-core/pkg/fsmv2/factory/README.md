@@ -18,11 +18,54 @@ ExampleparentObservedState → "exampleparent"
 
 **Critical constraint:** Go type names cannot contain hyphens. Therefore, worker types like `"example-child"` are **impossible** to derive from any type name. This is why folder names must match worker types exactly.
 
+## Two Registries: Why and How
+
+The factory package maintains two separate registries:
+
+1. **Worker Registry** (`registry`): Maps worker type → worker factory function
+2. **Supervisor Registry** (`supervisorRegistry`): Maps worker type → supervisor factory function
+
+These are separate because:
+- They have different function signatures
+- The `interface{}` return type in supervisor factory avoids circular imports
+- Both are required for the FSM system to function correctly
+
+**Critical invariant:** Every worker type must be registered in BOTH registries with the SAME key.
+An architecture test enforces this invariant.
+
 ## Registration Functions
 
-### Recommended: Combined Registration
+### Preferred: `RegisterWorkerType` (Generic, Type-Safe)
 
-Use `RegisterWorkerAndSupervisorFactoryByType` to register both factories atomically:
+Use `RegisterWorkerType` to register both factories atomically with automatic type derivation:
+
+```go
+func init() {
+    // Worker type is automatically derived from ExamplechildObservedState → "examplechild"
+    if err := factory.RegisterWorkerType[snapshot.ExamplechildObservedState, *snapshot.ExamplechildDesiredState](
+        func(id fsmv2.Identity, logger *zap.SugaredLogger) fsmv2.Worker {
+            worker, _ := NewChildWorker(id, pool, logger)
+            return worker
+        },
+        func(cfg interface{}) interface{} {
+            return supervisor.NewSupervisor[snapshot.ExamplechildObservedState, *snapshot.ExamplechildDesiredState](
+                cfg.(supervisor.Config))
+        },
+    ); err != nil {
+        panic(err)
+    }
+}
+```
+
+Benefits:
+- Worker type is derived from the generic type parameter (no manual strings)
+- Registers both factories atomically
+- Rolls back on partial failure
+- **Impossible to have mismatched keys**
+
+### Alternative: `RegisterWorkerAndSupervisorFactoryByType` (Explicit String)
+
+Use when you need an explicit type string (rare):
 
 ```go
 func init() {
@@ -34,7 +77,7 @@ func init() {
             return NewChildWorker(id, logger)
         },
         func(raw interface{}) interface{} {
-            return helpers.NewTypedSupervisor[*snapshot.ExamplechildObservedState, *snapshot.ExamplechildDesiredState](raw)
+            return supervisor.NewSupervisor[*snapshot.ExamplechildObservedState, *snapshot.ExamplechildDesiredState](raw)
         },
     )
     if err != nil {
@@ -43,14 +86,9 @@ func init() {
 }
 ```
 
-This function:
-- Registers both worker factory and supervisor factory with the **same** key
-- Rolls back on partial failure (atomic registration)
-- Prevents mismatches between registries
+### Low-Level Functions (Tests Only)
 
-### Low-Level Functions (Use with Caution)
-
-If you need fine-grained control, use the individual registration functions:
+Individual registration functions exist for testing purposes:
 
 ```go
 // Worker factory registration
@@ -60,7 +98,8 @@ factory.RegisterFactoryByType(workerType, workerFactory)
 factory.RegisterSupervisorFactoryByType(workerType, supervisorFactory)
 ```
 
-**Warning:** Using these separately can lead to mismatches if different keys are used.
+**Warning:** Using these in production code can lead to mismatches if different keys are used.
+The architecture test will catch such mismatches.
 
 ## Validation Functions
 
@@ -101,7 +140,7 @@ If you create a folder `foo`, your types must be named `FooObservedState` and `F
 **Wrong:**
 ```go
 // supervisor.go derives "parent" from ParentObservedState
-_ = factory.RegisterSupervisorFactory[snapshot.ParentObservedState, ...]
+_ = factory.RegisterSupervisorFactoryByType("parent", ...)
 
 // worker.go uses explicit string "example-parent"
 _ = factory.RegisterFactoryByType("example-parent", ...)
@@ -109,7 +148,7 @@ _ = factory.RegisterFactoryByType("example-parent", ...)
 
 **Result:** `no supervisor factory registered for worker type: example-parent`
 
-**Fix:** Use `RegisterWorkerAndSupervisorFactoryByType` with derived type.
+**Fix:** Use `RegisterWorkerType[TObserved, TDesired]()` which derives the key automatically.
 
 ### 2. Hyphenated Folder Names
 
@@ -129,10 +168,26 @@ _ = factory.RegisterFactoryByType("example-parent", ...)
 
 **Fix:** Rename type to `MyworkerObservedState` or folder to `somethingelse`.
 
-## Architecture Test
+## Architecture Tests
+
+### Folder Naming Validation
 
 The architecture test `ValidateFolderMatchesWorkerType` automatically validates:
 - Every worker folder contains a snapshot with `*ObservedState` type
 - The derived worker type equals the folder name
 
 Run with: `ginkgo --focus="Worker Folder Naming" ./pkg/fsmv2/`
+
+### Registry Consistency Validation
+
+The architecture test for registry consistency validates:
+- Every worker type in the worker registry also exists in the supervisor registry
+- Every worker type in the supervisor registry also exists in the worker registry
+
+This catches mismatches caused by:
+- Using different keys when registering worker vs supervisor factories
+- Forgetting to register one of the two factories
+
+Run with: `ginkgo --focus="Worker Factory Registration" ./pkg/fsmv2/`
+
+If this test fails, you'll see a `REGISTRY_MISMATCH` violation indicating which types are missing from which registry.

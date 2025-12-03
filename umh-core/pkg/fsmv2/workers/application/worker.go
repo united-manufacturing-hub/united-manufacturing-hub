@@ -266,23 +266,17 @@ func NewApplicationSupervisor(cfg SupervisorConfig) (*supervisor.Supervisor[snap
 // Registration happens automatically when this package is imported.
 // The application worker can create any registered worker type as children.
 func init() {
-	// Register ApplicationWorker factory.
-	// This allows creating application workers via factory.NewWorkerByType().
-	if err := factory.RegisterFactory[snapshot.ApplicationObservedState, *snapshot.ApplicationDesiredState](
-		func(identity fsmv2.Identity, _ *zap.SugaredLogger) fsmv2.Worker {
-			return NewApplicationWorker(identity.ID, identity.Name)
-		}); err != nil {
-		panic(fmt.Sprintf("failed to register ApplicationWorker factory: %v", err))
-	}
-
-	// Register ApplicationWorker supervisor factory.
-	// This allows creating supervisors for application workers via factory.NewSupervisorByType().
-	if err := factory.RegisterSupervisorFactory[snapshot.ApplicationObservedState, *snapshot.ApplicationDesiredState](
+	// Register both worker and supervisor factories atomically.
+	// The worker type is derived from ApplicationObservedState, ensuring consistency.
+	if err := factory.RegisterWorkerType[snapshot.ApplicationObservedState, *snapshot.ApplicationDesiredState](
+		func(id fsmv2.Identity, _ *zap.SugaredLogger) fsmv2.Worker {
+			return NewApplicationWorker(id.ID, id.Name)
+		},
 		func(cfg interface{}) interface{} {
-			supervisorCfg := cfg.(supervisor.Config)
-
-			return supervisor.NewSupervisor[snapshot.ApplicationObservedState, *snapshot.ApplicationDesiredState](supervisorCfg)
-		}); err != nil {
-		panic(fmt.Sprintf("failed to register ApplicationWorker supervisor factory: %v", err))
+			return supervisor.NewSupervisor[snapshot.ApplicationObservedState, *snapshot.ApplicationDesiredState](
+				cfg.(supervisor.Config))
+		},
+	); err != nil {
+		panic(fmt.Sprintf("failed to register ApplicationWorker: %v", err))
 	}
 }

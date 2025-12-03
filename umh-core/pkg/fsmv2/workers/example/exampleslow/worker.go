@@ -130,16 +130,20 @@ func (w *ExampleslowWorker) getConnectionHealth() string {
 }
 
 func init() {
-	_ = factory.RegisterSupervisorFactory[snapshot.ExampleslowObservedState, *snapshot.ExampleslowDesiredState](
+	// Register both worker and supervisor factories atomically.
+	// The worker type is derived from ExampleslowObservedState, ensuring consistency.
+	// NOTE: This fixes a previous key mismatch where supervisor was "exampleslow" but worker was "slow".
+	if err := factory.RegisterWorkerType[snapshot.ExampleslowObservedState, *snapshot.ExampleslowDesiredState](
+		func(id fsmv2.Identity, logger *zap.SugaredLogger) fsmv2.Worker {
+			pool := &DefaultConnectionPool{}
+			worker, _ := NewExampleslowWorker(id, pool, logger)
+			return worker
+		},
 		func(cfg interface{}) interface{} {
-			supervisorCfg := cfg.(supervisor.Config)
-
-			return supervisor.NewSupervisor[snapshot.ExampleslowObservedState, *snapshot.ExampleslowDesiredState](supervisorCfg)
-		})
-
-	_ = factory.RegisterFactoryByType("slow", func(identity fsmv2.Identity, logger *zap.SugaredLogger) fsmv2.Worker {
-		pool := &DefaultConnectionPool{}
-		worker, _ := NewExampleslowWorker(identity, pool, logger)
-		return worker
-	})
+			return supervisor.NewSupervisor[snapshot.ExampleslowObservedState, *snapshot.ExampleslowDesiredState](
+				cfg.(supervisor.Config))
+		},
+	); err != nil {
+		panic(err)
+	}
 }

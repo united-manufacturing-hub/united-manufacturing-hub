@@ -19,14 +19,24 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"sort"
 
 	. "github.com/onsi/ginkgo/v2"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/validator"
 
 	// Import state packages to scan for violations.
 	childState "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplechild/state"
 	parentState "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent/state"
+
+	// Import worker packages to register them for registry consistency tests.
+	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application"
+	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplechild"
+	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplefailing"
+	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplepanic"
+	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent"
+	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleslow"
 )
 
 var _ = Describe("FSMv2 Architecture Validation", func() {
@@ -354,6 +364,38 @@ var _ = Describe("FSMv2 Architecture Validation", func() {
 				violations := validator.ValidateFolderMatchesWorkerType(getFsmv2Dir())
 				if len(violations) > 0 {
 					message := validator.FormatViolationsWithPattern("Folder Naming Violations", violations, "FOLDER_WORKER_TYPE_MISMATCH")
+					Fail(message)
+				}
+			})
+		})
+
+		Describe("Worker Factory Registration (Invariant: Complete Registry)", func() {
+			It("should have matching worker and supervisor registrations", func() {
+				workerOnly, supervisorOnly := factory.ValidateRegistryConsistency()
+
+				if len(workerOnly) > 0 || len(supervisorOnly) > 0 {
+					var violations []validator.Violation
+
+					sort.Strings(workerOnly)
+					for _, wt := range workerOnly {
+						violations = append(violations, validator.Violation{
+							File:    "factory/worker_factory.go",
+							Type:    "REGISTRY_MISMATCH",
+							Message: fmt.Sprintf("Worker '%s' registered without supervisor factory", wt),
+						})
+					}
+
+					sort.Strings(supervisorOnly)
+					for _, st := range supervisorOnly {
+						violations = append(violations, validator.Violation{
+							File:    "factory/worker_factory.go",
+							Type:    "REGISTRY_MISMATCH",
+							Message: fmt.Sprintf("Supervisor '%s' registered without worker factory", st),
+						})
+					}
+
+					message := validator.FormatViolationsWithPattern(
+						"Registry Mismatch", violations, "REGISTRY_MISMATCH")
 					Fail(message)
 				}
 			})

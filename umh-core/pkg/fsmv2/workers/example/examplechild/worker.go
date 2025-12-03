@@ -135,18 +135,19 @@ func (w *ChildWorker) GetInitialState() fsmv2.State[any, any] {
 }
 
 func init() {
-	// Register supervisor factory for creating child supervisors
-	_ = factory.RegisterSupervisorFactory[snapshot.ExamplechildObservedState, *snapshot.ExamplechildDesiredState](
+	// Register both worker and supervisor factories atomically.
+	// The worker type is derived from ExamplechildObservedState, ensuring consistency.
+	if err := factory.RegisterWorkerType[snapshot.ExamplechildObservedState, *snapshot.ExamplechildDesiredState](
+		func(id fsmv2.Identity, logger *zap.SugaredLogger) fsmv2.Worker {
+			pool := &DefaultConnectionPool{}
+			worker, _ := NewChildWorker(id, pool, logger)
+			return worker
+		},
 		func(cfg interface{}) interface{} {
-			supervisorCfg := cfg.(supervisor.Config)
-
-			return supervisor.NewSupervisor[snapshot.ExamplechildObservedState, *snapshot.ExamplechildDesiredState](supervisorCfg)
-		})
-
-	// Register worker factory for ApplicationWorker to create child workers via YAML config
-	_ = factory.RegisterFactoryByType("examplechild", func(identity fsmv2.Identity, logger *zap.SugaredLogger) fsmv2.Worker {
-		pool := &DefaultConnectionPool{}
-		worker, _ := NewChildWorker(identity, pool, logger)
-		return worker
-	})
+			return supervisor.NewSupervisor[snapshot.ExamplechildObservedState, *snapshot.ExamplechildDesiredState](
+				cfg.(supervisor.Config))
+		},
+	); err != nil {
+		panic(err)
+	}
 }

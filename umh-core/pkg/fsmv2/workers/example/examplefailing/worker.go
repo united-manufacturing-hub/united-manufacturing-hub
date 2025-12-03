@@ -136,18 +136,20 @@ func (w *FailingWorker) getConnectionHealth() string {
 }
 
 func init() {
-	// Register supervisor factory for creating failing supervisors
-	_ = factory.RegisterSupervisorFactory[snapshot.ExamplefailingObservedState, *snapshot.ExamplefailingDesiredState](
+	// Register both worker and supervisor factories atomically.
+	// The worker type is derived from ExamplefailingObservedState, ensuring consistency.
+	// NOTE: This fixes a previous key mismatch where supervisor was "examplefailing" but worker was "failing".
+	if err := factory.RegisterWorkerType[snapshot.ExamplefailingObservedState, *snapshot.ExamplefailingDesiredState](
+		func(id fsmv2.Identity, logger *zap.SugaredLogger) fsmv2.Worker {
+			pool := &DefaultConnectionPool{}
+			worker, _ := NewFailingWorker(id, pool, logger)
+			return worker
+		},
 		func(cfg interface{}) interface{} {
-			supervisorCfg := cfg.(supervisor.Config)
-
-			return supervisor.NewSupervisor[snapshot.ExamplefailingObservedState, *snapshot.ExamplefailingDesiredState](supervisorCfg)
-		})
-
-	// Register worker factory for ApplicationWorker to create failing workers via YAML config
-	_ = factory.RegisterFactoryByType("failing", func(identity fsmv2.Identity, logger *zap.SugaredLogger) fsmv2.Worker {
-		pool := &DefaultConnectionPool{}
-		worker, _ := NewFailingWorker(identity, pool, logger)
-		return worker
-	})
+			return supervisor.NewSupervisor[snapshot.ExamplefailingObservedState, *snapshot.ExamplefailingDesiredState](
+				cfg.(supervisor.Config))
+		},
+	); err != nil {
+		panic(err)
+	}
 }
