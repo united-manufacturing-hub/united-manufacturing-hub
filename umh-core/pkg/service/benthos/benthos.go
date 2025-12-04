@@ -140,7 +140,6 @@ type ServiceInfo struct {
 }
 
 type BenthosStatus struct {
-
 	// StatusReason contains the reason for the status of the Benthos service
 	// If the service is degraded, this will contain the log entry that caused the degradation together with the information that it is degraded because of the log entry
 	// If the service is currently starting up, it will contain the s6 status of the service
@@ -233,7 +232,6 @@ type BenthosService struct {
 // yaml.Unmarshal and simply hand the already-normalised struct back to the
 // caller – a ~20× speed-up on the hot path.
 type configCacheEntry struct {
-
 	// parsed is the *fully normalised* BenthosServiceConfig that callers
 	// expect.  It is treated as **read-only** after being cached; if callers
 	// ever start mutating the struct, we must clone it before returning.
@@ -248,7 +246,8 @@ type configCacheEntry struct {
 func hash(buf []byte) uint64 { return xxhash.Sum64(buf) }
 
 // benthosLogRe is a helper function for BenthosService.IsLogsFine.
-var benthosLogRe = regexp.MustCompile(`^level=(error|warning)\s+msg=(.+)`)
+// no ^ anchor since redpanda-connect logs may start with time= prefix.
+var benthosLogRe = regexp.MustCompile(`level=(error|warning)\s+msg=(.+)`)
 
 // BenthosServiceOption is a function that modifies a BenthosService.
 type BenthosServiceOption func(*BenthosService)
