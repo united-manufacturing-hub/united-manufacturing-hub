@@ -430,7 +430,7 @@ func validateStateStructs() []validator.Violation {
 		v := reflect.ValueOf(state).Elem()
 		t := v.Type()
 
-		for i := 0; i < t.NumField(); i++ {
+		for i := range t.NumField() {
 			field := t.Field(i)
 
 			// Skip embedded base types (they start with capital letter and are anonymous)
@@ -460,7 +460,7 @@ func validateStateStructs() []validator.Violation {
 		v := reflect.ValueOf(state).Elem()
 		t := v.Type()
 
-		for i := 0; i < t.NumField(); i++ {
+		for i := range t.NumField() {
 			field := t.Field(i)
 
 			if field.Anonymous {

@@ -50,6 +50,7 @@ func (a *ConnectAction) Execute(ctx context.Context, depsAny any) error {
 	}
 
 	logger.Info("Connect action completed")
+
 	return nil
 }
 

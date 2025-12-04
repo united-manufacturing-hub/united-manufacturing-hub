@@ -71,6 +71,7 @@ func (o ExamplepanicObservedState) GetObservedDesiredState() fsmv2.DesiredState 
 // Called by Collector when StateProvider callback is configured.
 func (o ExamplepanicObservedState) SetState(s string) fsmv2.ObservedState {
 	o.State = s
+
 	return o
 }
 
@@ -78,5 +79,6 @@ func (o ExamplepanicObservedState) SetState(s string) fsmv2.ObservedState {
 // Called by Collector when ShutdownRequestedProvider callback is configured.
 func (o ExamplepanicObservedState) SetShutdownRequested(v bool) fsmv2.ObservedState {
 	o.ExamplepanicDesiredState.ShutdownRequested = v
+
 	return o
 }

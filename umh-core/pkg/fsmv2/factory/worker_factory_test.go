@@ -477,7 +477,7 @@ func TestRegisterWorkerAndSupervisorFactory(t *testing.T) {
 		{
 			name: "fail when worker already registered",
 			setupRegistry: func() {
-				factory.RegisterFactoryByType("test_worker", func(id fsmv2.Identity, _ *zap.SugaredLogger) fsmv2.Worker {
+				_ = factory.RegisterFactoryByType("test_worker", func(id fsmv2.Identity, _ *zap.SugaredLogger) fsmv2.Worker {
 					return &mockWorker{identity: id}
 				})
 			},
@@ -487,7 +487,7 @@ func TestRegisterWorkerAndSupervisorFactory(t *testing.T) {
 		{
 			name: "fail when supervisor already registered and rollback worker",
 			setupRegistry: func() {
-				factory.RegisterSupervisorFactoryByType("test_worker", func(cfg interface{}) interface{} {
+				_ = factory.RegisterSupervisorFactoryByType("test_worker", func(cfg interface{}) interface{} {
 					return nil
 				})
 			},
@@ -541,6 +541,7 @@ func TestRegisterWorkerAndSupervisorFactory(t *testing.T) {
 				for _, typ := range types {
 					if typ == "test_worker" {
 						foundWorker = true
+
 						break
 					}
 				}
@@ -553,6 +554,7 @@ func TestRegisterWorkerAndSupervisorFactory(t *testing.T) {
 				for _, typ := range supervisorTypes {
 					if typ == "test_worker" {
 						foundSupervisor = true
+
 						break
 					}
 				}
@@ -583,10 +585,10 @@ func TestValidateRegistryConsistency(t *testing.T) {
 			name: "consistent registries",
 			setupRegistry: func() {
 				factory.ResetRegistry()
-				factory.RegisterFactoryByType("worker_a", func(id fsmv2.Identity, _ *zap.SugaredLogger) fsmv2.Worker {
+				_ = factory.RegisterFactoryByType("worker_a", func(id fsmv2.Identity, _ *zap.SugaredLogger) fsmv2.Worker {
 					return &mockWorker{identity: id}
 				})
-				factory.RegisterSupervisorFactoryByType("worker_a", func(cfg interface{}) interface{} {
+				_ = factory.RegisterSupervisorFactoryByType("worker_a", func(cfg interface{}) interface{} {
 					return nil
 				})
 			},
@@ -597,7 +599,7 @@ func TestValidateRegistryConsistency(t *testing.T) {
 			name: "worker registered but not supervisor",
 			setupRegistry: func() {
 				factory.ResetRegistry()
-				factory.RegisterFactoryByType("orphan_worker", func(id fsmv2.Identity, _ *zap.SugaredLogger) fsmv2.Worker {
+				_ = factory.RegisterFactoryByType("orphan_worker", func(id fsmv2.Identity, _ *zap.SugaredLogger) fsmv2.Worker {
 					return &mockWorker{identity: id}
 				})
 			},
@@ -608,7 +610,7 @@ func TestValidateRegistryConsistency(t *testing.T) {
 			name: "supervisor registered but not worker",
 			setupRegistry: func() {
 				factory.ResetRegistry()
-				factory.RegisterSupervisorFactoryByType("orphan_supervisor", func(cfg interface{}) interface{} {
+				_ = factory.RegisterSupervisorFactoryByType("orphan_supervisor", func(cfg interface{}) interface{} {
 					return nil
 				})
 			},
@@ -620,18 +622,18 @@ func TestValidateRegistryConsistency(t *testing.T) {
 			setupRegistry: func() {
 				factory.ResetRegistry()
 				// Both registered
-				factory.RegisterFactoryByType("consistent", func(id fsmv2.Identity, _ *zap.SugaredLogger) fsmv2.Worker {
+				_ = factory.RegisterFactoryByType("consistent", func(id fsmv2.Identity, _ *zap.SugaredLogger) fsmv2.Worker {
 					return &mockWorker{identity: id}
 				})
-				factory.RegisterSupervisorFactoryByType("consistent", func(cfg interface{}) interface{} {
+				_ = factory.RegisterSupervisorFactoryByType("consistent", func(cfg interface{}) interface{} {
 					return nil
 				})
 				// Worker only
-				factory.RegisterFactoryByType("worker_only", func(id fsmv2.Identity, _ *zap.SugaredLogger) fsmv2.Worker {
+				_ = factory.RegisterFactoryByType("worker_only", func(id fsmv2.Identity, _ *zap.SugaredLogger) fsmv2.Worker {
 					return &mockWorker{identity: id}
 				})
 				// Supervisor only
-				factory.RegisterSupervisorFactoryByType("supervisor_only", func(cfg interface{}) interface{} {
+				_ = factory.RegisterSupervisorFactoryByType("supervisor_only", func(cfg interface{}) interface{} {
 					return nil
 				})
 			},
@@ -694,7 +696,7 @@ func TestListSupervisorTypes(t *testing.T) {
 			name: "single supervisor",
 			setupRegistry: func() {
 				factory.ResetRegistry()
-				factory.RegisterSupervisorFactoryByType("supervisor_a", func(cfg interface{}) interface{} {
+				_ = factory.RegisterSupervisorFactoryByType("supervisor_a", func(cfg interface{}) interface{} {
 					return nil
 				})
 			},
@@ -704,13 +706,13 @@ func TestListSupervisorTypes(t *testing.T) {
 			name: "multiple supervisors",
 			setupRegistry: func() {
 				factory.ResetRegistry()
-				factory.RegisterSupervisorFactoryByType("supervisor_a", func(cfg interface{}) interface{} {
+				_ = factory.RegisterSupervisorFactoryByType("supervisor_a", func(cfg interface{}) interface{} {
 					return nil
 				})
-				factory.RegisterSupervisorFactoryByType("supervisor_b", func(cfg interface{}) interface{} {
+				_ = factory.RegisterSupervisorFactoryByType("supervisor_b", func(cfg interface{}) interface{} {
 					return nil
 				})
-				factory.RegisterSupervisorFactoryByType("supervisor_c", func(cfg interface{}) interface{} {
+				_ = factory.RegisterSupervisorFactoryByType("supervisor_c", func(cfg interface{}) interface{} {
 					return nil
 				})
 			},
