@@ -31,7 +31,7 @@ import "encoding/json"
 // IsShutdownRequested() method and the ShutdownRequestable interface's SetShutdownRequested() method.
 type BaseDesiredState struct {
 	ShutdownRequested bool   `json:"ShutdownRequested"`
-	State             string `json:"state"` // "stopped" or "running" - user intent
+	State             string `json:"state"` // "stopped" or "running" - desired lifecycle state
 }
 
 // IsShutdownRequested returns whether shutdown has been requested for this worker.
@@ -43,6 +43,32 @@ func (b *BaseDesiredState) IsShutdownRequested() bool {
 // This satisfies the ShutdownRequestable interface.
 func (b *BaseDesiredState) SetShutdownRequested(v bool) {
 	b.ShutdownRequested = v
+}
+
+// BaseUserSpec provides common fields for all user configuration types.
+// Workers embed this struct to get consistent state handling.
+//
+// Example:
+//
+//	type MyWorkerUserSpec struct {
+//	    config.BaseUserSpec
+//	    // ... worker-specific fields
+//	}
+//
+// Workers embedding BaseUserSpec can use GetState() to get the desired lifecycle state
+// with a default of "running" if not specified by the user.
+type BaseUserSpec struct {
+	// State specifies the desired lifecycle state: "running" or "stopped".
+	// Defaults to "running" if empty. Validated in the supervisor after DeriveDesiredState.
+	State string `json:"state,omitempty" yaml:"state,omitempty"`
+}
+
+// GetState returns the desired state, defaulting to "running" if empty.
+func (b BaseUserSpec) GetState() string {
+	if b.State == "" {
+		return DesiredStateRunning
+	}
+	return b.State
 }
 
 // UserSpec contains user-provided configuration for a worker.
@@ -149,7 +175,7 @@ type UserSpec struct {
 type ChildSpec struct {
 	Name         string            `json:"name"                   yaml:"name"`                   // Unique name for this child (within parent scope)
 	WorkerType   string            `json:"workerType"             yaml:"workerType"`             // Type of worker to create (registered worker factory key)
-	UserSpec     UserSpec          `json:"userSpec"               yaml:"userSpec"`               // Configuration for the child worker
+	UserSpec     UserSpec          `json:"userSpec"               yaml:"userSpec"`               // Raw user config (input to DeriveDesiredState)
 	StateMapping map[string]string `json:"stateMapping,omitempty" yaml:"stateMapping,omitempty"` // Optional parent→child state mapping
 }
 
@@ -172,10 +198,10 @@ func (c *ChildSpec) MarshalJSON() ([]byte, error) {
 // this to declare what children should exist. The supervisor handles all lifecycle:
 //
 //	// In parent's DeriveDesiredState():
-//	func (w *ParentWorker) DeriveDesiredState(spec interface{}) (DesiredState, error) {
-//	    return types.DesiredState{
+//	func (w *ParentWorker) DeriveDesiredState(spec interface{}) (config.DesiredState, error) {
+//	    return config.DesiredState{
 //	        State: "running",
-//	        ChildrenSpecs: []types.ChildSpec{
+//	        ChildrenSpecs: []config.ChildSpec{
 //	            {Name: "child-1", WorkerType: "mqtt_client", ...},
 //	            {Name: "child-2", WorkerType: "modbus_client", ...},
 //	        },

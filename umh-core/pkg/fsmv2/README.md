@@ -60,6 +60,28 @@ requesting "changes since sync_id X" receive only meaningful updates.
 
 See `pkg/cse/storage/doc.go` for full CSE documentation.
 
+### The Transformation Pipeline
+
+The Triangle Model shows reconciliation. But where does Desired state come from?
+User configuration is **transformed**, not copied:
+
+```
+UserSpec.Config (raw YAML)     →  "children_count: 5"
+        ↓
+    DeriveDesiredState()       →  parses, validates, computes
+        ↓
+DesiredState (technical)       →  { State: "running", ChildrenSpecs: [5 objects] }
+```
+
+**Key insight**: `DesiredState` structure may be COMPLETELY DIFFERENT from `UserSpec`.
+The `DeriveDesiredState()` function is a transformation, not a copy - it can:
+- Parse YAML/JSON into typed structs
+- Validate user input
+- Compute derived fields (e.g., generate ChildSpec array from a count)
+- Apply defaults
+
+See `workers/example/exampleparent/worker.go` for a concrete example.
+
 ## Quick Start
 
 ```bash
@@ -132,7 +154,7 @@ func (w *MyWorker) GetInitialState() fsmv2.State {
 The supervisor orchestrates worker lifecycle through a reconciliation loop:
 
 1. **Collect** observed state (runs async in background)
-2. **Derive** desired state from user config
+2. **Derive** desired state by transforming UserSpec
 3. **Decide** via `State.Next(snapshot)` → returns (nextState, signal, action)
 4. **Execute** action async (with retry/backoff) while loop continues
 

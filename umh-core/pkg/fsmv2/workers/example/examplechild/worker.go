@@ -124,7 +124,7 @@ func (w *ChildWorker) DeriveDesiredState(spec interface{}) (fsmv2types.DesiredSt
 	}
 
 	return fsmv2types.DesiredState{
-		State:         fsmv2types.DesiredStateRunning,
+		State:         childSpec.GetState(), // Uses BaseUserSpec.GetState() with default "running"
 		ChildrenSpecs: nil,
 	}, nil
 }

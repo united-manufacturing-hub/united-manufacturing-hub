@@ -14,9 +14,14 @@
 
 package examplefailing
 
+import (
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
+)
+
 // FailingUserSpec defines the typed configuration for the failing worker.
 // This is parsed from the UserSpec.Config YAML/JSON string.
 type FailingUserSpec struct {
+	config.BaseUserSpec // Provides State field with GetState() defaulting to "running"
 	// ShouldFail controls whether the connect action should fail
 	ShouldFail bool `yaml:"shouldFail" json:"shouldFail"`
 }

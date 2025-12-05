@@ -112,7 +112,7 @@ func (w *ExamplepanicWorker) DeriveDesiredState(spec interface{}) (fsmv2types.De
 	}
 
 	return fsmv2types.DesiredState{
-		State:         fsmv2types.DesiredStateRunning,
+		State:         panicSpec.GetState(), // Uses BaseUserSpec.GetState() with default "running"
 		ChildrenSpecs: nil,
 	}, nil
 }

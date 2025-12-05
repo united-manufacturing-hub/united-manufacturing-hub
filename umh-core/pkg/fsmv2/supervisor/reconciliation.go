@@ -555,8 +555,8 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 	desiredDoc[FieldID] = firstWorkerID
 
 	// CRITICAL: Preserve ShutdownRequested field if it was set by requestShutdown
-	// DeriveDesiredState returns user-derived config, but shutdown is a supervisor operation
-	// that must override user config. We load the existing desired state as typed struct
+	// DeriveDesiredState returns worker-derived DesiredState, but shutdown is a supervisor
+	// operation that must override it. We load the existing desired state as typed struct
 	// and check via DesiredState interface.
 	var existingDesiredTyped TDesired
 	if err := s.store.LoadDesiredTyped(ctx, s.workerType, firstWorkerID, &existingDesiredTyped); err == nil {

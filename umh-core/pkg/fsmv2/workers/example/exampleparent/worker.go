@@ -74,24 +74,29 @@ func (w *ParentWorker) CollectObservedState(ctx context.Context) (fsmv2.Observed
 	default:
 	}
 
+	deps := w.GetDependencies()
+	tracker := deps.GetStateTracker()
+
 	observed := snapshot.ExampleparentObservedState{
-		ID:          w.identity.ID,
-		CollectedAt: time.Now(),
+		ID:             w.identity.ID,
+		CollectedAt:    time.Now(),
+		StateEnteredAt: tracker.GetStateEnteredAt(),
+		Elapsed:        tracker.Elapsed(), // Pre-computed using Clock (mockable in tests)
 	}
 
 	return observed, nil
 }
 
-// DeriveDesiredState determines what state the parent worker should be in
+// DeriveDesiredState determines what state the parent worker should be in.
 // This method must be PURE - it only uses the spec parameter, never dependencies.
-// TODO: check why spec interface{} and not spec fsmv2types.UserSpec.
+// Note: spec is interface{} for flexibility across different worker types (each has its own UserSpec).
 func (w *ParentWorker) DeriveDesiredState(spec interface{}) (fsmv2types.DesiredState, error) {
 	var childrenCount int
 
 	// Handle nil spec - return default state with no children
 	if spec == nil {
 		return fsmv2types.DesiredState{
-			State:         "running",
+			State:         fsmv2types.DesiredStateRunning, // Default when no config provided
 			ChildrenSpecs: nil,
 		}, nil
 	}
@@ -112,7 +117,7 @@ func (w *ParentWorker) DeriveDesiredState(spec interface{}) (fsmv2types.DesiredS
 
 	if childrenCount == 0 {
 		return fsmv2types.DesiredState{
-			State:         "running",
+			State:         parentSpec.GetState(), // Uses BaseUserSpec.GetState() with default "running"
 			ChildrenSpecs: nil,
 		}, nil
 	}
@@ -123,11 +128,17 @@ func (w *ParentWorker) DeriveDesiredState(spec interface{}) (fsmv2types.DesiredS
 			Name:       fmt.Sprintf("child-%d", i),
 			WorkerType: "examplechild",
 			UserSpec:   fsmv2types.UserSpec{},
+			StateMapping: map[string]string{
+				"TryingToStart": "running",
+				"Running":       "running",
+				"TryingToStop":  "stopped",
+				"Stopped":       "stopped",
+			},
 		}
 	}
 
 	return fsmv2types.DesiredState{
-		State:         "running",
+		State:         parentSpec.GetState(), // Uses BaseUserSpec.GetState() with default "running"
 		ChildrenSpecs: childrenSpecs,
 	}, nil
 }

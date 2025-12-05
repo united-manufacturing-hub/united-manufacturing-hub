@@ -117,7 +117,7 @@ func (w *FailingWorker) DeriveDesiredState(spec interface{}) (fsmv2types.Desired
 	}
 
 	return fsmv2types.DesiredState{
-		State:         fsmv2types.DesiredStateRunning,
+		State:         failingSpec.GetState(), // Uses BaseUserSpec.GetState() with default "running"
 		ChildrenSpecs: nil,
 	}, nil
 }

@@ -112,7 +112,7 @@ func (w *ExampleslowWorker) DeriveDesiredState(spec interface{}) (fsmv2types.Des
 	}
 
 	return fsmv2types.DesiredState{
-		State:         fsmv2types.DesiredStateRunning,
+		State:         slowSpec.GetState(), // Uses BaseUserSpec.GetState() with default "running"
 		ChildrenSpecs: nil,
 	}, nil
 }

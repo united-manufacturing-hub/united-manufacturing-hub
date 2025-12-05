@@ -14,8 +14,13 @@
 
 package exampleparent
 
+import (
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
+)
+
 // ParentUserSpec defines the typed configuration for the parent worker.
 // This is parsed from the UserSpec.Config YAML/JSON string.
 type ParentUserSpec struct {
-	ChildrenCount int `json:"children_count" yaml:"children_count"`
+	config.BaseUserSpec                                                    // Provides State field with GetState() defaulting to "running"
+	ChildrenCount       int `json:"children_count" yaml:"children_count"`
 }

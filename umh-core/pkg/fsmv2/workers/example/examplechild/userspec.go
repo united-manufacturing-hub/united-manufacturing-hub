@@ -14,9 +14,12 @@
 
 package example_child
 
+import (
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
+)
+
 // ChildUserSpec defines the typed configuration for the child worker.
 // This is parsed from the UserSpec.Config YAML/JSON string.
 type ChildUserSpec struct {
-	// Currently no configuration needed for child worker
-	// Add fields here as requirements emerge
+	config.BaseUserSpec // Provides State field with GetState() defaulting to "running"
 }

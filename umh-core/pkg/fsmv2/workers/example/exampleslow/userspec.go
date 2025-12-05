@@ -14,7 +14,14 @@
 
 package example_slow
 
+import (
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
+)
+
+// ExampleslowUserSpec defines the typed configuration for the slow worker.
+// This is parsed from the UserSpec.Config YAML/JSON string.
 type ExampleslowUserSpec struct {
-	ShouldRun    bool `yaml:"shouldRun"`
-	DelaySeconds int  `yaml:"delaySeconds"`
+	config.BaseUserSpec // Provides State field with GetState() defaulting to "running"
+	ShouldRun           bool `yaml:"shouldRun"`
+	DelaySeconds        int  `yaml:"delaySeconds"`
 }
