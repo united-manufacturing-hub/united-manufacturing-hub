@@ -4,6 +4,43 @@ Type-safe state machine framework for managing worker lifecycles with compile-ti
 
 > **Implementation Details**: For Go idiom patterns, code examples, and API contracts, see `doc.go`.
 
+## Why FSMv2?
+
+FSMv2 solves problems that emerged from UMH Classic (Kubernetes-based) and FSMv1:
+
+| Problem | FSMv2 Solution |
+|---------|----------------|
+| Kubernetes is complex for edge devices | Single Docker container with S6 process supervision |
+| Pod states don't reflect actual health | Explicit states: `running`, `degraded` (with reason), `stopped` |
+| 30+ second response time | Sub-100ms configuration changes |
+| Goroutine async bugs in Classic (still unexplained failures in Sentry) | Single-threaded tick loop, no async coordination needed |
+
+### Why Single Container?
+
+The ["one process per container" dogma](https://github.com/just-containers/s6-overlay?tab=readme-ov-file#the-docker-way)
+doesn't apply to edge devices:
+- **Operational simplicity**: No distributed consensus, no network quorum, works offline
+- **"One thing" not "one process"**: As s6-overlay notes, "a single 'thing' often requires multiple processes" - data collection, protocol handling, and health monitoring serve one unified purpose
+
+### Why S6?
+
+[S6](https://skarnet.org/software/s6/why.html) exists because other supervisors don't work well in containers. The S6 author notes that "Upstart uses ptrace to watch its children fork(), and links process 1 against libdbus. This is insane." Integrated init systems like systemd and upstart "add incredible complexity where it does not belong" by combining process supervision with machine management.
+
+The S6 philosophy: "Process 1 should be _absolutely stable_, it should be guaranteed to never crash." S6 focuses solely on process supervision:
+- **No heavy dependencies**: No ptrace, no D-Bus, no XML configuration
+- **Designed for PID 1**: Proper zombie reaping, signal handling, and container lifecycle
+- **Writing your own is hard**: PID 1 must be absolutely stable - getting zombie reaping, signal forwarding, and graceful shutdown right is difficult
+
+**FSMv2 implements the same control loop pattern as Kubernetes controllers and PLCs:**
+Desired state → Compare → Actuate → Observe → Repeat.
+
+**Further context:**
+- [Kubernetes Controllers](https://kubernetes.io/docs/concepts/architecture/controller/) - The control loop pattern
+- [IT/OT Control Loops](https://learn.umh.app/lesson/introduction-into-it-ot-control-loop/) - Manufacturing context
+- [UMH Core vs Classic](https://docs.umh.app/umh-core-vs-classic-faq) - Why we moved from Kubernetes
+- [Why S6 exists](https://skarnet.org/software/s6/why.html) - Process supervision philosophy
+- [The Docker Way](https://github.com/just-containers/s6-overlay?tab=readme-ov-file#the-docker-way) - Multi-process container rationale
+
 ## The Triangle Model
 
 Every worker in FSMv2 is represented by three components:
@@ -30,6 +67,10 @@ Every worker in FSMv2 is represented by three components:
 The supervisor runs a single-threaded reconciliation loop that makes observed state match desired state.
 
 ### Why This Model?
+
+The Triangle Model maps directly to control loop theory: **Identity** (what am I controlling?),
+**Desired** (set point), **Observed** (process variable), **Reconciliation** (controller logic).
+This is the same pattern used in Kubernetes controllers, PLCs, and thermostats.
 
 The Triangle Model aligns with the Control Sync Engine (CSE) storage pattern used throughout UMH.
 CSE separates each worker into three parts with different lifecycles:
@@ -332,3 +373,8 @@ The supervisor handles all storage operations automatically:
 - `LoadSnapshot()` for atomic loading of all three parts
 
 **See `pkg/cse/storage/doc.go` for storage WHYs.**
+
+## Further Reading
+
+- [Migration from FSMv1](docs/migration-from-v1.md) - Quick reference for v1 developers
+- External links in [Why FSMv2?](#why-fsmv2) section for background on control loops and Kubernetes patterns

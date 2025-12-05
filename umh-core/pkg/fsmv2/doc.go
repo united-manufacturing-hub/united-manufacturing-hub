@@ -17,7 +17,9 @@
 //
 // # Overview
 //
-// For the conceptual overview and Triangle Model diagram, see README.md.
+// For background on WHY FSMv2 exists and how it relates to Kubernetes/PLC control loop patterns,
+// see README.md "Why FSMv2?" section. For the conceptual overview and Triangle Model diagram,
+// see README.md.
 //
 // FSMv2 separates concerns into three layers:
 //   - Worker: Business logic implementation (what the worker does)
