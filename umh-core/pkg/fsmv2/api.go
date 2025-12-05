@@ -135,7 +135,8 @@ type Worker interface {
 	// Must respect context cancellation. Errors are logged but don't stop the FSM.
 	CollectObservedState(ctx context.Context) (ObservedState, error)
 
-	// DeriveDesiredState transforms user configuration into desired state.
+	// DeriveDesiredState derives the target state from user configuration (spec).
+	// This is a derivation, not a copy - it parses, validates, and computes derived fields.
 	// Pure function - no side effects. Called on each tick.
 	DeriveDesiredState(spec interface{}) (config.DesiredState, error)
 

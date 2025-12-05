@@ -38,7 +38,7 @@ Every worker in FSMv2 is represented by three components:
 ```
 
 - **Identity**: Immutable worker identification (ID, name, type)
-- **Desired**: Configuration that SHOULD be deployed (from user config)
+- **Desired**: Target state to achieve (derived from user intent via DeriveDesiredState)
 - **Observed**: Configuration that IS deployed (from monitoring)
 
 The supervisor runs a single-threaded reconciliation loop that makes observed state match desired state.
