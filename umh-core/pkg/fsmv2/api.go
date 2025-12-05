@@ -21,23 +21,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 )
 
-// # Reading Guide for New Developers
-//
-// Start with README.md for the "Why FSMv2?" section and Triangle Model,
-// then doc.go for implementation patterns. This file (api.go) defines
-// the core interface contracts.
-//
-// Key concepts in order:
-//   1. Signal - How workers communicate with supervisor
-//   2. Identity - Immutable worker identification
-//   3. ObservedState/DesiredState - The reconciliation model
-//   4. Snapshot - Complete state view (immutable, passed by value)
-//   5. Action - Side effects (must be idempotent)
-//   6. State - Decision logic (pure functions only)
-//   7. Worker - Your implementation
-//
-// For runnable examples, see workers/example/ and examples/simple/.
-
 // Signal is used by states to communicate special conditions to the supervisor.
 // These signals trigger supervisor-level actions beyond normal state transitions.
 type Signal int
@@ -50,15 +33,6 @@ const (
 	// SignalNeedsRestart tells supervisor to initiate shutdown for a restart cycle.
 	SignalNeedsRestart
 )
-
-// Signal Decision Guide:
-//   - SignalNone: Normal operation, supervisor continues tick loop
-//   - SignalNeedsRemoval: Worker cleanup complete, remove from supervisor
-//   - SignalNeedsRestart: Trigger controlled restart (shutdown then recreate)
-//
-// Example: A StoppedState returns SignalNeedsRemoval after confirming
-// all resources are released. SignalNeedsRestart is used for config changes
-// that require full worker recreation.
 
 // Identity uniquely identifies a worker instance.
 // This is immutable for the lifetime of the worker.
@@ -85,46 +59,9 @@ type ObservedState interface {
 
 // DesiredState represents what we want the system to be.
 // Derived from user configuration via DeriveDesiredState().
-// The supervisor can inject shutdown requests here.
 //
-// ARCHITECTURAL INVARIANT: DesiredState must NEVER contain a Dependencies field.
-//
-// Why? Dependencies are runtime interfaces (connections, pools, loggers) that:
-//  1. Cannot be JSON-serialized (interfaces have no data)
-//  2. Must not be accessed from State.Next() (states are pure functions)
-//  3. Belong to the Worker struct, not configuration
-//
-// Where dependencies ARE used:
-//   - Actions: Receive deps via Execute(ctx, depsAny any) parameter
-//   - Collector: Access via worker.GetDependencies()
-//   - ObservedState: Collector converts deps data into serializable fields
-//
-// If you need state to check a runtime condition (like IsConnected()):
-//  1. Have the Collector read it from dependencies
-//  2. Write it to an ObservedState field (like ConnectionHealth)
-//  3. State.Next() checks the ObservedState field
-//
-// Example:
-//
-//	// WRONG - don't do this:
-//	type MyDesiredState struct {
-//	    Dependencies MyDependencies  // FORBIDDEN
-//	}
-//
-//	// RIGHT - collector populates observed state:
-//	func (w *MyWorker) CollectObservedState(ctx context.Context) {
-//	    deps := w.GetDependencies()
-//	    return MyObservedState{
-//	        ConnectionHealth: deps.IsConnected() ? "healthy" : "disconnected",
-//	    }
-//	}
-//
-//	// RIGHT - state checks observed state:
-//	func (s *MyState) Next(snap MySnapshot) (...) {
-//	    if snap.Observed.ConnectionHealth == "healthy" {  // Correct
-//	        ...
-//	    }
-//	}
+// INVARIANT: DesiredState must NEVER contain Dependencies (runtime interfaces).
+// Pass dependencies to Action.Execute() instead.
 type DesiredState interface {
 	// IsShutdownRequested is set by supervisor to initiate graceful shutdown.
 	// States MUST check this first in their Next() method.
@@ -145,227 +82,39 @@ type ShutdownRequestable interface {
 }
 
 // Snapshot is the complete view of the worker at a point in time.
-// The supervisor assembles this from the database and passes it to State.Next().
-// This enables pure functional state transitions based on complete information.
-//
-// IMMUTABILITY (Invariant I9):
-// Snapshot is passed by value to State.Next(), making it inherently immutable.
-// States receive a COPY of the snapshot, so mutations don't affect the original.
-// This guarantees that state transitions are pure functions without side effects.
-//
-// We do NOT use getters because:
-//  1. Pass-by-value makes mutation impossible (copies on assignment)
-//  2. Getters add boilerplate without adding safety
-//  3. Go convention favors simple field access over accessors (see time.Time, net.IP)
-//
-// This is the idiomatic Go approach: Use value semantics for immutability,
-// not OOP patterns like getters/setters.
-//
-// Go's pass-by-value semantics enforce this at the language level:
-//   - When State.Next(snapshot Snapshot) is called, Go copies the struct
-//   - Fields (Identity, Observed, Desired) are copied as interface pointers
-//   - States can mutate their local copy without affecting supervisor's snapshot
-//   - No runtime validation needed - the compiler enforces this
-//
-// Example showing immutability in practice:
-//
-//	func (s MyState) Next(snapshot Snapshot) (State, Signal, Action) {
-//	    // snapshot is a copy - mutations here don't affect supervisor's snapshot
-//	    snapshot.Observed = nil  // This only affects the local copy
-//	    snapshot.Identity.Name = "modified"  // Local copy only
-//	    return s, SignalNone, nil
-//	}
-//
-// Defense-in-depth layers:
-//   - Layer 1: Pass-by-value (Go language design)
-//   - Layer 2: Documentation (this godoc)
-//   - Layer 3: Tests demonstrating immutability (supervisor/immutability_test.go)
-//
-// For type-safe access in State.Next(), use helpers.ConvertSnapshot[O, D](snapAny)
-// which returns a TypedSnapshot with typed Observed and Desired fields.
-// See internal/helpers/state_adapter.go for usage patterns.
+// Passed by value to State.Next(), making it inherently immutable.
+// Use helpers.ConvertSnapshot[O, D](snapAny) for type-safe field access.
 type Snapshot struct {
 	Identity Identity    // Who am I?
 	Observed interface{} // What is the actual state? (ObservedState or basic.Document)
 	Desired  interface{} // What should the state be? (DesiredState or basic.Document)
 }
 
-// For type-safe access in State.Next(), use helpers.ConvertSnapshot:
-//
-//	snap := helpers.ConvertSnapshot[MyObservedState, *MyDesiredState](snapshotAny)
-//	if snap.Desired.SomeField { ... }
-//	if snap.Observed.IsRunning { ... }
-//
-// This avoids manual type assertions and provides compile-time safety.
-// See internal/helpers/state_adapter.go for implementation.
-
 // Action represents a side effect that transitions the system between states.
-// Actions are executed by the supervisor after State.Next() returns them.
-// They can be long-running and will be retried with backoff on failure.
-// Actions MUST be idempotent (safe to call multiple times with identical result).
-// Each action should check if work is already done before performing it.
+// Executed by the supervisor after State.Next() returns them.
+// Retried with exponential backoff on failure.
 //
-// IDEMPOTENCY REQUIREMENT (Invariant I10):
-// Actions MUST be safe to call multiple times. Each action implementation should:
-//  1. Check if work is already done before performing it
-//  2. Produce the same final state whether called once or multiple times
-//  3. Handle partial completion gracefully (retry from checkpoint)
-//
-// Example idempotent action (empty struct, deps injected):
-//
-//	func (a *ConnectAction) Execute(ctx context.Context, depsAny any) error {
-//	    // ALWAYS check context cancellation first
-//	    select {
-//	    case <-ctx.Done():
-//	        return ctx.Err()
-//	    default:
-//	    }
-//	    deps := depsAny.(MyDependencies)
-//	    // Check if already done (idempotency)
-//	    if deps.IsConnected() {
-//	        return nil  // Already connected, idempotent
-//	    }
-//	    return deps.Connect(ctx)
-//	}
-//
-// Example NON-idempotent action (DO NOT DO THIS):
-//
-//	func (a *IncrementCounterAction) Execute(ctx context.Context, depsAny any) error {
-//	    deps := depsAny.(MyDependencies)
-//	    deps.IncrementCounter()  // WRONG! Multiple calls increment multiple times
-//	    return nil
-//	}
-//
-// Testing idempotency:
-// Use the idempotency test helper in supervisor/action_helpers_test.go:
-//
-//	VerifyActionIdempotency(action, 3, func() {
-//	    Expect(fileExists("test.txt")).To(BeTrue())
-//	})
-//
-// REQUIREMENT (FSM v2): Every Action implementation MUST have an idempotency test.
-// Code reviewers: Check that action_*_test.go files use VerifyActionIdempotency.
-//
-// Partial completion example (deploy 5 files, 3 succeed before failure):
-//
-//	func (a *DeployFilesAction) Execute(ctx context.Context, deps TDeps) error {
-//	    for _, file := range a.Files {
-//	        // Check if already deployed (idempotent - skip completed work)
-//	        if deps.FileExists(file.Path) {
-//	            continue  // Already done, move to next
-//	        }
-//	        if err := deps.WriteFile(file.Path, file.Content); err != nil {
-//	            return err  // Retry will resume from here
-//	        }
-//	    }
-//	    return nil
-//	}
-//
-// Defense-in-depth layers:
-//   - Layer 1: Document requirement in Action interface
-//   - Layer 2: Provide test helpers for verification
-//   - Layer 3: Examples showing idempotent patterns
-//   - Layer 4: ActionExecutor with exponential backoff validates this
-//
-// Example: StartProcess, StopProcess, CreateConfigFiles, CallAPI.
+// REQUIREMENT: Actions MUST be idempotent (safe to call multiple times).
+// Check if work is already done before performing it.
 type Action[TDeps any] interface {
-	// Execute performs the action. Can be blocking and long-running.
-	// Must handle context cancellation. Must be idempotent.
-	// Dependencies are injected via deps parameter at execution time.
+	// Execute performs the action. Must handle context cancellation.
 	Execute(ctx context.Context, deps TDeps) error
-	// Name returns a descriptive name for logging/debugging
+	// Name returns a descriptive name for logging/debugging.
 	Name() string
 }
 
 // State represents a single state in the FSM lifecycle.
-// Each state encapsulates the decision logic for transitions.
 // States are stateless - they examine the snapshot and decide what happens next.
-// State.Next() must be a pure function: no database writes, no file changes,
-// no goroutine launches, no network calls. Only compare observed vs desired
-// and return the appropriate action/transition.
+// State.Next() must be a pure function: no side effects, no external calls.
 //
-// Key principles:
-//   - States MUST handle ShutdownRequested first
-//   - State transitions are explicit and visible in code
-//   - States return actions for side effects, not perform them
-//
-// State Naming and Behavior Convention:
-//
-// ACTIVE STATES (prefix: "TryingTo")
-//   - Emit actions on every tick until success condition met
-//   - Examples: TryingToStartState, TryingToStopState
-//   - Represent ongoing operations that need retrying
-//
-// PASSIVE STATES (descriptive nouns)
-//   - Only observe and transition based on conditions
-//   - Examples: RunningState, StoppedState, DegradedState
-//   - Represent stable conditions where no action needed
-//
-// TODO: Consider previous state tracking in Snapshot for debugging
-//
-// Example implementation:
-//
-//	func (s RunningState) Next(snapshot Snapshot) (State, Signal, Action) {
-//	    // Always check shutdown first
-//	    if snapshot.Desired.ShutdownRequested() {
-//	        return StoppingState{}, SignalNone, nil
-//	    }
-//	    // Check if reconfiguration needed
-//	    if snapshot.Observed != snapshot.Desired {
-//	        return ReconfiguringState{}, SignalNone, nil
-//	    }
-//	    // Stay in current state
-//	    return s, SignalNone, nil
-//	}
-//
-// Multi-tick shutdown example:
-//
-//	func (s ShuttingDownState) Next(snap Snapshot) (...) {
-//	    if snap.Observed.CleanupComplete {
-//	        return StoppedState{}, SignalNeedsRemoval, nil
-//	    }
-//	    // Keep emitting cleanup action until observed state shows completion
-//	    return s, SignalNone, &CleanupAction{}
-//	}
+// Key rules:
+//   - Check ShutdownRequested first in Next()
+//   - Return action OR state change, not both (supervisor panics otherwise)
+//   - "TryingTo" prefix = active state emitting actions; nouns = passive observation
 type State[TSnapshot any, TDeps any] interface {
 	// Next evaluates the snapshot and returns the next transition.
-	// This is a pure function - no side effects, no external calls.
-	// The supervisor calls this on each tick (e.g., every second).
-	//
-	// IMMUTABILITY (Invariant I9):
-	// The snapshot parameter is passed by value (copied), so any modifications
-	// to it within Next() do not affect the supervisor's original snapshot.
-	// This enforces immutability and enables pure functional transitions.
-	//
-	// Go's pass-by-value semantics guarantee:
-	//   - snapshot is a COPY of the supervisor's snapshot
-	//   - Mutations to snapshot only affect this local copy
-	//   - The supervisor's snapshot remains unchanged
-	//   - No defensive copying or validation needed
-	//
-	// TYPE SAFETY (Invariant I11):
-	// The snapshot parameter uses the concrete TSnapshot type, eliminating
-	// runtime type assertions. The compiler enforces type safety at compile time.
-	// States receive correctly typed snapshots without manual casting.
-	//
-	// Returns:
-	//   - nextState: State to transition to (can return self to stay)
-	//   - signal: Optional signal to supervisor (usually SignalNone)
-	//   - action: Optional action to execute before next tick (can be nil)
-	//
-	// Only returns new state when all conditions are met.
-	// Should not switch the state and emit an action at the same time. There should
-	// be one way to progress: emit action → observe result → then transition.
-	// Allowing both creates confusion about the intended flow. Supervisor panics if
-	// both are returned (this is an application logic issue).
-	//
-	// Supervisor will only call Next() if there is no ongoing action (to prevent multiple actions).
-	//
-	// Supervisor flow after calling Next():
-	//   1. If action != nil: execute it (with retries/backoff on error)
-	//   2. Transition to nextState
-	//   3. Process signal (e.g., remove worker if SignalNeedsRemoval)
-	//   4. Wait for next tick
+	// Pure function called on each tick. Snapshot is passed by value (immutable).
+	// Returns: nextState, signal to supervisor, optional action to execute.
 	Next(snapshot TSnapshot) (State[TSnapshot, TDeps], Signal, Action[TDeps])
 
 	// String returns the state name for logging/debugging
@@ -380,75 +129,21 @@ type State[TSnapshot any, TDeps any] interface {
 
 // Worker is the business logic interface that developers implement.
 // The supervisor manages the worker lifecycle using these methods.
-//
-// Interaction flow:
-//
-//  1. Supervisor creates worker and calls GetInitialState()
-//
-//  2. Supervisor starts goroutine calling CollectObservedState() in a loop
-//
-//  3. On each tick:
-//     - Supervisor calls DeriveDesiredState() with latest config
-//     - Supervisor reads latest ObservedState from DB (collected in step 2)
-//     - Supervisor calls currentState.Next() with the snapshot
-//     - Supervisor sets currentState to whatever currentState.Next() returns
-//     - Supervisor executes any returned action
-//
-//  4. On shutdown: Supervisor sets ShutdownRequested in desired state
-//
-//  5. Worker states handle shutdown, eventually returning SignalNeedsRemoval
-//
-//  6. Supervisor removes worker from system
 type Worker interface {
 	// CollectObservedState monitors the actual system state.
 	// Called in a separate goroutine with timeout protection.
-	//
-	// Context Handling (Invariant I6):
-	//   - MUST respect context cancellation within grace period (5 seconds)
-	//   - Failure to exit after context cancellation will cause panic
-	//   - This enforces proper async operation lifecycle management
-	//
-	// Timeout Protection:
-	//   - Wrapped with per-operation timeout (observation interval + cgroup buffer + margin)
-	//   - Default: 1s interval + 200ms cgroup throttle + 1s margin = 2.2s timeout
-	//   - Accounts for Docker/Kubernetes CPU throttling (100ms cgroup period)
-	//   - Operations exceeding timeout are cancelled automatically
-	//
-	// Error Handling:
-	//   - Errors are logged but don't stop the FSM
-	//   - Supervisor handles staleness via FreshnessChecker
-	//   - Repeated timeouts trigger collector restart with backoff
-	//
-	// Upgrade Notice from fsm: this function replaces the whole `_monitor` logic
-	//
-	// Example: Poll process status, check file existence, query APIs
+	// Must respect context cancellation. Errors are logged but don't stop the FSM.
 	CollectObservedState(ctx context.Context) (ObservedState, error)
 
 	// DeriveDesiredState transforms user configuration into desired state.
 	// Pure function - no side effects. Called on each tick.
-	// The spec parameter comes from user configuration.
-	//
-	// This is used for templating, for example to convert user configuration to the actual "technical" template.
-	//
-	// Returns concrete config.DesiredState to enable hierarchical composition via ChildrenSpecs field.
-	// Parent workers can declare child FSM workers by populating ChildrenSpecs, allowing supervisor
-	// to reconcile actual children to match desired specs (Kubernetes-style declarative management).
-	//
-	// Example: Parse YAML config, apply templates, validate settings
 	DeriveDesiredState(spec interface{}) (config.DesiredState, error)
 
 	// GetInitialState returns the starting state for this worker.
 	// Called once during worker creation.
-	//
-	// Returns State[any, any] to allow supervisor to work with heterogeneous worker types.
-	// Concrete workers return their specific typed states which satisfy this interface.
-	//
-	// Example: return &InitializingState{} or &StoppedState{}
 	GetInitialState() State[any, any]
 
-	// NOTE: Shutdown is managed by the supervisor via database updates.
-	// The supervisor sets ShutdownRequested=true in the desired state using SetShutdownRequested().
-	// Workers check IsShutdownRequested() in their state transitions.
+	// Shutdown is managed by the supervisor via ShutdownRequested in desired state.
 }
 
 // DependencyProvider is an optional interface that workers can implement
