@@ -75,6 +75,18 @@
 //
 // The supervisor retries failed actions with exponential backoff, so idempotency is critical.
 //
+// ## DesiredState: No Runtime Dependencies
+//
+// ARCHITECTURAL INVARIANT: DesiredState must NEVER contain Dependencies.
+// Dependencies are runtime interfaces (connections, pools) that cannot be serialized.
+//
+// If you need state to check a runtime condition (like IsConnected()):
+//  1. Collector reads it from dependencies
+//  2. Collector writes to ObservedState field (e.g., ConnectionHealth)
+//  3. State.Next() checks ObservedState, not dependencies
+//
+// See workers/example/example-child/worker.go for the correct pattern.
+//
 // ## Retry and Backoff Configuration
 //
 // FSMv2 automatically retries failed actions with exponential backoff to handle transient failures.
