@@ -21,6 +21,23 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 )
 
+// # Reading Guide for New Developers
+//
+// Start with README.md for the "Why FSMv2?" section and Triangle Model,
+// then doc.go for implementation patterns. This file (api.go) defines
+// the core interface contracts.
+//
+// Key concepts in order:
+//   1. Signal - How workers communicate with supervisor
+//   2. Identity - Immutable worker identification
+//   3. ObservedState/DesiredState - The reconciliation model
+//   4. Snapshot - Complete state view (immutable, passed by value)
+//   5. Action - Side effects (must be idempotent)
+//   6. State - Decision logic (pure functions only)
+//   7. Worker - Your implementation
+//
+// For runnable examples, see workers/example/ and examples/simple/.
+
 // Signal is used by states to communicate special conditions to the supervisor.
 // These signals trigger supervisor-level actions beyond normal state transitions.
 type Signal int
@@ -33,6 +50,15 @@ const (
 	// SignalNeedsRestart tells supervisor to initiate shutdown for a restart cycle.
 	SignalNeedsRestart
 )
+
+// Signal Decision Guide:
+//   - SignalNone: Normal operation, supervisor continues tick loop
+//   - SignalNeedsRemoval: Worker cleanup complete, remove from supervisor
+//   - SignalNeedsRestart: Trigger controlled restart (shutdown then recreate)
+//
+// Example: A StoppedState returns SignalNeedsRemoval after confirming
+// all resources are released. SignalNeedsRestart is used for config changes
+// that require full worker recreation.
 
 // Identity uniquely identifies a worker instance.
 // This is immutable for the lifetime of the worker.
@@ -164,10 +190,20 @@ type Snapshot struct {
 	Desired  interface{} // What should the state be? (DesiredState or basic.Document)
 }
 
+// For type-safe access in State.Next(), use helpers.ConvertSnapshot:
+//
+//	snap := helpers.ConvertSnapshot[MyObservedState, *MyDesiredState](snapshotAny)
+//	if snap.Desired.SomeField { ... }
+//	if snap.Observed.IsRunning { ... }
+//
+// This avoids manual type assertions and provides compile-time safety.
+// See internal/helpers/state_adapter.go for implementation.
+
 // Action represents a side effect that transitions the system between states.
 // Actions are executed by the supervisor after State.Next() returns them.
 // They can be long-running and will be retried with backoff on failure.
-// Actions MUST be idempotent - safe to retry after partial completion.
+// Actions MUST be idempotent (safe to call multiple times with identical result).
+// Each action should check if work is already done before performing it.
 //
 // IDEMPOTENCY REQUIREMENT (Invariant I10):
 // Actions MUST be safe to call multiple times. Each action implementation should:
@@ -244,6 +280,9 @@ type Action[TDeps any] interface {
 // State represents a single state in the FSM lifecycle.
 // Each state encapsulates the decision logic for transitions.
 // States are stateless - they examine the snapshot and decide what happens next.
+// State.Next() must be a pure function: no database writes, no file changes,
+// no goroutine launches, no network calls. Only compare observed vs desired
+// and return the appropriate action/transition.
 //
 // Key principles:
 //   - States MUST handle ShutdownRequested first
