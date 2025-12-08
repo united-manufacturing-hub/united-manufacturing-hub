@@ -56,13 +56,13 @@ var _ = Describe("ChildSpec Validation Integration", func() {
 		_ = basicStore.CreateCollection(ctx, "another_child_desired", nil)
 		_ = basicStore.CreateCollection(ctx, "another_child_observed", nil)
 
-		_ = factory.RegisterFactoryByType("valid_child", func(id fsmv2.Identity, _ *zap.SugaredLogger) fsmv2.Worker {
+		_ = factory.RegisterFactoryByType("valid_child", func(id fsmv2.Identity, _ *zap.SugaredLogger, _ fsmv2.StateReader) fsmv2.Worker {
 			return &validChildSpecMockWorker{
 				identity:     id,
 				initialState: &mockState{},
 			}
 		})
-		_ = factory.RegisterFactoryByType("another_child", func(id fsmv2.Identity, _ *zap.SugaredLogger) fsmv2.Worker {
+		_ = factory.RegisterFactoryByType("another_child", func(id fsmv2.Identity, _ *zap.SugaredLogger, _ fsmv2.StateReader) fsmv2.Worker {
 			return &validChildSpecMockWorker{
 				identity:     id,
 				initialState: &mockState{},

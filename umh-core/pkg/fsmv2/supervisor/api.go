@@ -18,6 +18,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
@@ -174,6 +175,35 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity fsmv2.Identity, wor
 			}
 
 			return desired.IsShutdownRequested()
+		},
+		// ChildrenCountsProvider returns the count of healthy and unhealthy children.
+		// Used by parent workers to track their children's health status for state transitions.
+		// A child is considered healthy if its state contains "Running" or "Connected".
+		ChildrenCountsProvider: func() (healthy int, unhealthy int) {
+			s.mu.RLock()
+			defer s.mu.RUnlock()
+
+			for _, child := range s.children {
+				stateName := child.GetCurrentStateName()
+				// A child is healthy if it's in a running/connected operational state
+				if strings.Contains(stateName, "Running") || strings.Contains(stateName, "Connected") {
+					healthy++
+				} else if stateName != "" && stateName != "unknown" &&
+					!strings.Contains(stateName, "Stopped") {
+					// Only count as unhealthy if it has a known state that's not healthy
+					// and not in Stopped state (TryingToStop still counts as unhealthy
+					// so parent waits for children to fully stop)
+					unhealthy++
+				}
+			}
+			return healthy, unhealthy
+		},
+		// MappedParentStateProvider returns the mapped state from parent's StateMapping.
+		// Used by child workers to know when parent wants them to start/stop.
+		// Returns "running" when parent is in TryingToStart/Running states,
+		// Returns "stopped" (or empty) when parent is in Stopped/TryingToStop states.
+		MappedParentStateProvider: func() string {
+			return s.getMappedParentState()
 		},
 	})
 
@@ -462,4 +492,23 @@ func (s *Supervisor[TObserved, TDesired]) getHierarchyPathUnlocked() string {
 	// This means child supervisor logs will show "childID(childType)" instead of
 	// "parentID(parentType)/childID(childType)" - less context but no deadlock.
 	return segment
+}
+
+// GetCurrentStateName returns the current FSM state name for this supervisor's worker.
+// Returns "unknown" if no worker or state is set.
+// Used by parent supervisors to track children's health status.
+func (s *Supervisor[TObserved, TDesired]) GetCurrentStateName() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	// Get the first (and typically only) worker's current state
+	for _, workerCtx := range s.workers {
+		workerCtx.mu.RLock()
+		defer workerCtx.mu.RUnlock()
+		if workerCtx.currentState != nil {
+			return workerCtx.currentState.String()
+		}
+		return "unknown"
+	}
+	return "unknown"
 }

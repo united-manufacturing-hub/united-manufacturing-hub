@@ -46,6 +46,7 @@ func NewFailingWorker(
 	identity fsmv2.Identity,
 	connectionPool ConnectionPool,
 	logger *zap.SugaredLogger,
+	stateReader fsmv2.StateReader,
 ) (*FailingWorker, error) {
 	if connectionPool == nil {
 		return nil, errors.New("connectionPool must not be nil")
@@ -62,7 +63,7 @@ func NewFailingWorker(
 		}
 		identity.WorkerType = workerType
 	}
-	dependencies := NewFailingDependencies(connectionPool, logger, identity)
+	dependencies := NewFailingDependencies(connectionPool, logger, stateReader, identity)
 
 	conn, err := connectionPool.Acquire()
 	if err != nil {
@@ -140,9 +141,9 @@ func init() {
 	// The worker type is derived from ExamplefailingObservedState, ensuring consistency.
 	// NOTE: This fixes a previous key mismatch where supervisor was "examplefailing" but worker was "failing".
 	if err := factory.RegisterWorkerType[snapshot.ExamplefailingObservedState, *snapshot.ExamplefailingDesiredState](
-		func(id fsmv2.Identity, logger *zap.SugaredLogger) fsmv2.Worker {
+		func(id fsmv2.Identity, logger *zap.SugaredLogger, stateReader fsmv2.StateReader) fsmv2.Worker {
 			pool := &DefaultConnectionPool{}
-			worker, _ := NewFailingWorker(id, pool, logger)
+			worker, _ := NewFailingWorker(id, pool, logger, stateReader)
 			return worker
 		},
 		func(cfg interface{}) interface{} {

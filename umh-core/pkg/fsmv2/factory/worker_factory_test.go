@@ -76,7 +76,7 @@ func TestRegisterWorkerType(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			factoryFunc := func(id fsmv2.Identity, _ *zap.SugaredLogger) fsmv2.Worker {
+			factoryFunc := func(id fsmv2.Identity, _ *zap.SugaredLogger, _ fsmv2.StateReader) fsmv2.Worker {
 				return &mockWorker{identity: id}
 			}
 
@@ -102,7 +102,7 @@ func TestNewWorker(t *testing.T) {
 	factory.ResetRegistry()
 
 	// Register a worker type for testing
-	err := factory.RegisterFactoryByType("test_worker", func(id fsmv2.Identity, _ *zap.SugaredLogger) fsmv2.Worker {
+	err := factory.RegisterFactoryByType("test_worker", func(id fsmv2.Identity, _ *zap.SugaredLogger, _ fsmv2.StateReader) fsmv2.Worker {
 		return &mockWorker{identity: id}
 	})
 	if err != nil {
@@ -144,7 +144,7 @@ func TestNewWorker(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			worker, err := factory.NewWorkerByType(tt.workerType, tt.identity, zap.NewNop().Sugar())
+			worker, err := factory.NewWorkerByType(tt.workerType, tt.identity, zap.NewNop().Sugar(), nil)
 
 			if tt.wantErr {
 				if err == nil {
@@ -193,7 +193,7 @@ func TestConcurrentRegistration(t *testing.T) {
 			for j := range numWorkerTypes {
 				workerType := "worker_" + string(rune('A'+j))
 
-				err := factory.RegisterFactoryByType(workerType, func(id fsmv2.Identity, _ *zap.SugaredLogger) fsmv2.Worker {
+				err := factory.RegisterFactoryByType(workerType, func(id fsmv2.Identity, _ *zap.SugaredLogger, _ fsmv2.StateReader) fsmv2.Worker {
 					return &mockWorker{identity: id}
 				})
 				if err != nil {
@@ -227,7 +227,7 @@ func TestConcurrentCreation(t *testing.T) {
 	for i := range 3 {
 		workerType := "concurrent_worker_" + string(rune('A'+i))
 
-		err := factory.RegisterFactoryByType(workerType, func(id fsmv2.Identity, _ *zap.SugaredLogger) fsmv2.Worker {
+		err := factory.RegisterFactoryByType(workerType, func(id fsmv2.Identity, _ *zap.SugaredLogger, _ fsmv2.StateReader) fsmv2.Worker {
 			return &mockWorker{identity: id}
 		})
 		if err != nil {
@@ -256,7 +256,7 @@ func TestConcurrentCreation(t *testing.T) {
 				WorkerType: workerType,
 			}
 
-			worker, err := factory.NewWorkerByType(workerType, identity, zap.NewNop().Sugar())
+			worker, err := factory.NewWorkerByType(workerType, identity, zap.NewNop().Sugar(), nil)
 			if err != nil {
 				errors <- err
 			} else {
@@ -326,7 +326,7 @@ func TestListRegisteredTypes_SingleRegistration(t *testing.T) {
 	factory.ResetRegistry()
 
 	// Register one worker type
-	err := factory.RegisterFactoryByType("mqtt_client", func(id fsmv2.Identity, _ *zap.SugaredLogger) fsmv2.Worker {
+	err := factory.RegisterFactoryByType("mqtt_client", func(id fsmv2.Identity, _ *zap.SugaredLogger, _ fsmv2.StateReader) fsmv2.Worker {
 		return &mockWorker{identity: id}
 	})
 	if err != nil {
@@ -352,7 +352,7 @@ func TestListRegisteredTypes_MultipleRegistrations(t *testing.T) {
 	workerTypes := []string{"mqtt_client", "modbus_server", "opcua_client"}
 
 	for _, wt := range workerTypes {
-		err := factory.RegisterFactoryByType(wt, func(id fsmv2.Identity, _ *zap.SugaredLogger) fsmv2.Worker {
+		err := factory.RegisterFactoryByType(wt, func(id fsmv2.Identity, _ *zap.SugaredLogger, _ fsmv2.StateReader) fsmv2.Worker {
 			return &mockWorker{identity: id}
 		})
 		if err != nil {
@@ -384,7 +384,7 @@ func TestListRegisteredTypes_ReturnsSliceCopy(t *testing.T) {
 	factory.ResetRegistry()
 
 	// Register a worker type
-	err := factory.RegisterFactoryByType("test_worker", func(id fsmv2.Identity, _ *zap.SugaredLogger) fsmv2.Worker {
+	err := factory.RegisterFactoryByType("test_worker", func(id fsmv2.Identity, _ *zap.SugaredLogger, _ fsmv2.StateReader) fsmv2.Worker {
 		return &mockWorker{identity: id}
 	})
 	if err != nil {
@@ -420,7 +420,7 @@ func TestListRegisteredTypes_ConcurrentCalls(t *testing.T) {
 	for i := range 5 {
 		workerType := "worker_" + string(rune('A'+i))
 
-		err := factory.RegisterFactoryByType(workerType, func(id fsmv2.Identity, _ *zap.SugaredLogger) fsmv2.Worker {
+		err := factory.RegisterFactoryByType(workerType, func(id fsmv2.Identity, _ *zap.SugaredLogger, _ fsmv2.StateReader) fsmv2.Worker {
 			return &mockWorker{identity: id}
 		})
 		if err != nil {
@@ -477,7 +477,7 @@ func TestRegisterWorkerAndSupervisorFactory(t *testing.T) {
 		{
 			name: "fail when worker already registered",
 			setupRegistry: func() {
-				_ = factory.RegisterFactoryByType("test_worker", func(id fsmv2.Identity, _ *zap.SugaredLogger) fsmv2.Worker {
+				_ = factory.RegisterFactoryByType("test_worker", func(id fsmv2.Identity, _ *zap.SugaredLogger, _ fsmv2.StateReader) fsmv2.Worker {
 					return &mockWorker{identity: id}
 				})
 			},
@@ -506,7 +506,7 @@ func TestRegisterWorkerAndSupervisorFactory(t *testing.T) {
 
 			err := factory.RegisterWorkerAndSupervisorFactoryByType(
 				"test_worker",
-				func(id fsmv2.Identity, _ *zap.SugaredLogger) fsmv2.Worker {
+				func(id fsmv2.Identity, _ *zap.SugaredLogger, _ fsmv2.StateReader) fsmv2.Worker {
 					return &mockWorker{identity: id}
 				},
 				func(cfg interface{}) interface{} {
@@ -585,7 +585,7 @@ func TestValidateRegistryConsistency(t *testing.T) {
 			name: "consistent registries",
 			setupRegistry: func() {
 				factory.ResetRegistry()
-				_ = factory.RegisterFactoryByType("worker_a", func(id fsmv2.Identity, _ *zap.SugaredLogger) fsmv2.Worker {
+				_ = factory.RegisterFactoryByType("worker_a", func(id fsmv2.Identity, _ *zap.SugaredLogger, _ fsmv2.StateReader) fsmv2.Worker {
 					return &mockWorker{identity: id}
 				})
 				_ = factory.RegisterSupervisorFactoryByType("worker_a", func(cfg interface{}) interface{} {
@@ -599,7 +599,7 @@ func TestValidateRegistryConsistency(t *testing.T) {
 			name: "worker registered but not supervisor",
 			setupRegistry: func() {
 				factory.ResetRegistry()
-				_ = factory.RegisterFactoryByType("orphan_worker", func(id fsmv2.Identity, _ *zap.SugaredLogger) fsmv2.Worker {
+				_ = factory.RegisterFactoryByType("orphan_worker", func(id fsmv2.Identity, _ *zap.SugaredLogger, _ fsmv2.StateReader) fsmv2.Worker {
 					return &mockWorker{identity: id}
 				})
 			},
@@ -622,14 +622,14 @@ func TestValidateRegistryConsistency(t *testing.T) {
 			setupRegistry: func() {
 				factory.ResetRegistry()
 				// Both registered
-				_ = factory.RegisterFactoryByType("consistent", func(id fsmv2.Identity, _ *zap.SugaredLogger) fsmv2.Worker {
+				_ = factory.RegisterFactoryByType("consistent", func(id fsmv2.Identity, _ *zap.SugaredLogger, _ fsmv2.StateReader) fsmv2.Worker {
 					return &mockWorker{identity: id}
 				})
 				_ = factory.RegisterSupervisorFactoryByType("consistent", func(cfg interface{}) interface{} {
 					return nil
 				})
 				// Worker only
-				_ = factory.RegisterFactoryByType("worker_only", func(id fsmv2.Identity, _ *zap.SugaredLogger) fsmv2.Worker {
+				_ = factory.RegisterFactoryByType("worker_only", func(id fsmv2.Identity, _ *zap.SugaredLogger, _ fsmv2.StateReader) fsmv2.Worker {
 					return &mockWorker{identity: id}
 				})
 				// Supervisor only

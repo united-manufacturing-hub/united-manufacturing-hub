@@ -39,7 +39,7 @@ var _ = Describe("AuthenticateAction", func() {
 		logger = zap.NewNop().Sugar()
 		transport = &mockTransport{}
 		identity := fsmv2.Identity{ID: "test-id", WorkerType: "communicator"}
-		dependencies = communicator.NewCommunicatorDependencies(transport, logger, identity)
+		dependencies = communicator.NewCommunicatorDependencies(transport, logger, nil, identity)
 		// Dependencies now passed to Execute(), not constructor
 		act = action.NewAuthenticateAction(
 			"https://relay.example.com",

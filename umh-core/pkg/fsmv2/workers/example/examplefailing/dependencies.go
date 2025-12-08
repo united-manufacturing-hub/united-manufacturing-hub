@@ -60,9 +60,9 @@ type FailingDependencies struct {
 }
 
 // NewFailingDependencies creates new dependencies for the failing worker.
-func NewFailingDependencies(connectionPool ConnectionPool, logger *zap.SugaredLogger, identity fsmv2.Identity) *FailingDependencies {
+func NewFailingDependencies(connectionPool ConnectionPool, logger *zap.SugaredLogger, stateReader fsmv2.StateReader, identity fsmv2.Identity) *FailingDependencies {
 	return &FailingDependencies{
-		BaseDependencies: fsmv2.NewBaseDependencies(logger, identity),
+		BaseDependencies: fsmv2.NewBaseDependencies(logger, stateReader, identity),
 		connectionPool:   connectionPool,
 	}
 }

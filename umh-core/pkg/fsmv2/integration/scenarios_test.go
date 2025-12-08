@@ -28,24 +28,36 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/examples"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/integration"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent/state"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence/memory"
 )
 
 var _ = Describe("Simple Scenario Integration", func() {
 	It("should run scenario and verify all requirements", func() {
+		By("Setting short durations for fast testing")
+		// Override durations for fast test execution (500ms/1s instead of 5s/10s)
+		originalStoppedWait := state.StoppedWaitDuration
+		originalRunning := state.RunningDuration
+		state.StoppedWaitDuration = 500 * time.Millisecond
+		state.RunningDuration = 1 * time.Second
+		defer func() {
+			state.StoppedWaitDuration = originalStoppedWait
+			state.RunningDuration = originalRunning
+		}()
+
 		By("Setting up test logger at DebugLevel")
 		testLogger := integration.NewTestLogger(zapcore.DebugLevel)
 
-		By("Setting up context with 15s timeout")
-		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		By("Setting up context with 30s timeout")
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
 		By("Setting up triangular store")
 		store := setupTestStoreForScenario(testLogger.Logger)
 
-		By("Creating scenario context with 10s duration")
-		scenarioCtx, scenarioCancel := context.WithTimeout(ctx, 10*time.Second)
+		By("Creating scenario context with 20s duration for cycle completion")
+		scenarioCtx, scenarioCancel := context.WithTimeout(ctx, 20*time.Second)
 		defer scenarioCancel()
 
 		By("Running SimpleScenario with 100ms tick interval")
@@ -130,6 +142,50 @@ var _ = Describe("Simple Scenario Integration", func() {
 
 		By("Verifying no action failures")
 		verifyNoActionFailures(testLogger)
+
+		// =====================================================================
+		// NEW: Cyclic Start/Stop Verifications
+		// =====================================================================
+
+		By("Verifying cyclic state transitions")
+		verifyCyclicStateTransitions(testLogger)
+
+		By("Verifying timing-based transitions")
+		verifyTimingBasedTransitions(testLogger)
+
+		By("Verifying children health tracking")
+		verifyChildrenHealthTracking(store)
+
+		By("Verifying state_entered_at and elapsed fields")
+		verifyStateEnteredAtAndElapsed(store)
+
+		By("Verifying parent reaches Running state")
+		verifyParentReachesRunning(testLogger)
+
+		// =====================================================================
+		// NEW: Parent-Child Coordination Verifications (TDD - should FAIL)
+		// These tests verify that children wait for parent state before starting
+		// =====================================================================
+
+		By("Verifying children wait for parent TryingToStart before transitioning")
+		verifyNoChildTransitionBeforeParentTryingToStart(testLogger)
+
+		By("Verifying state transition ordering (parent before children)")
+		verifyStateTransitionOrdering(testLogger)
+
+		// =====================================================================
+		// NEW: Children Stop When Parent TryingToStop Verifications (TDD)
+		// These tests verify children respond to parent-initiated stop via StateMapping
+		// =====================================================================
+
+		By("Verifying children stop when parent goes to TryingToStop")
+		verifyChildrenStopWhenParentTryingToStop(testLogger)
+
+		By("Verifying parent completes full cycle back to Stopped")
+		verifyParentReachesStopped(testLogger)
+
+		By("Verifying full cyclic pattern completes")
+		verifyFullCycle(testLogger)
 	})
 })
 
@@ -625,4 +681,418 @@ func verifyNoActionFailures(t *integration.TestLogger) {
 		fmt.Sprintf("Found %d action panics", len(panics)))
 
 	GinkgoWriter.Printf("✓ No action execution failures or panics\n")
+}
+
+// =============================================================================
+// Category 5: Cyclic Start/Stop Verifications
+// =============================================================================
+
+// verifyCyclicStateTransitions verifies the expected state transition sequence
+// for the cyclic start/stop pattern.
+func verifyCyclicStateTransitions(t *integration.TestLogger) {
+	stateTransitions := t.GetLogsMatching("state_transition")
+
+	// Build ordered list of parent state transitions
+	// Note: "worker" field contains hierarchy path like "parent-1-001(exampleparent)"
+	var parentTransitions []string
+	for _, entry := range stateTransitions {
+		worker := ""
+		toState := ""
+		for _, field := range entry.Context {
+			if field.Key == "worker" {
+				worker = field.String
+			}
+			if field.Key == "to_state" {
+				toState = field.String
+			}
+		}
+		// Check if this is a parent worker by looking for "exampleparent" in the hierarchy path
+		if strings.Contains(worker, "exampleparent") && toState != "" {
+			parentTransitions = append(parentTransitions, toState)
+		}
+	}
+
+	// Verify expected sequence appears: Stopped → TryingToStart → Running → TryingToStop → Stopped
+	// The sequence may have variations (e.g., starting from Stopped), but these key states should appear
+	expectedStates := []string{"TryingToStart", "Running", "TryingToStop"}
+
+	// Check that sequence appears (may have repeated Stopped at start)
+	Expect(len(parentTransitions)).To(BeNumerically(">=", len(expectedStates)),
+		fmt.Sprintf("Expected at least %d parent transitions, got %d: %v",
+			len(expectedStates), len(parentTransitions), parentTransitions))
+
+	GinkgoWriter.Printf("✓ Parent state transitions: %v\n", parentTransitions)
+}
+
+// verifyTimingBasedTransitions verifies that time-based transitions occurred.
+func verifyTimingBasedTransitions(t *integration.TestLogger) {
+	// Look for transitions from Stopped → TryingToStart (after StoppedWaitDuration)
+	// and Running → TryingToStop (after RunningDuration)
+	stateTransitions := t.GetLogsMatching("state_transition")
+
+	stoppedToTrying := false
+	runningToTrying := false
+
+	for _, entry := range stateTransitions {
+		fromState := ""
+		toState := ""
+		worker := ""
+		for _, field := range entry.Context {
+			if field.Key == "from_state" {
+				fromState = field.String
+			}
+			if field.Key == "to_state" {
+				toState = field.String
+			}
+			if field.Key == "worker" {
+				worker = field.String
+			}
+		}
+
+		// Check if this is a parent worker by looking for "exampleparent" in hierarchy path
+		if !strings.Contains(worker, "exampleparent") {
+			continue
+		}
+
+		if fromState == "Stopped" && toState == "TryingToStart" {
+			stoppedToTrying = true
+		}
+		if fromState == "Running" && toState == "TryingToStop" {
+			runningToTrying = true
+		}
+	}
+
+	Expect(stoppedToTrying).To(BeTrue(),
+		"Expected Stopped → TryingToStart transition (timing-based)")
+	Expect(runningToTrying).To(BeTrue(),
+		"Expected Running → TryingToStop transition (timing-based)")
+
+	GinkgoWriter.Printf("✓ Timing-based transitions occurred\n")
+}
+
+// verifyChildrenHealthTracking verifies parent tracks children health correctly.
+func verifyChildrenHealthTracking(store storage.TriangularStoreInterface) {
+	workers := getWorkersFromStore(store)
+
+	for _, w := range workers {
+		if w.WorkerType != "exampleparent" {
+			continue
+		}
+
+		if w.Observed == nil {
+			continue
+		}
+
+		// Verify children_healthy and children_unhealthy are tracked
+		_, hasHealthy := w.Observed["children_healthy"]
+		_, hasUnhealthy := w.Observed["children_unhealthy"]
+
+		Expect(hasHealthy).To(BeTrue(),
+			fmt.Sprintf("Parent %s missing children_healthy field", w.WorkerID))
+		Expect(hasUnhealthy).To(BeTrue(),
+			fmt.Sprintf("Parent %s missing children_unhealthy field", w.WorkerID))
+	}
+
+	GinkgoWriter.Printf("✓ Parent tracks children health counts\n")
+}
+
+// verifyStateEnteredAtAndElapsed verifies timing fields are populated.
+func verifyStateEnteredAtAndElapsed(store storage.TriangularStoreInterface) {
+	workers := getWorkersFromStore(store)
+
+	for _, w := range workers {
+		if w.WorkerType != "exampleparent" {
+			continue
+		}
+
+		if w.Observed == nil {
+			continue
+		}
+
+		_, hasStateEnteredAt := w.Observed["state_entered_at"]
+		_, hasElapsed := w.Observed["elapsed"]
+
+		Expect(hasStateEnteredAt).To(BeTrue(),
+			fmt.Sprintf("Parent %s missing state_entered_at field", w.WorkerID))
+		Expect(hasElapsed).To(BeTrue(),
+			fmt.Sprintf("Parent %s missing elapsed field", w.WorkerID))
+	}
+
+	GinkgoWriter.Printf("✓ Parent has state_entered_at and elapsed fields\n")
+}
+
+// verifyParentReachesRunning verifies parent reaches Running state.
+func verifyParentReachesRunning(t *integration.TestLogger) {
+	stateTransitions := t.GetLogsMatching("state_transition")
+
+	reachedRunning := false
+	for _, entry := range stateTransitions {
+		toState := ""
+		worker := ""
+		for _, field := range entry.Context {
+			if field.Key == "to_state" {
+				toState = field.String
+			}
+			if field.Key == "worker" {
+				worker = field.String
+			}
+		}
+
+		// Check if this is a parent worker by looking for "exampleparent" in hierarchy path
+		if strings.Contains(worker, "exampleparent") && toState == "Running" {
+			reachedRunning = true
+			break
+		}
+	}
+
+	Expect(reachedRunning).To(BeTrue(),
+		"Expected parent to reach Running state")
+
+	GinkgoWriter.Printf("✓ Parent reached Running state\n")
+}
+
+// =============================================================================
+// Category 6: Parent-Child Coordination Tests (TDD - These Should FAIL Initially)
+// =============================================================================
+
+// verifyNoChildTransitionBeforeParentTryingToStart ensures children don't
+// transition from Stopped until parent reaches TryingToStart.
+// This test catches the bug where children start immediately without waiting
+// for parent to signal them via StateMapping.
+func verifyNoChildTransitionBeforeParentTryingToStart(t *integration.TestLogger) {
+	stateTransitions := t.GetLogsMatching("state_transition")
+
+	parentReachedTryingToStart := false
+	var childTransitionsBeforeParent []string
+
+	for _, entry := range stateTransitions {
+		worker := ""
+		toState := ""
+		fromState := ""
+		for _, field := range entry.Context {
+			if field.Key == "worker" {
+				worker = field.String
+			}
+			if field.Key == "to_state" {
+				toState = field.String
+			}
+			if field.Key == "from_state" {
+				fromState = field.String
+			}
+		}
+
+		// Check if parent reached TryingToStart
+		if strings.Contains(worker, "exampleparent") && toState == "TryingToStart" {
+			parentReachedTryingToStart = true
+		}
+
+		// Check if child transitioned from Stopped BEFORE parent reached TryingToStart
+		// This is the bug: children should stay in Stopped until parent signals them
+		if strings.Contains(worker, "examplechild") &&
+			!parentReachedTryingToStart &&
+			fromState == "Stopped" {
+			childTransitionsBeforeParent = append(childTransitionsBeforeParent,
+				fmt.Sprintf("%s: %s → %s", worker, fromState, toState))
+		}
+	}
+
+	Expect(childTransitionsBeforeParent).To(BeEmpty(),
+		fmt.Sprintf("BUG: Children transitioned before parent TryingToStart: %v", childTransitionsBeforeParent))
+
+	GinkgoWriter.Printf("✓ Children waited for parent TryingToStart\n")
+}
+
+// verifyStateTransitionOrdering verifies the expected parent-child ordering:
+// Parent TryingToStart must come BEFORE any child TryingToConnect.
+// This ensures children don't start connecting until parent is ready.
+func verifyStateTransitionOrdering(t *integration.TestLogger) {
+	stateTransitions := t.GetLogsMatching("state_transition")
+
+	// Build timeline of key events
+	type event struct {
+		index  int
+		worker string
+		state  string
+	}
+
+	var timeline []event
+	for i, entry := range stateTransitions {
+		worker := ""
+		toState := ""
+		for _, field := range entry.Context {
+			if field.Key == "worker" {
+				worker = field.String
+			}
+			if field.Key == "to_state" {
+				toState = field.String
+			}
+		}
+
+		timeline = append(timeline, event{
+			index:  i,
+			worker: worker,
+			state:  toState,
+		})
+	}
+
+	// Find indices of key transitions
+	var parentTryingToStartIdx int = -1
+	var firstChildTryingToConnectIdx int = -1
+
+	for _, e := range timeline {
+		if strings.Contains(e.worker, "exampleparent") && e.state == "TryingToStart" {
+			if parentTryingToStartIdx == -1 {
+				parentTryingToStartIdx = e.index
+			}
+		}
+		if strings.Contains(e.worker, "examplechild") && e.state == "TryingToConnect" {
+			if firstChildTryingToConnectIdx == -1 {
+				firstChildTryingToConnectIdx = e.index
+			}
+		}
+	}
+
+	// Verify ordering: Parent TryingToStart (idx) < Child TryingToConnect (idx)
+	Expect(parentTryingToStartIdx).To(BeNumerically(">=", 0),
+		"Parent never reached TryingToStart state")
+	Expect(firstChildTryingToConnectIdx).To(BeNumerically(">=", 0),
+		"No child reached TryingToConnect state")
+	Expect(parentTryingToStartIdx).To(BeNumerically("<", firstChildTryingToConnectIdx),
+		fmt.Sprintf("BUG: Parent TryingToStart (idx %d) should come BEFORE child TryingToConnect (idx %d)",
+			parentTryingToStartIdx, firstChildTryingToConnectIdx))
+
+	GinkgoWriter.Printf("✓ State transition ordering correct (parent idx %d < child idx %d)\n",
+		parentTryingToStartIdx, firstChildTryingToConnectIdx)
+}
+
+// =============================================================================
+// Category 7: Children Stop When Parent TryingToStop Tests (TDD)
+// =============================================================================
+
+// verifyChildrenStopWhenParentTryingToStop ensures children transition
+// out of Connected when parent goes to TryingToStop.
+func verifyChildrenStopWhenParentTryingToStop(t *integration.TestLogger) {
+	stateTransitions := t.GetLogsMatching("state_transition")
+
+	parentReachedTryingToStop := false
+	childrenStoppedAfterParent := false
+
+	for _, entry := range stateTransitions {
+		worker := ""
+		fromState := ""
+		toState := ""
+		for _, field := range entry.Context {
+			if field.Key == "worker" {
+				worker = field.String
+			}
+			if field.Key == "from_state" {
+				fromState = field.String
+			}
+			if field.Key == "to_state" {
+				toState = field.String
+			}
+		}
+
+		if strings.Contains(worker, "exampleparent") && toState == "TryingToStop" {
+			parentReachedTryingToStop = true
+		}
+
+		// After parent reaches TryingToStop, children should transition FROM Connected
+		if parentReachedTryingToStop &&
+			strings.Contains(worker, "examplechild") &&
+			fromState == "Connected" {
+			childrenStoppedAfterParent = true
+		}
+	}
+
+	Expect(parentReachedTryingToStop).To(BeTrue(),
+		"Parent should reach TryingToStop state")
+	Expect(childrenStoppedAfterParent).To(BeTrue(),
+		"BUG: Children should transition from Connected after parent TryingToStop")
+
+	GinkgoWriter.Printf("✓ Children stop when parent goes to TryingToStop\n")
+}
+
+// verifyParentReachesStopped ensures parent completes the full cycle back to Stopped.
+// IMPORTANT: This verifies the parent cycles BACK to Stopped AFTER reaching Running,
+// not just that it started in Stopped.
+func verifyParentReachesStopped(t *integration.TestLogger) {
+	stateTransitions := t.GetLogsMatching("state_transition")
+
+	// Track if parent reached Running, then Stopped (true cycle completion)
+	sawRunning := false
+	parentCycledBackToStopped := false
+	parentReachedStoppedCount := 0
+
+	for _, entry := range stateTransitions {
+		worker := ""
+		toState := ""
+		for _, field := range entry.Context {
+			if field.Key == "worker" {
+				worker = field.String
+			}
+			if field.Key == "to_state" {
+				toState = field.String
+			}
+		}
+
+		if strings.Contains(worker, "exampleparent") {
+			if toState == "Running" {
+				sawRunning = true
+			}
+			if toState == "Stopped" {
+				parentReachedStoppedCount++
+				if sawRunning {
+					parentCycledBackToStopped = true
+				}
+			}
+		}
+	}
+
+	// Parent MUST cycle back to Stopped AFTER reaching Running
+	// This catches the bug where parent gets stuck in TryingToStop
+	Expect(parentCycledBackToStopped).To(BeTrue(),
+		"BUG: Parent should cycle back to Stopped after reaching Running state")
+
+	GinkgoWriter.Printf("✓ Parent completes cycle back to Stopped (reached %d times)\n", parentReachedStoppedCount)
+}
+
+// verifyFullCycle verifies the complete cyclic pattern.
+func verifyFullCycle(t *integration.TestLogger) {
+	stateTransitions := t.GetLogsMatching("state_transition")
+
+	var parentStates []string
+	for _, entry := range stateTransitions {
+		worker := ""
+		toState := ""
+		for _, field := range entry.Context {
+			if field.Key == "worker" {
+				worker = field.String
+			}
+			if field.Key == "to_state" {
+				toState = field.String
+			}
+		}
+
+		if strings.Contains(worker, "exampleparent") {
+			parentStates = append(parentStates, toState)
+		}
+	}
+
+	// Expected sequence: TryingToStart → Running → TryingToStop → Stopped
+	expectedSequence := []string{"TryingToStart", "Running", "TryingToStop", "Stopped"}
+
+	// Verify sequence appears in order
+	seqIdx := 0
+	for _, state := range parentStates {
+		if seqIdx < len(expectedSequence) && state == expectedSequence[seqIdx] {
+			seqIdx++
+		}
+	}
+
+	Expect(seqIdx).To(Equal(len(expectedSequence)),
+		fmt.Sprintf("Expected full cycle %v, but only matched %d states. Actual: %v",
+			expectedSequence, seqIdx, parentStates))
+
+	GinkgoWriter.Printf("✓ Full cycle completed: %v\n", expectedSequence)
 }

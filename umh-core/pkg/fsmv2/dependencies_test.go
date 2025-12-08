@@ -40,13 +40,13 @@ var _ = Describe("BaseDependencies", func() {
 	Describe("NewBaseDependencies", func() {
 		It("should create a non-nil dependencies", func() {
 			identity := fsmv2.Identity{ID: "test-id", WorkerType: "test-worker"}
-			dependencies := fsmv2.NewBaseDependencies(logger, identity)
+			dependencies := fsmv2.NewBaseDependencies(logger, nil, identity)
 			Expect(dependencies).NotTo(BeNil())
 		})
 
 		It("should return the logger passed to constructor", func() {
 			identity := fsmv2.Identity{ID: "test-id", WorkerType: "test-worker"}
-			dependencies := fsmv2.NewBaseDependencies(logger, identity)
+			dependencies := fsmv2.NewBaseDependencies(logger, nil, identity)
 			// Logger will be enriched with worker context
 			Expect(dependencies.GetLogger()).NotTo(BeNil())
 		})
@@ -54,7 +54,7 @@ var _ = Describe("BaseDependencies", func() {
 		It("should panic when logger is nil", func() {
 			identity := fsmv2.Identity{ID: "test-id", WorkerType: "test-worker"}
 			Expect(func() {
-				fsmv2.NewBaseDependencies(nil, identity)
+				fsmv2.NewBaseDependencies(nil, nil, identity)
 			}).To(Panic())
 		})
 	})
@@ -62,7 +62,7 @@ var _ = Describe("BaseDependencies", func() {
 	Describe("ActionLogger", func() {
 		It("should return a logger enriched with action context", func() {
 			identity := fsmv2.Identity{ID: "test-id", WorkerType: "test-worker"}
-			dependencies := fsmv2.NewBaseDependencies(logger, identity)
+			dependencies := fsmv2.NewBaseDependencies(logger, nil, identity)
 			actionLog := dependencies.ActionLogger("test-action")
 			Expect(actionLog).NotTo(BeNil())
 		})
@@ -71,7 +71,7 @@ var _ = Describe("BaseDependencies", func() {
 	Describe("Dependencies interface compliance", func() {
 		It("should implement Dependencies interface", func() {
 			identity := fsmv2.Identity{ID: "test-id", WorkerType: "test-worker"}
-			dependencies := fsmv2.NewBaseDependencies(logger, identity)
+			dependencies := fsmv2.NewBaseDependencies(logger, nil, identity)
 			var _ fsmv2.Dependencies = dependencies
 		})
 	})

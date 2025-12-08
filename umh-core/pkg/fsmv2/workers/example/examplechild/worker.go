@@ -46,6 +46,7 @@ func NewChildWorker(
 	identity fsmv2.Identity,
 	connectionPool ConnectionPool,
 	logger *zap.SugaredLogger,
+	stateReader fsmv2.StateReader,
 ) (*ChildWorker, error) {
 	if connectionPool == nil {
 		return nil, errors.New("connectionPool must not be nil")
@@ -62,7 +63,7 @@ func NewChildWorker(
 		}
 		identity.WorkerType = workerType
 	}
-	dependencies := NewExamplechildDependencies(connectionPool, logger, identity)
+	dependencies := NewExamplechildDependencies(connectionPool, logger, stateReader, identity)
 
 	conn, err := connectionPool.Acquire()
 	if err != nil {
@@ -84,6 +85,9 @@ func (w *ChildWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedS
 		return nil, ctx.Err()
 	default:
 	}
+
+	// TODO: ensure the timeout and context usage here is properly implemented
+	// above logic is still stupid
 
 	// Get connection health from dependencies (updated by ConnectAction/DisconnectAction)
 	deps := w.GetDependencies()
@@ -138,9 +142,9 @@ func init() {
 	// Register both worker and supervisor factories atomically.
 	// The worker type is derived from ExamplechildObservedState, ensuring consistency.
 	if err := factory.RegisterWorkerType[snapshot.ExamplechildObservedState, *snapshot.ExamplechildDesiredState](
-		func(id fsmv2.Identity, logger *zap.SugaredLogger) fsmv2.Worker {
+		func(id fsmv2.Identity, logger *zap.SugaredLogger, stateReader fsmv2.StateReader) fsmv2.Worker {
 			pool := &DefaultConnectionPool{}
-			worker, _ := NewChildWorker(id, pool, logger)
+			worker, _ := NewChildWorker(id, pool, logger, stateReader)
 			return worker
 		},
 		func(cfg interface{}) interface{} {

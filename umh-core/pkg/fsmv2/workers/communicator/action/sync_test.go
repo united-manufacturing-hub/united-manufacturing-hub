@@ -39,7 +39,7 @@ var _ = Describe("SyncAction", func() {
 		logger = zap.NewNop().Sugar()
 		mockTransport = &mockSyncTransport{}
 		identity := fsmv2.Identity{ID: "test-id", WorkerType: "communicator"}
-		dependencies = communicator.NewCommunicatorDependencies(mockTransport, logger, identity)
+		dependencies = communicator.NewCommunicatorDependencies(mockTransport, logger, nil, identity)
 		// Dependencies now passed to Execute(), not constructor
 		act = action.NewSyncAction("test-jwt-token")
 	})

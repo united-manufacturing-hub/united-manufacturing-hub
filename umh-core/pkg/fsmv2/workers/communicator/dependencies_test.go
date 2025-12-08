@@ -56,19 +56,19 @@ var _ = Describe("CommunicatorDependencies", func() {
 		Context("when creating a new dependencies", func() {
 			It("should return a non-nil dependencies", func() {
 				identity := fsmv2.Identity{ID: "test-id", WorkerType: "communicator"}
-				deps := communicator.NewCommunicatorDependencies(mt, logger, identity)
+				deps := communicator.NewCommunicatorDependencies(mt, logger, nil, identity)
 				Expect(deps).NotTo(BeNil())
 			})
 
 			It("should store the transport", func() {
 				identity := fsmv2.Identity{ID: "test-id", WorkerType: "communicator"}
-				deps := communicator.NewCommunicatorDependencies(mt, logger, identity)
+				deps := communicator.NewCommunicatorDependencies(mt, logger, nil, identity)
 				Expect(deps.GetTransport()).To(Equal(mt))
 			})
 
 			It("should store the logger", func() {
 				identity := fsmv2.Identity{ID: "test-id", WorkerType: "communicator"}
-				deps := communicator.NewCommunicatorDependencies(mt, logger, identity)
+				deps := communicator.NewCommunicatorDependencies(mt, logger, nil, identity)
 				// Logger is enriched with worker context, so it won't equal original
 				Expect(deps.GetLogger()).NotTo(BeNil())
 			})
@@ -78,7 +78,7 @@ var _ = Describe("CommunicatorDependencies", func() {
 	Describe("GetTransport", func() {
 		It("should return the transport passed to the constructor", func() {
 			identity := fsmv2.Identity{ID: "test-id", WorkerType: "communicator"}
-			deps := communicator.NewCommunicatorDependencies(mt, logger, identity)
+			deps := communicator.NewCommunicatorDependencies(mt, logger, nil, identity)
 			Expect(deps.GetTransport()).To(Equal(mt))
 		})
 	})
@@ -86,7 +86,7 @@ var _ = Describe("CommunicatorDependencies", func() {
 	Describe("GetLogger", func() {
 		It("should return the logger inherited from BaseDependencies", func() {
 			identity := fsmv2.Identity{ID: "test-id", WorkerType: "communicator"}
-			deps := communicator.NewCommunicatorDependencies(mt, logger, identity)
+			deps := communicator.NewCommunicatorDependencies(mt, logger, nil, identity)
 			// Logger is enriched with worker context
 			Expect(deps.GetLogger()).NotTo(BeNil())
 		})
@@ -95,7 +95,7 @@ var _ = Describe("CommunicatorDependencies", func() {
 	Describe("Dependencies interface implementation", func() {
 		It("should implement fsmv2.Dependencies interface", func() {
 			identity := fsmv2.Identity{ID: "test-id", WorkerType: "communicator"}
-			deps := communicator.NewCommunicatorDependencies(mt, logger, identity)
+			deps := communicator.NewCommunicatorDependencies(mt, logger, nil, identity)
 			var _ fsmv2.Dependencies = deps
 			Expect(deps).To(Satisfy(func(d interface{}) bool {
 				_, ok := d.(fsmv2.Dependencies)

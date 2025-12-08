@@ -81,6 +81,9 @@ type SupervisorInterface interface {
 	// Format: "workerID(workerType)/childID(childType)/..."
 	// Example: "scenario123(application)/parent-123(parent)/child001(child)"
 	GetHierarchyPath() string
+	// GetCurrentStateName returns the current FSM state name for this supervisor's worker.
+	// Returns "unknown" if no worker or state is set.
+	GetCurrentStateName() string
 }
 
 // WorkerContext encapsulates the runtime state for a single worker

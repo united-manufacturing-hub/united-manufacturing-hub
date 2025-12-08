@@ -143,7 +143,7 @@ func (ts *TriangularStore) saveWithDelta(
 			}
 
 			// Log creation for observability
-			ts.logger.Infow(opts.Role+"_created",
+			ts.logger.Debugw(opts.Role+"_created",
 				"worker", hierarchyPath)
 		} else {
 			var hasChanges bool
@@ -175,7 +175,7 @@ func (ts *TriangularStore) saveWithDelta(
 			}
 
 			// Log changes for observability
-			ts.logger.Infow(opts.Role+"_changed",
+			ts.logger.Debugw(opts.Role+"_changed",
 				"worker", hierarchyPath,
 				"changes", changes)
 		}

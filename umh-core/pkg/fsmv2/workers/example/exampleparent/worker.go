@@ -44,6 +44,7 @@ type ParentWorker struct {
 func NewParentWorker(
 	identity fsmv2.Identity,
 	logger *zap.SugaredLogger,
+	stateReader fsmv2.StateReader,
 ) (*ParentWorker, error) {
 	if logger == nil {
 		return nil, errors.New("logger must not be nil")
@@ -57,7 +58,7 @@ func NewParentWorker(
 		}
 		identity.WorkerType = workerType
 	}
-	dependencies := NewParentDependencies(logger, identity)
+	dependencies := NewParentDependencies(logger, stateReader, identity)
 
 	return &ParentWorker{
 		BaseWorker: helpers.NewBaseWorker(dependencies),
@@ -76,6 +77,18 @@ func (w *ParentWorker) CollectObservedState(ctx context.Context) (fsmv2.Observed
 
 	deps := w.GetDependencies()
 	tracker := deps.GetStateTracker()
+
+	// Load previous observed state to detect state changes
+	stateReader := deps.GetStateReader()
+	if stateReader != nil {
+		var previousObserved snapshot.ExampleparentObservedState
+		err := stateReader.LoadObservedTyped(ctx, w.identity.WorkerType, w.identity.ID, &previousObserved)
+		if err == nil && previousObserved.State != "" {
+			// Record state change - resets timer if state changed
+			tracker.RecordStateChange(previousObserved.State)
+		}
+		// If LoadObservedTyped fails or State is empty, this is the first tick - continue without calling RecordStateChange
+	}
 
 	observed := snapshot.ExampleparentObservedState{
 		ID:             w.identity.ID,
@@ -152,8 +165,8 @@ func init() {
 	// Register both worker and supervisor factories atomically.
 	// The worker type is derived from ExampleparentObservedState, ensuring consistency.
 	if err := factory.RegisterWorkerType[snapshot.ExampleparentObservedState, *snapshot.ExampleparentDesiredState](
-		func(id fsmv2.Identity, logger *zap.SugaredLogger) fsmv2.Worker {
-			worker, _ := NewParentWorker(id, logger)
+		func(id fsmv2.Identity, logger *zap.SugaredLogger, stateReader fsmv2.StateReader) fsmv2.Worker {
+			worker, _ := NewParentWorker(id, logger, stateReader)
 			return worker
 		},
 		func(cfg interface{}) interface{} {

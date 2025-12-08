@@ -64,9 +64,9 @@ type ExamplechildDependencies struct {
 }
 
 // NewExamplechildDependencies creates new dependencies for the child worker.
-func NewExamplechildDependencies(connectionPool ConnectionPool, logger *zap.SugaredLogger, identity fsmv2.Identity) *ExamplechildDependencies {
+func NewExamplechildDependencies(connectionPool ConnectionPool, logger *zap.SugaredLogger, stateReader fsmv2.StateReader, identity fsmv2.Identity) *ExamplechildDependencies {
 	return &ExamplechildDependencies{
-		BaseDependencies: fsmv2.NewBaseDependencies(logger, identity),
+		BaseDependencies: fsmv2.NewBaseDependencies(logger, stateReader, identity),
 		connectionPool:   connectionPool,
 		isConnected:      false,
 	}

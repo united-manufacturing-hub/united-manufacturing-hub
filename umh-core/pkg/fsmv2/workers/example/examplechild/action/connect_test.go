@@ -35,7 +35,7 @@ var _ = Describe("ConnectAction", func() {
 	BeforeEach(func() {
 		ctx = context.Background()
 		identity := fsmv2.Identity{ID: "test-id", WorkerType: "child"}
-		depsAny = example_child.NewExamplechildDependencies(&example_child.DefaultConnectionPool{}, zap.NewNop().Sugar(), identity)
+		depsAny = example_child.NewExamplechildDependencies(&example_child.DefaultConnectionPool{}, zap.NewNop().Sugar(), nil, identity)
 	})
 
 	Describe("Execute", func() {

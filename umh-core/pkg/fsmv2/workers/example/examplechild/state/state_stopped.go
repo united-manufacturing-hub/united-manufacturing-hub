@@ -34,8 +34,10 @@ func (s *StoppedState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, f
 		return s, fsmv2.SignalNeedsRemoval, nil
 	}
 
-	// Only transition to connecting if desired state wants us running
-	if snap.Desired.ShouldBeRunning() {
+	// Only transition to connecting if desired state wants us running.
+	// Check via Observed since ParentMappedState is injected by collector into the
+	// embedded DesiredState within ObservedState.
+	if snap.Observed.ShouldBeRunning() {
 		return &TryingToConnectState{}, fsmv2.SignalNone, nil
 	}
 

@@ -204,6 +204,7 @@ func NewCommunicatorWorker(
 	name string,
 	transportParam transport.Transport,
 	logger *zap.SugaredLogger,
+	stateReader fsmv2.StateReader,
 ) (*CommunicatorWorker, error) {
 	workerType, err := storage.DeriveWorkerType[snapshot.CommunicatorObservedState]()
 	if err != nil {
@@ -219,7 +220,7 @@ func NewCommunicatorWorker(
 		// workers via factory. For directly constructed workers, fallback logging is used.
 	}
 
-	dependencies := NewCommunicatorDependencies(transportParam, logger, identity)
+	dependencies := NewCommunicatorDependencies(transportParam, logger, stateReader, identity)
 
 	return &CommunicatorWorker{
 		BaseWorker: helpers.NewBaseWorker(dependencies),

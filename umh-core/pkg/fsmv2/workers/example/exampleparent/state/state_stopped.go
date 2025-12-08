@@ -15,13 +15,20 @@
 package state
 
 import (
+	"time"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent/snapshot"
 )
 
+// StoppedWaitDuration is how long to wait in stopped state before transitioning to TryingToStart.
+// This is a var (not const) to allow tests to override it for fast execution.
+var StoppedWaitDuration = 5 * time.Second
+
 // StoppedState represents the initial state before any children are spawned.
+// It waits for StoppedWaitDuration before transitioning to TryingToStart.
 type StoppedState struct {
 	BaseParentState
 }
@@ -34,9 +41,13 @@ func (s *StoppedState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, f
 		return s, fsmv2.SignalNeedsRemoval, nil
 	}
 
-	// Only transition to starting if desired state wants us running
+	// Wait StoppedWaitDuration in stopped state before transitioning to starting.
+	// Elapsed is pre-computed in CollectObservedState using Clock (mockable in tests).
 	if snap.Desired.ShouldBeRunning() {
-		return &TryingToStartState{}, fsmv2.SignalNone, nil
+		if snap.Observed.Elapsed >= StoppedWaitDuration {
+			return &TryingToStartState{}, fsmv2.SignalNone, nil
+		}
+		// Still waiting - remain in stopped state
 	}
 
 	return s, fsmv2.SignalNone, nil

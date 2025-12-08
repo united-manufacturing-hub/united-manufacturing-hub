@@ -16,17 +16,26 @@ package exampleparent
 
 import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent/dependency"
 	"go.uber.org/zap"
 )
 
 // ParentDependencies provides access to tools needed by parent worker actions.
+// Dependencies should only contain tools (interfaces), not state primitives.
 type ParentDependencies struct {
 	*fsmv2.BaseDependencies
+	stateTracker dependency.StateTracker
 }
 
 // NewParentDependencies creates new dependencies for the parent worker.
-func NewParentDependencies(logger *zap.SugaredLogger, identity fsmv2.Identity) *ParentDependencies {
+func NewParentDependencies(logger *zap.SugaredLogger, stateReader fsmv2.StateReader, identity fsmv2.Identity) *ParentDependencies {
 	return &ParentDependencies{
-		BaseDependencies: fsmv2.NewBaseDependencies(logger, identity),
+		BaseDependencies: fsmv2.NewBaseDependencies(logger, stateReader, identity),
+		stateTracker:     dependency.NewDefaultStateTracker(nil), // Uses real clock
 	}
+}
+
+// GetStateTracker returns the state tracker tool for tracking state transitions.
+func (d *ParentDependencies) GetStateTracker() dependency.StateTracker {
+	return d.stateTracker
 }

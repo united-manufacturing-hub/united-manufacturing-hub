@@ -15,13 +15,20 @@
 package state
 
 import (
+	"time"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent/snapshot"
 )
 
+// RunningDuration is how long to stay in running state before initiating the stop cycle.
+// This is a var (not const) to allow tests to override it for fast execution.
+var RunningDuration = 10 * time.Second
+
 // RunningState represents normal operational state with all children healthy.
+// It stays in this state for RunningDuration before automatically transitioning to TryingToStop.
 type RunningState struct {
 	BaseParentState
 }
@@ -34,8 +41,15 @@ func (s *RunningState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, f
 		return &TryingToStopState{}, fsmv2.SignalNone, nil
 	}
 
+	// Transition to degraded if any child becomes unhealthy
 	if snap.Observed.ChildrenUnhealthy > 0 {
 		return &DegradedState{}, fsmv2.SignalNone, nil
+	}
+
+	// After RunningDuration in running state, initiate stop cycle.
+	// Elapsed is pre-computed in CollectObservedState using Clock (mockable in tests).
+	if snap.Observed.Elapsed >= RunningDuration {
+		return &TryingToStopState{}, fsmv2.SignalNone, nil
 	}
 
 	return s, fsmv2.SignalNone, nil

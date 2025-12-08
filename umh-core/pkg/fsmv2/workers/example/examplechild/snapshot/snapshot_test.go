@@ -63,3 +63,58 @@ func TestExamplechildDesiredState_ShutdownRequested(t *testing.T) {
 		})
 	}
 }
+
+func TestExamplechildObservedState_IsStopRequired(t *testing.T) {
+	tests := []struct {
+		name              string
+		shutdownRequested bool
+		parentMappedState string
+		want              bool
+	}{
+		{
+			name:              "returns true when shutdown requested",
+			shutdownRequested: true,
+			parentMappedState: "running",
+			want:              true,
+		},
+		{
+			name:              "returns true when parent mapped state is stopped",
+			shutdownRequested: false,
+			parentMappedState: "stopped",
+			want:              true,
+		},
+		{
+			name:              "returns true when parent mapped state is empty",
+			shutdownRequested: false,
+			parentMappedState: "",
+			want:              true,
+		},
+		{
+			name:              "returns false when running and not shutdown requested",
+			shutdownRequested: false,
+			parentMappedState: "running",
+			want:              false,
+		},
+		{
+			name:              "returns true when both shutdown requested and parent stopped",
+			shutdownRequested: true,
+			parentMappedState: "stopped",
+			want:              true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			obs := ExamplechildObservedState{
+				ExamplechildDesiredState: ExamplechildDesiredState{
+					ParentMappedState: tt.parentMappedState,
+				},
+			}
+			obs.ExamplechildDesiredState.SetShutdownRequested(tt.shutdownRequested)
+
+			if got := obs.IsStopRequired(); got != tt.want {
+				t.Errorf("IsStopRequired() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

@@ -23,6 +23,8 @@ import (
 )
 
 // TryingToStartState represents the state while loading config and spawning children.
+// It uses StateMapping to set children desired state to "running" and waits for all
+// children to become healthy before transitioning to RunningState.
 type TryingToStartState struct {
 	BaseParentState
 }
@@ -35,19 +37,27 @@ func (s *TryingToStartState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Sig
 		return &TryingToStopState{}, fsmv2.SignalNone, nil
 	}
 
-	// Parent worker is "started" when it has a valid observed state with an ID
-	// The StartAction just logs that it's starting, so we can transition immediately
-	// to Running state where we monitor children health
-	if snap.Observed.ID != "" {
+	// First, ensure we have a valid ID (StartAction sets this up)
+	if snap.Observed.ID == "" {
+		return s, fsmv2.SignalNone, &action.StartAction{}
+	}
+
+	// Wait for ALL children to be running (healthy > 0, unhealthy == 0).
+	// StateMapping ensures children have desired state = "running".
+	// We only transition when all expected children are healthy.
+	if snap.Observed.ChildrenHealthy > 0 && snap.Observed.ChildrenUnhealthy == 0 {
 		return &RunningState{}, fsmv2.SignalNone, nil
 	}
 
-	return s, fsmv2.SignalNone, &action.StartAction{}
+	// Children not ready yet - stay in this state
+	return s, fsmv2.SignalNone, nil
 }
 
 func (s *TryingToStartState) String() string {
 	return helpers.DeriveStateName(s)
 }
+
+// TODO: reason should include the snap.Observed.ChildrenHealthy > 0 && snap.Observed.ChildrenUnhealthy == 0
 
 func (s *TryingToStartState) Reason() string {
 	return "Loading configuration and spawning children"

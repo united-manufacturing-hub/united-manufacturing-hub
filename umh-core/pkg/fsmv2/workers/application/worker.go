@@ -269,7 +269,7 @@ func init() {
 	// Register both worker and supervisor factories atomically.
 	// The worker type is derived from ApplicationObservedState, ensuring consistency.
 	if err := factory.RegisterWorkerType[snapshot.ApplicationObservedState, *snapshot.ApplicationDesiredState](
-		func(id fsmv2.Identity, _ *zap.SugaredLogger) fsmv2.Worker {
+		func(id fsmv2.Identity, _ *zap.SugaredLogger, _ fsmv2.StateReader) fsmv2.Worker {
 			return NewApplicationWorker(id.ID, id.Name)
 		},
 		func(cfg interface{}) interface{} {

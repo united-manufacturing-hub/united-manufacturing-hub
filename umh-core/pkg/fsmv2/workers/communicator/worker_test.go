@@ -50,6 +50,7 @@ var _ = Describe("CommunicatorWorker", func() {
 			"Test Communicator",
 			mockTransport,
 			logger,
+			nil,
 		)
 		Expect(err).ToNot(HaveOccurred())
 	})

@@ -43,7 +43,7 @@ var _ = Describe("ParentWorker", func() {
 		logger = zap.NewNop().Sugar()
 		identity := fsmv2.Identity{ID: "test-parent", Name: "Test Parent"}
 		var err error
-		worker, err = exampleparent.NewParentWorker(identity, logger)
+		worker, err = exampleparent.NewParentWorker(identity, logger, nil)
 		Expect(err).ToNot(HaveOccurred())
 	})
 

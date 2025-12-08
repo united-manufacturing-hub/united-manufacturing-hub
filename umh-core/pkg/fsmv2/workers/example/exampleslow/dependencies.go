@@ -46,9 +46,9 @@ type ExampleslowDependencies struct {
 	connectionPool ConnectionPool
 }
 
-func NewExampleslowDependencies(connectionPool ConnectionPool, logger *zap.SugaredLogger, identity fsmv2.Identity) *ExampleslowDependencies {
+func NewExampleslowDependencies(connectionPool ConnectionPool, logger *zap.SugaredLogger, stateReader fsmv2.StateReader, identity fsmv2.Identity) *ExampleslowDependencies {
 	return &ExampleslowDependencies{
-		BaseDependencies: fsmv2.NewBaseDependencies(logger, identity),
+		BaseDependencies: fsmv2.NewBaseDependencies(logger, stateReader, identity),
 		connectionPool:   connectionPool,
 	}
 }

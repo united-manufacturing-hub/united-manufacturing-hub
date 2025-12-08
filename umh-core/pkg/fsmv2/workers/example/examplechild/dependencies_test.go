@@ -88,7 +88,7 @@ func TestNewExamplechildDependencies(t *testing.T) {
 	mockPool := NewMockConnectionPool()
 	identity := fsmv2.Identity{ID: "test-id", WorkerType: "child"}
 
-	deps := NewExamplechildDependencies(mockPool, logger, identity)
+	deps := NewExamplechildDependencies(mockPool, logger, nil, identity)
 
 	if deps == nil {
 		t.Fatal("NewExamplechildDependencies returned nil")
@@ -112,7 +112,7 @@ func TestExamplechildDependencies_GetConnectionPool(t *testing.T) {
 	mockPool := NewMockConnectionPool()
 	identity := fsmv2.Identity{ID: "test-id", WorkerType: "child"}
 
-	deps := NewExamplechildDependencies(mockPool, logger, identity)
+	deps := NewExamplechildDependencies(mockPool, logger, nil, identity)
 
 	pool := deps.GetConnectionPool()
 	if mockPoolTyped, ok := pool.(*MockConnectionPool); !ok || mockPoolTyped != mockPool {

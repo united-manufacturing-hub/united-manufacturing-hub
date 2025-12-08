@@ -44,6 +44,7 @@ func NewExampleslowWorker(
 	identity fsmv2.Identity,
 	connectionPool ConnectionPool,
 	logger *zap.SugaredLogger,
+	stateReader fsmv2.StateReader,
 ) (*ExampleslowWorker, error) {
 	if connectionPool == nil {
 		return nil, errors.New("connectionPool must not be nil")
@@ -60,7 +61,7 @@ func NewExampleslowWorker(
 		}
 		identity.WorkerType = workerType
 	}
-	dependencies := NewExampleslowDependencies(connectionPool, logger, identity)
+	dependencies := NewExampleslowDependencies(connectionPool, logger, stateReader, identity)
 
 	conn, err := connectionPool.Acquire()
 	if err != nil {
@@ -134,9 +135,9 @@ func init() {
 	// The worker type is derived from ExampleslowObservedState, ensuring consistency.
 	// NOTE: This fixes a previous key mismatch where supervisor was "exampleslow" but worker was "slow".
 	if err := factory.RegisterWorkerType[snapshot.ExampleslowObservedState, *snapshot.ExampleslowDesiredState](
-		func(id fsmv2.Identity, logger *zap.SugaredLogger) fsmv2.Worker {
+		func(id fsmv2.Identity, logger *zap.SugaredLogger, stateReader fsmv2.StateReader) fsmv2.Worker {
 			pool := &DefaultConnectionPool{}
-			worker, _ := NewExampleslowWorker(id, pool, logger)
+			worker, _ := NewExampleslowWorker(id, pool, logger, stateReader)
 			return worker
 		},
 		func(cfg interface{}) interface{} {

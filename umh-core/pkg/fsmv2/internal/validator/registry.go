@@ -106,6 +106,26 @@ worker starts an operation right before shutdown is requested.`,
 }`,
 		ReferenceFile: "example-child/state/state_connected.go:30",
 	},
+	"CHILD_MUST_USE_IS_STOP_REQUIRED": {
+		Name: "Child Workers Must Use IsStopRequired()",
+		Why: `Child workers must check IsStopRequired() instead of just IsShutdownRequested().
+WHY: Child workers have TWO shutdown signals:
+1. IsShutdownRequested() - explicit shutdown request
+2. !ShouldBeRunning() - parent stopped via StateMapping
+
+Using only IsShutdownRequested() misses parent lifecycle changes, causing
+children to stay running when parent goes to TryingToStop.
+
+IsStopRequired() = IsShutdownRequested() || !ShouldBeRunning()`,
+		CorrectCode: `func (s *ChildState) Next(snapAny any) (...) {
+    snap := helpers.ConvertSnapshot[...](snapAny)
+    if snap.Observed.IsStopRequired() {  // NOT snap.Desired.IsShutdownRequested()
+        return &TryingToStopState{}, SignalNone, nil
+    }
+    // Then other logic...
+}`,
+		ReferenceFile: "example-child/state/state_connected.go:33",
+	},
 	"STATE_AND_ACTION": {
 		Name: "State Change XOR Action",
 		Why: `Next() must return EITHER a new state OR an action, never both simultaneously.
@@ -130,7 +150,7 @@ WHY: The supervisor uses this timestamp to detect stale data. If a collector
 crashes or hangs, stale timestamps trigger recovery mechanisms. Without
 timestamps, the supervisor cannot distinguish between "recently collected"
 and "collector is dead, data is hours old". This is critical for self-healing.`,
-		CorrectCode: "type MyObservedState struct {\n    ID          string    `json:\"id\"`\n    CollectedAt time.Time `json:\"collected_at\"`  // REQUIRED\n    // ... other fields\n}",
+		CorrectCode:   "type MyObservedState struct {\n    ID          string    `json:\"id\"`\n    CollectedAt time.Time `json:\"collected_at\"`  // REQUIRED\n    // ... other fields\n}",
 		ReferenceFile: "example-child/snapshot/snapshot.go:61",
 	},
 	"MISSING_IS_SHUTDOWN_REQUESTED": {

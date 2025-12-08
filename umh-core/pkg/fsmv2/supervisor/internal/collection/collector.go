@@ -60,6 +60,8 @@ type CollectorConfig[TObserved any] struct {
 	EnableTraceLogging  bool         // Whether to emit verbose per-collection logs
 	StateProvider       func() string // Returns current FSM state name (injected by supervisor)
 	ShutdownRequestedProvider func() bool // Returns current shutdown requested status (injected by supervisor)
+	ChildrenCountsProvider func() (healthy int, unhealthy int) // Returns children health counts (injected by supervisor for parent workers)
+	MappedParentStateProvider func() string // Returns mapped state from parent's StateMapping (injected by supervisor for child workers)
 }
 
 // Collector manages the observation loop lifecycle and data collection.
@@ -302,6 +304,28 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 		shutdownRequested := c.config.ShutdownRequestedProvider()
 		if setter, ok := observed.(interface{ SetShutdownRequested(bool) fsmv2.ObservedState }); ok {
 			observed = setter.SetShutdownRequested(shutdownRequested)
+		}
+	}
+
+	// Inject children counts into observed state.
+	// The ChildrenCountsProvider callback is injected by the supervisor and returns the
+	// count of healthy and unhealthy children. This is used by parent workers to track
+	// their children's health status for state transitions.
+	if c.config.ChildrenCountsProvider != nil {
+		healthy, unhealthy := c.config.ChildrenCountsProvider()
+		if setter, ok := observed.(interface{ SetChildrenCounts(int, int) fsmv2.ObservedState }); ok {
+			observed = setter.SetChildrenCounts(healthy, unhealthy)
+		}
+	}
+
+	// Inject mapped parent state into observed state.
+	// The MappedParentStateProvider callback is injected by the supervisor and returns the
+	// state mapping from parent (e.g., "running" or "stopped"). This is used by child workers
+	// to know when parent wants them to start/stop via StateMapping.
+	if c.config.MappedParentStateProvider != nil {
+		mappedState := c.config.MappedParentStateProvider()
+		if setter, ok := observed.(interface{ SetParentMappedState(string) fsmv2.ObservedState }); ok {
+			observed = setter.SetParentMappedState(mappedState)
 		}
 	}
 

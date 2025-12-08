@@ -46,9 +46,9 @@ type ExamplepanicDependencies struct {
 	connectionPool ConnectionPool
 }
 
-func NewExamplepanicDependencies(connectionPool ConnectionPool, logger *zap.SugaredLogger, identity fsmv2.Identity) *ExamplepanicDependencies {
+func NewExamplepanicDependencies(connectionPool ConnectionPool, logger *zap.SugaredLogger, stateReader fsmv2.StateReader, identity fsmv2.Identity) *ExamplepanicDependencies {
 	return &ExamplepanicDependencies{
-		BaseDependencies: fsmv2.NewBaseDependencies(logger, identity),
+		BaseDependencies: fsmv2.NewBaseDependencies(logger, stateReader, identity),
 		connectionPool:   connectionPool,
 	}
 }

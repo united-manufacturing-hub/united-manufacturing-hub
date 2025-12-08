@@ -23,6 +23,8 @@ import (
 )
 
 // TryingToStopState represents the state during graceful shutdown.
+// It uses StateMapping to set children desired state to "stopped" and waits for all
+// children to stop before transitioning to StoppedState.
 type TryingToStopState struct {
 	BaseParentState
 }
@@ -31,13 +33,20 @@ func (s *TryingToStopState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Sign
 	snap := helpers.ConvertSnapshot[snapshot.ExampleparentObservedState, *snapshot.ExampleparentDesiredState](snapAny)
 	snap.Observed.State = config.MakeState(config.PrefixTryingToStop, "children")
 
-	// Parent worker is considered "stopped" when we have valid observed state
-	// After StopAction executes, we can transition to Stopped
-	if snap.Observed.ID != "" {
+	// First, ensure we have a valid ID (StopAction may need to run)
+	if snap.Observed.ID == "" {
+		return s, fsmv2.SignalNone, &action.StopAction{}
+	}
+
+	// Wait for all children to be stopped (healthy == 0, unhealthy == 0).
+	// StateMapping ensures children have desired state = "stopped".
+	// We only transition when all children have stopped.
+	if snap.Observed.ChildrenHealthy == 0 && snap.Observed.ChildrenUnhealthy == 0 {
 		return &StoppedState{}, fsmv2.SignalNone, nil
 	}
 
-	return s, fsmv2.SignalNone, &action.StopAction{}
+	// Children not stopped yet - stay in this state
+	return s, fsmv2.SignalNone, nil
 }
 
 func (s *TryingToStopState) String() string {

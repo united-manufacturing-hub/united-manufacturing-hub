@@ -44,13 +44,30 @@ type ExamplechildSnapshot struct {
 // See fsmv2.DesiredState documentation for the architectural invariant.
 type ExamplechildDesiredState struct {
 	config.BaseDesiredState // Provides ShutdownRequested + IsShutdownRequested() + SetShutdownRequested()
+
+	// ParentMappedState is the desired state from parent's StateMapping.
+	// When parent is in TryingToStart/Running → "running"
+	// When parent is in TryingToStop/Stopped → "stopped"
+	// This field is injected by the supervisor via MappedParentStateProvider callback.
+	ParentMappedState string `json:"parent_mapped_state"`
 }
 
 // ShouldBeRunning returns true if the child should be in a running/connected state.
 // This is the positive assertion that should be checked before transitioning
 // from stopped to starting states.
+//
+// Children only run when:
+// 1. ShutdownRequested is false (not being shut down)
+// 2. ParentMappedState is "running" (parent wants children to run)
+//
+// This ensures children wait for parent to reach TryingToStart before connecting.
 func (s *ExamplechildDesiredState) ShouldBeRunning() bool {
-	return !s.ShutdownRequested
+	if s.ShutdownRequested {
+		return false
+	}
+	// Only run if parent explicitly wants us running via StateMapping
+	// Default to not running if ParentMappedState is empty or "stopped"
+	return s.ParentMappedState == "running"
 }
 
 // ExamplechildObservedState represents the current state of the child worker.
@@ -86,4 +103,21 @@ func (o ExamplechildObservedState) SetState(s string) fsmv2.ObservedState {
 func (o ExamplechildObservedState) SetShutdownRequested(v bool) fsmv2.ObservedState {
 	o.ExamplechildDesiredState.ShutdownRequested = v
 	return o
+}
+
+// SetParentMappedState sets the parent's mapped state on this observed state.
+// Called by Collector when MappedParentStateProvider callback is configured.
+// This enables children to check if parent wants them running via StateMapping.
+func (o ExamplechildObservedState) SetParentMappedState(state string) fsmv2.ObservedState {
+	o.ExamplechildDesiredState.ParentMappedState = state
+	return o
+}
+
+// IsStopRequired reports whether the child needs to stop.
+// This is a QUERY on injected data, not a signal emission.
+// It combines:
+//   - IsShutdownRequested() - explicit system shutdown
+//   - !ShouldBeRunning() - parent no longer wants child running
+func (o ExamplechildObservedState) IsStopRequired() bool {
+	return o.IsShutdownRequested() || !o.ShouldBeRunning()
 }

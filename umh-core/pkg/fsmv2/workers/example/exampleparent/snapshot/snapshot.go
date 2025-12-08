@@ -43,8 +43,10 @@ func (s *ExampleparentDesiredState) ShouldBeRunning() bool {
 
 // ExampleparentObservedState represents the current state of the parent worker.
 type ExampleparentObservedState struct {
-	ID          string    `json:"id"`
-	CollectedAt time.Time `json:"collected_at"`
+	ID             string        `json:"id"`
+	CollectedAt    time.Time     `json:"collected_at"`
+	StateEnteredAt time.Time     `json:"state_entered_at"` // When current state was entered (from StateTracker)
+	Elapsed        time.Duration `json:"elapsed"`          // Time since state was entered (pre-computed, mockable via Clock)
 
 	ExampleparentDesiredState `json:",inline"`
 
@@ -72,5 +74,13 @@ func (o ExampleparentObservedState) SetState(s string) fsmv2.ObservedState {
 // Called by Collector when ShutdownRequestedProvider callback is configured.
 func (o ExampleparentObservedState) SetShutdownRequested(v bool) fsmv2.ObservedState {
 	o.ExampleparentDesiredState.ShutdownRequested = v
+	return o
+}
+
+// SetChildrenCounts sets the children health counts on this observed state.
+// Called by Collector when ChildrenCountsProvider callback is configured.
+func (o ExampleparentObservedState) SetChildrenCounts(healthy, unhealthy int) fsmv2.ObservedState {
+	o.ChildrenHealthy = healthy
+	o.ChildrenUnhealthy = unhealthy
 	return o
 }

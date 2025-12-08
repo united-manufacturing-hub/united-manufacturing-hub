@@ -29,8 +29,8 @@ import (
 
 var (
 	// registry maps worker type names to factory functions.
-	// Factory functions receive Identity and Logger to create properly-configured workers.
-	registry = make(map[string]func(fsmv2.Identity, *zap.SugaredLogger) fsmv2.Worker)
+	// Factory functions receive Identity, Logger, and StateReader to create properly-configured workers.
+	registry = make(map[string]func(fsmv2.Identity, *zap.SugaredLogger, fsmv2.StateReader) fsmv2.Worker)
 	// registryMu protects concurrent access to the registry.
 	registryMu sync.RWMutex
 
@@ -60,10 +60,10 @@ var (
 //
 // Example usage (supervisor internals):
 //
-//	err := factory.RegisterFactoryByType("mqtt_client", func(id fsmv2.Identity, logger *zap.SugaredLogger) fsmv2.Worker {
-//	    return NewMQTTWorker(id, logger)
+//	err := factory.RegisterFactoryByType("mqtt_client", func(id fsmv2.Identity, logger *zap.SugaredLogger, stateReader fsmv2.StateReader) fsmv2.Worker {
+//	    return NewMQTTWorker(id, logger, stateReader)
 //	})
-func RegisterFactoryByType(workerType string, factoryFunc func(fsmv2.Identity, *zap.SugaredLogger) fsmv2.Worker) error {
+func RegisterFactoryByType(workerType string, factoryFunc func(fsmv2.Identity, *zap.SugaredLogger, fsmv2.StateReader) fsmv2.Worker) error {
 	if workerType == "" {
 		return errors.New("worker type cannot be empty")
 	}
@@ -99,15 +99,15 @@ func RegisterFactoryByType(workerType string, factoryFunc func(fsmv2.Identity, *
 //
 //	func init() {
 //	    err := factory.RegisterFactory[ContainerObservedState, ContainerDesiredState](
-//	        func(id fsmv2.Identity, logger *zap.SugaredLogger) fsmv2.Worker {
-//	            return NewContainerWorker(id, logger)
+//	        func(id fsmv2.Identity, logger *zap.SugaredLogger, stateReader fsmv2.StateReader) fsmv2.Worker {
+//	            return NewContainerWorker(id, logger, stateReader)
 //	        })
 //	    if err != nil {
 //	        panic(err)
 //	    }
 //	}
 func RegisterFactory[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState](
-	factoryFunc func(fsmv2.Identity, *zap.SugaredLogger) fsmv2.Worker,
+	factoryFunc func(fsmv2.Identity, *zap.SugaredLogger, fsmv2.StateReader) fsmv2.Worker,
 ) error {
 	workerType, err := storage.DeriveWorkerType[TObserved]()
 	if err != nil {
@@ -212,11 +212,11 @@ func RegisterSupervisorFactoryByType(workerType string, factoryFunc func(interfa
 //
 // Example usage in supervisor (processing ChildSpec):
 //
-//	worker, err := factory.NewWorkerByType(spec.WorkerType, identity, s.logger)
+//	worker, err := factory.NewWorkerByType(spec.WorkerType, identity, s.logger, s.stateReader)
 //	if err != nil {
 //	    return fmt.Errorf("failed to create child worker: %w", err)
 //	}
-func NewWorkerByType(workerType string, identity fsmv2.Identity, logger *zap.SugaredLogger) (fsmv2.Worker, error) {
+func NewWorkerByType(workerType string, identity fsmv2.Identity, logger *zap.SugaredLogger, stateReader fsmv2.StateReader) (fsmv2.Worker, error) {
 	if workerType == "" {
 		return nil, errors.New("worker type cannot be empty")
 	}
@@ -231,7 +231,7 @@ func NewWorkerByType(workerType string, identity fsmv2.Identity, logger *zap.Sug
 		return nil, errors.New("unknown worker type: " + workerType)
 	}
 
-	return factoryFunc(identity, logger), nil
+	return factoryFunc(identity, logger, stateReader), nil
 }
 
 // NewSupervisorByType creates a supervisor for the given worker type.
@@ -291,7 +291,7 @@ func NewSupervisorByType(workerType string, config interface{}) (interface{}, er
 func ResetRegistry() {
 	registryMu.Lock()
 
-	registry = make(map[string]func(fsmv2.Identity, *zap.SugaredLogger) fsmv2.Worker)
+	registry = make(map[string]func(fsmv2.Identity, *zap.SugaredLogger, fsmv2.StateReader) fsmv2.Worker)
 
 	registryMu.Unlock()
 
@@ -352,8 +352,8 @@ func ListRegisteredTypes() []string {
 //	if !ok {
 //	    return fmt.Errorf("container worker type not registered")
 //	}
-//	worker := factory(identity, logger)
-func GetFactory[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState]() (func(fsmv2.Identity, *zap.SugaredLogger) fsmv2.Worker, bool, error) {
+//	worker := factory(identity, logger, stateReader)
+func GetFactory[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState]() (func(fsmv2.Identity, *zap.SugaredLogger, fsmv2.StateReader) fsmv2.Worker, bool, error) {
 	workerType, err := storage.DeriveWorkerType[TObserved]()
 	if err != nil {
 		return nil, false, fmt.Errorf("failed to derive worker type: %w", err)
@@ -383,8 +383,8 @@ func GetFactory[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState]() (f
 //
 //	err := factory.RegisterWorkerAndSupervisorFactoryByType(
 //	    "mqtt_client",
-//	    func(id fsmv2.Identity, logger *zap.SugaredLogger) fsmv2.Worker {
-//	        return NewMQTTWorker(id, logger)
+//	    func(id fsmv2.Identity, logger *zap.SugaredLogger, stateReader fsmv2.StateReader) fsmv2.Worker {
+//	        return NewMQTTWorker(id, logger, stateReader)
 //	    },
 //	    func(cfg interface{}) interface{} {
 //	        supervisorCfg := cfg.(supervisor.Config)
@@ -393,7 +393,7 @@ func GetFactory[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState]() (f
 //	)
 func RegisterWorkerAndSupervisorFactoryByType(
 	workerType string,
-	workerFactory func(fsmv2.Identity, *zap.SugaredLogger) fsmv2.Worker,
+	workerFactory func(fsmv2.Identity, *zap.SugaredLogger, fsmv2.StateReader) fsmv2.Worker,
 	supervisorFactory func(interface{}) interface{},
 ) error {
 	if workerType == "" {
@@ -435,8 +435,8 @@ func RegisterWorkerAndSupervisorFactoryByType(
 //
 //	func init() {
 //	    err := factory.RegisterWorkerType[snapshot.MyObservedState, *snapshot.MyDesiredState](
-//	        func(id fsmv2.Identity, logger *zap.SugaredLogger) fsmv2.Worker {
-//	            worker, _ := NewMyWorker(id, logger)
+//	        func(id fsmv2.Identity, logger *zap.SugaredLogger, stateReader fsmv2.StateReader) fsmv2.Worker {
+//	            worker, _ := NewMyWorker(id, logger, stateReader)
 //	            return worker
 //	        },
 //	        func(cfg interface{}) interface{} {
@@ -449,7 +449,7 @@ func RegisterWorkerAndSupervisorFactoryByType(
 //	    }
 //	}
 func RegisterWorkerType[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState](
-	workerFactory func(fsmv2.Identity, *zap.SugaredLogger) fsmv2.Worker,
+	workerFactory func(fsmv2.Identity, *zap.SugaredLogger, fsmv2.StateReader) fsmv2.Worker,
 	supervisorFactory func(interface{}) interface{},
 ) error {
 	workerType, err := storage.DeriveWorkerType[TObserved]()

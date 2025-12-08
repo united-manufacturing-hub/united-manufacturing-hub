@@ -29,7 +29,7 @@ func TestNewChildWorker(t *testing.T) {
 	mockPool := NewMockConnectionPool()
 	identity := fsmv2.Identity{ID: "test-id", Name: "test-child"}
 
-	worker, err := NewChildWorker(identity, mockPool, logger)
+	worker, err := NewChildWorker(identity, mockPool, logger, nil)
 	if err != nil {
 		t.Fatalf("NewChildWorker() error = %v", err)
 	}
@@ -48,7 +48,7 @@ func TestChildWorker_CollectObservedState(t *testing.T) {
 	mockPool := NewMockConnectionPool()
 	identity := fsmv2.Identity{ID: "test-id", Name: "test-child"}
 
-	worker, err := NewChildWorker(identity, mockPool, logger)
+	worker, err := NewChildWorker(identity, mockPool, logger, nil)
 	if err != nil {
 		t.Fatalf("NewChildWorker() error = %v", err)
 	}
@@ -68,7 +68,7 @@ func TestChildWorker_DeriveDesiredState(t *testing.T) {
 	mockPool := NewMockConnectionPool()
 	identity := fsmv2.Identity{ID: "test-id", Name: "test-child"}
 
-	worker, err := NewChildWorker(identity, mockPool, logger)
+	worker, err := NewChildWorker(identity, mockPool, logger, nil)
 	if err != nil {
 		t.Fatalf("NewChildWorker() error = %v", err)
 	}

@@ -44,6 +44,7 @@ func NewExamplepanicWorker(
 	identity fsmv2.Identity,
 	connectionPool ConnectionPool,
 	logger *zap.SugaredLogger,
+	stateReader fsmv2.StateReader,
 ) (*ExamplepanicWorker, error) {
 	if connectionPool == nil {
 		return nil, errors.New("connectionPool must not be nil")
@@ -60,7 +61,7 @@ func NewExamplepanicWorker(
 		}
 		identity.WorkerType = workerType
 	}
-	dependencies := NewExamplepanicDependencies(connectionPool, logger, identity)
+	dependencies := NewExamplepanicDependencies(connectionPool, logger, stateReader, identity)
 
 	conn, err := connectionPool.Acquire()
 	if err != nil {
@@ -134,9 +135,9 @@ func init() {
 	// The worker type is derived from ExamplepanicObservedState, ensuring consistency.
 	// NOTE: This fixes a previous key mismatch where supervisor was "examplepanic" but worker was "panic".
 	if err := factory.RegisterWorkerType[snapshot.ExamplepanicObservedState, *snapshot.ExamplepanicDesiredState](
-		func(id fsmv2.Identity, logger *zap.SugaredLogger) fsmv2.Worker {
+		func(id fsmv2.Identity, logger *zap.SugaredLogger, stateReader fsmv2.StateReader) fsmv2.Worker {
 			pool := &DefaultConnectionPool{}
-			worker, _ := NewExamplepanicWorker(id, pool, logger)
+			worker, _ := NewExamplepanicWorker(id, pool, logger, stateReader)
 			return worker
 		},
 		func(cfg interface{}) interface{} {

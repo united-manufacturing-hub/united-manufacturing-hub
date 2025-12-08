@@ -36,7 +36,7 @@ var _ = Describe("ParentDependencies", func() {
 	Describe("NewParentDependencies", func() {
 		It("should create dependencies with valid inputs", func() {
 			identity := fsmv2.Identity{ID: "test-id", WorkerType: "parent"}
-			deps = exampleparent.NewParentDependencies(logger, identity)
+			deps = exampleparent.NewParentDependencies(logger, nil, identity)
 
 			Expect(deps).NotTo(BeNil())
 			// Logger is enriched with worker context
