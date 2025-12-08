@@ -51,9 +51,8 @@ Your instance will appear as **"Online"** in the Management Console within secon
 If you can't use the cloud Management Console:
 
 ```bash
-mkdir umh-core-data && cd umh-core-data
-docker run -d --name umh-core \
-  -v $(pwd):/data \
+docker volume create umh-core-data && docker run -d --name umh-core \
+  -v umh-core-data:/data \
   management.umh.app/oci/united-manufacturing-hub/umh-core:latest
 ```
 
@@ -63,17 +62,14 @@ docker run -d --name umh-core \
 
 ## Troubleshooting
 
-**Volume permission errors**  
-If you see `s6-svscan: warning: unable to stat benthos-dataflow-*` or protocol converters failing to activate, the container cannot write to the mounted volume. Test without the `-v` flag to confirm, then fix permissions with the `:z` flag on SELinux systems or ensure write access for the container user.
-
-**SELinux volume permissions**  
-On RHEL, Rocky, or other SELinux-enabled systems, append `:z` to the volume mount so Docker can relabel the directory:
+**Volume permission errors**
+Named volumes automatically handle permissions for the container user (UID 1000). If you still see permission errors like `s6-svscan: warning: unable to stat benthos-dataflow-*`, try removing and recreating the volume:
 
 ```bash
--v "$(pwd):/data:z"
+docker volume rm umh-core-data && docker volume create umh-core-data
 ```
 
-If you omit this, you might see `chmod: /data/config.yaml: no such file or directory` and the container fails to start.
+For advanced users needing bind mounts (custom data locations), see the [Container Layout reference](../reference/container-layout.md#advanced-custom-data-location).
 
 **Corporate firewall/proxy issues**  
 If your corporate network intercepts TLS traffic, see the [Corporate Firewalls Guide](../production/corporate-firewalls.md) to add your CA certificate or, as a last resort, set `allowInsecureTLS: true` in `config.yaml` or use `-e ALLOW_INSECURE_TLS=true` in your docker run command.
