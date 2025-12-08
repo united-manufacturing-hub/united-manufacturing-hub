@@ -122,6 +122,20 @@ You can also define exceptions to override inherited permissions. For example, a
 
 Only admins and the Account Owner can invite new users and add instances. When inviting users, admins can only grant permissions for locations where they themselves have admin access. This prevents privilege escalation and ensures that permissions flow naturally through the organization. Currently, every admin can create instances in every location. If they would create an instance that is outside of their location permission scope, they would not be able to modify it via the Management Console.
 
+##### User Invitation Process
+
+When an admin invites a new user:
+
+1. **Admin specifies**: Email address, role, and location permissions
+2. **System generates**: Invite link + separate invite key (shown only to the admin)
+3. **Auth0 sends**: Automatic invitation email to the user
+4. **Admin shares**: The invite key through a separate secure channel
+5. **User accepts**: Clicks link, authenticates with Auth0, enters invite key
+
+The invite key can only be used once and enables secure key exchange without the backend ever seeing the user's private credentials.
+
+**Why two pieces?** The invite link proves email ownership (via Auth0). The invite key, shared separately, ensures the inviting admin intended this specific person to receive access. This prevents email forwarding attacks.
+
 ### Access Revocation
 
 **Applicable Standards**: NIST SP 800-53 AC-2 (Account Management), OWASP Session Management Cheat Sheet
@@ -319,20 +333,6 @@ For critical infrastructure requiring SL3+, contact UMH for enterprise security 
 ---
 
 ## Reference
-
-### User Invitation Process
-
-When an admin invites a new user:
-
-1. **Admin specifies**: Email address, role, and location permissions
-2. **System generates**: Invite link + separate invite key (shown only to the admin)
-3. **Auth0 sends**: Automatic invitation email to the user
-4. **Admin shares**: The invite key through a separate secure channel
-5. **User accepts**: Clicks link, authenticates with Auth0, enters invite key
-
-The invite key can only be used once and enables secure key exchange without the backend ever seeing the user's private credentials.
-
-**Why two pieces?** The invite link proves email ownership (via Auth0). The invite key, shared separately, ensures the inviting admin intended this specific person to receive access. This prevents email forwarding attacks.
 
 ### Deployment Considerations
 
