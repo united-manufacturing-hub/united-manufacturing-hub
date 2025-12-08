@@ -330,17 +330,13 @@ For critical infrastructure requiring SL3+, contact UMH for enterprise security 
 - [NIST SP 800-53 Access Control](https://csrc.nist.gov/pubs/sp/800/53/r5/upd1/final)
 - [ISA/IEC 62443 Series of Standards](https://www.isa.org/standards-and-publications/isa-standards/isa-iec-62443-series-of-standards)
 
----
-
-## Reference
-
-### Deployment Considerations
+#### Deployment Considerations
 
 The permission infrastructure exists and controls what users see in ManagementConsole, but UMH Core does not yet validate individual user permissions when executing commands. Similarly, users accept messages from all instances within their company without per-instance verification. This means that within a company, all authenticated users can execute all actions on UMH Core instances, regardless of their assigned role or location permissions.
 
 The permission system provides fine-grained authorization that is ready for enforcement once validation is implemented.
 
-### Auth0 Organization Linking
+#### Auth0 Organization Linking
 
 Each company can be linked to an Auth0 organization, enabling:
 
