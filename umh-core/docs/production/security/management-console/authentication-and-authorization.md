@@ -120,7 +120,7 @@ You can also define exceptions to override inherited permissions. For example, a
 
 #### User and Instance Management
 
-Only admins and the Account Owner can invite new users and add instances. When inviting users, admins can only grant permissions for locations where they themselves have admin access. This prevents privilege escalation and ensures that permissions flow naturally through the organization.
+Only admins and the Account Owner can invite new users and add instances. When inviting users, admins can only grant permissions for locations where they themselves have admin access. This prevents privilege escalation and ensures that permissions flow naturally through the organization. Currently, every admin can create instances in every location. If they would create an instance that is outside of their location permission scope, they would not be able to modify it via the Management Console.
 
 ### Access Revocation
 
