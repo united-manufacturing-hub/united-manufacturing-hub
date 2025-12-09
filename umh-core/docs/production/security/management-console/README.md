@@ -2,10 +2,12 @@
 
 This directory will contain security documentation for the cloud-based Management Console platform.
 
+## Topics
+
+- **[Authentication and Authorization](authentication-and-authorization.md)** - User and instance authentication, role-based access control, and permission system
+
 ## Planned Topics
 
-- **Authentication** - User authentication mechanisms and identity providers
-- **Authorization** - Role-based access control and permissions
 - **Cloud Infrastructure** - Cloud security architecture and compliance
 - **API Security** - API authentication, rate limiting, and input validation
 
