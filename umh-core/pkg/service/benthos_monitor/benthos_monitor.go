@@ -258,7 +258,11 @@ func WithS6Manager(s6Manager *s6fsm.S6Manager) BenthosMonitorServiceOption {
 	}
 }
 
-func NewBenthosMonitorService(benthosName string, opts ...BenthosMonitorServiceOption) *BenthosMonitorService {
+func NewBenthosMonitorService(benthosName string, opts ...BenthosMonitorServiceOption) (*BenthosMonitorService, error) {
+	if err := config.ValidateComponentName(benthosName); err != nil {
+		return nil, fmt.Errorf("invalid benthos service name: %w", err)
+	}
+
 	managerName := fmt.Sprintf("%s%s", logger.ComponentBenthosService, "benthos-monitor-"+benthosName)
 
 	service := &BenthosMonitorService{
@@ -272,7 +276,7 @@ func NewBenthosMonitorService(benthosName string, opts ...BenthosMonitorServiceO
 		opt(service)
 	}
 
-	return service
+	return service, nil
 }
 
 // BLOCK_START_MARKER marks the begin of a new data block inside the logs.

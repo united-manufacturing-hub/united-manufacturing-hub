@@ -84,6 +84,31 @@ Options include:
 - **Metrics**: Monitor performance
 - **Delete**: Remove the flow
 
+### Enable Debug Logging
+
+For troubleshooting data processing issues in stand-alone flows, enable the `debug_level` configuration option:
+
+**Via YAML:**
+```yaml
+dataFlow:
+  - name: custom-processor
+    desiredState: active
+    dataFlowComponentConfig:
+      debug_level: true  # Enable detailed logging (default: false)
+      benthos:
+        # ...
+```
+
+**What it controls:**
+- Log level: DEBUG (when `true`) vs INFO (when `false`, default)
+- Detailed operational logging for input/output operations
+- Processing step execution details
+- Data transformation trace information
+
+**Important:** Debug logging generates significantly more log data and may impact performance. **Use only during active troubleshooting** and disable afterward.
+
+View logs via right-click → **Logs**. For comprehensive debug_level configuration reference, see [Configuration Reference](../../reference/configuration-reference.md).
+
 ## Configuration (YAML)
 
 Stand-alone flows use standard Benthos configuration:

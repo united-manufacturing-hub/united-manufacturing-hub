@@ -18,7 +18,7 @@ ARG ALPINE_VERSION=MUST_BE_SET_BY_MAKEFILE
 ARG NMAP_VERSION=MUST_BE_SET_BY_MAKEFILE
 
 # --- Cache Stage ---
-FROM scratch as cache
+FROM scratch AS cache
 COPY .docker-cache/s6-overlay/ /s6-overlay/
 COPY .docker-cache/benthos/ /benthos/
 COPY .docker-cache/redpanda/amd64/ /redpanda/amd64/
@@ -26,7 +26,7 @@ COPY .docker-cache/redpanda/arm64/ /redpanda/arm64/
 
 
 # --- Downloader Stage (using cached files) ---
-FROM alpine:${ALPINE_VERSION} as downloader
+FROM alpine:${ALPINE_VERSION} AS downloader
 RUN apk add --no-cache bash curl jq tzdata ca-certificates xz bc
 
 ARG S6_OVERLAY_VERSION=MUST_BE_SET_BY_MAKEFILE
@@ -74,7 +74,7 @@ RUN apk add --no-cache nmap=${NMAP_VERSION}
 # Cleanup all the files we don't need
 RUN rm -rf /s6-overlay /benthos /redpanda
 
-FROM golang:${GOLANG_VERSION}-alpine as build
+FROM golang:${GOLANG_VERSION}-alpine AS build
 ARG S6_OVERLAY_VERSION=MUST_BE_SET_BY_MAKEFILE
 ARG BENTHOS_UMH_VERSION=MUST_BE_SET_BY_MAKEFILE
 ARG REDPANDA_VERSION=MUST_BE_SET_BY_MAKEFILE
@@ -110,7 +110,7 @@ RUN if [ "$DEBUG" = "true" ]; then \
     -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/version.AppVersion=${APP_VERSION}" \
     -o /go/bin/umh-core cmd/main.go; \
     else \
-    CGO_ENABLED=1 go build -mod=vendor  \
+    CGO_ENABLED=0 go build -mod=vendor  \
     -ldflags "-s -w \
     -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants.S6OverlayVersion=${S6_OVERLAY_VERSION} \
     -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants.BenthosVersion=${BENTHOS_UMH_VERSION} \
@@ -120,7 +120,7 @@ RUN if [ "$DEBUG" = "true" ]; then \
     fi
 
 # --- Final Stage ---
-FROM alpine:${ALPINE_VERSION} as runner
+FROM alpine:${ALPINE_VERSION} AS runner
 # Copy everything from the downloader stage
 COPY --from=downloader / /
 
@@ -135,9 +135,9 @@ RUN adduser -D -u 1000 -s /bin/sh umhuser && \
     mkdir -p /data/logs /data/logs/umh-core /data/services /data/benthos /data/redpanda/coredump && \
     chown -R umhuser:umhuser /data
 
-# Set ownership of S6 runtime directories for non-root operation
-RUN mkdir -p /run/s6 /var/run && \
-    chown -R umhuser:umhuser /run /var/run /etc/s6-overlay
+# Set ownership of S6 overlay config for non-root operation
+# Note: /run permissions handled by S6_YES_I_WANT_A_WORLD_WRITABLE_RUN_BECAUSE_KUBERNETES=1
+RUN chown -R umhuser:umhuser /etc/s6-overlay
 
 # Handle DEBUG mode - install Go and Delve when DEBUG=true
 # Delve is a debugger for Go (https://github.com/go-delve/delve/)
@@ -174,7 +174,8 @@ RUN if [ "$DEBUG" = "true" ]; then \
 
 # Set environment variables and volume
 # S6_SYNC_DISKS=1: Sync the disks to ensure that the data is persisted, this is needed for the redpanda service
-ENV S6_KEEP_ENV=1 \
+ENV S6_YES_I_WANT_A_WORLD_WRITABLE_RUN_BECAUSE_KUBERNETES=1 \
+    S6_KEEP_ENV=1 \
     S6_BEHAVIOUR_IF_STAGE2_FAILS=2 \
     S6_CMD_WAIT_FOR_SERVICES=1 \
     S6_SERVICES_READYTIME=50 \

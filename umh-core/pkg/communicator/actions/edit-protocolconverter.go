@@ -83,10 +83,6 @@ func (d DFCType) IsValid() bool {
 // EditProtocolConverterAction implements the Action interface for editing
 // protocol converter configurations, particularly for adding DFC configurations.
 type EditProtocolConverterAction struct {
-
-	// Desired DFC config for comparison during health checks
-	desiredDFCConfig dataflowcomponentserviceconfig.DataflowComponentServiceConfig
-
 	configManager config.ConfigManager
 
 	outboundChannel chan *models.UMHMessage
@@ -96,14 +92,19 @@ type EditProtocolConverterAction struct {
 	systemSnapshotManager *fsm.SnapshotManager
 
 	actionLogger   *zap.SugaredLogger
-	dfcPayload     models.CDFCPayload
 	userEmail      string
 	name           string // protocol converter name (optional for updates)
 	dfcType        DFCType
 	connectionPort string
 	connectionIP   string
 
-	vb           []models.ProtocolConverterVariable
+	dfcPayload models.CDFCPayload
+
+	vb []models.ProtocolConverterVariable
+
+	// Desired DFC config for comparison during health checks
+	desiredDFCConfig dataflowcomponentserviceconfig.DataflowComponentServiceConfig
+
 	actionUUID   uuid.UUID
 	instanceUUID uuid.UUID
 
@@ -204,7 +205,7 @@ func (a *EditProtocolConverterAction) Validate() error {
 		return errors.New("missing or invalid protocol converter UUID")
 	}
 
-	if err := ValidateComponentName(a.name); err != nil {
+	if err := config.ValidateComponentName(a.name); err != nil {
 		return err
 	}
 

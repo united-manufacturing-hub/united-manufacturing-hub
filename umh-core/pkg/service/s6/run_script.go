@@ -63,8 +63,11 @@ var runScriptParser = regexp.MustCompile(`(?m)fdmove -c 2 1(?:\s+(.+)|$)`)
 // envVarParser is a regexp to extract environment variables from the run script.
 var envVarParser = regexp.MustCompile(`export\s+(\w+)\s+(.+)`)
 
-// logFilesizeParser is a dedicated regexp to extract log filesize value from the log run script
+// logFilesizeParser is a dedicated regexp to extract log filesize value from the log run script.
 // It matches the s6-log command format: "s6-log n20 s1024 T /path" and captures the filesize.
+// Note: This regex intentionally requires the s{size} directive. When LogFilesize == 0,
+// getLogRunScript omits the size directive, so this regex won't match - which is correct
+// because the caller in s6.go defaults to 0 when no match is found.
 var logFilesizeParser = regexp.MustCompile(`s6-log\s+n\d+\s+s(\d+)\s+T\s+\S+`)
 
 // memoryLimitParser is a regexp to extract the memory limit from the run script.
@@ -101,7 +104,7 @@ func getLogRunScript(config s6serviceconfig.S6ServiceConfig, logDir string) (str
 	// n{count} - number of archived files to keep
 	// s{size} - rotate at this file size (only if LogFilesize > 0)
 	// T - ISO 8601 timestamps (required for our time parser)
-	// Important: This needs to be T (ISO 8861) as our time parser expects this format
+	// Important: This needs to be T (ISO 8601) as our time parser expects this format
 
 	// Use our default archive count for dynamic services.
 	// Static services like umh-core use n5 (configured in s6-rc.d/umh-core-log/run)

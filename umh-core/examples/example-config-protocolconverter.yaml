@@ -29,7 +29,7 @@ protocolConverter:
       config:
         connection:
           nmap:
-            target:   "{{ .HOST }}"
+            target:   "{{ .IP }}"
             port:     "{{ .PORT }}"    # Now templatable! Resolves to proper uint16 at runtime
         dataflowcomponent_read:
           benthos:
@@ -47,10 +47,10 @@ protocolConverter:
                         msg.meta.location_path = "{{ .location_path }}"; // auto-generated path from agent and protocol converter location
                         msg.meta.data_contract = "_raw";
                         msg.meta.tag_name      = "random_int";
-                        msg.meta.host          = "{{ .HOST }}"; // optional metadata
+                        msg.meta.host          = "{{ .IP }}"; // optional metadata
                         msg.meta.port          = "{{ .PORT }}"; // optional metadata
                         // tag_processor now auto-creates msg.meta.topic
                         return msg;
       variables:
-        HOST:   "localhost"
+        IP:   "localhost"
         PORT: "8080"

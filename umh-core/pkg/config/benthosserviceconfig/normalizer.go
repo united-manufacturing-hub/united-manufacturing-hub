@@ -58,10 +58,7 @@ func (n *Normalizer) NormalizeConfig(cfg BenthosServiceConfig) BenthosServiceCon
 		normalized.MetricsPort = 4195
 	}
 
-	// Set default log level if not specified
-	if normalized.LogLevel == "" {
-		normalized.LogLevel = "INFO"
-	}
+	// DebugLevel is a bool, no normalization needed (defaults to false)
 
 	return normalized
 }

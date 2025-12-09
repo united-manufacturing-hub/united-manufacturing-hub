@@ -56,7 +56,7 @@ TARGETARCH := $(shell go env GOARCH)
 
 # Default values for go tools
 GINKGO_VERSION = v2.23.4
-NILWAY_VERSION = latest
+NILAWAY_VERSION = v0.0.0-20251119034912-44f92224c998
 LEFTHOOK_VERSION = v1.13.2
 GOLANGCI_LINT_VERSION = v2.5.0
 BETTERALIGN_VERSION = v0.7.1
@@ -69,7 +69,7 @@ NMAP_VERSION = 7.97-r0
 S6_OVERLAY_VERSION = 3.2.0.2
 REDPANDA_VERSION = 24.3.18
 ## Benthos version is a tag or a sha-<commit hash> (e.g. 0.9.4 or sha-a51a685) to be used in the docker image
-BENTHOS_UMH_VERSION = 0.11.9
+BENTHOS_UMH_VERSION = 0.11.13
 BUF_VERSION = 1.55.1
 PROTOC_GEN_GO_VERSION = 1.36.6
 
@@ -86,7 +86,7 @@ VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "0.0
 install:
 	sudo chown vscode:vscode data || true
 	sudo chown vscode:vscode tmp || true
-	go install go.uber.org/nilaway/cmd/nilaway@$(NILWAY_VERSION)
+	go install go.uber.org/nilaway/cmd/nilaway@$(NILAWAY_VERSION)
 	go install github.com/onsi/ginkgo/v2/ginkgo@$(GINKGO_VERSION)
 	go install github.com/evilmartians/lefthook@$(LEFTHOOK_VERSION)
 	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
@@ -279,10 +279,10 @@ test: vet-nilaway-lint-betteralign
 	go test -race -v -tags=test ./...
 
 unit-test: vet-nilaway-lint-betteralign
-	ginkgo -r -v --tags=test --race --label-filter='!integration && !redpanda-extended && !tls' --fail-fast ./...
+	go run github.com/onsi/ginkgo/v2/ginkgo -r --tags=test --race --label-filter='!integration && !redpanda-extended && !tls' --fail-fast ./...
 
 unit-test-fail-slow: vet-nilaway-lint-betteralign
-	ginkgo -r -v --tags=test --race --label-filter='!integration && !redpanda-extended && !tls' ./...
+	go run github.com/onsi/ginkgo/v2/ginkgo -r --tags=test --race --label-filter='!integration && !redpanda-extended && !tls' ./...
 
 benchmark:
 	@echo "Running benchmarks..."
@@ -327,20 +327,20 @@ pre-test: build-protobuf stop-all-pods vet-nilaway-lint-betteralign
 pre-test-ci: vet-nilaway-lint-betteralign
 
 integration-test: pre-test
-	ginkgo -r -v --tags=test --label-filter='integration' --fail-fast ./...
+	go run github.com/onsi/ginkgo/v2/ginkgo -r --tags=test --label-filter='integration' --fail-fast ./...
 
 redpanda-extended-test: pre-test
-	ginkgo -r -v --tags=test --label-filter='redpanda-extended' --fail-fast --timeout=1.5h ./...
+	go run github.com/onsi/ginkgo/v2/ginkgo -r --tags=test --label-filter='redpanda-extended' --fail-fast --timeout=1.5h ./...
 
 badssl-test: pre-test
-	ginkgo -r -v --tags=test --label-filter='tls' --fail-fast ./...
+	go run github.com/onsi/ginkgo/v2/ginkgo -r --tags=test --label-filter='tls' --fail-fast ./...
 
 # integration-test-ci: Runs integration tests in CI environments with proper version tagging
 # - Injects VERSION via ldflags into AppVersion for proper error identification in Sentry
 # - CI test failures SHOULD be reported to Sentry (unlike local dev failures)
 # - Helps identify flaky tests by consistently tracking failures in CI pipelines
 integration-test-ci: pre-test-ci
-	VERSION=$(VERSION) ginkgo -r -v --tags=test --label-filter='integration' --fail-fast -ldflags="-X 'github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/version.AppVersion=$(VERSION)'" ./...
+	VERSION=$(VERSION) go run github.com/onsi/ginkgo/v2/ginkgo -r --tags=test --label-filter='integration' --fail-fast -ldflags="-X 'github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/version.AppVersion=$(VERSION)'" ./...
 
 update-go-dependencies:
 	go get -u ./...
