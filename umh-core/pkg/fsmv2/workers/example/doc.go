@@ -59,7 +59,7 @@
 //
 // Parent-Child: See exampleparent/worker.go for:
 //   - Returning ChildrenSpecs in DeriveDesiredState()
-//   - StateMapping for FSM state coordination
+//   - ChildStartStates for child lifecycle coordination
 //   - VariableBundle for passing data to children
 //
 // Testing: See child/action/*_test.go for:

@@ -45,9 +45,9 @@ type ExamplechildSnapshot struct {
 type ExamplechildDesiredState struct {
 	config.BaseDesiredState // Provides ShutdownRequested + IsShutdownRequested() + SetShutdownRequested()
 
-	// ParentMappedState is the desired state from parent's StateMapping.
-	// When parent is in TryingToStart/Running → "running"
-	// When parent is in TryingToStop/Stopped → "stopped"
+	// ParentMappedState is the desired state derived from parent's ChildStartStates.
+	// When parent is in a state listed in ChildStartStates → "running"
+	// When parent is in any other state → "stopped"
 	// This field is injected by the supervisor via MappedParentStateProvider callback.
 	ParentMappedState string `json:"parent_mapped_state"`
 }
@@ -65,7 +65,7 @@ func (s *ExamplechildDesiredState) ShouldBeRunning() bool {
 	if s.ShutdownRequested {
 		return false
 	}
-	// Only run if parent explicitly wants us running via StateMapping
+	// Only run if parent explicitly wants us running via ChildStartStates
 	// Default to not running if ParentMappedState is empty or "stopped"
 	return s.ParentMappedState == "running"
 }

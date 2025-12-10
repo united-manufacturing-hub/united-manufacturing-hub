@@ -150,10 +150,53 @@
 //
 // Key concepts:
 //   - Parent returns ChildrenSpecs in DeriveDesiredState()
-//   - StateMapping coordinates FSM states (NOT data passing)
+//   - ChildStartStates coordinates child lifecycle (NOT data passing)
 //   - Use VariableBundle for passing data to children
 //
 // See workers/example/exampleparent/worker.go for complete parent-child example.
+//
+// ## Helper Functions
+//
+// The config package provides helpers to reduce boilerplate in DeriveDesiredState():
+//
+//	// ParseUserSpec[T] - type-safe parsing of UserSpec.Config
+//	parsed, err := config.ParseUserSpec[MyConfig](spec)
+//	if err != nil { return config.DesiredState{}, err }
+//
+//	// DeriveLeafState[T] - one-liner for leaf workers (no children)
+//	// Requires MyConfig to implement GetState() string
+//	return config.DeriveLeafState[MyConfig](spec)
+//
+// These helpers eliminate 15-25 lines of boilerplate per worker.
+// See config/helpers.go for full documentation.
+//
+// ## Parent-Child Visibility (ChildrenView)
+//
+// Parent workers can observe their children's state via ChildrenView interface:
+//
+//	type ChildrenView interface {
+//	    List() []ChildInfo           // All children with state info
+//	    Get(name string) *ChildInfo  // Single child by name
+//	    Counts() (healthy, unhealthy int)
+//	    AllHealthy() bool
+//	    AllStopped() bool
+//	}
+//
+// ChildInfo provides read-only info about each child:
+//   - Name, WorkerType, StateName, IsHealthy
+//   - HierarchyPath for logging context
+//
+// To use in parent workers, implement SetChildrenView() on your ObservedState:
+//
+//	func (o MyObservedState) SetChildrenView(view config.ChildrenView) fsmv2.ObservedState {
+//	    healthy, unhealthy := view.Counts()
+//	    o.ChildrenHealthy = healthy
+//	    o.ChildrenUnhealthy = unhealthy
+//	    return o
+//	}
+//
+// The supervisor automatically calls SetChildrenView() during observation collection.
+// See config/childspec.go for ChildrenView and ChildInfo definitions.
 //
 // # Architecture Documentation
 //

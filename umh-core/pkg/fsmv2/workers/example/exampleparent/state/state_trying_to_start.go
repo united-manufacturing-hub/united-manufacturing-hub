@@ -23,8 +23,8 @@ import (
 )
 
 // TryingToStartState represents the state while loading config and spawning children.
-// It uses StateMapping to set children desired state to "running" and waits for all
-// children to become healthy before transitioning to RunningState.
+// Children with ChildStartStates containing "TryingToStart" will have desired state "running".
+// Waits for all children to become healthy before transitioning to RunningState.
 type TryingToStartState struct {
 	BaseParentState
 }
@@ -43,7 +43,7 @@ func (s *TryingToStartState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Sig
 	}
 
 	// Wait for ALL children to be running (healthy > 0, unhealthy == 0).
-	// StateMapping ensures children have desired state = "running".
+	// ChildStartStates ensures children have desired state = "running".
 	// We only transition when all expected children are healthy.
 	if snap.Observed.ChildrenHealthy > 0 && snap.Observed.ChildrenUnhealthy == 0 {
 		return &RunningState{}, fsmv2.SignalNone, nil

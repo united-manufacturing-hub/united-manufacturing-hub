@@ -190,7 +190,6 @@
 //   - Name is non-empty
 //   - WorkerType is registered in factory
 //   - Variables are valid (no nil maps)
-//   - StateMapping keys match valid parent states
 //
 // See childspec_validation.go for validation details.
 package config

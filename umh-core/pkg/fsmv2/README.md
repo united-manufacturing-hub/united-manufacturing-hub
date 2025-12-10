@@ -73,10 +73,6 @@ UserSpec.Config (raw YAML)     →  "children_count: 5"
 DesiredState (technical)       →  { State: "running", ChildrenSpecs: [5 objects] }
 ```
 
-TODO:
-- change statemapping to be not generic to any states, and i think we only need a if parent is stopped, stop all child;ren as well"
-
-
 **Key insight**: `DesiredState` structure may be COMPLETELY DIFFERENT from `UserSpec`.
 The `DeriveDesiredState()` function is a transformation, not a copy - it can:
 - Parse YAML/JSON into typed structs

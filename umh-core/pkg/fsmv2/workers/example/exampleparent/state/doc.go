@@ -18,7 +18,7 @@
 //
 // This package is referenced by pkg/fsmv2/doc.go as an example of:
 //   - Parent-child hierarchical composition
-//   - State coordination via StateMapping
+//   - State coordination via ChildStartStates
 //
 // When modifying these files, verify doc.go references remain accurate.
 //

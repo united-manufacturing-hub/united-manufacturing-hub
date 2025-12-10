@@ -23,8 +23,8 @@ import (
 )
 
 // TryingToStopState represents the state during graceful shutdown.
-// It uses StateMapping to set children desired state to "stopped" and waits for all
-// children to stop before transitioning to StoppedState.
+// Children without "TryingToStop" in ChildStartStates will have desired state "stopped".
+// Waits for all children to stop before transitioning to StoppedState.
 type TryingToStopState struct {
 	BaseParentState
 }
@@ -39,7 +39,7 @@ func (s *TryingToStopState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Sign
 	}
 
 	// Wait for all children to be stopped (healthy == 0, unhealthy == 0).
-	// StateMapping ensures children have desired state = "stopped".
+	// ChildStartStates ensures children have desired state = "stopped".
 	// We only transition when all children have stopped.
 	if snap.Observed.ChildrenHealthy == 0 && snap.Observed.ChildrenUnhealthy == 0 {
 		return &StoppedState{}, fsmv2.SignalNone, nil

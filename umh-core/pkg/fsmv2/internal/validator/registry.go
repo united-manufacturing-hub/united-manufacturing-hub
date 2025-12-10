@@ -111,7 +111,7 @@ worker starts an operation right before shutdown is requested.`,
 		Why: `Child workers must check IsStopRequired() instead of just IsShutdownRequested().
 WHY: Child workers have TWO shutdown signals:
 1. IsShutdownRequested() - explicit shutdown request
-2. !ShouldBeRunning() - parent stopped via StateMapping
+2. !ShouldBeRunning() - parent stopped via ChildStartStates
 
 Using only IsShutdownRequested() misses parent lifecycle changes, causing
 children to stay running when parent goes to TryingToStop.
