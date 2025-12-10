@@ -68,8 +68,8 @@ type SupervisorInterface interface {
 	tick(ctx context.Context) error
 	updateUserSpec(spec config.UserSpec)
 	getUserSpec() config.UserSpec
-	getStateMapping() map[string]string
-	setStateMapping(mapping map[string]string)
+	getChildStartStates() []string
+	setChildStartStates(states []string)
 	getMappedParentState() string
 	setMappedParentState(state string)
 	calculateHierarchySize() int
@@ -84,6 +84,9 @@ type SupervisorInterface interface {
 	// GetCurrentStateName returns the current FSM state name for this supervisor's worker.
 	// Returns "unknown" if no worker or state is set.
 	GetCurrentStateName() string
+	// GetWorkerType returns the type of workers this supervisor manages.
+	// Example: "examplechild", "exampleparent", "application"
+	GetWorkerType() string
 }
 
 // WorkerContext encapsulates the runtime state for a single worker

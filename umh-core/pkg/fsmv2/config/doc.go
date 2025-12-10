@@ -111,10 +111,7 @@
 //	        Variables: config.VariableBundle{
 //	            User: map[string]any{"URL": "tcp://localhost:1883"},
 //	        },
-//	        StateMapping: map[string]string{
-//	            "active":  "connected",
-//	            "closing": "stopped",
-//	        },
+//	        ChildStartStates: []string{"Running", "TryingToStart"},
 //	    },
 //	}
 //
@@ -129,27 +126,26 @@
 // 3. Dynamic: Children can be added/removed by changing ChildrenSpecs
 // in DeriveDesiredState(). No manual worker creation needed.
 //
-// # StateMapping: Coordinating Parent and Child States
+// # ChildStartStates: Coordinating Parent and Child Lifecycle
 //
-// StateMapping coordinates FSM states between parent and child:
+// ChildStartStates specifies which parent FSM states cause the child to run:
 //
-//	StateMapping: map[string]string{
-//	    "active":  "connected",  // When parent is "active", child should be "connected"
-//	    "closing": "stopped",    // When parent is "closing", child should be "stopped"
-//	}
+//	ChildStartStates: []string{"Running", "TryingToStart"}
+//	// Child runs when parent is in "Running" or "TryingToStart"
+//	// Child stops when parent is in any other state
 //
-// Why StateMapping?
+// Why ChildStartStates?
 //
 // 1. Coordinated Lifecycle: Parent controls when children start/stop.
-// A parent in "closing" state wants all children stopped before it exits.
+// A parent in "Stopping" state automatically stops all children.
 //
-// 2. Decoupled States: Parent state names can differ from child state names.
-// Parent might use "active" while child uses "connected".
+// 2. Simple Logic: Child runs if parent state is in the list, stops otherwise.
+// Empty list means child always runs.
 //
 // 3. Declarative Control: Parent doesn't imperatively start/stop children.
 // It declares the desired child state, and the child FSM handles transitions.
 //
-// Note: StateMapping is for FSM state coordination, not data passing.
+// Note: ChildStartStates is for lifecycle coordination, not data passing.
 // Use VariableBundle to pass data from parent to child.
 //
 // # DesiredState and Shutdown Control

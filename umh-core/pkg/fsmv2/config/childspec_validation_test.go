@@ -57,17 +57,14 @@ var _ = Describe("ChildSpec Validation", func() {
 			Expect(err).NotTo(HaveOccurred())
 		})
 
-		It("should pass validation for a ChildSpec with StateMapping", func() {
+		It("should pass validation for a ChildSpec with ChildStartStates", func() {
 			spec := config.ChildSpec{
-				Name:       "valid-child-with-mapping",
+				Name:       "valid-child-with-states",
 				WorkerType: "test-worker",
 				UserSpec: config.UserSpec{
 					Config: "config-data",
 				},
-				StateMapping: map[string]string{
-					"running": "active",
-					"stopped": "idle",
-				},
+				ChildStartStates: []string{"Running", "TryingToStart"},
 			}
 
 			err := config.ValidateChildSpec(spec, registry)
@@ -151,28 +148,28 @@ var _ = Describe("ChildSpec Validation", func() {
 			Expect(err.Error()).To(ContainSubstring("invalid-spec"))
 		})
 
-		It("should validate even with nil StateMapping", func() {
+		It("should validate even with nil ChildStartStates", func() {
 			spec := config.ChildSpec{
-				Name:       "no-mapping",
+				Name:       "no-states",
 				WorkerType: "test-worker",
 				UserSpec: config.UserSpec{
 					Config: "config",
 				},
-				StateMapping: nil,
+				ChildStartStates: nil,
 			}
 
 			err := config.ValidateChildSpec(spec, registry)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
-		It("should validate with empty StateMapping", func() {
+		It("should validate with empty ChildStartStates", func() {
 			spec := config.ChildSpec{
-				Name:       "empty-mapping",
+				Name:       "empty-states",
 				WorkerType: "test-worker",
 				UserSpec: config.UserSpec{
 					Config: "config",
 				},
-				StateMapping: map[string]string{},
+				ChildStartStates: []string{},
 			}
 
 			err := config.ValidateChildSpec(spec, registry)
@@ -398,20 +395,18 @@ var _ = Describe("ChildSpec Validation", func() {
 			Expect(err.Error()).To(ContainSubstring("unique-1"))
 		})
 
-		It("should pass validation with multiple specs having different StateMapping", func() {
+		It("should pass validation with multiple specs having different ChildStartStates", func() {
 			specs := []config.ChildSpec{
 				{
-					Name:       "child-with-mapping",
+					Name:       "child-with-states",
 					WorkerType: "communicator",
 					UserSpec: config.UserSpec{
 						Config: "config",
 					},
-					StateMapping: map[string]string{
-						"running": "active",
-					},
+					ChildStartStates: []string{"Running"},
 				},
 				{
-					Name:       "child-without-mapping",
+					Name:       "child-without-states",
 					WorkerType: "test-worker",
 					UserSpec: config.UserSpec{
 						Config: "config",

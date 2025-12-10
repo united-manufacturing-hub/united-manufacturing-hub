@@ -198,12 +198,28 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity fsmv2.Identity, wor
 			}
 			return healthy, unhealthy
 		},
-		// MappedParentStateProvider returns the mapped state from parent's StateMapping.
+		// MappedParentStateProvider returns the mapped state from parent's ChildStartStates.
 		// Used by child workers to know when parent wants them to start/stop.
-		// Returns "running" when parent is in TryingToStart/Running states,
-		// Returns "stopped" (or empty) when parent is in Stopped/TryingToStop states.
+		// Returns "running" when parent is in a state listed in ChildStartStates,
+		// Returns "stopped" when parent is not in any ChildStartStates,
+		// Returns "running" when ChildStartStates is empty (child always runs).
 		MappedParentStateProvider: func() string {
 			return s.getMappedParentState()
+		},
+		// ChildrenViewProvider returns a config.ChildrenView for parent workers.
+		// Used by parent workers to inspect individual child states, not just counts.
+		// The closure captures s.children and s.mu for thread-safe access.
+		ChildrenViewProvider: func() any {
+			s.mu.RLock()
+			defer s.mu.RUnlock()
+
+			// Create a copy of children map for the manager
+			childrenCopy := make(map[string]SupervisorInterface, len(s.children))
+			for name, child := range s.children {
+				childrenCopy[name] = child
+			}
+
+			return NewChildrenManager(childrenCopy)
 		},
 	})
 
@@ -377,29 +393,28 @@ func (s *Supervisor[TObserved, TDesired]) setMappedParentState(state string) {
 	s.mappedParentState = state
 }
 
-// getStateMapping implements SupervisorInterface.
-func (s *Supervisor[TObserved, TDesired]) getStateMapping() map[string]string {
+// getChildStartStates implements SupervisorInterface.
+func (s *Supervisor[TObserved, TDesired]) getChildStartStates() []string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	if s.stateMapping == nil {
+	if s.childStartStates == nil {
 		return nil
 	}
 
-	mapping := make(map[string]string, len(s.stateMapping))
-	for k, v := range s.stateMapping {
-		mapping[k] = v
-	}
+	// Return a copy to prevent external modification
+	states := make([]string, len(s.childStartStates))
+	copy(states, s.childStartStates)
 
-	return mapping
+	return states
 }
 
-// setStateMapping implements SupervisorInterface.
-func (s *Supervisor[TObserved, TDesired]) setStateMapping(mapping map[string]string) {
+// setChildStartStates implements SupervisorInterface.
+func (s *Supervisor[TObserved, TDesired]) setChildStartStates(states []string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	s.stateMapping = mapping
+	s.childStartStates = states
 }
 
 // updateUserSpec implements SupervisorInterface.
@@ -511,4 +526,10 @@ func (s *Supervisor[TObserved, TDesired]) GetCurrentStateName() string {
 		return "unknown"
 	}
 	return "unknown"
+}
+
+// GetWorkerType returns the type of workers this supervisor manages.
+// Example: "examplechild", "exampleparent", "application"
+func (s *Supervisor[TObserved, TDesired]) GetWorkerType() string {
+	return s.workerType
 }

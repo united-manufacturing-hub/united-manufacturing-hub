@@ -138,14 +138,14 @@ children:
 			Expect(err.Error()).To(ContainSubstring("invalid spec type"))
 		})
 
-		It("should preserve state mapping in children", func() {
+		It("should preserve ChildStartStates in children", func() {
 			yamlConfig := `
 children:
   - name: "child-1"
     workerType: "example-child"
-    stateMapping:
-      running: "active"
-      stopped: "idle"
+    childStartStates:
+      - "running"
+      - "TryingToStart"
 `
 			userSpec := config.UserSpec{
 				Config: yamlConfig,
@@ -154,8 +154,7 @@ children:
 			desired, err := worker.DeriveDesiredState(userSpec)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(desired.ChildrenSpecs).To(HaveLen(1))
-			Expect(desired.ChildrenSpecs[0].StateMapping).To(HaveKeyWithValue("running", "active"))
-			Expect(desired.ChildrenSpecs[0].StateMapping).To(HaveKeyWithValue("stopped", "idle"))
+			Expect(desired.ChildrenSpecs[0].ChildStartStates).To(ConsistOf("running", "TryingToStart"))
 		})
 
 		It("should handle mixed worker types", func() {

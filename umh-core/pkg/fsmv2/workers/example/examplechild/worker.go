@@ -21,11 +21,10 @@ import (
 	"time"
 
 	"go.uber.org/zap"
-	"gopkg.in/yaml.v3"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	fsmv2types "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
@@ -106,31 +105,9 @@ func (w *ChildWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedS
 }
 
 // DeriveDesiredState determines what state the child worker should be in.
-func (w *ChildWorker) DeriveDesiredState(spec interface{}) (fsmv2types.DesiredState, error) {
-	// Handle nil spec (used during initialization in AddWorker)
-	if spec == nil {
-		return fsmv2types.DesiredState{
-			State:         fsmv2types.DesiredStateRunning,
-			ChildrenSpecs: nil,
-		}, nil
-	}
-
-	userSpec, ok := spec.(fsmv2types.UserSpec)
-	if !ok {
-		return fsmv2types.DesiredState{}, fmt.Errorf("invalid spec type: expected fsmv2types.UserSpec, got %T", spec)
-	}
-
-	var childSpec ChildUserSpec
-	if userSpec.Config != "" {
-		if err := yaml.Unmarshal([]byte(userSpec.Config), &childSpec); err != nil {
-			return fsmv2types.DesiredState{}, fmt.Errorf("failed to parse child spec: %w", err)
-		}
-	}
-
-	return fsmv2types.DesiredState{
-		State:         childSpec.GetState(), // Uses BaseUserSpec.GetState() with default "running"
-		ChildrenSpecs: nil,
-	}, nil
+// Uses the DeriveLeafState helper for type-safe parsing and boilerplate reduction.
+func (w *ChildWorker) DeriveDesiredState(spec interface{}) (config.DesiredState, error) {
+	return config.DeriveLeafState[ChildUserSpec](spec)
 }
 
 // GetInitialState returns the state the FSM should start in.

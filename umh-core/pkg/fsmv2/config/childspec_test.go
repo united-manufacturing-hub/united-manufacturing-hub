@@ -31,18 +31,15 @@ var _ = Describe("ChildSpec", func() {
 				UserSpec: config.UserSpec{
 					Config: "mqtt:\n  url: tcp://localhost:1883",
 				},
-				StateMapping: map[string]string{
-					"idle":   "stopped",
-					"active": "running",
-				},
+				ChildStartStates: []string{"Running", "TryingToStart"},
 			}
 
 			data, err := yaml.Marshal(spec)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(string(data)).To(ContainSubstring("name: connection"))
 			Expect(string(data)).To(ContainSubstring("workerType: mqtt_connection"))
-			Expect(string(data)).To(ContainSubstring("stateMapping:"))
-			Expect(string(data)).To(ContainSubstring("idle: stopped"))
+			Expect(string(data)).To(ContainSubstring("childStartStates:"))
+			Expect(string(data)).To(ContainSubstring("- Running"))
 		})
 
 		It("should deserialize from YAML correctly", func() {
@@ -51,9 +48,9 @@ name: connection
 workerType: mqtt_connection
 userSpec:
   config: "mqtt:\n  url: tcp://localhost:1883"
-stateMapping:
-  idle: stopped
-  active: running
+childStartStates:
+  - Running
+  - TryingToStart
 `
 			var spec config.ChildSpec
 			err := yaml.Unmarshal([]byte(yamlData), &spec)
@@ -62,11 +59,10 @@ stateMapping:
 			Expect(spec.Name).To(Equal("connection"))
 			Expect(spec.WorkerType).To(Equal("mqtt_connection"))
 			Expect(spec.UserSpec.Config).To(ContainSubstring("tcp://localhost:1883"))
-			Expect(spec.StateMapping["idle"]).To(Equal("stopped"))
-			Expect(spec.StateMapping["active"]).To(Equal("running"))
+			Expect(spec.ChildStartStates).To(ConsistOf("Running", "TryingToStart"))
 		})
 
-		It("should handle optional StateMapping correctly", func() {
+		It("should handle optional ChildStartStates correctly", func() {
 			yamlData := `
 name: simple-worker
 workerType: basic
@@ -78,7 +74,7 @@ userSpec:
 
 			Expect(err).ToNot(HaveOccurred())
 			Expect(spec.Name).To(Equal("simple-worker"))
-			Expect(spec.StateMapping).To(BeNil())
+			Expect(spec.ChildStartStates).To(BeNil())
 		})
 	})
 

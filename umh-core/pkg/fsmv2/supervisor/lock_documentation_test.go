@@ -391,7 +391,7 @@ var _ = Describe("Lock Documentation", func() {
 			// This test documents what good lock documentation looks like
 			expectedFormat := `
 // mu protects access to workers map, expectedObservedTypes, expectedDesiredTypes,
-// children, childDoneChans, stateMapping, globalVars, and mappedParentState.
+// children, childDoneChans, globalVars, and mappedParentState.
 //
 // This is a sync.RWMutex to allow concurrent reads from multiple goroutines
 // while ensuring exclusive writes when modifying worker registry state.

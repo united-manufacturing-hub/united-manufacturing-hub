@@ -110,34 +110,24 @@ type UserSpec struct {
 //   - Supervisor handles "how to make it exist"
 //   - Children run independently in their own FSMs
 //
-// STATE MAPPING: Parent State → Child State Coordination
+// CHILD START STATES: Parent State → Child Lifecycle Coordination
 //
-// StateMapping allows parent FSM states to trigger child FSM state transitions.
-// This is NOT data passing - it's state synchronization.
+// ChildStartStates specifies which parent FSM states cause children to run.
+// When the parent is in a listed state, children run. Otherwise, they stop.
 //
-// Example use case: When parent enters "Starting" state, force all children
-// to enter their "Initializing" state.
+// Example use case: Children should only run when parent is in "Running" or "TryingToStart" states.
 //
 // Format:
 //
-//	StateMapping: map[string]string{
-//	    "ParentStateName": "ChildStateName",
-//	}
+//	ChildStartStates: []string{"Running", "TryingToStart"}
 //
 // When to use:
-// - Parent lifecycle controls child lifecycle (e.g., Stopping → Cleanup)
-// - Parent operational state affects child behavior (e.g., Paused → Idle)
+// - Parent lifecycle controls child lifecycle (children run only in certain parent states)
+// - Simple "run when parent is active" patterns
 //
 // When NOT to use:
 // - Passing data between states (use VariableBundle instead)
 // - Triggering actions (use signals instead)
-//
-// Example:
-//
-//	StateMapping: map[string]string{
-//	    "running":  "active",   // When parent is running, children should be active
-//	    "stopping": "stopped",  // When parent is stopping, children should stop
-//	}
 //
 // Example - Protocol converter managing connections:
 //
@@ -146,37 +136,31 @@ type UserSpec struct {
 //	    Name:       "mqtt-connection",
 //	    WorkerType: "mqtt_client",
 //	    UserSpec:   UserSpec{Config: "url: tcp://localhost:1883"},
-//	    StateMapping: map[string]string{
-//	        "idle":    "stopped",    // When converter idle, disconnect
-//	        "active":  "connected",  // When converter active, connect
-//	        "closing": "stopped",    // When converter closing, disconnect
-//	    },
+//	    ChildStartStates: []string{"Running", "TryingToStart"}, // Child runs when parent is active
 //	}
 //
 // Example - Benthos managing connections and data flows:
 //
-//	// Benthos declares multiple children with different mappings
+//	// Benthos declares multiple children with different lifecycle rules
 //	[]ChildSpec{
 //	    {
 //	        Name:       "modbus-connection",
 //	        WorkerType: "modbus_client",
 //	        UserSpec:   UserSpec{Config: "address: 192.168.1.100:502"},
+//	        // Empty ChildStartStates = child always runs (follows parent's DesiredState.State)
 //	    },
 //	    {
 //	        Name:       "source-flow",
 //	        WorkerType: "benthos_flow",
 //	        UserSpec:   UserSpec{Config: "input: {...}"},
-//	        StateMapping: map[string]string{
-//	            "running": "active",
-//	            "stopped": "stopped",
-//	        },
+//	        ChildStartStates: []string{"Running"}, // Child only runs when parent is Running
 //	    },
 //	}
 type ChildSpec struct {
-	Name         string            `json:"name"                   yaml:"name"`                   // Unique name for this child (within parent scope)
-	WorkerType   string            `json:"workerType"             yaml:"workerType"`             // Type of worker to create (registered worker factory key)
-	UserSpec     UserSpec          `json:"userSpec"               yaml:"userSpec"`               // Raw user config (input to DeriveDesiredState)
-	StateMapping map[string]string `json:"stateMapping,omitempty" yaml:"stateMapping,omitempty"` // Optional parent→child state mapping
+	Name             string   `json:"name"                       yaml:"name"`                       // Unique name for this child (within parent scope)
+	WorkerType       string   `json:"workerType"                 yaml:"workerType"`                 // Type of worker to create (registered worker factory key)
+	UserSpec         UserSpec `json:"userSpec"                   yaml:"userSpec"`                   // Raw user config (input to DeriveDesiredState)
+	ChildStartStates []string `json:"childStartStates,omitempty" yaml:"childStartStates,omitempty"` // Parent FSM states where child should run (empty = always run)
 }
 
 // MarshalJSON implements json.Marshaler for ChildSpec.
@@ -185,6 +169,95 @@ func (c *ChildSpec) MarshalJSON() ([]byte, error) {
 	type Alias ChildSpec
 
 	return json.Marshal((*Alias)(c))
+}
+
+// GetMappedChildState returns the desired state for this child based on the parent's current FSM state.
+//
+// Logic:
+//   - If ChildStartStates is empty: child always runs (returns "running")
+//   - If parentState is in ChildStartStates: child should run (returns "running")
+//   - Otherwise: child should stop (returns "stopped")
+//
+// Example:
+//
+//	spec := ChildSpec{ChildStartStates: []string{"Running", "TryingToStart"}}
+//	spec.GetMappedChildState("Running")        // returns "running"
+//	spec.GetMappedChildState("TryingToStop")   // returns "stopped"
+//	spec.GetMappedChildState("Stopped")        // returns "stopped"
+//
+// Note: This replaces the deprecated StateMapping approach with a simpler model.
+func (c *ChildSpec) GetMappedChildState(parentState string) string {
+	// Empty ChildStartStates = always run
+	if len(c.ChildStartStates) == 0 {
+		return DesiredStateRunning
+	}
+
+	// Check if parent state is in the list
+	for _, state := range c.ChildStartStates {
+		if state == parentState {
+			return DesiredStateRunning
+		}
+	}
+
+	return DesiredStateStopped
+}
+
+// ChildInfo provides a read-only snapshot of a child worker's current state.
+// This is used by ChildrenView to give parent workers visibility into their children
+// without allowing direct modification.
+//
+// All fields are copies, not references - modifying them has no effect on the actual child.
+type ChildInfo struct {
+	Name          string // Child name (unique within parent scope)
+	WorkerType    string // Child worker type
+	StateName     string // Current FSM state name (e.g., "Running", "TryingToStart")
+	StateReason   string // Human-readable reason for current state
+	IsHealthy     bool   // Whether the child is considered healthy
+	ErrorMsg      string // Error message if unhealthy (empty if healthy)
+	HierarchyPath string // Full path in the worker hierarchy (e.g., "app.parent.child")
+}
+
+// ChildrenView provides read-only access to a parent worker's children.
+// This interface enables parent workers to observe their children's state
+// during CollectObservedState without being able to modify them.
+//
+// The supervisor injects this via callbacks, ensuring parents only see
+// a snapshot of child state (not live references).
+//
+// Usage in CollectObservedState:
+//
+//	func (w *ParentWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedState, error) {
+//	    deps := w.GetDependencies()
+//	    childrenView := deps.GetChildrenView()
+//
+//	    // Check aggregate health
+//	    if !childrenView.AllHealthy() {
+//	        healthy, unhealthy := childrenView.Counts()
+//	        // Handle degraded state...
+//	    }
+//
+//	    // Or inspect specific children
+//	    for _, child := range childrenView.List() {
+//	        if !child.IsHealthy {
+//	            log.Warnf("Child %s unhealthy: %s", child.Name, child.ErrorMsg)
+//	        }
+//	    }
+//	}
+type ChildrenView interface {
+	// List returns info about all children.
+	List() []ChildInfo
+
+	// Get returns info about a specific child by name, or nil if not found.
+	Get(name string) *ChildInfo
+
+	// Counts returns the number of healthy and unhealthy children.
+	Counts() (healthy, unhealthy int)
+
+	// AllHealthy returns true if all children are healthy (or there are no children).
+	AllHealthy() bool
+
+	// AllStopped returns true if all children are in the Stopped state (or there are no children).
+	AllStopped() bool
 }
 
 // DesiredState represents what we want the system to be.
@@ -215,9 +288,10 @@ func (c *ChildSpec) MarshalJSON() ([]byte, error) {
 //	    ChildrenSpecs: nil,         // Children removed during shutdown
 //	}
 type DesiredState struct {
-	BaseDesiredState                                                                   // Provides ShutdownRequested field and methods (IsShutdownRequested, SetShutdownRequested)
-	State            string      `json:"state"                   yaml:"state"`          // Current desired state ("running", "stopped", "shutdown", etc.)
-	ChildrenSpecs    []ChildSpec `json:"childrenSpecs,omitempty" yaml:"childrenSpecs,omitempty"` // Declarative specification of child workers
+	BaseDesiredState                                                                              // Provides ShutdownRequested field and methods (IsShutdownRequested, SetShutdownRequested)
+	State            string      `json:"state"                      yaml:"state"`                 // Current desired state ("running", "stopped", "shutdown", etc.)
+	ChildrenSpecs    []ChildSpec `json:"childrenSpecs,omitempty"    yaml:"childrenSpecs,omitempty"` // Declarative specification of child workers
+	OriginalUserSpec interface{} `json:"originalUserSpec,omitempty" yaml:"-"`                     // Captures the input that produced this DesiredState (for debugging/traceability)
 }
 
 // NOTE: IsShutdownRequested() and SetShutdownRequested() are provided by embedded BaseDesiredState.

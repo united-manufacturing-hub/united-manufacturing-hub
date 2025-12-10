@@ -186,6 +186,9 @@ func ValidateNilSpecHandling(baseDir string) []Violation {
 }
 
 // checkNilSpecHandling parses a worker file and checks if DeriveDesiredState checks for nil spec.
+// This validation passes if:
+// 1. The function has an explicit `if spec == nil` check in the first two statements, OR
+// 2. The function uses helper functions (DeriveLeafState, ParseUserSpec) that handle nil internally
 func checkNilSpecHandling(filename string) []Violation {
 	var violations []Violation
 
@@ -205,6 +208,12 @@ func checkNilSpecHandling(filename string) []Violation {
 
 		// Check if body exists and has at least one statement
 		if funcDecl.Body == nil || len(funcDecl.Body.List) == 0 {
+			return true
+		}
+
+		// Check for nil-safe helper functions in any statement
+		// DeriveLeafState and ParseUserSpec handle nil internally
+		if usesNilSafeHelper(funcDecl.Body) {
 			return true
 		}
 
@@ -254,6 +263,52 @@ func checkNilSpecHandling(filename string) []Violation {
 	})
 
 	return violations
+}
+
+// usesNilSafeHelper checks if the function body uses helper functions that handle nil internally.
+// These helpers (DeriveLeafState, ParseUserSpec) check for nil spec before type assertion.
+func usesNilSafeHelper(body *ast.BlockStmt) bool {
+	// Helper function names that handle nil internally
+	nilSafeHelpers := map[string]bool{
+		"DeriveLeafState": true,
+		"ParseUserSpec":   true,
+	}
+
+	found := false
+	ast.Inspect(body, func(n ast.Node) bool {
+		callExpr, ok := n.(*ast.CallExpr)
+		if !ok {
+			return true
+		}
+
+		// Check for direct function call: DeriveLeafState[T](spec)
+		if indexExpr, ok := callExpr.Fun.(*ast.IndexExpr); ok {
+			if sel, ok := indexExpr.X.(*ast.SelectorExpr); ok {
+				if nilSafeHelpers[sel.Sel.Name] {
+					found = true
+					return false
+				}
+			}
+			if ident, ok := indexExpr.X.(*ast.Ident); ok {
+				if nilSafeHelpers[ident.Name] {
+					found = true
+					return false
+				}
+			}
+		}
+
+		// Check for selector call: config.DeriveLeafState[T](spec)
+		if sel, ok := callExpr.Fun.(*ast.SelectorExpr); ok {
+			if nilSafeHelpers[sel.Sel.Name] {
+				found = true
+				return false
+			}
+		}
+
+		return true
+	})
+
+	return found
 }
 
 // ValidatePointerReceivers checks that Worker methods use pointer receivers.

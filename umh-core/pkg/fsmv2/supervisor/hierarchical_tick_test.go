@@ -267,10 +267,10 @@ var _ = Describe("Hierarchical Tick Propagation (Task 0.6)", func() {
 				},
 				childrenSpecs: []config.ChildSpec{
 					{
-						Name:         "child1",
-						WorkerType:   "child",
-						UserSpec:     config.UserSpec{},
-						StateMapping: map[string]string{"running": "active"},
+						Name:             "child1",
+						WorkerType:       "child",
+						UserSpec:         config.UserSpec{},
+						ChildStartStates: []string{"running"},
 					},
 				},
 			}

@@ -21,11 +21,10 @@ import (
 	"time"
 
 	"go.uber.org/zap"
-	"gopkg.in/yaml.v3"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	fsmv2types "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
@@ -103,56 +102,50 @@ func (w *ParentWorker) CollectObservedState(ctx context.Context) (fsmv2.Observed
 // DeriveDesiredState determines what state the parent worker should be in.
 // This method must be PURE - it only uses the spec parameter, never dependencies.
 // Note: spec is interface{} for flexibility across different worker types (each has its own UserSpec).
-func (w *ParentWorker) DeriveDesiredState(spec interface{}) (fsmv2types.DesiredState, error) {
-	var childrenCount int
-
+//
+// Uses ParseUserSpec helper for type-safe parsing.
+func (w *ParentWorker) DeriveDesiredState(spec interface{}) (config.DesiredState, error) {
 	// Handle nil spec - return default state with no children
 	if spec == nil {
-		return fsmv2types.DesiredState{
-			State:         fsmv2types.DesiredStateRunning, // Default when no config provided
-			ChildrenSpecs: nil,
+		return config.DesiredState{
+			State:            config.DesiredStateRunning,
+			ChildrenSpecs:    nil,
+			OriginalUserSpec: nil,
 		}, nil
 	}
 
-	userSpec, ok := spec.(fsmv2types.UserSpec)
-	if !ok {
-		return fsmv2types.DesiredState{}, fmt.Errorf("invalid spec type: expected fsmv2types.UserSpec, got %T", spec)
+	// Use ParseUserSpec helper for type-safe parsing
+	parentSpec, err := config.ParseUserSpec[ParentUserSpec](spec)
+	if err != nil {
+		return config.DesiredState{}, err
 	}
 
-	var parentSpec ParentUserSpec
-	if userSpec.Config != "" {
-		if err := yaml.Unmarshal([]byte(userSpec.Config), &parentSpec); err != nil {
-			return fsmv2types.DesiredState{}, fmt.Errorf("failed to parse parent spec: %w", err)
-		}
-	}
-
-	childrenCount = parentSpec.ChildrenCount
+	childrenCount := parentSpec.ChildrenCount
 
 	if childrenCount == 0 {
-		return fsmv2types.DesiredState{
-			State:         parentSpec.GetState(), // Uses BaseUserSpec.GetState() with default "running"
-			ChildrenSpecs: nil,
+		return config.DesiredState{
+			State:            parentSpec.GetState(),
+			ChildrenSpecs:    nil,
+			OriginalUserSpec: spec,
 		}, nil
 	}
 
-	childrenSpecs := make([]fsmv2types.ChildSpec, childrenCount)
+	// Create child specs using the new ChildStartStates approach
+	childrenSpecs := make([]config.ChildSpec, childrenCount)
 	for i := range childrenCount {
-		childrenSpecs[i] = fsmv2types.ChildSpec{
+		childrenSpecs[i] = config.ChildSpec{
 			Name:       fmt.Sprintf("child-%d", i),
 			WorkerType: "examplechild",
-			UserSpec:   fsmv2types.UserSpec{},
-			StateMapping: map[string]string{
-				"TryingToStart": "running",
-				"Running":       "running",
-				"TryingToStop":  "stopped",
-				"Stopped":       "stopped",
-			},
+			UserSpec:   config.UserSpec{},
+			// New approach: list parent states where children should run
+			ChildStartStates: []string{"TryingToStart", "Running"},
 		}
 	}
 
-	return fsmv2types.DesiredState{
-		State:         parentSpec.GetState(), // Uses BaseUserSpec.GetState() with default "running"
-		ChildrenSpecs: childrenSpecs,
+	return config.DesiredState{
+		State:            parentSpec.GetState(),
+		ChildrenSpecs:    childrenSpecs,
+		OriginalUserSpec: spec,
 	}, nil
 }
 

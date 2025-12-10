@@ -336,7 +336,7 @@ func TestProtocolConverterEndToEndTick(t *testing.T) {
 	// 13. Verify: Async action enqueued (start flows)
 	// 14. Wait for action completion
 	// 15. Verify: ProtocolConverter.observedState.State == "running"
-	// 16. Verify: All phases integrated: Hierarchy + Templates + Variables + StateMapping + AsyncActions
+	// 16. Verify: All phases integrated: Hierarchy + Templates + Variables + ChildStartStates + AsyncActions
 }
 
 // TestSupervisorSavesIdentityToTriangularStore verifies that Supervisor uses TriangularStore.SaveIdentity
@@ -579,7 +579,7 @@ func (m *mockWorkerWithChildren) GetInitialState() fsmv2.State[any, any] {
 	return m.initialState
 }
 
-func TestApplyStateMapping_WithMapping(t *testing.T) {
+func TestChildStartStates_ParentInList(t *testing.T) {
 	ctx := context.Background()
 	logger := zap.NewNop().Sugar()
 
@@ -617,22 +617,21 @@ func TestApplyStateMapping_WithMapping(t *testing.T) {
 		WorkerType: "parent",
 	}
 
+	// ChildStartStates: child runs when parent is in "active" state
 	childSpecs := []config.ChildSpec{
 		{
-			Name:       "child-1",
-			WorkerType: "child",
-			UserSpec:   config.UserSpec{Config: "url: tcp://localhost:1883"},
-			StateMapping: map[string]string{
-				"idle":   "stopped",
-				"active": "connected",
-			},
+			Name:             "child-1",
+			WorkerType:       "child",
+			UserSpec:         config.UserSpec{Config: "url: tcp://localhost:1883"},
+			ChildStartStates: []string{"active"},
 		},
 	}
 
+	// Parent is in "active" state (which IS in ChildStartStates)
 	worker := &mockWorkerWithChildren{
 		identity:      identity,
-		initialState:  &mockState{name: "idle"},
-		observed:      persistence.Document{"id": "parent-1", "status": "idle"},
+		initialState:  &mockState{name: "active"},
+		observed:      persistence.Document{"id": "parent-1", "status": "active"},
 		childrenSpecs: childSpecs,
 	}
 
@@ -662,12 +661,12 @@ func TestApplyStateMapping_WithMapping(t *testing.T) {
 	}
 
 	mappedState := typedChild.GetMappedParentState()
-	if mappedState != "stopped" {
-		t.Errorf("Expected child mappedParentState 'stopped', got '%s'", mappedState)
+	if mappedState != "running" {
+		t.Errorf("Expected child mappedParentState 'running' (parent in ChildStartStates), got '%s'", mappedState)
 	}
 }
 
-func TestApplyStateMapping_NoMapping(t *testing.T) {
+func TestChildStartStates_EmptyList(t *testing.T) {
 	ctx := context.Background()
 	logger := zap.NewNop().Sugar()
 
@@ -705,11 +704,13 @@ func TestApplyStateMapping_NoMapping(t *testing.T) {
 		WorkerType: "parent",
 	}
 
+	// Empty ChildStartStates = child always runs
 	childSpecs := []config.ChildSpec{
 		{
-			Name:       "child-1",
-			WorkerType: "child",
-			UserSpec:   config.UserSpec{Config: "url: tcp://localhost:1883"},
+			Name:             "child-1",
+			WorkerType:       "child",
+			UserSpec:         config.UserSpec{Config: "url: tcp://localhost:1883"},
+			ChildStartStates: nil, // Empty = always run
 		},
 	}
 
@@ -744,11 +745,11 @@ func TestApplyStateMapping_NoMapping(t *testing.T) {
 
 	mappedState := typedChild.GetMappedParentState()
 	if mappedState != "running" {
-		t.Errorf("Expected child mappedParentState 'running' (parent state), got '%s'", mappedState)
+		t.Errorf("Expected child mappedParentState 'running' (empty ChildStartStates = always run), got '%s'", mappedState)
 	}
 }
 
-func TestApplyStateMapping_MissingStateInMapping(t *testing.T) {
+func TestChildStartStates_ParentNotInList(t *testing.T) {
 	ctx := context.Background()
 	logger := zap.NewNop().Sugar()
 
@@ -786,15 +787,14 @@ func TestApplyStateMapping_MissingStateInMapping(t *testing.T) {
 		WorkerType: "parent",
 	}
 
+	// ChildStartStates: child runs when parent is in "active" state
+	// Parent is in "unknown" state (NOT in list) → child should be stopped
 	childSpecs := []config.ChildSpec{
 		{
-			Name:       "child-1",
-			WorkerType: "child",
-			UserSpec:   config.UserSpec{Config: "url: tcp://localhost:1883"},
-			StateMapping: map[string]string{
-				"idle":   "stopped",
-				"active": "connected",
-			},
+			Name:             "child-1",
+			WorkerType:       "child",
+			UserSpec:         config.UserSpec{Config: "url: tcp://localhost:1883"},
+			ChildStartStates: []string{"active"},
 		},
 	}
 
@@ -828,12 +828,12 @@ func TestApplyStateMapping_MissingStateInMapping(t *testing.T) {
 	}
 
 	mappedState := typedChild.GetMappedParentState()
-	if mappedState != "unknown" {
-		t.Errorf("Expected child mappedParentState 'unknown' (parent state when not in mapping), got '%s'", mappedState)
+	if mappedState != "stopped" {
+		t.Errorf("Expected child mappedParentState 'stopped' (parent NOT in ChildStartStates), got '%s'", mappedState)
 	}
 }
 
-func TestApplyStateMapping_MultipleChildren(t *testing.T) {
+func TestChildStartStates_MultipleChildren(t *testing.T) {
 	ctx := context.Background()
 	logger := zap.NewNop().Sugar()
 
@@ -877,32 +877,29 @@ func TestApplyStateMapping_MultipleChildren(t *testing.T) {
 		WorkerType: "parent",
 	}
 
+	// Test different ChildStartStates configurations
 	childSpecs := []config.ChildSpec{
 		{
-			Name:       "child-1",
-			WorkerType: "child",
-			UserSpec:   config.UserSpec{Config: "url: tcp://localhost:1883"},
-			StateMapping: map[string]string{
-				"active": "connected",
-				"idle":   "disconnected",
-			},
+			Name:             "child-1",
+			WorkerType:       "child",
+			UserSpec:         config.UserSpec{Config: "url: tcp://localhost:1883"},
+			ChildStartStates: []string{"active"}, // Runs when parent is "active"
 		},
 		{
-			Name:       "child-2",
-			WorkerType: "child",
-			UserSpec:   config.UserSpec{Config: "address: 192.168.1.100:502"},
-			StateMapping: map[string]string{
-				"active": "polling",
-				"idle":   "stopped",
-			},
+			Name:             "child-2",
+			WorkerType:       "child",
+			UserSpec:         config.UserSpec{Config: "address: 192.168.1.100:502"},
+			ChildStartStates: []string{"idle"}, // Runs when parent is "idle" (NOT "active")
 		},
 		{
-			Name:       "child-3",
-			WorkerType: "child",
-			UserSpec:   config.UserSpec{Config: "endpoint: opc.tcp://localhost:4840"},
+			Name:             "child-3",
+			WorkerType:       "child",
+			UserSpec:         config.UserSpec{Config: "endpoint: opc.tcp://localhost:4840"},
+			ChildStartStates: nil, // Empty = always runs
 		},
 	}
 
+	// Parent is in "active" state
 	worker := &mockWorkerWithChildren{
 		identity:      identity,
 		initialState:  &mockState{name: "active"},
@@ -925,6 +922,7 @@ func TestApplyStateMapping_MultipleChildren(t *testing.T) {
 		t.Fatalf("Expected 3 children, got %d", len(children))
 	}
 
+	// child-1: ChildStartStates: ["active"], parent is "active" → runs
 	child1, exists := children["child-1"]
 	if !exists {
 		t.Fatal("Expected child-1 to exist")
@@ -935,10 +933,11 @@ func TestApplyStateMapping_MultipleChildren(t *testing.T) {
 		t.Fatal("Child-1 supervisor should be correct type")
 	}
 
-	if typedChild1.GetMappedParentState() != "connected" {
-		t.Errorf("Expected child-1 mappedParentState 'connected', got '%s'", typedChild1.GetMappedParentState())
+	if typedChild1.GetMappedParentState() != "running" {
+		t.Errorf("Expected child-1 mappedParentState 'running' (parent in ChildStartStates), got '%s'", typedChild1.GetMappedParentState())
 	}
 
+	// child-2: ChildStartStates: ["idle"], parent is "active" → stopped
 	child2, exists := children["child-2"]
 	if !exists {
 		t.Fatal("Expected child-2 to exist")
@@ -949,10 +948,11 @@ func TestApplyStateMapping_MultipleChildren(t *testing.T) {
 		t.Fatal("Child-2 supervisor should be correct type")
 	}
 
-	if typedChild2.GetMappedParentState() != "polling" {
-		t.Errorf("Expected child-2 mappedParentState 'polling', got '%s'", typedChild2.GetMappedParentState())
+	if typedChild2.GetMappedParentState() != "stopped" {
+		t.Errorf("Expected child-2 mappedParentState 'stopped' (parent NOT in ChildStartStates), got '%s'", typedChild2.GetMappedParentState())
 	}
 
+	// child-3: ChildStartStates: nil (empty) → always runs
 	child3, exists := children["child-3"]
 	if !exists {
 		t.Fatal("Expected child-3 to exist")
@@ -963,12 +963,12 @@ func TestApplyStateMapping_MultipleChildren(t *testing.T) {
 		t.Fatal("Child-3 supervisor should be correct type")
 	}
 
-	if typedChild3.GetMappedParentState() != "active" {
-		t.Errorf("Expected child-3 mappedParentState 'active' (parent state, no mapping), got '%s'", typedChild3.GetMappedParentState())
+	if typedChild3.GetMappedParentState() != "running" {
+		t.Errorf("Expected child-3 mappedParentState 'running' (empty ChildStartStates = always run), got '%s'", typedChild3.GetMappedParentState())
 	}
 }
 
-func TestApplyStateMapping_EmptyStateMapping(t *testing.T) {
+func TestChildStartStates_EmptySlice(t *testing.T) {
 	ctx := context.Background()
 	logger := zap.NewNop().Sugar()
 
@@ -1006,12 +1006,13 @@ func TestApplyStateMapping_EmptyStateMapping(t *testing.T) {
 		WorkerType: "parent",
 	}
 
+	// Empty slice = always runs
 	childSpecs := []config.ChildSpec{
 		{
-			Name:         "child-1",
-			WorkerType:   "mqtt_client",
-			UserSpec:     config.UserSpec{Config: "url: tcp://localhost:1883"},
-			StateMapping: map[string]string{},
+			Name:             "child-1",
+			WorkerType:       "mqtt_client",
+			UserSpec:         config.UserSpec{Config: "url: tcp://localhost:1883"},
+			ChildStartStates: []string{},
 		},
 	}
 
@@ -1046,11 +1047,11 @@ func TestApplyStateMapping_EmptyStateMapping(t *testing.T) {
 
 	mappedState := typedChild.GetMappedParentState()
 	if mappedState != "running" {
-		t.Errorf("Expected child mappedParentState 'running' (parent state with empty map), got '%s'", mappedState)
+		t.Errorf("Expected child mappedParentState 'running' (empty ChildStartStates = always run), got '%s'", mappedState)
 	}
 }
 
-func TestApplyStateMapping_NilStateMapping(t *testing.T) {
+func TestChildStartStates_NilSlice(t *testing.T) {
 	ctx := context.Background()
 	logger := zap.NewNop().Sugar()
 
@@ -1088,12 +1089,13 @@ func TestApplyStateMapping_NilStateMapping(t *testing.T) {
 		WorkerType: "parent",
 	}
 
+	// Nil slice = always runs (same as empty)
 	childSpecs := []config.ChildSpec{
 		{
-			Name:         "child-1",
-			WorkerType:   "mqtt_client",
-			UserSpec:     config.UserSpec{Config: "url: tcp://localhost:1883"},
-			StateMapping: nil,
+			Name:             "child-1",
+			WorkerType:       "mqtt_client",
+			UserSpec:         config.UserSpec{Config: "url: tcp://localhost:1883"},
+			ChildStartStates: nil,
 		},
 	}
 
@@ -1127,7 +1129,7 @@ func TestApplyStateMapping_NilStateMapping(t *testing.T) {
 	}
 
 	mappedState := typedChild.GetMappedParentState()
-	if mappedState != "starting" {
-		t.Errorf("Expected child mappedParentState 'starting' (parent state with nil map), got '%s'", mappedState)
+	if mappedState != "running" {
+		t.Errorf("Expected child mappedParentState 'running' (nil ChildStartStates = always run), got '%s'", mappedState)
 	}
 }

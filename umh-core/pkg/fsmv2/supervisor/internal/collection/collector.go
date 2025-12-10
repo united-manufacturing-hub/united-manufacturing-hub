@@ -62,6 +62,7 @@ type CollectorConfig[TObserved any] struct {
 	ShutdownRequestedProvider func() bool // Returns current shutdown requested status (injected by supervisor)
 	ChildrenCountsProvider func() (healthy int, unhealthy int) // Returns children health counts (injected by supervisor for parent workers)
 	MappedParentStateProvider func() string // Returns mapped state from parent's StateMapping (injected by supervisor for child workers)
+	ChildrenViewProvider func() any // Returns config.ChildrenView for parent workers to inspect children (injected by supervisor)
 }
 
 // Collector manages the observation loop lifecycle and data collection.
@@ -326,6 +327,18 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 		mappedState := c.config.MappedParentStateProvider()
 		if setter, ok := observed.(interface{ SetParentMappedState(string) fsmv2.ObservedState }); ok {
 			observed = setter.SetParentMappedState(mappedState)
+		}
+	}
+
+	// Inject children view into observed state.
+	// The ChildrenViewProvider callback is injected by the supervisor and returns a
+	// config.ChildrenView that gives parent workers full visibility into their children's
+	// state (beyond just counts). This enables parent workers to inspect individual
+	// child states, errors, and health status.
+	if c.config.ChildrenViewProvider != nil {
+		childrenView := c.config.ChildrenViewProvider()
+		if setter, ok := observed.(interface{ SetChildrenView(any) fsmv2.ObservedState }); ok {
+			observed = setter.SetChildrenView(childrenView)
 		}
 	}
 
