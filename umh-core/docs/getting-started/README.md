@@ -63,11 +63,13 @@ docker volume create umh-core-data && docker run -d --name umh-core \
 ## Troubleshooting
 
 **Volume permission errors**
-Named volumes automatically handle permissions for the container user (UID 1000). If you still see permission errors like `s6-svscan: warning: unable to stat benthos-dataflow-*`, try removing and recreating the volume:
+Named volumes automatically handle permissions for the container user (UID 1000). If you still see permission errors like `s6-svscan: warning: unable to stat benthos-dataflow-*`, try removing the container and recreating the volume:
 
 ```bash
-docker volume rm umh-core-data && docker volume create umh-core-data
+docker rm -f umh-core && docker volume rm umh-core-data && docker volume create umh-core-data
 ```
+
+Then re-run the `docker run` command from above.
 
 For advanced users needing bind mounts (custom data locations), see the [Container Layout reference](../reference/container-layout.md#advanced-custom-data-location).
 
