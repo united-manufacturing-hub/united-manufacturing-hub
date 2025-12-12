@@ -7,22 +7,24 @@ To update umh-core, simply stop the container, pull the latest image, and start 
 ## Standard Update (v0.44+)
 
 ```bash
-# stop + delete the old container (data is preserved)
-sudo docker stop umh-core
-sudo docker rm umh-core
+# stop + delete the old container (data is preserved in the named volume)
+docker stop umh-core
+docker rm umh-core
 
 # Fix permissions for non-root container
 sudo chown -R 1000:1000 "$(pwd)/umh-core-data"
 
 # pull the latest image and re-create
-sudo docker run -d \
+docker run -d \
   --name umh-core \
   --restart unless-stopped \
-  -v "$(pwd)/umh-core-data":/data \
+  -v umh-core-data:/data \
   management.umh.app/oci/united-manufacturing-hub/umh-core:<NEW_VERSION>
 ```
 
-Need to roll back? Just start the previous tag against the same `/data` volume.
+> **Note:** On Linux without Docker group membership, prefix commands with `sudo`.
+
+Need to roll back? Just start the previous tag against the same `umh-core-data` volume.
 
 ## Automatic Permission Check
 
