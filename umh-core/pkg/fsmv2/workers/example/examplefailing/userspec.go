@@ -25,9 +25,12 @@ import (
 //
 //	should_fail: true
 //	max_failures: 3
+//	restart_after_failures: 5
 //
 // This configures the worker to fail 3 times before succeeding,
 // demonstrating exponential backoff and eventual recovery.
+// If restart_after_failures is set, the worker will emit SignalNeedsRestart
+// after that many consecutive failures, triggering a full worker restart.
 type FailingUserSpec struct {
 	config.BaseUserSpec // Provides State field with GetState() defaulting to "running"
 	// ShouldFail controls whether the connect action should fail.
@@ -36,6 +39,10 @@ type FailingUserSpec struct {
 	// MaxFailures is the number of times the connect action will fail before succeeding.
 	// Default is 3 if not specified.
 	MaxFailures int `yaml:"max_failures" json:"max_failures"`
+	// RestartAfterFailures triggers SignalNeedsRestart after this many consecutive failures.
+	// Default is 0 (no restart). When set, the worker will request a full restart
+	// instead of continuing to retry forever.
+	RestartAfterFailures int `yaml:"restart_after_failures" json:"restart_after_failures"`
 }
 
 // GetMaxFailures returns the configured max failures, defaulting to 3.
@@ -44,4 +51,10 @@ func (s *FailingUserSpec) GetMaxFailures() int {
 		return 3 // Default
 	}
 	return s.MaxFailures
+}
+
+// GetRestartAfterFailures returns the configured restart threshold.
+// Returns 0 (default) to indicate no restart.
+func (s *FailingUserSpec) GetRestartAfterFailures() int {
+	return s.RestartAfterFailures
 }

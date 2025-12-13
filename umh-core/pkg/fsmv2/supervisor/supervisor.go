@@ -191,8 +191,10 @@ type Supervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] stru
 	freshnessChecker *health.FreshnessChecker         // Data freshness validator
 	children         map[string]SupervisorInterface   // Child supervisors by name (hierarchical composition)
 	childDoneChans   map[string]<-chan struct{}       // Done channels for child supervisors
-	pendingRemoval   map[string]bool                  // Children pending graceful shutdown (waiting for SignalNeedsRemoval)
-	childStartStates []string                         // Parent FSM states where this child should run
+	pendingRemoval      map[string]bool                  // Children pending graceful shutdown (waiting for SignalNeedsRemoval)
+	pendingRestart      map[string]bool                  // Workers pending restart after shutdown completes
+	restartRequestedAt  map[string]time.Time             // When restart was requested for each worker
+	childStartStates    []string                         // Parent FSM states where this child should run
 	userSpec          config.UserSpec                  // User-provided configuration for this supervisor
 	mappedParentState string                           // State mapped from parent (if this is a child supervisor)
 	globalVars        map[string]any                   // Global variables (fleet-wide settings from management system)
@@ -295,9 +297,11 @@ func NewSupervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState](c
 		tickInterval:     tickInterval,
 		freshnessChecker: freshnessChecker,
 		children:       make(map[string]SupervisorInterface),
-		childDoneChans: make(map[string]<-chan struct{}),
-		pendingRemoval: make(map[string]bool),
-		createdAt:      time.Now(),
+		childDoneChans:     make(map[string]<-chan struct{}),
+		pendingRemoval:     make(map[string]bool),
+		pendingRestart:     make(map[string]bool),
+		restartRequestedAt: make(map[string]time.Time),
+		createdAt:          time.Now(),
 		parentID:         "",
 		healthChecker:    NewInfrastructureHealthChecker(DefaultMaxInfraRecoveryAttempts, DefaultRecoveryAttemptWindow),
 		actionExecutor:   execution.NewActionExecutor(10, cfg.WorkerType, cfg.Logger),

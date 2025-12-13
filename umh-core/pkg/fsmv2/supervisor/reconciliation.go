@@ -384,6 +384,9 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 		s.logHeartbeat()
 	}
 
+	// Check for timed out restart requests
+	s.checkRestartTimeouts(ctx)
+
 	// PHASE 1: Infrastructure health check (priority 1)
 	// Copy children map under lock to avoid race with reconcileChildren
 	s.mu.RLock()
@@ -682,6 +685,23 @@ func (s *Supervisor[TObserved, TDesired]) processSignal(ctx context.Context, wor
 	case fsmv2.SignalNeedsRemoval:
 		s.logger.Debugw("worker_removal_signaled")
 
+		// Check if this worker should be restarted instead of removed
+		s.mu.Lock()
+		shouldRestart := s.pendingRestart[workerID]
+		if shouldRestart {
+			delete(s.pendingRestart, workerID)
+			delete(s.restartRequestedAt, workerID)
+		}
+		s.mu.Unlock()
+
+		if shouldRestart {
+			s.logger.Infow("worker_restarting",
+				"worker", workerID,
+				"reason", "restart requested after graceful shutdown")
+			return s.handleWorkerRestart(ctx, workerID)
+		}
+
+		// Original removal flow continues below...
 		s.mu.Lock()
 
 		workerCtx, exists := s.workers[workerID]
@@ -783,15 +803,73 @@ func (s *Supervisor[TObserved, TDesired]) processSignal(ctx context.Context, wor
 
 		return nil
 	case fsmv2.SignalNeedsRestart:
-		s.logger.Infow("worker_restart_signaled")
+		s.logger.Infow("worker_restart_requested",
+			"worker", workerID,
+			"reason", "worker signaled unrecoverable error")
 
-		if err := s.restartCollector(ctx, workerID); err != nil {
-			return fmt.Errorf("failed to restart collector for worker %s: %w", workerID, err)
+		// Mark for restart (will be checked when SignalNeedsRemoval is received)
+		s.mu.Lock()
+		s.pendingRestart[workerID] = true
+		s.restartRequestedAt[workerID] = time.Now()
+		s.mu.Unlock()
+
+		// Request graceful shutdown - worker will go through cleanup states
+		if err := s.requestShutdown(ctx, workerID, "restart_requested"); err != nil {
+			s.logger.Warnw("restart_shutdown_request_failed",
+				"worker", workerID, "error", err)
+			// Continue anyway - we want to restart even if request fails
 		}
 
 		return nil
 	default:
 		return fmt.Errorf("unknown signal: %d", signal)
+	}
+}
+
+// checkRestartTimeouts checks for workers that have been pending restart too long
+// and force-resets them. Called from tick() to handle stuck restart requests.
+func (s *Supervisor[TObserved, TDesired]) checkRestartTimeouts(ctx context.Context) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for workerID := range s.pendingRestart {
+		requestedAt, exists := s.restartRequestedAt[workerID]
+		if !exists {
+			continue
+		}
+
+		if time.Since(requestedAt) > DefaultGracefulRestartTimeout {
+			s.logger.Warnw("restart_graceful_timeout",
+				"worker", workerID,
+				"timeout", DefaultGracefulRestartTimeout,
+				"waited", time.Since(requestedAt))
+
+			workerCtx, workerExists := s.workers[workerID]
+			if !workerExists {
+				delete(s.pendingRestart, workerID)
+				delete(s.restartRequestedAt, workerID)
+				continue
+			}
+
+			// Force reset (skip waiting for SignalNeedsRemoval)
+			s.logger.Infow("worker_restart_force_reset",
+				"worker", workerID,
+				"from_state", workerCtx.currentState.String())
+
+			workerCtx.currentState = workerCtx.worker.GetInitialState()
+
+			if workerCtx.collector != nil {
+				workerCtx.collector.Restart()
+			}
+
+			// Clear pending restart
+			delete(s.pendingRestart, workerID)
+			delete(s.restartRequestedAt, workerID)
+
+			s.logger.Infow("worker_restart_force_complete",
+				"worker", workerID,
+				"to_state", workerCtx.currentState.String())
+		}
 	}
 }
 

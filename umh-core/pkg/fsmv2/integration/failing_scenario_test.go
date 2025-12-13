@@ -77,6 +77,12 @@ var _ = Describe("Failing Scenario Integration", func() {
 
 		By("Verifying permanent worker never reaches Connected")
 		verifyPermanentWorkerNeverConnected(testLogger)
+
+		By("Verifying restart worker triggers SignalNeedsRestart")
+		verifyRestartWorkerTriggersRestart(testLogger)
+
+		By("Verifying restart worker completes full restart flow")
+		verifyRestartWorkerCompletes(testLogger)
 	})
 })
 
@@ -220,4 +226,52 @@ func verifyPermanentWorkerNeverConnected(t *integration.TestLogger) {
 	}
 
 	GinkgoWriter.Printf("✓ Permanent worker never reached Connected (stays in TryingToConnect)\n")
+}
+
+// verifyRestartWorkerTriggersRestart checks that the restart worker emits SignalNeedsRestart.
+func verifyRestartWorkerTriggersRestart(t *integration.TestLogger) {
+	restartLogs := t.GetLogsMatching("worker_restart_requested")
+
+	restartWorkerTriggered := false
+	for _, entry := range restartLogs {
+		worker := ""
+		for _, field := range entry.Context {
+			if field.Key == "worker" {
+				worker = field.String
+			}
+		}
+		if strings.Contains(worker, "failing-worker-restart") {
+			restartWorkerTriggered = true
+			break
+		}
+	}
+
+	Expect(restartWorkerTriggered).To(BeTrue(),
+		"Expected restart worker to trigger SignalNeedsRestart")
+
+	GinkgoWriter.Printf("✓ Restart worker triggered SignalNeedsRestart\n")
+}
+
+// verifyRestartWorkerCompletes checks the restart flow completes.
+func verifyRestartWorkerCompletes(t *integration.TestLogger) {
+	completeLogs := t.GetLogsMatching("worker_restart_complete")
+
+	found := false
+	for _, entry := range completeLogs {
+		worker := ""
+		for _, field := range entry.Context {
+			if field.Key == "worker" {
+				worker = field.String
+			}
+		}
+		if strings.Contains(worker, "failing-worker-restart") {
+			found = true
+			break
+		}
+	}
+
+	Expect(found).To(BeTrue(),
+		"Expected restart worker to complete restart flow")
+
+	GinkgoWriter.Printf("✓ Restart worker completed full restart\n")
 }

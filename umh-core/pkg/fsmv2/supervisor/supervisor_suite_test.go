@@ -72,6 +72,7 @@ func registerTestWorkerFactories() {
 		"s6_service",
 		"type_a",
 		"type_b",
+		"test", // Used by handleWorkerRestart tests for full worker recreation
 	}
 
 	for _, workerType := range workerTypes {

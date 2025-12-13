@@ -55,12 +55,13 @@ func (d *DefaultConnectionPool) HealthCheck(_ Connection) error {
 // It implements ExamplefailingDependenciesWithFailure interface for failure simulation.
 type FailingDependencies struct {
 	*fsmv2.BaseDependencies
-	connectionPool ConnectionPool
-	mu             sync.RWMutex
-	shouldFail     bool
-	maxFailures    int
-	attempts       int
-	connected      bool
+	connectionPool       ConnectionPool
+	mu                   sync.RWMutex
+	shouldFail           bool
+	maxFailures          int
+	attempts             int
+	connected            bool
+	restartAfterFailures int
 }
 
 // NewFailingDependencies creates new dependencies for the failing worker.
@@ -139,4 +140,19 @@ func (d *FailingDependencies) IsConnected() bool {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 	return d.connected
+}
+
+// SetRestartAfterFailures sets the restart threshold.
+func (d *FailingDependencies) SetRestartAfterFailures(n int) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.restartAfterFailures = n
+}
+
+// GetRestartAfterFailures returns the restart threshold.
+// 0 means no restart.
+func (d *FailingDependencies) GetRestartAfterFailures() int {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	return d.restartAfterFailures
 }

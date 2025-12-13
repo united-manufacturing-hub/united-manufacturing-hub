@@ -39,6 +39,8 @@ type ExamplefailingDependencies interface {
 	SetConnected(connected bool)
 	// IsConnected returns whether the worker is currently connected.
 	IsConnected() bool
+	// GetRestartAfterFailures returns the restart threshold (0 = no restart).
+	GetRestartAfterFailures() int
 }
 
 // ExamplefailingSnapshot represents a point-in-time view of the failing worker state.
@@ -74,10 +76,11 @@ type ExamplefailingObservedState struct {
 
 	ExamplefailingDesiredState `json:",inline"`
 
-	State            string `json:"state"` // Observed lifecycle state (e.g., "running_connected")
-	LastError        error  `json:"last_error,omitempty"`
-	ConnectAttempts  int    `json:"connect_attempts"`
-	ConnectionHealth string `json:"connection_health"`
+	State                string `json:"state"` // Observed lifecycle state (e.g., "running_connected")
+	LastError            error  `json:"last_error,omitempty"`
+	ConnectAttempts      int    `json:"connect_attempts"`
+	ConnectionHealth     string `json:"connection_health"`
+	RestartAfterFailures int    `json:"restart_after_failures"` // Restart threshold from config
 }
 
 func (o ExamplefailingObservedState) GetTimestamp() time.Time {

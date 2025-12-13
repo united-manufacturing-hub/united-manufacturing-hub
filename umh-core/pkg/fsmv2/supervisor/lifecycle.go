@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 )
@@ -449,5 +450,132 @@ func (s *Supervisor[TObserved, TDesired]) RequestShutdown(ctx context.Context, r
 			s.logger.Warnw("shutdown_request_failed", "error", err)
 		}
 	}
+	return nil
+}
+
+// handleWorkerRestart performs FULL worker recreation after graceful shutdown.
+// Called when SignalNeedsRemoval is received for a worker marked in pendingRestart.
+//
+// This destroys the old worker instance completely (including all dependencies) and
+// creates a fresh worker via the factory. This ensures all worker state is reset,
+// including any attempt counters, connection pools, or cached data in dependencies.
+//
+// Flow:
+//  1. Extract identity from existing worker (before removal)
+//  2. RemoveWorker - stops collector, executor, removes from registry
+//  3. Clear ShutdownRequested in storage (so new worker starts fresh)
+//  4. factory.NewWorkerByType - creates completely new worker instance
+//  5. AddWorker - registers new worker, starts collector
+func (s *Supervisor[TObserved, TDesired]) handleWorkerRestart(ctx context.Context, workerID string) error {
+	// Extract identity under lock before removal
+	s.mu.RLock()
+	workerCtx, exists := s.workers[workerID]
+	if !exists {
+		s.mu.RUnlock()
+		return fmt.Errorf("worker %s not found for restart", workerID)
+	}
+	identity := workerCtx.identity
+	fromState := workerCtx.currentState.String()
+	s.mu.RUnlock()
+
+	s.logger.Infow("worker_restart_executing",
+		"worker", workerID,
+		"from_state", fromState,
+		"action", "full_recreation")
+
+	// 1. Remove old worker completely (stops collector, executor, removes from registry)
+	if err := s.RemoveWorker(ctx, workerID); err != nil {
+		return fmt.Errorf("failed to remove worker for restart: %w", err)
+	}
+
+	s.logger.Debugw("worker_restart_old_removed",
+		"worker", workerID)
+
+	// 2. Clear shutdown flag in storage BEFORE creating new worker
+	// This ensures the new worker doesn't immediately see ShutdownRequested=true
+	if err := s.clearShutdownRequested(ctx, workerID); err != nil {
+		s.logger.Warnw("restart_clear_shutdown_failed",
+			"worker", workerID, "error", err)
+		// Continue anyway - the new worker might still work
+	}
+
+	// 3. Create fresh worker instance via factory
+	newWorker, err := factory.NewWorkerByType(s.workerType, identity, s.baseLogger, s.store)
+	if err != nil {
+		return fmt.Errorf("failed to create new worker for restart: %w", err)
+	}
+
+	s.logger.Debugw("worker_restart_new_created",
+		"worker", workerID)
+
+	// 4. Add new worker to supervisor (this also starts the collector if supervisor is running)
+	if err := s.AddWorker(identity, newWorker); err != nil {
+		return fmt.Errorf("failed to add new worker for restart: %w", err)
+	}
+
+	// 5. Start the new worker's collector and executor if supervisor is already running
+	if supervisorCtx, started := s.getStartedContext(); started {
+		s.mu.RLock()
+		newWorkerCtx, exists := s.workers[workerID]
+		s.mu.RUnlock()
+
+		if exists && newWorkerCtx.collector != nil {
+			if err := newWorkerCtx.collector.Start(supervisorCtx); err != nil {
+				s.logger.Errorw("restart_collector_start_failed",
+					"worker", workerID, "error", err)
+			}
+			newWorkerCtx.executor.Start(supervisorCtx)
+		}
+	}
+
+	// 6. Reset health counters for fresh start
+	s.mu.Lock()
+	s.collectorHealth.restartCount = 0
+	s.mu.Unlock()
+
+	// Get new state for logging
+	s.mu.RLock()
+	newWorkerCtx, _ := s.workers[workerID]
+	toState := "unknown"
+	if newWorkerCtx != nil && newWorkerCtx.currentState != nil {
+		toState = newWorkerCtx.currentState.String()
+	}
+	s.mu.RUnlock()
+
+	s.logger.Infow("worker_restart_complete",
+		"worker", workerID,
+		"to_state", toState)
+
+	return nil
+}
+
+// clearShutdownRequested clears the ShutdownRequested flag in storage for restart.
+func (s *Supervisor[TObserved, TDesired]) clearShutdownRequested(ctx context.Context, workerID string) error {
+	// Load current desired state
+	var desired TDesired
+	if err := s.store.LoadDesiredTyped(ctx, s.workerType, workerID, &desired); err != nil {
+		return fmt.Errorf("load desired for clear shutdown: %w", err)
+	}
+
+	// Clear shutdown flag via interface
+	if sr, ok := any(desired).(fsmv2.ShutdownRequestable); ok {
+		sr.SetShutdownRequested(false)
+	}
+
+	// Save back - need to convert to Document
+	desiredDoc := make(persistence.Document)
+	desiredJSON, err := json.Marshal(desired)
+	if err != nil {
+		return fmt.Errorf("marshal desired: %w", err)
+	}
+	if err := json.Unmarshal(desiredJSON, &desiredDoc); err != nil {
+		return fmt.Errorf("unmarshal desired to doc: %w", err)
+	}
+	desiredDoc["id"] = workerID
+
+	if _, err := s.store.SaveDesired(ctx, s.workerType, workerID, desiredDoc); err != nil {
+		return fmt.Errorf("save desired: %w", err)
+	}
+
 	return nil
 }

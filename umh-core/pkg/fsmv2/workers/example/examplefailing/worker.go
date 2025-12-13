@@ -93,10 +93,11 @@ func (w *FailingWorker) CollectObservedState(ctx context.Context) (fsmv2.Observe
 	}
 
 	observed := snapshot.ExamplefailingObservedState{
-		ID:               w.identity.ID,
-		CollectedAt:      time.Now(),
-		ConnectionHealth: connectionHealth,
-		ConnectAttempts:  deps.GetAttempts(),
+		ID:                   w.identity.ID,
+		CollectedAt:          time.Now(),
+		ConnectionHealth:     connectionHealth,
+		ConnectAttempts:      deps.GetAttempts(),
+		RestartAfterFailures: deps.GetRestartAfterFailures(),
 	}
 
 	return observed, nil
@@ -128,6 +129,7 @@ func (w *FailingWorker) DeriveDesiredState(spec interface{}) (fsmv2types.Desired
 	deps := w.GetDependencies()
 	deps.SetShouldFail(failingSpec.ShouldFail)
 	deps.SetMaxFailures(failingSpec.GetMaxFailures())
+	deps.SetRestartAfterFailures(failingSpec.GetRestartAfterFailures())
 
 	return fsmv2types.DesiredState{
 		State:         failingSpec.GetState(), // Uses BaseUserSpec.GetState() with default "running"

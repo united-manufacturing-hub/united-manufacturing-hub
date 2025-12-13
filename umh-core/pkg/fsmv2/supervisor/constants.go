@@ -73,4 +73,7 @@ const (
 	// graceful shutdown during Shutdown(). Workers have this time to process their shutdown
 	// state machines and emit SignalNeedsRemoval before forced shutdown proceeds.
 	DefaultGracefulShutdownTimeout = 5 * time.Second
+
+	// DefaultGracefulRestartTimeout is how long to wait for graceful restart before force resetting.
+	DefaultGracefulRestartTimeout = 30 * time.Second
 )

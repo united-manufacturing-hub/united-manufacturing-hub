@@ -16,6 +16,7 @@ package supervisor
 
 import (
 	"context"
+	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 )
@@ -52,4 +53,25 @@ func (s *Supervisor[TObserved, TDesired]) TestTickAll(ctx context.Context) error
 // TestUpdateUserSpec exposes updateUserSpec() for testing. DO NOT USE in production code.
 func (s *Supervisor[TObserved, TDesired]) TestUpdateUserSpec(spec config.UserSpec) {
 	s.updateUserSpec(spec)
+}
+
+// TestSetPendingRestart marks a worker as pending restart for testing. DO NOT USE in production code.
+func (s *Supervisor[TObserved, TDesired]) TestSetPendingRestart(workerID string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.pendingRestart[workerID] = true
+}
+
+// TestSetRestartRequestedAt sets the restart requested timestamp for testing. DO NOT USE in production code.
+func (s *Supervisor[TObserved, TDesired]) TestSetRestartRequestedAt(workerID string, t time.Time) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.restartRequestedAt[workerID] = t
+}
+
+// TestIsPendingRestart checks if worker is in pendingRestart map. DO NOT USE in production code.
+func (s *Supervisor[TObserved, TDesired]) TestIsPendingRestart(workerID string) bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.pendingRestart[workerID]
 }

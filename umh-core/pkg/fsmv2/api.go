@@ -28,9 +28,33 @@ type Signal int
 const (
 	// SignalNone indicates normal operation, no special action needed.
 	SignalNone Signal = iota
+
 	// SignalNeedsRemoval tells supervisor this worker has completed cleanup and can be removed.
+	// Emitted by Stopped state when ShutdownRequested=true and cleanup is complete.
 	SignalNeedsRemoval
-	// SignalNeedsRestart tells supervisor to initiate shutdown for a restart cycle.
+
+	// SignalNeedsRestart tells supervisor the worker has detected an unrecoverable error
+	// and needs a full restart. The supervisor will:
+	//   1. Set ShutdownRequested=true (trigger graceful shutdown)
+	//   2. Wait for worker to complete shutdown and emit SignalNeedsRemoval
+	//   3. Reset worker to initial state instead of removing it
+	//   4. Restart the observation collector
+	//
+	// If graceful shutdown takes too long (>30s), the supervisor force-resets the worker.
+	//
+	// Use this when:
+	//   - Action failures indicate permanent misconfiguration
+	//   - Worker state is corrupted and needs a fresh start
+	//   - External resource needs reconnection from scratch
+	//
+	// Example in state:
+	//
+	//   func (s *TryingToConnectState) Next(snap MySnapshot) (State, Signal, Action) {
+	//       if snap.Observed.ConsecutiveFailures > 100 {
+	//           return s, fsmv2.SignalNeedsRestart, nil
+	//       }
+	//       return s, fsmv2.SignalNone, &ConnectAction{}
+	//   }
 	SignalNeedsRestart
 )
 

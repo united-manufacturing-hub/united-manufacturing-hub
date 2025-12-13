@@ -115,5 +115,18 @@ children:
       config: |
         should_fail: true
         max_failures: 999999
+
+  # Worker that triggers full restart after 5 failures - demonstrates SignalNeedsRestart
+  # After 5 consecutive failures, the worker emits SignalNeedsRestart which triggers:
+  # 1. Graceful shutdown (worker goes through cleanup states)
+  # 2. Worker state reset to initial
+  # 3. Worker restarts fresh and tries again
+  - name: "failing-worker-restart"
+    workerType: "examplefailing"
+    userSpec:
+      config: |
+        should_fail: true
+        max_failures: 999999
+        restart_after_failures: 5
 `,
 }

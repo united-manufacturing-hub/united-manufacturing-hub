@@ -143,7 +143,11 @@ var _ = Describe("Supervisor Lifecycle", func() {
 		})
 
 		Context("when SignalNeedsRestart is received", func() {
-			It("should restart collector and increment restart count", func() {
+			It("should mark worker for restart and request graceful shutdown", func() {
+				// NOTE: SignalNeedsRestart now triggers a full worker restart (graceful shutdown + reset)
+				// instead of just restarting the collector. The restart count is NOT incremented
+				// because we're doing a full restart, not a collector-only restart.
+				// See "SignalNeedsRestart full worker restart" tests for comprehensive coverage.
 				store := newMockTriangularStore()
 
 				state := &mockState{
@@ -157,7 +161,10 @@ var _ = Describe("Supervisor Lifecycle", func() {
 
 				err := s.TestTick(context.Background())
 				Expect(err).ToNot(HaveOccurred())
-				Expect(s.TestGetRestartCount()).To(Equal(1))
+
+				// Worker should still exist (not removed yet - waiting for graceful shutdown)
+				workers := s.ListWorkers()
+				Expect(workers).To(HaveLen(1))
 			})
 		})
 
@@ -175,6 +182,119 @@ var _ = Describe("Supervisor Lifecycle", func() {
 				err := s.TestTick(context.Background())
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("unknown signal"))
+			})
+		})
+	})
+
+	Describe("SignalNeedsRestart full worker restart", func() {
+		Context("when SignalNeedsRestart is received", func() {
+			It("should mark worker for restart and request graceful shutdown", func() {
+				store := newMockTriangularStore()
+
+				state := &mockState{
+					signal: fsmv2.SignalNeedsRestart,
+				}
+				state.nextState = state
+
+				s := newSupervisorWithWorker(&mockWorker{initialState: state}, store, supervisor.CollectorHealthConfig{
+					MaxRestartAttempts: 3,
+				})
+
+				workersBefore := s.ListWorkers()
+				Expect(workersBefore).To(HaveLen(1))
+
+				err := s.TestTick(context.Background())
+				Expect(err).ToNot(HaveOccurred())
+
+				workersAfter := s.ListWorkers()
+				Expect(workersAfter).To(HaveLen(1))
+
+				identity := mockIdentity()
+				var desiredState mockDesiredState
+				loadErr := store.LoadDesiredTyped(context.Background(), "test", identity.ID, &desiredState)
+				Expect(loadErr).ToNot(HaveOccurred())
+				Expect(desiredState.ShutdownRequested).To(BeTrue())
+			})
+		})
+
+		Context("when SignalNeedsRemoval received for worker in pendingRestart", func() {
+			It("should restart worker instead of removing", func() {
+				store := newMockTriangularStore()
+
+				initialState := &mockState{}
+				initialState.nextState = initialState
+
+				stoppedState := &mockState{
+					signal: fsmv2.SignalNeedsRemoval,
+				}
+				stoppedState.nextState = stoppedState
+
+				worker := &mockWorker{initialState: stoppedState}
+
+				s := newSupervisorWithWorker(worker, store, supervisor.CollectorHealthConfig{})
+
+				identity := mockIdentity()
+				s.TestSetPendingRestart(identity.ID)
+
+				workersBefore := s.ListWorkers()
+				Expect(workersBefore).To(HaveLen(1))
+
+				err := s.TestTick(context.Background())
+				Expect(err).ToNot(HaveOccurred())
+
+				workersAfter := s.ListWorkers()
+				Expect(workersAfter).To(HaveLen(1))
+
+				var desiredState mockDesiredState
+				loadErr := store.LoadDesiredTyped(context.Background(), "test", identity.ID, &desiredState)
+				Expect(loadErr).ToNot(HaveOccurred())
+				Expect(desiredState.ShutdownRequested).To(BeFalse())
+			})
+		})
+
+		Context("when SignalNeedsRemoval received for worker NOT in pendingRestart", func() {
+			It("should remove worker normally", func() {
+				store := newMockTriangularStore()
+
+				state := &mockState{
+					signal: fsmv2.SignalNeedsRemoval,
+				}
+				state.nextState = state
+
+				s := newSupervisorWithWorker(&mockWorker{initialState: state}, store, supervisor.CollectorHealthConfig{})
+
+				workersBefore := s.ListWorkers()
+				Expect(workersBefore).To(HaveLen(1))
+
+				err := s.TestTick(context.Background())
+				Expect(err).ToNot(HaveOccurred())
+
+				workersAfter := s.ListWorkers()
+				Expect(workersAfter).To(BeEmpty())
+			})
+		})
+
+		Context("when graceful restart times out", func() {
+			It("should force reset worker after timeout", func() {
+				store := newMockTriangularStore()
+
+				state := &mockState{}
+				state.nextState = state
+
+				s := newSupervisorWithWorker(&mockWorker{initialState: state}, store, supervisor.CollectorHealthConfig{})
+				identity := mockIdentity()
+
+				s.TestSetPendingRestart(identity.ID)
+
+				s.TestSetRestartRequestedAt(identity.ID, time.Now().Add(-35*time.Second))
+
+				err := s.TestTick(context.Background())
+				Expect(err).ToNot(HaveOccurred())
+
+				workers := s.ListWorkers()
+				Expect(workers).To(HaveLen(1))
+
+				Expect(s.TestIsPendingRestart(identity.ID)).To(BeFalse())
 			})
 		})
 	})
