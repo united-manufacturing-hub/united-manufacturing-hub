@@ -52,11 +52,15 @@ func (d *DefaultConnectionPool) HealthCheck(_ Connection) error {
 }
 
 // FailingDependencies provides access to tools needed by failing worker actions.
+// It implements ExamplefailingDependenciesWithFailure interface for failure simulation.
 type FailingDependencies struct {
 	*fsmv2.BaseDependencies
 	connectionPool ConnectionPool
 	mu             sync.RWMutex
 	shouldFail     bool
+	maxFailures    int
+	attempts       int
+	connected      bool
 }
 
 // NewFailingDependencies creates new dependencies for the failing worker.
@@ -64,6 +68,7 @@ func NewFailingDependencies(connectionPool ConnectionPool, logger *zap.SugaredLo
 	return &FailingDependencies{
 		BaseDependencies: fsmv2.NewBaseDependencies(logger, stateReader, identity),
 		connectionPool:   connectionPool,
+		maxFailures:      3, // Default: fail 3 times before success
 	}
 }
 
@@ -84,4 +89,54 @@ func (d *FailingDependencies) GetShouldFail() bool {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 	return d.shouldFail
+}
+
+// SetMaxFailures sets the maximum number of failures before success.
+func (d *FailingDependencies) SetMaxFailures(maxFailures int) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.maxFailures = maxFailures
+}
+
+// GetMaxFailures returns the configured maximum number of failures before success.
+func (d *FailingDependencies) GetMaxFailures() int {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	return d.maxFailures
+}
+
+// IncrementAttempts increments and returns the current attempt count.
+func (d *FailingDependencies) IncrementAttempts() int {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.attempts++
+	return d.attempts
+}
+
+// GetAttempts returns the current attempt count.
+func (d *FailingDependencies) GetAttempts() int {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	return d.attempts
+}
+
+// ResetAttempts resets the attempt counter to zero.
+func (d *FailingDependencies) ResetAttempts() {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.attempts = 0
+}
+
+// SetConnected marks the worker as connected or disconnected.
+func (d *FailingDependencies) SetConnected(connected bool) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.connected = connected
+}
+
+// IsConnected returns whether the worker is currently connected.
+func (d *FailingDependencies) IsConnected() bool {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	return d.connected
 }

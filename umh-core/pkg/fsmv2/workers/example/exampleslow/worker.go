@@ -21,11 +21,10 @@ import (
 	"time"
 
 	"go.uber.org/zap"
-	"gopkg.in/yaml.v3"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	fsmv2types "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
@@ -35,9 +34,8 @@ import (
 
 type ExampleslowWorker struct {
 	*helpers.BaseWorker[*ExampleslowDependencies]
-	identity   fsmv2.Identity
-	logger     *zap.SugaredLogger
-	connection Connection
+	identity fsmv2.Identity
+	logger   *zap.SugaredLogger
 }
 
 func NewExampleslowWorker(
@@ -63,16 +61,10 @@ func NewExampleslowWorker(
 	}
 	dependencies := NewExampleslowDependencies(connectionPool, logger, stateReader, identity)
 
-	conn, err := connectionPool.Acquire()
-	if err != nil {
-		logger.Warnw("Failed to acquire initial connection", "error", err)
-	}
-
 	return &ExampleslowWorker{
 		BaseWorker: helpers.NewBaseWorker(dependencies),
 		identity:   identity,
 		logger:     logger,
-		connection: conn,
 	}, nil
 }
 
@@ -83,51 +75,48 @@ func (w *ExampleslowWorker) CollectObservedState(ctx context.Context) (fsmv2.Obs
 	default:
 	}
 
+	// Get connection health from dependencies (updated by ConnectAction/DisconnectAction)
+	deps := w.GetDependencies()
+	connectionHealth := "no connection"
+	if deps.IsConnected() {
+		connectionHealth = "healthy"
+	}
+
 	observed := snapshot.ExampleslowObservedState{
 		ID:               w.identity.ID,
 		CollectedAt:      time.Now(),
-		ConnectionHealth: w.getConnectionHealth(),
+		ConnectionHealth: connectionHealth,
 	}
 
 	return observed, nil
 }
 
-func (w *ExampleslowWorker) DeriveDesiredState(spec interface{}) (fsmv2types.DesiredState, error) {
+func (w *ExampleslowWorker) DeriveDesiredState(spec interface{}) (config.DesiredState, error) {
 	if spec == nil {
-		return fsmv2types.DesiredState{
-			State:         fsmv2types.DesiredStateRunning,
+		return config.DesiredState{
+			State:         config.DesiredStateRunning,
 			ChildrenSpecs: nil,
 		}, nil
 	}
 
-	userSpec, ok := spec.(fsmv2types.UserSpec)
-	if !ok {
-		return fsmv2types.DesiredState{}, fmt.Errorf("invalid spec type: expected fsmv2types.UserSpec, got %T", spec)
+	parsed, err := config.ParseUserSpec[ExampleslowUserSpec](spec)
+	if err != nil {
+		return config.DesiredState{}, err
 	}
 
-	var slowSpec ExampleslowUserSpec
-	if userSpec.Config != "" {
-		if err := yaml.Unmarshal([]byte(userSpec.Config), &slowSpec); err != nil {
-			return fsmv2types.DesiredState{}, fmt.Errorf("failed to parse slow spec: %w", err)
-		}
-	}
+	// Update dependencies with parsed config
+	deps := w.GetDependencies()
+	deps.SetDelaySeconds(parsed.DelaySeconds)
 
-	return fsmv2types.DesiredState{
-		State:         slowSpec.GetState(), // Uses BaseUserSpec.GetState() with default "running"
-		ChildrenSpecs: nil,
+	return config.DesiredState{
+		State:            parsed.GetState(), // Uses BaseUserSpec.GetState() with default "running"
+		ChildrenSpecs:    nil,
+		OriginalUserSpec: spec,
 	}, nil
 }
 
 func (w *ExampleslowWorker) GetInitialState() fsmv2.State[any, any] {
 	return &state.StoppedState{}
-}
-
-func (w *ExampleslowWorker) getConnectionHealth() string {
-	if w.connection == nil {
-		return "no connection"
-	}
-
-	return "healthy"
 }
 
 func init() {

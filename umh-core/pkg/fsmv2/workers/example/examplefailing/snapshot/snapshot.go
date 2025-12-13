@@ -22,9 +22,23 @@ import (
 )
 
 // ExamplefailingDependencies interface to avoid import cycles.
+// Includes all methods needed by actions.
 type ExamplefailingDependencies interface {
 	fsmv2.Dependencies
+	// GetShouldFail returns whether the worker should simulate failures.
 	GetShouldFail() bool
+	// IncrementAttempts increments and returns the current attempt count.
+	IncrementAttempts() int
+	// GetAttempts returns the current attempt count without incrementing.
+	GetAttempts() int
+	// ResetAttempts resets the attempt counter to zero.
+	ResetAttempts()
+	// GetMaxFailures returns the configured maximum number of failures before success.
+	GetMaxFailures() int
+	// SetConnected marks the worker as connected.
+	SetConnected(connected bool)
+	// IsConnected returns whether the worker is currently connected.
+	IsConnected() bool
 }
 
 // ExamplefailingSnapshot represents a point-in-time view of the failing worker state.

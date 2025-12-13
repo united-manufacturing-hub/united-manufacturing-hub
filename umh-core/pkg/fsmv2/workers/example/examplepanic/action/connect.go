@@ -22,9 +22,9 @@ import (
 
 const ConnectActionName = "connect"
 
-type ConnectAction struct {
-	ShouldPanic bool
-}
+// ConnectAction is a stateless action that attempts to establish a connection.
+// Configuration (shouldPanic) is read from dependencies, not struct fields.
+type ConnectAction struct{}
 
 func (a *ConnectAction) Execute(ctx context.Context, depsAny any) error {
 	select {
@@ -35,12 +35,15 @@ func (a *ConnectAction) Execute(ctx context.Context, depsAny any) error {
 	deps := depsAny.(snapshot.ExamplepanicDependencies)
 	logger := deps.GetLogger()
 
-	if a.ShouldPanic {
+	if deps.IsShouldPanic() {
 		logger.Warn("Simulating panic in connect action")
 		panic("simulated panic in connect action")
 	}
 
 	logger.Info("Attempting to connect (normal behavior)")
+
+	// Mark as connected on success
+	deps.SetConnected(true)
 
 	return nil
 }

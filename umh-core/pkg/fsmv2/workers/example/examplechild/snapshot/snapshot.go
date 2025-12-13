@@ -58,16 +58,19 @@ type ExamplechildDesiredState struct {
 //
 // Children only run when:
 // 1. ShutdownRequested is false (not being shut down)
-// 2. ParentMappedState is "running" (parent wants children to run)
+// 2. ParentMappedState is config.DesiredStateRunning (parent wants children to run)
 //
 // This ensures children wait for parent to reach TryingToStart before connecting.
+//
+// LIFECYCLE INVARIANT: Do NOT add custom lifecycle fields like ShouldRun.
+// Use only ShutdownRequested (from BaseDesiredState) and ParentMappedState (for children).
 func (s *ExamplechildDesiredState) ShouldBeRunning() bool {
 	if s.ShutdownRequested {
 		return false
 	}
 	// Only run if parent explicitly wants us running via ChildStartStates
 	// Default to not running if ParentMappedState is empty or "stopped"
-	return s.ParentMappedState == "running"
+	return s.ParentMappedState == config.DesiredStateRunning
 }
 
 // ExamplechildObservedState represents the current state of the child worker.

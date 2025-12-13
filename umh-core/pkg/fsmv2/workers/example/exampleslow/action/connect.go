@@ -23,25 +23,20 @@ import (
 
 const ConnectActionName = "connect"
 
-type ConnectAction struct {
-	DelaySeconds int
-}
-
-func NewConnectAction(delaySeconds int) *ConnectAction {
-	return &ConnectAction{
-		DelaySeconds: delaySeconds,
-	}
-}
+// ConnectAction is a stateless action that attempts to establish a connection with a delay.
+// Configuration (delaySeconds) is read from dependencies, not struct fields.
+type ConnectAction struct{}
 
 func (a *ConnectAction) Execute(ctx context.Context, depsAny any) error {
 	deps := depsAny.(snapshot.ExampleslowDependencies)
 	logger := deps.GetLogger()
+	delaySeconds := deps.GetDelaySeconds()
 
-	logger.Infow("connect_attempting", "delay_seconds", a.DelaySeconds)
+	logger.Infow("connect_attempting", "delay_seconds", delaySeconds)
 
-	if a.DelaySeconds > 0 {
+	if delaySeconds > 0 {
 		select {
-		case <-time.After(time.Duration(a.DelaySeconds) * time.Second):
+		case <-time.After(time.Duration(delaySeconds) * time.Second):
 			logger.Info("Connect delay completed successfully")
 		case <-ctx.Done():
 			logger.Warn("Connect action cancelled during delay")
@@ -50,6 +45,9 @@ func (a *ConnectAction) Execute(ctx context.Context, depsAny any) error {
 	}
 
 	logger.Info("Connect action completed")
+
+	// Mark as connected on success
+	deps.SetConnected(true)
 
 	return nil
 }

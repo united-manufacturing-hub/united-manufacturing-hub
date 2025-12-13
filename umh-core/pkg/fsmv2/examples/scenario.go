@@ -75,11 +75,10 @@ type Scenario struct {
 // Registry contains all available scenarios.
 // Add new scenarios here to make them available in both tests and CLI.
 var Registry = map[string]Scenario{
-	"simple": SimpleScenario,
-	// Future scenarios:
-	// "stress": StressScenario,
-	// "panic-recovery": PanicRecoveryScenario,
-	// "store-failure": StoreFailureScenario,
+	"simple":  SimpleScenario,
+	"failing": FailingScenario,
+	"panic":   PanicScenario,
+	"slow":    SlowScenario,
 }
 
 // RunConfig configures how a scenario is executed.

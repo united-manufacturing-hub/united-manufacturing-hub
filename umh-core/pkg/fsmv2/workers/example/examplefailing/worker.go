@@ -86,10 +86,17 @@ func (w *FailingWorker) CollectObservedState(ctx context.Context) (fsmv2.Observe
 	default:
 	}
 
+	deps := w.GetDependencies()
+	connectionHealth := "no connection"
+	if deps.IsConnected() {
+		connectionHealth = "healthy"
+	}
+
 	observed := snapshot.ExamplefailingObservedState{
 		ID:               w.identity.ID,
 		CollectedAt:      time.Now(),
-		ConnectionHealth: w.getConnectionHealth(),
+		ConnectionHealth: connectionHealth,
+		ConnectAttempts:  deps.GetAttempts(),
 	}
 
 	return observed, nil
@@ -117,6 +124,11 @@ func (w *FailingWorker) DeriveDesiredState(spec interface{}) (fsmv2types.Desired
 		}
 	}
 
+	// Apply configuration to dependencies
+	deps := w.GetDependencies()
+	deps.SetShouldFail(failingSpec.ShouldFail)
+	deps.SetMaxFailures(failingSpec.GetMaxFailures())
+
 	return fsmv2types.DesiredState{
 		State:         failingSpec.GetState(), // Uses BaseUserSpec.GetState() with default "running"
 		ChildrenSpecs: nil,
@@ -126,14 +138,6 @@ func (w *FailingWorker) DeriveDesiredState(spec interface{}) (fsmv2types.Desired
 // GetInitialState returns the state the FSM should start in.
 func (w *FailingWorker) GetInitialState() fsmv2.State[any, any] {
 	return &state.StoppedState{}
-}
-
-func (w *FailingWorker) getConnectionHealth() string {
-	if w.connection == nil {
-		return "no connection"
-	}
-
-	return "healthy"
 }
 
 func init() {

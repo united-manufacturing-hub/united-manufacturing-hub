@@ -15,8 +15,11 @@
 package example_panic
 
 import (
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"sync"
+
 	"go.uber.org/zap"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 )
 
 type Connection interface{}
@@ -44,6 +47,10 @@ func (d *DefaultConnectionPool) HealthCheck(_ Connection) error {
 type ExamplepanicDependencies struct {
 	*fsmv2.BaseDependencies
 	connectionPool ConnectionPool
+
+	mu          sync.RWMutex
+	shouldPanic bool
+	isConnected bool
 }
 
 func NewExamplepanicDependencies(connectionPool ConnectionPool, logger *zap.SugaredLogger, stateReader fsmv2.StateReader, identity fsmv2.Identity) *ExamplepanicDependencies {
@@ -55,4 +62,32 @@ func NewExamplepanicDependencies(connectionPool ConnectionPool, logger *zap.Suga
 
 func (d *ExamplepanicDependencies) GetConnectionPool() ConnectionPool {
 	return d.connectionPool
+}
+
+// SetShouldPanic sets whether the worker should panic during connect action.
+func (d *ExamplepanicDependencies) SetShouldPanic(shouldPanic bool) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.shouldPanic = shouldPanic
+}
+
+// IsShouldPanic returns whether the worker should panic during connect action.
+func (d *ExamplepanicDependencies) IsShouldPanic() bool {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	return d.shouldPanic
+}
+
+// SetConnected sets the connection state.
+func (d *ExamplepanicDependencies) SetConnected(connected bool) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.isConnected = connected
+}
+
+// IsConnected returns the current connection state.
+func (d *ExamplepanicDependencies) IsConnected() bool {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	return d.isConnected
 }

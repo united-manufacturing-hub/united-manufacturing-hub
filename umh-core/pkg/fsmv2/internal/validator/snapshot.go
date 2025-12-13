@@ -656,6 +656,89 @@ func checkFolderMatchesWorkerType(filename string) []Violation {
 	return violations
 }
 
+// ValidateNoCustomLifecycleFields checks that DesiredState structs do NOT have custom lifecycle fields.
+// Lifecycle is controlled by:
+//   - config.BaseDesiredState.ShutdownRequested (inherited) - for graceful shutdown
+//   - ParentMappedState (for child workers only) - injected by supervisor from parent's state
+//
+// Adding custom lifecycle fields like ShouldRun, IsRunning, ShouldStop, Enabled, Active
+// is an anti-pattern that breaks parent-child coordination and is never populated correctly
+// (since DeriveDesiredState returns config.DesiredState, not the typed struct).
+func ValidateNoCustomLifecycleFields(baseDir string) []Violation {
+	var violations []Violation
+
+	snapshotFiles := FindSnapshotFiles(baseDir)
+
+	for _, file := range snapshotFiles {
+		fileViolations := checkNoCustomLifecycleFields(file)
+		violations = append(violations, fileViolations...)
+	}
+
+	return violations
+}
+
+// checkNoCustomLifecycleFields parses a snapshot file and checks that DesiredState structs
+// do not have custom lifecycle control fields.
+func checkNoCustomLifecycleFields(filename string) []Violation {
+	var violations []Violation
+
+	fset := token.NewFileSet()
+
+	node, err := parser.ParseFile(fset, filename, nil, parser.ParseComments)
+	if err != nil {
+		return violations
+	}
+
+	// Forbidden lifecycle field patterns (case-insensitive match on field name)
+	// These duplicate lifecycle control and are never populated correctly.
+	forbiddenPatterns := []string{
+		"ShouldRun",
+		"ShouldStop",
+		"IsRunning",
+		"IsActive",
+		"Enabled",
+		"Active",
+	}
+
+	// Look for structs with "DesiredState" in the name
+	ast.Inspect(node, func(n ast.Node) bool {
+		typeSpec, ok := n.(*ast.TypeSpec)
+		if !ok || !strings.Contains(typeSpec.Name.Name, "DesiredState") {
+			return true
+		}
+
+		structType, ok := typeSpec.Type.(*ast.StructType)
+		if !ok {
+			return true
+		}
+
+		// Check for forbidden lifecycle fields
+		for _, field := range structType.Fields.List {
+			for _, name := range field.Names {
+				for _, pattern := range forbiddenPatterns {
+					if strings.EqualFold(name.Name, pattern) {
+						pos := fset.Position(field.Pos())
+						violations = append(violations, Violation{
+							File: filename,
+							Line: pos.Line,
+							Type: "CUSTOM_LIFECYCLE_FIELD",
+							Message: fmt.Sprintf("DesiredState %s has forbidden lifecycle field '%s' - "+
+								"lifecycle is controlled by ShutdownRequested (from BaseDesiredState) "+
+								"and ParentMappedState (for child workers). "+
+								"Custom lifecycle fields are never populated correctly and break parent-child coordination.",
+								typeSpec.Name.Name, name.Name),
+						})
+					}
+				}
+			}
+		}
+
+		return true
+	})
+
+	return violations
+}
+
 // checkDesiredStateHasNoDependencies parses a snapshot file and checks that DesiredState structs
 // do not have any field with "Dependencies" in the name.
 func checkDesiredStateHasNoDependencies(filename string) []Violation {

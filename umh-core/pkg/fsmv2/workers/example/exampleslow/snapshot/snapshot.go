@@ -23,6 +23,14 @@ import (
 
 type ExampleslowDependencies interface {
 	fsmv2.Dependencies
+	// SetConnected sets the connection state.
+	SetConnected(connected bool)
+	// IsConnected returns the current connection state.
+	IsConnected() bool
+	// SetDelaySeconds sets the delay for connect action.
+	SetDelaySeconds(delaySeconds int)
+	// GetDelaySeconds returns the configured delay.
+	GetDelaySeconds() int
 }
 
 type ExampleslowSnapshot struct {
@@ -33,13 +41,15 @@ type ExampleslowSnapshot struct {
 
 type ExampleslowDesiredState struct {
 	config.BaseDesiredState // Provides ShutdownRequested + IsShutdownRequested() + SetShutdownRequested()
-	ShouldRun    bool
-	DelaySeconds int
+	DelaySeconds            int
 	// Dependencies removed: Actions receive deps via Execute() parameter, not DesiredState
 }
 
+// ShouldBeRunning returns true if this leaf worker should be running.
+// For leaf workers (no parent), lifecycle is controlled solely by ShutdownRequested.
+// Do NOT add custom lifecycle fields like ShouldRun - that's an anti-pattern.
 func (s *ExampleslowDesiredState) ShouldBeRunning() bool {
-	return !s.ShutdownRequested && s.ShouldRun
+	return !s.ShutdownRequested
 }
 
 type ExampleslowObservedState struct {

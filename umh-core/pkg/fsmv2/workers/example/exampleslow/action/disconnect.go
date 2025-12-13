@@ -39,6 +39,9 @@ func (a *DisconnectAction) Execute(ctx context.Context, depsAny any) error {
 
 	logger.Info("Attempting to disconnect")
 
+	// Mark as disconnected
+	deps.SetConnected(false)
+
 	return nil
 }
 

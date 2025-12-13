@@ -35,8 +35,13 @@ func (a *DisconnectAction) Execute(ctx context.Context, depsAny any) error {
 	}
 	deps := depsAny.(snapshot.ExamplefailingDependencies)
 	logger := deps.GetLogger()
-	logger.Info("Attempting to disconnect")
+	logger.Info("Disconnecting")
 
+	// Mark connection as closed
+	deps.SetConnected(false)
+	deps.ResetAttempts()
+
+	logger.Info("Disconnected successfully")
 	return nil
 }
 

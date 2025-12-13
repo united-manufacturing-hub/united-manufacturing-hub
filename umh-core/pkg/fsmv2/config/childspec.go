@@ -29,6 +29,30 @@ import "encoding/json"
 //
 // Workers embedding BaseDesiredState automatically satisfy the DesiredState interface's
 // IsShutdownRequested() method and the ShutdownRequestable interface's SetShutdownRequested() method.
+//
+// # LIFECYCLE CONTROL INVARIANT
+//
+// The FSM controls worker lifecycle through state transitions, NOT through custom bool fields.
+// Do NOT add fields like ShouldRun, IsRunning, Enabled, or Active to your DesiredState.
+//
+// Correct lifecycle control:
+//   - ShutdownRequested: Inherited from this type. Set by supervisor for graceful shutdown.
+//   - ParentMappedState: For child workers only. Injected by supervisor from parent's ChildStartStates.
+//   - State ("running"/"stopped"): From BaseUserSpec.GetState(). Controls whether worker should be running.
+//
+// Correct ShouldBeRunning() implementations:
+//
+//	// Root/leaf workers (no parent):
+//	func (s *MyDesiredState) ShouldBeRunning() bool {
+//	    return !s.ShutdownRequested
+//	}
+//
+//	// Child workers (have parent):
+//	func (s *MyDesiredState) ShouldBeRunning() bool {
+//	    return !s.ShutdownRequested && s.ParentMappedState == config.DesiredStateRunning
+//	}
+//
+// See ValidateNoCustomLifecycleFields in pkg/fsmv2/internal/validator/snapshot.go for enforcement.
 type BaseDesiredState struct {
 	ShutdownRequested bool   `json:"ShutdownRequested"`
 	State             string `json:"state"` // "stopped" or "running" - desired lifecycle state

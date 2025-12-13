@@ -414,6 +414,20 @@ var _ = Describe("FSMv2 Architecture Validation", func() {
 				}
 			})
 		})
+
+		Describe("No Custom Lifecycle Fields (Invariant: FSM Controls Lifecycle)", func() {
+			It("should not have ShouldRun, IsRunning, or similar fields in DesiredState", func() {
+				violations := validator.ValidateNoCustomLifecycleFields(getFsmv2Dir())
+				if len(violations) > 0 {
+					message := validator.FormatViolationsWithPattern(
+						"Custom Lifecycle Field Violations",
+						violations,
+						"CUSTOM_LIFECYCLE_FIELD",
+					)
+					Fail(message)
+				}
+			})
+		})
 	})
 })
 

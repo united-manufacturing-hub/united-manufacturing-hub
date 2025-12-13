@@ -23,6 +23,12 @@ import (
 
 type ExamplepanicDependencies interface {
 	fsmv2.Dependencies
+	// IsShouldPanic returns whether the worker should panic during connect action.
+	IsShouldPanic() bool
+	// SetConnected sets the connection state.
+	SetConnected(connected bool)
+	// IsConnected returns the current connection state.
+	IsConnected() bool
 }
 
 type ExamplepanicSnapshot struct {

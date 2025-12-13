@@ -15,8 +15,11 @@
 package example_slow
 
 import (
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"sync"
+
 	"go.uber.org/zap"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 )
 
 type Connection interface{}
@@ -44,6 +47,10 @@ func (d *DefaultConnectionPool) HealthCheck(_ Connection) error {
 type ExampleslowDependencies struct {
 	*fsmv2.BaseDependencies
 	connectionPool ConnectionPool
+
+	mu           sync.RWMutex
+	isConnected  bool
+	delaySeconds int
 }
 
 func NewExampleslowDependencies(connectionPool ConnectionPool, logger *zap.SugaredLogger, stateReader fsmv2.StateReader, identity fsmv2.Identity) *ExampleslowDependencies {
@@ -55,4 +62,32 @@ func NewExampleslowDependencies(connectionPool ConnectionPool, logger *zap.Sugar
 
 func (d *ExampleslowDependencies) GetConnectionPool() ConnectionPool {
 	return d.connectionPool
+}
+
+// SetConnected sets the connection state.
+func (d *ExampleslowDependencies) SetConnected(connected bool) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.isConnected = connected
+}
+
+// IsConnected returns the current connection state.
+func (d *ExampleslowDependencies) IsConnected() bool {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	return d.isConnected
+}
+
+// SetDelaySeconds sets the delay for connect action.
+func (d *ExampleslowDependencies) SetDelaySeconds(delaySeconds int) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.delaySeconds = delaySeconds
+}
+
+// GetDelaySeconds returns the configured delay.
+func (d *ExampleslowDependencies) GetDelaySeconds() int {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	return d.delaySeconds
 }
