@@ -26,8 +26,7 @@ on:
 jobs:
   unit-tests:
     name: Unit Tests
-    runs-on:
-      group: arc-runners-tests
+    runs-on: depot-ubuntu-24.04
     defaults:
       run:
         working-directory: ./umh-core
@@ -54,8 +53,7 @@ jobs:
 
   integration-tests:
     name: Integration Tests
-    runs-on:
-      group: eos
+    runs-on: depot-ubuntu-24.04
     strategy:
       matrix:
         instance: [1, 2, 3]
