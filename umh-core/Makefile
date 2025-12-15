@@ -228,8 +228,9 @@ build build-pprof build-debug: build-protobuf download-docker-binaries
 	$(call DOCKER_BUILD)
 
 # CI build using Depot (multi-arch)
+# Note: Skips build-protobuf since pb.go files are committed to repo
 # Usage: make build-depot DEPOT_PROJECT_ID=xxx TAGS="-t ghcr.io/.../umh-core:v1.0.0" VERSION=v1.0.0
-build-depot: build-protobuf download-docker-binaries
+build-depot: download-docker-binaries
 	$(call DEPOT_BUILD)
 
 FLAVOR ?=                         # empty → normal build
