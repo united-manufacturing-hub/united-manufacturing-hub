@@ -61,20 +61,6 @@ jobs:
           username: ${{ secrets.DOCKER_READ_ONLY_USER }}
           password: ${{ secrets.DOCKER_READ_ONLY_PAT }}
 
-      - name: Determine app version
-        id: set_version
-        run: |
-          # Check if this is a tag build
-          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
-            # If it's a tag, use the tag name as version
-            VERSION="${{ github.ref_name }}"
-          else
-            # For branch builds, use a dev version with the SHA
-            VERSION="0.0.0-dev-${{ github.sha }}"
-          fi
-          echo "APP_VERSION=${VERSION}" >> $GITHUB_OUTPUT
-          echo "Setting APP_VERSION to ${VERSION}"
-
       - name: Docker meta
         id: meta
         uses: docker/metadata-action@v5
@@ -86,25 +72,30 @@ jobs:
             type=ref,event=tag
             type=sha
 
-      - name: Get dependencies
-        working-directory: ./umh-core
+      - name: Determine version
+        id: version
         run: |
-          make download-docker-binaries
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            echo "VERSION=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+          else
+            echo "VERSION=0.0.0-dev-${{ github.sha }}" >> $GITHUB_OUTPUT
+          fi
 
-      - name: Build and Push Docker Image
-        uses: depot/build-push-action@9785b135c3c76c33db102e45be96a25ab55cd507
-        with:
-          project: ${{ secrets.DEPOT_PROJECT_ID }}
-          token: ${{ secrets.DEPOT_TOKEN }}
-          push: true
-          platforms: linux/amd64,linux/arm64
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          build-args: |
-            APP_VERSION=${{ steps.set_version.outputs.APP_VERSION }}
-          provenance: false
-          context: ./umh-core
-          file: ./umh-core/Dockerfile
+      - name: Build and Push
+        working-directory: ./umh-core
+        env:
+          DEPOT_PROJECT_ID: ${{ secrets.DEPOT_PROJECT_ID }}
+          DEPOT_TOKEN: ${{ secrets.DEPOT_TOKEN }}
+        run: |
+          # Convert metadata tags to -t flags
+          TAGS=""
+          while IFS= read -r tag; do
+            [ -n "$tag" ] && TAGS="$TAGS -t $tag"
+          done <<< "${{ steps.meta.outputs.tags }}"
+
+          make build-depot \
+            VERSION=${{ steps.version.outputs.VERSION }} \
+            TAGS="$TAGS"
 
   notify-management-console:
     needs: build

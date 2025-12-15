@@ -179,9 +179,11 @@ download-docker-binaries:
 
 	@echo "All required files are present and up to date"
 
-.PHONY: build build-pprof build-debug
-COMMON_ARGS = \
-	--platform linux/$(TARGETARCH) \
+.PHONY: build build-pprof build-debug build-depot
+
+# ============== SHARED BUILD ARGS (single source of truth) ==============
+# Used by both local builds (make build) and CI builds (make build-depot)
+VERSION_ARGS = \
 	--build-arg GOLANG_VERSION=$(GOLANG_VERSION) \
 	--build-arg ALPINE_VERSION=$(ALPINE_VERSION) \
 	--build-arg NMAP_VERSION=$(NMAP_VERSION) \
@@ -189,8 +191,13 @@ COMMON_ARGS = \
 	--build-arg BENTHOS_UMH_VERSION=$(BENTHOS_UMH_VERSION) \
 	--build-arg REDPANDA_VERSION=$(REDPANDA_VERSION) \
 	--build-arg DLV_VERSION=$(DLV_VERSION) \
-	--build-arg APP_VERSION=$(VERSION) \
-	--build-arg TARGETARCH=$(TARGETARCH)
+	--build-arg APP_VERSION=$(VERSION)
+
+# ============== LOCAL BUILD (single-arch, --load) ==============
+COMMON_ARGS = \
+	--platform linux/$(TARGETARCH) \
+	--build-arg TARGETARCH=$(TARGETARCH) \
+	$(VERSION_ARGS)
 
 define DOCKER_BUILD
 	docker buildx build $(COMMON_ARGS) $(EXTRA_ARGS) \
@@ -198,13 +205,32 @@ define DOCKER_BUILD
 		-t $(IMAGE_NAME):$(TAG) .
 endef
 
+# ============== CI BUILD (multi-arch, --push via Depot) ==============
+CI_ARGS = \
+	--platform linux/amd64,linux/arm64 \
+	$(VERSION_ARGS)
+
+# TAGS should be passed as: TAGS="-t ghcr.io/.../umh-core:tag1 -t ghcr.io/.../umh-core:tag2"
+define DEPOT_BUILD
+	depot build $(CI_ARGS) $(EXTRA_ARGS) \
+		--project $(DEPOT_PROJECT_ID) \
+		--push \
+		--progress=plain -f Dockerfile \
+		$(TAGS) .
+endef
+
 build:
 build-pprof:       EXTRA_ARGS := --build-arg PPROF=true
 build-debug:       EXTRA_ARGS := --build-arg DEBUG=true
 
-# Refresh cache and build docker binaries
+# Local builds (existing behavior preserved)
 build build-pprof build-debug: build-protobuf download-docker-binaries
 	$(call DOCKER_BUILD)
+
+# CI build using Depot (multi-arch)
+# Usage: make build-depot DEPOT_PROJECT_ID=xxx TAGS="-t ghcr.io/.../umh-core:v1.0.0" VERSION=v1.0.0
+build-depot: build-protobuf download-docker-binaries
+	$(call DEPOT_BUILD)
 
 FLAVOR ?=                         # empty → normal build
 BUILD_TARGET = $(if $(FLAVOR),build-$(FLAVOR),build)
