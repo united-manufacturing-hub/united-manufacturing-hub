@@ -118,9 +118,11 @@ func GetMetricsURL() string {
 		port = 8080 // Fallback to default port
 	}
 
-	fmt.Printf("Using localhost URL with host port: http://%s:%d/metrics\n", "localhost", port)
+	// Use 127.0.0.1 instead of localhost to avoid IPv6 issues on Ubuntu 24.04
+	// where localhost may resolve to ::1 but services bind only to IPv4
+	fmt.Printf("Using IPv4 URL with host port: http://127.0.0.1:%d/metrics\n", port)
 
-	return fmt.Sprintf("http://%s:%d/metrics", "localhost", port)
+	return fmt.Sprintf("http://127.0.0.1:%d/metrics", port)
 }
 
 // GetGoldenServiceURL returns the URL for the golden service.
@@ -135,9 +137,11 @@ func GetGoldenServiceURL() string {
 		port = 8082 // Fallback to default port
 	}
 
-	fmt.Printf("Using localhost URL with host port: http://%s:%d/health\n", "localhost", port)
+	// Use 127.0.0.1 instead of localhost to avoid IPv6 issues on Ubuntu 24.04
+	// where localhost may resolve to ::1 but services bind only to IPv4
+	fmt.Printf("Using IPv4 URL with host port: http://127.0.0.1:%d/health\n", port)
 
-	return fmt.Sprintf("http://%s:%d", "localhost", port)
+	return fmt.Sprintf("http://127.0.0.1:%d", port)
 }
 
 // writeConfigFile writes the given YAML content to a config file for the container to read.
