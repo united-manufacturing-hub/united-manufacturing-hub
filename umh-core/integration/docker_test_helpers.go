@@ -402,8 +402,9 @@ func BuildAndRunContainer(configYaml string, memory string, cpus uint) error {
 
 	// 7.5. Fix permissions inside the container (needed on depot runners)
 	// The config.yaml may have wrong ownership after docker cp
+	// Must chmod ALL of /data including config.yaml, not just subdirectories
 	out, err = runDockerCommand("exec", "-u", "0", containerName, "sh", "-c",
-		"chown -R 1000:1000 /data && chmod -R 777 /data/logs /data/redpanda 2>/dev/null || true")
+		"chown -R 1000:1000 /data && chmod 666 /data/config.yaml && chmod -R 777 /data/logs /data/redpanda")
 	if err != nil {
 		GinkgoWriter.Printf("Warning: failed to fix permissions in container: %v\n%s\n", err, out)
 		// Continue anyway - permissions might already be correct
