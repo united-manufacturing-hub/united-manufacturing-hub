@@ -313,13 +313,21 @@ func BuildAndRunContainer(configYaml string, memory string, cpus uint) error {
 	tmpRedpandaDir := filepath.Join(getTmpDir(), containerName, "redpanda")
 	tmpLogsDir := filepath.Join(getTmpDir(), containerName, "logs")
 
-	// 4. Create the directories
+	// 4. Create the directories with permissions that allow container user (UID 1000) to write
 	if err := os.MkdirAll(tmpRedpandaDir, 0o777); err != nil {
 		return fmt.Errorf("failed to create redpanda dir: %w", err)
 	}
 
 	if err := os.MkdirAll(tmpLogsDir, 0o777); err != nil {
 		return fmt.Errorf("failed to create logs dir: %w", err)
+	}
+
+	// Change ownership to UID 1000 (umhuser in container) to avoid permission issues
+	// This is needed on depot runners where the host user differs from container user
+	if _, err := runDockerCommand("run", "--rm", "-v", tmpRedpandaDir+":/mnt/redpanda", "-v", tmpLogsDir+":/mnt/logs",
+		"alpine:3.20", "sh", "-c", "chown -R 1000:1000 /mnt/redpanda /mnt/logs"); err != nil {
+		GinkgoWriter.Printf("Warning: failed to chown volume dirs: %v\n", err)
+		// Don't fail - might work without chown on some systems
 	}
 
 	// 5. Create the container WITHOUT starting it
