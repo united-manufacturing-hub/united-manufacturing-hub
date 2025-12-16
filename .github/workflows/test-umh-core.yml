@@ -97,6 +97,7 @@ jobs:
       - name: Run integration tests
         env:
           CI: true
+          FORCE_DOCKER: true  # Force Docker usage since image is built with docker buildx
           VERSION: ${{ github.ref_name }}
         run: make integration-test-ci
 

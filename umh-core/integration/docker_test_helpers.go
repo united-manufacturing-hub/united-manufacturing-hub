@@ -667,9 +667,12 @@ func runDockerCommand(args ...string) (string, error) {
 func runDockerCommandWithCtx(ctx context.Context, args ...string) (string, error) {
 	fmt.Printf("Running docker command: %v\n", args)
 	// Check if we use docker or podman
+	// FORCE_DOCKER=true bypasses podman detection (needed when image built with Docker)
 	dockerCmd := "docker"
-	if _, err := exec.LookPath("podman"); err == nil {
-		dockerCmd = "podman"
+	if os.Getenv("FORCE_DOCKER") != "true" {
+		if _, err := exec.LookPath("podman"); err == nil {
+			dockerCmd = "podman"
+		}
 	}
 
 	cmd := exec.CommandContext(ctx, dockerCmd, args...)
