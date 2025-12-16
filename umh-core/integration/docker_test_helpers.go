@@ -193,6 +193,7 @@ func writeConfigFile(yamlContent string, containerName ...string) error {
 
 			return fmt.Errorf("failed to copy config to container: %w", err)
 		}
+
 	}
 
 	return nil
@@ -322,11 +323,19 @@ func BuildAndRunContainer(configYaml string, memory string, cpus uint) error {
 		return fmt.Errorf("failed to create logs dir: %w", err)
 	}
 
+	// Explicitly chmod to ensure permissions are set regardless of umask
+	if err := os.Chmod(tmpRedpandaDir, 0o777); err != nil {
+		GinkgoWriter.Printf("Warning: failed to chmod redpanda dir: %v\n", err)
+	}
+	if err := os.Chmod(tmpLogsDir, 0o777); err != nil {
+		GinkgoWriter.Printf("Warning: failed to chmod logs dir: %v\n", err)
+	}
+
 	// Change ownership to UID 1000 (umhuser in container) to avoid permission issues
 	// This is needed on depot runners where the host user differs from container user
 	if _, err := runDockerCommand("run", "--rm", "-v", tmpRedpandaDir+":/mnt/redpanda", "-v", tmpLogsDir+":/mnt/logs",
-		"alpine:3.20", "sh", "-c", "chown -R 1000:1000 /mnt/redpanda /mnt/logs"); err != nil {
-		GinkgoWriter.Printf("Warning: failed to chown volume dirs: %v\n", err)
+		"alpine:3.20", "sh", "-c", "chown -R 1000:1000 /mnt/redpanda /mnt/logs && chmod -R 777 /mnt/redpanda /mnt/logs"); err != nil {
+		GinkgoWriter.Printf("Warning: failed to chown/chmod volume dirs: %v\n", err)
 		// Don't fail - might work without chown on some systems
 	}
 
@@ -390,6 +399,15 @@ func BuildAndRunContainer(configYaml string, memory string, cpus uint) error {
 	}
 
 	GinkgoWriter.Println("Container started successfully")
+
+	// 7.5. Fix permissions inside the container (needed on depot runners)
+	// The config.yaml may have wrong ownership after docker cp
+	out, err = runDockerCommand("exec", "-u", "0", containerName, "sh", "-c",
+		"chown -R 1000:1000 /data && chmod -R 777 /data/logs /data/redpanda 2>/dev/null || true")
+	if err != nil {
+		GinkgoWriter.Printf("Warning: failed to fix permissions in container: %v\n%s\n", err, out)
+		// Continue anyway - permissions might already be correct
+	}
 
 	// 8. Verify the container is actually running
 	out, err = runDockerCommand("inspect", "--format", "{{.State.Status}}", containerName)
