@@ -40,82 +40,26 @@ jobs:
       contents: read
       packages: write
     timeout-minutes: 60
-    strategy:
-      matrix:
-        architecture: ["amd64", "arm64"]
-    runs-on:
-      group: ${{ matrix.architecture == 'arm64' && 'arc-runners-small' || 'arc-runners-build' }}
-    outputs:
-      tags: ${{ steps.meta.outputs.tags }}
-      BASE_TAGS: ${{ steps.output-tags.outputs.BASE_TAGS }}
+    runs-on: depot-ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
 
-      - name: Check if Docker daemon is running
-        id: check_docker
-        run: |
-          SECONDS=0
-          TIMEOUT=120
-          while ! docker info >/dev/null 2>&1; do
-            if [ $SECONDS -ge $TIMEOUT ]; then
-              echo "Docker daemon is not running after ${TIMEOUT} seconds, exiting..."
-              docker info
-              exit 1
-            fi
-            echo "Waiting for Docker daemon to start..."
-            sleep 1
-          done
-          echo "Docker daemon is running."
+      - name: Setup Depot
+        uses: depot/setup-action@b0b1ea4f69e92ebf5dea3f8713a1b0c37b2126a5 # v1.6.0
 
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
-        env:
-          GITHUB_USER: ${{ github.actor }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           registry: ghcr.io
-          username: $GITHUB_USER
+          username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Login to Docker Hub
         uses: docker/login-action@v3
-        env:
-          DOCKER_READ_ONLY_PAT: ${{ secrets.DOCKER_READ_ONLY_PAT }}
-          DOCKER_READ_ONLY_USER: ${{ secrets.DOCKER_READ_ONLY_USER }}
         with:
           registry: docker.io
           username: ${{ secrets.DOCKER_READ_ONLY_USER }}
           password: ${{ secrets.DOCKER_READ_ONLY_PAT }}
-
-      - name: Setup QEMU
-        uses: docker/setup-qemu-action@v3
-        with:
-          image: management.umh.app/oci/tonistiigi/binfmt:latest
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Set PLATFORM_SHORT
-        id: platform_short
-        shell: bash
-        run: |
-          PLATFORM_SHORT="${{ matrix.architecture }}"
-          PLATFORM_SHORT="${PLATFORM_SHORT//\//-}"
-          echo "PLATFORM_SHORT=${PLATFORM_SHORT}" >> $GITHUB_OUTPUT
-
-      - name: Determine app version
-        id: set_version
-        run: |
-          # Check if this is a tag build
-          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
-            # If it's a tag, use the tag name as version
-            VERSION="${{ github.ref_name }}"
-          else
-            # For branch builds, use a dev version with the SHA
-            VERSION="0.0.0-dev-${{ github.sha }}"
-          fi
-          echo "APP_VERSION=${VERSION}" >> $GITHUB_OUTPUT
-          echo "Setting APP_VERSION to ${VERSION}"
 
       - name: Docker meta
         id: meta
@@ -128,160 +72,35 @@ jobs:
             type=ref,event=tag
             type=sha
 
-      - name: Prepare tags with platform suffix
-        id: prepare_tags
+      - name: Determine version
+        id: version
         run: |
-          TAGS="${{ steps.meta.outputs.tags }}"
-          PLATFORM_SUFFIX="-${{ steps.platform_short.outputs.PLATFORM_SHORT }}"
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            echo "VERSION=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+          else
+            echo "VERSION=0.0.0-dev-${{ github.sha }}" >> $GITHUB_OUTPUT
+          fi
 
-          # Replace newlines with commas
-          TAGS_CLEAN=$(echo "$TAGS" | tr '\n' ',' | sed 's/,$//')
-
-          # Split tags into an array
-          IFS=',' read -ra TAG_ARRAY <<< "$TAGS_CLEAN"
-
-          # Append platform suffix to each tag
-          for TAG in "${TAG_ARRAY[@]}"; do
-            TAG_WITH_SUFFIX="${TAG}${PLATFORM_SUFFIX}"
-            NEW_TAGS_ARRAY+=("$TAG_WITH_SUFFIX")
-          done
-
-          # Join the new tags into a comma-separated string
-          NEW_TAGS=$(IFS=','; echo "${NEW_TAGS_ARRAY[*]}")
-
-          echo "NEW_TAGS=$NEW_TAGS" >> $GITHUB_OUTPUT
-
-      - name: Cache dependencies
-        id: cache-dependencies
-        uses: actions/cache@v4
-        with:
-          path: ./umh-core/.docker-cache
-          key: ${{ runner.os }}-${{ matrix.architecture }}-docker-cache-${{ hashFiles('./umh-core/Makefile') }}
-          restore-keys: |
-            ${{ runner.os }}-${{ matrix.architecture }}-docker-cache-
-
-      - name: Get dependencies
-        working-directory: ./umh-core
-        run: |
-          make download-docker-binaries
-
-      - name: Build and Push Docker Image
+      - name: Build and Push
         working-directory: ./umh-core
         env:
-          REGISTRY: ${{ env.REGISTRY }}
-          IMAGE_NAME: ${{ env.IMAGE_NAME }}
-          TARGETARCH: ${{ matrix.architecture }}
+          DEPOT_PROJECT_ID: ${{ secrets.DEPOT_PROJECT_ID }}
+          DEPOT_TOKEN: ${{ secrets.DEPOT_TOKEN }}
         run: |
-          # Get the base tags from meta
-          TAGS="${{ steps.meta.outputs.tags }}"
+          # Convert metadata tags to -t flags
+          TAGS=""
+          while IFS= read -r tag; do
+            [ -n "$tag" ] && TAGS="$TAGS -t $tag"
+          done <<< "${{ steps.meta.outputs.tags }}"
 
-          # Convert newlines to spaces and handle as a space-separated list
-          TAGS_SPACE=$(echo "$TAGS" | tr '\n' ' ')
-
-          # Process each tag
-          for TAG in $TAGS_SPACE; do
-            # Get the tag part without the registry/repo prefix
-            TAG_PART=$(echo "$TAG" | sed "s|$REGISTRY/$IMAGE_NAME:||")
-            
-            echo "Building and pushing for tag: $TAG_PART"
-            
-            # Build the image (and tag it with the REGISTRY path)
-            make build TARGETARCH=${{ matrix.architecture }} TAG=$TAG_PART APP_VERSION=${{ steps.set_version.outputs.APP_VERSION }}
-            
-            # After build, explicitly tag with the full repository path
-            LOCAL_IMAGE_NAME="umh-core:$TAG_PART"
-            FULL_REPO_IMAGE="$REGISTRY/$IMAGE_NAME:$TAG_PART"
-            echo "Explicitly tagging $LOCAL_IMAGE_NAME as $FULL_REPO_IMAGE"
-            docker tag $LOCAL_IMAGE_NAME $FULL_REPO_IMAGE
-            
-            # Also tag with platform-specific tag directly
-            PLATFORM_TAG="${TAG_PART}-${{ matrix.architecture }}"
-            FULL_PLATFORM_REPO_IMAGE="$REGISTRY/$IMAGE_NAME:$PLATFORM_TAG"
-            echo "Tagging with platform suffix: $FULL_PLATFORM_REPO_IMAGE"
-            docker tag $LOCAL_IMAGE_NAME $FULL_PLATFORM_REPO_IMAGE
-            
-            # Push the platform-specific tag
-            echo "Pushing $FULL_PLATFORM_REPO_IMAGE"
-            docker push $FULL_PLATFORM_REPO_IMAGE
-          done
-
-      - name: Set Output Tags
-        id: output-tags
-        run: |
-          echo "BASE_TAGS<<EOF" >> $GITHUB_OUTPUT
-          echo "${{ steps.meta.outputs.tags }}" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-
-  create-manifests:
-    needs: build
-    if: needs.build.outputs.tags != ''
-    permissions:
-      contents: read
-      packages: write
-    runs-on:
-      group: arc-runners-small
-    defaults:
-      run:
-        shell: bash
-    steps:
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
-        env:
-          GITHUB_USER: ${{ github.actor }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          registry: ghcr.io
-          username: $GITHUB_USER
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Create multiarch manifests
-        run: |
-          set -euxo pipefail
-
-          TAGS="${{ needs.build.outputs.BASE_TAGS }}"
-
-          IFS=$'\n' readarray -t TAG_ARRAY <<< "$TAGS"
-
-          ARCHITECTURES=("amd64" "arm64")
-
-          for TAG in "${TAG_ARRAY[@]}"; do
-            echo "Processing tag $TAG"
-            PLATFORM_TAGS=""
-            for ARCH in "${ARCHITECTURES[@]}"; do
-              PLATFORM_SHORT="${ARCH//\//-}"
-              PLATFORM_TAG="${TAG}-${PLATFORM_SHORT}"
-              PLATFORM_TAGS="${PLATFORM_TAGS} ${PLATFORM_TAG}"
-            done
-            
-            echo "Checking availability of images for $TAG"
-            MISSING_IMAGES=0
-            for IMAGE in ${PLATFORM_TAGS}; do
-              echo "Checking image: $IMAGE"
-              if ! docker buildx imagetools inspect "$IMAGE" >/dev/null 2>&1; then
-                echo "Image not found: $IMAGE"
-                MISSING_IMAGES=1
-              else
-                echo "Image exists: $IMAGE"
-              fi
-            done
-            
-            if [ $MISSING_IMAGES -ne 0 ]; then
-              echo "One or more images are missing for $TAG. Skipping manifest creation."
-              continue
-            fi
-            
-            echo "Creating manifest for $TAG from $PLATFORM_TAGS"
-            docker buildx imagetools create -t "${TAG}" ${PLATFORM_TAGS}
-          done
+          make build-depot \
+            VERSION=${{ steps.version.outputs.VERSION }} \
+            TAGS="$TAGS"
 
   notify-management-console:
-    needs: create-manifests
+    needs: build
     if: startsWith(github.ref, 'refs/tags/')
-    runs-on:
-      group: arc-runners-small
+    runs-on: depot-ubuntu-24.04
     steps:
       - name: Notify management console
         env:

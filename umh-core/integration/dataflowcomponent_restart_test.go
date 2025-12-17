@@ -120,19 +120,23 @@ var _ = Describe("DataFlowComponent Restart Integration Test", Ordered, Label("i
 			restartActions[mode]()
 
 			By("Validating that the container is stopped (via docker ps)")
-			out, err := runDockerCommand("ps", "-a", "--format", "{{.Names}} {{.ID}} {{.Status}}")
-			GinkgoWriter.Printf("Docker ps: %s\n", out)
-			Expect(err).ToNot(HaveOccurred())
-			lines := strings.Split(out, "\n")
-			var containerLine string
-			for _, line := range lines {
-				if strings.Contains(line, getContainerName()) {
-					containerLine = line
+			Eventually(func() bool {
+				out, err := runDockerCommand("ps", "-a", "--format", "{{.Names}} {{.ID}} {{.Status}}")
+				if err != nil {
+					GinkgoWriter.Printf("Docker ps error: %v\n", err)
 
-					break
+					return false
 				}
-			}
-			Expect(containerLine).To(ContainSubstring("Exited"))
+				GinkgoWriter.Printf("Docker ps: %s\n", out)
+				lines := strings.Split(out, "\n")
+				for _, line := range lines {
+					if strings.Contains(line, getContainerName()) {
+						return strings.Contains(line, "Exited")
+					}
+				}
+
+				return false // Container not found in output
+			}, 30*time.Second, 1*time.Second).Should(BeTrue(), "Container should be in Exited state after stop/kill")
 
 			By(fmt.Sprintf("Waiting %s before restart", containerDownWait))
 			waitSeconds := int(containerDownWait.Seconds())
@@ -142,7 +146,7 @@ var _ = Describe("DataFlowComponent Restart Integration Test", Ordered, Label("i
 			}
 
 			By("Starting the container again")
-			out, err = runDockerCommand("start", getContainerName())
+			out, err := runDockerCommand("start", getContainerName())
 			GinkgoWriter.Printf("Started container: %s\n", out)
 			Expect(err).ToNot(HaveOccurred())
 
