@@ -163,13 +163,12 @@ var _ = Describe("S6 Service", func() {
 
 		It("should correctly identify known services", func() {
 			// Known services
+			// Note: syslogd and syslogd-log removed for non-root container support
 			knownServices := []string{
 				// Core services
 				"s6-linux-init-shutdownd",
 				"s6rc-fdholder",
 				"s6rc-oneshot-runner",
-				"syslogd",
-				"syslogd-log",
 				"umh-core",
 				// S6 internal directories
 				".s6-svscan",
@@ -220,6 +219,7 @@ var _ = Describe("S6 Service", func() {
 			removedDirectories = []string{}
 
 			// Setup mock file system functions
+			// Note: syslogd and syslogd-log removed for non-root container support
 			mockFS.WithReadDirFunc(func(ctx context.Context, path string) ([]os.DirEntry, error) {
 				// Return a mix of known and unknown directories
 				return []os.DirEntry{
@@ -227,8 +227,6 @@ var _ = Describe("S6 Service", func() {
 					mockDirEntry{name: "s6-linux-init-shutdownd", isDir: true},
 					mockDirEntry{name: "s6rc-fdholder", isDir: true},
 					mockDirEntry{name: "s6rc-oneshot-runner", isDir: true},
-					mockDirEntry{name: "syslogd", isDir: true},
-					mockDirEntry{name: "syslogd-log", isDir: true},
 					mockDirEntry{name: "umh-core", isDir: true},
 					// Known services - s6 internals
 					mockDirEntry{name: ".s6-svscan", isDir: true},
@@ -250,8 +248,9 @@ var _ = Describe("S6 Service", func() {
 			mockFS.WithRemoveAllFunc(func(ctx context.Context, path string) error {
 				for _, known := range []string{
 					// Core services
+					// Note: syslogd and syslogd-log removed for non-root container support
 					"s6-linux-init-shutdownd", "s6rc-fdholder", "s6rc-oneshot-runner",
-					"syslogd", "syslogd-log", "umh-core",
+					"umh-core",
 					// S6 internals
 					".s6-svscan", "user", "s6-rc",
 					// Pattern-based

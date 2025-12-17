@@ -21,6 +21,7 @@ header:
   paths-ignore:
     - "**/*.md"
     - "**/*.mdc"
+    - "**/.gitkeep"
     - "LICENSE"
     - "NOTICE"
     - "CODEOWNERS"

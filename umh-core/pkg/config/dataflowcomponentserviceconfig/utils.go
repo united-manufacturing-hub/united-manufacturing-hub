@@ -57,6 +57,7 @@ func FromBenthosServiceConfig(benthos benthosserviceconfig.BenthosServiceConfig)
 			RateLimitResources: benthos.RateLimitResources,
 			Buffer:             benthos.Buffer,
 		},
+		DebugLevel: benthos.DebugLevel,
 	}
 }
 

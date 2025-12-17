@@ -17,7 +17,22 @@
 
 Mount **one persistent volume** (e.g. `umh-core-data`) to `/data` and you're done.
 
+#### Advanced: Custom Data Location
 
+If you need control over the exact data location (e.g., for compliance or backup requirements), you can use a bind mount instead of a named volume:
+
+```bash
+mkdir -p /path/to/umh-core-data
+# Ensure container user (UID 1000) has write access
+chown -R 1000:1000 /path/to/umh-core-data
+docker run -d --name umh-core -v /path/to/umh-core-data:/data ...
+```
+
+On SELinux systems (RHEL, Rocky), append `:z` to the volume mount so Docker can relabel the directory:
+
+```bash
+-v "/path/to/umh-core-data:/data:z"
+```
 
 ### /config.yaml
 
