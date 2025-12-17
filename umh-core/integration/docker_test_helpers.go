@@ -118,9 +118,11 @@ func GetMetricsURL() string {
 		port = 8080 // Fallback to default port
 	}
 
-	fmt.Printf("Using localhost URL with host port: http://%s:%d/metrics\n", "localhost", port)
+	// Use 127.0.0.1 instead of localhost to avoid IPv6 issues on Ubuntu 24.04
+	// where localhost may resolve to ::1 but services bind only to IPv4
+	fmt.Printf("Using IPv4 URL with host port: http://127.0.0.1:%d/metrics\n", port)
 
-	return fmt.Sprintf("http://%s:%d/metrics", "localhost", port)
+	return fmt.Sprintf("http://127.0.0.1:%d/metrics", port)
 }
 
 // GetGoldenServiceURL returns the URL for the golden service.
@@ -135,9 +137,11 @@ func GetGoldenServiceURL() string {
 		port = 8082 // Fallback to default port
 	}
 
-	fmt.Printf("Using localhost URL with host port: http://%s:%d/health\n", "localhost", port)
+	// Use 127.0.0.1 instead of localhost to avoid IPv6 issues on Ubuntu 24.04
+	// where localhost may resolve to ::1 but services bind only to IPv4
+	fmt.Printf("Using IPv4 URL with host port: http://127.0.0.1:%d/health\n", port)
 
-	return fmt.Sprintf("http://%s:%d", "localhost", port)
+	return fmt.Sprintf("http://127.0.0.1:%d", port)
 }
 
 // writeConfigFile writes the given YAML content to a config file for the container to read.
@@ -189,6 +193,7 @@ func writeConfigFile(yamlContent string, containerName ...string) error {
 
 			return fmt.Errorf("failed to copy config to container: %w", err)
 		}
+
 	}
 
 	return nil
@@ -309,13 +314,29 @@ func BuildAndRunContainer(configYaml string, memory string, cpus uint) error {
 	tmpRedpandaDir := filepath.Join(getTmpDir(), containerName, "redpanda")
 	tmpLogsDir := filepath.Join(getTmpDir(), containerName, "logs")
 
-	// 4. Create the directories
+	// 4. Create the directories with permissions that allow container user (UID 1000) to write
 	if err := os.MkdirAll(tmpRedpandaDir, 0o777); err != nil {
 		return fmt.Errorf("failed to create redpanda dir: %w", err)
 	}
 
 	if err := os.MkdirAll(tmpLogsDir, 0o777); err != nil {
 		return fmt.Errorf("failed to create logs dir: %w", err)
+	}
+
+	// Explicitly chmod to ensure permissions are set regardless of umask
+	if err := os.Chmod(tmpRedpandaDir, 0o777); err != nil {
+		GinkgoWriter.Printf("Warning: failed to chmod redpanda dir: %v\n", err)
+	}
+	if err := os.Chmod(tmpLogsDir, 0o777); err != nil {
+		GinkgoWriter.Printf("Warning: failed to chmod logs dir: %v\n", err)
+	}
+
+	// Change ownership to UID 1000 (umhuser in container) to avoid permission issues
+	// This is needed on depot runners where the host user differs from container user
+	if _, err := runDockerCommand("run", "--rm", "-v", tmpRedpandaDir+":/mnt/redpanda", "-v", tmpLogsDir+":/mnt/logs",
+		"alpine:3.20", "sh", "-c", "chown -R 1000:1000 /mnt/redpanda /mnt/logs && chmod -R 777 /mnt/redpanda /mnt/logs"); err != nil {
+		GinkgoWriter.Printf("Warning: failed to chown/chmod volume dirs: %v\n", err)
+		// Don't fail - might work without chown on some systems
 	}
 
 	// 5. Create the container WITHOUT starting it
@@ -378,6 +399,16 @@ func BuildAndRunContainer(configYaml string, memory string, cpus uint) error {
 	}
 
 	GinkgoWriter.Println("Container started successfully")
+
+	// 7.5. Fix permissions inside the container (needed on depot runners)
+	// The config.yaml may have wrong ownership after docker cp
+	// Must chmod ALL of /data including config.yaml, not just subdirectories
+	out, err = runDockerCommand("exec", "-u", "0", containerName, "sh", "-c",
+		"chown -R 1000:1000 /data && chmod 666 /data/config.yaml && chmod -R 777 /data/logs /data/redpanda")
+	if err != nil {
+		GinkgoWriter.Printf("Warning: failed to fix permissions in container: %v\n%s\n", err, out)
+		// Continue anyway - permissions might already be correct
+	}
 
 	// 8. Verify the container is actually running
 	out, err = runDockerCommand("inspect", "--format", "{{.State.Status}}", containerName)
@@ -667,9 +698,12 @@ func runDockerCommand(args ...string) (string, error) {
 func runDockerCommandWithCtx(ctx context.Context, args ...string) (string, error) {
 	fmt.Printf("Running docker command: %v\n", args)
 	// Check if we use docker or podman
+	// FORCE_DOCKER=true bypasses podman detection (needed when image built with Docker)
 	dockerCmd := "docker"
-	if _, err := exec.LookPath("podman"); err == nil {
-		dockerCmd = "podman"
+	if os.Getenv("FORCE_DOCKER") != "true" {
+		if _, err := exec.LookPath("podman"); err == nil {
+			dockerCmd = "podman"
+		}
 	}
 
 	cmd := exec.CommandContext(ctx, dockerCmd, args...)
