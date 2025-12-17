@@ -53,7 +53,7 @@ jobs:
 
   integration-tests:
     name: Integration Tests
-    runs-on: depot-ubuntu-24.04
+    runs-on: depot-ubuntu-24.04-8
     strategy:
       matrix:
         instance: [1, 2, 3]
