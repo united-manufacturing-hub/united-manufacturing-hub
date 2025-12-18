@@ -168,7 +168,9 @@ jobs:
             }
 
             failed=0
-            for bin in /usr/local/bin/benthos /opt/redpanda/bin/redpanda /usr/local/bin/umh-core \
+            # Note: /opt/redpanda/bin/redpanda is a shell wrapper script
+            # The actual ELF binary is at /opt/redpanda/libexec/redpanda
+            for bin in /usr/local/bin/benthos /opt/redpanda/libexec/redpanda /usr/local/bin/umh-core \
                        /command/s6-svscan /command/s6-supervise /command/execlineb; do
               check_binary "$bin" || failed=1
             done
