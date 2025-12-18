@@ -153,13 +153,26 @@ jobs:
           set -euo pipefail
 
           echo "Checking binary architectures..."
+          # Use od to read ELF header machine type (bytes 18-19)
+          # ARM64 = b700, x86-64 = 3e00 (little-endian)
           docker run --rm --platform linux/arm64 "$IMAGE" sh -c '
-            file /usr/local/bin/benthos \
-                 /opt/redpanda/bin/redpanda \
-                 /usr/local/bin/umh-core \
-                 /command/s6-svscan \
-                 /command/s6-supervise \
-                 /command/execlineb
+            check_binary() {
+              local binary=$1
+              local machine=$(od -An -tx1 -j18 -N2 "$binary" 2>/dev/null | tr -d " ")
+
+              case "$machine" in
+                "b700") echo "$binary: ARM aarch64" ;;
+                "3e00") echo "$binary: x86-64 (ERROR!)"; return 1 ;;
+                *) echo "$binary: unknown arch ($machine)"; return 1 ;;
+              esac
+            }
+
+            failed=0
+            for bin in /usr/local/bin/benthos /opt/redpanda/bin/redpanda /usr/local/bin/umh-core \
+                       /command/s6-svscan /command/s6-supervise /command/execlineb; do
+              check_binary "$bin" || failed=1
+            done
+            exit $failed
           ' | tee /tmp/arch-check.txt
 
           # Fail if any binary is x86-64
@@ -169,7 +182,7 @@ jobs:
             exit 1
           fi
 
-          # Verify ARM64 (pattern confirmed correct for all ELF types)
+          # Verify ARM64
           if ! grep -q "ARM aarch64" /tmp/arch-check.txt; then
             echo "::error::Binaries are not ARM64!"
             cat /tmp/arch-check.txt
