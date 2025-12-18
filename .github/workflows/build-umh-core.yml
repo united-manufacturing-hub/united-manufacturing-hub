@@ -97,14 +97,31 @@ jobs:
             VERSION=${{ steps.version.outputs.VERSION }} \
             TAGS="$TAGS"
 
-  verify-arm64-binaries:
-    name: Verify ARM64 Image
+  verify-binaries:
+    name: Verify ${{ matrix.arch }} Image
     needs: build
-    runs-on: depot-ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 10
     permissions:
       contents: read
       packages: read
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [arm64, amd64]
+        include:
+          - arch: arm64
+            runner: depot-ubuntu-24.04-arm
+            platform: linux/arm64
+            expected_machine: "b700"
+            expected_uname: "aarch64"
+            arch_name: "ARM aarch64"
+          - arch: amd64
+            runner: depot-ubuntu-24.04
+            platform: linux/amd64
+            expected_machine: "3e00"
+            expected_uname: "x86_64"
+            arch_name: "x86-64"
     steps:
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
@@ -113,28 +130,29 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Verify we're on ARM64 runner
+      - name: Verify runner architecture
         run: |
           ARCH=$(uname -m)
           echo "Runner architecture: $ARCH"
-          if [ "$ARCH" != "aarch64" ]; then
-            echo "::error::Not running on ARM64 runner! Got: $ARCH"
+          echo "Expected: ${{ matrix.expected_uname }}"
+          if [ "$ARCH" != "${{ matrix.expected_uname }}" ]; then
+            echo "::error::Not running on expected architecture! Expected: ${{ matrix.expected_uname }}, Got: $ARCH"
             exit 1
           fi
 
-      - name: Pull ARM64 image with retry
+      - name: Pull ${{ matrix.arch }} image with retry
         run: |
           set -euo pipefail
           SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
           IMAGE="ghcr.io/united-manufacturing-hub/umh-core:sha-${SHORT_SHA}"
           echo "IMAGE=$IMAGE" >> $GITHUB_ENV
 
-          echo "Pulling ARM64 image: $IMAGE"
+          echo "Pulling ${{ matrix.arch }} image: $IMAGE"
           MAX_RETRIES=5
           RETRY_DELAY=10
 
           for i in $(seq 1 $MAX_RETRIES); do
-            if docker pull --platform linux/arm64 "$IMAGE"; then
+            if docker pull --platform ${{ matrix.platform }} "$IMAGE"; then
               echo "Image pulled successfully"
               exit 0
             fi
@@ -149,22 +167,30 @@ jobs:
           exit 1
 
       - name: Verify binary architectures
+        env:
+          EXPECTED_MACHINE: ${{ matrix.expected_machine }}
+          ARCH_NAME: ${{ matrix.arch_name }}
         run: |
           set -euo pipefail
 
           echo "Checking binary architectures..."
+          echo "Expected machine type: $EXPECTED_MACHINE ($ARCH_NAME)"
           # Use od to read ELF header machine type (bytes 18-19)
           # ARM64 = b700, x86-64 = 3e00 (little-endian)
-          docker run --rm --platform linux/arm64 "$IMAGE" sh -c '
+          docker run --rm --platform ${{ matrix.platform }} \
+            -e EXPECTED_MACHINE="$EXPECTED_MACHINE" \
+            -e ARCH_NAME="$ARCH_NAME" \
+            "$IMAGE" sh -c '
             check_binary() {
               local binary=$1
               local machine=$(od -An -tx1 -j18 -N2 "$binary" 2>/dev/null | tr -d " ")
 
-              case "$machine" in
-                "b700") echo "$binary: ARM aarch64" ;;
-                "3e00") echo "$binary: x86-64 (ERROR!)"; return 1 ;;
-                *) echo "$binary: unknown arch ($machine)"; return 1 ;;
-              esac
+              if [ "$machine" = "$EXPECTED_MACHINE" ]; then
+                echo "$binary: $ARCH_NAME"
+              else
+                echo "$binary: wrong arch ($machine, expected $EXPECTED_MACHINE)"
+                return 1
+              fi
             }
 
             failed=0
@@ -177,21 +203,14 @@ jobs:
             exit $failed
           ' | tee /tmp/arch-check.txt
 
-          # Fail if any binary is x86-64
-          if grep -q "x86-64" /tmp/arch-check.txt; then
-            echo "::error::ARM64 image contains x86-64 binaries!"
+          # Verify expected architecture found
+          if ! grep -q "$ARCH_NAME" /tmp/arch-check.txt; then
+            echo "::error::Binaries are not $ARCH_NAME!"
             cat /tmp/arch-check.txt
             exit 1
           fi
 
-          # Verify ARM64
-          if ! grep -q "ARM aarch64" /tmp/arch-check.txt; then
-            echo "::error::Binaries are not ARM64!"
-            cat /tmp/arch-check.txt
-            exit 1
-          fi
-
-          echo "All binaries are native ARM64"
+          echo "All binaries are native $ARCH_NAME"
 
       - name: Smoke test - verify binaries execute
         run: |
@@ -199,15 +218,15 @@ jobs:
           echo "Running smoke tests..."
 
           # Test benthos
-          docker run --rm --platform linux/arm64 "$IMAGE" benthos --version
+          docker run --rm --platform ${{ matrix.platform }} "$IMAGE" benthos --version
           echo "benthos executes"
 
           # Test umh-core
-          docker run --rm --platform linux/arm64 "$IMAGE" umh-core --help || true
+          docker run --rm --platform ${{ matrix.platform }} "$IMAGE" umh-core --help || true
           echo "umh-core executes"
 
           # Test S6 (just check it runs, version flag may not exist)
-          docker run --rm --platform linux/arm64 "$IMAGE" /command/s6-svscan --help 2>&1 || true
+          docker run --rm --platform ${{ matrix.platform }} "$IMAGE" /command/s6-svscan --help 2>&1 || true
           echo "s6-svscan executes"
 
           echo "All smoke tests passed"
@@ -215,7 +234,10 @@ jobs:
       - name: Add to job summary
         if: always()
         run: |
-          echo "## ARM64 Binary Verification" >> $GITHUB_STEP_SUMMARY
+          echo "## ${{ matrix.arch }} Binary Verification" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Architecture**: ${{ matrix.arch_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Platform**: ${{ matrix.platform }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           if [ -f /tmp/arch-check.txt ]; then
             echo '```' >> $GITHUB_STEP_SUMMARY
