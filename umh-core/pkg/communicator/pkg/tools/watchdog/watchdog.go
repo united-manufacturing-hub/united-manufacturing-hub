@@ -21,9 +21,9 @@ import (
 	"sync/atomic"
 	"time"
 
+	"context"
 	"github.com/google/uuid"
 	"go.uber.org/zap"
-	"golang.org/x/net/context"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 )
