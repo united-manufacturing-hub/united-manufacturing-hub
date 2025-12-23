@@ -251,7 +251,7 @@ protocolConverter:
               uns: {}
 ```
 
-### GraphQL API - Topic Browser
+### GraphQL API - Topic Browser 🚧
 
 GraphQL API for querying Unified Namespace topics.
 
