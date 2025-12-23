@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"runtime/debug"
 	"sync"
 	"time"
 
@@ -112,49 +113,88 @@ func (ae *ActionExecutor) worker() {
 				// Channel closed, exit gracefully
 				return
 			}
-			startTime := time.Now()
-			actionCtx, cancel := context.WithTimeout(ae.ctx, work.timeout)
 
-			err := work.action.Execute(actionCtx, work.deps)
-			duration := time.Since(startTime)
+			ae.executeWorkWithRecovery(work)
+		}
+	}
+}
 
-			status := "success"
+// executeWorkWithRecovery handles action execution with panic recovery.
+// This ensures that a panicking action doesn't crash the worker goroutine,
+// allowing the executor to remain functional.
+func (ae *ActionExecutor) executeWorkWithRecovery(work actionWork) {
+	startTime := time.Now()
 
+	actionCtx, cancel := context.WithTimeout(ae.ctx, work.timeout)
+	defer cancel()
+
+	var err error
+
+	var status string
+
+	// Panic recovery - ensures worker survives and in-progress is cleared
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("action panicked: %v", r)
+			status = "panic"
+
+			ae.logger.Errorw("action_panic",
+				"action", work.actionID,
+				"action_name", work.action.Name(),
+				"panic", fmt.Sprintf("%v", r),
+				"stack", string(debug.Stack()))
+		}
+
+		// Always clear in-progress status (even after panic)
+		ae.mu.Lock()
+		delete(ae.inProgress, work.actionID)
+		ae.mu.Unlock()
+
+		// Record metrics
+		duration := time.Since(startTime)
+
+		if status == "" {
 			if err != nil {
 				if errors.Is(err, context.DeadlineExceeded) {
-					metrics.RecordActionTimeout(ae.supervisorID, work.action.Name())
-
 					status = "timeout"
-
-					ae.logger.Errorw("action_failed",
-						"action", work.action.Name(),
-						"error", "timeout",
-						"duration_ms", duration.Milliseconds(),
-						"timeout_ms", work.timeout.Milliseconds())
 				} else {
 					status = "error"
-
-					ae.logger.Errorw("action_failed",
-						"action", work.action.Name(),
-						"error", err.Error(),
-						"duration_ms", duration.Milliseconds())
 				}
 			} else {
-				// Success logs at DEBUG - operators only need failures, not routine success
-				ae.logger.Debugw("action_completed",
-					"action", work.action.Name(),
-					"duration_ms", duration.Milliseconds(),
-					"success", true)
+				status = "success"
 			}
-
-			metrics.RecordActionExecutionDuration(ae.supervisorID, work.action.Name(), status, duration)
-
-			cancel()
-
-			ae.mu.Lock()
-			delete(ae.inProgress, work.actionID)
-			ae.mu.Unlock()
 		}
+
+		metrics.RecordActionExecutionDuration(ae.supervisorID, work.action.Name(), status, duration)
+	}()
+
+	// Execute action
+	err = work.action.Execute(actionCtx, work.deps)
+
+	// Handle normal completion (non-panic)
+	duration := time.Since(startTime)
+
+	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) {
+			metrics.RecordActionTimeout(ae.supervisorID, work.action.Name())
+
+			ae.logger.Errorw("action_failed",
+				"action", work.action.Name(),
+				"error", "timeout",
+				"duration_ms", duration.Milliseconds(),
+				"timeout_ms", work.timeout.Milliseconds())
+		} else {
+			ae.logger.Errorw("action_failed",
+				"action", work.action.Name(),
+				"error", err.Error(),
+				"duration_ms", duration.Milliseconds())
+		}
+	} else {
+		// Success logs at DEBUG - operators only need failures, not routine success
+		ae.logger.Debugw("action_completed",
+			"action", work.action.Name(),
+			"duration_ms", duration.Milliseconds(),
+			"success", true)
 	}
 }
 

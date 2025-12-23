@@ -617,6 +617,96 @@ var _ = Describe("ActionExecutor", func() {
 			})
 		})
 	})
+
+	Describe("Panic Recovery", func() {
+		It("should recover from panicking action and clear in-progress status", func() {
+			actionID := "panic-action"
+			panicAction := &testAction{
+				execute: func(ctx context.Context) error {
+					panic("simulated panic in action")
+				},
+				name: "panic-test",
+			}
+
+			err := executor.EnqueueAction(actionID, panicAction, nil)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Wait for action to be processed (panic should be recovered)
+			Eventually(func() bool {
+				return !executor.HasActionInProgress(actionID)
+			}, 2*time.Second, 50*time.Millisecond).Should(BeTrue(),
+				"Action should be cleared from in-progress after panic recovery")
+		})
+
+		It("should keep worker pool functional after panic", func() {
+			// First: trigger panic
+			panicAction := &testAction{
+				execute: func(ctx context.Context) error {
+					panic("boom")
+				},
+			}
+			err := executor.EnqueueAction("panic-action", panicAction, nil)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Wait for panic to be processed
+			Eventually(func() bool {
+				return !executor.HasActionInProgress("panic-action")
+			}, 2*time.Second).Should(BeTrue())
+
+			// Second: verify executor still works with normal action
+			completed := make(chan bool, 1)
+			normalAction := &testAction{
+				execute: func(ctx context.Context) error {
+					completed <- true
+					return nil
+				},
+			}
+
+			err = executor.EnqueueAction("normal-action", normalAction, nil)
+			Expect(err).ToNot(HaveOccurred())
+
+			Eventually(completed, 2*time.Second).Should(Receive(BeTrue()),
+				"Normal action should complete after previous action panicked")
+		})
+
+		It("should handle multiple consecutive panics without crashing", func() {
+			for i := range 5 {
+				actionID := fmt.Sprintf("panic-action-%d", i)
+				idx := i // capture loop variable
+				panicAction := &testAction{
+					execute: func(ctx context.Context) error {
+						panic(fmt.Sprintf("panic %d", idx))
+					},
+				}
+				err := executor.EnqueueAction(actionID, panicAction, nil)
+				Expect(err).ToNot(HaveOccurred())
+			}
+
+			// Wait for all panics to be processed
+			Eventually(func() int {
+				count := 0
+				for i := range 5 {
+					if !executor.HasActionInProgress(fmt.Sprintf("panic-action-%d", i)) {
+						count++
+					}
+				}
+				return count
+			}, 5*time.Second).Should(Equal(5),
+				"All panic actions should be cleared from in-progress")
+
+			// Verify executor still works
+			completed := make(chan bool, 1)
+			normalAction := &testAction{
+				execute: func(ctx context.Context) error {
+					completed <- true
+					return nil
+				},
+			}
+			err := executor.EnqueueAction("final-normal", normalAction, nil)
+			Expect(err).ToNot(HaveOccurred())
+			Eventually(completed, 2*time.Second).Should(Receive())
+		})
+	})
 })
 
 type testAction struct {

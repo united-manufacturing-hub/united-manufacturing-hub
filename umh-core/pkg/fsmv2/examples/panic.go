@@ -14,26 +14,29 @@
 
 package examples
 
-// PanicScenario demonstrates what happens when an action panics.
+// PanicScenario demonstrates panic recovery in action handlers.
 //
 // # What This Scenario Tests
 //
-// This scenario showcases the current behavior when an action panics:
+// This scenario showcases how the ActionExecutor handles panics gracefully:
 //   - Action panics during execution (simulated critical failure)
-//   - Process crashes (panics propagate to the main goroutine)
+//   - Panic is caught, logged, and converted to an error
+//   - Worker pool remains functional and retries the action
 //
 // # Flow
 //
 //  1. Worker starts in Stopped state
 //  2. Worker transitions to TryingToConnect (desired state is "running")
 //  3. ConnectAction executes and panics (simulated crash)
-//  4. Process crashes with panic stack trace
+//  4. Panic is recovered and logged as "action_panic" with stack trace
+//  5. Worker remains in TryingToConnect and retries on next tick
 //
 // # What to Observe
 //
 // When running this scenario, you should see:
 //   - "Simulating panic in connect action" warning
-//   - Panic stack trace and process exit
+//   - "action_panic" log entries with stack traces
+//   - Worker staying in TryingToConnect (never reaching Connected)
 //
 // # Configuration
 //
@@ -42,25 +45,29 @@ package examples
 //
 // # Pattern Demonstrated
 //
-// Action Panic → Process Crash (current behavior)
+// Action Panic → Error (Recovered by ActionExecutor)
 //
-// This scenario demonstrates that panics in actions are NOT recovered.
-// In production, actions should use proper error handling instead of panicking.
+// This scenario demonstrates that panics in actions ARE recovered by the
+// ActionExecutor. The defer/recover wrapper in executeWorkWithRecovery():
+//   - Catches the panic before it propagates
+//   - Logs the panic with full stack trace
+//   - Clears the action from in-progress map
+//   - Allows the worker to retry on the next tick
+//
 // Real-world examples that could cause panics:
 //   - Nil pointer dereference in protocol handler
 //   - Array index out of bounds during message parsing
 //   - Unexpected type assertion failure
 //
-// # Future Consideration
+// # Resilience vs Visibility Trade-off
 //
-// Panic recovery could be added to the ActionExecutor to convert panics
-// to errors, allowing the worker to retry. This would improve resilience
-// but may mask bugs that should be fixed. For now, panics crash the process
-// which makes bugs immediately visible during development.
+// Panic recovery improves system resilience (workers don't crash permanently)
+// but may mask bugs. The "action_panic" log with stack trace ensures bugs
+// remain visible for debugging while the system continues operating.
 var PanicScenario = Scenario{
 	Name: "panic",
 
-	Description: "Demonstrates what happens when an action panics (process crash)",
+	Description: "Demonstrates panic recovery in action handlers",
 
 	YAMLConfig: `
 children:
