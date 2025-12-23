@@ -53,7 +53,7 @@ Your Factory Floor                    UMH Core                         Your Syst
 ──────────────────                    ────────                         ────────────
                                                         
 PLCs (S7, Modbus)    ─┐                                          ┌─▶ Dashboards
-Sensors (OPC UA)     ─┼─[Bridge]─▶ Unified Namespace ─[Bridge]─┼─▶ Cloud/MQTT
+Sensors (OPC UA)     ─┼─[Bridge]─▶ Unified Namespace ─[Bridge]───┼─▶ Cloud/MQTT
 MES/ERP (REST)       ─┘              (organized data)            └─▶ Databases
 ```
 
