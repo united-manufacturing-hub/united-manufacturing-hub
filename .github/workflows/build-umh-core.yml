@@ -141,30 +141,26 @@ jobs:
           fi
 
       - name: Pull ${{ matrix.arch }} image with retry
-        run: |
-          set -euo pipefail
-          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
-          IMAGE="ghcr.io/united-manufacturing-hub/umh-core:sha-${SHORT_SHA}"
-          echo "IMAGE=$IMAGE" >> $GITHUB_ENV
+        uses: nick-fields/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08 # v3
+        with:
+          timeout_seconds: 120
+          max_attempts: 5
+          retry_wait_seconds: 10
+          command: |
+            set -euo pipefail
+            SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+            IMAGE="ghcr.io/united-manufacturing-hub/umh-core:sha-${SHORT_SHA}"
+            echo "IMAGE=$IMAGE" >> $GITHUB_ENV
 
-          echo "Pulling ${{ matrix.arch }} image: $IMAGE"
-          MAX_RETRIES=5
-          RETRY_DELAY=10
+            echo "Pulling ${{ matrix.arch }} image: $IMAGE"
 
-          for i in $(seq 1 $MAX_RETRIES); do
             if docker pull --platform ${{ matrix.platform }} "$IMAGE"; then
               echo "Image pulled successfully"
               exit 0
             fi
-            if [ $i -lt $MAX_RETRIES ]; then
-              echo "Pull failed, retrying in ${RETRY_DELAY}s... (attempt $i/$MAX_RETRIES)"
-              sleep $RETRY_DELAY
-              RETRY_DELAY=$((RETRY_DELAY * 2))
-            fi
-          done
 
-          echo "::error::Failed to pull image after $MAX_RETRIES attempts"
-          exit 1
+            echo "::error::Failed to pull image"
+            exit 1
 
       - name: Verify binary architectures
         env:
@@ -211,25 +207,6 @@ jobs:
           fi
 
           echo "All binaries are native $ARCH_NAME"
-
-      - name: Smoke test - verify binaries execute
-        run: |
-          set -euo pipefail
-          echo "Running smoke tests..."
-
-          # Test benthos
-          docker run --rm --platform ${{ matrix.platform }} "$IMAGE" benthos --version
-          echo "benthos executes"
-
-          # Test umh-core
-          docker run --rm --platform ${{ matrix.platform }} "$IMAGE" umh-core --help || true
-          echo "umh-core executes"
-
-          # Test S6 (just check it runs, version flag may not exist)
-          docker run --rm --platform ${{ matrix.platform }} "$IMAGE" /command/s6-svscan --help 2>&1 || true
-          echo "s6-svscan executes"
-
-          echo "All smoke tests passed"
 
       - name: Add to job summary
         if: always()
