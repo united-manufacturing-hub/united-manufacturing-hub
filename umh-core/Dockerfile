@@ -80,6 +80,7 @@ ARG BENTHOS_UMH_VERSION=MUST_BE_SET_BY_MAKEFILE
 ARG REDPANDA_VERSION=MUST_BE_SET_BY_MAKEFILE
 ARG DEBUG=false
 ARG PPROF=false
+ARG CRYPTOLIB=false
 WORKDIR /go/src/github.com/united-manufacturing-hub/united-manufacturing-hub
 
 # Set app version with a default value - can be overridden at build time
@@ -103,6 +104,14 @@ RUN if [ "$DEBUG" = "true" ]; then \
     -o /go/bin/umh-core cmd/main.go; \
     elif [ "$PPROF" = "true" ]; then \
     CGO_ENABLED=1 go build -mod=vendor -tags pprof \
+    -ldflags "-s -w \
+    -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants.S6OverlayVersion=${S6_OVERLAY_VERSION} \
+    -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants.BenthosVersion=${BENTHOS_UMH_VERSION} \
+    -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants.RedpandaVersion=${REDPANDA_VERSION} \
+    -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/version.AppVersion=${APP_VERSION}" \
+    -o /go/bin/umh-core cmd/main.go; \
+    elif [ "$CRYPTOLIB" = "true" ]; then \
+    CGO_ENABLED=0 go build -tags cryptolib \
     -ldflags "-s -w \
     -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants.S6OverlayVersion=${S6_OVERLAY_VERSION} \
     -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants.BenthosVersion=${BENTHOS_UMH_VERSION} \

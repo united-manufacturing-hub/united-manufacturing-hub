@@ -145,7 +145,7 @@ var _ = Describe("Subscribe and Receive Test", func() {
 		state = &communication_state.CommunicationState{
 			LoginResponse:   login,
 			Watchdog:        dog.(*watchdog.Watchdog),
-			InboundChannel:  make(chan *models.UMHMessage, 100),
+			InboundChannel:  make(chan *models.UMHMessageWithAdditionalInfo, 100),
 			OutboundChannel: outboundChan, // Use our custom outbound channel
 			InsecureTLS:     false,
 			ReleaseChannel:  config.ReleaseChannel("stable"),
@@ -173,6 +173,7 @@ var _ = Describe("Subscribe and Receive Test", func() {
 			false,
 			apiUrl,
 			log,
+			nil, // certSubChan - not needed for tests
 		)
 
 		// Initialize subscriber handler
@@ -194,6 +195,7 @@ var _ = Describe("Subscribe and Receive Test", func() {
 			config.NewMockConfigManager(),
 			logger.For(logger.ComponentCommunicator),
 			topicBrowserCommunicator,
+			nil, // certSubChan - not needed for tests
 		)
 		subHandler.StartNotifier()
 
@@ -242,7 +244,7 @@ var _ = Describe("Subscribe and Receive Test", func() {
 
 			// If it's a subscribe message, add the subscriber
 			if decodedContent.MessageType == models.Subscribe {
-				subHandler.AddOrRefreshSubscriber(msg.Email, false)
+				subHandler.AddOrRefreshSubscriber(msg.Email, false, nil, nil, nil, nil)
 				GinkgoWriter.Printf("Added subscriber: %s\n", msg.Email)
 			}
 		}

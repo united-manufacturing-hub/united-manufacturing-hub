@@ -117,7 +117,7 @@ func main() {
 	// Initialize the communication state
 	communicationState := communication_state.NewCommunicationState(
 		watchdog.NewWatchdog(ctx, time.NewTicker(time.Second*10), true, logger.For(logger.ComponentCommunicator)),
-		make(chan *models.UMHMessage, 100),
+		make(chan *models.UMHMessageWithAdditionalInfo, 100),
 		make(chan *models.UMHMessage, 100),
 		configData.Agent.ReleaseChannel,
 		systemSnapshotManager,

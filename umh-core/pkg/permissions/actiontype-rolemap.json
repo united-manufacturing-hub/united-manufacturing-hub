@@ -1,0 +1,201 @@
+{
+  "groups": {
+    "Get Actions": {
+      "description": "Read-only operations for viewing resources & states",
+      "actions": {
+        "get-connection-notes": [
+          "Admin",
+          "Viewer",
+          "Editor"
+        ],
+        "get-datasource-basic": [
+          "Admin",
+          "Viewer",
+          "Editor"
+        ],
+        "get-protocol-converter": [
+          "Admin",
+          "Viewer",
+          "Editor"
+        ],
+        "get-audit-log": [
+          "Admin"
+        ],
+        "get-data-flow-component": [
+          "Admin",
+          "Viewer",
+          "Editor"
+        ],
+        "get-data-flow-component-metrics": [
+          "Admin",
+          "Viewer",
+          "Editor"
+        ],
+        "get-data-flow-component-log": [
+          "Admin",
+          "Viewer",
+          "Editor"
+        ],
+        "get-kubernetes-events": [
+          "Admin",
+          "Viewer",
+          "Editor"
+        ],
+        "get-opcua-tags": [
+          "Admin",
+          "Viewer",
+          "Editor"
+        ],
+        "allow-app-secret-access": [
+          "Admin"
+        ]
+      }
+    },
+    "Edit Actions": {
+      "description": "Operations that modify existing resources",
+      "actions": {
+        "edit-connection": [
+          "Admin",
+          "Editor"
+        ],
+        "edit-opcua-datasource": [
+          "Admin",
+          "Editor"
+        ],
+        "edit-mqtt-broker": [
+          "Admin",
+          "Editor"
+        ],
+        "edit-protocol-converter": [
+          "Admin",
+          "Editor"
+        ],
+        "edit-instance-location": [
+          "Admin"
+        ],
+        "edit-instance": [
+          "Admin"
+        ],
+        "edit-data-flow-component": [
+          "Admin",
+          "Editor"
+        ],
+        "rollback-data-flow-component": [
+          "Admin",
+          "Editor"
+        ]
+      }
+    },
+    "Delete Actions": {
+      "description": "Operations that remove resources",
+      "actions": {
+        "delete-connection": [
+          "Admin",
+          "Editor"
+        ],
+        "delete-datasource": [
+          "Admin",
+          "Editor"
+        ],
+        "delete-protocol-converter": [
+          "Admin",
+          "Editor"
+        ],
+        "delete-data-flow-component": [
+          "Admin",
+          "Editor"
+        ]
+      }
+    },
+    "Deploy Actions": {
+      "description": "Operations for deploying new resources",
+      "actions": {
+        "deploy-opcua-connection": [
+          "Admin",
+          "Editor"
+        ],
+        "deploy-connection": [
+          "Admin",
+          "Editor"
+        ],
+        "deploy-opcua-datasource": [
+          "Admin",
+          "Editor"
+        ],
+        "deploy-protocol-converter": [
+          "Admin",
+          "Editor"
+        ],
+        "deploy-data-flow-component": [
+          "Admin",
+          "Editor"
+        ]
+      }
+    },
+    "Test Actions": {
+      "description": "Operations for testing configurations",
+      "actions": {
+        "test-benthos-input": [
+          "Admin",
+          "Editor"
+        ],
+        "test-network-connection": [
+          "Admin",
+          "Editor"
+        ]
+      }
+    },
+    "System Actions": {
+      "description": "System-level operations",
+      "actions": {
+        "upgrade-companion": [
+          "Admin"
+        ],
+        "create-instance": [
+          "Super-Admin"
+        ],
+        "delete-instance": [
+          "Super-Admin"
+        ]
+      }
+    },
+    "Company Actions": {
+      "description": "Company-level operations",
+      "actions": {
+        "create-invite": [
+          "Super-Admin"
+        ],
+        "get-company-invites": [
+          "Super-Admin"
+        ],
+        "delete-invite": [
+          "Super-Admin"
+        ],
+        "get-company-users": [
+          "Super-Admin"
+        ],
+        "delete-company-user": [
+          "Super-Admin"
+        ],
+        "change-user-role": [
+          "Super-Admin"
+        ],
+        "change-user-permissions": [
+          "Super-Admin"
+        ]
+      }
+    }
+  },
+  "ungrouped": {
+    "unknown": [
+      "Admin",
+      "Viewer",
+      "Editor"
+    ],
+    "dummy": [
+      "Admin",
+      "Viewer",
+      "Editor"
+    ]
+  }
+}

@@ -15,11 +15,13 @@
 package subscriber
 
 import (
+	"crypto/x509"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2/push"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/encoding"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/topicbrowser"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/permissions"
 
 	"github.com/google/uuid"
 
@@ -59,6 +61,10 @@ func NewHandler(
 	configManager config.ConfigManager,
 	logger *zap.SugaredLogger,
 	topicBrowserCommunicator *topicbrowser.TopicBrowserCommunicator,
+	certSubChan chan struct {
+		Email string
+		Cert  *x509.Certificate
+	},
 ) *Handler {
 	s := &Handler{}
 	s.subscriberRegistry = subscribers.NewRegistry(cull, ttl)
@@ -84,7 +90,34 @@ func (s *Handler) StartNotifier() {
 	go s.notifySubscribers()
 }
 
-func (s *Handler) AddOrRefreshSubscriber(identifier string, bootstrapped bool) {
+func (s *Handler) AddOrRefreshSubscriber(
+	identifier string,
+	bootstrapped bool,
+	userCert *x509.Certificate,
+	rootCA *x509.Certificate,
+	intermediateCerts []*x509.Certificate,
+	validator permissions.Validator,
+) {
+	// Validate user permissions if rootCA is available
+	if rootCA != nil && userCert != nil {
+		locationStr := permissions.GetLocationFromConfig(s.configManager)
+		allowed, err := validator.ValidateUserPermissions(
+			userCert,
+			"subscribe",
+			locationStr,
+			rootCA,
+			intermediateCerts,
+		)
+		if err != nil {
+			s.logger.Warnf("Permission validation failed for subscriber %s: %v", identifier, err)
+			return
+		}
+		if !allowed {
+			s.logger.Warnf("Permission denied for subscriber %s: user is not authorized to subscribe", identifier)
+			return
+		}
+	}
+
 	s.subscriberRegistry.AddOrRefresh(identifier, bootstrapped)
 	s.dog.SetHasSubscribers(true)
 }
@@ -99,7 +132,7 @@ func (s *Handler) GetSubscribers() []string {
 func (s *Handler) notifySubscribers() {
 	watcherUUID := s.dog.RegisterHeartbeat("notifySubscribers", 0, 600, true)
 
-	var timer = time.NewTicker(time.Second)
+	timer := time.NewTicker(time.Second)
 	defer timer.Stop()
 
 	for range timer.C {

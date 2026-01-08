@@ -22,6 +22,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/permissions"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/encoding"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/subscriber"
@@ -34,7 +35,7 @@ import (
 type Router struct {
 	dog                   watchdog.Iface
 	configManager         config.ConfigManager
-	inboundChannel        chan *models.UMHMessage
+	inboundChannel        chan *models.UMHMessageWithAdditionalInfo
 	outboundChannel       chan *models.UMHMessage
 	clientConnections     map[string]*ClientConnection
 	subHandler            *subscriber.Handler
@@ -44,6 +45,7 @@ type Router struct {
 	releaseChannel        config.ReleaseChannel
 	clientConnectionsLock sync.RWMutex
 	instanceUUID          uuid.UUID
+	validator             permissions.Validator
 }
 
 type ClientConnection struct {
@@ -52,7 +54,7 @@ type ClientConnection struct {
 }
 
 func NewRouter(dog watchdog.Iface,
-	inboundChannel chan *models.UMHMessage,
+	inboundChannel chan *models.UMHMessageWithAdditionalInfo,
 	instanceUUID uuid.UUID,
 	outboundChannel chan *models.UMHMessage,
 	releaseChannel config.ReleaseChannel,
@@ -74,6 +76,7 @@ func NewRouter(dog watchdog.Iface,
 		configManager:         configManager,
 		actionLogger:          logger,
 		routerLogger:          logger,
+		validator:             permissions.NewValidator(),
 	}
 }
 
@@ -119,7 +122,7 @@ func (r *Router) router() {
 // this is an optimization to avoid sending a "new subscriber" message, containing the cached uns data with at least
 // one event for every topic, to the frontend when the user is already subscribed
 // we should avoid unnecessary new subscriber message generation because of its high memory and cpu usage.
-func (r *Router) handleSub(message *models.UMHMessage, messageContent models.UMHMessageContent, watcherUUID uuid.UUID) {
+func (r *Router) handleSub(message *models.UMHMessageWithAdditionalInfo, messageContent models.UMHMessageContent, watcherUUID uuid.UUID) {
 	if r.subHandler == nil {
 		r.dog.ReportHeartbeatStatus(watcherUUID, watchdog.HEARTBEAT_STATUS_WARNING)
 		r.routerLogger.Warnf("Subscribe handler not yet initialized")
@@ -135,10 +138,17 @@ func (r *Router) handleSub(message *models.UMHMessage, messageContent models.UMH
 		}
 	}
 
-	r.subHandler.AddOrRefreshSubscriber(message.Email, subscribePayload.Resubscribed)
+	r.subHandler.AddOrRefreshSubscriber(
+		message.Email,
+		subscribePayload.Resubscribed,
+		message.Certificate,
+		message.RootCA,
+		message.IntermediateCerts,
+		r.validator,
+	)
 }
 
-func (r *Router) handleAction(messageContent models.UMHMessageContent, message *models.UMHMessage, watcherUUID uuid.UUID) {
+func (r *Router) handleAction(messageContent models.UMHMessageContent, message *models.UMHMessageWithAdditionalInfo, watcherUUID uuid.UUID) {
 	var actionPayload models.ActionMessagePayload
 
 	payloadMap, ok := messageContent.Payload.(map[string]interface{})
@@ -169,5 +179,9 @@ func (r *Router) handleAction(messageContent models.UMHMessageContent, message *
 		traceId,
 		r.systemSnapshotManager,
 		r.configManager,
+		message.Certificate,
+		message.RootCA,
+		message.IntermediateCerts,
+		r.validator,
 	)
 }

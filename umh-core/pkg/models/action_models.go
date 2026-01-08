@@ -15,6 +15,8 @@
 package models
 
 import (
+	"crypto/x509"
+
 	"github.com/Masterminds/semver/v3"
 	"github.com/google/uuid"
 )
@@ -81,6 +83,13 @@ type UMHMessage struct {
 	Email        string           `json:"email"`
 	Content      string           `json:"content"`
 	InstanceUUID uuid.UUID        `json:"umhInstance"`
+}
+
+type UMHMessageWithAdditionalInfo struct {
+	UMHMessage
+	Certificate       *x509.Certificate   `json:"certificate"`
+	RootCA            *x509.Certificate   `json:"rootCA"`
+	IntermediateCerts []*x509.Certificate `json:"intermediateCerts"`
 }
 
 // Define MessageType as a custom type for better type safety.
@@ -430,7 +439,6 @@ type EditDataflowcomponentRequestSchemaJson struct {
 type GetDataflowcomponentResponse map[string]GetDataflowcomponentResponseContent
 
 type GetDataflowcomponentResponseContent struct {
-
 	// Meta corresponds to the JSON schema field "meta".
 	Meta CommonDataFlowComponentMeta `json:"meta" mapstructure:"meta" yaml:"meta"`
 
@@ -473,7 +481,6 @@ type CommonDataFlowComponentCDFCPropertiesPayload struct {
 }
 
 type CommonDataFlowComponentCDFCProperties struct {
-
 	// Pipeline corresponds to the JSON schema field "pipeline".
 	Pipeline CommonDataFlowComponentPipelineConfig `json:"pipeline" mapstructure:"pipeline" yaml:"pipeline"`
 
@@ -717,10 +724,12 @@ type ActionReplyResponseSchemaJsonActionReplyPayloadV2 struct {
 
 type ActionReplyResponseSchemaJsonActionReplyState string
 
-const ActionReplyResponseSchemaJsonActionReplyStateActionConfirmed ActionReplyResponseSchemaJsonActionReplyState = "action-confirmed"
-const ActionReplyResponseSchemaJsonActionReplyStateActionExecuting ActionReplyResponseSchemaJsonActionReplyState = "action-executing"
-const ActionReplyResponseSchemaJsonActionReplyStateActionFailure ActionReplyResponseSchemaJsonActionReplyState = "action-failure"
-const ActionReplyResponseSchemaJsonActionReplyStateActionSuccess ActionReplyResponseSchemaJsonActionReplyState = "action-success"
+const (
+	ActionReplyResponseSchemaJsonActionReplyStateActionConfirmed ActionReplyResponseSchemaJsonActionReplyState = "action-confirmed"
+	ActionReplyResponseSchemaJsonActionReplyStateActionExecuting ActionReplyResponseSchemaJsonActionReplyState = "action-executing"
+	ActionReplyResponseSchemaJsonActionReplyStateActionFailure   ActionReplyResponseSchemaJsonActionReplyState = "action-failure"
+	ActionReplyResponseSchemaJsonActionReplyStateActionSuccess   ActionReplyResponseSchemaJsonActionReplyState = "action-success"
+)
 
 // var enumValues_ActionReplyResponseSchemaJsonActionReplyState = []interface{}{
 // 	"action-confirmed",

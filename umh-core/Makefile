@@ -179,7 +179,7 @@ download-docker-binaries:
 
 	@echo "All required files are present and up to date"
 
-.PHONY: build build-pprof build-debug build-depot
+.PHONY: build build-pprof build-debug build-depot build-internal
 
 # ============== SHARED BUILD ARGS (single source of truth) ==============
 # Used by both local builds (make build) and CI builds (make build-depot)
@@ -222,9 +222,14 @@ endef
 build:
 build-pprof:       EXTRA_ARGS := --build-arg PPROF=true
 build-debug:       EXTRA_ARGS := --build-arg DEBUG=true
+build-internal:    EXTRA_ARGS := --build-arg CRYPTOLIB=true
 
 # Local builds (existing behavior preserved)
 build build-pprof build-debug: build-protobuf download-docker-binaries
+	$(call DOCKER_BUILD)
+
+# Internal build with cryptolib tag for permission validation (requires GOPRIVATE for ManagementConsole)
+build-internal: download-docker-binaries
 	$(call DOCKER_BUILD)
 
 # CI build using Depot (multi-arch)

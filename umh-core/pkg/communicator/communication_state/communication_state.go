@@ -16,6 +16,7 @@ package communication_state
 
 import (
 	"context"
+	"crypto/x509"
 	"sync"
 	"time"
 
@@ -41,7 +42,7 @@ type CommunicationState struct {
 	LoginResponseMu       *sync.RWMutex
 	mu                    *sync.RWMutex
 	Watchdog              *watchdog.Watchdog
-	InboundChannel        chan *models.UMHMessage
+	InboundChannel        chan *models.UMHMessageWithAdditionalInfo
 	Puller                *pull.Puller
 	Pusher                *push.Pusher
 	SubscriberHandler     *subscriber.Handler
@@ -58,12 +59,16 @@ type CommunicationState struct {
 	InsecureTLS           bool
 	// TopicBrowserSimulatorEnabled tracks whether simulator mode is enabled
 	TopicBrowserSimulatorEnabled bool
+	certSubChan                  chan struct {
+		Email string
+		Cert  *x509.Certificate
+	}
 }
 
 // NewCommunicationState creates a new CommunicationState with initialized mutex.
 func NewCommunicationState(
 	watchdog *watchdog.Watchdog,
-	inboundChannel chan *models.UMHMessage,
+	inboundChannel chan *models.UMHMessageWithAdditionalInfo,
 	outboundChannel chan *models.UMHMessage,
 	releaseChannel config.ReleaseChannel,
 	systemSnapshotManager *fsm.SnapshotManager,
@@ -86,6 +91,10 @@ func NewCommunicationState(
 		Logger:                logger,
 		InsecureTLS:           insecureTLS,
 		TopicBrowserCache:     topicBrowserCache,
+		certSubChan: make(chan struct {
+			Email string
+			Cert  *x509.Certificate
+		}, 100),
 	}
 }
 
@@ -109,7 +118,7 @@ func (c *CommunicationState) InitialiseAndStartPuller() {
 		return
 	}
 
-	c.Puller = pull.NewPuller(c.LoginResponse.JWT, c.Watchdog, c.InboundChannel, c.InsecureTLS, c.ApiUrl, c.Logger)
+	c.Puller = pull.NewPuller(c.LoginResponse.JWT, c.Watchdog, c.InboundChannel, c.InsecureTLS, c.ApiUrl, c.Logger, c.certSubChan)
 	if c.Puller == nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "Failed to create puller")
 	}
@@ -291,6 +300,7 @@ func (c *CommunicationState) InitialiseAndStartSubscriberHandler(ttl time.Durati
 		configManager,
 		c.Logger,
 		topicBrowserCommunicator,
+		c.certSubChan,
 	)
 	if c.SubscriberHandler == nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "Failed to create subscriber handler")

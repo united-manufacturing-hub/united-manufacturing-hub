@@ -15,6 +15,7 @@
 package actions
 
 import (
+	"crypto/x509"
 	"fmt"
 
 	"github.com/google/uuid"
@@ -25,6 +26,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/permissions"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 )
 
@@ -58,8 +60,31 @@ type Action interface {
 //
 // After execution, it handles sending the success reply if the action completed successfully.
 // Error handling for each step is done within this function.
-func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePayload, sender string, outboundChannel chan *models.UMHMessage, releaseChannel config.ReleaseChannel, dog watchdog.Iface, traceID uuid.UUID, systemSnapshotManager *fsm.SnapshotManager, configManager config.ConfigManager) {
+func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePayload, sender string, outboundChannel chan *models.UMHMessage, releaseChannel config.ReleaseChannel, dog watchdog.Iface, traceID uuid.UUID, systemSnapshotManager *fsm.SnapshotManager, configManager config.ConfigManager, senderCertificate *x509.Certificate, rootCA *x509.Certificate, intermediateCerts []*x509.Certificate, validator permissions.Validator) {
 	log := logger.For(logger.ComponentCommunicator)
+
+	// Validate user permissions if rootCA is available
+	// In OSS builds or when rootCA is not configured, this will be skipped
+	if rootCA != nil {
+		locationStr := permissions.GetLocationFromConfig(configManager)
+
+		allowed, err := validator.ValidateUserPermissions(
+			senderCertificate,
+			string(payload.ActionType),
+			locationStr,
+			rootCA,
+			intermediateCerts,
+		)
+		if err != nil {
+			log.Warnf("Permission validation failed: %v", err)
+			SendActionReply(instanceUUID, sender, payload.ActionUUID, models.ActionFinishedWithFailure, fmt.Sprintf("Permission validation failed: %v", err), outboundChannel, payload.ActionType)
+			return
+		}
+		if !allowed {
+			SendActionReply(instanceUUID, sender, payload.ActionUUID, models.ActionFinishedWithFailure, "Permission denied: user is not authorized for this action", outboundChannel, payload.ActionType)
+			return
+		}
+	}
 
 	// Start a new transaction for this action
 	log.Debugf("Handling action message: Type: %s, Payload: %v", payload.ActionType, payload.ActionPayload)
@@ -332,7 +357,7 @@ func generateUMHMessage(instanceUUID uuid.UUID, userEmail string, messageType mo
 
 	encryptedContent, err := encoding.EncodeMessageFromUMHInstanceToUser(messageContent)
 	if err != nil {
-		return
+		return umhMessage, err
 	}
 
 	umhMessage = models.UMHMessage{
@@ -341,7 +366,7 @@ func generateUMHMessage(instanceUUID uuid.UUID, userEmail string, messageType mo
 		InstanceUUID: instanceUUID,
 	}
 
-	return
+	return umhMessage, err
 }
 
 // ParseActionPayload is a generic helper function that converts raw payload data into a typed struct.
@@ -486,3 +511,4 @@ func GetFirstMessageFromMap(msg map[string]interface{}) interface{} {
 
 	return nil
 }
+
