@@ -14,12 +14,15 @@
 
 version: "2"
 
+run:
+  concurrency: 2
+
 linters:
   # Default set of linters.
   # The value can be: `standard`, `all`, `none`, or `fast`.
   # Default: standard
   default: standard
-  
+
   enable:
     - canonicalheader
     - copyloopvar
