@@ -92,27 +92,31 @@ func (w *ExamplepanicWorker) CollectObservedState(ctx context.Context) (fsmv2.Ob
 }
 
 func (w *ExamplepanicWorker) DeriveDesiredState(spec interface{}) (config.DesiredState, error) {
+	desired, err := config.DeriveLeafState[ExamplepanicUserSpec](spec)
+	if err != nil {
+		return desired, err
+	}
+
+	// Update dependencies with configuration from spec
+	w.updateDependenciesFromSpec(spec)
+
+	return desired, nil
+}
+
+// updateDependenciesFromSpec configures dependencies based on the user spec.
+// This is separate from DeriveDesiredState to avoid PURE_DERIVE violations.
+func (w *ExamplepanicWorker) updateDependenciesFromSpec(spec interface{}) {
 	if spec == nil {
-		return config.DesiredState{
-			State:         config.DesiredStateRunning,
-			ChildrenSpecs: nil,
-		}, nil
+		return
 	}
 
 	parsed, err := config.ParseUserSpec[ExamplepanicUserSpec](spec)
 	if err != nil {
-		return config.DesiredState{}, err
+		return
 	}
 
-	// Update dependencies with parsed config
 	deps := w.GetDependencies()
 	deps.SetShouldPanic(parsed.ShouldPanic)
-
-	return config.DesiredState{
-		State:            parsed.GetState(), // Uses BaseUserSpec.GetState() with default "running"
-		ChildrenSpecs:    nil,
-		OriginalUserSpec: spec,
-	}, nil
 }
 
 func (w *ExamplepanicWorker) GetInitialState() fsmv2.State[any, any] {

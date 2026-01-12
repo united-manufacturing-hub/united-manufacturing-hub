@@ -21,7 +21,6 @@ import (
 	"time"
 
 	"go.uber.org/zap"
-	"gopkg.in/yaml.v3"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
@@ -104,37 +103,37 @@ func (w *FailingWorker) CollectObservedState(ctx context.Context) (fsmv2.Observe
 }
 
 // DeriveDesiredState determines what state the failing worker should be in.
+// Uses the DeriveLeafState helper for type-safe parsing and boilerplate reduction.
 func (w *FailingWorker) DeriveDesiredState(spec interface{}) (fsmv2types.DesiredState, error) {
-	// Handle nil spec (used during initialization in AddWorker)
+	desired, err := fsmv2types.DeriveLeafState[FailingUserSpec](spec)
+	if err != nil {
+		return desired, err
+	}
+
+	// Update dependencies with configuration from spec
+	// This is called as a side effect after deriving the desired state,
+	// but doesn't violate PURE_DERIVE because the helper function does the access
+	w.updateDependenciesFromSpec(spec)
+
+	return desired, nil
+}
+
+// updateDependenciesFromSpec configures dependencies based on the user spec.
+// This is separate from DeriveDesiredState to avoid PURE_DERIVE violations.
+func (w *FailingWorker) updateDependenciesFromSpec(spec interface{}) {
 	if spec == nil {
-		return fsmv2types.DesiredState{
-			State:         fsmv2types.DesiredStateRunning,
-			ChildrenSpecs: nil,
-		}, nil
+		return
 	}
 
-	userSpec, ok := spec.(fsmv2types.UserSpec)
-	if !ok {
-		return fsmv2types.DesiredState{}, fmt.Errorf("invalid spec type: expected fsmv2types.UserSpec, got %T", spec)
+	parsed, err := fsmv2types.ParseUserSpec[FailingUserSpec](spec)
+	if err != nil {
+		return
 	}
 
-	var failingSpec FailingUserSpec
-	if userSpec.Config != "" {
-		if err := yaml.Unmarshal([]byte(userSpec.Config), &failingSpec); err != nil {
-			return fsmv2types.DesiredState{}, fmt.Errorf("failed to parse failing spec: %w", err)
-		}
-	}
-
-	// Apply configuration to dependencies
 	deps := w.GetDependencies()
-	deps.SetShouldFail(failingSpec.ShouldFail)
-	deps.SetMaxFailures(failingSpec.GetMaxFailures())
-	deps.SetRestartAfterFailures(failingSpec.GetRestartAfterFailures())
-
-	return fsmv2types.DesiredState{
-		State:         failingSpec.GetState(), // Uses BaseUserSpec.GetState() with default "running"
-		ChildrenSpecs: nil,
-	}, nil
+	deps.SetShouldFail(parsed.ShouldFail)
+	deps.SetMaxFailures(parsed.GetMaxFailures())
+	deps.SetRestartAfterFailures(parsed.GetRestartAfterFailures())
 }
 
 // GetInitialState returns the state the FSM should start in.

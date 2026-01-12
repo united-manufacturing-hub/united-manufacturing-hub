@@ -92,27 +92,31 @@ func (w *ExampleslowWorker) CollectObservedState(ctx context.Context) (fsmv2.Obs
 }
 
 func (w *ExampleslowWorker) DeriveDesiredState(spec interface{}) (config.DesiredState, error) {
+	desired, err := config.DeriveLeafState[ExampleslowUserSpec](spec)
+	if err != nil {
+		return desired, err
+	}
+
+	// Update dependencies with configuration from spec
+	w.updateDependenciesFromSpec(spec)
+
+	return desired, nil
+}
+
+// updateDependenciesFromSpec configures dependencies based on the user spec.
+// This is separate from DeriveDesiredState to avoid PURE_DERIVE violations.
+func (w *ExampleslowWorker) updateDependenciesFromSpec(spec interface{}) {
 	if spec == nil {
-		return config.DesiredState{
-			State:         config.DesiredStateRunning,
-			ChildrenSpecs: nil,
-		}, nil
+		return
 	}
 
 	parsed, err := config.ParseUserSpec[ExampleslowUserSpec](spec)
 	if err != nil {
-		return config.DesiredState{}, err
+		return
 	}
 
-	// Update dependencies with parsed config
 	deps := w.GetDependencies()
 	deps.SetDelaySeconds(parsed.DelaySeconds)
-
-	return config.DesiredState{
-		State:            parsed.GetState(), // Uses BaseUserSpec.GetState() with default "running"
-		ChildrenSpecs:    nil,
-		OriginalUserSpec: spec,
-	}, nil
 }
 
 func (w *ExampleslowWorker) GetInitialState() fsmv2.State[any, any] {

@@ -132,11 +132,12 @@ func (w *ParentWorker) DeriveDesiredState(spec interface{}) (config.DesiredState
 
 	// Create child specs using the new ChildStartStates approach
 	childrenSpecs := make([]config.ChildSpec, childrenCount)
+	childWorkerType := parentSpec.GetChildWorkerType()
 	for i := range childrenCount {
 		childrenSpecs[i] = config.ChildSpec{
 			Name:       fmt.Sprintf("child-%d", i),
-			WorkerType: "examplechild",
-			UserSpec:   config.UserSpec{},
+			WorkerType: childWorkerType,
+			UserSpec:   config.UserSpec{Config: parentSpec.ChildConfig},
 			// New approach: list parent states where children should run
 			ChildStartStates: []string{"TryingToStart", "Running"},
 		}

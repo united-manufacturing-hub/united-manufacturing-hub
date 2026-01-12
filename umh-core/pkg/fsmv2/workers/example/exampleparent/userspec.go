@@ -21,6 +21,16 @@ import (
 // ParentUserSpec defines the typed configuration for the parent worker.
 // This is parsed from the UserSpec.Config YAML/JSON string.
 type ParentUserSpec struct {
-	config.BaseUserSpec                                                    // Provides State field with GetState() defaulting to "running"
-	ChildrenCount       int `json:"children_count" yaml:"children_count"`
+	config.BaseUserSpec // Provides State field with GetState() defaulting to "running"
+	ChildrenCount       int    `json:"children_count" yaml:"children_count"`
+	ChildWorkerType     string `json:"child_worker_type" yaml:"child_worker_type"` // Optional: defaults to "examplechild"
+	ChildConfig         string `json:"child_config" yaml:"child_config"`           // Optional: config to pass to children
+}
+
+// GetChildWorkerType returns the configured child worker type, defaulting to "examplechild".
+func (s *ParentUserSpec) GetChildWorkerType() string {
+	if s.ChildWorkerType == "" {
+		return "examplechild"
+	}
+	return s.ChildWorkerType
 }
