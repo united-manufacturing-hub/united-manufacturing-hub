@@ -774,6 +774,11 @@ func (ts *TriangularStore) toDocument(v interface{}) (persistence.Document, erro
 		return nil, fmt.Errorf("failed to unmarshal JSON to document: %w", err)
 	}
 
+	// Ensure the document is not nil (can happen if JSON was "null")
+	if doc == nil {
+		return nil, errors.New("unmarshaled document is nil")
+	}
+
 	return doc, nil
 }
 
