@@ -102,6 +102,10 @@ func (p *Puller) pull() {
 			}
 
 			p.logger.Errorf("Error pulling messages: %v", err)
+			// Circuit breaker: prevent log spam when backend unreachable.
+			// 1 second provides breathing room without impacting recovery time,
+			// since this runs async and won't block data infrastructure.
+			time.Sleep(1 * time.Second)
 
 			continue
 		}

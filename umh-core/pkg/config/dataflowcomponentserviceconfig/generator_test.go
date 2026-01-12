@@ -46,7 +46,7 @@ var _ = Describe("DFC YAML Generator", func() {
 		Entry("should render empty stdout output correctly",
 			testCase{
 				config: &DataflowComponentServiceConfig{
-					BenthosConfig{
+					BenthosConfig: BenthosConfig{
 						Output: map[string]any{
 							"stdout": map[string]any{},
 						},
@@ -69,7 +69,7 @@ var _ = Describe("DFC YAML Generator", func() {
 		Entry("should render configured output correctly",
 			testCase{
 				config: &DataflowComponentServiceConfig{
-					BenthosConfig{
+					BenthosConfig: BenthosConfig{
 						Output: map[string]any{
 							"stdout": map[string]any{
 								"codec": "lines",
@@ -90,7 +90,7 @@ var _ = Describe("DFC YAML Generator", func() {
 		Entry("should render empty input correctly",
 			testCase{
 				config: &DataflowComponentServiceConfig{
-					BenthosConfig{
+					BenthosConfig: BenthosConfig{
 						Input: map[string]any{},
 						Output: map[string]any{
 							"stdout": map[string]any{},
@@ -109,7 +109,7 @@ var _ = Describe("DFC YAML Generator", func() {
 		Entry("should render Kafka input with processor and AWS S3 output",
 			testCase{
 				config: &DataflowComponentServiceConfig{
-					BenthosConfig{
+					BenthosConfig: BenthosConfig{
 						Input: map[string]any{
 							"kafka": map[string]any{
 								"addresses": []string{"kafka:9092"},
@@ -186,7 +186,7 @@ var _ = Describe("DFC YAML Generator", func() {
 
 			// Use Generator directly
 			cfg := DataflowComponentServiceConfig{
-				BenthosConfig{
+				BenthosConfig: BenthosConfig{
 					Input: map[string]any{
 						"kafka": map[string]any{
 							"addresses": []string{"kafka:9092"},

@@ -35,6 +35,8 @@ const (
 const (
 	// DefaultBenthosLogLevel is the default log level for Benthos services when none is specified.
 	DefaultBenthosLogLevel = "INFO"
+	// DebugBenthosLogLevel is the debug log level for Benthos services.
+	DebugBenthosLogLevel = "DEBUG"
 )
 
 var (

@@ -40,16 +40,16 @@ func (c *Comparator) ConfigsEqual(desired, observed BenthosServiceConfig) (isEqu
 	normDesired := c.normalizer.NormalizeConfig(desired)
 	normObserved := c.normalizer.NormalizeConfig(observed)
 
-	defer func() {
+	defer func(normDesired, normObserved *BenthosServiceConfig) {
 		if !isEqual {
-			zap.S().Infof("Normalized desired:  %+v", normDesired)
-			zap.S().Infof("Normalized observed: %+v", normObserved)
+			zap.S().Debugf("Normalized desired:  %+v", normDesired)
+			zap.S().Debugf("Normalized observed: %+v", normObserved)
 		}
-	}()
+	}(&normDesired, &normObserved) // configs are passed as pointers to make the copy cheap
 
 	// Compare essential fields that must match exactly
 	// Ignoring MetricsPort since it's allocated by the port manager
-	if normDesired.LogLevel != normObserved.LogLevel {
+	if normDesired.DebugLevel != normObserved.DebugLevel {
 		return false
 	}
 
@@ -109,9 +109,9 @@ func (c *Comparator) ConfigDiff(desired, observed BenthosServiceConfig) string {
 			normDesired.MetricsPort, normObserved.MetricsPort))
 	}
 
-	if normDesired.LogLevel != normObserved.LogLevel {
-		diff.WriteString(fmt.Sprintf("LogLevel: Want: %s, Have: %s\n",
-			normDesired.LogLevel, normObserved.LogLevel))
+	if normDesired.DebugLevel != normObserved.DebugLevel {
+		diff.WriteString(fmt.Sprintf("DebugLevel: Want: %v, Have: %v\n",
+			normDesired.DebugLevel, normObserved.DebugLevel))
 	}
 
 	// Compare Input sections

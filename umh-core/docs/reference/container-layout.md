@@ -17,7 +17,63 @@
 
 Mount **one persistent volume** (e.g. `umh-core-data`) to `/data` and you're done.
 
+#### Advanced: Custom Data Location
 
+If you need control over the exact data location (e.g., for compliance or backup requirements), you can use a custom folder instead of a Docker volume:
+
+```bash
+mkdir -p /path/to/umh-core-data
+# Ensure container user has write access
+chown -R 1000:1000 /path/to/umh-core-data
+docker run -d --name umh-core -v /path/to/umh-core-data:/data:z ...
+```
+
+On SELinux systems (RHEL, Rocky), the `:z` flag allows Docker to relabel the directory. It's harmlessly ignored on other systems.
+
+#### Upgrading Custom Folders to v0.44+
+
+Version 0.44+ runs as a non-root user. If upgrading from an older version with a custom data folder, fix permissions first:
+
+```bash
+docker stop umh-core
+docker rm umh-core
+
+# Fix permissions for non-root container
+sudo chown -R 1000:1000 /path/to/umh-core-data
+
+docker run -d \
+  --name umh-core \
+  --restart unless-stopped \
+  -v /path/to/umh-core-data:/data:z \
+  management.umh.app/oci/united-manufacturing-hub/umh-core:<NEW_VERSION>
+```
+
+#### Migrating to Docker Volumes (Optional)
+
+If you want to switch from a custom folder to a Docker volume:
+
+```bash
+docker stop umh-core
+docker rm umh-core
+
+# Create volume and copy data
+docker volume create umh-core-data
+docker run --rm \
+  -v /path/to/umh-core-data:/source:ro,z \
+  -v umh-core-data:/target \
+  alpine sh -c "cp -av /source/. /target/"
+
+# Fix permissions and start
+docker run --rm -v umh-core-data:/data alpine chown -R 1000:1000 /data
+
+docker run -d \
+  --name umh-core \
+  --restart unless-stopped \
+  -v umh-core-data:/data \
+  management.umh.app/oci/united-manufacturing-hub/umh-core:<NEW_VERSION>
+```
+
+Keep your old folder as backup for 24-48 hours before deleting.
 
 ### /config.yaml
 

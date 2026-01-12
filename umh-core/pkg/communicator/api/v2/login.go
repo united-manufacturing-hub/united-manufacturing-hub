@@ -83,19 +83,35 @@ func login(token string, insecureTLS bool, apiURL string, logger *zap.SugaredLog
 	return &LoginResponse, nil
 }
 
-func NewLogin(authToken string, insecureTLS bool, apiURL string, logger *zap.SugaredLogger) *LoginResponse {
+func NewLogin(ctx context.Context, authToken string, insecureTLS bool, apiURL string, logger *zap.SugaredLogger) *LoginResponse {
 	var credentials *LoginResponse
 
 	bo := tools.NewBackoff(1*time.Second, 1*time.Second, 60*time.Second, tools.BackoffPolicyLinear)
 
 	var loggedIn bool
 	for !loggedIn {
+		select {
+		case <-ctx.Done():
+			logger.Info("Login cancelled before attempt")
+
+			return nil
+		default:
+		}
+
 		var err error
 
 		credentials, err = login(authToken, insecureTLS, apiURL, logger)
 		if err != nil {
 			logger.Warnf("Failed to login: %s", err)
-			bo.IncrementAndSleep()
+
+			backoffDuration := bo.Next()
+			select {
+			case <-time.After(backoffDuration):
+			case <-ctx.Done():
+				logger.Info("Login cancelled during backoff")
+
+				return nil
+			}
 		} else {
 			loggedIn = true
 		}

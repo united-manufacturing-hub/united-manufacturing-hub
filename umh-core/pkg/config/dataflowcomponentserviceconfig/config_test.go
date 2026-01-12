@@ -20,7 +20,6 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 )
 
 var _ = Describe("DataFlowComponentConfig", func() {
@@ -55,11 +54,11 @@ var _ = Describe("DataFlowComponentConfig", func() {
 			Expect(fullConfig.Input).To(Equal(benthos.Input))
 			Expect(fullConfig.Pipeline).To(Equal(benthos.Pipeline))
 			Expect(fullConfig.Output).To(Equal(benthos.Output))
-			Expect(fullConfig.MetricsPort).To(Equal(uint16(0)))                     // Default value
-			Expect(fullConfig.LogLevel).To(Equal(constants.DefaultBenthosLogLevel)) // Default value
+			Expect(fullConfig.MetricsPort).To(Equal(uint16(0))) // Default value
+			Expect(fullConfig.DebugLevel).To(BeFalse())         // Default value
 		})
 
-		It("should convert BenthosServiceConfig to BenthosConfig, ignoring advanced fields", func() {
+		It("should convert BenthosServiceConfig to BenthosConfig, preserving DebugLevel but ignoring MetricsPort", func() {
 			// Create a full BenthosServiceConfig
 			fullConfig := benthosserviceconfig.BenthosServiceConfig{
 				Input: map[string]interface{}{
@@ -71,8 +70,8 @@ var _ = Describe("DataFlowComponentConfig", func() {
 				Output: map[string]interface{}{
 					"stdout": map[string]interface{}{},
 				},
-				MetricsPort: 8080,    // This should be ignored in conversion
-				LogLevel:    "DEBUG", // This should be ignored in conversion
+				MetricsPort: 8080, // This should be ignored in conversion
+				DebugLevel:  true, // This MUST be preserved for config comparison to work
 			}
 
 			// Convert to simplified BenthosConfig
@@ -81,13 +80,14 @@ var _ = Describe("DataFlowComponentConfig", func() {
 			// Verify conversion
 			Expect(simplified.BenthosConfig.Input).To(Equal(fullConfig.Input))
 			Expect(simplified.BenthosConfig.Output).To(Equal(fullConfig.Output))
+			Expect(simplified.DebugLevel).To(BeTrue()) // DebugLevel must be preserved
 
 			// Convert back to BenthosServiceConfig
 			convertedBack := simplified.GetBenthosServiceConfig()
 
-			// Verify advanced fields use defaults, not original values
-			Expect(convertedBack.MetricsPort).To(Equal(uint16(0)))                     // Default, not 8080
-			Expect(convertedBack.LogLevel).To(Equal(constants.DefaultBenthosLogLevel)) // Default, not DEBUG
+			// Verify MetricsPort uses default, but DebugLevel is preserved
+			Expect(convertedBack.MetricsPort).To(Equal(uint16(0))) // Default, not 8080
+			Expect(convertedBack.DebugLevel).To(BeTrue())          // Preserved from original
 		})
 	})
 

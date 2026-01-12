@@ -56,20 +56,20 @@ TARGETARCH := $(shell go env GOARCH)
 
 # Default values for go tools
 GINKGO_VERSION = v2.23.4
-NILWAY_VERSION = latest
+NILAWAY_VERSION = v0.0.0-20251119034912-44f92224c998
 LEFTHOOK_VERSION = v1.13.2
-GOLANGCI_LINT_VERSION = v2.3.1
+GOLANGCI_LINT_VERSION = v2.5.0
 BETTERALIGN_VERSION = v0.7.1
 DLV_VERSION = v1.25.1
 
 # Default values for build arguments
-GOLANG_VERSION = 1.25.1
+GOLANG_VERSION = 1.25.3
 ALPINE_VERSION = 3.22.2
 NMAP_VERSION = 7.97-r0
 S6_OVERLAY_VERSION = 3.2.0.2
 REDPANDA_VERSION = 24.3.18
 ## Benthos version is a tag or a sha-<commit hash> (e.g. 0.9.4 or sha-a51a685) to be used in the docker image
-BENTHOS_UMH_VERSION = 0.11.8
+BENTHOS_UMH_VERSION = 0.11.15
 BUF_VERSION = 1.55.1
 PROTOC_GEN_GO_VERSION = 1.36.6
 
@@ -86,7 +86,7 @@ VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "0.0
 install:
 	sudo chown vscode:vscode data || true
 	sudo chown vscode:vscode tmp || true
-	go install go.uber.org/nilaway/cmd/nilaway@$(NILWAY_VERSION)
+	go install go.uber.org/nilaway/cmd/nilaway@$(NILAWAY_VERSION)
 	go install github.com/onsi/ginkgo/v2/ginkgo@$(GINKGO_VERSION)
 	go install github.com/evilmartians/lefthook@$(LEFTHOOK_VERSION)
 	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
@@ -101,7 +101,6 @@ download-docker-binaries:
 		rm -f .docker-cache/s6-overlay/*.tar.xz; \
 		echo "$(S6_OVERLAY_VERSION)" > .docker-cache/s6-overlay/version; \
 		wget -O .docker-cache/s6-overlay/s6-overlay-noarch.tar.xz "https://github.com/just-containers/s6-overlay/releases/download/v$(S6_OVERLAY_VERSION)/s6-overlay-noarch.tar.xz"; \
-		wget -O .docker-cache/s6-overlay/syslogd-overlay-noarch.tar.xz "https://github.com/just-containers/s6-overlay/releases/download/v$(S6_OVERLAY_VERSION)/syslogd-overlay-noarch.tar.xz"; \
 		wget -O .docker-cache/s6-overlay/s6-overlay-x86_64.tar.xz "https://github.com/just-containers/s6-overlay/releases/download/v$(S6_OVERLAY_VERSION)/s6-overlay-x86_64.tar.xz"; \
 		wget -O .docker-cache/s6-overlay/s6-overlay-aarch64.tar.xz "https://github.com/just-containers/s6-overlay/releases/download/v$(S6_OVERLAY_VERSION)/s6-overlay-aarch64.tar.xz"; \
 	fi
@@ -152,7 +151,6 @@ download-docker-binaries:
 		.docker-cache/s6-overlay/s6-overlay-noarch.tar.xz \
 		.docker-cache/s6-overlay/s6-overlay-x86_64.tar.xz \
 		.docker-cache/s6-overlay/s6-overlay-aarch64.tar.xz \
-		.docker-cache/s6-overlay/syslogd-overlay-noarch.tar.xz \
 		.docker-cache/benthos/benthos-linux-amd64 \
 		.docker-cache/benthos/benthos-linux-arm64; \
 	do \
@@ -181,9 +179,11 @@ download-docker-binaries:
 
 	@echo "All required files are present and up to date"
 
-.PHONY: build build-pprof build-debug
-COMMON_ARGS = \
-	--platform linux/$(TARGETARCH) \
+.PHONY: build build-pprof build-debug build-depot
+
+# ============== SHARED BUILD ARGS (single source of truth) ==============
+# Used by both local builds (make build) and CI builds (make build-depot)
+VERSION_ARGS = \
 	--build-arg GOLANG_VERSION=$(GOLANG_VERSION) \
 	--build-arg ALPINE_VERSION=$(ALPINE_VERSION) \
 	--build-arg NMAP_VERSION=$(NMAP_VERSION) \
@@ -191,8 +191,13 @@ COMMON_ARGS = \
 	--build-arg BENTHOS_UMH_VERSION=$(BENTHOS_UMH_VERSION) \
 	--build-arg REDPANDA_VERSION=$(REDPANDA_VERSION) \
 	--build-arg DLV_VERSION=$(DLV_VERSION) \
-	--build-arg APP_VERSION=$(VERSION) \
-	--build-arg TARGETARCH=$(TARGETARCH)
+	--build-arg APP_VERSION=$(VERSION)
+
+# ============== LOCAL BUILD (single-arch, --load) ==============
+COMMON_ARGS = \
+	--platform linux/$(TARGETARCH) \
+	--build-arg TARGETARCH=$(TARGETARCH) \
+	$(VERSION_ARGS)
 
 define DOCKER_BUILD
 	docker buildx build $(COMMON_ARGS) $(EXTRA_ARGS) \
@@ -200,13 +205,33 @@ define DOCKER_BUILD
 		-t $(IMAGE_NAME):$(TAG) .
 endef
 
+# ============== CI BUILD (multi-arch, --push via Depot) ==============
+CI_ARGS = \
+	--platform linux/amd64,linux/arm64 \
+	$(VERSION_ARGS)
+
+# TAGS should be passed as: TAGS="-t ghcr.io/.../umh-core:tag1 -t ghcr.io/.../umh-core:tag2"
+define DEPOT_BUILD
+	depot build $(CI_ARGS) $(EXTRA_ARGS) \
+		--project $(DEPOT_PROJECT_ID) \
+		--push \
+		--progress=plain -f Dockerfile \
+		$(TAGS) .
+endef
+
 build:
 build-pprof:       EXTRA_ARGS := --build-arg PPROF=true
 build-debug:       EXTRA_ARGS := --build-arg DEBUG=true
 
-# Refresh cache and build docker binaries
+# Local builds (existing behavior preserved)
 build build-pprof build-debug: build-protobuf download-docker-binaries
 	$(call DOCKER_BUILD)
+
+# CI build using Depot (multi-arch)
+# Note: Skips build-protobuf since pb.go files are committed to repo
+# Usage: make build-depot DEPOT_PROJECT_ID=xxx TAGS="-t ghcr.io/.../umh-core:v1.0.0" VERSION=v1.0.0
+build-depot: download-docker-binaries
+	$(call DEPOT_BUILD)
 
 FLAVOR ?=                         # empty → normal build
 BUILD_TARGET = $(if $(FLAVOR),build-$(FLAVOR),build)
@@ -281,10 +306,10 @@ test: vet-nilaway-lint-betteralign
 	go test -race -v -tags=test ./...
 
 unit-test: vet-nilaway-lint-betteralign
-	ginkgo -r -v --tags=test --race --label-filter='!integration && !redpanda-extended && !tls' --fail-fast ./...
+	go run github.com/onsi/ginkgo/v2/ginkgo -r --tags=test --race --label-filter='!integration && !redpanda-extended && !tls' --fail-fast ./...
 
 unit-test-fail-slow: vet-nilaway-lint-betteralign
-	ginkgo -r -v --tags=test --race --label-filter='!integration && !redpanda-extended && !tls' ./...
+	go run github.com/onsi/ginkgo/v2/ginkgo -r --tags=test --race --label-filter='!integration && !redpanda-extended && !tls' ./...
 
 .PHONY: check-idempotency-tests
 check-idempotency-tests:
@@ -351,20 +376,20 @@ pre-test: build-protobuf stop-all-pods vet-nilaway-lint-betteralign
 pre-test-ci: vet-nilaway-lint-betteralign
 
 integration-test: pre-test
-	ginkgo -r -v --tags=test --label-filter='integration' --fail-fast ./...
+	go run github.com/onsi/ginkgo/v2/ginkgo -r --tags=test --label-filter='integration' --fail-fast ./...
 
 redpanda-extended-test: pre-test
-	ginkgo -r -v --tags=test --label-filter='redpanda-extended' --fail-fast --timeout=1.5h ./...
+	go run github.com/onsi/ginkgo/v2/ginkgo -r --tags=test --label-filter='redpanda-extended' --fail-fast --timeout=1.5h ./...
 
 badssl-test: pre-test
-	ginkgo -r -v --tags=test --label-filter='tls' --fail-fast ./...
+	go run github.com/onsi/ginkgo/v2/ginkgo -r --tags=test --label-filter='tls' --fail-fast ./...
 
 # integration-test-ci: Runs integration tests in CI environments with proper version tagging
 # - Injects VERSION via ldflags into AppVersion for proper error identification in Sentry
 # - CI test failures SHOULD be reported to Sentry (unlike local dev failures)
 # - Helps identify flaky tests by consistently tracking failures in CI pipelines
 integration-test-ci: pre-test-ci
-	VERSION=$(VERSION) ginkgo -r -v --tags=test --label-filter='integration' --fail-fast -ldflags="-X 'github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/version.AppVersion=$(VERSION)'" ./...
+	VERSION=$(VERSION) go run github.com/onsi/ginkgo/v2/ginkgo -r --tags=test --label-filter='integration' --fail-fast -ldflags="-X 'github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/version.AppVersion=$(VERSION)'" ./...
 
 update-go-dependencies:
 	go get -u ./...

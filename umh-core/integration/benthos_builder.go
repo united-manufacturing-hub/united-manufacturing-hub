@@ -62,7 +62,7 @@ func (b *BenthosBuilder) AddGoldenBenthos() *BenthosBuilder {
 			Output: map[string]interface{}{
 				"stdout": map[string]interface{}{},
 			},
-			LogLevel: "DEBUG",
+			DebugLevel: true,
 		},
 	}
 
@@ -106,7 +106,7 @@ func (b *BenthosBuilder) AddGeneratorBenthos(name string, interval string) *Bent
 			Output: map[string]interface{}{
 				"stdout": map[string]interface{}{},
 			},
-			LogLevel: "INFO",
+			DebugLevel: false,
 		},
 	}
 

@@ -212,6 +212,7 @@ func waitForMetrics() error {
 
 	Eventually(func() error {
 		totalAttempts++
+
 		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 		defer cancel()
 
@@ -258,6 +259,7 @@ func waitForMetrics() error {
 
 			return lastError
 		}
+
 		defer func() {
 			if err := resp.Body.Close(); err != nil {
 				Fail(fmt.Sprintf("Error closing response body: %v\n", err))
@@ -273,6 +275,7 @@ func waitForMetrics() error {
 
 		// Success! Reset error counter
 		consecutiveErrors = 0
+
 		fmt.Printf("Successfully connected to metrics endpoint (%s) after %v (%d attempts)\n",
 			url, time.Since(startTime), totalAttempts)
 

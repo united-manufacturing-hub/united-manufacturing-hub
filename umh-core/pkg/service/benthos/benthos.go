@@ -47,6 +47,25 @@ import (
 	"github.com/cespare/xxhash/v2"
 )
 
+const (
+	// OPCDebugEnvVar is the environment variable name for enabling OPC UA debug logging.
+	//
+	// This variable is read by the gopcua library (github.com/gopcua/opcua/debug/debug.go)
+	// and accepts space-separated flag names to control different debug output levels:
+	//
+	//   - "debug"  : Enables general debug logging with file:line prefixes (debug.Printf)
+	//   - "codec"  : Prints detailed encoding/decoding information during binary marshaling
+	//   - "packet" : Prints raw packet data being sent/received over the wire
+	//
+	// Multiple flags can be combined: OPC_DEBUG="debug codec"
+	//
+	// When debug_level is enabled in config, this is automatically set to "debug" to enable
+	// general OPC UA debugging without the verbosity of codec/packet-level output.
+	//
+	// Reference: https://github.com/gopcua/opcua/blob/main/debug/debug.go
+	OPCDebugEnvVar = "OPC_DEBUG"
+)
+
 // IBenthosService is the interface for managing Benthos services.
 type IBenthosService interface {
 	// GenerateS6ConfigForBenthos generates a S6 config for a given benthos instance
@@ -121,7 +140,6 @@ type ServiceInfo struct {
 }
 
 type BenthosStatus struct {
-
 	// StatusReason contains the reason for the status of the Benthos service
 	// If the service is degraded, this will contain the log entry that caused the degradation together with the information that it is degraded because of the log entry
 	// If the service is currently starting up, it will contain the s6 status of the service
@@ -214,7 +232,6 @@ type BenthosService struct {
 // yaml.Unmarshal and simply hand the already-normalised struct back to the
 // caller – a ~20× speed-up on the hot path.
 type configCacheEntry struct {
-
 	// parsed is the *fully normalised* BenthosServiceConfig that callers
 	// expect.  It is treated as **read-only** after being cached; if callers
 	// ever start mutating the struct, we must clone it before returning.
@@ -229,7 +246,8 @@ type configCacheEntry struct {
 func hash(buf []byte) uint64 { return xxhash.Sum64(buf) }
 
 // benthosLogRe is a helper function for BenthosService.IsLogsFine.
-var benthosLogRe = regexp.MustCompile(`^level=(error|warning)\s+msg=(.+)`)
+// no ^ anchor since redpanda-connect logs may start with time= prefix.
+var benthosLogRe = regexp.MustCompile(`level=(error|warning)\s+msg=(.+)`)
 
 // BenthosServiceOption is a function that modifies a BenthosService.
 type BenthosServiceOption func(*BenthosService)
@@ -280,10 +298,6 @@ func (s *BenthosService) generateBenthosYaml(config *benthosserviceconfig.Bentho
 		return "", errors.New("config is nil")
 	}
 
-	if config.LogLevel == "" {
-		config.LogLevel = "INFO"
-	}
-
 	return benthosserviceconfig.RenderBenthosYAML(
 		config.Input,
 		config.Output,
@@ -292,7 +306,7 @@ func (s *BenthosService) generateBenthosYaml(config *benthosserviceconfig.Bentho
 		config.RateLimitResources,
 		config.Buffer,
 		config.MetricsPort,
-		config.LogLevel,
+		config.DebugLevel,
 	)
 }
 
@@ -314,13 +328,18 @@ func (s *BenthosService) GenerateS6ConfigForBenthos(benthosConfig *benthosservic
 		return s6serviceconfig.S6ServiceConfig{}, err
 	}
 
+	env := make(map[string]string)
+	if benthosConfig.DebugLevel {
+		env[OPCDebugEnvVar] = "debug"
+	}
+
 	s6Config = s6serviceconfig.S6ServiceConfig{
 		Command: []string{
 			"/usr/local/bin/benthos",
 			"-c",
 			configPath,
 		},
-		Env: map[string]string{},
+		Env: env,
 		ConfigFiles: map[string]string{
 			constants.BenthosConfigFileName: yamlConfig,
 		},
@@ -409,7 +428,7 @@ func (s *BenthosService) GetConfig(ctx context.Context, filesystemService filesy
 	// Safely extract log_level
 	if logger, ok := benthosConfig["logger"].(map[string]interface{}); ok {
 		if level, ok := logger["level"].(string); ok {
-			result.LogLevel = level
+			result.DebugLevel = (level == "DEBUG")
 		}
 	}
 

@@ -30,13 +30,13 @@ var _ = Describe("Benthos YAML Normalizer", func() {
 			normalizedOutput := normalizedConfig.Output
 			normalizedPipeline := normalizedConfig.Pipeline
 			normalizedMetricsPort := normalizedConfig.MetricsPort
-			normalizedLogLevel := normalizedConfig.LogLevel
+			normalizedDebugLevel := normalizedConfig.DebugLevel
 
 			Expect(normalizedInput).NotTo(BeNil())
 			Expect(normalizedOutput).NotTo(BeNil())
 			Expect(normalizedPipeline).NotTo(BeNil())
 			Expect(normalizedMetricsPort).To(Equal(uint16(4195)))
-			Expect(normalizedLogLevel).To(Equal("INFO"))
+			Expect(normalizedDebugLevel).To(BeFalse())
 		})
 
 		It("should preserve existing values", func() {
@@ -61,7 +61,7 @@ var _ = Describe("Benthos YAML Normalizer", func() {
 					},
 				},
 				MetricsPort: uint16(8000),
-				LogLevel:    "DEBUG",
+				DebugLevel:  true,
 			}
 
 			normalizer := NewNormalizer()
@@ -70,10 +70,10 @@ var _ = Describe("Benthos YAML Normalizer", func() {
 			normalizedOutput := normalizedConfig.Output
 			normalizedPipeline := normalizedConfig.Pipeline
 			normalizedMetricsPort := normalizedConfig.MetricsPort
-			normalizedLogLevel := normalizedConfig.LogLevel
+			normalizedDebugLevel := normalizedConfig.DebugLevel
 
 			Expect(normalizedMetricsPort).To(Equal(uint16(8000)))
-			Expect(normalizedLogLevel).To(Equal("DEBUG"))
+			Expect(normalizedDebugLevel).To(BeTrue())
 
 			// Check input preserved
 			inputMqtt := normalizedInput["mqtt"].(map[string]interface{})
@@ -100,7 +100,7 @@ var _ = Describe("Benthos YAML Normalizer", func() {
 				// CacheResources is nil
 				// RateLimitResources is nil
 				MetricsPort: 4195,
-				LogLevel:    "INFO",
+				DebugLevel:  false,
 			}
 
 			normalizer := NewNormalizer()
@@ -139,7 +139,7 @@ var _ = Describe("Benthos YAML Normalizer", func() {
 
 			// Results should be the same
 			Expect(normalizedConfig1.MetricsPort).To(Equal(normalizedConfig2.MetricsPort))
-			Expect(normalizedConfig1.LogLevel).To(Equal(normalizedConfig2.LogLevel))
+			Expect(normalizedConfig1.DebugLevel).To(Equal(normalizedConfig2.DebugLevel))
 			Expect(normalizedConfig1.Input).NotTo(BeNil())
 			Expect(normalizedConfig1.Output).NotTo(BeNil())
 		})

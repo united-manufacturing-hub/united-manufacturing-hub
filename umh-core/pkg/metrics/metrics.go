@@ -164,8 +164,9 @@ func SetupMetricsEndpoint(addr string) *http.Server {
 	mux.Handle("/metrics", promhttp.Handler())
 
 	server := &http.Server{
-		Addr:    addr,
-		Handler: mux,
+		Addr:        addr,
+		Handler:     mux,
+		ReadTimeout: 5 * time.Second,
 	}
 
 	go func() {

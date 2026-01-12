@@ -13,7 +13,6 @@
 // limitations under the License.
 
 //go:build test
-// +build test
 
 package redpanda_monitor_test
 

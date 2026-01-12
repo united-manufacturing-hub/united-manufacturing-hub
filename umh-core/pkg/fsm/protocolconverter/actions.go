@@ -263,8 +263,11 @@ func (p *ProtocolConverterInstance) UpdateObservedStateOfInstance(ctx context.Co
 	agentLocationStr := convertIntMapToStringMap(snapshot.CurrentConfig.Agent.Location)
 
 	mergedLocation := make(map[string]string)
+
 	for k, v := range agentLocationStr {
-		mergedLocation[k] = v
+		if v != "" {
+			mergedLocation[k] = v
+		}
 	}
 
 	for k, v := range p.specConfig.Location {

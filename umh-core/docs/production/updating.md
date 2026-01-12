@@ -1,20 +1,30 @@
 # Updating
 
-To update umh-core, simply stop the container, pull the latest image, and start the container again.
+To update umh-core, stop the container and start a new one with the latest image.
 
 ```bash
-# stop + delete the old container (data is preserved)
-sudo docker stop umh-core
-sudo docker rm umh-core
+docker stop umh-core
+docker rm umh-core
 
-# pull the latest image and re-create
-sudo docker run -d \
+docker run -d \
   --name umh-core \
   --restart unless-stopped \
-  -v "$(pwd)/umh-core-data":/data \
+  -v umh-core-data:/data \
   management.umh.app/oci/united-manufacturing-hub/umh-core:<NEW_VERSION>
 ```
 
-Need to roll back? Just start the previous tag against the same `/data` volume.
+**That's it!** Your data is preserved in the `umh-core-data` volume.
 
-You can find the latest version on the [Releases](https://github.com/united-manufacturing-hub/united-manufacturing-hub/releases) page.
+> **Note:** On Linux without Docker group membership, prefix commands with `sudo`.
+
+## Rollback
+
+Need to roll back? Start the previous version against the same volume.
+
+## Releases
+
+Find the latest version on the [Releases](https://github.com/united-manufacturing-hub/united-manufacturing-hub/releases) page.
+
+---
+
+> **Using a custom data folder?** If you manually specified a folder path instead of using a Docker volume, see [Container Layout](../reference/container-layout.md#advanced-custom-data-location) for upgrade instructions.

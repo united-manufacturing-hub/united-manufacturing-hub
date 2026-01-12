@@ -17,12 +17,14 @@ package dataflowcomponentserviceconfig
 import (
 	"github.com/google/uuid"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 )
 
 // GetBenthosServiceConfig converts the component config to a full BenthosServiceConfig.
 func (c DataflowComponentServiceConfig) GetBenthosServiceConfig() benthosserviceconfig.BenthosServiceConfig {
-	return c.BenthosConfig.ToBenthosServiceConfig()
+	cfg := c.BenthosConfig.ToBenthosServiceConfig()
+	cfg.DebugLevel = c.DebugLevel
+
+	return cfg
 }
 
 // ToBenthosServiceConfig converts the simplified BenthosConfig to a full BenthosServiceConfig
@@ -37,7 +39,9 @@ func (bc BenthosConfig) ToBenthosServiceConfig() benthosserviceconfig.BenthosSer
 		Buffer:             bc.Buffer,
 		// Default values for advanced configuration
 		MetricsPort: 0, // Will be assigned dynamically by the port manager
-		LogLevel:    constants.DefaultBenthosLogLevel,
+		// DebugLevel defaults to false - not propagated from templates. Debug settings
+		// are configured per-instance at DFC/ProtocolConverter spec level, not in reusable templates.
+		DebugLevel:  false,
 	}
 }
 
@@ -53,6 +57,7 @@ func FromBenthosServiceConfig(benthos benthosserviceconfig.BenthosServiceConfig)
 			RateLimitResources: benthos.RateLimitResources,
 			Buffer:             benthos.Buffer,
 		},
+		DebugLevel: benthos.DebugLevel,
 	}
 }
 

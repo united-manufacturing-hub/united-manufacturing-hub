@@ -176,7 +176,7 @@ var _ = Describe("ControlLoop", func() {
 		})
 
 		It("should return error if manager returns error", func() {
-			mockManager.ReconcileError = errors.New("reconcile error")
+			mockManager.SetReconcileError(errors.New("reconcile error"))
 
 			err := controlLoop.Reconcile(ctx, 0)
 			Expect(err).To(HaveOccurred())
@@ -265,7 +265,7 @@ var _ = Describe("ControlLoop", func() {
 		})
 
 		It("should stop execution if Reconcile returns a non-timeout error", func() {
-			mockManager.ReconcileError = errors.New("reconcile error")
+			mockManager.SetReconcileError(errors.New("reconcile error"))
 
 			// Start executing in a goroutine
 			execDone := make(chan error)
@@ -364,7 +364,7 @@ var _ = Describe("ControlLoop", func() {
 
 			// Set up random delays in mocks
 			mockConfig.ConfigDelay = time.Duration(rng.Intn(30)) * time.Millisecond
-			mockManager.ReconcileDelay = time.Duration(rng.Intn(30)) * time.Millisecond
+			mockManager.SetReconcileDelay(time.Duration(rng.Intn(30)) * time.Millisecond)
 
 			// Use a context with longer timeout for random delays
 			fuzzCtx, fuzzCancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
@@ -468,13 +468,13 @@ var _ = Describe("ControlLoop", func() {
 				// Mix of defective configs, file system failures, and delays
 				mockConfig.Config = generateDefectiveConfig()
 				mockConfig.ConfigDelay = time.Duration(rng.Intn(30)) * time.Millisecond
-				mockManager.ReconcileDelay = time.Duration(rng.Intn(30)) * time.Millisecond
+				mockManager.SetReconcileDelay(time.Duration(rng.Intn(30)) * time.Millisecond)
 
 				// Add random manager failures
 				if rng.Float64() < 0.3 {
-					mockManager.ReconcileError = fmt.Errorf("random manager error #%d", i)
+					mockManager.SetReconcileError(fmt.Errorf("random manager error #%d", i))
 				} else {
-					mockManager.ReconcileError = nil
+					mockManager.SetReconcileError(nil)
 				}
 
 				// Run the control loop

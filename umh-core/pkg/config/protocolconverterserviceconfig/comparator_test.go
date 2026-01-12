@@ -140,6 +140,31 @@ var _ = Describe("ProtocolConverter YAML Comparator", func() {
 			Expect(diff).To(ContainSubstring("Input.mqtt differs"))
 		})
 
+		It("should consider configs with different DebugLevel not equal", func() {
+			config1 := ProtocolConverterServiceConfigSpec{
+				Config: ProtocolConverterServiceConfigTemplate{
+					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{},
+				},
+				DebugLevel: false,
+			}
+
+			config2 := ProtocolConverterServiceConfigSpec{
+				Config: ProtocolConverterServiceConfigTemplate{
+					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{},
+				},
+				DebugLevel: true,
+			}
+
+			comparator := NewComparator()
+			equal := comparator.ConfigsEqual(config1, config2)
+
+			Expect(equal).To(BeFalse())
+			diff := comparator.ConfigDiff(config1, config2)
+			Expect(diff).To(ContainSubstring("DebugLevel"))
+			Expect(diff).To(ContainSubstring("Want: false"))
+			Expect(diff).To(ContainSubstring("Have: true"))
+		})
+
 		It("should consider configs with different output not equal", func() {
 
 			config1 := ProtocolConverterServiceConfigSpec{
@@ -319,6 +344,211 @@ var _ = Describe("ProtocolConverter YAML Comparator", func() {
 
 			diff := comparator.ConfigDiff(config1, config2)
 			Expect(diff).To(ContainSubstring("No significant differences"))
+		})
+
+		It("should consider configs with same location equal", func() {
+			config1 := ProtocolConverterServiceConfigSpec{
+				Config: ProtocolConverterServiceConfigTemplate{
+					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
+							Input: map[string]any{
+								"mqtt": map[string]any{
+									"topic": "test/topic",
+								},
+							},
+							Output: map[string]any{
+								"kafka": map[string]any{
+									"topic": "test-output",
+								},
+							},
+						},
+					},
+					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+						NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
+							Target: "127.0.0.1",
+							Port:   "443",
+						},
+					},
+				},
+				Location: map[string]string{
+					"0": "Enterprise",
+					"1": "Site-A",
+					"2": "Area-1",
+				},
+			}
+
+			config2 := ProtocolConverterServiceConfigSpec{
+				Config: ProtocolConverterServiceConfigTemplate{
+					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
+							Input: map[string]any{
+								"mqtt": map[string]any{
+									"topic": "test/topic",
+								},
+							},
+							Output: map[string]any{
+								"kafka": map[string]any{
+									"topic": "test-output",
+								},
+							},
+						},
+					},
+					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+						NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
+							Target: "127.0.0.1",
+							Port:   "443",
+						},
+					},
+				},
+				Location: map[string]string{
+					"0": "Enterprise",
+					"1": "Site-A",
+					"2": "Area-1",
+				},
+			}
+
+			comparator := NewComparator()
+			equal := comparator.ConfigsEqual(config1, config2)
+			Expect(equal).To(BeTrue())
+		})
+
+		It("should consider configs with different location not equal", func() {
+			config1 := ProtocolConverterServiceConfigSpec{
+				Config: ProtocolConverterServiceConfigTemplate{
+					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
+							Input: map[string]any{
+								"mqtt": map[string]any{
+									"topic": "test/topic",
+								},
+							},
+							Output: map[string]any{
+								"kafka": map[string]any{
+									"topic": "test-output",
+								},
+							},
+						},
+					},
+					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+						NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
+							Target: "127.0.0.1",
+							Port:   "443",
+						},
+					},
+				},
+				Location: map[string]string{
+					"0": "Enterprise",
+					"1": "Site-A",
+				},
+			}
+
+			config2 := ProtocolConverterServiceConfigSpec{
+				Config: ProtocolConverterServiceConfigTemplate{
+					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
+							Input: map[string]any{
+								"mqtt": map[string]any{
+									"topic": "test/topic",
+								},
+							},
+							Output: map[string]any{
+								"kafka": map[string]any{
+									"topic": "test-output",
+								},
+							},
+						},
+					},
+					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+						NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
+							Target: "127.0.0.1",
+							Port:   "443",
+						},
+					},
+				},
+				Location: map[string]string{
+					"0": "Enterprise",
+					"1": "Site-B",
+				},
+			}
+
+			comparator := NewComparator()
+			equal := comparator.ConfigsEqual(config1, config2)
+			Expect(equal).To(BeFalse())
+
+			diff := comparator.ConfigDiff(config1, config2)
+			Expect(diff).To(ContainSubstring("Location:"))
+			Expect(diff).To(ContainSubstring("Site-A"))
+			Expect(diff).To(ContainSubstring("Site-B"))
+		})
+
+		It("should consider configs that have a different amount of locations not equal", func() {
+			config1 := ProtocolConverterServiceConfigSpec{
+				Config: ProtocolConverterServiceConfigTemplate{
+					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
+							Input: map[string]any{
+								"mqtt": map[string]any{
+									"topic": "test/topic",
+								},
+							},
+							Output: map[string]any{
+								"kafka": map[string]any{
+									"topic": "test-output",
+								},
+							},
+						},
+					},
+					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+						NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
+							Target: "127.0.0.1",
+							Port:   "443",
+						},
+					},
+				},
+				Location: map[string]string{
+					"0": "Enterprise",
+					"1": "Site-A",
+					"2": "Site-B",
+				},
+			}
+
+			config2 := ProtocolConverterServiceConfigSpec{
+				Config: ProtocolConverterServiceConfigTemplate{
+					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
+							Input: map[string]any{
+								"mqtt": map[string]any{
+									"topic": "test/topic",
+								},
+							},
+							Output: map[string]any{
+								"kafka": map[string]any{
+									"topic": "test-output",
+								},
+							},
+						},
+					},
+					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+						NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
+							Target: "127.0.0.1",
+							Port:   "443",
+						},
+					},
+				},
+				Location: map[string]string{
+					"0": "Enterprise",
+					"1": "Site-B",
+				},
+			}
+
+			comparator := NewComparator()
+			equal := comparator.ConfigsEqual(config1, config2)
+			Expect(equal).To(BeFalse())
+
+			diff := comparator.ConfigDiff(config1, config2)
+			Expect(diff).To(ContainSubstring("Location:"))
+			Expect(diff).To(ContainSubstring("Site-A"))
+			Expect(diff).To(ContainSubstring("Site-B"))
 		})
 	})
 

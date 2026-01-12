@@ -1,0 +1,51 @@
+#!/command/with-contenv sh
+# Copyright 2025 UMH Systems GmbH
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Verify /data is writable by umhuser (UID 1000) as documented in security model
+
+if ! touch /data/.write-test 2>/dev/null; then
+    cat >&2 <<EOF
+================================================================================
+ERROR: Cannot write to /data directory
+
+SECURITY CHANGE: umh-core runs as non-root user 'umhuser' (UID 1000) for
+enhanced security. The /data directory must be writable by this user.
+
+Current issue: The /data directory exists but is not writable by UID 1000.
+This could be due to:
+- Directory owned by root (common after upgrades)
+- Directory owned by another user
+- Restrictive file permissions
+- SELinux/AppArmor policies
+
+To fix this, run on your host:
+  sudo chown -R 1000:1000 <your-data-directory>
+
+Note: If using SELinux, you may also need:
+  sudo chcon -R -t container_file_t <your-data-directory>
+
+After fixing permissions, restart the container.
+
+For details and rollback options, see:
+https://docs.umh.app/production/security/umh-core/deployment-security#filesystem-access
+
+================================================================================
+EOF
+    exit 1
+fi
+rm -f /data/.write-test
+
+# Ensure required directories exist
+mkdir -p /data/logs /data/services /data/redpanda 2>/dev/null

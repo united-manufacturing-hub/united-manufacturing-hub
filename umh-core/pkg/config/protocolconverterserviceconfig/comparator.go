@@ -50,11 +50,14 @@ func (c *Comparator) ConfigsEqual(desired, observed ProtocolConverterServiceConf
 	comparatorVariable := variables.NewComparator()
 
 	connectionEqual := reflect.DeepEqual(connectionD, connectionO)
+	locationEqual := reflect.DeepEqual(desired.Location, observed.Location)
 
 	return connectionEqual &&
+		locationEqual &&
 		comparatorDFC.ConfigsEqual(dfcReadD, dfcReadO) &&
 		comparatorDFC.ConfigsEqual(dfcWriteD, dfcWriteO) &&
-		comparatorVariable.ConfigsEqual(desired.Variables, observed.Variables)
+		comparatorVariable.ConfigsEqual(desired.Variables, observed.Variables) &&
+		desired.DebugLevel == observed.DebugLevel
 }
 
 // ConfigDiff returns a human-readable string describing differences between configs.
@@ -73,6 +76,11 @@ func (c *Comparator) ConfigDiff(desired, observed ProtocolConverterServiceConfig
 		connectionDiff = fmt.Sprintf("Connection: %v vs %v", connectionD, connectionO)
 	}
 
+	locationDiff := ""
+	if !reflect.DeepEqual(desired.Location, observed.Location) {
+		locationDiff = fmt.Sprintf("Location: %v vs %v", desired.Location, observed.Location)
+	}
+
 	// diff for dfc's
 	comparatorDFC := dataflowcomponentserviceconfig.NewComparator()
 	dfcReadDiff := comparatorDFC.ConfigDiff(dfcReadD, dfcReadO)
@@ -82,5 +90,10 @@ func (c *Comparator) ConfigDiff(desired, observed ProtocolConverterServiceConfig
 	comparatorVariable := variables.NewComparator()
 	variableDiff := comparatorVariable.ConfigDiff(desired.Variables, observed.Variables)
 
-	return connectionDiff + dfcReadDiff + dfcWriteDiff + variableDiff
+	debugLevelDiff := ""
+	if desired.DebugLevel != observed.DebugLevel {
+		debugLevelDiff = fmt.Sprintf("DebugLevel: Want: %v, Have: %v\n", desired.DebugLevel, observed.DebugLevel)
+	}
+
+	return connectionDiff + locationDiff + dfcReadDiff + dfcWriteDiff + variableDiff + debugLevelDiff
 }

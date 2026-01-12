@@ -18,7 +18,7 @@ ARG ALPINE_VERSION=MUST_BE_SET_BY_MAKEFILE
 ARG NMAP_VERSION=MUST_BE_SET_BY_MAKEFILE
 
 # --- Cache Stage ---
-FROM scratch as cache
+FROM scratch AS cache
 COPY .docker-cache/s6-overlay/ /s6-overlay/
 COPY .docker-cache/benthos/ /benthos/
 COPY .docker-cache/redpanda/amd64/ /redpanda/amd64/
@@ -26,7 +26,7 @@ COPY .docker-cache/redpanda/arm64/ /redpanda/arm64/
 
 
 # --- Downloader Stage (using cached files) ---
-FROM alpine:${ALPINE_VERSION} as downloader
+FROM alpine:${ALPINE_VERSION} AS downloader
 RUN apk add --no-cache bash curl jq tzdata ca-certificates xz bc
 
 ARG S6_OVERLAY_VERSION=MUST_BE_SET_BY_MAKEFILE
@@ -34,11 +34,10 @@ ARG BENTHOS_UMH_VERSION=MUST_BE_SET_BY_MAKEFILE
 ARG REDPANDA_VERSION=MUST_BE_SET_BY_MAKEFILE
 ARG NMAP_VERSION=MUST_BE_SET_BY_MAKEFILE
 ARG DLV_VERSION=MUST_BE_SET_BY_MAKEFILE
-ARG TARGETARCH=amd64
+ARG TARGETARCH
 
 # Copy cached files from cache stage
 COPY --from=cache /s6-overlay/s6-overlay-noarch.tar.xz /tmp/
-COPY --from=cache /s6-overlay/syslogd-overlay-noarch.tar.xz /tmp/
 
 # s6-overlay noarch
 RUN tar -C / -Jxpf /tmp/s6-overlay-noarch.tar.xz && rm /tmp/s6-overlay-noarch.tar.xz
@@ -50,8 +49,9 @@ RUN S6_ARCH=$([ "${TARGETARCH}" = "arm64" ] && echo "aarch64" || echo "x86_64") 
     cp /s6-overlay/s6-overlay-${S6_ARCH}.tar.xz /tmp/ && \
     tar -C / -Jxpf /tmp/s6-overlay-${S6_ARCH}.tar.xz && rm /tmp/s6-overlay-${S6_ARCH}.tar.xz
 
-# syslogd overlay
-RUN tar -C / -Jxpf /tmp/syslogd-overlay-noarch.tar.xz && rm /tmp/syslogd-overlay-noarch.tar.xz
+# Note: syslogd overlay is NOT installed because it requires root privileges
+# (creates /var/log/syslogd, drops privileges via s6-applyuidgid). umh-core
+# logs to stdout/stderr (container best practice), so syslog emulation is not needed.
 
 # Benthos installation
 COPY --from=cache /benthos/benthos-linux-amd64 /benthos/benthos-linux-amd64
@@ -74,7 +74,7 @@ RUN apk add --no-cache nmap=${NMAP_VERSION}
 # Cleanup all the files we don't need
 RUN rm -rf /s6-overlay /benthos /redpanda
 
-FROM golang:${GOLANG_VERSION}-alpine as build
+FROM golang:${GOLANG_VERSION}-alpine AS build
 ARG S6_OVERLAY_VERSION=MUST_BE_SET_BY_MAKEFILE
 ARG BENTHOS_UMH_VERSION=MUST_BE_SET_BY_MAKEFILE
 ARG REDPANDA_VERSION=MUST_BE_SET_BY_MAKEFILE
@@ -110,7 +110,7 @@ RUN if [ "$DEBUG" = "true" ]; then \
     -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/version.AppVersion=${APP_VERSION}" \
     -o /go/bin/umh-core cmd/main.go; \
     else \
-    CGO_ENABLED=1 go build -mod=vendor  \
+    CGO_ENABLED=0 go build -mod=vendor  \
     -ldflags "-s -w \
     -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants.S6OverlayVersion=${S6_OVERLAY_VERSION} \
     -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants.BenthosVersion=${BENTHOS_UMH_VERSION} \
@@ -120,7 +120,7 @@ RUN if [ "$DEBUG" = "true" ]; then \
     fi
 
 # --- Final Stage ---
-FROM alpine:${ALPINE_VERSION} as runner
+FROM alpine:${ALPINE_VERSION} AS runner
 # Copy everything from the downloader stage
 COPY --from=downloader / /
 
@@ -130,6 +130,15 @@ COPY --from=build /go/bin/umh-core /usr/local/bin/umh-core
 # Install coreutils (this allows date resolution beyond seconds)
 RUN apk add --no-cache coreutils
 
+# Create non-root user and set ownership at build-time
+RUN adduser -D -u 1000 -s /bin/sh umhuser && \
+    mkdir -p /data/logs /data/logs/umh-core /data/services /data/benthos /data/redpanda/coredump && \
+    chown -R umhuser:umhuser /data
+
+# Set ownership of S6 overlay config for non-root operation
+# Note: /run permissions handled by S6_YES_I_WANT_A_WORLD_WRITABLE_RUN_BECAUSE_KUBERNETES=1
+RUN chown -R umhuser:umhuser /etc/s6-overlay
+
 # Handle DEBUG mode - install Go and Delve when DEBUG=true
 # Delve is a debugger for Go (https://github.com/go-delve/delve/)
 # We can use it for remote debugging of the UMH Core
@@ -137,7 +146,7 @@ ARG DEBUG=false
 ARG DLV_VERSION=MUST_BE_SET_BY_MAKEFILE
 RUN if [ "$DEBUG" = "true" ]; then \
     apk add --no-cache go && \
-    go install github.com/go-delve/delve/cmd/dlv@${DLV_VERSION}; \
+    GOBIN=/usr/local/bin go install github.com/go-delve/delve/cmd/dlv@${DLV_VERSION}; \
     fi
 
 RUN chmod +x /usr/local/bin/umh-core && \
@@ -146,6 +155,9 @@ RUN chmod +x /usr/local/bin/umh-core && \
 
 # Copy s6 service configuration
 COPY ./s6-base/s6-rc.d /etc/s6-overlay/s6-rc.d/
+
+# Copy S6 initialization scripts for permission checks
+COPY ./cont-init.d /etc/cont-init.d/
 
 # Use either standard or debug service based on DEBUG flag
 ARG DEBUG=false
@@ -162,15 +174,17 @@ RUN if [ "$DEBUG" = "true" ]; then \
 
 # Set environment variables and volume
 # S6_SYNC_DISKS=1: Sync the disks to ensure that the data is persisted, this is needed for the redpanda service
-ENV S6_KEEP_ENV=1 \
+ENV S6_YES_I_WANT_A_WORLD_WRITABLE_RUN_BECAUSE_KUBERNETES=1 \
+    S6_KEEP_ENV=1 \
     S6_BEHAVIOUR_IF_STAGE2_FAILS=2 \
     S6_CMD_WAIT_FOR_SERVICES=1 \
     S6_SERVICES_READYTIME=50 \
     S6_SYNC_DISKS=1 \
-    # Important: This needs to be T (ISO 8861) as our time parser expects this format
-    S6_LOGGING_SCRIPT="n5 s10000000 T" \
     PATH="/opt/redpanda/bin:$PATH"
 VOLUME ["/data"]
+
+# Switch to non-root user - S6 overlay will run as umhuser (UID 1000)
+USER umhuser:umhuser
 
 ENTRYPOINT ["/init"]
 CMD []

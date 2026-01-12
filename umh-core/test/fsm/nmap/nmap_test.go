@@ -13,7 +13,6 @@
 // limitations under the License.
 
 //go:build test
-// +build test
 
 package nmap_test
 
@@ -546,9 +545,9 @@ var _ = Describe("NmapInstance FSM", func() {
 		It("should continue reconciling despite permanent errors in UpdateObservedState when in starting state", func() {
 			// ARCHITECTURAL DECISION: We now continue reconciling even when UpdateObservedState
 			// encounters permanent errors, regardless of whether we're in a terminal or non-terminal state.
-			// This enables force-kill recovery scenarios where S6 services exist on filesystem 
+			// This enables force-kill recovery scenarios where S6 services exist on filesystem
 			// but FSM managers lose their in-memory mappings.
-			// 
+			//
 			// The trade-off: We prioritize system recovery over immediate error handling.
 			// Permanent errors in UpdateObservedState no longer trigger automatic FSM removal,
 			// allowing the system to restore services after unexpected shutdowns/restarts.
@@ -607,7 +606,7 @@ var _ = Describe("NmapInstance FSM", func() {
 			Expect(instance.GetDesiredFSMState()).To(Equal(nmap.OperationalStateOpen))
 			// The current state should remain in starting or may progress
 			currentState := instance.GetCurrentFSMState()
-			Expect(nmap.IsStartingState(currentState) || nmap.IsRunningState(currentState)).To(BeTrue(), 
+			Expect(nmap.IsStartingState(currentState) || nmap.IsRunningState(currentState)).To(BeTrue(),
 				"FSM should maintain starting state or progress despite UpdateObservedState errors")
 
 			// Force removal should NOT be attempted since we continue reconciling
