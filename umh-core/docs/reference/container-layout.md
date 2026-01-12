@@ -45,7 +45,7 @@ docker run -d \
   --name umh-core \
   --restart unless-stopped \
   -v /path/to/umh-core-data:/data:z \
-  management.umh.app/oci/united-manufacturing-hub/umh-core:<NEW_VERSION>
+  management.umh.app/oci/united-manufacturing-hub/umh-core:<VERSION>
 ```
 
 #### Migrating to Docker Volumes (Optional)
@@ -70,7 +70,7 @@ docker run -d \
   --name umh-core \
   --restart unless-stopped \
   -v umh-core-data:/data \
-  management.umh.app/oci/united-manufacturing-hub/umh-core:<NEW_VERSION>
+  management.umh.app/oci/united-manufacturing-hub/umh-core:<VERSION>
 ```
 
 Keep your old folder as backup for 24-48 hours before deleting.

@@ -21,7 +21,7 @@ No kubectl, no Kubernetes setup, just a single Docker container. Almost anything
 
 For detailed sizing recommendations, see the [Sizing Guide](../production/sizing-guide.md).
 
-## Option 1: Using the Management Console (Recommended)
+## Installation using the Management Console
 
 1. **Sign up** at [management.umh.app](https://management.umh.app)
 2. Click **"Add a new instance"**
@@ -46,18 +46,6 @@ Your instance will appear as **"Online"** in the Management Console within secon
 
 **Next step:** [Connect your first data source →](1-connect-data.md)
 
-## Option 2: Local Installation (Without Management Console)
-
-If you can't use the cloud Management Console:
-
-```bash
-docker volume create umh-core-data && docker run -d --name umh-core \
-  -v umh-core-data:/data \
-  management.umh.app/oci/united-manufacturing-hub/umh-core:latest
-```
-
-**Note:** Without the Management Console, you'll need to edit configuration files directly. We strongly recommend using Option 1 for the best experience.
-
 ---
 
 ## Troubleshooting
@@ -69,11 +57,11 @@ Named volumes automatically handle permissions for the container user (UID 1000)
 docker rm -f umh-core && docker volume rm umh-core-data && docker volume create umh-core-data
 ```
 
-Then re-run the `docker run` command from above.
+Then re-run the `docker run` command.
 
 For advanced users needing bind mounts (custom data locations), see the [Container Layout reference](../reference/container-layout.md#advanced-custom-data-location).
 
-**Corporate firewall/proxy issues**  
+**Corporate firewall/proxy issues**
 If your corporate network intercepts TLS traffic, see the [Corporate Firewalls Guide](../production/corporate-firewalls.md) to add your CA certificate or, as a last resort, set `allowInsecureTLS: true` in `config.yaml` or use `-e ALLOW_INSECURE_TLS=true` in your docker run command.
 
 For proxy configuration, see the [Corporate Firewalls Guide](../production/corporate-firewalls.md) or add these arguments to your docker run:
