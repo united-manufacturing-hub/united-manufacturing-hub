@@ -16,6 +16,7 @@ package action_test
 
 import (
 	"context"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -29,17 +30,17 @@ import (
 
 var _ = Describe("AuthenticateAction", func() {
 	var (
-		act          *action.AuthenticateAction
-		dependencies *communicator.CommunicatorDependencies
-		logger       *zap.SugaredLogger
-		transport    *mockTransport
+		act           *action.AuthenticateAction
+		dependencies  *communicator.CommunicatorDependencies
+		logger        *zap.SugaredLogger
+		mockTransp    *mockTransport
 	)
 
 	BeforeEach(func() {
 		logger = zap.NewNop().Sugar()
-		transport = &mockTransport{}
+		mockTransp = &mockTransport{}
 		identity := fsmv2.Identity{ID: "test-id", WorkerType: "communicator"}
-		dependencies = communicator.NewCommunicatorDependencies(transport, logger, nil, identity)
+		dependencies = communicator.NewCommunicatorDependencies(mockTransp, logger, nil, identity)
 		// Dependencies now passed to Execute(), not constructor
 		act = action.NewAuthenticateAction(
 			"https://relay.example.com",
@@ -61,19 +62,55 @@ var _ = Describe("AuthenticateAction", func() {
 				err := act.Execute(ctx, dependencies)
 				Expect(err).NotTo(HaveOccurred())
 			}
-			Expect(transport.authCallCount).To(Equal(3))
+			Expect(mockTransp.authCallCount).To(Equal(3))
+		})
+	})
+
+	Describe("JWT Storage", func() {
+		It("should store JWT token in dependencies after successful authentication", func() {
+			ctx := context.Background()
+			expectedToken := "test-jwt-token-xyz"
+			expectedExpiry := time.Now().Add(24 * time.Hour).Unix()
+			mockTransp.authResponse = transport.AuthResponse{
+				Token:     expectedToken,
+				ExpiresAt: expectedExpiry,
+			}
+
+			err := act.Execute(ctx, dependencies)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Verify JWT token is stored in dependencies
+			Expect(dependencies.GetJWTToken()).To(Equal(expectedToken))
+		})
+
+		It("should store JWT expiry in dependencies after successful authentication", func() {
+			ctx := context.Background()
+			expectedToken := "test-jwt-token-xyz"
+			expectedExpiry := time.Now().Add(24 * time.Hour).Unix()
+			mockTransp.authResponse = transport.AuthResponse{
+				Token:     expectedToken,
+				ExpiresAt: expectedExpiry,
+			}
+
+			err := act.Execute(ctx, dependencies)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Verify JWT expiry is stored in dependencies (converted from Unix timestamp)
+			storedExpiry := dependencies.GetJWTExpiry()
+			Expect(storedExpiry.Unix()).To(Equal(expectedExpiry))
 		})
 	})
 })
 
 type mockTransport struct {
 	authCallCount int
+	authResponse  transport.AuthResponse
 }
 
 func (m *mockTransport) Authenticate(ctx context.Context, req transport.AuthRequest) (transport.AuthResponse, error) {
 	m.authCallCount++
 
-	return transport.AuthResponse{}, nil
+	return m.authResponse, nil
 }
 
 func (m *mockTransport) Pull(ctx context.Context, jwtToken string) ([]*transport.UMHMessage, error) {

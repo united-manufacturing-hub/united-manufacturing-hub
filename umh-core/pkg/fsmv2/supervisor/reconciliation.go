@@ -1053,7 +1053,10 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 				"child_name", spec.Name,
 				"parent_worker_type", s.workerType)
 
-			child.updateUserSpec(spec.UserSpec)
+			// Merge parent User variables with child's (child overrides parent)
+			childUserSpec := spec.UserSpec
+			childUserSpec.Variables = config.Merge(s.userSpec.Variables, spec.UserSpec.Variables)
+			child.updateUserSpec(childUserSpec)
 			child.setChildStartStates(spec.ChildStartStates)
 
 			updatedCount++
@@ -1096,7 +1099,10 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 				continue
 			}
 
-			childSupervisor.updateUserSpec(spec.UserSpec)
+			// Merge parent User variables with child's (child overrides parent)
+			childUserSpec := spec.UserSpec
+			childUserSpec.Variables = config.Merge(s.userSpec.Variables, spec.UserSpec.Variables)
+			childSupervisor.updateUserSpec(childUserSpec)
 			childSupervisor.setChildStartStates(spec.ChildStartStates)
 			childSupervisor.setParent(s, s.workerType)
 

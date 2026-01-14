@@ -27,6 +27,12 @@ import (
 type CommunicatorDependencies interface {
 	fsmv2.Dependencies
 	GetTransport() transport.Transport
+	// SetJWT stores the JWT token and expiry from authentication response.
+	// Called by AuthenticateAction after successful authentication.
+	SetJWT(token string, expiry time.Time)
+	// SetPulledMessages stores the messages retrieved from the backend.
+	// Called by SyncAction after successful pull operation.
+	SetPulledMessages(messages []*transport.UMHMessage)
 }
 
 const AuthenticateActionName = "authenticate"
@@ -167,8 +173,8 @@ func (a *AuthenticateAction) Execute(ctx context.Context, depsAny any) error {
 		return err
 	}
 
-	// Store JWT token in observed state (will be read in next CollectObservedState)
-	_ = authResp
+	// Store JWT token in dependencies (will be read by CollectObservedState)
+	deps.SetJWT(authResp.Token, time.Unix(authResp.ExpiresAt, 0))
 
 	return nil
 }

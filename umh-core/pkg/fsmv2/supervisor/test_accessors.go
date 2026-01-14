@@ -75,3 +75,10 @@ func (s *Supervisor[TObserved, TDesired]) TestIsPendingRestart(workerID string) 
 	defer s.mu.RUnlock()
 	return s.pendingRestart[workerID]
 }
+
+// TestGetUserSpec returns the current userSpec for testing. DO NOT USE in production code.
+func (s *Supervisor[TObserved, TDesired]) TestGetUserSpec() config.UserSpec {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.userSpec
+}

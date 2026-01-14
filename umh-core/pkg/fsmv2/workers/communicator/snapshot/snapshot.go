@@ -138,10 +138,24 @@ type CommunicatorObservedState struct {
 
 	// Inbound Messages
 	MessagesReceived []transport.UMHMessage
+
+	// Error tracking for health monitoring
+	ConsecutiveErrors int
 }
 
+// IsTokenExpired returns true if the JWT token is expired or will expire soon.
+// Uses a 10-minute buffer for proactive refresh to avoid authentication failures
+// during sync operations. Returns false if JWTExpiry is zero (no expiration tracking).
 func (o CommunicatorObservedState) IsTokenExpired() bool {
-	return time.Now().After(o.JWTExpiry)
+	// Zero expiry means no expiration tracking (e.g., token not yet obtained)
+	if o.JWTExpiry.IsZero() {
+		return false
+	}
+
+	// Consider token expired if it expires within 10 minutes (proactive refresh)
+	const refreshBuffer = 10 * time.Minute
+
+	return time.Now().Add(refreshBuffer).After(o.JWTExpiry)
 }
 
 func (o CommunicatorObservedState) IsSyncHealthy() bool {
@@ -149,7 +163,7 @@ func (o CommunicatorObservedState) IsSyncHealthy() bool {
 }
 
 func (o CommunicatorObservedState) GetConsecutiveErrors() int {
-	return 0
+	return o.ConsecutiveErrors
 }
 
 func (o CommunicatorObservedState) GetObservedDesiredState() fsmv2.DesiredState {

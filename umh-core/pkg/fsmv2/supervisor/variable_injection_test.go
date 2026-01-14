@@ -24,8 +24,8 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence/memory"
 )
@@ -324,6 +324,127 @@ var _ = Describe("Variable Injection", func() {
 			// For child supervisor, parent_id should be set to parent's worker type
 			// This test will need adjustment based on actual implementation
 			Skip("Pending implementation of parentID mechanism")
+		})
+	})
+
+	Describe("Variable Inheritance from Parent to Child", func() {
+		It("should inherit parent User variables to child, with child vars overriding parent", func() {
+			// Setup parent supervisor with User variables
+			parentUserVars := map[string]any{
+				"IP":   "192.168.1.100",
+				"PORT": 502,
+			}
+
+			parentUserSpec := config.UserSpec{
+				Variables: config.VariableBundle{
+					User: parentUserVars,
+				},
+			}
+
+			s.TestUpdateUserSpec(parentUserSpec)
+
+			// Create a child spec that does NOT define IP but defines DEVICE_ID
+			childUserSpec := config.UserSpec{
+				Variables: config.VariableBundle{
+					User: map[string]any{
+						"DEVICE_ID": "child-device",
+					},
+				},
+			}
+
+			// Capture the userSpec passed to child during reconciliation
+			var capturedChildSpec config.UserSpec
+
+			// Create a mock child supervisor to capture the userSpec
+			// We'll use the TestReconcileWithCapture helper if available,
+			// or check via the child's updateUserSpec
+			// For now, we test via DeriveDesiredState which receives the merged spec
+
+			testWorker.deriveDesiredStateFunc = func(spec config.UserSpec) (config.DesiredState, error) {
+				// This will be called during tick, returning a ChildSpec
+				return config.DesiredState{
+					State: "running",
+					ChildrenSpecs: []config.ChildSpec{
+						{
+							Name:       "test-child",
+							WorkerType: "test",
+							UserSpec:   childUserSpec,
+						},
+					},
+				}, nil
+			}
+
+			// Tick the parent to trigger reconcileChildren
+			err := s.TestTick(ctx)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Get the child supervisor and check its userSpec
+			children := s.GetChildren()
+			Expect(children).To(HaveKey("test-child"))
+
+			child := children["test-child"]
+			Expect(child).ToNot(BeNil())
+
+			// Get the child's userSpec through the test helper
+			capturedChildSpec = child.TestGetUserSpec()
+
+			// Verify inheritance: child should have parent's IP and PORT, plus its own DEVICE_ID
+			Expect(capturedChildSpec.Variables.User).To(HaveKeyWithValue("IP", "192.168.1.100"))
+			Expect(capturedChildSpec.Variables.User).To(HaveKeyWithValue("PORT", 502))
+			Expect(capturedChildSpec.Variables.User).To(HaveKeyWithValue("DEVICE_ID", "child-device"))
+		})
+
+		It("should allow child User variables to override parent User variables", func() {
+			// Setup parent supervisor with User variables
+			parentUserVars := map[string]any{
+				"IP":   "192.168.1.100",
+				"PORT": 502,
+			}
+
+			parentUserSpec := config.UserSpec{
+				Variables: config.VariableBundle{
+					User: parentUserVars,
+				},
+			}
+
+			s.TestUpdateUserSpec(parentUserSpec)
+
+			// Create a child spec that overrides PORT
+			childUserSpec := config.UserSpec{
+				Variables: config.VariableBundle{
+					User: map[string]any{
+						"PORT":      503, // Override parent's PORT
+						"DEVICE_ID": "child-device",
+					},
+				},
+			}
+
+			testWorker.deriveDesiredStateFunc = func(spec config.UserSpec) (config.DesiredState, error) {
+				return config.DesiredState{
+					State: "running",
+					ChildrenSpecs: []config.ChildSpec{
+						{
+							Name:       "override-child",
+							WorkerType: "test",
+							UserSpec:   childUserSpec,
+						},
+					},
+				}, nil
+			}
+
+			err := s.TestTick(ctx)
+			Expect(err).ToNot(HaveOccurred())
+
+			children := s.GetChildren()
+			Expect(children).To(HaveKey("override-child"))
+
+			child := children["override-child"]
+			capturedChildSpec := child.TestGetUserSpec()
+
+			// Verify: IP inherited, PORT overridden by child, DEVICE_ID from child
+			Expect(capturedChildSpec.Variables.User).To(HaveKeyWithValue("IP", "192.168.1.100"))
+			Expect(capturedChildSpec.Variables.User).To(HaveKeyWithValue("PORT", 503)) // Child's value
+			Expect(capturedChildSpec.Variables.User).To(HaveKeyWithValue("DEVICE_ID", "child-device"))
 		})
 	})
 

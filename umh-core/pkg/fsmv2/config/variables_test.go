@@ -303,7 +303,7 @@ global:
 			Expect(result).ToNot(HaveKey("IP"))
 		})
 
-		It("should set global key to nil when Global map is nil", func() {
+		It("should NOT include global key when Global map is nil", func() {
 			bundle := config.VariableBundle{
 				User: map[string]any{
 					"IP": "192.168.1.100",
@@ -314,11 +314,10 @@ global:
 			result := bundle.Flatten()
 
 			Expect(result).To(HaveKeyWithValue("IP", "192.168.1.100"))
-			Expect(result).To(HaveKey("global"))
-			Expect(result["global"]).To(BeNil())
+			Expect(result).ToNot(HaveKey("global"))
 		})
 
-		It("should set internal key to nil when Internal map is nil", func() {
+		It("should NOT include internal key when Internal map is nil", func() {
 			bundle := config.VariableBundle{
 				User: map[string]any{
 					"IP": "192.168.1.100",
@@ -329,8 +328,7 @@ global:
 			result := bundle.Flatten()
 
 			Expect(result).To(HaveKeyWithValue("IP", "192.168.1.100"))
-			Expect(result).To(HaveKey("internal"))
-			Expect(result["internal"]).To(BeNil())
+			Expect(result).ToNot(HaveKey("internal"))
 		})
 
 		It("should handle completely empty VariableBundle", func() {
@@ -339,10 +337,145 @@ global:
 			result := bundle.Flatten()
 
 			Expect(result).ToNot(BeNil())
-			Expect(result).To(HaveKey("global"))
-			Expect(result).To(HaveKey("internal"))
-			Expect(result["global"]).To(BeNil())
-			Expect(result["internal"]).To(BeNil())
+			Expect(result).ToNot(HaveKey("global"))
+			Expect(result).ToNot(HaveKey("internal"))
+			Expect(len(result)).To(Equal(0))
+		})
+	})
+
+	Describe("Merge", func() {
+		It("should copy parent User variables to merged result", func() {
+			parent := config.VariableBundle{
+				User: map[string]any{
+					"IP":   "10.0.0.1",
+					"PORT": 502,
+				},
+			}
+			child := config.VariableBundle{}
+
+			result := config.Merge(parent, child)
+
+			Expect(result.User).To(HaveKeyWithValue("IP", "10.0.0.1"))
+			Expect(result.User).To(HaveKeyWithValue("PORT", 502))
+		})
+
+		It("should copy child User variables to merged result", func() {
+			parent := config.VariableBundle{}
+			child := config.VariableBundle{
+				User: map[string]any{
+					"DEVICE_ID": "plc-01",
+					"TIMEOUT":   5000,
+				},
+			}
+
+			result := config.Merge(parent, child)
+
+			Expect(result.User).To(HaveKeyWithValue("DEVICE_ID", "plc-01"))
+			Expect(result.User).To(HaveKeyWithValue("TIMEOUT", 5000))
+		})
+
+		It("should override parent User variables when child has same keys", func() {
+			parent := config.VariableBundle{
+				User: map[string]any{
+					"IP":   "10.0.0.1",
+					"PORT": 502,
+				},
+			}
+			child := config.VariableBundle{
+				User: map[string]any{
+					"PORT":      503, // Override parent PORT
+					"DEVICE_ID": "plc-01",
+				},
+			}
+
+			result := config.Merge(parent, child)
+
+			Expect(result.User).To(HaveKeyWithValue("IP", "10.0.0.1"))      // From parent
+			Expect(result.User).To(HaveKeyWithValue("PORT", 503))           // Child overrides parent
+			Expect(result.User).To(HaveKeyWithValue("DEVICE_ID", "plc-01")) // From child
+		})
+
+		It("should handle nil parent User map gracefully", func() {
+			parent := config.VariableBundle{
+				User: nil,
+			}
+			child := config.VariableBundle{
+				User: map[string]any{
+					"DEVICE_ID": "plc-01",
+				},
+			}
+
+			result := config.Merge(parent, child)
+
+			Expect(result.User).ToNot(BeNil())
+			Expect(result.User).To(HaveKeyWithValue("DEVICE_ID", "plc-01"))
+		})
+
+		It("should handle nil child User map gracefully", func() {
+			parent := config.VariableBundle{
+				User: map[string]any{
+					"IP":   "10.0.0.1",
+					"PORT": 502,
+				},
+			}
+			child := config.VariableBundle{
+				User: nil,
+			}
+
+			result := config.Merge(parent, child)
+
+			Expect(result.User).ToNot(BeNil())
+			Expect(result.User).To(HaveKeyWithValue("IP", "10.0.0.1"))
+			Expect(result.User).To(HaveKeyWithValue("PORT", 502))
+		})
+
+		It("should handle both nil User maps gracefully", func() {
+			parent := config.VariableBundle{
+				User: nil,
+			}
+			child := config.VariableBundle{
+				User: nil,
+			}
+
+			result := config.Merge(parent, child)
+
+			Expect(result.User).ToNot(BeNil())
+			Expect(result.User).To(BeEmpty())
+		})
+
+		It("should NOT merge Internal or Global (they remain nil in result)", func() {
+			parent := config.VariableBundle{
+				User: map[string]any{
+					"IP": "10.0.0.1",
+				},
+				Global: map[string]any{
+					"api_endpoint": "https://api.example.com",
+				},
+				Internal: map[string]any{
+					"id": "parent-123",
+				},
+			}
+			child := config.VariableBundle{
+				User: map[string]any{
+					"PORT": 502,
+				},
+				Global: map[string]any{
+					"cluster_id": "prod-cluster",
+				},
+				Internal: map[string]any{
+					"id": "child-456",
+				},
+			}
+
+			result := config.Merge(parent, child)
+
+			// User variables should be merged
+			Expect(result.User).To(HaveKeyWithValue("IP", "10.0.0.1"))
+			Expect(result.User).To(HaveKeyWithValue("PORT", 502))
+
+			// Global and Internal should NOT be merged (remain nil)
+			Expect(result.Global).To(BeNil())
+			Expect(result.Internal).To(BeNil())
 		})
 	})
 })

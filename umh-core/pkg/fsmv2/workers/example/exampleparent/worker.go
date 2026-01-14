@@ -134,10 +134,21 @@ func (w *ParentWorker) DeriveDesiredState(spec interface{}) (config.DesiredState
 	childrenSpecs := make([]config.ChildSpec, childrenCount)
 	childWorkerType := parentSpec.GetChildWorkerType()
 	for i := range childrenCount {
+		// Each child gets its own DEVICE_ID variable.
+		// Parent's variables (IP, PORT, etc.) will be merged in by the supervisor
+		// via config.Merge() in reconcileChildren(). Child variables override parent.
+		childVariables := config.VariableBundle{
+			User: map[string]any{
+				"DEVICE_ID": fmt.Sprintf("device-%d", i),
+			},
+		}
 		childrenSpecs[i] = config.ChildSpec{
 			Name:       fmt.Sprintf("child-%d", i),
 			WorkerType: childWorkerType,
-			UserSpec:   config.UserSpec{Config: parentSpec.ChildConfig},
+			UserSpec: config.UserSpec{
+				Config:    parentSpec.ChildConfig,
+				Variables: childVariables,
+			},
 			// New approach: list parent states where children should run
 			ChildStartStates: []string{"TryingToStart", "Running"},
 		}

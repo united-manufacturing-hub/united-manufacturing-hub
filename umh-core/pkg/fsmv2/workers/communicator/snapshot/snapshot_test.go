@@ -15,6 +15,7 @@
 package snapshot_test
 
 import (
+	"testing"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -22,6 +23,11 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/snapshot"
 )
+
+func TestSnapshot(t *testing.T) {
+	RegisterFailHandler(Fail)
+	RunSpecs(t, "Snapshot Suite")
+}
 
 var _ = Describe("CommunicatorObservedState", func() {
 	var observed *snapshot.CommunicatorObservedState
@@ -79,6 +85,34 @@ var _ = Describe("CommunicatorObservedState", func() {
 			It("should return false (zero time means no expiration tracking)", func() {
 				expired := observed.IsTokenExpired()
 				Expect(expired).To(BeFalse(), "Zero expiration time should not be considered expired")
+			})
+		})
+	})
+
+	Describe("GetConsecutiveErrors", func() {
+		Context("when no errors have occurred", func() {
+			It("should return 0", func() {
+				Expect(observed.GetConsecutiveErrors()).To(Equal(0))
+			})
+		})
+
+		Context("when ConsecutiveErrors is set to 1", func() {
+			BeforeEach(func() {
+				observed.ConsecutiveErrors = 1
+			})
+
+			It("should return 1", func() {
+				Expect(observed.GetConsecutiveErrors()).To(Equal(1))
+			})
+		})
+
+		Context("when multiple consecutive errors have occurred", func() {
+			BeforeEach(func() {
+				observed.ConsecutiveErrors = 5
+			})
+
+			It("should return the accumulated count", func() {
+				Expect(observed.GetConsecutiveErrors()).To(Equal(5))
 			})
 		})
 	})

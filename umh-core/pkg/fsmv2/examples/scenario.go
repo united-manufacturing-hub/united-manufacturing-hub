@@ -82,6 +82,7 @@ var Registry = map[string]Scenario{
 	"cascade":     CascadeScenario,
 	"timeout":     TimeoutScenario,
 	"configerror": ConfigErrorScenario,
+	"inheritance": InheritanceScenario,
 }
 
 // RunConfig configures how a scenario is executed.

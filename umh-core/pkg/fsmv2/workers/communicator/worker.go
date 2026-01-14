@@ -243,13 +243,40 @@ func NewCommunicatorWorker(
 //
 // This method never returns an error for the communicator worker.
 func (w *CommunicatorWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedState, error) {
-	observed := snapshot.CommunicatorObservedState{
-		CollectedAt: time.Now(),
+	deps := w.GetDependencies()
+
+	// Read JWT token and expiry from dependencies
+	jwtToken := deps.GetJWTToken()
+	jwtExpiry := deps.GetJWTExpiry()
+
+	// Read pulled messages from dependencies
+	pulledMessages := deps.GetPulledMessages()
+
+	// Convert []*transport.UMHMessage to []transport.UMHMessage for the snapshot
+	var messagesReceived []transport.UMHMessage
+	if pulledMessages != nil {
+		messagesReceived = make([]transport.UMHMessage, len(pulledMessages))
+		for i, msg := range pulledMessages {
+			if msg != nil {
+				messagesReceived[i] = *msg
+			}
+		}
 	}
 
-	// TODO: Implement proper state collection based on transport state
-	// This will need to query the transport for current authentication status
-	// and sync health, rather than relying on previousAction pattern
+	// Determine authentication status: authenticated if token is present and not expired
+	authenticated := jwtToken != "" && !time.Now().After(jwtExpiry)
+
+	// Read consecutive error count from dependencies
+	consecutiveErrors := deps.GetConsecutiveErrors()
+
+	observed := snapshot.CommunicatorObservedState{
+		CollectedAt:       time.Now(),
+		JWTToken:          jwtToken,
+		JWTExpiry:         jwtExpiry,
+		MessagesReceived:  messagesReceived,
+		Authenticated:     authenticated,
+		ConsecutiveErrors: consecutiveErrors,
+	}
 
 	return observed, nil
 }

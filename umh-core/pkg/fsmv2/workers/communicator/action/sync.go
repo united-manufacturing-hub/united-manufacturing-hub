@@ -105,7 +105,7 @@ func (a *SyncAction) Execute(ctx context.Context, depsAny any) error {
 	}
 
 	// 2. Store pulled messages (they will be available in next observed state)
-	_ = messages
+	deps.SetPulledMessages(messages)
 
 	// 3. Push batch to backend if we have messages
 	if len(a.MessagesToBePushed) > 0 {

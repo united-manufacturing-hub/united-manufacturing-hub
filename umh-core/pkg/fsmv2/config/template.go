@@ -47,3 +47,15 @@ func RenderTemplate[T any](tmpl string, data T) (string, error) {
 
 	return buf.String(), nil
 }
+
+// RenderConfigTemplate renders a Go template string with VariableBundle data.
+// User variables are accessible at top-level ({{ .IP }}), while Global and Internal
+// require prefixes ({{ .global.key }}, {{ .internal.key }}).
+// Returns empty string for empty template. Fails on missing variables (strict mode).
+func RenderConfigTemplate(tmpl string, vars VariableBundle) (string, error) {
+	if tmpl == "" {
+		return "", nil
+	}
+
+	return RenderTemplate(tmpl, vars.Flatten())
+}

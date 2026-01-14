@@ -87,6 +87,8 @@ type SupervisorInterface interface {
 	// GetWorkerType returns the type of workers this supervisor manages.
 	// Example: "examplechild", "exampleparent", "application"
 	GetWorkerType() string
+	// TestGetUserSpec returns the current userSpec for testing. DO NOT USE in production code.
+	TestGetUserSpec() config.UserSpec
 }
 
 // WorkerContext encapsulates the runtime state for a single worker
