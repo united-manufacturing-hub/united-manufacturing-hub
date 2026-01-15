@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sync/atomic"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
@@ -379,8 +380,9 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 // making it safe to call at high frequency (100Hz+) without impacting system performance.
 func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 	// Increment tick counter and log heartbeat periodically
-	s.tickCount++
-	if s.tickCount%heartbeatTickInterval == 0 {
+	// Use atomic to avoid race when parent tick() calls child tick()
+	tickCount := atomic.AddUint64(&s.tickCount, 1)
+	if tickCount%heartbeatTickInterval == 0 {
 		s.logHeartbeat()
 	}
 
@@ -488,7 +490,8 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 
 	// PHASE 0.5: Variable Injection
 	// Inject variables BEFORE DeriveDesiredState() so they're available for template expansion
-	userSpecWithVars := s.userSpec
+	// Use getUserSpec() to avoid race with parent calling updateUserSpec()
+	userSpecWithVars := s.getUserSpec()
 
 	if userSpecWithVars.Variables.User == nil {
 		userSpecWithVars.Variables.User = make(map[string]any)
@@ -1005,7 +1008,7 @@ func (s *Supervisor[TObserved, TDesired]) logHeartbeat() {
 	activeActions := 0
 
 	s.logger.Infow("supervisor_heartbeat",
-		"tick", s.tickCount,
+		"tick", atomic.LoadUint64(&s.tickCount),
 		"workers", workerCount,
 		"children", childCount,
 		"worker_states", workerStates,
@@ -1054,6 +1057,7 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 				"parent_worker_type", s.workerType)
 
 			// Merge parent User variables with child's (child overrides parent)
+			// Direct access is safe here - reconcileChildren holds s.mu.Lock()
 			childUserSpec := spec.UserSpec
 			childUserSpec.Variables = config.Merge(s.userSpec.Variables, spec.UserSpec.Variables)
 			child.updateUserSpec(childUserSpec)
@@ -1100,6 +1104,7 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 			}
 
 			// Merge parent User variables with child's (child overrides parent)
+			// Direct access is safe here - reconcileChildren holds s.mu.Lock()
 			childUserSpec := spec.UserSpec
 			childUserSpec.Variables = config.Merge(s.userSpec.Variables, spec.UserSpec.Variables)
 			childSupervisor.updateUserSpec(childUserSpec)
