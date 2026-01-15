@@ -96,6 +96,70 @@ userSpec:
 	})
 })
 
+var _ = Describe("ChildSpec Clone", func() {
+	Describe("Clone()", func() {
+		It("should create a deep copy that is independent from the original", func() {
+			// Create original ChildSpec with UserSpec and ChildStartStates
+			original := config.ChildSpec{
+				Name:       "original-worker",
+				WorkerType: "mqtt_connection",
+				UserSpec: config.UserSpec{
+					Config: "original-config",
+					Variables: config.VariableBundle{
+						User: map[string]interface{}{
+							"key1": "value1",
+						},
+					},
+				},
+				ChildStartStates: []string{"Running", "TryingToStart"},
+			}
+
+			// Clone it
+			cloned := original.Clone()
+
+			// Verify clone has same values
+			Expect(cloned.Name).To(Equal(original.Name))
+			Expect(cloned.WorkerType).To(Equal(original.WorkerType))
+			Expect(cloned.UserSpec.Config).To(Equal(original.UserSpec.Config))
+			Expect(cloned.ChildStartStates).To(Equal(original.ChildStartStates))
+
+			// Modify the clone's ChildStartStates slice
+			cloned.ChildStartStates[0] = "Modified"
+			cloned.ChildStartStates = append(cloned.ChildStartStates, "NewState")
+
+			// Verify the original is NOT affected
+			Expect(original.ChildStartStates).To(Equal([]string{"Running", "TryingToStart"}))
+			Expect(original.ChildStartStates).ToNot(ContainElement("Modified"))
+			Expect(original.ChildStartStates).ToNot(ContainElement("NewState"))
+		})
+
+		It("should handle nil ChildStartStates", func() {
+			original := config.ChildSpec{
+				Name:             "worker-no-states",
+				WorkerType:       "basic",
+				ChildStartStates: nil,
+			}
+
+			cloned := original.Clone()
+
+			Expect(cloned.ChildStartStates).To(BeNil())
+		})
+
+		It("should handle empty ChildStartStates slice", func() {
+			original := config.ChildSpec{
+				Name:             "worker-empty-states",
+				WorkerType:       "basic",
+				ChildStartStates: []string{},
+			}
+
+			cloned := original.Clone()
+
+			Expect(cloned.ChildStartStates).ToNot(BeNil())
+			Expect(cloned.ChildStartStates).To(BeEmpty())
+		})
+	})
+})
+
 var _ = Describe("DesiredState", func() {
 	Describe("YAML serialization", func() {
 		It("should serialize to YAML correctly", func() {

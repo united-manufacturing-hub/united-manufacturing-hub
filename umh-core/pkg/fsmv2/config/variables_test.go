@@ -478,4 +478,79 @@ global:
 			Expect(result.Internal).To(BeNil())
 		})
 	})
+
+	Describe("Clone", func() {
+		It("should deeply clone nested maps so modifications don't affect original", func() {
+			// Create original with nested map in User
+			original := config.VariableBundle{
+				User: map[string]any{
+					"IP":   "192.168.1.100",
+					"PORT": 502,
+					"nested": map[string]any{
+						"key1": "value1",
+						"key2": "value2",
+					},
+				},
+				Global: map[string]any{
+					"api_endpoint": "https://api.example.com",
+					"settings": map[string]any{
+						"timeout": 30,
+						"retries": 3,
+					},
+				},
+			}
+
+			// Clone the bundle
+			cloned := original.Clone()
+
+			// Modify nested map in cloned User
+			nestedClone, ok := cloned.User["nested"].(map[string]any)
+			Expect(ok).To(BeTrue())
+			nestedClone["key1"] = "modified_value"
+			nestedClone["key3"] = "new_value"
+
+			// Modify nested map in cloned Global
+			settingsClone, ok := cloned.Global["settings"].(map[string]any)
+			Expect(ok).To(BeTrue())
+			settingsClone["timeout"] = 60
+			settingsClone["new_setting"] = "added"
+
+			// Verify original nested maps are NOT affected
+			nestedOriginal, ok := original.User["nested"].(map[string]any)
+			Expect(ok).To(BeTrue())
+			Expect(nestedOriginal["key1"]).To(Equal("value1"), "Original nested map should not be modified")
+			Expect(nestedOriginal).ToNot(HaveKey("key3"), "Original nested map should not have new keys")
+
+			settingsOriginal, ok := original.Global["settings"].(map[string]any)
+			Expect(ok).To(BeTrue())
+			Expect(settingsOriginal["timeout"]).To(Equal(30), "Original Global nested map should not be modified")
+			Expect(settingsOriginal).ToNot(HaveKey("new_setting"), "Original Global nested map should not have new keys")
+		})
+
+		It("should handle nil maps gracefully", func() {
+			original := config.VariableBundle{
+				User:   nil,
+				Global: nil,
+			}
+
+			cloned := original.Clone()
+
+			Expect(cloned.User).To(BeNil())
+			Expect(cloned.Global).To(BeNil())
+		})
+
+		It("should handle empty maps correctly", func() {
+			original := config.VariableBundle{
+				User:   map[string]any{},
+				Global: map[string]any{},
+			}
+
+			cloned := original.Clone()
+
+			Expect(cloned.User).ToNot(BeNil())
+			Expect(cloned.User).To(BeEmpty())
+			Expect(cloned.Global).ToNot(BeNil())
+			Expect(cloned.Global).To(BeEmpty())
+		})
+	})
 })

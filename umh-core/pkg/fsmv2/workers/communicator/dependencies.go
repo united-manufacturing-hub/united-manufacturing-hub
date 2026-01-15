@@ -111,9 +111,13 @@ func (d *CommunicatorDependencies) SetPulledMessages(messages []*transport.UMHMe
 	d.pulledMessages = messages
 }
 
-// GetPulledMessages returns a copy of the stored pulled messages.
+// GetPulledMessages returns a shallow copy of the stored pulled messages slice.
 // This is called by CollectObservedState to populate the observed state.
-// Thread-safe: returns a copy to prevent race conditions if caller modifies the slice.
+//
+// Thread-safety notes:
+// - The slice itself is copied: adding/removing elements won't affect internal state
+// - The message pointers are shared: modifying message contents WILL affect internal state
+// - Callers should treat returned messages as read-only
 func (d *CommunicatorDependencies) GetPulledMessages() []*transport.UMHMessage {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
@@ -122,7 +126,7 @@ func (d *CommunicatorDependencies) GetPulledMessages() []*transport.UMHMessage {
 		return nil
 	}
 
-	// Return a copy to prevent caller from modifying internal state
+	// Return a shallow copy of the slice (pointers are still shared)
 	result := make([]*transport.UMHMessage, len(d.pulledMessages))
 	copy(result, d.pulledMessages)
 

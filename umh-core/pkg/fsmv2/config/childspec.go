@@ -204,6 +204,17 @@ func (c *ChildSpec) MarshalJSON() ([]byte, error) {
 	return json.Marshal((*Alias)(c))
 }
 
+// Clone creates a deep copy of the ChildSpec.
+func (c ChildSpec) Clone() ChildSpec {
+	clone := c
+	clone.UserSpec = c.UserSpec.Clone()
+	if c.ChildStartStates != nil {
+		clone.ChildStartStates = make([]string, len(c.ChildStartStates))
+		copy(clone.ChildStartStates, c.ChildStartStates)
+	}
+	return clone
+}
+
 // GetMappedChildState returns the desired state for this child based on the parent's current FSM state.
 //
 // Logic:

@@ -24,7 +24,18 @@ import (
 )
 
 // StoppedWaitDuration is how long to wait in stopped state before transitioning to TryingToStart.
-// This is a var (not const) to allow tests to override it for fast execution.
+//
+// EXAMPLE/TEST WORKER ONLY: This is declared as var (not const) to allow tests to override
+// the duration for fast test execution without real time delays.
+//
+// WARNING: Real production workers should NOT follow this pattern. Production code should use:
+//   - Dependency injection (pass duration via constructor or config struct)
+//   - Configuration objects that can be mocked in tests
+//   - Interface-based time abstractions
+//
+// Package-level mutable variables create global state that can cause test interference
+// and make code harder to reason about. This pattern is acceptable here only because
+// this is an example/test worker demonstrating FSM concepts, not production code.
 var StoppedWaitDuration = 5 * time.Second
 
 // StoppedState represents the initial state before any children are spawned.

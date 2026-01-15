@@ -14,6 +14,8 @@
 
 package config
 
+import "encoding/json"
+
 // VariableBundle provides three-tier namespace structure for FSMv2 variables.
 //
 // The three namespaces serve distinct purposes with different serialization
@@ -131,25 +133,26 @@ func Merge(parent, child VariableBundle) VariableBundle {
 	return merged
 }
 
+// deepCloneMap creates a deep copy of a map using JSON serialization.
+// This ensures nested maps and slices are fully cloned, not just their references.
+func deepCloneMap(m map[string]any) map[string]any {
+	if m == nil {
+		return nil
+	}
+	data, _ := json.Marshal(m)
+	var result map[string]any
+	json.Unmarshal(data, &result)
+	return result
+}
+
 // Clone creates a deep copy of the VariableBundle.
-// All maps are copied to prevent shared references.
+// All maps are deeply copied (including nested structures) to prevent shared references.
 // Internal is NOT copied (regenerated per-worker by supervisor).
 func (v VariableBundle) Clone() VariableBundle {
 	clone := VariableBundle{}
 
-	if v.User != nil {
-		clone.User = make(map[string]any, len(v.User))
-		for k, val := range v.User {
-			clone.User[k] = val
-		}
-	}
-
-	if v.Global != nil {
-		clone.Global = make(map[string]any, len(v.Global))
-		for k, val := range v.Global {
-			clone.Global[k] = val
-		}
-	}
+	clone.User = deepCloneMap(v.User)
+	clone.Global = deepCloneMap(v.Global)
 
 	// Internal is intentionally NOT cloned - it's regenerated per-worker
 

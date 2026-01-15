@@ -451,9 +451,10 @@ var _ = Describe("Variable Injection", func() {
 	Describe("User Variables Preservation", func() {
 		It("should preserve existing User variables during injection", func() {
 			// Set up userSpec with existing User variables
+			// Note: PORT uses float64 because JSON deep cloning converts all numbers to float64
 			existingUserVars := map[string]any{
 				"IP":   "192.168.1.100",
-				"PORT": 502,
+				"PORT": float64(502),
 			}
 
 			userSpec := config.UserSpec{
