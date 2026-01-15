@@ -286,10 +286,8 @@ func verifyChildrenReceivedMergedVariablesFromStore(store storage.TriangularStor
 		GinkgoWriter.Printf("  Child %s state: %s\n", child.WorkerID, state)
 	}
 
-	// The variable inheritance is validated by the fact that:
-	// 1. Children were successfully created
-	// 2. Children have valid FSM states (TryingToConnect, Connected, etc.)
-	// 3. The scenario completed without errors
+	// DIRECT VARIABLE ASSERTIONS
+	// Verify the actual merged variables in the store
 	//
 	// The actual variable merging happens in reconcileChildren():
 	//   childUserSpec.Variables = config.Merge(s.userSpec.Variables, spec.UserSpec.Variables)
@@ -299,14 +297,78 @@ func verifyChildrenReceivedMergedVariablesFromStore(store storage.TriangularStor
 	//   Child:  {DEVICE_ID: "device-0"}
 	//   Result: {IP: "192.168.1.100", PORT: 502, CONNECTION_NAME: "factory-plc", DEVICE_ID: "device-0"}
 
-	GinkgoWriter.Printf("✓ Variable inheritance verified:\n")
-	GinkgoWriter.Printf("  Parent variables (from config.yaml):\n")
-	GinkgoWriter.Printf("    - IP: \"192.168.1.100\"\n")
-	GinkgoWriter.Printf("    - PORT: 502\n")
-	GinkgoWriter.Printf("    - CONNECTION_NAME: \"factory-plc\"\n")
-	GinkgoWriter.Printf("  Child variables (from GetChildSpecs):\n")
-	GinkgoWriter.Printf("    - DEVICE_ID: \"device-N\"\n")
-	GinkgoWriter.Printf("  Merged variables (child has all):\n")
-	GinkgoWriter.Printf("    - IP, PORT, CONNECTION_NAME (inherited from parent)\n")
-	GinkgoWriter.Printf("    - DEVICE_ID (child's own variable)\n")
+	for i, child := range childWorkers {
+		GinkgoWriter.Printf("\n  Verifying child %d (%s) variables:\n", i, child.WorkerID)
+
+		// Navigate the Desired document to extract variables
+		// Path: Desired["originalUserSpec"]["variables"]["user"]["<var_name>"]
+		Expect(child.Desired).NotTo(BeNil(),
+			fmt.Sprintf("Child %s should have Desired state", child.WorkerID))
+
+		// Get originalUserSpec from Desired
+		originalUserSpec, hasSpec := child.Desired["originalUserSpec"]
+		Expect(hasSpec).To(BeTrue(),
+			fmt.Sprintf("Child %s Desired should have originalUserSpec, got: %+v", child.WorkerID, child.Desired))
+
+		userSpecMap, ok := originalUserSpec.(map[string]any)
+		Expect(ok).To(BeTrue(),
+			fmt.Sprintf("Child %s originalUserSpec should be map[string]any, got: %T", child.WorkerID, originalUserSpec))
+
+		// Get variables from userSpec
+		variables, hasVars := userSpecMap["variables"]
+		Expect(hasVars).To(BeTrue(),
+			fmt.Sprintf("Child %s userSpec should have variables, got: %+v", child.WorkerID, userSpecMap))
+
+		varsMap, ok := variables.(map[string]any)
+		Expect(ok).To(BeTrue(),
+			fmt.Sprintf("Child %s variables should be map[string]any, got: %T", child.WorkerID, variables))
+
+		// Get user namespace from variables
+		userVars, hasUser := varsMap["user"]
+		Expect(hasUser).To(BeTrue(),
+			fmt.Sprintf("Child %s variables should have user namespace, got: %+v", child.WorkerID, varsMap))
+
+		userVarsMap, ok := userVars.(map[string]any)
+		Expect(ok).To(BeTrue(),
+			fmt.Sprintf("Child %s user variables should be map[string]any, got: %T", child.WorkerID, userVars))
+
+		GinkgoWriter.Printf("    User variables: %+v\n", userVarsMap)
+
+		// Assert inherited variables from parent
+		Expect(userVarsMap).To(HaveKeyWithValue("IP", "192.168.1.100"),
+			fmt.Sprintf("Child %s should inherit IP from parent", child.WorkerID))
+		GinkgoWriter.Printf("    ✓ IP: %v (inherited from parent)\n", userVarsMap["IP"])
+
+		// PORT is stored as float64 in JSON unmarshalling
+		portValue, hasPort := userVarsMap["PORT"]
+		Expect(hasPort).To(BeTrue(),
+			fmt.Sprintf("Child %s should inherit PORT from parent", child.WorkerID))
+		// Handle both int and float64 (JSON unmarshalling converts to float64)
+		var portInt int
+		switch v := portValue.(type) {
+		case float64:
+			portInt = int(v)
+		case int:
+			portInt = v
+		default:
+			Fail(fmt.Sprintf("Child %s PORT should be numeric, got: %T", child.WorkerID, portValue))
+		}
+		Expect(portInt).To(Equal(502),
+			fmt.Sprintf("Child %s should inherit PORT=502 from parent, got %d", child.WorkerID, portInt))
+		GinkgoWriter.Printf("    ✓ PORT: %v (inherited from parent)\n", portInt)
+
+		Expect(userVarsMap).To(HaveKeyWithValue("CONNECTION_NAME", "factory-plc"),
+			fmt.Sprintf("Child %s should inherit CONNECTION_NAME from parent", child.WorkerID))
+		GinkgoWriter.Printf("    ✓ CONNECTION_NAME: %v (inherited from parent)\n", userVarsMap["CONNECTION_NAME"])
+
+		// Assert child's own variable (DEVICE_ID)
+		deviceID, hasDeviceID := userVarsMap["DEVICE_ID"]
+		Expect(hasDeviceID).To(BeTrue(),
+			fmt.Sprintf("Child %s should have DEVICE_ID variable", child.WorkerID))
+		Expect(deviceID).To(HavePrefix("device-"),
+			fmt.Sprintf("Child %s DEVICE_ID should start with 'device-', got: %v", child.WorkerID, deviceID))
+		GinkgoWriter.Printf("    ✓ DEVICE_ID: %v (child's own variable)\n", deviceID)
+	}
+
+	GinkgoWriter.Printf("\n✓ Variable inheritance verified with direct assertions!\n")
 }
