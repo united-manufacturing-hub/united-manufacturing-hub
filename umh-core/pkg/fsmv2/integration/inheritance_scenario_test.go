@@ -30,7 +30,9 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent/state"
 )
 
-var _ = Describe("Inheritance Scenario Integration", func() {
+var _ = Describe("Inheritance Scenario Integration", Serial, func() {
+	// Serial: This test modifies package-level variables (state.StoppedWaitDuration, state.RunningDuration)
+	// to speed up test execution. Serial ensures no parallel test interference.
 	It("should demonstrate variable inheritance from parent to children", func() {
 		By("Setting short durations for fast testing")
 		// Override durations for fast test execution

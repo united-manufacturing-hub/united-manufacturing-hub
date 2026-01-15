@@ -115,6 +115,15 @@ type UserSpec struct {
 	Variables VariableBundle `json:"variables" yaml:"variables"` // Variable bundle (User, Global, Internal namespaces)
 }
 
+// Clone creates a deep copy of the UserSpec.
+// The Config string is copied by value, Variables maps are deep-copied.
+func (u UserSpec) Clone() UserSpec {
+	return UserSpec{
+		Config:    u.Config,
+		Variables: u.Variables.Clone(),
+	}
+}
+
 // ChildSpec is a declarative specification for a child FSM worker.
 // Parent workers return these in DeriveDesiredState().ChildrenSpecs to declare their children.
 // The supervisor reconciles actual children to match these specs (Kubernetes-style).

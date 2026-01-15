@@ -111,14 +111,22 @@ func (d *CommunicatorDependencies) SetPulledMessages(messages []*transport.UMHMe
 	d.pulledMessages = messages
 }
 
-// GetPulledMessages returns the stored pulled messages.
+// GetPulledMessages returns a copy of the stored pulled messages.
 // This is called by CollectObservedState to populate the observed state.
-// Thread-safe: uses mutex for concurrent access protection.
+// Thread-safe: returns a copy to prevent race conditions if caller modifies the slice.
 func (d *CommunicatorDependencies) GetPulledMessages() []*transport.UMHMessage {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 
-	return d.pulledMessages
+	if d.pulledMessages == nil {
+		return nil
+	}
+
+	// Return a copy to prevent caller from modifying internal state
+	result := make([]*transport.UMHMessage, len(d.pulledMessages))
+	copy(result, d.pulledMessages)
+
+	return result
 }
 
 // RecordError increments the consecutive error counter.

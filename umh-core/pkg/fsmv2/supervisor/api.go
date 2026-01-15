@@ -426,11 +426,12 @@ func (s *Supervisor[TObserved, TDesired]) updateUserSpec(spec config.UserSpec) {
 }
 
 // getUserSpec implements SupervisorInterface.
+// Returns a deep copy to prevent callers from modifying internal state.
 func (s *Supervisor[TObserved, TDesired]) getUserSpec() config.UserSpec {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	return s.userSpec
+	return s.userSpec.Clone()
 }
 
 // setParent implements SupervisorInterface.

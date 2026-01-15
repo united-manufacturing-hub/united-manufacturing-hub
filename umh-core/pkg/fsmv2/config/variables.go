@@ -130,3 +130,28 @@ func Merge(parent, child VariableBundle) VariableBundle {
 
 	return merged
 }
+
+// Clone creates a deep copy of the VariableBundle.
+// All maps are copied to prevent shared references.
+// Internal is NOT copied (regenerated per-worker by supervisor).
+func (v VariableBundle) Clone() VariableBundle {
+	clone := VariableBundle{}
+
+	if v.User != nil {
+		clone.User = make(map[string]any, len(v.User))
+		for k, val := range v.User {
+			clone.User[k] = val
+		}
+	}
+
+	if v.Global != nil {
+		clone.Global = make(map[string]any, len(v.Global))
+		for k, val := range v.Global {
+			clone.Global[k] = val
+		}
+	}
+
+	// Internal is intentionally NOT cloned - it's regenerated per-worker
+
+	return clone
+}
