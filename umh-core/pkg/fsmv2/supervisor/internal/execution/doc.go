@@ -24,7 +24,7 @@
 //
 // # Why Asynchronous Execution?
 //
-// Actions are executed asynchronously for several critical reasons:
+// Actions are executed asynchronously for several key reasons:
 //
 // 1. Non-blocking Tick Loop: The supervisor's tick loop must complete quickly
 // (typically <100ms) to maintain responsiveness. Long-running actions (network

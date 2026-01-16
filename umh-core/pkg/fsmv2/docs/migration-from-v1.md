@@ -16,7 +16,7 @@
 1. **States are types, not strings** - Compiler catches invalid transitions
 2. **Pure state functions** - `State.Next()` has no side effects, just returns next state
 3. **Explicit actions** - Side effects are separate Action structs with `Execute()`
-4. **Single-threaded tick loop** - Supervisor orchestrates, no race conditions
+4. **Single-threaded tick loop** - Supervisor manages, no race conditions
 
 ## Resources
 

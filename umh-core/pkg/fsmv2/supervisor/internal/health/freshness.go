@@ -130,7 +130,7 @@ func (f *FreshnessChecker) Check(snapshot *fsmv2.Snapshot) bool {
 }
 
 // IsTimeout checks if observation data has exceeded the timeout threshold.
-// Returns true if data is critically old and requires collector restart.
+// Returns true if data is stale and requires collector restart.
 func (f *FreshnessChecker) IsTimeout(snapshot *fsmv2.Snapshot) bool {
 	collectedAt, ok := f.extractTimestamp(snapshot)
 	if !ok {

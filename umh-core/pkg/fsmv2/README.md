@@ -151,7 +151,7 @@ func (w *MyWorker) GetInitialState() fsmv2.State {
 
 ### Tick Loop
 
-The supervisor orchestrates worker lifecycle through a reconciliation loop:
+The supervisor manages worker lifecycle through a reconciliation loop:
 
 1. **Collect** observed state (runs async in background)
 2. **Derive** desired state by transforming UserSpec

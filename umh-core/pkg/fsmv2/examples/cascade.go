@@ -14,11 +14,11 @@
 
 package examples
 
-// CascadeScenario demonstrates how failures propagate through parent-child hierarchies.
+// CascadeScenario shows how failures propagate through parent-child hierarchies.
 //
 // # What This Scenario Tests
 //
-// This scenario demonstrates:
+// This scenario tests:
 //
 //  1. Child-to-Parent Health Propagation (upward cascade)
 //     - When a child enters a failing/unhealthy state, the parent detects it
@@ -28,14 +28,14 @@ package examples
 //  2. Recovery Flow (upward cascade resolution)
 //     - When the failing child recovers, parent detects healthy state
 //     - Parent transitions from Degraded back to Running
-//     - System returns to fully operational state
+//     - System returns to Running state
 //
 //  3. Multi-Child Failure Handling
 //     - Multiple children can fail independently
 //     - Parent tracks total healthy/unhealthy counts
 //     - All children must recover for parent to return to Running
 //
-// TODO: it is important to note the difference in "what can be implemented with FSM_v2 and what is built into FSM_V2.
+// TODO: Note: the difference in "what can be implemented with FSM_v2 and what is built into FSM_V2.
 // we need to clearly explain it here as the parent goes to degraded is not a standard pattern
 // # Architecture: The Supervisor Pattern
 //
@@ -98,7 +98,7 @@ package examples
 //	"connect_succeeded_after_failures" worker="child-0" total_attempts=4
 //	"connect_succeeded_after_failures" worker="child-1" total_attempts=4
 //
-// # Key Insight: Parent Degraded State
+// # Parent Degraded State Behavior
 //
 // The exampleparent worker has these states:
 //
@@ -147,7 +147,7 @@ package examples
 //
 // # How to Verify This Scenario
 //
-// When running this scenario, watch for these EXACT event sequences:
+// When running this scenario, watch for these event sequences:
 //
 // Phase 1: Startup
 //   - Parent starts: Stopped → TryingToStart → Running:healthy
@@ -165,12 +165,12 @@ package examples
 //   - Second child succeeds: "connect_succeeded_after_failures" total_attempts=4
 //   - Parent transitions: Running:degraded → Running:healthy
 //
-// Key Insight: Parent only becomes healthy when ALL children are healthy.
-// Degraded state is NOT an error - it's normal resilience behavior.
+// Parent transitions to Running:healthy only when all children reach healthy state.
+// Degraded state indicates partial capacity, not an error. This is expected resilience behavior.
 var CascadeScenario = Scenario{
 	Name: "cascade",
 
-	Description: "Demonstrates cascade failure: child failures propagate to parent state, parent recovery when children heal",
+	Description: "Shows cascade failure: child failures propagate to parent state, parent recovery when children heal",
 
 	YAMLConfig: `
 children:

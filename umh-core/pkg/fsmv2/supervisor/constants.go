@@ -19,7 +19,7 @@ import "time"
 const (
 	// DefaultTickInterval is the default interval between FSM reconciliation ticks.
 	//
-	// RECOMMENDED (Invariant I12): TickInterval <= ObservationInterval
+	// Recommended (Invariant I12): TickInterval <= ObservationInterval
 	// This prevents tick queue buildup when observations take longer.
 	// When TickInterval > ObservationInterval, multiple ticks may execute on same stale snapshot.
 	//
@@ -29,7 +29,7 @@ const (
 	// DefaultStaleThreshold is the default age threshold for detecting stale observation data.
 	DefaultStaleThreshold = 10 * time.Second
 
-	// DefaultCollectorTimeout is the default age threshold for detecting critically old data requiring restart.
+	// DefaultCollectorTimeout is the default age threshold for detecting stale data requiring restart.
 	DefaultCollectorTimeout = 20 * time.Second
 
 	// DefaultMaxRestartAttempts is the default maximum number of collector restart attempts before panic.
@@ -37,7 +37,7 @@ const (
 
 	// DefaultObservationInterval is the default interval between observation collection attempts.
 	//
-	// RECOMMENDED (Invariant I11): ObservationInterval < StaleThreshold
+	// Recommended (Invariant I11): ObservationInterval < StaleThreshold
 	// Multiple observation attempts occur before data is marked stale.
 	// Example: 1s observation interval + 10s stale threshold = ~10 attempts before stale.
 	//
@@ -48,7 +48,7 @@ const (
 	// MaxCgroupThrottlePeriod is the maximum CPU throttling period for Docker/Kubernetes cgroups.
 	// Default cpu.cfs_period_us = 100ms. Conservative estimate: 2x for consecutive throttles.
 	//
-	// TIMING ASSUMPTION (Invariant I14): Timeout margin accounts for cgroup throttling
+	// Timing assumption (Invariant I14): Timeout margin accounts for cgroup throttling
 	// Docker and Kubernetes use cgroups to limit CPU usage. When a container exhausts
 	// its CPU quota, it's throttled for the remainder of the cgroup period (default 100ms).
 	//
@@ -63,7 +63,7 @@ const (
 	// DefaultObservationTimeout is the default timeout for observation operations.
 	// Calculated as: observation interval + cgroup throttle buffer + safety margin.
 	//
-	// IMPORTANT: Timeout ordering invariant (I7)
+	// Important: Timeout ordering invariant (I7)
 	// ObservationTimeout < StaleThreshold < CollectorTimeout
 	// This ordering ensures observation failures don't trigger stale detection,
 	// and stale detection occurs before collector restart.

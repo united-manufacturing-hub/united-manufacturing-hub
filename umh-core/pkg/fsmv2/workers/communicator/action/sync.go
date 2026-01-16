@@ -89,7 +89,7 @@ func NewSyncAction(jwtToken string) *SyncAction {
 //
 // Returns an error if:
 //   - Context is cancelled
-//   - HTTP transport fails critically (e.g., network unreachable)
+//   - HTTP transport fails (e.g., network unreachable)
 //   - Authentication token expired (triggers re-authentication)
 //
 // Non-critical failures (e.g., channel full) are logged but not returned.

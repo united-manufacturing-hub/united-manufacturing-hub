@@ -315,7 +315,7 @@ func (a *ConnectAction) Execute(ctx context.Context) error {
 		Why: `All Worker interface methods must use pointer receivers (*T).
 WHY: Workers contain state (dependencies, configuration) that must persist
 across method calls. Value receivers create copies, losing mutations.
-More critically, Go interfaces work differently with pointer vs value
+More importantly, Go interfaces work differently with pointer vs value
 receivers - inconsistent receiver types cause subtle interface satisfaction
 bugs where methods "disappear" depending on how the type is used.`,
 		CorrectCode: `// Correct: pointer receiver

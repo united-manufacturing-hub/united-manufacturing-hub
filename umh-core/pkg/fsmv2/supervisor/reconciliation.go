@@ -240,7 +240,7 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 	if currentState == nil {
 		if _, alreadyLogged := s.noStateMachineLoggedOnce.LoadOrStore(workerID, true); !alreadyLogged {
 			s.logger.Infow("worker_has_no_state_machine",
-				"info", "This worker operates as an orchestrator without its own FSM")
+				"info", "This worker manages child workers without its own FSM")
 		}
 
 		return nil
@@ -351,7 +351,7 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 
 // Tick performs one supervisor tick cycle, integrating all FSMv2 phases.
 //
-// ARCHITECTURE: This method orchestrates four phases in priority order:
+// ARCHITECTURE: This method executes four phases in priority order:
 //
 // PHASE 1: Infrastructure Supervision (from Phase 1)
 //   - Verify child consistency via InfrastructureHealthChecker

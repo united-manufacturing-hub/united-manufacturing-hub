@@ -45,7 +45,7 @@
 //   - Tolerates temporary network blips without overreacting
 //
 // Timeout Threshold (default: 30s):
-//   - Data is considered "critically old" and unreliable
+//   - Data is considered "stale" and unreliable
 //   - Triggers collector restart
 //   - Triggers shutdown escalation
 //   - Indicates serious collection failure
@@ -67,7 +67,7 @@
 //   - Workers implement custom staleness handling
 //
 // Layer 3: Collector Restart
-//   - IsTimeout() detects critically old data (>30s)
+//   - IsTimeout() detects stale data (>30s)
 //   - Supervisor restarts the collector with backoff
 //   - Collector restart clears hung goroutines
 //
@@ -123,7 +123,7 @@
 //
 //	// Check if data has timed out
 //	if checker.IsTimeout(snapshot) {
-//	    // Critical staleness, restart collector
+//	    // Staleness timeout, restart collector
 //	}
 //
 // # Integration with Collection

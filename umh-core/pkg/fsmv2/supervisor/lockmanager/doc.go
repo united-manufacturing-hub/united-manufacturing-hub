@@ -60,7 +60,7 @@
 //
 // # Mandatory Ordering: Supervisor.mu → WorkerContext.mu
 //
-// The most critical ordering is Supervisor.mu before WorkerContext.mu because:
+// The most important ordering is Supervisor.mu before WorkerContext.mu because:
 //
 // 1. Supervisor iterates workers: The supervisor's tick loop iterates over
 // worker contexts. It must hold Supervisor.mu to prevent concurrent modification.

@@ -1,15 +1,15 @@
 # Application Worker
 
-The Application worker is the root orchestrator for FSM v2. It dynamically creates and manages child workers based on YAML configuration, implementing the "passthrough pattern" where the application worker passes through child specifications without needing to know about specific child types.
+The Application worker is the root coordinator for FSM v2. It dynamically creates and manages child workers based on YAML configuration, implementing the "passthrough pattern" where the application worker processes child specifications without needing to know about specific child types.
 
 ## Architecture
 
-The Application worker is inspired by Erlang/OTP's Application concept - it coordinates a complete system with lifecycle management, configuration, and fault tolerance. It's not just managing FSMs, but orchestrating a complete application.
+The Application worker is inspired by Erlang/OTP's Application concept - it coordinates a complete system with lifecycle management, configuration, and fault tolerance.
 
 ### Key Concepts
 
-- **Application Worker**: The root orchestrator that parses YAML configuration to discover and create child workers
-- **Passthrough Pattern**: The application worker doesn't hardcode child types; it passes through ChildSpec arrays from configuration
+- **Application Worker**: The root coordinator that parses YAML configuration to discover and create child workers
+- **Passthrough Pattern**: The application worker doesn't hardcode child types; it processes ChildSpec arrays from configuration
 - **Dynamic Worker Creation**: Any registered worker type can be instantiated as a child via the factory pattern
 
 ## Directory Structure
@@ -83,7 +83,7 @@ The application worker automatically registers itself with the factory on import
 import _ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application"
 ```
 
-The application worker to be created dynamically:
+The application worker can be created dynamically:
 
 ```go
 worker := factory.NewWorkerByType(identity, workerType)
@@ -140,7 +140,7 @@ The application worker doesn't need to know about specific child types. It simpl
 2. Returns `config.DesiredState` with `ChildrenSpecs` populated
 3. The supervisor's `reconcileChildren()` handles actual child creation via factory
 
-Managing ANY registered worker type as children without hardcoding types in the application supervisor.
+The application supervisor can manage any registered worker type as children without hardcoding types.
 
 ### Factory Integration
 
@@ -149,7 +149,7 @@ The application worker registers both:
 - **Worker factory**: Creates `ApplicationWorker` instances
 - **Supervisor factory**: Creates `Supervisor[ApplicationObservedState, *ApplicationDesiredState]` instances
 
-Dynamic creation without compile-time dependencies on specific child types.
+Dynamic creation works without compile-time dependencies on specific child types.
 
 ## Migration from Root Package
 
