@@ -83,7 +83,7 @@ The application worker automatically registers itself with the factory on import
 import _ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application"
 ```
 
-This allows the application worker to be created dynamically:
+The application worker to be created dynamically:
 
 ```go
 worker := factory.NewWorkerByType(identity, workerType)
@@ -140,7 +140,7 @@ The application worker doesn't need to know about specific child types. It simpl
 2. Returns `config.DesiredState` with `ChildrenSpecs` populated
 3. The supervisor's `reconcileChildren()` handles actual child creation via factory
 
-This allows managing ANY registered worker type as children without hardcoding types in the application supervisor.
+Managing ANY registered worker type as children without hardcoding types in the application supervisor.
 
 ### Factory Integration
 
@@ -149,7 +149,7 @@ The application worker registers both:
 - **Worker factory**: Creates `ApplicationWorker` instances
 - **Supervisor factory**: Creates `Supervisor[ApplicationObservedState, *ApplicationDesiredState]` instances
 
-This enables dynamic creation without compile-time dependencies on specific child types.
+Dynamic creation without compile-time dependencies on specific child types.
 
 ## Migration from Root Package
 

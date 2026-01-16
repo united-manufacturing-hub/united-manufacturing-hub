@@ -47,7 +47,7 @@ func (w *BaseWorker[D]) GetDependencies() D {
 }
 
 // GetDependenciesAny returns the dependencies as any for the DependencyProvider interface.
-// This allows the supervisor's ActionExecutor to pass dependencies to actions.
+// The supervisor's ActionExecutor to pass dependencies to actions.
 func (w *BaseWorker[D]) GetDependenciesAny() any {
 	return w.dependencies
 }

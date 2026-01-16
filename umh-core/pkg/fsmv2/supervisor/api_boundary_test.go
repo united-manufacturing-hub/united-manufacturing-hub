@@ -201,14 +201,14 @@ var _ = Describe("Supervisor API Boundary", func() {
 	Context("Public methods have godoc comments", func() {
 		// TODO: double check if we should keep this
 		It("should have documentation for all public methods", func() {
-			Skip("This test requires AST parsing - will be validated manually during code review")
+			Skip("This test requires AST parsing - validate manually during code review")
 		})
 	})
 
 	Context("Package-level functions", func() {
 		// TODO: double check if we should keep this
 		It("should NOT export helper functions", func() {
-			Skip("Package-level function visibility will be verified in internal/ package tests")
+			Skip("Package-level function visibility is verified in internal/ package tests")
 		})
 	})
 })

@@ -65,7 +65,7 @@ type SyncActionResult struct {
 //   - jwtToken: JWT token for authentication
 //
 // Dependencies are injected via Execute() parameter by the supervisor,
-// not passed to constructor. This ensures actions work correctly after
+// not passed to constructor. Actions work correctly after
 // DesiredState is loaded from storage (Dependencies can't be serialized).
 func NewSyncAction(jwtToken string) *SyncAction {
 	return &SyncAction{
@@ -93,7 +93,7 @@ func NewSyncAction(jwtToken string) *SyncAction {
 //   - Authentication token expired (triggers re-authentication)
 //
 // Non-critical failures (e.g., channel full) are logged but not returned.
-// This allows the sync loop to continue even if some operations fail.
+// The sync loop to continue even if some operations fail.
 func (a *SyncAction) Execute(ctx context.Context, depsAny any) error {
 	// Cast dependencies from supervisor-injected parameter
 	deps := depsAny.(CommunicatorDependencies)

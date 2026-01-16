@@ -17,12 +17,12 @@
 // # Overview
 //
 // The FreshnessChecker validates that observed state is recent enough to make
-// reliable decisions. It implements a 4-layer defense-in-depth strategy for
+// reliable decisions. It implements a 4-layer validation strategy for
 // detecting and handling stale data.
 //
 // # Why Freshness Detection?
 //
-// Observed state freshness is critical because:
+// Observed state freshness is important because:
 //
 // 1. Stale Data = Wrong Decisions: The FSM makes decisions based on observed
 // state. If that state is from 5 minutes ago, the decision may be wrong.
@@ -42,19 +42,19 @@
 //   - Data is considered "stale" but still usable
 //   - Triggers warning logs for debugging
 //   - May trigger degraded state transitions
-//   - Allows for temporary network blips without overreacting
+//   - Tolerates temporary network blips without overreacting
 //
 // Timeout Threshold (default: 30s):
 //   - Data is considered "critically old" and unreliable
 //   - Triggers collector restart
-//   - May trigger shutdown escalation
+//   - Triggers shutdown escalation
 //   - Indicates serious collection failure
 //
-// Why two thresholds? Graceful degradation:
+// Why two thresholds? Two thresholds allow different responses:
 //   - Brief staleness (5-30s): Log warning, maybe degrade, but keep running
 //   - Extended staleness (>30s): Take corrective action (restart collector)
 //
-// # 4-Layer Defense-in-Depth Strategy
+// # 4-Layer Validation Strategy
 //
 // Layer 1: Timestamp Detection
 //   - Every ObservedState includes GetTimestamp()
@@ -63,8 +63,8 @@
 //
 // Layer 2: State Transition
 //   - Supervisor uses Check() result in state logic
-//   - Stale data may trigger transition to degraded state
-//   - Worker can implement custom staleness handling
+//   - Stale data triggers transition to degraded state
+//   - Workers implement custom staleness handling
 //
 // Layer 3: Collector Restart
 //   - IsTimeout() detects critically old data (>30s)
@@ -118,7 +118,7 @@
 //
 //	// Check if data is fresh
 //	if !checker.Check(snapshot) {
-//	    // Data is stale, consider degraded transition
+//	    // Data is stale, handle degraded transition
 //	}
 //
 //	// Check if data has timed out
@@ -141,7 +141,7 @@
 //	    if freshnessChecker.IsTimeout(snapshot) {
 //	        collector.Restart()
 //	    }
-//	    // Consider transitioning to degraded
+//	    // Transition to degraded
 //	}
 //
 // See supervisor/collection/doc.go for collection implementation details.

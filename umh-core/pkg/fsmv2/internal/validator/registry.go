@@ -21,7 +21,7 @@ var PatternRegistry = map[string]PatternInfo{
 		Name: "Empty State Structs",
 		Why: `States must be pure behavior with no fields (except embedded base types).
 WHY: States represent WHERE in the lifecycle, not WHAT data exists. If a state
-needs data, it comes from the Snapshot. This ensures states are stateless and
+needs data, it comes from the Snapshot. States are stateless and
 predictable - the same Snapshot always produces the same transition.`,
 		CorrectCode: `type ConnectedState struct {
     BaseChildState  // OK: embedded base type
@@ -58,7 +58,7 @@ late assertions indicate logic that should be refactored.`,
 		Why: `Next() must have exactly ONE type assertion/conversion at the first statement.
 WHY: Multiple type assertions indicate scattered type handling. Each assertion
 is a potential runtime panic. The single entry-point pattern centralizes type
-conversion, making it easy to verify correctness and impossible to forget.`,
+conversion, enabling compile-time verification of correctness and impossible to forget.`,
 		CorrectCode: `func (s *MyState) Next(snapAny any) (...) {
     snap := helpers.ConvertSnapshot[ObsState, *DesState](snapAny)  // ONCE at entry
     // NOT: multiple conversions scattered through the method
@@ -345,7 +345,7 @@ func (s *TryingToConnectState) Next(snap any) (...) {
 	"MISSING_CATCHALL_RETURN": {
 		Name: "Exhaustive Transition Coverage",
 		Why: `Next() methods should end with a catch-all return: "return s, SignalNone, nil".
-WHY: This ensures the FSM always has a valid transition. Without a catch-all,
+WHY: The FSM always has a valid transition. Without a catch-all,
 edge cases may cause undefined behavior. The catch-all is a safety net that
 maintains the current state when no explicit transition matches.`,
 		CorrectCode: `func (s *MyState) Next(snap any) (...) {
@@ -419,7 +419,7 @@ func (a *Action) Execute(ctx context.Context) error {
 	"OBSERVED_STATE_NOT_EMBEDDING_DESIRED": {
 		Name: "ObservedState Must Embed DesiredState",
 		Why: `ObservedState structs must embed their DesiredState type anonymously with json:",inline" tag.
-WHY: This ensures that all desired state fields are automatically included in the observed
+WHY: All desired state fields are automatically included in the observed
 state, maintaining consistency between what is desired and what is observed. The inline
 tag prevents nested JSON structure and keeps the serialized format flat. Using named fields
 instead of embedding leads to duplication and potential inconsistency.`,

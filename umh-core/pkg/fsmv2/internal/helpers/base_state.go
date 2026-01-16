@@ -41,7 +41,7 @@ import (
 //	state := RunningState{}
 //	fmt.Println(state.String()) // Output: Running
 //
-// For simpler usage, you can also use the package-level function:
+// Alternatively, you can also use the package-level function:
 //
 //	func (s RunningState) String() string {
 //	    return helpers.DeriveStateName(s)

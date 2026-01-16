@@ -45,8 +45,8 @@ import (
 //   - Result: JWT token available, ready for push/pull sync operations
 //
 // Transition to DegradedState on authentication failure:
-//   - Currently NOT implemented (state loops on itself emitting AuthenticateAction)
-//   - Future: Failed AuthenticateAction should set error state triggering DegradedState
+//   - Not implemented (state loops on itself emitting AuthenticateAction)
+//   - When implemented, failed AuthenticateAction should set error state triggering DegradedState
 //   - Expected: Backoff logic and retry limits in DegradedState
 //
 // # Actions
@@ -65,7 +65,7 @@ import (
 //
 // # Invariants
 //
-//   - Enforces C1 (authentication precedence): MUST obtain JWT token before any sync operations.
+//   - Enforces C1 (authentication precedence): must obtain JWT token before any sync operations.
 //     SyncingState is unreachable without passing through this state successfully.
 //
 //   - Enforces C2 (token expiry handling): Checks observed.IsTokenExpired() before declaring
@@ -78,7 +78,7 @@ import (
 //   - C3 (transport lifecycle): Assumes Dependencies.Transport exists (validated in worker construction)
 //   - C5 (syncing loop): Not relevant here; applies to SyncingState operational loop
 //
-// See worker.go invariants block (C1-C5) for complete defense-in-depth details.
+// See worker.go invariants block (C1-C5) for complete validation layer details.
 type TryingToAuthenticateState struct {
 	BaseCommunicatorState
 }

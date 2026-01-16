@@ -60,7 +60,7 @@ type ExampleslowDesiredState struct {
 // 1. ShutdownRequested is false (not being shut down)
 // 2. ParentMappedState is config.DesiredStateRunning (parent wants children to run)
 //
-// This ensures children wait for parent to reach TryingToStart before connecting.
+// Children wait for parent to reach TryingToStart before connecting.
 func (s *ExampleslowDesiredState) ShouldBeRunning() bool {
 	if s.ShutdownRequested {
 		return false
@@ -106,7 +106,7 @@ func (o ExampleslowObservedState) SetShutdownRequested(v bool) fsmv2.ObservedSta
 
 // SetParentMappedState sets the parent's mapped state on this observed state.
 // Called by Collector when MappedParentStateProvider callback is configured.
-// This enables children to check if parent wants them running via StateMapping.
+// Children can check if parent wants them running via StateMapping.
 func (o ExampleslowObservedState) SetParentMappedState(state string) fsmv2.ObservedState {
 	o.ExampleslowDesiredState.ParentMappedState = state
 	return o

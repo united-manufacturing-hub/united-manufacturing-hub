@@ -60,7 +60,7 @@ type ExamplepanicDesiredState struct {
 // 1. ShutdownRequested is false (not being shut down)
 // 2. ParentMappedState is config.DesiredStateRunning (parent wants children to run)
 //
-// This ensures children wait for parent to reach TryingToStart before connecting.
+// Children wait for parent to reach TryingToStart before connecting.
 func (s *ExamplepanicDesiredState) ShouldBeRunning() bool {
 	if s.ShutdownRequested {
 		return false
@@ -112,7 +112,7 @@ func (o ExamplepanicObservedState) SetShutdownRequested(v bool) fsmv2.ObservedSt
 
 // SetParentMappedState sets the parent's mapped state on this observed state.
 // Called by Collector when MappedParentStateProvider callback is configured.
-// This enables children to check if parent wants them running via StateMapping.
+// Children can check if parent wants them running via StateMapping.
 func (o ExamplepanicObservedState) SetParentMappedState(state string) fsmv2.ObservedState {
 	o.ExamplepanicDesiredState.ParentMappedState = state
 	return o

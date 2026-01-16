@@ -25,6 +25,7 @@ import (
 	"go.uber.org/zap/zapcore"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/examples"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/integration"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent/state"
@@ -93,6 +94,9 @@ var _ = Describe("Inheritance Scenario Integration", Serial, func() {
 
 		By("Verifying children received merged variables (store-based)")
 		verifyChildrenReceivedMergedVariablesFromStore(store)
+
+		By("Verifying template rendering works with merged variables")
+		verifyTemplateRenderingWorks(store)
 	})
 })
 
@@ -373,4 +377,145 @@ func verifyChildrenReceivedMergedVariablesFromStore(store storage.TriangularStor
 	}
 
 	GinkgoWriter.Printf("\n✓ Variable inheritance verified with direct assertions!\n")
+}
+
+// verifyTemplateRenderingWorks verifies that template rendering works correctly
+// by calling config.RenderConfigTemplate directly with the child's UserSpec.
+//
+// This test:
+// 1. Gets children from store
+// 2. Extracts UserSpec from child.Desired["originalUserSpec"]
+// 3. Calls config.RenderConfigTemplate(userSpec.Config, userSpec.Variables)
+// 4. Asserts rendered output contains "192.168.1.100" (IP rendered)
+// 5. Asserts rendered output does NOT contain "{{ .IP }}" (no placeholders)
+// 6. Asserts rendered output contains "device-" (DEVICE_ID rendered)
+//
+// This test is expected to FAIL in the RED phase because the child's UserSpec.Config
+// is currently empty (parent doesn't pass a config template yet).
+func verifyTemplateRenderingWorks(store storage.TriangularStoreInterface) {
+	workers := getWorkersFromStore(store)
+
+	// Find child workers
+	var childWorkers []examples.WorkerSnapshot
+	for i := range workers {
+		w := &workers[i]
+		if w.WorkerType == "examplechild" {
+			childWorkers = append(childWorkers, *w)
+		}
+	}
+
+	Expect(len(childWorkers)).To(BeNumerically(">=", 2),
+		fmt.Sprintf("Expected at least 2 child workers, found %d", len(childWorkers)))
+
+	GinkgoWriter.Printf("\n=== Verifying template rendering works ===\n")
+	GinkgoWriter.Printf("Found %d child workers to verify\n", len(childWorkers))
+
+	for i, child := range childWorkers {
+		GinkgoWriter.Printf("\n  Verifying child %d (%s) template rendering:\n", i, child.WorkerID)
+
+		// Child should have Desired state
+		Expect(child.Desired).NotTo(BeNil(),
+			fmt.Sprintf("Child %s should have Desired state", child.WorkerID))
+
+		// Extract UserSpec from originalUserSpec
+		userSpec, err := extractUserSpec(child.Desired)
+		Expect(err).NotTo(HaveOccurred(),
+			fmt.Sprintf("Child %s: failed to extract UserSpec: %v", child.WorkerID, err))
+
+		GinkgoWriter.Printf("    UserSpec.Config: %q\n", userSpec.Config)
+		GinkgoWriter.Printf("    UserSpec.Variables: %+v\n", userSpec.Variables)
+
+		// Config should not be empty (this is expected to FAIL in RED phase)
+		Expect(userSpec.Config).NotTo(BeEmpty(),
+			fmt.Sprintf("Child %s UserSpec.Config should not be empty - parent must provide a config template", child.WorkerID))
+
+		// Call RenderConfigTemplate directly
+		renderedConfig, err := config.RenderConfigTemplate(userSpec.Config, userSpec.Variables)
+		Expect(err).NotTo(HaveOccurred(),
+			fmt.Sprintf("Child %s: RenderConfigTemplate failed: %v", child.WorkerID, err))
+
+		GinkgoWriter.Printf("    Rendered config: %q\n", renderedConfig)
+
+		// Assert rendered output contains IP (192.168.1.100 from parent variables)
+		Expect(renderedConfig).To(ContainSubstring("192.168.1.100"),
+			fmt.Sprintf("Child %s rendered config should contain IP '192.168.1.100'", child.WorkerID))
+		GinkgoWriter.Printf("    [PASS] Contains rendered IP: 192.168.1.100\n")
+
+		// Assert rendered output does NOT contain unrendered placeholders
+		Expect(renderedConfig).NotTo(ContainSubstring("{{ .IP }}"),
+			fmt.Sprintf("Child %s rendered config should NOT contain unrendered placeholder '{{ .IP }}'", child.WorkerID))
+		GinkgoWriter.Printf("    [PASS] Does not contain unrendered placeholder {{ .IP }}\n")
+
+		// Assert rendered output contains DEVICE_ID prefix (device-0, device-1, etc.)
+		Expect(renderedConfig).To(ContainSubstring("device-"),
+			fmt.Sprintf("Child %s rendered config should contain DEVICE_ID prefix 'device-'", child.WorkerID))
+		GinkgoWriter.Printf("    [PASS] Contains rendered DEVICE_ID prefix: device-\n")
+	}
+
+	GinkgoWriter.Printf("\n[PASS] Template rendering verified in all children!\n")
+	GinkgoWriter.Printf("\n=== Production Note ===\n")
+	GinkgoWriter.Printf("In production, workers call RenderConfigTemplate in DeriveDesiredState()\n")
+	GinkgoWriter.Printf("to convert UserSpec.Config template + Variables into rendered config.\n")
+}
+
+// extractUserSpec extracts a config.UserSpec from the originalUserSpec field in Desired state.
+// Returns error if the field is missing or has unexpected structure.
+func extractUserSpec(desired map[string]any) (config.UserSpec, error) {
+	// Get originalUserSpec from Desired
+	originalUserSpec, hasSpec := desired["originalUserSpec"]
+	if !hasSpec {
+		return config.UserSpec{}, fmt.Errorf("missing originalUserSpec field, got keys: %v", getMapKeys(desired))
+	}
+
+	userSpecMap, ok := originalUserSpec.(map[string]any)
+	if !ok {
+		return config.UserSpec{}, fmt.Errorf("originalUserSpec should be map[string]any, got: %T", originalUserSpec)
+	}
+
+	// Extract config string
+	configStr := ""
+	if configVal, hasConfig := userSpecMap["config"]; hasConfig {
+		if s, ok := configVal.(string); ok {
+			configStr = s
+		}
+	}
+
+	// Extract variables
+	var variables config.VariableBundle
+	if varsVal, hasVars := userSpecMap["variables"]; hasVars {
+		if varsMap, ok := varsVal.(map[string]any); ok {
+			// Extract user namespace
+			if userVars, hasUser := varsMap["user"]; hasUser {
+				if userVarsMap, ok := userVars.(map[string]any); ok {
+					variables.User = userVarsMap
+				}
+			}
+			// Extract global namespace
+			if globalVars, hasGlobal := varsMap["global"]; hasGlobal {
+				if globalVarsMap, ok := globalVars.(map[string]any); ok {
+					variables.Global = globalVarsMap
+				}
+			}
+			// Extract internal namespace
+			if internalVars, hasInternal := varsMap["internal"]; hasInternal {
+				if internalVarsMap, ok := internalVars.(map[string]any); ok {
+					variables.Internal = internalVarsMap
+				}
+			}
+		}
+	}
+
+	return config.UserSpec{
+		Config:    configStr,
+		Variables: variables,
+	}, nil
+}
+
+// getMapKeys returns the keys of a map for debugging purposes.
+func getMapKeys(m map[string]any) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	return keys
 }

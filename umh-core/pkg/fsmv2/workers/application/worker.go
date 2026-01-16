@@ -261,7 +261,7 @@ func NewApplicationSupervisor(cfg SupervisorConfig) (*supervisor.Supervisor[snap
 }
 
 // init registers the application worker with the factory.
-// This enables automatic creation via factory.NewWorkerByType() and factory.NewSupervisorByType().
+// Automatic creation via factory.NewWorkerByType() and factory.NewSupervisorByType().
 //
 // Registration happens automatically when this package is imported.
 // The application worker can create any registered worker type as children.

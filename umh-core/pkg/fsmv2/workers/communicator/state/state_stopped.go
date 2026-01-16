@@ -67,7 +67,7 @@ import (
 //   - C3 (transport lifecycle): Dependencies validation happens in worker construction,
 //     not in state transitions. Stopped assumes transport exists if worker was created.
 //
-// See worker.go invariants block (C1-C5) for complete defense-in-depth details.
+// See worker.go invariants block (C1-C5) for complete validation layer details.
 type StoppedState struct {
 	BaseCommunicatorState
 }

@@ -72,7 +72,7 @@ type Identity struct {
 // The supervisor collects this via CollectObservedState() in a separate goroutine.
 type ObservedState interface {
 	// GetObservedDesiredState returns the desired state that is actually deployed.
-	// This allows comparing what's deployed vs what we want to deploy.
+	// Comparing what's deployed vs what we want to deploy.
 	// It is required to enforce that everything we configure should also be read back to double-check it.
 	GetObservedDesiredState() DesiredState
 
@@ -94,7 +94,7 @@ type DesiredState interface {
 
 // ShutdownRequestable allows setting the shutdown flag on any DesiredState.
 // All DesiredState types should embed config.BaseDesiredState to satisfy this interface.
-// This enables type-safe shutdown request propagation from supervisor to workers.
+// Type-safe shutdown request propagation from supervisor to workers.
 //
 // Example usage:
 //

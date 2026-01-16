@@ -13,7 +13,7 @@
 // limitations under the License.
 
 // Package factory provides a registry-based worker factory for dynamic FSM v2 worker creation.
-// This enables hierarchical composition where parent workers can create child workers by type name.
+// Hierarchical composition where parent workers can create child workers by type name.
 package factory
 
 import (
@@ -368,7 +368,7 @@ func GetFactory[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState]() (f
 }
 
 // RegisterWorkerAndSupervisorFactoryByType atomically registers both worker and supervisor factories
-// using the same worker type name. This ensures both registries stay synchronized.
+// using the same worker type name. Both registries stay synchronized.
 // If supervisor registration fails, the worker registration is rolled back.
 //
 // THREAD SAFETY:

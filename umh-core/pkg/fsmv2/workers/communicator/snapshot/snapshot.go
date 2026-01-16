@@ -67,7 +67,7 @@ type CommunicatorSnapshot struct {
 // # Architecture Note
 //
 // Dependencies are NOT stored in DesiredState. They are injected via Execute()
-// parameter by the supervisor (see reconciliation.go). This ensures actions
+// parameter by the supervisor (see reconciliation.go). Actions
 // work correctly after DesiredState is loaded from storage (Dependencies can't
 // be serialized).
 //

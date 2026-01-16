@@ -76,7 +76,7 @@ type VariableBundle struct {
 }
 
 // Flatten returns a map with User variables promoted to top-level and Global/Internal nested.
-// This enables intuitive template syntax where User variables are accessible as {{ .varname }}
+// Template syntax uses User variables where User variables are accessible as {{ .varname }}
 // while Global and Internal require explicit prefixes ({{ .global.varname }}, {{ .internal.varname }}).
 //
 // Example:
@@ -134,7 +134,7 @@ func Merge(parent, child VariableBundle) VariableBundle {
 }
 
 // deepCloneMap creates a deep copy of a map using JSON serialization.
-// This ensures nested maps and slices are fully cloned, not just their references.
+// Nested maps and slices are fully cloned, not just their references.
 func deepCloneMap(m map[string]any) map[string]any {
 	if m == nil {
 		return nil

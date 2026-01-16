@@ -111,7 +111,7 @@ type AuthenticateActionResult struct {
 //   - authToken: Pre-shared secret for authentication (from config)
 //
 // Dependencies are injected via Execute() parameter by the supervisor,
-// not passed to constructor. This ensures actions work correctly after
+// not passed to constructor. Actions work correctly after
 // DesiredState is loaded from storage (Dependencies can't be serialized).
 func NewAuthenticateAction(relayURL, instanceUUID, authToken string) *AuthenticateAction {
 	return &AuthenticateAction{

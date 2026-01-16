@@ -147,7 +147,7 @@ var _ = Describe("Supervisor Lifecycle", func() {
 				// NOTE: SignalNeedsRestart now triggers a full worker restart (graceful shutdown + reset)
 				// instead of just restarting the collector. The restart count is NOT incremented
 				// because we're doing a full restart, not a collector-only restart.
-				// See "SignalNeedsRestart full worker restart" tests for comprehensive coverage.
+				// See "SignalNeedsRestart full worker restart" tests for all FSM state combinations.
 				store := newMockTriangularStore()
 
 				state := &mockState{

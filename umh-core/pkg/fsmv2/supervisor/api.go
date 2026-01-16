@@ -30,9 +30,9 @@ import (
 
 // AddWorker adds a new worker to the supervisor's registry.
 // Returns error if worker with same ID already exists.
-// DEFENSE-IN-DEPTH VALIDATION STRATEGY:
+// Multi-layer validation strategy:
 //
-// FSMv2 validates data at MULTIPLE layers (not one centralized validator).
+// FSMv2 validates data at multiple layers (not one centralized validator).
 // This is intentional, not redundant:
 //
 // Layer 1: API entry (AddWorker) - Fast fail on obvious errors
@@ -40,10 +40,10 @@ import (
 // Layer 3: Factory (worker creation) - Validate WorkerType exists
 // Layer 4: Worker constructor - Validate dependencies
 //
-// WHY multiple layers:
+// Why multiple layers:
 //   - Security: Never trust data, even from internal callers
 //   - Debuggability: Errors caught closest to source
-//   - Robustness: One layer failing doesn't compromise system
+//   - Reliability: One layer failing doesn't compromise system
 //
 // Each layer has different validation concerns:
 //   - Layer 1: Public API validation (protect against bad calls)
@@ -132,13 +132,13 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity fsmv2.Identity, wor
 	s.logger.Debugw("initial_desired_state_saved")
 
 	// Create worker-enriched logger for collector and executor.
-	// CRITICAL: Use baseLogger (un-enriched) to prevent duplicate "worker" fields.
+	// Important: Use baseLogger (un-enriched) to prevent duplicate "worker" fields.
 	// Format: "workerID(workerType)/childID(childType)/..."
 	// Example: "scenario123(application)/parent-123(parent)/child001(child)"
 	workerLogger := s.baseLogger.With("worker", identity.HierarchyPath)
 
 	// Declare workerCtx early so the closure can capture it.
-	// This enables StateProvider to access the FSM state safely.
+	// StateProvider can access the FSM state safely.
 	var workerCtx *WorkerContext[TObserved, TDesired]
 
 	collector := collection.NewCollector[TObserved](collection.CollectorConfig[TObserved]{
@@ -491,7 +491,7 @@ func (s *Supervisor[TObserved, TDesired]) getHierarchyPathUnlocked() string {
 
 	// TODO: HOTFIX - Skip parent path to avoid deadlock.
 	//
-	// DEADLOCK ROOT CAUSE:
+	// Deadlock root cause:
 	// 1. Parent supervisor's tick() holds s.mu lock
 	// 2. tick() → reconcileChildren() → creates child supervisor
 	// 3. childSupervisor.AddWorker() calls getHierarchyPathUnlocked() (line ~158)

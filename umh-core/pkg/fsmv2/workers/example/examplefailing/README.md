@@ -73,7 +73,7 @@ The worker is automatically registered with the factory system:
 - Worker type: `"failing"`
 - Supervisor factory for `FailingObservedState` and `FailingDesiredState`
 
-This allows creating instances via YAML configuration in the Application worker.
+Creating instances via YAML configuration in the Application worker.
 
 ## State Transitions
 

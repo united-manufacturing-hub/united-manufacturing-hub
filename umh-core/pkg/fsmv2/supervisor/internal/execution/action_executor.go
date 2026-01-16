@@ -120,7 +120,7 @@ func (ae *ActionExecutor) worker() {
 }
 
 // executeWorkWithRecovery handles action execution with panic recovery.
-// This ensures that a panicking action doesn't crash the worker goroutine,
+// Panic recovery prevents a panicking action from crashing the worker goroutine,
 // allowing the executor to remain functional.
 func (ae *ActionExecutor) executeWorkWithRecovery(work actionWork) {
 	startTime := time.Now()

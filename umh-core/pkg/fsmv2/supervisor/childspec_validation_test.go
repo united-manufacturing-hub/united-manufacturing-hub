@@ -510,7 +510,7 @@ var _ = Describe("ChildSpec Validation Integration", func() {
 			sup := NewSupervisor[*TestObservedState, *TestDesiredState](supervisorCfg)
 			Expect(sup).NotTo(BeNil())
 
-			// Test that validation is comprehensive
+			// Test that all validation checks run
 			mockWorker := &validChildSpecMockWorker{
 				identity: fsmv2.Identity{
 					ID:         "worker-9",

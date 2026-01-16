@@ -428,7 +428,7 @@ func ValidateDesiredStateValues(baseDir string) []Violation {
 }
 
 // checkDesiredStateValues parses a snapshot file and checks that DesiredState.State field
-// is only assigned "stopped" or "running" values. This is a simpler check that looks for
+// is only assigned "stopped" or "running" values. This check looks for
 // string literal assignments to the State field.
 func checkDesiredStateValues(filename string) []Violation {
 	var violations []Violation
@@ -592,7 +592,7 @@ func ValidateDesiredStateHasNoDependencies(baseDir string) []Violation {
 }
 
 // ValidateFolderMatchesWorkerType checks that worker folder names match their derived worker types.
-// This ensures consistency between folder names and type names, preventing registration mismatches.
+// Folder names must match type names to ensure consistency between folder names and type names, preventing registration mismatches.
 func ValidateFolderMatchesWorkerType(baseDir string) []Violation {
 	var violations []Violation
 

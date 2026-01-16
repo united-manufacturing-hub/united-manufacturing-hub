@@ -138,7 +138,7 @@ func (u UserSpec) Clone() UserSpec {
 //  4. Supervisor updates changed children
 //  5. Supervisor removes extra children
 //
-// This enables clean separation of concerns:
+// Clean separation of concerns:
 //   - Parents focus on "what should exist"
 //   - Supervisor handles "how to make it exist"
 //   - Children run independently in their own FSMs
@@ -197,7 +197,7 @@ type ChildSpec struct {
 }
 
 // MarshalJSON implements json.Marshaler for ChildSpec.
-// This ensures consistent JSON serialization across the system.
+// Consistent JSON serialization across the system.
 func (c *ChildSpec) MarshalJSON() ([]byte, error) {
 	type Alias ChildSpec
 
@@ -229,7 +229,7 @@ func (c ChildSpec) Clone() ChildSpec {
 //	spec.GetMappedChildState("TryingToStop")   // returns "stopped"
 //	spec.GetMappedChildState("Stopped")        // returns "stopped"
 //
-// Note: This replaces the deprecated StateMapping approach with a simpler model.
+// Note: This replaces the deprecated StateMapping approach with direct state checks.
 func (c *ChildSpec) GetMappedChildState(parentState string) string {
 	// Empty ChildStartStates = always run
 	if len(c.ChildStartStates) == 0 {
@@ -332,10 +332,10 @@ type ChildrenView interface {
 //	    ChildrenSpecs: nil,         // Children removed during shutdown
 //	}
 type DesiredState struct {
-	BaseDesiredState                                                                              // Provides ShutdownRequested field and methods (IsShutdownRequested, SetShutdownRequested)
-	State            string      `json:"state"                      yaml:"state"`                 // Current desired state ("running", "stopped", "shutdown", etc.)
-	ChildrenSpecs    []ChildSpec `json:"childrenSpecs,omitempty"    yaml:"childrenSpecs,omitempty"` // Declarative specification of child workers
-	OriginalUserSpec interface{} `json:"originalUserSpec,omitempty" yaml:"-"`                     // Captures the input that produced this DesiredState (for debugging/traceability)
+	BaseDesiredState                                                                                   // Provides ShutdownRequested field and methods (IsShutdownRequested, SetShutdownRequested)
+	State            string      `json:"state"                      yaml:"state"`                      // Current desired state ("running", "stopped", "shutdown", etc.)
+	ChildrenSpecs    []ChildSpec `json:"childrenSpecs,omitempty"    yaml:"childrenSpecs,omitempty"`    // Declarative specification of child workers
+	OriginalUserSpec interface{} `json:"originalUserSpec,omitempty" yaml:"-"`                          // Captures the input that produced this DesiredState (for debugging/traceability)
 }
 
 // NOTE: IsShutdownRequested() and SetShutdownRequested() are provided by embedded BaseDesiredState.

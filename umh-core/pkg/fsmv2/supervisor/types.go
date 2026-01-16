@@ -59,7 +59,7 @@ func (s *stubAction) Name() string {
 }
 
 // SupervisorInterface provides a type-erased interface for hierarchical supervisor composition.
-// This allows a parent Supervisor[TObserved, TDesired] to manage children of different types.
+// A parent Supervisor[TObserved, TDesired] can manage children of different types.
 type SupervisorInterface interface {
 	Start(ctx context.Context) <-chan struct{}
 	Shutdown()

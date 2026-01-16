@@ -57,7 +57,7 @@ import (
 )
 
 // StateReader provides read-only access to the TriangularStore for workers.
-// This enables workers to query their own previous observed state (for state change detection)
+// Workers can query their own previous observed state (for state change detection)
 // and query children's observed states (for richer parent-child coordination).
 //
 // IMPORTANT: This is READ-ONLY. Workers MUST NOT write to the store directly.

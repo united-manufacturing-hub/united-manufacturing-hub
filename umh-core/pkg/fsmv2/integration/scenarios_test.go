@@ -904,7 +904,7 @@ func verifyNoChildTransitionBeforeParentTryingToStart(t *integration.TestLogger)
 
 // verifyStateTransitionOrdering verifies the expected parent-child ordering:
 // Parent TryingToStart must come BEFORE any child TryingToConnect.
-// This ensures children don't start connecting until parent is ready.
+// Children don't start connecting until parent is ready.
 func verifyStateTransitionOrdering(t *integration.TestLogger) {
 	stateTransitions := t.GetLogsMatching("state_transition")
 

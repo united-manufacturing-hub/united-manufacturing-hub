@@ -38,7 +38,7 @@ const (
 	// DefaultObservationInterval is the default interval between observation collection attempts.
 	//
 	// RECOMMENDED (Invariant I11): ObservationInterval < StaleThreshold
-	// This ensures multiple observation attempts before data is marked stale.
+	// Multiple observation attempts occur before data is marked stale.
 	// Example: 1s observation interval + 10s stale threshold = ~10 attempts before stale.
 	//
 	// If violated: System still works but FSM may pause more frequently due to

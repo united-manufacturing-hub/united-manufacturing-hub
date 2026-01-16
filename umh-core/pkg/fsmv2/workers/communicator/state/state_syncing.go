@@ -97,7 +97,7 @@ import (
 //   - IsSyncHealthy() returns false when errors exceed threshold (e.g., 3 consecutive failures)
 //   - Health degradation triggers transition to DegradedState for backoff and recovery
 //
-// See worker.go invariants block (C1-C5) for complete defense-in-depth details.
+// See worker.go invariants block (C1-C5) for complete validation layer details.
 type SyncingState struct {
 }
 

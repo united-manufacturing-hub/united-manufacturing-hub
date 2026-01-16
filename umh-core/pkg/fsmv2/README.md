@@ -55,7 +55,7 @@ CSE separates each worker into three parts with different lifecycles:
 - **Desired**: Versioned with optimistic locking (user intent)
 - **Observed**: Ephemeral, reconstructed by polling (system reality)
 
-This enables delta streaming to clients - only actual changes increment sync IDs, so clients
+Delta streaming to clients - only actual changes increment sync IDs, so clients
 requesting "changes since sync_id X" receive only meaningful updates.
 
 See `pkg/cse/storage/doc.go` for full CSE documentation.

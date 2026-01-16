@@ -148,7 +148,7 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 			"type", fmt.Sprintf("%T", observed))
 	}
 
-	// SHUTDOWN BYPASS: Allow FSM to process shutdown even with stale data.
+	// Shutdown bypass: Allow FSM to process shutdown even with stale data.
 	// During graceful shutdown, child supervisors shut down first (correct order),
 	// which causes parent's observation to become stale (collectors can't observe gone children).
 	// The shutdown transition only needs the ShutdownRequested flag, not fresh observation data.
@@ -426,14 +426,14 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 				"recovery_status", s.getRecoveryStatus())
 
 			if attempts == 4 {
-				s.logger.Warn("WARNING: One retry attempt remaining before escalation",
+				s.logger.Warn("Warning: One retry attempt remaining before escalation",
 					"child_name", childErr.ChildName,
 					"attempts_remaining", 1,
 					"total_downtime", s.healthChecker.backoff.GetTotalDowntime().String())
 			}
 
 			if attempts >= 5 {
-				s.logger.Error("ESCALATION REQUIRED: Infrastructure failure after max retry attempts. Manual intervention needed.",
+				s.logger.Error("Escalation required: Infrastructure failure after max retry attempts. Manual intervention needed.",
 					"child_name", childErr.ChildName,
 					"max_attempts", 5,
 					"total_downtime", s.healthChecker.backoff.GetTotalDowntime().String(),
@@ -516,38 +516,70 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 	metrics.RecordVariablePropagation(s.workerType)
 
 	// PHASE 0: Hierarchical Composition
-	// 1. DeriveDesiredState
-	templateStart := time.Now()
-	desired, err := worker.DeriveDesiredState(userSpecWithVars)
-	templateDuration := time.Since(templateStart)
+	// 1. DeriveDesiredState (with caching)
 
-	if err != nil {
-		s.logger.Error("template rendering failed",
-			"error", err.Error(),
+	// Compute hash of current userSpec to detect changes
+	currentHash := config.ComputeUserSpecHash(userSpecWithVars)
+
+	// Check if we can use cached result
+	s.mu.RLock()
+	lastHash := s.lastUserSpecHash
+	cachedState := s.cachedDesiredState
+	s.mu.RUnlock()
+
+	var desired config.DesiredState
+
+	if lastHash == currentHash && cachedState != nil {
+		// Cache hit - reuse previous result
+		desired = *cachedState
+		s.logTrace("derive_desired_state_cached",
+			"hash", currentHash[:8]+"...")
+	} else {
+		// Cache miss - call DeriveDesiredState
+		templateStart := time.Now()
+		var err error
+		desired, err = worker.DeriveDesiredState(userSpecWithVars)
+		templateDuration := time.Since(templateStart)
+
+		if err != nil {
+			s.logger.Error("template rendering failed",
+				"error", err.Error(),
+				"duration_ms", templateDuration.Milliseconds())
+			metrics.RecordTemplateRenderingDuration(s.workerType, "error", templateDuration)
+			metrics.RecordTemplateRenderingError(s.workerType, "derivation_failed")
+
+			// Don't cache errors - will retry next tick
+			return fmt.Errorf("failed to derive desired state: %w", err)
+		}
+
+		// Validate DesiredState.State is a valid lifecycle state ("stopped" or "running")
+		// This catches both developer mistakes (hardcoded wrong values) and user config mistakes
+		if valErr := config.ValidateDesiredState(desired.State); valErr != nil {
+			s.logger.Error("invalid desired state from DeriveDesiredState",
+				"state", desired.State,
+				"worker_id", firstWorkerID,
+				"error", valErr)
+			metrics.RecordTemplateRenderingDuration(s.workerType, "error", templateDuration)
+			metrics.RecordTemplateRenderingError(s.workerType, "invalid_state_value")
+
+			// Don't cache validation errors - will retry next tick
+			return fmt.Errorf("failed to derive desired state: %w", valErr)
+		}
+
+		// Update cache
+		s.mu.Lock()
+		s.lastUserSpecHash = currentHash
+		s.cachedDesiredState = &desired
+		s.mu.Unlock()
+
+		s.logTrace("derive_desired_state_computed",
+			"hash", currentHash[:8]+"...",
 			"duration_ms", templateDuration.Milliseconds())
-		metrics.RecordTemplateRenderingDuration(s.workerType, "error", templateDuration)
-		metrics.RecordTemplateRenderingError(s.workerType, "derivation_failed")
-
-		return fmt.Errorf("failed to derive desired state: %w", err)
+		metrics.RecordTemplateRenderingDuration(s.workerType, "success", templateDuration)
 	}
-
-	// Validate DesiredState.State is a valid lifecycle state ("stopped" or "running")
-	// This catches both developer mistakes (hardcoded wrong values) and user config mistakes
-	if valErr := config.ValidateDesiredState(desired.State); valErr != nil {
-		s.logger.Error("invalid desired state from DeriveDesiredState",
-			"state", desired.State,
-			"worker_id", firstWorkerID,
-			"error", valErr)
-		metrics.RecordTemplateRenderingDuration(s.workerType, "error", templateDuration)
-		metrics.RecordTemplateRenderingError(s.workerType, "invalid_state_value")
-
-		return fmt.Errorf("failed to derive desired state: %w", valErr)
-	}
-
-	metrics.RecordTemplateRenderingDuration(s.workerType, "success", templateDuration)
 
 	// Save derived desired state to database BEFORE tickWorker
-	// This ensures tickWorker loads the freshest desired state from the snapshot
+	// tickWorker loads the freshest desired state from the snapshot
 	desiredJSON, err := json.Marshal(desired)
 	if err != nil {
 		return fmt.Errorf("failed to marshal derived desired state: %w", err)
@@ -560,7 +592,7 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 
 	desiredDoc[FieldID] = firstWorkerID
 
-	// CRITICAL: Preserve ShutdownRequested field if it was set by requestShutdown
+	// Important: Preserve ShutdownRequested field if it was set by requestShutdown
 	// DeriveDesiredState returns worker-derived DesiredState, but shutdown is a supervisor
 	// operation that must override it. We load the existing desired state as typed struct
 	// and check via DesiredState interface.
@@ -733,7 +765,7 @@ func (s *Supervisor[TObserved, TDesired]) processSignal(ctx context.Context, wor
 		delete(s.workers, workerID)
 		s.mu.Unlock()
 
-		// LOCK SAFETY: Clean up children OUTSIDE parent lock to avoid deadlock.
+		// Lock safety: Clean up children OUTSIDE parent lock to avoid deadlock.
 		// Calling reconcileChildren() would re-acquire parent lock and call child.Shutdown()
 		// while holding it, which blocks any readers (GetChildren, calculateHierarchySize)
 		// indefinitely and risks deadlock if children try to access parent state.
@@ -756,9 +788,9 @@ func (s *Supervisor[TObserved, TDesired]) processSignal(ctx context.Context, wor
 
 		s.mu.Unlock()
 
-		// GRACEFUL CHILD SHUTDOWN: Request graceful shutdown and wait for children
+		// Graceful child shutdown: Request graceful shutdown and wait for children
 		// to complete their state machine shutdown (e.g., disconnect actions) before
-		// proceeding with parent removal. This ensures proper cleanup ordering.
+		// proceeding with parent removal. Cleanup proceeds in proper order.
 		//
 		// Flow:
 		// 1. Request graceful shutdown on all children (sets shutdownRequested=true)
@@ -790,7 +822,7 @@ func (s *Supervisor[TObserved, TDesired]) processSignal(ctx context.Context, wor
 		}
 
 		// Collect final observation to capture terminal state (e.g., "Stopped") before shutdown.
-		// This ensures the OBSERVED snapshot shows the correct final state instead of an
+		// The observed snapshot shows the correct final state instead of an
 		// intermediate state like "TryingToStop". Errors are logged but not fatal.
 		if workerCtx.collector.IsRunning() {
 			collectCtx, cancel := context.WithTimeout(ctx, s.collectorHealth.observationTimeout)
@@ -1080,7 +1112,7 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 			childConfig := Config{
 				WorkerType:              spec.WorkerType,
 				Store:                   s.store,
-				Logger:                  s.baseLogger, // CRITICAL: Use un-enriched logger to prevent duplicate "worker" fields
+				Logger:                  s.baseLogger, // Important: Use un-enriched logger to prevent duplicate "worker" fields
 				TickInterval:            s.tickInterval,
 				GracefulShutdownTimeout: s.gracefulShutdownTimeout,
 			}
@@ -1116,7 +1148,7 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 			childID := spec.Name + "-001"
 
 			// Get parent's full hierarchy path from first worker's stored identity
-			// (avoids getHierarchyPathUnlocked() which has HOTFIX returning incomplete path)
+			// (avoids getHierarchyPathUnlocked() which has hotfix returning incomplete path)
 			var parentPath string
 			for _, wCtx := range s.workers {
 				if wCtx.identity.HierarchyPath != "" {
@@ -1135,7 +1167,7 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 			}
 
 			// Use factory to create worker instance with un-enriched logger
-			// CRITICAL: Pass baseLogger to prevent duplicate "worker" fields
+			// Important: Pass baseLogger to prevent duplicate "worker" fields
 			childWorker, err := factory.NewWorkerByType(spec.WorkerType, childIdentity, s.baseLogger, s.store)
 			if err != nil {
 				s.logger.Errorw("child_worker_creation_failed",

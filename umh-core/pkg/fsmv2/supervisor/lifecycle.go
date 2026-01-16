@@ -33,7 +33,7 @@ func (s *Supervisor[TObserved, TDesired]) Start(ctx context.Context) <-chan stru
 	done := make(chan struct{})
 
 	// Create a child context that we can cancel in Shutdown()
-	// This allows Shutdown() to stop the tick loop even if parent context is still active
+	// Shutdown() can stop the tick loop even if parent context is still active
 	s.ctxMu.Lock()
 	s.ctx, s.ctxCancel = context.WithCancel(ctx)
 	s.ctxMu.Unlock()
@@ -102,8 +102,8 @@ func (s *Supervisor[TObserved, TDesired]) tickLoop(ctx context.Context) {
 // This method is called when the supervisor is being removed from its parent.
 // This method is idempotent - calling it multiple times is safe.
 //
-// IMPORTANT: Shutdown order is children FIRST, then own workers, then cancel context.
-// This ensures children can still tick and process their graceful shutdown while
+// Important: Shutdown order is children first, then own workers, then cancel context.
+// Children can still tick and process their graceful shutdown while
 // the parent's context is still active.
 func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 	s.logTrace("lifecycle",
@@ -140,7 +140,7 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 	// We use a temporary context that won't be cancelled during graceful shutdown.
 	gracefulCtx := context.Background()
 
-	// LOCK SAFETY: Extract children and done channels while holding lock,
+	// Lock safety: Extract children and done channels while holding lock,
 	// then release lock before recursively shutting down children.
 	// This prevents deadlock where:
 	// 1. Parent holds write lock
@@ -166,7 +166,7 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 	// Release lock before graceful shutdown operations
 	s.mu.Unlock()
 
-	// GRACEFUL SHUTDOWN PHASE 1: Shutdown children FIRST (while context still active)
+	// Graceful shutdown phase 1: Shutdown children first (while context still active)
 	// Children's tick loops depend on the parent's context. By shutting down children
 	// before cancelling our context, children can still tick and process their
 	// graceful shutdown (FSM transitions, disconnect actions, emit SignalNeedsRemoval).
@@ -207,7 +207,7 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 		s.logger.Debugw("graceful_shutdown_children_complete")
 	}
 
-	// GRACEFUL SHUTDOWN PHASE 2: Request graceful shutdown on OWN workers
+	// Graceful shutdown phase 2: Request graceful shutdown on own workers
 	// Now that children are done, handle our own workers.
 	// The tick loop is still running, so workers can process their state machines.
 	if len(workerIDs) > 0 {
@@ -248,7 +248,7 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 		ticker.Stop()
 	}
 
-	// GRACEFUL SHUTDOWN PHASE 3: Cancel context
+	// Graceful shutdown phase 3: Cancel context
 	// Only after children AND own workers are done do we cancel our context.
 	// This must happen BEFORE waiting for metrics reporter, because the metrics
 	// reporter goroutine waits on <-ctx.Done() to exit.
@@ -457,7 +457,7 @@ func (s *Supervisor[TObserved, TDesired]) RequestShutdown(ctx context.Context, r
 // Called when SignalNeedsRemoval is received for a worker marked in pendingRestart.
 //
 // This destroys the old worker instance completely (including all dependencies) and
-// creates a fresh worker via the factory. This ensures all worker state is reset,
+// creates a fresh worker via the factory. All worker state resets,
 // including any attempt counters, connection pools, or cached data in dependencies.
 //
 // Flow:
@@ -492,7 +492,7 @@ func (s *Supervisor[TObserved, TDesired]) handleWorkerRestart(ctx context.Contex
 		"worker", workerID)
 
 	// 2. Clear shutdown flag in storage BEFORE creating new worker
-	// This ensures the new worker doesn't immediately see ShutdownRequested=true
+	// The new worker does not immediately see ShutdownRequested=true
 	if err := s.clearShutdownRequested(ctx, workerID); err != nil {
 		s.logger.Warnw("restart_clear_shutdown_failed",
 			"worker", workerID, "error", err)

@@ -30,7 +30,7 @@ type Identity struct {
 }
 
 // StateMapping defines how parent state maps to child desired states.
-// This enables parent FSMs to declaratively specify what state their
+// Parent FSMs can declaratively specify what state their
 // children should be in when the parent is in a particular state.
 type StateMapping struct {
 	// ParentState is the state that triggers child updates
@@ -48,7 +48,7 @@ type StateMapping struct {
 
 // StateMappingRegistry holds mappings for hierarchical FSMs.
 // It enables parent FSMs to control child FSM desired states
-// through a discoverable and easy-to-use API.
+// through a discoverable and type-safe API.
 type StateMappingRegistry struct {
 	mappings []StateMapping
 }

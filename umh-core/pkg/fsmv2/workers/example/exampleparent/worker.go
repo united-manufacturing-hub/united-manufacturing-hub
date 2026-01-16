@@ -142,11 +142,27 @@ func (w *ParentWorker) DeriveDesiredState(spec interface{}) (config.DesiredState
 				"DEVICE_ID": fmt.Sprintf("device-%d", i),
 			},
 		}
+
+		// Determine child config: use explicit ChildConfig if provided, otherwise use default template.
+		// Different child worker types to receive appropriate configuration.
+		var childConfig string
+		if parentSpec.ChildConfig != "" {
+			// Use the explicitly provided child config (e.g., for examplefailing workers)
+			childConfig = parentSpec.ChildConfig
+		} else {
+			// Build default config template that uses variables from both parent and child.
+			// Parent provides: IP, PORT (defined in parent's variables)
+			// Child provides: DEVICE_ID (defined above in childVariables)
+			// The supervisor merges these so children have access to all three.
+			childConfig = `address: {{ .IP }}:{{ .PORT }}
+device: {{ .DEVICE_ID }}`
+		}
+
 		childrenSpecs[i] = config.ChildSpec{
 			Name:       fmt.Sprintf("child-%d", i),
 			WorkerType: childWorkerType,
 			UserSpec: config.UserSpec{
-				Config:    parentSpec.ChildConfig,
+				Config:    childConfig,
 				Variables: childVariables,
 			},
 			// New approach: list parent states where children should run

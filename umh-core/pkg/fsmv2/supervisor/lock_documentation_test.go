@@ -375,7 +375,7 @@ var _ = Describe("Lock Documentation", func() {
 		})
 
 		It("should panic if locks are acquired in wrong order", func() {
-			Skip("This test will be implemented once runtime assertions are added")
+			Skip("This test requires runtime assertions once runtime assertions are added")
 			// This test will verify that the runtime assertion actually panics
 			// when locks are acquired out of order.
 			//
@@ -418,7 +418,7 @@ mu sync.RWMutex
 })
 
 var _ = Describe("Lock Analysis Report", func() {
-	It("should generate a comprehensive lock analysis for documentation", func() {
+	It("should generate lock analysis with violation details for documentation", func() {
 		// This test generates a report of all locks found in the codebase
 		// to aid in documentation efforts.
 
@@ -467,7 +467,7 @@ var _ = Describe("Lock Analysis Report", func() {
 			return true
 		})
 
-		// Generate report (will be visible in test output)
+		// Generate report (visible in test output)
 		GinkgoWriter.Printf("\n=== Lock Analysis Report ===\n")
 		GinkgoWriter.Printf("Found %d locks in supervisor.go:\n", len(locks))
 		for i, lock := range locks {

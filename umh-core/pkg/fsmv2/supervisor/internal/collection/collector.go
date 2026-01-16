@@ -185,7 +185,7 @@ func (c *Collector[TObserved]) Stop(ctx context.Context) {
 }
 
 // CollectFinalObservation triggers one final observation synchronously before shutdown.
-// This ensures the terminal FSM state (e.g., "Stopped") is captured in the database
+// The terminal FSM state (e.g., "Stopped") is captured in the database
 // before the collector is stopped. Without this, the last observation may show
 // an intermediate state like "TryingToStop" instead of the final state.
 //
@@ -299,7 +299,7 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 
 	// Inject shutdown requested status into observed state.
 	// The ShutdownRequestedProvider callback is injected by the supervisor and returns the
-	// current shutdown requested status from the desired state. This ensures OBSERVED snapshot
+	// current shutdown requested status from the desired state. The observed snapshot
 	// accurately reflects whether shutdown has been requested.
 	if c.config.ShutdownRequestedProvider != nil {
 		shutdownRequested := c.config.ShutdownRequestedProvider()
@@ -333,7 +333,7 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 	// Inject children view into observed state.
 	// The ChildrenViewProvider callback is injected by the supervisor and returns a
 	// config.ChildrenView that gives parent workers full visibility into their children's
-	// state (beyond just counts). This enables parent workers to inspect individual
+	// state (beyond just counts). Parent workers can inspect individual
 	// child states, errors, and health status.
 	if c.config.ChildrenViewProvider != nil {
 		childrenView := c.config.ChildrenViewProvider()

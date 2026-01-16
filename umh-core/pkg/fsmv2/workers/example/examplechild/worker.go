@@ -105,9 +105,60 @@ func (w *ChildWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedS
 }
 
 // DeriveDesiredState determines what state the child worker should be in.
-// Uses the DeriveLeafState helper for type-safe parsing and boilerplate reduction.
+// The child receives a Config template from the parent via ChildSpec.UserSpec.Config.
+// This method renders the template first, then parses the result.
+//
+// ARCHITECTURE NOTE: Production workers follow this pattern:
+//
+// 1. DesiredState: Contains OriginalUserSpec (template + variables), NOT rendered config
+//    - Rendered configs are ephemeral, computed by Actions
+//
+// 2. Action (CreateServiceAction): Renders and writes config to disk
+//    rendered := config.RenderConfigTemplate(userSpec.Config, userSpec.Variables)
+//    checksum := xxhash(rendered)
+//    fsService.WriteFile("/data/services/benthos-"+id+"/config.yaml", rendered)
+//    deps.expectedChecksum = checksum  // Store for drift detection
+//
+// 3. CollectObservedState: Reads file checksum, compares with expected
+//    currentChecksum := xxhash(fileContent)
+//    observed.IsDrifted = (currentChecksum != deps.expectedChecksum)
+//
+// 4. Caching layers for performance:
+//    - Supervisor: hash(UserSpec) → skip DeriveDesiredState if unchanged (Stage 7)
+//    - Action: Compare checksums → skip write if file already correct
+//
+// This example demonstrates variable inheritance and template rendering.
+// For full S6 service creation, see pkg/service/s6/lifecycle.go.
 func (w *ChildWorker) DeriveDesiredState(spec interface{}) (config.DesiredState, error) {
-	return config.DeriveLeafState[ChildUserSpec](spec)
+	// Handle nil spec - return default state
+	if spec == nil {
+		return config.DesiredState{
+			State:            config.DesiredStateRunning,
+			OriginalUserSpec: nil,
+		}, nil
+	}
+
+	// Cast spec to UserSpec to access Config and Variables
+	userSpec, ok := spec.(config.UserSpec)
+	if !ok {
+		return config.DesiredState{}, fmt.Errorf("invalid spec type: expected UserSpec, got %T", spec)
+	}
+
+	// Render the config template using the merged variables
+	// Variables include: IP, PORT (from parent) + DEVICE_ID (from child)
+	renderedConfig, err := config.RenderConfigTemplate(userSpec.Config, userSpec.Variables)
+	if err != nil {
+		return config.DesiredState{}, fmt.Errorf("template rendering failed: %w", err)
+	}
+
+	// Create a new UserSpec with the rendered config for parsing
+	renderedSpec := config.UserSpec{
+		Config:    renderedConfig,
+		Variables: userSpec.Variables,
+	}
+
+	// Now parse the rendered config using the helper
+	return config.DeriveLeafState[ChildUserSpec](renderedSpec)
 }
 
 // GetInitialState returns the state the FSM should start in.

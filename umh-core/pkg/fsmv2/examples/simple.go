@@ -15,7 +15,7 @@
 package examples
 
 // This file defines the SimpleScenario, which serves as both a working example
-// and comprehensive documentation for creating FSM v2 test scenarios.
+// and documentation for creating FSM v2 test scenarios.
 //
 // # What is a Scenario?
 //
@@ -333,7 +333,7 @@ package examples
 //	    return children, nil
 //	}
 //
-// This allows scenarios to create variable numbers of workers based on configuration.
+// Scenarios to create variable numbers of workers based on configuration.
 
 // SimpleScenario demonstrates the minimal FSM v2 hierarchy: one parent with two children.
 //
@@ -415,5 +415,9 @@ children:
     userSpec:
       config: |
         children_count: 2
+      variables:
+        user:
+          IP: "127.0.0.1"
+          PORT: 8080
 `,
 }

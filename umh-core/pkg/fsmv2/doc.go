@@ -17,7 +17,7 @@
 //
 // # Overview
 //
-// For background on WHY FSMv2 exists and how it relates to Kubernetes/PLC control loop patterns,
+// For background on why FSMv2 exists and how it relates to Kubernetes/PLC control loop patterns,
 // see README.md "Why FSMv2?" section. For the conceptual overview and Triangle Model diagram,
 // see README.md.
 //
@@ -64,20 +64,20 @@
 // ## Actions: Idempotent Operations
 //
 // Actions represent side effects that transition the system between states.
-// All actions MUST be idempotent - safe to retry after partial completion.
+// All actions must be idempotent - safe to retry after partial completion.
 //
 // Key requirements:
-//   - Actions are EMPTY STRUCTS - dependencies injected via Execute(ctx, depsAny)
-//   - ALWAYS check ctx.Done() first for cancellation
+//   - Actions are empty structs - dependencies injected via Execute(ctx, depsAny)
+//   - Always check ctx.Done() first for cancellation
 //   - Check if work already done before performing it (idempotency)
 //
 // See workers/example/example-child/action/connect.go for a complete example.
 //
-// The supervisor retries failed actions with exponential backoff, so idempotency is critical.
+// The supervisor retries failed actions with exponential backoff, so actions must be idempotent.
 //
 // ## DesiredState: No Runtime Dependencies
 //
-// ARCHITECTURAL INVARIANT: DesiredState must NEVER contain Dependencies.
+// Architectural invariant: DesiredState must never contain Dependencies.
 // Dependencies are runtime interfaces (connections, pools) that cannot be serialized.
 //
 // If you need state to check a runtime condition (like IsConnected()):
@@ -105,33 +105,35 @@
 //   - Escalation after 5 failed attempts (logs manual intervention required)
 //
 // Example action retry sequence:
-//   Attempt 1: Execute immediately
-//   Attempt 2: Wait 1s, execute
-//   Attempt 3: Wait 2s, execute
-//   Attempt 4: Wait 4s, execute
-//   Attempt 5: Wait 8s, execute
-//   Attempt 6+: Wait 60s, execute (capped at maxDelay)
+//
+//	Attempt 1: Execute immediately
+//	Attempt 2: Wait 1s, execute
+//	Attempt 3: Wait 2s, execute
+//	Attempt 4: Wait 4s, execute
+//	Attempt 5: Wait 8s, execute
+//	Attempt 6+: Wait 60s, execute (capped at maxDelay)
 //
 // Circuit Breaker Escalation Flow:
-//   Attempts 1-3: Log warnings with retry countdown
-//   Attempt 4: "WARNING: One retry attempt remaining before escalation"
-//   Attempt 5: "ESCALATION REQUIRED: Manual intervention needed"
-//   Runbook: https://docs.umh.app/runbooks/supervisor-escalation
+//
+//	Attempts 1-3: Log warnings with retry countdown
+//	Attempt 4: "WARNING: One retry attempt remaining before escalation"
+//	Attempt 5: "ESCALATION REQUIRED: Manual intervention needed"
+//	Runbook: https://docs.umh.app/runbooks/supervisor-escalation
 //
 // Implementation details in:
 //   - supervisor/internal/execution/backoff.go (ExponentialBackoff implementation)
 //   - supervisor/infrastructure_health.go (circuit breaker constants)
 //   - supervisor/reconciliation.go (retry logic and escalation)
 //
-// ## Validation: Defense-in-Depth
+// ## Validation: Layered Approach
 //
-// FSMv2 validates data at multiple layers (not centralized) for robustness:
+// FSMv2 validates data at multiple layers to catch errors early:
 //   - Layer 1: API entry (supervisor.AddWorker) - Fast fail on invalid input
 //   - Layer 2: Reconciliation (reconcileChildren) - Runtime consistency checks
 //   - Layer 3: Factory (WorkerFactory) - Registry validation
 //   - Layer 4: Worker constructor (NewMyWorker) - Business logic validation
 //
-// This is intentional, not redundant. Each layer defends against different failure modes.
+// Each layer catches different types of errors.
 //
 // ## Variables: Three-Tier Namespace
 //
@@ -141,6 +143,7 @@
 //   - Internal: Runtime metadata (nested) - NOT serialized
 //
 // User and Global are persisted. Internal is runtime-only.
+// TODO: Explain Templating
 // See config/variables.go for the VariableBundle struct definition.
 //
 // ## Hierarchical Composition: Parent-Child Workers
@@ -150,7 +153,7 @@
 //
 // Key concepts:
 //   - Parent returns ChildrenSpecs in DeriveDesiredState()
-//   - ChildStartStates coordinates child lifecycle (NOT data passing)
+//   - ChildStartStates coordinates child lifecycle (not data passing)
 //   - Use VariableBundle for passing data to children
 //
 // See workers/example/exampleparent/worker.go for complete parent-child example.
@@ -230,7 +233,7 @@
 //
 // ## Shutdown Handling
 //
-// States MUST check IsShutdownRequested() as their first conditional in Next().
+// States must check IsShutdownRequested() as their first conditional in Next().
 // See workers/example/example-child/state/ for examples of proper shutdown handling.
 //
 // ## Type-Safe Dependencies

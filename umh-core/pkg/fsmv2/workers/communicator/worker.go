@@ -41,7 +41,7 @@
 //     WHY:  Continuous bidirectional sync is the primary operational mode
 //     ENFORCED: SyncingState.Next() returns (self, SignalNone, SyncAction)
 //
-// Defense-in-depth layers:
+// Safety layers:
 //   - Layer 1: Type system (Go's strong typing, interface contracts)
 //   - Layer 2: Runtime checks (state machine transitions, nil validation)
 //   - Layer 3: Tests (verify invariants hold under all conditions)
@@ -149,7 +149,7 @@ import (
 //   - States read from observedState (e.g., IsAuthenticated)
 //   - Worker returns observedState in CollectObservedState
 //
-// This enables actions to communicate results to states without coupling.
+// Actions communicate results to states without coupling.
 //
 // # Dependencies
 //

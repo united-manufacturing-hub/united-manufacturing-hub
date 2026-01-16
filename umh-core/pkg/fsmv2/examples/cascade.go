@@ -18,7 +18,6 @@ package examples
 //
 // # What This Scenario Tests
 //
-// Cascade failure is one of the most important patterns in distributed systems.
 // This scenario demonstrates:
 //
 //  1. Child-to-Parent Health Propagation (upward cascade)
@@ -36,6 +35,8 @@ package examples
 //     - Parent tracks total healthy/unhealthy counts
 //     - All children must recover for parent to return to Running
 //
+// TODO: it is important to note the difference in "what can be implemented with FSM_v2 and what is built into FSM_V2.
+// we need to clearly explain it here as the parent goes to degraded is not a standard pattern
 // # Architecture: The Supervisor Pattern
 //
 // In FSM v2, parents don't directly control children. Instead:
@@ -125,21 +126,7 @@ package examples
 //
 //	ChildStartStates: []string{"Running:healthy"}  // Only healthy parent
 //
-// # Real-World Parallels
-//
-// Database Connection Pool:
-//   - Pool manager (parent) has multiple connections (children)
-//   - Connections fail health checks (transient network issues)
-//   - Pool enters "degraded" mode, alerts operators
-//   - Connections recover after retries
-//   - Pool returns to "healthy" mode
-//
-// Kubernetes Pod with Sidecars:
-//   - Main container (parent logic) coordinates sidecars (children)
-//   - Sidecar crashes and restarts
-//   - Pod status shows "degraded" during restart
-//   - Sidecar recovers
-//   - Pod returns to "healthy"
+// TODO: is this really implemented?
 //
 // # Cascade Failure vs. Other Patterns
 //
@@ -180,21 +167,6 @@ package examples
 //
 // Key Insight: Parent only becomes healthy when ALL children are healthy.
 // Degraded state is NOT an error - it's normal resilience behavior.
-//
-// # Why This Matters for Production
-//
-// In production, cascade failures inform:
-//
-//  1. Monitoring: Parent Degraded state triggers alerts
-//  2. Capacity: Know how many children are unhealthy
-//  3. SLAs: Degraded != Down, service continues with reduced capacity
-//  4. Recovery: Automatic recovery when children heal
-//
-// By understanding cascade behavior, developers can:
-//   - Design appropriate parent state transitions
-//   - Configure alerting thresholds (e.g., "alert if >50% children unhealthy")
-//   - Implement graceful degradation patterns
-//   - Test recovery under realistic multi-failure conditions
 var CascadeScenario = Scenario{
 	Name: "cascade",
 
@@ -215,5 +187,9 @@ children:
         child_config: |
           should_fail: true
           max_failures: 3
+      variables:
+        user:
+          IP: "127.0.0.1"
+          PORT: 8080
 `,
 }

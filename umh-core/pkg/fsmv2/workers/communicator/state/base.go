@@ -37,7 +37,7 @@ package state
 //	    BaseCommunicatorState
 //	}
 //
-// This enables type assertions and polymorphism while maintaining a zero-allocation
+// Type assertions and polymorphism while maintaining an
 // interface marker. The interface is intentionally empty because all behavior is
 // defined through methods on concrete types.
 //

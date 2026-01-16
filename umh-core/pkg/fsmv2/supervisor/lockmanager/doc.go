@@ -81,7 +81,7 @@
 // and runtime stack introspection. This adds overhead (microseconds per lock).
 //
 // 2. Development Safety: During development and testing, enable checks to catch
-// ordering violations early. Panics on violation make debugging easy.
+// ordering violations early. Panics on violation produce full stack traces for debugging.
 //
 // 3. CI Enforcement: CI runs with checks enabled. Any ordering violation fails
 // the build before reaching production.

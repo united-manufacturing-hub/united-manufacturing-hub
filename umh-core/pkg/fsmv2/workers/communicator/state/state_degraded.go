@@ -49,7 +49,7 @@ import (
 //   - Result: Return to normal operational sync loop
 //
 // Transition to TryingToAuthenticateState on auth issues:
-//   - Currently NOT implemented in this state (would need to detect auth-specific errors)
+//   - Not implemented in this state (would need to detect auth-specific errors)
 //   - Future: If errors are determined to be authentication-related, should transition to auth
 //   - Expected: Error classification logic in action to distinguish network vs auth failures
 //
@@ -65,7 +65,7 @@ import (
 //   - Action idempotency: Safe to retry, critical for recovery attempts
 //   - Backoff logic: Implemented via action's error counting (future: exponential backoff)
 //
-// Current behavior loops on self emitting SyncAction until health recovers. This provides
+// The state loops on itself emitting SyncAction until health recovers. This provides
 // continuous retry without state transitions, allowing action-layer backoff to control rate.
 //
 // # State Transitions
@@ -101,13 +101,13 @@ import (
 //
 // # Future Enhancements
 //
-// Potential improvements for robust error handling:
+// Potential improvements for error recovery:
 //   - Exponential backoff between retry attempts (currently action-layer responsibility)
 //   - Error classification (network vs auth vs transport) for smarter transitions
 //   - Maximum retry limit before escalation or alert generation
 //   - Circuit breaker pattern to prevent thundering herd on backend recovery
 //
-// See worker.go invariants block (C1-C5) for complete defense-in-depth details.
+// See worker.go invariants block (C1-C5) for complete validation layer details.
 type DegradedState struct {
 	BaseCommunicatorState
 }
