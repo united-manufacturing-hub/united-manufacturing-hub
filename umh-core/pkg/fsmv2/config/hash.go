@@ -28,11 +28,12 @@ import (
 //   - Config string (hashed directly)
 //   - Variables.User and Variables.Global (serialized as sorted JSON for determinism)
 //
-// NOTE: Variables.Internal is NOT included in the hash because it has the
-// json:"-" tag (see variables.go). This is intentional: Internal variables
-// are regenerated per-tick by the supervisor (workerID, createdAt, parentID)
-// and remain stable within a supervisor's lifetime. They do not need to
-// trigger cache invalidation.
+// Variables.Internal is excluded (via json:"-" tag) because Internal contains
+// only supervisor-assigned constants (workerID, parentID) that are set once
+// at supervisor creation and never change.
+//
+// Cache behavior: DeriveDesiredState is called when Config or Variables change.
+// If neither changes, the cached result is reused.
 //
 // Map key ordering does not affect the hash because JSON marshaling
 // in Go produces sorted keys for maps.
