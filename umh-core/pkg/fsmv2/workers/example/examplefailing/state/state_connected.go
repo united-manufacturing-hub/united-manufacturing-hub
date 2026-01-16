@@ -30,7 +30,9 @@ func (s *ConnectedState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal,
 	snap := helpers.ConvertSnapshot[snapshot.ExamplefailingObservedState, *snapshot.ExamplefailingDesiredState](snapAny)
 	snap.Observed.State = config.MakeState(config.PrefixRunning, "connected")
 
-	if snap.Desired.IsShutdownRequested() || !snap.Desired.ShouldBeRunning() {
+	// Check via Observed.IsStopRequired() since ParentMappedState is injected by collector
+	// into the embedded DesiredState within ObservedState.
+	if snap.Observed.IsStopRequired() {
 		return &TryingToStopState{}, fsmv2.SignalNone, nil
 	}
 

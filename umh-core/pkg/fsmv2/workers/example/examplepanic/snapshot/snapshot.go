@@ -42,11 +42,32 @@ type ExamplepanicSnapshot struct {
 // See fsmv2.DesiredState documentation for the architectural invariant.
 type ExamplepanicDesiredState struct {
 	config.BaseDesiredState // Provides ShutdownRequested + IsShutdownRequested() + SetShutdownRequested()
-	ShouldPanic             bool `json:"ShouldPanic"`
+
+	// ParentMappedState is the desired state derived from parent's ChildStartStates.
+	// When parent is in a state listed in ChildStartStates → "running"
+	// When parent is in any other state → "stopped"
+	// This field is injected by the supervisor via MappedParentStateProvider callback.
+	ParentMappedState string `json:"parent_mapped_state"`
+
+	ShouldPanic bool `json:"ShouldPanic"`
 }
 
+// ShouldBeRunning returns true if the panic worker should be in a running/connected state.
+// This is the positive assertion that should be checked before transitioning
+// from stopped to starting states.
+//
+// Children only run when:
+// 1. ShutdownRequested is false (not being shut down)
+// 2. ParentMappedState is config.DesiredStateRunning (parent wants children to run)
+//
+// This ensures children wait for parent to reach TryingToStart before connecting.
 func (s *ExamplepanicDesiredState) ShouldBeRunning() bool {
-	return !s.ShutdownRequested
+	if s.ShutdownRequested {
+		return false
+	}
+	// Only run if parent explicitly wants us running via ChildStartStates
+	// Default to not running if ParentMappedState is empty or "stopped"
+	return s.ParentMappedState == config.DesiredStateRunning
 }
 
 func (s *ExamplepanicDesiredState) IsShouldPanic() bool {
@@ -87,4 +108,21 @@ func (o ExamplepanicObservedState) SetShutdownRequested(v bool) fsmv2.ObservedSt
 	o.ExamplepanicDesiredState.ShutdownRequested = v
 
 	return o
+}
+
+// SetParentMappedState sets the parent's mapped state on this observed state.
+// Called by Collector when MappedParentStateProvider callback is configured.
+// This enables children to check if parent wants them running via StateMapping.
+func (o ExamplepanicObservedState) SetParentMappedState(state string) fsmv2.ObservedState {
+	o.ExamplepanicDesiredState.ParentMappedState = state
+	return o
+}
+
+// IsStopRequired reports whether the child needs to stop.
+// This is a QUERY on injected data, not a signal emission.
+// It combines:
+//   - IsShutdownRequested() - explicit system shutdown
+//   - !ShouldBeRunning() - parent no longer wants child running
+func (o ExamplepanicObservedState) IsStopRequired() bool {
+	return o.IsShutdownRequested() || !o.ShouldBeRunning()
 }
