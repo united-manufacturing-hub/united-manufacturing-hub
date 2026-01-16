@@ -149,7 +149,7 @@ return &ConnectedState{}, SignalNone, &SomeAction{}`,
 WHY: The supervisor uses this timestamp to detect stale data. If a collector
 crashes or hangs, stale timestamps trigger recovery mechanisms. Without
 timestamps, the supervisor cannot distinguish between "recently collected"
-and "collector is dead, data is hours old". This is critical for self-healing.`,
+and "collector is dead, data is hours old". This is required for self-healing.`,
 		CorrectCode:   "type MyObservedState struct {\n    ID          string    `json:\"id\"`\n    CollectedAt time.Time `json:\"collected_at\"`  // REQUIRED\n    // ... other fields\n}",
 		ReferenceFile: "example-child/snapshot/snapshot.go:61",
 	},

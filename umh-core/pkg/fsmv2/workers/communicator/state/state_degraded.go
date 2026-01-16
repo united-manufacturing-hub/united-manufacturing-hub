@@ -62,7 +62,7 @@ import (
 // Emits SyncAction with retry semantics:
 //   - Action parameters: Same as SyncingState (Dependencies, JWTToken)
 //   - Action responsibilities: Attempt sync operations, update health metrics
-//   - Action idempotency: Safe to retry, critical for recovery attempts
+//   - Action idempotency: Safe to retry, required for recovery attempts
 //   - Backoff logic: Implemented via action's error counting (future: exponential backoff)
 //
 // The state loops on itself emitting SyncAction until health recovers. This provides
