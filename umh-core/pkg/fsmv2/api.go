@@ -21,7 +21,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 )
 
-// Signal is used by states to communicate special conditions to the supervisor.
+// States use Signal to communicate special conditions to the supervisor.
 // These signals trigger supervisor-level actions beyond normal state transitions.
 type Signal int
 
@@ -30,12 +30,12 @@ const (
 	SignalNone Signal = iota
 
 	// SignalNeedsRemoval tells supervisor this worker has completed cleanup and can be removed.
-	// Emitted by Stopped state when ShutdownRequested=true and cleanup is complete.
+	// Emitted by Stopped state when IsShutdownRequested() returns true and cleanup is complete.
 	SignalNeedsRemoval
 
 	// SignalNeedsRestart tells supervisor the worker has detected an unrecoverable error
 	// and needs a full restart. The supervisor will:
-	//   1. Set ShutdownRequested=true (trigger graceful shutdown)
+	//   1. Call SetShutdownRequested(true) (trigger graceful shutdown)
 	//   2. Wait for worker to complete shutdown and emit SignalNeedsRemoval
 	//   3. Reset worker to initial state instead of removing it
 	//   4. Restart the observation collector
@@ -47,7 +47,7 @@ const (
 	//   - Worker state is corrupted and needs a fresh start
 	//   - External resource needs reconnection from scratch
 	//
-	// Example in state:
+	// Pseudo-code example:
 	//
 	//   func (s *TryingToConnectState) Next(snap MySnapshot) (State, Signal, Action) {
 	//       if snap.Observed.ConsecutiveFailures > 100 {
@@ -55,16 +55,19 @@ const (
 	//       }
 	//       return s, fsmv2.SignalNone, &ConnectAction{}
 	//   }
+	//
+	// Note: Due to Go's lack of covariance, actual implementations use State[any, any].
+	// See doc.go "Immutability" section for the actual implementation pattern.
 	SignalNeedsRestart
 )
 
 // Identity uniquely identifies a worker instance.
 // This is immutable for the lifetime of the worker.
 type Identity struct {
-	ID            string `json:"id"`            // Unique identifier (e.g., UUID)
-	Name          string `json:"name"`          // Human-readable name
-	WorkerType    string `json:"workerType"`    // Type of worker (e.g., "container", "pod")
-	HierarchyPath string `json:"hierarchyPath"` // Full path from root: "scenario123(application)/parent-123(parent)/child001(child)"
+	ID            string `json:"id"`            // Unique identifier (e.g., UUID).
+	Name          string `json:"name"`          // Human-readable name.
+	WorkerType    string `json:"workerType"`    // Type of worker (e.g., "container", "pod").
+	HierarchyPath string `json:"hierarchyPath"` // Full path from root: "scenario123(application)/parent-123(parent)/child001(child)".
 }
 
 // ObservedState represents the actual state gathered from monitoring the system.
@@ -73,7 +76,7 @@ type Identity struct {
 type ObservedState interface {
 	// GetObservedDesiredState returns the desired state that is actually deployed.
 	// Comparing what's deployed vs what we want to deploy.
-	// It is required to enforce that everything we configure should also be read back to double-check it.
+	// This interface enforces that all configured values are read back for verification.
 	GetObservedDesiredState() DesiredState
 
 	// GetTimestamp returns the time when this observed state was collected,
@@ -106,12 +109,12 @@ type ShutdownRequestable interface {
 }
 
 // Snapshot is the complete view of the worker at a point in time.
-// Passed by value to State.Next(), making it inherently immutable.
+// The supervisor passes Snapshot by value to State.Next(), making it inherently immutable.
 // Use helpers.ConvertSnapshot[O, D](snapAny) for type-safe field access.
 type Snapshot struct {
 	Identity Identity    // Who am I?
-	Observed interface{} // What is the actual state? (ObservedState or basic.Document)
-	Desired  interface{} // What should the state be? (DesiredState or basic.Document)
+	Observed interface{} // What is the actual state? (ObservedState or basic.Document).
+	Desired  interface{} // What should the state be? (DesiredState or basic.Document).
 }
 
 // Action represents an idempotent side effect that modifies external system state.
@@ -130,25 +133,19 @@ type Action[TDeps any] interface {
 
 // State represents a single state in the FSM lifecycle.
 // States are stateless - they examine the snapshot and decide what happens next.
-// State.Next() must be a pure function: no side effects, no external calls.
-//
-// Key rules:
-//   - Check ShutdownRequested first in Next()
-//   - Return action or state change, not both (supervisor panics otherwise)
-//   - "TryingTo" prefix = active state emitting actions; nouns = passive observation
+// See doc.go "States" section for patterns and rationale.
 type State[TSnapshot any, TDeps any] interface {
 	// Next evaluates the snapshot and returns the next transition.
-	// Pure function called on each tick. Snapshot is passed by value (immutable).
+	// Pure function called on each tick. The supervisor passes the snapshot by value (immutable).
 	// Returns: nextState, signal to supervisor, optional action to execute.
 	Next(snapshot TSnapshot) (State[TSnapshot, TDeps], Signal, Action[TDeps])
 
-	// String returns the state name for logging/debugging
+	// String returns the state name for logging/debugging.
 	String() string
 
-	// Reason is the reason for the current state and gives more background information
-	// For degraded state it could give exact information on what is degraded
-	// For starting states, it could report the "sub-states",
-	// so benthos could report the reason that it is starting is that S6 is not yet started
+	// Reason returns the reason for the current state and gives more background information.
+	// For degraded state, it reports exactly what degrades functionality.
+	// In TryingTo... states, it reports the target state - for example, benthos reports that S6 is not yet started.
 	Reason() string
 }
 
@@ -156,7 +153,7 @@ type State[TSnapshot any, TDeps any] interface {
 // The supervisor manages the worker lifecycle using these methods.
 type Worker interface {
 	// CollectObservedState monitors the actual system state.
-	// Called in a separate goroutine with timeout protection.
+	// The supervisor calls this method in a separate goroutine with timeout protection.
 	// Must respect context cancellation. Errors are logged but don't stop the FSM.
 	CollectObservedState(ctx context.Context) (ObservedState, error)
 

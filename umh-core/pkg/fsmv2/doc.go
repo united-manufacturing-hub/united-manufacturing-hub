@@ -48,7 +48,7 @@
 // ## States: Structs, Not Strings
 //
 // States are concrete Go types implementing the State interface, providing:
-//   - Compile-time type safety (returning wrong type won't compile).
+//   - Compile-time type safety (returning wrong type will not compile).
 //   - Explicit transitions (visible in code).
 //   - Encapsulated logic (each state is self-contained).
 //
@@ -56,10 +56,14 @@
 //
 // ## Immutability: Pass-by-Value
 //
-// Snapshots are passed by value to State.Next(), making them inherently immutable.
+// The supervisor passes snapshots by value to State.Next(), making them inherently immutable.
 // Go's pass-by-value semantics guarantee states cannot modify the supervisor's data.
 // No getters or defensive copying needed - the language enforces immutability.
 // See internal/helpers/state_adapter.go for ConvertSnapshot helper that provides type-safe access.
+//
+// Note: The State interface uses generics (State[TSnapshot, TDeps]), but implementations
+// use State[any, any] because Go lacks covariance support. The Snapshot struct provides
+// type-safe access via helpers.ConvertSnapshot[O, D](snapAny).
 //
 // ## Actions: Idempotent Operations
 //
@@ -75,7 +79,7 @@
 // See workers/example/examplechild/action/connect.go for a complete example.
 //
 // When an action fails, the state remains unchanged. On the next tick,
-// state.Next() is called again and may return the same action.
+// the supervisor calls state.Next() again, which may return the same action.
 //
 // ## Error Handling
 //
@@ -83,15 +87,15 @@
 //   - Network timeouts or connection refusals.
 //   - Retriable conditions like pool exhaustion or rate limiting.
 //
-// Do not return an error for these situations:
-//   - Validation failures. Validate in state.Next() before emitting the action.
-//   - Permanent failures. Return SignalNeedsRestart from state.Next() instead.
-//   - Expected conditions. For example, "already connected" is success.
+// Avoid returning errors for these situations:
+//   - Validation failures: Validate in state.Next() before emitting the action.
+//   - Permanent failures: Return SignalNeedsRestart from state.Next() instead.
+//   - Expected conditions: For example, "already connected" is success.
 //
 // ## DesiredState: No Runtime Dependencies
 //
-// Architectural invariant: DesiredState must never contain Dependencies.
-// Dependencies are runtime interfaces (connections, pools) that cannot be serialized.
+// DesiredState never contains Dependencies. This architectural constraint ensures
+// serializability, since Dependencies are runtime interfaces (connections, pools).
 //
 // If you need state to check a runtime condition (like IsConnected()):
 //  1. Collector reads it from dependencies
@@ -109,7 +113,7 @@
 //   - Next tick → state.Next() called again with fresh observation
 //   - If conditions unchanged → state.Next() returns same action → action enqueued again
 //   - Retry rate governed by tick interval (not exponential backoff)
-//   - No max attempts limit (retries until action succeeds or supervisor shuts down)
+//   - The retry mechanism has no max attempts limit and retries until the action succeeds or the supervisor shuts down.
 //
 // Action-Observation Gating:
 //   - After action enqueued, actionPending flag is set
@@ -120,7 +124,7 @@
 // Action Execution (per-action):
 //   - Default timeout: 30 seconds per action attempt
 //   - Executed asynchronously in worker pool (non-blocking tick loop)
-//   - No automatic retry within a single execution - failure clears inProgress
+//   - There is no automatic retry within a single execution. A failure clears the inProgress flag.
 //   - Retries happen naturally via tick-based re-evaluation
 //
 // Infrastructure Health Circuit Breaker (infrastructure failures):
@@ -247,17 +251,17 @@
 //
 // ## State Naming Conventions
 //
-// Active states (emit actions until condition met):
-//   - Prefix: "TryingTo" or "Ensuring"
-//   - Examples: TryingToStartState, EnsuringConnectedState
+// Active states emit actions until a condition is met:
+//   - Use the prefix "TryingTo" or "Ensuring".
+//   - Examples include TryingToStartState and EnsuringConnectedState.
 //
-// Passive states (observe and react):
-//   - Descriptive nouns
-//   - Examples: RunningState, StoppedState, DegradedState
+// Passive states observe and react:
+//   - Use descriptive nouns.
+//   - Examples include RunningState, StoppedState, and DegradedState.
 //
 // ## Shutdown Handling
 //
-// States must check IsShutdownRequested() as their first conditional in Next().
+// Check IsShutdownRequested() as the first conditional in Next().
 // See workers/example/examplechild/state/ for examples of proper shutdown handling.
 //
 // ## Type-Safe Dependencies
@@ -280,16 +284,16 @@
 //
 // The supervisor manages concurrency:
 //   - CollectObservedState() runs in separate goroutine with timeout
-//   - State.Next() called in supervisor's main goroutine (single-threaded)
-//   - Action.Execute() runs in supervisor's main goroutine with retry/backoff
+//   - The supervisor calls State.Next() in its main goroutine (single-threaded).
+//   - The supervisor runs Action.Execute() in its main goroutine with retry/backoff.
 //
-// Workers don't need to implement locking - the supervisor handles it.
+// Workers do not need to implement locking because the supervisor handles it.
 //
 // # Best Practices
 //
-//   - Keep Next() pure (no side effects, no external calls)
+//   - Keep Next() pure (see "Immutability" section above)
 //   - Make actions idempotent (check if work already done)
-//   - Check ShutdownRequested() first in all states
+//   - Check IsShutdownRequested() first in all states (see "Shutdown Handling" section above)
 //   - Use type-safe state structs, not strings
 //   - Return action OR transition, not both simultaneously
 //   - Handle context cancellation in all async operations
