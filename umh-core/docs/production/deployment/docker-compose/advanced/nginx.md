@@ -102,22 +102,3 @@ The `docker-compose.yaml` has to mount `certs` and `nginx.conf` in appropriate p
 +       - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
 +       - ./certs:/etc/nginx/tls:ro
 ```
-
-### Allowing forwarded SSL connections in umh-core
-
-umh-core needs to be told to accept forwarded requests when they come from a TLS connection.
-
-```diff
-  services:
-    umh:
-      image: management.umh.app/oci/united-manufacturing-hub/umh-core:v0.43.18
-      restart: unless-stopped
-      volumes:
-        - umh-data:/data
-      environment:
-        - AUTH_TOKEN=your-auth-token # TODO: you have to replace this
-        - RELEASE_CHANNEL=stable
-        - API_URL=https://management.umh.app/api
-        - LOCATION_0=your-location # TODO: you have to replace this
-+       - ALLOW_INSECURE_TLS=true
-```

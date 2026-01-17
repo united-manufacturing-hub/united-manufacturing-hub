@@ -7,35 +7,21 @@ This guide walks you through setting up umh-core with Docker Compose, starting w
 - Docker and Docker Compose installed on your system
 - Basic familiarity with the command line
 
-## Minimal Setup: umh-core Only
+## Minimal Setup
 
-If you are currently running umh-core using the docker cli similar to this:
-
-```bash
-docker volume create umh-data
-docker run -d \
-  --name umh \
-  --restart unless-stopped \
-  -v umh-data:/data \
-  -e AUTH_TOKEN=your-auth-token \
-  -e LOCATION_0=your-location \
-  -e RELEASE_CHANNEL=stable \
-  -e API_URL=https://management.umh.app/api \
-  management.umh.app/oci/united-manufacturing-hub/umh-core:v0.43.18
-```
-
-The equivalent Docker Compose configuration is:
+1. Find the latest version on the [Releases](https://github.com/united-manufacturing-hub/united-manufacturing-hub/releases) page and replace `<VERSION>` with your selected version.
+2. Save this in `docker-compose.yaml`.
 
 ```yaml
 services:
   umh:
-    image: management.umh.app/oci/united-manufacturing-hub/umh-core:v0.43.18
+    image: management.umh.app/oci/united-manufacturing-hub/umh-core:<VERSION> # TODO: change this
     restart: unless-stopped
     volumes:
       - umh-data:/data
     environment:
-      - AUTH_TOKEN=your-auth-token
-      - LOCATION_0=your-location
+      - AUTH_TOKEN=your-auth-token # TODO: change this
+      - LOCATION_0=your-location # TODO: change this
       - RELEASE_CHANNEL=stable
       - API_URL=https://management.umh.app/api
 
@@ -43,7 +29,7 @@ volumes:
   umh-data: {}
 ```
 
-Save this as `docker-compose.yaml` and run:
+Then run:
 
 ```bash
 docker compose up -d
@@ -74,15 +60,15 @@ Below are the changes to be made to the base configuration to deploy TimescaleDB
 ```diff
 services:
   umh:
-    image: management.umh.app/oci/united-manufacturing-hub/umh-core:v0.43.18
+    image: management.umh.app/oci/united-manufacturing-hub/umh-core:<VERSION> # TODO: change this
     restart: unless-stopped
     volumes:
       - umh-data:/data
     environment:
-      - AUTH_TOKEN=your-auth-token # TODO: you have to replace this
+      - AUTH_TOKEN=your-auth-token # TODO: change this
       - RELEASE_CHANNEL=stable
       - API_URL=https://management.umh.app/api
-      - LOCATION_0=your-location # TODO: you have to replace this
+      - LOCATION_0=your-location # TODO: change this
 
 +   pgbouncer:
 +     image: docker.io/edoburu/pgbouncer:v1.24.1-p1
@@ -137,7 +123,7 @@ services:
 This declares:
 
 - 2 Services called `pgbouncer` and `timescaledb`: PgBouncer acts as a proxy to TimescaleDB. This means the Credentials have to match between these two Services. Healthchecks ensure that the Services are started in order. `timescaledb` is isolated in the Network `timescaledb-network`. `pgbouncer` is both in the `default` and the `timescaledb-network`. This makes PgBouncer the only Service which can talk to TimescaleDB directly.
-- 2 Networks called `timescaledb-network` and `default`: Without the Network section the Network `default` is always created by default. Services use the Network `default` if no explicite Network configuration is provided. The `timescaledb-network` is configured to be internal which means Services can't reach the internet or any Service outside this Network if they are only connected through this Network.
+- 2 Networks called `timescaledb-network` and `default`: Without the Network section the Network `default` is always created by default. Services use the Network `default` if no explicit Network configuration is provided. The `timescaledb-network` is configured to be internal which means Services can't reach the internet or any Service outside this Network if they are only connected through this Network.
 - 1 Volume called `timescaledb-data`: This is where TimescaleDB stores its data.
 
 ### Grafana
@@ -151,15 +137,15 @@ Below are the changes to be made to the base configuration to deploy Grafana tog
 ```diff
   services:
     umh:
-      image: management.umh.app/oci/united-manufacturing-hub/umh-core:v0.43.18
+      image: management.umh.app/oci/united-manufacturing-hub/umh-core:<VERSION> # TODO: change this
       restart: unless-stopped
       volumes:
         - umh-data:/data
       environment:
-        - AUTH_TOKEN=your-auth-token # TODO: you have to replace this
+        - AUTH_TOKEN=your-auth-token # TODO: change this
         - RELEASE_CHANNEL=stable
         - API_URL=https://management.umh.app/api
-        - LOCATION_0=your-location # TODO: you have to replace this
+        - LOCATION_0=your-location # TODO: change this
 
 +   grafana:
 +     image: management.umh.app/oci/grafana/grafana:12.3.0
@@ -188,15 +174,15 @@ To get the most out of Grafana it should be deployed together with TimescaleDB t
 ```yaml
 services:
   umh:
-    image: management.umh.app/oci/united-manufacturing-hub/umh-core:v0.43.18
+    image: management.umh.app/oci/united-manufacturing-hub/umh-core:<VERSION> # TODO: change this
     restart: unless-stopped
     volumes:
       - umh-data:/data
     environment:
-      - AUTH_TOKEN=your-auth-token # TODO: you have to replace this
+      - AUTH_TOKEN=your-auth-token # TODO: change this
       - RELEASE_CHANNEL=stable
       - API_URL=https://management.umh.app/api
-      - LOCATION_0=your-location # TODO: you have to replace this
+      - LOCATION_0=your-location # TODO: change this
 
   grafana:
     image: management.umh.app/oci/grafana/grafana:12.3.0
