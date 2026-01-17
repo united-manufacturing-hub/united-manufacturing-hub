@@ -1,0 +1,2 @@
+# This directory is used by Vale to store downloaded style packages.
+# The Google style guide package will be downloaded here when running `vale sync`.
