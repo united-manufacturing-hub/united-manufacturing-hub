@@ -22,24 +22,24 @@
 // see README.md.
 //
 // FSMv2 separates concerns into three layers:
-//   - Worker: Business logic implementation (what the worker does)
-//   - State: Decision logic (when to transition, what actions to take)
-//   - Supervisor: Orchestration (tick loop, action execution, child management)
+//   - Worker: Business logic implementation (what the worker does).
+//   - State: Decision logic (when to transition, what actions to take).
+//   - Supervisor: Orchestration (tick loop, action execution, child management).
 //
 // This separation enables:
-//   - Pure functional state transitions (no side effects in Next())
-//   - Explicit action execution with retry/backoff
-//   - Declarative child management (Kubernetes-style)
-//   - Type-safe dependencies via generics
+//   - Pure functional state transitions (no side effects in Next()).
+//   - Explicit action execution with retry/backoff.
+//   - Declarative child management (Kubernetes-style).
+//   - Type-safe dependencies via generics.
 //
 // # Quick Start
 //
 // For complete working examples, see:
-//   - workers/example/example-child/worker.go - Child worker implementation
-//   - workers/example/example-child/state/ - State definitions and transitions
-//   - workers/example/example-child/action/ - Idempotent actions
+//   - workers/example/examplechild/worker.go - Child worker implementation
+//   - workers/example/examplechild/state/ - State definitions and transitions
+//   - workers/example/examplechild/action/ - Idempotent actions
 //   - workers/example/exampleparent/worker.go - Parent with child management
-//   - examples/simple/main.go - Runnable example with YAML config
+//   - examples/cascade.go - Runnable example with YAML config
 //
 // # Key Concepts
 //
@@ -48,11 +48,11 @@
 // ## States: Structs, Not Strings
 //
 // States are concrete Go types implementing the State interface, providing:
-//   - Compile-time type safety (returning wrong type won't compile)
-//   - Explicit transitions (visible in code)
-//   - Encapsulated logic (each state is self-contained)
+//   - Compile-time type safety (returning wrong type won't compile).
+//   - Explicit transitions (visible in code).
+//   - Encapsulated logic (each state is self-contained).
 //
-// See workers/example/example-child/state/ for state implementations.
+// See workers/example/examplechild/state/ for state implementations.
 //
 // ## Immutability: Pass-by-Value
 //
@@ -63,17 +63,30 @@
 //
 // ## Actions: Idempotent Operations
 //
-// Actions represent side effects that transition the system between states.
-// All actions must be idempotent - safe to retry after partial completion.
+// Actions represent idempotent side effects that modify external system state.
+// They do not cause state transitions directly. All actions must be idempotent,
+// meaning they are safe to retry after partial completion.
 //
 // Key requirements:
-//   - Actions are empty structs - dependencies injected via Execute(ctx, depsAny)
-//   - Always check ctx.Done() first for cancellation
-//   - Check if work already done before performing it (idempotency)
+//   - Actions are empty structs. Dependencies are injected via Execute(ctx, depsAny).
+//   - Always check ctx.Done() first for cancellation.
+//   - Check if work is already done before performing it (idempotency).
 //
-// See workers/example/example-child/action/connect.go for a complete example.
+// See workers/example/examplechild/action/connect.go for a complete example.
 //
-// The supervisor retries failed actions with exponential backoff, so actions must be idempotent.
+// When an action fails, the state remains unchanged. On the next tick,
+// state.Next() is called again and may return the same action.
+//
+// ## Error Handling
+//
+// Return an error for transient failures that the framework should retry:
+//   - Network timeouts or connection refusals.
+//   - Retriable conditions like pool exhaustion or rate limiting.
+//
+// Do not return an error for these situations:
+//   - Validation failures. Validate in state.Next() before emitting the action.
+//   - Permanent failures. Return SignalNeedsRestart from state.Next() instead.
+//   - Expected conditions. For example, "already connected" is success.
 //
 // ## DesiredState: No Runtime Dependencies
 //
@@ -85,18 +98,30 @@
 //  2. Collector writes to ObservedState field (e.g., ConnectionHealth)
 //  3. State.Next() checks ObservedState, not dependencies
 //
-// See workers/example/example-child/worker.go for the correct pattern.
+// See workers/example/examplechild/worker.go for the correct pattern.
 //
-// ## Retry and Backoff Configuration
+// ## Retry Mechanism
 //
-// FSMv2 automatically retries failed actions with exponential backoff to handle transient failures.
+// FSMv2 retries failed actions through tick-based state re-evaluation, not automatic backoff.
 //
-// Action Execution Retry (per-action):
-//   - Base delay: 1 second
-//   - Max delay: 60 seconds
-//   - Formula: delay = min(2^attempts × baseDelay, maxDelay)
-//   - Default timeout: 30 seconds per action attempt
+// Primary Retry Mechanism (tick-based re-evaluation):
+//   - Action fails → state remains unchanged → inProgress flag cleared
+//   - Next tick → state.Next() called again with fresh observation
+//   - If conditions unchanged → state.Next() returns same action → action enqueued again
+//   - Retry rate governed by tick interval (not exponential backoff)
 //   - No max attempts limit (retries until action succeeds or supervisor shuts down)
+//
+// Action-Observation Gating:
+//   - After action enqueued, actionPending flag is set
+//   - FSM tick is blocked until fresh observation arrives (prevents duplicate actions)
+//   - Observation timestamp must be newer than action enqueue time to proceed
+//   - This ensures the action's effect is observed before re-evaluation
+//
+// Action Execution (per-action):
+//   - Default timeout: 30 seconds per action attempt
+//   - Executed asynchronously in worker pool (non-blocking tick loop)
+//   - No automatic retry within a single execution - failure clears inProgress
+//   - Retries happen naturally via tick-based re-evaluation
 //
 // Infrastructure Health Circuit Breaker (infrastructure failures):
 //   - Max attempts: 5 (DefaultMaxInfraRecoveryAttempts)
@@ -104,26 +129,26 @@
 //   - Backoff range: 1s → 60s (exponential)
 //   - Escalation after 5 failed attempts (logs manual intervention required)
 //
-// Example action retry sequence:
+// Example retry flow:
 //
-//	Attempt 1: Execute immediately
-//	Attempt 2: Wait 1s, execute
-//	Attempt 3: Wait 2s, execute
-//	Attempt 4: Wait 4s, execute
-//	Attempt 5: Wait 8s, execute
-//	Attempt 6+: Wait 60s, execute (capped at maxDelay)
+//	Tick 1: state.Next() returns ConnectAction → action enqueued
+//	        Action fails → inProgress cleared
+//	Tick 2: actionPending blocks until fresh observation (gating)
+//	Tick 3: state.Next() re-evaluates → conditions unchanged → ConnectAction returned
+//	        Action enqueued again → retries naturally via tick loop
 //
-// Circuit Breaker Escalation Flow:
+// Circuit Breaker Escalation Flow (infrastructure only):
 //
 //	Attempts 1-3: Log warnings with retry countdown
-//	Attempt 4: "WARNING: One retry attempt remaining before escalation"
-//	Attempt 5: "ESCALATION REQUIRED: Manual intervention needed"
+//	Attempt 4: "Warning: One retry attempt remaining before escalation"
+//	Attempt 5: "Escalation required: Manual intervention needed"
 //	Runbook: https://docs.umh.app/runbooks/supervisor-escalation
 //
 // Implementation details in:
-//   - supervisor/internal/execution/backoff.go (ExponentialBackoff implementation)
+//   - supervisor/internal/execution/action_executor.go (async execution, timeout)
+//   - supervisor/internal/execution/backoff.go (ExponentialBackoff for circuit breaker)
 //   - supervisor/infrastructure_health.go (circuit breaker constants)
-//   - supervisor/reconciliation.go (retry logic and escalation)
+//   - supervisor/reconciliation.go (tick loop, action gating, re-evaluation)
 //
 // ## Validation: Layered Approach
 //
@@ -140,10 +165,9 @@
 // VariableBundle provides three namespaces for configuration:
 //   - User: Top-level template access (flattened, e.g., {{ .IP }})
 //   - Global: Fleet-wide settings (nested, e.g., {{ .global.cluster_id }})
-//   - Internal: Runtime metadata (nested) - NOT serialized
+//   - Internal: Runtime metadata (nested). Not serialized.
 //
 // User and Global are persisted. Internal is runtime-only.
-// TODO: Explain Templating
 // See config/variables.go for the VariableBundle struct definition.
 //
 // ## Hierarchical Composition: Parent-Child Workers
@@ -234,12 +258,12 @@
 // ## Shutdown Handling
 //
 // States must check IsShutdownRequested() as their first conditional in Next().
-// See workers/example/example-child/state/ for examples of proper shutdown handling.
+// See workers/example/examplechild/state/ for examples of proper shutdown handling.
 //
 // ## Type-Safe Dependencies
 //
 // Use BaseWorker[D] for type-safe dependency access without casting.
-// See workers/example/example-child/dependencies.go for dependency pattern.
+// See workers/example/examplechild/dependencies.go for dependency pattern.
 //
 // # Testing
 //
@@ -249,8 +273,8 @@
 //  3. Verifying returned state, signal, and action
 //  4. Testing action idempotency with VerifyActionIdempotency helper
 //
-// See workers/example/example-child/state/*_test.go for state transition tests.
-// See workers/example/example-child/action/*_test.go for action idempotency tests.
+// See workers/example/examplechild/state/*_test.go for state transition tests.
+// See workers/example/examplechild/action/*_test.go for action idempotency tests.
 //
 // # Thread Safety
 //

@@ -84,11 +84,11 @@ type ObservedState interface {
 // DesiredState represents what we want the system to be.
 // Derived from user configuration via DeriveDesiredState().
 //
-// INVARIANT: DesiredState must NEVER contain Dependencies (runtime interfaces).
+// DesiredState does not contain Dependencies (runtime interfaces).
 // Pass dependencies to Action.Execute() instead.
 type DesiredState interface {
 	// IsShutdownRequested is set by supervisor to initiate graceful shutdown.
-	// States MUST check this first in their Next() method.
+	// States should check this first in their Next() method.
 	IsShutdownRequested() bool
 }
 
@@ -114,12 +114,13 @@ type Snapshot struct {
 	Desired  interface{} // What should the state be? (DesiredState or basic.Document)
 }
 
-// Action represents a side effect that transitions the system between states.
-// Executed by the supervisor after State.Next() returns them.
-// Retried with exponential backoff on failure.
+// Action represents an idempotent side effect that modifies external system state.
+// The supervisor executes actions after State.Next() returns them.
+// When an action fails, the state remains unchanged. On the next tick,
+// state.Next() may return the same action.
 //
-// REQUIREMENT: Actions MUST be idempotent (safe to call multiple times).
-// Check if work is already done before performing it.
+// Actions must be idempotent (safe to call multiple times).
+// For detailed patterns and examples, see doc.go "Actions" section.
 type Action[TDeps any] interface {
 	// Execute performs the action. Must handle context cancellation.
 	Execute(ctx context.Context, deps TDeps) error
@@ -133,7 +134,7 @@ type Action[TDeps any] interface {
 //
 // Key rules:
 //   - Check ShutdownRequested first in Next()
-//   - Return action OR state change, not both (supervisor panics otherwise)
+//   - Return action or state change, not both (supervisor panics otherwise)
 //   - "TryingTo" prefix = active state emitting actions; nouns = passive observation
 type State[TSnapshot any, TDeps any] interface {
 	// Next evaluates the snapshot and returns the next transition.

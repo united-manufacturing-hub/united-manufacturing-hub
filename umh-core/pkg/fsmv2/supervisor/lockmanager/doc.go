@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// TODO: check if this should be moved to internal package.
-
 // Package lockmanager provides lock ordering enforcement for FSMv2.
 //
 // # Overview

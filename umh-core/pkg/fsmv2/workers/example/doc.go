@@ -23,16 +23,16 @@
 // This package contains several example workers demonstrating FSMv2 patterns:
 //
 //   - exampleparent/ - Parent worker with child management (hierarchical composition)
-//   - child/ - Child worker with states, actions, and dependencies
-//   - failing/ - Worker that simulates failures (for testing retry logic)
-//   - slow/ - Worker with slow operations (for testing timeouts)
-//   - panic/ - Worker that panics (for testing panic recovery)
+//   - examplechild/ - Child worker with states, actions, and dependencies
+//   - examplefailing/ - Worker that simulates failures (for testing retry logic)
+//   - exampleslow/ - Worker with slow operations (for testing timeouts)
+//   - examplepanic/ - Worker that panics (for testing panic recovery)
 //
 // # Directory Structure
 //
 // Each worker follows a consistent structure:
 //
-//	child/
+//	examplechild/
 //	├── worker.go           # Worker implementation (CollectObservedState, DeriveDesiredState)
 //	├── dependencies.go     # Dependency injection struct
 //	├── userspec.go         # User configuration parsing
@@ -47,12 +47,12 @@
 //
 // # Key Patterns Demonstrated
 //
-// States: See child/state/ for:
+// States: See examplechild/state/ for:
 //   - Shutdown handling (always check IsShutdownRequested() first)
 //   - State naming conventions (TryingTo* for active, descriptive nouns for passive)
 //   - State transitions returning (State, Signal, Action)
 //
-// Actions: See child/action/connect.go for:
+// Actions: See examplechild/action/connect.go for:
 //   - Empty struct pattern (no fields, deps injected via Execute)
 //   - Context cancellation check (select on ctx.Done() first)
 //   - Idempotency (check if work already done)
@@ -62,7 +62,7 @@
 //   - ChildStartStates for child lifecycle coordination
 //   - VariableBundle for passing data to children
 //
-// Testing: See child/action/*_test.go for:
+// Testing: See examplechild/action/*_test.go for:
 //   - Action idempotency verification
 //   - State transition testing patterns
 package example
