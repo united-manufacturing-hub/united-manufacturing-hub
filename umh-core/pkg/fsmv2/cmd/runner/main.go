@@ -46,9 +46,11 @@ func main() {
 	// List scenarios if requested
 	if *listFlag {
 		fmt.Println("Available scenarios:")
+
 		for name, scenario := range examples.Registry {
 			fmt.Printf("  %-15s - %s\n", name, scenario.Description)
 		}
+
 		return
 	}
 
@@ -86,7 +88,8 @@ func main() {
 	)
 
 	logger := zap.New(core)
-	defer logger.Sync()
+
+	defer func() { _ = logger.Sync() }()
 
 	// Look up scenario from registry
 	scenario, exists := examples.Registry[*scenarioName]
@@ -104,6 +107,7 @@ func main() {
 	// Wrap context with timeout if duration specified
 	if *duration > 0 {
 		var timeoutCancel context.CancelFunc
+
 		ctx, timeoutCancel = context.WithTimeout(ctx, *duration)
 		defer timeoutCancel()
 	}
@@ -172,7 +176,7 @@ func main() {
 	)
 }
 
-// parseLogLevel converts string log level to zap level
+// parseLogLevel converts string log level to zap level.
 func parseLogLevel(level string) (zapcore.Level, error) {
 	switch level {
 	case "debug":

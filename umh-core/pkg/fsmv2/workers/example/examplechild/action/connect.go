@@ -43,6 +43,7 @@ func (a *ConnectAction) Execute(ctx context.Context, depsAny any) error {
 		return ctx.Err()
 	default:
 	}
+
 	deps := depsAny.(snapshot.ExamplechildDependencies)
 	logger := deps.ActionLogger(ConnectActionName)
 	logger.Info("Attempting to connect")

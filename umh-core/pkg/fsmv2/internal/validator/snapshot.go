@@ -148,6 +148,7 @@ func checkDesiredStateShutdownMethod(filename string) []Violation {
 		}
 
 		desiredStateTypes[typeSpec.Name.Name] = info
+
 		return true
 	})
 
@@ -209,6 +210,7 @@ func getEmbeddedTypeName(expr ast.Expr) string {
 			return x.Name + "." + t.Sel.Name
 		}
 	}
+
 	return ""
 }
 
@@ -287,6 +289,7 @@ func checkObservedStateEmbedsDesired(filename string) []Violation {
 						Type:    "OBSERVED_STATE_NOT_EMBEDDING_DESIRED",
 						Message: fmt.Sprintf("ObservedState %s has named field %s - should embed anonymously with json:\",inline\" tag", typeSpec.Name.Name, name.Name),
 					})
+
 					return true
 				}
 			}
@@ -447,6 +450,7 @@ func checkDesiredStateValues(filename string) []Violation {
 		if ok && strings.Contains(typeSpec.Name.Name, "DesiredState") {
 			desiredStateTypes[typeSpec.Name.Name] = true
 		}
+
 		return true
 	})
 
@@ -520,12 +524,15 @@ func checkObservedStateHasSetState(filename string) []Violation {
 
 	// Collect all ObservedState type names
 	observedStateTypes := make(map[string]token.Pos)
+
 	ast.Inspect(node, func(n ast.Node) bool {
 		typeSpec, ok := n.(*ast.TypeSpec)
 		if !ok || !strings.Contains(typeSpec.Name.Name, "ObservedState") {
 			return true
 		}
+
 		observedStateTypes[typeSpec.Name.Name] = typeSpec.Pos()
+
 		return true
 	})
 
@@ -543,6 +550,7 @@ func checkObservedStateHasSetState(filename string) []Violation {
 
 		// Get receiver type name
 		var typeName string
+
 		switch recvType := funcDecl.Recv.List[0].Type.(type) {
 		case *ast.StarExpr:
 			if ident, ok := recvType.X.(*ast.Ident); ok {

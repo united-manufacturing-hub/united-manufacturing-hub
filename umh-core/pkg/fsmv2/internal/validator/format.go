@@ -41,17 +41,22 @@ func FormatViolationsWithPattern(title string, violations []Violation, patternTy
 		sb.WriteString(fmt.Sprintf("║  PATTERN: %-66s║\n", pattern.Name))
 		sb.WriteString("╠════════════════════════════════════════════════════════════════════════════╣\n")
 		sb.WriteString("║  WHY THIS MATTERS:                                                         ║\n")
+
 		for _, line := range WrapText(pattern.Why, 74) {
 			sb.WriteString(fmt.Sprintf("║  %-74s║\n", line))
 		}
+
 		sb.WriteString("║                                                                            ║\n")
 		sb.WriteString("║  CORRECT EXAMPLE:                                                          ║\n")
+
 		for _, line := range strings.Split(pattern.CorrectCode, "\n") {
 			if len(line) > 74 {
 				line = line[:71] + "..."
 			}
+
 			sb.WriteString(fmt.Sprintf("║  %-74s║\n", line))
 		}
+
 		sb.WriteString("║                                                                            ║\n")
 	} else {
 		sb.WriteString(fmt.Sprintf("║  %-74s║\n", title))
@@ -59,12 +64,14 @@ func FormatViolationsWithPattern(title string, violations []Violation, patternTy
 	}
 
 	sb.WriteString("║  VIOLATIONS FOUND:                                                         ║\n")
+
 	for i, v := range violations {
 		line := fmt.Sprintf("%d. %s", i+1, v)
 		for _, wrapped := range WrapText(line, 74) {
 			sb.WriteString(fmt.Sprintf("║  %-74s║\n", wrapped))
 		}
 	}
+
 	sb.WriteString("║                                                                            ║\n")
 
 	if hasPattern && pattern.ReferenceFile != "" {
@@ -80,17 +87,23 @@ func FormatViolationsWithPattern(title string, violations []Violation, patternTy
 // WrapText wraps text to fit within maxWidth characters.
 func WrapText(text string, maxWidth int) []string {
 	var lines []string
+
 	for _, paragraph := range strings.Split(text, "\n") {
 		if paragraph == "" {
 			lines = append(lines, "")
+
 			continue
 		}
+
 		words := strings.Fields(paragraph)
 		if len(words) == 0 {
 			lines = append(lines, "")
+
 			continue
 		}
+
 		currentLine := words[0]
+
 		for _, word := range words[1:] {
 			if len(currentLine)+1+len(word) <= maxWidth {
 				currentLine += " " + word
@@ -99,7 +112,9 @@ func WrapText(text string, maxWidth int) []string {
 				currentLine = word
 			}
 		}
+
 		lines = append(lines, currentLine)
 	}
+
 	return lines
 }

@@ -81,6 +81,7 @@ func (d *ExamplechildDependencies) GetConnectionPool() ConnectionPool {
 func (d *ExamplechildDependencies) SetConnected(connected bool) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
+
 	d.isConnected = connected
 }
 
@@ -88,5 +89,6 @@ func (d *ExamplechildDependencies) SetConnected(connected bool) {
 func (d *ExamplechildDependencies) IsConnected() bool {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
+
 	return d.isConnected
 }

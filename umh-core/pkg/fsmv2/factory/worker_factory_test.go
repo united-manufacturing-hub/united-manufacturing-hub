@@ -538,6 +538,7 @@ func TestRegisterWorkerAndSupervisorFactory(t *testing.T) {
 				// Verify both worker and supervisor were registered
 				types := factory.ListRegisteredTypes()
 				foundWorker := false
+
 				for _, typ := range types {
 					if typ == "test_worker" {
 						foundWorker = true
@@ -545,12 +546,14 @@ func TestRegisterWorkerAndSupervisorFactory(t *testing.T) {
 						break
 					}
 				}
+
 				if !foundWorker {
 					t.Error("Worker factory was not registered")
 				}
 
 				supervisorTypes := factory.ListSupervisorTypes()
 				foundSupervisor := false
+
 				for _, typ := range supervisorTypes {
 					if typ == "test_worker" {
 						foundSupervisor = true
@@ -558,6 +561,7 @@ func TestRegisterWorkerAndSupervisorFactory(t *testing.T) {
 						break
 					}
 				}
+
 				if !foundSupervisor {
 					t.Error("Supervisor factory was not registered")
 				}
@@ -652,10 +656,12 @@ func TestValidateRegistryConsistency(t *testing.T) {
 			if len(workerOnly) != len(tt.wantWorkerOnly) {
 				t.Errorf("ValidateRegistryConsistency() workerOnly count = %d, want %d", len(workerOnly), len(tt.wantWorkerOnly))
 			}
+
 			workerOnlyMap := make(map[string]bool)
 			for _, w := range workerOnly {
 				workerOnlyMap[w] = true
 			}
+
 			for _, want := range tt.wantWorkerOnly {
 				if !workerOnlyMap[want] {
 					t.Errorf("ValidateRegistryConsistency() missing worker-only type %q", want)
@@ -666,10 +672,12 @@ func TestValidateRegistryConsistency(t *testing.T) {
 			if len(supervisorOnly) != len(tt.wantSupervisorOnly) {
 				t.Errorf("ValidateRegistryConsistency() supervisorOnly count = %d, want %d", len(supervisorOnly), len(tt.wantSupervisorOnly))
 			}
+
 			supervisorOnlyMap := make(map[string]bool)
 			for _, s := range supervisorOnly {
 				supervisorOnlyMap[s] = true
 			}
+
 			for _, want := range tt.wantSupervisorOnly {
 				if !supervisorOnlyMap[want] {
 					t.Errorf("ValidateRegistryConsistency() missing supervisor-only type %q", want)

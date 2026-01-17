@@ -44,6 +44,7 @@ func (m *ChildrenManager) List() []config.ChildInfo {
 	for name, child := range m.children {
 		infos = append(infos, m.buildChildInfo(name, child))
 	}
+
 	return infos
 }
 
@@ -54,7 +55,9 @@ func (m *ChildrenManager) Get(name string) *config.ChildInfo {
 	if !exists {
 		return nil
 	}
+
 	info := m.buildChildInfo(name, child)
+
 	return &info
 }
 
@@ -76,6 +79,7 @@ func (m *ChildrenManager) Counts() (healthy, unhealthy int) {
 		}
 		// Stopped and unknown states don't count as either
 	}
+
 	return healthy, unhealthy
 }
 
@@ -92,6 +96,7 @@ func (m *ChildrenManager) AllHealthy() bool {
 			return false
 		}
 	}
+
 	return true
 }
 
@@ -108,6 +113,7 @@ func (m *ChildrenManager) AllStopped() bool {
 			return false
 		}
 	}
+
 	return true
 }
 
@@ -137,12 +143,15 @@ func isUnhealthyState(stateName string) bool {
 	if stateName == "" || stateName == "unknown" {
 		return false
 	}
+
 	if strings.Contains(stateName, "Stopped") {
 		return false
 	}
+
 	if isHealthyState(stateName) {
 		return false
 	}
+
 	return true
 }
 

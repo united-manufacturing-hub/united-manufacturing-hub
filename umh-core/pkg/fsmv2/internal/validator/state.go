@@ -43,8 +43,8 @@ func ValidateNextMethodTypeAssertions(baseDir string) []Violation {
 
 // checkSingleEntryPointPattern parses a state file and looks for type assertions in Next().
 // Valid patterns:
-// 1. A type assertion at the first statement: snap := snapAny.(SomeType)
-// 2. A ConvertSnapshot call at the first statement: snap := helpers.ConvertSnapshot[...](snapAny)
+// 1. A type assertion at the first statement: snap := snapAny.(SomeType).
+// 2. A ConvertSnapshot call at the first statement: snap := helpers.ConvertSnapshot[...](snapAny).
 func checkSingleEntryPointPattern(filename string) []Violation {
 	var violations []Violation
 
@@ -79,6 +79,7 @@ func checkSingleEntryPointPattern(filename string) []Violation {
 			if typeAssert, ok := bodyNode.(*ast.TypeAssertExpr); ok {
 				pos := fset.Position(typeAssert.Pos())
 				typeAssertions = append(typeAssertions, pos.Line)
+
 				return true
 			}
 
@@ -102,16 +103,20 @@ func checkSingleEntryPointPattern(filename string) []Violation {
 		// 2. Exactly 1 ConvertSnapshot call at first statement, no type assertions
 		totalEntryPoints := len(typeAssertions) + len(convertSnapshotCalls)
 
-		if totalEntryPoints == 0 {
+		switch {
+		case totalEntryPoints == 0:
 			violations = append(violations, Violation{
 				File:    filename,
 				Line:    fset.Position(funcDecl.Pos()).Line,
 				Type:    "MISSING_ENTRY_ASSERTION",
 				Message: "Next() method missing entry-point type conversion (should use type assertion or ConvertSnapshot at first statement)",
 			})
-		} else if totalEntryPoints > 1 {
+		case totalEntryPoints > 1:
 			// Find the second entry point for error reporting
-			allLines := append(typeAssertions, convertSnapshotCalls...)
+			allLines := make([]int, 0, len(typeAssertions)+len(convertSnapshotCalls))
+			allLines = append(allLines, typeAssertions...)
+			allLines = append(allLines, convertSnapshotCalls...)
+
 			if len(allLines) > 1 {
 				violations = append(violations, Violation{
 					File:    filename,
@@ -120,7 +125,7 @@ func checkSingleEntryPointPattern(filename string) []Violation {
 					Message: fmt.Sprintf("Next() method has %d type conversions (should have exactly 1 at entry)", totalEntryPoints),
 				})
 			}
-		} else {
+		default:
 			// Exactly one entry point - check if it's at the first statement
 			var entryLine int
 			if len(typeAssertions) == 1 {
@@ -187,6 +192,7 @@ func checkShutdownCheckFirst(filename string) []Violation {
 		for _, stmt := range funcDecl.Body.List[1:] { // Skip first statement (type assertion)
 			if ifStmt, ok := stmt.(*ast.IfStmt); ok {
 				firstIfStmt = ifStmt
+
 				break
 			}
 		}
@@ -199,15 +205,18 @@ func checkShutdownCheckFirst(filename string) []Violation {
 		// Check if the first if statement is checking IsShutdownRequested or IsStopRequired
 		// (IsStopRequired is used by child workers and combines IsShutdownRequested + !ShouldBeRunning)
 		isShutdownCheck := false
+
 		ast.Inspect(firstIfStmt.Cond, func(condNode ast.Node) bool {
 			if callExpr, ok := condNode.(*ast.CallExpr); ok {
 				if selExpr, ok := callExpr.Fun.(*ast.SelectorExpr); ok {
 					if selExpr.Sel.Name == "IsShutdownRequested" || selExpr.Sel.Name == "IsStopRequired" {
 						isShutdownCheck = true
+
 						return false
 					}
 				}
 			}
+
 			return true
 		})
 
@@ -240,6 +249,7 @@ func ValidateChildWorkersIsStopRequired(baseDir string) []Violation {
 
 	// Find all worker directories
 	workersDir := filepath.Join(baseDir, "workers")
+
 	entries, err := os.ReadDir(workersDir)
 	if err != nil {
 		return violations
@@ -249,6 +259,7 @@ func ValidateChildWorkersIsStopRequired(baseDir string) []Violation {
 		if !entry.IsDir() {
 			continue
 		}
+
 		workerDir := filepath.Join(workersDir, entry.Name())
 
 		// Check subdirectories (e.g., example/examplechild)
@@ -261,6 +272,7 @@ func ValidateChildWorkersIsStopRequired(baseDir string) []Violation {
 			if !subEntry.IsDir() {
 				continue
 			}
+
 			subWorkerDir := filepath.Join(workerDir, subEntry.Name())
 			violations = append(violations, checkChildWorkerIsStopRequired(subWorkerDir)...)
 		}
@@ -283,6 +295,7 @@ func checkChildWorkerIsStopRequired(workerDir string) []Violation {
 
 	// Find state files in this worker
 	stateDir := filepath.Join(workerDir, "state")
+
 	stateFiles, err := filepath.Glob(filepath.Join(stateDir, "state_*.go"))
 	if err != nil {
 		return violations
@@ -294,6 +307,7 @@ func checkChildWorkerIsStopRequired(workerDir string) []Violation {
 		if strings.HasSuffix(baseName, "_test.go") {
 			continue
 		}
+
 		if strings.Contains(baseName, "stopped") || strings.Contains(baseName, "trying_to_stop") {
 			continue
 		}
@@ -314,22 +328,26 @@ func checkChildWorkerIsStopRequired(workerDir string) []Violation {
 // isChildWorker checks if a worker has IsStopRequired() method in its snapshot.
 func isChildWorker(workerDir string) bool {
 	snapshotFile := filepath.Join(workerDir, "snapshot", "snapshot.go")
+
 	content, err := os.ReadFile(snapshotFile)
 	if err != nil {
 		return false
 	}
+
 	return strings.Contains(string(content), "IsStopRequired()")
 }
 
 // checkFirstConditionalUsesIsStopRequired parses state file and checks first if condition.
 func checkFirstConditionalUsesIsStopRequired(filename string) bool {
 	fset := token.NewFileSet()
+
 	node, err := parser.ParseFile(fset, filename, nil, parser.ParseComments)
 	if err != nil {
 		return true // Be permissive on parse errors
 	}
 
 	usesIsStopRequired := false
+
 	ast.Inspect(node, func(n ast.Node) bool {
 		funcDecl, ok := n.(*ast.FuncDecl)
 		if !ok || funcDecl.Name.Name != "Next" {
@@ -349,15 +367,19 @@ func checkFirstConditionalUsesIsStopRequired(filename string) bool {
 						if selExpr, ok := callExpr.Fun.(*ast.SelectorExpr); ok {
 							if selExpr.Sel.Name == "IsStopRequired" {
 								usesIsStopRequired = true
+
 								return false
 							}
 						}
 					}
+
 					return true
 				})
+
 				break
 			}
 		}
+
 		return true
 	})
 
@@ -409,6 +431,7 @@ func checkStateXORAction(filename string) []Violation {
 
 			// Check if state is changing (not returning 's' or receiver)
 			stateIsChanging := false
+
 			if unaryExpr, ok := stateResult.(*ast.UnaryExpr); ok {
 				// &SomeState{} - check if it's not the current state
 				if compLit, ok := unaryExpr.X.(*ast.CompositeLit); ok {
@@ -429,6 +452,7 @@ func checkStateXORAction(filename string) []Violation {
 
 			// Check if action is non-nil
 			actionIsNonNil := false
+
 			if _, ok := actionResult.(*ast.Ident); !ok {
 				// Not 'nil', could be &SomeAction{}
 				if unaryExpr, ok := actionResult.(*ast.UnaryExpr); ok {
@@ -490,14 +514,17 @@ func checkStateStringAndReason(filename string) []Violation {
 
 	// Collect all state types (structs ending with "State")
 	stateTypes := make(map[string]token.Pos)
+
 	ast.Inspect(node, func(n ast.Node) bool {
 		typeSpec, ok := n.(*ast.TypeSpec)
 		if !ok || !strings.HasSuffix(typeSpec.Name.Name, "State") {
 			return true
 		}
+
 		if _, ok := typeSpec.Type.(*ast.StructType); ok {
 			stateTypes[typeSpec.Name.Name] = typeSpec.Pos()
 		}
+
 		return true
 	})
 
@@ -518,6 +545,7 @@ func checkStateStringAndReason(filename string) []Violation {
 
 		// Get receiver type name
 		var typeName string
+
 		switch recvType := funcDecl.Recv.List[0].Type.(type) {
 		case *ast.StarExpr:
 			if ident, ok := recvType.X.(*ast.Ident); ok {
@@ -531,6 +559,7 @@ func checkStateStringAndReason(filename string) []Violation {
 			if funcDecl.Name.Name == "String" {
 				typesWithString[typeName] = true
 			}
+
 			if funcDecl.Name.Name == "Reason" {
 				typesWithReason[typeName] = true
 			}
@@ -549,6 +578,7 @@ func checkStateStringAndReason(filename string) []Violation {
 				Message: fmt.Sprintf("State %s missing String() string method", typeName),
 			})
 		}
+
 		if !typesWithReason[typeName] {
 			violations = append(violations, Violation{
 				File:    filename,
@@ -669,6 +699,7 @@ func checkSignalStateMutualExclusion(filename string) []Violation {
 
 			// Check if signal is not SignalNone
 			signalIsNone := false
+
 			if selExpr, ok := signalResult.(*ast.SelectorExpr); ok {
 				if selExpr.Sel.Name == "SignalNone" {
 					signalIsNone = true
@@ -678,6 +709,7 @@ func checkSignalStateMutualExclusion(filename string) []Violation {
 			// If signal is not SignalNone, state must be 's' (receiver)
 			if !signalIsNone {
 				stateIsReceiver := false
+
 				if ident, ok := stateResult.(*ast.Ident); ok {
 					if ident.Name == "s" {
 						stateIsReceiver = true
@@ -741,6 +773,7 @@ func checkTryingToStatesReturnActions(filename string) []Violation {
 		}
 
 		hasActionReturn := false
+
 		ast.Inspect(funcDecl.Body, func(bodyNode ast.Node) bool {
 			retStmt, ok := bodyNode.(*ast.ReturnStmt)
 			if !ok || len(retStmt.Results) != 3 {
@@ -752,12 +785,14 @@ func checkTryingToStatesReturnActions(filename string) []Violation {
 				if unaryExpr, ok := actionResult.(*ast.UnaryExpr); ok {
 					if _, ok := unaryExpr.X.(*ast.CompositeLit); ok {
 						hasActionReturn = true
+
 						return false
 					}
 				}
 			} else {
 				if ident, ok := actionResult.(*ast.Ident); ok && ident.Name != "nil" {
 					hasActionReturn = true
+
 					return false
 				}
 			}
@@ -825,6 +860,7 @@ func checkExhaustiveTransitionCoverage(filename string) []Violation {
 		}
 
 		lastStmt := funcDecl.Body.List[len(funcDecl.Body.List)-1]
+
 		retStmt, ok := lastStmt.(*ast.ReturnStmt)
 		if !ok || len(retStmt.Results) != 3 {
 			return true
@@ -835,6 +871,7 @@ func checkExhaustiveTransitionCoverage(filename string) []Violation {
 		actionResult := retStmt.Results[2]
 
 		isCatchAll := false
+
 		if ident, ok := stateResult.(*ast.Ident); ok && ident.Name == "s" {
 			if selExpr, ok := signalResult.(*ast.SelectorExpr); ok {
 				if selExpr.Sel.Name == "SignalNone" {
@@ -898,11 +935,13 @@ func checkBaseStateEmbedding(filename string) []Violation {
 		}
 
 		hasBaseState := false
+
 		for _, field := range structType.Fields.List {
 			if len(field.Names) == 0 {
 				if ident, ok := field.Type.(*ast.Ident); ok {
 					if strings.HasPrefix(ident.Name, "Base") && strings.HasSuffix(ident.Name, "State") {
 						hasBaseState = true
+
 						break
 					}
 				}
@@ -926,7 +965,7 @@ func checkBaseStateEmbedding(filename string) []Violation {
 }
 
 // GetStateFilePath converts a type name to a state file path.
-// e.g., "TryingToConnectState" -> "state_trying_to_connect.go"
+// For example, "TryingToConnectState" -> "state_trying_to_connect.go".
 func GetStateFilePath(fsmv2Dir, typeName string) string {
 	fileName := strings.ToLower(strings.ReplaceAll(typeName, "State", ""))
 	fileName = "state_" + strings.ToLower(strings.ReplaceAll(fileName, "TryingTo", "trying_to_"))

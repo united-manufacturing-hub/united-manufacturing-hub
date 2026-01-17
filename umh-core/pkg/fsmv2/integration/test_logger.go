@@ -59,6 +59,7 @@ func (tl *TestLogger) HasLogWithMessage(msg string) bool {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -76,6 +77,7 @@ func (tl *TestLogger) HasLogWithField(key string, value interface{}) bool {
 			}
 		}
 	}
+
 	return false
 }
 
@@ -86,12 +88,15 @@ func (tl *TestLogger) GetLogsMatching(msg string) []observer.LoggedEntry {
 	defer tl.mu.RUnlock()
 
 	var matching []observer.LoggedEntry
+
 	entries := tl.Logs.All()
+
 	for _, entry := range entries {
 		if strings.Contains(entry.Message, msg) {
 			matching = append(matching, entry)
 		}
 	}
+
 	return matching
 }
 
@@ -102,12 +107,15 @@ func (tl *TestLogger) GetErrorsAndWarnings() []observer.LoggedEntry {
 	defer tl.mu.RUnlock()
 
 	var errorsAndWarnings []observer.LoggedEntry
+
 	entries := tl.Logs.All()
+
 	for _, entry := range entries {
 		if entry.Level == zapcore.ErrorLevel || entry.Level == zapcore.WarnLevel {
 			errorsAndWarnings = append(errorsAndWarnings, entry)
 		}
 	}
+
 	return errorsAndWarnings
 }
 
@@ -117,12 +125,15 @@ func (tl *TestLogger) CountLogsWithMessage(msg string) int {
 	defer tl.mu.RUnlock()
 
 	count := 0
+
 	entries := tl.Logs.All()
+
 	for _, entry := range entries {
 		if strings.Contains(entry.Message, msg) {
 			count++
 		}
 	}
+
 	return count
 }
 
@@ -133,13 +144,16 @@ func (tl *TestLogger) GetLogsWithFieldContaining(key, valueSubstring string) []o
 	defer tl.mu.RUnlock()
 
 	var matching []observer.LoggedEntry
+
 	entries := tl.Logs.All()
+
 	for _, entry := range entries {
 		for _, field := range entry.Context {
 			if field.Key == key {
 				if strVal, ok := field.Interface.(string); ok {
 					if strings.Contains(strVal, valueSubstring) {
 						matching = append(matching, entry)
+
 						break
 					}
 				}
@@ -157,16 +171,20 @@ func (tl *TestLogger) GetLogsMissingField(key string) []observer.LoggedEntry {
 	defer tl.mu.RUnlock()
 
 	var missing []observer.LoggedEntry
+
 	entries := tl.Logs.All()
 
 	for _, entry := range entries {
 		hasField := false
+
 		for _, field := range entry.Context {
 			if field.Key == key {
 				hasField = true
+
 				break
 			}
 		}
+
 		if !hasField {
 			missing = append(missing, entry)
 		}

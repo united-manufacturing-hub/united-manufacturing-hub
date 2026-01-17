@@ -116,5 +116,6 @@ func ListScenarios() map[string]string {
 	for name, scenario := range Registry {
 		result[name] = scenario.Description
 	}
+
 	return result
 }

@@ -175,9 +175,11 @@ var CascadeScenario = Scenario{
 	YAMLConfig: `
 children:
   # Parent that creates 2 children of type examplefailing
-  # Children will fail 3 times each, then recover
-  # Parent will go to Degraded state while children are unhealthy
-  # Parent will return to Running when all children recover
+  # Children will fail 3 times per cycle, for 2 cycles total:
+  # Cycle 1 (startup): Children fail 3x, then connect -> Parent reaches Running
+  # Cycle 2 (runtime): Children disconnect, fail 3x again -> Parent goes Degraded
+  # After cycle 2: Children connect permanently -> Parent returns to Running
+  # This tests the complete cascade flow including Degraded state transitions.
   - name: "cascade-parent"
     workerType: "exampleparent"
     userSpec:
@@ -187,6 +189,7 @@ children:
         child_config: |
           should_fail: true
           max_failures: 3
+          failure_cycles: 2
       variables:
         user:
           IP: "127.0.0.1"

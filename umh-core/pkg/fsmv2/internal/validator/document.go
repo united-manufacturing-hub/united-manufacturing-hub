@@ -36,12 +36,13 @@ import (
 // - Direct document manipulation breaks the abstraction boundary between
 //   the supervisor and persistence layers
 // - Type-safe interfaces ensure compile-time guarantees
-// - The triangular adapter pattern (Worker -> Interface -> Concrete type) should be used
+// - The triangular adapter pattern (Worker -> Interface -> Concrete type) should be used.
 func ValidateNoDirectDocumentManipulation(baseDir string) []Violation {
 	var violations []Violation
 
 	// Only scan supervisor package files
 	supervisorDir := filepath.Join(baseDir, "supervisor")
+
 	entries, err := os.ReadDir(supervisorDir)
 	if err != nil {
 		return violations
@@ -69,6 +70,7 @@ func checkDocumentManipulation(filename string) []Violation {
 	var violations []Violation
 
 	fset := token.NewFileSet()
+
 	node, err := parser.ParseFile(fset, filename, nil, parser.ParseComments)
 	if err != nil {
 		return violations

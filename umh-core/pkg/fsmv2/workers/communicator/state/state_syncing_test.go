@@ -39,10 +39,6 @@ var _ = Describe("SyncingState", func() {
 		stateObj = &state.SyncingState{}
 		_ = stateObj
 	})
-
-	PIt("should sync messages and transition to appropriate state", func() {
-		// Tests pending: Need registry pattern updates
-	})
 })
 
 var _ = Describe("SyncingState Circuit Breaker", func() {

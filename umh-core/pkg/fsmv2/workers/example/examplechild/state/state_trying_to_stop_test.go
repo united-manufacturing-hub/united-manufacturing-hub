@@ -18,7 +18,5 @@ import "testing"
 
 func TestTryingToStopState(t *testing.T) {
 	state := &TryingToStopState{}
-	if state == nil {
-		t.Fatal("TryingToStopState is nil")
-	}
+	_ = state // Verify compilation
 }

@@ -98,7 +98,7 @@ name: {{ .name }}`
 			merged := config.MergeLocations(parentLocation, childLocation)
 			Expect(merged).To(HaveLen(4))
 
-			filled := config.FillISA95Gaps(merged)
+			filled := config.FillISA95Gaps(merged) //nolint:staticcheck // testing deprecated function
 			Expect(filled).To(HaveLen(5))
 
 			Expect(filled[0].Type).To(Equal("enterprise"))
@@ -212,7 +212,7 @@ internal_id: {{ .internal.id }}`
 				{Type: "line", Value: "Line-A"},
 			}
 
-			filled := config.FillISA95Gaps(sparseLocation)
+			filled := config.FillISA95Gaps(sparseLocation) //nolint:staticcheck // testing deprecated function
 
 			Expect(filled).To(HaveLen(5))
 			Expect(filled[0].Type).To(Equal("enterprise"))

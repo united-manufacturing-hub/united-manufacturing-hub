@@ -29,7 +29,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/testutil"
 )
 
-// CachingTestWorker wraps testutil.Worker to track DeriveDesiredState calls
+// CachingTestWorker wraps testutil.Worker to track DeriveDesiredState calls.
 type CachingTestWorker struct {
 	testutil.Worker
 	deriveCallCount atomic.Int32
@@ -49,14 +49,17 @@ func NewCachingTestWorker(identity fsmv2.Identity) *CachingTestWorker {
 			Desired:     &testutil.DesiredState{},
 		}, nil
 	}
+
 	return w
 }
 
 func (w *CachingTestWorker) DeriveDesiredState(spec interface{}) (config.DesiredState, error) {
 	w.deriveCallCount.Add(1)
+
 	if userSpec, ok := spec.(config.UserSpec); ok {
 		w.lastSpec = userSpec
 	}
+
 	return config.DesiredState{
 		State: config.DesiredStateRunning,
 	}, nil

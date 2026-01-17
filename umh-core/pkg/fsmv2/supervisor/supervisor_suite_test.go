@@ -382,9 +382,6 @@ func newSupervisorWithWorker(worker *mockWorker, customStore storage.TriangularS
 		}
 
 		triangularStore = storage.NewTriangularStore(basicStore, zap.NewNop().Sugar())
-		if triangularStore == nil {
-			panic("triangular store is nil")
-		}
 	}
 
 	s := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{

@@ -55,7 +55,7 @@ var _ = Describe("LockManager", func() {
 
 		It("should track lock release", func() {
 			lock1.Lock()
-			lock1.Unlock()
+			lock1.Unlock() //nolint:staticcheck // empty critical section intentional for testing lock tracking
 
 			Expect(manager.IsHeld("Lock1")).To(BeFalse())
 		})
@@ -130,7 +130,7 @@ var _ = Describe("LockManager", func() {
 				lock1.Lock()
 				time.Sleep(10 * time.Millisecond)
 				lock2.Lock()
-				lock2.Unlock()
+				lock2.Unlock() //nolint:staticcheck // empty critical section intentional for testing lock ordering
 				lock1.Unlock()
 			}()
 
@@ -139,7 +139,7 @@ var _ = Describe("LockManager", func() {
 				defer wg.Done()
 				time.Sleep(5 * time.Millisecond)
 				lock2.Lock()
-				lock2.Unlock()
+				lock2.Unlock() //nolint:staticcheck // empty critical section intentional for testing lock ordering
 			}()
 
 			wg.Wait()
@@ -159,7 +159,7 @@ var _ = Describe("LockManager", func() {
 
 			Expect(func() {
 				freshLock1.Lock()
-				freshLock1.Unlock()
+				freshLock1.Unlock() //nolint:staticcheck // empty critical section intentional for testing
 			}).NotTo(Panic())
 		})
 
@@ -172,7 +172,7 @@ var _ = Describe("LockManager", func() {
 			start := time.Now()
 			for range 10000 {
 				freshLock.Lock()
-				freshLock.Unlock()
+				freshLock.Unlock() //nolint:staticcheck // empty critical section intentional for testing
 			}
 			duration := time.Since(start)
 

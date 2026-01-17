@@ -32,6 +32,7 @@ func (a *ConnectAction) Execute(ctx context.Context, depsAny any) error {
 		return ctx.Err()
 	default:
 	}
+
 	deps := depsAny.(snapshot.ExamplepanicDependencies)
 	logger := deps.GetLogger()
 

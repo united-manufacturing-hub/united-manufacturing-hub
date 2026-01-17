@@ -37,24 +37,30 @@ type ConnectAction struct {
 
 // Execute attempts to acquire a connection from the pool.
 // Returns ErrSimulatedFailure when configured to fail and attempt count < MaxFailures.
+// Supports multiple failure cycles: each cycle fails MaxFailures times before succeeding.
 func (a *ConnectAction) Execute(ctx context.Context, depsAny any) error {
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
 	default:
 	}
+
 	deps := depsAny.(snapshot.ExamplefailingDependencies)
 	logger := deps.GetLogger()
 
-	// Check if we should simulate failure
-	if deps.GetShouldFail() {
+	// Check if we should simulate failure (and we still have cycles to complete)
+	if deps.GetShouldFail() && !deps.AllCyclesComplete() {
 		attempts := deps.IncrementAttempts()
 		maxFailures := deps.GetMaxFailures()
+		currentCycle := deps.GetCurrentCycle()
+		totalCycles := deps.GetFailureCycles()
 
 		logger.Infow("connect_attempting",
 			"attempt", attempts,
 			"max_failures", maxFailures,
 			"should_fail", true,
+			"current_cycle", currentCycle+1, // Human-readable (1-indexed)
+			"total_cycles", totalCycles,
 		)
 
 		if attempts <= maxFailures {
@@ -62,19 +68,29 @@ func (a *ConnectAction) Execute(ctx context.Context, depsAny any) error {
 				"attempt", attempts,
 				"max_failures", maxFailures,
 				"remaining", maxFailures-attempts,
+				"current_cycle", currentCycle+1,
+				"total_cycles", totalCycles,
 			)
+
 			return ErrSimulatedFailure
 		}
 
 		logger.Infow("connect_succeeded_after_failures",
 			"total_attempts", attempts,
+			"current_cycle", currentCycle+1,
+			"total_cycles", totalCycles,
+			"more_cycles_remaining", currentCycle+1 < totalCycles,
 		)
 		deps.SetConnected(true)
+		deps.ResetTicksInConnected() // Reset ticks counter for the Connected state
+
 		return nil
 	}
 
 	logger.Info("connect_succeeded")
 	deps.SetConnected(true)
+	deps.ResetTicksInConnected() // Reset ticks counter for the Connected state
+
 	return nil
 }
 

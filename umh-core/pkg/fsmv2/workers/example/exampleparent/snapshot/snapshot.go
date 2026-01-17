@@ -67,13 +67,15 @@ func (o ExampleparentObservedState) GetObservedDesiredState() fsmv2.DesiredState
 // Called by Collector when StateProvider callback is configured.
 func (o ExampleparentObservedState) SetState(s string) fsmv2.ObservedState {
 	o.State = s
+
 	return o
 }
 
 // SetShutdownRequested sets the shutdown requested status on this observed state.
 // Called by Collector when ShutdownRequestedProvider callback is configured.
 func (o ExampleparentObservedState) SetShutdownRequested(v bool) fsmv2.ObservedState {
-	o.ExampleparentDesiredState.ShutdownRequested = v
+	o.ShutdownRequested = v
+
 	return o
 }
 
@@ -82,5 +84,6 @@ func (o ExampleparentObservedState) SetShutdownRequested(v bool) fsmv2.ObservedS
 func (o ExampleparentObservedState) SetChildrenCounts(healthy, unhealthy int) fsmv2.ObservedState {
 	o.ChildrenHealthy = healthy
 	o.ChildrenUnhealthy = unhealthy
+
 	return o
 }

@@ -193,10 +193,13 @@ func (c *Collector[TObserved]) Stop(ctx context.Context) {
 // The caller should handle errors gracefully - a failed final observation is not fatal.
 func (c *Collector[TObserved]) CollectFinalObservation(ctx context.Context) error {
 	c.mu.RLock()
+
 	if c.state != collectorStateRunning {
 		c.mu.RUnlock()
+
 		return fmt.Errorf("collector not running (state: %s)", c.state.String())
 	}
+
 	timeout := c.config.ObservationTimeout
 	c.mu.RUnlock()
 
@@ -208,10 +211,12 @@ func (c *Collector[TObserved]) CollectFinalObservation(ctx context.Context) erro
 	err := c.collectAndSaveObservedState(collectCtx)
 	if err != nil {
 		c.config.Logger.Warnw("collector_final_observation_failed", "error", err)
+
 		return err
 	}
 
 	c.config.Logger.Debugw("collector_final_observation_completed")
+
 	return nil
 }
 

@@ -24,7 +24,6 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 )
@@ -265,28 +264,3 @@ var _ = Describe("DeriveDesiredState saves to store", func() {
 		Expect(savedState).To(Equal("running"))
 	})
 })
-
-// trackingWorker is a mock worker that tracks DeriveDesiredState calls.
-type trackingWorker struct {
-	deriveFunc func(spec interface{}) (config.DesiredState, error)
-}
-
-func (w *trackingWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedState, error) {
-	return &supervisor.TestObservedState{
-		ID:          "test-worker",
-		CollectedAt: time.Now(),
-		Desired:     &supervisor.TestDesiredState{},
-	}, nil
-}
-
-func (w *trackingWorker) DeriveDesiredState(spec interface{}) (config.DesiredState, error) {
-	if w.deriveFunc != nil {
-		return w.deriveFunc(spec)
-	}
-
-	return config.DesiredState{State: "running"}, nil
-}
-
-func (w *trackingWorker) GetInitialState() fsmv2.State[any, any] {
-	return &supervisor.TestState{}
-}

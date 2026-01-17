@@ -99,6 +99,7 @@ func (v VariableBundle) Flatten() map[string]any {
 	if v.Global != nil {
 		result["global"] = v.Global
 	}
+
 	if v.Internal != nil {
 		result["internal"] = v.Internal
 	}
@@ -139,9 +140,13 @@ func deepCloneMap(m map[string]any) map[string]any {
 	if m == nil {
 		return nil
 	}
+
 	data, _ := json.Marshal(m)
+
 	var result map[string]any
-	json.Unmarshal(data, &result)
+
+	_ = json.Unmarshal(data, &result)
+
 	return result
 }
 

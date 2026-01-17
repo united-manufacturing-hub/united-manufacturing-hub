@@ -17,7 +17,7 @@ package execution
 import (
 	"context"
 
-	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 )
 
@@ -44,7 +44,7 @@ func VerifyActionIdempotency(action fsmv2.Action[any], iterations int, verifySta
 
 	for i := range iterations {
 		err := action.Execute(ctx, nil)
-		Expect(err).ToNot(HaveOccurred(), "Action should succeed on iteration %d", i+1)
+		gomega.Expect(err).ToNot(gomega.HaveOccurred(), "Action should succeed on iteration %d", i+1)
 	}
 
 	verifyState()

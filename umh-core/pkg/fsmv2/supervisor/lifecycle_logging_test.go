@@ -307,12 +307,13 @@ var _ = Describe("Lifecycle Logging", func() {
 				runSupervisor()
 
 				entries := parseLogEntries()
-				Expect(len(entries)).To(BeNumerically(">", 0), "Expected log entries to be emitted")
+				Expect(entries).ToNot(BeEmpty(), "Expected log entries to be emitted")
 
 				foundDebugEntry := false
 				for _, entry := range entries {
 					if entry["level"] == "debug" {
 						foundDebugEntry = true
+
 						break
 					}
 				}

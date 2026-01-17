@@ -76,15 +76,19 @@ func verifyPanicWorkerCreated(t *integration.TestLogger) {
 	stateTransitions := t.GetLogsMatching("state_transition")
 
 	workerFound := false
+
 	for _, entry := range stateTransitions {
 		worker := ""
+
 		for _, field := range entry.Context {
 			if field.Key == "worker" {
 				worker = field.String
 			}
 		}
+
 		if strings.Contains(worker, "panic-worker") {
 			workerFound = true
+
 			break
 		}
 	}
@@ -103,6 +107,7 @@ func verifyPanicWasCaught(t *integration.TestLogger) {
 
 	// Verify panic message contains expected text
 	panicFound := false
+
 	for _, entry := range panicLogs {
 		for _, field := range entry.Context {
 			if field.Key == "panic" {
@@ -113,6 +118,7 @@ func verifyPanicWasCaught(t *integration.TestLogger) {
 						panicStr = interfaceVal
 					}
 				}
+
 				if strings.Contains(panicStr, "simulated panic") ||
 					strings.Contains(panicStr, "panic") {
 					panicFound = true
@@ -131,19 +137,24 @@ func verifyPanicWorkerNeverConnected(t *integration.TestLogger) {
 	stateTransitions := t.GetLogsMatching("state_transition")
 
 	reachedConnected := false
+
 	for _, entry := range stateTransitions {
 		worker := ""
 		toState := ""
+
 		for _, field := range entry.Context {
 			if field.Key == "worker" {
 				worker = field.String
 			}
+
 			if field.Key == "to_state" {
 				toState = field.String
 			}
 		}
+
 		if strings.Contains(worker, "panic-worker") && toState == "Connected" {
 			reachedConnected = true
+
 			break
 		}
 	}

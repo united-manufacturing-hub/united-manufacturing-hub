@@ -32,8 +32,8 @@ import (
 func (s *Supervisor[TObserved, TDesired]) Start(ctx context.Context) <-chan struct{} {
 	done := make(chan struct{})
 
-	// Create a child context that we can cancel in Shutdown()
-	// Shutdown() can stop the tick loop even if parent context is still active
+	// Create a child context that we can cancel via Shutdown().
+	// This allows stopping the tick loop even if parent context is still active.
 	s.ctxMu.Lock()
 	s.ctx, s.ctxCancel = context.WithCancel(ctx)
 	s.ctxMu.Unlock()
@@ -149,10 +149,13 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 	// By releasing parent lock before calling child.Shutdown(), we allow
 	// child Tick() goroutines to complete and exit cleanly.
 	childrenToShutdown := make(map[string]SupervisorInterface, len(s.children))
+
 	childDoneChans := make(map[string]<-chan struct{}, len(s.childDoneChans))
+
 	for name, child := range s.children {
 		childrenToShutdown[name] = child
 	}
+
 	for name, done := range s.childDoneChans {
 		childDoneChans[name] = done
 	}
@@ -233,6 +236,7 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 			case <-timeoutCh:
 				s.logger.Warnw("graceful_shutdown_timeout",
 					"timeout", gracefulTimeout)
+
 				break gracefulWaitLoop
 			case <-ticker.C:
 				s.mu.RLock()
@@ -241,10 +245,12 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 
 				if remaining == 0 {
 					s.logger.Debugw("graceful_shutdown_workers_removed")
+
 					break gracefulWaitLoop
 				}
 			}
 		}
+
 		ticker.Stop()
 	}
 
@@ -253,10 +259,12 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 	// This must happen BEFORE waiting for metrics reporter, because the metrics
 	// reporter goroutine waits on <-ctx.Done() to exit.
 	s.ctxMu.Lock()
+
 	if s.ctxCancel != nil {
 		s.ctxCancel()
 		s.ctxCancel = nil // Prevent double-cancel
 	}
+
 	s.ctxMu.Unlock()
 
 	// Wait for metrics reporter to finish (it will exit now that context is cancelled)
@@ -271,6 +279,7 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 	// Shutdown all per-worker executors and collectors (any remaining after graceful shutdown)
 	// These have their own goroutines that need to be stopped to prevent leaks.
 	shutdownCtx := context.Background()
+
 	for _, workerCtx := range s.workers {
 		s.logger.Debugw("worker_shutting_down")
 
@@ -391,6 +400,7 @@ func (s *Supervisor[TObserved, TDesired]) requestShutdown(ctx context.Context, w
 
 	// Load current desired state from database
 	var desired TDesired
+
 	err := s.store.LoadDesiredTyped(ctx, s.workerType, workerID, &desired)
 	if err != nil {
 		if !errors.Is(err, persistence.ErrNotFound) {
@@ -414,6 +424,7 @@ func (s *Supervisor[TObserved, TDesired]) requestShutdown(ctx context.Context, w
 	if err != nil {
 		return fmt.Errorf("failed to marshal desired state: %w", err)
 	}
+
 	desiredDoc := make(persistence.Document)
 	if err := json.Unmarshal(desiredJSON, &desiredDoc); err != nil {
 		return fmt.Errorf("failed to unmarshal to document: %w", err)
@@ -439,10 +450,13 @@ func (s *Supervisor[TObserved, TDesired]) requestShutdown(ctx context.Context, w
 // child supervisors when children are removed from ChildrenSpecs.
 func (s *Supervisor[TObserved, TDesired]) RequestShutdown(ctx context.Context, reason string) error {
 	s.mu.RLock()
+
 	workerIDs := make([]string, 0, len(s.workers))
+
 	for workerID := range s.workers {
 		workerIDs = append(workerIDs, workerID)
 	}
+
 	s.mu.RUnlock()
 
 	for _, workerID := range workerIDs {
@@ -450,6 +464,7 @@ func (s *Supervisor[TObserved, TDesired]) RequestShutdown(ctx context.Context, r
 			s.logger.Warnw("shutdown_request_failed", "error", err)
 		}
 	}
+
 	return nil
 }
 
@@ -469,13 +484,17 @@ func (s *Supervisor[TObserved, TDesired]) RequestShutdown(ctx context.Context, r
 func (s *Supervisor[TObserved, TDesired]) handleWorkerRestart(ctx context.Context, workerID string) error {
 	// Extract identity under lock before removal
 	s.mu.RLock()
+
 	workerCtx, exists := s.workers[workerID]
 	if !exists {
 		s.mu.RUnlock()
+
 		return fmt.Errorf("worker %s not found for restart", workerID)
 	}
+
 	identity := workerCtx.identity
 	fromState := workerCtx.currentState.String()
+
 	s.mu.RUnlock()
 
 	s.logger.Infow("worker_restart_executing",
@@ -524,6 +543,7 @@ func (s *Supervisor[TObserved, TDesired]) handleWorkerRestart(ctx context.Contex
 				s.logger.Errorw("restart_collector_start_failed",
 					"worker", workerID, "error", err)
 			}
+
 			newWorkerCtx.executor.Start(supervisorCtx)
 		}
 	}
@@ -535,11 +555,14 @@ func (s *Supervisor[TObserved, TDesired]) handleWorkerRestart(ctx context.Contex
 
 	// Get new state for logging
 	s.mu.RLock()
-	newWorkerCtx, _ := s.workers[workerID]
+
+	newWorkerCtx := s.workers[workerID]
 	toState := "unknown"
+
 	if newWorkerCtx != nil && newWorkerCtx.currentState != nil {
 		toState = newWorkerCtx.currentState.String()
 	}
+
 	s.mu.RUnlock()
 
 	s.logger.Infow("worker_restart_complete",
@@ -564,13 +587,16 @@ func (s *Supervisor[TObserved, TDesired]) clearShutdownRequested(ctx context.Con
 
 	// Save back - need to convert to Document
 	desiredDoc := make(persistence.Document)
+
 	desiredJSON, err := json.Marshal(desired)
 	if err != nil {
 		return fmt.Errorf("marshal desired: %w", err)
 	}
+
 	if err := json.Unmarshal(desiredJSON, &desiredDoc); err != nil {
 		return fmt.Errorf("unmarshal desired to doc: %w", err)
 	}
+
 	desiredDoc["id"] = workerID
 
 	if _, err := s.store.SaveDesired(ctx, s.workerType, workerID, desiredDoc); err != nil {

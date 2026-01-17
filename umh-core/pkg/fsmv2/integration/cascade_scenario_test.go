@@ -40,17 +40,19 @@ var _ = Describe("Cascade Scenario Integration", func() {
 		By("Setting up triangular store")
 		store := setupTestStoreForScenario(testLogger.Logger)
 
-		By("Creating scenario context with 15s duration")
-		// 15s allows time for the full failure/recovery cycle:
+		By("Creating scenario context with 25s duration")
+		// 25s allows time for two complete failure cycles:
+		// Cycle 1 (startup):
 		// - Parent starts and creates children
 		// - Children wait for ParentMappedState before starting (slight delay)
-		// - Children fail (3 times each)
-		// - Parent goes to Degraded
-		// - Children recover
-		// - Parent returns to Running
-		// Note: 10s was the original duration but children now properly wait for
-		// ParentMappedState which adds a small startup delay.
-		scenarioCtx, scenarioCancel := context.WithTimeout(ctx, 15*time.Second)
+		// - Children fail (3 times each) - Parent stays in TryingToStart (expected)
+		// - Children recover - Parent goes to Running
+		// Cycle 2 (runtime):
+		// - Children disconnect (after 2 healthy ticks)
+		// - Children fail (3 times each) - Parent goes to Degraded
+		// - Children recover - Parent returns to Running
+		// Note: 15s was not enough for two full cycles with 100ms tick interval.
+		scenarioCtx, scenarioCancel := context.WithTimeout(ctx, 25*time.Second)
 		defer scenarioCancel()
 
 		By("Running CascadeScenario with 100ms tick interval")
@@ -100,15 +102,19 @@ func verifyCascadeParentCreated(t *integration.TestLogger) {
 	createdLogs := t.GetLogsMatching("worker_created")
 
 	parentCreated := false
+
 	for _, entry := range createdLogs {
 		worker := ""
+
 		for _, field := range entry.Context {
 			if field.Key == "worker" {
 				worker = field.String
 			}
 		}
+
 		if strings.Contains(worker, "cascade-parent") {
 			parentCreated = true
+
 			break
 		}
 	}
@@ -118,13 +124,16 @@ func verifyCascadeParentCreated(t *integration.TestLogger) {
 		stateTransitions := t.GetLogsMatching("state_transition")
 		for _, entry := range stateTransitions {
 			worker := ""
+
 			for _, field := range entry.Context {
 				if field.Key == "worker" {
 					worker = field.String
 				}
 			}
+
 			if strings.Contains(worker, "cascade-parent") {
 				parentCreated = true
+
 				break
 			}
 		}
@@ -142,8 +151,10 @@ func verifyCascadeChildrenCreated(t *integration.TestLogger) {
 	stateTransitions := t.GetLogsMatching("state_transition")
 
 	childrenFound := make(map[string]bool)
+
 	for _, entry := range stateTransitions {
 		worker := ""
+
 		for _, field := range entry.Context {
 			if field.Key == "worker" {
 				worker = field.String
@@ -159,17 +170,19 @@ func verifyCascadeChildrenCreated(t *integration.TestLogger) {
 	failureLogs := t.GetLogsMatching("connect_failed_simulated")
 	for _, entry := range failureLogs {
 		worker := ""
+
 		for _, field := range entry.Context {
 			if field.Key == "worker" {
 				worker = field.String
 			}
 		}
+
 		if strings.Contains(worker, "child-") {
 			childrenFound[worker] = true
 		}
 	}
 
-	Expect(len(childrenFound)).To(BeNumerically(">=", 1),
+	Expect(childrenFound).ToNot(BeEmpty(),
 		fmt.Sprintf("Expected at least one child worker to be created, found: %v", childrenFound))
 
 	GinkgoWriter.Printf("✓ Cascade children created: %d children\n", len(childrenFound))
@@ -180,13 +193,16 @@ func verifyCascadeChildrenFailed(t *integration.TestLogger) {
 	failureLogs := t.GetLogsMatching("connect_failed_simulated")
 
 	childFailures := 0
+
 	for _, entry := range failureLogs {
 		worker := ""
+
 		for _, field := range entry.Context {
 			if field.Key == "worker" {
 				worker = field.String
 			}
 		}
+
 		if strings.Contains(worker, "child-") {
 			childFailures++
 		}
@@ -207,13 +223,16 @@ func verifyCascadeChildrenRecovered(t *integration.TestLogger) {
 	recoveryLogs := t.GetLogsMatching("connect_succeeded_after_failures")
 
 	childRecoveries := 0
+
 	for _, entry := range recoveryLogs {
 		worker := ""
+
 		for _, field := range entry.Context {
 			if field.Key == "worker" {
 				worker = field.String
 			}
 		}
+
 		if strings.Contains(worker, "child-") {
 			childRecoveries++
 		}
@@ -236,10 +255,12 @@ func verifyCascadeParentStateTransitions(t *integration.TestLogger) {
 	for _, entry := range stateTransitions {
 		worker := ""
 		toState := ""
+
 		for _, field := range entry.Context {
 			if field.Key == "worker" {
 				worker = field.String
 			}
+
 			if field.Key == "to_state" {
 				toState = field.String
 			}
@@ -253,22 +274,23 @@ func verifyCascadeParentStateTransitions(t *integration.TestLogger) {
 					parentToHealthy = true
 				}
 			}
+
 			if strings.Contains(toState, "degraded") || strings.Contains(toState, "Degraded") {
 				parentToDegraded = true
 			}
 		}
 	}
 
-	// Log parent state transitions for observability
-	// Note: Parent transitioning to Degraded state is timing-dependent - children may
-	// fail and recover so quickly that parent never observes ChildrenUnhealthy > 0.
-	// This is a known limitation of the cascade scenario timing, not a bug in the FSM.
-	// The important behaviors (children fail, children recover) are verified above.
-	GinkgoWriter.Printf("✓ Parent state transitions: healthy=%v, degraded=%v, recovered=%v\n",
+	// Assert parent transitions through degraded state
+	// This verifies the cascade behavior: when children become unhealthy,
+	// parent should detect it and transition to Degraded state.
+	Expect(parentToDegraded).To(BeTrue(),
+		"Expected parent to transition to Degraded when children fail")
+	Expect(parentRecoveredToHealthy).To(BeTrue(),
+		"Expected parent to recover to Running after children heal")
+
+	GinkgoWriter.Printf("✓ Parent state transitions verified: healthy=%v, degraded=%v, recovered=%v\n",
 		parentToHealthy, parentToDegraded, parentRecoveredToHealthy)
-	if !parentToDegraded {
-		GinkgoWriter.Printf("  (Note: Parent may not have seen children in unhealthy state due to fast recovery)\n")
-	}
 }
 
 // verifyCascadeMultipleChildrenIndependent checks that multiple children fail independently.
@@ -280,14 +302,17 @@ func verifyCascadeMultipleChildrenIndependent(t *integration.TestLogger) {
 
 	for _, entry := range failureLogs {
 		worker := ""
+
 		for _, field := range entry.Context {
 			if field.Key == "worker" {
 				worker = field.String
 			}
 		}
+
 		if strings.Contains(worker, "child-0") {
 			child0Failures++
 		}
+
 		if strings.Contains(worker, "child-1") {
 			child1Failures++
 		}
@@ -312,14 +337,17 @@ func verifyCascadeAllChildrenMustRecover(t *integration.TestLogger) {
 
 	for _, entry := range recoveryLogs {
 		worker := ""
+
 		for _, field := range entry.Context {
 			if field.Key == "worker" {
 				worker = field.String
 			}
 		}
+
 		if strings.Contains(worker, "child-0") {
 			child0Recovered = true
 		}
+
 		if strings.Contains(worker, "child-1") {
 			child1Recovered = true
 		}
@@ -343,20 +371,22 @@ func verifyCascadeChildFailureCounts(t *integration.TestLogger) {
 
 	for _, entry := range failureLogs {
 		worker := ""
+
 		for _, field := range entry.Context {
 			if field.Key == "worker" {
 				worker = field.String
 			}
 		}
+
 		if strings.Contains(worker, "child-") {
 			childFailures[worker]++
 		}
 	}
 
-	// Each child should fail exactly 3 times (max_failures: 3)
+	// Each child should fail exactly 6 times (max_failures: 3 * failure_cycles: 2 = 6)
 	for child, count := range childFailures {
-		Expect(count).To(Equal(3),
-			fmt.Sprintf("Expected %s to fail exactly 3 times, got %d", child, count))
+		Expect(count).To(Equal(6),
+			fmt.Sprintf("Expected %s to fail exactly 6 times (3 per cycle * 2 cycles), got %d", child, count))
 	}
 
 	GinkgoWriter.Printf("✓ Child failure counts: %v\n", childFailures)

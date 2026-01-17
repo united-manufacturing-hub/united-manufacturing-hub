@@ -60,9 +60,11 @@ func TestCreateTriangularStoreForWorkerType(t *testing.T) {
 
 func TestIdentity(t *testing.T) {
 	identity := testutil.Identity()
+
 	if identity.ID != "test-worker" {
 		t.Errorf("expected ID 'test-worker', got %s", identity.ID)
 	}
+
 	if identity.WorkerType != "container" {
 		t.Errorf("expected WorkerType 'container', got %s", identity.WorkerType)
 	}

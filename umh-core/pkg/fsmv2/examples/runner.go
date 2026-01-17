@@ -100,18 +100,22 @@ func Run(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 	// If dump is enabled, wrap the done channel to dump on completion
 	if cfg.DumpStore {
 		wrappedDone := make(chan struct{})
+
 		go func() {
 			<-done
 			// Use background context for dump since original ctx may be cancelled
 			dumpCtx := context.Background()
+
 			dump, err := DumpScenario(dumpCtx, cfg.Store, startSyncID)
 			if err != nil {
 				cfg.Logger.Warnw("Failed to dump scenario", "error", err)
 			} else {
 				fmt.Print(dump.FormatHuman())
 			}
+
 			close(wrappedDone)
 		}()
+
 		return &RunResult{Done: wrappedDone, Shutdown: shutdownFn}, nil
 	}
 
@@ -136,5 +140,6 @@ func Run(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 //	defer store.Close()
 func SetupStore(logger *zap.SugaredLogger) storage.TriangularStoreInterface {
 	basicStore := memory.NewInMemoryStore()
+
 	return storage.NewTriangularStore(basicStore, logger)
 }

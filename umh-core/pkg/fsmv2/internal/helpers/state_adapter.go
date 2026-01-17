@@ -107,6 +107,7 @@ func ConvertSnapshot[O any, D any](snapAny any) TypedSnapshot[O, D] {
 				ok = true
 			}
 		}
+
 		if !ok {
 			actualType := reflect.TypeOf(raw.Observed)
 

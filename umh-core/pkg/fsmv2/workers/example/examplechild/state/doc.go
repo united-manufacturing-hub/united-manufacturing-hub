@@ -12,16 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package state provides FSM state implementations for the example child worker.
-//
-// # Documentation
-//
-// This package is referenced by pkg/fsmv2/doc.go as an example of:
-//   - State naming conventions (TryingTo* for active, descriptive nouns for passive)
-//   - Shutdown handling (check IsShutdownRequested() first)
-//   - State transitions returning (State, Signal, Action)
-//
-// When modifying these files, verify doc.go references remain accurate.
-//
-// See workers/example/doc.go for the full example worker documentation.
+// Package state implements FSM states for the example child worker.
+// For state pattern documentation, see pkg/fsmv2/doc.go.
+// For parent package overview, see workers/example/doc.go.
 package state

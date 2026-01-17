@@ -41,6 +41,20 @@ type ExamplefailingDependencies interface {
 	IsConnected() bool
 	// GetRestartAfterFailures returns the restart threshold (0 = no restart).
 	GetRestartAfterFailures() int
+	// GetFailureCycles returns the configured number of failure cycles.
+	GetFailureCycles() int
+	// GetCurrentCycle returns the current failure cycle (0-indexed).
+	GetCurrentCycle() int
+	// AllCyclesComplete returns true if all failure cycles have been completed.
+	AllCyclesComplete() bool
+	// AdvanceCycle advances to the next failure cycle and resets attempts.
+	AdvanceCycle() int
+	// IncrementTicksInConnected increments and returns ticks in Connected state.
+	IncrementTicksInConnected() int
+	// GetTicksInConnected returns the number of ticks in Connected state.
+	GetTicksInConnected() int
+	// ResetTicksInConnected resets the ticks counter to zero.
+	ResetTicksInConnected()
 }
 
 // ExamplefailingSnapshot represents a point-in-time view of the failing worker state.
@@ -94,11 +108,15 @@ type ExamplefailingObservedState struct {
 
 	ExamplefailingDesiredState `json:",inline"`
 
-	State                string `json:"state"` // Observed lifecycle state (e.g., "running_connected")
-	LastError            error  `json:"last_error,omitempty"`
-	ConnectAttempts      int    `json:"connect_attempts"`
-	ConnectionHealth     string `json:"connection_health"`
-	RestartAfterFailures int    `json:"restart_after_failures"` // Restart threshold from config
+	State                 string `json:"state"` // Observed lifecycle state (e.g., "running_connected")
+	LastError             error  `json:"last_error,omitempty"`
+	ConnectAttempts       int    `json:"connect_attempts"`
+	ConnectionHealth      string `json:"connection_health"`
+	RestartAfterFailures  int    `json:"restart_after_failures"` // Restart threshold from config
+	AllCyclesComplete     bool   `json:"all_cycles_complete"`    // True when all failure cycles done
+	TicksInConnectedState int    `json:"ticks_in_connected"`     // Ticks spent in Connected state
+	CurrentCycle          int    `json:"current_cycle"`          // Current failure cycle (0-indexed)
+	TotalCycles           int    `json:"total_cycles"`           // Total failure cycles configured
 }
 
 func (o ExamplefailingObservedState) GetTimestamp() time.Time {
@@ -113,13 +131,15 @@ func (o ExamplefailingObservedState) GetObservedDesiredState() fsmv2.DesiredStat
 // Called by Collector when StateProvider callback is configured.
 func (o ExamplefailingObservedState) SetState(s string) fsmv2.ObservedState {
 	o.State = s
+
 	return o
 }
 
 // SetShutdownRequested sets the shutdown requested status on this observed state.
 // Called by Collector when ShutdownRequestedProvider callback is configured.
 func (o ExamplefailingObservedState) SetShutdownRequested(v bool) fsmv2.ObservedState {
-	o.ExamplefailingDesiredState.ShutdownRequested = v
+	o.ShutdownRequested = v
+
 	return o
 }
 
@@ -127,7 +147,8 @@ func (o ExamplefailingObservedState) SetShutdownRequested(v bool) fsmv2.Observed
 // Called by Collector when MappedParentStateProvider callback is configured.
 // Children can check if parent wants them running via StateMapping.
 func (o ExamplefailingObservedState) SetParentMappedState(state string) fsmv2.ObservedState {
-	o.ExamplefailingDesiredState.ParentMappedState = state
+	o.ParentMappedState = state
+
 	return o
 }
 

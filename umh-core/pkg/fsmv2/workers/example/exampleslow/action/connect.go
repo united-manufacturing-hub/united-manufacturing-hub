@@ -40,6 +40,7 @@ func (a *ConnectAction) Execute(ctx context.Context, depsAny any) error {
 			logger.Info("Connect delay completed successfully")
 		case <-ctx.Done():
 			logger.Warn("Connect action cancelled during delay")
+
 			return ctx.Err()
 		}
 	}

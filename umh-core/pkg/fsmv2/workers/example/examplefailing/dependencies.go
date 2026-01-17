@@ -55,13 +55,16 @@ func (d *DefaultConnectionPool) HealthCheck(_ Connection) error {
 // It implements ExamplefailingDependenciesWithFailure interface for failure simulation.
 type FailingDependencies struct {
 	*fsmv2.BaseDependencies
-	connectionPool       ConnectionPool
-	mu                   sync.RWMutex
-	shouldFail           bool
-	maxFailures          int
-	attempts             int
-	connected            bool
-	restartAfterFailures int
+	connectionPool        ConnectionPool
+	mu                    sync.RWMutex
+	shouldFail            bool
+	maxFailures           int
+	attempts              int
+	connected             bool
+	restartAfterFailures  int
+	failureCycles         int // Total number of failure cycles to perform
+	currentCycle          int // Current failure cycle (0-indexed)
+	ticksInConnectedState int // Number of ticks spent in Connected state
 }
 
 // NewFailingDependencies creates new dependencies for the failing worker.
@@ -70,6 +73,7 @@ func NewFailingDependencies(connectionPool ConnectionPool, logger *zap.SugaredLo
 		BaseDependencies: fsmv2.NewBaseDependencies(logger, stateReader, identity),
 		connectionPool:   connectionPool,
 		maxFailures:      3, // Default: fail 3 times before success
+		failureCycles:    1, // Default: single failure cycle (backward compatible)
 	}
 }
 
@@ -82,6 +86,7 @@ func (d *FailingDependencies) GetConnectionPool() ConnectionPool {
 func (d *FailingDependencies) SetShouldFail(shouldFail bool) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
+
 	d.shouldFail = shouldFail
 }
 
@@ -89,6 +94,7 @@ func (d *FailingDependencies) SetShouldFail(shouldFail bool) {
 func (d *FailingDependencies) GetShouldFail() bool {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
+
 	return d.shouldFail
 }
 
@@ -96,6 +102,7 @@ func (d *FailingDependencies) GetShouldFail() bool {
 func (d *FailingDependencies) SetMaxFailures(maxFailures int) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
+
 	d.maxFailures = maxFailures
 }
 
@@ -103,6 +110,7 @@ func (d *FailingDependencies) SetMaxFailures(maxFailures int) {
 func (d *FailingDependencies) GetMaxFailures() int {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
+
 	return d.maxFailures
 }
 
@@ -110,7 +118,9 @@ func (d *FailingDependencies) GetMaxFailures() int {
 func (d *FailingDependencies) IncrementAttempts() int {
 	d.mu.Lock()
 	defer d.mu.Unlock()
+
 	d.attempts++
+
 	return d.attempts
 }
 
@@ -118,6 +128,7 @@ func (d *FailingDependencies) IncrementAttempts() int {
 func (d *FailingDependencies) GetAttempts() int {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
+
 	return d.attempts
 }
 
@@ -125,6 +136,7 @@ func (d *FailingDependencies) GetAttempts() int {
 func (d *FailingDependencies) ResetAttempts() {
 	d.mu.Lock()
 	defer d.mu.Unlock()
+
 	d.attempts = 0
 }
 
@@ -132,6 +144,7 @@ func (d *FailingDependencies) ResetAttempts() {
 func (d *FailingDependencies) SetConnected(connected bool) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
+
 	d.connected = connected
 }
 
@@ -139,6 +152,7 @@ func (d *FailingDependencies) SetConnected(connected bool) {
 func (d *FailingDependencies) IsConnected() bool {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
+
 	return d.connected
 }
 
@@ -146,6 +160,7 @@ func (d *FailingDependencies) IsConnected() bool {
 func (d *FailingDependencies) SetRestartAfterFailures(n int) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
+
 	d.restartAfterFailures = n
 }
 
@@ -154,5 +169,77 @@ func (d *FailingDependencies) SetRestartAfterFailures(n int) {
 func (d *FailingDependencies) GetRestartAfterFailures() int {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
+
 	return d.restartAfterFailures
+}
+
+// SetFailureCycles sets the total number of failure cycles to perform.
+func (d *FailingDependencies) SetFailureCycles(cycles int) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	d.failureCycles = cycles
+}
+
+// GetFailureCycles returns the configured number of failure cycles.
+func (d *FailingDependencies) GetFailureCycles() int {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+
+	return d.failureCycles
+}
+
+// GetCurrentCycle returns the current failure cycle (0-indexed).
+func (d *FailingDependencies) GetCurrentCycle() int {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+
+	return d.currentCycle
+}
+
+// AllCyclesComplete returns true if all failure cycles have been completed.
+func (d *FailingDependencies) AllCyclesComplete() bool {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+
+	return d.currentCycle >= d.failureCycles
+}
+
+// AdvanceCycle advances to the next failure cycle and resets the attempt counter.
+// Returns the new cycle number.
+func (d *FailingDependencies) AdvanceCycle() int {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	d.currentCycle++
+
+	d.attempts = 0
+
+	return d.currentCycle
+}
+
+// IncrementTicksInConnected increments and returns the ticks spent in Connected state.
+func (d *FailingDependencies) IncrementTicksInConnected() int {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	d.ticksInConnectedState++
+
+	return d.ticksInConnectedState
+}
+
+// GetTicksInConnected returns the number of ticks spent in Connected state.
+func (d *FailingDependencies) GetTicksInConnected() int {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+
+	return d.ticksInConnectedState
+}
+
+// ResetTicksInConnected resets the ticks counter to zero.
+func (d *FailingDependencies) ResetTicksInConnected() {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	d.ticksInConnectedState = 0
 }

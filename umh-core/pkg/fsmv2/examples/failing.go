@@ -91,8 +91,8 @@ package examples
 //
 // # Real-World Parallels
 //
-// Recovery: Network drops for 30 seconds, then reconnects
-// Permanent: Wrong IP address configured, will never connect
+// Recovery: Network drops for 30 seconds, then reconnects.
+// Permanent: Wrong IP address configured, will never connect.
 var FailingScenario = Scenario{
 	Name: "failing",
 

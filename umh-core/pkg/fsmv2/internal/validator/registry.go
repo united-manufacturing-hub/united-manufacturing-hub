@@ -585,5 +585,6 @@ Use RegisterWorkerType[TObserved, TDesired]() to register both atomically.`,
 // GetPattern returns pattern info for a violation type.
 func GetPattern(patternType string) (PatternInfo, bool) {
 	pattern, ok := PatternRegistry[patternType]
+
 	return pattern, ok
 }

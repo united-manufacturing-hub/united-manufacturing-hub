@@ -64,11 +64,11 @@ var _ = Describe("State Functions", func() {
 	Describe("ValidateDesiredState", func() {
 		Context("with valid desired states", func() {
 			It("returns nil for 'running'", func() {
-				Expect(config.ValidateDesiredState(config.DesiredStateRunning)).To(BeNil())
+				Expect(config.ValidateDesiredState(config.DesiredStateRunning)).To(Succeed())
 			})
 
 			It("returns nil for 'stopped'", func() {
-				Expect(config.ValidateDesiredState(config.DesiredStateStopped)).To(BeNil())
+				Expect(config.ValidateDesiredState(config.DesiredStateStopped)).To(Succeed())
 			})
 		})
 

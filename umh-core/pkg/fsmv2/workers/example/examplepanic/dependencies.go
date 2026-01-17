@@ -68,6 +68,7 @@ func (d *ExamplepanicDependencies) GetConnectionPool() ConnectionPool {
 func (d *ExamplepanicDependencies) SetShouldPanic(shouldPanic bool) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
+
 	d.shouldPanic = shouldPanic
 }
 
@@ -75,6 +76,7 @@ func (d *ExamplepanicDependencies) SetShouldPanic(shouldPanic bool) {
 func (d *ExamplepanicDependencies) IsShouldPanic() bool {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
+
 	return d.shouldPanic
 }
 
@@ -82,6 +84,7 @@ func (d *ExamplepanicDependencies) IsShouldPanic() bool {
 func (d *ExamplepanicDependencies) SetConnected(connected bool) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
+
 	d.isConnected = connected
 }
 
@@ -89,5 +92,6 @@ func (d *ExamplepanicDependencies) SetConnected(connected bool) {
 func (d *ExamplepanicDependencies) IsConnected() bool {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
+
 	return d.isConnected
 }

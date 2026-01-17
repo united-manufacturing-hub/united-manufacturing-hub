@@ -44,10 +44,6 @@ var _ = Describe("SyncAction", func() {
 		act = action.NewSyncAction("test-jwt-token")
 	})
 
-	PIt("should execute sync operation", func() {
-		// Tests pending: Need registry pattern updates
-	})
-
 	Describe("Message Storage", func() {
 		It("should store pulled messages in dependencies after successful sync", func() {
 			ctx := context.Background()

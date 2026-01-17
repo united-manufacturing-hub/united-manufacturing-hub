@@ -55,8 +55,10 @@ func NewParentWorker(
 		if err != nil {
 			return nil, fmt.Errorf("failed to derive worker type: %w", err)
 		}
+
 		identity.WorkerType = workerType
 	}
+
 	dependencies := NewParentDependencies(logger, stateReader, identity)
 
 	return &ParentWorker{
@@ -81,6 +83,7 @@ func (w *ParentWorker) CollectObservedState(ctx context.Context) (fsmv2.Observed
 	stateReader := deps.GetStateReader()
 	if stateReader != nil {
 		var previousObserved snapshot.ExampleparentObservedState
+
 		err := stateReader.LoadObservedTyped(ctx, w.identity.WorkerType, w.identity.ID, &previousObserved)
 		if err == nil && previousObserved.State != "" {
 			// Record state change - resets timer if state changed
@@ -133,6 +136,7 @@ func (w *ParentWorker) DeriveDesiredState(spec interface{}) (config.DesiredState
 	// Create child specs using the new ChildStartStates approach
 	childrenSpecs := make([]config.ChildSpec, childrenCount)
 	childWorkerType := parentSpec.GetChildWorkerType()
+
 	for i := range childrenCount {
 		// Each child gets its own DEVICE_ID variable.
 		// Parent's variables (IP, PORT, etc.) will be merged in by the supervisor
@@ -188,6 +192,7 @@ func init() {
 	if err := factory.RegisterWorkerType[snapshot.ExampleparentObservedState, *snapshot.ExampleparentDesiredState](
 		func(id fsmv2.Identity, logger *zap.SugaredLogger, stateReader fsmv2.StateReader) fsmv2.Worker {
 			worker, _ := NewParentWorker(id, logger, stateReader)
+
 			return worker
 		},
 		func(cfg interface{}) interface{} {

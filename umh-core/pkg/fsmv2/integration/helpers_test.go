@@ -311,6 +311,7 @@ func NewTestApplicationSupervisor(yamlConfig string, logger *zap.SugaredLogger) 
 	if err != nil {
 		return nil, fmt.Errorf("failed to derive worker type: %w", err)
 	}
+
 	_ = basicStore.CreateCollection(ctx, applicationWorkerType+"_identity", nil)
 	_ = basicStore.CreateCollection(ctx, applicationWorkerType+"_desired", nil)
 	_ = basicStore.CreateCollection(ctx, applicationWorkerType+"_observed", nil)

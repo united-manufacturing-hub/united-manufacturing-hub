@@ -29,8 +29,4 @@ var _ = Describe("TryingToAuthenticateState", func() {
 		stateObj = &state.TryingToAuthenticateState{}
 		_ = stateObj
 	})
-
-	PIt("should transition to appropriate state based on authentication result", func() {
-		// Tests pending: Need registry pattern updates
-	})
 })

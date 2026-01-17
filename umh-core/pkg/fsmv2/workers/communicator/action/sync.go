@@ -53,7 +53,9 @@ type SyncAction struct {
 	// Dependencies are received via Execute() parameter, not stored in struct
 }
 
-// TODO: docstring.
+// SyncActionResult contains the results of a sync operation.
+// PushedMessages are the messages that were sent to the backend.
+// PulledMessages are the messages that were received from the backend.
 type SyncActionResult struct {
 	PushedMessages []*transport.UMHMessage
 	PulledMessages []*transport.UMHMessage

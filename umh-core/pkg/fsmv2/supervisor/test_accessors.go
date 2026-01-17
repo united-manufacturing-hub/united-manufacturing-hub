@@ -35,6 +35,7 @@ func (s *Supervisor[TObserved, TDesired]) TestRequestShutdown(ctx context.Contex
 func (s *Supervisor[TObserved, TDesired]) TestGetRestartCount() int {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+
 	return s.collectorHealth.restartCount
 }
 
@@ -42,6 +43,7 @@ func (s *Supervisor[TObserved, TDesired]) TestGetRestartCount() int {
 func (s *Supervisor[TObserved, TDesired]) TestSetRestartCount(count int) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
 	s.collectorHealth.restartCount = count
 }
 
@@ -59,6 +61,7 @@ func (s *Supervisor[TObserved, TDesired]) TestUpdateUserSpec(spec config.UserSpe
 func (s *Supervisor[TObserved, TDesired]) TestSetPendingRestart(workerID string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
 	s.pendingRestart[workerID] = true
 }
 
@@ -66,6 +69,7 @@ func (s *Supervisor[TObserved, TDesired]) TestSetPendingRestart(workerID string)
 func (s *Supervisor[TObserved, TDesired]) TestSetRestartRequestedAt(workerID string, t time.Time) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
 	s.restartRequestedAt[workerID] = t
 }
 
@@ -73,6 +77,7 @@ func (s *Supervisor[TObserved, TDesired]) TestSetRestartRequestedAt(workerID str
 func (s *Supervisor[TObserved, TDesired]) TestIsPendingRestart(workerID string) bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+
 	return s.pendingRestart[workerID]
 }
 
@@ -80,5 +85,6 @@ func (s *Supervisor[TObserved, TDesired]) TestIsPendingRestart(workerID string) 
 func (s *Supervisor[TObserved, TDesired]) TestGetUserSpec() config.UserSpec {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+
 	return s.userSpec
 }

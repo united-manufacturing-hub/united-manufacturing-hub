@@ -64,7 +64,7 @@ func benchmarkSupervisorTick(b *testing.B, workerCount int) {
 	})
 
 	// Add N workers to supervisor
-	for i := 0; i < workerCount; i++ {
+	for i := range workerCount {
 		workerID := fmt.Sprintf("worker-%d", i)
 		identity := fsmv2.Identity{
 			ID:   workerID,
@@ -96,7 +96,7 @@ func benchmarkSupervisorTick(b *testing.B, workerCount int) {
 	b.ResetTimer()
 
 	// Benchmark the tick loop
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		err := s.TestTickAll(ctx)
 		if err != nil {
 			b.Fatalf("Tick failed: %v", err)

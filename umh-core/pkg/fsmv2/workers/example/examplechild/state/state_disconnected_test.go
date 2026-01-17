@@ -18,7 +18,5 @@ import "testing"
 
 func TestDisconnectedState(t *testing.T) {
 	state := &DisconnectedState{}
-	if state == nil {
-		t.Fatal("DisconnectedState is nil")
-	}
+	_ = state // Verify compilation
 }

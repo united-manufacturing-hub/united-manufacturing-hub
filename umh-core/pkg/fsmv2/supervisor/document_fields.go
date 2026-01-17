@@ -34,7 +34,7 @@ const (
 
 	// FieldShutdownRequested is the graceful shutdown signal.
 	// Set in desired documents to request FSM shutdown.
-	// PascalCase matches struct tag: `json:"ShutdownRequested"`
+	// PascalCase matches struct tag: `json:"ShutdownRequested"`.
 	FieldShutdownRequested = "ShutdownRequested"
 
 	// FieldParentID is the parent supervisor ID.

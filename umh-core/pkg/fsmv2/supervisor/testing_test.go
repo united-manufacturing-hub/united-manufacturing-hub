@@ -85,7 +85,7 @@ var _ = Describe("Testing Helpers", func() {
 			_, err := store.SaveDesired(ctx, "test", "test-worker", desired)
 			Expect(err).ToNot(HaveOccurred())
 
-			retrieved, err := store.LoadDesired(ctx, "test", "test-worker")
+			retrieved, err := store.LoadDesired(ctx, "test", "test-worker") //nolint:staticcheck // testing deprecated function
 			Expect(err).ToNot(HaveOccurred())
 			// CSE fields are injected automatically
 			// Note: _updated_at is only set on updates, not on first save
@@ -105,7 +105,7 @@ var _ = Describe("Testing Helpers", func() {
 			_, err := store.SaveObserved(ctx, "test", "test-worker", observed)
 			Expect(err).ToNot(HaveOccurred())
 
-			retrieved, err := store.LoadObserved(ctx, "test", "test-worker")
+			retrieved, err := store.LoadObserved(ctx, "test", "test-worker") //nolint:staticcheck // testing deprecated function
 			Expect(err).ToNot(HaveOccurred())
 			// CSE fields are injected automatically
 			// Note: _updated_at is only set on updates, not on first save

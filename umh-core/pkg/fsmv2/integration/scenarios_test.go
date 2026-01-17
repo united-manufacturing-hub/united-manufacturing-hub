@@ -203,13 +203,17 @@ func verifyNoErrorsOrWarnings(t *integration.TestLogger) {
 		GinkgoWriter.Printf("DEBUG Error/Warning: %s - %s (context: %v)\n", entry.Level, entry.Message, entry.ContextMap())
 
 		isKnown := false
+
 		for _, issue := range knownIssues {
 			if strings.Contains(entry.Message, issue) {
 				GinkgoWriter.Printf("Known issue: %s - %s\n", entry.Level, entry.Message)
+
 				isKnown = true
+
 				break
 			}
 		}
+
 		if isKnown {
 			continue
 		}
@@ -270,6 +274,7 @@ func verifyTriangularStoreChanges(t *integration.TestLogger) {
 
 func verifyShutdownOrder(t *integration.TestLogger) {
 	tickLoopStartedLogs := t.GetLogsMatching("tick_loop_started")
+
 	var workerTypes []string
 
 	for _, entry := range tickLoopStartedLogs {
@@ -302,6 +307,7 @@ func verifyAllLogsHaveWorkerField(t *integration.TestLogger) {
 	}
 
 	var unexpectedMissing []string
+
 	for _, entry := range logsMissingWorker {
 		if !knownInitLogs[entry.Message] {
 			unexpectedMissing = append(unexpectedMissing, entry.Message)
@@ -340,6 +346,7 @@ func getWorkersFromStore(store storage.TriangularStoreInterface) []examples.Work
 
 	// Extract unique workers and load their snapshots
 	seen := make(map[string]bool)
+
 	var workers []examples.WorkerSnapshot
 
 	for _, delta := range resp.Deltas {
@@ -347,6 +354,7 @@ func getWorkersFromStore(store storage.TriangularStoreInterface) []examples.Work
 		if seen[key] {
 			continue
 		}
+
 		seen[key] = true
 
 		snapshot, err := store.LoadSnapshot(ctx, delta.WorkerType, delta.WorkerID)
@@ -375,7 +383,7 @@ func getWorkersFromStore(store storage.TriangularStoreInterface) []examples.Work
 // This is the MAIN BUG FIX test - currently expected to FAIL.
 func verifyObservedStateHasState(store storage.TriangularStoreInterface) {
 	workers := getWorkersFromStore(store)
-	Expect(len(workers)).To(BeNumerically(">", 0), "No workers found in store")
+	Expect(workers).ToNot(BeEmpty(), "No workers found in store")
 
 	for _, w := range workers {
 		if w.Observed == nil {
@@ -430,6 +438,7 @@ func verifyStateFieldsAreValid(store storage.TriangularStoreInterface) {
 		}
 
 		var validStates map[string]bool
+
 		switch w.WorkerType {
 		case "examplechild":
 			validStates = validChildStates
@@ -511,6 +520,7 @@ func verifyChildrenReachConnectedState(t *integration.TestLogger) {
 	stateTransitions := t.GetLogsMatching("state_transition")
 
 	connectedCount := 0
+
 	for _, entry := range stateTransitions {
 		for _, field := range entry.Context {
 			if field.Key == "to_state" {
@@ -533,6 +543,7 @@ func verifyShutdownTransitionsClean(t *integration.TestLogger) {
 	stateTransitions := t.GetLogsMatching("state_transition")
 
 	var tryingToStopSeen, stoppedSeen bool
+
 	for _, entry := range stateTransitions {
 		for _, field := range entry.Context {
 			if field.Key == "to_state" {
@@ -540,6 +551,7 @@ func verifyShutdownTransitionsClean(t *integration.TestLogger) {
 				if field.String == "TryingToStop" {
 					tryingToStopSeen = true
 				}
+
 				if field.String == "Stopped" {
 					stoppedSeen = true
 				}
@@ -623,10 +635,12 @@ func verifyChildCountMatches(store storage.TriangularStoreInterface) {
 
 	// Separate parents and children
 	var parents, children []examples.WorkerSnapshot
+
 	for _, w := range workers {
-		if w.WorkerType == "exampleparent" {
+		switch w.WorkerType {
+		case "exampleparent":
 			parents = append(parents, w)
-		} else if w.WorkerType == "examplechild" {
+		case "examplechild":
 			children = append(children, w)
 		}
 	}
@@ -638,10 +652,12 @@ func verifyChildCountMatches(store storage.TriangularStoreInterface) {
 
 		// Count children that belong to this parent (by hierarchy_path)
 		expectedCount := 0
+
 		for _, child := range children {
 			if child.Identity == nil {
 				continue
 			}
+
 			if path, ok := child.Identity["hierarchy_path"].(string); ok {
 				if strings.Contains(path, parent.WorkerID) {
 					expectedCount++
@@ -695,17 +711,21 @@ func verifyCyclicStateTransitions(t *integration.TestLogger) {
 	// Build ordered list of parent state transitions
 	// Note: "worker" field contains hierarchy path like "parent-1-001(exampleparent)"
 	var parentTransitions []string
+
 	for _, entry := range stateTransitions {
 		worker := ""
 		toState := ""
+
 		for _, field := range entry.Context {
 			if field.Key == "worker" {
 				worker = field.String
 			}
+
 			if field.Key == "to_state" {
 				toState = field.String
 			}
 		}
+
 		// Check if this is a parent worker by looking for "exampleparent" in the hierarchy path
 		if strings.Contains(worker, "exampleparent") && toState != "" {
 			parentTransitions = append(parentTransitions, toState)
@@ -737,13 +757,16 @@ func verifyTimingBasedTransitions(t *integration.TestLogger) {
 		fromState := ""
 		toState := ""
 		worker := ""
+
 		for _, field := range entry.Context {
 			if field.Key == "from_state" {
 				fromState = field.String
 			}
+
 			if field.Key == "to_state" {
 				toState = field.String
 			}
+
 			if field.Key == "worker" {
 				worker = field.String
 			}
@@ -757,6 +780,7 @@ func verifyTimingBasedTransitions(t *integration.TestLogger) {
 		if fromState == "Stopped" && toState == "TryingToStart" {
 			stoppedToTrying = true
 		}
+
 		if fromState == "Running" && toState == "TryingToStop" {
 			runningToTrying = true
 		}
@@ -826,13 +850,16 @@ func verifyParentReachesRunning(t *integration.TestLogger) {
 	stateTransitions := t.GetLogsMatching("state_transition")
 
 	reachedRunning := false
+
 	for _, entry := range stateTransitions {
 		toState := ""
 		worker := ""
+
 		for _, field := range entry.Context {
 			if field.Key == "to_state" {
 				toState = field.String
 			}
+
 			if field.Key == "worker" {
 				worker = field.String
 			}
@@ -841,6 +868,7 @@ func verifyParentReachesRunning(t *integration.TestLogger) {
 		// Check if this is a parent worker by looking for "exampleparent" in hierarchy path
 		if strings.Contains(worker, "exampleparent") && toState == "Running" {
 			reachedRunning = true
+
 			break
 		}
 	}
@@ -863,19 +891,23 @@ func verifyNoChildTransitionBeforeParentTryingToStart(t *integration.TestLogger)
 	stateTransitions := t.GetLogsMatching("state_transition")
 
 	parentReachedTryingToStart := false
+
 	var childTransitionsBeforeParent []string
 
 	for _, entry := range stateTransitions {
 		worker := ""
 		toState := ""
 		fromState := ""
+
 		for _, field := range entry.Context {
 			if field.Key == "worker" {
 				worker = field.String
 			}
+
 			if field.Key == "to_state" {
 				toState = field.String
 			}
+
 			if field.Key == "from_state" {
 				fromState = field.String
 			}
@@ -916,13 +948,16 @@ func verifyStateTransitionOrdering(t *integration.TestLogger) {
 	}
 
 	var timeline []event
+
 	for i, entry := range stateTransitions {
 		worker := ""
 		toState := ""
+
 		for _, field := range entry.Context {
 			if field.Key == "worker" {
 				worker = field.String
 			}
+
 			if field.Key == "to_state" {
 				toState = field.String
 			}
@@ -936,8 +971,9 @@ func verifyStateTransitionOrdering(t *integration.TestLogger) {
 	}
 
 	// Find indices of key transitions
-	var parentTryingToStartIdx int = -1
-	var firstChildTryingToConnectIdx int = -1
+	var parentTryingToStartIdx = -1
+
+	var firstChildTryingToConnectIdx = -1
 
 	for _, e := range timeline {
 		if strings.Contains(e.worker, "exampleparent") && e.state == "TryingToStart" {
@@ -945,6 +981,7 @@ func verifyStateTransitionOrdering(t *integration.TestLogger) {
 				parentTryingToStartIdx = e.index
 			}
 		}
+
 		if strings.Contains(e.worker, "examplechild") && e.state == "TryingToConnect" {
 			if firstChildTryingToConnectIdx == -1 {
 				firstChildTryingToConnectIdx = e.index
@@ -981,13 +1018,16 @@ func verifyChildrenStopWhenParentTryingToStop(t *integration.TestLogger) {
 		worker := ""
 		fromState := ""
 		toState := ""
+
 		for _, field := range entry.Context {
 			if field.Key == "worker" {
 				worker = field.String
 			}
+
 			if field.Key == "from_state" {
 				fromState = field.String
 			}
+
 			if field.Key == "to_state" {
 				toState = field.String
 			}
@@ -1027,10 +1067,12 @@ func verifyParentReachesStopped(t *integration.TestLogger) {
 	for _, entry := range stateTransitions {
 		worker := ""
 		toState := ""
+
 		for _, field := range entry.Context {
 			if field.Key == "worker" {
 				worker = field.String
 			}
+
 			if field.Key == "to_state" {
 				toState = field.String
 			}
@@ -1040,8 +1082,10 @@ func verifyParentReachesStopped(t *integration.TestLogger) {
 			if toState == "Running" {
 				sawRunning = true
 			}
+
 			if toState == "Stopped" {
 				parentReachedStoppedCount++
+
 				if sawRunning {
 					parentCycledBackToStopped = true
 				}
@@ -1062,13 +1106,16 @@ func verifyFullCycle(t *integration.TestLogger) {
 	stateTransitions := t.GetLogsMatching("state_transition")
 
 	var parentStates []string
+
 	for _, entry := range stateTransitions {
 		worker := ""
 		toState := ""
+
 		for _, field := range entry.Context {
 			if field.Key == "worker" {
 				worker = field.String
 			}
+
 			if field.Key == "to_state" {
 				toState = field.String
 			}

@@ -52,6 +52,7 @@ func ValidateDesiredState(state string) error {
 
 	// Determine likely intent for actionable guidance
 	var hint string
+
 	switch state {
 	case "starting", "active", "connected", "running_connected":
 		hint = "Use 'running' for components that should be active."

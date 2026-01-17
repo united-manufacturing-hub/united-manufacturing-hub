@@ -37,6 +37,7 @@ func (a *StartAction) Execute(ctx context.Context, depsAny any) error {
 		return ctx.Err()
 	default:
 	}
+
 	if depsAny != nil {
 		deps := depsAny.(fsmv2.Dependencies)
 		logger := deps.GetLogger()

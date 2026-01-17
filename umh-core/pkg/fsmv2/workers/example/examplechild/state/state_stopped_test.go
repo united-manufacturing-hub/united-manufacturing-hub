@@ -16,10 +16,8 @@ package state
 
 import "testing"
 
-// TODO: switch to ginkgo
+// TODO: switch to ginkgo.
 func TestStoppedState(t *testing.T) {
 	state := &StoppedState{}
-	if state == nil {
-		t.Fatal("StoppedState is nil")
-	}
+	_ = state // Verify compilation
 }

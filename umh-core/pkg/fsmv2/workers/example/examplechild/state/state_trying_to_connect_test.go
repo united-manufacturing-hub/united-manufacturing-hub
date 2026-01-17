@@ -18,7 +18,5 @@ import "testing"
 
 func TestTryingToConnectState(t *testing.T) {
 	state := &TryingToConnectState{}
-	if state == nil {
-		t.Fatal("TryingToConnectState is nil")
-	}
+	_ = state // Verify compilation
 }

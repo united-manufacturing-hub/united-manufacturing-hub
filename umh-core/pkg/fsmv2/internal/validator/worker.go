@@ -118,6 +118,7 @@ func checkContextCancellationInCollect(filename string) []Violation {
 
 		// Look for select statement with ctx.Done() case
 		hasContextCancellation := false
+
 		ast.Inspect(funcDecl.Body, func(bodyNode ast.Node) bool {
 			selectStmt, ok := bodyNode.(*ast.SelectStmt)
 			if !ok {
@@ -141,6 +142,7 @@ func checkContextCancellationInCollect(filename string) []Violation {
 										if ident, ok := selExpr.X.(*ast.Ident); ok {
 											if ident.Name == "ctx" {
 												hasContextCancellation = true
+
 												return false
 											}
 										}
@@ -188,7 +190,7 @@ func ValidateNilSpecHandling(baseDir string) []Violation {
 // checkNilSpecHandling parses a worker file and checks if DeriveDesiredState checks for nil spec.
 // This validation passes if:
 // 1. The function has an explicit `if spec == nil` check in the first two statements, OR
-// 2. The function uses helper functions (DeriveLeafState, ParseUserSpec) that handle nil internally
+// 2. The function uses helper functions (DeriveLeafState, ParseUserSpec) that handle nil internally.
 func checkNilSpecHandling(filename string) []Violation {
 	var violations []Violation
 
@@ -219,6 +221,7 @@ func checkNilSpecHandling(filename string) []Violation {
 
 		// Check first or second statement for nil check
 		hasNilCheck := false
+
 		for i := 0; i < 2 && i < len(funcDecl.Body.List); i++ {
 			stmt := funcDecl.Body.List[i]
 
@@ -235,13 +238,16 @@ func checkNilSpecHandling(filename string) []Violation {
 					if ident, ok := binExpr.X.(*ast.Ident); ok && ident.Name == "spec" {
 						if nilIdent, ok := binExpr.Y.(*ast.Ident); ok && nilIdent.Name == "nil" {
 							hasNilCheck = true
+
 							break
 						}
 					}
+
 					// Check right side (nil == spec)
 					if ident, ok := binExpr.Y.(*ast.Ident); ok && ident.Name == "spec" {
 						if nilIdent, ok := binExpr.X.(*ast.Ident); ok && nilIdent.Name == "nil" {
 							hasNilCheck = true
+
 							break
 						}
 					}
@@ -275,6 +281,7 @@ func usesNilSafeHelper(body *ast.BlockStmt) bool {
 	}
 
 	found := false
+
 	ast.Inspect(body, func(n ast.Node) bool {
 		callExpr, ok := n.(*ast.CallExpr)
 		if !ok {
@@ -286,12 +293,15 @@ func usesNilSafeHelper(body *ast.BlockStmt) bool {
 			if sel, ok := indexExpr.X.(*ast.SelectorExpr); ok {
 				if nilSafeHelpers[sel.Sel.Name] {
 					found = true
+
 					return false
 				}
 			}
+
 			if ident, ok := indexExpr.X.(*ast.Ident); ok {
 				if nilSafeHelpers[ident.Name] {
 					found = true
+
 					return false
 				}
 			}
@@ -301,6 +311,7 @@ func usesNilSafeHelper(body *ast.BlockStmt) bool {
 		if sel, ok := callExpr.Fun.(*ast.SelectorExpr); ok {
 			if nilSafeHelpers[sel.Sel.Name] {
 				found = true
+
 				return false
 			}
 		}
@@ -468,6 +479,7 @@ func checkChildSpecValidation(filename string) []Violation {
 				if selExpr, ok := rangeStmt.X.(*ast.SelectorExpr); ok {
 					if selExpr.Sel.Name == "Children" {
 						hasChildrenValidation = true
+
 						return false
 					}
 				}
@@ -482,6 +494,7 @@ func checkChildSpecValidation(filename string) []Violation {
 							if sel, ok := arrayType.Elt.(*ast.SelectorExpr); ok {
 								if sel.Sel.Name == "ChildSpec" {
 									hasProgrammaticChildren = true
+
 									return false
 								}
 							}

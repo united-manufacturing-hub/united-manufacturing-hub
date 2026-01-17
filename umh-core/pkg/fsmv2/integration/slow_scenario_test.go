@@ -86,15 +86,19 @@ func verifySloWorkerAttemptsConnect(t *integration.TestLogger) {
 	attemptLogs := t.GetLogsMatching("connect_attempting")
 
 	connectAttempted := false
+
 	for _, entry := range attemptLogs {
 		worker := ""
+
 		for _, field := range entry.Context {
 			if field.Key == "worker" {
 				worker = field.String
 			}
 		}
+
 		if strings.Contains(worker, "slow-worker-1") {
 			connectAttempted = true
+
 			break
 		}
 	}
@@ -110,15 +114,19 @@ func verifySloWorkerDelay(t *integration.TestLogger) {
 	delayCompletedLogs := t.GetLogsMatching("Connect delay completed successfully")
 
 	delayCompleted := false
+
 	for _, entry := range delayCompletedLogs {
 		worker := ""
+
 		for _, field := range entry.Context {
 			if field.Key == "worker" {
 				worker = field.String
 			}
 		}
+
 		if strings.Contains(worker, "slow-worker-1") {
 			delayCompleted = true
+
 			break
 		}
 	}
@@ -134,19 +142,24 @@ func verifySloWorkerConnected(t *integration.TestLogger) {
 	stateTransitions := t.GetLogsMatching("state_transition")
 
 	slowConnected := false
+
 	for _, entry := range stateTransitions {
 		worker := ""
 		toState := ""
+
 		for _, field := range entry.Context {
 			if field.Key == "worker" {
 				worker = field.String
 			}
+
 			if field.Key == "to_state" {
 				toState = field.String
 			}
 		}
+
 		if strings.Contains(worker, "slow-worker-1") && toState == "Connected" {
 			slowConnected = true
+
 			break
 		}
 	}
@@ -168,17 +181,21 @@ func verifySloWorkerStateTransitions(t *integration.TestLogger) {
 		worker := ""
 		fromState := ""
 		toState := ""
+
 		for _, field := range entry.Context {
 			if field.Key == "worker" {
 				worker = field.String
 			}
+
 			if field.Key == "from_state" {
 				fromState = field.String
 			}
+
 			if field.Key == "to_state" {
 				toState = field.String
 			}
 		}
+
 		if !strings.Contains(worker, "slow-worker-1") {
 			continue
 		}
@@ -186,6 +203,7 @@ func verifySloWorkerStateTransitions(t *integration.TestLogger) {
 		if fromState == "Stopped" && toState == "TryingToConnect" {
 			stoppedToTrying = true
 		}
+
 		if fromState == "TryingToConnect" && toState == "Connected" {
 			tryingToConnected = true
 		}
@@ -205,11 +223,13 @@ func verifySloWorkerNoCancellation(t *integration.TestLogger) {
 
 	for _, entry := range cancellationLogs {
 		worker := ""
+
 		for _, field := range entry.Context {
 			if field.Key == "worker" {
 				worker = field.String
 			}
 		}
+
 		if strings.Contains(worker, "slow-worker-1") {
 			Fail("Slow worker should NOT be cancelled during the 8-second scenario duration")
 		}

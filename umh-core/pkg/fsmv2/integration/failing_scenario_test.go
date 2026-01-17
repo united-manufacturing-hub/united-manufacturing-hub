@@ -92,15 +92,19 @@ func verifyRecoveryWorkerSucceeds(t *integration.TestLogger) {
 
 	// Filter to only recovery worker
 	recoverySucceeded := false
+
 	for _, entry := range succeededLogs {
 		worker := ""
+
 		for _, field := range entry.Context {
 			if field.Key == "worker" {
 				worker = field.String
 			}
 		}
+
 		if strings.Contains(worker, "failing-worker-recovery") {
 			recoverySucceeded = true
+
 			break
 		}
 	}
@@ -117,13 +121,16 @@ func verifyPermanentWorkerStaysStuck(t *integration.TestLogger) {
 
 	// Count failures for permanent worker
 	permanentFailures := 0
+
 	for _, entry := range failedLogs {
 		worker := ""
+
 		for _, field := range entry.Context {
 			if field.Key == "worker" {
 				worker = field.String
 			}
 		}
+
 		if strings.Contains(worker, "failing-worker-permanent") {
 			permanentFailures++
 		}
@@ -137,11 +144,13 @@ func verifyPermanentWorkerStaysStuck(t *integration.TestLogger) {
 	succeededLogs := t.GetLogsMatching("connect_succeeded_after_failures")
 	for _, entry := range succeededLogs {
 		worker := ""
+
 		for _, field := range entry.Context {
 			if field.Key == "worker" {
 				worker = field.String
 			}
 		}
+
 		Expect(strings.Contains(worker, "failing-worker-permanent")).To(BeFalse(),
 			"Permanent worker should NEVER succeed")
 	}
@@ -153,21 +162,24 @@ func verifyPermanentWorkerStaysStuck(t *integration.TestLogger) {
 func verifyActionFailuresLogged(t *integration.TestLogger) {
 	failedLogs := t.GetLogsMatching("connect_failed_simulated")
 
-	Expect(len(failedLogs)).To(BeNumerically(">=", 1),
+	Expect(failedLogs).ToNot(BeEmpty(),
 		"Expected at least one connect_failed_simulated log")
 
 	// Verify logs have attempt and remaining fields
 	for _, entry := range failedLogs {
 		hasAttempt := false
 		hasRemaining := false
+
 		for _, field := range entry.Context {
 			if field.Key == "attempt" {
 				hasAttempt = true
 			}
+
 			if field.Key == "remaining" {
 				hasRemaining = true
 			}
 		}
+
 		Expect(hasAttempt).To(BeTrue(),
 			"connect_failed_simulated should have 'attempt' field")
 		Expect(hasRemaining).To(BeTrue(),
@@ -182,19 +194,24 @@ func verifyRecoveryWorkerReachesConnected(t *integration.TestLogger) {
 	stateTransitions := t.GetLogsMatching("state_transition")
 
 	recoveryReachedConnected := false
+
 	for _, entry := range stateTransitions {
 		worker := ""
 		toState := ""
+
 		for _, field := range entry.Context {
 			if field.Key == "worker" {
 				worker = field.String
 			}
+
 			if field.Key == "to_state" {
 				toState = field.String
 			}
 		}
+
 		if strings.Contains(worker, "failing-worker-recovery") && toState == "Connected" {
 			recoveryReachedConnected = true
+
 			break
 		}
 	}
@@ -212,14 +229,17 @@ func verifyPermanentWorkerNeverConnected(t *integration.TestLogger) {
 	for _, entry := range stateTransitions {
 		worker := ""
 		toState := ""
+
 		for _, field := range entry.Context {
 			if field.Key == "worker" {
 				worker = field.String
 			}
+
 			if field.Key == "to_state" {
 				toState = field.String
 			}
 		}
+
 		if strings.Contains(worker, "failing-worker-permanent") && toState == "Connected" {
 			Fail("Permanent worker should NEVER reach Connected state")
 		}
@@ -233,15 +253,19 @@ func verifyRestartWorkerTriggersRestart(t *integration.TestLogger) {
 	restartLogs := t.GetLogsMatching("worker_restart_requested")
 
 	restartWorkerTriggered := false
+
 	for _, entry := range restartLogs {
 		worker := ""
+
 		for _, field := range entry.Context {
 			if field.Key == "worker" {
 				worker = field.String
 			}
 		}
+
 		if strings.Contains(worker, "failing-worker-restart") {
 			restartWorkerTriggered = true
+
 			break
 		}
 	}
@@ -257,15 +281,19 @@ func verifyRestartWorkerCompletes(t *integration.TestLogger) {
 	completeLogs := t.GetLogsMatching("worker_restart_complete")
 
 	found := false
+
 	for _, entry := range completeLogs {
 		worker := ""
+
 		for _, field := range entry.Context {
 			if field.Key == "worker" {
 				worker = field.String
 			}
 		}
+
 		if strings.Contains(worker, "failing-worker-restart") {
 			found = true
+
 			break
 		}
 	}

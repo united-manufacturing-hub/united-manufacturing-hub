@@ -98,13 +98,15 @@ func (o ExamplechildObservedState) GetObservedDesiredState() fsmv2.DesiredState 
 // Called by Collector when StateProvider callback is configured.
 func (o ExamplechildObservedState) SetState(s string) fsmv2.ObservedState {
 	o.State = s
+
 	return o
 }
 
 // SetShutdownRequested sets the shutdown requested status on this observed state.
 // Called by Collector when ShutdownRequestedProvider callback is configured.
 func (o ExamplechildObservedState) SetShutdownRequested(v bool) fsmv2.ObservedState {
-	o.ExamplechildDesiredState.ShutdownRequested = v
+	o.ShutdownRequested = v
+
 	return o
 }
 
@@ -112,7 +114,8 @@ func (o ExamplechildObservedState) SetShutdownRequested(v bool) fsmv2.ObservedSt
 // Called by Collector when MappedParentStateProvider callback is configured.
 // Children can check if parent wants them running via StateMapping.
 func (o ExamplechildObservedState) SetParentMappedState(state string) fsmv2.ObservedState {
-	o.ExamplechildDesiredState.ParentMappedState = state
+	o.ParentMappedState = state
+
 	return o
 }
 

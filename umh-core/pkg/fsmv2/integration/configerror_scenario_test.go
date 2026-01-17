@@ -82,13 +82,16 @@ func verifyConfigValidWorker(t *integration.TestLogger) {
 
 	validWorkerFound := false
 	childrenOfValid := 0
+
 	for _, entry := range stateTransitions {
 		worker := ""
+
 		for _, field := range entry.Context {
 			if field.Key == "worker" {
 				worker = field.String
 			}
 		}
+
 		if strings.Contains(worker, "config-valid") {
 			validWorkerFound = true
 		}
@@ -113,6 +116,7 @@ func verifyConfigTypeMismatchWorker(t *integration.TestLogger) {
 
 	// Count children specifically
 	childrenOfMismatch := 0
+
 	for _, entry := range typeMismatchLogs {
 		for _, field := range entry.Context {
 			if field.Key == "worker" {
@@ -148,11 +152,13 @@ func verifyConfigFailingDefaults(t *integration.TestLogger) {
 
 	// Count failures for any failing-related worker
 	failingWorkerFailures := 0
+
 	for _, entry := range failureLogs {
 		for _, field := range entry.Context {
 			if field.Key == "worker" {
 				// Count any failure from a failing worker
 				failingWorkerFailures++
+
 				break
 			}
 		}

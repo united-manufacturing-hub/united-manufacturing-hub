@@ -30,7 +30,9 @@ import (
 func generateLargeConfig(sizeBytes int) string {
 	// Each line is approximately 50 bytes
 	lineTemplate := "  - name: sensor_%d\n    address: 192.168.1.%d\n"
+
 	var sb strings.Builder
+
 	sb.WriteString("sensors:\n")
 
 	for i := 0; sb.Len() < sizeBytes; i++ {
@@ -43,7 +45,9 @@ func generateLargeConfig(sizeBytes int) string {
 // generateConfigWithTemplates creates a config with template variables.
 func generateConfigWithTemplates(sizeBytes int) string {
 	lineTemplate := "  - name: sensor_{{ .DEVICE_ID }}_%d\n    address: {{ .IP }}:{{ .PORT }}\n"
+
 	var sb strings.Builder
+
 	sb.WriteString("sensors:\n")
 
 	for i := 0; sb.Len() < sizeBytes; i++ {
@@ -184,6 +188,7 @@ func BenchmarkComputeUserSpecHash(b *testing.B) {
 
 		b.Run(s.name, func(b *testing.B) {
 			b.ReportAllocs()
+
 			for range b.N {
 				config.ComputeUserSpecHash(spec)
 			}
@@ -217,6 +222,7 @@ func BenchmarkRenderConfigTemplate(b *testing.B) {
 
 		b.Run(s.name, func(b *testing.B) {
 			b.ReportAllocs()
+
 			for range b.N {
 				_, _ = config.RenderConfigTemplate(configTemplate, variables)
 			}
@@ -224,7 +230,7 @@ func BenchmarkRenderConfigTemplate(b *testing.B) {
 	}
 }
 
-// BenchmarkHashVsRender provides a direct comparison for benchstat
+// BenchmarkHashVsRender provides a direct comparison for benchstat.
 func BenchmarkHashVsRender(b *testing.B) {
 	configTemplate := generateConfigWithTemplates(100 * 1024) // 100KB
 	spec := config.UserSpec{
@@ -240,6 +246,7 @@ func BenchmarkHashVsRender(b *testing.B) {
 
 	b.Run("Hash", func(b *testing.B) {
 		b.ReportAllocs()
+
 		for range b.N {
 			config.ComputeUserSpecHash(spec)
 		}
@@ -247,6 +254,7 @@ func BenchmarkHashVsRender(b *testing.B) {
 
 	b.Run("Render", func(b *testing.B) {
 		b.ReportAllocs()
+
 		for range b.N {
 			_, _ = config.RenderConfigTemplate(spec.Config, spec.Variables)
 		}

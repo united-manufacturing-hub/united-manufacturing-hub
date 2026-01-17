@@ -68,6 +68,7 @@ func (d *ExampleslowDependencies) GetConnectionPool() ConnectionPool {
 func (d *ExampleslowDependencies) SetConnected(connected bool) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
+
 	d.isConnected = connected
 }
 
@@ -75,6 +76,7 @@ func (d *ExampleslowDependencies) SetConnected(connected bool) {
 func (d *ExampleslowDependencies) IsConnected() bool {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
+
 	return d.isConnected
 }
 
@@ -82,6 +84,7 @@ func (d *ExampleslowDependencies) IsConnected() bool {
 func (d *ExampleslowDependencies) SetDelaySeconds(delaySeconds int) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
+
 	d.delaySeconds = delaySeconds
 }
 
@@ -89,5 +92,6 @@ func (d *ExampleslowDependencies) SetDelaySeconds(delaySeconds int) {
 func (d *ExampleslowDependencies) GetDelaySeconds() int {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
+
 	return d.delaySeconds
 }

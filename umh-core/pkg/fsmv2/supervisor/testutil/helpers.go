@@ -214,7 +214,9 @@ func (s *Store) SaveIdentity(ctx context.Context, workerType string, id string, 
 	if s.Identity[workerType] == nil {
 		s.Identity[workerType] = make(map[string]persistence.Document)
 	}
+
 	s.Identity[workerType][id] = identity
+
 	return s.SaveErr
 }
 
@@ -222,6 +224,7 @@ func (s *Store) LoadIdentity(ctx context.Context, workerType string, id string) 
 	if s.Identity[workerType] == nil || s.Identity[workerType][id] == nil {
 		return nil, persistence.ErrNotFound
 	}
+
 	return s.Identity[workerType][id], nil
 }
 
@@ -229,10 +232,13 @@ func (s *Store) SaveDesired(ctx context.Context, workerType string, id string, d
 	if s.SaveDesiredFunc != nil {
 		return s.SaveDesiredFunc(ctx, workerType, id, desired)
 	}
+
 	if s.Desired[workerType] == nil {
 		s.Desired[workerType] = make(map[string]persistence.Document)
 	}
+
 	s.Desired[workerType][id] = desired
+
 	return s.SaveErr
 }
 
@@ -240,6 +246,7 @@ func (s *Store) LoadDesired(ctx context.Context, workerType string, id string) (
 	if s.Desired[workerType] == nil || s.Desired[workerType][id] == nil {
 		return nil, persistence.ErrNotFound
 	}
+
 	return s.Desired[workerType][id], nil
 }
 
@@ -248,11 +255,14 @@ func (s *Store) LoadDesiredTyped(ctx context.Context, workerType string, id stri
 	if err != nil {
 		return err
 	}
+
 	doc, ok := result.(persistence.Document)
 	if !ok {
 		return fmt.Errorf("expected Document, got %T", result)
 	}
+
 	jsonBytes, _ := json.Marshal(doc)
+
 	return json.Unmarshal(jsonBytes, dest)
 }
 
@@ -260,19 +270,24 @@ func (s *Store) SaveObserved(ctx context.Context, workerType string, id string, 
 	if s.SaveObservedFunc != nil {
 		return s.SaveObservedFunc(ctx, workerType, id, observed)
 	}
+
 	if s.Observed[workerType] == nil {
 		s.Observed[workerType] = make(map[string]persistence.Document)
 	}
+
 	var doc persistence.Document
+
 	if observedDoc, ok := observed.(persistence.Document); ok {
 		doc = observedDoc
 	} else {
 		doc = persistence.Document{"data": observed, "collectedAt": time.Now()}
 	}
+
 	s.Observed[workerType][id] = doc
 	if s.SaveErr != nil {
 		return false, s.SaveErr
 	}
+
 	return true, nil
 }
 
@@ -280,6 +295,7 @@ func (s *Store) LoadObserved(ctx context.Context, workerType string, id string) 
 	if s.Observed[workerType] == nil || s.Observed[workerType][id] == nil {
 		return nil, persistence.ErrNotFound
 	}
+
 	return s.Observed[workerType][id], nil
 }
 
@@ -288,11 +304,14 @@ func (s *Store) LoadObservedTyped(ctx context.Context, workerType string, id str
 	if err != nil {
 		return err
 	}
+
 	doc, ok := result.(persistence.Document)
 	if !ok {
 		return fmt.Errorf("expected Document, got %T", result)
 	}
+
 	jsonBytes, _ := json.Marshal(doc)
+
 	return json.Unmarshal(jsonBytes, dest)
 }
 
@@ -300,6 +319,7 @@ func (s *Store) LoadSnapshot(ctx context.Context, workerType string, id string) 
 	if s.LoadSnapshotFunc != nil {
 		return s.LoadSnapshotFunc(ctx, workerType, id)
 	}
+
 	identity := persistence.Document{
 		"id":         id,
 		"name":       "Test Worker",
@@ -307,15 +327,19 @@ func (s *Store) LoadSnapshot(ctx context.Context, workerType string, id string) 
 	}
 	desired := persistence.Document{}
 	observed := persistence.Document{"collectedAt": time.Now()}
+
 	if s.Identity[workerType] != nil && s.Identity[workerType][id] != nil {
 		identity = s.Identity[workerType][id]
 	}
+
 	if s.Desired[workerType] != nil && s.Desired[workerType][id] != nil {
 		desired = s.Desired[workerType][id]
 	}
+
 	if s.Observed[workerType] != nil && s.Observed[workerType][id] != nil {
 		observed = s.Observed[workerType][id]
 	}
+
 	return &storage.Snapshot{
 		Identity: identity,
 		Desired:  desired,
@@ -333,6 +357,7 @@ func (a *Action) Execute(ctx context.Context, snapshot any) error {
 	if a.ExecuteFunc != nil {
 		return a.ExecuteFunc(ctx, snapshot)
 	}
+
 	return nil
 }
 

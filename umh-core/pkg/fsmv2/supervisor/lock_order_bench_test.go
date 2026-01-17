@@ -30,7 +30,7 @@ func BenchmarkLockAcquisitionWithoutChecks(b *testing.B) {
 
 	for range b.N {
 		lock.Lock()
-		lock.Unlock()
+		lock.Unlock() //nolint:staticcheck // empty critical section intentional for benchmarking
 	}
 }
 
@@ -44,7 +44,7 @@ func BenchmarkLockAcquisitionConcurrentWithoutChecks(b *testing.B) {
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
 			lock.Lock()
-			lock.Unlock()
+			lock.Unlock() //nolint:staticcheck // empty critical section intentional for benchmarking
 		}
 	})
 }
@@ -58,7 +58,7 @@ func BenchmarkWorkerContextLockWithoutChecks(b *testing.B) {
 
 	for range b.N {
 		lock.Lock()
-		lock.Unlock()
+		lock.Unlock() //nolint:staticcheck // empty critical section intentional for benchmarking
 	}
 }
 
@@ -71,7 +71,7 @@ func BenchmarkReadLockWithoutChecks(b *testing.B) {
 
 	for range b.N {
 		lock.RLock()
-		lock.RUnlock()
+		lock.RUnlock() //nolint:staticcheck // empty critical section intentional for benchmarking
 	}
 }
 
@@ -87,7 +87,7 @@ func BenchmarkHierarchicalLockWithoutChecks(b *testing.B) {
 	for range b.N {
 		supervisorLock.Lock()
 		workerLock.Lock()
-		workerLock.Unlock()
+		workerLock.Unlock() //nolint:staticcheck // empty critical section intentional for benchmarking
 		supervisorLock.Unlock()
 	}
 }

@@ -408,6 +408,7 @@ func RegisterWorkerAndSupervisorFactoryByType(
 		registryMu.Lock()
 		delete(registry, workerType)
 		registryMu.Unlock()
+
 		return fmt.Errorf("failed to register supervisor factory: %w", err)
 	}
 
@@ -482,17 +483,23 @@ func RegisterWorkerType[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredSta
 //	}
 func ValidateRegistryConsistency() (workerOnly []string, supervisorOnly []string) {
 	registryMu.RLock()
+
 	workerTypes := make(map[string]bool, len(registry))
+
 	for workerType := range registry {
 		workerTypes[workerType] = true
 	}
+
 	registryMu.RUnlock()
 
 	supervisorRegistryMu.RLock()
+
 	supervisorTypes := make(map[string]bool, len(supervisorRegistry))
+
 	for supervisorType := range supervisorRegistry {
 		supervisorTypes[supervisorType] = true
 	}
+
 	supervisorRegistryMu.RUnlock()
 
 	for workerType := range workerTypes {

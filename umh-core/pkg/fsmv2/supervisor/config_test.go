@@ -29,7 +29,7 @@ func setupTestStore(workerType string) *storage.TriangularStore {
 	ctx := context.Background()
 	basicStore := memory.NewInMemoryStore()
 
-	// TODO: i dont htink this is required anymore, the createColelction
+	// TODO: i dont think this is required anymore, the createCollection
 
 	_ = basicStore.CreateCollection(ctx, workerType+"_identity", nil)
 	_ = basicStore.CreateCollection(ctx, workerType+"_desired", nil)

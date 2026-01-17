@@ -92,9 +92,7 @@ func TestNewExamplechildDependencies(t *testing.T) {
 
 	if deps == nil {
 		t.Fatal("NewExamplechildDependencies returned nil")
-	}
-
-	if deps.GetLogger() == nil {
+	} else if deps.GetLogger() == nil {
 		t.Error("GetLogger() returned nil")
 	}
 

@@ -339,7 +339,7 @@ global:
 			Expect(result).ToNot(BeNil())
 			Expect(result).ToNot(HaveKey("global"))
 			Expect(result).ToNot(HaveKey("internal"))
-			Expect(len(result)).To(Equal(0))
+			Expect(result).To(BeEmpty())
 		})
 	})
 

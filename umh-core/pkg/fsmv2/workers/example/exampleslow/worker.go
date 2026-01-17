@@ -47,6 +47,7 @@ func NewExampleslowWorker(
 	if connectionPool == nil {
 		return nil, errors.New("connectionPool must not be nil")
 	}
+
 	if logger == nil {
 		return nil, errors.New("logger must not be nil")
 	}
@@ -57,8 +58,10 @@ func NewExampleslowWorker(
 		if err != nil {
 			return nil, fmt.Errorf("failed to derive worker type: %w", err)
 		}
+
 		identity.WorkerType = workerType
 	}
+
 	dependencies := NewExampleslowDependencies(connectionPool, logger, stateReader, identity)
 
 	return &ExampleslowWorker{
@@ -77,7 +80,9 @@ func (w *ExampleslowWorker) CollectObservedState(ctx context.Context) (fsmv2.Obs
 
 	// Get connection health from dependencies (updated by ConnectAction/DisconnectAction)
 	deps := w.GetDependencies()
+
 	connectionHealth := "no connection"
+
 	if deps.IsConnected() {
 		connectionHealth = "healthy"
 	}
@@ -131,6 +136,7 @@ func init() {
 		func(id fsmv2.Identity, logger *zap.SugaredLogger, stateReader fsmv2.StateReader) fsmv2.Worker {
 			pool := &DefaultConnectionPool{}
 			worker, _ := NewExampleslowWorker(id, pool, logger, stateReader)
+
 			return worker
 		},
 		func(cfg interface{}) interface{} {

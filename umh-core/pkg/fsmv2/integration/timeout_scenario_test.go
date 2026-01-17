@@ -84,19 +84,24 @@ func verifyTimeoutQuickWorker(t *integration.TestLogger) {
 	stateTransitions := t.GetLogsMatching("state_transition")
 
 	quickConnected := false
+
 	for _, entry := range stateTransitions {
 		worker := ""
 		toState := ""
+
 		for _, field := range entry.Context {
 			if field.Key == "worker" {
 				worker = field.String
 			}
+
 			if field.Key == "to_state" {
 				toState = field.String
 			}
 		}
+
 		if strings.Contains(worker, "timeout-quick") && toState == "Connected" {
 			quickConnected = true
+
 			break
 		}
 	}
@@ -112,19 +117,24 @@ func verifyTimeoutSlowWorker(t *integration.TestLogger) {
 	stateTransitions := t.GetLogsMatching("state_transition")
 
 	slowConnected := false
+
 	for _, entry := range stateTransitions {
 		worker := ""
 		toState := ""
+
 		for _, field := range entry.Context {
 			if field.Key == "worker" {
 				worker = field.String
 			}
+
 			if field.Key == "to_state" {
 				toState = field.String
 			}
 		}
+
 		if strings.Contains(worker, "timeout-slow") && toState == "Connected" {
 			slowConnected = true
+
 			break
 		}
 	}
@@ -140,13 +150,16 @@ func verifyTimeoutRetryWorker(t *integration.TestLogger) {
 	failureLogs := t.GetLogsMatching("connect_failed_simulated")
 
 	retryFailures := 0
+
 	for _, entry := range failureLogs {
 		worker := ""
+
 		for _, field := range entry.Context {
 			if field.Key == "worker" {
 				worker = field.String
 			}
 		}
+
 		if strings.Contains(worker, "timeout-retry") {
 			retryFailures++
 		}
@@ -159,15 +172,19 @@ func verifyTimeoutRetryWorker(t *integration.TestLogger) {
 	// Check for eventual success
 	successLogs := t.GetLogsMatching("connect_succeeded_after_failures")
 	retryRecovered := false
+
 	for _, entry := range successLogs {
 		worker := ""
+
 		for _, field := range entry.Context {
 			if field.Key == "worker" {
 				worker = field.String
 			}
 		}
+
 		if strings.Contains(worker, "timeout-retry") {
 			retryRecovered = true
+
 			break
 		}
 	}
@@ -183,13 +200,16 @@ func verifyTimeoutCombinedWorker(t *integration.TestLogger) {
 	failureLogs := t.GetLogsMatching("connect_failed_simulated")
 
 	combinedFailures := 0
+
 	for _, entry := range failureLogs {
 		worker := ""
+
 		for _, field := range entry.Context {
 			if field.Key == "worker" {
 				worker = field.String
 			}
 		}
+
 		if strings.Contains(worker, "timeout-combined") {
 			combinedFailures++
 		}
@@ -202,15 +222,19 @@ func verifyTimeoutCombinedWorker(t *integration.TestLogger) {
 	// Check for eventual success
 	successLogs := t.GetLogsMatching("connect_succeeded_after_failures")
 	combinedRecovered := false
+
 	for _, entry := range successLogs {
 		worker := ""
+
 		for _, field := range entry.Context {
 			if field.Key == "worker" {
 				worker = field.String
 			}
 		}
+
 		if strings.Contains(worker, "timeout-combined") {
 			combinedRecovered = true
+
 			break
 		}
 	}

@@ -30,7 +30,7 @@ func (s *TryingToConnectState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.S
 	snap := helpers.ConvertSnapshot[snapshot.ExamplepanicObservedState, *snapshot.ExamplepanicDesiredState](snapAny)
 	snap.Observed.State = config.MakeState(config.PrefixTryingToStart, "connection")
 
-	if snap.Desired.IsShutdownRequested() {
+	if snap.Observed.IsStopRequired() {
 		return &TryingToStopState{}, fsmv2.SignalNone, nil
 	}
 

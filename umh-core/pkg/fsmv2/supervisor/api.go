@@ -160,6 +160,7 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity fsmv2.Identity, wor
 			if workerCtx.currentState == nil {
 				return "unknown"
 			}
+
 			return workerCtx.currentState.String()
 		},
 		// ShutdownRequestedProvider returns the current shutdown status from the desired state.
@@ -196,6 +197,7 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity fsmv2.Identity, wor
 					unhealthy++
 				}
 			}
+
 			return healthy, unhealthy
 		},
 		// MappedParentStateProvider returns the mapped state from parent's ChildStartStates.
@@ -475,13 +477,16 @@ func (s *Supervisor[TObserved, TDesired]) getHierarchyPathUnlocked() string {
 	var workerID string
 	for id := range s.workers {
 		workerID = id
+
 		break
 	}
+
 	if workerID == "" {
 		workerID = "unknown"
 	}
 
 	// Build this node's path segment: "workerID(workerType)"
+
 	segment := fmt.Sprintf("%s(%s)", workerID, s.workerType)
 
 	// If no parent, we're root - return just our segment
@@ -520,17 +525,21 @@ func (s *Supervisor[TObserved, TDesired]) GetCurrentStateName() string {
 	// Get the first (and typically only) worker's current state
 	for _, workerCtx := range s.workers {
 		workerCtx.mu.RLock()
+
 		defer workerCtx.mu.RUnlock()
+
 		if workerCtx.currentState != nil {
 			return workerCtx.currentState.String()
 		}
+
 		return "unknown"
 	}
+
 	return "unknown"
 }
 
 // GetWorkerType returns the type of workers this supervisor manages.
-// Example: "examplechild", "exampleparent", "application"
+// For example: "examplechild", "exampleparent", "application".
 func (s *Supervisor[TObserved, TDesired]) GetWorkerType() string {
 	return s.workerType
 }

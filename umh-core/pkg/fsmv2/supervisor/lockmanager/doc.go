@@ -38,7 +38,7 @@
 //
 //	Goroutine A                Goroutine B
 //	-----------                -----------
-//	Lock(Supervisor.mu)        Lock(Supervisor.mu)  // Must wait
+//	Lock(Supervisor.mu)        TryLock(Supervisor.mu)  // Must wait
 //	Lock(WorkerContext.mu)          ^ BLOCKED (waits for A)
 //	Unlock(WorkerContext.mu)   Lock(WorkerContext.mu)  // Now allowed
 //	Unlock(Supervisor.mu)      Unlock(WorkerContext.mu)

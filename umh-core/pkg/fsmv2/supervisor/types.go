@@ -44,20 +44,6 @@ type CollectorHealth struct {
 	lastRestart        time.Time     // Timestamp of last restart attempt
 }
 
-// stubAction is a no-op action used for Phase 2 integration testing.
-// This will be replaced with real action derivation in Phase 3.
-// It exists to prevent EnqueueAction from being test-only.
-type stubAction struct{}
-
-func (s *stubAction) Execute(ctx context.Context, deps any) error {
-	// No-op: Phase 2 stub, real actions in Phase 3
-	return nil
-}
-
-func (s *stubAction) Name() string {
-	return "stub-action-phase2"
-}
-
 // SupervisorInterface provides a type-erased interface for hierarchical supervisor composition.
 // A parent Supervisor[TObserved, TDesired] can manage children of different types.
 type SupervisorInterface interface {

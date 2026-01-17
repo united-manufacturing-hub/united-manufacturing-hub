@@ -40,7 +40,7 @@ var forbiddenLogMethods = map[string]bool{
 // Rationale: Structured logging with key-value pairs enables:
 // - Better log aggregation and querying
 // - Consistent field names across the codebase
-// - Hierarchical context via the "worker" field
+// - Hierarchical context via the "worker" field.
 func ValidateStructuredLogging(baseDir string) []Violation {
 	var violations []Violation
 
@@ -70,7 +70,6 @@ func ValidateStructuredLogging(baseDir string) []Violation {
 
 		return nil
 	})
-
 	if err != nil {
 		return violations
 	}
@@ -109,6 +108,7 @@ func checkForNonStructuredLogging(filename string) []Violation {
 		// Get the receiver name to confirm it's a logger
 		// We check for common logger variable names
 		receiverName := ""
+
 		switch x := selExpr.X.(type) {
 		case *ast.Ident:
 			receiverName = x.Name
@@ -122,10 +122,6 @@ func checkForNonStructuredLogging(filename string) []Violation {
 		if receiverName == "logger" || receiverName == "Logger" ||
 			strings.Contains(receiverName, "log") || strings.Contains(receiverName, "Log") {
 			pos := fset.Position(callExpr.Pos())
-			relPath, _ := filepath.Rel(filepath.Dir(filename), filename)
-			if relPath == "" {
-				relPath = filepath.Base(filename)
-			}
 
 			structuredMethod := strings.TrimSuffix(methodName, "f") + "w"
 			violations = append(violations, Violation{

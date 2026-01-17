@@ -209,9 +209,7 @@ var _ = Describe("ActionExecutor", func() {
 				Expect(err).ToNot(HaveOccurred())
 			}
 
-			Eventually(func() int32 {
-				return executed.Load()
-			}, 200*time.Millisecond).Should(Equal(int32(actionCount)))
+			Eventually(executed.Load, 200*time.Millisecond).Should(Equal(int32(actionCount)))
 		})
 	})
 
@@ -658,6 +656,7 @@ var _ = Describe("ActionExecutor", func() {
 			normalAction := &testAction{
 				execute: func(ctx context.Context) error {
 					completed <- true
+
 					return nil
 				},
 			}
@@ -690,6 +689,7 @@ var _ = Describe("ActionExecutor", func() {
 						count++
 					}
 				}
+
 				return count
 			}, 5*time.Second).Should(Equal(5),
 				"All panic actions should be cleared from in-progress")
@@ -699,6 +699,7 @@ var _ = Describe("ActionExecutor", func() {
 			normalAction := &testAction{
 				execute: func(ctx context.Context) error {
 					completed <- true
+
 					return nil
 				},
 			}

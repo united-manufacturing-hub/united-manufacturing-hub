@@ -55,5 +55,6 @@ func MustExtract[T any](vars VariableBundle) T {
 	if err != nil {
 		panic(err)
 	}
+
 	return result
 }

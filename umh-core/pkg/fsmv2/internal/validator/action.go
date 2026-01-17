@@ -123,6 +123,7 @@ func checkContextCancellationInAction(filename string) []Violation {
 
 		// Look for ctx.Done() check in method body
 		hasContextCheck := false
+
 		ast.Inspect(funcDecl.Body, func(bodyNode ast.Node) bool {
 			// Check for select statement with ctx.Done()
 			if selectStmt, ok := bodyNode.(*ast.SelectStmt); ok {
@@ -137,6 +138,7 @@ func checkContextCancellationInAction(filename string) []Violation {
 											if xIdent, ok := selExpr.X.(*ast.Ident); ok && xIdent.Name == "ctx" {
 												if selExpr.Sel.Name == "Done" {
 													hasContextCheck = true
+
 													return false
 												}
 											}
@@ -157,11 +159,13 @@ func checkContextCancellationInAction(filename string) []Violation {
 							if xIdent, ok := selExpr.X.(*ast.Ident); ok && xIdent.Name == "ctx" {
 								if selExpr.Sel.Name == "Done" {
 									hasContextCheck = true
+
 									return false
 								}
 							}
 						}
 					}
+
 					return true
 				})
 			}
@@ -217,7 +221,7 @@ func checkNoInternalRetryLoops(filename string) []Violation {
 			return true
 		}
 
-		// Look for for loops in the method body
+		// Look for loops in the method body
 		ast.Inspect(funcDecl.Body, func(bodyNode ast.Node) bool {
 			forStmt, ok := bodyNode.(*ast.ForStmt)
 			if !ok {
@@ -234,6 +238,7 @@ func checkNoInternalRetryLoops(filename string) []Violation {
 						})
 					}
 				}
+
 				return true
 			}
 
@@ -267,6 +272,7 @@ func hasErrorHandling(body *ast.BlockStmt) bool {
 			for _, result := range retStmt.Results {
 				if ident, ok := result.(*ast.Ident); ok && ident.Name == "err" {
 					hasError = true
+
 					return false
 				}
 			}
@@ -280,6 +286,7 @@ func hasErrorHandling(body *ast.BlockStmt) bool {
 					if ident, ok := binExpr.X.(*ast.Ident); ok && ident.Name == "err" {
 						if nilIdent, ok := binExpr.Y.(*ast.Ident); ok && nilIdent.Name == "nil" {
 							hasError = true
+
 							return false
 						}
 					}

@@ -107,15 +107,19 @@ func verifyInheritanceParentCreated(t *integration.TestLogger) {
 	stateTransitions := t.GetLogsMatching("state_transition")
 
 	parentCreated := false
+
 	for _, entry := range createdLogs {
 		worker := ""
+
 		for _, field := range entry.Context {
 			if field.Key == "worker" {
 				worker = field.String
 			}
 		}
+
 		if strings.Contains(worker, "inheritance-parent") {
 			parentCreated = true
+
 			break
 		}
 	}
@@ -124,13 +128,16 @@ func verifyInheritanceParentCreated(t *integration.TestLogger) {
 	if !parentCreated {
 		for _, entry := range stateTransitions {
 			worker := ""
+
 			for _, field := range entry.Context {
 				if field.Key == "worker" {
 					worker = field.String
 				}
 			}
+
 			if strings.Contains(worker, "inheritance-parent") {
 				parentCreated = true
+
 				break
 			}
 		}
@@ -152,11 +159,13 @@ func verifyInheritanceChildrenCreated(t *integration.TestLogger) {
 	// Check state transitions for child workers
 	for _, entry := range stateTransitions {
 		worker := ""
+
 		for _, field := range entry.Context {
 			if field.Key == "worker" {
 				worker = field.String
 			}
 		}
+
 		if strings.Contains(worker, "child-0") || strings.Contains(worker, "child-1") {
 			childrenFound[worker] = true
 		}
@@ -165,11 +174,13 @@ func verifyInheritanceChildrenCreated(t *integration.TestLogger) {
 	// Also check child_adding logs
 	for _, entry := range childAddingLogs {
 		childName := ""
+
 		for _, field := range entry.Context {
 			if field.Key == "child_name" {
 				childName = field.String
 			}
 		}
+
 		if childName != "" {
 			childrenFound[childName] = true
 		}
@@ -196,13 +207,16 @@ func verifyVariablePropagation(t *integration.TestLogger) {
 	stateTransitions := t.GetLogsMatching("state_transition")
 
 	childTransitions := 0
+
 	for _, entry := range stateTransitions {
 		worker := ""
+
 		for _, field := range entry.Context {
 			if field.Key == "worker" {
 				worker = field.String
 			}
 		}
+
 		if strings.Contains(worker, "examplechild") {
 			childTransitions++
 		}
@@ -222,19 +236,24 @@ func verifyParentHasVariables(t *integration.TestLogger) {
 	stateTransitions := t.GetLogsMatching("state_transition")
 
 	parentReachedRunning := false
+
 	for _, entry := range stateTransitions {
 		worker := ""
 		toState := ""
+
 		for _, field := range entry.Context {
 			if field.Key == "worker" {
 				worker = field.String
 			}
+
 			if field.Key == "to_state" {
 				toState = field.String
 			}
 		}
+
 		if strings.Contains(worker, "inheritance-parent") && toState == "Running" {
 			parentReachedRunning = true
+
 			break
 		}
 	}
@@ -258,6 +277,7 @@ func verifyChildrenReceivedMergedVariablesFromStore(store storage.TriangularStor
 
 	// Find parent and children
 	var parentWorker *examples.WorkerSnapshot
+
 	var childWorkers []examples.WorkerSnapshot
 
 	for i := range workers {
@@ -359,6 +379,7 @@ func verifyChildrenReceivedMergedVariablesFromStore(store storage.TriangularStor
 		default:
 			Fail(fmt.Sprintf("Child %s PORT should be numeric, got: %T", child.WorkerID, portValue))
 		}
+
 		Expect(portInt).To(Equal(502),
 			fmt.Sprintf("Child %s should inherit PORT=502 from parent, got %d", child.WorkerID, portInt))
 		GinkgoWriter.Printf("    ✓ PORT: %v (inherited from parent)\n", portInt)
@@ -397,6 +418,7 @@ func verifyTemplateRenderingWorks(store storage.TriangularStoreInterface) {
 
 	// Find child workers
 	var childWorkers []examples.WorkerSnapshot
+
 	for i := range workers {
 		w := &workers[i]
 		if w.WorkerType == "examplechild" {
@@ -474,6 +496,7 @@ func extractUserSpec(desired map[string]any) (config.UserSpec, error) {
 
 	// Extract config string
 	configStr := ""
+
 	if configVal, hasConfig := userSpecMap["config"]; hasConfig {
 		if s, ok := configVal.(string); ok {
 			configStr = s
@@ -482,6 +505,7 @@ func extractUserSpec(desired map[string]any) (config.UserSpec, error) {
 
 	// Extract variables
 	var variables config.VariableBundle
+
 	if varsVal, hasVars := userSpecMap["variables"]; hasVars {
 		if varsMap, ok := varsVal.(map[string]any); ok {
 			// Extract user namespace
@@ -517,5 +541,6 @@ func getMapKeys(m map[string]any) []string {
 	for k := range m {
 		keys = append(keys, k)
 	}
+
 	return keys
 }

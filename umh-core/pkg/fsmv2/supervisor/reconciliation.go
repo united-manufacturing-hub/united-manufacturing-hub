@@ -30,7 +30,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 )
 
-// factoryRegistryAdapter provides an adapter for config validation
+// factoryRegistryAdapter provides an adapter for config validation.
 type factoryRegistryAdapter struct{}
 
 func (f *factoryRegistryAdapter) ListRegisteredTypes() []string {
@@ -67,6 +67,7 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 		s.logger.Debugw("tick_worker_skip",
 			"reason", "worker_removed_during_shutdown",
 			"worker_id", workerID)
+
 		return nil
 	}
 
@@ -153,7 +154,7 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 	// which causes parent's observation to become stale (collectors can't observe gone children).
 	// The shutdown transition only needs the ShutdownRequested flag, not fresh observation data.
 	var isShutdownRequested bool
-	if ds, ok := any(snapshot.Desired).(fsmv2.DesiredState); ok {
+	if ds, ok := snapshot.Desired.(fsmv2.DesiredState); ok {
 		isShutdownRequested = ds.IsShutdownRequested()
 	}
 
@@ -290,10 +291,13 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 		// Set action gating: block state.Next() until fresh observation arrives
 		workerCtx.mu.Lock()
 		workerCtx.actionPending = true
+
 		var currentObsTime time.Time
+
 		if timestampProvider, ok := any(observed).(interface{ GetTimestamp() time.Time }); ok {
 			currentObsTime = timestampProvider.GetTimestamp()
 		}
+
 		workerCtx.lastActionObsTime = currentObsTime
 		workerCtx.mu.Unlock()
 
@@ -481,6 +485,7 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 		if !s.started.Load() {
 			return nil
 		}
+
 		return errors.New("no workers in supervisor")
 	}
 
@@ -532,12 +537,15 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 	if lastHash == currentHash && cachedState != nil {
 		// Cache hit - reuse previous result
 		desired = *cachedState
+
 		s.logTrace("derive_desired_state_cached",
 			"hash", currentHash[:8]+"...")
 	} else {
 		// Cache miss - call DeriveDesiredState
 		templateStart := time.Now()
+
 		var err error
+
 		desired, err = worker.DeriveDesiredState(userSpecWithVars)
 		templateDuration := time.Since(templateStart)
 
@@ -578,8 +586,8 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 		metrics.RecordTemplateRenderingDuration(s.workerType, "success", templateDuration)
 	}
 
-	// Save derived desired state to database BEFORE tickWorker
-	// tickWorker loads the freshest desired state from the snapshot
+	// Save derived desired state to database BEFORE calling tickWorker,
+	// which loads the freshest desired state from the snapshot.
 	desiredJSON, err := json.Marshal(desired)
 	if err != nil {
 		return fmt.Errorf("failed to marshal derived desired state: %w", err)
@@ -647,6 +655,7 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 	if desiredDoc[FieldShutdownRequested] == true {
 		childrenSpecs = nil
 	}
+
 	if err := s.reconcileChildren(childrenSpecs); err != nil {
 		return fmt.Errorf("failed to reconcile children: %w", err)
 	}
@@ -722,17 +731,20 @@ func (s *Supervisor[TObserved, TDesired]) processSignal(ctx context.Context, wor
 
 		// Check if this worker should be restarted instead of removed
 		s.mu.Lock()
+
 		shouldRestart := s.pendingRestart[workerID]
 		if shouldRestart {
 			delete(s.pendingRestart, workerID)
 			delete(s.restartRequestedAt, workerID)
 		}
+
 		s.mu.Unlock()
 
 		if shouldRestart {
 			s.logger.Infow("worker_restarting",
 				"worker", workerID,
 				"reason", "restart requested after graceful shutdown")
+
 			return s.handleWorkerRestart(ctx, workerID)
 		}
 
@@ -827,6 +839,7 @@ func (s *Supervisor[TObserved, TDesired]) processSignal(ctx context.Context, wor
 		if workerCtx.collector.IsRunning() {
 			collectCtx, cancel := context.WithTimeout(ctx, s.collectorHealth.observationTimeout)
 			_ = workerCtx.collector.CollectFinalObservation(collectCtx)
+
 			cancel()
 		}
 
@@ -883,6 +896,7 @@ func (s *Supervisor[TObserved, TDesired]) checkRestartTimeouts(ctx context.Conte
 			if !workerExists {
 				delete(s.pendingRestart, workerID)
 				delete(s.restartRequestedAt, workerID)
+
 				continue
 			}
 
@@ -1026,15 +1040,19 @@ func (s *Supervisor[TObserved, TDesired]) logHeartbeat() {
 	childCount := len(s.children)
 
 	workerStates := make(map[string]string, workerCount)
+
 	for id, workerCtx := range s.workers {
 		workerCtx.mu.RLock()
+
 		if workerCtx.currentState != nil {
 			workerStates[id] = workerCtx.currentState.String()
 		} else {
 			workerStates[id] = "no_state_machine"
 		}
+
 		workerCtx.mu.RUnlock()
 	}
+
 	s.mu.RUnlock()
 
 	activeActions := 0
@@ -1150,12 +1168,15 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 			// Get parent's full hierarchy path from first worker's stored identity
 			// (avoids getHierarchyPathUnlocked() which has hotfix returning incomplete path)
 			var parentPath string
+
 			for _, wCtx := range s.workers {
 				if wCtx.identity.HierarchyPath != "" {
 					parentPath = wCtx.identity.HierarchyPath
+
 					break
 				}
 			}
+
 			childPath := fmt.Sprintf("%s/%s(%s)", parentPath, childID, spec.WorkerType)
 
 			// Create worker identity with hierarchy path for logging context
@@ -1255,6 +1276,7 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 		child := s.children[name]
 		if child == nil {
 			delete(s.pendingRemoval, name)
+
 			continue
 		}
 
@@ -1270,10 +1292,12 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 
 			// Now safe to fully shut down and remove
 			child.Shutdown()
+
 			if done, exists := s.childDoneChans[name]; exists {
 				<-done
 				delete(s.childDoneChans, name)
 			}
+
 			delete(s.children, name)
 			delete(s.pendingRemoval, name)
 
@@ -1301,6 +1325,7 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 			"updated", updatedCount,
 			"duration_ms", duration.Milliseconds())
 	}
+
 	metrics.RecordReconciliation(s.workerType, "success", duration)
 
 	return nil

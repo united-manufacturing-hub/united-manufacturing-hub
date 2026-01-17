@@ -89,6 +89,7 @@ func DumpScenario(ctx context.Context, store storage.TriangularStoreInterface, s
 // extractAndLoadWorkers extracts unique workers from deltas and loads their snapshots.
 func extractAndLoadWorkers(ctx context.Context, store storage.TriangularStoreInterface, deltas []storage.Delta) []WorkerSnapshot {
 	seen := make(map[string]bool)
+
 	var workers []WorkerSnapshot
 
 	for _, delta := range deltas {
@@ -96,6 +97,7 @@ func extractAndLoadWorkers(ctx context.Context, store storage.TriangularStoreInt
 		if seen[key] {
 			continue
 		}
+
 		seen[key] = true
 
 		// Load full snapshot using existing LoadSnapshot API
@@ -124,6 +126,7 @@ func extractAndLoadWorkers(ctx context.Context, store storage.TriangularStoreInt
 		if workers[i].WorkerType != workers[j].WorkerType {
 			return workers[i].WorkerType < workers[j].WorkerType
 		}
+
 		return workers[i].WorkerID < workers[j].WorkerID
 	})
 
@@ -211,6 +214,7 @@ func (d *ScenarioDump) FormatHuman() string {
 	for wt := range workersByType {
 		workerTypes = append(workerTypes, wt)
 	}
+
 	sort.Strings(workerTypes)
 
 	for _, wt := range workerTypes {
@@ -247,29 +251,34 @@ func formatValue(v interface{}) string {
 	if len(s) > 80 {
 		return s[:77] + "..."
 	}
+
 	return s
 }
 
 // formatDocument writes a document's fields to the string builder.
 func formatDocument(sb *strings.Builder, doc persistence.Document, indent string) {
-	if doc == nil || len(doc) == 0 {
+	if len(doc) == 0 {
 		sb.WriteString(indent + "(empty)\n")
+
 		return
 	}
 
 	// Get sorted keys for consistent output
 	var keys []string
+
 	for k := range doc {
 		// Skip CSE metadata fields for cleaner output
 		if strings.HasPrefix(k, "_") {
 			continue
 		}
+
 		keys = append(keys, k)
 	}
+
 	sort.Strings(keys)
 
 	for _, k := range keys {
-		sb.WriteString(fmt.Sprintf("%s%s: %v\n", indent, k, formatValue(doc[k])))
+		fmt.Fprintf(sb, "%s%s: %v\n", indent, k, formatValue(doc[k]))
 	}
 
 	if len(keys) == 0 {

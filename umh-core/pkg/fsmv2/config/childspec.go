@@ -30,10 +30,10 @@ import "encoding/json"
 // Workers embedding BaseDesiredState automatically satisfy the DesiredState interface's
 // IsShutdownRequested() method and the ShutdownRequestable interface's SetShutdownRequested() method.
 //
-// # LIFECYCLE CONTROL INVARIANT
+// # Lifecycle Control Invariant
 //
-// The FSM controls worker lifecycle through state transitions, NOT through custom bool fields.
-// Do NOT add fields like ShouldRun, IsRunning, Enabled, or Active to your DesiredState.
+// The FSM controls worker lifecycle through state transitions, not through custom bool fields.
+// Do not add fields like ShouldRun, IsRunning, Enabled, or Active to your DesiredState.
 //
 // Correct lifecycle control:
 //   - ShutdownRequested: Inherited from this type. Set by supervisor for graceful shutdown.
@@ -92,6 +92,7 @@ func (b BaseUserSpec) GetState() string {
 	if b.State == "" {
 		return DesiredStateRunning
 	}
+
 	return b.State
 }
 
@@ -128,7 +129,8 @@ func (u UserSpec) Clone() UserSpec {
 // Parent workers return these in DeriveDesiredState().ChildrenSpecs to declare their children.
 // The supervisor reconciles actual children to match these specs (Kubernetes-style).
 //
-// DECLARATIVE CHILD MANAGEMENT:
+// # Declarative Child Management
+//
 // Parents don't create/destroy children directly. Instead they declare what should exist,
 // and the supervisor handles creation, updates, and cleanup automatically:
 //
@@ -143,7 +145,9 @@ func (u UserSpec) Clone() UserSpec {
 //   - Supervisor handles "how to make it exist"
 //   - Children run independently in their own FSMs
 //
-// CHILD START STATES: Parent State → Child Lifecycle Coordination
+// # Child Start States
+//
+// ChildStartStates coordinates parent state with child lifecycle.
 //
 // ChildStartStates specifies which parent FSM states cause children to run.
 // When the parent is in a listed state, children run. Otherwise, they stop.
@@ -158,7 +162,7 @@ func (u UserSpec) Clone() UserSpec {
 // - Parent lifecycle controls child lifecycle (children run only in certain parent states)
 // - Simple "run when parent is active" patterns
 //
-// When NOT to use:
+// When not to use:
 // - Passing data between states (use VariableBundle instead)
 // - Triggering actions (use signals instead)
 //
@@ -207,11 +211,14 @@ func (c *ChildSpec) MarshalJSON() ([]byte, error) {
 // Clone creates a deep copy of the ChildSpec.
 func (c ChildSpec) Clone() ChildSpec {
 	clone := c
+
 	clone.UserSpec = c.UserSpec.Clone()
+
 	if c.ChildStartStates != nil {
 		clone.ChildStartStates = make([]string, len(c.ChildStartStates))
 		copy(clone.ChildStartStates, c.ChildStartStates)
 	}
+
 	return clone
 }
 
@@ -263,30 +270,46 @@ type ChildInfo struct {
 
 // ChildrenView provides read-only access to a parent worker's children.
 // This interface enables parent workers to observe their children's state
-// during CollectObservedState without being able to modify them.
+// without being able to modify them.
 //
-// The supervisor injects this via callbacks, ensuring parents only see
-// a snapshot of child state (not live references).
+// The supervisor injects ChildrenView via setter methods on ObservedState,
+// not through dependencies. To use it:
 //
-// Usage in CollectObservedState:
+// 1. Add fields to your ObservedState to store children info:
 //
-//	func (w *ParentWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedState, error) {
-//	    deps := w.GetDependencies()
-//	    childrenView := deps.GetChildrenView()
-//
-//	    // Check aggregate health
-//	    if !childrenView.AllHealthy() {
-//	        healthy, unhealthy := childrenView.Counts()
-//	        // Handle degraded state...
-//	    }
-//
-//	    // Or inspect specific children
-//	    for _, child := range childrenView.List() {
-//	        if !child.IsHealthy {
-//	            log.Warnf("Child %s unhealthy: %s", child.Name, child.ErrorMsg)
-//	        }
-//	    }
+//	type MyObservedState struct {
+//	    ChildrenHealthy   int
+//	    ChildrenUnhealthy int
 //	}
+//
+// 2. Implement SetChildrenView on your ObservedState (called automatically by supervisor):
+//
+//	func (o MyObservedState) SetChildrenView(view any) fsmv2.ObservedState {
+//	    if cv, ok := view.(config.ChildrenView); ok {
+//	        o.ChildrenHealthy, o.ChildrenUnhealthy = cv.Counts()
+//	        // Or use cv.List(), cv.Get(name), cv.AllHealthy(), cv.AllStopped()
+//	    }
+//	    return o
+//	}
+//
+// 3. Access children info in State.Next() via the snapshot:
+//
+//	func (s *RunningState) Next(snap MySnapshot) (State, Signal, Action) {
+//	    if snap.Observed.ChildrenUnhealthy > 0 {
+//	        return &DegradedState{}, SignalNone, nil
+//	    }
+//	    // ...
+//	}
+//
+// For simpler use cases, implement SetChildrenCounts instead:
+//
+//	func (o MyObservedState) SetChildrenCounts(healthy, unhealthy int) fsmv2.ObservedState {
+//	    o.ChildrenHealthy = healthy
+//	    o.ChildrenUnhealthy = unhealthy
+//	    return o
+//	}
+//
+// See workers/example/exampleparent/snapshot/snapshot.go for the simple counts pattern.
 type ChildrenView interface {
 	// List returns info about all children.
 	List() []ChildInfo
@@ -308,9 +331,10 @@ type ChildrenView interface {
 // This is returned by Worker.DeriveDesiredState() and used by State.Next() for decisions.
 //
 // The supervisor can inject shutdown requests by setting State to "shutdown".
-// Workers MUST check ShutdownRequested() first in their State.Next() implementations.
+// Workers must check ShutdownRequested() first in their State.Next() implementations.
 //
-// CHILDREN MANAGEMENT:
+// # Children Management
+//
 // The ChildrenSpecs field enables declarative child management. Parent workers populate
 // this to declare what children should exist. The supervisor handles all lifecycle:
 //
@@ -352,7 +376,7 @@ type DesiredState struct {
 //
 //	func (s RunningState) Next(snapshot fsmv2.Snapshot) (State, Signal, Action) {
 //	    desired := snapshot.Desired.(types.DesiredState)
-//	    // ALWAYS check shutdown first
+//	    // Always check shutdown first
 //	    if desired.IsShutdownRequested() {
 //	        return StoppingState{}, fsmv2.SignalNone, nil
 //	    }

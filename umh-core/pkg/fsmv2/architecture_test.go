@@ -434,6 +434,7 @@ var _ = Describe("FSMv2 Architecture Validation", func() {
 // getFsmv2Dir returns the path to the fsmv2 package directory.
 func getFsmv2Dir() string {
 	_, filename, _, _ := runtime.Caller(0)
+
 	return filepath.Dir(filename)
 }
 

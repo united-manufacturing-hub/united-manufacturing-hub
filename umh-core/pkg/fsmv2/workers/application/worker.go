@@ -53,6 +53,7 @@ func NewApplicationWorker(id, name string) *ApplicationWorker {
 	if id == "" || name == "" {
 		return nil
 	}
+
 	return &ApplicationWorker{
 		id:   id,
 		name: name,
@@ -134,8 +135,8 @@ func (w *ApplicationWorker) DeriveDesiredState(spec interface{}) (config.Desired
 
 // GetInitialState returns the starting state for this application worker.
 // The application supervisor uses a minimal 2-state FSM:
-// - RunningState: Normal operation, transitions to StoppedState when ShutdownRequested=true
-// - StoppedState: Emits SignalNeedsRemoval to indicate ready for removal
+// - RunningState: Normal operation, transitions to StoppedState when ShutdownRequested=true.
+// - StoppedState: Emits SignalNeedsRemoval to indicate ready for removal.
 func (w *ApplicationWorker) GetInitialState() fsmv2.State[any, any] {
 	return &state.RunningState{}
 }
