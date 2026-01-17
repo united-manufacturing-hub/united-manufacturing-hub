@@ -117,7 +117,7 @@ func (d *CommunicatorDependencies) SetPulledMessages(messages []*transport.UMHMe
 // Thread-safety notes:
 // - The slice itself is copied: adding/removing elements won't affect internal state
 // - The message pointers are shared: modifying message contents WILL affect internal state
-// - Callers should treat returned messages as read-only
+// - Callers should treat returned messages as read-only.
 func (d *CommunicatorDependencies) GetPulledMessages() []*transport.UMHMessage {
 	d.mu.RLock()
 	defer d.mu.RUnlock()

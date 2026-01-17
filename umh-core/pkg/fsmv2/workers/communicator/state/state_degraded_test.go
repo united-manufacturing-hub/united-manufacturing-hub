@@ -15,6 +15,8 @@
 package state_test
 
 import (
+	"time"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"go.uber.org/zap"
@@ -33,7 +35,7 @@ var _ = Describe("DegradedState", func() {
 	BeforeEach(func() {
 		logger = zap.NewNop().Sugar()
 		_ = logger
-		stateObj = &state.DegradedState{}
+		stateObj = state.NewDegradedState()
 	})
 
 	Describe("Next", func() {
@@ -105,5 +107,51 @@ var _ = Describe("DegradedState", func() {
 		It("should return descriptive reason", func() {
 			Expect(stateObj.Reason()).To(Equal("Sync is experiencing errors"))
 		})
+	})
+})
+
+var _ = Describe("DegradedState Backoff", func() {
+	It("stays in degraded state during backoff period", func() {
+		// Arrange: 5 consecutive errors = 32s backoff (2^5 = 32)
+		// Create DegradedState with enteredAt = now
+		stateObj := state.NewDegradedState()
+
+		snap := snapshot.CommunicatorSnapshot{
+			Desired: snapshot.CommunicatorDesiredState{},
+			Observed: snapshot.CommunicatorObservedState{
+				Authenticated:     false,
+				ConsecutiveErrors: 5,
+			},
+		}
+
+		// Act: Call Next() immediately (within backoff)
+		nextState, signal, action := stateObj.Next(snap)
+
+		// Assert: Still in degraded, no action (waiting for backoff)
+		Expect(nextState).To(BeAssignableToTypeOf(&state.DegradedState{}))
+		Expect(signal).To(Equal(fsmv2.SignalNone))
+		Expect(action).To(BeNil(), "Should NOT emit action during backoff period")
+	})
+
+	It("attempts sync after backoff period expires", func() {
+		// Arrange: Create state that entered 40s ago (backoff expired for 5 errors)
+		// 5 errors = 32s backoff, so 40s should be past the backoff
+		stateObj := state.NewDegradedStateWithEnteredAt(time.Now().Add(-40 * time.Second))
+
+		snap := snapshot.CommunicatorSnapshot{
+			Desired: snapshot.CommunicatorDesiredState{},
+			Observed: snapshot.CommunicatorObservedState{
+				Authenticated:     false,
+				ConsecutiveErrors: 5,
+			},
+		}
+
+		// Act: Call Next()
+		nextState, _, action := stateObj.Next(snap)
+
+		// Assert: Action returned (attempting sync)
+		Expect(nextState).To(BeAssignableToTypeOf(&state.DegradedState{}))
+		Expect(action).NotTo(BeNil(), "Should emit SyncAction after backoff expires")
+		Expect(action.Name()).To(Equal("sync"))
 	})
 })

@@ -33,6 +33,14 @@ type CommunicatorDependencies interface {
 	// SetPulledMessages stores the messages retrieved from the backend.
 	// Called by SyncAction after successful pull operation.
 	SetPulledMessages(messages []*transport.UMHMessage)
+
+	// Added for Bug #1 fix - error tracking methods:
+	// RecordError increments consecutive error count after HTTP failure.
+	RecordError()
+	// RecordSuccess resets consecutive error count after HTTP success.
+	RecordSuccess()
+	// GetConsecutiveErrors returns the current consecutive error count.
+	GetConsecutiveErrors() int
 }
 
 const AuthenticateActionName = "authenticate"

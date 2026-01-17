@@ -37,12 +37,12 @@ type AuthResponse struct {
 
 // PullPayload represents the response from /v2/instance/pull.
 type PullPayload struct {
-	UMHMessages []*UMHMessage `json:"umhMessages"`
+	UMHMessages []*UMHMessage `json:"UMHMessages"`
 }
 
 // PushPayload represents the request to /v2/instance/push.
 type PushPayload struct {
-	UMHMessages []*UMHMessage `json:"umhMessages"`
+	UMHMessages []*UMHMessage `json:"UMHMessages"`
 }
 
 // Transport defines the interface for communicating with the relay server.

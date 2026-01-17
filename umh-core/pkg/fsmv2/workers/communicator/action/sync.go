@@ -101,6 +101,10 @@ func (a *SyncAction) Execute(ctx context.Context, depsAny any) error {
 	// 1. Pull messages from backend
 	messages, err := deps.GetTransport().Pull(ctx, a.JWTToken)
 	if err != nil {
+		// BUG #1 (ENG-3600): Old communicator reported OK before verifying success.
+		// We call RecordError() ONLY on actual failure, never before.
+		deps.RecordError()
+
 		return fmt.Errorf("pull failed: %w", err)
 	}
 
@@ -110,9 +114,16 @@ func (a *SyncAction) Execute(ctx context.Context, depsAny any) error {
 	// 3. Push batch to backend if we have messages
 	if len(a.MessagesToBePushed) > 0 {
 		if err := deps.GetTransport().Push(ctx, a.JWTToken, a.MessagesToBePushed); err != nil {
+			deps.RecordError()
+
 			return fmt.Errorf("push failed: %w", err)
 		}
 	}
+
+	// 4. Success - call RecordSuccess()
+	// BUG #1 (ENG-3600): Counter only resets AFTER confirmed success,
+	// preventing oscillation 0→1→0→1.
+	deps.RecordSuccess()
 
 	return nil
 }

@@ -15,6 +15,8 @@
 package state
 
 import (
+	"time"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/action"
@@ -110,6 +112,23 @@ import (
 // See worker.go invariants block (C1-C5) for complete validation layer details.
 type DegradedState struct {
 	BaseCommunicatorState
+	enteredAt time.Time
+}
+
+// NewDegradedState creates a new DegradedState with enteredAt set to the current time.
+// This timestamp is used to calculate backoff delays before retry attempts.
+func NewDegradedState() *DegradedState {
+	return &DegradedState{
+		enteredAt: time.Now(),
+	}
+}
+
+// NewDegradedStateWithEnteredAt creates a new DegradedState with a custom enteredAt timestamp.
+// This is primarily used for testing to simulate states that have been active for a specific duration.
+func NewDegradedStateWithEnteredAt(enteredAt time.Time) *DegradedState {
+	return &DegradedState{
+		enteredAt: enteredAt,
+	}
 }
 
 func (s *DegradedState) Next(snapshot snapshot.CommunicatorSnapshot) (BaseCommunicatorState, fsmv2.Signal, fsmv2.Action[any]) {
@@ -125,7 +144,16 @@ func (s *DegradedState) Next(snapshot snapshot.CommunicatorSnapshot) (BaseCommun
 		return &SyncingState{}, fsmv2.SignalNone, nil
 	}
 
-	// Create SyncAction - deps injected via Execute() by supervisor
+	// Calculate backoff using SyncingState's GetBackoffDelay
+	backoffDelay := (&SyncingState{}).GetBackoffDelay(observed)
+
+	// If we're still within the backoff period, wait (no action)
+	if time.Since(s.enteredAt) < backoffDelay {
+		return s, fsmv2.SignalNone, nil
+	}
+
+	// Backoff expired - create SyncAction to retry
+	// deps injected via Execute() by supervisor
 	syncAction := action.NewSyncAction(observed.JWTToken)
 
 	return s, fsmv2.SignalNone, syncAction

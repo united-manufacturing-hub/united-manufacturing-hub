@@ -39,7 +39,7 @@ func NewHTTPTransport(relayURL string) *HTTPTransport {
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
 			Transport: &http.Transport{
-				IdleConnTimeout: 90 * time.Second,
+				DisableKeepAlives: true, // BUG #3 fix: no connection reuse, no stale connections
 			},
 		},
 	}
@@ -176,8 +176,6 @@ func (t *HTTPTransport) ResetClient() {
 }
 
 // Close closes the transport.
-func (t *HTTPTransport) Close() error {
+func (t *HTTPTransport) Close() {
 	t.ResetClient()
-
-	return nil
 }
