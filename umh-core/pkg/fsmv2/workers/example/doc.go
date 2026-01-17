@@ -45,24 +45,51 @@
 //	    ├── connect.go      # Example action
 //	    └── connect_test.go # Idempotency tests
 //
+// # Quick Start: Creating a New Worker
+//
+// To create a new worker named "myworker":
+//
+//  1. Create the directory structure:
+//
+//     workers/myworker/
+//     ├── worker.go           # Implement Worker interface
+//     ├── dependencies.go     # Define dependencies struct
+//     ├── userspec.go         # Parse user configuration
+//     ├── snapshot/
+//     │   └── snapshot.go     # Define ObservedState and DesiredState types
+//     ├── state/
+//     │   ├── base.go         # Common state utilities
+//     │   └── state_initial.go # Initial state implementation
+//     └── action/
+//         └── (action files)  # Action implementations
+//
+//  2. Register the worker in init():
+//
+//     func init() {
+//         factory.RegisterWorkerType[snapshot.MyworkerObservedState, *snapshot.MyworkerDesiredState](
+//             workerFactory, supervisorFactory)
+//     }
+//
+//  3. Copy from examplechild/ as a starting point.
+//
+// See factory/README.md for worker type derivation rules.
+//
 // # Key Patterns Demonstrated
 //
-// States: See examplechild/state/ for:
-//   - Shutdown handling (always check IsShutdownRequested() first)
-//   - State naming conventions (TryingTo* for active, descriptive nouns for passive)
-//   - State transitions returning (State, Signal, Action)
+// For conceptual documentation and requirements, see pkg/fsmv2/doc.go.
+// This package demonstrates those patterns in working code.
 //
-// Actions: See examplechild/action/connect.go for:
-//   - Empty struct pattern (no fields, deps injected via Execute)
-//   - Context cancellation check (select on ctx.Done() first)
-//   - Idempotency (check if work already done)
+// States: See pkg/fsmv2/doc.go for state patterns. This package demonstrates them:
+//   - examplechild/state/ implements child worker states.
+//   - exampleparent/state/ implements parent worker states.
 //
-// Parent-Child: See exampleparent/worker.go for:
-//   - Returning ChildrenSpecs in DeriveDesiredState()
-//   - ChildStartStates for child lifecycle coordination
-//   - VariableBundle for passing data to children
+// Actions: See pkg/fsmv2/doc.go for action requirements. This package demonstrates them:
+//   - examplechild/action/connect.go shows the empty struct and idempotency patterns.
 //
-// Testing: See examplechild/action/*_test.go for:
-//   - Action idempotency verification
-//   - State transition testing patterns
+// Parent-Child: See pkg/fsmv2/doc.go for hierarchical composition. This package demonstrates it:
+//   - exampleparent/worker.go shows ChildrenSpecs and VariableBundle usage.
+//
+// Testing: This package demonstrates testing patterns:
+//   - examplechild/action/*_test.go shows action idempotency verification.
+//   - examplechild/state/*_test.go shows state transition testing.
 package example

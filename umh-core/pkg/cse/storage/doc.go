@@ -21,8 +21,8 @@
 //
 // The three-state model separates each worker into:
 //   - Identity: Immutable worker identification (ID, name, type)
-//   - Desired: User intent/configuration (what we WANT)
-//   - Observed: System reality (what actually EXISTS)
+//   - Desired: User intent/configuration (the intended state)
+//   - Observed: System reality (the actual state)
 //
 // The FSMv2 supervisor uses this package for all state persistence.
 // See pkg/fsmv2/supervisor/supervisor.go for usage patterns.
@@ -49,10 +49,10 @@
 // like worker ID, name, and worker type that identify "what is this worker?"
 //
 // Desired: Updated by users/configuration changes. Represents intent - what
-// the system SHOULD be doing. Participates in optimistic locking with versions.
+// the system should be doing. Participates in optimistic locking with versions.
 //
 // Observed: Updated frequently by polling (every 500ms by default). Represents
-// reality - what the system IS doing. Ephemeral and reconstructed from external
+// reality - what the system is doing. Ephemeral and reconstructed from external
 // system queries.
 //
 // Separating them prevents coupling their update patterns. A configuration change
@@ -118,7 +118,7 @@
 // type safety, IDE autocomplete, and compile-time error checking.
 //
 // Both patterns use the same underlying convention-based naming ({workerType}_{role})
-// and the same storage backend. The interface methods are NOT deprecated - they
+// and the same storage backend. The interface methods are not deprecated - they
 // serve the runtime polymorphic use case where generics can't help.
 //
 // # Why Convention-Based Naming?

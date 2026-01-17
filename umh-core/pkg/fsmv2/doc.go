@@ -21,6 +21,12 @@
 // see README.md "Why FSMv2?" section. For the conceptual overview and Triangle Model diagram,
 // see README.md.
 //
+// The Triangle Model defines the data architecture: Identity (who), Desired (want), Observed (actual).
+// The three layers below define the code architecture that operates on this data.
+//
+// A tick is one iteration of the supervisor's control loop: collect observation,
+// derive desired state, evaluate the state machine, and execute any returned action.
+//
 // FSMv2 separates concerns into three layers:
 //   - Worker: Business logic implementation (what the worker does).
 //   - State: Decision logic (when to transition, what actions to take).
@@ -116,8 +122,8 @@
 //   - The retry mechanism has no max attempts limit and retries until the action succeeds or the supervisor shuts down.
 //
 // Action-Observation Gating:
-//   - After action enqueued, actionPending flag is set
-//   - FSM tick is blocked until fresh observation arrives (prevents duplicate actions)
+//   - After enqueueing an action, the supervisor sets the actionPending flag.
+//   - The actionPending flag blocks the FSM tick until a fresh observation arrives (prevents duplicate actions).
 //   - Observation timestamp must be newer than action enqueue time to proceed
 //   - This ensures the action's effect is observed before re-evaluation
 //
@@ -163,6 +169,7 @@
 //   - Layer 4: Worker constructor (NewMyWorker) - Business logic validation
 //
 // Each layer catches different types of errors.
+// See factory/README.md for worker type derivation and registration patterns.
 //
 // ## Variables: Three-Tier Namespace
 //
@@ -201,38 +208,71 @@
 // These helpers eliminate 15-25 lines of boilerplate per worker.
 // See config/helpers.go for full documentation.
 //
-// ## Parent-Child Visibility (ChildrenView)
+// ## Factory Registration
 //
-// Parent workers can observe their children's state via ChildrenView interface:
+// Workers register with the factory in their package's init() function:
 //
-//	type ChildrenView interface {
-//	    List() []ChildInfo           // All children with state info
-//	    Get(name string) *ChildInfo  // Single child by name
-//	    Counts() (healthy, unhealthy int)
-//	    AllHealthy() bool
-//	    AllStopped() bool
+//	func init() {
+//	    if err := factory.RegisterWorkerType[snapshot.MyObserved, *snapshot.MyDesired](
+//	        func(id fsmv2.Identity, logger *zap.SugaredLogger, stateReader fsmv2.StateReader) fsmv2.Worker {
+//	            return NewMyWorker(id, logger, stateReader)
+//	        },
+//	        func(cfg interface{}) interface{} {
+//	            return supervisor.NewSupervisor[snapshot.MyObserved, *snapshot.MyDesired](
+//	                cfg.(supervisor.Config))
+//	        },
+//	    ); err != nil {
+//	        panic(err)
+//	    }
 //	}
 //
-// ChildInfo provides read-only info about each child:
-//   - Name, WorkerType, StateName, IsHealthy
-//   - HierarchyPath for logging context
+// The worker type is derived from the ObservedState struct name (MyObserved → "my").
+// See factory/README.md for naming conventions and common mistakes.
 //
-// To use in parent workers, implement SetChildrenView() on your ObservedState:
+// ## Parent-Child Visibility (ChildrenView)
 //
-//	func (o MyObservedState) SetChildrenView(view config.ChildrenView) fsmv2.ObservedState {
-//	    healthy, unhealthy := view.Counts()
+// Parent workers observe children's health via setter methods on their ObservedState.
+// The supervisor automatically calls these setters during observation collection.
+//
+// Two patterns are supported:
+//
+// Pattern 1: Simple counts (recommended for basic health tracking)
+//
+//	func (o MyObservedState) SetChildrenCounts(healthy, unhealthy int) fsmv2.ObservedState {
 //	    o.ChildrenHealthy = healthy
 //	    o.ChildrenUnhealthy = unhealthy
 //	    return o
 //	}
 //
-// The supervisor automatically calls SetChildrenView() during observation collection.
+// Pattern 2: Full visibility (for inspecting individual children)
+//
+//	func (o MyObservedState) SetChildrenView(view any) fsmv2.ObservedState {
+//	    if cv, ok := view.(config.ChildrenView); ok {
+//	        healthy, unhealthy := cv.Counts()
+//	        o.ChildrenHealthy = healthy
+//	        o.ChildrenUnhealthy = unhealthy
+//	        // Can also use: cv.List(), cv.Get(name), cv.AllHealthy(), cv.AllStopped()
+//	    }
+//	    return o
+//	}
+//
+// ChildrenView interface provides:
+//   - List() []ChildInfo: All children with state info
+//   - Get(name string) *ChildInfo: Single child by name
+//   - Counts() (healthy, unhealthy int): Aggregate health counts
+//   - AllHealthy() bool: True if all children healthy
+//   - AllStopped() bool: True if all children stopped
+//
+// ChildInfo provides read-only info about each child:
+//   - Name, WorkerType, StateName, StateReason, IsHealthy, ErrorMsg, HierarchyPath
+//
+// See workers/example/exampleparent/snapshot/snapshot.go for the simple counts pattern.
 // See config/childspec.go for ChildrenView and ChildInfo definitions.
 //
 // # Architecture Documentation
 //
 // For detailed architecture explanations, see:
-//   - architecture_test.go - Patterns enforced by tests (run with -v for WHY explanations)
+//   - architecture_test.go - Patterns enforced by tests (run with -v for rationale explanations)
 //   - api.go - Core interfaces (Worker, State, Action)
 //   - internal/helpers/ - Convenience helpers (BaseState, BaseWorker, ConvertSnapshot)
 //   - supervisor/supervisor.go - Orchestration and lifecycle management
@@ -285,7 +325,7 @@
 // The supervisor manages concurrency:
 //   - CollectObservedState() runs in separate goroutine with timeout
 //   - The supervisor calls State.Next() in its main goroutine (single-threaded).
-//   - The supervisor runs Action.Execute() in its main goroutine with retry/backoff.
+//   - Action.Execute() runs asynchronously in worker pool (non-blocking tick loop).
 //
 // Workers do not need to implement locking because the supervisor handles it.
 //
@@ -295,7 +335,45 @@
 //   - Make actions idempotent (check if work already done)
 //   - Check IsShutdownRequested() first in all states (see "Shutdown Handling" section above)
 //   - Use type-safe state structs, not strings
-//   - Return action OR transition, not both simultaneously
+//   - Return action or transition, not both - the supervisor panics if both are returned.
 //   - Handle context cancellation in all async operations
 //   - Test action idempotency with VerifyActionIdempotency helper
+//
+// # Glossary
+//
+// Tick: One iteration of the supervisor's control loop. Collects observation,
+// derives desired state, evaluates the state machine, and executes any action.
+//
+// State (Go type): A struct implementing the State interface. Represents a
+// node in the FSM with its Next() method defining transitions.
+//
+// State (FSM state): The current node in the finite state machine, represented
+// by a Go State struct (e.g., RunningState, TryingToConnectState).
+//
+// State (string): The snap.Observed.State field, a string for debugging/logging.
+// Set via config.MakeState(prefix, suffix). Not the FSM state itself.
+//
+// DesiredState: What the system should be. Derived from user configuration.
+// Does not contain runtime dependencies.
+//
+// ObservedState: What the system actually is. Collected via CollectObservedState().
+// Contains timestamps for freshness checking.
+//
+// Signal: Communication from state to supervisor. SignalNone (normal),
+// SignalNeedsRemoval (cleanup complete), SignalNeedsRestart (unrecoverable error).
+//
+// Action: An idempotent side effect. Executed asynchronously after state.Next()
+// returns it. Must handle context cancellation.
+//
+// Snapshot: Point-in-time view containing Identity, Observed, and Desired.
+// Passed by value to State.Next() for immutability.
+//
+// Worker: Business logic implementation. Provides CollectObservedState(),
+// DeriveDesiredState(), and GetInitialState().
+//
+// Supervisor: Orchestrates the tick loop, executes actions, manages children.
+// See supervisor/doc.go for tick loop details.
+//
+// actionPending: Internal gating flag. When true, blocks FSM tick until fresh
+// observation arrives. Prevents duplicate action execution.
 package fsmv2
