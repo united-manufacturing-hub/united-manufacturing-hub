@@ -51,6 +51,9 @@
   * [HTTP API Reference](reference/http-api/README.md)
     * [Topic Browser GraphQL API](reference/http-api/topic-browser-graphql.md)
 * [UMH Core vs UMH Classic](umh-core-vs-classic-faq.md)
+* [Changelog](changelog/README.md)
+  * [Management Console](changelog/management-console.md)
+  * [UMH Core](changelog/umh-core.md)
 
 ## UMH Classic
 

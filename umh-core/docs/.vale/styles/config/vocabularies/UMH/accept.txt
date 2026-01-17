@@ -1,0 +1,218 @@
+# UMH Technical Vocabulary
+# =========================
+# Terms that should not be flagged as spelling errors.
+
+# UMH-specific terms
+UMH
+umh-core
+umh-classic
+Redpanda
+benthos
+benthos-umh
+Grafana
+TimescaleDB
+Barista
+
+# Kubernetes and Infrastructure
+kubectl
+kubelet
+Kubernetes
+K8s
+k8s
+Helm
+ConfigMap
+ConfigMaps
+StatefulSet
+DaemonSet
+namespace
+Namespace
+namespaces
+distros
+CNIs
+HAProxy
+nginx
+NGINX
+
+# Protocols and Connectivity
+Modbus
+OPC
+OPCUA
+S7
+MQTT
+WebSocket
+WebSockets
+TCP
+UDP
+RTU
+RTUs
+PLCs
+PLC
+
+# Data and API
+GraphQL
+APIs
+API
+ACLs
+WALs
+KPIs
+OEE
+SSO
+OAuth
+JWT
+
+# Technical Terms
+config
+configs
+Config
+env
+ENV
+hwid
+crypto
+SSLabs
+Vanta
+WAFs
+lookups
+cgroup
+cgroups
+
+# Programming
+async
+stringify
+JSON
+YAML
+regex
+Truthy
+Falsy
+SSR
+CSR
+const
+Const
+UUID
+UUIDs
+uuid
+uuids
+timestamp
+timestamps
+
+# Code and CLI
+cli
+CLI
+repo
+repos
+stdin
+stdout
+stderr
+args
+param
+params
+
+# Metrics and Monitoring
+Seastar
+throughput
+latency
+p95
+p99
+
+# Contributors and Companies
+Parris
+umhuser
+
+# Plurals and abbreviations
+msgs
+SCCs
+subprocess
+subprocesses
+
+# Additional infrastructure terms
+Auth0
+microservice
+microservices
+DevOps
+GitOps
+CI/CD
+rollout
+rollouts
+failover
+failovers
+autoscaling
+
+# File formats and extensions
+proto
+protobuf
+
+# Common abbreviations (literal text, not regex)
+i.e.
+e.g.
+etc.
+vs.
+
+# OS and system terms
+systemd
+cron
+syslog
+hostname
+
+# Technical naming conventions (snake_case identifiers)
+location_path
+data_contract
+tag_name
+starting_failed_dfc_missing
+
+# Example DFC/bridge names
+mqtt_to_kafka_historian_bridge
+kafka_to_postgresql_historian_bridge
+opcua_to_umh_core
+generate_to_stdout
+
+# Software and tools
+Dockerfile
+Portainer
+Mosquitto
+HTTPOnly
+
+# Security and audit terms
+auditability
+auditable
+misconfiguration
+misconfigured
+exfiltrate
+passthrough
+
+# Common compound words
+preconfigured
+postprocessing
+preprocessing
+onboarding
+untrusted
+unvalidated
+
+# FSM state machine transitions (snake_case)
+stop_done
+start_done
+benthos_started
+starting_benthos
+redpanda_started
+starting_redpanda
+data_received
+no_data_timeout
+benthos_degraded
+redpanda_degraded
+
+# Token and authentication
+AUTH_TOKENs
+
+# English variants
+Mitigations
+
+# Additional state machine states
+degraded_benthos
+degraded_redpanda
+# Vale tokenizes markdown bold incorrectly, extracting "degraded_" from "**degraded_benthos**"
+degraded_
+
+# Possessive forms
+data's
+
+# UI/UX terms
+Resizable
+resizable

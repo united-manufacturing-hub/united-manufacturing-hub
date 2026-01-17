@@ -1,0 +1,4 @@
+# Generated Vale style packages (downloaded via `vale sync`)
+# These should not be committed - run `vale sync` locally to download them
+Google/
+Vale/

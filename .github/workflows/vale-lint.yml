@@ -18,6 +18,10 @@ on:
     paths: ['umh-core/docs/**/*.md']
   merge_group:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: true
+
 jobs:
   vale:
     runs-on: ubuntu-latest
