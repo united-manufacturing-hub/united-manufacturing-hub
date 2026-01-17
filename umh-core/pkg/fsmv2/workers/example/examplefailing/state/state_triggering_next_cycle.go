@@ -39,7 +39,6 @@ func (s *TriggeringNextCycleState) Next(snapAny any) (fsmv2.State[any, any], fsm
 
 	// Check if DisconnectAction has run by looking at ConnectionHealth.
 	// If we're still "healthy", the disconnect action hasn't run yet - emit it.
-	// If we're "no connection", the disconnect has run - transition to Disconnected.
 	if snap.Observed.ConnectionHealth == "healthy" {
 		// Disconnect action hasn't run yet - emit it
 		return s, fsmv2.SignalNone, &action.DisconnectAction{}
@@ -47,6 +46,11 @@ func (s *TriggeringNextCycleState) Next(snapAny any) (fsmv2.State[any, any], fsm
 
 	// After disconnect action has run (ConnectionHealth = "no connection"),
 	// transition to Disconnected which will then try to reconnect.
+	if snap.Observed.ConnectionHealth == "no connection" {
+		return &DisconnectedState{}, fsmv2.SignalNone, nil
+	}
+
+	// Catch-all: stay in current state
 	return s, fsmv2.SignalNone, nil
 }
 
