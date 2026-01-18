@@ -1,10 +1,9 @@
 # Changelog
 
-Release notes for UMH.
+New updates and improvements.
 
----
-
-### Management Console 2026-01-13
+{% update date="2026-01-13" %}
+## Management Console
 
 **Data Flow Setup Wizard**
 
@@ -23,10 +22,10 @@ Creating new Data Flows is now guided and faster. When you select a protocol lik
 
 - Protocol forms properly wait for prefilled data before rendering, preventing a flash of empty forms
 - Fixed loading placeholder colors that changed after a recent update, restoring the original subtle appearance
+{% endupdate %}
 
----
-
-### Management Console 2025-12-18
+{% update date="2025-12-18" %}
+## Management Console
 
 **Visual Refresh**
 
@@ -51,10 +50,10 @@ Your profile picture from Auth0 now appears in the sidebar and user menu. If no 
 **Fixes**
 
 - Fixed incorrect label in Topic Browser that showed "Physical Path" instead of "Location Path"
+{% endupdate %}
 
----
-
-### umh-core v0.44.0
+{% update date="2025-12-17" %}
+## umh-core v0.44.0
 
 **Breaking Change: Non-Root Container Security**
 
@@ -80,10 +79,10 @@ docker run -v umh-core-data:/data ...
 - **Non-Root Container Security** - umh-core now runs all processes as a regular user instead of root. This limits potential damage if a vulnerability is ever exploited—even if an attacker gets into the container, they can't gain root-level access.
 
 - **Comprehensive Security Documentation** - New documentation at docs/production/security/ explains our security approach including threat model, shared responsibility, and compliance mapping for OWASP, NIST, and IEC 62443 standards.
+{% endupdate %}
 
----
-
-### Management Console 2025-12-08
+{% update date="2025-12-08" %}
+## Management Console
 
 **Improvements**
 
@@ -98,10 +97,10 @@ docker run -v umh-core-data:/data ...
 - Fixed inconsistent padding and hover states on icon buttons in side panels
 - Fixed the chevron/arrow icon not displaying correctly when adding a stream processor
 - Fixed the height and hover area of the sidebar collapse/expand toggle button
+{% endupdate %}
 
----
-
-### umh-core v0.43.18
+{% update date="2025-12-01" %}
+## umh-core v0.43.18
 
 **On-Demand Logs and Metrics Panels**
 
@@ -129,10 +128,10 @@ Fixed an issue where subscribing directly to OPC UA child nodes (without a paren
 **Fixes**
 
 - Delete dialogs now properly close when clicking the X button
+{% endupdate %}
 
----
-
-### umh-core v0.43.17
+{% update date="2025-11-25" %}
+## umh-core v0.43.17
 
 **Debug Logging for Troubleshooting**
 
@@ -147,10 +146,10 @@ You can now add `debug_level: true` to your bridge or data flow configurations t
 - **Security Vulnerability Fixed** - Fixed a critical security vulnerability where malicious service names could potentially be used to access sensitive files on the system. Component names are now strictly validated to prevent path traversal attacks.
 
 - **Production Build Optimization** - Fixed production build configuration to properly disable CGO, improving binary performance and security.
+{% endupdate %}
 
----
-
-### Management Console 2025-11-20
+{% update date="2025-11-20" %}
+## Management Console
 
 **Dynamic Protocol Forms**
 
@@ -171,10 +170,10 @@ The default SparkplugB template now includes comprehensive documentation for all
 
 - Form validation errors no longer appear immediately when opening forms—they only show after you interact with a field
 - Fixed an issue where flat NDATA metrics could cause filter problems
+{% endupdate %}
 
----
-
-### Management Console 2025-11-17
+{% update date="2025-11-17" %}
+## Management Console
 
 **Quick Condition Duplication**
 
@@ -190,10 +189,10 @@ You can now duplicate conditions with a single click using the new duplicate but
 **Fixes**
 
 - Instance names now appear immediately after you change them, with automatic cache refresh
+{% endupdate %}
 
----
-
-### umh-core v0.43.16
+{% update date="2025-11-13" %}
+## umh-core v0.43.16
 
 **OPC UA Browse Performance**
 
@@ -212,10 +211,10 @@ Browse operations now use a global worker pool instead of creating separate pool
 - **S7-1200 Subscription Errors** - Fixed StatusBadFilterNotAllowed errors when subscribing to S7-1200 PLCs with data filters
 
 - **Browse Operation Stability** - Resolved potential deadlocks during high-concurrency browse operations
+{% endupdate %}
 
----
-
-### umh-core v0.43.15
+{% update date="2025-11-10" %}
+## umh-core v0.43.15
 
 **Data Infrastructure Independence**
 
@@ -230,10 +229,10 @@ Deployments complete 80-90% faster for customers with large configurations (e.g.
 - **Location Levels Now Display Correctly** - Fixed issue where location level fields (Level 2-5) showed placeholder text like "Your level 2 name" instead of actual saved values in Bridge edit views.
 
 - **Log Spam Prevention** - When Management Console is unreachable, error logging is now limited to 1 error per second instead of 100 errors per second.
+{% endupdate %}
 
----
-
-### umh-core v0.43.14
+{% update date="2025-11-03" %}
+## umh-core v0.43.14
 
 **OPC UA Large Server Support**
 
@@ -254,10 +253,10 @@ Fixed console.log() and other console methods in JavaScript processors to work l
 **Bug Fixes**
 
 - **Connection Failures in High-Latency Regions** - Fixed timing mismatch that caused frequent EOF errors and connection failures in high-latency environments, particularly affecting sites in Japan and other regions with network latency above 200ms.
+{% endupdate %}
 
----
-
-### umh-core v0.43.13
+{% update date="2025-10-30" %}
+## umh-core v0.43.13
 
 **OPC UA Connection Improvements**
 
@@ -268,10 +267,10 @@ Fixed certificate generation issues that prevented connections to OPC UA servers
 - **Array Data Type Preservation** - Fixed array handling to preserve whether values are numbers or text when passing data between systems. Previously, arrays like [1,2,3] could be confused with ["1","2","3"], causing data processing errors.
 
 - **Service Restart Stability** - Fixed crashes that could occur when restarting services with active Sparkplug B connections.
+{% endupdate %}
 
----
-
-### umh-core v0.43.12
+{% update date="2025-10-28" %}
+## umh-core v0.43.12
 
 **Resource Limit Blocking Enabled by Default**
 
@@ -288,10 +287,10 @@ You can disable this protection by setting `agent.enableResourceLimitBlocking: f
 - **Redpanda Configuration Persistence** - Your custom Redpanda resource limits (CPU cores and memory settings) now persist correctly across restarts. Previously, MaxCores and MemoryPerCoreInBytes were being overwritten to defaults.
 
 - **Blocked Converter UI Display** - Protocol converters blocked by resource limits now show their configured connection details (IP address, port, flows) in the UI instead of "Connection Unavailable".
+{% endupdate %}
 
----
-
-### umh-core v0.43.10
+{% update date="2025-10-27" %}
+## umh-core v0.43.10
 
 **More Flexible Component Naming**
 
@@ -319,10 +318,10 @@ Idle protocol converter states now correctly show as green/active instead of app
 - Fixed critical issue where NULL-padded strings from S7 PLCs weren't being properly handled by the downsampler
 - Fixed confusing IP address input instructions that made new users think they should type literal "{{ .IP }}" into form fields
 - Components in idle states now correctly show as "active" health status instead of appearing degraded
+{% endupdate %}
 
----
-
-### Management Console 2025-10-20
+{% update date="2025-10-20" %}
+## Management Console
 
 **Enterprise SSO Login Reliability**
 
@@ -339,10 +338,10 @@ Fixed "All customer instances unreachable" errors for customers with many instan
 **Email Consistency in Onboarding**
 
 Email addresses are now normalized to lowercase throughout the entire onboarding process, preventing case-related mismatches.
+{% endupdate %}
 
----
-
-### Management Console 2025-10-16
+{% update date="2025-10-16" %}
+## Management Console
 
 **Data Compression Visibility**
 
@@ -361,10 +360,10 @@ You can now click directly on component names to edit them, instead of using the
 - Fixed misaligned "Remove Level" buttons in location configuration forms with consistent heights and proper spacing
 
 ![Form Alignment](images/2025-10-16-form-alignment.png)
+{% endupdate %}
 
----
-
-### Management Console 2025-10-10
+{% update date="2025-10-10" %}
+## Management Console
 
 **Bridge Location Handling**
 
@@ -388,15 +387,12 @@ You can now click directly on component names to edit them, instead of using the
 
 - Resolved minor visual inconsistencies in bridge configuration layout
 - Cleaned up redundant validation messages
+{% endupdate %}
 
----
-
-### Management Console 2025-10-06
+{% update date="2025-10-06" %}
+## Management Console
 
 **Topic Browser Live Updates**
 
 Topics now visually highlight when they receive new data, similar to MQTT Explorer. You'll see a brief highlight animation on the entire path whenever values update, making it easy to identify active data flows at a glance. Perfect for monitoring which topics are actively publishing without manually checking each one.
-
----
-
-*As a SaaS platform, Management Console improvements are automatically deployed to all customers. UMH Core updates require upgrading your container version.*
+{% endupdate %}
