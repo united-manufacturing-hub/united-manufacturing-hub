@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-name: Documentation Style Check
+name: vale
 on:
   pull_request:
     paths: ['umh-core/docs/**/*.md']
@@ -31,3 +31,5 @@ jobs:
         with:
           files: umh-core/docs/
           reporter: github-pr-review
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

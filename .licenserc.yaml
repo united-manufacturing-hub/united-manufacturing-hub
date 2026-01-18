@@ -70,5 +70,6 @@ header:
     - "umh-core/pkg/service/s6/s6_test_log_data.txt"
     - "umh-core/docs/.vale.ini"
     - "umh-core/docs/.vale/**/*.txt"
+    - ".vale.ini"
 
   comment: on-failure
