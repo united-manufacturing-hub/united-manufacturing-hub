@@ -12,4 +12,4 @@ If you are unfamiliar with Docker Compose, refer to the [official Docker Compose
 
 Docker Compose uses YAML files for the declaration of Docker Resources. These files are called `docker-compose.yaml`.
 
-In these files Docker Volumes, Docker Networks and Docker Containers can all be declared and configured to work with eachother. This makes Docker Compose particularly valuable when additional Services like Grafana or TimescaleDB should be deployed alongside umh-core. But it is also valuable if only umh-core is deployed as it keeps the configuration of the container in a file instead of being lost to a one-off command.
+In these files Docker Volumes, Docker Networks and Docker Containers can all be declared and configured to work with each other. This makes Docker Compose particularly valuable when additional Services like Grafana or TimescaleDB should be deployed alongside umh-core. But it is also valuable if only umh-core is deployed as it keeps the configuration of the container in a file instead of being lost to a one-off command.

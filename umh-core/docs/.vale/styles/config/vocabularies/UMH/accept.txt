@@ -216,3 +216,45 @@ data's
 # UI/UX terms
 Resizable
 resizable
+prefilled
+tooltips
+dialogs
+
+# Vendor names
+Kepware
+Prosys
+Ignition
+Podman
+SELinux
+
+# Go programming terms
+goroutine
+goroutines
+stdlib
+
+# Network and security
+iptables
+firewalld
+deadband
+
+# Data processing
+downsampler
+Downsampler
+sanitization
+booleans
+
+# Abbreviations
+CVEs
+rpk
+CNCs
+Healthchecks
+
+# Industrial terms
+Sparkplug
+SparkplugB
+Skarnet
+
+# Technical naming (snake_case)
+virtual_path
+sensor_data
+pooler
