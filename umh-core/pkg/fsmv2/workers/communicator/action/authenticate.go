@@ -63,6 +63,10 @@ type CommunicatorDependencies interface {
 	RecordPushSuccess(latency time.Duration, msgCount int)
 	// RecordPushFailure records a failed push with latency.
 	RecordPushFailure(latency time.Duration)
+
+	// Metrics returns the MetricsRecorder for actions to record metrics.
+	// Actions call IncrementCounter/SetGauge with typed constants.
+	Metrics() *fsmv2.MetricsRecorder
 }
 
 const AuthenticateActionName = "authenticate"

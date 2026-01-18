@@ -119,6 +119,7 @@ import (
 	fsmv2types "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/snapshot"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/state"
@@ -280,7 +281,7 @@ func (w *CommunicatorWorker) CollectObservedState(ctx context.Context) (fsmv2.Ob
 	consecutiveErrors := deps.GetConsecutiveErrors()
 
 	// Get previous metrics from store (persisted across restarts)
-	var prevMetrics snapshot.SyncMetrics
+	var prevMetrics fsmv2.Metrics
 
 	stateReader := deps.GetStateReader()
 	if stateReader != nil {
@@ -290,49 +291,35 @@ func (w *CommunicatorWorker) CollectObservedState(ctx context.Context) (fsmv2.Ob
 		}
 	}
 
-	// Get this tick's sync results from dependencies
-	pullResult, pushResult, tickCompleted := deps.GetLastSyncResults()
-
-	// Accumulate metrics from this tick
+	// Initialize metrics from previous (for accumulation)
 	newMetrics := prevMetrics
-	if tickCompleted {
-		// Pull metrics
-		newMetrics.Pull.TotalOps++
-		if pullResult.Success {
-			newMetrics.Pull.SuccessfulOps++
-			newMetrics.Pull.MessagesPulled += pullResult.Count
-		} else {
-			newMetrics.Pull.FailedOps++
-		}
 
-		newMetrics.Pull.LastLatency = pullResult.Latency
-		// Update average latency (weighted running average)
-		if newMetrics.Pull.TotalOps > 0 {
-			totalLatency := newMetrics.Pull.AvgLatency*time.Duration(newMetrics.Pull.TotalOps-1) + pullResult.Latency
-			newMetrics.Pull.AvgLatency = totalLatency / time.Duration(newMetrics.Pull.TotalOps)
-		}
-
-		// Push metrics (only if push actually happened - check count > 0 or explicit tracking)
-		if pushResult.Count > 0 || !pushResult.Success {
-			newMetrics.Push.TotalOps++
-			if pushResult.Success {
-				newMetrics.Push.SuccessfulOps++
-				newMetrics.Push.MessagesPushed += pushResult.Count
-			} else {
-				newMetrics.Push.FailedOps++
-			}
-
-			newMetrics.Push.LastLatency = pushResult.Latency
-			// Update average latency
-			if newMetrics.Push.TotalOps > 0 {
-				totalLatency := newMetrics.Push.AvgLatency*time.Duration(newMetrics.Push.TotalOps-1) + pushResult.Latency
-				newMetrics.Push.AvgLatency = totalLatency / time.Duration(newMetrics.Push.TotalOps)
-			}
-		}
-
-		// Clear per-tick results for next cycle
-		deps.ClearSyncResults()
+	if newMetrics.Counters == nil {
+		newMetrics.Counters = make(map[string]int64)
 	}
+
+	if newMetrics.Gauges == nil {
+		newMetrics.Gauges = make(map[string]float64)
+	}
+
+	// Drain this tick's buffered metrics from MetricsRecorder
+	tickMetrics := deps.Metrics().Drain()
+
+	// Accumulate counters (add deltas to cumulative)
+	for name, delta := range tickMetrics.Counters {
+		newMetrics.Counters[name] += delta
+	}
+
+	// Set gauges (overwrite with latest values)
+	for name, value := range tickMetrics.Gauges {
+		newMetrics.Gauges[name] = value
+	}
+
+	// Also set consecutive errors as a gauge
+	newMetrics.Gauges[string(metrics.GaugeConsecutiveErrors)] = float64(consecutiveErrors)
+
+	// Clear per-tick results from legacy tracking (for backward compatibility with tests)
+	deps.ClearSyncResults()
 
 	observed := snapshot.CommunicatorObservedState{
 		CollectedAt:       time.Now(),

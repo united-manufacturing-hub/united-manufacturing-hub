@@ -27,32 +27,7 @@ import (
 type CommunicatorDependencies interface {
 	fsmv2.Dependencies
 	GetTransport() transport.Transport
-}
-
-// PullMetrics contains metrics for pull operations.
-type PullMetrics struct {
-	TotalOps       int           `json:"totalOps"`
-	SuccessfulOps  int           `json:"successfulOps"`
-	FailedOps      int           `json:"failedOps"`
-	MessagesPulled int           `json:"messagesPulled"`
-	LastLatency    time.Duration `json:"lastLatency"`
-	AvgLatency     time.Duration `json:"avgLatency"`
-}
-
-// PushMetrics contains metrics for push operations.
-type PushMetrics struct {
-	TotalOps       int           `json:"totalOps"`
-	SuccessfulOps  int           `json:"successfulOps"`
-	FailedOps      int           `json:"failedOps"`
-	MessagesPushed int           `json:"messagesPushed"`
-	LastLatency    time.Duration `json:"lastLatency"`
-	AvgLatency     time.Duration `json:"avgLatency"`
-}
-
-// SyncMetrics aggregates pull and push metrics.
-type SyncMetrics struct {
-	Pull PullMetrics `json:"pull"`
-	Push PushMetrics `json:"push"`
+	Metrics() *fsmv2.MetricsRecorder
 }
 
 type CommunicatorSnapshot struct {
@@ -181,7 +156,14 @@ type CommunicatorObservedState struct {
 	ConsecutiveErrors int
 
 	// Sync metrics for observability
-	Metrics SyncMetrics `json:"metrics"`
+	// Uses standard fsmv2.Metrics structure for automatic Prometheus export
+	Metrics fsmv2.Metrics `json:"metrics"`
+}
+
+// GetMetrics returns a pointer to the Metrics field.
+// Implements fsmv2.MetricsHolder for automatic Prometheus export by supervisor.
+func (o *CommunicatorObservedState) GetMetrics() *fsmv2.Metrics {
+	return &o.Metrics
 }
 
 // IsTokenExpired returns true if the JWT token is expired or will expire soon.

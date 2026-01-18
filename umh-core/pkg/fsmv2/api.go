@@ -16,7 +16,10 @@ package fsmv2
 
 import (
 	"context"
+	"sync"
 	"time"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/metrics"
 )
 
 // States use Signal to communicate special conditions to the supervisor.
@@ -189,5 +192,131 @@ type DependencyProvider interface {
 	// GetDependenciesAny returns the worker's dependencies as any.
 	// This is used by the ActionExecutor to pass dependencies to actions.
 	GetDependenciesAny() any
+}
+
+// =============================================================================
+// METRICS INFRASTRUCTURE
+// =============================================================================
+
+// Metrics is the standard metrics container for all FSMv2 workers.
+// Workers set values here via MetricsRecorder, supervisor automatically exports to Prometheus.
+//
+// Design principle: Single source of truth. Metrics are stored in ObservedState
+// (persisted to CSE) and derived for Prometheus export. No duplication.
+//
+// Counters are cumulative values. Supervisor computes deltas for Prometheus.
+// Gauges are point-in-time values. Exported directly to Prometheus.
+type Metrics struct {
+	// Counters are cumulative values that only increase.
+	// Examples: "pull_ops", "messages_pulled", "errors_total"
+	// The supervisor computes deltas between observations for Prometheus counters.
+	Counters map[string]int64 `json:"counters,omitempty"`
+
+	// Gauges are point-in-time values that can increase or decrease.
+	// Examples: "consecutive_errors", "queue_depth", "last_pull_latency_ms"
+	// These are exported directly to Prometheus gauges.
+	Gauges map[string]float64 `json:"gauges,omitempty"`
+}
+
+// NewMetrics creates an initialized Metrics struct with empty maps.
+func NewMetrics() Metrics {
+	return Metrics{
+		Counters: make(map[string]int64),
+		Gauges:   make(map[string]float64),
+	}
+}
+
+// MetricsHolder is implemented by ObservedState types that have metrics.
+// Supervisor uses this to automatically export metrics to Prometheus.
+//
+// Workers implement this interface to expose their Metrics field:
+//
+//	func (o *MyObservedState) GetMetrics() *fsmv2.Metrics {
+//	    return &o.Metrics
+//	}
+type MetricsHolder interface {
+	GetMetrics() *Metrics
+}
+
+// MetricsRecorder buffers per-tick metric updates from actions.
+// Actions call IncrementCounter/SetGauge during Execute().
+// CollectObservedState calls Drain() to merge buffered metrics into ObservedState.Metrics.
+//
+// Thread-safety: Uses sync.Mutex for all operations.
+// Actions may run concurrently with collection, so locking is required.
+//
+// Lifecycle:
+//  1. Action calls IncrementCounter/SetGauge (buffered in recorder)
+//  2. CollectObservedState calls Drain() (returns buffer, clears for next tick)
+//  3. CollectObservedState merges drained values into cumulative Metrics
+//  4. Metrics persisted to CSE as part of ObservedState
+type MetricsRecorder struct {
+	mu       sync.Mutex
+	counters map[string]int64
+	gauges   map[string]float64
+}
+
+// NewMetricsRecorder creates a MetricsRecorder ready for use.
+func NewMetricsRecorder() *MetricsRecorder {
+	return &MetricsRecorder{
+		counters: make(map[string]int64),
+		gauges:   make(map[string]float64),
+	}
+}
+
+// IncrementCounter adds delta to a counter.
+// Uses typed CounterName for compile-time safety against typos.
+//
+// Example:
+//
+//	deps.Metrics().IncrementCounter(metrics.CounterMessagesPulled, int64(len(messages)))
+func (r *MetricsRecorder) IncrementCounter(name metrics.CounterName, delta int64) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	r.counters[string(name)] += delta
+}
+
+// SetGauge sets a gauge to the specified value.
+// Uses typed GaugeName for compile-time safety against typos.
+//
+// Example:
+//
+//	deps.Metrics().SetGauge(metrics.GaugeLastPullLatencyMs, float64(latency.Milliseconds()))
+func (r *MetricsRecorder) SetGauge(name metrics.GaugeName, value float64) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	r.gauges[string(name)] = value
+}
+
+// DrainResult holds the buffered metrics from a Drain() operation.
+type DrainResult struct {
+	// Counters contains the delta values accumulated since last drain.
+	Counters map[string]int64
+	// Gauges contains the most recent gauge values.
+	Gauges map[string]float64
+}
+
+// Drain returns buffered metrics and resets the buffer for the next tick.
+// Called by CollectObservedState to merge per-tick metrics into cumulative state.
+//
+// Returns a DrainResult containing:
+//   - Counters: Delta values to ADD to cumulative counters
+//   - Gauges: Current values to SET as gauge values
+func (r *MetricsRecorder) Drain() DrainResult {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	result := DrainResult{
+		Counters: r.counters,
+		Gauges:   r.gauges,
+	}
+
+	// Reset buffers for next tick
+	r.counters = make(map[string]int64)
+	r.gauges = make(map[string]float64)
+
+	return result
 }
 

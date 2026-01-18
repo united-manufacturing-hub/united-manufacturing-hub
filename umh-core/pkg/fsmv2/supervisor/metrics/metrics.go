@@ -15,10 +15,14 @@
 package metrics
 
 import (
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 )
 
 var (
@@ -334,6 +338,158 @@ func RecordObservationSave(workerType string, changed bool, duration time.Durati
 
 	observationSaveTotal.WithLabelValues(workerType, changedStr).Inc()
 	observationSaveDuration.WithLabelValues(workerType, changedStr).Observe(duration.Seconds())
+}
+
+// =============================================================================
+// WORKER METRICS EXPORTER
+// =============================================================================
+
+// WorkerMetricsExporter exports worker-specific metrics from ObservedState to Prometheus.
+// It tracks previous metric values to compute counter deltas.
+//
+// The exporter is designed to be called after CollectObservedState() completes.
+// It reads the Metrics field from ObservedState (via MetricsHolder interface)
+// and exports:
+//   - Counters: Delta since last export (increments Prometheus counter)
+//   - Gauges: Current value (sets Prometheus gauge)
+//
+// Thread-safety: Uses sync.Mutex for registry access.
+type WorkerMetricsExporter struct {
+	mu sync.Mutex
+
+	// Dynamic counter/gauge registries - created on first use per metric name
+	counters map[string]*prometheus.CounterVec
+	gauges   map[string]*prometheus.GaugeVec
+
+	// Previous counter values for delta computation
+	// Key format: "workerType:workerID:metricName"
+	prevCounters map[string]int64
+}
+
+// workerMetricsExporter is the singleton exporter instance.
+// Using a singleton ensures consistent delta tracking across all supervisors.
+var workerMetricsExporter = &WorkerMetricsExporter{
+	counters:     make(map[string]*prometheus.CounterVec),
+	gauges:       make(map[string]*prometheus.GaugeVec),
+	prevCounters: make(map[string]int64),
+}
+
+// ExportWorkerMetrics exports metrics from ObservedState to Prometheus.
+// Should be called by the supervisor after CollectObservedState() completes.
+//
+// Parameters:
+//   - workerType: Worker type for Prometheus labels
+//   - workerID: Worker ID for Prometheus labels
+//   - observed: The current ObservedState (must implement MetricsHolder)
+//
+// If observed does not implement MetricsHolder, this is a no-op.
+func ExportWorkerMetrics(workerType, workerID string, observed fsmv2.ObservedState) {
+	holder, ok := observed.(fsmv2.MetricsHolder)
+	if !ok {
+		return
+	}
+
+	metrics := holder.GetMetrics()
+	if metrics == nil {
+		return
+	}
+
+	workerMetricsExporter.export(workerType, workerID, metrics)
+}
+
+// CleanupWorkerMetrics removes cached counter values for a worker.
+// Should be called when a worker is removed to prevent memory leaks.
+//
+// Parameters:
+//   - workerType: Worker type that was removed
+//   - workerID: Worker ID that was removed
+func CleanupWorkerMetrics(workerType, workerID string) {
+	workerMetricsExporter.cleanup(workerType, workerID)
+}
+
+func (e *WorkerMetricsExporter) cleanup(workerType, workerID string) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	// Remove all entries for this worker from prevCounters
+	prefix := workerType + ":" + workerID + ":"
+	for key := range e.prevCounters {
+		if strings.HasPrefix(key, prefix) {
+			delete(e.prevCounters, key)
+		}
+	}
+}
+
+func (e *WorkerMetricsExporter) export(workerType, workerID string, metrics *fsmv2.Metrics) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	labels := prometheus.Labels{
+		"worker_type": workerType,
+		"worker_id":   workerID,
+	}
+
+	// Export counters (compute delta from previous value)
+	for name, value := range metrics.Counters {
+		prevKey := workerType + ":" + workerID + ":" + name
+		prevValue := e.prevCounters[prevKey]
+
+		// Compute delta
+		delta := value - prevValue
+		if delta > 0 {
+			counter := e.getOrCreateCounter(name)
+			counter.With(labels).Add(float64(delta))
+		}
+
+		// Update previous value for next export
+		e.prevCounters[prevKey] = value
+	}
+
+	// Export gauges (direct value)
+	for name, value := range metrics.Gauges {
+		gauge := e.getOrCreateGauge(name)
+		gauge.With(labels).Set(value)
+	}
+}
+
+func (e *WorkerMetricsExporter) getOrCreateCounter(name string) *prometheus.CounterVec {
+	if counter, exists := e.counters[name]; exists {
+		return counter
+	}
+
+	// Create new counter with dynamic registration
+	counter := promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: namespace,
+			Subsystem: "worker",
+			Name:      name,
+			Help:      "Worker metric: " + name,
+		},
+		[]string{"worker_type", "worker_id"},
+	)
+	e.counters[name] = counter
+
+	return counter
+}
+
+func (e *WorkerMetricsExporter) getOrCreateGauge(name string) *prometheus.GaugeVec {
+	if gauge, exists := e.gauges[name]; exists {
+		return gauge
+	}
+
+	// Create new gauge with dynamic registration
+	gauge := promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: namespace,
+			Subsystem: "worker",
+			Name:      name,
+			Help:      "Worker metric: " + name,
+		},
+		[]string{"worker_type", "worker_id"},
+	)
+	e.gauges[name] = gauge
+
+	return gauge
 }
 
 // GetHierarchyDepthGauge returns the hierarchy depth gauge for testing.

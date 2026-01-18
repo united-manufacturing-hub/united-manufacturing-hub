@@ -401,6 +401,10 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 	// Record metrics
 	metrics.RecordObservationSave(workerType, changed, saveDuration)
 
+	// Export worker-specific metrics from ObservedState to Prometheus
+	// This reads the Metrics field (if present) and exports counters/gauges
+	metrics.ExportWorkerMetrics(workerType, c.config.Identity.ID, observed)
+
 	// Log result - per-collection logs moved to TRACE for scalability
 	if changed {
 		c.logTrace("observation_saved",

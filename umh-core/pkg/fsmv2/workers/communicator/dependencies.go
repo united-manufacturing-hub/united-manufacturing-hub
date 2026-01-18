@@ -38,15 +38,19 @@ import (
 // The consecutiveErrors field tracks consecutive errors for health monitoring.
 // This is incremented by RecordError() and reset by RecordSuccess().
 //
+// Metrics recording:
+// Actions use deps.Metrics().IncrementCounter/SetGauge to record metrics.
+// CollectObservedState calls Metrics().Drain() to merge into ObservedState.Metrics.
+//
 // Access is protected by mu for thread-safety.
 //
 // Field ordering: Fields are ordered by decreasing size to minimize struct padding.
 // 24-byte fields first, then 16-byte, then 8-byte, then 1-byte (bools) at the end.
 type CommunicatorDependencies struct {
 	// 24-byte fields
-	mu             sync.RWMutex              // Mutex for thread-safe access
-	jwtExpiry      time.Time                 // JWT expiry (set by AuthenticateAction)
-	pulledMessages []*transport.UMHMessage   // Pulled messages (set by SyncAction)
+	mu             sync.RWMutex            // Mutex for thread-safe access
+	jwtExpiry      time.Time               // JWT expiry (set by AuthenticateAction)
+	pulledMessages []*transport.UMHMessage // Pulled messages (set by SyncAction)
 
 	// 16-byte fields
 	transport transport.Transport // HTTP transport for push/pull operations
@@ -54,13 +58,14 @@ type CommunicatorDependencies struct {
 
 	// 8-byte fields
 	*fsmv2.BaseDependencies
-	lastPullLatency   time.Duration             // Per-tick pull latency
-	lastPushLatency   time.Duration             // Per-tick push latency
+	metrics           *fsmv2.MetricsRecorder       // Standard metrics recorder for actions
+	lastPullLatency   time.Duration                // Per-tick pull latency
+	lastPushLatency   time.Duration                // Per-tick push latency
 	inboundChan       chan<- *transport.UMHMessage // Write received messages to router
 	outboundChan      <-chan *transport.UMHMessage // Read messages from router to push
-	consecutiveErrors int                       // Error counter (incremented by RecordError)
-	lastPullCount     int                       // Per-tick pull message count
-	lastPushCount     int                       // Per-tick push message count
+	consecutiveErrors int                          // Error counter (incremented by RecordError)
+	lastPullCount     int                          // Per-tick pull message count
+	lastPushCount     int                          // Per-tick push message count
 
 	// 1-byte fields (bools grouped at end to minimize padding)
 	lastPullSuccess   bool // Per-tick pull success flag
@@ -84,9 +89,17 @@ func NewCommunicatorDependencies(t transport.Transport, logger *zap.SugaredLogge
 	return &CommunicatorDependencies{
 		BaseDependencies: fsmv2.NewBaseDependencies(logger, stateReader, identity),
 		transport:        t,
+		metrics:          fsmv2.NewMetricsRecorder(),
 		inboundChan:      inbound,
 		outboundChan:     outbound,
 	}
+}
+
+// Metrics returns the MetricsRecorder for actions to record metrics.
+// Actions call IncrementCounter/SetGauge with typed constants.
+// CollectObservedState calls Drain() to merge buffered metrics.
+func (d *CommunicatorDependencies) Metrics() *fsmv2.MetricsRecorder {
+	return d.metrics
 }
 
 // SetTransport sets the transport instance (mutex protected).

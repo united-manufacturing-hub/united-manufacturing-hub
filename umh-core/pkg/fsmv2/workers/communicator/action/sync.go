@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
 )
 
@@ -112,10 +113,21 @@ func (a *SyncAction) Execute(ctx context.Context, depsAny any) error {
 		deps.RecordPullFailure(pullLatency)
 		deps.RecordError()
 
+		// Record metrics with typed constants
+		deps.Metrics().IncrementCounter(metrics.CounterPullOps, 1)
+		deps.Metrics().IncrementCounter(metrics.CounterPullFailures, 1)
+		deps.Metrics().SetGauge(metrics.GaugeLastPullLatencyMs, float64(pullLatency.Milliseconds()))
+
 		return fmt.Errorf("pull failed: %w", err)
 	}
 
 	deps.RecordPullSuccess(pullLatency, len(messages))
+
+	// Record successful pull metrics with typed constants
+	deps.Metrics().IncrementCounter(metrics.CounterPullOps, 1)
+	deps.Metrics().IncrementCounter(metrics.CounterPullSuccess, 1)
+	deps.Metrics().IncrementCounter(metrics.CounterMessagesPulled, int64(len(messages)))
+	deps.Metrics().SetGauge(metrics.GaugeLastPullLatencyMs, float64(pullLatency.Milliseconds()))
 
 	// 2. Store pulled messages (they will be available in next observed state)
 	deps.SetPulledMessages(messages)
@@ -160,13 +172,26 @@ func (a *SyncAction) Execute(ctx context.Context, depsAny any) error {
 	if len(messagesToPush) > 0 {
 		pushStart := time.Now()
 		if err := deps.GetTransport().Push(ctx, a.JWTToken, messagesToPush); err != nil {
-			deps.RecordPushFailure(time.Since(pushStart))
+			pushLatency := time.Since(pushStart)
+			deps.RecordPushFailure(pushLatency)
 			deps.RecordError()
+
+			// Record push failure metrics with typed constants
+			deps.Metrics().IncrementCounter(metrics.CounterPushOps, 1)
+			deps.Metrics().IncrementCounter(metrics.CounterPushFailures, 1)
+			deps.Metrics().SetGauge(metrics.GaugeLastPushLatencyMs, float64(pushLatency.Milliseconds()))
 
 			return fmt.Errorf("push failed: %w", err)
 		}
 
-		deps.RecordPushSuccess(time.Since(pushStart), len(messagesToPush))
+		pushLatency := time.Since(pushStart)
+		deps.RecordPushSuccess(pushLatency, len(messagesToPush))
+
+		// Record successful push metrics with typed constants
+		deps.Metrics().IncrementCounter(metrics.CounterPushOps, 1)
+		deps.Metrics().IncrementCounter(metrics.CounterPushSuccess, 1)
+		deps.Metrics().IncrementCounter(metrics.CounterMessagesPushed, int64(len(messagesToPush)))
+		deps.Metrics().SetGauge(metrics.GaugeLastPushLatencyMs, float64(pushLatency.Milliseconds()))
 	}
 
 	// 6. Success - call RecordSuccess()
