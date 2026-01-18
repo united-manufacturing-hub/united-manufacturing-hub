@@ -54,7 +54,7 @@ Your profile picture from Auth0 now appears in the sidebar and user menu. If no 
 
 ---
 
-### December 17, 2025
+### v0.44.0
 
 **Breaking Change: Non-Root Container Security**
 
@@ -101,7 +101,7 @@ docker run -v umh-core-data:/data ...
 
 ---
 
-### December 1, 2025
+### v0.43.18
 
 **On-Demand Logs and Metrics Panels**
 
@@ -132,7 +132,7 @@ Fixed an issue where subscribing directly to OPC UA child nodes (without a paren
 
 ---
 
-### November 25, 2025
+### v0.43.17
 
 **Debug Logging for Troubleshooting**
 
@@ -193,7 +193,7 @@ You can now duplicate conditions with a single click using the new duplicate but
 
 ---
 
-### November 13, 2025
+### v0.43.16
 
 **OPC UA Browse Performance**
 
@@ -215,7 +215,7 @@ Browse operations now use a global worker pool instead of creating separate pool
 
 ---
 
-### November 10, 2025
+### v0.43.15
 
 **Data Infrastructure Independence**
 
@@ -233,7 +233,7 @@ Deployments complete 80-90% faster for customers with large configurations (e.g.
 
 ---
 
-### November 3, 2025
+### v0.43.14
 
 **OPC UA Large Server Support**
 
@@ -257,7 +257,7 @@ Fixed console.log() and other console methods in JavaScript processors to work l
 
 ---
 
-### October 30, 2025
+### v0.43.13
 
 **OPC UA Connection Improvements**
 
@@ -271,7 +271,7 @@ Fixed certificate generation issues that prevented connections to OPC UA servers
 
 ---
 
-### October 28, 2025
+### v0.43.12
 
 **Resource Limit Blocking Enabled by Default**
 
@@ -291,7 +291,7 @@ You can disable this protection by setting `agent.enableResourceLimitBlocking: f
 
 ---
 
-### October 27, 2025
+### v0.43.10
 
 **More Flexible Component Naming**
 
