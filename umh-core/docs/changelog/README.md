@@ -4,7 +4,7 @@ Release notes for UMH.
 
 ---
 
-### January 13, 2026
+### Management Console 2026-01-13
 
 **Data Flow Setup Wizard**
 
@@ -26,7 +26,7 @@ Creating new Data Flows is now guided and faster. When you select a protocol lik
 
 ---
 
-### December 18, 2025
+### Management Console 2025-12-18
 
 **Visual Refresh**
 
@@ -54,7 +54,7 @@ Your profile picture from Auth0 now appears in the sidebar and user menu. If no 
 
 ---
 
-### v0.44.0
+### umh-core v0.44.0
 
 **Breaking Change: Non-Root Container Security**
 
@@ -83,7 +83,7 @@ docker run -v umh-core-data:/data ...
 
 ---
 
-### December 8, 2025
+### Management Console 2025-12-08
 
 **Improvements**
 
@@ -101,7 +101,7 @@ docker run -v umh-core-data:/data ...
 
 ---
 
-### v0.43.18
+### umh-core v0.43.18
 
 **On-Demand Logs and Metrics Panels**
 
@@ -132,7 +132,7 @@ Fixed an issue where subscribing directly to OPC UA child nodes (without a paren
 
 ---
 
-### v0.43.17
+### umh-core v0.43.17
 
 **Debug Logging for Troubleshooting**
 
@@ -150,7 +150,7 @@ You can now add `debug_level: true` to your bridge or data flow configurations t
 
 ---
 
-### November 20, 2025
+### Management Console 2025-11-20
 
 **Dynamic Protocol Forms**
 
@@ -174,7 +174,7 @@ The default SparkplugB template now includes comprehensive documentation for all
 
 ---
 
-### November 17, 2025
+### Management Console 2025-11-17
 
 **Quick Condition Duplication**
 
@@ -193,7 +193,7 @@ You can now duplicate conditions with a single click using the new duplicate but
 
 ---
 
-### v0.43.16
+### umh-core v0.43.16
 
 **OPC UA Browse Performance**
 
@@ -215,7 +215,7 @@ Browse operations now use a global worker pool instead of creating separate pool
 
 ---
 
-### v0.43.15
+### umh-core v0.43.15
 
 **Data Infrastructure Independence**
 
@@ -233,7 +233,7 @@ Deployments complete 80-90% faster for customers with large configurations (e.g.
 
 ---
 
-### v0.43.14
+### umh-core v0.43.14
 
 **OPC UA Large Server Support**
 
@@ -257,7 +257,7 @@ Fixed console.log() and other console methods in JavaScript processors to work l
 
 ---
 
-### v0.43.13
+### umh-core v0.43.13
 
 **OPC UA Connection Improvements**
 
@@ -271,7 +271,7 @@ Fixed certificate generation issues that prevented connections to OPC UA servers
 
 ---
 
-### v0.43.12
+### umh-core v0.43.12
 
 **Resource Limit Blocking Enabled by Default**
 
@@ -291,7 +291,7 @@ You can disable this protection by setting `agent.enableResourceLimitBlocking: f
 
 ---
 
-### v0.43.10
+### umh-core v0.43.10
 
 **More Flexible Component Naming**
 
@@ -322,7 +322,7 @@ Idle protocol converter states now correctly show as green/active instead of app
 
 ---
 
-### October 20, 2025
+### Management Console 2025-10-20
 
 **Enterprise SSO Login Reliability**
 
@@ -342,7 +342,7 @@ Email addresses are now normalized to lowercase throughout the entire onboarding
 
 ---
 
-### October 16, 2025
+### Management Console 2025-10-16
 
 **Data Compression Visibility**
 
@@ -364,7 +364,7 @@ You can now click directly on component names to edit them, instead of using the
 
 ---
 
-### October 10, 2025
+### Management Console 2025-10-10
 
 **Bridge Location Handling**
 
@@ -391,7 +391,7 @@ You can now click directly on component names to edit them, instead of using the
 
 ---
 
-### October 6, 2025
+### Management Console 2025-10-06
 
 **Topic Browser Live Updates**
 
