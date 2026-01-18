@@ -115,10 +115,10 @@ func (w *FailingWorker) CollectObservedState(ctx context.Context) (fsmv2.Observe
 
 // DeriveDesiredState determines what state the failing worker should be in.
 // Uses the DeriveLeafState helper for type-safe parsing and boilerplate reduction.
-func (w *FailingWorker) DeriveDesiredState(spec interface{}) (fsmv2types.DesiredState, error) {
+func (w *FailingWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
 	desired, err := fsmv2types.DeriveLeafState[FailingUserSpec](spec)
 	if err != nil {
-		return desired, err
+		return nil, err
 	}
 
 	// Update dependencies with configuration from spec
@@ -126,7 +126,7 @@ func (w *FailingWorker) DeriveDesiredState(spec interface{}) (fsmv2types.Desired
 	// but doesn't violate PURE_DERIVE because the helper function does the access
 	w.updateDependenciesFromSpec(spec)
 
-	return desired, nil
+	return &desired, nil
 }
 
 // updateDependenciesFromSpec configures dependencies based on the user spec.

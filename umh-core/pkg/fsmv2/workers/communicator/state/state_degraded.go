@@ -19,6 +19,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/action"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/snapshot"
 )
@@ -131,21 +132,20 @@ func NewDegradedStateWithEnteredAt(enteredAt time.Time) *DegradedState {
 	}
 }
 
-func (s *DegradedState) Next(snapshot snapshot.CommunicatorSnapshot) (BaseCommunicatorState, fsmv2.Signal, fsmv2.Action[any]) {
-	snapshot.Observed.State = config.MakeState(config.PrefixRunning, "degraded")
-	desired := snapshot.Desired
-	observed := snapshot.Observed
+func (s *DegradedState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, fsmv2.Action[any]) {
+	snap := helpers.ConvertSnapshot[snapshot.CommunicatorObservedState, *snapshot.CommunicatorDesiredState](snapAny)
+	snap.Observed.State = config.MakeState(config.PrefixRunning, "degraded")
 
-	if desired.IsShutdownRequested() {
+	if snap.Desired.IsShutdownRequested() {
 		return &StoppedState{}, fsmv2.SignalNone, nil
 	}
 
-	if observed.IsSyncHealthy() && observed.GetConsecutiveErrors() == 0 {
+	if snap.Observed.IsSyncHealthy() && snap.Observed.GetConsecutiveErrors() == 0 {
 		return &SyncingState{}, fsmv2.SignalNone, nil
 	}
 
 	// Calculate backoff using SyncingState's GetBackoffDelay
-	backoffDelay := (&SyncingState{}).GetBackoffDelay(observed)
+	backoffDelay := (&SyncingState{}).GetBackoffDelay(snap.Observed)
 
 	// If we're still within the backoff period, wait (no action)
 	if time.Since(s.enteredAt) < backoffDelay {
@@ -154,7 +154,7 @@ func (s *DegradedState) Next(snapshot snapshot.CommunicatorSnapshot) (BaseCommun
 
 	// Backoff expired - create SyncAction to retry
 	// deps injected via Execute() by supervisor
-	syncAction := action.NewSyncAction(observed.JWTToken)
+	syncAction := action.NewSyncAction(snap.Observed.JWTToken)
 
 	return s, fsmv2.SignalNone, syncAction
 }

@@ -502,8 +502,8 @@ func (m *mockWorker) CollectObservedState(_ context.Context) (fsmv2.ObservedStat
 	}, nil
 }
 
-func (m *mockWorker) DeriveDesiredState(_ interface{}) (config.DesiredState, error) {
-	return config.DesiredState{State: "running"}, nil
+func (m *mockWorker) DeriveDesiredState(_ interface{}) (fsmv2.DesiredState, error) {
+	return &config.DesiredState{State: "running"}, nil
 }
 
 func (m *mockWorker) GetInitialState() fsmv2.State[any, any] {
@@ -528,13 +528,23 @@ func (m *mockObservedState) MarshalJSON() ([]byte, error) {
 	return json.Marshal(m.doc)
 }
 
-type mockDesiredState struct{}
+type mockDesiredState struct {
+	State string
+}
 
 func (m *mockDesiredState) IsShutdownRequested() bool {
 	return false
 }
 
 func (m *mockDesiredState) SetShutdownRequested(_ bool) {
+}
+
+func (m *mockDesiredState) GetState() string {
+	if m.State == "" {
+		return "running"
+	}
+
+	return m.State
 }
 
 type mockState struct {
@@ -568,8 +578,8 @@ func (m *mockWorkerWithChildren) CollectObservedState(_ context.Context) (fsmv2.
 	}, nil
 }
 
-func (m *mockWorkerWithChildren) DeriveDesiredState(_ interface{}) (config.DesiredState, error) {
-	return config.DesiredState{
+func (m *mockWorkerWithChildren) DeriveDesiredState(_ interface{}) (fsmv2.DesiredState, error) {
+	return &config.DesiredState{
 		State:         "running",
 		ChildrenSpecs: m.childrenSpecs,
 	}, nil

@@ -17,6 +17,7 @@ package state
 import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/action"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/snapshot"
 )
@@ -83,24 +84,24 @@ type TryingToAuthenticateState struct {
 	BaseCommunicatorState
 }
 
-func (s *TryingToAuthenticateState) Next(snapshot snapshot.CommunicatorSnapshot) (BaseCommunicatorState, fsmv2.Signal, fsmv2.Action[any]) {
-	snapshot.Observed.State = config.MakeState(config.PrefixTryingToStart, "authentication")
-	desired := snapshot.Desired
-	observed := snapshot.Observed
+func (s *TryingToAuthenticateState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, fsmv2.Action[any]) {
+	snap := helpers.ConvertSnapshot[snapshot.CommunicatorObservedState, *snapshot.CommunicatorDesiredState](snapAny)
+	snap.Observed.State = config.MakeState(config.PrefixTryingToStart, "authentication")
 
-	if desired.IsShutdownRequested() {
+	if snap.Desired.IsShutdownRequested() {
 		return &StoppedState{}, fsmv2.SignalNone, nil
 	}
 
-	if observed.Authenticated && !observed.IsTokenExpired() { // TODO: check good abstraction / API
+	if snap.Observed.Authenticated && !snap.Observed.IsTokenExpired() { // TODO: check good abstraction / API
 		return &SyncingState{}, fsmv2.SignalNone, nil
 	}
 
 	// Create AuthenticateAction - deps injected via Execute() by supervisor
 	authenticateAction := action.NewAuthenticateAction(
-		desired.RelayURL,
-		desired.InstanceUUID,
-		desired.AuthToken,
+		snap.Desired.RelayURL,
+		snap.Desired.InstanceUUID,
+		snap.Desired.AuthToken,
+		snap.Desired.Timeout,
 	)
 
 	return s, fsmv2.SignalNone, authenticateAction

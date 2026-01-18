@@ -104,10 +104,10 @@ type childrenConfig struct {
 //	    userSpec:
 //	      config: |
 //	        value: 20
-func (w *ApplicationWorker) DeriveDesiredState(spec interface{}) (config.DesiredState, error) {
+func (w *ApplicationWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
 	// Handle nil spec (used during initialization in AddWorker).
 	if spec == nil {
-		return config.DesiredState{
+		return &config.DesiredState{
 			State:         "running",
 			ChildrenSpecs: nil,
 		}, nil
@@ -116,18 +116,18 @@ func (w *ApplicationWorker) DeriveDesiredState(spec interface{}) (config.Desired
 	// Get UserSpec from the spec interface.
 	userSpec, ok := spec.(config.UserSpec)
 	if !ok {
-		return config.DesiredState{}, fmt.Errorf("invalid spec type: expected config.UserSpec, got %T", spec)
+		return nil, fmt.Errorf("invalid spec type: expected config.UserSpec, got %T", spec)
 	}
 
 	// Parse children from YAML config.
 	var childrenCfg childrenConfig
 	if userSpec.Config != "" {
 		if err := yaml.Unmarshal([]byte(userSpec.Config), &childrenCfg); err != nil {
-			return config.DesiredState{}, fmt.Errorf("failed to parse children config: %w", err)
+			return nil, fmt.Errorf("failed to parse children config: %w", err)
 		}
 	}
 
-	return config.DesiredState{
+	return &config.DesiredState{
 		State:         "running",
 		ChildrenSpecs: childrenCfg.Children,
 	}, nil

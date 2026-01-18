@@ -43,6 +43,10 @@ func (t *testDesired) IsShutdownRequested() bool {
 	return t.shutdown
 }
 
+func (t *testDesired) GetState() string {
+	return "running"
+}
+
 type wrongObserved struct {
 	Value string
 }
@@ -61,6 +65,10 @@ type wrongDesired struct {
 
 func (w *wrongDesired) IsShutdownRequested() bool {
 	return false
+}
+
+func (w *wrongDesired) GetState() string {
+	return "running"
 }
 
 func TestConvertSnapshot_SuccessfulConversion(t *testing.T) {

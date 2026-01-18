@@ -69,6 +69,16 @@ func (b *BaseDesiredState) SetShutdownRequested(v bool) {
 	b.ShutdownRequested = v
 }
 
+// GetState returns the desired lifecycle state.
+// Implements fsmv2.DesiredState interface.
+func (b *BaseDesiredState) GetState() string {
+	if b.State == "" {
+		return DesiredStateRunning
+	}
+
+	return b.State
+}
+
 // BaseUserSpec provides common fields for all user configuration types.
 // Workers embed this struct to get consistent state handling.
 //
@@ -382,3 +392,27 @@ type DesiredState struct {
 //	    }
 //	    // ... rest of logic
 //	}
+
+// ChildSpecProvider is implemented by DesiredState types that can have children.
+// Used by supervisor to extract children specs for reconciliation.
+// Workers with children should return a DesiredState type implementing this interface.
+type ChildSpecProvider interface {
+	GetChildrenSpecs() []ChildSpec
+}
+
+// GetChildrenSpecs returns the children specifications.
+// Implements ChildSpecProvider interface.
+func (d *DesiredState) GetChildrenSpecs() []ChildSpec {
+	return d.ChildrenSpecs
+}
+
+// GetState returns the desired lifecycle state.
+// Implements fsmv2.DesiredState interface.
+// This method uses DesiredState.State field (not the embedded BaseDesiredState.State).
+func (d *DesiredState) GetState() string {
+	if d.State == "" {
+		return DesiredStateRunning
+	}
+
+	return d.State
+}

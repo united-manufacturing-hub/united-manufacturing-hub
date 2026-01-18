@@ -29,11 +29,40 @@ type CommunicatorDependencies interface {
 	GetTransport() transport.Transport
 }
 
+// PullMetrics contains metrics for pull operations.
+type PullMetrics struct {
+	TotalOps       int           `json:"totalOps"`
+	SuccessfulOps  int           `json:"successfulOps"`
+	FailedOps      int           `json:"failedOps"`
+	MessagesPulled int           `json:"messagesPulled"`
+	LastLatency    time.Duration `json:"lastLatency"`
+	AvgLatency     time.Duration `json:"avgLatency"`
+}
+
+// PushMetrics contains metrics for push operations.
+type PushMetrics struct {
+	TotalOps       int           `json:"totalOps"`
+	SuccessfulOps  int           `json:"successfulOps"`
+	FailedOps      int           `json:"failedOps"`
+	MessagesPushed int           `json:"messagesPushed"`
+	LastLatency    time.Duration `json:"lastLatency"`
+	AvgLatency     time.Duration `json:"avgLatency"`
+}
+
+// SyncMetrics aggregates pull and push metrics.
+type SyncMetrics struct {
+	Pull PullMetrics `json:"pull"`
+	Push PushMetrics `json:"push"`
+}
+
 type CommunicatorSnapshot struct {
 	Identity fsmv2.Identity
 	Observed CommunicatorObservedState
 	Desired  CommunicatorDesiredState
 }
+
+// Compile-time interface check: CommunicatorDesiredState must implement fsmv2.DesiredState.
+var _ fsmv2.DesiredState = (*CommunicatorDesiredState)(nil)
 
 // CommunicatorDesiredState represents the target configuration for the communicator.
 //
@@ -51,6 +80,7 @@ type CommunicatorSnapshot struct {
 //	RelayURL: Set at startup, never changes
 //	InstanceUUID: Set at startup, never changes
 //	AuthToken: Set at startup, never changes
+//	Timeout: Set at startup, controls HTTP request timeout
 //	MessagesToBeSent: Updated by agent when config changes need to be sent
 //
 // # Field Validation
@@ -58,6 +88,7 @@ type CommunicatorSnapshot struct {
 //   - RelayURL: MUST be non-empty URL (enforced: Worker constructor validates)
 //   - InstanceUUID: MUST be non-empty UUID (enforced: Worker constructor validates)
 //   - AuthToken: MUST be non-empty string (enforced: Worker constructor validates)
+//   - Timeout: Defaults to 10s if not specified
 //   - MessagesToBeSent: May be empty array, elements must be valid UMHMessage
 //
 // # Invariants
@@ -78,14 +109,21 @@ type CommunicatorSnapshot struct {
 type CommunicatorDesiredState struct {
 	config.BaseDesiredState // Provides ShutdownRequested + IsShutdownRequested() + SetShutdownRequested()
 
-	// Authentication
-	InstanceUUID string
-	AuthToken    string
-	RelayURL     string
+	// Authentication - typed fields populated by DeriveDesiredState
+	InstanceUUID string        `json:"instanceUUID"`
+	AuthToken    string        `json:"authToken"`
+	RelayURL     string        `json:"relayURL"`
+	Timeout      time.Duration `json:"timeout"`
 
 	// Messages
-	MessagesToBeSent []transport.UMHMessage
+	MessagesToBeSent []transport.UMHMessage `json:"messagesToBeSent,omitempty"`
 	// Dependencies removed: Actions receive deps via Execute() parameter, not DesiredState
+}
+
+// GetState returns the desired lifecycle state ("running" or "stopped").
+// This method satisfies the fsmv2.DesiredState interface.
+func (d *CommunicatorDesiredState) GetState() string {
+	return d.State
 }
 
 // CommunicatorObservedState represents the current state of the communicator.
@@ -141,6 +179,9 @@ type CommunicatorObservedState struct {
 
 	// Error tracking for health monitoring
 	ConsecutiveErrors int
+
+	// Sync metrics for observability
+	Metrics SyncMetrics `json:"metrics"`
 }
 
 // IsTokenExpired returns true if the JWT token is expired or will expire soon.

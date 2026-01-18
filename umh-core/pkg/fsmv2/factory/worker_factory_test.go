@@ -37,8 +37,8 @@ func (m *mockWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedSt
 	return nil, nil
 }
 
-func (m *mockWorker) DeriveDesiredState(spec interface{}) (config.DesiredState, error) {
-	return config.DesiredState{}, nil
+func (m *mockWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
+	return &config.DesiredState{}, nil
 }
 
 func (m *mockWorker) GetInitialState() fsmv2.State[any, any] {

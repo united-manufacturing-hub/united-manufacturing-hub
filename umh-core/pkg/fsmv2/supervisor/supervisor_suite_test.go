@@ -116,10 +116,19 @@ func (m *mockObservedState) GetTimestamp() time.Time {
 
 type mockDesiredState struct {
 	ShutdownRequested bool
+	State             string
 }
 
 func (m *mockDesiredState) IsShutdownRequested() bool {
 	return m.ShutdownRequested
+}
+
+func (m *mockDesiredState) GetState() string {
+	if m.State == "" {
+		return "running"
+	}
+
+	return m.State
 }
 
 type mockWorker struct {
@@ -150,8 +159,8 @@ func (m *mockWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedSt
 	}, nil
 }
 
-func (m *mockWorker) DeriveDesiredState(spec interface{}) (config.DesiredState, error) {
-	return config.DesiredState{State: "running"}, nil
+func (m *mockWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
+	return &config.DesiredState{State: "running"}, nil
 }
 
 func (m *mockWorker) GetInitialState() fsmv2.State[any, any] {

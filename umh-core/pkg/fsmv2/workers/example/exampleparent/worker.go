@@ -107,10 +107,10 @@ func (w *ParentWorker) CollectObservedState(ctx context.Context) (fsmv2.Observed
 // Note: spec is interface{} for flexibility across different worker types (each has its own UserSpec).
 //
 // Uses ParseUserSpec helper for type-safe parsing.
-func (w *ParentWorker) DeriveDesiredState(spec interface{}) (config.DesiredState, error) {
+func (w *ParentWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
 	// Handle nil spec - return default state with no children
 	if spec == nil {
-		return config.DesiredState{
+		return &config.DesiredState{
 			State:            config.DesiredStateRunning,
 			ChildrenSpecs:    nil,
 			OriginalUserSpec: nil,
@@ -120,13 +120,13 @@ func (w *ParentWorker) DeriveDesiredState(spec interface{}) (config.DesiredState
 	// Use ParseUserSpec helper for type-safe parsing
 	parentSpec, err := config.ParseUserSpec[ParentUserSpec](spec)
 	if err != nil {
-		return config.DesiredState{}, err
+		return nil, err
 	}
 
 	childrenCount := parentSpec.ChildrenCount
 
 	if childrenCount == 0 {
-		return config.DesiredState{
+		return &config.DesiredState{
 			State:            parentSpec.GetState(),
 			ChildrenSpecs:    nil,
 			OriginalUserSpec: spec,
@@ -174,7 +174,7 @@ device: {{ .DEVICE_ID }}`
 		}
 	}
 
-	return config.DesiredState{
+	return &config.DesiredState{
 		State:            parentSpec.GetState(),
 		ChildrenSpecs:    childrenSpecs,
 		OriginalUserSpec: spec,

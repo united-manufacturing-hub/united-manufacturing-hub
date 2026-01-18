@@ -74,7 +74,7 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity fsmv2.Identity, wor
 	}
 
 	// Validate DesiredState.State is a valid lifecycle state ("stopped" or "running")
-	if valErr := config.ValidateDesiredState(initialDesired.State); valErr != nil {
+	if valErr := config.ValidateDesiredState(initialDesired.GetState()); valErr != nil {
 		return fmt.Errorf("failed to derive initial desired state: %w", valErr)
 	}
 

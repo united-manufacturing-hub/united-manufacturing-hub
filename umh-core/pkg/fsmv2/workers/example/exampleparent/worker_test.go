@@ -70,9 +70,10 @@ var _ = Describe("ParentWorker", func() {
 				Variables: fsmv2types.VariableBundle{},
 			}
 
-			desired, err := worker.DeriveDesiredState(spec)
+			desiredIface, err := worker.DeriveDesiredState(spec)
 
 			Expect(err).ToNot(HaveOccurred())
+			desired := desiredIface.(*fsmv2types.DesiredState)
 			Expect(desired.State).To(Equal("running"))
 			Expect(desired.ChildrenSpecs).To(BeNil())
 		})
@@ -83,9 +84,10 @@ var _ = Describe("ParentWorker", func() {
 				Variables: fsmv2types.VariableBundle{},
 			}
 
-			desired, err := worker.DeriveDesiredState(spec)
+			desiredIface, err := worker.DeriveDesiredState(spec)
 
 			Expect(err).ToNot(HaveOccurred())
+			desired := desiredIface.(*fsmv2types.DesiredState)
 			Expect(desired.State).To(Equal("running"))
 			Expect(desired.ChildrenSpecs).To(HaveLen(3))
 			Expect(desired.ChildrenSpecs[0].Name).To(Equal("child-0"))

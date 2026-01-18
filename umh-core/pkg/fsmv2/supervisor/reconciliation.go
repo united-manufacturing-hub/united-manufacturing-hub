@@ -532,11 +532,12 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 	cachedState := s.cachedDesiredState
 	s.mu.RUnlock()
 
-	var desired config.DesiredState
+	// desired is fsmv2.DesiredState interface - workers return their typed DesiredState
+	var desired fsmv2.DesiredState
 
 	if lastHash == currentHash && cachedState != nil {
 		// Cache hit - reuse previous result
-		desired = *cachedState
+		desired = cachedState
 
 		s.logTrace("derive_desired_state_cached",
 			"hash", currentHash[:8]+"...")
@@ -562,9 +563,10 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 
 		// Validate DesiredState.State is a valid lifecycle state ("stopped" or "running")
 		// This catches both developer mistakes (hardcoded wrong values) and user config mistakes
-		if valErr := config.ValidateDesiredState(desired.State); valErr != nil {
+		// Use GetState() method from fsmv2.DesiredState interface
+		if valErr := config.ValidateDesiredState(desired.GetState()); valErr != nil {
 			s.logger.Error("invalid desired state from DeriveDesiredState",
-				"state", desired.State,
+				"state", desired.GetState(),
 				"worker_id", firstWorkerID,
 				"error", valErr)
 			metrics.RecordTemplateRenderingDuration(s.workerType, "error", templateDuration)
@@ -577,7 +579,7 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 		// Update cache
 		s.mu.Lock()
 		s.lastUserSpecHash = currentHash
-		s.cachedDesiredState = &desired
+		s.cachedDesiredState = desired
 		s.mu.Unlock()
 
 		s.logTrace("derive_desired_state_computed",
@@ -625,11 +627,18 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 		s.logTrace("derived_desired_state_saved")
 	}
 
+	// Extract ChildrenSpecs via ChildSpecProvider interface
+	// The desired state may implement this interface if it has children
+	var childrenSpecs []config.ChildSpec
+	if provider, ok := desired.(config.ChildSpecProvider); ok {
+		childrenSpecs = provider.GetChildrenSpecs()
+	}
+
 	// Validate ChildrenSpecs before reconciliation
-	if len(desired.ChildrenSpecs) > 0 {
+	if len(childrenSpecs) > 0 {
 		registry := &factoryRegistryAdapter{}
 
-		if err := config.ValidateChildSpecs(desired.ChildrenSpecs, registry); err != nil {
+		if err := config.ValidateChildSpecs(childrenSpecs, registry); err != nil {
 			s.logger.Error("child spec validation failed",
 				"error", err.Error())
 
@@ -638,7 +647,7 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 
 		// Per-tick log moved to TRACE for scalability
 		s.logTrace("child_specs_validated",
-			"child_count", len(desired.ChildrenSpecs))
+			"child_count", len(childrenSpecs))
 	}
 
 	// 2. Tick worker FIRST to progress FSM state before creating children
@@ -651,7 +660,6 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 	// This tells reconcileChildren that no children are desired, triggering graceful
 	// shutdown via RequestShutdown() on each existing child. Without this, DeriveDesiredState
 	// would return childrenSpecs based on config, causing children to be re-created during shutdown.
-	childrenSpecs := desired.ChildrenSpecs
 	if desiredDoc[FieldShutdownRequested] == true {
 		childrenSpecs = nil
 	}

@@ -40,14 +40,15 @@ var _ = Describe("DegradedState", func() {
 
 	Describe("Next", func() {
 		Context("when sync recovers", func() {
-			var snap snapshot.CommunicatorSnapshot
+			var snap fsmv2.Snapshot
 
 			BeforeEach(func() {
-				snap = snapshot.CommunicatorSnapshot{
-					Desired: snapshot.CommunicatorDesiredState{},
+				snap = fsmv2.Snapshot{
+					Identity: fsmv2.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
 					Observed: snapshot.CommunicatorObservedState{
 						Authenticated: true,
 					},
+					Desired: &snapshot.CommunicatorDesiredState{},
 				}
 			})
 
@@ -68,14 +69,15 @@ var _ = Describe("DegradedState", func() {
 		})
 
 		Context("when sync is still unhealthy", func() {
-			var snap snapshot.CommunicatorSnapshot
+			var snap fsmv2.Snapshot
 
 			BeforeEach(func() {
-				snap = snapshot.CommunicatorSnapshot{
-					Desired: snapshot.CommunicatorDesiredState{},
+				snap = fsmv2.Snapshot{
+					Identity: fsmv2.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
 					Observed: snapshot.CommunicatorObservedState{
 						Authenticated: false,
 					},
+					Desired: &snapshot.CommunicatorDesiredState{},
 				}
 			})
 
@@ -116,12 +118,13 @@ var _ = Describe("DegradedState Backoff", func() {
 		// Create DegradedState with enteredAt = now
 		stateObj := state.NewDegradedState()
 
-		snap := snapshot.CommunicatorSnapshot{
-			Desired: snapshot.CommunicatorDesiredState{},
+		snap := fsmv2.Snapshot{
+			Identity: fsmv2.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
 			Observed: snapshot.CommunicatorObservedState{
 				Authenticated:     false,
 				ConsecutiveErrors: 5,
 			},
+			Desired: &snapshot.CommunicatorDesiredState{},
 		}
 
 		// Act: Call Next() immediately (within backoff)
@@ -138,12 +141,13 @@ var _ = Describe("DegradedState Backoff", func() {
 		// 5 errors = 32s backoff, so 40s should be past the backoff
 		stateObj := state.NewDegradedStateWithEnteredAt(time.Now().Add(-40 * time.Second))
 
-		snap := snapshot.CommunicatorSnapshot{
-			Desired: snapshot.CommunicatorDesiredState{},
+		snap := fsmv2.Snapshot{
+			Identity: fsmv2.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
 			Observed: snapshot.CommunicatorObservedState{
 				Authenticated:     false,
 				ConsecutiveErrors: 5,
 			},
+			Desired: &snapshot.CommunicatorDesiredState{},
 		}
 
 		// Act: Call Next()

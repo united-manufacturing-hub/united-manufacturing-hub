@@ -17,6 +17,7 @@ package action
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
 )
@@ -100,29 +101,75 @@ func (a *SyncAction) Execute(ctx context.Context, depsAny any) error {
 	// Cast dependencies from supervisor-injected parameter
 	deps := depsAny.(CommunicatorDependencies)
 
-	// 1. Pull messages from backend
+	// 1. Pull messages from backend with timing
+	pullStart := time.Now()
 	messages, err := deps.GetTransport().Pull(ctx, a.JWTToken)
+	pullLatency := time.Since(pullStart)
+
 	if err != nil {
 		// BUG #1 (ENG-3600): Old communicator reported OK before verifying success.
 		// We call RecordError() ONLY on actual failure, never before.
+		deps.RecordPullFailure(pullLatency)
 		deps.RecordError()
 
 		return fmt.Errorf("pull failed: %w", err)
 	}
 
+	deps.RecordPullSuccess(pullLatency, len(messages))
+
 	// 2. Store pulled messages (they will be available in next observed state)
 	deps.SetPulledMessages(messages)
 
-	// 3. Push batch to backend if we have messages
-	if len(a.MessagesToBePushed) > 0 {
-		if err := deps.GetTransport().Push(ctx, a.JWTToken, a.MessagesToBePushed); err != nil {
+	// 3. Write pulled messages to inbound channel (if available)
+	if inChan := deps.GetInboundChan(); inChan != nil {
+		for _, msg := range messages {
+			select {
+			case inChan <- msg:
+				// Message sent to router
+			case <-ctx.Done():
+				return ctx.Err()
+			default:
+				// Channel full, log warning but don't block
+				deps.GetLogger().Warnw("Inbound channel full, dropping message")
+			}
+		}
+	}
+
+	// 4. Read messages from outbound channel (if available)
+	var messagesToPush []*transport.UMHMessage
+
+	if outChan := deps.GetOutboundChan(); outChan != nil {
+		// Non-blocking drain of all available messages
+	drainLoop:
+		for {
+			select {
+			case msg := <-outChan:
+				messagesToPush = append(messagesToPush, msg)
+			default:
+				break drainLoop
+			}
+		}
+	}
+
+	// Fallback: use messages from action struct (for test scenarios)
+	if len(messagesToPush) == 0 && len(a.MessagesToBePushed) > 0 {
+		messagesToPush = a.MessagesToBePushed
+	}
+
+	// 5. Push batch to backend if we have messages (with timing)
+	if len(messagesToPush) > 0 {
+		pushStart := time.Now()
+		if err := deps.GetTransport().Push(ctx, a.JWTToken, messagesToPush); err != nil {
+			deps.RecordPushFailure(time.Since(pushStart))
 			deps.RecordError()
 
 			return fmt.Errorf("push failed: %w", err)
 		}
+
+		deps.RecordPushSuccess(time.Since(pushStart), len(messagesToPush))
 	}
 
-	// 4. Success - call RecordSuccess()
+	// 6. Success - call RecordSuccess()
 	// BUG #1 (ENG-3600): Counter only resets AFTER confirmed success,
 	// preventing oscillation 0→1→0→1.
 	deps.RecordSuccess()

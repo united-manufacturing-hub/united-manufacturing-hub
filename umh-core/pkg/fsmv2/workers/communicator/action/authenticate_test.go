@@ -46,6 +46,7 @@ var _ = Describe("AuthenticateAction", func() {
 			"https://relay.example.com",
 			"test-uuid",
 			"test-token",
+			10*time.Second,
 		)
 	})
 

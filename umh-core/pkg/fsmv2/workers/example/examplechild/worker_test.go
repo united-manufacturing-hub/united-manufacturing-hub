@@ -78,11 +78,12 @@ func TestChildWorker_DeriveDesiredState(t *testing.T) {
 		Variables: fsmv2types.VariableBundle{},
 	}
 
-	desired, err := worker.DeriveDesiredState(spec)
+	desiredIface, err := worker.DeriveDesiredState(spec)
 	if err != nil {
 		t.Fatalf("DeriveDesiredState() error = %v", err)
 	}
 
+	desired := desiredIface.(*fsmv2types.DesiredState)
 	if desired.State != fsmv2types.DesiredStateRunning {
 		t.Errorf("DeriveDesiredState() state = %v, want %s", desired.State, fsmv2types.DesiredStateRunning)
 	}

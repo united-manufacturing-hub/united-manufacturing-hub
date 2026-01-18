@@ -26,10 +26,11 @@
 //     WHY:  Expired tokens cause 401 errors and sync failures
 //     ENFORCED: SyncAction checks JWTExpiry before transport.Push/Pull
 //
-// C3: Transport lifecycle
-//     MUST: Transport must not be nil throughout worker lifetime
-//     WHY:  All actions depend on transport for HTTP communication
-//     ENFORCED: NewCommunicatorWorker validates transport parameter
+// C3: Transport lifecycle (UPDATED)
+//     MUST: Transport must be set before syncing operations
+//     WHY:  All sync actions depend on transport for HTTP communication
+//     ENFORCED: AuthenticateAction creates transport on first execution
+//     NOTE: Transport may be nil after worker construction, before first auth
 //
 // C4: Shutdown check priority
 //     MUST: Check shutdown signal before processing any action
@@ -111,11 +112,14 @@ import (
 	"time"
 
 	"go.uber.org/zap"
+	"gopkg.in/yaml.v3"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	fsmv2types "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/snapshot"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/state"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
@@ -241,6 +245,12 @@ func NewCommunicatorWorker(
 // Actions (AuthenticateAction, SyncAction) update the shared observedState,
 // and this method returns it to the supervisor.
 //
+// Metrics accumulation:
+//   - Reads previous metrics from the state store
+//   - Gets this tick's results from dependencies
+//   - Accumulates metrics (totals, counts, latency averages)
+//   - Clears per-tick results for next cycle
+//
 // This method never returns an error for the communicator worker.
 func (w *CommunicatorWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedState, error) {
 	deps := w.GetDependencies()
@@ -269,6 +279,61 @@ func (w *CommunicatorWorker) CollectObservedState(ctx context.Context) (fsmv2.Ob
 	// Read consecutive error count from dependencies
 	consecutiveErrors := deps.GetConsecutiveErrors()
 
+	// Get previous metrics from store (persisted across restarts)
+	var prevMetrics snapshot.SyncMetrics
+
+	stateReader := deps.GetStateReader()
+	if stateReader != nil {
+		var prev snapshot.CommunicatorObservedState
+		if err := stateReader.LoadObservedTyped(ctx, deps.GetWorkerType(), deps.GetWorkerID(), &prev); err == nil {
+			prevMetrics = prev.Metrics
+		}
+	}
+
+	// Get this tick's sync results from dependencies
+	pullResult, pushResult, tickCompleted := deps.GetLastSyncResults()
+
+	// Accumulate metrics from this tick
+	newMetrics := prevMetrics
+	if tickCompleted {
+		// Pull metrics
+		newMetrics.Pull.TotalOps++
+		if pullResult.Success {
+			newMetrics.Pull.SuccessfulOps++
+			newMetrics.Pull.MessagesPulled += pullResult.Count
+		} else {
+			newMetrics.Pull.FailedOps++
+		}
+
+		newMetrics.Pull.LastLatency = pullResult.Latency
+		// Update average latency (weighted running average)
+		if newMetrics.Pull.TotalOps > 0 {
+			totalLatency := newMetrics.Pull.AvgLatency*time.Duration(newMetrics.Pull.TotalOps-1) + pullResult.Latency
+			newMetrics.Pull.AvgLatency = totalLatency / time.Duration(newMetrics.Pull.TotalOps)
+		}
+
+		// Push metrics (only if push actually happened - check count > 0 or explicit tracking)
+		if pushResult.Count > 0 || !pushResult.Success {
+			newMetrics.Push.TotalOps++
+			if pushResult.Success {
+				newMetrics.Push.SuccessfulOps++
+				newMetrics.Push.MessagesPushed += pushResult.Count
+			} else {
+				newMetrics.Push.FailedOps++
+			}
+
+			newMetrics.Push.LastLatency = pushResult.Latency
+			// Update average latency
+			if newMetrics.Push.TotalOps > 0 {
+				totalLatency := newMetrics.Push.AvgLatency*time.Duration(newMetrics.Push.TotalOps-1) + pushResult.Latency
+				newMetrics.Push.AvgLatency = totalLatency / time.Duration(newMetrics.Push.TotalOps)
+			}
+		}
+
+		// Clear per-tick results for next cycle
+		deps.ClearSyncResults()
+	}
+
 	observed := snapshot.CommunicatorObservedState{
 		CollectedAt:       time.Now(),
 		JWTToken:          jwtToken,
@@ -276,6 +341,7 @@ func (w *CommunicatorWorker) CollectObservedState(ctx context.Context) (fsmv2.Ob
 		MessagesReceived:  messagesReceived,
 		Authenticated:     authenticated,
 		ConsecutiveErrors: consecutiveErrors,
+		Metrics:           newMetrics,
 	}
 
 	return observed, nil
@@ -283,19 +349,55 @@ func (w *CommunicatorWorker) CollectObservedState(ctx context.Context) (fsmv2.Ob
 
 // DeriveDesiredState determines what state the communicator should be in.
 //
-// For MVP, this always returns "not shutdown" - the communicator should
-// always be running and syncing. Future versions may derive desired state
-// from configuration (e.g., enable/disable sync).
+// This method parses the UserSpec.Config YAML into typed configuration
+// and returns a typed CommunicatorDesiredState with all configuration fields populated.
+// States access these typed fields directly (NO re-parsing of OriginalUserSpec).
 //
-// The spec parameter is reserved for future use and currently ignored.
+// The spec parameter should be a fsmv2types.UserSpec containing the communicator config.
 //
-// This method never returns an error for the communicator worker.
-func (w *CommunicatorWorker) DeriveDesiredState(spec interface{}) (fsmv2types.DesiredState, error) {
-	// For now, communicator uses simple desired state without children
-	// Future: may populate ChildrenSpecs for sub-components
-	return fsmv2types.DesiredState{
-		State:         "running",
-		ChildrenSpecs: nil,
+// Returns an error if config parsing fails.
+func (w *CommunicatorWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
+	if spec == nil {
+		return &snapshot.CommunicatorDesiredState{
+			BaseDesiredState: fsmv2types.BaseDesiredState{
+				State: "running",
+			},
+		}, nil
+	}
+
+	// Cast spec to UserSpec to access Config and Variables
+	userSpec, ok := spec.(fsmv2types.UserSpec)
+	if !ok {
+		return nil, fmt.Errorf("invalid spec type: expected UserSpec, got %T", spec)
+	}
+
+	// Render the config template using the variables
+	renderedConfig, err := fsmv2types.RenderConfigTemplate(userSpec.Config, userSpec.Variables)
+	if err != nil {
+		return nil, fmt.Errorf("template rendering failed: %w", err)
+	}
+
+	// Parse the rendered config into CommunicatorUserSpec
+	var commSpec CommunicatorUserSpec
+	if err := yaml.Unmarshal([]byte(renderedConfig), &commSpec); err != nil {
+		return nil, fmt.Errorf("config parse failed: %w", err)
+	}
+
+	// Set default timeout if not specified
+	if commSpec.Timeout == 0 {
+		commSpec.Timeout = 10 * time.Second
+	}
+
+	// Return typed CommunicatorDesiredState - ALL fields preserved through marshal/unmarshal!
+	// States access typed fields directly (NO re-parsing of OriginalUserSpec)
+	return &snapshot.CommunicatorDesiredState{
+		BaseDesiredState: fsmv2types.BaseDesiredState{
+			State: commSpec.GetState(),
+		},
+		RelayURL:     commSpec.RelayURL,
+		InstanceUUID: commSpec.InstanceUUID,
+		AuthToken:    commSpec.AuthToken,
+		Timeout:      commSpec.Timeout,
 	}, nil
 }
 
@@ -303,6 +405,30 @@ func (w *CommunicatorWorker) DeriveDesiredState(spec interface{}) (fsmv2types.De
 //
 // The communicator always starts in StoppedState. The FSM will transition
 // through Authenticating → Authenticated → Syncing based on observed state.
-func (w *CommunicatorWorker) GetInitialState() state.BaseCommunicatorState {
+func (w *CommunicatorWorker) GetInitialState() fsmv2.State[any, any] {
 	return &state.StoppedState{}
+}
+
+func init() {
+	// Register both worker and supervisor factories atomically.
+	if err := factory.RegisterWorkerType[snapshot.CommunicatorObservedState, *snapshot.CommunicatorDesiredState](
+		func(id fsmv2.Identity, logger *zap.SugaredLogger, stateReader fsmv2.StateReader) fsmv2.Worker {
+			// Create dependencies WITHOUT transport (created lazily by AuthenticateAction)
+			deps := NewCommunicatorDependencies(nil, logger, stateReader, id)
+			worker, err := NewCommunicatorWorker(id.ID, id.Name, nil, logger, stateReader)
+			if err != nil {
+				panic(fmt.Sprintf("failed to create communicator worker: %v", err))
+			}
+			// Replace dependencies with the ones we created
+			worker.BaseWorker = helpers.NewBaseWorker(deps)
+
+			return worker
+		},
+		func(cfg interface{}) interface{} {
+			return supervisor.NewSupervisor[snapshot.CommunicatorObservedState, *snapshot.CommunicatorDesiredState](
+				cfg.(supervisor.Config))
+		},
+	); err != nil {
+		panic(fmt.Sprintf("failed to register communicator worker: %v", err))
+	}
 }

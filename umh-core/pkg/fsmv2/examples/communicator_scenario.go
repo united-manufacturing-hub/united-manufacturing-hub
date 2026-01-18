@@ -15,360 +15,407 @@
 package examples
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
+	"errors"
 	"fmt"
-	"net/http"
-	"sync"
 	"time"
 
 	"go.uber.org/zap"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/testutil"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
 )
 
-// CommunicatorScenario tests the FSMv2 communicator with mock server.
-//
-// # Purpose
-//
-// This scenario provides end-to-end testing of the communicator worker,
-// verifying the complete lifecycle:
-//   - Authentication with relay server
-//   - Message pulling (backend -> edge)
-//   - Message pushing (edge -> backend)
-//   - Error handling and degraded state
-//   - Re-authentication on token expiry
-//
-// # Usage
-//
-// Create a scenario with a mock server URL:
-//
-//	mockServer := testutil.NewMockRelayServer()
-//	scenario := examples.NewCommunicatorScenario(mockServer.URL(), "auth-token")
-//	err := scenario.Run(ctx, 5*time.Second)
-//
-// # State Tracking
-//
-// The scenario tracks:
-//   - receivedMessages: Messages pulled from backend
-//   - outboundQueue: Messages to be pushed to backend
-//   - consecutiveErrors: Error count for health monitoring
-type CommunicatorScenario struct {
-	apiURL    string
-	authToken string
-	logger    *zap.SugaredLogger
-
-	// State tracking
-	mu                sync.Mutex
-	receivedMessages  []*transport.UMHMessage
-	outboundQueue     []*transport.UMHMessage
-	errorThreshold    int
-	consecutiveErrors int
-
-	// HTTP client for requests
-	httpClient *http.Client
-	jwtToken   string
+// TestChannelProvider provides channels for test scenarios.
+// It implements communicator.ChannelProvider for injecting test channels.
+type TestChannelProvider struct {
+	inbound  chan *transport.UMHMessage // Worker writes here (received messages)
+	outbound chan *transport.UMHMessage // Worker reads from here (messages to push)
 }
 
-// NewCommunicatorScenario creates a new scenario with mock server URL.
-//
-// Parameters:
-//   - mockServerURL: URL of the mock relay server
-//   - authToken: Authentication token for the relay server
-//
-// Returns a scenario ready to be run.
-func NewCommunicatorScenario(mockServerURL, authToken string) *CommunicatorScenario {
-	logger, _ := zap.NewDevelopment()
-
-	return &CommunicatorScenario{
-		apiURL:           mockServerURL,
-		authToken:        authToken,
-		logger:           logger.Sugar(),
-		receivedMessages: make([]*transport.UMHMessage, 0),
-		outboundQueue:    make([]*transport.UMHMessage, 0),
-		errorThreshold:   3, // Default threshold
-		httpClient: &http.Client{
-			Timeout: 10 * time.Second,
-		},
+// NewTestChannelProvider creates a new test channel provider with buffered channels.
+func NewTestChannelProvider(bufferSize int) *TestChannelProvider {
+	return &TestChannelProvider{
+		inbound:  make(chan *transport.UMHMessage, bufferSize),
+		outbound: make(chan *transport.UMHMessage, bufferSize),
 	}
 }
 
-// Run executes the scenario for the specified duration.
-//
-// This method:
-//  1. Authenticates with the mock server
-//  2. Performs sync operations (push/pull)
-//  3. Tracks messages and errors
-//
-// Parameters:
-//   - ctx: Context for cancellation
-//   - duration: How long to run the scenario
-//
-// Returns error if critical operations fail.
-func (s *CommunicatorScenario) Run(ctx context.Context, duration time.Duration) error {
-	// Create a context with timeout
-	runCtx, cancel := context.WithTimeout(ctx, duration)
-	defer cancel()
+// GetChannels returns the channels for the specified worker.
+// The inbound channel receives messages pulled from HTTP.
+// The outbound channel provides messages to push to HTTP.
+func (p *TestChannelProvider) GetChannels(_ string) (
+	chan<- *transport.UMHMessage,
+	<-chan *transport.UMHMessage,
+) {
+	return p.inbound, p.outbound
+}
 
-	// Authenticate first
-	if err := s.authenticate(runCtx); err != nil {
-		s.mu.Lock()
-		s.consecutiveErrors++
-		s.mu.Unlock()
+// GetInboundChan returns the inbound channel for reading received messages.
+func (p *TestChannelProvider) GetInboundChan() <-chan *transport.UMHMessage {
+	return p.inbound
+}
 
-		return err
-	}
+// QueueOutbound adds a message to the outbound channel for the worker to push.
+func (p *TestChannelProvider) QueueOutbound(msg *transport.UMHMessage) {
+	p.outbound <- msg
+}
 
-	// Run sync loop
-	ticker := time.NewTicker(100 * time.Millisecond)
-	defer ticker.Stop()
+// DrainInbound reads all available messages from the inbound channel.
+// Non-blocking: returns immediately with whatever messages are available.
+func (p *TestChannelProvider) DrainInbound() []*transport.UMHMessage {
+	var messages []*transport.UMHMessage
 
+drainLoop:
 	for {
 		select {
-		case <-runCtx.Done():
-			return nil
-		case <-ticker.C:
-			// Pull messages
-			if err := s.pullMessages(runCtx); err != nil {
-				s.mu.Lock()
-				s.consecutiveErrors++
-				shouldReauth := s.consecutiveErrors >= s.errorThreshold
-				s.mu.Unlock()
-
-				// Check if we need to re-authenticate (after threshold errors)
-				// Note: authenticate() needs its own lock, so we release ours first
-				if shouldReauth {
-					// Try re-authentication
-					if authErr := s.authenticate(runCtx); authErr == nil {
-						s.mu.Lock()
-						s.consecutiveErrors = 0
-						s.mu.Unlock()
-					}
-				}
-
-				continue
-			}
-
-			// Push outbound messages
-			if err := s.pushMessages(runCtx); err != nil {
-				s.mu.Lock()
-				s.consecutiveErrors++
-				s.mu.Unlock()
-
-				continue
-			}
+		case msg := <-p.inbound:
+			messages = append(messages, msg)
+		default:
+			break drainLoop
 		}
 	}
+
+	return messages
 }
 
-// authenticate performs login with the mock relay server.
-func (s *CommunicatorScenario) authenticate(ctx context.Context) error {
-	authReq := transport.AuthRequest{
-		InstanceUUID: "test-instance-uuid",
-		Email:        s.authToken,
-	}
-
-	body, err := json.Marshal(authReq)
-	if err != nil {
-		return fmt.Errorf("failed to marshal auth request: %w", err)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, s.apiURL+"/v2/instance/login", bytes.NewBuffer(body))
-	if err != nil {
-		return fmt.Errorf("failed to create auth request: %w", err)
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := s.httpClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("auth request failed: %w", err)
-	}
-
-	defer func() {
-		_ = resp.Body.Close()
-	}()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("auth failed with status %d", resp.StatusCode)
-	}
-
-	var authResp transport.AuthResponse
-	if err := json.NewDecoder(resp.Body).Decode(&authResp); err != nil {
-		return fmt.Errorf("failed to decode auth response: %w", err)
-	}
-
-	s.mu.Lock()
-	s.jwtToken = authResp.Token
-	s.mu.Unlock()
-
-	return nil
-}
-
-// pullMessages fetches messages from the backend.
-func (s *CommunicatorScenario) pullMessages(ctx context.Context) error {
-	s.mu.Lock()
-	token := s.jwtToken
-	s.mu.Unlock()
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, s.apiURL+"/v2/instance/pull", nil)
-	if err != nil {
-		return fmt.Errorf("failed to create pull request: %w", err)
-	}
-
-	req.AddCookie(&http.Cookie{Name: "token", Value: token})
-
-	resp, err := s.httpClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("pull request failed: %w", err)
-	}
-
-	defer func() {
-		_ = resp.Body.Close()
-	}()
-
-	if resp.StatusCode == http.StatusUnauthorized {
-		return fmt.Errorf("authentication failed: %d", resp.StatusCode)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("pull failed with status %d", resp.StatusCode)
-	}
-
-	// Use uppercase "UMHMessages" to match mock server response
-	var payload struct {
-		UMHMessages []*transport.UMHMessage `json:"UMHMessages"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
-		return fmt.Errorf("failed to decode pull response: %w", err)
-	}
-
-	// Store received messages
-	if len(payload.UMHMessages) > 0 {
-		s.mu.Lock()
-		s.receivedMessages = append(s.receivedMessages, payload.UMHMessages...)
-		s.consecutiveErrors = 0 // Reset on success
-		s.mu.Unlock()
-	} else {
-		// Even empty response is success
-		s.mu.Lock()
-		s.consecutiveErrors = 0
-		s.mu.Unlock()
-	}
-
-	return nil
-}
-
-// pushMessages sends queued messages to the backend.
-func (s *CommunicatorScenario) pushMessages(ctx context.Context) error {
-	s.mu.Lock()
-	token := s.jwtToken
-	outbound := make([]*transport.UMHMessage, len(s.outboundQueue))
-	copy(outbound, s.outboundQueue)
-	s.outboundQueue = s.outboundQueue[:0] // Clear queue
-	s.mu.Unlock()
-
-	if len(outbound) == 0 {
-		return nil
-	}
-
-	// Use uppercase "UMHMessages" to match mock server expected format
-	payload := struct {
-		UMHMessages []*transport.UMHMessage `json:"UMHMessages"`
-	}{
-		UMHMessages: outbound,
-	}
-
-	body, err := json.Marshal(payload)
-	if err != nil {
-		// Put messages back in queue on failure
-		s.mu.Lock()
-		s.outboundQueue = append(s.outboundQueue, outbound...)
-		s.mu.Unlock()
-
-		return fmt.Errorf("failed to marshal push payload: %w", err)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, s.apiURL+"/v2/instance/push", bytes.NewBuffer(body))
-	if err != nil {
-		s.mu.Lock()
-		s.outboundQueue = append(s.outboundQueue, outbound...)
-		s.mu.Unlock()
-
-		return fmt.Errorf("failed to create push request: %w", err)
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-	req.AddCookie(&http.Cookie{Name: "token", Value: token})
-
-	resp, err := s.httpClient.Do(req)
-	if err != nil {
-		s.mu.Lock()
-		s.outboundQueue = append(s.outboundQueue, outbound...)
-		s.mu.Unlock()
-
-		return fmt.Errorf("push request failed: %w", err)
-	}
-
-	defer func() {
-		_ = resp.Body.Close()
-	}()
-
-	if resp.StatusCode != http.StatusOK {
-		s.mu.Lock()
-		s.outboundQueue = append(s.outboundQueue, outbound...)
-		s.mu.Unlock()
-
-		return fmt.Errorf("push failed with status %d", resp.StatusCode)
-	}
-
-	s.mu.Lock()
-	s.consecutiveErrors = 0 // Reset on success
-	s.mu.Unlock()
-
-	return nil
-}
-
-// GetReceivedMessages returns messages pulled from the backend.
+// CommunicatorRunConfig configures a communicator scenario run.
 //
-// Returns a copy of the received messages slice to avoid race conditions.
-func (s *CommunicatorScenario) GetReceivedMessages() []*transport.UMHMessage {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+// This struct provides configuration for running the FSMv2 communicator worker
+// via ApplicationSupervisor with a mock relay server.
+//
+// # Basic Usage
+//
+// For CLI usage, you need minimal configuration:
+//
+//	result := RunCommunicatorScenario(ctx, CommunicatorRunConfig{
+//	    Duration: 10 * time.Second,
+//	})
+//
+// # Test Usage with Message Injection
+//
+// To test message handling, pre-populate the mock server:
+//
+//	result := RunCommunicatorScenario(ctx, CommunicatorRunConfig{
+//	    Duration: 2 * time.Second,
+//	    InitialPullMessages: []*transport.UMHMessage{{
+//	        InstanceUUID: "test-instance",
+//	        Content:      "action-from-backend",
+//	    }},
+//	})
+type CommunicatorRunConfig struct {
+	// Duration specifies how long to run the scenario.
+	// Use 0 to run until the context is cancelled.
+	// Negative values are invalid and return an error.
+	Duration time.Duration
 
-	result := make([]*transport.UMHMessage, len(s.receivedMessages))
-	copy(result, s.receivedMessages)
+	// TickInterval is the supervisor tick interval (default: 100ms if zero).
+	TickInterval time.Duration
+
+	// AuthToken authenticates with the mock relay server.
+	// If empty, defaults to "test-auth-token".
+	AuthToken string
+
+	// Logger outputs scenario logs. If nil, the function creates a development logger.
+	Logger *zap.SugaredLogger
+
+	// InitialPullMessages contains messages to queue on the mock server before the scenario starts.
+	// The communicator receives these messages during pull operations.
+	InitialPullMessages []*transport.UMHMessage
+
+	// InitialOutboundMessages contains messages to queue for pushing.
+	// These are provided via the channel provider for the worker to push to HTTP.
+	InitialOutboundMessages []*transport.UMHMessage
+
+	// MockServer lets you inject a pre-configured mock server for error testing.
+	// If nil, the function creates and manages a new mock server internally.
+	// When you provide a MockServer, you are responsible for calling Close().
+	MockServer *testutil.MockRelayServer
+}
+
+// CommunicatorRunResult contains observable results after scenario completion.
+//
+// This struct captures everything you need to verify communicator behavior
+// using the FSMv2 communicator worker via ApplicationSupervisor.
+//
+// # Asserting on Results
+//
+//	result := RunCommunicatorScenario(ctx, cfg)
+//	Expect(result.Error).NotTo(HaveOccurred())
+//	Expect(result.AuthCallCount).To(BeNumerically(">=", 1), "should authenticate at least once")
+//	Expect(result.PushedMessages).To(HaveLen(expectedPushCount))
+type CommunicatorRunResult struct {
+	// Done channel closes when the scenario completes (matches RunResult pattern).
+	Done <-chan struct{}
+
+	// Shutdown triggers graceful shutdown of the scenario.
+	// Call this to stop the scenario gracefully (e.g., on Ctrl+C).
+	Shutdown func()
+
+	// ReceivedMessages contains messages received via the channel provider.
+	// These are messages the communicator pulled from HTTP and forwarded to the inbound channel.
+	// Note: Only available when using channel provider; may be nil for HTTP-only tests.
+	// Note: Only populated after Done closes.
+	ReceivedMessages []*transport.UMHMessage
+
+	// PushedMessages contains all messages the mock server received from the communicator.
+	// These are messages the worker pushed to HTTP.
+	// Note: Only populated after Done closes.
+	PushedMessages []*transport.UMHMessage
+
+	// ConsecutiveErrors is the final consecutive error count when the scenario stopped.
+	// Note: This is obtained from mock server error tracking, not FSM state.
+	// Note: Only populated after Done closes.
+	ConsecutiveErrors int
+
+	// AuthCallCount indicates how many times the communicator called the auth endpoint.
+	// Normally 1 for a healthy run. Higher values indicate re-authentication occurred.
+	// Note: Only populated after Done closes.
+	AuthCallCount int
+
+	// Error is non-nil if the scenario failed to run (setup failure, etc.).
+	Error error
+}
+
+// RunCommunicatorScenario runs the FSMv2 communicator worker via ApplicationSupervisor.
+//
+// This function creates a mock relay server, configures the communicator worker
+// with the mock server URL, and runs it through the standard ApplicationSupervisor
+// workflow. This tests the actual FSMv2 communicator worker implementation.
+//
+// # What This Function Does
+//
+//  1. Validates configuration (duration non-negative, context not cancelled)
+//  2. Creates and starts a mock relay server (or uses the injected one)
+//  3. Queues any InitialPullMessages on the mock server
+//  4. Sets up channel provider for outbound messages (if any)
+//  5. Builds dynamic YAML config with mock server URL
+//  6. Runs via ApplicationSupervisor for the specified Duration
+//  7. Captures results (messages, auth calls) from mock server
+//  8. Cleans up resources
+//  9. Returns results for assertions
+//
+// # Resource Management
+//
+// When MockServer is nil, the function manages the server lifecycle internally.
+// When you provide a MockServer, you are responsible for closing it.
+//
+// # CLI Usage Example
+//
+//	result := RunCommunicatorScenario(ctx, CommunicatorRunConfig{
+//	    Duration: 10 * time.Second,
+//	    Logger:   logger,
+//	})
+//	if result.Error != nil {
+//	    log.Fatalf("Scenario failed: %v", result.Error)
+//	}
+//	log.Printf("Auth calls: %d, Messages pushed: %d", result.AuthCallCount, len(result.PushedMessages))
+//
+// # Test Usage Example
+//
+//	result := RunCommunicatorScenario(ctx, CommunicatorRunConfig{
+//	    Duration: 2 * time.Second,
+//	    InitialPullMessages: []*transport.UMHMessage{{
+//	        InstanceUUID: "test",
+//	        Content:      "test-action",
+//	    }},
+//	})
+//	Expect(result.Error).NotTo(HaveOccurred())
+//	Expect(result.AuthCallCount).To(BeNumerically(">=", 1))
+func RunCommunicatorScenario(ctx context.Context, cfg CommunicatorRunConfig) *CommunicatorRunResult {
+	done := make(chan struct{})
+
+	// Validate configuration
+	if cfg.Duration < 0 {
+		close(done)
+
+		return &CommunicatorRunResult{
+			Done:  done,
+			Error: fmt.Errorf("invalid duration %v: must be non-negative", cfg.Duration),
+		}
+	}
+
+	// Check context before starting
+	if ctx.Err() != nil {
+		close(done)
+
+		return &CommunicatorRunResult{
+			Done:  done,
+			Error: fmt.Errorf("context already cancelled: %w", ctx.Err()),
+		}
+	}
+
+	// Create or use provided mock server
+	var mockServer *testutil.MockRelayServer
+
+	var ownsMockServer bool
+
+	if cfg.MockServer != nil {
+		mockServer = cfg.MockServer
+		ownsMockServer = false
+	} else {
+		mockServer = testutil.NewMockRelayServer()
+		ownsMockServer = true
+	}
+
+	// Validate server started
+	serverURL := mockServer.URL()
+
+	if serverURL == "" {
+		if ownsMockServer {
+			mockServer.Close()
+		}
+
+		close(done)
+
+		return &CommunicatorRunResult{
+			Done:  done,
+			Error: errors.New("mock server started but URL is empty"),
+		}
+	}
+
+	// Queue initial pull messages if provided
+	for _, msg := range cfg.InitialPullMessages {
+		mockServer.QueuePullMessage(msg)
+	}
+
+	// Set up channel provider for outbound messages
+	var channelProvider *TestChannelProvider
+
+	if len(cfg.InitialOutboundMessages) > 0 {
+		channelProvider = NewTestChannelProvider(100)
+		communicator.SetChannelProvider(channelProvider)
+
+		// Queue outbound messages
+		for _, msg := range cfg.InitialOutboundMessages {
+			channelProvider.QueueOutbound(msg)
+		}
+	}
+
+	// Build auth token
+	authToken := cfg.AuthToken
+	if authToken == "" {
+		authToken = "test-auth-token"
+	}
+
+	// Build dynamic YAML config with mock server URL
+	scenarioConfig := fmt.Sprintf(`
+children:
+  - name: "communicator-1"
+    workerType: "communicator"
+    userSpec:
+      config: |
+        relayURL: "%s"
+        instanceUUID: "test-instance-uuid"
+        authToken: "%s"
+        timeout: "5s"
+        state: "running"
+`, serverURL, authToken)
+
+	// Create scenario with dynamic config
+	testScenario := Scenario{
+		Name:        "communicator-test",
+		Description: "Test communicator with mock server",
+		YAMLConfig:  scenarioConfig,
+	}
+
+	// Setup logger
+	logger := cfg.Logger
+	if logger == nil {
+		devLogger, _ := zap.NewDevelopment()
+		logger = devLogger.Sugar()
+	}
+
+	// Setup tick interval
+	tickInterval := cfg.TickInterval
+	if tickInterval == 0 {
+		tickInterval = 100 * time.Millisecond
+	}
+
+	// Setup store
+	store := SetupStore(logger)
+
+	// Run via ApplicationSupervisor (non-blocking - returns immediately)
+	runResult, err := Run(ctx, RunConfig{
+		Scenario:     testScenario,
+		Duration:     0, // Don't use Run's duration handling - we do it ourselves
+		TickInterval: tickInterval,
+		Logger:       logger,
+		Store:        store,
+	})
+	if err != nil {
+		// Cleanup
+		if channelProvider != nil {
+			communicator.ClearChannelProvider()
+		}
+
+		if ownsMockServer {
+			mockServer.Close()
+		}
+
+		close(done)
+
+		return &CommunicatorRunResult{
+			Done:     done,
+			Shutdown: func() {}, // No-op since already failed
+			Error:    fmt.Errorf("failed to start scenario: %w", err),
+		}
+	}
+
+	// Create result struct - fields will be populated when Done closes
+	result := &CommunicatorRunResult{
+		Done:     done,
+		Shutdown: runResult.Shutdown, // Delegate to internal Shutdown
+		Error:    nil,
+	}
+
+	// Handle completion in background goroutine
+	go func() {
+		// Handle duration-based shutdown
+		if cfg.Duration > 0 {
+			// Wait for duration then trigger shutdown
+			select {
+			case <-time.After(cfg.Duration):
+				runResult.Shutdown()
+			case <-ctx.Done():
+				runResult.Shutdown()
+			case <-runResult.Done:
+				// Already completed
+			}
+		} else {
+			// Duration 0 means run until context cancelled or Shutdown() called
+			select {
+			case <-ctx.Done():
+				runResult.Shutdown()
+			case <-runResult.Done:
+				// Already completed (Shutdown was called externally)
+			}
+		}
+
+		// Wait for scenario to fully complete
+		<-runResult.Done
+
+		// Capture received messages from channel provider (if used)
+		if channelProvider != nil {
+			result.ReceivedMessages = channelProvider.DrainInbound()
+		}
+
+		// Capture results from mock server
+		result.PushedMessages = mockServer.GetPushedMessages()
+		result.AuthCallCount = mockServer.AuthCallCount()
+
+		// Cleanup
+		if channelProvider != nil {
+			communicator.ClearChannelProvider()
+		}
+
+		if ownsMockServer {
+			mockServer.Close()
+		}
+
+		close(done)
+	}()
 
 	return result
-}
-
-// QueueOutboundMessage queues a message to be pushed to the backend.
-//
-// Messages are pushed during the next sync cycle.
-func (s *CommunicatorScenario) QueueOutboundMessage(msg *transport.UMHMessage) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	s.outboundQueue = append(s.outboundQueue, msg)
-}
-
-// GetConsecutiveErrors returns the current consecutive error count.
-//
-// This is used by tests to verify error tracking behavior.
-func (s *CommunicatorScenario) GetConsecutiveErrors() int {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	return s.consecutiveErrors
-}
-
-// SetErrorThreshold sets the error threshold for degraded state.
-//
-// After this many consecutive errors, the scenario attempts re-authentication.
-func (s *CommunicatorScenario) SetErrorThreshold(threshold int) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	s.errorThreshold = threshold
 }

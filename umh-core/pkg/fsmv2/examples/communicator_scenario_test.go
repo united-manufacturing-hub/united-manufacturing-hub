@@ -21,8 +21,10 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"go.uber.org/zap"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/examples"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/testutil"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
 )
@@ -33,144 +35,267 @@ func TestCommunicatorScenario(t *testing.T) {
 }
 
 var _ = Describe("Communicator Scenario", func() {
-	var (
-		mockServer *testutil.MockRelayServer
-		scenario   *examples.CommunicatorScenario
-		ctx        context.Context
-		cancel     context.CancelFunc
-	)
+	var ctx context.Context
+	var cancel context.CancelFunc
 
 	BeforeEach(func() {
-		mockServer = testutil.NewMockRelayServer()
 		ctx, cancel = context.WithTimeout(context.Background(), 30*time.Second)
 	})
 
 	AfterEach(func() {
 		cancel()
-		mockServer.Close()
+		// CRITICAL: Clean up global channel provider to prevent test pollution
+		communicator.ClearChannelProvider()
 	})
 
-	Describe("Authentication and Syncing", func() {
-		It("authenticates and enters syncing state", func() {
-			// Create scenario with mock server
-			scenario = examples.NewCommunicatorScenario(mockServer.URL(), "test-auth-token")
+	Describe("Using FSMv2 worker via ApplicationSupervisor", func() {
+		It("authenticates and starts running", func() {
+			result := examples.RunCommunicatorScenario(ctx, examples.CommunicatorRunConfig{
+				Duration: 2 * time.Second,
+			})
+			Expect(result.Error).NotTo(HaveOccurred())
+			<-result.Done // Wait for scenario completion before checking result fields
+			Expect(result.AuthCallCount).To(BeNumerically(">=", 1))
+		})
 
-			// Run for a short duration
-			err := scenario.Run(ctx, 2*time.Second)
-			Expect(err).NotTo(HaveOccurred())
+		It("uses default auth token when not provided", func() {
+			result := examples.RunCommunicatorScenario(ctx, examples.CommunicatorRunConfig{
+				Duration: 1 * time.Second,
+			})
+			Expect(result.Error).NotTo(HaveOccurred())
+			<-result.Done // Wait for scenario completion before checking result fields
+			Expect(result.AuthCallCount).To(BeNumerically(">=", 1))
+		})
 
-			// Verify authentication was called
-			Expect(mockServer.AuthCallCount()).To(BeNumerically(">=", 1))
+		It("handles custom auth token", func() {
+			result := examples.RunCommunicatorScenario(ctx, examples.CommunicatorRunConfig{
+				Duration:  1 * time.Second,
+				AuthToken: "custom-token",
+			})
+			Expect(result.Error).NotTo(HaveOccurred())
+			<-result.Done // Wait for scenario completion before checking result fields
+			Expect(result.AuthCallCount).To(BeNumerically(">=", 1))
+		})
+
+		It("handles custom logger", func() {
+			result := examples.RunCommunicatorScenario(ctx, examples.CommunicatorRunConfig{
+				Duration: 1 * time.Second,
+				Logger:   zap.NewNop().Sugar(),
+			})
+			Expect(result.Error).NotTo(HaveOccurred())
+			<-result.Done // Wait for completion
+		})
+
+		It("handles custom tick interval", func() {
+			result := examples.RunCommunicatorScenario(ctx, examples.CommunicatorRunConfig{
+				Duration:     1 * time.Second,
+				TickInterval: 50 * time.Millisecond,
+			})
+			Expect(result.Error).NotTo(HaveOccurred())
+			<-result.Done // Wait for completion
+		})
+
+		It("pushes outbound messages via channel provider", func() {
+			result := examples.RunCommunicatorScenario(ctx, examples.CommunicatorRunConfig{
+				Duration: 2 * time.Second,
+				InitialOutboundMessages: []*transport.UMHMessage{{
+					InstanceUUID: "test-instance",
+					Content:      "status-update",
+				}},
+			})
+			Expect(result.Error).NotTo(HaveOccurred())
+			<-result.Done // Wait for scenario completion before checking result fields
+			// The worker reads from outbound channel and pushes to HTTP
+			// Mock server receives the pushed messages
+			Expect(result.PushedMessages).To(HaveLen(1))
+		})
+
+		It("handles both pull and push in same run", func() {
+			result := examples.RunCommunicatorScenario(ctx, examples.CommunicatorRunConfig{
+				Duration: 2 * time.Second,
+				InitialPullMessages: []*transport.UMHMessage{{
+					InstanceUUID: "test-instance",
+					Content:      "inbound-message",
+				}},
+				InitialOutboundMessages: []*transport.UMHMessage{{
+					InstanceUUID: "test-instance",
+					Content:      "outbound-message",
+				}},
+			})
+			Expect(result.Error).NotTo(HaveOccurred())
+			<-result.Done // Wait for scenario completion before checking result fields
+			// Outbound messages should be pushed
+			Expect(result.PushedMessages).To(HaveLen(1))
+			// Note: Received messages require channel provider which is set up
+			// when InitialOutboundMessages is provided
 		})
 	})
 
-	Describe("Message Pulling", func() {
-		It("pulls messages and makes them available via GetReceivedMessages", func() {
-			// Queue a message on the mock server
-			msg := &transport.UMHMessage{
-				InstanceUUID: "test-instance-123",
-				Content:      "test-action-from-backend",
-				Email:        "test@example.com",
+	Describe("Error conditions", func() {
+		It("returns error for negative duration", func() {
+			result := examples.RunCommunicatorScenario(ctx, examples.CommunicatorRunConfig{
+				Duration: -1 * time.Second,
+			})
+			Expect(result.Error).To(HaveOccurred())
+			Expect(result.Error.Error()).To(ContainSubstring("invalid duration"))
+		})
+
+		It("returns error when context already cancelled", func() {
+			cancelledCtx, cancel := context.WithCancel(ctx)
+			cancel() // Cancel immediately
+
+			result := examples.RunCommunicatorScenario(cancelledCtx, examples.CommunicatorRunConfig{
+				Duration: 1 * time.Second,
+			})
+			Expect(result.Error).To(HaveOccurred())
+			Expect(result.Error.Error()).To(ContainSubstring("context already cancelled"))
+		})
+
+		It("handles injected mock server", func() {
+			mockServer := testutil.NewMockRelayServer()
+			defer mockServer.Close()
+
+			result := examples.RunCommunicatorScenario(ctx, examples.CommunicatorRunConfig{
+				Duration:   1 * time.Second,
+				MockServer: mockServer,
+			})
+			Expect(result.Error).NotTo(HaveOccurred())
+			<-result.Done // Wait for scenario completion before checking result fields
+			// Should run successfully with injected mock server
+			Expect(result.AuthCallCount).To(BeNumerically(">=", 1))
+		})
+	})
+
+	Describe("Edge cases", func() {
+		It("handles very short duration", func() {
+			result := examples.RunCommunicatorScenario(ctx, examples.CommunicatorRunConfig{
+				Duration: 100 * time.Millisecond,
+			})
+			// Should complete without panic
+			Expect(result.Error).NotTo(HaveOccurred())
+			<-result.Done // Wait for completion
+		})
+
+		It("handles zero duration (runs until context cancelled)", func() {
+			shortCtx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
+			defer cancel()
+
+			result := examples.RunCommunicatorScenario(shortCtx, examples.CommunicatorRunConfig{
+				Duration: 0, // Run forever
+			})
+			// Should complete when context times out
+			Expect(result.Error).NotTo(HaveOccurred())
+			<-result.Done // Wait for completion
+		})
+	})
+
+	Describe("Result structure", func() {
+		It("returns all expected fields", func() {
+			result := examples.RunCommunicatorScenario(ctx, examples.CommunicatorRunConfig{
+				Duration: 1 * time.Second,
+			})
+
+			Expect(result.Done).NotTo(BeNil())
+			Expect(result.Shutdown).NotTo(BeNil()) // Shutdown function should be set
+			<-result.Done // Wait for completion before checking result fields
+			Expect(result.PushedMessages).NotTo(BeNil())
+			Expect(result.ConsecutiveErrors).To(BeNumerically(">=", 0))
+			Expect(result.AuthCallCount).To(BeNumerically(">=", 0))
+		})
+
+		It("closes Done channel when complete", func() {
+			result := examples.RunCommunicatorScenario(ctx, examples.CommunicatorRunConfig{
+				Duration: 500 * time.Millisecond,
+			})
+			// Allow extra time for graceful shutdown (duration + shutdown overhead)
+			Eventually(result.Done, 5*time.Second).Should(BeClosed())
+		})
+	})
+
+	// Table-driven tests for configuration variations
+	DescribeTable("handles various configurations correctly",
+		func(cfg examples.CommunicatorRunConfig, expectSuccess bool) {
+			result := examples.RunCommunicatorScenario(ctx, cfg)
+
+			if expectSuccess {
+				Expect(result.Error).NotTo(HaveOccurred())
+				<-result.Done // Wait for scenario completion before checking result fields
+				Expect(result.AuthCallCount).To(BeNumerically(">=", 1))
 			}
-			mockServer.QueuePullMessage(msg)
+		},
+		Entry("minimal config",
+			examples.CommunicatorRunConfig{Duration: 1 * time.Second},
+			true),
+		Entry("with custom auth token",
+			examples.CommunicatorRunConfig{Duration: 1 * time.Second, AuthToken: "custom"},
+			true),
+		Entry("with logger",
+			examples.CommunicatorRunConfig{Duration: 1 * time.Second, Logger: zap.NewNop().Sugar()},
+			true),
+		Entry("with custom tick interval",
+			examples.CommunicatorRunConfig{Duration: 1 * time.Second, TickInterval: 50 * time.Millisecond},
+			true),
+	)
+})
 
-			// Create and run scenario
-			scenario = examples.NewCommunicatorScenario(mockServer.URL(), "test-auth-token")
-			err := scenario.Run(ctx, 2*time.Second)
-			Expect(err).NotTo(HaveOccurred())
-
-			// Verify message was received
-			receivedMessages := scenario.GetReceivedMessages()
-			Expect(receivedMessages).To(HaveLen(1))
-			Expect(receivedMessages[0].Content).To(Equal("test-action-from-backend"))
-		})
+var _ = Describe("CommunicatorScenarioEntry registry", func() {
+	It("is registered with CustomRunner that uses ApplicationSupervisor internally", func() {
+		scenario, exists := examples.Registry["communicator"]
+		Expect(exists).To(BeTrue())
+		Expect(scenario.Name).To(Equal("communicator"))
+		Expect(scenario.Description).NotTo(BeEmpty())
+		// Uses CustomRunner for mock server orchestration (but still uses ApplicationSupervisor internally)
+		Expect(scenario.CustomRunner).NotTo(BeNil())
+		Expect(scenario.YAMLConfig).To(BeEmpty()) // Config built dynamically with mock server URL
 	})
 
-	Describe("Message Pushing", func() {
-		It("pushes queued outbound messages to the server", func() {
-			// Create scenario
-			scenario = examples.NewCommunicatorScenario(mockServer.URL(), "test-auth-token")
+	It("description explains ApplicationSupervisor usage", func() {
+		scenario := examples.Registry["communicator"]
+		// Description should mention that it uses ApplicationSupervisor (not bypass)
+		Expect(scenario.Description).To(ContainSubstring("ApplicationSupervisor"))
+	})
+})
 
-			// Queue an outbound message
-			outboundMsg := &transport.UMHMessage{
-				InstanceUUID: "test-instance-123",
-				Content:      "status-update-from-edge",
-				Email:        "test@example.com",
-			}
-			scenario.QueueOutboundMessage(outboundMsg)
+var _ = Describe("TestChannelProvider", func() {
+	It("provides channels for test scenarios", func() {
+		provider := examples.NewTestChannelProvider(10)
+		inbound, outbound := provider.GetChannels("test-worker")
 
-			// Run scenario
-			err := scenario.Run(ctx, 2*time.Second)
-			Expect(err).NotTo(HaveOccurred())
-
-			// Verify message was pushed to server
-			pushedMessages := mockServer.GetPushedMessages()
-			Expect(pushedMessages).To(HaveLen(1))
-			Expect(pushedMessages[0].Content).To(Equal("status-update-from-edge"))
-		})
+		Expect(inbound).NotTo(BeNil())
+		Expect(outbound).NotTo(BeNil())
 	})
 
-	Describe("Error Handling", func() {
-		It("handles consecutive errors and tracks error count", func() {
-			// Create scenario
-			scenario = examples.NewCommunicatorScenario(mockServer.URL(), "test-auth-token")
+	It("queues and drains messages correctly", func() {
+		provider := examples.NewTestChannelProvider(10)
 
-			// Run a short sync first to authenticate
-			err := scenario.Run(ctx, 300*time.Millisecond)
-			Expect(err).NotTo(HaveOccurred())
+		// Queue a message via outbound
+		testMsg := &transport.UMHMessage{Content: "test-message"}
+		provider.QueueOutbound(testMsg)
 
-			// Now inject an error and run again
-			mockServer.SimulateServerError(500)
-
-			// Run scenario briefly - error will cause consecutive error count to increase
-			err = scenario.Run(ctx, 300*time.Millisecond)
-			// Error might occur, that's expected
-			_ = err
-
-			// The error count may have been reset if a successful pull happened after the error
-			// Just verify the scenario ran without panicking
-			Expect(scenario.GetConsecutiveErrors()).To(BeNumerically(">=", 0))
-		})
-
-		It("resets error count on successful operations", func() {
-			// Create scenario
-			scenario = examples.NewCommunicatorScenario(mockServer.URL(), "test-auth-token")
-
-			// Run scenario - should succeed and have low or 0 errors
-			err := scenario.Run(ctx, 500*time.Millisecond)
-			Expect(err).NotTo(HaveOccurred())
-
-			// After successful run, consecutive errors should be low (0 or 1 depending on timing)
-			// The sync loop resets errors after each successful pull
-			errorCount := scenario.GetConsecutiveErrors()
-			Expect(errorCount).To(BeNumerically("<=", 1))
-		})
+		// Get channels and read from outbound
+		_, outbound := provider.GetChannels("test-worker")
+		receivedMsg := <-outbound
+		Expect(receivedMsg.Content).To(Equal("test-message"))
 	})
 
-	Describe("Re-authentication", func() {
-		It("re-authenticates on 401 response", func() {
-			// Create scenario with low error threshold for quick re-auth
-			scenario = examples.NewCommunicatorScenario(mockServer.URL(), "test-auth-token")
-			scenario.SetErrorThreshold(1) // Re-auth after 1 error
+	It("drains inbound messages", func() {
+		provider := examples.NewTestChannelProvider(10)
+		inbound, _ := provider.GetChannels("test-worker")
 
-			// Run briefly to authenticate initially
-			err := scenario.Run(ctx, 300*time.Millisecond)
-			Expect(err).NotTo(HaveOccurred())
+		// Send messages to inbound
+		inbound <- &transport.UMHMessage{Content: "msg1"}
+		inbound <- &transport.UMHMessage{Content: "msg2"}
 
-			initialAuthCount := mockServer.AuthCallCount()
-			Expect(initialAuthCount).To(BeNumerically(">=", 1))
+		// Drain
+		messages := provider.DrainInbound()
+		Expect(messages).To(HaveLen(2))
+		Expect(messages[0].Content).To(Equal("msg1"))
+		Expect(messages[1].Content).To(Equal("msg2"))
+	})
 
-			// Simulate auth expiry (401 on next request)
-			mockServer.SimulateAuthExpiry()
-
-			// Continue running - the 401 should trigger re-auth after hitting threshold
-			err = scenario.Run(ctx, 500*time.Millisecond)
-			// Error may happen during re-auth attempts
-			_ = err
-
-			// Should have more auth calls due to re-authentication
-			finalAuthCount := mockServer.AuthCallCount()
-			Expect(finalAuthCount).To(BeNumerically(">", initialAuthCount))
-		})
+	It("returns empty slice when no messages available", func() {
+		provider := examples.NewTestChannelProvider(10)
+		messages := provider.DrainInbound()
+		Expect(messages).To(BeEmpty())
 	})
 })

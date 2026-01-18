@@ -20,6 +20,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/action"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/snapshot"
 )
@@ -112,28 +113,27 @@ const (
 type SyncingState struct {
 }
 
-func (s *SyncingState) Next(snapshot snapshot.CommunicatorSnapshot) (BaseCommunicatorState, fsmv2.Signal, fsmv2.Action[any]) {
-	snapshot.Observed.State = config.MakeState(config.PrefixRunning, "syncing")
-	desired := snapshot.Desired
-	observed := snapshot.Observed
+func (s *SyncingState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, fsmv2.Action[any]) {
+	snap := helpers.ConvertSnapshot[snapshot.CommunicatorObservedState, *snapshot.CommunicatorDesiredState](snapAny)
+	snap.Observed.State = config.MakeState(config.PrefixRunning, "syncing")
 
-	if desired.IsShutdownRequested() {
+	if snap.Desired.IsShutdownRequested() {
 		return &StoppedState{}, fsmv2.SignalNone, nil
 	}
 
-	if observed.IsTokenExpired() {
+	if snap.Observed.IsTokenExpired() {
 		return &TryingToAuthenticateState{}, fsmv2.SignalNone, nil
 	}
 
-	if !observed.Authenticated {
+	if !snap.Observed.Authenticated {
 		return &TryingToAuthenticateState{}, fsmv2.SignalNone, nil
 	}
 
-	if !observed.IsSyncHealthy() {
+	if !snap.Observed.IsSyncHealthy() {
 		return NewDegradedState(), fsmv2.SignalNone, nil
 	}
 
-	syncAction := action.NewSyncAction(observed.JWTToken)
+	syncAction := action.NewSyncAction(snap.Observed.JWTToken)
 
 	return s, fsmv2.SignalNone, syncAction
 }

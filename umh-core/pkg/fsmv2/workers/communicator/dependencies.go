@@ -55,18 +55,59 @@ type CommunicatorDependencies struct {
 
 	// Consecutive error counter (incremented by RecordError, reset by RecordSuccess)
 	consecutiveErrors int
+
+	// Per-tick sync results (set by SyncAction, read by CollectObservedState)
+	// These store results from THIS tick only, not cumulative totals.
+	// CollectObservedState reads previous metrics from the store and accumulates.
+	lastPullLatency   time.Duration
+	lastPullCount     int
+	lastPullSuccess   bool
+	lastPushLatency   time.Duration
+	lastPushCount     int
+	lastPushSuccess   bool
+	syncTickCompleted bool // True if a sync tick ran this cycle
+
+	// Channels for FSMv1 integration (may be nil in test scenarios)
+	inboundChan  chan<- *transport.UMHMessage // Write received messages to router
+	outboundChan <-chan *transport.UMHMessage // Read messages from router to push
 }
 
 // NewCommunicatorDependencies creates a new dependencies for the communicator worker.
-func NewCommunicatorDependencies(transport transport.Transport, logger *zap.SugaredLogger, stateReader fsmv2.StateReader, identity fsmv2.Identity) *CommunicatorDependencies {
+func NewCommunicatorDependencies(t transport.Transport, logger *zap.SugaredLogger, stateReader fsmv2.StateReader, identity fsmv2.Identity) *CommunicatorDependencies {
+	var inbound chan<- *transport.UMHMessage
+
+	var outbound <-chan *transport.UMHMessage
+
+	// Get channels from provider if available (production use)
+	if provider := GetChannelProvider(); provider != nil {
+		inbound, outbound = provider.GetChannels(identity.ID)
+	}
+
+	// If no provider, channels are nil (test/scenario use - HTTP only)
+
 	return &CommunicatorDependencies{
 		BaseDependencies: fsmv2.NewBaseDependencies(logger, stateReader, identity),
-		transport:        transport,
+		transport:        t,
+		inboundChan:      inbound,
+		outboundChan:     outbound,
 	}
 }
 
-// GetTransport returns the transport for HTTP communication.
+// SetTransport sets the transport instance (mutex protected).
+// Called by AuthenticateAction on first execution.
+func (d *CommunicatorDependencies) SetTransport(t transport.Transport) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	d.transport = t
+}
+
+// GetTransport returns the transport (mutex protected).
+// Returns nil if not yet created - callers MUST check for nil.
 func (d *CommunicatorDependencies) GetTransport() transport.Transport {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+
 	return d.transport
 }
 
@@ -161,4 +202,112 @@ func (d *CommunicatorDependencies) GetConsecutiveErrors() int {
 	defer d.mu.RUnlock()
 
 	return d.consecutiveErrors
+}
+
+// GetInboundChan returns channel to write received messages.
+// May return nil if no channel provider was set.
+func (d *CommunicatorDependencies) GetInboundChan() chan<- *transport.UMHMessage {
+	return d.inboundChan
+}
+
+// GetOutboundChan returns channel to read messages for pushing.
+// May return nil if no channel provider was set.
+func (d *CommunicatorDependencies) GetOutboundChan() <-chan *transport.UMHMessage {
+	return d.outboundChan
+}
+
+// RecordPullSuccess records a successful pull operation with its latency and message count.
+// Stores per-tick results; CollectObservedState accumulates into metrics.
+// Thread-safe: uses mutex for concurrent access protection.
+func (d *CommunicatorDependencies) RecordPullSuccess(latency time.Duration, msgCount int) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	d.lastPullLatency = latency
+	d.lastPullCount = msgCount
+	d.lastPullSuccess = true
+	d.syncTickCompleted = true
+}
+
+// RecordPullFailure records a failed pull operation with its latency.
+// Stores per-tick results; CollectObservedState accumulates into metrics.
+// Thread-safe: uses mutex for concurrent access protection.
+func (d *CommunicatorDependencies) RecordPullFailure(latency time.Duration) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	d.lastPullLatency = latency
+	d.lastPullCount = 0
+	d.lastPullSuccess = false
+	d.syncTickCompleted = true
+}
+
+// RecordPushSuccess records a successful push operation with its latency and message count.
+// Stores per-tick results; CollectObservedState accumulates into metrics.
+// Thread-safe: uses mutex for concurrent access protection.
+func (d *CommunicatorDependencies) RecordPushSuccess(latency time.Duration, msgCount int) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	d.lastPushLatency = latency
+	d.lastPushCount = msgCount
+	d.lastPushSuccess = true
+}
+
+// RecordPushFailure records a failed push operation with its latency.
+// Stores per-tick results; CollectObservedState accumulates into metrics.
+// Thread-safe: uses mutex for concurrent access protection.
+func (d *CommunicatorDependencies) RecordPushFailure(latency time.Duration) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	d.lastPushLatency = latency
+	d.lastPushCount = 0
+	d.lastPushSuccess = false
+}
+
+// SyncTickResult contains the results of a single pull or push operation.
+type SyncTickResult struct {
+	Latency time.Duration
+	Count   int
+	Success bool
+}
+
+// GetLastSyncResults returns the per-tick sync results from the most recent sync operation.
+// Returns pull result, push result, and whether a sync tick completed this cycle.
+// Thread-safe: uses mutex for concurrent access protection.
+func (d *CommunicatorDependencies) GetLastSyncResults() (pull SyncTickResult, push SyncTickResult, completed bool) {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+
+	pull = SyncTickResult{
+		Latency: d.lastPullLatency,
+		Count:   d.lastPullCount,
+		Success: d.lastPullSuccess,
+	}
+
+	push = SyncTickResult{
+		Latency: d.lastPushLatency,
+		Count:   d.lastPushCount,
+		Success: d.lastPushSuccess,
+	}
+
+	completed = d.syncTickCompleted
+
+	return
+}
+
+// ClearSyncResults clears the per-tick sync results after CollectObservedState has accumulated them.
+// Thread-safe: uses mutex for concurrent access protection.
+func (d *CommunicatorDependencies) ClearSyncResults() {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	d.lastPullLatency = 0
+	d.lastPullCount = 0
+	d.lastPullSuccess = false
+	d.lastPushLatency = 0
+	d.lastPushCount = 0
+	d.lastPushSuccess = false
+	d.syncTickCompleted = false
 }

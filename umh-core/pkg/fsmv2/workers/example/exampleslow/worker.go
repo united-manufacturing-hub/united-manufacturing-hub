@@ -96,16 +96,16 @@ func (w *ExampleslowWorker) CollectObservedState(ctx context.Context) (fsmv2.Obs
 	return observed, nil
 }
 
-func (w *ExampleslowWorker) DeriveDesiredState(spec interface{}) (config.DesiredState, error) {
+func (w *ExampleslowWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
 	desired, err := config.DeriveLeafState[ExampleslowUserSpec](spec)
 	if err != nil {
-		return desired, err
+		return nil, err
 	}
 
 	// Update dependencies with configuration from spec
 	w.updateDependenciesFromSpec(spec)
 
-	return desired, nil
+	return &desired, nil
 }
 
 // updateDependenciesFromSpec configures dependencies based on the user spec.

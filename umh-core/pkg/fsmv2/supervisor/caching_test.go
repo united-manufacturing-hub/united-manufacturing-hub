@@ -53,14 +53,14 @@ func NewCachingTestWorker(identity fsmv2.Identity) *CachingTestWorker {
 	return w
 }
 
-func (w *CachingTestWorker) DeriveDesiredState(spec interface{}) (config.DesiredState, error) {
+func (w *CachingTestWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
 	w.deriveCallCount.Add(1)
 
 	if userSpec, ok := spec.(config.UserSpec); ok {
 		w.lastSpec = userSpec
 	}
 
-	return config.DesiredState{
+	return &config.DesiredState{
 		State: config.DesiredStateRunning,
 	}, nil
 }

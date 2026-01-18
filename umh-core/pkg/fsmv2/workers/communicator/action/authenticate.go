@@ -20,6 +20,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
+	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
 )
 
 // CommunicatorDependencies represents the dependencies needed by communicator actions.
@@ -27,6 +28,9 @@ import (
 type CommunicatorDependencies interface {
 	fsmv2.Dependencies
 	GetTransport() transport.Transport
+	// SetTransport sets the transport instance (mutex protected).
+	// Called by AuthenticateAction on first execution.
+	SetTransport(t transport.Transport)
 	// SetJWT stores the JWT token and expiry from authentication response.
 	// Called by AuthenticateAction after successful authentication.
 	SetJWT(token string, expiry time.Time)
@@ -41,6 +45,24 @@ type CommunicatorDependencies interface {
 	RecordSuccess()
 	// GetConsecutiveErrors returns the current consecutive error count.
 	GetConsecutiveErrors() int
+
+	// Channel access methods for FSMv1 integration
+	// GetInboundChan returns channel to write received messages.
+	// May return nil if no channel provider was set.
+	GetInboundChan() chan<- *transport.UMHMessage
+	// GetOutboundChan returns channel to read messages for pushing.
+	// May return nil if no channel provider was set.
+	GetOutboundChan() <-chan *transport.UMHMessage
+
+	// Sync metrics recording methods (store per-tick results)
+	// RecordPullSuccess records a successful pull with latency and message count.
+	RecordPullSuccess(latency time.Duration, msgCount int)
+	// RecordPullFailure records a failed pull with latency.
+	RecordPullFailure(latency time.Duration)
+	// RecordPushSuccess records a successful push with latency and message count.
+	RecordPushSuccess(latency time.Duration, msgCount int)
+	// RecordPushFailure records a failed push with latency.
+	RecordPushFailure(latency time.Duration)
 }
 
 const AuthenticateActionName = "authenticate"
@@ -103,6 +125,7 @@ type AuthenticateAction struct {
 	RelayURL     string
 	InstanceUUID string
 	AuthToken    string
+	Timeout      time.Duration // From CommunicatorUserSpec.Timeout
 	// Dependencies are received via Execute() parameter, not stored in struct
 }
 
@@ -117,15 +140,21 @@ type AuthenticateActionResult struct {
 //   - relayURL: Relay server endpoint (e.g., "https://relay.umh.app")
 //   - instanceUUID: Identifies this Edge instance (from config)
 //   - authToken: Pre-shared secret for authentication (from config)
+//   - timeout: HTTP request timeout (defaults to 10s if 0)
 //
 // Dependencies are injected via Execute() parameter by the supervisor,
 // not passed to constructor. Actions work correctly after
 // DesiredState is loaded from storage (Dependencies can't be serialized).
-func NewAuthenticateAction(relayURL, instanceUUID, authToken string) *AuthenticateAction {
+func NewAuthenticateAction(relayURL, instanceUUID, authToken string, timeout time.Duration) *AuthenticateAction {
+	if timeout == 0 {
+		timeout = 10 * time.Second // Default timeout
+	}
+
 	return &AuthenticateAction{
 		RelayURL:     relayURL,
 		InstanceUUID: instanceUUID,
 		AuthToken:    authToken,
+		Timeout:      timeout,
 	}
 }
 
@@ -170,6 +199,12 @@ func NewAuthenticateAction(relayURL, instanceUUID, authToken string) *Authentica
 func (a *AuthenticateAction) Execute(ctx context.Context, depsAny any) error {
 	// Cast dependencies from supervisor-injected parameter
 	deps := depsAny.(CommunicatorDependencies)
+
+	// Create transport if not yet created (first run)
+	if deps.GetTransport() == nil {
+		newTransport := httpTransport.NewHTTPTransport(a.RelayURL, a.Timeout)
+		deps.SetTransport(newTransport)
+	}
 
 	authReq := transport.AuthRequest{
 		InstanceUUID: a.InstanceUUID,

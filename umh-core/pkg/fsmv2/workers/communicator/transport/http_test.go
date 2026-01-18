@@ -49,8 +49,8 @@ var _ = Describe("HTTP Transport", func() {
 			}))
 			defer server.Close()
 
-			// Note: Existing constructor signature is NewHTTPTransport(relayURL string)
-			transport := httptransport.NewHTTPTransport(server.URL)
+			// Note: Constructor accepts relayURL and timeout
+			transport := httptransport.NewHTTPTransport(server.URL, 30*time.Second)
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
 
@@ -81,7 +81,7 @@ var _ = Describe("HTTP Transport", func() {
 			}))
 			defer server.Close()
 
-			transport := httptransport.NewHTTPTransport(server.URL)
+			transport := httptransport.NewHTTPTransport(server.URL, 30*time.Second)
 
 			// Context with 100ms timeout - MUCH shorter than server delay
 			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
@@ -101,7 +101,7 @@ var _ = Describe("HTTP Transport", func() {
 			}))
 			defer server.Close()
 
-			transport := httptransport.NewHTTPTransport(server.URL)
+			transport := httptransport.NewHTTPTransport(server.URL, 30*time.Second)
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
 

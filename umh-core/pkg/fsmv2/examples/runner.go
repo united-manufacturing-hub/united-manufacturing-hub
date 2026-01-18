@@ -24,6 +24,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence/memory"
 
+	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator"
 	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplechild"
 	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplefailing"
 	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplepanic"
@@ -49,6 +50,10 @@ type RunResult struct {
 // and starts it. The supervisor runs until the context is cancelled or the
 // specified duration elapses.
 //
+// If the scenario has a CustomRunner, Run() delegates directly to it instead of
+// creating an ApplicationSupervisor. CustomRunner scenarios are responsible for
+// their own resource lifecycle management.
+//
 // If DumpStore is enabled, outputs a human-readable summary of all store changes
 // and final worker states after the scenario completes.
 //
@@ -58,7 +63,7 @@ type RunResult struct {
 //
 // Returns:
 //   - *RunResult: Contains done channel and shutdown function
-//   - error: If supervisor creation fails
+//   - error: If supervisor creation fails or scenario configuration is invalid
 //
 // Example:
 //
@@ -71,6 +76,25 @@ type RunResult struct {
 //	})
 //	// On signal, call result.Shutdown() for graceful shutdown
 func Run(ctx context.Context, cfg RunConfig) (*RunResult, error) {
+	// Validate scenario configuration
+	hasYAML := cfg.Scenario.YAMLConfig != ""
+	hasCustom := cfg.Scenario.CustomRunner != nil
+
+	if !hasYAML && !hasCustom {
+		return nil, fmt.Errorf("scenario %q is not properly configured: "+
+			"neither YAMLConfig nor CustomRunner is set", cfg.Scenario.Name)
+	}
+
+	if hasYAML && hasCustom {
+		return nil, fmt.Errorf("scenario %q has conflicting configuration: "+
+			"both YAMLConfig and CustomRunner are set (only one allowed)", cfg.Scenario.Name)
+	}
+
+	// Use custom runner if set
+	if hasCustom {
+		return cfg.Scenario.CustomRunner(ctx, cfg)
+	}
+
 	// Capture start syncID before running scenario (for dump)
 	var startSyncID int64
 	if cfg.DumpStore {

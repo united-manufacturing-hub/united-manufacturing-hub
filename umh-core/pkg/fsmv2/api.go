@@ -17,8 +17,6 @@ package fsmv2
 import (
 	"context"
 	"time"
-
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 )
 
 // States use Signal to communicate special conditions to the supervisor.
@@ -93,10 +91,14 @@ type DesiredState interface {
 	// IsShutdownRequested is set by supervisor to initiate graceful shutdown.
 	// States should check this first in their Next() method.
 	IsShutdownRequested() bool
+
+	// GetState returns the desired lifecycle state ("running", "stopped", etc.).
+	// Used by supervisor to validate state values after DeriveDesiredState.
+	GetState() string
 }
 
 // ShutdownRequestable allows setting the shutdown flag on any DesiredState.
-// All DesiredState types should embed config.BaseDesiredState to satisfy this interface.
+// All DesiredState types should embed config.BaseDesiredState (from pkg/fsmv2/config) to satisfy this interface.
 // Type-safe shutdown request propagation from supervisor to workers.
 //
 // Example usage:
@@ -160,7 +162,11 @@ type Worker interface {
 	// DeriveDesiredState derives the target state from user configuration (spec).
 	// This is a derivation, not a copy - it parses, validates, and computes derived fields.
 	// Pure function - no side effects. Called on each tick.
-	DeriveDesiredState(spec interface{}) (config.DesiredState, error)
+	//
+	// Return type is DesiredState interface, allowing workers to return their typed
+	// DesiredState structs (e.g., *snapshot.CommunicatorDesiredState). The supervisor
+	// type-asserts to TDesired before marshaling, preserving all typed fields.
+	DeriveDesiredState(spec interface{}) (DesiredState, error)
 
 	// GetInitialState returns the starting state for this worker.
 	// Called once during worker creation.

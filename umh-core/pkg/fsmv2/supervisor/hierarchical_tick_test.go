@@ -65,10 +65,10 @@ func (h *hierarchicalWorker) CollectObservedState(ctx context.Context) (fsmv2.Ob
 	return h.observed, nil
 }
 
-func (h *hierarchicalWorker) DeriveDesiredState(spec interface{}) (config.DesiredState, error) {
+func (h *hierarchicalWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
 	h.logger.Log("DeriveDesiredState:" + h.id)
 
-	return config.DesiredState{
+	return &config.DesiredState{
 		State:         "running",
 		ChildrenSpecs: h.childrenSpecs,
 	}, nil

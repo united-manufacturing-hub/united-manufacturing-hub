@@ -33,11 +33,16 @@ type HTTPTransport struct {
 }
 
 // NewHTTPTransport creates a new HTTP transport.
-func NewHTTPTransport(relayURL string) *HTTPTransport {
+// If timeout is 0, defaults to 30 seconds.
+func NewHTTPTransport(relayURL string, timeout time.Duration) *HTTPTransport {
+	if timeout == 0 {
+		timeout = 30 * time.Second
+	}
+
 	t := &HTTPTransport{
 		RelayURL: relayURL,
 		httpClient: &http.Client{
-			Timeout: 30 * time.Second,
+			Timeout: timeout,
 			Transport: &http.Transport{
 				DisableKeepAlives: true, // BUG #3 fix: no connection reuse, no stale connections
 			},
@@ -54,7 +59,7 @@ func (t *HTTPTransport) Authenticate(ctx context.Context, req transport.AuthRequ
 		return transport.AuthResponse{}, fmt.Errorf("failed to marshal auth request: %w", err)
 	}
 
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, t.RelayURL+"/v2/auth", bytes.NewBuffer(body))
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, t.RelayURL+"/v2/instance/login", bytes.NewBuffer(body))
 	if err != nil {
 		return transport.AuthResponse{}, fmt.Errorf("failed to create auth request: %w", err)
 	}

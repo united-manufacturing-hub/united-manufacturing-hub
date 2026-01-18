@@ -16,6 +16,7 @@ package communicator_test
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -23,6 +24,7 @@ import (
 	. "github.com/onsi/gomega"
 	"go.uber.org/zap"
 
+	fsmv2types "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/snapshot"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/state"
@@ -72,13 +74,115 @@ var _ = Describe("CommunicatorWorker", func() {
 
 	Describe("DeriveDesiredState", func() {
 		Context("with nil spec", func() {
-			It("should return default desired state", func() {
-				desired, err := worker.DeriveDesiredState(nil)
+			It("should return default CommunicatorDesiredState", func() {
+				desiredIface, err := worker.DeriveDesiredState(nil)
 				Expect(err).NotTo(HaveOccurred())
 
-				Expect(desired.State).To(Equal("running"))
+				// Type assert to typed CommunicatorDesiredState
+				desired, ok := desiredIface.(*snapshot.CommunicatorDesiredState)
+				Expect(ok).To(BeTrue(), "expected *snapshot.CommunicatorDesiredState")
+				Expect(desired.GetState()).To(Equal("running"))
 				Expect(desired.IsShutdownRequested()).To(BeFalse())
-				Expect(desired.ChildrenSpecs).To(BeNil())
+			})
+		})
+
+		Context("with valid UserSpec", func() {
+			It("should return typed CommunicatorDesiredState with all fields populated", func() {
+				spec := fsmv2types.UserSpec{
+					Config: `
+relayURL: "https://relay.umh.app"
+instanceUUID: "test-uuid-12345"
+authToken: "test-auth-token-secret"
+timeout: 15s
+state: "running"
+`,
+				}
+
+				desiredIface, err := worker.DeriveDesiredState(spec)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Type assert to typed CommunicatorDesiredState
+				desired, ok := desiredIface.(*snapshot.CommunicatorDesiredState)
+				Expect(ok).To(BeTrue(), "expected *snapshot.CommunicatorDesiredState")
+
+				// Verify typed fields are populated
+				Expect(desired.RelayURL).To(Equal("https://relay.umh.app"))
+				Expect(desired.InstanceUUID).To(Equal("test-uuid-12345"))
+				Expect(desired.AuthToken).To(Equal("test-auth-token-secret"))
+				Expect(desired.Timeout).To(Equal(15 * time.Second))
+				Expect(desired.GetState()).To(Equal("running"))
+			})
+
+			It("should apply default timeout when not specified", func() {
+				spec := fsmv2types.UserSpec{
+					Config: `
+relayURL: "https://relay.umh.app"
+instanceUUID: "test-uuid"
+authToken: "test-token"
+`,
+				}
+
+				desiredIface, err := worker.DeriveDesiredState(spec)
+				Expect(err).NotTo(HaveOccurred())
+
+				desired := desiredIface.(*snapshot.CommunicatorDesiredState)
+				Expect(desired.Timeout).To(Equal(10 * time.Second))
+			})
+		})
+
+		Context("type assertion and roundtrip", func() {
+			It("should preserve typed fields through marshal/unmarshal roundtrip", func() {
+				// Create spec with all typed fields
+				spec := fsmv2types.UserSpec{
+					Config: `
+relayURL: "https://relay.example.com"
+instanceUUID: "roundtrip-uuid-test"
+authToken: "roundtrip-auth-token"
+timeout: 30s
+state: "running"
+`,
+				}
+
+				// Derive desired state
+				desiredIface, err := worker.DeriveDesiredState(spec)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Type assert to verify type
+				originalDesired, ok := desiredIface.(*snapshot.CommunicatorDesiredState)
+				Expect(ok).To(BeTrue())
+
+				// Marshal to JSON (simulates what supervisor does)
+				jsonBytes, err := json.Marshal(originalDesired)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Unmarshal back (simulates what supervisor does when loading)
+				var loadedDesired snapshot.CommunicatorDesiredState
+				err = json.Unmarshal(jsonBytes, &loadedDesired)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Verify ALL typed fields survived the roundtrip
+				Expect(loadedDesired.RelayURL).To(Equal("https://relay.example.com"))
+				Expect(loadedDesired.InstanceUUID).To(Equal("roundtrip-uuid-test"))
+				Expect(loadedDesired.AuthToken).To(Equal("roundtrip-auth-token"))
+				Expect(loadedDesired.Timeout).To(Equal(30 * time.Second))
+				Expect(loadedDesired.GetState()).To(Equal("running"))
+			})
+
+			It("should return clear error on invalid spec type", func() {
+				// Pass wrong type
+				_, err := worker.DeriveDesiredState("invalid-string-spec")
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("invalid spec type"))
+			})
+
+			It("should return error on invalid YAML config", func() {
+				spec := fsmv2types.UserSpec{
+					Config: `invalid: yaml: [missing bracket`,
+				}
+
+				_, err := worker.DeriveDesiredState(spec)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("config parse failed"))
 			})
 		})
 	})

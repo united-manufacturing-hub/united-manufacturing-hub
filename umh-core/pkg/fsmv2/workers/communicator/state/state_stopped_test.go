@@ -25,7 +25,7 @@ import (
 var _ = Describe("StoppedState", func() {
 	var (
 		stateObj *state.StoppedState
-		snap     snapshot.CommunicatorSnapshot
+		snap     fsmv2.Snapshot
 	)
 
 	BeforeEach(func() {
@@ -35,9 +35,10 @@ var _ = Describe("StoppedState", func() {
 	Describe("Next", func() {
 		Context("when shutdown is not requested", func() {
 			BeforeEach(func() {
-				snap = snapshot.CommunicatorSnapshot{
-					Desired:  snapshot.CommunicatorDesiredState{},
+				snap = fsmv2.Snapshot{
+					Identity: fsmv2.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
 					Observed: snapshot.CommunicatorObservedState{},
+					Desired:  &snapshot.CommunicatorDesiredState{},
 				}
 			})
 

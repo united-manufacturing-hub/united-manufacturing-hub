@@ -96,16 +96,16 @@ func (w *ExamplepanicWorker) CollectObservedState(ctx context.Context) (fsmv2.Ob
 	return observed, nil
 }
 
-func (w *ExamplepanicWorker) DeriveDesiredState(spec interface{}) (config.DesiredState, error) {
+func (w *ExamplepanicWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
 	desired, err := config.DeriveLeafState[ExamplepanicUserSpec](spec)
 	if err != nil {
-		return desired, err
+		return nil, err
 	}
 
 	// Update dependencies with configuration from spec
 	w.updateDependenciesFromSpec(spec)
 
-	return desired, nil
+	return &desired, nil
 }
 
 // updateDependenciesFromSpec configures dependencies based on the user spec.

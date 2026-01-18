@@ -134,10 +134,10 @@ func (w *ChildWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedS
 //
 // This example demonstrates variable inheritance and template rendering.
 // For full S6 service creation, see pkg/service/s6/lifecycle.go.
-func (w *ChildWorker) DeriveDesiredState(spec interface{}) (config.DesiredState, error) {
+func (w *ChildWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
 	// Handle nil spec - return default state
 	if spec == nil {
-		return config.DesiredState{
+		return &config.DesiredState{
 			State:            config.DesiredStateRunning,
 			OriginalUserSpec: nil,
 		}, nil
@@ -146,14 +146,14 @@ func (w *ChildWorker) DeriveDesiredState(spec interface{}) (config.DesiredState,
 	// Cast spec to UserSpec to access Config and Variables
 	userSpec, ok := spec.(config.UserSpec)
 	if !ok {
-		return config.DesiredState{}, fmt.Errorf("invalid spec type: expected UserSpec, got %T", spec)
+		return nil, fmt.Errorf("invalid spec type: expected UserSpec, got %T", spec)
 	}
 
 	// Render the config template using the merged variables
 	// Variables include: IP, PORT (from parent) + DEVICE_ID (from child)
 	renderedConfig, err := config.RenderConfigTemplate(userSpec.Config, userSpec.Variables)
 	if err != nil {
-		return config.DesiredState{}, fmt.Errorf("template rendering failed: %w", err)
+		return nil, fmt.Errorf("template rendering failed: %w", err)
 	}
 
 	// Create a new UserSpec with the rendered config for parsing
@@ -163,7 +163,12 @@ func (w *ChildWorker) DeriveDesiredState(spec interface{}) (config.DesiredState,
 	}
 
 	// Now parse the rendered config using the helper
-	return config.DeriveLeafState[ChildUserSpec](renderedSpec)
+	desired, err := config.DeriveLeafState[ChildUserSpec](renderedSpec)
+	if err != nil {
+		return nil, err
+	}
+
+	return &desired, nil
 }
 
 // GetInitialState returns the state the FSM should start in.

@@ -142,3 +142,13 @@ func (d *BaseDependencies) ActionLogger(actionType string) *zap.SugaredLogger {
 func (d *BaseDependencies) GetStateReader() StateReader {
 	return d.stateReader
 }
+
+// GetWorkerType returns the worker type for this dependencies.
+func (d *BaseDependencies) GetWorkerType() string {
+	return d.workerType
+}
+
+// GetWorkerID returns the worker ID for this dependencies.
+func (d *BaseDependencies) GetWorkerID() string {
+	return d.workerID
+}

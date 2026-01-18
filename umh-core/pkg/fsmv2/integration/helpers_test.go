@@ -195,6 +195,10 @@ func (m *MockDesiredState) IsShutdownRequested() bool {
 	return m.shutdownRequested
 }
 
+func (m *MockDesiredState) GetState() string {
+	return "running"
+}
+
 func (m *MockDesiredState) SetShutdownRequested(requested bool) {
 	m.shutdownRequested = requested
 }

@@ -89,8 +89,9 @@ children:
 				Config: yamlConfig,
 			}
 
-			desired, err := worker.DeriveDesiredState(userSpec)
+			desiredIface, err := worker.DeriveDesiredState(userSpec)
 			Expect(err).ToNot(HaveOccurred())
+			desired := desiredIface.(*config.DesiredState)
 			Expect(desired.State).To(Equal("running"))
 			Expect(desired.ChildrenSpecs).To(HaveLen(2))
 			Expect(desired.ChildrenSpecs[0].Name).To(Equal("child-1"))
@@ -105,8 +106,9 @@ children:
 				Config: yamlConfig,
 			}
 
-			desired, err := worker.DeriveDesiredState(userSpec)
+			desiredIface, err := worker.DeriveDesiredState(userSpec)
 			Expect(err).ToNot(HaveOccurred())
+			desired := desiredIface.(*config.DesiredState)
 			Expect(desired.State).To(Equal("running"))
 			Expect(desired.ChildrenSpecs).To(BeEmpty())
 		})
@@ -116,8 +118,9 @@ children:
 				Config: "",
 			}
 
-			desired, err := worker.DeriveDesiredState(userSpec)
+			desiredIface, err := worker.DeriveDesiredState(userSpec)
 			Expect(err).ToNot(HaveOccurred())
+			desired := desiredIface.(*config.DesiredState)
 			Expect(desired.State).To(Equal("running"))
 			Expect(desired.ChildrenSpecs).To(BeNil())
 		})
@@ -151,8 +154,9 @@ children:
 				Config: yamlConfig,
 			}
 
-			desired, err := worker.DeriveDesiredState(userSpec)
+			desiredIface, err := worker.DeriveDesiredState(userSpec)
 			Expect(err).ToNot(HaveOccurred())
+			desired := desiredIface.(*config.DesiredState)
 			Expect(desired.ChildrenSpecs).To(HaveLen(1))
 			Expect(desired.ChildrenSpecs[0].ChildStartStates).To(ConsistOf("running", "TryingToStart"))
 		})
@@ -171,8 +175,9 @@ children:
 				Config: yamlConfig,
 			}
 
-			desired, err := worker.DeriveDesiredState(userSpec)
+			desiredIface, err := worker.DeriveDesiredState(userSpec)
 			Expect(err).ToNot(HaveOccurred())
+			desired := desiredIface.(*config.DesiredState)
 			Expect(desired.ChildrenSpecs).To(HaveLen(3))
 			Expect(desired.ChildrenSpecs[0].WorkerType).To(Equal("counter"))
 			Expect(desired.ChildrenSpecs[1].WorkerType).To(Equal("timer"))
