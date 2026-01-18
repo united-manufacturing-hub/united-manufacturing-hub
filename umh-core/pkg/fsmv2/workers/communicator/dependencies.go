@@ -39,37 +39,33 @@ import (
 // This is incremented by RecordError() and reset by RecordSuccess().
 //
 // Access is protected by mu for thread-safety.
+//
+// Field ordering: Fields are ordered by decreasing size to minimize struct padding.
+// 24-byte fields first, then 16-byte, then 8-byte, then 1-byte (bools) at the end.
 type CommunicatorDependencies struct {
+	// 24-byte fields
+	mu             sync.RWMutex              // Mutex for thread-safe access
+	jwtExpiry      time.Time                 // JWT expiry (set by AuthenticateAction)
+	pulledMessages []*transport.UMHMessage   // Pulled messages (set by SyncAction)
+
+	// 16-byte fields
+	transport transport.Transport // HTTP transport for push/pull operations
+	jwtToken  string              // JWT token (set by AuthenticateAction)
+
+	// 8-byte fields
 	*fsmv2.BaseDependencies
-	transport transport.Transport
+	lastPullLatency   time.Duration             // Per-tick pull latency
+	lastPushLatency   time.Duration             // Per-tick push latency
+	inboundChan       chan<- *transport.UMHMessage // Write received messages to router
+	outboundChan      <-chan *transport.UMHMessage // Read messages from router to push
+	consecutiveErrors int                       // Error counter (incremented by RecordError)
+	lastPullCount     int                       // Per-tick pull message count
+	lastPushCount     int                       // Per-tick push message count
 
-	// Mutex for thread-safe access to JWT, message, and error tracking storage
-	mu sync.RWMutex
-
-	// JWT token storage (set by AuthenticateAction, read by CollectObservedState)
-	jwtToken  string
-	jwtExpiry time.Time
-
-	// Pulled message storage (set by SyncAction, read by CollectObservedState)
-	pulledMessages []*transport.UMHMessage
-
-	// Consecutive error counter (incremented by RecordError, reset by RecordSuccess)
-	consecutiveErrors int
-
-	// Per-tick sync results (set by SyncAction, read by CollectObservedState)
-	// These store results from THIS tick only, not cumulative totals.
-	// CollectObservedState reads previous metrics from the store and accumulates.
-	lastPullLatency   time.Duration
-	lastPullCount     int
-	lastPullSuccess   bool
-	lastPushLatency   time.Duration
-	lastPushCount     int
-	lastPushSuccess   bool
+	// 1-byte fields (bools grouped at end to minimize padding)
+	lastPullSuccess   bool // Per-tick pull success flag
+	lastPushSuccess   bool // Per-tick push success flag
 	syncTickCompleted bool // True if a sync tick ran this cycle
-
-	// Channels for FSMv1 integration (may be nil in test scenarios)
-	inboundChan  chan<- *transport.UMHMessage // Write received messages to router
-	outboundChan <-chan *transport.UMHMessage // Read messages from router to push
 }
 
 // NewCommunicatorDependencies creates a new dependencies for the communicator worker.

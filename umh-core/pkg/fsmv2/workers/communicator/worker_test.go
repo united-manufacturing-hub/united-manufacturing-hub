@@ -17,6 +17,7 @@ package communicator_test
 import (
 	"context"
 	"encoding/json"
+	"sync"
 	"testing"
 	"time"
 
@@ -30,6 +31,46 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/state"
 	transportpkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
 )
+
+// MockStateReader implements fsmv2.StateReader for testing metrics accumulation.
+// It stores observed state and returns it on subsequent LoadObservedTyped calls.
+type MockStateReader struct {
+	mu    sync.RWMutex
+	store map[string]interface{}
+}
+
+func NewMockStateReader() *MockStateReader {
+	return &MockStateReader{
+		store: make(map[string]interface{}),
+	}
+}
+
+func (m *MockStateReader) LoadObservedTyped(_ context.Context, workerType, id string, result interface{}) error {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	key := workerType + "/" + id
+	if stored, ok := m.store[key]; ok {
+		// Marshal and unmarshal to copy the data
+		data, err := json.Marshal(stored)
+		if err != nil {
+			return err
+		}
+
+		return json.Unmarshal(data, result)
+	}
+
+	return nil // No previous state
+}
+
+// SaveObserved saves the observed state for later retrieval (simulates collector behavior).
+func (m *MockStateReader) SaveObserved(workerType, id string, observed interface{}) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	key := workerType + "/" + id
+	m.store[key] = observed
+}
 
 func TestCommunicator(t *testing.T) {
 	RegisterFailHandler(Fail)
@@ -289,6 +330,196 @@ state: "running"
 			// Assert
 			communicatorObserved := observed.(snapshot.CommunicatorObservedState)
 			Expect(communicatorObserved.Authenticated).To(BeFalse())
+		})
+
+		Context("metrics accumulation", func() {
+			// Helper to create worker with MockStateReader and simulate collector save
+			type metricsTestContext struct {
+				worker      *communicator.CommunicatorWorker
+				stateReader *MockStateReader
+			}
+
+			createWorkerWithStateReader := func() *metricsTestContext {
+				stateReader := NewMockStateReader()
+				w, err := communicator.NewCommunicatorWorker(
+					"test-metrics-id",
+					"Test Metrics Worker",
+					mockTransport,
+					logger,
+					stateReader,
+				)
+				Expect(err).NotTo(HaveOccurred())
+
+				return &metricsTestContext{worker: w, stateReader: stateReader}
+			}
+
+			// Helper to collect observed state and save it (simulates collector)
+			collectAndSave := func(tc *metricsTestContext) snapshot.CommunicatorObservedState {
+				observed, err := tc.worker.CollectObservedState(ctx)
+				Expect(err).NotTo(HaveOccurred())
+				communicatorObserved := observed.(snapshot.CommunicatorObservedState)
+				// Simulate collector saving observed state
+				tc.stateReader.SaveObserved("communicator", "test-metrics-id", communicatorObserved)
+
+				return communicatorObserved
+			}
+
+			It("should accumulate pull metrics on successful pull", func() {
+				// Arrange: Record a successful pull
+				deps := worker.GetDependencies()
+				deps.RecordPullSuccess(100*time.Millisecond, 5)
+
+				// Act
+				observed, err := worker.CollectObservedState(ctx)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Assert
+				communicatorObserved := observed.(snapshot.CommunicatorObservedState)
+				Expect(communicatorObserved.Metrics.Pull.TotalOps).To(Equal(1))
+				Expect(communicatorObserved.Metrics.Pull.SuccessfulOps).To(Equal(1))
+				Expect(communicatorObserved.Metrics.Pull.FailedOps).To(Equal(0))
+				Expect(communicatorObserved.Metrics.Pull.MessagesPulled).To(Equal(5))
+				Expect(communicatorObserved.Metrics.Pull.LastLatency).To(Equal(100 * time.Millisecond))
+				Expect(communicatorObserved.Metrics.Pull.AvgLatency).To(Equal(100 * time.Millisecond))
+			})
+
+			It("should accumulate pull metrics on failed pull", func() {
+				// Arrange: Record a failed pull
+				deps := worker.GetDependencies()
+				deps.RecordPullFailure(50 * time.Millisecond)
+
+				// Act
+				observed, err := worker.CollectObservedState(ctx)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Assert
+				communicatorObserved := observed.(snapshot.CommunicatorObservedState)
+				Expect(communicatorObserved.Metrics.Pull.TotalOps).To(Equal(1))
+				Expect(communicatorObserved.Metrics.Pull.SuccessfulOps).To(Equal(0))
+				Expect(communicatorObserved.Metrics.Pull.FailedOps).To(Equal(1))
+				Expect(communicatorObserved.Metrics.Pull.MessagesPulled).To(Equal(0))
+				Expect(communicatorObserved.Metrics.Pull.LastLatency).To(Equal(50 * time.Millisecond))
+			})
+
+			It("should accumulate push metrics on successful push", func() {
+				// Arrange: Record a successful pull (required for sync tick) and push
+				deps := worker.GetDependencies()
+				deps.RecordPullSuccess(50*time.Millisecond, 0)
+				deps.RecordPushSuccess(200*time.Millisecond, 3)
+
+				// Act
+				observed, err := worker.CollectObservedState(ctx)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Assert
+				communicatorObserved := observed.(snapshot.CommunicatorObservedState)
+				Expect(communicatorObserved.Metrics.Push.TotalOps).To(Equal(1))
+				Expect(communicatorObserved.Metrics.Push.SuccessfulOps).To(Equal(1))
+				Expect(communicatorObserved.Metrics.Push.FailedOps).To(Equal(0))
+				Expect(communicatorObserved.Metrics.Push.MessagesPushed).To(Equal(3))
+				Expect(communicatorObserved.Metrics.Push.LastLatency).To(Equal(200 * time.Millisecond))
+			})
+
+			It("should accumulate push metrics on failed push", func() {
+				// Arrange: Record a successful pull and failed push
+				deps := worker.GetDependencies()
+				deps.RecordPullSuccess(50*time.Millisecond, 0)
+				deps.RecordPushFailure(150 * time.Millisecond)
+
+				// Act
+				observed, err := worker.CollectObservedState(ctx)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Assert
+				communicatorObserved := observed.(snapshot.CommunicatorObservedState)
+				Expect(communicatorObserved.Metrics.Push.TotalOps).To(Equal(1))
+				Expect(communicatorObserved.Metrics.Push.SuccessfulOps).To(Equal(0))
+				Expect(communicatorObserved.Metrics.Push.FailedOps).To(Equal(1))
+				Expect(communicatorObserved.Metrics.Push.MessagesPushed).To(Equal(0))
+			})
+
+			It("should clear per-tick results after CollectObservedState", func() {
+				// Use worker with state reader to test accumulation persistence
+				tc := createWorkerWithStateReader()
+				deps := tc.worker.GetDependencies()
+
+				// Record a sync operation
+				deps.RecordPullSuccess(100*time.Millisecond, 2)
+
+				// First collection should have metrics
+				observed1 := collectAndSave(tc)
+				Expect(observed1.Metrics.Pull.TotalOps).To(Equal(1))
+
+				// Second collection (without new sync) should maintain previous metrics
+				// but NOT increment (syncTickCompleted is false)
+				observed2 := collectAndSave(tc)
+				Expect(observed2.Metrics.Pull.TotalOps).To(Equal(1)) // Still 1, no new tick
+			})
+
+			It("should calculate running average latency correctly", func() {
+				// Use worker with state reader to test accumulation
+				tc := createWorkerWithStateReader()
+				deps := tc.worker.GetDependencies()
+
+				// First pull: 100ms
+				deps.RecordPullSuccess(100*time.Millisecond, 1)
+				observed1 := collectAndSave(tc)
+				Expect(observed1.Metrics.Pull.AvgLatency).To(Equal(100 * time.Millisecond))
+
+				// Second pull: 200ms - average should be (100+200)/2 = 150ms
+				deps.RecordPullSuccess(200*time.Millisecond, 1)
+				observed2 := collectAndSave(tc)
+				Expect(observed2.Metrics.Pull.TotalOps).To(Equal(2))
+				Expect(observed2.Metrics.Pull.AvgLatency).To(Equal(150 * time.Millisecond))
+
+				// Third pull: 300ms - average should be (100+200+300)/3 = 200ms
+				deps.RecordPullSuccess(300*time.Millisecond, 1)
+				observed3 := collectAndSave(tc)
+				Expect(observed3.Metrics.Pull.TotalOps).To(Equal(3))
+				Expect(observed3.Metrics.Pull.AvgLatency).To(Equal(200 * time.Millisecond))
+			})
+
+			It("should accumulate message counts across multiple pulls", func() {
+				// Use worker with state reader to test accumulation
+				tc := createWorkerWithStateReader()
+				deps := tc.worker.GetDependencies()
+
+				// First pull: 5 messages
+				deps.RecordPullSuccess(50*time.Millisecond, 5)
+				collectAndSave(tc)
+
+				// Second pull: 3 messages
+				deps.RecordPullSuccess(50*time.Millisecond, 3)
+				observed2 := collectAndSave(tc)
+				Expect(observed2.Metrics.Pull.MessagesPulled).To(Equal(8)) // 5 + 3
+
+				// Third pull: 2 messages
+				deps.RecordPullSuccess(50*time.Millisecond, 2)
+				observed3 := collectAndSave(tc)
+				Expect(observed3.Metrics.Pull.MessagesPulled).To(Equal(10)) // 5 + 3 + 2
+			})
+
+			It("should track both successful and failed ops separately", func() {
+				// Use worker with state reader to test accumulation
+				tc := createWorkerWithStateReader()
+				deps := tc.worker.GetDependencies()
+
+				// Success
+				deps.RecordPullSuccess(50*time.Millisecond, 1)
+				collectAndSave(tc)
+
+				// Failure
+				deps.RecordPullFailure(50 * time.Millisecond)
+				collectAndSave(tc)
+
+				// Success
+				deps.RecordPullSuccess(50*time.Millisecond, 1)
+				observed := collectAndSave(tc)
+
+				Expect(observed.Metrics.Pull.TotalOps).To(Equal(3))
+				Expect(observed.Metrics.Pull.SuccessfulOps).To(Equal(2))
+				Expect(observed.Metrics.Pull.FailedOps).To(Equal(1))
+			})
 		})
 	})
 })
