@@ -294,6 +294,15 @@ func (s *RedpandaService) GenerateS6ConfigForRedpanda(redpandaConfig *redpandase
 			// --smp comes directly from seastar (you can find all redpanda seastar options by executing `redpanda --help` or `redpanda --seastar-help`)
 			"--smp",
 			strconv.Itoa(redpandaConfig.Resources.MaxCores),
+			// --overprovisioned disables Seastar's busy-polling reactor model, reducing CPU usage
+			// from 100% (even when idle) to near-zero when not processing. This trades slightly
+			// higher latency for fair CPU sharing with other processes.
+			// Required for UMH because: (1) always runs in Docker where CPU pinning doesn't work,
+			// (2) Redpanda shares the container with other s6-supervised processes,
+			// (3) never runs on dedicated hardware, (4) manufacturing data doesn't need sub-ms latency.
+			// See: https://docs.redpanda.com/current/reference/rpk/rpk-redpanda/rpk-redpanda-mode/
+			// See: https://docs.seastar.io/master/structseastar_1_1reactor__options.html
+			"--overprovisioned",
 		},
 		Env: map[string]string{},
 		ConfigFiles: map[string]string{
