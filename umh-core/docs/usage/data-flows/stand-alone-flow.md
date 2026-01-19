@@ -84,6 +84,22 @@ Options include:
 - **Metrics**: Monitor performance
 - **Delete**: Remove the flow
 
+### Detail View
+
+Click on any stand-alone flow to open the detail view with multiple tabs:
+
+**Overview Tab**: Shows the flow configuration and current state:
+
+![Standalone Detail Overview](./images/standalone-detail-overview.png)
+
+**Logs Tab**: Stream real-time logs from the flow for debugging:
+
+![Standalone Detail Logs](./images/standalone-detail-logs.png)
+
+**Metrics Tab**: Monitor performance metrics including throughput and processing times:
+
+![Standalone Detail Metrics](./images/standalone-detail-metrics.png)
+
 ### Enable Debug Logging
 
 For troubleshooting data processing issues in stand-alone flows, enable the `debug_level` configuration option:

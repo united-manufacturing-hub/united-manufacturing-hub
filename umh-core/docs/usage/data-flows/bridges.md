@@ -26,24 +26,41 @@ Go to **Data Flows** and click **Add Bridge**:
 
 ![Data Flows Overview](./images/bridges-overview.png)
 
-### Step 2: Configure General Settings
+### Step 2: Choose Creation Method
 
-Fill in the basic information and press **Save & Deploy**. A popup will appear. Only then you can proceed with Step 3.
+After clicking **Add Bridge**, you'll see two options:
 
-![Bridge General Configuration](./images/bridge-general-good-conenction-no-read-flow.png)
+![Bridge Creation Choice](./images/bridge-creation-choice.png)
+
+- **From Scratch**: Start with a template from our library of 200+ protocol configurations
+- **From Existing Bridge**: Copy settings from an existing bridge (useful for similar devices)
+
+### Step 3: Select a Template
+
+If you chose **From Scratch**, you'll see a searchable grid of protocol templates organized by vendor and protocol:
+
+![Template Selection Grid](./images/template-selection-grid.png)
+
+Use the **search bar** to find templates by name, or filter by **vendor** and **protocol** using the dropdown menus. Templates include pre-configured settings for common industrial devices.
+
+### Step 4: Configure the Bridge
+
+After selecting a template, the configuration form opens with **pre-filled settings** based on your chosen protocol:
+
+![Bridge Configuration Prefilled](./images/bridge-config-prefilled.png)
 
 **General Information:**
-- **Name**: Unique identifier for your bridge
+- **Name**: Auto-generated from template, customize as needed
 - **Instance**: Select your UMH instance
 - **Level 0-4**: Location path (e.g., enterprise → site → area → line → machine)
 
 **Connection:**
 - **IP Address**: Device IP (becomes `{{ .IP }}` variable)
-- **Port**: Connection port (becomes `{{ .PORT }}` variable)
+- **Port**: Pre-filled with protocol default (becomes `{{ .PORT }}` variable)
 
-### Step 3: Select Protocol
+### Step 5: Select Protocol Details
 
-Click the **Read** tab and select your protocol:
+Click the **Read** tab to configure protocol-specific settings:
 
 ![Protocol Selection](./images/bridges-read-no-dfc-protocol-selection.png)
 
