@@ -1135,12 +1135,23 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 
 			addedCount++
 
+			// Merge parent dependencies with child's (child overrides parent)
+			mergedDeps := config.MergeDependencies(s.deps, spec.Dependencies)
+
+			s.logTrace("lifecycle",
+				"lifecycle_event", "dependencies_merged",
+				"child_name", spec.Name,
+				"parent_dep_count", len(s.deps),
+				"child_dep_count", len(spec.Dependencies),
+				"merged_dep_count", len(mergedDeps))
+
 			childConfig := Config{
 				WorkerType:              spec.WorkerType,
 				Store:                   s.store,
 				Logger:                  s.baseLogger, // Important: Use un-enriched logger to prevent duplicate "worker" fields
 				TickInterval:            s.tickInterval,
 				GracefulShutdownTimeout: s.gracefulShutdownTimeout,
+				Dependencies:            mergedDeps,
 			}
 
 			// Use factory to create child supervisor with proper type
@@ -1197,7 +1208,8 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 
 			// Use factory to create worker instance with un-enriched logger
 			// Important: Pass baseLogger to prevent duplicate "worker" fields
-			childWorker, err := factory.NewWorkerByType(spec.WorkerType, childIdentity, s.baseLogger, s.store, s.deps)
+			// Use mergedDeps to include both parent and child-specific dependencies
+			childWorker, err := factory.NewWorkerByType(spec.WorkerType, childIdentity, s.baseLogger, s.store, mergedDeps)
 			if err != nil {
 				s.logger.Errorw("child_worker_creation_failed",
 					"child_name", spec.Name,

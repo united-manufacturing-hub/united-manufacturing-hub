@@ -176,6 +176,13 @@ func (u UserSpec) Clone() UserSpec {
 // - Passing data between states (use VariableBundle instead)
 // - Triggering actions (use signals instead)
 //
+// # Dependency Inheritance
+//
+// Dependencies are additional deps to merge with parent's deps.
+// Child values override parent values for the same keys.
+// NOTE: This is a shallow merge - interface/channel values are shared, not copied.
+// Set to nil to use parent's deps unchanged.
+//
 // Example - Protocol converter managing connections:
 //
 //	// Parent (protocol converter) declares a child (MQTT connection)
@@ -204,10 +211,11 @@ func (u UserSpec) Clone() UserSpec {
 //	    },
 //	}
 type ChildSpec struct {
-	Name             string   `json:"name"                       yaml:"name"`                       // Unique name for this child (within parent scope)
-	WorkerType       string   `json:"workerType"                 yaml:"workerType"`                 // Type of worker to create (registered worker factory key)
-	UserSpec         UserSpec `json:"userSpec"                   yaml:"userSpec"`                   // Raw user config (input to DeriveDesiredState)
-	ChildStartStates []string `json:"childStartStates,omitempty" yaml:"childStartStates,omitempty"` // Parent FSM states where child should run (empty = always run)
+	Name             string         `json:"name"                       yaml:"name"`                       // Unique name for this child (within parent scope)
+	WorkerType       string         `json:"workerType"                 yaml:"workerType"`                 // Type of worker to create (registered worker factory key)
+	UserSpec         UserSpec       `json:"userSpec"                   yaml:"userSpec"`                   // Raw user config (input to DeriveDesiredState)
+	ChildStartStates []string       `json:"childStartStates,omitempty" yaml:"childStartStates,omitempty"` // Parent FSM states where child should run (empty = always run)
+	Dependencies     map[string]any `json:"dependencies,omitempty"     yaml:"dependencies,omitempty"`     // Additional deps to merge with parent's deps (child overrides parent)
 }
 
 // MarshalJSON implements json.Marshaler for ChildSpec.
@@ -219,6 +227,8 @@ func (c *ChildSpec) MarshalJSON() ([]byte, error) {
 }
 
 // Clone creates a deep copy of the ChildSpec.
+// Note: Dependencies is shallow-copied (values are shared intentionally since they
+// represent shared resources like channels and interfaces).
 func (c ChildSpec) Clone() ChildSpec {
 	clone := c
 
@@ -227,6 +237,13 @@ func (c ChildSpec) Clone() ChildSpec {
 	if c.ChildStartStates != nil {
 		clone.ChildStartStates = make([]string, len(c.ChildStartStates))
 		copy(clone.ChildStartStates, c.ChildStartStates)
+	}
+
+	if c.Dependencies != nil {
+		clone.Dependencies = make(map[string]any, len(c.Dependencies))
+		for k, v := range c.Dependencies {
+			clone.Dependencies[k] = v
+		}
 	}
 
 	return clone
