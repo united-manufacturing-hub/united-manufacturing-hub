@@ -158,7 +158,7 @@ func init() {
 	// The worker type is derived from ExamplefailingObservedState, ensuring consistency.
 	// NOTE: This fixes a previous key mismatch where supervisor was "examplefailing" but worker was "failing".
 	if err := factory.RegisterWorkerType[snapshot.ExamplefailingObservedState, *snapshot.ExamplefailingDesiredState](
-		func(id fsmv2.Identity, logger *zap.SugaredLogger, stateReader fsmv2.StateReader) fsmv2.Worker {
+		func(id fsmv2.Identity, logger *zap.SugaredLogger, stateReader fsmv2.StateReader, _ map[string]any) fsmv2.Worker {
 			pool := &DefaultConnectionPool{}
 			worker, _ := NewFailingWorker(id, pool, logger, stateReader)
 

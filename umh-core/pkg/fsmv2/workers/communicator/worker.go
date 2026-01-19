@@ -399,15 +399,28 @@ func (w *CommunicatorWorker) GetInitialState() fsmv2.State[any, any] {
 func init() {
 	// Register both worker and supervisor factories atomically.
 	if err := factory.RegisterWorkerType[snapshot.CommunicatorObservedState, *snapshot.CommunicatorDesiredState](
-		func(id fsmv2.Identity, logger *zap.SugaredLogger, stateReader fsmv2.StateReader) fsmv2.Worker {
+		func(id fsmv2.Identity, logger *zap.SugaredLogger, stateReader fsmv2.StateReader, deps map[string]any) fsmv2.Worker {
+			// Extract channelProvider from injected dependencies if available
+			var channelProvider ChannelProvider
+			if deps != nil {
+				if cp, ok := deps["channelProvider"].(ChannelProvider); ok {
+					channelProvider = cp
+				}
+			}
+
 			// Create dependencies WITHOUT transport (created lazily by AuthenticateAction)
-			deps := NewCommunicatorDependencies(nil, logger, stateReader, id)
+			commDeps := NewCommunicatorDependencies(nil, logger, stateReader, id)
+			// Set channel provider if injected
+			if channelProvider != nil {
+				commDeps.SetChannelProvider(channelProvider)
+			}
+
 			worker, err := NewCommunicatorWorker(id.ID, id.Name, nil, logger, stateReader)
 			if err != nil {
 				panic(fmt.Sprintf("failed to create communicator worker: %v", err))
 			}
 			// Replace dependencies with the ones we created
-			worker.BaseWorker = helpers.NewBaseWorker(deps)
+			worker.BaseWorker = helpers.NewBaseWorker(commDeps)
 
 			return worker
 		},

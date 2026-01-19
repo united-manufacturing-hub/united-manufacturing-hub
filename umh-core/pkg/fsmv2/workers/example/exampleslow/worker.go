@@ -133,7 +133,7 @@ func init() {
 	// The worker type is derived from ExampleslowObservedState, ensuring consistency.
 	// NOTE: This fixes a previous key mismatch where supervisor was "exampleslow" but worker was "slow".
 	if err := factory.RegisterWorkerType[snapshot.ExampleslowObservedState, *snapshot.ExampleslowDesiredState](
-		func(id fsmv2.Identity, logger *zap.SugaredLogger, stateReader fsmv2.StateReader) fsmv2.Worker {
+		func(id fsmv2.Identity, logger *zap.SugaredLogger, stateReader fsmv2.StateReader, _ map[string]any) fsmv2.Worker {
 			pool := &DefaultConnectionPool{}
 			worker, _ := NewExampleslowWorker(id, pool, logger, stateReader)
 

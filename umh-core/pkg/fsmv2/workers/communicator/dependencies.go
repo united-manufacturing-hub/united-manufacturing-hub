@@ -102,6 +102,22 @@ func (d *CommunicatorDependencies) Metrics() *fsmv2.MetricsRecorder {
 	return d.metrics
 }
 
+// SetChannelProvider configures the inbound/outbound channels from a provider.
+// This allows injecting channel provider via dependencies instead of global state.
+// Called by factory when deps["channelProvider"] is set.
+func (d *CommunicatorDependencies) SetChannelProvider(p ChannelProvider) {
+	if p == nil {
+		return
+	}
+
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	inbound, outbound := p.GetChannels(d.GetWorkerID())
+	d.inboundChan = inbound
+	d.outboundChan = outbound
+}
+
 // SetTransport sets the transport instance (mutex protected).
 // Called by AuthenticateAction on first execution.
 func (d *CommunicatorDependencies) SetTransport(t transport.Transport) {

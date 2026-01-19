@@ -182,6 +182,11 @@ type SupervisorConfig struct {
 	// Optional - defaults to false. Set ENABLE_TRACE_LOGGING=true for deep debugging.
 	// When false, these high-frequency internal logs are suppressed to improve signal-to-noise ratio.
 	EnableTraceLogging bool
+
+	// Dependencies is an optional map of named dependencies to inject into child workers.
+	// Worker factories can access these via the deps parameter to avoid global state.
+	// Example: deps["channelProvider"] could provide channels for the communicator worker.
+	Dependencies map[string]any
 }
 
 // NewApplicationSupervisor creates a supervisor with an application worker already added.
@@ -270,7 +275,7 @@ func init() {
 	// Register both worker and supervisor factories atomically.
 	// The worker type is derived from ApplicationObservedState, ensuring consistency.
 	if err := factory.RegisterWorkerType[snapshot.ApplicationObservedState, *snapshot.ApplicationDesiredState](
-		func(id fsmv2.Identity, _ *zap.SugaredLogger, _ fsmv2.StateReader) fsmv2.Worker {
+		func(id fsmv2.Identity, _ *zap.SugaredLogger, _ fsmv2.StateReader, _ map[string]any) fsmv2.Worker {
 			return NewApplicationWorker(id.ID, id.Name)
 		},
 		func(cfg interface{}) interface{} {

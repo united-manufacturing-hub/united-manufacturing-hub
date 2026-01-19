@@ -190,7 +190,7 @@ func init() {
 	// Register both worker and supervisor factories atomically.
 	// The worker type is derived from ExampleparentObservedState, ensuring consistency.
 	if err := factory.RegisterWorkerType[snapshot.ExampleparentObservedState, *snapshot.ExampleparentDesiredState](
-		func(id fsmv2.Identity, logger *zap.SugaredLogger, stateReader fsmv2.StateReader) fsmv2.Worker {
+		func(id fsmv2.Identity, logger *zap.SugaredLogger, stateReader fsmv2.StateReader, _ map[string]any) fsmv2.Worker {
 			worker, _ := NewParentWorker(id, logger, stateReader)
 
 			return worker

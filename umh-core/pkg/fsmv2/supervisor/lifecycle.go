@@ -519,7 +519,7 @@ func (s *Supervisor[TObserved, TDesired]) handleWorkerRestart(ctx context.Contex
 	}
 
 	// 3. Create fresh worker instance via factory
-	newWorker, err := factory.NewWorkerByType(s.workerType, identity, s.baseLogger, s.store)
+	newWorker, err := factory.NewWorkerByType(s.workerType, identity, s.baseLogger, s.store, s.deps)
 	if err != nil {
 		return fmt.Errorf("failed to create new worker for restart: %w", err)
 	}

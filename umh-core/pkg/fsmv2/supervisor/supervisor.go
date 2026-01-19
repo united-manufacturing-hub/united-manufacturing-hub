@@ -222,8 +222,9 @@ type Supervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] stru
 	noStateMachineLoggedOnce sync.Map       // Tracks workers that have logged no_state_machine (workerID → true)
 	tickCount                uint64         // Counter for ticks, used for periodic heartbeat logging
 	gracefulShutdownTimeout  time.Duration  // How long to wait for workers to shutdown gracefully
-	lastUserSpecHash   string            // Hash of last UserSpec used for DeriveDesiredState
+	lastUserSpecHash   string             // Hash of last UserSpec used for DeriveDesiredState
 	cachedDesiredState fsmv2.DesiredState // Cached result from DeriveDesiredState (typed TDesired stored as interface)
+	deps               map[string]any     // Dependencies for worker creation (injected, not global)
 }
 
 func NewSupervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState](cfg Config) *Supervisor[TObserved, TDesired] {
@@ -317,5 +318,6 @@ func NewSupervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState](c
 		userSpec:                cfg.UserSpec,
 		enableTraceLogging:      cfg.EnableTraceLogging,
 		gracefulShutdownTimeout: gracefulShutdownTimeout,
+		deps:                    cfg.Dependencies,
 	}
 }

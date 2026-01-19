@@ -174,4 +174,10 @@ type Config struct {
 	// If this timeout is reached, the supervisor proceeds with forced shutdown.
 	// Optional - defaults to 5 seconds.
 	GracefulShutdownTimeout time.Duration
+
+	// Dependencies is an optional map of named dependencies to inject into child workers.
+	// Worker factories can access these via the deps parameter to avoid global state.
+	// Example: deps["channelProvider"] could provide channels for the communicator worker.
+	// Optional - defaults to nil.
+	Dependencies map[string]any
 }
