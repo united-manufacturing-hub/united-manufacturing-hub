@@ -23,6 +23,12 @@ import (
 	"go.uber.org/zap"
 )
 
+// TransportResetThreshold is the number of consecutive errors that triggers a transport reset.
+// When this threshold is reached (and at every multiple of the threshold), the transport's
+// Reset() method is called to flush stale connections and potentially resolve connection-level
+// issues like DNS caching, corrupted TCP state, or stale pooled connections.
+const TransportResetThreshold = 5
+
 // CommunicatorDependencies provides access to tools needed by communicator worker actions.
 // It extends BaseDependencies with communicator-specific tools (transport).
 //
@@ -211,6 +217,8 @@ func (d *CommunicatorDependencies) GetPulledMessages() []*transport.UMHMessage {
 // RecordError increments the consecutive error counter.
 // On the first error (transitioning from 0 errors), it also sets degradedEnteredAt
 // to track when we entered degraded mode.
+// When consecutive errors reach TransportResetThreshold (or any multiple thereof),
+// the transport's Reset() method is called to flush stale connections.
 // This is called by actions after an operation fails.
 // Thread-safe: uses mutex for concurrent access protection.
 func (d *CommunicatorDependencies) RecordError() {
@@ -223,6 +231,11 @@ func (d *CommunicatorDependencies) RecordError() {
 	}
 
 	d.consecutiveErrors++
+
+	// Trigger transport reset when threshold is reached (or at multiples of threshold)
+	if d.consecutiveErrors%TransportResetThreshold == 0 && d.transport != nil {
+		d.transport.Reset()
+	}
 }
 
 // RecordSuccess resets the consecutive error counter to 0 and clears degradedEnteredAt.

@@ -332,6 +332,90 @@ var _ = Describe("CommunicatorDependencies", func() {
 		})
 	})
 
+	Describe("Transport reset on consecutive errors", func() {
+		var (
+			mockTrans *MockTransport
+			deps      *communicator.CommunicatorDependencies
+		)
+
+		BeforeEach(func() {
+			mockTrans = NewMockTransport()
+			identity := fsmv2.Identity{ID: "test-id", WorkerType: "communicator"}
+			deps = communicator.NewCommunicatorDependencies(mockTrans, logger, nil, identity)
+		})
+
+		Context("when errors are below threshold", func() {
+			It("should NOT call Reset() for 4 consecutive errors", func() {
+				// Record 4 errors (below threshold of 5)
+				for range 4 {
+					deps.RecordError()
+				}
+
+				Expect(mockTrans.ResetCallCount()).To(Equal(0))
+			})
+		})
+
+		Context("when errors reach threshold", func() {
+			It("should call Reset() when consecutive errors reach TransportResetThreshold (5)", func() {
+				// Record 5 errors to reach threshold
+				for range 5 {
+					deps.RecordError()
+				}
+
+				// Reset should be called once when threshold is reached
+				Expect(mockTrans.ResetCallCount()).To(Equal(1))
+			})
+
+			It("should call Reset() again when errors accumulate to next threshold multiple", func() {
+				// Record 10 errors (two thresholds)
+				for range 10 {
+					deps.RecordError()
+				}
+
+				// Reset should be called twice (at 5 and 10)
+				Expect(mockTrans.ResetCallCount()).To(Equal(2))
+			})
+		})
+
+		Context("when transport is nil", func() {
+			It("should not panic when recording errors without transport", func() {
+				identity := fsmv2.Identity{ID: "test-id", WorkerType: "communicator"}
+				// Create deps with nil transport
+				depsWithNilTransport := communicator.NewCommunicatorDependencies(nil, logger, nil, identity)
+
+				// Should not panic even when threshold is reached
+				Expect(func() {
+					for range 10 {
+						depsWithNilTransport.RecordError()
+					}
+				}).NotTo(Panic())
+			})
+		})
+
+		Context("when success resets error count", func() {
+			It("should require reaching threshold again after RecordSuccess", func() {
+				// Record 3 errors
+				for range 3 {
+					deps.RecordError()
+				}
+				Expect(mockTrans.ResetCallCount()).To(Equal(0))
+
+				// Success resets counter
+				deps.RecordSuccess()
+
+				// Record 4 more errors (still below threshold)
+				for range 4 {
+					deps.RecordError()
+				}
+				Expect(mockTrans.ResetCallCount()).To(Equal(0))
+
+				// 5th error should trigger reset
+				deps.RecordError()
+				Expect(mockTrans.ResetCallCount()).To(Equal(1))
+			})
+		})
+	})
+
 	Describe("DegradedEnteredAt tracking", func() {
 		var deps *communicator.CommunicatorDependencies
 

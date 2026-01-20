@@ -28,6 +28,7 @@ type MockTransport struct {
 	authenticateCalls int
 	pullCalls         int
 	pushCalls         int
+	resetCalls        int
 
 	authenticateErr error
 	pullErr         error
@@ -93,7 +94,10 @@ func (m *MockTransport) Close() {
 }
 
 func (m *MockTransport) Reset() {
-	// No-op for mock
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.resetCalls++
 }
 
 func (m *MockTransport) SetAuthenticateError(err error) {
@@ -150,6 +154,13 @@ func (m *MockTransport) PushCallCount() int {
 	defer m.mu.Unlock()
 
 	return m.pushCalls
+}
+
+func (m *MockTransport) ResetCallCount() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	return m.resetCalls
 }
 
 // MockChannelProvider implements communicator.ChannelProvider for testing
