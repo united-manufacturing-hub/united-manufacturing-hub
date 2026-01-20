@@ -26,11 +26,13 @@
 //     WHY:  Expired tokens cause 401 errors and sync failures
 //     ENFORCED: SyncAction checks JWTExpiry before transport.Push/Pull
 //
-// C3: Transport lifecycle (UPDATED)
+// C3: Transport lifecycle
 //     MUST: Transport must be set before syncing operations
 //     WHY:  All sync actions depend on transport for HTTP communication
 //     ENFORCED: AuthenticateAction creates transport on first execution
-//     NOTE: Transport may be nil after worker construction, before first auth
+//     GUARANTEE: After AuthenticateAction.Execute() runs, transport is non-nil
+//     IMPLICATION: SyncAction, ResetTransportAction can assume transport is non-nil
+//                  (they only execute after authentication has completed)
 //
 // C4: Shutdown check priority
 //     MUST: Check shutdown signal before processing any action

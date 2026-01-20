@@ -125,7 +125,19 @@ func (d *CommunicatorDependencies) SetTransport(t transport.Transport) {
 }
 
 // GetTransport returns the transport (mutex protected).
-// Returns nil if not yet created - callers MUST check for nil.
+//
+// Transport nil safety:
+//   - Returns nil only if transport was not passed to NewCommunicatorDependencies
+//     AND AuthenticateAction.Execute() has not yet run
+//   - After AuthenticateAction.Execute() completes (even with error), transport is non-nil
+//   - All actions that execute AFTER TryingToAuthenticateState (SyncAction, ResetTransportAction)
+//     are guaranteed to have a non-nil transport
+//
+// State machine guarantees:
+//   - TryingToAuthenticateState -> SyncingState transition requires successful authentication
+//   - SyncingState -> DegradedState transition happens only after sync operations
+//   - DegradedState can only call ResetTransportAction, which is safe
+//   - Therefore, only AuthenticateAction may see nil transport (and it handles this by creating one)
 func (d *CommunicatorDependencies) GetTransport() transport.Transport {
 	d.mu.RLock()
 	defer d.mu.RUnlock()

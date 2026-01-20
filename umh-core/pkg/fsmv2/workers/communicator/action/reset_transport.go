@@ -83,17 +83,21 @@ func (a *ResetTransportAction) Name() string {
 //   - Transport has a fresh HTTP client
 //   - Next sync operation will use new connections
 //
+// Transport nil safety:
+//   - ResetTransportAction is ONLY called from DegradedState
+//   - DegradedState is only reachable AFTER SyncingState
+//   - SyncingState is only reachable AFTER TryingToAuthenticateState
+//   - TryingToAuthenticateState runs AuthenticateAction which creates the transport
+//   - Therefore, transport is GUARANTEED to be non-nil when this action executes
+//
 // Error handling:
-//   - If transport is nil (not yet created), this is a no-op
 //   - Transport.Reset() does not return errors (best-effort operation)
 func (a *ResetTransportAction) Execute(ctx context.Context, depsAny any) error {
 	deps := depsAny.(CommunicatorDependencies)
 
 	transport := deps.GetTransport()
-	if transport != nil {
-		transport.Reset()
-		deps.GetLogger().Infow("Transport reset completed", "reason", "degraded_state_threshold")
-	}
+	transport.Reset()
+	deps.GetLogger().Infow("Transport reset completed", "reason", "degraded_state_threshold")
 
 	return nil
 }

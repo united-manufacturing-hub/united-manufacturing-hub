@@ -69,16 +69,13 @@ var _ = Describe("ResetTransportAction", func() {
 			Expect(mockTransp.resetCallCount).To(Equal(3))
 		})
 
-		It("should handle nil transport gracefully", func() {
-			ctx := context.Background()
-			// Create dependencies without transport
-			depsNoTransport := communicator.NewCommunicatorDependencies(nil, logger, nil, fsmv2.Identity{ID: "test", WorkerType: "communicator"})
-
-			err := act.Execute(ctx, depsNoTransport)
-
-			// Should not panic or error - just no-op
-			Expect(err).NotTo(HaveOccurred())
-		})
+		// Note: We removed the "nil transport" test case because transport is now
+		// GUARANTEED to be non-nil when ResetTransportAction executes:
+		// - ResetTransportAction is ONLY called from DegradedState
+		// - DegradedState is only reachable AFTER SyncingState
+		// - SyncingState is only reachable AFTER TryingToAuthenticateState
+		// - TryingToAuthenticateState runs AuthenticateAction which creates the transport
+		// Therefore, testing nil transport is testing an impossible scenario.
 	})
 })
 
