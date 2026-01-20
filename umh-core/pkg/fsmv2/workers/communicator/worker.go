@@ -408,11 +408,30 @@ func init() {
 				}
 			}
 
+			// Extract onAuthSuccessCallback from injected dependencies if available (Bug #6 fix)
+			var onAuthSuccessCallback func(uuid, name string)
+			if deps != nil {
+				if cb, ok := deps["onAuthSuccessCallback"].(func(uuid, name string)); ok {
+					onAuthSuccessCallback = cb
+					logger.Infow("onAuthSuccessCallback extracted from dependencies")
+				} else {
+					logger.Warnw("onAuthSuccessCallback not found or wrong type in dependencies",
+						"hasKey", deps["onAuthSuccessCallback"] != nil,
+						"type", fmt.Sprintf("%T", deps["onAuthSuccessCallback"]))
+				}
+			} else {
+				logger.Warnw("deps is nil, cannot extract onAuthSuccessCallback")
+			}
+
 			// Create dependencies WITHOUT transport (created lazily by AuthenticateAction)
 			commDeps := NewCommunicatorDependencies(nil, logger, stateReader, id)
 			// Set channel provider if injected
 			if channelProvider != nil {
 				commDeps.SetChannelProvider(channelProvider)
+			}
+			// Set auth success callback if injected (Bug #6 fix)
+			if onAuthSuccessCallback != nil {
+				commDeps.SetOnAuthSuccessCallback(onAuthSuccessCallback)
 			}
 
 			worker, err := NewCommunicatorWorker(id.ID, id.Name, nil, logger, stateReader)

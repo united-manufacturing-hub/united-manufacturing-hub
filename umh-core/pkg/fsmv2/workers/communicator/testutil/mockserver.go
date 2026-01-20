@@ -34,10 +34,12 @@ type MockRelayServer struct {
 	pushedMsgs        []*transport.UMHMessage
 	authCalls         int
 	jwtToken          string
-	instanceID        string
 	connectionHeaders []string
 	nextError         int
 	slowDelay         time.Duration
+	// Bug #6 fix: Backend returns a specific UUID for the instance
+	backendUUID string
+	backendName string
 }
 
 // NewMockRelayServer creates and starts a new mock relay server.
@@ -47,11 +49,24 @@ func NewMockRelayServer() *MockRelayServer {
 		pushedMsgs:        make([]*transport.UMHMessage, 0),
 		connectionHeaders: make([]string, 0),
 		jwtToken:          "mock-jwt-token-" + time.Now().Format("20060102150405"),
+		// Bug #6 fix: Default backend UUID - different from any placeholder UUID
+		backendUUID: "backend-real-uuid-12345678",
+		backendName: "Mock Instance Name",
 	}
 
 	m.server = httptest.NewServer(http.HandlerFunc(m.handler))
 
 	return m
+}
+
+// SetBackendUUID sets the UUID that will be returned in login responses.
+// Use this to test Bug #6 fix: ensuring the backend-returned UUID is used.
+func (m *MockRelayServer) SetBackendUUID(uuid, name string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.backendUUID = uuid
+	m.backendName = name
 }
 
 // handler routes requests to the appropriate handler based on the path.
@@ -101,6 +116,7 @@ func (m *MockRelayServer) handler(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleLogin handles authentication requests.
+// Matches real backend behavior: Authorization header with Bearer token, returns uuid/name in response.
 func (m *MockRelayServer) handleLogin(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -108,20 +124,25 @@ func (m *MockRelayServer) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req transport.AuthRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+	// Real FSMv2 transport uses Authorization header, not JSON body
+	// Accept either for backward compatibility with tests
+	authHeader := r.Header.Get("Authorization")
+	if authHeader == "" {
+		// Fallback: try to read from body (legacy test behavior)
+		// No auth header and no valid body - that's OK for mock, just continue
+		var req transport.AuthRequest
 
-		return
+		_ = json.NewDecoder(r.Body).Decode(&req)
 	}
 
 	m.mu.Lock()
 	m.authCalls++
-	m.instanceID = req.InstanceUUID
 	token := m.jwtToken
+	backendUUID := m.backendUUID
+	backendName := m.backendName
 	m.mu.Unlock()
 
-	// Set JWT cookie
+	// Set JWT cookie (matching real backend behavior)
 	http.SetCookie(w, &http.Cookie{
 		Name:     "token",
 		Value:    token,
@@ -129,10 +150,14 @@ func (m *MockRelayServer) handleLogin(w http.ResponseWriter, r *http.Request) {
 		HttpOnly: true,
 	})
 
-	// Return token in response body as well
-	resp := transport.AuthResponse{
-		Token:     token,
-		ExpiresAt: time.Now().Add(24 * time.Hour).Unix(),
+	// Return uuid and name in response body (Bug #6 fix: real backend returns these)
+	// The real backend returns: {"uuid": "...", "name": "..."}
+	resp := struct {
+		UUID string `json:"uuid"`
+		Name string `json:"name"`
+	}{
+		UUID: backendUUID,
+		Name: backendName,
 	}
 
 	w.Header().Set("Content-Type", "application/json")

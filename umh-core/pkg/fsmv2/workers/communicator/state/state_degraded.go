@@ -21,6 +21,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/action"
+	commconfig "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/snapshot"
 )
 
@@ -150,6 +151,13 @@ func (s *DegradedState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, 
 	// If we're still within the backoff period, wait (no action)
 	if time.Since(s.enteredAt) < backoffDelay {
 		return s, fsmv2.SignalNone, nil
+	}
+
+	// Check if we should reset the transport (at 5, 10, 15... consecutive errors)
+	// This helps recover from persistent connection-level issues
+	consecutiveErrors := snap.Observed.GetConsecutiveErrors()
+	if consecutiveErrors > 0 && consecutiveErrors%commconfig.TransportResetThreshold == 0 {
+		return s, fsmv2.SignalNone, action.NewResetTransportAction()
 	}
 
 	// Backoff expired - create SyncAction to retry

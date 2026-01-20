@@ -20,9 +20,14 @@ import (
 
 // Configuration errors.
 var (
-	ErrAPIURLRequired   = errors.New("APIURL is required when UseFSMv2Transport is enabled")
+	ErrAPIURLRequired    = errors.New("APIURL is required when UseFSMv2Transport is enabled")
 	ErrAuthTokenRequired = errors.New("AuthToken is required when UseFSMv2Transport is enabled")
 )
+
+// TransportResetThreshold is the number of consecutive errors before the
+// transport is reset in degraded state. Reset occurs at multiples of this
+// threshold (5, 10, 15...) to allow periodic reset attempts.
+const TransportResetThreshold = 5
 
 // CommunicatorConfig holds configuration for the communicator worker.
 type CommunicatorConfig struct {

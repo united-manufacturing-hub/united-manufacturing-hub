@@ -124,3 +124,6 @@ func (m *mockTransport) Push(ctx context.Context, jwtToken string, messages []*t
 
 func (m *mockTransport) Close() {
 }
+
+func (m *mockTransport) Reset() {
+}

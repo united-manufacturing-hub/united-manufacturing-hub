@@ -92,6 +92,10 @@ func (m *MockTransport) Close() {
 	// No-op for mock
 }
 
+func (m *MockTransport) Reset() {
+	// No-op for mock
+}
+
 func (m *MockTransport) SetAuthenticateError(err error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()

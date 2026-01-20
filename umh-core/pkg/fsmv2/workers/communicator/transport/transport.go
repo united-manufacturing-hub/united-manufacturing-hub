@@ -17,8 +17,9 @@ package transport
 import "context"
 
 // UMHMessage represents a message in the umh-core push/pull protocol.
+// Note: InstanceUUID uses json tag "umhInstance" to match backend API (models.UMHMessage).
 type UMHMessage struct {
-	InstanceUUID string `json:"instanceUUID"`
+	InstanceUUID string `json:"umhInstance"`
 	Content      string `json:"content"`
 	Email        string `json:"email"`
 }
@@ -31,8 +32,10 @@ type AuthRequest struct {
 
 // AuthResponse represents an authentication response.
 type AuthResponse struct {
-	Token     string `json:"token"`
-	ExpiresAt int64  `json:"expiresAt,omitempty"`
+	Token        string `json:"token"`
+	ExpiresAt    int64  `json:"expiresAt,omitempty"`
+	InstanceUUID string `json:"uuid,omitempty"`     // Instance UUID returned by backend
+	InstanceName string `json:"name,omitempty"`     // Instance name returned by backend
 }
 
 // PullPayload represents the response from /v2/instance/pull.
@@ -136,4 +139,22 @@ type Transport interface {
 	//
 	// Does not return an error (cleanup operations are best-effort).
 	Close()
+
+	// Reset recreates the underlying client to establish fresh connections.
+	//
+	// This method is useful when the transport is in a degraded state and
+	// retrying with the same client isn't helping. It closes existing idle
+	// connections and creates a new HTTP client with the same configuration.
+	//
+	// Use case: When DegradedState detects persistent failures (e.g., 5 consecutive
+	// errors), it triggers Reset() to potentially resolve connection-level issues
+	// like stale TCP connections, DNS caching problems, or corrupted connection state.
+	//
+	// Idempotency:
+	//   - Safe to call multiple times
+	//   - Does not affect in-flight requests (they will complete or timeout)
+	//   - Subsequent Push/Pull/Authenticate calls use the new client
+	//
+	// Does not return an error (reset operations are best-effort).
+	Reset()
 }

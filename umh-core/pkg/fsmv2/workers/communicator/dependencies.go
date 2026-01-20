@@ -53,19 +53,22 @@ type CommunicatorDependencies struct {
 	pulledMessages []*transport.UMHMessage // Pulled messages (set by SyncAction)
 
 	// 16-byte fields
-	transport transport.Transport // HTTP transport for push/pull operations
-	jwtToken  string              // JWT token (set by AuthenticateAction)
+	transport    transport.Transport // HTTP transport for push/pull operations
+	jwtToken     string              // JWT token (set by AuthenticateAction)
+	instanceUUID string              // Instance UUID from backend (set by AuthenticateAction)
+	instanceName string              // Instance name from backend (set by AuthenticateAction)
 
 	// 8-byte fields
 	*fsmv2.BaseDependencies
-	metrics           *fsmv2.MetricsRecorder       // Standard metrics recorder for actions
-	lastPullLatency   time.Duration                // Per-tick pull latency
-	lastPushLatency   time.Duration                // Per-tick push latency
-	inboundChan       chan<- *transport.UMHMessage // Write received messages to router
-	outboundChan      <-chan *transport.UMHMessage // Read messages from router to push
-	consecutiveErrors int                          // Error counter (incremented by RecordError)
-	lastPullCount     int                          // Per-tick pull message count
-	lastPushCount     int                          // Per-tick push message count
+	metrics               *fsmv2.MetricsRecorder       // Standard metrics recorder for actions
+	lastPullLatency       time.Duration                // Per-tick pull latency
+	lastPushLatency       time.Duration                // Per-tick push latency
+	inboundChan           chan<- *transport.UMHMessage // Write received messages to router
+	outboundChan          <-chan *transport.UMHMessage // Read messages from router to push
+	onAuthSuccessCallback func(uuid, name string)      // Callback when auth succeeds (Bug #6)
+	consecutiveErrors     int                          // Error counter (incremented by RecordError)
+	lastPullCount         int                          // Per-tick pull message count
+	lastPushCount         int                          // Per-tick push message count
 
 	// 1-byte fields (bools grouped at end to minimize padding)
 	lastPullSuccess   bool // Per-tick pull success flag
@@ -335,4 +338,70 @@ func (d *CommunicatorDependencies) ClearSyncResults() {
 	d.lastPushCount = 0
 	d.lastPushSuccess = false
 	d.syncTickCompleted = false
+}
+
+// SetOnAuthSuccessCallback sets a callback to be invoked when authentication succeeds.
+// The callback receives the instance UUID and name from the backend.
+// This is used by main.go to update CommunicationState.LoginResponse with the real UUID.
+// Thread-safe: uses mutex for concurrent access protection.
+func (d *CommunicatorDependencies) SetOnAuthSuccessCallback(callback func(uuid, name string)) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	d.onAuthSuccessCallback = callback
+	d.GetLogger().Infow("SetOnAuthSuccessCallback called", "callbackIsNil", callback == nil)
+}
+
+// SetInstanceInfo stores the instance UUID and name from authentication response.
+// Called by AuthenticateAction after successful authentication.
+// Also triggers the OnAuthSuccess callback if set.
+// Thread-safe: uses mutex for concurrent access protection.
+func (d *CommunicatorDependencies) SetInstanceInfo(uuid, name string) {
+	d.mu.Lock()
+	d.instanceUUID = uuid
+	d.instanceName = name
+	callback := d.onAuthSuccessCallback
+	d.mu.Unlock()
+
+	logger := d.GetLogger()
+	logger.Infow("SetInstanceInfo called",
+		"uuid", uuid,
+		"name", name,
+		"hasCallback", callback != nil)
+
+	// Trigger callback outside of lock to avoid deadlock
+	if callback != nil {
+		logger.Infow("Triggering onAuthSuccessCallback")
+		callback(uuid, name)
+	} else {
+		logger.Warnw("onAuthSuccessCallback is nil, cannot trigger callback")
+	}
+}
+
+// GetInstanceUUID returns the stored instance UUID from backend authentication.
+// Thread-safe: uses mutex for concurrent access protection.
+func (d *CommunicatorDependencies) GetInstanceUUID() string {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+
+	return d.instanceUUID
+}
+
+// GetInstanceName returns the stored instance name from backend authentication.
+// Thread-safe: uses mutex for concurrent access protection.
+func (d *CommunicatorDependencies) GetInstanceName() string {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+
+	return d.instanceName
+}
+
+// GetInstanceInfo returns both the stored instance UUID and name from backend authentication.
+// This is a convenience method that returns both values in a single call.
+// Thread-safe: uses mutex for concurrent access protection.
+func (d *CommunicatorDependencies) GetInstanceInfo() (uuid, name string) {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+
+	return d.instanceUUID, d.instanceName
 }

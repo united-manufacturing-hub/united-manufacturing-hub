@@ -40,6 +40,7 @@ func (m *mockTransport) Push(_ context.Context, _ string, _ []*transport.UMHMess
 	return nil
 }
 func (m *mockTransport) Close() {}
+func (m *mockTransport) Reset() {}
 
 var _ = Describe("CommunicatorDependencies", func() {
 	var (
@@ -102,6 +103,89 @@ var _ = Describe("CommunicatorDependencies", func() {
 
 				return ok
 			}))
+		})
+	})
+
+	Describe("Bug #6: Instance info and auth success callback", func() {
+		var deps *communicator.CommunicatorDependencies
+
+		BeforeEach(func() {
+			identity := fsmv2.Identity{ID: "test-id", WorkerType: "communicator"}
+			deps = communicator.NewCommunicatorDependencies(mt, logger, nil, identity)
+		})
+
+		Describe("SetInstanceInfo", func() {
+			It("should store instance UUID and name", func() {
+				deps.SetInstanceInfo("backend-real-uuid-12345", "My Instance")
+				uuid, name := deps.GetInstanceInfo()
+				Expect(uuid).To(Equal("backend-real-uuid-12345"))
+				Expect(name).To(Equal("My Instance"))
+			})
+		})
+
+		Describe("SetOnAuthSuccessCallback", func() {
+			It("should invoke callback when SetInstanceInfo is called", func() {
+				var callbackUUID, callbackName string
+				callbackCalled := false
+
+				deps.SetOnAuthSuccessCallback(func(uuid, name string) {
+					callbackCalled = true
+					callbackUUID = uuid
+					callbackName = name
+				})
+
+				deps.SetInstanceInfo("backend-uuid-from-auth", "Backend Instance Name")
+
+				Expect(callbackCalled).To(BeTrue(), "Expected callback to be invoked")
+				Expect(callbackUUID).To(Equal("backend-uuid-from-auth"))
+				Expect(callbackName).To(Equal("Backend Instance Name"))
+			})
+
+			It("should not panic if no callback is set", func() {
+				Expect(func() {
+					deps.SetInstanceInfo("uuid", "name")
+				}).NotTo(Panic())
+			})
+
+			It("should handle callback being set after SetInstanceInfo was already called", func() {
+				// First call without callback
+				deps.SetInstanceInfo("first-uuid", "First Name")
+
+				// Now set callback
+				var callbackUUID string
+				deps.SetOnAuthSuccessCallback(func(uuid, name string) {
+					callbackUUID = uuid
+				})
+
+				// Second call should trigger callback
+				deps.SetInstanceInfo("second-uuid", "Second Name")
+				Expect(callbackUUID).To(Equal("second-uuid"))
+			})
+		})
+
+		Describe("Thread safety for instance info", func() {
+			It("should handle concurrent SetInstanceInfo calls", func() {
+				done := make(chan bool, 10)
+
+				for i := range 10 {
+					go func(idx int) {
+						deps.SetInstanceInfo(
+							"uuid-"+string(rune('0'+idx)),
+							"name-"+string(rune('0'+idx)),
+						)
+						done <- true
+					}(i)
+				}
+
+				for range 10 {
+					<-done
+				}
+
+				// Should not panic and should have some value
+				uuid, name := deps.GetInstanceInfo()
+				Expect(uuid).NotTo(BeEmpty())
+				Expect(name).NotTo(BeEmpty())
+			})
 		})
 	})
 

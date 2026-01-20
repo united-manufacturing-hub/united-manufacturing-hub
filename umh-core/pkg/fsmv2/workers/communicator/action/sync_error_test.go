@@ -71,6 +71,10 @@ func (m *MockTransport) Push(ctx context.Context, jwtToken string, messages []*t
 func (m *MockTransport) Close() {
 }
 
+// Reset satisfies transport.Transport interface.
+func (m *MockTransport) Reset() {
+}
+
 func (m *MockTransport) PullReturns(messages []*transport.UMHMessage, err error) {
 	m.pullResults = []pullResult{{messages: messages, err: err}}
 	m.pullIndex = 0

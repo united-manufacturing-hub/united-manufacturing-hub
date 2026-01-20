@@ -394,7 +394,7 @@ func enableBackendConnection(ctx context.Context, config *config.FullConfig, com
 
 		communicationState.InitialiseAndStartPuller()
 		communicationState.InitialiseAndStartPusher()
-		communicationState.InitialiseAndStartSubscriberHandler(time.Minute*5, time.Minute, config, snapshotManager, configManager)
+		communicationState.InitialiseAndStartSubscriberHandler(time.Minute*5, time.Minute, config, snapshotManager, configManager, nil) // nil = legacy mode uses Pusher
 		communicationState.InitialiseAndStartRouter()
 		communicationState.InitialiseReAuthHandler(config.Agent.AuthToken, config.Agent.AllowInsecureTLS)
 
@@ -528,6 +528,14 @@ func (a *CommunicationStateChannelAdapter) GetChannels(_ string) (
 	return a.fsmInbound, a.fsmOutbound
 }
 
+// GetOutboundWriteChannel returns the outbound channel for direct writing.
+// This allows SubscriberHandler to bypass the legacy→FSMv2 conversion goroutine
+// and write transport.UMHMessage directly to the FSMv2 outbound channel.
+// Used for Priority 0: Remove Pusher from FSMv2 flow.
+func (a *CommunicationStateChannelAdapter) GetOutboundWriteChannel() chan<- *transport.UMHMessage {
+	return a.fsmOutbound
+}
+
 func enableFSMv2BackendConnection(
 	ctx context.Context,
 	configData *config.FullConfig,
@@ -553,7 +561,9 @@ func enableFSMv2BackendConnection(
 	channelAdapter.Start(ctx)
 
 	// Build YAML config for FSMv2 ApplicationSupervisor
-	instanceUUID := "instance-" + uuid.New().String()[:8] // Generate a short UUID for the instance
+	// Note: instanceUUID in config is a placeholder - the real UUID is returned by the backend
+	// and will be set via onAuthSuccessCallback (Bug #6 fix)
+	placeholderUUID := uuid.New().String()
 	yamlConfig := fmt.Sprintf(`
 children:
   - name: "communicator"
@@ -565,12 +575,20 @@ children:
         authToken: "%s"
         timeout: "10s"
         state: "running"
-`, configData.Agent.APIURL, instanceUUID, configData.Agent.AuthToken)
+`, configData.Agent.APIURL, placeholderUUID, configData.Agent.AuthToken)
 
 	// Setup store (in-memory for now)
 	store := examples.SetupStore(logger)
 
-	// Create ApplicationSupervisor with channel provider injected via Dependencies
+	// Create callback to update LoginResponse with real UUID from backend (Bug #6 fix)
+	// This is called by AuthenticateAction after successful authentication
+	onAuthSuccessCallback := func(realUUID, name string) {
+		logger.Infow("Authentication succeeded, updating LoginResponse with backend UUID",
+			"realUUID", realUUID, "name", name, "placeholderUUID", placeholderUUID)
+		communicationState.SetLoginResponseForFSMv2(realUUID)
+	}
+
+	// Create ApplicationSupervisor with channel provider and auth callback injected via Dependencies
 	// This avoids global state and enables proper testing
 	appSup, err := application.NewApplicationSupervisor(application.SupervisorConfig{
 		ID:           "fsmv2-communicator",
@@ -580,7 +598,8 @@ children:
 		TickInterval: 100 * time.Millisecond,
 		YAMLConfig:   yamlConfig,
 		Dependencies: map[string]any{
-			"channelProvider": channelAdapter,
+			"channelProvider":       channelAdapter,
+			"onAuthSuccessCallback": onAuthSuccessCallback,
 		},
 	})
 	if err != nil {
@@ -592,8 +611,22 @@ children:
 	// Start supervisor (non-blocking - returns done channel)
 	done := appSup.Start(ctx)
 
-	// Initialize and start the Router (still needed to process messages)
-	communicationState.InitialiseAndStartRouter()
+	// Initialize Router for FSMv2 mode:
+	// 1. Create write-only Pusher (writes to channel, FSMv2 handles HTTP)
+	// 2. Set LoginResponse with placeholder UUID (will be updated by onAuthSuccessCallback)
+	// 3. Initialize SubscriberHandler (generates status messages)
+	// 4. Start Router (processes inbound messages, generates status via Subscriber)
+	communicationState.InitializeWriteOnlyPusher(placeholderUUID)
+	communicationState.SetLoginResponseForFSMv2(placeholderUUID)
+	communicationState.InitialiseAndStartSubscriberHandler(
+		5*time.Minute, // TTL: time until subscriber considered dead
+		1*time.Minute, // Cull: cycle time to remove dead subscribers
+		configData,
+		communicationState.SystemSnapshotManager,
+		communicationState.ConfigManager,
+		channelAdapter.GetOutboundWriteChannel(), // FSMv2 mode: bypass Pusher, write directly to FSMv2 transport
+	)
+	communicationState.InitializeRouterForFSMv2()
 
 	logger.Info("FSMv2 communicator started, waiting for shutdown")
 

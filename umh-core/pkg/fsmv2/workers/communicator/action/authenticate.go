@@ -67,6 +67,11 @@ type CommunicatorDependencies interface {
 	// Metrics returns the MetricsRecorder for actions to record metrics.
 	// Actions call IncrementCounter/SetGauge with typed constants.
 	Metrics() *fsmv2.MetricsRecorder
+
+	// SetInstanceInfo stores the instance UUID and name from authentication response.
+	// Called by AuthenticateAction after successful authentication.
+	// Also triggers the OnAuthSuccess callback if set.
+	SetInstanceInfo(uuid, name string)
 }
 
 const AuthenticateActionName = "authenticate"
@@ -222,6 +227,25 @@ func (a *AuthenticateAction) Execute(ctx context.Context, depsAny any) error {
 
 	// Store JWT token in dependencies (will be read by CollectObservedState)
 	deps.SetJWT(authResp.Token, time.Unix(authResp.ExpiresAt, 0))
+
+	// Store instance info from backend response (Bug #6 fix)
+	// This updates the legacy LoginResponse with the correct UUID
+	logger := deps.GetLogger()
+	logger.Infow("Authentication response received",
+		"instanceUUID", authResp.InstanceUUID,
+		"instanceName", authResp.InstanceName,
+		"hasToken", authResp.Token != "",
+	)
+
+	if authResp.InstanceUUID != "" {
+		logger.Infow("Setting instance info from backend",
+			"uuid", authResp.InstanceUUID,
+			"name", authResp.InstanceName,
+		)
+		deps.SetInstanceInfo(authResp.InstanceUUID, authResp.InstanceName)
+	} else {
+		logger.Warnw("Backend did not return instance UUID in auth response")
+	}
 
 	return nil
 }

@@ -45,7 +45,7 @@ var _ = Describe("MockRelayServer", func() {
 	})
 
 	Describe("Authentication", func() {
-		It("accepts login and returns JWT token", func() {
+		It("accepts login and returns JWT token in cookie and uuid/name in body", func() {
 			// Prepare login request
 			loginReq := map[string]string{
 				"instanceUUID": "test-instance-123",
@@ -62,12 +62,14 @@ var _ = Describe("MockRelayServer", func() {
 			// Verify response
 			Expect(resp.StatusCode).To(Equal(http.StatusOK))
 
+			// Bug #6 fix: real backend returns uuid and name in response body
 			var authResp map[string]interface{}
 			err = json.NewDecoder(resp.Body).Decode(&authResp)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(authResp["token"]).NotTo(BeEmpty())
+			Expect(authResp["uuid"]).NotTo(BeEmpty())
+			Expect(authResp["name"]).NotTo(BeEmpty())
 
-			// Verify JWT cookie is set
+			// Verify JWT cookie is set (real backend behavior)
 			cookies := resp.Cookies()
 			var tokenCookie *http.Cookie
 			for _, c := range cookies {

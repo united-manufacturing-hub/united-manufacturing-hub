@@ -43,6 +43,7 @@ type Router struct {
 	routerLogger          *zap.SugaredLogger
 	releaseChannel        config.ReleaseChannel
 	clientConnectionsLock sync.RWMutex
+	instanceUUIDMu        sync.RWMutex
 	instanceUUID          uuid.UUID
 }
 
@@ -75,6 +76,26 @@ func NewRouter(dog watchdog.Iface,
 		actionLogger:          logger,
 		routerLogger:          logger,
 	}
+}
+
+// SetInstanceUUID updates the Router's instance UUID.
+// This is called by SetLoginResponseForFSMv2 when authentication succeeds
+// and the real UUID is received from the backend (Bug #8 fix).
+// Thread-safe: uses mutex for concurrent access protection.
+func (r *Router) SetInstanceUUID(newUUID uuid.UUID) {
+	r.instanceUUIDMu.Lock()
+	defer r.instanceUUIDMu.Unlock()
+
+	r.instanceUUID = newUUID
+}
+
+// GetInstanceUUID returns the Router's instance UUID.
+// Thread-safe: uses mutex for concurrent access protection.
+func (r *Router) GetInstanceUUID() uuid.UUID {
+	r.instanceUUIDMu.RLock()
+	defer r.instanceUUIDMu.RUnlock()
+
+	return r.instanceUUID
 }
 
 func (r *Router) Start() {
@@ -160,7 +181,7 @@ func (r *Router) handleAction(messageContent models.UMHMessageContent, message *
 	}
 
 	go actions.HandleActionMessage(
-		r.instanceUUID,
+		r.GetInstanceUUID(),
 		actionPayload,
 		message.Email,
 		r.outboundChannel,

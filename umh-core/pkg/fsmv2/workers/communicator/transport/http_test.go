@@ -35,9 +35,10 @@ func TestHTTPTransport(t *testing.T) {
 }
 
 var _ = Describe("HTTP Transport", func() {
-	Describe("Bug #3: Connection Pooling Fix", func() {
-		It("sends Connection: close header when DisableKeepAlives is set", func() {
+	Describe("Bug #7: Connection Pooling Fix", func() {
+		It("uses connection pooling with keep-alive", func() {
 			// Track Connection headers from requests
+			// With connection pooling enabled, sequential requests should NOT send "Connection: close"
 			var connectionHeaders []string
 			var mu sync.Mutex
 
@@ -61,13 +62,15 @@ var _ = Describe("HTTP Transport", func() {
 			_, err = transport.Pull(ctx, "jwt-token-2")
 			Expect(err).NotTo(HaveOccurred())
 
-			// Assert: Connection header should be "close" when DisableKeepAlives=true
-			// This proves the fix for Bug #3 (stale connections)
+			// Assert: With connection pooling enabled, Connection header should NOT be "close"
+			// This verifies Bug #7 fix: replaced DisableKeepAlives with proper pooling
 			mu.Lock()
 			defer mu.Unlock()
 			Expect(connectionHeaders).To(HaveLen(2))
 			for _, header := range connectionHeaders {
-				Expect(header).To(Equal("close"))
+				// Connection header should be empty (keep-alive is default)
+				// or "keep-alive" - but NOT "close"
+				Expect(header).NotTo(Equal("close"))
 			}
 		})
 	})
