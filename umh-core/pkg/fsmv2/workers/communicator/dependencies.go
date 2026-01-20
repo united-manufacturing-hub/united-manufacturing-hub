@@ -19,15 +19,10 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/backoff"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
 	"go.uber.org/zap"
 )
-
-// TransportResetThreshold is the number of consecutive errors that triggers a transport reset.
-// When this threshold is reached (and at every multiple of the threshold), the transport's
-// Reset() method is called to flush stale connections and potentially resolve connection-level
-// issues like DNS caching, corrupted TCP state, or stale pooled connections.
-const TransportResetThreshold = 5
 
 // CommunicatorDependencies provides access to tools needed by communicator worker actions.
 // It extends BaseDependencies with communicator-specific tools (transport).
@@ -233,7 +228,7 @@ func (d *CommunicatorDependencies) RecordError() {
 	d.consecutiveErrors++
 
 	// Trigger transport reset when threshold is reached (or at multiples of threshold)
-	if d.consecutiveErrors%TransportResetThreshold == 0 && d.transport != nil {
+	if d.consecutiveErrors%backoff.TransportResetThreshold == 0 && d.transport != nil {
 		d.transport.Reset()
 	}
 }

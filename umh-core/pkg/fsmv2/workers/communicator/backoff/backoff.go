@@ -27,6 +27,12 @@ const (
 
 	// BaseDelay is the starting delay for backoff calculation.
 	BaseDelay = time.Second
+
+	// TransportResetThreshold is the number of consecutive errors that triggers a transport reset.
+	// When this threshold is reached (and at every multiple of the threshold), the transport's
+	// Reset() method is called to flush stale connections and potentially resolve connection-level
+	// issues like DNS caching, corrupted TCP state, or stale pooled connections.
+	TransportResetThreshold = 5
 )
 
 // CalculateDelay calculates exponential backoff based on consecutive errors.

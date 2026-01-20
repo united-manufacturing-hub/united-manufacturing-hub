@@ -22,7 +22,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/action"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/backoff"
-	commconfig "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/snapshot"
 )
 
@@ -163,7 +162,7 @@ func (s *DegradedState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, 
 
 	// Check if we should reset the transport (at 5, 10, 15... consecutive errors)
 	// This helps recover from persistent connection-level issues
-	if consecutiveErrors > 0 && consecutiveErrors%commconfig.TransportResetThreshold == 0 {
+	if consecutiveErrors > 0 && consecutiveErrors%backoff.TransportResetThreshold == 0 {
 		return s, fsmv2.SignalNone, action.NewResetTransportAction()
 	}
 
