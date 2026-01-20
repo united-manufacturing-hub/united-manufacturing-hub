@@ -95,6 +95,7 @@ type Dependencies interface {
 type BaseDependencies struct {
 	logger      *zap.SugaredLogger
 	stateReader StateReader
+	metrics     *MetricsRecorder
 	workerType  string
 	workerID    string
 }
@@ -121,6 +122,7 @@ func NewBaseDependencies(logger *zap.SugaredLogger, stateReader StateReader, ide
 	return &BaseDependencies{
 		logger:      logger.With("worker", workerPath),
 		stateReader: stateReader,
+		metrics:     NewMetricsRecorder(),
 		workerType:  identity.WorkerType,
 		workerID:    identity.ID,
 	}
@@ -141,6 +143,19 @@ func (d *BaseDependencies) ActionLogger(actionType string) *zap.SugaredLogger {
 // Returns nil if no StateReader was provided during construction.
 func (d *BaseDependencies) GetStateReader() StateReader {
 	return d.stateReader
+}
+
+// Metrics returns the MetricsRecorder for actions to record metrics.
+// Actions call IncrementCounter/SetGauge with typed constants from the metrics package.
+// CollectObservedState implementations should call Drain() to merge buffered metrics
+// into the observed state.
+//
+// Example usage in an action:
+//
+//	deps.Metrics().IncrementCounter(metrics.CounterPullOps, 1)
+//	deps.Metrics().SetGauge(metrics.GaugeLastPullLatencyMs, float64(latency.Milliseconds()))
+func (d *BaseDependencies) Metrics() *MetricsRecorder {
+	return d.metrics
 }
 
 // GetWorkerType returns the worker type for this dependencies.

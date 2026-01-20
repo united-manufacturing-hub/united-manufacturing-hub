@@ -40,6 +40,26 @@ type CounterName string
 // These are exported directly to Prometheus.
 type GaugeName string
 
+// Generic worker counter names.
+// These can be used by any worker type for common operations.
+const (
+	// CounterStateTransitions tracks total state transitions.
+	CounterStateTransitions CounterName = "state_transitions"
+
+	// CounterActionExecutions tracks total action executions.
+	CounterActionExecutions CounterName = "action_executions"
+
+	// CounterActionErrors tracks total action execution errors.
+	CounterActionErrors CounterName = "action_errors"
+)
+
+// Generic worker gauge names.
+// These can be used by any worker type for common monitoring.
+const (
+	// GaugeTimeInCurrentStateMs tracks time spent in the current state in milliseconds.
+	GaugeTimeInCurrentStateMs GaugeName = "time_in_current_state_ms"
+)
+
 // Communicator worker counter names.
 // These track cumulative operations for the bidirectional sync.
 const (

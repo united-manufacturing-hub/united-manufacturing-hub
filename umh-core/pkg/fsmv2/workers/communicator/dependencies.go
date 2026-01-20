@@ -61,8 +61,7 @@ type CommunicatorDependencies struct {
 
 	// 8-byte fields
 	*fsmv2.BaseDependencies
-	metrics            *fsmv2.MetricsRecorder       // Standard metrics recorder for actions
-	degradedEnteredAt  time.Time                    // When we entered degraded mode (first error after success)
+	degradedEnteredAt time.Time // When we entered degraded mode (first error after success)
 	lastPullLatency    time.Duration                // Per-tick pull latency
 	lastPushLatency    time.Duration                // Per-tick push latency
 	inboundChan        chan<- *transport.UMHMessage // Write received messages to router
@@ -103,17 +102,9 @@ func NewCommunicatorDependencies(t transport.Transport, logger *zap.SugaredLogge
 	return &CommunicatorDependencies{
 		BaseDependencies: fsmv2.NewBaseDependencies(logger, stateReader, identity),
 		transport:        t,
-		metrics:          fsmv2.NewMetricsRecorder(),
 		inboundChan:      inbound,
 		outboundChan:     outbound,
 	}
-}
-
-// Metrics returns the MetricsRecorder for actions to record metrics.
-// Actions call IncrementCounter/SetGauge with typed constants.
-// CollectObservedState calls Drain() to merge buffered metrics.
-func (d *CommunicatorDependencies) Metrics() *fsmv2.MetricsRecorder {
-	return d.metrics
 }
 
 // SetTransport sets the transport instance (mutex protected).
