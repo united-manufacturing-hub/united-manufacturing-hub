@@ -308,6 +308,13 @@
 //
 // Use BaseWorker[D] for type-safe dependency access without casting.
 // See workers/example/examplechild/dependencies.go for dependency pattern.
+// See DEPENDENCIES.md for comprehensive dependency documentation including:
+//   - Dependency inventory and availability
+//   - Creating custom dependencies tutorial
+//   - Global variables flow
+//   - StateReader examples
+//   - Metrics in actions
+//   - Parent-child sharing patterns
 //
 // # Testing
 //
