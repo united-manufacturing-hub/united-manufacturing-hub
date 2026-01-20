@@ -16,6 +16,7 @@ package communicator_test
 
 import (
 	"context"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -327,6 +328,108 @@ var _ = Describe("CommunicatorDependencies", func() {
 
 				// The counter should be a non-negative integer
 				Expect(deps.GetConsecutiveErrors()).To(BeNumerically(">=", 0))
+			})
+		})
+	})
+
+	Describe("DegradedEnteredAt tracking", func() {
+		var deps *communicator.CommunicatorDependencies
+
+		BeforeEach(func() {
+			identity := fsmv2.Identity{ID: "test-id", WorkerType: "communicator"}
+			deps = communicator.NewCommunicatorDependencies(mt, logger, nil, identity)
+		})
+
+		Describe("GetDegradedEnteredAt", func() {
+			Context("when no errors have been recorded", func() {
+				It("should return zero time", func() {
+					Expect(deps.GetDegradedEnteredAt().IsZero()).To(BeTrue())
+				})
+			})
+		})
+
+		Describe("RecordError sets DegradedEnteredAt", func() {
+			Context("when first error is recorded", func() {
+				It("should set DegradedEnteredAt to current time", func() {
+					Expect(deps.GetDegradedEnteredAt().IsZero()).To(BeTrue())
+
+					deps.RecordError()
+
+					// DegradedEnteredAt should now be set
+					enteredAt := deps.GetDegradedEnteredAt()
+					Expect(enteredAt.IsZero()).To(BeFalse())
+					// Should be very recent (within last second)
+					Expect(enteredAt).To(BeTemporally("~", time.Now(), time.Second))
+				})
+			})
+
+			Context("when subsequent errors are recorded", func() {
+				It("should NOT update DegradedEnteredAt", func() {
+					deps.RecordError()
+					firstEnteredAt := deps.GetDegradedEnteredAt()
+
+					// Small delay to ensure time difference
+					deps.RecordError()
+					deps.RecordError()
+
+					// DegradedEnteredAt should still be the original time
+					Expect(deps.GetDegradedEnteredAt()).To(Equal(firstEnteredAt))
+				})
+			})
+		})
+
+		Describe("RecordSuccess clears DegradedEnteredAt", func() {
+			Context("when success is recorded after errors", func() {
+				It("should clear DegradedEnteredAt", func() {
+					deps.RecordError()
+					Expect(deps.GetDegradedEnteredAt().IsZero()).To(BeFalse())
+
+					deps.RecordSuccess()
+
+					// DegradedEnteredAt should be cleared
+					Expect(deps.GetDegradedEnteredAt().IsZero()).To(BeTrue())
+				})
+			})
+
+			Context("when success is recorded without prior errors", func() {
+				It("should keep DegradedEnteredAt as zero", func() {
+					Expect(deps.GetDegradedEnteredAt().IsZero()).To(BeTrue())
+
+					deps.RecordSuccess()
+
+					Expect(deps.GetDegradedEnteredAt().IsZero()).To(BeTrue())
+				})
+			})
+		})
+
+		Describe("DegradedEnteredAt preserved through error sequence", func() {
+			It("should track the original entry time through multiple errors and reset on success", func() {
+				// No errors yet
+				Expect(deps.GetDegradedEnteredAt().IsZero()).To(BeTrue())
+				Expect(deps.GetConsecutiveErrors()).To(Equal(0))
+
+				// First error sets DegradedEnteredAt
+				deps.RecordError()
+				firstEnteredAt := deps.GetDegradedEnteredAt()
+				Expect(firstEnteredAt.IsZero()).To(BeFalse())
+
+				// More errors don't change DegradedEnteredAt
+				deps.RecordError()
+				deps.RecordError()
+				Expect(deps.GetDegradedEnteredAt()).To(Equal(firstEnteredAt))
+				Expect(deps.GetConsecutiveErrors()).To(Equal(3))
+
+				// Success clears both
+				deps.RecordSuccess()
+				Expect(deps.GetDegradedEnteredAt().IsZero()).To(BeTrue())
+				Expect(deps.GetConsecutiveErrors()).To(Equal(0))
+
+				// New error sequence gets new timestamp
+				deps.RecordError()
+				newEnteredAt := deps.GetDegradedEnteredAt()
+				Expect(newEnteredAt.IsZero()).To(BeFalse())
+				// The new timestamp should be after (or equal to) the first one
+				Expect(newEnteredAt).To(BeTemporally(">=", firstEnteredAt))
 			})
 		})
 	})

@@ -21,6 +21,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/action"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/backoff"
 	commconfig "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/snapshot"
 )
@@ -114,23 +115,25 @@ import (
 // See worker.go invariants block (C1-C5) for complete validation layer details.
 type DegradedState struct {
 	BaseCommunicatorState
-	enteredAt time.Time
+	// Note: FSM states should be stateless. All timing information is now stored in
+	// ObservedState.DegradedEnteredAt, which is populated by the dependencies when
+	// the first error occurs.
 }
 
-// NewDegradedState creates a new DegradedState with enteredAt set to the current time.
-// This timestamp is used to calculate backoff delays before retry attempts.
+// NewDegradedState creates a new DegradedState.
+// The entry timestamp is tracked in ObservedState.DegradedEnteredAt, not in the state itself.
 func NewDegradedState() *DegradedState {
-	return &DegradedState{
-		enteredAt: time.Now(),
-	}
+	return &DegradedState{}
 }
 
-// NewDegradedStateWithEnteredAt creates a new DegradedState with a custom enteredAt timestamp.
-// This is primarily used for testing to simulate states that have been active for a specific duration.
-func NewDegradedStateWithEnteredAt(enteredAt time.Time) *DegradedState {
-	return &DegradedState{
-		enteredAt: enteredAt,
-	}
+// NewDegradedStateWithEnteredAt creates a new DegradedState.
+//
+// Deprecated: The enteredAt parameter is ignored. DegradedState now reads the entry
+// timestamp from ObservedState.DegradedEnteredAt, which is set by dependencies when
+// the first error occurs. This function is kept for backward compatibility with tests.
+// Tests should instead set up the dependencies to call RecordError() at the desired time.
+func NewDegradedStateWithEnteredAt(_ time.Time) *DegradedState {
+	return &DegradedState{}
 }
 
 func (s *DegradedState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, fsmv2.Action[any]) {
@@ -145,17 +148,21 @@ func (s *DegradedState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, 
 		return &SyncingState{}, fsmv2.SignalNone, nil
 	}
 
-	// Calculate backoff using SyncingState's GetBackoffDelay
-	backoffDelay := (&SyncingState{}).GetBackoffDelay(snap.Observed)
+	// Calculate backoff using the shared backoff utility
+	consecutiveErrors := snap.Observed.GetConsecutiveErrors()
+	backoffDelay := backoff.CalculateDelay(consecutiveErrors)
+
+	// Get when we entered degraded mode (first error after success)
+	// This timestamp is set by dependencies.RecordError() on the first error
+	enteredAt := snap.Observed.DegradedEnteredAt
 
 	// If we're still within the backoff period, wait (no action)
-	if time.Since(s.enteredAt) < backoffDelay {
+	if !enteredAt.IsZero() && time.Since(enteredAt) < backoffDelay {
 		return s, fsmv2.SignalNone, nil
 	}
 
 	// Check if we should reset the transport (at 5, 10, 15... consecutive errors)
 	// This helps recover from persistent connection-level issues
-	consecutiveErrors := snap.Observed.GetConsecutiveErrors()
 	if consecutiveErrors > 0 && consecutiveErrors%commconfig.TransportResetThreshold == 0 {
 		return s, fsmv2.SignalNone, action.NewResetTransportAction()
 	}

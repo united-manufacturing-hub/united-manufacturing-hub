@@ -117,6 +117,7 @@ func (d *CommunicatorDesiredState) GetState() string {
 //	JWTToken: "" → "token-value" (set by AuthenticateAction)
 //	JWTExpiry: zero → timestamp (set by AuthenticateAction, checked before sync)
 //	MessagesReceived: empty → populated (updated by SyncAction on Pull)
+//	DegradedEnteredAt: zero → timestamp (set on first error, cleared on success)
 //
 // # Field Validation
 //
@@ -126,6 +127,7 @@ func (d *CommunicatorDesiredState) GetState() string {
 //   - JWTExpiry: zero OR future timestamp (checked by C2 invariant)
 //   - MessagesReceived: May be empty array, elements must be valid UMHMessage
 //   - CommunicatorDesiredState: Embedded desired state (always present)
+//   - DegradedEnteredAt: zero OR timestamp when errors started
 //
 // # Invariants
 //
@@ -155,6 +157,9 @@ type CommunicatorObservedState struct {
 
 	// Error tracking for health monitoring
 	ConsecutiveErrors int
+	// DegradedEnteredAt tracks when we entered degraded mode (first error after success).
+	// Zero means not in degraded mode. Used by DegradedState for backoff calculation.
+	DegradedEnteredAt time.Time `json:"degradedEnteredAt,omitempty"`
 
 	// Sync metrics for observability
 	// Uses standard fsmv2.Metrics structure for automatic Prometheus export

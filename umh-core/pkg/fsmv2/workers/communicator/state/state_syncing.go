@@ -15,22 +15,14 @@
 package state
 
 import (
-	"math"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/action"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/backoff"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/snapshot"
-)
-
-const (
-	// maxBackoffDelay caps the exponential backoff to prevent excessive delays.
-	maxBackoffDelay = 60 * time.Second
-
-	// baseBackoffDelay is the starting delay for backoff calculation.
-	baseBackoffDelay = time.Second
 )
 
 // SyncingState represents the primary operational state for bidirectional message synchronization.
@@ -147,27 +139,10 @@ func (s *SyncingState) Reason() string {
 }
 
 // GetBackoffDelay calculates exponential backoff based on consecutive errors.
-// Returns 0 if no errors. Caps at maxBackoffDelay.
+// Returns 0 if no errors. Caps at 60 seconds.
 //
-// This implements a simple circuit breaker pattern: more errors = longer delay.
+// This method delegates to the backoff.CalculateDelay utility function.
+// It is kept for backward compatibility with existing code and tests.
 func (s *SyncingState) GetBackoffDelay(observed snapshot.CommunicatorObservedState) time.Duration {
-	if observed.ConsecutiveErrors == 0 {
-		return 0
-	}
-
-	// Exponential backoff: 2^errors seconds, capped at 60s
-	// Cap early to prevent overflow for large error counts
-	// 2^6 = 64 seconds, so anything >= 6 errors would exceed 60s cap
-	if observed.ConsecutiveErrors >= 6 {
-		return maxBackoffDelay
-	}
-
-	delaySeconds := math.Pow(2, float64(observed.ConsecutiveErrors))
-	delay := time.Duration(delaySeconds) * baseBackoffDelay
-
-	if delay > maxBackoffDelay {
-		return maxBackoffDelay
-	}
-
-	return delay
+	return backoff.CalculateDelay(observed.ConsecutiveErrors)
 }

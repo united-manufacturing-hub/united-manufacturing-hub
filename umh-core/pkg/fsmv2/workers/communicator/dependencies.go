@@ -60,14 +60,15 @@ type CommunicatorDependencies struct {
 
 	// 8-byte fields
 	*fsmv2.BaseDependencies
-	metrics         *fsmv2.MetricsRecorder       // Standard metrics recorder for actions
-	lastPullLatency time.Duration                // Per-tick pull latency
-	lastPushLatency time.Duration                // Per-tick push latency
-	inboundChan     chan<- *transport.UMHMessage // Write received messages to router
-	outboundChan    <-chan *transport.UMHMessage // Read messages from router to push
-	consecutiveErrors int                        // Error counter (incremented by RecordError)
-	lastPullCount     int                        // Per-tick pull message count
-	lastPushCount     int                        // Per-tick push message count
+	metrics            *fsmv2.MetricsRecorder       // Standard metrics recorder for actions
+	degradedEnteredAt  time.Time                    // When we entered degraded mode (first error after success)
+	lastPullLatency    time.Duration                // Per-tick pull latency
+	lastPushLatency    time.Duration                // Per-tick push latency
+	inboundChan        chan<- *transport.UMHMessage // Write received messages to router
+	outboundChan       <-chan *transport.UMHMessage // Read messages from router to push
+	consecutiveErrors  int                          // Error counter (incremented by RecordError)
+	lastPullCount      int                          // Per-tick pull message count
+	lastPushCount      int                          // Per-tick push message count
 
 	// 1-byte fields (bools grouped at end to minimize padding)
 	lastPullSuccess   bool // Per-tick pull success flag
@@ -196,16 +197,23 @@ func (d *CommunicatorDependencies) GetPulledMessages() []*transport.UMHMessage {
 }
 
 // RecordError increments the consecutive error counter.
+// On the first error (transitioning from 0 errors), it also sets degradedEnteredAt
+// to track when we entered degraded mode.
 // This is called by actions after an operation fails.
 // Thread-safe: uses mutex for concurrent access protection.
 func (d *CommunicatorDependencies) RecordError() {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
+	// If this is the first error, record when we entered degraded mode
+	if d.consecutiveErrors == 0 {
+		d.degradedEnteredAt = time.Now()
+	}
+
 	d.consecutiveErrors++
 }
 
-// RecordSuccess resets the consecutive error counter to 0.
+// RecordSuccess resets the consecutive error counter to 0 and clears degradedEnteredAt.
 // This is called by actions after an operation succeeds.
 // Thread-safe: uses mutex for concurrent access protection.
 func (d *CommunicatorDependencies) RecordSuccess() {
@@ -213,6 +221,7 @@ func (d *CommunicatorDependencies) RecordSuccess() {
 	defer d.mu.Unlock()
 
 	d.consecutiveErrors = 0
+	d.degradedEnteredAt = time.Time{} // Clear degraded entry time
 }
 
 // GetConsecutiveErrors returns the current consecutive error count.
@@ -223,6 +232,17 @@ func (d *CommunicatorDependencies) GetConsecutiveErrors() int {
 	defer d.mu.RUnlock()
 
 	return d.consecutiveErrors
+}
+
+// GetDegradedEnteredAt returns when we entered degraded mode (first error after success).
+// Returns zero time if not currently in degraded mode (no consecutive errors).
+// This is called by CollectObservedState to populate the observed state.
+// Thread-safe: uses mutex for concurrent access protection.
+func (d *CommunicatorDependencies) GetDegradedEnteredAt() time.Time {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+
+	return d.degradedEnteredAt
 }
 
 // GetInboundChan returns channel to write received messages.

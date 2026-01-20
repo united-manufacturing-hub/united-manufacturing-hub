@@ -277,8 +277,9 @@ func (w *CommunicatorWorker) CollectObservedState(ctx context.Context) (fsmv2.Ob
 	// Determine authentication status: authenticated if token is present and not expired
 	authenticated := jwtToken != "" && !time.Now().After(jwtExpiry)
 
-	// Read consecutive error count from dependencies
+	// Read consecutive error count and degraded entry time from dependencies
 	consecutiveErrors := deps.GetConsecutiveErrors()
+	degradedEnteredAt := deps.GetDegradedEnteredAt()
 
 	// Get previous metrics from store (persisted across restarts)
 	var prevMetrics fsmv2.Metrics
@@ -332,6 +333,7 @@ func (w *CommunicatorWorker) CollectObservedState(ctx context.Context) (fsmv2.Ob
 		MessagesReceived:  messagesReceived,
 		Authenticated:     authenticated,
 		ConsecutiveErrors: consecutiveErrors,
+		DegradedEnteredAt: degradedEnteredAt,
 		Metrics:           newMetrics,
 	}
 

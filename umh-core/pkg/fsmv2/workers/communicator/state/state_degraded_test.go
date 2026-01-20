@@ -116,14 +116,15 @@ var _ = Describe("DegradedState Transport Reset", func() {
 	// TransportResetThreshold is 5 - reset at 5, 10, 15... errors
 	// Backoff: 5 errors = 32s, 6+ errors = 60s (capped)
 	It("should emit ResetTransportAction at exactly 5 consecutive errors", func() {
-		// Arrange: 5 errors = 32s backoff, so wait 35s to be past backoff
-		stateObj := state.NewDegradedStateWithEnteredAt(time.Now().Add(-35 * time.Second))
+		// Arrange: 5 errors = 32s backoff, DegradedEnteredAt was 35s ago (past backoff)
+		stateObj := state.NewDegradedState()
 
 		snap := fsmv2.Snapshot{
 			Identity: fsmv2.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
 			Observed: snapshot.CommunicatorObservedState{
 				Authenticated:     false,
 				ConsecutiveErrors: 5,
+				DegradedEnteredAt: time.Now().Add(-35 * time.Second),
 			},
 			Desired: &snapshot.CommunicatorDesiredState{},
 		}
@@ -139,15 +140,16 @@ var _ = Describe("DegradedState Transport Reset", func() {
 	})
 
 	It("should NOT emit ResetTransportAction at 6 consecutive errors", func() {
-		// Arrange: 6 errors = 60s backoff (capped), so wait 65s to be past backoff
+		// Arrange: 6 errors = 60s backoff (capped), DegradedEnteredAt was 65s ago (past backoff)
 		// 6 % 5 != 0, so should emit SyncAction, not ResetTransportAction
-		stateObj := state.NewDegradedStateWithEnteredAt(time.Now().Add(-65 * time.Second))
+		stateObj := state.NewDegradedState()
 
 		snap := fsmv2.Snapshot{
 			Identity: fsmv2.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
 			Observed: snapshot.CommunicatorObservedState{
 				Authenticated:     false,
 				ConsecutiveErrors: 6,
+				DegradedEnteredAt: time.Now().Add(-65 * time.Second),
 			},
 			Desired: &snapshot.CommunicatorDesiredState{},
 		}
@@ -161,15 +163,16 @@ var _ = Describe("DegradedState Transport Reset", func() {
 	})
 
 	It("should emit ResetTransportAction again at 10 consecutive errors", func() {
-		// Arrange: 10 errors = 60s backoff (capped), so wait 65s to be past backoff
+		// Arrange: 10 errors = 60s backoff (capped), DegradedEnteredAt was 65s ago (past backoff)
 		// 10 % 5 == 0, so should emit ResetTransportAction
-		stateObj := state.NewDegradedStateWithEnteredAt(time.Now().Add(-65 * time.Second))
+		stateObj := state.NewDegradedState()
 
 		snap := fsmv2.Snapshot{
 			Identity: fsmv2.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
 			Observed: snapshot.CommunicatorObservedState{
 				Authenticated:     false,
 				ConsecutiveErrors: 10,
+				DegradedEnteredAt: time.Now().Add(-65 * time.Second),
 			},
 			Desired: &snapshot.CommunicatorDesiredState{},
 		}
@@ -183,15 +186,16 @@ var _ = Describe("DegradedState Transport Reset", func() {
 	})
 
 	It("should NOT emit ResetTransportAction at 0 errors", func() {
-		// 0 errors = 0s backoff, so wait 1s to be past backoff
+		// 0 errors = 0s backoff, DegradedEnteredAt was 1s ago (past backoff)
 		// 0 % 5 == 0 but we shouldn't reset when there are no errors
-		stateObj := state.NewDegradedStateWithEnteredAt(time.Now().Add(-1 * time.Second))
+		stateObj := state.NewDegradedState()
 
 		snap := fsmv2.Snapshot{
 			Identity: fsmv2.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
 			Observed: snapshot.CommunicatorObservedState{
 				Authenticated:     false,
 				ConsecutiveErrors: 0,
+				DegradedEnteredAt: time.Now().Add(-1 * time.Second),
 			},
 			Desired: &snapshot.CommunicatorDesiredState{},
 		}
@@ -208,7 +212,7 @@ var _ = Describe("DegradedState Transport Reset", func() {
 var _ = Describe("DegradedState Backoff", func() {
 	It("stays in degraded state during backoff period", func() {
 		// Arrange: 3 consecutive errors = 8s backoff (2^3 = 8)
-		// Create DegradedState with enteredAt = now
+		// DegradedEnteredAt set to now (within backoff period)
 		// Using 3 errors to avoid the reset threshold (5)
 		stateObj := state.NewDegradedState()
 
@@ -217,6 +221,7 @@ var _ = Describe("DegradedState Backoff", func() {
 			Observed: snapshot.CommunicatorObservedState{
 				Authenticated:     false,
 				ConsecutiveErrors: 3,
+				DegradedEnteredAt: time.Now(), // Just entered degraded
 			},
 			Desired: &snapshot.CommunicatorDesiredState{},
 		}
@@ -231,15 +236,16 @@ var _ = Describe("DegradedState Backoff", func() {
 	})
 
 	It("attempts sync after backoff period expires", func() {
-		// Arrange: 3 errors = 8s backoff, wait 10s to be past backoff
+		// Arrange: 3 errors = 8s backoff, DegradedEnteredAt was 10s ago (past backoff)
 		// Using 3 errors to avoid the reset threshold (5)
-		stateObj := state.NewDegradedStateWithEnteredAt(time.Now().Add(-10 * time.Second))
+		stateObj := state.NewDegradedState()
 
 		snap := fsmv2.Snapshot{
 			Identity: fsmv2.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
 			Observed: snapshot.CommunicatorObservedState{
 				Authenticated:     false,
 				ConsecutiveErrors: 3,
+				DegradedEnteredAt: time.Now().Add(-10 * time.Second), // Past backoff period
 			},
 			Desired: &snapshot.CommunicatorDesiredState{},
 		}
