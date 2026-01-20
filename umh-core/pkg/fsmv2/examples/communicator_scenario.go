@@ -280,17 +280,13 @@ func RunCommunicatorScenario(ctx context.Context, cfg CommunicatorRunConfig) *Co
 		mockServer.QueuePullMessage(msg)
 	}
 
-	// Set up channel provider for outbound messages
-	var channelProvider *TestChannelProvider
+	// Set up channel provider unconditionally (Phase 1 requirement: singleton MUST be set)
+	channelProvider := NewTestChannelProvider(100)
+	communicator.SetChannelProvider(channelProvider)
 
-	if len(cfg.InitialOutboundMessages) > 0 {
-		channelProvider = NewTestChannelProvider(100)
-		communicator.SetChannelProvider(channelProvider)
-
-		// Queue outbound messages
-		for _, msg := range cfg.InitialOutboundMessages {
-			channelProvider.QueueOutbound(msg)
-		}
+	// Queue outbound messages if provided
+	for _, msg := range cfg.InitialOutboundMessages {
+		channelProvider.QueueOutbound(msg)
 	}
 
 	// Build auth token
@@ -311,7 +307,7 @@ children:
         authToken: "%s"
         timeout: "5s"
         state: "running"
-`, serverURL, authToken)
+`, serverURL, authToken) // TODO: why state=running? it should always be running?
 
 	// Create scenario with dynamic config
 	testScenario := Scenario{
@@ -324,6 +320,7 @@ children:
 	logger := cfg.Logger
 	if logger == nil {
 		devLogger, _ := zap.NewDevelopment()
+		// TODO: why our own logger here?
 		logger = devLogger.Sugar()
 	}
 
