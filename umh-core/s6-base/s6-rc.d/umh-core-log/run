@@ -3,4 +3,9 @@
 # n5 - keep 5 archived files (lower than dynamic services since umh-core is verbose)
 # s10000000 - rotate at 10MB
 # T - ISO 8601 timestamps (required for our time parser)
+
+# uses https://skarnet.org/software/execline/pipeline.html to connect tee and s6-log
+# tee gets the stdin of the parent process (log messages), sends it to /proc/1/fd/1 (container logs)
+# and writes it out (T-piece) and the stdout of tee is piped to the s6-log program
+pipeline { tee /proc/1/fd/1 }
 s6-log n5 s10000000 T /data/logs/umh-core
