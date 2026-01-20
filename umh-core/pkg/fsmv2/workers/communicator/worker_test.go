@@ -542,5 +542,51 @@ state: "running"
 				Expect(observed.Metrics.Counters[string(metrics.CounterPullFailures)]).To(Equal(int64(1)))
 			})
 		})
+
+		// Phase 2: AuthenticatedUUID in ObservedState tests
+		Context("authenticated UUID tracking", func() {
+			It("should return the authenticated UUID stored in dependencies", func() {
+				// Arrange: Set authenticated UUID in dependencies (simulating successful auth)
+				deps := worker.GetDependencies()
+				expectedUUID := "backend-authenticated-uuid-12345"
+				deps.SetAuthenticatedUUID(expectedUUID)
+
+				// Act
+				observed, err := worker.CollectObservedState(ctx)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Assert
+				communicatorObserved := observed.(snapshot.CommunicatorObservedState)
+				Expect(communicatorObserved.AuthenticatedUUID).To(Equal(expectedUUID))
+			})
+
+			It("should return empty string when no UUID has been set", func() {
+				// Arrange: No UUID set (default state after worker creation)
+				// Dependencies start with empty authenticatedUUID
+
+				// Act
+				observed, err := worker.CollectObservedState(ctx)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Assert
+				communicatorObserved := observed.(snapshot.CommunicatorObservedState)
+				Expect(communicatorObserved.AuthenticatedUUID).To(BeEmpty())
+			})
+
+			It("should update AuthenticatedUUID when SetAuthenticatedUUID is called multiple times", func() {
+				// Arrange: Set UUID multiple times (e.g., re-authentication scenarios)
+				deps := worker.GetDependencies()
+				deps.SetAuthenticatedUUID("first-uuid")
+				deps.SetAuthenticatedUUID("second-uuid-after-reauth")
+
+				// Act
+				observed, err := worker.CollectObservedState(ctx)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Assert: Should have the latest value
+				communicatorObserved := observed.(snapshot.CommunicatorObservedState)
+				Expect(communicatorObserved.AuthenticatedUUID).To(Equal("second-uuid-after-reauth"))
+			})
+		})
 	})
 })

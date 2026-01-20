@@ -321,10 +321,14 @@ func (w *CommunicatorWorker) CollectObservedState(ctx context.Context) (fsmv2.Ob
 	// Clear per-tick results from legacy tracking (for backward compatibility with tests)
 	deps.ClearSyncResults()
 
+	// Read authenticated UUID from dependencies
+	authenticatedUUID := deps.GetAuthenticatedUUID()
+
 	observed := snapshot.CommunicatorObservedState{
 		CollectedAt:       time.Now(),
 		JWTToken:          jwtToken,
 		JWTExpiry:         jwtExpiry,
+		AuthenticatedUUID: authenticatedUUID,
 		MessagesReceived:  messagesReceived,
 		Authenticated:     authenticated,
 		ConsecutiveErrors: consecutiveErrors,
@@ -399,35 +403,18 @@ func (w *CommunicatorWorker) GetInitialState() fsmv2.State[any, any] {
 func init() {
 	// Register both worker and supervisor factories atomically.
 	if err := factory.RegisterWorkerType[snapshot.CommunicatorObservedState, *snapshot.CommunicatorDesiredState](
-		func(id fsmv2.Identity, logger *zap.SugaredLogger, stateReader fsmv2.StateReader, deps map[string]any) fsmv2.Worker {
+		func(id fsmv2.Identity, logger *zap.SugaredLogger, stateReader fsmv2.StateReader, _ map[string]any) fsmv2.Worker {
 			// Phase 1: ChannelProvider MUST be set via global singleton BEFORE factory is called.
 			// The singleton is read by NewCommunicatorDependencies and will panic if not set.
 			// DO NOT extract channelProvider from deps - singleton is THE ONLY way.
 
-			// Extract onAuthSuccessCallback from injected dependencies if available (Bug #6 fix)
-			var onAuthSuccessCallback func(uuid, name string)
-			if deps != nil {
-				if cb, ok := deps["onAuthSuccessCallback"].(func(uuid, name string)); ok {
-					onAuthSuccessCallback = cb
-					logger.Infow("onAuthSuccessCallback extracted from dependencies")
-				} else {
-					logger.Warnw("onAuthSuccessCallback not found or wrong type in dependencies",
-						"hasKey", deps["onAuthSuccessCallback"] != nil,
-						"type", fmt.Sprintf("%T", deps["onAuthSuccessCallback"]))
-				}
-			} else {
-				logger.Warnw("deps is nil, cannot extract onAuthSuccessCallback")
-			}
+			// Phase 2: UUID is available via ObservedState.AuthenticatedUUID
+			// No callback injection needed - consumers poll ObservedState instead.
 
 			// Create dependencies WITHOUT transport (created lazily by AuthenticateAction).
 			// NewCommunicatorDependencies will read channels from the global singleton.
 			// It will panic if the singleton is not set - this is intentional.
 			commDeps := NewCommunicatorDependencies(nil, logger, stateReader, id)
-
-			// Set auth success callback if injected (Bug #6 fix)
-			if onAuthSuccessCallback != nil {
-				commDeps.SetOnAuthSuccessCallback(onAuthSuccessCallback)
-			}
 
 			worker, err := NewCommunicatorWorker(id.ID, id.Name, nil, logger, stateReader)
 			if err != nil {

@@ -63,7 +63,7 @@ func (m *mockTransport) Push(_ context.Context, _ string, _ []*communicator_tran
 func (m *mockTransport) Close() {}
 func (m *mockTransport) Reset() {}
 
-// mockChannelProvider implements communicator.ChannelProvider for testing
+// mockChannelProvider implements communicator.ChannelProvider for testing.
 type mockChannelProvider struct {
 	inbound  chan<- *communicator_transport.UMHMessage
 	outbound <-chan *communicator_transport.UMHMessage
@@ -76,11 +76,12 @@ func (m *mockChannelProvider) GetChannels(_ string) (
 	return m.inbound, m.outbound
 }
 
-// newTestChannelProvider creates a mock channel provider for test setup
+// newTestChannelProvider creates a mock channel provider for test setup.
 func newTestChannelProvider() *mockChannelProvider {
 	// Create bidirectional channels, then extract send-only and receive-only
 	inboundBi := make(chan *communicator_transport.UMHMessage, 100)
 	outboundBi := make(chan *communicator_transport.UMHMessage, 100)
+
 	return &mockChannelProvider{
 		inbound:  inboundBi,
 		outbound: outboundBi,
@@ -158,7 +159,7 @@ var _ = Describe("CommunicatorDependencies", func() {
 		})
 	})
 
-	Describe("Bug #6: Instance info and auth success callback", func() {
+	Describe("Phase 2: AuthenticatedUUID storage via ObservedState", func() {
 		var deps *communicator.CommunicatorDependencies
 
 		BeforeEach(func() {
@@ -166,65 +167,35 @@ var _ = Describe("CommunicatorDependencies", func() {
 			deps = communicator.NewCommunicatorDependencies(mt, logger, nil, identity)
 		})
 
-		Describe("SetInstanceInfo", func() {
-			It("should store instance UUID and name", func() {
-				deps.SetInstanceInfo("backend-real-uuid-12345", "My Instance")
-				uuid, name := deps.GetInstanceInfo()
+		Describe("SetAuthenticatedUUID", func() {
+			It("should store the authenticated UUID", func() {
+				deps.SetAuthenticatedUUID("backend-real-uuid-12345")
+				uuid := deps.GetAuthenticatedUUID()
 				Expect(uuid).To(Equal("backend-real-uuid-12345"))
-				Expect(name).To(Equal("My Instance"))
+			})
+
+			It("should update UUID when called multiple times (re-authentication)", func() {
+				deps.SetAuthenticatedUUID("first-uuid")
+				deps.SetAuthenticatedUUID("second-uuid-after-reauth")
+				uuid := deps.GetAuthenticatedUUID()
+				Expect(uuid).To(Equal("second-uuid-after-reauth"))
 			})
 		})
 
-		Describe("SetOnAuthSuccessCallback", func() {
-			It("should invoke callback when SetInstanceInfo is called", func() {
-				var callbackUUID, callbackName string
-				callbackCalled := false
-
-				deps.SetOnAuthSuccessCallback(func(uuid, name string) {
-					callbackCalled = true
-					callbackUUID = uuid
-					callbackName = name
-				})
-
-				deps.SetInstanceInfo("backend-uuid-from-auth", "Backend Instance Name")
-
-				Expect(callbackCalled).To(BeTrue(), "Expected callback to be invoked")
-				Expect(callbackUUID).To(Equal("backend-uuid-from-auth"))
-				Expect(callbackName).To(Equal("Backend Instance Name"))
-			})
-
-			It("should not panic if no callback is set", func() {
-				Expect(func() {
-					deps.SetInstanceInfo("uuid", "name")
-				}).NotTo(Panic())
-			})
-
-			It("should handle callback being set after SetInstanceInfo was already called", func() {
-				// First call without callback
-				deps.SetInstanceInfo("first-uuid", "First Name")
-
-				// Now set callback
-				var callbackUUID string
-				deps.SetOnAuthSuccessCallback(func(uuid, name string) {
-					callbackUUID = uuid
-				})
-
-				// Second call should trigger callback
-				deps.SetInstanceInfo("second-uuid", "Second Name")
-				Expect(callbackUUID).To(Equal("second-uuid"))
+		Describe("GetAuthenticatedUUID", func() {
+			It("should return empty string when no UUID has been set", func() {
+				uuid := deps.GetAuthenticatedUUID()
+				Expect(uuid).To(BeEmpty())
 			})
 		})
 
-		Describe("Thread safety for instance info", func() {
-			It("should handle concurrent SetInstanceInfo calls", func() {
+		Describe("Thread safety for authenticated UUID", func() {
+			It("should handle concurrent SetAuthenticatedUUID calls", func() {
 				done := make(chan bool, 10)
 
 				for i := range 10 {
 					go func(idx int) {
-						deps.SetInstanceInfo(
-							"uuid-"+string(rune('0'+idx)),
-							"name-"+string(rune('0'+idx)),
-						)
+						deps.SetAuthenticatedUUID("uuid-" + string(rune('0'+idx)))
 						done <- true
 					}(i)
 				}
@@ -234,9 +205,43 @@ var _ = Describe("CommunicatorDependencies", func() {
 				}
 
 				// Should not panic and should have some value
-				uuid, name := deps.GetInstanceInfo()
+				uuid := deps.GetAuthenticatedUUID()
 				Expect(uuid).NotTo(BeEmpty())
-				Expect(name).NotTo(BeEmpty())
+			})
+
+			It("should handle concurrent read and write", func() {
+				done := make(chan bool, 20)
+
+				// Writers
+				for i := range 10 {
+					go func(idx int) {
+						deps.SetAuthenticatedUUID("uuid-" + string(rune('0'+idx)))
+						done <- true
+					}(i)
+				}
+
+				// Readers
+				for range 10 {
+					go func() {
+						_ = deps.GetAuthenticatedUUID()
+						done <- true
+					}()
+				}
+
+				for range 20 {
+					<-done
+				}
+
+				// Should not panic
+			})
+		})
+
+		Describe("Backward compatibility: SetInstanceInfo (deprecated)", func() {
+			It("should store instance UUID and name via deprecated method", func() {
+				deps.SetInstanceInfo("backend-real-uuid-12345", "My Instance")
+				uuid, name := deps.GetInstanceInfo()
+				Expect(uuid).To(Equal("backend-real-uuid-12345"))
+				Expect(name).To(Equal("My Instance"))
 			})
 		})
 	})

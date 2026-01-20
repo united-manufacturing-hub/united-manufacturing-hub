@@ -145,9 +145,10 @@ type CommunicatorObservedState struct {
 	State string `json:"state"` // Observed lifecycle state (e.g., "running_connected")
 
 	// Authentication
-	Authenticated bool
-	JWTToken      string
-	JWTExpiry     time.Time
+	Authenticated     bool
+	JWTToken          string
+	JWTExpiry         time.Time
+	AuthenticatedUUID string `json:"authenticatedUUID,omitempty"` // UUID from backend after successful authentication
 
 	// Inbound Messages
 	MessagesReceived []transport.UMHMessage
