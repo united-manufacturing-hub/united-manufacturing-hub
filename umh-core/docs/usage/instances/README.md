@@ -85,6 +85,7 @@ Version information for support and updates:
 ## Next Steps
 
 - **Configure your instance**: [Edit the config file](config-file.md)
+- **View logs**: [Access logs](access-logs.md)
 - **Connect devices**: [Create bridges](../data-flows/bridges.md)
 - **View your data**: [Topic Browser](../unified-namespace/topic-browser.md)
 - **Understand states**: [State Machines reference](../../reference/state-machines.md)
