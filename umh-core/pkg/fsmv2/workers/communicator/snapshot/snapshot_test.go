@@ -116,4 +116,102 @@ var _ = Describe("CommunicatorObservedState", func() {
 			})
 		})
 	})
+
+	Describe("IsSyncHealthy", func() {
+		Context("when authenticated with valid token and no errors", func() {
+			BeforeEach(func() {
+				observed.Authenticated = true
+				observed.JWTExpiry = time.Now().Add(1 * time.Hour) // Token valid for 1 hour
+				observed.ConsecutiveErrors = 0
+			})
+
+			It("should return true", func() {
+				Expect(observed.IsSyncHealthy()).To(BeTrue())
+			})
+		})
+
+		Context("when authenticated with valid token but errors below threshold", func() {
+			BeforeEach(func() {
+				observed.Authenticated = true
+				observed.JWTExpiry = time.Now().Add(1 * time.Hour)
+				observed.ConsecutiveErrors = 4 // Below threshold of 5
+			})
+
+			It("should return true", func() {
+				Expect(observed.IsSyncHealthy()).To(BeTrue())
+			})
+		})
+
+		Context("when authenticated with valid token but errors at threshold", func() {
+			BeforeEach(func() {
+				observed.Authenticated = true
+				observed.JWTExpiry = time.Now().Add(1 * time.Hour)
+				observed.ConsecutiveErrors = 5 // At threshold
+			})
+
+			It("should return false", func() {
+				Expect(observed.IsSyncHealthy()).To(BeFalse())
+			})
+		})
+
+		Context("when authenticated with valid token but errors above threshold", func() {
+			BeforeEach(func() {
+				observed.Authenticated = true
+				observed.JWTExpiry = time.Now().Add(1 * time.Hour)
+				observed.ConsecutiveErrors = 10 // Well above threshold
+			})
+
+			It("should return false", func() {
+				Expect(observed.IsSyncHealthy()).To(BeFalse())
+			})
+		})
+
+		Context("when not authenticated", func() {
+			BeforeEach(func() {
+				observed.Authenticated = false
+				observed.JWTExpiry = time.Now().Add(1 * time.Hour)
+				observed.ConsecutiveErrors = 0
+			})
+
+			It("should return false", func() {
+				Expect(observed.IsSyncHealthy()).To(BeFalse())
+			})
+		})
+
+		Context("when token is expired", func() {
+			BeforeEach(func() {
+				observed.Authenticated = true
+				observed.JWTExpiry = time.Now().Add(-1 * time.Hour) // Expired 1 hour ago
+				observed.ConsecutiveErrors = 0
+			})
+
+			It("should return false", func() {
+				Expect(observed.IsSyncHealthy()).To(BeFalse())
+			})
+		})
+
+		Context("when token is about to expire (within 10-minute buffer)", func() {
+			BeforeEach(func() {
+				observed.Authenticated = true
+				observed.JWTExpiry = time.Now().Add(5 * time.Minute) // Expires in 5 minutes
+				observed.ConsecutiveErrors = 0
+			})
+
+			It("should return false", func() {
+				Expect(observed.IsSyncHealthy()).To(BeFalse())
+			})
+		})
+
+		Context("when all conditions fail", func() {
+			BeforeEach(func() {
+				observed.Authenticated = false
+				observed.JWTExpiry = time.Now().Add(-1 * time.Hour)
+				observed.ConsecutiveErrors = 10
+			})
+
+			It("should return false", func() {
+				Expect(observed.IsSyncHealthy()).To(BeFalse())
+			})
+		})
+	})
 })

@@ -19,6 +19,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/backoff"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
 )
 
@@ -192,8 +193,17 @@ func (o CommunicatorObservedState) IsTokenExpired() bool {
 	return time.Now().Add(refreshBuffer).After(o.JWTExpiry)
 }
 
+// IsSyncHealthy returns true if the communicator is healthy for syncing.
+// This checks three conditions:
+// 1. Authenticated: Must have valid authentication with the backend
+// 2. Token not expired: JWT token must not be expired or near expiration
+// 3. Consecutive errors below threshold: Too many consecutive errors indicate unhealthy state
+//
+// The health threshold uses backoff.TransportResetThreshold (5 errors) as the threshold.
+// When ConsecutiveErrors >= threshold, the communicator is considered unhealthy and
+// should transition to degraded state for recovery.
 func (o CommunicatorObservedState) IsSyncHealthy() bool {
-	return o.Authenticated && !o.IsTokenExpired()
+	return o.Authenticated && !o.IsTokenExpired() && o.ConsecutiveErrors < backoff.TransportResetThreshold
 }
 
 func (o CommunicatorObservedState) GetConsecutiveErrors() int {
