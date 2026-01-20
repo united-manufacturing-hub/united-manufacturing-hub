@@ -22,41 +22,9 @@ import (
 const ResetTransportActionName = "reset_transport"
 
 // ResetTransportAction resets the HTTP transport to establish fresh connections.
-//
-// # Purpose
-//
-// When the communicator enters a degraded state due to persistent failures (e.g.,
-// 5 consecutive errors), this action resets the underlying HTTP transport. This can
-// help resolve connection-level issues like:
-//   - Stale TCP connections that appear alive but are actually dead
-//   - DNS caching issues where the server IP has changed
-//   - Corrupted connection pool state
-//   - TLS session issues
-//
-// # When This Action Is Triggered
-//
-// DegradedState triggers this action when consecutive errors reach a multiple of
-// the TransportResetThreshold (5). This means:
-//   - At 5 errors: first reset
-//   - At 10 errors: second reset
-//   - At 15 errors: third reset, etc.
-//
-// This periodic reset approach allows multiple recovery attempts rather than
-// a one-time reset that might not help.
-//
-// # Idempotency
-//
-// This action is idempotent and safe to call multiple times:
-//   - Each call creates a fresh HTTP client
-//   - Previous connections are closed before new client creation
-//   - No persistent state is affected (JWT tokens, etc. remain valid)
-//
-// # Example
-//
-//	// DegradedState detects 5 consecutive errors
-//	if consecutiveErrors > 0 && consecutiveErrors%TransportResetThreshold == 0 {
-//	    return s, SignalNone, NewResetTransportAction()
-//	}
+// Triggered by DegradedState at multiples of TransportResetThreshold (5, 10, 15...).
+// Resolves stale TCP connections, DNS caching, corrupted connection pool, or TLS issues.
+// Idempotent: creates fresh HTTP client while preserving JWT tokens.
 type ResetTransportAction struct{}
 
 // NewResetTransportAction creates a new transport reset action.
@@ -69,29 +37,7 @@ func (a *ResetTransportAction) Name() string {
 	return ResetTransportActionName
 }
 
-// Execute resets the transport to establish fresh connections.
-//
-// This method is called by the FSM v2 Supervisor when in DegradedState and
-// the reset threshold is reached.
-//
-// Reset flow:
-//  1. Get transport from dependencies
-//  2. Call Reset() on the transport (closes idle connections, creates new client)
-//  3. Return success (transport is ready for new requests)
-//
-// On success:
-//   - Transport has a fresh HTTP client
-//   - Next sync operation will use new connections
-//
-// Transport nil safety:
-//   - ResetTransportAction is ONLY called from DegradedState
-//   - DegradedState is only reachable AFTER SyncingState
-//   - SyncingState is only reachable AFTER TryingToAuthenticateState
-//   - TryingToAuthenticateState runs AuthenticateAction which creates the transport
-//   - Therefore, transport is GUARANTEED to be non-nil when this action executes
-//
-// Error handling:
-//   - Transport.Reset() does not return errors (best-effort operation)
+// Execute resets the transport. Transport is guaranteed non-nil per worker.go C3.
 func (a *ResetTransportAction) Execute(ctx context.Context, depsAny any) error {
 	deps := depsAny.(CommunicatorDependencies)
 

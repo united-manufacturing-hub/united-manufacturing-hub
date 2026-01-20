@@ -76,60 +76,14 @@ type CommunicatorDependencies interface {
 
 const AuthenticateActionName = "authenticate"
 
-// AuthenticateAction performs authentication with the relay server to obtain a JWT token.
+// AuthenticateAction obtains a JWT token from the relay server for sync operations.
 //
-// # Purpose
+// Flow: POST instanceUUID + authToken to relay → receive JWT token + expiry → store in deps.
+// Idempotent: safe to retry on failure, multiple calls won't create multiple tokens.
+// Creates transport on first execution if not present.
 //
-// Before the communicator can sync data, it must authenticate with the relay server.
-// The relay uses JWT tokens to:
-//   - Identify which Edge instance is connecting
-//   - Authorize access to specific sync channels
-//   - Rate limit and monitor connections
-//
-// This action performs the authentication flow and stores the JWT token in
-// the shared observed state for use by subsequent sync operations.
-//
-// # Authentication Flow
-//
-// 1. Build authentication request with instanceUUID and authToken
-// 2. Send POST to /authenticate endpoint on relay server
-// 3. Receive JWT token and expiration time
-// 4. Store token in CommunicatorObservedState
-// 5. Mark as authenticated
-//
-// # Idempotency
-//
-// This action is idempotent and safe to retry:
-//   - If already authenticated (have valid JWT), returns immediately
-//   - If authentication fails, can be retried safely
-//   - Multiple calls won't create multiple tokens
-//
-// Idempotency check is performed at the start of Execute():
-//
-//	if observedState.IsAuthenticated() && observedState.GetJWTToken() != "" {
-//	    return nil  // Already authenticated
-//	}
-//
-// # Security Model
-//
-// Authentication uses a pre-shared secret (authToken):
-//   - The authToken is configured on both Edge and Management Console
-//   - It's sent to the relay server to prove identity
-//   - The relay validates the token and issues a JWT
-//
-// The JWT token is then used for all sync operations:
-//   - Transport includes JWT in WebSocket connection headers
-//   - Relay validates JWT before routing messages
-//   - JWT expires after a period (typically 24 hours)
-//
-// # Error Handling
-//
-// Returns an error if:
-//   - HTTP request fails (network error, timeout)
-//   - Relay returns non-200 status (invalid credentials)
-//   - Response parsing fails (malformed JSON)
-//
-// On error, the FSM will retry the authentication based on state transitions.
+// Returns error on network failure, invalid credentials (non-200), or malformed response.
+// See worker.go C1 (authentication precedence) and C3 (transport lifecycle).
 type AuthenticateAction struct {
 	RelayURL     string
 	InstanceUUID string
@@ -144,16 +98,7 @@ type AuthenticateActionResult struct {
 }
 
 // NewAuthenticateAction creates a new authentication action.
-//
-// Parameters:
-//   - relayURL: Relay server endpoint (e.g., "https://relay.umh.app")
-//   - instanceUUID: Identifies this Edge instance (from config)
-//   - authToken: Pre-shared secret for authentication (from config)
-//   - timeout: HTTP request timeout (defaults to 10s if 0)
-//
-// Dependencies are injected via Execute() parameter by the supervisor,
-// not passed to constructor. Actions work correctly after
-// DesiredState is loaded from storage (Dependencies can't be serialized).
+// Timeout defaults to 10s if 0. Dependencies injected via Execute().
 func NewAuthenticateAction(relayURL, instanceUUID, authToken string, timeout time.Duration) *AuthenticateAction {
 	if timeout == 0 {
 		timeout = 10 * time.Second // Default timeout
@@ -168,43 +113,7 @@ func NewAuthenticateAction(relayURL, instanceUUID, authToken string, timeout tim
 }
 
 // Execute performs authentication with the relay server.
-//
-// This method is called by the FSM v2 Supervisor when in the Authenticating state.
-//
-// Authentication flow:
-//  1. Check if already authenticated (idempotency)
-//  2. Build JSON request with instanceUUID and authToken
-//  3. POST to /authenticate endpoint
-//  4. Parse JWT token from response
-//  5. Store token in observedState
-//  6. Mark as authenticated
-//
-// Idempotency guarantee:
-//   - If already authenticated, returns immediately without network call
-//   - Safe to call multiple times (FSM may retry on failure)
-//
-// On success:
-//   - observedState.IsAuthenticated() returns true
-//   - observedState.GetJWTToken() returns valid JWT
-//   - FSM transitions to Authenticated state
-//
-// On failure:
-//   - observedState remains unauthenticated
-//   - Error is returned to FSM
-//   - FSM may retry or transition to error state
-//
-// Returns an error if:
-//   - JSON marshaling fails (malformed request)
-//   - HTTP request fails (network error, timeout)
-//   - Response status is not 200 (authentication failed)
-//   - JSON parsing fails (malformed response)
-//
-// The relay server is expected to return:
-//
-//	{
-//	    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-//	    "expiresAt": 1735689600
-//	}
+// Creates transport if not present, then POSTs auth request and stores JWT in deps.
 func (a *AuthenticateAction) Execute(ctx context.Context, depsAny any) error {
 	// Cast dependencies from supervisor-injected parameter
 	deps := depsAny.(CommunicatorDependencies)

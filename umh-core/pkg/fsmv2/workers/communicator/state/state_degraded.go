@@ -25,93 +25,15 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/snapshot"
 )
 
-// DegradedState represents the error recovery mode when sync operations repeatedly fail.
+// DegradedState handles error recovery when sync operations repeatedly fail.
+// Uses exponential backoff and periodic transport resets (at 5, 10, 15... errors).
 //
-// # Purpose
+// Transitions:
+//   - → SyncingState: when IsSyncHealthy() && consecutive errors = 0
+//   - → StoppedState: if shutdown requested
+//   - → self: backoff wait or retry via SyncAction/ResetTransportAction
 //
-// This state provides graceful degradation and recovery when sync health deteriorates due to
-// consecutive errors (network failures, transport errors, backend unavailability). Instead of
-// rapid retry loops that could overwhelm the system, DegradedState implements backoff logic
-// and controlled retry attempts to allow transient issues to resolve.
-//
-// The state continues attempting sync operations but with awareness that the system is not
-// operating at full health. It transitions back to SyncingState once health recovers, or to
-// TryingToAuthenticateState if authentication becomes the root cause.
-//
-// # Entry Conditions
-//
-//   - Transition from SyncingState when sync health degrades:
-//     observed.IsSyncHealthy() returns false (consecutive errors exceed threshold)
-//   - Expected causes: Network instability, relay server temporary unavailability,
-//     HTTP transport errors, partial message delivery failures
-//
-// # Exit Conditions
-//
-// Transition to SyncingState on health recovery:
-//   - Preconditions: observed.IsSyncHealthy() == true AND observed.GetConsecutiveErrors() == 0
-//   - Triggers: Successful SyncAction execution resets error counter and health status
-//   - Result: Return to normal operational sync loop
-//
-// Transition to TryingToAuthenticateState on auth issues:
-//   - Not implemented in this state (would need to detect auth-specific errors)
-//   - Future: If errors are determined to be authentication-related, should transition to auth
-//   - Expected: Error classification logic in action to distinguish network vs auth failures
-//
-// Transition to StoppedState on shutdown:
-//   - Triggers: desired.ShutdownRequested() returns true
-//   - Result: Graceful shutdown even during degraded operation
-//
-// # Actions
-//
-// Emits SyncAction with retry semantics:
-//   - Action parameters: Same as SyncingState (Dependencies, JWTToken)
-//   - Action responsibilities: Attempt sync operations, update health metrics
-//   - Action idempotency: Safe to retry, required for recovery attempts
-//   - Backoff logic: Implemented via action's error counting (future: exponential backoff)
-//
-// The state loops on itself emitting SyncAction until health recovers. This provides
-// continuous retry without state transitions, allowing action-layer backoff to control rate.
-//
-// # State Transitions
-//
-//	DegradedState → SyncingState (when health recovers: IsSyncHealthy && consecutive errors = 0)
-//	DegradedState → DegradedState (loop: retry sync until success or shutdown)
-//	DegradedState → StoppedState (when shutdown requested)
-//	DegradedState → TryingToAuthenticateState (future: when errors indicate auth failure)
-//
-// # Invariants
-//
-//   - Enforces C4 (shutdown check priority): desired.ShutdownRequested() checked first in Next(),
-//     ensuring graceful shutdown is possible even during degraded operation.
-//
-// Related invariants (not directly enforced here):
-//   - C1 (authentication precedence): DegradedState assumes prior successful authentication
-//   - C2 (token expiry handling): Token expiry should be caught by SyncingState before degradation,
-//     but DegradedState could check this as additional safety (currently not implemented)
-//   - C3 (transport lifecycle): Assumes Dependencies.Transport exists for retry attempts
-//   - C5 (syncing loop): DegradedState is outside the primary sync loop; recovery returns to C5 loop
-//
-// # Recovery Strategy
-//
-// Error recovery follows this pattern:
-//  1. SyncingState detects consecutive failures (e.g., 3 in a row)
-//  2. Transition to DegradedState to signal unhealthy state
-//  3. DegradedState continues retry attempts (action may implement backoff)
-//  4. Single successful sync resets error counter and health status
-//  5. Transition back to SyncingState resumes normal operation
-//
-// This provides resilience against transient network issues, temporary backend outages,
-// and intermittent relay server problems without manual intervention.
-//
-// # Future Enhancements
-//
-// Potential improvements for error recovery:
-//   - Exponential backoff between retry attempts (currently action-layer responsibility)
-//   - Error classification (network vs auth vs transport) for smarter transitions
-//   - Maximum retry limit before escalation or alert generation
-//   - Circuit breaker pattern to prevent thundering herd on backend recovery
-//
-// See worker.go invariants block (C1-C5) for complete validation layer details.
+// Enforces C4 (shutdown priority). Timing stored in ObservedState.DegradedEnteredAt.
 type DegradedState struct {
 	BaseCommunicatorState
 	// Note: FSM states should be stateless. All timing information is now stored in
@@ -120,17 +42,12 @@ type DegradedState struct {
 }
 
 // NewDegradedState creates a new DegradedState.
-// The entry timestamp is tracked in ObservedState.DegradedEnteredAt, not in the state itself.
 func NewDegradedState() *DegradedState {
 	return &DegradedState{}
 }
 
 // NewDegradedStateWithEnteredAt creates a new DegradedState.
-//
-// Deprecated: The enteredAt parameter is ignored. DegradedState now reads the entry
-// timestamp from ObservedState.DegradedEnteredAt, which is set by dependencies when
-// the first error occurs. This function is kept for backward compatibility with tests.
-// Tests should instead set up the dependencies to call RecordError() at the desired time.
+// Deprecated: enteredAt is ignored; reads from ObservedState.DegradedEnteredAt instead.
 func NewDegradedStateWithEnteredAt(_ time.Time) *DegradedState {
 	return &DegradedState{}
 }
