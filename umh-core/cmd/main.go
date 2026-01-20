@@ -25,6 +25,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/pprof"
 	v2 "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/communication_state"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/fsmv2_adapter"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/graphql"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/encoding"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
@@ -40,7 +41,6 @@ import (
 	topicbrowserfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/topicbrowser"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/examples"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
@@ -406,136 +406,6 @@ func enableBackendConnection(ctx context.Context, config *config.FullConfig, com
 	logger.Info("Backend connection enabled")
 }
 
-// CommunicationStateChannelAdapter adapts CommunicationState channels for FSMv2 communicator.
-// It converts between models.UMHMessage (legacy) and transport.UMHMessage (FSMv2).
-//
-// Flow:
-//   - FSMv2 worker writes received messages to inbound channel
-//   - Adapter converts transport.UMHMessage → models.UMHMessage
-//   - Writes to CommunicationState.InboundChannel for Router processing
-//   - Router writes responses to CommunicationState.OutboundChannel
-//   - Adapter converts models.UMHMessage → transport.UMHMessage
-//   - FSMv2 worker reads from outbound channel to push to HTTP
-type CommunicationStateChannelAdapter struct {
-	// Intermediate channels with transport.UMHMessage type
-	fsmInbound  chan *transport.UMHMessage // FSMv2 writes here
-	fsmOutbound chan *transport.UMHMessage // FSMv2 reads from here
-
-	// Legacy channels from CommunicationState
-	legacyInbound  chan *models.UMHMessage // Router reads from here
-	legacyOutbound chan *models.UMHMessage // Router writes here
-
-	logger *zap.SugaredLogger
-}
-
-// NewCommunicationStateChannelAdapter creates an adapter that bridges FSMv2 and legacy channels.
-func NewCommunicationStateChannelAdapter(
-	legacyInbound chan *models.UMHMessage,
-	legacyOutbound chan *models.UMHMessage,
-	logger *zap.SugaredLogger,
-) *CommunicationStateChannelAdapter {
-	return &CommunicationStateChannelAdapter{
-		fsmInbound:     make(chan *transport.UMHMessage, 100),
-		fsmOutbound:    make(chan *transport.UMHMessage, 100),
-		legacyInbound:  legacyInbound,
-		legacyOutbound: legacyOutbound,
-		logger:         logger,
-	}
-}
-
-// Start begins the conversion goroutines. Call this before starting FSMv2 supervisor.
-func (a *CommunicationStateChannelAdapter) Start(ctx context.Context) {
-	// Goroutine: FSMv2 inbound → Legacy inbound (for Router)
-	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case msg := <-a.fsmInbound:
-				if msg == nil {
-					continue
-				}
-
-				// Convert transport.UMHMessage → models.UMHMessage
-				var instanceUUID uuid.UUID
-				if msg.InstanceUUID != "" {
-					parsed, err := uuid.Parse(msg.InstanceUUID)
-					if err != nil {
-						a.logger.Warnw("failed to parse InstanceUUID, using nil UUID",
-							"instanceUUID", msg.InstanceUUID, "error", err)
-
-						instanceUUID = uuid.Nil
-					} else {
-						instanceUUID = parsed
-					}
-				}
-
-				legacyMsg := &models.UMHMessage{
-					Content:      msg.Content,
-					InstanceUUID: instanceUUID,
-					Email:        msg.Email,
-				}
-
-				// Non-blocking send to prevent deadlock
-				select {
-				case a.legacyInbound <- legacyMsg:
-				case <-ctx.Done():
-					return
-				default:
-					a.logger.Warnw("legacy inbound channel full, dropping message")
-				}
-			}
-		}
-	}()
-
-	// Goroutine: Legacy outbound → FSMv2 outbound (for push)
-	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case msg := <-a.legacyOutbound:
-				if msg == nil {
-					continue
-				}
-
-				// Convert models.UMHMessage → transport.UMHMessage
-				fsmMsg := &transport.UMHMessage{
-					Content:      msg.Content,
-					InstanceUUID: msg.InstanceUUID.String(),
-					Email:        msg.Email,
-				}
-
-				// Non-blocking send to prevent deadlock
-				select {
-				case a.fsmOutbound <- fsmMsg:
-				case <-ctx.Done():
-					return
-				default:
-					a.logger.Warnw("FSMv2 outbound channel full, dropping message")
-				}
-			}
-		}
-	}()
-}
-
-// GetChannels returns channels for the FSMv2 communicator worker.
-// Implements communicator.ChannelProvider interface.
-func (a *CommunicationStateChannelAdapter) GetChannels(_ string) (
-	inbound chan<- *transport.UMHMessage,
-	outbound <-chan *transport.UMHMessage,
-) {
-	return a.fsmInbound, a.fsmOutbound
-}
-
-// GetOutboundWriteChannel returns the outbound channel for direct writing.
-// This allows SubscriberHandler to bypass the legacy→FSMv2 conversion goroutine
-// and write transport.UMHMessage directly to the FSMv2 outbound channel.
-// Used for Priority 0: Remove Pusher from FSMv2 flow.
-func (a *CommunicationStateChannelAdapter) GetOutboundWriteChannel() chan<- *transport.UMHMessage {
-	return a.fsmOutbound
-}
-
 func enableFSMv2BackendConnection(
 	ctx context.Context,
 	configData *config.FullConfig,
@@ -551,7 +421,7 @@ func enableFSMv2BackendConnection(
 	}
 
 	// Create channel adapter to bridge FSMv2 and legacy channels
-	channelAdapter := NewCommunicationStateChannelAdapter(
+	channelAdapter := fsmv2_adapter.NewLegacyChannelBridge(
 		communicationState.InboundChannel,
 		communicationState.OutboundChannel,
 		logger,
