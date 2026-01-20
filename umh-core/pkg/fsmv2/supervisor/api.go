@@ -25,6 +25,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/internal/collection"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/internal/execution"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 )
 
@@ -228,12 +229,15 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity fsmv2.Identity, wor
 	executor := execution.NewActionExecutor(10, identity.ID, workerLogger)
 
 	workerCtx = &WorkerContext[TObserved, TDesired]{
-		mu:           s.lockManager.NewLock(lockNameWorkerContextMu, lockLevelWorkerContextMu),
-		identity:     identity,
-		worker:       worker,
-		currentState: worker.GetInitialState(),
-		collector:    collector,
-		executor:     executor,
+		mu:               s.lockManager.NewLock(lockNameWorkerContextMu, lockLevelWorkerContextMu),
+		identity:         identity,
+		worker:           worker,
+		currentState:     worker.GetInitialState(),
+		collector:        collector,
+		executor:         executor,
+		stateEnteredAt:   time.Now(),
+		stateTransitions: make(map[string]int64),
+		stateDurations:   make(map[string]time.Duration),
 	}
 	s.workers[identity.ID] = workerCtx
 
@@ -263,6 +267,13 @@ func (s *Supervisor[TObserved, TDesired]) RemoveWorker(ctx context.Context, work
 
 	workerCtx.collector.Stop(ctx)
 	workerCtx.executor.Shutdown()
+
+	// Cleanup state duration metric for removed worker
+	workerCtx.mu.RLock()
+	if workerCtx.currentState != nil {
+		metrics.CleanupStateDuration(s.workerType, workerID, workerCtx.currentState.String())
+	}
+	workerCtx.mu.RUnlock()
 
 	s.logger.Infow("worker_removed")
 

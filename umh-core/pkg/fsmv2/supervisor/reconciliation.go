@@ -308,15 +308,19 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 
 	// Transition to next state
 	if nextState != currentState {
+		fromState := currentState.String()
+		toState := nextState.String()
+		now := time.Now()
+
 		s.logTrace("lifecycle",
 			"lifecycle_event", "state_transition",
-			"from_state", currentState.String(),
-			"to_state", nextState.String(),
+			"from_state", fromState,
+			"to_state", toState,
 			"reason", nextState.Reason())
 
 		s.logger.Infow("state_transition",
-			"from_state", currentState.String(),
-			"to_state", nextState.String(),
+			"from_state", fromState,
+			"to_state", toState,
 			"reason", nextState.Reason())
 
 		s.logTrace("lifecycle",
@@ -330,16 +334,45 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 			"lifecycle_event", "mutex_lock_acquired",
 			"mutex_name", "workerCtx.mu")
 
+		// Track cumulative time in previous state
+		if !workerCtx.stateEnteredAt.IsZero() {
+			timeInState := now.Sub(workerCtx.stateEnteredAt)
+			workerCtx.stateDurations[fromState] += timeInState
+		}
+
+		// Track transition count to new state
+		workerCtx.stateTransitions[toState]++
+
+		// Update current state
 		workerCtx.currentState = nextState
+
+		// Update state entered timestamp
+		workerCtx.stateEnteredAt = now
+
 		workerCtx.mu.Unlock()
 
 		s.logTrace("lifecycle",
 			"lifecycle_event", "mutex_unlock",
 			"mutex_name", "workerCtx.mu")
+
+		// Record Prometheus metric AFTER lock release
+		metrics.RecordStateTransition(s.workerType, fromState, toState)
 	} else {
 		s.logTrace("state_unchanged",
 			"state", currentState.String())
 	}
+
+	// Update state duration gauge (every tick, not just transitions)
+	workerCtx.mu.RLock()
+	if workerCtx.currentState != nil && !workerCtx.stateEnteredAt.IsZero() {
+		metrics.RecordStateDuration(
+			s.workerType,
+			workerID,
+			workerCtx.currentState.String(),
+			time.Since(workerCtx.stateEnteredAt),
+		)
+	}
+	workerCtx.mu.RUnlock()
 
 	// Process signal
 	if err := s.processSignal(ctx, workerID, signal); err != nil {

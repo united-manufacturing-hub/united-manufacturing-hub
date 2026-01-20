@@ -104,6 +104,13 @@ type WorkerContext[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] s
 	executor          *execution.ActionExecutor
 	actionPending     bool
 	lastActionObsTime time.Time
+
+	// Automatic state tracking (provided by supervisor for ALL workers)
+	// These fields track state history for metrics and debugging without
+	// requiring each worker to implement tracking manually.
+	stateEnteredAt   time.Time                // When current state was entered
+	stateTransitions map[string]int64         // state_name → total times entered
+	stateDurations   map[string]time.Duration // state_name → cumulative time spent
 }
 
 // CollectorHealthConfig configures observation collector health monitoring.

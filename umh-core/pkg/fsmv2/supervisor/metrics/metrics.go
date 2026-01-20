@@ -229,6 +229,28 @@ var (
 		[]string{"worker_type"},
 	)
 
+	// State transitions counter - uses dynamic labels from state.String()
+	stateTransitionsTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: namespace,
+			Subsystem: subsystem,
+			Name:      "state_transitions_total",
+			Help:      "Total state transitions by from_state and to_state",
+		},
+		[]string{"worker_type", "from_state", "to_state"},
+	)
+
+	// Time spent in current state (updated every tick)
+	stateDurationSeconds = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: namespace,
+			Subsystem: subsystem,
+			Name:      "state_duration_seconds",
+			Help:      "Time spent in current state",
+		},
+		[]string{"worker_type", "worker_id", "state"},
+	)
+
 	observationSaveTotal = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: namespace,
@@ -338,6 +360,24 @@ func RecordObservationSave(workerType string, changed bool, duration time.Durati
 
 	observationSaveTotal.WithLabelValues(workerType, changedStr).Inc()
 	observationSaveDuration.WithLabelValues(workerType, changedStr).Observe(duration.Seconds())
+}
+
+// RecordStateTransition records a state transition event.
+// Called by supervisor when worker transitions from one FSM state to another.
+func RecordStateTransition(workerType, fromState, toState string) {
+	stateTransitionsTotal.WithLabelValues(workerType, fromState, toState).Inc()
+}
+
+// RecordStateDuration records how long a worker has been in its current state.
+// Called by supervisor on every tick to track time spent in each state.
+func RecordStateDuration(workerType, workerID, state string, duration time.Duration) {
+	stateDurationSeconds.WithLabelValues(workerType, workerID, state).Set(duration.Seconds())
+}
+
+// CleanupStateDuration removes state duration metric for a worker.
+// Call on worker removal to prevent memory leaks and stale metrics.
+func CleanupStateDuration(workerType, workerID, state string) {
+	stateDurationSeconds.DeleteLabelValues(workerType, workerID, state)
 }
 
 // =============================================================================
