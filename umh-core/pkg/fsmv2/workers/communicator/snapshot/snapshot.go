@@ -162,7 +162,12 @@ type CommunicatorObservedState struct {
 
 // GetMetrics returns a pointer to the Metrics field.
 // Implements fsmv2.MetricsHolder for automatic Prometheus export by supervisor.
-func (o *CommunicatorObservedState) GetMetrics() *fsmv2.Metrics {
+//
+// IMPORTANT: Uses value receiver to work with interface values after SetState() etc.
+// are called. Those methods return copies (value semantics for immutability), and
+// Go's method set rules require value receiver for the interface assertion to succeed.
+// Go's escape analysis will heap-allocate the receiver when address is taken.
+func (o CommunicatorObservedState) GetMetrics() *fsmv2.Metrics {
 	return &o.Metrics
 }
 

@@ -123,10 +123,19 @@ func (a *SyncAction) Execute(ctx context.Context, depsAny any) error {
 
 	deps.RecordPullSuccess(pullLatency, len(messages))
 
+	// Calculate bytes pulled
+	var bytesPulled int64
+	for _, msg := range messages {
+		if msg != nil {
+			bytesPulled += int64(len(msg.InstanceUUID) + len(msg.Content) + len(msg.Email))
+		}
+	}
+
 	// Record successful pull metrics with typed constants
 	deps.Metrics().IncrementCounter(metrics.CounterPullOps, 1)
 	deps.Metrics().IncrementCounter(metrics.CounterPullSuccess, 1)
 	deps.Metrics().IncrementCounter(metrics.CounterMessagesPulled, int64(len(messages)))
+	deps.Metrics().IncrementCounter(metrics.CounterBytesPulled, bytesPulled)
 	deps.Metrics().SetGauge(metrics.GaugeLastPullLatencyMs, float64(pullLatency.Milliseconds()))
 
 	// 2. Store pulled messages (they will be available in next observed state)
@@ -187,10 +196,19 @@ func (a *SyncAction) Execute(ctx context.Context, depsAny any) error {
 		pushLatency := time.Since(pushStart)
 		deps.RecordPushSuccess(pushLatency, len(messagesToPush))
 
+		// Calculate bytes pushed
+		var bytesPushed int64
+		for _, msg := range messagesToPush {
+			if msg != nil {
+				bytesPushed += int64(len(msg.InstanceUUID) + len(msg.Content) + len(msg.Email))
+			}
+		}
+
 		// Record successful push metrics with typed constants
 		deps.Metrics().IncrementCounter(metrics.CounterPushOps, 1)
 		deps.Metrics().IncrementCounter(metrics.CounterPushSuccess, 1)
 		deps.Metrics().IncrementCounter(metrics.CounterMessagesPushed, int64(len(messagesToPush)))
+		deps.Metrics().IncrementCounter(metrics.CounterBytesPushed, bytesPushed)
 		deps.Metrics().SetGauge(metrics.GaugeLastPushLatencyMs, float64(pushLatency.Milliseconds()))
 	}
 

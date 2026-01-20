@@ -66,6 +66,12 @@ const (
 
 	// CounterMessagesPushed tracks total messages pushed to backend.
 	CounterMessagesPushed CounterName = "messages_pushed"
+
+	// CounterBytesPulled tracks total bytes pulled from backend.
+	CounterBytesPulled CounterName = "bytes_pulled"
+
+	// CounterBytesPushed tracks total bytes pushed to backend.
+	CounterBytesPushed CounterName = "bytes_pushed"
 )
 
 // Communicator worker gauge names.
