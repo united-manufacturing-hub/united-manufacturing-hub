@@ -400,13 +400,9 @@ func init() {
 	// Register both worker and supervisor factories atomically.
 	if err := factory.RegisterWorkerType[snapshot.CommunicatorObservedState, *snapshot.CommunicatorDesiredState](
 		func(id fsmv2.Identity, logger *zap.SugaredLogger, stateReader fsmv2.StateReader, deps map[string]any) fsmv2.Worker {
-			// Extract channelProvider from injected dependencies if available
-			var channelProvider ChannelProvider
-			if deps != nil {
-				if cp, ok := deps["channelProvider"].(ChannelProvider); ok {
-					channelProvider = cp
-				}
-			}
+			// Phase 1: ChannelProvider MUST be set via global singleton BEFORE factory is called.
+			// The singleton is read by NewCommunicatorDependencies and will panic if not set.
+			// DO NOT extract channelProvider from deps - singleton is THE ONLY way.
 
 			// Extract onAuthSuccessCallback from injected dependencies if available (Bug #6 fix)
 			var onAuthSuccessCallback func(uuid, name string)
@@ -423,12 +419,11 @@ func init() {
 				logger.Warnw("deps is nil, cannot extract onAuthSuccessCallback")
 			}
 
-			// Create dependencies WITHOUT transport (created lazily by AuthenticateAction)
+			// Create dependencies WITHOUT transport (created lazily by AuthenticateAction).
+			// NewCommunicatorDependencies will read channels from the global singleton.
+			// It will panic if the singleton is not set - this is intentional.
 			commDeps := NewCommunicatorDependencies(nil, logger, stateReader, id)
-			// Set channel provider if injected
-			if channelProvider != nil {
-				commDeps.SetChannelProvider(channelProvider)
-			}
+
 			// Set auth success callback if injected (Bug #6 fix)
 			if onAuthSuccessCallback != nil {
 				commDeps.SetOnAuthSuccessCallback(onAuthSuccessCallback)

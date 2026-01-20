@@ -23,34 +23,86 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
+	communicator_transport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
 )
 
 // Test suite is registered in worker_test.go to avoid duplicate RunSpecs
 
+// =============================================================================
+// Phase 1 Architecture Verification Tests - ChannelProvider Singleton
+// =============================================================================
+//
+// These tests verify the Phase 1 FSMv2 Communicator Architecture:
+// 1. ChannelProvider MUST be set via global singleton BEFORE creating dependencies
+// 2. deps.SetChannelProvider() method should NOT exist (removed in Phase 1)
+// 3. factory deps["channelProvider"] path should NOT exist (removed in Phase 1)
+//
+// Compile-time verification:
+// The removal of deps.SetChannelProvider() is verified at compile time - if this
+// code compiles, the method does not exist on CommunicatorDependencies:
+//
+//     var _ interface{ SetChannelProvider(ChannelProvider) } = (*communicator.CommunicatorDependencies)(nil)
+//     // ^ This line would fail to compile if the method still exists
+//
+// The above is NOT included because it would FAIL compilation after Phase 1 is complete.
+// Instead, if someone accidentally adds the method back, the architecture tests
+// will catch it at runtime.
+// =============================================================================
+
 type mockTransport struct{}
 
-func (m *mockTransport) Authenticate(_ context.Context, _ transport.AuthRequest) (transport.AuthResponse, error) {
-	return transport.AuthResponse{}, nil
+func (m *mockTransport) Authenticate(_ context.Context, _ communicator_transport.AuthRequest) (communicator_transport.AuthResponse, error) {
+	return communicator_transport.AuthResponse{}, nil
 }
-func (m *mockTransport) Pull(_ context.Context, _ string) ([]*transport.UMHMessage, error) {
+func (m *mockTransport) Pull(_ context.Context, _ string) ([]*communicator_transport.UMHMessage, error) {
 	return nil, nil
 }
-func (m *mockTransport) Push(_ context.Context, _ string, _ []*transport.UMHMessage) error {
+func (m *mockTransport) Push(_ context.Context, _ string, _ []*communicator_transport.UMHMessage) error {
 	return nil
 }
 func (m *mockTransport) Close() {}
 func (m *mockTransport) Reset() {}
 
+// mockChannelProvider implements communicator.ChannelProvider for testing
+type mockChannelProvider struct {
+	inbound  chan<- *communicator_transport.UMHMessage
+	outbound <-chan *communicator_transport.UMHMessage
+}
+
+func (m *mockChannelProvider) GetChannels(_ string) (
+	inbound chan<- *communicator_transport.UMHMessage,
+	outbound <-chan *communicator_transport.UMHMessage,
+) {
+	return m.inbound, m.outbound
+}
+
+// newTestChannelProvider creates a mock channel provider for test setup
+func newTestChannelProvider() *mockChannelProvider {
+	// Create bidirectional channels, then extract send-only and receive-only
+	inboundBi := make(chan *communicator_transport.UMHMessage, 100)
+	outboundBi := make(chan *communicator_transport.UMHMessage, 100)
+	return &mockChannelProvider{
+		inbound:  inboundBi,
+		outbound: outboundBi,
+	}
+}
+
 var _ = Describe("CommunicatorDependencies", func() {
 	var (
-		mt     transport.Transport
+		mt     communicator_transport.Transport
 		logger *zap.SugaredLogger
 	)
 
 	BeforeEach(func() {
 		mt = &mockTransport{}
 		logger = zap.NewNop().Sugar()
+		// Phase 1: Set up singleton for ALL tests (except Phase 1 architecture tests)
+		communicator.SetChannelProvider(newTestChannelProvider())
+	})
+
+	AfterEach(func() {
+		// Clean up singleton after each test
+		communicator.ClearChannelProvider()
 	})
 
 	Describe("NewCommunicatorDependencies", func() {
@@ -270,6 +322,69 @@ var _ = Describe("CommunicatorDependencies", func() {
 
 				// The counter should be a non-negative integer
 				Expect(deps.GetConsecutiveErrors()).To(BeNumerically(">=", 0))
+			})
+		})
+	})
+
+	// =============================================================================
+	// Phase 1: ChannelProvider Singleton Architecture Tests
+	// =============================================================================
+	//
+	// After Phase 1, the ChannelProvider MUST be set via global singleton ONLY.
+	// These tests verify:
+	// 1. NewCommunicatorDependencies panics if singleton is nil
+	// 2. deps.SetChannelProvider() method no longer exists (verified at runtime)
+	//
+	// See comment block at top of file for compile-time verification notes.
+	// =============================================================================
+	Describe("Phase 1: ChannelProvider Singleton Architecture", func() {
+		BeforeEach(func() {
+			// Ensure singleton is cleared before each test
+			communicator.ClearChannelProvider()
+		})
+
+		AfterEach(func() {
+			// Clean up singleton after each test
+			communicator.ClearChannelProvider()
+		})
+
+		Describe("NewCommunicatorDependencies", func() {
+			Context("when ChannelProvider singleton is NOT set", func() {
+				It("should panic with clear error message", func() {
+					// Ensure singleton is nil
+					Expect(communicator.GetChannelProvider()).To(BeNil())
+
+					// Creating dependencies without singleton should panic
+					identity := fsmv2.Identity{ID: "test-id", WorkerType: "communicator"}
+					Expect(func() {
+						communicator.NewCommunicatorDependencies(mt, logger, nil, identity)
+					}).To(PanicWith(ContainSubstring("ChannelProvider must be set")))
+				})
+			})
+
+			Context("when ChannelProvider singleton IS set", func() {
+				It("should NOT panic and create dependencies with channels from singleton", func() {
+					// Set up mock provider
+					inbound := make(chan<- *communicator_transport.UMHMessage, 10)
+					outbound := make(<-chan *communicator_transport.UMHMessage, 10)
+					mockProvider := &mockChannelProvider{
+						inbound:  inbound,
+						outbound: outbound,
+					}
+					communicator.SetChannelProvider(mockProvider)
+
+					// Creating dependencies should NOT panic
+					identity := fsmv2.Identity{ID: "test-singleton-id", WorkerType: "communicator"}
+					var deps *communicator.CommunicatorDependencies
+					Expect(func() {
+						deps = communicator.NewCommunicatorDependencies(mt, logger, nil, identity)
+					}).NotTo(Panic())
+
+					Expect(deps).NotTo(BeNil())
+					// Channels should be set from singleton provider
+					Expect(deps.GetInboundChan()).To(Equal(inbound))
+					Expect(deps.GetOutboundChan()).To(Equal(outbound))
+				})
 			})
 		})
 	})

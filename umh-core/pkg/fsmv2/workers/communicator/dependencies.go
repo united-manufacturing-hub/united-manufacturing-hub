@@ -77,17 +77,27 @@ type CommunicatorDependencies struct {
 }
 
 // NewCommunicatorDependencies creates a new dependencies for the communicator worker.
+//
+// Phase 1 Architecture: ChannelProvider singleton is THE ONLY way to get channels.
+// This function will PANIC if the global ChannelProvider singleton is not set.
+// The singleton MUST be set via SetChannelProvider() BEFORE calling this function.
+//
+// Expected call flow:
+//  1. main.go: adapter := NewLegacyChannelBridge(...)
+//  2. main.go: SetChannelProvider(adapter)  // Single point of setup
+//  3. FSMv2 starts supervisor
+//  4. Communicator worker created, NewCommunicatorDependencies calls GetChannelProvider()
+//  5. If GetChannelProvider() returns nil -> panic
 func NewCommunicatorDependencies(t transport.Transport, logger *zap.SugaredLogger, stateReader fsmv2.StateReader, identity fsmv2.Identity) *CommunicatorDependencies {
-	var inbound chan<- *transport.UMHMessage
-
-	var outbound <-chan *transport.UMHMessage
-
-	// Get channels from provider if available (production use)
-	if provider := GetChannelProvider(); provider != nil {
-		inbound, outbound = provider.GetChannels(identity.ID)
+	// Phase 1: ChannelProvider singleton is REQUIRED
+	provider := GetChannelProvider()
+	if provider == nil {
+		panic("ChannelProvider must be set before creating communicator dependencies. " +
+			"Call SetChannelProvider() in main.go before starting the FSMv2 supervisor.")
 	}
 
-	// If no provider, channels are nil (test/scenario use - HTTP only)
+	// Get channels from the singleton provider
+	inbound, outbound := provider.GetChannels(identity.ID)
 
 	return &CommunicatorDependencies{
 		BaseDependencies: fsmv2.NewBaseDependencies(logger, stateReader, identity),
@@ -103,22 +113,6 @@ func NewCommunicatorDependencies(t transport.Transport, logger *zap.SugaredLogge
 // CollectObservedState calls Drain() to merge buffered metrics.
 func (d *CommunicatorDependencies) Metrics() *fsmv2.MetricsRecorder {
 	return d.metrics
-}
-
-// SetChannelProvider configures the inbound/outbound channels from a provider.
-// This allows injecting channel provider via dependencies instead of global state.
-// Called by factory when deps["channelProvider"] is set.
-func (d *CommunicatorDependencies) SetChannelProvider(p ChannelProvider) {
-	if p == nil {
-		return
-	}
-
-	d.mu.Lock()
-	defer d.mu.Unlock()
-
-	inbound, outbound := p.GetChannels(d.GetWorkerID())
-	d.inboundChan = inbound
-	d.outboundChan = outbound
 }
 
 // SetTransport sets the transport instance (mutex protected).

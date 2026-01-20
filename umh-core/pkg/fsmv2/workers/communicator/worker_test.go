@@ -90,6 +90,10 @@ var _ = Describe("CommunicatorWorker", func() {
 		ctx = context.Background()
 		logger = zap.NewNop().Sugar()
 		mockTransport = NewMockTransport()
+
+		// Phase 1: Set up ChannelProvider singleton BEFORE creating worker
+		communicator.SetChannelProvider(NewMockChannelProvider())
+
 		var err error
 		worker, err = communicator.NewCommunicatorWorker(
 			"test-id",
@@ -99,6 +103,11 @@ var _ = Describe("CommunicatorWorker", func() {
 			nil,
 		)
 		Expect(err).ToNot(HaveOccurred())
+	})
+
+	AfterEach(func() {
+		// Clean up singleton after each test
+		communicator.ClearChannelProvider()
 	})
 
 	Describe("Worker interface implementation", func() {

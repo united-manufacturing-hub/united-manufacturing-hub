@@ -151,3 +151,27 @@ func (m *MockTransport) PushCallCount() int {
 
 	return m.pushCalls
 }
+
+// MockChannelProvider implements communicator.ChannelProvider for testing
+type MockChannelProvider struct {
+	inbound  chan<- *transportpkg.UMHMessage
+	outbound <-chan *transportpkg.UMHMessage
+}
+
+// NewMockChannelProvider creates a mock channel provider with buffered channels
+func NewMockChannelProvider() *MockChannelProvider {
+	// Create bidirectional channels with buffer size 100
+	inboundBi := make(chan *transportpkg.UMHMessage, 100)
+	outboundBi := make(chan *transportpkg.UMHMessage, 100)
+	return &MockChannelProvider{
+		inbound:  inboundBi,
+		outbound: outboundBi,
+	}
+}
+
+func (m *MockChannelProvider) GetChannels(_ string) (
+	inbound chan<- *transportpkg.UMHMessage,
+	outbound <-chan *transportpkg.UMHMessage,
+) {
+	return m.inbound, m.outbound
+}
