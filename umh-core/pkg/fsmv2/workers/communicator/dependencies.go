@@ -21,6 +21,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/backoff"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
+	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
 	"go.uber.org/zap"
 )
 
@@ -61,14 +62,19 @@ type CommunicatorDependencies struct {
 
 	// 8-byte fields
 	*fsmv2.BaseDependencies
-	degradedEnteredAt time.Time // When we entered degraded mode (first error after success)
+	degradedEnteredAt  time.Time                    // When we entered degraded mode (first error after success)
+	lastAuthAttemptAt  time.Time                    // Last authentication attempt timestamp (for backoff)
 	lastPullLatency    time.Duration                // Per-tick pull latency
 	lastPushLatency    time.Duration                // Per-tick push latency
+	lastRetryAfter     time.Duration                // Retry-After from last error (from server)
 	inboundChan        chan<- *transport.UMHMessage // Write received messages to router
 	outboundChan       <-chan *transport.UMHMessage // Read messages from router to push
 	consecutiveErrors  int                          // Error counter (incremented by RecordError)
 	lastPullCount      int                          // Per-tick pull message count
 	lastPushCount      int                          // Per-tick push message count
+
+	// 4-byte fields
+	lastErrorType httpTransport.ErrorType // Last error type for intelligent backoff
 
 	// 1-byte fields (bools grouped at end to minimize padding)
 	lastPullSuccess   bool // Per-tick pull success flag
@@ -224,7 +230,7 @@ func (d *CommunicatorDependencies) RecordError() {
 	}
 }
 
-// RecordSuccess resets the consecutive error counter to 0 and clears degradedEnteredAt.
+// RecordSuccess resets the consecutive error counter to 0 and clears all error tracking state.
 // This is called by actions after an operation succeeds.
 // Thread-safe: uses mutex for concurrent access protection.
 func (d *CommunicatorDependencies) RecordSuccess() {
@@ -232,7 +238,69 @@ func (d *CommunicatorDependencies) RecordSuccess() {
 	defer d.mu.Unlock()
 
 	d.consecutiveErrors = 0
-	d.degradedEnteredAt = time.Time{} // Clear degraded entry time
+	d.degradedEnteredAt = time.Time{}  // Clear degraded entry time
+	d.lastErrorType = 0                // Clear error type
+	d.lastRetryAfter = 0               // Clear retry-after
+	d.lastAuthAttemptAt = time.Time{} // Clear auth attempt time
+}
+
+// RecordTypedError increments the consecutive error counter and records error type and retry-after.
+// This is called by actions after an operation fails with a classified error.
+// Thread-safe: uses mutex for concurrent access protection.
+func (d *CommunicatorDependencies) RecordTypedError(errType httpTransport.ErrorType, retryAfter time.Duration) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	// If this is the first error, record when we entered degraded mode
+	if d.consecutiveErrors == 0 {
+		d.degradedEnteredAt = time.Now()
+	}
+
+	d.consecutiveErrors++
+	d.lastErrorType = errType
+	d.lastRetryAfter = retryAfter
+
+	// Trigger transport reset when threshold is reached (or at multiples of threshold)
+	if d.consecutiveErrors%backoff.TransportResetThreshold == 0 && d.transport != nil {
+		d.transport.Reset()
+	}
+}
+
+// GetLastErrorType returns the last recorded error type.
+// Thread-safe: uses mutex for concurrent access protection.
+func (d *CommunicatorDependencies) GetLastErrorType() httpTransport.ErrorType {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+
+	return d.lastErrorType
+}
+
+// GetLastRetryAfter returns the Retry-After duration from the last error.
+// Thread-safe: uses mutex for concurrent access protection.
+func (d *CommunicatorDependencies) GetLastRetryAfter() time.Duration {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+
+	return d.lastRetryAfter
+}
+
+// SetLastAuthAttemptAt records the timestamp of the last authentication attempt.
+// This is used for backoff calculation in TryingToAuthenticateState.
+// Thread-safe: uses mutex for concurrent access protection.
+func (d *CommunicatorDependencies) SetLastAuthAttemptAt(t time.Time) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	d.lastAuthAttemptAt = t
+}
+
+// GetLastAuthAttemptAt returns the timestamp of the last authentication attempt.
+// Thread-safe: uses mutex for concurrent access protection.
+func (d *CommunicatorDependencies) GetLastAuthAttemptAt() time.Time {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+
+	return d.lastAuthAttemptAt
 }
 
 // GetConsecutiveErrors returns the current consecutive error count.

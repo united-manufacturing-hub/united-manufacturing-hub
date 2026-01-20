@@ -19,6 +19,8 @@ package backoff
 import (
 	"math"
 	"time"
+
+	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
 )
 
 const (
@@ -34,6 +36,7 @@ const (
 	// issues like DNS caching, corrupted TCP state, or stale pooled connections.
 	TransportResetThreshold = 5
 )
+
 
 // CalculateDelay calculates exponential backoff based on consecutive errors.
 // Returns 0 if no errors or negative errors. Caps at MaxDelay (60 seconds).
@@ -60,4 +63,70 @@ func CalculateDelay(consecutiveErrors int) time.Duration {
 	}
 
 	return delay
+}
+
+// CalculateDelayForErrorType returns backoff based on error type.
+// If retryAfter > 0 (from Retry-After header), it overrides the default strategy.
+// This enables intelligent backoff: Cloudflare/proxy blocks get fixed delays,
+// rate limits get progressive delays, network errors get exponential backoff.
+func CalculateDelayForErrorType(errType httpTransport.ErrorType, consecutiveErrors int, retryAfter time.Duration) time.Duration {
+	// Respect server's Retry-After header if provided
+	if retryAfter > 0 {
+		return retryAfter
+	}
+
+	return calculateDefaultDelay(errType, consecutiveErrors)
+}
+
+// calculateDefaultDelay returns backoff without Retry-After override.
+func calculateDefaultDelay(errType httpTransport.ErrorType, consecutiveErrors int) time.Duration {
+	switch errType {
+	case httpTransport.ErrorTypeCloudflareChallenge,
+		httpTransport.ErrorTypeProxyBlock:
+		// Fixed 60s for challenges/blocks - waiting longer doesn't help
+		return 60 * time.Second
+
+	case httpTransport.ErrorTypeInvalidToken:
+		// Fixed 60s for auth errors - credentials won't magically change
+		return 60 * time.Second
+
+	case httpTransport.ErrorTypeBackendRateLimit:
+		// Progressive: 30s, 60s, 120s, 300s (5 min max)
+		delays := []time.Duration{30 * time.Second, 60 * time.Second, 120 * time.Second, 300 * time.Second}
+
+		idx := consecutiveErrors - 1
+		if idx < 0 {
+			idx = 0
+		}
+
+		if idx >= len(delays) {
+			idx = len(delays) - 1
+		}
+
+		return delays[idx]
+
+	case httpTransport.ErrorTypeServerError:
+		// Exponential backoff: 2s, 4s, 8s, 16s, 32s (server may recover)
+		return CalculateDelay(consecutiveErrors)
+
+	case httpTransport.ErrorTypeNetwork:
+		// Exponential backoff: 1s, 2s, 4s, 8s, 16s (network may recover)
+		return CalculateDelay(consecutiveErrors)
+
+	case httpTransport.ErrorTypeInstanceDeleted:
+		// Instance deleted - no point retrying
+		return 0
+
+	default:
+		// Unknown errors - use exponential backoff
+		return CalculateDelay(consecutiveErrors)
+	}
+}
+
+// ShouldStopRetrying always returns false - the communicator should never stop retrying.
+// Only the backoff time changes based on error type via CalculateDelayForErrorType.
+// This ensures the communicator remains resilient and keeps attempting to reconnect.
+func ShouldStopRetrying(_ httpTransport.ErrorType, _ int) bool {
+	// Never stop retrying - only backoff time changes
+	return false
 }

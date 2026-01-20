@@ -21,6 +21,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/backoff"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
+	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
 )
 
 // CommunicatorDependencies represents the dependencies needed by communicator actions.
@@ -161,6 +162,14 @@ type CommunicatorObservedState struct {
 	// DegradedEnteredAt tracks when we entered degraded mode (first error after success).
 	// Zero means not in degraded mode. Used by DegradedState for backoff calculation.
 	DegradedEnteredAt time.Time `json:"degradedEnteredAt,omitempty"`
+
+	// Error type tracking for intelligent backoff
+	// LastErrorType is the type of the last error (for error-specific backoff strategies).
+	LastErrorType httpTransport.ErrorType `json:"lastErrorType,omitempty"`
+	// LastRetryAfter is the Retry-After duration from the last error response (from server).
+	LastRetryAfter time.Duration `json:"lastRetryAfter,omitempty"`
+	// LastAuthAttemptAt is the timestamp of the last authentication attempt (for auth backoff).
+	LastAuthAttemptAt time.Time `json:"lastAuthAttemptAt,omitempty"`
 
 	// Sync metrics for observability
 	// Uses standard fsmv2.Metrics structure for automatic Prometheus export

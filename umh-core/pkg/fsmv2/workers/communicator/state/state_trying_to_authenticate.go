@@ -15,10 +15,13 @@
 package state
 
 import (
+	"time"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/action"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/backoff"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/snapshot"
 )
 
@@ -38,12 +41,28 @@ func (s *TryingToAuthenticateState) Next(snapAny any) (fsmv2.State[any, any], fs
 	snap := helpers.ConvertSnapshot[snapshot.CommunicatorObservedState, *snapshot.CommunicatorDesiredState](snapAny)
 	snap.Observed.State = config.MakeState(config.PrefixTryingToStart, "authentication")
 
+	// C4: Shutdown check priority
 	if snap.Desired.IsShutdownRequested() {
 		return &StoppedState{}, fsmv2.SignalNone, nil
 	}
 
-	if snap.Observed.Authenticated && !snap.Observed.IsTokenExpired() { // TODO: check good abstraction / API
+	// Already authenticated? Proceed to syncing
+	if snap.Observed.Authenticated && !snap.Observed.IsTokenExpired() {
 		return &SyncingState{}, fsmv2.SignalNone, nil
+	}
+
+	// Check backoff delay (if we have previous errors)
+	// This prevents hammering the backend when authentication repeatedly fails
+	if snap.Observed.ConsecutiveErrors > 0 && !snap.Observed.LastAuthAttemptAt.IsZero() {
+		delay := backoff.CalculateDelayForErrorType(
+			snap.Observed.LastErrorType,
+			snap.Observed.ConsecutiveErrors,
+			snap.Observed.LastRetryAfter, // Respect server's Retry-After
+		)
+		if time.Since(snap.Observed.LastAuthAttemptAt) < delay {
+			// Still in backoff period - wait without action
+			return s, fsmv2.SignalNone, nil
+		}
 	}
 
 	// Create AuthenticateAction - deps injected via Execute() by supervisor

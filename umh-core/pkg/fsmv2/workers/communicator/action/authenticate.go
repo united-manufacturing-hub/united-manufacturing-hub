@@ -16,9 +16,11 @@ package action
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
 	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
 )
@@ -38,13 +40,25 @@ type CommunicatorDependencies interface {
 	// Called by SyncAction after successful pull operation.
 	SetPulledMessages(messages []*transport.UMHMessage)
 
-	// Added for Bug #1 fix - error tracking methods:
+	// Error tracking methods:
 	// RecordError increments consecutive error count after HTTP failure.
 	RecordError()
 	// RecordSuccess resets consecutive error count after HTTP success.
 	RecordSuccess()
 	// GetConsecutiveErrors returns the current consecutive error count.
 	GetConsecutiveErrors() int
+
+	// Typed error tracking methods for intelligent backoff:
+	// RecordTypedError records error type and retry-after for intelligent backoff.
+	RecordTypedError(errType httpTransport.ErrorType, retryAfter time.Duration)
+	// GetLastErrorType returns the last recorded error type.
+	GetLastErrorType() httpTransport.ErrorType
+	// GetLastRetryAfter returns the Retry-After duration from the last error.
+	GetLastRetryAfter() time.Duration
+	// SetLastAuthAttemptAt records the timestamp of the last authentication attempt.
+	SetLastAuthAttemptAt(t time.Time)
+	// GetLastAuthAttemptAt returns the timestamp of the last authentication attempt.
+	GetLastAuthAttemptAt() time.Time
 
 	// Channel access methods for FSMv1 integration
 	// GetInboundChan returns channel to write received messages.
@@ -114,6 +128,7 @@ func NewAuthenticateAction(relayURL, instanceUUID, authToken string, timeout tim
 
 // Execute performs authentication with the relay server.
 // Creates transport if not present, then POSTs auth request and stores JWT in deps.
+// Records auth attempt timestamp and error type for intelligent backoff.
 func (a *AuthenticateAction) Execute(ctx context.Context, depsAny any) error {
 	// Cast dependencies from supervisor-injected parameter
 	deps := depsAny.(CommunicatorDependencies)
@@ -129,10 +144,28 @@ func (a *AuthenticateAction) Execute(ctx context.Context, depsAny any) error {
 		Email:        a.AuthToken,
 	}
 
+	// Record auth attempt timestamp BEFORE the attempt (for backoff calculation)
+	deps.SetLastAuthAttemptAt(time.Now())
+
 	authResp, err := deps.GetTransport().Authenticate(ctx, authReq)
 	if err != nil {
+		// Extract error type and record typed error (with Retry-After if present)
+		var transportErr *httpTransport.TransportError
+		if errors.As(err, &transportErr) {
+			deps.RecordTypedError(transportErr.Type, transportErr.RetryAfter)
+			// Record metric for error type
+			deps.Metrics().IncrementCounter(counterForErrorType(transportErr.Type), 1)
+		} else {
+			// Non-transport error (e.g., context canceled) - treat as network error
+			deps.RecordTypedError(httpTransport.ErrorTypeNetwork, 0)
+			deps.Metrics().IncrementCounter(metrics.CounterNetworkErrorsTotal, 1)
+		}
+
 		return err
 	}
+
+	// Success - clear error tracking
+	deps.RecordSuccess()
 
 	// Store JWT token in dependencies (will be read by CollectObservedState)
 	deps.SetJWT(authResp.Token, time.Unix(authResp.ExpiresAt, 0))
@@ -156,6 +189,31 @@ func (a *AuthenticateAction) Execute(ctx context.Context, depsAny any) error {
 	}
 
 	return nil
+}
+
+// counterForErrorType maps ErrorType to Prometheus counter.
+// This function MUST handle ALL error types to avoid metric gaps.
+func counterForErrorType(t httpTransport.ErrorType) metrics.CounterName {
+	switch t {
+	case httpTransport.ErrorTypeCloudflareChallenge:
+		return metrics.CounterCloudflareErrorsTotal
+	case httpTransport.ErrorTypeBackendRateLimit:
+		return metrics.CounterBackendRateLimitErrorsTotal
+	case httpTransport.ErrorTypeInvalidToken:
+		return metrics.CounterAuthFailuresTotal
+	case httpTransport.ErrorTypeInstanceDeleted:
+		return metrics.CounterInstanceDeletedTotal
+	case httpTransport.ErrorTypeServerError:
+		return metrics.CounterServerErrorsTotal
+	case httpTransport.ErrorTypeProxyBlock:
+		return metrics.CounterProxyBlockErrorsTotal
+	case httpTransport.ErrorTypeNetwork:
+		return metrics.CounterNetworkErrorsTotal
+	case httpTransport.ErrorTypeUnknown:
+		return metrics.CounterNetworkErrorsTotal // Unknown → network bucket
+	default:
+		return metrics.CounterNetworkErrorsTotal
+	}
 }
 
 func (a *AuthenticateAction) Name() string {

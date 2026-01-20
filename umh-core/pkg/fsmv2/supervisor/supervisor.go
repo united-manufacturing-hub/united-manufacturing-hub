@@ -307,7 +307,7 @@ func NewSupervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState](c
 		createdAt:          time.Now(),
 		parentID:         "",
 		healthChecker:    NewInfrastructureHealthChecker(DefaultMaxInfraRecoveryAttempts, DefaultRecoveryAttemptWindow),
-		actionExecutor:   execution.NewActionExecutor(10, cfg.WorkerType, cfg.Logger),
+		actionExecutor:   execution.NewActionExecutor(10, cfg.WorkerType, fsmv2.Identity{WorkerType: cfg.WorkerType}, cfg.Logger),
 		collectorHealth: CollectorHealth{
 			observationTimeout: observationTimeout,
 			staleThreshold:     staleThreshold,

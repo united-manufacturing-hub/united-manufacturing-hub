@@ -16,11 +16,13 @@ package action
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
+	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
 )
 
 const SyncActionName = "sync"
@@ -65,9 +67,20 @@ func (a *SyncAction) Execute(ctx context.Context, depsAny any) error {
 
 	if err != nil {
 		// BUG #1 (ENG-3600): Old communicator reported OK before verifying success.
-		// We call RecordError() ONLY on actual failure, never before.
+		// We call RecordTypedError() ONLY on actual failure, never before.
 		deps.RecordPullFailure(pullLatency)
-		deps.RecordError()
+
+		// Extract error type and record typed error (with Retry-After if present)
+		var transportErr *httpTransport.TransportError
+		if errors.As(err, &transportErr) {
+			deps.RecordTypedError(transportErr.Type, transportErr.RetryAfter)
+			// Record metric for error type
+			deps.Metrics().IncrementCounter(counterForErrorType(transportErr.Type), 1)
+		} else {
+			// Non-transport error (e.g., context canceled) - treat as network error
+			deps.RecordTypedError(httpTransport.ErrorTypeNetwork, 0)
+			deps.Metrics().IncrementCounter(metrics.CounterNetworkErrorsTotal, 1)
+		}
 
 		// Record metrics with typed constants
 		deps.Metrics().IncrementCounter(metrics.CounterPullOps, 1)
@@ -81,6 +94,7 @@ func (a *SyncAction) Execute(ctx context.Context, depsAny any) error {
 
 	// Calculate bytes pulled
 	var bytesPulled int64
+
 	for _, msg := range messages {
 		if msg != nil {
 			bytesPulled += int64(len(msg.InstanceUUID) + len(msg.Content) + len(msg.Email))
@@ -139,7 +153,18 @@ func (a *SyncAction) Execute(ctx context.Context, depsAny any) error {
 		if err := deps.GetTransport().Push(ctx, a.JWTToken, messagesToPush); err != nil {
 			pushLatency := time.Since(pushStart)
 			deps.RecordPushFailure(pushLatency)
-			deps.RecordError()
+
+			// Extract error type and record typed error (with Retry-After if present)
+			var transportErr *httpTransport.TransportError
+			if errors.As(err, &transportErr) {
+				deps.RecordTypedError(transportErr.Type, transportErr.RetryAfter)
+				// Record metric for error type
+				deps.Metrics().IncrementCounter(counterForErrorType(transportErr.Type), 1)
+			} else {
+				// Non-transport error (e.g., context canceled) - treat as network error
+				deps.RecordTypedError(httpTransport.ErrorTypeNetwork, 0)
+				deps.Metrics().IncrementCounter(metrics.CounterNetworkErrorsTotal, 1)
+			}
 
 			// Record push failure metrics with typed constants
 			deps.Metrics().IncrementCounter(metrics.CounterPushOps, 1)
@@ -154,6 +179,7 @@ func (a *SyncAction) Execute(ctx context.Context, depsAny any) error {
 
 		// Calculate bytes pushed
 		var bytesPushed int64
+
 		for _, msg := range messagesToPush {
 			if msg != nil {
 				bytesPushed += int64(len(msg.InstanceUUID) + len(msg.Content) + len(msg.Email))

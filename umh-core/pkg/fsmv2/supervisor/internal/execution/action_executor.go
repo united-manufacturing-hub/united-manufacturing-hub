@@ -30,6 +30,7 @@ import (
 
 type ActionExecutor struct {
 	supervisorID   string
+	identity       fsmv2.Identity // Worker identity for logging
 	workerCount    int
 	actionQueue    chan actionWork
 	inProgress     map[string]bool
@@ -52,13 +53,14 @@ type actionWork struct {
 	deps     any // Dependencies to pass to the action
 }
 
-func NewActionExecutor(workerCount int, supervisorID string, logger *zap.SugaredLogger) *ActionExecutor {
+func NewActionExecutor(workerCount int, supervisorID string, identity fsmv2.Identity, logger *zap.SugaredLogger) *ActionExecutor {
 	if workerCount <= 0 {
 		workerCount = 10
 	}
 
 	return &ActionExecutor{
 		supervisorID:   supervisorID,
+		identity:       identity,
 		workerCount:    workerCount,
 		actionQueue:    make(chan actionWork, workerCount*2),
 		inProgress:     make(map[string]bool),
@@ -68,13 +70,14 @@ func NewActionExecutor(workerCount int, supervisorID string, logger *zap.Sugared
 	}
 }
 
-func NewActionExecutorWithTimeout(workerCount int, timeouts map[string]time.Duration, supervisorID string, logger *zap.SugaredLogger) *ActionExecutor {
+func NewActionExecutorWithTimeout(workerCount int, timeouts map[string]time.Duration, supervisorID string, identity fsmv2.Identity, logger *zap.SugaredLogger) *ActionExecutor {
 	if workerCount <= 0 {
 		workerCount = 10
 	}
 
 	return &ActionExecutor{
 		supervisorID:   supervisorID,
+		identity:       identity,
 		workerCount:    workerCount,
 		actionQueue:    make(chan actionWork, workerCount*2),
 		inProgress:     make(map[string]bool),
@@ -139,6 +142,7 @@ func (ae *ActionExecutor) executeWorkWithRecovery(work actionWork) {
 			status = "panic"
 
 			ae.logger.Errorw("action_panic",
+				"worker", ae.identity.String(),
 				"action", work.actionID,
 				"action_name", work.action.Name(),
 				"panic", fmt.Sprintf("%v", r),
@@ -179,12 +183,14 @@ func (ae *ActionExecutor) executeWorkWithRecovery(work actionWork) {
 			metrics.RecordActionTimeout(ae.supervisorID, work.action.Name())
 
 			ae.logger.Errorw("action_failed",
+				"worker", ae.identity.String(),
 				"action", work.action.Name(),
 				"error", "timeout",
 				"duration_ms", duration.Milliseconds(),
 				"timeout_ms", work.timeout.Milliseconds())
 		} else {
 			ae.logger.Errorw("action_failed",
+				"worker", ae.identity.String(),
 				"action", work.action.Name(),
 				"error", err.Error(),
 				"duration_ms", duration.Milliseconds())
@@ -192,6 +198,7 @@ func (ae *ActionExecutor) executeWorkWithRecovery(work actionWork) {
 	} else {
 		// Success logs at DEBUG - operators only need failures, not routine success
 		ae.logger.Debugw("action_completed",
+			"worker", ae.identity.String(),
 			"action", work.action.Name(),
 			"duration_ms", duration.Milliseconds(),
 			"success", true)

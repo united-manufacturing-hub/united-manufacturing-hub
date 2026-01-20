@@ -55,6 +55,8 @@ type StateSetter interface {
 //  3. Router processes → 50+ Actions → outboundChannel
 //  4. Bridge.CollectAndWrite() drains outboundChannel → Dependencies.MessagesToBePushed
 //  5. FSMv2 SyncAction pushes MessagesToBePushed
+//
+// TODO: shouldnt this here not use stateGetter and setter and instead just the channel?
 type Bridge struct {
 	stateGetter  StateGetter
 	stateSetter  StateSetter

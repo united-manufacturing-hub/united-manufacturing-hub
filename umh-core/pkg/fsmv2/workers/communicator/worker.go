@@ -283,6 +283,11 @@ func (w *CommunicatorWorker) CollectObservedState(ctx context.Context) (fsmv2.Ob
 	consecutiveErrors := deps.GetConsecutiveErrors()
 	degradedEnteredAt := deps.GetDegradedEnteredAt()
 
+	// Read error type tracking fields from dependencies (for intelligent backoff)
+	lastErrorType := deps.GetLastErrorType()
+	lastRetryAfter := deps.GetLastRetryAfter()
+	lastAuthAttemptAt := deps.GetLastAuthAttemptAt()
+
 	// Get previous metrics from store (persisted across restarts)
 	var prevMetrics fsmv2.Metrics
 
@@ -336,6 +341,10 @@ func (w *CommunicatorWorker) CollectObservedState(ctx context.Context) (fsmv2.Ob
 		Authenticated:     authenticated,
 		ConsecutiveErrors: consecutiveErrors,
 		DegradedEnteredAt: degradedEnteredAt,
+		// Error type tracking fields for intelligent backoff
+		LastErrorType:     lastErrorType,
+		LastRetryAfter:    lastRetryAfter,
+		LastAuthAttemptAt: lastAuthAttemptAt,
 		Metrics:           newMetrics,
 	}
 

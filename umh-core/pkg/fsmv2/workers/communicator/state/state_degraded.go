@@ -64,9 +64,13 @@ func (s *DegradedState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, 
 		return &SyncingState{}, fsmv2.SignalNone, nil
 	}
 
-	// Calculate backoff using the shared backoff utility
+	// Calculate backoff using error-type-aware backoff utility
 	consecutiveErrors := snap.Observed.GetConsecutiveErrors()
-	backoffDelay := backoff.CalculateDelay(consecutiveErrors)
+	backoffDelay := backoff.CalculateDelayForErrorType(
+		snap.Observed.LastErrorType,
+		consecutiveErrors,
+		snap.Observed.LastRetryAfter, // Respect server's Retry-After
+	)
 
 	// Get when we entered degraded mode (first error after success)
 	// This timestamp is set by dependencies.RecordError() on the first error

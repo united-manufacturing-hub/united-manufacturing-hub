@@ -71,6 +71,20 @@ type Identity struct {
 	HierarchyPath string `json:"hierarchyPath"` // Full path from root: "scenario123(application)/parent-123(parent)/child001(child)".
 }
 
+// String implements fmt.Stringer for logging purposes.
+// Returns HierarchyPath if available, falls back to "ID(Type)" for root workers.
+func (i Identity) String() string {
+	if i.HierarchyPath != "" {
+		return i.HierarchyPath
+	}
+
+	if i.ID != "" && i.WorkerType != "" {
+		return i.ID + "(" + i.WorkerType + ")"
+	}
+
+	return "unknown"
+}
+
 // ObservedState represents the actual state gathered from monitoring the system.
 // Implementations should include timestamps to detect staleness.
 // The supervisor collects this via CollectObservedState() in a separate goroutine.

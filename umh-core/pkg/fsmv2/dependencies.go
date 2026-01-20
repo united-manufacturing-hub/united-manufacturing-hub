@@ -101,26 +101,15 @@ type BaseDependencies struct {
 }
 
 // NewBaseDependencies creates a new base dependencies with common tools.
-// The logger is automatically enriched with hierarchical worker context.
+// The logger is automatically enriched with hierarchical worker context using identity.String().
 // The stateReader can be nil if state access is not needed.
-//
-// Logger enrichment uses Identity.HierarchyPath for the "worker" field:
-//   - Format: "scenario123(application)/parent-123(parent)/child001(child)"
-//   - This provides full hierarchical context in every log message
-//   - Falls back to "workerID(workerType)" if HierarchyPath is empty
 func NewBaseDependencies(logger *zap.SugaredLogger, stateReader StateReader, identity Identity) *BaseDependencies {
 	if logger == nil {
 		panic("NewBaseDependencies: logger cannot be nil")
 	}
 
-	// Use HierarchyPath if available, otherwise construct a simple path
-	workerPath := identity.HierarchyPath
-	if workerPath == "" {
-		workerPath = identity.ID + "(" + identity.WorkerType + ")"
-	}
-
 	return &BaseDependencies{
-		logger:      logger.With("worker", workerPath),
+		logger:      logger.With("worker", identity.String()),
 		stateReader: stateReader,
 		metrics:     NewMetricsRecorder(),
 		workerType:  identity.WorkerType,

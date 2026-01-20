@@ -134,9 +134,8 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity fsmv2.Identity, wor
 
 	// Create worker-enriched logger for collector and executor.
 	// Important: Use baseLogger (un-enriched) to prevent duplicate "worker" fields.
-	// Format: "workerID(workerType)/childID(childType)/..."
-	// Example: "scenario123(application)/parent-123(parent)/child001(child)"
-	workerLogger := s.baseLogger.With("worker", identity.HierarchyPath)
+	// Uses identity.String() which returns HierarchyPath or "ID(Type)" fallback.
+	workerLogger := s.baseLogger.With("worker", identity.String())
 
 	// Declare workerCtx early so the closure can capture it.
 	// StateProvider can access the FSM state safely.
@@ -226,7 +225,7 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity fsmv2.Identity, wor
 		},
 	})
 
-	executor := execution.NewActionExecutor(10, identity.ID, workerLogger)
+	executor := execution.NewActionExecutor(10, s.workerType, identity, workerLogger)
 
 	workerCtx = &WorkerContext[TObserved, TDesired]{
 		mu:               s.lockManager.NewLock(lockNameWorkerContextMu, lockLevelWorkerContextMu),

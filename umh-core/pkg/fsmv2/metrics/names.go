@@ -94,6 +94,31 @@ const (
 	CounterBytesPushed CounterName = "bytes_pushed"
 )
 
+// Error type counter names.
+// These track errors by classification for intelligent backoff and monitoring.
+const (
+	// CounterAuthFailuresTotal tracks authentication failures (401/403).
+	CounterAuthFailuresTotal CounterName = "auth_failures_total"
+
+	// CounterServerErrorsTotal tracks server errors (5xx).
+	CounterServerErrorsTotal CounterName = "server_errors_total"
+
+	// CounterNetworkErrorsTotal tracks network/connection errors.
+	CounterNetworkErrorsTotal CounterName = "network_errors_total"
+
+	// CounterCloudflareErrorsTotal tracks Cloudflare challenge responses (429 + HTML).
+	CounterCloudflareErrorsTotal CounterName = "cloudflare_errors_total"
+
+	// CounterProxyBlockErrorsTotal tracks proxy block responses (Zscaler, etc.).
+	CounterProxyBlockErrorsTotal CounterName = "proxy_block_errors_total"
+
+	// CounterBackendRateLimitErrorsTotal tracks backend rate limit errors (429 + JSON).
+	CounterBackendRateLimitErrorsTotal CounterName = "backend_rate_limit_errors_total"
+
+	// CounterInstanceDeletedTotal tracks instance deleted errors (404).
+	CounterInstanceDeletedTotal CounterName = "instance_deleted_total"
+)
+
 // Communicator worker gauge names.
 // These track point-in-time values for monitoring.
 const (

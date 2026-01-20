@@ -61,7 +61,7 @@ func clearChannelProviderSingleton() {
 	communicator.ClearChannelProvider()
 }
 
-// Suite-level setup: ensure singleton is cleared before and after each test
+// Suite-level setup: ensure singleton is cleared before and after each test.
 var _ = BeforeEach(func() {
 	// Phase 1: Set up ChannelProvider singleton for action tests
 	setupChannelProviderSingleton()

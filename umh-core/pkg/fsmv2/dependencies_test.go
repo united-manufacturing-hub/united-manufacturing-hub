@@ -25,9 +25,9 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 )
 
-func TestFsmv2Dependencies(t *testing.T) {
+func TestFsmv2(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "FSMv2 Dependencies Suite")
+	RunSpecs(t, "FSMv2 Suite")
 }
 
 var _ = Describe("BaseDependencies", func() {
