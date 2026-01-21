@@ -209,7 +209,7 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity fsmv2.Identity, wor
 			return s.getMappedParentState()
 		},
 		// ChildrenViewProvider returns a config.ChildrenView for parent workers.
-		// TODO: does this not comflcit with the depdenncies that are injected?
+		// TODO: does this not conflict with the dependencies that are injected?
 		// Used by parent workers to inspect individual child states, not just counts.
 		// The closure captures s.children and s.mu for thread-safe access.
 		ChildrenViewProvider: func() any {
