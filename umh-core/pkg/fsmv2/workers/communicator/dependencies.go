@@ -62,24 +62,15 @@ type CommunicatorDependencies struct {
 
 	// 8-byte fields
 	*fsmv2.BaseDependencies
-	degradedEnteredAt  time.Time                    // When we entered degraded mode (first error after success)
-	lastAuthAttemptAt  time.Time                    // Last authentication attempt timestamp (for backoff)
-	lastPullLatency    time.Duration                // Per-tick pull latency
-	lastPushLatency    time.Duration                // Per-tick push latency
-	lastRetryAfter     time.Duration                // Retry-After from last error (from server)
-	inboundChan        chan<- *transport.UMHMessage // Write received messages to router
-	outboundChan       <-chan *transport.UMHMessage // Read messages from router to push
-	consecutiveErrors  int                          // Error counter (incremented by RecordError)
-	lastPullCount      int                          // Per-tick pull message count
-	lastPushCount      int                          // Per-tick push message count
+	degradedEnteredAt time.Time                    // When we entered degraded mode (first error after success)
+	lastAuthAttemptAt time.Time                    // Last authentication attempt timestamp (for backoff)
+	lastRetryAfter    time.Duration                // Retry-After from last error (from server)
+	inboundChan       chan<- *transport.UMHMessage // Write received messages to router
+	outboundChan      <-chan *transport.UMHMessage // Read messages from router to push
+	consecutiveErrors int                          // Error counter (incremented by RecordError)
 
 	// 4-byte fields
 	lastErrorType httpTransport.ErrorType // Last error type for intelligent backoff
-
-	// 1-byte fields (bools grouped at end to minimize padding)
-	lastPullSuccess   bool // Per-tick pull success flag
-	lastPushSuccess   bool // Per-tick push success flag
-	syncTickCompleted bool // True if a sync tick ran this cycle
 }
 
 // NewCommunicatorDependencies creates a new dependencies for the communicator worker.
@@ -336,101 +327,21 @@ func (d *CommunicatorDependencies) GetOutboundChan() <-chan *transport.UMHMessag
 	return d.outboundChan
 }
 
-// RecordPullSuccess records a successful pull operation with its latency and message count.
-// Stores per-tick results; CollectObservedState accumulates into metrics.
-// Thread-safe: uses mutex for concurrent access protection.
-func (d *CommunicatorDependencies) RecordPullSuccess(latency time.Duration, msgCount int) {
-	d.mu.Lock()
-	defer d.mu.Unlock()
+// RecordPullSuccess is a no-op kept for interface compatibility.
+// Metrics are recorded via MetricsRecorder instead.
+func (d *CommunicatorDependencies) RecordPullSuccess(latency time.Duration, msgCount int) {}
 
-	d.lastPullLatency = latency
-	d.lastPullCount = msgCount
-	d.lastPullSuccess = true
-	d.syncTickCompleted = true
-}
+// RecordPullFailure is a no-op kept for interface compatibility.
+// Metrics are recorded via MetricsRecorder instead.
+func (d *CommunicatorDependencies) RecordPullFailure(latency time.Duration) {}
 
-// RecordPullFailure records a failed pull operation with its latency.
-// Stores per-tick results; CollectObservedState accumulates into metrics.
-// Thread-safe: uses mutex for concurrent access protection.
-func (d *CommunicatorDependencies) RecordPullFailure(latency time.Duration) {
-	d.mu.Lock()
-	defer d.mu.Unlock()
+// RecordPushSuccess is a no-op kept for interface compatibility.
+// Metrics are recorded via MetricsRecorder instead.
+func (d *CommunicatorDependencies) RecordPushSuccess(latency time.Duration, msgCount int) {}
 
-	d.lastPullLatency = latency
-	d.lastPullCount = 0
-	d.lastPullSuccess = false
-	d.syncTickCompleted = true
-}
-
-// RecordPushSuccess records a successful push operation with its latency and message count.
-// Stores per-tick results; CollectObservedState accumulates into metrics.
-// Thread-safe: uses mutex for concurrent access protection.
-func (d *CommunicatorDependencies) RecordPushSuccess(latency time.Duration, msgCount int) {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-
-	d.lastPushLatency = latency
-	d.lastPushCount = msgCount
-	d.lastPushSuccess = true
-}
-
-// RecordPushFailure records a failed push operation with its latency.
-// Stores per-tick results; CollectObservedState accumulates into metrics.
-// Thread-safe: uses mutex for concurrent access protection.
-func (d *CommunicatorDependencies) RecordPushFailure(latency time.Duration) {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-
-	d.lastPushLatency = latency
-	d.lastPushCount = 0
-	d.lastPushSuccess = false
-}
-
-// SyncTickResult contains the results of a single pull or push operation.
-type SyncTickResult struct {
-	Latency time.Duration
-	Count   int
-	Success bool
-}
-
-// GetLastSyncResults returns the per-tick sync results from the most recent sync operation.
-// Returns pull result, push result, and whether a sync tick completed this cycle.
-// Thread-safe: uses mutex for concurrent access protection.
-func (d *CommunicatorDependencies) GetLastSyncResults() (pull SyncTickResult, push SyncTickResult, completed bool) {
-	d.mu.RLock()
-	defer d.mu.RUnlock()
-
-	pull = SyncTickResult{
-		Latency: d.lastPullLatency,
-		Count:   d.lastPullCount,
-		Success: d.lastPullSuccess,
-	}
-
-	push = SyncTickResult{
-		Latency: d.lastPushLatency,
-		Count:   d.lastPushCount,
-		Success: d.lastPushSuccess,
-	}
-
-	completed = d.syncTickCompleted
-
-	return
-}
-
-// ClearSyncResults clears the per-tick sync results after CollectObservedState has accumulated them.
-// Thread-safe: uses mutex for concurrent access protection.
-func (d *CommunicatorDependencies) ClearSyncResults() {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-
-	d.lastPullLatency = 0
-	d.lastPullCount = 0
-	d.lastPullSuccess = false
-	d.lastPushLatency = 0
-	d.lastPushCount = 0
-	d.lastPushSuccess = false
-	d.syncTickCompleted = false
-}
+// RecordPushFailure is a no-op kept for interface compatibility.
+// Metrics are recorded via MetricsRecorder instead.
+func (d *CommunicatorDependencies) RecordPushFailure(latency time.Duration) {}
 
 // SetInstanceInfo stores the instance UUID and name from authentication response.
 // Called by AuthenticateAction after successful authentication.

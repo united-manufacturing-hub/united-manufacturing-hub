@@ -326,10 +326,6 @@ func (w *CommunicatorWorker) CollectObservedState(ctx context.Context) (fsmv2.Ob
 	// Also set consecutive errors as a gauge
 	newMetrics.Gauges[string(metrics.GaugeConsecutiveErrors)] = float64(consecutiveErrors)
 
-	// Clear per-tick results from legacy tracking (for backward compatibility with tests)
-	// // TODO: wtf what backwards compatbitlity? remove it!
-	deps.ClearSyncResults()
-
 	// Read authenticated UUID from dependencies
 	authenticatedUUID := deps.GetAuthenticatedUUID()
 
