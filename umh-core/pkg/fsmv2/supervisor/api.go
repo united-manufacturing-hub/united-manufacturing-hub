@@ -209,7 +209,6 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity fsmv2.Identity, wor
 			return s.getMappedParentState()
 		},
 		// ChildrenViewProvider returns a config.ChildrenView for parent workers.
-		// TODO: does this not conflict with the dependencies that are injected?
 		// Used by parent workers to inspect individual child states, not just counts.
 		// The closure captures s.children and s.mu for thread-safe access.
 		ChildrenViewProvider: func() any {
@@ -225,8 +224,7 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity fsmv2.Identity, wor
 			return NewChildrenManager(childrenCopy)
 		},
 		// FrameworkMetricsProvider returns computed framework metrics from workerCtx.
-		// Called during collection to inject into ObservedState automatically.
-		// This is AUTOMATIC INJECTION - workers don't implement SetFrameworkMetrics themselves.
+		// Called BEFORE CollectObservedState to compute metrics for explicit copying.
 		// The closure captures workerCtx by reference and acquires RLock when called (thread-safe).
 		FrameworkMetricsProvider: func() *fsmv2.FrameworkMetrics {
 			if workerCtx == nil {
@@ -251,6 +249,27 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity fsmv2.Identity, wor
 				StartupCount:            workerCtx.startupCount,
 			}
 		},
+		// FrameworkMetricsSetter sets framework metrics on worker dependencies BEFORE CollectObservedState.
+		// Workers then access this via deps.GetFrameworkState() and explicitly copy to their observed state.
+		// This replaces the duck-typing SetFrameworkMetrics injection pattern.
+		FrameworkMetricsSetter: func(fm *fsmv2.FrameworkMetrics) {
+			// Use type assertion to access GetDependenciesAny() and SetFrameworkState()
+			// All workers embed BaseWorker which provides GetDependenciesAny()
+			// All dependencies embed BaseDependencies which provides SetFrameworkState()
+			//
+			// IMPORTANT: We must use GetDependenciesAny() (returns any) NOT GetDependencies() (returns D).
+			// In Go, a method returning a concrete type D does NOT satisfy an interface requiring
+			// return type `any`. GetDependenciesAny() exists specifically for this duck-typing use case.
+			type depsGetter interface {
+				GetDependenciesAny() any
+			}
+			if dg, ok := worker.(depsGetter); ok {
+				deps := dg.GetDependenciesAny()
+				if setter, ok := deps.(interface{ SetFrameworkState(*fsmv2.FrameworkMetrics) }); ok {
+					setter.SetFrameworkState(fm)
+				}
+			}
+		},
 	})
 
 	executor := execution.NewActionExecutor(10, s.workerType, identity, workerLogger)
@@ -264,10 +283,10 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity fsmv2.Identity, wor
 	loadCancel()
 	if loadErr == nil {
 		// Try to extract previous StartupCount from FrameworkMetrics
-		if holder, ok := any(&prevObserved).(interface {
-			GetFrameworkMetrics() *fsmv2.FrameworkMetrics
-		}); ok {
-			if fm := holder.GetFrameworkMetrics(); fm != nil && fm.StartupCount > 0 {
+		// Use fsmv2.MetricsHolder interface for type assertion (value receiver methods)
+		if holder, ok := any(prevObserved).(fsmv2.MetricsHolder); ok {
+			fm := holder.GetFrameworkMetrics()
+			if fm.StartupCount > 0 {
 				startupCount = fm.StartupCount + 1
 			}
 		}

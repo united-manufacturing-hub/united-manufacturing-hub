@@ -125,9 +125,9 @@ func (m *ChildrenManager) buildChildInfo(name string, child SupervisorInterface)
 		Name:          name,
 		WorkerType:    child.GetWorkerType(),
 		StateName:     stateName,
-		StateReason:   "", // TODO: expose state reason through SupervisorInterface if needed
+		StateReason:   "", // Deferred: expose via ActionHistoryRecorder pattern if needed
 		IsHealthy:     isHealthyState(stateName),
-		ErrorMsg:      "", // TODO: expose error info through SupervisorInterface if needed
+		ErrorMsg:      "", // Deferred: expose via ActionHistoryRecorder pattern if needed
 		HierarchyPath: child.GetHierarchyPath(),
 	}
 }

@@ -55,7 +55,7 @@ func (s *SyncingState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, f
 	}
 
 	if !snap.Observed.IsSyncHealthy() {
-		return NewDegradedState(), fsmv2.SignalNone, nil
+		return &DegradedState{}, fsmv2.SignalNone, nil
 	}
 
 	syncAction := action.NewSyncAction(snap.Observed.JWTToken)

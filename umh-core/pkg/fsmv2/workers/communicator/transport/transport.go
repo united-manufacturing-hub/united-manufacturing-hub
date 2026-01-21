@@ -53,31 +53,10 @@ type PushPayload struct {
 // Transport implementations handle authentication and bidirectional messaging
 // between edge instances and the backend relay server.
 type Transport interface {
-	// TODO: does the comment need to be that long? 3 liens would probably be enough?
 	// Authenticate obtains a JWT token from the relay server.
-	//
-	// This method exchanges pre-shared credentials (instanceUUID, email) for
-	// a JWT token used in subsequent Push/Pull operations.
-	//
-	// Context handling:
-	//   - Respects ctx.Done() for cancellation
-	//   - No automatic timeout (caller should use context.WithTimeout)
-	//
-	// Idempotency:
-	//   - Safe to call multiple times with same credentials
-	//   - Each call returns a NEW token (previous tokens remain valid until expiry)
-	//
-	// Returns:
-	//   - AuthResponse with JWT token and expiry on success
-	//   - Error for network failures, auth failures (401), or server errors (5xx)
-	//
-	// Example:
-	//   resp, err := transport.Authenticate(ctx, AuthRequest{
-	//       InstanceUUID: "uuid-123",
-	//       Email: "user@example.com",
-	//   })
-	//   if err != nil { return err }
-	//   // Use resp.Token for Push/Pull
+	// Exchanges credentials (instanceUUID, email) for a JWT used in Push/Pull.
+	// Idempotent: safe to call multiple times; each returns a NEW token.
+	// Returns error for network failures, auth failures (401), or server errors.
 	Authenticate(ctx context.Context, req AuthRequest) (AuthResponse, error)
 
 	// Pull retrieves pending messages from the relay server.

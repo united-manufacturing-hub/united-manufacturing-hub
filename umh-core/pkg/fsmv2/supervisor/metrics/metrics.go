@@ -429,12 +429,13 @@ func ExportWorkerMetrics(workerType, workerID string, observed fsmv2.ObservedSta
 		return
 	}
 
-	metrics := holder.GetMetrics()
-	if metrics == nil {
+	metrics := holder.GetWorkerMetrics()
+	// Check if worker metrics are empty (no counters or gauges recorded)
+	if metrics.Counters == nil && metrics.Gauges == nil {
 		return
 	}
 
-	workerMetricsExporter.export(workerType, workerID, metrics)
+	workerMetricsExporter.export(workerType, workerID, &metrics)
 }
 
 // CleanupWorkerMetrics removes cached counter values for a worker.

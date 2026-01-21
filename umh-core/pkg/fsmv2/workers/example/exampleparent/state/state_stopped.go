@@ -53,9 +53,10 @@ func (s *StoppedState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, f
 	}
 
 	// Wait StoppedWaitDuration in stopped state before transitioning to starting.
-	// TimeInCurrentStateMs is injected by supervisor via FrameworkMetrics.
+	// TimeInCurrentStateMs is copied from deps by worker via Metrics.Framework.
+	// Direct field access is required for CSE serializability - getter methods don't work.
 	if snap.Desired.ShouldBeRunning() {
-		elapsed := time.Duration(snap.Observed.GetFrameworkMetrics().TimeInCurrentStateMs) * time.Millisecond
+		elapsed := time.Duration(snap.Observed.Metrics.Framework.TimeInCurrentStateMs) * time.Millisecond
 		if elapsed >= StoppedWaitDuration {
 			return &TryingToStartState{}, fsmv2.SignalNone, nil
 		}

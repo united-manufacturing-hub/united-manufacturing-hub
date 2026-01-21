@@ -41,18 +41,6 @@ type DegradedState struct {
 	// the first error occurs.
 }
 
-// NewDegradedState creates a new DegradedState.
-// TODO: this is not fsmv2 idiomatic?
-func NewDegradedState() *DegradedState {
-	return &DegradedState{}
-}
-
-// NewDegradedStateWithEnteredAt creates a new DegradedState.
-// Deprecated: enteredAt is ignored; reads from ObservedState.DegradedEnteredAt instead.
-func NewDegradedStateWithEnteredAt(_ time.Time) *DegradedState {
-	return &DegradedState{}
-}
-
 func (s *DegradedState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, fsmv2.Action[any]) {
 	snap := helpers.ConvertSnapshot[snapshot.CommunicatorObservedState, *snapshot.CommunicatorDesiredState](snapAny)
 	snap.Observed.State = config.MakeState(config.PrefixRunning, "degraded")
@@ -61,7 +49,7 @@ func (s *DegradedState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, 
 		return &StoppedState{}, fsmv2.SignalNone, nil
 	}
 
-	// TODO: does this mean after 3 consecutie errors when it is healthy again, it cannot go to syncing state again?
+	// Returns to syncing when health recovers (IsSyncHealthy) and errors are cleared (RecordSuccess resets counter)
 	if snap.Observed.IsSyncHealthy() && snap.Observed.GetConsecutiveErrors() == 0 {
 		return &SyncingState{}, fsmv2.SignalNone, nil
 	}

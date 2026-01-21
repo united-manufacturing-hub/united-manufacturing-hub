@@ -87,15 +87,13 @@ type CommunicatorDesiredState struct {
 	config.BaseDesiredState // Provides ShutdownRequested + IsShutdownRequested() + SetShutdownRequested()
 
 	// Authentication - typed fields populated by DeriveDesiredState
-	InstanceUUID string        `json:"instanceUUID"` // TODO: this is not used right?
+	InstanceUUID string        `json:"instanceUUID"` // Used by AuthenticateAction for backend authentication
 	AuthToken    string        `json:"authToken"`
 	RelayURL     string        `json:"relayURL"`
 	Timeout      time.Duration `json:"timeout"`
 
 	// Messages
 	MessagesToBeSent []transport.UMHMessage `json:"messagesToBeSent,omitempty"`
-	// Dependencies removed: Actions receive deps via Execute() parameter, not DesiredState
-	// TODO: above comment can be deleted? do check for similar omments. it does not match the googel develoepr language style guide on their website (fetch it!) as it is temporary
 }
 
 // GetState returns the desired lifecycle state ("running" or "stopped").
@@ -131,17 +129,6 @@ func (d *CommunicatorDesiredState) GetState() string {
 //   - MessagesReceived: May be empty array, elements must be valid UMHMessage
 //   - CommunicatorDesiredState: Embedded desired state (always present)
 //   - DegradedEnteredAt: zero OR timestamp when errors started
-//
-// TODO: are the following two blocks of comments necessary? is this field here necessary in the first place or shoudl we just go for inline comments?
-// # Invariants
-//
-//   - Related to C2 (token expiry): JWTExpiry must be checked before sync
-//   - Related to C1 (auth precedence): Authenticated=false blocks sync
-//
-// # Immutability
-//
-// This struct is immutable after creation. Actions create NEW observed states
-// via Worker.CollectObservedState(), not modify existing instances.
 type CommunicatorObservedState struct {
 	CollectedAt time.Time
 

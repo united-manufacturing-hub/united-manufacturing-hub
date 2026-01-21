@@ -64,9 +64,13 @@ type CollectorConfig[TObserved any] struct {
 	MappedParentStateProvider func() string // Returns mapped state from parent's StateMapping (injected by supervisor for child workers)
 	ChildrenViewProvider func() any // Returns config.ChildrenView for parent workers to inspect children (injected by supervisor)
 	// FrameworkMetricsProvider returns current framework metrics from supervisor.
-	// Called during collection to inject into ObservedState automatically.
+	// Called BEFORE collection to inject into worker dependencies.
 	// The provider captures workerCtx and acquires RLock when called (thread-safe).
 	FrameworkMetricsProvider func() *fsmv2.FrameworkMetrics
+	// FrameworkMetricsSetter sets framework metrics on worker dependencies.
+	// Called BEFORE CollectObservedState so workers can access via deps.GetFrameworkState().
+	// Replaces the duck-typing injection pattern for explicit metrics copying.
+	FrameworkMetricsSetter func(*fsmv2.FrameworkMetrics)
 }
 
 // Collector manages the observation loop lifecycle and data collection.
@@ -286,6 +290,14 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 	c.logTrace("observation_collection_starting",
 		"collection_start_time", collectionStartTime.Format(time.RFC3339Nano))
 
+	// Set framework metrics on worker dependencies BEFORE collection.
+	// Workers access this via deps.GetFrameworkState() in CollectObservedState.
+	// This replaces the duck-typing injection pattern for explicit metrics copying.
+	if c.config.FrameworkMetricsProvider != nil && c.config.FrameworkMetricsSetter != nil {
+		fm := c.config.FrameworkMetricsProvider()
+		c.config.FrameworkMetricsSetter(fm)
+	}
+
 	observed, err := c.config.Worker.CollectObservedState(ctx)
 	if err != nil {
 		// Keep error logs at DEBUG for debugging
@@ -351,17 +363,9 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 		}
 	}
 
-	// Inject framework metrics into observed state.
-	// The FrameworkMetricsProvider callback is injected by the supervisor and returns
-	// computed framework metrics (TimeInCurrentStateMs, StateTransitionsTotal, etc.).
-	// This is AUTOMATIC INJECTION - workers don't implement this themselves.
-	// The provider acquires workerCtx.mu.RLock() when called (thread-safe).
-	if c.config.FrameworkMetricsProvider != nil {
-		fm := c.config.FrameworkMetricsProvider()
-		if setter, ok := observed.(interface{ SetFrameworkMetrics(*fsmv2.FrameworkMetrics) }); ok {
-			setter.SetFrameworkMetrics(fm)
-		}
-	}
+	// Framework metrics are now set on worker dependencies BEFORE CollectObservedState.
+	// Workers explicitly copy from deps.GetFrameworkState() in their CollectObservedState.
+	// No duck-typing injection needed - metrics flow through the struct fields.
 
 	// Extract and log observation timestamp
 	var observationTimestamp time.Time

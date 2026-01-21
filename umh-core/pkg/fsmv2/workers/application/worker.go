@@ -75,6 +75,9 @@ func (w *ApplicationWorker) CollectObservedState(ctx context.Context) (fsmv2.Obs
 	default:
 	}
 
+	// ApplicationWorker doesn't embed BaseWorker and doesn't have dependencies.
+	// Framework metrics won't be copied (zero values). This is acceptable for the
+	// application supervisor which is a simple passthrough worker.
 	return snapshot.ApplicationObservedState{
 		ID:          w.id,
 		CollectedAt: time.Now(),
@@ -83,10 +86,7 @@ func (w *ApplicationWorker) CollectObservedState(ctx context.Context) (fsmv2.Obs
 			Name: w.name,
 			// BaseDesiredState and ChildrenSpecs default to zero values
 		},
-		// Initialize embedded metrics for interface consistency.
-		// ApplicationWorker doesn't have a MetricsRecorder currently,
-		// but this allows future metrics support without struct changes.
-		MetricsEmbedder: fsmv2.MetricsEmbedder{Metrics: fsmv2.NewMetrics()},
+		// MetricsEmbedder is embedded - zero value is valid
 	}, nil
 }
 

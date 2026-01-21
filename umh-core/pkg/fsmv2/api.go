@@ -243,13 +243,20 @@ func NewMetrics() Metrics {
 // MetricsHolder is implemented by ObservedState types that have metrics.
 // Supervisor uses this to automatically export metrics to Prometheus.
 //
-// Workers implement this interface to expose their Metrics field:
+// Workers embed MetricsEmbedder which provides value receiver implementations.
+// Value receivers are required because ObservedState flows as values through
+// interfaces, and pointer receiver methods are NOT in the method set of values.
 //
-//	func (o *MyObservedState) GetMetrics() *fsmv2.Metrics {
-//	    return &o.Metrics
+// Usage:
+//
+//	holder, ok := observed.(fsmv2.MetricsHolder)
+//	if ok {
+//	    workerMetrics := holder.GetWorkerMetrics()
+//	    frameworkMetrics := holder.GetFrameworkMetrics()
 //	}
 type MetricsHolder interface {
-	GetMetrics() *Metrics
+	GetWorkerMetrics() Metrics
+	GetFrameworkMetrics() FrameworkMetrics
 }
 
 // MetricsRecorder buffers per-tick metric updates from actions.
@@ -402,46 +409,56 @@ type FrameworkMetrics struct {
 	StartupCount int64 `json:"startup_count"`
 }
 
+// MetricsContainer groups framework and worker metrics together.
+// Named type (not anonymous struct) for testability, godoc, and error messages.
+//
+// JSON structure: {"framework":{...},"worker":{...}}
+// Access pattern: snap.Observed.Metrics.Framework.TimeInCurrentStateMs
+type MetricsContainer struct {
+	// Framework contains supervisor-computed metrics (copied from deps by worker).
+	Framework FrameworkMetrics `json:"framework,omitempty"`
+
+	// Worker contains worker-defined metrics (recorded via MetricsRecorder).
+	Worker Metrics `json:"worker,omitempty"`
+}
+
 // MetricsEmbedder provides both framework and worker metrics.
 // Embed this in ObservedState structs to guarantee CSE and Prometheus paths are consistent.
 //
 // Usage:
 //
 //	type MyObservedState struct {
-//	    fsmv2.MetricsEmbedder  // Provides GetMetrics() and GetFrameworkMetrics()
+//	    fsmv2.MetricsEmbedder  // Provides Metrics field with Framework and Worker
 //	    CollectedAt time.Time
 //	    // ... other fields
 //	}
 //
 // The embedded struct provides:
-//   - GetMetrics() *Metrics for MetricsHolder interface (worker metrics)
-//   - GetFrameworkMetrics() *FrameworkMetrics for supervisor-injected metrics
+//   - Direct field access: snap.Observed.Metrics.Framework.TimeInCurrentStateMs
+//   - MetricsHolder interface methods for Prometheus export (value receivers)
+//
+// Workers copy framework metrics explicitly in CollectObservedState:
+//
+//	fm := deps.GetFrameworkState()
+//	if fm != nil {
+//	    obs.Metrics.Framework = *fm
+//	}
 type MetricsEmbedder struct {
-	// FrameworkMetrics contains supervisor-provided metrics (injected each tick).
-	FrameworkMetrics FrameworkMetrics `json:"framework_metrics,omitempty"`
-
-	// Metrics contains worker-defined metrics (recorded via MetricsRecorder).
-	Metrics Metrics `json:"metrics,omitempty"`
+	// Metrics contains both framework and worker metrics in a nested structure.
+	// JSON: {"metrics":{"framework":{...},"worker":{...}}}
+	Metrics MetricsContainer `json:"metrics,omitempty"`
 }
 
-// GetMetrics implements MetricsHolder interface for worker metrics.
-// Returns a pointer to allow modification by MetricsRecorder.Drain() merging.
-func (m *MetricsEmbedder) GetMetrics() *Metrics {
-	return &m.Metrics
+// GetWorkerMetrics implements MetricsHolder interface for worker metrics.
+// Returns by value (not pointer) because ObservedState flows as values through
+// interfaces, and pointer receiver methods are NOT in the method set of values.
+func (m MetricsEmbedder) GetWorkerMetrics() Metrics {
+	return m.Metrics.Worker
 }
 
-// GetFrameworkMetrics returns the framework-provided metrics.
-// Returns a pointer to allow supervisor to inject values before State.Next().
-func (m *MetricsEmbedder) GetFrameworkMetrics() *FrameworkMetrics {
-	return &m.FrameworkMetrics
-}
-
-// SetFrameworkMetrics sets the framework-provided metrics (called by collector automatically).
-// This is part of the automatic injection pattern - workers don't call this directly.
-// The collector calls this via type assertion during collectAndSaveObservedState().
-func (m *MetricsEmbedder) SetFrameworkMetrics(fm *FrameworkMetrics) {
-	if fm != nil {
-		m.FrameworkMetrics = *fm
-	}
+// GetFrameworkMetrics implements MetricsHolder interface for framework metrics.
+// Returns by value (not pointer) for the same reason as GetWorkerMetrics.
+func (m MetricsEmbedder) GetFrameworkMetrics() FrameworkMetrics {
+	return m.Metrics.Framework
 }
 

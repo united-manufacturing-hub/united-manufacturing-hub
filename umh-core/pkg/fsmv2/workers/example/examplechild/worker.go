@@ -104,6 +104,12 @@ func (w *ChildWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedS
 		ID:               w.identity.ID,
 		CollectedAt:      time.Now(),
 		ConnectionHealth: connectionHealth,
+		// MetricsEmbedder is embedded - zero value is valid
+	}
+
+	// Copy framework metrics from deps (set by supervisor before CollectObservedState)
+	if fm := deps.GetFrameworkState(); fm != nil {
+		observed.Metrics.Framework = *fm
 	}
 
 	return observed, nil

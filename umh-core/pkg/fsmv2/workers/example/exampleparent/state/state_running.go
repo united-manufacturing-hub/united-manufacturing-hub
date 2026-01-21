@@ -58,12 +58,9 @@ func (s *RunningState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, f
 	}
 
 	// After RunningDuration in running state, initiate stop cycle.
-	// TimeInCurrentStateMs is injected by supervisor via FrameworkMetrics.
-	fm := snap.Observed.GetFrameworkMetrics()
-	if fm == nil {
-		return s, fsmv2.SignalNone, nil
-	}
-	elapsed := time.Duration(fm.TimeInCurrentStateMs) * time.Millisecond
+	// TimeInCurrentStateMs is copied from deps by worker via Metrics.Framework.
+	// Direct field access is required for CSE serializability - getter methods don't work.
+	elapsed := time.Duration(snap.Observed.Metrics.Framework.TimeInCurrentStateMs) * time.Millisecond
 	if elapsed >= RunningDuration {
 		return &TryingToStopState{}, fsmv2.SignalNone, nil
 	}

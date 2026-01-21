@@ -288,26 +288,26 @@ func (w *CommunicatorWorker) CollectObservedState(ctx context.Context) (fsmv2.Ob
 	lastRetryAfter := deps.GetLastRetryAfter()
 	lastAuthAttemptAt := deps.GetLastAuthAttemptAt()
 
-	// Get previous metrics from store (persisted across restarts)
-	var prevMetrics fsmv2.Metrics
+	// Get previous worker metrics from store (persisted across restarts)
+	var prevWorkerMetrics fsmv2.Metrics
 
 	stateReader := deps.GetStateReader()
 	if stateReader != nil {
 		var prev snapshot.CommunicatorObservedState
 		if err := stateReader.LoadObservedTyped(ctx, deps.GetWorkerType(), deps.GetWorkerID(), &prev); err == nil {
-			prevMetrics = prev.Metrics
+			prevWorkerMetrics = prev.Metrics.Worker
 		}
 	}
 
 	// Initialize metrics from previous (for accumulation)
-	newMetrics := prevMetrics
+	newWorkerMetrics := prevWorkerMetrics
 
-	if newMetrics.Counters == nil {
-		newMetrics.Counters = make(map[string]int64)
+	if newWorkerMetrics.Counters == nil {
+		newWorkerMetrics.Counters = make(map[string]int64)
 	}
 
-	if newMetrics.Gauges == nil {
-		newMetrics.Gauges = make(map[string]float64)
+	if newWorkerMetrics.Gauges == nil {
+		newWorkerMetrics.Gauges = make(map[string]float64)
 	}
 
 	// Drain this tick's buffered metrics from MetricsRecorder
@@ -315,19 +315,29 @@ func (w *CommunicatorWorker) CollectObservedState(ctx context.Context) (fsmv2.Ob
 
 	// Accumulate counters (add deltas to cumulative)
 	for name, delta := range tickMetrics.Counters {
-		newMetrics.Counters[name] += delta
+		newWorkerMetrics.Counters[name] += delta
 	}
 
 	// Set gauges (overwrite with latest values)
 	for name, value := range tickMetrics.Gauges {
-		newMetrics.Gauges[name] = value
+		newWorkerMetrics.Gauges[name] = value
 	}
 
 	// Also set consecutive errors as a gauge
-	newMetrics.Gauges[string(metrics.GaugeConsecutiveErrors)] = float64(consecutiveErrors)
+	newWorkerMetrics.Gauges[string(metrics.GaugeConsecutiveErrors)] = float64(consecutiveErrors)
 
 	// Read authenticated UUID from dependencies
 	authenticatedUUID := deps.GetAuthenticatedUUID()
+
+	// Build metrics container with both framework and worker metrics
+	metricsContainer := fsmv2.MetricsContainer{
+		Worker: newWorkerMetrics,
+	}
+
+	// Copy framework metrics from deps (set by supervisor before CollectObservedState)
+	if fm := deps.GetFrameworkState(); fm != nil {
+		metricsContainer.Framework = *fm
+	}
 
 	observed := snapshot.CommunicatorObservedState{
 		CollectedAt:       time.Now(),
@@ -342,8 +352,8 @@ func (w *CommunicatorWorker) CollectObservedState(ctx context.Context) (fsmv2.Ob
 		LastErrorType:     lastErrorType,
 		LastRetryAfter:    lastRetryAfter,
 		LastAuthAttemptAt: lastAuthAttemptAt,
-		// Use MetricsEmbedder for both worker and framework metrics
-		MetricsEmbedder: fsmv2.MetricsEmbedder{Metrics: newMetrics},
+		// Use MetricsEmbedder with nested container for both worker and framework metrics
+		MetricsEmbedder: fsmv2.MetricsEmbedder{Metrics: metricsContainer},
 	}
 
 	return observed, nil

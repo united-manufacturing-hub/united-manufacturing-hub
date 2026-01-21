@@ -823,7 +823,10 @@ func verifyChildrenHealthTracking(store storage.TriangularStoreInterface) {
 	GinkgoWriter.Printf("✓ Parent tracks children health counts\n")
 }
 
-// verifyStateEnteredAtAndElapsed verifies timing fields are populated.
+// verifyStateEnteredAtAndElapsed verifies timing fields are populated in nested metrics.framework.
+// After restructuring MetricsEmbedder to nested MetricsContainer, fields are at:
+//   - metrics.framework.state_entered_at_unix
+//   - metrics.framework.time_in_current_state_ms
 func verifyStateEnteredAtAndElapsed(store storage.TriangularStoreInterface) {
 	workers := getWorkersFromStore(store)
 
@@ -836,16 +839,40 @@ func verifyStateEnteredAtAndElapsed(store storage.TriangularStoreInterface) {
 			continue
 		}
 
-		_, hasStateEnteredAt := w.Observed["state_entered_at"]
-		_, hasElapsed := w.Observed["elapsed"]
+		// Check for nested metrics.framework structure
+		metricsRaw, hasMetrics := w.Observed["metrics"]
+		Expect(hasMetrics).To(BeTrue(),
+			fmt.Sprintf("Parent %s missing metrics field", w.WorkerID))
+
+		metrics, ok := metricsRaw.(map[string]interface{})
+		Expect(ok).To(BeTrue(),
+			fmt.Sprintf("Parent %s metrics field is not a map", w.WorkerID))
+
+		frameworkRaw, hasFramework := metrics["framework"]
+		Expect(hasFramework).To(BeTrue(),
+			fmt.Sprintf("Parent %s missing metrics.framework field", w.WorkerID))
+
+		framework, ok := frameworkRaw.(map[string]interface{})
+		Expect(ok).To(BeTrue(),
+			fmt.Sprintf("Parent %s metrics.framework field is not a map", w.WorkerID))
+
+		_, hasStateEnteredAt := framework["state_entered_at_unix"]
+		_, hasTimeInState := framework["time_in_current_state_ms"]
 
 		Expect(hasStateEnteredAt).To(BeTrue(),
-			fmt.Sprintf("Parent %s missing state_entered_at field", w.WorkerID))
-		Expect(hasElapsed).To(BeTrue(),
-			fmt.Sprintf("Parent %s missing elapsed field", w.WorkerID))
+			fmt.Sprintf("Parent %s missing metrics.framework.state_entered_at_unix field", w.WorkerID))
+		Expect(hasTimeInState).To(BeTrue(),
+			fmt.Sprintf("Parent %s missing metrics.framework.time_in_current_state_ms field", w.WorkerID))
+
+		// Verify the values are meaningful (non-zero for active workers)
+		stateEnteredAt, _ := framework["state_entered_at_unix"].(float64)
+
+		Expect(stateEnteredAt).To(BeNumerically(">", 0),
+			fmt.Sprintf("Parent %s state_entered_at_unix should be > 0, got %v", w.WorkerID, stateEnteredAt))
+		// Note: time_in_current_state_ms can be 0 if just entered the state, so we don't assert > 0
 	}
 
-	GinkgoWriter.Printf("✓ Parent has state_entered_at and elapsed fields\n")
+	GinkgoWriter.Printf("✓ Parent has metrics.framework.state_entered_at_unix and time_in_current_state_ms fields\n")
 }
 
 // verifyParentReachesRunning verifies parent reaches Running state.
@@ -1208,11 +1235,9 @@ var _ = Describe("MetricsHolder Type Assertion", func() {
 
 		By("Verifying direct field access works (for state files and CSE)")
 		// Direct field access - how state files should access metrics
-		// This mirrors the JSON structure: {"framework_metrics":{...},"metrics":{...}}
-		// NOTE: Current structure uses flat FrameworkMetrics, not nested Metrics.Framework
-		// After the fix, this should work: parentObs.Metrics.Framework.TimeInCurrentStateMs
-		// For now, we use the current structure: parentObs.FrameworkMetrics.TimeInCurrentStateMs
-		GinkgoWriter.Printf("DEBUG: Parent FrameworkMetrics: %+v\n", parentObs.FrameworkMetrics)
+		// This mirrors the JSON structure: {"metrics":{"framework":{...},"worker":{...}}}
+		// Direct field access for state files: parentObs.Metrics.Framework.TimeInCurrentStateMs
+		GinkgoWriter.Printf("DEBUG: Parent FrameworkMetrics: %+v\n", parentObs.Metrics.Framework)
 
 		By("Verifying MetricsHolder interface works (for Prometheus export)")
 		// THIS IS THE BUG: Type assertion fails with pointer receivers
@@ -1230,10 +1255,12 @@ var _ = Describe("MetricsHolder Type Assertion", func() {
 		Expect(ok).To(BeTrue(), "MetricsHolder type assertion should succeed - THIS FAILS WITH POINTER RECEIVERS")
 
 		if ok {
-			// Current interface uses GetMetrics() *Metrics
-			metrics := holder.GetMetrics()
-			Expect(metrics).NotTo(BeNil(), "GetMetrics should return non-nil metrics")
-			GinkgoWriter.Printf("✓ MetricsHolder interface works: metrics=%+v\n", metrics)
+			// New interface uses GetWorkerMetrics() and GetFrameworkMetrics() with value receivers
+			workerMetrics := holder.GetWorkerMetrics()
+			frameworkMetrics := holder.GetFrameworkMetrics()
+			// Worker metrics may be empty if no actions recorded counters/gauges
+			_ = workerMetrics
+			GinkgoWriter.Printf("✓ MetricsHolder interface works: frameworkMetrics=%+v\n", frameworkMetrics)
 		}
 	})
 })

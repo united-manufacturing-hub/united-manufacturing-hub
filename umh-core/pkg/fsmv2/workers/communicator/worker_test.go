@@ -388,11 +388,11 @@ state: "running"
 
 				// Assert: New metrics pattern uses Counters and Gauges maps
 				communicatorObserved := observed.(snapshot.CommunicatorObservedState)
-				Expect(communicatorObserved.Metrics.Counters[string(metrics.CounterPullOps)]).To(Equal(int64(1)))
-				Expect(communicatorObserved.Metrics.Counters[string(metrics.CounterPullSuccess)]).To(Equal(int64(1)))
-				Expect(communicatorObserved.Metrics.Counters[string(metrics.CounterPullFailures)]).To(Equal(int64(0)))
-				Expect(communicatorObserved.Metrics.Counters[string(metrics.CounterMessagesPulled)]).To(Equal(int64(5)))
-				Expect(communicatorObserved.Metrics.Gauges[string(metrics.GaugeLastPullLatencyMs)]).To(Equal(100.0))
+				Expect(communicatorObserved.Metrics.Worker.Counters[string(metrics.CounterPullOps)]).To(Equal(int64(1)))
+				Expect(communicatorObserved.Metrics.Worker.Counters[string(metrics.CounterPullSuccess)]).To(Equal(int64(1)))
+				Expect(communicatorObserved.Metrics.Worker.Counters[string(metrics.CounterPullFailures)]).To(Equal(int64(0)))
+				Expect(communicatorObserved.Metrics.Worker.Counters[string(metrics.CounterMessagesPulled)]).To(Equal(int64(5)))
+				Expect(communicatorObserved.Metrics.Worker.Gauges[string(metrics.GaugeLastPullLatencyMs)]).To(Equal(100.0))
 			})
 
 			It("should accumulate pull metrics on failed pull", func() {
@@ -408,11 +408,11 @@ state: "running"
 
 				// Assert: New metrics pattern uses Counters and Gauges maps
 				communicatorObserved := observed.(snapshot.CommunicatorObservedState)
-				Expect(communicatorObserved.Metrics.Counters[string(metrics.CounterPullOps)]).To(Equal(int64(1)))
-				Expect(communicatorObserved.Metrics.Counters[string(metrics.CounterPullSuccess)]).To(Equal(int64(0)))
-				Expect(communicatorObserved.Metrics.Counters[string(metrics.CounterPullFailures)]).To(Equal(int64(1)))
-				Expect(communicatorObserved.Metrics.Counters[string(metrics.CounterMessagesPulled)]).To(Equal(int64(0)))
-				Expect(communicatorObserved.Metrics.Gauges[string(metrics.GaugeLastPullLatencyMs)]).To(Equal(50.0))
+				Expect(communicatorObserved.Metrics.Worker.Counters[string(metrics.CounterPullOps)]).To(Equal(int64(1)))
+				Expect(communicatorObserved.Metrics.Worker.Counters[string(metrics.CounterPullSuccess)]).To(Equal(int64(0)))
+				Expect(communicatorObserved.Metrics.Worker.Counters[string(metrics.CounterPullFailures)]).To(Equal(int64(1)))
+				Expect(communicatorObserved.Metrics.Worker.Counters[string(metrics.CounterMessagesPulled)]).To(Equal(int64(0)))
+				Expect(communicatorObserved.Metrics.Worker.Gauges[string(metrics.GaugeLastPullLatencyMs)]).To(Equal(50.0))
 			})
 
 			It("should accumulate push metrics on successful push", func() {
@@ -429,11 +429,11 @@ state: "running"
 
 				// Assert: New metrics pattern uses Counters and Gauges maps
 				communicatorObserved := observed.(snapshot.CommunicatorObservedState)
-				Expect(communicatorObserved.Metrics.Counters[string(metrics.CounterPushOps)]).To(Equal(int64(1)))
-				Expect(communicatorObserved.Metrics.Counters[string(metrics.CounterPushSuccess)]).To(Equal(int64(1)))
-				Expect(communicatorObserved.Metrics.Counters[string(metrics.CounterPushFailures)]).To(Equal(int64(0)))
-				Expect(communicatorObserved.Metrics.Counters[string(metrics.CounterMessagesPushed)]).To(Equal(int64(3)))
-				Expect(communicatorObserved.Metrics.Gauges[string(metrics.GaugeLastPushLatencyMs)]).To(Equal(200.0))
+				Expect(communicatorObserved.Metrics.Worker.Counters[string(metrics.CounterPushOps)]).To(Equal(int64(1)))
+				Expect(communicatorObserved.Metrics.Worker.Counters[string(metrics.CounterPushSuccess)]).To(Equal(int64(1)))
+				Expect(communicatorObserved.Metrics.Worker.Counters[string(metrics.CounterPushFailures)]).To(Equal(int64(0)))
+				Expect(communicatorObserved.Metrics.Worker.Counters[string(metrics.CounterMessagesPushed)]).To(Equal(int64(3)))
+				Expect(communicatorObserved.Metrics.Worker.Gauges[string(metrics.GaugeLastPushLatencyMs)]).To(Equal(200.0))
 			})
 
 			It("should accumulate push metrics on failed push", func() {
@@ -449,10 +449,10 @@ state: "running"
 
 				// Assert: New metrics pattern uses Counters and Gauges maps
 				communicatorObserved := observed.(snapshot.CommunicatorObservedState)
-				Expect(communicatorObserved.Metrics.Counters[string(metrics.CounterPushOps)]).To(Equal(int64(1)))
-				Expect(communicatorObserved.Metrics.Counters[string(metrics.CounterPushSuccess)]).To(Equal(int64(0)))
-				Expect(communicatorObserved.Metrics.Counters[string(metrics.CounterPushFailures)]).To(Equal(int64(1)))
-				Expect(communicatorObserved.Metrics.Counters[string(metrics.CounterMessagesPushed)]).To(Equal(int64(0)))
+				Expect(communicatorObserved.Metrics.Worker.Counters[string(metrics.CounterPushOps)]).To(Equal(int64(1)))
+				Expect(communicatorObserved.Metrics.Worker.Counters[string(metrics.CounterPushSuccess)]).To(Equal(int64(0)))
+				Expect(communicatorObserved.Metrics.Worker.Counters[string(metrics.CounterPushFailures)]).To(Equal(int64(1)))
+				Expect(communicatorObserved.Metrics.Worker.Counters[string(metrics.CounterMessagesPushed)]).To(Equal(int64(0)))
 			})
 
 			It("should clear per-tick results after CollectObservedState", func() {
@@ -466,11 +466,11 @@ state: "running"
 
 				// First collection should have metrics
 				observed1 := collectAndSave(tc)
-				Expect(observed1.Metrics.Counters[string(metrics.CounterPullOps)]).To(Equal(int64(1)))
+				Expect(observed1.Metrics.Worker.Counters[string(metrics.CounterPullOps)]).To(Equal(int64(1)))
 
 				// Second collection (without new metrics recorded) should maintain previous cumulative
 				observed2 := collectAndSave(tc)
-				Expect(observed2.Metrics.Counters[string(metrics.CounterPullOps)]).To(Equal(int64(1))) // Still 1, no new tick
+				Expect(observed2.Metrics.Worker.Counters[string(metrics.CounterPullOps)]).To(Equal(int64(1))) // Still 1, no new tick
 			})
 
 			It("should track last latency as gauge", func() {
@@ -482,14 +482,14 @@ state: "running"
 				deps.MetricsRecorder().IncrementCounter(metrics.CounterPullOps, 1)
 				deps.MetricsRecorder().SetGauge(metrics.GaugeLastPullLatencyMs, 100.0)
 				observed1 := collectAndSave(tc)
-				Expect(observed1.Metrics.Gauges[string(metrics.GaugeLastPullLatencyMs)]).To(Equal(100.0))
+				Expect(observed1.Metrics.Worker.Gauges[string(metrics.GaugeLastPullLatencyMs)]).To(Equal(100.0))
 
 				// Second pull: 200ms - gauge should be updated to new value
 				deps.MetricsRecorder().IncrementCounter(metrics.CounterPullOps, 1)
 				deps.MetricsRecorder().SetGauge(metrics.GaugeLastPullLatencyMs, 200.0)
 				observed2 := collectAndSave(tc)
-				Expect(observed2.Metrics.Counters[string(metrics.CounterPullOps)]).To(Equal(int64(2)))
-				Expect(observed2.Metrics.Gauges[string(metrics.GaugeLastPullLatencyMs)]).To(Equal(200.0))
+				Expect(observed2.Metrics.Worker.Counters[string(metrics.CounterPullOps)]).To(Equal(int64(2)))
+				Expect(observed2.Metrics.Worker.Gauges[string(metrics.GaugeLastPullLatencyMs)]).To(Equal(200.0))
 			})
 
 			It("should accumulate message counts across multiple pulls", func() {
@@ -506,13 +506,13 @@ state: "running"
 				deps.MetricsRecorder().IncrementCounter(metrics.CounterPullOps, 1)
 				deps.MetricsRecorder().IncrementCounter(metrics.CounterMessagesPulled, 3)
 				observed2 := collectAndSave(tc)
-				Expect(observed2.Metrics.Counters[string(metrics.CounterMessagesPulled)]).To(Equal(int64(8))) // 5 + 3
+				Expect(observed2.Metrics.Worker.Counters[string(metrics.CounterMessagesPulled)]).To(Equal(int64(8))) // 5 + 3
 
 				// Third pull: 2 messages
 				deps.MetricsRecorder().IncrementCounter(metrics.CounterPullOps, 1)
 				deps.MetricsRecorder().IncrementCounter(metrics.CounterMessagesPulled, 2)
 				observed3 := collectAndSave(tc)
-				Expect(observed3.Metrics.Counters[string(metrics.CounterMessagesPulled)]).To(Equal(int64(10))) // 5 + 3 + 2
+				Expect(observed3.Metrics.Worker.Counters[string(metrics.CounterMessagesPulled)]).To(Equal(int64(10))) // 5 + 3 + 2
 			})
 
 			It("should track both successful and failed ops separately", func() {
@@ -537,9 +537,9 @@ state: "running"
 				deps.MetricsRecorder().IncrementCounter(metrics.CounterMessagesPulled, 1)
 				observed := collectAndSave(tc)
 
-				Expect(observed.Metrics.Counters[string(metrics.CounterPullOps)]).To(Equal(int64(3)))
-				Expect(observed.Metrics.Counters[string(metrics.CounterPullSuccess)]).To(Equal(int64(2)))
-				Expect(observed.Metrics.Counters[string(metrics.CounterPullFailures)]).To(Equal(int64(1)))
+				Expect(observed.Metrics.Worker.Counters[string(metrics.CounterPullOps)]).To(Equal(int64(3)))
+				Expect(observed.Metrics.Worker.Counters[string(metrics.CounterPullSuccess)]).To(Equal(int64(2)))
+				Expect(observed.Metrics.Worker.Counters[string(metrics.CounterPullFailures)]).To(Equal(int64(1)))
 			})
 		})
 

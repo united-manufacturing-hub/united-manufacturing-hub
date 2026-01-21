@@ -857,7 +857,7 @@ func (s *Supervisor[TObserved, TDesired]) processSignal(ctx context.Context, wor
 		// 3. After workers are removed, call Shutdown() to clean up supervisor resources
 		// 4. Remove from parent's children map
 
-		// TODO: RequestGracefulShutdown method not yet implemented
+		// Graceful shutdown: currently uses immediate Shutdown() instead of context-aware RequestGracefulShutdown
 		_ = ctx
 
 		// Now shutdown child supervisors and clean up
