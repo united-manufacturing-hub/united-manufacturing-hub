@@ -75,13 +75,6 @@ func NormalizeHierarchyLevels(levels []LocationLevel) []LocationLevel {
 	return result
 }
 
-// FillISA95Gaps is deprecated. Use NormalizeHierarchyLevels instead.
-//
-// Deprecated: This function will be removed in a future version.
-func FillISA95Gaps(levels []LocationLevel) []LocationLevel {
-	return NormalizeHierarchyLevels(levels)
-}
-
 // ComputeLocationPath joins non-empty location values with dots.
 // Empty values are skipped to avoid double dots.
 // Returns empty string if all levels are empty.

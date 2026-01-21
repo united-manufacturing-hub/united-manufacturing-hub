@@ -43,19 +43,6 @@ var _ = Describe("ChildSpec Validation Integration", func() {
 		logger = zap.NewNop().Sugar()
 		basicStore = memory.NewInMemoryStore()
 
-		// Create collections in database
-		// TODO: remove this, this is not required anymore
-		// Collections follow convention: {workerType}_identity, {workerType}_desired, {workerType}_observed
-		_ = basicStore.CreateCollection(ctx, "test_supervisor_identity", nil)
-		_ = basicStore.CreateCollection(ctx, "test_supervisor_desired", nil)
-		_ = basicStore.CreateCollection(ctx, "test_supervisor_observed", nil)
-		_ = basicStore.CreateCollection(ctx, "valid_child_identity", nil)
-		_ = basicStore.CreateCollection(ctx, "valid_child_desired", nil)
-		_ = basicStore.CreateCollection(ctx, "valid_child_observed", nil)
-		_ = basicStore.CreateCollection(ctx, "another_child_identity", nil)
-		_ = basicStore.CreateCollection(ctx, "another_child_desired", nil)
-		_ = basicStore.CreateCollection(ctx, "another_child_observed", nil)
-
 		_ = factory.RegisterFactoryByType("valid_child", func(id fsmv2.Identity, _ *zap.SugaredLogger, _ fsmv2.StateReader, _ map[string]any) fsmv2.Worker {
 			return &validChildSpecMockWorker{
 				identity:     id,

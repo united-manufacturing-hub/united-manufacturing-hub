@@ -108,7 +108,7 @@ var _ = Describe("Location Computation", func() {
 		})
 	})
 
-	Describe("FillISA95Gaps", func() {
+	Describe("NormalizeHierarchyLevels", func() {
 		Context("when missing area in the middle", func() {
 			It("should fill missing ISA-95 levels in correct order", func() {
 				levels := []config.LocationLevel{
@@ -118,7 +118,7 @@ var _ = Describe("Location Computation", func() {
 					{Type: "cell", Value: "Cell-5"},
 				}
 
-				result := config.FillISA95Gaps(levels)
+				result := config.NormalizeHierarchyLevels(levels)
 
 				Expect(result).To(HaveLen(5))
 				Expect(result[0]).To(Equal(config.LocationLevel{Type: "enterprise", Value: "ACME"}))
@@ -136,7 +136,7 @@ var _ = Describe("Location Computation", func() {
 					{Type: "cell", Value: "Cell-5"},
 				}
 
-				result := config.FillISA95Gaps(levels)
+				result := config.NormalizeHierarchyLevels(levels)
 
 				Expect(result).To(HaveLen(5))
 				Expect(result[0]).To(Equal(config.LocationLevel{Type: "enterprise", Value: ""}))
@@ -154,7 +154,7 @@ var _ = Describe("Location Computation", func() {
 					{Type: "site", Value: "Factory-1"},
 				}
 
-				result := config.FillISA95Gaps(levels)
+				result := config.NormalizeHierarchyLevels(levels)
 
 				Expect(result).To(HaveLen(5))
 				Expect(result[0]).To(Equal(config.LocationLevel{Type: "enterprise", Value: "ACME"}))
@@ -175,7 +175,7 @@ var _ = Describe("Location Computation", func() {
 					{Type: "cell", Value: "Cell-5"},
 				}
 
-				result := config.FillISA95Gaps(levels)
+				result := config.NormalizeHierarchyLevels(levels)
 
 				Expect(result).To(HaveLen(5))
 				Expect(result).To(Equal(levels))
@@ -186,7 +186,7 @@ var _ = Describe("Location Computation", func() {
 			It("should fill all 5 levels as empty", func() {
 				levels := []config.LocationLevel{}
 
-				result := config.FillISA95Gaps(levels)
+				result := config.NormalizeHierarchyLevels(levels)
 
 				Expect(result).To(HaveLen(5))
 				Expect(result[0]).To(Equal(config.LocationLevel{Type: "enterprise", Value: ""}))
@@ -205,7 +205,7 @@ var _ = Describe("Location Computation", func() {
 					{Type: "line", Value: "Line-A"},
 				}
 
-				result := config.FillISA95Gaps(levels)
+				result := config.NormalizeHierarchyLevels(levels)
 
 				Expect(result).To(HaveLen(5))
 				Expect(result[0]).To(Equal(config.LocationLevel{Type: "enterprise", Value: "ACME"}))

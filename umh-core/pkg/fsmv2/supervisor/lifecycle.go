@@ -351,23 +351,6 @@ func (s *Supervisor[TObserved, TDesired]) calculateHierarchySize() int {
 	return size
 }
 
-// isStarted returns whether the supervisor has been started.
-//
-//nolint:unused // Part of API design, may be used in future
-func (s *Supervisor[TObserved, TDesired]) isStarted() bool {
-	return s.started.Load()
-}
-
-// getContext returns the current context for the supervisor.
-//
-//nolint:unused // Part of API design, may be used in future
-func (s *Supervisor[TObserved, TDesired]) getContext() context.Context {
-	s.ctxMu.RLock()
-	defer s.ctxMu.RUnlock()
-
-	return s.ctx
-}
-
 // getStartedContext atomically checks if started and returns context.
 // This prevents TOCTOU races between isStarted() and getContext() calls.
 func (s *Supervisor[TObserved, TDesired]) getStartedContext() (context.Context, bool) {
