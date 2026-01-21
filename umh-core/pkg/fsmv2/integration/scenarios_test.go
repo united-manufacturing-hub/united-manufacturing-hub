@@ -16,6 +16,7 @@ package integration_test
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -26,8 +27,10 @@ import (
 	"go.uber.org/zap/zapcore"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/examples"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/integration"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent/snapshot"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent/state"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence/memory"
@@ -1143,3 +1146,94 @@ func verifyFullCycle(t *integration.TestLogger) {
 
 	GinkgoWriter.Printf("✓ Full cycle completed: %v\n", expectedSequence)
 }
+
+// =============================================================================
+// Category 8: MetricsHolder Type Assertion Tests (TDD for Prometheus Export Bug)
+// =============================================================================
+
+var _ = Describe("MetricsHolder Type Assertion", func() {
+	It("should export worker metrics to Prometheus and support CSE serialization", func() {
+		By("Setting short durations for fast testing")
+		originalStoppedWait := state.StoppedWaitDuration
+		originalRunning := state.RunningDuration
+		state.StoppedWaitDuration = 500 * time.Millisecond
+		state.RunningDuration = 500 * time.Millisecond
+		defer func() {
+			state.StoppedWaitDuration = originalStoppedWait
+			state.RunningDuration = originalRunning
+		}()
+
+		By("Setting up test logger at DebugLevel")
+		testLogger := integration.NewTestLogger(zapcore.DebugLevel)
+
+		By("Setting up context with 15s timeout")
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+
+		By("Setting up triangular store")
+		store := setupTestStoreForScenario(testLogger.Logger)
+
+		By("Running SimpleScenario which creates parent with children")
+		result, err := examples.Run(ctx, examples.RunConfig{
+			Scenario:     examples.SimpleScenario,
+			Duration:     5 * time.Second,
+			TickInterval: 100 * time.Millisecond,
+			Logger:       testLogger.Logger,
+			Store:        store,
+		})
+		Expect(err).NotTo(HaveOccurred())
+		<-result.Done
+
+		By("Loading parent's observed state from store (CSE serialized)")
+		workers := getWorkersFromStore(store)
+		Expect(workers).NotTo(BeEmpty(), "Should have workers in store")
+
+		// Find the parent worker
+		var parentObs snapshot.ExampleparentObservedState
+		var foundParent bool
+		for _, w := range workers {
+			if w.WorkerType == "exampleparent" {
+				// Marshal to JSON and back to concrete type - simulates CSE deserialization
+				observedJSON, err := json.Marshal(w.Observed)
+				Expect(err).NotTo(HaveOccurred())
+
+				err = json.Unmarshal(observedJSON, &parentObs)
+				Expect(err).NotTo(HaveOccurred())
+				foundParent = true
+				GinkgoWriter.Printf("DEBUG: Parent observed state JSON: %s\n", string(observedJSON))
+				break
+			}
+		}
+		Expect(foundParent).To(BeTrue(), "Should find parent worker in store")
+
+		By("Verifying direct field access works (for state files and CSE)")
+		// Direct field access - how state files should access metrics
+		// This mirrors the JSON structure: {"framework_metrics":{...},"metrics":{...}}
+		// NOTE: Current structure uses flat FrameworkMetrics, not nested Metrics.Framework
+		// After the fix, this should work: parentObs.Metrics.Framework.TimeInCurrentStateMs
+		// For now, we use the current structure: parentObs.FrameworkMetrics.TimeInCurrentStateMs
+		GinkgoWriter.Printf("DEBUG: Parent FrameworkMetrics: %+v\n", parentObs.FrameworkMetrics)
+
+		By("Verifying MetricsHolder interface works (for Prometheus export)")
+		// THIS IS THE BUG: Type assertion fails with pointer receivers
+		// When passed as interface{}, pointer receiver methods are NOT in method set
+		//
+		// Go rule: If T is a value type (not a pointer), its method set only includes
+		// methods with value receivers. Pointer receiver methods require *T.
+		//
+		// MetricsEmbedder has: func (m *MetricsEmbedder) GetMetrics() *Metrics
+		// This is a POINTER receiver, so it's NOT in the method set of the value.
+		holder, ok := interface{}(parentObs).(fsmv2.MetricsHolder)
+
+		// BEFORE FIX: ok = false (type assertion fails because GetMetrics has pointer receiver)
+		// AFTER FIX: ok = true (value receivers work)
+		Expect(ok).To(BeTrue(), "MetricsHolder type assertion should succeed - THIS FAILS WITH POINTER RECEIVERS")
+
+		if ok {
+			// Current interface uses GetMetrics() *Metrics
+			metrics := holder.GetMetrics()
+			Expect(metrics).NotTo(BeNil(), "GetMetrics should return non-nil metrics")
+			GinkgoWriter.Printf("✓ MetricsHolder interface works: metrics=%+v\n", metrics)
+		}
+	})
+})
