@@ -311,6 +311,7 @@ unit-test: vet-nilaway-lint-betteralign
 unit-test-fail-slow: vet-nilaway-lint-betteralign
 	go run github.com/onsi/ginkgo/v2/ginkgo -r --tags=test --race --label-filter='!integration && !redpanda-extended && !tls' ./...
 
+# TODO: remove check-idempotency-tests
 .PHONY: check-idempotency-tests
 check-idempotency-tests:
 	@echo "Checking for idempotency test coverage (Invariant I10)..."

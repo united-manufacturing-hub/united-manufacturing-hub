@@ -41,8 +41,8 @@ import (
 // This is incremented by RecordError() and reset by RecordSuccess().
 //
 // Metrics recording:
-// Actions use deps.Metrics().IncrementCounter/SetGauge to record metrics.
-// CollectObservedState calls Metrics().Drain() to merge into ObservedState.Metrics.
+// Actions use deps.MetricsRecorder().IncrementCounter/SetGauge to record metrics.
+// CollectObservedState calls MetricsRecorder().Drain() to merge into ObservedState.Metrics.
 //
 // Access is protected by mu for thread-safety.
 //

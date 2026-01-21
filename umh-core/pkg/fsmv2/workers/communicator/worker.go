@@ -311,7 +311,7 @@ func (w *CommunicatorWorker) CollectObservedState(ctx context.Context) (fsmv2.Ob
 	}
 
 	// Drain this tick's buffered metrics from MetricsRecorder
-	tickMetrics := deps.Metrics().Drain()
+	tickMetrics := deps.MetricsRecorder().Drain()
 
 	// Accumulate counters (add deltas to cumulative)
 	for name, delta := range tickMetrics.Counters {

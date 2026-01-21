@@ -11,6 +11,9 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+//
+//
+// TODO: why is there a fsmv2 adapter and a fsmv2 bridge, this doesnt make sense
 
 // Package fsmv2_bridge connects the FSMv2 communicator worker with the
 // legacy Router's channel-based messaging.

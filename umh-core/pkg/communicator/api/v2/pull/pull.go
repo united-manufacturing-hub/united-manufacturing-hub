@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// TODO: check why this was modified here in this branch, if not necessarily required, leave old communciaotr the same
+// only acceptable changes are for the bridge/adapter to allow the new fsmv2 transport
+
 package pull
 
 import (

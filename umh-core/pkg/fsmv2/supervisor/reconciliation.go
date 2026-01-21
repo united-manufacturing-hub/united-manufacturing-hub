@@ -247,35 +247,9 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 		return nil
 	}
 
-	// Inject FrameworkMetrics into ObservedState before calling State.Next()
-	// This provides supervisor-tracked state data to workers for application logic decisions.
-	if holder, ok := snapshot.Observed.(interface{ GetFrameworkMetrics() *fsmv2.FrameworkMetrics }); ok {
-		fm := holder.GetFrameworkMetrics()
-		if fm != nil {
-			// Session Metrics - computed fresh each tick
-			workerCtx.mu.RLock()
-			fm.TimeInCurrentStateMs = time.Since(workerCtx.stateEnteredAt).Milliseconds()
-			fm.StateEnteredAtUnix = workerCtx.stateEnteredAt.Unix()
-			fm.StateTransitionsTotal = workerCtx.totalTransitions
-
-			// EXISTING field: stateTransitions map[string]int64 (types.go:116)
-			fm.TransitionsByState = workerCtx.stateTransitions
-
-			// EXISTING field: stateDurations map[string]time.Duration (types.go:117)
-			// Convert Duration to milliseconds for FrameworkMetrics
-			fm.CumulativeTimeByStateMs = make(map[string]int64, len(workerCtx.stateDurations))
-			for state, duration := range workerCtx.stateDurations {
-				fm.CumulativeTimeByStateMs[state] = duration.Milliseconds()
-			}
-
-			// Per-worker collector restarts (not global)
-			fm.CollectorRestarts = workerCtx.collectorRestarts
-
-			// Persistent Counter (loaded from CSE on AddWorker, survives restarts)
-			fm.StartupCount = workerCtx.startupCount
-			workerCtx.mu.RUnlock()
-		}
-	}
+	// NOTE: FrameworkMetrics injection is now handled automatically by the Collector
+	// via FrameworkMetricsProvider callback. See collector.go collectAndSaveObservedState().
+	// The provider is set up in api.go AddWorker() when creating the CollectorConfig.
 
 	nextState, signal, action := currentState.Next(*snapshot)
 

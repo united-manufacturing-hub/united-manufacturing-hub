@@ -436,3 +436,12 @@ func (m *MetricsEmbedder) GetFrameworkMetrics() *FrameworkMetrics {
 	return &m.FrameworkMetrics
 }
 
+// SetFrameworkMetrics sets the framework-provided metrics (called by collector automatically).
+// This is part of the automatic injection pattern - workers don't call this directly.
+// The collector calls this via type assertion during collectAndSaveObservedState().
+func (m *MetricsEmbedder) SetFrameworkMetrics(fm *FrameworkMetrics) {
+	if fm != nil {
+		m.FrameworkMetrics = *fm
+	}
+}
+

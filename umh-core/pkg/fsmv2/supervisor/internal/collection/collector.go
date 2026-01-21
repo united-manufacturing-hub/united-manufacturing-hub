@@ -63,6 +63,10 @@ type CollectorConfig[TObserved any] struct {
 	ChildrenCountsProvider func() (healthy int, unhealthy int) // Returns children health counts (injected by supervisor for parent workers)
 	MappedParentStateProvider func() string // Returns mapped state from parent's StateMapping (injected by supervisor for child workers)
 	ChildrenViewProvider func() any // Returns config.ChildrenView for parent workers to inspect children (injected by supervisor)
+	// FrameworkMetricsProvider returns current framework metrics from supervisor.
+	// Called during collection to inject into ObservedState automatically.
+	// The provider captures workerCtx and acquires RLock when called (thread-safe).
+	FrameworkMetricsProvider func() *fsmv2.FrameworkMetrics
 }
 
 // Collector manages the observation loop lifecycle and data collection.
@@ -344,6 +348,18 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 		childrenView := c.config.ChildrenViewProvider()
 		if setter, ok := observed.(interface{ SetChildrenView(any) fsmv2.ObservedState }); ok {
 			observed = setter.SetChildrenView(childrenView)
+		}
+	}
+
+	// Inject framework metrics into observed state.
+	// The FrameworkMetricsProvider callback is injected by the supervisor and returns
+	// computed framework metrics (TimeInCurrentStateMs, StateTransitionsTotal, etc.).
+	// This is AUTOMATIC INJECTION - workers don't implement this themselves.
+	// The provider acquires workerCtx.mu.RLock() when called (thread-safe).
+	if c.config.FrameworkMetricsProvider != nil {
+		fm := c.config.FrameworkMetricsProvider()
+		if setter, ok := observed.(interface{ SetFrameworkMetrics(*fsmv2.FrameworkMetrics) }); ok {
+			setter.SetFrameworkMetrics(fm)
 		}
 	}
 

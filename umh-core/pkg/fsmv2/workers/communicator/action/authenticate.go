@@ -78,9 +78,9 @@ type CommunicatorDependencies interface {
 	// RecordPushFailure records a failed push with latency.
 	RecordPushFailure(latency time.Duration)
 
-	// Metrics returns the MetricsRecorder for actions to record metrics.
+	// MetricsRecorder returns the MetricsRecorder for actions to record metrics.
 	// Actions call IncrementCounter/SetGauge with typed constants.
-	Metrics() *fsmv2.MetricsRecorder
+	MetricsRecorder() *fsmv2.MetricsRecorder
 
 	// SetAuthenticatedUUID stores the UUID returned by the backend after successful authentication.
 	// Called by AuthenticateAction after successful authentication.
@@ -154,11 +154,11 @@ func (a *AuthenticateAction) Execute(ctx context.Context, depsAny any) error {
 		if errors.As(err, &transportErr) {
 			deps.RecordTypedError(transportErr.Type, transportErr.RetryAfter)
 			// Record metric for error type
-			deps.Metrics().IncrementCounter(counterForErrorType(transportErr.Type), 1)
+			deps.MetricsRecorder().IncrementCounter(counterForErrorType(transportErr.Type), 1)
 		} else {
 			// Non-transport error (e.g., context canceled) - treat as network error
 			deps.RecordTypedError(httpTransport.ErrorTypeNetwork, 0)
-			deps.Metrics().IncrementCounter(metrics.CounterNetworkErrorsTotal, 1)
+			deps.MetricsRecorder().IncrementCounter(metrics.CounterNetworkErrorsTotal, 1)
 		}
 
 		return err

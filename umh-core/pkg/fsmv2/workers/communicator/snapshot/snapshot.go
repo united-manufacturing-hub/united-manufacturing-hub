@@ -29,7 +29,7 @@ import (
 type CommunicatorDependencies interface {
 	fsmv2.Dependencies
 	GetTransport() transport.Transport
-	Metrics() *fsmv2.MetricsRecorder
+	MetricsRecorder() *fsmv2.MetricsRecorder
 }
 
 type CommunicatorSnapshot struct {

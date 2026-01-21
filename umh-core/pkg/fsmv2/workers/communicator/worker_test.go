@@ -377,10 +377,10 @@ state: "running"
 			It("should accumulate pull metrics on successful pull", func() {
 				// Arrange: Record a successful pull using the new MetricsRecorder pattern
 				deps := worker.GetDependencies()
-				deps.Metrics().IncrementCounter(metrics.CounterPullOps, 1)
-				deps.Metrics().IncrementCounter(metrics.CounterPullSuccess, 1)
-				deps.Metrics().IncrementCounter(metrics.CounterMessagesPulled, 5)
-				deps.Metrics().SetGauge(metrics.GaugeLastPullLatencyMs, 100.0)
+				deps.MetricsRecorder().IncrementCounter(metrics.CounterPullOps, 1)
+				deps.MetricsRecorder().IncrementCounter(metrics.CounterPullSuccess, 1)
+				deps.MetricsRecorder().IncrementCounter(metrics.CounterMessagesPulled, 5)
+				deps.MetricsRecorder().SetGauge(metrics.GaugeLastPullLatencyMs, 100.0)
 
 				// Act
 				observed, err := worker.CollectObservedState(ctx)
@@ -398,9 +398,9 @@ state: "running"
 			It("should accumulate pull metrics on failed pull", func() {
 				// Arrange: Record a failed pull using the new MetricsRecorder pattern
 				deps := worker.GetDependencies()
-				deps.Metrics().IncrementCounter(metrics.CounterPullOps, 1)
-				deps.Metrics().IncrementCounter(metrics.CounterPullFailures, 1)
-				deps.Metrics().SetGauge(metrics.GaugeLastPullLatencyMs, 50.0)
+				deps.MetricsRecorder().IncrementCounter(metrics.CounterPullOps, 1)
+				deps.MetricsRecorder().IncrementCounter(metrics.CounterPullFailures, 1)
+				deps.MetricsRecorder().SetGauge(metrics.GaugeLastPullLatencyMs, 50.0)
 
 				// Act
 				observed, err := worker.CollectObservedState(ctx)
@@ -418,10 +418,10 @@ state: "running"
 			It("should accumulate push metrics on successful push", func() {
 				// Arrange: Record push metrics using the new MetricsRecorder pattern
 				deps := worker.GetDependencies()
-				deps.Metrics().IncrementCounter(metrics.CounterPushOps, 1)
-				deps.Metrics().IncrementCounter(metrics.CounterPushSuccess, 1)
-				deps.Metrics().IncrementCounter(metrics.CounterMessagesPushed, 3)
-				deps.Metrics().SetGauge(metrics.GaugeLastPushLatencyMs, 200.0)
+				deps.MetricsRecorder().IncrementCounter(metrics.CounterPushOps, 1)
+				deps.MetricsRecorder().IncrementCounter(metrics.CounterPushSuccess, 1)
+				deps.MetricsRecorder().IncrementCounter(metrics.CounterMessagesPushed, 3)
+				deps.MetricsRecorder().SetGauge(metrics.GaugeLastPushLatencyMs, 200.0)
 
 				// Act
 				observed, err := worker.CollectObservedState(ctx)
@@ -439,9 +439,9 @@ state: "running"
 			It("should accumulate push metrics on failed push", func() {
 				// Arrange: Record failed push metrics using the new MetricsRecorder pattern
 				deps := worker.GetDependencies()
-				deps.Metrics().IncrementCounter(metrics.CounterPushOps, 1)
-				deps.Metrics().IncrementCounter(metrics.CounterPushFailures, 1)
-				deps.Metrics().SetGauge(metrics.GaugeLastPushLatencyMs, 150.0)
+				deps.MetricsRecorder().IncrementCounter(metrics.CounterPushOps, 1)
+				deps.MetricsRecorder().IncrementCounter(metrics.CounterPushFailures, 1)
+				deps.MetricsRecorder().SetGauge(metrics.GaugeLastPushLatencyMs, 150.0)
 
 				// Act
 				observed, err := worker.CollectObservedState(ctx)
@@ -461,8 +461,8 @@ state: "running"
 				deps := tc.worker.GetDependencies()
 
 				// Record metrics using the new MetricsRecorder pattern
-				deps.Metrics().IncrementCounter(metrics.CounterPullOps, 1)
-				deps.Metrics().IncrementCounter(metrics.CounterMessagesPulled, 2)
+				deps.MetricsRecorder().IncrementCounter(metrics.CounterPullOps, 1)
+				deps.MetricsRecorder().IncrementCounter(metrics.CounterMessagesPulled, 2)
 
 				// First collection should have metrics
 				observed1 := collectAndSave(tc)
@@ -479,14 +479,14 @@ state: "running"
 				deps := tc.worker.GetDependencies()
 
 				// First pull: 100ms
-				deps.Metrics().IncrementCounter(metrics.CounterPullOps, 1)
-				deps.Metrics().SetGauge(metrics.GaugeLastPullLatencyMs, 100.0)
+				deps.MetricsRecorder().IncrementCounter(metrics.CounterPullOps, 1)
+				deps.MetricsRecorder().SetGauge(metrics.GaugeLastPullLatencyMs, 100.0)
 				observed1 := collectAndSave(tc)
 				Expect(observed1.Metrics.Gauges[string(metrics.GaugeLastPullLatencyMs)]).To(Equal(100.0))
 
 				// Second pull: 200ms - gauge should be updated to new value
-				deps.Metrics().IncrementCounter(metrics.CounterPullOps, 1)
-				deps.Metrics().SetGauge(metrics.GaugeLastPullLatencyMs, 200.0)
+				deps.MetricsRecorder().IncrementCounter(metrics.CounterPullOps, 1)
+				deps.MetricsRecorder().SetGauge(metrics.GaugeLastPullLatencyMs, 200.0)
 				observed2 := collectAndSave(tc)
 				Expect(observed2.Metrics.Counters[string(metrics.CounterPullOps)]).To(Equal(int64(2)))
 				Expect(observed2.Metrics.Gauges[string(metrics.GaugeLastPullLatencyMs)]).To(Equal(200.0))
@@ -498,19 +498,19 @@ state: "running"
 				deps := tc.worker.GetDependencies()
 
 				// First pull: 5 messages
-				deps.Metrics().IncrementCounter(metrics.CounterPullOps, 1)
-				deps.Metrics().IncrementCounter(metrics.CounterMessagesPulled, 5)
+				deps.MetricsRecorder().IncrementCounter(metrics.CounterPullOps, 1)
+				deps.MetricsRecorder().IncrementCounter(metrics.CounterMessagesPulled, 5)
 				collectAndSave(tc)
 
 				// Second pull: 3 messages
-				deps.Metrics().IncrementCounter(metrics.CounterPullOps, 1)
-				deps.Metrics().IncrementCounter(metrics.CounterMessagesPulled, 3)
+				deps.MetricsRecorder().IncrementCounter(metrics.CounterPullOps, 1)
+				deps.MetricsRecorder().IncrementCounter(metrics.CounterMessagesPulled, 3)
 				observed2 := collectAndSave(tc)
 				Expect(observed2.Metrics.Counters[string(metrics.CounterMessagesPulled)]).To(Equal(int64(8))) // 5 + 3
 
 				// Third pull: 2 messages
-				deps.Metrics().IncrementCounter(metrics.CounterPullOps, 1)
-				deps.Metrics().IncrementCounter(metrics.CounterMessagesPulled, 2)
+				deps.MetricsRecorder().IncrementCounter(metrics.CounterPullOps, 1)
+				deps.MetricsRecorder().IncrementCounter(metrics.CounterMessagesPulled, 2)
 				observed3 := collectAndSave(tc)
 				Expect(observed3.Metrics.Counters[string(metrics.CounterMessagesPulled)]).To(Equal(int64(10))) // 5 + 3 + 2
 			})
@@ -521,20 +521,20 @@ state: "running"
 				deps := tc.worker.GetDependencies()
 
 				// Success (using MetricsRecorder with typed constants)
-				deps.Metrics().IncrementCounter(metrics.CounterPullOps, 1)
-				deps.Metrics().IncrementCounter(metrics.CounterPullSuccess, 1)
-				deps.Metrics().IncrementCounter(metrics.CounterMessagesPulled, 1)
+				deps.MetricsRecorder().IncrementCounter(metrics.CounterPullOps, 1)
+				deps.MetricsRecorder().IncrementCounter(metrics.CounterPullSuccess, 1)
+				deps.MetricsRecorder().IncrementCounter(metrics.CounterMessagesPulled, 1)
 				collectAndSave(tc)
 
 				// Failure
-				deps.Metrics().IncrementCounter(metrics.CounterPullOps, 1)
-				deps.Metrics().IncrementCounter(metrics.CounterPullFailures, 1)
+				deps.MetricsRecorder().IncrementCounter(metrics.CounterPullOps, 1)
+				deps.MetricsRecorder().IncrementCounter(metrics.CounterPullFailures, 1)
 				collectAndSave(tc)
 
 				// Success
-				deps.Metrics().IncrementCounter(metrics.CounterPullOps, 1)
-				deps.Metrics().IncrementCounter(metrics.CounterPullSuccess, 1)
-				deps.Metrics().IncrementCounter(metrics.CounterMessagesPulled, 1)
+				deps.MetricsRecorder().IncrementCounter(metrics.CounterPullOps, 1)
+				deps.MetricsRecorder().IncrementCounter(metrics.CounterPullSuccess, 1)
+				deps.MetricsRecorder().IncrementCounter(metrics.CounterMessagesPulled, 1)
 				observed := collectAndSave(tc)
 
 				Expect(observed.Metrics.Counters[string(metrics.CounterPullOps)]).To(Equal(int64(3)))

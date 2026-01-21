@@ -75,17 +75,17 @@ func (a *SyncAction) Execute(ctx context.Context, depsAny any) error {
 		if errors.As(err, &transportErr) {
 			deps.RecordTypedError(transportErr.Type, transportErr.RetryAfter)
 			// Record metric for error type
-			deps.Metrics().IncrementCounter(counterForErrorType(transportErr.Type), 1)
+			deps.MetricsRecorder().IncrementCounter(counterForErrorType(transportErr.Type), 1)
 		} else {
 			// Non-transport error (e.g., context canceled) - treat as network error
 			deps.RecordTypedError(httpTransport.ErrorTypeNetwork, 0)
-			deps.Metrics().IncrementCounter(metrics.CounterNetworkErrorsTotal, 1)
+			deps.MetricsRecorder().IncrementCounter(metrics.CounterNetworkErrorsTotal, 1)
 		}
 
 		// Record metrics with typed constants
-		deps.Metrics().IncrementCounter(metrics.CounterPullOps, 1)
-		deps.Metrics().IncrementCounter(metrics.CounterPullFailures, 1)
-		deps.Metrics().SetGauge(metrics.GaugeLastPullLatencyMs, float64(pullLatency.Milliseconds()))
+		deps.MetricsRecorder().IncrementCounter(metrics.CounterPullOps, 1)
+		deps.MetricsRecorder().IncrementCounter(metrics.CounterPullFailures, 1)
+		deps.MetricsRecorder().SetGauge(metrics.GaugeLastPullLatencyMs, float64(pullLatency.Milliseconds()))
 
 		return fmt.Errorf("pull failed: %w", err)
 	}
@@ -102,11 +102,11 @@ func (a *SyncAction) Execute(ctx context.Context, depsAny any) error {
 	}
 
 	// Record successful pull metrics with typed constants
-	deps.Metrics().IncrementCounter(metrics.CounterPullOps, 1)
-	deps.Metrics().IncrementCounter(metrics.CounterPullSuccess, 1)
-	deps.Metrics().IncrementCounter(metrics.CounterMessagesPulled, int64(len(messages)))
-	deps.Metrics().IncrementCounter(metrics.CounterBytesPulled, bytesPulled)
-	deps.Metrics().SetGauge(metrics.GaugeLastPullLatencyMs, float64(pullLatency.Milliseconds()))
+	deps.MetricsRecorder().IncrementCounter(metrics.CounterPullOps, 1)
+	deps.MetricsRecorder().IncrementCounter(metrics.CounterPullSuccess, 1)
+	deps.MetricsRecorder().IncrementCounter(metrics.CounterMessagesPulled, int64(len(messages)))
+	deps.MetricsRecorder().IncrementCounter(metrics.CounterBytesPulled, bytesPulled)
+	deps.MetricsRecorder().SetGauge(metrics.GaugeLastPullLatencyMs, float64(pullLatency.Milliseconds()))
 
 	// 2. Store pulled messages (they will be available in next observed state)
 	deps.SetPulledMessages(messages)
@@ -159,17 +159,17 @@ func (a *SyncAction) Execute(ctx context.Context, depsAny any) error {
 			if errors.As(err, &transportErr) {
 				deps.RecordTypedError(transportErr.Type, transportErr.RetryAfter)
 				// Record metric for error type
-				deps.Metrics().IncrementCounter(counterForErrorType(transportErr.Type), 1)
+				deps.MetricsRecorder().IncrementCounter(counterForErrorType(transportErr.Type), 1)
 			} else {
 				// Non-transport error (e.g., context canceled) - treat as network error
 				deps.RecordTypedError(httpTransport.ErrorTypeNetwork, 0)
-				deps.Metrics().IncrementCounter(metrics.CounterNetworkErrorsTotal, 1)
+				deps.MetricsRecorder().IncrementCounter(metrics.CounterNetworkErrorsTotal, 1)
 			}
 
 			// Record push failure metrics with typed constants
-			deps.Metrics().IncrementCounter(metrics.CounterPushOps, 1)
-			deps.Metrics().IncrementCounter(metrics.CounterPushFailures, 1)
-			deps.Metrics().SetGauge(metrics.GaugeLastPushLatencyMs, float64(pushLatency.Milliseconds()))
+			deps.MetricsRecorder().IncrementCounter(metrics.CounterPushOps, 1)
+			deps.MetricsRecorder().IncrementCounter(metrics.CounterPushFailures, 1)
+			deps.MetricsRecorder().SetGauge(metrics.GaugeLastPushLatencyMs, float64(pushLatency.Milliseconds()))
 
 			return fmt.Errorf("push failed: %w", err)
 		}
@@ -187,11 +187,11 @@ func (a *SyncAction) Execute(ctx context.Context, depsAny any) error {
 		}
 
 		// Record successful push metrics with typed constants
-		deps.Metrics().IncrementCounter(metrics.CounterPushOps, 1)
-		deps.Metrics().IncrementCounter(metrics.CounterPushSuccess, 1)
-		deps.Metrics().IncrementCounter(metrics.CounterMessagesPushed, int64(len(messagesToPush)))
-		deps.Metrics().IncrementCounter(metrics.CounterBytesPushed, bytesPushed)
-		deps.Metrics().SetGauge(metrics.GaugeLastPushLatencyMs, float64(pushLatency.Milliseconds()))
+		deps.MetricsRecorder().IncrementCounter(metrics.CounterPushOps, 1)
+		deps.MetricsRecorder().IncrementCounter(metrics.CounterPushSuccess, 1)
+		deps.MetricsRecorder().IncrementCounter(metrics.CounterMessagesPushed, int64(len(messagesToPush)))
+		deps.MetricsRecorder().IncrementCounter(metrics.CounterBytesPushed, bytesPushed)
+		deps.MetricsRecorder().SetGauge(metrics.GaugeLastPushLatencyMs, float64(pushLatency.Milliseconds()))
 	}
 
 	// 6. Success - call RecordSuccess()

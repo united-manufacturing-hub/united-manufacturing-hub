@@ -224,6 +224,33 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity fsmv2.Identity, wor
 
 			return NewChildrenManager(childrenCopy)
 		},
+		// FrameworkMetricsProvider returns computed framework metrics from workerCtx.
+		// Called during collection to inject into ObservedState automatically.
+		// This is AUTOMATIC INJECTION - workers don't implement SetFrameworkMetrics themselves.
+		// The closure captures workerCtx by reference and acquires RLock when called (thread-safe).
+		FrameworkMetricsProvider: func() *fsmv2.FrameworkMetrics {
+			if workerCtx == nil {
+				return nil
+			}
+			workerCtx.mu.RLock()
+			defer workerCtx.mu.RUnlock()
+
+			// Convert stateDurations (map[string]time.Duration) to milliseconds
+			cumulativeTimeMs := make(map[string]int64, len(workerCtx.stateDurations))
+			for state, duration := range workerCtx.stateDurations {
+				cumulativeTimeMs[state] = duration.Milliseconds()
+			}
+
+			return &fsmv2.FrameworkMetrics{
+				TimeInCurrentStateMs:    time.Since(workerCtx.stateEnteredAt).Milliseconds(),
+				StateEnteredAtUnix:      workerCtx.stateEnteredAt.Unix(),
+				StateTransitionsTotal:   workerCtx.totalTransitions,
+				TransitionsByState:      workerCtx.stateTransitions,
+				CumulativeTimeByStateMs: cumulativeTimeMs,
+				CollectorRestarts:       workerCtx.collectorRestarts,
+				StartupCount:            workerCtx.startupCount,
+			}
+		},
 	})
 
 	executor := execution.NewActionExecutor(10, s.workerType, identity, workerLogger)

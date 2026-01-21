@@ -93,11 +93,12 @@ type Dependencies interface {
 // BaseDependencies provides common tools for all workers.
 // Worker-specific dependencies should embed this struct.
 type BaseDependencies struct {
-	logger      *zap.SugaredLogger
-	stateReader StateReader
-	metrics     *MetricsRecorder
-	workerType  string
-	workerID    string
+	logger          *zap.SugaredLogger
+	stateReader     StateReader
+	metricsRecorder *MetricsRecorder
+	frameworkState  *FrameworkMetrics // Set by supervisor before collection, may be stale (~1 tick)
+	workerType      string
+	workerID        string
 }
 
 // NewBaseDependencies creates a new base dependencies with common tools.
@@ -109,11 +110,12 @@ func NewBaseDependencies(logger *zap.SugaredLogger, stateReader StateReader, ide
 	}
 
 	return &BaseDependencies{
-		logger:      logger.With("worker", identity.String()),
-		stateReader: stateReader,
-		metrics:     NewMetricsRecorder(),
-		workerType:  identity.WorkerType,
-		workerID:    identity.ID,
+		logger:          logger.With("worker", identity.String()),
+		stateReader:     stateReader,
+		metricsRecorder: NewMetricsRecorder(),
+		frameworkState:  nil, // Set by supervisor before collection
+		workerType:      identity.WorkerType,
+		workerID:        identity.ID,
 	}
 }
 
@@ -134,17 +136,38 @@ func (d *BaseDependencies) GetStateReader() StateReader {
 	return d.stateReader
 }
 
-// Metrics returns the MetricsRecorder for actions to record metrics.
+// MetricsRecorder returns the MetricsRecorder for actions to record metrics.
 // Actions call IncrementCounter/SetGauge with typed constants from the metrics package.
 // CollectObservedState implementations should call Drain() to merge buffered metrics
 // into the observed state.
 //
+// This is a WRITE-ONLY buffer. Metrics written here become visible in ObservedState
+// only AFTER CollectObservedState() drains the buffer.
+//
 // Example usage in an action:
 //
-//	deps.Metrics().IncrementCounter(metrics.CounterPullOps, 1)
-//	deps.Metrics().SetGauge(metrics.GaugeLastPullLatencyMs, float64(latency.Milliseconds()))
-func (d *BaseDependencies) Metrics() *MetricsRecorder {
-	return d.metrics
+//	deps.MetricsRecorder().IncrementCounter(metrics.CounterPullOps, 1)
+//	deps.MetricsRecorder().SetGauge(metrics.GaugeLastPullLatencyMs, float64(latency.Milliseconds()))
+func (d *BaseDependencies) MetricsRecorder() *MetricsRecorder {
+	return d.metricsRecorder
+}
+
+// GetFrameworkState returns the framework metrics provided by the supervisor.
+// This data is updated by the supervisor BEFORE CollectObservedState() runs,
+// so it may be ~1 tick stale. Do NOT use for sub-second timing decisions.
+//
+// For timing info about the current state (TimeInCurrentStateMs, etc.), prefer
+// reading from ObservedState.FrameworkMetrics in State.Next() where it's freshest.
+//
+// For action-level timing, use time.Now() and time.Since() directly.
+func (d *BaseDependencies) GetFrameworkState() *FrameworkMetrics {
+	return d.frameworkState
+}
+
+// SetFrameworkState sets the framework metrics. Called by supervisor before collection.
+// Workers should NOT call this directly - it's for supervisor use only.
+func (d *BaseDependencies) SetFrameworkState(fm *FrameworkMetrics) {
+	d.frameworkState = fm
 }
 
 // GetWorkerType returns the worker type for this dependencies.
