@@ -67,6 +67,10 @@ type SupervisorInterface interface {
 	// Format: "workerID(workerType)/childID(childType)/..."
 	// Example: "scenario123(application)/parent-123(parent)/child001(child)"
 	GetHierarchyPath() string
+	// GetHierarchyPathUnlocked returns the hierarchy path without acquiring locks.
+	// Use this from within locked contexts to avoid deadlock.
+	// Caller must hold s.mu.RLock() or s.mu.Lock().
+	GetHierarchyPathUnlocked() string
 	// GetCurrentStateName returns the current FSM state name for this supervisor's worker.
 	// Returns "unknown" if no worker or state is set.
 	GetCurrentStateName() string

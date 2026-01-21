@@ -1218,7 +1218,7 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 			childID := spec.Name + "-001"
 
 			// Get parent's full hierarchy path from first worker's stored identity
-			// (avoids getHierarchyPathUnlocked() which has hotfix returning incomplete path)
+			// (uses stored identity for consistency with how paths are assigned)
 			var parentPath string
 
 			for _, wCtx := range s.workers {

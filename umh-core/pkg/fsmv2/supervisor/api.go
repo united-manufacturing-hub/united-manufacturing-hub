@@ -337,7 +337,10 @@ func (s *Supervisor[TObserved, TDesired]) GetWorkers() []fsmv2.Identity {
 	return workers
 }
 
-// GetCurrentState returns the current state name for the first worker (backwards compatibility).
+// GetCurrentState returns the current state of the first worker.
+// Deprecated: Use GetCurrentStateName() for interface compatibility, or
+// GetWorkerState(workerID) for full state information including reason.
+// This method will be removed in a future version.
 func (s *Supervisor[TObserved, TDesired]) GetCurrentState() string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -477,12 +480,13 @@ func (s *Supervisor[TObserved, TDesired]) GetHierarchyPath() string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	return s.getHierarchyPathUnlocked()
+	return s.GetHierarchyPathUnlocked()
 }
 
-// getHierarchyPathUnlocked computes the hierarchy path without acquiring the lock.
+// GetHierarchyPathUnlocked computes the hierarchy path without acquiring the lock.
+// Use this from within locked contexts to avoid deadlock.
 // Caller must hold s.mu.RLock() or s.mu.Lock().
-func (s *Supervisor[TObserved, TDesired]) getHierarchyPathUnlocked() string {
+func (s *Supervisor[TObserved, TDesired]) GetHierarchyPathUnlocked() string {
 	// Get first worker ID for this supervisor's segment
 	var workerID string
 	for id := range s.workers {
@@ -496,7 +500,6 @@ func (s *Supervisor[TObserved, TDesired]) getHierarchyPathUnlocked() string {
 	}
 
 	// Build this node's path segment: "workerID(workerType)"
-
 	segment := fmt.Sprintf("%s(%s)", workerID, s.workerType)
 
 	// If no parent, we're root - return just our segment
@@ -504,25 +507,12 @@ func (s *Supervisor[TObserved, TDesired]) getHierarchyPathUnlocked() string {
 		return segment
 	}
 
-	// TODO: HOTFIX - Skip parent path to avoid deadlock.
-	//
-	// Deadlock root cause:
-	// 1. Parent supervisor's tick() holds s.mu lock
-	// 2. tick() → reconcileChildren() → creates child supervisor
-	// 3. childSupervisor.AddWorker() calls getHierarchyPathUnlocked() (line ~158)
-	// 4. getHierarchyPathUnlocked() would call s.parent.GetHierarchyPath()
-	// 5. GetHierarchyPath() tries to acquire s.mu.RLock() on parent
-	// 6. DEADLOCK - parent's lock is already held by tick()!
-	//
-	// PROPER FIX (requires interface change):
-	// 1. Add GetHierarchyPathUnlocked() to SupervisorInterface (types.go)
-	// 2. Have all supervisors implement it (this method already exists, just not on interface)
-	// 3. Call s.parent.GetHierarchyPathUnlocked() instead of GetHierarchyPath()
-	//
-	// For now, we skip parent path computation to unblock development.
-	// This means child supervisor logs will show "childID(childType)" instead of
-	// "parentID(parentType)/childID(childType)" - less context but no deadlock.
-	return segment
+	// Call parent's unlocked method to avoid deadlock.
+	// This is safe because GetHierarchyPathUnlocked is now on the SupervisorInterface,
+	// allowing hierarchical path computation without lock acquisition.
+	parentPath := s.parent.GetHierarchyPathUnlocked()
+
+	return parentPath + "/" + segment
 }
 
 // GetCurrentStateName returns the current FSM state name for this supervisor's worker.

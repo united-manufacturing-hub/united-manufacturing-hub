@@ -68,7 +68,8 @@ func ParseUserSpec[T any](spec interface{}) (T, error) {
 // It handles the common case of parsing UserSpec.Config and returning a DesiredState
 // with no children.
 //
-// The type parameter T must implement StateGetter (typically by embedding BaseUserSpec).
+// The type parameter T must have a pointer type *T that implements StateGetter
+// (typically by embedding BaseUserSpec which has pointer receiver methods).
 //
 // Usage:
 //
@@ -82,7 +83,10 @@ func ParseUserSpec[T any](spec interface{}) (T, error) {
 //	}
 //
 // This replaces ~15-25 lines of boilerplate with a single line.
-func DeriveLeafState[T StateGetter](spec interface{}) (DesiredState, error) {
+func DeriveLeafState[T any, PT interface {
+	*T
+	StateGetter
+}](spec interface{}) (DesiredState, error) {
 	if spec == nil {
 		return DesiredState{
 			State:            DesiredStateRunning,
@@ -95,8 +99,10 @@ func DeriveLeafState[T StateGetter](spec interface{}) (DesiredState, error) {
 		return DesiredState{}, err
 	}
 
+	// Use pointer to call GetState since BaseUserSpec has pointer receiver
+	ptr := PT(&parsed)
 	return DesiredState{
-		State:            parsed.GetState(),
+		State:            ptr.GetState(),
 		ChildrenSpecs:    nil,
 		OriginalUserSpec: spec,
 	}, nil

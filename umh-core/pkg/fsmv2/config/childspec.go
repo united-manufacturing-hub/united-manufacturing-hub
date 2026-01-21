@@ -98,7 +98,7 @@ type BaseUserSpec struct {
 }
 
 // GetState returns the desired state, defaulting to "running" if empty.
-func (b BaseUserSpec) GetState() string {
+func (b *BaseUserSpec) GetState() string {
 	if b.State == "" {
 		return DesiredStateRunning
 	}
