@@ -266,11 +266,35 @@ ginkgo run --focus="Architecture" -v ./pkg/fsmv2/
 ginkgo -r ./pkg/fsmv2/
 ```
 
+## Troubleshooting Quick Reference
+
+| Symptom | Check | Resolution |
+|---------|-------|------------|
+| Stuck in `TryingTo*` state | Action logs for errors | Fix action failure or external dependency |
+| Running but not working | Observation timestamps | Verify `CollectObservedState()` queries actual system |
+| Won't shut down | `IsShutdownRequested()` check | Ensure all states check shutdown first |
+| Action runs multiple times | Action idempotency | Add "already done" check before work |
+
+**Performance baseline**: ~4µs per worker per tick, linear O(n) scaling.
+
+## Metrics Flow
+
+Metrics land in `ObservedState.Metrics` and sync to frontend via CSE:
+
+```
+Action.Execute() → deps.Metrics().IncrementCounter/SetGauge
+    ↓
+CollectObservedState() → Drain() into ObservedState.Metrics
+    ↓
+CSE TriangularStore → Delta sync → Frontend
+```
+
+Workers can check their own metrics in `State.Next()` to trigger degraded states.
+See `api.go` for `Metrics`, `MetricsRecorder`, and `MetricsHolder` interfaces.
+
 ## Further Reading
 
 - [Migration from FSMv1](docs/migration-from-v1.md) - Quick reference for v1 developers
-- [Troubleshooting Guide](docs/troubleshooting.md) - Common issues, error messages, debugging tips
-- [Metrics Guide](docs/metrics.md) - How metrics flow through FSMv2 to the frontend
 - [API Stability](API_STABILITY.md) - Stability tiers and migration checklist
 - [Kubernetes Controllers](https://kubernetes.io/docs/concepts/architecture/controller/) - The control loop pattern
 - [IT/OT Control Loops](https://learn.umh.app/lesson/introduction-into-it-ot-control-loop/) - Manufacturing context
