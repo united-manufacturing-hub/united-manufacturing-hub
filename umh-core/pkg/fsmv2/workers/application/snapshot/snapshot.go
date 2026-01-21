@@ -34,8 +34,10 @@ type ApplicationObservedState struct {
 
 	State string `json:"state"` // Observed lifecycle state (e.g., "running_connected")
 
-	// Metrics for observability - uses standard fsmv2.Metrics structure for automatic Prometheus export.
-	Metrics fsmv2.Metrics `json:"metrics,omitempty"`
+	// Embedded metrics for both framework and worker metrics.
+	// Framework metrics provide time-in-state via GetFrameworkMetrics().TimeInCurrentStateMs
+	// and state entered time via GetFrameworkMetrics().StateEnteredAtUnix.
+	fsmv2.MetricsEmbedder `json:",inline"`
 }
 
 // GetTimestamp returns the time when this observed state was collected.
@@ -62,17 +64,6 @@ func (o ApplicationObservedState) SetShutdownRequested(v bool) fsmv2.ObservedSta
 	o.ShutdownRequested = v
 
 	return o
-}
-
-// GetMetrics returns a pointer to the Metrics field.
-// Implements fsmv2.MetricsHolder for automatic Prometheus export by supervisor.
-//
-// IMPORTANT: Uses value receiver to work with interface values after SetState() etc.
-// are called. Those methods return copies (value semantics for immutability), and
-// Go's method set rules require value receiver for the interface assertion to succeed.
-// Go's escape analysis will heap-allocate the receiver when address is taken.
-func (o ApplicationObservedState) GetMetrics() *fsmv2.Metrics {
-	return &o.Metrics
 }
 
 // ApplicationDesiredState represents the desired state for an application supervisor.

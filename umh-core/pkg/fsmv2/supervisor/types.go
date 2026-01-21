@@ -109,12 +109,20 @@ type WorkerContext[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] s
 	actionPending     bool
 	lastActionObsTime time.Time
 
+	// TODO: maybe put into sperate struct here jsut for emtrics? why are these two different blocks anyway> shouldnt the first block be also framework metrics fields>
+
 	// Automatic state tracking (provided by supervisor for ALL workers)
 	// These fields track state history for metrics and debugging without
 	// requiring each worker to implement tracking manually.
 	stateEnteredAt   time.Time                // When current state was entered
 	stateTransitions map[string]int64         // state_name → total times entered
 	stateDurations   map[string]time.Duration // state_name → cumulative time spent
+
+	// Framework metrics fields (exposed to workers via FrameworkMetrics injection)
+	// These are per-worker values, not global supervisor values.
+	totalTransitions  int64 // Sum of all stateTransitions values (convenience counter)
+	collectorRestarts int64 // Per-worker collector restarts (moved from global CollectorHealth)
+	startupCount      int64 // PERSISTENT: Loaded from CSE in AddWorker(), incremented, survives restarts
 }
 
 // CollectorHealthConfig configures observation collector health monitoring.

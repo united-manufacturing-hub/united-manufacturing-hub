@@ -327,6 +327,7 @@ func (w *CommunicatorWorker) CollectObservedState(ctx context.Context) (fsmv2.Ob
 	newMetrics.Gauges[string(metrics.GaugeConsecutiveErrors)] = float64(consecutiveErrors)
 
 	// Clear per-tick results from legacy tracking (for backward compatibility with tests)
+	// // TODO: wtf what backwards compatbitlity? remove it!
 	deps.ClearSyncResults()
 
 	// Read authenticated UUID from dependencies
@@ -345,7 +346,8 @@ func (w *CommunicatorWorker) CollectObservedState(ctx context.Context) (fsmv2.Ob
 		LastErrorType:     lastErrorType,
 		LastRetryAfter:    lastRetryAfter,
 		LastAuthAttemptAt: lastAuthAttemptAt,
-		Metrics:           newMetrics,
+		// Use MetricsEmbedder for both worker and framework metrics
+		MetricsEmbedder: fsmv2.MetricsEmbedder{Metrics: newMetrics},
 	}
 
 	return observed, nil

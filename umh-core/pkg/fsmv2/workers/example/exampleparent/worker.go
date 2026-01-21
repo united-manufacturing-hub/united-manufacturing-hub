@@ -93,10 +93,10 @@ func (w *ParentWorker) CollectObservedState(ctx context.Context) (fsmv2.Observed
 	}
 
 	observed := snapshot.ExampleparentObservedState{
-		ID:             w.identity.ID,
-		CollectedAt:    time.Now(),
-		StateEnteredAt: tracker.GetStateEnteredAt(),
-		Elapsed:        tracker.Elapsed(), // Pre-computed using Clock (mockable in tests)
+		ID:          w.identity.ID,
+		CollectedAt: time.Now(),
+		// Time-in-state tracking is now handled by supervisor via FrameworkMetrics injection.
+		// States access it via snap.Observed.GetFrameworkMetrics().TimeInCurrentStateMs
 	}
 
 	return observed, nil

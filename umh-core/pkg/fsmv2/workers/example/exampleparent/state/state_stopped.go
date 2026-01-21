@@ -53,9 +53,10 @@ func (s *StoppedState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, f
 	}
 
 	// Wait StoppedWaitDuration in stopped state before transitioning to starting.
-	// Elapsed is pre-computed in CollectObservedState using Clock (mockable in tests).
+	// TimeInCurrentStateMs is injected by supervisor via FrameworkMetrics.
 	if snap.Desired.ShouldBeRunning() {
-		if snap.Observed.Elapsed >= StoppedWaitDuration {
+		elapsed := time.Duration(snap.Observed.GetFrameworkMetrics().TimeInCurrentStateMs) * time.Millisecond
+		if elapsed >= StoppedWaitDuration {
 			return &TryingToStartState{}, fsmv2.SignalNone, nil
 		}
 		// Still waiting - remain in stopped state

@@ -1,5 +1,7 @@
 # FSMv2 API Stability Guide
 
+TODO: is this required?
+
 Migration reference for FSMv1 to FSMv2. Stability tiers indicate API commitment level.
 
 **Stability Tiers:**

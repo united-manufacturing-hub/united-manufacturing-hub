@@ -247,6 +247,36 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 		return nil
 	}
 
+	// Inject FrameworkMetrics into ObservedState before calling State.Next()
+	// This provides supervisor-tracked state data to workers for application logic decisions.
+	if holder, ok := snapshot.Observed.(interface{ GetFrameworkMetrics() *fsmv2.FrameworkMetrics }); ok {
+		fm := holder.GetFrameworkMetrics()
+		if fm != nil {
+			// Session Metrics - computed fresh each tick
+			workerCtx.mu.RLock()
+			fm.TimeInCurrentStateMs = time.Since(workerCtx.stateEnteredAt).Milliseconds()
+			fm.StateEnteredAtUnix = workerCtx.stateEnteredAt.Unix()
+			fm.StateTransitionsTotal = workerCtx.totalTransitions
+
+			// EXISTING field: stateTransitions map[string]int64 (types.go:116)
+			fm.TransitionsByState = workerCtx.stateTransitions
+
+			// EXISTING field: stateDurations map[string]time.Duration (types.go:117)
+			// Convert Duration to milliseconds for FrameworkMetrics
+			fm.CumulativeTimeByStateMs = make(map[string]int64, len(workerCtx.stateDurations))
+			for state, duration := range workerCtx.stateDurations {
+				fm.CumulativeTimeByStateMs[state] = duration.Milliseconds()
+			}
+
+			// Per-worker collector restarts (not global)
+			fm.CollectorRestarts = workerCtx.collectorRestarts
+
+			// Persistent Counter (loaded from CSE on AddWorker, survives restarts)
+			fm.StartupCount = workerCtx.startupCount
+			workerCtx.mu.RUnlock()
+		}
+	}
+
 	nextState, signal, action := currentState.Next(*snapshot)
 
 	hasAction := action != nil
@@ -342,6 +372,7 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 
 		// Track transition count to new state
 		workerCtx.stateTransitions[toState]++
+		workerCtx.totalTransitions++ // Session total for FrameworkMetrics
 
 		// Update current state
 		workerCtx.currentState = nextState
@@ -1011,6 +1042,11 @@ func (s *Supervisor[TObserved, TDesired]) restartCollector(ctx context.Context, 
 	if !exists {
 		return fmt.Errorf("worker %s not found", workerID)
 	}
+
+	// Increment per-worker collector restarts (for FrameworkMetrics exposure)
+	workerCtx.mu.Lock()
+	workerCtx.collectorRestarts++
+	workerCtx.mu.Unlock()
 
 	if workerCtx.collector != nil {
 		workerCtx.collector.Restart()

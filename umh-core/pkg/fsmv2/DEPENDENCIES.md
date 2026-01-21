@@ -16,7 +16,11 @@ This guide covers dependency injection patterns for FSMv2 workers.
 | `InboundChan` | `chan<- *UMHMessage` | Write channel for received messages | Communicator only |
 | `OutboundChan` | `<-chan *UMHMessage` | Read channel for outgoing messages | Communicator only |
 
+// TODO: logger, statereader and metrics recorder i get, maybe even workerypoe and id, but the rest is custom, so not need to document it? jsut that customs are possible?
+
 ## Creating Custom Dependencies
+
+TODO: really necessary this tutorial?
 
 ### Step 1: Embed BaseDependencies
 
@@ -147,6 +151,8 @@ func (w *ParentWorker) checkChildHealth(ctx context.Context, childID string) boo
 
 ### Recording Metrics
 
+TODO: needs tor be updarted based on the last implementation
+
 Actions use typed constants from `pkg/fsmv2/metrics` for compile-time safety:
 
 ```go
@@ -166,6 +172,8 @@ func (a *SyncAction) Execute(ctx context.Context, depsAny any) error {
 ```
 
 ### Draining in CollectObservedState
+
+// TODO: doesn't this happen automatically? or should this not work automatically and provided by the framework here fo fsmv2, e.g. supervisor?
 
 ```go
 func (w *MyWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedState, error) {

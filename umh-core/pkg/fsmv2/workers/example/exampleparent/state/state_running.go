@@ -58,8 +58,9 @@ func (s *RunningState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, f
 	}
 
 	// After RunningDuration in running state, initiate stop cycle.
-	// Elapsed is pre-computed in CollectObservedState using Clock (mockable in tests).
-	if snap.Observed.Elapsed >= RunningDuration {
+	// TimeInCurrentStateMs is injected by supervisor via FrameworkMetrics.
+	elapsed := time.Duration(snap.Observed.GetFrameworkMetrics().TimeInCurrentStateMs) * time.Millisecond
+	if elapsed >= RunningDuration {
 		return &TryingToStopState{}, fsmv2.SignalNone, nil
 	}
 

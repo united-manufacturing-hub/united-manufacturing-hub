@@ -34,8 +34,8 @@ type AuthRequest struct {
 type AuthResponse struct {
 	Token        string `json:"token"`
 	ExpiresAt    int64  `json:"expiresAt,omitempty"`
-	InstanceUUID string `json:"uuid,omitempty"`     // Instance UUID returned by backend
-	InstanceName string `json:"name,omitempty"`     // Instance name returned by backend
+	InstanceUUID string `json:"uuid,omitempty"` // Instance UUID returned by backend
+	InstanceName string `json:"name,omitempty"` // Instance name returned by backend
 }
 
 // PullPayload represents the response from /v2/instance/pull.
@@ -53,6 +53,7 @@ type PushPayload struct {
 // Transport implementations handle authentication and bidirectional messaging
 // between edge instances and the backend relay server.
 type Transport interface {
+	// TODO: does the comment need to be that long? 3 liens would probably be enough?
 	// Authenticate obtains a JWT token from the relay server.
 	//
 	// This method exchanges pre-shared credentials (instanceUUID, email) for

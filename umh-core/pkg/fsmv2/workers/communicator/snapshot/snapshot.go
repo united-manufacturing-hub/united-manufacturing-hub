@@ -87,7 +87,7 @@ type CommunicatorDesiredState struct {
 	config.BaseDesiredState // Provides ShutdownRequested + IsShutdownRequested() + SetShutdownRequested()
 
 	// Authentication - typed fields populated by DeriveDesiredState
-	InstanceUUID string        `json:"instanceUUID"`
+	InstanceUUID string        `json:"instanceUUID"` // TODO: this is not used right?
 	AuthToken    string        `json:"authToken"`
 	RelayURL     string        `json:"relayURL"`
 	Timeout      time.Duration `json:"timeout"`
@@ -95,6 +95,7 @@ type CommunicatorDesiredState struct {
 	// Messages
 	MessagesToBeSent []transport.UMHMessage `json:"messagesToBeSent,omitempty"`
 	// Dependencies removed: Actions receive deps via Execute() parameter, not DesiredState
+	// TODO: above comment can be deleted? do check for similar omments. it does not match the googel develoepr language style guide on their website (fetch it!) as it is temporary
 }
 
 // GetState returns the desired lifecycle state ("running" or "stopped").
@@ -131,6 +132,7 @@ func (d *CommunicatorDesiredState) GetState() string {
 //   - CommunicatorDesiredState: Embedded desired state (always present)
 //   - DegradedEnteredAt: zero OR timestamp when errors started
 //
+// TODO: are the following two blocks of comments necessary? is this field here necessary in the first place or shoudl we just go for inline comments?
 // # Invariants
 //
 //   - Related to C2 (token expiry): JWTExpiry must be checked before sync
@@ -171,20 +173,10 @@ type CommunicatorObservedState struct {
 	// LastAuthAttemptAt is the timestamp of the last authentication attempt (for auth backoff).
 	LastAuthAttemptAt time.Time `json:"lastAuthAttemptAt,omitempty"`
 
-	// Sync metrics for observability
-	// Uses standard fsmv2.Metrics structure for automatic Prometheus export
-	Metrics fsmv2.Metrics `json:"metrics"`
-}
-
-// GetMetrics returns a pointer to the Metrics field.
-// Implements fsmv2.MetricsHolder for automatic Prometheus export by supervisor.
-//
-// IMPORTANT: Uses value receiver to work with interface values after SetState() etc.
-// are called. Those methods return copies (value semantics for immutability), and
-// Go's method set rules require value receiver for the interface assertion to succeed.
-// Go's escape analysis will heap-allocate the receiver when address is taken.
-func (o CommunicatorObservedState) GetMetrics() *fsmv2.Metrics {
-	return &o.Metrics
+	// Embedded metrics for both framework and worker metrics.
+	// Provides GetMetrics() for worker metrics and GetFrameworkMetrics() for supervisor-injected metrics.
+	// Uses standard fsmv2.Metrics structure for automatic Prometheus export.
+	fsmv2.MetricsEmbedder `json:",inline"`
 }
 
 // IsTokenExpired returns true if the JWT token is expired or will expire soon.

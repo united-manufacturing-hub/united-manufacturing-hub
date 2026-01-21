@@ -84,6 +84,11 @@ type ExamplechildObservedState struct {
 	LastError        error  `json:"last_error,omitempty"`
 	ConnectAttempts  int    `json:"connect_attempts"`
 	ConnectionHealth string `json:"connection_health"`
+
+	// Embedded metrics for both framework and worker metrics.
+	// Framework metrics provide time-in-state via GetFrameworkMetrics().TimeInCurrentStateMs
+	// and state entered time via GetFrameworkMetrics().StateEnteredAtUnix.
+	fsmv2.MetricsEmbedder `json:",inline"`
 }
 
 func (o ExamplechildObservedState) GetTimestamp() time.Time {

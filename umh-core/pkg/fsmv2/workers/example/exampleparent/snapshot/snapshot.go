@@ -43,16 +43,19 @@ func (s *ExampleparentDesiredState) ShouldBeRunning() bool {
 
 // ExampleparentObservedState represents the current state of the parent worker.
 type ExampleparentObservedState struct {
-	ID             string        `json:"id"`
-	CollectedAt    time.Time     `json:"collected_at"`
-	StateEnteredAt time.Time     `json:"state_entered_at"` // When current state was entered (from StateTracker)
-	Elapsed        time.Duration `json:"elapsed"`          // Time since state was entered (pre-computed, mockable via Clock)
+	ID          string    `json:"id"`
+	CollectedAt time.Time `json:"collected_at"`
 
 	ExampleparentDesiredState `json:",inline"`
 
 	State             string `json:"state"` // Observed lifecycle state (e.g., "running_connected")
 	ChildrenHealthy   int    `json:"children_healthy"`
 	ChildrenUnhealthy int    `json:"children_unhealthy"`
+
+	// Embedded metrics for both framework and worker metrics.
+	// Framework metrics provide time-in-state via GetFrameworkMetrics().TimeInCurrentStateMs
+	// and state entered time via GetFrameworkMetrics().StateEnteredAtUnix.
+	fsmv2.MetricsEmbedder `json:",inline"`
 }
 
 func (o ExampleparentObservedState) GetTimestamp() time.Time {

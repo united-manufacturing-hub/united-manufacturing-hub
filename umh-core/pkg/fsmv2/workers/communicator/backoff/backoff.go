@@ -130,3 +130,37 @@ func ShouldStopRetrying(_ httpTransport.ErrorType, _ int) bool {
 	// Never stop retrying - only backoff time changes
 	return false
 }
+
+// ShouldResetTransport determines if the HTTP transport should be reset based on error type.
+// Transport reset flushes connection pools, clears DNS cache, and re-establishes TLS.
+// This helps recover from connection-level issues that accumulate over time.
+//
+// Reset patterns:
+//   - Network errors: Reset every TransportResetThreshold (5) consecutive errors
+//   - Server/Cloudflare errors: Reset every 2*TransportResetThreshold (10) consecutive errors
+//   - Other errors: Never reset (auth errors, rate limits won't benefit from transport reset)
+//
+// Workers use this by checking after each error:
+//
+//	if backoff.ShouldResetTransport(errType, consecutiveErrors) {
+//	    deps.Transport.Reset()
+//	}
+func ShouldResetTransport(errType httpTransport.ErrorType, consecutiveErrors int) bool {
+	if consecutiveErrors == 0 {
+		return false
+	}
+
+	switch errType {
+	case httpTransport.ErrorTypeNetwork:
+		// Network errors benefit most from transport reset - reset every 5 errors
+		return consecutiveErrors%TransportResetThreshold == 0
+
+	case httpTransport.ErrorTypeServerError, httpTransport.ErrorTypeCloudflareChallenge:
+		// Server/Cloudflare errors might benefit, but less frequently - reset every 10 errors
+		return consecutiveErrors%(TransportResetThreshold*2) == 0
+
+	default:
+		// Auth errors, rate limits, proxy blocks, etc. won't benefit from transport reset
+		return false
+	}
+}

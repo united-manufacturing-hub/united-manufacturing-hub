@@ -83,10 +83,10 @@ func (w *ApplicationWorker) CollectObservedState(ctx context.Context) (fsmv2.Obs
 			Name: w.name,
 			// BaseDesiredState and ChildrenSpecs default to zero values
 		},
-		// Initialize empty metrics for interface consistency.
+		// Initialize embedded metrics for interface consistency.
 		// ApplicationWorker doesn't have a MetricsRecorder currently,
 		// but this allows future metrics support without struct changes.
-		Metrics: fsmv2.NewMetrics(),
+		MetricsEmbedder: fsmv2.MetricsEmbedder{Metrics: fsmv2.NewMetrics()},
 	}, nil
 }
 

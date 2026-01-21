@@ -334,3 +334,105 @@ func (r *MetricsRecorder) Drain() DrainResult {
 	return result
 }
 
+// GetGauge returns a gauge value by name, or 0 if not set or nil.
+// Nil-safe: returns 0 for nil Metrics or nil Gauges map.
+func (m *Metrics) GetGauge(name metrics.GaugeName) float64 {
+	if m == nil || m.Gauges == nil {
+		return 0
+	}
+	return m.Gauges[string(name)]
+}
+
+// GetCounter returns a counter value by name, or 0 if not set or nil.
+// Nil-safe: returns 0 for nil Metrics or nil Counters map.
+func (m *Metrics) GetCounter(name metrics.CounterName) int64 {
+	if m == nil || m.Counters == nil {
+		return 0
+	}
+	return m.Counters[string(name)]
+}
+
+// =============================================================================
+// FRAMEWORK METRICS (Supervisor-Provided)
+// =============================================================================
+
+// FrameworkMetrics contains metrics automatically provided by the supervisor.
+// Workers don't need to implement anything - these are always available.
+// The supervisor injects these values into ObservedState before calling State.Next().
+//
+// THREE CATEGORIES:
+//   - Session Metrics: Reset on restart (TimeInCurrentStateMs, TransitionsByState, etc.)
+//   - Persistent Counters: Survive restart (StartupCount)
+//
+// Workers access these in State.Next() via:
+//
+//	fm := snap.Observed.GetFrameworkMetrics()
+//	timeInState := time.Duration(fm.TimeInCurrentStateMs) * time.Millisecond
+//	startupCount := fm.StartupCount  // Persists across restarts
+type FrameworkMetrics struct {
+	// === Session Metrics (reset on restart) ===
+
+	// TimeInCurrentStateMs is milliseconds since the current state was entered.
+	// Updated each tick by supervisor.
+	TimeInCurrentStateMs int64 `json:"time_in_current_state_ms"`
+
+	// StateEnteredAtUnix is Unix timestamp (seconds) when current state was entered.
+	StateEnteredAtUnix int64 `json:"state_entered_at_unix"`
+
+	// StateTransitionsTotal is the total number of state transitions this session.
+	StateTransitionsTotal int64 `json:"state_transitions_total"`
+
+	// TransitionsByState maps state names to the number of times that state was entered.
+	// Example: {"running": 5, "degraded": 2, "stopped": 1}
+	TransitionsByState map[string]int64 `json:"transitions_by_state,omitempty"`
+
+	// CumulativeTimeByStateMs maps state names to total milliseconds spent in that state.
+	// Example: {"running": 60000, "degraded": 5000}
+	CumulativeTimeByStateMs map[string]int64 `json:"cumulative_time_by_state_ms,omitempty"`
+
+	// CollectorRestarts is the number of times the observation collector was restarted
+	// for this specific worker (not global). Reset on worker restart.
+	CollectorRestarts int64 `json:"collector_restarts"`
+
+	// === Persistent Counters (survive restart) ===
+
+	// StartupCount is the number of times this worker has been started.
+	// Loaded from CSE on AddWorker(), incremented, and persisted.
+	// Use this to detect restart loops or track worker lifetime.
+	StartupCount int64 `json:"startup_count"`
+}
+
+// MetricsEmbedder provides both framework and worker metrics.
+// Embed this in ObservedState structs to guarantee CSE and Prometheus paths are consistent.
+//
+// Usage:
+//
+//	type MyObservedState struct {
+//	    fsmv2.MetricsEmbedder  // Provides GetMetrics() and GetFrameworkMetrics()
+//	    CollectedAt time.Time
+//	    // ... other fields
+//	}
+//
+// The embedded struct provides:
+//   - GetMetrics() *Metrics for MetricsHolder interface (worker metrics)
+//   - GetFrameworkMetrics() *FrameworkMetrics for supervisor-injected metrics
+type MetricsEmbedder struct {
+	// FrameworkMetrics contains supervisor-provided metrics (injected each tick).
+	FrameworkMetrics FrameworkMetrics `json:"framework_metrics,omitempty"`
+
+	// Metrics contains worker-defined metrics (recorded via MetricsRecorder).
+	Metrics Metrics `json:"metrics,omitempty"`
+}
+
+// GetMetrics implements MetricsHolder interface for worker metrics.
+// Returns a pointer to allow modification by MetricsRecorder.Drain() merging.
+func (m *MetricsEmbedder) GetMetrics() *Metrics {
+	return &m.Metrics
+}
+
+// GetFrameworkMetrics returns the framework-provided metrics.
+// Returns a pointer to allow supervisor to inject values before State.Next().
+func (m *MetricsEmbedder) GetFrameworkMetrics() *FrameworkMetrics {
+	return &m.FrameworkMetrics
+}
+

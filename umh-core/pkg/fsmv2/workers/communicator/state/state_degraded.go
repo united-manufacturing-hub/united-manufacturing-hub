@@ -42,6 +42,7 @@ type DegradedState struct {
 }
 
 // NewDegradedState creates a new DegradedState.
+// TODO: this is not fsmv2 idiomatic?
 func NewDegradedState() *DegradedState {
 	return &DegradedState{}
 }
@@ -60,6 +61,7 @@ func (s *DegradedState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, 
 		return &StoppedState{}, fsmv2.SignalNone, nil
 	}
 
+	// TODO: does this mean after 3 consecutie errors when it is healthy again, it cannot go to syncing state again?
 	if snap.Observed.IsSyncHealthy() && snap.Observed.GetConsecutiveErrors() == 0 {
 		return &SyncingState{}, fsmv2.SignalNone, nil
 	}

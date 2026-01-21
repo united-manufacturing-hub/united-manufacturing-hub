@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// TODO: doesnt this make sense to move the metric nbames into speratep ackages? so specify communicatorm etrics in communicator package, etc.?
+
 // Package metrics provides typed metric name constants for FSMv2 workers.
 //
 // This package ensures compile-time safety for metric names. Using typed
@@ -57,7 +59,30 @@ const (
 // These can be used by any worker type for common monitoring.
 const (
 	// GaugeTimeInCurrentStateMs tracks time spent in the current state in milliseconds.
+	// NOTE: Also available via FrameworkMetrics.TimeInCurrentStateMs (supervisor-injected).
 	GaugeTimeInCurrentStateMs GaugeName = "time_in_current_state_ms"
+)
+
+// Framework metric names (supervisor-provided).
+// These are automatically injected into FrameworkMetrics by the supervisor.
+// Workers access them via snap.Observed.GetFrameworkMetrics() in State.Next().
+//
+// NOTE: These constants are for Prometheus export consistency. The actual values
+// are available via FrameworkMetrics struct fields (not map-based metrics).
+const (
+	// GaugeStateEnteredAtUnix tracks when the current state was entered (Unix timestamp).
+	GaugeStateEnteredAtUnix GaugeName = "state_entered_at_unix"
+
+	// CounterStateTransitionsTotal tracks total state transitions this session.
+	// Different from CounterStateTransitions which is the per-tick counter.
+	CounterStateTransitionsTotal CounterName = "state_transitions_total"
+
+	// CounterCollectorRestarts tracks per-worker collector restart count.
+	CounterCollectorRestarts CounterName = "collector_restarts"
+
+	// CounterStartupCount tracks how many times this worker has been started (persistent).
+	// This value survives restarts - loaded from CSE and incremented on each AddWorker().
+	CounterStartupCount CounterName = "startup_count"
 )
 
 // Communicator worker counter names.

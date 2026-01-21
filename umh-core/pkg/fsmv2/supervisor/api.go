@@ -227,16 +227,35 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity fsmv2.Identity, wor
 
 	executor := execution.NewActionExecutor(10, s.workerType, identity, workerLogger)
 
+	// Load previous StartupCount from CSE (if exists) for persistent counter
+	// This counter survives restarts and is incremented on each AddWorker()
+	var startupCount int64 = 1 // Default to 1 for first-time workers
+	loadCtx, loadCancel := context.WithTimeout(context.Background(), 2*time.Second)
+	var prevObserved TObserved
+	loadErr := s.store.LoadObservedTyped(loadCtx, s.workerType, identity.ID, &prevObserved)
+	loadCancel()
+	if loadErr == nil {
+		// Try to extract previous StartupCount from FrameworkMetrics
+		if holder, ok := any(&prevObserved).(interface{ GetFrameworkMetrics() *fsmv2.FrameworkMetrics }); ok {
+			if fm := holder.GetFrameworkMetrics(); fm != nil && fm.StartupCount > 0 {
+				startupCount = fm.StartupCount + 1
+			}
+		}
+	}
+
 	workerCtx = &WorkerContext[TObserved, TDesired]{
-		mu:               s.lockManager.NewLock(lockNameWorkerContextMu, lockLevelWorkerContextMu),
-		identity:         identity,
-		worker:           worker,
-		currentState:     worker.GetInitialState(),
-		collector:        collector,
-		executor:         executor,
-		stateEnteredAt:   time.Now(),
-		stateTransitions: make(map[string]int64),
-		stateDurations:   make(map[string]time.Duration),
+		mu:                s.lockManager.NewLock(lockNameWorkerContextMu, lockLevelWorkerContextMu),
+		identity:          identity,
+		worker:            worker,
+		currentState:      worker.GetInitialState(),
+		collector:         collector,
+		executor:          executor,
+		stateEnteredAt:    time.Now(),
+		stateTransitions:  make(map[string]int64),
+		stateDurations:    make(map[string]time.Duration),
+		totalTransitions:  0,                 // Session metric, starts at 0
+		collectorRestarts: 0,                 // Per-worker collector restarts
+		startupCount:      startupCount,      // PERSISTENT: loaded from CSE, incremented
 	}
 	s.workers[identity.ID] = workerCtx
 
