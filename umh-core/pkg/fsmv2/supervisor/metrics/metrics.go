@@ -15,7 +15,6 @@
 package metrics
 
 import (
-	"strings"
 	"sync"
 	"time"
 
@@ -57,16 +56,6 @@ var (
 			Help:      "Duration of infrastructure recovery in seconds",
 		},
 		[]string{"worker_type"},
-	)
-
-	childHealthCheckTotal = promauto.NewCounterVec(
-		prometheus.CounterOpts{
-			Namespace: namespace,
-			Subsystem: subsystem,
-			Name:      "child_health_check_total",
-			Help:      "Total number of child health checks by status",
-		},
-		[]string{"worker_type", "child_name", "status"},
 	)
 
 	actionQueuedTotal = promauto.NewCounterVec(
@@ -287,10 +276,6 @@ func RecordInfrastructureRecovery(supervisorID string, duration time.Duration) {
 	infrastructureRecoveryDuration.WithLabelValues(supervisorID).Observe(duration.Seconds())
 }
 
-func RecordChildHealthCheck(supervisorID, childName, status string) {
-	childHealthCheckTotal.WithLabelValues(supervisorID, childName, status).Inc()
-}
-
 func RecordActionQueued(supervisorID, actionType string) {
 	actionQueuedTotal.WithLabelValues(supervisorID, actionType).Inc()
 }
@@ -436,29 +421,6 @@ func ExportWorkerMetrics(workerType, workerID string, observed fsmv2.ObservedSta
 	}
 
 	workerMetricsExporter.export(workerType, workerID, &metrics)
-}
-
-// CleanupWorkerMetrics removes cached counter values for a worker.
-// Should be called when a worker is removed to prevent memory leaks.
-//
-// Parameters:
-//   - workerType: Worker type that was removed
-//   - workerID: Worker ID that was removed
-func CleanupWorkerMetrics(workerType, workerID string) {
-	workerMetricsExporter.cleanup(workerType, workerID)
-}
-
-func (e *WorkerMetricsExporter) cleanup(workerType, workerID string) {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-
-	// Remove all entries for this worker from prevCounters
-	prefix := workerType + ":" + workerID + ":"
-	for key := range e.prevCounters {
-		if strings.HasPrefix(key, prefix) {
-			delete(e.prevCounters, key)
-		}
-	}
 }
 
 func (e *WorkerMetricsExporter) export(workerType, workerID string, metrics *fsmv2.Metrics) {

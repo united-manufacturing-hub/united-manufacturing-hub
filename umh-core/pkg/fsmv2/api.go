@@ -341,24 +341,6 @@ func (r *MetricsRecorder) Drain() DrainResult {
 	return result
 }
 
-// GetGauge returns a gauge value by name, or 0 if not set or nil.
-// Nil-safe: returns 0 for nil Metrics or nil Gauges map.
-func (m *Metrics) GetGauge(name metrics.GaugeName) float64 {
-	if m == nil || m.Gauges == nil {
-		return 0
-	}
-	return m.Gauges[string(name)]
-}
-
-// GetCounter returns a counter value by name, or 0 if not set or nil.
-// Nil-safe: returns 0 for nil Metrics or nil Counters map.
-func (m *Metrics) GetCounter(name metrics.CounterName) int64 {
-	if m == nil || m.Counters == nil {
-		return 0
-	}
-	return m.Counters[string(name)]
-}
-
 // =============================================================================
 // FRAMEWORK METRICS (Supervisor-Provided)
 // =============================================================================

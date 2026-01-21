@@ -49,20 +49,6 @@ var _ = Describe("Infrastructure Recovery Metrics", Label("metrics"), func() {
 		})
 	})
 
-	Context("RecordChildHealthCheck", func() {
-		It("should record child health check with status", func() {
-			supervisorID := "test-supervisor-3"
-			childName := "test-child"
-
-			Expect(func() {
-				metrics.RecordChildHealthCheck(supervisorID, childName, "healthy")
-			}).NotTo(Panic())
-
-			Expect(func() {
-				metrics.RecordChildHealthCheck(supervisorID, childName, "unhealthy")
-			}).NotTo(Panic())
-		})
-	})
 })
 
 var _ = Describe("Action Execution Metrics", Label("metrics"), func() {
