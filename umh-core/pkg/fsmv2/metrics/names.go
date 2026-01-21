@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// TODO: doesnt this make sense to move the metric nbames into speratep ackages? so specify communicatorm etrics in communicator package, etc.?
-
 // Package metrics provides typed metric name constants for FSMv2 workers.
 //
 // This package ensures compile-time safety for metric names. Using typed
@@ -30,6 +28,16 @@
 // Typos become compile errors:
 //
 //	deps.Metrics().IncrementCounter(metrics.CounterMessagessPulled, 1) // COMPILE ERROR
+//
+// # Design: Centralized vs Distributed
+//
+// Metric names are centralized here (not in individual worker packages) because:
+//   - Single source of truth prevents naming conflicts between workers
+//   - Compile-time safety across the entire codebase
+//   - Easy to audit all metrics in one place
+//
+// Consider distributing to individual packages only if many worker types (5+)
+// with complex metrics emerge, making this file unwieldy.
 package metrics
 
 // CounterName is a type-safe metric name for counters.

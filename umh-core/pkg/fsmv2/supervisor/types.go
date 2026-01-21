@@ -109,20 +109,20 @@ type WorkerContext[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] s
 	actionPending     bool
 	lastActionObsTime time.Time
 
-	// TODO: maybe put into sperate struct here jsut for emtrics? why are these two different blocks anyway> shouldnt the first block be also framework metrics fields>
-
-	// Automatic state tracking (provided by supervisor for ALL workers)
-	// These fields track state history for metrics and debugging without
-	// requiring each worker to implement tracking manually.
+	// Supervisor-internal state tracking (injected into FrameworkMetrics for worker access).
+	//
+	// These fields are tracked by the supervisor and COPIED into FrameworkMetrics before
+	// State.Next() so workers can read them. Workers cannot write these directly.
+	//
+	// This is separate from MetricsRecorder which handles worker-written metrics:
+	// - WorkerContext fields: Supervisor writes, workers read (via FrameworkMetrics)
+	// - MetricsRecorder: Workers write, supervisor drains and persists
 	stateEnteredAt   time.Time                // When current state was entered
 	stateTransitions map[string]int64         // state_name → total times entered
 	stateDurations   map[string]time.Duration // state_name → cumulative time spent
-
-	// Framework metrics fields (exposed to workers via FrameworkMetrics injection)
-	// These are per-worker values, not global supervisor values.
-	totalTransitions  int64 // Sum of all stateTransitions values (convenience counter)
-	collectorRestarts int64 // Per-worker collector restarts (moved from global CollectorHealth)
-	startupCount      int64 // PERSISTENT: Loaded from CSE in AddWorker(), incremented, survives restarts
+	totalTransitions  int64                   // Sum of all stateTransitions values
+	collectorRestarts int64                   // Per-worker collector restarts
+	startupCount      int64                   // PERSISTENT: Loaded from CSE, incremented on AddWorker()
 }
 
 // CollectorHealthConfig configures observation collector health monitoring.

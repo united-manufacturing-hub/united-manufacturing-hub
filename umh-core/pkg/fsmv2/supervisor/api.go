@@ -209,6 +209,7 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity fsmv2.Identity, wor
 			return s.getMappedParentState()
 		},
 		// ChildrenViewProvider returns a config.ChildrenView for parent workers.
+		// TODO: does this not comflcit with the depdenncies that are injected?
 		// Used by parent workers to inspect individual child states, not just counts.
 		// The closure captures s.children and s.mu for thread-safe access.
 		ChildrenViewProvider: func() any {
@@ -236,7 +237,9 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity fsmv2.Identity, wor
 	loadCancel()
 	if loadErr == nil {
 		// Try to extract previous StartupCount from FrameworkMetrics
-		if holder, ok := any(&prevObserved).(interface{ GetFrameworkMetrics() *fsmv2.FrameworkMetrics }); ok {
+		if holder, ok := any(&prevObserved).(interface {
+			GetFrameworkMetrics() *fsmv2.FrameworkMetrics
+		}); ok {
 			if fm := holder.GetFrameworkMetrics(); fm != nil && fm.StartupCount > 0 {
 				startupCount = fm.StartupCount + 1
 			}
@@ -253,9 +256,9 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity fsmv2.Identity, wor
 		stateEnteredAt:    time.Now(),
 		stateTransitions:  make(map[string]int64),
 		stateDurations:    make(map[string]time.Duration),
-		totalTransitions:  0,                 // Session metric, starts at 0
-		collectorRestarts: 0,                 // Per-worker collector restarts
-		startupCount:      startupCount,      // PERSISTENT: loaded from CSE, incremented
+		totalTransitions:  0,            // Session metric, starts at 0
+		collectorRestarts: 0,            // Per-worker collector restarts
+		startupCount:      startupCount, // PERSISTENT: loaded from CSE, incremented
 	}
 	s.workers[identity.ID] = workerCtx
 
