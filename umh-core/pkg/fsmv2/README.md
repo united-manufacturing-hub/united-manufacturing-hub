@@ -269,6 +269,9 @@ ginkgo -r ./pkg/fsmv2/
 ## Further Reading
 
 - [Migration from FSMv1](docs/migration-from-v1.md) - Quick reference for v1 developers
+- [Troubleshooting Guide](docs/troubleshooting.md) - Common issues, error messages, debugging tips
+- [Metrics Guide](docs/metrics.md) - How metrics flow through FSMv2 to the frontend
+- [API Stability](API_STABILITY.md) - Stability tiers and migration checklist
 - [Kubernetes Controllers](https://kubernetes.io/docs/concepts/architecture/controller/) - The control loop pattern
 - [IT/OT Control Loops](https://learn.umh.app/lesson/introduction-into-it-ot-control-loop/) - Manufacturing context
 - [UMH Core vs Classic](https://docs.umh.app/umh-core-vs-classic-faq) - Why we moved from Kubernetes
