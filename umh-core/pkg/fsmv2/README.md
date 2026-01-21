@@ -294,8 +294,6 @@ See `api.go` for `Metrics`, `MetricsRecorder`, and `MetricsHolder` interfaces.
 
 ## Further Reading
 
-- [Migration from FSMv1](docs/migration-from-v1.md) - Quick reference for v1 developers
-- [API Stability](API_STABILITY.md) - Stability tiers and migration checklist
 - [Kubernetes Controllers](https://kubernetes.io/docs/concepts/architecture/controller/) - The control loop pattern
 - [IT/OT Control Loops](https://learn.umh.app/lesson/introduction-into-it-ot-control-loop/) - Manufacturing context
 - [UMH Core vs Classic](https://docs.umh.app/umh-core-vs-classic-faq) - Why we moved from Kubernetes

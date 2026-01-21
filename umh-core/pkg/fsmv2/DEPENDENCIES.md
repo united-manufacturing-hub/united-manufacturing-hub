@@ -11,80 +11,8 @@ This guide covers dependency injection patterns for FSMv2 workers.
 | `MetricsRecorder` | `*fsmv2.MetricsRecorder` | Buffer and record per-tick metrics | All workers via `BaseDependencies` |
 | `WorkerType` | `string` | Worker type identifier | All workers via `BaseDependencies` |
 | `WorkerID` | `string` | Worker instance ID | All workers via `BaseDependencies` |
-| `Transport` | `transport.Transport` | HTTP transport for push/pull | Communicator only |
-| `ConnectionPool` | `ConnectionPool` | Connection management interface | Example child (customizable) |
-| `InboundChan` | `chan<- *UMHMessage` | Write channel for received messages | Communicator only |
-| `OutboundChan` | `<-chan *UMHMessage` | Read channel for outgoing messages | Communicator only |
 
-// TODO: logger, statereader and metrics recorder i get, maybe even workerypoe and id, but the rest is custom, so not need to document it? jsut that customs are possible?
-
-## Creating Custom Dependencies
-
-TODO: really necessary this tutorial?
-
-### Step 1: Embed BaseDependencies
-
-```go
-type MyWorkerDependencies struct {
-    *fsmv2.BaseDependencies           // Provides logger, stateReader, metrics
-    customClient  CustomClientInterface
-    mu            sync.RWMutex         // For thread-safe state
-    isConnected   bool
-}
-```
-
-### Step 2: Create Constructor
-
-```go
-func NewMyWorkerDependencies(
-    client CustomClientInterface,
-    logger *zap.SugaredLogger,
-    stateReader fsmv2.StateReader,
-    identity fsmv2.Identity,
-) *MyWorkerDependencies {
-    return &MyWorkerDependencies{
-        BaseDependencies: fsmv2.NewBaseDependencies(logger, stateReader, identity),
-        customClient:     client,
-    }
-}
-```
-
-### Step 3: Add Accessor Methods
-
-```go
-func (d *MyWorkerDependencies) GetClient() CustomClientInterface {
-    return d.customClient
-}
-
-func (d *MyWorkerDependencies) SetConnected(connected bool) {
-    d.mu.Lock()
-    defer d.mu.Unlock()
-    d.isConnected = connected
-}
-
-func (d *MyWorkerDependencies) IsConnected() bool {
-    d.mu.RLock()
-    defer d.mu.RUnlock()
-    return d.isConnected
-}
-```
-
-### Step 4: Register with Factory
-
-```go
-func init() {
-    factory.RegisterWorkerType[MyObservedState, *MyDesiredState](
-        func(id fsmv2.Identity, logger *zap.SugaredLogger, stateReader fsmv2.StateReader, deps map[string]any) fsmv2.Worker {
-            // Create dependencies with injected resources
-            myDeps := NewMyWorkerDependencies(nil, logger, stateReader, id)
-            return NewMyWorker(id, myDeps)
-        },
-        func(cfg interface{}) interface{} {
-            return supervisor.NewSupervisor[MyObservedState, *MyDesiredState](cfg.(supervisor.Config))
-        },
-    )
-}
-```
+Custom dependencies (e.g., `Transport`, `ConnectionPool`, channels) can be added by embedding `BaseDependencies` in your own struct. See `workers/communicator/dependencies.go` for an example.
 
 ## Global Variables Flow
 
@@ -151,8 +79,6 @@ func (w *ParentWorker) checkChildHealth(ctx context.Context, childID string) boo
 
 ### Recording Metrics
 
-TODO: needs tor be updarted based on the last implementation
-
 Actions use typed constants from `pkg/fsmv2/metrics` for compile-time safety:
 
 ```go
@@ -172,8 +98,6 @@ func (a *SyncAction) Execute(ctx context.Context, depsAny any) error {
 ```
 
 ### Draining in CollectObservedState
-
-// TODO: doesn't this happen automatically? or should this not work automatically and provided by the framework here fo fsmv2, e.g. supervisor?
 
 ```go
 func (w *MyWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedState, error) {
