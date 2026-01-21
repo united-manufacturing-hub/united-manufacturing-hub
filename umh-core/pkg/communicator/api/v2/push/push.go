@@ -102,16 +102,8 @@ func (p *Pusher) Push(message models.UMHMessage) {
 		}
 	}()
 
-	// Use the message's InstanceUUID if provided, otherwise fall back to Pusher's default.
-	// This is critical for FSMv2 mode where the real UUID is set on the message by SubscriberHandler
-	// after authentication succeeds (Bug #8 fix: Pusher was ignoring message.InstanceUUID).
-	instanceUUID := message.InstanceUUID
-	if instanceUUID == uuid.Nil {
-		instanceUUID = p.instanceUUID
-	}
-
 	p.outboundMessageChannel <- &models.UMHMessage{
-		InstanceUUID: instanceUUID,
+		InstanceUUID: p.instanceUUID,
 		Content:      message.Content,
 		Email:        message.Email,
 	}

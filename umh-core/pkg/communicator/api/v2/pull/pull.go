@@ -12,9 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// TODO: check why this was modified here in this branch, if not necessarily required, leave old communicator the same
-// only acceptable changes are for the bridge/adapter to allow the new fsmv2 transport
-
 package pull
 
 import (
@@ -36,10 +33,6 @@ import (
 	"go.uber.org/zap"
 )
 
-// RequestInFlightThreshold is the duration after which a request is considered
-// stuck and the health check should report WARNING status.
-const RequestInFlightThreshold = 10 * time.Second
-
 type Puller struct {
 	jwt                   atomic.Value
 	dog                   watchdog.Iface
@@ -48,11 +41,6 @@ type Puller struct {
 	apiURL                string
 	shallRun              atomic.Bool
 	insecureTLS           bool
-
-	// Request state tracking for health checks
-	inFlightRequest   atomic.Bool
-	requestStartTime  atomic.Value // stores time.Time
-	lastRequestFailed atomic.Bool
 }
 
 func NewPuller(jwt string, dog watchdog.Iface, inboundChannel chan *models.UMHMessage, insecureTLS bool, apiURL string, logger *zap.SugaredLogger) *Puller {
@@ -72,63 +60,6 @@ func NewPuller(jwt string, dog watchdog.Iface, inboundChannel chan *models.UMHMe
 
 func (p *Puller) UpdateJWT(jwt string) {
 	p.jwt.Store(jwt)
-}
-
-// SetRequestInFlight sets whether an HTTP request is currently in flight.
-// This is used for health check status reporting.
-func (p *Puller) SetRequestInFlight(inFlight bool) {
-	p.inFlightRequest.Store(inFlight)
-}
-
-// IsRequestInFlight returns whether an HTTP request is currently in flight.
-func (p *Puller) IsRequestInFlight() bool {
-	return p.inFlightRequest.Load()
-}
-
-// SetRequestStartTime sets the time when the current request started.
-func (p *Puller) SetRequestStartTime(t time.Time) {
-	p.requestStartTime.Store(t)
-}
-
-// GetRequestStartTime returns the time when the current request started.
-// Returns zero time if no request has been started.
-func (p *Puller) GetRequestStartTime() time.Time {
-	if t, ok := p.requestStartTime.Load().(time.Time); ok {
-		return t
-	}
-
-	return time.Time{}
-}
-
-// SetLastRequestFailed sets whether the last request failed.
-func (p *Puller) SetLastRequestFailed(failed bool) {
-	p.lastRequestFailed.Store(failed)
-}
-
-// GetCurrentStatus returns the current health status of the puller.
-// This can be used by external health checks to determine if the puller
-// is operating normally or experiencing issues.
-//
-// Returns:
-//   - HEARTBEAT_STATUS_WARNING if a request has been in flight for > 10s
-//   - HEARTBEAT_STATUS_WARNING if the last request failed
-//   - HEARTBEAT_STATUS_OK otherwise
-func (p *Puller) GetCurrentStatus() watchdog.HeartbeatStatus {
-	// Check if request has been in flight too long
-	if p.inFlightRequest.Load() {
-		if startTime := p.GetRequestStartTime(); !startTime.IsZero() {
-			if time.Since(startTime) > RequestInFlightThreshold {
-				return watchdog.HEARTBEAT_STATUS_WARNING
-			}
-		}
-	}
-
-	// Check if last request failed
-	if p.lastRequestFailed.Load() {
-		return watchdog.HEARTBEAT_STATUS_WARNING
-	}
-
-	return watchdog.HEARTBEAT_STATUS_OK
 }
 
 func (p *Puller) Start() {
@@ -155,25 +86,14 @@ func (p *Puller) pull() {
 	for p.shallRun.Load() {
 		<-ticker.C
 
+		p.dog.ReportHeartbeatStatus(watcherUUID, watchdog.HEARTBEAT_STATUS_OK)
+
 		var cookies = map[string]string{
 			"token": p.jwt.Load().(string),
 		}
 
-		// Track request state for health monitoring
-		p.SetRequestInFlight(true)
-		p.SetRequestStartTime(time.Now())
-
 		incomingMessages, _, err := http.GetRequest[backend_api_structs.PullPayload](context.Background(), http.PullEndpoint, nil, &cookies, p.insecureTLS, p.apiURL, p.logger)
-
-		// Request completed - update state
-		p.SetRequestInFlight(false)
-
 		if err != nil {
-			p.SetLastRequestFailed(true)
-
-			// Report current status to watchdog (will be WARNING due to error)
-			p.dog.ReportHeartbeatStatus(watcherUUID, p.GetCurrentStatus())
-
 			// Ignore context canceled errors
 			if errors.Is(err, context.Canceled) {
 				time.Sleep(1 * time.Second)
@@ -189,10 +109,6 @@ func (p *Puller) pull() {
 
 			continue
 		}
-
-		// Request succeeded - clear error state
-		p.SetLastRequestFailed(false)
-		p.dog.ReportHeartbeatStatus(watcherUUID, watchdog.HEARTBEAT_STATUS_OK)
 
 		error_handler.ResetErrorCounter()
 
