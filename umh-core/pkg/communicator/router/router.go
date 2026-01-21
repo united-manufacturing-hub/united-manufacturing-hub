@@ -79,9 +79,11 @@ func NewRouter(dog watchdog.Iface,
 }
 
 // SetInstanceUUID updates the Router's instance UUID.
-// This is called by SetLoginResponseForFSMv2 when authentication succeeds
-// and the real UUID is received from the backend (Bug #8 fix).
-// TODO: what is bug #8, double check if this change is actually needed
+// This is required for FSMv2 because the Router is created BEFORE authentication
+// with a placeholder UUID. When authentication completes asynchronously via
+// AuthenticateAction, the real UUID must be updated here so action replies
+// contain the correct instanceUUID.
+// Called by SetLoginResponseForFSMv2 in communication_state.go.
 // Thread-safe: uses mutex for concurrent access protection.
 func (r *Router) SetInstanceUUID(newUUID uuid.UUID) {
 	r.instanceUUIDMu.Lock()
