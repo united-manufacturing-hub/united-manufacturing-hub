@@ -63,6 +63,10 @@ func NewApplicationWorker(id, name string) *ApplicationWorker {
 // CollectObservedState returns the current observed state of the application supervisor.
 // Since the application supervisor has minimal internal state, this mainly tracks
 // the deployed desired state for comparison.
+//
+// Metrics: Initializes an empty Metrics struct for consistency with other workers.
+// The ApplicationWorker currently doesn't have a MetricsRecorder, but the Metrics
+// field is provided for interface consistency and future extensibility.
 func (w *ApplicationWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedState, error) {
 	// Check context cancellation first.
 	select {
@@ -79,6 +83,10 @@ func (w *ApplicationWorker) CollectObservedState(ctx context.Context) (fsmv2.Obs
 			Name: w.name,
 			// BaseDesiredState and ChildrenSpecs default to zero values
 		},
+		// Initialize empty metrics for interface consistency.
+		// ApplicationWorker doesn't have a MetricsRecorder currently,
+		// but this allows future metrics support without struct changes.
+		Metrics: fsmv2.NewMetrics(),
 	}, nil
 }
 
