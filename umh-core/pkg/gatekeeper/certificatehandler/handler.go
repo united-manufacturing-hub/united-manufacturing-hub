@@ -2,7 +2,6 @@ package certificatehandler
 
 import (
 	"crypto/x509"
-	"maps"
 	"sync"
 
 	"go.uber.org/zap"
@@ -69,13 +68,6 @@ func (h *CertHandler) setCertificate(email string, cert *x509.Certificate, inter
 	}
 }
 
-func (h *CertHandler) updateCerts(certs map[string]*certificateBundle) {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-
-	maps.Copy(h.userCerts, certs)
-}
-
 func (h *CertHandler) deleteCertificate(email string) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -102,13 +94,4 @@ func (h *CertHandler) deleteRootCA() {
 	defer h.mu.Unlock()
 
 	h.rootCA = nil
-}
-
-func (h *CertHandler) trackEmail(email string) {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-
-	if _, exists := h.userCerts[email]; !exists {
-		h.userCerts[email] = nil
-	}
 }

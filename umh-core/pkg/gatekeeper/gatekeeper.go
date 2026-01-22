@@ -3,6 +3,7 @@ package gatekeeper
 import (
 	"context"
 	"sync"
+	"time"
 
 	"go.uber.org/zap"
 
@@ -13,12 +14,22 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 )
 
+const subscriberTTL = 5 * time.Minute
+
+type userFetcherState struct {
+	cancel   context.CancelFunc
+	lastSeen time.Time
+}
+
 // Gatekeeper sits between Transport and Business Logic layers.
 type Gatekeeper struct {
 	validator          validator.Validator
 	certificateHandler certificatehandler.Handler
 	protocolDetector   protocol.Detector
 	compression        compression.Handler
+
+	fetcher        certificatehandler.Fetcher
+	activeFetchers sync.Map
 
 	inboundChan  <-chan *models.UMHMessage
 	outboundChan chan<- *models.UMHMessage
@@ -36,6 +47,7 @@ func New(
 	inbound <-chan *models.UMHMessage,
 	outbound chan<- *models.UMHMessage,
 	certHandler certificatehandler.Handler,
+	fetcher certificatehandler.Fetcher,
 	log *zap.SugaredLogger,
 ) *Gatekeeper {
 	return &Gatekeeper{
@@ -43,6 +55,7 @@ func New(
 		certificateHandler: certHandler,
 		protocolDetector:   protocol.NewDetector(log),
 		compression:        compression.NewHandler(log),
+		fetcher:            fetcher,
 		inboundChan:        inbound,
 		outboundChan:       outbound,
 		verifiedChan:       make(chan *models.MessageContentWithSender, 100),
@@ -61,8 +74,9 @@ func (g *Gatekeeper) Start(ctx context.Context) {
 	ctx, g.cancel = context.WithCancel(ctx)
 	g.mu.Unlock()
 
-	g.wg.Add(1)
+	g.wg.Add(2)
 	go g.processInbound(ctx)
+	go g.runFetcherCleanup(ctx)
 }
 
 // Stop gracefully shuts down the Gatekeeper.
@@ -79,6 +93,13 @@ func (g *Gatekeeper) Stop() {
 	g.mu.Unlock()
 
 	g.wg.Wait()
+
+	g.activeFetchers.Range(func(key, value any) bool {
+		state := value.(*userFetcherState)
+		state.cancel()
+		return true
+	})
+
 	close(g.verifiedChan)
 }
 
@@ -108,26 +129,94 @@ func (g *Gatekeeper) processInbound(ctx context.Context) {
 	}
 }
 
-func (g *Gatekeeper) handleMessage(_ context.Context, msg *models.UMHMessage) {
-	// 1. Get the appropriate crypto handler based on protocol version
+func (g *Gatekeeper) handleMessage(ctx context.Context, msg *models.UMHMessage) {
 	cryptHandler := g.protocolDetector.Detect(msg)
 
-	// 2. Decrypt content (no-op for v0, actual decryption for cseV1)
 	decrypted, err := cryptHandler.Decrypt([]byte(msg.Content))
 	if err != nil {
-		g.log.Warnw("Failed to decrypt message", "email", msg.Email, "error", err)
+		g.log.Warnf("Failed to decrypt message: %v", err)
 		return
 	}
 
-	// 3. Decode (base64 + decompress + unmarshal)
 	messageContent, err := g.compression.Decode(string(decrypted))
 	if err != nil {
-		g.log.Warnw("Failed to decode message", "email", msg.Email, "error", err)
+		g.log.Warnf("Failed to decode message: %v", err)
 		return
 	}
 
-	// TODO: 4. Validate permissions
-	// TODO: 5. Send to verified channel
+	if messageContent.MessageType == models.Subscribe {
+		g.manageFetcher(ctx, msg.Email, true)
+	}
 
-	g.log.Debugw("Processing message", "email", msg.Email, "messageType", messageContent.MessageType)
+	// TODO: Validate permissions
+	// TODO: Send to verified channel
+
+	g.log.Debugf("Processing message type=%s email=%s", messageContent.MessageType, msg.Email)
+}
+
+func (g *Gatekeeper) manageFetcher(ctx context.Context, email string, active bool) {
+	if active {
+		existing, loaded := g.activeFetchers.Load(email)
+		if loaded {
+			state := existing.(*userFetcherState)
+			state.lastSeen = time.Now()
+			return
+		}
+		g.addFetcher(ctx, email)
+	} else {
+		g.removeFetcher(email)
+	}
+}
+
+func (g *Gatekeeper) addFetcher(ctx context.Context, email string) {
+	fetcherCtx, cancel := context.WithCancel(ctx)
+	state := &userFetcherState{
+		cancel:   cancel,
+		lastSeen: time.Now(),
+	}
+
+	if _, loaded := g.activeFetchers.LoadOrStore(email, state); loaded {
+		cancel()
+		return
+	}
+
+	g.log.Debugf("Starting certificate fetcher for %s", email)
+	go g.fetcher.RunForUser(fetcherCtx, email)
+}
+
+func (g *Gatekeeper) removeFetcher(email string) {
+	existing, loaded := g.activeFetchers.LoadAndDelete(email)
+	if !loaded {
+		return
+	}
+
+	state := existing.(*userFetcherState)
+	state.cancel()
+	g.log.Debugf("Stopped certificate fetcher for %s", email)
+}
+
+func (g *Gatekeeper) runFetcherCleanup(ctx context.Context) {
+	defer g.wg.Done()
+
+	ticker := time.NewTicker(1 * time.Minute)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			now := time.Now()
+			g.activeFetchers.Range(func(key, value any) bool {
+				email := key.(string)
+				state := value.(*userFetcherState)
+
+				if now.Sub(state.lastSeen) > subscriberTTL {
+					g.manageFetcher(ctx, email, false)
+				}
+
+				return true
+			})
+		}
+	}
 }
