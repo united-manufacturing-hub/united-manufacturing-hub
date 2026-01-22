@@ -37,20 +37,25 @@ type ActionResult struct {
 }
 
 // ActionHistoryRecorder buffers action results during execution.
-// Actions record their outcomes here during Execute(), and the collector drains
-// the buffer during CollectObservedState() to include in ObservedState.
+// This is used INTERNALLY by the supervisor - workers should NOT use this directly.
 //
-// This enables parents to see WHY children are in their current state by reading
-// child ObservedState from CSE via StateReader.LoadObservedTyped().
+// The supervisor owns the ActionHistoryRecorder and auto-records action results
+// via ActionExecutor callback. Workers access action history read-only via
+// deps.GetActionHistory() which returns []ActionResult.
+//
+// Data flow:
+//  1. ActionExecutor.executeWorkWithRecovery() → workerCtx.actionHistory.Record()
+//  2. ActionHistoryProvider callback drains → ActionHistorySetter injects into deps
+//  3. CollectObservedState() → deps.GetActionHistory() → ObservedState.LastActionResults
 //
 // Thread-safe: Can be called concurrently from multiple goroutines.
 type ActionHistoryRecorder interface {
 	// Record adds an action result to the buffer.
-	// Called by actions after Execute() completes.
+	// Called by supervisor's ActionExecutor after Execute() completes.
 	Record(result ActionResult)
 
 	// Drain returns all buffered results and clears the buffer.
-	// Called by collector during CollectObservedState().
+	// Called by ActionHistoryProvider callback before CollectObservedState().
 	// Returns an empty slice if no results are buffered.
 	Drain() []ActionResult
 }

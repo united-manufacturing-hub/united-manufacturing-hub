@@ -93,13 +93,13 @@ type Dependencies interface {
 // BaseDependencies provides common tools for all workers.
 // Worker-specific dependencies should embed this struct.
 type BaseDependencies struct {
-	logger                *zap.SugaredLogger
-	stateReader           StateReader
-	metricsRecorder       *MetricsRecorder
-	actionHistoryRecorder ActionHistoryRecorder
-	frameworkState        *FrameworkMetrics // Set by supervisor before collection, may be stale (~1 tick)
-	workerType            string
-	workerID              string
+	logger          *zap.SugaredLogger
+	stateReader     StateReader
+	metricsRecorder *MetricsRecorder
+	actionHistory   []ActionResult    // Set by supervisor before CollectObservedState, read-only for workers
+	frameworkState  *FrameworkMetrics // Set by supervisor before collection, may be stale (~1 tick)
+	workerType      string
+	workerID        string
 }
 
 // NewBaseDependencies creates a new base dependencies with common tools.
@@ -111,13 +111,13 @@ func NewBaseDependencies(logger *zap.SugaredLogger, stateReader StateReader, ide
 	}
 
 	return &BaseDependencies{
-		logger:                logger.With("worker", identity.String()),
-		stateReader:           stateReader,
-		metricsRecorder:       NewMetricsRecorder(),
-		actionHistoryRecorder: NewInMemoryActionHistoryRecorder(),
-		frameworkState:        nil, // Set by supervisor before collection
-		workerType:            identity.WorkerType,
-		workerID:              identity.ID,
+		logger:          logger.With("worker", identity.String()),
+		stateReader:     stateReader,
+		metricsRecorder: NewMetricsRecorder(),
+		actionHistory:   nil, // Set by supervisor before CollectObservedState
+		frameworkState:  nil, // Set by supervisor before collection
+		workerType:      identity.WorkerType,
+		workerID:        identity.ID,
 	}
 }
 
@@ -154,27 +154,31 @@ func (d *BaseDependencies) MetricsRecorder() *MetricsRecorder {
 	return d.metricsRecorder
 }
 
-// GetActionHistory returns the ActionHistoryRecorder for actions to record results.
-// Actions call Record() after execution to capture success/failure and latency.
-// The collector drains this buffer during CollectObservedState() to include
-// action history in ObservedState, which parents can then read via StateReader.
+// GetActionHistory returns the action history set by the supervisor.
+// This is supervisor-managed data (like FrameworkMetrics) - workers can only read, not write.
+// The supervisor auto-records action results via ActionExecutor callback and injects
+// them into deps before CollectObservedState() is called.
 //
-// This is a WRITE-ONLY buffer. Action history written here becomes visible in
-// ObservedState only AFTER CollectObservedState() drains the buffer.
+// Workers should read this in CollectObservedState() and assign to their ObservedState:
 //
-// Example usage in an action:
+//	func (w *MyWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedState, error) {
+//	    deps := w.GetDependencies()
+//	    return MyObservedState{
+//	        LastActionResults: deps.GetActionHistory(),
+//	        // ... other fields
+//	    }, nil
+//	}
 //
-//	start := time.Now()
-//	err := doSomething()
-//	deps.GetActionHistory().Record(fsmv2.ActionResult{
-//	    ActionType: "MyAction",
-//	    Success:    err == nil,
-//	    ErrorMsg:   errorString(err),
-//	    Latency:    time.Since(start),
-//	    Timestamp:  time.Now(),
-//	})
-func (d *BaseDependencies) GetActionHistory() ActionHistoryRecorder {
-	return d.actionHistoryRecorder
+// Returns nil if no action history has been set (e.g., no actions executed yet).
+func (d *BaseDependencies) GetActionHistory() []ActionResult {
+	return d.actionHistory
+}
+
+// SetActionHistory sets the action history. Called by supervisor before CollectObservedState.
+// Workers should NOT call this directly - it's for supervisor use only.
+// This follows the same pattern as SetFrameworkState().
+func (d *BaseDependencies) SetActionHistory(history []ActionResult) {
+	d.actionHistory = history
 }
 
 // GetFrameworkState returns the framework metrics provided by the supervisor.

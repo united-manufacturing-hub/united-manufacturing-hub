@@ -71,13 +71,13 @@ type CollectorConfig[TObserved any] struct {
 	// Called BEFORE CollectObservedState so workers can access via deps.GetFrameworkState().
 	// Replaces the duck-typing injection pattern for explicit metrics copying.
 	FrameworkMetricsSetter func(*fsmv2.FrameworkMetrics)
-	// ActionHistoryProvider returns buffered action results from worker dependencies.
-	// Called AFTER CollectObservedState to drain the action history buffer.
-	// Actions record results via deps.GetActionHistory().Record() during Execute().
+	// ActionHistoryProvider returns buffered action results from supervisor's workerCtx.
+	// Called BEFORE CollectObservedState to get action results for injection into deps.
+	// The supervisor auto-records action results via ActionExecutor callback.
 	ActionHistoryProvider func() []fsmv2.ActionResult
-	// ActionHistorySetter sets action history on the observed state.
-	// Called AFTER CollectObservedState to include action results in ObservedState.
-	// ObservedState types that want action history must implement SetActionHistory().
+	// ActionHistorySetter sets action history on worker dependencies BEFORE CollectObservedState.
+	// Workers then access via deps.GetActionHistory() and assign to their ObservedState.
+	// This follows the same pattern as FrameworkMetricsSetter.
 	ActionHistorySetter func([]fsmv2.ActionResult)
 }
 
@@ -306,6 +306,14 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 		c.config.FrameworkMetricsSetter(fm)
 	}
 
+	// Set action history on worker dependencies BEFORE collection.
+	// Workers access this via deps.GetActionHistory() in CollectObservedState.
+	// This follows the same pattern as FrameworkMetrics.
+	if c.config.ActionHistoryProvider != nil && c.config.ActionHistorySetter != nil {
+		actionHistory := c.config.ActionHistoryProvider()
+		c.config.ActionHistorySetter(actionHistory)
+	}
+
 	observed, err := c.config.Worker.CollectObservedState(ctx)
 	if err != nil {
 		// Keep error logs at DEBUG for debugging
@@ -371,19 +379,13 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 		}
 	}
 
-	// Inject action history into observed state.
-	// The ActionHistoryProvider callback drains the action history buffer from worker
-	// dependencies. Actions record their outcomes via deps.GetActionHistory().Record()
-	// during Execute(). Parents can then read child action history from CSE via
-	// StateReader.LoadObservedTyped() to understand WHY children are in their current state.
-	if c.config.ActionHistoryProvider != nil {
-		actionHistory := c.config.ActionHistoryProvider()
-		if setter, ok := observed.(interface {
-			SetActionHistory([]fsmv2.ActionResult) fsmv2.ObservedState
-		}); ok {
-			observed = setter.SetActionHistory(actionHistory)
-		}
-	}
+	// NOTE: ActionHistory injection was REMOVED from collector.
+	// Collector should NOT modify ObservedState after CollectObservedState returns.
+	// ActionHistory follows the FrameworkMetrics pattern:
+	// 1. Supervisor auto-records action results via ActionExecutor callback
+	// 2. ActionHistorySetter injects into worker deps BEFORE CollectObservedState
+	// 3. Worker reads deps.GetActionHistory() and assigns to ObservedState.LastActionResults
+	// See DEPENDENCIES.md for the full pattern.
 
 	// Framework metrics are now set on worker dependencies BEFORE CollectObservedState.
 	// Workers explicitly copy from deps.GetFrameworkState() in their CollectObservedState.

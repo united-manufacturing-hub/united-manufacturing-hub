@@ -86,7 +86,9 @@ type ExamplechildObservedState struct {
 	ConnectionHealth string `json:"connection_health"`
 
 	// LastActionResults contains the action history from the last collection cycle.
-	// Actions record their outcomes via deps.GetActionHistory().Record() during Execute().
+	// This is supervisor-managed data: the supervisor auto-records action results
+	// via ActionExecutor callback and injects them into deps before CollectObservedState.
+	// Workers read deps.GetActionHistory() and assign here in CollectObservedState.
 	// Parents can read this from CSE via StateReader.LoadObservedTyped() to understand
 	// WHY children are in their current state.
 	LastActionResults []fsmv2.ActionResult `json:"last_action_results,omitempty"`
@@ -139,12 +141,6 @@ func (o ExamplechildObservedState) IsStopRequired() bool {
 	return o.IsShutdownRequested() || !o.ShouldBeRunning()
 }
 
-// SetActionHistory sets the action history on this observed state.
-// Called by Collector when ActionHistoryProvider callback is configured.
-// Actions record their outcomes via deps.GetActionHistory().Record() during Execute().
-// Parents can read child action history from CSE via StateReader.LoadObservedTyped().
-func (o ExamplechildObservedState) SetActionHistory(history []fsmv2.ActionResult) fsmv2.ObservedState {
-	o.LastActionResults = history
-
-	return o
-}
+// NOTE: SetActionHistory was REMOVED - collector should NOT modify ObservedState.
+// Workers read deps.GetActionHistory() and assign to LastActionResults in CollectObservedState.
+// This follows the same pattern as FrameworkMetrics (supervisor sets on deps, worker reads and assigns).

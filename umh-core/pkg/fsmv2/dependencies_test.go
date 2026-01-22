@@ -77,26 +77,28 @@ var _ = Describe("BaseDependencies", func() {
 	})
 
 	Describe("GetActionHistory", func() {
-		It("should return a non-nil ActionHistoryRecorder", func() {
+		It("should return nil when no action history has been set", func() {
 			identity := fsmv2.Identity{ID: "test-id", WorkerType: "test-worker"}
 			dependencies := fsmv2.NewBaseDependencies(logger, nil, identity)
-			recorder := dependencies.GetActionHistory()
-			Expect(recorder).NotTo(BeNil())
+			history := dependencies.GetActionHistory()
+			Expect(history).To(BeNil())
 		})
 
-		It("should allow recording action results", func() {
+		It("should return action history set by supervisor", func() {
 			identity := fsmv2.Identity{ID: "test-id", WorkerType: "test-worker"}
 			dependencies := fsmv2.NewBaseDependencies(logger, nil, identity)
-			recorder := dependencies.GetActionHistory()
 
-			recorder.Record(fsmv2.ActionResult{
-				ActionType: "TestAction",
-				Success:    true,
+			// Supervisor sets action history (workers can only read)
+			dependencies.SetActionHistory([]fsmv2.ActionResult{
+				{
+					ActionType: "TestAction",
+					Success:    true,
+				},
 			})
 
-			results := recorder.Drain()
-			Expect(results).To(HaveLen(1))
-			Expect(results[0].ActionType).To(Equal("TestAction"))
+			history := dependencies.GetActionHistory()
+			Expect(history).To(HaveLen(1))
+			Expect(history[0].ActionType).To(Equal("TestAction"))
 		})
 	})
 })
