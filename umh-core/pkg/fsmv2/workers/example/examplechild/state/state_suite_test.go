@@ -15,15 +15,13 @@
 package state_test
 
 import (
+	"testing"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplechild/state"
 )
 
-var _ = Describe("TryingToConnectState", func() {
-	It("should compile and instantiate", func() {
-		s := &state.TryingToConnectState{}
-		Expect(s).NotTo(BeNil())
-	})
-})
+func TestState(t *testing.T) {
+	RegisterFailHandler(Fail)
+	RunSpecs(t, "Examplechild State Suite")
+}

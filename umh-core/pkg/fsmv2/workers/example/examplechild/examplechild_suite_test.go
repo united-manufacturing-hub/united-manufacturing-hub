@@ -12,18 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package state_test
+package example_child_test
 
 import (
+	"testing"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplechild/state"
 )
 
-var _ = Describe("TryingToConnectState", func() {
-	It("should compile and instantiate", func() {
-		s := &state.TryingToConnectState{}
-		Expect(s).NotTo(BeNil())
-	})
-})
+func TestExamplechild(t *testing.T) {
+	RegisterFailHandler(Fail)
+	RunSpecs(t, "Examplechild Suite")
+}

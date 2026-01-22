@@ -12,13 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package helpers
+package helpers_test
 
 import (
-	"testing"
+	"strings"
 	"time"
 
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 )
 
 // Test types for the state adapter tests.
@@ -71,348 +75,316 @@ func (w *wrongDesired) GetState() string {
 	return "running"
 }
 
-func TestConvertSnapshot_SuccessfulConversion(t *testing.T) {
-	// Arrange
-	identity := fsmv2.Identity{
-		ID:         "test-id",
-		Name:       "test-name",
-		WorkerType: "test-worker",
-	}
-	observed := testObserved{
-		Value:     "observed-value",
-		Timestamp: time.Now(),
-	}
-	desired := &testDesired{shutdown: true}
+var _ = Describe("StateAdapter", func() {
+	Describe("ConvertSnapshot", func() {
+		Context("successful conversion", func() {
+			It("should convert snapshot with correct types", func() {
+				identity := fsmv2.Identity{
+					ID:         "test-id",
+					Name:       "test-name",
+					WorkerType: "test-worker",
+				}
+				observed := testObserved{
+					Value:     "observed-value",
+					Timestamp: time.Now(),
+				}
+				desired := &testDesired{shutdown: true}
 
-	rawSnapshot := fsmv2.Snapshot{
-		Identity: identity,
-		Observed: observed,
-		Desired:  desired,
-	}
+				rawSnapshot := fsmv2.Snapshot{
+					Identity: identity,
+					Observed: observed,
+					Desired:  desired,
+				}
 
-	// Act
-	typedSnap := ConvertSnapshot[testObserved, *testDesired](rawSnapshot)
+				typedSnap := helpers.ConvertSnapshot[testObserved, *testDesired](rawSnapshot)
 
-	// Assert
-	if typedSnap.Identity.ID != identity.ID {
-		t.Errorf("Expected Identity.ID %s, got %s", identity.ID, typedSnap.Identity.ID)
-	}
+				Expect(typedSnap.Identity.ID).To(Equal(identity.ID))
+				Expect(typedSnap.Identity.Name).To(Equal(identity.Name))
+				Expect(typedSnap.Identity.WorkerType).To(Equal(identity.WorkerType))
+				Expect(typedSnap.Observed.Value).To(Equal(observed.Value))
+				Expect(typedSnap.Desired.IsShutdownRequested()).To(BeTrue())
+			})
 
-	if typedSnap.Identity.Name != identity.Name {
-		t.Errorf("Expected Identity.Name %s, got %s", identity.Name, typedSnap.Identity.Name)
-	}
+			It("should handle value type observed", func() {
+				identity := fsmv2.Identity{
+					ID:         "test-id",
+					Name:       "test-name",
+					WorkerType: "test-worker",
+				}
+				observed := testObserved{
+					Value:     "value-type-test",
+					Timestamp: time.Now(),
+				}
+				desired := &testDesired{shutdown: false}
 
-	if typedSnap.Identity.WorkerType != identity.WorkerType {
-		t.Errorf("Expected Identity.WorkerType %s, got %s", identity.WorkerType, typedSnap.Identity.WorkerType)
-	}
+				rawSnapshot := fsmv2.Snapshot{
+					Identity: identity,
+					Observed: observed,
+					Desired:  desired,
+				}
 
-	if typedSnap.Observed.Value != observed.Value {
-		t.Errorf("Expected Observed.Value %s, got %s", observed.Value, typedSnap.Observed.Value)
-	}
+				typedSnap := helpers.ConvertSnapshot[testObserved, *testDesired](rawSnapshot)
 
-	if !typedSnap.Desired.IsShutdownRequested() {
-		t.Error("Expected Desired.IsShutdownRequested() to be true")
-	}
-}
+				Expect(typedSnap.Observed.Value).To(Equal("value-type-test"))
+			})
 
-func TestConvertSnapshot_ValueTypeObserved(t *testing.T) {
-	// Arrange - test with value type (non-pointer) for observed
-	identity := fsmv2.Identity{
-		ID:         "test-id",
-		Name:       "test-name",
-		WorkerType: "test-worker",
-	}
-	observed := testObserved{
-		Value:     "value-type-test",
-		Timestamp: time.Now(),
-	}
-	desired := &testDesired{shutdown: false}
+			It("should handle pointer type desired", func() {
+				identity := fsmv2.Identity{
+					ID:         "test-id",
+					Name:       "test-name",
+					WorkerType: "test-worker",
+				}
+				observed := testObserved{
+					Value:     "test",
+					Timestamp: time.Now(),
+				}
+				desired := &testDesired{shutdown: true}
 
-	rawSnapshot := fsmv2.Snapshot{
-		Identity: identity,
-		Observed: observed,
-		Desired:  desired,
-	}
+				rawSnapshot := fsmv2.Snapshot{
+					Identity: identity,
+					Observed: observed,
+					Desired:  desired,
+				}
 
-	// Act
-	typedSnap := ConvertSnapshot[testObserved, *testDesired](rawSnapshot)
+				typedSnap := helpers.ConvertSnapshot[testObserved, *testDesired](rawSnapshot)
 
-	// Assert
-	if typedSnap.Observed.Value != "value-type-test" {
-		t.Errorf("Expected Observed.Value 'value-type-test', got %s", typedSnap.Observed.Value)
-	}
-}
+				Expect(typedSnap.Desired).NotTo(BeNil())
+				Expect(typedSnap.Desired.IsShutdownRequested()).To(BeTrue())
+			})
+		})
 
-func TestConvertSnapshot_PointerTypeDesired(t *testing.T) {
-	// Arrange - test with pointer type for desired
-	identity := fsmv2.Identity{
-		ID:         "test-id",
-		Name:       "test-name",
-		WorkerType: "test-worker",
-	}
-	observed := testObserved{
-		Value:     "test",
-		Timestamp: time.Now(),
-	}
-	desired := &testDesired{shutdown: true}
+		Context("panic scenarios", func() {
+			It("should panic on wrong observed type", func() {
+				identity := fsmv2.Identity{
+					ID:         "test-id",
+					Name:       "test-name",
+					WorkerType: "test-worker",
+				}
+				observed := wrongObserved{Value: "wrong"}
+				desired := &testDesired{shutdown: false}
 
-	rawSnapshot := fsmv2.Snapshot{
-		Identity: identity,
-		Observed: observed,
-		Desired:  desired,
-	}
+				rawSnapshot := fsmv2.Snapshot{
+					Identity: identity,
+					Observed: observed,
+					Desired:  desired,
+				}
 
-	// Act
-	typedSnap := ConvertSnapshot[testObserved, *testDesired](rawSnapshot)
+				Expect(func() {
+					helpers.ConvertSnapshot[testObserved, *testDesired](rawSnapshot)
+				}).To(Panic())
+			})
 
-	// Assert
-	if typedSnap.Desired == nil {
-		t.Error("Expected Desired to not be nil")
-	}
+			It("should panic with message mentioning Observed", func() {
+				identity := fsmv2.Identity{
+					ID:         "test-id",
+					Name:       "test-name",
+					WorkerType: "test-worker",
+				}
+				observed := wrongObserved{Value: "wrong"}
+				desired := &testDesired{shutdown: false}
 
-	if !typedSnap.Desired.IsShutdownRequested() {
-		t.Error("Expected Desired.IsShutdownRequested() to be true")
-	}
-}
+				rawSnapshot := fsmv2.Snapshot{
+					Identity: identity,
+					Observed: observed,
+					Desired:  desired,
+				}
 
-func TestConvertSnapshot_PanicOnWrongObservedType(t *testing.T) {
-	// Arrange
-	identity := fsmv2.Identity{
-		ID:         "test-id",
-		Name:       "test-name",
-		WorkerType: "test-worker",
-	}
-	observed := wrongObserved{Value: "wrong"}
-	desired := &testDesired{shutdown: false}
+				defer func() {
+					r := recover()
+					Expect(r).NotTo(BeNil())
+					panicMsg, ok := r.(string)
+					Expect(ok).To(BeTrue())
+					Expect(panicMsg).To(ContainSubstring("Observed"))
+				}()
 
-	rawSnapshot := fsmv2.Snapshot{
-		Identity: identity,
-		Observed: observed,
-		Desired:  desired,
-	}
+				helpers.ConvertSnapshot[testObserved, *testDesired](rawSnapshot)
+			})
 
-	// Act & Assert
-	defer func() {
-		r := recover()
-		if r == nil {
-			t.Error("Expected panic for wrong observed type")
+			It("should panic on wrong desired type", func() {
+				identity := fsmv2.Identity{
+					ID:         "test-id",
+					Name:       "test-name",
+					WorkerType: "test-worker",
+				}
+				observed := testObserved{Value: "test", Timestamp: time.Now()}
+				desired := &wrongDesired{value: 42}
 
-			return
-		}
+				rawSnapshot := fsmv2.Snapshot{
+					Identity: identity,
+					Observed: observed,
+					Desired:  desired,
+				}
 
-		panicMsg, ok := r.(string)
-		if !ok {
-			t.Errorf("Expected panic message to be string, got %T", r)
+				Expect(func() {
+					helpers.ConvertSnapshot[testObserved, *testDesired](rawSnapshot)
+				}).To(Panic())
+			})
 
-			return
-		}
+			It("should panic with message mentioning Desired", func() {
+				identity := fsmv2.Identity{
+					ID:         "test-id",
+					Name:       "test-name",
+					WorkerType: "test-worker",
+				}
+				observed := testObserved{Value: "test", Timestamp: time.Now()}
+				desired := &wrongDesired{value: 42}
 
-		if panicMsg == "" {
-			t.Error("Expected non-empty panic message")
-		}
-		// Check for descriptive message
-		if !containsSubstring(panicMsg, "Observed") {
-			t.Errorf("Expected panic message to mention 'Observed', got: %s", panicMsg)
-		}
-	}()
+				rawSnapshot := fsmv2.Snapshot{
+					Identity: identity,
+					Observed: observed,
+					Desired:  desired,
+				}
 
-	ConvertSnapshot[testObserved, *testDesired](rawSnapshot)
-}
+				defer func() {
+					r := recover()
+					Expect(r).NotTo(BeNil())
+					panicMsg, ok := r.(string)
+					Expect(ok).To(BeTrue())
+					Expect(panicMsg).To(ContainSubstring("Desired"))
+				}()
 
-func TestConvertSnapshot_PanicOnWrongDesiredType(t *testing.T) {
-	// Arrange
-	identity := fsmv2.Identity{
-		ID:         "test-id",
-		Name:       "test-name",
-		WorkerType: "test-worker",
-	}
-	observed := testObserved{Value: "test", Timestamp: time.Now()}
-	desired := &wrongDesired{value: 42}
+				helpers.ConvertSnapshot[testObserved, *testDesired](rawSnapshot)
+			})
 
-	rawSnapshot := fsmv2.Snapshot{
-		Identity: identity,
-		Observed: observed,
-		Desired:  desired,
-	}
+			It("should panic on non-Snapshot input", func() {
+				notASnapshot := "not a snapshot"
 
-	// Act & Assert
-	defer func() {
-		r := recover()
-		if r == nil {
-			t.Error("Expected panic for wrong desired type")
+				Expect(func() {
+					helpers.ConvertSnapshot[testObserved, *testDesired](notASnapshot)
+				}).To(Panic())
+			})
 
-			return
-		}
+			It("should panic with message mentioning Snapshot for non-Snapshot input", func() {
+				notASnapshot := "not a snapshot"
 
-		panicMsg, ok := r.(string)
-		if !ok {
-			t.Errorf("Expected panic message to be string, got %T", r)
+				defer func() {
+					r := recover()
+					Expect(r).NotTo(BeNil())
+					panicMsg, ok := r.(string)
+					Expect(ok).To(BeTrue())
+					Expect(panicMsg).To(ContainSubstring("Snapshot"))
+				}()
 
-			return
-		}
+				helpers.ConvertSnapshot[testObserved, *testDesired](notASnapshot)
+			})
 
-		if panicMsg == "" {
-			t.Error("Expected non-empty panic message")
-		}
-		// Check for descriptive message
-		if !containsSubstring(panicMsg, "Desired") {
-			t.Errorf("Expected panic message to mention 'Desired', got: %s", panicMsg)
-		}
-	}()
+			It("should panic on nil observed", func() {
+				identity := fsmv2.Identity{
+					ID:         "test-id",
+					Name:       "test-name",
+					WorkerType: "test-worker",
+				}
+				desired := &testDesired{shutdown: false}
 
-	ConvertSnapshot[testObserved, *testDesired](rawSnapshot)
-}
+				rawSnapshot := fsmv2.Snapshot{
+					Identity: identity,
+					Observed: nil,
+					Desired:  desired,
+				}
 
-func TestConvertSnapshot_PanicOnNonSnapshotInput(t *testing.T) {
-	// Arrange - pass something that's not a Snapshot
-	notASnapshot := "not a snapshot"
+				Expect(func() {
+					helpers.ConvertSnapshot[testObserved, *testDesired](rawSnapshot)
+				}).To(Panic())
+			})
 
-	// Act & Assert
-	defer func() {
-		r := recover()
-		if r == nil {
-			t.Error("Expected panic for non-Snapshot input")
+			It("should panic with message mentioning Observed for nil observed", func() {
+				identity := fsmv2.Identity{
+					ID:         "test-id",
+					Name:       "test-name",
+					WorkerType: "test-worker",
+				}
+				desired := &testDesired{shutdown: false}
 
-			return
-		}
+				rawSnapshot := fsmv2.Snapshot{
+					Identity: identity,
+					Observed: nil,
+					Desired:  desired,
+				}
 
-		panicMsg, ok := r.(string)
-		if !ok {
-			t.Errorf("Expected panic message to be string, got %T", r)
+				defer func() {
+					r := recover()
+					Expect(r).NotTo(BeNil())
+					panicMsg, ok := r.(string)
+					Expect(ok).To(BeTrue())
+					Expect(panicMsg).To(ContainSubstring("Observed"))
+				}()
 
-			return
-		}
+				helpers.ConvertSnapshot[testObserved, *testDesired](rawSnapshot)
+			})
 
-		if !containsSubstring(panicMsg, "Snapshot") {
-			t.Errorf("Expected panic message to mention 'Snapshot', got: %s", panicMsg)
-		}
-	}()
+			It("should panic on nil desired", func() {
+				identity := fsmv2.Identity{
+					ID:         "test-id",
+					Name:       "test-name",
+					WorkerType: "test-worker",
+				}
+				observed := testObserved{Value: "test", Timestamp: time.Now()}
 
-	ConvertSnapshot[testObserved, *testDesired](notASnapshot)
-}
+				rawSnapshot := fsmv2.Snapshot{
+					Identity: identity,
+					Observed: observed,
+					Desired:  nil,
+				}
 
-func TestConvertSnapshot_NilObserved(t *testing.T) {
-	// Arrange
-	identity := fsmv2.Identity{
-		ID:         "test-id",
-		Name:       "test-name",
-		WorkerType: "test-worker",
-	}
-	desired := &testDesired{shutdown: false}
+				Expect(func() {
+					helpers.ConvertSnapshot[testObserved, *testDesired](rawSnapshot)
+				}).To(Panic())
+			})
 
-	rawSnapshot := fsmv2.Snapshot{
-		Identity: identity,
-		Observed: nil,
-		Desired:  desired,
-	}
+			It("should panic with message mentioning Desired for nil desired", func() {
+				identity := fsmv2.Identity{
+					ID:         "test-id",
+					Name:       "test-name",
+					WorkerType: "test-worker",
+				}
+				observed := testObserved{Value: "test", Timestamp: time.Now()}
 
-	// Act & Assert
-	defer func() {
-		r := recover()
-		if r == nil {
-			t.Error("Expected panic for nil observed")
+				rawSnapshot := fsmv2.Snapshot{
+					Identity: identity,
+					Observed: observed,
+					Desired:  nil,
+				}
 
-			return
-		}
+				defer func() {
+					r := recover()
+					Expect(r).NotTo(BeNil())
+					panicMsg, ok := r.(string)
+					Expect(ok).To(BeTrue())
+					Expect(panicMsg).To(ContainSubstring("Desired"))
+				}()
 
-		panicMsg, ok := r.(string)
-		if !ok {
-			t.Errorf("Expected panic message to be string, got %T", r)
+				helpers.ConvertSnapshot[testObserved, *testDesired](rawSnapshot)
+			})
+		})
+	})
 
-			return
-		}
+	Describe("TypedSnapshot", func() {
+		It("should support direct field access", func() {
+			identity := fsmv2.Identity{
+				ID:         "test-id",
+				Name:       "test-name",
+				WorkerType: "test-worker",
+			}
+			observed := testObserved{
+				Value:     "direct-access-test",
+				Timestamp: time.Now(),
+			}
+			desired := &testDesired{shutdown: true}
 
-		if !containsSubstring(panicMsg, "Observed") {
-			t.Errorf("Expected panic message to mention 'Observed', got: %s", panicMsg)
-		}
-	}()
+			typedSnap := helpers.TypedSnapshot[testObserved, *testDesired]{
+				Identity: identity,
+				Observed: observed,
+				Desired:  desired,
+			}
 
-	ConvertSnapshot[testObserved, *testDesired](rawSnapshot)
-}
-
-func TestConvertSnapshot_NilDesired(t *testing.T) {
-	// Arrange
-	identity := fsmv2.Identity{
-		ID:         "test-id",
-		Name:       "test-name",
-		WorkerType: "test-worker",
-	}
-	observed := testObserved{Value: "test", Timestamp: time.Now()}
-
-	rawSnapshot := fsmv2.Snapshot{
-		Identity: identity,
-		Observed: observed,
-		Desired:  nil,
-	}
-
-	// Act & Assert
-	defer func() {
-		r := recover()
-		if r == nil {
-			t.Error("Expected panic for nil desired")
-
-			return
-		}
-
-		panicMsg, ok := r.(string)
-		if !ok {
-			t.Errorf("Expected panic message to be string, got %T", r)
-
-			return
-		}
-
-		if !containsSubstring(panicMsg, "Desired") {
-			t.Errorf("Expected panic message to mention 'Desired', got: %s", panicMsg)
-		}
-	}()
-
-	ConvertSnapshot[testObserved, *testDesired](rawSnapshot)
-}
-
-func TestTypedSnapshot_DirectFieldAccess(t *testing.T) {
-	// Arrange
-	identity := fsmv2.Identity{
-		ID:         "test-id",
-		Name:       "test-name",
-		WorkerType: "test-worker",
-	}
-	observed := testObserved{
-		Value:     "direct-access-test",
-		Timestamp: time.Now(),
-	}
-	desired := &testDesired{shutdown: true}
-
-	typedSnap := TypedSnapshot[testObserved, *testDesired]{
-		Identity: identity,
-		Observed: observed,
-		Desired:  desired,
-	}
-
-	// Assert - verify direct field access works correctly
-	if typedSnap.Identity.ID != "test-id" {
-		t.Errorf("Expected Identity.ID 'test-id', got %s", typedSnap.Identity.ID)
-	}
-
-	if typedSnap.Observed.Value != "direct-access-test" {
-		t.Errorf("Expected Observed.Value 'direct-access-test', got %s", typedSnap.Observed.Value)
-	}
-
-	if !typedSnap.Desired.IsShutdownRequested() {
-		t.Error("Expected Desired.IsShutdownRequested() to be true")
-	}
-}
+			Expect(typedSnap.Identity.ID).To(Equal("test-id"))
+			Expect(typedSnap.Observed.Value).To(Equal("direct-access-test"))
+			Expect(typedSnap.Desired.IsShutdownRequested()).To(BeTrue())
+		})
+	})
+})
 
 // containsSubstring is a helper function to check if a string contains a substring.
 func containsSubstring(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(s) > 0 && containsSubstringHelper(s, substr))
-}
-
-func containsSubstringHelper(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-
-	return false
+	return strings.Contains(s, substr)
 }

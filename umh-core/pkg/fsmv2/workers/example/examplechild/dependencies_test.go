@@ -12,15 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package example_child
+package example_child_test
 
 import (
 	"errors"
-	"testing"
 
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 	"go.uber.org/zap"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	example_child "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplechild"
 )
 
 // MockConnectionPool is a mock implementation of ConnectionPool for testing.
@@ -42,7 +44,7 @@ func NewMockConnectionPool() *MockConnectionPool {
 	}
 }
 
-func (m *MockConnectionPool) Acquire() (Connection, error) {
+func (m *MockConnectionPool) Acquire() (example_child.Connection, error) {
 	if m.acquireErr != nil {
 		return nil, m.acquireErr
 	}
@@ -53,7 +55,7 @@ func (m *MockConnectionPool) Acquire() (Connection, error) {
 	return conn, nil
 }
 
-func (m *MockConnectionPool) Release(conn Connection) error {
+func (m *MockConnectionPool) Release(conn example_child.Connection) error {
 	if m.releaseErr != nil {
 		return m.releaseErr
 	}
@@ -69,7 +71,7 @@ func (m *MockConnectionPool) Release(conn Connection) error {
 	return nil
 }
 
-func (m *MockConnectionPool) HealthCheck(conn Connection) error {
+func (m *MockConnectionPool) HealthCheck(conn example_child.Connection) error {
 	if m.healthCheckErr != nil {
 		return m.healthCheckErr
 	}
@@ -83,37 +85,38 @@ func (m *MockConnectionPool) HealthCheck(conn Connection) error {
 	return nil
 }
 
-func TestNewExamplechildDependencies(t *testing.T) {
-	logger := zap.NewNop().Sugar()
-	mockPool := NewMockConnectionPool()
-	identity := fsmv2.Identity{ID: "test-id", WorkerType: "child"}
+var _ = Describe("ExamplechildDependencies", func() {
+	var (
+		logger   *zap.SugaredLogger
+		mockPool *MockConnectionPool
+		identity fsmv2.Identity
+	)
 
-	deps := NewExamplechildDependencies(mockPool, logger, nil, identity)
+	BeforeEach(func() {
+		logger = zap.NewNop().Sugar()
+		mockPool = NewMockConnectionPool()
+		identity = fsmv2.Identity{ID: "test-id", WorkerType: "child"}
+	})
 
-	if deps == nil {
-		t.Fatal("NewExamplechildDependencies returned nil")
-	} else if deps.GetLogger() == nil {
-		t.Error("GetLogger() returned nil")
-	}
+	Describe("NewExamplechildDependencies", func() {
+		It("should create dependencies with valid logger and pool", func() {
+			deps := example_child.NewExamplechildDependencies(mockPool, logger, nil, identity)
 
-	if deps.GetConnectionPool() == nil {
-		t.Error("GetConnectionPool() returned nil")
-	}
+			Expect(deps).NotTo(BeNil())
+			Expect(deps.GetLogger()).NotTo(BeNil())
+		})
+	})
 
-	if pool, ok := deps.GetConnectionPool().(*MockConnectionPool); !ok || pool != mockPool {
-		t.Error("GetConnectionPool() returned wrong instance")
-	}
-}
+	Describe("GetConnectionPool", func() {
+		It("should return the original connection pool", func() {
+			deps := example_child.NewExamplechildDependencies(mockPool, logger, nil, identity)
 
-func TestExamplechildDependencies_GetConnectionPool(t *testing.T) {
-	logger := zap.NewNop().Sugar()
-	mockPool := NewMockConnectionPool()
-	identity := fsmv2.Identity{ID: "test-id", WorkerType: "child"}
+			pool := deps.GetConnectionPool()
+			Expect(pool).NotTo(BeNil())
 
-	deps := NewExamplechildDependencies(mockPool, logger, nil, identity)
-
-	pool := deps.GetConnectionPool()
-	if mockPoolTyped, ok := pool.(*MockConnectionPool); !ok || mockPoolTyped != mockPool {
-		t.Error("GetConnectionPool() did not return the original pool")
-	}
-}
+			mockPoolTyped, ok := pool.(*MockConnectionPool)
+			Expect(ok).To(BeTrue())
+			Expect(mockPoolTyped).To(Equal(mockPool))
+		})
+	})
+})

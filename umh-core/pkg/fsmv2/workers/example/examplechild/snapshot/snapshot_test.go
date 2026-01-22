@@ -12,109 +12,73 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package snapshot
+package snapshot_test
 
 import (
-	"testing"
 	"time"
+
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplechild/snapshot"
 )
 
-func TestExamplechildObservedState_GetTimestamp(t *testing.T) {
-	now := time.Now()
-	observed := ExamplechildObservedState{
-		CollectedAt: now,
-	}
-
-	if observed.GetTimestamp() != now {
-		t.Errorf("GetTimestamp() = %v, want %v", observed.GetTimestamp(), now)
-	}
-}
-
-func TestExamplechildObservedState_GetObservedDesiredState(t *testing.T) {
-	observed := ExamplechildObservedState{
-		CollectedAt: time.Now(),
-		State:       "running_connected",
-	}
-
-	desired := observed.GetObservedDesiredState()
-	if desired == nil {
-		t.Fatal("GetObservedDesiredState() returned nil")
-	}
-}
-
-func TestExamplechildDesiredState_ShutdownRequested(t *testing.T) {
-	tests := []struct {
-		name     string
-		shutdown bool
-		want     bool
-	}{
-		{"not requested", false, false},
-		{"requested", true, true},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			desired := &ExamplechildDesiredState{}
-			desired.SetShutdownRequested(tt.shutdown)
-
-			if got := desired.IsShutdownRequested(); got != tt.want {
-				t.Errorf("IsShutdownRequested() = %v, want %v", got, tt.want)
+var _ = Describe("ExamplechildObservedState", func() {
+	Describe("GetTimestamp", func() {
+		It("should return the CollectedAt timestamp", func() {
+			now := time.Now()
+			observed := snapshot.ExamplechildObservedState{
+				CollectedAt: now,
 			}
+
+			Expect(observed.GetTimestamp()).To(Equal(now))
 		})
-	}
-}
+	})
 
-func TestExamplechildObservedState_IsStopRequired(t *testing.T) {
-	tests := []struct {
-		name              string
-		shutdownRequested bool
-		parentMappedState string
-		want              bool
-	}{
-		{
-			name:              "returns true when shutdown requested",
-			shutdownRequested: true,
-			parentMappedState: "running",
-			want:              true,
-		},
-		{
-			name:              "returns true when parent mapped state is stopped",
-			shutdownRequested: false,
-			parentMappedState: "stopped",
-			want:              true,
-		},
-		{
-			name:              "returns true when parent mapped state is empty",
-			shutdownRequested: false,
-			parentMappedState: "",
-			want:              true,
-		},
-		{
-			name:              "returns false when running and not shutdown requested",
-			shutdownRequested: false,
-			parentMappedState: "running",
-			want:              false,
-		},
-		{
-			name:              "returns true when both shutdown requested and parent stopped",
-			shutdownRequested: true,
-			parentMappedState: "stopped",
-			want:              true,
-		},
-	}
+	Describe("GetObservedDesiredState", func() {
+		It("should return a non-nil desired state", func() {
+			observed := snapshot.ExamplechildObservedState{
+				CollectedAt: time.Now(),
+				State:       "running_connected",
+			}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			obs := ExamplechildObservedState{
-				ExamplechildDesiredState: ExamplechildDesiredState{
-					ParentMappedState: tt.parentMappedState,
+			desired := observed.GetObservedDesiredState()
+			Expect(desired).NotTo(BeNil())
+		})
+	})
+})
+
+var _ = Describe("ExamplechildDesiredState", func() {
+	Describe("ShutdownRequested", func() {
+		DescribeTable("should correctly report shutdown status",
+			func(shutdown bool, want bool) {
+				desired := &snapshot.ExamplechildDesiredState{}
+				desired.SetShutdownRequested(shutdown)
+
+				Expect(desired.IsShutdownRequested()).To(Equal(want))
+			},
+			Entry("not requested", false, false),
+			Entry("requested", true, true),
+		)
+	})
+})
+
+var _ = Describe("ExamplechildObservedState.IsStopRequired", func() {
+	DescribeTable("should correctly determine stop requirement",
+		func(shutdownRequested bool, parentMappedState string, want bool) {
+			obs := snapshot.ExamplechildObservedState{
+				ExamplechildDesiredState: snapshot.ExamplechildDesiredState{
+					ParentMappedState: parentMappedState,
 				},
 			}
-			obs.ExamplechildDesiredState.SetShutdownRequested(tt.shutdownRequested)
+			obs.ExamplechildDesiredState.SetShutdownRequested(shutdownRequested)
 
-			if got := obs.IsStopRequired(); got != tt.want {
-				t.Errorf("IsStopRequired() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
+			Expect(obs.IsStopRequired()).To(Equal(want))
+		},
+		Entry("returns true when shutdown requested", true, "running", true),
+		Entry("returns true when parent mapped state is stopped", false, "stopped", true),
+		Entry("returns true when parent mapped state is empty", false, "", true),
+		Entry("returns false when running and not shutdown requested", false, "running", false),
+		Entry("returns true when both shutdown requested and parent stopped", true, "stopped", true),
+	)
+})

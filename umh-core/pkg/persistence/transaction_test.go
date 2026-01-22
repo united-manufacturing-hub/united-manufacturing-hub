@@ -17,7 +17,9 @@ package persistence_test
 import (
 	"context"
 	"errors"
-	"testing"
+
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 )
@@ -130,177 +132,126 @@ func (t *mockTx) Close(ctx context.Context) error {
 	panic("not implemented")
 }
 
-func TestWithTransaction_Success(t *testing.T) {
-	store := &mockStore{}
+var _ = Describe("Transaction", func() {
+	var store *mockStore
 
-	err := persistence.WithTransaction(context.Background(), store, func(tx persistence.Tx) error {
-		return nil
-	})
-	if err != nil {
-		t.Errorf("WithTransaction() returned error: %v", err)
-	}
-
-	if !store.txCommitted {
-		t.Error("Transaction was not committed")
-	}
-
-	if store.txRolledBack {
-		t.Error("Transaction was rolled back (should have been committed)")
-	}
-}
-
-func TestWithTransaction_Error(t *testing.T) {
-	store := &mockStore{}
-	expectedErr := errors.New("transaction failed")
-
-	err := persistence.WithTransaction(context.Background(), store, func(tx persistence.Tx) error {
-		return expectedErr
-	})
-	if err == nil {
-		t.Error("WithTransaction() expected error, got nil")
-	} else if !errors.Is(err, expectedErr) && err.Error() != expectedErr.Error() {
-		t.Errorf("WithTransaction() error = %v, want %v", err, expectedErr)
-	}
-
-	if store.txCommitted {
-		t.Error("Transaction was committed (should have been rolled back)")
-	}
-
-	if !store.txRolledBack {
-		t.Error("Transaction was not rolled back")
-	}
-}
-
-func TestWithTransaction_Panic(t *testing.T) {
-	store := &mockStore{}
-
-	defer func() {
-		if r := recover(); r == nil {
-			t.Error("WithTransaction() did not re-panic")
-		}
-
-		if !store.txRolledBack {
-			t.Error("Transaction was not rolled back after panic")
-		}
-
-		if store.txCommitted {
-			t.Error("Transaction was committed after panic")
-		}
-	}()
-
-	_ = persistence.WithTransaction(context.Background(), store, func(tx persistence.Tx) error {
-		panic("something went wrong")
-	})
-}
-
-func TestWithTransaction_ContextCancelled(t *testing.T) {
-	store := &mockStore{}
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-
-	err := persistence.WithTransaction(ctx, store, func(tx persistence.Tx) error {
-		return nil
+	BeforeEach(func() {
+		store = &mockStore{}
 	})
 
-	if !errors.Is(err, context.Canceled) {
-		t.Errorf("WithTransaction() error = %v, want %v", err, context.Canceled)
-	}
+	Describe("WithTransaction", func() {
+		It("should commit on success", func() {
+			err := persistence.WithTransaction(context.Background(), store, func(tx persistence.Tx) error {
+				return nil
+			})
 
-	if store.txCommitted {
-		t.Error("Transaction was committed (should have been rolled back)")
-	}
-}
+			Expect(err).NotTo(HaveOccurred())
+			Expect(store.txCommitted).To(BeTrue())
+			Expect(store.txRolledBack).To(BeFalse())
+		})
 
-func TestWithRetry_Success(t *testing.T) {
-	store := &mockStore{}
-	callCount := 0
+		It("should rollback on error", func() {
+			expectedErr := errors.New("transaction failed")
 
-	err := persistence.WithRetry(context.Background(), store, 3, func(tx persistence.Tx) error {
-		callCount++
+			err := persistence.WithTransaction(context.Background(), store, func(tx persistence.Tx) error {
+				return expectedErr
+			})
 
-		return nil
-	})
-	if err != nil {
-		t.Errorf("WithRetry() returned error: %v", err)
-	}
+			Expect(err).To(HaveOccurred())
+			Expect(store.txCommitted).To(BeFalse())
+			Expect(store.txRolledBack).To(BeTrue())
+		})
 
-	if callCount != 1 {
-		t.Errorf("Function called %d times, expected 1", callCount)
-	}
-}
+		It("should rollback on panic and re-panic", func() {
+			defer func() {
+				r := recover()
+				Expect(r).NotTo(BeNil())
+				Expect(store.txRolledBack).To(BeTrue())
+				Expect(store.txCommitted).To(BeFalse())
+			}()
 
-func TestWithRetry_Conflict(t *testing.T) {
-	store := &mockStore{}
-	callCount := 0
+			_ = persistence.WithTransaction(context.Background(), store, func(tx persistence.Tx) error {
+				panic("something went wrong")
+			})
+		})
 
-	err := persistence.WithRetry(context.Background(), store, 3, func(tx persistence.Tx) error {
-		callCount++
-		if callCount < 3 {
-			return persistence.ErrConflict
-		}
+		It("should return error when context is cancelled", func() {
+			ctx, cancel := context.WithCancel(context.Background())
+			cancel()
 
-		return nil
-	})
-	if err != nil {
-		t.Errorf("WithRetry() returned error: %v", err)
-	}
+			err := persistence.WithTransaction(ctx, store, func(tx persistence.Tx) error {
+				return nil
+			})
 
-	if callCount != 3 {
-		t.Errorf("Function called %d times, expected 3", callCount)
-	}
-}
-
-func TestWithRetry_ExceedsMaxRetries(t *testing.T) {
-	store := &mockStore{}
-	callCount := 0
-
-	err := persistence.WithRetry(context.Background(), store, 3, func(tx persistence.Tx) error {
-		callCount++
-
-		return persistence.ErrConflict
+			Expect(errors.Is(err, context.Canceled)).To(BeTrue())
+			Expect(store.txCommitted).To(BeFalse())
+		})
 	})
 
-	if !errors.Is(err, persistence.ErrConflict) {
-		t.Errorf("WithRetry() error = %v, want ErrConflict", err)
-	}
+	Describe("WithRetry", func() {
+		It("should succeed on first attempt", func() {
+			callCount := 0
 
-	if callCount != 4 {
-		t.Errorf("Function called %d times, expected 4", callCount)
-	}
-}
+			err := persistence.WithRetry(context.Background(), store, 3, func(tx persistence.Tx) error {
+				callCount++
 
-func TestWithRetry_NonConflictError(t *testing.T) {
-	store := &mockStore{}
-	callCount := 0
-	otherErr := errors.New("other error")
+				return nil
+			})
 
-	err := persistence.WithRetry(context.Background(), store, 3, func(tx persistence.Tx) error {
-		callCount++
+			Expect(err).NotTo(HaveOccurred())
+			Expect(callCount).To(Equal(1))
+		})
 
-		return otherErr
+		It("should retry on conflict until success", func() {
+			callCount := 0
+
+			err := persistence.WithRetry(context.Background(), store, 3, func(tx persistence.Tx) error {
+				callCount++
+				if callCount < 3 {
+					return persistence.ErrConflict
+				}
+
+				return nil
+			})
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(callCount).To(Equal(3))
+		})
+
+		It("should return error when max retries exceeded", func() {
+			callCount := 0
+
+			err := persistence.WithRetry(context.Background(), store, 3, func(tx persistence.Tx) error {
+				callCount++
+
+				return persistence.ErrConflict
+			})
+
+			Expect(errors.Is(err, persistence.ErrConflict)).To(BeTrue())
+			Expect(callCount).To(Equal(4))
+		})
+
+		It("should not retry for non-conflict errors", func() {
+			callCount := 0
+			otherErr := errors.New("other error")
+
+			err := persistence.WithRetry(context.Background(), store, 3, func(tx persistence.Tx) error {
+				callCount++
+
+				return otherErr
+			})
+
+			Expect(err).To(HaveOccurred())
+			Expect(callCount).To(Equal(1))
+		})
+
+		It("should return error for negative maxRetries", func() {
+			err := persistence.WithRetry(context.Background(), store, -1, func(tx persistence.Tx) error {
+				return nil
+			})
+
+			Expect(err).To(HaveOccurred())
+			Expect(store.beginTxCalled).To(Equal(0))
+		})
 	})
-	if err == nil {
-		t.Error("WithRetry() expected error, got nil")
-	} else if !errors.Is(err, otherErr) && err.Error() != otherErr.Error() {
-		t.Errorf("WithRetry() error = %v, want %v", err, otherErr)
-	}
-
-	if callCount != 1 {
-		t.Errorf("Function called %d times, expected 1 (no retry for non-conflict)", callCount)
-	}
-}
-
-func TestWithRetry_NegativeMaxRetries(t *testing.T) {
-	store := &mockStore{}
-
-	err := persistence.WithRetry(context.Background(), store, -1, func(tx persistence.Tx) error {
-		return nil
-	})
-	if err == nil {
-		t.Error("WithRetry() should return error for negative maxRetries")
-	}
-
-	if store.beginTxCalled > 0 {
-		t.Error("BeginTx should not be called with negative maxRetries")
-	}
-}
+})

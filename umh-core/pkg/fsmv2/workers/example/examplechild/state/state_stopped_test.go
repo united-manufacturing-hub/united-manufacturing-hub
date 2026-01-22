@@ -12,12 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package state
+package state_test
 
-import "testing"
+import (
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 
-// TODO: switch to ginkgo.
-func TestStoppedState(t *testing.T) {
-	state := &StoppedState{}
-	_ = state // Verify compilation
-}
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplechild/state"
+)
+
+var _ = Describe("StoppedState", func() {
+	It("should compile and instantiate", func() {
+		s := &state.StoppedState{}
+		Expect(s).NotTo(BeNil())
+	})
+})

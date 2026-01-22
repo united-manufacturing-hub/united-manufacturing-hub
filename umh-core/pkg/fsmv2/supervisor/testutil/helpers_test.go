@@ -16,77 +16,67 @@ package testutil_test
 
 import (
 	"context"
-	"testing"
+
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/testutil"
 )
 
-func TestWorkerCollectObservedState(t *testing.T) {
-	worker := &testutil.Worker{}
-	ctx := context.Background()
+var _ = Describe("Testutil Helpers", func() {
+	Describe("Worker", func() {
+		It("should collect observed state successfully", func() {
+			worker := &testutil.Worker{}
+			ctx := context.Background()
 
-	observed, err := worker.CollectObservedState(ctx)
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
+			observed, err := worker.CollectObservedState(ctx)
 
-	if observed == nil {
-		t.Fatal("expected non-nil observed state")
-	}
+			Expect(err).NotTo(HaveOccurred())
+			Expect(observed).NotTo(BeNil())
 
-	state, ok := observed.(*testutil.ObservedState)
-	if !ok {
-		t.Fatalf("expected *testutil.ObservedState, got %T", observed)
-	}
+			state, ok := observed.(*testutil.ObservedState)
+			Expect(ok).To(BeTrue())
+			Expect(state.ID).To(Equal("test-worker"))
+		})
+	})
 
-	if state.ID != "test-worker" {
-		t.Errorf("expected ID 'test-worker', got %s", state.ID)
-	}
-}
+	Describe("CreateTriangularStore", func() {
+		It("should create a non-nil store", func() {
+			store := testutil.CreateTriangularStore()
+			Expect(store).NotTo(BeNil())
+		})
+	})
 
-func TestCreateTriangularStore(t *testing.T) {
-	store := testutil.CreateTriangularStore()
-	if store == nil {
-		t.Fatal("expected non-nil store")
-	}
-}
+	Describe("CreateTriangularStoreForWorkerType", func() {
+		It("should create a non-nil store for a worker type", func() {
+			store := testutil.CreateTriangularStoreForWorkerType("s6")
+			Expect(store).NotTo(BeNil())
+		})
+	})
 
-func TestCreateTriangularStoreForWorkerType(t *testing.T) {
-	store := testutil.CreateTriangularStoreForWorkerType("s6")
-	if store == nil {
-		t.Fatal("expected non-nil store")
-	}
-}
+	Describe("Identity", func() {
+		It("should return a test identity with expected values", func() {
+			identity := testutil.Identity()
 
-func TestIdentity(t *testing.T) {
-	identity := testutil.Identity()
+			Expect(identity.ID).To(Equal("test-worker"))
+			Expect(identity.WorkerType).To(Equal("container"))
+		})
+	})
 
-	if identity.ID != "test-worker" {
-		t.Errorf("expected ID 'test-worker', got %s", identity.ID)
-	}
+	Describe("WorkerWithType", func() {
+		It("should collect observed state with custom worker type ID", func() {
+			worker := &testutil.WorkerWithType{
+				WorkerType: "s6",
+			}
+			ctx := context.Background()
 
-	if identity.WorkerType != "container" {
-		t.Errorf("expected WorkerType 'container', got %s", identity.WorkerType)
-	}
-}
+			observed, err := worker.CollectObservedState(ctx)
 
-func TestWorkerWithType(t *testing.T) {
-	worker := &testutil.WorkerWithType{
-		WorkerType: "s6",
-	}
-	ctx := context.Background()
+			Expect(err).NotTo(HaveOccurred())
 
-	observed, err := worker.CollectObservedState(ctx)
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
-
-	state, ok := observed.(*testutil.ObservedState)
-	if !ok {
-		t.Fatalf("expected *testutil.ObservedState, got %T", observed)
-	}
-
-	if state.ID != "s6-worker" {
-		t.Errorf("expected ID 's6-worker', got %s", state.ID)
-	}
-}
+			state, ok := observed.(*testutil.ObservedState)
+			Expect(ok).To(BeTrue())
+			Expect(state.ID).To(Equal("s6-worker"))
+		})
+	})
+})

@@ -16,41 +16,48 @@ package persistence_test
 
 import (
 	"context"
-	"testing"
+
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 )
 
-// TestStoreInterfaceExists verifies that the Store interface is defined.
-// This test will fail initially (RED phase) and pass once we implement the interface (GREEN phase).
-func TestStoreInterfaceExists(t *testing.T) {
-	// This should compile once the Store interface exists
-	var _ persistence.Store = nil
-}
+var _ = Describe("Store Interface", func() {
+	Describe("Interface Existence", func() {
+		It("should have Store interface defined", func() {
+			var _ persistence.Store = nil
+			Expect(true).To(BeTrue())
+		})
 
-// TestDocumentTypeExists verifies that the Document type is defined.
-func TestDocumentTypeExists(t *testing.T) {
-	// This should compile once the Document type exists
-	var _ persistence.Document = nil
-}
+		It("should have Document type defined", func() {
+			var _ persistence.Document = nil
+			Expect(true).To(BeTrue())
+		})
+	})
 
-// TestCreateCollection verifies the CreateCollection method signature exists.
-func TestCreateCollection(t *testing.T) {
-	ctx := context.Background()
+	Describe("CreateCollection", func() {
+		It("should have correct method signature", func() {
+			ctx := context.Background()
 
-	// We're not testing implementation yet, just interface definition
-	// This verifies method signature exists with correct parameters
-	var store persistence.Store
-	if store != nil {
-		_ = store.CreateCollection(ctx, "test_collection", nil)
-	}
-}
+			var store persistence.Store
+			if store != nil {
+				_ = store.CreateCollection(ctx, "test_collection", nil)
+			}
+			Expect(true).To(BeTrue())
+		})
+	})
 
-// TestTransactionInterface verifies the Tx interface extends Store.
-func TestTransactionInterface(t *testing.T) {
-	var _ persistence.Tx = nil
+	Describe("Transaction Interface", func() {
+		It("should have Tx interface defined", func() {
+			var _ persistence.Tx = nil
+			Expect(true).To(BeTrue())
+		})
 
-	var tx persistence.Tx
-
-	var _ persistence.Store = tx
-}
+		It("should have Tx extend Store interface", func() {
+			var tx persistence.Tx
+			var _ persistence.Store = tx
+			Expect(true).To(BeTrue())
+		})
+	})
+})

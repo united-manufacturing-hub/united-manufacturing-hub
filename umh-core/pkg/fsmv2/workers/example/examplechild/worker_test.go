@@ -12,79 +12,77 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package example_child
+package example_child_test
 
 import (
 	"context"
-	"testing"
 
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 	"go.uber.org/zap"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	fsmv2types "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
+	example_child "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplechild"
 )
 
-func TestNewChildWorker(t *testing.T) {
-	logger := zap.NewNop().Sugar()
-	mockPool := NewMockConnectionPool()
-	identity := fsmv2.Identity{ID: "test-id", Name: "test-child"}
+var _ = Describe("ChildWorker", func() {
+	var (
+		logger   *zap.SugaredLogger
+		mockPool *MockConnectionPool
+		identity fsmv2.Identity
+	)
 
-	worker, err := NewChildWorker(identity, mockPool, logger, nil)
-	if err != nil {
-		t.Fatalf("NewChildWorker() error = %v", err)
-	}
+	BeforeEach(func() {
+		logger = zap.NewNop().Sugar()
+		mockPool = NewMockConnectionPool()
+		identity = fsmv2.Identity{ID: "test-id", Name: "test-child"}
+	})
 
-	if worker == nil {
-		t.Fatal("NewChildWorker returned nil")
-	}
+	Describe("NewChildWorker", func() {
+		It("should create a worker successfully", func() {
+			worker, err := example_child.NewChildWorker(identity, mockPool, logger, nil)
 
-	if worker.GetInitialState() == nil {
-		t.Error("GetInitialState() returned nil")
-	}
-}
+			Expect(err).NotTo(HaveOccurred())
+			Expect(worker).NotTo(BeNil())
+		})
 
-func TestChildWorker_CollectObservedState(t *testing.T) {
-	logger := zap.NewNop().Sugar()
-	mockPool := NewMockConnectionPool()
-	identity := fsmv2.Identity{ID: "test-id", Name: "test-child"}
+		It("should have a non-nil initial state", func() {
+			worker, err := example_child.NewChildWorker(identity, mockPool, logger, nil)
 
-	worker, err := NewChildWorker(identity, mockPool, logger, nil)
-	if err != nil {
-		t.Fatalf("NewChildWorker() error = %v", err)
-	}
+			Expect(err).NotTo(HaveOccurred())
+			Expect(worker.GetInitialState()).NotTo(BeNil())
+		})
+	})
 
-	observed, err := worker.CollectObservedState(context.Background())
-	if err != nil {
-		t.Fatalf("CollectObservedState() error = %v", err)
-	}
+	Describe("CollectObservedState", func() {
+		It("should return a valid observed state", func() {
+			worker, err := example_child.NewChildWorker(identity, mockPool, logger, nil)
+			Expect(err).NotTo(HaveOccurred())
 
-	if observed == nil {
-		t.Fatal("CollectObservedState() returned nil")
-	}
-}
+			observed, err := worker.CollectObservedState(context.Background())
 
-func TestChildWorker_DeriveDesiredState(t *testing.T) {
-	logger := zap.NewNop().Sugar()
-	mockPool := NewMockConnectionPool()
-	identity := fsmv2.Identity{ID: "test-id", Name: "test-child"}
+			Expect(err).NotTo(HaveOccurred())
+			Expect(observed).NotTo(BeNil())
+		})
+	})
 
-	worker, err := NewChildWorker(identity, mockPool, logger, nil)
-	if err != nil {
-		t.Fatalf("NewChildWorker() error = %v", err)
-	}
+	Describe("DeriveDesiredState", func() {
+		It("should return running state for empty config", func() {
+			worker, err := example_child.NewChildWorker(identity, mockPool, logger, nil)
+			Expect(err).NotTo(HaveOccurred())
 
-	spec := fsmv2types.UserSpec{
-		Config:    "",
-		Variables: fsmv2types.VariableBundle{},
-	}
+			spec := config.UserSpec{
+				Config:    "",
+				Variables: config.VariableBundle{},
+			}
 
-	desiredIface, err := worker.DeriveDesiredState(spec)
-	if err != nil {
-		t.Fatalf("DeriveDesiredState() error = %v", err)
-	}
+			desiredIface, err := worker.DeriveDesiredState(spec)
 
-	desired := desiredIface.(*fsmv2types.DesiredState)
-	if desired.State != fsmv2types.DesiredStateRunning {
-		t.Errorf("DeriveDesiredState() state = %v, want %s", desired.State, fsmv2types.DesiredStateRunning)
-	}
-}
+			Expect(err).NotTo(HaveOccurred())
+
+			desired := desiredIface.(*config.DesiredState)
+			Expect(desired.State).To(Equal(config.DesiredStateRunning))
+		})
+	})
+})
