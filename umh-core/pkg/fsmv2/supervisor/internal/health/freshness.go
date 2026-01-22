@@ -50,7 +50,7 @@ func (f *FreshnessChecker) extractTimestamp(snapshot *fsmv2.Snapshot) (time.Time
 	}
 
 	// Prefer typed interface (returns struct's CollectedAt field)
-	if timestampProvider, ok := snapshot.Observed.(interface{ GetTimestamp() time.Time }); ok {
+	if timestampProvider, ok := snapshot.Observed.(fsmv2.TimestampProvider); ok {
 		return timestampProvider.GetTimestamp(), true
 	}
 

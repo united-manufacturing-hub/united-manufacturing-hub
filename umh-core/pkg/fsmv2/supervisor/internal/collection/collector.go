@@ -369,7 +369,7 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 
 	// Extract and log observation timestamp
 	var observationTimestamp time.Time
-	if timestampProvider, ok := observed.(interface{ GetTimestamp() time.Time }); ok {
+	if timestampProvider, ok := observed.(fsmv2.TimestampProvider); ok {
 		observationTimestamp = timestampProvider.GetTimestamp()
 		// Per-collection log moved to TRACE for scalability
 		c.logTrace("observation_collected",

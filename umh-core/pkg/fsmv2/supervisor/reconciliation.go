@@ -138,7 +138,7 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 	}
 
 	// Log loaded observation details
-	if timestampProvider, ok := any(observed).(interface{ GetTimestamp() time.Time }); ok {
+	if timestampProvider, ok := any(observed).(fsmv2.TimestampProvider); ok {
 		observationTimestamp := timestampProvider.GetTimestamp()
 		s.logTrace("observation_timestamp_loaded",
 			"stage", "data_freshness",
@@ -212,7 +212,7 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 		// Observation must be NEWER than last action to unlock gating
 		var currentObsTime time.Time
 
-		if timestampProvider, ok := any(observed).(interface{ GetTimestamp() time.Time }); ok {
+		if timestampProvider, ok := any(observed).(fsmv2.TimestampProvider); ok {
 			currentObsTime = timestampProvider.GetTimestamp()
 		}
 
@@ -298,7 +298,7 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 
 		var currentObsTime time.Time
 
-		if timestampProvider, ok := any(observed).(interface{ GetTimestamp() time.Time }); ok {
+		if timestampProvider, ok := any(observed).(fsmv2.TimestampProvider); ok {
 			currentObsTime = timestampProvider.GetTimestamp()
 		}
 
@@ -1037,7 +1037,7 @@ func (s *Supervisor[TObserved, TDesired]) checkDataFreshness(snapshot *fsmv2.Sna
 	)
 
 	// ObservedState interface requires GetTimestamp() - no Document fallback needed
-	if timestampProvider, ok := snapshot.Observed.(interface{ GetTimestamp() time.Time }); ok {
+	if timestampProvider, ok := snapshot.Observed.(fsmv2.TimestampProvider); ok {
 		collectedAt = timestampProvider.GetTimestamp()
 		hasTimestamp = true
 	}

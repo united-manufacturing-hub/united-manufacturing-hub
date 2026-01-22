@@ -99,6 +99,16 @@ type ObservedState interface {
 	GetTimestamp() time.Time
 }
 
+// TimestampProvider allows access to observation timestamps.
+// Implemented by ObservedState types that track when observations were made.
+// Used by collector, reconciliation, and health checks to verify data freshness.
+//
+// This is a minimal interface extracted from ObservedState to enable type assertions
+// without requiring the full ObservedState interface. Prefer this for timestamp-only checks.
+type TimestampProvider interface {
+	GetTimestamp() time.Time
+}
+
 // DesiredState represents what we want the system to be.
 // Derived from user configuration via DeriveDesiredState().
 //
