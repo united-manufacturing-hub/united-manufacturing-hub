@@ -15,7 +15,6 @@
 package helpers_test
 
 import (
-	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -383,8 +382,3 @@ var _ = Describe("StateAdapter", func() {
 		})
 	})
 })
-
-// containsSubstring is a helper function to check if a string contains a substring.
-func containsSubstring(s, substr string) bool {
-	return strings.Contains(s, substr)
-}

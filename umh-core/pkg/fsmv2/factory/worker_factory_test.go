@@ -16,7 +16,6 @@ package factory_test
 
 import (
 	"context"
-	"strings"
 	"sync"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -225,7 +224,7 @@ var _ = Describe("WorkerFactory", func() {
 			types := factory.ListRegisteredTypes()
 
 			Expect(types).NotTo(BeNil())
-			Expect(types).To(HaveLen(0))
+			Expect(types).To(BeEmpty())
 		})
 
 		It("should return single type after one registration", func() {
@@ -455,8 +454,3 @@ var _ = Describe("WorkerFactory", func() {
 		)
 	})
 })
-
-// contains checks if string s contains substring substr.
-func contains(s, substr string) bool {
-	return strings.Contains(s, substr)
-}
