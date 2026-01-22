@@ -461,10 +461,11 @@ func (e *WorkerMetricsExporter) getOrCreateCounter(name string) *prometheus.Coun
 	}
 
 	// Create new counter with dynamic registration
+	// Use subsystem "fsmv2_worker" for consistency with other fsmv2 metrics (umh_fsmv2_worker_*)
 	counter := promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: namespace,
-			Subsystem: "worker",
+			Subsystem: subsystem + "_worker",
 			Name:      name,
 			Help:      "Worker metric: " + name,
 		},
@@ -481,10 +482,11 @@ func (e *WorkerMetricsExporter) getOrCreateGauge(name string) *prometheus.GaugeV
 	}
 
 	// Create new gauge with dynamic registration
+	// Use subsystem "fsmv2_worker" for consistency with other fsmv2 metrics (umh_fsmv2_worker_*)
 	gauge := promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: namespace,
-			Subsystem: "worker",
+			Subsystem: subsystem + "_worker",
 			Name:      name,
 			Help:      "Worker metric: " + name,
 		},
