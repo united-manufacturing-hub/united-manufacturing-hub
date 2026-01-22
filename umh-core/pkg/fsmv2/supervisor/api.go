@@ -271,9 +271,40 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity fsmv2.Identity, wor
 				}
 			}
 		},
+		// ActionHistoryProvider returns buffered action results from workerCtx.actionHistory.
+		// Called BEFORE CollectObservedState to drain the action history buffer.
+		// The supervisor auto-records action results via ActionExecutor callback.
+		ActionHistoryProvider: func() []fsmv2.ActionResult {
+			if workerCtx == nil || workerCtx.actionHistory == nil {
+				return nil
+			}
+			return workerCtx.actionHistory.Drain()
+		},
+		// ActionHistorySetter sets action history on worker dependencies BEFORE CollectObservedState.
+		// Workers then access this via deps.GetActionHistory() and assign to their ObservedState.
+		// This follows the same pattern as FrameworkMetricsSetter.
+		ActionHistorySetter: func(history []fsmv2.ActionResult) {
+			type depsGetter interface {
+				GetDependenciesAny() any
+			}
+			if dg, ok := worker.(depsGetter); ok {
+				deps := dg.GetDependenciesAny()
+				if setter, ok := deps.(interface{ SetActionHistory([]fsmv2.ActionResult) }); ok {
+					setter.SetActionHistory(history)
+				}
+			}
+		},
 	})
 
 	executor := execution.NewActionExecutor(10, s.workerType, identity, workerLogger)
+
+	// Create action history buffer for this worker (supervisor-owned)
+	actionHistoryBuffer := fsmv2.NewInMemoryActionHistoryRecorder()
+
+	// Set up executor callback to auto-record action results to actionHistory
+	executor.SetOnActionComplete(func(result fsmv2.ActionResult) {
+		actionHistoryBuffer.Record(result)
+	})
 
 	// Load previous StartupCount from CSE (if exists) for persistent counter
 	// This counter survives restarts and is incremented on each AddWorker()
@@ -303,6 +334,7 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity fsmv2.Identity, wor
 		currentState:      worker.GetInitialState(),
 		collector:         collector,
 		executor:          executor,
+		actionHistory:     actionHistoryBuffer, // Supervisor-owned buffer for action results
 		stateEnteredAt:    time.Now(),
 		stateTransitions:  make(map[string]int64),
 		stateDurations:    make(map[string]time.Duration),

@@ -29,21 +29,22 @@ import (
 )
 
 type ActionExecutor struct {
-	supervisorID   string
-	identity       fsmv2.Identity // Worker identity for logging
-	workerCount    int
-	actionQueue    chan actionWork
-	inProgress     map[string]bool
-	mu             sync.RWMutex
-	ctx            context.Context
-	cancel         context.CancelFunc
-	wg             sync.WaitGroup
-	timeouts       map[string]time.Duration
-	defaultTimeout time.Duration
-	metricsCancel  context.CancelFunc
-	metricsWg      sync.WaitGroup
-	logger         *zap.SugaredLogger
-	closeOnce      sync.Once // Ensures actionQueue is closed only once
+	supervisorID     string
+	identity         fsmv2.Identity // Worker identity for logging
+	workerCount      int
+	actionQueue      chan actionWork
+	inProgress       map[string]bool
+	mu               sync.RWMutex
+	ctx              context.Context
+	cancel           context.CancelFunc
+	wg               sync.WaitGroup
+	timeouts         map[string]time.Duration
+	defaultTimeout   time.Duration
+	metricsCancel    context.CancelFunc
+	metricsWg        sync.WaitGroup
+	logger           *zap.SugaredLogger
+	closeOnce        sync.Once                     // Ensures actionQueue is closed only once
+	onActionComplete func(result fsmv2.ActionResult) // Called after each action execution (for auto-recording to ActionHistory)
 }
 
 type actionWork struct {
@@ -170,6 +171,21 @@ func (ae *ActionExecutor) executeWorkWithRecovery(work actionWork) {
 		}
 
 		metrics.RecordActionExecutionDuration(ae.supervisorID, work.action.Name(), status, duration)
+
+		// Auto-record to ActionHistory if callback is set
+		if ae.onActionComplete != nil {
+			errorMsg := ""
+			if err != nil {
+				errorMsg = err.Error()
+			}
+			ae.onActionComplete(fsmv2.ActionResult{
+				Timestamp:  time.Now(),
+				ActionType: work.action.Name(),
+				Success:    status == "success",
+				ErrorMsg:   errorMsg,
+				Latency:    duration,
+			})
+		}
 	}()
 
 	// Execute action
@@ -299,6 +315,15 @@ func (ae *ActionExecutor) GetActiveActionCount() int {
 	defer ae.mu.RUnlock()
 
 	return len(ae.inProgress)
+}
+
+// SetOnActionComplete sets a callback to be called after each action execution.
+// This is used by the supervisor to auto-record action results to ActionHistory.
+// The callback receives an ActionResult with action name, success/failure, error message, and latency.
+//
+// Thread-safe: This method should be called during executor setup, before Start().
+func (ae *ActionExecutor) SetOnActionComplete(fn func(fsmv2.ActionResult)) {
+	ae.onActionComplete = fn
 }
 
 func (ae *ActionExecutor) Shutdown() {

@@ -119,6 +119,7 @@ type WorkerContext[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] s
 	executor          *execution.ActionExecutor
 	actionPending     bool
 	lastActionObsTime time.Time
+	actionHistory     *fsmv2.InMemoryActionHistoryRecorder // Supervisor-owned buffer for action results
 
 	// Supervisor-internal state tracking (injected into FrameworkMetrics for worker access).
 	//
