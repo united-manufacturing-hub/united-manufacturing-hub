@@ -247,6 +247,7 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity fsmv2.Identity, wor
 				CumulativeTimeByStateMs: cumulativeTimeMs,
 				CollectorRestarts:       workerCtx.collectorRestarts,
 				StartupCount:            workerCtx.startupCount,
+				StateReason:             workerCtx.currentStateReason,
 			}
 		},
 		// FrameworkMetricsSetter sets framework metrics on worker dependencies BEFORE CollectObservedState.
@@ -277,10 +278,13 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity fsmv2.Identity, wor
 	// Load previous StartupCount from CSE (if exists) for persistent counter
 	// This counter survives restarts and is incremented on each AddWorker()
 	var startupCount int64 = 1 // Default to 1 for first-time workers
+
 	loadCtx, loadCancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer loadCancel()
+
 	var prevObserved TObserved
+
 	loadErr := s.store.LoadObservedTyped(loadCtx, s.workerType, identity.ID, &prevObserved)
-	loadCancel()
 	if loadErr == nil {
 		// Try to extract previous StartupCount from FrameworkMetrics
 		// Use fsmv2.MetricsHolder interface for type assertion (value receiver methods)
@@ -337,9 +341,11 @@ func (s *Supervisor[TObserved, TDesired]) RemoveWorker(ctx context.Context, work
 
 	// Cleanup state duration metric for removed worker
 	workerCtx.mu.RLock()
+
 	if workerCtx.currentState != nil {
 		metrics.CleanupStateDuration(s.workerType, workerID, workerCtx.currentState.String())
 	}
+
 	workerCtx.mu.RUnlock()
 
 	s.logger.Infow("worker_removed")
@@ -466,6 +472,45 @@ func (s *Supervisor[TObserved, TDesired]) getMappedParentState() string {
 // Used by InfrastructureHealthChecker.CheckChildConsistency() to detect unhealthy children.
 func (s *Supervisor[TObserved, TDesired]) isCircuitOpen() bool {
 	return s.circuitOpen.Load()
+}
+
+// IsCircuitOpen implements SupervisorInterface.
+// Returns true if the circuit breaker is open (infrastructure failure detected).
+// Used by ChildInfo to report infrastructure status to parents.
+func (s *Supervisor[TObserved, TDesired]) IsCircuitOpen() bool {
+	return s.circuitOpen.Load()
+}
+
+// IsObservationStale implements SupervisorInterface.
+// Returns true if the last observation is older than the stale threshold.
+// Used by ChildInfo to report infrastructure status to parents.
+func (s *Supervisor[TObserved, TDesired]) IsObservationStale() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	// Check first worker's state (child supervisors typically have one worker)
+	for _, workerCtx := range s.workers {
+		if workerCtx.collector == nil {
+			return true // No collector = stale
+		}
+
+		// Get last observation timestamp from worker context
+		workerCtx.mu.RLock()
+		stateEnteredAt := workerCtx.stateEnteredAt
+		workerCtx.mu.RUnlock()
+
+		// If no state entered time, assume stale (not yet observed)
+		if stateEnteredAt.IsZero() {
+			return true
+		}
+
+		// Use stale threshold from collector health config
+		age := time.Since(stateEnteredAt)
+		return age > s.collectorHealth.staleThreshold
+	}
+
+	// No workers = stale
+	return true
 }
 
 // setMappedParentState implements SupervisorInterface.
@@ -604,6 +649,28 @@ func (s *Supervisor[TObserved, TDesired]) GetCurrentStateName() string {
 	}
 
 	return "unknown"
+}
+
+// GetCurrentStateNameAndReason returns the current FSM state name and reason.
+// Returns ("unknown", "") if no worker or state is set.
+// Used by ChildInfo to populate StateReason field for parent workers.
+func (s *Supervisor[TObserved, TDesired]) GetCurrentStateNameAndReason() (string, string) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	// Get the first (and typically only) worker's current state and reason
+	for _, workerCtx := range s.workers {
+		workerCtx.mu.RLock()
+		defer workerCtx.mu.RUnlock()
+
+		if workerCtx.currentState != nil {
+			return workerCtx.currentState.String(), workerCtx.currentStateReason
+		}
+
+		return "unknown", ""
+	}
+
+	return "unknown", ""
 }
 
 // GetWorkerType returns the type of workers this supervisor manages.

@@ -71,6 +71,14 @@ type CollectorConfig[TObserved any] struct {
 	// Called BEFORE CollectObservedState so workers can access via deps.GetFrameworkState().
 	// Replaces the duck-typing injection pattern for explicit metrics copying.
 	FrameworkMetricsSetter func(*fsmv2.FrameworkMetrics)
+	// ActionHistoryProvider returns buffered action results from worker dependencies.
+	// Called AFTER CollectObservedState to drain the action history buffer.
+	// Actions record results via deps.GetActionHistory().Record() during Execute().
+	ActionHistoryProvider func() []fsmv2.ActionResult
+	// ActionHistorySetter sets action history on the observed state.
+	// Called AFTER CollectObservedState to include action results in ObservedState.
+	// ObservedState types that want action history must implement SetActionHistory().
+	ActionHistorySetter func([]fsmv2.ActionResult)
 }
 
 // Collector manages the observation loop lifecycle and data collection.
@@ -360,6 +368,20 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 		childrenView := c.config.ChildrenViewProvider()
 		if setter, ok := observed.(interface{ SetChildrenView(any) fsmv2.ObservedState }); ok {
 			observed = setter.SetChildrenView(childrenView)
+		}
+	}
+
+	// Inject action history into observed state.
+	// The ActionHistoryProvider callback drains the action history buffer from worker
+	// dependencies. Actions record their outcomes via deps.GetActionHistory().Record()
+	// during Execute(). Parents can then read child action history from CSE via
+	// StateReader.LoadObservedTyped() to understand WHY children are in their current state.
+	if c.config.ActionHistoryProvider != nil {
+		actionHistory := c.config.ActionHistoryProvider()
+		if setter, ok := observed.(interface {
+			SetActionHistory([]fsmv2.ActionResult) fsmv2.ObservedState
+		}); ok {
+			observed = setter.SetActionHistory(actionHistory)
 		}
 	}
 

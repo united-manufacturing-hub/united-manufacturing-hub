@@ -306,8 +306,7 @@ children:
         instanceUUID: "test-instance-uuid"
         authToken: "%s"
         timeout: "5s"
-        state: "running"
-`, serverURL, authToken) // TODO: why state=running? it should always be running?
+`, serverURL, authToken)
 
 	// Create scenario with dynamic config
 	testScenario := Scenario{
@@ -320,7 +319,6 @@ children:
 	logger := cfg.Logger
 	if logger == nil {
 		devLogger, _ := zap.NewDevelopment()
-		// TODO: why our own logger here?
 		logger = devLogger.Sugar()
 	}
 

@@ -399,13 +399,20 @@ type FrameworkMetrics struct {
 	// Loaded from CSE on AddWorker(), incremented, and persisted.
 	// Use this to detect restart loops or track worker lifetime.
 	StartupCount int64 `json:"startup_count"`
+
+	// === State Information ===
+
+	// StateReason is a human-readable explanation for the current state.
+	// Set by the supervisor during state transitions from state.Reason().
+	// Useful for understanding WHY the worker is in its current state.
+	StateReason string `json:"state_reason,omitempty"`
 }
 
 // MetricsContainer groups framework and worker metrics together.
 // Named type (not anonymous struct) for testability, godoc, and error messages.
 //
-// JSON structure: {"framework":{...},"worker":{...}}
-// Access pattern: snap.Observed.Metrics.Framework.TimeInCurrentStateMs
+// JSON structure: {"framework":{...},"worker":{...}}.
+// Access pattern: snap.Observed.Metrics.Framework.TimeInCurrentStateMs.
 type MetricsContainer struct {
 	// Framework contains supervisor-computed metrics (copied from deps by worker).
 	Framework FrameworkMetrics `json:"framework,omitempty"`

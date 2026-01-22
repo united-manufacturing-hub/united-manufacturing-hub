@@ -80,6 +80,8 @@ type ExampleslowObservedState struct {
 	LastError        error  `json:"last_error,omitempty"`
 	ConnectAttempts  int    `json:"connect_attempts"`
 	ConnectionHealth string `json:"connection_health"`
+
+	fsmv2.MetricsEmbedder `json:",inline"` // Framework and worker metrics for Prometheus export
 }
 
 func (o ExampleslowObservedState) GetTimestamp() time.Time {

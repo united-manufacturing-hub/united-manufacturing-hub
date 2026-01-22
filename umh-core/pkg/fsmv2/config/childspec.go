@@ -293,6 +293,9 @@ type ChildInfo struct {
 	IsHealthy     bool   // Whether the child is considered healthy
 	ErrorMsg      string // Error message if unhealthy (empty if healthy)
 	HierarchyPath string // Full path in the worker hierarchy (e.g., "app.parent.child")
+	// Infrastructure status fields (framework-tracked)
+	IsStale       bool // True if observation age > stale threshold (~10s)
+	IsCircuitOpen bool // True if infrastructure failure detected (circuit breaker open)
 }
 
 // ChildrenView provides read-only access to a parent worker's children.

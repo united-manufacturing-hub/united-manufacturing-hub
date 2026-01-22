@@ -57,8 +57,6 @@ func (s *TryingToStartState) String() string {
 	return helpers.DeriveStateName(s)
 }
 
-// TODO: reason should include the snap.Observed.ChildrenHealthy > 0 && snap.Observed.ChildrenUnhealthy == 0
-
 func (s *TryingToStartState) Reason() string {
-	return "Loading configuration and spawning children"
+	return "Waiting for all children to become healthy"
 }

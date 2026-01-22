@@ -351,6 +351,9 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 		// Update current state
 		workerCtx.currentState = nextState
 
+		// Capture state reason (exposed via FrameworkMetrics and GetCurrentStateNameAndReason)
+		workerCtx.currentStateReason = nextState.Reason()
+
 		// Update state entered timestamp
 		workerCtx.stateEnteredAt = now
 
@@ -369,6 +372,7 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 
 	// Update state duration gauge (every tick, not just transitions)
 	workerCtx.mu.RLock()
+
 	if workerCtx.currentState != nil && !workerCtx.stateEnteredAt.IsZero() {
 		metrics.RecordStateDuration(
 			s.workerType,
@@ -377,6 +381,7 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 			time.Since(workerCtx.stateEnteredAt),
 		)
 	}
+
 	workerCtx.mu.RUnlock()
 
 	// Process signal

@@ -428,6 +428,34 @@ var _ = Describe("FSMv2 Architecture Validation", func() {
 				}
 			})
 		})
+
+		Describe("Framework Metrics Copy (Invariant: Workers Copy Metrics from Deps)", func() {
+			It("should call GetFrameworkState() when GetDependencies() is used in CollectObservedState", func() {
+				violations := validator.ValidateFrameworkMetricsCopy(getFsmv2Dir())
+				if len(violations) > 0 {
+					message := validator.FormatViolationsWithPattern(
+						"Framework Metrics Copy Violations",
+						violations,
+						"MISSING_FRAMEWORK_METRICS_COPY",
+					)
+					Fail(message)
+				}
+			})
+		})
+
+		Describe("MetricsEmbedder Value Receivers (Invariant: Interface Satisfaction)", func() {
+			It("should use value receivers for MetricsHolder interface methods", func() {
+				violations := validator.ValidateMetricsEmbedderValueReceivers(getFsmv2Dir())
+				if len(violations) > 0 {
+					message := validator.FormatViolationsWithPattern(
+						"MetricsEmbedder Receiver Violations",
+						violations,
+						"POINTER_RECEIVER_ON_METRICS_EMBEDDER",
+					)
+					Fail(message)
+				}
+			})
+		})
 	})
 })
 

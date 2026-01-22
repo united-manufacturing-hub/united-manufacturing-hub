@@ -85,6 +85,12 @@ type ExamplechildObservedState struct {
 	ConnectAttempts  int    `json:"connect_attempts"`
 	ConnectionHealth string `json:"connection_health"`
 
+	// LastActionResults contains the action history from the last collection cycle.
+	// Actions record their outcomes via deps.GetActionHistory().Record() during Execute().
+	// Parents can read this from CSE via StateReader.LoadObservedTyped() to understand
+	// WHY children are in their current state.
+	LastActionResults []fsmv2.ActionResult `json:"last_action_results,omitempty"`
+
 	// Embedded metrics for both framework and worker metrics.
 	// Framework metrics provide time-in-state via GetFrameworkMetrics().TimeInCurrentStateMs
 	// and state entered time via GetFrameworkMetrics().StateEnteredAtUnix.
@@ -131,4 +137,14 @@ func (o ExamplechildObservedState) SetParentMappedState(state string) fsmv2.Obse
 //   - !ShouldBeRunning() - parent no longer wants child running
 func (o ExamplechildObservedState) IsStopRequired() bool {
 	return o.IsShutdownRequested() || !o.ShouldBeRunning()
+}
+
+// SetActionHistory sets the action history on this observed state.
+// Called by Collector when ActionHistoryProvider callback is configured.
+// Actions record their outcomes via deps.GetActionHistory().Record() during Execute().
+// Parents can read child action history from CSE via StateReader.LoadObservedTyped().
+func (o ExamplechildObservedState) SetActionHistory(history []fsmv2.ActionResult) fsmv2.ObservedState {
+	o.LastActionResults = history
+
+	return o
 }

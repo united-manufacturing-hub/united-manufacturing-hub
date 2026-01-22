@@ -622,3 +622,164 @@ func checkDeriveDesiredStateReturns(filename string) []Violation {
 
 	return violations
 }
+
+// ValidateFrameworkMetricsCopy checks that workers with dependencies copy framework metrics.
+// Workers that call GetDependencies() in CollectObservedState and have MetricsEmbedder
+// must also call GetFrameworkState() to copy framework metrics.
+func ValidateFrameworkMetricsCopy(baseDir string) []Violation {
+	var violations []Violation
+
+	workerFiles := FindWorkerFiles(baseDir)
+
+	for _, file := range workerFiles {
+		fileViolations := checkFrameworkMetricsCopy(file)
+		violations = append(violations, fileViolations...)
+	}
+
+	return violations
+}
+
+// checkFrameworkMetricsCopy verifies that CollectObservedState copies framework metrics.
+// The pattern is: if a worker has dependencies (calls GetDependencies), it should
+// call GetFrameworkState() to copy framework metrics to the observed state.
+//
+// Workers without dependencies (like ApplicationWorker) are exempt - they intentionally
+// don't have access to framework metrics.
+func checkFrameworkMetricsCopy(filename string) []Violation {
+	var violations []Violation
+
+	fset := token.NewFileSet()
+
+	node, err := parser.ParseFile(fset, filename, nil, parser.ParseComments)
+	if err != nil {
+		return violations
+	}
+
+	// Look for CollectObservedState() method
+	ast.Inspect(node, func(n ast.Node) bool {
+		funcDecl, ok := n.(*ast.FuncDecl)
+		if !ok || funcDecl.Name.Name != "CollectObservedState" {
+			return true
+		}
+
+		hasGetDependencies := false
+		hasGetFrameworkState := false
+
+		// Check for GetDependencies() and GetFrameworkState() calls
+		ast.Inspect(funcDecl.Body, func(bodyNode ast.Node) bool {
+			callExpr, ok := bodyNode.(*ast.CallExpr)
+			if !ok {
+				return true
+			}
+
+			if selExpr, ok := callExpr.Fun.(*ast.SelectorExpr); ok {
+				switch selExpr.Sel.Name {
+				case "GetDependencies":
+					hasGetDependencies = true
+				case "GetFrameworkState":
+					hasGetFrameworkState = true
+				}
+			}
+
+			return true
+		})
+
+		// If worker has dependencies but doesn't copy framework metrics, flag it
+		if hasGetDependencies && !hasGetFrameworkState {
+			pos := fset.Position(funcDecl.Pos())
+			violations = append(violations, Violation{
+				File:    filename,
+				Line:    pos.Line,
+				Type:    "MISSING_FRAMEWORK_METRICS_COPY",
+				Message: "CollectObservedState() calls GetDependencies() but not GetFrameworkState() - must copy framework metrics from deps",
+			})
+		}
+
+		return true
+	})
+
+	return violations
+}
+
+// ValidateMetricsEmbedderValueReceivers checks that MetricsEmbedder uses value receivers.
+// This ensures type assertions work when ObservedState is passed as interface{} value.
+// Pointer receivers cause type assertion failures because when a struct is passed by value,
+// pointer receiver methods are not in the method set.
+func ValidateMetricsEmbedderValueReceivers(baseDir string) []Violation {
+	var violations []Violation
+
+	// Check api.go for MetricsEmbedder methods
+	apiFile := filepath.Join(baseDir, "api.go")
+	fileViolations := checkMetricsEmbedderReceivers(apiFile)
+	violations = append(violations, fileViolations...)
+
+	return violations
+}
+
+// checkMetricsEmbedderReceivers parses api.go and checks that MetricsEmbedder methods
+// use value receivers (not pointer receivers).
+func checkMetricsEmbedderReceivers(filename string) []Violation {
+	var violations []Violation
+
+	fset := token.NewFileSet()
+
+	node, err := parser.ParseFile(fset, filename, nil, parser.ParseComments)
+	if err != nil {
+		return violations
+	}
+
+	// Methods that must use value receivers for MetricsHolder interface
+	targetMethods := map[string]bool{
+		"GetWorkerMetrics":    true,
+		"GetFrameworkMetrics": true,
+	}
+
+	ast.Inspect(node, func(n ast.Node) bool {
+		funcDecl, ok := n.(*ast.FuncDecl)
+		if !ok || funcDecl.Recv == nil || len(funcDecl.Recv.List) == 0 {
+			return true
+		}
+
+		// Check if this is a MetricsEmbedder method
+		recv := funcDecl.Recv.List[0]
+
+		recvTypeName := getReceiverTypeName(recv.Type)
+		if recvTypeName != "MetricsEmbedder" {
+			return true
+		}
+
+		// Check if this is a target method
+		if !targetMethods[funcDecl.Name.Name] {
+			return true
+		}
+
+		// Check if receiver is a pointer (violation)
+		if _, isPointer := recv.Type.(*ast.StarExpr); isPointer {
+			pos := fset.Position(funcDecl.Pos())
+			violations = append(violations, Violation{
+				File:    filename,
+				Line:    pos.Line,
+				Type:    "POINTER_RECEIVER_ON_METRICS_EMBEDDER",
+				Message: fmt.Sprintf("MetricsEmbedder.%s() uses pointer receiver (*MetricsEmbedder) - must use value receiver for interface satisfaction", funcDecl.Name.Name),
+			})
+		}
+
+		return true
+	})
+
+	return violations
+}
+
+// getReceiverTypeName extracts the type name from a receiver (handles both T and *T).
+func getReceiverTypeName(expr ast.Expr) string {
+	switch t := expr.(type) {
+	case *ast.StarExpr:
+		if ident, ok := t.X.(*ast.Ident); ok {
+			return ident.Name
+		}
+	case *ast.Ident:
+		return t.Name
+	}
+
+	return ""
+}

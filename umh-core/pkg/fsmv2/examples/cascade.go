@@ -14,159 +14,18 @@
 
 package examples
 
-// CascadeScenario shows how failures propagate through parent-child hierarchies.
+// CascadeScenario shows parent-child health propagation.
 //
-// # What This Scenario Tests
+// What happens:
+//  1. Parent starts with 2 children (examplefailing workers)
+//  2. Children fail 3 times, parent goes to Degraded state
+//  3. Children recover, parent returns to Running state
 //
-// This scenario tests:
+// Key concept: FSMv2 automatically injects ChildrenHealthy/ChildrenUnhealthy
+// counts into parent's ObservedState. The parent's state machine reads these
+// and decides when to transition to/from Degraded.
 //
-//  1. Child-to-Parent Health Propagation (upward cascade)
-//     - When a child enters a failing/unhealthy state, the parent detects it
-//     - Parent transitions from Running to Degraded
-//     - Parent's observed state reflects the unhealthy child count
-//
-//  2. Recovery Flow (upward cascade resolution)
-//     - When the failing child recovers, parent detects healthy state
-//     - Parent transitions from Degraded back to Running
-//     - System returns to Running state
-//
-//  3. Multi-Child Failure Handling
-//     - Multiple children can fail independently
-//     - Parent tracks total healthy/unhealthy counts
-//     - All children must recover for parent to return to Running
-//
-// TODO: Note: the difference in "what can be implemented with FSM_v2 and what is built into FSM_V2.
-// we need to clearly explain it here as the parent goes to degraded is not a standard pattern
-// # Architecture: The Supervisor Pattern
-//
-// In FSM v2, parents don't directly control children. Instead:
-//
-//	Parent (exampleparent)
-//	  └── Declares children in DeriveDesiredState().ChildrenSpecs
-//	  └── Supervisor observes child health counts
-//	  └── Parent state machine reacts to ChildrenUnhealthy count
-//
-//	Children (examplefailing)
-//	  └── Each child is an independent FSM
-//	  └── Child health determined by its observed state
-//	  └── Children fail 3 times, then recover
-//
-// # Hierarchy Created
-//
-//	cascade-parent (exampleparent)
-//	  ├── child-0 (examplefailing - fails 3x then recovers)
-//	  └── child-1 (examplefailing - fails 3x then recovers)
-//
-// # Flow - Cascade Failure + Recovery
-//
-//	Timeline:
-//	  T+0s:   Parent starts in Stopped, desired=running
-//	  T+0.1s: Parent → TryingToStart (startup action)
-//	  T+0.2s: Parent → Running (startup complete)
-//	          Children created: child-0 + child-1 (both examplefailing)
-//	  T+0.3s: Children start: Stopped → TryingToConnect
-//	  T+0.4s: child-0: TryingToConnect, failure 1/3
-//	  T+0.4s: child-1: TryingToConnect, failure 1/3
-//	          Parent: ChildrenUnhealthy = 2
-//	          Parent → Degraded (detected unhealthy children)
-//	  T+0.5s: Children continue failing (failure 2/3)
-//	  T+0.6s: Children continue failing (failure 3/3)
-//	  T+0.7s: child-0 → Connected (recovery on attempt 4)
-//	          Parent: ChildrenUnhealthy = 1 (still degraded)
-//	  T+0.8s: child-1 → Connected (recovery on attempt 4)
-//	          Parent: ChildrenUnhealthy = 0
-//	          Parent → Running (all children healthy)
-//
-// # What to Observe in Logs
-//
-// Parent state transitions:
-//
-//	"state" from="Running:healthy" to="Running:degraded"  // Child failures detected
-//	"state" from="Running:degraded" to="Running:healthy"  // All children recovered
-//
-// Child health counts (in parent's observed state):
-//
-//	"children_healthy": 0, "children_unhealthy": 2  // Both children failing
-//	"children_healthy": 1, "children_unhealthy": 1  // One recovered
-//	"children_healthy": 2, "children_unhealthy": 0  // All recovered
-//
-// Child state transitions:
-//
-//	"connect_failed_simulated" worker="child-0" attempt=1 remaining=2
-//	"connect_failed_simulated" worker="child-1" attempt=1 remaining=2
-//	...
-//	"connect_succeeded_after_failures" worker="child-0" total_attempts=4
-//	"connect_succeeded_after_failures" worker="child-1" total_attempts=4
-//
-// # Parent Degraded State Behavior
-//
-// The exampleparent worker has these states:
-//
-//	Stopped         - Not running
-//	TryingToStart   - Starting up
-//	Running:healthy - All children healthy (normal operation)
-//	Running:degraded- Some children unhealthy (degraded operation)
-//	TryingToStop    - Shutting down
-//
-// The Degraded state:
-//   - Triggered when ChildrenUnhealthy > 0
-//   - Still allows children to run (Running prefix matches ChildStartStates)
-//   - Returns to Running:healthy when ChildrenUnhealthy == 0
-//
-// # ChildStartStates and Cascade
-//
-// Children are configured with:
-//
-//	ChildStartStates: []string{"TryingToStart", "Running"}
-//
-// This means children run when parent state starts with "TryingToStart" or "Running".
-// Since Degraded state is "Running:degraded", children continue running.
-//
-// If you wanted children to STOP when parent degrades, you would use:
-//
-//	ChildStartStates: []string{"Running:healthy"}  // Only healthy parent
-//
-// TODO: is this really implemented?
-//
-// # Cascade Failure vs. Other Patterns
-//
-//	Transient Failure (failing scenario):
-//	  - Single worker fails and recovers
-//	  - No parent involvement
-//	  - Tests retry logic
-//
-//	Cascade Failure (this scenario):
-//	  - Child failures affect parent state
-//	  - Multiple children can fail independently
-//	  - Tests health propagation through hierarchy
-//
-//	Panic (panic scenario):
-//	  - Worker crashes entirely
-//	  - Process must restart
-//	  - Tests crash recovery
-//
-// # How to Verify This Scenario
-//
-// When running this scenario, watch for these event sequences:
-//
-// Phase 1: Startup
-//   - Parent starts: Stopped → TryingToStart → Running:healthy
-//   - Children created: child-0, child-1 appear in logs
-//
-// Phase 2: Failures Begin
-//   - Both children log: "connect_failed_simulated" attempt=1 remaining=2
-//   - Parent transitions: Running:healthy → Running:degraded
-//
-// Phase 3: Partial Recovery (if staggered)
-//   - First child succeeds: "connect_succeeded_after_failures" total_attempts=4
-//   - Parent STAYS in Running:degraded (one child still failing)
-//
-// Phase 4: Full Recovery
-//   - Second child succeeds: "connect_succeeded_after_failures" total_attempts=4
-//   - Parent transitions: Running:degraded → Running:healthy
-//
-// Parent transitions to Running:healthy only when all children reach healthy state.
-// Degraded state indicates partial capacity, not an error. This is expected resilience behavior.
+// See exampleparent/state/ for the transition logic.
 var CascadeScenario = Scenario{
 	Name: "cascade",
 

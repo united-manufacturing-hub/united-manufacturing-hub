@@ -110,6 +110,11 @@ func (w *FailingWorker) CollectObservedState(ctx context.Context) (fsmv2.Observe
 	// Populate the embedded DesiredState's ShouldFail field
 	observed.ShouldFail = deps.GetShouldFail()
 
+	// Copy framework metrics from deps (set by supervisor before CollectObservedState)
+	if fm := deps.GetFrameworkState(); fm != nil {
+		observed.Metrics.Framework = *fm
+	}
+
 	return observed, nil
 }
 

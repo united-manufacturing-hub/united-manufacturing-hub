@@ -74,9 +74,20 @@ type SupervisorInterface interface {
 	// GetCurrentStateName returns the current FSM state name for this supervisor's worker.
 	// Returns "unknown" if no worker or state is set.
 	GetCurrentStateName() string
+	// GetCurrentStateNameAndReason returns the current FSM state name and reason.
+	// Returns ("unknown", "") if no worker or state is set.
+	// Used by ChildInfo to populate StateReason field.
+	GetCurrentStateNameAndReason() (stateName string, reason string)
 	// GetWorkerType returns the type of workers this supervisor manages.
 	// Example: "examplechild", "exampleparent", "application"
 	GetWorkerType() string
+	// IsObservationStale returns true if the last observation is older than the stale threshold.
+	// Used by ChildInfo to report infrastructure status to parents.
+	IsObservationStale() bool
+	// IsCircuitOpen returns true if the circuit breaker is open for this supervisor.
+	// When open, it indicates infrastructure failure (child consistency check failed).
+	// Used by ChildInfo to report infrastructure status to parents.
+	IsCircuitOpen() bool
 	// TestGetUserSpec returns the current userSpec for testing. DO NOT USE in production code.
 	TestGetUserSpec() config.UserSpec
 }
@@ -117,12 +128,13 @@ type WorkerContext[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] s
 	// This is separate from MetricsRecorder which handles worker-written metrics:
 	// - WorkerContext fields: Supervisor writes, workers read (via FrameworkMetrics)
 	// - MetricsRecorder: Workers write, supervisor drains and persists
-	stateEnteredAt   time.Time                // When current state was entered
-	stateTransitions map[string]int64         // state_name → total times entered
-	stateDurations   map[string]time.Duration // state_name → cumulative time spent
-	totalTransitions  int64                   // Sum of all stateTransitions values
-	collectorRestarts int64                   // Per-worker collector restarts
-	startupCount      int64                   // PERSISTENT: Loaded from CSE, incremented on AddWorker()
+	stateEnteredAt     time.Time                // When current state was entered
+	currentStateReason string                   // Human-readable reason for current state (from state.Reason())
+	stateTransitions   map[string]int64         // state_name → total times entered
+	stateDurations     map[string]time.Duration // state_name → cumulative time spent
+	totalTransitions   int64                    // Sum of all stateTransitions values
+	collectorRestarts  int64                    // Per-worker collector restarts
+	startupCount       int64                    // PERSISTENT: Loaded from CSE, incremented on AddWorker()
 }
 
 // CollectorHealthConfig configures observation collector health monitoring.

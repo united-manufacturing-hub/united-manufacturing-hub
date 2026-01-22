@@ -117,6 +117,8 @@ type ExamplefailingObservedState struct {
 	TicksInConnectedState int    `json:"ticks_in_connected"`     // Ticks spent in Connected state
 	CurrentCycle          int    `json:"current_cycle"`          // Current failure cycle (0-indexed)
 	TotalCycles           int    `json:"total_cycles"`           // Total failure cycles configured
+
+	fsmv2.MetricsEmbedder `json:",inline"` // Framework and worker metrics for Prometheus export
 }
 
 func (o ExamplefailingObservedState) GetTimestamp() time.Time {

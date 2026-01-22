@@ -21,14 +21,14 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application/snapshot"
 )
 
 var _ = Describe("Supervisor API Boundary", func() {
 	var supervisorType reflect.Type
 
 	BeforeEach(func() {
-		// TODO: maybe use the application worker here as this worker is like the default everywhere?
-		supervisorType = reflect.TypeOf(&supervisor.Supervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState]{})
+		supervisorType = reflect.TypeOf(&supervisor.Supervisor[snapshot.ApplicationObservedState, *snapshot.ApplicationDesiredState]{})
 	})
 
 	Context("Public API methods", func() {

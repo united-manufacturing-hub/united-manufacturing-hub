@@ -88,9 +88,6 @@ func (w *ChildWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedS
 	default:
 	}
 
-	// TODO: ensure the timeout and context usage here is properly implemented
-	// TODO: review context cancellation handling
-
 	// Get connection health from dependencies (updated by ConnectAction/DisconnectAction)
 	deps := w.GetDependencies()
 

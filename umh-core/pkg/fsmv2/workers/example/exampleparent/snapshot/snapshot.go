@@ -52,6 +52,12 @@ type ExampleparentObservedState struct {
 	ChildrenHealthy   int    `json:"children_healthy"`
 	ChildrenUnhealthy int    `json:"children_unhealthy"`
 
+	// LastActionResults contains the action history from the last collection cycle.
+	// Actions record their outcomes via deps.GetActionHistory().Record() during Execute().
+	// Parents can read this from CSE via StateReader.LoadObservedTyped() to understand
+	// WHY children are in their current state.
+	LastActionResults []fsmv2.ActionResult `json:"last_action_results,omitempty"`
+
 	// Embedded metrics for both framework and worker metrics.
 	// Framework metrics provide time-in-state via GetFrameworkMetrics().TimeInCurrentStateMs
 	// and state entered time via GetFrameworkMetrics().StateEnteredAtUnix.
@@ -87,6 +93,16 @@ func (o ExampleparentObservedState) SetShutdownRequested(v bool) fsmv2.ObservedS
 func (o ExampleparentObservedState) SetChildrenCounts(healthy, unhealthy int) fsmv2.ObservedState {
 	o.ChildrenHealthy = healthy
 	o.ChildrenUnhealthy = unhealthy
+
+	return o
+}
+
+// SetActionHistory sets the action history on this observed state.
+// Called by Collector when ActionHistoryProvider callback is configured.
+// Actions record their outcomes via deps.GetActionHistory().Record() during Execute().
+// Parents can read child action history from CSE via StateReader.LoadObservedTyped().
+func (o ExampleparentObservedState) SetActionHistory(history []fsmv2.ActionResult) fsmv2.ObservedState {
+	o.LastActionResults = history
 
 	return o
 }

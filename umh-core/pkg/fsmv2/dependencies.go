@@ -93,12 +93,13 @@ type Dependencies interface {
 // BaseDependencies provides common tools for all workers.
 // Worker-specific dependencies should embed this struct.
 type BaseDependencies struct {
-	logger          *zap.SugaredLogger
-	stateReader     StateReader
-	metricsRecorder *MetricsRecorder
-	frameworkState  *FrameworkMetrics // Set by supervisor before collection, may be stale (~1 tick)
-	workerType      string
-	workerID        string
+	logger                *zap.SugaredLogger
+	stateReader           StateReader
+	metricsRecorder       *MetricsRecorder
+	actionHistoryRecorder ActionHistoryRecorder
+	frameworkState        *FrameworkMetrics // Set by supervisor before collection, may be stale (~1 tick)
+	workerType            string
+	workerID              string
 }
 
 // NewBaseDependencies creates a new base dependencies with common tools.
@@ -110,12 +111,13 @@ func NewBaseDependencies(logger *zap.SugaredLogger, stateReader StateReader, ide
 	}
 
 	return &BaseDependencies{
-		logger:          logger.With("worker", identity.String()),
-		stateReader:     stateReader,
-		metricsRecorder: NewMetricsRecorder(),
-		frameworkState:  nil, // Set by supervisor before collection
-		workerType:      identity.WorkerType,
-		workerID:        identity.ID,
+		logger:                logger.With("worker", identity.String()),
+		stateReader:           stateReader,
+		metricsRecorder:       NewMetricsRecorder(),
+		actionHistoryRecorder: NewInMemoryActionHistoryRecorder(),
+		frameworkState:        nil, // Set by supervisor before collection
+		workerType:            identity.WorkerType,
+		workerID:              identity.ID,
 	}
 }
 
@@ -150,6 +152,29 @@ func (d *BaseDependencies) GetStateReader() StateReader {
 //	deps.MetricsRecorder().SetGauge(metrics.GaugeLastPullLatencyMs, float64(latency.Milliseconds()))
 func (d *BaseDependencies) MetricsRecorder() *MetricsRecorder {
 	return d.metricsRecorder
+}
+
+// GetActionHistory returns the ActionHistoryRecorder for actions to record results.
+// Actions call Record() after execution to capture success/failure and latency.
+// The collector drains this buffer during CollectObservedState() to include
+// action history in ObservedState, which parents can then read via StateReader.
+//
+// This is a WRITE-ONLY buffer. Action history written here becomes visible in
+// ObservedState only AFTER CollectObservedState() drains the buffer.
+//
+// Example usage in an action:
+//
+//	start := time.Now()
+//	err := doSomething()
+//	deps.GetActionHistory().Record(fsmv2.ActionResult{
+//	    ActionType: "MyAction",
+//	    Success:    err == nil,
+//	    ErrorMsg:   errorString(err),
+//	    Latency:    time.Since(start),
+//	    Timestamp:  time.Now(),
+//	})
+func (d *BaseDependencies) GetActionHistory() ActionHistoryRecorder {
+	return d.actionHistoryRecorder
 }
 
 // GetFrameworkState returns the framework metrics provided by the supervisor.

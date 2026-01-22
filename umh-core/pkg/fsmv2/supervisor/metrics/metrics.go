@@ -218,7 +218,7 @@ var (
 		[]string{"worker_type"},
 	)
 
-	// State transitions counter - uses dynamic labels from state.String()
+	// State transitions counter - uses dynamic labels from state.String().
 	stateTransitionsTotal = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: namespace,
@@ -229,7 +229,7 @@ var (
 		[]string{"worker_type", "from_state", "to_state"},
 	)
 
-	// Time spent in current state (updated every tick)
+	// Time spent in current state (updated every tick).
 	stateDurationSeconds = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: namespace,

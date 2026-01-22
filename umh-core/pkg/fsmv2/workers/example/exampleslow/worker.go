@@ -93,6 +93,11 @@ func (w *ExampleslowWorker) CollectObservedState(ctx context.Context) (fsmv2.Obs
 		ConnectionHealth: connectionHealth,
 	}
 
+	// Copy framework metrics from deps (set by supervisor before CollectObservedState)
+	if fm := deps.GetFrameworkState(); fm != nil {
+		observed.Metrics.Framework = *fm
+	}
+
 	return observed, nil
 }
 

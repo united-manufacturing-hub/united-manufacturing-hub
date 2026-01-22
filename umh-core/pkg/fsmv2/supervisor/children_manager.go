@@ -119,16 +119,19 @@ func (m *ChildrenManager) AllStopped() bool {
 
 // buildChildInfo creates a ChildInfo struct from a child supervisor.
 func (m *ChildrenManager) buildChildInfo(name string, child SupervisorInterface) config.ChildInfo {
-	stateName := child.GetCurrentStateName()
+	stateName, stateReason := child.GetCurrentStateNameAndReason()
 
 	return config.ChildInfo{
 		Name:          name,
 		WorkerType:    child.GetWorkerType(),
 		StateName:     stateName,
-		StateReason:   "", // Deferred: expose via ActionHistoryRecorder pattern if needed
+		StateReason:   stateReason,
 		IsHealthy:     isHealthyState(stateName),
 		ErrorMsg:      "", // Deferred: expose via ActionHistoryRecorder pattern if needed
 		HierarchyPath: child.GetHierarchyPath(),
+		// Infrastructure status (framework-tracked)
+		IsStale:       child.IsObservationStale(),
+		IsCircuitOpen: child.IsCircuitOpen(),
 	}
 }
 
