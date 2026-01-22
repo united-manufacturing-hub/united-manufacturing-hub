@@ -118,6 +118,12 @@ type ExamplefailingObservedState struct {
 	CurrentCycle          int    `json:"current_cycle"`          // Current failure cycle (0-indexed)
 	TotalCycles           int    `json:"total_cycles"`           // Total failure cycles configured
 
+	// LastActionResults contains the action history from the last collection cycle.
+	// This is supervisor-managed data: the supervisor auto-records action results
+	// via ActionExecutor callback and injects them into deps before CollectObservedState.
+	// Workers read deps.GetActionHistory() and assign here in CollectObservedState.
+	LastActionResults []fsmv2.ActionResult `json:"last_action_results,omitempty"`
+
 	fsmv2.MetricsEmbedder `json:",inline"` // Framework and worker metrics for Prometheus export
 }
 

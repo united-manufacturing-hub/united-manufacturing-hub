@@ -443,6 +443,20 @@ var _ = Describe("FSMv2 Architecture Validation", func() {
 			})
 		})
 
+		Describe("Action History Copy (Invariant: Workers Copy ActionHistory from Deps)", func() {
+			It("should call GetActionHistory() when GetDependencies() is used in CollectObservedState", func() {
+				violations := validator.ValidateActionHistoryCopy(getFsmv2Dir())
+				if len(violations) > 0 {
+					message := validator.FormatViolationsWithPattern(
+						"Action History Copy Violations",
+						violations,
+						"MISSING_ACTION_HISTORY_COPY",
+					)
+					Fail(message)
+				}
+			})
+		})
+
 		Describe("MetricsEmbedder Value Receivers (Invariant: Interface Satisfaction)", func() {
 			It("should use value receivers for MetricsHolder interface methods", func() {
 				violations := validator.ValidateMetricsEmbedderValueReceivers(getFsmv2Dir())

@@ -98,6 +98,9 @@ func (w *ExampleslowWorker) CollectObservedState(ctx context.Context) (fsmv2.Obs
 		observed.Metrics.Framework = *fm
 	}
 
+	// Copy action history from deps (set by supervisor before CollectObservedState)
+	observed.LastActionResults = deps.GetActionHistory()
+
 	return observed, nil
 }
 

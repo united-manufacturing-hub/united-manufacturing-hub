@@ -81,6 +81,12 @@ type ExampleslowObservedState struct {
 	ConnectAttempts  int    `json:"connect_attempts"`
 	ConnectionHealth string `json:"connection_health"`
 
+	// LastActionResults contains the action history from the last collection cycle.
+	// This is supervisor-managed data: the supervisor auto-records action results
+	// via ActionExecutor callback and injects them into deps before CollectObservedState.
+	// Workers read deps.GetActionHistory() and assign here in CollectObservedState.
+	LastActionResults []fsmv2.ActionResult `json:"last_action_results,omitempty"`
+
 	fsmv2.MetricsEmbedder `json:",inline"` // Framework and worker metrics for Prometheus export
 }
 

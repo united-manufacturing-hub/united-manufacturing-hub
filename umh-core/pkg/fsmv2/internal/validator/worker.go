@@ -783,3 +783,82 @@ func getReceiverTypeName(expr ast.Expr) string {
 
 	return ""
 }
+
+// ValidateActionHistoryCopy checks that workers with dependencies copy action history.
+// Workers that call GetDependencies() in CollectObservedState must also call
+// GetActionHistory() to copy action history to the observed state.
+// This follows the same pattern as FrameworkMetrics - supervisor sets on deps, worker reads and assigns.
+func ValidateActionHistoryCopy(baseDir string) []Violation {
+	var violations []Violation
+
+	workerFiles := FindWorkerFiles(baseDir)
+
+	for _, file := range workerFiles {
+		fileViolations := checkActionHistoryCopy(file)
+		violations = append(violations, fileViolations...)
+	}
+
+	return violations
+}
+
+// checkActionHistoryCopy verifies that CollectObservedState copies action history.
+// The pattern is: if a worker has dependencies (calls GetDependencies), it should
+// call GetActionHistory() to copy action history to the observed state.
+//
+// Workers without dependencies (like ApplicationWorker) are exempt - they intentionally
+// don't have access to action history.
+func checkActionHistoryCopy(filename string) []Violation {
+	var violations []Violation
+
+	fset := token.NewFileSet()
+
+	node, err := parser.ParseFile(fset, filename, nil, parser.ParseComments)
+	if err != nil {
+		return violations
+	}
+
+	// Look for CollectObservedState() method
+	ast.Inspect(node, func(n ast.Node) bool {
+		funcDecl, ok := n.(*ast.FuncDecl)
+		if !ok || funcDecl.Name.Name != "CollectObservedState" {
+			return true
+		}
+
+		hasGetDependencies := false
+		hasGetActionHistory := false
+
+		// Check for GetDependencies() and GetActionHistory() calls
+		ast.Inspect(funcDecl.Body, func(bodyNode ast.Node) bool {
+			callExpr, ok := bodyNode.(*ast.CallExpr)
+			if !ok {
+				return true
+			}
+
+			if selExpr, ok := callExpr.Fun.(*ast.SelectorExpr); ok {
+				switch selExpr.Sel.Name {
+				case "GetDependencies":
+					hasGetDependencies = true
+				case "GetActionHistory":
+					hasGetActionHistory = true
+				}
+			}
+
+			return true
+		})
+
+		// If worker has dependencies but doesn't copy action history, flag it
+		if hasGetDependencies && !hasGetActionHistory {
+			pos := fset.Position(funcDecl.Pos())
+			violations = append(violations, Violation{
+				File:    filename,
+				Line:    pos.Line,
+				Type:    "MISSING_ACTION_HISTORY_COPY",
+				Message: "CollectObservedState() calls GetDependencies() but not GetActionHistory() - must copy action history from deps",
+			})
+		}
+
+		return true
+	})
+
+	return violations
+}
