@@ -43,7 +43,7 @@ type ActionExecutor struct {
 	metricsCancel    context.CancelFunc
 	metricsWg        sync.WaitGroup
 	logger           *zap.SugaredLogger
-	closeOnce        sync.Once                     // Ensures actionQueue is closed only once
+	closeOnce        sync.Once                       // Ensures actionQueue is closed only once
 	onActionComplete func(result fsmv2.ActionResult) // Called after each action execution (for auto-recording to ActionHistory)
 }
 
@@ -178,6 +178,7 @@ func (ae *ActionExecutor) executeWorkWithRecovery(work actionWork) {
 			if err != nil {
 				errorMsg = err.Error()
 			}
+
 			ae.onActionComplete(fsmv2.ActionResult{
 				Timestamp:  time.Now(),
 				ActionType: work.action.Name(),

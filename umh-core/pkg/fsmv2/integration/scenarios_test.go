@@ -197,7 +197,7 @@ func verifyNoErrorsOrWarnings(t *integration.TestLogger) {
 
 	// Known timing-related issues during test scenarios
 	knownIssues := []string{
-		"data_stale",                  // Observation collector may report stale data briefly
+		"data_stale",                   // Observation collector may report stale data briefly
 		"collector_observation_failed", // Collector may fail temporarily during shutdown
 	}
 
@@ -268,7 +268,7 @@ func verifyTriangularStoreChanges(t *integration.TestLogger) {
 	desiredLogs := t.GetLogsMatching("desired_changed")
 
 	// Verify that store changes were logged
-	Expect(len(observationLogs) + len(desiredLogs)).To(BeNumerically(">=", 1),
+	Expect(len(observationLogs)+len(desiredLogs)).To(BeNumerically(">=", 1),
 		"Expected at least 1 store change (observation or desired)")
 
 	GinkgoWriter.Printf("✓ TriangularStore changes detected (observation: %d, desired: %d)\n",
@@ -304,8 +304,8 @@ func verifyAllLogsHaveWorkerField(t *integration.TestLogger) {
 
 	// Known initialization logs that don't have worker field (logged during setup)
 	knownInitLogs := map[string]bool{
-		"identity_saved":             true,
-		"initial_observation_saved":  true,
+		"identity_saved":              true,
+		"initial_observation_saved":   true,
 		"initial_desired_state_saved": true,
 	}
 
@@ -1228,6 +1228,7 @@ var _ = Describe("MetricsHolder Type Assertion", func() {
 				Expect(err).NotTo(HaveOccurred())
 				foundParent = true
 				GinkgoWriter.Printf("DEBUG: Parent observed state JSON: %s\n", string(observedJSON))
+
 				break
 			}
 		}

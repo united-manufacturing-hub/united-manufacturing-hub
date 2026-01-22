@@ -145,7 +145,6 @@ func (ts *TriangularStore) registerWorkerType(workerType string) {
 	ts.knownWorkerTypesMu.Unlock()
 }
 
-
 // SaveIdentity stores immutable worker identity (runtime polymorphic API).
 //
 // CONVENTION-BASED NAMING: Collection name is derived from naming convention: {workerType}_identity
@@ -1190,16 +1189,19 @@ func (ts *TriangularStore) buildBootstrap(ctx context.Context, atSyncID int64) (
 
 	// Get a copy of known worker types to avoid holding the lock during DB operations
 	ts.knownWorkerTypesMu.RLock()
+
 	workerTypes := make([]string, 0, len(ts.knownWorkerTypes))
 	for wt := range ts.knownWorkerTypes {
 		workerTypes = append(workerTypes, wt)
 	}
+
 	ts.knownWorkerTypesMu.RUnlock()
 
 	// Iterate over all known worker types
 	for _, workerType := range workerTypes {
 		// Query identity collection to get all worker IDs for this type
 		identityCollection := workerType + "_identity"
+
 		identityDocs, err := ts.store.Find(ctx, identityCollection, persistence.Query{})
 		if err != nil {
 			// Collection may not exist or be empty - skip silently

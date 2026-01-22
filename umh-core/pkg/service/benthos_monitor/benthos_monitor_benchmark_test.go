@@ -311,6 +311,7 @@ func BenchmarkParseBenthosLogsWithPercentiles(b *testing.B) {
 	if err != nil {
 		b.Fatalf("Failed to create service: %v", err)
 	}
+
 	logs := prepareSampleLogEntries()
 	ctx := context.Background()
 

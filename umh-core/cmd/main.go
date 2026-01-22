@@ -474,6 +474,7 @@ children:
 	// This avoids global state and enables proper testing
 	// Use Named("fsmv2") to create [fsmv2] prefix in logs for easy filtering
 	fsmv2Logger := logger.Named("fsmv2")
+
 	appSup, err := application.NewApplicationSupervisor(application.SupervisorConfig{
 		ID:           "fsmv2-communicator",
 		Name:         "FSMv2 Communicator",
@@ -526,6 +527,7 @@ children:
 			case <-ticker.C:
 				// Load the communicator's observed state from the store
 				var observed snapshot.CommunicatorObservedState
+
 				err := store.LoadObservedTyped(ctx, "communicator", CommunicatorWorkerID, &observed)
 				if err != nil {
 					// Not found yet or error - keep polling
@@ -537,6 +539,7 @@ children:
 						"realUUID", observed.AuthenticatedUUID,
 						"placeholderUUID", placeholderUUID)
 					communicationState.SetLoginResponseForFSMv2(observed.AuthenticatedUUID)
+
 					return
 				}
 			}

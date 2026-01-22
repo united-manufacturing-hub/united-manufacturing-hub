@@ -101,6 +101,7 @@ func DeriveLeafState[T any, PT interface {
 
 	// Use pointer to call GetState since BaseUserSpec has pointer receiver
 	ptr := PT(&parsed)
+
 	return DesiredState{
 		State:            ptr.GetState(),
 		ChildrenSpecs:    nil,

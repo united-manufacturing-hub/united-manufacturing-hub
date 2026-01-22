@@ -82,7 +82,7 @@ var _ = Describe("ActionHistory Integration", func() {
 	})
 })
 
-// ActionResultMatcher helps verify ActionResult fields in tests
+// ActionResultMatcher helps verify ActionResult fields in tests.
 type ActionResultMatcher struct {
 	ActionType string
 	Success    bool
@@ -98,12 +98,15 @@ func (m ActionResultMatcher) Match(actual interface{}) (success bool, err error)
 	if result.ActionType != m.ActionType {
 		return false, nil
 	}
+
 	if result.Success != m.Success {
 		return false, nil
 	}
+
 	if m.HasError && result.ErrorMsg == "" {
 		return false, nil
 	}
+
 	if !m.HasError && result.ErrorMsg != "" {
 		return false, nil
 	}
@@ -111,6 +114,7 @@ func (m ActionResultMatcher) Match(actual interface{}) (success bool, err error)
 	if time.Since(result.Timestamp) > time.Minute {
 		return false, nil
 	}
+
 	return true, nil
 }
 

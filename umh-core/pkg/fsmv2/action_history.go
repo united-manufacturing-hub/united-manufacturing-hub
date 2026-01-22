@@ -80,6 +80,7 @@ func NewInMemoryActionHistoryRecorder() *InMemoryActionHistoryRecorder {
 func (r *InMemoryActionHistoryRecorder) Record(result ActionResult) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+
 	r.results = append(r.results, result)
 }
 

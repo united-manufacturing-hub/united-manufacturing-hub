@@ -293,6 +293,7 @@ func (ts *TriangularStore) computeCreatedDiff(doc persistence.Document, role str
 	}
 
 	cseFields := getCSEFields(role)
+
 	cseFieldSet := make(map[string]bool, len(cseFields))
 	for _, f := range cseFields {
 		cseFieldSet[f] = true
@@ -300,6 +301,7 @@ func (ts *TriangularStore) computeCreatedDiff(doc persistence.Document, role str
 
 	// Filter out CSE metadata fields - only include business data
 	added := make(map[string]interface{})
+
 	for key, val := range doc {
 		if !cseFieldSet[key] && key != "id" && key != FieldVersion {
 			added[key] = val

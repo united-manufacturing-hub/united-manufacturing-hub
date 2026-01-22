@@ -278,6 +278,7 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity fsmv2.Identity, wor
 			if workerCtx == nil || workerCtx.actionHistory == nil {
 				return nil
 			}
+
 			return workerCtx.actionHistory.Drain()
 		},
 		// ActionHistorySetter sets action history on worker dependencies BEFORE CollectObservedState.
@@ -538,6 +539,7 @@ func (s *Supervisor[TObserved, TDesired]) IsObservationStale() bool {
 
 		// Use stale threshold from collector health config
 		age := time.Since(stateEnteredAt)
+
 		return age > s.collectorHealth.staleThreshold
 	}
 

@@ -1179,13 +1179,14 @@ var _ = Describe("TriangularStore", func() {
 				// Check delta was stored in _deltas collection
 				deltas, err := store.Find(ctx, storage.DeltaCollectionName, persistence.Query{})
 				Expect(err).NotTo(HaveOccurred())
-				Expect(len(deltas)).To(BeNumerically(">=", 1), "Delta should be stored")
+				Expect(deltas).ToNot(BeEmpty(), "Delta should be stored")
 
 				// Find the delta for our worker
 				var foundDelta persistence.Document
 				for _, d := range deltas {
 					if d["worker_id"] == "new-worker-001" && d["role"] == "desired" {
 						foundDelta = d
+
 						break
 					}
 				}
@@ -1215,6 +1216,7 @@ var _ = Describe("TriangularStore", func() {
 				for _, d := range deltas {
 					if d["worker_id"] == "new-worker-002" && d["role"] == "observed" {
 						foundDelta = d
+
 						break
 					}
 				}
@@ -1242,6 +1244,7 @@ var _ = Describe("TriangularStore", func() {
 				for _, d := range deltas {
 					if d["worker_id"] == "new-worker-003" && d["role"] == "identity" {
 						foundDelta = d
+
 						break
 					}
 				}
@@ -1294,7 +1297,7 @@ var _ = Describe("TriangularStore", func() {
 
 				// Verify no new delta was added (no business fields to record)
 				deltasAfter, _ := store.Find(ctx, storage.DeltaCollectionName, persistence.Query{})
-				Expect(len(deltasAfter)).To(Equal(countBefore), "No delta should be added for document with only id")
+				Expect(deltasAfter).To(HaveLen(countBefore), "No delta should be added for document with only id")
 			})
 		})
 	})

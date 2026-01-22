@@ -103,7 +103,7 @@ var _ = Describe("ActionHistoryRecorder", func() {
 				var wg sync.WaitGroup
 				numGoroutines := 100
 
-				for i := 0; i < numGoroutines; i++ {
+				for i := range numGoroutines {
 					wg.Add(1)
 					go func(n int) {
 						defer wg.Done()
@@ -125,7 +125,7 @@ var _ = Describe("ActionHistoryRecorder", func() {
 				numRecords := 50
 
 				// Start recording goroutines
-				for i := 0; i < numRecords; i++ {
+				for i := range numRecords {
 					wg.Add(1)
 					go func(n int) {
 						defer wg.Done()
@@ -137,7 +137,7 @@ var _ = Describe("ActionHistoryRecorder", func() {
 
 				// Periodically drain while recording
 				drainedCount := 0
-				for i := 0; i < 5; i++ {
+				for range 5 {
 					results := recorder.Drain()
 					drainedCount += len(results)
 					time.Sleep(time.Millisecond)
