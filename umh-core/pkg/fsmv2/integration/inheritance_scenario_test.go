@@ -294,6 +294,11 @@ func verifyChildrenReceivedMergedVariablesFromStore(store storage.TriangularStor
 	Expect(len(childWorkers)).To(BeNumerically(">=", 2),
 		fmt.Sprintf("Expected at least 2 child workers, found %d", len(childWorkers)))
 
+	// Explicit nil check for nilaway (it doesn't recognize Ginkgo's Expect assertions)
+	if parentWorker == nil {
+		return
+	}
+
 	GinkgoWriter.Printf("✓ Found parent worker: %s/%s\n", parentWorker.WorkerType, parentWorker.WorkerID)
 	GinkgoWriter.Printf("✓ Found %d child workers\n", len(childWorkers))
 
