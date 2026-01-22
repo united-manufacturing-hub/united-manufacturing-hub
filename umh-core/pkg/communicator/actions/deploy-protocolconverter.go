@@ -63,10 +63,9 @@ type DeployProtocolConverterAction struct {
 
 	outboundChannel       chan *models.UMHMessage
 	systemSnapshotManager *fsm.SnapshotManager // Snapshot Manager holds the latest system snapshot
+	actionLogger          *zap.SugaredLogger
 
-	actionLogger *zap.SugaredLogger
-	userEmail    string
-
+	userEmail string
 	// Parsed request payload (only populated after Parse)
 	payload models.ProtocolConverter
 

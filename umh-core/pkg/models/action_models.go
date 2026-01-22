@@ -769,8 +769,8 @@ type ProtocolConverterDFC struct {
 }
 
 type ProtocolConverterVariable struct {
-	Label string `json:"label" mapstructure:"label" yaml:"label"`
 	Value any    `json:"value" mapstructure:"value" yaml:"value"`
+	Label string `json:"label" mapstructure:"label" yaml:"label"`
 }
 
 type ProtocolConverterTemplateInfo struct {
@@ -786,10 +786,10 @@ type ProtocolConverter struct {
 	WriteDFC     *ProtocolConverterDFC          `json:"writeDFC"`
 	TemplateInfo *ProtocolConverterTemplateInfo `json:"templateInfo"`
 	Meta         *ProtocolConverterMeta         `json:"meta"`
-	Name         string                         `binding:"required"  json:"name"`
-	Connection   ProtocolConverterConnection    `json:"connection"`
 	// Variables contains custom variables for template expansion
-	Variables map[string]any `json:"variables"`
+	Variables  map[string]any              `json:"variables"`
+	Name       string                      `binding:"required" json:"name"`
+	Connection ProtocolConverterConnection `json:"connection"`
 }
 
 type ProtocolConverterMeta struct {
