@@ -37,6 +37,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"strconv"
 	"time"
 
@@ -198,6 +199,11 @@ func (a *DeployProtocolConverterAction) createProtocolConverterConfig() config.P
 		for _, variable := range a.payload.TemplateInfo.Variables {
 			userVars[variable.Label] = variable.Value
 		}
+	}
+
+	// Add any additional variables
+	if a.payload.Variables != nil {
+		maps.Copy(userVars, a.payload.Variables)
 	}
 
 	variableBundle := variables.VariableBundle{
