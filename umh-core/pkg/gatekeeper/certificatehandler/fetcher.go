@@ -4,12 +4,17 @@ import (
 	"context"
 	"crypto/x509"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/url"
 	"time"
 
+	"go.uber.org/zap"
+	"golang.org/x/crypto/sha3"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2/http"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/gatekeeper/validator"
 )
 
 const UserCertificateEndpoint = "/v2/instance/user/certificate"
@@ -18,63 +23,123 @@ type UserCertificateResponse struct {
 	UserEmail        string `json:"userEmail"`
 	Certificate      string `json:"certificate"`
 	CertificateChain string `json:"certificateChain"`
-	RootCA           string `json:"encryptedRootCA"` // compare with stored encrypted
+	RootCA           string `json:"encryptedRootCA"`
 }
 
-func (h *CertHandler) StartFetcher(ctx context.Context, jwt string, apiURL string, insecureTLS bool) {
+type CertFetcher struct {
+	handler      *CertHandler
+	validator    validator.Validator
+	jwt          string
+	apiURL       string
+	authToken    string
+	instanceUUID string
+	insecureTLS  bool
+	log          *zap.SugaredLogger
+}
+
+func NewFetcher(
+	handler *CertHandler,
+	v validator.Validator,
+	jwt string,
+	apiURL string,
+	authToken string,
+	instanceUUID string,
+	insecureTLS bool,
+	log *zap.SugaredLogger,
+) *CertFetcher {
+	return &CertFetcher{
+		handler:      handler,
+		validator:    v,
+		jwt:          jwt,
+		apiURL:       apiURL,
+		authToken:    authToken,
+		instanceUUID: instanceUUID,
+		insecureTLS:  insecureTLS,
+		log:          log,
+	}
+}
+
+func (f *CertFetcher) RunForUser(ctx context.Context, email string) {
+	f.fetchAndStore(ctx, email)
+
 	ticker := time.NewTicker(1 * time.Minute)
 	defer ticker.Stop()
 
 	for {
 		select {
 		case <-ctx.Done():
+			f.handler.deleteCertificate(email)
 			return
 		case <-ticker.C:
-			h.refreshCertificates(ctx, jwt, apiURL, insecureTLS)
+			f.fetchAndStore(ctx, email)
 		}
 	}
 }
 
-func (h *CertHandler) refreshCertificates(ctx context.Context, jwt string, apiURL string, insecureTLS bool) {
-	h.mu.RLock()
-	emails := make([]string, 0, len(h.userCerts))
-	for email := range h.userCerts {
-		emails = append(emails, email)
+func (f *CertFetcher) fetchAndStore(ctx context.Context, email string) {
+	cookies := map[string]string{"token": f.jwt}
+
+	resp, err := f.fetchUserCertificate(ctx, email, &cookies)
+	if err != nil {
+		f.log.Warnf("Failed to fetch certificate for %s: %v", email, err)
+		return
 	}
-	h.mu.RUnlock()
 
-	cookies := map[string]string{"token": jwt}
-
-	for _, email := range emails {
-		resp, err := h.fetchUserCertificate(ctx, email, &cookies, insecureTLS, apiURL)
-		if err != nil {
-			h.log.Warnf("Failed to fetch certificate for %s: %v", email, err)
-			continue
-		}
-
-		if resp == nil {
-			continue
-		}
-
-		cert, err := parseCertificate(resp.Certificate)
-		if err != nil {
-			h.log.Warnf("Failed to parse certificate for %s: %v", email, err)
-			continue
-		}
-
-		chain, err := parseCertificateChain(resp.CertificateChain)
-		if err != nil {
-			h.log.Warnf("Failed to parse certificate chain for %s: %v", email, err)
-			continue
-		}
-
-		h.setCertificate(resp.UserEmail, cert, chain)
-
-		if resp.RootCA != "" && resp.RootCA != h.encryptedRootCA {
-			h.setEncryptedRootCA(resp.RootCA)
-			// TODO: decrypt and parse rootCA
-		}
+	if resp == nil {
+		return
 	}
+
+	cert, err := parseCertificate(resp.Certificate)
+	if err != nil {
+		f.log.Warnf("Failed to parse certificate for %s: %v", email, err)
+		return
+	}
+
+	chain, err := parseCertificateChain(resp.CertificateChain)
+	if err != nil {
+		f.log.Warnf("Failed to parse certificate chain for %s: %v", email, err)
+		return
+	}
+
+	f.handler.setCertificate(resp.UserEmail, cert, chain)
+
+	if resp.RootCA != "" && resp.RootCA != f.handler.encryptedRootCA {
+		f.handler.setEncryptedRootCA(resp.RootCA)
+
+		hasher := sha3.New256()
+		hasher.Write([]byte(f.authToken))
+		keyMaterial := hex.EncodeToString(hasher.Sum(nil))
+
+		decrypted, err := f.validator.DecryptRootCA(resp.RootCA, keyMaterial, f.instanceUUID)
+		if err != nil {
+			f.log.Warnf("Failed to decrypt rootCA: %v", err)
+			return
+		}
+
+		rootCert, err := parseCertificate(decrypted)
+		if err != nil {
+			f.log.Warnf("Failed to parse decrypted rootCA: %v", err)
+			return
+		}
+
+		f.handler.setRootCA(rootCert)
+	}
+}
+
+func (f *CertFetcher) fetchUserCertificate(ctx context.Context, email string, cookies *map[string]string) (*UserCertificateResponse, error) {
+	encodedEmail := url.QueryEscape(email)
+	endpoint := http.Endpoint(fmt.Sprintf("%s?email=%s", UserCertificateEndpoint, encodedEmail))
+
+	response, statusCode, err := http.GetRequest[UserCertificateResponse](ctx, endpoint, nil, cookies, f.insecureTLS, f.apiURL, f.log)
+	if err != nil {
+		if statusCode == 204 {
+			return nil, nil
+		}
+
+		return nil, err
+	}
+
+	return response, nil
 }
 
 func parseCertificate(base64Cert string) (*x509.Certificate, error) {
@@ -114,20 +179,4 @@ func parseCertificateChain(chainJSON string) ([]*x509.Certificate, error) {
 	}
 
 	return chain, nil
-}
-
-func (h *CertHandler) fetchUserCertificate(ctx context.Context, email string, cookies *map[string]string, insecureTLS bool, apiURL string) (*UserCertificateResponse, error) {
-	encodedEmail := url.QueryEscape(email)
-	endpoint := http.Endpoint(fmt.Sprintf("%s?email=%s", UserCertificateEndpoint, encodedEmail))
-
-	response, statusCode, err := http.GetRequest[UserCertificateResponse](ctx, endpoint, nil, cookies, insecureTLS, apiURL, h.log)
-	if err != nil {
-		if statusCode == 204 {
-			return nil, nil
-		}
-
-		return nil, err
-	}
-
-	return response, nil
 }
