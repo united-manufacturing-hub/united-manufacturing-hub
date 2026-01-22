@@ -24,12 +24,12 @@ import (
 // DeltaEntry represents a single change for storage in DeltaStore.
 // This is the internal representation stored in the delta table.
 type DeltaEntry struct {
-	SyncID     int64     // Global monotonic sequence number
+	Timestamp  time.Time // When the change occurred
+	Changes    *Diff     // Field-level changes
 	WorkerType string    // Type of worker (e.g., "container", "relay")
 	ID         string    // Unique identifier for the worker
 	Role       string    // "identity", "desired", or "observed"
-	Changes    *Diff     // Field-level changes
-	Timestamp  time.Time // When the change occurred
+	SyncID     int64     // Global monotonic sequence number
 }
 
 // Diff represents field-level changes between two documents.

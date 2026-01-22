@@ -34,22 +34,23 @@ type ExamplechildDependencies interface {
 // ExamplechildSnapshot represents a point-in-time view of the child worker state.
 // This is the combined snapshot type for type assertions in Next() methods.
 type ExamplechildSnapshot struct {
+	Desired  *ExamplechildDesiredState
 	Identity fsmv2.Identity
 	Observed ExamplechildObservedState
-	Desired  *ExamplechildDesiredState
 }
 
 // ExamplechildDesiredState represents the target configuration for the child worker.
 // NOTE: Dependencies are NOT stored here - they belong in the Worker struct.
 // See fsmv2.DesiredState documentation for the architectural invariant.
 type ExamplechildDesiredState struct {
-	config.BaseDesiredState // Provides ShutdownRequested + IsShutdownRequested() + SetShutdownRequested()
 
 	// ParentMappedState is the desired state derived from parent's ChildStartStates.
 	// When parent is in a state listed in ChildStartStates → "running"
 	// When parent is in any other state → "stopped"
 	// This field is injected by the supervisor via MappedParentStateProvider callback.
-	ParentMappedState string `json:"parent_mapped_state"`
+	ParentMappedState       string `json:"parent_mapped_state"`
+	config.BaseDesiredState        // Provides ShutdownRequested + IsShutdownRequested() + SetShutdownRequested()
+
 }
 
 // ShouldBeRunning returns true if the child should be in a running/connected state.
@@ -75,14 +76,15 @@ func (s *ExamplechildDesiredState) ShouldBeRunning() bool {
 
 // ExamplechildObservedState represents the current state of the child worker.
 type ExamplechildObservedState struct {
-	ID          string    `json:"id"`
 	CollectedAt time.Time `json:"collected_at"`
+
+	LastError error `json:"last_error,omitempty"`
 
 	ExamplechildDesiredState `json:",inline"`
 
+	ID string `json:"id"`
+
 	State            string `json:"state"` // Observed lifecycle state (e.g., "running_connected")
-	LastError        error  `json:"last_error,omitempty"`
-	ConnectAttempts  int    `json:"connect_attempts"`
 	ConnectionHealth string `json:"connection_health"`
 
 	// LastActionResults contains the action history from the last collection cycle.
@@ -97,6 +99,8 @@ type ExamplechildObservedState struct {
 	// Framework metrics provide time-in-state via GetFrameworkMetrics().TimeInCurrentStateMs
 	// and state entered time via GetFrameworkMetrics().StateEnteredAtUnix.
 	fsmv2.MetricsEmbedder `json:",inline"`
+
+	ConnectAttempts int `json:"connect_attempts"`
 }
 
 func (o ExamplechildObservedState) GetTimestamp() time.Time {

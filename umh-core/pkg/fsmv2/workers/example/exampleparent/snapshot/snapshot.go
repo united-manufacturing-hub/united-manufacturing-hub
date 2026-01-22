@@ -23,15 +23,15 @@ import (
 
 // ExampleparentSnapshot represents a point-in-time view of the parent worker state.
 type ExampleparentSnapshot struct {
+	Desired  *ExampleparentDesiredState
 	Identity fsmv2.Identity
 	Observed ExampleparentObservedState
-	Desired  *ExampleparentDesiredState
 }
 
 // ExampleparentDesiredState represents the target configuration for the parent worker.
 type ExampleparentDesiredState struct {
-	config.BaseDesiredState        // Provides ShutdownRequested + IsShutdownRequested() + SetShutdownRequested()
-	ChildCount          int `json:"ChildCount"`
+	config.BaseDesiredState     // Provides ShutdownRequested + IsShutdownRequested() + SetShutdownRequested()
+	ChildCount              int `json:"ChildCount"`
 }
 
 // ShouldBeRunning returns true if the parent should be in a running state.
@@ -43,14 +43,11 @@ func (s *ExampleparentDesiredState) ShouldBeRunning() bool {
 
 // ExampleparentObservedState represents the current state of the parent worker.
 type ExampleparentObservedState struct {
-	ID          string    `json:"id"`
 	CollectedAt time.Time `json:"collected_at"`
 
-	ExampleparentDesiredState `json:",inline"`
+	ID string `json:"id"`
 
-	State             string `json:"state"` // Observed lifecycle state (e.g., "running_connected")
-	ChildrenHealthy   int    `json:"children_healthy"`
-	ChildrenUnhealthy int    `json:"children_unhealthy"`
+	State string `json:"state"` // Observed lifecycle state (e.g., "running_connected")
 
 	// LastActionResults contains the action history from the last collection cycle.
 	// This is supervisor-managed data: the supervisor auto-records action results
@@ -59,10 +56,15 @@ type ExampleparentObservedState struct {
 	// Parents can read child action history from CSE via StateReader.LoadObservedTyped().
 	LastActionResults []fsmv2.ActionResult `json:"last_action_results,omitempty"`
 
+	ExampleparentDesiredState `json:",inline"`
+
 	// Embedded metrics for both framework and worker metrics.
 	// Framework metrics provide time-in-state via GetFrameworkMetrics().TimeInCurrentStateMs
 	// and state entered time via GetFrameworkMetrics().StateEnteredAtUnix.
 	fsmv2.MetricsEmbedder `json:",inline"`
+
+	ChildrenHealthy   int `json:"children_healthy"`
+	ChildrenUnhealthy int `json:"children_unhealthy"`
 }
 
 func (o ExampleparentObservedState) GetTimestamp() time.Time {

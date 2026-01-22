@@ -172,13 +172,13 @@ import (
 // These dependencies are passed to actions when created by states.
 type CommunicatorWorker struct {
 	*helpers.BaseWorker[*CommunicatorDependencies]
-	identity fsmv2.Identity
 
 	// Temporary State
 	// Temporary state can be a local logger, or some HTTP client, or some local services
 	// like filesystem, etc.
 	// But everything that configures it or that needs to be exposed should be in observed and desired state
-	logger *zap.SugaredLogger
+	logger   *zap.SugaredLogger
+	identity fsmv2.Identity
 }
 
 // NewCommunicatorWorker creates a new Channel-based Communicator worker.

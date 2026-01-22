@@ -30,9 +30,9 @@ import (
 )
 
 type ObservedState struct {
-	ID          string             `json:"id"`
 	CollectedAt time.Time          `json:"collectedAt"`
 	Desired     fsmv2.DesiredState `json:"-"`
+	ID          string             `json:"id"`
 }
 
 func (t *ObservedState) GetObservedDesiredState() fsmv2.DesiredState {
@@ -44,8 +44,8 @@ func (t *ObservedState) GetTimestamp() time.Time {
 }
 
 type DesiredState struct {
-	ShutdownReq bool   `json:"ShutdownRequested"`
 	State       string `json:"state"`
+	ShutdownReq bool   `json:"ShutdownRequested"`
 }
 
 func (t *DesiredState) IsShutdownRequested() bool {
@@ -130,8 +130,8 @@ func (m *WorkerWithType) CollectObservedState(ctx context.Context) (fsmv2.Observ
 
 type State struct {
 	NextState fsmv2.State[any, any]
-	Signal    fsmv2.Signal
 	Action    fsmv2.Action[any]
+	Signal    fsmv2.Signal
 }
 
 func (m *State) Next(snapshot any) (fsmv2.State[any, any], fsmv2.Signal, fsmv2.Action[any]) {

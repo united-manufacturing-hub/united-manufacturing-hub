@@ -51,18 +51,14 @@ func (s collectorState) String() string {
 // CollectorConfig provides configuration for observation data collection.
 // The type parameter TObserved represents the observed state type for this collector.
 type CollectorConfig[TObserved any] struct {
-	Worker              fsmv2.Worker
-	Identity            fsmv2.Identity
-	Store               storage.TriangularStoreInterface
-	Logger              *zap.SugaredLogger
-	ObservationInterval time.Duration
-	ObservationTimeout  time.Duration
-	EnableTraceLogging  bool         // Whether to emit verbose per-collection logs
-	StateProvider       func() string // Returns current FSM state name (injected by supervisor)
-	ShutdownRequestedProvider func() bool // Returns current shutdown requested status (injected by supervisor)
-	ChildrenCountsProvider func() (healthy int, unhealthy int) // Returns children health counts (injected by supervisor for parent workers)
-	MappedParentStateProvider func() string // Returns mapped state from parent's StateMapping (injected by supervisor for child workers)
-	ChildrenViewProvider func() any // Returns config.ChildrenView for parent workers to inspect children (injected by supervisor)
+	Worker                    fsmv2.Worker
+	Store                     storage.TriangularStoreInterface
+	Logger                    *zap.SugaredLogger
+	StateProvider             func() string                       // Returns current FSM state name (injected by supervisor)
+	ShutdownRequestedProvider func() bool                         // Returns current shutdown requested status (injected by supervisor)
+	ChildrenCountsProvider    func() (healthy int, unhealthy int) // Returns children health counts (injected by supervisor for parent workers)
+	MappedParentStateProvider func() string                       // Returns mapped state from parent's StateMapping (injected by supervisor for child workers)
+	ChildrenViewProvider      func() any                          // Returns config.ChildrenView for parent workers to inspect children (injected by supervisor)
 	// FrameworkMetricsProvider returns current framework metrics from supervisor.
 	// Called BEFORE collection to inject into worker dependencies.
 	// The provider captures workerCtx and acquires RLock when called (thread-safe).
@@ -79,20 +75,24 @@ type CollectorConfig[TObserved any] struct {
 	// Workers then access via deps.GetActionHistory() and assign to their ObservedState.
 	// This follows the same pattern as FrameworkMetricsSetter.
 	ActionHistorySetter func([]fsmv2.ActionResult)
+	Identity            fsmv2.Identity
+	ObservationInterval time.Duration
+	ObservationTimeout  time.Duration
+	EnableTraceLogging  bool // Whether to emit verbose per-collection logs
 }
 
 // Collector manages the observation loop lifecycle and data collection.
 // The type parameter TObserved represents the observed state type for this collector.
 type Collector[TObserved any] struct {
-	config        CollectorConfig[TObserved]
-	state         collectorState
-	running       bool
-	mu            sync.RWMutex
 	ctx           context.Context
+	parentCtx     context.Context
 	cancel        context.CancelFunc
 	goroutineDone chan struct{}
-	parentCtx     context.Context
 	restartChan   chan struct{}
+	config        CollectorConfig[TObserved]
+	state         collectorState
+	mu            sync.RWMutex
+	running       bool
 }
 
 // NewCollector creates a new collector with the given configuration.
@@ -329,7 +329,9 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 	// while allowing FSM state to be observed.
 	if c.config.StateProvider != nil {
 		stateName := c.config.StateProvider()
-		if setter, ok := observed.(interface{ SetState(string) fsmv2.ObservedState }); ok {
+		if setter, ok := observed.(interface {
+			SetState(string) fsmv2.ObservedState
+		}); ok {
 			observed = setter.SetState(stateName)
 		}
 	}
@@ -340,7 +342,9 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 	// accurately reflects whether shutdown has been requested.
 	if c.config.ShutdownRequestedProvider != nil {
 		shutdownRequested := c.config.ShutdownRequestedProvider()
-		if setter, ok := observed.(interface{ SetShutdownRequested(bool) fsmv2.ObservedState }); ok {
+		if setter, ok := observed.(interface {
+			SetShutdownRequested(bool) fsmv2.ObservedState
+		}); ok {
 			observed = setter.SetShutdownRequested(shutdownRequested)
 		}
 	}
@@ -351,7 +355,9 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 	// their children's health status for state transitions.
 	if c.config.ChildrenCountsProvider != nil {
 		healthy, unhealthy := c.config.ChildrenCountsProvider()
-		if setter, ok := observed.(interface{ SetChildrenCounts(int, int) fsmv2.ObservedState }); ok {
+		if setter, ok := observed.(interface {
+			SetChildrenCounts(int, int) fsmv2.ObservedState
+		}); ok {
 			observed = setter.SetChildrenCounts(healthy, unhealthy)
 		}
 	}
@@ -362,7 +368,9 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 	// to know when parent wants them to start/stop via StateMapping.
 	if c.config.MappedParentStateProvider != nil {
 		mappedState := c.config.MappedParentStateProvider()
-		if setter, ok := observed.(interface{ SetParentMappedState(string) fsmv2.ObservedState }); ok {
+		if setter, ok := observed.(interface {
+			SetParentMappedState(string) fsmv2.ObservedState
+		}); ok {
 			observed = setter.SetParentMappedState(mappedState)
 		}
 	}

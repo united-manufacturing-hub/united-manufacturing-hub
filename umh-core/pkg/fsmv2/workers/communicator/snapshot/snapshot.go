@@ -34,8 +34,8 @@ type CommunicatorDependencies interface {
 
 type CommunicatorSnapshot struct {
 	Identity fsmv2.Identity
-	Observed CommunicatorObservedState
 	Desired  CommunicatorDesiredState
+	Observed CommunicatorObservedState
 }
 
 // Compile-time interface check: CommunicatorDesiredState must implement fsmv2.DesiredState.
@@ -87,13 +87,13 @@ type CommunicatorDesiredState struct {
 	config.BaseDesiredState // Provides ShutdownRequested + IsShutdownRequested() + SetShutdownRequested()
 
 	// Authentication - typed fields populated by DeriveDesiredState
-	InstanceUUID string        `json:"instanceUUID"` // Used by AuthenticateAction for backend authentication
-	AuthToken    string        `json:"authToken"`
-	RelayURL     string        `json:"relayURL"`
-	Timeout      time.Duration `json:"timeout"`
+	InstanceUUID string `json:"instanceUUID"` // Used by AuthenticateAction for backend authentication
+	AuthToken    string `json:"authToken"`
+	RelayURL     string `json:"relayURL"`
 
 	// Messages
 	MessagesToBeSent []transport.UMHMessage `json:"messagesToBeSent,omitempty"`
+	Timeout          time.Duration          `json:"timeout"`
 }
 
 // GetState returns the desired lifecycle state ("running" or "stopped").
@@ -132,38 +132,41 @@ func (d *CommunicatorDesiredState) GetState() string {
 type CommunicatorObservedState struct {
 	CollectedAt time.Time
 
-	// DesiredState
-	CommunicatorDesiredState `json:",inline"`
+	JWTExpiry time.Time
+	// DegradedEnteredAt tracks when we entered degraded mode (first error after success).
+	// Zero means not in degraded mode. Used by DegradedState for backoff calculation.
+	DegradedEnteredAt time.Time `json:"degradedEnteredAt,omitempty"`
+
+	// LastAuthAttemptAt is the timestamp of the last authentication attempt (for auth backoff).
+	LastAuthAttemptAt time.Time `json:"lastAuthAttemptAt,omitempty"`
 
 	State string `json:"state"` // Observed lifecycle state (e.g., "running_connected")
 
-	// Authentication
-	Authenticated     bool
 	JWTToken          string
-	JWTExpiry         time.Time
 	AuthenticatedUUID string `json:"authenticatedUUID,omitempty"` // UUID from backend after successful authentication
 
 	// Inbound Messages
 	MessagesReceived []transport.UMHMessage
 
+	// DesiredState
+	CommunicatorDesiredState `json:",inline"`
+
+	// Embedded metrics for both framework and worker metrics.
+	// Provides GetMetrics() for worker metrics and GetFrameworkMetrics() for supervisor-injected metrics.
+	// Uses standard fsmv2.Metrics structure for automatic Prometheus export.
+	fsmv2.MetricsEmbedder `json:",inline"`
+
 	// Error tracking for health monitoring
 	ConsecutiveErrors int
-	// DegradedEnteredAt tracks when we entered degraded mode (first error after success).
-	// Zero means not in degraded mode. Used by DegradedState for backoff calculation.
-	DegradedEnteredAt time.Time `json:"degradedEnteredAt,omitempty"`
 
 	// Error type tracking for intelligent backoff
 	// LastErrorType is the type of the last error (for error-specific backoff strategies).
 	LastErrorType httpTransport.ErrorType `json:"lastErrorType,omitempty"`
 	// LastRetryAfter is the Retry-After duration from the last error response (from server).
 	LastRetryAfter time.Duration `json:"lastRetryAfter,omitempty"`
-	// LastAuthAttemptAt is the timestamp of the last authentication attempt (for auth backoff).
-	LastAuthAttemptAt time.Time `json:"lastAuthAttemptAt,omitempty"`
 
-	// Embedded metrics for both framework and worker metrics.
-	// Provides GetMetrics() for worker metrics and GetFrameworkMetrics() for supervisor-injected metrics.
-	// Uses standard fsmv2.Metrics structure for automatic Prometheus export.
-	fsmv2.MetricsEmbedder `json:",inline"`
+	// Authentication
+	Authenticated bool
 }
 
 // IsTokenExpired returns true if the JWT token is expired or will expire soon.

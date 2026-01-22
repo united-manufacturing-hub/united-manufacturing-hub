@@ -93,13 +93,13 @@ type Dependencies interface {
 // BaseDependencies provides common tools for all workers.
 // Worker-specific dependencies should embed this struct.
 type BaseDependencies struct {
-	logger          *zap.SugaredLogger
 	stateReader     StateReader
+	logger          *zap.SugaredLogger
 	metricsRecorder *MetricsRecorder
-	actionHistory   []ActionResult    // Set by supervisor before CollectObservedState, read-only for workers
 	frameworkState  *FrameworkMetrics // Set by supervisor before collection, may be stale (~1 tick)
 	workerType      string
 	workerID        string
+	actionHistory   []ActionResult // Set by supervisor before CollectObservedState, read-only for workers
 }
 
 // NewBaseDependencies creates a new base dependencies with common tools.

@@ -141,9 +141,9 @@ type ShutdownRequestable interface {
 // The supervisor passes Snapshot by value to State.Next(), making it inherently immutable.
 // Use helpers.ConvertSnapshot[O, D](snapAny) for type-safe field access.
 type Snapshot struct {
-	Identity Identity    // Who am I?
 	Observed interface{} // What is the actual state? (ObservedState or basic.Document).
 	Desired  interface{} // What should the state be? (DesiredState or basic.Document).
+	Identity Identity    // Who am I?
 }
 
 // Action represents an idempotent side effect that modifies external system state.
@@ -282,9 +282,9 @@ type MetricsHolder interface {
 //  3. CollectObservedState merges drained values into cumulative Metrics
 //  4. Metrics persisted to CSE as part of ObservedState
 type MetricsRecorder struct {
-	mu       sync.Mutex
 	counters map[string]int64
 	gauges   map[string]float64
+	mu       sync.Mutex
 }
 
 // NewMetricsRecorder creates a MetricsRecorder ready for use.
@@ -371,6 +371,21 @@ func (r *MetricsRecorder) Drain() DrainResult {
 type FrameworkMetrics struct {
 	// === Session Metrics (reset on restart) ===
 
+	// TransitionsByState maps state names to the number of times that state was entered.
+	// Example: {"running": 5, "degraded": 2, "stopped": 1}
+	TransitionsByState map[string]int64 `json:"transitions_by_state,omitempty"`
+
+	// CumulativeTimeByStateMs maps state names to total milliseconds spent in that state.
+	// Example: {"running": 60000, "degraded": 5000}
+	CumulativeTimeByStateMs map[string]int64 `json:"cumulative_time_by_state_ms,omitempty"`
+
+	// === State Information ===
+
+	// StateReason is a human-readable explanation for the current state.
+	// Set by the supervisor during state transitions from state.Reason().
+	// Useful for understanding WHY the worker is in its current state.
+	StateReason string `json:"state_reason,omitempty"`
+
 	// TimeInCurrentStateMs is milliseconds since the current state was entered.
 	// Updated each tick by supervisor.
 	TimeInCurrentStateMs int64 `json:"time_in_current_state_ms"`
@@ -380,14 +395,6 @@ type FrameworkMetrics struct {
 
 	// StateTransitionsTotal is the total number of state transitions this session.
 	StateTransitionsTotal int64 `json:"state_transitions_total"`
-
-	// TransitionsByState maps state names to the number of times that state was entered.
-	// Example: {"running": 5, "degraded": 2, "stopped": 1}
-	TransitionsByState map[string]int64 `json:"transitions_by_state,omitempty"`
-
-	// CumulativeTimeByStateMs maps state names to total milliseconds spent in that state.
-	// Example: {"running": 60000, "degraded": 5000}
-	CumulativeTimeByStateMs map[string]int64 `json:"cumulative_time_by_state_ms,omitempty"`
 
 	// CollectorRestarts is the number of times the observation collector was restarted
 	// for this specific worker (not global). Reset on worker restart.
@@ -399,13 +406,6 @@ type FrameworkMetrics struct {
 	// Loaded from CSE on AddWorker(), incremented, and persisted.
 	// Use this to detect restart loops or track worker lifetime.
 	StartupCount int64 `json:"startup_count"`
-
-	// === State Information ===
-
-	// StateReason is a human-readable explanation for the current state.
-	// Set by the supervisor during state transitions from state.Reason().
-	// Useful for understanding WHY the worker is in its current state.
-	StateReason string `json:"state_reason,omitempty"`
 }
 
 // MetricsContainer groups framework and worker metrics together.
@@ -414,11 +414,11 @@ type FrameworkMetrics struct {
 // JSON structure: {"framework":{...},"worker":{...}}.
 // Access pattern: snap.Observed.Metrics.Framework.TimeInCurrentStateMs.
 type MetricsContainer struct {
-	// Framework contains supervisor-computed metrics (copied from deps by worker).
-	Framework FrameworkMetrics `json:"framework,omitempty"`
 
 	// Worker contains worker-defined metrics (recorded via MetricsRecorder).
 	Worker Metrics `json:"worker,omitempty"`
+	// Framework contains supervisor-computed metrics (copied from deps by worker).
+	Framework FrameworkMetrics `json:"framework,omitempty"`
 }
 
 // MetricsEmbedder provides both framework and worker metrics.
@@ -460,4 +460,3 @@ func (m MetricsEmbedder) GetWorkerMetrics() Metrics {
 func (m MetricsEmbedder) GetFrameworkMetrics() FrameworkMetrics {
 	return m.Metrics.Framework
 }
-

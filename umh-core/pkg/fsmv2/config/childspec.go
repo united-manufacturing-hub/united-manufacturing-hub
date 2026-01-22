@@ -54,8 +54,8 @@ import "encoding/json"
 //
 // See ValidateNoCustomLifecycleFields in pkg/fsmv2/internal/validator/snapshot.go for enforcement.
 type BaseDesiredState struct {
-	ShutdownRequested bool   `json:"ShutdownRequested"`
 	State             string `json:"state"` // "stopped" or "running" - desired lifecycle state
+	ShutdownRequested bool   `json:"ShutdownRequested"`
 }
 
 // IsShutdownRequested returns whether shutdown has been requested for this worker.
@@ -122,8 +122,8 @@ func (b *BaseUserSpec) GetState() string {
 //	        ↓ DeriveDesiredState()
 //	DesiredState{Host: "192.168.1.100", Port: 502}
 type UserSpec struct {
-	Config    string         `json:"config"    yaml:"config"`    // Raw user-provided configuration (YAML, JSON, or other format)
 	Variables VariableBundle `json:"variables" yaml:"variables"` // Variable bundle (User, Global, Internal namespaces)
+	Config    string         `json:"config"    yaml:"config"`    // Raw user-provided configuration (YAML, JSON, or other format)
 }
 
 // Clone creates a deep copy of the UserSpec.
@@ -211,11 +211,11 @@ func (u UserSpec) Clone() UserSpec {
 //	    },
 //	}
 type ChildSpec struct {
+	UserSpec         UserSpec       `json:"userSpec"                   yaml:"userSpec"`                   // Raw user config (input to DeriveDesiredState)
+	Dependencies     map[string]any `json:"dependencies,omitempty"     yaml:"dependencies,omitempty"`     // Additional deps to merge with parent's deps (child overrides parent)
 	Name             string         `json:"name"                       yaml:"name"`                       // Unique name for this child (within parent scope)
 	WorkerType       string         `json:"workerType"                 yaml:"workerType"`                 // Type of worker to create (registered worker factory key)
-	UserSpec         UserSpec       `json:"userSpec"                   yaml:"userSpec"`                   // Raw user config (input to DeriveDesiredState)
 	ChildStartStates []string       `json:"childStartStates,omitempty" yaml:"childStartStates,omitempty"` // Parent FSM states where child should run (empty = always run)
-	Dependencies     map[string]any `json:"dependencies,omitempty"     yaml:"dependencies,omitempty"`     // Additional deps to merge with parent's deps (child overrides parent)
 }
 
 // MarshalJSON implements json.Marshaler for ChildSpec.
@@ -290,9 +290,9 @@ type ChildInfo struct {
 	WorkerType    string // Child worker type
 	StateName     string // Current FSM state name (e.g., "Running", "TryingToStart")
 	StateReason   string // Human-readable reason for current state
-	IsHealthy     bool   // Whether the child is considered healthy
 	ErrorMsg      string // Error message if unhealthy (empty if healthy)
 	HierarchyPath string // Full path in the worker hierarchy (e.g., "app.parent.child")
+	IsHealthy     bool   // Whether the child is considered healthy
 	// Infrastructure status fields (framework-tracked)
 	IsStale       bool // True if observation age > stale threshold (~10s)
 	IsCircuitOpen bool // True if infrastructure failure detected (circuit breaker open)
@@ -386,10 +386,10 @@ type ChildrenView interface {
 //	    ChildrenSpecs: nil,         // Children removed during shutdown
 //	}
 type DesiredState struct {
-	BaseDesiredState                                                                                   // Provides ShutdownRequested field and methods (IsShutdownRequested, SetShutdownRequested)
-	State            string      `json:"state"                      yaml:"state"`                      // Current desired state ("running", "stopped", "shutdown", etc.)
-	ChildrenSpecs    []ChildSpec `json:"childrenSpecs,omitempty"    yaml:"childrenSpecs,omitempty"`    // Declarative specification of child workers
-	OriginalUserSpec interface{} `json:"originalUserSpec,omitempty" yaml:"-"`                          // Captures the input that produced this DesiredState (for debugging/traceability)
+	OriginalUserSpec interface{} `json:"originalUserSpec,omitempty" yaml:"-"` // Captures the input that produced this DesiredState (for debugging/traceability)
+	BaseDesiredState             // Provides ShutdownRequested field and methods (IsShutdownRequested, SetShutdownRequested)
+	State            string      `json:"state"                   yaml:"state"`                   // Current desired state ("running", "stopped", "shutdown", etc.)
+	ChildrenSpecs    []ChildSpec `json:"childrenSpecs,omitempty" yaml:"childrenSpecs,omitempty"` // Declarative specification of child workers
 }
 
 // NOTE: IsShutdownRequested() and SetShutdownRequested() are provided by embedded BaseDesiredState.

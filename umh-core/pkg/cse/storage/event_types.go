@@ -19,31 +19,31 @@ import (
 )
 
 const (
-	EventTypeObservation   = "observation"
-	EventTypeDesiredChange = "desired_change"
+	EventTypeObservation    = "observation"
+	EventTypeDesiredChange  = "desired_change"
 	EventTypeIdentityCreate = "identity_create"
 )
 
 type Event struct {
-	SyncID      int64
+	Changes     *Diff
 	WorkerID    string
 	WorkerType  string
 	Collection  string
 	Role        string
 	EventType   string
-	HasChanges  bool
-	Changes     *Diff
+	SyncID      int64
 	TimestampMs int64
+	HasChanges  bool
 }
 
 type EventSnapshot struct {
-	ID          int64
+	Document    persistence.Document
 	WorkerID    string
 	WorkerType  string
 	Collection  string
 	Role        string
+	ID          int64
 	AtSyncID    int64
-	Document    persistence.Document
 	EventCount  int
 	TimestampMs int64
 }

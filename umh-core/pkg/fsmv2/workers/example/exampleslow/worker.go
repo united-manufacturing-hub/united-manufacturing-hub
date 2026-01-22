@@ -34,8 +34,8 @@ import (
 
 type ExampleslowWorker struct {
 	*helpers.BaseWorker[*ExampleslowDependencies]
-	identity fsmv2.Identity
 	logger   *zap.SugaredLogger
+	identity fsmv2.Identity
 }
 
 func NewExampleslowWorker(

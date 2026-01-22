@@ -25,14 +25,14 @@ import (
 // ApplicationObservedState represents the minimal observed state for an application supervisor.
 // It embeds the desired state to track what was actually deployed.
 type ApplicationObservedState struct {
-	ID          string    `json:"id"`
 	CollectedAt time.Time `json:"collected_at"`
+	ID          string    `json:"id"`
 	Name        string    `json:"name"`
+
+	State string `json:"state"` // Observed lifecycle state (e.g., "running_connected")
 
 	// DeployedDesiredState is what was last deployed to this application.
 	ApplicationDesiredState `json:",inline"`
-
-	State string `json:"state"` // Observed lifecycle state (e.g., "running_connected")
 
 	// Embedded metrics for both framework and worker metrics.
 	// Framework metrics provide time-in-state via GetFrameworkMetrics().TimeInCurrentStateMs

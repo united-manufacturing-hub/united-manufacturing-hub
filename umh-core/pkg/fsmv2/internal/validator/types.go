@@ -19,9 +19,9 @@ import "fmt"
 // Violation represents an architectural violation found in code.
 type Violation struct {
 	File    string
-	Line    int
 	Type    string
 	Message string
+	Line    int
 }
 
 func (v Violation) String() string {

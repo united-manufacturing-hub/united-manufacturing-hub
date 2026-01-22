@@ -20,8 +20,8 @@ import "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pk
 // Clients provide their last sync position and optionally filter
 // which data they want to receive.
 type Subscription struct {
-	LastSyncID int64   // Client's last sync position
 	Queries    []Query // What data to receive (empty = all)
+	LastSyncID int64   // Client's last sync position
 }
 
 // Query is a stub for now - filtering will be added later.
@@ -32,11 +32,11 @@ type Query struct{}
 // It contains just the diff (not full document) to minimize
 // data transfer over the wire.
 type Delta struct {
-	SyncID      int64  // Global monotonic sequence number
+	Changes     *Diff  // Field-level changes (Added, Modified, Removed)
 	WorkerType  string // Type of worker (e.g., "container", "relay")
 	WorkerID    string // Unique identifier for the worker
 	Role        string // "identity", "desired", or "observed"
-	Changes     *Diff  // Field-level changes (Added, Modified, Removed)
+	SyncID      int64  // Global monotonic sequence number
 	TimestampMs int64  // When the change occurred (Unix ms)
 }
 
@@ -44,10 +44,10 @@ type Delta struct {
 // It either contains incremental deltas or full bootstrap data
 // if the client is too far behind.
 type DeltasResponse struct {
-	Deltas            []Delta        // Incremental changes since LastSyncID
-	RequiresBootstrap bool           // True if client too far behind
 	Bootstrap         *BootstrapData // Full state if bootstrap needed
+	Deltas            []Delta        // Incremental changes since LastSyncID
 	LatestSyncID      int64          // Current sync position
+	RequiresBootstrap bool           // True if client too far behind
 	HasMore           bool           // More deltas available (pagination)
 }
 
@@ -57,16 +57,16 @@ type DeltasResponse struct {
 //   - Delta history has been compacted
 //   - Client is syncing for the first time.
 type BootstrapData struct {
-	Workers      []WorkerSnapshot // Full state of all workers
-	AtSyncID     int64            // Sync position of this bootstrap
-	TimestampMs  int64            // When bootstrap was generated
+	Workers     []WorkerSnapshot // Full state of all workers
+	AtSyncID    int64            // Sync position of this bootstrap
+	TimestampMs int64            // When bootstrap was generated
 }
 
 // WorkerSnapshot contains the complete triangular state for a single worker.
 type WorkerSnapshot struct {
-	WorkerType string               // Type of worker
-	WorkerID   string               // Unique identifier
 	Identity   persistence.Document // Immutable identity (may be nil)
 	Desired    persistence.Document // User intent (may be nil)
 	Observed   persistence.Document // System reality (may be nil)
+	WorkerType string               // Type of worker
+	WorkerID   string               // Unique identifier
 }

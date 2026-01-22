@@ -34,10 +34,10 @@ import (
 
 // ChildWorker implements the FSM v2 Worker interface for resource management.
 type ChildWorker struct {
-	*helpers.BaseWorker[*ExamplechildDependencies]
-	identity   fsmv2.Identity
-	logger     *zap.SugaredLogger
 	connection Connection
+	*helpers.BaseWorker[*ExamplechildDependencies]
+	logger   *zap.SugaredLogger
+	identity fsmv2.Identity
 }
 
 // NewChildWorker creates a new example child worker.
@@ -122,21 +122,21 @@ func (w *ChildWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedS
 // ARCHITECTURE NOTE: Production workers follow this pattern:
 //
 // 1. DesiredState: Contains OriginalUserSpec (template + variables), NOT rendered config
-//    - Rendered configs are ephemeral, computed by Actions
+//   - Rendered configs are ephemeral, computed by Actions
 //
-// 2. Action (CreateServiceAction): Renders and writes config to disk
-//    rendered := config.RenderConfigTemplate(userSpec.Config, userSpec.Variables)
-//    checksum := xxhash(rendered)
-//    fsService.WriteFile("/data/services/benthos-"+id+"/config.yaml", rendered)
-//    deps.expectedChecksum = checksum  // Store for drift detection
+//  2. Action (CreateServiceAction): Renders and writes config to disk
+//     rendered := config.RenderConfigTemplate(userSpec.Config, userSpec.Variables)
+//     checksum := xxhash(rendered)
+//     fsService.WriteFile("/data/services/benthos-"+id+"/config.yaml", rendered)
+//     deps.expectedChecksum = checksum  // Store for drift detection
 //
-// 3. CollectObservedState: Reads file checksum, compares with expected
-//    currentChecksum := xxhash(fileContent)
-//    observed.IsDrifted = (currentChecksum != deps.expectedChecksum)
+//  3. CollectObservedState: Reads file checksum, compares with expected
+//     currentChecksum := xxhash(fileContent)
+//     observed.IsDrifted = (currentChecksum != deps.expectedChecksum)
 //
 // 4. Caching layers for performance:
-//    - Supervisor: hash(UserSpec) → skip DeriveDesiredState if unchanged (Stage 7)
-//    - Action: Compare checksums → skip write if file already correct
+//   - Supervisor: hash(UserSpec) → skip DeriveDesiredState if unchanged (Stage 7)
+//   - Action: Compare checksums → skip write if file already correct
 //
 // This example demonstrates variable inheritance and template rendering.
 // For full S6 service creation, see pkg/service/s6/lifecycle.go.

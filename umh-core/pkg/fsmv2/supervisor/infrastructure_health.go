@@ -27,8 +27,8 @@ const (
 )
 
 type ChildHealthError struct {
-	ChildName string
 	Err       error
+	ChildName string
 }
 
 func (e *ChildHealthError) Error() string {

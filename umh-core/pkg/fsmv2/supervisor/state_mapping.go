@@ -17,9 +17,9 @@ package supervisor
 // Snapshot is the complete view of the worker at a point in time.
 // This is a simplified version for state mapping purposes.
 type Snapshot struct {
-	Identity Identity    // Who am I?
 	Observed interface{} // What is the actual state?
 	Desired  interface{} // What should the state be?
+	Identity Identity    // Who am I?
 }
 
 // Identity uniquely identifies a worker instance.
@@ -33,8 +33,6 @@ type Identity struct {
 // Parent FSMs can declaratively specify what state their
 // children should be in when the parent is in a particular state.
 type StateMapping struct {
-	// ParentState is the state that triggers child updates
-	ParentState string
 
 	// ChildDesired maps child IDs to their desired states
 	// Example: {"child-1": "running", "child-2": "running"}
@@ -44,6 +42,8 @@ type StateMapping struct {
 	// If nil, the mapping is always applied.
 	// If provided, mapping is only applied when condition returns true.
 	Condition func(parentSnapshot Snapshot) bool
+	// ParentState is the state that triggers child updates
+	ParentState string
 }
 
 // StateMappingRegistry holds mappings for hierarchical FSMs.

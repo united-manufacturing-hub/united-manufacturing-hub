@@ -80,11 +80,11 @@ func (e ErrorType) String() string {
 // TransportError represents a classified HTTP transport error.
 // It embeds error type information for intelligent backoff strategies.
 type TransportError struct {
+	Err        error
+	Message    string
 	Type       ErrorType
 	StatusCode int
-	Message    string
 	RetryAfter time.Duration
-	Err        error
 }
 
 // Error implements the error interface.
@@ -222,8 +222,8 @@ func newTransportError(statusCode int, body []byte, headers http.Header, baseErr
 
 // HTTPTransport implements HTTP-based communication using umh-core protocol.
 type HTTPTransport struct {
-	RelayURL   string
 	httpClient *http.Client
+	RelayURL   string
 }
 
 // NewHTTPTransport creates a new HTTP transport.

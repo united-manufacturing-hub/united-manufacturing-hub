@@ -28,18 +28,18 @@ import (
 // MockRelayServer is a mock HTTP server that simulates the relay server for testing.
 // It supports authentication, pull, and push operations with error injection capabilities.
 type MockRelayServer struct {
-	server            *httptest.Server
-	mu                sync.Mutex
+	server   *httptest.Server
+	jwtToken string
+	// Bug #6 fix: Backend returns a specific UUID for the instance
+	backendUUID       string
+	backendName       string
 	pullQueue         []*transport.UMHMessage
 	pushedMsgs        []*transport.UMHMessage
-	authCalls         int
-	jwtToken          string
 	connectionHeaders []string
+	authCalls         int
 	nextError         int
 	slowDelay         time.Duration
-	// Bug #6 fix: Backend returns a specific UUID for the instance
-	backendUUID string
-	backendName string
+	mu                sync.Mutex
 }
 
 // NewMockRelayServer creates and starts a new mock relay server.

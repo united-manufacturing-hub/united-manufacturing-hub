@@ -49,28 +49,30 @@ import (
 // Field ordering: Fields are ordered by decreasing size to minimize struct padding.
 // 24-byte fields first, then 16-byte, then 8-byte, then 1-byte (bools) at the end.
 type CommunicatorDependencies struct {
-	// 24-byte fields
-	mu             sync.RWMutex            // Mutex for thread-safe access
-	jwtExpiry      time.Time               // JWT expiry (set by AuthenticateAction)
-	pulledMessages []*transport.UMHMessage // Pulled messages (set by SyncAction)
+	jwtExpiry         time.Time // JWT expiry (set by AuthenticateAction)
+	degradedEnteredAt time.Time // When we entered degraded mode (first error after success)
+	lastAuthAttemptAt time.Time // Last authentication attempt timestamp (for backoff)
 
 	// 16-byte fields
-	transport    transport.Transport // HTTP transport for push/pull operations
-	jwtToken     string              // JWT token (set by AuthenticateAction)
-	instanceUUID string              // Instance UUID from backend (set by AuthenticateAction)
-	instanceName string              // Instance name from backend (set by AuthenticateAction)
+	transport transport.Transport // HTTP transport for push/pull operations
 
 	// 8-byte fields
 	*fsmv2.BaseDependencies
-	degradedEnteredAt time.Time                    // When we entered degraded mode (first error after success)
-	lastAuthAttemptAt time.Time                    // Last authentication attempt timestamp (for backoff)
-	lastRetryAfter    time.Duration                // Retry-After from last error (from server)
-	inboundChan       chan<- *transport.UMHMessage // Write received messages to router
-	outboundChan      <-chan *transport.UMHMessage // Read messages from router to push
-	consecutiveErrors int                          // Error counter (incremented by RecordError)
+	inboundChan  chan<- *transport.UMHMessage // Write received messages to router
+	outboundChan <-chan *transport.UMHMessage // Read messages from router to push
+	jwtToken     string                       // JWT token (set by AuthenticateAction)
+	instanceUUID string                       // Instance UUID from backend (set by AuthenticateAction)
+	instanceName string                       // Instance name from backend (set by AuthenticateAction)
+
+	pulledMessages []*transport.UMHMessage // Pulled messages (set by SyncAction)
+
+	lastRetryAfter    time.Duration // Retry-After from last error (from server)
+	consecutiveErrors int           // Error counter (incremented by RecordError)
 
 	// 4-byte fields
 	lastErrorType httpTransport.ErrorType // Last error type for intelligent backoff
+	// 24-byte fields
+	mu sync.RWMutex // Mutex for thread-safe access
 }
 
 // NewCommunicatorDependencies creates a new dependencies for the communicator worker.
@@ -229,9 +231,9 @@ func (d *CommunicatorDependencies) RecordSuccess() {
 	defer d.mu.Unlock()
 
 	d.consecutiveErrors = 0
-	d.degradedEnteredAt = time.Time{}  // Clear degraded entry time
-	d.lastErrorType = 0                // Clear error type
-	d.lastRetryAfter = 0               // Clear retry-after
+	d.degradedEnteredAt = time.Time{} // Clear degraded entry time
+	d.lastErrorType = 0               // Clear error type
+	d.lastRetryAfter = 0              // Clear retry-after
 	d.lastAuthAttemptAt = time.Time{} // Clear auth attempt time
 }
 

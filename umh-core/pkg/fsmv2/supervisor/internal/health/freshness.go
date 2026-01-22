@@ -25,9 +25,9 @@ import (
 
 // FreshnessChecker validates observation data age against thresholds.
 type FreshnessChecker struct {
+	logger         *zap.SugaredLogger
 	staleThreshold time.Duration
 	timeout        time.Duration
-	logger         *zap.SugaredLogger
 }
 
 // NewFreshnessChecker creates a checker with the given thresholds.

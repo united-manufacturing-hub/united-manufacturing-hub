@@ -380,7 +380,6 @@ func CleanupStateDuration(workerType, workerID, state string) {
 //
 // Thread-safety: Uses sync.Mutex for registry access.
 type WorkerMetricsExporter struct {
-	mu sync.Mutex
 
 	// Dynamic counter/gauge registries - created on first use per metric name
 	counters map[string]*prometheus.CounterVec
@@ -389,6 +388,7 @@ type WorkerMetricsExporter struct {
 	// Previous counter values for delta computation
 	// Key format: "workerType:workerID:metricName"
 	prevCounters map[string]int64
+	mu           sync.Mutex
 }
 
 // workerMetricsExporter is the singleton exporter instance.

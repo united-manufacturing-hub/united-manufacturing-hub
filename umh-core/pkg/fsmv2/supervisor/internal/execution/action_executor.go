@@ -29,29 +29,29 @@ import (
 )
 
 type ActionExecutor struct {
-	supervisorID     string
-	identity         fsmv2.Identity // Worker identity for logging
-	workerCount      int
+	ctx              context.Context
 	actionQueue      chan actionWork
 	inProgress       map[string]bool
-	mu               sync.RWMutex
-	ctx              context.Context
 	cancel           context.CancelFunc
-	wg               sync.WaitGroup
 	timeouts         map[string]time.Duration
-	defaultTimeout   time.Duration
 	metricsCancel    context.CancelFunc
-	metricsWg        sync.WaitGroup
 	logger           *zap.SugaredLogger
-	closeOnce        sync.Once                       // Ensures actionQueue is closed only once
 	onActionComplete func(result fsmv2.ActionResult) // Called after each action execution (for auto-recording to ActionHistory)
+	identity         fsmv2.Identity                  // Worker identity for logging
+	supervisorID     string
+	wg               sync.WaitGroup
+	metricsWg        sync.WaitGroup
+	workerCount      int
+	defaultTimeout   time.Duration
+	mu               sync.RWMutex
+	closeOnce        sync.Once // Ensures actionQueue is closed only once
 }
 
 type actionWork struct {
-	actionID string
 	action   fsmv2.Action[any]
-	timeout  time.Duration
 	deps     any // Dependencies to pass to the action
+	actionID string
+	timeout  time.Duration
 }
 
 func NewActionExecutor(workerCount int, supervisorID string, identity fsmv2.Identity, logger *zap.SugaredLogger) *ActionExecutor {

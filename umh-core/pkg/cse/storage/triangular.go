@@ -99,11 +99,12 @@ type TriangularStore struct {
 
 	// Memory cache for hot path performance (LoadSnapshot is called 100-1000+ times/sec)
 	snapshotCache map[string]*cachedSnapshot // key: "{workerType}_{id}"
-	cacheMutex    sync.RWMutex
 
 	// Known worker types - automatically populated as workers are saved
 	// Used by buildBootstrap to discover all worker types for full state sync
-	knownWorkerTypes   map[string]struct{}
+	knownWorkerTypes map[string]struct{}
+	cacheMutex       sync.RWMutex
+
 	knownWorkerTypesMu sync.RWMutex
 }
 
@@ -347,10 +348,10 @@ var diffExcludedFields = map[string]bool{
 // CSE semantics: Fields are never removed, only "added" or "modified".
 // old=nil means this is a new field being added for the first time.
 type FieldChange struct {
-	Field      string      `json:"field"`
-	ChangeType string      `json:"change_type"` // "added" or "modified" (CSE never removes fields)
 	Old        interface{} `json:"old"`
 	New        interface{} `json:"new"`
+	Field      string      `json:"field"`
+	ChangeType string      `json:"change_type"` // "added" or "modified" (CSE never removes fields)
 }
 
 // formatValueForLog safely formats a value for logging with truncation.

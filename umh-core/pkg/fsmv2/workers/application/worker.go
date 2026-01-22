@@ -158,11 +158,6 @@ func (w *ApplicationWorker) GetDependenciesAny() any {
 
 // SupervisorConfig contains configuration for creating an application supervisor.
 type SupervisorConfig struct {
-	// ID is the unique identifier for the application worker.
-	ID string
-
-	// Name is a human-readable name for the application worker.
-	Name string
 
 	// Store is the triangular store for state persistence.
 	Store storage.TriangularStoreInterface
@@ -170,9 +165,15 @@ type SupervisorConfig struct {
 	// Logger is the logger for supervisor operations.
 	Logger *zap.SugaredLogger
 
-	// TickInterval is how often the supervisor evaluates state transitions.
-	// Defaults to 100ms if not set.
-	TickInterval time.Duration
+	// Dependencies is an optional map of named dependencies to inject into child workers.
+	// Worker factories can access these via the deps parameter to avoid global state.
+	// Example: deps["channelProvider"] could provide channels for the communicator worker.
+	Dependencies map[string]any
+	// ID is the unique identifier for the application worker.
+	ID string
+
+	// Name is a human-readable name for the application worker.
+	Name string
 
 	// YAMLConfig is the raw YAML configuration containing children specifications.
 	// This is passed to the application worker to parse and extract children.
@@ -186,15 +187,14 @@ type SupervisorConfig struct {
 	//           value: 10
 	YAMLConfig string
 
+	// TickInterval is how often the supervisor evaluates state transitions.
+	// Defaults to 100ms if not set.
+	TickInterval time.Duration
+
 	// EnableTraceLogging enables verbose lifecycle event logging (mutex locks, tick events, etc.)
 	// Optional - defaults to false. Set ENABLE_TRACE_LOGGING=true for deep debugging.
 	// When false, these high-frequency internal logs are suppressed to improve signal-to-noise ratio.
 	EnableTraceLogging bool
-
-	// Dependencies is an optional map of named dependencies to inject into child workers.
-	// Worker factories can access these via the deps parameter to avoid global state.
-	// Example: deps["channelProvider"] could provide channels for the communicator worker.
-	Dependencies map[string]any
 }
 
 // NewApplicationSupervisor creates a supervisor with an application worker already added.

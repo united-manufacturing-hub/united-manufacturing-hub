@@ -20,10 +20,10 @@ import (
 )
 
 type ExponentialBackoff struct {
+	startTime time.Time
 	baseDelay time.Duration
 	maxDelay  time.Duration
 	attempts  int
-	startTime time.Time
 }
 
 func NewExponentialBackoff(baseDelay, maxDelay time.Duration) *ExponentialBackoff {

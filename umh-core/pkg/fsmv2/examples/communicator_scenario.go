@@ -105,20 +105,18 @@ drainLoop:
 //	    }},
 //	})
 type CommunicatorRunConfig struct {
-	// Duration specifies how long to run the scenario.
-	// Use 0 to run until the context is cancelled.
-	// Negative values are invalid and return an error.
-	Duration time.Duration
 
-	// TickInterval is the supervisor tick interval (default: 100ms if zero).
-	TickInterval time.Duration
+	// Logger outputs scenario logs. If nil, the function creates a development logger.
+	Logger *zap.SugaredLogger
+
+	// MockServer lets you inject a pre-configured mock server for error testing.
+	// If nil, the function creates and manages a new mock server internally.
+	// When you provide a MockServer, you are responsible for calling Close().
+	MockServer *testutil.MockRelayServer
 
 	// AuthToken authenticates with the mock relay server.
 	// If empty, defaults to "test-auth-token".
 	AuthToken string
-
-	// Logger outputs scenario logs. If nil, the function creates a development logger.
-	Logger *zap.SugaredLogger
 
 	// InitialPullMessages contains messages to queue on the mock server before the scenario starts.
 	// The communicator receives these messages during pull operations.
@@ -128,10 +126,13 @@ type CommunicatorRunConfig struct {
 	// These are provided via the channel provider for the worker to push to HTTP.
 	InitialOutboundMessages []*transport.UMHMessage
 
-	// MockServer lets you inject a pre-configured mock server for error testing.
-	// If nil, the function creates and manages a new mock server internally.
-	// When you provide a MockServer, you are responsible for calling Close().
-	MockServer *testutil.MockRelayServer
+	// Duration specifies how long to run the scenario.
+	// Use 0 to run until the context is cancelled.
+	// Negative values are invalid and return an error.
+	Duration time.Duration
+
+	// TickInterval is the supervisor tick interval (default: 100ms if zero).
+	TickInterval time.Duration
 }
 
 // CommunicatorRunResult contains observable results after scenario completion.
@@ -146,6 +147,9 @@ type CommunicatorRunConfig struct {
 //	Expect(result.AuthCallCount).To(BeNumerically(">=", 1), "should authenticate at least once")
 //	Expect(result.PushedMessages).To(HaveLen(expectedPushCount))
 type CommunicatorRunResult struct {
+
+	// Error is non-nil if the scenario failed to run (setup failure, etc.).
+	Error error
 	// Done channel closes when the scenario completes (matches RunResult pattern).
 	Done <-chan struct{}
 
@@ -173,9 +177,6 @@ type CommunicatorRunResult struct {
 	// Normally 1 for a healthy run. Higher values indicate re-authentication occurred.
 	// Note: Only populated after Done closes.
 	AuthCallCount int
-
-	// Error is non-nil if the scenario failed to run (setup failure, etc.).
-	Error error
 }
 
 // RunCommunicatorScenario runs the FSMv2 communicator worker via ApplicationSupervisor.

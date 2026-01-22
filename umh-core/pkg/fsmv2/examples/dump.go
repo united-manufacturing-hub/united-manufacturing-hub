@@ -37,19 +37,19 @@ const (
 // ScenarioDump captures the complete state and history of a scenario run.
 // It includes both the delta history (what changed) and final state (current values).
 type ScenarioDump struct {
-	StartSyncID int64           // Sync ID at scenario start
-	EndSyncID   int64           // Sync ID at scenario end
-	Deltas      []storage.Delta // All changes during scenario (chronological)
+	Deltas      []storage.Delta  // All changes during scenario (chronological)
 	Workers     []WorkerSnapshot // Final state of all workers (grouped by type)
+	StartSyncID int64            // Sync ID at scenario start
+	EndSyncID   int64            // Sync ID at scenario end
 }
 
 // WorkerSnapshot represents the final triangular state of a worker.
 type WorkerSnapshot struct {
-	WorkerType string
-	WorkerID   string
 	Identity   persistence.Document
 	Desired    persistence.Document
 	Observed   persistence.Document
+	WorkerType string
+	WorkerID   string
 }
 
 // DumpScenario captures deltas and final state using TriangularStore's existing API.

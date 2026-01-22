@@ -34,8 +34,8 @@ import (
 
 type ExamplepanicWorker struct {
 	*helpers.BaseWorker[*ExamplepanicDependencies]
-	identity fsmv2.Identity
 	logger   *zap.SugaredLogger
+	identity fsmv2.Identity
 }
 
 func NewExamplepanicWorker(

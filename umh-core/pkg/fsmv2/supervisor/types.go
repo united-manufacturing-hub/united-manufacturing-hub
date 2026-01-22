@@ -36,12 +36,12 @@ import (
 // This struct is internal to Supervisor and tracks runtime state.
 // Configuration is provided via CollectorHealthConfig.
 type CollectorHealth struct {
+	lastRestart        time.Time     // Timestamp of last restart attempt
 	observationTimeout time.Duration // Maximum time for single observation operation
 	staleThreshold     time.Duration // Age when data considered stale (pause FSM)
 	timeout            time.Duration // Age when collector considered broken (trigger restart)
 	maxRestartAttempts int           // Maximum restart attempts before escalation
 	restartCount       int           // Current restart attempt counter
-	lastRestart        time.Time     // Timestamp of last restart attempt
 }
 
 // SupervisorInterface provides a type-erased interface for hierarchical supervisor composition.
@@ -99,6 +99,19 @@ type SupervisorInterface interface {
 // THREAD SAFETY: currentState is protected by mu. Always lock before accessing.
 // tickInProgress prevents concurrent ticks for the same worker.
 type WorkerContext[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] struct {
+	lastActionObsTime time.Time
+
+	// Supervisor-internal state tracking (injected into FrameworkMetrics for worker access).
+	//
+	// These fields are tracked by the supervisor and COPIED into FrameworkMetrics before
+	// State.Next() so workers can read them. Workers cannot write these directly.
+	//
+	// This is separate from MetricsRecorder which handles worker-written metrics:
+	// - WorkerContext fields: Supervisor writes, workers read (via FrameworkMetrics)
+	// - MetricsRecorder: Workers write, supervisor drains and persists
+	stateEnteredAt time.Time // When current state was entered
+	worker         fsmv2.Worker
+	currentState   fsmv2.State[any, any]
 	// mu Protects currentState (per-worker FSM state).
 	//
 	// This is a lockmanager.Lock wrapping sync.RWMutex because state is checked on every tick (frequent concurrent reads)
@@ -110,32 +123,20 @@ type WorkerContext[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] s
 	//
 	// Lock Order: This lock must be acquired AFTER Supervisor.mu when both are needed.
 	// See package-level LOCK ORDER section for details.
-	mu                *lockmanager.Lock
-	tickInProgress    atomic.Bool
-	identity          fsmv2.Identity
-	worker            fsmv2.Worker
-	currentState      fsmv2.State[any, any]
-	collector         *collection.Collector[TObserved]
-	executor          *execution.ActionExecutor
-	actionPending     bool
-	lastActionObsTime time.Time
-	actionHistory     *fsmv2.InMemoryActionHistoryRecorder // Supervisor-owned buffer for action results
+	mu            *lockmanager.Lock
+	collector     *collection.Collector[TObserved]
+	executor      *execution.ActionExecutor
+	actionHistory *fsmv2.InMemoryActionHistoryRecorder // Supervisor-owned buffer for action results
 
-	// Supervisor-internal state tracking (injected into FrameworkMetrics for worker access).
-	//
-	// These fields are tracked by the supervisor and COPIED into FrameworkMetrics before
-	// State.Next() so workers can read them. Workers cannot write these directly.
-	//
-	// This is separate from MetricsRecorder which handles worker-written metrics:
-	// - WorkerContext fields: Supervisor writes, workers read (via FrameworkMetrics)
-	// - MetricsRecorder: Workers write, supervisor drains and persists
-	stateEnteredAt     time.Time                // When current state was entered
-	currentStateReason string                   // Human-readable reason for current state (from state.Reason())
 	stateTransitions   map[string]int64         // state_name → total times entered
 	stateDurations     map[string]time.Duration // state_name → cumulative time spent
-	totalTransitions   int64                    // Sum of all stateTransitions values
-	collectorRestarts  int64                    // Per-worker collector restarts
-	startupCount       int64                    // PERSISTENT: Loaded from CSE, incremented on AddWorker()
+	identity           fsmv2.Identity
+	currentStateReason string // Human-readable reason for current state (from state.Reason())
+	totalTransitions   int64  // Sum of all stateTransitions values
+	collectorRestarts  int64  // Per-worker collector restarts
+	startupCount       int64  // PERSISTENT: Loaded from CSE, incremented on AddWorker()
+	tickInProgress     atomic.Bool
+	actionPending      bool
 }
 
 // CollectorHealthConfig configures observation collector health monitoring.
@@ -170,9 +171,11 @@ type CollectorHealthConfig struct {
 // Config contains supervisor configuration.
 // All fields except WorkerType and Store have sensible defaults.
 type Config struct {
-	// WorkerType identifies the type of workers this supervisor manages.
-	// Required - no default.
-	WorkerType string
+
+	// UserSpec provides initial user configuration for the supervisor.
+	// This is optional for supervisors created by parents (they receive config via updateUserSpec).
+	// For root supervisors (like application supervisors), this provides the initial configuration.
+	UserSpec config.UserSpec
 
 	// Store persists FSM state (identity, desired, observed) using triangular model.
 	// Required - no default. Use storage.NewTriangularStore(basicStore, logger) or a mock.
@@ -182,23 +185,22 @@ type Config struct {
 	// Required - no default (use zap.NewNop().Sugar() for tests).
 	Logger *zap.SugaredLogger
 
-	// TickInterval is how often supervisor evaluates FSM state transitions.
-	// Optional - defaults to DefaultTickInterval (1 second).
-	TickInterval time.Duration
+	// Dependencies is an optional map of named dependencies to inject into child workers.
+	// Worker factories can access these via the deps parameter to avoid global state.
+	// Example: deps["channelProvider"] could provide channels for the communicator worker.
+	// Optional - defaults to nil.
+	Dependencies map[string]any
+	// WorkerType identifies the type of workers this supervisor manages.
+	// Required - no default.
+	WorkerType string
 
 	// CollectorHealth configures observation collector monitoring.
 	// Optional - all fields default to values in constants.go.
 	CollectorHealth CollectorHealthConfig
 
-	// UserSpec provides initial user configuration for the supervisor.
-	// This is optional for supervisors created by parents (they receive config via updateUserSpec).
-	// For root supervisors (like application supervisors), this provides the initial configuration.
-	UserSpec config.UserSpec
-
-	// EnableTraceLogging enables verbose lifecycle event logging (mutex locks, tick events, etc.)
-	// Optional - defaults to false. Set ENABLE_TRACE_LOGGING=true for deep debugging.
-	// When false, these high-frequency internal logs are suppressed to improve signal-to-noise ratio.
-	EnableTraceLogging bool
+	// TickInterval is how often supervisor evaluates FSM state transitions.
+	// Optional - defaults to DefaultTickInterval (1 second).
+	TickInterval time.Duration
 
 	// GracefulShutdownTimeout is how long to wait for workers to complete graceful shutdown.
 	// During shutdown, the supervisor requests graceful shutdown on all workers and waits
@@ -207,9 +209,8 @@ type Config struct {
 	// Optional - defaults to 5 seconds.
 	GracefulShutdownTimeout time.Duration
 
-	// Dependencies is an optional map of named dependencies to inject into child workers.
-	// Worker factories can access these via the deps parameter to avoid global state.
-	// Example: deps["channelProvider"] could provide channels for the communicator worker.
-	// Optional - defaults to nil.
-	Dependencies map[string]any
+	// EnableTraceLogging enables verbose lifecycle event logging (mutex locks, tick events, etc.)
+	// Optional - defaults to false. Set ENABLE_TRACE_LOGGING=true for deep debugging.
+	// When false, these high-frequency internal logs are suppressed to improve signal-to-noise ratio.
+	EnableTraceLogging bool
 }

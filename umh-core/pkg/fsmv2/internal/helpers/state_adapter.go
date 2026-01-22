@@ -43,9 +43,9 @@ import (
 //	    return s, SignalNone, nil
 //	}
 type TypedSnapshot[O any, D any] struct {
-	Identity fsmv2.Identity
 	Observed O
 	Desired  D
+	Identity fsmv2.Identity
 }
 
 // ConvertSnapshot converts an any-typed snapshot to a typed snapshot.

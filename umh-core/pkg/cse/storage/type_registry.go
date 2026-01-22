@@ -22,9 +22,9 @@ import (
 
 // TypeRegistry stores reflect.Type metadata for worker types.
 type TypeRegistry struct {
-	mu       sync.RWMutex
 	observed map[string]reflect.Type
 	desired  map[string]reflect.Type
+	mu       sync.RWMutex
 }
 
 // NewTypeRegistry creates a new type registry.

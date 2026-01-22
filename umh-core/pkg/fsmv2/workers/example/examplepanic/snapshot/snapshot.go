@@ -33,21 +33,22 @@ type ExamplepanicDependencies interface {
 
 type ExamplepanicSnapshot struct {
 	Identity fsmv2.Identity
-	Observed ExamplepanicObservedState
 	Desired  ExamplepanicDesiredState
+	Observed ExamplepanicObservedState
 }
 
 // ExamplepanicDesiredState represents the target configuration for the panic worker.
 // NOTE: Dependencies are NOT stored here - they belong in the Worker struct.
 // See fsmv2.DesiredState documentation for the architectural invariant.
 type ExamplepanicDesiredState struct {
-	config.BaseDesiredState // Provides ShutdownRequested + IsShutdownRequested() + SetShutdownRequested()
 
 	// ParentMappedState is the desired state derived from parent's ChildStartStates.
 	// When parent is in a state listed in ChildStartStates → "running"
 	// When parent is in any other state → "stopped"
 	// This field is injected by the supervisor via MappedParentStateProvider callback.
 	ParentMappedState string `json:"parent_mapped_state"`
+
+	config.BaseDesiredState // Provides ShutdownRequested + IsShutdownRequested() + SetShutdownRequested()
 
 	ShouldPanic bool `json:"ShouldPanic"`
 }
@@ -75,15 +76,15 @@ func (s *ExamplepanicDesiredState) IsShouldPanic() bool {
 }
 
 type ExamplepanicObservedState struct {
-	ID          string    `json:"id"`
 	CollectedAt time.Time `json:"collected_at"`
 
-	ExamplepanicDesiredState `json:",inline"`
+	LastError error  `json:"last_error,omitempty"`
+	ID        string `json:"id"`
 
 	State            string `json:"state"` // Observed lifecycle state (e.g., "running_connected")
-	LastError        error  `json:"last_error,omitempty"`
-	ConnectAttempts  int    `json:"connect_attempts"`
 	ConnectionHealth string `json:"connection_health"`
+
+	ExamplepanicDesiredState `json:",inline"`
 
 	// LastActionResults contains the action history from the last collection cycle.
 	// This is supervisor-managed data: the supervisor auto-records action results
@@ -92,6 +93,8 @@ type ExamplepanicObservedState struct {
 	LastActionResults []fsmv2.ActionResult `json:"last_action_results,omitempty"`
 
 	fsmv2.MetricsEmbedder `json:",inline"` // Framework and worker metrics for Prometheus export
+
+	ConnectAttempts int `json:"connect_attempts"`
 }
 
 func (o ExamplepanicObservedState) GetTimestamp() time.Time {

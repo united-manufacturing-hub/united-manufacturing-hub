@@ -35,8 +35,8 @@ import (
 // ParentWorker implements the FSM v2 Worker interface for parent-child relationships.
 type ParentWorker struct {
 	*helpers.BaseWorker[*ParentDependencies]
-	identity fsmv2.Identity
 	logger   *zap.SugaredLogger
+	identity fsmv2.Identity
 }
 
 // NewParentWorker creates a new example parent worker.

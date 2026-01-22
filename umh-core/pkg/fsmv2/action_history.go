@@ -63,8 +63,8 @@ type ActionHistoryRecorder interface {
 // InMemoryActionHistoryRecorder is a thread-safe implementation of ActionHistoryRecorder.
 // It uses a mutex to protect concurrent access to the results buffer.
 type InMemoryActionHistoryRecorder struct {
-	mu      sync.Mutex
 	results []ActionResult
+	mu      sync.Mutex
 }
 
 // NewInMemoryActionHistoryRecorder creates a new thread-safe ActionHistoryRecorder.

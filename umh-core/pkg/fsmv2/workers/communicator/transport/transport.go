@@ -33,9 +33,9 @@ type AuthRequest struct {
 // AuthResponse represents an authentication response.
 type AuthResponse struct {
 	Token        string `json:"token"`
-	ExpiresAt    int64  `json:"expiresAt,omitempty"`
 	InstanceUUID string `json:"uuid,omitempty"` // Instance UUID returned by backend
 	InstanceName string `json:"name,omitempty"` // Instance name returned by backend
+	ExpiresAt    int64  `json:"expiresAt,omitempty"`
 }
 
 // PullPayload represents the response from /v2/instance/pull.

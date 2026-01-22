@@ -54,17 +54,17 @@ func (d *DefaultConnectionPool) HealthCheck(_ Connection) error {
 // FailingDependencies provides access to tools needed by failing worker actions.
 // It implements ExamplefailingDependenciesWithFailure interface for failure simulation.
 type FailingDependencies struct {
+	connectionPool ConnectionPool
 	*fsmv2.BaseDependencies
-	connectionPool        ConnectionPool
-	mu                    sync.RWMutex
-	shouldFail            bool
 	maxFailures           int
 	attempts              int
-	connected             bool
 	restartAfterFailures  int
 	failureCycles         int // Total number of failure cycles to perform
 	currentCycle          int // Current failure cycle (0-indexed)
 	ticksInConnectedState int // Number of ticks spent in Connected state
+	mu                    sync.RWMutex
+	shouldFail            bool
+	connected             bool
 }
 
 // NewFailingDependencies creates new dependencies for the failing worker.

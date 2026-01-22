@@ -171,8 +171,12 @@ const (
 // run in the same process and can share in-memory state. For distributed deployments,
 // the persistence layer would need to be replaced with a distributed storage backend.
 type Supervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] struct {
-	workerType string                                         // Type of workers managed (e.g., "container") - for storage collection naming
-	workers    map[string]*WorkerContext[TObserved, TDesired] // workerID → worker context
+	createdAt          time.Time                                      // Timestamp when supervisor was created
+	store              storage.TriangularStoreInterface               // State persistence layer (triangular model)
+	parent             SupervisorInterface                            // Pointer to parent supervisor (nil for root supervisors)
+	ctx                context.Context                                // Context for supervisor lifecycle
+	cachedDesiredState fsmv2.DesiredState                             // Cached result from DeriveDesiredState (typed TDesired stored as interface)
+	workers            map[string]*WorkerContext[TObserved, TDesired] // workerID → worker context
 	// mu Protects access to workers map, children, childDoneChans, globalVars, and mappedParentState.
 	//
 	// This is a lockmanager.Lock wrapping sync.RWMutex to allow concurrent reads from multiple goroutines
@@ -181,32 +185,20 @@ type Supervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] stru
 	//
 	// Lock Order: Must be acquired BEFORE WorkerContext.mu when both are needed.
 	// See package-level LOCK ORDER section for details.
-	mu               *lockmanager.Lock
-	lockManager      *lockmanager.LockManager
-	store            storage.TriangularStoreInterface // State persistence layer (triangular model)
-	logger           *zap.SugaredLogger               // Logger for supervisor operations (enriched with worker path)
-	baseLogger       *zap.SugaredLogger               // Original logger without worker enrichment (for child supervisors)
-	tickInterval     time.Duration                    // How often to evaluate state transitions
-	collectorHealth  CollectorHealth                  // Collector health tracking
-	freshnessChecker *health.FreshnessChecker         // Data freshness validator
-	children         map[string]SupervisorInterface   // Child supervisors by name (hierarchical composition)
-	childDoneChans   map[string]<-chan struct{}       // Done channels for child supervisors
-	pendingRemoval      map[string]bool                  // Children pending graceful shutdown (waiting for SignalNeedsRemoval)
-	pendingRestart      map[string]bool                  // Workers pending restart after shutdown completes
-	restartRequestedAt  map[string]time.Time             // When restart was requested for each worker
-	childStartStates    []string                         // Parent FSM states where this child should run
-	userSpec          config.UserSpec                  // User-provided configuration for this supervisor
-	mappedParentState string                           // State mapped from parent (if this is a child supervisor)
-	globalVars        map[string]any                   // Global variables (fleet-wide settings from management system)
-	createdAt         time.Time                        // Timestamp when supervisor was created
-	parentID          string                           // ID of parent supervisor (empty string for root supervisors)
-	parent            SupervisorInterface              // Pointer to parent supervisor (nil for root supervisors)
-	healthChecker     *InfrastructureHealthChecker     // Infrastructure health monitoring
-	circuitOpen       atomic.Bool                      // Circuit breaker state (atomic for concurrent access)
-	actionExecutor    *execution.ActionExecutor        // Async action execution (Phase 2)
-	metricsWg         sync.WaitGroup                   // WaitGroup for metrics reporter goroutine
-	ctx               context.Context                  // Context for supervisor lifecycle
-	ctxCancel         context.CancelFunc               // Cancel function for supervisor context
+	mu                 *lockmanager.Lock
+	lockManager        *lockmanager.LockManager
+	logger             *zap.SugaredLogger             // Logger for supervisor operations (enriched with worker path)
+	baseLogger         *zap.SugaredLogger             // Original logger without worker enrichment (for child supervisors)
+	freshnessChecker   *health.FreshnessChecker       // Data freshness validator
+	children           map[string]SupervisorInterface // Child supervisors by name (hierarchical composition)
+	childDoneChans     map[string]<-chan struct{}     // Done channels for child supervisors
+	pendingRemoval     map[string]bool                // Children pending graceful shutdown (waiting for SignalNeedsRemoval)
+	pendingRestart     map[string]bool                // Workers pending restart after shutdown completes
+	restartRequestedAt map[string]time.Time           // When restart was requested for each worker
+	globalVars         map[string]any                 // Global variables (fleet-wide settings from management system)
+	healthChecker      *InfrastructureHealthChecker   // Infrastructure health monitoring
+	actionExecutor     *execution.ActionExecutor      // Async action execution (Phase 2)
+	ctxCancel          context.CancelFunc             // Cancel function for supervisor context
 	// ctxMu Protects ctx and ctxCancel to prevent TOCTOU races during shutdown.
 	//
 	// Without this lock, a goroutine could check ctx.Err() (finding it non-cancelled),
@@ -217,14 +209,22 @@ type Supervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] stru
 	// It can be acquired alone when checking context status, or after Supervisor.mu
 	// if both are needed (advisory order).
 	ctxMu                    *lockmanager.Lock
-	started                  atomic.Bool    // Whether supervisor has been started
-	enableTraceLogging       bool           // Whether to emit verbose lifecycle logs (mutex, tick events)
-	noStateMachineLoggedOnce sync.Map       // Tracks workers that have logged no_state_machine (workerID → true)
-	tickCount                uint64         // Counter for ticks, used for periodic heartbeat logging
-	gracefulShutdownTimeout  time.Duration  // How long to wait for workers to shutdown gracefully
-	lastUserSpecHash   string             // Hash of last UserSpec used for DeriveDesiredState
-	cachedDesiredState fsmv2.DesiredState // Cached result from DeriveDesiredState (typed TDesired stored as interface)
-	deps               map[string]any     // Dependencies for worker creation (injected, not global)
+	deps                     map[string]any  // Dependencies for worker creation (injected, not global)
+	noStateMachineLoggedOnce sync.Map        // Tracks workers that have logged no_state_machine (workerID → true)
+	userSpec                 config.UserSpec // User-provided configuration for this supervisor
+	workerType               string          // Type of workers managed (e.g., "container") - for storage collection naming
+	mappedParentState        string          // State mapped from parent (if this is a child supervisor)
+	parentID                 string          // ID of parent supervisor (empty string for root supervisors)
+	lastUserSpecHash         string          // Hash of last UserSpec used for DeriveDesiredState
+	childStartStates         []string        // Parent FSM states where this child should run
+	collectorHealth          CollectorHealth // Collector health tracking
+	metricsWg                sync.WaitGroup  // WaitGroup for metrics reporter goroutine
+	tickInterval             time.Duration   // How often to evaluate state transitions
+	tickCount                uint64          // Counter for ticks, used for periodic heartbeat logging
+	gracefulShutdownTimeout  time.Duration   // How long to wait for workers to shutdown gracefully
+	circuitOpen              atomic.Bool     // Circuit breaker state (atomic for concurrent access)
+	started                  atomic.Bool     // Whether supervisor has been started
+	enableTraceLogging       bool            // Whether to emit verbose lifecycle logs (mutex, tick events)
 }
 
 func NewSupervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState](cfg Config) *Supervisor[TObserved, TDesired] {
@@ -289,25 +289,25 @@ func NewSupervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState](c
 	}
 
 	return &Supervisor[TObserved, TDesired]{
-		workerType:       cfg.WorkerType,
-		workers:          make(map[string]*WorkerContext[TObserved, TDesired]),
-		lockManager:      lm,
-		mu:               lm.NewLock(lockNameSupervisorMu, lockLevelSupervisorMu),
-		ctxMu:            lm.NewLock(lockNameSupervisorCtxMu, lockLevelSupervisorCtxMu),
-		store:            cfg.Store,
-		logger:           cfg.Logger,
-		baseLogger:       cfg.Logger, // Store un-enriched logger for passing to child supervisors
-		tickInterval:     tickInterval,
-		freshnessChecker: freshnessChecker,
-		children:       make(map[string]SupervisorInterface),
+		workerType:         cfg.WorkerType,
+		workers:            make(map[string]*WorkerContext[TObserved, TDesired]),
+		lockManager:        lm,
+		mu:                 lm.NewLock(lockNameSupervisorMu, lockLevelSupervisorMu),
+		ctxMu:              lm.NewLock(lockNameSupervisorCtxMu, lockLevelSupervisorCtxMu),
+		store:              cfg.Store,
+		logger:             cfg.Logger,
+		baseLogger:         cfg.Logger, // Store un-enriched logger for passing to child supervisors
+		tickInterval:       tickInterval,
+		freshnessChecker:   freshnessChecker,
+		children:           make(map[string]SupervisorInterface),
 		childDoneChans:     make(map[string]<-chan struct{}),
 		pendingRemoval:     make(map[string]bool),
 		pendingRestart:     make(map[string]bool),
 		restartRequestedAt: make(map[string]time.Time),
 		createdAt:          time.Now(),
-		parentID:         "",
-		healthChecker:    NewInfrastructureHealthChecker(DefaultMaxInfraRecoveryAttempts, DefaultRecoveryAttemptWindow),
-		actionExecutor:   execution.NewActionExecutor(10, cfg.WorkerType, fsmv2.Identity{WorkerType: cfg.WorkerType}, cfg.Logger),
+		parentID:           "",
+		healthChecker:      NewInfrastructureHealthChecker(DefaultMaxInfraRecoveryAttempts, DefaultRecoveryAttemptWindow),
+		actionExecutor:     execution.NewActionExecutor(10, cfg.WorkerType, fsmv2.Identity{WorkerType: cfg.WorkerType}, cfg.Logger),
 		collectorHealth: CollectorHealth{
 			observationTimeout: observationTimeout,
 			staleThreshold:     staleThreshold,

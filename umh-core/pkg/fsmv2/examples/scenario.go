@@ -150,16 +150,6 @@ type ScenarioRunner func(ctx context.Context, cfg RunConfig) (*RunResult, error)
 //
 // Run() returns an error if you set both YAMLConfig and CustomRunner, or if you set neither.
 type Scenario struct {
-	// Name is the identifier for this scenario (used in CLI --scenario flag)
-	Name string
-
-	// Description explains what this scenario tests (shown in CLI output)
-	Description string
-
-	// YAMLConfig defines the worker hierarchy for this scenario.
-	// This is the same format used in production configurations.
-	// Do not set this if you set CustomRunner.
-	YAMLConfig string
 
 	// CustomRunner, if set, handles scenario execution.
 	// This enables scenarios that need infrastructure setup (like mock servers)
@@ -173,6 +163,16 @@ type Scenario struct {
 	//
 	// See ScenarioRunner documentation for the full contract and patterns.
 	CustomRunner ScenarioRunner
+	// Name is the identifier for this scenario (used in CLI --scenario flag)
+	Name string
+
+	// Description explains what this scenario tests (shown in CLI output)
+	Description string
+
+	// YAMLConfig defines the worker hierarchy for this scenario.
+	// This is the same format used in production configurations.
+	// Do not set this if you set CustomRunner.
+	YAMLConfig string
 }
 
 // Registry contains all available scenarios.
@@ -266,6 +266,13 @@ var CommunicatorScenarioEntry = Scenario{
 
 // RunConfig configures how a scenario is executed.
 type RunConfig struct {
+
+	// Store for triangular state persistence (can be spy store for assertions)
+	Store storage.TriangularStoreInterface
+
+	// Logger for all FSM output (can be test logger for capture)
+	Logger *zap.SugaredLogger
+
 	// Scenario to run
 	Scenario Scenario
 
@@ -274,12 +281,6 @@ type RunConfig struct {
 
 	// TickInterval for the supervisor tick loop
 	TickInterval time.Duration
-
-	// Logger for all FSM output (can be test logger for capture)
-	Logger *zap.SugaredLogger
-
-	// Store for triangular state persistence (can be spy store for assertions)
-	Store storage.TriangularStoreInterface
 
 	// EnableTraceLogging enables verbose mutex/tick logging
 	EnableTraceLogging bool

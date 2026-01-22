@@ -69,9 +69,9 @@ const (
 //	// Translates to SQL: WHERE age > 18
 //	// Translates to MongoDB: {age: {$gt: 18}}
 type FilterCondition struct {
+	Value interface{}
 	Field string
 	Op    Operator
-	Value interface{}
 }
 
 // SortOrder represents sort direction (ascending or descending).

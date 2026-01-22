@@ -36,10 +36,10 @@ type StateTracker interface {
 
 // DefaultStateTracker is the production implementation.
 type DefaultStateTracker struct {
-	clock        clock.Clock
-	mu           sync.RWMutex
-	currentState string
 	enteredAt    time.Time
+	clock        clock.Clock
+	currentState string
+	mu           sync.RWMutex
 }
 
 // NewDefaultStateTracker creates a new StateTracker with the given clock.

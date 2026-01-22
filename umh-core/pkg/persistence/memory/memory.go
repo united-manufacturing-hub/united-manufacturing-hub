@@ -106,8 +106,8 @@ func validateContext(ctx context.Context) error {
 // access or multi-process coordination. For production deployments, use a persistent storage
 // backend like SQLite or PostgreSQL.
 type InMemoryStore struct {
-	mu          sync.RWMutex
 	collections map[string]map[string]persistence.Document
+	mu          sync.RWMutex
 }
 
 // NewInMemoryStore creates a new empty in-memory document store.
@@ -532,11 +532,11 @@ func (s *InMemoryStore) Close(ctx context.Context) error {
 // underlying store directly. These operations are not transactional.
 type inMemoryTx struct {
 	store      *InMemoryStore
-	committed  bool
-	rolledBack bool
 	changes    map[string]map[string]*persistence.Document
 	deletes    map[string]map[string]bool
 	mu         sync.Mutex
+	committed  bool
+	rolledBack bool
 }
 
 // CreateCollection creates a collection directly on the underlying store.

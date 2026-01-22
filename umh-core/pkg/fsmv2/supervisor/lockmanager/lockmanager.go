@@ -29,15 +29,15 @@ type LockManager struct {
 }
 
 type Lock struct {
-	mu      sync.RWMutex
+	manager *LockManager
 	name    string
 	level   int
-	manager *LockManager
+	mu      sync.RWMutex
 }
 
 type lockOrderTracker struct {
-	mu    sync.RWMutex
 	locks map[uint64][]heldLock
+	mu    sync.RWMutex
 }
 
 type heldLock struct {

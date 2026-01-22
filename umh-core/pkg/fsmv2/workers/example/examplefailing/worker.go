@@ -34,10 +34,10 @@ import (
 
 // FailingWorker implements the FSM v2 Worker interface for testing failure scenarios.
 type FailingWorker struct {
-	*helpers.BaseWorker[*FailingDependencies]
-	identity   fsmv2.Identity
-	logger     *zap.SugaredLogger
 	connection Connection
+	*helpers.BaseWorker[*FailingDependencies]
+	logger   *zap.SugaredLogger
+	identity fsmv2.Identity
 }
 
 // NewFailingWorker creates a new example failing worker.

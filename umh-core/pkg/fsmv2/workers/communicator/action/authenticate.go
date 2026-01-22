@@ -107,8 +107,8 @@ type AuthenticateAction struct {
 }
 
 type AuthenticateActionResult struct {
-	JWTToken       string
 	JWTTokenExpiry time.Time
+	JWTToken       string
 }
 
 // NewAuthenticateAction creates a new authentication action.
