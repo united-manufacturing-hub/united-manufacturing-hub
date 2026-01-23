@@ -115,6 +115,8 @@ func NewWatchdog(ctx context.Context, ticker *time.Ticker, warningsAreErrors boo
 
 // Start synchronously starts the watchdog.
 func (s *Watchdog) Start() {
+	defer s.ticker.Stop()
+
 	for {
 		select {
 		case uniqueIdentifier, ok := <-s.badHeartbeatChan:
