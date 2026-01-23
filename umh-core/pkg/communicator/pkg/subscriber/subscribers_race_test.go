@@ -88,8 +88,6 @@ var _ = Describe("SubscriberHandler Race Condition", func() {
 				go func() {
 					defer GinkgoRecover()
 					defer wg.Done()
-					// GetInstanceUUID doesn't exist yet - this will cause compilation error
-					// which is the expected RED phase behavior
 					_ = handler.GetInstanceUUID()
 				}()
 			}
@@ -102,7 +100,6 @@ var _ = Describe("SubscriberHandler Race Condition", func() {
 			expectedUUID := uuid.New()
 			handler.SetInstanceUUID(expectedUUID)
 
-			// GetInstanceUUID doesn't exist yet - this will cause compilation error
 			actualUUID := handler.GetInstanceUUID()
 			Expect(actualUUID).To(Equal(expectedUUID))
 		})
