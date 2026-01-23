@@ -658,7 +658,8 @@ func (ts *TriangularStore) LoadSnapshot(ctx context.Context, workerType string, 
 	if cached, exists := ts.snapshotCache[cacheKey]; exists && cached.syncID == currentSyncID {
 		ts.cacheMutex.RUnlock()
 
-		return cached.snapshot, nil
+		// Return a deep copy to prevent callers from corrupting the cache
+		return cloneSnapshot(cached.snapshot), nil
 	}
 
 	ts.cacheMutex.RUnlock()
@@ -713,7 +714,8 @@ func (ts *TriangularStore) LoadSnapshot(ctx context.Context, workerType string, 
 	}
 	ts.cacheMutex.Unlock()
 
-	return snapshot, nil
+	// Return a deep copy to prevent callers from corrupting the cache
+	return cloneSnapshot(snapshot), nil
 }
 
 func (ts *TriangularStore) GetLastSyncID(_ context.Context) (int64, error) {
@@ -731,6 +733,67 @@ func (ts *TriangularStore) Close() error {
 	defer cancel()
 
 	return ts.store.Close(ctx)
+}
+
+// cloneSnapshot creates a deep copy of a Snapshot to prevent cache corruption.
+// Callers may mutate returned snapshots, so we must return copies, not references.
+func cloneSnapshot(s *Snapshot) *Snapshot {
+	if s == nil {
+		return nil
+	}
+
+	return &Snapshot{
+		Identity: deepCopyDocument(s.Identity),
+		Desired:  deepCopyDocument(s.Desired),
+		Observed: deepCopyObserved(s.Observed),
+	}
+}
+
+// deepCopyDocument creates a shallow copy of a persistence.Document.
+// For FSM v2's use case, documents contain only primitive types (strings, numbers, bools)
+// so a shallow copy is sufficient. If nested maps/slices are needed, this should be
+// extended to use json.Marshal/Unmarshal for true deep copy.
+func deepCopyDocument(doc persistence.Document) persistence.Document {
+	if doc == nil {
+		return nil
+	}
+
+	copy := make(persistence.Document, len(doc))
+	for k, v := range doc {
+		copy[k] = v
+	}
+
+	return copy
+}
+
+// deepCopyObserved creates a copy of the Observed field which can be either
+// a persistence.Document or a typed struct.
+func deepCopyObserved(observed interface{}) interface{} {
+	if observed == nil {
+		return nil
+	}
+
+	// If it's a Document, use the document copy function
+	if doc, ok := observed.(persistence.Document); ok {
+		return deepCopyDocument(doc)
+	}
+
+	// For typed structs, use JSON round-trip for deep copy
+	// This handles any nested fields properly
+	data, err := json.Marshal(observed)
+	if err != nil {
+		// If marshal fails, return original (shouldn't happen for valid structs)
+		return observed
+	}
+
+	// Create a new instance of the same type
+	newVal := reflect.New(reflect.TypeOf(observed)).Interface()
+	if err := json.Unmarshal(data, newVal); err != nil {
+		return observed
+	}
+
+	// Return the value, not the pointer
+	return reflect.ValueOf(newVal).Elem().Interface()
 }
 
 // toDocument converts various input types to persistence.Document.

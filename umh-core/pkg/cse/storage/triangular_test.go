@@ -750,6 +750,33 @@ var _ = Describe("TriangularStore", func() {
 				Expect(snapshot.Observed).To(BeNil())
 			})
 		})
+
+		Context("cache isolation", func() {
+			It("should return deep copies so callers cannot corrupt the cache", func() {
+				// First load - gets from store and caches
+				snapshot1, err := ts.LoadSnapshot(ctx, "container", "worker-123")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(snapshot1.Identity["name"]).To(Equal("Container A"))
+
+				// Mutate the returned snapshot - this should NOT affect the cache
+				snapshot1.Identity["name"] = "CORRUPTED"
+				snapshot1.Desired["config"] = "CORRUPTED"
+				observedDoc1, ok := snapshot1.Observed.(persistence.Document)
+				Expect(ok).To(BeTrue())
+				observedDoc1["status"] = "CORRUPTED"
+
+				// Second load - should get from cache but return fresh copy
+				snapshot2, err := ts.LoadSnapshot(ctx, "container", "worker-123")
+				Expect(err).NotTo(HaveOccurred())
+
+				// Verify cache was not corrupted
+				Expect(snapshot2.Identity["name"]).To(Equal("Container A"), "cache was corrupted by caller mutation")
+				Expect(snapshot2.Desired["config"]).To(Equal("value"), "cache was corrupted by caller mutation")
+				observedDoc2, ok := snapshot2.Observed.(persistence.Document)
+				Expect(ok).To(BeTrue())
+				Expect(observedDoc2["status"]).To(Equal("running"), "cache was corrupted by caller mutation")
+			})
+		})
 	})
 
 	Describe("GlobalSyncID", func() {
