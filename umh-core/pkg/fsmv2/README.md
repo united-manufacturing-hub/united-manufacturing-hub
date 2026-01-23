@@ -147,6 +147,50 @@ func (w *MyWorker) GetInitialState() fsmv2.State {
 - Read `doc.go` for interface contracts and detailed patterns
 - See `workers/example/` for complete reference implementations
 
+### File Structure for New Worker
+
+```
+workers/myworker/
+├── worker.go           # Worker interface (3 methods)
+├── dependencies.go     # Shared state with mutex
+├── userspec.go         # User configuration schema
+├── snapshot/
+│   └── snapshot.go     # Contains both ObservedState and DesiredState
+├── state/
+│   ├── base.go              # Shared state logic
+│   ├── state_stopped.go     # Initial state
+│   └── state_running.go     # Operational state (loops)
+└── action/
+    ├── action1.go      # I/O operation 1 (idempotent)
+    └── action2.go      # I/O operation 2 (idempotent)
+```
+
+*Note: ApplicationWorker (root supervisor) uses simpler passthrough pattern without dependencies.*
+
+### Real-World Example: Communicator Worker
+
+The Communicator demonstrates real-world I/O handling with HTTP authentication and sync:
+
+```
+Stopped → TryingToAuthenticate → Syncing ↔ Degraded
+   ↑              ↓                 ↓         ↓
+   └──────────────┴─────────────────┴─────────┘
+              (Token expiry or auth loss)
+```
+
+**State Machine Flow**:
+1. `StoppedState`: Initial state, transitions on startup
+2. `TryingToAuthenticateState`: Emits `AuthenticateAction` (HTTP POST) with exponential backoff
+3. `SyncingState`: Emits `SyncAction` continuously (HTTP pull/push loop), checks token expiry
+4. `DegradedState`: Error recovery with intelligent backoff by error type
+
+**Key Design Decisions**:
+- I/O operations (HTTP) isolated in Actions, never in States
+- Actions update shared state via Dependencies (thread-safe setters)
+- CollectObservedState reads from Dependencies (thread-safe getters)
+- Token expiry handled by transitioning back to `TryingToAuthenticateState`
+- Consecutive errors tracked per operation type to trigger automatic transport reset
+
 ## Core Concepts
 
 ### Tick Loop
@@ -207,6 +251,16 @@ For detailed implementation patterns including:
 - Immutability guarantees
 
 **See `doc.go` for Go idiom patterns and code examples.**
+
+### I/O Isolation Rule
+
+| Component | Can Do I/O | Purpose |
+|-----------|------------|---------|
+| States | NO (pure functions) | Decide next state + action |
+| Actions | YES (idempotent) | Perform HTTP, file, network I/O |
+| Worker | NO (read-only) | Collect observations |
+
+**Key insight**: States return `(nextState, signal, action)` tuple. I/O operations belong in Actions, never in States.
 
 ### State XOR Action Rule
 
@@ -274,8 +328,9 @@ ginkgo -r ./pkg/fsmv2/
 | Running but not working | Observation timestamps | Verify `CollectObservedState()` queries actual system |
 | Won't shut down | `IsShutdownRequested()` check | Ensure all states check shutdown first |
 | Action runs multiple times | Action idempotency | Add "already done" check before work |
+| Data considered stale | Circuit breaker metrics | Check observation collection errors |
 
-**Performance baseline**: ~4µs per worker per tick, linear O(n) scaling.
+**Performance baseline**: ~4µs per worker per tick, linear O(n) scaling (see benchmark tests).
 
 ## Metrics Flow
 
