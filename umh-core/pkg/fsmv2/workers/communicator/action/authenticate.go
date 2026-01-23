@@ -19,8 +19,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/metrics"
+	depspkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
 	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
 )
@@ -28,7 +27,7 @@ import (
 // CommunicatorDependencies represents the dependencies needed by communicator actions.
 // This is an interface to avoid import cycles (action -> communicator -> snapshot -> action).
 type CommunicatorDependencies interface {
-	deps.Dependencies
+	depspkg.Dependencies
 	GetTransport() transport.Transport
 	// SetTransport sets the transport instance (mutex protected).
 	// Called by AuthenticateAction on first execution.
@@ -80,7 +79,7 @@ type CommunicatorDependencies interface {
 
 	// MetricsRecorder returns the MetricsRecorder for actions to record metrics.
 	// Actions call IncrementCounter/SetGauge with typed constants.
-	MetricsRecorder() *deps.MetricsRecorder
+	MetricsRecorder() *depspkg.MetricsRecorder
 
 	// SetAuthenticatedUUID stores the UUID returned by the backend after successful authentication.
 	// Called by AuthenticateAction after successful authentication.
@@ -158,7 +157,7 @@ func (a *AuthenticateAction) Execute(ctx context.Context, depsAny any) error {
 		} else {
 			// Non-transport error (e.g., context canceled) - treat as network error
 			deps.RecordTypedError(httpTransport.ErrorTypeNetwork, 0)
-			deps.MetricsRecorder().IncrementCounter(metrics.CounterNetworkErrorsTotal, 1)
+			deps.MetricsRecorder().IncrementCounter(depspkg.CounterNetworkErrorsTotal, 1)
 		}
 
 		return err
@@ -193,26 +192,26 @@ func (a *AuthenticateAction) Execute(ctx context.Context, depsAny any) error {
 
 // counterForErrorType maps ErrorType to Prometheus counter.
 // This function MUST handle ALL error types to avoid metric gaps.
-func counterForErrorType(t httpTransport.ErrorType) metrics.CounterName {
+func counterForErrorType(t httpTransport.ErrorType) depspkg.CounterName {
 	switch t {
 	case httpTransport.ErrorTypeCloudflareChallenge:
-		return metrics.CounterCloudflareErrorsTotal
+		return depspkg.CounterCloudflareErrorsTotal
 	case httpTransport.ErrorTypeBackendRateLimit:
-		return metrics.CounterBackendRateLimitErrorsTotal
+		return depspkg.CounterBackendRateLimitErrorsTotal
 	case httpTransport.ErrorTypeInvalidToken:
-		return metrics.CounterAuthFailuresTotal
+		return depspkg.CounterAuthFailuresTotal
 	case httpTransport.ErrorTypeInstanceDeleted:
-		return metrics.CounterInstanceDeletedTotal
+		return depspkg.CounterInstanceDeletedTotal
 	case httpTransport.ErrorTypeServerError:
-		return metrics.CounterServerErrorsTotal
+		return depspkg.CounterServerErrorsTotal
 	case httpTransport.ErrorTypeProxyBlock:
-		return metrics.CounterProxyBlockErrorsTotal
+		return depspkg.CounterProxyBlockErrorsTotal
 	case httpTransport.ErrorTypeNetwork:
-		return metrics.CounterNetworkErrorsTotal
+		return depspkg.CounterNetworkErrorsTotal
 	case httpTransport.ErrorTypeUnknown:
-		return metrics.CounterNetworkErrorsTotal // Unknown → network bucket
+		return depspkg.CounterNetworkErrorsTotal // Unknown → network bucket
 	default:
-		return metrics.CounterNetworkErrorsTotal
+		return depspkg.CounterNetworkErrorsTotal
 	}
 }
 

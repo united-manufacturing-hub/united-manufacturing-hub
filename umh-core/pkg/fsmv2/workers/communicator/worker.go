@@ -122,7 +122,6 @@ import (
 	fsmv2types "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/snapshot"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/state"
@@ -290,7 +289,7 @@ func (w *CommunicatorWorker) CollectObservedState(ctx context.Context) (fsmv2.Ob
 	lastAuthAttemptAt := deps.GetLastAuthAttemptAt()
 
 	// Get previous worker metrics from store (persisted across restarts)
-	var prevWorkerMetrics fsmv2.Metrics
+	var prevWorkerMetrics depspkg.Metrics
 
 	stateReader := deps.GetStateReader()
 	if stateReader != nil {
@@ -325,7 +324,7 @@ func (w *CommunicatorWorker) CollectObservedState(ctx context.Context) (fsmv2.Ob
 	}
 
 	// Also set consecutive errors as a gauge
-	newWorkerMetrics.Gauges[string(metrics.GaugeConsecutiveErrors)] = float64(consecutiveErrors)
+	newWorkerMetrics.Gauges[string(depspkg.GaugeConsecutiveErrors)] = float64(consecutiveErrors)
 
 	// Read authenticated UUID from dependencies
 	authenticatedUUID := deps.GetAuthenticatedUUID()

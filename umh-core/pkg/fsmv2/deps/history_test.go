@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package fsmv2_test
+package deps_test
 
 import (
 	"fmt"
@@ -22,22 +22,20 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 )
-
-// Tests run as part of FSMv2 Suite (see dependencies_test.go)
 
 var _ = Describe("ActionHistoryRecorder", func() {
 	Describe("InMemoryActionHistoryRecorder", func() {
-		var recorder *fsmv2.InMemoryActionHistoryRecorder
+		var recorder *deps.InMemoryActionHistoryRecorder
 
 		BeforeEach(func() {
-			recorder = fsmv2.NewInMemoryActionHistoryRecorder()
+			recorder = deps.NewInMemoryActionHistoryRecorder()
 		})
 
 		Describe("Record and Drain", func() {
 			It("should record action results", func() {
-				recorder.Record(fsmv2.ActionResult{
+				recorder.Record(deps.ActionResult{
 					ActionType: "TestAction",
 					Success:    true,
 					Timestamp:  time.Now(),
@@ -50,7 +48,7 @@ var _ = Describe("ActionHistoryRecorder", func() {
 			})
 
 			It("should clear buffer after drain", func() {
-				recorder.Record(fsmv2.ActionResult{ActionType: "Test1"})
+				recorder.Record(deps.ActionResult{ActionType: "Test1"})
 				firstDrain := recorder.Drain()
 				Expect(firstDrain).To(HaveLen(1))
 
@@ -62,7 +60,7 @@ var _ = Describe("ActionHistoryRecorder", func() {
 				now := time.Now()
 				latency := 500 * time.Millisecond
 
-				recorder.Record(fsmv2.ActionResult{
+				recorder.Record(deps.ActionResult{
 					Timestamp:  now,
 					ActionType: "SyncAction",
 					ErrorMsg:   "connection refused",
@@ -80,9 +78,9 @@ var _ = Describe("ActionHistoryRecorder", func() {
 			})
 
 			It("should record multiple results in order", func() {
-				recorder.Record(fsmv2.ActionResult{ActionType: "First"})
-				recorder.Record(fsmv2.ActionResult{ActionType: "Second"})
-				recorder.Record(fsmv2.ActionResult{ActionType: "Third"})
+				recorder.Record(deps.ActionResult{ActionType: "First"})
+				recorder.Record(deps.ActionResult{ActionType: "Second"})
+				recorder.Record(deps.ActionResult{ActionType: "Third"})
 
 				results := recorder.Drain()
 				Expect(results).To(HaveLen(3))
@@ -107,7 +105,7 @@ var _ = Describe("ActionHistoryRecorder", func() {
 					wg.Add(1)
 					go func(n int) {
 						defer wg.Done()
-						recorder.Record(fsmv2.ActionResult{
+						recorder.Record(deps.ActionResult{
 							ActionType: fmt.Sprintf("Action%d", n),
 							Success:    true,
 						})
@@ -129,7 +127,7 @@ var _ = Describe("ActionHistoryRecorder", func() {
 					wg.Add(1)
 					go func(n int) {
 						defer wg.Done()
-						recorder.Record(fsmv2.ActionResult{
+						recorder.Record(deps.ActionResult{
 							ActionType: fmt.Sprintf("Action%d", n),
 						})
 					}(i)
@@ -156,7 +154,7 @@ var _ = Describe("ActionHistoryRecorder", func() {
 
 		Describe("Interface compliance", func() {
 			It("should implement ActionHistoryRecorder interface", func() {
-				var _ fsmv2.ActionHistoryRecorder = recorder
+				var _ deps.ActionHistoryRecorder = recorder
 			})
 		})
 	})

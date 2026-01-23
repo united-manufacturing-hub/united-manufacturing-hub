@@ -12,14 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// TEMPORARY RE-EXPORTS - Remove in Phase 3
-// This file re-exports types from deps/ for backward compatibility during migration.
-package fsmv2
+package fsmv2_test
 
-import "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
+import (
+	"testing"
 
-type ActionResult = deps.ActionResult
-type ActionHistoryRecorder = deps.ActionHistoryRecorder
-type InMemoryActionHistoryRecorder = deps.InMemoryActionHistoryRecorder
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+)
 
-var NewInMemoryActionHistoryRecorder = deps.NewInMemoryActionHistoryRecorder
+func TestFsmv2(t *testing.T) {
+	RegisterFailHandler(Fail)
+	RunSpecs(t, "FSMv2 Suite")
+}

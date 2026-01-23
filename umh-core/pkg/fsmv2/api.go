@@ -119,7 +119,7 @@ type ShutdownRequestable interface {
 type Snapshot struct {
 	Observed interface{} // What is the actual state? (ObservedState or basic.Document).
 	Desired  interface{} // What should the state be? (DesiredState or basic.Document).
-	Identity Identity    // Who am I?
+	Identity deps.Identity // Who am I?
 }
 
 // Action represents an idempotent side effect that modifies external system state.
@@ -193,20 +193,3 @@ type DependencyProvider interface {
 	// This is used by the ActionExecutor to pass dependencies to actions.
 	GetDependenciesAny() any
 }
-
-// =============================================================================
-// TEMPORARY RE-EXPORTS - Remove in Phase 3
-// =============================================================================
-
-// Metrics types are now in deps package. These re-exports provide backward compatibility.
-type Metrics = deps.Metrics
-type MetricsHolder = deps.MetricsHolder
-type MetricsRecorder = deps.MetricsRecorder
-type DrainResult = deps.DrainResult
-type FrameworkMetrics = deps.FrameworkMetrics
-type MetricsContainer = deps.MetricsContainer
-type MetricsEmbedder = deps.MetricsEmbedder
-
-var NewMetrics = deps.NewMetrics
-var NewMetricsRecorder = deps.NewMetricsRecorder
-var NewFrameworkMetrics = deps.NewFrameworkMetrics

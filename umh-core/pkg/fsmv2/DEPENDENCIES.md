@@ -7,9 +7,9 @@ This guide covers dependency injection patterns for FSMv2 workers.
 | Dependency | Type | Purpose | Availability |
 |------------|------|---------|--------------|
 | `Logger` | `*zap.SugaredLogger` | Structured logging with worker context | All workers via `BaseDependencies` |
-| `StateReader` | `fsmv2.StateReader` | Read-only access to observed state from CSE | All workers via `BaseDependencies` |
-| `MetricsRecorder` | `*fsmv2.MetricsRecorder` | Buffer and record per-tick metrics | All workers via `BaseDependencies` |
-| `FrameworkMetrics` | `*fsmv2.FrameworkMetrics` | Supervisor-tracked metrics (read-only) | Injected via `deps.GetFrameworkState()` |
+| `StateReader` | `deps.StateReader` | Read-only access to observed state from CSE | All workers via `BaseDependencies` |
+| `MetricsRecorder` | `*deps.MetricsRecorder` | Buffer and record per-tick metrics | All workers via `BaseDependencies` |
+| `FrameworkMetrics` | `*deps.FrameworkMetrics` | Supervisor-tracked metrics (read-only) | Injected via `deps.GetFrameworkState()` |
 | `ChildrenView` | `config.ChildrenView` | Access child worker info (read-only) | Injected via `deps.GetChildrenView()` |
 | `WorkerType` | `string` | Worker type identifier | All workers via `BaseDependencies` |
 | `WorkerID` | `string` | Worker instance ID | All workers via `BaseDependencies` |
@@ -83,19 +83,19 @@ func (w *ParentWorker) checkChildHealth(ctx context.Context, childID string) boo
 
 ### Recording Metrics
 
-Actions use typed constants from `pkg/fsmv2/metrics` for compile-time safety:
+Actions use typed constants from `pkg/fsmv2/deps` for compile-time safety:
 
 ```go
 func (a *SyncAction) Execute(ctx context.Context, depsAny any) error {
     deps := depsAny.(CommunicatorDependencies)
 
     // Increment counters (cumulative values)
-    deps.Metrics().IncrementCounter(metrics.CounterPullOps, 1)
-    deps.Metrics().IncrementCounter(metrics.CounterMessagesPulled, int64(len(messages)))
+    deps.Metrics().IncrementCounter(deps.CounterPullOps, 1)
+    deps.Metrics().IncrementCounter(deps.CounterMessagesPulled, int64(len(messages)))
 
     // Set gauges (point-in-time values)
-    deps.Metrics().SetGauge(metrics.GaugeLastPullLatencyMs, float64(latency.Milliseconds()))
-    deps.Metrics().SetGauge(metrics.GaugeConsecutiveErrors, float64(errorCount))
+    deps.Metrics().SetGauge(deps.GaugeLastPullLatencyMs, float64(latency.Milliseconds()))
+    deps.Metrics().SetGauge(deps.GaugeConsecutiveErrors, float64(errorCount))
 
     return nil
 }
@@ -108,7 +108,7 @@ func (w *MyWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedStat
     deps := w.GetDependencies()
 
     // Get previous metrics from store
-    var prevMetrics fsmv2.Metrics
+    var prevMetrics deps.Metrics
     if stateReader := deps.GetStateReader(); stateReader != nil {
         var prev MyObservedState
         if err := stateReader.LoadObservedTyped(ctx, deps.GetWorkerType(), deps.GetWorkerID(), &prev); err == nil {
@@ -147,7 +147,7 @@ func (w *MyWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedStat
 
 ### Defining Custom Metrics
 
-Add typed constants in `pkg/fsmv2/metrics/names.go`:
+Add typed constants in `pkg/fsmv2/deps/names.go`:
 
 ```go
 // MyWorker counter names
@@ -211,7 +211,7 @@ func (a *MyAction) Execute(ctx context.Context, depsAny any) error {
 
 ```go
 // Check if ObservedState has metrics
-if holder, ok := observed.(fsmv2.MetricsHolder); ok {
+if holder, ok := observed.(deps.MetricsHolder); ok {
     metrics := holder.GetMetrics()
     // Export to Prometheus
 }
@@ -320,7 +320,7 @@ Workers can add their own utilities by embedding `BaseDependencies`:
 
 ```go
 type MyDependencies struct {
-    *fsmv2.BaseDependencies
+    *deps.BaseDependencies
 
     mu               sync.RWMutex
     consecutiveErrors int
@@ -349,7 +349,7 @@ func (d *MyDependencies) GetConsecutiveErrors() int {
 
 ```go
 type MyDependencies struct {
-    *fsmv2.BaseDependencies
+    *deps.BaseDependencies
 
     mu          sync.RWMutex
     isConnected bool
@@ -372,11 +372,11 @@ func (d *MyDependencies) IsConnected() bool {
 
 ```go
 type MyDependencies struct {
-    *fsmv2.BaseDependencies
+    *deps.BaseDependencies
     httpClient HTTPClient  // Injected at construction, used directly in actions
 }
 
-func NewMyDependencies(base *fsmv2.BaseDependencies, client HTTPClient) *MyDependencies {
+func NewMyDependencies(base *deps.BaseDependencies, client HTTPClient) *MyDependencies {
     return &MyDependencies{
         BaseDependencies: base,
         httpClient:       client,
@@ -450,5 +450,5 @@ This mirrors `FrameworkMetrics` exactly - supervisor owns the data, injects into
 - [doc.go](doc.go) - FSMv2 framework overview
 - [api.go](api.go) - Core interfaces (`Worker`, `State`, `Action`)
 - [config/dependencies.go](config/dependencies.go) - `MergeDependencies()` implementation
-- [metrics/names.go](metrics/names.go) - Typed metric name constants
+- [deps/metrics.go](deps/metrics.go) - Typed metric name constants
 - [workers/example/](workers/example/) - Complete working examples
