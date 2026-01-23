@@ -314,6 +314,16 @@ func (ts *TriangularStore) LoadDesired(ctx context.Context, workerType string, i
 //	var dest ParentDesiredState
 //	err := ts.LoadDesiredTyped(ctx, "parent", "parent-001", &dest)
 func (ts *TriangularStore) LoadDesiredTyped(ctx context.Context, workerType string, id string, dest interface{}) error {
+	// Guard against nil or non-pointer dest to prevent reflect panics
+	if dest == nil {
+		return errors.New("dest must be non-nil pointer, got nil")
+	}
+
+	destVal := reflect.ValueOf(dest)
+	if destVal.Kind() != reflect.Ptr {
+		return fmt.Errorf("dest must be pointer, got %s", destVal.Kind())
+	}
+
 	result, err := ts.LoadDesired(ctx, workerType, id)
 	if err != nil {
 		return err
@@ -510,6 +520,16 @@ func (ts *TriangularStore) LoadObserved(ctx context.Context, workerType string, 
 //	var dest ParentObservedState
 //	err := ts.LoadObservedTyped(ctx, "parent", "parent-001", &dest)
 func (ts *TriangularStore) LoadObservedTyped(ctx context.Context, workerType string, id string, dest interface{}) error {
+	// Guard against nil or non-pointer dest to prevent reflect panics
+	if dest == nil {
+		return errors.New("dest must be non-nil pointer, got nil")
+	}
+
+	destVal := reflect.ValueOf(dest)
+	if destVal.Kind() != reflect.Ptr {
+		return fmt.Errorf("dest must be pointer, got %s", destVal.Kind())
+	}
+
 	result, err := ts.LoadObserved(ctx, workerType, id)
 	if err != nil {
 		return err

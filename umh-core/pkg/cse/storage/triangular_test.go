@@ -982,6 +982,57 @@ var _ = Describe("TriangularStore", func() {
 		})
 	})
 
+	Describe("LoadDesiredTyped method (nil pointer guards)", func() {
+		BeforeEach(func() {
+			// Save a document so we can test loading
+			desired := persistence.Document{
+				"id":      "guard-test",
+				"name":    "TestWorker",
+				"command": "start",
+			}
+			_, err := ts.SaveDesired(ctx, "parent", "guard-test", desired)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should return error for nil dest", func() {
+			err := ts.LoadDesiredTyped(ctx, "parent", "guard-test", nil)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("nil"))
+		})
+
+		It("should return error for non-pointer dest", func() {
+			var dest ParentDesiredState
+			err := ts.LoadDesiredTyped(ctx, "parent", "guard-test", dest) // not &dest
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("pointer"))
+		})
+	})
+
+	Describe("LoadObservedTyped method (nil pointer guards)", func() {
+		BeforeEach(func() {
+			// Save a document so we can test loading
+			observed := persistence.Document{
+				"id":     "guard-test",
+				"status": "running",
+			}
+			_, err := ts.SaveObserved(ctx, "parent", "guard-test", observed)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should return error for nil dest", func() {
+			err := ts.LoadObservedTyped(ctx, "parent", "guard-test", nil)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("nil"))
+		})
+
+		It("should return error for non-pointer dest", func() {
+			var dest ParentObservedState
+			err := ts.LoadObservedTyped(ctx, "parent", "guard-test", dest) // not &dest
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("pointer"))
+		})
+	})
+
 	Describe("SaveDesiredTyped[T]", func() {
 		It("should derive table name from type and save typed desired state", func() {
 			desired := ParentDesiredState{
