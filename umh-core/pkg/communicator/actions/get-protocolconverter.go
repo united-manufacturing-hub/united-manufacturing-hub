@@ -360,6 +360,7 @@ func (a *GetProtocolConverterAction) Execute() (interface{}, map[string]interfac
 					WriteDFC:     writeDFC,
 					Meta:         meta,
 					TemplateInfo: templateInfo,
+					Variables:    specConfig.Variables.User,
 				}
 
 				a.actionLogger.Info("Protocol converter found and built, returning response")
