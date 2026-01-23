@@ -166,11 +166,13 @@ var _ = Describe("LegacyChannelBridge", func() {
 			// Fill the legacy inbound channel
 			legacyIn <- &models.UMHMessage{}
 
-			// Send should not block - use goroutine with timeout
+			// Send should not block even after saturating the internal buffer
+			// Send more messages than the channel capacity to exercise the drop path
 			done := make(chan struct{})
 			go func() {
-				fsmIn <- &transport.UMHMessage{Content: "test1"}
-				fsmIn <- &transport.UMHMessage{Content: "test2"} // This would block if not non-blocking
+				for range cap(fsmIn) + 1 {
+					fsmIn <- &transport.UMHMessage{Content: "test"}
+				}
 				close(done)
 			}()
 
@@ -188,14 +190,13 @@ var _ = Describe("LegacyChannelBridge", func() {
 
 			_, fsmOut := bridge.GetChannels("test")
 
-			// Fill the FSM outbound channel by not reading from it
-			legacyOut <- &models.UMHMessage{}
-			legacyOut <- &models.UMHMessage{} // These fill the internal buffer
-
-			// Verify conversion goroutine doesn't block
+			// Fill the FSM outbound channel and exercise the drop path
+			// Send more messages than the channel capacity
 			done := make(chan struct{})
 			go func() {
-				time.Sleep(200 * time.Millisecond) // Give time for potential deadlock
+				for range cap(legacyOut) + 1 {
+					legacyOut <- &models.UMHMessage{}
+				}
 				close(done)
 			}()
 

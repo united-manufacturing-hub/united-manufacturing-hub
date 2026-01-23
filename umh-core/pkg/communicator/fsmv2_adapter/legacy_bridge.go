@@ -79,8 +79,10 @@ func (b *LegacyChannelBridge) Start(ctx context.Context) {
 			case msg, ok := <-b.fsmInbound:
 				if !ok {
 					b.logger.Infow("fsmInbound channel closed, stopping inbound bridge goroutine")
+
 					return
 				}
+
 				if msg == nil {
 					continue
 				}
@@ -126,8 +128,10 @@ func (b *LegacyChannelBridge) Start(ctx context.Context) {
 			case msg, ok := <-b.legacyOutbound:
 				if !ok {
 					b.logger.Infow("legacyOutbound channel closed, stopping outbound bridge goroutine")
+
 					return
 				}
+
 				if msg == nil {
 					continue
 				}
