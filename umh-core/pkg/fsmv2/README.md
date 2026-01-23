@@ -4,7 +4,7 @@ Type-safe state machine framework for managing worker lifecycles with compile-ti
 
 > **Implementation Details**: For Go idiom patterns, code examples, and API contracts, see `doc.go`.
 
-### How It Works (60 seconds)
+## How It Works (60 seconds)
 
 FSMv2 is a **state machine supervisor**:
 
@@ -12,7 +12,7 @@ FSMv2 is a **state machine supervisor**:
 2. **Supervisor runs a loop**: Observe → Compare → Decide → Act → Repeat (~4µs per worker per tick)
 3. **State transitions happen** when observations change, NOT when actions complete
 
-```
+```text
 Config Change → DeriveDesiredState() → Supervisor compares → State.Next() decides → Action executes → CollectObservedState() → Loop
 ```
 
@@ -182,7 +182,7 @@ return NewState{}, SignalNone, &SomeAction{}  // Don't do this
 
 ## File Structure for New Worker
 
-```
+```text
 workers/myworker/
 ├── worker.go           # Worker interface (3 methods)
 ├── userspec.go         # User configuration schema
@@ -211,7 +211,7 @@ workers/myworker/
 
 Every worker in FSMv2 is represented by three components:
 
-```
+```text
         IDENTITY
        (What it is)
            /\
@@ -236,7 +236,7 @@ The supervisor runs a single-threaded reconciliation loop that makes observed st
 
 User configuration is **transformed**, not copied:
 
-```
+```text
 UserSpec (user intent)      →  "I want it warm at 8am"
         ↓
     DeriveDesiredState()    →  parses, validates, computes
@@ -258,7 +258,7 @@ The old Communicator had "6 channels and 4 goroutines to send messages to REST A
 
 FSMv2 Communicator is a clean state machine:
 
-```
+```text
 Stopped → TryingToAuthenticate → Syncing ↔ Degraded
    ↑              ↓                 ↓         ↓
    └──────────────┴─────────────────┴─────────┘
