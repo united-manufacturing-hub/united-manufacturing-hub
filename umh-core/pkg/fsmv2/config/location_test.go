@@ -215,6 +215,27 @@ var _ = Describe("Location Computation", func() {
 				Expect(result[4]).To(Equal(config.LocationLevel{Type: "cell", Value: "Cell-5"}))
 			})
 		})
+
+		Context("when duplicate types exist", func() {
+			It("should keep the last value for each type", func() {
+				// NormalizeHierarchyLevels uses a map, so duplicates of the same type
+				// will have only the last value preserved
+				levels := []config.LocationLevel{
+					{Type: "enterprise", Value: "OldCorp"},
+					{Type: "enterprise", Value: "NewCorp"},
+					{Type: "site", Value: "Factory-1"},
+				}
+
+				result := config.NormalizeHierarchyLevels(levels)
+
+				Expect(result).To(HaveLen(5))
+				Expect(result[0]).To(Equal(config.LocationLevel{Type: "enterprise", Value: "NewCorp"}))
+				Expect(result[1]).To(Equal(config.LocationLevel{Type: "site", Value: "Factory-1"}))
+				Expect(result[2]).To(Equal(config.LocationLevel{Type: "area", Value: ""}))
+				Expect(result[3]).To(Equal(config.LocationLevel{Type: "line", Value: ""}))
+				Expect(result[4]).To(Equal(config.LocationLevel{Type: "cell", Value: ""}))
+			})
+		})
 	})
 
 	Describe("ComputeLocationPath", func() {

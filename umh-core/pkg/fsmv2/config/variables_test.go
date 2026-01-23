@@ -552,5 +552,28 @@ global:
 			Expect(cloned.Global).ToNot(BeNil())
 			Expect(cloned.Global).To(BeEmpty())
 		})
+
+		It("should NOT clone Internal map (intentional - regenerated per-worker)", func() {
+			// Internal map is intentionally NOT cloned by Clone() because:
+			// 1. Internal variables are regenerated per-worker (identity, parent_id, etc.)
+			// 2. Cloning Internal would preserve stale identity from parent
+			// 3. The supervisor sets fresh Internal values after cloning
+			original := config.VariableBundle{
+				Internal: map[string]any{
+					"id":        "worker-123",
+					"parent_id": "parent-456",
+				},
+			}
+
+			cloned := original.Clone()
+
+			// Verify Internal is nil after cloning (intentional behavior)
+			Expect(cloned.Internal).To(BeNil(),
+				"Internal should NOT be cloned - it's regenerated per-worker by the supervisor")
+
+			// Verify original is unchanged
+			Expect(original.Internal).ToNot(BeNil())
+			Expect(original.Internal["id"]).To(Equal("worker-123"))
+		})
 	})
 })

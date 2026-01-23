@@ -171,7 +171,9 @@ func verifyConfigFailingDefaults(t *integration.TestLogger) {
 	GinkgoWriter.Printf("✓ ConfigError scenario completed (failure logs: %d, failing worker logs: %d)\n",
 		len(failureLogs), len(failingDefaultsLogs))
 
-	// The main test is that the scenario completed without panic
-	// Even if specific workers didn't log exactly what we expected,
-	// the fact that we got here means the config error handling worked
+	// Verify that at least some failing worker activity occurred
+	// This ensures the test actually exercises the failing/default code path
+	totalFailingActivity := len(failureLogs) + len(failingDefaultsLogs)
+	Expect(totalFailingActivity).To(BeNumerically(">", 0),
+		"Expected failing/default worker activity to be logged, but no activity was recorded")
 }

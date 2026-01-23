@@ -34,7 +34,8 @@ var _ = Describe("FSMv2 Direct Channel Mode", func() {
 	)
 
 	BeforeEach(func() {
-		zapLogger, _ := zap.NewDevelopment()
+		zapLogger, err := zap.NewDevelopment()
+		Expect(err).NotTo(HaveOccurred())
 		logger = zapLogger.Sugar()
 	})
 
