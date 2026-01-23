@@ -843,12 +843,48 @@ var _ = Describe("TriangularStore", func() {
 			Expect(err).To(HaveOccurred())
 		})
 
+		It("should fail for document with non-string id field", func() {
+			err := ts.SaveIdentity(ctx, "container", "worker-123", persistence.Document{
+				"id":   123, // int instead of string
+				"name": "Container A",
+			})
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("non-empty string"))
+		})
+
+		It("should fail for document with empty string id field", func() {
+			err := ts.SaveIdentity(ctx, "container", "worker-123", persistence.Document{
+				"id":   "",
+				"name": "Container A",
+			})
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("non-empty string"))
+		})
+
+		It("should fail for document with mismatched id field", func() {
+			err := ts.SaveIdentity(ctx, "container", "worker-123", persistence.Document{
+				"id":   "worker-456", // different from parameter
+				"name": "Container A",
+			})
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("does not match"))
+		})
+
 		Context("for desired state", func() {
 			It("should fail for document without id field", func() {
 				_, err := ts.SaveDesired(ctx, "container", "worker-123", persistence.Document{
 					"config": "value",
 				})
 				Expect(err).To(HaveOccurred())
+			})
+
+			It("should fail for document with mismatched id field", func() {
+				_, err := ts.SaveDesired(ctx, "container", "worker-123", persistence.Document{
+					"id":     "worker-456", // different from parameter
+					"config": "value",
+				})
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("does not match"))
 			})
 		})
 

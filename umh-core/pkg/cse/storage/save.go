@@ -102,9 +102,14 @@ func (ts *TriangularStore) saveWithDelta(
 		return false, nil, errors.New("document cannot be nil")
 	}
 
-	// Validate document has required 'id' field
-	if doc["id"] == nil {
-		return false, nil, errors.New("document must have 'id' field")
+	// Validate document has required 'id' field that matches the parameter
+	docID, ok := doc["id"].(string)
+	if !ok || docID == "" {
+		return false, nil, errors.New("document must have non-empty string 'id' field")
+	}
+
+	if docID != id {
+		return false, nil, fmt.Errorf("document id %q does not match parameter id %q", docID, id)
 	}
 
 	// Collection name follows convention: {workerType}_{role}
