@@ -64,13 +64,19 @@ func (p *TestChannelProvider) QueueOutbound(msg *transport.UMHMessage) {
 
 // DrainInbound reads all available messages from the inbound channel.
 // Non-blocking: returns immediately with whatever messages are available.
+// Handles closed channels gracefully to prevent infinite loops.
 func (p *TestChannelProvider) DrainInbound() []*transport.UMHMessage {
 	var messages []*transport.UMHMessage
 
 drainLoop:
 	for {
 		select {
-		case msg := <-p.inbound:
+		case msg, ok := <-p.inbound:
+			if !ok {
+				// Channel closed, stop draining
+				break drainLoop
+			}
+
 			messages = append(messages, msg)
 		default:
 			break drainLoop
