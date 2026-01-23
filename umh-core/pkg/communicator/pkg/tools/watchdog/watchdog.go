@@ -117,7 +117,12 @@ func NewWatchdog(ctx context.Context, ticker *time.Ticker, warningsAreErrors boo
 func (s *Watchdog) Start() {
 	for {
 		select {
-		case uniqueIdentifier := <-s.badHeartbeatChan:
+		case uniqueIdentifier, ok := <-s.badHeartbeatChan:
+			if !ok {
+				s.logger.Infow("badHeartbeatChan closed, stopping watchdog")
+
+				return
+			}
 			{
 				name := s.getHeartbeatNameByUUID(uniqueIdentifier)
 				s.reportStateToNiceFail()
@@ -189,7 +194,9 @@ func (s *Watchdog) Start() {
 		case <-s.ctx.Done():
 			{
 				s.reportStateToNiceFail()
-				sentry.ReportIssuef(sentry.IssueTypeError, s.logger, "Watchdog context done: [%s] ", s.watchdogID)
+				s.logger.Infow("Watchdog context cancelled, stopping watchdog", "watchdogID", s.watchdogID)
+
+				return
 			}
 		}
 	}
