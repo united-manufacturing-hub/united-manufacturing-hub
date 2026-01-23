@@ -63,17 +63,16 @@ type WorkerSnapshot struct {
 //   - *ScenarioDump: Complete dump with deltas and worker snapshots
 //   - error: If querying fails
 func DumpScenario(ctx context.Context, store storage.TriangularStoreInterface, startSyncID int64) (*ScenarioDump, error) {
-	// Get current sync ID as end point
-	endSyncID, err := store.GetLatestSyncID(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get latest sync ID: %w", err)
-	}
-
 	// Get all deltas since start using existing GetDeltas API
 	resp, err := store.GetDeltas(ctx, storage.Subscription{LastSyncID: startSyncID})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get deltas: %w", err)
 	}
+
+	// Use LatestSyncID from response to avoid race condition.
+	// Previously we called GetLatestSyncID separately, which could return a value
+	// older than the newest delta if new writes occurred between the two calls.
+	endSyncID := resp.LatestSyncID
 
 	// Extract unique workers from deltas and load their snapshots
 	workers := extractAndLoadWorkers(ctx, store, resp.Deltas)
