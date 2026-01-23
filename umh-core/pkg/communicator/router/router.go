@@ -107,11 +107,19 @@ func (r *Router) Start() {
 
 func (r *Router) router() {
 	watcherUUID := r.dog.RegisterHeartbeat("router", 5, 600, true)
+
 	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
 
 	for {
 		select {
-		case message := <-r.inboundChannel:
+		case message, ok := <-r.inboundChannel:
+			if !ok {
+				r.routerLogger.Infow("inbound channel closed, stopping router")
+
+				return
+			}
+
 			r.dog.ReportHeartbeatStatus(watcherUUID, watchdog.HEARTBEAT_STATUS_OK)
 			// Decode message
 			messageContent, err := encoding.DecodeMessageFromUserToUMHInstance(message.Content)
