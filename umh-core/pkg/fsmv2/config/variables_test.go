@@ -79,8 +79,11 @@ global:
 			data, err := yaml.Marshal(bundle)
 			Expect(err).ToNot(HaveOccurred())
 
-			yamlStr := string(data)
-			Expect(yamlStr).To(Equal("{}\n"))
+			// Use semantic check instead of exact string match (more robust against yaml library changes)
+			var result map[string]any
+			err = yaml.Unmarshal(data, &result)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result).To(BeEmpty())
 		})
 
 		It("should round-trip through YAML correctly", func() {
