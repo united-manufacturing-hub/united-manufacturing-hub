@@ -145,7 +145,7 @@ func (w *ChildWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, 
 	// Handle nil spec - return default state
 	if spec == nil {
 		return &config.DesiredState{
-			State:            config.DesiredStateRunning,
+			BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
 			OriginalUserSpec: nil,
 		}, nil
 	}

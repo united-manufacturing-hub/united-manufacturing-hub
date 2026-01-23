@@ -93,7 +93,7 @@ func (m *Worker) CollectObservedState(ctx context.Context) (fsmv2.ObservedState,
 }
 
 func (m *Worker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
-	return &config.DesiredState{State: "running"}, nil
+	return &config.DesiredState{BaseDesiredState: config.BaseDesiredState{State: "running"}}, nil
 }
 
 func (m *Worker) GetInitialState() fsmv2.State[any, any] {

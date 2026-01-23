@@ -37,7 +37,7 @@ type StateGetter interface {
 //	        return config.DesiredState{}, err
 //	    }
 //	    // Use parsed.Field1, parsed.Field2, etc.
-//	    return config.DesiredState{State: parsed.GetState()}, nil
+//	    return config.DesiredState{BaseDesiredState: BaseDesiredState{State: parsed.GetState()}}, nil
 //	}
 //
 // For nil specs (used during initialization), returns zero value of T.
@@ -89,7 +89,7 @@ func DeriveLeafState[T any, PT interface {
 }](spec interface{}) (DesiredState, error) {
 	if spec == nil {
 		return DesiredState{
-			State:            DesiredStateRunning,
+			BaseDesiredState: BaseDesiredState{State: DesiredStateRunning},
 			OriginalUserSpec: nil,
 		}, nil
 	}
@@ -103,7 +103,7 @@ func DeriveLeafState[T any, PT interface {
 	ptr := PT(&parsed)
 
 	return DesiredState{
-		State:            ptr.GetState(),
+		BaseDesiredState: BaseDesiredState{State: ptr.GetState()},
 		ChildrenSpecs:    nil,
 		OriginalUserSpec: spec,
 	}, nil

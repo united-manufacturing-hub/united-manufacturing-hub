@@ -117,8 +117,8 @@ func (w *ApplicationWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredS
 	// Handle nil spec (used during initialization in AddWorker).
 	if spec == nil {
 		return &config.DesiredState{
-			State:         "running",
-			ChildrenSpecs: nil,
+			BaseDesiredState: config.BaseDesiredState{State: "running"},
+			ChildrenSpecs:    nil,
 		}, nil
 	}
 
@@ -137,8 +137,8 @@ func (w *ApplicationWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredS
 	}
 
 	return &config.DesiredState{
-		State:         "running",
-		ChildrenSpecs: childrenCfg.Children,
+		BaseDesiredState: config.BaseDesiredState{State: "running"},
+		ChildrenSpecs:    childrenCfg.Children,
 	}, nil
 }
 

@@ -120,7 +120,7 @@ func (w *ParentWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState,
 	// Handle nil spec - return default state with no children
 	if spec == nil {
 		return &config.DesiredState{
-			State:            config.DesiredStateRunning,
+			BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
 			ChildrenSpecs:    nil,
 			OriginalUserSpec: nil,
 		}, nil
@@ -136,7 +136,7 @@ func (w *ParentWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState,
 
 	if childrenCount == 0 {
 		return &config.DesiredState{
-			State:            parentSpec.GetState(),
+			BaseDesiredState: config.BaseDesiredState{State: parentSpec.GetState()},
 			ChildrenSpecs:    nil,
 			OriginalUserSpec: spec,
 		}, nil
@@ -184,7 +184,7 @@ device: {{ .DEVICE_ID }}`
 	}
 
 	return &config.DesiredState{
-		State:            parentSpec.GetState(),
+		BaseDesiredState: config.BaseDesiredState{State: parentSpec.GetState()},
 		ChildrenSpecs:    childrenSpecs,
 		OriginalUserSpec: spec,
 	}, nil

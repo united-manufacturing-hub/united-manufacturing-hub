@@ -164,7 +164,7 @@ var _ = Describe("DesiredState", func() {
 	Describe("YAML serialization", func() {
 		It("should serialize to YAML correctly", func() {
 			desired := config.DesiredState{
-				State: "running",
+				BaseDesiredState: config.BaseDesiredState{State: "running"},
 				ChildrenSpecs: []config.ChildSpec{
 					{
 						Name:       "child1",
@@ -222,7 +222,7 @@ state: stopped
 	Describe("ShutdownRequested interface", func() {
 		It("should return false when State is not 'shutdown'", func() {
 			desired := config.DesiredState{
-				State: "running",
+				BaseDesiredState: config.BaseDesiredState{State: "running"},
 			}
 
 			Expect(desired.IsShutdownRequested()).To(BeFalse())

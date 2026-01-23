@@ -62,7 +62,7 @@ func (w *CachingTestWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredS
 	}
 
 	return &config.DesiredState{
-		State: config.DesiredStateRunning,
+		BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
 	}, nil
 }
 

@@ -94,7 +94,7 @@ func (m *internalMockWorker) CollectObservedState(_ context.Context) (fsmv2.Obse
 }
 
 func (m *internalMockWorker) DeriveDesiredState(_ interface{}) (fsmv2.DesiredState, error) {
-	return &config.DesiredState{State: "running"}, nil
+	return &config.DesiredState{BaseDesiredState: config.BaseDesiredState{State: "running"}}, nil
 }
 
 func (m *internalMockWorker) GetInitialState() fsmv2.State[any, any] {
@@ -176,8 +176,8 @@ func (m *internalMockWorkerWithChildren) CollectObservedState(_ context.Context)
 
 func (m *internalMockWorkerWithChildren) DeriveDesiredState(_ interface{}) (fsmv2.DesiredState, error) {
 	return &config.DesiredState{
-		State:         "running",
-		ChildrenSpecs: m.childrenSpecs,
+		BaseDesiredState: config.BaseDesiredState{State: "running"},
+		ChildrenSpecs:    m.childrenSpecs,
 	}, nil
 }
 

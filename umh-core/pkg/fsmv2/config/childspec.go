@@ -54,8 +54,8 @@ import "encoding/json"
 //
 // See ValidateNoCustomLifecycleFields in pkg/fsmv2/internal/validator/snapshot.go for enforcement.
 type BaseDesiredState struct {
-	State             string `json:"state"` // "stopped" or "running" - desired lifecycle state
-	ShutdownRequested bool   `json:"ShutdownRequested"`
+	State             string `json:"state"             yaml:"state"`             // "stopped" or "running" - desired lifecycle state
+	ShutdownRequested bool   `json:"ShutdownRequested" yaml:"ShutdownRequested"` //nolint:tagliatelle // Match JSON field name for API compatibility
 }
 
 // IsShutdownRequested returns whether shutdown has been requested for this worker.
@@ -371,7 +371,7 @@ type ChildrenView interface {
 //	// In parent's DeriveDesiredState():
 //	func (w *ParentWorker) DeriveDesiredState(spec interface{}) (config.DesiredState, error) {
 //	    return config.DesiredState{
-//	        State: "running",
+//	        BaseDesiredState: config.BaseDesiredState{State: "running"},
 //	        ChildrenSpecs: []config.ChildSpec{
 //	            {Name: "child-1", WorkerType: "mqtt_client", ...},
 //	            {Name: "child-2", WorkerType: "modbus_client", ...},
@@ -382,14 +382,13 @@ type ChildrenView interface {
 // Example with shutdown:
 //
 //	DesiredState{
-//	    State:         "shutdown",  // Triggers shutdown sequence
-//	    ChildrenSpecs: nil,         // Children removed during shutdown
+//	    BaseDesiredState: BaseDesiredState{State: "shutdown"},  // Triggers shutdown sequence
+//	    ChildrenSpecs:    nil,                                  // Children removed during shutdown
 //	}
 type DesiredState struct {
-	OriginalUserSpec interface{} `json:"originalUserSpec,omitempty" yaml:"-"` // Captures the input that produced this DesiredState (for debugging/traceability)
-	BaseDesiredState             // Provides ShutdownRequested field and methods (IsShutdownRequested, SetShutdownRequested)
-	State            string      `json:"state"                   yaml:"state"`                   // Current desired state ("running", "stopped", "shutdown", etc.)
-	ChildrenSpecs    []ChildSpec `json:"childrenSpecs,omitempty" yaml:"childrenSpecs,omitempty"` // Declarative specification of child workers
+	OriginalUserSpec interface{} `json:"originalUserSpec,omitempty" yaml:"-"`                    // Captures the input that produced this DesiredState (for debugging/traceability)
+	BaseDesiredState `yaml:",inline"`                                                            // Provides State, ShutdownRequested fields and methods (GetState, IsShutdownRequested, SetShutdownRequested)
+	ChildrenSpecs    []ChildSpec `json:"childrenSpecs,omitempty"    yaml:"childrenSpecs,omitempty"` // Declarative specification of child workers
 }
 
 // NOTE: IsShutdownRequested() and SetShutdownRequested() are provided by embedded BaseDesiredState.
@@ -426,13 +425,5 @@ func (d *DesiredState) GetChildrenSpecs() []ChildSpec {
 	return d.ChildrenSpecs
 }
 
-// GetState returns the desired lifecycle state.
-// Implements fsmv2.DesiredState interface.
-// This method uses DesiredState.State field (not the embedded BaseDesiredState.State).
-func (d *DesiredState) GetState() string {
-	if d.State == "" {
-		return DesiredStateRunning
-	}
-
-	return d.State
-}
+// NOTE: GetState() is provided by embedded BaseDesiredState.
+// The BaseDesiredState.State field is the canonical source of truth for lifecycle state.
