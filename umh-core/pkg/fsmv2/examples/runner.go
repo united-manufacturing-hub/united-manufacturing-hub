@@ -161,7 +161,12 @@ func Run(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 //
 //	logger := zap.NewDevelopment().Sugar()
 //	store := examples.SetupStore(logger)
-//	defer store.Close()
+//
+// Note: The returned interface does not expose Close(). For cleanup, use type assertion:
+//
+//	if closer, ok := store.(interface{ Close() error }); ok {
+//	    defer closer.Close()
+//	}
 func SetupStore(logger *zap.SugaredLogger) storage.TriangularStoreInterface {
 	basicStore := memory.NewInMemoryStore()
 
