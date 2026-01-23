@@ -1223,6 +1223,32 @@ var _ = Describe("TriangularStore", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(changed).To(BeTrue(), "Save with different data should return changed=true")
 		})
+
+		It("should use time.Time type for _updated_at in no-change path (type consistency)", func() {
+			// This test verifies that the UpdateTimestampOnNoChange path
+			// uses time.Time (not int64/UnixMilli) for _updated_at consistency
+			observed := persistence.Document{
+				"id":     "type-test-worker",
+				"status": "running",
+			}
+
+			// First save - creates the document
+			_, err := ts.SaveObserved(ctx, "testworker", "type-test-worker", observed)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Second save with same data - triggers UpdateTimestampOnNoChange path
+			_, err = ts.SaveObserved(ctx, "testworker", "type-test-worker", observed)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Load the document and verify _updated_at is time.Time
+			saved, err := store.Get(ctx, "testworker_observed", "type-test-worker")
+			Expect(err).NotTo(HaveOccurred())
+
+			// This should NOT panic - _updated_at should be time.Time, not int64
+			updatedAt, ok := saved[storage.FieldUpdatedAt].(time.Time)
+			Expect(ok).To(BeTrue(), "_updated_at should be time.Time, not int64")
+			Expect(updatedAt).NotTo(BeZero())
+		})
 	})
 
 	Describe("Creation Deltas", func() {

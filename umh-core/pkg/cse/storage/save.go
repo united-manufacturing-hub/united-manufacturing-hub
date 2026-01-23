@@ -159,7 +159,8 @@ func (ts *TriangularStore) saveWithDelta(
 				// No business data changed
 				if opts.UpdateTimestampOnNoChange && existing != nil {
 					// Update CSE timestamp for staleness detection (observed state)
-					now := time.Now().UnixMilli()
+					// Use time.Time for consistency with injectMetadataWithOptions (line 270)
+					now := time.Now().UTC()
 					existing[FieldUpdatedAt] = now
 
 					err = ts.store.Update(ctx, collectionName, id, existing)
