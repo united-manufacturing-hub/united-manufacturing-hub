@@ -157,8 +157,17 @@ func (d *BaseDependencies) MetricsRecorder() *MetricsRecorder {
 //	}
 //
 // Returns nil if no action history has been set (e.g., no actions executed yet).
+// Returns a shallow copy to enforce read-only contract - callers cannot modify
+// supervisor-owned history.
 func (d *BaseDependencies) GetActionHistory() []ActionResult {
-	return d.actionHistory
+	if d.actionHistory == nil {
+		return nil
+	}
+
+	out := make([]ActionResult, len(d.actionHistory))
+	copy(out, d.actionHistory)
+
+	return out
 }
 
 // SetActionHistory sets the action history. Called by supervisor before CollectObservedState.

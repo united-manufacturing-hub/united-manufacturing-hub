@@ -176,18 +176,12 @@ func main() {
 	)
 }
 
-// parseLogLevel converts string log level to zap level.
+// parseLogLevel converts string log level to zap level using zap's built-in parser.
 func parseLogLevel(level string) (zapcore.Level, error) {
-	switch level {
-	case "debug":
-		return zap.DebugLevel, nil
-	case "info":
-		return zap.InfoLevel, nil
-	case "warn":
-		return zap.WarnLevel, nil
-	case "error":
-		return zap.ErrorLevel, nil
-	default:
+	var lvl zapcore.Level
+	if err := lvl.UnmarshalText([]byte(level)); err != nil {
 		return zap.InfoLevel, fmt.Errorf("unknown log level: %s", level)
 	}
+
+	return lvl, nil
 }

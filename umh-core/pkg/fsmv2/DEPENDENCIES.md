@@ -20,7 +20,7 @@ Custom dependencies (e.g., `Transport`, `ConnectionPool`, channels) can be added
 
 ## Global Variables Flow
 
-```
+```text
 SetGlobalVariables(vars)
         │
         ▼
@@ -46,6 +46,13 @@ Global variables are fleet-wide settings injected by the supervisor before `Deri
 ## StateReader Examples
 
 ### Read Own Previous State
+
+**Note**: `GetStateReader()` returns nil in the following cases:
+- During worker initialization (before supervisor sets up the state reader)
+- In unit tests that don't configure a mock store
+- When CSE storage is unavailable
+
+Always nil-check before use:
 
 ```go
 func (w *MyWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedState, error) {
@@ -241,7 +248,7 @@ func (s *MyState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, fsmv2.
 
 FSMv2 dependencies serve as a bridge between action execution and observation collection:
 
-```
+```text
 Action.Execute(ctx, deps)
        ↓
 deps.Record*() / deps.Set*()     ← Actions write results

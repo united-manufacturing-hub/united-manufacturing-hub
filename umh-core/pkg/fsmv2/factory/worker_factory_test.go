@@ -16,6 +16,7 @@ package factory_test
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -186,9 +187,9 @@ var _ = Describe("WorkerFactory", func() {
 				go func(goroutineID int) {
 					defer wg.Done()
 
-					workerType := "concurrent_worker_" + string(rune('A'+(goroutineID%3)))
+					workerType := fmt.Sprintf("concurrent_worker_%c", 'A'+(goroutineID%3))
 					identity := deps.Identity{
-						ID:         "worker-" + string(rune('0'+goroutineID)),
+						ID:         fmt.Sprintf("worker-%d", goroutineID),
 						Name:       "Concurrent Worker",
 						WorkerType: workerType,
 					}

@@ -46,7 +46,12 @@ type ModifiedField struct {
 }
 
 // IsEmpty returns true if the Diff contains no changes.
+// Returns true if the receiver is nil (nil Diff is considered empty).
 func (d *Diff) IsEmpty() bool {
+	if d == nil {
+		return true
+	}
+
 	return len(d.Added) == 0 && len(d.Modified) == 0 && len(d.Removed) == 0
 }
 
