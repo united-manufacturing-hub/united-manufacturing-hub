@@ -25,25 +25,33 @@ const (
 )
 
 type Event struct {
-	Changes     *Diff
+	// Strings (16 bytes each) - ordered first by size
 	WorkerID    string
 	WorkerType  string
 	Collection  string
 	Role        string
 	EventType   string
+	// Pointer (8 bytes)
+	Changes *Diff
+	// Int64s (8 bytes each)
 	SyncID      int64
 	TimestampMs int64
-	HasChanges  bool
+	// Bool (1 byte)
+	HasChanges bool
 }
 
 type EventSnapshot struct {
-	Document    persistence.Document
-	WorkerID    string
-	WorkerType  string
-	Collection  string
-	Role        string
+	// Strings (16 bytes each) - ordered first by size
+	WorkerID   string
+	WorkerType string
+	Collection string
+	Role       string
+	// Map (8 bytes - pointer to map header)
+	Document persistence.Document
+	// Int64s (8 bytes each)
 	ID          int64
 	AtSyncID    int64
-	EventCount  int
 	TimestampMs int64
+	// Int (8 bytes on 64-bit)
+	EventCount int
 }

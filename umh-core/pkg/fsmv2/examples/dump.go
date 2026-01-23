@@ -45,11 +45,13 @@ type ScenarioDump struct {
 
 // WorkerSnapshot represents the final triangular state of a worker.
 type WorkerSnapshot struct {
-	Identity   persistence.Document
-	Desired    persistence.Document
-	Observed   persistence.Document
+	// Strings (16 bytes each) - ordered first by size
 	WorkerType string
 	WorkerID   string
+	// Maps (8 bytes each - pointer to map header)
+	Identity persistence.Document
+	Desired  persistence.Document
+	Observed persistence.Document
 }
 
 // DumpScenario captures deltas and final state using TriangularStore's existing API.

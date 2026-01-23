@@ -211,11 +211,15 @@ func (u UserSpec) Clone() UserSpec {
 //	    },
 //	}
 type ChildSpec struct {
-	UserSpec         UserSpec       `json:"userSpec"                   yaml:"userSpec"`                   // Raw user config (input to DeriveDesiredState)
-	Dependencies     map[string]any `json:"dependencies,omitempty"     yaml:"dependencies,omitempty"`     // Additional deps to merge with parent's deps (child overrides parent)
-	Name             string         `json:"name"                       yaml:"name"`                       // Unique name for this child (within parent scope)
-	WorkerType       string         `json:"workerType"                 yaml:"workerType"`                 // Type of worker to create (registered worker factory key)
-	ChildStartStates []string       `json:"childStartStates,omitempty" yaml:"childStartStates,omitempty"` // Parent FSM states where child should run (empty = always run)
+	// Embedded struct (largest)
+	UserSpec UserSpec `json:"userSpec" yaml:"userSpec"` // Raw user config (input to DeriveDesiredState)
+	// Slice (24 bytes)
+	ChildStartStates []string `json:"childStartStates,omitempty" yaml:"childStartStates,omitempty"` // Parent FSM states where child should run (empty = always run)
+	// Strings (16 bytes each)
+	Name       string `json:"name"       yaml:"name"`       // Unique name for this child (within parent scope)
+	WorkerType string `json:"workerType" yaml:"workerType"` // Type of worker to create (registered worker factory key)
+	// Map (8 bytes)
+	Dependencies map[string]any `json:"dependencies,omitempty" yaml:"dependencies,omitempty"` // Additional deps to merge with parent's deps (child overrides parent)
 }
 
 // MarshalJSON implements json.Marshaler for ChildSpec.

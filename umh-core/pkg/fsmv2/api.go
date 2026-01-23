@@ -117,9 +117,11 @@ type ShutdownRequestable interface {
 // The supervisor passes Snapshot by value to State.Next(), making it inherently immutable.
 // Use helpers.ConvertSnapshot[O, D](snapAny) for type-safe field access.
 type Snapshot struct {
+	// Identity (64 bytes - struct with 4 strings) - ordered first by size
+	Identity deps.Identity // Who am I?
+	// Interfaces (16 bytes each)
 	Observed interface{} // What is the actual state? (ObservedState or basic.Document).
 	Desired  interface{} // What should the state be? (DesiredState or basic.Document).
-	Identity deps.Identity // Who am I?
 }
 
 // Action represents an idempotent side effect that modifies external system state.
