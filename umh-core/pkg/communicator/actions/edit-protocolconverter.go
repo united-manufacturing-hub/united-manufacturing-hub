@@ -392,11 +392,16 @@ func (a *EditProtocolConverterAction) applyMutation(benthosConfig dataflowcompon
 
 		// Add the new variables and preserve existing child variables
 		newVB = make(map[string]any)
+
+		// First copy existing variables (provides defaults)
+		if targetPC.ProtocolConverterServiceConfig.Variables.User != nil {
+			maps.Copy(newVB, targetPC.ProtocolConverterServiceConfig.Variables.User)
+		}
+
+		// Then add new variables (overwrites with updated values)
 		for _, variable := range a.vb {
 			newVB[variable.Label] = variable.Value
 		}
-
-		maps.Copy(newVB, targetPC.ProtocolConverterServiceConfig.Variables.User)
 	} else {
 		// Root or stand-alone: apply mutations directly
 		instanceToModify = targetPC
@@ -404,11 +409,16 @@ func (a *EditProtocolConverterAction) applyMutation(benthosConfig dataflowcompon
 
 		// Add the variables and keep the existing variables
 		newVB = make(map[string]any)
+
+		// First copy existing variables (provides defaults)
+		if targetPC.ProtocolConverterServiceConfig.Variables.User != nil {
+			maps.Copy(newVB, targetPC.ProtocolConverterServiceConfig.Variables.User)
+		}
+
+		// Then add new variables (overwrites with updated values)
 		for _, variable := range a.vb {
 			newVB[variable.Label] = variable.Value
 		}
-
-		maps.Copy(newVB, targetPC.ProtocolConverterServiceConfig.Variables.User)
 	}
 
 	// As the BuildRuntimeConfig function always adds location and location_path to the user variables,
