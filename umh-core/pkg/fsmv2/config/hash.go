@@ -45,12 +45,17 @@ func ComputeUserSpecHash(spec UserSpec) string {
 	// Hash the Config string directly
 	h.Write([]byte(spec.Config))
 
-	// Hash the Variables as JSON for determinism
-	// json.Marshal sorts map keys alphabetically, ensuring consistent output
+	// Hash the Variables as JSON for determinism.
+	// json.Marshal sorts map keys alphabetically, ensuring consistent output.
+	//
+	// Note: If marshal fails, we skip Variables and use Config-only hash. This is safe because:
+	// 1. Variables come from YAML config, which only produces JSON-serializable types
+	// 2. ValidateChildSpec rejects unmarshalable specs upstream (childspec_validation.go)
+	// 3. The Config-only hash still provides differentiation for the common case
+	// This is defensive programming for an impossible-in-production state.
 	if varsBytes, err := json.Marshal(spec.Variables); err == nil {
 		h.Write(varsBytes)
 	}
-	// On marshal error, we just skip Variables - the Config hash alone provides some differentiation
 
 	return fmt.Sprintf("%016x", h.Sum64())
 }
