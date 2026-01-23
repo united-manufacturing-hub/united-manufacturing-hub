@@ -22,6 +22,7 @@ import (
 	"sort"
 
 	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/validator"
@@ -46,11 +47,7 @@ var _ = Describe("FSMv2 Architecture Validation", func() {
 		Describe("Empty State Structs (Invariant: States are Pure Behavior)", func() {
 			It("should have no fields except embedded base types", func() {
 				violations := validateStateStructs()
-
-				if len(violations) > 0 {
-					message := validator.FormatViolations("Empty State Violations", violations)
-					Fail(message)
-				}
+				Expect(violations).To(BeEmpty(), validator.FormatViolations("Empty State Violations", violations))
 			})
 		})
 
