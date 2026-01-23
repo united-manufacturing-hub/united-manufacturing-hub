@@ -17,7 +17,7 @@ package example_child
 import (
 	"sync"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"go.uber.org/zap"
 )
 
@@ -54,7 +54,7 @@ func (d *DefaultConnectionPool) HealthCheck(_ Connection) error {
 // ExamplechildDependencies provides access to tools needed by child worker actions.
 // The isConnected flag is shared between actions and CollectObservedState.
 type ExamplechildDependencies struct {
-	*fsmv2.BaseDependencies
+	*deps.BaseDependencies
 	connectionPool ConnectionPool
 
 	// isConnected tracks connection state, updated by ConnectAction/DisconnectAction
@@ -64,9 +64,9 @@ type ExamplechildDependencies struct {
 }
 
 // NewExamplechildDependencies creates new dependencies for the child worker.
-func NewExamplechildDependencies(connectionPool ConnectionPool, logger *zap.SugaredLogger, stateReader fsmv2.StateReader, identity fsmv2.Identity) *ExamplechildDependencies {
+func NewExamplechildDependencies(connectionPool ConnectionPool, logger *zap.SugaredLogger, stateReader deps.StateReader, identity deps.Identity) *ExamplechildDependencies {
 	return &ExamplechildDependencies{
-		BaseDependencies: fsmv2.NewBaseDependencies(logger, stateReader, identity),
+		BaseDependencies: deps.NewBaseDependencies(logger, stateReader, identity),
 		connectionPool:   connectionPool,
 		isConnected:      false,
 	}

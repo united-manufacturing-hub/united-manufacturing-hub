@@ -22,7 +22,7 @@ import (
 	. "github.com/onsi/gomega"
 	"go.uber.org/zap"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/action"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
@@ -39,7 +39,7 @@ var _ = Describe("AuthenticateAction", func() {
 	BeforeEach(func() {
 		logger = zap.NewNop().Sugar()
 		mockTransp = &mockTransport{}
-		identity := fsmv2.Identity{ID: "test-id", WorkerType: "communicator"}
+		identity := deps.Identity{ID: "test-id", WorkerType: "communicator"}
 		dependencies = communicator.NewCommunicatorDependencies(mockTransp, logger, nil, identity)
 		// Dependencies now passed to Execute(), not constructor
 		act = action.NewAuthenticateAction(
@@ -70,7 +70,7 @@ var _ = Describe("AuthenticateAction", func() {
 	Describe("Transport Nil Safety", func() {
 		It("should create transport if nil in dependencies on first execution", func() {
 			// Create dependencies with nil transport (simulates factory creation)
-			identity := fsmv2.Identity{ID: "test-nil-transport", WorkerType: "communicator"}
+			identity := deps.Identity{ID: "test-nil-transport", WorkerType: "communicator"}
 			depsWithNilTransport := communicator.NewCommunicatorDependencies(nil, logger, nil, identity)
 			Expect(depsWithNilTransport.GetTransport()).To(BeNil(), "transport should be nil before first auth")
 

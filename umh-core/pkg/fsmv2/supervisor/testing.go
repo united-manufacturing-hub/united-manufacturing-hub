@@ -16,7 +16,7 @@ package supervisor
 
 import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/testutil"
 	"go.uber.org/zap"
 )
@@ -31,7 +31,7 @@ type TestWorkerWithType = testutil.WorkerWithType
 
 type TestState = testutil.State
 
-func TestIdentity() fsmv2.Identity {
+func TestIdentity() deps.Identity {
 	return testutil.Identity()
 }
 

@@ -17,7 +17,7 @@ package action
 import (
 	"context"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 )
 
 const StopActionName = "stop"
@@ -39,7 +39,7 @@ func (a *StopAction) Execute(ctx context.Context, depsAny any) error {
 	}
 
 	if depsAny != nil {
-		deps := depsAny.(fsmv2.Dependencies)
+		deps := depsAny.(deps.Dependencies)
 		logger := deps.GetLogger()
 		logger.Info("Stopping parent worker")
 	}

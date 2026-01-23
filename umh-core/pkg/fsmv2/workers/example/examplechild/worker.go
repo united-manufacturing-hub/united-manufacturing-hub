@@ -24,6 +24,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
@@ -37,15 +38,15 @@ type ChildWorker struct {
 	connection Connection
 	*helpers.BaseWorker[*ExamplechildDependencies]
 	logger   *zap.SugaredLogger
-	identity fsmv2.Identity
+	identity deps.Identity
 }
 
 // NewChildWorker creates a new example child worker.
 func NewChildWorker(
-	identity fsmv2.Identity,
+	identity deps.Identity,
 	connectionPool ConnectionPool,
 	logger *zap.SugaredLogger,
-	stateReader fsmv2.StateReader,
+	stateReader deps.StateReader,
 ) (*ChildWorker, error) {
 	if connectionPool == nil {
 		return nil, errors.New("connectionPool must not be nil")
@@ -186,7 +187,7 @@ func init() {
 	// Register both worker and supervisor factories atomically.
 	// The worker type is derived from ExamplechildObservedState, ensuring consistency.
 	if err := factory.RegisterWorkerType[snapshot.ExamplechildObservedState, *snapshot.ExamplechildDesiredState](
-		func(id fsmv2.Identity, logger *zap.SugaredLogger, stateReader fsmv2.StateReader, _ map[string]any) fsmv2.Worker {
+		func(id deps.Identity, logger *zap.SugaredLogger, stateReader deps.StateReader, _ map[string]any) fsmv2.Worker {
 			pool := &DefaultConnectionPool{}
 			worker, _ := NewChildWorker(id, pool, logger, stateReader)
 

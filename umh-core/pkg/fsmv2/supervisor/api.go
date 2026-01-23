@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/internal/collection"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/internal/execution"
@@ -51,7 +52,7 @@ import (
 //   - Layer 2: Runtime state validation (data evolved since layer 1)
 //   - Layer 3: Registry validation (WorkerType registered?)
 //   - Layer 4: Logical validation (dependencies compatible?)
-func (s *Supervisor[TObserved, TDesired]) AddWorker(identity fsmv2.Identity, worker fsmv2.Worker) error {
+func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, worker fsmv2.Worker) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -226,7 +227,7 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity fsmv2.Identity, wor
 		// FrameworkMetricsProvider returns computed framework metrics from workerCtx.
 		// Called BEFORE CollectObservedState to compute metrics for explicit copying.
 		// The closure captures workerCtx by reference and acquires RLock when called (thread-safe).
-		FrameworkMetricsProvider: func() *fsmv2.FrameworkMetrics {
+		FrameworkMetricsProvider: func() *deps.FrameworkMetrics {
 			if workerCtx == nil {
 				return nil
 			}
@@ -239,7 +240,7 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity fsmv2.Identity, wor
 				cumulativeTimeMs[state] = duration.Milliseconds()
 			}
 
-			return &fsmv2.FrameworkMetrics{
+			return &deps.FrameworkMetrics{
 				TimeInCurrentStateMs:    time.Since(workerCtx.stateEnteredAt).Milliseconds(),
 				StateEnteredAtUnix:      workerCtx.stateEnteredAt.Unix(),
 				StateTransitionsTotal:   workerCtx.totalTransitions,
@@ -253,7 +254,7 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity fsmv2.Identity, wor
 		// FrameworkMetricsSetter sets framework metrics on worker dependencies BEFORE CollectObservedState.
 		// Workers then access this via deps.GetFrameworkState() and explicitly copy to their observed state.
 		// This replaces the duck-typing SetFrameworkMetrics injection pattern.
-		FrameworkMetricsSetter: func(fm *fsmv2.FrameworkMetrics) {
+		FrameworkMetricsSetter: func(fm *deps.FrameworkMetrics) {
 			// Use type assertion to access GetDependenciesAny() and SetFrameworkState()
 			// All workers embed BaseWorker which provides GetDependenciesAny()
 			// All dependencies embed BaseDependencies which provides SetFrameworkState()
@@ -265,8 +266,8 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity fsmv2.Identity, wor
 				GetDependenciesAny() any
 			}
 			if dg, ok := worker.(depsGetter); ok {
-				deps := dg.GetDependenciesAny()
-				if setter, ok := deps.(interface{ SetFrameworkState(*fsmv2.FrameworkMetrics) }); ok {
+				workerDeps := dg.GetDependenciesAny()
+				if setter, ok := workerDeps.(interface{ SetFrameworkState(*deps.FrameworkMetrics) }); ok {
 					setter.SetFrameworkState(fm)
 				}
 			}
@@ -274,7 +275,7 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity fsmv2.Identity, wor
 		// ActionHistoryProvider returns buffered action results from workerCtx.actionHistory.
 		// Called BEFORE CollectObservedState to drain the action history buffer.
 		// The supervisor auto-records action results via ActionExecutor callback.
-		ActionHistoryProvider: func() []fsmv2.ActionResult {
+		ActionHistoryProvider: func() []deps.ActionResult {
 			if workerCtx == nil || workerCtx.actionHistory == nil {
 				return nil
 			}
@@ -284,13 +285,13 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity fsmv2.Identity, wor
 		// ActionHistorySetter sets action history on worker dependencies BEFORE CollectObservedState.
 		// Workers then access this via deps.GetActionHistory() and assign to their ObservedState.
 		// This follows the same pattern as FrameworkMetricsSetter.
-		ActionHistorySetter: func(history []fsmv2.ActionResult) {
+		ActionHistorySetter: func(history []deps.ActionResult) {
 			type depsGetter interface {
 				GetDependenciesAny() any
 			}
 			if dg, ok := worker.(depsGetter); ok {
-				deps := dg.GetDependenciesAny()
-				if setter, ok := deps.(interface{ SetActionHistory([]fsmv2.ActionResult) }); ok {
+				workerDeps := dg.GetDependenciesAny()
+				if setter, ok := workerDeps.(interface{ SetActionHistory([]deps.ActionResult) }); ok {
 					setter.SetActionHistory(history)
 				}
 			}
@@ -300,10 +301,10 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity fsmv2.Identity, wor
 	executor := execution.NewActionExecutor(10, s.workerType, identity, workerLogger)
 
 	// Create action history buffer for this worker (supervisor-owned)
-	actionHistoryBuffer := fsmv2.NewInMemoryActionHistoryRecorder()
+	actionHistoryBuffer := deps.NewInMemoryActionHistoryRecorder()
 
 	// Set up executor callback to auto-record action results to actionHistory
-	executor.SetOnActionComplete(func(result fsmv2.ActionResult) {
+	executor.SetOnActionComplete(func(result deps.ActionResult) {
 		actionHistoryBuffer.Record(result)
 	})
 
@@ -319,8 +320,8 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity fsmv2.Identity, wor
 	loadErr := s.store.LoadObservedTyped(loadCtx, s.workerType, identity.ID, &prevObserved)
 	if loadErr == nil {
 		// Try to extract previous StartupCount from FrameworkMetrics
-		// Use fsmv2.MetricsHolder interface for type assertion (value receiver methods)
-		if holder, ok := any(prevObserved).(fsmv2.MetricsHolder); ok {
+		// Use deps.MetricsHolder interface for type assertion (value receiver methods)
+		if holder, ok := any(prevObserved).(deps.MetricsHolder); ok {
 			fm := holder.GetFrameworkMetrics()
 			if fm.StartupCount > 0 {
 				startupCount = fm.StartupCount + 1
@@ -423,17 +424,17 @@ func (s *Supervisor[TObserved, TDesired]) SetGlobalVariables(vars map[string]any
 }
 
 // GetWorkers returns all worker IDs currently managed by this supervisor.
-func (s *Supervisor[TObserved, TDesired]) GetWorkers() []fsmv2.Identity {
+func (s *Supervisor[TObserved, TDesired]) GetWorkers() []deps.Identity {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	workers := make([]fsmv2.Identity, 0, len(s.workers))
+	workers := make([]deps.Identity, 0, len(s.workers))
 	for id, worker := range s.workers {
 		if worker == nil {
 			continue
 		}
 
-		workers = append(workers, fsmv2.Identity{
+		workers = append(workers, deps.Identity{
 			ID:            id,
 			Name:          worker.identity.Name,
 			WorkerType:    s.workerType,

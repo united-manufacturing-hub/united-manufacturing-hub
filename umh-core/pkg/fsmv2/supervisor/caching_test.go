@@ -24,6 +24,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/testutil"
@@ -34,10 +35,10 @@ type CachingTestWorker struct {
 	testutil.Worker
 	deriveCallCount atomic.Int32
 	lastSpec        config.UserSpec
-	identity        fsmv2.Identity
+	identity        deps.Identity
 }
 
-func NewCachingTestWorker(identity fsmv2.Identity) *CachingTestWorker {
+func NewCachingTestWorker(identity deps.Identity) *CachingTestWorker {
 	w := &CachingTestWorker{
 		identity: identity,
 	}
@@ -109,7 +110,7 @@ var _ = Describe("DeriveDesiredState Caching", func() {
 			)
 
 			// Create and add worker
-			identity := fsmv2.Identity{ID: "test-worker", WorkerType: workerType}
+			identity := deps.Identity{ID: "test-worker", WorkerType: workerType}
 			worker := NewCachingTestWorker(identity)
 			err := sup.AddWorker(identity, worker)
 			Expect(err).NotTo(HaveOccurred())
@@ -155,7 +156,7 @@ var _ = Describe("DeriveDesiredState Caching", func() {
 				},
 			)
 
-			identity := fsmv2.Identity{ID: "test-worker", WorkerType: workerType}
+			identity := deps.Identity{ID: "test-worker", WorkerType: workerType}
 			worker := NewCachingTestWorker(identity)
 			err := sup.AddWorker(identity, worker)
 			Expect(err).NotTo(HaveOccurred())
@@ -206,7 +207,7 @@ var _ = Describe("DeriveDesiredState Caching", func() {
 				},
 			)
 
-			identity := fsmv2.Identity{ID: "test-worker", WorkerType: workerType}
+			identity := deps.Identity{ID: "test-worker", WorkerType: workerType}
 			worker := NewCachingTestWorker(identity)
 			err := sup.AddWorker(identity, worker)
 			Expect(err).NotTo(HaveOccurred())
@@ -256,7 +257,7 @@ var _ = Describe("DeriveDesiredState Caching", func() {
 				},
 			)
 
-			identity := fsmv2.Identity{ID: "test-worker", WorkerType: workerType}
+			identity := deps.Identity{ID: "test-worker", WorkerType: workerType}
 			worker := NewCachingTestWorker(identity)
 			err := sup.AddWorker(identity, worker)
 			Expect(err).NotTo(HaveOccurred())

@@ -21,7 +21,7 @@ import (
 	. "github.com/onsi/gomega"
 	"go.uber.org/zap"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	example_child "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplechild"
 )
 
@@ -89,13 +89,13 @@ var _ = Describe("ExamplechildDependencies", func() {
 	var (
 		logger   *zap.SugaredLogger
 		mockPool *MockConnectionPool
-		identity fsmv2.Identity
+		identity deps.Identity
 	)
 
 	BeforeEach(func() {
 		logger = zap.NewNop().Sugar()
 		mockPool = NewMockConnectionPool()
-		identity = fsmv2.Identity{ID: "test-id", WorkerType: "child"}
+		identity = deps.Identity{ID: "test-id", WorkerType: "child"}
 	})
 
 	Describe("NewExamplechildDependencies", func() {

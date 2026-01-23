@@ -19,7 +19,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
 	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
@@ -28,7 +28,7 @@ import (
 // CommunicatorDependencies represents the dependencies needed by communicator actions.
 // This is an interface to avoid import cycles (action -> communicator -> snapshot -> action).
 type CommunicatorDependencies interface {
-	fsmv2.Dependencies
+	deps.Dependencies
 	GetTransport() transport.Transport
 	// SetTransport sets the transport instance (mutex protected).
 	// Called by AuthenticateAction on first execution.
@@ -80,7 +80,7 @@ type CommunicatorDependencies interface {
 
 	// MetricsRecorder returns the MetricsRecorder for actions to record metrics.
 	// Actions call IncrementCounter/SetGauge with typed constants.
-	MetricsRecorder() *fsmv2.MetricsRecorder
+	MetricsRecorder() *deps.MetricsRecorder
 
 	// SetAuthenticatedUUID stores the UUID returned by the backend after successful authentication.
 	// Called by AuthenticateAction after successful authentication.

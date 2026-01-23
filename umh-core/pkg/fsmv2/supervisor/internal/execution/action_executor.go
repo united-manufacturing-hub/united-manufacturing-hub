@@ -25,6 +25,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/metrics"
 )
 
@@ -36,8 +37,8 @@ type ActionExecutor struct {
 	timeouts         map[string]time.Duration
 	metricsCancel    context.CancelFunc
 	logger           *zap.SugaredLogger
-	onActionComplete func(result fsmv2.ActionResult) // Called after each action execution (for auto-recording to ActionHistory)
-	identity         fsmv2.Identity                  // Worker identity for logging
+	onActionComplete func(result deps.ActionResult) // Called after each action execution (for auto-recording to ActionHistory)
+	identity         deps.Identity                  // Worker identity for logging
 	supervisorID     string
 	wg               sync.WaitGroup
 	metricsWg        sync.WaitGroup
@@ -54,7 +55,7 @@ type actionWork struct {
 	timeout  time.Duration
 }
 
-func NewActionExecutor(workerCount int, supervisorID string, identity fsmv2.Identity, logger *zap.SugaredLogger) *ActionExecutor {
+func NewActionExecutor(workerCount int, supervisorID string, identity deps.Identity, logger *zap.SugaredLogger) *ActionExecutor {
 	if workerCount <= 0 {
 		workerCount = 10
 	}
@@ -71,7 +72,7 @@ func NewActionExecutor(workerCount int, supervisorID string, identity fsmv2.Iden
 	}
 }
 
-func NewActionExecutorWithTimeout(workerCount int, timeouts map[string]time.Duration, supervisorID string, identity fsmv2.Identity, logger *zap.SugaredLogger) *ActionExecutor {
+func NewActionExecutorWithTimeout(workerCount int, timeouts map[string]time.Duration, supervisorID string, identity deps.Identity, logger *zap.SugaredLogger) *ActionExecutor {
 	if workerCount <= 0 {
 		workerCount = 10
 	}
@@ -179,7 +180,7 @@ func (ae *ActionExecutor) executeWorkWithRecovery(work actionWork) {
 				errorMsg = err.Error()
 			}
 
-			ae.onActionComplete(fsmv2.ActionResult{
+			ae.onActionComplete(deps.ActionResult{
 				Timestamp:  time.Now(),
 				ActionType: work.action.Name(),
 				Success:    status == "success",
@@ -323,7 +324,7 @@ func (ae *ActionExecutor) GetActiveActionCount() int {
 // The callback receives an ActionResult with action name, success/failure, error message, and latency.
 //
 // Thread-safe: This method should be called during executor setup, before Start().
-func (ae *ActionExecutor) SetOnActionComplete(fn func(fsmv2.ActionResult)) {
+func (ae *ActionExecutor) SetOnActionComplete(fn func(deps.ActionResult)) {
 	ae.onActionComplete = fn
 }
 

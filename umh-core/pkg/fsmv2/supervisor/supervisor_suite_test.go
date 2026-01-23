@@ -28,6 +28,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
@@ -78,7 +79,7 @@ func registerTestWorkerFactories() {
 	for _, workerType := range workerTypes {
 		wt := workerType
 		// Register worker factory
-		err := factory.RegisterFactoryByType(wt, func(identity fsmv2.Identity, _ *zap.SugaredLogger, _ fsmv2.StateReader, _ map[string]any) fsmv2.Worker {
+		err := factory.RegisterFactoryByType(wt, func(identity deps.Identity, _ *zap.SugaredLogger, _ deps.StateReader, _ map[string]any) fsmv2.Worker {
 			return &supervisor.TestWorkerWithType{
 				Worker:     supervisor.TestWorker{},
 				WorkerType: wt,
@@ -359,8 +360,8 @@ func (m *mockStore) GetDeltas(ctx context.Context, sub storage.Subscription) (st
 	return storage.DeltasResponse{}, nil
 }
 
-func mockIdentity() fsmv2.Identity {
-	return fsmv2.Identity{
+func mockIdentity() deps.Identity {
+	return deps.Identity{
 		ID:         "test-worker",
 		Name:       "Test Worker",
 		WorkerType: "test",

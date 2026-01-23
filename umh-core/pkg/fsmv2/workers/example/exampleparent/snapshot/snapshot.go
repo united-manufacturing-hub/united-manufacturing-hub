@@ -18,13 +18,14 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 )
 
 // ExampleparentSnapshot represents a point-in-time view of the parent worker state.
 type ExampleparentSnapshot struct {
 	Desired  *ExampleparentDesiredState
-	Identity fsmv2.Identity
+	Identity deps.Identity
 	Observed ExampleparentObservedState
 }
 
@@ -54,14 +55,14 @@ type ExampleparentObservedState struct {
 	// via ActionExecutor callback and injects them into deps before CollectObservedState.
 	// Workers read deps.GetActionHistory() and assign here in CollectObservedState.
 	// Parents can read child action history from CSE via StateReader.LoadObservedTyped().
-	LastActionResults []fsmv2.ActionResult `json:"last_action_results,omitempty"`
+	LastActionResults []deps.ActionResult `json:"last_action_results,omitempty"`
 
 	ExampleparentDesiredState `json:",inline"`
 
 	// Embedded metrics for both framework and worker metrics.
 	// Framework metrics provide time-in-state via GetFrameworkMetrics().TimeInCurrentStateMs
 	// and state entered time via GetFrameworkMetrics().StateEnteredAtUnix.
-	fsmv2.MetricsEmbedder `json:",inline"`
+	deps.MetricsEmbedder `json:",inline"`
 
 	ChildrenHealthy   int `json:"children_healthy"`
 	ChildrenUnhealthy int `json:"children_unhealthy"`

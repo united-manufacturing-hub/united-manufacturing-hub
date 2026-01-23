@@ -22,7 +22,7 @@ import (
 	. "github.com/onsi/gomega"
 	"go.uber.org/zap"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 )
 
@@ -37,9 +37,9 @@ var _ = Describe("Multi-Worker Integration", func() {
 				Logger:     zap.NewNop().Sugar(),
 			})
 
-			identity1 := fsmv2.Identity{ID: "worker1", Name: "Worker 1"}
-			identity2 := fsmv2.Identity{ID: "worker2", Name: "Worker 2"}
-			identity3 := fsmv2.Identity{ID: "worker3", Name: "Worker 3"}
+			identity1 := deps.Identity{ID: "worker1", Name: "Worker 1"}
+			identity2 := deps.Identity{ID: "worker2", Name: "Worker 2"}
+			identity3 := deps.Identity{ID: "worker3", Name: "Worker 3"}
 
 			worker1 := &mockWorker{
 				observed: &mockObservedState{ID: "worker1", CollectedAt: time.Now(), Desired: &mockDesiredState{}},
@@ -83,9 +83,9 @@ var _ = Describe("Multi-Worker Integration", func() {
 				Logger:     zap.NewNop().Sugar(),
 			})
 
-			identity1 := fsmv2.Identity{ID: "worker1", Name: "Worker 1"}
-			identity2 := fsmv2.Identity{ID: "worker2", Name: "Worker 2"}
-			identity3 := fsmv2.Identity{ID: "worker3", Name: "Worker 3"}
+			identity1 := deps.Identity{ID: "worker1", Name: "Worker 1"}
+			identity2 := deps.Identity{ID: "worker2", Name: "Worker 2"}
+			identity3 := deps.Identity{ID: "worker3", Name: "Worker 3"}
 
 			worker1 := &mockWorker{
 				observed: &mockObservedState{ID: "worker1", CollectedAt: time.Now(), Desired: &mockDesiredState{}},
@@ -135,7 +135,7 @@ var _ = Describe("Multi-Worker Integration", func() {
 			go func() {
 				defer GinkgoRecover()
 				for range 10 {
-					identity := fsmv2.Identity{ID: "concurrent1", Name: "Concurrent Worker 1"}
+					identity := deps.Identity{ID: "concurrent1", Name: "Concurrent Worker 1"}
 					worker := &mockWorker{
 						observed: &mockObservedState{ID: "concurrent1", CollectedAt: time.Now(), Desired: &mockDesiredState{}},
 					}
@@ -149,7 +149,7 @@ var _ = Describe("Multi-Worker Integration", func() {
 			go func() {
 				defer GinkgoRecover()
 				for range 10 {
-					identity := fsmv2.Identity{ID: "concurrent2", Name: "Concurrent Worker 2"}
+					identity := deps.Identity{ID: "concurrent2", Name: "Concurrent Worker 2"}
 					worker := &mockWorker{
 						observed: &mockObservedState{ID: "concurrent2", CollectedAt: time.Now(), Desired: &mockDesiredState{}},
 					}
@@ -178,8 +178,8 @@ var _ = Describe("Multi-Worker Integration", func() {
 				Logger:     zap.NewNop().Sugar(),
 			})
 
-			identity1 := fsmv2.Identity{ID: "worker1", Name: "Worker 1"}
-			identity2 := fsmv2.Identity{ID: "worker2", Name: "Worker 2"}
+			identity1 := deps.Identity{ID: "worker1", Name: "Worker 1"}
+			identity2 := deps.Identity{ID: "worker2", Name: "Worker 2"}
 
 			worker1 := &mockWorker{
 				observed: &mockObservedState{ID: "worker1", CollectedAt: time.Now(), Desired: &mockDesiredState{}},

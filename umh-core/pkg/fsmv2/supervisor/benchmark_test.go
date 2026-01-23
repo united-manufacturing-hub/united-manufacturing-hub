@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 	"go.uber.org/zap"
 )
@@ -89,7 +90,7 @@ func benchmarkSupervisorTick(b *testing.B, workerCount int) {
 	// Add N workers to supervisor
 	for i := range workerCount {
 		workerID := fmt.Sprintf("worker-%d", i)
-		identity := fsmv2.Identity{
+		identity := deps.Identity{
 			ID:   workerID,
 			Name: fmt.Sprintf("Benchmark Worker %d", i),
 		}
@@ -182,7 +183,7 @@ func BenchmarkTickLoopWithSlowWorker(b *testing.B) {
 
 	// Add one slow worker (100ms delay) and several fast workers
 	slowWorkerID := "slow-worker-0"
-	slowIdentity := fsmv2.Identity{
+	slowIdentity := deps.Identity{
 		ID:   slowWorkerID,
 		Name: "Slow Worker",
 	}
@@ -203,7 +204,7 @@ func BenchmarkTickLoopWithSlowWorker(b *testing.B) {
 	// Add 10 fast workers
 	for i := 1; i <= 10; i++ {
 		workerID := fmt.Sprintf("fast-worker-%d", i)
-		identity := fsmv2.Identity{
+		identity := deps.Identity{
 			ID:   workerID,
 			Name: fmt.Sprintf("Fast Worker %d", i),
 		}
@@ -249,7 +250,7 @@ func BenchmarkTickLoopConcurrentActions(b *testing.B) {
 	// Add 50 workers with small random delays to simulate real-world variance
 	for i := range 50 {
 		workerID := fmt.Sprintf("concurrent-worker-%d", i)
-		identity := fsmv2.Identity{
+		identity := deps.Identity{
 			ID:   workerID,
 			Name: fmt.Sprintf("Concurrent Worker %d", i),
 		}
@@ -335,7 +336,7 @@ func BenchmarkObservationCollectionSingle(b *testing.B) {
 	})
 
 	workerID := "latency-worker-0"
-	identity := fsmv2.Identity{
+	identity := deps.Identity{
 		ID:   workerID,
 		Name: "Latency Worker",
 	}
@@ -395,7 +396,7 @@ func benchmarkObservationCollectionN(b *testing.B, workerCount int) {
 
 	for i := range workerCount {
 		workerID := fmt.Sprintf("latency-worker-%d", i)
-		identity := fsmv2.Identity{
+		identity := deps.Identity{
 			ID:   workerID,
 			Name: fmt.Sprintf("Latency Worker %d", i),
 		}

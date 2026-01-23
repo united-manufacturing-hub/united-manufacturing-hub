@@ -24,6 +24,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence/memory"
@@ -145,8 +146,8 @@ func (m *State) Next(snapshot any) (fsmv2.State[any, any], fsmv2.Signal, fsmv2.A
 func (m *State) String() string { return "State" }
 func (m *State) Reason() string { return "test state" }
 
-func Identity() fsmv2.Identity {
-	return fsmv2.Identity{
+func Identity() deps.Identity {
+	return deps.Identity{
 		ID:         "test-worker",
 		Name:       "Test Worker",
 		WorkerType: "container",

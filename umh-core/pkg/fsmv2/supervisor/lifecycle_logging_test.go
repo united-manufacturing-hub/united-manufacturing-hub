@@ -27,7 +27,7 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 )
 
@@ -111,7 +111,7 @@ var _ = Describe("Lifecycle Logging", func() {
 		}
 		sup = supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](cfg)
 
-		identity := fsmv2.Identity{
+		identity := deps.Identity{
 			ID:         "worker-1",
 			Name:       "Test Worker",
 			WorkerType: "test",
@@ -179,7 +179,7 @@ var _ = Describe("Lifecycle Logging", func() {
 			}
 			sup = supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](cfg)
 
-			identity := fsmv2.Identity{
+			identity := deps.Identity{
 				ID:            "worker-1",
 				Name:          "Test Worker",
 				WorkerType:    "test",
@@ -210,7 +210,7 @@ var _ = Describe("Lifecycle Logging", func() {
 			}
 			sup = supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](cfg)
 
-			identity := fsmv2.Identity{
+			identity := deps.Identity{
 				ID:         "worker-1",
 				Name:       "Test Worker",
 				WorkerType: "test",
@@ -239,7 +239,7 @@ var _ = Describe("Lifecycle Logging", func() {
 			}
 			sup = supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](cfg)
 
-			identity := fsmv2.Identity{
+			identity := deps.Identity{
 				ID:         "worker-1",
 				Name:       "Test Worker",
 				WorkerType: "test",
@@ -294,7 +294,7 @@ var _ = Describe("Lifecycle Logging", func() {
 				}
 				sup = supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](cfg)
 
-				identity := fsmv2.Identity{
+				identity := deps.Identity{
 					ID:         "worker-1",
 					Name:       "Test Worker",
 					WorkerType: "test",
@@ -338,7 +338,7 @@ var _ = Describe("Lifecycle Logging", func() {
 				}
 				sup = supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](cfg)
 
-				identity := fsmv2.Identity{
+				identity := deps.Identity{
 					ID:         "worker-1",
 					Name:       "Test Worker",
 					WorkerType: "test",

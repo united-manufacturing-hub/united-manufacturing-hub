@@ -27,6 +27,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
@@ -254,7 +255,7 @@ func NewApplicationSupervisor(cfg SupervisorConfig) (*supervisor.Supervisor[snap
 
 	// Create application worker identity.
 	// For root supervisors, HierarchyPath is just the single segment: "id(workerType)"
-	appIdentity := fsmv2.Identity{
+	appIdentity := deps.Identity{
 		ID:            cfg.ID,
 		Name:          cfg.Name,
 		WorkerType:    appWorkerType,
@@ -284,7 +285,7 @@ func init() {
 	// Register both worker and supervisor factories atomically.
 	// The worker type is derived from ApplicationObservedState, ensuring consistency.
 	if err := factory.RegisterWorkerType[snapshot.ApplicationObservedState, *snapshot.ApplicationDesiredState](
-		func(id fsmv2.Identity, _ *zap.SugaredLogger, _ fsmv2.StateReader, _ map[string]any) fsmv2.Worker {
+		func(id deps.Identity, _ *zap.SugaredLogger, _ deps.StateReader, _ map[string]any) fsmv2.Worker {
 			return NewApplicationWorker(id.ID, id.Name)
 		},
 		func(cfg interface{}) interface{} {

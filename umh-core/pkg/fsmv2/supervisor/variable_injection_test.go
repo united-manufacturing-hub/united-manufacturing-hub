@@ -24,6 +24,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
@@ -32,7 +33,7 @@ import (
 
 // TestWorker is a test double for fsmv2.Worker that allows capturing DeriveDesiredState calls.
 type TestWorker struct {
-	identity               fsmv2.Identity
+	identity               deps.Identity
 	initialState           fsmv2.State[any, any]
 	deriveDesiredStateFunc func(spec config.UserSpec) (fsmv2.DesiredState, error)
 }
@@ -103,7 +104,7 @@ var _ = Describe("Variable Injection", func() {
 		ctx        context.Context
 		store      storage.TriangularStoreInterface
 		testWorker *TestWorker
-		identity   fsmv2.Identity
+		identity   deps.Identity
 		s          *supervisor.Supervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState]
 		logger     *zap.SugaredLogger
 	)
@@ -125,7 +126,7 @@ var _ = Describe("Variable Injection", func() {
 
 		store = storage.NewTriangularStore(basicStore, zap.NewNop().Sugar())
 
-		identity = fsmv2.Identity{
+		identity = deps.Identity{
 			ID:         "test-worker-1",
 			Name:       "Test Worker",
 			WorkerType: "test",

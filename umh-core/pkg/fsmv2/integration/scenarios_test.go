@@ -27,7 +27,7 @@ import (
 	"go.uber.org/zap/zapcore"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/examples"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/integration"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent/snapshot"
@@ -1249,7 +1249,7 @@ var _ = Describe("MetricsHolder Type Assertion", func() {
 		//
 		// MetricsEmbedder has: func (m *MetricsEmbedder) GetMetrics() *Metrics
 		// This is a POINTER receiver, so it's NOT in the method set of the value.
-		holder, ok := interface{}(parentObs).(fsmv2.MetricsHolder)
+		holder, ok := interface{}(parentObs).(deps.MetricsHolder)
 
 		// BEFORE FIX: ok = false (type assertion fails because GetMetrics has pointer receiver)
 		// AFTER FIX: ok = true (value receivers work)

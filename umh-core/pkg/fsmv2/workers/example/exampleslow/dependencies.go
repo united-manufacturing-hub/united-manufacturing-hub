@@ -19,7 +19,7 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 )
 
 type Connection interface{}
@@ -45,7 +45,7 @@ func (d *DefaultConnectionPool) HealthCheck(_ Connection) error {
 }
 
 type ExampleslowDependencies struct {
-	*fsmv2.BaseDependencies
+	*deps.BaseDependencies
 	connectionPool ConnectionPool
 
 	mu           sync.RWMutex
@@ -53,9 +53,9 @@ type ExampleslowDependencies struct {
 	delaySeconds int
 }
 
-func NewExampleslowDependencies(connectionPool ConnectionPool, logger *zap.SugaredLogger, stateReader fsmv2.StateReader, identity fsmv2.Identity) *ExampleslowDependencies {
+func NewExampleslowDependencies(connectionPool ConnectionPool, logger *zap.SugaredLogger, stateReader deps.StateReader, identity deps.Identity) *ExampleslowDependencies {
 	return &ExampleslowDependencies{
-		BaseDependencies: fsmv2.NewBaseDependencies(logger, stateReader, identity),
+		BaseDependencies: deps.NewBaseDependencies(logger, stateReader, identity),
 		connectionPool:   connectionPool,
 	}
 }

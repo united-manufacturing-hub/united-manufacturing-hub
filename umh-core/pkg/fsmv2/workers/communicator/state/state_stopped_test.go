@@ -18,6 +18,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/snapshot"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/state"
 )
@@ -36,7 +37,7 @@ var _ = Describe("StoppedState", func() {
 		Context("when shutdown is not requested", func() {
 			BeforeEach(func() {
 				snap = fsmv2.Snapshot{
-					Identity: fsmv2.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
+					Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
 					Observed: snapshot.CommunicatorObservedState{},
 					Desired:  &snapshot.CommunicatorDesiredState{},
 				}

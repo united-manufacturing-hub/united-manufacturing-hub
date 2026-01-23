@@ -19,14 +19,14 @@ import (
 	. "github.com/onsi/gomega"
 	"go.uber.org/zap"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent"
 )
 
 var _ = Describe("ParentDependencies", func() {
 	var (
-		logger *zap.SugaredLogger
-		deps   *exampleparent.ParentDependencies
+		logger     *zap.SugaredLogger
+		parentDeps *exampleparent.ParentDependencies
 	)
 
 	BeforeEach(func() {
@@ -35,12 +35,12 @@ var _ = Describe("ParentDependencies", func() {
 
 	Describe("NewParentDependencies", func() {
 		It("should create dependencies with valid inputs", func() {
-			identity := fsmv2.Identity{ID: "test-id", WorkerType: "parent"}
-			deps = exampleparent.NewParentDependencies(logger, nil, identity)
+			identity := deps.Identity{ID: "test-id", WorkerType: "parent"}
+			parentDeps = exampleparent.NewParentDependencies(logger, nil, identity)
 
-			Expect(deps).NotTo(BeNil())
+			Expect(parentDeps).NotTo(BeNil())
 			// Logger is enriched with worker context
-			Expect(deps.GetLogger()).NotTo(BeNil())
+			Expect(parentDeps.GetLogger()).NotTo(BeNil())
 		})
 	})
 })

@@ -118,6 +118,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	depspkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	fsmv2types "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
@@ -178,7 +179,7 @@ type CommunicatorWorker struct {
 	// like filesystem, etc.
 	// But everything that configures it or that needs to be exposed should be in observed and desired state
 	logger   *zap.SugaredLogger
-	identity fsmv2.Identity
+	identity depspkg.Identity
 }
 
 // NewCommunicatorWorker creates a new Channel-based Communicator worker.
@@ -211,7 +212,7 @@ func NewCommunicatorWorker(
 	name string,
 	transportParam transport.Transport,
 	logger *zap.SugaredLogger,
-	stateReader fsmv2.StateReader,
+	stateReader depspkg.StateReader,
 ) (*CommunicatorWorker, error) {
 	workerType, err := storage.DeriveWorkerType[snapshot.CommunicatorObservedState]()
 	if err != nil {
@@ -219,7 +220,7 @@ func NewCommunicatorWorker(
 	}
 
 	// Create identity first so it can be used for dependency logging
-	identity := fsmv2.Identity{
+	identity := depspkg.Identity{
 		ID:         id,
 		Name:       name,
 		WorkerType: workerType,
@@ -330,7 +331,7 @@ func (w *CommunicatorWorker) CollectObservedState(ctx context.Context) (fsmv2.Ob
 	authenticatedUUID := deps.GetAuthenticatedUUID()
 
 	// Build metrics container with both framework and worker metrics
-	metricsContainer := fsmv2.MetricsContainer{
+	metricsContainer := depspkg.MetricsContainer{
 		Worker: newWorkerMetrics,
 	}
 
@@ -353,7 +354,7 @@ func (w *CommunicatorWorker) CollectObservedState(ctx context.Context) (fsmv2.Ob
 		LastRetryAfter:    lastRetryAfter,
 		LastAuthAttemptAt: lastAuthAttemptAt,
 		// Use MetricsEmbedder with nested container for both worker and framework metrics
-		MetricsEmbedder: fsmv2.MetricsEmbedder{Metrics: metricsContainer},
+		MetricsEmbedder: depspkg.MetricsEmbedder{Metrics: metricsContainer},
 	}
 
 	return observed, nil
@@ -424,7 +425,7 @@ func (w *CommunicatorWorker) GetInitialState() fsmv2.State[any, any] {
 func init() {
 	// Register both worker and supervisor factories atomically.
 	if err := factory.RegisterWorkerType[snapshot.CommunicatorObservedState, *snapshot.CommunicatorDesiredState](
-		func(id fsmv2.Identity, logger *zap.SugaredLogger, stateReader fsmv2.StateReader, _ map[string]any) fsmv2.Worker {
+		func(id depspkg.Identity, logger *zap.SugaredLogger, stateReader depspkg.StateReader, _ map[string]any) fsmv2.Worker {
 			// Phase 1: ChannelProvider MUST be set via global singleton BEFORE factory is called.
 			// The singleton is read by NewCommunicatorDependencies and will panic if not set.
 			// DO NOT extract channelProvider from deps - singleton is THE ONLY way.

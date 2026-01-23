@@ -24,6 +24,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
@@ -43,13 +44,13 @@ var _ = Describe("ChildSpec Validation Integration", func() {
 		logger = zap.NewNop().Sugar()
 		basicStore = memory.NewInMemoryStore()
 
-		_ = factory.RegisterFactoryByType("valid_child", func(id fsmv2.Identity, _ *zap.SugaredLogger, _ fsmv2.StateReader, _ map[string]any) fsmv2.Worker {
+		_ = factory.RegisterFactoryByType("valid_child", func(id deps.Identity, _ *zap.SugaredLogger, _ deps.StateReader, _ map[string]any) fsmv2.Worker {
 			return &validChildSpecMockWorker{
 				identity:     id,
 				initialState: &mockState{},
 			}
 		})
-		_ = factory.RegisterFactoryByType("another_child", func(id fsmv2.Identity, _ *zap.SugaredLogger, _ fsmv2.StateReader, _ map[string]any) fsmv2.Worker {
+		_ = factory.RegisterFactoryByType("another_child", func(id deps.Identity, _ *zap.SugaredLogger, _ deps.StateReader, _ map[string]any) fsmv2.Worker {
 			return &validChildSpecMockWorker{
 				identity:     id,
 				initialState: &mockState{},
@@ -78,7 +79,7 @@ var _ = Describe("ChildSpec Validation Integration", func() {
 
 			// Setup worker that returns valid ChildSpecs
 			mockWorker := &validChildSpecMockWorker{
-				identity: fsmv2.Identity{
+				identity: deps.Identity{
 					ID:         "worker-1",
 					Name:       "Test Worker",
 					WorkerType: "test_supervisor",
@@ -132,7 +133,7 @@ var _ = Describe("ChildSpec Validation Integration", func() {
 
 			// Setup worker with ChildSpec{Name: "", ...}
 			mockWorker := &validChildSpecMockWorker{
-				identity: fsmv2.Identity{
+				identity: deps.Identity{
 					ID:         "worker-2",
 					Name:       "Test Worker 2",
 					WorkerType: "test_supervisor",
@@ -185,7 +186,7 @@ var _ = Describe("ChildSpec Validation Integration", func() {
 
 			// Setup worker with empty WorkerType
 			mockWorker := &validChildSpecMockWorker{
-				identity: fsmv2.Identity{
+				identity: deps.Identity{
 					ID:         "worker-3",
 					Name:       "Test Worker 3",
 					WorkerType: "test_supervisor",
@@ -238,7 +239,7 @@ var _ = Describe("ChildSpec Validation Integration", func() {
 
 			// Setup worker with unknown WorkerType
 			mockWorker := &validChildSpecMockWorker{
-				identity: fsmv2.Identity{
+				identity: deps.Identity{
 					ID:         "worker-4",
 					Name:       "Test Worker 4",
 					WorkerType: "test_supervisor",
@@ -284,7 +285,7 @@ var _ = Describe("ChildSpec Validation Integration", func() {
 
 			// Setup worker with duplicate child names
 			mockWorker := &validChildSpecMockWorker{
-				identity: fsmv2.Identity{
+				identity: deps.Identity{
 					ID:         "worker-5",
 					Name:       "Test Worker 5",
 					WorkerType: "test_supervisor",
@@ -335,7 +336,7 @@ var _ = Describe("ChildSpec Validation Integration", func() {
 
 			// Multiple validation errors in different specs
 			mockWorker := &validChildSpecMockWorker{
-				identity: fsmv2.Identity{
+				identity: deps.Identity{
 					ID:         "worker-6",
 					Name:       "Test Worker 6",
 					WorkerType: "test_supervisor",
@@ -387,7 +388,7 @@ var _ = Describe("ChildSpec Validation Integration", func() {
 			callOrder := []string{}
 
 			mockWorker := &trackedCallOrderMockWorker{
-				identity: fsmv2.Identity{
+				identity: deps.Identity{
 					ID:         "worker-7",
 					Name:       "Test Worker 7",
 					WorkerType: "test_supervisor",
@@ -438,7 +439,7 @@ var _ = Describe("ChildSpec Validation Integration", func() {
 			callOrder := []string{}
 
 			mockWorker := &trackedCallOrderMockWorker{
-				identity: fsmv2.Identity{
+				identity: deps.Identity{
 					ID:         "worker-8",
 					Name:       "Test Worker 8",
 					WorkerType: "test_supervisor",
@@ -499,7 +500,7 @@ var _ = Describe("ChildSpec Validation Integration", func() {
 
 			// Test that all validation checks run
 			mockWorker := &validChildSpecMockWorker{
-				identity: fsmv2.Identity{
+				identity: deps.Identity{
 					ID:         "worker-9",
 					Name:       "Test Worker 9",
 					WorkerType: "test_supervisor",
@@ -545,7 +546,7 @@ var _ = Describe("ChildSpec Validation Integration", func() {
 
 			// Setup worker with ChildSpec containing UserSpec data
 			mockWorker := &validChildSpecMockWorker{
-				identity: fsmv2.Identity{
+				identity: deps.Identity{
 					ID:         "worker-10",
 					Name:       "Test Worker 10",
 					WorkerType: "test_supervisor",
@@ -590,7 +591,7 @@ var _ = Describe("ChildSpec Validation Integration", func() {
 
 // validChildSpecMockWorker returns configurable ChildSpecs in DeriveDesiredState.
 type validChildSpecMockWorker struct {
-	identity     fsmv2.Identity
+	identity     deps.Identity
 	initialState fsmv2.State[any, any]
 	observed     persistence.Document
 	childSpecs   []config.ChildSpec
@@ -618,7 +619,7 @@ func (m *validChildSpecMockWorker) GetInitialState() fsmv2.State[any, any] {
 
 // trackedCallOrderMockWorker tracks which methods are called and in what order.
 type trackedCallOrderMockWorker struct {
-	identity     fsmv2.Identity
+	identity     deps.Identity
 	initialState fsmv2.State[any, any]
 	observed     persistence.Document
 	childSpecs   []config.ChildSpec

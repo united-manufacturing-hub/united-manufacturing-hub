@@ -23,7 +23,7 @@ import (
 	. "github.com/onsi/gomega"
 	"go.uber.org/zap"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	depspkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/action"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
@@ -101,7 +101,7 @@ var _ = Describe("SyncAction Error Handling", func() {
 	BeforeEach(func() {
 		ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
 		mockTransport = NewMockTransport()
-		identity := fsmv2.Identity{ID: "test-worker", Name: "Test Worker"}
+		identity := depspkg.Identity{ID: "test-worker", Name: "Test Worker"}
 		deps = communicator.NewCommunicatorDependencies(mockTransport, testLogger, nil, identity)
 	})
 

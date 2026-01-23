@@ -18,11 +18,12 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 )
 
 type ExampleslowDependencies interface {
-	fsmv2.Dependencies
+	deps.Dependencies
 	// SetConnected sets the connection state.
 	SetConnected(connected bool)
 	// IsConnected returns the current connection state.
@@ -34,7 +35,7 @@ type ExampleslowDependencies interface {
 }
 
 type ExampleslowSnapshot struct {
-	Identity fsmv2.Identity
+	Identity deps.Identity
 	Desired  ExampleslowDesiredState
 	Observed ExampleslowObservedState
 }
@@ -86,9 +87,9 @@ type ExampleslowObservedState struct {
 	// This is supervisor-managed data: the supervisor auto-records action results
 	// via ActionExecutor callback and injects them into deps before CollectObservedState.
 	// Workers read deps.GetActionHistory() and assign here in CollectObservedState.
-	LastActionResults []fsmv2.ActionResult `json:"last_action_results,omitempty"`
+	LastActionResults []deps.ActionResult `json:"last_action_results,omitempty"`
 
-	fsmv2.MetricsEmbedder `json:",inline"` // Framework and worker metrics for Prometheus export
+	deps.MetricsEmbedder `json:",inline"` // Framework and worker metrics for Prometheus export
 
 	ConnectAttempts int `json:"connect_attempts"`
 }

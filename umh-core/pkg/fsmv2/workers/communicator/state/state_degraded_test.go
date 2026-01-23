@@ -22,6 +22,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/snapshot"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/state"
 )
@@ -44,7 +45,7 @@ var _ = Describe("DegradedState", func() {
 
 			BeforeEach(func() {
 				snap = fsmv2.Snapshot{
-					Identity: fsmv2.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
+					Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
 					Observed: snapshot.CommunicatorObservedState{
 						Authenticated: true,
 					},
@@ -73,7 +74,7 @@ var _ = Describe("DegradedState", func() {
 
 			BeforeEach(func() {
 				snap = fsmv2.Snapshot{
-					Identity: fsmv2.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
+					Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
 					Observed: snapshot.CommunicatorObservedState{
 						Authenticated: false,
 					},
@@ -120,7 +121,7 @@ var _ = Describe("DegradedState Transport Reset", func() {
 		stateObj := &state.DegradedState{}
 
 		snap := fsmv2.Snapshot{
-			Identity: fsmv2.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
+			Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
 			Observed: snapshot.CommunicatorObservedState{
 				Authenticated:     false,
 				ConsecutiveErrors: 5,
@@ -145,7 +146,7 @@ var _ = Describe("DegradedState Transport Reset", func() {
 		stateObj := &state.DegradedState{}
 
 		snap := fsmv2.Snapshot{
-			Identity: fsmv2.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
+			Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
 			Observed: snapshot.CommunicatorObservedState{
 				Authenticated:     false,
 				ConsecutiveErrors: 6,
@@ -168,7 +169,7 @@ var _ = Describe("DegradedState Transport Reset", func() {
 		stateObj := &state.DegradedState{}
 
 		snap := fsmv2.Snapshot{
-			Identity: fsmv2.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
+			Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
 			Observed: snapshot.CommunicatorObservedState{
 				Authenticated:     false,
 				ConsecutiveErrors: 10,
@@ -191,7 +192,7 @@ var _ = Describe("DegradedState Transport Reset", func() {
 		stateObj := &state.DegradedState{}
 
 		snap := fsmv2.Snapshot{
-			Identity: fsmv2.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
+			Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
 			Observed: snapshot.CommunicatorObservedState{
 				Authenticated:     false,
 				ConsecutiveErrors: 0,
@@ -217,7 +218,7 @@ var _ = Describe("DegradedState Backoff", func() {
 		stateObj := &state.DegradedState{}
 
 		snap := fsmv2.Snapshot{
-			Identity: fsmv2.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
+			Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
 			Observed: snapshot.CommunicatorObservedState{
 				Authenticated:     false,
 				ConsecutiveErrors: 3,
@@ -241,7 +242,7 @@ var _ = Describe("DegradedState Backoff", func() {
 		stateObj := &state.DegradedState{}
 
 		snap := fsmv2.Snapshot{
-			Identity: fsmv2.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
+			Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
 			Observed: snapshot.CommunicatorObservedState{
 				Authenticated:     false,
 				ConsecutiveErrors: 3,

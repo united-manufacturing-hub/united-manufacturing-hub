@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/backoff"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
@@ -27,13 +28,13 @@ import (
 // CommunicatorDependencies represents the dependencies needed by communicator actions.
 // This is an interface to avoid import cycles (communicator -> snapshot -> communicator).
 type CommunicatorDependencies interface {
-	fsmv2.Dependencies
+	deps.Dependencies
 	GetTransport() transport.Transport
-	MetricsRecorder() *fsmv2.MetricsRecorder
+	MetricsRecorder() *deps.MetricsRecorder
 }
 
 type CommunicatorSnapshot struct {
-	Identity fsmv2.Identity
+	Identity deps.Identity
 	Desired  CommunicatorDesiredState
 	Observed CommunicatorObservedState
 }
@@ -153,8 +154,8 @@ type CommunicatorObservedState struct {
 
 	// Embedded metrics for both framework and worker metrics.
 	// Provides GetMetrics() for worker metrics and GetFrameworkMetrics() for supervisor-injected metrics.
-	// Uses standard fsmv2.Metrics structure for automatic Prometheus export.
-	fsmv2.MetricsEmbedder `json:",inline"`
+	// Uses standard deps.Metrics structure for automatic Prometheus export.
+	deps.MetricsEmbedder `json:",inline"`
 
 	// Error tracking for health monitoring
 	ConsecutiveErrors int

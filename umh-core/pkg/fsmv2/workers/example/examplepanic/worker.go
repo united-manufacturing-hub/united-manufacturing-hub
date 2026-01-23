@@ -24,6 +24,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
@@ -35,14 +36,14 @@ import (
 type ExamplepanicWorker struct {
 	*helpers.BaseWorker[*ExamplepanicDependencies]
 	logger   *zap.SugaredLogger
-	identity fsmv2.Identity
+	identity deps.Identity
 }
 
 func NewExamplepanicWorker(
-	identity fsmv2.Identity,
+	identity deps.Identity,
 	connectionPool ConnectionPool,
 	logger *zap.SugaredLogger,
-	stateReader fsmv2.StateReader,
+	stateReader deps.StateReader,
 ) (*ExamplepanicWorker, error) {
 	if connectionPool == nil {
 		return nil, errors.New("connectionPool must not be nil")
@@ -141,7 +142,7 @@ func init() {
 	// The worker type is derived from ExamplepanicObservedState, ensuring consistency.
 	// NOTE: This fixes a previous key mismatch where supervisor was "examplepanic" but worker was "panic".
 	if err := factory.RegisterWorkerType[snapshot.ExamplepanicObservedState, *snapshot.ExamplepanicDesiredState](
-		func(id fsmv2.Identity, logger *zap.SugaredLogger, stateReader fsmv2.StateReader, _ map[string]any) fsmv2.Worker {
+		func(id deps.Identity, logger *zap.SugaredLogger, stateReader deps.StateReader, _ map[string]any) fsmv2.Worker {
 			pool := &DefaultConnectionPool{}
 			worker, _ := NewExamplepanicWorker(id, pool, logger, stateReader)
 

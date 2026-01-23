@@ -19,7 +19,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 )
 
 var _ = Describe("ActionHistory Integration", func() {
@@ -27,7 +27,7 @@ var _ = Describe("ActionHistory Integration", func() {
 		It("should have an onActionComplete callback field", func() {
 			// This test verifies the ActionExecutor has the callback mechanism
 			// The implementation should add:
-			// - onActionComplete func(fsmv2.ActionResult) field to ActionExecutor
+			// - onActionComplete func(deps.ActionResult) field to ActionExecutor
 			// - SetOnActionComplete method to set the callback
 			Skip("Implementation pending - ActionExecutor needs onActionComplete callback")
 		})
@@ -53,7 +53,7 @@ var _ = Describe("ActionHistory Integration", func() {
 		It("should have an actionHistory field to store recorded actions", func() {
 			// This test verifies WorkerContext has the actionHistory buffer
 			// The implementation should add:
-			// - actionHistory *fsmv2.InMemoryActionHistoryRecorder field to WorkerContext
+			// - actionHistory *deps.InMemoryActionHistoryRecorder field to WorkerContext
 			Skip("Implementation pending - WorkerContext needs actionHistory field")
 		})
 	})
@@ -90,7 +90,7 @@ type ActionResultMatcher struct {
 }
 
 func (m ActionResultMatcher) Match(actual interface{}) (success bool, err error) {
-	result, ok := actual.(fsmv2.ActionResult)
+	result, ok := actual.(deps.ActionResult)
 	if !ok {
 		return false, nil
 	}

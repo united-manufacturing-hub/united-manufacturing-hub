@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 )
 
@@ -37,7 +38,7 @@ type ApplicationObservedState struct {
 	// Embedded metrics for both framework and worker metrics.
 	// Framework metrics provide time-in-state via GetFrameworkMetrics().TimeInCurrentStateMs
 	// and state entered time via GetFrameworkMetrics().StateEnteredAtUnix.
-	fsmv2.MetricsEmbedder `json:",inline"`
+	deps.MetricsEmbedder `json:",inline"`
 }
 
 // GetTimestamp returns the time when this observed state was collected.

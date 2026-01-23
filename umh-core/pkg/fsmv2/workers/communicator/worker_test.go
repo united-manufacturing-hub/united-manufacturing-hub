@@ -33,7 +33,7 @@ import (
 	transportpkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
 )
 
-// MockStateReader implements fsmv2.StateReader for testing metrics accumulation.
+// MockStateReader implements deps.StateReader for testing metrics accumulation.
 // It stores observed state and returns it on subsequent LoadObservedTyped calls.
 type MockStateReader struct {
 	mu    sync.RWMutex

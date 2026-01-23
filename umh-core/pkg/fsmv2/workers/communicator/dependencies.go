@@ -18,7 +18,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/backoff"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
 	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
@@ -57,7 +57,7 @@ type CommunicatorDependencies struct {
 	transport transport.Transport // HTTP transport for push/pull operations
 
 	// 8-byte fields
-	*fsmv2.BaseDependencies
+	*deps.BaseDependencies
 	inboundChan  chan<- *transport.UMHMessage // Write received messages to router
 	outboundChan <-chan *transport.UMHMessage // Read messages from router to push
 	jwtToken     string                       // JWT token (set by AuthenticateAction)
@@ -87,7 +87,7 @@ type CommunicatorDependencies struct {
 //  3. FSMv2 starts supervisor
 //  4. Communicator worker created, NewCommunicatorDependencies calls GetChannelProvider()
 //  5. If GetChannelProvider() returns nil -> panic
-func NewCommunicatorDependencies(t transport.Transport, logger *zap.SugaredLogger, stateReader fsmv2.StateReader, identity fsmv2.Identity) *CommunicatorDependencies {
+func NewCommunicatorDependencies(t transport.Transport, logger *zap.SugaredLogger, stateReader deps.StateReader, identity deps.Identity) *CommunicatorDependencies {
 	// Phase 1: ChannelProvider singleton is REQUIRED
 	provider := GetChannelProvider()
 	if provider == nil {
@@ -99,7 +99,7 @@ func NewCommunicatorDependencies(t transport.Transport, logger *zap.SugaredLogge
 	inbound, outbound := provider.GetChannels(identity.ID)
 
 	return &CommunicatorDependencies{
-		BaseDependencies: fsmv2.NewBaseDependencies(logger, stateReader, identity),
+		BaseDependencies: deps.NewBaseDependencies(logger, stateReader, identity),
 		transport:        t,
 		inboundChan:      inbound,
 		outboundChan:     outbound,

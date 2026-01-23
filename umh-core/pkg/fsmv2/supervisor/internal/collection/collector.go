@@ -22,6 +22,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/metrics"
 	"go.uber.org/zap"
 )
@@ -62,20 +63,20 @@ type CollectorConfig[TObserved any] struct {
 	// FrameworkMetricsProvider returns current framework metrics from supervisor.
 	// Called BEFORE collection to inject into worker dependencies.
 	// The provider captures workerCtx and acquires RLock when called (thread-safe).
-	FrameworkMetricsProvider func() *fsmv2.FrameworkMetrics
+	FrameworkMetricsProvider func() *deps.FrameworkMetrics
 	// FrameworkMetricsSetter sets framework metrics on worker dependencies.
 	// Called BEFORE CollectObservedState so workers can access via deps.GetFrameworkState().
 	// Replaces the duck-typing injection pattern for explicit metrics copying.
-	FrameworkMetricsSetter func(*fsmv2.FrameworkMetrics)
+	FrameworkMetricsSetter func(*deps.FrameworkMetrics)
 	// ActionHistoryProvider returns buffered action results from supervisor's workerCtx.
 	// Called BEFORE CollectObservedState to get action results for injection into deps.
 	// The supervisor auto-records action results via ActionExecutor callback.
-	ActionHistoryProvider func() []fsmv2.ActionResult
+	ActionHistoryProvider func() []deps.ActionResult
 	// ActionHistorySetter sets action history on worker dependencies BEFORE CollectObservedState.
 	// Workers then access via deps.GetActionHistory() and assign to their ObservedState.
 	// This follows the same pattern as FrameworkMetricsSetter.
-	ActionHistorySetter func([]fsmv2.ActionResult)
-	Identity            fsmv2.Identity
+	ActionHistorySetter func([]deps.ActionResult)
+	Identity            deps.Identity
 	ObservationInterval time.Duration
 	ObservationTimeout  time.Duration
 	EnableTraceLogging  bool // Whether to emit verbose per-collection logs

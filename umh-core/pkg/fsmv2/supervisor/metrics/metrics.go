@@ -22,6 +22,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promauto"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 )
 
 var (
@@ -409,7 +410,7 @@ var workerMetricsExporter = &WorkerMetricsExporter{
 //
 // If observed does not implement MetricsHolder, this is a no-op.
 func ExportWorkerMetrics(workerType, workerID string, observed fsmv2.ObservedState) {
-	holder, ok := observed.(fsmv2.MetricsHolder)
+	holder, ok := observed.(deps.MetricsHolder)
 	if !ok {
 		return
 	}
@@ -423,7 +424,7 @@ func ExportWorkerMetrics(workerType, workerID string, observed fsmv2.ObservedSta
 	workerMetricsExporter.export(workerType, workerID, &metrics)
 }
 
-func (e *WorkerMetricsExporter) export(workerType, workerID string, metrics *fsmv2.Metrics) {
+func (e *WorkerMetricsExporter) export(workerType, workerID string, metrics *deps.Metrics) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 

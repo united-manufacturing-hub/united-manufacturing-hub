@@ -27,6 +27,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
@@ -62,7 +63,7 @@ func registerInternalTestWorkerFactories() {
 	for _, workerType := range workerTypes {
 		wt := workerType
 		// Register worker factory
-		_ = factory.RegisterFactoryByType(wt, func(identity fsmv2.Identity, _ *zap.SugaredLogger, _ fsmv2.StateReader, _ map[string]any) fsmv2.Worker {
+		_ = factory.RegisterFactoryByType(wt, func(identity deps.Identity, _ *zap.SugaredLogger, _ deps.StateReader, _ map[string]any) fsmv2.Worker {
 			return &TestWorkerWithType{
 				WorkerType: wt,
 			}
@@ -80,7 +81,7 @@ func registerInternalTestWorkerFactories() {
 // internalMockWorker is a mock worker for internal supervisor tests.
 // NOTE: This is different from mockWorker in supervisor_suite_test.go (external tests).
 type internalMockWorker struct {
-	identity     fsmv2.Identity
+	identity     deps.Identity
 	initialState fsmv2.State[any, any]
 	observed     persistence.Document
 }
@@ -160,7 +161,7 @@ func (m *mockState) Next(_ any) (fsmv2.State[any, any], fsmv2.Signal, fsmv2.Acti
 
 // internalMockWorkerWithChildren is a mock worker that returns configurable ChildSpecs.
 type internalMockWorkerWithChildren struct {
-	identity      fsmv2.Identity
+	identity      deps.Identity
 	initialState  fsmv2.State[any, any]
 	observed      persistence.Document
 	childrenSpecs []config.ChildSpec
@@ -240,7 +241,7 @@ var _ = Describe("Supervisor Internal", func() {
 
 			supervisor := NewSupervisor[*TestObservedState, *TestDesiredState](supervisorCfg)
 
-			identity := fsmv2.Identity{
+			identity := deps.Identity{
 				ID:         "worker-1",
 				Name:       "Test Worker",
 				WorkerType: "test",
@@ -282,7 +283,7 @@ var _ = Describe("Supervisor Internal", func() {
 
 			supervisor := NewSupervisor[*TestObservedState, *TestDesiredState](supervisorCfg)
 
-			identity := fsmv2.Identity{
+			identity := deps.Identity{
 				ID:         "worker-1",
 				Name:       "Test Worker",
 				WorkerType: "test",
@@ -346,7 +347,7 @@ var _ = Describe("Supervisor Internal", func() {
 
 			parent := NewSupervisor[*TestObservedState, *TestDesiredState](supervisorCfg)
 
-			identity := fsmv2.Identity{
+			identity := deps.Identity{
 				ID:         "parent-1",
 				Name:       "Parent Worker",
 				WorkerType: "parent",
@@ -396,7 +397,7 @@ var _ = Describe("Supervisor Internal", func() {
 
 			parent := NewSupervisor[*TestObservedState, *TestDesiredState](supervisorCfg)
 
-			identity := fsmv2.Identity{
+			identity := deps.Identity{
 				ID:         "parent-1",
 				Name:       "Parent Worker",
 				WorkerType: "parent",
@@ -444,7 +445,7 @@ var _ = Describe("Supervisor Internal", func() {
 
 			parent := NewSupervisor[*TestObservedState, *TestDesiredState](supervisorCfg)
 
-			identity := fsmv2.Identity{
+			identity := deps.Identity{
 				ID:         "parent-1",
 				Name:       "Parent Worker",
 				WorkerType: "parent",
@@ -500,7 +501,7 @@ var _ = Describe("Supervisor Internal", func() {
 
 			parent := NewSupervisor[*TestObservedState, *TestDesiredState](supervisorCfg)
 
-			identity := fsmv2.Identity{
+			identity := deps.Identity{
 				ID:         "parent-1",
 				Name:       "Parent Worker",
 				WorkerType: "parent",
@@ -574,7 +575,7 @@ var _ = Describe("Supervisor Internal", func() {
 
 			parent := NewSupervisor[*TestObservedState, *TestDesiredState](supervisorCfg)
 
-			identity := fsmv2.Identity{
+			identity := deps.Identity{
 				ID:         "parent-1",
 				Name:       "Parent Worker",
 				WorkerType: "parent",
@@ -622,7 +623,7 @@ var _ = Describe("Supervisor Internal", func() {
 
 			parent := NewSupervisor[*TestObservedState, *TestDesiredState](supervisorCfg)
 
-			identity := fsmv2.Identity{
+			identity := deps.Identity{
 				ID:         "parent-1",
 				Name:       "Parent Worker",
 				WorkerType: "parent",

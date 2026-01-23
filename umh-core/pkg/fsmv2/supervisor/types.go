@@ -23,6 +23,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/internal/collection"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/internal/execution"
@@ -61,7 +62,7 @@ type SupervisorInterface interface {
 	calculateHierarchySize() int
 	calculateHierarchyDepth() int
 	GetChildren() map[string]SupervisorInterface
-	AddWorker(identity fsmv2.Identity, worker fsmv2.Worker) error
+	AddWorker(identity deps.Identity, worker fsmv2.Worker) error
 	setParent(parent SupervisorInterface, parentID string)
 	// GetHierarchyPath returns the full hierarchy path from root to this supervisor.
 	// Format: "workerID(workerType)/childID(childType)/..."
@@ -126,11 +127,11 @@ type WorkerContext[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] s
 	mu            *lockmanager.Lock
 	collector     *collection.Collector[TObserved]
 	executor      *execution.ActionExecutor
-	actionHistory *fsmv2.InMemoryActionHistoryRecorder // Supervisor-owned buffer for action results
+	actionHistory *deps.InMemoryActionHistoryRecorder // Supervisor-owned buffer for action results
 
 	stateTransitions   map[string]int64         // state_name → total times entered
 	stateDurations     map[string]time.Duration // state_name → cumulative time spent
-	identity           fsmv2.Identity
+	identity           deps.Identity
 	currentStateReason string // Human-readable reason for current state (from state.Reason())
 	totalTransitions   int64  // Sum of all stateTransitions values
 	collectorRestarts  int64  // Per-worker collector restarts

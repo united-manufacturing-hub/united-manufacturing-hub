@@ -18,13 +18,14 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 )
 
 // ExamplechildDependencies interface to avoid import cycles.
 // Includes methods for connection state management used by actions.
 type ExamplechildDependencies interface {
-	fsmv2.Dependencies
+	deps.Dependencies
 	// SetConnected updates the connection state. Called by ConnectAction/DisconnectAction.
 	SetConnected(connected bool)
 	// IsConnected returns the current connection state. Called by CollectObservedState.
@@ -35,7 +36,7 @@ type ExamplechildDependencies interface {
 // This is the combined snapshot type for type assertions in Next() methods.
 type ExamplechildSnapshot struct {
 	Desired  *ExamplechildDesiredState
-	Identity fsmv2.Identity
+	Identity deps.Identity
 	Observed ExamplechildObservedState
 }
 
@@ -93,12 +94,12 @@ type ExamplechildObservedState struct {
 	// Workers read deps.GetActionHistory() and assign here in CollectObservedState.
 	// Parents can read this from CSE via StateReader.LoadObservedTyped() to understand
 	// WHY children are in their current state.
-	LastActionResults []fsmv2.ActionResult `json:"last_action_results,omitempty"`
+	LastActionResults []deps.ActionResult `json:"last_action_results,omitempty"`
 
 	// Embedded metrics for both framework and worker metrics.
 	// Framework metrics provide time-in-state via GetFrameworkMetrics().TimeInCurrentStateMs
 	// and state entered time via GetFrameworkMetrics().StateEnteredAtUnix.
-	fsmv2.MetricsEmbedder `json:",inline"`
+	deps.MetricsEmbedder `json:",inline"`
 
 	ConnectAttempts int `json:"connect_attempts"`
 }

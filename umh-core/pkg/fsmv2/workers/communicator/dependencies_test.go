@@ -22,7 +22,7 @@ import (
 	. "github.com/onsi/gomega"
 	"go.uber.org/zap"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	depspkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator"
 	communicator_transport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
 )
@@ -110,19 +110,19 @@ var _ = Describe("CommunicatorDependencies", func() {
 	Describe("NewCommunicatorDependencies", func() {
 		Context("when creating a new dependencies", func() {
 			It("should return a non-nil dependencies", func() {
-				identity := fsmv2.Identity{ID: "test-id", WorkerType: "communicator"}
+				identity := depspkg.Identity{ID: "test-id", WorkerType: "communicator"}
 				deps := communicator.NewCommunicatorDependencies(mt, logger, nil, identity)
 				Expect(deps).NotTo(BeNil())
 			})
 
 			It("should store the transport", func() {
-				identity := fsmv2.Identity{ID: "test-id", WorkerType: "communicator"}
+				identity := depspkg.Identity{ID: "test-id", WorkerType: "communicator"}
 				deps := communicator.NewCommunicatorDependencies(mt, logger, nil, identity)
 				Expect(deps.GetTransport()).To(Equal(mt))
 			})
 
 			It("should store the logger", func() {
-				identity := fsmv2.Identity{ID: "test-id", WorkerType: "communicator"}
+				identity := depspkg.Identity{ID: "test-id", WorkerType: "communicator"}
 				deps := communicator.NewCommunicatorDependencies(mt, logger, nil, identity)
 				// Logger is enriched with worker context, so it won't equal original
 				Expect(deps.GetLogger()).NotTo(BeNil())
@@ -132,7 +132,7 @@ var _ = Describe("CommunicatorDependencies", func() {
 
 	Describe("GetTransport", func() {
 		It("should return the transport passed to the constructor", func() {
-			identity := fsmv2.Identity{ID: "test-id", WorkerType: "communicator"}
+			identity := depspkg.Identity{ID: "test-id", WorkerType: "communicator"}
 			deps := communicator.NewCommunicatorDependencies(mt, logger, nil, identity)
 			Expect(deps.GetTransport()).To(Equal(mt))
 		})
@@ -140,7 +140,7 @@ var _ = Describe("CommunicatorDependencies", func() {
 
 	Describe("GetLogger", func() {
 		It("should return the logger inherited from BaseDependencies", func() {
-			identity := fsmv2.Identity{ID: "test-id", WorkerType: "communicator"}
+			identity := depspkg.Identity{ID: "test-id", WorkerType: "communicator"}
 			deps := communicator.NewCommunicatorDependencies(mt, logger, nil, identity)
 			// Logger is enriched with worker context
 			Expect(deps.GetLogger()).NotTo(BeNil())
@@ -148,12 +148,12 @@ var _ = Describe("CommunicatorDependencies", func() {
 	})
 
 	Describe("Dependencies interface implementation", func() {
-		It("should implement fsmv2.Dependencies interface", func() {
-			identity := fsmv2.Identity{ID: "test-id", WorkerType: "communicator"}
+		It("should implement deps.Dependencies interface", func() {
+			identity := depspkg.Identity{ID: "test-id", WorkerType: "communicator"}
 			deps := communicator.NewCommunicatorDependencies(mt, logger, nil, identity)
-			var _ fsmv2.Dependencies = deps
+			var _ depspkg.Dependencies = deps
 			Expect(deps).To(Satisfy(func(d interface{}) bool {
-				_, ok := d.(fsmv2.Dependencies)
+				_, ok := d.(depspkg.Dependencies)
 
 				return ok
 			}))
@@ -164,7 +164,7 @@ var _ = Describe("CommunicatorDependencies", func() {
 		var deps *communicator.CommunicatorDependencies
 
 		BeforeEach(func() {
-			identity := fsmv2.Identity{ID: "test-id", WorkerType: "communicator"}
+			identity := depspkg.Identity{ID: "test-id", WorkerType: "communicator"}
 			deps = communicator.NewCommunicatorDependencies(mt, logger, nil, identity)
 		})
 
@@ -251,7 +251,7 @@ var _ = Describe("CommunicatorDependencies", func() {
 		var deps *communicator.CommunicatorDependencies
 
 		BeforeEach(func() {
-			identity := fsmv2.Identity{ID: "test-id", WorkerType: "communicator"}
+			identity := depspkg.Identity{ID: "test-id", WorkerType: "communicator"}
 			deps = communicator.NewCommunicatorDependencies(mt, logger, nil, identity)
 		})
 
@@ -340,7 +340,7 @@ var _ = Describe("CommunicatorDependencies", func() {
 
 		BeforeEach(func() {
 			mockTrans = NewMockTransport()
-			identity := fsmv2.Identity{ID: "test-id", WorkerType: "communicator"}
+			identity := depspkg.Identity{ID: "test-id", WorkerType: "communicator"}
 			deps = communicator.NewCommunicatorDependencies(mockTrans, logger, nil, identity)
 		})
 
@@ -379,7 +379,7 @@ var _ = Describe("CommunicatorDependencies", func() {
 
 		Context("when transport is nil", func() {
 			It("should not panic when recording errors without transport", func() {
-				identity := fsmv2.Identity{ID: "test-id", WorkerType: "communicator"}
+				identity := depspkg.Identity{ID: "test-id", WorkerType: "communicator"}
 				// Create deps with nil transport
 				depsWithNilTransport := communicator.NewCommunicatorDependencies(nil, logger, nil, identity)
 
@@ -420,7 +420,7 @@ var _ = Describe("CommunicatorDependencies", func() {
 		var deps *communicator.CommunicatorDependencies
 
 		BeforeEach(func() {
-			identity := fsmv2.Identity{ID: "test-id", WorkerType: "communicator"}
+			identity := depspkg.Identity{ID: "test-id", WorkerType: "communicator"}
 			deps = communicator.NewCommunicatorDependencies(mt, logger, nil, identity)
 		})
 
@@ -547,7 +547,7 @@ var _ = Describe("CommunicatorDependencies", func() {
 					Expect(communicator.GetChannelProvider()).To(BeNil())
 
 					// Creating dependencies without singleton should panic
-					identity := fsmv2.Identity{ID: "test-id", WorkerType: "communicator"}
+					identity := depspkg.Identity{ID: "test-id", WorkerType: "communicator"}
 					Expect(func() {
 						communicator.NewCommunicatorDependencies(mt, logger, nil, identity)
 					}).To(PanicWith(ContainSubstring("ChannelProvider must be set")))
@@ -566,7 +566,7 @@ var _ = Describe("CommunicatorDependencies", func() {
 					communicator.SetChannelProvider(mockProvider)
 
 					// Creating dependencies should NOT panic
-					identity := fsmv2.Identity{ID: "test-singleton-id", WorkerType: "communicator"}
+					identity := depspkg.Identity{ID: "test-singleton-id", WorkerType: "communicator"}
 					var deps *communicator.CommunicatorDependencies
 					Expect(func() {
 						deps = communicator.NewCommunicatorDependencies(mt, logger, nil, identity)

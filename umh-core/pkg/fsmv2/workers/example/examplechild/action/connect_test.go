@@ -21,7 +21,7 @@ import (
 	. "github.com/onsi/gomega"
 	"go.uber.org/zap"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	example_child "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplechild"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplechild/action"
 )
@@ -34,7 +34,7 @@ var _ = Describe("ConnectAction", func() {
 
 	BeforeEach(func() {
 		ctx = context.Background()
-		identity := fsmv2.Identity{ID: "test-id", WorkerType: "child"}
+		identity := deps.Identity{ID: "test-id", WorkerType: "child"}
 		depsAny = example_child.NewExamplechildDependencies(&example_child.DefaultConnectionPool{}, zap.NewNop().Sugar(), nil, identity)
 	})
 

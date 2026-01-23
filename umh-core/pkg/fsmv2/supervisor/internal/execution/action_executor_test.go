@@ -26,11 +26,12 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/internal/execution"
 )
 
 // testIdentity is a helper identity used across all action executor tests.
-var testIdentity = fsmv2.Identity{ID: "test-worker", WorkerType: "test"}
+var testIdentity = deps.Identity{ID: "test-worker", WorkerType: "test"}
 
 var _ = Describe("ActionExecutor", func() {
 	var (

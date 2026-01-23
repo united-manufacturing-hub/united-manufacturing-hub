@@ -24,7 +24,7 @@ import (
 	. "github.com/onsi/gomega"
 	"go.uber.org/zap"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 )
 
@@ -59,7 +59,7 @@ var _ = Describe("Supervisor Race Conditions", func() {
 					defer wg.Done()
 
 					for i := range numWorkers {
-						identity := fsmv2.Identity{
+						identity := deps.Identity{
 							ID:         fmt.Sprintf("worker-%d", i),
 							Name:       fmt.Sprintf("Test Worker %d", i),
 							WorkerType: "test",
@@ -141,7 +141,7 @@ var _ = Describe("Supervisor Race Conditions", func() {
 				const numGoroutines = 10
 				var wg sync.WaitGroup
 
-				identity := fsmv2.Identity{
+				identity := deps.Identity{
 					ID:         "duplicate-worker",
 					Name:       "Duplicate Test Worker",
 					WorkerType: "test",
@@ -171,7 +171,7 @@ var _ = Describe("Supervisor Race Conditions", func() {
 
 		Context("when reading and writing worker state concurrently", func() {
 			It("should detect race conditions on GetWorkerState", func() {
-				identity := fsmv2.Identity{
+				identity := deps.Identity{
 					ID:         "state-test-worker",
 					Name:       "State Test Worker",
 					WorkerType: "test",

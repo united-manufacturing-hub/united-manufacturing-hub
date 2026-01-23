@@ -17,7 +17,7 @@ package examplefailing
 import (
 	"sync"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"go.uber.org/zap"
 )
 
@@ -55,7 +55,7 @@ func (d *DefaultConnectionPool) HealthCheck(_ Connection) error {
 // It implements ExamplefailingDependenciesWithFailure interface for failure simulation.
 type FailingDependencies struct {
 	connectionPool ConnectionPool
-	*fsmv2.BaseDependencies
+	*deps.BaseDependencies
 	maxFailures           int
 	attempts              int
 	restartAfterFailures  int
@@ -68,9 +68,9 @@ type FailingDependencies struct {
 }
 
 // NewFailingDependencies creates new dependencies for the failing worker.
-func NewFailingDependencies(connectionPool ConnectionPool, logger *zap.SugaredLogger, stateReader fsmv2.StateReader, identity fsmv2.Identity) *FailingDependencies {
+func NewFailingDependencies(connectionPool ConnectionPool, logger *zap.SugaredLogger, stateReader deps.StateReader, identity deps.Identity) *FailingDependencies {
 	return &FailingDependencies{
-		BaseDependencies: fsmv2.NewBaseDependencies(logger, stateReader, identity),
+		BaseDependencies: deps.NewBaseDependencies(logger, stateReader, identity),
 		connectionPool:   connectionPool,
 		maxFailures:      3, // Default: fail 3 times before success
 		failureCycles:    1, // Default: single failure cycle (backward compatible)

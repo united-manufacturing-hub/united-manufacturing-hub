@@ -24,6 +24,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/metrics"
@@ -127,7 +128,7 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 
 	// Build snapshot with typed states
 	snapshot := &fsmv2.Snapshot{
-		Identity: fsmv2.Identity{
+		Identity: deps.Identity{
 			ID:            workerID,
 			Name:          getString(storageSnapshot.Identity, FieldName, workerID),
 			WorkerType:    workerCtx.identity.WorkerType,
@@ -1247,7 +1248,7 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 			childPath := fmt.Sprintf("%s/%s(%s)", parentPath, childID, spec.WorkerType)
 
 			// Create worker identity with hierarchy path for logging context
-			childIdentity := fsmv2.Identity{
+			childIdentity := deps.Identity{
 				ID:            childID,
 				Name:          spec.Name,
 				WorkerType:    spec.WorkerType,

@@ -21,7 +21,7 @@ import (
 	. "github.com/onsi/gomega"
 	"go.uber.org/zap"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/action"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
@@ -38,7 +38,7 @@ var _ = Describe("SyncAction", func() {
 	BeforeEach(func() {
 		logger = zap.NewNop().Sugar()
 		mockTransport = &mockSyncTransport{}
-		identity := fsmv2.Identity{ID: "test-id", WorkerType: "communicator"}
+		identity := deps.Identity{ID: "test-id", WorkerType: "communicator"}
 		dependencies = communicator.NewCommunicatorDependencies(mockTransport, logger, nil, identity)
 		// Dependencies now passed to Execute(), not constructor
 		act = action.NewSyncAction("test-jwt-token")

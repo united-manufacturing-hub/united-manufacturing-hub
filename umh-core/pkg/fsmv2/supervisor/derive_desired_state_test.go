@@ -23,7 +23,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 )
@@ -78,7 +78,7 @@ var _ = Describe("DeriveDesiredState saves to store", func() {
 			},
 		})
 
-		identity := fsmv2.Identity{
+		identity := deps.Identity{
 			ID:         workerID,
 			Name:       "Test Worker",
 			WorkerType: workerType,
@@ -157,7 +157,7 @@ var _ = Describe("DeriveDesiredState saves to store", func() {
 			},
 		})
 
-		identity := fsmv2.Identity{
+		identity := deps.Identity{
 			ID:         workerID,
 			Name:       "Test Worker",
 			WorkerType: workerType,
@@ -248,7 +248,7 @@ var _ = Describe("DeriveDesiredState saves to store", func() {
 			},
 		})
 
-		identity := fsmv2.Identity{
+		identity := deps.Identity{
 			ID:         workerID,
 			Name:       "Test Worker",
 			WorkerType: workerType,

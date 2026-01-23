@@ -22,7 +22,7 @@ import (
 	. "github.com/onsi/gomega"
 	"go.uber.org/zap"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	fsmv2types "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent/state"
@@ -41,7 +41,7 @@ var _ = Describe("ParentWorker", func() {
 
 	BeforeEach(func() {
 		logger = zap.NewNop().Sugar()
-		identity := fsmv2.Identity{ID: "test-parent", Name: "Test Parent"}
+		identity := deps.Identity{ID: "test-parent", Name: "Test Parent"}
 		var err error
 		worker, err = exampleparent.NewParentWorker(identity, logger, nil)
 		Expect(err).ToNot(HaveOccurred())

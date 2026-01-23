@@ -24,7 +24,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence/memory"
@@ -70,9 +70,9 @@ var _ = Describe("Multi-Worker Supervisor", func() {
 
 	Describe("AddWorker", func() {
 		It("should add worker to registry", func() {
-			identity1 := fsmv2.Identity{ID: "worker-1", Name: "Worker 1"}
-			identity2 := fsmv2.Identity{ID: "worker-2", Name: "Worker 2"}
-			identity3 := fsmv2.Identity{ID: "worker-3", Name: "Worker 3"}
+			identity1 := deps.Identity{ID: "worker-1", Name: "Worker 1"}
+			identity2 := deps.Identity{ID: "worker-2", Name: "Worker 2"}
+			identity3 := deps.Identity{ID: "worker-3", Name: "Worker 3"}
 
 			worker1 := &mockWorker{observed: createMockObservedStateWithID("worker-1")}
 			worker2 := &mockWorker{observed: createMockObservedStateWithID("worker-2")}
@@ -93,7 +93,7 @@ var _ = Describe("Multi-Worker Supervisor", func() {
 		})
 
 		It("should reject duplicate worker IDs", func() {
-			identity := fsmv2.Identity{ID: "worker-1", Name: "Worker 1"}
+			identity := deps.Identity{ID: "worker-1", Name: "Worker 1"}
 			worker1 := &mockWorker{observed: createMockObservedStateWithID("worker-1")}
 			worker2 := &mockWorker{observed: createMockObservedStateWithID("worker-1")}
 
@@ -108,7 +108,7 @@ var _ = Describe("Multi-Worker Supervisor", func() {
 
 	Describe("RemoveWorker", func() {
 		It("should remove worker from registry and stop collector", func() {
-			identity := fsmv2.Identity{ID: "worker-1", Name: "Worker 1"}
+			identity := deps.Identity{ID: "worker-1", Name: "Worker 1"}
 			worker := &mockWorker{observed: createMockObservedStateWithID("worker-1")}
 
 			err := s.AddWorker(identity, worker)
@@ -133,7 +133,7 @@ var _ = Describe("Multi-Worker Supervisor", func() {
 
 	Describe("GetWorker", func() {
 		It("should return worker context for valid ID", func() {
-			identity := fsmv2.Identity{ID: "worker-1", Name: "Worker 1"}
+			identity := deps.Identity{ID: "worker-1", Name: "Worker 1"}
 			worker := &mockWorker{observed: createMockObservedStateWithID("worker-1")}
 
 			err := s.AddWorker(identity, worker)
@@ -154,9 +154,9 @@ var _ = Describe("Multi-Worker Supervisor", func() {
 
 	Describe("ListWorkers", func() {
 		It("should return all worker IDs", func() {
-			identity1 := fsmv2.Identity{ID: "worker-1", Name: "Worker 1"}
-			identity2 := fsmv2.Identity{ID: "worker-2", Name: "Worker 2"}
-			identity3 := fsmv2.Identity{ID: "worker-3", Name: "Worker 3"}
+			identity1 := deps.Identity{ID: "worker-1", Name: "Worker 1"}
+			identity2 := deps.Identity{ID: "worker-2", Name: "Worker 2"}
+			identity3 := deps.Identity{ID: "worker-3", Name: "Worker 3"}
 
 			worker1 := &mockWorker{observed: createMockObservedStateWithID("worker-1")}
 			worker2 := &mockWorker{observed: createMockObservedStateWithID("worker-2")}
@@ -179,7 +179,7 @@ var _ = Describe("Multi-Worker Supervisor", func() {
 
 	Describe("GetWorkerState", func() {
 		It("should return state name and reason for a worker", func() {
-			identity := fsmv2.Identity{ID: "worker-1", Name: "Worker 1"}
+			identity := deps.Identity{ID: "worker-1", Name: "Worker 1"}
 
 			stateWithReason := &mockState{}
 			worker := &mockWorker{
@@ -205,7 +205,7 @@ var _ = Describe("Multi-Worker Supervisor", func() {
 		})
 
 		It("should safely return state during concurrent tick operations", func() {
-			identity := fsmv2.Identity{ID: "worker-1", Name: "Worker 1"}
+			identity := deps.Identity{ID: "worker-1", Name: "Worker 1"}
 
 			stateWithReason := &mockState{}
 			worker := &mockWorker{
@@ -249,9 +249,9 @@ var _ = Describe("Multi-Worker Supervisor", func() {
 
 	Describe("TickAll", func() {
 		It("should tick all workers in registry", func() {
-			identity1 := fsmv2.Identity{ID: "worker-1", Name: "Worker 1"}
-			identity2 := fsmv2.Identity{ID: "worker-2", Name: "Worker 2"}
-			identity3 := fsmv2.Identity{ID: "worker-3", Name: "Worker 3"}
+			identity1 := deps.Identity{ID: "worker-1", Name: "Worker 1"}
+			identity2 := deps.Identity{ID: "worker-2", Name: "Worker 2"}
+			identity3 := deps.Identity{ID: "worker-3", Name: "Worker 3"}
 
 			worker1 := &mockWorker{observed: createMockObservedStateWithID("worker-1")}
 			worker2 := &mockWorker{observed: createMockObservedStateWithID("worker-2")}
@@ -272,9 +272,9 @@ var _ = Describe("Multi-Worker Supervisor", func() {
 		})
 
 		It("should continue ticking other workers even if one fails", func() {
-			identity1 := fsmv2.Identity{ID: "worker-1", Name: "Worker 1"}
-			identity2 := fsmv2.Identity{ID: "worker-2", Name: "Worker 2"}
-			identity3 := fsmv2.Identity{ID: "worker-3", Name: "Worker 3"}
+			identity1 := deps.Identity{ID: "worker-1", Name: "Worker 1"}
+			identity2 := deps.Identity{ID: "worker-2", Name: "Worker 2"}
+			identity3 := deps.Identity{ID: "worker-3", Name: "Worker 3"}
 
 			worker1 := &mockWorker{observed: createMockObservedStateWithID("worker-1")}
 			worker2 := &mockWorker{observed: createMockObservedStateWithID("worker-2")}

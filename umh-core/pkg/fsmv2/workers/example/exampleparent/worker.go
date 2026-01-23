@@ -24,6 +24,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
@@ -36,14 +37,14 @@ import (
 type ParentWorker struct {
 	*helpers.BaseWorker[*ParentDependencies]
 	logger   *zap.SugaredLogger
-	identity fsmv2.Identity
+	identity deps.Identity
 }
 
 // NewParentWorker creates a new example parent worker.
 func NewParentWorker(
-	identity fsmv2.Identity,
+	identity deps.Identity,
 	logger *zap.SugaredLogger,
-	stateReader fsmv2.StateReader,
+	stateReader deps.StateReader,
 ) (*ParentWorker, error) {
 	if logger == nil {
 		return nil, errors.New("logger must not be nil")
@@ -198,7 +199,7 @@ func init() {
 	// Register both worker and supervisor factories atomically.
 	// The worker type is derived from ExampleparentObservedState, ensuring consistency.
 	if err := factory.RegisterWorkerType[snapshot.ExampleparentObservedState, *snapshot.ExampleparentDesiredState](
-		func(id fsmv2.Identity, logger *zap.SugaredLogger, stateReader fsmv2.StateReader, _ map[string]any) fsmv2.Worker {
+		func(id deps.Identity, logger *zap.SugaredLogger, stateReader deps.StateReader, _ map[string]any) fsmv2.Worker {
 			worker, _ := NewParentWorker(id, logger, stateReader)
 
 			return worker

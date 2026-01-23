@@ -24,6 +24,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	fsmv2types "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
@@ -37,15 +38,15 @@ type FailingWorker struct {
 	connection Connection
 	*helpers.BaseWorker[*FailingDependencies]
 	logger   *zap.SugaredLogger
-	identity fsmv2.Identity
+	identity deps.Identity
 }
 
 // NewFailingWorker creates a new example failing worker.
 func NewFailingWorker(
-	identity fsmv2.Identity,
+	identity deps.Identity,
 	connectionPool ConnectionPool,
 	logger *zap.SugaredLogger,
-	stateReader fsmv2.StateReader,
+	stateReader deps.StateReader,
 ) (*FailingWorker, error) {
 	if connectionPool == nil {
 		return nil, errors.New("connectionPool must not be nil")
@@ -166,7 +167,7 @@ func init() {
 	// The worker type is derived from ExamplefailingObservedState, ensuring consistency.
 	// NOTE: This fixes a previous key mismatch where supervisor was "examplefailing" but worker was "failing".
 	if err := factory.RegisterWorkerType[snapshot.ExamplefailingObservedState, *snapshot.ExamplefailingDesiredState](
-		func(id fsmv2.Identity, logger *zap.SugaredLogger, stateReader fsmv2.StateReader, _ map[string]any) fsmv2.Worker {
+		func(id deps.Identity, logger *zap.SugaredLogger, stateReader deps.StateReader, _ map[string]any) fsmv2.Worker {
 			pool := &DefaultConnectionPool{}
 			worker, _ := NewFailingWorker(id, pool, logger, stateReader)
 

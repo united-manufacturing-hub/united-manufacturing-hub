@@ -22,7 +22,7 @@ import (
 	. "github.com/onsi/gomega"
 	"go.uber.org/zap"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 )
 
@@ -37,7 +37,7 @@ var _ = Describe("Triangular Store Bug", func() {
 			Logger:     zap.NewNop().Sugar(),
 		})
 
-		identity := fsmv2.Identity{
+		identity := deps.Identity{
 			ID:         "worker1",
 			Name:       "Test Worker 1",
 			WorkerType: "",
