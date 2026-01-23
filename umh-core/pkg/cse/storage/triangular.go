@@ -655,8 +655,10 @@ type Snapshot struct {
 //   - id: Unique worker identifier
 //
 // Returns:
-//   - *Snapshot: Complete worker state (identity, desired, observed as Documents)
-//   - error: ErrNotFound if any part is missing, or transaction fails
+//   - *Snapshot: Complete worker state (identity, desired, observed as Documents).
+//     If desired or observed are missing, they will be nil in the returned Snapshot.
+//   - error: ErrNotFound if identity is missing, or transaction fails.
+//     Note: Missing desired/observed are tolerated and do NOT return an error.
 //
 // Example:
 //
