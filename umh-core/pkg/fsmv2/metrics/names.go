@@ -12,159 +12,57 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package metrics provides typed metric name constants for FSMv2 workers.
-//
-// This package ensures compile-time safety for metric names. Using typed
-// constants prevents typos that would otherwise silently create incorrect
-// metrics (e.g., "mesages_pulled" instead of "messages_pulled").
-//
-// # Usage
-//
-// Actions record metrics using typed constants:
-//
-//	deps.Metrics().IncrementCounter(metrics.CounterMessagesPulled, 5)
-//	deps.Metrics().SetGauge(metrics.GaugeLastPullLatencyMs, 42.0)
-//
-// Typos become compile errors:
-//
-//	deps.Metrics().IncrementCounter(metrics.CounterMessagessPulled, 1) // COMPILE ERROR
-//
-// # Design: Centralized vs Distributed
-//
-// Metric names are centralized here (not in individual worker packages) because:
-//   - Single source of truth prevents naming conflicts between workers
-//   - Compile-time safety across the entire codebase
-//   - Easy to audit all metrics in one place
-//
-// Consider distributing to individual packages only if many worker types (5+)
-// with complex metrics emerge, making this file unwieldy.
+// TEMPORARY RE-EXPORTS - Remove in Phase 3
+// This file re-exports metric types and constants from deps/ for backward compatibility.
 package metrics
 
-// CounterName is a type-safe metric name for counters.
-// Counters are cumulative values that only increase.
-// The supervisor computes deltas for Prometheus export.
-type CounterName string
+import "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 
-// GaugeName is a type-safe metric name for gauges.
-// Gauges are point-in-time values that can go up or down.
-// These are exported directly to Prometheus.
-type GaugeName string
+// Type aliases work fine.
+type CounterName = deps.CounterName
+type GaugeName = deps.GaugeName
 
-// Generic worker counter names.
-// These can be used by any worker type for common operations.
-const (
-	// CounterStateTransitions tracks total state transitions.
-	CounterStateTransitions CounterName = "state_transitions"
+// IMPORTANT: Go does NOT allow `const X = pkg.X`.
+// Must use var for re-exports of constants.
+var (
+	// Generic worker counters.
+	CounterStateTransitions = deps.CounterStateTransitions
+	CounterActionExecutions = deps.CounterActionExecutions
+	CounterActionErrors     = deps.CounterActionErrors
 
-	// CounterActionExecutions tracks total action executions.
-	CounterActionExecutions CounterName = "action_executions"
+	// Generic worker gauges.
+	GaugeTimeInCurrentStateMs = deps.GaugeTimeInCurrentStateMs
 
-	// CounterActionErrors tracks total action execution errors.
-	CounterActionErrors CounterName = "action_errors"
-)
+	// Framework metrics.
+	GaugeStateEnteredAtUnix      = deps.GaugeStateEnteredAtUnix
+	CounterStateTransitionsTotal = deps.CounterStateTransitionsTotal
+	CounterCollectorRestarts     = deps.CounterCollectorRestarts
+	CounterStartupCount          = deps.CounterStartupCount
 
-// Generic worker gauge names.
-// These can be used by any worker type for common monitoring.
-const (
-	// GaugeTimeInCurrentStateMs tracks time spent in the current state in milliseconds.
-	// NOTE: Also available via FrameworkMetrics.TimeInCurrentStateMs (supervisor-injected).
-	GaugeTimeInCurrentStateMs GaugeName = "time_in_current_state_ms"
-)
+	// Communicator counters.
+	CounterPullOps        = deps.CounterPullOps
+	CounterPullSuccess    = deps.CounterPullSuccess
+	CounterPullFailures   = deps.CounterPullFailures
+	CounterMessagesPulled = deps.CounterMessagesPulled
+	CounterPushOps        = deps.CounterPushOps
+	CounterPushSuccess    = deps.CounterPushSuccess
+	CounterPushFailures   = deps.CounterPushFailures
+	CounterMessagesPushed = deps.CounterMessagesPushed
+	CounterBytesPulled    = deps.CounterBytesPulled
+	CounterBytesPushed    = deps.CounterBytesPushed
 
-// Framework metric names (supervisor-provided).
-// These are automatically injected into FrameworkMetrics by the supervisor.
-// Workers access them via snap.Observed.GetFrameworkMetrics() in State.Next().
-//
-// NOTE: These constants are for Prometheus export consistency. The actual values
-// are available via FrameworkMetrics struct fields (not map-based metrics).
-const (
-	// GaugeStateEnteredAtUnix tracks when the current state was entered (Unix timestamp).
-	GaugeStateEnteredAtUnix GaugeName = "state_entered_at_unix"
+	// Error counters.
+	CounterAuthFailuresTotal           = deps.CounterAuthFailuresTotal
+	CounterServerErrorsTotal           = deps.CounterServerErrorsTotal
+	CounterNetworkErrorsTotal          = deps.CounterNetworkErrorsTotal
+	CounterCloudflareErrorsTotal       = deps.CounterCloudflareErrorsTotal
+	CounterProxyBlockErrorsTotal       = deps.CounterProxyBlockErrorsTotal
+	CounterBackendRateLimitErrorsTotal = deps.CounterBackendRateLimitErrorsTotal
+	CounterInstanceDeletedTotal        = deps.CounterInstanceDeletedTotal
 
-	// CounterStateTransitionsTotal tracks total state transitions this session.
-	// Different from CounterStateTransitions which is the per-tick counter.
-	CounterStateTransitionsTotal CounterName = "state_transitions_total"
-
-	// CounterCollectorRestarts tracks per-worker collector restart count.
-	CounterCollectorRestarts CounterName = "collector_restarts"
-
-	// CounterStartupCount tracks how many times this worker has been started (persistent).
-	// This value survives restarts - loaded from CSE and incremented on each AddWorker().
-	CounterStartupCount CounterName = "startup_count"
-)
-
-// Communicator worker counter names.
-// These track cumulative operations for the bidirectional sync.
-const (
-	// CounterPullOps tracks total pull operations attempted.
-	CounterPullOps CounterName = "pull_ops"
-
-	// CounterPullSuccess tracks successful pull operations.
-	CounterPullSuccess CounterName = "pull_success"
-
-	// CounterPullFailures tracks failed pull operations.
-	CounterPullFailures CounterName = "pull_failures"
-
-	// CounterMessagesPulled tracks total messages pulled from backend.
-	CounterMessagesPulled CounterName = "messages_pulled"
-
-	// CounterPushOps tracks total push operations attempted.
-	CounterPushOps CounterName = "push_ops"
-
-	// CounterPushSuccess tracks successful push operations.
-	CounterPushSuccess CounterName = "push_success"
-
-	// CounterPushFailures tracks failed push operations.
-	CounterPushFailures CounterName = "push_failures"
-
-	// CounterMessagesPushed tracks total messages pushed to backend.
-	CounterMessagesPushed CounterName = "messages_pushed"
-
-	// CounterBytesPulled tracks total bytes pulled from backend.
-	CounterBytesPulled CounterName = "bytes_pulled"
-
-	// CounterBytesPushed tracks total bytes pushed to backend.
-	CounterBytesPushed CounterName = "bytes_pushed"
-)
-
-// Error type counter names.
-// These track errors by classification for intelligent backoff and monitoring.
-const (
-	// CounterAuthFailuresTotal tracks authentication failures (401/403).
-	CounterAuthFailuresTotal CounterName = "auth_failures_total"
-
-	// CounterServerErrorsTotal tracks server errors (5xx).
-	CounterServerErrorsTotal CounterName = "server_errors_total"
-
-	// CounterNetworkErrorsTotal tracks network/connection errors.
-	CounterNetworkErrorsTotal CounterName = "network_errors_total"
-
-	// CounterCloudflareErrorsTotal tracks Cloudflare challenge responses (429 + HTML).
-	CounterCloudflareErrorsTotal CounterName = "cloudflare_errors_total"
-
-	// CounterProxyBlockErrorsTotal tracks proxy block responses (Zscaler, etc.).
-	CounterProxyBlockErrorsTotal CounterName = "proxy_block_errors_total"
-
-	// CounterBackendRateLimitErrorsTotal tracks backend rate limit errors (429 + JSON).
-	CounterBackendRateLimitErrorsTotal CounterName = "backend_rate_limit_errors_total"
-
-	// CounterInstanceDeletedTotal tracks instance deleted errors (404).
-	CounterInstanceDeletedTotal CounterName = "instance_deleted_total"
-)
-
-// Communicator worker gauge names.
-// These track point-in-time values for monitoring.
-const (
-	// GaugeLastPullLatencyMs tracks the latency of the most recent pull operation in milliseconds.
-	GaugeLastPullLatencyMs GaugeName = "last_pull_latency_ms"
-
-	// GaugeLastPushLatencyMs tracks the latency of the most recent push operation in milliseconds.
-	GaugeLastPushLatencyMs GaugeName = "last_push_latency_ms"
-
-	// GaugeConsecutiveErrors tracks the number of consecutive errors.
-	// Resets to 0 on successful operation.
-	GaugeConsecutiveErrors GaugeName = "consecutive_errors"
-
-	// GaugeQueueDepth tracks the depth of the outbound message queue.
-	GaugeQueueDepth GaugeName = "queue_depth"
+	// Communicator gauges.
+	GaugeLastPullLatencyMs = deps.GaugeLastPullLatencyMs
+	GaugeLastPushLatencyMs = deps.GaugeLastPushLatencyMs
+	GaugeConsecutiveErrors = deps.GaugeConsecutiveErrors
+	GaugeQueueDepth        = deps.GaugeQueueDepth
 )

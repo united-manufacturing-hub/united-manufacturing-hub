@@ -12,14 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// TEMPORARY RE-EXPORTS - Remove in Phase 3
-// This file re-exports types from deps/ for backward compatibility during migration.
-package fsmv2
-
-import "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-
-type ActionResult = deps.ActionResult
-type ActionHistoryRecorder = deps.ActionHistoryRecorder
-type InMemoryActionHistoryRecorder = deps.InMemoryActionHistoryRecorder
-
-var NewInMemoryActionHistoryRecorder = deps.NewInMemoryActionHistoryRecorder
+// Package deps provides dependency injection types for FSMv2 workers.
+//
+// This package contains:
+//   - BaseDependencies: Common tools for all workers (logger, state reader, metrics)
+//   - StateReader: Read-only access to TriangularStore
+//   - MetricsRecorder: Buffer for action-written metrics
+//   - ActionHistoryRecorder: Buffer for action execution results
+//   - Metric name constants for type-safe metric recording
+//
+// Workers embed BaseDependencies and extend with worker-specific tools.
+// See pkg/fsmv2/DEPENDENCIES.md for patterns and examples.
+package deps
