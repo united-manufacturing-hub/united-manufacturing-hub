@@ -152,7 +152,7 @@
 //	Attempts 1-3: Log warnings with retry countdown
 //	Attempt 4: "Warning: One retry attempt remaining before escalation"
 //	Attempt 5: "Escalation required: Manual intervention needed"
-//	Runbook: https://docs.umh.app/runbooks/supervisor-escalation
+//	Runbook: (documentation pending - see supervisor/infrastructure_health.go for details)
 //
 // Implementation details in:
 //   - supervisor/internal/execution/action_executor.go (async execution, timeout)
