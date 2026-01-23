@@ -15,7 +15,7 @@
 package helpers
 
 import (
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 )
 
 // BaseWorker provides type-safe dependency access for all workers.
@@ -32,12 +32,12 @@ import (
 //	}
 //
 // See workers/example/example-child/worker.go for complete usage.
-type BaseWorker[D fsmv2.Dependencies] struct {
+type BaseWorker[D deps.Dependencies] struct {
 	dependencies D
 }
 
 // NewBaseWorker creates a new BaseWorker with the given dependencies.
-func NewBaseWorker[D fsmv2.Dependencies](dependencies D) *BaseWorker[D] {
+func NewBaseWorker[D deps.Dependencies](dependencies D) *BaseWorker[D] {
 	return &BaseWorker[D]{dependencies: dependencies}
 }
 

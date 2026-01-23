@@ -21,6 +21,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 )
 
@@ -78,7 +79,7 @@ var _ = Describe("StateAdapter", func() {
 	Describe("ConvertSnapshot", func() {
 		Context("successful conversion", func() {
 			It("should convert snapshot with correct types", func() {
-				identity := fsmv2.Identity{
+				identity := deps.Identity{
 					ID:         "test-id",
 					Name:       "test-name",
 					WorkerType: "test-worker",
@@ -105,7 +106,7 @@ var _ = Describe("StateAdapter", func() {
 			})
 
 			It("should handle value type observed", func() {
-				identity := fsmv2.Identity{
+				identity := deps.Identity{
 					ID:         "test-id",
 					Name:       "test-name",
 					WorkerType: "test-worker",
@@ -128,7 +129,7 @@ var _ = Describe("StateAdapter", func() {
 			})
 
 			It("should handle pointer type desired", func() {
-				identity := fsmv2.Identity{
+				identity := deps.Identity{
 					ID:         "test-id",
 					Name:       "test-name",
 					WorkerType: "test-worker",
@@ -154,7 +155,7 @@ var _ = Describe("StateAdapter", func() {
 
 		Context("panic scenarios", func() {
 			It("should panic on wrong observed type", func() {
-				identity := fsmv2.Identity{
+				identity := deps.Identity{
 					ID:         "test-id",
 					Name:       "test-name",
 					WorkerType: "test-worker",
@@ -174,7 +175,7 @@ var _ = Describe("StateAdapter", func() {
 			})
 
 			It("should panic with message mentioning Observed", func() {
-				identity := fsmv2.Identity{
+				identity := deps.Identity{
 					ID:         "test-id",
 					Name:       "test-name",
 					WorkerType: "test-worker",
@@ -200,7 +201,7 @@ var _ = Describe("StateAdapter", func() {
 			})
 
 			It("should panic on wrong desired type", func() {
-				identity := fsmv2.Identity{
+				identity := deps.Identity{
 					ID:         "test-id",
 					Name:       "test-name",
 					WorkerType: "test-worker",
@@ -220,7 +221,7 @@ var _ = Describe("StateAdapter", func() {
 			})
 
 			It("should panic with message mentioning Desired", func() {
-				identity := fsmv2.Identity{
+				identity := deps.Identity{
 					ID:         "test-id",
 					Name:       "test-name",
 					WorkerType: "test-worker",
@@ -268,7 +269,7 @@ var _ = Describe("StateAdapter", func() {
 			})
 
 			It("should panic on nil observed", func() {
-				identity := fsmv2.Identity{
+				identity := deps.Identity{
 					ID:         "test-id",
 					Name:       "test-name",
 					WorkerType: "test-worker",
@@ -287,7 +288,7 @@ var _ = Describe("StateAdapter", func() {
 			})
 
 			It("should panic with message mentioning Observed for nil observed", func() {
-				identity := fsmv2.Identity{
+				identity := deps.Identity{
 					ID:         "test-id",
 					Name:       "test-name",
 					WorkerType: "test-worker",
@@ -312,7 +313,7 @@ var _ = Describe("StateAdapter", func() {
 			})
 
 			It("should panic on nil desired", func() {
-				identity := fsmv2.Identity{
+				identity := deps.Identity{
 					ID:         "test-id",
 					Name:       "test-name",
 					WorkerType: "test-worker",
@@ -331,7 +332,7 @@ var _ = Describe("StateAdapter", func() {
 			})
 
 			It("should panic with message mentioning Desired for nil desired", func() {
-				identity := fsmv2.Identity{
+				identity := deps.Identity{
 					ID:         "test-id",
 					Name:       "test-name",
 					WorkerType: "test-worker",
@@ -359,7 +360,7 @@ var _ = Describe("StateAdapter", func() {
 
 	Describe("TypedSnapshot", func() {
 		It("should support direct field access", func() {
-			identity := fsmv2.Identity{
+			identity := deps.Identity{
 				ID:         "test-id",
 				Name:       "test-name",
 				WorkerType: "test-worker",

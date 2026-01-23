@@ -19,6 +19,7 @@ import (
 	"reflect"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 )
 
 // TypedSnapshot holds typed observed and desired state for use in state transitions.
@@ -45,7 +46,7 @@ import (
 type TypedSnapshot[O any, D any] struct {
 	Observed O
 	Desired  D
-	Identity fsmv2.Identity
+	Identity deps.Identity
 }
 
 // ConvertSnapshot converts an any-typed snapshot to a typed snapshot.

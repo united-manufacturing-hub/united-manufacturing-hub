@@ -19,7 +19,7 @@ import (
 	. "github.com/onsi/gomega"
 	"go.uber.org/zap"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 )
 
@@ -32,8 +32,8 @@ var _ = Describe("BaseWorker", func() {
 
 	Describe("NewBaseWorker", func() {
 		It("should create a non-nil worker", func() {
-			identity := fsmv2.Identity{ID: "test-id", WorkerType: "test-worker"}
-			registry := fsmv2.NewBaseDependencies(logger, nil, identity)
+			identity := deps.Identity{ID: "test-id", WorkerType: "test-worker"}
+			registry := deps.NewBaseDependencies(logger, nil, identity)
 			worker := helpers.NewBaseWorker(registry)
 
 			Expect(worker).NotTo(BeNil())
@@ -42,8 +42,8 @@ var _ = Describe("BaseWorker", func() {
 
 	Describe("GetDependencies", func() {
 		It("should return the registry passed to constructor", func() {
-			identity := fsmv2.Identity{ID: "test-id", WorkerType: "test-worker"}
-			registry := fsmv2.NewBaseDependencies(logger, nil, identity)
+			identity := deps.Identity{ID: "test-id", WorkerType: "test-worker"}
+			registry := deps.NewBaseDependencies(logger, nil, identity)
 			worker := helpers.NewBaseWorker(registry)
 
 			returnedRegistry := worker.GetDependencies()
@@ -54,18 +54,18 @@ var _ = Describe("BaseWorker", func() {
 
 	Describe("Generic type parameter", func() {
 		It("should work with concrete BaseDependencies type", func() {
-			identity := fsmv2.Identity{ID: "test-id", WorkerType: "test-worker"}
-			registry := fsmv2.NewBaseDependencies(logger, nil, identity)
-			worker := helpers.NewBaseWorker[*fsmv2.BaseDependencies](registry)
+			identity := deps.Identity{ID: "test-id", WorkerType: "test-worker"}
+			registry := deps.NewBaseDependencies(logger, nil, identity)
+			worker := helpers.NewBaseWorker[*deps.BaseDependencies](registry)
 
 			Expect(worker).NotTo(BeNil())
 			Expect(worker.GetDependencies()).To(Equal(registry))
 		})
 
 		It("should work with any type implementing Dependencies interface", func() {
-			identity := fsmv2.Identity{ID: "test-id", WorkerType: "test-worker"}
-			dependencies := fsmv2.NewBaseDependencies(logger, nil, identity)
-			worker := helpers.NewBaseWorker[fsmv2.Dependencies](dependencies)
+			identity := deps.Identity{ID: "test-id", WorkerType: "test-worker"}
+			dependencies := deps.NewBaseDependencies(logger, nil, identity)
+			worker := helpers.NewBaseWorker[deps.Dependencies](dependencies)
 
 			Expect(worker).NotTo(BeNil())
 			Expect(worker.GetDependencies()).To(Equal(dependencies))
@@ -76,13 +76,13 @@ var _ = Describe("BaseWorker", func() {
 
 	Describe("Embedding pattern", func() {
 		type TestWorker struct {
-			*helpers.BaseWorker[*fsmv2.BaseDependencies]
+			*helpers.BaseWorker[*deps.BaseDependencies]
 			customField string
 		}
 
 		It("should allow worker structs to embed BaseWorker", func() {
-			identity := fsmv2.Identity{ID: "test-id", WorkerType: "test-worker"}
-			registry := fsmv2.NewBaseDependencies(logger, nil, identity)
+			identity := deps.Identity{ID: "test-id", WorkerType: "test-worker"}
+			registry := deps.NewBaseDependencies(logger, nil, identity)
 			testWorker := &TestWorker{
 				BaseWorker:  helpers.NewBaseWorker(registry),
 				customField: "test-value",
@@ -93,8 +93,8 @@ var _ = Describe("BaseWorker", func() {
 		})
 
 		It("should provide direct access to registry through embedded BaseWorker", func() {
-			identity := fsmv2.Identity{ID: "test-id", WorkerType: "test-worker"}
-			registry := fsmv2.NewBaseDependencies(logger, nil, identity)
+			identity := deps.Identity{ID: "test-id", WorkerType: "test-worker"}
+			registry := deps.NewBaseDependencies(logger, nil, identity)
 			testWorker := &TestWorker{
 				BaseWorker:  helpers.NewBaseWorker(registry),
 				customField: "test-value",
