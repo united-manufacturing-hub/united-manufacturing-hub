@@ -90,12 +90,12 @@ func (a *SyncAction) Execute(ctx context.Context, depsAny any) error {
     deps := depsAny.(CommunicatorDependencies)
 
     // Increment counters (cumulative values)
-    deps.Metrics().IncrementCounter(deps.CounterPullOps, 1)
-    deps.Metrics().IncrementCounter(deps.CounterMessagesPulled, int64(len(messages)))
+    deps.MetricsRecorder().IncrementCounter(deps.CounterPullOps, 1)
+    deps.MetricsRecorder().IncrementCounter(deps.CounterMessagesPulled, int64(len(messages)))
 
     // Set gauges (point-in-time values)
-    deps.Metrics().SetGauge(deps.GaugeLastPullLatencyMs, float64(latency.Milliseconds()))
-    deps.Metrics().SetGauge(deps.GaugeConsecutiveErrors, float64(errorCount))
+    deps.MetricsRecorder().SetGauge(deps.GaugeLastPullLatencyMs, float64(latency.Milliseconds()))
+    deps.MetricsRecorder().SetGauge(deps.GaugeConsecutiveErrors, float64(errorCount))
 
     return nil
 }
@@ -126,7 +126,7 @@ func (w *MyWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedStat
     }
 
     // Drain this tick's buffered metrics
-    tickMetrics := deps.Metrics().Drain()
+    tickMetrics := deps.MetricsRecorder().Drain()
 
     // Accumulate counters (add deltas)
     for name, delta := range tickMetrics.Counters {
