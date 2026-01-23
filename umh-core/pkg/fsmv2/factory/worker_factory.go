@@ -370,9 +370,12 @@ func GetFactory[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState]() (f
 	return factoryFunc, exists, nil
 }
 
-// RegisterWorkerAndSupervisorFactoryByType atomically registers both worker and supervisor factories
-// using the same worker type name. Both registries stay synchronized.
-// If supervisor registration fails, the worker registration is rolled back.
+// RegisterWorkerAndSupervisorFactoryByType registers both worker and supervisor factories
+// using the same worker type name, with best-effort rollback on failure.
+//
+// NOTE: This is NOT truly atomic - there's a brief window between worker and supervisor
+// registration where only the worker is registered. If supervisor registration fails,
+// the worker registration is rolled back, but this is done as a separate operation.
 //
 // THREAD SAFETY:
 // This function is thread-safe and can be called concurrently from multiple goroutines.
@@ -418,14 +421,14 @@ func RegisterWorkerAndSupervisorFactoryByType(
 	return nil
 }
 
-// RegisterWorkerType atomically registers both worker and supervisor factories using
+// RegisterWorkerType registers both worker and supervisor factories using
 // compile-time type parameters. The worker type is automatically derived from TObserved,
 // ensuring consistency between worker and supervisor registrations.
 //
 // This is the PREFERRED registration API for worker packages. It combines the benefits of:
 //   - Compile-time type safety from type parameters
 //   - Automatic worker type derivation (no manual string matching)
-//   - Atomic registration with rollback on failure
+//   - Best-effort rollback on failure (see RegisterWorkerAndSupervisorFactoryByType)
 //
 // THREAD SAFETY:
 // This function is thread-safe and can be called concurrently from multiple goroutines.
