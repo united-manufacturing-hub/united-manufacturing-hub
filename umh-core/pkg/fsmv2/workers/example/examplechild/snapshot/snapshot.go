@@ -18,8 +18,8 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 )
 
 // ExamplechildDependencies interface to avoid import cycles.
@@ -39,7 +39,7 @@ type ExamplechildSnapshot struct {
 // ExamplechildDesiredState represents the target configuration for the child worker.
 type ExamplechildDesiredState struct {
 	// ParentMappedState derives from parent's ChildStartStates; injected via MappedParentStateProvider.
-	ParentMappedState       string `json:"parent_mapped_state"`
+	ParentMappedState string `json:"parent_mapped_state"`
 	config.BaseDesiredState
 }
 
@@ -106,4 +106,3 @@ func (o ExamplechildObservedState) SetParentMappedState(state string) fsmv2.Obse
 func (o ExamplechildObservedState) IsStopRequired() bool {
 	return o.IsShutdownRequested() || !o.ShouldBeRunning()
 }
-

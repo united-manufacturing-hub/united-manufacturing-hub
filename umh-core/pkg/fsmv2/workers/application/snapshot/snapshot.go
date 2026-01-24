@@ -19,8 +19,8 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 )
 
 // ApplicationObservedState represents the observed state for an application supervisor.
@@ -78,4 +78,3 @@ type ApplicationDesiredState struct {
 func (d *ApplicationDesiredState) GetChildrenSpecs() []config.ChildSpec {
 	return d.ChildrenSpecs
 }
-

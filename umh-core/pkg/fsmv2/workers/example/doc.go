@@ -61,13 +61,13 @@
 //     │   ├── base.go         # Common state utilities
 //     │   └── state_initial.go # Initial state implementation
 //     └── action/
-//         └── (action files)  # Action implementations
+//     └── (action files)  # Action implementations
 //
 //  2. Register the worker in init():
 //
 //     func init() {
-//         factory.RegisterWorkerType[snapshot.MyworkerObservedState, *snapshot.MyworkerDesiredState](
-//             workerFactory, supervisorFactory)
+//     factory.RegisterWorkerType[snapshot.MyworkerObservedState, *snapshot.MyworkerDesiredState](
+//     workerFactory, supervisorFactory)
 //     }
 //
 //  3. Copy from examplechild/ as a starting point.

@@ -18,8 +18,8 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/backoff"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
 	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
@@ -63,7 +63,7 @@ func (d *CommunicatorDesiredState) GetState() string {
 type CommunicatorObservedState struct {
 	CollectedAt time.Time
 
-	JWTExpiry time.Time
+	JWTExpiry         time.Time
 	DegradedEnteredAt time.Time `json:"degradedEnteredAt,omitempty"` // When errors started (zero = not degraded)
 
 	LastAuthAttemptAt time.Time `json:"lastAuthAttemptAt,omitempty"`
@@ -85,7 +85,7 @@ type CommunicatorObservedState struct {
 	ConsecutiveErrors int
 
 	LastErrorType  httpTransport.ErrorType `json:"lastErrorType,omitempty"`
-	LastRetryAfter time.Duration          `json:"lastRetryAfter,omitempty"` // Server-provided Retry-After duration
+	LastRetryAfter time.Duration           `json:"lastRetryAfter,omitempty"` // Server-provided Retry-After duration
 
 	// Authentication
 	Authenticated bool

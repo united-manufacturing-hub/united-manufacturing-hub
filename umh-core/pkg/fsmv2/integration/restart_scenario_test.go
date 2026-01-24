@@ -77,4 +77,3 @@ var _ = Describe("Restart Scenario Integration", func() {
 		GinkgoWriter.Printf("Worker restart scenario documented\n")
 	})
 })
-

@@ -364,7 +364,6 @@ func CleanupStateDuration(workerType, workerID, state string) {
 // WorkerMetricsExporter exports worker-specific metrics from ObservedState to Prometheus.
 // Tracks previous counter values to compute deltas.
 type WorkerMetricsExporter struct {
-
 	counters     map[string]*prometheus.CounterVec
 	gauges       map[string]*prometheus.GaugeVec
 	prevCounters map[string]int64 // Key: "workerType:workerID:metricName"

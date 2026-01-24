@@ -28,7 +28,6 @@ const (
 	TransportResetThreshold = 5 // Consecutive errors before calling Transport.Reset()
 )
 
-
 // CalculateDelay returns 2^consecutiveErrors seconds, capped at MaxDelay.
 func CalculateDelay(consecutiveErrors int) time.Duration {
 	if consecutiveErrors <= 0 {

@@ -30,10 +30,10 @@ import (
 
 var _ = Describe("AuthenticateAction", func() {
 	var (
-		act           *action.AuthenticateAction
-		dependencies  *communicator.CommunicatorDependencies
-		logger        *zap.SugaredLogger
-		mockTransp    *mockTransport
+		act          *action.AuthenticateAction
+		dependencies *communicator.CommunicatorDependencies
+		logger       *zap.SugaredLogger
+		mockTransp   *mockTransport
 	)
 
 	BeforeEach(func() {

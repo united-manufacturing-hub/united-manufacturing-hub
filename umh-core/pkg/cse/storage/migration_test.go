@@ -90,10 +90,10 @@ var _ = Describe("Storage Migration Scenarios", func() {
 
 	Context("Field Removal Migration", func() {
 		type OldVersion struct {
-			ID         string `json:"id"`
-			Name       string `json:"name"`
-			Status     string `json:"status"`
-			OldField   string `json:"oldField"` // Will be removed
+			ID       string `json:"id"`
+			Name     string `json:"name"`
+			Status   string `json:"status"`
+			OldField string `json:"oldField"` // Will be removed
 		}
 
 		type NewVersion struct {
@@ -144,15 +144,15 @@ var _ = Describe("Storage Migration Scenarios", func() {
 
 	Context("Field Rename Migration (using JSON tags)", func() {
 		type OldVersion struct {
-			ID         string `json:"id"`
-			Name       string `json:"name"`
-			OldStatus  string `json:"status"` // Old field name
+			ID        string `json:"id"`
+			Name      string `json:"name"`
+			OldStatus string `json:"status"` // Old field name
 		}
 
 		type NewVersion struct {
-			ID         string `json:"id"`
-			Name       string `json:"name"`
-			NewStatus  string `json:"status"` // New field name, same JSON tag
+			ID        string `json:"id"`
+			Name      string `json:"name"`
+			NewStatus string `json:"status"` // New field name, same JSON tag
 		}
 
 		It("should load old data into renamed field via JSON tag", func() {

@@ -21,5 +21,5 @@ import (
 // ExampleslowUserSpec defines the typed configuration for the slow worker.
 type ExampleslowUserSpec struct {
 	config.BaseUserSpec
-	DelaySeconds        int `yaml:"delaySeconds"`
+	DelaySeconds int `yaml:"delaySeconds"`
 }

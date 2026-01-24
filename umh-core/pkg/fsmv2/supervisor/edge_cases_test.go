@@ -60,7 +60,7 @@ var _ = Describe("Edge Cases", func() {
 				Expect(err).ToNot(HaveOccurred())
 
 				desiredDoc := persistence.Document{
-					"id":               identity.ID,
+					"id":                identity.ID,
 					"ShutdownRequested": false,
 				}
 				_, err = mockStore.SaveDesired(context.Background(), "container", identity.ID, desiredDoc)
@@ -139,7 +139,6 @@ var _ = Describe("Edge Cases", func() {
 					<-done
 				}()
 
-
 				// Wait for action to execute
 				time.Sleep(1200 * time.Millisecond)
 
@@ -180,7 +179,6 @@ var _ = Describe("Edge Cases", func() {
 					<-done
 				}()
 
-
 				// Wait for action to execute (with retry)
 				time.Sleep(2500 * time.Millisecond)
 
@@ -217,7 +215,6 @@ var _ = Describe("Edge Cases", func() {
 					s.Shutdown()
 					<-done
 				}()
-
 
 				// Wait for action to execute (with max retries)
 				time.Sleep(3500 * time.Millisecond)
@@ -287,7 +284,7 @@ var _ = Describe("Edge Cases", func() {
 				Expect(err).ToNot(HaveOccurred())
 
 				desiredDoc := persistence.Document{
-					"id":               identity.ID,
+					"id":                identity.ID,
 					"ShutdownRequested": false,
 				}
 				_, err = mockStore.SaveDesired(context.Background(), "container", identity.ID, desiredDoc)
@@ -546,7 +543,7 @@ var _ = Describe("Edge Cases", func() {
 				Expect(err).ToNot(HaveOccurred())
 
 				desiredDoc := persistence.Document{
-					"id":               identity.ID,
+					"id":                identity.ID,
 					"ShutdownRequested": false,
 				}
 				_, err = mockStore.SaveDesired(context.Background(), "container", identity.ID, desiredDoc)
@@ -654,7 +651,7 @@ var _ = Describe("Type Safety (Invariant I16)", func() {
 				Expect(err).ToNot(HaveOccurred())
 
 				desiredDoc := persistence.Document{
-					"id":               identity.ID,
+					"id":                identity.ID,
 					"ShutdownRequested": false,
 				}
 				_, err = mockStore.SaveDesired(context.Background(), "container", identity.ID, desiredDoc)
@@ -713,7 +710,7 @@ var _ = Describe("Type Safety (Invariant I16)", func() {
 				Expect(err).ToNot(HaveOccurred())
 
 				desiredDoc := persistence.Document{
-					"id":               identity.ID,
+					"id":                identity.ID,
 					"ShutdownRequested": false,
 				}
 				_, err = mockStore.SaveDesired(context.Background(), "container", identity.ID, desiredDoc)

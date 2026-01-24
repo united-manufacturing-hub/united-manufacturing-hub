@@ -197,7 +197,7 @@ var _ = Describe("Communicator Scenario", func() {
 
 			Expect(result.Done).NotTo(BeNil())
 			Expect(result.Shutdown).NotTo(BeNil()) // Shutdown function should be set
-			<-result.Done // Wait for completion before checking result fields
+			<-result.Done                          // Wait for completion before checking result fields
 			Expect(result.PushedMessages).NotTo(BeNil())
 			Expect(result.ConsecutiveErrors).To(BeNumerically(">=", 0))
 			Expect(result.AuthCallCount).To(BeNumerically(">=", 0))

@@ -51,4 +51,3 @@ func (w *BaseWorker[D]) GetDependencies() D {
 func (w *BaseWorker[D]) GetDependenciesAny() any {
 	return w.dependencies
 }
-

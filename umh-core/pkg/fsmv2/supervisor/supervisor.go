@@ -56,8 +56,8 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/internal/execution"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/internal/health"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/lockmanager"
@@ -138,7 +138,7 @@ type Supervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] stru
 	parent             SupervisorInterface
 	ctx                context.Context
 	cachedDesiredState fsmv2.DesiredState
-	workers map[string]*WorkerContext[TObserved, TDesired]
+	workers            map[string]*WorkerContext[TObserved, TDesired]
 	// mu Protects access to workers map, children, childDoneChans, globalVars, and mappedParentState.
 	//
 	// This is a lockmanager.Lock wrapping sync.RWMutex to allow concurrent reads from multiple goroutines
@@ -147,8 +147,8 @@ type Supervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] stru
 	//
 	// Lock Order: Must be acquired BEFORE WorkerContext.mu when both are needed.
 	// See package-level LOCK ORDER section for details.
-	mu          *lockmanager.Lock
-	lockManager *lockmanager.LockManager
+	mu                 *lockmanager.Lock
+	lockManager        *lockmanager.LockManager
 	logger             *zap.SugaredLogger
 	baseLogger         *zap.SugaredLogger // Un-enriched logger for child supervisors
 	freshnessChecker   *health.FreshnessChecker
@@ -159,8 +159,8 @@ type Supervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] stru
 	restartRequestedAt map[string]time.Time
 	globalVars         map[string]any
 	healthChecker      *InfrastructureHealthChecker
-	actionExecutor *execution.ActionExecutor
-	ctxCancel      context.CancelFunc
+	actionExecutor     *execution.ActionExecutor
+	ctxCancel          context.CancelFunc
 	// ctxMu Protects ctx and ctxCancel to prevent TOCTOU races during shutdown.
 	//
 	// Without this lock, a goroutine could check ctx.Err() (finding it non-cancelled),
@@ -170,8 +170,8 @@ type Supervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] stru
 	// This lock is independent from Supervisor.mu and can be acquired separately.
 	// It can be acquired alone when checking context status, or after Supervisor.mu
 	// if both are needed (advisory order).
-	ctxMu *lockmanager.Lock
-	deps  map[string]any
+	ctxMu                    *lockmanager.Lock
+	deps                     map[string]any
 	noStateMachineLoggedOnce sync.Map
 	userSpec                 config.UserSpec
 	workerType               string

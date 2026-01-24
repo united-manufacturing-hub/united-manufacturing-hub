@@ -23,8 +23,8 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/internal/collection"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/internal/execution"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/lockmanager"
@@ -106,11 +106,11 @@ type WorkerContext[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] s
 	// Workers read via FrameworkMetrics; MetricsRecorder handles worker-written metrics.
 	stateEnteredAt time.Time // When current state was entered
 	worker         fsmv2.Worker
-	currentState fsmv2.State[any, any]
+	currentState   fsmv2.State[any, any]
 	// mu protects currentState. Uses RWMutex for frequent reads, rare writes.
 	// Lock Order: Acquire AFTER Supervisor.mu when both needed.
 	// WorkerContext.mu locks are independent from each other (enables parallel worker processing).
-	mu *lockmanager.Lock
+	mu            *lockmanager.Lock
 	collector     *collection.Collector[TObserved]
 	executor      *execution.ActionExecutor
 	actionHistory *deps.InMemoryActionHistoryRecorder // Supervisor-owned buffer for action results

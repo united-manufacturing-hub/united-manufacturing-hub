@@ -38,23 +38,23 @@ package examples
 //
 // ## Worker Type Not Found
 //
-//	1. ApplicationSupervisor parses YAML
-//	2. For each child, looks up workerType in factory registry
-//	3. If not found: error logged, worker not created
-//	4. Other workers continue normally
+//  1. ApplicationSupervisor parses YAML
+//  2. For each child, looks up workerType in factory registry
+//  3. If not found: error logged, worker not created
+//  4. Other workers continue normally
 //
 // ## YAML Parse Error
 //
-//	1. DeriveDesiredState calls ParseUserSpec[T](spec)
-//	2. ParseUserSpec attempts yaml.Unmarshal
-//	3. If type mismatch: Go uses zero value (no error from unmarshal!)
-//	4. Worker proceeds with default/zero config
+//  1. DeriveDesiredState calls ParseUserSpec[T](spec)
+//  2. ParseUserSpec attempts yaml.Unmarshal
+//  3. If type mismatch: Go uses zero value (no error from unmarshal!)
+//  4. Worker proceeds with default/zero config
 //
 // ## Missing Required Field
 //
-//	1. Worker receives parsed config with zero values
-//	2. Worker code must validate and handle missing fields
-//	3. GetMaxFailures() returns default (3) if MaxFailures is 0
+//  1. Worker receives parsed config with zero values
+//  2. Worker code must validate and handle missing fields
+//  3. GetMaxFailures() returns default (3) if MaxFailures is 0
 //
 // # Key Insight: YAML Parsing is Lenient
 //

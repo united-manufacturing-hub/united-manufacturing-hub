@@ -68,7 +68,7 @@
 //   - 1s collection interval
 //   - 200ms cgroup throttle buffer (100ms period x 2)
 //   - 1s safety margin
-//   = 2.2s total timeout
+//     = 2.2s total timeout
 //
 // # Automatic restart with backoff
 //
