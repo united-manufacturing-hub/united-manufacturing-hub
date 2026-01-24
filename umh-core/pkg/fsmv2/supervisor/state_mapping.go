@@ -38,17 +38,13 @@ type StateMapping struct {
 	// Example: {"child-1": "running", "child-2": "running"}
 	ChildDesired map[string]string
 
-	// Condition is optional function to check before applying mapping.
-	// If nil, the mapping is always applied.
-	// If provided, mapping is only applied when condition returns true.
+	// Condition is optional; if nil, the mapping is always applied.
 	Condition func(parentSnapshot Snapshot) bool
 	// ParentState is the state that triggers child updates
 	ParentState string
 }
 
 // StateMappingRegistry holds mappings for hierarchical FSMs.
-// It enables parent FSMs to control child FSM desired states
-// through a discoverable and type-safe API.
 type StateMappingRegistry struct {
 	mappings []StateMapping
 }
@@ -66,11 +62,7 @@ func (r *StateMappingRegistry) Register(mapping StateMapping) {
 }
 
 // DeriveChildDesiredStates returns the desired states for all children
-// based on the current parent state. It evaluates all registered mappings
-// for the given parent state and merges the results.
-//
-// Later mappings can override earlier ones for the same child ID.
-// Mappings with conditions are only included if the condition returns true.
+// based on the current parent state. Later mappings override earlier ones.
 func (r *StateMappingRegistry) DeriveChildDesiredStates(
 	parentState string,
 	parentSnapshot Snapshot,

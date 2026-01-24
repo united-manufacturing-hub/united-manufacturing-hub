@@ -21,15 +21,12 @@ package supervisor
 // (FieldCreatedAt, FieldUpdatedAt) from pkg/cse/storage/constants.go to avoid duplication.
 const (
 	// FieldID is the worker unique identifier.
-	// Required in all documents (identity, desired, observed).
 	FieldID = "id"
 
 	// FieldName is the worker display name.
-	// Set in identity documents.
 	FieldName = "name"
 
 	// FieldWorkerType is the worker type designation.
-	// Set in identity documents.
 	FieldWorkerType = "worker_type"
 
 	// FieldShutdownRequested is the graceful shutdown signal.
@@ -37,8 +34,6 @@ const (
 	// PascalCase matches struct tag: `json:"ShutdownRequested"`.
 	FieldShutdownRequested = "ShutdownRequested"
 
-	// FieldParentID is the parent supervisor ID.
-	// Set in Internal variables for hierarchical composition.
-	// Renamed from "bridged_by" for clarity.
+	// FieldParentID is the parent supervisor ID (renamed from "bridged_by").
 	FieldParentID = "parent_id"
 )

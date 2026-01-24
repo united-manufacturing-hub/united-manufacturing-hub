@@ -55,8 +55,7 @@ func (h *InfrastructureHealthChecker) CheckChildConsistency(children map[string]
 			continue
 		}
 
-		// Type assert to access circuitOpen field (internal to package)
-		// We use interface{} because Supervisor has different type parameters per child
+		// Type assert needed because Supervisor has different type parameters per child
 		type circuitChecker interface {
 			isCircuitOpen() bool
 		}
