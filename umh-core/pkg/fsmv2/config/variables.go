@@ -108,10 +108,10 @@ func (v VariableBundle) Flatten() map[string]any {
 
 // VariableOverride tracks when a child variable overrides a parent variable.
 type VariableOverride struct {
-	Namespace string // "User" or "Global"
-	Key       string
 	OldValue  any
 	NewValue  any
+	Namespace string // "User" or "Global"
+	Key       string
 }
 
 // MergeResult contains the merged VariableBundle and any override warnings.
