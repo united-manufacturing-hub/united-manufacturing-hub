@@ -92,6 +92,13 @@ func (v VariableBundle) Flatten() map[string]any {
 	result := make(map[string]any)
 
 	for k, val := range v.User {
+		// Skip reserved keys to avoid collision with namespace prefixes.
+		// Users should not define variables named "global" or "internal" as these
+		// are reserved for the Global and Internal namespace maps.
+		if k == "global" || k == "internal" {
+			continue
+		}
+
 		result[k] = val
 	}
 
@@ -149,8 +156,9 @@ func MergeWithOverrides(parent, child VariableBundle) MergeResult {
 	var overrides []VariableOverride
 
 	// Merge User variables (child overrides parent)
+	// Use deepCloneValue to prevent shared references between parent/child and merged bundle.
 	for k, v := range parent.User {
-		merged.User[k] = v
+		merged.User[k] = deepCloneValue(v)
 	}
 
 	for k, v := range child.User {
@@ -163,12 +171,13 @@ func MergeWithOverrides(parent, child VariableBundle) MergeResult {
 			})
 		}
 
-		merged.User[k] = v
+		merged.User[k] = deepCloneValue(v)
 	}
 
 	// Merge Global variables (child overrides parent)
+	// Use deepCloneValue to prevent shared references between parent/child and merged bundle.
 	for k, v := range parent.Global {
-		merged.Global[k] = v
+		merged.Global[k] = deepCloneValue(v)
 	}
 
 	for k, v := range child.Global {
@@ -181,7 +190,7 @@ func MergeWithOverrides(parent, child VariableBundle) MergeResult {
 			})
 		}
 
-		merged.Global[k] = v
+		merged.Global[k] = deepCloneValue(v)
 	}
 
 	// Set Global to nil if empty to maintain JSON omitempty behavior
