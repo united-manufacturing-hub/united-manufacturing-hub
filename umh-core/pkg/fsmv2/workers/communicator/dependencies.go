@@ -19,7 +19,6 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/backoff"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
 	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
 	"go.uber.org/zap"
@@ -131,7 +130,9 @@ func (d *CommunicatorDependencies) GetPulledMessages() []*transport.UMHMessage {
 	return result
 }
 
-// RecordError increments consecutive errors and triggers transport reset at threshold multiples.
+// RecordError increments consecutive errors and records when degraded mode started.
+// Transport reset is handled by ResetTransportAction from DegradedState, not here,
+// to avoid duplicate resets and maintain single responsibility.
 func (d *CommunicatorDependencies) RecordError() {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -141,10 +142,6 @@ func (d *CommunicatorDependencies) RecordError() {
 	}
 
 	d.consecutiveErrors++
-
-	if d.consecutiveErrors%backoff.TransportResetThreshold == 0 && d.transport != nil {
-		d.transport.Reset()
-	}
 }
 
 // RecordSuccess resets all error tracking state.
@@ -160,6 +157,8 @@ func (d *CommunicatorDependencies) RecordSuccess() {
 }
 
 // RecordTypedError increments consecutive errors and records error type and retry-after.
+// Transport reset is handled by ResetTransportAction from DegradedState, not here,
+// to avoid duplicate resets and maintain single responsibility.
 func (d *CommunicatorDependencies) RecordTypedError(errType httpTransport.ErrorType, retryAfter time.Duration) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -171,10 +170,6 @@ func (d *CommunicatorDependencies) RecordTypedError(errType httpTransport.ErrorT
 	d.consecutiveErrors++
 	d.lastErrorType = errType
 	d.lastRetryAfter = retryAfter
-
-	if d.consecutiveErrors%backoff.TransportResetThreshold == 0 && d.transport != nil {
-		d.transport.Reset()
-	}
 }
 
 // GetLastErrorType returns the last recorded error type.
