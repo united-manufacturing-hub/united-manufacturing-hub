@@ -58,10 +58,10 @@ var _ = Describe("ConfigError Scenario Integration", func() {
 
 // verifyConfigValidWorker checks that the valid config worker creates children.
 func verifyConfigValidWorker(t *integration.TestLogger) {
+	// Check state_transition logs for parent worker
 	stateTransitions := t.GetLogsMatching("state_transition")
 
 	validWorkerFound := false
-	childrenOfValid := 0
 
 	for _, entry := range stateTransitions {
 		worker := ""
@@ -72,69 +72,62 @@ func verifyConfigValidWorker(t *integration.TestLogger) {
 			}
 		}
 
-		if strings.Contains(worker, "config-valid") {
+		if strings.Contains(worker, "config-valid") && !strings.Contains(worker, "child-") {
 			validWorkerFound = true
-		}
-		// Children of config-valid would be named config-valid-child-N
-		if strings.Contains(worker, "config-valid") && strings.Contains(worker, "child-") {
-			childrenOfValid++
 		}
 	}
 
 	Expect(validWorkerFound).To(BeTrue(),
 		"Expected config-valid worker to be created")
 
-	// Verify that valid worker actually creates children (children_count: 2 in config)
-	// Note: Children may not have time to emit state_transition logs within the test window.
-	// The scenario timeout (10s) is optimized for verifying error handling, not child lifecycle.
-	// If children ARE captured, verify the count is reasonable; otherwise report for diagnostics.
-	if childrenOfValid > 0 {
-		GinkgoWriter.Printf("✓ Valid config worker created with %d children (captured in time)\n", childrenOfValid)
-	} else {
-		GinkgoWriter.Printf("✓ Valid config worker found (children not captured within test window - this is timing-dependent)\n")
+	// Check identity_created logs for children (children emit identity_created, not state_transition)
+	// Children have hierarchy path like: .../config-valid-001(exampleparent)/child-0-001(examplechild)
+	identityLogs := t.GetLogsMatching("identity_created")
+	childrenOfValid := 0
+
+	for _, entry := range identityLogs {
+		for _, field := range entry.Context {
+			if field.Key == "worker" {
+				worker := field.String
+				if strings.Contains(worker, "config-valid") && strings.Contains(worker, "child-") {
+					childrenOfValid++
+				}
+			}
+		}
 	}
+
+	// Verify that valid worker actually creates children (children_count: 2 in config)
+	Expect(childrenOfValid).To(BeNumerically(">=", 2),
+		fmt.Sprintf("Expected config-valid worker to create at least 2 children, got %d", childrenOfValid))
+
+	GinkgoWriter.Printf("✓ Valid config worker created with %d children\n", childrenOfValid)
 }
 
 // verifyConfigTypeMismatchWorker checks that type mismatch is handled gracefully.
 // Note: YAML parsing is lenient - "not-a-number" becomes 0 for int fields.
 // This means the parent worker is created but with 0 children.
 func verifyConfigTypeMismatchWorker(t *integration.TestLogger) {
-	// Check for any logs related to type-mismatch worker
-	typeMismatchLogs := t.GetLogsWithFieldContaining("worker", "type-mismatch")
-
-	// Note: Worker may not have emitted logs within the test window (timing-dependent).
-	// The scenario timeout (10s) is optimized for verifying error handling, not exhaustive worker coverage.
-	if len(typeMismatchLogs) == 0 {
-		GinkgoWriter.Printf("✓ Type mismatch worker not captured within test window (timing-dependent)\n")
-
-		return
-	}
-
-	// Count children specifically
+	// Check identity_created logs to count children of type-mismatch worker
+	// With children_count: "not-a-number", YAML unmarshal gives 0, so no children should exist
+	identityLogs := t.GetLogsMatching("identity_created")
 	childrenOfMismatch := 0
 
-	for _, entry := range typeMismatchLogs {
+	for _, entry := range identityLogs {
 		for _, field := range entry.Context {
 			if field.Key == "worker" {
-				if strVal, ok := field.Interface.(string); ok {
-					if strings.Contains(strVal, "child-") {
-						childrenOfMismatch++
-					}
-				} else if strings.Contains(field.String, "child-") {
+				worker := field.String
+				if strings.Contains(worker, "type-mismatch") && strings.Contains(worker, "child-") {
 					childrenOfMismatch++
 				}
 			}
 		}
 	}
 
-	// The scenario should run without crashing even with invalid config
-	// This test verifies graceful degradation (no panic, no children)
-	GinkgoWriter.Printf("✓ Type mismatch scenario completed (logs: %d, children: %d)\n",
-		len(typeMismatchLogs), childrenOfMismatch)
-
 	// With children_count: "not-a-number", unmarshal gives 0, so no children
 	Expect(childrenOfMismatch).To(Equal(0),
 		fmt.Sprintf("Expected type mismatch worker to have 0 children (silent degradation), got %d", childrenOfMismatch))
+
+	GinkgoWriter.Printf("✓ Type mismatch worker has 0 children (YAML gave 0 for invalid children_count)\n")
 }
 
 // verifyConfigFailingDefaults checks that failing worker uses defaults when config is invalid.
