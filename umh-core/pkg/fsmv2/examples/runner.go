@@ -89,6 +89,7 @@ func Run(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 
 		go func() {
 			<-done
+
 			dumpCtx := context.Background()
 
 			dump, err := DumpScenario(dumpCtx, cfg.Store, startSyncID)

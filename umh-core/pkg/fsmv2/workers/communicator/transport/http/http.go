@@ -111,6 +111,7 @@ func isCloudflareChallenge(statusCode int, headers http.Header, body []byte) boo
 	if statusCode != http.StatusTooManyRequests {
 		return false
 	}
+
 	server := headers.Get("Server")
 	if strings.Contains(strings.ToLower(server), "cloudflare") {
 		return bytes.Contains(body, []byte("Just a moment")) ||
@@ -150,9 +151,11 @@ func parseRetryAfter(headers http.Header) time.Duration {
 	if value == "" {
 		return 0
 	}
+
 	if seconds, err := strconv.Atoi(value); err == nil {
 		return time.Duration(seconds) * time.Second
 	}
+
 	if t, err := http.ParseTime(value); err == nil {
 		delay := time.Until(t)
 		if delay > 0 {

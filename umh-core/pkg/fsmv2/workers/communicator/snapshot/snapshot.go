@@ -96,7 +96,9 @@ func (o CommunicatorObservedState) IsTokenExpired() bool {
 	if o.JWTExpiry.IsZero() {
 		return false
 	}
+
 	const refreshBuffer = 10 * time.Minute
+
 	return time.Now().Add(refreshBuffer).After(o.JWTExpiry)
 }
 

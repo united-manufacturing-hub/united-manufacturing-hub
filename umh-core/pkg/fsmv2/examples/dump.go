@@ -240,6 +240,7 @@ func formatDocument(sb *strings.Builder, doc persistence.Document, indent string
 	}
 
 	var keys []string
+
 	for k := range doc {
 		if strings.HasPrefix(k, "_") {
 			continue

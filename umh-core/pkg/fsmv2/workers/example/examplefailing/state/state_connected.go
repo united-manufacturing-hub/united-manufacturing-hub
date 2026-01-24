@@ -47,6 +47,7 @@ func (s *ConnectedState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal,
 		if snap.Observed.TicksInConnectedState >= ticksBeforeNextCycle {
 			return &TriggeringNextCycleState{}, fsmv2.SignalNone, nil
 		}
+
 		return s, fsmv2.SignalNone, &action.IncrementTicksAction{}
 	}
 

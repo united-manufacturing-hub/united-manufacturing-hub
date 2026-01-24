@@ -109,6 +109,7 @@ func (a *SyncAction) Execute(ctx context.Context, depsAny any) error {
 	}
 
 	var messagesToPush []*transport.UMHMessage
+
 	if outChan := deps.GetOutboundChan(); outChan != nil {
 	drainLoop:
 		for {
@@ -122,7 +123,6 @@ func (a *SyncAction) Execute(ctx context.Context, depsAny any) error {
 	}
 
 	if len(messagesToPush) == 0 && len(a.MessagesToBePushed) > 0 { // Fallback for tests
-
 		messagesToPush = a.MessagesToBePushed
 	}
 

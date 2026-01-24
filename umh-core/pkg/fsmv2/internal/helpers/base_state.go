@@ -69,8 +69,10 @@ func DeriveStateName(state interface{}) string {
 	if t.Kind() == reflect.Ptr {
 		t = t.Elem()
 	}
+
 	name := t.Name()
 	name = strings.TrimSuffix(name, "State")
+
 	return name
 }
 

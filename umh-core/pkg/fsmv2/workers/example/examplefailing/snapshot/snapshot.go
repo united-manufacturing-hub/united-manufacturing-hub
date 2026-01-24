@@ -65,6 +65,7 @@ func (s *ExamplefailingDesiredState) ShouldBeRunning() bool {
 	if s.ShutdownRequested {
 		return false
 	}
+
 	return s.ParentMappedState == config.DesiredStateRunning
 }
 

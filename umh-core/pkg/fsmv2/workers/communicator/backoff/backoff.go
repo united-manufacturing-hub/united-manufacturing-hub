@@ -68,13 +68,16 @@ func calculateDefaultDelay(errType httpTransport.ErrorType, consecutiveErrors in
 
 	case httpTransport.ErrorTypeBackendRateLimit:
 		delays := []time.Duration{30 * time.Second, 60 * time.Second, 120 * time.Second, 300 * time.Second}
+
 		idx := consecutiveErrors - 1
 		if idx < 0 {
 			idx = 0
 		}
+
 		if idx >= len(delays) {
 			idx = len(delays) - 1
 		}
+
 		return delays[idx]
 
 	case httpTransport.ErrorTypeServerError, httpTransport.ErrorTypeNetwork:

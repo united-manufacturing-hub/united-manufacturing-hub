@@ -39,6 +39,7 @@ func ValidateNoDirectDocumentManipulation(baseDir string) []Violation {
 		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") {
 			continue
 		}
+
 		if strings.HasSuffix(entry.Name(), "_test.go") {
 			continue
 		}

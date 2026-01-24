@@ -125,7 +125,9 @@ func RunCommunicatorScenario(ctx context.Context, cfg CommunicatorRunConfig) *Co
 	}
 
 	var mockServer *testutil.MockRelayServer
+
 	var ownsMockServer bool
+
 	if cfg.MockServer != nil {
 		mockServer = cfg.MockServer
 		ownsMockServer = false

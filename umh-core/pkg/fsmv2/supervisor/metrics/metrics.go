@@ -405,11 +405,13 @@ func (e *WorkerMetricsExporter) export(workerType, workerID string, metrics *dep
 	for name, value := range metrics.Counters {
 		prevKey := workerType + ":" + workerID + ":" + name
 		prevValue := e.prevCounters[prevKey]
+
 		delta := value - prevValue
 		if delta > 0 {
 			counter := e.getOrCreateCounter(name)
 			counter.With(labels).Add(float64(delta))
 		}
+
 		e.prevCounters[prevKey] = value
 	}
 
