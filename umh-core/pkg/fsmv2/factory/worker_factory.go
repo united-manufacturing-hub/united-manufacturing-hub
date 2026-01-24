@@ -77,6 +77,10 @@ func RegisterFactory[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState]
 func RegisterSupervisorFactory[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState](
 	factoryFunc func(interface{}) interface{},
 ) error {
+	if factoryFunc == nil {
+		return errors.New("supervisor factory function cannot be nil")
+	}
+
 	workerType, err := storage.DeriveWorkerType[TObserved]()
 	if err != nil {
 		return fmt.Errorf("failed to derive worker type: %w", err)

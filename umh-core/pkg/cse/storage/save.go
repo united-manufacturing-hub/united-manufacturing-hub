@@ -133,6 +133,13 @@ func (ts *TriangularStore) saveWithDelta(
 					if err != nil {
 						return false, nil, fmt.Errorf("failed to update timestamp for %s/%s: %w", workerType, id, err)
 					}
+
+					// Invalidate cache so LoadSnapshot returns updated timestamp
+					cacheKey := workerType + "_" + id
+
+					ts.cacheMutex.Lock()
+					delete(ts.snapshotCache, cacheKey)
+					ts.cacheMutex.Unlock()
 				}
 
 				return false, nil, nil
