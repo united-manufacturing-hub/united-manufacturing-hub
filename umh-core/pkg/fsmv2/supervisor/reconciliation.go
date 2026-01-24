@@ -383,6 +383,12 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 		)
 	}
 
+	// Capture final state while holding lock for logging after processSignal
+	finalState := "nil"
+	if workerCtx.currentState != nil {
+		finalState = workerCtx.currentState.String()
+	}
+
 	workerCtx.mu.RUnlock()
 
 	if err := s.processSignal(ctx, workerID, signal); err != nil {
@@ -391,7 +397,7 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 
 	s.logTrace("lifecycle",
 		"lifecycle_event", "tick_complete",
-		"final_state", workerCtx.currentState.String())
+		"final_state", finalState)
 
 	return nil
 }
@@ -911,11 +917,27 @@ func (s *Supervisor[TObserved, TDesired]) checkRestartTimeouts(ctx context.Conte
 			}
 
 			// Force reset (skip waiting for SignalNeedsRemoval)
+			// Acquire workerCtx.mu to safely access/modify currentState.
+			// Lock order: Supervisor.mu (already held) -> WorkerContext.mu
+			workerCtx.mu.Lock()
+
+			fromState := "nil"
+			if workerCtx.currentState != nil {
+				fromState = workerCtx.currentState.String()
+			}
+
 			s.logger.Infow("worker_restart_force_reset",
 				"worker", workerID,
-				"from_state", workerCtx.currentState.String())
+				"from_state", fromState)
 
 			workerCtx.currentState = workerCtx.worker.GetInitialState()
+
+			toState := "nil"
+			if workerCtx.currentState != nil {
+				toState = workerCtx.currentState.String()
+			}
+
+			workerCtx.mu.Unlock()
 
 			if workerCtx.collector != nil {
 				workerCtx.collector.Restart()
@@ -927,7 +949,7 @@ func (s *Supervisor[TObserved, TDesired]) checkRestartTimeouts(ctx context.Conte
 
 			s.logger.Infow("worker_restart_force_complete",
 				"worker", workerID,
-				"to_state", workerCtx.currentState.String())
+				"to_state", toState)
 		}
 	}
 }
