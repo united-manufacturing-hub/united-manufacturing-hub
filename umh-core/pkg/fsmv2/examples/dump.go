@@ -61,7 +61,14 @@ func DumpScenario(ctx context.Context, store storage.TriangularStoreInterface, s
 	// Use LatestSyncID from response to avoid race between GetDeltas and GetLatestSyncID
 	endSyncID := resp.LatestSyncID
 
-	workers := extractAndLoadWorkers(ctx, store, resp.Deltas)
+	var workers []WorkerSnapshot
+
+	// Handle bootstrap case: when client is too far behind, use Bootstrap.Workers
+	if resp.RequiresBootstrap && resp.Bootstrap != nil {
+		workers = convertStorageWorkers(resp.Bootstrap.Workers)
+	} else {
+		workers = extractAndLoadWorkers(ctx, store, resp.Deltas)
+	}
 
 	return &ScenarioDump{
 		StartSyncID: startSyncID,
@@ -69,6 +76,23 @@ func DumpScenario(ctx context.Context, store storage.TriangularStoreInterface, s
 		Deltas:      resp.Deltas,
 		Workers:     workers,
 	}, nil
+}
+
+// convertStorageWorkers converts storage.WorkerSnapshot to examples.WorkerSnapshot.
+func convertStorageWorkers(storageWorkers []storage.WorkerSnapshot) []WorkerSnapshot {
+	workers := make([]WorkerSnapshot, len(storageWorkers))
+
+	for i, sw := range storageWorkers {
+		workers[i] = WorkerSnapshot{
+			WorkerType: sw.WorkerType,
+			WorkerID:   sw.WorkerID,
+			Identity:   sw.Identity,
+			Desired:    sw.Desired,
+			Observed:   sw.Observed,
+		}
+	}
+
+	return workers
 }
 
 // extractAndLoadWorkers loads snapshots for unique workers found in deltas.

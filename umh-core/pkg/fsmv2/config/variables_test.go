@@ -446,7 +446,7 @@ global:
 			Expect(result.User).To(BeEmpty())
 		})
 
-		It("should NOT merge Internal or Global (they remain nil in result)", func() {
+		It("should merge User and Global, but NOT Internal (Internal regenerated per-worker)", func() {
 			parent := config.VariableBundle{
 				User: map[string]any{
 					"IP": "10.0.0.1",
@@ -472,13 +472,78 @@ global:
 
 			result := config.Merge(parent, child)
 
-			// User variables should be merged
+			// User variables should be merged (child overrides parent)
 			Expect(result.User).To(HaveKeyWithValue("IP", "10.0.0.1"))
 			Expect(result.User).To(HaveKeyWithValue("PORT", 502))
 
-			// Global and Internal should NOT be merged (remain nil)
-			Expect(result.Global).To(BeNil())
+			// Global variables should be merged (child overrides parent)
+			// Fleet-wide settings should propagate from parent to child
+			Expect(result.Global).To(HaveKeyWithValue("api_endpoint", "https://api.example.com"))
+			Expect(result.Global).To(HaveKeyWithValue("cluster_id", "prod-cluster"))
+
+			// Internal should NOT be merged (runtime-only, regenerated per-worker by supervisor)
 			Expect(result.Internal).To(BeNil())
+		})
+	})
+
+	Describe("MergeWithOverrides", func() {
+		It("should detect when child User variables override parent User variables", func() {
+			parent := config.VariableBundle{
+				User: map[string]any{
+					"IP":   "10.0.0.1",
+					"PORT": 502,
+				},
+			}
+			child := config.VariableBundle{
+				User: map[string]any{
+					"PORT": 503, // Override
+				},
+			}
+
+			result := config.MergeWithOverrides(parent, child)
+
+			// Should have one override
+			Expect(result.Overrides).To(HaveLen(1))
+			Expect(result.Overrides[0].Namespace).To(Equal("User"))
+			Expect(result.Overrides[0].Key).To(Equal("PORT"))
+			Expect(result.Overrides[0].OldValue).To(Equal(502))
+			Expect(result.Overrides[0].NewValue).To(Equal(503))
+		})
+
+		It("should detect when child Global variables override parent Global variables", func() {
+			parent := config.VariableBundle{
+				Global: map[string]any{
+					"api_endpoint": "https://api.example.com",
+					"cluster_id":   "prod-cluster",
+				},
+			}
+			child := config.VariableBundle{
+				Global: map[string]any{
+					"api_endpoint": "https://api.other.com", // Override
+				},
+			}
+
+			result := config.MergeWithOverrides(parent, child)
+
+			// Should have one override
+			Expect(result.Overrides).To(HaveLen(1))
+			Expect(result.Overrides[0].Namespace).To(Equal("Global"))
+			Expect(result.Overrides[0].Key).To(Equal("api_endpoint"))
+			Expect(result.Overrides[0].OldValue).To(Equal("https://api.example.com"))
+			Expect(result.Overrides[0].NewValue).To(Equal("https://api.other.com"))
+		})
+
+		It("should return empty overrides when no conflicts exist", func() {
+			parent := config.VariableBundle{
+				User: map[string]any{"IP": "10.0.0.1"},
+			}
+			child := config.VariableBundle{
+				User: map[string]any{"PORT": 502},
+			}
+
+			result := config.MergeWithOverrides(parent, child)
+
+			Expect(result.Overrides).To(BeEmpty())
 		})
 	})
 

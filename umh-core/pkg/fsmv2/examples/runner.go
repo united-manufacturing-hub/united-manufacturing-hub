@@ -61,8 +61,14 @@ func Run(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 	}
 
 	var startSyncID int64
+
 	if cfg.DumpStore {
-		startSyncID, _ = cfg.Store.GetLatestSyncID(ctx)
+		var err error
+
+		startSyncID, err = cfg.Store.GetLatestSyncID(ctx)
+		if err != nil {
+			cfg.Logger.Warnw("Failed to get starting sync ID, dump will show all changes", "error", err)
+		}
 	}
 
 	appSup, err := application.NewApplicationSupervisor(application.SupervisorConfig{

@@ -357,8 +357,8 @@ type ChildrenView interface {
 // DesiredState represents what we want the system to be.
 // This is returned by Worker.DeriveDesiredState() and used by State.Next() for decisions.
 //
-// The supervisor can inject shutdown requests by setting State to "shutdown".
-// Workers must check ShutdownRequested() first in their State.Next() implementations.
+// The supervisor injects shutdown requests by setting ShutdownRequested = true.
+// Workers must check IsShutdownRequested() first in their State.Next() implementations.
 //
 // # Children Management
 //
@@ -379,8 +379,8 @@ type ChildrenView interface {
 // Example with shutdown:
 //
 //	DesiredState{
-//	    BaseDesiredState: BaseDesiredState{State: "shutdown"},  // Triggers shutdown sequence
-//	    ChildrenSpecs:    nil,                                  // Children removed during shutdown
+//	    BaseDesiredState: BaseDesiredState{ShutdownRequested: true},  // Triggers shutdown sequence
+//	    ChildrenSpecs:    nil,                                        // Children removed during shutdown
 //	}
 type DesiredState struct {
 	OriginalUserSpec interface{}      `json:"originalUserSpec,omitempty" yaml:"-"` // Captures the input that produced this DesiredState (for debugging/traceability)

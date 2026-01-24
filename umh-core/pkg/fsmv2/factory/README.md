@@ -6,7 +6,7 @@ The factory package provides registration mechanisms for FSM v2 workers and supe
 
 Worker types are **derived from Go type names**, not manually specified.
 
-```
+```text
 ExamplechildObservedState    → "examplechild"
 ApplicationObservedState → "application"
 ExampleparentObservedState → "exampleparent"

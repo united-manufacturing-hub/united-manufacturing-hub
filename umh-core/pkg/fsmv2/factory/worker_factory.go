@@ -44,6 +44,10 @@ func RegisterFactoryByType(workerType string, factoryFunc func(deps.Identity, *z
 		return errors.New("worker type cannot be empty")
 	}
 
+	if factoryFunc == nil {
+		return errors.New("factory function cannot be nil")
+	}
+
 	registryMu.Lock()
 	defer registryMu.Unlock()
 
@@ -95,6 +99,10 @@ func RegisterSupervisorFactory[TObserved fsmv2.ObservedState, TDesired fsmv2.Des
 func RegisterSupervisorFactoryByType(workerType string, factoryFunc func(interface{}) interface{}) error {
 	if workerType == "" {
 		return errors.New("worker type cannot be empty")
+	}
+
+	if factoryFunc == nil {
+		return errors.New("supervisor factory function cannot be nil")
 	}
 
 	supervisorRegistryMu.Lock()

@@ -225,8 +225,15 @@ func (ts *TriangularStore) injectMetadataWithOptions(doc persistence.Document, o
 
 		// Optimistic locking for desired state
 		if opts.IncrementVersion {
-			currentVersion, ok := doc[FieldVersion].(int64)
-			if !ok {
+			// Handle both int64 (native) and float64 (after JSON round-trip)
+			var currentVersion int64
+
+			switch v := doc[FieldVersion].(type) {
+			case int64:
+				currentVersion = v
+			case float64:
+				currentVersion = int64(v)
+			default:
 				currentVersion = 0
 			}
 

@@ -130,20 +130,6 @@ func verifyConfigFailingDefaults(t *integration.TestLogger) {
 	// Also check for workers containing "failing-defaults" or "failing"
 	failingDefaultsLogs := t.GetLogsWithFieldContaining("worker", "failing")
 
-	// Count failures for any failing-related worker
-	failingWorkerFailures := 0
-
-	for _, entry := range failureLogs {
-		for _, field := range entry.Context {
-			if field.Key == "worker" {
-				// Count any failure from a failing worker
-				failingWorkerFailures++
-
-				break
-			}
-		}
-	}
-
 	// This verifies that:
 	// 1. The scenario ran without crashing
 	// 2. Workers with invalid config were handled gracefully (using defaults or silent degradation)

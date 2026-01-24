@@ -762,12 +762,32 @@ func deepCopyDocument(doc persistence.Document) persistence.Document {
 		return nil
 	}
 
-	copy := make(persistence.Document, len(doc))
-	for k, v := range doc {
-		copy[k] = v
+	// Use JSON round-trip to ensure true deep copy of nested maps/slices.
+	// A shallow copy (for k, v := range doc) would leave nested structures
+	// referencing the original data, allowing mutations to corrupt the cache.
+	data, err := json.Marshal(doc)
+	if err != nil {
+		// Fallback to shallow copy if marshal fails (should not happen in practice)
+		shallowCopy := make(persistence.Document, len(doc))
+		for k, v := range doc {
+			shallowCopy[k] = v
+		}
+
+		return shallowCopy
 	}
 
-	return copy
+	var deepCopy persistence.Document
+	if err := json.Unmarshal(data, &deepCopy); err != nil {
+		// Fallback to shallow copy if unmarshal fails
+		shallowCopy := make(persistence.Document, len(doc))
+		for k, v := range doc {
+			shallowCopy[k] = v
+		}
+
+		return shallowCopy
+	}
+
+	return deepCopy
 }
 
 // deepCopyObserved creates a copy of the Observed field which can be either
