@@ -55,20 +55,11 @@ type ExamplepanicDesiredState struct {
 }
 
 // ShouldBeRunning returns true if the panic worker should be in a running/connected state.
-// This is the positive assertion that should be checked before transitioning
-// from stopped to starting states.
-//
-// Children only run when:
-// 1. ShutdownRequested is false (not being shut down)
-// 2. ParentMappedState is config.DesiredStateRunning (parent wants children to run)
-//
-// Children wait for parent to reach TryingToStart before connecting.
+// Children run when ShutdownRequested is false AND ParentMappedState is "running".
 func (s *ExamplepanicDesiredState) ShouldBeRunning() bool {
 	if s.ShutdownRequested {
 		return false
 	}
-	// Only run if parent explicitly wants us running via ChildStartStates
-	// Default to not running if ParentMappedState is empty or "stopped"
 	return s.ParentMappedState == config.DesiredStateRunning
 }
 
@@ -87,10 +78,7 @@ type ExamplepanicObservedState struct {
 
 	ExamplepanicDesiredState `json:",inline"`
 
-	// LastActionResults contains the action history from the last collection cycle.
-	// This is supervisor-managed data: the supervisor auto-records action results
-	// via ActionExecutor callback and injects them into deps before CollectObservedState.
-	// Workers read deps.GetActionHistory() and assign here in CollectObservedState.
+	// Supervisor-managed action history injected into deps before CollectObservedState.
 	LastActionResults []deps.ActionResult `json:"last_action_results,omitempty"`
 
 	deps.MetricsEmbedder `json:",inline"` // Framework and worker metrics for Prometheus export
@@ -106,36 +94,28 @@ func (o ExamplepanicObservedState) GetObservedDesiredState() fsmv2.DesiredState 
 	return &o.ExamplepanicDesiredState
 }
 
-// SetState sets the FSM state name on this observed state.
-// Called by Collector when StateProvider callback is configured.
+// SetState sets the FSM state name, called by Collector via StateProvider callback.
 func (o ExamplepanicObservedState) SetState(s string) fsmv2.ObservedState {
 	o.State = s
 
 	return o
 }
 
-// SetShutdownRequested sets the shutdown requested status on this observed state.
-// Called by Collector when ShutdownRequestedProvider callback is configured.
+// SetShutdownRequested sets the shutdown requested status, called by Collector via ShutdownRequestedProvider callback.
 func (o ExamplepanicObservedState) SetShutdownRequested(v bool) fsmv2.ObservedState {
 	o.ShutdownRequested = v
 
 	return o
 }
 
-// SetParentMappedState sets the parent's mapped state on this observed state.
-// Called by Collector when MappedParentStateProvider callback is configured.
-// Children can check if parent wants them running via StateMapping.
+// SetParentMappedState sets the parent's mapped state, called by Collector via MappedParentStateProvider callback.
 func (o ExamplepanicObservedState) SetParentMappedState(state string) fsmv2.ObservedState {
 	o.ParentMappedState = state
 
 	return o
 }
 
-// IsStopRequired reports whether the child needs to stop.
-// This is a QUERY on injected data, not a signal emission.
-// It combines:
-//   - IsShutdownRequested() - explicit system shutdown
-//   - !ShouldBeRunning() - parent no longer wants child running
+// IsStopRequired reports whether the child needs to stop (shutdown requested OR parent wants child stopped).
 func (o ExamplepanicObservedState) IsStopRequired() bool {
 	return o.IsShutdownRequested() || !o.ShouldBeRunning()
 }

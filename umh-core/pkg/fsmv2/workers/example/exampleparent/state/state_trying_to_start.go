@@ -37,19 +37,15 @@ func (s *TryingToStartState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Sig
 		return &TryingToStopState{}, fsmv2.SignalNone, nil
 	}
 
-	// First, ensure we have a valid ID (StartAction sets this up)
 	if snap.Observed.ID == "" {
 		return s, fsmv2.SignalNone, &action.StartAction{}
 	}
 
-	// Wait for ALL children to be running (healthy > 0, unhealthy == 0).
-	// ChildStartStates ensures children have desired state = "running".
-	// We only transition when all expected children are healthy.
+	// All children must be running (healthy > 0, unhealthy == 0) before transitioning.
 	if snap.Observed.ChildrenHealthy > 0 && snap.Observed.ChildrenUnhealthy == 0 {
 		return &RunningState{}, fsmv2.SignalNone, nil
 	}
 
-	// Children not ready yet - stay in this state
 	return s, fsmv2.SignalNone, nil
 }
 

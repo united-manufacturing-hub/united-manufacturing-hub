@@ -26,9 +26,8 @@ const DisconnectActionName = "disconnect"
 type DisconnectAction struct {
 }
 
-// Execute attempts to release the connection back to the pool.
-// When failure cycles are configured, this advances to the next cycle
-// instead of simply resetting attempts.
+// Execute releases the connection back to the pool.
+// When failure cycles are configured, advances to the next cycle instead of resetting attempts.
 func (a *DisconnectAction) Execute(ctx context.Context, depsAny any) error {
 	select {
 	case <-ctx.Done():
@@ -40,11 +39,8 @@ func (a *DisconnectAction) Execute(ctx context.Context, depsAny any) error {
 	logger := deps.GetLogger()
 	logger.Info("Disconnecting")
 
-	// Mark connection as closed
 	deps.SetConnected(false)
 
-	// If we're simulating failures and have more cycles, advance to next cycle
-	// Otherwise just reset attempts
 	if deps.GetShouldFail() && !deps.AllCyclesComplete() {
 		newCycle := deps.AdvanceCycle() // Increments cycle AND resets attempts
 		logger.Infow("disconnect_advanced_cycle",

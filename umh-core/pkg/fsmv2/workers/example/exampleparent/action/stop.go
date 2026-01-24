@@ -22,15 +22,10 @@ import (
 
 const StopActionName = "stop"
 
-// StopAction gracefully stops all children and cleans up resources
-// This is a stateless action - completely empty struct with no fields.
-// Dependencies will be injected via Execute() in Phase 2C when the Action interface is updated.
-type StopAction struct {
-	// COMPLETELY EMPTY - no dependencies
-}
+// StopAction gracefully stops all children and cleans up resources.
+type StopAction struct{}
 
-// Execute stops all children gracefully
-// Dependencies are injected via deps parameter, enabling full action functionality.
+// Execute stops all children gracefully.
 func (a *StopAction) Execute(ctx context.Context, depsAny any) error {
 	select {
 	case <-ctx.Done():

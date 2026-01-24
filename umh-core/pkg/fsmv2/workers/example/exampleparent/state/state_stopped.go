@@ -23,19 +23,8 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent/snapshot"
 )
 
-// StoppedWaitDuration is how long to wait in stopped state before transitioning to TryingToStart.
-//
-// EXAMPLE/TEST WORKER ONLY: This is declared as var (not const) to allow tests to override
-// the duration for fast test execution without real time delays.
-//
-// WARNING: Real production workers should NOT follow this pattern. Production code should use:
-//   - Dependency injection (pass duration via constructor or config struct)
-//   - Configuration objects that can be mocked in tests
-//   - Interface-based time abstractions
-//
-// Package-level mutable variables create global state that can cause test interference
-// and make code harder to reason about. This pattern is acceptable here only because
-// this is an example/test worker demonstrating FSM concepts, not production code.
+// StoppedWaitDuration is how long to wait before transitioning to TryingToStart.
+// Declared as var (not const) to allow test overrides. Production workers should use dependency injection instead.
 var StoppedWaitDuration = 5 * time.Second
 
 // StoppedState represents the initial state before any children are spawned.
@@ -52,15 +41,12 @@ func (s *StoppedState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, f
 		return s, fsmv2.SignalNeedsRemoval, nil
 	}
 
-	// Wait StoppedWaitDuration in stopped state before transitioning to starting.
-	// TimeInCurrentStateMs is copied from deps by worker via Metrics.Framework.
-	// Direct field access is required for CSE serializability - getter methods don't work.
+	// Wait StoppedWaitDuration before transitioning. Direct field access required for CSE serializability.
 	if snap.Desired.ShouldBeRunning() {
 		elapsed := time.Duration(snap.Observed.Metrics.Framework.TimeInCurrentStateMs) * time.Millisecond
 		if elapsed >= StoppedWaitDuration {
 			return &TryingToStartState{}, fsmv2.SignalNone, nil
 		}
-		// Still waiting - remain in stopped state
 	}
 
 	return s, fsmv2.SignalNone, nil

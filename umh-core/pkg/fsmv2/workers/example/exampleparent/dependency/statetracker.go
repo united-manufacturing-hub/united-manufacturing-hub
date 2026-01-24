@@ -21,8 +21,7 @@ import (
 	"github.com/benbjohnson/clock"
 )
 
-// StateTracker provides state transition time tracking as a tool.
-// This is injectable and testable, keeping dependencies as tools only.
+// StateTracker provides state transition time tracking.
 type StateTracker interface {
 	// RecordStateChange updates the entry time if state changed
 	RecordStateChange(newState string)

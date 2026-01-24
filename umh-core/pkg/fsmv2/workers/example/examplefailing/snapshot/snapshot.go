@@ -23,38 +23,22 @@ import (
 )
 
 // ExamplefailingDependencies interface to avoid import cycles.
-// Includes all methods needed by actions.
 type ExamplefailingDependencies interface {
 	deps.Dependencies
-	// GetShouldFail returns whether the worker should simulate failures.
 	GetShouldFail() bool
-	// IncrementAttempts increments and returns the current attempt count.
 	IncrementAttempts() int
-	// GetAttempts returns the current attempt count without incrementing.
 	GetAttempts() int
-	// ResetAttempts resets the attempt counter to zero.
 	ResetAttempts()
-	// GetMaxFailures returns the configured maximum number of failures before success.
 	GetMaxFailures() int
-	// SetConnected marks the worker as connected.
 	SetConnected(connected bool)
-	// IsConnected returns whether the worker is currently connected.
 	IsConnected() bool
-	// GetRestartAfterFailures returns the restart threshold (0 = no restart).
 	GetRestartAfterFailures() int
-	// GetFailureCycles returns the configured number of failure cycles.
 	GetFailureCycles() int
-	// GetCurrentCycle returns the current failure cycle (0-indexed).
 	GetCurrentCycle() int
-	// AllCyclesComplete returns true if all failure cycles have been completed.
 	AllCyclesComplete() bool
-	// AdvanceCycle advances to the next failure cycle and resets attempts.
 	AdvanceCycle() int
-	// IncrementTicksInConnected increments and returns ticks in Connected state.
 	IncrementTicksInConnected() int
-	// GetTicksInConnected returns the number of ticks in Connected state.
 	GetTicksInConnected() int
-	// ResetTicksInConnected resets the ticks counter to zero.
 	ResetTicksInConnected()
 }
 
@@ -66,14 +50,9 @@ type ExamplefailingSnapshot struct {
 }
 
 // ExamplefailingDesiredState represents the target configuration for the failing worker.
-// NOTE: Dependencies are NOT stored here - they belong in the Worker struct.
-// See fsmv2.DesiredState documentation for the architectural invariant.
+// Dependencies are NOT stored here - they belong in the Worker struct.
 type ExamplefailingDesiredState struct {
-
-	// ParentMappedState is the desired state derived from parent's ChildStartStates.
-	// When parent is in a state listed in ChildStartStates → "running"
-	// When parent is in any other state → "stopped"
-	// This field is injected by the supervisor via MappedParentStateProvider callback.
+	// Injected by supervisor via MappedParentStateProvider callback.
 	ParentMappedState string `json:"parent_mapped_state"`
 
 	config.BaseDesiredState // Provides ShutdownRequested + IsShutdownRequested() + SetShutdownRequested()
@@ -81,21 +60,11 @@ type ExamplefailingDesiredState struct {
 	ShouldFail bool `json:"ShouldFail"`
 }
 
-// ShouldBeRunning returns true if the failing worker should be in a running/connected state.
-// This is the positive assertion that should be checked before transitioning
-// from stopped to starting states.
-//
-// Children only run when:
-// 1. ShutdownRequested is false (not being shut down)
-// 2. ParentMappedState is config.DesiredStateRunning (parent wants children to run)
-//
-// Children wait for parent to reach TryingToStart before connecting.
+// ShouldBeRunning returns true if ShutdownRequested is false and parent wants children to run.
 func (s *ExamplefailingDesiredState) ShouldBeRunning() bool {
 	if s.ShutdownRequested {
 		return false
 	}
-	// Only run if parent explicitly wants us running via ChildStartStates
-	// Default to not running if ParentMappedState is empty or "stopped"
 	return s.ParentMappedState == config.DesiredStateRunning
 }
 
@@ -103,33 +72,29 @@ func (s *ExamplefailingDesiredState) IsShouldFail() bool {
 	return s.ShouldFail
 }
 
-// ExamplefailingObservedState represents the current state of the failing worker.
 type ExamplefailingObservedState struct {
 	CollectedAt time.Time `json:"collected_at"`
 
 	LastError error  `json:"last_error,omitempty"`
 	ID        string `json:"id"`
 
-	State            string `json:"state"` // Observed lifecycle state (e.g., "running_connected")
+	State            string `json:"state"`
 	ConnectionHealth string `json:"connection_health"`
 
 	ExamplefailingDesiredState `json:",inline"`
 
-	// LastActionResults contains the action history from the last collection cycle.
-	// This is supervisor-managed data: the supervisor auto-records action results
-	// via ActionExecutor callback and injects them into deps before CollectObservedState.
-	// Workers read deps.GetActionHistory() and assign here in CollectObservedState.
+	// Supervisor-managed: auto-recorded via ActionExecutor and injected into deps.
 	LastActionResults []deps.ActionResult `json:"last_action_results,omitempty"`
 
-	deps.MetricsEmbedder `json:",inline"` // Framework and worker metrics for Prometheus export
+	deps.MetricsEmbedder `json:",inline"`
 
 	ConnectAttempts       int `json:"connect_attempts"`
-	RestartAfterFailures  int `json:"restart_after_failures"` // Restart threshold from config
-	TicksInConnectedState int `json:"ticks_in_connected"`     // Ticks spent in Connected state
-	CurrentCycle          int `json:"current_cycle"`          // Current failure cycle (0-indexed)
-	TotalCycles           int `json:"total_cycles"`           // Total failure cycles configured
+	RestartAfterFailures  int `json:"restart_after_failures"`
+	TicksInConnectedState int `json:"ticks_in_connected"`
+	CurrentCycle          int `json:"current_cycle"`
+	TotalCycles           int `json:"total_cycles"`
 
-	AllCyclesComplete bool `json:"all_cycles_complete"` // True when all failure cycles done
+	AllCyclesComplete bool `json:"all_cycles_complete"`
 }
 
 func (o ExamplefailingObservedState) GetTimestamp() time.Time {
@@ -140,36 +105,25 @@ func (o ExamplefailingObservedState) GetObservedDesiredState() fsmv2.DesiredStat
 	return &o.ExamplefailingDesiredState
 }
 
-// SetState sets the FSM state name on this observed state.
-// Called by Collector when StateProvider callback is configured.
 func (o ExamplefailingObservedState) SetState(s string) fsmv2.ObservedState {
 	o.State = s
 
 	return o
 }
 
-// SetShutdownRequested sets the shutdown requested status on this observed state.
-// Called by Collector when ShutdownRequestedProvider callback is configured.
 func (o ExamplefailingObservedState) SetShutdownRequested(v bool) fsmv2.ObservedState {
 	o.ShutdownRequested = v
 
 	return o
 }
 
-// SetParentMappedState sets the parent's mapped state on this observed state.
-// Called by Collector when MappedParentStateProvider callback is configured.
-// Children can check if parent wants them running via StateMapping.
 func (o ExamplefailingObservedState) SetParentMappedState(state string) fsmv2.ObservedState {
 	o.ParentMappedState = state
 
 	return o
 }
 
-// IsStopRequired reports whether the child needs to stop.
-// This is a QUERY on injected data, not a signal emission.
-// It combines:
-//   - IsShutdownRequested() - explicit system shutdown
-//   - !ShouldBeRunning() - parent no longer wants child running
+// IsStopRequired reports whether shutdown is requested or parent wants child stopped.
 func (o ExamplefailingObservedState) IsStopRequired() bool {
 	return o.IsShutdownRequested() || !o.ShouldBeRunning()
 }

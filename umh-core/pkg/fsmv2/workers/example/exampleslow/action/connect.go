@@ -23,8 +23,7 @@ import (
 
 const ConnectActionName = "connect"
 
-// ConnectAction is a stateless action that attempts to establish a connection with a delay.
-// Configuration (delaySeconds) is read from dependencies, not struct fields.
+// ConnectAction attempts to establish a connection with a configurable delay.
 type ConnectAction struct{}
 
 func (a *ConnectAction) Execute(ctx context.Context, depsAny any) error {
@@ -47,7 +46,6 @@ func (a *ConnectAction) Execute(ctx context.Context, depsAny any) error {
 
 	logger.Info("Connect action completed")
 
-	// Mark as connected on success
 	deps.SetConnected(true)
 
 	return nil

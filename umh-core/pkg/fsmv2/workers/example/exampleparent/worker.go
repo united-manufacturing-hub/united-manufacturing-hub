@@ -50,7 +50,6 @@ func NewParentWorker(
 		return nil, errors.New("logger must not be nil")
 	}
 
-	// Set workerType if not already set (derive from snapshot type)
 	if identity.WorkerType == "" {
 		workerType, err := storage.DeriveWorkerType[snapshot.ExampleparentObservedState]()
 		if err != nil {
@@ -80,7 +79,6 @@ func (w *ParentWorker) CollectObservedState(ctx context.Context) (fsmv2.Observed
 	deps := w.GetDependencies()
 	tracker := deps.GetStateTracker()
 
-	// Load previous observed state to detect state changes
 	stateReader := deps.GetStateReader()
 	if stateReader != nil {
 		var previousObserved snapshot.ExampleparentObservedState
@@ -90,34 +88,25 @@ func (w *ParentWorker) CollectObservedState(ctx context.Context) (fsmv2.Observed
 			// Record state change - resets timer if state changed
 			tracker.RecordStateChange(previousObserved.State)
 		}
-		// If LoadObservedTyped fails or State is empty, this is the first tick - continue without calling RecordStateChange
 	}
 
 	observed := snapshot.ExampleparentObservedState{
 		ID:          w.identity.ID,
 		CollectedAt: time.Now(),
-		// MetricsEmbedder is embedded - zero value is valid
 	}
 
-	// Copy framework metrics from deps (set by supervisor before CollectObservedState)
-	// States access them via direct field access: snap.Observed.Metrics.Framework.TimeInCurrentStateMs
 	if fm := deps.GetFrameworkState(); fm != nil {
 		observed.Metrics.Framework = *fm
 	}
 
-	// Copy action history from deps (set by supervisor before CollectObservedState)
 	observed.LastActionResults = deps.GetActionHistory()
 
 	return observed, nil
 }
 
 // DeriveDesiredState determines what state the parent worker should be in.
-// This method must be PURE - it only uses the spec parameter, never dependencies.
-// Note: spec is interface{} for flexibility across different worker types (each has its own UserSpec).
-//
-// Uses ParseUserSpec helper for type-safe parsing.
+// Must be PURE - only uses the spec parameter, never dependencies.
 func (w *ParentWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
-	// Handle nil spec - return default state with no children
 	if spec == nil {
 		return &config.DesiredState{
 			BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
@@ -126,7 +115,6 @@ func (w *ParentWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState,
 		}, nil
 	}
 
-	// Use ParseUserSpec helper for type-safe parsing
 	parentSpec, err := config.ParseUserSpec[ParentUserSpec](spec)
 	if err != nil {
 		return nil, err
@@ -142,31 +130,20 @@ func (w *ParentWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState,
 		}, nil
 	}
 
-	// Create child specs using the new ChildStartStates approach
 	childrenSpecs := make([]config.ChildSpec, childrenCount)
 	childWorkerType := parentSpec.GetChildWorkerType()
 
 	for i := range childrenCount {
-		// Each child gets its own DEVICE_ID variable.
-		// Parent's variables (IP, PORT, etc.) will be merged in by the supervisor
-		// via config.Merge() in reconcileChildren(). Child variables override parent.
 		childVariables := config.VariableBundle{
 			User: map[string]any{
 				"DEVICE_ID": fmt.Sprintf("device-%d", i),
 			},
 		}
 
-		// Determine child config: use explicit ChildConfig if provided, otherwise use default template.
-		// Different child worker types to receive appropriate configuration.
 		var childConfig string
 		if parentSpec.ChildConfig != "" {
-			// Use the explicitly provided child config (e.g., for examplefailing workers)
 			childConfig = parentSpec.ChildConfig
 		} else {
-			// Build default config template that uses variables from both parent and child.
-			// Parent provides: IP, PORT (defined in parent's variables)
-			// Child provides: DEVICE_ID (defined above in childVariables)
-			// The supervisor merges these so children have access to all three.
 			childConfig = `address: {{ .IP }}:{{ .PORT }}
 device: {{ .DEVICE_ID }}`
 		}
@@ -178,7 +155,6 @@ device: {{ .DEVICE_ID }}`
 				Config:    childConfig,
 				Variables: childVariables,
 			},
-			// New approach: list parent states where children should run
 			ChildStartStates: []string{"TryingToStart", "Running"},
 		}
 	}
@@ -196,8 +172,6 @@ func (w *ParentWorker) GetInitialState() fsmv2.State[any, any] {
 }
 
 func init() {
-	// Register both worker and supervisor factories atomically.
-	// The worker type is derived from ExampleparentObservedState, ensuring consistency.
 	if err := factory.RegisterWorkerType[snapshot.ExampleparentObservedState, *snapshot.ExampleparentDesiredState](
 		func(id deps.Identity, logger *zap.SugaredLogger, stateReader deps.StateReader, _ map[string]any) fsmv2.Worker {
 			worker, _ := NewParentWorker(id, logger, stateReader)

@@ -33,19 +33,15 @@ func (s *TryingToStopState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Sign
 	snap := helpers.ConvertSnapshot[snapshot.ExampleparentObservedState, *snapshot.ExampleparentDesiredState](snapAny)
 	snap.Observed.State = config.MakeState(config.PrefixTryingToStop, "children")
 
-	// First, ensure we have a valid ID (StopAction may need to run)
 	if snap.Observed.ID == "" {
 		return s, fsmv2.SignalNone, &action.StopAction{}
 	}
 
-	// Wait for all children to be stopped (healthy == 0, unhealthy == 0).
-	// ChildStartStates ensures children have desired state = "stopped".
-	// We only transition when all children have stopped.
+	// All children must be stopped before transitioning.
 	if snap.Observed.ChildrenHealthy == 0 && snap.Observed.ChildrenUnhealthy == 0 {
 		return &StoppedState{}, fsmv2.SignalNone, nil
 	}
 
-	// Children not stopped yet - stay in this state
 	return s, fsmv2.SignalNone, nil
 }
 

@@ -35,15 +35,11 @@ func (s *TryingToConnectState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.S
 		return &TryingToStopState{}, fsmv2.SignalNone, nil
 	}
 
-	// Check for restart threshold - emit SignalNeedsRestart if we've hit the limit
-	// This triggers a full worker restart (graceful shutdown → reset → restart)
 	if snap.Observed.RestartAfterFailures > 0 &&
 		snap.Observed.ConnectAttempts >= snap.Observed.RestartAfterFailures {
 		return s, fsmv2.SignalNeedsRestart, nil
 	}
 
-	// Failing worker is "connected" when observed state shows healthy connection
-	// After ConnectAction executes, we can transition to Connected
 	if snap.Observed.ConnectionHealth == "healthy" {
 		return &ConnectedState{}, fsmv2.SignalNone, nil
 	}

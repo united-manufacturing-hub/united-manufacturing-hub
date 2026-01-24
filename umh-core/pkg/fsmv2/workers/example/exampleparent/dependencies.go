@@ -21,7 +21,6 @@ import (
 )
 
 // ParentDependencies provides access to tools needed by parent worker actions.
-// Dependencies should only contain tools (interfaces), not state primitives.
 type ParentDependencies struct {
 	*deps.BaseDependencies
 	stateTracker dependency.StateTracker

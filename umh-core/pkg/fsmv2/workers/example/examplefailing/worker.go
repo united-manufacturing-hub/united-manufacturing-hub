@@ -56,7 +56,6 @@ func NewFailingWorker(
 		return nil, errors.New("logger must not be nil")
 	}
 
-	// Set workerType if not already set (derive from snapshot type)
 	if identity.WorkerType == "" {
 		workerType, err := storage.DeriveWorkerType[snapshot.ExamplefailingObservedState]()
 		if err != nil {
@@ -108,38 +107,30 @@ func (w *FailingWorker) CollectObservedState(ctx context.Context) (fsmv2.Observe
 		CurrentCycle:          deps.GetCurrentCycle(),
 		TotalCycles:           deps.GetFailureCycles(),
 	}
-	// Populate the embedded DesiredState's ShouldFail field
 	observed.ShouldFail = deps.GetShouldFail()
 
-	// Copy framework metrics from deps (set by supervisor before CollectObservedState)
 	if fm := deps.GetFrameworkState(); fm != nil {
 		observed.Metrics.Framework = *fm
 	}
 
-	// Copy action history from deps (set by supervisor before CollectObservedState)
 	observed.LastActionResults = deps.GetActionHistory()
 
 	return observed, nil
 }
 
 // DeriveDesiredState determines what state the failing worker should be in.
-// Uses the DeriveLeafState helper for type-safe parsing and boilerplate reduction.
 func (w *FailingWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
 	desired, err := fsmv2types.DeriveLeafState[FailingUserSpec](spec)
 	if err != nil {
 		return nil, err
 	}
 
-	// Update dependencies with configuration from spec
-	// This is called as a side effect after deriving the desired state,
-	// but doesn't violate PURE_DERIVE because the helper function does the access
 	w.updateDependenciesFromSpec(spec)
 
 	return &desired, nil
 }
 
 // updateDependenciesFromSpec configures dependencies based on the user spec.
-// This is separate from DeriveDesiredState to avoid PURE_DERIVE violations.
 func (w *FailingWorker) updateDependenciesFromSpec(spec interface{}) {
 	if spec == nil {
 		return
@@ -163,9 +154,6 @@ func (w *FailingWorker) GetInitialState() fsmv2.State[any, any] {
 }
 
 func init() {
-	// Register both worker and supervisor factories atomically.
-	// The worker type is derived from ExamplefailingObservedState, ensuring consistency.
-	// NOTE: This fixes a previous key mismatch where supervisor was "examplefailing" but worker was "failing".
 	if err := factory.RegisterWorkerType[snapshot.ExamplefailingObservedState, *snapshot.ExamplefailingDesiredState](
 		func(id deps.Identity, logger *zap.SugaredLogger, stateReader deps.StateReader, _ map[string]any) fsmv2.Worker {
 			pool := &DefaultConnectionPool{}

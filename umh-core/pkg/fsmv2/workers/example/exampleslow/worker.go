@@ -53,7 +53,6 @@ func NewExampleslowWorker(
 		return nil, errors.New("logger must not be nil")
 	}
 
-	// Set workerType if not already set (derive from snapshot type)
 	if identity.WorkerType == "" {
 		workerType, err := storage.DeriveWorkerType[snapshot.ExampleslowObservedState]()
 		if err != nil {
@@ -79,7 +78,6 @@ func (w *ExampleslowWorker) CollectObservedState(ctx context.Context) (fsmv2.Obs
 	default:
 	}
 
-	// Get connection health from dependencies (updated by ConnectAction/DisconnectAction)
 	deps := w.GetDependencies()
 
 	connectionHealth := "no connection"
@@ -94,12 +92,10 @@ func (w *ExampleslowWorker) CollectObservedState(ctx context.Context) (fsmv2.Obs
 		ConnectionHealth: connectionHealth,
 	}
 
-	// Copy framework metrics from deps (set by supervisor before CollectObservedState)
 	if fm := deps.GetFrameworkState(); fm != nil {
 		observed.Metrics.Framework = *fm
 	}
 
-	// Copy action history from deps (set by supervisor before CollectObservedState)
 	observed.LastActionResults = deps.GetActionHistory()
 
 	return observed, nil
@@ -111,14 +107,12 @@ func (w *ExampleslowWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredS
 		return nil, err
 	}
 
-	// Update dependencies with configuration from spec
 	w.updateDependenciesFromSpec(spec)
 
 	return &desired, nil
 }
 
-// updateDependenciesFromSpec configures dependencies based on the user spec.
-// This is separate from DeriveDesiredState to avoid PURE_DERIVE violations.
+// updateDependenciesFromSpec configures dependencies based on the user spec (separate to avoid PURE_DERIVE violations).
 func (w *ExampleslowWorker) updateDependenciesFromSpec(spec interface{}) {
 	if spec == nil {
 		return
@@ -138,9 +132,6 @@ func (w *ExampleslowWorker) GetInitialState() fsmv2.State[any, any] {
 }
 
 func init() {
-	// Register both worker and supervisor factories atomically.
-	// The worker type is derived from ExampleslowObservedState, ensuring consistency.
-	// NOTE: This fixes a previous key mismatch where supervisor was "exampleslow" but worker was "slow".
 	if err := factory.RegisterWorkerType[snapshot.ExampleslowObservedState, *snapshot.ExampleslowDesiredState](
 		func(id deps.Identity, logger *zap.SugaredLogger, stateReader deps.StateReader, _ map[string]any) fsmv2.Worker {
 			pool := &DefaultConnectionPool{}

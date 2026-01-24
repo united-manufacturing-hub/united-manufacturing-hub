@@ -18,8 +18,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 )
 
-// ExamplepanicUserSpec defines the typed configuration for the panic worker.
-// This is parsed from the UserSpec.Config YAML/JSON string.
+// ExamplepanicUserSpec is the typed configuration for the panic worker.
 type ExamplepanicUserSpec struct {
 	config.BaseUserSpec // Provides State field with GetState() defaulting to "running"
 	ShouldRun           bool `yaml:"should_run"`

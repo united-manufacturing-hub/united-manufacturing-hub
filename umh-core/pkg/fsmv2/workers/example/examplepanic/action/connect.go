@@ -22,8 +22,6 @@ import (
 
 const ConnectActionName = "connect"
 
-// ConnectAction is a stateless action that attempts to establish a connection.
-// Configuration (shouldPanic) is read from dependencies, not struct fields.
 type ConnectAction struct{}
 
 func (a *ConnectAction) Execute(ctx context.Context, depsAny any) error {
@@ -43,7 +41,6 @@ func (a *ConnectAction) Execute(ctx context.Context, depsAny any) error {
 
 	logger.Info("Attempting to connect (normal behavior)")
 
-	// Mark as connected on success
 	deps.SetConnected(true)
 
 	return nil

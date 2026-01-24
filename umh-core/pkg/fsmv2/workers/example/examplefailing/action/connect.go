@@ -48,7 +48,6 @@ func (a *ConnectAction) Execute(ctx context.Context, depsAny any) error {
 	deps := depsAny.(snapshot.ExamplefailingDependencies)
 	logger := deps.GetLogger()
 
-	// Check if we should simulate failure (and we still have cycles to complete)
 	if deps.GetShouldFail() && !deps.AllCyclesComplete() {
 		attempts := deps.IncrementAttempts()
 		maxFailures := deps.GetMaxFailures()
@@ -82,14 +81,14 @@ func (a *ConnectAction) Execute(ctx context.Context, depsAny any) error {
 			"more_cycles_remaining", currentCycle+1 < totalCycles,
 		)
 		deps.SetConnected(true)
-		deps.ResetTicksInConnected() // Reset ticks counter for the Connected state
+		deps.ResetTicksInConnected()
 
 		return nil
 	}
 
 	logger.Info("connect_succeeded")
 	deps.SetConnected(true)
-	deps.ResetTicksInConnected() // Reset ticks counter for the Connected state
+	deps.ResetTicksInConnected()
 
 	return nil
 }

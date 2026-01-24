@@ -38,7 +38,6 @@ func (s *TryingToConnectState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.S
 		return &ConnectedState{}, fsmv2.SignalNone, nil
 	}
 
-	// Action is stateless - configuration is read from dependencies
 	return s, fsmv2.SignalNone, &action.ConnectAction{}
 }
 

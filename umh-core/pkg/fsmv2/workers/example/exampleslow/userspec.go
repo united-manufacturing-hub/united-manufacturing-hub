@@ -19,12 +19,7 @@ import (
 )
 
 // ExampleslowUserSpec defines the typed configuration for the slow worker.
-// This is parsed from the UserSpec.Config YAML/JSON string.
-//
-// Note: Do NOT add ShouldRun or similar lifecycle fields here.
-// Lifecycle is controlled by config.BaseUserSpec.State ("running"/"stopped")
-// and BaseDesiredState.ShutdownRequested.
 type ExampleslowUserSpec struct {
-	config.BaseUserSpec // Provides State field with GetState() defaulting to "running"
+	config.BaseUserSpec
 	DelaySeconds        int `yaml:"delaySeconds"`
 }

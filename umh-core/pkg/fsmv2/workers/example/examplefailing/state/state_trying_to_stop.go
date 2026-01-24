@@ -31,7 +31,6 @@ func (s *TryingToStopState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Sign
 	snap := helpers.ConvertSnapshot[snapshot.ExamplefailingObservedState, *snapshot.ExamplefailingDesiredState](snapAny)
 	snap.Observed.State = config.MakeState(config.PrefixTryingToStop, "connection")
 
-	// If we're fully disconnected, transition to stopped
 	if snap.Observed.ConnectionHealth == "no connection" {
 		return &StoppedState{}, fsmv2.SignalNone, nil
 	}

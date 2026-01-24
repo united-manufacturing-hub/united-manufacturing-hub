@@ -22,15 +22,10 @@ import (
 
 const StartActionName = "start"
 
-// StartAction loads configuration and spawns children
-// This is a stateless action - completely empty struct with no fields.
-// Dependencies will be injected via Execute() in Phase 2C when the Action interface is updated.
-type StartAction struct {
-	// COMPLETELY EMPTY - no dependencies
-}
+// StartAction loads configuration and spawns children.
+type StartAction struct{}
 
-// Execute loads config and returns ChildrenSpecs for spawning
-// Dependencies are injected via deps parameter, enabling full action functionality.
+// Execute loads config and returns ChildrenSpecs for spawning.
 func (a *StartAction) Execute(ctx context.Context, depsAny any) error {
 	select {
 	case <-ctx.Done():
