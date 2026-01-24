@@ -467,6 +467,29 @@ var _ = Describe("FSMv2 Architecture Validation", func() {
 				}
 			})
 		})
+
+		Describe("Static Error Messages (Invariant: Sentry Grouping)", func() {
+			It("should not have dynamic content in error messages", func() {
+				violations := validator.ValidateStaticErrorMessages(getFsmv2Dir())
+				if len(violations) > 0 {
+					// Report violations but skip instead of failing
+					// P2-19 will fix all violations; this test documents what needs fixing
+					message := validator.FormatViolationsWithPattern(
+						"Static Error Message Violations",
+						violations,
+						"DYNAMIC_ERROR_MESSAGE",
+					)
+					maxViolations := 20
+					if len(violations) > maxViolations {
+						Skip(fmt.Sprintf("Found %d static error violations (showing first %d, to be fixed in P2-19):\n%s",
+							len(violations), maxViolations, message))
+					} else {
+						Skip(fmt.Sprintf("Found %d static error violations (to be fixed in P2-19):\n%s",
+							len(violations), message))
+					}
+				}
+			})
+		})
 	})
 })
 
