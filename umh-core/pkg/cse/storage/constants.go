@@ -79,18 +79,14 @@ const (
 // TRADE-OFF: Less flexible than registry, but we don't need flexibility here.
 //            CSE metadata conventions are stable and don't vary per worker type.
 
-// Identity CSE fields (immutable, created once)
-// WARNING: This slice is exported for read-only access. DO NOT MODIFY.
-// Modifying this slice will break CSE metadata conventions across the system.
+// IdentityCSEFields contains CSE fields for immutable identity records.
 var IdentityCSEFields = []string{
 	FieldSyncID,    // Global sync version for delta queries
 	FieldVersion,   // Always 1 for identity (never changes)
 	FieldCreatedAt, // Timestamp of identity creation
 }
 
-// Desired CSE fields (user intent, versioned for optimistic locking)
-// WARNING: This slice is exported for read-only access. DO NOT MODIFY.
-// Modifying this slice will break CSE metadata conventions across the system.
+// DesiredCSEFields contains CSE fields for user intent records with optimistic locking.
 var DesiredCSEFields = []string{
 	FieldSyncID,    // Global sync version
 	FieldVersion,   // Increments on each update (optimistic locking)
@@ -98,10 +94,8 @@ var DesiredCSEFields = []string{
 	FieldUpdatedAt, // Timestamp of last save
 }
 
-// Observed CSE fields (system reality, frequently updated)
-// WARNING: This slice is exported for read-only access. DO NOT MODIFY.
-// Modifying this slice will break CSE metadata conventions across the system.
-// NOTE: collected_at is NOT a CSE field - it's a business field set by FSM v2 workers.
+// ObservedCSEFields contains CSE fields for system reality records.
+// collected_at is a business field set by FSM v2 workers, not a CSE field.
 var ObservedCSEFields = []string{
 	FieldSyncID,    // Global sync version
 	FieldVersion,   // Increments on each update
@@ -109,8 +103,7 @@ var ObservedCSEFields = []string{
 	FieldUpdatedAt, // Timestamp of last observation
 }
 
-// getCSEFields returns the appropriate CSE fields for a given role.
-// This replaces registry lookup with compile-time constant selection.
+// getCSEFields returns the CSE fields for a given role.
 func getCSEFields(role string) []string {
 	switch role {
 	case RoleIdentity:

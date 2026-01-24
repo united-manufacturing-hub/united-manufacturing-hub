@@ -206,7 +206,6 @@ func (ts *TriangularStore) SaveIdentity(ctx context.Context, workerType string, 
 //   - persistence.Document: Identity document with CSE metadata
 //   - error: ErrNotFound if worker doesn't exist
 func (ts *TriangularStore) LoadIdentity(ctx context.Context, workerType string, id string) (persistence.Document, error) {
-	// Collection name follows convention: {workerType}_identity
 	collectionName := workerType + "_identity"
 
 	doc, err := ts.store.Get(ctx, collectionName, id)
@@ -314,7 +313,6 @@ func (ts *TriangularStore) LoadDesired(ctx context.Context, workerType string, i
 //	var dest ParentDesiredState
 //	err := ts.LoadDesiredTyped(ctx, "parent", "parent-001", &dest)
 func (ts *TriangularStore) LoadDesiredTyped(ctx context.Context, workerType string, id string, dest interface{}) error {
-	// Guard against nil or non-pointer dest to prevent reflect panics
 	if dest == nil {
 		return errors.New("dest must be non-nil pointer, got nil")
 	}
@@ -329,14 +327,12 @@ func (ts *TriangularStore) LoadDesiredTyped(ctx context.Context, workerType stri
 		return err
 	}
 
-	// If result is already the correct type, copy it
 	if reflect.TypeOf(result) == reflect.TypeOf(dest).Elem() {
 		reflect.ValueOf(dest).Elem().Set(reflect.ValueOf(result))
 
 		return nil
 	}
 
-	// Otherwise, deserialize Document to dest
 	doc, ok := result.(persistence.Document)
 	if !ok {
 		return fmt.Errorf("LoadDesired returned %T, cannot deserialize", result)
@@ -390,17 +386,14 @@ func formatValueForLog(v interface{}) interface{} {
 func (ts *TriangularStore) getChangedFieldsWithValues(current, new persistence.Document) []FieldChange {
 	var changes []FieldChange
 
-	// Fields added or modified
-	// Note: We only track fields present in 'new' because CSE never removes fields.
-	// Fields missing from 'new' retain their existing values in the store.
+	// CSE never removes fields - fields missing from 'new' retain existing values
 	for k, newVal := range new {
 		if diffExcludedFields[k] {
-			continue // Skip timestamp fields that change every tick
+			continue
 		}
 
 		oldVal, exists := current[k]
 		if !exists {
-			// Field is new (added)
 			changes = append(changes, FieldChange{
 				Field:      k,
 				ChangeType: "added",
@@ -408,7 +401,6 @@ func (ts *TriangularStore) getChangedFieldsWithValues(current, new persistence.D
 				New:        formatValueForLog(newVal),
 			})
 		} else if !reflect.DeepEqual(oldVal, newVal) {
-			// Field exists but value changed (modified)
 			changes = append(changes, FieldChange{
 				Field:      k,
 				ChangeType: "modified",
@@ -463,13 +455,11 @@ func (ts *TriangularStore) getChangedFieldsWithValues(current, new persistence.D
 //   - changed: true if data was written to database, false if write was skipped
 //   - err: non-nil if operation failed (changed is always false when err != nil)
 func (ts *TriangularStore) SaveObserved(ctx context.Context, workerType string, id string, observed interface{}) (changed bool, err error) {
-	// Convert observed to Document if needed
 	observedDoc, err := ts.toDocument(observed)
 	if err != nil {
 		return false, fmt.Errorf("failed to convert observed to document: %w", err)
 	}
 
-	// Ensure id field is set
 	observedDoc["id"] = id
 
 	changed, _, err = ts.saveWithDelta(ctx, workerType, id, observedDoc, ObservedSaveOptions)
@@ -520,7 +510,6 @@ func (ts *TriangularStore) LoadObserved(ctx context.Context, workerType string, 
 //	var dest ParentObservedState
 //	err := ts.LoadObservedTyped(ctx, "parent", "parent-001", &dest)
 func (ts *TriangularStore) LoadObservedTyped(ctx context.Context, workerType string, id string, dest interface{}) error {
-	// Guard against nil or non-pointer dest to prevent reflect panics
 	if dest == nil {
 		return errors.New("dest must be non-nil pointer, got nil")
 	}
@@ -535,14 +524,12 @@ func (ts *TriangularStore) LoadObservedTyped(ctx context.Context, workerType str
 		return err
 	}
 
-	// If result is already the correct type, copy it
 	if reflect.TypeOf(result) == reflect.TypeOf(dest).Elem() {
 		reflect.ValueOf(dest).Elem().Set(reflect.ValueOf(result))
 
 		return nil
 	}
 
-	// Otherwise, deserialize Document to dest
 	doc, ok := result.(persistence.Document)
 	if !ok {
 		return fmt.Errorf("LoadObserved returned %T, cannot deserialize", result)
@@ -585,7 +572,7 @@ func (ts *TriangularStore) performDeltaCheck(
 	role string,
 ) (hasChanges bool, changes []FieldChange, diff *Diff) {
 	if currentDoc == nil {
-		return true, nil, nil // New document = changes
+		return true, nil, nil
 	}
 
 	cseFields := getCSEFields(role)
@@ -686,12 +673,10 @@ func (ts *TriangularStore) LoadSnapshot(ctx context.Context, workerType string, 
 
 	ts.cacheMutex.RUnlock()
 
-	// Collection names follow convention: {workerType}_{role}
 	identityCollectionName := workerType + "_identity"
 	desiredCollectionName := workerType + "_desired"
 	observedCollectionName := workerType + "_observed"
 
-	// Use transaction for atomic read
 	tx, err := ts.store.BeginTx(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to begin transaction: %w", err)
@@ -699,7 +684,6 @@ func (ts *TriangularStore) LoadSnapshot(ctx context.Context, workerType string, 
 
 	defer func() { _ = tx.Rollback() }()
 
-	// Load all three parts
 	identity, err := tx.Get(ctx, identityCollectionName, id)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load identity: %w", err)
@@ -725,8 +709,7 @@ func (ts *TriangularStore) LoadSnapshot(ctx context.Context, workerType string, 
 		Observed: observed,
 	}
 
-	// Capture syncID AFTER loading data to avoid TOCTOU race.
-	// If we use the syncID captured before loading, it may be stale by now.
+	// Capture syncID AFTER loading to avoid TOCTOU race
 	syncIDAtCacheTime := ts.syncID.Load()
 
 	ts.cacheMutex.Lock()
@@ -736,7 +719,6 @@ func (ts *TriangularStore) LoadSnapshot(ctx context.Context, workerType string, 
 	}
 	ts.cacheMutex.Unlock()
 
-	// Return a deep copy to prevent callers from corrupting the cache
 	return cloneSnapshot(snapshot), nil
 }
 
@@ -757,8 +739,8 @@ func (ts *TriangularStore) Close() error {
 	return ts.store.Close(ctx)
 }
 
-// cloneSnapshot creates a deep copy of a Snapshot to prevent cache corruption.
-// Callers may mutate returned snapshots, so we must return copies, not references.
+// cloneSnapshot creates a deep copy of a Snapshot.
+// Callers may mutate returned snapshots, so we return copies, not references.
 func cloneSnapshot(s *Snapshot) *Snapshot {
 	if s == nil {
 		return nil
@@ -795,26 +777,21 @@ func deepCopyObserved(observed interface{}) interface{} {
 		return nil
 	}
 
-	// If it's a Document, use the document copy function
 	if doc, ok := observed.(persistence.Document); ok {
 		return deepCopyDocument(doc)
 	}
 
-	// For typed structs, use JSON round-trip for deep copy
-	// This handles any nested fields properly
+	// JSON round-trip for typed structs handles nested fields properly
 	data, err := json.Marshal(observed)
 	if err != nil {
-		// If marshal fails, return original (shouldn't happen for valid structs)
 		return observed
 	}
 
-	// Create a new instance of the same type
 	newVal := reflect.New(reflect.TypeOf(observed)).Interface()
 	if err := json.Unmarshal(data, newVal); err != nil {
 		return observed
 	}
 
-	// Return the value, not the pointer
 	return reflect.ValueOf(newVal).Elem().Interface()
 }
 
@@ -837,18 +814,15 @@ func (ts *TriangularStore) toDocument(v interface{}) (persistence.Document, erro
 		return nil, errors.New("cannot convert nil to document")
 	}
 
-	// Already a Document
 	if doc, ok := v.(persistence.Document); ok {
 		return doc, nil
 	}
 
-	// map[string]interface{}
 	if m, ok := v.(map[string]interface{}); ok {
 		return persistence.Document(m), nil
 	}
 
-	// For structs and other types, use JSON marshaling
-	// This handles most Go types including time.Time, nested structs, etc.
+	// JSON marshaling handles time.Time, nested structs, etc.
 	jsonBytes, err := json.Marshal(v)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal to JSON: %w", err)
@@ -859,7 +833,6 @@ func (ts *TriangularStore) toDocument(v interface{}) (persistence.Document, erro
 		return nil, fmt.Errorf("failed to unmarshal JSON to document: %w", err)
 	}
 
-	// Ensure the document is not nil (can happen if JSON was "null")
 	if doc == nil {
 		return nil, errors.New("unmarshaled document is nil")
 	}
@@ -894,8 +867,6 @@ func documentToStruct(doc persistence.Document, dest interface{}) error {
 		return fmt.Errorf("dest must be pointer, got %s", destVal.Kind())
 	}
 
-	// Marshal Document to JSON, then unmarshal to typed struct
-	// This handles time.Time, nested structs, and complex types properly
 	jsonBytes, err := json.Marshal(doc)
 	if err != nil {
 		return fmt.Errorf("failed to marshal document to JSON: %w", err)
@@ -936,13 +907,11 @@ func LoadDesiredTyped[T any](ts *TriangularStore, ctx context.Context, id string
 		return result, fmt.Errorf("failed to derive collection name: %w", err)
 	}
 
-	// Load from persistence
 	doc, err := ts.store.Get(ctx, collectionName, id)
 	if err != nil {
 		return result, err
 	}
 
-	// Unmarshal Document to typed struct
 	if err := documentToStruct(doc, &result); err != nil {
 		return result, fmt.Errorf("failed to unmarshal to type %T: %w", result, err)
 	}
@@ -990,7 +959,6 @@ func LoadDesiredTyped[T any](ts *TriangularStore, ctx context.Context, id string
 //	desired := ParentDesiredState{Name: "Worker1", Command: "start"}
 //	changed, err := storage.SaveDesiredTyped[ParentDesiredState](ts, ctx, "parent-001", desired)
 func SaveDesiredTyped[T any](ts *TriangularStore, ctx context.Context, id string, desired T) (changed bool, err error) {
-	// Marshal struct to Document
 	bytes, err := json.Marshal(desired)
 	if err != nil {
 		return false, fmt.Errorf("failed to marshal desired state: %w", err)
@@ -1001,7 +969,6 @@ func SaveDesiredTyped[T any](ts *TriangularStore, ctx context.Context, id string
 		return false, fmt.Errorf("failed to unmarshal to Document: %w", err)
 	}
 
-	// Add ID if not present
 	if _, ok := desiredDoc["id"]; !ok {
 		desiredDoc["id"] = id
 	}
@@ -1044,13 +1011,11 @@ func LoadObservedTyped[T any](ts *TriangularStore, ctx context.Context, id strin
 		return result, fmt.Errorf("failed to derive collection name: %w", err)
 	}
 
-	// Load from persistence
 	doc, err := ts.store.Get(ctx, collectionName, id)
 	if err != nil {
 		return result, err
 	}
 
-	// Use documentToStruct helper for deserialization
 	if err := documentToStruct(doc, &result); err != nil {
 		return result, fmt.Errorf("failed to unmarshal to type %T: %w", result, err)
 	}
@@ -1091,7 +1056,6 @@ func LoadObservedTyped[T any](ts *TriangularStore, ctx context.Context, id strin
 //	changed, err := storage.SaveObservedTyped[ParentObservedState](ts, ctx, "parent-001", observed)
 //	// changed=true if this is a new write or data changed, false if identical to previous
 func SaveObservedTyped[T any](ts *TriangularStore, ctx context.Context, id string, observed T) (bool, error) {
-	// Marshal struct to Document
 	observedDoc := make(persistence.Document)
 
 	bytes, err := json.Marshal(observed)
@@ -1103,12 +1067,10 @@ func SaveObservedTyped[T any](ts *TriangularStore, ctx context.Context, id strin
 		return false, fmt.Errorf("failed to unmarshal to Document: %w", err)
 	}
 
-	// Add ID if not present (convenience)
 	if _, ok := observedDoc["id"]; !ok {
 		observedDoc["id"] = id
 	}
 
-	// Use unified write path with observed-specific options
 	workerType, err := DeriveWorkerType[T]()
 	if err != nil {
 		return false, fmt.Errorf("failed to derive worker type: %w", err)
@@ -1120,9 +1082,7 @@ func SaveObservedTyped[T any](ts *TriangularStore, ctx context.Context, id strin
 }
 
 func DeriveWorkerType[T any]() (string, error) {
-	// Use TypeOf on interface to avoid nil pointer issues with pointer types
 	t := reflect.TypeOf((*T)(nil)).Elem()
-	// Handle pointer types by getting the element type
 	if t.Kind() == reflect.Ptr {
 		t = t.Elem()
 	}
@@ -1215,7 +1175,6 @@ func DeriveCollectionName[T any](role string) (string, error) {
 func (ts *TriangularStore) GetDeltas(ctx context.Context, sub Subscription) (DeltasResponse, error) {
 	currentSyncID := ts.syncID.Load()
 
-	// If client is at current position, no changes needed
 	if sub.LastSyncID >= currentSyncID {
 		return DeltasResponse{
 			Deltas:       []Delta{},
@@ -1224,7 +1183,6 @@ func (ts *TriangularStore) GetDeltas(ctx context.Context, sub Subscription) (Del
 		}, nil
 	}
 
-	// Query delta store for changes since client's position
 	const deltaLimit = 100
 
 	if ts.deltaStore != nil {
@@ -1234,7 +1192,6 @@ func (ts *TriangularStore) GetDeltas(ctx context.Context, sub Subscription) (Del
 				"error", err,
 				"lastSyncID", sub.LastSyncID)
 		} else if len(entries) > 0 {
-			// Convert DeltaEntry to Delta
 			deltas := make([]Delta, 0, len(entries))
 			for _, entry := range entries {
 				deltas = append(deltas, Delta{
@@ -1255,7 +1212,6 @@ func (ts *TriangularStore) GetDeltas(ctx context.Context, sub Subscription) (Del
 		}
 	}
 
-	// Fallback to bootstrap if no deltas available
 	bootstrap, err := ts.buildBootstrap(ctx, currentSyncID)
 	if err != nil {
 		return DeltasResponse{}, fmt.Errorf("failed to build bootstrap: %w", err)
@@ -1273,7 +1229,6 @@ func (ts *TriangularStore) GetDeltas(ctx context.Context, sub Subscription) (Del
 func (ts *TriangularStore) buildBootstrap(ctx context.Context, atSyncID int64) (*BootstrapData, error) {
 	workers := make([]WorkerSnapshot, 0)
 
-	// Get a copy of known worker types to avoid holding the lock during DB operations
 	ts.knownWorkerTypesMu.RLock()
 
 	workerTypes := make([]string, 0, len(ts.knownWorkerTypes))
@@ -1283,32 +1238,25 @@ func (ts *TriangularStore) buildBootstrap(ctx context.Context, atSyncID int64) (
 
 	ts.knownWorkerTypesMu.RUnlock()
 
-	// Iterate over all known worker types
 	for _, workerType := range workerTypes {
-		// Query identity collection to get all worker IDs for this type
 		identityCollection := workerType + "_identity"
 
 		identityDocs, err := ts.store.Find(ctx, identityCollection, persistence.Query{})
 		if err != nil {
-			// Collection may not exist or be empty - skip silently
 			continue
 		}
 
-		// Build snapshot for each worker
 		for _, identityDoc := range identityDocs {
 			id, ok := identityDoc["id"].(string)
 			if !ok {
-				continue // Skip invalid documents
-			}
-
-			// Load the full snapshot (includes identity, desired, observed)
-			snapshot, err := ts.LoadSnapshot(ctx, workerType, id)
-			if err != nil {
-				// Skip workers that can't be loaded
 				continue
 			}
 
-			// Convert Observed to persistence.Document (may be nil or interface{})
+			snapshot, err := ts.LoadSnapshot(ctx, workerType, id)
+			if err != nil {
+				continue
+			}
+
 			var observedDoc persistence.Document
 			if snapshot.Observed != nil {
 				if doc, ok := snapshot.Observed.(persistence.Document); ok {
@@ -1333,8 +1281,7 @@ func (ts *TriangularStore) buildBootstrap(ctx context.Context, atSyncID int64) (
 	}, nil
 }
 
-// GetLatestSyncID returns the current sync_id.
-// This can be used by clients to establish their initial sync position.
+// GetLatestSyncID returns the current sync_id for clients to establish initial sync position.
 func (ts *TriangularStore) GetLatestSyncID(ctx context.Context) (int64, error) {
 	return ts.syncID.Load(), nil
 }

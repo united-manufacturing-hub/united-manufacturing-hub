@@ -64,7 +64,6 @@ func computeDiff(oldDoc, newDoc persistence.Document) *Diff {
 		Removed:  []string{},
 	}
 
-	// Find added and modified fields
 	for key, newVal := range newDoc {
 		if oldVal, exists := oldDoc[key]; !exists {
 			diff.Added[key] = newVal
@@ -73,7 +72,6 @@ func computeDiff(oldDoc, newDoc persistence.Document) *Diff {
 		}
 	}
 
-	// Find removed fields
 	for key := range oldDoc {
 		if _, exists := newDoc[key]; !exists {
 			diff.Removed = append(diff.Removed, key)
