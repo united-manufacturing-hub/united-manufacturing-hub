@@ -26,7 +26,6 @@ import (
 )
 
 // DeltaCollectionName is the single unified collection for all deltas.
-// Using a single collection makes "get all deltas since X" trivial.
 const DeltaCollectionName = "_deltas"
 
 // DeltaStore persists deltas using the existing persistence.Store.
@@ -55,18 +54,13 @@ func NewDeltaStore(store persistence.Store) *DeltaStore {
 }
 
 // Append adds a delta to persistent storage.
-// Uses: store.Insert(ctx, collection, doc)
-//
-// All deltas are stored in a single unified collection (_deltas).
-// SyncID is used as the document ID for efficient querying.
 func (ds *DeltaStore) Append(ctx context.Context, entry DeltaEntry) error {
 	if ds.store == nil {
-		return nil // No-op if store not configured
+		return nil
 	}
 
-	// Convert DeltaEntry to Document for persistence
 	doc := persistence.Document{
-		"id":          strconv.FormatInt(entry.SyncID, 10), // Use SyncID as document ID
+		"id":          strconv.FormatInt(entry.SyncID, 10),
 		"sync_id":     entry.SyncID,
 		"worker_type": entry.WorkerType,
 		"worker_id":   entry.ID,
@@ -74,7 +68,6 @@ func (ds *DeltaStore) Append(ctx context.Context, entry DeltaEntry) error {
 		"timestamp":   entry.Timestamp.UnixMilli(),
 	}
 
-	// Serialize Changes (Diff) to JSON for storage
 	if entry.Changes != nil {
 		changesJSON, err := json.Marshal(entry.Changes)
 		if err != nil {
@@ -93,25 +86,19 @@ func (ds *DeltaStore) Append(ctx context.Context, entry DeltaEntry) error {
 }
 
 // GetSince returns deltas for a specific worker type and role since sinceSyncID.
-// Uses the unified delta collection with filtering.
-//
-// Returns deltas ordered by sync_id ascending.
 func (ds *DeltaStore) GetSince(ctx context.Context, workerType, role string, sinceSyncID int64, limit int) ([]DeltaEntry, error) {
 	if ds.store == nil {
 		return []DeltaEntry{}, nil
 	}
 
-	// Query the unified delta collection
 	docs, err := ds.store.Find(ctx, DeltaCollectionName, persistence.Query{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to list deltas: %w", err)
 	}
 
-	// Filter by worker_type, role, and sync_id
 	entries := make([]DeltaEntry, 0, limit)
 
 	for _, doc := range docs {
-		// Filter by worker_type and role
 		if wt, ok := doc["worker_type"].(string); !ok || wt != workerType {
 			continue
 		}
@@ -122,21 +109,19 @@ func (ds *DeltaStore) GetSince(ctx context.Context, workerType, role string, sin
 
 		syncID := extractSyncID(doc)
 		if syncID <= sinceSyncID {
-			continue // Skip deltas we've already seen
+			continue
 		}
 
 		entry, err := ds.documentToEntry(doc)
 		if err != nil {
-			continue // Skip malformed documents
+			continue
 		}
 
 		entries = append(entries, entry)
 	}
 
-	// Sort by SyncID ascending
 	sortEntriesBySyncID(entries)
 
-	// Apply limit
 	if limit > 0 && len(entries) > limit {
 		return entries[:limit], nil
 	}
@@ -145,41 +130,34 @@ func (ds *DeltaStore) GetSince(ctx context.Context, workerType, role string, sin
 }
 
 // GetAllSince returns deltas across all worker types and roles since sinceSyncID.
-// This is used by GetDeltas to serve sync clients.
-//
-// With a single unified delta collection, this is now a simple query.
 func (ds *DeltaStore) GetAllSince(ctx context.Context, sinceSyncID int64, limit int) ([]DeltaEntry, error) {
 	if ds.store == nil {
 		return []DeltaEntry{}, nil
 	}
 
-	// Query the unified delta collection
 	docs, err := ds.store.Find(ctx, DeltaCollectionName, persistence.Query{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to query deltas: %w", err)
 	}
 
-	// Filter by sync_id > sinceSyncID and convert to entries
 	entries := make([]DeltaEntry, 0, limit)
 
 	for _, doc := range docs {
 		syncID := extractSyncID(doc)
 		if syncID <= sinceSyncID {
-			continue // Skip deltas we've already seen
+			continue
 		}
 
 		entry, err := ds.documentToEntry(doc)
 		if err != nil {
-			continue // Skip malformed documents
+			continue
 		}
 
 		entries = append(entries, entry)
 	}
 
-	// Sort by SyncID ascending for consistent ordering
 	sortEntriesBySyncID(entries)
 
-	// Apply limit
 	if limit > 0 && len(entries) > limit {
 		return entries[:limit], nil
 	}
@@ -187,24 +165,19 @@ func (ds *DeltaStore) GetAllSince(ctx context.Context, sinceSyncID int64, limit 
 	return entries, nil
 }
 
-// DeleteBefore removes old deltas (for compaction).
-// Uses the unified delta collection.
-//
+// DeleteBefore removes old deltas for compaction.
 // If workerType and role are empty, deletes all deltas before beforeSyncID.
-// Otherwise, deletes only deltas matching the workerType and role.
 func (ds *DeltaStore) DeleteBefore(ctx context.Context, workerType, role string, beforeSyncID int64) error {
 	if ds.store == nil {
 		return nil
 	}
 
-	// Query the unified delta collection
 	docs, err := ds.store.Find(ctx, DeltaCollectionName, persistence.Query{})
 	if err != nil {
 		return fmt.Errorf("failed to list deltas for deletion: %w", err)
 	}
 
 	for _, doc := range docs {
-		// Filter by worker_type and role if specified
 		if workerType != "" {
 			if wt, ok := doc["worker_type"].(string); !ok || wt != workerType {
 				continue
@@ -237,36 +210,30 @@ func (ds *DeltaStore) DeleteBefore(ctx context.Context, workerType, role string,
 func (ds *DeltaStore) documentToEntry(doc persistence.Document) (DeltaEntry, error) {
 	entry := DeltaEntry{}
 
-	// Extract sync_id
 	if syncID, ok := doc["sync_id"].(int64); ok {
 		entry.SyncID = syncID
 	} else if f, ok := doc["sync_id"].(float64); ok {
 		entry.SyncID = int64(f)
 	}
 
-	// Extract worker_type
 	if wt, ok := doc["worker_type"].(string); ok {
 		entry.WorkerType = wt
 	}
 
-	// Extract worker_id
 	if wid, ok := doc["worker_id"].(string); ok {
 		entry.ID = wid
 	}
 
-	// Extract role
 	if r, ok := doc["role"].(string); ok {
 		entry.Role = r
 	}
 
-	// Extract timestamp
 	if ts, ok := doc["timestamp"].(int64); ok {
 		entry.Timestamp = time.UnixMilli(ts)
 	} else if f, ok := doc["timestamp"].(float64); ok {
 		entry.Timestamp = time.UnixMilli(int64(f))
 	}
 
-	// Extract and deserialize changes
 	if changesStr, ok := doc["changes"].(string); ok && changesStr != "" {
 		var diff Diff
 		if err := json.Unmarshal([]byte(changesStr), &diff); err == nil {
@@ -277,7 +244,7 @@ func (ds *DeltaStore) documentToEntry(doc persistence.Document) (DeltaEntry, err
 	return entry, nil
 }
 
-// extractSyncID extracts sync_id from a document, handling both int64 and float64 types.
+// extractSyncID handles both int64 and float64 types from JSON unmarshaling.
 func extractSyncID(doc persistence.Document) int64 {
 	if syncID, ok := doc["sync_id"].(int64); ok {
 		return syncID
@@ -290,7 +257,7 @@ func extractSyncID(doc persistence.Document) int64 {
 	return 0
 }
 
-// sortEntriesBySyncID sorts delta entries by SyncID in ascending order.
+// sortEntriesBySyncID sorts entries by SyncID ascending.
 func sortEntriesBySyncID(entries []DeltaEntry) {
 	sort.Slice(entries, func(i, j int) bool {
 		return entries[i].SyncID < entries[j].SyncID
