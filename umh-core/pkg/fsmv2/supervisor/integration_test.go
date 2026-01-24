@@ -122,17 +122,26 @@ var _ = Describe("DataFreshness Full Cycle Integration", func() {
 		Expect(s.TestGetRestartCount()).To(Equal(0), "should not restart for stale (but not timeout) data")
 
 		// Phase 3: Timeout (trigger restarts)
+		// The restartCollector uses non-blocking backoff: it checks time.Since(lastRestart)
+		// before allowing a restart. Backoff is calculated as (restartCount+1)*2 seconds.
+		// We need to simulate backoff time having elapsed.
 		snapshotTimestamp = time.Now().Add(-15 * time.Second) // >10s timeout
 
-		// First restart
+		// First restart (restartCount=0, so backoff = (0+1)*2 = 2s)
 		err = s.TestTick(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(s.TestGetRestartCount()).To(Equal(1))
+
+		// Simulate backoff period elapsed (>4s since restartCount is now 1, backoff = (1+1)*2 = 4s)
+		s.TestSetLastRestart(time.Now().Add(-5 * time.Second))
 
 		// Second restart
 		err = s.TestTick(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(s.TestGetRestartCount()).To(Equal(2))
+
+		// Simulate backoff period elapsed (>6s since restartCount is now 2, backoff = (2+1)*2 = 6s)
+		s.TestSetLastRestart(time.Now().Add(-7 * time.Second))
 
 		// Third restart
 		err = s.TestTick(ctx)

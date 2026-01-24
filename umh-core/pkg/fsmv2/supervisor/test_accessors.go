@@ -88,3 +88,17 @@ func (s *Supervisor[TObserved, TDesired]) TestGetUserSpec() config.UserSpec {
 
 	return s.userSpec
 }
+
+// TestRestartCollector exposes restartCollector() for testing. DO NOT USE in production code.
+func (s *Supervisor[TObserved, TDesired]) TestRestartCollector(ctx context.Context, workerID string) error {
+	return s.restartCollector(ctx, workerID)
+}
+
+// TestSetLastRestart sets collectorHealth.lastRestart for testing. DO NOT USE in production code.
+// This allows tests to simulate backoff time having elapsed.
+func (s *Supervisor[TObserved, TDesired]) TestSetLastRestart(t time.Time) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.collectorHealth.lastRestart = t
+}

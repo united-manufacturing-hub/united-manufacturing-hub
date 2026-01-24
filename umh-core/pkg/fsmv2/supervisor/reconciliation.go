@@ -948,16 +948,32 @@ func (s *Supervisor[TObserved, TDesired]) restartCollector(ctx context.Context, 
 			s.collectorHealth.restartCount, s.collectorHealth.maxRestartAttempts))
 	}
 
+	// Non-blocking backoff: check if sufficient time has elapsed since last restart.
+	// This allows the tick loop to complete quickly (<100ms) instead of blocking.
+	// The backoff increases with each restart attempt: 2s, 4s, 6s, etc.
+	backoff := time.Duration((s.collectorHealth.restartCount+1)*2) * time.Second
+
+	// If this is not the first restart, check if backoff period has elapsed
+	if !s.collectorHealth.lastRestart.IsZero() {
+		elapsed := time.Since(s.collectorHealth.lastRestart)
+		if elapsed < backoff {
+			// Backoff not yet elapsed - skip this restart attempt (non-blocking)
+			s.logger.Debugw("collector_restart_backoff",
+				"restart_attempt", s.collectorHealth.restartCount,
+				"backoff_remaining", backoff-elapsed)
+
+			return nil
+		}
+	}
+
+	// Proceed with restart
 	s.collectorHealth.restartCount++
 	s.collectorHealth.lastRestart = time.Now()
 
-	backoff := time.Duration(s.collectorHealth.restartCount*2) * time.Second
 	s.logger.Warnw("collector_restarting",
 		"restart_attempt", s.collectorHealth.restartCount,
 		"max_attempts", s.collectorHealth.maxRestartAttempts,
 		"backoff", backoff)
-
-	time.Sleep(backoff)
 
 	s.mu.RLock()
 	workerCtx, exists := s.workers[workerID]
