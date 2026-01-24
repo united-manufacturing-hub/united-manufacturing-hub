@@ -41,18 +41,9 @@ import (
 // Returns a hex-encoded FNV-1a 64-bit hash string (16 characters).
 func ComputeUserSpecHash(spec UserSpec) string {
 	h := fnv.New64a()
-
-	// Hash the Config string directly
 	h.Write([]byte(spec.Config))
 
-	// Hash the Variables as JSON for determinism.
-	// json.Marshal sorts map keys alphabetically, ensuring consistent output.
-	//
-	// Note: If marshal fails, we skip Variables and use Config-only hash. This is safe because:
-	// 1. Variables come from YAML config, which only produces JSON-serializable types
-	// 2. ValidateChildSpec rejects unmarshalable specs upstream (childspec_validation.go)
-	// 3. The Config-only hash still provides differentiation for the common case
-	// This is defensive programming for an impossible-in-production state.
+	// Marshal failure falls back to Config-only hash; Variables from YAML are always serializable.
 	if varsBytes, err := json.Marshal(spec.Variables); err == nil {
 		h.Write(varsBytes)
 	}

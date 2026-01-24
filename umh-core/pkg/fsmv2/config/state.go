@@ -40,17 +40,12 @@ func IsValidDesiredState(state string) bool {
 }
 
 // ValidateDesiredState checks that state is "stopped" or "running".
-// Returns a user-friendly error per UX_STANDARDS.md Error Excellence.
-//
-// This validation runs at runtime when DeriveDesiredState returns, catching:
-//   - Developer mistakes (hardcoded wrong values in worker.go)
-//   - User configuration mistakes (wrong state: value in YAML config)
+// Returns a user-friendly error with guidance based on likely intent.
 func ValidateDesiredState(state string) error {
 	if IsValidDesiredState(state) {
 		return nil
 	}
 
-	// Determine likely intent for actionable guidance
 	var hint string
 
 	switch state {

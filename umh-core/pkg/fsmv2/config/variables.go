@@ -95,7 +95,6 @@ func (v VariableBundle) Flatten() map[string]any {
 		result[k] = val
 	}
 
-	// Only include global/internal if non-nil (cleaner template scope)
 	if v.Global != nil {
 		result["global"] = v.Global
 	}
@@ -121,12 +120,10 @@ func Merge(parent, child VariableBundle) VariableBundle {
 		User: make(map[string]any),
 	}
 
-	// Copy parent User vars
 	for k, v := range parent.User {
 		merged.User[k] = v
 	}
 
-	// Child User vars override parent
 	for k, v := range child.User {
 		merged.User[k] = v
 	}
@@ -158,8 +155,6 @@ func (v VariableBundle) Clone() VariableBundle {
 
 	clone.User = deepCloneMap(v.User)
 	clone.Global = deepCloneMap(v.Global)
-
-	// Internal is intentionally NOT cloned - it's regenerated per-worker
 
 	return clone
 }

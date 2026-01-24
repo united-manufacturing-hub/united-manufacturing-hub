@@ -27,17 +27,14 @@ type WorkerTypeChecker interface {
 
 // ValidateChildSpec validates a ChildSpec for common errors.
 func ValidateChildSpec(spec ChildSpec, registry WorkerTypeChecker) error {
-	// Check Name (required for reconciliation)
 	if spec.Name == "" {
 		return errors.New("child spec name cannot be empty")
 	}
 
-	// Check WorkerType (required, must exist in registry)
 	if spec.WorkerType == "" {
 		return fmt.Errorf("child spec %q: worker type cannot be empty", spec.Name)
 	}
 
-	// Verify WorkerType exists in registry
 	validTypes := registry.ListRegisteredTypes()
 	found := false
 
@@ -54,7 +51,6 @@ func ValidateChildSpec(spec ChildSpec, registry WorkerTypeChecker) error {
 			spec.Name, spec.WorkerType, validTypes)
 	}
 
-	// Check UserSpec can be marshaled (basic validation)
 	if _, err := json.Marshal(spec.UserSpec); err != nil {
 		return fmt.Errorf("child spec %q: invalid user spec: %w", spec.Name, err)
 	}
@@ -67,12 +63,10 @@ func ValidateChildSpecs(specs []ChildSpec, registry WorkerTypeChecker) error {
 	names := make(map[string]bool)
 
 	for i, spec := range specs {
-		// Validate individual spec
 		if err := ValidateChildSpec(spec, registry); err != nil {
 			return fmt.Errorf("child spec [%d]: %w", i, err)
 		}
 
-		// Check for duplicate names
 		if names[spec.Name] {
 			return fmt.Errorf("duplicate child spec name %q", spec.Name)
 		}

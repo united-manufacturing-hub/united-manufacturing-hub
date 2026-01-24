@@ -55,7 +55,6 @@ func NormalizeHierarchyLevels(levels []LocationLevel) []LocationLevel {
 	// Define standard hierarchy order (ISA-95 compatible)
 	hierarchyOrder := []string{"enterprise", "site", "area", "line", "cell"}
 
-	// Build map of existing levels
 	levelMap := make(map[string]string)
 	for _, level := range levels {
 		levelMap[level.Type] = level.Value

@@ -219,7 +219,6 @@ type ChildSpec struct {
 }
 
 // MarshalJSON implements json.Marshaler for ChildSpec.
-// Consistent JSON serialization across the system.
 func (c *ChildSpec) MarshalJSON() ([]byte, error) {
 	type Alias ChildSpec
 
@@ -265,12 +264,10 @@ func (c ChildSpec) Clone() ChildSpec {
 //
 // Note: This replaces the deprecated StateMapping approach with direct state checks.
 func (c *ChildSpec) GetMappedChildState(parentState string) string {
-	// Empty ChildStartStates = always run
 	if len(c.ChildStartStates) == 0 {
 		return DesiredStateRunning
 	}
 
-	// Check if parent state is in the list
 	for _, state := range c.ChildStartStates {
 		if state == parentState {
 			return DesiredStateRunning

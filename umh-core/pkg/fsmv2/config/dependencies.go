@@ -31,12 +31,11 @@ package config
 //	child  = {"timeout": 60, "customDep": value}
 //	result = {"channelProvider": provider1, "timeout": 60, "customDep": value}
 func MergeDependencies(parent, child map[string]any) map[string]any {
-	// Both nil - return nil (no allocation)
 	if parent == nil && child == nil {
 		return nil
 	}
 
-	// Only child - return shallow copy of child (not original reference)
+	// Return copies to avoid mutating originals
 	if parent == nil {
 		result := make(map[string]any, len(child))
 		for k, v := range child {
@@ -46,7 +45,6 @@ func MergeDependencies(parent, child map[string]any) map[string]any {
 		return result
 	}
 
-	// Only parent - return shallow copy of parent (not original reference)
 	if child == nil {
 		result := make(map[string]any, len(parent))
 		for k, v := range parent {
@@ -56,7 +54,6 @@ func MergeDependencies(parent, child map[string]any) map[string]any {
 		return result
 	}
 
-	// Both present - merge (child overrides parent)
 	result := make(map[string]any, len(parent)+len(child))
 	for k, v := range parent {
 		result[k] = v

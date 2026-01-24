@@ -21,8 +21,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 )
 
-// States use Signal to communicate special conditions to the supervisor.
-// These signals trigger supervisor-level actions beyond normal state transitions.
+// Signal communicates special conditions from states to the supervisor.
 type Signal int
 
 const (
@@ -62,12 +61,8 @@ const (
 )
 
 // ObservedState represents the actual state gathered from monitoring the system.
-// Implementations should include timestamps to detect staleness.
-// The supervisor collects this via CollectObservedState() in a separate goroutine.
 type ObservedState interface {
 	// GetObservedDesiredState returns the desired state that is actually deployed.
-	// Comparing what's deployed vs what we want to deploy.
-	// This interface enforces that all configured values are read back for verification.
 	GetObservedDesiredState() DesiredState
 
 	// GetTimestamp returns the time when this observed state was collected,
@@ -75,21 +70,12 @@ type ObservedState interface {
 	GetTimestamp() time.Time
 }
 
-// TimestampProvider allows access to observation timestamps.
-// Implemented by ObservedState types that track when observations were made.
-// Used by collector, reconciliation, and health checks to verify data freshness.
-//
-// This is a minimal interface extracted from ObservedState to enable type assertions
-// without requiring the full ObservedState interface. Prefer this for timestamp-only checks.
+// TimestampProvider allows access to observation timestamps for staleness checks.
 type TimestampProvider interface {
 	GetTimestamp() time.Time
 }
 
-// DesiredState represents what we want the system to be.
-// Derived from user configuration via DeriveDesiredState().
-//
-// DesiredState does not contain Dependencies (runtime interfaces).
-// Pass dependencies to Action.Execute() instead.
+// DesiredState represents the target state derived from user configuration.
 type DesiredState interface {
 	// IsShutdownRequested is set by supervisor to initiate graceful shutdown.
 	// States should check this first in their Next() method.
@@ -101,21 +87,12 @@ type DesiredState interface {
 }
 
 // ShutdownRequestable allows setting the shutdown flag on any DesiredState.
-// All DesiredState types should embed config.BaseDesiredState (from pkg/fsmv2/config) to satisfy this interface.
-// Type-safe shutdown request propagation from supervisor to workers.
-//
-// Example usage:
-//
-//	if sr, ok := any(desired).(fsmv2.ShutdownRequestable); ok {
-//	    sr.SetShutdownRequested(true)
-//	}
+// Embed config.BaseDesiredState (from pkg/fsmv2/config) to satisfy this interface.
 type ShutdownRequestable interface {
 	SetShutdownRequested(bool)
 }
 
-// Snapshot is the complete view of the worker at a point in time.
-// The supervisor passes Snapshot by value to State.Next(), making it inherently immutable.
-// Use helpers.ConvertSnapshot[O, D](snapAny) for type-safe field access.
+// Snapshot is the complete view of the worker at a point in time (immutable).
 type Snapshot struct {
 	Observed interface{}   // What is the actual state? (ObservedState or basic.Document).
 	Desired  interface{}   // What should the state be? (DesiredState or basic.Document).
@@ -123,12 +100,7 @@ type Snapshot struct {
 }
 
 // Action represents an idempotent side effect that modifies external system state.
-// The supervisor executes actions after State.Next() returns them.
-// When an action fails, the state remains unchanged. On the next tick,
-// state.Next() may return the same action.
-//
-// Actions must be idempotent (safe to call multiple times).
-// For detailed patterns and examples, see doc.go "Actions" section.
+// Actions must be idempotent; failed actions leave state unchanged for retry.
 type Action[TDeps any] interface {
 	// Execute performs the action. Must handle context cancellation.
 	Execute(ctx context.Context, deps TDeps) error
@@ -136,9 +108,7 @@ type Action[TDeps any] interface {
 	Name() string
 }
 
-// State represents a single state in the FSM lifecycle.
-// States are stateless - they examine the snapshot and decide what happens next.
-// See doc.go "States" section for patterns and rationale.
+// State represents a single state in the FSM lifecycle (stateless).
 type State[TSnapshot any, TDeps any] interface {
 	// Next evaluates the snapshot and returns the next transition.
 	// Pure function called on each tick. The supervisor passes the snapshot by value (immutable).
@@ -155,20 +125,11 @@ type State[TSnapshot any, TDeps any] interface {
 }
 
 // Worker is the business logic interface that developers implement.
-// The supervisor manages the worker lifecycle using these methods.
 type Worker interface {
 	// CollectObservedState monitors the actual system state.
-	// The supervisor calls this method in a separate goroutine with timeout protection.
-	// Must respect context cancellation. Errors are logged but don't stop the FSM.
 	CollectObservedState(ctx context.Context) (ObservedState, error)
 
 	// DeriveDesiredState derives the target state from user configuration (spec).
-	// This is a derivation, not a copy - it parses, validates, and computes derived fields.
-	// Pure function - no side effects. Called on each tick.
-	//
-	// Return type is DesiredState interface, allowing workers to return their typed
-	// DesiredState structs (e.g., *snapshot.CommunicatorDesiredState). The supervisor
-	// type-asserts to TDesired before marshaling, preserving all typed fields.
 	DeriveDesiredState(spec interface{}) (DesiredState, error)
 
 	// GetInitialState returns the starting state for this worker.
@@ -178,18 +139,9 @@ type Worker interface {
 	// Shutdown is managed by the supervisor via ShutdownRequested in desired state.
 }
 
-// DependencyProvider is an optional interface that workers can implement
-// to expose their dependencies for action execution.
+// DependencyProvider exposes worker dependencies for action execution.
 // Workers that embed helpers.BaseWorker automatically satisfy this interface.
-//
-// Example usage:
-//
-//	if provider, ok := worker.(DependencyProvider); ok {
-//	    deps := provider.GetDependenciesAny()
-//	    action.Execute(ctx, deps)
-//	}
 type DependencyProvider interface {
 	// GetDependenciesAny returns the worker's dependencies as any.
-	// This is used by the ActionExecutor to pass dependencies to actions.
 	GetDependenciesAny() any
 }

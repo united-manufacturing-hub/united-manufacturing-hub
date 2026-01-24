@@ -27,7 +27,6 @@ type StateGetter interface {
 }
 
 // ParseUserSpec provides type-safe parsing of UserSpec.Config into a typed struct.
-// This eliminates boilerplate in DeriveDesiredState implementations.
 //
 // Usage:
 //
@@ -64,9 +63,7 @@ func ParseUserSpec[T any](spec interface{}) (T, error) {
 	return result, nil
 }
 
-// DeriveLeafState is a one-liner helper for leaf workers (workers without children).
-// It handles the common case of parsing UserSpec.Config and returning a DesiredState
-// with no children.
+// DeriveLeafState parses UserSpec.Config and returns a DesiredState with no children.
 //
 // The type parameter T must have a pointer type *T that implements StateGetter
 // (typically by embedding BaseUserSpec which has pointer receiver methods).
@@ -81,8 +78,6 @@ func ParseUserSpec[T any](spec interface{}) (T, error) {
 //	func (w *MyWorker) DeriveDesiredState(spec interface{}) (config.DesiredState, error) {
 //	    return config.DeriveLeafState[MyUserSpec](spec)
 //	}
-//
-// This replaces ~15-25 lines of boilerplate with a single line.
 func DeriveLeafState[T any, PT interface {
 	*T
 	StateGetter
