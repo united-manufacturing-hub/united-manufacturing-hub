@@ -38,8 +38,6 @@ import (
 
 var _ = Describe("Simple Scenario Integration", func() {
 	It("should run scenario and verify all requirements", func() {
-		By("Setting short durations for fast testing")
-		// Override durations for fast test execution (500ms/1s instead of 5s/10s)
 		originalStoppedWait := state.StoppedWaitDuration
 		originalRunning := state.RunningDuration
 		state.StoppedWaitDuration = 500 * time.Millisecond
@@ -49,21 +47,16 @@ var _ = Describe("Simple Scenario Integration", func() {
 			state.RunningDuration = originalRunning
 		}()
 
-		By("Setting up test logger at DebugLevel")
 		testLogger := integration.NewTestLogger(zapcore.DebugLevel)
 
-		By("Setting up context with 30s timeout")
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
-		By("Setting up triangular store")
 		store := setupTestStoreForScenario(testLogger.Logger)
 
-		By("Creating scenario context with 20s duration for cycle completion")
 		scenarioCtx, scenarioCancel := context.WithTimeout(ctx, 20*time.Second)
 		defer scenarioCancel()
 
-		By("Running SimpleScenario with 100ms tick interval")
 		result, err := examples.Run(scenarioCtx, examples.RunConfig{
 			Scenario:     examples.SimpleScenario,
 			TickInterval: 100 * time.Millisecond,
@@ -72,122 +65,41 @@ var _ = Describe("Simple Scenario Integration", func() {
 		})
 		Expect(err).NotTo(HaveOccurred())
 
-		By("Waiting for scenario completion (10s)")
 		<-result.Done
 
-		// =====================================================================
-		// Existing Verifications (Logging-Based)
-		// =====================================================================
-
-		By("Verifying no errors or warnings")
 		verifyNoErrorsOrWarnings(testLogger)
-
-		By("Verifying parent and children were created")
 		verifyParentAndChildrenCreated(testLogger)
-
-		By("Verifying children emit connect actions exactly once")
 		verifyConnectActionsExactlyOnce(testLogger)
-
-		By("Verifying state transition sequence")
 		verifyStateTransitionSequence(testLogger)
-
-		By("Verifying TriangularStore changes")
 		verifyTriangularStoreChanges(testLogger)
-
-		By("Verifying shutdown order: children stop before parent")
 		verifyShutdownOrder(testLogger)
-
-		By("Verifying all logs have worker field")
 		verifyAllLogsHaveWorkerField(testLogger)
 
-		// =====================================================================
-		// NEW: Data Consistency Verifications (Store-Based)
-		// =====================================================================
-
-		By("Verifying OBSERVED.state is populated (MAIN BUG FIX)")
 		verifyObservedStateHasState(store)
-
-		By("Verifying state values are valid FSM states")
 		verifyStateFieldsAreValid(store)
-
-		By("Verifying timestamps are recent")
 		verifyTimestampsProgressing(store)
-
-		By("Verifying IDs match across documents")
 		verifyIDsMatch(store)
 
-		// =====================================================================
-		// NEW: State Lifecycle Verifications
-		// =====================================================================
-
-		By("Verifying children reach Connected state")
 		verifyChildrenReachConnectedState(testLogger)
-
-		By("Verifying clean shutdown transitions")
 		verifyShutdownTransitionsClean(testLogger)
-
-		By("Verifying no orphaned TryingTo* states")
 		verifyNoOrphanedStates(store)
 
-		// =====================================================================
-		// NEW: Hierarchy Verifications
-		// =====================================================================
-
-		By("Verifying hierarchy paths are correct")
 		verifyHierarchyPathCorrect(store)
-
-		By("Verifying parent child counts match")
 		verifyChildCountMatches(store)
 
-		// =====================================================================
-		// NEW: Action Execution Verifications
-		// =====================================================================
-
-		By("Verifying no action failures")
 		verifyNoActionFailures(testLogger)
 
-		// =====================================================================
-		// NEW: Cyclic Start/Stop Verifications
-		// =====================================================================
-
-		By("Verifying cyclic state transitions")
 		verifyCyclicStateTransitions(testLogger)
-
-		By("Verifying timing-based transitions")
 		verifyTimingBasedTransitions(testLogger)
-
-		By("Verifying children health tracking")
 		verifyChildrenHealthTracking(store)
-
-		By("Verifying state_entered_at and elapsed fields")
 		verifyStateEnteredAtAndElapsed(store)
-
-		By("Verifying parent reaches Running state")
 		verifyParentReachesRunning(testLogger)
 
-		// =====================================================================
-		// NEW: Parent-Child Coordination Verifications (TDD - should FAIL)
-		// These tests verify that children wait for parent state before starting
-		// =====================================================================
-
-		By("Verifying children wait for parent TryingToStart before transitioning")
 		verifyNoChildTransitionBeforeParentTryingToStart(testLogger)
-
-		By("Verifying state transition ordering (parent before children)")
 		verifyStateTransitionOrdering(testLogger)
 
-		// =====================================================================
-		// NEW: Children Stop When Parent TryingToStop Verifications (TDD)
-		// These tests verify children respond to parent-initiated stop via StateMapping
-		// =====================================================================
-
-		By("Verifying children stop when parent goes to TryingToStop")
 		verifyChildrenStopWhenParentTryingToStop(testLogger)
-
-		By("Verifying parent completes full cycle back to Stopped")
 		verifyParentReachesStopped(testLogger)
-
-		By("Verifying full cyclic pattern completes")
 		verifyFullCycle(testLogger)
 	})
 })
@@ -1180,7 +1092,6 @@ func verifyFullCycle(t *integration.TestLogger) {
 
 var _ = Describe("MetricsHolder Type Assertion", func() {
 	It("should export worker metrics to Prometheus and support CSE serialization", func() {
-		By("Setting short durations for fast testing")
 		originalStoppedWait := state.StoppedWaitDuration
 		originalRunning := state.RunningDuration
 		state.StoppedWaitDuration = 500 * time.Millisecond
@@ -1190,17 +1101,13 @@ var _ = Describe("MetricsHolder Type Assertion", func() {
 			state.RunningDuration = originalRunning
 		}()
 
-		By("Setting up test logger at DebugLevel")
 		testLogger := integration.NewTestLogger(zapcore.DebugLevel)
 
-		By("Setting up context with 15s timeout")
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
 
-		By("Setting up triangular store")
 		store := setupTestStoreForScenario(testLogger.Logger)
 
-		By("Running SimpleScenario which creates parent with children")
 		result, err := examples.Run(ctx, examples.RunConfig{
 			Scenario:     examples.SimpleScenario,
 			Duration:     5 * time.Second,
@@ -1211,16 +1118,13 @@ var _ = Describe("MetricsHolder Type Assertion", func() {
 		Expect(err).NotTo(HaveOccurred())
 		<-result.Done
 
-		By("Loading parent's observed state from store (CSE serialized)")
 		workers := getWorkersFromStore(store)
 		Expect(workers).NotTo(BeEmpty(), "Should have workers in store")
 
-		// Find the parent worker
 		var parentObs snapshot.ExampleparentObservedState
 		var foundParent bool
 		for _, w := range workers {
 			if w.WorkerType == "exampleparent" {
-				// Marshal to JSON and back to concrete type - simulates CSE deserialization
 				observedJSON, err := json.Marshal(w.Observed)
 				Expect(err).NotTo(HaveOccurred())
 
@@ -1234,34 +1138,17 @@ var _ = Describe("MetricsHolder Type Assertion", func() {
 		}
 		Expect(foundParent).To(BeTrue(), "Should find parent worker in store")
 
-		By("Verifying direct field access works (for state files and CSE)")
-		// Direct field access - how state files should access metrics
-		// This mirrors the JSON structure: {"metrics":{"framework":{...},"worker":{...}}}
-		// Direct field access for state files: parentObs.Metrics.Framework.TimeInCurrentStateMs
 		GinkgoWriter.Printf("DEBUG: Parent FrameworkMetrics: %+v\n", parentObs.Metrics.Framework)
 
-		By("Verifying MetricsHolder interface works (for Prometheus export)")
-		// THIS IS THE BUG: Type assertion fails with pointer receivers
-		// When passed as interface{}, pointer receiver methods are NOT in method set
-		//
-		// Go rule: If T is a value type (not a pointer), its method set only includes
-		// methods with value receivers. Pointer receiver methods require *T.
-		//
-		// MetricsEmbedder has: func (m *MetricsEmbedder) GetMetrics() *Metrics
-		// This is a POINTER receiver, so it's NOT in the method set of the value.
 		holder, ok := interface{}(parentObs).(deps.MetricsHolder)
 
-		// BEFORE FIX: ok = false (type assertion fails because GetMetrics has pointer receiver)
-		// AFTER FIX: ok = true (value receivers work)
 		Expect(ok).To(BeTrue(), "MetricsHolder type assertion should succeed - THIS FAILS WITH POINTER RECEIVERS")
 
 		if ok {
-			// New interface uses GetWorkerMetrics() and GetFrameworkMetrics() with value receivers
 			workerMetrics := holder.GetWorkerMetrics()
 			frameworkMetrics := holder.GetFrameworkMetrics()
-			// Worker metrics may be empty if no actions recorded counters/gauges
 			_ = workerMetrics
-			GinkgoWriter.Printf("✓ MetricsHolder interface works: frameworkMetrics=%+v\n", frameworkMetrics)
+			GinkgoWriter.Printf("MetricsHolder interface works: frameworkMetrics=%+v\n", frameworkMetrics)
 		}
 	})
 })

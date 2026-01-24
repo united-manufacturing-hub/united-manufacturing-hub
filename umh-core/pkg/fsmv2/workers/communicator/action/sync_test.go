@@ -56,7 +56,6 @@ var _ = Describe("SyncAction", func() {
 			err := act.Execute(ctx, dependencies)
 			Expect(err).NotTo(HaveOccurred())
 
-			// Verify pulled messages are stored in dependencies
 			storedMessages := dependencies.GetPulledMessages()
 			Expect(storedMessages).To(HaveLen(2))
 			Expect(storedMessages[0].Content).To(Equal("message-1"))
@@ -70,7 +69,6 @@ var _ = Describe("SyncAction", func() {
 			err := act.Execute(ctx, dependencies)
 			Expect(err).NotTo(HaveOccurred())
 
-			// Verify empty slice is stored
 			storedMessages := dependencies.GetPulledMessages()
 			Expect(storedMessages).To(BeEmpty())
 		})
@@ -78,7 +76,6 @@ var _ = Describe("SyncAction", func() {
 		It("should overwrite previous messages on subsequent pulls", func() {
 			ctx := context.Background()
 
-			// First pull with messages
 			mockTransport.pullResponse = []*transport.UMHMessage{
 				{Email: "test@example.com", InstanceUUID: "uuid-1", Content: "first"},
 			}
@@ -87,7 +84,6 @@ var _ = Describe("SyncAction", func() {
 			Expect(dependencies.GetPulledMessages()).To(HaveLen(1))
 			Expect(dependencies.GetPulledMessages()[0].Content).To(Equal("first"))
 
-			// Second pull with different messages
 			mockTransport.pullResponse = []*transport.UMHMessage{
 				{Email: "test@example.com", InstanceUUID: "uuid-2", Content: "second"},
 				{Email: "test@example.com", InstanceUUID: "uuid-3", Content: "third"},

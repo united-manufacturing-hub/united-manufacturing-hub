@@ -249,38 +249,30 @@ state: "running"
 		})
 
 		It("should return the JWT token stored in dependencies", func() {
-			// Arrange: Set JWT token in dependencies
 			deps := worker.GetDependencies()
 			expectedToken := "test-jwt-token-12345"
 			deps.SetJWT(expectedToken, time.Now().Add(1*time.Hour))
 
-			// Act
 			observed, err := worker.CollectObservedState(ctx)
 			Expect(err).NotTo(HaveOccurred())
 
-			// Assert
 			communicatorObserved := observed.(snapshot.CommunicatorObservedState)
 			Expect(communicatorObserved.JWTToken).To(Equal(expectedToken))
 		})
 
 		It("should return the JWT expiry stored in dependencies", func() {
-			// Arrange: Set JWT expiry in dependencies
 			deps := worker.GetDependencies()
 			expectedExpiry := time.Now().Add(2 * time.Hour).Truncate(time.Second)
 			deps.SetJWT("some-token", expectedExpiry)
 
-			// Act
 			observed, err := worker.CollectObservedState(ctx)
 			Expect(err).NotTo(HaveOccurred())
 
-			// Assert
 			communicatorObserved := observed.(snapshot.CommunicatorObservedState)
-			// Compare truncated times to avoid nanosecond precision issues
 			Expect(communicatorObserved.JWTExpiry.Truncate(time.Second)).To(Equal(expectedExpiry))
 		})
 
 		It("should return the pulled messages stored in dependencies", func() {
-			// Arrange: Set pulled messages in dependencies
 			deps := worker.GetDependencies()
 			expectedMessages := []*transportpkg.UMHMessage{
 				{Content: "message-1"},
@@ -288,11 +280,9 @@ state: "running"
 			}
 			deps.SetPulledMessages(expectedMessages)
 
-			// Act
 			observed, err := worker.CollectObservedState(ctx)
 			Expect(err).NotTo(HaveOccurred())
 
-			// Assert
 			communicatorObserved := observed.(snapshot.CommunicatorObservedState)
 			Expect(communicatorObserved.MessagesReceived).To(HaveLen(2))
 			Expect(communicatorObserved.MessagesReceived[0].Content).To(Equal("message-1"))
@@ -300,50 +290,38 @@ state: "running"
 		})
 
 		It("should return the consecutive error count from dependencies", func() {
-			// Arrange: Record some errors in dependencies
 			deps := worker.GetDependencies()
 			deps.RecordError()
 			deps.RecordError()
 			deps.RecordError()
 
-			// Act
 			observed, err := worker.CollectObservedState(ctx)
 			Expect(err).NotTo(HaveOccurred())
 
-			// Assert
 			communicatorObserved := observed.(snapshot.CommunicatorObservedState)
 			Expect(communicatorObserved.ConsecutiveErrors).To(Equal(3))
 		})
 
 		It("should set Authenticated to true when JWT token is present and not expired", func() {
-			// Arrange: Set valid JWT in dependencies
 			deps := worker.GetDependencies()
 			deps.SetJWT("valid-token", time.Now().Add(1*time.Hour))
 
-			// Act
 			observed, err := worker.CollectObservedState(ctx)
 			Expect(err).NotTo(HaveOccurred())
 
-			// Assert
 			communicatorObserved := observed.(snapshot.CommunicatorObservedState)
 			Expect(communicatorObserved.Authenticated).To(BeTrue())
 		})
 
 		It("should set Authenticated to false when JWT token is empty", func() {
-			// Arrange: No JWT token set (default state)
-			// Dependencies start with empty JWT
-
-			// Act
 			observed, err := worker.CollectObservedState(ctx)
 			Expect(err).NotTo(HaveOccurred())
 
-			// Assert
 			communicatorObserved := observed.(snapshot.CommunicatorObservedState)
 			Expect(communicatorObserved.Authenticated).To(BeFalse())
 		})
 
 		Context("metrics accumulation", func() {
-			// Helper to create worker with MockStateReader and simulate collector save
 			type metricsTestContext struct {
 				worker      *communicator.CommunicatorWorker
 				stateReader *MockStateReader
@@ -375,18 +353,15 @@ state: "running"
 			}
 
 			It("should accumulate pull metrics on successful pull", func() {
-				// Arrange: Record a successful pull using the new MetricsRecorder pattern
 				deps := worker.GetDependencies()
 				deps.MetricsRecorder().IncrementCounter(depspkg.CounterPullOps, 1)
 				deps.MetricsRecorder().IncrementCounter(depspkg.CounterPullSuccess, 1)
 				deps.MetricsRecorder().IncrementCounter(depspkg.CounterMessagesPulled, 5)
 				deps.MetricsRecorder().SetGauge(depspkg.GaugeLastPullLatencyMs, 100.0)
 
-				// Act
 				observed, err := worker.CollectObservedState(ctx)
 				Expect(err).NotTo(HaveOccurred())
 
-				// Assert: New metrics pattern uses Counters and Gauges maps
 				communicatorObserved := observed.(snapshot.CommunicatorObservedState)
 				Expect(communicatorObserved.Metrics.Worker.Counters[string(depspkg.CounterPullOps)]).To(Equal(int64(1)))
 				Expect(communicatorObserved.Metrics.Worker.Counters[string(depspkg.CounterPullSuccess)]).To(Equal(int64(1)))
@@ -396,17 +371,14 @@ state: "running"
 			})
 
 			It("should accumulate pull metrics on failed pull", func() {
-				// Arrange: Record a failed pull using the new MetricsRecorder pattern
 				deps := worker.GetDependencies()
 				deps.MetricsRecorder().IncrementCounter(depspkg.CounterPullOps, 1)
 				deps.MetricsRecorder().IncrementCounter(depspkg.CounterPullFailures, 1)
 				deps.MetricsRecorder().SetGauge(depspkg.GaugeLastPullLatencyMs, 50.0)
 
-				// Act
 				observed, err := worker.CollectObservedState(ctx)
 				Expect(err).NotTo(HaveOccurred())
 
-				// Assert: New metrics pattern uses Counters and Gauges maps
 				communicatorObserved := observed.(snapshot.CommunicatorObservedState)
 				Expect(communicatorObserved.Metrics.Worker.Counters[string(depspkg.CounterPullOps)]).To(Equal(int64(1)))
 				Expect(communicatorObserved.Metrics.Worker.Counters[string(depspkg.CounterPullSuccess)]).To(Equal(int64(0)))
@@ -416,18 +388,15 @@ state: "running"
 			})
 
 			It("should accumulate push metrics on successful push", func() {
-				// Arrange: Record push metrics using the new MetricsRecorder pattern
 				deps := worker.GetDependencies()
 				deps.MetricsRecorder().IncrementCounter(depspkg.CounterPushOps, 1)
 				deps.MetricsRecorder().IncrementCounter(depspkg.CounterPushSuccess, 1)
 				deps.MetricsRecorder().IncrementCounter(depspkg.CounterMessagesPushed, 3)
 				deps.MetricsRecorder().SetGauge(depspkg.GaugeLastPushLatencyMs, 200.0)
 
-				// Act
 				observed, err := worker.CollectObservedState(ctx)
 				Expect(err).NotTo(HaveOccurred())
 
-				// Assert: New metrics pattern uses Counters and Gauges maps
 				communicatorObserved := observed.(snapshot.CommunicatorObservedState)
 				Expect(communicatorObserved.Metrics.Worker.Counters[string(depspkg.CounterPushOps)]).To(Equal(int64(1)))
 				Expect(communicatorObserved.Metrics.Worker.Counters[string(depspkg.CounterPushSuccess)]).To(Equal(int64(1)))
@@ -437,17 +406,14 @@ state: "running"
 			})
 
 			It("should accumulate push metrics on failed push", func() {
-				// Arrange: Record failed push metrics using the new MetricsRecorder pattern
 				deps := worker.GetDependencies()
 				deps.MetricsRecorder().IncrementCounter(depspkg.CounterPushOps, 1)
 				deps.MetricsRecorder().IncrementCounter(depspkg.CounterPushFailures, 1)
 				deps.MetricsRecorder().SetGauge(depspkg.GaugeLastPushLatencyMs, 150.0)
 
-				// Act
 				observed, err := worker.CollectObservedState(ctx)
 				Expect(err).NotTo(HaveOccurred())
 
-				// Assert: New metrics pattern uses Counters and Gauges maps
 				communicatorObserved := observed.(snapshot.CommunicatorObservedState)
 				Expect(communicatorObserved.Metrics.Worker.Counters[string(depspkg.CounterPushOps)]).To(Equal(int64(1)))
 				Expect(communicatorObserved.Metrics.Worker.Counters[string(depspkg.CounterPushSuccess)]).To(Equal(int64(0)))
@@ -456,35 +422,28 @@ state: "running"
 			})
 
 			It("should clear per-tick results after CollectObservedState", func() {
-				// Use worker with state reader to test accumulation persistence
 				tc := createWorkerWithStateReader()
 				deps := tc.worker.GetDependencies()
 
-				// Record metrics using the new MetricsRecorder pattern
 				deps.MetricsRecorder().IncrementCounter(depspkg.CounterPullOps, 1)
 				deps.MetricsRecorder().IncrementCounter(depspkg.CounterMessagesPulled, 2)
 
-				// First collection should have metrics
 				observed1 := collectAndSave(tc)
 				Expect(observed1.Metrics.Worker.Counters[string(depspkg.CounterPullOps)]).To(Equal(int64(1)))
 
-				// Second collection (without new metrics recorded) should maintain previous cumulative
 				observed2 := collectAndSave(tc)
 				Expect(observed2.Metrics.Worker.Counters[string(depspkg.CounterPullOps)]).To(Equal(int64(1))) // Still 1, no new tick
 			})
 
 			It("should track last latency as gauge", func() {
-				// Use worker with state reader to test gauge tracking
 				tc := createWorkerWithStateReader()
 				deps := tc.worker.GetDependencies()
 
-				// First pull: 100ms
 				deps.MetricsRecorder().IncrementCounter(depspkg.CounterPullOps, 1)
 				deps.MetricsRecorder().SetGauge(depspkg.GaugeLastPullLatencyMs, 100.0)
 				observed1 := collectAndSave(tc)
 				Expect(observed1.Metrics.Worker.Gauges[string(depspkg.GaugeLastPullLatencyMs)]).To(Equal(100.0))
 
-				// Second pull: 200ms - gauge should be updated to new value
 				deps.MetricsRecorder().IncrementCounter(depspkg.CounterPullOps, 1)
 				deps.MetricsRecorder().SetGauge(depspkg.GaugeLastPullLatencyMs, 200.0)
 				observed2 := collectAndSave(tc)
@@ -493,45 +452,37 @@ state: "running"
 			})
 
 			It("should accumulate message counts across multiple pulls", func() {
-				// Use worker with state reader to test accumulation
 				tc := createWorkerWithStateReader()
 				deps := tc.worker.GetDependencies()
 
-				// First pull: 5 messages
 				deps.MetricsRecorder().IncrementCounter(depspkg.CounterPullOps, 1)
 				deps.MetricsRecorder().IncrementCounter(depspkg.CounterMessagesPulled, 5)
 				collectAndSave(tc)
 
-				// Second pull: 3 messages
 				deps.MetricsRecorder().IncrementCounter(depspkg.CounterPullOps, 1)
 				deps.MetricsRecorder().IncrementCounter(depspkg.CounterMessagesPulled, 3)
 				observed2 := collectAndSave(tc)
-				Expect(observed2.Metrics.Worker.Counters[string(depspkg.CounterMessagesPulled)]).To(Equal(int64(8))) // 5 + 3
+				Expect(observed2.Metrics.Worker.Counters[string(depspkg.CounterMessagesPulled)]).To(Equal(int64(8)))
 
-				// Third pull: 2 messages
 				deps.MetricsRecorder().IncrementCounter(depspkg.CounterPullOps, 1)
 				deps.MetricsRecorder().IncrementCounter(depspkg.CounterMessagesPulled, 2)
 				observed3 := collectAndSave(tc)
-				Expect(observed3.Metrics.Worker.Counters[string(depspkg.CounterMessagesPulled)]).To(Equal(int64(10))) // 5 + 3 + 2
+				Expect(observed3.Metrics.Worker.Counters[string(depspkg.CounterMessagesPulled)]).To(Equal(int64(10)))
 			})
 
 			It("should track both successful and failed ops separately", func() {
-				// Use worker with state reader to test accumulation
 				tc := createWorkerWithStateReader()
 				deps := tc.worker.GetDependencies()
 
-				// Success (using MetricsRecorder with typed constants)
 				deps.MetricsRecorder().IncrementCounter(depspkg.CounterPullOps, 1)
 				deps.MetricsRecorder().IncrementCounter(depspkg.CounterPullSuccess, 1)
 				deps.MetricsRecorder().IncrementCounter(depspkg.CounterMessagesPulled, 1)
 				collectAndSave(tc)
 
-				// Failure
 				deps.MetricsRecorder().IncrementCounter(depspkg.CounterPullOps, 1)
 				deps.MetricsRecorder().IncrementCounter(depspkg.CounterPullFailures, 1)
 				collectAndSave(tc)
 
-				// Success
 				deps.MetricsRecorder().IncrementCounter(depspkg.CounterPullOps, 1)
 				deps.MetricsRecorder().IncrementCounter(depspkg.CounterPullSuccess, 1)
 				deps.MetricsRecorder().IncrementCounter(depspkg.CounterMessagesPulled, 1)
@@ -546,44 +497,33 @@ state: "running"
 		// Phase 2: AuthenticatedUUID in ObservedState tests
 		Context("authenticated UUID tracking", func() {
 			It("should return the authenticated UUID stored in dependencies", func() {
-				// Arrange: Set authenticated UUID in dependencies (simulating successful auth)
 				deps := worker.GetDependencies()
 				expectedUUID := "backend-authenticated-uuid-12345"
 				deps.SetAuthenticatedUUID(expectedUUID)
 
-				// Act
 				observed, err := worker.CollectObservedState(ctx)
 				Expect(err).NotTo(HaveOccurred())
 
-				// Assert
 				communicatorObserved := observed.(snapshot.CommunicatorObservedState)
 				Expect(communicatorObserved.AuthenticatedUUID).To(Equal(expectedUUID))
 			})
 
 			It("should return empty string when no UUID has been set", func() {
-				// Arrange: No UUID set (default state after worker creation)
-				// Dependencies start with empty authenticatedUUID
-
-				// Act
 				observed, err := worker.CollectObservedState(ctx)
 				Expect(err).NotTo(HaveOccurred())
 
-				// Assert
 				communicatorObserved := observed.(snapshot.CommunicatorObservedState)
 				Expect(communicatorObserved.AuthenticatedUUID).To(BeEmpty())
 			})
 
 			It("should update AuthenticatedUUID when SetAuthenticatedUUID is called multiple times", func() {
-				// Arrange: Set UUID multiple times (e.g., re-authentication scenarios)
 				deps := worker.GetDependencies()
 				deps.SetAuthenticatedUUID("first-uuid")
 				deps.SetAuthenticatedUUID("second-uuid-after-reauth")
 
-				// Act
 				observed, err := worker.CollectObservedState(ctx)
 				Expect(err).NotTo(HaveOccurred())
 
-				// Assert: Should have the latest value
 				communicatorObserved := observed.(snapshot.CommunicatorObservedState)
 				Expect(communicatorObserved.AuthenticatedUUID).To(Equal("second-uuid-after-reauth"))
 			})

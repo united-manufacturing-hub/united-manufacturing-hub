@@ -30,26 +30,16 @@ import (
 
 var _ = Describe("ConfigError Scenario Integration", func() {
 	It("should demonstrate configuration validation and error handling", func() {
-		By("Setting up test logger at DebugLevel")
 		testLogger := integration.NewTestLogger(zapcore.DebugLevel)
 
-		By("Setting up context with 30s timeout")
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
-		By("Setting up triangular store")
 		store := setupTestStoreForScenario(testLogger.Logger)
 
-		By("Creating scenario context with 10s duration")
-		// 10s is enough to see:
-		// - Valid worker creates children successfully
-		// - Type mismatch worker creates 0 children (silent degradation)
-		// - Empty config worker creates 0 children
-		// - Failing worker uses defaults due to type mismatch
 		scenarioCtx, scenarioCancel := context.WithTimeout(ctx, 10*time.Second)
 		defer scenarioCancel()
 
-		By("Running ConfigErrorScenario with 100ms tick interval")
 		result, err := examples.Run(scenarioCtx, examples.RunConfig{
 			Scenario:     examples.ConfigErrorScenario,
 			TickInterval: 100 * time.Millisecond,
@@ -58,20 +48,10 @@ var _ = Describe("ConfigError Scenario Integration", func() {
 		})
 		Expect(err).NotTo(HaveOccurred())
 
-		By("Waiting for scenario completion")
 		<-result.Done
 
-		// =====================================================================
-		// ConfigError Scenario Verifications
-		// =====================================================================
-
-		By("Verifying valid config worker works correctly")
 		verifyConfigValidWorker(testLogger)
-
-		By("Verifying type mismatch results in zero children (silent degradation)")
 		verifyConfigTypeMismatchWorker(testLogger)
-
-		By("Verifying failing worker uses defaults when config is invalid")
 		verifyConfigFailingDefaults(testLogger)
 	})
 })

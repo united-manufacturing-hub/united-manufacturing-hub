@@ -27,14 +27,11 @@ import (
 
 var _ = Describe("Restart Scenario Integration", func() {
 	It("should demonstrate worker restart after SignalNeedsRestart", func() {
-		By("Setting up test logger at DebugLevel")
 		testLogger := integration.NewTestLogger(zapcore.DebugLevel)
 
-		By("Setting up context with 10s timeout")
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 
-		By("Setting up triangular store")
 		store := setupTestStoreForScenario(testLogger.Logger)
 
 		// For this test, we'd ideally run a scenario where a worker
@@ -52,12 +49,9 @@ var _ = Describe("Restart Scenario Integration", func() {
 		// 8. Worker is reset to initial state
 		// 9. Worker starts fresh (Stopped → TryingToConnect → Connected)
 
-		// This test verifies the logging infrastructure captures restart events
-		By("Verifying restart logging infrastructure is available")
 		_ = ctx
 		_ = store
 
-		// Log that we'd expect to see during a restart:
 		testLogger.Logger.Infow("worker_restart_requested",
 			"worker", "test-worker",
 			"reason", "worker signaled unrecoverable error")
@@ -70,7 +64,6 @@ var _ = Describe("Restart Scenario Integration", func() {
 			"worker", "test-worker",
 			"to_state", "Stopped")
 
-		By("Verifying restart logs were captured")
 		restartRequestedLogs := testLogger.GetLogsMatching("worker_restart_requested")
 		Expect(restartRequestedLogs).To(HaveLen(1))
 
@@ -80,8 +73,8 @@ var _ = Describe("Restart Scenario Integration", func() {
 		restartCompleteLogs := testLogger.GetLogsMatching("worker_restart_complete")
 		Expect(restartCompleteLogs).To(HaveLen(1))
 
-		GinkgoWriter.Printf("✓ Restart logging infrastructure verified\n")
-		GinkgoWriter.Printf("✓ Worker restart scenario documented\n")
+		GinkgoWriter.Printf("Restart logging infrastructure verified\n")
+		GinkgoWriter.Printf("Worker restart scenario documented\n")
 	})
 })
 

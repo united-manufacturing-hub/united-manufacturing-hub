@@ -111,45 +111,36 @@ var _ = Describe("SyncAction Error Handling", func() {
 
 	Describe("Bug #1: Watchdog Oscillation Fix", func() {
 		It("calls RecordError on Pull failure", func() {
-			// Arrange: Transport fails
 			mockTransport.PullReturns(nil, errors.New("network error"))
 			syncAction := action.NewSyncAction("test-jwt-token")
 
-			// Initial state
 			Expect(deps.GetConsecutiveErrors()).To(Equal(0))
 
-			// Act: Execute fails
 			err := syncAction.Execute(ctx, deps)
 			Expect(err).To(HaveOccurred())
 
-			// Assert: Error counter incremented via RecordError()
 			Expect(deps.GetConsecutiveErrors()).To(Equal(1))
 		})
 
 		It("accumulates ConsecutiveErrors on repeated failures", func() {
-			// Arrange: Transport always fails
 			mockTransport.PullReturnsOnCall(0, nil, errors.New("error 1"))
 			mockTransport.PullReturnsOnCall(1, nil, errors.New("error 2"))
 			mockTransport.PullReturnsOnCall(2, nil, errors.New("error 3"))
 			syncAction := action.NewSyncAction("test-jwt-token")
 
-			// Act: Execute 3 times
 			for range 3 {
 				_ = syncAction.Execute(ctx, deps)
 			}
 
-			// Assert: Counter accumulated, NOT oscillating (0→1→0→1)
 			Expect(deps.GetConsecutiveErrors()).To(Equal(3))
 		})
 
 		It("calls RecordSuccess only on success (resets counter)", func() {
-			// Arrange: Fail twice, then succeed
 			mockTransport.PullReturnsOnCall(0, nil, errors.New("error 1"))
 			mockTransport.PullReturnsOnCall(1, nil, errors.New("error 2"))
 			mockTransport.PullReturnsOnCall(2, []*transport.UMHMessage{}, nil)
 			syncAction := action.NewSyncAction("test-jwt-token")
 
-			// Act: Execute with failures then success
 			_ = syncAction.Execute(ctx, deps)
 			Expect(deps.GetConsecutiveErrors()).To(Equal(1))
 
@@ -159,7 +150,6 @@ var _ = Describe("SyncAction Error Handling", func() {
 			err := syncAction.Execute(ctx, deps)
 			Expect(err).NotTo(HaveOccurred())
 
-			// Assert: Counter reset to 0 only after confirmed success via RecordSuccess()
 			Expect(deps.GetConsecutiveErrors()).To(Equal(0))
 		})
 	})

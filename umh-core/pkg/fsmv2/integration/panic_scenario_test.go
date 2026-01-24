@@ -29,22 +29,17 @@ import (
 
 var _ = Describe("Panic Scenario Integration", func() {
 	It("should demonstrate panic recovery and logging", func() {
-		By("Setting up test logger at DebugLevel")
 		testLogger := integration.NewTestLogger(zapcore.DebugLevel)
 
-		By("Setting up context with 30s timeout")
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
-		By("Setting up triangular store")
 		store := setupTestStoreForScenario(testLogger.Logger)
 
-		By("Creating scenario context with 5s duration")
 		// Short duration - panic should be caught quickly
 		scenarioCtx, scenarioCancel := context.WithTimeout(ctx, 5*time.Second)
 		defer scenarioCancel()
 
-		By("Running PanicScenario with 100ms tick interval")
 		result, err := examples.Run(scenarioCtx, examples.RunConfig{
 			Scenario:     examples.PanicScenario,
 			TickInterval: 100 * time.Millisecond,
@@ -53,20 +48,10 @@ var _ = Describe("Panic Scenario Integration", func() {
 		})
 		Expect(err).NotTo(HaveOccurred())
 
-		By("Waiting for scenario completion")
 		<-result.Done
 
-		// =====================================================================
-		// Panic Scenario Verifications
-		// =====================================================================
-
-		By("Verifying panic worker was created")
 		verifyPanicWorkerCreated(testLogger)
-
-		By("Verifying panic was caught and logged")
 		verifyPanicWasCaught(testLogger)
-
-		By("Verifying worker never reached Connected state")
 		verifyPanicWorkerNeverConnected(testLogger)
 	})
 })

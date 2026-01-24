@@ -30,26 +30,16 @@ import (
 
 var _ = Describe("Timeout Scenario Integration", func() {
 	It("should demonstrate timeout and retry behavior patterns", func() {
-		By("Setting up test logger at DebugLevel")
 		testLogger := integration.NewTestLogger(zapcore.DebugLevel)
 
-		By("Setting up context with 30s timeout")
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
-		By("Setting up triangular store")
 		store := setupTestStoreForScenario(testLogger.Logger)
 
-		By("Creating scenario context with 10s duration")
-		// 10s is enough to see:
-		// - Quick worker connects immediately
-		// - Slow worker connects after 2s delay
-		// - Retry worker fails 3 times then succeeds
-		// - Combined worker shows multiple failure patterns
 		scenarioCtx, scenarioCancel := context.WithTimeout(ctx, 10*time.Second)
 		defer scenarioCancel()
 
-		By("Running TimeoutScenario with 100ms tick interval")
 		result, err := examples.Run(scenarioCtx, examples.RunConfig{
 			Scenario:     examples.TimeoutScenario,
 			TickInterval: 100 * time.Millisecond,
@@ -58,23 +48,11 @@ var _ = Describe("Timeout Scenario Integration", func() {
 		})
 		Expect(err).NotTo(HaveOccurred())
 
-		By("Waiting for scenario completion")
 		<-result.Done
 
-		// =====================================================================
-		// Timeout Scenario Verifications
-		// =====================================================================
-
-		By("Verifying quick worker completes immediately")
 		verifyTimeoutQuickWorker(testLogger)
-
-		By("Verifying slow worker completes with delay")
 		verifyTimeoutSlowWorker(testLogger)
-
-		By("Verifying retry worker demonstrates retry pattern")
 		verifyTimeoutRetryWorker(testLogger)
-
-		By("Verifying combined worker handles multiple failure patterns")
 		verifyTimeoutCombinedWorker(testLogger)
 	})
 })

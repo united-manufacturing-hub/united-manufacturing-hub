@@ -114,10 +114,7 @@ var _ = Describe("DegradedState", func() {
 })
 
 var _ = Describe("DegradedState Transport Reset", func() {
-	// TransportResetThreshold is 5 - reset at 5, 10, 15... errors
-	// Backoff: 5 errors = 32s, 6+ errors = 60s (capped)
 	It("should emit ResetTransportAction at exactly 5 consecutive errors", func() {
-		// Arrange: 5 errors = 32s backoff, DegradedEnteredAt was 35s ago (past backoff)
 		stateObj := &state.DegradedState{}
 
 		snap := fsmv2.Snapshot{
@@ -130,10 +127,8 @@ var _ = Describe("DegradedState Transport Reset", func() {
 			Desired: &snapshot.CommunicatorDesiredState{},
 		}
 
-		// Act
 		nextState, signal, act := stateObj.Next(snap)
 
-		// Assert
 		Expect(nextState).To(BeAssignableToTypeOf(&state.DegradedState{}))
 		Expect(signal).To(Equal(fsmv2.SignalNone))
 		Expect(act).NotTo(BeNil())
@@ -141,8 +136,6 @@ var _ = Describe("DegradedState Transport Reset", func() {
 	})
 
 	It("should NOT emit ResetTransportAction at 6 consecutive errors", func() {
-		// Arrange: 6 errors = 60s backoff (capped), DegradedEnteredAt was 65s ago (past backoff)
-		// 6 % 5 != 0, so should emit SyncAction, not ResetTransportAction
 		stateObj := &state.DegradedState{}
 
 		snap := fsmv2.Snapshot{
@@ -155,17 +148,13 @@ var _ = Describe("DegradedState Transport Reset", func() {
 			Desired: &snapshot.CommunicatorDesiredState{},
 		}
 
-		// Act
 		_, _, act := stateObj.Next(snap)
 
-		// Assert: Should emit SyncAction, not ResetTransportAction
 		Expect(act).NotTo(BeNil())
 		Expect(act.Name()).To(Equal("sync"))
 	})
 
 	It("should emit ResetTransportAction again at 10 consecutive errors", func() {
-		// Arrange: 10 errors = 60s backoff (capped), DegradedEnteredAt was 65s ago (past backoff)
-		// 10 % 5 == 0, so should emit ResetTransportAction
 		stateObj := &state.DegradedState{}
 
 		snap := fsmv2.Snapshot{
@@ -178,17 +167,13 @@ var _ = Describe("DegradedState Transport Reset", func() {
 			Desired: &snapshot.CommunicatorDesiredState{},
 		}
 
-		// Act
 		_, _, act := stateObj.Next(snap)
 
-		// Assert
 		Expect(act).NotTo(BeNil())
 		Expect(act.Name()).To(Equal("reset_transport"))
 	})
 
 	It("should NOT emit ResetTransportAction at 0 errors", func() {
-		// 0 errors = 0s backoff, DegradedEnteredAt was 1s ago (past backoff)
-		// 0 % 5 == 0 but we shouldn't reset when there are no errors
 		stateObj := &state.DegradedState{}
 
 		snap := fsmv2.Snapshot{
@@ -201,10 +186,8 @@ var _ = Describe("DegradedState Transport Reset", func() {
 			Desired: &snapshot.CommunicatorDesiredState{},
 		}
 
-		// Act
 		_, _, act := stateObj.Next(snap)
 
-		// Assert: Should emit SyncAction, not ResetTransportAction
 		Expect(act).NotTo(BeNil())
 		Expect(act.Name()).To(Equal("sync"))
 	})
@@ -212,9 +195,6 @@ var _ = Describe("DegradedState Transport Reset", func() {
 
 var _ = Describe("DegradedState Backoff", func() {
 	It("stays in degraded state during backoff period", func() {
-		// Arrange: 3 consecutive errors = 8s backoff (2^3 = 8)
-		// DegradedEnteredAt set to now (within backoff period)
-		// Using 3 errors to avoid the reset threshold (5)
 		stateObj := &state.DegradedState{}
 
 		snap := fsmv2.Snapshot{
@@ -227,18 +207,14 @@ var _ = Describe("DegradedState Backoff", func() {
 			Desired: &snapshot.CommunicatorDesiredState{},
 		}
 
-		// Act: Call Next() immediately (within backoff)
 		nextState, signal, action := stateObj.Next(snap)
 
-		// Assert: Still in degraded, no action (waiting for backoff)
 		Expect(nextState).To(BeAssignableToTypeOf(&state.DegradedState{}))
 		Expect(signal).To(Equal(fsmv2.SignalNone))
 		Expect(action).To(BeNil(), "Should NOT emit action during backoff period")
 	})
 
 	It("attempts sync after backoff period expires", func() {
-		// Arrange: 3 errors = 8s backoff, DegradedEnteredAt was 10s ago (past backoff)
-		// Using 3 errors to avoid the reset threshold (5)
 		stateObj := &state.DegradedState{}
 
 		snap := fsmv2.Snapshot{
@@ -251,10 +227,8 @@ var _ = Describe("DegradedState Backoff", func() {
 			Desired: &snapshot.CommunicatorDesiredState{},
 		}
 
-		// Act: Call Next()
 		nextState, _, action := stateObj.Next(snap)
 
-		// Assert: Action returned (attempting sync)
 		Expect(nextState).To(BeAssignableToTypeOf(&state.DegradedState{}))
 		Expect(action).NotTo(BeNil(), "Should emit SyncAction after backoff expires")
 		Expect(action.Name()).To(Equal("sync"))

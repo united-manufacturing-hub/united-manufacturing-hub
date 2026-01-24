@@ -29,26 +29,16 @@ import (
 
 var _ = Describe("Slow Scenario Integration", func() {
 	It("should demonstrate long-running action handling and context cancellation", func() {
-		By("Setting up test logger at DebugLevel")
 		testLogger := integration.NewTestLogger(zapcore.DebugLevel)
 
-		By("Setting up context with 30s timeout")
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
-		By("Setting up triangular store")
 		store := setupTestStoreForScenario(testLogger.Logger)
 
-		By("Creating scenario context with 8s duration")
-		// 8s is enough to see:
-		// - Worker starts in Stopped state
-		// - Transitions to TryingToConnect
-		// - Executes 2-second delay
-		// - Completes with Connected state
 		scenarioCtx, scenarioCancel := context.WithTimeout(ctx, 8*time.Second)
 		defer scenarioCancel()
 
-		By("Running SlowScenario with 100ms tick interval")
 		result, err := examples.Run(scenarioCtx, examples.RunConfig{
 			Scenario:     examples.SlowScenario,
 			TickInterval: 100 * time.Millisecond,
@@ -57,26 +47,12 @@ var _ = Describe("Slow Scenario Integration", func() {
 		})
 		Expect(err).NotTo(HaveOccurred())
 
-		By("Waiting for scenario completion")
 		<-result.Done
 
-		// =====================================================================
-		// Slow Scenario Verifications
-		// =====================================================================
-
-		By("Verifying slow worker begins connection attempt")
 		verifySloWorkerAttemptsConnect(testLogger)
-
-		By("Verifying slow worker experiences expected delay")
 		verifySloWorkerDelay(testLogger)
-
-		By("Verifying slow worker completes connection successfully")
 		verifySloWorkerConnected(testLogger)
-
-		By("Verifying state transitions follow expected pattern")
 		verifySloWorkerStateTransitions(testLogger)
-
-		By("Verifying no unexpected cancellations occurred")
 		verifySloWorkerNoCancellation(testLogger)
 	})
 })

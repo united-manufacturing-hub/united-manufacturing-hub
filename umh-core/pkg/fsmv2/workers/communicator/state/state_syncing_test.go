@@ -43,19 +43,15 @@ var _ = Describe("SyncingState", func() {
 
 var _ = Describe("SyncingState Circuit Breaker", func() {
 	It("applies backoff delay based on ConsecutiveErrors", func() {
-		// Arrange: State with accumulated errors
 		observed := snapshot.CommunicatorObservedState{
 			ConsecutiveErrors: 5,
 			Authenticated:     true,
 		}
 
 		syncingState := &state.SyncingState{}
-
-		// Act: Get backoff delay
 		delay := syncingState.GetBackoffDelay(observed)
 
-		// Assert: Delay increases with errors (exponential backoff capped at 60s)
-		// 5 errors → 2^5 = 32 seconds
+		// 5 errors = 2^5 = 32 seconds (exponential backoff capped at 60s)
 		Expect(delay).To(BeNumerically(">=", 10*time.Second))
 		Expect(delay).To(BeNumerically("<=", 60*time.Second))
 	})

@@ -46,7 +46,6 @@ var _ = Describe("MockRelayServer", func() {
 
 	Describe("Authentication", func() {
 		It("accepts login and returns JWT token in cookie and uuid/name in body", func() {
-			// Prepare login request
 			loginReq := map[string]string{
 				"instanceUUID": "test-instance-123",
 				"email":        "test@example.com",
@@ -54,22 +53,18 @@ var _ = Describe("MockRelayServer", func() {
 			body, err := json.Marshal(loginReq)
 			Expect(err).NotTo(HaveOccurred())
 
-			// Send login request
 			resp, err := http.Post(server.URL()+"/v2/instance/login", "application/json", bytes.NewBuffer(body))
 			Expect(err).NotTo(HaveOccurred())
 			defer func() { _ = resp.Body.Close() }()
 
-			// Verify response
 			Expect(resp.StatusCode).To(Equal(http.StatusOK))
 
-			// Bug #6 fix: real backend returns uuid and name in response body
 			var authResp map[string]interface{}
 			err = json.NewDecoder(resp.Body).Decode(&authResp)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(authResp["uuid"]).NotTo(BeEmpty())
 			Expect(authResp["name"]).NotTo(BeEmpty())
 
-			// Verify JWT cookie is set (real backend behavior)
 			cookies := resp.Cookies()
 			var tokenCookie *http.Cookie
 			for _, c := range cookies {
@@ -86,7 +81,6 @@ var _ = Describe("MockRelayServer", func() {
 		It("tracks authentication calls", func() {
 			Expect(server.AuthCallCount()).To(Equal(0))
 
-			// First login
 			loginReq := map[string]string{
 				"instanceUUID": "test-instance-123",
 				"email":        "test@example.com",
@@ -97,7 +91,6 @@ var _ = Describe("MockRelayServer", func() {
 			_ = resp.Body.Close()
 			Expect(server.AuthCallCount()).To(Equal(1))
 
-			// Second login
 			resp, err = http.Post(server.URL()+"/v2/instance/login", "application/json", bytes.NewBuffer(body))
 			Expect(err).NotTo(HaveOccurred())
 			_ = resp.Body.Close()
@@ -107,7 +100,6 @@ var _ = Describe("MockRelayServer", func() {
 
 	Describe("Pull", func() {
 		It("returns queued messages", func() {
-			// Queue some messages
 			msg1 := &transport.UMHMessage{
 				InstanceUUID: "test-instance-123",
 				Content:      "message-1",
@@ -121,18 +113,15 @@ var _ = Describe("MockRelayServer", func() {
 			server.QueuePullMessage(msg1)
 			server.QueuePullMessage(msg2)
 
-			// Create request with JWT cookie
 			req, err := http.NewRequest(http.MethodGet, server.URL()+"/v2/instance/pull", nil)
 			Expect(err).NotTo(HaveOccurred())
 			req.AddCookie(&http.Cookie{Name: "token", Value: "test-jwt-token"})
 
-			// Send request
 			client := &http.Client{}
 			resp, err := client.Do(req)
 			Expect(err).NotTo(HaveOccurred())
 			defer func() { _ = resp.Body.Close() }()
 
-			// Verify response
 			Expect(resp.StatusCode).To(Equal(http.StatusOK))
 
 			var payload struct {
@@ -146,18 +135,15 @@ var _ = Describe("MockRelayServer", func() {
 		})
 
 		It("returns empty when no messages queued", func() {
-			// Create request with JWT cookie
 			req, err := http.NewRequest(http.MethodGet, server.URL()+"/v2/instance/pull", nil)
 			Expect(err).NotTo(HaveOccurred())
 			req.AddCookie(&http.Cookie{Name: "token", Value: "test-jwt-token"})
 
-			// Send request
 			client := &http.Client{}
 			resp, err := client.Do(req)
 			Expect(err).NotTo(HaveOccurred())
 			defer func() { _ = resp.Body.Close() }()
 
-			// Verify response
 			Expect(resp.StatusCode).To(Equal(http.StatusOK))
 
 			var payload struct {
@@ -169,7 +155,6 @@ var _ = Describe("MockRelayServer", func() {
 		})
 
 		It("clears queue after pull", func() {
-			// Queue a message
 			msg := &transport.UMHMessage{
 				InstanceUUID: "test-instance-123",
 				Content:      "message-1",
@@ -177,7 +162,6 @@ var _ = Describe("MockRelayServer", func() {
 			}
 			server.QueuePullMessage(msg)
 
-			// First pull
 			req, _ := http.NewRequest(http.MethodGet, server.URL()+"/v2/instance/pull", nil)
 			req.AddCookie(&http.Cookie{Name: "token", Value: "test-jwt-token"})
 			client := &http.Client{}
@@ -185,7 +169,6 @@ var _ = Describe("MockRelayServer", func() {
 			Expect(err).NotTo(HaveOccurred())
 			_ = resp.Body.Close()
 
-			// Second pull should return empty
 			req, _ = http.NewRequest(http.MethodGet, server.URL()+"/v2/instance/pull", nil)
 			req.AddCookie(&http.Cookie{Name: "token", Value: "test-jwt-token"})
 			resp, err = client.Do(req)
@@ -203,7 +186,6 @@ var _ = Describe("MockRelayServer", func() {
 
 	Describe("Push", func() {
 		It("records pushed messages", func() {
-			// Prepare push request
 			msg1 := &transport.UMHMessage{
 				InstanceUUID: "test-instance-123",
 				Content:      "pushed-message-1",
@@ -222,22 +204,18 @@ var _ = Describe("MockRelayServer", func() {
 			body, err := json.Marshal(payload)
 			Expect(err).NotTo(HaveOccurred())
 
-			// Create request with JWT cookie
 			req, err := http.NewRequest(http.MethodPost, server.URL()+"/v2/instance/push", bytes.NewBuffer(body))
 			Expect(err).NotTo(HaveOccurred())
 			req.Header.Set("Content-Type", "application/json")
 			req.AddCookie(&http.Cookie{Name: "token", Value: "test-jwt-token"})
 
-			// Send request
 			client := &http.Client{}
 			resp, err := client.Do(req)
 			Expect(err).NotTo(HaveOccurred())
 			defer func() { _ = resp.Body.Close() }()
 
-			// Verify response
 			Expect(resp.StatusCode).To(Equal(http.StatusOK))
 
-			// Verify messages were recorded
 			pushed := server.GetPushedMessages()
 			Expect(pushed).To(HaveLen(2))
 			Expect(pushed[0].Content).To(Equal("pushed-message-1"))
@@ -245,7 +223,6 @@ var _ = Describe("MockRelayServer", func() {
 		})
 
 		It("allows clearing pushed messages", func() {
-			// Push a message
 			msg := &transport.UMHMessage{
 				InstanceUUID: "test-instance-123",
 				Content:      "pushed-message",
@@ -266,10 +243,8 @@ var _ = Describe("MockRelayServer", func() {
 			Expect(err).NotTo(HaveOccurred())
 			_ = resp.Body.Close()
 
-			// Verify message was recorded
 			Expect(server.GetPushedMessages()).To(HaveLen(1))
 
-			// Clear and verify
 			server.ClearPushedMessages()
 			Expect(server.GetPushedMessages()).To(BeEmpty())
 		})
@@ -279,7 +254,6 @@ var _ = Describe("MockRelayServer", func() {
 		It("simulates 401 for re-auth testing", func() {
 			server.SimulateAuthExpiry()
 
-			// Try to pull - should get 401
 			req, err := http.NewRequest(http.MethodGet, server.URL()+"/v2/instance/pull", nil)
 			Expect(err).NotTo(HaveOccurred())
 			req.AddCookie(&http.Cookie{Name: "token", Value: "test-jwt-token"})
@@ -295,7 +269,6 @@ var _ = Describe("MockRelayServer", func() {
 		It("simulates server errors (500)", func() {
 			server.SimulateServerError(http.StatusInternalServerError)
 
-			// Try to pull - should get 500
 			req, err := http.NewRequest(http.MethodGet, server.URL()+"/v2/instance/pull", nil)
 			Expect(err).NotTo(HaveOccurred())
 			req.AddCookie(&http.Cookie{Name: "token", Value: "test-jwt-token"})
@@ -311,7 +284,6 @@ var _ = Describe("MockRelayServer", func() {
 		It("simulates slow response for timeout testing", func() {
 			server.SimulateSlowResponse(200 * time.Millisecond)
 
-			// Create client with short timeout
 			client := &http.Client{
 				Timeout: 50 * time.Millisecond,
 			}
@@ -320,7 +292,6 @@ var _ = Describe("MockRelayServer", func() {
 			Expect(err).NotTo(HaveOccurred())
 			req.AddCookie(&http.Cookie{Name: "token", Value: "test-jwt-token"})
 
-			// Should timeout
 			_, err = client.Do(req)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("deadline exceeded"))
@@ -329,7 +300,6 @@ var _ = Describe("MockRelayServer", func() {
 		It("error injection is one-time only", func() {
 			server.SimulateServerError(http.StatusInternalServerError)
 
-			// First request gets error
 			req, _ := http.NewRequest(http.MethodGet, server.URL()+"/v2/instance/pull", nil)
 			req.AddCookie(&http.Cookie{Name: "token", Value: "test-jwt-token"})
 			client := &http.Client{}
@@ -338,7 +308,6 @@ var _ = Describe("MockRelayServer", func() {
 			Expect(resp.StatusCode).To(Equal(http.StatusInternalServerError))
 			_ = resp.Body.Close()
 
-			// Second request succeeds
 			req, _ = http.NewRequest(http.MethodGet, server.URL()+"/v2/instance/pull", nil)
 			req.AddCookie(&http.Cookie{Name: "token", Value: "test-jwt-token"})
 			resp, err = client.Do(req)
@@ -350,14 +319,12 @@ var _ = Describe("MockRelayServer", func() {
 
 	Describe("Connection Header Tracking for Bug #3 Validation", func() {
 		It("tracks Connection headers from requests", func() {
-			// Create transport with DisableKeepAlives (like the real HTTPTransport)
 			client := &http.Client{
 				Transport: &http.Transport{
 					DisableKeepAlives: true,
 				},
 			}
 
-			// Make two requests
 			req1, _ := http.NewRequest(http.MethodGet, server.URL()+"/v2/instance/pull", nil)
 			req1.AddCookie(&http.Cookie{Name: "token", Value: "test-jwt-token"})
 			resp, err := client.Do(req1)
@@ -370,7 +337,6 @@ var _ = Describe("MockRelayServer", func() {
 			Expect(err).NotTo(HaveOccurred())
 			_ = resp.Body.Close()
 
-			// Verify Connection headers were tracked
 			headers := server.GetReceivedConnectionHeaders()
 			Expect(headers).To(HaveLen(2))
 			// When DisableKeepAlives=true, Go HTTP client sends "Connection: close"

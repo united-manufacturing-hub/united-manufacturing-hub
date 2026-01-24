@@ -69,12 +69,10 @@ var _ = Describe("AuthenticateAction", func() {
 
 	Describe("Transport Nil Safety", func() {
 		It("should create transport if nil in dependencies on first execution", func() {
-			// Create dependencies with nil transport (simulates factory creation)
 			identity := deps.Identity{ID: "test-nil-transport", WorkerType: "communicator"}
 			depsWithNilTransport := communicator.NewCommunicatorDependencies(nil, logger, nil, identity)
 			Expect(depsWithNilTransport.GetTransport()).To(BeNil(), "transport should be nil before first auth")
 
-			// Create action with config (simulates TryingToAuthenticateState creating action)
 			authAction := action.NewAuthenticateAction(
 				"https://relay.example.com",
 				"test-uuid",
@@ -83,28 +81,21 @@ var _ = Describe("AuthenticateAction", func() {
 			)
 
 			ctx := context.Background()
-			// Execute should create transport and store it in deps
 			err := authAction.Execute(ctx, depsWithNilTransport)
-			// Note: This will fail because we're hitting a real URL - that's expected
-			// The important thing is that transport is created before the network call
-			_ = err // Ignore network error
+			_ = err
 
-			// After Execute, transport should be non-nil
 			Expect(depsWithNilTransport.GetTransport()).NotTo(BeNil(), "transport should be created after first auth execution")
 		})
 
 		It("should not replace existing transport on subsequent executions", func() {
 			ctx := context.Background()
 
-			// Get original transport
 			originalTransport := dependencies.GetTransport()
 			Expect(originalTransport).NotTo(BeNil())
 
-			// Execute action
 			err := act.Execute(ctx, dependencies)
 			Expect(err).NotTo(HaveOccurred())
 
-			// Transport should be the same (not replaced)
 			Expect(dependencies.GetTransport()).To(Equal(originalTransport))
 		})
 	})
@@ -122,7 +113,6 @@ var _ = Describe("AuthenticateAction", func() {
 			err := act.Execute(ctx, dependencies)
 			Expect(err).NotTo(HaveOccurred())
 
-			// Verify JWT token is stored in dependencies
 			Expect(dependencies.GetJWTToken()).To(Equal(expectedToken))
 		})
 
@@ -138,7 +128,6 @@ var _ = Describe("AuthenticateAction", func() {
 			err := act.Execute(ctx, dependencies)
 			Expect(err).NotTo(HaveOccurred())
 
-			// Verify JWT expiry is stored in dependencies (converted from Unix timestamp)
 			storedExpiry := dependencies.GetJWTExpiry()
 			Expect(storedExpiry.Unix()).To(Equal(expectedExpiry))
 		})

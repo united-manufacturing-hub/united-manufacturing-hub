@@ -30,17 +30,13 @@ import (
 
 var _ = Describe("Cascade Scenario Integration", func() {
 	It("should demonstrate child failure propagation to parent state", func() {
-		By("Setting up test logger at DebugLevel")
 		testLogger := integration.NewTestLogger(zapcore.DebugLevel)
 
-		By("Setting up context with 30s timeout")
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
-		By("Setting up triangular store")
 		store := setupTestStoreForScenario(testLogger.Logger)
 
-		By("Creating scenario context with 25s duration")
 		// 25s allows time for two complete failure cycles:
 		// Cycle 1 (startup):
 		// - Parent starts and creates children
@@ -55,7 +51,6 @@ var _ = Describe("Cascade Scenario Integration", func() {
 		scenarioCtx, scenarioCancel := context.WithTimeout(ctx, 25*time.Second)
 		defer scenarioCancel()
 
-		By("Running CascadeScenario with 100ms tick interval")
 		result, err := examples.Run(scenarioCtx, examples.RunConfig{
 			Scenario:     examples.CascadeScenario,
 			TickInterval: 100 * time.Millisecond,
@@ -64,35 +59,15 @@ var _ = Describe("Cascade Scenario Integration", func() {
 		})
 		Expect(err).NotTo(HaveOccurred())
 
-		By("Waiting for scenario completion")
 		<-result.Done
 
-		// =====================================================================
-		// Cascade Scenario Verifications
-		// =====================================================================
-
-		By("Verifying parent worker was created")
 		verifyCascadeParentCreated(testLogger)
-
-		By("Verifying children were created by parent")
 		verifyCascadeChildrenCreated(testLogger)
-
-		By("Verifying children experienced failures")
 		verifyCascadeChildrenFailed(testLogger)
-
-		By("Verifying children eventually recovered")
 		verifyCascadeChildrenRecovered(testLogger)
-
-		By("Verifying parent state transitions through degraded state")
 		verifyCascadeParentStateTransitions(testLogger)
-
-		By("Verifying multiple children fail independently")
 		verifyCascadeMultipleChildrenIndependent(testLogger)
-
-		By("Verifying all children must recover for parent to be healthy")
 		verifyCascadeAllChildrenMustRecover(testLogger)
-
-		By("Verifying each child fails expected number of times")
 		verifyCascadeChildFailureCounts(testLogger)
 	})
 })

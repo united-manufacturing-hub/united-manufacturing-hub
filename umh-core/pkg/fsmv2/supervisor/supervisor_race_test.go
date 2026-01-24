@@ -30,9 +30,8 @@ import (
 
 var _ = Describe("Supervisor Race Conditions", func() {
 	var (
-		s    *supervisor.Supervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState]
-		ctx  context.Context
-		once sync.Once
+		s   *supervisor.Supervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState]
+		ctx context.Context
 	)
 
 	BeforeEach(func() {
@@ -129,10 +128,6 @@ var _ = Describe("Supervisor Race Conditions", func() {
 				}
 
 				wg.Wait()
-
-				once.Do(func() {
-					By("Test completed - race detector should report issues if mutex is missing")
-				})
 			})
 		})
 

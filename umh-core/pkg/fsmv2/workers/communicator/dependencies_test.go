@@ -103,7 +103,6 @@ var _ = Describe("CommunicatorDependencies", func() {
 	})
 
 	AfterEach(func() {
-		// Clean up singleton after each test
 		communicator.ClearChannelProvider()
 	})
 
@@ -124,7 +123,6 @@ var _ = Describe("CommunicatorDependencies", func() {
 			It("should store the logger", func() {
 				identity := depspkg.Identity{ID: "test-id", WorkerType: "communicator"}
 				deps := communicator.NewCommunicatorDependencies(mt, logger, nil, identity)
-				// Logger is enriched with worker context, so it won't equal original
 				Expect(deps.GetLogger()).NotTo(BeNil())
 			})
 		})
@@ -233,7 +231,6 @@ var _ = Describe("CommunicatorDependencies", func() {
 					<-done
 				}
 
-				// Should not panic
 			})
 		})
 
@@ -305,7 +302,6 @@ var _ = Describe("CommunicatorDependencies", func() {
 			It("should handle concurrent RecordError and RecordSuccess calls", func() {
 				done := make(chan bool, 20)
 
-				// Launch multiple goroutines to record errors
 				for range 10 {
 					go func() {
 						deps.RecordError()
@@ -313,7 +309,6 @@ var _ = Describe("CommunicatorDependencies", func() {
 					}()
 				}
 
-				// Launch multiple goroutines to record success
 				for range 10 {
 					go func() {
 						deps.RecordSuccess()
@@ -321,12 +316,10 @@ var _ = Describe("CommunicatorDependencies", func() {
 					}()
 				}
 
-				// Wait for all goroutines to complete
 				for range 20 {
 					<-done
 				}
 
-				// The counter should be a non-negative integer
 				Expect(deps.GetConsecutiveErrors()).To(BeNumerically(">=", 0))
 			})
 		})
@@ -346,7 +339,6 @@ var _ = Describe("CommunicatorDependencies", func() {
 
 		Context("when errors are below threshold", func() {
 			It("should NOT call Reset() for 4 consecutive errors", func() {
-				// Record 4 errors (below threshold of 5)
 				for range 4 {
 					deps.RecordError()
 				}
@@ -357,22 +349,18 @@ var _ = Describe("CommunicatorDependencies", func() {
 
 		Context("when errors reach threshold", func() {
 			It("should call Reset() when consecutive errors reach TransportResetThreshold (5)", func() {
-				// Record 5 errors to reach threshold
 				for range 5 {
 					deps.RecordError()
 				}
 
-				// Reset should be called once when threshold is reached
 				Expect(mockTrans.ResetCallCount()).To(Equal(1))
 			})
 
 			It("should call Reset() again when errors accumulate to next threshold multiple", func() {
-				// Record 10 errors (two thresholds)
 				for range 10 {
 					deps.RecordError()
 				}
 
-				// Reset should be called twice (at 5 and 10)
 				Expect(mockTrans.ResetCallCount()).To(Equal(2))
 			})
 		})
@@ -380,10 +368,8 @@ var _ = Describe("CommunicatorDependencies", func() {
 		Context("when transport is nil", func() {
 			It("should not panic when recording errors without transport", func() {
 				identity := depspkg.Identity{ID: "test-id", WorkerType: "communicator"}
-				// Create deps with nil transport
 				depsWithNilTransport := communicator.NewCommunicatorDependencies(nil, logger, nil, identity)
 
-				// Should not panic even when threshold is reached
 				Expect(func() {
 					for range 10 {
 						depsWithNilTransport.RecordError()
@@ -394,22 +380,18 @@ var _ = Describe("CommunicatorDependencies", func() {
 
 		Context("when success resets error count", func() {
 			It("should require reaching threshold again after RecordSuccess", func() {
-				// Record 3 errors
 				for range 3 {
 					deps.RecordError()
 				}
 				Expect(mockTrans.ResetCallCount()).To(Equal(0))
 
-				// Success resets counter
 				deps.RecordSuccess()
 
-				// Record 4 more errors (still below threshold)
 				for range 4 {
 					deps.RecordError()
 				}
 				Expect(mockTrans.ResetCallCount()).To(Equal(0))
 
-				// 5th error should trigger reset
 				deps.RecordError()
 				Expect(mockTrans.ResetCallCount()).To(Equal(1))
 			})
@@ -439,10 +421,8 @@ var _ = Describe("CommunicatorDependencies", func() {
 
 					deps.RecordError()
 
-					// DegradedEnteredAt should now be set
 					enteredAt := deps.GetDegradedEnteredAt()
 					Expect(enteredAt.IsZero()).To(BeFalse())
-					// Should be very recent (within last second)
 					Expect(enteredAt).To(BeTemporally("~", time.Now(), time.Second))
 				})
 			})
@@ -452,11 +432,9 @@ var _ = Describe("CommunicatorDependencies", func() {
 					deps.RecordError()
 					firstEnteredAt := deps.GetDegradedEnteredAt()
 
-					// Small delay to ensure time difference
 					deps.RecordError()
 					deps.RecordError()
 
-					// DegradedEnteredAt should still be the original time
 					Expect(deps.GetDegradedEnteredAt()).To(Equal(firstEnteredAt))
 				})
 			})
@@ -470,7 +448,6 @@ var _ = Describe("CommunicatorDependencies", func() {
 
 					deps.RecordSuccess()
 
-					// DegradedEnteredAt should be cleared
 					Expect(deps.GetDegradedEnteredAt().IsZero()).To(BeTrue())
 				})
 			})
@@ -488,31 +465,25 @@ var _ = Describe("CommunicatorDependencies", func() {
 
 		Describe("DegradedEnteredAt preserved through error sequence", func() {
 			It("should track the original entry time through multiple errors and reset on success", func() {
-				// No errors yet
 				Expect(deps.GetDegradedEnteredAt().IsZero()).To(BeTrue())
 				Expect(deps.GetConsecutiveErrors()).To(Equal(0))
 
-				// First error sets DegradedEnteredAt
 				deps.RecordError()
 				firstEnteredAt := deps.GetDegradedEnteredAt()
 				Expect(firstEnteredAt.IsZero()).To(BeFalse())
 
-				// More errors don't change DegradedEnteredAt
 				deps.RecordError()
 				deps.RecordError()
 				Expect(deps.GetDegradedEnteredAt()).To(Equal(firstEnteredAt))
 				Expect(deps.GetConsecutiveErrors()).To(Equal(3))
 
-				// Success clears both
 				deps.RecordSuccess()
 				Expect(deps.GetDegradedEnteredAt().IsZero()).To(BeTrue())
 				Expect(deps.GetConsecutiveErrors()).To(Equal(0))
 
-				// New error sequence gets new timestamp
 				deps.RecordError()
 				newEnteredAt := deps.GetDegradedEnteredAt()
 				Expect(newEnteredAt.IsZero()).To(BeFalse())
-				// The new timestamp should be after (or equal to) the first one
 				Expect(newEnteredAt).To(BeTemporally(">=", firstEnteredAt))
 			})
 		})
@@ -556,7 +527,6 @@ var _ = Describe("CommunicatorDependencies", func() {
 
 			Context("when ChannelProvider singleton IS set", func() {
 				It("should NOT panic and create dependencies with channels from singleton", func() {
-					// Set up mock provider
 					inbound := make(chan<- *communicator_transport.UMHMessage, 10)
 					outbound := make(<-chan *communicator_transport.UMHMessage, 10)
 					mockProvider := &mockChannelProvider{
@@ -565,7 +535,6 @@ var _ = Describe("CommunicatorDependencies", func() {
 					}
 					communicator.SetChannelProvider(mockProvider)
 
-					// Creating dependencies should NOT panic
 					identity := depspkg.Identity{ID: "test-singleton-id", WorkerType: "communicator"}
 					var deps *communicator.CommunicatorDependencies
 					Expect(func() {
@@ -573,7 +542,6 @@ var _ = Describe("CommunicatorDependencies", func() {
 					}).NotTo(Panic())
 
 					Expect(deps).NotTo(BeNil())
-					// Channels should be set from singleton provider
 					Expect(deps.GetInboundChan()).To(Equal(inbound))
 					Expect(deps.GetOutboundChan()).To(Equal(outbound))
 				})

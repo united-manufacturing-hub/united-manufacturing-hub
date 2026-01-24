@@ -37,8 +37,6 @@ func TestHTTPTransport(t *testing.T) {
 var _ = Describe("HTTP Transport", func() {
 	Describe("Bug #7: Connection Pooling Fix", func() {
 		It("uses connection pooling with keep-alive", func() {
-			// Track Connection headers from requests
-			// With connection pooling enabled, sequential requests should NOT send "Connection: close"
 			var connectionHeaders []string
 			var mu sync.Mutex
 
@@ -62,14 +60,10 @@ var _ = Describe("HTTP Transport", func() {
 			_, err = transport.Pull(ctx, "jwt-token-2")
 			Expect(err).NotTo(HaveOccurred())
 
-			// Assert: With connection pooling enabled, Connection header should NOT be "close"
-			// This verifies Bug #7 fix: replaced DisableKeepAlives with proper pooling
 			mu.Lock()
 			defer mu.Unlock()
 			Expect(connectionHeaders).To(HaveLen(2))
 			for _, header := range connectionHeaders {
-				// Connection header should be empty (keep-alive is default)
-				// or "keep-alive" - but NOT "close"
 				Expect(header).NotTo(Equal("close"))
 			}
 		})
@@ -77,7 +71,6 @@ var _ = Describe("HTTP Transport", func() {
 
 	Describe("Bug #4: Context Timeout Fix", func() {
 		It("respects context cancellation and returns error", func() {
-			// Server that blocks for 5 seconds
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				time.Sleep(5 * time.Second)
 				_ = json.NewEncoder(w).Encode(map[string]any{"UMHMessages": []any{}})
@@ -86,14 +79,11 @@ var _ = Describe("HTTP Transport", func() {
 
 			transport := httptransport.NewHTTPTransport(server.URL, 30*time.Second)
 
-			// Context with 100ms timeout - MUCH shorter than server delay
 			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 			defer cancel()
 
-			// Pull should return quickly with context deadline exceeded
 			_, err := transport.Pull(ctx, "jwt-token")
 
-			// Assert: Error occurred due to context timeout
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("context deadline exceeded"))
 		})
@@ -108,7 +98,6 @@ var _ = Describe("HTTP Transport", func() {
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
 
-			// Should complete quickly
 			_, err := transport.Pull(ctx, "jwt-token")
 			Expect(err).NotTo(HaveOccurred())
 		})

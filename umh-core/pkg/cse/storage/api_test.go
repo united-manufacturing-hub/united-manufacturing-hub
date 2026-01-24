@@ -57,9 +57,6 @@ var _ = Describe("TriangularStore Public API", func() {
 
 		Describe("Step 1: Register Worker and Verify Collections", func() {
 			It("should create collections when registering a new worker", func() {
-				// Given: Empty store
-
-				// When: Save identity
 				err := ts.SaveIdentity(ctx, workerType, workerID, persistence.Document{
 					"id":         workerID,
 					"name":       "Test Container",
@@ -67,7 +64,6 @@ var _ = Describe("TriangularStore Public API", func() {
 				})
 				Expect(err).NotTo(HaveOccurred())
 
-				// Then: Verify identity can be loaded
 				identity, err := ts.LoadIdentity(ctx, workerType, workerID)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(identity["name"]).To(Equal("Test Container"))
@@ -77,14 +73,12 @@ var _ = Describe("TriangularStore Public API", func() {
 
 		Describe("Step 2: Verify Snapshot After Initial Desired State", func() {
 			It("should return snapshot after initial desired state", func() {
-				// Given: Worker with identity
 				err := ts.SaveIdentity(ctx, workerType, workerID, persistence.Document{
 					"id":   workerID,
 					"name": "Test Container",
 				})
 				Expect(err).NotTo(HaveOccurred())
 
-				// When: Save desired state
 				changed, err := ts.SaveDesired(ctx, workerType, workerID, persistence.Document{
 					"id":     workerID,
 					"config": "production",
@@ -92,7 +86,6 @@ var _ = Describe("TriangularStore Public API", func() {
 				Expect(err).NotTo(HaveOccurred())
 				Expect(changed).To(BeTrue()) // First save always changes
 
-				// Then: Verify data can be loaded back
 				desired, err := ts.LoadDesired(ctx, workerType, workerID)
 				Expect(err).NotTo(HaveOccurred())
 				desiredDoc := desired.(persistence.Document)
@@ -102,11 +95,9 @@ var _ = Describe("TriangularStore Public API", func() {
 
 		Describe("Step 3: Verify Delta Created via GetDeltas", func() {
 			It("should return delta or bootstrap after save", func() {
-				// Given: Get initial sync position
 				initialSyncID, err := ts.GetLatestSyncID(ctx)
 				Expect(err).NotTo(HaveOccurred())
 
-				// When: Save desired state (first save)
 				changed, err := ts.SaveDesired(ctx, workerType, workerID, persistence.Document{
 					"id":     workerID,
 					"config": "initial",
@@ -114,7 +105,6 @@ var _ = Describe("TriangularStore Public API", func() {
 				Expect(err).NotTo(HaveOccurred())
 				Expect(changed).To(BeTrue())
 
-				// Then: GetDeltas shows change occurred
 				sub := storage.Subscription{LastSyncID: initialSyncID}
 				resp, err := ts.GetDeltas(ctx, sub)
 				Expect(err).NotTo(HaveOccurred())
@@ -129,7 +119,6 @@ var _ = Describe("TriangularStore Public API", func() {
 			})
 
 			It("should return deltas array with field-level changes", func() {
-				// Given: Worker with initial desired state
 				_, err := ts.SaveDesired(ctx, workerType, workerID, persistence.Document{
 					"id":     workerID,
 					"config": "initial",
@@ -140,7 +129,6 @@ var _ = Describe("TriangularStore Public API", func() {
 				syncAfterFirst, err := ts.GetLatestSyncID(ctx)
 				Expect(err).NotTo(HaveOccurred())
 
-				// When: Save updated desired state
 				changed, err := ts.SaveDesired(ctx, workerType, workerID, persistence.Document{
 					"id":     workerID,
 					"config": "updated",
@@ -148,7 +136,6 @@ var _ = Describe("TriangularStore Public API", func() {
 				Expect(err).NotTo(HaveOccurred())
 				Expect(changed).To(BeTrue())
 
-				// Then: GetDeltas returns delta for the change
 				sub := storage.Subscription{LastSyncID: syncAfterFirst}
 				resp, err := ts.GetDeltas(ctx, sub)
 				Expect(err).NotTo(HaveOccurred())
@@ -171,7 +158,6 @@ var _ = Describe("TriangularStore Public API", func() {
 
 		Describe("Step 4: Verify No Delta on Unchanged Data", func() {
 			It("should not create delta when data unchanged", func() {
-				// Given: Existing desired state
 				_, err := ts.SaveDesired(ctx, workerType, workerID, persistence.Document{
 					"id":     workerID,
 					"config": "value",
@@ -181,13 +167,10 @@ var _ = Describe("TriangularStore Public API", func() {
 				syncAfterFirst, err := ts.GetLatestSyncID(ctx)
 				Expect(err).NotTo(HaveOccurred())
 
-				// When: Save identical data
 				changed, err := ts.SaveDesired(ctx, workerType, workerID, persistence.Document{
 					"id":     workerID,
 					"config": "value",
 				})
-
-				// Then: No change detected
 				Expect(err).NotTo(HaveOccurred())
 				Expect(changed).To(BeFalse())
 
@@ -258,7 +241,6 @@ var _ = Describe("TriangularStore Public API", func() {
 
 		Describe("GetDeltas Edge Cases", func() {
 			It("should return empty deltas when client is at current position", func() {
-				// Given: Worker with some state
 				_, _ = ts.SaveDesired(ctx, workerType, workerID, persistence.Document{
 					"id":     workerID,
 					"config": "value",
@@ -267,34 +249,26 @@ var _ = Describe("TriangularStore Public API", func() {
 				currentSync, err := ts.GetLatestSyncID(ctx)
 				Expect(err).NotTo(HaveOccurred())
 
-				// When: Client is at current position
 				sub := storage.Subscription{LastSyncID: currentSync}
 				resp, err := ts.GetDeltas(ctx, sub)
 				Expect(err).NotTo(HaveOccurred())
-
-				// Then: No deltas and not bootstrap
 				Expect(resp.Deltas).To(BeEmpty())
 				Expect(resp.RequiresBootstrap).To(BeFalse())
 				Expect(resp.LatestSyncID).To(Equal(currentSync))
 			})
 
 			It("should return empty deltas when client is ahead of server", func() {
-				// Given: Empty store with initial sync ID
 				currentSync, err := ts.GetLatestSyncID(ctx)
 				Expect(err).NotTo(HaveOccurred())
 
-				// When: Client claims to be ahead (shouldn't happen but handle gracefully)
 				sub := storage.Subscription{LastSyncID: currentSync + 100}
 				resp, err := ts.GetDeltas(ctx, sub)
 				Expect(err).NotTo(HaveOccurred())
-
-				// Then: No deltas (client is "ahead")
 				Expect(resp.Deltas).To(BeEmpty())
 				Expect(resp.RequiresBootstrap).To(BeFalse())
 			})
 
 			It("should include HasMore flag when delta limit reached", func() {
-				// Given: Multiple changes
 				for i := range 150 {
 					_, _ = ts.SaveDesired(ctx, workerType, workerID, persistence.Document{
 						"id":    workerID,
@@ -302,12 +276,10 @@ var _ = Describe("TriangularStore Public API", func() {
 					})
 				}
 
-				// When: Request deltas from start
 				sub := storage.Subscription{LastSyncID: 0}
 				resp, err := ts.GetDeltas(ctx, sub)
 				Expect(err).NotTo(HaveOccurred())
 
-				// Then: Either has deltas with HasMore, or requires bootstrap
 				if !resp.RequiresBootstrap && len(resp.Deltas) > 0 {
 					// If returning deltas, might indicate HasMore
 					// Note: Current limit is 100, so with 150 changes, HasMore should be true
@@ -320,7 +292,6 @@ var _ = Describe("TriangularStore Public API", func() {
 
 		Describe("Delta Store Integration", func() {
 			It("should persist deltas to unified collection", func() {
-				// Given: Save multiple changes
 				err := ts.SaveIdentity(ctx, workerType, workerID, persistence.Document{
 					"id":   workerID,
 					"name": "Test",
@@ -339,12 +310,10 @@ var _ = Describe("TriangularStore Public API", func() {
 				})
 				Expect(err).NotTo(HaveOccurred())
 
-				// When: Query deltas from start
 				sub := storage.Subscription{LastSyncID: 0}
 				resp, err := ts.GetDeltas(ctx, sub)
 				Expect(err).NotTo(HaveOccurred())
 
-				// Then: Should have deltas for the changes
 				if !resp.RequiresBootstrap {
 					// Deltas should be ordered by SyncID
 					for i := 1; i < len(resp.Deltas); i++ {

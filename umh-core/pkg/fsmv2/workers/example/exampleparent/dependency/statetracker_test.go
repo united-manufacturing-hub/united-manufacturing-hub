@@ -43,7 +43,6 @@ var _ = Describe("StateTracker", func() {
 
 	Describe("NewDefaultStateTracker", func() {
 		It("should initialize with current time as enteredAt", func() {
-			// The initial enteredAt should be the clock's current time
 			Expect(tracker.GetStateEnteredAt()).To(Equal(mockClock.Now()))
 		})
 
