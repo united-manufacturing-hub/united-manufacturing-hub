@@ -16,21 +16,16 @@ package storage
 
 import "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 
-// Subscription represents a client's sync subscription.
-// Clients provide their last sync position and optionally filter
-// which data they want to receive.
+// Subscription represents a client's sync subscription with position and optional filters.
 type Subscription struct {
 	Queries    []Query // What data to receive (empty = all)
 	LastSyncID int64   // Client's last sync position
 }
 
-// Query is a stub for now - filtering will be added later.
-// Empty queries means "receive all changes".
+// Query is a stub for now - filtering will be added later. Empty = all changes.
 type Query struct{}
 
-// Delta represents a single change event for sync clients.
-// It contains just the diff (not full document) to minimize
-// data transfer over the wire.
+// Delta represents a single change event for sync clients (diff only, not full document).
 type Delta struct {
 	Changes     *Diff  // Field-level changes (Added, Modified, Removed)
 	WorkerType  string // Type of worker (e.g., "container", "relay")
@@ -40,9 +35,7 @@ type Delta struct {
 	TimestampMs int64  // When the change occurred (Unix ms)
 }
 
-// DeltasResponse is returned by GetDeltas to sync clients.
-// It either contains incremental deltas or full bootstrap data
-// if the client is too far behind.
+// DeltasResponse contains incremental deltas or full bootstrap data if client is too far behind.
 type DeltasResponse struct {
 	Bootstrap         *BootstrapData // Full state if bootstrap needed
 	Deltas            []Delta        // Incremental changes since LastSyncID
@@ -51,11 +44,7 @@ type DeltasResponse struct {
 	HasMore           bool           // More deltas available (pagination)
 }
 
-// BootstrapData contains full state for clients that are too far behind
-// to receive incremental deltas. This typically happens when:
-//   - Client is reconnecting after extended offline period
-//   - Delta history has been compacted
-//   - Client is syncing for the first time.
+// BootstrapData contains full state for clients too far behind for incremental deltas.
 type BootstrapData struct {
 	Workers     []WorkerSnapshot // Full state of all workers
 	AtSyncID    int64            // Sync position of this bootstrap
