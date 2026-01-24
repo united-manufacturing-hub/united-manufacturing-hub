@@ -20,7 +20,7 @@
 // prevent deadlocks. It uses a level-based ordering system where locks with
 // lower levels must be acquired before locks with higher levels.
 //
-// # Why Lock Ordering Matters
+// # Lock ordering
 //
 // Without consistent lock ordering, deadlocks can occur:
 //
@@ -44,7 +44,7 @@
 //	Unlock(Supervisor.mu)      Unlock(WorkerContext.mu)
 //	   = NO DEADLOCK              Unlock(Supervisor.mu)
 //
-// # Lock Level Hierarchy
+// # Lock level hierarchy
 //
 // FSMv2 uses the following lock levels (lower = acquire first):
 //
@@ -56,63 +56,47 @@
 //
 // Rule: Always acquire locks in ascending level order.
 //
-// # Mandatory Ordering: Supervisor.mu → WorkerContext.mu
+// # Supervisor.mu before WorkerContext.mu
 //
-// The most important ordering is Supervisor.mu before WorkerContext.mu because:
-//
-// 1. Supervisor iterates workers: The supervisor's tick loop iterates over
-// worker contexts. It must hold Supervisor.mu to prevent concurrent modification.
-//
-// 2. Worker modifications: When modifying a specific worker, we need
-// WorkerContext.mu. If we already hold Supervisor.mu from iteration, we must
-// acquire WorkerContext.mu second (not first).
-//
-// 3. Deadlock potential: If WorkerContext.mu could be acquired before
-// Supervisor.mu, we'd have deadlock scenarios between tick loop and worker
+// The supervisor's tick loop iterates over worker contexts while holding
+// Supervisor.mu to prevent concurrent modification. When modifying a specific
+// worker, WorkerContext.mu must be acquired second. If WorkerContext.mu could
+// be acquired first, deadlocks would occur between the tick loop and worker
 // operations.
 //
-// # Why Environment Variable Control?
+// # Environment variable control
 //
-// Lock order checking is controlled by ENABLE_LOCK_ORDER_CHECKS=1 because:
+// Lock order checking is controlled by ENABLE_LOCK_ORDER_CHECKS=1.
 //
-// 1. Production Performance: Checking lock order requires per-goroutine tracking
-// and runtime stack introspection. This adds overhead (microseconds per lock).
-//
-// 2. Development Safety: During development and testing, enable checks to catch
-// ordering violations early. Panics on violation produce full stack traces for debugging.
-//
-// 3. CI Enforcement: CI runs with checks enabled. Any ordering violation fails
-// the build before reaching production.
+// Checking lock order requires per-goroutine tracking and runtime stack
+// introspection, adding overhead (microseconds per lock). Enable checks
+// during development and testing to catch ordering violations early.
+// CI runs with checks enabled; any ordering violation fails the build.
 //
 // In production: ENABLE_LOCK_ORDER_CHECKS="" (disabled, no overhead)
 // In development: ENABLE_LOCK_ORDER_CHECKS=1 (enabled, catches violations)
 // In CI: ENABLE_LOCK_ORDER_CHECKS=1 (enabled, enforces ordering)
 //
-// # Why Panic on Violation?
+// # Panic on violation
 //
-// The LockManager panics on lock order violations because:
+// The LockManager panics on lock order violations to provide immediate feedback
+// with a full stack trace. A log message could be missed; a panic cannot.
+// Crashing during testing is preferable to deadlocking in production.
 //
-// 1. Immediate Feedback: Developers see the violation immediately in testing,
-// with a full stack trace showing exactly where the bad ordering occurred.
-//
-// 2. No Silent Failures: A log message could be missed. A panic cannot be.
-//
-// 3. Fail-Fast: Better to crash during testing than deadlock in production.
-//
-// 4. Debugging Context: The panic message includes:
+// The panic message includes:
 //   - Which locks are involved
 //   - Their respective levels
 //   - The expected ordering
 //   - Full stack trace
 //
-// # Detection Mechanism
+// # Detection mechanism
 //
 // The LockManager tracks per-goroutine lock acquisitions:
 //
-// 1. Each goroutine has a list of currently held locks (name + level)
+// 1. Each goroutine has a list of held locks (name + level)
 // 2. On Lock(), check if any held lock has a HIGHER level
-// 3. If yes, panic (would violate ordering)
-// 4. If no, record the new lock and proceed
+// 3. If yes, panic (ordering violation)
+// 4. If no, record the lock and proceed
 // 5. On Unlock(), remove the lock from the held list
 //
 // # Usage
@@ -134,18 +118,18 @@
 //	workerMu.Lock()
 //	supervisorMu.Lock()  // PANIC: lock order violation
 //
-// # Testing Lock Order
+// # Testing lock order
 //
 // Run tests with lock order checks enabled:
 //
 //	ENABLE_LOCK_ORDER_CHECKS=1 ginkgo -r ./pkg/fsmv2/supervisor
 //
-// Any lock order violation will cause a panic with:
+// Any lock order violation causes a panic with:
 //   - The violating lock acquisition
 //   - The higher-level lock already held
 //   - Full stack trace
 //
-// # Integration with Supervisor
+// # Supervisor integration
 //
 // The supervisor creates locks at initialization:
 //

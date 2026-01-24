@@ -15,24 +15,22 @@
 // Package action provides idempotent actions for the example child worker.
 //
 // For core FSM concepts including state machine definitions, tick loop mechanics,
-// and the worker hierarchy, see the authoritative documentation in
-// workers/example/doc.go.
+// and the worker hierarchy, see workers/example/doc.go.
 //
-// # Action Implementation Patterns
+// # Action implementation patterns
 //
-// This package demonstrates the canonical patterns for FSM v2 actions:
+// This package demonstrates FSM v2 action patterns:
 //   - Use empty structs with no fields. Inject dependencies via Execute.
 //   - Check context cancellation first with select on ctx.Done().
-//   - Design for idempotency. Check if work is already done before acting.
+//   - Check if work is already done before acting.
 //
-// # Error Handling Standards
+// # Error handling
 //
-// Actions perform side effects and can fail. When an action returns an error,
-// the state remains unchanged. On the next tick, state.Next() is called again
-// and may return the same action, effectively retrying through state
+// When an action returns an error, the state remains unchanged. On the next
+// tick, state.Next() may return the same action, retrying through state
 // re-evaluation.
 //
-// ## When to Return an Error
+// ## When to return an error
 //
 // Return an error in these situations:
 //   - The operation fails due to transient issues like network timeouts or
@@ -41,7 +39,7 @@
 //     limiting.
 //   - You deliberately simulate failures for testing purposes.
 //
-// ## When Not to Return an Error
+// ## When not to return an error
 //
 // Do not return an error in these situations:
 //   - Validation fails. Validate in state.Next() before you emit the action.
@@ -52,7 +50,7 @@
 //
 // # Idempotency
 //
-// For idempotency requirements and rationale, see pkg/fsmv2/doc.go "Actions" section.
+// For idempotency requirements, see pkg/fsmv2/doc.go "Actions" section.
 //
 // Example patterns:
 //
@@ -71,7 +69,7 @@
 //	    return nil
 //	}
 //
-// # Context Cancellation
+// # Context cancellation
 //
 // Check context cancellation at the start of every action:
 //

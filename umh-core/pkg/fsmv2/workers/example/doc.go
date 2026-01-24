@@ -18,9 +18,9 @@
 //   - pkg/fsmv2/README.md - Triangle Model, concepts, quick start
 //   - pkg/fsmv2/doc.go - Implementation patterns, API contracts
 //
-// # Example Workers
+// # Example workers
 //
-// This package contains several example workers demonstrating FSMv2 patterns:
+// This package contains example workers demonstrating FSMv2 patterns:
 //
 //   - exampleparent/ - Parent worker with child management (hierarchical composition)
 //   - examplechild/ - Child worker with states, actions, and dependencies
@@ -28,9 +28,9 @@
 //   - exampleslow/ - Worker with slow operations (for testing timeouts)
 //   - examplepanic/ - Worker that panics (for testing panic recovery)
 //
-// # Directory Structure
+// # Directory structure
 //
-// Each worker follows a consistent structure:
+// Each worker follows this structure:
 //
 //	examplechild/
 //	├── worker.go           # Worker implementation (CollectObservedState, DeriveDesiredState)
@@ -45,9 +45,9 @@
 //	    ├── connect.go      # Example action
 //	    └── connect_test.go # Idempotency tests
 //
-// # Quick Start: Creating a New Worker
+// # Creating a worker
 //
-// To create a new worker named "myworker":
+// To create a worker named "myworker":
 //
 //  1. Create the directory structure:
 //
@@ -74,22 +74,21 @@
 //
 // See factory/README.md for worker type derivation rules.
 //
-// # Key Patterns Demonstrated
+// # Patterns demonstrated
 //
-// For conceptual documentation and requirements, see pkg/fsmv2/doc.go.
-// This package demonstrates those patterns in working code.
+// For pattern documentation and requirements, see pkg/fsmv2/doc.go.
 //
-// States: See pkg/fsmv2/doc.go for state patterns. This package demonstrates them:
+// States:
 //   - examplechild/state/ implements child worker states.
 //   - exampleparent/state/ implements parent worker states.
 //
-// Actions: See pkg/fsmv2/doc.go for action requirements. This package demonstrates them:
+// Actions:
 //   - examplechild/action/connect.go shows the empty struct and idempotency patterns.
 //
-// Parent-Child: See pkg/fsmv2/doc.go for hierarchical composition. This package demonstrates it:
+// Parent-child:
 //   - exampleparent/worker.go shows ChildrenSpecs and VariableBundle usage.
 //
-// Testing: This package demonstrates testing patterns:
+// Testing:
 //   - examplechild/action/*_test.go shows action idempotency verification.
 //   - examplechild/state/*_test.go shows state transition testing.
 package example

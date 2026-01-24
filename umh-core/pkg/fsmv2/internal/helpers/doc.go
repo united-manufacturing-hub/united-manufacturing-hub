@@ -14,13 +14,12 @@
 
 // Package helpers provides convenience utilities for FSMv2 workers.
 //
-// This package contains optional boilerplate reducers that help implement
-// workers more easily. Unlike the core fsmv2 contracts (api.go, dependencies.go),
-// these helpers are not required for FSM operation but reduce repetitive code.
+// These helpers reduce boilerplate when implementing workers. Unlike the core
+// fsmv2 contracts (api.go, dependencies.go), they are optional.
 //
 // # BaseState
 //
-// BaseState provides automatic state name derivation from type names:
+// BaseState derives state names from type names:
 //
 //	type RunningState struct {
 //	    helpers.BaseState
@@ -32,7 +31,7 @@
 //
 // # BaseWorker
 //
-// BaseWorker provides type-safe dependency access for workers:
+// BaseWorker provides type-safe dependency access:
 //
 //	type MyWorker struct {
 //	    *helpers.BaseWorker[*MyDeps]
@@ -44,17 +43,16 @@
 //
 // # ConvertSnapshot
 //
-// ConvertSnapshot provides type-safe snapshot conversion for state transitions:
+// ConvertSnapshot converts snapshots with type safety for state transitions:
 //
 //	func (s *MyState) Next(snapAny any) (fsmv2.State, fsmv2.Signal, fsmv2.Action) {
 //	    snap := helpers.ConvertSnapshot[MyObserved, *MyDesired](snapAny)
 //	    // Direct typed access: snap.Observed.Field, snap.Desired.Method()
 //	}
 //
-// # Why Internal?
+// # Internal placement
 //
-// These helpers are placed in internal/ because they are implementation details
-// that support the public fsmv2 API. The core contracts (Worker, State, Action,
-// Dependencies) remain public in pkg/fsmv2/, while these convenience utilities
-// are available within the package hierarchy.
+// The helpers live in internal/ because they support the public fsmv2 API as
+// implementation details. Core contracts (Worker, State, Action, Dependencies)
+// remain public in pkg/fsmv2/.
 package helpers

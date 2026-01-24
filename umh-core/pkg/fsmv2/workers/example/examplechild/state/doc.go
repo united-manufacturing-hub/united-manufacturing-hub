@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package state implements FSM states for the example child worker.
+// Package state defines FSM states for the example child worker.
 // For state pattern documentation, see pkg/fsmv2/doc.go.
 // For parent package overview, see workers/example/doc.go.
 package state

@@ -14,7 +14,7 @@
 
 // Package deps provides dependency injection types for FSMv2 workers.
 //
-// This package contains:
+// Types:
 //   - BaseDependencies: Common tools for all workers (logger, state reader, metrics)
 //   - StateReader: Read-only access to TriangularStore
 //   - MetricsRecorder: Buffer for action-written metrics

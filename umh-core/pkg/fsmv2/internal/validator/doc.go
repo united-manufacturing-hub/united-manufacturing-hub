@@ -14,26 +14,26 @@
 
 // Package validator provides architecture validation utilities for FSMv2.
 //
-// This package contains AST-based validators that enforce FSMv2 architectural
-// patterns. It is used by architecture_test.go to validate code at test time.
+// Contains AST-based validators that enforce FSMv2 architectural patterns.
+// Used by architecture_test.go to validate code at test time.
 //
 // # Validators
 //
-// The package provides validators for:
+// Validates the following:
 //   - State structs (empty fields, base embedding, String/Reason methods)
 //   - Action structs (stateless, context cancellation, no channels)
 //   - Worker files (DeriveDesiredState purity, dependency validation)
 //   - Snapshot files (CollectedAt timestamp, IsShutdownRequested method)
 //
-// # Pattern Registry
+// # Pattern registry
 //
-// The PatternRegistry contains WHY explanations for each architectural pattern.
-// When a violation is found, the registry provides educational context about
-// why the pattern matters and how to fix the violation.
+// PatternRegistry contains explanations for each architectural pattern.
+// When a violation is found, the registry provides context about the pattern
+// and how to fix the violation.
 //
 // # Usage
 //
-// Validators are called from architecture_test.go:
+// Call validators from architecture_test.go:
 //
 //	violations := validator.ValidateStateStructs(baseDir)
 //	if len(violations) > 0 {

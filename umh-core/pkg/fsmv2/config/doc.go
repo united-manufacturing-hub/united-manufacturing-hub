@@ -22,9 +22,9 @@
 //   - DesiredState: Target state with shutdown control
 //   - Template utilities for variable expansion
 //
-// # Why Three Variable Tiers?
+// # Variable tiers
 //
-// Variables are organized into three namespaces for different purposes:
+// Variables are organized into three namespaces:
 //
 // User Namespace:
 //   - Contains: Worker-specific configuration (IP addresses, ports, URLs)
@@ -44,17 +44,10 @@
 //   - Serialization: NO (runtime-only, not persisted)
 //   - Use case: Values that shouldn't be saved to config
 //
-// # Why User Variables Get Top-Level Access?
+// # User variable flattening
 //
-// User variables are "flattened" to top-level in templates because:
-//
-// 1. Most Common Use Case: 80%+ of template variables are user-defined
-// (IP addresses, ports, connection strings). Making them top-level
-// reduces boilerplate.
-//
-// 2. Ergonomic Templates: {{ .IP }} is cleaner than {{ .user.IP }}
-//
-// 3. Backward Compatibility: Existing templates expect top-level access.
+// User variables are flattened to top-level in templates because they
+// represent 80%+ of template variables. {{ .IP }} is cleaner than {{ .user.IP }}.
 //
 // Flattening example:
 //
@@ -75,31 +68,19 @@
 //	{{ .global.cluster }}      // Global variable (nested)
 //	{{ .internal.timestamp }}  // Internal variable (nested)
 //
-// # Why Internal Variables Are Not Serialized?
+// # Internal variable serialization
 //
-// Internal variables use json:"-" yaml:"-" tags because:
+// Internal variables use json:"-" yaml:"-" tags because they contain
+// runtime-only values (timestamps, system state) that are computed fresh
+// each run. Saving them would produce stale data on next load.
 //
-// 1. Runtime-Only: Values like timestamps and system state shouldn't be
-// saved to config files. They're computed fresh each run.
+// # map[string]any design
 //
-// 2. Avoid Stale Data: Saved timestamps would be wrong on next load.
+// VariableBundle uses map[string]any because users define arbitrary config
+// fields in YAML. A typed struct would require code changes for each new
+// variable. Go templates validate variable existence and type at render time.
 //
-// 3. Security: Some internal values might be sensitive (tokens, PIDs).
-//
-// # Why map[string]any Instead of Structs?
-//
-// VariableBundle uses map[string]any because:
-//
-// 1. User-Defined Fields: Users define arbitrary config fields in YAML.
-// We cannot pre-type {{ .MyCustomField }} or {{ .IP_PRIMARY }}.
-//
-// 2. Dynamic Templates: Template variables are user-controlled. A typed
-// struct would require code changes for each new variable.
-//
-// 3. Type Safety at Render: Go templates validate variable existence and
-// type at render time. Missing or wrong-typed variables produce clear errors.
-//
-// # ChildSpec and Hierarchical Composition
+// # ChildSpec and hierarchical composition
 //
 // ChildSpec declares child workers that a parent worker manages:
 //
@@ -115,18 +96,11 @@
 //	    },
 //	}
 //
-// Why ChildSpec instead of direct child creation?
+// ChildSpec is declarative: parents declare what children should exist, not
+// how to create them. The supervisor handles creation, deletion, and updates.
+// Children can be added or removed by changing ChildrenSpecs in DeriveDesiredState().
 //
-// 1. Declarative: Parent declares what children SHOULD exist, not HOW
-// to create them. Supervisor handles creation/deletion/updates.
-//
-// 2. Kubernetes-Style: Like Deployments managing Pods. Desired state vs
-// actual state reconciliation.
-//
-// 3. Dynamic: Children can be added/removed by changing ChildrenSpecs
-// in DeriveDesiredState(). No manual worker creation needed.
-//
-// # ChildStartStates: Coordinating Parent and Child Lifecycle
+// # ChildStartStates
 //
 // ChildStartStates specifies which parent FSM states cause the child to run:
 //
@@ -134,21 +108,13 @@
 //	// Child runs when parent is in "Running" or "TryingToStart"
 //	// Child stops when parent is in any other state
 //
-// Why ChildStartStates?
+// The child runs if the parent state is in the list, stops otherwise.
+// An empty list means the child always runs.
 //
-// 1. Coordinated Lifecycle: Parent controls when children start/stop.
-// A parent in "Stopping" state automatically stops all children.
-//
-// 2. Simple Logic: Child runs if parent state is in the list, stops otherwise.
-// Empty list means child always runs.
-//
-// 3. Declarative Control: Parent doesn't imperatively start/stop children.
-// It declares the desired child state, and the child FSM handles transitions.
-//
-// Note: ChildStartStates is for lifecycle coordination, not data passing.
+// ChildStartStates handles lifecycle coordination, not data passing.
 // Use VariableBundle to pass data from parent to child.
 //
-// # DesiredState and Shutdown Control
+// # DesiredState and shutdown control
 //
 // DesiredState includes IsShutdownRequested() for graceful shutdown:
 //
@@ -158,18 +124,12 @@
 //	    ChildrenSpecs    []ChildSpec
 //	}
 //
-// Why ShutdownRequested in DesiredState?
+// The supervisor sets ShutdownRequested when shutdown is initiated. Workers
+// check this flag in their state transitions and complete cleanup states
+// before signaling removal. Parent shutdown propagates ShutdownRequested
+// to all children, so children clean up before parent completes shutdown.
 //
-// 1. Supervisor Control: The supervisor sets ShutdownRequested when shutdown
-// is initiated. Workers check this in their state transitions.
-//
-// 2. Graceful Shutdown: Workers transition through proper cleanup states
-// before signaling removal. No abrupt termination.
-//
-// 3. Hierarchy-Aware: Parent shutdown sets ShutdownRequested for all children.
-// Children clean up before parent completes shutdown.
-//
-// # Template Expansion
+// # Template expansion
 //
 // The config package provides template utilities for variable expansion:
 //
@@ -181,12 +141,12 @@
 //	result, err := config.ExpandTemplate(config, bundle.Flatten())
 //	// result: "address: \"192.168.1.100:502\"\ncluster: \"prod\""
 //
-// Template expansion happens during DeriveDesiredState(), transforming
-// user configuration into concrete desired state.
+// Template expansion happens during DeriveDesiredState(), transforming user
+// configuration into concrete desired state.
 //
 // # Validation
 //
-// ChildSpec validation ensures:
+// ChildSpec validation checks:
 //   - Name is non-empty
 //   - WorkerType is registered in factory
 //   - Variables are valid (no nil maps)

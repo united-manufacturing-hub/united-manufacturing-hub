@@ -22,68 +22,68 @@
 //   - Freshness timestamps for staleness detection
 //   - Automatic restart with backoff on repeated failures
 //
-// # Why Separate Goroutine?
+// # Separate goroutine
 //
-// Observed state collection runs in a separate goroutine because:
+// Observed state collection runs in a separate goroutine for three reasons:
 //
-// 1. Non-blocking Tick Loop: The supervisor's tick loop uses the most recently
-// collected state without waiting for collection to complete. This keeps the
+// 1. Non-blocking tick loop: The supervisor's tick loop uses the most recently
+// collected state without waiting for collection to complete, keeping the
 // tick loop fast (<100ms) even if collection is slow.
 //
-// 2. Decoupled Timing: Collection interval (how often we poll the system) is
-// independent of tick interval (how often we reconcile). Collection might run
+// 2. Decoupled timing: Collection interval (how often the system is polled) is
+// independent of tick interval (how often reconciliation runs). Collection might run
 // every 100ms while ticks run every second.
 //
 // 3. Isolation: Collection failures don't block state transitions. The supervisor
 // continues operating with stale data (detected via freshness checks) rather
 // than halting.
 //
-// # Why Freshness Timestamps?
+// # Freshness timestamps
 //
-// Every ObservedState includes a timestamp (GetTimestamp()) because:
+// Every ObservedState includes a timestamp (GetTimestamp()) for three reasons:
 //
-// 1. Staleness Detection: The supervisor's health checker uses timestamps to
+// 1. Staleness detection: The supervisor's health checker uses timestamps to
 // detect when collection has stopped working. If observed state is too old,
 // the worker transitions to a degraded state.
 //
 // 2. Debugging: Operators can see when state was last collected, helping
 // diagnose issues like network partitions or hung collectors.
 //
-// 3. Ordering: If multiple collection results arrive out of order (rare but
-// possible), timestamps ensure we use the most recent one.
+// 3. Ordering: If multiple collection results arrive out of order,
+// timestamps determine which one is most recent.
 //
-// # Why Timeouts?
+// # Timeouts
 //
-// Collection has configurable timeouts (default: 2.2s) because:
+// Collection has configurable timeouts (default: 2.2s) for three reasons:
 //
-// 1. Resource Reclamation: A hung collection (e.g., network timeout) is
+// 1. Resource reclamation: A hung collection (e.g., network timeout) is
 // cancelled and the goroutine freed. Without timeouts, collectors could
 // accumulate indefinitely.
 //
-// 2. Predictable Latency: Operators know the maximum age of observed state
-// is bounded by the timeout. This helps SLA calculations.
+// 2. Predictable latency: Operators know the maximum age of observed state
+// is bounded by the timeout, which helps SLA calculations.
 //
-// 3. Cgroup Awareness: The default timeout accounts for Docker/Kubernetes
+// 3. Cgroup awareness: The default timeout accounts for Docker/Kubernetes
 // CPU throttling:
 //   - 1s collection interval
-//   - 200ms cgroup throttle buffer (100ms period × 2)
+//   - 200ms cgroup throttle buffer (100ms period x 2)
 //   - 1s safety margin
 //   = 2.2s total timeout
 //
-// # Why Automatic Restart with Backoff?
+// # Automatic restart with backoff
 //
-// The collector restarts automatically with exponential backoff because:
+// The collector restarts automatically with exponential backoff for three reasons:
 //
-// 1. Transient Failures: Network blips, temporary resource exhaustion, or
-// brief service outages should self-heal without operator intervention.
+// 1. Transient failures: Network blips, temporary resource exhaustion, or
+// brief service outages self-heal without operator intervention.
 //
-// 2. Thundering Herd Prevention: If all collectors fail simultaneously (e.g.,
+// 2. Thundering herd prevention: If all collectors fail simultaneously (e.g.,
 // during a network partition), backoff prevents them from all retrying at once.
 //
-// 3. Resource Protection: Repeated immediate restarts could exhaust resources.
+// 3. Resource protection: Repeated immediate restarts could exhaust resources.
 // Backoff gives the system time to recover.
 //
-// # Thread Safety Model
+// # Thread safety model
 //
 // The Collector uses a mutex to protect its internal state:
 //
@@ -91,7 +91,7 @@
 //   - GetLatestState() acquires a read lock
 //   - The collection goroutine acquires exclusive locks when updating state
 //
-// The supervisor can safely call GetLatestState() from the tick loop while
+// The supervisor can call GetLatestState() from the tick loop while
 // collection runs in the background.
 //
 // # Usage
@@ -129,14 +129,14 @@
 //   - fsmv2_collection_success_total: Count of successful collections
 //   - fsmv2_observed_state_age_seconds: Current age of observed state
 //
-// # Integration with Health
+// # Integration with health
 //
 // The health package uses collector timestamps to detect staleness:
 //
-//   - Layer 1: Timestamp too old → mark data as stale
-//   - Layer 2: Stale for too long → transition to degraded
-//   - Layer 3: Degraded for too long → escalate to stopping
-//   - Layer 4: If all else fails → trigger restart
+//   - Layer 1: Timestamp too old -> mark data as stale
+//   - Layer 2: Stale for too long -> transition to degraded
+//   - Layer 3: Degraded for too long -> escalate to stopping
+//   - Layer 4: If all else fails -> trigger restart
 //
 // See supervisor/health/doc.go for the full freshness detection strategy.
 package collection

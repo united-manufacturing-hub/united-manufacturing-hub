@@ -27,7 +27,7 @@
 // The FSMv2 supervisor uses this package for all state persistence.
 // See pkg/fsmv2/supervisor/supervisor.go for usage patterns.
 //
-// # Go Structs with Reflection
+// # Go structs with reflection
 //
 // CSE uses Go structs with reflection-based type derivation. Collection names
 // are derived from struct type names using a naming convention:
@@ -40,10 +40,10 @@
 // type registration. The type name suffix (DesiredState, ObservedState) determines
 // the role, and the prefix determines the worker type.
 //
-// # Why Three Separate Collections?
+// # Collections
 //
 // Each worker's state is stored in three separate collections because identity,
-// desired, and observed have fundamentally different lifecycles:
+// desired, and observed have different lifecycles:
 //
 // Identity: Created once at worker creation, never updated. Immutable fields
 // like worker ID, name, and worker type that identify "what is this worker?"
@@ -59,20 +59,20 @@
 // (desired) shouldn't require knowing current system state (observed), and polling
 // shouldn't affect identity or configuration.
 //
-// # Why Delta Checking?
+// # Delta checking
 //
-// Both SaveDesired and SaveObserved include built-in delta checking that skips
-// writes when data hasn't changed:
+// SaveDesired and SaveObserved include delta checking that skips writes when
+// data hasn't changed:
 //
 //	changed, err := storage.SaveDesiredTyped[ContainerDesiredState](ts, ctx, id, desired)
 //	changed, err := storage.SaveObservedTyped[ContainerObservedState](ts, ctx, id, observed)
 //	// changed=false means write was skipped (data unchanged)
 //
-// Why? Both desired and observed state can be written frequently. For observed,
+// Both desired and observed state can be written frequently. For observed,
 // polling happens every 500ms in FSMv2. For desired, supervisor ticks may re-derive
-// the same desired state on every tick. Without delta checking, we'd write
-// identical data repeatedly, incrementing sync IDs unnecessarily and generating
-// noise in change streams.
+// the same desired state on every tick. Without delta checking, writes of
+// identical data would increment sync IDs unnecessarily and generate noise in
+// change streams.
 //
 // Delta checking compares business data (excludes CSE metadata fields like
 // _sync_id, _version, timestamps). If only metadata would change, the write
@@ -82,79 +82,69 @@
 // increment sync_id, so clients requesting "changes since sync_id X" receive
 // only meaningful updates.
 //
-// # Why Version Management Differs?
+// # Version management
 //
 // Desired and Observed handle versions differently:
 //
-// Desired: _version increments on every update.
-// Why? Desired represents user intent and participates in optimistic locking.
-// When two clients modify configuration concurrently, version conflicts reveal
-// the race condition. The pattern is: read version, modify, write with expected
-// version, fail if version changed.
+// Desired: _version increments on every update. Desired represents user intent
+// and participates in optimistic locking. When two clients modify configuration
+// concurrently, version conflicts reveal the race condition. The pattern is:
+// read version, modify, write with expected version, fail if version changed.
 //
-// Observed: _version is preserved (doesn't increment).
-// Why? Observed state is ephemeral. It's reconstructed by polling external
-// systems, not by user modifications. There's no "concurrent modification" to
-// detect - the latest poll result is always authoritative. Version conflicts
-// don't make sense for ephemeral data.
+// Observed: _version is preserved (doesn't increment). Observed state is
+// ephemeral and reconstructed by polling external systems. The latest poll
+// result is always authoritative, so version conflicts don't apply.
 //
-// # Why Two API Patterns?
+// # API patterns
 //
-// The storage API provides two patterns for different use cases:
+// The storage API provides two patterns:
 //
-// 1. Runtime Polymorphic API (interface methods):
+// 1. Runtime polymorphic API (interface methods):
 //
 //	ts.SaveObserved(ctx, "container", id, observed)
 //
 // Use when worker type is determined at runtime. Supervisors managing multiple
-// worker types use this because they iterate over heterogeneous workers and
-// can't know types at compile time.
+// worker types use this because they iterate over heterogeneous workers.
 //
-// 2. Compile-Time Typed API (generic functions):
+// 2. Compile-time typed API (generic functions):
 //
 //	storage.SaveObservedTyped[ContainerObservedState](ts, ctx, id, observed)
 //
 // Use when type is known at compile time. Collectors and workers use this for
-// type safety, IDE autocomplete, and compile-time error checking.
+// type safety and compile-time error checking.
 //
-// Both patterns use the same underlying convention-based naming ({workerType}_{role})
-// and the same storage backend. The interface methods are not deprecated - they
-// serve the runtime polymorphic use case where generics can't help.
+// Both patterns use the same convention-based naming ({workerType}_{role}) and
+// storage backend.
 //
-// # Why Convention-Based Naming?
+// # Convention-based naming
 //
 // Collection names follow a strict convention: {workerType}_{role}
 //
 //	container_identity    container_desired    container_observed
 //	relay_identity        relay_desired        relay_observed
 //
-// Why? Convention-based naming eliminates the need for explicit type registration.
 // The generic functions derive workerType from the struct name using reflection:
 //
 //	DeriveWorkerType[ContainerObservedState]() → "container"
 //
-// This "convention over configuration" approach reduces boilerplate. You define
-// a struct with the right naming convention, and storage operations just work.
-// No registry, no initialization, no mapping files.
+// This approach eliminates explicit type registration. Define a struct with the
+// right naming convention, and storage operations work without registry or
+// mapping files.
 //
-// # Why Atomic LoadSnapshot?
+// # Atomic LoadSnapshot
 //
 // LoadSnapshot uses a database transaction to atomically load all three parts:
 //
 //	snapshot, err := ts.LoadSnapshot(ctx, "container", "worker-123")
 //	// snapshot.Identity, snapshot.Desired, snapshot.Observed are consistent
 //
-// Why? FSM state machines need a consistent view of worker state to make
-// correct decisions. Without atomic loading, you might see desired="stop"
-// with observed="running" (from before the desired change), leading to
-// incorrect state transitions.
+// FSM state machines need a consistent view of worker state. Without atomic
+// loading, you might see desired="stop" with observed="running" (from before
+// the desired change), leading to incorrect state transitions.
 //
-// Transactions ensure snapshot isolation: all three parts reflect the same
-// point in time, even if another goroutine is updating observed state.
+// # CSE metadata fields
 //
-// # CSE Metadata Fields
-//
-// TriangularStore auto-injects CSE metadata fields transparently:
+// TriangularStore auto-injects CSE metadata fields:
 //
 //	_sync_id:    Global sync version (for delta sync queries)
 //	_version:    Document version (for optimistic locking)
@@ -165,22 +155,20 @@
 // incrementing sync IDs after successful writes, managing versions per role,
 // and setting timestamps appropriately.
 //
-// # Future: Delta Streaming via sync_id
+// # Delta streaming via sync_id
 //
-// The _sync_id field enables efficient client synchronization (planned feature):
+// The _sync_id field enables efficient client synchronization:
 //
 //	// Client requests: "give me all changes since my last sync"
 //	SELECT * FROM all_collections WHERE _sync_id > 12345 ORDER BY _sync_id
 //
-// This allows clients to:
-//   - Maintain local caches synchronized with server state
-//   - Request only incremental changes instead of full snapshots
-//   - Track exactly which updates they've processed
+// Clients can maintain local caches synchronized with server state, request
+// only incremental changes, and track which updates they've processed.
 //
 // The infrastructure (sync_id auto-increment, delta checking) is in place.
-// The query API for streaming changes to clients is planned for future phases.
+// The query API for streaming changes to clients is planned.
 //
-// # Future: UserSpec and SAGA Patterns
+// # UserSpec and SAGA patterns
 //
 // The triangular model separates user intent from system state:
 //
@@ -193,14 +181,14 @@
 //	ObservedState  → Actual system state
 //
 // Planned enhancements:
-//   - UserSpec versioning for audit trails (who changed what, when)
+//   - UserSpec versioning for audit trails
 //   - SAGA pattern: users modify UserSpec only, DesiredState flows automatically
-//   - Conflict resolution via resource IDs (not last-write-wins)
+//   - Conflict resolution via resource IDs
 //   - Audit logs tracking user requests and their effects
 //
 // See PR #2235 (FSM v2 Phase 1) and Linear ENG-3622 (CSE RFC) for context.
 //
-// # Usage Example
+// # Usage example
 //
 //	// Create store
 //	ts := storage.NewTriangularStore(persistenceStore, logger)

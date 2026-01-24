@@ -22,60 +22,34 @@
 //   - Worker pool for concurrent action execution
 //   - Metrics for queue size, utilization, and execution duration
 //
-// # Why Asynchronous Execution?
+// # Asynchronous execution
 //
-// Actions are executed asynchronously for several key reasons:
+// Actions execute asynchronously to keep the supervisor's tick loop fast
+// (typically <100ms). Long-running actions like network calls or process starts
+// run in the worker pool instead of blocking the tick loop.
 //
-// 1. Non-blocking Tick Loop: The supervisor's tick loop must complete quickly
-// (typically <100ms) to maintain responsiveness. Long-running actions (network
-// calls, process starts) would stall all workers if executed synchronously.
+// Each action has a timeout. If an action hangs, the context is cancelled and
+// the supervisor retries with backoff. Action failures are isolated - a crashing
+// action does not affect other workers.
 //
-// 2. Timeout Protection: Actions have per-operation timeouts. If an action hangs
-// (e.g., network partition), the context is cancelled and the action fails cleanly.
-// The supervisor can then retry with backoff.
+// # Worker pool
 //
-// 3. Isolation: Action failures are isolated to the action itself. A crashing
-// action doesn't bring down the supervisor or affect other workers.
+// The ActionExecutor uses a fixed worker pool (default: 10 workers) with a
+// buffered channel (2x worker count). This bounds concurrency to prevent
+// resource exhaustion and provides backpressure - if the queue is full,
+// enqueue returns an error instead of blocking.
 //
-// # Why Worker Pool?
+// # Per-action timeouts
 //
-// The ActionExecutor uses a fixed worker pool (default: 10 workers) because:
+// Actions have configurable timeouts (default: 30s). A slow action times out
+// and releases its worker slot, allowing other actions to execute. Without
+// timeouts, a hung action could hold a worker slot forever.
 //
-// 1. Bounded Concurrency: Prevents resource exhaustion from too many concurrent
-// actions. In production, thousands of actions could be enqueued simultaneously.
+// # Idempotency requirement
 //
-// 2. Queue Backpressure: The buffered channel (2x worker count) provides natural
-// backpressure. If the queue is full, enqueue returns an error rather than
-// blocking indefinitely.
-//
-// 3. Predictable Resource Usage: A fixed pool means predictable memory and CPU
-// usage regardless of action volume.
-//
-// # Why Per-Action Timeouts?
-//
-// Actions have configurable timeouts (default: 30s) because:
-//
-// 1. Graceful Degradation: A slow action doesn't block other actions. It times
-// out, logs an error, and the supervisor can retry with backoff.
-//
-// 2. Resource Reclamation: Timed-out actions release their worker slot, allowing
-// other actions to execute.
-//
-// 3. Deadlock Prevention: Without timeouts, a hung action could hold a worker
-// slot forever, eventually exhausting the pool.
-//
-// # Why Idempotency Requirement?
-//
-// All actions MUST be idempotent (safe to call multiple times) because:
-//
-// 1. Retry After Timeout: If an action times out but partially completed, the
-// supervisor will retry it. Idempotency ensures the retry is safe.
-//
-// 2. Network Partitions: Actions may be executed but their completion ack lost
-// due to network issues. The supervisor will retry, so idempotency is essential.
-//
-// 3. Exponential Backoff: The supervisor retries failed actions with exponential
-// backoff. Each retry must be safe.
+// All actions MUST be idempotent. The supervisor retries actions after timeouts,
+// failures, and network partitions. If an action times out but partially
+// completed, the retry must be safe.
 //
 // Example idempotent action:
 //
@@ -87,18 +61,12 @@
 //	    return startProcess(ctx, a.ProcessPath)
 //	}
 //
-// # Why Exponential Backoff?
+// # Exponential backoff
 //
-// Failed actions are retried with exponential backoff because:
-//
-// 1. Transient Failures: Many failures are transient (network blips, resource
-// contention). Exponential backoff gives the system time to recover.
-//
-// 2. Thundering Herd Prevention: Without backoff, all failed actions would
-// retry simultaneously, potentially overwhelming the system.
-//
-// 3. Fair Scheduling: Backoff ensures that repeatedly failing actions don't
-// starve healthy actions of worker slots.
+// Failed actions retry with exponential backoff. This handles transient failures
+// (network blips, resource contention) by giving the system time to recover.
+// Backoff also prevents thundering herd retries and ensures failing actions
+// do not starve healthy actions of worker slots.
 //
 // # Usage
 //
@@ -119,9 +87,9 @@
 //	// Shutdown
 //	executor.Shutdown()
 //
-// # Testing Idempotency
+// # Testing idempotency
 //
-// Use the VerifyActionIdempotency helper to test action idempotency:
+// Use VerifyActionIdempotency to test action idempotency:
 //
 //	execution.VerifyActionIdempotency(action, 3, func() {
 //	    // Verify expected state after 3 executions
@@ -136,9 +104,9 @@
 //   - fsmv2_action_timeout_total: Count of timed-out actions
 //   - fsmv2_worker_pool_utilization: Percentage of workers in use
 //
-// # Thread Safety
+// # Thread safety
 //
-// The ActionExecutor is fully thread-safe:
+// The ActionExecutor is thread-safe:
 //   - EnqueueAction() can be called from any goroutine
 //   - HasActionInProgress() uses read locks for concurrent access
 //   - GetActiveActionCount() uses read locks for concurrent access

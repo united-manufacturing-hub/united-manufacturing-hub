@@ -17,26 +17,17 @@
 //
 // # Overview
 //
-// For background on why FSMv2 exists and how it relates to Kubernetes/PLC control loop patterns,
-// see README.md "Why FSMv2?" section. For the conceptual overview and Triangle Model diagram,
-// see README.md.
-//
-// The Triangle Model defines the data architecture: Identity (who), Desired (want), Observed (actual).
-// The three layers below define the code architecture that operates on this data.
+// For background on FSMv2 and its relation to Kubernetes/PLC control loop patterns,
+// see README.md. The Triangle Model defines the data architecture: Identity (who),
+// Desired (want), Observed (actual).
 //
 // A tick is one iteration of the supervisor's control loop: collect observation,
 // derive desired state, evaluate the state machine, and execute any returned action.
 //
 // FSMv2 separates concerns into three layers:
-//   - Worker: Business logic implementation (what the worker does).
-//   - State: Decision logic (when to transition, what actions to take).
-//   - Supervisor: Orchestration (tick loop, action execution, child management).
-//
-// This separation enables:
-//   - Pure functional state transitions (no side effects in Next()).
-//   - Explicit action execution with retry/backoff.
-//   - Declarative child management (Kubernetes-style).
-//   - Type-safe dependencies via generics.
+//   - Worker: Business logic (what the worker does)
+//   - State: Decision logic (when to transition, what actions to take)
+//   - Supervisor: Orchestration (tick loop, action execution, child management)
 //
 // # Quick Start
 //
@@ -51,35 +42,30 @@
 //
 // For the Triangle Model and Tick Loop diagram, see README.md.
 //
-// ## States: Structs, Not Strings
+// ## States as structs
 //
-// States are concrete Go types implementing the State interface, providing:
-//   - Compile-time type safety (returning wrong type will not compile).
-//   - Explicit transitions (visible in code).
-//   - Encapsulated logic (each state is self-contained).
+// States are concrete Go types implementing the State interface, providing
+// compile-time type safety, explicit transitions, and encapsulated logic.
+// See workers/example/examplechild/state/ for implementations.
 //
-// See workers/example/examplechild/state/ for state implementations.
+// ## Immutability
 //
-// ## Immutability: Pass-by-Value
+// The supervisor passes snapshots by value to State.Next(). Go's pass-by-value
+// semantics prevent states from modifying the supervisor's data.
+// See internal/helpers/state_adapter.go for ConvertSnapshot helper.
 //
-// The supervisor passes snapshots by value to State.Next(), making them inherently immutable.
-// Go's pass-by-value semantics guarantee states cannot modify the supervisor's data.
-// No getters or defensive copying needed - the language enforces immutability.
-// See internal/helpers/state_adapter.go for ConvertSnapshot helper that provides type-safe access.
+// The State interface uses generics (State[TSnapshot, TDeps]), but implementations
+// use State[any, any] because Go lacks covariance support. Access typed data via
+// helpers.ConvertSnapshot[O, D](snapAny).
 //
-// Note: The State interface uses generics (State[TSnapshot, TDeps]), but implementations
-// use State[any, any] because Go lacks covariance support. The Snapshot struct provides
-// type-safe access via helpers.ConvertSnapshot[O, D](snapAny).
+// ## Actions
 //
-// ## Actions: Idempotent Operations
-//
-// Actions represent idempotent side effects that modify external system state.
-// They do not cause state transitions directly. All actions must be idempotent,
-// meaning they are safe to retry after partial completion.
+// Actions are idempotent side effects that modify external system state.
+// They do not cause state transitions directly.
 //
 // Key requirements:
 //   - Actions are empty structs. Dependencies are injected via Execute(ctx, depsAny).
-//   - Always check ctx.Done() first for cancellation.
+//   - Check ctx.Done() first for cancellation.
 //   - Check if work is already done before performing it (idempotency).
 //
 // See workers/example/examplechild/action/connect.go for a complete example.
@@ -98,45 +84,44 @@
 //   - Permanent failures: Return SignalNeedsRestart from state.Next() instead.
 //   - Expected conditions: For example, "already connected" is success.
 //
-// ## DesiredState: No Runtime Dependencies
+// ## DesiredState constraints
 //
-// DesiredState never contains Dependencies. This architectural constraint ensures
-// serializability, since Dependencies are runtime interfaces (connections, pools).
+// DesiredState never contains Dependencies because Dependencies are runtime
+// interfaces (connections, pools) that cannot be serialized.
 //
-// If you need state to check a runtime condition (like IsConnected()):
+// To check a runtime condition (like IsConnected()):
 //  1. Collector reads it from dependencies
 //  2. Collector writes to ObservedState field (e.g., ConnectionHealth)
 //  3. State.Next() checks ObservedState, not dependencies
 //
-// See workers/example/examplechild/worker.go for the correct pattern.
+// See workers/example/examplechild/worker.go for the pattern.
 //
-// ## Retry Mechanism
+// ## Retry mechanism
 //
 // FSMv2 retries failed actions through tick-based state re-evaluation, not automatic backoff.
 //
-// Primary Retry Mechanism (tick-based re-evaluation):
+// Tick-based re-evaluation:
 //   - Action fails → state remains unchanged → inProgress flag cleared
 //   - Next tick → state.Next() called again with fresh observation
 //   - If conditions unchanged → state.Next() returns same action → action enqueued again
 //   - Retry rate governed by tick interval (not exponential backoff)
-//   - The retry mechanism has no max attempts limit and retries until the action succeeds or the supervisor shuts down.
+//   - Retries continue until the action succeeds or the supervisor shuts down
 //
-// Action-Observation Gating:
-//   - After enqueueing an action, the supervisor sets the actionPending flag.
-//   - The actionPending flag blocks the FSM tick until a fresh observation arrives (prevents duplicate actions).
+// Action-observation gating:
+//   - After enqueueing an action, the supervisor sets the actionPending flag
+//   - The actionPending flag blocks the FSM tick until a fresh observation arrives
 //   - Observation timestamp must be newer than action enqueue time to proceed
-//   - This ensures the action's effect is observed before re-evaluation
 //
-// Action Execution (per-action):
+// Action execution:
 //   - Default timeout: 30 seconds per action attempt
 //   - Executed asynchronously in worker pool (non-blocking tick loop)
-//   - There is no automatic retry within a single execution. A failure clears the inProgress flag.
-//   - Retries happen naturally via tick-based re-evaluation
+//   - No automatic retry within a single execution; failure clears the inProgress flag
+//   - Retries happen via tick-based re-evaluation
 //
-// Infrastructure Health Circuit Breaker (infrastructure failures):
+// Infrastructure health circuit breaker:
 //   - Max attempts: 5 (DefaultMaxInfraRecoveryAttempts)
 //   - Attempt window: 5 minutes (DefaultRecoveryAttemptWindow)
-//   - Backoff range: 1s → 60s (exponential)
+//   - Backoff range: 1s to 60s (exponential)
 //   - Escalation after 5 failed attempts (logs manual intervention required)
 //
 // Example retry flow:
@@ -147,12 +132,12 @@
 //	Tick 3: state.Next() re-evaluates → conditions unchanged → ConnectAction returned
 //	        Action enqueued again → retries naturally via tick loop
 //
-// Circuit Breaker Escalation Flow (infrastructure only):
+// Circuit breaker escalation flow:
 //
 //	Attempts 1-3: Log warnings with retry countdown
 //	Attempt 4: "Warning: One retry attempt remaining before escalation"
 //	Attempt 5: "Escalation required: Manual intervention needed"
-//	Runbook: (documentation pending - see supervisor/infrastructure_health.go for details)
+//	Runbook: See supervisor/infrastructure_health.go
 //
 // Implementation details in:
 //   - supervisor/internal/execution/action_executor.go (async execution, timeout)
@@ -160,40 +145,38 @@
 //   - supervisor/infrastructure_health.go (circuit breaker constants)
 //   - supervisor/reconciliation.go (tick loop, action gating, re-evaluation)
 //
-// ## Validation: Layered Approach
+// ## Validation layers
 //
-// FSMv2 validates data at multiple layers to catch errors early:
+// FSMv2 validates data at multiple layers:
 //   - Layer 1: API entry (supervisor.AddWorker) - Fast fail on invalid input
 //   - Layer 2: Reconciliation (reconcileChildren) - Runtime consistency checks
 //   - Layer 3: Factory (WorkerFactory) - Registry validation
 //   - Layer 4: Worker constructor (NewMyWorker) - Business logic validation
 //
-// Each layer catches different types of errors.
 // See factory/README.md for worker type derivation and registration patterns.
 //
-// ## Variables: Three-Tier Namespace
+// ## Variable namespaces
 //
-// VariableBundle provides three namespaces for configuration:
+// VariableBundle provides three namespaces:
 //   - User: Top-level template access (flattened, e.g., {{ .IP }})
 //   - Global: Fleet-wide settings (nested, e.g., {{ .global.cluster_id }})
-//   - Internal: Runtime metadata (nested). Not serialized.
+//   - Internal: Runtime metadata (nested), not serialized
 //
-// User and Global are persisted. Internal is runtime-only.
 // See config/variables.go for the VariableBundle struct definition.
 //
-// ## Hierarchical Composition: Parent-Child Workers
+// ## Parent-child workers
 //
 // Parents declare children via ChildSpec in DeriveDesiredState().
-// Supervisor handles creation, updates, and cleanup automatically.
+// The supervisor handles creation, updates, and cleanup automatically.
 //
 // Key concepts:
 //   - Parent returns ChildrenSpecs in DeriveDesiredState()
 //   - ChildStartStates coordinates child lifecycle (not data passing)
 //   - Use VariableBundle for passing data to children
 //
-// See workers/example/exampleparent/worker.go for complete parent-child example.
+// See workers/example/exampleparent/worker.go for a complete example.
 //
-// ## Helper Functions
+// ## Helper functions
 //
 // The config package provides helpers to reduce boilerplate in DeriveDesiredState():
 //
@@ -205,10 +188,9 @@
 //	// Requires MyConfig to implement GetState() string
 //	return config.DeriveLeafState[MyConfig](spec)
 //
-// These helpers eliminate 15-25 lines of boilerplate per worker.
-// See config/helpers.go for full documentation.
+// See config/helpers.go for documentation.
 //
-// ## Factory Registration
+// ## Factory registration
 //
 // Workers register with the factory in their package's init() function:
 //
@@ -229,10 +211,10 @@
 // The worker type is derived from the ObservedState struct name (MyObserved → "my").
 // See factory/README.md for naming conventions and common mistakes.
 //
-// ## Parent-Child Visibility (ChildrenView)
+// ## Parent-child visibility
 //
 // Parent workers observe children's health via setter methods on their ObservedState.
-// The supervisor automatically calls these setters during observation collection.
+// The supervisor calls these setters during observation collection.
 //
 // Two patterns are supported:
 //
@@ -269,7 +251,7 @@
 // See workers/example/exampleparent/snapshot/snapshot.go for the simple counts pattern.
 // See config/childspec.go for ChildrenView and ChildInfo definitions.
 //
-// # Architecture Documentation
+// # Architecture documentation
 //
 // For detailed architecture explanations, see:
 //   - architecture_test.go - Patterns enforced by tests (run with -v for rationale explanations)
@@ -279,108 +261,100 @@
 //   - config/childspec.go - Hierarchical composition
 //   - config/variables.go - Variable namespaces
 //
-// # Architecture Validation
+// # Architecture validation
 //
-// Run architecture tests to validate all patterns:
+// Run architecture tests to validate patterns:
 //
 //	ginkgo run --focus="Architecture" -v ./pkg/fsmv2/
 //
-// Tests enforce: immutability, shutdown handling, state naming, idempotency.
+// Tests enforce immutability, shutdown handling, state naming, and idempotency.
 //
-// # Common Patterns
+// # Common patterns
 //
-// ## State Naming Conventions
+// ## State naming conventions
 //
-// Active states emit actions until a condition is met:
-//   - Use the prefix "TryingTo" or "Ensuring".
-//   - Examples include TryingToStartState and EnsuringConnectedState.
+// Active states emit actions until a condition is met. Use the prefix "TryingTo"
+// or "Ensuring" (e.g., TryingToStartState, EnsuringConnectedState).
 //
-// Passive states observe and react:
-//   - Use descriptive nouns.
-//   - Examples include RunningState, StoppedState, and DegradedState.
+// Passive states observe and react. Use descriptive nouns
+// (e.g., RunningState, StoppedState, DegradedState).
 //
-// ## Shutdown Handling
+// ## Shutdown handling
 //
 // Check IsShutdownRequested() as the first conditional in Next().
-// See workers/example/examplechild/state/ for examples of proper shutdown handling.
+// See workers/example/examplechild/state/ for examples.
 //
-// ## Type-Safe Dependencies
+// ## Type-safe dependencies
 //
 // Use BaseWorker[D] for type-safe dependency access without casting.
-// See workers/example/examplechild/dependencies.go for dependency pattern.
-// See DEPENDENCIES.md for comprehensive dependency documentation including:
-//   - Dependency inventory and availability
-//   - Creating custom dependencies tutorial
-//   - Global variables flow
-//   - StateReader examples
-//   - Metrics in actions
-//   - Parent-child sharing patterns
+// See workers/example/examplechild/dependencies.go for the pattern.
+// See DEPENDENCIES.md for comprehensive documentation including dependency
+// inventory, custom dependencies, global variables, StateReader, metrics,
+// and parent-child sharing patterns.
 //
 // # Testing
 //
-// Test FSM workers by:
-//  1. Creating test states and actions
-//  2. Calling Next() with test snapshots
-//  3. Verifying returned state, signal, and action
-//  4. Testing action idempotency with VerifyActionIdempotency helper
+// Test FSM workers by creating test states and actions, calling Next() with
+// test snapshots, and verifying the returned state, signal, and action.
+// Use VerifyActionIdempotency helper for action tests.
 //
 // See workers/example/examplechild/state/*_test.go for state transition tests.
 // See workers/example/examplechild/action/*_test.go for action idempotency tests.
 //
-// # Thread Safety
+// # Thread safety
 //
 // The supervisor manages concurrency:
-//   - CollectObservedState() runs in separate goroutine with timeout
-//   - The supervisor calls State.Next() in its main goroutine (single-threaded).
-//   - Action.Execute() runs asynchronously in worker pool (non-blocking tick loop).
+//   - CollectObservedState() runs in a separate goroutine with timeout
+//   - State.Next() runs in the supervisor's main goroutine (single-threaded)
+//   - Action.Execute() runs asynchronously in a worker pool
 //
-// Workers do not need to implement locking because the supervisor handles it.
+// Workers do not need to implement locking.
 //
-// # Best Practices
+// # Best practices
 //
-//   - Keep Next() pure (see "Immutability" section above)
+//   - Keep Next() pure (no side effects)
 //   - Make actions idempotent (check if work already done)
-//   - Check IsShutdownRequested() first in all states (see "Shutdown Handling" section above)
+//   - Check IsShutdownRequested() first in all states
 //   - Use type-safe state structs, not strings
-//   - Return action or transition, not both - the supervisor panics if both are returned.
+//   - Return action or transition, not both (the supervisor panics if both are returned)
 //   - Handle context cancellation in all async operations
 //   - Test action idempotency with VerifyActionIdempotency helper
 //
 // # Glossary
 //
-// Tick: One iteration of the supervisor's control loop. Collects observation,
-// derives desired state, evaluates the state machine, and executes any action.
+// Tick: One iteration of the supervisor's control loop (collect observation,
+// derive desired state, evaluate state machine, execute action).
 //
-// State (Go type): A struct implementing the State interface. Represents a
+// State (Go type): A struct implementing the State interface, representing a
 // node in the FSM with its Next() method defining transitions.
 //
-// State (FSM state): The current node in the finite state machine, represented
-// by a Go State struct (e.g., RunningState, TryingToConnectState).
+// State (FSM state): The FSM's position, represented by a Go State struct
+// (e.g., RunningState, TryingToConnectState).
 //
-// State (string): The snap.Observed.State field, a string for debugging/logging.
-// Set via config.MakeState(prefix, suffix). Not the FSM state itself.
+// State (string): The snap.Observed.State field for debugging/logging.
+// Set via config.MakeState(prefix, suffix).
 //
 // DesiredState: What the system should be. Derived from user configuration.
 // Does not contain runtime dependencies.
 //
-// ObservedState: What the system actually is. Collected via CollectObservedState().
+// ObservedState: What the system is. Collected via CollectObservedState().
 // Contains timestamps for freshness checking.
 //
-// Signal: Communication from state to supervisor. SignalNone (normal),
-// SignalNeedsRemoval (cleanup complete), SignalNeedsRestart (unrecoverable error).
+// Signal: Communication from state to supervisor (SignalNone, SignalNeedsRemoval,
+// SignalNeedsRestart).
 //
-// Action: An idempotent side effect. Executed asynchronously after state.Next()
+// Action: An idempotent side effect executed asynchronously after state.Next()
 // returns it. Must handle context cancellation.
 //
 // Snapshot: Point-in-time view containing Identity, Observed, and Desired.
-// Passed by value to State.Next() for immutability.
+// Passed by value to State.Next().
 //
-// Worker: Business logic implementation. Provides CollectObservedState(),
+// Worker: Business logic implementation providing CollectObservedState(),
 // DeriveDesiredState(), and GetInitialState().
 //
-// Supervisor: Orchestrates the tick loop, executes actions, manages children.
-// See supervisor/doc.go for tick loop details.
+// Supervisor: Orchestrates the tick loop, executes actions, and manages children.
+// See supervisor/doc.go for details.
 //
-// actionPending: Internal gating flag. When true, blocks FSM tick until fresh
-// observation arrives. Prevents duplicate action execution.
+// actionPending: Internal gating flag that blocks FSM tick until fresh
+// observation arrives, preventing duplicate action execution.
 package fsmv2
