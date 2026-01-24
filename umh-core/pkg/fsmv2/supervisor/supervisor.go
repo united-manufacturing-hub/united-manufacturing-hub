@@ -40,7 +40,7 @@
 // To prevent deadlocks, locks must be acquired in this order:
 //
 // 1. MANDATORY: Supervisor.mu → WorkerContext.mu (violation = immediate deadlock)
-// 2. ADVISORY: Supervisor.mu → Supervisor.ctxMu (ctxMu can be acquired alone)
+// 2. ADVISORY: Supervisor.mu → Supervisor.ctxMu (ctxMu is independent and can be acquired alone)
 // 3. CRITICAL: Never hold Supervisor.mu while calling child/worker methods
 // 4. WorkerContext.mu locks are independent (enables parallel worker processing)
 package supervisor
@@ -138,9 +138,17 @@ type Supervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] stru
 	parent             SupervisorInterface
 	ctx                context.Context
 	cachedDesiredState fsmv2.DesiredState
-	workers            map[string]*WorkerContext[TObserved, TDesired]
-	mu                 *lockmanager.Lock // Protects workers, children, childDoneChans, globalVars, mappedParentState
-	lockManager        *lockmanager.LockManager
+	workers map[string]*WorkerContext[TObserved, TDesired]
+	// mu Protects access to workers map, children, childDoneChans, globalVars, and mappedParentState.
+	//
+	// This is a lockmanager.Lock wrapping sync.RWMutex to allow concurrent reads from multiple goroutines
+	// (e.g., GetWorker, ListWorkers) while ensuring exclusive writes when modifying
+	// worker registry state (e.g., AddWorker, RemoveWorker).
+	//
+	// Lock Order: Must be acquired BEFORE WorkerContext.mu when both are needed.
+	// See package-level LOCK ORDER section for details.
+	mu          *lockmanager.Lock
+	lockManager *lockmanager.LockManager
 	logger             *zap.SugaredLogger
 	baseLogger         *zap.SugaredLogger // Un-enriched logger for child supervisors
 	freshnessChecker   *health.FreshnessChecker
@@ -151,10 +159,19 @@ type Supervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] stru
 	restartRequestedAt map[string]time.Time
 	globalVars         map[string]any
 	healthChecker      *InfrastructureHealthChecker
-	actionExecutor     *execution.ActionExecutor
-	ctxCancel          context.CancelFunc
-	ctxMu              *lockmanager.Lock // Protects ctx/ctxCancel to prevent TOCTOU races during shutdown
-	deps               map[string]any
+	actionExecutor *execution.ActionExecutor
+	ctxCancel      context.CancelFunc
+	// ctxMu Protects ctx and ctxCancel to prevent TOCTOU races during shutdown.
+	//
+	// Without this lock, a goroutine could check ctx.Err() (finding it non-cancelled),
+	// then another goroutine calls ctxCancel(), then the first goroutine uses ctx
+	// assuming it's still valid. This lock ensures atomic read-check-use patterns.
+	//
+	// This lock is independent from Supervisor.mu and can be acquired separately.
+	// It can be acquired alone when checking context status, or after Supervisor.mu
+	// if both are needed (advisory order).
+	ctxMu *lockmanager.Lock
+	deps  map[string]any
 	noStateMachineLoggedOnce sync.Map
 	userSpec                 config.UserSpec
 	workerType               string
