@@ -20,17 +20,9 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
 )
 
-// ChannelProvider supplies channels for communicator workers.
-// Production code registers a provider before starting ApplicationSupervisor.
-// Tests can use nil provider (HTTP-only) or mock channels.
+// ChannelProvider supplies inbound/outbound channels for communicator workers.
 type ChannelProvider interface {
-	// GetChannels returns channels for the specified worker.
-	// inbound: worker writes received messages (from HTTP) to router
-	// outbound: worker reads messages from router to push (to HTTP)
-	GetChannels(workerID string) (
-		inbound chan<- *transport.UMHMessage,
-		outbound <-chan *transport.UMHMessage,
-	)
+	GetChannels(workerID string) (inbound chan<- *transport.UMHMessage, outbound <-chan *transport.UMHMessage)
 }
 
 var (
@@ -38,9 +30,7 @@ var (
 	channelProviderMu     sync.RWMutex
 )
 
-// SetChannelProvider sets the global channel provider.
-// Call this BEFORE starting ApplicationSupervisor in production.
-// Pass nil to disable channel integration (for HTTP-only testing).
+// SetChannelProvider sets the global channel provider. Must be called before starting ApplicationSupervisor.
 func SetChannelProvider(p ChannelProvider) {
 	channelProviderMu.Lock()
 	defer channelProviderMu.Unlock()
@@ -48,8 +38,7 @@ func SetChannelProvider(p ChannelProvider) {
 	globalChannelProvider = p
 }
 
-// GetChannelProvider returns the current channel provider.
-// Returns nil if no provider is set.
+// GetChannelProvider returns the current channel provider, or nil if not set.
 func GetChannelProvider() ChannelProvider {
 	channelProviderMu.RLock()
 	defer channelProviderMu.RUnlock()
@@ -57,8 +46,7 @@ func GetChannelProvider() ChannelProvider {
 	return globalChannelProvider
 }
 
-// ClearChannelProvider removes the channel provider.
-// Useful for test cleanup.
+// ClearChannelProvider removes the channel provider (for test cleanup).
 func ClearChannelProvider() {
 	channelProviderMu.Lock()
 	defer channelProviderMu.Unlock()

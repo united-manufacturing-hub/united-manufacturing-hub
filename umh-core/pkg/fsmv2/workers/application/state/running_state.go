@@ -22,8 +22,6 @@ import (
 )
 
 // RunningState represents the normal operating state of the application supervisor.
-// The application supervisor is purely a coordinator with no external resources to manage,
-// so this state simply stays running until shutdown is requested.
 type RunningState struct {
 	BaseApplicationState
 }

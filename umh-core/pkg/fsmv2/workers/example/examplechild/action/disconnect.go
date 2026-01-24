@@ -22,15 +22,10 @@ import (
 
 const DisconnectActionName = "disconnect"
 
-// DisconnectAction closes the connection gracefully
-// This is a stateless action - completely empty struct with no fields.
-// Dependencies will be injected via Execute() in Phase 2C when the Action interface is updated.
-type DisconnectAction struct {
-	// COMPLETELY EMPTY - no dependencies
-}
+// DisconnectAction closes the connection gracefully.
+type DisconnectAction struct{}
 
-// Execute releases the connection back to the pool
-// Dependencies are injected via deps parameter, enabling full action functionality.
+// Execute releases the connection back to the pool.
 func (a *DisconnectAction) Execute(ctx context.Context, depsAny any) error {
 	select {
 	case <-ctx.Done():
@@ -42,7 +37,6 @@ func (a *DisconnectAction) Execute(ctx context.Context, depsAny any) error {
 	logger := deps.GetLogger()
 	logger.Info("Disconnecting")
 
-	// Mark as disconnected - this will be read by CollectObservedState
 	deps.SetConnected(false)
 	logger.Info("Disconnected")
 

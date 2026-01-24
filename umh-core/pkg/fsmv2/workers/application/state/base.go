@@ -14,8 +14,6 @@
 
 package state
 
-// BaseApplicationState defines the interface that all application state implementations must satisfy.
-// This is a marker interface used for type safety and compile-time checking.
-// All states must also implement fsmv2.State for FSM integration.
+// BaseApplicationState is a marker interface for type safety; all states must also implement fsmv2.State.
 type BaseApplicationState interface {
 }

@@ -25,20 +25,9 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/snapshot"
 )
 
-// DegradedState handles error recovery when sync operations repeatedly fail.
-// Uses exponential backoff and periodic transport resets (at 5, 10, 15... errors).
-//
-// Transitions:
-//   - → SyncingState: when IsSyncHealthy() && consecutive errors = 0
-//   - → StoppedState: if shutdown requested
-//   - → self: backoff wait or retry via SyncAction/ResetTransportAction
-//
-// Enforces C4 (shutdown priority). Timing stored in ObservedState.DegradedEnteredAt.
+// DegradedState handles error recovery with exponential backoff and periodic transport resets.
 type DegradedState struct {
 	BaseCommunicatorState
-	// Note: FSM states should be stateless. All timing information is now stored in
-	// ObservedState.DegradedEnteredAt, which is populated by the dependencies when
-	// the first error occurs.
 }
 
 func (s *DegradedState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, fsmv2.Action[any]) {
@@ -49,36 +38,27 @@ func (s *DegradedState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, 
 		return &StoppedState{}, fsmv2.SignalNone, nil
 	}
 
-	// Returns to syncing when health recovers (IsSyncHealthy) and errors are cleared (RecordSuccess resets counter)
 	if snap.Observed.IsSyncHealthy() && snap.Observed.GetConsecutiveErrors() == 0 {
 		return &SyncingState{}, fsmv2.SignalNone, nil
 	}
 
-	// Calculate backoff using error-type-aware backoff utility
 	consecutiveErrors := snap.Observed.GetConsecutiveErrors()
 	backoffDelay := backoff.CalculateDelayForErrorType(
 		snap.Observed.LastErrorType,
 		consecutiveErrors,
-		snap.Observed.LastRetryAfter, // Respect server's Retry-After
+		snap.Observed.LastRetryAfter,
 	)
 
-	// Get when we entered degraded mode (first error after success)
-	// This timestamp is set by dependencies.RecordError() on the first error
 	enteredAt := snap.Observed.DegradedEnteredAt
-
-	// If we're still within the backoff period, wait (no action)
 	if !enteredAt.IsZero() && time.Since(enteredAt) < backoffDelay {
 		return s, fsmv2.SignalNone, nil
 	}
 
-	// Check if we should reset the transport (at 5, 10, 15... consecutive errors)
-	// This helps recover from persistent connection-level issues
+	// Reset transport at 5, 10, 15... errors to recover from connection-level issues
 	if consecutiveErrors > 0 && consecutiveErrors%backoff.TransportResetThreshold == 0 {
 		return s, fsmv2.SignalNone, action.NewResetTransportAction()
 	}
 
-	// Backoff expired - create SyncAction to retry
-	// deps injected via Execute() by supervisor
 	syncAction := action.NewSyncAction(snap.Observed.JWTToken)
 
 	return s, fsmv2.SignalNone, syncAction

@@ -36,7 +36,6 @@ func (s *StoppedState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, f
 		return s, fsmv2.SignalNeedsRemoval, nil
 	}
 
-	// If shutdown is no longer requested (shouldn't happen but defensive), stay stopped
 	return s, fsmv2.SignalNone, nil
 }
 

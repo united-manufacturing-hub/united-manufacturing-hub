@@ -18,7 +18,6 @@ import (
 	"context"
 )
 
-// ResetTransportActionName is the unique identifier for this action.
 const ResetTransportActionName = "reset_transport"
 
 // ResetTransportAction resets the HTTP transport to establish fresh connections.
@@ -27,17 +26,15 @@ const ResetTransportActionName = "reset_transport"
 // Idempotent: creates fresh HTTP client while preserving JWT tokens.
 type ResetTransportAction struct{}
 
-// NewResetTransportAction creates a new transport reset action.
 func NewResetTransportAction() *ResetTransportAction {
 	return &ResetTransportAction{}
 }
 
-// Name returns the action name for logging and metrics.
 func (a *ResetTransportAction) Name() string {
 	return ResetTransportActionName
 }
 
-// Execute resets the transport. Transport is guaranteed non-nil per worker.go C3.
+// Execute resets the transport. Transport guaranteed non-nil per worker.go C3.
 func (a *ResetTransportAction) Execute(ctx context.Context, depsAny any) error {
 	deps := depsAny.(CommunicatorDependencies)
 

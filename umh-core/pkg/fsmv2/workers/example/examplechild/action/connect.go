@@ -22,21 +22,15 @@ import (
 
 const ConnectActionName = "connect"
 
-// ConnectAction establishes a connection to an external resource
-// This is a stateless action - completely empty struct with no fields.
-// Dependencies will be injected via Execute() in Phase 2C when the Action interface is updated.
-type ConnectAction struct {
-	// COMPLETELY EMPTY - no dependencies, no state
-}
+// ConnectAction establishes a connection to an external resource.
+type ConnectAction struct{}
 
-// NewConnectActionWithFailures creates a connect action that will fail N times before succeeding
-// Note: Retry logic will be handled by ActionExecutor in Phase 2C, not by the action itself.
+// NewConnectActionWithFailures creates a connect action that will fail N times before succeeding.
 func NewConnectActionWithFailures(failCount int) *ConnectAction {
 	return &ConnectAction{}
 }
 
-// Execute attempts to acquire a connection from the pool
-// Dependencies are injected via deps parameter, enabling full action functionality.
+// Execute attempts to acquire a connection from the pool.
 func (a *ConnectAction) Execute(ctx context.Context, depsAny any) error {
 	select {
 	case <-ctx.Done():
@@ -48,7 +42,6 @@ func (a *ConnectAction) Execute(ctx context.Context, depsAny any) error {
 	logger := deps.ActionLogger(ConnectActionName)
 	logger.Info("Attempting to connect")
 
-	// Mark as connected - this will be read by CollectObservedState
 	deps.SetConnected(true)
 	logger.Info("Connection established")
 

@@ -49,8 +49,6 @@ type ApplicationWorker struct {
 
 // NewApplicationWorker creates a new application worker.
 func NewApplicationWorker(id, name string) *ApplicationWorker {
-	// Validate required parameters (id and name are non-pointer, so validation is minimal).
-	// This satisfies the constructor validation pattern required by architecture tests.
 	if id == "" || name == "" {
 		return nil
 	}
@@ -62,32 +60,20 @@ func NewApplicationWorker(id, name string) *ApplicationWorker {
 }
 
 // CollectObservedState returns the current observed state of the application supervisor.
-// Since the application supervisor has minimal internal state, this mainly tracks
-// the deployed desired state for comparison.
-//
-// Metrics: Initializes an empty Metrics struct for consistency with other workers.
-// The ApplicationWorker currently doesn't have a MetricsRecorder, but the Metrics
-// field is provided for interface consistency and future extensibility.
 func (w *ApplicationWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedState, error) {
-	// Check context cancellation first.
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	default:
 	}
 
-	// ApplicationWorker doesn't embed BaseWorker and doesn't have dependencies.
-	// Framework metrics won't be copied (zero values). This is acceptable for the
-	// application supervisor which is a simple passthrough worker.
 	return snapshot.ApplicationObservedState{
 		ID:          w.id,
 		CollectedAt: time.Now(),
 		Name:        w.name,
 		ApplicationDesiredState: snapshot.ApplicationDesiredState{
 			Name: w.name,
-			// BaseDesiredState and ChildrenSpecs default to zero values
 		},
-		// MetricsEmbedder is embedded - zero value is valid
 	}, nil
 }
 
@@ -97,24 +83,7 @@ type childrenConfig struct {
 }
 
 // DeriveDesiredState parses the YAML configuration to extract children specifications.
-// This is the core of the passthrough pattern - the application doesn't need to know about
-// child types, it just passes through the ChildSpec array from the config.
-//
-// Example YAML config:
-//
-//	children:
-//	  - name: "child-1"
-//	    workerType: "example-child"
-//	    userSpec:
-//	      config: |
-//	        value: 10
-//	  - name: "child-2"
-//	    workerType: "example-child"
-//	    userSpec:
-//	      config: |
-//	        value: 20
 func (w *ApplicationWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
-	// Handle nil spec (used during initialization in AddWorker).
 	if spec == nil {
 		return &config.DesiredState{
 			BaseDesiredState: config.BaseDesiredState{State: "running"},
@@ -122,13 +91,11 @@ func (w *ApplicationWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredS
 		}, nil
 	}
 
-	// Get UserSpec from the spec interface.
 	userSpec, ok := spec.(config.UserSpec)
 	if !ok {
 		return nil, fmt.Errorf("invalid spec type: expected config.UserSpec, got %T", spec)
 	}
 
-	// Parse children from YAML config.
 	var childrenCfg childrenConfig
 	if userSpec.Config != "" {
 		if err := yaml.Unmarshal([]byte(userSpec.Config), &childrenCfg); err != nil {
@@ -143,106 +110,40 @@ func (w *ApplicationWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredS
 }
 
 // GetInitialState returns the starting state for this application worker.
-// The application supervisor uses a minimal 2-state FSM:
-// - RunningState: Normal operation, transitions to StoppedState when ShutdownRequested=true.
-// - StoppedState: Emits SignalNeedsRemoval to indicate ready for removal.
 func (w *ApplicationWorker) GetInitialState() fsmv2.State[any, any] {
 	return &state.RunningState{}
 }
 
 // GetDependenciesAny implements fsmv2.DependencyProvider.
-// ApplicationWorker currently has no dependencies, so this returns nil.
-// Actions emitted by ApplicationWorker will receive nil deps.
 func (w *ApplicationWorker) GetDependenciesAny() any {
 	return nil
 }
 
 // SupervisorConfig contains configuration for creating an application supervisor.
 type SupervisorConfig struct {
-
-	// Store is the triangular store for state persistence.
-	Store storage.TriangularStoreInterface
-
-	// Logger is the logger for supervisor operations.
-	Logger *zap.SugaredLogger
-
-	// Dependencies is an optional map of named dependencies to inject into child workers.
-	// Worker factories can access these via the deps parameter to avoid global state.
-	// Example: deps["channelProvider"] could provide channels for the communicator worker.
-	Dependencies map[string]any
-	// ID is the unique identifier for the application worker.
-	ID string
-
-	// Name is a human-readable name for the application worker.
-	Name string
-
-	// YAMLConfig is the raw YAML configuration containing children specifications.
-	// This is passed to the application worker to parse and extract children.
-	//
-	// Example:
-	//   children:
-	//     - name: "child-1"
-	//       workerType: "example-child"
-	//       userSpec:
-	//         config: |
-	//           value: 10
-	YAMLConfig string
-
-	// TickInterval is how often the supervisor evaluates state transitions.
-	// Defaults to 100ms if not set.
-	TickInterval time.Duration
-
-	// EnableTraceLogging enables verbose lifecycle event logging (mutex locks, tick events, etc.)
-	// Optional - defaults to false. Set ENABLE_TRACE_LOGGING=true for deep debugging.
-	// When false, these high-frequency internal logs are suppressed to improve signal-to-noise ratio.
-	EnableTraceLogging bool
+	Store              storage.TriangularStoreInterface
+	Logger             *zap.SugaredLogger
+	Dependencies       map[string]any // Injected into child workers via deps parameter
+	ID                 string
+	Name               string
+	YAMLConfig         string        // Raw YAML containing children specifications
+	TickInterval       time.Duration // Defaults to 100ms
+	EnableTraceLogging bool          // Verbose lifecycle event logging for debugging
 }
 
 // NewApplicationSupervisor creates a supervisor with an application worker already added.
-// The application worker parses YAML config to dynamically discover child workers.
-// Child workers are created automatically via reconcileChildren() based on
-// the ChildrenSpecs in the config.
-//
-// This is the KEY API that encapsulates the application worker pattern. Users simply
-// call this function with YAML config and get a fully initialized supervisor
-// ready to Start().
-//
-// The passthrough pattern allows managing ANY registered worker type as children
-// without hardcoding types in the application supervisor.
-//
-// Example usage:
-//
-//	sup, err := application.NewApplicationSupervisor(application.SupervisorConfig{
-//	    ID:     "app-001",
-//	    Name:   "My Application Supervisor",
-//	    Store:  myStore,
-//	    Logger: myLogger,
-//	    YAMLConfig: `
-//	children:
-//	  - name: "worker-1"
-//	    workerType: "example-child"
-//	    userSpec:
-//	      config: |
-//	        value: 10
-//	`,
-//	})
-//	if err != nil {
-//	    return err
-//	}
-//	done := sup.Start(ctx)
+// Child workers are created automatically via reconcileChildren() based on ChildrenSpecs.
 func NewApplicationSupervisor(cfg SupervisorConfig) (*supervisor.Supervisor[snapshot.ApplicationObservedState, *snapshot.ApplicationDesiredState], error) {
 	tickInterval := cfg.TickInterval
 	if tickInterval == 0 {
 		tickInterval = 100 * time.Millisecond
 	}
 
-	// Derive worker type from observed state type.
 	appWorkerType, err := storage.DeriveWorkerType[snapshot.ApplicationObservedState]()
 	if err != nil {
 		return nil, fmt.Errorf("failed to derive worker type: %w", err)
 	}
 
-	// Create supervisor.
 	sup := supervisor.NewSupervisor[snapshot.ApplicationObservedState, *snapshot.ApplicationDesiredState](supervisor.Config{
 		WorkerType:         appWorkerType,
 		Store:              cfg.Store,
@@ -253,8 +154,6 @@ func NewApplicationSupervisor(cfg SupervisorConfig) (*supervisor.Supervisor[snap
 		Dependencies:       cfg.Dependencies,
 	})
 
-	// Create application worker identity.
-	// For root supervisors, HierarchyPath is just the single segment: "id(workerType)"
 	appIdentity := deps.Identity{
 		ID:            cfg.ID,
 		Name:          cfg.Name,
@@ -262,12 +161,9 @@ func NewApplicationSupervisor(cfg SupervisorConfig) (*supervisor.Supervisor[snap
 		HierarchyPath: fmt.Sprintf("%s(%s)", cfg.ID, appWorkerType),
 	}
 
-	// Create application worker.
 	appWorker := NewApplicationWorker(cfg.ID, cfg.Name)
 
-	// KEY PATTERN: Application workers need explicit AddWorker().
-	// Child workers are created automatically via reconcileChildren().
-	// This is the fundamental asymmetry that this setup helper encapsulates.
+	// Application workers need explicit AddWorker; child workers are created via reconcileChildren
 	err = sup.AddWorker(appIdentity, appWorker)
 	if err != nil {
 		return nil, err
@@ -276,14 +172,8 @@ func NewApplicationSupervisor(cfg SupervisorConfig) (*supervisor.Supervisor[snap
 	return sup, nil
 }
 
-// init registers the application worker with the factory.
-// Automatic creation via factory.NewWorkerByType() and factory.NewSupervisorByType().
-//
-// Registration happens automatically when this package is imported.
-// The application worker can create any registered worker type as children.
+// init registers the application worker with the factory for automatic creation via factory.NewWorkerByType().
 func init() {
-	// Register both worker and supervisor factories atomically.
-	// The worker type is derived from ApplicationObservedState, ensuring consistency.
 	if err := factory.RegisterWorkerType[snapshot.ApplicationObservedState, *snapshot.ApplicationDesiredState](
 		func(id deps.Identity, _ *zap.SugaredLogger, _ deps.StateReader, _ map[string]any) fsmv2.Worker {
 			return NewApplicationWorker(id.ID, id.Name)

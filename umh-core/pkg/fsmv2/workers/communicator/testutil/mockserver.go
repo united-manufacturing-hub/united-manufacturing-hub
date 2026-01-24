@@ -60,7 +60,6 @@ func NewMockRelayServer() *MockRelayServer {
 }
 
 // SetBackendUUID sets the UUID that will be returned in login responses.
-// Use this to test Bug #6 fix: ensuring the backend-returned UUID is used.
 func (m *MockRelayServer) SetBackendUUID(uuid, name string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -124,8 +123,7 @@ func (m *MockRelayServer) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Real FSMv2 transport uses Authorization header, not JSON body
-	// Accept either for backward compatibility with tests
+	// Accept Authorization header or JSON body for backward compatibility with tests
 	authHeader := r.Header.Get("Authorization")
 	if authHeader == "" {
 		// Fallback: try to read from body (legacy test behavior)
@@ -150,8 +148,7 @@ func (m *MockRelayServer) handleLogin(w http.ResponseWriter, r *http.Request) {
 		HttpOnly: true,
 	})
 
-	// Return uuid and name in response body (Bug #6 fix: real backend returns these)
-	// The real backend returns: {"uuid": "...", "name": "..."}
+	// Return uuid and name in response body (matches real backend behavior)
 	resp := struct {
 		UUID string `json:"uuid"`
 		Name string `json:"name"`

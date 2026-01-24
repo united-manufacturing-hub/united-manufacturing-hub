@@ -56,7 +56,6 @@ func NewChildWorker(
 		return nil, errors.New("logger must not be nil")
 	}
 
-	// Set workerType if not already set (derive from snapshot type)
 	if identity.WorkerType == "" {
 		workerType, err := storage.DeriveWorkerType[snapshot.ExamplechildObservedState]()
 		if err != nil {
@@ -89,7 +88,6 @@ func (w *ChildWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedS
 	default:
 	}
 
-	// Get connection health from dependencies (updated by ConnectAction/DisconnectAction)
 	deps := w.GetDependencies()
 
 	connectionHealth := "no connection"
@@ -102,47 +100,20 @@ func (w *ChildWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedS
 		ID:               w.identity.ID,
 		CollectedAt:      time.Now(),
 		ConnectionHealth: connectionHealth,
-		// MetricsEmbedder is embedded - zero value is valid
 	}
 
-	// Copy framework metrics from deps (set by supervisor before CollectObservedState)
 	if fm := deps.GetFrameworkState(); fm != nil {
 		observed.Metrics.Framework = *fm
 	}
 
-	// Copy action history from deps (set by supervisor before CollectObservedState)
 	observed.LastActionResults = deps.GetActionHistory()
 
 	return observed, nil
 }
 
 // DeriveDesiredState determines what state the child worker should be in.
-// The child receives a Config template from the parent via ChildSpec.UserSpec.Config.
-// This method renders the template first, then parses the result.
-//
-// ARCHITECTURE NOTE: Production workers follow this pattern:
-//
-// 1. DesiredState: Contains OriginalUserSpec (template + variables), NOT rendered config
-//   - Rendered configs are ephemeral, computed by Actions
-//
-//  2. Action (CreateServiceAction): Renders and writes config to disk
-//     rendered := config.RenderConfigTemplate(userSpec.Config, userSpec.Variables)
-//     checksum := xxhash(rendered)
-//     fsService.WriteFile("/data/services/benthos-"+id+"/config.yaml", rendered)
-//     deps.expectedChecksum = checksum  // Store for drift detection
-//
-//  3. CollectObservedState: Reads file checksum, compares with expected
-//     currentChecksum := xxhash(fileContent)
-//     observed.IsDrifted = (currentChecksum != deps.expectedChecksum)
-//
-// 4. Caching layers for performance:
-//   - Supervisor: hash(UserSpec) → skip DeriveDesiredState if unchanged (Stage 7)
-//   - Action: Compare checksums → skip write if file already correct
-//
-// This example demonstrates variable inheritance and template rendering.
-// For full S6 service creation, see pkg/service/s6/lifecycle.go.
+// Templates are rendered here; production workers store checksums for drift detection.
 func (w *ChildWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
-	// Handle nil spec - return default state
 	if spec == nil {
 		return &config.DesiredState{
 			BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
@@ -150,26 +121,21 @@ func (w *ChildWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, 
 		}, nil
 	}
 
-	// Cast spec to UserSpec to access Config and Variables
 	userSpec, ok := spec.(config.UserSpec)
 	if !ok {
 		return nil, fmt.Errorf("invalid spec type: expected UserSpec, got %T", spec)
 	}
 
-	// Render the config template using the merged variables
-	// Variables include: IP, PORT (from parent) + DEVICE_ID (from child)
 	renderedConfig, err := config.RenderConfigTemplate(userSpec.Config, userSpec.Variables)
 	if err != nil {
 		return nil, fmt.Errorf("template rendering failed: %w", err)
 	}
 
-	// Create a new UserSpec with the rendered config for parsing
 	renderedSpec := config.UserSpec{
 		Config:    renderedConfig,
 		Variables: userSpec.Variables,
 	}
 
-	// Now parse the rendered config using the helper
 	desired, err := config.DeriveLeafState[ChildUserSpec](renderedSpec)
 	if err != nil {
 		return nil, err
@@ -184,8 +150,6 @@ func (w *ChildWorker) GetInitialState() fsmv2.State[any, any] {
 }
 
 func init() {
-	// Register both worker and supervisor factories atomically.
-	// The worker type is derived from ExamplechildObservedState, ensuring consistency.
 	if err := factory.RegisterWorkerType[snapshot.ExamplechildObservedState, *snapshot.ExamplechildDesiredState](
 		func(id deps.Identity, logger *zap.SugaredLogger, stateReader deps.StateReader, _ map[string]any) fsmv2.Worker {
 			pool := &DefaultConnectionPool{}

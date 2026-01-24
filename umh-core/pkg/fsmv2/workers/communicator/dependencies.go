@@ -25,69 +25,38 @@ import (
 	"go.uber.org/zap"
 )
 
-// CommunicatorDependencies provides access to tools needed by communicator worker actions.
-// It extends BaseDependencies with communicator-specific tools (transport).
-//
-// JWT storage:
-// The jwtToken and jwtExpiry fields store authentication results from AuthenticateAction.
-// These are read by CollectObservedState to populate the observed state.
-//
-// Message storage:
-// The pulledMessages field stores messages retrieved by SyncAction.Pull().
-// These are read by CollectObservedState to populate the observed state.
-//
-// Error tracking:
-// The consecutiveErrors field tracks consecutive errors for health monitoring.
-// This is incremented by RecordError() and reset by RecordSuccess().
-//
-// Metrics recording:
-// Actions use deps.MetricsRecorder().IncrementCounter/SetGauge to record metrics.
-// CollectObservedState calls MetricsRecorder().Drain() to merge into ObservedState.Metrics.
-//
-// Access is protected by mu for thread-safety.
+// CommunicatorDependencies provides transport and channel access for communicator worker actions.
 type CommunicatorDependencies struct {
-	jwtExpiry         time.Time // JWT expiry (set by AuthenticateAction)
-	degradedEnteredAt time.Time // When we entered degraded mode (first error after success)
-	lastAuthAttemptAt time.Time // Last authentication attempt timestamp (for backoff)
+	jwtExpiry         time.Time
+	degradedEnteredAt time.Time
+	lastAuthAttemptAt time.Time
 
-	transport transport.Transport // HTTP transport for push/pull operations
+	transport transport.Transport
 
 	*deps.BaseDependencies
-	inboundChan  chan<- *transport.UMHMessage // Write received messages to router
-	outboundChan <-chan *transport.UMHMessage // Read messages from router to push
-	jwtToken     string                       // JWT token (set by AuthenticateAction)
-	instanceUUID string                       // Instance UUID from backend (set by AuthenticateAction)
-	instanceName string                       // Instance name from backend (set by AuthenticateAction)
+	inboundChan  chan<- *transport.UMHMessage
+	outboundChan <-chan *transport.UMHMessage
+	jwtToken     string
+	instanceUUID string
+	instanceName string
 
-	pulledMessages []*transport.UMHMessage // Pulled messages (set by SyncAction)
+	pulledMessages []*transport.UMHMessage
 
-	lastRetryAfter    time.Duration             // Retry-After from last error (from server)
-	consecutiveErrors int                       // Error counter (incremented by RecordError)
-	lastErrorType     httpTransport.ErrorType   // Last error type for intelligent backoff
-	mu                sync.RWMutex              // Mutex for thread-safe access
+	lastRetryAfter    time.Duration
+	consecutiveErrors int
+	lastErrorType     httpTransport.ErrorType
+	mu                sync.RWMutex
 }
 
-// NewCommunicatorDependencies creates a new dependencies for the communicator worker.
-//
-// Phase 1 Architecture: ChannelProvider singleton is THE ONLY way to get channels.
-// This function will PANIC if the global ChannelProvider singleton is not set.
-// The singleton MUST be set via SetChannelProvider() BEFORE calling this function.
-//
-// Expected call flow:
-//  1. main.go: adapter := NewLegacyChannelBridge(...)
-//  2. main.go: SetChannelProvider(adapter)  // Single point of setup
-//  3. FSMv2 starts supervisor
-//  4. Communicator worker created, NewCommunicatorDependencies calls GetChannelProvider()
-//  5. If GetChannelProvider() returns nil -> panic
+// NewCommunicatorDependencies creates dependencies for the communicator worker.
+// Panics if SetChannelProvider was not called first.
 func NewCommunicatorDependencies(t transport.Transport, logger *zap.SugaredLogger, stateReader deps.StateReader, identity deps.Identity) *CommunicatorDependencies {
-	// Phase 1: ChannelProvider singleton is REQUIRED
 	provider := GetChannelProvider()
 	if provider == nil {
 		panic("ChannelProvider must be set before creating communicator dependencies. " +
 			"Call SetChannelProvider() in main.go before starting the FSMv2 supervisor.")
 	}
 
-	// Get channels from the singleton provider
 	inbound, outbound := provider.GetChannels(identity.ID)
 
 	return &CommunicatorDependencies{
@@ -98,8 +67,7 @@ func NewCommunicatorDependencies(t transport.Transport, logger *zap.SugaredLogge
 	}
 }
 
-// SetTransport sets the transport instance (mutex protected).
-// Called by AuthenticateAction on first execution.
+// SetTransport sets the transport instance.
 func (d *CommunicatorDependencies) SetTransport(t transport.Transport) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -107,20 +75,7 @@ func (d *CommunicatorDependencies) SetTransport(t transport.Transport) {
 	d.transport = t
 }
 
-// GetTransport returns the transport (mutex protected).
-//
-// Transport nil safety:
-//   - Returns nil only if transport was not passed to NewCommunicatorDependencies
-//     AND AuthenticateAction.Execute() has not yet run
-//   - After AuthenticateAction.Execute() completes (even with error), transport is non-nil
-//   - All actions that execute AFTER TryingToAuthenticateState (SyncAction, ResetTransportAction)
-//     are guaranteed to have a non-nil transport
-//
-// State machine guarantees:
-//   - TryingToAuthenticateState -> SyncingState transition requires successful authentication
-//   - SyncingState -> DegradedState transition happens only after sync operations
-//   - DegradedState can only call ResetTransportAction, which is safe
-//   - Therefore, only AuthenticateAction may see nil transport (and it handles this by creating one)
+// GetTransport returns the transport. Nil only before AuthenticateAction runs.
 func (d *CommunicatorDependencies) GetTransport() transport.Transport {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
@@ -129,8 +84,6 @@ func (d *CommunicatorDependencies) GetTransport() transport.Transport {
 }
 
 // SetJWT stores the JWT token and expiry from authentication response.
-// This is called by AuthenticateAction after successful authentication.
-// Thread-safe: uses mutex for concurrent access protection.
 func (d *CommunicatorDependencies) SetJWT(token string, expiry time.Time) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -140,8 +93,6 @@ func (d *CommunicatorDependencies) SetJWT(token string, expiry time.Time) {
 }
 
 // GetJWTToken returns the stored JWT token.
-// This is called by CollectObservedState to populate the observed state.
-// Thread-safe: uses mutex for concurrent access protection.
 func (d *CommunicatorDependencies) GetJWTToken() string {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
@@ -150,8 +101,6 @@ func (d *CommunicatorDependencies) GetJWTToken() string {
 }
 
 // GetJWTExpiry returns the stored JWT expiry time.
-// This is called by CollectObservedState to populate the observed state.
-// Thread-safe: uses mutex for concurrent access protection.
 func (d *CommunicatorDependencies) GetJWTExpiry() time.Time {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
@@ -160,8 +109,6 @@ func (d *CommunicatorDependencies) GetJWTExpiry() time.Time {
 }
 
 // SetPulledMessages stores the messages retrieved from the backend.
-// This is called by SyncAction after successful pull operation.
-// Thread-safe: uses mutex for concurrent access protection.
 func (d *CommunicatorDependencies) SetPulledMessages(messages []*transport.UMHMessage) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -169,13 +116,7 @@ func (d *CommunicatorDependencies) SetPulledMessages(messages []*transport.UMHMe
 	d.pulledMessages = messages
 }
 
-// GetPulledMessages returns a shallow copy of the stored pulled messages slice.
-// This is called by CollectObservedState to populate the observed state.
-//
-// Thread-safety notes:
-// - The slice itself is copied: adding/removing elements won't affect internal state
-// - The message pointers are shared: modifying message contents WILL affect internal state
-// - Callers should treat returned messages as read-only.
+// GetPulledMessages returns a shallow copy of the pulled messages. Treat as read-only.
 func (d *CommunicatorDependencies) GetPulledMessages() []*transport.UMHMessage {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
@@ -184,59 +125,45 @@ func (d *CommunicatorDependencies) GetPulledMessages() []*transport.UMHMessage {
 		return nil
 	}
 
-	// Return a shallow copy of the slice (pointers are still shared)
 	result := make([]*transport.UMHMessage, len(d.pulledMessages))
 	copy(result, d.pulledMessages)
 
 	return result
 }
 
-// RecordError increments the consecutive error counter.
-// On the first error (transitioning from 0 errors), it also sets degradedEnteredAt
-// to track when we entered degraded mode.
-// When consecutive errors reach TransportResetThreshold (or any multiple thereof),
-// the transport's Reset() method is called to flush stale connections.
-// This is called by actions after an operation fails.
-// Thread-safe: uses mutex for concurrent access protection.
+// RecordError increments consecutive errors and triggers transport reset at threshold multiples.
 func (d *CommunicatorDependencies) RecordError() {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
-	// If this is the first error, record when we entered degraded mode
 	if d.consecutiveErrors == 0 {
 		d.degradedEnteredAt = time.Now()
 	}
 
 	d.consecutiveErrors++
 
-	// Trigger transport reset when threshold is reached (or at multiples of threshold)
 	if d.consecutiveErrors%backoff.TransportResetThreshold == 0 && d.transport != nil {
 		d.transport.Reset()
 	}
 }
 
-// RecordSuccess resets the consecutive error counter to 0 and clears all error tracking state.
-// This is called by actions after an operation succeeds.
-// Thread-safe: uses mutex for concurrent access protection.
+// RecordSuccess resets all error tracking state.
 func (d *CommunicatorDependencies) RecordSuccess() {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
 	d.consecutiveErrors = 0
-	d.degradedEnteredAt = time.Time{} // Clear degraded entry time
-	d.lastErrorType = 0               // Clear error type
-	d.lastRetryAfter = 0              // Clear retry-after
-	d.lastAuthAttemptAt = time.Time{} // Clear auth attempt time
+	d.degradedEnteredAt = time.Time{}
+	d.lastErrorType = 0
+	d.lastRetryAfter = 0
+	d.lastAuthAttemptAt = time.Time{}
 }
 
-// RecordTypedError increments the consecutive error counter and records error type and retry-after.
-// This is called by actions after an operation fails with a classified error.
-// Thread-safe: uses mutex for concurrent access protection.
+// RecordTypedError increments consecutive errors and records error type and retry-after.
 func (d *CommunicatorDependencies) RecordTypedError(errType httpTransport.ErrorType, retryAfter time.Duration) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
-	// If this is the first error, record when we entered degraded mode
 	if d.consecutiveErrors == 0 {
 		d.degradedEnteredAt = time.Now()
 	}
@@ -245,14 +172,12 @@ func (d *CommunicatorDependencies) RecordTypedError(errType httpTransport.ErrorT
 	d.lastErrorType = errType
 	d.lastRetryAfter = retryAfter
 
-	// Trigger transport reset when threshold is reached (or at multiples of threshold)
 	if d.consecutiveErrors%backoff.TransportResetThreshold == 0 && d.transport != nil {
 		d.transport.Reset()
 	}
 }
 
 // GetLastErrorType returns the last recorded error type.
-// Thread-safe: uses mutex for concurrent access protection.
 func (d *CommunicatorDependencies) GetLastErrorType() httpTransport.ErrorType {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
@@ -261,7 +186,6 @@ func (d *CommunicatorDependencies) GetLastErrorType() httpTransport.ErrorType {
 }
 
 // GetLastRetryAfter returns the Retry-After duration from the last error.
-// Thread-safe: uses mutex for concurrent access protection.
 func (d *CommunicatorDependencies) GetLastRetryAfter() time.Duration {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
@@ -270,8 +194,6 @@ func (d *CommunicatorDependencies) GetLastRetryAfter() time.Duration {
 }
 
 // SetLastAuthAttemptAt records the timestamp of the last authentication attempt.
-// This is used for backoff calculation in TryingToAuthenticateState.
-// Thread-safe: uses mutex for concurrent access protection.
 func (d *CommunicatorDependencies) SetLastAuthAttemptAt(t time.Time) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -280,7 +202,6 @@ func (d *CommunicatorDependencies) SetLastAuthAttemptAt(t time.Time) {
 }
 
 // GetLastAuthAttemptAt returns the timestamp of the last authentication attempt.
-// Thread-safe: uses mutex for concurrent access protection.
 func (d *CommunicatorDependencies) GetLastAuthAttemptAt() time.Time {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
@@ -289,8 +210,6 @@ func (d *CommunicatorDependencies) GetLastAuthAttemptAt() time.Time {
 }
 
 // GetConsecutiveErrors returns the current consecutive error count.
-// This is called by CollectObservedState to populate the observed state.
-// Thread-safe: uses mutex for concurrent access protection.
 func (d *CommunicatorDependencies) GetConsecutiveErrors() int {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
@@ -298,10 +217,7 @@ func (d *CommunicatorDependencies) GetConsecutiveErrors() int {
 	return d.consecutiveErrors
 }
 
-// GetDegradedEnteredAt returns when we entered degraded mode (first error after success).
-// Returns zero time if not currently in degraded mode (no consecutive errors).
-// This is called by CollectObservedState to populate the observed state.
-// Thread-safe: uses mutex for concurrent access protection.
+// GetDegradedEnteredAt returns when degraded mode started, or zero if not degraded.
 func (d *CommunicatorDependencies) GetDegradedEnteredAt() time.Time {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
@@ -309,39 +225,29 @@ func (d *CommunicatorDependencies) GetDegradedEnteredAt() time.Time {
 	return d.degradedEnteredAt
 }
 
-// GetInboundChan returns channel to write received messages.
-// May return nil if no channel provider was set.
+// GetInboundChan returns channel to write received messages, or nil if no provider set.
 func (d *CommunicatorDependencies) GetInboundChan() chan<- *transport.UMHMessage {
 	return d.inboundChan
 }
 
-// GetOutboundChan returns channel to read messages for pushing.
-// May return nil if no channel provider was set.
+// GetOutboundChan returns channel to read messages for pushing, or nil if no provider set.
 func (d *CommunicatorDependencies) GetOutboundChan() <-chan *transport.UMHMessage {
 	return d.outboundChan
 }
 
-// RecordPullSuccess is a no-op kept for interface compatibility.
-// Metrics are recorded via MetricsRecorder instead.
+// RecordPullSuccess is a no-op for interface compatibility.
 func (d *CommunicatorDependencies) RecordPullSuccess(latency time.Duration, msgCount int) {}
 
-// RecordPullFailure is a no-op kept for interface compatibility.
-// Metrics are recorded via MetricsRecorder instead.
+// RecordPullFailure is a no-op for interface compatibility.
 func (d *CommunicatorDependencies) RecordPullFailure(latency time.Duration) {}
 
-// RecordPushSuccess is a no-op kept for interface compatibility.
-// Metrics are recorded via MetricsRecorder instead.
+// RecordPushSuccess is a no-op for interface compatibility.
 func (d *CommunicatorDependencies) RecordPushSuccess(latency time.Duration, msgCount int) {}
 
-// RecordPushFailure is a no-op kept for interface compatibility.
-// Metrics are recorded via MetricsRecorder instead.
+// RecordPushFailure is a no-op for interface compatibility.
 func (d *CommunicatorDependencies) RecordPushFailure(latency time.Duration) {}
 
-// SetInstanceInfo stores the instance UUID and name from authentication response.
-// Called by AuthenticateAction after successful authentication.
-// Thread-safe: uses mutex for concurrent access protection.
-//
-// Deprecated: Use SetAuthenticatedUUID instead. This method is kept for backward compatibility.
+// SetInstanceInfo stores the instance UUID and name. Deprecated: Use SetAuthenticatedUUID instead.
 func (d *CommunicatorDependencies) SetInstanceInfo(uuid, name string) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -351,7 +257,6 @@ func (d *CommunicatorDependencies) SetInstanceInfo(uuid, name string) {
 }
 
 // GetInstanceUUID returns the stored instance UUID from backend authentication.
-// Thread-safe: uses mutex for concurrent access protection.
 func (d *CommunicatorDependencies) GetInstanceUUID() string {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
@@ -360,7 +265,6 @@ func (d *CommunicatorDependencies) GetInstanceUUID() string {
 }
 
 // GetInstanceName returns the stored instance name from backend authentication.
-// Thread-safe: uses mutex for concurrent access protection.
 func (d *CommunicatorDependencies) GetInstanceName() string {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
@@ -368,9 +272,7 @@ func (d *CommunicatorDependencies) GetInstanceName() string {
 	return d.instanceName
 }
 
-// GetInstanceInfo returns both the stored instance UUID and name from backend authentication.
-// This is a convenience method that returns both values in a single call.
-// Thread-safe: uses mutex for concurrent access protection.
+// GetInstanceInfo returns both the stored instance UUID and name.
 func (d *CommunicatorDependencies) GetInstanceInfo() (uuid, name string) {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
@@ -378,10 +280,7 @@ func (d *CommunicatorDependencies) GetInstanceInfo() (uuid, name string) {
 	return d.instanceUUID, d.instanceName
 }
 
-// SetAuthenticatedUUID stores the UUID returned from the backend after successful authentication.
-// This is called by AuthenticateAction after successful authentication.
-// The stored UUID is then exposed via CollectObservedState in ObservedState.AuthenticatedUUID.
-// Thread-safe: uses mutex for concurrent access protection.
+// SetAuthenticatedUUID stores the UUID returned from the backend after authentication.
 func (d *CommunicatorDependencies) SetAuthenticatedUUID(uuid string) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -390,8 +289,6 @@ func (d *CommunicatorDependencies) SetAuthenticatedUUID(uuid string) {
 }
 
 // GetAuthenticatedUUID returns the stored UUID from backend authentication.
-// This is called by CollectObservedState to populate ObservedState.AuthenticatedUUID.
-// Thread-safe: uses mutex for concurrent access protection.
 func (d *CommunicatorDependencies) GetAuthenticatedUUID() string {
 	d.mu.RLock()
 	defer d.mu.RUnlock()

@@ -23,13 +23,9 @@ import (
 
 // VerifyActionIdempotency tests that an action is idempotent by executing it
 // multiple times and verifying the result is the same as executing it once.
+// Recommend 3-5 iterations.
 //
-// Parameters:
-//   - action: The action to test
-//   - iterations: Number of times to execute (recommend 3-5)
-//   - verifyState: Function that checks the final state is correct
-//
-// Example usage:
+// Example:
 //
 //	It("should be idempotent", func() {
 //	    action := &MyAction{...}
@@ -50,14 +46,7 @@ func VerifyActionIdempotency(action fsmv2.Action[any], iterations int, verifySta
 	verifyState()
 }
 
-// VerifyActionIdempotencyWithSetup tests idempotency with setup/teardown.
-//
-// Parameters:
-//   - setup: Called once before all executions to prepare test state
-//   - teardown: Called once after all executions to clean up
-//   - action: The action to test
-//   - iterations: Number of times to execute
-//   - verifyState: Function that checks the final state
+// VerifyActionIdempotencyWithSetup tests idempotency with setup/teardown callbacks.
 //
 // Example:
 //

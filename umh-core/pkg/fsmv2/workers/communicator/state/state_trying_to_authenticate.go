@@ -41,18 +41,15 @@ func (s *TryingToAuthenticateState) Next(snapAny any) (fsmv2.State[any, any], fs
 	snap := helpers.ConvertSnapshot[snapshot.CommunicatorObservedState, *snapshot.CommunicatorDesiredState](snapAny)
 	snap.Observed.State = config.MakeState(config.PrefixTryingToStart, "authentication")
 
-	// C4: Shutdown check priority
 	if snap.Desired.IsShutdownRequested() {
 		return &StoppedState{}, fsmv2.SignalNone, nil
 	}
 
-	// Already authenticated? Proceed to syncing
 	if snap.Observed.Authenticated && !snap.Observed.IsTokenExpired() {
 		return &SyncingState{}, fsmv2.SignalNone, nil
 	}
 
-	// Check backoff delay (if we have previous errors)
-	// This prevents hammering the backend when authentication repeatedly fails
+	// Backoff to avoid hammering backend on repeated auth failures
 	if snap.Observed.ConsecutiveErrors > 0 && !snap.Observed.LastAuthAttemptAt.IsZero() {
 		delay := backoff.CalculateDelayForErrorType(
 			snap.Observed.LastErrorType,
@@ -60,12 +57,10 @@ func (s *TryingToAuthenticateState) Next(snapAny any) (fsmv2.State[any, any], fs
 			snap.Observed.LastRetryAfter, // Respect server's Retry-After
 		)
 		if time.Since(snap.Observed.LastAuthAttemptAt) < delay {
-			// Still in backoff period - wait without action
 			return s, fsmv2.SignalNone, nil
 		}
 	}
 
-	// Create AuthenticateAction - deps injected via Execute() by supervisor
 	authenticateAction := action.NewAuthenticateAction(
 		snap.Desired.RelayURL,
 		snap.Desired.InstanceUUID,

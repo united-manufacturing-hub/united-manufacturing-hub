@@ -23,8 +23,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 )
 
-// ApplicationObservedState represents the minimal observed state for an application supervisor.
-// It embeds the desired state to track what was actually deployed.
+// ApplicationObservedState represents the observed state for an application supervisor.
 type ApplicationObservedState struct {
 	CollectedAt time.Time `json:"collected_at"`
 	ID          string    `json:"id"`
@@ -35,9 +34,6 @@ type ApplicationObservedState struct {
 	// DeployedDesiredState is what was last deployed to this application.
 	ApplicationDesiredState `json:",inline"`
 
-	// Embedded metrics for both framework and worker metrics.
-	// Framework metrics provide time-in-state via GetFrameworkMetrics().TimeInCurrentStateMs
-	// and state entered time via GetFrameworkMetrics().StateEnteredAtUnix.
 	deps.MetricsEmbedder `json:",inline"`
 }
 
@@ -68,8 +64,6 @@ func (o ApplicationObservedState) SetShutdownRequested(v bool) fsmv2.ObservedSta
 }
 
 // ApplicationDesiredState represents the desired state for an application supervisor.
-// It embeds config.BaseDesiredState directly (consistent with ALL other workers)
-// and declares ChildrenSpecs as a named field.
 type ApplicationDesiredState struct {
 	config.BaseDesiredState `json:",inline"`
 
@@ -77,7 +71,6 @@ type ApplicationDesiredState struct {
 	Name string `json:"name"`
 
 	// ChildrenSpecs declares the children this application supervisor should manage.
-	// Supervisor propagates shutdown to children via database mechanism.
 	ChildrenSpecs []config.ChildSpec `json:"childrenSpecs,omitempty"`
 }
 
@@ -86,5 +79,3 @@ func (d *ApplicationDesiredState) GetChildrenSpecs() []config.ChildSpec {
 	return d.ChildrenSpecs
 }
 
-// NOTE: IsShutdownRequested() and SetShutdownRequested() are provided by embedded BaseDesiredState.
-// No delegation methods needed - this is consistent with all other workers.

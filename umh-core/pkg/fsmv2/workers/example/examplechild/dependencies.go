@@ -24,41 +24,36 @@ import (
 // Connection represents a connection to an external resource.
 type Connection interface{}
 
-// ConnectionPool is a mock interface for managing connections
-// In a real implementation, this would manage actual network connections.
+// ConnectionPool is a mock interface for managing connections.
 type ConnectionPool interface {
 	Acquire() (Connection, error)
 	Release(Connection) error
 	HealthCheck(Connection) error
 }
 
-// DefaultConnectionPool is a no-op connection pool used for factory registration.
-// It always returns a nil connection successfully, suitable for testing and examples.
+// DefaultConnectionPool is a no-op connection pool for testing and examples.
 type DefaultConnectionPool struct{}
 
-// Acquire returns a nil connection (no-op implementation).
+// Acquire returns a nil connection.
 func (d *DefaultConnectionPool) Acquire() (Connection, error) {
 	return nil, nil
 }
 
-// Release is a no-op.
+// Release releases a connection.
 func (d *DefaultConnectionPool) Release(_ Connection) error {
 	return nil
 }
 
-// HealthCheck always returns success (no-op implementation).
+// HealthCheck checks the connection health.
 func (d *DefaultConnectionPool) HealthCheck(_ Connection) error {
 	return nil
 }
 
 // ExamplechildDependencies provides access to tools needed by child worker actions.
-// The isConnected flag is shared between actions and CollectObservedState.
 type ExamplechildDependencies struct {
 	*deps.BaseDependencies
 	connectionPool ConnectionPool
 
-	// isConnected tracks connection state, updated by ConnectAction/DisconnectAction
-	// and read by CollectObservedState. Protected by mu.
 	mu          sync.RWMutex
 	isConnected bool
 }

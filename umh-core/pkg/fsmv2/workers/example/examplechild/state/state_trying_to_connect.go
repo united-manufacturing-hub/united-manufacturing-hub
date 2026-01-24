@@ -35,9 +35,7 @@ func (s *TryingToConnectState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.S
 		return &TryingToStopState{}, fsmv2.SignalNone, nil
 	}
 
-	// Child worker is "connected" when observed state shows healthy connection
-	// The collector populates ConnectionHealth from dependencies.IsConnected()
-	// After ConnectAction executes and collector runs, we see "healthy" here
+	// Collector populates ConnectionHealth from dependencies.IsConnected()
 	if snap.Observed.ConnectionHealth == "healthy" {
 		return &ConnectedState{}, fsmv2.SignalNone, nil
 	}

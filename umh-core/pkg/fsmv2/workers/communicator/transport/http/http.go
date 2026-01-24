@@ -33,7 +33,6 @@ import (
 )
 
 // ErrorType classifies HTTP errors for intelligent backoff strategies.
-// Each error type has different retry/backoff behavior.
 type ErrorType int
 
 const (
@@ -112,23 +111,19 @@ func isCloudflareChallenge(statusCode int, headers http.Header, body []byte) boo
 	if statusCode != http.StatusTooManyRequests {
 		return false
 	}
-	// Cloudflare sets specific headers on challenge pages
 	server := headers.Get("Server")
 	if strings.Contains(strings.ToLower(server), "cloudflare") {
-		// Cloudflare server + 429 = likely challenge
-		// Also check body for definitive match
 		return bytes.Contains(body, []byte("Just a moment")) ||
 			bytes.Contains(body, []byte("challenge-form")) ||
 			bytes.Contains(body, []byte("cf-browser-verification"))
 	}
-	// Also check body without server header (some configurations)
+	// Check body without server header (some Cloudflare configurations)
 	return bytes.Contains(body, []byte("Just a moment")) ||
 		bytes.Contains(body, []byte("challenge-form"))
 }
 
 // isProxyBlock detects proxy block pages (Zscaler, BlueCoat, etc.).
 func isProxyBlock(body []byte) bool {
-	// Common proxy block signatures
 	signatures := [][]byte{
 		[]byte("Zscaler"),
 		[]byte("BlueCoat"),
@@ -155,11 +150,9 @@ func parseRetryAfter(headers http.Header) time.Duration {
 	if value == "" {
 		return 0
 	}
-	// Try parsing as seconds (integer)
 	if seconds, err := strconv.Atoi(value); err == nil {
 		return time.Duration(seconds) * time.Second
 	}
-	// Try parsing as HTTP-date (RFC 7231 format)
 	if t, err := http.ParseTime(value); err == nil {
 		delay := time.Until(t)
 		if delay > 0 {
@@ -234,8 +227,7 @@ func NewHTTPTransport(relayURL string, timeout time.Duration) *HTTPTransport {
 		timeout = 30 * time.Second
 	}
 
-	// Transport settings with proper connection pooling (Bug #7 fix)
-	// Replaced DisableKeepAlives:true with proper pooling for better performance
+	// Connection pooling replaces DisableKeepAlives for better performance (Bug #7 fix)
 	t := &HTTPTransport{
 		RelayURL: relayURL,
 		httpClient: &http.Client{
@@ -269,11 +261,8 @@ func NewHTTPTransport(relayURL string, timeout time.Duration) *HTTPTransport {
 	return t
 }
 
-// Authenticate performs JWT authentication.
-// Uses Authorization header with double-hashed token (matching legacy communicator).
-// Returns *TransportError on failure with classified error type for intelligent backoff.
+// Authenticate performs JWT authentication using double-hashed token in Authorization header.
 func (t *HTTPTransport) Authenticate(ctx context.Context, req transport.AuthRequest) (transport.AuthResponse, error) {
-	// Create POST request (no body needed - auth is in header)
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, t.RelayURL+"/v2/instance/login", nil)
 	if err != nil {
 		return transport.AuthResponse{}, &TransportError{
@@ -283,7 +272,7 @@ func (t *HTTPTransport) Authenticate(ctx context.Context, req transport.AuthRequ
 		}
 	}
 
-	// Double-hash the token: Hash(Hash(AuthToken)) - matches legacy communicator
+	// Double-hash token: Hash(Hash(AuthToken)) matches legacy communicator behavior
 	hashedToken := hash.Sha3Hash(hash.Sha3Hash(req.Email))
 	httpReq.Header.Set("Authorization", "Bearer "+hashedToken)
 	httpReq.Header.Set("Content-Type", "application/json")
@@ -307,7 +296,6 @@ func (t *HTTPTransport) Authenticate(ctx context.Context, req transport.AuthRequ
 		return transport.AuthResponse{}, newTransportError(resp.StatusCode, bodyBytes, resp.Header, nil)
 	}
 
-	// Read and log response body for debugging
 	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return transport.AuthResponse{}, &TransportError{
@@ -317,17 +305,14 @@ func (t *HTTPTransport) Authenticate(ctx context.Context, req transport.AuthRequ
 		}
 	}
 
-	// Parse response body for instance info
 	var loginResp struct {
 		UUID string `json:"uuid"`
 		Name string `json:"name"`
 	}
 	if err := json.Unmarshal(bodyBytes, &loginResp); err != nil {
-		// Log the response body to understand what the backend returns
 		return transport.AuthResponse{}, fmt.Errorf("failed to decode auth response (body: %s): %w", string(bodyBytes), err)
 	}
 
-	// Extract JWT token from cookie (matching legacy behavior)
 	var jwtToken string
 
 	for _, cookie := range resp.Cookies() {
@@ -342,8 +327,7 @@ func (t *HTTPTransport) Authenticate(ctx context.Context, req transport.AuthRequ
 		return transport.AuthResponse{}, errors.New("no token cookie returned from login")
 	}
 
-	// Set default expiry to 23 hours from now (typical JWT lifetime is 24h, refresh proactively)
-	// The backend doesn't return expiresAt in the response, so we estimate based on typical JWT lifetime
+	// Backend doesn't return expiresAt; estimate 23h (refresh before typical 24h JWT expiry)
 	defaultExpiry := time.Now().Add(23 * time.Hour).Unix()
 
 	return transport.AuthResponse{
@@ -355,7 +339,6 @@ func (t *HTTPTransport) Authenticate(ctx context.Context, req transport.AuthRequ
 }
 
 // Pull retrieves messages from the backend (GET /v2/instance/pull).
-// Returns *TransportError on failure with classified error type for intelligent backoff.
 func (t *HTTPTransport) Pull(ctx context.Context, jwtToken string) ([]*transport.UMHMessage, error) {
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, t.RelayURL+"/v2/instance/pull", nil)
 	if err != nil {
@@ -366,7 +349,6 @@ func (t *HTTPTransport) Pull(ctx context.Context, jwtToken string) ([]*transport
 		}
 	}
 
-	// Add JWT token as cookie
 	httpReq.AddCookie(&http.Cookie{Name: "token", Value: jwtToken})
 
 	resp, err := t.httpClient.Do(httpReq)
@@ -382,12 +364,10 @@ func (t *HTTPTransport) Pull(ctx context.Context, jwtToken string) ([]*transport
 		_ = resp.Body.Close()
 	}()
 
-	// 204 No Content = no messages available (valid response)
 	if resp.StatusCode == http.StatusNoContent {
 		return nil, nil
 	}
 
-	// Any non-OK status (except 204) is an error
 	if resp.StatusCode != http.StatusOK {
 		bodyBytes, _ := io.ReadAll(resp.Body)
 
@@ -403,7 +383,6 @@ func (t *HTTPTransport) Pull(ctx context.Context, jwtToken string) ([]*transport
 }
 
 // Push sends messages to the backend (POST /v2/instance/push).
-// Returns *TransportError on failure with classified error type for intelligent backoff.
 func (t *HTTPTransport) Push(ctx context.Context, jwtToken string, messages []*transport.UMHMessage) error {
 	if len(messages) == 0 {
 		return nil
@@ -428,8 +407,6 @@ func (t *HTTPTransport) Push(ctx context.Context, jwtToken string, messages []*t
 	}
 
 	httpReq.Header.Set("Content-Type", "application/json")
-
-	// Add JWT token as cookie
 	httpReq.AddCookie(&http.Cookie{Name: "token", Value: jwtToken})
 
 	resp, err := t.httpClient.Do(httpReq)
@@ -445,7 +422,6 @@ func (t *HTTPTransport) Push(ctx context.Context, jwtToken string, messages []*t
 		_ = resp.Body.Close()
 	}()
 
-	// Any error status (>= 400) is classified and returned
 	if resp.StatusCode >= 400 {
 		bodyBytes, _ := io.ReadAll(resp.Body)
 
@@ -467,36 +443,28 @@ func (t *HTTPTransport) Close() {
 	t.ResetClient()
 }
 
-// Reset recreates the HTTP client to establish fresh connections.
-// This is useful when the transport is in a degraded state and
-// retrying with the same client isn't helping.
-// Thread-safe: the httpClient field is replaced atomically.
+// Reset recreates the HTTP client to establish fresh connections when retries aren't helping.
 func (t *HTTPTransport) Reset() {
 	// Close existing connections
 	t.ResetClient()
 
-	// Recreate HTTP client with same settings
 	t.httpClient = &http.Client{
 		Timeout: t.httpClient.Timeout,
 		Transport: &http.Transport{
-			// Disable HTTP/2 to match Cloudflare behavior
 			ForceAttemptHTTP2: false,
 			TLSNextProto:      make(map[string]func(authority string, c *tls.Conn) http.RoundTripper),
 			Proxy:             http.ProxyFromEnvironment,
 
-			// Connection pooling (minimal for low-traffic FSMv2)
-			MaxIdleConns:        5, // Total idle connections
-			MaxIdleConnsPerHost: 1, // 1 idle connection to relay endpoint
-			MaxConnsPerHost:     2, // Up to 2 concurrent (auth + pull/push)
+			MaxIdleConns:        5,
+			MaxIdleConnsPerHost: 1,
+			MaxConnsPerHost:     2,
 
-			// Dial settings
 			DialContext: (&net.Dialer{
 				Timeout:   30 * time.Second,
 				KeepAlive: 30 * time.Second,
 			}).DialContext,
 
-			// Timeouts
-			IdleConnTimeout:       30 * time.Second, // Match legacy keepAliveTimeout
+			IdleConnTimeout:       30 * time.Second,
 			TLSHandshakeTimeout:   10 * time.Second,
 			ResponseHeaderTimeout: 30 * time.Second,
 			ExpectContinueTimeout: 1 * time.Second,

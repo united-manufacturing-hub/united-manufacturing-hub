@@ -72,7 +72,6 @@ func (s *SyncingState) Reason() string {
 }
 
 // GetBackoffDelay calculates exponential backoff based on consecutive errors.
-// Delegates to backoff.CalculateDelay. Kept for backward compatibility.
 func (s *SyncingState) GetBackoffDelay(observed snapshot.CommunicatorObservedState) time.Duration {
 	return backoff.CalculateDelay(observed.ConsecutiveErrors)
 }
