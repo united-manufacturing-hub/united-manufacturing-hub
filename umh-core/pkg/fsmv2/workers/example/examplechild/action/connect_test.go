@@ -49,18 +49,18 @@ var _ = Describe("ConnectAction", func() {
 			})
 		})
 
-		Context("when created with failures", func() {
-			It("should succeed on all executions (skeleton implementation)", func() {
-				connectAction := action.NewConnectActionWithFailures(2)
+		Context("when executed multiple times", func() {
+			It("should succeed on all executions", func() {
+				connectAction := &action.ConnectAction{}
 
 				err1 := connectAction.Execute(ctx, depsAny)
-				Expect(err1).ToNot(HaveOccurred(), "first execution should succeed (skeleton implementation)")
+				Expect(err1).ToNot(HaveOccurred())
 
 				err2 := connectAction.Execute(ctx, depsAny)
-				Expect(err2).ToNot(HaveOccurred(), "second execution should succeed (skeleton implementation)")
+				Expect(err2).ToNot(HaveOccurred())
 
 				err3 := connectAction.Execute(ctx, depsAny)
-				Expect(err3).ToNot(HaveOccurred(), "third execution should succeed (skeleton implementation)")
+				Expect(err3).ToNot(HaveOccurred())
 			})
 		})
 	})

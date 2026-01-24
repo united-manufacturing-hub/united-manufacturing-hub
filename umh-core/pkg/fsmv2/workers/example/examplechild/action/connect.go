@@ -25,11 +25,6 @@ const ConnectActionName = "connect"
 // ConnectAction establishes a connection to an external resource.
 type ConnectAction struct{}
 
-// NewConnectActionWithFailures creates a connect action that will fail N times before succeeding.
-func NewConnectActionWithFailures(failCount int) *ConnectAction {
-	return &ConnectAction{}
-}
-
 // Execute attempts to acquire a connection from the pool.
 func (a *ConnectAction) Execute(ctx context.Context, depsAny any) error {
 	select {
