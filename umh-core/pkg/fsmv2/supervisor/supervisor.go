@@ -16,8 +16,7 @@
 // worker lifecycles with compile-time type safety.
 //
 // The Supervisor[TObserved, TDesired] type uses generics to ensure all workers managed
-// by a supervisor have consistent ObservedState and DesiredState types. This eliminates
-// runtime type errors and provides better IDE support.
+// by a supervisor have consistent ObservedState and DesiredState types.
 //
 // # Type Safety with Generics
 //
@@ -30,47 +29,20 @@
 //   - ExampleparentObservedState -> "exampleparent"
 //   - ContainerObservedState -> "container"
 //
-// This eliminates manual WorkerType constants and provides compile-time validation.
-//
 // # Architecture Constraints
 //
-// Storage Abstraction:
-//
-//	The supervisor MUST interact with storage exclusively through the
-//	TriangularStore adapter interface. Direct access to storage packages
-//	(e.g., pkg/cse/storage) is not permitted in supervisor production code.
-//
-//	Rationale:
-//	  - Maintains clean abstraction boundaries
-//	  - Prevents tight coupling to storage implementations
-//	  - Enables storage backend changes without supervisor modifications
-//	  - Facilitates testing through adapter mocking
-//
-//	Tests may use direct storage access or mock implementations for
-//	test setup and verification purposes.
+// Storage Abstraction: The supervisor MUST interact with storage exclusively through
+// the TriangularStore adapter interface. Tests may use direct storage access for
+// setup and verification.
 //
 // # LOCK ORDER
 //
 // To prevent deadlocks, locks must be acquired in this order:
 //
-// 1. MANDATORY: Supervisor.mu → WorkerContext.mu
-//   - Always acquire Supervisor.mu first to lookup worker
-//   - Then acquire WorkerContext.mu to modify state
-//   - Violation risk: HIGH (immediate deadlock)
-//
-// 2. ADVISORY: Supervisor.mu → Supervisor.ctxMu
-//   - If both needed, acquire mu first
-//   - However, ctxMu is independent and can be acquired alone
-//   - Violation risk: LOW (rarely needed together)
-//
+// 1. MANDATORY: Supervisor.mu → WorkerContext.mu (violation = immediate deadlock)
+// 2. ADVISORY: Supervisor.mu → Supervisor.ctxMu (ctxMu can be acquired alone)
 // 3. CRITICAL: Never hold Supervisor.mu while calling child/worker methods
-//   - Extract data under lock, release, then call methods
-//   - Prevents circular dependencies in hierarchy
-//   - Current code already follows this (lines 1783-1791, 1420-1436)
-//
-// 4. WorkerContext.mu locks are independent
-//   - No ordering between different workers' locks
-//   - Enables true parallel worker processing
+// 4. WorkerContext.mu locks are independent (enables parallel worker processing)
 package supervisor
 
 import (
@@ -136,96 +108,68 @@ import (
 //
 // =============================================================================
 
-// Lock names for tracking.
 const (
 	lockNameSupervisorMu    = "Supervisor.mu"
 	lockNameSupervisorCtxMu = "Supervisor.ctxMu"
 	lockNameWorkerContextMu = "WorkerContext.mu"
 )
 
-// heartbeatTickInterval defines how many ticks between heartbeat logs.
-// At 100ms tick interval, this logs every 10 seconds.
-const heartbeatTickInterval = 100
+const heartbeatTickInterval = 100 // ticks between heartbeat logs
 
-// Lock levels for ordering (lower number = must be acquired first).
+// Lock levels for ordering (lower = acquired first).
 const (
 	lockLevelSupervisorMu    = 1
-	lockLevelSupervisorCtxMu = 2 // Can be acquired alone OR after Supervisor.mu
-	lockLevelWorkerContextMu = 3 // Must be acquired AFTER Supervisor.mu
+	lockLevelSupervisorCtxMu = 2
+	lockLevelWorkerContextMu = 3
 )
 
-// Supervisor manages the lifecycle of a single worker.
-// It runs two goroutines:
-//  1. Observation loop: Continuously calls worker.CollectObservedState()
-//  2. Main tick loop: Calls state.Next() and executes actions
+// Supervisor manages worker lifecycles via two goroutines: observation loop and tick loop.
 //
-// The supervisor implements the 4-layer defense for data freshness:
-//   - Layer 1: Pause FSM when data is stale (>10s by default)
-//   - Layer 2: Restart collector when data times out (>20s by default)
+// 4-layer defense for data freshness:
+//   - Layer 1: Pause FSM when data is stale (>10s)
+//   - Layer 2: Restart collector when data times out (>20s)
 //   - Layer 3: Request graceful shutdown after max restart attempts
-//   - Layer 4: Comprehensive logging and metrics (observability)
+//   - Layer 4: Logging and metrics
 //
-// ARCHITECTURE: Single-Node Coordination
-//
-// This implementation coordinates multiple workers on a single node only.
-// State persistence uses TriangularStore, which currently assumes all workers
-// run in the same process and can share in-memory state. For distributed deployments,
-// the persistence layer would need to be replaced with a distributed storage backend.
+// Single-node coordination only; distributed deployments require a different storage backend.
 type Supervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] struct {
-	createdAt          time.Time                                      // Timestamp when supervisor was created
-	store              storage.TriangularStoreInterface               // State persistence layer (triangular model)
-	parent             SupervisorInterface                            // Pointer to parent supervisor (nil for root supervisors)
-	ctx                context.Context                                // Context for supervisor lifecycle
-	cachedDesiredState fsmv2.DesiredState                             // Cached result from DeriveDesiredState (typed TDesired stored as interface)
-	workers            map[string]*WorkerContext[TObserved, TDesired] // workerID → worker context
-	// mu Protects access to workers map, children, childDoneChans, globalVars, and mappedParentState.
-	//
-	// This is a lockmanager.Lock wrapping sync.RWMutex to allow concurrent reads from multiple goroutines
-	// (e.g., GetWorker, ListWorkers) while ensuring exclusive writes when modifying
-	// worker registry state (e.g., AddWorker, RemoveWorker).
-	//
-	// Lock Order: Must be acquired BEFORE WorkerContext.mu when both are needed.
-	// See package-level LOCK ORDER section for details.
-	mu                 *lockmanager.Lock
+	createdAt          time.Time
+	store              storage.TriangularStoreInterface
+	parent             SupervisorInterface
+	ctx                context.Context
+	cachedDesiredState fsmv2.DesiredState
+	workers            map[string]*WorkerContext[TObserved, TDesired]
+	mu                 *lockmanager.Lock // Protects workers, children, childDoneChans, globalVars, mappedParentState
 	lockManager        *lockmanager.LockManager
-	logger             *zap.SugaredLogger             // Logger for supervisor operations (enriched with worker path)
-	baseLogger         *zap.SugaredLogger             // Original logger without worker enrichment (for child supervisors)
-	freshnessChecker   *health.FreshnessChecker       // Data freshness validator
-	children           map[string]SupervisorInterface // Child supervisors by name (hierarchical composition)
-	childDoneChans     map[string]<-chan struct{}     // Done channels for child supervisors
-	pendingRemoval     map[string]bool                // Children pending graceful shutdown (waiting for SignalNeedsRemoval)
-	pendingRestart     map[string]bool                // Workers pending restart after shutdown completes
-	restartRequestedAt map[string]time.Time           // When restart was requested for each worker
-	globalVars         map[string]any                 // Global variables (fleet-wide settings from management system)
-	healthChecker      *InfrastructureHealthChecker   // Infrastructure health monitoring
-	actionExecutor     *execution.ActionExecutor      // Async action execution (Phase 2)
-	ctxCancel          context.CancelFunc             // Cancel function for supervisor context
-	// ctxMu Protects ctx and ctxCancel to prevent TOCTOU races during shutdown.
-	//
-	// Without this lock, a goroutine could check ctx.Err() (finding it non-cancelled),
-	// then another goroutine calls ctxCancel(), then the first goroutine uses ctx
-	// assuming it's still valid. This lock ensures atomic read-check-use patterns.
-	//
-	// This lock is independent from Supervisor.mu and can be acquired separately.
-	// It can be acquired alone when checking context status, or after Supervisor.mu
-	// if both are needed (advisory order).
-	ctxMu                    *lockmanager.Lock
-	deps                     map[string]any  // Dependencies for worker creation (injected, not global)
-	noStateMachineLoggedOnce sync.Map        // Tracks workers that have logged no_state_machine (workerID → true)
-	userSpec                 config.UserSpec // User-provided configuration for this supervisor
-	workerType               string          // Type of workers managed (e.g., "container") - for storage collection naming
-	mappedParentState        string          // State mapped from parent (if this is a child supervisor)
-	parentID                 string          // ID of parent supervisor (empty string for root supervisors)
-	lastUserSpecHash         string          // Hash of last UserSpec used for DeriveDesiredState
-	childStartStates         []string        // Parent FSM states where this child should run
-	collectorHealth          CollectorHealth // Collector health tracking
-	metricsWg                sync.WaitGroup  // WaitGroup for metrics reporter goroutine
-	tickInterval             time.Duration   // How often to evaluate state transitions
-	tickCount                uint64          // Counter for ticks, used for periodic heartbeat logging
-	gracefulShutdownTimeout  time.Duration   // How long to wait for workers to shutdown gracefully
-	circuitOpen              atomic.Bool     // Circuit breaker state (atomic for concurrent access)
-	started                  atomic.Bool     // Whether supervisor has been started
-	enableTraceLogging       bool            // Whether to emit verbose lifecycle logs (mutex, tick events)
+	logger             *zap.SugaredLogger
+	baseLogger         *zap.SugaredLogger // Un-enriched logger for child supervisors
+	freshnessChecker   *health.FreshnessChecker
+	children           map[string]SupervisorInterface
+	childDoneChans     map[string]<-chan struct{}
+	pendingRemoval     map[string]bool
+	pendingRestart     map[string]bool
+	restartRequestedAt map[string]time.Time
+	globalVars         map[string]any
+	healthChecker      *InfrastructureHealthChecker
+	actionExecutor     *execution.ActionExecutor
+	ctxCancel          context.CancelFunc
+	ctxMu              *lockmanager.Lock // Protects ctx/ctxCancel to prevent TOCTOU races during shutdown
+	deps               map[string]any
+	noStateMachineLoggedOnce sync.Map
+	userSpec                 config.UserSpec
+	workerType               string
+	mappedParentState        string
+	parentID                 string
+	lastUserSpecHash         string
+	childStartStates         []string
+	collectorHealth          CollectorHealth
+	metricsWg                sync.WaitGroup
+	tickInterval             time.Duration
+	tickCount                uint64
+	gracefulShutdownTimeout  time.Duration
+	circuitOpen              atomic.Bool
+	started                  atomic.Bool
+	enableTraceLogging       bool
 }
 
 func NewSupervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState](cfg Config) *Supervisor[TObserved, TDesired] {
@@ -297,7 +241,7 @@ func NewSupervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState](c
 		ctxMu:              lm.NewLock(lockNameSupervisorCtxMu, lockLevelSupervisorCtxMu),
 		store:              cfg.Store,
 		logger:             cfg.Logger,
-		baseLogger:         cfg.Logger, // Store un-enriched logger for passing to child supervisors
+		baseLogger:         cfg.Logger,
 		tickInterval:       tickInterval,
 		freshnessChecker:   freshnessChecker,
 		children:           make(map[string]SupervisorInterface),

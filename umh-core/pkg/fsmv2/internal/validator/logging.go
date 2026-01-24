@@ -44,23 +44,19 @@ var forbiddenLogMethods = map[string]bool{
 func ValidateStructuredLogging(baseDir string) []Violation {
 	var violations []Violation
 
-	// Walk all Go files in the fsmv2 directory
 	err := filepath.Walk(baseDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return nil // Skip errors
 		}
 
-		// Skip non-Go files and test files
 		if info.IsDir() || !strings.HasSuffix(path, ".go") {
 			return nil
 		}
 
-		// Skip test files and generated files
 		if strings.HasSuffix(path, "_test.go") || strings.Contains(path, "generated") {
 			return nil
 		}
 
-		// Skip the validator package itself
 		if strings.Contains(path, "internal/validator") {
 			return nil
 		}
@@ -94,7 +90,6 @@ func checkForNonStructuredLogging(filename string) []Violation {
 			return true
 		}
 
-		// Check for selector expressions like logger.Warnf(...)
 		selExpr, ok := callExpr.Fun.(*ast.SelectorExpr)
 		if !ok {
 			return true
@@ -105,20 +100,15 @@ func checkForNonStructuredLogging(filename string) []Violation {
 			return true
 		}
 
-		// Get the receiver name to confirm it's a logger
-		// We check for common logger variable names
 		receiverName := ""
 
 		switch x := selExpr.X.(type) {
 		case *ast.Ident:
 			receiverName = x.Name
 		case *ast.SelectorExpr:
-			// Handle cases like s.logger.Warnf or d.logger.Warnf
-			// x.Sel is already *ast.Ident in Go AST
 			receiverName = x.Sel.Name
 		}
 
-		// Only flag if it looks like a logger call
 		if receiverName == "logger" || receiverName == "Logger" ||
 			strings.Contains(receiverName, "log") || strings.Contains(receiverName, "Log") {
 			pos := fset.Position(callExpr.Pos())

@@ -382,32 +382,8 @@ package examples
 //	    --duration=10s \
 //	    --tick-interval=100ms
 var SimpleScenario = Scenario{
-	// Name is the CLI identifier. Use lowercase-with-dashes convention.
-	Name: "simple",
-
-	// Description appears in CLI output and documentation.
-	// Explain what this scenario tests and what behavior to expect.
+	Name:        "simple",
 	Description: "Single parent worker with 2 dynamically-created child workers",
-
-	// YAMLConfig defines the worker hierarchy.
-	// This is the same format as production ApplicationWorker configurations.
-	//
-	// The children array defines root-level workers. Each can have its own children,
-	// creating a tree structure.
-	//
-	// In this scenario:
-	// - We create 1 root worker named "parent-1"
-	// - It has workerType "exampleparent", which maps to exampleparent worker
-	// - Its userSpec.config contains "children_count: 2"
-	// - The parent worker parses this into ParentUserSpec{ChildrenCount: 2}
-	// - The parent's GetChildSpecs() method returns 2 ChildSpec entries
-	// - Each child has workerType "examplechild", which maps to examplechild worker
-	//
-	// The result is a 3-worker hierarchy:
-	//   app-001
-	//     └─ parent-1
-	//         ├─ parent-1-child-1
-	//         └─ parent-1-child-2
 	YAMLConfig: `
 children:
   - name: "parent-1"

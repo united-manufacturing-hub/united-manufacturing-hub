@@ -161,34 +161,27 @@ var ConfigErrorScenario = Scenario{
 
 	YAMLConfig: `
 children:
-  # Valid configuration - baseline for comparison
-  # This should work normally
+  # Valid configuration baseline
   - name: "config-valid"
     workerType: "exampleparent"
     userSpec:
       config: |
         children_count: 2
 
-  # Type mismatch - string where int expected
-  # YAML parsing is lenient: children_count becomes 0 (zero value)
-  # Parent will create 0 children (not an error, just unexpected behavior)
+  # Type mismatch: children_count becomes 0 (YAML is lenient)
   - name: "config-type-mismatch"
     workerType: "exampleparent"
     userSpec:
       config: |
         children_count: "not-a-number"
 
-  # Empty configuration
-  # All fields get default/zero values
-  # Parent creates 0 children (children_count defaults to 0)
+  # Empty config: all fields get zero values
   - name: "config-empty"
     workerType: "exampleparent"
     userSpec:
       config: ""
 
-  # Failing worker with invalid max_failures
-  # max_failures: "three" becomes 0 → GetMaxFailures() returns default 3
-  # Demonstrates how defaults protect against type mismatches
+  # Invalid max_failures becomes 0, GetMaxFailures() returns default 3
   - name: "config-failing-defaults"
     workerType: "examplefailing"
     userSpec:

@@ -29,42 +29,16 @@ import (
 )
 
 var (
-	// registry maps worker type names to factory functions.
-	// Factory functions receive Identity, Logger, StateReader, and optional Dependencies to create properly-configured workers.
-	// The deps parameter allows dependency injection without global state.
-	registry = make(map[string]func(deps.Identity, *zap.SugaredLogger, deps.StateReader, map[string]any) fsmv2.Worker)
-	// registryMu protects concurrent access to the registry.
+	registry   = make(map[string]func(deps.Identity, *zap.SugaredLogger, deps.StateReader, map[string]any) fsmv2.Worker)
 	registryMu sync.RWMutex
 
-	// supervisorRegistry stores supervisor factory functions keyed by worker type.
-	// Factory functions take a config interface{} parameter and return an interface{} supervisor.
-	// The actual types are supervisor.Config and supervisor.SupervisorInterface, but we use
-	// interface{} here to avoid circular imports between factory and supervisor packages.
-	supervisorRegistry = make(map[string]func(interface{}) interface{})
-	// supervisorRegistryMu protects concurrent access to the supervisor registry.
+	// Uses interface{} to avoid circular imports between factory and supervisor packages.
+	supervisorRegistry   = make(map[string]func(interface{}) interface{})
 	supervisorRegistryMu sync.RWMutex
 )
 
 // RegisterFactoryByType adds a worker type to the global registry using a runtime string type.
-// This is used for supervisor internals that work with children polymorphically.
 // For worker package initialization, use RegisterFactory[TObserved, TDesired]() instead.
-//
-// The factory function receives the supervisor's logger and optional dependencies, allowing
-// workers to use consistent structured logging and dependency injection without global state.
-//
-// THREAD SAFETY:
-// This function is thread-safe and can be called concurrently from multiple goroutines.
-// However, duplicate registrations will return an error.
-//
-// ERROR CONDITIONS:
-//   - Returns error if workerType is empty
-//   - Returns error if workerType is already registered
-//
-// Example usage (supervisor internals):
-//
-//	err := factory.RegisterFactoryByType("mqtt_client", func(id deps.Identity, logger *zap.SugaredLogger, stateReader deps.StateReader, deps map[string]any) fsmv2.Worker {
-//	    return NewMQTTWorker(id, logger, stateReader, deps)
-//	})
 func RegisterFactoryByType(workerType string, factoryFunc func(deps.Identity, *zap.SugaredLogger, deps.StateReader, map[string]any) fsmv2.Worker) error {
 	if workerType == "" {
 		return errors.New("worker type cannot be empty")
@@ -83,31 +57,7 @@ func RegisterFactoryByType(workerType string, factoryFunc func(deps.Identity, *z
 }
 
 // RegisterFactory adds a worker type to the global registry using compile-time type parameters.
-// This is the recommended API for worker packages registering themselves during initialization.
-// The workerType is automatically derived from the TObserved type parameter.
-//
-// The factory function receives the supervisor's logger and optional dependencies, allowing
-// workers to use consistent structured logging and dependency injection without global state.
-//
-// THREAD SAFETY:
-// This function is thread-safe and can be called concurrently from multiple goroutines.
-// However, duplicate registrations will return an error.
-//
-// ERROR CONDITIONS:
-//   - Returns error if the derived workerType is empty
-//   - Returns error if the workerType is already registered
-//
-// Example usage:
-//
-//	func init() {
-//	    err := factory.RegisterFactory[ContainerObservedState, ContainerDesiredState](
-//	        func(id deps.Identity, logger *zap.SugaredLogger, stateReader deps.StateReader, deps map[string]any) fsmv2.Worker {
-//	            return NewContainerWorker(id, logger, stateReader, deps)
-//	        })
-//	    if err != nil {
-//	        panic(err)
-//	    }
-//	}
+// The workerType is derived from the TObserved type parameter.
 func RegisterFactory[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState](
 	factoryFunc func(deps.Identity, *zap.SugaredLogger, deps.StateReader, map[string]any) fsmv2.Worker,
 ) error {
@@ -120,28 +70,6 @@ func RegisterFactory[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState]
 }
 
 // RegisterSupervisorFactory registers a supervisor factory for a worker type.
-// The supervisor factory creates properly-typed supervisors for the given worker type.
-// This is called alongside RegisterFactory to enable child supervisor creation.
-//
-// THREAD SAFETY:
-// This function is thread-safe and can be called concurrently from multiple goroutines.
-// However, duplicate registrations will return an error.
-//
-// ERROR CONDITIONS:
-//   - Returns error if the supervisor factory is already registered for this worker type
-//
-// Example usage:
-//
-//	func init() {
-//	    err := factory.RegisterSupervisorFactory[ContainerObservedState, ContainerDesiredState](
-//	        func(cfg interface{}) interface{} {
-//	            supervisorCfg := cfg.(supervisor.Config)
-//	            return supervisor.New[ContainerObservedState, ContainerDesiredState](supervisorCfg)
-//	        })
-//	    if err != nil {
-//	        panic(err)
-//	    }
-//	}
 func RegisterSupervisorFactory[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState](
 	factoryFunc func(interface{}) interface{},
 ) error {
@@ -163,23 +91,7 @@ func RegisterSupervisorFactory[TObserved fsmv2.ObservedState, TDesired fsmv2.Des
 }
 
 // RegisterSupervisorFactoryByType adds a supervisor factory using a runtime string type name.
-// This is used for testing and cases where the worker type is determined at runtime.
 // For worker package initialization, use RegisterSupervisorFactory[TObserved, TDesired]() instead.
-//
-// THREAD SAFETY:
-// This function is thread-safe and can be called concurrently from multiple goroutines.
-// However, duplicate registrations will return an error.
-//
-// ERROR CONDITIONS:
-//   - Returns error if workerType is empty
-//   - Returns error if workerType is already registered
-//
-// Example usage (testing):
-//
-//	err := factory.RegisterSupervisorFactoryByType("child", func(cfg interface{}) interface{} {
-//	    supervisorCfg := cfg.(supervisor.Config)
-//	    return supervisor.NewSupervisor[*TestObservedState, *TestDesiredState](supervisorCfg)
-//	})
 func RegisterSupervisorFactoryByType(workerType string, factoryFunc func(interface{}) interface{}) error {
 	if workerType == "" {
 		return errors.New("worker type cannot be empty")
@@ -198,27 +110,7 @@ func RegisterSupervisorFactoryByType(workerType string, factoryFunc func(interfa
 }
 
 // NewWorkerByType creates a worker instance by runtime string type name.
-// This is used by supervisors during hierarchical child instantiation (runtime polymorphism).
-// For compile-time type-safe worker creation, use GetFactory[TObserved, TDesired]() instead.
-//
-// The logger parameter is passed to the factory function, allowing workers to receive
-// the supervisor's logger for consistent structured logging throughout the hierarchy.
-// The deps parameter allows passing dependencies to workers without global state.
-//
-// THREAD SAFETY:
-// This function is thread-safe and can be called concurrently from multiple goroutines.
-// The registry is protected by a read-write mutex.
-//
-// ERROR CONDITIONS:
-//   - Returns error if workerType is empty
-//   - Returns error if workerType is not registered
-//
-// Example usage in supervisor (processing ChildSpec):
-//
-//	worker, err := factory.NewWorkerByType(spec.WorkerType, identity, s.logger, s.stateReader, deps)
-//	if err != nil {
-//	    return fmt.Errorf("failed to create child worker: %w", err)
-//	}
+// For compile-time type-safe creation, use GetFactory[TObserved, TDesired]() instead.
 func NewWorkerByType(workerType string, identity deps.Identity, logger *zap.SugaredLogger, stateReader deps.StateReader, deps map[string]any) (fsmv2.Worker, error) {
 	if workerType == "" {
 		return nil, errors.New("worker type cannot be empty")
@@ -238,27 +130,7 @@ func NewWorkerByType(workerType string, identity deps.Identity, logger *zap.Suga
 }
 
 // NewSupervisorByType creates a supervisor for the given worker type.
-// This is used by parent supervisors when creating child supervisors.
-//
-// The config parameter should be of type supervisor.Config, and the returned
-// interface{} should be cast to supervisor.SupervisorInterface by the caller.
-// We use interface{} types here to avoid circular imports between factory and supervisor packages.
-//
-// THREAD SAFETY:
-// This function is thread-safe and can be called concurrently from multiple goroutines.
-// The supervisor registry is protected by a read-write mutex.
-//
-// ERROR CONDITIONS:
-//   - Returns error if workerType is empty
-//   - Returns error if no supervisor factory is registered for the worker type
-//
-// Example usage in parent supervisor:
-//
-//	rawSupervisor, err := factory.NewSupervisorByType(spec.WorkerType, supervisorConfig)
-//	if err != nil {
-//	    return fmt.Errorf("failed to create child supervisor: %w", err)
-//	}
-//	childSupervisor := rawSupervisor.(supervisor.SupervisorInterface)
+// Uses interface{} to avoid circular imports; caller casts to supervisor.SupervisorInterface.
 func NewSupervisorByType(workerType string, config interface{}) (interface{}, error) {
 	if workerType == "" {
 		return nil, errors.New("worker type cannot be empty")
@@ -277,20 +149,7 @@ func NewSupervisorByType(workerType string, config interface{}) (interface{}, er
 	return factoryFunc(config), nil
 }
 
-// ResetRegistry clears all registered worker and supervisor factories.
-// This is primarily used for testing to ensure clean state between tests.
-//
-// THREAD SAFETY:
-// This function is thread-safe but should only be called during test setup,
-// not in production code.
-//
-// Example usage in tests:
-//
-//	func TestMyFeature(t *testing.T) {
-//	    factory.ResetRegistry()  // Clean state
-//	    // ... register test worker types
-//	    // ... run tests
-//	}
+// ResetRegistry clears all registered worker and supervisor factories. For testing only.
 func ResetRegistry() {
 	registryMu.Lock()
 
@@ -306,23 +165,6 @@ func ResetRegistry() {
 }
 
 // ListRegisteredTypes returns all registered worker type names.
-// Thread-safe - returns a copy of registered type names, not references to internal registry.
-// Useful for debugging, introspection, and validation.
-//
-// THREAD SAFETY:
-// This function is thread-safe and can be called concurrently from multiple goroutines.
-// The returned slice is a copy, so modifying it does not affect the registry.
-//
-// Return value:
-// A slice of registered worker type names. Returns an empty (non-nil) slice if no types are registered.
-// The order of types in the slice is not guaranteed.
-//
-// Example usage:
-//
-//	types := factory.ListRegisteredTypes()
-//	if !contains(types, "mqtt_client") {
-//	    return fmt.Errorf("mqtt_client worker type not registered")
-//	}
 func ListRegisteredTypes() []string {
 	registryMu.RLock()
 	defer registryMu.RUnlock()
@@ -336,26 +178,6 @@ func ListRegisteredTypes() []string {
 }
 
 // GetFactory retrieves a worker factory by compile-time type parameters.
-// This is the recommended API for code that knows worker types at compile time.
-// The workerType is automatically derived from the TObserved type parameter.
-//
-// THREAD SAFETY:
-// This function is thread-safe and can be called concurrently from multiple goroutines.
-//
-// Return value:
-// Returns the factory function and true if the worker type is registered.
-// Returns nil and false if the worker type is not registered.
-//
-// Example usage:
-//
-//	factory, ok, err := factory.GetFactory[ContainerObservedState, ContainerDesiredState]()
-//	if err != nil {
-//	    return fmt.Errorf("failed to derive worker type: %w", err)
-//	}
-//	if !ok {
-//	    return fmt.Errorf("container worker type not registered")
-//	}
-//	worker := factory(identity, logger, stateReader, deps)
 func GetFactory[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState]() (func(deps.Identity, *zap.SugaredLogger, deps.StateReader, map[string]any) fsmv2.Worker, bool, error) {
 	workerType, err := storage.DeriveWorkerType[TObserved]()
 	if err != nil {
@@ -370,33 +192,8 @@ func GetFactory[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState]() (f
 	return factoryFunc, exists, nil
 }
 
-// RegisterWorkerAndSupervisorFactoryByType registers both worker and supervisor factories
-// using the same worker type name, with best-effort rollback on failure.
-//
-// NOTE: This is NOT truly atomic - there's a brief window between worker and supervisor
-// registration where only the worker is registered. If supervisor registration fails,
-// the worker registration is rolled back, but this is done as a separate operation.
-//
-// THREAD SAFETY:
-// This function is thread-safe and can be called concurrently from multiple goroutines.
-//
-// ERROR CONDITIONS:
-//   - Returns error if workerType is empty
-//   - Returns error if workerType is already registered in either registry
-//   - Rolls back worker registration if supervisor registration fails
-//
-// Example usage:
-//
-//	err := factory.RegisterWorkerAndSupervisorFactoryByType(
-//	    "mqtt_client",
-//	    func(id deps.Identity, logger *zap.SugaredLogger, stateReader deps.StateReader, deps map[string]any) fsmv2.Worker {
-//	        return NewMQTTWorker(id, logger, stateReader, deps)
-//	    },
-//	    func(cfg interface{}) interface{} {
-//	        supervisorCfg := cfg.(supervisor.Config)
-//	        return supervisor.New[MQTTObservedState, MQTTDesiredState](supervisorCfg)
-//	    },
-//	)
+// RegisterWorkerAndSupervisorFactoryByType registers both worker and supervisor factories.
+// Not atomic: rolls back worker registration if supervisor registration fails.
 func RegisterWorkerAndSupervisorFactoryByType(
 	workerType string,
 	workerFactory func(deps.Identity, *zap.SugaredLogger, deps.StateReader, map[string]any) fsmv2.Worker,
@@ -421,40 +218,8 @@ func RegisterWorkerAndSupervisorFactoryByType(
 	return nil
 }
 
-// RegisterWorkerType registers both worker and supervisor factories using
-// compile-time type parameters. The worker type is automatically derived from TObserved,
-// ensuring consistency between worker and supervisor registrations.
-//
-// This is the PREFERRED registration API for worker packages. It combines the benefits of:
-//   - Compile-time type safety from type parameters
-//   - Automatic worker type derivation (no manual string matching)
-//   - Best-effort rollback on failure (see RegisterWorkerAndSupervisorFactoryByType)
-//
-// THREAD SAFETY:
-// This function is thread-safe and can be called concurrently from multiple goroutines.
-//
-// ERROR CONDITIONS:
-//   - Returns error if workerType derivation fails
-//   - Returns error if workerType is already registered in either registry
-//   - Rolls back worker registration if supervisor registration fails
-//
-// Example usage:
-//
-//	func init() {
-//	    err := factory.RegisterWorkerType[snapshot.MyObservedState, *snapshot.MyDesiredState](
-//	        func(id deps.Identity, logger *zap.SugaredLogger, stateReader deps.StateReader, deps map[string]any) fsmv2.Worker {
-//	            worker, _ := NewMyWorker(id, logger, stateReader, deps)
-//	            return worker
-//	        },
-//	        func(cfg interface{}) interface{} {
-//	            supervisorCfg := cfg.(supervisor.Config)
-//	            return supervisor.NewSupervisor[snapshot.MyObservedState, *snapshot.MyDesiredState](supervisorCfg)
-//	        },
-//	    )
-//	    if err != nil {
-//	        panic(err)
-//	    }
-//	}
+// RegisterWorkerType registers both worker and supervisor factories using compile-time type parameters.
+// Preferred API: provides type safety and automatic worker type derivation.
 func RegisterWorkerType[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState](
 	workerFactory func(deps.Identity, *zap.SugaredLogger, deps.StateReader, map[string]any) fsmv2.Worker,
 	supervisorFactory func(interface{}) interface{},
@@ -468,25 +233,7 @@ func RegisterWorkerType[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredSta
 }
 
 // ValidateRegistryConsistency checks for mismatches between worker and supervisor registries.
-// Returns two slices: worker types without supervisors, and supervisor types without workers.
-// Empty slices indicate consistent registries.
-//
-// THREAD SAFETY:
-// This function is thread-safe and can be called concurrently from multiple goroutines.
-//
-// Return values:
-//   - workerOnly: Worker types registered without corresponding supervisor factories
-//   - supervisorOnly: Supervisor types registered without corresponding worker factories
-//
-// Example usage:
-//
-//	workerOnly, supervisorOnly := factory.ValidateRegistryConsistency()
-//	if len(workerOnly) > 0 {
-//	    log.Warnf("Worker types without supervisors: %v", workerOnly)
-//	}
-//	if len(supervisorOnly) > 0 {
-//	    log.Warnf("Supervisor types without workers: %v", supervisorOnly)
-//	}
+// Returns worker types without supervisors, and supervisor types without workers.
 func ValidateRegistryConsistency() (workerOnly []string, supervisorOnly []string) {
 	registryMu.RLock()
 
@@ -524,22 +271,6 @@ func ValidateRegistryConsistency() (workerOnly []string, supervisorOnly []string
 }
 
 // ListSupervisorTypes returns all registered supervisor type names.
-// This is the companion function to ListRegisteredTypes() for supervisor factories.
-//
-// THREAD SAFETY:
-// This function is thread-safe and can be called concurrently from multiple goroutines.
-// The returned slice is a copy, so modifying it does not affect the registry.
-//
-// Return value:
-// A slice of registered supervisor type names. Returns an empty (non-nil) slice if no types are registered.
-// The order of types in the slice is not guaranteed.
-//
-// Example usage:
-//
-//	types := factory.ListSupervisorTypes()
-//	if !contains(types, "mqtt_client") {
-//	    return fmt.Errorf("mqtt_client supervisor type not registered")
-//	}
 func ListSupervisorTypes() []string {
 	supervisorRegistryMu.RLock()
 	defer supervisorRegistryMu.RUnlock()

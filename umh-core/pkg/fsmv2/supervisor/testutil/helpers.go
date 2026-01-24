@@ -371,9 +371,7 @@ func (a *Action) Execute(ctx context.Context, snapshot any) error {
 	return nil
 }
 
-// VerifyActionIdempotency tests that an action is idempotent by executing it
-// multiple times and verifying the result is the same as executing it once.
-// Re-exported from execution package for external test usage.
+// VerifyActionIdempotency tests that an action is idempotent by executing it multiple times.
 func VerifyActionIdempotency(action fsmv2.Action[any], iterations int, verifyState func()) {
 	ctx := context.Background()
 

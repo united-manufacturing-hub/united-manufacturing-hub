@@ -24,19 +24,13 @@ import (
 )
 
 // TestLogger provides a logger that captures logs for verification in integration tests.
-// It uses zap's zaptest/observer to record all log entries and provides helper methods
-// for querying and verifying log output.
 type TestLogger struct {
-	// Logger is the sugared logger to pass to FSM components
 	Logger *zap.SugaredLogger
-	// Logs contains all captured log entries
-	Logs *observer.ObservedLogs
-	// mu protects access to the logger for thread-safe operations
-	mu sync.RWMutex
+	Logs   *observer.ObservedLogs
+	mu     sync.RWMutex
 }
 
 // NewTestLogger creates a new TestLogger with the specified log level.
-// The logger captures all log entries at or above the specified level.
 func NewTestLogger(level zapcore.Level) *TestLogger {
 	core, logs := observer.New(level)
 	logger := zap.New(core).Sugar()
@@ -48,7 +42,6 @@ func NewTestLogger(level zapcore.Level) *TestLogger {
 }
 
 // HasLogWithMessage checks if any captured log contains the specified message substring.
-// The check is case-sensitive.
 func (tl *TestLogger) HasLogWithMessage(msg string) bool {
 	tl.mu.RLock()
 	defer tl.mu.RUnlock()
@@ -64,7 +57,6 @@ func (tl *TestLogger) HasLogWithMessage(msg string) bool {
 }
 
 // HasLogWithField checks if any captured log has a field with the specified key and value.
-// The value comparison uses simple equality.
 func (tl *TestLogger) HasLogWithField(key string, value interface{}) bool {
 	tl.mu.RLock()
 	defer tl.mu.RUnlock()
@@ -82,7 +74,6 @@ func (tl *TestLogger) HasLogWithField(key string, value interface{}) bool {
 }
 
 // GetLogsMatching returns all log entries that contain the specified message substring.
-// Returns an empty slice if no logs match.
 func (tl *TestLogger) GetLogsMatching(msg string) []observer.LoggedEntry {
 	tl.mu.RLock()
 	defer tl.mu.RUnlock()
@@ -101,7 +92,6 @@ func (tl *TestLogger) GetLogsMatching(msg string) []observer.LoggedEntry {
 }
 
 // GetErrorsAndWarnings returns all log entries at ERROR or WARN level.
-// Useful for checking if unexpected errors or warnings were logged during tests.
 func (tl *TestLogger) GetErrorsAndWarnings() []observer.LoggedEntry {
 	tl.mu.RLock()
 	defer tl.mu.RUnlock()
@@ -119,7 +109,7 @@ func (tl *TestLogger) GetErrorsAndWarnings() []observer.LoggedEntry {
 	return errorsAndWarnings
 }
 
-// CountLogsWithMessage returns the number of log entries that contain the specified message substring.
+// CountLogsWithMessage returns the count of log entries containing the specified message substring.
 func (tl *TestLogger) CountLogsWithMessage(msg string) int {
 	tl.mu.RLock()
 	defer tl.mu.RUnlock()
@@ -137,8 +127,7 @@ func (tl *TestLogger) CountLogsWithMessage(msg string) int {
 	return count
 }
 
-// GetLogsWithFieldContaining returns all log entries that have a field with the specified key
-// and a value containing the specified substring.
+// GetLogsWithFieldContaining returns log entries with a field matching the key and value substring.
 func (tl *TestLogger) GetLogsWithFieldContaining(key, valueSubstring string) []observer.LoggedEntry {
 	tl.mu.RLock()
 	defer tl.mu.RUnlock()
@@ -165,7 +154,6 @@ func (tl *TestLogger) GetLogsWithFieldContaining(key, valueSubstring string) []o
 }
 
 // GetLogsMissingField returns all log entries that are missing the specified field.
-// Useful for verifying that all logs have required context fields like "worker".
 func (tl *TestLogger) GetLogsMissingField(key string) []observer.LoggedEntry {
 	tl.mu.RLock()
 	defer tl.mu.RUnlock()

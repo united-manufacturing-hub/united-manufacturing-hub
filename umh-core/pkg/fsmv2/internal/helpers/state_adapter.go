@@ -80,14 +80,12 @@ type TypedSnapshot[O any, D any] struct {
 //	    // ... state logic with direct typed access
 //	}
 func ConvertSnapshot[O any, D any](snapAny any) TypedSnapshot[O, D] {
-	// Convert to Snapshot type
 	raw, ok := snapAny.(fsmv2.Snapshot)
 	if !ok {
 		actualType := reflect.TypeOf(snapAny)
 		panic(fmt.Sprintf("ConvertSnapshot: expected Snapshot, got %v", actualType))
 	}
 
-	// Convert Observed with descriptive error
 	var observed O
 	if raw.Observed == nil {
 		var zero O
@@ -98,8 +96,7 @@ func ConvertSnapshot[O any, D any](snapAny any) TypedSnapshot[O, D] {
 
 	observed, ok = raw.Observed.(O)
 	if !ok {
-		// Handle case where O is value type but raw.Observed is pointer type
-		// Try to dereference if raw.Observed is a pointer to O
+		// Handle value type O when raw.Observed is pointer type by dereferencing
 		actualVal := reflect.ValueOf(raw.Observed)
 		if actualVal.Kind() == reflect.Ptr && !actualVal.IsNil() {
 			elem := actualVal.Elem()
@@ -119,7 +116,6 @@ func ConvertSnapshot[O any, D any](snapAny any) TypedSnapshot[O, D] {
 		}
 	}
 
-	// Convert Desired with descriptive error
 	var desired D
 	if raw.Desired == nil {
 		var zero D

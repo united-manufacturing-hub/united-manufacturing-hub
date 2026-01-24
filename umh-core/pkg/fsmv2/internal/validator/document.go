@@ -23,24 +23,11 @@ import (
 	"strings"
 )
 
-// ValidateNoDirectDocumentManipulation checks that supervisor code doesn't directly
-// manipulate persistence.Document types. This enforces the architectural boundary
-// that state changes should flow through typed interfaces (like ShutdownRequestable)
-// rather than direct document field manipulation.
-//
-// The patterns we want to prevent:
-// 1. Type assertions to persistence.Document (e.g., desiredDoc, ok := desired.(persistence.Document))
-// 2. Direct field writes to ShutdownRequested without going through SetShutdownRequested()
-//
-// Why this matters:
-// - Direct document manipulation breaks the abstraction boundary between
-//   the supervisor and persistence layers
-// - Type-safe interfaces ensure compile-time guarantees
-// - The triangular adapter pattern (Worker -> Interface -> Concrete type) should be used.
+// ValidateNoDirectDocumentManipulation checks that supervisor code uses typed interfaces
+// (like ShutdownRequestable) rather than direct persistence.Document manipulation.
 func ValidateNoDirectDocumentManipulation(baseDir string) []Violation {
 	var violations []Violation
 
-	// Only scan supervisor package files
 	supervisorDir := filepath.Join(baseDir, "supervisor")
 
 	entries, err := os.ReadDir(supervisorDir)
@@ -52,7 +39,6 @@ func ValidateNoDirectDocumentManipulation(baseDir string) []Violation {
 		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") {
 			continue
 		}
-		// Skip test files
 		if strings.HasSuffix(entry.Name(), "_test.go") {
 			continue
 		}
@@ -77,7 +63,6 @@ func checkDocumentManipulation(filename string) []Violation {
 	}
 
 	ast.Inspect(node, func(n ast.Node) bool {
-		// Check for type assertions to persistence.Document
 		typeAssert, ok := n.(*ast.TypeAssertExpr)
 		if ok {
 			if selExpr, ok := typeAssert.Type.(*ast.SelectorExpr); ok {

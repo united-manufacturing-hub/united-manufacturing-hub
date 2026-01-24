@@ -16,14 +16,7 @@ package examples
 
 // SlowScenario demonstrates long-running action handling and context cancellation.
 //
-// # What This Scenario Tests
-//
-// This scenario showcases the FSM's handling of actions that take significant time:
-//   - Action simulates a slow operation (e.g., connection establishment)
-//   - FSM waits for action to complete without blocking other workers
-//   - Context cancellation properly interrupts the action on shutdown
-//
-// # Flow (Single Pattern - Easy to Trace)
+// # Flow
 //
 //  1. Worker starts in Stopped state
 //  2. Worker transitions to TryingToConnect (desired state is "running")
@@ -34,37 +27,11 @@ package examples
 //
 // # What to Observe
 //
-// In logs, you should see:
-//   - "connect_attempting" with delay_seconds: 2
-//   - 2-second pause during action execution
-//   - "Connect delay completed successfully"
-//   - "Connect action completed"
-//   - State transition: TryingToConnect → Connected
+// In logs: "connect_attempting" with delay_seconds: 2, 2-second pause,
+// "Connect delay completed successfully", state transition to Connected.
 //
-// # Shutdown Behavior
-//
-// If shutdown is requested during the delay:
-//   - "Connect action cancelled during delay" is logged
-//   - Action returns ctx.Err() immediately
-//   - Worker transitions to TryingToStop instead of Connected
-//
-// # Configuration
-//
-// The worker is configured with:
-//   - delaySeconds: 2 - simulates 2-second connection establishment
-//
-// # Pattern Demonstrated
-//
-// Long-Running Action + Context-Aware Cancellation
-//
-// This is essential for graceful shutdown. Real-world examples:
-//   - TCP connection establishment (may take several seconds)
-//   - TLS handshake with certificate validation
-//   - OPC UA session creation with discovery
-//   - Database connection pool initialization
-//
-// The FSM ensures actions respect context cancellation, enabling
-// clean shutdown without waiting for slow operations to complete.
+// On shutdown during delay: Action returns ctx.Err() immediately,
+// worker transitions to TryingToStop instead of Connected.
 var SlowScenario = Scenario{
 	Name: "slow",
 

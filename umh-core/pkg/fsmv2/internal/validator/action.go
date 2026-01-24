@@ -47,7 +47,6 @@ func checkActionFile(filename string) []Violation {
 		return violations
 	}
 
-	// Look for struct declarations with "Action" in the name
 	ast.Inspect(node, func(n ast.Node) bool {
 		typeSpec, ok := n.(*ast.TypeSpec)
 		if !ok || !strings.Contains(typeSpec.Name.Name, "Action") {
@@ -59,16 +58,12 @@ func checkActionFile(filename string) []Violation {
 			return true
 		}
 
-		// Check each field
 		for _, field := range structType.Fields.List {
-			// Skip embedded types
 			if len(field.Names) == 0 {
 				continue
 			}
 
 			fieldName := field.Names[0].Name
-
-			// Check for violation patterns
 			if strings.Contains(strings.ToLower(fieldName), "dependencies") ||
 				strings.Contains(strings.ToLower(fieldName), "failure") ||
 				strings.Contains(strings.ToLower(fieldName), "count") ||
@@ -114,23 +109,19 @@ func checkContextCancellationInAction(filename string) []Violation {
 		return violations
 	}
 
-	// Look for Execute() method
 	ast.Inspect(node, func(n ast.Node) bool {
 		funcDecl, ok := n.(*ast.FuncDecl)
 		if !ok || funcDecl.Name.Name != "Execute" {
 			return true
 		}
 
-		// Look for ctx.Done() check in method body
 		hasContextCheck := false
 
 		ast.Inspect(funcDecl.Body, func(bodyNode ast.Node) bool {
-			// Check for select statement with ctx.Done()
 			if selectStmt, ok := bodyNode.(*ast.SelectStmt); ok {
 				for _, commClause := range selectStmt.Body.List {
 					if clause, ok := commClause.(*ast.CommClause); ok {
 						if clause.Comm != nil {
-							// Check for <-ctx.Done()
 							if exprStmt, ok := clause.Comm.(*ast.ExprStmt); ok {
 								if unaryExpr, ok := exprStmt.X.(*ast.UnaryExpr); ok && unaryExpr.Op == token.ARROW {
 									if callExpr, ok := unaryExpr.X.(*ast.CallExpr); ok {
@@ -151,7 +142,6 @@ func checkContextCancellationInAction(filename string) []Violation {
 				}
 			}
 
-			// Check for if statement with ctx.Done()
 			if ifStmt, ok := bodyNode.(*ast.IfStmt); ok {
 				ast.Inspect(ifStmt.Cond, func(condNode ast.Node) bool {
 					if callExpr, ok := condNode.(*ast.CallExpr); ok {
@@ -214,20 +204,16 @@ func checkNoInternalRetryLoops(filename string) []Violation {
 		return violations
 	}
 
-	// Look for Execute() method
 	ast.Inspect(node, func(n ast.Node) bool {
 		funcDecl, ok := n.(*ast.FuncDecl)
 		if !ok || funcDecl.Name.Name != "Execute" {
 			return true
 		}
 
-		// Look for loops in the method body
 		ast.Inspect(funcDecl.Body, func(bodyNode ast.Node) bool {
 			forStmt, ok := bodyNode.(*ast.ForStmt)
 			if !ok {
-				// Check range loops too
 				if rangeStmt, ok := bodyNode.(*ast.RangeStmt); ok {
-					// Check if this range loop has error handling
 					if hasErrorHandling(rangeStmt.Body) {
 						pos := fset.Position(rangeStmt.Pos())
 						violations = append(violations, Violation{
@@ -242,7 +228,6 @@ func checkNoInternalRetryLoops(filename string) []Violation {
 				return true
 			}
 
-			// Check if this for loop has error handling (return err pattern)
 			if hasErrorHandling(forStmt.Body) {
 				pos := fset.Position(forStmt.Pos())
 				violations = append(violations, Violation{
@@ -267,7 +252,6 @@ func hasErrorHandling(body *ast.BlockStmt) bool {
 	hasError := false
 
 	ast.Inspect(body, func(n ast.Node) bool {
-		// Check for "return err" or "return ..., err"
 		if retStmt, ok := n.(*ast.ReturnStmt); ok {
 			for _, result := range retStmt.Results {
 				if ident, ok := result.(*ast.Ident); ok && ident.Name == "err" {
@@ -278,11 +262,9 @@ func hasErrorHandling(body *ast.BlockStmt) bool {
 			}
 		}
 
-		// Check for "if err != nil"
 		if ifStmt, ok := n.(*ast.IfStmt); ok {
 			if binExpr, ok := ifStmt.Cond.(*ast.BinaryExpr); ok {
 				if binExpr.Op == token.NEQ {
-					// Check if comparing err to nil
 					if ident, ok := binExpr.X.(*ast.Ident); ok && ident.Name == "err" {
 						if nilIdent, ok := binExpr.Y.(*ast.Ident); ok && nilIdent.Name == "nil" {
 							hasError = true

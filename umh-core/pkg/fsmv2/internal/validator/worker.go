@@ -48,21 +48,18 @@ func checkDeriveDesiredStateMethod(filename string) []Violation {
 		return violations
 	}
 
-	// Look for DeriveDesiredState() method
 	ast.Inspect(node, func(n ast.Node) bool {
 		funcDecl, ok := n.(*ast.FuncDecl)
 		if !ok || funcDecl.Name.Name != "DeriveDesiredState" {
 			return true
 		}
 
-		// Look for GetDependencies() calls in the method body
 		ast.Inspect(funcDecl.Body, func(bodyNode ast.Node) bool {
 			callExpr, ok := bodyNode.(*ast.CallExpr)
 			if !ok {
 				return true
 			}
 
-			// Check for method calls on receiver
 			if selExpr, ok := callExpr.Fun.(*ast.SelectorExpr); ok {
 				if selExpr.Sel.Name == "GetDependencies" {
 					pos := fset.Position(callExpr.Pos())
@@ -109,14 +106,12 @@ func checkContextCancellationInCollect(filename string) []Violation {
 		return violations
 	}
 
-	// Look for CollectObservedState() method
 	ast.Inspect(node, func(n ast.Node) bool {
 		funcDecl, ok := n.(*ast.FuncDecl)
 		if !ok || funcDecl.Name.Name != "CollectObservedState" {
 			return true
 		}
 
-		// Look for select statement with ctx.Done() case
 		hasContextCancellation := false
 
 		ast.Inspect(funcDecl.Body, func(bodyNode ast.Node) bool {
@@ -125,14 +120,12 @@ func checkContextCancellationInCollect(filename string) []Violation {
 				return true
 			}
 
-			// Check each case in select
 			for _, stmt := range selectStmt.Body.List {
 				commClause, ok := stmt.(*ast.CommClause)
 				if !ok || commClause.Comm == nil {
 					continue
 				}
 
-				// Look for <-ctx.Done()
 				if exprStmt, ok := commClause.Comm.(*ast.ExprStmt); ok {
 					if unaryExpr, ok := exprStmt.X.(*ast.UnaryExpr); ok {
 						if unaryExpr.Op == token.ARROW {
@@ -187,10 +180,7 @@ func ValidateNilSpecHandling(baseDir string) []Violation {
 	return violations
 }
 
-// checkNilSpecHandling parses a worker file and checks if DeriveDesiredState checks for nil spec.
-// This validation passes if:
-// 1. The function has an explicit `if spec == nil` check in the first two statements, OR
-// 2. The function uses helper functions (DeriveLeafState, ParseUserSpec) that handle nil internally.
+// checkNilSpecHandling checks for nil spec check or use of nil-safe helpers (DeriveLeafState, ParseUserSpec).
 func checkNilSpecHandling(filename string) []Violation {
 	var violations []Violation
 
@@ -201,40 +191,32 @@ func checkNilSpecHandling(filename string) []Violation {
 		return violations
 	}
 
-	// Look for DeriveDesiredState() method
 	ast.Inspect(node, func(n ast.Node) bool {
 		funcDecl, ok := n.(*ast.FuncDecl)
 		if !ok || funcDecl.Name.Name != "DeriveDesiredState" {
 			return true
 		}
 
-		// Check if body exists and has at least one statement
 		if funcDecl.Body == nil || len(funcDecl.Body.List) == 0 {
 			return true
 		}
 
-		// Check for nil-safe helper functions in any statement
-		// DeriveLeafState and ParseUserSpec handle nil internally
 		if usesNilSafeHelper(funcDecl.Body) {
 			return true
 		}
 
-		// Check first or second statement for nil check
 		hasNilCheck := false
 
 		for i := 0; i < 2 && i < len(funcDecl.Body.List); i++ {
 			stmt := funcDecl.Body.List[i]
 
-			// Look for if statement
 			ifStmt, ok := stmt.(*ast.IfStmt)
 			if !ok {
 				continue
 			}
 
-			// Check if condition is "spec == nil" or "nil == spec"
 			if binExpr, ok := ifStmt.Cond.(*ast.BinaryExpr); ok {
 				if binExpr.Op == token.EQL {
-					// Check left side
 					if ident, ok := binExpr.X.(*ast.Ident); ok && ident.Name == "spec" {
 						if nilIdent, ok := binExpr.Y.(*ast.Ident); ok && nilIdent.Name == "nil" {
 							hasNilCheck = true
@@ -243,7 +225,6 @@ func checkNilSpecHandling(filename string) []Violation {
 						}
 					}
 
-					// Check right side (nil == spec)
 					if ident, ok := binExpr.Y.(*ast.Ident); ok && ident.Name == "spec" {
 						if nilIdent, ok := binExpr.X.(*ast.Ident); ok && nilIdent.Name == "nil" {
 							hasNilCheck = true
@@ -271,10 +252,8 @@ func checkNilSpecHandling(filename string) []Violation {
 	return violations
 }
 
-// usesNilSafeHelper checks if the function body uses helper functions that handle nil internally.
-// These helpers (DeriveLeafState, ParseUserSpec) check for nil spec before type assertion.
+// usesNilSafeHelper checks if the function body uses helpers that handle nil internally.
 func usesNilSafeHelper(body *ast.BlockStmt) bool {
-	// Helper function names that handle nil internally
 	nilSafeHelpers := map[string]bool{
 		"DeriveLeafState": true,
 		"ParseUserSpec":   true,
@@ -288,7 +267,6 @@ func usesNilSafeHelper(body *ast.BlockStmt) bool {
 			return true
 		}
 
-		// Check for direct function call: DeriveLeafState[T](spec)
 		if indexExpr, ok := callExpr.Fun.(*ast.IndexExpr); ok {
 			if sel, ok := indexExpr.X.(*ast.SelectorExpr); ok {
 				if nilSafeHelpers[sel.Sel.Name] {
@@ -307,7 +285,6 @@ func usesNilSafeHelper(body *ast.BlockStmt) bool {
 			}
 		}
 
-		// Check for selector call: config.DeriveLeafState[T](spec)
 		if sel, ok := callExpr.Fun.(*ast.SelectorExpr); ok {
 			if nilSafeHelpers[sel.Sel.Name] {
 				found = true
@@ -336,7 +313,7 @@ func ValidatePointerReceivers(baseDir string) []Violation {
 	return violations
 }
 
-// checkPointerReceivers parses a worker file and checks for pointer receivers.
+// checkPointerReceivers checks that Worker methods use pointer receivers.
 func checkPointerReceivers(filename string) []Violation {
 	var violations []Violation
 
@@ -347,7 +324,6 @@ func checkPointerReceivers(filename string) []Violation {
 		return violations
 	}
 
-	// Look for Worker interface methods
 	targetMethods := map[string]bool{
 		"CollectObservedState": true,
 		"DeriveDesiredState":   true,
@@ -360,12 +336,10 @@ func checkPointerReceivers(filename string) []Violation {
 			return true
 		}
 
-		// Check if receiver exists and is a pointer
 		if funcDecl.Recv == nil || len(funcDecl.Recv.List) == 0 {
 			return true
 		}
 
-		// Check if receiver is a pointer (*T)
 		isPointer := false
 		if _, ok := funcDecl.Recv.List[0].Type.(*ast.StarExpr); ok {
 			isPointer = true
@@ -401,7 +375,7 @@ func ValidateDependencyValidation(baseDir string) []Violation {
 	return violations
 }
 
-// checkDependencyValidation parses a worker file and checks constructor validation.
+// checkDependencyValidation checks that constructors validate dependencies.
 func checkDependencyValidation(filename string) []Violation {
 	var violations []Violation
 
@@ -448,7 +422,7 @@ func ValidateChildSpecValidation(baseDir string) []Violation {
 	return violations
 }
 
-// checkChildSpecValidation parses a worker file and checks DeriveDesiredState validation.
+// checkChildSpecValidation checks that parent workers validate ChildrenSpecs.
 func checkChildSpecValidation(filename string) []Violation {
 	var violations []Violation
 
@@ -474,7 +448,6 @@ func checkChildSpecValidation(filename string) []Violation {
 		hasProgrammaticChildren := false
 
 		ast.Inspect(funcDecl.Body, func(bodyNode ast.Node) bool {
-			// Check for user-provided children that need validation (range over .Children selector)
 			if rangeStmt, ok := bodyNode.(*ast.RangeStmt); ok {
 				if selExpr, ok := rangeStmt.X.(*ast.SelectorExpr); ok {
 					if selExpr.Sel.Name == "Children" {
@@ -485,11 +458,9 @@ func checkChildSpecValidation(filename string) []Violation {
 				}
 			}
 
-			// Check for programmatically generated children (make([]...ChildSpec) call)
 			if callExpr, ok := bodyNode.(*ast.CallExpr); ok {
 				if ident, ok := callExpr.Fun.(*ast.Ident); ok && ident.Name == "make" {
 					if len(callExpr.Args) > 0 {
-						// Check if making a slice of ChildSpec type
 						if arrayType, ok := callExpr.Args[0].(*ast.ArrayType); ok {
 							if sel, ok := arrayType.Elt.(*ast.SelectorExpr); ok {
 								if sel.Sel.Name == "ChildSpec" {
@@ -506,7 +477,6 @@ func checkChildSpecValidation(filename string) []Violation {
 			return true
 		})
 
-		// Only require validation if using user-provided children (not programmatic generation)
 		if !hasChildrenValidation && !hasProgrammaticChildren {
 			pos := fset.Position(funcDecl.Pos())
 			violations = append(violations, Violation{
@@ -523,9 +493,7 @@ func checkChildSpecValidation(filename string) []Violation {
 	return violations
 }
 
-// ValidateDeriveDesiredStateReturns checks that DeriveDesiredState returns valid State values.
-// The State field in DesiredState must be "stopped" or "running" (config.DesiredState* constants).
-// This is validated at test-time via AST parsing to catch hardcoded invalid values.
+// ValidateDeriveDesiredStateReturns checks that DeriveDesiredState returns valid State values ("stopped" or "running").
 func ValidateDeriveDesiredStateReturns(baseDir string) []Violation {
 	var violations []Violation
 
@@ -539,8 +507,7 @@ func ValidateDeriveDesiredStateReturns(baseDir string) []Violation {
 	return violations
 }
 
-// checkDeriveDesiredStateReturns parses a worker file and checks that DeriveDesiredState
-// returns valid State values ("stopped" or "running").
+// checkDeriveDesiredStateReturns checks that DeriveDesiredState returns valid State values.
 func checkDeriveDesiredStateReturns(filename string) []Violation {
 	var violations []Violation
 
@@ -551,30 +518,25 @@ func checkDeriveDesiredStateReturns(filename string) []Violation {
 		return violations
 	}
 
-	// Valid desired state values
 	validStates := map[string]bool{
 		"stopped": true,
 		"running": true,
 	}
 
-	// Look for DeriveDesiredState() method
 	ast.Inspect(node, func(n ast.Node) bool {
 		funcDecl, ok := n.(*ast.FuncDecl)
 		if !ok || funcDecl.Name.Name != "DeriveDesiredState" {
 			return true
 		}
 
-		// Find all return statements in the method
 		ast.Inspect(funcDecl.Body, func(bodyNode ast.Node) bool {
 			retStmt, ok := bodyNode.(*ast.ReturnStmt)
 			if !ok || len(retStmt.Results) == 0 {
 				return true
 			}
 
-			// Check first return value (DesiredState)
 			firstResult := retStmt.Results[0]
 
-			// Handle &Type{} or Type{} composite literals
 			var compLit *ast.CompositeLit
 			if unaryExpr, ok := firstResult.(*ast.UnaryExpr); ok {
 				compLit, _ = unaryExpr.X.(*ast.CompositeLit)
@@ -586,7 +548,6 @@ func checkDeriveDesiredStateReturns(filename string) []Violation {
 				return true
 			}
 
-			// Find State field in composite literal
 			for _, elt := range compLit.Elts {
 				kvExpr, ok := elt.(*ast.KeyValueExpr)
 				if !ok {
@@ -598,7 +559,6 @@ func checkDeriveDesiredStateReturns(filename string) []Violation {
 					continue
 				}
 
-				// Check if value is a string literal
 				if basicLit, ok := kvExpr.Value.(*ast.BasicLit); ok && basicLit.Kind == token.STRING {
 					value := strings.Trim(basicLit.Value, `"`)
 					if !validStates[value] {
@@ -611,7 +571,6 @@ func checkDeriveDesiredStateReturns(filename string) []Violation {
 						})
 					}
 				}
-				// Note: We don't flag config.DesiredState* constants as they're valid
 			}
 
 			return true
@@ -624,8 +583,6 @@ func checkDeriveDesiredStateReturns(filename string) []Violation {
 }
 
 // ValidateFrameworkMetricsCopy checks that workers with dependencies copy framework metrics.
-// Workers that call GetDependencies() in CollectObservedState and have MetricsEmbedder
-// must also call GetFrameworkState() to copy framework metrics.
 func ValidateFrameworkMetricsCopy(baseDir string) []Violation {
 	var violations []Violation
 
@@ -640,11 +597,6 @@ func ValidateFrameworkMetricsCopy(baseDir string) []Violation {
 }
 
 // checkFrameworkMetricsCopy verifies that CollectObservedState copies framework metrics.
-// The pattern is: if a worker has dependencies (calls GetDependencies), it should
-// call GetFrameworkState() to copy framework metrics to the observed state.
-//
-// Workers without dependencies (like ApplicationWorker) are exempt - they intentionally
-// don't have access to framework metrics.
 func checkFrameworkMetricsCopy(filename string) []Violation {
 	var violations []Violation
 
@@ -655,7 +607,6 @@ func checkFrameworkMetricsCopy(filename string) []Violation {
 		return violations
 	}
 
-	// Look for CollectObservedState() method
 	ast.Inspect(node, func(n ast.Node) bool {
 		funcDecl, ok := n.(*ast.FuncDecl)
 		if !ok || funcDecl.Name.Name != "CollectObservedState" {
@@ -665,7 +616,6 @@ func checkFrameworkMetricsCopy(filename string) []Violation {
 		hasGetDependencies := false
 		hasGetFrameworkState := false
 
-		// Check for GetDependencies() and GetFrameworkState() calls
 		ast.Inspect(funcDecl.Body, func(bodyNode ast.Node) bool {
 			callExpr, ok := bodyNode.(*ast.CallExpr)
 			if !ok {
@@ -684,7 +634,6 @@ func checkFrameworkMetricsCopy(filename string) []Violation {
 			return true
 		})
 
-		// If worker has dependencies but doesn't copy framework metrics, flag it
 		if hasGetDependencies && !hasGetFrameworkState {
 			pos := fset.Position(funcDecl.Pos())
 			violations = append(violations, Violation{
@@ -702,13 +651,9 @@ func checkFrameworkMetricsCopy(filename string) []Violation {
 }
 
 // ValidateMetricsEmbedderValueReceivers checks that MetricsEmbedder uses value receivers.
-// This ensures type assertions work when ObservedState is passed as interface{} value.
-// Pointer receivers cause type assertion failures because when a struct is passed by value,
-// pointer receiver methods are not in the method set.
 func ValidateMetricsEmbedderValueReceivers(baseDir string) []Violation {
 	var violations []Violation
 
-	// Check api.go for MetricsEmbedder methods
 	apiFile := filepath.Join(baseDir, "api.go")
 	fileViolations := checkMetricsEmbedderReceivers(apiFile)
 	violations = append(violations, fileViolations...)
@@ -716,8 +661,7 @@ func ValidateMetricsEmbedderValueReceivers(baseDir string) []Violation {
 	return violations
 }
 
-// checkMetricsEmbedderReceivers parses api.go and checks that MetricsEmbedder methods
-// use value receivers (not pointer receivers).
+// checkMetricsEmbedderReceivers checks that MetricsEmbedder methods use value receivers.
 func checkMetricsEmbedderReceivers(filename string) []Violation {
 	var violations []Violation
 
@@ -728,7 +672,6 @@ func checkMetricsEmbedderReceivers(filename string) []Violation {
 		return violations
 	}
 
-	// Methods that must use value receivers for MetricsHolder interface
 	targetMethods := map[string]bool{
 		"GetWorkerMetrics":    true,
 		"GetFrameworkMetrics": true,
@@ -740,7 +683,6 @@ func checkMetricsEmbedderReceivers(filename string) []Violation {
 			return true
 		}
 
-		// Check if this is a MetricsEmbedder method
 		recv := funcDecl.Recv.List[0]
 
 		recvTypeName := getReceiverTypeName(recv.Type)
@@ -748,12 +690,10 @@ func checkMetricsEmbedderReceivers(filename string) []Violation {
 			return true
 		}
 
-		// Check if this is a target method
 		if !targetMethods[funcDecl.Name.Name] {
 			return true
 		}
 
-		// Check if receiver is a pointer (violation)
 		if _, isPointer := recv.Type.(*ast.StarExpr); isPointer {
 			pos := fset.Position(funcDecl.Pos())
 			violations = append(violations, Violation{
@@ -770,7 +710,7 @@ func checkMetricsEmbedderReceivers(filename string) []Violation {
 	return violations
 }
 
-// getReceiverTypeName extracts the type name from a receiver (handles both T and *T).
+// getReceiverTypeName extracts the type name from a receiver.
 func getReceiverTypeName(expr ast.Expr) string {
 	switch t := expr.(type) {
 	case *ast.StarExpr:
@@ -785,9 +725,6 @@ func getReceiverTypeName(expr ast.Expr) string {
 }
 
 // ValidateActionHistoryCopy checks that workers with dependencies copy action history.
-// Workers that call GetDependencies() in CollectObservedState must also call
-// GetActionHistory() to copy action history to the observed state.
-// This follows the same pattern as FrameworkMetrics - supervisor sets on deps, worker reads and assigns.
 func ValidateActionHistoryCopy(baseDir string) []Violation {
 	var violations []Violation
 
@@ -802,11 +739,6 @@ func ValidateActionHistoryCopy(baseDir string) []Violation {
 }
 
 // checkActionHistoryCopy verifies that CollectObservedState copies action history.
-// The pattern is: if a worker has dependencies (calls GetDependencies), it should
-// call GetActionHistory() to copy action history to the observed state.
-//
-// Workers without dependencies (like ApplicationWorker) are exempt - they intentionally
-// don't have access to action history.
 func checkActionHistoryCopy(filename string) []Violation {
 	var violations []Violation
 
@@ -817,7 +749,6 @@ func checkActionHistoryCopy(filename string) []Violation {
 		return violations
 	}
 
-	// Look for CollectObservedState() method
 	ast.Inspect(node, func(n ast.Node) bool {
 		funcDecl, ok := n.(*ast.FuncDecl)
 		if !ok || funcDecl.Name.Name != "CollectObservedState" {
@@ -827,7 +758,6 @@ func checkActionHistoryCopy(filename string) []Violation {
 		hasGetDependencies := false
 		hasGetActionHistory := false
 
-		// Check for GetDependencies() and GetActionHistory() calls
 		ast.Inspect(funcDecl.Body, func(bodyNode ast.Node) bool {
 			callExpr, ok := bodyNode.(*ast.CallExpr)
 			if !ok {
@@ -846,7 +776,6 @@ func checkActionHistoryCopy(filename string) []Violation {
 			return true
 		})
 
-		// If worker has dependencies but doesn't copy action history, flag it
 		if hasGetDependencies && !hasGetActionHistory {
 			pos := fset.Position(funcDecl.Pos())
 			violations = append(violations, Violation{

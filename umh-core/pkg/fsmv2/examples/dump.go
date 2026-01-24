@@ -28,19 +28,18 @@ import (
 // ANSI color codes for terminal output.
 const (
 	colorReset  = "\033[0m"
-	colorGreen  = "\033[32m" // Added fields (+)
-	colorYellow = "\033[33m" // Modified fields (~)
-	colorRed    = "\033[31m" // Removed fields (-)
-	colorCyan   = "\033[36m" // Headers/metadata
+	colorGreen  = "\033[32m"
+	colorYellow = "\033[33m"
+	colorRed    = "\033[31m"
+	colorCyan   = "\033[36m"
 )
 
-// ScenarioDump captures the complete state and history of a scenario run.
-// It includes both the delta history (what changed) and final state (current values).
+// ScenarioDump captures delta history and final state of a scenario run.
 type ScenarioDump struct {
-	Deltas      []storage.Delta  // All changes during scenario (chronological)
-	Workers     []WorkerSnapshot // Final state of all workers (grouped by type)
-	StartSyncID int64            // Sync ID at scenario start
-	EndSyncID   int64            // Sync ID at scenario end
+	Deltas      []storage.Delta
+	Workers     []WorkerSnapshot
+	StartSyncID int64
+	EndSyncID   int64
 }
 
 // WorkerSnapshot represents the final triangular state of a worker.
@@ -52,29 +51,16 @@ type WorkerSnapshot struct {
 	WorkerID   string
 }
 
-// DumpScenario captures deltas and final state using TriangularStore's existing API.
-//
-// Parameters:
-//   - ctx: Context for cancellation
-//   - store: TriangularStore interface to query
-//   - startSyncID: Sync ID captured at scenario start (use 0 for all history)
-//
-// Returns:
-//   - *ScenarioDump: Complete dump with deltas and worker snapshots
-//   - error: If querying fails
+// DumpScenario captures deltas and final state. Use startSyncID=0 for all history.
 func DumpScenario(ctx context.Context, store storage.TriangularStoreInterface, startSyncID int64) (*ScenarioDump, error) {
-	// Get all deltas since start using existing GetDeltas API
 	resp, err := store.GetDeltas(ctx, storage.Subscription{LastSyncID: startSyncID})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get deltas: %w", err)
 	}
 
-	// Use LatestSyncID from response to avoid race condition.
-	// Previously we called GetLatestSyncID separately, which could return a value
-	// older than the newest delta if new writes occurred between the two calls.
+	// Use LatestSyncID from response to avoid race between GetDeltas and GetLatestSyncID
 	endSyncID := resp.LatestSyncID
 
-	// Extract unique workers from deltas and load their snapshots
 	workers := extractAndLoadWorkers(ctx, store, resp.Deltas)
 
 	return &ScenarioDump{
@@ -85,7 +71,7 @@ func DumpScenario(ctx context.Context, store storage.TriangularStoreInterface, s
 	}, nil
 }
 
-// extractAndLoadWorkers extracts unique workers from deltas and loads their snapshots.
+// extractAndLoadWorkers loads snapshots for unique workers found in deltas.
 func extractAndLoadWorkers(ctx context.Context, store storage.TriangularStoreInterface, deltas []storage.Delta) []WorkerSnapshot {
 	seen := make(map[string]bool)
 
@@ -99,13 +85,11 @@ func extractAndLoadWorkers(ctx context.Context, store storage.TriangularStoreInt
 
 		seen[key] = true
 
-		// Load full snapshot using existing LoadSnapshot API
 		snapshot, err := store.LoadSnapshot(ctx, delta.WorkerType, delta.WorkerID)
 		if err != nil {
-			continue // Worker may have been deleted
+			continue
 		}
 
-		// Convert observed to Document if possible
 		var observedDoc persistence.Document
 		if doc, ok := snapshot.Observed.(persistence.Document); ok {
 			observedDoc = doc
@@ -120,7 +104,6 @@ func extractAndLoadWorkers(ctx context.Context, store storage.TriangularStoreInt
 		})
 	}
 
-	// Sort workers by type then ID for consistent output
 	sort.Slice(workers, func(i, j int) bool {
 		if workers[i].WorkerType != workers[j].WorkerType {
 			return workers[i].WorkerType < workers[j].WorkerType
@@ -132,8 +115,7 @@ func extractAndLoadWorkers(ctx context.Context, store storage.TriangularStoreInt
 	return workers
 }
 
-// FormatHuman returns a human-readable string representation of the dump.
-// Shows delta history followed by final state grouped by worker type.
+// FormatHuman returns delta history followed by final state grouped by worker type.
 func (d *ScenarioDump) FormatHuman() string {
 	var sb strings.Builder
 
@@ -159,7 +141,6 @@ func (d *ScenarioDump) FormatHuman() string {
 			i+1, ts, delta.WorkerType, delta.WorkerID, delta.Role))
 
 		if delta.Changes != nil {
-			// Sort and display Added fields (green)
 			var addedKeys []string
 			for field := range delta.Changes.Added {
 				addedKeys = append(addedKeys, field)
@@ -171,7 +152,6 @@ func (d *ScenarioDump) FormatHuman() string {
 				sb.WriteString(fmt.Sprintf("    %s+%s %s: %v\n", colorGreen, colorReset, field, formatValue(delta.Changes.Added[field])))
 			}
 
-			// Sort and display Modified fields (yellow)
 			var modifiedKeys []string
 			for field := range delta.Changes.Modified {
 				modifiedKeys = append(modifiedKeys, field)
@@ -184,7 +164,6 @@ func (d *ScenarioDump) FormatHuman() string {
 				sb.WriteString(fmt.Sprintf("    %s~%s %s: %v → %v\n", colorYellow, colorReset, field, formatValue(mod.Old), formatValue(mod.New)))
 			}
 
-			// Sort and display Removed fields (red)
 			sortedRemoved := make([]string, len(delta.Changes.Removed))
 			copy(sortedRemoved, delta.Changes.Removed)
 			sort.Strings(sortedRemoved)
@@ -202,13 +181,11 @@ func (d *ScenarioDump) FormatHuman() string {
 	sb.WriteString(fmt.Sprintf("FINAL STATE (%d workers)\n", len(d.Workers)))
 	sb.WriteString("═══════════════════════════════════════════════════════════════════════\n")
 
-	// Group workers by type
 	workersByType := make(map[string][]WorkerSnapshot)
 	for _, w := range d.Workers {
 		workersByType[w.WorkerType] = append(workersByType[w.WorkerType], w)
 	}
 
-	// Get sorted worker types
 	var workerTypes []string
 	for wt := range workersByType {
 		workerTypes = append(workerTypes, wt)
@@ -244,7 +221,7 @@ func (d *ScenarioDump) FormatHuman() string {
 	return sb.String()
 }
 
-// formatValue formats a value for display, truncating long strings.
+// formatValue formats a value, truncating at 80 characters.
 func formatValue(v interface{}) string {
 	s := fmt.Sprintf("%v", v)
 	if len(s) > 80 {
@@ -254,7 +231,7 @@ func formatValue(v interface{}) string {
 	return s
 }
 
-// formatDocument writes a document's fields to the string builder.
+// formatDocument writes document fields to the string builder, skipping CSE metadata.
 func formatDocument(sb *strings.Builder, doc persistence.Document, indent string) {
 	if len(doc) == 0 {
 		sb.WriteString(indent + "(empty)\n")
@@ -262,11 +239,8 @@ func formatDocument(sb *strings.Builder, doc persistence.Document, indent string
 		return
 	}
 
-	// Get sorted keys for consistent output
 	var keys []string
-
 	for k := range doc {
-		// Skip CSE metadata fields for cleaner output
 		if strings.HasPrefix(k, "_") {
 			continue
 		}

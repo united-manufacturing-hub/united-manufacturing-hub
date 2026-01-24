@@ -43,7 +43,6 @@ func main() {
 
 	flag.Parse()
 
-	// List scenarios if requested
 	if *listFlag {
 		fmt.Println("Available scenarios:")
 
@@ -54,7 +53,6 @@ func main() {
 		return
 	}
 
-	// Setup logger with human-readable console output
 	level, err := parseLogLevel(*logLevel)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Invalid log level: %v\n", err)
@@ -65,7 +63,6 @@ func main() {
 		level = zap.DebugLevel
 	}
 
-	// Create a human-readable console encoder
 	encoderConfig := zapcore.EncoderConfig{
 		TimeKey:        "time",
 		LevelKey:       "level",
@@ -91,7 +88,6 @@ func main() {
 
 	defer func() { _ = logger.Sync() }()
 
-	// Look up scenario from registry
 	scenario, exists := examples.Registry[*scenarioName]
 	if !exists {
 		logger.Fatal("Scenario not found",
@@ -100,11 +96,9 @@ func main() {
 		)
 	}
 
-	// Setup context (no cancellation from signal - shutdown is handled via Shutdown())
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Wrap context with timeout if duration specified
 	if *duration > 0 {
 		var timeoutCancel context.CancelFunc
 
@@ -112,10 +106,8 @@ func main() {
 		defer timeoutCancel()
 	}
 
-	// Setup store
 	store := examples.SetupStore(logger.Sugar())
 
-	// Print scenario info
 	durationStr := "endless (until Ctrl+C)"
 	if *duration > 0 {
 		durationStr = duration.String()
@@ -128,7 +120,6 @@ func main() {
 		zap.Duration("tick", *tickInterval),
 	)
 
-	// Run the scenario
 	result, err := examples.Run(ctx, examples.RunConfig{
 		Scenario:           scenario,
 		TickInterval:       *tickInterval,
@@ -141,9 +132,7 @@ func main() {
 		logger.Fatal("Failed to start scenario", zap.Error(err))
 	}
 
-	// Setup signal handling - call graceful shutdown instead of cancelling context
-	// First signal: graceful shutdown
-	// Second signal: force immediate exit
+	// First signal: graceful shutdown. Second signal: force exit.
 	sigChan := make(chan os.Signal, 2)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
@@ -153,24 +142,19 @@ func main() {
 			zap.String("signal", sig.String()),
 			zap.String("hint", "Press Ctrl+C again to force immediate exit"))
 
-		// Start shutdown in background so we can still listen for second signal
 		go result.Shutdown()
 
-		// Wait for either second signal (force exit) or graceful completion
 		select {
 		case sig := <-sigChan:
 			logger.Warn("Received second signal, forcing immediate exit!",
 				zap.String("signal", sig.String()))
 			os.Exit(1)
 		case <-result.Done:
-			// Graceful shutdown completed before second signal
 		}
 	}()
 
-	// Wait for completion
 	<-result.Done
 
-	// Print completion message
 	logger.Info("Scenario completed",
 		zap.String("name", *scenarioName),
 	)

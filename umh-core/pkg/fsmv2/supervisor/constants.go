@@ -18,12 +18,7 @@ import "time"
 
 const (
 	// DefaultTickInterval is the default interval between FSM reconciliation ticks.
-	//
-	// Recommended (Invariant I12): TickInterval <= ObservationInterval
-	// This prevents tick queue buildup when observations take longer.
-	// When TickInterval > ObservationInterval, multiple ticks may execute on same stale snapshot.
-	//
-	// Current defaults: 1s tick interval, 1s observation interval (equal, optimal).
+	// Invariant I12: TickInterval <= ObservationInterval to prevent tick queue buildup.
 	DefaultTickInterval = 1 * time.Second
 
 	// DefaultStaleThreshold is the default age threshold for detecting stale observation data.
@@ -36,42 +31,19 @@ const (
 	DefaultMaxRestartAttempts = 3
 
 	// DefaultObservationInterval is the default interval between observation collection attempts.
-	//
-	// Recommended (Invariant I11): ObservationInterval < StaleThreshold
-	// Multiple observation attempts occur before data is marked stale.
-	// Example: 1s observation interval + 10s stale threshold = ~10 attempts before stale.
-	//
-	// If violated: System still works but FSM may pause more frequently due to
-	// perceived stale data from fewer observation attempts.
+	// Invariant I11: ObservationInterval < StaleThreshold so multiple attempts occur before data is marked stale.
 	DefaultObservationInterval = 1 * time.Second
 
 	// MaxCgroupThrottlePeriod is the maximum CPU throttling period for Docker/Kubernetes cgroups.
-	// Default cpu.cfs_period_us = 100ms. Conservative estimate: 2x for consecutive throttles.
-	//
-	// Timing assumption (Invariant I14): Timeout margin accounts for cgroup throttling
-	// Docker and Kubernetes use cgroups to limit CPU usage. When a container exhausts
-	// its CPU quota, it's throttled for the remainder of the cgroup period (default 100ms).
-	//
-	// This constant provides a 200ms buffer (2x the default period) to account for:
-	// - One full throttle period (100ms)
-	// - Potential consecutive throttle (another 100ms)
-	// - Ensures timeouts don't fire prematurely due to CPU throttling
-	//
+	// 200ms buffer (2x default cfs_period_us) accounts for consecutive throttles.
 	// Reference: https://docs.docker.com/config/containers/resource_constraints/
 	MaxCgroupThrottlePeriod = 200 * time.Millisecond
 
 	// DefaultObservationTimeout is the default timeout for observation operations.
-	// Calculated as: observation interval + cgroup throttle buffer + safety margin.
-	//
-	// Important: Timeout ordering invariant (I7)
-	// ObservationTimeout < StaleThreshold < CollectorTimeout
-	// This ordering ensures observation failures don't trigger stale detection,
-	// and stale detection occurs before collector restart.
+	// Invariant I7: ObservationTimeout < StaleThreshold < CollectorTimeout.
 	DefaultObservationTimeout = DefaultObservationInterval + MaxCgroupThrottlePeriod + 1*time.Second
 
-	// DefaultGracefulShutdownTimeout is the default time to wait for workers to complete
-	// graceful shutdown during Shutdown(). Workers have this time to process their shutdown
-	// state machines and emit SignalNeedsRemoval before forced shutdown proceeds.
+	// DefaultGracefulShutdownTimeout is the default time to wait for workers to complete graceful shutdown.
 	DefaultGracefulShutdownTimeout = 5 * time.Second
 
 	// DefaultGracefulRestartTimeout is how long to wait for graceful restart before force resetting.

@@ -219,7 +219,6 @@ var (
 		[]string{"worker_type"},
 	)
 
-	// State transitions counter - uses dynamic labels from state.String().
 	stateTransitionsTotal = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: namespace,
@@ -230,7 +229,6 @@ var (
 		[]string{"worker_type", "from_state", "to_state"},
 	)
 
-	// Time spent in current state (updated every tick).
 	stateDurationSeconds = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: namespace,
@@ -349,51 +347,30 @@ func RecordObservationSave(workerType string, changed bool, duration time.Durati
 }
 
 // RecordStateTransition records a state transition event.
-// Called by supervisor when worker transitions from one FSM state to another.
 func RecordStateTransition(workerType, fromState, toState string) {
 	stateTransitionsTotal.WithLabelValues(workerType, fromState, toState).Inc()
 }
 
 // RecordStateDuration records how long a worker has been in its current state.
-// Called by supervisor on every tick to track time spent in each state.
 func RecordStateDuration(workerType, workerID, state string, duration time.Duration) {
 	stateDurationSeconds.WithLabelValues(workerType, workerID, state).Set(duration.Seconds())
 }
 
 // CleanupStateDuration removes state duration metric for a worker.
-// Call on worker removal to prevent memory leaks and stale metrics.
 func CleanupStateDuration(workerType, workerID, state string) {
 	stateDurationSeconds.DeleteLabelValues(workerType, workerID, state)
 }
 
-// =============================================================================
-// WORKER METRICS EXPORTER
-// =============================================================================
-
 // WorkerMetricsExporter exports worker-specific metrics from ObservedState to Prometheus.
-// It tracks previous metric values to compute counter deltas.
-//
-// The exporter is designed to be called after CollectObservedState() completes.
-// It reads the Metrics field from ObservedState (via MetricsHolder interface)
-// and exports:
-//   - Counters: Delta since last export (increments Prometheus counter)
-//   - Gauges: Current value (sets Prometheus gauge)
-//
-// Thread-safety: Uses sync.Mutex for registry access.
+// Tracks previous counter values to compute deltas.
 type WorkerMetricsExporter struct {
 
-	// Dynamic counter/gauge registries - created on first use per metric name
-	counters map[string]*prometheus.CounterVec
-	gauges   map[string]*prometheus.GaugeVec
-
-	// Previous counter values for delta computation
-	// Key format: "workerType:workerID:metricName"
-	prevCounters map[string]int64
+	counters     map[string]*prometheus.CounterVec
+	gauges       map[string]*prometheus.GaugeVec
+	prevCounters map[string]int64 // Key: "workerType:workerID:metricName"
 	mu           sync.Mutex
 }
 
-// workerMetricsExporter is the singleton exporter instance.
-// Using a singleton ensures consistent delta tracking across all supervisors.
 var workerMetricsExporter = &WorkerMetricsExporter{
 	counters:     make(map[string]*prometheus.CounterVec),
 	gauges:       make(map[string]*prometheus.GaugeVec),
@@ -401,14 +378,7 @@ var workerMetricsExporter = &WorkerMetricsExporter{
 }
 
 // ExportWorkerMetrics exports metrics from ObservedState to Prometheus.
-// Should be called by the supervisor after CollectObservedState() completes.
-//
-// Parameters:
-//   - workerType: Worker type for Prometheus labels
-//   - workerID: Worker ID for Prometheus labels
-//   - observed: The current ObservedState (must implement MetricsHolder)
-//
-// If observed does not implement MetricsHolder, this is a no-op.
+// No-op if observed does not implement MetricsHolder.
 func ExportWorkerMetrics(workerType, workerID string, observed fsmv2.ObservedState) {
 	holder, ok := observed.(deps.MetricsHolder)
 	if !ok {
@@ -416,7 +386,6 @@ func ExportWorkerMetrics(workerType, workerID string, observed fsmv2.ObservedSta
 	}
 
 	metrics := holder.GetWorkerMetrics()
-	// Check if worker metrics are empty (no counters or gauges recorded)
 	if metrics.Counters == nil && metrics.Gauges == nil {
 		return
 	}
@@ -433,23 +402,17 @@ func (e *WorkerMetricsExporter) export(workerType, workerID string, metrics *dep
 		"worker_id":   workerID,
 	}
 
-	// Export counters (compute delta from previous value)
 	for name, value := range metrics.Counters {
 		prevKey := workerType + ":" + workerID + ":" + name
 		prevValue := e.prevCounters[prevKey]
-
-		// Compute delta
 		delta := value - prevValue
 		if delta > 0 {
 			counter := e.getOrCreateCounter(name)
 			counter.With(labels).Add(float64(delta))
 		}
-
-		// Update previous value for next export
 		e.prevCounters[prevKey] = value
 	}
 
-	// Export gauges (direct value)
 	for name, value := range metrics.Gauges {
 		gauge := e.getOrCreateGauge(name)
 		gauge.With(labels).Set(value)
@@ -461,8 +424,6 @@ func (e *WorkerMetricsExporter) getOrCreateCounter(name string) *prometheus.Coun
 		return counter
 	}
 
-	// Create new counter with dynamic registration
-	// Use subsystem "fsmv2_worker" for consistency with other fsmv2 metrics (umh_fsmv2_worker_*)
 	counter := promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: namespace,
@@ -482,8 +443,6 @@ func (e *WorkerMetricsExporter) getOrCreateGauge(name string) *prometheus.GaugeV
 		return gauge
 	}
 
-	// Create new gauge with dynamic registration
-	// Use subsystem "fsmv2_worker" for consistency with other fsmv2 metrics (umh_fsmv2_worker_*)
 	gauge := promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: namespace,
@@ -499,15 +458,11 @@ func (e *WorkerMetricsExporter) getOrCreateGauge(name string) *prometheus.GaugeV
 }
 
 // GetHierarchyDepthGauge returns the hierarchy depth gauge for testing.
-// This function is exported to allow test code to read metric values via promtest.ToFloat64().
-// Production code should use RecordHierarchyDepth() instead.
 func GetHierarchyDepthGauge() *prometheus.GaugeVec {
 	return hierarchyDepth
 }
 
 // GetHierarchySizeGauge returns the hierarchy size gauge for testing.
-// This function is exported to allow test code to read metric values via promtest.ToFloat64().
-// Production code should use RecordHierarchySize() instead.
 func GetHierarchySizeGauge() *prometheus.GaugeVec {
 	return hierarchySize
 }

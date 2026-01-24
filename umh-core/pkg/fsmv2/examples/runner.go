@@ -34,49 +34,15 @@ import (
 
 // RunResult contains the result of running a scenario.
 type RunResult struct {
-	// Done channel that closes when the supervisor stops
-	Done <-chan struct{}
-
-	// Shutdown initiates graceful shutdown of the supervisor.
-	// This first requests shutdown on all workers (sets ShutdownRequested=true),
-	// waits for workers to complete their FSM shutdown transitions,
-	// then cancels the supervisor context.
-	Shutdown func()
+	Done     <-chan struct{} // Closes when the supervisor stops
+	Shutdown func()          // Initiates graceful shutdown of the supervisor
 }
 
 // Run executes a scenario with the given configuration.
 //
-// This function creates an ApplicationSupervisor with the scenario's YAML config
-// and starts it. The supervisor runs until the context is cancelled or the
-// specified duration elapses.
-//
-// If the scenario has a CustomRunner, Run() delegates directly to it instead of
-// creating an ApplicationSupervisor. CustomRunner scenarios are responsible for
-// their own resource lifecycle management.
-//
-// If DumpStore is enabled, outputs a human-readable summary of all store changes
-// and final worker states after the scenario completes.
-//
-// Parameters:
-//   - ctx: Context for cancellation
-//   - cfg: RunConfig with scenario, duration, tick interval, logger, store, and trace logging options
-//
-// Returns:
-//   - *RunResult: Contains done channel and shutdown function
-//   - error: If supervisor creation fails or scenario configuration is invalid
-//
-// Example:
-//
-//	result, err := examples.Run(ctx, examples.RunConfig{
-//	    Scenario:     examples.SimpleScenario,
-//	    Duration:     10 * time.Second,
-//	    TickInterval: 100 * time.Millisecond,
-//	    Logger:       logger,
-//	    Store:        store,
-//	})
-//	// On signal, call result.Shutdown() for graceful shutdown
+// Creates an ApplicationSupervisor with the scenario's YAML config, or delegates
+// to CustomRunner if set. If DumpStore is enabled, outputs store changes summary.
 func Run(ctx context.Context, cfg RunConfig) (*RunResult, error) {
-	// Validate scenario configuration
 	hasYAML := cfg.Scenario.YAMLConfig != ""
 	hasCustom := cfg.Scenario.CustomRunner != nil
 
@@ -90,12 +56,10 @@ func Run(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 			"both YAMLConfig and CustomRunner are set (only one allowed)", cfg.Scenario.Name)
 	}
 
-	// Use custom runner if set
 	if hasCustom {
 		return cfg.Scenario.CustomRunner(ctx, cfg)
 	}
 
-	// Capture start syncID before running scenario (for dump)
 	var startSyncID int64
 	if cfg.DumpStore {
 		startSyncID, _ = cfg.Store.GetLatestSyncID(ctx)
@@ -116,18 +80,15 @@ func Run(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 
 	done := appSup.Start(ctx)
 
-	// Create shutdown function that initiates graceful shutdown
 	shutdownFn := func() {
 		appSup.Shutdown()
 	}
 
-	// If dump is enabled, wrap the done channel to dump on completion
 	if cfg.DumpStore {
 		wrappedDone := make(chan struct{})
 
 		go func() {
 			<-done
-			// Use background context for dump since original ctx may be cancelled
 			dumpCtx := context.Background()
 
 			dump, err := DumpScenario(dumpCtx, cfg.Store, startSyncID)
@@ -147,26 +108,6 @@ func Run(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 }
 
 // SetupStore creates an in-memory TriangularStore for testing and CLI usage.
-//
-// This is a convenience function that creates a memory-backed store,
-// useful for scenarios that don't require persistent storage.
-//
-// Parameters:
-//   - logger: Logger for store operations (use zap.NewNop().Sugar() for silent operation)
-//
-// Returns:
-//   - storage.TriangularStoreInterface: In-memory store ready for use
-//
-// Example:
-//
-//	logger := zap.NewDevelopment().Sugar()
-//	store := examples.SetupStore(logger)
-//
-// Note: The returned interface does not expose Close(). For cleanup, use type assertion:
-//
-//	if closer, ok := store.(interface{ Close() error }); ok {
-//	    defer closer.Close()
-//	}
 func SetupStore(logger *zap.SugaredLogger) storage.TriangularStoreInterface {
 	basicStore := memory.NewInMemoryStore()
 

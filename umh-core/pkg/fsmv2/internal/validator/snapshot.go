@@ -48,7 +48,6 @@ func checkObservedStateTimestamp(filename string) []Violation {
 		return violations
 	}
 
-	// Look for structs with "ObservedState" in the name
 	ast.Inspect(node, func(n ast.Node) bool {
 		typeSpec, ok := n.(*ast.TypeSpec)
 		if !ok || !strings.Contains(typeSpec.Name.Name, "ObservedState") {
@@ -60,7 +59,6 @@ func checkObservedStateTimestamp(filename string) []Violation {
 			return true
 		}
 
-		// Check for CollectedAt field
 		hasCollectedAt := false
 
 		for _, field := range structType.Fields.List {
@@ -121,7 +119,6 @@ func checkDesiredStateShutdownMethod(filename string) []Violation {
 		return violations
 	}
 
-	// Collect all DesiredState types with embedding info
 	desiredStateTypes := make(map[string]desiredStateInfo)
 
 	ast.Inspect(node, func(n ast.Node) bool {
@@ -132,10 +129,8 @@ func checkDesiredStateShutdownMethod(filename string) []Violation {
 
 		info := desiredStateInfo{pos: typeSpec.Pos()}
 
-		// Check if struct embeds BaseDesiredState (directly or via config.BaseDesiredState)
 		if structType, ok := typeSpec.Type.(*ast.StructType); ok {
 			for _, field := range structType.Fields.List {
-				// Anonymous/embedded fields have no names
 				if len(field.Names) == 0 {
 					embedName := getEmbeddedTypeName(field.Type)
 					if strings.Contains(embedName, "BaseDesiredState") {
@@ -152,7 +147,6 @@ func checkDesiredStateShutdownMethod(filename string) []Violation {
 		return true
 	})
 
-	// Collect all types that have IsShutdownRequested method declared explicitly
 	typesWithMethod := make(map[string]bool)
 
 	ast.Inspect(node, func(n ast.Node) bool {
@@ -165,7 +159,6 @@ func checkDesiredStateShutdownMethod(filename string) []Violation {
 			return true
 		}
 
-		// Get receiver type name
 		var typeName string
 
 		switch recvType := funcDecl.Recv.List[0].Type.(type) {
@@ -184,7 +177,6 @@ func checkDesiredStateShutdownMethod(filename string) []Violation {
 		return true
 	})
 
-	// Check for violations - only if NEITHER embedded NOR explicit method
 	for typeName, info := range desiredStateTypes {
 		if !typesWithMethod[typeName] && !info.embedsBaseDesired {
 			violations = append(violations, Violation{
@@ -240,7 +232,6 @@ func checkObservedStateEmbedsDesired(filename string) []Violation {
 		return violations
 	}
 
-	// Look for structs with "ObservedState" in the name
 	ast.Inspect(node, func(n ast.Node) bool {
 		typeSpec, ok := n.(*ast.TypeSpec)
 		if !ok || !strings.Contains(typeSpec.Name.Name, "ObservedState") {
@@ -252,24 +243,20 @@ func checkObservedStateEmbedsDesired(filename string) []Violation {
 			return true
 		}
 
-		// Check for embedded DesiredState field
 		hasEmbeddedDesired := false
 		hasInlineTag := false
 
 		var embeddedFieldPos token.Pos
 
 		for _, field := range structType.Fields.List {
-			// Anonymous/embedded fields have no names
 			if len(field.Names) == 0 {
 				embedName := getEmbeddedTypeName(field.Type)
 				if strings.Contains(embedName, "DesiredState") {
 					hasEmbeddedDesired = true
 					embeddedFieldPos = field.Pos()
 
-					// Check for json:",inline" tag
 					if field.Tag != nil {
 						tagValue := field.Tag.Value
-						// Tag value includes quotes, e.g., `json:"field_name"`
 						if strings.Contains(tagValue, `json:`) && strings.Contains(tagValue, `,inline`) {
 							hasInlineTag = true
 						}
@@ -279,7 +266,6 @@ func checkObservedStateEmbedsDesired(filename string) []Violation {
 				}
 			}
 
-			// Also check for named DesiredState field (which is WRONG)
 			for _, name := range field.Names {
 				if strings.Contains(name.Name, "DesiredState") {
 					pos := fset.Position(field.Pos())
@@ -319,7 +305,7 @@ func checkObservedStateEmbedsDesired(filename string) []Violation {
 	return violations
 }
 
-// ValidateStateFieldExists checks that both DesiredState and ObservedState have a State string field.
+// ValidateStateFieldExists checks that DesiredState and ObservedState have a State string field.
 func ValidateStateFieldExists(baseDir string) []Violation {
 	var violations []Violation
 
@@ -333,10 +319,8 @@ func ValidateStateFieldExists(baseDir string) []Violation {
 	return violations
 }
 
-// checkStateFieldExists parses a snapshot file and checks for State string field in both
-// DesiredState and ObservedState structs.
-// For DesiredState structs, State is inherited from embedded BaseDesiredState.
-// For ObservedState structs, State must be an explicit field (not inherited from DesiredState).
+// checkStateFieldExists parses a snapshot file and checks for State string field.
+// DesiredState inherits State from BaseDesiredState; ObservedState needs explicit field.
 func checkStateFieldExists(filename string) []Violation {
 	var violations []Violation
 
@@ -347,7 +331,6 @@ func checkStateFieldExists(filename string) []Violation {
 		return violations
 	}
 
-	// Look for structs with "DesiredState" or "ObservedState" in the name
 	ast.Inspect(node, func(n ast.Node) bool {
 		typeSpec, ok := n.(*ast.TypeSpec)
 		if !ok {
@@ -366,15 +349,12 @@ func checkStateFieldExists(filename string) []Violation {
 			return true
 		}
 
-		// Check for State string field (explicit or inherited)
 		hasStateField := false
 		embedsBaseDesiredState := false
 
 		for _, field := range structType.Fields.List {
-			// Check for explicit State field
 			for _, name := range field.Names {
 				if name.Name == "State" {
-					// Verify it's a string type
 					if ident, ok := field.Type.(*ast.Ident); ok && ident.Name == "string" {
 						hasStateField = true
 
@@ -383,7 +363,6 @@ func checkStateFieldExists(filename string) []Violation {
 				}
 			}
 
-			// Check for embedded BaseDesiredState (anonymous field)
 			if len(field.Names) == 0 {
 				embedName := getEmbeddedTypeName(field.Type)
 				if strings.Contains(embedName, "BaseDesiredState") {
@@ -392,13 +371,9 @@ func checkStateFieldExists(filename string) []Violation {
 			}
 		}
 
-		// For DesiredState structs, State is inherited from BaseDesiredState
 		if isDesiredState && embedsBaseDesiredState {
 			hasStateField = true
 		}
-
-		// For ObservedState, State must be explicit (not inherited from embedded DesiredState)
-		// because the ObservedState.State has different semantics (lifecycle state)
 
 		if !hasStateField {
 			pos := fset.Position(typeSpec.Pos())
@@ -430,9 +405,7 @@ func ValidateDesiredStateValues(baseDir string) []Violation {
 	return violations
 }
 
-// checkDesiredStateValues parses a snapshot file and checks that DesiredState.State field
-// is only assigned "stopped" or "running" values. This check looks for
-// string literal assignments to the State field.
+// checkDesiredStateValues checks that DesiredState.State is only assigned "stopped" or "running".
 func checkDesiredStateValues(filename string) []Violation {
 	var violations []Violation
 
@@ -443,7 +416,6 @@ func checkDesiredStateValues(filename string) []Violation {
 		return violations
 	}
 
-	// Track DesiredState type names
 	desiredStateTypes := make(map[string]bool)
 	ast.Inspect(node, func(n ast.Node) bool {
 		typeSpec, ok := n.(*ast.TypeSpec)
@@ -454,7 +426,6 @@ func checkDesiredStateValues(filename string) []Violation {
 		return true
 	})
 
-	// Look for assignments to .State field on DesiredState types
 	ast.Inspect(node, func(n ast.Node) bool {
 		assignStmt, ok := n.(*ast.AssignStmt)
 		if !ok {
@@ -467,7 +438,6 @@ func checkDesiredStateValues(filename string) []Violation {
 				continue
 			}
 
-			// Check if RHS is a string literal
 			if i >= len(assignStmt.Rhs) {
 				continue
 			}
@@ -510,8 +480,7 @@ func ValidateObservedStateHasSetState(baseDir string) []Violation {
 	return violations
 }
 
-// checkObservedStateHasSetState parses a snapshot file and checks that ObservedState types
-// have a SetState(string) method defined.
+// checkObservedStateHasSetState checks that ObservedState types have a SetState(string) method.
 func checkObservedStateHasSetState(filename string) []Violation {
 	var violations []Violation
 
@@ -522,7 +491,6 @@ func checkObservedStateHasSetState(filename string) []Violation {
 		return violations
 	}
 
-	// Collect all ObservedState type names
 	observedStateTypes := make(map[string]token.Pos)
 
 	ast.Inspect(node, func(n ast.Node) bool {
@@ -536,7 +504,6 @@ func checkObservedStateHasSetState(filename string) []Violation {
 		return true
 	})
 
-	// Collect all types that have SetState method defined
 	typesWithSetState := make(map[string]bool)
 	ast.Inspect(node, func(n ast.Node) bool {
 		funcDecl, ok := n.(*ast.FuncDecl)
@@ -548,7 +515,6 @@ func checkObservedStateHasSetState(filename string) []Violation {
 			return true
 		}
 
-		// Get receiver type name
 		var typeName string
 
 		switch recvType := funcDecl.Recv.List[0].Type.(type) {
@@ -567,7 +533,6 @@ func checkObservedStateHasSetState(filename string) []Violation {
 		return true
 	})
 
-	// Check for violations: ObservedState types that don't have SetState method
 	for typeName, pos := range observedStateTypes {
 		if !typesWithSetState[typeName] {
 			violations = append(violations, Violation{
@@ -600,7 +565,6 @@ func ValidateDesiredStateHasNoDependencies(baseDir string) []Violation {
 }
 
 // ValidateFolderMatchesWorkerType checks that worker folder names match their derived worker types.
-// Folder names must match type names to ensure consistency between folder names and type names, preventing registration mismatches.
 func ValidateFolderMatchesWorkerType(baseDir string) []Violation {
 	var violations []Violation
 
@@ -614,10 +578,7 @@ func ValidateFolderMatchesWorkerType(baseDir string) []Violation {
 	return violations
 }
 
-// checkFolderMatchesWorkerType parses a snapshot file, derives the worker type from the
-// ObservedState type name, and compares it to the folder name.
-// The derivation follows the same logic as storage.DeriveWorkerType:
-// strip "ObservedState" suffix and lowercase.
+// checkFolderMatchesWorkerType derives worker type from ObservedState and compares to folder name.
 func checkFolderMatchesWorkerType(filename string) []Violation {
 	var violations []Violation
 
@@ -628,26 +589,20 @@ func checkFolderMatchesWorkerType(filename string) []Violation {
 		return violations
 	}
 
-	// Get the worker folder name (parent of snapshot/ directory)
-	// Path structure: .../workers/example/examplechild/snapshot/snapshot.go
-	// We want "examplechild" (the parent of "snapshot")
-	dir := filepath.Dir(filename)            // .../snapshot
-	workerDir := filepath.Dir(dir)           // .../examplechild
-	folderName := filepath.Base(workerDir)   // examplechild
+	dir := filepath.Dir(filename)
+	workerDir := filepath.Dir(dir)
+	folderName := filepath.Base(workerDir)
 
-	// Look for structs with "ObservedState" in the name
 	ast.Inspect(node, func(n ast.Node) bool {
 		typeSpec, ok := n.(*ast.TypeSpec)
 		if !ok || !strings.HasSuffix(typeSpec.Name.Name, "ObservedState") {
 			return true
 		}
 
-		// Derive worker type using same logic as storage.DeriveWorkerType
 		typeName := typeSpec.Name.Name
 		workerType := strings.TrimSuffix(typeName, "ObservedState")
 		workerType = strings.ToLower(workerType)
 
-		// Compare to folder name
 		if folderName != workerType {
 			pos := fset.Position(typeSpec.Pos())
 			violations = append(violations, Violation{
@@ -665,13 +620,7 @@ func checkFolderMatchesWorkerType(filename string) []Violation {
 }
 
 // ValidateNoCustomLifecycleFields checks that DesiredState structs do NOT have custom lifecycle fields.
-// Lifecycle is controlled by:
-//   - config.BaseDesiredState.ShutdownRequested (inherited) - for graceful shutdown
-//   - ParentMappedState (for child workers only) - injected by supervisor from parent's state
-//
-// Adding custom lifecycle fields like ShouldRun, IsRunning, ShouldStop, Enabled, Active
-// is an anti-pattern that breaks parent-child coordination and is never populated correctly
-// (since DeriveDesiredState returns config.DesiredState, not the typed struct).
+// Lifecycle is controlled by BaseDesiredState.ShutdownRequested and ParentMappedState.
 func ValidateNoCustomLifecycleFields(baseDir string) []Violation {
 	var violations []Violation
 
@@ -685,8 +634,7 @@ func ValidateNoCustomLifecycleFields(baseDir string) []Violation {
 	return violations
 }
 
-// checkNoCustomLifecycleFields parses a snapshot file and checks that DesiredState structs
-// do not have custom lifecycle control fields.
+// checkNoCustomLifecycleFields checks for forbidden lifecycle control fields in DesiredState.
 func checkNoCustomLifecycleFields(filename string) []Violation {
 	var violations []Violation
 
@@ -697,8 +645,6 @@ func checkNoCustomLifecycleFields(filename string) []Violation {
 		return violations
 	}
 
-	// Forbidden lifecycle field patterns (case-insensitive match on field name)
-	// These duplicate lifecycle control and are never populated correctly.
 	forbiddenPatterns := []string{
 		"ShouldRun",
 		"ShouldStop",
@@ -708,7 +654,6 @@ func checkNoCustomLifecycleFields(filename string) []Violation {
 		"Active",
 	}
 
-	// Look for structs with "DesiredState" in the name
 	ast.Inspect(node, func(n ast.Node) bool {
 		typeSpec, ok := n.(*ast.TypeSpec)
 		if !ok || !strings.Contains(typeSpec.Name.Name, "DesiredState") {
@@ -720,7 +665,6 @@ func checkNoCustomLifecycleFields(filename string) []Violation {
 			return true
 		}
 
-		// Check for forbidden lifecycle fields
 		for _, field := range structType.Fields.List {
 			for _, name := range field.Names {
 				for _, pattern := range forbiddenPatterns {
@@ -747,8 +691,7 @@ func checkNoCustomLifecycleFields(filename string) []Violation {
 	return violations
 }
 
-// checkDesiredStateHasNoDependencies parses a snapshot file and checks that DesiredState structs
-// do not have any field with "Dependencies" in the name.
+// checkDesiredStateHasNoDependencies checks that DesiredState has no Dependencies field.
 func checkDesiredStateHasNoDependencies(filename string) []Violation {
 	var violations []Violation
 
@@ -759,7 +702,6 @@ func checkDesiredStateHasNoDependencies(filename string) []Violation {
 		return violations
 	}
 
-	// Look for structs with "DesiredState" in the name
 	ast.Inspect(node, func(n ast.Node) bool {
 		typeSpec, ok := n.(*ast.TypeSpec)
 		if !ok || !strings.Contains(typeSpec.Name.Name, "DesiredState") {
@@ -771,7 +713,6 @@ func checkDesiredStateHasNoDependencies(filename string) []Violation {
 			return true
 		}
 
-		// Check for Dependencies field (any field with "Dependencies" in name)
 		for _, field := range structType.Fields.List {
 			for _, name := range field.Names {
 				if strings.Contains(name.Name, "Dependencies") {

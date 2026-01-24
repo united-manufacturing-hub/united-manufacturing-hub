@@ -65,20 +65,12 @@ func (b BaseState) StateNameFromType(state interface{}) string {
 // This is a package-level function that can be used directly without
 // needing a BaseState instance.
 func DeriveStateName(state interface{}) string {
-	// Get the type of the state
 	t := reflect.TypeOf(state)
-
-	// Handle pointer types
 	if t.Kind() == reflect.Ptr {
 		t = t.Elem()
 	}
-
-	// Get the type name
 	name := t.Name()
-
-	// Strip "State" suffix if present
 	name = strings.TrimSuffix(name, "State")
-
 	return name
 }
 

@@ -191,13 +191,10 @@ var Registry = map[string]Scenario{
 
 // CommunicatorScenarioEntry registers the communicator scenario for CLI access.
 //
-// This scenario uses a CustomRunner that wraps RunCommunicatorScenario, which:
+// Uses a CustomRunner that wraps RunCommunicatorScenario:
 //  1. Creates an embedded mock relay server
 //  2. Builds dynamic YAMLConfig with the mock server URL
-//  3. Runs via ApplicationSupervisor (NOT bypassing FSMv2)
-//
-// This is an "infrastructure orchestration" CustomRunner, not an "FSMv2 bypass".
-// The FSMv2 communicator worker still runs through ApplicationSupervisor.
+//  3. Runs via ApplicationSupervisor
 //
 // # CLI Usage
 //
@@ -207,24 +204,13 @@ var Registry = map[string]Scenario{
 //
 //   - FSMv2 communicator worker state machine (Stopped -> Authenticating -> Syncing)
 //   - Authentication with relay server via HTTPTransport
-//   - Message pulling (backend -> edge) via SyncAction
-//   - Message pushing (edge -> backend) via SyncAction
+//   - Message pulling (backend -> edge) and pushing (edge -> backend) via SyncAction
 //   - Metrics collection and observability
-//
-// # Expected Output
-//
-//	INFO worker_state_change worker=communicator-1 from=stopped to=trying_to_start
-//	INFO worker_state_change worker=communicator-1 from=trying_to_start to=running
-//	INFO sync_action_executed worker=communicator-1 pulled=5 pushed=0
-//	...
-//	INFO scenario_complete auth_calls=1 pushed_messages=0 received_messages=5
 var CommunicatorScenarioEntry = Scenario{
 	Name:        "communicator",
 	Description: "Tests FSMv2 communicator worker with embedded mock server (uses ApplicationSupervisor)",
 	YAMLConfig:  "", // Config built dynamically by RunCommunicatorScenario with mock server URL
 	CustomRunner: func(ctx context.Context, cfg RunConfig) (*RunResult, error) {
-		// RunCommunicatorScenario creates mock server AND uses ApplicationSupervisor internally.
-		// This is infrastructure orchestration, not FSMv2 bypass.
 		result := RunCommunicatorScenario(ctx, CommunicatorRunConfig{
 			Duration:     cfg.Duration,
 			TickInterval: cfg.TickInterval,
@@ -245,7 +231,6 @@ var CommunicatorScenarioEntry = Scenario{
 			return nil, result.Error
 		}
 
-		// Log final stats when done (in background)
 		if cfg.Logger != nil {
 			go func() {
 				<-result.Done
@@ -267,27 +252,13 @@ var CommunicatorScenarioEntry = Scenario{
 // RunConfig configures how a scenario is executed.
 type RunConfig struct {
 
-	// Store for triangular state persistence (can be spy store for assertions)
-	Store storage.TriangularStoreInterface
-
-	// Logger for all FSM output (can be test logger for capture)
-	Logger *zap.SugaredLogger
-
-	// Scenario to run
-	Scenario Scenario
-
-	// Duration to run the scenario. 0 means run forever (until context cancelled)
-	Duration time.Duration
-
-	// TickInterval for the supervisor tick loop
-	TickInterval time.Duration
-
-	// EnableTraceLogging enables verbose mutex/tick logging
+	Store            storage.TriangularStoreInterface
+	Logger           *zap.SugaredLogger
+	Scenario         Scenario
+	Duration         time.Duration // 0 means run forever (until context cancelled)
+	TickInterval     time.Duration
 	EnableTraceLogging bool
-
-	// DumpStore enables dumping store deltas and final state after scenario completion.
-	// When enabled, outputs a human-readable summary of all changes and final worker states.
-	DumpStore bool
+	DumpStore        bool // Dump store deltas and final state after completion
 }
 
 // ListScenarios returns all registered scenario names and descriptions.

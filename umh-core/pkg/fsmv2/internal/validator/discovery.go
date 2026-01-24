@@ -29,12 +29,10 @@ func FindStateFiles(baseDir string) []string {
 			return err
 		}
 
-		// Skip communicator worker
 		if strings.Contains(path, "workers/communicator/") {
 			return nil
 		}
 
-		// Include state_*.go files (not test files, not base.go)
 		if !info.IsDir() &&
 			strings.HasPrefix(filepath.Base(path), "state_") &&
 			!strings.HasSuffix(path, "_test.go") &&
@@ -58,12 +56,10 @@ func FindActionFiles(baseDir string) []string {
 			return err
 		}
 
-		// Skip communicator worker
 		if strings.Contains(path, "workers/communicator/") {
 			return nil
 		}
 
-		// Include files in action/ directories (not test files)
 		if !info.IsDir() &&
 			strings.Contains(path, "/action/") &&
 			!strings.HasSuffix(path, "_test.go") &&
@@ -86,12 +82,10 @@ func FindWorkerFiles(baseDir string) []string {
 			return err
 		}
 
-		// Skip communicator worker
 		if strings.Contains(path, "workers/communicator/") {
 			return nil
 		}
 
-		// Include worker.go files
 		if !info.IsDir() &&
 			filepath.Base(path) == "worker.go" {
 			files = append(files, path)
@@ -112,12 +106,10 @@ func FindSnapshotFiles(baseDir string) []string {
 			return err
 		}
 
-		// Skip communicator worker
 		if strings.Contains(path, "workers/communicator/") {
 			return nil
 		}
 
-		// Include snapshot.go files
 		if !info.IsDir() &&
 			filepath.Base(path) == "snapshot.go" {
 			files = append(files, path)
