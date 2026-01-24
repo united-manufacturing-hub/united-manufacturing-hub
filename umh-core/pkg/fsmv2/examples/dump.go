@@ -45,11 +45,9 @@ type ScenarioDump struct {
 
 // WorkerSnapshot represents the final triangular state of a worker.
 type WorkerSnapshot struct {
-	// Maps (8 bytes each - pointer to map header)
-	Identity persistence.Document
-	Desired  persistence.Document
-	Observed persistence.Document
-	// Strings (16 bytes each) - ordered first by size
+	Identity   persistence.Document
+	Desired    persistence.Document
+	Observed   persistence.Document
 	WorkerType string
 	WorkerID   string
 }

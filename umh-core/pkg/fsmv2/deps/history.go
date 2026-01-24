@@ -21,13 +21,6 @@ import (
 
 // ActionResult captures the outcome of a single action execution.
 // Parent workers can use this to understand WHY children are in their current state.
-//
-// Field ordering is by decreasing size for optimal memory alignment:
-//   - Timestamp: 24 bytes (time.Time)
-//   - ActionType: 16 bytes (string header)
-//   - ErrorMsg: 16 bytes (string header)
-//   - Latency: 8 bytes (time.Duration)
-//   - Success: 1 byte (bool)
 type ActionResult struct {
 	Timestamp  time.Time     `json:"timestamp"`            // When the action completed
 	ActionType string        `json:"action_type"`          // e.g., "AuthenticateAction", "SyncAction"

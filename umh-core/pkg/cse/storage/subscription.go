@@ -32,30 +32,23 @@ type Query struct{}
 // It contains just the diff (not full document) to minimize
 // data transfer over the wire.
 type Delta struct {
-	// Pointer (8 bytes)
-	Changes *Diff // Field-level changes (Added, Modified, Removed)
-	// Strings (16 bytes each) - ordered first by size
-	WorkerType string // Type of worker (e.g., "container", "relay")
-	WorkerID   string // Unique identifier for the worker
-	Role       string // "identity", "desired", or "observed"
-	// Int64s (8 bytes each)
-	SyncID      int64 // Global monotonic sequence number
-	TimestampMs int64 // When the change occurred (Unix ms)
+	Changes     *Diff  // Field-level changes (Added, Modified, Removed)
+	WorkerType  string // Type of worker (e.g., "container", "relay")
+	WorkerID    string // Unique identifier for the worker
+	Role        string // "identity", "desired", or "observed"
+	SyncID      int64  // Global monotonic sequence number
+	TimestampMs int64  // When the change occurred (Unix ms)
 }
 
 // DeltasResponse is returned by GetDeltas to sync clients.
 // It either contains incremental deltas or full bootstrap data
 // if the client is too far behind.
 type DeltasResponse struct {
-	// Pointer (8 bytes)
-	Bootstrap *BootstrapData // Full state if bootstrap needed
-	// Slice (24 bytes) - ordered first by size
-	Deltas []Delta // Incremental changes since LastSyncID
-	// Int64 (8 bytes)
-	LatestSyncID int64 // Current sync position
-	// Bools (1 byte each)
-	RequiresBootstrap bool // True if client too far behind
-	HasMore           bool // More deltas available (pagination)
+	Bootstrap         *BootstrapData // Full state if bootstrap needed
+	Deltas            []Delta        // Incremental changes since LastSyncID
+	LatestSyncID      int64          // Current sync position
+	RequiresBootstrap bool           // True if client too far behind
+	HasMore           bool           // More deltas available (pagination)
 }
 
 // BootstrapData contains full state for clients that are too far behind
@@ -71,11 +64,9 @@ type BootstrapData struct {
 
 // WorkerSnapshot contains the complete triangular state for a single worker.
 type WorkerSnapshot struct {
-	// Maps (8 bytes each - pointer to map header)
-	Identity persistence.Document // Immutable identity (may be nil)
-	Desired  persistence.Document // User intent (may be nil)
-	Observed persistence.Document // System reality (may be nil)
-	// Strings (16 bytes each) - ordered first by size
-	WorkerType string // Type of worker
-	WorkerID   string // Unique identifier
+	Identity   persistence.Document // Immutable identity (may be nil)
+	Desired    persistence.Document // User intent (may be nil)
+	Observed   persistence.Document // System reality (may be nil)
+	WorkerType string               // Type of worker
+	WorkerID   string               // Unique identifier
 }
