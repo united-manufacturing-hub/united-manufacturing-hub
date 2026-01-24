@@ -101,10 +101,26 @@ func (b *LegacyChannelBridge) Start(ctx context.Context) {
 					}
 				}
 
+				// Parse TraceID if present
+				var metadata *models.MessageMetadata
+
+				if msg.TraceID != "" {
+					traceID, err := uuid.Parse(msg.TraceID)
+					if err != nil {
+						b.logger.Warnw("failed to parse TraceID, skipping metadata",
+							"traceID", msg.TraceID, "error", err)
+					} else {
+						metadata = &models.MessageMetadata{
+							TraceID: traceID,
+						}
+					}
+				}
+
 				legacyMsg := &models.UMHMessage{
 					Content:      msg.Content,
 					InstanceUUID: instanceUUID,
 					Email:        msg.Email,
+					Metadata:     metadata,
 				}
 
 				// Non-blocking send to prevent deadlock
@@ -137,10 +153,16 @@ func (b *LegacyChannelBridge) Start(ctx context.Context) {
 				}
 
 				// Convert models.UMHMessage -> transport.UMHMessage
+				var traceID string
+				if msg.Metadata != nil {
+					traceID = msg.Metadata.TraceID.String()
+				}
+
 				fsmMsg := &transport.UMHMessage{
 					Content:      msg.Content,
 					InstanceUUID: msg.InstanceUUID.String(),
 					Email:        msg.Email,
+					TraceID:      traceID,
 				}
 
 				// Non-blocking send to prevent deadlock

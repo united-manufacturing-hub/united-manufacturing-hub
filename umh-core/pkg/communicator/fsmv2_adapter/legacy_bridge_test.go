@@ -225,6 +225,118 @@ var _ = Describe("LegacyChannelBridge", func() {
 		})
 	})
 
+	Describe("TraceID preservation", func() {
+		It("should preserve TraceID when converting transport.UMHMessage to models.UMHMessage on inbound", func() {
+			legacyIn := make(chan *models.UMHMessage, 10)
+			legacyOut := make(chan *models.UMHMessage, 10)
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			defer cancel()
+
+			bridge := fsmv2_adapter.NewLegacyChannelBridge(legacyIn, legacyOut, logger)
+			bridge.Start(ctx)
+
+			fsmIn, _ := bridge.GetChannels("test")
+			testUUID := "550e8400-e29b-41d4-a716-446655440000"
+			testTraceID := "11111111-2222-3333-4444-555555555555"
+			fsmIn <- &transport.UMHMessage{
+				InstanceUUID: testUUID,
+				Content:      "test-content",
+				Email:        "test@example.com",
+				TraceID:      testTraceID,
+			}
+
+			Eventually(legacyIn).Should(Receive(SatisfyAll(
+				HaveField("InstanceUUID", Equal(uuid.MustParse(testUUID))),
+				HaveField("Content", Equal("test-content")),
+				HaveField("Email", Equal("test@example.com")),
+				HaveField("Metadata", SatisfyAll(
+					Not(BeNil()),
+					HaveField("TraceID", Equal(uuid.MustParse(testTraceID))),
+				)),
+			)))
+		})
+
+		It("should preserve TraceID when converting models.UMHMessage to transport.UMHMessage on outbound", func() {
+			legacyIn := make(chan *models.UMHMessage, 10)
+			legacyOut := make(chan *models.UMHMessage, 10)
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			defer cancel()
+
+			bridge := fsmv2_adapter.NewLegacyChannelBridge(legacyIn, legacyOut, logger)
+			bridge.Start(ctx)
+
+			_, fsmOut := bridge.GetChannels("test")
+			testUUID := uuid.MustParse("550e8400-e29b-41d4-a716-446655440000")
+			testTraceID := uuid.MustParse("11111111-2222-3333-4444-555555555555")
+			legacyOut <- &models.UMHMessage{
+				InstanceUUID: testUUID,
+				Content:      "test-content",
+				Email:        "test@example.com",
+				Metadata: &models.MessageMetadata{
+					TraceID: testTraceID,
+				},
+			}
+
+			Eventually(fsmOut).Should(Receive(SatisfyAll(
+				HaveField("InstanceUUID", Equal(testUUID.String())),
+				HaveField("Content", Equal("test-content")),
+				HaveField("Email", Equal("test@example.com")),
+				HaveField("TraceID", Equal(testTraceID.String())),
+			)))
+		})
+
+		It("should handle nil Metadata when converting to transport.UMHMessage", func() {
+			legacyIn := make(chan *models.UMHMessage, 10)
+			legacyOut := make(chan *models.UMHMessage, 10)
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			defer cancel()
+
+			bridge := fsmv2_adapter.NewLegacyChannelBridge(legacyIn, legacyOut, logger)
+			bridge.Start(ctx)
+
+			_, fsmOut := bridge.GetChannels("test")
+			testUUID := uuid.MustParse("550e8400-e29b-41d4-a716-446655440000")
+			legacyOut <- &models.UMHMessage{
+				InstanceUUID: testUUID,
+				Content:      "test-content",
+				Email:        "test@example.com",
+				Metadata:     nil, // No metadata
+			}
+
+			Eventually(fsmOut).Should(Receive(SatisfyAll(
+				HaveField("InstanceUUID", Equal(testUUID.String())),
+				HaveField("Content", Equal("test-content")),
+				HaveField("Email", Equal("test@example.com")),
+				HaveField("TraceID", Equal("")), // Empty when no metadata
+			)))
+		})
+
+		It("should handle empty TraceID in transport message", func() {
+			legacyIn := make(chan *models.UMHMessage, 10)
+			legacyOut := make(chan *models.UMHMessage, 10)
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			defer cancel()
+
+			bridge := fsmv2_adapter.NewLegacyChannelBridge(legacyIn, legacyOut, logger)
+			bridge.Start(ctx)
+
+			fsmIn, _ := bridge.GetChannels("test")
+			testUUID := "550e8400-e29b-41d4-a716-446655440000"
+			fsmIn <- &transport.UMHMessage{
+				InstanceUUID: testUUID,
+				Content:      "test-content",
+				Email:        "test@example.com",
+				TraceID:      "", // Empty trace ID
+			}
+
+			Eventually(legacyIn).Should(Receive(SatisfyAll(
+				HaveField("InstanceUUID", Equal(uuid.MustParse(testUUID))),
+				HaveField("Content", Equal("test-content")),
+				// Metadata should be nil or have uuid.Nil when TraceID is empty
+			)))
+		})
+	})
+
 	Describe("Message integrity", func() {
 		It("should preserve message integrity through conversion cycle", func() {
 			legacyIn := make(chan *models.UMHMessage, 10)
