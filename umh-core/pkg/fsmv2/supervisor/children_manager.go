@@ -22,15 +22,11 @@ import (
 
 // ChildrenManager provides a read-only view of children for parent workers.
 // It implements the config.ChildrenView interface.
-//
-// This type wraps the supervisor's internal children map and provides
-// a snapshot-based view that doesn't allow modifications.
 type ChildrenManager struct {
 	children map[string]SupervisorInterface
 }
 
 // NewChildrenManager creates a new ChildrenManager wrapping the given children map.
-// The children map should be obtained from the supervisor while holding the appropriate lock.
 func NewChildrenManager(children map[string]SupervisorInterface) *ChildrenManager {
 	return &ChildrenManager{
 		children: children,
@@ -63,11 +59,6 @@ func (m *ChildrenManager) Get(name string) *config.ChildInfo {
 
 // Counts returns the number of healthy and unhealthy children.
 // Implements config.ChildrenView.
-//
-// Health determination:
-//   - Healthy: state contains "Running" or "Connected"
-//   - Unhealthy: non-empty state that isn't healthy and isn't "Stopped"
-//   - Ignored: empty state, "unknown", or "Stopped" states
 func (m *ChildrenManager) Counts() (healthy, unhealthy int) {
 	for _, child := range m.children {
 		stateName := child.GetCurrentStateName()
@@ -77,7 +68,6 @@ func (m *ChildrenManager) Counts() (healthy, unhealthy int) {
 		} else if isUnhealthyState(stateName) {
 			unhealthy++
 		}
-		// Stopped and unknown states don't count as either
 	}
 
 	return healthy, unhealthy
@@ -127,9 +117,8 @@ func (m *ChildrenManager) buildChildInfo(name string, child SupervisorInterface)
 		StateName:     stateName,
 		StateReason:   stateReason,
 		IsHealthy:     isHealthyState(stateName),
-		ErrorMsg:      "", // Deferred: expose via ActionHistoryRecorder pattern if needed
+		ErrorMsg:      "",
 		HierarchyPath: child.GetHierarchyPath(),
-		// Infrastructure status (framework-tracked)
 		IsStale:       child.IsObservationStale(),
 		IsCircuitOpen: child.IsCircuitOpen(),
 	}
@@ -141,7 +130,6 @@ func isHealthyState(stateName string) bool {
 }
 
 // isUnhealthyState returns true if the state indicates an unhealthy child.
-// Unhealthy means: has a known state that's not healthy and not stopped.
 func isUnhealthyState(stateName string) bool {
 	if stateName == "" || stateName == "unknown" {
 		return false

@@ -33,7 +33,6 @@ func (s *Supervisor[TObserved, TDesired]) Start(ctx context.Context) <-chan stru
 	done := make(chan struct{})
 
 	// Create a child context that we can cancel via Shutdown().
-	// This allows stopping the tick loop even if parent context is still active.
 	s.ctxMu.Lock()
 	s.ctx, s.ctxCancel = context.WithCancel(ctx)
 	s.ctxMu.Unlock()
@@ -41,7 +40,6 @@ func (s *Supervisor[TObserved, TDesired]) Start(ctx context.Context) <-chan stru
 
 	s.logger.Debugw("supervisor_started")
 
-	// Use the child context for all goroutines so they stop when Shutdown() is called
 	s.ctxMu.RLock()
 	supervisorCtx := s.ctx
 	s.ctxMu.RUnlock()
@@ -99,12 +97,8 @@ func (s *Supervisor[TObserved, TDesired]) tickLoop(ctx context.Context) {
 }
 
 // Shutdown gracefully shuts down this supervisor and all its workers.
-// This method is called when the supervisor is being removed from its parent.
-// This method is idempotent - calling it multiple times is safe.
-//
-// Important: Shutdown order is children first, then own workers, then cancel context.
-// Children can still tick and process their graceful shutdown while
-// the parent's context is still active.
+// Shutdown order: children first, then own workers, then cancel context.
+// Idempotent.
 func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 	s.logTrace("lifecycle",
 		"lifecycle_event", "shutdown_start")
@@ -137,17 +131,9 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 
 	s.logger.Infow("supervisor_shutting_down")
 
-	// We use a temporary context that won't be cancelled during graceful shutdown.
 	gracefulCtx := context.Background()
 
-	// Lock safety: Extract children and done channels while holding lock,
-	// then release lock before recursively shutting down children.
-	// This prevents deadlock where:
-	// 1. Parent holds write lock
-	// 2. Parent calls child.Shutdown() which tries to acquire child's write lock
-	// 3. Child's Tick() goroutine is blocked waiting for parent's read lock
-	// By releasing parent lock before calling child.Shutdown(), we allow
-	// child Tick() goroutines to complete and exit cleanly.
+	// Extract children before releasing lock to avoid deadlock with child Tick() goroutines.
 	childrenToShutdown := make(map[string]SupervisorInterface, len(s.children))
 
 	childDoneChans := make(map[string]<-chan struct{}, len(s.childDoneChans))
@@ -169,10 +155,7 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 	// Release lock before graceful shutdown operations
 	s.mu.Unlock()
 
-	// Graceful shutdown phase 1: Shutdown children first (while context still active)
-	// Children's tick loops depend on the parent's context. By shutting down children
-	// before cancelling our context, children can still tick and process their
-	// graceful shutdown (FSM transitions, disconnect actions, emit SignalNeedsRemoval).
+	// Phase 1: Shutdown children first (context still active for FSM transitions).
 	if len(childrenToShutdown) > 0 {
 		s.logger.Debugw("graceful_shutdown_children_starting",
 			"child_count", len(childrenToShutdown))
@@ -186,10 +169,6 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 			s.logger.Debugw("child_shutting_down",
 				"child_name", childName)
 
-			// child.Shutdown() will recursively:
-			// 1. Shutdown grandchildren first
-			// 2. Request graceful shutdown on child's workers
-			// 3. Cancel child's context last
 			child.Shutdown()
 
 			// Wait for child supervisor to fully shut down
@@ -210,9 +189,7 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 		s.logger.Debugw("graceful_shutdown_children_complete")
 	}
 
-	// Graceful shutdown phase 2: Request graceful shutdown on own workers
-	// Now that children are done, handle our own workers.
-	// The tick loop is still running, so workers can process their state machines.
+	// Phase 2: Request graceful shutdown on own workers.
 	if len(workerIDs) > 0 {
 		s.logger.Debugw("graceful_shutdown_workers_starting",
 			"worker_count", len(workerIDs))
@@ -254,10 +231,7 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 		ticker.Stop()
 	}
 
-	// Graceful shutdown phase 3: Cancel context
-	// Only after children AND own workers are done do we cancel our context.
-	// This must happen BEFORE waiting for metrics reporter, because the metrics
-	// reporter goroutine waits on <-ctx.Done() to exit.
+	// Phase 3: Cancel context (must happen before waiting for metrics reporter).
 	s.ctxMu.Lock()
 
 	if s.ctxCancel != nil {
@@ -276,8 +250,7 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 	// Shutdown action executor (doesn't block)
 	s.actionExecutor.Shutdown()
 
-	// Shutdown all per-worker executors and collectors (any remaining after graceful shutdown)
-	// These have their own goroutines that need to be stopped to prevent leaks.
+	// Shutdown remaining per-worker executors and collectors.
 	shutdownCtx := context.Background()
 
 	for _, workerCtx := range s.workers {
@@ -351,8 +324,7 @@ func (s *Supervisor[TObserved, TDesired]) calculateHierarchySize() int {
 	return size
 }
 
-// getStartedContext atomically checks if started and returns context.
-// This prevents TOCTOU races between isStarted() and getContext() calls.
+// getStartedContext atomically checks if started and returns context (avoids TOCTOU).
 func (s *Supervisor[TObserved, TDesired]) getStartedContext() (context.Context, bool) {
 	s.ctxMu.RLock()
 	defer s.ctxMu.RUnlock()
@@ -402,7 +374,6 @@ func (s *Supervisor[TObserved, TDesired]) requestShutdown(ctx context.Context, w
 		return fmt.Errorf("desired state type %T does not implement ShutdownRequestable", desired)
 	}
 
-	// Convert to Document via JSON marshaling (required by SaveDesired)
 	desiredJSON, err := json.Marshal(desired)
 	if err != nil {
 		return fmt.Errorf("failed to marshal desired state: %w", err)
@@ -413,8 +384,7 @@ func (s *Supervisor[TObserved, TDesired]) requestShutdown(ctx context.Context, w
 		return fmt.Errorf("failed to unmarshal to document: %w", err)
 	}
 
-	// Add 'id' field required by TriangularStore validation
-	// JSON marshaling doesn't preserve this field since typed structs don't have an 'id' field
+	// Add 'id' field required by TriangularStore validation.
 	desiredDoc[FieldID] = workerID
 
 	// Save updated desired state back to database
@@ -493,8 +463,7 @@ func (s *Supervisor[TObserved, TDesired]) handleWorkerRestart(ctx context.Contex
 	s.logger.Debugw("worker_restart_old_removed",
 		"worker", workerID)
 
-	// 2. Clear shutdown flag in storage BEFORE creating new worker
-	// The new worker does not immediately see ShutdownRequested=true
+	// 2. Clear shutdown flag in storage BEFORE creating new worker.
 	if err := s.clearShutdownRequested(ctx, workerID); err != nil {
 		s.logger.Warnw("restart_clear_shutdown_failed",
 			"worker", workerID, "error", err)

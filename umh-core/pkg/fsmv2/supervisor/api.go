@@ -63,24 +63,20 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	// Collect initial observation
 	observed, err := worker.CollectObservedState(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to collect initial observed state: %w", err)
 	}
 
-	// Derive initial desired state
 	initialDesired, err := worker.DeriveDesiredState(nil)
 	if err != nil {
 		return fmt.Errorf("failed to derive initial desired state: %w", err)
 	}
 
-	// Validate DesiredState.State is a valid lifecycle state ("stopped" or "running")
 	if valErr := config.ValidateDesiredState(initialDesired.GetState()); valErr != nil {
 		return fmt.Errorf("failed to derive initial desired state: %w", valErr)
 	}
 
-	// Save identity to database
 	identityDoc := persistence.Document{
 		"id":             identity.ID,
 		"name":           identity.Name,
@@ -93,7 +89,6 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 
 	s.logger.Debugw("identity_saved")
 
-	// Save initial observation to database for immediate availability
 	observedJSON, err := json.Marshal(observed)
 	if err != nil {
 		return fmt.Errorf("failed to marshal observed state: %w", err)
@@ -113,7 +108,6 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 
 	s.logger.Debugw("initial_observation_saved")
 
-	// Save initial desired state to database
 	desiredJSON, err := json.Marshal(initialDesired)
 	if err != nil {
 		return fmt.Errorf("failed to marshal desired state: %w", err)
@@ -133,13 +127,10 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 
 	s.logger.Debugw("initial_desired_state_saved")
 
-	// Create worker-enriched logger for collector and executor.
-	// Important: Use baseLogger (un-enriched) to prevent duplicate "worker" fields.
-	// Uses identity.String() which returns HierarchyPath or "ID(Type)" fallback.
+	// Use baseLogger (un-enriched) to prevent duplicate "worker" fields.
 	workerLogger := s.baseLogger.With("worker", identity.String())
 
-	// Declare workerCtx early so the closure can capture it.
-	// StateProvider can access the FSM state safely.
+	// Declared early so closures can capture it by reference.
 	var workerCtx *WorkerContext[TObserved, TDesired]
 
 	collector := collection.NewCollector[TObserved](collection.CollectorConfig[TObserved]{
@@ -149,9 +140,6 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 		Logger:              workerLogger,
 		ObservationInterval: DefaultObservationInterval,
 		ObservationTimeout:  s.collectorHealth.observationTimeout,
-		// StateProvider returns the current FSM state name.
-		// The closure captures workerCtx by reference; workerCtx is assigned below
-		// before the collector is started (in supervisor.Start), ensuring thread safety.
 		StateProvider: func() string {
 			if workerCtx == nil {
 				return "unknown"
@@ -164,9 +152,6 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 
 			return workerCtx.currentState.String()
 		},
-		// ShutdownRequestedProvider returns the current shutdown status from the desired state.
-		// It loads the desired state from the database and checks IsShutdownRequested().
-		// The closure captures identity.ID and s.store for database access.
 		ShutdownRequestedProvider: func() bool {
 			ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 			defer cancel()
@@ -178,45 +163,31 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 
 			return desired.IsShutdownRequested()
 		},
-		// ChildrenCountsProvider returns the count of healthy and unhealthy children.
-		// Used by parent workers to track their children's health status for state transitions.
-		// A child is considered healthy if its state contains "Running" or "Connected".
+		// A child is healthy if its state contains "Running" or "Connected".
 		ChildrenCountsProvider: func() (healthy int, unhealthy int) {
 			s.mu.RLock()
 			defer s.mu.RUnlock()
 
 			for _, child := range s.children {
 				stateName := child.GetCurrentStateName()
-				// A child is healthy if it's in a running/connected operational state
 				if strings.Contains(stateName, "Running") || strings.Contains(stateName, "Connected") {
 					healthy++
 				} else if stateName != "" && stateName != "unknown" &&
 					!strings.Contains(stateName, "Stopped") {
-					// Only count as unhealthy if it has a known state that's not healthy
-					// and not in Stopped state (TryingToStop still counts as unhealthy
-					// so parent waits for children to fully stop)
+					// TryingToStop counts as unhealthy so parent waits for full stop
 					unhealthy++
 				}
 			}
 
 			return healthy, unhealthy
 		},
-		// MappedParentStateProvider returns the mapped state from parent's ChildStartStates.
-		// Used by child workers to know when parent wants them to start/stop.
-		// Returns "running" when parent is in a state listed in ChildStartStates,
-		// Returns "stopped" when parent is not in any ChildStartStates,
-		// Returns "running" when ChildStartStates is empty (child always runs).
 		MappedParentStateProvider: func() string {
 			return s.getMappedParentState()
 		},
-		// ChildrenViewProvider returns a config.ChildrenView for parent workers.
-		// Used by parent workers to inspect individual child states, not just counts.
-		// The closure captures s.children and s.mu for thread-safe access.
 		ChildrenViewProvider: func() any {
 			s.mu.RLock()
 			defer s.mu.RUnlock()
 
-			// Create a copy of children map for the manager
 			childrenCopy := make(map[string]SupervisorInterface, len(s.children))
 			for name, child := range s.children {
 				childrenCopy[name] = child
@@ -224,9 +195,7 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 
 			return NewChildrenManager(childrenCopy)
 		},
-		// FrameworkMetricsProvider returns computed framework metrics from workerCtx.
-		// Called BEFORE CollectObservedState to compute metrics for explicit copying.
-		// The closure captures workerCtx by reference and acquires RLock when called (thread-safe).
+		// Called BEFORE CollectObservedState to compute metrics.
 		FrameworkMetricsProvider: func() *deps.FrameworkMetrics {
 			if workerCtx == nil {
 				return nil
@@ -251,17 +220,8 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 				StateReason:             workerCtx.currentStateReason,
 			}
 		},
-		// FrameworkMetricsSetter sets framework metrics on worker dependencies BEFORE CollectObservedState.
-		// Workers then access this via deps.GetFrameworkState() and explicitly copy to their observed state.
-		// This replaces the duck-typing SetFrameworkMetrics injection pattern.
 		FrameworkMetricsSetter: func(fm *deps.FrameworkMetrics) {
-			// Use type assertion to access GetDependenciesAny() and SetFrameworkState()
-			// All workers embed BaseWorker which provides GetDependenciesAny()
-			// All dependencies embed BaseDependencies which provides SetFrameworkState()
-			//
-			// IMPORTANT: We must use GetDependenciesAny() (returns any) NOT GetDependencies() (returns D).
-			// In Go, a method returning a concrete type D does NOT satisfy an interface requiring
-			// return type `any`. GetDependenciesAny() exists specifically for this duck-typing use case.
+			// Must use GetDependenciesAny() (returns any), not GetDependencies() (returns D).
 			type depsGetter interface {
 				GetDependenciesAny() any
 			}
@@ -272,9 +232,7 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 				}
 			}
 		},
-		// ActionHistoryProvider returns buffered action results from workerCtx.actionHistory.
-		// Called BEFORE CollectObservedState to drain the action history buffer.
-		// The supervisor auto-records action results via ActionExecutor callback.
+		// Called BEFORE CollectObservedState to drain action history buffer.
 		ActionHistoryProvider: func() []deps.ActionResult {
 			if workerCtx == nil || workerCtx.actionHistory == nil {
 				return nil
@@ -282,9 +240,6 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 
 			return workerCtx.actionHistory.Drain()
 		},
-		// ActionHistorySetter sets action history on worker dependencies BEFORE CollectObservedState.
-		// Workers then access this via deps.GetActionHistory() and assign to their ObservedState.
-		// This follows the same pattern as FrameworkMetricsSetter.
 		ActionHistorySetter: func(history []deps.ActionResult) {
 			type depsGetter interface {
 				GetDependenciesAny() any
@@ -300,17 +255,14 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 
 	executor := execution.NewActionExecutor(10, s.workerType, identity, workerLogger)
 
-	// Create action history buffer for this worker (supervisor-owned)
 	actionHistoryBuffer := deps.NewInMemoryActionHistoryRecorder()
 
-	// Set up executor callback to auto-record action results to actionHistory
 	executor.SetOnActionComplete(func(result deps.ActionResult) {
 		actionHistoryBuffer.Record(result)
 	})
 
-	// Load previous StartupCount from CSE (if exists) for persistent counter
-	// This counter survives restarts and is incremented on each AddWorker()
-	var startupCount int64 = 1 // Default to 1 for first-time workers
+	// Survives restarts, incremented on each AddWorker().
+	var startupCount int64 = 1
 
 	loadCtx, loadCancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer loadCancel()
@@ -319,8 +271,6 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 
 	loadErr := s.store.LoadObservedTyped(loadCtx, s.workerType, identity.ID, &prevObserved)
 	if loadErr == nil {
-		// Try to extract previous StartupCount from FrameworkMetrics
-		// Use deps.MetricsHolder interface for type assertion (value receiver methods)
 		if holder, ok := any(prevObserved).(deps.MetricsHolder); ok {
 			fm := holder.GetFrameworkMetrics()
 			if fm.StartupCount > 0 {
@@ -336,17 +286,16 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 		currentState:      worker.GetInitialState(),
 		collector:         collector,
 		executor:          executor,
-		actionHistory:     actionHistoryBuffer, // Supervisor-owned buffer for action results
+		actionHistory:     actionHistoryBuffer,
 		stateEnteredAt:    time.Now(),
 		stateTransitions:  make(map[string]int64),
 		stateDurations:    make(map[string]time.Duration),
-		totalTransitions:  0,            // Session metric, starts at 0
-		collectorRestarts: 0,            // Per-worker collector restarts
-		startupCount:      startupCount, // PERSISTENT: loaded from CSE, incremented
+		totalTransitions:  0,
+		collectorRestarts: 0,
+		startupCount:      startupCount,
 	}
 	s.workers[identity.ID] = workerCtx
 
-	// Enrich supervisor's own logger with worker path from Identity.
 	if len(s.workers) == 1 && identity.HierarchyPath != "" {
 		s.logger = workerLogger
 	}
@@ -373,7 +322,6 @@ func (s *Supervisor[TObserved, TDesired]) RemoveWorker(ctx context.Context, work
 	workerCtx.collector.Stop(ctx)
 	workerCtx.executor.Shutdown()
 
-	// Cleanup state duration metric for removed worker
 	workerCtx.mu.RLock()
 
 	if workerCtx.currentState != nil {
@@ -522,29 +470,24 @@ func (s *Supervisor[TObserved, TDesired]) IsObservationStale() bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	// Check first worker's state (child supervisors typically have one worker)
 	for _, workerCtx := range s.workers {
 		if workerCtx.collector == nil {
-			return true // No collector = stale
+			return true
 		}
 
-		// Get last observation timestamp from worker context
 		workerCtx.mu.RLock()
 		stateEnteredAt := workerCtx.stateEnteredAt
 		workerCtx.mu.RUnlock()
 
-		// If no state entered time, assume stale (not yet observed)
 		if stateEnteredAt.IsZero() {
 			return true
 		}
 
-		// Use stale threshold from collector health config
 		age := time.Since(stateEnteredAt)
 
 		return age > s.collectorHealth.staleThreshold
 	}
 
-	// No workers = stale
 	return true
 }
 
@@ -565,7 +508,6 @@ func (s *Supervisor[TObserved, TDesired]) getChildStartStates() []string {
 		return nil
 	}
 
-	// Return a copy to prevent external modification
 	states := make([]string, len(s.childStartStates))
 	copy(states, s.childStartStates)
 
@@ -635,7 +577,6 @@ func (s *Supervisor[TObserved, TDesired]) GetHierarchyPath() string {
 // Use this from within locked contexts to avoid deadlock.
 // Caller must hold s.mu.RLock() or s.mu.Lock().
 func (s *Supervisor[TObserved, TDesired]) GetHierarchyPathUnlocked() string {
-	// Get first worker ID for this supervisor's segment
 	var workerID string
 	for id := range s.workers {
 		workerID = id
@@ -647,17 +588,12 @@ func (s *Supervisor[TObserved, TDesired]) GetHierarchyPathUnlocked() string {
 		workerID = "unknown"
 	}
 
-	// Build this node's path segment: "workerID(workerType)"
 	segment := fmt.Sprintf("%s(%s)", workerID, s.workerType)
 
-	// If no parent, we're root - return just our segment
 	if s.parent == nil {
 		return segment
 	}
 
-	// Call parent's unlocked method to avoid deadlock.
-	// This is safe because GetHierarchyPathUnlocked is now on the SupervisorInterface,
-	// allowing hierarchical path computation without lock acquisition.
 	parentPath := s.parent.GetHierarchyPathUnlocked()
 
 	return parentPath + "/" + segment
@@ -670,7 +606,6 @@ func (s *Supervisor[TObserved, TDesired]) GetCurrentStateName() string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	// Get the first (and typically only) worker's current state
 	for _, workerCtx := range s.workers {
 		workerCtx.mu.RLock()
 
@@ -693,7 +628,6 @@ func (s *Supervisor[TObserved, TDesired]) GetCurrentStateNameAndReason() (string
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	// Get the first (and typically only) worker's current state and reason
 	for _, workerCtx := range s.workers {
 		workerCtx.mu.RLock()
 		defer workerCtx.mu.RUnlock()
