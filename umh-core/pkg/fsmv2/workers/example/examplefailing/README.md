@@ -1,19 +1,16 @@
-# Example Failing Worker
+# Example failing worker
 
-This worker demonstrates predictable failure scenarios for testing FSM error handling and retry behavior.
+Test fixture that simulates connection failures for validating FSM error handling and retry behavior.
 
 ## Purpose
 
-The `example-failing` worker is a test fixture that simulates connection failures in a controlled manner. It's useful for:
-
-- Testing FSM error handling and retry logic
-- Demonstrating how actions can fail and recover
-- Validating supervisor behavior during failures
-- Creating reproducible failure scenarios for integration tests
+- Test FSM error handling and retry logic
+- Validate supervisor behavior during failures
+- Create reproducible failure scenarios for integration tests
 
 ## Configuration
 
-The worker is configured via YAML with a `ShouldFail` boolean flag:
+Configure the worker via YAML with a `ShouldFail` boolean flag:
 
 ```yaml
 workerType: "failing"
@@ -25,7 +22,7 @@ config:
 
 ### When `shouldFail: false` (default)
 
-The worker behaves like a normal connection worker:
+The worker behaves like a standard connection worker:
 
 1. Starts in `stopped` state
 2. Transitions to `trying_to_connect`
@@ -42,10 +39,10 @@ The worker simulates connection failures:
 4. FSM retries with exponential backoff
 5. Remains in `trying_to_connect` state until `shouldFail` is changed to `false`
 
-## Usage Example
+## Usage example
 
 ```go
-// Create a failing worker that will fail connections
+// Create a failing worker
 worker := example_failing.NewFailingWorker(
     "test-worker-1",
     "Test Failing Worker",
@@ -58,24 +55,22 @@ supervisor.AddWorker(worker, fsmv2types.UserSpec{
     Config: `shouldFail: true`,
 })
 
-// Worker will repeatedly fail connect attempts
-
-// Later, to allow connection to succeed:
+// Allow connection to succeed
 supervisor.UpdateWorker(worker.Identity.ID, fsmv2types.UserSpec{
     Config: `shouldFail: false`,
 })
 ```
 
-## Factory Registration
+## Factory registration
 
-The worker is automatically registered with the factory system:
+The worker registers with the factory system:
 
 - Worker type: `"failing"`
 - Supervisor factory for `FailingObservedState` and `FailingDesiredState`
 
-Creating instances via YAML configuration in the Application worker.
+Create instances via YAML configuration in the Application worker.
 
-## State Transitions
+## State transitions
 
 ```
 stopped → trying_to_connect → (if shouldFail=false) → connected
@@ -83,7 +78,7 @@ stopped → trying_to_connect → (if shouldFail=false) → connected
    └────────────┘
 ```
 
-## Files Structure
+## File structure
 
 ```
 example-failing/
@@ -104,19 +99,19 @@ example-failing/
     └── disconnect.go    # Disconnect action
 ```
 
-## Key Implementation Details
+## Implementation details
 
 1. **Thread-safe failure flag**: `FailingDependencies` uses mutex to protect the `shouldFail` flag
-2. **Action failure simulation**: `ConnectAction.Execute()` checks the flag and returns error if set
+2. **Action failure simulation**: `ConnectAction.Execute()` checks the flag and returns an error if set
 3. **Configuration parsing**: `DeriveDesiredState()` parses YAML config and updates the failure flag
-4. **Standard FSM pattern**: Follows the same state machine structure as production workers
+4. **FSM pattern**: Follows the same state machine structure as production workers
 
-## Testing FSM Behavior
+## Testing FSM behavior
 
-This worker enables testing:
+Use this worker to test:
 
-- **Retry mechanisms**: How many times does the FSM retry before giving up?
-- **Backoff strategies**: Does exponential backoff work correctly?
-- **Error propagation**: Are errors properly logged and reported?
-- **State consistency**: Does the FSM maintain correct state during failures?
-- **Recovery**: Can the worker recover when `shouldFail` changes to `false`?
+- **Retry mechanisms**: FSM retry count before giving up
+- **Backoff strategies**: Exponential backoff correctness
+- **Error propagation**: Error logging and reporting
+- **State consistency**: FSM state correctness during failures
+- **Recovery**: Worker recovery when `shouldFail` changes to `false`

@@ -1,18 +1,18 @@
-# Application Worker
+# Application worker
 
-The Application worker is the root coordinator for FSM v2. It dynamically creates and manages child workers based on YAML configuration, implementing the "passthrough pattern" where the application worker processes child specifications without needing to know about specific child types.
+The application worker is the root coordinator for FSM v2. It creates and manages child workers based on YAML configuration using the passthrough pattern, where the application worker processes child specifications without knowing about specific child types.
 
 ## Architecture
 
-The Application worker is inspired by Erlang/OTP's Application concept - it coordinates a complete system with lifecycle management, configuration, and fault tolerance.
+The application worker coordinates a complete system with lifecycle management, configuration, and fault tolerance, inspired by Erlang/OTP's Application concept.
 
-### Key Concepts
+### Key concepts
 
-- **Application Worker**: The root coordinator that parses YAML configuration to discover and create child workers
-- **Passthrough Pattern**: The application worker doesn't hardcode child types; it processes ChildSpec arrays from configuration
-- **Dynamic Worker Creation**: Any registered worker type can be instantiated as a child via the factory pattern
+- **Application worker**: Root coordinator that parses YAML configuration to discover and create child workers
+- **Passthrough pattern**: Processes ChildSpec arrays from configuration without hardcoding child types
+- **Dynamic worker creation**: Any registered worker type can be instantiated as a child via the factory pattern
 
-## Directory Structure
+## Directory structure
 
 ```
 application/
@@ -26,7 +26,7 @@ application/
 
 ## Usage
 
-### Creating an Application Supervisor
+### Creating an application supervisor
 
 ```go
 import (
@@ -61,7 +61,7 @@ done := sup.Start(ctx)
 <-done
 ```
 
-### YAML Configuration Format
+### YAML configuration format
 
 The application worker expects a YAML configuration with a `children` array:
 
@@ -75,26 +75,26 @@ children:
         value: 10
 ```
 
-## Factory Registration
+## Factory registration
 
-The application worker automatically registers itself with the factory on import:
+The application worker registers itself with the factory on import:
 
 ```go
 import _ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application"
 ```
 
-The application worker can be created dynamically:
+Create the application worker dynamically:
 
 ```go
 worker := factory.NewWorkerByType(identity, workerType)
 supervisor := factory.NewSupervisorByType(supervisorCfg, workerType)
 ```
 
-## State Types
+## State types
 
 ### ApplicationObservedState
 
-Represents the minimal observed state for an application supervisor:
+Represents the observed state for an application supervisor:
 
 ```go
 type ApplicationObservedState struct {
@@ -107,7 +107,7 @@ type ApplicationObservedState struct {
 
 ### ApplicationDesiredState
 
-Represents the desired state with children specifications:
+Represents the desired state with child specifications:
 
 ```go
 type ApplicationDesiredState struct {
@@ -130,19 +130,19 @@ Run specific test suite:
 go test ./pkg/fsmv2/workers/application -v
 ```
 
-## Design Patterns
+## Design patterns
 
-### Passthrough Pattern
+### Passthrough pattern
 
-The application worker doesn't need to know about specific child types. It simply:
+The application worker:
 
 1. Parses YAML configuration to extract `children` array
 2. Returns `config.DesiredState` with `ChildrenSpecs` populated
-3. The supervisor's `reconcileChildren()` handles actual child creation via factory
+3. The supervisor's `reconcileChildren()` handles child creation via factory
 
 The application supervisor can manage any registered worker type as children without hardcoding types.
 
-### Factory Integration
+### Factory integration
 
 The application worker registers both:
 
@@ -151,9 +151,9 @@ The application worker registers both:
 
 Dynamic creation works without compile-time dependencies on specific child types.
 
-## Migration from Root Package
+## Migration from root package
 
-This package replaces the previous `pkg/fsmv2/root` package with clearer naming:
+This package replaces `pkg/fsmv2/root` with clearer naming:
 
 | Old Name | New Name |
 |----------|----------|

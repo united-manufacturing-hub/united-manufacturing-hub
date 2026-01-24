@@ -1,10 +1,10 @@
-# FSM v2 Factory Package
+# FSM v2 factory package
 
 The factory package provides registration mechanisms for FSM v2 workers and supervisors.
 
-## Key Concept: Worker Type Derivation
+## Worker type derivation
 
-Worker types are **derived from Go type names**, not manually specified. This prevents registration mismatches.
+Worker types are **derived from Go type names**, not manually specified.
 
 ```
 ExamplechildObservedState    → "examplechild"
@@ -16,28 +16,24 @@ ExampleparentObservedState → "exampleparent"
 1. Strip `ObservedState` or `DesiredState` suffix
 2. Lowercase the result
 
-**Critical constraint:** Go type names cannot contain hyphens. Therefore, worker types like `"example-child"` are **impossible** to derive from any type name. This is why folder names must match worker types exactly.
+**Constraint:** Go type names cannot contain hyphens. Worker types like `"example-child"` cannot be derived from any type name, so folder names must match worker types exactly.
 
-## Two Registries: Why and How
+## Registries
 
 The factory package maintains two separate registries:
 
 1. **Worker Registry** (`registry`): Maps worker type → worker factory function
 2. **Supervisor Registry** (`supervisorRegistry`): Maps worker type → supervisor factory function
 
-These are separate because:
-- They have different function signatures
-- The `interface{}` return type in supervisor factory avoids circular imports
-- Both are required for the FSM system to function correctly
+These are separate because they have different function signatures and the `interface{}` return type in supervisor factory avoids circular imports.
 
-**Critical invariant:** Every worker type must be registered in BOTH registries with the SAME key.
-An architecture test enforces this invariant.
+**Invariant:** Every worker type must be registered in BOTH registries with the SAME key. An architecture test enforces this.
 
-## Registration Functions
+## Registration functions
 
-### Preferred: `RegisterWorkerType` (Generic, Type-Safe)
+### `RegisterWorkerType` (preferred)
 
-Use `RegisterWorkerType` to register both factories atomically with automatic type derivation:
+Registers both factories atomically with automatic type derivation:
 
 ```go
 func init() {
@@ -58,14 +54,14 @@ func init() {
 ```
 
 Benefits:
-- Worker type is derived from the generic type parameter (no manual strings)
+- Derives worker type from the generic type parameter
 - Registers both factories atomically
 - Rolls back on partial failure
-- **Impossible to have mismatched keys**
+- Prevents mismatched keys
 
-### Alternative: `RegisterWorkerAndSupervisorFactoryByType` (Explicit String)
+### `RegisterWorkerAndSupervisorFactoryByType`
 
-Use when you need an explicit type string (rare):
+Use when you need an explicit type string:
 
 ```go
 func init() {
@@ -86,9 +82,9 @@ func init() {
 }
 ```
 
-### Low-Level Functions (Tests Only)
+### Low-level functions (tests only)
 
-Individual registration functions exist for testing purposes:
+Individual registration functions for testing:
 
 ```go
 // Worker factory registration
@@ -98,12 +94,11 @@ factory.RegisterFactoryByType(workerType, workerFactory)
 factory.RegisterSupervisorFactoryByType(workerType, supervisorFactory)
 ```
 
-**Warning:** Using these in production code can lead to mismatches if different keys are used.
-The architecture test will catch such mismatches.
+**Warning:** Using these in production code can lead to mismatches if different keys are used. The architecture test catches such mismatches.
 
-## Validation Functions
+## Validation functions
 
-### Check Registry Consistency
+### Check registry consistency
 
 ```go
 workerOnly, supervisorOnly := factory.ValidateRegistryConsistency()
@@ -112,18 +107,18 @@ if len(workerOnly) > 0 || len(supervisorOnly) > 0 {
 }
 ```
 
-### List Registered Types
+### List registered types
 
 ```go
 workerTypes := factory.ListWorkerTypes()
 supervisorTypes := factory.ListSupervisorTypes()
 ```
 
-## Folder Naming Convention
+## Folder naming convention
 
-**Invariant: Folder name MUST equal derived worker type.**
+**Invariant: Folder name must equal derived worker type.**
 
-This is enforced by architecture tests in `architecture_test.go`.
+Architecture tests in `architecture_test.go` enforce this.
 
 | Folder | Type Name | Derived Worker Type | Valid? |
 |--------|-----------|---------------------|--------|
@@ -133,9 +128,9 @@ This is enforced by architecture tests in `architecture_test.go`.
 
 If you create a folder `foo`, your types must be named `FooObservedState` and `FooDesiredState`.
 
-## Common Mistakes
+## Common mistakes
 
-### 1. Manual String Mismatch
+### Manual string mismatch
 
 **Wrong:**
 ```go
@@ -150,7 +145,7 @@ _ = factory.RegisterFactoryByType("example-parent", ...)
 
 **Fix:** Use `RegisterWorkerType[TObserved, TDesired]()` which derives the key automatically.
 
-### 2. Hyphenated Folder Names
+### Hyphenated folder names
 
 **Wrong:** Folder `example-child` with type `ExamplechildObservedState`
 - Derived type: `"examplechild"`
@@ -159,7 +154,7 @@ _ = factory.RegisterFactoryByType("example-parent", ...)
 
 **Fix:** Rename folder to match derived type (`examplechild`), or use underscores/no separators in folder name.
 
-### 3. Type Name Doesn't Match Folder
+### Type name doesn't match folder
 
 **Wrong:** Folder `myworker` with type `SomethingElseObservedState`
 - Derived type: `"somethingelse"`
@@ -168,26 +163,24 @@ _ = factory.RegisterFactoryByType("example-parent", ...)
 
 **Fix:** Rename type to `MyworkerObservedState` or folder to `somethingelse`.
 
-## Architecture Tests
+## Architecture tests
 
-### Folder Naming Validation
+### Folder naming validation
 
-The architecture test `ValidateFolderMatchesWorkerType` automatically validates:
+The `ValidateFolderMatchesWorkerType` test validates:
 - Every worker folder contains a snapshot with `*ObservedState` type
 - The derived worker type equals the folder name
 
 Run with: `ginkgo --focus="Worker Folder Naming" ./pkg/fsmv2/`
 
-### Registry Consistency Validation
+### Registry consistency validation
 
-The architecture test for registry consistency validates:
-- Every worker type in the worker registry also exists in the supervisor registry
-- Every worker type in the supervisor registry also exists in the worker registry
+The registry consistency test validates:
+- Every worker type in the worker registry exists in the supervisor registry
+- Every worker type in the supervisor registry exists in the worker registry
 
-This catches mismatches caused by:
-- Using different keys when registering worker vs supervisor factories
-- Forgetting to register one of the two factories
+The test catches mismatches caused by using different keys when registering worker vs supervisor factories, or forgetting to register one of the two factories.
 
 Run with: `ginkgo --focus="Worker Factory Registration" ./pkg/fsmv2/`
 
-If this test fails, you'll see a `REGISTRY_MISMATCH` violation indicating which types are missing from which registry.
+If this test fails, a `REGISTRY_MISMATCH` violation indicates which types are missing from which registry.
