@@ -295,21 +295,16 @@ func (c *Collector[TObserved]) observationLoop() {
 
 func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) error {
 	collectionStartTime := time.Now()
-	// Per-collection log moved to TRACE for scalability
 	c.logTrace("observation_collection_starting",
 		"collection_start_time", collectionStartTime.Format(time.RFC3339Nano))
 
-	// Set framework metrics on worker dependencies BEFORE collection.
-	// Workers access this via deps.GetFrameworkState() in CollectObservedState.
-	// This replaces the duck-typing injection pattern for explicit metrics copying.
+	// Inject framework metrics before CollectObservedState so workers can access via deps.GetFrameworkState()
 	if c.config.FrameworkMetricsProvider != nil && c.config.FrameworkMetricsSetter != nil {
 		fm := c.config.FrameworkMetricsProvider()
 		c.config.FrameworkMetricsSetter(fm)
 	}
 
-	// Set action history on worker dependencies BEFORE collection.
-	// Workers access this via deps.GetActionHistory() in CollectObservedState.
-	// This follows the same pattern as FrameworkMetrics.
+	// Inject action history before CollectObservedState so workers can access via deps.GetActionHistory()
 	if c.config.ActionHistoryProvider != nil && c.config.ActionHistorySetter != nil {
 		actionHistory := c.config.ActionHistoryProvider()
 		c.config.ActionHistorySetter(actionHistory)
@@ -317,17 +312,13 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 
 	observed, err := c.config.Worker.CollectObservedState(ctx)
 	if err != nil {
-		// Keep error logs at DEBUG for debugging
 		c.config.Logger.Debugw("collector_collect_failed",
 			"error", err)
 
 		return err
 	}
 
-	// Inject FSM state name into observed state.
-	// The StateProvider callback is injected by the supervisor and returns the current
-	// state machine state. This preserves the "Collector-only writes ObservedState" boundary
-	// while allowing FSM state to be observed.
+	// Inject FSM state via callback to preserve "Collector-only writes ObservedState" boundary
 	if c.config.StateProvider != nil {
 		stateName := c.config.StateProvider()
 		if setter, ok := observed.(interface {
@@ -337,10 +328,7 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 		}
 	}
 
-	// Inject shutdown requested status into observed state.
-	// The ShutdownRequestedProvider callback is injected by the supervisor and returns the
-	// current shutdown requested status from the desired state. The observed snapshot
-	// accurately reflects whether shutdown has been requested.
+	// Inject shutdown requested status from desired state into observed snapshot
 	if c.config.ShutdownRequestedProvider != nil {
 		shutdownRequested := c.config.ShutdownRequestedProvider()
 		if setter, ok := observed.(interface {
@@ -350,10 +338,7 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 		}
 	}
 
-	// Inject children counts into observed state.
-	// The ChildrenCountsProvider callback is injected by the supervisor and returns the
-	// count of healthy and unhealthy children. This is used by parent workers to track
-	// their children's health status for state transitions.
+	// Inject children health counts for parent workers to track state transitions
 	if c.config.ChildrenCountsProvider != nil {
 		healthy, unhealthy := c.config.ChildrenCountsProvider()
 		if setter, ok := observed.(interface {
@@ -363,10 +348,7 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 		}
 	}
 
-	// Inject mapped parent state into observed state.
-	// The MappedParentStateProvider callback is injected by the supervisor and returns the
-	// state mapping from parent (e.g., "running" or "stopped"). This is used by child workers
-	// to know when parent wants them to start/stop via StateMapping.
+	// Inject mapped parent state so child workers know when to start/stop via StateMapping
 	if c.config.MappedParentStateProvider != nil {
 		mappedState := c.config.MappedParentStateProvider()
 		if setter, ok := observed.(interface {
@@ -376,11 +358,7 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 		}
 	}
 
-	// Inject children view into observed state.
-	// The ChildrenViewProvider callback is injected by the supervisor and returns a
-	// config.ChildrenView that gives parent workers full visibility into their children's
-	// state (beyond just counts). Parent workers can inspect individual
-	// child states, errors, and health status.
+	// Inject children view so parent workers can inspect individual child states
 	if c.config.ChildrenViewProvider != nil {
 		childrenView := c.config.ChildrenViewProvider()
 		if setter, ok := observed.(interface{ SetChildrenView(any) fsmv2.ObservedState }); ok {
@@ -388,34 +366,20 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 		}
 	}
 
-	// NOTE: ActionHistory injection was REMOVED from collector.
-	// Collector should NOT modify ObservedState after CollectObservedState returns.
-	// ActionHistory follows the FrameworkMetrics pattern:
-	// 1. Supervisor auto-records action results via ActionExecutor callback
-	// 2. ActionHistorySetter injects into worker deps BEFORE CollectObservedState
-	// 3. Worker reads deps.GetActionHistory() and assigns to ObservedState.LastActionResults
-	// See DEPENDENCIES.md for the full pattern.
-
-	// Framework metrics are now set on worker dependencies BEFORE CollectObservedState.
-	// Workers explicitly copy from deps.GetFrameworkState() in their CollectObservedState.
-	// No duck-typing injection needed - metrics flow through the struct fields.
-
-	// Extract and log observation timestamp
+	// NOTE: ActionHistory injection was removed - collector must not modify ObservedState
+	// after CollectObservedState returns. Workers read deps.GetActionHistory() directly.
 	var observationTimestamp time.Time
 	if timestampProvider, ok := observed.(fsmv2.TimestampProvider); ok {
 		observationTimestamp = timestampProvider.GetTimestamp()
-		// Per-collection log moved to TRACE for scalability
 		c.logTrace("observation_collected",
 			"observation_timestamp", observationTimestamp.Format(time.RFC3339Nano))
 	} else {
-		// Per-collection log moved to TRACE for scalability
 		c.logTrace("observation_collected_no_timestamp",
 			"actual_type", fmt.Sprintf("%T", observed))
 	}
 
 	saveStartTime := time.Now()
 
-	// Type assert observed state to TObserved for compile-time type safety
 	observedTyped, ok := observed.(TObserved)
 	if !ok {
 		c.config.Logger.Errorw("collector_type_mismatch",
@@ -425,7 +389,6 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 		return fmt.Errorf("observed state type mismatch: expected %T, got %T", *new(TObserved), observed)
 	}
 
-	// Use typed storage API - no workerType parameter needed, derived from TObserved
 	ts, ok := c.config.Store.(*storage.TriangularStore)
 	if !ok {
 		c.config.Logger.Errorw("collector_store_type_mismatch",
@@ -445,20 +408,14 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 
 	saveDuration := time.Since(saveStartTime)
 
-	// Derive worker type from TObserved for metrics
 	workerType, err := storage.DeriveWorkerType[TObserved]()
 	if err != nil {
 		return fmt.Errorf("failed to derive worker type for metrics: %w", err)
 	}
 
-	// Record metrics
 	metrics.RecordObservationSave(workerType, changed, saveDuration)
-
-	// Export worker-specific metrics from ObservedState to Prometheus
-	// This reads the Metrics field (if present) and exports counters/gauges
 	metrics.ExportWorkerMetrics(workerType, c.config.Identity.ID, observed)
 
-	// Log result - per-collection logs moved to TRACE for scalability
 	if changed {
 		c.logTrace("observation_saved",
 			"save_duration", saveDuration,
