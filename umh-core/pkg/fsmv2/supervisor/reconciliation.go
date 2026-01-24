@@ -1171,6 +1171,15 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 				"child_name", spec.Name,
 				"parent_worker_type", s.workerType)
 
+			// Clear pendingRemoval if child was marked for removal but re-appeared in specs
+			// This handles the case where a child disappears temporarily (e.g., during restart)
+			// and then re-appears in the desired spec before shutdown completes
+			if s.pendingRemoval[spec.Name] {
+				s.logger.Debugw("child_reappeared_clearing_pending_removal",
+					"child_name", spec.Name)
+				delete(s.pendingRemoval, spec.Name)
+			}
+
 			// Merge parent User variables with child's (child overrides parent)
 			// Direct access is safe here - reconcileChildren holds s.mu.Lock()
 			childUserSpec := spec.UserSpec

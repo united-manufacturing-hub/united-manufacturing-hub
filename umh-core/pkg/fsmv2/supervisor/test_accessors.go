@@ -102,3 +102,23 @@ func (s *Supervisor[TObserved, TDesired]) TestSetLastRestart(t time.Time) {
 
 	s.collectorHealth.lastRestart = t
 }
+
+// TestIsPendingRemoval checks if a child is in the pendingRemoval map. DO NOT USE in production code.
+func (s *Supervisor[TObserved, TDesired]) TestIsPendingRemoval(childName string) bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	return s.pendingRemoval[childName]
+}
+
+// TestSetPendingRemoval marks a child as pending removal for testing. DO NOT USE in production code.
+func (s *Supervisor[TObserved, TDesired]) TestSetPendingRemovalFlag(childName string, value bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if value {
+		s.pendingRemoval[childName] = true
+	} else {
+		delete(s.pendingRemoval, childName)
+	}
+}
