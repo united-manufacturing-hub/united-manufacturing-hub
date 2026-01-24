@@ -91,10 +91,6 @@ import (
 // CommunicatorWorker implements the FSM v2 Worker interface for channel-based synchronization.
 type CommunicatorWorker struct {
 	*helpers.BaseWorker[*CommunicatorDependencies]
-
-	// Temporary state: local logger, HTTP client, filesystem, etc. Config goes in observed/desired state.
-	logger   *zap.SugaredLogger
-	identity depspkg.Identity
 }
 
 // NewCommunicatorWorker creates a new Channel-based Communicator worker in Stopped state.
@@ -121,8 +117,6 @@ func NewCommunicatorWorker(
 
 	return &CommunicatorWorker{
 		BaseWorker: helpers.NewBaseWorker(dependencies),
-		identity:   identity,
-		logger:     logger,
 	}, nil
 }
 
