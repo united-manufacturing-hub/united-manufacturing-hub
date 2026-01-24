@@ -102,28 +102,13 @@ type SupervisorInterface interface {
 type WorkerContext[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] struct {
 	lastActionObsTime time.Time
 
-	// Supervisor-internal state tracking (injected into FrameworkMetrics for worker access).
-	//
-	// These fields are tracked by the supervisor and COPIED into FrameworkMetrics before
-	// State.Next() so workers can read them. Workers cannot write these directly.
-	//
-	// This is separate from MetricsRecorder which handles worker-written metrics:
-	// - WorkerContext fields: Supervisor writes, workers read (via FrameworkMetrics)
-	// - MetricsRecorder: Workers write, supervisor drains and persists
+	// Supervisor-internal state tracking (copied into FrameworkMetrics before State.Next()).
+	// Workers read via FrameworkMetrics; MetricsRecorder handles worker-written metrics.
 	stateEnteredAt time.Time // When current state was entered
 	worker         fsmv2.Worker
 	currentState   fsmv2.State[any, any]
-	// mu Protects currentState (per-worker FSM state).
-	//
-	// This is a lockmanager.Lock wrapping sync.RWMutex because state is checked on every tick (frequent concurrent reads)
-	// but only written during state transitions (infrequent writes).
-	//
-	// Per-worker isolation: Each WorkerContext has its own independent mu lock,
-	// enabling true parallel processing of multiple workers without contention.
-	// There is no ordering between different workers' mu locks.
-	//
-	// Lock Order: This lock must be acquired AFTER Supervisor.mu when both are needed.
-	// See package-level LOCK ORDER section for details.
+	// mu protects currentState. Uses RWMutex for frequent reads, rare writes.
+	// Lock Order: Acquire AFTER Supervisor.mu when both needed.
 	mu            *lockmanager.Lock
 	collector     *collection.Collector[TObserved]
 	executor      *execution.ActionExecutor

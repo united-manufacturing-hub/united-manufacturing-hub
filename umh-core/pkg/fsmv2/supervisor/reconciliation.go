@@ -96,7 +96,6 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 		"current_state", currentStateStr)
 	workerCtx.mu.RUnlock()
 
-	// Load latest snapshot from database
 	s.logTrace("loading_snapshot",
 		"stage", "data_freshness")
 
@@ -110,7 +109,6 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 		panic("Invariant I16 violated: storage returned nil ObservedState for worker " + workerID)
 	}
 
-	// Load typed observed state
 	var observed TObserved
 
 	err = s.store.LoadObservedTyped(ctx, s.workerType, workerID, &observed)
@@ -118,7 +116,6 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 		return fmt.Errorf("failed to load typed observed state: %w", err)
 	}
 
-	// Load typed desired state
 	var desired TDesired
 
 	err = s.store.LoadDesiredTyped(ctx, s.workerType, workerID, &desired)
@@ -126,7 +123,6 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 		return fmt.Errorf("failed to load typed desired state: %w", err)
 	}
 
-	// Build snapshot with typed states
 	snapshot := &fsmv2.Snapshot{
 		Identity: deps.Identity{
 			ID:            workerID,
@@ -138,7 +134,6 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 		Desired:  desired,
 	}
 
-	// Log loaded observation details
 	if timestampProvider, ok := any(observed).(fsmv2.TimestampProvider); ok {
 		observationTimestamp := timestampProvider.GetTimestamp()
 		s.logTrace("observation_timestamp_loaded",
@@ -261,13 +256,12 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 		"signal", int(signal),
 		"has_action", hasAction)
 
-	// VALIDATION: Cannot switch state AND emit action simultaneously
+	// FSM invariant: state transition and action emission are mutually exclusive
 	if nextState != currentState && action != nil {
 		panic(fmt.Sprintf("invalid state transition: state %s tried to switch to %s AND emit action %s",
 			currentState.String(), nextState.String(), action.Name()))
 	}
 
-	// Execute action if present
 	if action != nil {
 		actionID := action.Name()
 
@@ -293,7 +287,7 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 			return fmt.Errorf("failed to enqueue action: %w", err)
 		}
 
-		// Set action gating: block state.Next() until fresh observation arrives
+		// Block FSM progression until fresh observation confirms action effect
 		workerCtx.mu.Lock()
 		workerCtx.actionPending = true
 
@@ -311,7 +305,6 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 			"observation_time", currentObsTime.Format(time.RFC3339Nano))
 	}
 
-	// Transition to next state
 	if nextState != currentState {
 		fromState := currentState.String()
 		toState := nextState.String()
@@ -339,23 +332,17 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 			"lifecycle_event", "mutex_lock_acquired",
 			"mutex_name", "workerCtx.mu")
 
-		// Track cumulative time in previous state
 		if !workerCtx.stateEnteredAt.IsZero() {
 			timeInState := now.Sub(workerCtx.stateEnteredAt)
 			workerCtx.stateDurations[fromState] += timeInState
 		}
 
-		// Track transition count to new state
 		workerCtx.stateTransitions[toState]++
-		workerCtx.totalTransitions++ // Session total for FrameworkMetrics
-
-		// Update current state
+		workerCtx.totalTransitions++
 		workerCtx.currentState = nextState
 
-		// Capture state reason (exposed via FrameworkMetrics and GetCurrentStateNameAndReason)
+		// Exposed via FrameworkMetrics and GetCurrentStateNameAndReason
 		workerCtx.currentStateReason = nextState.Reason()
-
-		// Update state entered timestamp
 		workerCtx.stateEnteredAt = now
 
 		workerCtx.mu.Unlock()
@@ -371,7 +358,6 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 			"state", currentState.String())
 	}
 
-	// Update state duration gauge (every tick, not just transitions)
 	workerCtx.mu.RLock()
 
 	if workerCtx.currentState != nil && !workerCtx.stateEnteredAt.IsZero() {
@@ -385,7 +371,6 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 
 	workerCtx.mu.RUnlock()
 
-	// Process signal
 	if err := s.processSignal(ctx, workerID, signal); err != nil {
 		return fmt.Errorf("signal processing failed: %w", err)
 	}
@@ -427,18 +412,14 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 // PERFORMANCE: The complete tick loop is non-blocking and completes in <10ms,
 // making it safe to call at high frequency (100Hz+) without impacting system performance.
 func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
-	// Increment tick counter and log heartbeat periodically
-	// Use atomic to avoid race when parent tick() calls child tick()
 	tickCount := atomic.AddUint64(&s.tickCount, 1)
 	if tickCount%heartbeatTickInterval == 0 {
 		s.logHeartbeat()
 	}
 
-	// Check for timed out restart requests
 	s.checkRestartTimeouts(ctx)
 
-	// PHASE 1: Infrastructure health check (priority 1)
-	// Copy children map under lock to avoid race with reconcileChildren
+	// PHASE 1: Infrastructure health check
 	s.mu.RLock()
 
 	childrenCopy := make(map[string]SupervisorInterface, len(s.children))
@@ -567,10 +548,8 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 	// PHASE 0: Hierarchical Composition
 	// 1. DeriveDesiredState (with caching)
 
-	// Compute hash of current userSpec to detect changes
 	currentHash := config.ComputeUserSpecHash(userSpecWithVars)
 
-	// Check if we can use cached result
 	s.mu.RLock()
 	lastHash := s.lastUserSpecHash
 	cachedState := s.cachedDesiredState
@@ -632,8 +611,7 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 		metrics.RecordTemplateRenderingDuration(s.workerType, "success", templateDuration)
 	}
 
-	// Save derived desired state to database BEFORE calling tickWorker,
-	// which loads the freshest desired state from the snapshot.
+	// Save before tickWorker, which loads the freshest desired state from snapshot
 	desiredJSON, err := json.Marshal(desired)
 	if err != nil {
 		return fmt.Errorf("failed to marshal derived desired state: %w", err)
@@ -646,10 +624,7 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 
 	desiredDoc[FieldID] = firstWorkerID
 
-	// Important: Preserve ShutdownRequested field if it was set by requestShutdown
-	// DeriveDesiredState returns worker-derived DesiredState, but shutdown is a supervisor
-	// operation that must override it. We load the existing desired state as typed struct
-	// and check via DesiredState interface.
+	// Preserve ShutdownRequested: shutdown is a supervisor operation that overrides DeriveDesiredState
 	var existingDesiredTyped TDesired
 	if err := s.store.LoadDesiredTyped(ctx, s.workerType, firstWorkerID, &existingDesiredTyped); err == nil {
 		// Check if existing state had shutdown requested via interface
@@ -671,8 +646,6 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 		s.logTrace("derived_desired_state_saved")
 	}
 
-	// Extract ChildrenSpecs via ChildSpecProvider interface
-	// The desired state may implement this interface if it has children
 	var childrenSpecs []config.ChildSpec
 	if provider, ok := desired.(config.ChildSpecProvider); ok {
 		childrenSpecs = provider.GetChildrenSpecs()
@@ -694,16 +667,12 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 			"child_count", len(childrenSpecs))
 	}
 
-	// 2. Tick worker FIRST to progress FSM state before creating children
+	// Tick worker before creating children to progress FSM state first
 	if err := s.tickWorker(ctx, firstWorkerID); err != nil {
 		return fmt.Errorf("failed to tick worker: %w", err)
 	}
 
-	// 3. Reconcile children (propagate errors)
-	// SHUTDOWN HANDLING: When ShutdownRequested=true, pass nil childrenSpecs.
-	// This tells reconcileChildren that no children are desired, triggering graceful
-	// shutdown via RequestShutdown() on each existing child. Without this, DeriveDesiredState
-	// would return childrenSpecs based on config, causing children to be re-created during shutdown.
+	// When shutting down, pass nil to trigger graceful child shutdown instead of re-creation
 	if desiredDoc[FieldShutdownRequested] == true {
 		childrenSpecs = nil
 	}
@@ -712,10 +681,9 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 		return fmt.Errorf("failed to reconcile children: %w", err)
 	}
 
-	// 4. Apply state mapping
 	s.applyStateMapping()
 
-	// 5. Recursively tick children (log errors, don't fail parent)
+	// Tick children; errors logged but don't fail parent
 	s.mu.RLock()
 
 	childrenToTick := make([]SupervisorInterface, 0, len(s.children))
@@ -829,17 +797,7 @@ func (s *Supervisor[TObserved, TDesired]) processSignal(ctx context.Context, wor
 		delete(s.workers, workerID)
 		s.mu.Unlock()
 
-		// Lock safety: Clean up children OUTSIDE parent lock to avoid deadlock.
-		// Calling reconcileChildren() would re-acquire parent lock and call child.Shutdown()
-		// while holding it, which blocks any readers (GetChildren, calculateHierarchySize)
-		// indefinitely and risks deadlock if children try to access parent state.
-		//
-		// Instead, we call child.Shutdown() directly for each child, which:
-		// - Only acquires child's own lock (not parent's)
-		// - Allows parent lock to be acquired by other goroutines
-		// - Child supervisors handle their own cleanup recursively
-		//
-		// Implementation: Extract done channels first (under lock), then wait outside lock
+		// Clean up children outside parent lock to avoid deadlock with GetChildren/calculateHierarchySize
 		doneChannels := make(map[string]<-chan struct{})
 
 		s.mu.Lock()
@@ -852,21 +810,9 @@ func (s *Supervisor[TObserved, TDesired]) processSignal(ctx context.Context, wor
 
 		s.mu.Unlock()
 
-		// Graceful child shutdown: Request graceful shutdown and wait for children
-		// to complete their state machine shutdown (e.g., disconnect actions) before
-		// proceeding with parent removal. Cleanup proceeds in proper order.
-		//
-		// Flow:
-		// 1. Request graceful shutdown on all children (sets shutdownRequested=true)
-		// 2. Wait for children's workers to process their state machines
-		//    (e.g., Connected → TryingToDisconnect → disconnect action → Disconnected → SignalNeedsRemoval)
-		// 3. After workers are removed, call Shutdown() to clean up supervisor resources
-		// 4. Remove from parent's children map
-
-		// Graceful shutdown: currently uses immediate Shutdown() instead of context-aware RequestGracefulShutdown
+		// TODO: Use context-aware RequestGracefulShutdown instead of immediate Shutdown
 		_ = ctx
 
-		// Now shutdown child supervisors and clean up
 		for name, child := range childrenToCleanup {
 			s.logger.Debugw("child_supervisor_shutdown",
 				"child_name", name,
@@ -885,9 +831,7 @@ func (s *Supervisor[TObserved, TDesired]) processSignal(ctx context.Context, wor
 			s.mu.Unlock()
 		}
 
-		// Collect final observation to capture terminal state (e.g., "Stopped") before shutdown.
-		// The observed snapshot shows the correct final state instead of an
-		// intermediate state like "TryingToStop". Errors are logged but not fatal.
+		// Capture terminal state (e.g., "Stopped") before shutdown
 		if workerCtx.collector.IsRunning() {
 			collectCtx, cancel := context.WithTimeout(ctx, s.collectorHealth.observationTimeout)
 			_ = workerCtx.collector.CollectFinalObservation(collectCtx)
@@ -1023,7 +967,6 @@ func (s *Supervisor[TObserved, TDesired]) restartCollector(ctx context.Context, 
 		return fmt.Errorf("worker %s not found", workerID)
 	}
 
-	// Increment per-worker collector restarts (for FrameworkMetrics exposure)
 	workerCtx.mu.Lock()
 	workerCtx.collectorRestarts++
 	workerCtx.mu.Unlock()

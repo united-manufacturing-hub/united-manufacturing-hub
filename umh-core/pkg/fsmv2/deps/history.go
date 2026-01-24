@@ -54,14 +54,12 @@ type ActionHistoryRecorder interface {
 }
 
 // InMemoryActionHistoryRecorder is a thread-safe implementation of ActionHistoryRecorder.
-// It uses a mutex to protect concurrent access to the results buffer.
 type InMemoryActionHistoryRecorder struct {
 	results []ActionResult
 	mu      sync.Mutex
 }
 
 // NewInMemoryActionHistoryRecorder creates a new thread-safe ActionHistoryRecorder.
-// The initial capacity is set to 10 to avoid frequent reallocations for typical workloads.
 func NewInMemoryActionHistoryRecorder() *InMemoryActionHistoryRecorder {
 	return &InMemoryActionHistoryRecorder{
 		results: make([]ActionResult, 0, 10),
@@ -69,7 +67,6 @@ func NewInMemoryActionHistoryRecorder() *InMemoryActionHistoryRecorder {
 }
 
 // Record adds an action result to the buffer.
-// Thread-safe: Can be called concurrently from multiple goroutines.
 func (r *InMemoryActionHistoryRecorder) Record(result ActionResult) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -78,8 +75,7 @@ func (r *InMemoryActionHistoryRecorder) Record(result ActionResult) {
 }
 
 // Drain returns all buffered results and clears the buffer.
-// Thread-safe: Can be called concurrently, but typically called by collector.
-// Returns an empty slice if no results are buffered (never returns nil).
+// Never returns nil; returns empty slice if no results buffered.
 func (r *InMemoryActionHistoryRecorder) Drain() []ActionResult {
 	r.mu.Lock()
 	defer r.mu.Unlock()

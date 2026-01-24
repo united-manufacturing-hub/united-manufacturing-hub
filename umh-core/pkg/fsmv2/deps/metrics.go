@@ -22,18 +22,13 @@ import (
 // METRIC NAME TYPES (Type-Safe Constants)
 // =============================================================================
 
-// CounterName is a type-safe metric name for counters.
-// Counters are cumulative values that only increase.
-// The supervisor computes deltas for Prometheus export.
+// CounterName is a type-safe metric name for counters (cumulative, only increase).
 type CounterName string
 
-// GaugeName is a type-safe metric name for gauges.
-// Gauges are point-in-time values that can go up or down.
-// These are exported directly to Prometheus.
+// GaugeName is a type-safe metric name for gauges (point-in-time, can go up or down).
 type GaugeName string
 
-// Generic worker counter names.
-// These can be used by any worker type for common operations.
+// Generic worker counter names for common operations.
 const (
 	// CounterStateTransitions tracks total state transitions.
 	CounterStateTransitions CounterName = "state_transitions"
@@ -45,20 +40,15 @@ const (
 	CounterActionErrors CounterName = "action_errors"
 )
 
-// Generic worker gauge names.
-// These can be used by any worker type for common monitoring.
+// Generic worker gauge names for common monitoring.
 const (
 	// GaugeTimeInCurrentStateMs tracks time spent in the current state in milliseconds.
 	// NOTE: Also available via FrameworkMetrics.TimeInCurrentStateMs (supervisor-injected).
 	GaugeTimeInCurrentStateMs GaugeName = "time_in_current_state_ms"
 )
 
-// Framework metric names (supervisor-provided).
-// These are automatically injected into FrameworkMetrics by the supervisor.
-// Workers access them via snap.Observed.GetFrameworkMetrics() in State.Next().
-//
-// NOTE: These constants are for Prometheus export consistency. The actual values
-// are available via FrameworkMetrics struct fields (not map-based metrics).
+// Framework metric names (supervisor-provided, for Prometheus export consistency).
+// Actual values are in FrameworkMetrics struct fields, not map-based metrics.
 const (
 	// GaugeStateEnteredAtUnix tracks when the current state was entered (Unix timestamp).
 	GaugeStateEnteredAtUnix GaugeName = "state_entered_at_unix"
@@ -75,8 +65,7 @@ const (
 	CounterStartupCount CounterName = "startup_count"
 )
 
-// Communicator worker counter names.
-// These track cumulative operations for the bidirectional sync.
+// Communicator worker counter names for bidirectional sync.
 const (
 	// CounterPullOps tracks total pull operations attempted.
 	CounterPullOps CounterName = "pull_ops"
@@ -109,8 +98,7 @@ const (
 	CounterBytesPushed CounterName = "bytes_pushed"
 )
 
-// Error type counter names.
-// These track errors by classification for intelligent backoff and monitoring.
+// Error type counter names for intelligent backoff and monitoring.
 const (
 	// CounterAuthFailuresTotal tracks authentication failures (401/403).
 	CounterAuthFailuresTotal CounterName = "auth_failures_total"
@@ -134,8 +122,7 @@ const (
 	CounterInstanceDeletedTotal CounterName = "instance_deleted_total"
 )
 
-// Communicator worker gauge names.
-// These track point-in-time values for monitoring.
+// Communicator worker gauge names for monitoring.
 const (
 	// GaugeLastPullLatencyMs tracks the latency of the most recent pull operation in milliseconds.
 	GaugeLastPullLatencyMs GaugeName = "last_pull_latency_ms"
@@ -277,7 +264,6 @@ func (r *MetricsRecorder) Drain() DrainResult {
 		Gauges:   r.gauges,
 	}
 
-	// Reset buffers for next tick
 	r.counters = make(map[string]int64)
 	r.gauges = make(map[string]float64)
 
