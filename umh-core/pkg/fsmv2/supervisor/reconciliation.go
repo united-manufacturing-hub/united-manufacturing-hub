@@ -24,8 +24,8 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
@@ -160,7 +160,13 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 	if !isShutdownRequested && !s.checkDataFreshness(snapshot) {
 		if s.freshnessChecker.IsTimeout(snapshot) {
 			// I4: Check if we've exhausted restart attempts
-			if s.collectorHealth.restartCount >= s.collectorHealth.maxRestartAttempts {
+			// Acquire lock to read mutable collectorHealth fields (restartCount)
+			// Note: maxRestartAttempts is immutable (set in constructor), no lock needed
+			s.mu.RLock()
+			restartCount := s.collectorHealth.restartCount
+			s.mu.RUnlock()
+
+			if restartCount >= s.collectorHealth.maxRestartAttempts {
 				// Max attempts reached - escalate to shutdown (Layer 3)
 				s.logger.Errorw("collector_unresponsive_max_attempts",
 					"restart_attempts", s.collectorHealth.maxRestartAttempts)
@@ -186,10 +192,18 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 		return nil
 	}
 
+	// Check and reset restartCount under lock to prevent data races
+	s.mu.Lock()
+
 	if s.collectorHealth.restartCount > 0 {
-		s.logger.Infow("collector_recovered",
-			"restart_attempts", s.collectorHealth.restartCount)
+		restartCount := s.collectorHealth.restartCount
 		s.collectorHealth.restartCount = 0
+		s.mu.Unlock()
+
+		s.logger.Infow("collector_recovered",
+			"restart_attempts", restartCount)
+	} else {
+		s.mu.Unlock()
 	}
 
 	// I16: Validate ObservedState is not nil before progressing FSM
@@ -943,7 +957,12 @@ func getString(doc interface{}, key string, defaultValue string) string {
 }
 
 func (s *Supervisor[TObserved, TDesired]) restartCollector(ctx context.Context, workerID string) error {
+	// Acquire lock to access mutable collectorHealth fields (restartCount, lastRestart)
+	// Note: maxRestartAttempts is immutable (set in constructor), no lock needed for read
+	s.mu.Lock()
+
 	if s.collectorHealth.restartCount >= s.collectorHealth.maxRestartAttempts {
+		s.mu.Unlock()
 		panic(fmt.Sprintf("supervisor bug: RestartCollector called with restartCount=%d >= maxRestartAttempts=%d (should have escalated to shutdown)",
 			s.collectorHealth.restartCount, s.collectorHealth.maxRestartAttempts))
 	}
@@ -957,9 +976,12 @@ func (s *Supervisor[TObserved, TDesired]) restartCollector(ctx context.Context, 
 	if !s.collectorHealth.lastRestart.IsZero() {
 		elapsed := time.Since(s.collectorHealth.lastRestart)
 		if elapsed < backoff {
+			restartCount := s.collectorHealth.restartCount
+			s.mu.Unlock()
+
 			// Backoff not yet elapsed - skip this restart attempt (non-blocking)
 			s.logger.Debugw("collector_restart_backoff",
-				"restart_attempt", s.collectorHealth.restartCount,
+				"restart_attempt", restartCount,
 				"backoff_remaining", backoff-elapsed)
 
 			return nil
@@ -970,9 +992,14 @@ func (s *Supervisor[TObserved, TDesired]) restartCollector(ctx context.Context, 
 	s.collectorHealth.restartCount++
 	s.collectorHealth.lastRestart = time.Now()
 
+	// Capture values for logging after unlock
+	restartCount := s.collectorHealth.restartCount
+	maxRestartAttempts := s.collectorHealth.maxRestartAttempts
+	s.mu.Unlock()
+
 	s.logger.Warnw("collector_restarting",
-		"restart_attempt", s.collectorHealth.restartCount,
-		"max_attempts", s.collectorHealth.maxRestartAttempts,
+		"restart_attempt", restartCount,
+		"max_attempts", maxRestartAttempts,
 		"backoff", backoff)
 
 	s.mu.RLock()
