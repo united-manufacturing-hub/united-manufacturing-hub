@@ -23,6 +23,8 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/internal/collection"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/internal/execution"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 )
@@ -435,7 +437,9 @@ func (s *Supervisor[TObserved, TDesired]) RequestShutdown(ctx context.Context, r
 //  4. factory.NewWorkerByType - creates completely new worker instance
 //  5. AddWorker - registers new worker, starts collector
 func (s *Supervisor[TObserved, TDesired]) handleWorkerRestart(ctx context.Context, workerID string) error {
-	// Extract identity under lock before removal
+	// Extract identity and state under lock before removal.
+	// NOTE: We hold both s.mu and workerCtx.mu to prevent TOCTOU race when
+	// reading currentState - otherwise reconciliation could modify it concurrently.
 	s.mu.RLock()
 
 	workerCtx, exists := s.workers[workerID]
@@ -446,7 +450,11 @@ func (s *Supervisor[TObserved, TDesired]) handleWorkerRestart(ctx context.Contex
 	}
 
 	identity := workerCtx.identity
+
+	// Hold workerCtx.mu while reading currentState to prevent race with reconciliation
+	workerCtx.mu.RLock()
 	fromState := workerCtx.currentState.String()
+	workerCtx.mu.RUnlock()
 
 	s.mu.RUnlock()
 
@@ -484,19 +492,36 @@ func (s *Supervisor[TObserved, TDesired]) handleWorkerRestart(ctx context.Contex
 		return fmt.Errorf("failed to add new worker for restart: %w", err)
 	}
 
-	// 5. Start the new worker's collector and executor if supervisor is already running
+	// 5. Start the new worker's collector and executor if supervisor is already running.
+	// NOTE: We capture collector and executor under lock to prevent TOCTOU race.
+	// Between checking worker existence and starting collector/executor, another
+	// goroutine could remove the worker. By capturing the pointers under lock,
+	// we ensure we have valid references even if the worker is subsequently removed.
 	if supervisorCtx, started := s.getStartedContext(); started {
 		s.mu.RLock()
+
 		newWorkerCtx, exists := s.workers[workerID]
+
+		var collector *collection.Collector[TObserved]
+
+		var executor *execution.ActionExecutor
+
+		if exists && newWorkerCtx != nil {
+			collector = newWorkerCtx.collector
+			executor = newWorkerCtx.executor
+		}
+
 		s.mu.RUnlock()
 
-		if exists && newWorkerCtx.collector != nil {
-			if err := newWorkerCtx.collector.Start(supervisorCtx); err != nil {
+		if collector != nil {
+			if err := collector.Start(supervisorCtx); err != nil {
 				s.logger.Errorw("restart_collector_start_failed",
 					"worker", workerID, "error", err)
 			}
+		}
 
-			newWorkerCtx.executor.Start(supervisorCtx)
+		if executor != nil {
+			executor.Start(supervisorCtx)
 		}
 	}
 
@@ -505,14 +530,22 @@ func (s *Supervisor[TObserved, TDesired]) handleWorkerRestart(ctx context.Contex
 	s.collectorHealth.restartCount = 0
 	s.mu.Unlock()
 
-	// Get new state for logging
+	// Get new state for logging.
+	// NOTE: We hold both s.mu and workerCtx.mu to prevent TOCTOU race when
+	// reading currentState - otherwise reconciliation could modify it concurrently.
 	s.mu.RLock()
 
 	newWorkerCtx := s.workers[workerID]
 	toState := "unknown"
 
-	if newWorkerCtx != nil && newWorkerCtx.currentState != nil {
-		toState = newWorkerCtx.currentState.String()
+	if newWorkerCtx != nil {
+		newWorkerCtx.mu.RLock()
+
+		if newWorkerCtx.currentState != nil {
+			toState = newWorkerCtx.currentState.String()
+		}
+
+		newWorkerCtx.mu.RUnlock()
 	}
 
 	s.mu.RUnlock()
