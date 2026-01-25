@@ -122,7 +122,7 @@ type WorkerContext[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] s
 	stateTransitions   map[string]int64         // state_name → total times entered
 	stateDurations     map[string]time.Duration // state_name → cumulative time spent
 	identity           deps.Identity
-	currentStateReason string // Human-readable reason for current state (from state.Reason())
+	currentStateReason string // Human-readable reason for current state (from NextResult.Reason)
 	totalTransitions   int64  // Sum of all stateTransitions values
 	collectorRestarts  int64  // Per-worker collector restarts
 	startupCount       int64  // PERSISTENT: Loaded from CSE, incremented on AddWorker()

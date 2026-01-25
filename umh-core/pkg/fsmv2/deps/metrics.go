@@ -298,7 +298,7 @@ type FrameworkMetrics struct {
 	// === State Information ===
 
 	// StateReason is a human-readable explanation for the current state.
-	// Set by the supervisor during state transitions from state.Reason().
+	// Set by the supervisor during state transitions from NextResult.Reason.
 	// Useful for understanding WHY the worker is in its current state.
 	StateReason string `json:"state_reason,omitempty"`
 
