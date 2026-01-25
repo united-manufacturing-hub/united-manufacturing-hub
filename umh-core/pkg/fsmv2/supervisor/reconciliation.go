@@ -101,6 +101,10 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 
 	storageSnapshot, err := s.store.LoadSnapshot(ctx, s.workerType, workerID)
 	if err != nil {
+		s.logger.Errorw("snapshot_load_failed",
+			"worker_id", workerID,
+			"error", err)
+
 		return fmt.Errorf("failed to load snapshot: %w", err)
 	}
 
@@ -113,6 +117,10 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 
 	err = s.store.LoadObservedTyped(ctx, s.workerType, workerID, &observed)
 	if err != nil {
+		s.logger.Errorw("observed_state_load_failed",
+			"worker_id", workerID,
+			"error", err)
+
 		return fmt.Errorf("failed to load typed observed state: %w", err)
 	}
 
@@ -120,6 +128,10 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 
 	err = s.store.LoadDesiredTyped(ctx, s.workerType, workerID, &desired)
 	if err != nil {
+		s.logger.Errorw("desired_state_load_failed",
+			"worker_id", workerID,
+			"error", err)
+
 		return fmt.Errorf("failed to load typed desired state: %w", err)
 	}
 
@@ -183,6 +195,10 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 			// I4: Safe to restart (restartCount < maxRestartAttempts)
 			// RestartCollector will panic if invariant violated (defensive check)
 			if err := s.restartCollector(ctx, workerID); err != nil {
+				s.logger.Errorw("collector_restart_failed",
+					"worker_id", workerID,
+					"error", err)
+
 				return fmt.Errorf("failed to restart collector: %w", err)
 			}
 		}
@@ -298,6 +314,11 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 			"action_id", actionID)
 
 		if err := workerCtx.executor.EnqueueAction(actionID, action, deps); err != nil {
+			s.logger.Errorw("action_enqueue_failed",
+				"worker_id", workerID,
+				"action_id", actionID,
+				"error", err)
+
 			return fmt.Errorf("failed to enqueue action: %w", err)
 		}
 
@@ -392,6 +413,11 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 	workerCtx.mu.RUnlock()
 
 	if err := s.processSignal(ctx, workerID, signal); err != nil {
+		s.logger.Errorw("signal_processing_failed",
+			"worker_id", workerID,
+			"signal", int(signal),
+			"error", err)
+
 		return fmt.Errorf("signal processing failed: %w", err)
 	}
 

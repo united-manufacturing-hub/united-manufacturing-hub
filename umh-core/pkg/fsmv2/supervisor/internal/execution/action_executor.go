@@ -257,6 +257,12 @@ func (ae *ActionExecutor) EnqueueAction(actionID string, action fsmv2.Action[any
 		delete(ae.inProgress, actionID)
 		ae.mu.Unlock()
 
+		ae.logger.Errorw("action_queue_full",
+			"correlation_id", actionID,
+			"action_name", action.Name(),
+			"queue_capacity", cap(ae.actionQueue),
+			"worker_count", ae.workerCount)
+
 		return errors.New("action queue full")
 	}
 }
