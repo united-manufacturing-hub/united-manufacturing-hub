@@ -4,6 +4,35 @@ Type-safe state machine framework for managing worker lifecycles with compile-ti
 
 > **Implementation details**: For Go idiom patterns, code examples, and API contracts, see `doc.go`.
 
+## Quick Start
+
+Create your first worker in 5 minutes:
+
+```bash
+# 1. Copy the template structure
+workers/myworker/
+├── worker.go           # Worker interface (3 methods)
+├── userspec.go         # User configuration schema
+├── dependencies.go     # External dependencies
+├── snapshot/
+│   ├── observed.go     # What system actually is
+│   └── desired.go      # What user wants
+├── state/
+│   ├── stopped.go      # Initial state
+│   └── running.go      # Target state
+└── action/
+    └── start.go        # I/O operation (idempotent)
+
+# 2. Implement the 3 Worker methods in worker.go
+# 3. Create states with Next() functions
+# 4. Test with local runner
+go run pkg/fsmv2/cmd/runner/main.go --scenario=simple
+```
+
+**New to FSMv2?** Read [How it works](#how-it-works) below, then see [File structure](#file-structure-for-a-worker) for the full template.
+
+---
+
 ## How it works
 
 FSMv2 is a **state machine supervisor**:
@@ -17,8 +46,6 @@ Config Change → DeriveDesiredState() → Supervisor compares → State.Next() 
 ```
 
 **What you implement**: 3 Worker methods + States + Actions. **What you don't**: retries, timeouts, metrics, lifecycle management.
-
-> **Quick start**: Jump to [File structure](#file-structure-for-a-worker) to create your first worker.
 
 ## Motivation
 
@@ -196,14 +223,6 @@ workers/myworker/
     ├── start.go        # I/O operation (idempotent)
     └── stop.go         # Cleanup action
 ```
-
-### Quick start
-
-1. **Copy** the file structure template above
-2. **Define** `ObservedState` and `DesiredState` in `snapshot/`
-3. **Implement** the 3 Worker methods in `worker.go`
-4. **Create** states with `Next()` functions
-5. **Test** with local runner: `go run pkg/fsmv2/cmd/runner/main.go --scenario=simple`
 
 ## The triangle model
 
