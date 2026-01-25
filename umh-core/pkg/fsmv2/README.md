@@ -6,27 +6,34 @@ Type-safe state machine framework for managing worker lifecycles with compile-ti
 
 ## Quick Start
 
-Create your first worker in 5 minutes:
+**Start here:** The [`workers/example/helloworld/`](workers/example/helloworld/) directory contains a minimal working example with extensive comments. See its [README](workers/example/helloworld/README.md) for step-by-step instructions.
+
+```bash
+# Run the existing examples
+go run pkg/fsmv2/cmd/runner/main.go --list          # List all scenarios
+go run pkg/fsmv2/cmd/runner/main.go --scenario=simple --duration=5s
+```
+
+### Creating a New Worker
 
 ```bash
 # 1. Copy the template structure
 workers/myworker/
-├── worker.go           # Worker interface (3 methods)
+├── worker.go           # Worker interface (3 methods) + init() for registration
 ├── userspec.go         # User configuration schema
 ├── dependencies.go     # External dependencies
 ├── snapshot/
-│   ├── observed.go     # What system actually is
-│   └── desired.go      # What user wants
+│   └── snapshot.go     # ObservedState (embeds DesiredState with json:",inline")
 ├── state/
 │   ├── stopped.go      # Initial state
 │   └── running.go      # Target state
 └── action/
     └── start.go        # I/O operation (idempotent)
 
-# 2. Implement the 3 Worker methods in worker.go
-# 3. Create states with Next() functions
-# 4. Test with local runner
-go run pkg/fsmv2/cmd/runner/main.go --scenario=simple
+# 2. CRITICAL: Name types correctly (folder "myworker" → types "MyworkerXxx")
+# 3. Implement the 3 Worker methods in worker.go
+# 4. Add init() function to register with factory
+# 5. Test with local runner
 ```
 
 **New to FSMv2?** Read [How it works](#how-it-works) below, then see [File structure](#file-structure-for-a-worker) for the full template.
