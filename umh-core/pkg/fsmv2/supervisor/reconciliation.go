@@ -671,20 +671,47 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 		childrenSpecs = provider.GetChildrenSpecs()
 	}
 
-	// Validate ChildrenSpecs before reconciliation
+	// Validate only changed/new ChildrenSpecs before reconciliation (incremental validation)
 	if len(childrenSpecs) > 0 {
 		registry := &factoryRegistryAdapter{}
+		specsToValidate := make([]config.ChildSpec, 0)
 
-		if err := config.ValidateChildSpecs(childrenSpecs, registry); err != nil {
-			s.logger.Error("child spec validation failed",
-				"error", err.Error())
-
-			return fmt.Errorf("invalid child specifications: %w", err)
+		for _, spec := range childrenSpecs {
+			hash := spec.Hash()
+			if cachedHash, exists := s.validatedSpecHashes[spec.Name]; !exists || cachedHash != hash {
+				specsToValidate = append(specsToValidate, spec)
+			}
 		}
 
-		// Per-tick log moved to TRACE for scalability
-		s.logTrace("child_specs_validated",
-			"child_count", len(childrenSpecs))
+		if len(specsToValidate) > 0 {
+			if err := config.ValidateChildSpecs(specsToValidate, registry); err != nil {
+				s.logger.Error("child spec validation failed",
+					"error", err.Error())
+
+				return fmt.Errorf("invalid child specifications: %w", err)
+			}
+
+			// Update cache for validated specs
+			for _, spec := range specsToValidate {
+				s.validatedSpecHashes[spec.Name] = spec.Hash()
+			}
+
+			s.logTrace("child_specs_validated",
+				"validated_count", len(specsToValidate),
+				"total_count", len(childrenSpecs))
+		}
+
+		// Clean up removed specs from cache
+		currentNames := make(map[string]bool)
+		for _, spec := range childrenSpecs {
+			currentNames[spec.Name] = true
+		}
+
+		for name := range s.validatedSpecHashes {
+			if !currentNames[name] {
+				delete(s.validatedSpecHashes, name)
+			}
+		}
 	}
 
 	// Tick worker before creating children to progress FSM state first
