@@ -140,8 +140,8 @@ func (ae *ActionExecutor) executeWorkWithRecovery(work actionWork) {
 			status = "panic"
 
 			ae.logger.Errorw("action_panic",
+				"correlation_id", work.actionID,
 				"worker", ae.identity.String(),
-				"action", work.actionID,
 				"action_name", work.action.Name(),
 				"panic", fmt.Sprintf("%v", r),
 				"stack", string(debug.Stack()))
@@ -192,25 +192,27 @@ func (ae *ActionExecutor) executeWorkWithRecovery(work actionWork) {
 			metrics.RecordActionTimeout(ae.supervisorID, work.action.Name())
 
 			ae.logger.Errorw("action_failed",
+				"correlation_id", work.actionID,
 				"worker", ae.identity.String(),
-				"action", work.action.Name(),
+				"action_name", work.action.Name(),
 				"error", "timeout",
 				"duration_ms", duration.Milliseconds(),
 				"timeout_ms", work.timeout.Milliseconds())
 		} else {
 			ae.logger.Errorw("action_failed",
+				"correlation_id", work.actionID,
 				"worker", ae.identity.String(),
-				"action", work.action.Name(),
+				"action_name", work.action.Name(),
 				"error", err.Error(),
 				"duration_ms", duration.Milliseconds())
 		}
 	} else {
 		// Success logs at DEBUG - operators only need failures, not routine success
 		ae.logger.Debugw("action_completed",
+			"correlation_id", work.actionID,
 			"worker", ae.identity.String(),
-			"action", work.action.Name(),
-			"duration_ms", duration.Milliseconds(),
-			"success", true)
+			"action_name", work.action.Name(),
+			"duration_ms", duration.Milliseconds())
 	}
 }
 
