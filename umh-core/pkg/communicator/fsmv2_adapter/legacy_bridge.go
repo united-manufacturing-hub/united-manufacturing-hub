@@ -31,10 +31,24 @@ import (
 	"context"
 
 	"github.com/google/uuid"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 	"go.uber.org/zap"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
+)
+
+var (
+	droppedMessagesTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "umh",
+			Subsystem: "fsmv2_adapter",
+			Name:      "dropped_messages_total",
+			Help:      "Total number of messages dropped due to full channels",
+		},
+		[]string{"direction"},
+	)
 )
 
 // LegacyChannelBridge adapts CommunicationState channels for FSMv2 communicator.
@@ -130,6 +144,7 @@ func (b *LegacyChannelBridge) Start(ctx context.Context) {
 					return
 				default:
 					b.logger.Warnw("legacy_inbound_channel_full")
+					droppedMessagesTotal.WithLabelValues("inbound").Inc()
 				}
 			}
 		}
@@ -172,6 +187,7 @@ func (b *LegacyChannelBridge) Start(ctx context.Context) {
 					return
 				default:
 					b.logger.Warnw("fsmv2_outbound_channel_full")
+					droppedMessagesTotal.WithLabelValues("outbound").Inc()
 				}
 			}
 		}
