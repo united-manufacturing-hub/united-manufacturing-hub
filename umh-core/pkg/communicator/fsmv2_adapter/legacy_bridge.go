@@ -29,6 +29,7 @@ package fsmv2_adapter
 
 import (
 	"context"
+	"sync"
 
 	"github.com/google/uuid"
 	"github.com/prometheus/client_golang/prometheus"
@@ -62,6 +63,9 @@ type LegacyChannelBridge struct {
 	legacyInbound  chan *models.UMHMessage // Router reads from here
 	legacyOutbound chan *models.UMHMessage // Router writes here
 
+	// wg tracks the goroutines started by Start() for graceful shutdown
+	wg sync.WaitGroup
+
 	logger *zap.SugaredLogger
 }
 
@@ -83,9 +87,14 @@ func NewLegacyChannelBridge(
 }
 
 // Start begins the conversion goroutines. Call this before starting FSMv2 supervisor.
+// Use Wait() to block until all goroutines exit after context cancellation.
 func (b *LegacyChannelBridge) Start(ctx context.Context) {
 	// Goroutine: FSMv2 inbound -> Legacy inbound (for Router)
+	b.wg.Add(1)
+
 	go func() {
+		defer b.wg.Done()
+
 		for {
 			select {
 			case <-ctx.Done():
@@ -151,7 +160,11 @@ func (b *LegacyChannelBridge) Start(ctx context.Context) {
 	}()
 
 	// Goroutine: Legacy outbound -> FSMv2 outbound (for push)
+	b.wg.Add(1)
+
 	go func() {
+		defer b.wg.Done()
+
 		for {
 			select {
 			case <-ctx.Done():
@@ -192,6 +205,12 @@ func (b *LegacyChannelBridge) Start(ctx context.Context) {
 			}
 		}
 	}()
+}
+
+// Wait blocks until all goroutines started by Start() have exited.
+// Call this after canceling the context passed to Start() for graceful shutdown.
+func (b *LegacyChannelBridge) Wait() {
+	b.wg.Wait()
 }
 
 // GetChannels returns channels for the FSMv2 communicator worker.
