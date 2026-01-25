@@ -25,6 +25,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/snapshot"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/state"
+	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
 )
 
 var _ = Describe("DegradedState", func() {
@@ -190,6 +191,28 @@ var _ = Describe("DegradedState Transport Reset", func() {
 
 		Expect(act).NotTo(BeNil())
 		Expect(act.Name()).To(Equal("sync"))
+	})
+})
+
+var _ = Describe("DegradedState Auth Transition", func() {
+	It("should transition to TryingToAuthenticateState when last error is InvalidToken", func() {
+		stateObj := &state.DegradedState{}
+
+		snap := fsmv2.Snapshot{
+			Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
+			Observed: snapshot.CommunicatorObservedState{
+				LastErrorType:     httpTransport.ErrorTypeInvalidToken,
+				ConsecutiveErrors: 1,
+				DegradedEnteredAt: time.Now().Add(-65 * time.Second), // Past backoff
+			},
+			Desired: &snapshot.CommunicatorDesiredState{},
+		}
+
+		nextState, signal, action := stateObj.Next(snap)
+
+		Expect(nextState).To(BeAssignableToTypeOf(&state.TryingToAuthenticateState{}))
+		Expect(signal).To(Equal(fsmv2.SignalNone))
+		Expect(action).To(BeNil())
 	})
 })
 
