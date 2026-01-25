@@ -480,7 +480,7 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 		s.circuitOpen.Store(true)
 
 		if !wasOpen {
-			s.logger.Error("circuit breaker opened",
+			s.logger.Errorw("circuit_breaker_opened",
 				"error", err.Error(),
 				"error_scope", "infrastructure",
 				"impact", "all_workers")
@@ -492,7 +492,7 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 			attempts := s.healthChecker.backoff.GetAttempts()
 			nextDelay := s.healthChecker.backoff.NextDelay()
 
-			s.logger.Warn("Circuit breaker open, retrying infrastructure checks",
+			s.logger.Warnw("circuit_breaker_retry_scheduled",
 				"failed_child", childErr.ChildName,
 				"retry_attempt", attempts,
 				"max_attempts", s.healthChecker.maxAttempts,
@@ -501,14 +501,14 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 				"recovery_status", s.getRecoveryStatus())
 
 			if attempts == 4 {
-				s.logger.Warn("Warning: One retry attempt remaining before escalation",
+				s.logger.Warnw("escalation_warning_one_retry_remaining",
 					"child_name", childErr.ChildName,
 					"attempts_remaining", 1,
 					"total_downtime", s.healthChecker.backoff.GetTotalDowntime().String())
 			}
 
 			if attempts >= 5 {
-				s.logger.Error("Escalation required: Infrastructure failure after max retry attempts. Manual intervention needed.",
+				s.logger.Errorw("escalation_required",
 					"child_name", childErr.ChildName,
 					"max_attempts", 5,
 					"total_downtime", s.healthChecker.backoff.GetTotalDowntime().String(),
@@ -620,7 +620,7 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 		templateDuration := time.Since(templateStart)
 
 		if err != nil {
-			s.logger.Error("template rendering failed",
+			s.logger.Errorw("template_rendering_failed",
 				"error", err.Error(),
 				"duration_ms", templateDuration.Milliseconds())
 			metrics.RecordTemplateRenderingDuration(s.workerType, "error", templateDuration)
@@ -634,7 +634,7 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 		// This catches both developer mistakes (hardcoded wrong values) and user config mistakes
 		// Use GetState() method from fsmv2.DesiredState interface
 		if valErr := config.ValidateDesiredState(desired.GetState()); valErr != nil {
-			s.logger.Error("invalid desired state from DeriveDesiredState",
+			s.logger.Errorw("invalid_desired_state",
 				"state", desired.GetState(),
 				"worker_id", firstWorkerID,
 				"error", valErr)
@@ -711,7 +711,7 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 
 		if len(specsToValidate) > 0 {
 			if err := config.ValidateChildSpecs(specsToValidate, registry); err != nil {
-				s.logger.Error("child spec validation failed",
+				s.logger.Errorw("child_spec_validation_failed",
 					"error", err.Error())
 
 				return fmt.Errorf("invalid child specifications: %w", err)

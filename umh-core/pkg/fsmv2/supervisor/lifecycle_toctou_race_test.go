@@ -60,7 +60,7 @@ var _ = Describe("HandleWorkerRestart TOCTOU Race Conditions", func() {
 				const numIterations = 50
 				var wg sync.WaitGroup
 
-				for i := range numIterations {
+				for range numIterations {
 					workerID := "toctou-race-worker"
 
 					// Create a fresh supervisor for each iteration to isolate test runs
@@ -90,8 +90,6 @@ var _ = Describe("HandleWorkerRestart TOCTOU Race Conditions", func() {
 
 					err := localSupervisor.AddWorker(identity, worker)
 					if err != nil {
-						By("AddWorker failed, skipping iteration " + string(rune(i)))
-
 						continue
 					}
 
@@ -152,7 +150,7 @@ var _ = Describe("HandleWorkerRestart TOCTOU Race Conditions", func() {
 				const numIterations = 50
 				var wg sync.WaitGroup
 
-				for i := range numIterations {
+				for range numIterations {
 					workerID := "replace-race-worker"
 
 					triangularStore := createTestTriangularStore()
@@ -180,8 +178,6 @@ var _ = Describe("HandleWorkerRestart TOCTOU Race Conditions", func() {
 
 					err := localSupervisor.AddWorker(identity, worker)
 					if err != nil {
-						By("AddWorker failed, skipping iteration " + string(rune(i)))
-
 						continue
 					}
 

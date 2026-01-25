@@ -120,16 +120,14 @@ func (e *TransportError) Is(target error) bool {
 //   - "challenge-form" - Cloudflare challenge form element ID
 //   - "cf-browser-verification" - Cloudflare browser verification div ID
 //
-// Why these strings?
-//   - Cloudflare's challenge pages are generated server-side and contain
-//     consistent HTML markers. These strings have been stable across
-//     Cloudflare versions observed in production.
-//   - "Just a moment" appears in all challenge page variants
-//   - "challenge-form" and "cf-browser-verification" are specific element IDs
-//     that only appear in Cloudflare-generated pages
+// These strings identify Cloudflare challenge pages because Cloudflare generates
+// challenge pages server-side with consistent HTML markers that have remained
+// stable across production versions. "Just a moment" appears in all challenge
+// page variants, while "challenge-form" and "cf-browser-verification" are
+// element IDs specific to Cloudflare-generated pages.
 //
-// Note: Some Cloudflare configurations may not include the Server header,
-// so we also check body content alone as a fallback.
+// Some Cloudflare configurations may not include the Server header, so body
+// content alone is also checked as a fallback.
 func isCloudflareChallenge(statusCode int, headers http.Header, body []byte) bool {
 	if statusCode != http.StatusTooManyRequests {
 		return false

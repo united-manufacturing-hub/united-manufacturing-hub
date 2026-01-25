@@ -29,17 +29,13 @@ import (
 
 var _ = Describe("Restart Scenario Integration", func() {
 	It("should complete full worker restart cycle after SignalNeedsRestart", func() {
-		By("Setting up test logger at DebugLevel")
 		testLogger := integration.NewTestLogger(zapcore.DebugLevel)
 
-		By("Setting up context with 30s timeout")
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
-		By("Setting up triangular store")
 		store := setupTestStoreForScenario(testLogger.Logger)
 
-		By("Creating scenario context with 10s duration")
 		// 10s is enough to see the restart worker:
 		// - 5 consecutive failures (at 100ms tick) triggers SignalNeedsRestart
 		// - Graceful shutdown cycle completes
@@ -47,7 +43,6 @@ var _ = Describe("Restart Scenario Integration", func() {
 		scenarioCtx, scenarioCancel := context.WithTimeout(ctx, 10*time.Second)
 		defer scenarioCancel()
 
-		By("Running FailingScenario with 100ms tick interval")
 		result, err := examples.Run(scenarioCtx, examples.RunConfig{
 			Scenario:     examples.FailingScenario,
 			TickInterval: 100 * time.Millisecond,
@@ -56,7 +51,6 @@ var _ = Describe("Restart Scenario Integration", func() {
 		})
 		Expect(err).NotTo(HaveOccurred())
 
-		By("Waiting for scenario completion")
 		<-result.Done
 
 		// =====================================================================
@@ -79,16 +73,9 @@ var _ = Describe("Restart Scenario Integration", func() {
 		// 10. Worker starts fresh cycle (Stopped -> TryingToConnect)
 		// =====================================================================
 
-		By("Verifying restart worker triggers SignalNeedsRestart")
 		verifyRestartWorkerRequestsRestart(testLogger)
-
-		By("Verifying restart worker completes full restart flow")
 		verifyRestartWorkerCompletesRestart(testLogger)
-
-		By("Verifying restart worker goes through TryingToStop during shutdown")
 		verifyRestartWorkerGracefulShutdown(testLogger)
-
-		By("Verifying restart worker begins new cycle after restart")
 		verifyRestartWorkerBeginsNewCycle(testLogger)
 	})
 })

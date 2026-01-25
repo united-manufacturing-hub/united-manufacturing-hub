@@ -53,14 +53,11 @@ type HelloworldObservedState struct {
 	// CollectedAt is when this observation was taken
 	CollectedAt time.Time `json:"collected_at"`
 
-	// State is the current FSM state name (set by supervisor)
-	State string `json:"state"`
-
-	// HelloSaid tracks whether the SayHelloAction has been executed
-	HelloSaid bool `json:"hello_said"`
-
 	// LastActionResults contains action history (managed by supervisor)
 	LastActionResults []deps.ActionResult `json:"last_action_results,omitempty"`
+
+	// State is the current FSM state name (set by supervisor)
+	State string `json:"state"`
 
 	// HelloworldDesiredState embedded for state consistency
 	// REQUIRED: Architecture tests verify this pattern
@@ -69,6 +66,9 @@ type HelloworldObservedState struct {
 	// MetricsEmbedder provides framework and worker metrics
 	// REQUIRED: Without this, metrics won't be collected
 	deps.MetricsEmbedder `json:",inline"`
+
+	// HelloSaid tracks whether the SayHelloAction has been executed
+	HelloSaid bool `json:"hello_said"`
 }
 
 // GetTimestamp returns when this observation was collected.

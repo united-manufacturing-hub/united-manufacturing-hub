@@ -27,8 +27,8 @@ import (
 // formatVerbWithVariable represents a format verb that contains dynamic content.
 type formatVerbWithVariable struct {
 	verb     string
-	argIndex int
 	argName  string
+	argIndex int
 }
 
 // dynamicFormatVerbs are format verbs that typically contain dynamic content.
