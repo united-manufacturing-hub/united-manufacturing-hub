@@ -671,13 +671,14 @@ func (s *Supervisor[TObserved, TDesired]) GetCurrentStateName() string {
 	for _, workerCtx := range s.workers {
 		workerCtx.mu.RLock()
 
-		defer workerCtx.mu.RUnlock()
-
+		stateName := "unknown"
 		if workerCtx.currentState != nil {
-			return workerCtx.currentState.String()
+			stateName = workerCtx.currentState.String()
 		}
 
-		return "unknown"
+		workerCtx.mu.RUnlock()
+
+		return stateName
 	}
 
 	return "unknown"
@@ -692,13 +693,18 @@ func (s *Supervisor[TObserved, TDesired]) GetCurrentStateNameAndReason() (string
 
 	for _, workerCtx := range s.workers {
 		workerCtx.mu.RLock()
-		defer workerCtx.mu.RUnlock()
+
+		stateName := "unknown"
+		stateReason := ""
 
 		if workerCtx.currentState != nil {
-			return workerCtx.currentState.String(), workerCtx.currentStateReason
+			stateName = workerCtx.currentState.String()
+			stateReason = workerCtx.currentStateReason
 		}
 
-		return "unknown", ""
+		workerCtx.mu.RUnlock()
+
+		return stateName, stateReason
 	}
 
 	return "unknown", ""
