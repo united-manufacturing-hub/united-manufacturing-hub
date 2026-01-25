@@ -182,8 +182,18 @@ func getGoroutineID() uint64 {
 	var buf [64]byte
 
 	n := runtime.Stack(buf[:], false)
-	idField := strings.Fields(string(buf[:n]))[1]
-	id, _ := strconv.ParseUint(idField, 10, 64)
+	fields := strings.Fields(string(buf[:n]))
+
+	if len(fields) < 2 {
+		// Unexpected stack format, return 0 to indicate unknown goroutine
+		return 0
+	}
+
+	id, err := strconv.ParseUint(fields[1], 10, 64)
+	if err != nil {
+		// Parse failure indicates unexpected stack format, return 0
+		return 0
+	}
 
 	return id
 }
