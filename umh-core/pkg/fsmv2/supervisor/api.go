@@ -718,13 +718,13 @@ func (s *Supervisor[TObserved, TDesired]) GetWorkerType() string {
 
 // WorkerDebugInfo contains debug information for a single worker.
 type WorkerDebugInfo struct {
+	StateEnteredAt      time.Time `json:"state_entered_at"`
 	ID                  string    `json:"id"`
 	Name                string    `json:"name"`
 	WorkerType          string    `json:"worker_type"`
 	HierarchyPath       string    `json:"hierarchy_path"`
 	State               string    `json:"state"`
 	StateReason         string    `json:"state_reason"`
-	StateEnteredAt      time.Time `json:"state_entered_at"`
 	TimeInCurrentStateS float64   `json:"time_in_current_state_s"`
 	TotalTransitions    int64     `json:"total_transitions"`
 	CollectorRestarts   int64     `json:"collector_restarts"`
@@ -734,13 +734,13 @@ type WorkerDebugInfo struct {
 
 // SupervisorDebugInfo contains debug information for a supervisor and its hierarchy.
 type SupervisorDebugInfo struct {
+	Workers             []WorkerDebugInfo              `json:"workers"`
+	Children            map[string]SupervisorDebugInfo `json:"children,omitempty"`
 	WorkerType          string                         `json:"worker_type"`
 	HierarchyPath       string                         `json:"hierarchy_path"`
-	Workers             []WorkerDebugInfo              `json:"workers"`
-	CircuitOpen         bool                           `json:"circuit_open"`
 	MappedParentState   string                         `json:"mapped_parent_state,omitempty"`
-	Children            map[string]SupervisorDebugInfo `json:"children,omitempty"`
 	CollectedAtUnixNano int64                          `json:"collected_at_unix_nano"`
+	CircuitOpen         bool                           `json:"circuit_open"`
 }
 
 // GetDebugInfo returns introspection data for debugging and monitoring.
