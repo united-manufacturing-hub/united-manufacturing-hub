@@ -224,6 +224,11 @@ func (ae *ActionExecutor) EnqueueAction(actionID string, action fsmv2.Action[any
 	if ae.inProgress[actionID] {
 		ae.mu.Unlock()
 
+		ae.logger.Warnw("action_enqueue_rejected",
+			"correlation_id", actionID,
+			"action_name", action.Name(),
+			"reason", "already_in_progress")
+
 		return errors.New("action already in progress")
 	}
 

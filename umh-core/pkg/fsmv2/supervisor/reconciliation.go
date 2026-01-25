@@ -822,6 +822,9 @@ func (s *Supervisor[TObserved, TDesired]) processSignal(ctx context.Context, wor
 		if !exists {
 			s.mu.Unlock()
 
+			s.logger.Warnw("worker_removal_not_found",
+				"worker_id", workerID)
+
 			return errors.New("worker not found in registry")
 		}
 
@@ -913,6 +916,10 @@ func (s *Supervisor[TObserved, TDesired]) processSignal(ctx context.Context, wor
 
 		return nil
 	default:
+		s.logger.Errorw("unknown_signal_received",
+			"worker_id", workerID,
+			"signal", int(signal))
+
 		return errors.New("unknown signal")
 	}
 }
@@ -1056,6 +1063,9 @@ func (s *Supervisor[TObserved, TDesired]) restartCollector(ctx context.Context, 
 	s.mu.RUnlock()
 
 	if !exists {
+		s.logger.Errorw("collector_restart_worker_not_found",
+			"worker_id", workerID)
+
 		return errors.New("worker not found")
 	}
 
@@ -1306,6 +1316,7 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 			if err != nil {
 				s.logger.Errorw("child_worker_creation_failed",
 					"child_name", spec.Name,
+					"worker_type", spec.WorkerType,
 					"error", err)
 
 				continue

@@ -446,6 +446,9 @@ func (s *Supervisor[TObserved, TDesired]) handleWorkerRestart(ctx context.Contex
 	if !exists {
 		s.mu.RUnlock()
 
+		s.logger.Errorw("worker_restart_not_found",
+			"worker_id", workerID)
+
 		return errors.New("worker not found for restart")
 	}
 

@@ -213,7 +213,12 @@ func (c *Collector[TObserved]) CollectFinalObservation(ctx context.Context) erro
 	c.mu.RLock()
 
 	if c.state != collectorStateRunning {
+		currentState := c.state.String()
 		c.mu.RUnlock()
+
+		c.config.Logger.Warnw("collector_final_observation_skipped",
+			"reason", "not_running",
+			"current_state", currentState)
 
 		return errors.New("collector not running")
 	}

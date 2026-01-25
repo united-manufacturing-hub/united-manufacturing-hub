@@ -58,6 +58,11 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 	defer s.mu.Unlock()
 
 	if _, exists := s.workers[identity.ID]; exists {
+		s.logger.Warnw("worker_add_rejected",
+			"worker_id", identity.ID,
+			"worker_name", identity.Name,
+			"reason", "already_exists")
+
 		return errors.New("worker already exists")
 	}
 
@@ -313,6 +318,9 @@ func (s *Supervisor[TObserved, TDesired]) RemoveWorker(ctx context.Context, work
 	workerCtx, exists := s.workers[workerID]
 	if !exists {
 		s.mu.Unlock()
+
+		s.logger.Warnw("worker_remove_not_found",
+			"worker_id", workerID)
 
 		return errors.New("worker not found")
 	}
