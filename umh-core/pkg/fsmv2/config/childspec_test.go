@@ -268,7 +268,7 @@ var _ = Describe("ChildSpec Hash", func() {
 			}
 
 			hash := spec.Hash()
-			Expect(len(hash)).To(Equal(16))
+			Expect(hash).To(HaveLen(16))
 			// All characters should be hex digits
 			for _, c := range hash {
 				Expect(string(c)).To(MatchRegexp("[0-9a-f]"))

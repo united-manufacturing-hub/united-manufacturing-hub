@@ -176,6 +176,47 @@ var _ = Describe("ChildSpec Validation", func() {
 			Expect(err).NotTo(HaveOccurred())
 		})
 
+		It("should reject ChildStartStates with empty state name", func() {
+			spec := config.ChildSpec{
+				Name:             "test-child",
+				WorkerType:       "test-worker",
+				ChildStartStates: []string{"Running", ""},
+				UserSpec: config.UserSpec{
+					Config: "config",
+				},
+			}
+			err := config.ValidateChildSpec(spec, registry)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("cannot be empty"))
+		})
+
+		It("should reject ChildStartStates with duplicate state names", func() {
+			spec := config.ChildSpec{
+				Name:             "test-child",
+				WorkerType:       "test-worker",
+				ChildStartStates: []string{"Running", "Running"},
+				UserSpec: config.UserSpec{
+					Config: "config",
+				},
+			}
+			err := config.ValidateChildSpec(spec, registry)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("duplicate"))
+		})
+
+		It("should accept valid ChildStartStates with multiple unique states", func() {
+			spec := config.ChildSpec{
+				Name:             "test-child",
+				WorkerType:       "test-worker",
+				ChildStartStates: []string{"Running", "TryingToStart", "Degraded"},
+				UserSpec: config.UserSpec{
+					Config: "config",
+				},
+			}
+			err := config.ValidateChildSpec(spec, registry)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
 		It("should use correct name in all error messages", func() {
 			spec := config.ChildSpec{
 				Name:       "specific-child-name",

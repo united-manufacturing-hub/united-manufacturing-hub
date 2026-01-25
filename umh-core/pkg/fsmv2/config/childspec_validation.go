@@ -55,6 +55,23 @@ func ValidateChildSpec(spec ChildSpec, registry WorkerTypeChecker) error {
 		return fmt.Errorf("child spec %q: invalid user spec: %w", spec.Name, err)
 	}
 
+	// Validate ChildStartStates
+	if len(spec.ChildStartStates) > 0 {
+		seenStates := make(map[string]bool)
+
+		for i, state := range spec.ChildStartStates {
+			if state == "" {
+				return fmt.Errorf("child spec %q: ChildStartStates[%d] cannot be empty", spec.Name, i)
+			}
+
+			if seenStates[state] {
+				return fmt.Errorf("child spec %q: duplicate state %q in ChildStartStates", spec.Name, state)
+			}
+
+			seenStates[state] = true
+		}
+	}
+
 	return nil
 }
 
