@@ -69,7 +69,7 @@ func NewChildWorker(
 
 	conn, err := connectionPool.Acquire()
 	if err != nil {
-		logger.Warnw("Failed to acquire initial connection", "error", err)
+		logger.Warnw("initial_connection_failed", "error", err)
 	}
 
 	return &ChildWorker{

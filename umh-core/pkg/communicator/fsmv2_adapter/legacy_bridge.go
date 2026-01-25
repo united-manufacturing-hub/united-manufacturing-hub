@@ -78,7 +78,7 @@ func (b *LegacyChannelBridge) Start(ctx context.Context) {
 				return
 			case msg, ok := <-b.fsmInbound:
 				if !ok {
-					b.logger.Infow("fsmInbound channel closed, stopping inbound bridge goroutine")
+					b.logger.Infow("fsm_inbound_channel_closed")
 
 					return
 				}
@@ -92,7 +92,7 @@ func (b *LegacyChannelBridge) Start(ctx context.Context) {
 				if msg.InstanceUUID != "" {
 					parsed, err := uuid.Parse(msg.InstanceUUID)
 					if err != nil {
-						b.logger.Warnw("failed to parse InstanceUUID, using nil UUID",
+						b.logger.Warnw("instance_uuid_parse_failed",
 							"instanceUUID", msg.InstanceUUID, "error", err)
 
 						instanceUUID = uuid.Nil
@@ -107,7 +107,7 @@ func (b *LegacyChannelBridge) Start(ctx context.Context) {
 				if msg.TraceID != "" {
 					traceID, err := uuid.Parse(msg.TraceID)
 					if err != nil {
-						b.logger.Warnw("failed to parse TraceID, skipping metadata",
+						b.logger.Warnw("trace_id_parse_failed",
 							"traceID", msg.TraceID, "error", err)
 					} else {
 						metadata = &models.MessageMetadata{
@@ -129,7 +129,7 @@ func (b *LegacyChannelBridge) Start(ctx context.Context) {
 				case <-ctx.Done():
 					return
 				default:
-					b.logger.Warnw("legacy inbound channel full, dropping message")
+					b.logger.Warnw("legacy_inbound_channel_full")
 				}
 			}
 		}
@@ -143,7 +143,7 @@ func (b *LegacyChannelBridge) Start(ctx context.Context) {
 				return
 			case msg, ok := <-b.legacyOutbound:
 				if !ok {
-					b.logger.Infow("legacyOutbound channel closed, stopping outbound bridge goroutine")
+					b.logger.Infow("legacy_outbound_channel_closed")
 
 					return
 				}
@@ -171,7 +171,7 @@ func (b *LegacyChannelBridge) Start(ctx context.Context) {
 				case <-ctx.Done():
 					return
 				default:
-					b.logger.Warnw("FSMv2 outbound channel full, dropping message")
+					b.logger.Warnw("fsmv2_outbound_channel_full")
 				}
 			}
 		}

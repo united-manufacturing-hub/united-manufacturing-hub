@@ -129,19 +129,19 @@ func (a *AuthenticateAction) Execute(ctx context.Context, depsAny any) error {
 	deps.SetJWT(authResp.Token, time.Unix(authResp.ExpiresAt, 0))
 
 	logger := deps.GetLogger()
-	logger.Infow("Authentication response received",
-		"instanceUUID", authResp.InstanceUUID,
-		"instanceName", authResp.InstanceName,
-		"hasToken", authResp.Token != "",
+	logger.Infow("authentication_response_received",
+		"instance_uuid", authResp.InstanceUUID,
+		"instance_name", authResp.InstanceName,
+		"has_token", authResp.Token != "",
 	)
 
 	if authResp.InstanceUUID != "" {
-		logger.Infow("Storing authenticated UUID from backend",
+		logger.Infow("authenticated_uuid_stored",
 			"uuid", authResp.InstanceUUID,
 		)
 		deps.SetAuthenticatedUUID(authResp.InstanceUUID)
 	} else {
-		logger.Warnw("Backend did not return instance UUID in auth response")
+		logger.Warnw("instance_uuid_missing_in_auth_response")
 	}
 
 	return nil

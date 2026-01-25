@@ -40,7 +40,7 @@ func (a *ResetTransportAction) Execute(ctx context.Context, depsAny any) error {
 
 	transport := deps.GetTransport()
 	transport.Reset()
-	deps.GetLogger().Infow("Transport reset completed", "reason", "degraded_state_threshold")
+	deps.GetLogger().Infow("transport_reset_completed", "reason", "degraded_state_threshold")
 
 	return nil
 }

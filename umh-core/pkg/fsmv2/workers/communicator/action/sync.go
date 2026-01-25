@@ -103,7 +103,7 @@ func (a *SyncAction) Execute(ctx context.Context, depsAny any) error {
 			case <-ctx.Done():
 				return ctx.Err()
 			default:
-				deps.GetLogger().Warnw("Inbound channel full, dropping message")
+				deps.GetLogger().Warnw("inbound_channel_full", "dropped_message", true)
 			}
 		}
 	}
