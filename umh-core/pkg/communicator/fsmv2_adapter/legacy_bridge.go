@@ -95,17 +95,25 @@ type LegacyChannelBridge struct {
 	logger *zap.SugaredLogger
 }
 
+// DefaultBufferSize is the default capacity for FSMv2 inbound/outbound channels.
+const DefaultBufferSize = 100
+
 // NewLegacyChannelBridge creates a bridge that adapts FSMv2 and legacy channels.
-// The bridge uses buffered channels with a capacity of 100 messages for both
-// inbound and outbound FSMv2 channels.
+// The bridge uses buffered channels with configurable capacity for both
+// inbound and outbound FSMv2 channels. If bufferSize is 0, DefaultBufferSize (100) is used.
 func NewLegacyChannelBridge(
 	legacyInbound chan *models.UMHMessage,
 	legacyOutbound chan *models.UMHMessage,
 	logger *zap.SugaredLogger,
+	bufferSize int,
 ) *LegacyChannelBridge {
+	if bufferSize <= 0 {
+		bufferSize = DefaultBufferSize
+	}
+
 	return &LegacyChannelBridge{
-		fsmInbound:     make(chan *transport.UMHMessage, 100),
-		fsmOutbound:    make(chan *transport.UMHMessage, 100),
+		fsmInbound:     make(chan *transport.UMHMessage, bufferSize),
+		fsmOutbound:    make(chan *transport.UMHMessage, bufferSize),
 		legacyInbound:  legacyInbound,
 		legacyOutbound: legacyOutbound,
 		logger:         logger,

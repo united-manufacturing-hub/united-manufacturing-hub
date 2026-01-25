@@ -428,10 +428,12 @@ func enableFSMv2BackendConnection(
 	}
 
 	// Create channel adapter to bridge FSMv2 and legacy channels
+	// Use default buffer size (0 = DefaultBufferSize)
 	channelAdapter := fsmv2_adapter.NewLegacyChannelBridge(
 		communicationState.InboundChannel,
 		communicationState.OutboundChannel,
 		logger,
+		0,
 	)
 
 	// Start conversion goroutines
