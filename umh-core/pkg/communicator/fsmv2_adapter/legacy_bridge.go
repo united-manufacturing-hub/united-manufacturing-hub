@@ -13,10 +13,31 @@
 // limitations under the License.
 
 // Package fsmv2_adapter provides adapters for bridging FSMv2 communicator
-// channels with legacy CommunicationState channels.
+// worker with existing UMH subsystems.
 //
-// The LegacyChannelBridge adapts CommunicationState channels for FSMv2 communicator.
-// It converts between models.UMHMessage (legacy) and transport.UMHMessage (FSMv2).
+// # Purpose
+//
+// This adapter exists for the TRANSITIONAL PERIOD while FSMv2 Communicator
+// is being integrated with the existing UMH codebase. It bridges the gap
+// between FSMv2's transport.UMHMessage and the legacy models.UMHMessage
+// used by the Router and other subsystems.
+//
+// # When to Use
+//
+//   - When integrating FSMv2 Communicator with existing UMH subsystems
+//   - During migration from legacy Communicator to FSMv2 Communicator
+//
+// # When NOT to Use
+//
+//   - For new greenfield FSMv2 workers (use transport.UMHMessage directly)
+//   - After full migration is complete (this package becomes obsolete)
+//
+// # Message Flow
+//
+//	┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+//	│  FSMv2 Worker   │────▶│  Legacy Bridge  │────▶│     Router      │
+//	│  (transport.*)  │◀────│   (converts)    │◀────│  (models.*)     │
+//	└─────────────────┘     └─────────────────┘     └─────────────────┘
 //
 // Flow:
 //   - FSMv2 worker writes received messages to inbound channel
@@ -25,6 +46,11 @@
 //   - Router writes responses to CommunicationState.OutboundChannel
 //   - Bridge converts models.UMHMessage -> transport.UMHMessage
 //   - FSMv2 worker reads from outbound channel to push to HTTP
+//
+// # Deprecation Plan
+//
+// This adapter is intended to be removed once the full FSMv2 migration is
+// complete and all subsystems use transport.UMHMessage directly.
 package fsmv2_adapter
 
 import (
