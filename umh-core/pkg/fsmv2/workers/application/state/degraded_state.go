@@ -21,27 +21,28 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application/snapshot"
 )
 
-// RunningState represents the normal operating state of the application supervisor.
-type RunningState struct {
+// DegradedState represents the state when infrastructure issues are detected.
+// The application enters this state when children have circuit breaker open or stale observations.
+type DegradedState struct {
 	BaseApplicationState
 }
 
-func (s *RunningState) Next(snapAny any) fsmv2.NextResult[any, any] {
+func (s *DegradedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := helpers.ConvertSnapshot[snapshot.ApplicationObservedState, *snapshot.ApplicationDesiredState](snapAny)
-	snap.Observed.State = config.MakeState(config.PrefixRunning, "managing")
+	snap.Observed.State = config.MakeState(config.PrefixRunning, "degraded")
 
 	if snap.Desired.IsShutdownRequested() {
 		return fsmv2.Result[any, any](&StoppedState{}, fsmv2.SignalNone, nil, "Shutdown requested")
 	}
 
-	// Check for infrastructure issues (circuit open OR stale children)
-	if snap.Observed.HasInfrastructureIssues() {
-		return fsmv2.Result[any, any](&DegradedState{}, fsmv2.SignalNone, nil, snap.Observed.InfrastructureReason())
+	// Recovered when no infrastructure issues remain
+	if !snap.Observed.HasInfrastructureIssues() {
+		return fsmv2.Result[any, any](&RunningState{}, fsmv2.SignalNone, nil, "Recovered from infrastructure issues")
 	}
 
-	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, "Application supervisor is running and managing children")
+	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, snap.Observed.InfrastructureReason())
 }
 
-func (s *RunningState) String() string {
+func (s *DegradedState) String() string {
 	return helpers.DeriveStateName(s)
 }

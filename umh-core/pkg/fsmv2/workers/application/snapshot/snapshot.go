@@ -16,6 +16,7 @@
 package snapshot
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
@@ -35,6 +36,12 @@ type ApplicationObservedState struct {
 	ApplicationDesiredState `json:",inline"`
 
 	deps.MetricsEmbedder `json:",inline"`
+
+	// Infrastructure health from ChildrenView (depth=1, direct children only)
+	ChildrenHealthy     int `json:"children_healthy"`
+	ChildrenUnhealthy   int `json:"children_unhealthy"`
+	ChildrenCircuitOpen int `json:"children_circuit_open"`
+	ChildrenStale       int `json:"children_stale"`
 }
 
 // GetTimestamp returns the time when this observed state was collected.
@@ -61,6 +68,45 @@ func (o ApplicationObservedState) SetShutdownRequested(v bool) fsmv2.ObservedSta
 	o.ShutdownRequested = v
 
 	return o
+}
+
+// SetChildrenView sets the children infrastructure health from the supervisor's ChildrenView.
+// Called by Collector when ChildrenViewProvider callback is configured.
+func (o ApplicationObservedState) SetChildrenView(view any) fsmv2.ObservedState {
+	cv, ok := view.(config.ChildrenView)
+	if !ok {
+		return o
+	}
+
+	o.ChildrenHealthy, o.ChildrenUnhealthy = cv.Counts()
+
+	// Count infrastructure issues from children
+	for _, child := range cv.List() {
+		if child.IsCircuitOpen {
+			o.ChildrenCircuitOpen++
+		}
+
+		if child.IsStale {
+			o.ChildrenStale++
+		}
+	}
+
+	return o
+}
+
+// HasInfrastructureIssues returns true if any children have circuit breaker open or stale observations.
+func (o ApplicationObservedState) HasInfrastructureIssues() bool {
+	return o.ChildrenCircuitOpen > 0 || o.ChildrenStale > 0
+}
+
+// InfrastructureReason returns a dynamic reason string for infrastructure issues.
+func (o ApplicationObservedState) InfrastructureReason() string {
+	if !o.HasInfrastructureIssues() {
+		return ""
+	}
+
+	return fmt.Sprintf("infrastructure degraded: circuit_open=%d, stale=%d",
+		o.ChildrenCircuitOpen, o.ChildrenStale)
 }
 
 // ApplicationDesiredState represents the desired state for an application supervisor.
