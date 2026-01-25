@@ -83,7 +83,7 @@ func calculateDefaultDelay(errType httpTransport.ErrorType, consecutiveErrors in
 		return CalculateDelay(consecutiveErrors)
 
 	case httpTransport.ErrorTypeInstanceDeleted:
-		return 0
+		return 5 * time.Minute
 
 	default:
 		return CalculateDelay(consecutiveErrors)

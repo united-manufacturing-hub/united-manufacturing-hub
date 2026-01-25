@@ -22,6 +22,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/backoff"
+	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
 )
 
 func TestBackoff(t *testing.T) {
@@ -68,5 +69,16 @@ var _ = Describe("CalculateDelay", func() {
 	It("handles negative errors gracefully (returns 0)", func() {
 		delay := backoff.CalculateDelay(-1)
 		Expect(delay).To(Equal(time.Duration(0)))
+	})
+})
+
+var _ = Describe("CalculateDelayForErrorType", func() {
+	It("should return 5 minute delay for ErrorTypeInstanceDeleted", func() {
+		delay := backoff.CalculateDelayForErrorType(
+			httpTransport.ErrorTypeInstanceDeleted,
+			1,
+			0,
+		)
+		Expect(delay).To(Equal(5 * time.Minute))
 	})
 })
