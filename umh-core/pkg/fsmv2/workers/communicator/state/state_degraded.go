@@ -60,8 +60,8 @@ func (s *DegradedState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, 
 		return s, fsmv2.SignalNone, nil
 	}
 
-	// Reset transport at 5, 10, 15... errors to recover from connection-level issues
-	if consecutiveErrors > 0 && consecutiveErrors%backoff.TransportResetThreshold == 0 {
+	// Reset transport periodically to recover from connection-level issues
+	if backoff.ShouldResetTransport(snap.Observed.LastErrorType, consecutiveErrors) {
 		return s, fsmv2.SignalNone, action.NewResetTransportAction()
 	}
 
