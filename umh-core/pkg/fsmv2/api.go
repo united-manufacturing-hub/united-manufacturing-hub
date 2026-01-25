@@ -108,20 +108,58 @@ type Action[TDeps any] interface {
 	Name() string
 }
 
+// NextResult contains the result of a State.Next() evaluation.
+// All fields except State are optional - use helpers.Result() to construct.
+type NextResult[TSnapshot any, TDeps any] struct {
+	// State is the next state (can be same state if no transition).
+	State State[TSnapshot, TDeps]
+
+	// Signal indicates framework-level events (shutdown, restart, etc.).
+	Signal Signal
+
+	// Action is an optional action to execute (nil if none).
+	Action Action[TDeps]
+
+	// Reason is a human-readable explanation of the current state.
+	// REQUIRED - describes WHY we're in this state.
+	// Can include dynamic data from the snapshot.
+	// Example: "sync degraded: 5 consecutive errors (authentication_failure)"
+	Reason string
+}
+
 // State represents a single state in the FSM lifecycle (stateless).
 type State[TSnapshot any, TDeps any] interface {
 	// Next evaluates the snapshot and returns the next transition.
 	// Pure function called on each tick. The supervisor passes the snapshot by value (immutable).
-	// Returns: nextState, signal to supervisor, optional action to execute.
-	Next(snapshot TSnapshot) (State[TSnapshot, TDeps], Signal, Action[TDeps])
+	// Returns a NextResult containing the next state, signal, optional action, and reason.
+	// The reason is REQUIRED and should explain WHY we're in/transitioning to this state.
+	Next(snapshot TSnapshot) NextResult[TSnapshot, TDeps]
 
 	// String returns the state name for logging/debugging.
 	String() string
+}
 
-	// Reason returns the reason for the current state and gives more background information.
-	// For degraded state, it reports exactly what degrades functionality.
-	// In TryingTo... states, it reports the target state - for example, benthos reports that S6 is not yet started.
-	Reason() string
+// Result creates a NextResult with the given components.
+// This is a convenience function to reduce boilerplate when returning from Next().
+//
+// Usage:
+//
+//	return fsmv2.Result(s, fsmv2.SignalNone, nil, "Worker is stopped")
+//
+//	reason := fmt.Sprintf("degraded: %d errors (%s)", errors, errorType)
+//	return fsmv2.Result(&DegradedState{}, fsmv2.SignalNone, nil, reason)
+func Result[TSnapshot any, TDeps any](
+	state State[TSnapshot, TDeps],
+	signal Signal,
+	action Action[TDeps],
+	reason string,
+) NextResult[TSnapshot, TDeps] {
+	return NextResult[TSnapshot, TDeps]{
+		State:  state,
+		Signal: signal,
+		Action: action,
+		Reason: reason,
+	}
 }
 
 // Worker is the business logic interface that developers implement.

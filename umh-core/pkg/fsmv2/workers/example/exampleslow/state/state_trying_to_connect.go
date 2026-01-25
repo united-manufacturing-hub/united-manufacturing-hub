@@ -26,25 +26,21 @@ type TryingToConnectState struct {
 	BaseExampleslowState
 }
 
-func (s *TryingToConnectState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, fsmv2.Action[any]) {
+func (s *TryingToConnectState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := helpers.ConvertSnapshot[snapshot.ExampleslowObservedState, *snapshot.ExampleslowDesiredState](snapAny)
 	snap.Observed.State = config.MakeState(config.PrefixTryingToStart, "connection")
 
 	if snap.Observed.IsStopRequired() {
-		return &TryingToStopState{}, fsmv2.SignalNone, nil
+		return fsmv2.Result[any, any](&TryingToStopState{}, fsmv2.SignalNone, nil, "stop required, transitioning to trying to stop")
 	}
 
 	if snap.Observed.ConnectionHealth == "healthy" {
-		return &ConnectedState{}, fsmv2.SignalNone, nil
+		return fsmv2.Result[any, any](&ConnectedState{}, fsmv2.SignalNone, nil, "connection healthy, transitioning to connected")
 	}
 
-	return s, fsmv2.SignalNone, &action.ConnectAction{}
+	return fsmv2.Result[any, any](s, fsmv2.SignalNone, &action.ConnectAction{}, "attempting to establish connection with delay")
 }
 
 func (s *TryingToConnectState) String() string {
 	return helpers.DeriveStateName(s)
-}
-
-func (s *TryingToConnectState) Reason() string {
-	return "Attempting to establish connection with delay"
 }

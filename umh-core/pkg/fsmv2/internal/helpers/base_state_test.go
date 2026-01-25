@@ -183,23 +183,6 @@ var _ = Describe("BaseState", func() {
 		})
 	})
 
-	Describe("Reason() method", func() {
-		It("should return empty string by default", func() {
-			state := RunningState{}
-			Expect(state.Reason()).To(Equal(""))
-		})
-
-		It("should return empty string for pointer receiver", func() {
-			state := &TryingToStartState{}
-			Expect(state.Reason()).To(Equal(""))
-		})
-
-		It("should return empty string for BaseState directly", func() {
-			state := helpers.BaseState{}
-			Expect(state.Reason()).To(Equal(""))
-		})
-	})
-
 	Describe("DeriveStateName function", func() {
 		It("should derive state name from value type", func() {
 			state := RunningState{}

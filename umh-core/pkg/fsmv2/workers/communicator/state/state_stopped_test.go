@@ -46,18 +46,18 @@ var _ = Describe("StoppedState", func() {
 			})
 
 			It("should transition to TryingToAuthenticateState", func() {
-				nextState, _, _ := stateObj.Next(snap)
-				Expect(nextState).To(BeAssignableToTypeOf(&state.TryingToAuthenticateState{}))
+				result := stateObj.Next(snap)
+				Expect(result.State).To(BeAssignableToTypeOf(&state.TryingToAuthenticateState{}))
 			})
 
 			It("should not signal anything", func() {
-				_, signal, _ := stateObj.Next(snap)
-				Expect(signal).To(Equal(fsmv2.SignalNone))
+				result := stateObj.Next(snap)
+				Expect(result.Signal).To(Equal(fsmv2.SignalNone))
 			})
 
 			It("should not return an action", func() {
-				_, _, action := stateObj.Next(snap)
-				Expect(action).To(BeNil())
+				result := stateObj.Next(snap)
+				Expect(result.Action).To(BeNil())
 			})
 		})
 	})
@@ -65,12 +65,6 @@ var _ = Describe("StoppedState", func() {
 	Describe("String", func() {
 		It("should return state name", func() {
 			Expect(stateObj.String()).To(Equal("Stopped"))
-		})
-	})
-
-	Describe("Reason", func() {
-		It("should return descriptive reason", func() {
-			Expect(stateObj.Reason()).To(Equal("Communicator is stopped"))
 		})
 	})
 })
@@ -90,11 +84,11 @@ var _ = Describe("StoppedState Transitions", func() {
 				Desired:  &snapshot.CommunicatorDesiredState{},
 			}
 
-			nextState, signal, action := stateObj.Next(snap)
+			result := stateObj.Next(snap)
 
-			Expect(nextState).To(BeAssignableToTypeOf(&state.TryingToAuthenticateState{}))
-			Expect(signal).To(Equal(fsmv2.SignalNone))
-			Expect(action).To(BeNil())
+			Expect(result.State).To(BeAssignableToTypeOf(&state.TryingToAuthenticateState{}))
+			Expect(result.Signal).To(Equal(fsmv2.SignalNone))
+			Expect(result.Action).To(BeNil())
 		})
 
 		It("should transition with empty observed state", func() {
@@ -106,11 +100,11 @@ var _ = Describe("StoppedState Transitions", func() {
 				},
 			}
 
-			nextState, signal, action := stateObj.Next(snap)
+			result := stateObj.Next(snap)
 
-			Expect(nextState).To(BeAssignableToTypeOf(&state.TryingToAuthenticateState{}))
-			Expect(signal).To(Equal(fsmv2.SignalNone))
-			Expect(action).To(BeNil())
+			Expect(result.State).To(BeAssignableToTypeOf(&state.TryingToAuthenticateState{}))
+			Expect(result.Signal).To(Equal(fsmv2.SignalNone))
+			Expect(result.Action).To(BeNil())
 		})
 	})
 
@@ -124,11 +118,11 @@ var _ = Describe("StoppedState Transitions", func() {
 				},
 			}
 
-			nextState, signal, action := stateObj.Next(snap)
+			result := stateObj.Next(snap)
 
-			Expect(nextState).To(BeAssignableToTypeOf(&state.StoppedState{}))
-			Expect(signal).To(Equal(fsmv2.SignalNeedsRemoval))
-			Expect(action).To(BeNil())
+			Expect(result.State).To(BeAssignableToTypeOf(&state.StoppedState{}))
+			Expect(result.Signal).To(Equal(fsmv2.SignalNeedsRemoval))
+			Expect(result.Action).To(BeNil())
 		})
 
 		It("should stay in StoppedState and emit SignalNeedsRemoval on shutdown", func() {
@@ -143,11 +137,11 @@ var _ = Describe("StoppedState Transitions", func() {
 				},
 			}
 
-			nextState, signal, action := stateObj.Next(snap)
+			result := stateObj.Next(snap)
 
-			Expect(nextState).To(BeAssignableToTypeOf(&state.StoppedState{}))
-			Expect(signal).To(Equal(fsmv2.SignalNeedsRemoval))
-			Expect(action).To(BeNil())
+			Expect(result.State).To(BeAssignableToTypeOf(&state.StoppedState{}))
+			Expect(result.Signal).To(Equal(fsmv2.SignalNeedsRemoval))
+			Expect(result.Action).To(BeNil())
 		})
 	})
 })

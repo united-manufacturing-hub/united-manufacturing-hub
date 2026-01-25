@@ -39,34 +39,26 @@ type StoppedState struct{}
 //  3. If no transition, stay in current state
 //
 // Returns:
-//   - next state to transition to (can be same state)
-//   - signal (SignalNone, SignalNeedsRemoval, etc.)
-//   - action to execute (nil if no action needed)
-func (s *StoppedState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, fsmv2.Action[any]) {
+//   - NextResult containing next state, signal, action, and reason
+func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := helpers.ConvertSnapshot[snapshot.HelloworldObservedState, *snapshot.HelloworldDesiredState](snapAny)
 
 	// 1. ALWAYS check shutdown first
 	if snap.Desired.IsShutdownRequested() {
-		return s, fsmv2.SignalNeedsRemoval, nil
+		return fsmv2.Result[any, any](s, fsmv2.SignalNeedsRemoval, nil, "Shutdown requested, signaling removal")
 	}
 
 	// 2. Check if we should start running
 	if !snap.Desired.IsShutdownRequested() {
-		return &TryingToStartState{}, fsmv2.SignalNone, nil
+		return fsmv2.Result[any, any](&TryingToStartState{}, fsmv2.SignalNone, nil, "Starting worker")
 	}
 
 	// 3. Stay in stopped state
-	return s, fsmv2.SignalNone, nil
+	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, "Worker is stopped, waiting to start")
 }
 
 // String returns the state name for logging and metrics.
 // Use helpers.DeriveStateName to get consistent snake_case naming.
 func (s *StoppedState) String() string {
 	return helpers.DeriveStateName(s)
-}
-
-// Reason returns a human-readable explanation of why we're in this state.
-// Shown in logs and debugging output.
-func (s *StoppedState) Reason() string {
-	return "Worker is stopped, waiting to start"
 }

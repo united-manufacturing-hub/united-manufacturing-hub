@@ -28,21 +28,17 @@ type StoppedState struct {
 	BaseCommunicatorState
 }
 
-func (s *StoppedState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, fsmv2.Action[any]) {
+func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := helpers.ConvertSnapshot[snapshot.CommunicatorObservedState, *snapshot.CommunicatorDesiredState](snapAny)
 	snap.Observed.State = config.PrefixStopped
 
 	if snap.Desired.IsShutdownRequested() {
-		return s, fsmv2.SignalNeedsRemoval, nil
+		return fsmv2.Result[any, any](s, fsmv2.SignalNeedsRemoval, nil, "Communicator is stopped and shutdown was requested")
 	}
 
-	return &TryingToAuthenticateState{}, fsmv2.SignalNone, nil
+	return fsmv2.Result[any, any](&TryingToAuthenticateState{}, fsmv2.SignalNone, nil, "Starting authentication")
 }
 
 func (s *StoppedState) String() string {
 	return "Stopped"
-}
-
-func (s *StoppedState) Reason() string {
-	return "Communicator is stopped"
 }

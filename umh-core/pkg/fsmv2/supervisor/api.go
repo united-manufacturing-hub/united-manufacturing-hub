@@ -335,20 +335,23 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 		}
 	}
 
+	initialState := worker.GetInitialState()
+
 	workerCtx = &WorkerContext[TObserved, TDesired]{
-		mu:                s.lockManager.NewLock(lockNameWorkerContextMu, lockLevelWorkerContextMu),
-		identity:          identity,
-		worker:            worker,
-		currentState:      worker.GetInitialState(),
-		collector:         collector,
-		executor:          executor,
-		actionHistory:     actionHistoryBuffer,
-		stateEnteredAt:    time.Now(),
-		stateTransitions:  make(map[string]int64),
-		stateDurations:    make(map[string]time.Duration),
-		totalTransitions:  0,
-		collectorRestarts: 0,
-		startupCount:      startupCount,
+		mu:                 s.lockManager.NewLock(lockNameWorkerContextMu, lockLevelWorkerContextMu),
+		identity:           identity,
+		worker:             worker,
+		currentState:       initialState,
+		currentStateReason: "initial",
+		collector:          collector,
+		executor:           executor,
+		actionHistory:      actionHistoryBuffer,
+		stateEnteredAt:     time.Now(),
+		stateTransitions:   make(map[string]int64),
+		stateDurations:     make(map[string]time.Duration),
+		totalTransitions:   0,
+		collectorRestarts:  0,
+		startupCount:       startupCount,
 	}
 	s.workers[identity.ID] = workerCtx
 
@@ -491,7 +494,7 @@ func (s *Supervisor[TObserved, TDesired]) GetWorkerState(workerID string) (strin
 		return "Unknown", "current state is nil", nil
 	}
 
-	return workerCtx.currentState.String(), workerCtx.currentState.Reason(), nil
+	return workerCtx.currentState.String(), workerCtx.currentStateReason, nil
 }
 
 // GetMappedParentState returns the mapped parent state for this supervisor.

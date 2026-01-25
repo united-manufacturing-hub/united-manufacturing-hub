@@ -26,26 +26,22 @@ type StoppedState struct {
 	BaseChildState
 }
 
-func (s *StoppedState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, fsmv2.Action[any]) {
+func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := helpers.ConvertSnapshot[snapshot.ExamplechildObservedState, *snapshot.ExamplechildDesiredState](snapAny)
 	snap.Observed.State = config.PrefixStopped
 
 	if snap.Desired.IsShutdownRequested() {
-		return s, fsmv2.SignalNeedsRemoval, nil
+		return fsmv2.Result[any, any](s, fsmv2.SignalNeedsRemoval, nil, "Shutdown requested")
 	}
 
 	// ParentMappedState is injected by collector into Observed.DesiredState
 	if snap.Observed.ShouldBeRunning() {
-		return &TryingToConnectState{}, fsmv2.SignalNone, nil
+		return fsmv2.Result[any, any](&TryingToConnectState{}, fsmv2.SignalNone, nil, "Child should be running, attempting to connect")
 	}
 
-	return s, fsmv2.SignalNone, nil
+	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, "Child is stopped, no connection")
 }
 
 func (s *StoppedState) String() string {
 	return helpers.DeriveStateName(s)
-}
-
-func (s *StoppedState) Reason() string {
-	return "Child is stopped, no connection"
 }

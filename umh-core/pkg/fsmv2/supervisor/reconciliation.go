@@ -277,23 +277,23 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 	// via FrameworkMetricsProvider callback. See collector.go collectAndSaveObservedState().
 	// The provider is set up in api.go AddWorker() when creating the CollectorConfig.
 
-	nextState, signal, action := currentState.Next(*snapshot)
+	result := currentState.Next(*snapshot)
 
-	hasAction := action != nil
+	hasAction := result.Action != nil
 	// Per-tick log moved to TRACE for scalability
 	s.logTrace("state_evaluation",
-		"next_state", nextState.String(),
-		"signal", int(signal),
+		"next_state", result.State.String(),
+		"signal", int(result.Signal),
 		"has_action", hasAction)
 
 	// FSM invariant: state transition and action emission are mutually exclusive
-	if nextState != currentState && action != nil {
+	if result.State != currentState && result.Action != nil {
 		panic(fmt.Sprintf("invalid state transition: state %s tried to switch to %s AND emit action %s",
-			currentState.String(), nextState.String(), action.Name()))
+			currentState.String(), result.State.String(), result.Action.Name()))
 	}
 
-	if action != nil {
-		actionID := action.Name()
+	if result.Action != nil {
+		actionID := result.Action.Name()
 
 		if workerCtx.executor.HasActionInProgress(actionID) {
 			s.logTrace("action_skipped",
@@ -313,7 +313,7 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 		s.logger.Debugw("action_enqueued",
 			"action_id", actionID)
 
-		if err := workerCtx.executor.EnqueueAction(actionID, action, deps); err != nil {
+		if err := workerCtx.executor.EnqueueAction(actionID, result.Action, deps); err != nil {
 			s.logger.Errorw("action_enqueue_failed",
 				"worker_id", workerID,
 				"action_id", actionID,
@@ -340,21 +340,21 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 			"observation_time", currentObsTime.Format(time.RFC3339Nano))
 	}
 
-	if nextState != currentState {
+	if result.State != currentState {
 		fromState := currentState.String()
-		toState := nextState.String()
+		toState := result.State.String()
 		now := time.Now()
 
 		s.logTrace("lifecycle",
 			"lifecycle_event", "state_transition",
 			"from_state", fromState,
 			"to_state", toState,
-			"reason", nextState.Reason())
+			"reason", result.Reason)
 
 		s.logger.Infow("state_transition",
 			"from_state", fromState,
 			"to_state", toState,
-			"reason", nextState.Reason())
+			"reason", result.Reason)
 
 		s.logTrace("lifecycle",
 			"lifecycle_event", "mutex_lock_acquire",
@@ -374,10 +374,10 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 
 		workerCtx.stateTransitions[toState]++
 		workerCtx.totalTransitions++
-		workerCtx.currentState = nextState
+		workerCtx.currentState = result.State
 
 		// Exposed via FrameworkMetrics and GetCurrentStateNameAndReason
-		workerCtx.currentStateReason = nextState.Reason()
+		workerCtx.currentStateReason = result.Reason
 		workerCtx.stateEnteredAt = now
 
 		workerCtx.mu.Unlock()
@@ -412,10 +412,10 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 
 	workerCtx.mu.RUnlock()
 
-	if err := s.processSignal(ctx, workerID, signal); err != nil {
+	if err := s.processSignal(ctx, workerID, result.Signal); err != nil {
 		s.logger.Errorw("signal_processing_failed",
 			"worker_id", workerID,
-			"signal", int(signal),
+			"signal", int(result.Signal),
 			"error", err)
 
 		return fmt.Errorf("signal processing failed: %w", err)

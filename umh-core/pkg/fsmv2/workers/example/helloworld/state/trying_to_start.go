@@ -32,31 +32,26 @@ type TryingToStartState struct{}
 //   - Check if the action we need has completed (observe the effect)
 //   - If completed, transition to next state
 //   - If not completed, emit the action and stay in this state
-func (s *TryingToStartState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, fsmv2.Action[any]) {
+func (s *TryingToStartState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := helpers.ConvertSnapshot[snapshot.HelloworldObservedState, *snapshot.HelloworldDesiredState](snapAny)
 
 	// 1. ALWAYS check shutdown first
 	if snap.Desired.IsShutdownRequested() {
-		return &StoppedState{}, fsmv2.SignalNone, nil
+		return fsmv2.Result[any, any](&StoppedState{}, fsmv2.SignalNone, nil, "Shutdown requested, transitioning to stopped")
 	}
 
 	// 2. Check if action has already completed (observe the effect)
 	// This makes the state machine resilient to action replay
 	if snap.Observed.HelloSaid {
-		return &RunningState{}, fsmv2.SignalNone, nil
+		return fsmv2.Result[any, any](&RunningState{}, fsmv2.SignalNone, nil, "Hello has been said, transitioning to running")
 	}
 
 	// 3. Emit action and stay in this state
 	// The action will set HelloSaid=true, which we'll observe next tick
-	return s, fsmv2.SignalNone, &action.SayHelloAction{}
+	return fsmv2.Result[any, any](s, fsmv2.SignalNone, &action.SayHelloAction{}, "Saying hello to the world")
 }
 
 // String returns the state name for logging and metrics.
 func (s *TryingToStartState) String() string {
 	return helpers.DeriveStateName(s)
-}
-
-// Reason returns a human-readable explanation.
-func (s *TryingToStartState) Reason() string {
-	return "Saying hello to the world"
 }

@@ -29,26 +29,22 @@ type TryingToStopState struct {
 	BaseParentState
 }
 
-func (s *TryingToStopState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, fsmv2.Action[any]) {
+func (s *TryingToStopState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := helpers.ConvertSnapshot[snapshot.ExampleparentObservedState, *snapshot.ExampleparentDesiredState](snapAny)
 	snap.Observed.State = config.MakeState(config.PrefixTryingToStop, "children")
 
 	if snap.Observed.ID == "" {
-		return s, fsmv2.SignalNone, &action.StopAction{}
+		return fsmv2.Result[any, any](s, fsmv2.SignalNone, &action.StopAction{}, "ID not set, executing StopAction")
 	}
 
 	// All children must be stopped before transitioning.
 	if snap.Observed.ChildrenHealthy == 0 && snap.Observed.ChildrenUnhealthy == 0 {
-		return &StoppedState{}, fsmv2.SignalNone, nil
+		return fsmv2.Result[any, any](&StoppedState{}, fsmv2.SignalNone, nil, "All children stopped, transitioning to Stopped")
 	}
 
-	return s, fsmv2.SignalNone, nil
+	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, "Gracefully stopping all children")
 }
 
 func (s *TryingToStopState) String() string {
 	return helpers.DeriveStateName(s)
-}
-
-func (s *TryingToStopState) Reason() string {
-	return "Gracefully stopping all children"
 }

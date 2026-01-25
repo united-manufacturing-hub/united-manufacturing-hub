@@ -47,21 +47,21 @@ var _ = Describe("TryingToStartState", func() {
 			})
 
 			It("should stay in TryingToStartState", func() {
-				nextState, _, _ := stateObj.Next(snap)
+				result := stateObj.Next(snap)
 
-				Expect(nextState).To(BeAssignableToTypeOf(&state.TryingToStartState{}))
+				Expect(result.State).To(BeAssignableToTypeOf(&state.TryingToStartState{}))
 			})
 
 			It("should not signal anything", func() {
-				_, signal, _ := stateObj.Next(snap)
+				result := stateObj.Next(snap)
 
-				Expect(signal).To(Equal(fsmv2.SignalNone))
+				Expect(result.Signal).To(Equal(fsmv2.SignalNone))
 			})
 
 			It("should emit SayHelloAction", func() {
-				_, _, actionResult := stateObj.Next(snap)
+				result := stateObj.Next(snap)
 
-				Expect(actionResult).To(BeAssignableToTypeOf(&action.SayHelloAction{}))
+				Expect(result.Action).To(BeAssignableToTypeOf(&action.SayHelloAction{}))
 			})
 		})
 
@@ -75,21 +75,21 @@ var _ = Describe("TryingToStartState", func() {
 			})
 
 			It("should transition to RunningState", func() {
-				nextState, _, _ := stateObj.Next(snap)
+				result := stateObj.Next(snap)
 
-				Expect(nextState).To(BeAssignableToTypeOf(&state.RunningState{}))
+				Expect(result.State).To(BeAssignableToTypeOf(&state.RunningState{}))
 			})
 
 			It("should not signal anything", func() {
-				_, signal, _ := stateObj.Next(snap)
+				result := stateObj.Next(snap)
 
-				Expect(signal).To(Equal(fsmv2.SignalNone))
+				Expect(result.Signal).To(Equal(fsmv2.SignalNone))
 			})
 
 			It("should not return an action", func() {
-				_, _, actionResult := stateObj.Next(snap)
+				result := stateObj.Next(snap)
 
-				Expect(actionResult).To(BeNil())
+				Expect(result.Action).To(BeNil())
 			})
 		})
 
@@ -105,21 +105,21 @@ var _ = Describe("TryingToStartState", func() {
 			})
 
 			It("should transition to StoppedState", func() {
-				nextState, _, _ := stateObj.Next(snap)
+				result := stateObj.Next(snap)
 
-				Expect(nextState).To(BeAssignableToTypeOf(&state.StoppedState{}))
+				Expect(result.State).To(BeAssignableToTypeOf(&state.StoppedState{}))
 			})
 
 			It("should not signal anything", func() {
-				_, signal, _ := stateObj.Next(snap)
+				result := stateObj.Next(snap)
 
-				Expect(signal).To(Equal(fsmv2.SignalNone))
+				Expect(result.Signal).To(Equal(fsmv2.SignalNone))
 			})
 
 			It("should not return an action", func() {
-				_, _, actionResult := stateObj.Next(snap)
+				result := stateObj.Next(snap)
 
-				Expect(actionResult).To(BeNil())
+				Expect(result.Action).To(BeNil())
 			})
 		})
 
@@ -133,11 +133,11 @@ var _ = Describe("TryingToStartState", func() {
 					},
 				}
 
-				nextState, signal, actionResult := stateObj.Next(snap)
+				result := stateObj.Next(snap)
 
-				Expect(nextState).To(BeAssignableToTypeOf(&state.StoppedState{}))
-				Expect(signal).To(Equal(fsmv2.SignalNone))
-				Expect(actionResult).To(BeNil())
+				Expect(result.State).To(BeAssignableToTypeOf(&state.StoppedState{}))
+				Expect(result.Signal).To(Equal(fsmv2.SignalNone))
+				Expect(result.Action).To(BeNil())
 			})
 		})
 	})
@@ -145,12 +145,6 @@ var _ = Describe("TryingToStartState", func() {
 	Describe("String", func() {
 		It("should return snake_case state name", func() {
 			Expect(stateObj.String()).To(Equal("TryingToStart"))
-		})
-	})
-
-	Describe("Reason", func() {
-		It("should return descriptive reason", func() {
-			Expect(stateObj.Reason()).To(Equal("Saying hello to the world"))
 		})
 	})
 })
@@ -170,11 +164,11 @@ var _ = Describe("TryingToStartState Transitions", func() {
 				Desired:  &snapshot.HelloworldDesiredState{},
 			}
 
-			nextState, signal, actionResult := stateObj.Next(snap)
+			result := stateObj.Next(snap)
 
-			Expect(nextState).To(BeAssignableToTypeOf(&state.RunningState{}))
-			Expect(signal).To(Equal(fsmv2.SignalNone))
-			Expect(actionResult).To(BeNil())
+			Expect(result.State).To(BeAssignableToTypeOf(&state.RunningState{}))
+			Expect(result.Signal).To(Equal(fsmv2.SignalNone))
+			Expect(result.Action).To(BeNil())
 		})
 	})
 
@@ -188,11 +182,11 @@ var _ = Describe("TryingToStartState Transitions", func() {
 				},
 			}
 
-			nextState, signal, actionResult := stateObj.Next(snap)
+			result := stateObj.Next(snap)
 
-			Expect(nextState).To(BeAssignableToTypeOf(&state.StoppedState{}))
-			Expect(signal).To(Equal(fsmv2.SignalNone))
-			Expect(actionResult).To(BeNil())
+			Expect(result.State).To(BeAssignableToTypeOf(&state.StoppedState{}))
+			Expect(result.Signal).To(Equal(fsmv2.SignalNone))
+			Expect(result.Action).To(BeNil())
 		})
 	})
 
@@ -204,11 +198,11 @@ var _ = Describe("TryingToStartState Transitions", func() {
 				Desired:  &snapshot.HelloworldDesiredState{},
 			}
 
-			nextState, signal, actionResult := stateObj.Next(snap)
+			result := stateObj.Next(snap)
 
-			Expect(nextState).To(BeAssignableToTypeOf(&state.TryingToStartState{}))
-			Expect(signal).To(Equal(fsmv2.SignalNone))
-			Expect(actionResult).To(BeAssignableToTypeOf(&action.SayHelloAction{}))
+			Expect(result.State).To(BeAssignableToTypeOf(&state.TryingToStartState{}))
+			Expect(result.Signal).To(Equal(fsmv2.SignalNone))
+			Expect(result.Action).To(BeAssignableToTypeOf(&action.SayHelloAction{}))
 		})
 	})
 })

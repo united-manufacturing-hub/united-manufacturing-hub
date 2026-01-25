@@ -27,21 +27,17 @@ type TryingToStopState struct {
 	BaseFailingState
 }
 
-func (s *TryingToStopState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, fsmv2.Action[any]) {
+func (s *TryingToStopState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := helpers.ConvertSnapshot[snapshot.ExamplefailingObservedState, *snapshot.ExamplefailingDesiredState](snapAny)
 	snap.Observed.State = config.MakeState(config.PrefixTryingToStop, "connection")
 
 	if snap.Observed.ConnectionHealth == "no connection" {
-		return &StoppedState{}, fsmv2.SignalNone, nil
+		return fsmv2.Result[any, any](&StoppedState{}, fsmv2.SignalNone, nil, "disconnected successfully")
 	}
 
-	return s, fsmv2.SignalNone, &action.DisconnectAction{}
+	return fsmv2.Result[any, any](s, fsmv2.SignalNone, &action.DisconnectAction{}, "attempting to disconnect cleanly")
 }
 
 func (s *TryingToStopState) String() string {
 	return helpers.DeriveStateName(s)
-}
-
-func (s *TryingToStopState) Reason() string {
-	return "Attempting to disconnect cleanly"
 }

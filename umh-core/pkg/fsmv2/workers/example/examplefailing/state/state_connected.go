@@ -30,34 +30,30 @@ type ConnectedState struct {
 	BaseFailingState
 }
 
-func (s *ConnectedState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, fsmv2.Action[any]) {
+func (s *ConnectedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := helpers.ConvertSnapshot[snapshot.ExamplefailingObservedState, *snapshot.ExamplefailingDesiredState](snapAny)
 	snap.Observed.State = config.MakeState(config.PrefixRunning, "connected")
 
 	if snap.Observed.IsStopRequired() {
-		return &TryingToStopState{}, fsmv2.SignalNone, nil
+		return fsmv2.Result[any, any](&TryingToStopState{}, fsmv2.SignalNone, nil, "stop required, transitioning to stop state")
 	}
 
 	if snap.Observed.ConnectionHealth == "no connection" {
-		return &DisconnectedState{}, fsmv2.SignalNone, nil
+		return fsmv2.Result[any, any](&DisconnectedState{}, fsmv2.SignalNone, nil, "connection lost unexpectedly")
 	}
 
 	// Simulate failures: stay healthy for a few ticks, then disconnect
 	if snap.Observed.ShouldFail && !snap.Observed.AllCyclesComplete {
 		if snap.Observed.TicksInConnectedState >= ticksBeforeNextCycle {
-			return &TriggeringNextCycleState{}, fsmv2.SignalNone, nil
+			return fsmv2.Result[any, any](&TriggeringNextCycleState{}, fsmv2.SignalNone, nil, "reached tick threshold, triggering next failure cycle")
 		}
 
-		return s, fsmv2.SignalNone, &action.IncrementTicksAction{}
+		return fsmv2.Result[any, any](s, fsmv2.SignalNone, &action.IncrementTicksAction{}, "incrementing ticks in connected state")
 	}
 
-	return s, fsmv2.SignalNone, nil
+	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, "connected and ready, no action needed")
 }
 
 func (s *ConnectedState) String() string {
 	return helpers.DeriveStateName(s)
-}
-
-func (s *ConnectedState) Reason() string {
-	return "Successfully connected and ready"
 }

@@ -30,24 +30,19 @@ type RunningState struct{}
 //   - Check shutdown first (transition to stopped)
 //   - Otherwise stay in running state
 //   - No actions needed in steady state
-func (s *RunningState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, fsmv2.Action[any]) {
+func (s *RunningState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := helpers.ConvertSnapshot[snapshot.HelloworldObservedState, *snapshot.HelloworldDesiredState](snapAny)
 
 	// 1. Check shutdown - transition back to stopped
 	if snap.Desired.IsShutdownRequested() {
-		return &StoppedState{}, fsmv2.SignalNone, nil
+		return fsmv2.Result[any, any](&StoppedState{}, fsmv2.SignalNone, nil, "Shutdown requested, transitioning to stopped")
 	}
 
 	// 2. Stay in running state - nothing to do
-	return s, fsmv2.SignalNone, nil
+	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, "Worker is running and has said hello")
 }
 
 // String returns the state name for logging and metrics.
 func (s *RunningState) String() string {
 	return helpers.DeriveStateName(s)
-}
-
-// Reason returns a human-readable explanation.
-func (s *RunningState) Reason() string {
-	return "Worker is running and has said hello"
 }

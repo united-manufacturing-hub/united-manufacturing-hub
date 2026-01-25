@@ -26,21 +26,17 @@ type RunningState struct {
 	BaseApplicationState
 }
 
-func (s *RunningState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, fsmv2.Action[any]) {
+func (s *RunningState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := helpers.ConvertSnapshot[snapshot.ApplicationObservedState, *snapshot.ApplicationDesiredState](snapAny)
 	snap.Observed.State = config.MakeState(config.PrefixRunning, "managing")
 
 	if snap.Desired.IsShutdownRequested() {
-		return &StoppedState{}, fsmv2.SignalNone, nil
+		return fsmv2.Result[any, any](&StoppedState{}, fsmv2.SignalNone, nil, "Shutdown requested")
 	}
 
-	return s, fsmv2.SignalNone, nil
+	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, "Application supervisor is running and managing children")
 }
 
 func (s *RunningState) String() string {
 	return helpers.DeriveStateName(s)
-}
-
-func (s *RunningState) Reason() string {
-	return "Application supervisor is running and managing children"
 }

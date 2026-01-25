@@ -39,12 +39,6 @@ var _ = Describe("TryingToAuthenticateState", func() {
 			Expect(stateObj.String()).To(Equal("TryingToAuthenticate"))
 		})
 	})
-
-	Describe("Reason", func() {
-		It("should return descriptive reason", func() {
-			Expect(stateObj.Reason()).To(Equal("Attempting to authenticate with relay server"))
-		})
-	})
 })
 
 var _ = Describe("TryingToAuthenticateState Transitions", func() {
@@ -64,11 +58,11 @@ var _ = Describe("TryingToAuthenticateState Transitions", func() {
 				},
 			}
 
-			nextState, signal, action := stateObj.Next(snap)
+			result := stateObj.Next(snap)
 
-			Expect(nextState).To(BeAssignableToTypeOf(&state.StoppedState{}))
-			Expect(signal).To(Equal(fsmv2.SignalNone))
-			Expect(action).To(BeNil())
+			Expect(result.State).To(BeAssignableToTypeOf(&state.StoppedState{}))
+			Expect(result.Signal).To(Equal(fsmv2.SignalNone))
+			Expect(result.Action).To(BeNil())
 		})
 
 		It("should transition to StoppedState on shutdown even if authenticated", func() {
@@ -84,11 +78,11 @@ var _ = Describe("TryingToAuthenticateState Transitions", func() {
 				},
 			}
 
-			nextState, signal, action := stateObj.Next(snap)
+			result := stateObj.Next(snap)
 
-			Expect(nextState).To(BeAssignableToTypeOf(&state.StoppedState{}))
-			Expect(signal).To(Equal(fsmv2.SignalNone))
-			Expect(action).To(BeNil())
+			Expect(result.State).To(BeAssignableToTypeOf(&state.StoppedState{}))
+			Expect(result.Signal).To(Equal(fsmv2.SignalNone))
+			Expect(result.Action).To(BeNil())
 		})
 	})
 
@@ -104,11 +98,11 @@ var _ = Describe("TryingToAuthenticateState Transitions", func() {
 				Desired: &snapshot.CommunicatorDesiredState{},
 			}
 
-			nextState, signal, action := stateObj.Next(snap)
+			result := stateObj.Next(snap)
 
-			Expect(nextState).To(BeAssignableToTypeOf(&state.SyncingState{}))
-			Expect(signal).To(Equal(fsmv2.SignalNone))
-			Expect(action).To(BeNil())
+			Expect(result.State).To(BeAssignableToTypeOf(&state.SyncingState{}))
+			Expect(result.Signal).To(Equal(fsmv2.SignalNone))
+			Expect(result.Action).To(BeNil())
 		})
 
 		It("should transition to SyncingState when authenticated and token not expired", func() {
@@ -124,11 +118,11 @@ var _ = Describe("TryingToAuthenticateState Transitions", func() {
 				},
 			}
 
-			nextState, signal, action := stateObj.Next(snap)
+			result := stateObj.Next(snap)
 
-			Expect(nextState).To(BeAssignableToTypeOf(&state.SyncingState{}))
-			Expect(signal).To(Equal(fsmv2.SignalNone))
-			Expect(action).To(BeNil())
+			Expect(result.State).To(BeAssignableToTypeOf(&state.SyncingState{}))
+			Expect(result.Signal).To(Equal(fsmv2.SignalNone))
+			Expect(result.Action).To(BeNil())
 		})
 	})
 
@@ -147,12 +141,12 @@ var _ = Describe("TryingToAuthenticateState Transitions", func() {
 				},
 			}
 
-			nextState, signal, action := stateObj.Next(snap)
+			result := stateObj.Next(snap)
 
-			Expect(nextState).To(BeAssignableToTypeOf(&state.TryingToAuthenticateState{}))
-			Expect(signal).To(Equal(fsmv2.SignalNone))
-			Expect(action).NotTo(BeNil())
-			Expect(action.Name()).To(Equal("authenticate"))
+			Expect(result.State).To(BeAssignableToTypeOf(&state.TryingToAuthenticateState{}))
+			Expect(result.Signal).To(Equal(fsmv2.SignalNone))
+			Expect(result.Action).NotTo(BeNil())
+			Expect(result.Action.Name()).To(Equal("authenticate"))
 		})
 
 		It("should stay in TryingToAuthenticateState when authenticated but token is expired", func() {
@@ -171,12 +165,12 @@ var _ = Describe("TryingToAuthenticateState Transitions", func() {
 				},
 			}
 
-			nextState, signal, action := stateObj.Next(snap)
+			result := stateObj.Next(snap)
 
-			Expect(nextState).To(BeAssignableToTypeOf(&state.TryingToAuthenticateState{}))
-			Expect(signal).To(Equal(fsmv2.SignalNone))
-			Expect(action).NotTo(BeNil())
-			Expect(action.Name()).To(Equal("authenticate"))
+			Expect(result.State).To(BeAssignableToTypeOf(&state.TryingToAuthenticateState{}))
+			Expect(result.Signal).To(Equal(fsmv2.SignalNone))
+			Expect(result.Action).NotTo(BeNil())
+			Expect(result.Action.Name()).To(Equal("authenticate"))
 		})
 
 		It("should stay in TryingToAuthenticateState when token expires within 10 minutes", func() {
@@ -195,12 +189,12 @@ var _ = Describe("TryingToAuthenticateState Transitions", func() {
 				},
 			}
 
-			nextState, signal, action := stateObj.Next(snap)
+			result := stateObj.Next(snap)
 
-			Expect(nextState).To(BeAssignableToTypeOf(&state.TryingToAuthenticateState{}))
-			Expect(signal).To(Equal(fsmv2.SignalNone))
-			Expect(action).NotTo(BeNil())
-			Expect(action.Name()).To(Equal("authenticate"))
+			Expect(result.State).To(BeAssignableToTypeOf(&state.TryingToAuthenticateState{}))
+			Expect(result.Signal).To(Equal(fsmv2.SignalNone))
+			Expect(result.Action).NotTo(BeNil())
+			Expect(result.Action.Name()).To(Equal("authenticate"))
 		})
 	})
 
@@ -221,11 +215,11 @@ var _ = Describe("TryingToAuthenticateState Transitions", func() {
 				},
 			}
 
-			nextState, signal, action := stateObj.Next(snap)
+			result := stateObj.Next(snap)
 
-			Expect(nextState).To(BeAssignableToTypeOf(&state.TryingToAuthenticateState{}))
-			Expect(signal).To(Equal(fsmv2.SignalNone))
-			Expect(action).To(BeNil(), "Should not emit action during backoff period")
+			Expect(result.State).To(BeAssignableToTypeOf(&state.TryingToAuthenticateState{}))
+			Expect(result.Signal).To(Equal(fsmv2.SignalNone))
+			Expect(result.Action).To(BeNil(), "Should not emit action during backoff period")
 		})
 
 		It("should emit AuthenticateAction after backoff period expires", func() {
@@ -244,12 +238,12 @@ var _ = Describe("TryingToAuthenticateState Transitions", func() {
 				},
 			}
 
-			nextState, signal, action := stateObj.Next(snap)
+			result := stateObj.Next(snap)
 
-			Expect(nextState).To(BeAssignableToTypeOf(&state.TryingToAuthenticateState{}))
-			Expect(signal).To(Equal(fsmv2.SignalNone))
-			Expect(action).NotTo(BeNil())
-			Expect(action.Name()).To(Equal("authenticate"))
+			Expect(result.State).To(BeAssignableToTypeOf(&state.TryingToAuthenticateState{}))
+			Expect(result.Signal).To(Equal(fsmv2.SignalNone))
+			Expect(result.Action).NotTo(BeNil())
+			Expect(result.Action.Name()).To(Equal("authenticate"))
 		})
 
 		It("should emit AuthenticateAction on first attempt (no errors)", func() {
@@ -267,12 +261,12 @@ var _ = Describe("TryingToAuthenticateState Transitions", func() {
 				},
 			}
 
-			nextState, signal, action := stateObj.Next(snap)
+			result := stateObj.Next(snap)
 
-			Expect(nextState).To(BeAssignableToTypeOf(&state.TryingToAuthenticateState{}))
-			Expect(signal).To(Equal(fsmv2.SignalNone))
-			Expect(action).NotTo(BeNil())
-			Expect(action.Name()).To(Equal("authenticate"))
+			Expect(result.State).To(BeAssignableToTypeOf(&state.TryingToAuthenticateState{}))
+			Expect(result.Signal).To(Equal(fsmv2.SignalNone))
+			Expect(result.Action).NotTo(BeNil())
+			Expect(result.Action.Name()).To(Equal("authenticate"))
 		})
 	})
 })

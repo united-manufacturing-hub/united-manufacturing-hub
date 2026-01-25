@@ -83,19 +83,16 @@ type TestState struct {
 	reason string
 }
 
-func (t *TestState) Next(snapshot any) (fsmv2.State[any, any], fsmv2.Signal, fsmv2.Action[any]) {
-	return t, fsmv2.SignalNone, nil
+func (t *TestState) Next(snapshot any) fsmv2.NextResult[any, any] {
+	reason := t.reason
+	if reason == "" {
+		reason = t.name
+	}
+
+	return fsmv2.Result[any, any](t, fsmv2.SignalNone, nil, reason)
 }
 
 func (t *TestState) String() string {
-	return t.name
-}
-
-func (t *TestState) Reason() string {
-	if t.reason != "" {
-		return t.reason
-	}
-
 	return t.name
 }
 

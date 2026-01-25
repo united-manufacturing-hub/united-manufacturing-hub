@@ -26,26 +26,22 @@ type ConnectedState struct {
 	BaseChildState
 }
 
-func (s *ConnectedState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, fsmv2.Action[any]) {
+func (s *ConnectedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := helpers.ConvertSnapshot[snapshot.ExamplechildObservedState, *snapshot.ExamplechildDesiredState](snapAny)
 	snap.Observed.State = config.MakeState(config.PrefixRunning, "connected")
 
 	if snap.Observed.IsStopRequired() {
-		return &TryingToStopState{}, fsmv2.SignalNone, nil
+		return fsmv2.Result[any, any](&TryingToStopState{}, fsmv2.SignalNone, nil, "Stop required, initiating shutdown")
 	}
 
 	// ConnectionHealth is populated by collector from dependencies
 	if snap.Observed.ConnectionHealth != "healthy" {
-		return &DisconnectedState{}, fsmv2.SignalNone, nil
+		return fsmv2.Result[any, any](&DisconnectedState{}, fsmv2.SignalNone, nil, "Connection lost, transitioning to disconnected")
 	}
 
-	return s, fsmv2.SignalNone, nil
+	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, "Active connection established")
 }
 
 func (s *ConnectedState) String() string {
 	return helpers.DeriveStateName(s)
-}
-
-func (s *ConnectedState) Reason() string {
-	return "Active connection established"
 }

@@ -133,18 +133,23 @@ type State struct {
 	NextState fsmv2.State[any, any]
 	Action    fsmv2.Action[any]
 	Signal    fsmv2.Signal
+	Reason    string
 }
 
-func (m *State) Next(snapshot any) (fsmv2.State[any, any], fsmv2.Signal, fsmv2.Action[any]) {
+func (m *State) Next(snapshot any) fsmv2.NextResult[any, any] {
 	if m.NextState == nil {
-		return m, fsmv2.SignalNone, nil
+		return fsmv2.Result[any, any](m, fsmv2.SignalNone, nil, "test state")
 	}
 
-	return m.NextState, m.Signal, m.Action
+	reason := m.Reason
+	if reason == "" {
+		reason = "test state"
+	}
+
+	return fsmv2.Result[any, any](m.NextState, m.Signal, m.Action, reason)
 }
 
 func (m *State) String() string { return "State" }
-func (m *State) Reason() string { return "test state" }
 
 func Identity() deps.Identity {
 	return deps.Identity{

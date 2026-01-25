@@ -55,7 +55,7 @@ var _ = Describe("Snapshot Immutability (I9)", func() {
 				}
 
 				// Call state.Next() with the snapshot
-				_, _, _ = mutatingState.Next(originalSnapshot)
+				_ = mutatingState.Next(originalSnapshot)
 
 				// Verify original snapshot wasn't mutated
 				// Even though state.Next() tried to set Observed to nil,
@@ -73,7 +73,7 @@ var _ = Describe("Snapshot Immutability (I9)", func() {
 
 				// Even after multiple invocations, original remains unchanged
 				for range 5 {
-					_, _, _ = mutatingState.Next(originalSnapshot)
+					_ = mutatingState.Next(originalSnapshot)
 					Expect(originalSnapshot.Observed).ToNot(BeNil())
 				}
 			})
@@ -92,7 +92,7 @@ var _ = Describe("Snapshot Immutability (I9)", func() {
 				originalName := originalSnapshot.Identity.Name
 
 				// Call state.Next() which tries to mutate identity
-				_, _, _ = identityMutatingState.Next(originalSnapshot)
+				_ = identityMutatingState.Next(originalSnapshot)
 
 				// Verify original identity wasn't changed
 				Expect(originalSnapshot.Identity.ID).To(Equal(originalID))
@@ -117,7 +117,7 @@ var _ = Describe("Snapshot Immutability (I9)", func() {
 				originalDesired := originalSnapshot.Desired
 
 				// Call state.Next() which tries to mutate everything
-				_, _, _ = aggressiveMutatingState.Next(originalSnapshot)
+				_ = aggressiveMutatingState.Next(originalSnapshot)
 
 				// Verify nothing was mutated in the original
 				Expect(originalSnapshot.Identity.ID).To(Equal(originalID))
@@ -135,40 +135,35 @@ func receiveSnapshotByValue(snapshot fsmv2.Snapshot) fsmv2.Snapshot {
 
 type snapshotMutatingState struct{}
 
-func (s *snapshotMutatingState) Next(snapshot any) (fsmv2.State[any, any], fsmv2.Signal, fsmv2.Action[any]) {
+func (s *snapshotMutatingState) Next(snapshot any) fsmv2.NextResult[any, any] {
 	snap := snapshot.(fsmv2.Snapshot)
 	snap.Observed = nil
 
-	return s, fsmv2.SignalNone, nil
+	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, "testing snapshot immutability")
 }
 
 func (s *snapshotMutatingState) String() string { return "SnapshotMutatingState" }
-func (s *snapshotMutatingState) Reason() string { return "testing snapshot immutability" }
 
 type identityMutatingState struct{}
 
-func (s *identityMutatingState) Next(snapshot any) (fsmv2.State[any, any], fsmv2.Signal, fsmv2.Action[any]) {
+func (s *identityMutatingState) Next(snapshot any) fsmv2.NextResult[any, any] {
 	snap := snapshot.(fsmv2.Snapshot)
 	snap.Identity.Name = "Modified"
 
-	return s, fsmv2.SignalNone, nil
+	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, "testing identity immutability")
 }
 
 func (s *identityMutatingState) String() string { return "IdentityMutatingState" }
-func (s *identityMutatingState) Reason() string { return "testing identity immutability" }
 
 type aggressiveMutatingState struct{}
 
-func (s *aggressiveMutatingState) Next(snapshot any) (fsmv2.State[any, any], fsmv2.Signal, fsmv2.Action[any]) {
+func (s *aggressiveMutatingState) Next(snapshot any) fsmv2.NextResult[any, any] {
 	snap := snapshot.(fsmv2.Snapshot)
 	snap.Observed = nil
 	snap.Identity.Name = "Modified"
 	snap.Desired = nil
 
-	return s, fsmv2.SignalNone, nil
+	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, "testing complete snapshot immutability")
 }
 
 func (s *aggressiveMutatingState) String() string { return "AggressiveMutatingState" }
-func (s *aggressiveMutatingState) Reason() string {
-	return "testing complete snapshot immutability"
-}

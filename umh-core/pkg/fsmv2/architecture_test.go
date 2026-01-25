@@ -128,8 +128,9 @@ var _ = Describe("FSMv2 Architecture Validation", func() {
 			})
 		})
 
-		Describe("State String() and Reason() Methods (Invariant: Debuggability)", func() {
-			It("should have both String() and Reason() methods", func() {
+		Describe("State String() Method (Invariant: Debuggability)", func() {
+			// Note: Reason() method was removed from State interface - reason now comes from NextResult.Reason
+			It("should have String() method for debugging", func() {
 				violations := validator.ValidateStateStringAndReason(getFsmv2Dir())
 				if len(violations) > 0 {
 					message := validator.FormatViolationsWithPattern("State Method Violations", violations, "STATE_MISSING_STRING_METHOD")

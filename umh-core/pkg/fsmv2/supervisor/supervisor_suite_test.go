@@ -176,18 +176,23 @@ type mockState struct {
 	nextState fsmv2.State[any, any]
 	signal    fsmv2.Signal
 	action    fsmv2.Action[any]
+	reason    string
 }
 
-func (m *mockState) Next(snapshot any) (fsmv2.State[any, any], fsmv2.Signal, fsmv2.Action[any]) {
+func (m *mockState) Next(snapshot any) fsmv2.NextResult[any, any] {
 	if m.nextState == nil {
-		return m, fsmv2.SignalNone, nil
+		return fsmv2.Result[any, any](m, fsmv2.SignalNone, nil, "mock state")
 	}
 
-	return m.nextState, m.signal, m.action
+	reason := m.reason
+	if reason == "" {
+		reason = "mock state"
+	}
+
+	return fsmv2.Result[any, any](m.nextState, m.signal, m.action, reason)
 }
 
 func (m *mockState) String() string { return "MockState" }
-func (m *mockState) Reason() string { return "mock state" }
 
 type mockStore struct {
 	identity     map[string]map[string]persistence.Document // workerType -> id -> document

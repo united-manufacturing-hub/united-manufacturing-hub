@@ -46,21 +46,21 @@ var _ = Describe("StoppedState", func() {
 			})
 
 			It("should transition to TryingToStartState", func() {
-				nextState, _, _ := stateObj.Next(snap)
+				result := stateObj.Next(snap)
 
-				Expect(nextState).To(BeAssignableToTypeOf(&state.TryingToStartState{}))
+				Expect(result.State).To(BeAssignableToTypeOf(&state.TryingToStartState{}))
 			})
 
 			It("should not signal anything", func() {
-				_, signal, _ := stateObj.Next(snap)
+				result := stateObj.Next(snap)
 
-				Expect(signal).To(Equal(fsmv2.SignalNone))
+				Expect(result.Signal).To(Equal(fsmv2.SignalNone))
 			})
 
 			It("should not return an action", func() {
-				_, _, action := stateObj.Next(snap)
+				result := stateObj.Next(snap)
 
-				Expect(action).To(BeNil())
+				Expect(result.Action).To(BeNil())
 			})
 		})
 
@@ -76,21 +76,21 @@ var _ = Describe("StoppedState", func() {
 			})
 
 			It("should stay in StoppedState", func() {
-				nextState, _, _ := stateObj.Next(snap)
+				result := stateObj.Next(snap)
 
-				Expect(nextState).To(BeAssignableToTypeOf(&state.StoppedState{}))
+				Expect(result.State).To(BeAssignableToTypeOf(&state.StoppedState{}))
 			})
 
 			It("should signal needs removal", func() {
-				_, signal, _ := stateObj.Next(snap)
+				result := stateObj.Next(snap)
 
-				Expect(signal).To(Equal(fsmv2.SignalNeedsRemoval))
+				Expect(result.Signal).To(Equal(fsmv2.SignalNeedsRemoval))
 			})
 
 			It("should not return an action", func() {
-				_, _, action := stateObj.Next(snap)
+				result := stateObj.Next(snap)
 
-				Expect(action).To(BeNil())
+				Expect(result.Action).To(BeNil())
 			})
 		})
 	})
@@ -98,12 +98,6 @@ var _ = Describe("StoppedState", func() {
 	Describe("String", func() {
 		It("should return snake_case state name", func() {
 			Expect(stateObj.String()).To(Equal("Stopped"))
-		})
-	})
-
-	Describe("Reason", func() {
-		It("should return descriptive reason", func() {
-			Expect(stateObj.Reason()).To(Equal("Worker is stopped, waiting to start"))
 		})
 	})
 })
@@ -123,11 +117,11 @@ var _ = Describe("StoppedState Transitions", func() {
 				Desired:  &snapshot.HelloworldDesiredState{},
 			}
 
-			nextState, signal, action := stateObj.Next(snap)
+			result := stateObj.Next(snap)
 
-			Expect(nextState).To(BeAssignableToTypeOf(&state.TryingToStartState{}))
-			Expect(signal).To(Equal(fsmv2.SignalNone))
-			Expect(action).To(BeNil())
+			Expect(result.State).To(BeAssignableToTypeOf(&state.TryingToStartState{}))
+			Expect(result.Signal).To(Equal(fsmv2.SignalNone))
+			Expect(result.Action).To(BeNil())
 		})
 
 		It("should transition with explicit shutdown=false", func() {
@@ -139,11 +133,11 @@ var _ = Describe("StoppedState Transitions", func() {
 				},
 			}
 
-			nextState, signal, action := stateObj.Next(snap)
+			result := stateObj.Next(snap)
 
-			Expect(nextState).To(BeAssignableToTypeOf(&state.TryingToStartState{}))
-			Expect(signal).To(Equal(fsmv2.SignalNone))
-			Expect(action).To(BeNil())
+			Expect(result.State).To(BeAssignableToTypeOf(&state.TryingToStartState{}))
+			Expect(result.Signal).To(Equal(fsmv2.SignalNone))
+			Expect(result.Action).To(BeNil())
 		})
 	})
 
@@ -157,11 +151,11 @@ var _ = Describe("StoppedState Transitions", func() {
 				},
 			}
 
-			nextState, signal, action := stateObj.Next(snap)
+			result := stateObj.Next(snap)
 
-			Expect(nextState).To(BeAssignableToTypeOf(&state.StoppedState{}))
-			Expect(signal).To(Equal(fsmv2.SignalNeedsRemoval))
-			Expect(action).To(BeNil())
+			Expect(result.State).To(BeAssignableToTypeOf(&state.StoppedState{}))
+			Expect(result.Signal).To(Equal(fsmv2.SignalNeedsRemoval))
+			Expect(result.Action).To(BeNil())
 		})
 
 		It("should signal removal even with HelloSaid=true", func() {
@@ -175,11 +169,11 @@ var _ = Describe("StoppedState Transitions", func() {
 				},
 			}
 
-			nextState, signal, action := stateObj.Next(snap)
+			result := stateObj.Next(snap)
 
-			Expect(nextState).To(BeAssignableToTypeOf(&state.StoppedState{}))
-			Expect(signal).To(Equal(fsmv2.SignalNeedsRemoval))
-			Expect(action).To(BeNil())
+			Expect(result.State).To(BeAssignableToTypeOf(&state.StoppedState{}))
+			Expect(result.Signal).To(Equal(fsmv2.SignalNeedsRemoval))
+			Expect(result.Action).To(BeNil())
 		})
 	})
 })
