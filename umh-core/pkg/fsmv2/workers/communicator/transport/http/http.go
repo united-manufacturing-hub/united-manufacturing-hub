@@ -107,6 +107,29 @@ func (e *TransportError) Is(target error) bool {
 }
 
 // isCloudflareChallenge detects Cloudflare challenge pages via headers and body content.
+//
+// Cloudflare challenge pages occur when Cloudflare's anti-bot protection activates.
+// Unlike backend rate limiting (which returns JSON with Retry-After), Cloudflare
+// challenges return HTML pages with JavaScript challenges.
+//
+// Detection criteria:
+//   - HTTP 429 status code (required)
+//   - "Server: cloudflare" header (optional but strong signal)
+//   - Body content markers (at least one required):
+//   - "Just a moment" - Cloudflare waiting page title text
+//   - "challenge-form" - Cloudflare challenge form element ID
+//   - "cf-browser-verification" - Cloudflare browser verification div ID
+//
+// Why these strings?
+//   - Cloudflare's challenge pages are generated server-side and contain
+//     consistent HTML markers. These strings have been stable across
+//     Cloudflare versions observed in production.
+//   - "Just a moment" appears in all challenge page variants
+//   - "challenge-form" and "cf-browser-verification" are specific element IDs
+//     that only appear in Cloudflare-generated pages
+//
+// Note: Some Cloudflare configurations may not include the Server header,
+// so we also check body content alone as a fallback.
 func isCloudflareChallenge(statusCode int, headers http.Header, body []byte) bool {
 	if statusCode != http.StatusTooManyRequests {
 		return false
@@ -118,6 +141,7 @@ func isCloudflareChallenge(statusCode int, headers http.Header, body []byte) boo
 			bytes.Contains(body, []byte("challenge-form")) ||
 			bytes.Contains(body, []byte("cf-browser-verification"))
 	}
+
 	// Check body without server header (some Cloudflare configurations)
 	return bytes.Contains(body, []byte("Just a moment")) ||
 		bytes.Contains(body, []byte("challenge-form"))
