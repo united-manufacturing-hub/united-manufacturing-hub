@@ -17,7 +17,9 @@ package state_test
 import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/snapshot"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/state"
@@ -69,6 +71,83 @@ var _ = Describe("StoppedState", func() {
 	Describe("Reason", func() {
 		It("should return descriptive reason", func() {
 			Expect(stateObj.Reason()).To(Equal("Communicator is stopped"))
+		})
+	})
+})
+
+var _ = Describe("StoppedState Transitions", func() {
+	var stateObj *state.StoppedState
+
+	BeforeEach(func() {
+		stateObj = &state.StoppedState{}
+	})
+
+	Describe("Stopped -> TryingToAuthenticateState", func() {
+		It("should transition when shutdown is not requested", func() {
+			snap := fsmv2.Snapshot{
+				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
+				Observed: snapshot.CommunicatorObservedState{},
+				Desired:  &snapshot.CommunicatorDesiredState{},
+			}
+
+			nextState, signal, action := stateObj.Next(snap)
+
+			Expect(nextState).To(BeAssignableToTypeOf(&state.TryingToAuthenticateState{}))
+			Expect(signal).To(Equal(fsmv2.SignalNone))
+			Expect(action).To(BeNil())
+		})
+
+		It("should transition with empty observed state", func() {
+			snap := fsmv2.Snapshot{
+				Identity: deps.Identity{ID: "comm-1", Name: "communicator", WorkerType: "communicator"},
+				Observed: snapshot.CommunicatorObservedState{},
+				Desired: &snapshot.CommunicatorDesiredState{
+					BaseDesiredState: config.BaseDesiredState{ShutdownRequested: false},
+				},
+			}
+
+			nextState, signal, action := stateObj.Next(snap)
+
+			Expect(nextState).To(BeAssignableToTypeOf(&state.TryingToAuthenticateState{}))
+			Expect(signal).To(Equal(fsmv2.SignalNone))
+			Expect(action).To(BeNil())
+		})
+	})
+
+	Describe("Stopped -> SignalNeedsRemoval", func() {
+		It("should signal removal when shutdown is requested", func() {
+			snap := fsmv2.Snapshot{
+				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
+				Observed: snapshot.CommunicatorObservedState{},
+				Desired: &snapshot.CommunicatorDesiredState{
+					BaseDesiredState: config.BaseDesiredState{ShutdownRequested: true},
+				},
+			}
+
+			nextState, signal, action := stateObj.Next(snap)
+
+			Expect(nextState).To(BeAssignableToTypeOf(&state.StoppedState{}))
+			Expect(signal).To(Equal(fsmv2.SignalNeedsRemoval))
+			Expect(action).To(BeNil())
+		})
+
+		It("should stay in StoppedState and emit SignalNeedsRemoval on shutdown", func() {
+			snap := fsmv2.Snapshot{
+				Identity: deps.Identity{ID: "comm-shutdown", Name: "communicator", WorkerType: "communicator"},
+				Observed: snapshot.CommunicatorObservedState{
+					Authenticated: true,
+					JWTToken:      "valid-token",
+				},
+				Desired: &snapshot.CommunicatorDesiredState{
+					BaseDesiredState: config.BaseDesiredState{ShutdownRequested: true},
+				},
+			}
+
+			nextState, signal, action := stateObj.Next(snap)
+
+			Expect(nextState).To(BeAssignableToTypeOf(&state.StoppedState{}))
+			Expect(signal).To(Equal(fsmv2.SignalNeedsRemoval))
+			Expect(action).To(BeNil())
 		})
 	})
 })
