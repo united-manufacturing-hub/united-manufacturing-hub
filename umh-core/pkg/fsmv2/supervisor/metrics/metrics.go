@@ -12,6 +12,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Package metrics provides Prometheus metrics for FSMv2 supervisors.
+//
+// # Cardinality Considerations
+//
+// Some metrics include a "worker_id" label which can lead to high cardinality
+// if the system has many workers. This is intentional for debugging specific
+// worker behavior, but operators should be aware of the trade-offs:
+//
+//   - state_duration_seconds: Uses worker_id to track per-worker state times
+//   - Dynamically created worker metrics: Use worker_id for isolation
+//
+// High cardinality mitigation strategies:
+//   - Configure Prometheus retention and scrape intervals appropriately
+//   - Use recording rules to aggregate per-worker metrics
+//   - Consider disabling detailed per-worker metrics in large deployments
+//   - Monitor _metric_count and _cardinality_total in Prometheus
+//
+// Expected cardinality: O(workers * states) for state_duration_seconds.
+// For typical deployments with <100 workers and <10 states, this is manageable.
+// For larger deployments (1000+ workers), consider aggregation strategies.
 package metrics
 
 import (
@@ -229,6 +249,9 @@ var (
 		[]string{"worker_type", "from_state", "to_state"},
 	)
 
+	// stateDurationSeconds tracks time in current state per worker.
+	// CARDINALITY NOTE: Uses worker_id label which creates O(workers * states) series.
+	// Cleanup via CleanupStateDuration() when workers are removed.
 	stateDurationSeconds = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: namespace,
@@ -363,6 +386,9 @@ func CleanupStateDuration(workerType, workerID, state string) {
 
 // WorkerMetricsExporter exports worker-specific metrics from ObservedState to Prometheus.
 // Tracks previous counter values to compute deltas.
+//
+// CARDINALITY NOTE: Creates metrics with worker_id label, resulting in O(workers * metrics) series.
+// For large deployments, consider aggregating metrics or limiting the number of distinct metrics.
 type WorkerMetricsExporter struct {
 	counters     map[string]*prometheus.CounterVec
 	gauges       map[string]*prometheus.GaugeVec
