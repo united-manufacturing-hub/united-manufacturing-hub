@@ -57,7 +57,7 @@ func ValidateDesiredState(state string) error {
 		hint = "Use 'running' for active components or 'stopped' for inactive ones."
 	}
 
-	return fmt.Errorf("invalid desired state '%s' - only 'stopped' or 'running' are allowed. %s", state, hint)
+	return fmt.Errorf("invalid desired state: only 'stopped' or 'running' are allowed. %s", hint)
 }
 
 // GetLifecyclePhase returns the lifecycle prefix from a state.

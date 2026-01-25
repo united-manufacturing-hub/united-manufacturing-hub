@@ -772,12 +772,12 @@ func (s *Supervisor[TObserved, TDesired]) tickAll(ctx context.Context) error {
 
 	for _, workerID := range workerIDs {
 		if err := s.tickWorker(ctx, workerID); err != nil {
-			errs = append(errs, fmt.Errorf("worker %s: %w", workerID, err))
+			errs = append(errs, err)
 		}
 	}
 
 	if len(errs) > 0 {
-		return fmt.Errorf("tick errors: %v", errs)
+		return errors.Join(errs...)
 	}
 
 	return nil
@@ -822,7 +822,7 @@ func (s *Supervisor[TObserved, TDesired]) processSignal(ctx context.Context, wor
 		if !exists {
 			s.mu.Unlock()
 
-			return fmt.Errorf("worker %s not found in registry", workerID)
+			return errors.New("worker not found in registry")
 		}
 
 		// Diagnostic logging: show children before removal
@@ -913,7 +913,7 @@ func (s *Supervisor[TObserved, TDesired]) processSignal(ctx context.Context, wor
 
 		return nil
 	default:
-		return fmt.Errorf("unknown signal: %d", signal)
+		return errors.New("unknown signal")
 	}
 }
 
@@ -1056,7 +1056,7 @@ func (s *Supervisor[TObserved, TDesired]) restartCollector(ctx context.Context, 
 	s.mu.RUnlock()
 
 	if !exists {
-		return fmt.Errorf("worker %s not found", workerID)
+		return errors.New("worker not found")
 	}
 
 	workerCtx.mu.Lock()

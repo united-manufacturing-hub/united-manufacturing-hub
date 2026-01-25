@@ -313,7 +313,7 @@ func (t *HTTPTransport) Authenticate(ctx context.Context, req transport.AuthRequ
 		Name string `json:"name"`
 	}
 	if err := json.Unmarshal(bodyBytes, &loginResp); err != nil {
-		return transport.AuthResponse{}, fmt.Errorf("failed to decode auth response (body: %s): %w", string(bodyBytes), err)
+		return transport.AuthResponse{}, fmt.Errorf("failed to decode auth response: %w", err)
 	}
 
 	var jwtToken string

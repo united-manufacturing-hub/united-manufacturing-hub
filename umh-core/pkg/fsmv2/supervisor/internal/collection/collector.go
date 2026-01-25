@@ -16,6 +16,7 @@ package collection
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -214,7 +215,7 @@ func (c *Collector[TObserved]) CollectFinalObservation(ctx context.Context) erro
 	if c.state != collectorStateRunning {
 		c.mu.RUnlock()
 
-		return fmt.Errorf("collector not running (state: %s)", c.state.String())
+		return errors.New("collector not running")
 	}
 
 	timeout := c.config.ObservationTimeout

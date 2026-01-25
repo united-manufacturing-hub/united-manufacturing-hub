@@ -265,11 +265,9 @@ var _ = Describe("ChildSpec Validation Integration", func() {
 			// Call supervisor.Tick()
 			err = sup.tick(ctx)
 
-			// Expect error listing available types
+			// Expect validation error about unknown worker type
 			Expect(err).To(HaveOccurred(), "should fail with unknown worker type")
 			Expect(err.Error()).To(ContainSubstring("unknown worker type"))
-			// Error should mention available types
-			Expect(err.Error()).To(ContainSubstring("available:"))
 		})
 
 		It("should fail validation with duplicate child names", func() {
@@ -526,11 +524,9 @@ var _ = Describe("ChildSpec Validation Integration", func() {
 			// Call supervisor.Tick()
 			err = sup.tick(ctx)
 
-			// Expect validation error
+			// Expect validation error about unknown worker type
 			Expect(err).To(HaveOccurred())
-
-			// Error should contain context about which spec failed
-			Expect(err.Error()).To(ContainSubstring("child-1"))
+			Expect(err.Error()).To(ContainSubstring("unknown worker type"))
 		})
 
 		It("should accept valid ChildSpecs with UserSpec data", func() {

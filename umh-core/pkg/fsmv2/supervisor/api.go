@@ -17,6 +17,7 @@ package supervisor
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -57,7 +58,7 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 	defer s.mu.Unlock()
 
 	if _, exists := s.workers[identity.ID]; exists {
-		return fmt.Errorf("worker %s already exists", identity.ID)
+		return errors.New("worker already exists")
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -313,7 +314,7 @@ func (s *Supervisor[TObserved, TDesired]) RemoveWorker(ctx context.Context, work
 	if !exists {
 		s.mu.Unlock()
 
-		return fmt.Errorf("worker %s not found", workerID)
+		return errors.New("worker not found")
 	}
 
 	delete(s.workers, workerID)
@@ -342,7 +343,7 @@ func (s *Supervisor[TObserved, TDesired]) GetWorker(workerID string) (*WorkerCon
 
 	ctx, exists := s.workers[workerID]
 	if !exists {
-		return nil, fmt.Errorf("worker %s not found", workerID)
+		return nil, errors.New("worker not found")
 	}
 
 	return ctx, nil
@@ -422,7 +423,7 @@ func (s *Supervisor[TObserved, TDesired]) GetWorkerState(workerID string) (strin
 
 	workerCtx, exists := s.workers[workerID]
 	if !exists {
-		return "", "", fmt.Errorf("worker %s not found", workerID)
+		return "", "", errors.New("worker not found")
 	}
 
 	workerCtx.mu.RLock()

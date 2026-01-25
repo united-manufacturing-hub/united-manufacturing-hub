@@ -136,7 +136,7 @@ func (ae *ActionExecutor) executeWorkWithRecovery(work actionWork) {
 
 	defer func() {
 		if r := recover(); r != nil {
-			err = fmt.Errorf("action panicked: %v", r)
+			err = errors.New("action panicked")
 			status = "panic"
 
 			ae.logger.Errorw("action_panic",
@@ -224,7 +224,7 @@ func (ae *ActionExecutor) EnqueueAction(actionID string, action fsmv2.Action[any
 	if ae.inProgress[actionID] {
 		ae.mu.Unlock()
 
-		return fmt.Errorf("action %s already in progress", actionID)
+		return errors.New("action already in progress")
 	}
 
 	ae.inProgress[actionID] = true

@@ -352,7 +352,7 @@ func (s *Supervisor[TObserved, TDesired]) requestShutdown(ctx context.Context, w
 	s.mu.RUnlock()
 
 	if !exists {
-		return fmt.Errorf("worker %s not found", workerID)
+		return errors.New("worker not found")
 	}
 
 	// Load current desired state from database
@@ -446,7 +446,7 @@ func (s *Supervisor[TObserved, TDesired]) handleWorkerRestart(ctx context.Contex
 	if !exists {
 		s.mu.RUnlock()
 
-		return fmt.Errorf("worker %s not found for restart", workerID)
+		return errors.New("worker not found for restart")
 	}
 
 	identity := workerCtx.identity
