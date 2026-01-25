@@ -230,16 +230,30 @@ func (d *CommunicatorDependencies) GetOutboundChan() <-chan *transport.UMHMessag
 	return d.outboundChan
 }
 
-// RecordPullSuccess is a no-op for interface compatibility.
+// -----------------------------------------------------------------------------
+// Legacy Metrics Methods (No-op)
+//
+// These methods exist for interface compatibility with legacy metric recording
+// interfaces. In FSMv2, metrics are recorded through deps.MetricsRecorder which
+// is automatically exported to Prometheus by the supervisor.
+//
+// Actions should use:
+//   deps.Metrics().IncrementCounter(deps.CounterPullSuccess, 1)
+//   deps.Metrics().SetGauge(deps.GaugeLastPullLatencyMs, float64(latency.Milliseconds()))
+//
+// The supervisor handles delta computation and Prometheus export.
+// -----------------------------------------------------------------------------
+
+// RecordPullSuccess is a no-op. Use MetricsRecorder instead (see above).
 func (d *CommunicatorDependencies) RecordPullSuccess(latency time.Duration, msgCount int) {}
 
-// RecordPullFailure is a no-op for interface compatibility.
+// RecordPullFailure is a no-op. Use MetricsRecorder instead (see above).
 func (d *CommunicatorDependencies) RecordPullFailure(latency time.Duration) {}
 
-// RecordPushSuccess is a no-op for interface compatibility.
+// RecordPushSuccess is a no-op. Use MetricsRecorder instead (see above).
 func (d *CommunicatorDependencies) RecordPushSuccess(latency time.Duration, msgCount int) {}
 
-// RecordPushFailure is a no-op for interface compatibility.
+// RecordPushFailure is a no-op. Use MetricsRecorder instead (see above).
 func (d *CommunicatorDependencies) RecordPushFailure(latency time.Duration) {}
 
 // SetInstanceInfo stores the instance UUID and name. Deprecated: Use SetAuthenticatedUUID instead.
