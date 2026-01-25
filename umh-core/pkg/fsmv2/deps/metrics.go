@@ -133,9 +133,6 @@ const (
 	// GaugeConsecutiveErrors tracks the number of consecutive errors.
 	// Resets to 0 on successful operation.
 	GaugeConsecutiveErrors GaugeName = "consecutive_errors"
-
-	// GaugeQueueDepth tracks the depth of the outbound message queue.
-	GaugeQueueDepth GaugeName = "queue_depth"
 )
 
 // =============================================================================
