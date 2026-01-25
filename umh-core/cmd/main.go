@@ -495,6 +495,9 @@ children:
 		return
 	}
 
+	// Register supervisor for debug introspection (/debug/fsmv2 endpoint)
+	metrics.RegisterFSMv2DebugProvider("application", appSup)
+
 	// Start supervisor (non-blocking - returns done channel)
 	done := appSup.Start(ctx)
 

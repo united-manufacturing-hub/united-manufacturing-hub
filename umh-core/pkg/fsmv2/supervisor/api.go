@@ -715,3 +715,91 @@ func (s *Supervisor[TObserved, TDesired]) GetCurrentStateNameAndReason() (string
 func (s *Supervisor[TObserved, TDesired]) GetWorkerType() string {
 	return s.workerType
 }
+
+// WorkerDebugInfo contains debug information for a single worker.
+type WorkerDebugInfo struct {
+	ID                  string    `json:"id"`
+	Name                string    `json:"name"`
+	WorkerType          string    `json:"worker_type"`
+	HierarchyPath       string    `json:"hierarchy_path"`
+	State               string    `json:"state"`
+	StateReason         string    `json:"state_reason"`
+	StateEnteredAt      time.Time `json:"state_entered_at"`
+	TimeInCurrentStateS float64   `json:"time_in_current_state_s"`
+	TotalTransitions    int64     `json:"total_transitions"`
+	CollectorRestarts   int64     `json:"collector_restarts"`
+	StartupCount        int64     `json:"startup_count"`
+	ActionPending       bool      `json:"action_pending"`
+}
+
+// SupervisorDebugInfo contains debug information for a supervisor and its hierarchy.
+type SupervisorDebugInfo struct {
+	WorkerType          string                         `json:"worker_type"`
+	HierarchyPath       string                         `json:"hierarchy_path"`
+	Workers             []WorkerDebugInfo              `json:"workers"`
+	CircuitOpen         bool                           `json:"circuit_open"`
+	MappedParentState   string                         `json:"mapped_parent_state,omitempty"`
+	Children            map[string]SupervisorDebugInfo `json:"children,omitempty"`
+	CollectedAtUnixNano int64                          `json:"collected_at_unix_nano"`
+}
+
+// GetDebugInfo returns introspection data for debugging and monitoring.
+// This method is thread-safe and provides a snapshot of the supervisor state.
+// The returned data is suitable for JSON serialization and /debug/fsmv2 endpoint.
+// Returns interface{} to satisfy metrics.FSMv2DebugProvider interface.
+func (s *Supervisor[TObserved, TDesired]) GetDebugInfo() interface{} {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	info := SupervisorDebugInfo{
+		WorkerType:          s.workerType,
+		HierarchyPath:       s.GetHierarchyPathUnlocked(),
+		CircuitOpen:         s.circuitOpen.Load(),
+		MappedParentState:   s.mappedParentState,
+		CollectedAtUnixNano: time.Now().UnixNano(),
+		Workers:             make([]WorkerDebugInfo, 0, len(s.workers)),
+	}
+
+	for _, workerCtx := range s.workers {
+		workerCtx.mu.RLock()
+
+		workerInfo := WorkerDebugInfo{
+			ID:                  workerCtx.identity.ID,
+			Name:                workerCtx.identity.Name,
+			WorkerType:          workerCtx.identity.WorkerType,
+			HierarchyPath:       workerCtx.identity.HierarchyPath,
+			State:               "unknown",
+			StateReason:         workerCtx.currentStateReason,
+			StateEnteredAt:      workerCtx.stateEnteredAt,
+			TimeInCurrentStateS: time.Since(workerCtx.stateEnteredAt).Seconds(),
+			TotalTransitions:    workerCtx.totalTransitions,
+			CollectorRestarts:   workerCtx.collectorRestarts,
+			StartupCount:        workerCtx.startupCount,
+			ActionPending:       workerCtx.actionPending,
+		}
+
+		if workerCtx.currentState != nil {
+			workerInfo.State = workerCtx.currentState.String()
+		}
+
+		workerCtx.mu.RUnlock()
+
+		info.Workers = append(info.Workers, workerInfo)
+	}
+
+	// Recursively collect child debug info
+	if len(s.children) > 0 {
+		info.Children = make(map[string]SupervisorDebugInfo, len(s.children))
+
+		for name, child := range s.children {
+			// Use the interface method which returns interface{}, then type assert
+			if debuggable, ok := child.(interface{ GetDebugInfo() interface{} }); ok {
+				if childInfo, ok := debuggable.GetDebugInfo().(SupervisorDebugInfo); ok {
+					info.Children[name] = childInfo
+				}
+			}
+		}
+	}
+
+	return info
+}

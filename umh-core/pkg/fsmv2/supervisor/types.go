@@ -91,6 +91,10 @@ type SupervisorInterface interface {
 	IsCircuitOpen() bool
 	// TestGetUserSpec returns the current userSpec for testing. DO NOT USE in production code.
 	TestGetUserSpec() config.UserSpec
+	// GetDebugInfo returns introspection data for debugging and monitoring.
+	// The returned data provides a snapshot of the supervisor's state.
+	// Returns interface{} to satisfy metrics.FSMv2DebugProvider interface.
+	GetDebugInfo() interface{}
 }
 
 // WorkerContext encapsulates the runtime state for a single worker
