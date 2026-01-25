@@ -187,6 +187,7 @@ var Registry = map[string]Scenario{
 	"configerror":  ConfigErrorScenario,
 	"inheritance":  InheritanceScenario,
 	"communicator": CommunicatorScenarioEntry,
+	"concurrent":   ConcurrentScenario,
 }
 
 // CommunicatorScenarioEntry registers the communicator scenario for CLI access.
