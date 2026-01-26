@@ -15,5 +15,5 @@
   ],
   "minimumReleaseAge": "7 days",
   "timezone": "Europe/Berlin",
-  "schedule": ["0 8 * * 0"]
+  "schedule": ["* 8 * * 0"]
 }
