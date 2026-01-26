@@ -338,7 +338,6 @@ func NewFrameworkMetrics() FrameworkMetrics {
 // JSON structure: {"framework":{...},"worker":{...}}.
 // Access pattern: snap.Observed.Metrics.Framework.TimeInCurrentStateMs.
 type MetricsContainer struct {
-
 	// Worker contains worker-defined metrics (recorded via MetricsRecorder).
 	Worker Metrics `json:"worker,omitempty"`
 	// Framework contains supervisor-computed metrics (copied from deps by worker).

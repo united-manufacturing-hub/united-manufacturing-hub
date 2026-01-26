@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"sort"
 	"syscall"
 	"time"
 
@@ -46,7 +47,15 @@ func main() {
 	if *listFlag {
 		fmt.Println("Available scenarios:")
 
-		for name, scenario := range examples.Registry {
+		names := make([]string, 0, len(examples.Registry))
+		for name := range examples.Registry {
+			names = append(names, name)
+		}
+
+		sort.Strings(names)
+
+		for _, name := range names {
+			scenario := examples.Registry[name]
 			fmt.Printf("  %-15s - %s\n", name, scenario.Description)
 		}
 

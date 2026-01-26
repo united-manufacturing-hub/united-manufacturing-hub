@@ -275,7 +275,7 @@ Every FSMv2 worker must implement:
 
 ```go
 type Worker interface {
-    // Query actual system state (runs in background goroutine, ~1s interval)
+    // Query actual system state (runs periodically in a background goroutine)
     CollectObservedState(ctx context.Context) (ObservedState, error)
 
     // Transform user config to desired state (called on config change)
