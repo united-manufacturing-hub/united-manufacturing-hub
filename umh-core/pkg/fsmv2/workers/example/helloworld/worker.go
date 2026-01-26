@@ -188,8 +188,13 @@ func init() {
 	if err := factory.RegisterWorkerType[snapshot.HelloworldObservedState, *snapshot.HelloworldDesiredState](
 		// Worker factory: creates worker instances
 		func(id deps.Identity, logger *zap.SugaredLogger, stateReader deps.StateReader, _ map[string]any) fsmv2.Worker {
-			worker, _ := NewHelloworldWorker(id, logger, stateReader)
-
+			worker, err := NewHelloworldWorker(id, logger, stateReader)
+			if err != nil {
+				if logger != nil {
+					logger.Errorw("helloworld_worker_creation_failed", "error", err)
+				}
+				return nil
+			}
 			return worker
 		},
 		// Supervisor factory: creates supervisor instances
