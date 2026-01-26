@@ -135,9 +135,9 @@ func (w *HelloworldWorker) CollectObservedState(ctx context.Context) (fsmv2.Obse
 func (w *HelloworldWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
 	if spec == nil {
 		// Default: desired state is running
-		return &config.DesiredState{
+		// Return the registered type (*snapshot.HelloworldDesiredState) to avoid type assertion failures
+		return &snapshot.HelloworldDesiredState{
 			BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
-			OriginalUserSpec: nil,
 		}, nil
 	}
 

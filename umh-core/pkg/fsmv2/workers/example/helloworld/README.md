@@ -12,7 +12,7 @@ _ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm
 
 ## State Machine
 
-```
+```text
 ┌──────────┐    ShouldBeRunning()    ┌──────────────────┐    HelloSaid    ┌─────────┐
 │ stopped  │ ──────────────────────▶ │ trying_to_start  │ ─────────────▶ │ running │
 └──────────┘                         └──────────────────┘                └─────────┘
@@ -23,7 +23,7 @@ _ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm
 
 ## File Structure
 
-```
+```text
 helloworld/
 ├── README.md           # This file - start here!
 ├── worker.go           # Main worker implementation (3 required methods)
