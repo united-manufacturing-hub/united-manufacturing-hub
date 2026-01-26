@@ -376,6 +376,35 @@ tail -f /data/logs/umh-core/current | grep fsmv2
 
 You should see log entries like `supervisor_heartbeat` with `hierarchy_path` containing `communicator` and `worker_states` showing the current state (e.g., `Syncing`).
 
+#### Enable Debug Logging
+
+For more detailed FSMv2 logs, set `LOGGING_LEVEL=DEBUG`:
+
+```bash
+# In Docker
+docker run -e LOGGING_LEVEL=DEBUG ...
+
+# In docker-compose.yml
+services:
+  umh-core:
+    environment:
+      - LOGGING_LEVEL=DEBUG
+```
+
+Then filter for FSMv2-specific logs:
+
+```bash
+tail -f /data/logs/umh-core/current | grep fsmv2
+```
+
+Debug output includes action completions, state changes, and observation updates:
+
+```
+[DEBUG] action_completed - hierarchy_path=.../communicator-001(communicator), action_name=sync, duration_ms=122
+[DEBUG] observed_changed - worker=.../communicator-001(communicator), changes=[{... CollectedAt modified}]
+[INFO]  supervisor_heartbeat - hierarchy_path=.../communicator-001(communicator), tick=400, worker_states=map[communicator-001:Syncing]
+```
+
 ## Supervisor responsibilities
 
 Developers implement business logic; the supervisor handles:
