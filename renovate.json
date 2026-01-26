@@ -1,0 +1,19 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended"
+  ],
+  "includePaths": [
+    "umh-core/**"
+  ],
+  "enabledManagers": [
+    "dockerfile",
+    "gomod"
+  ],
+  "postUpdateOptions": [
+    "gomodTidy"
+  ],
+  "minimumReleaseAge": "7 days",
+  "timezone": "Europe/Berlin",
+  "schedule": ["* 8 * * 0"]
+}
