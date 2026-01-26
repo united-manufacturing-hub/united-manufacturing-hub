@@ -96,7 +96,7 @@ var _ = Describe("RunningState", func() {
 	})
 
 	Describe("String", func() {
-		It("should return snake_case state name", func() {
+		It("should return the state name", func() {
 			Expect(stateObj.String()).To(Equal("Running"))
 		})
 	})
