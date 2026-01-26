@@ -140,6 +140,14 @@ func extractFingerprintKeys(fields []zapcore.Field) []string {
 				switch field.Type {
 				case zapcore.StringType:
 					value = field.String
+				case zapcore.Int64Type, zapcore.Int32Type, zapcore.Int16Type, zapcore.Int8Type:
+					value = strconv.FormatInt(field.Integer, 10)
+				case zapcore.BoolType:
+					if field.Integer == 1 {
+						value = "true"
+					} else {
+						value = "false"
+					}
 				default:
 					if field.Interface != nil {
 						value = fmt.Sprintf("%v", field.Interface)
