@@ -52,7 +52,7 @@ func RegisterFactoryByType(workerType string, factoryFunc func(deps.Identity, *z
 	defer registryMu.Unlock()
 
 	if _, exists := registry[workerType]; exists {
-		return errors.New("worker type already registered: " + workerType)
+		return errors.New("worker type already registered")
 	}
 
 	registry[workerType] = factoryFunc
@@ -90,7 +90,7 @@ func RegisterSupervisorFactory[TObserved fsmv2.ObservedState, TDesired fsmv2.Des
 	defer supervisorRegistryMu.Unlock()
 
 	if _, exists := supervisorRegistry[workerType]; exists {
-		return fmt.Errorf("supervisor factory already registered for worker type: %s", workerType)
+		return errors.New("supervisor factory already registered")
 	}
 
 	supervisorRegistry[workerType] = factoryFunc
@@ -113,7 +113,7 @@ func RegisterSupervisorFactoryByType(workerType string, factoryFunc func(interfa
 	defer supervisorRegistryMu.Unlock()
 
 	if _, exists := supervisorRegistry[workerType]; exists {
-		return fmt.Errorf("supervisor factory already registered for worker type: %s", workerType)
+		return errors.New("supervisor factory already registered")
 	}
 
 	supervisorRegistry[workerType] = factoryFunc
@@ -135,7 +135,7 @@ func NewWorkerByType(workerType string, identity deps.Identity, logger *zap.Suga
 	registryMu.RUnlock()
 
 	if !exists {
-		return nil, errors.New("unknown worker type: " + workerType)
+		return nil, errors.New("unknown worker type")
 	}
 
 	return factoryFunc(identity, logger, stateReader, deps), nil
@@ -155,7 +155,7 @@ func NewSupervisorByType(workerType string, config interface{}) (interface{}, er
 	supervisorRegistryMu.RUnlock()
 
 	if !exists {
-		return nil, fmt.Errorf("no supervisor factory registered for worker type: %s", workerType)
+		return nil, errors.New("no supervisor factory registered for worker type")
 	}
 
 	return factoryFunc(config), nil

@@ -28,10 +28,10 @@ const (
 // LifecyclePrefixes - standardized prefixes for ObservedState.State.
 // All observed states use prefix_suffix format where prefix indicates lifecycle phase.
 const (
-	PrefixStopped       = "stopped"           // Terminal state (no suffix)
+	PrefixStopped       = "stopped"          // Terminal state (no suffix)
 	PrefixTryingToStart = "trying_to_start_" // + worker-specific suffix
-	PrefixRunning       = "running_"          // + worker-specific suffix
-	PrefixTryingToStop  = "trying_to_stop_"   // + worker-specific suffix
+	PrefixRunning       = "running_"         // + worker-specific suffix
+	PrefixTryingToStop  = "trying_to_stop_"  // + worker-specific suffix
 )
 
 // IsValidDesiredState returns true if the state is a valid desired state value.
@@ -57,7 +57,7 @@ func ValidateDesiredState(state string) error {
 		hint = "Use 'running' for active components or 'stopped' for inactive ones."
 	}
 
-	return fmt.Errorf("invalid desired state '%s' - only 'stopped' or 'running' are allowed. %s", state, hint)
+	return fmt.Errorf("invalid desired state: only 'stopped' or 'running' are allowed. %s", hint)
 }
 
 // GetLifecyclePhase returns the lifecycle prefix from a state.

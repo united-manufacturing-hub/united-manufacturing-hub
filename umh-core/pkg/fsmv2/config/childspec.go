@@ -15,7 +15,11 @@
 // Package config provides core configuration types for FSMv2, including child specifications, variables, templates, and location hierarchies.
 package config
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"fmt"
+	"hash/fnv"
+)
 
 // BaseDesiredState provides common shutdown functionality for all DesiredState types.
 // Workers embed this struct to get consistent shutdown handling without boilerplate.
@@ -246,6 +250,39 @@ func (c ChildSpec) Clone() ChildSpec {
 	}
 
 	return clone
+}
+
+// Hash returns a deterministic hash of a ChildSpec for change detection.
+// This is used by the supervisor to detect when a ChildSpec has changed,
+// enabling incremental validation (only re-validate specs whose hash changed).
+//
+// The hash is computed from all relevant fields: Name, WorkerType, UserSpec,
+// ChildStartStates, and Dependencies (excluding any unexported fields).
+//
+// Returns a hex-encoded FNV-1a 64-bit hash string (16 characters).
+func (c ChildSpec) Hash() string {
+	h := fnv.New64a()
+
+	// Hash name and worker type
+	h.Write([]byte(c.Name))
+	h.Write([]byte(c.WorkerType))
+
+	// Hash UserSpec (config string + variables)
+	h.Write([]byte(c.UserSpec.Config))
+
+	if varsBytes, err := json.Marshal(c.UserSpec.Variables); err == nil {
+		h.Write(varsBytes)
+	}
+
+	// Hash ChildStartStates
+	for _, state := range c.ChildStartStates {
+		h.Write([]byte(state))
+	}
+
+	// Dependencies contain runtime objects (channels, etc.) that can't be meaningfully hashed,
+	// so we skip them. Changes to dependencies don't require re-validation anyway.
+
+	return fmt.Sprintf("%016x", h.Sum64())
 }
 
 // GetMappedChildState returns the desired state for this child based on the parent's current FSM state.

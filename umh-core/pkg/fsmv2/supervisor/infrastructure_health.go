@@ -35,6 +35,11 @@ func (e *ChildHealthError) Error() string {
 	return fmt.Sprintf("child %s unhealthy: %v", e.ChildName, e.Err)
 }
 
+// Unwrap returns the underlying error for use with errors.Is and errors.As.
+func (e *ChildHealthError) Unwrap() error {
+	return e.Err
+}
+
 type InfrastructureHealthChecker struct {
 	backoff       *execution.ExponentialBackoff
 	maxAttempts   int

@@ -15,8 +15,8 @@
 package state
 
 import (
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplepanic/snapshot"
 )
@@ -25,26 +25,22 @@ type StoppedState struct {
 	BaseExamplepanicState
 }
 
-func (s *StoppedState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, fsmv2.Action[any]) {
+func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := helpers.ConvertSnapshot[snapshot.ExamplepanicObservedState, *snapshot.ExamplepanicDesiredState](snapAny)
 	snap.Observed.State = config.PrefixStopped
 
 	if snap.Desired.IsShutdownRequested() {
-		return s, fsmv2.SignalNeedsRemoval, nil
+		return fsmv2.Result[any, any](s, fsmv2.SignalNeedsRemoval, nil, "Shutdown requested, signaling removal")
 	}
 
 	// ParentMappedState is in Observed.DesiredState, not Desired
 	if snap.Observed.ShouldBeRunning() {
-		return &TryingToConnectState{}, fsmv2.SignalNone, nil
+		return fsmv2.Result[any, any](&TryingToConnectState{}, fsmv2.SignalNone, nil, "Should be running, transitioning to TryingToConnect")
 	}
 
-	return s, fsmv2.SignalNone, nil
+	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, "Panic worker is stopped, no connection")
 }
 
 func (s *StoppedState) String() string {
 	return helpers.DeriveStateName(s)
-}
-
-func (s *StoppedState) Reason() string {
-	return "Panic worker is stopped, no connection"
 }

@@ -369,6 +369,7 @@ func ValidateStateXORAction(baseDir string) []Violation {
 }
 
 // checkStateXORAction parses a state file and checks return statements in Next().
+// This now checks for fsmv2.Result(state, signal, action, reason) calls.
 func checkStateXORAction(filename string) []Violation {
 	var violations []Violation
 
@@ -387,12 +388,15 @@ func checkStateXORAction(filename string) []Violation {
 
 		ast.Inspect(funcDecl.Body, func(bodyNode ast.Node) bool {
 			retStmt, ok := bodyNode.(*ast.ReturnStmt)
-			if !ok || len(retStmt.Results) != 3 {
+			if !ok || len(retStmt.Results) != 1 {
 				return true
 			}
 
-			stateResult := retStmt.Results[0]
-			actionResult := retStmt.Results[2]
+			// Extract state, signal, action from fsmv2.Result() call
+			stateResult, actionResult := extractResultArgs(retStmt.Results[0])
+			if stateResult == nil || actionResult == nil {
+				return true
+			}
 
 			stateIsChanging := false
 
@@ -445,22 +449,89 @@ func checkStateXORAction(filename string) []Violation {
 	return violations
 }
 
-// ValidateStateStringAndReason checks that all state types have String() and Reason() methods.
+// extractResultArgs extracts state and action arguments from a fsmv2.Result() call.
+// Returns (state, action) or (nil, nil) if not a Result call.
+func extractResultArgs(expr ast.Expr) (state, action ast.Expr) {
+	callExpr, ok := expr.(*ast.CallExpr)
+	if !ok {
+		return nil, nil
+	}
+
+	// Check if it's a call to fsmv2.Result or Result
+	var funcName string
+
+	switch fn := callExpr.Fun.(type) {
+	case *ast.SelectorExpr:
+		funcName = fn.Sel.Name
+	case *ast.IndexExpr:
+		// Handle generic syntax like fsmv2.Result[any, any](...)
+		if sel, ok := fn.X.(*ast.SelectorExpr); ok {
+			funcName = sel.Sel.Name
+		}
+	case *ast.IndexListExpr:
+		// Handle generic syntax like fsmv2.Result[any, any](...)
+		if sel, ok := fn.X.(*ast.SelectorExpr); ok {
+			funcName = sel.Sel.Name
+		}
+	}
+
+	if funcName != "Result" || len(callExpr.Args) < 3 {
+		return nil, nil
+	}
+
+	return callExpr.Args[0], callExpr.Args[2]
+}
+
+// extractResultArgsWithSignal extracts state, signal, and action arguments from a fsmv2.Result() call.
+// Returns (state, signal, action) or (nil, nil, nil) if not a Result call.
+func extractResultArgsWithSignal(expr ast.Expr) (state, signal, action ast.Expr) {
+	callExpr, ok := expr.(*ast.CallExpr)
+	if !ok {
+		return nil, nil, nil
+	}
+
+	// Check if it's a call to fsmv2.Result or Result
+	var funcName string
+
+	switch fn := callExpr.Fun.(type) {
+	case *ast.SelectorExpr:
+		funcName = fn.Sel.Name
+	case *ast.IndexExpr:
+		// Handle generic syntax like fsmv2.Result[any, any](...)
+		if sel, ok := fn.X.(*ast.SelectorExpr); ok {
+			funcName = sel.Sel.Name
+		}
+	case *ast.IndexListExpr:
+		// Handle generic syntax like fsmv2.Result[any, any](...)
+		if sel, ok := fn.X.(*ast.SelectorExpr); ok {
+			funcName = sel.Sel.Name
+		}
+	}
+
+	if funcName != "Result" || len(callExpr.Args) < 3 {
+		return nil, nil, nil
+	}
+
+	return callExpr.Args[0], callExpr.Args[1], callExpr.Args[2]
+}
+
+// ValidateStateStringAndReason checks that all state types have String() methods.
+// Note: Reason() method was removed from the State interface - reason now comes from NextResult.Reason.
 func ValidateStateStringAndReason(baseDir string) []Violation {
 	var violations []Violation
 
 	stateFiles := FindStateFiles(baseDir)
 
 	for _, file := range stateFiles {
-		fileViolations := checkStateStringAndReason(file)
+		fileViolations := checkStateStringMethod(file)
 		violations = append(violations, fileViolations...)
 	}
 
 	return violations
 }
 
-// checkStateStringAndReason parses a state file and checks for String() and Reason() methods.
-func checkStateStringAndReason(filename string) []Violation {
+// checkStateStringMethod parses a state file and checks for String() method.
+func checkStateStringMethod(filename string) []Violation {
 	var violations []Violation
 
 	fset := token.NewFileSet()
@@ -486,7 +557,6 @@ func checkStateStringAndReason(filename string) []Violation {
 	})
 
 	typesWithString := make(map[string]bool)
-	typesWithReason := make(map[string]bool)
 
 	ast.Inspect(node, func(n ast.Node) bool {
 		funcDecl, ok := n.(*ast.FuncDecl)
@@ -509,14 +579,8 @@ func checkStateStringAndReason(filename string) []Violation {
 			typeName = recvType.Name
 		}
 
-		if typeName != "" {
-			if funcDecl.Name.Name == "String" {
-				typesWithString[typeName] = true
-			}
-
-			if funcDecl.Name.Name == "Reason" {
-				typesWithReason[typeName] = true
-			}
+		if typeName != "" && funcDecl.Name.Name == "String" {
+			typesWithString[typeName] = true
 		}
 
 		return true
@@ -529,15 +593,6 @@ func checkStateStringAndReason(filename string) []Violation {
 				Line:    fset.Position(pos).Line,
 				Type:    "STATE_MISSING_STRING_METHOD",
 				Message: fmt.Sprintf("State %s missing String() string method", typeName),
-			})
-		}
-
-		if !typesWithReason[typeName] {
-			violations = append(violations, Violation{
-				File:    filename,
-				Line:    fset.Position(pos).Line,
-				Type:    "STATE_MISSING_STRING_METHOD",
-				Message: fmt.Sprintf("State %s missing Reason() string method", typeName),
 			})
 		}
 	}
@@ -578,11 +633,16 @@ func checkNoNilStateReturns(filename string) []Violation {
 
 		ast.Inspect(funcDecl.Body, func(bodyNode ast.Node) bool {
 			retStmt, ok := bodyNode.(*ast.ReturnStmt)
-			if !ok || len(retStmt.Results) < 1 {
+			if !ok || len(retStmt.Results) != 1 {
 				return true
 			}
 
-			stateResult := retStmt.Results[0]
+			// Extract state from fsmv2.Result() call
+			stateResult, _ := extractResultArgs(retStmt.Results[0])
+			if stateResult == nil {
+				return true
+			}
+
 			if ident, ok := stateResult.(*ast.Ident); ok {
 				if ident.Name == "nil" {
 					pos := fset.Position(retStmt.Pos())
@@ -590,7 +650,7 @@ func checkNoNilStateReturns(filename string) []Violation {
 						File:    filename,
 						Line:    pos.Line,
 						Type:    "NIL_STATE_RETURN",
-						Message: "Next() returns nil as state (should return valid state)",
+						Message: "Next() returns nil as state in fsmv2.Result() (should return valid state)",
 					})
 				}
 			}
@@ -619,6 +679,7 @@ func ValidateSignalStateMutualExclusion(baseDir string) []Violation {
 }
 
 // checkSignalStateMutualExclusion checks signals only with same-state returns.
+// This now checks for fsmv2.Result(state, signal, action, reason) calls.
 func checkSignalStateMutualExclusion(filename string) []Violation {
 	var violations []Violation
 
@@ -637,12 +698,15 @@ func checkSignalStateMutualExclusion(filename string) []Violation {
 
 		ast.Inspect(funcDecl.Body, func(bodyNode ast.Node) bool {
 			retStmt, ok := bodyNode.(*ast.ReturnStmt)
-			if !ok || len(retStmt.Results) != 3 {
+			if !ok || len(retStmt.Results) != 1 {
 				return true
 			}
 
-			stateResult := retStmt.Results[0]
-			signalResult := retStmt.Results[1]
+			// Extract state and signal from fsmv2.Result() call
+			stateResult, signalResult, _ := extractResultArgsWithSignal(retStmt.Results[0])
+			if stateResult == nil || signalResult == nil {
+				return true
+			}
 
 			signalIsNone := false
 
@@ -696,6 +760,7 @@ func ValidateTryingToStatesReturnActions(baseDir string) []Violation {
 }
 
 // checkTryingToStatesReturnActions checks if TryingTo states return actions.
+// This now checks for fsmv2.Result(state, signal, action, reason) calls where action is non-nil.
 func checkTryingToStatesReturnActions(filename string) []Violation {
 	var violations []Violation
 
@@ -721,21 +786,58 @@ func checkTryingToStatesReturnActions(filename string) []Violation {
 
 		ast.Inspect(funcDecl.Body, func(bodyNode ast.Node) bool {
 			retStmt, ok := bodyNode.(*ast.ReturnStmt)
-			if !ok || len(retStmt.Results) != 3 {
+			if !ok || len(retStmt.Results) != 1 {
 				return true
 			}
 
-			actionResult := retStmt.Results[2]
-			if _, ok := actionResult.(*ast.Ident); !ok {
-				if unaryExpr, ok := actionResult.(*ast.UnaryExpr); ok {
+			// Check for fsmv2.Result(...) call
+			callExpr, ok := retStmt.Results[0].(*ast.CallExpr)
+			if !ok {
+				return true
+			}
+
+			// Check if it's a call to fsmv2.Result or Result
+			var funcName string
+
+			switch fn := callExpr.Fun.(type) {
+			case *ast.SelectorExpr:
+				funcName = fn.Sel.Name
+			case *ast.IndexExpr:
+				// Handle generic syntax like fsmv2.Result[any, any](...)
+				if sel, ok := fn.X.(*ast.SelectorExpr); ok {
+					funcName = sel.Sel.Name
+				}
+			case *ast.IndexListExpr:
+				// Handle generic syntax like fsmv2.Result[any, any](...)
+				if sel, ok := fn.X.(*ast.SelectorExpr); ok {
+					funcName = sel.Sel.Name
+				}
+			}
+
+			if funcName != "Result" {
+				return true
+			}
+
+			// fsmv2.Result(state, signal, action, reason) - action is the 3rd argument (index 2)
+			if len(callExpr.Args) >= 3 {
+				actionArg := callExpr.Args[2]
+
+				// Check if action is not nil
+				if ident, ok := actionArg.(*ast.Ident); ok {
+					if ident.Name != "nil" {
+						hasActionReturn = true
+
+						return false
+					}
+				} else if unaryExpr, ok := actionArg.(*ast.UnaryExpr); ok {
+					// Handle &SomeAction{}
 					if _, ok := unaryExpr.X.(*ast.CompositeLit); ok {
 						hasActionReturn = true
 
 						return false
 					}
-				}
-			} else {
-				if ident, ok := actionResult.(*ast.Ident); ok && ident.Name != "nil" {
+				} else {
+					// Any other expression is likely a non-nil action
 					hasActionReturn = true
 
 					return false
@@ -776,6 +878,7 @@ func ValidateExhaustiveTransitionCoverage(baseDir string) []Violation {
 }
 
 // checkExhaustiveTransitionCoverage checks for catch-all return (TryingTo states exempt).
+// This now checks for fsmv2.Result(s, fsmv2.SignalNone, nil, "reason") pattern.
 func checkExhaustiveTransitionCoverage(filename string) []Violation {
 	var violations []Violation
 
@@ -804,13 +907,15 @@ func checkExhaustiveTransitionCoverage(filename string) []Violation {
 		lastStmt := funcDecl.Body.List[len(funcDecl.Body.List)-1]
 
 		retStmt, ok := lastStmt.(*ast.ReturnStmt)
-		if !ok || len(retStmt.Results) != 3 {
+		if !ok || len(retStmt.Results) != 1 {
 			return true
 		}
 
-		stateResult := retStmt.Results[0]
-		signalResult := retStmt.Results[1]
-		actionResult := retStmt.Results[2]
+		// Extract state, signal, action from fsmv2.Result() call
+		stateResult, signalResult, actionResult := extractResultArgsWithSignal(retStmt.Results[0])
+		if stateResult == nil || signalResult == nil || actionResult == nil {
+			return true
+		}
 
 		isCatchAll := false
 
@@ -830,7 +935,7 @@ func checkExhaustiveTransitionCoverage(filename string) []Violation {
 				File:    filename,
 				Line:    pos.Line,
 				Type:    "MISSING_CATCHALL_RETURN",
-				Message: "Next() should end with catch-all: return s, SignalNone, nil",
+				Message: "Next() should end with catch-all: fsmv2.Result(s, fsmv2.SignalNone, nil, reason)",
 			})
 		}
 

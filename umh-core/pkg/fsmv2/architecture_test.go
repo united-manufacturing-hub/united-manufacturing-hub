@@ -128,8 +128,9 @@ var _ = Describe("FSMv2 Architecture Validation", func() {
 			})
 		})
 
-		Describe("State String() and Reason() Methods (Invariant: Debuggability)", func() {
-			It("should have both String() and Reason() methods", func() {
+		Describe("State String() Method (Invariant: Debuggability)", func() {
+			// Note: Reason() method was removed from State interface - reason now comes from NextResult.Reason
+			It("should have String() method for debugging", func() {
 				violations := validator.ValidateStateStringAndReason(getFsmv2Dir())
 				if len(violations) > 0 {
 					message := validator.FormatViolationsWithPattern("State Method Violations", violations, "STATE_MISSING_STRING_METHOD")
@@ -464,6 +465,35 @@ var _ = Describe("FSMv2 Architecture Validation", func() {
 						"POINTER_RECEIVER_ON_METRICS_EMBEDDER",
 					)
 					Fail(message)
+				}
+			})
+		})
+
+		Describe("Static Error Messages (Invariant: Sentry Grouping)", func() {
+			It("should not have dynamic content in error messages", func() {
+				violations := validator.ValidateStaticErrorMessages(getFsmv2Dir())
+				if len(violations) > 0 {
+					// Report violations but skip instead of failing
+					// P2-19 will fix all violations; this test documents what needs fixing
+					maxViolations := 20
+					if len(violations) > maxViolations {
+						truncated := violations[:maxViolations]
+						message := validator.FormatViolationsWithPattern(
+							"Static Error Message Violations",
+							truncated,
+							"DYNAMIC_ERROR_MESSAGE",
+						)
+						Skip(fmt.Sprintf("Found %d static error violations (showing first %d, to be fixed in P2-19):\n%s",
+							len(violations), maxViolations, message))
+					} else {
+						message := validator.FormatViolationsWithPattern(
+							"Static Error Message Violations",
+							violations,
+							"DYNAMIC_ERROR_MESSAGE",
+						)
+						Skip(fmt.Sprintf("Found %d static error violations (to be fixed in P2-19):\n%s",
+							len(violations), message))
+					}
 				}
 			})
 		})

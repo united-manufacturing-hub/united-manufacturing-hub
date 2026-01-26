@@ -88,8 +88,8 @@ var _ = Describe("Extract", func() {
 
 				Expect(err).ToNot(HaveOccurred())
 				Expect(result.IP).To(Equal("192.168.1.100"))
-				Expect(result.PORT).To(Equal(0))        // zero value for int
-				Expect(result.Enabled).To(BeFalse())    // zero value for bool
+				Expect(result.PORT).To(Equal(0))     // zero value for int
+				Expect(result.Enabled).To(BeFalse()) // zero value for bool
 			})
 		})
 

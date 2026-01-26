@@ -580,6 +580,29 @@ Use RegisterWorkerType[TObserved, TDesired]() to register both atomically.`,
 }`,
 		ReferenceFile: "factory/worker_factory.go:451-461",
 	},
+	"DYNAMIC_ERROR_MESSAGE": {
+		Name: "Static Error Messages for Sentry Grouping",
+		Why: `Error messages must be static strings without dynamic content (IDs, timestamps, counts).
+WHY: Sentry groups errors by message. Dynamic content creates unique messages that
+cannot be grouped, causing:
+1. Sentry spam - thousands of "unique" issues that are the same error
+2. Impossible to track error frequency (each occurrence is a "new" issue)
+3. Alert fatigue for on-call engineers who can't distinguish severity
+
+Use static messages like "worker failed to start" and put dynamic context in
+Sentry's extra data fields, not in the error message itself.`,
+		CorrectCode: `// Correct: static message, context in Sentry scope
+return fmt.Errorf("worker failed to start: %w", err)
+
+// Correct: static message only
+return fmt.Errorf("connection refused")
+
+// WRONG: dynamic content in message (creates unique errors)
+return fmt.Errorf("worker %s failed at %v", workerID, time.Now())
+return fmt.Errorf("failed after %d retries", count)
+return fmt.Errorf("connection to %s:%d failed", host, port)`,
+		ReferenceFile: "pkg/fsmv2/ARCHITECTURE.md",
+	},
 }
 
 // GetPattern returns pattern info for a violation type.

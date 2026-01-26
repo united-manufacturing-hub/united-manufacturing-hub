@@ -58,7 +58,7 @@ func (f *FreshnessChecker) extractTimestamp(snapshot *fsmv2.Snapshot) (time.Time
 	doc, ok := snapshot.Observed.(persistence.Document)
 	if !ok {
 		f.logger.Warnw("observed_state_type_unknown",
-			"identity", snapshot.Identity,
+			"hierarchy_path", snapshot.Identity.HierarchyPath,
 			"type", fmt.Sprintf("%T", snapshot.Observed),
 			"action", "assuming_fresh")
 
@@ -69,7 +69,7 @@ func (f *FreshnessChecker) extractTimestamp(snapshot *fsmv2.Snapshot) (time.Time
 	ts, exists := doc["collected_at"]
 	if !exists {
 		f.logger.Warnw("observed_state_missing_timestamp",
-			"identity", snapshot.Identity,
+			"hierarchy_path", snapshot.Identity.HierarchyPath,
 			"action", "assuming_fresh")
 
 		return time.Time{}, false
@@ -86,7 +86,7 @@ func (f *FreshnessChecker) extractTimestamp(snapshot *fsmv2.Snapshot) (time.Time
 		collectedAt, err := time.Parse(time.RFC3339Nano, v)
 		if err != nil {
 			f.logger.Warnw("observed_state_invalid_timestamp",
-				"identity", snapshot.Identity,
+				"hierarchy_path", snapshot.Identity.HierarchyPath,
 				"value", v,
 				"action", "assuming_fresh")
 
@@ -96,7 +96,7 @@ func (f *FreshnessChecker) extractTimestamp(snapshot *fsmv2.Snapshot) (time.Time
 		return collectedAt, true
 	default:
 		f.logger.Warnw("observed_state_unknown_timestamp_type",
-			"identity", snapshot.Identity,
+			"hierarchy_path", snapshot.Identity.HierarchyPath,
 			"type", fmt.Sprintf("%T", v),
 			"action", "assuming_fresh")
 
@@ -121,7 +121,7 @@ func (f *FreshnessChecker) Check(snapshot *fsmv2.Snapshot) bool {
 
 	if !isFresh {
 		f.logger.Debugw("observed_state_stale",
-			"identity", snapshot.Identity,
+			"hierarchy_path", snapshot.Identity.HierarchyPath,
 			"age", age,
 			"threshold", f.staleThreshold)
 	}
@@ -142,7 +142,7 @@ func (f *FreshnessChecker) IsTimeout(snapshot *fsmv2.Snapshot) bool {
 
 	if isTimedOut {
 		f.logger.Warnw("observed_state_timeout",
-			"identity", snapshot.Identity,
+			"hierarchy_path", snapshot.Identity.HierarchyPath,
 			"age", age,
 			"threshold", f.timeout)
 	}

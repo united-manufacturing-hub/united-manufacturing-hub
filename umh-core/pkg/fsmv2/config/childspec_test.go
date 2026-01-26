@@ -160,6 +160,123 @@ var _ = Describe("ChildSpec Clone", func() {
 	})
 })
 
+var _ = Describe("ChildSpec Hash", func() {
+	Describe("Hash()", func() {
+		It("should produce deterministic hashes for identical specs", func() {
+			spec1 := config.ChildSpec{
+				Name:       "child-1",
+				WorkerType: "mqtt_connection",
+				UserSpec: config.UserSpec{
+					Config: "test-config",
+					Variables: config.VariableBundle{
+						User: map[string]interface{}{
+							"key": "value",
+						},
+					},
+				},
+				ChildStartStates: []string{"Running", "TryingToStart"},
+			}
+
+			spec2 := config.ChildSpec{
+				Name:       "child-1",
+				WorkerType: "mqtt_connection",
+				UserSpec: config.UserSpec{
+					Config: "test-config",
+					Variables: config.VariableBundle{
+						User: map[string]interface{}{
+							"key": "value",
+						},
+					},
+				},
+				ChildStartStates: []string{"Running", "TryingToStart"},
+			}
+
+			Expect(spec1.Hash()).To(Equal(spec2.Hash()))
+		})
+
+		It("should produce different hashes when Name changes", func() {
+			spec1 := config.ChildSpec{
+				Name:       "child-1",
+				WorkerType: "mqtt_connection",
+				UserSpec:   config.UserSpec{Config: "config"},
+			}
+
+			spec2 := config.ChildSpec{
+				Name:       "child-2",
+				WorkerType: "mqtt_connection",
+				UserSpec:   config.UserSpec{Config: "config"},
+			}
+
+			Expect(spec1.Hash()).NotTo(Equal(spec2.Hash()))
+		})
+
+		It("should produce different hashes when WorkerType changes", func() {
+			spec1 := config.ChildSpec{
+				Name:       "child-1",
+				WorkerType: "mqtt_connection",
+				UserSpec:   config.UserSpec{Config: "config"},
+			}
+
+			spec2 := config.ChildSpec{
+				Name:       "child-1",
+				WorkerType: "modbus_connection",
+				UserSpec:   config.UserSpec{Config: "config"},
+			}
+
+			Expect(spec1.Hash()).NotTo(Equal(spec2.Hash()))
+		})
+
+		It("should produce different hashes when UserSpec.Config changes", func() {
+			spec1 := config.ChildSpec{
+				Name:       "child-1",
+				WorkerType: "mqtt_connection",
+				UserSpec:   config.UserSpec{Config: "config-a"},
+			}
+
+			spec2 := config.ChildSpec{
+				Name:       "child-1",
+				WorkerType: "mqtt_connection",
+				UserSpec:   config.UserSpec{Config: "config-b"},
+			}
+
+			Expect(spec1.Hash()).NotTo(Equal(spec2.Hash()))
+		})
+
+		It("should produce different hashes when ChildStartStates changes", func() {
+			spec1 := config.ChildSpec{
+				Name:             "child-1",
+				WorkerType:       "mqtt_connection",
+				UserSpec:         config.UserSpec{Config: "config"},
+				ChildStartStates: []string{"Running"},
+			}
+
+			spec2 := config.ChildSpec{
+				Name:             "child-1",
+				WorkerType:       "mqtt_connection",
+				UserSpec:         config.UserSpec{Config: "config"},
+				ChildStartStates: []string{"Running", "TryingToStart"},
+			}
+
+			Expect(spec1.Hash()).NotTo(Equal(spec2.Hash()))
+		})
+
+		It("should produce a 16-character hex string", func() {
+			spec := config.ChildSpec{
+				Name:       "child-1",
+				WorkerType: "mqtt_connection",
+				UserSpec:   config.UserSpec{Config: "config"},
+			}
+
+			hash := spec.Hash()
+			Expect(hash).To(HaveLen(16))
+			// All characters should be hex digits
+			for _, c := range hash {
+				Expect(string(c)).To(MatchRegexp("[0-9a-f]"))
+			}
+		})
+	})
+})
+
 var _ = Describe("DesiredState", func() {
 	Describe("YAML serialization", func() {
 		It("should serialize to YAML correctly", func() {

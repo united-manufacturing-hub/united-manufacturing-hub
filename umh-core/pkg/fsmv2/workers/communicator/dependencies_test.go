@@ -325,7 +325,11 @@ var _ = Describe("CommunicatorDependencies", func() {
 		})
 	})
 
-	Describe("Transport reset on consecutive errors", func() {
+	// Transport reset responsibility belongs to ResetTransportAction, NOT RecordError.
+	// RecordError/RecordTypedError only track error counts; transport reset is triggered
+	// by DegradedState returning ResetTransportAction at threshold multiples.
+	// This separation ensures single responsibility and avoids double resets.
+	Describe("RecordError does NOT reset transport (reset via FSM action only)", func() {
 		var (
 			mockTrans *MockTransport
 			deps      *communicator.CommunicatorDependencies
@@ -348,20 +352,24 @@ var _ = Describe("CommunicatorDependencies", func() {
 		})
 
 		Context("when errors reach threshold", func() {
-			It("should call Reset() when consecutive errors reach TransportResetThreshold (5)", func() {
+			It("should NOT call Reset() even at TransportResetThreshold (5) - reset happens via FSM action", func() {
 				for range 5 {
 					deps.RecordError()
 				}
 
-				Expect(mockTrans.ResetCallCount()).To(Equal(1))
+				// Transport reset is handled by ResetTransportAction from DegradedState,
+				// not by RecordError. This avoids double resets.
+				Expect(mockTrans.ResetCallCount()).To(Equal(0))
 			})
 
-			It("should call Reset() again when errors accumulate to next threshold multiple", func() {
+			It("should NOT call Reset() even at threshold multiples (10) - reset happens via FSM action", func() {
 				for range 10 {
 					deps.RecordError()
 				}
 
-				Expect(mockTrans.ResetCallCount()).To(Equal(2))
+				// Transport reset is handled by ResetTransportAction from DegradedState,
+				// not by RecordError. This avoids double resets.
+				Expect(mockTrans.ResetCallCount()).To(Equal(0))
 			})
 		})
 
@@ -379,21 +387,22 @@ var _ = Describe("CommunicatorDependencies", func() {
 		})
 
 		Context("when success resets error count", func() {
-			It("should require reaching threshold again after RecordSuccess", func() {
+			It("should track consecutive errors correctly without calling Reset()", func() {
 				for range 3 {
 					deps.RecordError()
 				}
+				Expect(deps.GetConsecutiveErrors()).To(Equal(3))
 				Expect(mockTrans.ResetCallCount()).To(Equal(0))
 
 				deps.RecordSuccess()
+				Expect(deps.GetConsecutiveErrors()).To(Equal(0))
 
-				for range 4 {
+				for range 5 {
 					deps.RecordError()
 				}
+				Expect(deps.GetConsecutiveErrors()).To(Equal(5))
+				// Still no reset - that's the FSM's job via ResetTransportAction
 				Expect(mockTrans.ResetCallCount()).To(Equal(0))
-
-				deps.RecordError()
-				Expect(mockTrans.ResetCallCount()).To(Equal(1))
 			})
 		})
 	})

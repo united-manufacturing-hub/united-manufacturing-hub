@@ -38,37 +38,33 @@ import (
 type SyncingState struct {
 }
 
-func (s *SyncingState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, fsmv2.Action[any]) {
+func (s *SyncingState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := helpers.ConvertSnapshot[snapshot.CommunicatorObservedState, *snapshot.CommunicatorDesiredState](snapAny)
 	snap.Observed.State = config.MakeState(config.PrefixRunning, "syncing")
 
 	if snap.Desired.IsShutdownRequested() {
-		return &StoppedState{}, fsmv2.SignalNone, nil
+		return fsmv2.Result[any, any](&StoppedState{}, fsmv2.SignalNone, nil, "Shutdown requested during sync")
 	}
 
 	if snap.Observed.IsTokenExpired() {
-		return &TryingToAuthenticateState{}, fsmv2.SignalNone, nil
+		return fsmv2.Result[any, any](&TryingToAuthenticateState{}, fsmv2.SignalNone, nil, "Token expired, re-authenticating")
 	}
 
 	if !snap.Observed.Authenticated {
-		return &TryingToAuthenticateState{}, fsmv2.SignalNone, nil
+		return fsmv2.Result[any, any](&TryingToAuthenticateState{}, fsmv2.SignalNone, nil, "Not authenticated, re-authenticating")
 	}
 
 	if !snap.Observed.IsSyncHealthy() {
-		return &DegradedState{}, fsmv2.SignalNone, nil
+		return fsmv2.Result[any, any](&DegradedState{}, fsmv2.SignalNone, nil, "Sync health check failed")
 	}
 
 	syncAction := action.NewSyncAction(snap.Observed.JWTToken)
 
-	return s, fsmv2.SignalNone, syncAction
+	return fsmv2.Result[any, any](s, fsmv2.SignalNone, syncAction, "Syncing with relay server")
 }
 
 func (s *SyncingState) String() string {
 	return "Syncing"
-}
-
-func (s *SyncingState) Reason() string {
-	return "Syncing with relay server"
 }
 
 // GetBackoffDelay calculates exponential backoff based on consecutive errors.

@@ -15,8 +15,8 @@
 package state
 
 import (
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleslow/action"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleslow/snapshot"
@@ -26,21 +26,17 @@ type TryingToStopState struct {
 	BaseExampleslowState
 }
 
-func (s *TryingToStopState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, fsmv2.Action[any]) {
+func (s *TryingToStopState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := helpers.ConvertSnapshot[snapshot.ExampleslowObservedState, *snapshot.ExampleslowDesiredState](snapAny)
 	snap.Observed.State = config.MakeState(config.PrefixTryingToStop, "connection")
 
 	if snap.Observed.ConnectionHealth == "no connection" {
-		return &StoppedState{}, fsmv2.SignalNone, nil
+		return fsmv2.Result[any, any](&StoppedState{}, fsmv2.SignalNone, nil, "connection closed, transitioning to stopped")
 	}
 
-	return s, fsmv2.SignalNone, &action.DisconnectAction{}
+	return fsmv2.Result[any, any](s, fsmv2.SignalNone, &action.DisconnectAction{}, "closing connections gracefully")
 }
 
 func (s *TryingToStopState) String() string {
 	return helpers.DeriveStateName(s)
-}
-
-func (s *TryingToStopState) Reason() string {
-	return "Closing connections gracefully"
 }

@@ -66,8 +66,8 @@ var _ = Describe("ComputeUserSpecHash Performance", func() {
 
 	Describe("hash vs render performance ratio", func() {
 		const (
-			warmupIterations = 100
-			measureIterations = 1000
+			warmupIterations    = 100
+			measureIterations   = 1000
 			minimumSpeedupRatio = 5.0 // Conservative: actual is ~50x
 		)
 

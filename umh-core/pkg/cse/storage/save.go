@@ -200,7 +200,7 @@ func (ts *TriangularStore) saveWithDelta(
 			}
 
 			// Snapshot saved successfully, delta append is best-effort
-			ts.logger.Warnw("failed to append delta",
+			ts.logger.Warnw("delta_append_failed",
 				"worker", hierarchyPath,
 				"role", opts.Role,
 				"error", appendErr)

@@ -30,6 +30,7 @@ import (
 	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplepanic"
 	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent"
 	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleslow"
+	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/helloworld"
 )
 
 // RunResult contains the result of running a scenario.
@@ -67,7 +68,7 @@ func Run(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 
 		startSyncID, err = cfg.Store.GetLatestSyncID(ctx)
 		if err != nil {
-			cfg.Logger.Warnw("Failed to get starting sync ID, dump will show all changes", "error", err)
+			cfg.Logger.Warnw("sync_id_fetch_failed", "error", err, "impact", "dump_shows_all_changes")
 		}
 	}
 
@@ -100,7 +101,7 @@ func Run(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 
 			dump, err := DumpScenario(dumpCtx, cfg.Store, startSyncID)
 			if err != nil {
-				cfg.Logger.Warnw("Failed to dump scenario", "error", err)
+				cfg.Logger.Warnw("scenario_dump_failed", "error", err)
 			} else {
 				fmt.Print(dump.FormatHuman())
 			}

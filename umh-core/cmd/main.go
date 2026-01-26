@@ -428,10 +428,12 @@ func enableFSMv2BackendConnection(
 	}
 
 	// Create channel adapter to bridge FSMv2 and legacy channels
+	// Use default buffer size (0 = DefaultBufferSize)
 	channelAdapter := fsmv2_adapter.NewLegacyChannelBridge(
 		communicationState.InboundChannel,
 		communicationState.OutboundChannel,
 		logger,
+		0,
 	)
 
 	// Start conversion goroutines
@@ -474,10 +476,14 @@ children:
 	// This avoids global state and enables proper testing
 	// Use Named("fsmv2") to create [fsmv2] prefix in logs for easy filtering
 	fsmv2Logger := logger.Named("fsmv2")
+	// Wrap with SentryHook for automatic FSMv2 error capture to Sentry
+	// This only affects FSMv2 logs, not the rest of the application
+	fsmv2Core := sentry.NewSentryHook(fsmv2Logger.Desugar().Core())
+	fsmv2Logger = zap.New(fsmv2Core).Sugar()
 
 	appSup, err := application.NewApplicationSupervisor(application.SupervisorConfig{
-		ID:           "fsmv2-communicator",
-		Name:         "FSMv2 Communicator",
+		ID:           "application-fsmv2",
+		Name:         "Application FSMv2",
 		Store:        store,
 		Logger:       fsmv2Logger,
 		TickInterval: 100 * time.Millisecond,
@@ -492,6 +498,9 @@ children:
 
 		return
 	}
+
+	// Register supervisor for debug introspection (/debug/fsmv2 endpoint)
+	metrics.RegisterFSMv2DebugProvider("application", appSup)
 
 	// Start supervisor (non-blocking - returns done channel)
 	done := appSup.Start(ctx)

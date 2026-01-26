@@ -107,6 +107,27 @@ func (e *TransportError) Is(target error) bool {
 }
 
 // isCloudflareChallenge detects Cloudflare challenge pages via headers and body content.
+//
+// Cloudflare challenge pages occur when Cloudflare's anti-bot protection activates.
+// Unlike backend rate limiting (which returns JSON with Retry-After), Cloudflare
+// challenges return HTML pages with JavaScript challenges.
+//
+// Detection criteria:
+//   - HTTP 429 status code (required)
+//   - "Server: cloudflare" header (optional but strong signal)
+//   - Body content markers (at least one required):
+//   - "Just a moment" - Cloudflare waiting page title text
+//   - "challenge-form" - Cloudflare challenge form element ID
+//   - "cf-browser-verification" - Cloudflare browser verification div ID
+//
+// These strings identify Cloudflare challenge pages because Cloudflare generates
+// challenge pages server-side with consistent HTML markers that have remained
+// stable across production versions. "Just a moment" appears in all challenge
+// page variants, while "challenge-form" and "cf-browser-verification" are
+// element IDs specific to Cloudflare-generated pages.
+//
+// Some Cloudflare configurations may not include the Server header, so body
+// content alone is also checked as a fallback.
 func isCloudflareChallenge(statusCode int, headers http.Header, body []byte) bool {
 	if statusCode != http.StatusTooManyRequests {
 		return false
@@ -118,6 +139,7 @@ func isCloudflareChallenge(statusCode int, headers http.Header, body []byte) boo
 			bytes.Contains(body, []byte("challenge-form")) ||
 			bytes.Contains(body, []byte("cf-browser-verification"))
 	}
+
 	// Check body without server header (some Cloudflare configurations)
 	return bytes.Contains(body, []byte("Just a moment")) ||
 		bytes.Contains(body, []byte("challenge-form"))
@@ -313,7 +335,7 @@ func (t *HTTPTransport) Authenticate(ctx context.Context, req transport.AuthRequ
 		Name string `json:"name"`
 	}
 	if err := json.Unmarshal(bodyBytes, &loginResp); err != nil {
-		return transport.AuthResponse{}, fmt.Errorf("failed to decode auth response (body: %s): %w", string(bodyBytes), err)
+		return transport.AuthResponse{}, fmt.Errorf("failed to decode auth response: %w", err)
 	}
 
 	var jwtToken string

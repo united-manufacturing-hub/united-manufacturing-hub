@@ -17,13 +17,14 @@ package supervisor
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/internal/collection"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/internal/execution"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/metrics"
@@ -57,7 +58,11 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 	defer s.mu.Unlock()
 
 	if _, exists := s.workers[identity.ID]; exists {
-		return fmt.Errorf("worker %s already exists", identity.ID)
+		s.logger.Warnw("worker_add_rejected",
+			"hierarchy_path", identity.HierarchyPath,
+			"reason", "already_exists")
+
+		return errors.New("worker already exists")
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -65,15 +70,27 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 
 	observed, err := worker.CollectObservedState(ctx)
 	if err != nil {
+		s.logger.Errorw("worker_add_collect_observed_failed",
+			"hierarchy_path", identity.HierarchyPath,
+			"error", err)
+
 		return fmt.Errorf("failed to collect initial observed state: %w", err)
 	}
 
 	initialDesired, err := worker.DeriveDesiredState(nil)
 	if err != nil {
+		s.logger.Errorw("worker_add_derive_desired_failed",
+			"hierarchy_path", identity.HierarchyPath,
+			"error", err)
+
 		return fmt.Errorf("failed to derive initial desired state: %w", err)
 	}
 
 	if valErr := config.ValidateDesiredState(initialDesired.GetState()); valErr != nil {
+		s.logger.Errorw("worker_add_validate_desired_failed",
+			"hierarchy_path", identity.HierarchyPath,
+			"error", valErr)
+
 		return fmt.Errorf("failed to derive initial desired state: %w", valErr)
 	}
 
@@ -84,6 +101,10 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 		"hierarchy_path": identity.HierarchyPath,
 	}
 	if err := s.store.SaveIdentity(ctx, s.workerType, identity.ID, identityDoc); err != nil {
+		s.logger.Errorw("worker_add_save_identity_failed",
+			"hierarchy_path", identity.HierarchyPath,
+			"error", err)
+
 		return fmt.Errorf("failed to save identity: %w", err)
 	}
 
@@ -91,11 +112,19 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 
 	observedJSON, err := json.Marshal(observed)
 	if err != nil {
+		s.logger.Errorw("worker_add_marshal_observed_failed",
+			"hierarchy_path", identity.HierarchyPath,
+			"error", err)
+
 		return fmt.Errorf("failed to marshal observed state: %w", err)
 	}
 
 	observedDoc := make(persistence.Document)
 	if err := json.Unmarshal(observedJSON, &observedDoc); err != nil {
+		s.logger.Errorw("worker_add_unmarshal_observed_failed",
+			"hierarchy_path", identity.HierarchyPath,
+			"error", err)
+
 		return fmt.Errorf("failed to unmarshal observed state to document: %w", err)
 	}
 
@@ -103,6 +132,10 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 
 	_, err = s.store.SaveObserved(ctx, s.workerType, identity.ID, observedDoc)
 	if err != nil {
+		s.logger.Errorw("worker_add_save_observed_failed",
+			"hierarchy_path", identity.HierarchyPath,
+			"error", err)
+
 		return fmt.Errorf("failed to save initial observation: %w", err)
 	}
 
@@ -110,11 +143,19 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 
 	desiredJSON, err := json.Marshal(initialDesired)
 	if err != nil {
+		s.logger.Errorw("worker_add_marshal_desired_failed",
+			"hierarchy_path", identity.HierarchyPath,
+			"error", err)
+
 		return fmt.Errorf("failed to marshal desired state: %w", err)
 	}
 
 	desiredDoc := make(persistence.Document)
 	if err := json.Unmarshal(desiredJSON, &desiredDoc); err != nil {
+		s.logger.Errorw("worker_add_unmarshal_desired_failed",
+			"hierarchy_path", identity.HierarchyPath,
+			"error", err)
+
 		return fmt.Errorf("failed to unmarshal desired state to document: %w", err)
 	}
 
@@ -122,6 +163,10 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 
 	_, err = s.store.SaveDesired(ctx, s.workerType, identity.ID, desiredDoc)
 	if err != nil {
+		s.logger.Errorw("worker_add_save_desired_failed",
+			"hierarchy_path", identity.HierarchyPath,
+			"error", err)
+
 		return fmt.Errorf("failed to save initial desired state: %w", err)
 	}
 
@@ -279,20 +324,23 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 		}
 	}
 
+	initialState := worker.GetInitialState()
+
 	workerCtx = &WorkerContext[TObserved, TDesired]{
-		mu:                s.lockManager.NewLock(lockNameWorkerContextMu, lockLevelWorkerContextMu),
-		identity:          identity,
-		worker:            worker,
-		currentState:      worker.GetInitialState(),
-		collector:         collector,
-		executor:          executor,
-		actionHistory:     actionHistoryBuffer,
-		stateEnteredAt:    time.Now(),
-		stateTransitions:  make(map[string]int64),
-		stateDurations:    make(map[string]time.Duration),
-		totalTransitions:  0,
-		collectorRestarts: 0,
-		startupCount:      startupCount,
+		mu:                 s.lockManager.NewLock(lockNameWorkerContextMu, lockLevelWorkerContextMu),
+		identity:           identity,
+		worker:             worker,
+		currentState:       initialState,
+		currentStateReason: "initial",
+		collector:          collector,
+		executor:           executor,
+		actionHistory:      actionHistoryBuffer,
+		stateEnteredAt:     time.Now(),
+		stateTransitions:   make(map[string]int64),
+		stateDurations:     make(map[string]time.Duration),
+		totalTransitions:   0,
+		collectorRestarts:  0,
+		startupCount:       startupCount,
 	}
 	s.workers[identity.ID] = workerCtx
 
@@ -313,7 +361,11 @@ func (s *Supervisor[TObserved, TDesired]) RemoveWorker(ctx context.Context, work
 	if !exists {
 		s.mu.Unlock()
 
-		return fmt.Errorf("worker %s not found", workerID)
+		s.logger.Warnw("worker_remove_not_found",
+			"hierarchy_path", s.GetHierarchyPathUnlocked(),
+			"target_worker_id", workerID)
+
+		return errors.New("worker not found")
 	}
 
 	delete(s.workers, workerID)
@@ -325,7 +377,7 @@ func (s *Supervisor[TObserved, TDesired]) RemoveWorker(ctx context.Context, work
 	workerCtx.mu.RLock()
 
 	if workerCtx.currentState != nil {
-		metrics.CleanupStateDuration(s.workerType, workerID, workerCtx.currentState.String())
+		metrics.CleanupStateDuration(s.GetHierarchyPathUnlocked(), workerCtx.currentState.String())
 	}
 
 	workerCtx.mu.RUnlock()
@@ -342,7 +394,7 @@ func (s *Supervisor[TObserved, TDesired]) GetWorker(workerID string) (*WorkerCon
 
 	ctx, exists := s.workers[workerID]
 	if !exists {
-		return nil, fmt.Errorf("worker %s not found", workerID)
+		return nil, errors.New("worker not found")
 	}
 
 	return ctx, nil
@@ -422,7 +474,7 @@ func (s *Supervisor[TObserved, TDesired]) GetWorkerState(workerID string) (strin
 
 	workerCtx, exists := s.workers[workerID]
 	if !exists {
-		return "", "", fmt.Errorf("worker %s not found", workerID)
+		return "", "", errors.New("worker not found")
 	}
 
 	workerCtx.mu.RLock()
@@ -432,7 +484,7 @@ func (s *Supervisor[TObserved, TDesired]) GetWorkerState(workerID string) (strin
 		return "Unknown", "current state is nil", nil
 	}
 
-	return workerCtx.currentState.String(), workerCtx.currentState.Reason(), nil
+	return workerCtx.currentState.String(), workerCtx.currentStateReason, nil
 }
 
 // GetMappedParentState returns the mapped parent state for this supervisor.
@@ -476,14 +528,14 @@ func (s *Supervisor[TObserved, TDesired]) IsObservationStale() bool {
 		}
 
 		workerCtx.mu.RLock()
-		stateEnteredAt := workerCtx.stateEnteredAt
+		lastCollectedAt := workerCtx.lastObservationCollectedAt
 		workerCtx.mu.RUnlock()
 
-		if stateEnteredAt.IsZero() {
-			return true
+		if lastCollectedAt.IsZero() {
+			return true // Never collected = stale
 		}
 
-		age := time.Since(stateEnteredAt)
+		age := time.Since(lastCollectedAt)
 
 		return age > s.collectorHealth.staleThreshold
 	}
@@ -609,13 +661,14 @@ func (s *Supervisor[TObserved, TDesired]) GetCurrentStateName() string {
 	for _, workerCtx := range s.workers {
 		workerCtx.mu.RLock()
 
-		defer workerCtx.mu.RUnlock()
-
+		stateName := "unknown"
 		if workerCtx.currentState != nil {
-			return workerCtx.currentState.String()
+			stateName = workerCtx.currentState.String()
 		}
 
-		return "unknown"
+		workerCtx.mu.RUnlock()
+
+		return stateName
 	}
 
 	return "unknown"
@@ -630,13 +683,18 @@ func (s *Supervisor[TObserved, TDesired]) GetCurrentStateNameAndReason() (string
 
 	for _, workerCtx := range s.workers {
 		workerCtx.mu.RLock()
-		defer workerCtx.mu.RUnlock()
+
+		stateName := "unknown"
+		stateReason := ""
 
 		if workerCtx.currentState != nil {
-			return workerCtx.currentState.String(), workerCtx.currentStateReason
+			stateName = workerCtx.currentState.String()
+			stateReason = workerCtx.currentStateReason
 		}
 
-		return "unknown", ""
+		workerCtx.mu.RUnlock()
+
+		return stateName, stateReason
 	}
 
 	return "unknown", ""
@@ -646,4 +704,92 @@ func (s *Supervisor[TObserved, TDesired]) GetCurrentStateNameAndReason() (string
 // For example: "examplechild", "exampleparent", "application".
 func (s *Supervisor[TObserved, TDesired]) GetWorkerType() string {
 	return s.workerType
+}
+
+// WorkerDebugInfo contains debug information for a single worker.
+type WorkerDebugInfo struct {
+	StateEnteredAt      time.Time `json:"state_entered_at"`
+	ID                  string    `json:"id"`
+	Name                string    `json:"name"`
+	WorkerType          string    `json:"worker_type"`
+	HierarchyPath       string    `json:"hierarchy_path"`
+	State               string    `json:"state"`
+	StateReason         string    `json:"state_reason"`
+	TimeInCurrentStateS float64   `json:"time_in_current_state_s"`
+	TotalTransitions    int64     `json:"total_transitions"`
+	CollectorRestarts   int64     `json:"collector_restarts"`
+	StartupCount        int64     `json:"startup_count"`
+	ActionPending       bool      `json:"action_pending"`
+}
+
+// SupervisorDebugInfo contains debug information for a supervisor and its hierarchy.
+type SupervisorDebugInfo struct {
+	Children            map[string]SupervisorDebugInfo `json:"children,omitempty"`
+	WorkerType          string                         `json:"worker_type"`
+	HierarchyPath       string                         `json:"hierarchy_path"`
+	MappedParentState   string                         `json:"mapped_parent_state,omitempty"`
+	Workers             []WorkerDebugInfo              `json:"workers"`
+	CollectedAtUnixNano int64                          `json:"collected_at_unix_nano"`
+	CircuitOpen         bool                           `json:"circuit_open"`
+}
+
+// GetDebugInfo returns introspection data for debugging and monitoring.
+// This method is thread-safe and provides a snapshot of the supervisor state.
+// The returned data is suitable for JSON serialization and /debug/fsmv2 endpoint.
+// Returns interface{} to satisfy metrics.FSMv2DebugProvider interface.
+func (s *Supervisor[TObserved, TDesired]) GetDebugInfo() interface{} {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	info := SupervisorDebugInfo{
+		WorkerType:          s.workerType,
+		HierarchyPath:       s.GetHierarchyPathUnlocked(),
+		CircuitOpen:         s.circuitOpen.Load(),
+		MappedParentState:   s.mappedParentState,
+		CollectedAtUnixNano: time.Now().UnixNano(),
+		Workers:             make([]WorkerDebugInfo, 0, len(s.workers)),
+	}
+
+	for _, workerCtx := range s.workers {
+		workerCtx.mu.RLock()
+
+		workerInfo := WorkerDebugInfo{
+			ID:                  workerCtx.identity.ID,
+			Name:                workerCtx.identity.Name,
+			WorkerType:          workerCtx.identity.WorkerType,
+			HierarchyPath:       workerCtx.identity.HierarchyPath,
+			State:               "unknown",
+			StateReason:         workerCtx.currentStateReason,
+			StateEnteredAt:      workerCtx.stateEnteredAt,
+			TimeInCurrentStateS: time.Since(workerCtx.stateEnteredAt).Seconds(),
+			TotalTransitions:    workerCtx.totalTransitions,
+			CollectorRestarts:   workerCtx.collectorRestarts,
+			StartupCount:        workerCtx.startupCount,
+			ActionPending:       workerCtx.actionPending,
+		}
+
+		if workerCtx.currentState != nil {
+			workerInfo.State = workerCtx.currentState.String()
+		}
+
+		workerCtx.mu.RUnlock()
+
+		info.Workers = append(info.Workers, workerInfo)
+	}
+
+	// Recursively collect child debug info
+	if len(s.children) > 0 {
+		info.Children = make(map[string]SupervisorDebugInfo, len(s.children))
+
+		for name, child := range s.children {
+			// Use the interface method which returns interface{}, then type assert
+			if debuggable, ok := child.(interface{ GetDebugInfo() interface{} }); ok {
+				if childInfo, ok := debuggable.GetDebugInfo().(SupervisorDebugInfo); ok {
+					info.Children[name] = childInfo
+				}
+			}
+		}
+	}
+
+	return info
 }

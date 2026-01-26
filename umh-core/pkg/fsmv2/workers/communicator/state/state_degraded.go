@@ -15,6 +15,7 @@
 package state
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
@@ -23,6 +24,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/action"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/backoff"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/snapshot"
+	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
 )
 
 // DegradedState handles error recovery with exponential backoff and periodic transport resets.
@@ -30,16 +32,21 @@ type DegradedState struct {
 	BaseCommunicatorState
 }
 
-func (s *DegradedState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, fsmv2.Action[any]) {
+func (s *DegradedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := helpers.ConvertSnapshot[snapshot.CommunicatorObservedState, *snapshot.CommunicatorDesiredState](snapAny)
 	snap.Observed.State = config.MakeState(config.PrefixRunning, "degraded")
 
 	if snap.Desired.IsShutdownRequested() {
-		return &StoppedState{}, fsmv2.SignalNone, nil
+		return fsmv2.Result[any, any](&StoppedState{}, fsmv2.SignalNone, nil, "Shutdown requested during degraded state")
+	}
+
+	// If token is invalid, re-authenticate
+	if snap.Observed.LastErrorType == httpTransport.ErrorTypeInvalidToken {
+		return fsmv2.Result[any, any](&TryingToAuthenticateState{}, fsmv2.SignalNone, nil, "Token invalid, re-authenticating")
 	}
 
 	if snap.Observed.IsSyncHealthy() && snap.Observed.GetConsecutiveErrors() == 0 {
-		return &SyncingState{}, fsmv2.SignalNone, nil
+		return fsmv2.Result[any, any](&SyncingState{}, fsmv2.SignalNone, nil, "Recovered from degraded state")
 	}
 
 	consecutiveErrors := snap.Observed.GetConsecutiveErrors()
@@ -49,25 +56,56 @@ func (s *DegradedState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, 
 		snap.Observed.LastRetryAfter,
 	)
 
+	// Build dynamic reason based on current error state
+	reason := buildDegradedReason(snap.Observed.LastErrorType, consecutiveErrors, backoffDelay)
+
 	enteredAt := snap.Observed.DegradedEnteredAt
 	if !enteredAt.IsZero() && time.Since(enteredAt) < backoffDelay {
-		return s, fsmv2.SignalNone, nil
+		return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, reason)
 	}
 
-	// Reset transport at 5, 10, 15... errors to recover from connection-level issues
-	if consecutiveErrors > 0 && consecutiveErrors%backoff.TransportResetThreshold == 0 {
-		return s, fsmv2.SignalNone, action.NewResetTransportAction()
+	// Reset transport periodically to recover from connection-level issues
+	if backoff.ShouldResetTransport(snap.Observed.LastErrorType, consecutiveErrors) {
+		return fsmv2.Result[any, any](s, fsmv2.SignalNone, action.NewResetTransportAction(), "Resetting transport due to repeated failures")
 	}
 
 	syncAction := action.NewSyncAction(snap.Observed.JWTToken)
 
-	return s, fsmv2.SignalNone, syncAction
+	return fsmv2.Result[any, any](s, fsmv2.SignalNone, syncAction, reason)
 }
 
 func (s *DegradedState) String() string {
 	return "Degraded"
 }
 
-func (s *DegradedState) Reason() string {
-	return "Sync is experiencing errors"
+// buildDegradedReason creates a dynamic reason string based on the current error state.
+func buildDegradedReason(errorType httpTransport.ErrorType, consecutiveErrors int, backoffDelay time.Duration) string {
+	errorTypeStr := mapErrorTypeToReason(errorType)
+
+	return fmt.Sprintf("sync degraded: %d consecutive errors (%s), backoff %s",
+		consecutiveErrors, errorTypeStr, backoffDelay.Round(time.Second))
+}
+
+// mapErrorTypeToReason maps error types to human-readable strings.
+func mapErrorTypeToReason(errType httpTransport.ErrorType) string {
+	switch errType {
+	case httpTransport.ErrorTypeUnknown:
+		return "unclassified_error"
+	case httpTransport.ErrorTypeInvalidToken:
+		return "authentication_failure"
+	case httpTransport.ErrorTypeBackendRateLimit:
+		return "backend_rate_limited"
+	case httpTransport.ErrorTypeNetwork:
+		return "network_connectivity_failure"
+	case httpTransport.ErrorTypeServerError:
+		return "server_error_response"
+	case httpTransport.ErrorTypeCloudflareChallenge:
+		return "cloudflare_challenge_encountered"
+	case httpTransport.ErrorTypeProxyBlock:
+		return "proxy_block_page_received"
+	case httpTransport.ErrorTypeInstanceDeleted:
+		return "instance_not_found_on_backend"
+	default:
+		return "consecutive_errors_threshold_exceeded"
+	}
 }

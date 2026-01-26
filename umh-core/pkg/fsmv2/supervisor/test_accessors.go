@@ -88,3 +88,37 @@ func (s *Supervisor[TObserved, TDesired]) TestGetUserSpec() config.UserSpec {
 
 	return s.userSpec
 }
+
+// TestRestartCollector exposes restartCollector() for testing. DO NOT USE in production code.
+func (s *Supervisor[TObserved, TDesired]) TestRestartCollector(ctx context.Context, workerID string) error {
+	return s.restartCollector(ctx, workerID)
+}
+
+// TestSetLastRestart sets collectorHealth.lastRestart for testing. DO NOT USE in production code.
+// This allows tests to simulate backoff time having elapsed.
+func (s *Supervisor[TObserved, TDesired]) TestSetLastRestart(t time.Time) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.collectorHealth.lastRestart = t
+}
+
+// TestIsPendingRemoval checks if a child is in the pendingRemoval map. DO NOT USE in production code.
+func (s *Supervisor[TObserved, TDesired]) TestIsPendingRemoval(childName string) bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	return s.pendingRemoval[childName]
+}
+
+// TestSetPendingRemoval marks a child as pending removal for testing. DO NOT USE in production code.
+func (s *Supervisor[TObserved, TDesired]) TestSetPendingRemovalFlag(childName string, value bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if value {
+		s.pendingRemoval[childName] = true
+	} else {
+		delete(s.pendingRemoval, childName)
+	}
+}

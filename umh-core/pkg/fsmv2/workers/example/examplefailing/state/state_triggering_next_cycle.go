@@ -28,29 +28,25 @@ type TriggeringNextCycleState struct {
 	BaseFailingState
 }
 
-func (s *TriggeringNextCycleState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, fsmv2.Action[any]) {
+func (s *TriggeringNextCycleState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := helpers.ConvertSnapshot[snapshot.ExamplefailingObservedState, *snapshot.ExamplefailingDesiredState](snapAny)
 	snap.Observed.State = config.MakeState(config.PrefixRunning, "triggering_next_cycle")
 
 	if snap.Observed.IsStopRequired() {
-		return &TryingToStopState{}, fsmv2.SignalNone, nil
+		return fsmv2.Result[any, any](&TryingToStopState{}, fsmv2.SignalNone, nil, "stop required, transitioning to stop state")
 	}
 
 	if snap.Observed.ConnectionHealth == "healthy" {
-		return s, fsmv2.SignalNone, &action.DisconnectAction{}
+		return fsmv2.Result[any, any](s, fsmv2.SignalNone, &action.DisconnectAction{}, "disconnecting to trigger next failure cycle")
 	}
 
 	if snap.Observed.ConnectionHealth == "no connection" {
-		return &DisconnectedState{}, fsmv2.SignalNone, nil
+		return fsmv2.Result[any, any](&DisconnectedState{}, fsmv2.SignalNone, nil, "cycle triggered, connection lost")
 	}
 
-	return s, fsmv2.SignalNone, nil
+	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, "waiting for disconnect to complete")
 }
 
 func (s *TriggeringNextCycleState) String() string {
 	return helpers.DeriveStateName(s)
-}
-
-func (s *TriggeringNextCycleState) Reason() string {
-	return "Triggering next failure cycle for testing"
 }

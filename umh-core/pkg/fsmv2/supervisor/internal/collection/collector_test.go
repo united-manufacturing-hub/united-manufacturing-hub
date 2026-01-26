@@ -26,7 +26,7 @@ import (
 )
 
 var _ = Describe("Collector", func() {
-Context("when starting collector", func() {
+	Context("when starting collector", func() {
 		It("should start observation loop", func() {
 			worker := &supervisor.TestWorker{Observed: supervisor.CreateTestObservedStateWithID("test-worker")}
 			collector := collection.NewCollector[supervisor.TestObservedState](collection.CollectorConfig[supervisor.TestObservedState]{
@@ -57,7 +57,7 @@ Context("when starting collector", func() {
 		})
 	})
 
-Context("when restarting collector", func() {
+	Context("when restarting collector", func() {
 		It("should stop old loop and start new one", func() {
 			worker := &supervisor.TestWorker{Observed: supervisor.CreateTestObservedStateWithID("test-worker")}
 			collector := collection.NewCollector[supervisor.TestObservedState](collection.CollectorConfig[supervisor.TestObservedState]{

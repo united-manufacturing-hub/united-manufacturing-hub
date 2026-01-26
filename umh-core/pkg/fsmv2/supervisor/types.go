@@ -23,8 +23,8 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/internal/collection"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/internal/execution"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/lockmanager"
@@ -91,6 +91,10 @@ type SupervisorInterface interface {
 	IsCircuitOpen() bool
 	// TestGetUserSpec returns the current userSpec for testing. DO NOT USE in production code.
 	TestGetUserSpec() config.UserSpec
+	// GetDebugInfo returns introspection data for debugging and monitoring.
+	// The returned data provides a snapshot of the supervisor's state.
+	// Returns interface{} to satisfy metrics.FSMv2DebugProvider interface.
+	GetDebugInfo() interface{}
 }
 
 // WorkerContext encapsulates the runtime state for a single worker
@@ -105,12 +109,19 @@ type WorkerContext[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] s
 	// Supervisor-internal state tracking (copied into FrameworkMetrics before State.Next()).
 	// Workers read via FrameworkMetrics; MetricsRecorder handles worker-written metrics.
 	stateEnteredAt time.Time // When current state was entered
-	worker         fsmv2.Worker
-	currentState fsmv2.State[any, any]
+
+	// lastObservationCollectedAt stores the CollectedAt timestamp from the most recent
+	// observation loaded during tickWorker(). This is cached here (rather than re-fetched
+	// from CSE) so that IsObservationStale() can be called by the PARENT supervisor
+	// during its tick without blocking on CSE reads. The parent calls child.IsObservationStale()
+	// when building ChildInfo for SetChildrenView().
+	lastObservationCollectedAt time.Time
+	worker                     fsmv2.Worker
+	currentState               fsmv2.State[any, any]
 	// mu protects currentState. Uses RWMutex for frequent reads, rare writes.
 	// Lock Order: Acquire AFTER Supervisor.mu when both needed.
 	// WorkerContext.mu locks are independent from each other (enables parallel worker processing).
-	mu *lockmanager.Lock
+	mu            *lockmanager.Lock
 	collector     *collection.Collector[TObserved]
 	executor      *execution.ActionExecutor
 	actionHistory *deps.InMemoryActionHistoryRecorder // Supervisor-owned buffer for action results
@@ -118,7 +129,7 @@ type WorkerContext[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] s
 	stateTransitions   map[string]int64         // state_name → total times entered
 	stateDurations     map[string]time.Duration // state_name → cumulative time spent
 	identity           deps.Identity
-	currentStateReason string // Human-readable reason for current state (from state.Reason())
+	currentStateReason string // Human-readable reason for current state (from NextResult.Reason)
 	totalTransitions   int64  // Sum of all stateTransitions values
 	collectorRestarts  int64  // Per-worker collector restarts
 	startupCount       int64  // PERSISTENT: Loaded from CSE, incremented on AddWorker()

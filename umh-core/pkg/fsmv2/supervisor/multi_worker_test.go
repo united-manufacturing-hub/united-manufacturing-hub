@@ -178,7 +178,7 @@ var _ = Describe("Multi-Worker Supervisor", func() {
 	})
 
 	Describe("GetWorkerState", func() {
-		It("should return state name and reason for a worker", func() {
+		It("should return state name and initial reason for a worker before first tick", func() {
 			identity := deps.Identity{ID: "worker-1", Name: "Worker 1"}
 
 			stateWithReason := &mockState{}
@@ -190,10 +190,11 @@ var _ = Describe("Multi-Worker Supervisor", func() {
 			err := s.AddWorker(identity, worker)
 			Expect(err).ToNot(HaveOccurred())
 
+			// Before the first tick, reason should be "initial"
 			stateName, reason, err := s.GetWorkerState("worker-1")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(stateName).To(Equal("MockState"))
-			Expect(reason).To(Equal("mock state"))
+			Expect(reason).To(Equal("initial"))
 		})
 
 		It("should return error for non-existent worker", func() {

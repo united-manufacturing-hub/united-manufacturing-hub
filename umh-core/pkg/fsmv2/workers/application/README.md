@@ -98,10 +98,17 @@ Represents the observed state for an application supervisor:
 
 ```go
 type ApplicationObservedState struct {
-    ID          string
-    CollectedAt time.Time
-    Name        string
-    DeployedDesiredState ApplicationDesiredState
+    CollectedAt             time.Time `json:"collected_at"`
+    ID                      string    `json:"id"`
+    Name                    string    `json:"name"`
+    State                   string    `json:"state"`
+    ApplicationDesiredState           `json:",inline"`
+    deps.MetricsEmbedder              `json:",inline"`
+    // Infrastructure health from ChildrenView
+    ChildrenHealthy         int       `json:"children_healthy"`
+    ChildrenUnhealthy       int       `json:"children_unhealthy"`
+    ChildrenCircuitOpen     int       `json:"children_circuit_open"`
+    ChildrenStale           int       `json:"children_stale"`
 }
 ```
 
@@ -111,8 +118,9 @@ Represents the desired state with child specifications:
 
 ```go
 type ApplicationDesiredState struct {
-    config.DesiredState  // Embeds State and ChildrenSpecs
-    Name string
+    config.BaseDesiredState `json:",inline"`  // Embeds State and ShutdownRequested
+    Name          string                       `json:"name"`
+    ChildrenSpecs []config.ChildSpec           `json:"childrenSpecs,omitempty"`
 }
 ```
 
@@ -167,4 +175,4 @@ This package replaces `pkg/fsmv2/root` with clearer naming:
 
 - [Erlang/OTP Applications](https://www.erlang.org/doc/design_principles/applications.html)
 - [FSM v2 Architecture](../../README.md)
-- [Example Parent Worker](../example/example-parent/) - Similar pattern with more features
+- [Example Parent Worker](../example/exampleparent/) - Similar pattern with more features

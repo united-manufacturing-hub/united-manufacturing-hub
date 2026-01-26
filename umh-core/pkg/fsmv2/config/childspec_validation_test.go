@@ -97,7 +97,6 @@ var _ = Describe("ChildSpec Validation", func() {
 			err := config.ValidateChildSpec(spec, registry)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("worker type cannot be empty"))
-			Expect(err.Error()).To(ContainSubstring("missing-type"))
 		})
 
 		It("should fail when WorkerType is unknown", func() {
@@ -112,12 +111,9 @@ var _ = Describe("ChildSpec Validation", func() {
 			err := config.ValidateChildSpec(spec, registry)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("unknown worker type"))
-			Expect(err.Error()).To(ContainSubstring("unknown-worker"))
-			Expect(err.Error()).To(ContainSubstring("unknown-type-child"))
-			Expect(err.Error()).To(ContainSubstring("available:"))
 		})
 
-		It("should list available types in error message", func() {
+		It("should fail for invalid worker type", func() {
 			spec := config.ChildSpec{
 				Name:       "test-child",
 				WorkerType: "invalid-type",
@@ -128,8 +124,7 @@ var _ = Describe("ChildSpec Validation", func() {
 
 			err := config.ValidateChildSpec(spec, registry)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("communicator"))
-			Expect(err.Error()).To(ContainSubstring("test-worker"))
+			Expect(err.Error()).To(ContainSubstring("unknown worker type"))
 		})
 
 		It("should fail when UserSpec cannot be marshaled to JSON", func() {
@@ -145,7 +140,6 @@ var _ = Describe("ChildSpec Validation", func() {
 			err := config.ValidateChildSpec(spec, registry)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("invalid user spec"))
-			Expect(err.Error()).To(ContainSubstring("invalid-spec"))
 		})
 
 		It("should validate even with nil ChildStartStates", func() {
@@ -176,7 +170,48 @@ var _ = Describe("ChildSpec Validation", func() {
 			Expect(err).NotTo(HaveOccurred())
 		})
 
-		It("should use correct name in all error messages", func() {
+		It("should reject ChildStartStates with empty state name", func() {
+			spec := config.ChildSpec{
+				Name:             "test-child",
+				WorkerType:       "test-worker",
+				ChildStartStates: []string{"Running", ""},
+				UserSpec: config.UserSpec{
+					Config: "config",
+				},
+			}
+			err := config.ValidateChildSpec(spec, registry)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("cannot be empty"))
+		})
+
+		It("should reject ChildStartStates with duplicate state names", func() {
+			spec := config.ChildSpec{
+				Name:             "test-child",
+				WorkerType:       "test-worker",
+				ChildStartStates: []string{"Running", "Running"},
+				UserSpec: config.UserSpec{
+					Config: "config",
+				},
+			}
+			err := config.ValidateChildSpec(spec, registry)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("duplicate"))
+		})
+
+		It("should accept valid ChildStartStates with multiple unique states", func() {
+			spec := config.ChildSpec{
+				Name:             "test-child",
+				WorkerType:       "test-worker",
+				ChildStartStates: []string{"Running", "TryingToStart", "Degraded"},
+				UserSpec: config.UserSpec{
+					Config: "config",
+				},
+			}
+			err := config.ValidateChildSpec(spec, registry)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should return error for bad worker type", func() {
 			spec := config.ChildSpec{
 				Name:       "specific-child-name",
 				WorkerType: "bad-type",
@@ -187,7 +222,7 @@ var _ = Describe("ChildSpec Validation", func() {
 
 			err := config.ValidateChildSpec(spec, registry)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("specific-child-name"))
+			Expect(err.Error()).To(ContainSubstring("unknown worker type"))
 		})
 
 		It("should validate successfully with JSON variables", func() {
@@ -282,11 +317,10 @@ var _ = Describe("ChildSpec Validation", func() {
 
 			err := config.ValidateChildSpecs(specs, registry)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("child spec [1]"))
 			Expect(err.Error()).To(ContainSubstring("worker type cannot be empty"))
 		})
 
-		It("should report correct index when validation fails", func() {
+		It("should fail when spec has unknown worker type", func() {
 			specs := []config.ChildSpec{
 				{
 					Name:       "valid-1",
@@ -313,7 +347,7 @@ var _ = Describe("ChildSpec Validation", func() {
 
 			err := config.ValidateChildSpecs(specs, registry)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("child spec [2]"))
+			Expect(err.Error()).To(ContainSubstring("unknown worker type"))
 		})
 
 		It("should fail on duplicate names", func() {
@@ -336,8 +370,7 @@ var _ = Describe("ChildSpec Validation", func() {
 
 			err := config.ValidateChildSpecs(specs, registry)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("duplicate child spec name"))
-			Expect(err.Error()).To(ContainSubstring("duplicate-name"))
+			Expect(err.Error()).To(ContainSubstring("duplicate name"))
 		})
 
 		It("should catch duplicate names even when other validations fail", func() {
@@ -391,8 +424,7 @@ var _ = Describe("ChildSpec Validation", func() {
 
 			err := config.ValidateChildSpecs(specs, registry)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("duplicate child spec name"))
-			Expect(err.Error()).To(ContainSubstring("unique-1"))
+			Expect(err.Error()).To(ContainSubstring("duplicate name"))
 		})
 
 		It("should pass validation with multiple specs having different ChildStartStates", func() {
@@ -431,7 +463,6 @@ var _ = Describe("ChildSpec Validation", func() {
 
 			err := config.ValidateChildSpecs(specs, registry)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("child spec [0]"))
 			Expect(err.Error()).To(ContainSubstring("name cannot be empty"))
 		})
 

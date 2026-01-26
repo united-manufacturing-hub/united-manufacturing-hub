@@ -22,6 +22,7 @@ type UMHMessage struct {
 	InstanceUUID string `json:"umhInstance"`
 	Content      string `json:"content"`
 	Email        string `json:"email"`
+	TraceID      string `json:"traceId,omitempty"`
 }
 
 // AuthRequest represents an authentication request.

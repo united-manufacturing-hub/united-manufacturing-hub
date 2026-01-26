@@ -36,11 +36,16 @@ func (a *ResetTransportAction) Name() string {
 
 // Execute resets the transport. Transport guaranteed non-nil per worker.go C3.
 func (a *ResetTransportAction) Execute(ctx context.Context, depsAny any) error {
+	// Check for context cancellation before proceeding
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
 	deps := depsAny.(CommunicatorDependencies)
 
 	transport := deps.GetTransport()
 	transport.Reset()
-	deps.GetLogger().Infow("Transport reset completed", "reason", "degraded_state_threshold")
+	deps.GetLogger().Infow("transport_reset_completed", "reason", "degraded_state_threshold")
 
 	return nil
 }

@@ -30,23 +30,23 @@ import (
 // The CSE storage API provides two patterns for accessing worker state, optimized for
 // different use cases:
 //
-// 1. RUNTIME POLYMORPHIC API (for supervisors, factories):
-//    Interface methods with workerType string parameter. Use when worker type is
-//    determined at runtime and you need polymorphic behavior across multiple worker types.
+//  1. RUNTIME POLYMORPHIC API (for supervisors, factories):
+//     Interface methods with workerType string parameter. Use when worker type is
+//     determined at runtime and you need polymorphic behavior across multiple worker types.
 //
-//    Example (supervisor managing multiple worker types):
-//      func (s *Supervisor) saveState(ctx context.Context, workerType, id string, observed interface{}) {
-//          s.store.SaveObserved(ctx, workerType, id, observed)
-//      }
+//     Example (supervisor managing multiple worker types):
+//     func (s *Supervisor) saveState(ctx context.Context, workerType, id string, observed interface{}) {
+//     s.store.SaveObserved(ctx, workerType, id, observed)
+//     }
 //
-// 2. COMPILE-TIME TYPED API (for workers, tests):
-//    Package-level generic functions with type parameters. Use when type is known at
-//    compile time for type safety, better performance, and IDE autocomplete.
+//  2. COMPILE-TIME TYPED API (for workers, tests):
+//     Package-level generic functions with type parameters. Use when type is known at
+//     compile time for type safety, better performance, and IDE autocomplete.
 //
-//    Example (worker with known type):
-//      func (w *ContainerWorker) saveState(ctx context.Context) {
-//          SaveObservedTyped[ContainerObservedState](w.store, ctx, w.id, w.observed)
-//      }
+//     Example (worker with known type):
+//     func (w *ContainerWorker) saveState(ctx context.Context) {
+//     SaveObservedTyped[ContainerObservedState](w.store, ctx, w.id, w.observed)
+//     }
 //
 // Both patterns use the same underlying convention-based naming: {workerType}_{role}
 // (e.g., "container_observed", "relay_desired").

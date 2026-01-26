@@ -19,7 +19,6 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/backoff"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
 	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
 	"go.uber.org/zap"
@@ -131,7 +130,9 @@ func (d *CommunicatorDependencies) GetPulledMessages() []*transport.UMHMessage {
 	return result
 }
 
-// RecordError increments consecutive errors and triggers transport reset at threshold multiples.
+// RecordError increments consecutive errors and records when degraded mode started.
+// Transport reset is handled by ResetTransportAction from DegradedState, not here,
+// to avoid duplicate resets and maintain single responsibility.
 func (d *CommunicatorDependencies) RecordError() {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -141,10 +142,6 @@ func (d *CommunicatorDependencies) RecordError() {
 	}
 
 	d.consecutiveErrors++
-
-	if d.consecutiveErrors%backoff.TransportResetThreshold == 0 && d.transport != nil {
-		d.transport.Reset()
-	}
 }
 
 // RecordSuccess resets all error tracking state.
@@ -160,6 +157,8 @@ func (d *CommunicatorDependencies) RecordSuccess() {
 }
 
 // RecordTypedError increments consecutive errors and records error type and retry-after.
+// Transport reset is handled by ResetTransportAction from DegradedState, not here,
+// to avoid duplicate resets and maintain single responsibility.
 func (d *CommunicatorDependencies) RecordTypedError(errType httpTransport.ErrorType, retryAfter time.Duration) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -171,10 +170,6 @@ func (d *CommunicatorDependencies) RecordTypedError(errType httpTransport.ErrorT
 	d.consecutiveErrors++
 	d.lastErrorType = errType
 	d.lastRetryAfter = retryAfter
-
-	if d.consecutiveErrors%backoff.TransportResetThreshold == 0 && d.transport != nil {
-		d.transport.Reset()
-	}
 }
 
 // GetLastErrorType returns the last recorded error type.
@@ -235,16 +230,30 @@ func (d *CommunicatorDependencies) GetOutboundChan() <-chan *transport.UMHMessag
 	return d.outboundChan
 }
 
-// RecordPullSuccess is a no-op for interface compatibility.
+// -----------------------------------------------------------------------------
+// Legacy Metrics Methods (No-op)
+//
+// These methods exist for interface compatibility with legacy metric recording
+// interfaces. In FSMv2, metrics are recorded through deps.MetricsRecorder which
+// is automatically exported to Prometheus by the supervisor.
+//
+// Actions should use:
+//   deps.Metrics().IncrementCounter(deps.CounterPullSuccess, 1)
+//   deps.Metrics().SetGauge(deps.GaugeLastPullLatencyMs, float64(latency.Milliseconds()))
+//
+// The supervisor handles delta computation and Prometheus export.
+// -----------------------------------------------------------------------------
+
+// RecordPullSuccess is a no-op. Use MetricsRecorder instead (see above).
 func (d *CommunicatorDependencies) RecordPullSuccess(latency time.Duration, msgCount int) {}
 
-// RecordPullFailure is a no-op for interface compatibility.
+// RecordPullFailure is a no-op. Use MetricsRecorder instead (see above).
 func (d *CommunicatorDependencies) RecordPullFailure(latency time.Duration) {}
 
-// RecordPushSuccess is a no-op for interface compatibility.
+// RecordPushSuccess is a no-op. Use MetricsRecorder instead (see above).
 func (d *CommunicatorDependencies) RecordPushSuccess(latency time.Duration, msgCount int) {}
 
-// RecordPushFailure is a no-op for interface compatibility.
+// RecordPushFailure is a no-op. Use MetricsRecorder instead (see above).
 func (d *CommunicatorDependencies) RecordPushFailure(latency time.Duration) {}
 
 // SetInstanceInfo stores the instance UUID and name. Deprecated: Use SetAuthenticatedUUID instead.

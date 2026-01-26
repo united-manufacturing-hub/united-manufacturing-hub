@@ -32,7 +32,7 @@ func ValidateChildSpec(spec ChildSpec, registry WorkerTypeChecker) error {
 	}
 
 	if spec.WorkerType == "" {
-		return fmt.Errorf("child spec %q: worker type cannot be empty", spec.Name)
+		return errors.New("child spec validation failed: worker type cannot be empty")
 	}
 
 	validTypes := registry.ListRegisteredTypes()
@@ -47,12 +47,28 @@ func ValidateChildSpec(spec ChildSpec, registry WorkerTypeChecker) error {
 	}
 
 	if !found {
-		return fmt.Errorf("child spec %q: unknown worker type %q (available: %v)",
-			spec.Name, spec.WorkerType, validTypes)
+		return errors.New("child spec validation failed: unknown worker type")
 	}
 
 	if _, err := json.Marshal(spec.UserSpec); err != nil {
-		return fmt.Errorf("child spec %q: invalid user spec: %w", spec.Name, err)
+		return fmt.Errorf("child spec validation failed: invalid user spec: %w", err)
+	}
+
+	// Validate ChildStartStates
+	if len(spec.ChildStartStates) > 0 {
+		seenStates := make(map[string]bool)
+
+		for _, state := range spec.ChildStartStates {
+			if state == "" {
+				return errors.New("child spec validation failed: ChildStartStates entry cannot be empty")
+			}
+
+			if seenStates[state] {
+				return errors.New("child spec validation failed: duplicate state in ChildStartStates")
+			}
+
+			seenStates[state] = true
+		}
 	}
 
 	return nil
@@ -62,13 +78,13 @@ func ValidateChildSpec(spec ChildSpec, registry WorkerTypeChecker) error {
 func ValidateChildSpecs(specs []ChildSpec, registry WorkerTypeChecker) error {
 	names := make(map[string]bool)
 
-	for i, spec := range specs {
+	for _, spec := range specs {
 		if err := ValidateChildSpec(spec, registry); err != nil {
-			return fmt.Errorf("child spec [%d]: %w", i, err)
+			return err
 		}
 
 		if names[spec.Name] {
-			return fmt.Errorf("duplicate child spec name %q", spec.Name)
+			return errors.New("child spec validation failed: duplicate name")
 		}
 
 		names[spec.Name] = true

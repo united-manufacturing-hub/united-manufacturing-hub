@@ -28,21 +28,17 @@ type StoppedState struct {
 	BaseApplicationState
 }
 
-func (s *StoppedState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, fsmv2.Action[any]) {
+func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := helpers.ConvertSnapshot[snapshot.ApplicationObservedState, *snapshot.ApplicationDesiredState](snapAny)
 	snap.Observed.State = config.PrefixStopped
 
 	if snap.Desired.IsShutdownRequested() {
-		return s, fsmv2.SignalNeedsRemoval, nil
+		return fsmv2.Result[any, any](s, fsmv2.SignalNeedsRemoval, nil, "Application supervisor is stopped and shutdown requested")
 	}
 
-	return s, fsmv2.SignalNone, nil
+	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, "Application supervisor is stopped")
 }
 
 func (s *StoppedState) String() string {
 	return helpers.DeriveStateName(s)
-}
-
-func (s *StoppedState) Reason() string {
-	return "Application supervisor is stopped and ready for removal"
 }

@@ -18,8 +18,8 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 )
 
 // ExampleparentSnapshot represents a point-in-time view of the parent worker state.
@@ -88,4 +88,3 @@ func (o ExampleparentObservedState) SetChildrenCounts(healthy, unhealthy int) fs
 
 	return o
 }
-

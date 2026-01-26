@@ -16,6 +16,7 @@ package collection
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -212,9 +213,14 @@ func (c *Collector[TObserved]) CollectFinalObservation(ctx context.Context) erro
 	c.mu.RLock()
 
 	if c.state != collectorStateRunning {
+		currentState := c.state.String()
 		c.mu.RUnlock()
 
-		return fmt.Errorf("collector not running (state: %s)", c.state.String())
+		c.config.Logger.Warnw("collector_final_observation_skipped",
+			"reason", "not_running",
+			"current_state", currentState)
+
+		return errors.New("collector not running")
 	}
 
 	timeout := c.config.ObservationTimeout
@@ -408,13 +414,10 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 
 	saveDuration := time.Since(saveStartTime)
 
-	workerType, err := storage.DeriveWorkerType[TObserved]()
-	if err != nil {
-		return fmt.Errorf("failed to derive worker type for metrics: %w", err)
-	}
+	hierarchyPath := c.config.Identity.HierarchyPath
 
-	metrics.RecordObservationSave(workerType, changed, saveDuration)
-	metrics.ExportWorkerMetrics(workerType, c.config.Identity.ID, observed)
+	metrics.RecordObservationSave(hierarchyPath, changed, saveDuration)
+	metrics.ExportWorkerMetrics(hierarchyPath, observed)
 
 	if changed {
 		c.logTrace("observation_saved",

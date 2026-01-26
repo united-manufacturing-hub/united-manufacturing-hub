@@ -22,9 +22,11 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/snapshot"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/state"
+	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
 )
 
 var _ = Describe("DegradedState", func() {
@@ -54,18 +56,18 @@ var _ = Describe("DegradedState", func() {
 			})
 
 			It("should transition to SyncingState", func() {
-				nextState, _, _ := stateObj.Next(snap)
-				Expect(nextState).To(BeAssignableToTypeOf(&state.SyncingState{}))
+				result := stateObj.Next(snap)
+				Expect(result.State).To(BeAssignableToTypeOf(&state.SyncingState{}))
 			})
 
 			It("should not signal anything", func() {
-				_, signal, _ := stateObj.Next(snap)
-				Expect(signal).To(Equal(fsmv2.SignalNone))
+				result := stateObj.Next(snap)
+				Expect(result.Signal).To(Equal(fsmv2.SignalNone))
 			})
 
 			It("should not return an action", func() {
-				_, _, action := stateObj.Next(snap)
-				Expect(action).To(BeNil())
+				result := stateObj.Next(snap)
+				Expect(result.Action).To(BeNil())
 			})
 		})
 
@@ -83,19 +85,19 @@ var _ = Describe("DegradedState", func() {
 			})
 
 			It("should stay in DegradedState", func() {
-				nextState, _, _ := stateObj.Next(snap)
-				Expect(nextState).To(BeAssignableToTypeOf(&state.DegradedState{}))
+				result := stateObj.Next(snap)
+				Expect(result.State).To(BeAssignableToTypeOf(&state.DegradedState{}))
 			})
 
 			It("should emit SyncAction to retry", func() {
-				_, _, action := stateObj.Next(snap)
-				Expect(action).NotTo(BeNil())
-				Expect(action.Name()).To(Equal("sync"))
+				result := stateObj.Next(snap)
+				Expect(result.Action).NotTo(BeNil())
+				Expect(result.Action.Name()).To(Equal("sync"))
 			})
 
 			It("should not signal anything", func() {
-				_, signal, _ := stateObj.Next(snap)
-				Expect(signal).To(Equal(fsmv2.SignalNone))
+				result := stateObj.Next(snap)
+				Expect(result.Signal).To(Equal(fsmv2.SignalNone))
 			})
 		})
 	})
@@ -105,91 +107,197 @@ var _ = Describe("DegradedState", func() {
 			Expect(stateObj.String()).To(Equal("Degraded"))
 		})
 	})
+})
 
-	Describe("Reason", func() {
-		It("should return descriptive reason", func() {
-			Expect(stateObj.Reason()).To(Equal("Sync is experiencing errors"))
+var _ = Describe("DegradedState Transport Reset", func() {
+	Context("for network errors", func() {
+		It("should emit ResetTransportAction at exactly 5 consecutive errors", func() {
+			stateObj := &state.DegradedState{}
+
+			snap := fsmv2.Snapshot{
+				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
+				Observed: snapshot.CommunicatorObservedState{
+					Authenticated:     false,
+					ConsecutiveErrors: 5,
+					LastErrorType:     httpTransport.ErrorTypeNetwork,
+					DegradedEnteredAt: time.Now().Add(-35 * time.Second),
+				},
+				Desired: &snapshot.CommunicatorDesiredState{},
+			}
+
+			result := stateObj.Next(snap)
+
+			Expect(result.State).To(BeAssignableToTypeOf(&state.DegradedState{}))
+			Expect(result.Signal).To(Equal(fsmv2.SignalNone))
+			Expect(result.Action).NotTo(BeNil())
+			Expect(result.Action.Name()).To(Equal("reset_transport"))
+		})
+
+		It("should NOT emit ResetTransportAction at 6 consecutive errors", func() {
+			stateObj := &state.DegradedState{}
+
+			snap := fsmv2.Snapshot{
+				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
+				Observed: snapshot.CommunicatorObservedState{
+					Authenticated:     false,
+					ConsecutiveErrors: 6,
+					LastErrorType:     httpTransport.ErrorTypeNetwork,
+					DegradedEnteredAt: time.Now().Add(-65 * time.Second),
+				},
+				Desired: &snapshot.CommunicatorDesiredState{},
+			}
+
+			result := stateObj.Next(snap)
+
+			Expect(result.Action).NotTo(BeNil())
+			Expect(result.Action.Name()).To(Equal("sync"))
+		})
+
+		It("should emit ResetTransportAction again at 10 consecutive errors", func() {
+			stateObj := &state.DegradedState{}
+
+			snap := fsmv2.Snapshot{
+				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
+				Observed: snapshot.CommunicatorObservedState{
+					Authenticated:     false,
+					ConsecutiveErrors: 10,
+					LastErrorType:     httpTransport.ErrorTypeNetwork,
+					DegradedEnteredAt: time.Now().Add(-65 * time.Second),
+				},
+				Desired: &snapshot.CommunicatorDesiredState{},
+			}
+
+			result := stateObj.Next(snap)
+
+			Expect(result.Action).NotTo(BeNil())
+			Expect(result.Action.Name()).To(Equal("reset_transport"))
+		})
+
+		It("should NOT emit ResetTransportAction at 0 errors", func() {
+			stateObj := &state.DegradedState{}
+
+			snap := fsmv2.Snapshot{
+				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
+				Observed: snapshot.CommunicatorObservedState{
+					Authenticated:     false,
+					ConsecutiveErrors: 0,
+					LastErrorType:     httpTransport.ErrorTypeNetwork,
+					DegradedEnteredAt: time.Now().Add(-1 * time.Second),
+				},
+				Desired: &snapshot.CommunicatorDesiredState{},
+			}
+
+			result := stateObj.Next(snap)
+
+			Expect(result.Action).NotTo(BeNil())
+			Expect(result.Action.Name()).To(Equal("sync"))
+		})
+	})
+
+	Context("for server errors", func() {
+		It("should NOT emit ResetTransportAction at 5 errors (needs 10)", func() {
+			stateObj := &state.DegradedState{}
+
+			snap := fsmv2.Snapshot{
+				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
+				Observed: snapshot.CommunicatorObservedState{
+					Authenticated:     false,
+					ConsecutiveErrors: 5,
+					LastErrorType:     httpTransport.ErrorTypeServerError,
+					DegradedEnteredAt: time.Now().Add(-35 * time.Second),
+				},
+				Desired: &snapshot.CommunicatorDesiredState{},
+			}
+
+			result := stateObj.Next(snap)
+
+			Expect(result.Action).NotTo(BeNil())
+			Expect(result.Action.Name()).To(Equal("sync"))
+		})
+
+		It("should emit ResetTransportAction at 10 consecutive errors", func() {
+			stateObj := &state.DegradedState{}
+
+			snap := fsmv2.Snapshot{
+				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
+				Observed: snapshot.CommunicatorObservedState{
+					Authenticated:     false,
+					ConsecutiveErrors: 10,
+					LastErrorType:     httpTransport.ErrorTypeServerError,
+					DegradedEnteredAt: time.Now().Add(-65 * time.Second),
+				},
+				Desired: &snapshot.CommunicatorDesiredState{},
+			}
+
+			result := stateObj.Next(snap)
+
+			Expect(result.Action).NotTo(BeNil())
+			Expect(result.Action.Name()).To(Equal("reset_transport"))
+		})
+
+		It("should emit ResetTransportAction at 20 consecutive errors", func() {
+			stateObj := &state.DegradedState{}
+
+			snap := fsmv2.Snapshot{
+				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
+				Observed: snapshot.CommunicatorObservedState{
+					Authenticated:     false,
+					ConsecutiveErrors: 20,
+					LastErrorType:     httpTransport.ErrorTypeServerError,
+					DegradedEnteredAt: time.Now().Add(-65 * time.Second),
+				},
+				Desired: &snapshot.CommunicatorDesiredState{},
+			}
+
+			result := stateObj.Next(snap)
+
+			Expect(result.Action).NotTo(BeNil())
+			Expect(result.Action.Name()).To(Equal("reset_transport"))
+		})
+	})
+
+	Context("for unknown/other error types", func() {
+		It("should NOT emit ResetTransportAction regardless of error count", func() {
+			stateObj := &state.DegradedState{}
+
+			snap := fsmv2.Snapshot{
+				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
+				Observed: snapshot.CommunicatorObservedState{
+					Authenticated:     false,
+					ConsecutiveErrors: 100,
+					LastErrorType:     httpTransport.ErrorTypeBackendRateLimit,
+					DegradedEnteredAt: time.Now().Add(-600 * time.Second),
+				},
+				Desired: &snapshot.CommunicatorDesiredState{},
+			}
+
+			result := stateObj.Next(snap)
+
+			Expect(result.Action).NotTo(BeNil())
+			Expect(result.Action.Name()).To(Equal("sync"))
 		})
 	})
 })
 
-var _ = Describe("DegradedState Transport Reset", func() {
-	It("should emit ResetTransportAction at exactly 5 consecutive errors", func() {
+var _ = Describe("DegradedState Auth Transition", func() {
+	It("should transition to TryingToAuthenticateState when last error is InvalidToken", func() {
 		stateObj := &state.DegradedState{}
 
 		snap := fsmv2.Snapshot{
 			Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
 			Observed: snapshot.CommunicatorObservedState{
-				Authenticated:     false,
-				ConsecutiveErrors: 5,
-				DegradedEnteredAt: time.Now().Add(-35 * time.Second),
+				LastErrorType:     httpTransport.ErrorTypeInvalidToken,
+				ConsecutiveErrors: 1,
+				DegradedEnteredAt: time.Now().Add(-65 * time.Second), // Past backoff
 			},
 			Desired: &snapshot.CommunicatorDesiredState{},
 		}
 
-		nextState, signal, act := stateObj.Next(snap)
+		result := stateObj.Next(snap)
 
-		Expect(nextState).To(BeAssignableToTypeOf(&state.DegradedState{}))
-		Expect(signal).To(Equal(fsmv2.SignalNone))
-		Expect(act).NotTo(BeNil())
-		Expect(act.Name()).To(Equal("reset_transport"))
-	})
-
-	It("should NOT emit ResetTransportAction at 6 consecutive errors", func() {
-		stateObj := &state.DegradedState{}
-
-		snap := fsmv2.Snapshot{
-			Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
-			Observed: snapshot.CommunicatorObservedState{
-				Authenticated:     false,
-				ConsecutiveErrors: 6,
-				DegradedEnteredAt: time.Now().Add(-65 * time.Second),
-			},
-			Desired: &snapshot.CommunicatorDesiredState{},
-		}
-
-		_, _, act := stateObj.Next(snap)
-
-		Expect(act).NotTo(BeNil())
-		Expect(act.Name()).To(Equal("sync"))
-	})
-
-	It("should emit ResetTransportAction again at 10 consecutive errors", func() {
-		stateObj := &state.DegradedState{}
-
-		snap := fsmv2.Snapshot{
-			Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
-			Observed: snapshot.CommunicatorObservedState{
-				Authenticated:     false,
-				ConsecutiveErrors: 10,
-				DegradedEnteredAt: time.Now().Add(-65 * time.Second),
-			},
-			Desired: &snapshot.CommunicatorDesiredState{},
-		}
-
-		_, _, act := stateObj.Next(snap)
-
-		Expect(act).NotTo(BeNil())
-		Expect(act.Name()).To(Equal("reset_transport"))
-	})
-
-	It("should NOT emit ResetTransportAction at 0 errors", func() {
-		stateObj := &state.DegradedState{}
-
-		snap := fsmv2.Snapshot{
-			Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
-			Observed: snapshot.CommunicatorObservedState{
-				Authenticated:     false,
-				ConsecutiveErrors: 0,
-				DegradedEnteredAt: time.Now().Add(-1 * time.Second),
-			},
-			Desired: &snapshot.CommunicatorDesiredState{},
-		}
-
-		_, _, act := stateObj.Next(snap)
-
-		Expect(act).NotTo(BeNil())
-		Expect(act.Name()).To(Equal("sync"))
+		Expect(result.State).To(BeAssignableToTypeOf(&state.TryingToAuthenticateState{}))
+		Expect(result.Signal).To(Equal(fsmv2.SignalNone))
+		Expect(result.Action).To(BeNil())
 	})
 })
 
@@ -207,11 +315,11 @@ var _ = Describe("DegradedState Backoff", func() {
 			Desired: &snapshot.CommunicatorDesiredState{},
 		}
 
-		nextState, signal, action := stateObj.Next(snap)
+		result := stateObj.Next(snap)
 
-		Expect(nextState).To(BeAssignableToTypeOf(&state.DegradedState{}))
-		Expect(signal).To(Equal(fsmv2.SignalNone))
-		Expect(action).To(BeNil(), "Should NOT emit action during backoff period")
+		Expect(result.State).To(BeAssignableToTypeOf(&state.DegradedState{}))
+		Expect(result.Signal).To(Equal(fsmv2.SignalNone))
+		Expect(result.Action).To(BeNil(), "Should NOT emit action during backoff period")
 	})
 
 	It("attempts sync after backoff period expires", func() {
@@ -227,10 +335,255 @@ var _ = Describe("DegradedState Backoff", func() {
 			Desired: &snapshot.CommunicatorDesiredState{},
 		}
 
-		nextState, _, action := stateObj.Next(snap)
+		result := stateObj.Next(snap)
 
-		Expect(nextState).To(BeAssignableToTypeOf(&state.DegradedState{}))
-		Expect(action).NotTo(BeNil(), "Should emit SyncAction after backoff expires")
-		Expect(action.Name()).To(Equal("sync"))
+		Expect(result.State).To(BeAssignableToTypeOf(&state.DegradedState{}))
+		Expect(result.Action).NotTo(BeNil(), "Should emit SyncAction after backoff expires")
+		Expect(result.Action.Name()).To(Equal("sync"))
+	})
+})
+
+var _ = Describe("DegradedState Transitions", func() {
+	var stateObj *state.DegradedState
+
+	BeforeEach(func() {
+		stateObj = &state.DegradedState{}
+	})
+
+	Describe("Degraded -> StoppedState", func() {
+		It("should transition to StoppedState when shutdown is requested", func() {
+			snap := fsmv2.Snapshot{
+				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
+				Observed: snapshot.CommunicatorObservedState{
+					Authenticated:     true,
+					ConsecutiveErrors: 10,
+					DegradedEnteredAt: time.Now().Add(-5 * time.Minute),
+				},
+				Desired: &snapshot.CommunicatorDesiredState{
+					BaseDesiredState: config.BaseDesiredState{ShutdownRequested: true},
+				},
+			}
+
+			result := stateObj.Next(snap)
+
+			Expect(result.State).To(BeAssignableToTypeOf(&state.StoppedState{}))
+			Expect(result.Signal).To(Equal(fsmv2.SignalNone))
+			Expect(result.Action).To(BeNil())
+		})
+
+		It("should prioritize shutdown over recovery", func() {
+			snap := fsmv2.Snapshot{
+				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
+				Observed: snapshot.CommunicatorObservedState{
+					Authenticated:     true,
+					ConsecutiveErrors: 0,
+					DegradedEnteredAt: time.Time{},
+				},
+				Desired: &snapshot.CommunicatorDesiredState{
+					BaseDesiredState: config.BaseDesiredState{ShutdownRequested: true},
+				},
+			}
+
+			result := stateObj.Next(snap)
+
+			Expect(result.State).To(BeAssignableToTypeOf(&state.StoppedState{}))
+			Expect(result.Signal).To(Equal(fsmv2.SignalNone))
+			Expect(result.Action).To(BeNil())
+		})
+	})
+
+	Describe("Degraded -> TryingToAuthenticateState", func() {
+		It("should transition to TryingToAuthenticateState when last error is InvalidToken", func() {
+			snap := fsmv2.Snapshot{
+				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
+				Observed: snapshot.CommunicatorObservedState{
+					LastErrorType:     httpTransport.ErrorTypeInvalidToken,
+					ConsecutiveErrors: 1,
+					DegradedEnteredAt: time.Now().Add(-65 * time.Second),
+				},
+				Desired: &snapshot.CommunicatorDesiredState{},
+			}
+
+			result := stateObj.Next(snap)
+
+			Expect(result.State).To(BeAssignableToTypeOf(&state.TryingToAuthenticateState{}))
+			Expect(result.Signal).To(Equal(fsmv2.SignalNone))
+			Expect(result.Action).To(BeNil())
+		})
+
+		It("should transition to TryingToAuthenticateState on InvalidToken regardless of consecutive errors", func() {
+			snap := fsmv2.Snapshot{
+				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
+				Observed: snapshot.CommunicatorObservedState{
+					LastErrorType:     httpTransport.ErrorTypeInvalidToken,
+					ConsecutiveErrors: 100,
+					DegradedEnteredAt: time.Now().Add(-5 * time.Minute),
+				},
+				Desired: &snapshot.CommunicatorDesiredState{},
+			}
+
+			result := stateObj.Next(snap)
+
+			Expect(result.State).To(BeAssignableToTypeOf(&state.TryingToAuthenticateState{}))
+			Expect(result.Signal).To(Equal(fsmv2.SignalNone))
+			Expect(result.Action).To(BeNil())
+		})
+	})
+
+	Describe("Degraded -> SyncingState", func() {
+		It("should transition to SyncingState when sync is healthy and no errors", func() {
+			snap := fsmv2.Snapshot{
+				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
+				Observed: snapshot.CommunicatorObservedState{
+					Authenticated:     true,
+					JWTExpiry:         time.Now().Add(time.Hour),
+					ConsecutiveErrors: 0,
+				},
+				Desired: &snapshot.CommunicatorDesiredState{},
+			}
+
+			result := stateObj.Next(snap)
+
+			Expect(result.State).To(BeAssignableToTypeOf(&state.SyncingState{}))
+			Expect(result.Signal).To(Equal(fsmv2.SignalNone))
+			Expect(result.Action).To(BeNil())
+		})
+
+		It("should transition to SyncingState after full recovery", func() {
+			snap := fsmv2.Snapshot{
+				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
+				Observed: snapshot.CommunicatorObservedState{
+					Authenticated:     true,
+					JWTToken:          "valid-token",
+					JWTExpiry:         time.Now().Add(30 * time.Minute),
+					ConsecutiveErrors: 0,
+					DegradedEnteredAt: time.Time{},
+				},
+				Desired: &snapshot.CommunicatorDesiredState{
+					BaseDesiredState: config.BaseDesiredState{ShutdownRequested: false},
+				},
+			}
+
+			result := stateObj.Next(snap)
+
+			Expect(result.State).To(BeAssignableToTypeOf(&state.SyncingState{}))
+			Expect(result.Signal).To(Equal(fsmv2.SignalNone))
+			Expect(result.Action).To(BeNil())
+		})
+
+		It("should NOT transition to SyncingState if sync is healthy but has errors", func() {
+			snap := fsmv2.Snapshot{
+				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
+				Observed: snapshot.CommunicatorObservedState{
+					Authenticated:     true,
+					JWTExpiry:         time.Now().Add(time.Hour),
+					ConsecutiveErrors: 3,
+					DegradedEnteredAt: time.Now().Add(-20 * time.Second),
+				},
+				Desired: &snapshot.CommunicatorDesiredState{},
+			}
+
+			result := stateObj.Next(snap)
+
+			Expect(result.State).To(BeAssignableToTypeOf(&state.DegradedState{}))
+		})
+	})
+
+	Describe("Degraded -> self (backoff/retry)", func() {
+		It("should stay in DegradedState during backoff period", func() {
+			snap := fsmv2.Snapshot{
+				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
+				Observed: snapshot.CommunicatorObservedState{
+					Authenticated:     false,
+					ConsecutiveErrors: 3,
+					DegradedEnteredAt: time.Now(),
+				},
+				Desired: &snapshot.CommunicatorDesiredState{},
+			}
+
+			result := stateObj.Next(snap)
+
+			Expect(result.State).To(BeAssignableToTypeOf(&state.DegradedState{}))
+			Expect(result.Signal).To(Equal(fsmv2.SignalNone))
+			Expect(result.Action).To(BeNil())
+		})
+
+		It("should stay in DegradedState and emit SyncAction after backoff", func() {
+			snap := fsmv2.Snapshot{
+				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
+				Observed: snapshot.CommunicatorObservedState{
+					Authenticated:     false,
+					ConsecutiveErrors: 3,
+					DegradedEnteredAt: time.Now().Add(-10 * time.Second),
+				},
+				Desired: &snapshot.CommunicatorDesiredState{},
+			}
+
+			result := stateObj.Next(snap)
+
+			Expect(result.State).To(BeAssignableToTypeOf(&state.DegradedState{}))
+			Expect(result.Signal).To(Equal(fsmv2.SignalNone))
+			Expect(result.Action).NotTo(BeNil())
+			Expect(result.Action.Name()).To(Equal("sync"))
+		})
+
+		It("should emit ResetTransportAction at 5 consecutive network errors after backoff", func() {
+			snap := fsmv2.Snapshot{
+				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
+				Observed: snapshot.CommunicatorObservedState{
+					Authenticated:     false,
+					ConsecutiveErrors: 5,
+					LastErrorType:     httpTransport.ErrorTypeNetwork,
+					DegradedEnteredAt: time.Now().Add(-35 * time.Second),
+				},
+				Desired: &snapshot.CommunicatorDesiredState{},
+			}
+
+			result := stateObj.Next(snap)
+
+			Expect(result.State).To(BeAssignableToTypeOf(&state.DegradedState{}))
+			Expect(result.Signal).To(Equal(fsmv2.SignalNone))
+			Expect(result.Action).NotTo(BeNil())
+			Expect(result.Action.Name()).To(Equal("reset_transport"))
+		})
+
+		It("should emit ResetTransportAction at 10 consecutive network errors", func() {
+			snap := fsmv2.Snapshot{
+				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
+				Observed: snapshot.CommunicatorObservedState{
+					Authenticated:     false,
+					ConsecutiveErrors: 10,
+					LastErrorType:     httpTransport.ErrorTypeNetwork,
+					DegradedEnteredAt: time.Now().Add(-65 * time.Second),
+				},
+				Desired: &snapshot.CommunicatorDesiredState{},
+			}
+
+			result := stateObj.Next(snap)
+
+			Expect(result.State).To(BeAssignableToTypeOf(&state.DegradedState{}))
+			Expect(result.Signal).To(Equal(fsmv2.SignalNone))
+			Expect(result.Action).NotTo(BeNil())
+			Expect(result.Action.Name()).To(Equal("reset_transport"))
+		})
+
+		It("should emit SyncAction at 6 consecutive errors (not a reset threshold)", func() {
+			snap := fsmv2.Snapshot{
+				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
+				Observed: snapshot.CommunicatorObservedState{
+					Authenticated:     false,
+					ConsecutiveErrors: 6,
+					DegradedEnteredAt: time.Now().Add(-65 * time.Second),
+				},
+				Desired: &snapshot.CommunicatorDesiredState{},
+			}
+
+			result := stateObj.Next(snap)
+
+			Expect(result.State).To(BeAssignableToTypeOf(&state.DegradedState{}))
+			Expect(result.Signal).To(Equal(fsmv2.SignalNone))
+			Expect(result.Action).NotTo(BeNil())
+			Expect(result.Action.Name()).To(Equal("sync"))
+		})
 	})
 })

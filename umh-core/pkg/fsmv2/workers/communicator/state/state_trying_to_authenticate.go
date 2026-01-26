@@ -37,16 +37,16 @@ type TryingToAuthenticateState struct {
 	BaseCommunicatorState
 }
 
-func (s *TryingToAuthenticateState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, fsmv2.Action[any]) {
+func (s *TryingToAuthenticateState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := helpers.ConvertSnapshot[snapshot.CommunicatorObservedState, *snapshot.CommunicatorDesiredState](snapAny)
 	snap.Observed.State = config.MakeState(config.PrefixTryingToStart, "authentication")
 
 	if snap.Desired.IsShutdownRequested() {
-		return &StoppedState{}, fsmv2.SignalNone, nil
+		return fsmv2.Result[any, any](&StoppedState{}, fsmv2.SignalNone, nil, "Shutdown requested during authentication")
 	}
 
 	if snap.Observed.Authenticated && !snap.Observed.IsTokenExpired() {
-		return &SyncingState{}, fsmv2.SignalNone, nil
+		return fsmv2.Result[any, any](&SyncingState{}, fsmv2.SignalNone, nil, "Authentication successful, starting sync")
 	}
 
 	// Backoff to avoid hammering backend on repeated auth failures
@@ -57,7 +57,7 @@ func (s *TryingToAuthenticateState) Next(snapAny any) (fsmv2.State[any, any], fs
 			snap.Observed.LastRetryAfter, // Respect server's Retry-After
 		)
 		if time.Since(snap.Observed.LastAuthAttemptAt) < delay {
-			return s, fsmv2.SignalNone, nil
+			return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, "Waiting for backoff to expire before retry")
 		}
 	}
 
@@ -68,13 +68,9 @@ func (s *TryingToAuthenticateState) Next(snapAny any) (fsmv2.State[any, any], fs
 		snap.Desired.Timeout,
 	)
 
-	return s, fsmv2.SignalNone, authenticateAction
+	return fsmv2.Result[any, any](s, fsmv2.SignalNone, authenticateAction, "Attempting to authenticate with relay server")
 }
 
 func (s *TryingToAuthenticateState) String() string {
 	return "TryingToAuthenticate"
-}
-
-func (s *TryingToAuthenticateState) Reason() string {
-	return "Attempting to authenticate with relay server"
 }

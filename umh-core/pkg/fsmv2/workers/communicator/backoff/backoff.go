@@ -28,7 +28,6 @@ const (
 	TransportResetThreshold = 5 // Consecutive errors before calling Transport.Reset()
 )
 
-
 // CalculateDelay returns 2^consecutiveErrors seconds, capped at MaxDelay.
 func CalculateDelay(consecutiveErrors int) time.Duration {
 	if consecutiveErrors <= 0 {
@@ -84,7 +83,7 @@ func calculateDefaultDelay(errType httpTransport.ErrorType, consecutiveErrors in
 		return CalculateDelay(consecutiveErrors)
 
 	case httpTransport.ErrorTypeInstanceDeleted:
-		return 0
+		return 5 * time.Minute
 
 	default:
 		return CalculateDelay(consecutiveErrors)

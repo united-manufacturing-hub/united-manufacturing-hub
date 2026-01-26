@@ -4,6 +4,42 @@ Type-safe state machine framework for managing worker lifecycles with compile-ti
 
 > **Implementation details**: For Go idiom patterns, code examples, and API contracts, see `doc.go`.
 
+## Quick Start
+
+**Start here:** The [`workers/example/helloworld/`](workers/example/helloworld/) directory contains a minimal working example with extensive comments. See its [README](workers/example/helloworld/README.md) for step-by-step instructions.
+
+```bash
+# Run the existing examples
+go run pkg/fsmv2/cmd/runner/main.go --list          # List all scenarios
+go run pkg/fsmv2/cmd/runner/main.go --scenario=simple --duration=5s
+```
+
+### Creating a New Worker
+
+```bash
+# 1. Copy the template structure
+workers/myworker/
+├── worker.go           # Worker interface (3 methods) + init() for registration
+├── userspec.go         # User configuration schema
+├── dependencies.go     # External dependencies
+├── snapshot/
+│   └── snapshot.go     # ObservedState (embeds DesiredState with json:",inline")
+├── state/
+│   ├── stopped.go      # Initial state
+│   └── running.go      # Target state
+└── action/
+    └── start.go        # I/O operation (idempotent)
+
+# 2. CRITICAL: Name types correctly (folder "myworker" → types "MyworkerXxx")
+# 3. Implement the 3 Worker methods in worker.go
+# 4. Add init() function to register with factory
+# 5. Test with local runner
+```
+
+**New to FSMv2?** Read [How it works](#how-it-works) below, then see [File structure](#file-structure-for-a-worker) for the full template.
+
+---
+
 ## How it works
 
 FSMv2 is a **state machine supervisor**:
@@ -17,8 +53,6 @@ Config Change → DeriveDesiredState() → Supervisor compares → State.Next() 
 ```
 
 **What you implement**: 3 Worker methods + States + Actions. **What you don't**: retries, timeouts, metrics, lifecycle management.
-
-> **Quick start**: Jump to [File structure](#file-structure-for-a-worker) to create your first worker.
 
 ## Motivation
 
@@ -197,14 +231,6 @@ workers/myworker/
     └── stop.go         # Cleanup action
 ```
 
-### Quick start
-
-1. **Copy** the file structure template above
-2. **Define** `ObservedState` and `DesiredState` in `snapshot/`
-3. **Implement** the 3 Worker methods in `worker.go`
-4. **Create** states with `Next()` functions
-5. **Test** with local runner: `go run pkg/fsmv2/cmd/runner/main.go --scenario=simple`
-
 ## The triangle model
 
 Every worker in FSMv2 is represented by three components:
@@ -277,6 +303,78 @@ Stopped → TryingToAuthenticate → Syncing ↔ Degraded
 - I/O operations (HTTP) isolated in Actions, never in States
 - Actions update shared state via Dependencies (thread-safe setters)
 - CollectObservedState reads from Dependencies (thread-safe getters)
+
+### Enabling FSMv2 Communicator
+
+#### Option 1: Environment Variables
+
+```bash
+docker run -d \
+  -e AUTH_TOKEN=your-auth-token \
+  -e API_URL=https://management.umh.app \
+  -e USE_FSMV2_TRANSPORT=true \
+  umh-core:latest
+```
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `AUTH_TOKEN` | Yes | Authentication token from Management Console |
+| `API_URL` | Yes | Backend relay server URL (e.g., `https://management.umh.app`) |
+| `USE_FSMV2_TRANSPORT` | Yes | Set to `true` to enable FSMv2 communicator |
+
+#### Option 2: config.yaml
+
+```yaml
+agent:
+  communicator:
+    apiUrl: "https://management.umh.app"
+    authToken: "your-auth-token"
+    useFSMv2Transport: true
+```
+
+### Disabling FSMv2 Communicator
+
+To revert to the legacy communicator, explicitly set:
+
+```bash
+-e USE_FSMV2_TRANSPORT=false
+```
+
+Or in config.yaml:
+
+```yaml
+agent:
+  communicator:
+    useFSMv2Transport: false
+```
+
+**Note:** If `useFSMv2Transport` was previously enabled and saved to config.yaml, you must explicitly set it to `false` - simply omitting the environment variable will not override the persisted config value.
+
+### Verifying FSMv2 Communicator
+
+To verify that FSMv2 communicator is enabled and working:
+
+#### Check Metrics
+
+```bash
+curl localhost:8080/metrics | grep fsmv2
+```
+
+You should see metrics like `umh_fsmv2_*` indicating the FSMv2 supervisor is running.
+
+#### Watch Communicator Logs
+
+```bash
+cat /data/logs/umh-core/current | grep fsmv2
+```
+
+Or to follow logs in real-time:
+
+```bash
+tail -f /data/logs/umh-core/current | grep fsmv2
+```
+
+You should see log entries like `supervisor_heartbeat` with `hierarchy_path` containing `communicator` and `worker_states` showing the current state (e.g., `Syncing`).
 
 ## Supervisor responsibilities
 

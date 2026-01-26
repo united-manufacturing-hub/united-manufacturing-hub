@@ -81,10 +81,3 @@ func DeriveStateName(state interface{}) string {
 func (b BaseState) String() string {
 	return "BaseState"
 }
-
-// Reason returns the reason for the current state.
-// Override this method in your state implementations to provide meaningful reasons.
-// By default, returns an empty string.
-func (b BaseState) Reason() string {
-	return ""
-}

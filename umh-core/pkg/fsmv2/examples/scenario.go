@@ -187,6 +187,7 @@ var Registry = map[string]Scenario{
 	"configerror":  ConfigErrorScenario,
 	"inheritance":  InheritanceScenario,
 	"communicator": CommunicatorScenarioEntry,
+	"concurrent":   ConcurrentScenario,
 }
 
 // CommunicatorScenarioEntry registers the communicator scenario for CLI access.
@@ -251,14 +252,13 @@ var CommunicatorScenarioEntry = Scenario{
 
 // RunConfig configures how a scenario is executed.
 type RunConfig struct {
-
-	Store            storage.TriangularStoreInterface
-	Logger           *zap.SugaredLogger
-	Scenario         Scenario
-	Duration         time.Duration // 0 means run forever (until context cancelled)
-	TickInterval     time.Duration
+	Store              storage.TriangularStoreInterface
+	Logger             *zap.SugaredLogger
+	Scenario           Scenario
+	Duration           time.Duration // 0 means run forever (until context cancelled)
+	TickInterval       time.Duration
 	EnableTraceLogging bool
-	DumpStore        bool // Dump store deltas and final state after completion
+	DumpStore          bool // Dump store deltas and final state after completion
 }
 
 // ListScenarios returns all registered scenario names and descriptions.

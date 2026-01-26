@@ -20,7 +20,7 @@ import (
 
 // ExamplepanicUserSpec is the typed configuration for the panic worker.
 type ExamplepanicUserSpec struct {
-	config.BaseUserSpec // Provides State field with GetState() defaulting to "running"
+	config.BaseUserSpec      // Provides State field with GetState() defaulting to "running"
 	ShouldRun           bool `yaml:"should_run"`
 	ShouldPanic         bool `yaml:"should_panic"`
 }

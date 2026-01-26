@@ -67,12 +67,12 @@ func main() {
 		TimeKey:        "time",
 		LevelKey:       "level",
 		NameKey:        "logger",
-		CallerKey:      "",                          // Disable caller for cleaner output
-		FunctionKey:    zapcore.OmitKey,             // Disable function name
+		CallerKey:      "",              // Disable caller for cleaner output
+		FunctionKey:    zapcore.OmitKey, // Disable function name
 		MessageKey:     "msg",
-		StacktraceKey:  "",                          // Disable stacktrace for cleaner output
+		StacktraceKey:  "", // Disable stacktrace for cleaner output
 		LineEnding:     zapcore.DefaultLineEnding,
-		EncodeLevel:    zapcore.CapitalColorLevelEncoder, // Colored levels
+		EncodeLevel:    zapcore.CapitalColorLevelEncoder,            // Colored levels
 		EncodeTime:     zapcore.TimeEncoderOfLayout("15:04:05.000"), // Time with milliseconds
 		EncodeDuration: zapcore.StringDurationEncoder,
 		EncodeCaller:   zapcore.ShortCallerEncoder,

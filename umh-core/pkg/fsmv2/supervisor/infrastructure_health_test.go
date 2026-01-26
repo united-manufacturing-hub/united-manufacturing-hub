@@ -23,6 +23,39 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 )
 
+var _ = Describe("ChildHealthError", func() {
+	Describe("Unwrap", func() {
+		It("should return the underlying error", func() {
+			underlying := errors.New("underlying error")
+			healthErr := &supervisor.ChildHealthError{
+				Err:       underlying,
+				ChildName: "test-child",
+			}
+
+			Expect(healthErr.Unwrap()).To(Equal(underlying))
+		})
+
+		It("should work with errors.Is", func() {
+			underlying := errors.New("specific error")
+			healthErr := &supervisor.ChildHealthError{
+				Err:       underlying,
+				ChildName: "test-child",
+			}
+
+			Expect(errors.Is(healthErr, underlying)).To(BeTrue())
+		})
+
+		It("should return nil when Err is nil", func() {
+			healthErr := &supervisor.ChildHealthError{
+				ChildName: "test-child",
+			}
+
+			//nolint:ginkgolinter // Unwrap() returns error type but we're testing for nil, not checking error occurrence
+			Expect(healthErr.Unwrap()).To(BeNil())
+		})
+	})
+})
+
 var _ = Describe("InfrastructureHealthChecker", func() {
 	var checker *supervisor.InfrastructureHealthChecker
 

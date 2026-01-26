@@ -27,8 +27,8 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence/memory"
@@ -151,12 +151,8 @@ func (m *mockState) String() string {
 	return m.name
 }
 
-func (m *mockState) Reason() string {
-	return m.reason
-}
-
-func (m *mockState) Next(_ any) (fsmv2.State[any, any], fsmv2.Signal, fsmv2.Action[any]) {
-	return m, fsmv2.SignalNone, nil
+func (m *mockState) Next(_ any) fsmv2.NextResult[any, any] {
+	return fsmv2.Result[any, any](m, fsmv2.SignalNone, nil, m.reason)
 }
 
 // internalMockWorkerWithChildren is a mock worker that returns configurable ChildSpecs.
