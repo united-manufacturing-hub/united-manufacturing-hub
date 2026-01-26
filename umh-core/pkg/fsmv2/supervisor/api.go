@@ -304,6 +304,12 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 
 	executor.SetOnActionComplete(func(result deps.ActionResult) {
 		actionHistoryBuffer.Record(result)
+
+		// Trigger immediate observation after action completes.
+		// This eliminates the delay between action and FSM progression.
+		if workerCtx != nil && workerCtx.collector != nil && workerCtx.collector.IsRunning() {
+			workerCtx.collector.Restart()
+		}
 	})
 
 	// Survives restarts, incremented on each AddWorker().
