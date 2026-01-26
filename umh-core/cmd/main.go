@@ -476,6 +476,10 @@ children:
 	// This avoids global state and enables proper testing
 	// Use Named("fsmv2") to create [fsmv2] prefix in logs for easy filtering
 	fsmv2Logger := logger.Named("fsmv2")
+	// Wrap with SentryHook for automatic FSMv2 error capture to Sentry
+	// This only affects FSMv2 logs, not the rest of the application
+	fsmv2Core := sentry.NewSentryHook(fsmv2Logger.Desugar().Core())
+	fsmv2Logger = zap.New(fsmv2Core).Sugar()
 
 	appSup, err := application.NewApplicationSupervisor(application.SupervisorConfig{
 		ID:           "fsmv2-communicator",
