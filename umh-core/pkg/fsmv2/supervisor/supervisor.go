@@ -133,12 +133,13 @@ const (
 //
 // Single-node coordination only; distributed deployments require a different storage backend.
 type Supervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] struct {
-	createdAt          time.Time
-	store              storage.TriangularStoreInterface
-	parent             SupervisorInterface
-	ctx                context.Context
-	cachedDesiredState fsmv2.DesiredState
-	workers            map[string]*WorkerContext[TObserved, TDesired]
+	createdAt           time.Time
+	store               storage.TriangularStoreInterface
+	parent              SupervisorInterface
+	ctx                 context.Context
+	cachedDesiredState  fsmv2.DesiredState
+	cachedFirstWorkerID atomic.Value // string - cached for GetHierarchyPathUnlocked()
+	workers             map[string]*WorkerContext[TObserved, TDesired]
 	// mu Protects access to workers map, children, childDoneChans, globalVars, and mappedParentState.
 	//
 	// This is a lockmanager.Lock wrapping sync.RWMutex to allow concurrent reads from multiple goroutines
@@ -187,7 +188,6 @@ type Supervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] stru
 	gracefulShutdownTimeout  time.Duration
 	circuitOpen              atomic.Bool
 	started                  atomic.Bool
-	cachedFirstWorkerID      atomic.Value // string - cached for GetHierarchyPathUnlocked()
 	enableTraceLogging       bool
 }
 
