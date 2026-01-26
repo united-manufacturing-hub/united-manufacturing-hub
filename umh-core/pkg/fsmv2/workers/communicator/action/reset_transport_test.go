@@ -69,6 +69,27 @@ var _ = Describe("ResetTransportAction", func() {
 			Expect(mockTransp.resetCallCount).To(Equal(3))
 		})
 
+		It("should call Attempt() on retry tracker to advance counter (fixes infinite loop bug)", func() {
+			ctx := context.Background()
+
+			// Simulate 5 errors to reach the reset threshold
+			for range 5 {
+				dependencies.RecordError()
+			}
+
+			Expect(dependencies.RetryTracker().ConsecutiveErrors()).To(Equal(5))
+			Expect(dependencies.RetryTracker().ShouldReset(5)).To(BeTrue(), "should trigger reset at 5 errors")
+
+			// Execute ResetTransportAction
+			err := act.Execute(ctx, dependencies)
+			Expect(err).NotTo(HaveOccurred())
+
+			// BUG FIX VERIFICATION: After reset, counter should be 6 (not still 5)
+			// This breaks the modulo-5 trigger condition and prevents infinite loop
+			Expect(dependencies.RetryTracker().ConsecutiveErrors()).To(Equal(6))
+			Expect(dependencies.RetryTracker().ShouldReset(5)).To(BeFalse(), "should NOT trigger reset at 6 errors")
+		})
+
 		// Note: We removed the "nil transport" test case because transport is now
 		// GUARANTEED to be non-nil when ResetTransportAction executes:
 		// - ResetTransportAction is ONLY called from DegradedState
