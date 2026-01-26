@@ -211,7 +211,7 @@ func verifyConcurrentAllShutdownCleanly(t *integration.TestLogger) {
 				switch field.Key {
 				case "worker":
 					worker = field.String
-				case "to":
+				case "to_state":
 					toState = field.String
 				}
 			}
