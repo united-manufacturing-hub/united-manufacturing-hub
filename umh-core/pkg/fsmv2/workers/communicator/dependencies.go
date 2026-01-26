@@ -221,11 +221,9 @@ func (d *CommunicatorDependencies) GetLastAuthAttemptAt() time.Time {
 }
 
 // GetConsecutiveErrors returns the current consecutive error count.
+// Delegates to RetryTracker for single source of truth.
 func (d *CommunicatorDependencies) GetConsecutiveErrors() int {
-	d.mu.RLock()
-	defer d.mu.RUnlock()
-
-	return d.consecutiveErrors
+	return d.retryTracker.ConsecutiveErrors()
 }
 
 // GetDegradedEnteredAt returns when degraded mode started, or zero if not degraded.
