@@ -16,6 +16,7 @@ package sentry
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 
 	"github.com/getsentry/sentry-go"
@@ -109,7 +110,11 @@ func extractFieldsAsContext(fields []zapcore.Field) map[string]string {
 				context[field.Key] = "false"
 			}
 		case zapcore.Float64Type, zapcore.Float32Type:
-			context[field.Key] = fmt.Sprintf("%v", field.Interface)
+			if field.Type == zapcore.Float64Type {
+				context[field.Key] = strconv.FormatFloat(math.Float64frombits(uint64(field.Integer)), 'g', -1, 64)
+			} else {
+				context[field.Key] = strconv.FormatFloat(float64(math.Float32frombits(uint32(field.Integer))), 'g', -1, 32)
+			}
 		case zapcore.DurationType:
 			context[field.Key] = strconv.FormatInt(field.Integer, 10)
 		default:
