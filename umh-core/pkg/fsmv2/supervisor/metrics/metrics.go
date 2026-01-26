@@ -14,24 +14,27 @@
 
 // Package metrics provides Prometheus metrics for FSMv2 supervisors.
 //
+// # Label Convention: hierarchy_path
+//
+// All metrics use "hierarchy_path" as the primary identification label.
+// Format: "workerID(workerType)/childID(childType)/..."
+// Example: "application-main(application)/communicator-001(communicator)"
+//
+// This provides:
+//   - Full hierarchical context in a single label
+//   - Consistency with logging (same field used everywhere)
+//   - Both instance ID and type embedded in the path
+//   - Easy filtering by depth or subtree using regex
+//
 // # Cardinality Considerations
 //
-// Some metrics include a "worker_id" label which can lead to high cardinality
-// if the system has many workers. This is intentional for debugging specific
-// worker behavior, but operators should be aware of the trade-offs:
-//
-//   - state_duration_seconds: Uses worker_id to track per-worker state times
-//   - Dynamically created worker metrics: Use worker_id for isolation
-//
 // High cardinality mitigation strategies:
+//   - hierarchy_path cardinality is O(hierarchy_depth) not O(workers)
 //   - Configure Prometheus retention and scrape intervals appropriately
-//   - Use recording rules to aggregate per-worker metrics
-//   - Consider disabling detailed per-worker metrics in large deployments
+//   - Use recording rules to aggregate metrics by worker type
 //   - Monitor _metric_count and _cardinality_total in Prometheus
 //
-// Expected cardinality: O(workers * states) for state_duration_seconds.
-// For typical deployments with <100 workers and <10 states, this is manageable.
-// For larger deployments (1000+ workers), consider aggregation strategies.
+// For aggregation by worker type, use regex: {hierarchy_path=~".*\\(application\\).*"}
 package metrics
 
 import (
@@ -56,7 +59,7 @@ var (
 			Name:      "circuit_open",
 			Help:      "Circuit breaker state (0=closed, 1=open)",
 		},
-		[]string{"worker_type"},
+		[]string{"hierarchy_path"},
 	)
 
 	infrastructureRecoveryTotal = promauto.NewCounterVec(
@@ -66,7 +69,7 @@ var (
 			Name:      "infrastructure_recovery_total",
 			Help:      "Total number of infrastructure recovery events",
 		},
-		[]string{"worker_type"},
+		[]string{"hierarchy_path"},
 	)
 
 	infrastructureRecoveryDuration = promauto.NewHistogramVec(
@@ -76,7 +79,7 @@ var (
 			Name:      "infrastructure_recovery_duration_seconds",
 			Help:      "Duration of infrastructure recovery in seconds",
 		},
-		[]string{"worker_type"},
+		[]string{"hierarchy_path"},
 	)
 
 	actionQueuedTotal = promauto.NewCounterVec(
@@ -86,7 +89,7 @@ var (
 			Name:      "action_queued_total",
 			Help:      "Total number of actions queued",
 		},
-		[]string{"worker_type", "action_type"},
+		[]string{"hierarchy_path", "action_type"},
 	)
 
 	actionQueueSize = promauto.NewGaugeVec(
@@ -96,7 +99,7 @@ var (
 			Name:      "action_queue_size",
 			Help:      "Current size of the action queue",
 		},
-		[]string{"worker_type"},
+		[]string{"hierarchy_path"},
 	)
 
 	actionExecutionDuration = promauto.NewHistogramVec(
@@ -106,7 +109,7 @@ var (
 			Name:      "action_execution_duration_seconds",
 			Help:      "Duration of action execution in seconds",
 		},
-		[]string{"worker_type", "action_type", "status"},
+		[]string{"hierarchy_path", "action_type", "status"},
 	)
 
 	actionTimeoutTotal = promauto.NewCounterVec(
@@ -116,7 +119,7 @@ var (
 			Name:      "action_timeout_total",
 			Help:      "Total number of action timeouts",
 		},
-		[]string{"worker_type", "action_type"},
+		[]string{"hierarchy_path", "action_type"},
 	)
 
 	workerPoolUtilization = promauto.NewGaugeVec(
@@ -146,7 +149,7 @@ var (
 			Name:      "child_count",
 			Help:      "Current number of child supervisors",
 		},
-		[]string{"worker_type"},
+		[]string{"hierarchy_path"},
 	)
 
 	reconciliationTotal = promauto.NewCounterVec(
@@ -156,7 +159,7 @@ var (
 			Name:      "reconciliation_total",
 			Help:      "Total number of reconciliation cycles",
 		},
-		[]string{"worker_type", "result"},
+		[]string{"hierarchy_path", "result"},
 	)
 
 	reconciliationDuration = promauto.NewHistogramVec(
@@ -166,7 +169,7 @@ var (
 			Name:      "reconciliation_duration_seconds",
 			Help:      "Duration of reconciliation cycles in seconds",
 		},
-		[]string{"worker_type"},
+		[]string{"hierarchy_path"},
 	)
 
 	tickPropagationDepth = promauto.NewGaugeVec(
@@ -176,7 +179,7 @@ var (
 			Name:      "tick_propagation_depth",
 			Help:      "Depth of tick propagation in supervisor hierarchy",
 		},
-		[]string{"worker_type"},
+		[]string{"hierarchy_path"},
 	)
 
 	tickPropagationDuration = promauto.NewHistogramVec(
@@ -186,7 +189,7 @@ var (
 			Name:      "tick_propagation_duration_seconds",
 			Help:      "Duration of tick propagation in seconds",
 		},
-		[]string{"worker_type"},
+		[]string{"hierarchy_path"},
 	)
 
 	templateRenderingDuration = promauto.NewHistogramVec(
@@ -196,7 +199,7 @@ var (
 			Name:      "template_rendering_duration_seconds",
 			Help:      "Duration of template rendering in seconds",
 		},
-		[]string{"worker_type", "status"},
+		[]string{"hierarchy_path", "status"},
 	)
 
 	templateRenderingErrorsTotal = promauto.NewCounterVec(
@@ -206,7 +209,7 @@ var (
 			Name:      "template_rendering_errors_total",
 			Help:      "Total number of template rendering errors",
 		},
-		[]string{"worker_type", "error_type"},
+		[]string{"hierarchy_path", "error_type"},
 	)
 
 	variablePropagationTotal = promauto.NewCounterVec(
@@ -216,7 +219,7 @@ var (
 			Name:      "variable_propagation_total",
 			Help:      "Total number of variable propagation events",
 		},
-		[]string{"worker_type"},
+		[]string{"hierarchy_path"},
 	)
 
 	hierarchyDepth = promauto.NewGaugeVec(
@@ -226,7 +229,7 @@ var (
 			Name:      "hierarchy_depth",
 			Help:      "Depth of supervisor in hierarchy tree (0=root, 1=child, 2=grandchild, etc.)",
 		},
-		[]string{"worker_type"},
+		[]string{"hierarchy_path"},
 	)
 
 	hierarchySize = promauto.NewGaugeVec(
@@ -236,7 +239,7 @@ var (
 			Name:      "hierarchy_size",
 			Help:      "Total number of supervisors in subtree (self + all descendants)",
 		},
-		[]string{"worker_type"},
+		[]string{"hierarchy_path"},
 	)
 
 	stateTransitionsTotal = promauto.NewCounterVec(
@@ -246,11 +249,11 @@ var (
 			Name:      "state_transitions_total",
 			Help:      "Total state transitions by from_state and to_state",
 		},
-		[]string{"worker_type", "from_state", "to_state"},
+		[]string{"hierarchy_path", "from_state", "to_state"},
 	)
 
 	// stateDurationSeconds tracks time in current state per worker.
-	// CARDINALITY NOTE: Uses worker_id label which creates O(workers * states) series.
+	// Uses hierarchy_path which provides both instance identity and hierarchy context.
 	// Cleanup via CleanupStateDuration() when workers are removed.
 	stateDurationSeconds = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
@@ -259,7 +262,7 @@ var (
 			Name:      "state_duration_seconds",
 			Help:      "Time spent in current state",
 		},
-		[]string{"worker_type", "worker_id", "state"},
+		[]string{"hierarchy_path", "state"},
 	)
 
 	observationSaveTotal = promauto.NewCounterVec(
@@ -269,7 +272,7 @@ var (
 			Name:      "observation_save_total",
 			Help:      "Total number of observation save attempts",
 		},
-		[]string{"worker_type", "changed"},
+		[]string{"hierarchy_path", "changed"},
 	)
 
 	observationSaveDuration = promauto.NewHistogramVec(
@@ -280,119 +283,136 @@ var (
 			Help:      "Duration of observation save operations (including delta checking)",
 			Buckets:   prometheus.DefBuckets,
 		},
-		[]string{"worker_type", "changed"},
+		[]string{"hierarchy_path", "changed"},
 	)
 )
 
-func RecordCircuitOpen(supervisorID string, open bool) {
+// RecordCircuitOpen records circuit breaker state.
+func RecordCircuitOpen(hierarchyPath string, open bool) {
 	value := 0.0
 	if open {
 		value = 1.0
 	}
 
-	circuitOpen.WithLabelValues(supervisorID).Set(value)
+	circuitOpen.WithLabelValues(hierarchyPath).Set(value)
 }
 
-func RecordInfrastructureRecovery(supervisorID string, duration time.Duration) {
-	infrastructureRecoveryTotal.WithLabelValues(supervisorID).Inc()
-	infrastructureRecoveryDuration.WithLabelValues(supervisorID).Observe(duration.Seconds())
+// RecordInfrastructureRecovery records an infrastructure recovery event.
+func RecordInfrastructureRecovery(hierarchyPath string, duration time.Duration) {
+	infrastructureRecoveryTotal.WithLabelValues(hierarchyPath).Inc()
+	infrastructureRecoveryDuration.WithLabelValues(hierarchyPath).Observe(duration.Seconds())
 }
 
-func RecordActionQueued(supervisorID, actionType string) {
-	actionQueuedTotal.WithLabelValues(supervisorID, actionType).Inc()
+// RecordActionQueued records an action being queued.
+func RecordActionQueued(hierarchyPath, actionType string) {
+	actionQueuedTotal.WithLabelValues(hierarchyPath, actionType).Inc()
 }
 
-func RecordActionQueueSize(supervisorID string, size int) {
-	actionQueueSize.WithLabelValues(supervisorID).Set(float64(size))
+// RecordActionQueueSize records the current action queue size.
+func RecordActionQueueSize(hierarchyPath string, size int) {
+	actionQueueSize.WithLabelValues(hierarchyPath).Set(float64(size))
 }
 
-func RecordActionExecutionDuration(supervisorID, actionType, status string, duration time.Duration) {
-	actionExecutionDuration.WithLabelValues(supervisorID, actionType, status).Observe(duration.Seconds())
+// RecordActionExecutionDuration records action execution duration.
+func RecordActionExecutionDuration(hierarchyPath, actionType, status string, duration time.Duration) {
+	actionExecutionDuration.WithLabelValues(hierarchyPath, actionType, status).Observe(duration.Seconds())
 }
 
-func RecordActionTimeout(supervisorID, actionType string) {
-	actionTimeoutTotal.WithLabelValues(supervisorID, actionType).Inc()
+// RecordActionTimeout records an action timeout.
+func RecordActionTimeout(hierarchyPath, actionType string) {
+	actionTimeoutTotal.WithLabelValues(hierarchyPath, actionType).Inc()
 }
 
+// RecordWorkerPoolUtilization records worker pool utilization.
 func RecordWorkerPoolUtilization(poolName string, utilization float64) {
 	workerPoolUtilization.WithLabelValues(poolName).Set(utilization)
 }
 
+// RecordWorkerPoolQueueSize records worker pool queue size.
 func RecordWorkerPoolQueueSize(poolName string, size int) {
 	workerPoolQueueSize.WithLabelValues(poolName).Set(float64(size))
 }
 
-func RecordChildCount(supervisorID string, count int) {
-	childCount.WithLabelValues(supervisorID).Set(float64(count))
+// RecordChildCount records the number of child supervisors.
+func RecordChildCount(hierarchyPath string, count int) {
+	childCount.WithLabelValues(hierarchyPath).Set(float64(count))
 }
 
-func RecordReconciliation(supervisorID, result string, duration time.Duration) {
-	reconciliationTotal.WithLabelValues(supervisorID, result).Inc()
-	reconciliationDuration.WithLabelValues(supervisorID).Observe(duration.Seconds())
+// RecordReconciliation records a reconciliation cycle.
+func RecordReconciliation(hierarchyPath, result string, duration time.Duration) {
+	reconciliationTotal.WithLabelValues(hierarchyPath, result).Inc()
+	reconciliationDuration.WithLabelValues(hierarchyPath).Observe(duration.Seconds())
 }
 
-func RecordTickPropagationDepth(supervisorID string, depth int) {
-	tickPropagationDepth.WithLabelValues(supervisorID).Set(float64(depth))
+// RecordTickPropagationDepth records tick propagation depth.
+func RecordTickPropagationDepth(hierarchyPath string, depth int) {
+	tickPropagationDepth.WithLabelValues(hierarchyPath).Set(float64(depth))
 }
 
-func RecordTickPropagationDuration(supervisorID string, duration time.Duration) {
-	tickPropagationDuration.WithLabelValues(supervisorID).Observe(duration.Seconds())
+// RecordTickPropagationDuration records tick propagation duration.
+func RecordTickPropagationDuration(hierarchyPath string, duration time.Duration) {
+	tickPropagationDuration.WithLabelValues(hierarchyPath).Observe(duration.Seconds())
 }
 
-func RecordTemplateRenderingDuration(supervisorID, status string, duration time.Duration) {
-	templateRenderingDuration.WithLabelValues(supervisorID, status).Observe(duration.Seconds())
+// RecordTemplateRenderingDuration records template rendering duration.
+func RecordTemplateRenderingDuration(hierarchyPath, status string, duration time.Duration) {
+	templateRenderingDuration.WithLabelValues(hierarchyPath, status).Observe(duration.Seconds())
 }
 
-func RecordTemplateRenderingError(supervisorID, errorType string) {
-	templateRenderingErrorsTotal.WithLabelValues(supervisorID, errorType).Inc()
+// RecordTemplateRenderingError records a template rendering error.
+func RecordTemplateRenderingError(hierarchyPath, errorType string) {
+	templateRenderingErrorsTotal.WithLabelValues(hierarchyPath, errorType).Inc()
 }
 
-func RecordVariablePropagation(supervisorID string) {
-	variablePropagationTotal.WithLabelValues(supervisorID).Inc()
+// RecordVariablePropagation records a variable propagation event.
+func RecordVariablePropagation(hierarchyPath string) {
+	variablePropagationTotal.WithLabelValues(hierarchyPath).Inc()
 }
 
-func RecordHierarchyDepth(supervisorID string, depth int) {
-	hierarchyDepth.WithLabelValues(supervisorID).Set(float64(depth))
+// RecordHierarchyDepth records the depth in the supervisor hierarchy.
+func RecordHierarchyDepth(hierarchyPath string, depth int) {
+	hierarchyDepth.WithLabelValues(hierarchyPath).Set(float64(depth))
 }
 
-func RecordHierarchySize(supervisorID string, size int) {
-	hierarchySize.WithLabelValues(supervisorID).Set(float64(size))
+// RecordHierarchySize records the size of the supervisor subtree.
+func RecordHierarchySize(hierarchyPath string, size int) {
+	hierarchySize.WithLabelValues(hierarchyPath).Set(float64(size))
 }
 
-func RecordObservationSave(workerType string, changed bool, duration time.Duration) {
+// RecordObservationSave records an observation save operation.
+func RecordObservationSave(hierarchyPath string, changed bool, duration time.Duration) {
 	changedStr := "false"
 	if changed {
 		changedStr = "true"
 	}
 
-	observationSaveTotal.WithLabelValues(workerType, changedStr).Inc()
-	observationSaveDuration.WithLabelValues(workerType, changedStr).Observe(duration.Seconds())
+	observationSaveTotal.WithLabelValues(hierarchyPath, changedStr).Inc()
+	observationSaveDuration.WithLabelValues(hierarchyPath, changedStr).Observe(duration.Seconds())
 }
 
 // RecordStateTransition records a state transition event.
-func RecordStateTransition(workerType, fromState, toState string) {
-	stateTransitionsTotal.WithLabelValues(workerType, fromState, toState).Inc()
+func RecordStateTransition(hierarchyPath, fromState, toState string) {
+	stateTransitionsTotal.WithLabelValues(hierarchyPath, fromState, toState).Inc()
 }
 
 // RecordStateDuration records how long a worker has been in its current state.
-func RecordStateDuration(workerType, workerID, state string, duration time.Duration) {
-	stateDurationSeconds.WithLabelValues(workerType, workerID, state).Set(duration.Seconds())
+func RecordStateDuration(hierarchyPath, state string, duration time.Duration) {
+	stateDurationSeconds.WithLabelValues(hierarchyPath, state).Set(duration.Seconds())
 }
 
 // CleanupStateDuration removes state duration metric for a worker.
-func CleanupStateDuration(workerType, workerID, state string) {
-	stateDurationSeconds.DeleteLabelValues(workerType, workerID, state)
+func CleanupStateDuration(hierarchyPath, state string) {
+	stateDurationSeconds.DeleteLabelValues(hierarchyPath, state)
 }
 
 // WorkerMetricsExporter exports worker-specific metrics from ObservedState to Prometheus.
 // Tracks previous counter values to compute deltas.
 //
-// CARDINALITY NOTE: Creates metrics with worker_id label, resulting in O(workers * metrics) series.
-// For large deployments, consider aggregating metrics or limiting the number of distinct metrics.
+// Uses hierarchy_path label for consistent identification across the codebase.
 type WorkerMetricsExporter struct {
 	counters     map[string]*prometheus.CounterVec
 	gauges       map[string]*prometheus.GaugeVec
-	prevCounters map[string]int64 // Key: "workerType:workerID:metricName"
+	prevCounters map[string]int64 // Key: "hierarchyPath:metricName"
 	mu           sync.Mutex
 }
 
@@ -404,7 +424,7 @@ var workerMetricsExporter = &WorkerMetricsExporter{
 
 // ExportWorkerMetrics exports metrics from ObservedState to Prometheus.
 // No-op if observed does not implement MetricsHolder.
-func ExportWorkerMetrics(workerType, workerID string, observed fsmv2.ObservedState) {
+func ExportWorkerMetrics(hierarchyPath string, observed fsmv2.ObservedState) {
 	holder, ok := observed.(deps.MetricsHolder)
 	if !ok {
 		return
@@ -415,20 +435,19 @@ func ExportWorkerMetrics(workerType, workerID string, observed fsmv2.ObservedSta
 		return
 	}
 
-	workerMetricsExporter.export(workerType, workerID, &metrics)
+	workerMetricsExporter.export(hierarchyPath, &metrics)
 }
 
-func (e *WorkerMetricsExporter) export(workerType, workerID string, metrics *deps.Metrics) {
+func (e *WorkerMetricsExporter) export(hierarchyPath string, metrics *deps.Metrics) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
 	labels := prometheus.Labels{
-		"worker_type": workerType,
-		"worker_id":   workerID,
+		"hierarchy_path": hierarchyPath,
 	}
 
 	for name, value := range metrics.Counters {
-		prevKey := workerType + ":" + workerID + ":" + name
+		prevKey := hierarchyPath + ":" + name
 		prevValue := e.prevCounters[prevKey]
 
 		delta := value - prevValue
@@ -458,7 +477,7 @@ func (e *WorkerMetricsExporter) getOrCreateCounter(name string) *prometheus.Coun
 			Name:      name,
 			Help:      "Worker metric: " + name,
 		},
-		[]string{"worker_type", "worker_id"},
+		[]string{"hierarchy_path"},
 	)
 	e.counters[name] = counter
 
@@ -477,7 +496,7 @@ func (e *WorkerMetricsExporter) getOrCreateGauge(name string) *prometheus.GaugeV
 			Name:      name,
 			Help:      "Worker metric: " + name,
 		},
-		[]string{"worker_type", "worker_id"},
+		[]string{"hierarchy_path"},
 	)
 	e.gauges[name] = gauge
 

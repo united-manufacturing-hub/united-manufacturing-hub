@@ -269,55 +269,60 @@ var _ = Describe("Template Rendering Metrics", Label("metrics"), func() {
 var _ = Describe("State Transition Metrics", Label("metrics"), func() {
 	Context("RecordStateTransition", func() {
 		It("should record state transition without panic", func() {
-			// RED: This will fail until RecordStateTransition() is implemented
+			// hierarchy_path format: workerID(workerType)
+			hierarchyPath := "communicator-001(communicator)"
 			Expect(func() {
-				metrics.RecordStateTransition("communicator", "TryingToAuthenticate", "Syncing")
+				metrics.RecordStateTransition(hierarchyPath, "TryingToAuthenticate", "Syncing")
 			}).NotTo(Panic())
 		})
 
 		It("should record multiple state transitions", func() {
+			hierarchyPath := "communicator-001(communicator)"
 			Expect(func() {
-				metrics.RecordStateTransition("communicator", "Stopped", "TryingToAuthenticate")
-				metrics.RecordStateTransition("communicator", "TryingToAuthenticate", "Syncing")
-				metrics.RecordStateTransition("communicator", "Syncing", "Degraded")
+				metrics.RecordStateTransition(hierarchyPath, "Stopped", "TryingToAuthenticate")
+				metrics.RecordStateTransition(hierarchyPath, "TryingToAuthenticate", "Syncing")
+				metrics.RecordStateTransition(hierarchyPath, "Syncing", "Degraded")
 			}).NotTo(Panic())
 		})
 	})
 
 	Context("RecordStateDuration", func() {
 		It("should record state duration without panic", func() {
-			// RED: This will fail until RecordStateDuration() is implemented
+			// hierarchy_path now contains both worker identity and type
+			hierarchyPath := "worker-1(communicator)"
 			Expect(func() {
-				metrics.RecordStateDuration("communicator", "worker-1", "Syncing", 10*time.Second)
+				metrics.RecordStateDuration(hierarchyPath, "Syncing", 10*time.Second)
 			}).NotTo(Panic())
 		})
 
 		It("should handle zero duration", func() {
+			hierarchyPath := "worker-1(communicator)"
 			Expect(func() {
-				metrics.RecordStateDuration("communicator", "worker-1", "Stopped", 0)
+				metrics.RecordStateDuration(hierarchyPath, "Stopped", 0)
 			}).NotTo(Panic())
 		})
 
 		It("should record duration for different workers", func() {
 			Expect(func() {
-				metrics.RecordStateDuration("communicator", "worker-1", "Syncing", 10*time.Second)
-				metrics.RecordStateDuration("communicator", "worker-2", "Syncing", 20*time.Second)
+				metrics.RecordStateDuration("worker-1(communicator)", "Syncing", 10*time.Second)
+				metrics.RecordStateDuration("worker-2(communicator)", "Syncing", 20*time.Second)
 			}).NotTo(Panic())
 		})
 	})
 
 	Context("CleanupStateDuration", func() {
 		It("should cleanup state duration without panic", func() {
-			// RED: This will fail until CleanupStateDuration() is implemented
+			hierarchyPath := "worker-1(communicator)"
 			Expect(func() {
-				metrics.CleanupStateDuration("communicator", "worker-1", "Syncing")
+				metrics.CleanupStateDuration(hierarchyPath, "Syncing")
 			}).NotTo(Panic())
 		})
 
 		It("should cleanup after recording", func() {
+			hierarchyPath := "worker-1(communicator)"
 			Expect(func() {
-				metrics.RecordStateDuration("communicator", "worker-1", "Syncing", 10*time.Second)
-				metrics.CleanupStateDuration("communicator", "worker-1", "Syncing")
+				metrics.RecordStateDuration(hierarchyPath, "Syncing", 10*time.Second)
+				metrics.CleanupStateDuration(hierarchyPath, "Syncing")
 			}).NotTo(Panic())
 		})
 	})

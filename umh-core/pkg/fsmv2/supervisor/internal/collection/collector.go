@@ -414,13 +414,10 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 
 	saveDuration := time.Since(saveStartTime)
 
-	workerType, err := storage.DeriveWorkerType[TObserved]()
-	if err != nil {
-		return fmt.Errorf("failed to derive worker type for metrics: %w", err)
-	}
+	hierarchyPath := c.config.Identity.HierarchyPath
 
-	metrics.RecordObservationSave(workerType, changed, saveDuration)
-	metrics.ExportWorkerMetrics(workerType, c.config.Identity.ID, observed)
+	metrics.RecordObservationSave(hierarchyPath, changed, saveDuration)
+	metrics.ExportWorkerMetrics(hierarchyPath, observed)
 
 	if changed {
 		c.logTrace("observation_saved",

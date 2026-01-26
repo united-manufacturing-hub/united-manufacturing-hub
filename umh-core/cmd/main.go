@@ -482,8 +482,8 @@ children:
 	fsmv2Logger = zap.New(fsmv2Core).Sugar()
 
 	appSup, err := application.NewApplicationSupervisor(application.SupervisorConfig{
-		ID:           "fsmv2-communicator",
-		Name:         "FSMv2 Communicator",
+		ID:           "application-fsmv2",
+		Name:         "Application FSMv2",
 		Store:        store,
 		Logger:       fsmv2Logger,
 		TickInterval: 100 * time.Millisecond,

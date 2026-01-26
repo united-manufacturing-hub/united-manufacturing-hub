@@ -67,7 +67,8 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 		// "not found" is only possible due to this benign race condition.
 		s.logger.Debugw("tick_worker_skip",
 			"reason", "worker_removed_during_shutdown",
-			"worker_id", workerID)
+			"hierarchy_path", s.GetHierarchyPathUnlocked(),
+			"target_worker_id", workerID)
 
 		return nil
 	}
@@ -102,7 +103,7 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 	storageSnapshot, err := s.store.LoadSnapshot(ctx, s.workerType, workerID)
 	if err != nil {
 		s.logger.Errorw("snapshot_load_failed",
-			"worker_id", workerID,
+			"hierarchy_path", workerCtx.identity.HierarchyPath,
 			"error", err)
 
 		return fmt.Errorf("failed to load snapshot: %w", err)
@@ -118,7 +119,7 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 	err = s.store.LoadObservedTyped(ctx, s.workerType, workerID, &observed)
 	if err != nil {
 		s.logger.Errorw("observed_state_load_failed",
-			"worker_id", workerID,
+			"hierarchy_path", workerCtx.identity.HierarchyPath,
 			"error", err)
 
 		return fmt.Errorf("failed to load typed observed state: %w", err)
@@ -129,7 +130,7 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 	err = s.store.LoadDesiredTyped(ctx, s.workerType, workerID, &desired)
 	if err != nil {
 		s.logger.Errorw("desired_state_load_failed",
-			"worker_id", workerID,
+			"hierarchy_path", workerCtx.identity.HierarchyPath,
 			"error", err)
 
 		return fmt.Errorf("failed to load typed desired state: %w", err)
@@ -196,7 +197,7 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 			// RestartCollector will panic if invariant violated (defensive check)
 			if err := s.restartCollector(ctx, workerID); err != nil {
 				s.logger.Errorw("collector_restart_failed",
-					"worker_id", workerID,
+					"hierarchy_path", workerCtx.identity.HierarchyPath,
 					"error", err)
 
 				return fmt.Errorf("failed to restart collector: %w", err)
@@ -315,7 +316,7 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 
 		if err := workerCtx.executor.EnqueueAction(actionID, result.Action, deps); err != nil {
 			s.logger.Errorw("action_enqueue_failed",
-				"worker_id", workerID,
+				"hierarchy_path", workerCtx.identity.HierarchyPath,
 				"action_id", actionID,
 				"error", err)
 
@@ -387,7 +388,7 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 			"mutex_name", "workerCtx.mu")
 
 		// Record Prometheus metric AFTER lock release
-		metrics.RecordStateTransition(s.workerType, fromState, toState)
+		metrics.RecordStateTransition(s.GetHierarchyPathUnlocked(), fromState, toState)
 	} else {
 		s.logTrace("state_unchanged",
 			"state", currentState.String())
@@ -397,8 +398,7 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 
 	if workerCtx.currentState != nil && !workerCtx.stateEnteredAt.IsZero() {
 		metrics.RecordStateDuration(
-			s.workerType,
-			workerID,
+			s.GetHierarchyPathUnlocked(),
 			workerCtx.currentState.String(),
 			time.Since(workerCtx.stateEnteredAt),
 		)
@@ -414,7 +414,7 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 
 	if err := s.processSignal(ctx, workerID, result.Signal); err != nil {
 		s.logger.Errorw("signal_processing_failed",
-			"worker_id", workerID,
+			"hierarchy_path", workerCtx.identity.HierarchyPath,
 			"signal", int(result.Signal),
 			"error", err)
 
@@ -484,7 +484,7 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 				"error", err.Error(),
 				"error_scope", "infrastructure",
 				"impact", "all_workers")
-			metrics.RecordCircuitOpen(s.workerType, true)
+			metrics.RecordCircuitOpen(s.GetHierarchyPathUnlocked(), true)
 		}
 
 		var childErr *ChildHealthError
@@ -525,8 +525,8 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 		s.logger.Infow("circuit_breaker_closed",
 			"reason", "infrastructure_recovered",
 			"total_downtime", downtime.String())
-		metrics.RecordCircuitOpen(s.workerType, false)
-		metrics.RecordInfrastructureRecovery(s.workerType, downtime)
+		metrics.RecordCircuitOpen(s.GetHierarchyPathUnlocked(), false)
+		metrics.RecordInfrastructureRecovery(s.GetHierarchyPathUnlocked(), downtime)
 	}
 
 	s.circuitOpen.Store(false)
@@ -589,7 +589,7 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 	s.logTrace("variables_propagated",
 		"user_vars", userVarCount,
 		"global_vars", globalVarCount)
-	metrics.RecordVariablePropagation(s.workerType)
+	metrics.RecordVariablePropagation(s.GetHierarchyPathUnlocked())
 
 	// PHASE 0: Hierarchical Composition
 	// 1. DeriveDesiredState (with caching)
@@ -623,8 +623,8 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 			s.logger.Errorw("template_rendering_failed",
 				"error", err.Error(),
 				"duration_ms", templateDuration.Milliseconds())
-			metrics.RecordTemplateRenderingDuration(s.workerType, "error", templateDuration)
-			metrics.RecordTemplateRenderingError(s.workerType, "derivation_failed")
+			metrics.RecordTemplateRenderingDuration(s.GetHierarchyPathUnlocked(), "error", templateDuration)
+			metrics.RecordTemplateRenderingError(s.GetHierarchyPathUnlocked(), "derivation_failed")
 
 			// Don't cache errors - will retry next tick
 			return fmt.Errorf("failed to derive desired state: %w", err)
@@ -638,8 +638,8 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 				"state", desired.GetState(),
 				"worker_id", firstWorkerID,
 				"error", valErr)
-			metrics.RecordTemplateRenderingDuration(s.workerType, "error", templateDuration)
-			metrics.RecordTemplateRenderingError(s.workerType, "invalid_state_value")
+			metrics.RecordTemplateRenderingDuration(s.GetHierarchyPathUnlocked(), "error", templateDuration)
+			metrics.RecordTemplateRenderingError(s.GetHierarchyPathUnlocked(), "invalid_state_value")
 
 			// Don't cache validation errors - will retry next tick
 			return fmt.Errorf("failed to derive desired state: %w", valErr)
@@ -654,7 +654,7 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 		s.logTrace("derive_desired_state_computed",
 			"hash", currentHash[:8]+"...",
 			"duration_ms", templateDuration.Milliseconds())
-		metrics.RecordTemplateRenderingDuration(s.workerType, "success", templateDuration)
+		metrics.RecordTemplateRenderingDuration(s.GetHierarchyPathUnlocked(), "success", templateDuration)
 	}
 
 	// Save before tickWorker, which loads the freshest desired state from snapshot
@@ -835,7 +835,8 @@ func (s *Supervisor[TObserved, TDesired]) processSignal(ctx context.Context, wor
 
 		if shouldRestart {
 			s.logger.Infow("worker_restarting",
-				"worker", workerID,
+				"hierarchy_path", s.GetHierarchyPathUnlocked(),
+				"target_worker_id", workerID,
 				"reason", "restart requested after graceful shutdown")
 
 			return s.handleWorkerRestart(ctx, workerID)
@@ -849,7 +850,8 @@ func (s *Supervisor[TObserved, TDesired]) processSignal(ctx context.Context, wor
 			s.mu.Unlock()
 
 			s.logger.Warnw("worker_removal_not_found",
-				"worker_id", workerID)
+				"hierarchy_path", s.GetHierarchyPathUnlocked(),
+				"target_worker_id", workerID)
 
 			return errors.New("worker not found in registry")
 		}
@@ -924,7 +926,8 @@ func (s *Supervisor[TObserved, TDesired]) processSignal(ctx context.Context, wor
 		return nil
 	case fsmv2.SignalNeedsRestart:
 		s.logger.Infow("worker_restart_requested",
-			"worker", workerID,
+			"hierarchy_path", s.GetHierarchyPathUnlocked(),
+			"target_worker_id", workerID,
 			"reason", "worker signaled unrecoverable error")
 
 		// Mark for restart (will be checked when SignalNeedsRemoval is received)
@@ -936,14 +939,17 @@ func (s *Supervisor[TObserved, TDesired]) processSignal(ctx context.Context, wor
 		// Request graceful shutdown - worker will go through cleanup states
 		if err := s.requestShutdown(ctx, workerID, "restart_requested"); err != nil {
 			s.logger.Warnw("restart_shutdown_request_failed",
-				"worker", workerID, "error", err)
+				"hierarchy_path", s.GetHierarchyPathUnlocked(),
+				"target_worker_id", workerID,
+				"error", err)
 			// Continue anyway - we want to restart even if request fails
 		}
 
 		return nil
 	default:
 		s.logger.Errorw("unknown_signal_received",
-			"worker_id", workerID,
+			"hierarchy_path", s.GetHierarchyPathUnlocked(),
+			"target_worker_id", workerID,
 			"signal", int(signal))
 
 		return errors.New("unknown signal")
@@ -964,7 +970,8 @@ func (s *Supervisor[TObserved, TDesired]) checkRestartTimeouts(ctx context.Conte
 
 		if time.Since(requestedAt) > DefaultGracefulRestartTimeout {
 			s.logger.Warnw("restart_graceful_timeout",
-				"worker", workerID,
+				"hierarchy_path", s.GetHierarchyPathUnlocked(),
+				"target_worker_id", workerID,
 				"timeout", DefaultGracefulRestartTimeout,
 				"waited", time.Since(requestedAt))
 
@@ -987,7 +994,7 @@ func (s *Supervisor[TObserved, TDesired]) checkRestartTimeouts(ctx context.Conte
 			}
 
 			s.logger.Infow("worker_restart_force_reset",
-				"worker", workerID,
+				"hierarchy_path", workerCtx.identity.HierarchyPath,
 				"from_state", fromState)
 
 			workerCtx.currentState = workerCtx.worker.GetInitialState()
@@ -1008,7 +1015,7 @@ func (s *Supervisor[TObserved, TDesired]) checkRestartTimeouts(ctx context.Conte
 			delete(s.restartRequestedAt, workerID)
 
 			s.logger.Infow("worker_restart_force_complete",
-				"worker", workerID,
+				"hierarchy_path", workerCtx.identity.HierarchyPath,
 				"to_state", toState)
 		}
 	}
@@ -1090,7 +1097,8 @@ func (s *Supervisor[TObserved, TDesired]) restartCollector(ctx context.Context, 
 
 	if !exists {
 		s.logger.Errorw("collector_restart_worker_not_found",
-			"worker_id", workerID)
+			"hierarchy_path", s.GetHierarchyPathUnlocked(),
+			"target_worker_id", workerID)
 
 		return errors.New("worker not found")
 	}
@@ -1191,6 +1199,7 @@ func (s *Supervisor[TObserved, TDesired]) logHeartbeat() {
 	activeActions := 0
 
 	s.logger.Infow("supervisor_heartbeat",
+		"hierarchy_path", s.GetHierarchyPathUnlocked(),
 		"tick", atomic.LoadUint64(&s.tickCount),
 		"workers", workerCount,
 		"children", childCount,
@@ -1482,7 +1491,7 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 			"duration_ms", duration.Milliseconds())
 	}
 
-	metrics.RecordReconciliation(s.workerType, "success", duration)
+	metrics.RecordReconciliation(s.GetHierarchyPathUnlocked(), "success", duration)
 
 	return nil
 }

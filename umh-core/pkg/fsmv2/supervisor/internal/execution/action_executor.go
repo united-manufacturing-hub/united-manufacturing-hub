@@ -140,8 +140,8 @@ func (ae *ActionExecutor) executeWorkWithRecovery(work actionWork) {
 			status = "panic"
 
 			ae.logger.Errorw("action_panic",
+				"hierarchy_path", ae.identity.HierarchyPath,
 				"correlation_id", work.actionID,
-				"worker", ae.identity.String(),
 				"action_name", work.action.Name(),
 				"panic", fmt.Sprintf("%v", r),
 				"stack", string(debug.Stack()))
@@ -165,7 +165,7 @@ func (ae *ActionExecutor) executeWorkWithRecovery(work actionWork) {
 			}
 		}
 
-		metrics.RecordActionExecutionDuration(ae.supervisorID, work.action.Name(), status, duration)
+		metrics.RecordActionExecutionDuration(ae.identity.HierarchyPath, work.action.Name(), status, duration)
 
 		if ae.onActionComplete != nil {
 			errorMsg := ""
@@ -189,19 +189,19 @@ func (ae *ActionExecutor) executeWorkWithRecovery(work actionWork) {
 
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) {
-			metrics.RecordActionTimeout(ae.supervisorID, work.action.Name())
+			metrics.RecordActionTimeout(ae.identity.HierarchyPath, work.action.Name())
 
 			ae.logger.Errorw("action_failed",
+				"hierarchy_path", ae.identity.HierarchyPath,
 				"correlation_id", work.actionID,
-				"worker", ae.identity.String(),
 				"action_name", work.action.Name(),
 				"error", "timeout",
 				"duration_ms", duration.Milliseconds(),
 				"timeout_ms", work.timeout.Milliseconds())
 		} else {
 			ae.logger.Errorw("action_failed",
+				"hierarchy_path", ae.identity.HierarchyPath,
 				"correlation_id", work.actionID,
-				"worker", ae.identity.String(),
 				"action_name", work.action.Name(),
 				"error", err.Error(),
 				"duration_ms", duration.Milliseconds())
@@ -209,8 +209,8 @@ func (ae *ActionExecutor) executeWorkWithRecovery(work actionWork) {
 	} else {
 		// Success logs at DEBUG - operators only need failures, not routine success
 		ae.logger.Debugw("action_completed",
+			"hierarchy_path", ae.identity.HierarchyPath,
 			"correlation_id", work.actionID,
-			"worker", ae.identity.String(),
 			"action_name", work.action.Name(),
 			"duration_ms", duration.Milliseconds())
 	}
@@ -249,7 +249,7 @@ func (ae *ActionExecutor) EnqueueAction(actionID string, action fsmv2.Action[any
 
 	select {
 	case ae.actionQueue <- work:
-		metrics.RecordActionQueued(ae.supervisorID, action.Name())
+		metrics.RecordActionQueued(ae.identity.HierarchyPath, action.Name())
 
 		return nil
 	default:
@@ -283,10 +283,10 @@ func (ae *ActionExecutor) metricsReporter(ctx context.Context) {
 			inProgressCount := len(ae.inProgress)
 			ae.mu.RUnlock()
 
-			metrics.RecordWorkerPoolQueueSize(ae.supervisorID, queueSize)
+			metrics.RecordWorkerPoolQueueSize(ae.identity.HierarchyPath, queueSize)
 
 			utilization := float64(inProgressCount) / float64(ae.workerCount)
-			metrics.RecordWorkerPoolUtilization(ae.supervisorID, utilization)
+			metrics.RecordWorkerPoolUtilization(ae.identity.HierarchyPath, utilization)
 		}
 	}
 }

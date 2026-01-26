@@ -301,8 +301,8 @@ func (s *Supervisor[TObserved, TDesired]) recordHierarchyMetrics() {
 	depth := s.calculateHierarchyDepth()
 	size := s.calculateHierarchySize()
 
-	metrics.RecordHierarchyDepth(s.workerType, depth)
-	metrics.RecordHierarchySize(s.workerType, size)
+	metrics.RecordHierarchyDepth(s.GetHierarchyPathUnlocked(), depth)
+	metrics.RecordHierarchySize(s.GetHierarchyPathUnlocked(), size)
 }
 
 func (s *Supervisor[TObserved, TDesired]) calculateHierarchyDepth() int {
@@ -447,7 +447,8 @@ func (s *Supervisor[TObserved, TDesired]) handleWorkerRestart(ctx context.Contex
 		s.mu.RUnlock()
 
 		s.logger.Errorw("worker_restart_not_found",
-			"worker_id", workerID)
+			"hierarchy_path", s.GetHierarchyPathUnlocked(),
+			"target_worker_id", workerID)
 
 		return errors.New("worker not found for restart")
 	}
@@ -462,7 +463,7 @@ func (s *Supervisor[TObserved, TDesired]) handleWorkerRestart(ctx context.Contex
 	s.mu.RUnlock()
 
 	s.logger.Infow("worker_restart_executing",
-		"worker", workerID,
+		"hierarchy_path", identity.HierarchyPath,
 		"from_state", fromState,
 		"action", "full_recreation")
 
@@ -472,12 +473,13 @@ func (s *Supervisor[TObserved, TDesired]) handleWorkerRestart(ctx context.Contex
 	}
 
 	s.logger.Debugw("worker_restart_old_removed",
-		"worker", workerID)
+		"hierarchy_path", identity.HierarchyPath)
 
 	// 2. Clear shutdown flag in storage BEFORE creating new worker.
 	if err := s.clearShutdownRequested(ctx, workerID); err != nil {
 		s.logger.Warnw("restart_clear_shutdown_failed",
-			"worker", workerID, "error", err)
+			"hierarchy_path", identity.HierarchyPath,
+			"error", err)
 		// Continue anyway - the new worker might still work
 	}
 
@@ -488,7 +490,7 @@ func (s *Supervisor[TObserved, TDesired]) handleWorkerRestart(ctx context.Contex
 	}
 
 	s.logger.Debugw("worker_restart_new_created",
-		"worker", workerID)
+		"hierarchy_path", identity.HierarchyPath)
 
 	// 4. Add new worker to supervisor (this also starts the collector if supervisor is running)
 	if err := s.AddWorker(identity, newWorker); err != nil {
@@ -519,7 +521,8 @@ func (s *Supervisor[TObserved, TDesired]) handleWorkerRestart(ctx context.Contex
 		if collector != nil {
 			if err := collector.Start(supervisorCtx); err != nil {
 				s.logger.Errorw("restart_collector_start_failed",
-					"worker", workerID, "error", err)
+					"hierarchy_path", identity.HierarchyPath,
+					"error", err)
 			}
 		}
 
@@ -554,7 +557,7 @@ func (s *Supervisor[TObserved, TDesired]) handleWorkerRestart(ctx context.Contex
 	s.mu.RUnlock()
 
 	s.logger.Infow("worker_restart_complete",
-		"worker", workerID,
+		"hierarchy_path", identity.HierarchyPath,
 		"to_state", toState)
 
 	return nil
