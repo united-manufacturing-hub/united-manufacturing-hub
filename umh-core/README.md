@@ -51,3 +51,29 @@ agent:
 ```
 
 **Note:** If `useFSMv2Transport` was previously enabled and saved to config.yaml, you must explicitly set it to `false` - simply omitting the environment variable will not override the persisted config value.
+
+### Verifying FSMv2 Communicator
+
+To verify that FSMv2 communicator is enabled and working:
+
+#### Check Metrics
+
+```bash
+curl localhost:8080/metrics | grep fsmv2
+```
+
+You should see metrics like `umh_fsmv2_*` indicating the FSMv2 supervisor is running.
+
+#### Watch Communicator Logs
+
+```bash
+cat /data/logs/umh-core/current | grep fsmv2
+```
+
+Or to follow logs in real-time:
+
+```bash
+tail -f /data/logs/umh-core/current | grep fsmv2
+```
+
+You should see log entries with `[fsmv2]` prefix showing state transitions and sync operations.
