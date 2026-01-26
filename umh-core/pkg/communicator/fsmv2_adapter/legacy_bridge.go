@@ -216,7 +216,7 @@ func (b *LegacyChannelBridge) Start(ctx context.Context) {
 
 				// Convert models.UMHMessage -> transport.UMHMessage
 				var traceID string
-				if msg.Metadata != nil {
+				if msg.Metadata != nil && msg.Metadata.TraceID != uuid.Nil {
 					traceID = msg.Metadata.TraceID.String()
 				}
 
