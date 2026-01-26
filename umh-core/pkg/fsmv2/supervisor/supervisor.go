@@ -187,6 +187,7 @@ type Supervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] stru
 	gracefulShutdownTimeout  time.Duration
 	circuitOpen              atomic.Bool
 	started                  atomic.Bool
+	cachedFirstWorkerID      atomic.Value // string - cached for GetHierarchyPathUnlocked()
 	enableTraceLogging       bool
 }
 

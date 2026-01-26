@@ -344,6 +344,11 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 	}
 	s.workers[identity.ID] = workerCtx
 
+	// Cache the first worker ID for lock-free access in GetHierarchyPathUnlocked()
+	if s.cachedFirstWorkerID.Load() == nil {
+		s.cachedFirstWorkerID.Store(identity.ID)
+	}
+
 	if len(s.workers) == 1 && identity.HierarchyPath != "" {
 		s.logger = workerLogger
 	}
@@ -629,18 +634,13 @@ func (s *Supervisor[TObserved, TDesired]) GetHierarchyPath() string {
 }
 
 // GetHierarchyPathUnlocked computes the hierarchy path without acquiring the lock.
-// Use this from within locked contexts to avoid deadlock.
-// Caller must hold s.mu.RLock() or s.mu.Lock().
+// This function is safe to call without holding the lock because it uses a cached
+// worker ID (set atomically in AddWorker) instead of iterating over the workers map.
 func (s *Supervisor[TObserved, TDesired]) GetHierarchyPathUnlocked() string {
-	var workerID string
-	for id := range s.workers {
-		workerID = id
-
-		break
-	}
-
-	if workerID == "" {
-		workerID = "unknown"
+	// Use cached first worker ID for lock-free access
+	workerID := "unknown"
+	if cached := s.cachedFirstWorkerID.Load(); cached != nil {
+		workerID = cached.(string)
 	}
 
 	segment := fmt.Sprintf("%s(%s)", workerID, s.workerType)

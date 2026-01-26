@@ -1056,9 +1056,12 @@ func (s *Supervisor[TObserved, TDesired]) restartCollector(ctx context.Context, 
 	s.mu.Lock()
 
 	if s.collectorHealth.restartCount >= s.collectorHealth.maxRestartAttempts {
+		// Capture values before unlocking to avoid data race in panic message
+		restartCount := s.collectorHealth.restartCount
+		maxRestartAttempts := s.collectorHealth.maxRestartAttempts
 		s.mu.Unlock()
 		panic(fmt.Sprintf("supervisor bug: RestartCollector called with restartCount=%d >= maxRestartAttempts=%d (should have escalated to shutdown)",
-			s.collectorHealth.restartCount, s.collectorHealth.maxRestartAttempts))
+			restartCount, maxRestartAttempts))
 	}
 
 	// Non-blocking backoff: check if sufficient time has elapsed since last restart.
