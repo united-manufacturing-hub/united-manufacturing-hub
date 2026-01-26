@@ -18,9 +18,9 @@ import "time"
 
 // ErrorInfo contains details about the last recorded error.
 type ErrorInfo struct {
+	OccurredAt time.Time
 	Class      string        // Protocol-specific: "network", "rate_limit", "crc_mismatch", etc.
 	RetryAfter time.Duration // Server-suggested retry delay (from Retry-After header)
-	OccurredAt time.Time
 }
 
 // Recorder handles recording errors and successes.

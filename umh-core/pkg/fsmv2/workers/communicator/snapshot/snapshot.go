@@ -68,6 +68,8 @@ type CommunicatorObservedState struct {
 
 	LastAuthAttemptAt time.Time `json:"lastAuthAttemptAt,omitempty"`
 
+	LastErrorAt time.Time `json:"lastErrorAt,omitempty"` // When the last error occurred (for Retry-After timing)
+
 	State string `json:"state"` // Observed lifecycle state (e.g., "running_connected")
 
 	JWTToken          string
@@ -86,7 +88,6 @@ type CommunicatorObservedState struct {
 
 	LastErrorType  httpTransport.ErrorType `json:"lastErrorType,omitempty"`
 	LastRetryAfter time.Duration           `json:"lastRetryAfter,omitempty"` // Server-provided Retry-After duration
-	LastErrorAt    time.Time               `json:"lastErrorAt,omitempty"`    // When the last error occurred (for Retry-After timing)
 
 	// Authentication
 	Authenticated bool

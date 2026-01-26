@@ -33,6 +33,10 @@ type CommunicatorDependencies struct {
 
 	transport transport.Transport
 
+	// retryTracker provides framework-level retry tracking.
+	// Used by actions like ResetTransportAction to advance past modulo-N triggers.
+	retryTracker retry.Tracker
+
 	*deps.BaseDependencies
 	inboundChan  chan<- *transport.UMHMessage
 	outboundChan <-chan *transport.UMHMessage
@@ -45,10 +49,6 @@ type CommunicatorDependencies struct {
 	lastRetryAfter    time.Duration
 	consecutiveErrors int
 	lastErrorType     httpTransport.ErrorType
-
-	// retryTracker provides framework-level retry tracking.
-	// Used by actions like ResetTransportAction to advance past modulo-N triggers.
-	retryTracker retry.Tracker
 
 	mu sync.RWMutex
 }

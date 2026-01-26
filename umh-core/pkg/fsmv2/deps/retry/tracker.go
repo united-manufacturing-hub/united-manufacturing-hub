@@ -21,10 +21,10 @@ import (
 
 // tracker is the default thread-safe implementation of Tracker.
 type tracker struct {
-	mu                sync.RWMutex
-	consecutiveErrors int
 	degradedSince     time.Time
 	lastError         ErrorInfo
+	consecutiveErrors int
+	mu                sync.RWMutex
 }
 
 // New creates a new Tracker.
