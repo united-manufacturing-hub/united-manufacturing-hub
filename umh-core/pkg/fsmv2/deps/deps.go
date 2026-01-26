@@ -16,6 +16,7 @@ package deps
 
 import (
 	"context"
+	"sync"
 
 	"go.uber.org/zap"
 )
@@ -71,6 +72,7 @@ type BaseDependencies struct {
 	workerType      string
 	workerID        string
 	actionHistory   []ActionResult // Set by supervisor before CollectObservedState, read-only for workers
+	mu              sync.RWMutex   // Protects frameworkState and actionHistory
 }
 
 // NewBaseDependencies creates base dependencies with common tools.
@@ -110,6 +112,9 @@ func (d *BaseDependencies) MetricsRecorder() *MetricsRecorder {
 // GetActionHistory returns supervisor-managed action history (read-only).
 // Returns a shallow copy; nil if no actions have been executed.
 func (d *BaseDependencies) GetActionHistory() []ActionResult {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+
 	if d.actionHistory == nil {
 		return nil
 	}
@@ -122,17 +127,26 @@ func (d *BaseDependencies) GetActionHistory() []ActionResult {
 
 // SetActionHistory is for supervisor use only; called before CollectObservedState.
 func (d *BaseDependencies) SetActionHistory(history []ActionResult) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
 	d.actionHistory = history
 }
 
 // GetFrameworkState returns framework metrics (~1 tick stale).
 // For sub-second timing, use time.Now() directly in actions.
 func (d *BaseDependencies) GetFrameworkState() *FrameworkMetrics {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+
 	return d.frameworkState
 }
 
 // SetFrameworkState is for supervisor use only; called before collection.
 func (d *BaseDependencies) SetFrameworkState(fm *FrameworkMetrics) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
 	d.frameworkState = fm
 }
 
