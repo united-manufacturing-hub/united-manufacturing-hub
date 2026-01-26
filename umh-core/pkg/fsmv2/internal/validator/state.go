@@ -633,11 +633,16 @@ func checkNoNilStateReturns(filename string) []Violation {
 
 		ast.Inspect(funcDecl.Body, func(bodyNode ast.Node) bool {
 			retStmt, ok := bodyNode.(*ast.ReturnStmt)
-			if !ok || len(retStmt.Results) < 1 {
+			if !ok || len(retStmt.Results) != 1 {
 				return true
 			}
 
-			stateResult := retStmt.Results[0]
+			// Extract state from fsmv2.Result() call
+			stateResult, _ := extractResultArgs(retStmt.Results[0])
+			if stateResult == nil {
+				return true
+			}
+
 			if ident, ok := stateResult.(*ast.Ident); ok {
 				if ident.Name == "nil" {
 					pos := fset.Position(retStmt.Pos())
@@ -645,7 +650,7 @@ func checkNoNilStateReturns(filename string) []Violation {
 						File:    filename,
 						Line:    pos.Line,
 						Type:    "NIL_STATE_RETURN",
-						Message: "Next() returns nil as state (should return valid state)",
+						Message: "Next() returns nil as state in fsmv2.Result() (should return valid state)",
 					})
 				}
 			}
