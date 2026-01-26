@@ -132,8 +132,8 @@ func (m *WorkerWithType) CollectObservedState(ctx context.Context) (fsmv2.Observ
 type State struct {
 	NextState fsmv2.State[any, any]
 	Action    fsmv2.Action[any]
-	Signal    fsmv2.Signal
 	Reason    string
+	Signal    fsmv2.Signal
 }
 
 func (m *State) Next(snapshot any) fsmv2.NextResult[any, any] {

@@ -172,6 +172,7 @@ type Supervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] stru
 	// if both are needed (advisory order).
 	ctxMu                    *lockmanager.Lock
 	deps                     map[string]any
+	validatedSpecHashes      map[string]string // name -> hash of last validated spec
 	noStateMachineLoggedOnce sync.Map
 	userSpec                 config.UserSpec
 	workerType               string
@@ -187,7 +188,6 @@ type Supervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] stru
 	circuitOpen              atomic.Bool
 	started                  atomic.Bool
 	enableTraceLogging       bool
-	validatedSpecHashes      map[string]string // name -> hash of last validated spec
 }
 
 func NewSupervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState](cfg Config) *Supervisor[TObserved, TDesired] {

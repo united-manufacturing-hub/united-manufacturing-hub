@@ -734,11 +734,11 @@ type WorkerDebugInfo struct {
 
 // SupervisorDebugInfo contains debug information for a supervisor and its hierarchy.
 type SupervisorDebugInfo struct {
-	Workers             []WorkerDebugInfo              `json:"workers"`
 	Children            map[string]SupervisorDebugInfo `json:"children,omitempty"`
 	WorkerType          string                         `json:"worker_type"`
 	HierarchyPath       string                         `json:"hierarchy_path"`
 	MappedParentState   string                         `json:"mapped_parent_state,omitempty"`
+	Workers             []WorkerDebugInfo              `json:"workers"`
 	CollectedAtUnixNano int64                          `json:"collected_at_unix_nano"`
 	CircuitOpen         bool                           `json:"circuit_open"`
 }

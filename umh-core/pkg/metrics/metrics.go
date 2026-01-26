@@ -166,8 +166,8 @@ type FSMv2DebugProvider interface {
 
 // fsmv2DebugRegistry holds registered FSMv2 debug providers.
 var fsmv2DebugRegistry struct {
-	mu        sync.RWMutex
 	providers map[string]FSMv2DebugProvider
+	mu        sync.RWMutex
 }
 
 // RegisterFSMv2DebugProvider registers a debug provider for the /debug/fsmv2 endpoint.

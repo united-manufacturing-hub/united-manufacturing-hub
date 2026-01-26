@@ -89,10 +89,10 @@ type LegacyChannelBridge struct {
 	legacyInbound  chan *models.UMHMessage // Router reads from here
 	legacyOutbound chan *models.UMHMessage // Router writes here
 
+	logger *zap.SugaredLogger
+
 	// wg tracks the goroutines started by Start() for graceful shutdown
 	wg sync.WaitGroup
-
-	logger *zap.SugaredLogger
 }
 
 // DefaultBufferSize is the default capacity for FSMv2 inbound/outbound channels.

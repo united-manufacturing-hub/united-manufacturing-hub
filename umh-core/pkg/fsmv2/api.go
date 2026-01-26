@@ -114,9 +114,6 @@ type NextResult[TSnapshot any, TDeps any] struct {
 	// State is the next state (can be same state if no transition).
 	State State[TSnapshot, TDeps]
 
-	// Signal indicates framework-level events (shutdown, restart, etc.).
-	Signal Signal
-
 	// Action is an optional action to execute (nil if none).
 	Action Action[TDeps]
 
@@ -125,6 +122,9 @@ type NextResult[TSnapshot any, TDeps any] struct {
 	// Can include dynamic data from the snapshot.
 	// Example: "sync degraded: 5 consecutive errors (authentication_failure)"
 	Reason string
+
+	// Signal indicates framework-level events (shutdown, restart, etc.).
+	Signal Signal
 }
 
 // State represents a single state in the FSM lifecycle (stateless).
