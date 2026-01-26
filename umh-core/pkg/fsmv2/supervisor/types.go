@@ -128,6 +128,13 @@ type WorkerContext[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] s
 	startupCount       int64  // PERSISTENT: Loaded from CSE, incremented on AddWorker()
 	tickInProgress     atomic.Bool
 	actionPending      bool
+
+	// lastObservationCollectedAt stores the CollectedAt timestamp from the most recent
+	// observation loaded during tickWorker(). This is cached here (rather than re-fetched
+	// from CSE) so that IsObservationStale() can be called by the PARENT supervisor
+	// during its tick without blocking on CSE reads. The parent calls child.IsObservationStale()
+	// when building ChildInfo for SetChildrenView().
+	lastObservationCollectedAt time.Time
 }
 
 // CollectorHealthConfig configures observation collector health monitoring.

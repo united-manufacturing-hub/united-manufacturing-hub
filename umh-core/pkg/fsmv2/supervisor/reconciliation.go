@@ -149,6 +149,12 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 
 	if timestampProvider, ok := any(observed).(fsmv2.TimestampProvider); ok {
 		observationTimestamp := timestampProvider.GetTimestamp()
+
+		// Cache for IsObservationStale() - called by parent supervisor when building ChildInfo
+		workerCtx.mu.Lock()
+		workerCtx.lastObservationCollectedAt = observationTimestamp
+		workerCtx.mu.Unlock()
+
 		s.logTrace("observation_timestamp_loaded",
 			"stage", "data_freshness",
 			"timestamp", observationTimestamp.Format(time.RFC3339Nano))
@@ -211,16 +217,15 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 
 	// Check and reset restartCount under lock to prevent data races
 	s.mu.Lock()
-
-	if s.collectorHealth.restartCount > 0 {
-		restartCount := s.collectorHealth.restartCount
+	restartCount := s.collectorHealth.restartCount
+	if restartCount > 0 {
 		s.collectorHealth.restartCount = 0
-		s.mu.Unlock()
+	}
+	s.mu.Unlock()
 
+	if restartCount > 0 {
 		s.logger.Infow("collector_recovered",
 			"restart_attempts", restartCount)
-	} else {
-		s.mu.Unlock()
 	}
 
 	// I16: Validate ObservedState is not nil before progressing FSM

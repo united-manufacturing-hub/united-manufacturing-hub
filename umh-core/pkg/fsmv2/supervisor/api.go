@@ -528,14 +528,14 @@ func (s *Supervisor[TObserved, TDesired]) IsObservationStale() bool {
 		}
 
 		workerCtx.mu.RLock()
-		stateEnteredAt := workerCtx.stateEnteredAt
+		lastCollectedAt := workerCtx.lastObservationCollectedAt
 		workerCtx.mu.RUnlock()
 
-		if stateEnteredAt.IsZero() {
-			return true
+		if lastCollectedAt.IsZero() {
+			return true // Never collected = stale
 		}
 
-		age := time.Since(stateEnteredAt)
+		age := time.Since(lastCollectedAt)
 
 		return age > s.collectorHealth.staleThreshold
 	}
