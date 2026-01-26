@@ -133,8 +133,10 @@ type WorkerContext[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] s
 	totalTransitions   int64  // Sum of all stateTransitions values
 	collectorRestarts  int64  // Per-worker collector restarts
 	startupCount       int64  // PERSISTENT: Loaded from CSE, incremented on AddWorker()
-	tickInProgress     atomic.Bool
-	actionPending      bool
+	tickInProgress       atomic.Bool
+	actionPending        bool
+	gatingExplainedOnce  bool  // True after first DEBUG log for action-observation gating
+	gatingBlockedCount   int64 // Count of ticks blocked by action-observation gating
 }
 
 // CollectorHealthConfig configures observation collector health monitoring.

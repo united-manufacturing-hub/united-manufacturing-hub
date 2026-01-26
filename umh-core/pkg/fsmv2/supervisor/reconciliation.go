@@ -250,15 +250,38 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 
 		if currentObsTime.After(lastActionObsTime) {
 			workerCtx.mu.Lock()
+			blockedCount := workerCtx.gatingBlockedCount
 			workerCtx.actionPending = false
 			workerCtx.lastActionObsTime = time.Time{}
+			workerCtx.gatingExplainedOnce = false
+			workerCtx.gatingBlockedCount = 0
 			workerCtx.mu.Unlock()
 
 			s.logger.Debugw("action_gating_cleared",
+				"waited_ticks", blockedCount,
 				"last_action_time", lastActionObsTime.Format(time.RFC3339Nano),
 				"new_observation_time", currentObsTime.Format(time.RFC3339Nano))
 		} else {
+			workerCtx.mu.Lock()
+			explained := workerCtx.gatingExplainedOnce
+			workerCtx.gatingBlockedCount++
+
+			blockedCount := workerCtx.gatingBlockedCount
+			if !explained {
+				workerCtx.gatingExplainedOnce = true
+			}
+
+			workerCtx.mu.Unlock()
+
+			if !explained {
+				s.logger.Debugw("fsm_progression_paused",
+					"reason", "waiting_for_fresh_observation",
+					"explanation", "FSM waits for fresh observation after action to prevent duplicate execution. "+
+						"This log appears once per gating cycle.")
+			}
+
 			s.logTrace("action_gating_blocked",
+				"blocked_count", blockedCount,
 				"last_action_time", lastActionObsTime.Format(time.RFC3339Nano),
 				"current_observation_time", currentObsTime.Format(time.RFC3339Nano))
 
