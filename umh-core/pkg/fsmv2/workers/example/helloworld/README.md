@@ -77,10 +77,11 @@ type YourworkerDesiredState struct {
 
 ### 3. Implement states (`state/stopped.go`, etc.)
 
-Each state needs three methods:
-- `Next()` - Decision logic: return next state, signal, and optional action
+Each state needs two methods:
+- `Next()` - Decision logic: return NextResult (state, signal, optional action, and **reason**)
 - `String()` - State name for logging (use `helpers.DeriveStateName(s)`)
-- `Reason()` - Human-readable explanation
+
+The **reason** is required and should explain why the transition/state is chosen.
 
 ### 4. Implement actions (`action/say_hello.go`)
 
