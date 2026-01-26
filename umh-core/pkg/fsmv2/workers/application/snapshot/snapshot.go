@@ -79,6 +79,8 @@ func (o ApplicationObservedState) SetChildrenView(view any) fsmv2.ObservedState 
 	}
 
 	o.ChildrenHealthy, o.ChildrenUnhealthy = cv.Counts()
+	o.ChildrenCircuitOpen = 0
+	o.ChildrenStale = 0
 
 	// Count infrastructure issues from children
 	for _, child := range cv.List() {
