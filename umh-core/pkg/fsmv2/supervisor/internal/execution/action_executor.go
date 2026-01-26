@@ -225,6 +225,7 @@ func (ae *ActionExecutor) EnqueueAction(actionID string, action fsmv2.Action[any
 		ae.mu.Unlock()
 
 		ae.logger.Warnw("action_enqueue_rejected",
+			"hierarchy_path", ae.identity.HierarchyPath,
 			"correlation_id", actionID,
 			"action_name", action.Name(),
 			"reason", "already_in_progress")
@@ -258,6 +259,7 @@ func (ae *ActionExecutor) EnqueueAction(actionID string, action fsmv2.Action[any
 		ae.mu.Unlock()
 
 		ae.logger.Errorw("action_queue_full",
+			"hierarchy_path", ae.identity.HierarchyPath,
 			"correlation_id", actionID,
 			"action_name", action.Name(),
 			"queue_capacity", cap(ae.actionQueue),

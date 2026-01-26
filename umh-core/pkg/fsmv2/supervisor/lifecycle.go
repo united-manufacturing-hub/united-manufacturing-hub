@@ -298,11 +298,16 @@ func (s *Supervisor[TObserved, TDesired]) startMetricsReporter(ctx context.Conte
 
 // recordHierarchyMetrics records current hierarchy depth and size metrics.
 func (s *Supervisor[TObserved, TDesired]) recordHierarchyMetrics() {
+	// Get hierarchy path under lock first (GetHierarchyPathUnlocked iterates s.workers)
+	s.mu.RLock()
+	path := s.GetHierarchyPathUnlocked()
+	s.mu.RUnlock()
+
 	depth := s.calculateHierarchyDepth()
 	size := s.calculateHierarchySize()
 
-	metrics.RecordHierarchyDepth(s.GetHierarchyPathUnlocked(), depth)
-	metrics.RecordHierarchySize(s.GetHierarchyPathUnlocked(), size)
+	metrics.RecordHierarchyDepth(path, depth)
+	metrics.RecordHierarchySize(path, size)
 }
 
 func (s *Supervisor[TObserved, TDesired]) calculateHierarchyDepth() int {

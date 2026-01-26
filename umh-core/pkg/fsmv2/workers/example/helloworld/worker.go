@@ -163,7 +163,10 @@ func (w *HelloworldWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredSt
 		return nil, err
 	}
 
-	return &desired, nil
+	// Return the registered type (*snapshot.HelloworldDesiredState) to avoid type assertion failures
+	return &snapshot.HelloworldDesiredState{
+		BaseDesiredState: desired.BaseDesiredState,
+	}, nil
 }
 
 // GetInitialState returns the state the FSM should start in.
