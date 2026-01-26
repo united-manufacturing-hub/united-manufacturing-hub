@@ -47,5 +47,12 @@ func (a *ResetTransportAction) Execute(ctx context.Context, depsAny any) error {
 	transport.Reset()
 	deps.GetLogger().Infow("transport_reset_completed", "reason", "degraded_state_threshold")
 
+	// FIX: Advance the retry counter to break the modulo-N trigger condition.
+	// Without this, ShouldResetTransport(5) keeps returning true (5 % 5 == 0),
+	// causing an infinite reset loop. After Attempt(), counter becomes 6,
+	// and ShouldResetTransport(6) returns false (6 % 5 != 0).
+	// The counter resets to 0 only when SyncAction.Execute() succeeds.
+	deps.RetryTracker().Attempt()
+
 	return nil
 }

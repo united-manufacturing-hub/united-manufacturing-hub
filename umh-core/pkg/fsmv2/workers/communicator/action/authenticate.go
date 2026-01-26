@@ -20,6 +20,7 @@ import (
 	"time"
 
 	depspkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps/retry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
 	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
 )
@@ -41,6 +42,8 @@ type CommunicatorDependencies interface {
 	GetLastRetryAfter() time.Duration
 	SetLastAuthAttemptAt(t time.Time)
 	GetLastAuthAttemptAt() time.Time
+
+	RetryTracker() retry.Tracker
 
 	GetInboundChan() chan<- *transport.UMHMessage  // May return nil
 	GetOutboundChan() <-chan *transport.UMHMessage // May return nil
