@@ -26,6 +26,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/action"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/backoff"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/snapshot"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/state"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
@@ -33,11 +34,6 @@ import (
 )
 
 const (
-	// ResetThreshold is the error count at which transport reset fires.
-	// ShouldResetTransport() returns true when consecutiveErrors % ResetThreshold == 0.
-	// For network errors, this is 5 (defined in backoff/backoff.go).
-	ResetThreshold = 5
-
 	// DegradedBackoffDelay is the minimum wait time in DegradedState before emitting actions.
 	// Tests use values > 60s to ensure backoff has elapsed.
 	DegradedBackoffDelay = 60 * time.Second
@@ -64,88 +60,102 @@ var _ = Describe("DegradedState Integration - Infinite Loop Prevention", func() 
 
 	Describe("Reset Transport Loop Prevention", func() {
 		// This test documents the exact bug that was found and verifies the fix.
-		// Bug: ResetTransportAction didn't call Attempt(), so counter stayed at 5,
-		// causing ShouldResetTransport(5) to return true indefinitely.
-		It("should NOT cause infinite reset_transport loop at 5 consecutive errors", func() {
-			// Simulate 5 network errors to reach reset threshold
-			for range 5 {
+		// Bug: ResetTransportAction didn't call Attempt(), so counter stayed at threshold,
+		// causing ShouldResetTransport() to return true indefinitely.
+		It("should NOT cause infinite reset_transport loop at reset threshold", func() {
+			// Simulate network errors to reach reset threshold (backoff.TransportResetThreshold = 5)
+			for range backoff.TransportResetThreshold {
 				dependencies.RecordTypedError(httpTransport.ErrorTypeNetwork, 0)
 			}
 
-			Expect(dependencies.GetConsecutiveErrors()).To(Equal(5))
+			Expect(dependencies.GetConsecutiveErrors()).To(Equal(backoff.TransportResetThreshold),
+				"Should have exactly TransportResetThreshold errors")
 
-			// First evaluation: Should emit ResetTransportAction at 5 errors
+			// First evaluation: Should emit ResetTransportAction at threshold
 			snap1 := buildSnapshot(dependencies, httpTransport.ErrorTypeNetwork)
 			result1 := stateObj.Next(snap1)
 
-			Expect(result1.State).To(BeAssignableToTypeOf(&state.DegradedState{}))
-			Expect(result1.Action).NotTo(BeNil())
+			Expect(result1.State).To(BeAssignableToTypeOf(&state.DegradedState{}),
+				"Should stay in DegradedState")
+			Expect(result1.Action).NotTo(BeNil(),
+				"Should emit an action")
 			Expect(result1.Action.Name()).To(Equal("reset_transport"),
-				"At 5 errors, should emit reset_transport")
+				"At threshold errors, should emit reset_transport")
 
 			// Execute the ResetTransportAction - this is where the fix is
 			resetAction := result1.Action.(*action.ResetTransportAction)
 			err := resetAction.Execute(context.Background(), dependencies)
 			Expect(err).NotTo(HaveOccurred())
 
-			// BUG FIX VERIFICATION: Counter should now be 6, not still 5
-			Expect(dependencies.GetConsecutiveErrors()).To(Equal(6),
-				"After ResetTransportAction, counter should advance from 5 to 6")
+			// BUG FIX VERIFICATION: Counter should now be threshold+1, not still at threshold
+			Expect(dependencies.GetConsecutiveErrors()).To(Equal(backoff.TransportResetThreshold+1),
+				"After ResetTransportAction, counter should advance past threshold to break modulo-N trigger")
 
-			// Second evaluation: Should emit SyncAction at 6 errors (NOT another reset_transport!)
+			// Second evaluation: Should emit SyncAction (NOT another reset_transport!)
 			snap2 := buildSnapshot(dependencies, httpTransport.ErrorTypeNetwork)
 			result2 := stateObj.Next(snap2)
 
-			Expect(result2.State).To(BeAssignableToTypeOf(&state.DegradedState{}))
-			Expect(result2.Action).NotTo(BeNil())
+			Expect(result2.State).To(BeAssignableToTypeOf(&state.DegradedState{}),
+				"Should stay in DegradedState")
+			Expect(result2.Action).NotTo(BeNil(),
+				"Should emit an action")
 			Expect(result2.Action.Name()).To(Equal("sync"),
-				"At 6 errors, should emit sync (not reset_transport) - THIS BREAKS THE INFINITE LOOP")
+				"At threshold+1 errors, should emit sync (not reset_transport) - THIS BREAKS THE INFINITE LOOP")
 		})
 
-		It("should emit reset_transport again at 10 errors after proper progression", func() {
-			// Start at 5 errors
-			for range 5 {
+		It("should emit reset_transport again at 2x threshold after proper progression", func() {
+			threshold := backoff.TransportResetThreshold
+			doubleThreshold := threshold * 2
+
+			// Start at threshold errors
+			for range threshold {
 				dependencies.RecordTypedError(httpTransport.ErrorTypeNetwork, 0)
 			}
 
-			// First reset at 5 errors
+			// First reset at threshold errors
 			snap1 := buildSnapshot(dependencies, httpTransport.ErrorTypeNetwork)
 			result1 := stateObj.Next(snap1)
-			Expect(result1.Action.Name()).To(Equal("reset_transport"))
+			Expect(result1.Action.Name()).To(Equal("reset_transport"),
+				"At threshold, should emit reset_transport")
 
-			// Execute reset - advances counter to 6
+			// Execute reset - advances counter to threshold+1
 			resetAction1 := result1.Action.(*action.ResetTransportAction)
 			_ = resetAction1.Execute(context.Background(), dependencies)
-			Expect(dependencies.GetConsecutiveErrors()).To(Equal(6))
+			Expect(dependencies.GetConsecutiveErrors()).To(Equal(threshold+1),
+				"After reset, counter should be threshold+1")
 
-			// Simulate sync failures from 6 to 9
-			for i := 7; i <= 9; i++ {
+			// Simulate sync failures from threshold+1 to 2*threshold-1
+			for i := threshold + 2; i < doubleThreshold; i++ {
 				dependencies.RecordTypedError(httpTransport.ErrorTypeNetwork, 0)
-				Expect(dependencies.GetConsecutiveErrors()).To(Equal(i))
+				Expect(dependencies.GetConsecutiveErrors()).To(Equal(i),
+					"Counter should be %d", i)
 
 				snap := buildSnapshot(dependencies, httpTransport.ErrorTypeNetwork)
 				result := stateObj.Next(snap)
 				Expect(result.Action.Name()).To(Equal("sync"),
-					"At %d errors, should emit sync", i)
+					"At %d errors, should emit sync (not reset_transport)", i)
 			}
 
-			// Error 10 - should trigger another reset
+			// Error at 2*threshold - should trigger another reset
 			dependencies.RecordTypedError(httpTransport.ErrorTypeNetwork, 0)
-			Expect(dependencies.GetConsecutiveErrors()).To(Equal(10))
+			Expect(dependencies.GetConsecutiveErrors()).To(Equal(doubleThreshold),
+				"Counter should be at 2x threshold")
 
-			snap10 := buildSnapshot(dependencies, httpTransport.ErrorTypeNetwork)
-			result10 := stateObj.Next(snap10)
-			Expect(result10.Action.Name()).To(Equal("reset_transport"),
-				"At 10 errors, should emit reset_transport again")
+			snap2x := buildSnapshot(dependencies, httpTransport.ErrorTypeNetwork)
+			result2x := stateObj.Next(snap2x)
+			Expect(result2x.Action.Name()).To(Equal("reset_transport"),
+				"At 2x threshold errors, should emit reset_transport again")
 		})
 
 		It("should recover to Syncing when sync succeeds", func() {
-			// Start in degraded with 6 errors
-			for range 6 {
+			// Start in degraded with threshold+1 errors
+			errorCount := backoff.TransportResetThreshold + 1
+			for range errorCount {
 				dependencies.RecordTypedError(httpTransport.ErrorTypeNetwork, 0)
 			}
 
-			Expect(dependencies.GetConsecutiveErrors()).To(Equal(6))
+			Expect(dependencies.GetConsecutiveErrors()).To(Equal(errorCount),
+				"Should have threshold+1 errors")
 
 			// Simulate successful sync - this resets the counter
 			dependencies.RecordSuccess()
@@ -174,16 +184,18 @@ var _ = Describe("DegradedState Integration - Infinite Loop Prevention", func() 
 		It("should handle rapid consecutive resets correctly", func() {
 			// This tests that even if somehow we get multiple resets in sequence,
 			// each one advances the counter properly
+			threshold := backoff.TransportResetThreshold
 
-			// Start at 5 errors
-			for range 5 {
+			// Start at threshold errors
+			for range threshold {
 				dependencies.RecordTypedError(httpTransport.ErrorTypeNetwork, 0)
 			}
 
 			// First reset
 			resetAction := action.NewResetTransportAction()
 			_ = resetAction.Execute(context.Background(), dependencies)
-			Expect(dependencies.GetConsecutiveErrors()).To(Equal(6))
+			Expect(dependencies.GetConsecutiveErrors()).To(Equal(threshold+1),
+				"After first reset, counter should be threshold+1")
 
 			// Force counter back to 5 manually (simulating a bug where something resets it)
 			// This shouldn't happen in real code, but let's verify robustness
@@ -192,42 +204,51 @@ var _ = Describe("DegradedState Integration - Infinite Loop Prevention", func() 
 			// Instead, verify that calling Attempt() multiple times is safe
 			tracker := dependencies.RetryTracker()
 			tracker.Attempt()
-			Expect(dependencies.GetConsecutiveErrors()).To(Equal(7))
+			Expect(dependencies.GetConsecutiveErrors()).To(Equal(threshold+2),
+				"After second Attempt(), counter should be threshold+2")
 
 			tracker.Attempt()
-			Expect(dependencies.GetConsecutiveErrors()).To(Equal(8))
+			Expect(dependencies.GetConsecutiveErrors()).To(Equal(threshold+3),
+				"After third Attempt(), counter should be threshold+3")
 
-			// At 8 errors, should still emit sync (not reset_transport)
+			// At threshold+3 errors, should still emit sync (not reset_transport)
 			snap := buildSnapshot(dependencies, httpTransport.ErrorTypeNetwork)
 			result := stateObj.Next(snap)
-			Expect(result.Action.Name()).To(Equal("sync"))
+			Expect(result.Action.Name()).To(Equal("sync"),
+				"At non-threshold error count, should emit sync")
 		})
 	})
 
 	Describe("Full Recovery Cycle", func() {
 		It("should complete full cycle: healthy -> degraded -> reset -> sync retry -> recovery", func() {
-			// Phase 1: Healthy state (simulated by having 0 errors initially)
-			Expect(dependencies.GetConsecutiveErrors()).To(Equal(0))
+			threshold := backoff.TransportResetThreshold
 
-			// Phase 2: Network failures accumulate
-			for i := 1; i <= 5; i++ {
+			// Phase 1: Healthy state (simulated by having 0 errors initially)
+			Expect(dependencies.GetConsecutiveErrors()).To(Equal(0),
+				"Should start with 0 errors")
+
+			// Phase 2: Network failures accumulate to threshold
+			for range threshold {
 				dependencies.RecordTypedError(httpTransport.ErrorTypeNetwork, 0)
 			}
 
-			// Phase 3: At 5 errors, reset_transport fires
+			// Phase 3: At threshold errors, reset_transport fires
 			snap := buildSnapshot(dependencies, httpTransport.ErrorTypeNetwork)
 			result := stateObj.Next(snap)
-			Expect(result.Action.Name()).To(Equal("reset_transport"))
+			Expect(result.Action.Name()).To(Equal("reset_transport"),
+				"At threshold, should emit reset_transport")
 
 			// Execute reset
 			resetAction := result.Action.(*action.ResetTransportAction)
 			_ = resetAction.Execute(context.Background(), dependencies)
 
-			// Phase 4: Counter at 6, sync fires
-			Expect(dependencies.GetConsecutiveErrors()).To(Equal(6))
+			// Phase 4: Counter at threshold+1, sync fires
+			Expect(dependencies.GetConsecutiveErrors()).To(Equal(threshold+1),
+				"After reset, counter should be threshold+1")
 			snap2 := buildSnapshot(dependencies, httpTransport.ErrorTypeNetwork)
 			result2 := stateObj.Next(snap2)
-			Expect(result2.Action.Name()).To(Equal("sync"))
+			Expect(result2.Action.Name()).To(Equal("sync"),
+				"At threshold+1, should emit sync")
 
 			// Phase 5: Sync succeeds (network comes back)
 			dependencies.RecordSuccess()
