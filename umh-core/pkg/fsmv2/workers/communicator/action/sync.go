@@ -97,17 +97,26 @@ func (a *SyncAction) Execute(ctx context.Context, depsAny any) error {
 	deps.SetPulledMessages(messages)
 
 	if inChan := deps.GetInboundChan(); inChan != nil {
-		for _, msg := range messages {
+		for i, msg := range messages {
 			select {
 			case inChan <- msg:
 			case <-ctx.Done():
 				return ctx.Err()
 			default:
-				deps.GetLogger().Warnw("inbound_channel_full", "dropped_message", true)
+				deps.GetLogger().Warnw("inbound_channel_full_stopping_sync",
+					"total_messages", len(messages),
+					"delivered", i,
+					"pending", len(messages)-i)
+				// Record as typed error for proper backoff, then return
+				deps.RecordTypedError(httpTransport.ErrorTypeChannelFull, 0)
+				return fmt.Errorf("inbound channel full: stopping sync to prevent message loss")
 			}
 		}
 	}
 
+	// NOTE: At this point, pulled messages have been delivered to inbound channel.
+	// If Push fails below, those messages are still processed (intended behavior).
+	// Push will be retried on next SyncAction.
 	var messagesToPush []*transport.UMHMessage
 
 	if outChan := deps.GetOutboundChan(); outChan != nil {

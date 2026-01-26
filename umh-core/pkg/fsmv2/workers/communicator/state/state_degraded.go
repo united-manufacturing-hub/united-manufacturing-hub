@@ -59,9 +59,19 @@ func (s *DegradedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	// Build dynamic reason based on current error state
 	reason := buildDegradedReason(snap.Observed.LastErrorType, consecutiveErrors, backoffDelay)
 
-	enteredAt := snap.Observed.DegradedEnteredAt
-	if !enteredAt.IsZero() && time.Since(enteredAt) < backoffDelay {
-		return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, reason)
+	// Check if we should still be waiting before retrying.
+	// When Retry-After is provided, use LastErrorAt (when the error occurred).
+	// Otherwise, fall back to DegradedEnteredAt + calculated backoff.
+	if snap.Observed.LastRetryAfter > 0 && !snap.Observed.LastErrorAt.IsZero() {
+		// Retry-After from when it was issued
+		if time.Since(snap.Observed.LastErrorAt) < snap.Observed.LastRetryAfter {
+			return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, reason)
+		}
+	} else {
+		enteredAt := snap.Observed.DegradedEnteredAt
+		if !enteredAt.IsZero() && time.Since(enteredAt) < backoffDelay {
+			return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, reason)
+		}
 	}
 
 	// Reset transport periodically to recover from connection-level issues
@@ -105,6 +115,8 @@ func mapErrorTypeToReason(errType httpTransport.ErrorType) string {
 		return "proxy_block_page_received"
 	case httpTransport.ErrorTypeInstanceDeleted:
 		return "instance_not_found_on_backend"
+	case httpTransport.ErrorTypeChannelFull:
+		return "inbound_channel_full"
 	default:
 		return "consecutive_errors_threshold_exceeded"
 	}

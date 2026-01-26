@@ -85,6 +85,10 @@ func calculateDefaultDelay(errType httpTransport.ErrorType, consecutiveErrors in
 	case httpTransport.ErrorTypeInstanceDeleted:
 		return 5 * time.Minute
 
+	case httpTransport.ErrorTypeChannelFull:
+		// Short backoff to allow channel to drain
+		return 5 * time.Second
+
 	default:
 		return CalculateDelay(consecutiveErrors)
 	}

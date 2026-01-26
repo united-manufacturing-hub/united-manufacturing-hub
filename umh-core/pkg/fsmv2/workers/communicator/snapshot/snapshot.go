@@ -86,6 +86,7 @@ type CommunicatorObservedState struct {
 
 	LastErrorType  httpTransport.ErrorType `json:"lastErrorType,omitempty"`
 	LastRetryAfter time.Duration           `json:"lastRetryAfter,omitempty"` // Server-provided Retry-After duration
+	LastErrorAt    time.Time               `json:"lastErrorAt,omitempty"`    // When the last error occurred (for Retry-After timing)
 
 	// Authentication
 	Authenticated bool

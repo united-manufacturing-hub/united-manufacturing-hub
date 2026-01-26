@@ -31,6 +31,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/snapshot"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/state"
 	transportpkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
+	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
 )
 
 // MockStateReader implements deps.StateReader for testing metrics accumulation.
@@ -177,7 +178,8 @@ authToken: "test-token"
 				Expect(err).NotTo(HaveOccurred())
 
 				desired := desiredIface.(*snapshot.CommunicatorDesiredState)
-				Expect(desired.Timeout).To(Equal(10 * time.Second))
+				// Default timeout = LongPollingDuration (30s) + LongPollingBuffer (1s) = 31s
+				Expect(desired.Timeout).To(Equal(httpTransport.LongPollingDuration + httpTransport.LongPollingBuffer))
 			})
 		})
 

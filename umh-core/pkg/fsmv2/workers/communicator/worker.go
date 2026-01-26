@@ -84,6 +84,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/snapshot"
+	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/state"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
 )
@@ -147,6 +148,7 @@ func (w *CommunicatorWorker) CollectObservedState(ctx context.Context) (fsmv2.Ob
 	lastErrorType := deps.GetLastErrorType()
 	lastRetryAfter := deps.GetLastRetryAfter()
 	lastAuthAttemptAt := deps.GetLastAuthAttemptAt()
+	lastErrorAt := deps.RetryTracker().LastError().OccurredAt
 
 	var prevWorkerMetrics depspkg.Metrics
 
@@ -201,6 +203,7 @@ func (w *CommunicatorWorker) CollectObservedState(ctx context.Context) (fsmv2.Ob
 		DegradedEnteredAt: degradedEnteredAt,
 		LastErrorType:     lastErrorType,
 		LastRetryAfter:    lastRetryAfter,
+		LastErrorAt:       lastErrorAt,
 		LastAuthAttemptAt: lastAuthAttemptAt,
 		MetricsEmbedder:   depspkg.MetricsEmbedder{Metrics: metricsContainer},
 	}
@@ -234,7 +237,8 @@ func (w *CommunicatorWorker) DeriveDesiredState(spec interface{}) (fsmv2.Desired
 	}
 
 	if commSpec.Timeout == 0 {
-		commSpec.Timeout = 10 * time.Second
+		// Default to LongPollingDuration + buffer to prevent premature action timeouts
+		commSpec.Timeout = httpTransport.LongPollingDuration + httpTransport.LongPollingBuffer
 	}
 
 	return &snapshot.CommunicatorDesiredState{

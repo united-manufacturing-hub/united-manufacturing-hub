@@ -32,6 +32,13 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
 )
 
+const (
+	// LongPollingDuration is the HTTP timeout for long polling requests to the relay server.
+	LongPollingDuration = 30 * time.Second
+	// LongPollingBuffer is added to action timeout to prevent premature cancellation.
+	LongPollingBuffer = 1 * time.Second
+)
+
 // ErrorType classifies HTTP errors for intelligent backoff strategies.
 type ErrorType int
 
@@ -52,6 +59,9 @@ const (
 	ErrorTypeProxyBlock
 	// ErrorTypeNetwork represents network/connection errors.
 	ErrorTypeNetwork
+	// ErrorTypeChannelFull represents inbound channel capacity exceeded.
+	// Not a transport error per se, but uses same classification for backoff.
+	ErrorTypeChannelFull
 )
 
 // String returns a human-readable name for the error type.
@@ -71,6 +81,8 @@ func (e ErrorType) String() string {
 		return "proxy_block"
 	case ErrorTypeNetwork:
 		return "network"
+	case ErrorTypeChannelFull:
+		return "channel_full"
 	default:
 		return "unknown"
 	}
@@ -245,11 +257,11 @@ type HTTPTransport struct {
 }
 
 // NewHTTPTransport creates a new HTTP transport.
-// If timeout is 0, defaults to 30 seconds.
+// If timeout is 0, defaults to LongPollingDuration (30 seconds).
 // Transport settings match legacy communicator to avoid Cloudflare issues.
 func NewHTTPTransport(relayURL string, timeout time.Duration) *HTTPTransport {
 	if timeout == 0 {
-		timeout = 30 * time.Second
+		timeout = LongPollingDuration
 	}
 
 	// Connection pooling replaces DisableKeepAlives for better performance (Bug #7 fix)
