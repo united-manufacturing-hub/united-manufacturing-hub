@@ -44,6 +44,17 @@ func main() {
 
 	flag.Parse()
 
+	// Validate tick interval and duration to prevent runtime panics
+	if *tickInterval <= 0 {
+		fmt.Fprintf(os.Stderr, "Invalid tick interval: must be positive, got %v\n", *tickInterval)
+		os.Exit(1)
+	}
+
+	if *duration < 0 {
+		fmt.Fprintf(os.Stderr, "Invalid duration: must be non-negative, got %v\n", *duration)
+		os.Exit(1)
+	}
+
 	if *listFlag {
 		fmt.Println("Available scenarios:")
 

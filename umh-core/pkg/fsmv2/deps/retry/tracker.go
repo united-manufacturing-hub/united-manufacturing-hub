@@ -100,6 +100,10 @@ func (t *tracker) LastError() ErrorInfo {
 // --- Policy implementation ---
 
 func (t *tracker) ShouldReset(threshold int) bool {
+	if threshold <= 0 {
+		return false // Guard against division by zero
+	}
+
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 

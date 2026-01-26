@@ -399,7 +399,7 @@ tail -f /data/logs/umh-core/current | grep fsmv2
 
 Debug output includes action completions, state changes, and observation updates:
 
-```
+```text
 [DEBUG] action_completed - hierarchy_path=.../communicator-001(communicator), action_name=sync, duration_ms=122
 [DEBUG] observed_changed - worker=.../communicator-001(communicator), changes=[{... CollectedAt modified}]
 [INFO]  supervisor_heartbeat - hierarchy_path=.../communicator-001(communicator), tick=400, worker_states=map[communicator-001:Syncing]
