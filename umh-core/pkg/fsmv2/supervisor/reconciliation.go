@@ -1168,6 +1168,7 @@ func (s *Supervisor[TObserved, TDesired]) logHeartbeat() {
 	childCount := len(s.children)
 
 	workerStates := make(map[string]string, workerCount)
+	workerReasons := make(map[string]string, workerCount)
 
 	for id, workerCtx := range s.workers {
 		workerCtx.mu.RLock()
@@ -1176,6 +1177,10 @@ func (s *Supervisor[TObserved, TDesired]) logHeartbeat() {
 			workerStates[id] = workerCtx.currentState.String()
 		} else {
 			workerStates[id] = "no_state_machine"
+		}
+
+		if workerCtx.currentStateReason != "" {
+			workerReasons[id] = workerCtx.currentStateReason
 		}
 
 		workerCtx.mu.RUnlock()
@@ -1190,6 +1195,7 @@ func (s *Supervisor[TObserved, TDesired]) logHeartbeat() {
 		"workers", workerCount,
 		"children", childCount,
 		"worker_states", workerStates,
+		"worker_reasons", workerReasons,
 		"active_actions", activeActions)
 }
 
