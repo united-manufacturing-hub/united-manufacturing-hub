@@ -34,7 +34,7 @@ In FSMv1, state machines were built using the looplab FSM library:
 - **Mixed concerns**: Business logic, retry logic, and boilerplate were interleaved
 
 A typical FSMv1 implementation had these files:
-```
+```text
 machine.go       # FSM definition with state constants and transitions
 fsm_callbacks.go # Callback implementations (fail-free, logging only)
 actions.go       # Idempotent operations (can fail and retry)
@@ -54,7 +54,7 @@ FSMv2 fundamentally changes the approach:
 - **Separation of concerns**: States are pure (no I/O), Actions perform I/O, Worker collects observations
 
 A typical FSMv2 implementation has these files:
-```
+```text
 workers/myworker/
 ├── worker.go           # Worker interface (3 methods)
 ├── userspec.go         # User configuration schema
