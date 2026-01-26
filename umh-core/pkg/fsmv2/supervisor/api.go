@@ -357,12 +357,15 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 func (s *Supervisor[TObserved, TDesired]) RemoveWorker(ctx context.Context, workerID string) error {
 	s.mu.Lock()
 
+	// Cache hierarchy path while holding the lock to avoid data race
+	hierarchyPath := s.GetHierarchyPathUnlocked()
+
 	workerCtx, exists := s.workers[workerID]
 	if !exists {
 		s.mu.Unlock()
 
 		s.logger.Warnw("worker_remove_not_found",
-			"hierarchy_path", s.GetHierarchyPathUnlocked(),
+			"hierarchy_path", hierarchyPath,
 			"target_worker_id", workerID)
 
 		return errors.New("worker not found")
@@ -377,7 +380,7 @@ func (s *Supervisor[TObserved, TDesired]) RemoveWorker(ctx context.Context, work
 	workerCtx.mu.RLock()
 
 	if workerCtx.currentState != nil {
-		metrics.CleanupStateDuration(s.GetHierarchyPathUnlocked(), workerCtx.currentState.String())
+		metrics.CleanupStateDuration(hierarchyPath, workerCtx.currentState.String())
 	}
 
 	workerCtx.mu.RUnlock()
