@@ -57,6 +57,11 @@ type CommunicatorDependencies interface {
 
 	// UUID exposed via CollectObservedState in ObservedState.AuthenticatedUUID
 	SetAuthenticatedUUID(uuid string)
+
+	// Backpressure detection
+	GetInboundChanStats() (capacity int, length int)
+	IsBackpressured() bool
+	SetBackpressured(backpressured bool)
 }
 
 const AuthenticateActionName = "authenticate"

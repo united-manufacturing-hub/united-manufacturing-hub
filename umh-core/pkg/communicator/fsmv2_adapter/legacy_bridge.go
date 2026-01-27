@@ -256,6 +256,12 @@ func (b *LegacyChannelBridge) GetChannels(_ string) (
 	return b.fsmInbound, b.fsmOutbound
 }
 
+// GetInboundStats returns the capacity and current length of the FSMv2 inbound channel.
+// Used by SyncAction to detect backpressure before pulling messages.
+func (b *LegacyChannelBridge) GetInboundStats(_ string) (capacity int, length int) {
+	return cap(b.fsmInbound), len(b.fsmInbound)
+}
+
 // GetOutboundWriteChannel returns the outbound channel for direct writing.
 // This allows SubscriberHandler to bypass the legacy->FSMv2 conversion goroutine
 // and write transport.UMHMessage directly to the FSMv2 outbound channel.

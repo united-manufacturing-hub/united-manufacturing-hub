@@ -205,6 +205,7 @@ func (w *CommunicatorWorker) CollectObservedState(ctx context.Context) (fsmv2.Ob
 		LastRetryAfter:    lastRetryAfter,
 		LastErrorAt:       lastErrorAt,
 		LastAuthAttemptAt: lastAuthAttemptAt,
+		IsBackpressured:   deps.IsBackpressured(),
 		MetricsEmbedder:   depspkg.MetricsEmbedder{Metrics: metricsContainer},
 	}
 

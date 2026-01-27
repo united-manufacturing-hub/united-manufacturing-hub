@@ -50,6 +50,10 @@ type CommunicatorDependencies struct {
 	consecutiveErrors int
 	lastErrorType     httpTransport.ErrorType
 
+	// backpressured tracks hysteresis state for backpressure detection.
+	// When true, a higher threshold (low water mark) is required to resume pulling.
+	backpressured bool
+
 	mu sync.RWMutex
 }
 
@@ -323,4 +327,39 @@ func (d *CommunicatorDependencies) GetAuthenticatedUUID() string {
 	defer d.mu.RUnlock()
 
 	return d.instanceUUID
+}
+
+// IsBackpressured returns true if the communicator is in backpressure state.
+// Backpressure occurs when the inbound channel doesn't have enough capacity
+// for the expected batch size from the backend.
+func (d *CommunicatorDependencies) IsBackpressured() bool {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+
+	return d.backpressured
+}
+
+// SetBackpressured sets the backpressure state.
+// Called by SyncAction when entering or exiting backpressure.
+func (d *CommunicatorDependencies) SetBackpressured(backpressured bool) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	d.backpressured = backpressured
+}
+
+// GetInboundChanStats returns the capacity and current length of the inbound channel.
+// Returns (0, 0) if no channel provider is set.
+//
+// Returning (0, 0) when provider is nil intentionally triggers backpressure as a safe default.
+// With capacity=0 and length=0, available = 0 - 0 = 0, which is < ExpectedBatchSize (50),
+// so the sync action will skip pulling. This prevents pulling messages when we have no
+// channel to deliver them to, avoiding potential message loss.
+func (d *CommunicatorDependencies) GetInboundChanStats() (capacity int, length int) {
+	provider := GetChannelProvider()
+	if provider == nil {
+		return 0, 0
+	}
+
+	return provider.GetInboundStats(d.GetWorkerID())
 }

@@ -213,5 +213,31 @@ var _ = Describe("CommunicatorObservedState", func() {
 				Expect(observed.IsSyncHealthy()).To(BeFalse())
 			})
 		})
+
+		Context("when backpressured with otherwise healthy state", func() {
+			BeforeEach(func() {
+				observed.Authenticated = true
+				observed.JWTExpiry = time.Now().Add(1 * time.Hour)
+				observed.ConsecutiveErrors = 0
+				observed.IsBackpressured = true
+			})
+
+			It("should return false (backpressure means not healthy)", func() {
+				Expect(observed.IsSyncHealthy()).To(BeFalse())
+			})
+		})
+
+		Context("when not backpressured with healthy state", func() {
+			BeforeEach(func() {
+				observed.Authenticated = true
+				observed.JWTExpiry = time.Now().Add(1 * time.Hour)
+				observed.ConsecutiveErrors = 0
+				observed.IsBackpressured = false
+			})
+
+			It("should return true", func() {
+				Expect(observed.IsSyncHealthy()).To(BeTrue())
+			})
+		})
 	})
 })

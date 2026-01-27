@@ -77,6 +77,11 @@ func (m *mockChannelProvider) GetChannels(_ string) (
 	return m.inbound, m.outbound
 }
 
+func (m *mockChannelProvider) GetInboundStats(_ string) (capacity int, length int) {
+	// Return reasonable defaults for dependency tests (not testing backpressure here)
+	return 100, 0
+}
+
 // newTestChannelProvider creates a mock channel provider for test setup.
 func newTestChannelProvider() *mockChannelProvider {
 	// Create bidirectional channels, then extract send-only and receive-only

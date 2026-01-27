@@ -43,6 +43,11 @@ func (m *mockActionChannelProvider) GetChannels(_ string) (
 	return m.inbound, m.outbound
 }
 
+func (m *mockActionChannelProvider) GetInboundStats(_ string) (capacity int, length int) {
+	// Return reasonable defaults for action tests (not testing backpressure here)
+	return 100, 0
+}
+
 // setupChannelProviderSingleton sets up the global singleton for tests.
 // Must be called in BeforeEach before creating CommunicatorDependencies.
 func setupChannelProviderSingleton() {

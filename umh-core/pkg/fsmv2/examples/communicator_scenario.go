@@ -49,6 +49,12 @@ func (p *TestChannelProvider) GetChannels(_ string) (
 	return p.inbound, p.outbound
 }
 
+// GetInboundStats returns the capacity and current length of the inbound channel.
+// Used by SyncAction to detect backpressure before pulling messages.
+func (p *TestChannelProvider) GetInboundStats(_ string) (capacity int, length int) {
+	return cap(p.inbound), len(p.inbound)
+}
+
 // GetInboundChan returns the inbound channel for reading received messages from the worker.
 func (p *TestChannelProvider) GetInboundChan() <-chan *transport.UMHMessage {
 	return p.inbound

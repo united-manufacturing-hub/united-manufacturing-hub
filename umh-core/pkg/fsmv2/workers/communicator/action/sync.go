@@ -27,6 +27,19 @@ import (
 
 const SyncActionName = "sync"
 
+// Backpressure thresholds for inbound channel capacity management.
+// These prevent pulling messages from the backend when the local channel is near full.
+const (
+	// ExpectedBatchSize is the high water mark: stop pulling when available capacity < this value.
+	// This is the expected maximum number of messages that could be pulled in one request.
+	ExpectedBatchSize = 50
+
+	// LowWaterMarkMultiplier determines when to resume pulling after backpressure.
+	// Resume when available capacity >= ExpectedBatchSize * LowWaterMarkMultiplier.
+	// This hysteresis prevents oscillation between backpressured and normal states.
+	LowWaterMarkMultiplier = 2
+)
+
 // SyncAction performs bidirectional message sync via HTTP transport.
 //
 // Pull: HTTPTransport.Pull() → inboundChan (backend → edge).
@@ -51,72 +64,125 @@ func NewSyncAction(jwtToken string) *SyncAction {
 }
 
 // Execute performs a sync tick: pull, write to inbound, drain outbound, push.
+//
+// Backpressure check: Before pulling messages from the backend (which deletes them there),
+// we check if the local inbound channel has enough capacity. If not, we skip pulling
+// to prevent message loss. This is flow control, NOT an error.
+//
+// ACCEPTED RISK: There's a small race window between the capacity check and message delivery.
+// If another goroutine fills the channel during this window, partial delivery may fail.
+// This is acceptable because:
+// 1. The communicator is the sole producer to inbound channel (no other goroutines writing)
+// 2. The existing safety net (lines below) handles partial delivery failure
+// 3. Pre-check prevents the COMMON case (pulling into an already-full channel).
 func (a *SyncAction) Execute(ctx context.Context, depsAny any) error {
 	deps := depsAny.(CommunicatorDependencies)
 
-	pullStart := time.Now()
-	messages, err := deps.GetTransport().Pull(ctx, a.JWTToken)
-	pullLatency := time.Since(pullStart)
+	// === BACKPRESSURE CHECK (before destructive Pull) ===
+	// Check channel capacity to prevent pulling messages we can't deliver.
+	capacity, length := deps.GetInboundChanStats()
+	available := capacity - length
+	wasBackpressured := deps.IsBackpressured()
 
-	if err != nil {
-		// ENG-3600: RecordTypedError only on actual failure, not before
-		deps.RecordPullFailure(pullLatency)
+	var shouldSkipPull bool
+	if wasBackpressured {
+		// Low water mark: need more capacity to exit backpressure (hysteresis)
+		shouldSkipPull = available < ExpectedBatchSize*LowWaterMarkMultiplier
+	} else {
+		// High water mark: enter backpressure when capacity is low
+		shouldSkipPull = available < ExpectedBatchSize
+	}
 
-		var transportErr *httpTransport.TransportError
-		if errors.As(err, &transportErr) {
-			deps.RecordTypedError(transportErr.Type, transportErr.RetryAfter)
-			deps.MetricsRecorder().IncrementCounter(counterForErrorType(transportErr.Type), 1)
-		} else {
-			deps.RecordTypedError(httpTransport.ErrorTypeNetwork, 0)
-			deps.MetricsRecorder().IncrementCounter(depspkg.CounterNetworkErrorsTotal, 1)
+	// Track hysteresis state transitions
+	if shouldSkipPull {
+		if !wasBackpressured {
+			deps.GetLogger().Warnw("backpressure_entering",
+				"available", available,
+				"threshold", ExpectedBatchSize)
+			deps.SetBackpressured(true)
+			deps.MetricsRecorder().SetGauge(depspkg.GaugeBackpressureActive, 1)
+			deps.MetricsRecorder().IncrementCounter(depspkg.CounterBackpressureEntryTotal, 1)
+		}
+		// Skip pull, but continue to push outbound - backpressure is NOT an error
+	} else {
+		if wasBackpressured {
+			deps.GetLogger().Warnw("backpressure_exiting",
+				"available", available,
+				"low_water_mark", ExpectedBatchSize*LowWaterMarkMultiplier)
+			deps.SetBackpressured(false)
+			deps.MetricsRecorder().SetGauge(depspkg.GaugeBackpressureActive, 0)
+		}
+	}
+
+	// === PULL LOGIC (only when not backpressured) ===
+	if !shouldSkipPull {
+		pullStart := time.Now()
+		messages, err := deps.GetTransport().Pull(ctx, a.JWTToken)
+		pullLatency := time.Since(pullStart)
+
+		if err != nil {
+			// ENG-3600: RecordTypedError only on actual failure, not before
+			deps.RecordPullFailure(pullLatency)
+
+			var transportErr *httpTransport.TransportError
+			if errors.As(err, &transportErr) {
+				deps.RecordTypedError(transportErr.Type, transportErr.RetryAfter)
+				deps.MetricsRecorder().IncrementCounter(counterForErrorType(transportErr.Type), 1)
+			} else {
+				deps.RecordTypedError(httpTransport.ErrorTypeNetwork, 0)
+				deps.MetricsRecorder().IncrementCounter(depspkg.CounterNetworkErrorsTotal, 1)
+			}
+
+			deps.MetricsRecorder().IncrementCounter(depspkg.CounterPullOps, 1)
+			deps.MetricsRecorder().IncrementCounter(depspkg.CounterPullFailures, 1)
+			deps.MetricsRecorder().SetGauge(depspkg.GaugeLastPullLatencyMs, float64(pullLatency.Milliseconds()))
+
+			return fmt.Errorf("pull failed: %w", err)
+		}
+
+		deps.RecordPullSuccess(pullLatency, len(messages))
+
+		var bytesPulled int64
+
+		for _, msg := range messages {
+			if msg != nil {
+				bytesPulled += int64(len(msg.InstanceUUID) + len(msg.Content) + len(msg.Email))
+			}
 		}
 
 		deps.MetricsRecorder().IncrementCounter(depspkg.CounterPullOps, 1)
-		deps.MetricsRecorder().IncrementCounter(depspkg.CounterPullFailures, 1)
+		deps.MetricsRecorder().IncrementCounter(depspkg.CounterPullSuccess, 1)
+		deps.MetricsRecorder().IncrementCounter(depspkg.CounterMessagesPulled, int64(len(messages)))
+		deps.MetricsRecorder().IncrementCounter(depspkg.CounterBytesPulled, bytesPulled)
 		deps.MetricsRecorder().SetGauge(depspkg.GaugeLastPullLatencyMs, float64(pullLatency.Milliseconds()))
 
-		return fmt.Errorf("pull failed: %w", err)
-	}
+		deps.SetPulledMessages(messages)
 
-	deps.RecordPullSuccess(pullLatency, len(messages))
+		// Deliver pulled messages to inbound channel
+		if inChan := deps.GetInboundChan(); inChan != nil {
+			for i, msg := range messages {
+				select {
+				case inChan <- msg:
+				case <-ctx.Done():
+					return ctx.Err()
+				default:
+					deps.GetLogger().Warnw("inbound_channel_full_stopping_sync",
+						"total_messages", len(messages),
+						"delivered", i,
+						"pending", len(messages)-i)
+					// Record as typed error for proper backoff, then return
+					deps.RecordTypedError(httpTransport.ErrorTypeChannelFull, 0)
 
-	var bytesPulled int64
-
-	for _, msg := range messages {
-		if msg != nil {
-			bytesPulled += int64(len(msg.InstanceUUID) + len(msg.Content) + len(msg.Email))
-		}
-	}
-
-	deps.MetricsRecorder().IncrementCounter(depspkg.CounterPullOps, 1)
-	deps.MetricsRecorder().IncrementCounter(depspkg.CounterPullSuccess, 1)
-	deps.MetricsRecorder().IncrementCounter(depspkg.CounterMessagesPulled, int64(len(messages)))
-	deps.MetricsRecorder().IncrementCounter(depspkg.CounterBytesPulled, bytesPulled)
-	deps.MetricsRecorder().SetGauge(depspkg.GaugeLastPullLatencyMs, float64(pullLatency.Milliseconds()))
-
-	deps.SetPulledMessages(messages)
-
-	if inChan := deps.GetInboundChan(); inChan != nil {
-		for i, msg := range messages {
-			select {
-			case inChan <- msg:
-			case <-ctx.Done():
-				return ctx.Err()
-			default:
-				deps.GetLogger().Warnw("inbound_channel_full_stopping_sync",
-					"total_messages", len(messages),
-					"delivered", i,
-					"pending", len(messages)-i)
-				// Record as typed error for proper backoff, then return
-				deps.RecordTypedError(httpTransport.ErrorTypeChannelFull, 0)
-				return fmt.Errorf("inbound channel full: stopping sync to prevent message loss")
+					return errors.New("inbound channel full: stopping sync to prevent message loss")
+				}
 			}
 		}
 	}
 
-	// NOTE: At this point, pulled messages have been delivered to inbound channel.
+	// NOTE: At this point, pulled messages (if any) have been delivered to inbound channel.
 	// If Push fails below, those messages are still processed (intended behavior).
 	// Push will be retried on next SyncAction.
+	// Push also runs even during backpressure - outbound is not affected by inbound pressure.
 	var messagesToPush []*transport.UMHMessage
 
 	if outChan := deps.GetOutboundChan(); outChan != nil {
@@ -176,7 +242,10 @@ func (a *SyncAction) Execute(ctx context.Context, depsAny any) error {
 	}
 
 	// ENG-3600: Counter resets only after confirmed success to prevent oscillation
-	deps.RecordSuccess()
+	// Don't call RecordSuccess when backpressured - we're not fully syncing
+	if !deps.IsBackpressured() {
+		deps.RecordSuccess()
+	}
 
 	return nil
 }

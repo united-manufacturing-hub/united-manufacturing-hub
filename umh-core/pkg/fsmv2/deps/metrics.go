@@ -133,6 +133,17 @@ const (
 	// GaugeConsecutiveErrors tracks the number of consecutive errors.
 	// Resets to 0 on successful operation.
 	GaugeConsecutiveErrors GaugeName = "consecutive_errors"
+
+	// GaugeBackpressureActive indicates whether the communicator is in backpressure state.
+	// 1 = backpressure active (pulling paused), 0 = normal operation.
+	GaugeBackpressureActive GaugeName = "backpressure_active"
+)
+
+// Backpressure counter names for monitoring backpressure events.
+const (
+	// CounterBackpressureEntryTotal tracks total number of times backpressure was entered.
+	// Incremented each time the communicator transitions from normal to backpressured state.
+	CounterBackpressureEntryTotal CounterName = "backpressure_entry_total"
 )
 
 // =============================================================================

@@ -187,3 +187,8 @@ func (m *MockChannelProvider) GetChannels(_ string) (
 ) {
 	return m.inbound, m.outbound
 }
+
+func (m *MockChannelProvider) GetInboundStats(_ string) (capacity int, length int) {
+	// Return reasonable defaults for worker tests (not testing backpressure here)
+	return 100, 0
+}

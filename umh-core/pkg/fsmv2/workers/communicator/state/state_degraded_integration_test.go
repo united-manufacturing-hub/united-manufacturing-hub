@@ -339,5 +339,5 @@ func (m *mockResettableTransport) Close() {
 	// No-op for mock
 }
 
-// Ensure mockResettableTransport implements transport.Transport at compile time
+// Ensure mockResettableTransport implements transport.Transport at compile time.
 var _ transport.Transport = (*mockResettableTransport)(nil)

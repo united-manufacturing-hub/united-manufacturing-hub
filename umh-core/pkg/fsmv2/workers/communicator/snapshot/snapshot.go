@@ -89,6 +89,10 @@ type CommunicatorObservedState struct {
 	LastErrorType  httpTransport.ErrorType `json:"lastErrorType,omitempty"`
 	LastRetryAfter time.Duration           `json:"lastRetryAfter,omitempty"` // Server-provided Retry-After duration
 
+	// Backpressure indicates inbound channel is near full capacity.
+	// When true, pull operations are skipped to prevent message loss.
+	IsBackpressured bool `json:"isBackpressured,omitempty"`
+
 	// Authentication
 	Authenticated bool
 }
@@ -104,9 +108,9 @@ func (o CommunicatorObservedState) IsTokenExpired() bool {
 	return time.Now().Add(refreshBuffer).After(o.JWTExpiry)
 }
 
-// IsSyncHealthy returns true if authenticated, token valid, and consecutive errors below threshold.
+// IsSyncHealthy returns true if authenticated, token valid, consecutive errors below threshold, and not backpressured.
 func (o CommunicatorObservedState) IsSyncHealthy() bool {
-	return o.Authenticated && !o.IsTokenExpired() && o.ConsecutiveErrors < backoff.TransportResetThreshold
+	return o.Authenticated && !o.IsTokenExpired() && o.ConsecutiveErrors < backoff.TransportResetThreshold && !o.IsBackpressured
 }
 
 func (o CommunicatorObservedState) GetConsecutiveErrors() int {
