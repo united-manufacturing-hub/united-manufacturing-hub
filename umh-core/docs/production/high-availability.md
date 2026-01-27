@@ -6,13 +6,13 @@ UMH Core uses Kubernetes-native high availability. Your cluster handles restart 
 
 All state lives in the `/data` volume (see [Container Layout](../reference/container-layout.md) for structure). When a pod or node fails, Kubernetes schedules a new pod that mounts the same volume. Redpanda replays its write-ahead log and resumes processing.
 
-**Expected recovery times:**
+**Typical recovery times** (actual times depend on cluster configuration and workload):
 
 | Failure | Recovery |
 |---------|----------|
 | Process crash inside container | Sub-second (S6 supervisor restarts process) |
-| Pod crash | 30–60 seconds |
-| Node failure | 1–2 minutes |
+| Pod crash | 30–60 seconds (depends on pod restart policy and resource availability) |
+| Node failure | 1–2 minutes (depends on node failure detection timeout and storage reattachment) |
 
 ## Storage Requirement
 
@@ -22,7 +22,7 @@ The default k3s storage (`local-path`) binds the volume to one node. If that nod
 
 Storage that works: vSAN, SAN, EBS, Azure Disk, GCE PD, Longhorn, Rook-Ceph. All of these allow Kubernetes to mount the volume on any node.
 
-**Performance note:** Software-defined storage like Longhorn provides roughly 20–30% of native disk IOPS due to synchronous replication. For most UMH Core workloads, this is acceptable. For high-throughput scenarios, test before committing.
+**Performance note:** Software-defined storage like Longhorn adds latency due to synchronous replication. For most UMH Core workloads, this is acceptable. For high-throughput scenarios, benchmark your specific workload before committing.
 
 ### Single-Node Deployments
 
@@ -30,7 +30,7 @@ If you have one node, storage choice does not affect failover. The node itself i
 
 ### Longhorn on k3s
 
-If you do not have enterprise storage, Longhorn is a good choice for k3s clusters. See the [Longhorn Quick Installation Guide](https://longhorn.io/docs/1.10.1/deploy/install/) and [K3s-specific configuration](https://longhorn.io/docs/1.10.1/advanced-resources/os-distro-specific/csi-on-k3s/).
+If you do not have enterprise storage, Longhorn is a good choice for k3s clusters. See the [Longhorn Quick Installation Guide](https://longhorn.io/docs/latest/deploy/install/) and [K3s-specific configuration](https://longhorn.io/docs/latest/advanced-resources/os-distro-specific/csi-on-k3s/).
 
 ## Why Kubernetes-Native?
 
