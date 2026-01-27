@@ -130,23 +130,23 @@ var _ = Describe("CommunicatorObservedState", func() {
 			})
 		})
 
-		Context("when authenticated with valid token but errors below threshold", func() {
+		Context("when authenticated with valid token but has any consecutive errors", func() {
 			BeforeEach(func() {
 				observed.Authenticated = true
 				observed.JWTExpiry = time.Now().Add(1 * time.Hour)
-				observed.ConsecutiveErrors = 4 // Below threshold of 5
+				observed.ConsecutiveErrors = 1 // Any error makes sync unhealthy
 			})
 
-			It("should return true", func() {
-				Expect(observed.IsSyncHealthy()).To(BeTrue())
+			It("should return false (first error triggers degraded)", func() {
+				Expect(observed.IsSyncHealthy()).To(BeFalse())
 			})
 		})
 
-		Context("when authenticated with valid token but errors at threshold", func() {
+		Context("when authenticated with valid token but multiple errors", func() {
 			BeforeEach(func() {
 				observed.Authenticated = true
 				observed.JWTExpiry = time.Now().Add(1 * time.Hour)
-				observed.ConsecutiveErrors = 5 // At threshold
+				observed.ConsecutiveErrors = 5 // Multiple errors
 			})
 
 			It("should return false", func() {
@@ -154,11 +154,11 @@ var _ = Describe("CommunicatorObservedState", func() {
 			})
 		})
 
-		Context("when authenticated with valid token but errors above threshold", func() {
+		Context("when authenticated with valid token but many errors", func() {
 			BeforeEach(func() {
 				observed.Authenticated = true
 				observed.JWTExpiry = time.Now().Add(1 * time.Hour)
-				observed.ConsecutiveErrors = 10 // Well above threshold
+				observed.ConsecutiveErrors = 10 // Many errors
 			})
 
 			It("should return false", func() {

@@ -289,24 +289,23 @@ var _ = Describe("SyncingState Transitions", func() {
 			Expect(result.Action.Name()).To(Equal("sync"))
 		})
 
-		It("should stay in SyncingState with 4 consecutive errors (below threshold)", func() {
+		It("should transition to DegradedState on first consecutive error", func() {
 			snap := fsmv2.Snapshot{
 				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
 				Observed: snapshot.CommunicatorObservedState{
 					Authenticated:     true,
 					JWTToken:          "valid-token",
 					JWTExpiry:         time.Now().Add(time.Hour),
-					ConsecutiveErrors: 4,
+					ConsecutiveErrors: 1, // Any error triggers degraded state
 				},
 				Desired: &snapshot.CommunicatorDesiredState{},
 			}
 
 			result := stateObj.Next(snap)
 
-			Expect(result.State).To(BeAssignableToTypeOf(&state.SyncingState{}))
+			// First error immediately transitions to DegradedState
+			Expect(result.State).To(BeAssignableToTypeOf(&state.DegradedState{}))
 			Expect(result.Signal).To(Equal(fsmv2.SignalNone))
-			Expect(result.Action).NotTo(BeNil())
-			Expect(result.Action.Name()).To(Equal("sync"))
 		})
 
 		It("should stay in SyncingState and emit SyncAction after successful recovery", func() {

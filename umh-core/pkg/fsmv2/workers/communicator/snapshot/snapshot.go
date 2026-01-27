@@ -20,7 +20,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/backoff"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
 	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
 )
@@ -108,9 +107,10 @@ func (o CommunicatorObservedState) IsTokenExpired() bool {
 	return time.Now().Add(refreshBuffer).After(o.JWTExpiry)
 }
 
-// IsSyncHealthy returns true if authenticated, token valid, consecutive errors below threshold, and not backpressured.
+// IsSyncHealthy returns true if authenticated, token valid, no consecutive errors, and not backpressured.
+// Any error immediately makes sync unhealthy, triggering transition to DegradedState.
 func (o CommunicatorObservedState) IsSyncHealthy() bool {
-	return o.Authenticated && !o.IsTokenExpired() && o.ConsecutiveErrors < backoff.TransportResetThreshold && !o.IsBackpressured
+	return o.Authenticated && !o.IsTokenExpired() && o.ConsecutiveErrors == 0 && !o.IsBackpressured
 }
 
 func (o CommunicatorObservedState) GetConsecutiveErrors() int {
