@@ -787,7 +787,10 @@ type ProtocolConverter struct {
 	TemplateInfo *ProtocolConverterTemplateInfo `json:"templateInfo"`
 	Meta         *ProtocolConverterMeta         `json:"meta"`
 	Name         string                         `binding:"required"  json:"name"`
-	Connection   ProtocolConverterConnection    `json:"connection"`
+	// State is the desired operational state of the protocol converter ("active" or "stopped").
+	// If empty, the parse method sets this to "active".
+	State      string                      `json:"state,omitempty"`
+	Connection ProtocolConverterConnection `json:"connection"`
 }
 
 type ProtocolConverterMeta struct {
