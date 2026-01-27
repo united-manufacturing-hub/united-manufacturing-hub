@@ -228,6 +228,49 @@ var _ = Describe("ActionHistory Read-Only Pattern", func() {
 	})
 })
 
+var _ = Describe("RetryTracker", func() {
+	var (
+		logger       *zap.SugaredLogger
+		dependencies *deps.BaseDependencies
+	)
+
+	BeforeEach(func() {
+		logger = zap.NewNop().Sugar()
+		identity := deps.Identity{ID: "test-id", WorkerType: "test-worker"}
+		dependencies = deps.NewBaseDependencies(logger, nil, identity)
+	})
+
+	Describe("RetryTracker()", func() {
+		It("should return a non-nil tracker", func() {
+			tracker := dependencies.RetryTracker()
+			Expect(tracker).NotTo(BeNil())
+		})
+
+		It("should allow recording errors and reading consecutive errors", func() {
+			tracker := dependencies.RetryTracker()
+
+			Expect(tracker.ConsecutiveErrors()).To(Equal(0))
+
+			tracker.RecordError()
+			Expect(tracker.ConsecutiveErrors()).To(Equal(1))
+
+			tracker.RecordError()
+			Expect(tracker.ConsecutiveErrors()).To(Equal(2))
+		})
+
+		It("should reset consecutive errors on success", func() {
+			tracker := dependencies.RetryTracker()
+
+			tracker.RecordError()
+			tracker.RecordError()
+			Expect(tracker.ConsecutiveErrors()).To(Equal(2))
+
+			tracker.RecordSuccess()
+			Expect(tracker.ConsecutiveErrors()).To(Equal(0))
+		})
+	})
+})
+
 var _ = Describe("Identity", func() {
 	Describe("String()", func() {
 		It("returns HierarchyPath when available", func() {

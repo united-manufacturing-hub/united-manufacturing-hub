@@ -18,6 +18,7 @@ import (
 	"context"
 	"sync"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps/retry"
 	"go.uber.org/zap"
 )
 
@@ -68,6 +69,7 @@ type BaseDependencies struct {
 	stateReader     StateReader
 	logger          *zap.SugaredLogger
 	metricsRecorder *MetricsRecorder
+	retryTracker    retry.Tracker     // Framework-level retry tracking for error/success recording
 	frameworkState  *FrameworkMetrics // Set by supervisor before collection, may be stale (~1 tick)
 	workerType      string
 	workerID        string
@@ -86,6 +88,7 @@ func NewBaseDependencies(logger *zap.SugaredLogger, stateReader StateReader, ide
 		logger:          logger.With("worker", identity.String()),
 		stateReader:     stateReader,
 		metricsRecorder: NewMetricsRecorder(),
+		retryTracker:    retry.New(),
 		workerType:      identity.WorkerType,
 		workerID:        identity.ID,
 	}
@@ -156,4 +159,9 @@ func (d *BaseDependencies) GetWorkerType() string {
 
 func (d *BaseDependencies) GetWorkerID() string {
 	return d.workerID
+}
+
+// RetryTracker returns the framework-level retry tracker for error/success recording.
+func (d *BaseDependencies) RetryTracker() retry.Tracker {
+	return d.retryTracker
 }

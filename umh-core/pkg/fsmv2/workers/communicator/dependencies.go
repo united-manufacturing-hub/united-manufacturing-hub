@@ -25,17 +25,16 @@ import (
 	"go.uber.org/zap"
 )
 
+// Note: retry.Tracker is now inherited from BaseDependencies.
+// CommunicatorDependencies only keeps lastErrorType because backoff/backoff.go
+// uses type-safe switch statements on httpTransport.ErrorType.
+
 // CommunicatorDependencies provides transport and channel access for communicator worker actions.
 type CommunicatorDependencies struct {
 	jwtExpiry         time.Time
-	degradedEnteredAt time.Time
 	lastAuthAttemptAt time.Time
 
 	transport transport.Transport
-
-	// retryTracker provides framework-level retry tracking.
-	// Used by actions like ResetTransportAction to advance past modulo-N triggers.
-	retryTracker retry.Tracker
 
 	*deps.BaseDependencies
 	inboundChan  chan<- *transport.UMHMessage
@@ -46,9 +45,7 @@ type CommunicatorDependencies struct {
 
 	pulledMessages []*transport.UMHMessage
 
-	lastRetryAfter    time.Duration
-	consecutiveErrors int
-	lastErrorType     httpTransport.ErrorType
+	lastErrorType httpTransport.ErrorType
 
 	// backpressured tracks hysteresis state for backpressure detection.
 	// When true, a higher threshold (low water mark) is required to resume pulling.
@@ -73,7 +70,6 @@ func NewCommunicatorDependencies(t transport.Transport, logger *zap.SugaredLogge
 		transport:        t,
 		inboundChan:      inbound,
 		outboundChan:     outbound,
-		retryTracker:     retry.New(),
 	}
 }
 
@@ -145,32 +141,17 @@ func (d *CommunicatorDependencies) GetPulledMessages() []*transport.UMHMessage {
 // Transport reset is handled by ResetTransportAction from DegradedState, not here,
 // to avoid duplicate resets and maintain single responsibility.
 func (d *CommunicatorDependencies) RecordError() {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-
-	if d.consecutiveErrors == 0 {
-		d.degradedEnteredAt = time.Now()
-	}
-
-	d.consecutiveErrors++
-
-	// Keep retry tracker in sync
-	d.retryTracker.RecordError()
+	d.RetryTracker().RecordError()
 }
 
 // RecordSuccess resets all error tracking state.
 func (d *CommunicatorDependencies) RecordSuccess() {
 	d.mu.Lock()
-	defer d.mu.Unlock()
-
-	d.consecutiveErrors = 0
-	d.degradedEnteredAt = time.Time{}
 	d.lastErrorType = 0
-	d.lastRetryAfter = 0
 	d.lastAuthAttemptAt = time.Time{}
+	d.mu.Unlock()
 
-	// Keep retry tracker in sync
-	d.retryTracker.RecordSuccess()
+	d.RetryTracker().RecordSuccess()
 }
 
 // RecordTypedError increments consecutive errors and records error type and retry-after.
@@ -178,18 +159,10 @@ func (d *CommunicatorDependencies) RecordSuccess() {
 // to avoid duplicate resets and maintain single responsibility.
 func (d *CommunicatorDependencies) RecordTypedError(errType httpTransport.ErrorType, retryAfter time.Duration) {
 	d.mu.Lock()
-	defer d.mu.Unlock()
-
-	if d.consecutiveErrors == 0 {
-		d.degradedEnteredAt = time.Now()
-	}
-
-	d.consecutiveErrors++
 	d.lastErrorType = errType
-	d.lastRetryAfter = retryAfter
+	d.mu.Unlock()
 
-	// Keep retry tracker in sync (convert ErrorType to string class)
-	d.retryTracker.RecordError(retry.WithClass(errType.String()), retry.WithRetryAfter(retryAfter))
+	d.RetryTracker().RecordError(retry.WithClass(errType.String()), retry.WithRetryAfter(retryAfter))
 }
 
 // GetLastErrorType returns the last recorded error type.
@@ -202,10 +175,7 @@ func (d *CommunicatorDependencies) GetLastErrorType() httpTransport.ErrorType {
 
 // GetLastRetryAfter returns the Retry-After duration from the last error.
 func (d *CommunicatorDependencies) GetLastRetryAfter() time.Duration {
-	d.mu.RLock()
-	defer d.mu.RUnlock()
-
-	return d.lastRetryAfter
+	return d.RetryTracker().LastError().RetryAfter
 }
 
 // SetLastAuthAttemptAt records the timestamp of the last authentication attempt.
@@ -227,21 +197,14 @@ func (d *CommunicatorDependencies) GetLastAuthAttemptAt() time.Time {
 // GetConsecutiveErrors returns the current consecutive error count.
 // Delegates to RetryTracker for single source of truth.
 func (d *CommunicatorDependencies) GetConsecutiveErrors() int {
-	return d.retryTracker.ConsecutiveErrors()
+	return d.RetryTracker().ConsecutiveErrors()
 }
 
 // GetDegradedEnteredAt returns when degraded mode started, or zero if not degraded.
 func (d *CommunicatorDependencies) GetDegradedEnteredAt() time.Time {
-	d.mu.RLock()
-	defer d.mu.RUnlock()
+	degradedSince, _ := d.RetryTracker().DegradedSince()
 
-	return d.degradedEnteredAt
-}
-
-// RetryTracker returns the framework-level retry tracker.
-// Used by recovery actions (like ResetTransportAction) to advance past modulo-N triggers.
-func (d *CommunicatorDependencies) RetryTracker() retry.Tracker {
-	return d.retryTracker
+	return degradedSince
 }
 
 // GetInboundChan returns channel to write received messages, or nil if no provider set.
