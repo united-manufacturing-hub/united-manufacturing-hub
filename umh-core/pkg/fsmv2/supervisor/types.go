@@ -112,28 +112,23 @@ type SupervisorInterface interface {
 // THREAD SAFETY: currentState is protected by mu. Always lock before accessing.
 // tickInProgress prevents concurrent ticks for the same worker.
 type WorkerContext[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] struct {
+	// 24-byte time.Time fields first
 	lastActionObsTime time.Time
-
 	// Supervisor-internal state tracking (copied into FrameworkMetrics before State.Next()).
 	// Workers read via FrameworkMetrics; MetricsRecorder handles worker-written metrics.
 	stateEnteredAt time.Time // When current state was entered
-
 	// lastObservationCollectedAt stores the CollectedAt timestamp from the most recent
 	// observation loaded during tickWorker(). This is cached here (rather than re-fetched
 	// from CSE) so that IsObservationStale() can be called by the PARENT supervisor
 	// during its tick without blocking on CSE reads. The parent calls child.IsObservationStale()
 	// when building ChildInfo for SetChildrenView().
 	lastObservationCollectedAt time.Time
-	// lastObservedStateName caches the constructed observed state name (e.g., "running_healthy_connected").
-	// Constructed by supervisor as: phase.Prefix() + lowercase(state.String())
-	// Used by parent supervisors via GetObservedStateName() for health checks.
-	lastObservedStateName string
-	// lastLifecyclePhase caches the lifecycle phase of the current state.
-	// Used by parent supervisors via GetLifecyclePhase() to classify child health.
-	// This is the source of truth for health classification (phase.IsHealthy()).
-	lastLifecyclePhase config.LifecyclePhase
-	worker                     fsmv2.Worker
-	currentState               fsmv2.State[any, any]
+
+	// Interfaces (16 bytes each)
+	worker       fsmv2.Worker
+	currentState fsmv2.State[any, any]
+
+	// Pointers (8 bytes each)
 	// mu protects currentState. Uses RWMutex for frequent reads, rare writes.
 	// Lock Order: Acquire AFTER Supervisor.mu when both needed.
 	// WorkerContext.mu locks are independent from each other (enables parallel worker processing).
@@ -142,17 +137,35 @@ type WorkerContext[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] s
 	executor      *execution.ActionExecutor
 	actionHistory *deps.InMemoryActionHistoryRecorder // Supervisor-owned buffer for action results
 
-	stateTransitions   map[string]int64         // state_name → total times entered
-	stateDurations     map[string]time.Duration // state_name → cumulative time spent
-	identity           deps.Identity
-	currentStateReason string // Human-readable reason for current state (from NextResult.Reason)
-	totalTransitions   int64  // Sum of all stateTransitions values
-	collectorRestarts  int64  // Per-worker collector restarts
-	startupCount       int64  // PERSISTENT: Loaded from CSE, incremented on AddWorker()
-	tickInProgress       atomic.Bool
-	actionPending        bool
-	gatingExplainedOnce  bool  // True after first DEBUG log for action-observation gating
-	gatingBlockedCount   int64 // Count of ticks blocked by action-observation gating
+	// Maps (8 bytes each - pointers internally)
+	stateTransitions map[string]int64         // state_name → total times entered
+	stateDurations   map[string]time.Duration // state_name → cumulative time spent
+
+	// Structs
+	identity deps.Identity
+
+	// Strings (16 bytes each - pointer + length)
+	// lastObservedStateName caches the constructed observed state name (e.g., "running_healthy_connected").
+	// Constructed by supervisor as: phase.Prefix() + lowercase(state.String())
+	// Used by parent supervisors via GetObservedStateName() for health checks.
+	lastObservedStateName string
+	currentStateReason    string // Human-readable reason for current state (from NextResult.Reason)
+
+	// int64 fields (8 bytes each)
+	totalTransitions   int64 // Sum of all stateTransitions values
+	collectorRestarts  int64 // Per-worker collector restarts
+	startupCount       int64 // PERSISTENT: Loaded from CSE, incremented on AddWorker()
+	gatingBlockedCount int64 // Count of ticks blocked by action-observation gating
+
+	// lastLifecyclePhase caches the lifecycle phase of the current state.
+	// Used by parent supervisors via GetLifecyclePhase() to classify child health.
+	// This is the source of truth for health classification (phase.IsHealthy()).
+	lastLifecyclePhase config.LifecyclePhase
+
+	// Smaller types at end
+	tickInProgress      atomic.Bool
+	actionPending       bool
+	gatingExplainedOnce bool // True after first DEBUG log for action-observation gating
 }
 
 // CollectorHealthConfig configures observation collector health monitoring.
