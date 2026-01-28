@@ -182,6 +182,8 @@ func Result[TSnapshot any, TDeps any](
 }
 
 // Worker is the business logic interface that developers implement.
+// Note: Shutdown is managed by the supervisor via ShutdownRequested in desired state,
+// not by a method on this interface.
 type Worker interface {
 	// CollectObservedState monitors the actual system state.
 	CollectObservedState(ctx context.Context) (ObservedState, error)
@@ -192,8 +194,6 @@ type Worker interface {
 	// GetInitialState returns the starting state for this worker.
 	// Called once during worker creation.
 	GetInitialState() State[any, any]
-
-	// Shutdown is managed by the supervisor via ShutdownRequested in desired state.
 }
 
 // DependencyProvider exposes worker dependencies for action execution.

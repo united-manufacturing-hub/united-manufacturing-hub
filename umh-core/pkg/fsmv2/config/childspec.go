@@ -222,13 +222,6 @@ type ChildSpec struct {
 	ChildStartStates []string       `json:"childStartStates,omitempty" yaml:"childStartStates,omitempty"` // Parent FSM states where child should run (empty = always run)
 }
 
-// MarshalJSON implements json.Marshaler for ChildSpec.
-func (c *ChildSpec) MarshalJSON() ([]byte, error) {
-	type Alias ChildSpec
-
-	return json.Marshal((*Alias)(c))
-}
-
 // Clone creates a deep copy of the ChildSpec.
 // Note: Dependencies is shallow-copied (values are shared intentionally since they
 // represent shared resources like channels and interfaces).
@@ -264,22 +257,29 @@ func (c ChildSpec) Clone() ChildSpec {
 func (c ChildSpec) Hash() (string, error) {
 	h := fnv.New64a()
 
-	// Hash name and worker type
+	// Hash name and worker type with null byte separators to prevent collisions
+	// e.g., Name="ab", WorkerType="cd" vs Name="abc", WorkerType="d" would otherwise
+	// produce the same hash input ("abcd" vs "abcd")
 	h.Write([]byte(c.Name))
+	h.Write([]byte{0}) // separator
 	h.Write([]byte(c.WorkerType))
+	h.Write([]byte{0}) // separator
 
 	// Hash UserSpec (config string + variables)
 	h.Write([]byte(c.UserSpec.Config))
+	h.Write([]byte{0}) // separator
 
 	varsBytes, err := json.Marshal(c.UserSpec.Variables)
 	if err != nil {
 		return "", fmt.Errorf("failed to marshal Variables for hashing: %w", err)
 	}
 	h.Write(varsBytes)
+	h.Write([]byte{0}) // separator
 
 	// Hash ChildStartStates
 	for _, state := range c.ChildStartStates {
 		h.Write([]byte(state))
+		h.Write([]byte{0}) // separator
 	}
 
 	// Dependencies contain runtime objects (channels, etc.) that can't be meaningfully hashed,

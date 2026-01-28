@@ -15,6 +15,8 @@
 package config_test
 
 import (
+	"encoding/json"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"gopkg.in/yaml.v3"
@@ -88,7 +90,7 @@ userSpec:
 				},
 			}
 
-			data, err := spec.MarshalJSON()
+			data, err := json.Marshal(spec)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(string(data)).To(ContainSubstring(`"name":"dataflow"`))
 			Expect(string(data)).To(ContainSubstring(`"workerType":"kafka_consumer"`))
