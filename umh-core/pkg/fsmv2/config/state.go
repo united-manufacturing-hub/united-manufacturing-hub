@@ -31,56 +31,56 @@ const (
 //
 // Lifecycle flow:
 //
-//	                    ┌─────────────────────┐
-//	                    │      STOPPED        │
-//	                    │   (terminal state)  │
-//	                    └──────────┬──────────┘
-//	                               │ start
-//	                               ▼
-//	                    ┌─────────────────────┐
-//	                    │      STARTING       │
-//	                    │  (trying to start)  │
-//	                    └──────────┬──────────┘
-//	                               │ ready
-//	                               ▼
-//	         ┌─────────────────────────────────────────┐
-//	         │                RUNNING                   │
-//	         │  ┌───────────────┬───────────────┐      │
-//	         │  │    HEALTHY    │   DEGRADED    │      │
-//	         │  │ (fully stable)│ (with issues) │      │
-//	         │  └───────────────┴───────────────┘      │
-//	         └─────────────────────┬───────────────────┘
-//	                               │ stop
-//	                               ▼
-//	                    ┌─────────────────────┐
-//	                    │      STOPPING       │
-//	                    │  (trying to stop)   │
-//	                    └──────────┬──────────┘
-//	                               │ done
-//	                               ▼
-//	                    ┌─────────────────────┐
-//	                    │      STOPPED        │
-//	                    └─────────────────────┘
+//	           ┌─────────────────────┐
+//	           │      STOPPED        │
+//	           │   (terminal state)  │
+//	           └──────────┬──────────┘
+//	                      │ start
+//	                      ▼
+//	           ┌─────────────────────┐
+//	           │      STARTING       │
+//	           │  (trying to start)  │
+//	           └──────────┬──────────┘
+//	                      │ ready
+//	                      ▼
+//	┌─────────────────────────────────────────┐
+//	│                RUNNING                   │
+//	│  ┌───────────────┬───────────────┐      │
+//	│  │    HEALTHY    │   DEGRADED    │      │
+//	│  │ (fully stable)│ (with issues) │      │
+//	│  └───────────────┴───────────────┘      │
+//	└─────────────────────┬───────────────────┘
+//	                      │ stop
+//	                      ▼
+//	           ┌─────────────────────┐
+//	           │      STOPPING       │
+//	           │  (trying to stop)   │
+//	           └──────────┬──────────┘
+//	                      │ done
+//	                      ▼
+//	           ┌─────────────────────┐
+//	           │      STOPPED        │
+//	           └─────────────────────┘
 type LifecyclePhase int
 
 const (
 	// PhaseUnknown is the zero value for uninitialized states.
-	// Health: UNHEALTHY. Prefix: "unknown_"
+	// Health: UNHEALTHY. Prefix: "unknown_".
 	PhaseUnknown LifecyclePhase = iota
 
 	// PhaseStopped: Terminal state - cleanly shut down.
 	// Health: NEUTRAL (neither healthy nor unhealthy).
-	// Prefix: "stopped"
+	// Prefix: "stopped".
 	PhaseStopped
 
 	// PhaseStarting: Transitioning to running, not yet operational.
 	// Health: UNHEALTHY - dependency not satisfied.
-	// Prefix: "starting_"
+	// Prefix: "trying_to_start_"
 	PhaseStarting
 
 	// PhaseRunningHealthy: Operational AND stable - all good.
 	// Health: HEALTHY - dependency fully satisfied.
-	// Prefix: "running_healthy_"
+	// Prefix: "running_healthy_".
 	PhaseRunningHealthy
 
 	// PhaseRunningDegraded: Operational but with issues.
@@ -91,7 +91,7 @@ const (
 
 	// PhaseStopping: Graceful shutdown in progress.
 	// Health: UNHEALTHY - dependency being torn down.
-	// Prefix: "stopping_"
+	// Prefix: "trying_to_stop_"
 	PhaseStopping
 )
 
@@ -149,7 +149,7 @@ func (p LifecyclePhase) IsHealthy() bool {
 
 // IsOperational returns true if the system can serve requests.
 // Both RunningHealthy and RunningDegraded are operational.
-// Use this for: "Can the system do its job?" (yes, even if impaired)
+// Use this for: "Can the system do its job?" (yes, even if impaired).
 func (p LifecyclePhase) IsOperational() bool {
 	return p == PhaseRunningHealthy || p == PhaseRunningDegraded
 }
