@@ -15,7 +15,6 @@
 package validator
 
 import (
-	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -50,6 +49,7 @@ func FindStateFilesIncludingCommunicator(baseDir string) []string {
 		// Include files with "state_" prefix
 		if strings.HasPrefix(filepath.Base(path), "state_") {
 			files = append(files, path)
+
 			return nil
 		}
 
@@ -123,7 +123,7 @@ func checkNoObservedStateMutation(filename string) []Violation {
 						File:    filename,
 						Line:    pos.Line,
 						Type:    "OBSERVED_STATE_MUTATION",
-						Message: fmt.Sprintf("Next() method mutates observed state: %s", formatExpr(lhs)),
+						Message: "Next() method mutates observed state: " + formatExpr(lhs),
 					})
 				}
 			}
