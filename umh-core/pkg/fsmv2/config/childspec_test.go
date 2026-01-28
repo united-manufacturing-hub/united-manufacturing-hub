@@ -191,7 +191,11 @@ var _ = Describe("ChildSpec Hash", func() {
 				ChildStartStates: []string{"Running", "TryingToStart"},
 			}
 
-			Expect(spec1.Hash()).To(Equal(spec2.Hash()))
+			hash1, err1 := spec1.Hash()
+			Expect(err1).NotTo(HaveOccurred())
+			hash2, err2 := spec2.Hash()
+			Expect(err2).NotTo(HaveOccurred())
+			Expect(hash1).To(Equal(hash2))
 		})
 
 		It("should produce different hashes when Name changes", func() {
@@ -207,7 +211,11 @@ var _ = Describe("ChildSpec Hash", func() {
 				UserSpec:   config.UserSpec{Config: "config"},
 			}
 
-			Expect(spec1.Hash()).NotTo(Equal(spec2.Hash()))
+			hash1, err1 := spec1.Hash()
+			Expect(err1).NotTo(HaveOccurred())
+			hash2, err2 := spec2.Hash()
+			Expect(err2).NotTo(HaveOccurred())
+			Expect(hash1).NotTo(Equal(hash2))
 		})
 
 		It("should produce different hashes when WorkerType changes", func() {
@@ -223,7 +231,11 @@ var _ = Describe("ChildSpec Hash", func() {
 				UserSpec:   config.UserSpec{Config: "config"},
 			}
 
-			Expect(spec1.Hash()).NotTo(Equal(spec2.Hash()))
+			hash1, err1 := spec1.Hash()
+			Expect(err1).NotTo(HaveOccurred())
+			hash2, err2 := spec2.Hash()
+			Expect(err2).NotTo(HaveOccurred())
+			Expect(hash1).NotTo(Equal(hash2))
 		})
 
 		It("should produce different hashes when UserSpec.Config changes", func() {
@@ -239,7 +251,11 @@ var _ = Describe("ChildSpec Hash", func() {
 				UserSpec:   config.UserSpec{Config: "config-b"},
 			}
 
-			Expect(spec1.Hash()).NotTo(Equal(spec2.Hash()))
+			hash1, err1 := spec1.Hash()
+			Expect(err1).NotTo(HaveOccurred())
+			hash2, err2 := spec2.Hash()
+			Expect(err2).NotTo(HaveOccurred())
+			Expect(hash1).NotTo(Equal(hash2))
 		})
 
 		It("should produce different hashes when ChildStartStates changes", func() {
@@ -257,7 +273,11 @@ var _ = Describe("ChildSpec Hash", func() {
 				ChildStartStates: []string{"Running", "TryingToStart"},
 			}
 
-			Expect(spec1.Hash()).NotTo(Equal(spec2.Hash()))
+			hash1, err1 := spec1.Hash()
+			Expect(err1).NotTo(HaveOccurred())
+			hash2, err2 := spec2.Hash()
+			Expect(err2).NotTo(HaveOccurred())
+			Expect(hash1).NotTo(Equal(hash2))
 		})
 
 		It("should produce a 16-character hex string", func() {
@@ -267,7 +287,8 @@ var _ = Describe("ChildSpec Hash", func() {
 				UserSpec:   config.UserSpec{Config: "config"},
 			}
 
-			hash := spec.Hash()
+			hash, err := spec.Hash()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(hash).To(HaveLen(16))
 			// All characters should be hex digits
 			for _, c := range hash {

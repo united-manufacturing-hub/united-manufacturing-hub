@@ -197,6 +197,7 @@ func (m *mockState) String() string { return "MockState" }
 func (m *mockState) LifecyclePhase() config.LifecyclePhase { return config.PhaseRunningHealthy }
 
 type mockStore struct {
+	mu           sync.RWMutex
 	identity     map[string]map[string]persistence.Document // workerType -> id -> document
 	desired      map[string]map[string]persistence.Document
 	observed     map[string]map[string]persistence.Document
@@ -215,6 +216,9 @@ func newMockStore() *mockStore {
 }
 
 func (m *mockStore) SaveIdentity(ctx context.Context, workerType string, id string, identity persistence.Document) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	if m.identity[workerType] == nil {
 		m.identity[workerType] = make(map[string]persistence.Document)
 	}
@@ -225,6 +229,9 @@ func (m *mockStore) SaveIdentity(ctx context.Context, workerType string, id stri
 }
 
 func (m *mockStore) LoadIdentity(ctx context.Context, workerType string, id string) (persistence.Document, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
 	if m.identity[workerType] == nil || m.identity[workerType][id] == nil {
 		return nil, persistence.ErrNotFound
 	}
@@ -237,6 +244,9 @@ func (m *mockStore) SaveDesired(ctx context.Context, workerType string, id strin
 		return true, m.saveDesired(ctx, workerType, id, desired)
 	}
 
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	if m.desired[workerType] == nil {
 		m.desired[workerType] = make(map[string]persistence.Document)
 	}
@@ -247,6 +257,9 @@ func (m *mockStore) SaveDesired(ctx context.Context, workerType string, id strin
 }
 
 func (m *mockStore) LoadDesired(ctx context.Context, workerType string, id string) (interface{}, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
 	if m.desired[workerType] == nil || m.desired[workerType][id] == nil {
 		return nil, persistence.ErrNotFound
 	}
@@ -275,17 +288,20 @@ func (m *mockStore) SaveObserved(ctx context.Context, workerType string, id stri
 		return m.saveObserved(ctx, workerType, id, observed)
 	}
 
-	if m.observed[workerType] == nil {
-		m.observed[workerType] = make(map[string]persistence.Document)
-	}
-
-	// Convert observed to persistence.Document if it isn't already
+	// Convert observed to persistence.Document if it isn't already (do before lock)
 	var doc persistence.Document
 	if observedDoc, ok := observed.(persistence.Document); ok {
 		doc = observedDoc
 	} else {
 		// For non-Document types (like fsmv2.ObservedState), create a simple wrapper
 		doc = persistence.Document{"data": observed, "collectedAt": time.Now()}
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if m.observed[workerType] == nil {
+		m.observed[workerType] = make(map[string]persistence.Document)
 	}
 
 	m.observed[workerType][id] = doc
@@ -298,6 +314,9 @@ func (m *mockStore) SaveObserved(ctx context.Context, workerType string, id stri
 }
 
 func (m *mockStore) LoadObserved(ctx context.Context, workerType string, id string) (interface{}, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
 	if m.observed[workerType] == nil || m.observed[workerType][id] == nil {
 		return nil, persistence.ErrNotFound
 	}
@@ -325,6 +344,9 @@ func (m *mockStore) LoadSnapshot(ctx context.Context, workerType string, id stri
 	if m.loadSnapshot != nil {
 		return m.loadSnapshot(ctx, workerType, id)
 	}
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 
 	// Return default snapshot with identity
 	identity := persistence.Document{

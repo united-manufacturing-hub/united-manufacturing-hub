@@ -196,8 +196,10 @@ func init() {
 				if logger != nil {
 					logger.Errorw("helloworld_worker_creation_failed", "error", err)
 				}
+
 				return nil
 			}
+
 			return worker
 		},
 		// Supervisor factory: creates supervisor instances

@@ -171,13 +171,16 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 	currentStateForPhase := workerCtx.currentState
 	workerCtx.mu.RUnlock()
 
-	var lifecyclePhase config.LifecyclePhase
-	var observedStateName string
+	var (
+		lifecyclePhase    config.LifecyclePhase
+		observedStateName string
+	)
 
 	if currentStateForPhase != nil {
 		lifecyclePhase = currentStateForPhase.LifecyclePhase()
 		// Construct observed state name: phase.Prefix() + lowercase(state.String())
 		suffix := strings.ToLower(currentStateForPhase.String())
+
 		prefix := lifecyclePhase.Prefix()
 		if lifecyclePhase == config.PhaseStopped {
 			observedStateName = prefix // "stopped" has no suffix
@@ -245,10 +248,12 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 
 	// Check and reset restartCount under lock to prevent data races
 	s.mu.Lock()
+
 	restartCount := s.collectorHealth.restartCount
 	if restartCount > 0 {
 		s.collectorHealth.restartCount = 0
 	}
+
 	s.mu.Unlock()
 
 	if restartCount > 0 {
@@ -436,6 +441,20 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 		// Exposed via FrameworkMetrics and GetCurrentStateNameAndReason
 		workerCtx.currentStateReason = result.Reason
 		workerCtx.stateEnteredAt = now
+
+		// Update cached lifecycle phase and observed state name AFTER state transition.
+		// CRITICAL: This must happen AFTER currentState is updated, not before.
+		// Parent supervisors call GetLifecyclePhase() which returns lastLifecyclePhase.
+		// If we update this before the transition, parent sees stale health status.
+		newPhase := result.State.LifecyclePhase()
+		newSuffix := strings.ToLower(result.State.String())
+		newPrefix := newPhase.Prefix()
+		if newPhase == config.PhaseStopped {
+			workerCtx.lastObservedStateName = newPrefix // "stopped" has no suffix
+		} else {
+			workerCtx.lastObservedStateName = newPrefix + newSuffix
+		}
+		workerCtx.lastLifecyclePhase = newPhase
 
 		workerCtx.mu.Unlock()
 
@@ -759,7 +778,13 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 		specsToValidate := make([]config.ChildSpec, 0)
 
 		for _, spec := range childrenSpecs {
-			hash := spec.Hash()
+			hash, err := spec.Hash()
+			if err != nil {
+				// If hashing fails, always validate to be safe
+				s.logger.Warnw("spec_hash_failed", "spec", spec.Name, "error", err)
+				specsToValidate = append(specsToValidate, spec)
+				continue
+			}
 			if cachedHash, exists := s.validatedSpecHashes[spec.Name]; !exists || cachedHash != hash {
 				specsToValidate = append(specsToValidate, spec)
 			}
@@ -775,7 +800,13 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 
 			// Update cache for validated specs
 			for _, spec := range specsToValidate {
-				s.validatedSpecHashes[spec.Name] = spec.Hash()
+				hash, err := spec.Hash()
+				if err != nil {
+					// Skip caching if hash fails - will revalidate next time
+					s.logger.Warnw("spec_hash_cache_failed", "spec", spec.Name, "error", err)
+					continue
+				}
+				s.validatedSpecHashes[spec.Name] = hash
 			}
 
 			s.logTrace("child_specs_validated",
@@ -1611,4 +1642,3 @@ func (s *Supervisor[TObserved, TDesired]) computeMappedState(parentState string,
 
 	return config.DesiredStateStopped
 }
-

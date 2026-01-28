@@ -49,7 +49,7 @@ children:
           should_fail: true
           max_failures: 3
           failure_cycles: 2
-          recovery_delay_ms: 500
+          recovery_delay_observations: 3
       variables:
         user:
           IP: "127.0.0.1"

@@ -196,6 +196,7 @@ func (c *Collector[TObserved]) Restart() {
 	// Stop the current collector goroutine
 	stopCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+
 	c.Stop(stopCtx)
 
 	// Reset state so we can start again (Stop sets state to stopped)

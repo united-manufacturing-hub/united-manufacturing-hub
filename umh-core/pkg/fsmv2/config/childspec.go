@@ -259,8 +259,9 @@ func (c ChildSpec) Clone() ChildSpec {
 // The hash is computed from all relevant fields: Name, WorkerType, UserSpec,
 // ChildStartStates, and Dependencies (excluding any unexported fields).
 //
-// Returns a hex-encoded FNV-1a 64-bit hash string (16 characters).
-func (c ChildSpec) Hash() string {
+// Returns a hex-encoded FNV-1a 64-bit hash string (16 characters) and an error
+// if Variables cannot be marshaled to JSON.
+func (c ChildSpec) Hash() (string, error) {
 	h := fnv.New64a()
 
 	// Hash name and worker type
@@ -270,9 +271,11 @@ func (c ChildSpec) Hash() string {
 	// Hash UserSpec (config string + variables)
 	h.Write([]byte(c.UserSpec.Config))
 
-	if varsBytes, err := json.Marshal(c.UserSpec.Variables); err == nil {
-		h.Write(varsBytes)
+	varsBytes, err := json.Marshal(c.UserSpec.Variables)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal Variables for hashing: %w", err)
 	}
+	h.Write(varsBytes)
 
 	// Hash ChildStartStates
 	for _, state := range c.ChildStartStates {
@@ -282,7 +285,7 @@ func (c ChildSpec) Hash() string {
 	// Dependencies contain runtime objects (channels, etc.) that can't be meaningfully hashed,
 	// so we skip them. Changes to dependencies don't require re-validation anyway.
 
-	return fmt.Sprintf("%016x", h.Sum64())
+	return fmt.Sprintf("%016x", h.Sum64()), nil
 }
 
 // GetMappedChildState returns the desired state for this child based on the parent's current FSM state.
