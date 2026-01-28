@@ -32,9 +32,12 @@ type DegradedState struct {
 	BaseCommunicatorState
 }
 
+func (s *DegradedState) LifecyclePhase() config.LifecyclePhase {
+	return config.PhaseRunningDegraded
+}
+
 func (s *DegradedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := helpers.ConvertSnapshot[snapshot.CommunicatorObservedState, *snapshot.CommunicatorDesiredState](snapAny)
-	snap.Observed.State = config.MakeState(config.PrefixRunning, "degraded")
 
 	if snap.Desired.IsShutdownRequested() {
 		return fsmv2.Result[any, any](&StoppedState{}, fsmv2.SignalNone, nil, "Shutdown requested during degraded state")

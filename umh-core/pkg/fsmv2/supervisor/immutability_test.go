@@ -21,6 +21,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 )
 
 var _ = Describe("Snapshot Immutability (I9)", func() {
@@ -144,6 +145,10 @@ func (s *snapshotMutatingState) Next(snapshot any) fsmv2.NextResult[any, any] {
 
 func (s *snapshotMutatingState) String() string { return "SnapshotMutatingState" }
 
+func (s *snapshotMutatingState) LifecyclePhase() config.LifecyclePhase {
+	return config.PhaseRunningHealthy
+}
+
 type identityMutatingState struct{}
 
 func (s *identityMutatingState) Next(snapshot any) fsmv2.NextResult[any, any] {
@@ -154,6 +159,10 @@ func (s *identityMutatingState) Next(snapshot any) fsmv2.NextResult[any, any] {
 }
 
 func (s *identityMutatingState) String() string { return "IdentityMutatingState" }
+
+func (s *identityMutatingState) LifecyclePhase() config.LifecyclePhase {
+	return config.PhaseRunningHealthy
+}
 
 type aggressiveMutatingState struct{}
 
@@ -167,3 +176,7 @@ func (s *aggressiveMutatingState) Next(snapshot any) fsmv2.NextResult[any, any] 
 }
 
 func (s *aggressiveMutatingState) String() string { return "AggressiveMutatingState" }
+
+func (s *aggressiveMutatingState) LifecyclePhase() config.LifecyclePhase {
+	return config.PhaseRunningHealthy
+}

@@ -27,9 +27,12 @@ type TryingToStopState struct {
 	BaseChildState
 }
 
+func (s *TryingToStopState) LifecyclePhase() config.LifecyclePhase {
+	return config.PhaseStopping
+}
+
 func (s *TryingToStopState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := helpers.ConvertSnapshot[snapshot.ExamplechildObservedState, *snapshot.ExamplechildDesiredState](snapAny)
-	snap.Observed.State = config.MakeState(config.PrefixTryingToStop, "connection")
 
 	// Child worker is "stopped" when connection health shows not healthy (disconnected)
 	// After DisconnectAction executes and collector runs, ConnectionHealth will show "no connection"

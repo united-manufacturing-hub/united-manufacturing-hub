@@ -29,9 +29,12 @@ type TryingToStopState struct {
 	BaseParentState
 }
 
+func (s *TryingToStopState) LifecyclePhase() config.LifecyclePhase {
+	return config.PhaseStopping
+}
+
 func (s *TryingToStopState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := helpers.ConvertSnapshot[snapshot.ExampleparentObservedState, *snapshot.ExampleparentDesiredState](snapAny)
-	snap.Observed.State = config.MakeState(config.PrefixTryingToStop, "children")
 
 	if snap.Observed.ID == "" {
 		return fsmv2.Result[any, any](s, fsmv2.SignalNone, &action.StopAction{}, "ID not set, executing StopAction")

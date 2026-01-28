@@ -90,6 +90,12 @@ func (w *FailingWorker) CollectObservedState(ctx context.Context) (fsmv2.Observe
 
 	deps := w.GetDependencies()
 
+	// IMPORTANT: Increment observation counter at START of collection when recovery delay is active.
+	// This ensures deterministic counting for tests.
+	if deps.ShouldDelayRecovery() {
+		deps.IncrementObservationsSinceFailure()
+	}
+
 	connectionHealth := "no connection"
 
 	if deps.IsConnected() {
@@ -97,15 +103,17 @@ func (w *FailingWorker) CollectObservedState(ctx context.Context) (fsmv2.Observe
 	}
 
 	observed := snapshot.ExamplefailingObservedState{
-		ID:                    w.identity.ID,
-		CollectedAt:           time.Now(),
-		ConnectionHealth:      connectionHealth,
-		ConnectAttempts:       deps.GetAttempts(),
-		RestartAfterFailures:  deps.GetRestartAfterFailures(),
-		AllCyclesComplete:     deps.AllCyclesComplete(),
-		TicksInConnectedState: deps.GetTicksInConnected(),
-		CurrentCycle:          deps.GetCurrentCycle(),
-		TotalCycles:           deps.GetFailureCycles(),
+		ID:                       w.identity.ID,
+		CollectedAt:              time.Now(),
+		ConnectionHealth:         connectionHealth,
+		ConnectAttempts:          deps.GetAttempts(),
+		RestartAfterFailures:     deps.GetRestartAfterFailures(),
+		AllCyclesComplete:        deps.AllCyclesComplete(),
+		TicksInConnectedState:    deps.GetTicksInConnected(),
+		CurrentCycle:             deps.GetCurrentCycle(),
+		TotalCycles:              deps.GetFailureCycles(),
+		RecoveryDelayActive:      deps.ShouldDelayRecovery(),
+		ObservationsSinceFailure: deps.GetObservationsSinceFailure(),
 	}
 	observed.ShouldFail = deps.GetShouldFail()
 
@@ -146,6 +154,8 @@ func (w *FailingWorker) updateDependenciesFromSpec(spec interface{}) {
 	deps.SetMaxFailures(parsed.GetMaxFailures())
 	deps.SetRestartAfterFailures(parsed.GetRestartAfterFailures())
 	deps.SetFailureCycles(parsed.GetFailureCycles())
+	deps.SetRecoveryDelayMs(parsed.RecoveryDelayMs)
+	deps.SetRecoveryDelayObservations(parsed.GetRecoveryDelayObservations())
 }
 
 // GetInitialState returns the state the FSM should start in.

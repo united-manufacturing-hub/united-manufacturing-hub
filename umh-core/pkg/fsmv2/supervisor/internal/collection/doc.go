@@ -139,4 +139,40 @@
 //   - Layer 4: If all else fails -> trigger restart
 //
 // See supervisor/health/doc.go for the full freshness detection strategy.
+//
+// # Action-triggered observation
+//
+// The collector runs observations in two scenarios:
+//
+// 1. Periodic: Every ObservationInterval (default ~1 second) for regular monitoring.
+//    This ensures the FSM always has relatively fresh state even when idle.
+//
+// 2. On-demand: Immediately after an action completes. When a state returns an
+//    action, the FSM waits for fresh observation before re-evaluating. The action
+//    executor calls TriggerNow() when done, which signals the collector to collect
+//    immediately instead of waiting for the next periodic interval.
+//
+// This design ensures the FSM sees fresh state after any action that might modify
+// the external world (connecting to devices, writing data, etc.).
+//
+// # TriggerNow vs Restart
+//
+// TriggerNow() sends a non-blocking signal to trigger immediate collection.
+// Multiple calls coalesce into a single collection (buffered channel, capacity 1).
+// This is the normal-operation method called by OnActionComplete.
+//
+// Restart() is an emergency recovery mechanism that actually stops and restarts
+// the collector goroutine. Use this when the collector appears hung (not responding
+// to TriggerNow signals). This is a last resort - investigate why the collector hung.
+//
+// # Action-observation gating
+//
+// When a state returns an action:
+//   1. FSM sets an "action gate" and waits for fresh observation
+//   2. Action executes asynchronously in worker pool
+//   3. Action completes → OnActionComplete callback → TriggerNow()
+//   4. Collector wakes up, collects fresh observation
+//   5. Fresh observation unblocks the gate, FSM re-evaluates state
+//
+// This guarantees the FSM always has post-action state before deciding next transition.
 package collection

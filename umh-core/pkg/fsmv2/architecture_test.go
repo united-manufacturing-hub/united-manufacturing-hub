@@ -497,6 +497,20 @@ var _ = Describe("FSMv2 Architecture Validation", func() {
 				}
 			})
 		})
+
+		Describe("No Observed State Mutation (Invariant: Pure Functions)", func() {
+			It("should not mutate snap.Observed.* fields in Next() methods", func() {
+				violations := validator.ValidateNoObservedStateMutation(getFsmv2Dir())
+				if len(violations) > 0 {
+					message := validator.FormatViolationsWithPattern(
+						"Observed State Mutation Violations",
+						violations,
+						"OBSERVED_STATE_MUTATION",
+					)
+					Fail(message)
+				}
+			})
+		})
 	})
 })
 

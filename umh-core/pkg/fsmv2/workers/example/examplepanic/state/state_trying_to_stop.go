@@ -26,9 +26,12 @@ type TryingToStopState struct {
 	BaseExamplepanicState
 }
 
+func (s *TryingToStopState) LifecyclePhase() config.LifecyclePhase {
+	return config.PhaseStopping
+}
+
 func (s *TryingToStopState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := helpers.ConvertSnapshot[snapshot.ExamplepanicObservedState, *snapshot.ExamplepanicDesiredState](snapAny)
-	snap.Observed.State = config.MakeState(config.PrefixTryingToStop, "connection")
 
 	if snap.Observed.ConnectionHealth == "no connection" {
 		return fsmv2.Result[any, any](&StoppedState{}, fsmv2.SignalNone, nil, "Connection closed, transitioning to Stopped")

@@ -38,9 +38,12 @@ import (
 type SyncingState struct {
 }
 
+func (s *SyncingState) LifecyclePhase() config.LifecyclePhase {
+	return config.PhaseRunningHealthy
+}
+
 func (s *SyncingState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := helpers.ConvertSnapshot[snapshot.CommunicatorObservedState, *snapshot.CommunicatorDesiredState](snapAny)
-	snap.Observed.State = config.MakeState(config.PrefixRunning, "syncing")
 
 	if snap.Desired.IsShutdownRequested() {
 		return fsmv2.Result[any, any](&StoppedState{}, fsmv2.SignalNone, nil, "Shutdown requested during sync")

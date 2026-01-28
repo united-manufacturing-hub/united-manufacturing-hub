@@ -157,30 +157,30 @@ var _ = Describe("State Functions", func() {
 		})
 	})
 
-	Describe("GetLifecyclePhase", func() {
+	Describe("GetLifecyclePrefix", func() {
 		It("returns 'stopped' for stopped state", func() {
-			Expect(config.GetLifecyclePhase("stopped")).To(Equal(config.PrefixStopped))
+			Expect(config.GetLifecyclePrefix("stopped")).To(Equal(config.PrefixStopped))
 		})
 
 		It("returns PrefixTryingToStart for trying_to_start_* states", func() {
-			Expect(config.GetLifecyclePhase("trying_to_start_connecting")).To(Equal(config.PrefixTryingToStart))
-			Expect(config.GetLifecyclePhase("trying_to_start_authenticating")).To(Equal(config.PrefixTryingToStart))
+			Expect(config.GetLifecyclePrefix("trying_to_start_connecting")).To(Equal(config.PrefixTryingToStart))
+			Expect(config.GetLifecyclePrefix("trying_to_start_authenticating")).To(Equal(config.PrefixTryingToStart))
 		})
 
 		It("returns PrefixRunning for running_* states", func() {
-			Expect(config.GetLifecyclePhase("running_connected")).To(Equal(config.PrefixRunning))
-			Expect(config.GetLifecyclePhase("running_syncing")).To(Equal(config.PrefixRunning))
+			Expect(config.GetLifecyclePrefix("running_connected")).To(Equal(config.PrefixRunning))
+			Expect(config.GetLifecyclePrefix("running_syncing")).To(Equal(config.PrefixRunning))
 		})
 
 		It("returns PrefixTryingToStop for trying_to_stop_* states", func() {
-			Expect(config.GetLifecyclePhase("trying_to_stop_disconnecting")).To(Equal(config.PrefixTryingToStop))
-			Expect(config.GetLifecyclePhase("trying_to_stop_cleanup")).To(Equal(config.PrefixTryingToStop))
+			Expect(config.GetLifecyclePrefix("trying_to_stop_disconnecting")).To(Equal(config.PrefixTryingToStop))
+			Expect(config.GetLifecyclePrefix("trying_to_stop_cleanup")).To(Equal(config.PrefixTryingToStop))
 		})
 
 		It("returns empty string for invalid states", func() {
-			Expect(config.GetLifecyclePhase("")).To(Equal(""))
-			Expect(config.GetLifecyclePhase("invalid")).To(Equal(""))
-			Expect(config.GetLifecyclePhase("running")).To(Equal("")) // Missing underscore suffix
+			Expect(config.GetLifecyclePrefix("")).To(Equal(""))
+			Expect(config.GetLifecyclePrefix("invalid")).To(Equal(""))
+			Expect(config.GetLifecyclePrefix("running")).To(Equal("")) // Missing underscore suffix
 		})
 	})
 
@@ -225,6 +225,105 @@ var _ = Describe("State Functions", func() {
 		It("returns false for stable states", func() {
 			Expect(config.IsTransitioning("stopped")).To(BeFalse())
 			Expect(config.IsTransitioning("running_connected")).To(BeFalse())
+		})
+	})
+
+	Describe("LifecyclePhase enum", func() {
+		Describe("Prefix()", func() {
+			It("returns correct prefix for each phase", func() {
+				Expect(config.PhaseUnknown.Prefix()).To(Equal("unknown_"))
+				Expect(config.PhaseStopped.Prefix()).To(Equal("stopped"))
+				Expect(config.PhaseStarting.Prefix()).To(Equal("starting_"))
+				Expect(config.PhaseRunningHealthy.Prefix()).To(Equal("running_healthy_"))
+				Expect(config.PhaseRunningDegraded.Prefix()).To(Equal("running_degraded_"))
+				Expect(config.PhaseStopping.Prefix()).To(Equal("stopping_"))
+			})
+		})
+
+		Describe("String()", func() {
+			It("returns human-readable names", func() {
+				Expect(config.PhaseUnknown.String()).To(Equal("Unknown"))
+				Expect(config.PhaseStopped.String()).To(Equal("Stopped"))
+				Expect(config.PhaseStarting.String()).To(Equal("Starting"))
+				Expect(config.PhaseRunningHealthy.String()).To(Equal("RunningHealthy"))
+				Expect(config.PhaseRunningDegraded.String()).To(Equal("RunningDegraded"))
+				Expect(config.PhaseStopping.String()).To(Equal("Stopping"))
+			})
+		})
+
+		Describe("IsHealthy()", func() {
+			It("returns true ONLY for PhaseRunningHealthy", func() {
+				Expect(config.PhaseRunningHealthy.IsHealthy()).To(BeTrue())
+			})
+
+			It("returns false for all other phases", func() {
+				Expect(config.PhaseUnknown.IsHealthy()).To(BeFalse())
+				Expect(config.PhaseStopped.IsHealthy()).To(BeFalse())
+				Expect(config.PhaseStarting.IsHealthy()).To(BeFalse())
+				Expect(config.PhaseRunningDegraded.IsHealthy()).To(BeFalse())
+				Expect(config.PhaseStopping.IsHealthy()).To(BeFalse())
+			})
+
+			It("returns false for PhaseRunningDegraded (operational but NOT healthy)", func() {
+				Expect(config.PhaseRunningDegraded.IsHealthy()).To(BeFalse())
+				Expect(config.PhaseRunningDegraded.IsOperational()).To(BeTrue())
+			})
+		})
+
+		Describe("IsOperational()", func() {
+			It("returns true for both running phases", func() {
+				Expect(config.PhaseRunningHealthy.IsOperational()).To(BeTrue())
+				Expect(config.PhaseRunningDegraded.IsOperational()).To(BeTrue())
+			})
+
+			It("returns false for non-running phases", func() {
+				Expect(config.PhaseUnknown.IsOperational()).To(BeFalse())
+				Expect(config.PhaseStopped.IsOperational()).To(BeFalse())
+				Expect(config.PhaseStarting.IsOperational()).To(BeFalse())
+				Expect(config.PhaseStopping.IsOperational()).To(BeFalse())
+			})
+		})
+
+		Describe("IsTransitioning()", func() {
+			It("returns true for starting and stopping phases", func() {
+				Expect(config.PhaseStarting.IsTransitioning()).To(BeTrue())
+				Expect(config.PhaseStopping.IsTransitioning()).To(BeTrue())
+			})
+
+			It("returns false for stable phases", func() {
+				Expect(config.PhaseUnknown.IsTransitioning()).To(BeFalse())
+				Expect(config.PhaseStopped.IsTransitioning()).To(BeFalse())
+				Expect(config.PhaseRunningHealthy.IsTransitioning()).To(BeFalse())
+				Expect(config.PhaseRunningDegraded.IsTransitioning()).To(BeFalse())
+			})
+		})
+
+		Describe("IsStopped()", func() {
+			It("returns true only for PhaseStopped", func() {
+				Expect(config.PhaseStopped.IsStopped()).To(BeTrue())
+			})
+
+			It("returns false for all other phases", func() {
+				Expect(config.PhaseUnknown.IsStopped()).To(BeFalse())
+				Expect(config.PhaseStarting.IsStopped()).To(BeFalse())
+				Expect(config.PhaseRunningHealthy.IsStopped()).To(BeFalse())
+				Expect(config.PhaseRunningDegraded.IsStopped()).To(BeFalse())
+				Expect(config.PhaseStopping.IsStopped()).To(BeFalse())
+			})
+		})
+
+		Describe("IsDegraded()", func() {
+			It("returns true only for PhaseRunningDegraded", func() {
+				Expect(config.PhaseRunningDegraded.IsDegraded()).To(BeTrue())
+			})
+
+			It("returns false for all other phases", func() {
+				Expect(config.PhaseUnknown.IsDegraded()).To(BeFalse())
+				Expect(config.PhaseStopped.IsDegraded()).To(BeFalse())
+				Expect(config.PhaseStarting.IsDegraded()).To(BeFalse())
+				Expect(config.PhaseRunningHealthy.IsDegraded()).To(BeFalse())
+				Expect(config.PhaseStopping.IsDegraded()).To(BeFalse())
+			})
 		})
 	})
 })

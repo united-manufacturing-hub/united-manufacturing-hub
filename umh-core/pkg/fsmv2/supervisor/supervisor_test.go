@@ -155,6 +155,8 @@ func (m *mockState) Next(_ any) fsmv2.NextResult[any, any] {
 	return fsmv2.Result[any, any](m, fsmv2.SignalNone, nil, m.reason)
 }
 
+func (m *mockState) LifecyclePhase() config.LifecyclePhase { return config.PhaseRunningHealthy }
+
 // internalMockWorkerWithChildren is a mock worker that returns configurable ChildSpecs.
 type internalMockWorkerWithChildren struct {
 	identity      deps.Identity

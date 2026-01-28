@@ -603,6 +603,31 @@ return fmt.Errorf("failed after %d retries", count)
 return fmt.Errorf("connection to %s:%d failed", host, port)`,
 		ReferenceFile: "pkg/fsmv2/ARCHITECTURE.md",
 	},
+	"OBSERVED_STATE_MUTATION": {
+		Name: "No Observed State Mutation (Pure Functions)",
+		Why: `Next() methods must NEVER mutate snap.Observed.* fields.
+WHY: The FSMv2 architecture requires state transitions to be pure functions:
+1. Same input (snapshot) must ALWAYS produce the same output (state, signal, action)
+2. Mutations to ObservedState break referential transparency
+3. ObservedState should ONLY be written by the collector (CollectObservedState)
+4. Mutations in Next() cause race conditions and non-deterministic behavior
+5. Testing becomes impossible when state can be modified mid-transition
+
+Observation data flows: Dependencies → CollectObservedState → ObservedState → Next() (read-only)
+State changes flow: Next() returns new state → supervisor updates current state`,
+		CorrectCode: `func (s *MyState) Next(snapAny any) (...) {
+    snap := helpers.ConvertSnapshot[...](snapAny)
+
+    // CORRECT: Read from Observed
+    if snap.Observed.ConnectionHealth != "healthy" {
+        return fsmv2.Result(...)
+    }
+
+    // WRONG: Mutate Observed (causes race conditions)
+    // snap.Observed.State = "connecting"  // NEVER DO THIS
+}`,
+		ReferenceFile: "pkg/fsmv2/ARCHITECTURE.md",
+	},
 }
 
 // GetPattern returns pattern info for a violation type.

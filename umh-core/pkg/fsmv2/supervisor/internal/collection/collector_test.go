@@ -57,8 +57,8 @@ var _ = Describe("Collector", func() {
 		})
 	})
 
-	Context("when restarting collector", func() {
-		It("should stop old loop and start new one", func() {
+	Context("when triggering immediate collection", func() {
+		It("should signal observation loop to collect immediately", func() {
 			worker := &supervisor.TestWorker{Observed: supervisor.CreateTestObservedStateWithID("test-worker")}
 			collector := collection.NewCollector[supervisor.TestObservedState](collection.CollectorConfig[supervisor.TestObservedState]{
 				Worker:              worker,
@@ -76,7 +76,7 @@ var _ = Describe("Collector", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(collector.IsRunning()).To(BeTrue())
 
-			collector.Restart()
+			collector.TriggerNow()
 
 			Expect(collector.IsRunning()).To(BeTrue())
 
@@ -86,7 +86,7 @@ var _ = Describe("Collector", func() {
 		})
 	})
 
-	Context("when goroutine doesn't exit (invariant I6 violation)", func() {
+	Context("when goroutine doesn't exit during TriggerNow (invariant I6 violation)", func() {
 		It("should panic with clear message", func() {
 			collector := &testCollectorWithHangingLoop{}
 
@@ -99,7 +99,7 @@ var _ = Describe("Collector", func() {
 			time.Sleep(50 * time.Millisecond)
 
 			Expect(func() {
-				collector.Restart()
+				collector.TriggerNow()
 			}).To(Panic())
 		})
 	})
@@ -131,7 +131,7 @@ var _ = Describe("Collector", func() {
 			time.Sleep(100 * time.Millisecond)
 		})
 
-		It("should handle Restart() gracefully when called before Start()", func() {
+		It("should handle TriggerNow() gracefully when called before Start()", func() {
 			collector := collection.NewCollector[supervisor.TestObservedState](collection.CollectorConfig[supervisor.TestObservedState]{
 				Worker:              &supervisor.TestWorker{},
 				Identity:            supervisor.TestIdentity(),
@@ -142,7 +142,7 @@ var _ = Describe("Collector", func() {
 			})
 
 			// Should not panic - logs error and returns
-			collector.Restart()
+			collector.TriggerNow()
 		})
 
 		It("should handle Stop() gracefully when called before Start()", func() {
@@ -200,6 +200,55 @@ var _ = Describe("Collector", func() {
 			cancel()
 			time.Sleep(100 * time.Millisecond)
 			Expect(collector.IsRunning()).To(BeFalse())
+		})
+	})
+
+	Context("when calling Restart()", func() {
+		It("should stop and restart the collector goroutine", func() {
+			worker := &supervisor.TestWorker{Observed: supervisor.CreateTestObservedStateWithID("test-worker")}
+			collector := collection.NewCollector[supervisor.TestObservedState](collection.CollectorConfig[supervisor.TestObservedState]{
+				Worker:              worker,
+				Identity:            supervisor.TestIdentity(),
+				Store:               supervisor.CreateTestTriangularStore(),
+				Logger:              zap.NewNop().Sugar(),
+				ObservationInterval: 1 * time.Second,
+				ObservationTimeout:  3 * time.Second,
+			})
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			err := collector.Start(ctx)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(collector.IsRunning()).To(BeTrue())
+
+			// Restart should stop and start the collector goroutine
+			collector.Restart()
+
+			// After restart, collector should still be running
+			Expect(collector.IsRunning()).To(BeTrue())
+
+			// TriggerNow should still work after Restart
+			collector.TriggerNow()
+			Expect(collector.IsRunning()).To(BeTrue())
+
+			cancel()
+			time.Sleep(100 * time.Millisecond)
+			Expect(collector.IsRunning()).To(BeFalse())
+		})
+
+		It("should handle Restart() gracefully when called before Start()", func() {
+			collector := collection.NewCollector[supervisor.TestObservedState](collection.CollectorConfig[supervisor.TestObservedState]{
+				Worker:              &supervisor.TestWorker{},
+				Identity:            supervisor.TestIdentity(),
+				Store:               supervisor.CreateTestTriangularStore(),
+				Logger:              zap.NewNop().Sugar(),
+				ObservationInterval: 1 * time.Second,
+				ObservationTimeout:  3 * time.Second,
+			})
+
+			// Should not panic - logs error and returns
+			collector.Restart()
 		})
 	})
 
@@ -284,7 +333,7 @@ func (c *testCollectorWithHangingLoop) IsRunning() bool {
 	return true
 }
 
-func (c *testCollectorWithHangingLoop) Restart() {
+func (c *testCollectorWithHangingLoop) TriggerNow() {
 	if c.cancel != nil {
 		c.cancel()
 	}

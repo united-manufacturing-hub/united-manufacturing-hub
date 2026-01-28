@@ -29,6 +29,13 @@ type FailingUserSpec struct {
 	FailureCycles int `json:"failure_cycles" yaml:"failure_cycles"`
 	// RestartAfterFailures: triggers SignalNeedsRestart after this many failures (0 = disabled).
 	RestartAfterFailures int `json:"restart_after_failures" yaml:"restart_after_failures"`
+	// RecoveryDelayMs: time in milliseconds to wait after a failure before retrying.
+	// This keeps the worker in the unhealthy "TryingToConnect" state long enough
+	// for parent supervisors to observe it. 0 = no delay (immediate retry).
+	RecoveryDelayMs int `json:"recovery_delay_ms" yaml:"recovery_delay_ms"`
+	// RecoveryDelayObservations: number of observation cycles to wait after failure.
+	// This is preferred over RecoveryDelayMs for deterministic testing.
+	RecoveryDelayObservations int `json:"recovery_delay_observations" yaml:"recovery_delay_observations"`
 }
 
 // GetMaxFailures returns the configured max failures, defaulting to 3.
@@ -52,4 +59,9 @@ func (s *FailingUserSpec) GetFailureCycles() int {
 // GetRestartAfterFailures returns the configured restart threshold (0 = disabled).
 func (s *FailingUserSpec) GetRestartAfterFailures() int {
 	return s.RestartAfterFailures
+}
+
+// GetRecoveryDelayObservations returns the configured number of observation cycles to wait after failure.
+func (s *FailingUserSpec) GetRecoveryDelayObservations() int {
+	return s.RecoveryDelayObservations
 }

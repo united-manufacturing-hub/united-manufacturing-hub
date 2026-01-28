@@ -27,9 +27,12 @@ type TryingToConnectState struct {
 	BaseFailingState
 }
 
+func (s *TryingToConnectState) LifecyclePhase() config.LifecyclePhase {
+	return config.PhaseStarting
+}
+
 func (s *TryingToConnectState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := helpers.ConvertSnapshot[snapshot.ExamplefailingObservedState, *snapshot.ExamplefailingDesiredState](snapAny)
-	snap.Observed.State = config.MakeState(config.PrefixTryingToStart, "connection")
 
 	if snap.Observed.IsStopRequired() {
 		return fsmv2.Result[any, any](&TryingToStopState{}, fsmv2.SignalNone, nil, "stop required, transitioning to stop state")
@@ -42,6 +45,16 @@ func (s *TryingToConnectState) Next(snapAny any) fsmv2.NextResult[any, any] {
 
 	if snap.Observed.ConnectionHealth == "healthy" {
 		return fsmv2.Result[any, any](&ConnectedState{}, fsmv2.SignalNone, nil, "connection established successfully")
+	}
+
+	// Check if we should delay before retrying (recovery delay after failure).
+	// This keeps the worker in the unhealthy state long enough for parents to observe.
+	// IMPORTANT: Return an action to trigger observation, which keeps the child visible to the parent.
+	// Without an action, observations only happen every 1 second (DefaultObservationInterval),
+	// which could cause the parent to miss the unhealthy window during recovery delay.
+	if snap.Observed.RecoveryDelayActive {
+		return fsmv2.Result[any, any](s, fsmv2.SignalNone, &action.TriggerObservationAction{},
+			"waiting for recovery delay (triggering observation)")
 	}
 
 	return fsmv2.Result[any, any](s, fsmv2.SignalNone, &action.ConnectAction{}, "attempting to establish connection")

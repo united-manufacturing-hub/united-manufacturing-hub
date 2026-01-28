@@ -227,21 +227,31 @@ func verifyCascadeParentStateTransitions(t *integration.TestLogger) {
 	parentToDegraded := false
 	parentRecoveredToHealthy := false
 
+	// Debug: print all parent state transitions
+	GinkgoWriter.Printf("DEBUG: All parent state transitions:\n")
 	for _, entry := range stateTransitions {
 		worker := ""
+		fromState := ""
 		toState := ""
+		reason := ""
 
 		for _, field := range entry.Context {
 			if field.Key == "worker" {
 				worker = field.String
 			}
-
+			if field.Key == "from_state" {
+				fromState = field.String
+			}
 			if field.Key == "to_state" {
 				toState = field.String
+			}
+			if field.Key == "reason" {
+				reason = field.String
 			}
 		}
 
 		if strings.Contains(worker, "cascade-parent") {
+			GinkgoWriter.Printf("  %s -> %s (reason: %s)\n", fromState, toState, reason)
 			if strings.Contains(toState, "healthy") || toState == "Running" {
 				if parentToDegraded {
 					parentRecoveredToHealthy = true

@@ -28,9 +28,12 @@ type TriggeringNextCycleState struct {
 	BaseFailingState
 }
 
+func (s *TriggeringNextCycleState) LifecyclePhase() config.LifecyclePhase {
+	return config.PhaseRunningDegraded
+}
+
 func (s *TriggeringNextCycleState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := helpers.ConvertSnapshot[snapshot.ExamplefailingObservedState, *snapshot.ExamplefailingDesiredState](snapAny)
-	snap.Observed.State = config.MakeState(config.PrefixRunning, "triggering_next_cycle")
 
 	if snap.Observed.IsStopRequired() {
 		return fsmv2.Result[any, any](&TryingToStopState{}, fsmv2.SignalNone, nil, "stop required, transitioning to stop state")

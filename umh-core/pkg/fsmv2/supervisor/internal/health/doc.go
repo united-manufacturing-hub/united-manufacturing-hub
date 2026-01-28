@@ -135,7 +135,7 @@
 //	// Supervisor tick loop
 //	if !freshnessChecker.Check(snapshot) {
 //	    if freshnessChecker.IsTimeout(snapshot) {
-//	        collector.Restart()
+//	        collector.TriggerNow()
 //	    }
 //	    // Transition to degraded
 //	}

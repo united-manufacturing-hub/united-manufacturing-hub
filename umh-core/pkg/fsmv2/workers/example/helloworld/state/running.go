@@ -16,6 +16,7 @@ package state
 
 import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/helloworld/snapshot"
 )
@@ -23,6 +24,10 @@ import (
 // RunningState represents the worker actively running.
 // This is the steady state - worker stays here until shutdown.
 type RunningState struct{}
+
+func (s *RunningState) LifecyclePhase() config.LifecyclePhase {
+	return config.PhaseRunningHealthy
+}
 
 // Next implements state transition logic for RunningState.
 //

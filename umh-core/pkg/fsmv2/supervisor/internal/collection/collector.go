@@ -148,10 +148,39 @@ func (c *Collector[TObserved]) IsRunning() bool {
 	return c.running
 }
 
-// Restart signals the observation loop to collect immediately.
+// TriggerNow signals the observation loop to collect immediately.
+// This does NOT restart the collector goroutine - it just triggers an early collection.
+// Use Restart() for emergency recovery when the collector goroutine is hung.
+func (c *Collector[TObserved]) TriggerNow() {
+	c.mu.RLock()
+	running := c.state == collectorStateRunning
+	c.mu.RUnlock()
+
+	if !running {
+		c.config.Logger.Errorw("collector_trigger_now_failed",
+			"reason", "not_running",
+			"current_state", c.state.String())
+
+		return
+	}
+
+	c.config.Logger.Infow("collector_trigger_now_requested")
+
+	select {
+	case c.restartChan <- struct{}{}:
+		c.config.Logger.Debugw("collector_trigger_now_signal_sent")
+	default:
+		c.config.Logger.Debugw("collector_trigger_now_already_pending")
+	}
+}
+
+// Restart stops and restarts the collector goroutine.
+// This is an emergency recovery mechanism for hung collectors.
+// Use TriggerNow() for normal on-demand collection triggering.
 func (c *Collector[TObserved]) Restart() {
 	c.mu.RLock()
 	running := c.state == collectorStateRunning
+	parentCtx := c.parentCtx
 	c.mu.RUnlock()
 
 	if !running {
@@ -162,13 +191,30 @@ func (c *Collector[TObserved]) Restart() {
 		return
 	}
 
-	c.config.Logger.Infow("collector_restart_requested")
+	c.config.Logger.Infow("collector_restart_starting")
 
-	select {
-	case c.restartChan <- struct{}{}:
-		c.config.Logger.Debugw("collector_restart_signal_sent")
-	default:
-		c.config.Logger.Debugw("collector_restart_already_pending")
+	// Stop the current collector goroutine
+	stopCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	c.Stop(stopCtx)
+
+	// Reset state so we can start again (Stop sets state to stopped)
+	c.mu.Lock()
+	c.state = collectorStateCreated
+	c.restartChan = make(chan struct{}, 1)
+	c.mu.Unlock()
+
+	// Start again with the original parent context
+	if parentCtx != nil {
+		if err := c.Start(parentCtx); err != nil {
+			c.config.Logger.Errorw("collector_restart_start_failed",
+				"error", err)
+		} else {
+			c.config.Logger.Infow("collector_restart_complete")
+		}
+	} else {
+		c.config.Logger.Errorw("collector_restart_failed",
+			"reason", "no_parent_context")
 	}
 }
 
@@ -249,9 +295,11 @@ func (c *Collector[TObserved]) observationLoop() {
 		c.state = collectorStateStopped
 		c.running = false
 		close(c.goroutineDone)
+		// Read state string while holding lock to avoid race with Restart()
+		finalState := c.state.String()
 		c.mu.Unlock()
 		c.config.Logger.Debugw("collector_loop_stopped",
-			"final_state", c.state.String())
+			"final_state", finalState)
 	}()
 
 	c.mu.RLock()

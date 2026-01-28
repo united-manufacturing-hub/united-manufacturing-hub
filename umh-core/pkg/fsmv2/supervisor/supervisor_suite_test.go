@@ -194,6 +194,8 @@ func (m *mockState) Next(snapshot any) fsmv2.NextResult[any, any] {
 
 func (m *mockState) String() string { return "MockState" }
 
+func (m *mockState) LifecyclePhase() config.LifecyclePhase { return config.PhaseRunningHealthy }
+
 type mockStore struct {
 	identity     map[string]map[string]persistence.Document // workerType -> id -> document
 	desired      map[string]map[string]persistence.Document

@@ -17,6 +17,7 @@ package action
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplefailing/snapshot"
 )
@@ -70,6 +71,11 @@ func (a *ConnectAction) Execute(ctx context.Context, depsAny any) error {
 				"current_cycle", currentCycle+1,
 				"total_cycles", totalCycles,
 			)
+			// Record failure time for recovery delay and reset observation counter.
+			// The observation counter tracks how many CollectObservedState calls have
+			// happened since this failure - resetting it starts the delay window fresh.
+			deps.SetLastFailureTime(time.Now())
+			deps.ResetObservationsSinceFailure()
 
 			return ErrSimulatedFailure
 		}

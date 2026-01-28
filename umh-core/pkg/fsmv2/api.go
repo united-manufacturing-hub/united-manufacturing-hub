@@ -18,6 +18,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 )
 
@@ -137,6 +138,24 @@ type State[TSnapshot any, TDeps any] interface {
 
 	// String returns the state name for logging/debugging.
 	String() string
+
+	// LifecyclePhase returns the lifecycle phase of this state.
+	// Used by parent supervisors to classify child health without knowing
+	// implementation details of the child's state machine.
+	//
+	// The supervisor uses this to:
+	//   - Construct the observed state name: phase.Prefix() + lowercase(String())
+	//   - Classify child health: phase.IsHealthy(), phase.IsOperational()
+	//   - Enable ChildrenManager methods: AllHealthy(), Counts()
+	//
+	// Lifecycle phases:
+	//   - PhaseStopped:         stopped                → neutral health
+	//   - PhaseStarting:        starting_*             → unhealthy
+	//   - PhaseRunningHealthy:  running_healthy_*      → HEALTHY
+	//   - PhaseRunningDegraded: running_degraded_*     → unhealthy (but operational)
+	//   - PhaseStopping:        stopping_*             → unhealthy
+	//   - PhaseUnknown:         unknown_*              → unhealthy
+	LifecyclePhase() config.LifecyclePhase
 }
 
 // Result creates a NextResult with the given components.

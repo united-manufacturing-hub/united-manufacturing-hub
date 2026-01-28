@@ -15,8 +15,6 @@
 package supervisor
 
 import (
-	"strings"
-
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 )
 
@@ -58,22 +56,28 @@ func (m *ChildrenManager) Get(name string) *config.ChildInfo {
 }
 
 // Counts returns the number of healthy and unhealthy children.
+// healthy = PhaseRunningHealthy only
+// unhealthy = everything except PhaseRunningHealthy and PhaseStopped
 // Implements config.ChildrenView.
 func (m *ChildrenManager) Counts() (healthy, unhealthy int) {
 	for _, child := range m.children {
-		stateName := child.GetCurrentStateName()
+		phase := child.GetLifecyclePhase()
 
-		if isHealthyState(stateName) {
+		if phase.IsHealthy() {
 			healthy++
-		} else if isUnhealthyState(stateName) {
+		} else if !phase.IsStopped() {
+			// Everything except healthy and stopped is unhealthy
+			// This includes: PhaseUnknown, PhaseStarting, PhaseRunningDegraded, PhaseStopping
 			unhealthy++
 		}
+		// Stopped states are neither healthy nor unhealthy
 	}
 
 	return healthy, unhealthy
 }
 
-// AllHealthy returns true if all children are healthy (or there are no children).
+// AllHealthy returns true if all children are PhaseRunningHealthy (or there are no children).
+// Note: PhaseRunningDegraded is NOT healthy (even though it IS operational).
 // Implements config.ChildrenView.
 func (m *ChildrenManager) AllHealthy() bool {
 	if len(m.children) == 0 {
@@ -81,8 +85,24 @@ func (m *ChildrenManager) AllHealthy() bool {
 	}
 
 	for _, child := range m.children {
-		stateName := child.GetCurrentStateName()
-		if !isHealthyState(stateName) {
+		if !child.GetLifecyclePhase().IsHealthy() {
+			return false
+		}
+	}
+
+	return true
+}
+
+// AllOperational returns true if all children are operational (Healthy OR Degraded).
+// Use this for "can system serve requests?" checks.
+// Implements config.ChildrenView.
+func (m *ChildrenManager) AllOperational() bool {
+	if len(m.children) == 0 {
+		return true
+	}
+
+	for _, child := range m.children {
+		if !child.GetLifecyclePhase().IsOperational() {
 			return false
 		}
 	}
@@ -91,6 +111,7 @@ func (m *ChildrenManager) AllHealthy() bool {
 }
 
 // AllStopped returns true if all children are in the Stopped state (or there are no children).
+// Uses lifecycle phase check via phase.IsStopped().
 // Implements config.ChildrenView.
 func (m *ChildrenManager) AllStopped() bool {
 	if len(m.children) == 0 {
@@ -98,8 +119,7 @@ func (m *ChildrenManager) AllStopped() bool {
 	}
 
 	for _, child := range m.children {
-		stateName := child.GetCurrentStateName()
-		if !strings.Contains(stateName, "Stopped") {
+		if !child.GetLifecyclePhase().IsStopped() {
 			return false
 		}
 	}
@@ -110,40 +130,19 @@ func (m *ChildrenManager) AllStopped() bool {
 // buildChildInfo creates a ChildInfo struct from a child supervisor.
 func (m *ChildrenManager) buildChildInfo(name string, child SupervisorInterface) config.ChildInfo {
 	stateName, stateReason := child.GetCurrentStateNameAndReason()
+	phase := child.GetLifecyclePhase()
 
 	return config.ChildInfo{
 		Name:          name,
 		WorkerType:    child.GetWorkerType(),
 		StateName:     stateName,
 		StateReason:   stateReason,
-		IsHealthy:     isHealthyState(stateName),
+		IsHealthy:     phase.IsHealthy(), // Only PhaseRunningHealthy is healthy
 		ErrorMsg:      "",
 		HierarchyPath: child.GetHierarchyPath(),
 		IsStale:       child.IsObservationStale(),
 		IsCircuitOpen: child.IsCircuitOpen(),
 	}
-}
-
-// isHealthyState returns true if the state indicates a healthy child.
-func isHealthyState(stateName string) bool {
-	return strings.Contains(stateName, "Running") || strings.Contains(stateName, "Connected")
-}
-
-// isUnhealthyState returns true if the state indicates an unhealthy child.
-func isUnhealthyState(stateName string) bool {
-	if stateName == "" || stateName == "unknown" {
-		return false
-	}
-
-	if strings.Contains(stateName, "Stopped") {
-		return false
-	}
-
-	if isHealthyState(stateName) {
-		return false
-	}
-
-	return true
 }
 
 // Compile-time check that ChildrenManager implements ChildrenView.

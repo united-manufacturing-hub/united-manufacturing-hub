@@ -96,6 +96,10 @@ func (t *TestState) String() string {
 	return t.name
 }
 
+func (t *TestState) LifecyclePhase() config.LifecyclePhase {
+	return config.PhaseRunningHealthy
+}
+
 var _ = Describe("Variable Injection", func() {
 	var (
 		ctx        context.Context

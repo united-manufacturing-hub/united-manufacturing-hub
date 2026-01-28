@@ -40,6 +40,17 @@ type ExamplefailingDependencies interface {
 	IncrementTicksInConnected() int
 	GetTicksInConnected() int
 	ResetTicksInConnected()
+	// Recovery delay support (time-based - kept for backward compatibility)
+	SetLastFailureTime(t time.Time)
+	GetLastFailureTime() time.Time
+	ShouldDelayRecovery() bool
+	GetRecoveryDelayMs() int
+	// Recovery delay support (observation-based - preferred)
+	SetRecoveryDelayObservations(n int)
+	GetRecoveryDelayObservations() int
+	IncrementObservationsSinceFailure() int
+	GetObservationsSinceFailure() int
+	ResetObservationsSinceFailure()
 }
 
 // ExamplefailingSnapshot represents a point-in-time view of the failing worker state.
@@ -96,6 +107,12 @@ type ExamplefailingObservedState struct {
 	TotalCycles           int `json:"total_cycles"`
 
 	AllCyclesComplete bool `json:"all_cycles_complete"`
+
+	// RecoveryDelayActive is true when waiting after a failure before retrying.
+	// This keeps the worker in the unhealthy state long enough for parents to observe.
+	RecoveryDelayActive bool `json:"recovery_delay_active"`
+	// ObservationsSinceFailure tracks how many observation cycles have passed since the last failure.
+	ObservationsSinceFailure int `json:"observations_since_failure"`
 }
 
 func (o ExamplefailingObservedState) GetTimestamp() time.Time {

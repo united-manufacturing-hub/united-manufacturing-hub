@@ -37,9 +37,12 @@ type TryingToAuthenticateState struct {
 	BaseCommunicatorState
 }
 
+func (s *TryingToAuthenticateState) LifecyclePhase() config.LifecyclePhase {
+	return config.PhaseStarting
+}
+
 func (s *TryingToAuthenticateState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := helpers.ConvertSnapshot[snapshot.CommunicatorObservedState, *snapshot.CommunicatorDesiredState](snapAny)
-	snap.Observed.State = config.MakeState(config.PrefixTryingToStart, "authentication")
 
 	if snap.Desired.IsShutdownRequested() {
 		return fsmv2.Result[any, any](&StoppedState{}, fsmv2.SignalNone, nil, "Shutdown requested during authentication")

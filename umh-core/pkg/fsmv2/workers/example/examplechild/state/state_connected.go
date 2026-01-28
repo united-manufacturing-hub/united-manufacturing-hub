@@ -26,9 +26,12 @@ type ConnectedState struct {
 	BaseChildState
 }
 
+func (s *ConnectedState) LifecyclePhase() config.LifecyclePhase {
+	return config.PhaseRunningHealthy
+}
+
 func (s *ConnectedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := helpers.ConvertSnapshot[snapshot.ExamplechildObservedState, *snapshot.ExamplechildDesiredState](snapAny)
-	snap.Observed.State = config.MakeState(config.PrefixRunning, "connected")
 
 	if snap.Observed.IsStopRequired() {
 		return fsmv2.Result[any, any](&TryingToStopState{}, fsmv2.SignalNone, nil, "Stop required, initiating shutdown")

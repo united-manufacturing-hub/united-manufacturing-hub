@@ -25,9 +25,12 @@ type ConnectedState struct {
 	BaseExampleslowState
 }
 
+func (s *ConnectedState) LifecyclePhase() config.LifecyclePhase {
+	return config.PhaseRunningHealthy
+}
+
 func (s *ConnectedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := helpers.ConvertSnapshot[snapshot.ExampleslowObservedState, *snapshot.ExampleslowDesiredState](snapAny)
-	snap.Observed.State = config.MakeState(config.PrefixRunning, "connected")
 
 	if snap.Observed.IsStopRequired() {
 		return fsmv2.Result[any, any](&TryingToStopState{}, fsmv2.SignalNone, nil, "stop required, transitioning to trying to stop")

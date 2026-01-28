@@ -79,6 +79,14 @@ type SupervisorInterface interface {
 	// Returns ("unknown", "") if no worker or state is set.
 	// Used by ChildInfo to populate StateReason field.
 	GetCurrentStateNameAndReason() (stateName string, reason string)
+	// GetObservedStateName returns the observed state's State field (e.g., "running_healthy_connected").
+	// This exposes the lifecycle prefix for health checks using config.IsOperational().
+	// Returns "unknown" if no observation has been collected yet.
+	GetObservedStateName() string
+	// GetLifecyclePhase returns the lifecycle phase of the current state.
+	// Used by parent supervisors to classify child health via phase.IsHealthy().
+	// Returns PhaseUnknown if no state is set.
+	GetLifecyclePhase() config.LifecyclePhase
 	// GetWorkerType returns the type of workers this supervisor manages.
 	// Example: "examplechild", "exampleparent", "application"
 	GetWorkerType() string
@@ -116,6 +124,14 @@ type WorkerContext[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] s
 	// during its tick without blocking on CSE reads. The parent calls child.IsObservationStale()
 	// when building ChildInfo for SetChildrenView().
 	lastObservationCollectedAt time.Time
+	// lastObservedStateName caches the constructed observed state name (e.g., "running_healthy_connected").
+	// Constructed by supervisor as: phase.Prefix() + lowercase(state.String())
+	// Used by parent supervisors via GetObservedStateName() for health checks.
+	lastObservedStateName string
+	// lastLifecyclePhase caches the lifecycle phase of the current state.
+	// Used by parent supervisors via GetLifecyclePhase() to classify child health.
+	// This is the source of truth for health classification (phase.IsHealthy()).
+	lastLifecyclePhase config.LifecyclePhase
 	worker                     fsmv2.Worker
 	currentState               fsmv2.State[any, any]
 	// mu protects currentState. Uses RWMutex for frequent reads, rare writes.

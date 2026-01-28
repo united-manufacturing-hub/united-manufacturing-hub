@@ -26,9 +26,12 @@ type TryingToConnectState struct {
 	BaseExampleslowState
 }
 
+func (s *TryingToConnectState) LifecyclePhase() config.LifecyclePhase {
+	return config.PhaseStarting
+}
+
 func (s *TryingToConnectState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := helpers.ConvertSnapshot[snapshot.ExampleslowObservedState, *snapshot.ExampleslowDesiredState](snapAny)
-	snap.Observed.State = config.MakeState(config.PrefixTryingToStart, "connection")
 
 	if snap.Observed.IsStopRequired() {
 		return fsmv2.Result[any, any](&TryingToStopState{}, fsmv2.SignalNone, nil, "stop required, transitioning to trying to stop")

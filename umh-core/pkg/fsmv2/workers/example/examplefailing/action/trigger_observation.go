@@ -20,16 +20,22 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplefailing/snapshot"
 )
 
-const IncrementTicksActionName = "increment_connected_ticks"
+const TriggerObservationActionName = "trigger_observation"
 
-// IncrementTicksAction increments the tick counter while in Connected state.
-// This is used to track how long the worker has been connected so we can
-// trigger the next failure cycle after a configurable number of ticks.
-type IncrementTicksAction struct {
+// TriggerObservationAction triggers an observation cycle via action completion.
+// This is used to make the worker visible to parent supervisors by ensuring
+// the collector's OnActionComplete callback is triggered, which causes an
+// immediate observation rather than waiting for the next periodic interval.
+//
+// The action also increments the tick counter while in Connected state,
+// which can be used to track how long the worker has been connected.
+type TriggerObservationAction struct {
 }
 
-// Execute increments the tick counter in Connected state.
-func (a *IncrementTicksAction) Execute(ctx context.Context, depsAny any) error {
+// Execute triggers an observation by completing successfully.
+// The act of completing this action causes the collector to trigger TriggerNow(),
+// making this worker's state immediately visible to parent supervisors.
+func (a *TriggerObservationAction) Execute(ctx context.Context, depsAny any) error {
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
@@ -38,7 +44,7 @@ func (a *IncrementTicksAction) Execute(ctx context.Context, depsAny any) error {
 
 	deps := depsAny.(snapshot.ExamplefailingDependencies)
 	newTicks := deps.IncrementTicksInConnected()
-	deps.GetLogger().Infow("increment_ticks_in_connected",
+	deps.GetLogger().Infow("trigger_observation",
 		"new_ticks", newTicks,
 		"should_fail", deps.GetShouldFail(),
 		"all_cycles_complete", deps.AllCyclesComplete(),
@@ -49,10 +55,10 @@ func (a *IncrementTicksAction) Execute(ctx context.Context, depsAny any) error {
 	return nil
 }
 
-func (a *IncrementTicksAction) String() string {
-	return IncrementTicksActionName
+func (a *TriggerObservationAction) String() string {
+	return TriggerObservationActionName
 }
 
-func (a *IncrementTicksAction) Name() string {
-	return IncrementTicksActionName
+func (a *TriggerObservationAction) Name() string {
+	return TriggerObservationActionName
 }

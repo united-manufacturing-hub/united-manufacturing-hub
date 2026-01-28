@@ -16,6 +16,7 @@ package examplefailing
 
 import (
 	"sync"
+	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"go.uber.org/zap"
@@ -50,15 +51,19 @@ func (d *DefaultConnectionPool) HealthCheck(_ Connection) error {
 type FailingDependencies struct {
 	connectionPool ConnectionPool
 	*deps.BaseDependencies
-	maxFailures           int
-	attempts              int
-	restartAfterFailures  int
-	failureCycles         int // Total number of failure cycles to perform
-	currentCycle          int // Current failure cycle (0-indexed)
-	ticksInConnectedState int // Number of ticks spent in Connected state
-	mu                    sync.RWMutex
-	shouldFail            bool
-	connected             bool
+	maxFailures               int
+	attempts                  int
+	restartAfterFailures      int
+	failureCycles             int       // Total number of failure cycles to perform
+	currentCycle              int       // Current failure cycle (0-indexed)
+	ticksInConnectedState     int       // Number of ticks spent in Connected state
+	recoveryDelayMs           int       // Time to wait after failure before retrying (ms) - kept for backward compat
+	lastFailureTime           time.Time // When the last failure occurred - kept for metrics
+	recoveryDelayObservations int       // Number of observations to wait after failure before retrying
+	observationsSinceFailure  int       // Counter incremented each time CollectObservedState is called
+	mu                        sync.RWMutex
+	shouldFail                bool
+	connected                 bool
 }
 
 func NewFailingDependencies(connectionPool ConnectionPool, logger *zap.SugaredLogger, stateReader deps.StateReader, identity deps.Identity) *FailingDependencies {
@@ -214,4 +219,90 @@ func (d *FailingDependencies) ResetTicksInConnected() {
 	defer d.mu.Unlock()
 
 	d.ticksInConnectedState = 0
+}
+
+func (d *FailingDependencies) SetRecoveryDelayMs(delayMs int) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	d.recoveryDelayMs = delayMs
+}
+
+func (d *FailingDependencies) GetRecoveryDelayMs() int {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+
+	return d.recoveryDelayMs
+}
+
+func (d *FailingDependencies) SetLastFailureTime(t time.Time) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	d.lastFailureTime = t
+}
+
+func (d *FailingDependencies) GetLastFailureTime() time.Time {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+
+	return d.lastFailureTime
+}
+
+// ShouldDelayRecovery returns true if we should wait before retrying after a failure.
+// This keeps the worker in the unhealthy state long enough for parents to observe.
+// Uses observation-based counting to avoid race conditions with time-based delays.
+func (d *FailingDependencies) ShouldDelayRecovery() bool {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+
+	if d.recoveryDelayObservations == 0 {
+		return false
+	}
+
+	return d.observationsSinceFailure < d.recoveryDelayObservations
+}
+
+// SetRecoveryDelayObservations sets how many observation cycles to wait after failure.
+func (d *FailingDependencies) SetRecoveryDelayObservations(n int) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	d.recoveryDelayObservations = n
+}
+
+// GetRecoveryDelayObservations returns the configured observation delay threshold.
+func (d *FailingDependencies) GetRecoveryDelayObservations() int {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+
+	return d.recoveryDelayObservations
+}
+
+// IncrementObservationsSinceFailure increments the observation counter and returns the new value.
+// This should be called each time CollectObservedState is called.
+func (d *FailingDependencies) IncrementObservationsSinceFailure() int {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	d.observationsSinceFailure++
+
+	return d.observationsSinceFailure
+}
+
+// GetObservationsSinceFailure returns the current observation counter value.
+func (d *FailingDependencies) GetObservationsSinceFailure() int {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+
+	return d.observationsSinceFailure
+}
+
+// ResetObservationsSinceFailure resets the observation counter to 0.
+// This should be called when a failure occurs.
+func (d *FailingDependencies) ResetObservationsSinceFailure() {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	d.observationsSinceFailure = 0
 }

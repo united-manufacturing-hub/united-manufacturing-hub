@@ -151,6 +151,8 @@ func (m *State) Next(snapshot any) fsmv2.NextResult[any, any] {
 
 func (m *State) String() string { return "State" }
 
+func (m *State) LifecyclePhase() config.LifecyclePhase { return config.PhaseRunningHealthy }
+
 func Identity() deps.Identity {
 	return deps.Identity{
 		ID:         "test-worker",

@@ -19,7 +19,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
@@ -208,20 +207,23 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 
 			return desired.IsShutdownRequested()
 		},
-		// A child is healthy if its state contains "Running" or "Connected".
+		// A child is healthy ONLY if in PhaseRunningHealthy (fully stable).
+		// PhaseRunningDegraded is operational but NOT healthy.
+		// Uses lifecycle phase enum for type-safe health checks.
 		ChildrenCountsProvider: func() (healthy int, unhealthy int) {
 			s.mu.RLock()
 			defer s.mu.RUnlock()
 
 			for _, child := range s.children {
-				stateName := child.GetCurrentStateName()
-				if strings.Contains(stateName, "Running") || strings.Contains(stateName, "Connected") {
+				phase := child.GetLifecyclePhase()
+				if phase.IsHealthy() {
 					healthy++
-				} else if stateName != "" && stateName != "unknown" &&
-					!strings.Contains(stateName, "Stopped") {
-					// TryingToStop counts as unhealthy so parent waits for full stop
+				} else if !phase.IsStopped() {
+					// Everything except healthy and stopped is unhealthy
+					// This includes: PhaseUnknown, PhaseStarting, PhaseRunningDegraded, PhaseStopping
 					unhealthy++
 				}
+				// Stopped states are neither healthy nor unhealthy
 			}
 
 			return healthy, unhealthy
@@ -248,6 +250,14 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 			workerCtx.mu.RLock()
 			defer workerCtx.mu.RUnlock()
 
+			// Copy stateTransitions to avoid race condition with reconciliation goroutine.
+			// Without this copy, the map reference escapes the lock and can be read
+			// while reconciliation writes to it.
+			transitionsCopy := make(map[string]int64, len(workerCtx.stateTransitions))
+			for state, count := range workerCtx.stateTransitions {
+				transitionsCopy[state] = count
+			}
+
 			// Convert stateDurations (map[string]time.Duration) to milliseconds
 			cumulativeTimeMs := make(map[string]int64, len(workerCtx.stateDurations))
 			for state, duration := range workerCtx.stateDurations {
@@ -258,7 +268,7 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 				TimeInCurrentStateMs:    time.Since(workerCtx.stateEnteredAt).Milliseconds(),
 				StateEnteredAtUnix:      workerCtx.stateEnteredAt.Unix(),
 				StateTransitionsTotal:   workerCtx.totalTransitions,
-				TransitionsByState:      workerCtx.stateTransitions,
+				TransitionsByState:      transitionsCopy,
 				CumulativeTimeByStateMs: cumulativeTimeMs,
 				CollectorRestarts:       workerCtx.collectorRestarts,
 				StartupCount:            workerCtx.startupCount,
@@ -308,7 +318,7 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 		// Trigger immediate observation after action completes.
 		// This eliminates the delay between action and FSM progression.
 		if workerCtx != nil && workerCtx.collector != nil && workerCtx.collector.IsRunning() {
-			workerCtx.collector.Restart()
+			workerCtx.collector.TriggerNow()
 		}
 	})
 
@@ -707,6 +717,47 @@ func (s *Supervisor[TObserved, TDesired]) GetCurrentStateNameAndReason() (string
 	}
 
 	return "unknown", ""
+}
+
+// GetObservedStateName returns the observed state's State field (e.g., "running_healthy_connected").
+// This exposes the lifecycle prefix for health checks using config.IsOperational().
+// Returns "unknown" if no observation has been collected yet.
+// Used by parent supervisors to determine child health based on lifecycle phase.
+func (s *Supervisor[TObserved, TDesired]) GetObservedStateName() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	for _, workerCtx := range s.workers {
+		workerCtx.mu.RLock()
+		stateName := workerCtx.lastObservedStateName
+		workerCtx.mu.RUnlock()
+
+		if stateName == "" {
+			return "unknown"
+		}
+
+		return stateName
+	}
+
+	return "unknown"
+}
+
+// GetLifecyclePhase returns the lifecycle phase of the current state.
+// Used by parent supervisors to classify child health via phase.IsHealthy().
+// Returns PhaseUnknown if no state is set or no workers are registered.
+func (s *Supervisor[TObserved, TDesired]) GetLifecyclePhase() config.LifecyclePhase {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	for _, workerCtx := range s.workers {
+		workerCtx.mu.RLock()
+		phase := workerCtx.lastLifecyclePhase
+		workerCtx.mu.RUnlock()
+
+		return phase
+	}
+
+	return config.PhaseUnknown
 }
 
 // GetWorkerType returns the type of workers this supervisor manages.

@@ -382,12 +382,21 @@ type ChildrenView interface {
 	Get(name string) *ChildInfo
 
 	// Counts returns the number of healthy and unhealthy children.
+	// healthy = PhaseRunningHealthy only (fully stable)
+	// unhealthy = everything except PhaseRunningHealthy and PhaseStopped
+	// Note: PhaseRunningDegraded counts as unhealthy (operational but NOT healthy).
 	Counts() (healthy, unhealthy int)
 
-	// AllHealthy returns true if all children are healthy (or there are no children).
+	// AllHealthy returns true if all children are PhaseRunningHealthy (or there are no children).
+	// Note: PhaseRunningDegraded is NOT healthy (even though it IS operational).
 	AllHealthy() bool
 
-	// AllStopped returns true if all children are in the Stopped state (or there are no children).
+	// AllOperational returns true if all children are operational (or there are no children).
+	// Operational = PhaseRunningHealthy OR PhaseRunningDegraded (can serve requests).
+	// Use this for "can system serve requests?" checks.
+	AllOperational() bool
+
+	// AllStopped returns true if all children are in PhaseStopped (or there are no children).
 	AllStopped() bool
 }
 

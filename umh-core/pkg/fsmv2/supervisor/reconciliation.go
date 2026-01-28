@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -162,6 +163,33 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 		s.logTrace("observation_no_timestamp",
 			"stage", "data_freshness",
 			"type", fmt.Sprintf("%T", observed))
+	}
+
+	// Cache observed state name for GetObservedStateName() - used by parent for lifecycle-based health checks
+	// State implements LifecyclePhase(), construct name from phase + state.String()
+	workerCtx.mu.RLock()
+	currentStateForPhase := workerCtx.currentState
+	workerCtx.mu.RUnlock()
+
+	var lifecyclePhase config.LifecyclePhase
+	var observedStateName string
+
+	if currentStateForPhase != nil {
+		lifecyclePhase = currentStateForPhase.LifecyclePhase()
+		// Construct observed state name: phase.Prefix() + lowercase(state.String())
+		suffix := strings.ToLower(currentStateForPhase.String())
+		prefix := lifecyclePhase.Prefix()
+		if lifecyclePhase == config.PhaseStopped {
+			observedStateName = prefix // "stopped" has no suffix
+		} else {
+			observedStateName = prefix + suffix
+		}
+
+		// Cache both the observed state name and lifecycle phase
+		workerCtx.mu.Lock()
+		workerCtx.lastObservedStateName = observedStateName
+		workerCtx.lastLifecyclePhase = lifecyclePhase
+		workerCtx.mu.Unlock()
 	}
 
 	// Shutdown bypass: Allow FSM to process shutdown even with stale data.
@@ -1035,7 +1063,7 @@ func (s *Supervisor[TObserved, TDesired]) checkRestartTimeouts(ctx context.Conte
 			workerCtx.mu.Unlock()
 
 			if workerCtx.collector != nil {
-				workerCtx.collector.Restart()
+				workerCtx.collector.TriggerNow()
 			}
 
 			// Clear pending restart
@@ -1583,3 +1611,4 @@ func (s *Supervisor[TObserved, TDesired]) computeMappedState(parentState string,
 
 	return config.DesiredStateStopped
 }
+

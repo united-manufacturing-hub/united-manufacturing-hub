@@ -25,9 +25,12 @@ type DisconnectedState struct {
 	BaseExamplepanicState
 }
 
+func (s *DisconnectedState) LifecyclePhase() config.LifecyclePhase {
+	return config.PhaseRunningDegraded
+}
+
 func (s *DisconnectedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := helpers.ConvertSnapshot[snapshot.ExamplepanicObservedState, *snapshot.ExamplepanicDesiredState](snapAny)
-	snap.Observed.State = config.MakeState(config.PrefixRunning, "disconnected")
 
 	// ParentMappedState is in Observed.DesiredState, not Desired
 	if snap.Observed.IsStopRequired() {

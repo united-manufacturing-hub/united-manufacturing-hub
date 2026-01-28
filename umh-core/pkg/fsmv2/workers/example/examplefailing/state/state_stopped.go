@@ -26,9 +26,12 @@ type StoppedState struct {
 	BaseFailingState
 }
 
+func (s *StoppedState) LifecyclePhase() config.LifecyclePhase {
+	return config.PhaseStopped
+}
+
 func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := helpers.ConvertSnapshot[snapshot.ExamplefailingObservedState, *snapshot.ExamplefailingDesiredState](snapAny)
-	snap.Observed.State = config.PrefixStopped
 
 	if snap.Desired.IsShutdownRequested() {
 		return fsmv2.Result[any, any](s, fsmv2.SignalNeedsRemoval, nil, "shutdown requested, signaling removal")

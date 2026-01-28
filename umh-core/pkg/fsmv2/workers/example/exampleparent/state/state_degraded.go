@@ -26,9 +26,12 @@ type DegradedState struct {
 	BaseParentState
 }
 
+func (s *DegradedState) LifecyclePhase() config.LifecyclePhase {
+	return config.PhaseRunningDegraded
+}
+
 func (s *DegradedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := helpers.ConvertSnapshot[snapshot.ExampleparentObservedState, *snapshot.ExampleparentDesiredState](snapAny)
-	snap.Observed.State = config.MakeState(config.PrefixRunning, "degraded")
 
 	if snap.Desired.IsShutdownRequested() {
 		return fsmv2.Result[any, any](&TryingToStopState{}, fsmv2.SignalNone, nil, "Shutdown requested, transitioning to TryingToStop")

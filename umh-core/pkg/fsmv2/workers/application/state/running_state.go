@@ -26,9 +26,12 @@ type RunningState struct {
 	BaseApplicationState
 }
 
+func (s *RunningState) LifecyclePhase() config.LifecyclePhase {
+	return config.PhaseRunningHealthy
+}
+
 func (s *RunningState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := helpers.ConvertSnapshot[snapshot.ApplicationObservedState, *snapshot.ApplicationDesiredState](snapAny)
-	snap.Observed.State = config.MakeState(config.PrefixRunning, "managing")
 
 	if snap.Desired.IsShutdownRequested() {
 		return fsmv2.Result[any, any](&StoppedState{}, fsmv2.SignalNone, nil, "Shutdown requested")
