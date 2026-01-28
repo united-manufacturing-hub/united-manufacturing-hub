@@ -46,6 +46,7 @@ type ActionExecutor struct {
 	defaultTimeout   time.Duration
 	mu               sync.RWMutex
 	closeOnce        sync.Once
+	stopped          bool
 }
 
 type actionWork struct {
@@ -217,9 +218,22 @@ func (ae *ActionExecutor) executeWorkWithRecovery(work actionWork) {
 }
 
 // EnqueueAction adds an action to the execution queue without blocking.
-// Returns error if action is already in progress or queue is full.
+// Returns error if action is already in progress, queue is full, or executor is stopped.
 func (ae *ActionExecutor) EnqueueAction(actionID string, action fsmv2.Action[any], deps any) error {
 	ae.mu.Lock()
+
+	// Check if executor is stopped to prevent sending on closed channel
+	if ae.stopped {
+		ae.mu.Unlock()
+
+		ae.logger.Warnw("action_enqueue_rejected",
+			"hierarchy_path", ae.identity.HierarchyPath,
+			"correlation_id", actionID,
+			"action_name", action.Name(),
+			"reason", "executor_stopped")
+
+		return errors.New("executor stopped")
+	}
 
 	if ae.inProgress[actionID] {
 		ae.mu.Unlock()
@@ -316,6 +330,11 @@ func (ae *ActionExecutor) SetOnActionComplete(fn func(deps.ActionResult)) {
 }
 
 func (ae *ActionExecutor) Shutdown() {
+	// Mark as stopped first to prevent new actions from being enqueued
+	ae.mu.Lock()
+	ae.stopped = true
+	ae.mu.Unlock()
+
 	if ae.metricsCancel != nil {
 		ae.metricsCancel()
 	}
