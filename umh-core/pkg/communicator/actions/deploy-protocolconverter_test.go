@@ -354,5 +354,86 @@ var _ = Describe("DeployProtocolConverter", func() {
 			// Stop the state mocker
 			stateMocker.Stop()
 		})
+
+		It("should preserve array variables in TemplateInfo for template expansion", func() {
+			// Payload with complex array variables (e.g., AddressMappings from CSV)
+			addressMappings := []map[string]any{
+				{
+					"Address":      "DB1.DW20",
+					"TagName":      "temperature",
+					"Unit":         "celsius",
+					"DataContract": "_historian",
+				},
+				{
+					"Address":      "DB1.DW24",
+					"TagName":      "pressure",
+					"Unit":         "bar",
+					"DataContract": "_historian",
+				},
+			}
+
+			payload := map[string]any{
+				"name": pcName,
+				"connection": map[string]any{
+					"ip":   pcIP,
+					"port": pcPort,
+				},
+				"location": pcLocation,
+				"templateInfo": map[string]any{
+					"isTemplated": true,
+					"rootUUID":    "00000000-0000-0000-0000-000000000000",
+					"variables": []map[string]any{
+						{
+							"label": "AddressMappings",
+							"value": addressMappings,
+						},
+					},
+				},
+			}
+
+			err := action.Parse(payload)
+			Expect(err).NotTo(HaveOccurred())
+
+			mockConfig.ResetCalls()
+			err = stateMocker.Start()
+			Expect(err).NotTo(HaveOccurred())
+
+			result, metadata, err := action.Execute()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(metadata).To(BeNil())
+
+			stateMocker.Stop()
+
+			Expect(mockConfig.AtomicAddProtocolConverterCalled).To(BeTrue())
+			Expect(mockConfig.Config.ProtocolConverter).To(HaveLen(1))
+
+			addedPC := mockConfig.Config.ProtocolConverter[0]
+
+			// Verify variables are preserved in config (not stringified)
+			Expect(addedPC.ProtocolConverterServiceConfig.Variables.User).To(HaveKey("AddressMappings"))
+
+			// Verify the array structure is preserved (not converted to string)
+			preservedMappings, ok := addedPC.ProtocolConverterServiceConfig.Variables.User["AddressMappings"].([]any)
+			Expect(ok).To(BeTrue(), "AddressMappings should be preserved as array, not stringified")
+			Expect(preservedMappings).To(HaveLen(2))
+
+			// Verify first mapping has correct structure for template expansion
+			firstMapping, ok := preservedMappings[0].(map[string]any)
+			Expect(ok).To(BeTrue(), "Array elements should be maps for {{ range .AddressMappings }}")
+			Expect(firstMapping["Address"]).To(Equal("DB1.DW20"))
+			Expect(firstMapping["TagName"]).To(Equal("temperature"))
+			Expect(firstMapping["Unit"]).To(Equal("celsius"))
+
+			// Verify second mapping
+			secondMapping, ok := preservedMappings[1].(map[string]any)
+			Expect(ok).To(BeTrue())
+			Expect(secondMapping["Address"]).To(Equal("DB1.DW24"))
+			Expect(secondMapping["TagName"]).To(Equal("pressure"))
+
+			// Verify the response matches
+			responsePC, ok := result.(models.ProtocolConverter)
+			Expect(ok).To(BeTrue())
+			Expect(responsePC.Name).To(Equal(pcName))
+		})
 	})
 })
