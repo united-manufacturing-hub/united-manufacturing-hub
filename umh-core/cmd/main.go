@@ -21,9 +21,11 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/pprof"
 	v2 "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/communication_state"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/fsmv2_adapter"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/graphql"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/encoding"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
@@ -37,6 +39,10 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/redpanda"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/streamprocessor"
 	topicbrowserfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/topicbrowser"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/examples"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/snapshot"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
@@ -44,6 +50,11 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/version"
 	"go.uber.org/zap"
 )
+
+// CommunicatorWorkerID is the ID used for the communicator child worker.
+// This matches the pattern from reconciliation.go:1218 (childID := spec.Name + "-001")
+// where spec.Name is "communicator".
+const CommunicatorWorkerID = "communicator-001"
 
 func main() {
 	// Initialize the global logger first thing
@@ -177,9 +188,16 @@ func main() {
 	}
 
 	if configData.Agent.APIURL != "" && configData.Agent.AuthToken != "" {
-		sentry.SafeGoWithContext(ctx, func(ctx context.Context) {
-			enableBackendConnection(ctx, &configData, communicationState, controlLoop, communicationState.Logger)
-		})
+		if configData.Agent.UseFSMv2Transport {
+			log.Info("Using FSMv2 communicator (feature flag enabled)")
+			sentry.SafeGoWithContext(ctx, func(ctx context.Context) {
+				enableFSMv2BackendConnection(ctx, &configData, communicationState, log)
+			})
+		} else {
+			sentry.SafeGoWithContext(ctx, func(ctx context.Context) {
+				enableBackendConnection(ctx, &configData, communicationState, controlLoop, communicationState.Logger)
+			})
+		}
 	} else {
 		log.Warnf("No backend connection enabled, please set API_URL and AUTH_TOKEN")
 	}
@@ -383,7 +401,7 @@ func enableBackendConnection(ctx context.Context, config *config.FullConfig, com
 
 		communicationState.InitialiseAndStartPuller()
 		communicationState.InitialiseAndStartPusher()
-		communicationState.InitialiseAndStartSubscriberHandler(time.Minute*5, time.Minute, config, snapshotManager, configManager)
+		communicationState.InitialiseAndStartSubscriberHandler(time.Minute*5, time.Minute, config, snapshotManager, configManager, nil) // nil = legacy mode uses Pusher
 		communicationState.InitialiseAndStartRouter()
 		communicationState.InitialiseReAuthHandler(config.Agent.AuthToken, config.Agent.AllowInsecureTLS)
 
@@ -393,4 +411,154 @@ func enableBackendConnection(ctx context.Context, config *config.FullConfig, com
 	}
 
 	logger.Info("Backend connection enabled")
+}
+
+func enableFSMv2BackendConnection(
+	ctx context.Context,
+	configData *config.FullConfig,
+	communicationState *communication_state.CommunicationState,
+	logger *zap.SugaredLogger,
+) {
+	logger.Info("Enabling FSMv2 backend connection")
+
+	if configData == nil {
+		logger.Warn("Config is nil, cannot enable FSMv2 backend connection")
+
+		return
+	}
+
+	// Create channel adapter to bridge FSMv2 and legacy channels
+	// Use default buffer size (0 = DefaultBufferSize)
+	channelAdapter := fsmv2_adapter.NewLegacyChannelBridge(
+		communicationState.InboundChannel,
+		communicationState.OutboundChannel,
+		logger,
+		0,
+	)
+
+	// Start conversion goroutines
+	channelAdapter.Start(ctx)
+
+	// Set the global ChannelProvider singleton BEFORE creating the supervisor.
+	// Phase 1 architecture: singleton is THE ONLY way to provide channels to the communicator.
+	// The factory will panic if this is not set.
+	communicator.SetChannelProvider(channelAdapter)
+
+	// Build YAML config for FSMv2 ApplicationSupervisor
+	// Note: instanceUUID in config is a placeholder - the real UUID is returned by the backend
+	// and will be set via onAuthSuccessCallback (Bug #6 fix)
+	placeholderUUID := uuid.New().String()
+	yamlConfig := fmt.Sprintf(`
+children:
+  - name: "communicator"
+    workerType: "communicator"
+    userSpec:
+      config: |
+        relayURL: "%s"
+        instanceUUID: "%s"
+        authToken: "%s"
+        timeout: "10s"
+        state: "running"
+`, configData.Agent.APIURL, placeholderUUID, configData.Agent.AuthToken)
+
+	// Setup store (in-memory for now)
+	store := examples.SetupStore(logger)
+
+	// Create callback to update LoginResponse with real UUID from backend (Bug #6 fix)
+	// This is called by AuthenticateAction after successful authentication
+	onAuthSuccessCallback := func(realUUID, name string) {
+		logger.Infow("Authentication succeeded, updating LoginResponse with backend UUID",
+			"realUUID", realUUID, "name", name, "placeholderUUID", placeholderUUID)
+		communicationState.SetLoginResponseForFSMv2(realUUID)
+	}
+
+	// Create ApplicationSupervisor with channel provider and auth callback injected via Dependencies
+	// This avoids global state and enables proper testing
+	// Use Named("fsmv2") to create [fsmv2] prefix in logs for easy filtering
+	fsmv2Logger := logger.Named("fsmv2")
+	// Wrap with SentryHook for automatic FSMv2 error capture to Sentry
+	// This only affects FSMv2 logs, not the rest of the application
+	fsmv2Core := sentry.NewSentryHook(fsmv2Logger.Desugar().Core())
+	fsmv2Logger = zap.New(fsmv2Core).Sugar()
+
+	appSup, err := application.NewApplicationSupervisor(application.SupervisorConfig{
+		ID:           "application-fsmv2",
+		Name:         "Application FSMv2",
+		Store:        store,
+		Logger:       fsmv2Logger,
+		TickInterval: 100 * time.Millisecond,
+		YAMLConfig:   yamlConfig,
+		Dependencies: map[string]any{
+			"channelProvider":       channelAdapter,
+			"onAuthSuccessCallback": onAuthSuccessCallback,
+		},
+	})
+	if err != nil {
+		logger.Errorw("Failed to create FSMv2 supervisor", "error", err)
+
+		return
+	}
+
+	// Register supervisor for debug introspection (/debug/fsmv2 endpoint)
+	metrics.RegisterFSMv2DebugProvider("application", appSup)
+
+	// Start supervisor (non-blocking - returns done channel)
+	done := appSup.Start(ctx)
+
+	// Initialize Router for FSMv2 mode:
+	// 1. Create write-only Pusher (writes to channel, FSMv2 handles HTTP)
+	// 2. Set LoginResponse with placeholder UUID (will be updated by onAuthSuccessCallback)
+	// 3. Initialize SubscriberHandler (generates status messages)
+	// 4. Start Router (processes inbound messages, generates status via Subscriber)
+	communicationState.InitializeWriteOnlyPusher(placeholderUUID)
+	communicationState.SetLoginResponseForFSMv2(placeholderUUID)
+	communicationState.InitialiseAndStartSubscriberHandler(
+		5*time.Minute, // TTL: time until subscriber considered dead
+		1*time.Minute, // Cull: cycle time to remove dead subscribers
+		configData,
+		communicationState.SystemSnapshotManager,
+		communicationState.ConfigManager,
+		channelAdapter.GetOutboundWriteChannel(), // FSMv2 mode: bypass Pusher, write directly to FSMv2 transport
+	)
+	communicationState.InitializeRouterForFSMv2()
+
+	// Poll ObservedState for AuthenticatedUUID and update SetLoginResponseForFSMv2.
+	// Phase 2 architecture: UUID is read from ObservedState instead of callback.
+	// This goroutine runs until the real UUID is received from the backend.
+	go func() {
+		ticker := time.NewTicker(100 * time.Millisecond)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				// Load the communicator's observed state from the store
+				var observed snapshot.CommunicatorObservedState
+
+				err := store.LoadObservedTyped(ctx, "communicator", CommunicatorWorkerID, &observed)
+				if err != nil {
+					// Not found yet or error - keep polling
+					continue
+				}
+
+				if observed.AuthenticatedUUID != "" && observed.AuthenticatedUUID != placeholderUUID {
+					logger.Infow("Detected real UUID from ObservedState, updating LoginResponse",
+						"realUUID", observed.AuthenticatedUUID,
+						"placeholderUUID", placeholderUUID)
+					communicationState.SetLoginResponseForFSMv2(observed.AuthenticatedUUID)
+
+					return
+				}
+			}
+		}
+	}()
+
+	logger.Info("FSMv2 communicator started, waiting for shutdown")
+
+	// Wait for shutdown
+	<-done
+
+	logger.Info("FSMv2 backend connection shutdown complete")
 }

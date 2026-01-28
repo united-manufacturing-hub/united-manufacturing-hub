@@ -194,6 +194,7 @@ var _ = Describe("Subscribe and Receive Test", func() {
 			config.NewMockConfigManager(),
 			logger.For(logger.ComponentCommunicator),
 			topicBrowserCommunicator,
+			nil, // fsmOutboundChannel - nil for legacy mode test
 		)
 		subHandler.StartNotifier()
 
