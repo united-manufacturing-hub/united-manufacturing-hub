@@ -168,16 +168,6 @@ func (a *EditProtocolConverterAction) Parse(payload interface{}) error {
 		a.vb = make([]models.ProtocolConverterVariable, 0)
 	}
 
-	// Convert map[string]any to []ProtocolConverterVariable for consistency
-	if pcPayload.Variables != nil {
-		for key, value := range pcPayload.Variables {
-			a.vb = append(a.vb, models.ProtocolConverterVariable{
-				Label: key,
-				Value: value,
-			})
-		}
-	}
-
 	// Extract location
 	if pcPayload.Location != nil {
 		a.location = pcPayload.Location

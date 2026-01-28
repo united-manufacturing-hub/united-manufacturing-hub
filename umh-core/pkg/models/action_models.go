@@ -786,10 +786,8 @@ type ProtocolConverter struct {
 	WriteDFC     *ProtocolConverterDFC          `json:"writeDFC"`
 	TemplateInfo *ProtocolConverterTemplateInfo `json:"templateInfo"`
 	Meta         *ProtocolConverterMeta         `json:"meta"`
-	// Variables contains custom variables for template expansion
-	Variables  map[string]any              `json:"variables"`
-	Name       string                      `binding:"required" json:"name"`
-	Connection ProtocolConverterConnection `json:"connection"`
+	Name         string                         `binding:"required" json:"name"`
+	Connection   ProtocolConverterConnection    `json:"connection"`
 }
 
 type ProtocolConverterMeta struct {
