@@ -46,6 +46,7 @@ type ActionExecutor struct {
 	defaultTimeout   time.Duration
 	mu               sync.RWMutex
 	closeOnce        sync.Once
+	stopped          bool
 }
 
 type actionWork struct {
@@ -90,7 +91,9 @@ func NewActionExecutorWithTimeout(workerCount int, timeouts map[string]time.Dura
 }
 
 func (ae *ActionExecutor) Start(ctx context.Context) {
+	ae.mu.Lock()
 	ae.ctx, ae.cancel = context.WithCancel(ctx)
+	ae.mu.Unlock()
 
 	for range ae.workerCount {
 		ae.wg.Add(1)
@@ -99,7 +102,11 @@ func (ae *ActionExecutor) Start(ctx context.Context) {
 	}
 
 	metricsCtx, metricsCancel := context.WithCancel(ctx)
+
+	ae.mu.Lock()
 	ae.metricsCancel = metricsCancel
+	ae.mu.Unlock()
+
 	ae.metricsWg.Add(1)
 
 	go ae.metricsReporter(metricsCtx)
@@ -217,9 +224,22 @@ func (ae *ActionExecutor) executeWorkWithRecovery(work actionWork) {
 }
 
 // EnqueueAction adds an action to the execution queue without blocking.
-// Returns error if action is already in progress or queue is full.
+// Returns error if action is already in progress, queue is full, or executor is stopped.
 func (ae *ActionExecutor) EnqueueAction(actionID string, action fsmv2.Action[any], deps any) error {
 	ae.mu.Lock()
+
+	// Check if executor is stopped to prevent sending on closed channel
+	if ae.stopped {
+		ae.mu.Unlock()
+
+		ae.logger.Warnw("action_enqueue_rejected",
+			"hierarchy_path", ae.identity.HierarchyPath,
+			"correlation_id", actionID,
+			"action_name", action.Name(),
+			"reason", "executor_stopped")
+
+		return errors.New("executor stopped")
+	}
 
 	if ae.inProgress[actionID] {
 		ae.mu.Unlock()
@@ -316,8 +336,15 @@ func (ae *ActionExecutor) SetOnActionComplete(fn func(deps.ActionResult)) {
 }
 
 func (ae *ActionExecutor) Shutdown() {
-	if ae.metricsCancel != nil {
-		ae.metricsCancel()
+	// Mark as stopped and capture cancel functions under lock to prevent race with Start()
+	ae.mu.Lock()
+	ae.stopped = true
+	metricsCancel := ae.metricsCancel
+	cancel := ae.cancel
+	ae.mu.Unlock()
+
+	if metricsCancel != nil {
+		metricsCancel()
 	}
 
 	ae.metricsWg.Wait()
@@ -326,8 +353,8 @@ func (ae *ActionExecutor) Shutdown() {
 		close(ae.actionQueue)
 	})
 
-	if ae.cancel != nil {
-		ae.cancel()
+	if cancel != nil {
+		cancel()
 	}
 
 	ae.wg.Wait()
