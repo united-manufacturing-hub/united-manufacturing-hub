@@ -332,7 +332,7 @@
 // (e.g., RunningState, TryingToConnectState).
 //
 // State (string): The snap.Observed.State field for debugging/logging.
-// Set via config.MakeState(prefix, suffix).
+// Built using LifecyclePhase.Prefix() + suffix (e.g., "running_healthy_connected").
 //
 // DesiredState: What the system should be. Derived from user configuration.
 // Does not contain runtime dependencies.

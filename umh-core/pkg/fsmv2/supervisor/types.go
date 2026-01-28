@@ -80,7 +80,7 @@ type SupervisorInterface interface {
 	// Used by ChildInfo to populate StateReason field.
 	GetCurrentStateNameAndReason() (stateName string, reason string)
 	// GetObservedStateName returns the observed state's State field (e.g., "running_healthy_connected").
-	// This exposes the lifecycle prefix for health checks using config.IsOperational().
+	// Use config.ParseLifecyclePhase() to convert this to a LifecyclePhase for health checks.
 	// Returns "unknown" if no observation has been collected yet.
 	GetObservedStateName() string
 	// GetLifecyclePhase returns the lifecycle phase of the current state.

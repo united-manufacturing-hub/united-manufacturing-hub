@@ -22,45 +22,6 @@ import (
 )
 
 var _ = Describe("State Functions", func() {
-	Describe("MakeState", func() {
-		Context("with PrefixStopped", func() {
-			It("returns 'stopped' regardless of suffix", func() {
-				Expect(config.MakeState(config.PrefixStopped, "")).To(Equal("stopped"))
-				Expect(config.MakeState(config.PrefixStopped, "connected")).To(Equal("stopped"))
-				Expect(config.MakeState(config.PrefixStopped, "anything")).To(Equal("stopped"))
-			})
-		})
-
-		Context("with PrefixTryingToStart", func() {
-			It("concatenates prefix and suffix", func() {
-				Expect(config.MakeState(config.PrefixTryingToStart, "connecting")).To(Equal("trying_to_start_connecting"))
-				Expect(config.MakeState(config.PrefixTryingToStart, "authenticating")).To(Equal("trying_to_start_authenticating"))
-			})
-		})
-
-		Context("with PrefixRunning", func() {
-			It("concatenates prefix and suffix", func() {
-				Expect(config.MakeState(config.PrefixRunning, "connected")).To(Equal("running_connected"))
-				Expect(config.MakeState(config.PrefixRunning, "syncing")).To(Equal("running_syncing"))
-			})
-		})
-
-		Context("with PrefixTryingToStop", func() {
-			It("concatenates prefix and suffix", func() {
-				Expect(config.MakeState(config.PrefixTryingToStop, "disconnecting")).To(Equal("trying_to_stop_disconnecting"))
-				Expect(config.MakeState(config.PrefixTryingToStop, "cleanup")).To(Equal("trying_to_stop_cleanup"))
-			})
-		})
-
-		Context("with empty suffix", func() {
-			It("returns just the prefix for non-stopped states", func() {
-				Expect(config.MakeState(config.PrefixRunning, "")).To(Equal("running_"))
-				Expect(config.MakeState(config.PrefixTryingToStart, "")).To(Equal("trying_to_start_"))
-				Expect(config.MakeState(config.PrefixTryingToStop, "")).To(Equal("trying_to_stop_"))
-			})
-		})
-	})
-
 	Describe("ValidateDesiredState", func() {
 		Context("with valid desired states", func() {
 			It("returns nil for 'running'", func() {
@@ -157,74 +118,40 @@ var _ = Describe("State Functions", func() {
 		})
 	})
 
-	Describe("GetLifecyclePrefix", func() {
-		It("returns 'stopped' for stopped state", func() {
-			Expect(config.GetLifecyclePrefix("stopped")).To(Equal(config.PrefixStopped))
+	Describe("ParseLifecyclePhase", func() {
+		It("returns PhaseStopped for 'stopped'", func() {
+			Expect(config.ParseLifecyclePhase("stopped")).To(Equal(config.PhaseStopped))
 		})
 
-		It("returns PrefixTryingToStart for trying_to_start_* states", func() {
-			Expect(config.GetLifecyclePrefix("trying_to_start_connecting")).To(Equal(config.PrefixTryingToStart))
-			Expect(config.GetLifecyclePrefix("trying_to_start_authenticating")).To(Equal(config.PrefixTryingToStart))
+		It("returns PhaseStarting for trying_to_start_* states", func() {
+			Expect(config.ParseLifecyclePhase("trying_to_start_connecting")).To(Equal(config.PhaseStarting))
+			Expect(config.ParseLifecyclePhase("trying_to_start_authenticating")).To(Equal(config.PhaseStarting))
 		})
 
-		It("returns PrefixRunning for running_* states", func() {
-			Expect(config.GetLifecyclePrefix("running_connected")).To(Equal(config.PrefixRunning))
-			Expect(config.GetLifecyclePrefix("running_syncing")).To(Equal(config.PrefixRunning))
+		It("returns PhaseRunningHealthy for running_healthy_* states", func() {
+			Expect(config.ParseLifecyclePhase("running_healthy_connected")).To(Equal(config.PhaseRunningHealthy))
+			Expect(config.ParseLifecyclePhase("running_healthy_syncing")).To(Equal(config.PhaseRunningHealthy))
 		})
 
-		It("returns PrefixTryingToStop for trying_to_stop_* states", func() {
-			Expect(config.GetLifecyclePrefix("trying_to_stop_disconnecting")).To(Equal(config.PrefixTryingToStop))
-			Expect(config.GetLifecyclePrefix("trying_to_stop_cleanup")).To(Equal(config.PrefixTryingToStop))
+		It("returns PhaseRunningDegraded for running_degraded_* states", func() {
+			Expect(config.ParseLifecyclePhase("running_degraded_partial")).To(Equal(config.PhaseRunningDegraded))
+			Expect(config.ParseLifecyclePhase("running_degraded_unhealthy_children")).To(Equal(config.PhaseRunningDegraded))
 		})
 
-		It("returns empty string for invalid states", func() {
-			Expect(config.GetLifecyclePrefix("")).To(Equal(""))
-			Expect(config.GetLifecyclePrefix("invalid")).To(Equal(""))
-			Expect(config.GetLifecyclePrefix("running")).To(Equal("")) // Missing underscore suffix
-		})
-	})
-
-	Describe("IsOperational", func() {
-		It("returns true for running_* states", func() {
-			Expect(config.IsOperational("running_connected")).To(BeTrue())
-			Expect(config.IsOperational("running_syncing")).To(BeTrue())
+		It("returns PhaseStopping for trying_to_stop_* states", func() {
+			Expect(config.ParseLifecyclePhase("trying_to_stop_disconnecting")).To(Equal(config.PhaseStopping))
+			Expect(config.ParseLifecyclePhase("trying_to_stop_cleanup")).To(Equal(config.PhaseStopping))
 		})
 
-		It("returns false for non-running states", func() {
-			Expect(config.IsOperational("stopped")).To(BeFalse())
-			Expect(config.IsOperational("trying_to_start_connecting")).To(BeFalse())
-			Expect(config.IsOperational("trying_to_stop_disconnecting")).To(BeFalse())
-		})
-	})
-
-	Describe("IsStopped", func() {
-		It("returns true only for exactly 'stopped'", func() {
-			Expect(config.IsStopped("stopped")).To(BeTrue())
+		It("returns PhaseUnknown for unknown_* states", func() {
+			Expect(config.ParseLifecyclePhase("unknown_error")).To(Equal(config.PhaseUnknown))
+			Expect(config.ParseLifecyclePhase("unknown_initializing")).To(Equal(config.PhaseUnknown))
 		})
 
-		It("returns false for all other states", func() {
-			Expect(config.IsStopped("running_connected")).To(BeFalse())
-			Expect(config.IsStopped("trying_to_start_connecting")).To(BeFalse())
-			Expect(config.IsStopped("trying_to_stop_disconnecting")).To(BeFalse())
-			Expect(config.IsStopped("")).To(BeFalse())
-			Expect(config.IsStopped("stopped_")).To(BeFalse()) // Not exactly "stopped"
-		})
-	})
-
-	Describe("IsTransitioning", func() {
-		It("returns true for trying_to_start_* states", func() {
-			Expect(config.IsTransitioning("trying_to_start_connecting")).To(BeTrue())
-			Expect(config.IsTransitioning("trying_to_start_authenticating")).To(BeTrue())
-		})
-
-		It("returns true for trying_to_stop_* states", func() {
-			Expect(config.IsTransitioning("trying_to_stop_disconnecting")).To(BeTrue())
-			Expect(config.IsTransitioning("trying_to_stop_cleanup")).To(BeTrue())
-		})
-
-		It("returns false for stable states", func() {
-			Expect(config.IsTransitioning("stopped")).To(BeFalse())
-			Expect(config.IsTransitioning("running_connected")).To(BeFalse())
+		It("returns PhaseUnknown for unrecognized patterns", func() {
+			Expect(config.ParseLifecyclePhase("")).To(Equal(config.PhaseUnknown))
+			Expect(config.ParseLifecyclePhase("invalid")).To(Equal(config.PhaseUnknown))
+			Expect(config.ParseLifecyclePhase("running_connected")).To(Equal(config.PhaseUnknown)) // Old format without healthy/degraded
 		})
 	})
 
@@ -233,10 +160,10 @@ var _ = Describe("State Functions", func() {
 			It("returns correct prefix for each phase", func() {
 				Expect(config.PhaseUnknown.Prefix()).To(Equal("unknown_"))
 				Expect(config.PhaseStopped.Prefix()).To(Equal("stopped"))
-				Expect(config.PhaseStarting.Prefix()).To(Equal("starting_"))
+				Expect(config.PhaseStarting.Prefix()).To(Equal("trying_to_start_"))
 				Expect(config.PhaseRunningHealthy.Prefix()).To(Equal("running_healthy_"))
 				Expect(config.PhaseRunningDegraded.Prefix()).To(Equal("running_degraded_"))
-				Expect(config.PhaseStopping.Prefix()).To(Equal("stopping_"))
+				Expect(config.PhaseStopping.Prefix()).To(Equal("trying_to_stop_"))
 			})
 		})
 

@@ -720,7 +720,7 @@ func (s *Supervisor[TObserved, TDesired]) GetCurrentStateNameAndReason() (string
 }
 
 // GetObservedStateName returns the observed state's State field (e.g., "running_healthy_connected").
-// This exposes the lifecycle prefix for health checks using config.IsOperational().
+// Use config.ParseLifecyclePhase() to convert this to a LifecyclePhase for health checks.
 // Returns "unknown" if no observation has been collected yet.
 // Used by parent supervisors to determine child health based on lifecycle phase.
 func (s *Supervisor[TObserved, TDesired]) GetObservedStateName() string {

@@ -25,18 +25,6 @@ const (
 	DesiredStateRunning = "running"
 )
 
-// LifecyclePrefixes - standardized prefixes for ObservedState.State.
-// All observed states use prefix_suffix format where prefix indicates lifecycle phase.
-//
-// DEPRECATED: Use LifecyclePhase enum instead. These constants remain for
-// backwards compatibility during migration.
-const (
-	PrefixStopped       = "stopped"          // Terminal state (no suffix)
-	PrefixTryingToStart = "trying_to_start_" // + worker-specific suffix
-	PrefixRunning       = "running_"         // + worker-specific suffix
-	PrefixTryingToStop  = "trying_to_stop_"  // + worker-specific suffix
-)
-
 // LifecyclePhase represents the lifecycle phase of a worker state.
 // This is used by parent supervisors to classify child health without
 // knowing implementation details of the child's state machine.
@@ -110,18 +98,23 @@ const (
 // Prefix returns the string prefix for the observed state name.
 // The full observed state name is: Prefix() + lowercase(state.String())
 // For PhaseStopped, returns "stopped" with no trailing underscore.
+//
+// Naming convention:
+//   - "trying_to_*" prefixes: States that emit actions while waiting/retrying
+//   - "running_*" prefixes: Operational states (healthy or degraded)
+//   - "stopped": Terminal state
 func (p LifecyclePhase) Prefix() string {
 	switch p {
 	case PhaseStopped:
 		return "stopped" // No trailing underscore (no suffix for stopped)
 	case PhaseStarting:
-		return "starting_"
+		return "trying_to_start_" // States emitting actions while starting
 	case PhaseRunningHealthy:
 		return "running_healthy_"
 	case PhaseRunningDegraded:
 		return "running_degraded_"
 	case PhaseStopping:
-		return "stopping_"
+		return "trying_to_stop_" // States emitting actions while stopping
 	default:
 		return "unknown_"
 	}
@@ -177,6 +170,38 @@ func (p LifecyclePhase) IsDegraded() bool {
 	return p == PhaseRunningDegraded
 }
 
+// ParseLifecyclePhase parses a state string and returns the corresponding LifecyclePhase.
+// It handles the state format: "stopped", "trying_to_start_*", "running_healthy_*",
+// "running_degraded_*", "trying_to_stop_*", "unknown_*".
+// Returns PhaseUnknown for unrecognized patterns.
+func ParseLifecyclePhase(state string) LifecyclePhase {
+	if state == "stopped" {
+		return PhaseStopped
+	}
+
+	if strings.HasPrefix(state, "trying_to_start_") {
+		return PhaseStarting
+	}
+
+	if strings.HasPrefix(state, "running_healthy_") {
+		return PhaseRunningHealthy
+	}
+
+	if strings.HasPrefix(state, "running_degraded_") {
+		return PhaseRunningDegraded
+	}
+
+	if strings.HasPrefix(state, "trying_to_stop_") {
+		return PhaseStopping
+	}
+
+	if strings.HasPrefix(state, "unknown_") {
+		return PhaseUnknown
+	}
+
+	return PhaseUnknown
+}
+
 // IsValidDesiredState returns true if the state is a valid desired state value.
 func IsValidDesiredState(state string) bool {
 	return state == DesiredStateStopped || state == DesiredStateRunning
@@ -201,54 +226,4 @@ func ValidateDesiredState(state string) error {
 	}
 
 	return fmt.Errorf("invalid desired state: only 'stopped' or 'running' are allowed. %s", hint)
-}
-
-// GetLifecyclePrefix returns the lifecycle prefix from a state string.
-// Examples: "running_connected" → "running_", "stopped" → "stopped".
-//
-// DEPRECATED: Use LifecyclePhase enum methods instead.
-func GetLifecyclePrefix(state string) string {
-	if state == PrefixStopped {
-		return PrefixStopped
-	}
-
-	if strings.HasPrefix(state, PrefixTryingToStart) {
-		return PrefixTryingToStart
-	}
-
-	if strings.HasPrefix(state, PrefixRunning) {
-		return PrefixRunning
-	}
-
-	if strings.HasPrefix(state, PrefixTryingToStop) {
-		return PrefixTryingToStop
-	}
-
-	return "" // Invalid state
-}
-
-// IsOperational returns true if the state is in the running_* phase.
-func IsOperational(state string) bool {
-	return strings.HasPrefix(state, PrefixRunning)
-}
-
-// IsStopped returns true if the state is exactly "stopped".
-func IsStopped(state string) bool {
-	return state == PrefixStopped
-}
-
-// IsTransitioning returns true if the state is trying_to_start_* or trying_to_stop_*.
-func IsTransitioning(state string) bool {
-	return strings.HasPrefix(state, PrefixTryingToStart) ||
-		strings.HasPrefix(state, PrefixTryingToStop)
-}
-
-// MakeState builds a state string from prefix and suffix.
-// Example: MakeState(PrefixRunning, "connected") → "running_connected".
-func MakeState(prefix, suffix string) string {
-	if prefix == PrefixStopped {
-		return PrefixStopped
-	}
-
-	return prefix + suffix
 }
