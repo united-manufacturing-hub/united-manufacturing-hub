@@ -19,6 +19,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
+
 	v2 "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2/pull"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2/push"
@@ -30,6 +32,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	topicbrowserfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/topicbrowser"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	"go.uber.org/zap"
@@ -240,7 +243,7 @@ func (c *CommunicationState) UpdateTopicBrowserCache() error {
 // InitialiseAndStartSubscriberHandler creates a new subscriber handler and starts it
 // ttl is the time until a subscriber is considered dead (if no new subscriber message is received)
 // cull is the cycle time to remove dead subscribers.
-func (c *CommunicationState) InitialiseAndStartSubscriberHandler(ttl time.Duration, cull time.Duration, config *config.FullConfig, systemSnapshotManager *fsm.SnapshotManager, configManager config.ConfigManager) {
+func (c *CommunicationState) InitialiseAndStartSubscriberHandler(ttl time.Duration, cull time.Duration, config *config.FullConfig, systemSnapshotManager *fsm.SnapshotManager, configManager config.ConfigManager, fsmOutboundChannel chan<- *transport.UMHMessage) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -291,6 +294,7 @@ func (c *CommunicationState) InitialiseAndStartSubscriberHandler(ttl time.Durati
 		configManager,
 		c.Logger,
 		topicBrowserCommunicator,
+		fsmOutboundChannel, // FSMv2 direct channel (nil for legacy mode)
 	)
 	if c.SubscriberHandler == nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "Failed to create subscriber handler")
@@ -339,4 +343,126 @@ func (c *CommunicationState) InitialiseReAuthHandler(authToken string, insecureT
 
 		// The ticker will run for the lifetime of our program, therefore no cleanup is required.
 	})
+}
+
+// InitializeWriteOnlyPusher creates a Pusher that only writes to OutboundChannel without starting
+// the HTTP push goroutine. This is used for FSMv2 mode where FSMv2 handles the HTTP transport.
+// The Pusher.Push() method will write messages to OutboundChannel, which FSMv2 reads and pushes via HTTP.
+func (c *CommunicationState) InitializeWriteOnlyPusher(instanceUUID string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.Watchdog == nil {
+		sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "Watchdog is nil, cannot create write-only pusher")
+
+		return
+	}
+
+	// Parse UUID (or use nil if invalid)
+	parsedUUID, err := parseUUIDForFSMv2(instanceUUID)
+	if err != nil {
+		c.Logger.Warnw("Failed to parse instance UUID for FSMv2, using nil UUID", "error", err)
+	}
+
+	// Create Pusher but do NOT call Start() - FSMv2 handles HTTP transport
+	c.Pusher = push.NewPusher(
+		parsedUUID,
+		"", // Empty JWT - FSMv2 handles auth
+		c.Watchdog,
+		c.OutboundChannel,
+		push.DefaultDeadLetterChanBuffer(),
+		push.DefaultBackoffPolicy(),
+		c.InsecureTLS,
+		c.ApiUrl,
+		c.Logger,
+	)
+
+	// NOTE: We intentionally do NOT call c.Pusher.Start() here.
+	// FSMv2 communicator handles the HTTP push via SyncAction.
+}
+
+// SetLoginResponseForFSMv2 sets a minimal LoginResponse needed by the Router for FSMv2 mode.
+// FSMv2 handles authentication separately, so we just need the instance UUID.
+// Also updates the SubscriberHandler's and Router's instanceUUID if they exist (Bug #6, #8 fix).
+//
+// Lock ordering: Acquires mu.RLock() FIRST, then LoginResponseMu.Lock() SECOND.
+// This is consistent with other methods (InitialiseAndStartPuller, InitialiseAndStartPusher, etc.)
+// to prevent deadlocks. Bug #7 fix.
+func (c *CommunicationState) SetLoginResponseForFSMv2(instanceUUID string) {
+	// Acquire mu first (consistent lock ordering with other methods)
+	c.mu.RLock()
+	subscriberHandler := c.SubscriberHandler
+	router := c.Router
+	c.mu.RUnlock()
+
+	// Now acquire LoginResponseMu to update LoginResponse
+	c.LoginResponseMu.Lock()
+	defer c.LoginResponseMu.Unlock()
+
+	parsedUUID, err := parseUUIDForFSMv2(instanceUUID)
+	if err != nil {
+		c.Logger.Warnw("Failed to parse instance UUID for FSMv2, using nil UUID", "error", err)
+	}
+
+	c.LoginResponse = &v2.LoginResponse{
+		UUID: parsedUUID,
+		JWT:  "", // Empty JWT - FSMv2 handles auth
+		Name: "FSMv2 Instance",
+	}
+
+	// Update SubscriberHandler's instanceUUID if it exists (Bug #6 fix)
+	// We read subscriberHandler outside the lock, so it's safe to call SetInstanceUUID
+	// (which is thread-safe due to Bug #7 fix)
+	if subscriberHandler != nil {
+		subscriberHandler.SetInstanceUUID(parsedUUID)
+		c.Logger.Infow("Updated SubscriberHandler with backend UUID", "uuid", parsedUUID)
+	}
+
+	// Update Router's instanceUUID if it exists (Bug #8 fix)
+	// The Router was created with a placeholder UUID, and now we have the real UUID
+	// from the backend authentication response.
+	if router != nil {
+		router.SetInstanceUUID(parsedUUID)
+		c.Logger.Infow("Updated Router with backend UUID", "uuid", parsedUUID)
+	}
+}
+
+// InitializeRouterForFSMv2 initializes the Router for FSMv2 mode.
+// Unlike InitialiseAndStartRouter, this does not require a Puller (FSMv2 handles pulling).
+func (c *CommunicationState) InitializeRouterForFSMv2() {
+	if c.Pusher == nil {
+		sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "Pusher is nil, cannot start router for FSMv2")
+
+		return
+	}
+
+	if c.LoginResponse == nil {
+		sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "LoginResponse is nil, cannot start router for FSMv2")
+
+		return
+	}
+
+	c.mu.Lock()
+	c.LoginResponseMu.RLock()
+	// Note: Puller is nil for FSMv2 mode - FSMv2 handles pulling via SyncAction
+	c.Router = router.NewRouter(c.Watchdog, c.InboundChannel, c.LoginResponse.UUID, c.OutboundChannel, c.ReleaseChannel, c.SubscriberHandler, c.SystemSnapshotManager, c.ConfigManager, c.Logger)
+	c.LoginResponseMu.RUnlock()
+	c.mu.Unlock()
+
+	if c.Router == nil {
+		sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "Failed to create router for FSMv2")
+
+		return
+	}
+
+	c.Router.Start()
+}
+
+// parseUUIDForFSMv2 attempts to parse a UUID string, returning uuid.Nil on failure.
+func parseUUIDForFSMv2(uuidStr string) (uuid.UUID, error) {
+	if uuidStr == "" {
+		return uuid.Nil, nil
+	}
+
+	return uuid.Parse(uuidStr)
 }

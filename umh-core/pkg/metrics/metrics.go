@@ -15,11 +15,12 @@
 package metrics
 
 import (
+	"encoding/json"
+	"errors"
 	"net/http"
 	"runtime"
+	"sync"
 	"time"
-
-	"errors"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
@@ -157,11 +158,80 @@ var (
 	)
 )
 
+// FSMv2DebugProvider provides FSMv2 introspection data for the debug endpoint.
+// Implementations should return a JSON-serializable struct with supervisor state.
+type FSMv2DebugProvider interface {
+	GetDebugInfo() interface{}
+}
+
+// fsmv2DebugRegistry holds registered FSMv2 debug providers.
+var fsmv2DebugRegistry struct {
+	providers map[string]FSMv2DebugProvider
+	mu        sync.RWMutex
+}
+
+// RegisterFSMv2DebugProvider registers a debug provider for the /debug/fsmv2 endpoint.
+// Call this after creating an FSMv2 supervisor to expose its introspection data.
+func RegisterFSMv2DebugProvider(name string, provider FSMv2DebugProvider) {
+	fsmv2DebugRegistry.mu.Lock()
+	defer fsmv2DebugRegistry.mu.Unlock()
+
+	if fsmv2DebugRegistry.providers == nil {
+		fsmv2DebugRegistry.providers = make(map[string]FSMv2DebugProvider)
+	}
+
+	fsmv2DebugRegistry.providers[name] = provider
+}
+
+// UnregisterFSMv2DebugProvider removes a debug provider from the registry.
+// Call this when shutting down an FSMv2 supervisor.
+func UnregisterFSMv2DebugProvider(name string) {
+	fsmv2DebugRegistry.mu.Lock()
+	defer fsmv2DebugRegistry.mu.Unlock()
+
+	delete(fsmv2DebugRegistry.providers, name)
+}
+
+// handleFSMv2Debug handles the /debug/fsmv2 endpoint.
+func handleFSMv2Debug(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+
+		return
+	}
+
+	fsmv2DebugRegistry.mu.RLock()
+	defer fsmv2DebugRegistry.mu.RUnlock()
+
+	if len(fsmv2DebugRegistry.providers) == 0 {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"status":"no_providers_registered","message":"No FSMv2 supervisors are registered for debugging"}`))
+
+		return
+	}
+
+	response := make(map[string]interface{}, len(fsmv2DebugRegistry.providers))
+	for name, provider := range fsmv2DebugRegistry.providers {
+		response[name] = provider.GetDebugInfo()
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+
+	encoder := json.NewEncoder(w)
+	encoder.SetIndent("", "  ")
+
+	if err := encoder.Encode(response); err != nil {
+		http.Error(w, "Failed to encode debug info", http.StatusInternalServerError)
+	}
+}
+
 // SetupMetricsEndpoint starts an HTTP server to expose metrics
 // This should be called once at application startup.
 func SetupMetricsEndpoint(addr string) *http.Server {
 	mux := http.NewServeMux()
 	mux.Handle("/metrics", promhttp.Handler())
+	mux.HandleFunc("/debug/fsmv2", handleFSMv2Debug)
 
 	server := &http.Server{
 		Addr:        addr,

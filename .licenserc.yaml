@@ -69,5 +69,9 @@ header:
     - "umh-core/pkg/service/benthos_monitor/test_metrics.txt"
     - "umh-core/pkg/service/s6/s6_test_data.txt"
     - "umh-core/pkg/service/s6/s6_test_log_data.txt"
+    - "umh-core/.docker-cache/**/*"
+    - "umh-core/coverage.out"
+    - "umh-core/coverprofile.out"
+    - "umh-core/integration/umh-config/*.yaml"
 
   comment: on-failure

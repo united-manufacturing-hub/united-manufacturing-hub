@@ -15,3 +15,5 @@ tools/s6-analyzer/s6-analyzer
 # Test artifacts
 umh-core-data/
 test_output.txt
+runner
+runner-panic
