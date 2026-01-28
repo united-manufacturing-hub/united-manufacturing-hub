@@ -48,9 +48,9 @@ We didn't ditch it—**we de-coupled from it**.
 
 No – the two big ones are still there:
 
-**Scalability**: Run multiple `umh-core` replicas behind a Service/LB. Future: Redpanda clustering to shard partitions**Fail-over**: Shared volume (NFS/Longhorn) lets a standby replay Redpanda's log; any scheduler (k8s, Portainer, systemd-docker) restarts the pod/container.
+**Scalability**: Deploy one UMH Core instance per production line, each forwarding to a central site instance. This ISA-95 style hierarchy naturally distributes workload across your infrastructure.
 
-Manufacturing rarely needs layer-7 load-balancing (100 k msg/s is peanuts vs IT), but it's still possible if you want it.
+**Failover**: Kubernetes restarts crashed pods (30–60 seconds) and reschedules after node failure (1–2 minutes). See [High Availability](../production/high-availability.md).
 
 ## Why is Kafka (Redpanda) embedded instead of its own container?
 

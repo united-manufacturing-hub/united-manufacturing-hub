@@ -19,7 +19,7 @@
 - **Physical security** (secure deployment locations and restrict physical access per IEC 62443-3-3 SR 5.1)
 - **OT safety systems** (umh-core must not be integrated into safety-instrumented systems; see IEC 61508/61511)
 - **Backup and disaster recovery** (configuration backups, persistent volume snapshots, tested restore procedures per business continuity requirements)
-- **High availability** (deploying multiple instances if required for critical production lines)
+- **High availability**: use storage accessible from multiple nodes. See [High Availability](../../high-availability.md).
 - **Security event monitoring** (SIEM integration if required, intrusion detection systems)
 - **Corporate CA certificate management** (adding certificates for TLS inspection scenarios)
 - **Reading this documentation** - we provide secure software, you must deploy it securely
