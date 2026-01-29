@@ -84,6 +84,9 @@
 //   - Permanent failures: Return SignalNeedsRestart from state.Next() instead.
 //   - Expected conditions: For example, "already connected" is success.
 //
+// For Sentry error reporting, see sentry/doc.go. Use ErrorFields for all
+// error logs to ensure proper grouping and alerting.
+//
 // ## DesiredState constraints
 //
 // DesiredState never contains Dependencies because Dependencies are runtime
