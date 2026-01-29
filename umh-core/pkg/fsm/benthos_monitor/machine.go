@@ -38,6 +38,7 @@ func NewBenthosMonitorInstance(config config.BenthosMonitorConfig) (*BenthosMoni
 	if err != nil {
 		return nil, fmt.Errorf("failed to create benthos monitor service: %w", err)
 	}
+
 	return NewBenthosMonitorInstanceWithService(config, service), nil
 }
 

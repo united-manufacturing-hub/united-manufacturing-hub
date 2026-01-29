@@ -30,7 +30,7 @@ import (
 // persistent config files and runtime environment variables passed via docker -e flags.
 //
 // Order of precedence (highest to lowest):
-// 1. Environment variables (AUTH_TOKEN, API_URL, RELEASE_CHANNEL, ALLOW_INSECURE_TLS, LOCATION_*)
+// 1. Environment variables (AUTH_TOKEN, API_URL, RELEASE_CHANNEL, ALLOW_INSECURE_TLS, USE_FSMV2_TRANSPORT, LOCATION_*)
 // 2. Existing config file values
 // 3. Default values
 //
@@ -38,7 +38,7 @@ import (
 // which is particularly useful for CI/CD pipelines, testing, and containerized deployments.
 // For example, in the Makefile:
 //
-//	docker run -e AUTH_TOKEN=xyz -e LOCATION_0=factory1 -e ALLOW_INSECURE_TLS=true $(IMAGE_NAME):$(TAG)
+//	docker run -e AUTH_TOKEN=xyz -e LOCATION_0=factory1 -e ALLOW_INSECURE_TLS=true -e USE_FSMV2_TRANSPORT=true $(IMAGE_NAME):$(TAG)
 //
 // Detailed explanation of what happens:
 //
@@ -47,7 +47,7 @@ import (
 //   - If the file doesn't exist, a new config with default values is created
 //
 // 2. Environment variable processing:
-//   - Environment variables are collected: AUTH_TOKEN, API_URL, RELEASE_CHANNEL, ALLOW_INSECURE_TLS, LOCATION_0..6
+//   - Environment variables are collected: AUTH_TOKEN, API_URL, RELEASE_CHANNEL, ALLOW_INSECURE_TLS, USE_FSMV2_TRANSPORT, LOCATION_0..6
 //   - Only non-empty variables will override existing config values
 //   - For example, if AUTH_TOKEN is set in the environment, it will replace any existing value
 //     in the config file
@@ -97,6 +97,21 @@ func LoadConfigWithEnvOverrides(ctx context.Context, configManager *FileConfigMa
 		}
 	}
 
+	// For UseFSMv2Transport, we need to know if it was explicitly set
+	var (
+		useFSMv2Transport    bool
+		useFSMv2TransportSet bool
+	)
+
+	if useFSMv2TransportStr, exists := os.LookupEnv("USE_FSMV2_TRANSPORT"); exists {
+		useFSMv2Transport, err = env.GetAsBool("USE_FSMV2_TRANSPORT", false, false)
+		if err != nil {
+			sentry.ReportIssuef(sentry.IssueTypeWarning, log, "Failed to parse USE_FSMV2_TRANSPORT=%q as boolean: %w. Existing config value will be kept", useFSMv2TransportStr, err)
+		} else {
+			useFSMv2TransportSet = true
+		}
+	}
+
 	// Location values are numbered 0-6 and passed as LOCATION_0, LOCATION_1, etc.
 	locations := make(map[int]string)
 
@@ -141,6 +156,11 @@ func LoadConfigWithEnvOverrides(ctx context.Context, configManager *FileConfigMa
 	// Only set AllowInsecureTLS if it was explicitly provided as an environment variable
 	if allowInsecureTLSSet {
 		configOverride.Agent.AllowInsecureTLS = allowInsecureTLS
+	}
+
+	// Only set UseFSMv2Transport if it was explicitly provided as an environment variable
+	if useFSMv2TransportSet {
+		configOverride.Agent.UseFSMv2Transport = useFSMv2Transport
 	}
 
 	// Apply the environment overrides to the config

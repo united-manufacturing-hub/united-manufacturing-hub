@@ -193,7 +193,6 @@ func writeConfigFile(yamlContent string, containerName ...string) error {
 
 			return fmt.Errorf("failed to copy config to container: %w", err)
 		}
-
 	}
 
 	return nil
@@ -327,6 +326,7 @@ func BuildAndRunContainer(configYaml string, memory string, cpus uint) error {
 	if err := os.Chmod(tmpRedpandaDir, 0o777); err != nil {
 		GinkgoWriter.Printf("Warning: failed to chmod redpanda dir: %v\n", err)
 	}
+
 	if err := os.Chmod(tmpLogsDir, 0o777); err != nil {
 		GinkgoWriter.Printf("Warning: failed to chmod logs dir: %v\n", err)
 	}
@@ -700,6 +700,7 @@ func runDockerCommandWithCtx(ctx context.Context, args ...string) (string, error
 	// Check if we use docker or podman
 	// FORCE_DOCKER=true bypasses podman detection (needed when image built with Docker)
 	dockerCmd := "docker"
+
 	if os.Getenv("FORCE_DOCKER") != "true" {
 		if _, err := exec.LookPath("podman"); err == nil {
 			dockerCmd = "podman"

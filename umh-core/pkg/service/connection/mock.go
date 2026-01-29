@@ -55,28 +55,22 @@ type MockConnectionService struct {
 	ForceRemoveConnectionError           error
 	ReconcileManagerError                error
 
-	// Interface (16 bytes - pointer + type info)
 	NmapService nmap.INmapService
 
-	// Maps (8 bytes each - pointers)
 	ConnectionStates    map[string]*ServiceInfo
 	ExistingConnections map[string]bool
 	RecentNmapStates    map[string][]string
 	stateFlags          map[string]*ConnectionStateFlags
 
-	// Structs (varies in size)
 	GenerateNmapConfigForConnectionResult nmapserviceconfig.NmapServiceConfig
 	GetConfigResult                       connectionserviceconfig.ConnectionServiceConfig
 
-	// Slice (24 bytes - pointer + len + cap)
 	NmapConfigs []config.NmapConfig
 
 	StatusResult ServiceInfo
 
-	// Mutex (24 bytes typically)
 	mu sync.RWMutex
 
-	// Booleans (1 byte each, but grouped for better packing)
 	GenerateNmapConfigForConnectionCalled bool
 	GetConfigCalled                       bool
 	StatusCalled                          bool

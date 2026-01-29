@@ -15,11 +15,13 @@
 package subscriber
 
 import (
+	"sync"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2/push"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/encoding"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/topicbrowser"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
 
 	"github.com/google/uuid"
 
@@ -39,10 +41,12 @@ type Handler struct {
 	configManager              config.ConfigManager
 	subscriberRegistry         *subscribers.Registry
 	pusher                     *push.Pusher
+	fsmOutboundChannel         chan<- *transport.UMHMessage // FSMv2 direct channel (nil for legacy mode)
 	StatusCollector            *generator.StatusCollectorType
 	systemSnapshotManager      *fsm.SnapshotManager
 	topicBrowserCommunicator   *topicbrowser.TopicBrowserCommunicator
 	logger                     *zap.SugaredLogger
+	instanceUUIDMu             sync.RWMutex
 	instanceUUID               uuid.UUID
 	disableHardwareStatusCheck bool //nolint:unused // will be used in the future
 }
@@ -59,11 +63,13 @@ func NewHandler(
 	configManager config.ConfigManager,
 	logger *zap.SugaredLogger,
 	topicBrowserCommunicator *topicbrowser.TopicBrowserCommunicator,
+	fsmOutboundChannel chan<- *transport.UMHMessage, // FSMv2 direct channel (nil for legacy mode)
 ) *Handler {
 	s := &Handler{}
 	s.subscriberRegistry = subscribers.NewRegistry(cull, ttl)
 	s.dog = dog
 	s.pusher = pusher
+	s.fsmOutboundChannel = fsmOutboundChannel
 	s.instanceUUID = instanceUUID
 	s.systemSnapshotManager = systemSnapshotManager
 	s.configManager = configManager
@@ -94,6 +100,26 @@ func (s *Handler) GetSubscribers() []string {
 	s.dog.SetHasSubscribers(len(subscribers) > 0)
 
 	return subscribers
+}
+
+// SetInstanceUUID updates the instance UUID used for status messages.
+// This is called by FSMv2 when authentication succeeds and the backend
+// returns the real instance UUID (Bug #6 fix).
+// Thread-safe: uses mutex to protect against concurrent read/write.
+func (s *Handler) SetInstanceUUID(instanceUUID uuid.UUID) {
+	s.instanceUUIDMu.Lock()
+	defer s.instanceUUIDMu.Unlock()
+
+	s.instanceUUID = instanceUUID
+}
+
+// GetInstanceUUID returns the current instance UUID in a thread-safe manner.
+// This getter is used internally by notify() and can be called externally for testing.
+func (s *Handler) GetInstanceUUID() uuid.UUID {
+	s.instanceUUIDMu.RLock()
+	defer s.instanceUUIDMu.RUnlock()
+
+	return s.instanceUUID
 }
 
 func (s *Handler) notifySubscribers() {
@@ -162,11 +188,29 @@ func (s *Handler) notify() {
 			return
 		}
 
-		s.pusher.Push(models.UMHMessage{
-			Content:      message,
-			Email:        email,
-			InstanceUUID: s.instanceUUID,
-		})
+		// FSMv2 mode: write directly to FSMv2 outbound channel (bypasses legacy Pusher)
+		// Legacy mode: use Pusher as before
+		if s.fsmOutboundChannel != nil {
+			msg := &transport.UMHMessage{
+				InstanceUUID: s.GetInstanceUUID().String(),
+				Content:      message,
+				Email:        email,
+			}
+			select {
+			case s.fsmOutboundChannel <- msg:
+				// Successfully sent to FSMv2 transport
+			default:
+				s.logger.Warnf("FSMv2 outbound channel full, dropping message for subscriber %s", email)
+
+				return
+			}
+		} else {
+			s.pusher.Push(models.UMHMessage{
+				Content:      message,
+				Email:        email,
+				InstanceUUID: s.GetInstanceUUID(),
+			})
+		}
 
 		// Mark subscriber as bootstrapped after first message
 		if !bootstrapped {

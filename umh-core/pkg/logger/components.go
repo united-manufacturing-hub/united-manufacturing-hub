@@ -75,4 +75,7 @@ const (
 
 	// Communicator components.
 	ComponentCommunicator = "Communicator"
+
+	// FSMv2 components.
+	ComponentFSMv2 = "fsmv2"
 )

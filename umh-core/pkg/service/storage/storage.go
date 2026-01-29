@@ -93,7 +93,11 @@ func NewArchiveEventStorage(maxPointsPerState int) *ArchiveEventStorage {
 func (a *ArchiveEventStorage) storeDataPoints() {
 	for {
 		select {
-		case dataPoint := <-a.dataPointQueue:
+		case dataPoint, ok := <-a.dataPointQueue:
+			if !ok {
+				return // channel closed
+			}
+
 			a.mu.Lock()
 			points := a.dataPoints[dataPoint.Record.ID]
 			// Enforce max points limit per state
