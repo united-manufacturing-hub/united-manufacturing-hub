@@ -93,11 +93,14 @@ func NewActionExecutorWithTimeout(workerCount int, timeouts map[string]time.Dura
 func (ae *ActionExecutor) Start(ctx context.Context) {
 	ae.mu.Lock()
 	ae.ctx, ae.cancel = context.WithCancel(ctx)
-	ae.mu.Unlock()
-
+	// Pre-add all workers to WaitGroup under lock to prevent race with Shutdown()
 	for range ae.workerCount {
 		ae.wg.Add(1)
+	}
+	ae.mu.Unlock()
 
+	// Start workers - they're already counted in the WaitGroup
+	for range ae.workerCount {
 		go ae.worker()
 	}
 
@@ -105,9 +108,8 @@ func (ae *ActionExecutor) Start(ctx context.Context) {
 
 	ae.mu.Lock()
 	ae.metricsCancel = metricsCancel
+	ae.metricsWg.Add(1) // Add inside lock to prevent race with Shutdown()
 	ae.mu.Unlock()
-
-	ae.metricsWg.Add(1)
 
 	go ae.metricsReporter(metricsCtx)
 }
