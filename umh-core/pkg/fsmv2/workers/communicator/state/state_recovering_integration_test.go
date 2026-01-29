@@ -34,7 +34,7 @@ import (
 )
 
 const (
-	// DegradedBackoffDelay is the minimum wait time in DegradedState before emitting actions.
+	// DegradedBackoffDelay is the minimum wait time in RecoveringState before emitting actions.
 	// Tests use values > 60s to ensure backoff has elapsed.
 	DegradedBackoffDelay = 60 * time.Second
 )
@@ -42,9 +42,9 @@ const (
 // This test simulates the full FSM cycle to verify we don't get stuck in an
 // infinite reset_transport loop. It tests the fix for the bug where
 // ResetTransportAction didn't advance the retry counter.
-var _ = Describe("DegradedState Integration - Infinite Loop Prevention", func() {
+var _ = Describe("RecoveringState Integration - Infinite Loop Prevention", func() {
 	var (
-		stateObj     *state.DegradedState
+		stateObj     *state.RecoveringState
 		dependencies *communicator.CommunicatorDependencies
 		logger       *zap.SugaredLogger
 		mockTransp   *mockResettableTransport
@@ -55,7 +55,7 @@ var _ = Describe("DegradedState Integration - Infinite Loop Prevention", func() 
 		mockTransp = &mockResettableTransport{}
 		identity := deps.Identity{ID: "test-id", WorkerType: "communicator"}
 		dependencies = communicator.NewCommunicatorDependencies(mockTransp, logger, nil, identity)
-		stateObj = &state.DegradedState{}
+		stateObj = &state.RecoveringState{}
 	})
 
 	Describe("Reset Transport Loop Prevention", func() {
@@ -75,8 +75,8 @@ var _ = Describe("DegradedState Integration - Infinite Loop Prevention", func() 
 			snap1 := buildSnapshot(dependencies, httpTransport.ErrorTypeNetwork)
 			result1 := stateObj.Next(snap1)
 
-			Expect(result1.State).To(BeAssignableToTypeOf(&state.DegradedState{}),
-				"Should stay in DegradedState")
+			Expect(result1.State).To(BeAssignableToTypeOf(&state.RecoveringState{}),
+				"Should stay in RecoveringState")
 			Expect(result1.Action).NotTo(BeNil(),
 				"Should emit an action")
 			Expect(result1.Action.Name()).To(Equal("reset_transport"),
@@ -95,8 +95,8 @@ var _ = Describe("DegradedState Integration - Infinite Loop Prevention", func() 
 			snap2 := buildSnapshot(dependencies, httpTransport.ErrorTypeNetwork)
 			result2 := stateObj.Next(snap2)
 
-			Expect(result2.State).To(BeAssignableToTypeOf(&state.DegradedState{}),
-				"Should stay in DegradedState")
+			Expect(result2.State).To(BeAssignableToTypeOf(&state.RecoveringState{}),
+				"Should stay in RecoveringState")
 			Expect(result2.Action).NotTo(BeNil(),
 				"Should emit an action")
 			Expect(result2.Action.Name()).To(Equal("sync"),
@@ -295,7 +295,7 @@ var _ = Describe("DegradedState Integration - Infinite Loop Prevention", func() 
 	})
 })
 
-// buildSnapshot creates a snapshot with the current dependencies state for DegradedState evaluation.
+// buildSnapshot creates a snapshot with the current dependencies state for RecoveringState evaluation.
 // Uses GetWorkerID()/GetWorkerType() from BaseDependencies (no production code changes needed).
 func buildSnapshot(d *communicator.CommunicatorDependencies, lastErrorType httpTransport.ErrorType) fsmv2.Snapshot {
 	return fsmv2.Snapshot{

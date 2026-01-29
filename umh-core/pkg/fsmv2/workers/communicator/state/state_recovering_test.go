@@ -29,16 +29,16 @@ import (
 	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
 )
 
-var _ = Describe("DegradedState", func() {
+var _ = Describe("RecoveringState", func() {
 	var (
-		stateObj *state.DegradedState
+		stateObj *state.RecoveringState
 		logger   *zap.SugaredLogger
 	)
 
 	BeforeEach(func() {
 		logger = zap.NewNop().Sugar()
 		_ = logger
-		stateObj = &state.DegradedState{}
+		stateObj = &state.RecoveringState{}
 	})
 
 	Describe("Next", func() {
@@ -84,9 +84,9 @@ var _ = Describe("DegradedState", func() {
 				}
 			})
 
-			It("should stay in DegradedState", func() {
+			It("should stay in RecoveringState", func() {
 				result := stateObj.Next(snap)
-				Expect(result.State).To(BeAssignableToTypeOf(&state.DegradedState{}))
+				Expect(result.State).To(BeAssignableToTypeOf(&state.RecoveringState{}))
 			})
 
 			It("should emit SyncAction to retry", func() {
@@ -104,15 +104,15 @@ var _ = Describe("DegradedState", func() {
 
 	Describe("String", func() {
 		It("should return state name", func() {
-			Expect(stateObj.String()).To(Equal("Degraded"))
+			Expect(stateObj.String()).To(Equal("Recovering"))
 		})
 	})
 })
 
-var _ = Describe("DegradedState Transport Reset", func() {
+var _ = Describe("RecoveringState Transport Reset", func() {
 	Context("for network errors", func() {
 		It("should emit ResetTransportAction at exactly 5 consecutive errors", func() {
-			stateObj := &state.DegradedState{}
+			stateObj := &state.RecoveringState{}
 
 			snap := fsmv2.Snapshot{
 				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
@@ -127,14 +127,14 @@ var _ = Describe("DegradedState Transport Reset", func() {
 
 			result := stateObj.Next(snap)
 
-			Expect(result.State).To(BeAssignableToTypeOf(&state.DegradedState{}))
+			Expect(result.State).To(BeAssignableToTypeOf(&state.RecoveringState{}))
 			Expect(result.Signal).To(Equal(fsmv2.SignalNone))
 			Expect(result.Action).NotTo(BeNil())
 			Expect(result.Action.Name()).To(Equal("reset_transport"))
 		})
 
 		It("should NOT emit ResetTransportAction at 6 consecutive errors", func() {
-			stateObj := &state.DegradedState{}
+			stateObj := &state.RecoveringState{}
 
 			snap := fsmv2.Snapshot{
 				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
@@ -154,7 +154,7 @@ var _ = Describe("DegradedState Transport Reset", func() {
 		})
 
 		It("should emit ResetTransportAction again at 10 consecutive errors", func() {
-			stateObj := &state.DegradedState{}
+			stateObj := &state.RecoveringState{}
 
 			snap := fsmv2.Snapshot{
 				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
@@ -174,7 +174,7 @@ var _ = Describe("DegradedState Transport Reset", func() {
 		})
 
 		It("should NOT emit ResetTransportAction at 0 errors", func() {
-			stateObj := &state.DegradedState{}
+			stateObj := &state.RecoveringState{}
 
 			snap := fsmv2.Snapshot{
 				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
@@ -196,7 +196,7 @@ var _ = Describe("DegradedState Transport Reset", func() {
 
 	Context("for server errors", func() {
 		It("should NOT emit ResetTransportAction at 5 errors (needs 10)", func() {
-			stateObj := &state.DegradedState{}
+			stateObj := &state.RecoveringState{}
 
 			snap := fsmv2.Snapshot{
 				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
@@ -216,7 +216,7 @@ var _ = Describe("DegradedState Transport Reset", func() {
 		})
 
 		It("should emit ResetTransportAction at 10 consecutive errors", func() {
-			stateObj := &state.DegradedState{}
+			stateObj := &state.RecoveringState{}
 
 			snap := fsmv2.Snapshot{
 				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
@@ -236,7 +236,7 @@ var _ = Describe("DegradedState Transport Reset", func() {
 		})
 
 		It("should emit ResetTransportAction at 20 consecutive errors", func() {
-			stateObj := &state.DegradedState{}
+			stateObj := &state.RecoveringState{}
 
 			snap := fsmv2.Snapshot{
 				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
@@ -258,7 +258,7 @@ var _ = Describe("DegradedState Transport Reset", func() {
 
 	Context("for unknown/other error types", func() {
 		It("should NOT emit ResetTransportAction regardless of error count", func() {
-			stateObj := &state.DegradedState{}
+			stateObj := &state.RecoveringState{}
 
 			snap := fsmv2.Snapshot{
 				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
@@ -279,9 +279,9 @@ var _ = Describe("DegradedState Transport Reset", func() {
 	})
 })
 
-var _ = Describe("DegradedState Auth Transition", func() {
+var _ = Describe("RecoveringState Auth Transition", func() {
 	It("should transition to TryingToAuthenticateState when last error is InvalidToken", func() {
-		stateObj := &state.DegradedState{}
+		stateObj := &state.RecoveringState{}
 
 		snap := fsmv2.Snapshot{
 			Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
@@ -301,9 +301,9 @@ var _ = Describe("DegradedState Auth Transition", func() {
 	})
 })
 
-var _ = Describe("DegradedState Backoff", func() {
+var _ = Describe("RecoveringState Backoff", func() {
 	It("stays in degraded state during backoff period", func() {
-		stateObj := &state.DegradedState{}
+		stateObj := &state.RecoveringState{}
 
 		snap := fsmv2.Snapshot{
 			Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
@@ -317,13 +317,13 @@ var _ = Describe("DegradedState Backoff", func() {
 
 		result := stateObj.Next(snap)
 
-		Expect(result.State).To(BeAssignableToTypeOf(&state.DegradedState{}))
+		Expect(result.State).To(BeAssignableToTypeOf(&state.RecoveringState{}))
 		Expect(result.Signal).To(Equal(fsmv2.SignalNone))
 		Expect(result.Action).To(BeNil(), "Should NOT emit action during backoff period")
 	})
 
 	It("attempts sync after backoff period expires", func() {
-		stateObj := &state.DegradedState{}
+		stateObj := &state.RecoveringState{}
 
 		snap := fsmv2.Snapshot{
 			Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
@@ -337,17 +337,17 @@ var _ = Describe("DegradedState Backoff", func() {
 
 		result := stateObj.Next(snap)
 
-		Expect(result.State).To(BeAssignableToTypeOf(&state.DegradedState{}))
+		Expect(result.State).To(BeAssignableToTypeOf(&state.RecoveringState{}))
 		Expect(result.Action).NotTo(BeNil(), "Should emit SyncAction after backoff expires")
 		Expect(result.Action.Name()).To(Equal("sync"))
 	})
 })
 
-var _ = Describe("DegradedState Transitions", func() {
-	var stateObj *state.DegradedState
+var _ = Describe("RecoveringState Transitions", func() {
+	var stateObj *state.RecoveringState
 
 	BeforeEach(func() {
-		stateObj = &state.DegradedState{}
+		stateObj = &state.RecoveringState{}
 	})
 
 	Describe("Degraded -> StoppedState", func() {
@@ -485,12 +485,12 @@ var _ = Describe("DegradedState Transitions", func() {
 
 			result := stateObj.Next(snap)
 
-			Expect(result.State).To(BeAssignableToTypeOf(&state.DegradedState{}))
+			Expect(result.State).To(BeAssignableToTypeOf(&state.RecoveringState{}))
 		})
 	})
 
 	Describe("Degraded -> self (backoff/retry)", func() {
-		It("should stay in DegradedState during backoff period", func() {
+		It("should stay in RecoveringState during backoff period", func() {
 			snap := fsmv2.Snapshot{
 				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
 				Observed: snapshot.CommunicatorObservedState{
@@ -503,12 +503,12 @@ var _ = Describe("DegradedState Transitions", func() {
 
 			result := stateObj.Next(snap)
 
-			Expect(result.State).To(BeAssignableToTypeOf(&state.DegradedState{}))
+			Expect(result.State).To(BeAssignableToTypeOf(&state.RecoveringState{}))
 			Expect(result.Signal).To(Equal(fsmv2.SignalNone))
 			Expect(result.Action).To(BeNil())
 		})
 
-		It("should stay in DegradedState and emit SyncAction after backoff", func() {
+		It("should stay in RecoveringState and emit SyncAction after backoff", func() {
 			snap := fsmv2.Snapshot{
 				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
 				Observed: snapshot.CommunicatorObservedState{
@@ -521,7 +521,7 @@ var _ = Describe("DegradedState Transitions", func() {
 
 			result := stateObj.Next(snap)
 
-			Expect(result.State).To(BeAssignableToTypeOf(&state.DegradedState{}))
+			Expect(result.State).To(BeAssignableToTypeOf(&state.RecoveringState{}))
 			Expect(result.Signal).To(Equal(fsmv2.SignalNone))
 			Expect(result.Action).NotTo(BeNil())
 			Expect(result.Action.Name()).To(Equal("sync"))
@@ -541,7 +541,7 @@ var _ = Describe("DegradedState Transitions", func() {
 
 			result := stateObj.Next(snap)
 
-			Expect(result.State).To(BeAssignableToTypeOf(&state.DegradedState{}))
+			Expect(result.State).To(BeAssignableToTypeOf(&state.RecoveringState{}))
 			Expect(result.Signal).To(Equal(fsmv2.SignalNone))
 			Expect(result.Action).NotTo(BeNil())
 			Expect(result.Action.Name()).To(Equal("reset_transport"))
@@ -561,7 +561,7 @@ var _ = Describe("DegradedState Transitions", func() {
 
 			result := stateObj.Next(snap)
 
-			Expect(result.State).To(BeAssignableToTypeOf(&state.DegradedState{}))
+			Expect(result.State).To(BeAssignableToTypeOf(&state.RecoveringState{}))
 			Expect(result.Signal).To(Equal(fsmv2.SignalNone))
 			Expect(result.Action).NotTo(BeNil())
 			Expect(result.Action.Name()).To(Equal("reset_transport"))
@@ -580,7 +580,7 @@ var _ = Describe("DegradedState Transitions", func() {
 
 			result := stateObj.Next(snap)
 
-			Expect(result.State).To(BeAssignableToTypeOf(&state.DegradedState{}))
+			Expect(result.State).To(BeAssignableToTypeOf(&state.RecoveringState{}))
 			Expect(result.Signal).To(Equal(fsmv2.SignalNone))
 			Expect(result.Action).NotTo(BeNil())
 			Expect(result.Action.Name()).To(Equal("sync"))
