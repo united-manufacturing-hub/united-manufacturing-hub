@@ -16,7 +16,6 @@ package state
 
 import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent/action"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent/snapshot"
@@ -26,11 +25,7 @@ import (
 // Children without "TryingToStop" in ChildStartStates will have desired state "stopped".
 // Waits for all children to stop before transitioning to StoppedState.
 type TryingToStopState struct {
-	BaseParentState
-}
-
-func (s *TryingToStopState) LifecyclePhase() config.LifecyclePhase {
-	return config.PhaseStopping
+	helpers.StoppingBase
 }
 
 func (s *TryingToStopState) Next(snapAny any) fsmv2.NextResult[any, any] {

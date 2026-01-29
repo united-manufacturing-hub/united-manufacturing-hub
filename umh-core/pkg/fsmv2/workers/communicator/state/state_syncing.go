@@ -18,7 +18,6 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/action"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/backoff"
@@ -36,10 +35,7 @@ import (
 //
 // Enforces C2 (token expiry), C4 (shutdown priority), C5 (syncing loop).
 type SyncingState struct {
-}
-
-func (s *SyncingState) LifecyclePhase() config.LifecyclePhase {
-	return config.PhaseRunningHealthy
+	helpers.RunningHealthyBase
 }
 
 func (s *SyncingState) Next(snapAny any) fsmv2.NextResult[any, any] {

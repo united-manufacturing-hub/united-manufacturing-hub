@@ -132,7 +132,7 @@ const (
 
 	// PhaseStarting: Transitioning to running, not yet operational.
 	// Health: UNHEALTHY - dependency not satisfied.
-	// Prefix: "trying_to_start_"
+	// Prefix: "trying_to_start_".
 	PhaseStarting
 
 	// PhaseRunningHealthy: Operational AND stable - all good.
@@ -142,13 +142,13 @@ const (
 
 	// PhaseRunningDegraded: Operational but with issues.
 	// Health: UNHEALTHY (operational but NOT healthy!).
-	// Prefix: "running_degraded_"
+	// Prefix: "running_degraded_".
 	// Use case: Parent has unhealthy children but can still function.
 	PhaseRunningDegraded
 
 	// PhaseStopping: Graceful shutdown in progress.
 	// Health: UNHEALTHY - dependency being torn down.
-	// Prefix: "trying_to_stop_"
+	// Prefix: "trying_to_stop_".
 	PhaseStopping
 )
 
