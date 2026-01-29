@@ -31,13 +31,13 @@ import (
 type FullConfig struct {
 	Templates         TemplatesConfig           `yaml:"templates,omitempty"`         // Templates section with enforced structure for protocol converter
 	PayloadShapes     map[string]PayloadShape   `yaml:"payloadShapes,omitempty"`     // PayloadShapes section with enforced structure for payload shapes
-	Internal          InternalConfig            `yaml:"internal,omitempty"`          // Internal config, not to be used by the user, only to be used for testing internal components
+	Agent             AgentConfig               `yaml:"agent"`                       // Agent config, requires restart to take effect
 	DataModels        []DataModelsConfig        `yaml:"dataModels,omitempty"`        // DataModels section with enforced structure for data models
 	DataContracts     []DataContractsConfig     `yaml:"dataContracts,omitempty"`     // DataContracts section with enforced structure for data contracts
 	DataFlow          []DataFlowComponentConfig `yaml:"dataFlow,omitempty"`          // DataFlow components to manage, can be updated while running
 	ProtocolConverter []ProtocolConverterConfig `yaml:"protocolConverter,omitempty"` // ProtocolConverter config, can be updated while runnnig
 	StreamProcessor   []StreamProcessorConfig   `yaml:"streamProcessor,omitempty"`   // StreamProcessor config, can be updated while running
-	Agent             AgentConfig               `yaml:"agent"`                       // Agent config, requires restart to take effect
+	Internal          InternalConfig            `yaml:"internal,omitempty"`          // Internal config, not to be used by the user, only to be used for testing internal components
 }
 
 // TemplatesConfig defines the structure for the templates section.
@@ -88,19 +88,39 @@ type InternalConfig struct {
 }
 
 type AgentConfig struct {
-	Location                   map[int]string `yaml:"location,omitempty"`
-	ReleaseChannel             ReleaseChannel `yaml:"releaseChannel,omitempty"`
-	CommunicatorConfig         `yaml:"communicator,omitempty"`
-	GraphQLConfig              GraphQLConfig `yaml:"graphql,omitempty"` // GraphQL server configuration
-	MetricsPort                int           `yaml:"metricsPort"`       // Port to expose metrics on
-	Simulator                  bool          `yaml:"simulator,omitempty"`
+	Location                    map[int]string `yaml:"location,omitempty"`
+	ReleaseChannel              ReleaseChannel `yaml:"releaseChannel,omitempty"`
+	FSMv2StorePrefix            string         `yaml:"fsmv2StorePrefix,omitempty"` // State isolation prefix (default: "fsmv2_")
+	CommunicatorConfig          `yaml:"communicator,omitempty"`
+	GraphQLConfig               GraphQLConfig `yaml:"graphql,omitempty"` // GraphQL server configuration
+	MetricsPort                 int           `yaml:"metricsPort"`       // Port to expose metrics on
+	Simulator                   bool          `yaml:"simulator,omitempty"`
 	EnableResourceLimitBlocking bool          `yaml:"enableResourceLimitBlocking"` // Feature flag for resource-based bridge blocking
+
+	// FSMv2 feature flags for incremental migration
+	EnableFSMv2               bool `yaml:"enableFSMv2,omitempty"`               // Master switch: starts ApplicationSupervisor
+	UseFSMv2ProtocolConverter bool `yaml:"useFSMv2ProtocolConverter,omitempty"` // Migrate Protocol Converter to FSMv2
+}
+
+// ValidateFSMv2Flags validates FSMv2 feature flags and auto-enables EnableFSMv2
+// if any component flag is set. Returns true if EnableFSMv2 was auto-enabled.
+func (c *AgentConfig) ValidateFSMv2Flags() (autoEnabled bool) {
+	hasComponentFlag := c.UseFSMv2Transport || c.UseFSMv2ProtocolConverter
+
+	if hasComponentFlag && !c.EnableFSMv2 {
+		c.EnableFSMv2 = true
+
+		return true
+	}
+
+	return false
 }
 
 type CommunicatorConfig struct {
-	APIURL           string `yaml:"apiUrl,omitempty"`
-	AuthToken        string `yaml:"authToken,omitempty"`
-	AllowInsecureTLS bool   `yaml:"allowInsecureTLS,omitempty"` // Allow TLS connections without verifying the certificate.
+	APIURL            string `yaml:"apiUrl,omitempty"`
+	AuthToken         string `yaml:"authToken,omitempty"`
+	AllowInsecureTLS  bool   `yaml:"allowInsecureTLS,omitempty"`  // Allow TLS connections without verifying the certificate.
+	UseFSMv2Transport bool   `yaml:"useFSMv2Transport,omitempty"` // Feature flag: use FSMv2 communicator instead of legacy Puller/Pusher.
 }
 
 // FSMInstanceConfig is the config for a FSM instance.

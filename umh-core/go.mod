@@ -7,6 +7,7 @@ require (
 	github.com/99designs/gqlgen v0.17.78
 	github.com/DataDog/gostackparse v0.7.0
 	github.com/Masterminds/semver/v3 v3.4.0
+	github.com/benbjohnson/clock v1.3.5
 	github.com/cactus/tai64 v1.0.3
 	github.com/cenkalti/backoff v2.2.1+incompatible
 	github.com/cespare/xxhash/v2 v2.3.0

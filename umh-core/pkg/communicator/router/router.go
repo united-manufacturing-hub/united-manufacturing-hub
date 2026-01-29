@@ -43,6 +43,7 @@ type Router struct {
 	routerLogger          *zap.SugaredLogger
 	releaseChannel        config.ReleaseChannel
 	clientConnectionsLock sync.RWMutex
+	instanceUUIDMu        sync.RWMutex
 	instanceUUID          uuid.UUID
 }
 
@@ -77,17 +78,48 @@ func NewRouter(dog watchdog.Iface,
 	}
 }
 
+// SetInstanceUUID updates the Router's instance UUID.
+// This is required for FSMv2 because the Router is created BEFORE authentication
+// with a placeholder UUID. When authentication completes asynchronously via
+// AuthenticateAction, the real UUID must be updated here so action replies
+// contain the correct instanceUUID.
+// Called by SetLoginResponseForFSMv2 in communication_state.go.
+// Thread-safe: uses mutex for concurrent access protection.
+func (r *Router) SetInstanceUUID(newUUID uuid.UUID) {
+	r.instanceUUIDMu.Lock()
+	defer r.instanceUUIDMu.Unlock()
+
+	r.instanceUUID = newUUID
+}
+
+// GetInstanceUUID returns the Router's instance UUID.
+// Thread-safe: uses mutex for concurrent access protection.
+func (r *Router) GetInstanceUUID() uuid.UUID {
+	r.instanceUUIDMu.RLock()
+	defer r.instanceUUIDMu.RUnlock()
+
+	return r.instanceUUID
+}
+
 func (r *Router) Start() {
 	go r.router()
 }
 
 func (r *Router) router() {
 	watcherUUID := r.dog.RegisterHeartbeat("router", 5, 600, true)
+
 	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
 
 	for {
 		select {
-		case message := <-r.inboundChannel:
+		case message, ok := <-r.inboundChannel:
+			if !ok {
+				r.routerLogger.Infow("inbound channel closed, stopping router")
+
+				return
+			}
+
 			r.dog.ReportHeartbeatStatus(watcherUUID, watchdog.HEARTBEAT_STATUS_OK)
 			// Decode message
 			messageContent, err := encoding.DecodeMessageFromUserToUMHInstance(message.Content)
@@ -160,7 +192,7 @@ func (r *Router) handleAction(messageContent models.UMHMessageContent, message *
 	}
 
 	go actions.HandleActionMessage(
-		r.instanceUUID,
+		r.GetInstanceUUID(),
 		actionPayload,
 		message.Email,
 		r.outboundChannel,
