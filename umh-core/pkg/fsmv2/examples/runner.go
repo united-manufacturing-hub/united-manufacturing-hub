@@ -72,8 +72,7 @@ func Run(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 			cfg.Logger.Warnw("sync_id_fetch_failed", append(fsmv2sentry.ErrorFields{
 			Feature: "examples",
 			Err:     err,
-		}.ZapFields(),
-			"impact", "dump_shows_all_changes")...)
+		}.ZapFields(), "impact", "dump_shows_all_changes")...)
 		}
 	}
 

@@ -21,7 +21,6 @@ import (
 	"time"
 
 	"github.com/getsentry/sentry-go"
-	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
 
@@ -205,11 +204,11 @@ func BuildFingerprint(level zapcore.Level, feature, eventName, errorTypes string
 
 // ExtractFeature extracts the feature field from a field map.
 // Returns "unknown" if the feature field is missing, empty, or not a string.
+// Note: This function intentionally does NOT log warnings to avoid recursive
+// Sentry captures when the warning itself triggers the hook.
 func ExtractFeature(fieldMap map[string]interface{}) string {
 	feature, ok := fieldMap["feature"].(string)
 	if !ok || feature == "" {
-		zap.L().Warn("Missing 'feature' field in log, using 'unknown'")
-
 		return "unknown"
 	}
 
