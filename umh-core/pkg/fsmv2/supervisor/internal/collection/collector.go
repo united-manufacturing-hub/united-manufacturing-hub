@@ -24,6 +24,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
+	fsmv2sentry "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/sentry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/metrics"
 	"go.uber.org/zap"
 )
@@ -208,14 +209,20 @@ func (c *Collector[TObserved]) Restart() {
 	// Start again with the original parent context
 	if parentCtx != nil {
 		if err := c.Start(parentCtx); err != nil {
-			c.config.Logger.Errorw("collector_restart_start_failed",
-				"error", err)
+			c.config.Logger.Errorw("collector_restart_start_failed", fsmv2sentry.ErrorFields{
+				Feature:       "fsmv2",
+				Err:           err,
+				HierarchyPath: c.config.Identity.HierarchyPath,
+			}.ZapFields()...)
 		} else {
 			c.config.Logger.Infow("collector_restart_complete")
 		}
 	} else {
-		c.config.Logger.Errorw("collector_restart_failed",
-			"reason", "no_parent_context")
+		c.config.Logger.Errorw("collector_restart_failed", fsmv2sentry.ErrorFields{
+			Feature:       "fsmv2",
+			Err:           errors.New("no_parent_context"),
+			HierarchyPath: c.config.Identity.HierarchyPath,
+		}.ZapFields()...)
 	}
 }
 
@@ -280,7 +287,11 @@ func (c *Collector[TObserved]) CollectFinalObservation(ctx context.Context) erro
 
 	err := c.collectAndSaveObservedState(collectCtx)
 	if err != nil {
-		c.config.Logger.Warnw("collector_final_observation_failed", "error", err)
+		c.config.Logger.Warnw("collector_final_observation_failed", fsmv2sentry.ErrorFields{
+			Feature:       "fsmv2",
+			Err:           err,
+			HierarchyPath: c.config.Identity.HierarchyPath,
+		}.ZapFields()...)
 
 		return err
 	}
@@ -328,9 +339,12 @@ func (c *Collector[TObserved]) observationLoop() {
 
 			collectCtx, cancel := context.WithTimeout(ctx, timeout)
 			if err := c.collectAndSaveObservedState(collectCtx); err != nil {
-				c.config.Logger.Errorw("collector_observation_failed",
-					"trigger", "restart",
-					"error", err)
+				c.config.Logger.Errorw("collector_observation_failed", append(fsmv2sentry.ErrorFields{
+					Feature:       "fsmv2",
+					Err:           err,
+					HierarchyPath: c.config.Identity.HierarchyPath,
+				}.ZapFields(),
+					"trigger", "restart")...)
 			}
 
 			cancel()
@@ -338,9 +352,12 @@ func (c *Collector[TObserved]) observationLoop() {
 		case <-ticker.C:
 			collectCtx, cancel := context.WithTimeout(ctx, timeout)
 			if err := c.collectAndSaveObservedState(collectCtx); err != nil {
-				c.config.Logger.Errorw("collector_observation_failed",
-					"trigger", "ticker",
-					"error", err)
+				c.config.Logger.Errorw("collector_observation_failed", append(fsmv2sentry.ErrorFields{
+					Feature:       "fsmv2",
+					Err:           err,
+					HierarchyPath: c.config.Identity.HierarchyPath,
+				}.ZapFields(),
+					"trigger", "ticker")...)
 			}
 
 			cancel()

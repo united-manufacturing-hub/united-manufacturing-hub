@@ -21,6 +21,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
+	fsmv2sentry "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/sentry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence/memory"
 
@@ -68,7 +69,11 @@ func Run(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 
 		startSyncID, err = cfg.Store.GetLatestSyncID(ctx)
 		if err != nil {
-			cfg.Logger.Warnw("sync_id_fetch_failed", "error", err, "impact", "dump_shows_all_changes")
+			cfg.Logger.Warnw("sync_id_fetch_failed", append(fsmv2sentry.ErrorFields{
+			Feature: "examples",
+			Err:     err,
+		}.ZapFields(),
+			"impact", "dump_shows_all_changes")...)
 		}
 	}
 
@@ -101,7 +106,10 @@ func Run(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 
 			dump, err := DumpScenario(dumpCtx, cfg.Store, startSyncID)
 			if err != nil {
-				cfg.Logger.Warnw("scenario_dump_failed", "error", err)
+				cfg.Logger.Warnw("scenario_dump_failed", fsmv2sentry.ErrorFields{
+				Feature: "examples",
+				Err:     err,
+			}.ZapFields()...)
 			} else {
 				fmt.Print(dump.FormatHuman())
 			}

@@ -28,6 +28,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
+	fsmv2sentry "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/sentry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 )
@@ -103,9 +104,11 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 
 	storageSnapshot, err := s.store.LoadSnapshot(ctx, s.workerType, workerID)
 	if err != nil {
-		s.logger.Errorw("snapshot_load_failed",
-			"hierarchy_path", workerCtx.identity.HierarchyPath,
-			"error", err)
+		s.logger.Errorw("snapshot_load_failed", fsmv2sentry.ErrorFields{
+			Feature:       "fsmv2",
+			Err:           err,
+			HierarchyPath: workerCtx.identity.HierarchyPath,
+		}.ZapFields()...)
 
 		return fmt.Errorf("failed to load snapshot: %w", err)
 	}
@@ -119,9 +122,11 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 
 	err = s.store.LoadObservedTyped(ctx, s.workerType, workerID, &observed)
 	if err != nil {
-		s.logger.Errorw("observed_state_load_failed",
-			"hierarchy_path", workerCtx.identity.HierarchyPath,
-			"error", err)
+		s.logger.Errorw("observed_state_load_failed", fsmv2sentry.ErrorFields{
+			Feature:       "fsmv2",
+			Err:           err,
+			HierarchyPath: workerCtx.identity.HierarchyPath,
+		}.ZapFields()...)
 
 		return fmt.Errorf("failed to load typed observed state: %w", err)
 	}
@@ -130,9 +135,11 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 
 	err = s.store.LoadDesiredTyped(ctx, s.workerType, workerID, &desired)
 	if err != nil {
-		s.logger.Errorw("desired_state_load_failed",
-			"hierarchy_path", workerCtx.identity.HierarchyPath,
-			"error", err)
+		s.logger.Errorw("desired_state_load_failed", fsmv2sentry.ErrorFields{
+			Feature:       "fsmv2",
+			Err:           err,
+			HierarchyPath: workerCtx.identity.HierarchyPath,
+		}.ZapFields()...)
 
 		return fmt.Errorf("failed to load typed desired state: %w", err)
 	}
@@ -223,8 +230,11 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 
 				if shutdownErr := s.requestShutdown(ctx, workerID,
 					fmt.Sprintf("collector unresponsive after %d restart attempts", s.collectorHealth.maxRestartAttempts)); shutdownErr != nil {
-					s.logger.Errorw("shutdown_request_failed",
-						"error", shutdownErr)
+					s.logger.Errorw("shutdown_request_failed", fsmv2sentry.ErrorFields{
+						Feature:       "fsmv2",
+						Err:           shutdownErr,
+						HierarchyPath: workerCtx.identity.HierarchyPath,
+					}.ZapFields()...)
 				}
 
 				return errors.New("collector unresponsive, shutdown requested")
@@ -233,9 +243,11 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 			// I4: Safe to restart (restartCount < maxRestartAttempts)
 			// RestartCollector will panic if invariant violated (defensive check)
 			if err := s.restartCollector(ctx, workerID); err != nil {
-				s.logger.Errorw("collector_restart_failed",
-					"hierarchy_path", workerCtx.identity.HierarchyPath,
-					"error", err)
+				s.logger.Errorw("collector_restart_failed", fsmv2sentry.ErrorFields{
+					Feature:       "fsmv2",
+					Err:           err,
+					HierarchyPath: workerCtx.identity.HierarchyPath,
+				}.ZapFields()...)
 
 				return fmt.Errorf("failed to restart collector: %w", err)
 			}
@@ -376,10 +388,12 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 			"action_id", actionID)
 
 		if err := workerCtx.executor.EnqueueAction(actionID, result.Action, deps); err != nil {
-			s.logger.Errorw("action_enqueue_failed",
-				"hierarchy_path", workerCtx.identity.HierarchyPath,
-				"action_id", actionID,
-				"error", err)
+			s.logger.Errorw("action_enqueue_failed", append(fsmv2sentry.ErrorFields{
+				Feature:       "fsmv2",
+				Err:           err,
+				HierarchyPath: workerCtx.identity.HierarchyPath,
+			}.ZapFields(),
+				"action_id", actionID)...)
 
 			return fmt.Errorf("failed to enqueue action: %w", err)
 		}
@@ -488,10 +502,12 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 	workerCtx.mu.RUnlock()
 
 	if err := s.processSignal(ctx, workerID, result.Signal); err != nil {
-		s.logger.Errorw("signal_processing_failed",
-			"hierarchy_path", workerCtx.identity.HierarchyPath,
-			"signal", int(result.Signal),
-			"error", err)
+		s.logger.Errorw("signal_processing_failed", append(fsmv2sentry.ErrorFields{
+			Feature:       "fsmv2",
+			Err:           err,
+			HierarchyPath: workerCtx.identity.HierarchyPath,
+		}.ZapFields(),
+			"signal", int(result.Signal))...)
 
 		return fmt.Errorf("signal processing failed: %w", err)
 	}
@@ -555,10 +571,13 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 		s.circuitOpen.Store(true)
 
 		if !wasOpen {
-			s.logger.Errorw("circuit_breaker_opened",
-				"error", err.Error(),
+			s.logger.Errorw("circuit_breaker_opened", append(fsmv2sentry.ErrorFields{
+				Feature:       "fsmv2",
+				Err:           err,
+				HierarchyPath: s.GetHierarchyPathUnlocked(),
+			}.ZapFields(),
 				"error_scope", "infrastructure",
-				"impact", "all_workers")
+				"impact", "all_workers")...)
 			metrics.RecordCircuitOpen(s.GetHierarchyPathUnlocked(), true)
 		}
 
@@ -695,9 +714,12 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 		templateDuration := time.Since(templateStart)
 
 		if err != nil {
-			s.logger.Errorw("template_rendering_failed",
-				"error", err.Error(),
-				"duration_ms", templateDuration.Milliseconds())
+			s.logger.Errorw("template_rendering_failed", append(fsmv2sentry.ErrorFields{
+				Feature:       "fsmv2",
+				Err:           err,
+				HierarchyPath: s.GetHierarchyPathUnlocked(),
+			}.ZapFields(),
+				"duration_ms", templateDuration.Milliseconds())...)
 			metrics.RecordTemplateRenderingDuration(s.GetHierarchyPathUnlocked(), "error", templateDuration)
 			metrics.RecordTemplateRenderingError(s.GetHierarchyPathUnlocked(), "derivation_failed")
 
@@ -709,10 +731,13 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 		// This catches both developer mistakes (hardcoded wrong values) and user config mistakes
 		// Use GetState() method from fsmv2.DesiredState interface
 		if valErr := config.ValidateDesiredState(desired.GetState()); valErr != nil {
-			s.logger.Errorw("invalid_desired_state",
+			s.logger.Errorw("invalid_desired_state", append(fsmv2sentry.ErrorFields{
+				Feature:       "fsmv2",
+				Err:           valErr,
+				HierarchyPath: s.GetHierarchyPathUnlocked(),
+			}.ZapFields(),
 				"state", desired.GetState(),
-				"worker_id", firstWorkerID,
-				"error", valErr)
+				"worker_id", firstWorkerID)...)
 			metrics.RecordTemplateRenderingDuration(s.GetHierarchyPathUnlocked(), "error", templateDuration)
 			metrics.RecordTemplateRenderingError(s.GetHierarchyPathUnlocked(), "invalid_state_value")
 
@@ -760,8 +785,11 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 	if err != nil {
 		// Log the error but continue with the tick - the system can recover on the next tick
 		// The tickWorker will use the previously saved desired state
-		s.logger.Warnw("derived_desired_state_save_failed",
-			"error", err)
+		s.logger.Warnw("derived_desired_state_save_failed", fsmv2sentry.ErrorFields{
+			Feature:       "fsmv2",
+			Err:           err,
+			HierarchyPath: s.GetHierarchyPathUnlocked(),
+		}.ZapFields()...)
 	} else {
 		// Per-tick log moved to TRACE for scalability
 		s.logTrace("derived_desired_state_saved")
@@ -781,10 +809,17 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 			hash, err := spec.Hash()
 			if err != nil {
 				// If hashing fails, always validate to be safe
-				s.logger.Warnw("spec_hash_failed", "spec", spec.Name, "error", err)
+				s.logger.Warnw("spec_hash_failed", append(fsmv2sentry.ErrorFields{
+					Feature:       "fsmv2",
+					Err:           err,
+					HierarchyPath: s.GetHierarchyPathUnlocked(),
+				}.ZapFields(),
+					"spec", spec.Name)...)
 				specsToValidate = append(specsToValidate, spec)
+
 				continue
 			}
+
 			if cachedHash, exists := s.validatedSpecHashes[spec.Name]; !exists || cachedHash != hash {
 				specsToValidate = append(specsToValidate, spec)
 			}
@@ -792,8 +827,11 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 
 		if len(specsToValidate) > 0 {
 			if err := config.ValidateChildSpecs(specsToValidate, registry); err != nil {
-				s.logger.Errorw("child_spec_validation_failed",
-					"error", err.Error())
+				s.logger.Errorw("child_spec_validation_failed", fsmv2sentry.ErrorFields{
+					Feature:       "fsmv2",
+					Err:           err,
+					HierarchyPath: s.GetHierarchyPathUnlocked(),
+				}.ZapFields()...)
 
 				return fmt.Errorf("invalid child specifications: %w", err)
 			}
@@ -803,9 +841,16 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 				hash, err := spec.Hash()
 				if err != nil {
 					// Skip caching if hash fails - will revalidate next time
-					s.logger.Warnw("spec_hash_cache_failed", "spec", spec.Name, "error", err)
+					s.logger.Warnw("spec_hash_cache_failed", append(fsmv2sentry.ErrorFields{
+						Feature:       "fsmv2",
+						Err:           err,
+						HierarchyPath: s.GetHierarchyPathUnlocked(),
+					}.ZapFields(),
+						"spec", spec.Name)...)
+
 					continue
 				}
+
 				s.validatedSpecHashes[spec.Name] = hash
 			}
 
@@ -855,8 +900,11 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 
 	for _, child := range childrenToTick {
 		if err := child.tick(ctx); err != nil {
-			s.logger.Errorw("child_tick_failed",
-				"error", err)
+			s.logger.Errorw("child_tick_failed", fsmv2sentry.ErrorFields{
+				Feature:       "fsmv2",
+				Err:           err,
+				HierarchyPath: s.GetHierarchyPathUnlocked(),
+			}.ZapFields()...)
 			// Continue with other children
 		}
 	}
@@ -1025,10 +1073,12 @@ func (s *Supervisor[TObserved, TDesired]) processSignal(ctx context.Context, wor
 
 		// Request graceful shutdown - worker will go through cleanup states
 		if err := s.requestShutdown(ctx, workerID, "restart_requested"); err != nil {
-			s.logger.Warnw("restart_shutdown_request_failed",
-				"hierarchy_path", s.GetHierarchyPathUnlocked(),
-				"target_worker_id", workerID,
-				"error", err)
+			s.logger.Warnw("restart_shutdown_request_failed", append(fsmv2sentry.ErrorFields{
+				Feature:       "fsmv2",
+				Err:           err,
+				HierarchyPath: s.GetHierarchyPathUnlocked(),
+			}.ZapFields(),
+				"target_worker_id", workerID)...)
 			// Continue anyway - we want to restart even if request fails
 		}
 
@@ -1391,9 +1441,12 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 			// Use factory to create child supervisor with proper type
 			rawSupervisor, err := factory.NewSupervisorByType(spec.WorkerType, childConfig)
 			if err != nil {
-				s.logger.Errorw("child_supervisor_creation_failed",
-					"child_name", spec.Name,
-					"error", err)
+				s.logger.Errorw("child_supervisor_creation_failed", append(fsmv2sentry.ErrorFields{
+					Feature:       "fsmv2",
+					Err:           err,
+					HierarchyPath: s.GetHierarchyPathUnlocked(),
+				}.ZapFields(),
+					"child_name", spec.Name)...)
 
 				continue
 			}
@@ -1445,19 +1498,25 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 			// Use mergedDeps to include both parent and child-specific dependencies
 			childWorker, err := factory.NewWorkerByType(spec.WorkerType, childIdentity, s.baseLogger, s.store, mergedDeps)
 			if err != nil {
-				s.logger.Errorw("child_worker_creation_failed",
+				s.logger.Errorw("child_worker_creation_failed", append(fsmv2sentry.ErrorFields{
+					Feature:       "fsmv2",
+					Err:           err,
+					HierarchyPath: childPath,
+				}.ZapFields(),
 					"child_name", spec.Name,
-					"worker_type", spec.WorkerType,
-					"error", err)
+					"worker_type", spec.WorkerType)...)
 
 				continue
 			}
 
 			// Add worker to child supervisor
 			if err := childSupervisor.AddWorker(childIdentity, childWorker); err != nil {
-				s.logger.Errorw("child_supervisor_add_worker_failed",
-					"child_name", spec.Name,
-					"error", err)
+				s.logger.Errorw("child_supervisor_add_worker_failed", append(fsmv2sentry.ErrorFields{
+					Feature:       "fsmv2",
+					Err:           err,
+					HierarchyPath: childPath,
+				}.ZapFields(),
+					"child_name", spec.Name)...)
 
 				continue
 			}
@@ -1470,9 +1529,12 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 				FieldShutdownRequested: false,
 			}
 			if _, err := s.store.SaveDesired(childDesiredCtx, spec.WorkerType, childIdentity.ID, desiredDoc); err != nil {
-				s.logger.Warnw("child_initial_desired_state_save_failed",
-					"child_name", spec.Name,
-					"error", err)
+				s.logger.Warnw("child_initial_desired_state_save_failed", append(fsmv2sentry.ErrorFields{
+					Feature:       "fsmv2",
+					Err:           err,
+					HierarchyPath: childPath,
+				}.ZapFields(),
+					"child_name", spec.Name)...)
 			}
 
 			cancel()
@@ -1517,9 +1579,12 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 				// Child continues ticking and will emit SignalNeedsRemoval when ready
 				ctx := context.Background()
 				if err := child.RequestShutdown(ctx, "removed_from_specs"); err != nil {
-					s.logger.Warnw("child_shutdown_request_failed",
-						"child_name", name,
-						"error", err)
+					s.logger.Warnw("child_shutdown_request_failed", append(fsmv2sentry.ErrorFields{
+						Feature:       "fsmv2",
+						Err:           err,
+						HierarchyPath: s.GetHierarchyPathUnlocked(),
+					}.ZapFields(),
+						"child_name", name)...)
 				}
 			}
 			// DON'T delete here - wait for child's workers to complete shutdown

@@ -28,6 +28,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
+	fsmv2sentry "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/sentry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplechild/snapshot"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplechild/state"
@@ -69,7 +70,11 @@ func NewChildWorker(
 
 	conn, err := connectionPool.Acquire()
 	if err != nil {
-		logger.Warnw("initial_connection_failed", "error", err)
+		logger.Warnw("initial_connection_failed", fsmv2sentry.ErrorFields{
+			Feature:       "examples",
+			Err:           err,
+			HierarchyPath: identity.HierarchyPath,
+		}.ZapFields()...)
 	}
 
 	return &ChildWorker{

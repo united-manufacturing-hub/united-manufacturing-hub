@@ -26,6 +26,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
+	fsmv2sentry "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/sentry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/metrics"
 )
 
@@ -191,20 +192,24 @@ func (ae *ActionExecutor) executeWorkWithRecovery(work actionWork) {
 		if errors.Is(err, context.DeadlineExceeded) {
 			metrics.RecordActionTimeout(ae.identity.HierarchyPath, work.action.Name())
 
-			ae.logger.Errorw("action_failed",
-				"hierarchy_path", ae.identity.HierarchyPath,
+			ae.logger.Errorw("action_failed", append(fsmv2sentry.ErrorFields{
+				Feature:       "fsmv2",
+				Err:           err,
+				HierarchyPath: ae.identity.HierarchyPath,
+			}.ZapFields(),
 				"correlation_id", work.actionID,
 				"action_name", work.action.Name(),
-				"error", "timeout",
 				"duration_ms", duration.Milliseconds(),
-				"timeout_ms", work.timeout.Milliseconds())
+				"timeout_ms", work.timeout.Milliseconds())...)
 		} else {
-			ae.logger.Errorw("action_failed",
-				"hierarchy_path", ae.identity.HierarchyPath,
+			ae.logger.Errorw("action_failed", append(fsmv2sentry.ErrorFields{
+				Feature:       "fsmv2",
+				Err:           err,
+				HierarchyPath: ae.identity.HierarchyPath,
+			}.ZapFields(),
 				"correlation_id", work.actionID,
 				"action_name", work.action.Name(),
-				"error", err.Error(),
-				"duration_ms", duration.Milliseconds())
+				"duration_ms", duration.Milliseconds())...)
 		}
 	} else {
 		// Success logs at DEBUG - operators only need failures, not routine success

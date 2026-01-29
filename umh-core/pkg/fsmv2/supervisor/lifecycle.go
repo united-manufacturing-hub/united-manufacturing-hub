@@ -23,6 +23,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
+	fsmv2sentry "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/sentry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/internal/collection"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/internal/execution"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/metrics"
@@ -55,7 +56,11 @@ func (s *Supervisor[TObserved, TDesired]) Start(ctx context.Context) <-chan stru
 
 	for _, workerCtx := range s.workers {
 		if err := workerCtx.collector.Start(supervisorCtx); err != nil {
-			s.logger.Errorw("collector_start_failed", "error", err)
+			s.logger.Errorw("collector_start_failed", fsmv2sentry.ErrorFields{
+				Feature:       "fsmv2",
+				Err:           err,
+				HierarchyPath: workerCtx.identity.HierarchyPath,
+			}.ZapFields()...)
 		}
 
 		workerCtx.executor.Start(supervisorCtx)
@@ -92,7 +97,11 @@ func (s *Supervisor[TObserved, TDesired]) tickLoop(ctx context.Context) {
 			return
 		case <-ticker.C:
 			if err := s.tick(ctx); err != nil {
-				s.logger.Errorw("tick_error", "error", err)
+				s.logger.Errorw("tick_error", fsmv2sentry.ErrorFields{
+					Feature:       "fsmv2",
+					Err:           err,
+					HierarchyPath: s.GetHierarchyPath(),
+				}.ZapFields()...)
 			}
 		}
 	}
@@ -199,8 +208,11 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 		// Request graceful shutdown on all workers
 		for _, workerID := range workerIDs {
 			if err := s.requestShutdown(gracefulCtx, workerID, "supervisor_shutdown"); err != nil {
-				s.logger.Warnw("graceful_shutdown_request_failed",
-					"error", err)
+				s.logger.Warnw("graceful_shutdown_request_failed", fsmv2sentry.ErrorFields{
+					Feature:       "fsmv2",
+					Err:           err,
+					HierarchyPath: s.GetHierarchyPath(),
+				}.ZapFields()...)
 			}
 		}
 
@@ -421,7 +433,11 @@ func (s *Supervisor[TObserved, TDesired]) RequestShutdown(ctx context.Context, r
 
 	for _, workerID := range workerIDs {
 		if err := s.requestShutdown(ctx, workerID, reason); err != nil {
-			s.logger.Warnw("shutdown_request_failed", "error", err)
+			s.logger.Warnw("shutdown_request_failed", fsmv2sentry.ErrorFields{
+				Feature:       "fsmv2",
+				Err:           err,
+				HierarchyPath: s.GetHierarchyPath(),
+			}.ZapFields()...)
 		}
 	}
 
@@ -482,9 +498,11 @@ func (s *Supervisor[TObserved, TDesired]) handleWorkerRestart(ctx context.Contex
 
 	// 2. Clear shutdown flag in storage BEFORE creating new worker.
 	if err := s.clearShutdownRequested(ctx, workerID); err != nil {
-		s.logger.Warnw("restart_clear_shutdown_failed",
-			"hierarchy_path", identity.HierarchyPath,
-			"error", err)
+		s.logger.Warnw("restart_clear_shutdown_failed", fsmv2sentry.ErrorFields{
+			Feature:       "fsmv2",
+			Err:           err,
+			HierarchyPath: identity.HierarchyPath,
+		}.ZapFields()...)
 		// Continue anyway - the new worker might still work
 	}
 
@@ -525,9 +543,11 @@ func (s *Supervisor[TObserved, TDesired]) handleWorkerRestart(ctx context.Contex
 
 		if collector != nil {
 			if err := collector.Start(supervisorCtx); err != nil {
-				s.logger.Errorw("restart_collector_start_failed",
-					"hierarchy_path", identity.HierarchyPath,
-					"error", err)
+				s.logger.Errorw("restart_collector_start_failed", fsmv2sentry.ErrorFields{
+					Feature:       "fsmv2",
+					Err:           err,
+					HierarchyPath: identity.HierarchyPath,
+				}.ZapFields()...)
 			}
 		}
 

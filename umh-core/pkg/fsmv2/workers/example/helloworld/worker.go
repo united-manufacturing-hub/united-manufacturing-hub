@@ -41,6 +41,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
+	fsmv2sentry "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/sentry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/helloworld/snapshot"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/helloworld/state"
@@ -194,7 +195,11 @@ func init() {
 			worker, err := NewHelloworldWorker(id, logger, stateReader)
 			if err != nil {
 				if logger != nil {
-					logger.Errorw("helloworld_worker_creation_failed", "error", err)
+					logger.Errorw("helloworld_worker_creation_failed", fsmv2sentry.ErrorFields{
+						Feature:       "examples",
+						Err:           err,
+						HierarchyPath: id.HierarchyPath,
+					}.ZapFields()...)
 				}
 
 				return nil
