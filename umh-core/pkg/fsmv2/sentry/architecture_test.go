@@ -169,6 +169,7 @@ func checkForMissingErrorFields(filename string) []Violation {
 
 		// Check if the receiver looks like a logger
 		receiverName := ""
+
 		switch x := selExpr.X.(type) {
 		case *ast.Ident:
 			receiverName = x.Name
@@ -311,6 +312,7 @@ func checkForErrorDotError(filename string) []Violation {
 
 		// Check if the receiver looks like a logger
 		receiverName := ""
+
 		switch x := selExpr.X.(type) {
 		case *ast.Ident:
 			receiverName = x.Name
@@ -351,6 +353,7 @@ func hasErrorDotErrorPattern(call *ast.CallExpr) bool {
 	for i := 1; i < len(call.Args)-1; i++ {
 		// Check if current arg is "error" string
 		keyArg := call.Args[i]
+
 		basicLit, ok := keyArg.(*ast.BasicLit)
 		if !ok || basicLit.Kind != token.STRING {
 			continue
@@ -363,6 +366,7 @@ func hasErrorDotErrorPattern(call *ast.CallExpr) bool {
 
 		// Check if next arg is a call to .Error()
 		valueArg := call.Args[i+1]
+
 		callValue, ok := valueArg.(*ast.CallExpr)
 		if !ok {
 			continue
