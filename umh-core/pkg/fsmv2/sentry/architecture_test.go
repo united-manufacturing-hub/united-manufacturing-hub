@@ -46,7 +46,10 @@ var _ = Describe("FSMv2 Sentry Architecture", func() {
 
 		Describe("ErrorFields Usage (Invariant: Sentry Error Grouping)", func() {
 			It("should use fsmv2sentry.ErrorFields{...}.ZapFields() for error logging", func() {
-				violations := validateErrorFieldsUsage(getFsmv2Dir())
+				var violations []Violation
+				for _, dir := range getAllDirs() {
+					violations = append(violations, validateErrorFieldsUsage(dir)...)
+				}
 
 				if len(violations) > 0 {
 					message := formatViolations("ErrorFields Usage Violations", violations,
@@ -71,7 +74,10 @@ WRONG:
 
 		Describe("No err.Error() Calls (Invariant: Preserve Error Chain)", func() {
 			It("should not call err.Error() in logging statements", func() {
-				violations := validateNoErrorDotError(getFsmv2Dir())
+				var violations []Violation
+				for _, dir := range getAllDirs() {
+					violations = append(violations, validateNoErrorDotError(dir)...)
+				}
 
 				if len(violations) > 0 {
 					message := formatViolations("err.Error() Violations", violations,
@@ -95,7 +101,10 @@ the error object directly, never convert it to a string.`)
 
 		Describe("Non-Structured Logging (Invariant: Use Structured Logging)", func() {
 			It("should not use non-structured error/warn logging methods", func() {
-				violations := validateNoNonStructuredLogging(getFsmv2Dir())
+				var violations []Violation
+				for _, dir := range getAllDirs() {
+					violations = append(violations, validateNoNonStructuredLogging(dir)...)
+				}
 
 				if len(violations) > 0 {
 					message := formatViolations("Non-Structured Logging Violations", violations,
@@ -123,7 +132,10 @@ and make log analysis more difficult. Always use Errorw/Warnw with key-value pai
 
 		Describe("All Errorw Calls Must Use ErrorFields (Invariant: Sentry Integration)", func() {
 			It("should use ErrorFields for ALL Errorw calls", func() {
-				violations := validateAllErrorwUseErrorFields(getFsmv2Dir())
+				var violations []Violation
+				for _, dir := range getAllDirs() {
+					violations = append(violations, validateAllErrorwUseErrorFields(dir)...)
+				}
 
 				if len(violations) > 0 {
 					message := formatViolations("Errorw Without ErrorFields Violations", violations,
@@ -163,6 +175,33 @@ func getFsmv2Dir() string {
 	_, filename, _, _ := runtime.Caller(0)
 	// Navigate from sentry/ up to fsmv2/
 	return filepath.Dir(filepath.Dir(filename))
+}
+
+// getCseDir returns the path to the cse package directory.
+func getCseDir() string {
+	_, filename, _, _ := runtime.Caller(0)
+	// Navigate from fsmv2/sentry/ up to pkg/, then into cse/
+	pkgDir := filepath.Dir(filepath.Dir(filepath.Dir(filename)))
+
+	return filepath.Join(pkgDir, "cse")
+}
+
+// getPersistenceDir returns the path to the persistence package directory.
+func getPersistenceDir() string {
+	_, filename, _, _ := runtime.Caller(0)
+	// Navigate from fsmv2/sentry/ up to pkg/, then into persistence/
+	pkgDir := filepath.Dir(filepath.Dir(filepath.Dir(filename)))
+
+	return filepath.Join(pkgDir, "persistence")
+}
+
+// getAllDirs returns all directories that should be scanned for architecture tests.
+func getAllDirs() []string {
+	return []string{
+		getFsmv2Dir(),
+		getCseDir(),
+		getPersistenceDir(),
+	}
 }
 
 // validateErrorFieldsUsage scans all Go files in the fsmv2 package for

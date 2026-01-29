@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"time"
 
+	fsmv2sentry "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/sentry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 )
 
@@ -200,10 +201,12 @@ func (ts *TriangularStore) saveWithDelta(
 			}
 
 			// Snapshot saved successfully, delta append is best-effort
-			ts.logger.Warnw("delta_append_failed",
-				"worker", hierarchyPath,
-				"role", opts.Role,
-				"error", appendErr)
+			ts.logger.Warnw("delta_append_failed", append(fsmv2sentry.ErrorFields{
+				Feature:       "cse",
+				Err:           appendErr,
+				HierarchyPath: hierarchyPath,
+			}.ZapFields(),
+				"role", opts.Role)...)
 		}
 	}
 

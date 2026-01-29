@@ -27,6 +27,7 @@ import (
 
 	"go.uber.org/zap"
 
+	fsmv2sentry "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/sentry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 )
 
@@ -1208,9 +1209,11 @@ func (ts *TriangularStore) GetDeltas(ctx context.Context, sub Subscription) (Del
 	if ts.deltaStore != nil {
 		entries, err := ts.deltaStore.GetAllSince(ctx, sub.LastSyncID, deltaLimit)
 		if err != nil {
-			ts.logger.Warnw("delta_query_fallback_to_bootstrap",
-				"error", err,
-				"lastSyncID", sub.LastSyncID)
+			ts.logger.Warnw("delta_query_fallback_to_bootstrap", append(fsmv2sentry.ErrorFields{
+				Feature: "cse",
+				Err:     err,
+			}.ZapFields(),
+				"lastSyncID", sub.LastSyncID)...)
 		} else if len(entries) > 0 {
 			deltas := make([]Delta, 0, len(entries))
 			for _, entry := range entries {
