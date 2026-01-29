@@ -92,6 +92,69 @@ the error object directly, never convert it to a string.`)
 				}
 			})
 		})
+
+		Describe("Non-Structured Logging (Invariant: Use Structured Logging)", func() {
+			It("should not use non-structured error/warn logging methods", func() {
+				violations := validateNoNonStructuredLogging(getFsmv2Dir())
+
+				if len(violations) > 0 {
+					message := formatViolations("Non-Structured Logging Violations", violations,
+						`Error and warning logs must use structured logging methods (Errorw/Warnw)
+to ensure proper Sentry integration and consistent log formatting.
+
+CORRECT:
+  logger.Errorw("action_failed",
+      fsmv2sentry.ErrorFields{Err: err}.ZapFields()...)
+  logger.Warnw("action_slow", "duration", elapsed)
+
+WRONG:
+  logger.Error("action failed")
+  logger.Errorf("action failed: %v", err)
+  logger.Warn("action slow")
+  logger.Warnf("action slow: %v", elapsed)
+
+Non-structured methods (Error, Errorf, Warn, Warnf) bypass Sentry integration
+and make log analysis more difficult. Always use Errorw/Warnw with key-value pairs.`)
+
+					Fail(message)
+				}
+			})
+		})
+
+		Describe("All Errorw Calls Must Use ErrorFields (Invariant: Sentry Integration)", func() {
+			It("should use ErrorFields for ALL Errorw calls", func() {
+				violations := validateAllErrorwUseErrorFields(getFsmv2Dir())
+
+				if len(violations) > 0 {
+					message := formatViolations("Errorw Without ErrorFields Violations", violations,
+						`ALL Errorw calls must use fsmv2sentry.ErrorFields{...}.ZapFields()
+for proper feature routing and Sentry grouping.
+
+CORRECT:
+  logger.Errorw("action_failed",
+      fsmv2sentry.ErrorFields{
+          Err:     err,
+          Context: "connecting to database",
+      }.ZapFields()...)
+
+  // Even without an error object, use ErrorFields for consistency:
+  logger.Errorw("invalid_state",
+      fsmv2sentry.ErrorFields{
+          Context: "unexpected nil value",
+      }.ZapFields()...)
+
+WRONG:
+  logger.Errorw("action_failed", "key", value)
+  logger.Errorw("action_failed", "error", err)
+  logger.Errorw("invalid_state")
+
+ErrorFields ensures consistent Sentry fingerprinting and context capture
+for ALL error-level logs, not just those with error objects.`)
+
+					Fail(message)
+				}
+			})
+		})
 	})
 })
 
@@ -383,6 +446,206 @@ func hasErrorDotErrorPattern(call *ast.CallExpr) bool {
 	}
 
 	return false
+}
+
+// validateNoNonStructuredLogging scans all Go files in the fsmv2 package for
+// non-structured logging calls (Error, Errorf, Warn, Warnf) that should be
+// migrated to structured methods (Errorw, Warnw).
+func validateNoNonStructuredLogging(baseDir string) []Violation {
+	var violations []Violation
+
+	err := filepath.Walk(baseDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil // Skip errors
+		}
+
+		if info.IsDir() || !strings.HasSuffix(path, ".go") {
+			return nil
+		}
+
+		// Skip test files and generated code
+		if strings.HasSuffix(path, "_test.go") || strings.Contains(path, "generated") {
+			return nil
+		}
+
+		// Skip the validator and sentry packages themselves
+		if strings.Contains(path, "internal/validator") || strings.Contains(path, "/sentry/") {
+			return nil
+		}
+
+		fileViolations := checkForNonStructuredLogging(path)
+		violations = append(violations, fileViolations...)
+
+		return nil
+	})
+	if err != nil {
+		return violations
+	}
+
+	return violations
+}
+
+// checkForNonStructuredLogging parses a Go file and looks for logger.Error(),
+// logger.Errorf(), logger.Warn(), logger.Warnf() calls.
+func checkForNonStructuredLogging(filename string) []Violation {
+	var violations []Violation
+
+	fset := token.NewFileSet()
+
+	node, err := parser.ParseFile(fset, filename, nil, parser.ParseComments)
+	if err != nil {
+		return violations
+	}
+
+	// Non-structured methods that should be migrated
+	nonStructuredMethods := map[string]bool{
+		"Error":  true,
+		"Errorf": true,
+		"Warn":   true,
+		"Warnf":  true,
+	}
+
+	ast.Inspect(node, func(n ast.Node) bool {
+		callExpr, ok := n.(*ast.CallExpr)
+		if !ok {
+			return true
+		}
+
+		selExpr, ok := callExpr.Fun.(*ast.SelectorExpr)
+		if !ok {
+			return true
+		}
+
+		methodName := selExpr.Sel.Name
+		// Only check non-structured error/warn methods
+		if !nonStructuredMethods[methodName] {
+			return true
+		}
+
+		// Check if the receiver looks like a logger
+		receiverName := ""
+
+		switch x := selExpr.X.(type) {
+		case *ast.Ident:
+			receiverName = x.Name
+		case *ast.SelectorExpr:
+			receiverName = x.Sel.Name
+		}
+
+		if receiverName != "logger" && receiverName != "Logger" &&
+			!strings.Contains(strings.ToLower(receiverName), "log") {
+			return true
+		}
+
+		pos := fset.Position(callExpr.Pos())
+		violations = append(violations, Violation{
+			File:    filename,
+			Line:    pos.Line,
+			Type:    "NON_STRUCTURED_LOGGING",
+			Message: fmt.Sprintf("Use %sw() with structured fields instead of %s()", strings.TrimSuffix(methodName, "f"), methodName),
+		})
+
+		return true
+	})
+
+	return violations
+}
+
+// validateAllErrorwUseErrorFields scans all Go files in the fsmv2 package for
+// Errorw calls that do NOT use ErrorFields{...}.ZapFields().
+func validateAllErrorwUseErrorFields(baseDir string) []Violation {
+	var violations []Violation
+
+	err := filepath.Walk(baseDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil // Skip errors
+		}
+
+		if info.IsDir() || !strings.HasSuffix(path, ".go") {
+			return nil
+		}
+
+		// Skip test files and generated code
+		if strings.HasSuffix(path, "_test.go") || strings.Contains(path, "generated") {
+			return nil
+		}
+
+		// Skip the validator and sentry packages themselves
+		if strings.Contains(path, "internal/validator") || strings.Contains(path, "/sentry/") {
+			return nil
+		}
+
+		fileViolations := checkAllErrorwUseErrorFields(path)
+		violations = append(violations, fileViolations...)
+
+		return nil
+	})
+	if err != nil {
+		return violations
+	}
+
+	return violations
+}
+
+// checkAllErrorwUseErrorFields parses a Go file and looks for ALL logger.Errorw
+// calls that do NOT use ErrorFields{...}.ZapFields().
+func checkAllErrorwUseErrorFields(filename string) []Violation {
+	var violations []Violation
+
+	fset := token.NewFileSet()
+
+	node, err := parser.ParseFile(fset, filename, nil, parser.ParseComments)
+	if err != nil {
+		return violations
+	}
+
+	ast.Inspect(node, func(n ast.Node) bool {
+		callExpr, ok := n.(*ast.CallExpr)
+		if !ok {
+			return true
+		}
+
+		selExpr, ok := callExpr.Fun.(*ast.SelectorExpr)
+		if !ok {
+			return true
+		}
+
+		methodName := selExpr.Sel.Name
+		// Only check Errorw calls
+		if methodName != "Errorw" {
+			return true
+		}
+
+		// Check if the receiver looks like a logger
+		receiverName := ""
+
+		switch x := selExpr.X.(type) {
+		case *ast.Ident:
+			receiverName = x.Name
+		case *ast.SelectorExpr:
+			receiverName = x.Sel.Name
+		}
+
+		if receiverName != "logger" && receiverName != "Logger" &&
+			!strings.Contains(strings.ToLower(receiverName), "log") {
+			return true
+		}
+
+		// Check if this call uses ErrorFields{...}.ZapFields()
+		if !usesErrorFieldsZapFields(callExpr) {
+			pos := fset.Position(callExpr.Pos())
+			violations = append(violations, Violation{
+				File:    filename,
+				Line:    pos.Line,
+				Type:    "ERRORW_WITHOUT_ERROR_FIELDS",
+				Message: "All Errorw() calls must use fsmv2sentry.ErrorFields{...}.ZapFields() for Sentry integration",
+			})
+		}
+
+		return true
+	})
+
+	return violations
 }
 
 // formatViolations formats violations into a readable string with context.
