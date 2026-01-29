@@ -287,6 +287,9 @@ func hasRawErrorField(call *ast.CallExpr) bool {
 }
 
 // usesErrorFieldsZapFields checks if a logger call uses ErrorFields{...}.ZapFields().
+// It recognizes two patterns:
+// 1. Direct: logger.Errorw("msg", ErrorFields{}.ZapFields()...)
+// 2. With append: logger.Errorw("msg", append(ErrorFields{}.ZapFields(), "key", "value")...)
 func usesErrorFieldsZapFields(call *ast.CallExpr) bool {
 	// Look for a spread operator (...) argument that is a call to ZapFields()
 	for _, arg := range call.Args {
@@ -300,6 +303,20 @@ func usesErrorFieldsZapFields(call *ast.CallExpr) bool {
 			if sel, ok := callArg.Fun.(*ast.SelectorExpr); ok {
 				if sel.Sel.Name == "ZapFields" {
 					return true
+				}
+			}
+
+			// Check for append(ErrorFields{}.ZapFields(), ...)... pattern
+			if ident, ok := callArg.Fun.(*ast.Ident); ok && ident.Name == "append" {
+				// Check the first argument to append for ZapFields
+				if len(callArg.Args) > 0 {
+					if innerCall, ok := callArg.Args[0].(*ast.CallExpr); ok {
+						if sel, ok := innerCall.Fun.(*ast.SelectorExpr); ok {
+							if sel.Sel.Name == "ZapFields" {
+								return true
+							}
+						}
+					}
 				}
 			}
 		}

@@ -467,9 +467,11 @@ func (s *Supervisor[TObserved, TDesired]) handleWorkerRestart(ctx context.Contex
 	if !exists {
 		s.mu.RUnlock()
 
-		s.logger.Errorw("worker_restart_not_found",
-			"hierarchy_path", s.GetHierarchyPathUnlocked(),
-			"target_worker_id", workerID)
+		s.logger.Errorw("worker_restart_not_found", append(fsmv2sentry.ErrorFields{
+			Feature:       "fsmv2",
+			HierarchyPath: s.GetHierarchyPathUnlocked(),
+		}.ZapFields(),
+			"target_worker_id", workerID)...)
 
 		return errors.New("worker not found for restart")
 	}

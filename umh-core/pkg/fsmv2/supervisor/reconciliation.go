@@ -225,8 +225,11 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 
 			if restartCount >= s.collectorHealth.maxRestartAttempts {
 				// Max attempts reached - escalate to shutdown (Layer 3)
-				s.logger.Errorw("collector_unresponsive_max_attempts",
-					"restart_attempts", s.collectorHealth.maxRestartAttempts)
+				s.logger.Errorw("collector_unresponsive_max_attempts", append(fsmv2sentry.ErrorFields{
+					Feature:       "fsmv2",
+					HierarchyPath: s.GetHierarchyPathUnlocked(),
+				}.ZapFields(),
+					"restart_attempts", s.collectorHealth.maxRestartAttempts)...)
 
 				if shutdownErr := s.requestShutdown(ctx, workerID,
 					fmt.Sprintf("collector unresponsive after %d restart attempts", s.collectorHealth.maxRestartAttempts)); shutdownErr != nil {
@@ -602,12 +605,16 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 			}
 
 			if attempts >= 5 {
-				s.logger.Errorw("escalation_required",
+				s.logger.Errorw("escalation_required", append(fsmv2sentry.ErrorFields{
+					Feature:       "fsmv2",
+					Err:           childErr,
+					HierarchyPath: s.GetHierarchyPathUnlocked(),
+				}.ZapFields(),
 					"child_name", childErr.ChildName,
 					"max_attempts", 5,
 					"total_downtime", s.healthChecker.backoff.GetTotalDowntime().String(),
 					"runbook_url", "https://docs.umh.app/runbooks/supervisor-escalation",
-					"manual_steps", s.getEscalationSteps(childErr.ChildName))
+					"manual_steps", s.getEscalationSteps(childErr.ChildName))...)
 			}
 		}
 
@@ -1084,10 +1091,12 @@ func (s *Supervisor[TObserved, TDesired]) processSignal(ctx context.Context, wor
 
 		return nil
 	default:
-		s.logger.Errorw("unknown_signal_received",
-			"hierarchy_path", s.GetHierarchyPathUnlocked(),
+		s.logger.Errorw("unknown_signal_received", append(fsmv2sentry.ErrorFields{
+			Feature:       "fsmv2",
+			HierarchyPath: s.GetHierarchyPathUnlocked(),
+		}.ZapFields(),
 			"target_worker_id", workerID,
-			"signal", int(signal))
+			"signal", int(signal))...)
 
 		return errors.New("unknown signal")
 	}
@@ -1236,9 +1245,11 @@ func (s *Supervisor[TObserved, TDesired]) restartCollector(ctx context.Context, 
 	s.mu.RUnlock()
 
 	if !exists {
-		s.logger.Errorw("collector_restart_worker_not_found",
-			"hierarchy_path", s.GetHierarchyPathUnlocked(),
-			"target_worker_id", workerID)
+		s.logger.Errorw("collector_restart_worker_not_found", append(fsmv2sentry.ErrorFields{
+			Feature:       "fsmv2",
+			HierarchyPath: s.GetHierarchyPathUnlocked(),
+		}.ZapFields(),
+			"target_worker_id", workerID)...)
 
 		return errors.New("worker not found")
 	}
@@ -1268,7 +1279,9 @@ func (s *Supervisor[TObserved, TDesired]) checkDataFreshness(snapshot *fsmv2.Sna
 	}
 
 	if !hasTimestamp {
-		s.logger.Warn("Snapshot.Observed does not implement GetTimestamp(), cannot check freshness")
+		s.logger.Warnw("snapshot_missing_timestamp",
+			"reason", "Snapshot.Observed does not implement GetTimestamp()",
+			"impact", "cannot check freshness")
 
 		return true
 	}
@@ -1453,8 +1466,11 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 
 			childSupervisor, ok := rawSupervisor.(SupervisorInterface)
 			if !ok {
-				s.logger.Errorw("factory_invalid_supervisor_type",
-					"child_name", spec.Name)
+				s.logger.Errorw("factory_invalid_supervisor_type", append(fsmv2sentry.ErrorFields{
+					Feature:       "fsmv2",
+					HierarchyPath: s.GetHierarchyPathUnlocked(),
+				}.ZapFields(),
+					"child_name", spec.Name)...)
 
 				continue
 			}

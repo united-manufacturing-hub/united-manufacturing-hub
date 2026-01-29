@@ -157,6 +157,7 @@ func main() {
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
 	go func() {
+		sugar := logger.Sugar()
 		sig := <-sigChan
 		logger.Info("Received signal, initiating graceful shutdown...",
 			zap.String("signal", sig.String()),
@@ -166,8 +167,9 @@ func main() {
 
 		select {
 		case sig := <-sigChan:
-			logger.Warn("Received second signal, forcing immediate exit!",
-				zap.String("signal", sig.String()))
+			sugar.Warnw("forced_exit_second_signal",
+				"reason", "received_second_signal",
+				"signal", sig.String())
 			os.Exit(1)
 		case <-result.Done:
 		}

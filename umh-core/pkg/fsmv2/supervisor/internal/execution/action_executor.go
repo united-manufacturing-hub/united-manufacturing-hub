@@ -140,12 +140,15 @@ func (ae *ActionExecutor) executeWorkWithRecovery(work actionWork) {
 			err = errors.New("action panicked")
 			status = "panic"
 
-			ae.logger.Errorw("action_panic",
-				"hierarchy_path", ae.identity.HierarchyPath,
+			ae.logger.Errorw("action_panic", append(fsmv2sentry.ErrorFields{
+				Feature:       "fsmv2",
+				Err:           err,
+				HierarchyPath: ae.identity.HierarchyPath,
+			}.ZapFields(),
 				"correlation_id", work.actionID,
 				"action_name", work.action.Name(),
 				"panic", fmt.Sprintf("%v", r),
-				"stack", string(debug.Stack()))
+				"stack", string(debug.Stack()))...)
 		}
 
 		ae.mu.Lock()
@@ -263,12 +266,14 @@ func (ae *ActionExecutor) EnqueueAction(actionID string, action fsmv2.Action[any
 		delete(ae.inProgress, actionID)
 		ae.mu.Unlock()
 
-		ae.logger.Errorw("action_queue_full",
-			"hierarchy_path", ae.identity.HierarchyPath,
+		ae.logger.Errorw("action_queue_full", append(fsmv2sentry.ErrorFields{
+			Feature:       "fsmv2",
+			HierarchyPath: ae.identity.HierarchyPath,
+		}.ZapFields(),
 			"correlation_id", actionID,
 			"action_name", action.Name(),
 			"queue_capacity", cap(ae.actionQueue),
-			"worker_count", ae.workerCount)
+			"worker_count", ae.workerCount)...)
 
 		return errors.New("action queue full")
 	}

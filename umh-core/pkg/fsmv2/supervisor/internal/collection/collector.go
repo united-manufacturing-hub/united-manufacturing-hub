@@ -158,9 +158,12 @@ func (c *Collector[TObserved]) TriggerNow() {
 	c.mu.RUnlock()
 
 	if !running {
-		c.config.Logger.Errorw("collector_trigger_now_failed",
+		c.config.Logger.Errorw("collector_trigger_now_failed", append(fsmv2sentry.ErrorFields{
+			Feature:       "fsmv2",
+			HierarchyPath: c.config.Identity.HierarchyPath,
+		}.ZapFields(),
 			"reason", "not_running",
-			"current_state", c.state.String())
+			"current_state", c.state.String())...)
 
 		return
 	}
@@ -185,9 +188,12 @@ func (c *Collector[TObserved]) Restart() {
 	c.mu.RUnlock()
 
 	if !running {
-		c.config.Logger.Errorw("collector_restart_failed",
+		c.config.Logger.Errorw("collector_restart_failed", append(fsmv2sentry.ErrorFields{
+			Feature:       "fsmv2",
+			HierarchyPath: c.config.Identity.HierarchyPath,
+		}.ZapFields(),
 			"reason", "not_running",
-			"current_state", c.state.String())
+			"current_state", c.state.String())...)
 
 		return
 	}
@@ -251,8 +257,11 @@ func (c *Collector[TObserved]) Stop(ctx context.Context) {
 		c.config.Logger.Warnw("collector_stopped",
 			"result", "context_cancelled")
 	case <-time.After(5 * time.Second):
-		c.config.Logger.Errorw("collector_stopped",
-			"result", "timeout")
+		c.config.Logger.Errorw("collector_stopped", append(fsmv2sentry.ErrorFields{
+			Feature:       "fsmv2",
+			HierarchyPath: c.config.Identity.HierarchyPath,
+		}.ZapFields(),
+			"result", "timeout")...)
 	}
 }
 
@@ -454,18 +463,24 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 
 	observedTyped, ok := observed.(TObserved)
 	if !ok {
-		c.config.Logger.Errorw("collector_type_mismatch",
+		c.config.Logger.Errorw("collector_type_mismatch", append(fsmv2sentry.ErrorFields{
+			Feature:       "fsmv2",
+			HierarchyPath: c.config.Identity.HierarchyPath,
+		}.ZapFields(),
 			"expected_type", fmt.Sprintf("%T", *new(TObserved)),
-			"actual_type", fmt.Sprintf("%T", observed))
+			"actual_type", fmt.Sprintf("%T", observed))...)
 
 		return fmt.Errorf("observed state type mismatch: expected %T, got %T", *new(TObserved), observed)
 	}
 
 	ts, ok := c.config.Store.(*storage.TriangularStore)
 	if !ok {
-		c.config.Logger.Errorw("collector_store_type_mismatch",
+		c.config.Logger.Errorw("collector_store_type_mismatch", append(fsmv2sentry.ErrorFields{
+			Feature:       "fsmv2",
+			HierarchyPath: c.config.Identity.HierarchyPath,
+		}.ZapFields(),
 			"expected_type", "*storage.TriangularStore",
-			"actual_type", fmt.Sprintf("%T", c.config.Store))
+			"actual_type", fmt.Sprintf("%T", c.config.Store))...)
 
 		return fmt.Errorf("store is not *TriangularStore, got %T", c.config.Store)
 	}

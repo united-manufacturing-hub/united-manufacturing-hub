@@ -35,7 +35,9 @@ func (a *ConnectAction) Execute(ctx context.Context, depsAny any) error {
 	logger := deps.GetLogger()
 
 	if deps.IsShouldPanic() {
-		logger.Warn("Simulating panic in connect action")
+		logger.Warnw("simulating_panic",
+			"action", "connect",
+			"reason", "should_panic_flag_set")
 		panic("simulated panic in connect action")
 	}
 
