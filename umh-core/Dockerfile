@@ -183,6 +183,9 @@ ENV S6_YES_I_WANT_A_WORLD_WRITABLE_RUN_BECAUSE_KUBERNETES=1 \
     PATH="/opt/redpanda/bin:$PATH"
 VOLUME ["/data"]
 
+# set /tmp permissions to drwxrwxrwt
+RUN chmod 1777 /tmp
+
 # Switch to non-root user - S6 overlay will run as umhuser (UID 1000)
 USER umhuser:umhuser
 
