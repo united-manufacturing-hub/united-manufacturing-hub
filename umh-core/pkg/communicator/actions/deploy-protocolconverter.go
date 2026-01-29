@@ -48,6 +48,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/variables"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/protocolconverter"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
@@ -95,6 +96,10 @@ func (a *DeployProtocolConverterAction) Parse(payload interface{}) error {
 	}
 
 	a.payload = parsedPayload
+	if a.payload.State == "" {
+		a.payload.State = dataflowcomponent.OperationalStateActive
+	}
+
 	a.actionLogger.Debugf("Parsed DeployProtocolConverter action payload: name=%s, ip=%s, port=%d",
 		a.payload.Name, a.payload.Connection.IP, a.payload.Connection.Port)
 
@@ -117,6 +122,10 @@ func (a *DeployProtocolConverterAction) Validate() error {
 	}
 
 	if err := config.ValidateComponentName(a.payload.Name); err != nil {
+		return err
+	}
+
+	if err := ValidateDataFlowComponentState(a.payload.State); err != nil {
 		return err
 	}
 
@@ -162,25 +171,34 @@ func (a *DeployProtocolConverterAction) Execute() (interface{}, map[string]inter
 		Name:       a.payload.Name,
 		Location:   a.payload.Location,
 		Connection: a.payload.Connection,
+		State:      pcConfig.DesiredFSMState,
 		// ReadDFC, WriteDFC, and TemplateInfo are nil as they will be added later
 	}
 
+	// Determine the target state for status messages
+	targetState := pcConfig.DesiredFSMState
+
 	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
-		"Waiting for protocol converter to be active...", a.outboundChannel, models.DeployProtocolConverter)
+		fmt.Sprintf("Waiting for protocol converter to be %s...", targetState), a.outboundChannel, models.DeployProtocolConverter)
 
 	// check against observedState
 	if a.systemSnapshotManager != nil {
-		errCode, err := a.waitForComponentToAppear()
+		errCode, err := a.waitForComponentToAppear(targetState)
 		if err != nil {
-			errorMsg := fmt.Sprintf("Failed to wait for protocol converter to be active: %v", err)
+			errorMsg := fmt.Sprintf("Failed to wait for protocol converter to reach state %s: %v", targetState, err)
 			SendActionReplyV2(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errorMsg, errCode, nil, a.outboundChannel, models.DeployProtocolConverter, nil)
 
 			return nil, nil, fmt.Errorf("%s", errorMsg)
 		}
 	}
 
+	// Use appropriate terminal state description
+	terminal := map[string]string{
+		dataflowcomponent.OperationalStateActive:  "activated",
+		dataflowcomponent.OperationalStateStopped: "stopped",
+	}[targetState]
 	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
-		"Protocol converter successfully deployed and activated", a.outboundChannel, models.DeployProtocolConverter)
+		"Protocol converter successfully deployed and "+terminal, a.outboundChannel, models.DeployProtocolConverter)
 
 	return response, nil, nil
 }
@@ -228,7 +246,7 @@ func (a *DeployProtocolConverterAction) createProtocolConverterConfig() config.P
 	return config.ProtocolConverterConfig{
 		FSMInstanceConfig: config.FSMInstanceConfig{
 			Name:            a.payload.Name,
-			DesiredFSMState: "active", // Default to active state
+			DesiredFSMState: a.payload.State,
 		},
 		ProtocolConverterServiceConfig: spec,
 	}
@@ -264,11 +282,11 @@ func (a *DeployProtocolConverterAction) GetParsedPayload() models.ProtocolConver
 }
 
 // waitForComponentToAppear polls live FSM state until the new component
-// becomes available or the timeout hits (→ delete unless ignoreHealthCheck).
+// reaches the desired state or the timeout hits (→ delete unless ignoreHealthCheck).
 // the function returns the error code and the error message via an error object
 // the error code is a string that is sent to the frontend to allow it to determine if the action can be retried or not
 // the error message is sent to the frontend to allow the user to see the error message.
-func (a *DeployProtocolConverterAction) waitForComponentToAppear() (string, error) {
+func (a *DeployProtocolConverterAction) waitForComponentToAppear(desiredState string) (string, error) {
 	ticker := time.NewTicker(constants.ActionTickerTime)
 	defer ticker.Stop()
 
@@ -286,7 +304,7 @@ func (a *DeployProtocolConverterAction) waitForComponentToAppear() (string, erro
 
 		select {
 		case <-timeout:
-			stateMessage := Label("deploy", a.payload.Name) + "timeout reached. it did not become active in time. removing"
+			stateMessage := Label("deploy", a.payload.Name) + fmt.Sprintf("timeout reached. it did not become %s in time. removing", desiredState)
 			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, stateMessage,
 				a.outboundChannel, models.DeployProtocolConverter)
 
@@ -297,11 +315,11 @@ func (a *DeployProtocolConverterAction) waitForComponentToAppear() (string, erro
 			if err != nil {
 				a.actionLogger.Errorf("failed to remove protocol converter %s: %v", a.payload.Name, err)
 
-				return models.ErrRetryRollbackTimeout, fmt.Errorf("protocol converter '%s' failed to activate within timeout but could not be removed: %w. Please check system load and consider removing the component manually", a.payload.Name, err)
+				return models.ErrRetryRollbackTimeout, fmt.Errorf("protocol converter '%s' failed to reach state '%s' within timeout but could not be removed: %w. Please check system load and consider removing the component manually", a.payload.Name, desiredState, err)
 			}
 
 			// Build timeout error message with blocking reason if available
-			errorMsg := fmt.Sprintf("protocol converter '%s' was removed because it did not become active within the timeout period", a.payload.Name)
+			errorMsg := fmt.Sprintf("protocol converter '%s' was removed because it did not reach state '%s' within the timeout period", a.payload.Name, desiredState)
 			if lastStatusReason != "" {
 				errorMsg = fmt.Sprintf("protocol converter '%s' was removed because: %s", a.payload.Name, lastStatusReason)
 			} else {
@@ -326,11 +344,30 @@ func (a *DeployProtocolConverterAction) waitForComponentToAppear() (string, erro
 
 					found = true
 
-					// Check if the protocol converter is in an active state
-					// Note: starting_failed_dfc_missing is a valid state for empty bridges (no DFCs configured yet)
-					// This allows the deploy → edit workflow where deploy creates an empty bridge and edit adds DFCs later
-					if instance.CurrentState == "active" || instance.CurrentState == "idle" || instance.CurrentState == "starting_failed_dfc_missing" {
-						return "", nil
+					// Check if the protocol converter has reached the desired state
+					// For "active" state: accept "active", "idle", or "starting_failed_dfc_missing" (empty bridges)
+					// For "stopped" state: accept only "stopped"
+					var acceptedStates []string
+
+					switch desiredState {
+					case dataflowcomponent.OperationalStateActive:
+						// Note: starting_failed_dfc_missing is a valid state for empty bridges (no DFCs configured yet)
+						// This allows the deploy → edit workflow where deploy creates an empty bridge and edit adds DFCs later
+						acceptedStates = []string{
+							protocolconverter.OperationalStateActive,
+							protocolconverter.OperationalStateIdle,
+							protocolconverter.OperationalStateStartingFailedDFCMissing,
+						}
+					case dataflowcomponent.OperationalStateStopped:
+						acceptedStates = []string{
+							protocolconverter.OperationalStateStopped,
+						}
+					}
+
+					for _, acceptedState := range acceptedStates {
+						if instance.CurrentState == acceptedState {
+							return "", nil
+						}
 					}
 
 					// Get more detailed status information from the protocol converter snapshot

@@ -231,6 +231,42 @@ var _ = Describe("EditProtocolConverter", func() {
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to parse protocol converter payload"))
 		})
+
+		It("should default state to 'active' when not provided", func() {
+			payload := map[string]interface{}{
+				"name": pcName,
+				"connection": map[string]interface{}{
+					"ip":   "wttr.in",
+					"port": 80,
+				},
+				"uuid": pcUUID.String(),
+				// No state field provided
+			}
+
+			err := action.Parse(payload)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Verify that state defaults to "active"
+			Expect(action.GetState()).To(Equal("active"))
+		})
+
+		It("should preserve explicit 'stopped' state", func() {
+			payload := map[string]interface{}{
+				"name": pcName,
+				"connection": map[string]interface{}{
+					"ip":   "wttr.in",
+					"port": 80,
+				},
+				"uuid":  pcUUID.String(),
+				"state": "stopped",
+			}
+
+			err := action.Parse(payload)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Verify that state is preserved as "stopped"
+			Expect(action.GetState()).To(Equal("stopped"))
+		})
 	})
 
 	Describe("Validate", func() {
