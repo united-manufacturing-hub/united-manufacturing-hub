@@ -863,6 +863,7 @@ func (a *EditProtocolConverterAction) compareProtocolConverterDFCConfig(pcSnapsh
 			RateLimitResources: observedBenthosConfig.RateLimitResources,
 			Buffer:             observedBenthosConfig.Buffer,
 		},
+		DebugLevel: observedBenthosConfig.DebugLevel,
 	}
 
 	// render the desired DFC config template

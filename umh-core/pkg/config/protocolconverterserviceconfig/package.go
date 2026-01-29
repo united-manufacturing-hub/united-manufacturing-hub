@@ -78,7 +78,7 @@ type ProtocolConverterServiceConfigRuntime struct {
 	DataflowComponentReadServiceConfig  dataflowcomponentserviceconfig.DataflowComponentServiceConfig `yaml:"dataflowcomponent_read"`
 	DataflowComponentWriteServiceConfig dataflowcomponentserviceconfig.DataflowComponentServiceConfig `yaml:"dataflowcomponent_write"`
 
-	DebugLevel bool `yaml:"debug_level,omitempty"`
+	DebugLevel bool `yaml:"debug_level"`
 }
 
 // ProtocolConverterServiceConfigSpec is the **user‑facing** wrapper that binds a
@@ -102,7 +102,7 @@ type ProtocolConverterServiceConfigSpec struct {
 	Location    map[string]string                      `yaml:"location,omitempty"`
 	TemplateRef string                                 `yaml:"templateRef,omitempty"`
 	Config      ProtocolConverterServiceConfigTemplate `yaml:"config,omitempty"`
-	DebugLevel  bool                                   `yaml:"debug_level,omitempty"`
+	DebugLevel  bool                                   `yaml:"debug_level"`
 }
 
 // Equal checks if two ProtocolConverterServiceConfigs are equal.
