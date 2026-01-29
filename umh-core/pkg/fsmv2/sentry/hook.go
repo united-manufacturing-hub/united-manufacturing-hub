@@ -75,14 +75,13 @@ func (h *SentryHook) captureToSentry(entry zapcore.Entry, fields []zapcore.Field
 	// Extract feature field - use "unknown" if missing
 	feature := ExtractFeature(fieldMap)
 
-	// Extract error for fingerprinting and exception
-	var err error
+	// Extract error DIRECTLY from fields (FieldsToMap converts errors to strings)
+	err := ExtractErrorFromFields(fields)
 
 	var errorTypes string
 
-	if e, ok := fieldMap["error"].(error); ok && e != nil {
-		err = e
-		errorTypes = ExtractErrorTypes(e)
+	if err != nil {
+		errorTypes = ExtractErrorTypes(err)
 	}
 
 	// Build fingerprint using error TYPES (stable), not messages (contain URLs/IPs)
@@ -99,15 +98,25 @@ func (h *SentryHook) captureToSentry(entry zapcore.Entry, fields []zapcore.Field
 	event.Level = ZapLevelToSentry(entry.Level)
 	event.Message = entry.Message
 
-	// Add error as exception (enables unwrapping + stack trace)
+	// Add error as exception with event_name as the Type (shows as title in Sentry UI)
+	// This makes the title "action_failed" instead of "*fmt.wrapError"
 	if err != nil {
-		event.SetException(err, 1)
+		event.Exception = []sentry.Exception{
+			{
+				Type:  entry.Message, // "action_failed" - becomes the title
+				Value: err.Error(),   // "connection failed: ..." - becomes subtitle
+			},
+		}
 	}
 
-	// Set tags
+	// Set tags - include error_types for searchability
 	event.Tags = map[string]string{
 		"feature":    feature,
 		"event_name": entry.Message,
+	}
+
+	if errorTypes != "" {
+		event.Tags["error_types"] = errorTypes
 	}
 
 	// Auto-derive from hierarchy_path
@@ -205,4 +214,19 @@ func ExtractFeature(fieldMap map[string]interface{}) string {
 	}
 
 	return feature
+}
+
+// ExtractErrorFromFields extracts the error interface directly from zap fields.
+// This is needed because FieldsToMap/MapObjectEncoder converts errors to strings,
+// losing the error interface needed for SetException and error type extraction.
+func ExtractErrorFromFields(fields []zapcore.Field) error {
+	for _, f := range fields {
+		if f.Key == "error" && f.Type == zapcore.ErrorType {
+			if err, ok := f.Interface.(error); ok {
+				return err
+			}
+		}
+	}
+
+	return nil
 }
