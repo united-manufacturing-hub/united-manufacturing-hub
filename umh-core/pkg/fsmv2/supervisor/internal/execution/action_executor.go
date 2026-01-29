@@ -115,9 +115,14 @@ func (ae *ActionExecutor) Start(ctx context.Context) {
 func (ae *ActionExecutor) worker() {
 	defer ae.wg.Done()
 
+	// Capture context under lock to prevent race with Start()/Shutdown()
+	ae.mu.RLock()
+	ctx := ae.ctx
+	ae.mu.RUnlock()
+
 	for {
 		select {
-		case <-ae.ctx.Done():
+		case <-ctx.Done():
 			return
 
 		case work, ok := <-ae.actionQueue:
@@ -125,16 +130,17 @@ func (ae *ActionExecutor) worker() {
 				return
 			}
 
-			ae.executeWorkWithRecovery(work)
+			ae.executeWorkWithRecovery(ctx, work)
 		}
 	}
 }
 
 // executeWorkWithRecovery handles action execution with panic recovery.
-func (ae *ActionExecutor) executeWorkWithRecovery(work actionWork) {
+// ctx is passed from worker() which captures it under lock to prevent races.
+func (ae *ActionExecutor) executeWorkWithRecovery(ctx context.Context, work actionWork) {
 	startTime := time.Now()
 
-	actionCtx, cancel := context.WithTimeout(ae.ctx, work.timeout)
+	actionCtx, cancel := context.WithTimeout(ctx, work.timeout)
 	defer cancel()
 
 	var err error
@@ -156,6 +162,7 @@ func (ae *ActionExecutor) executeWorkWithRecovery(work actionWork) {
 
 		ae.mu.Lock()
 		delete(ae.inProgress, work.actionID)
+		callback := ae.onActionComplete
 		ae.mu.Unlock()
 
 		duration := time.Since(startTime)
@@ -174,13 +181,13 @@ func (ae *ActionExecutor) executeWorkWithRecovery(work actionWork) {
 
 		metrics.RecordActionExecutionDuration(ae.identity.HierarchyPath, work.action.Name(), status, duration)
 
-		if ae.onActionComplete != nil {
+		if callback != nil {
 			errorMsg := ""
 			if err != nil {
 				errorMsg = err.Error()
 			}
 
-			ae.onActionComplete(deps.ActionResult{
+			callback(deps.ActionResult{
 				Timestamp:  time.Now(),
 				ActionType: work.action.Name(),
 				Success:    status == "success",
@@ -254,12 +261,13 @@ func (ae *ActionExecutor) EnqueueAction(actionID string, action fsmv2.Action[any
 	}
 
 	ae.inProgress[actionID] = true
-	ae.mu.Unlock()
 
+	// Read timeout while still holding lock to prevent race with concurrent access
 	timeout, exists := ae.timeouts[actionID]
 	if !exists {
 		timeout = ae.defaultTimeout
 	}
+	ae.mu.Unlock()
 
 	work := actionWork{
 		actionID: actionID,
@@ -331,8 +339,11 @@ func (ae *ActionExecutor) GetActiveActionCount() int {
 
 // SetOnActionComplete sets a callback invoked after each action execution.
 // Should be called during executor setup, before Start().
+// Thread-safe: can be called concurrently with action execution.
 func (ae *ActionExecutor) SetOnActionComplete(fn func(deps.ActionResult)) {
+	ae.mu.Lock()
 	ae.onActionComplete = fn
+	ae.mu.Unlock()
 }
 
 func (ae *ActionExecutor) Shutdown() {
