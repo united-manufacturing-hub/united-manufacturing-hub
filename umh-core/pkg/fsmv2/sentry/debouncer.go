@@ -23,11 +23,11 @@ import (
 // This prevents duplicate errors with the same fingerprint from being captured
 // within the debounce window.
 type FingerprintDebouncer struct {
-	mu       sync.Mutex
-	wg       sync.WaitGroup
 	lastSeen map[string]time.Time
 	done     chan struct{}
+	wg       sync.WaitGroup
 	window   time.Duration
+	mu       sync.Mutex
 }
 
 // NewFingerprintDebouncer creates a debouncer with the specified debounce window.
