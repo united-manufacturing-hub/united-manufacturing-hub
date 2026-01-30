@@ -546,6 +546,73 @@ github.com/example/pkg/executor.executeWork()
 		})
 	})
 
+	Describe("With() Derived Logger", func() {
+		It("maintains Sentry capture through logger.With() derived loggers", func() {
+			// This tests a critical fix: when supervisors call logger.With("worker", "...")
+			// the derived logger must still capture errors to Sentry.
+
+			// Create a derived logger using With()
+			derivedLogger := logger.With("worker", "test-worker-123")
+
+			// Log an error through the derived logger
+			derivedLogger.Errorw("action_failed", sentry.ErrorFields{
+				Feature: "fsmv2",
+				Err:     io.EOF,
+			}.ZapFields()...)
+
+			// Event should be captured to Sentry
+			Eventually(func() int {
+				return store.Len()
+			}, time.Second, 10*time.Millisecond).Should(BeNumerically(">=", 1))
+
+			event := store.GetLast()
+			Expect(event).NotTo(BeNil())
+			Expect(event.Message).To(Equal("action_failed"))
+			Expect(event.Exception).NotTo(BeEmpty(), "Error should be captured as Exception")
+		})
+
+		It("maintains Sentry capture through multiple With() calls", func() {
+			// Test chained With() calls
+			derivedLogger := logger.With("worker", "test-worker").With("action", "test-action")
+
+			derivedLogger.Errorw("nested_error", sentry.ErrorFields{
+				Feature: "fsmv2",
+				Err:     errors.New("nested test error"),
+			}.ZapFields()...)
+
+			Eventually(func() int {
+				return store.Len()
+			}, time.Second, 10*time.Millisecond).Should(BeNumerically(">=", 1))
+
+			event := store.GetLast()
+			Expect(event).NotTo(BeNil())
+			Expect(event.Message).To(Equal("nested_error"))
+		})
+
+		It("shares debouncer across derived loggers", func() {
+			// Both loggers should share the same debouncer, so duplicate events are suppressed
+			derivedLogger1 := logger.With("worker", "worker-1")
+			derivedLogger2 := logger.With("worker", "worker-2")
+
+			// Log same error from both derived loggers
+			derivedLogger1.Errorw("shared_error", sentry.ErrorFields{
+				Feature: "fsmv2",
+				Err:     io.EOF,
+			}.ZapFields()...)
+
+			derivedLogger2.Errorw("shared_error", sentry.ErrorFields{
+				Feature: "fsmv2",
+				Err:     io.EOF,
+			}.ZapFields()...)
+
+			// Wait a bit for any async processing
+			time.Sleep(100 * time.Millisecond)
+
+			// Only one event should be captured (second is debounced due to same fingerprint)
+			Expect(store.Len()).To(Equal(1), "Debouncer should suppress duplicate from derived logger")
+		})
+	})
+
 	Describe("Fingerprint Stability", func() {
 		It("groups same error type with different URLs", func() {
 			// Create new hook with very short debounce to allow both events

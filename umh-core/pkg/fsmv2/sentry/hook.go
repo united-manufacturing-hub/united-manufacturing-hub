@@ -318,9 +318,7 @@ func ParseStackTrace(stack string) *sentry.Stacktrace {
 			Lineno:   gf.Line,
 			AbsPath:  absPath,
 			// Mark UMH application code as in_app for Sentry UI highlighting
-			InApp: strings.Contains(gf.Func, appPackagePrefix) ||
-				strings.Contains(absPath, "umh-core/pkg") ||
-				strings.Contains(absPath, "umh-core/cmd"),
+			InApp: isAppFrame(gf.Func, absPath),
 		}
 		frames = append(frames, frame)
 	}
@@ -349,6 +347,14 @@ var internalPackagePrefixes = []string{
 // Frames with this prefix get in_app=true, helping Sentry highlight relevant code.
 const appPackagePrefix = "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core"
 
+// isAppFrame determines if a frame belongs to UMH application code.
+// Used to set in_app=true in Sentry, which highlights relevant frames in the UI.
+func isAppFrame(module, absPath string) bool {
+	return strings.HasPrefix(module, appPackagePrefix) ||
+		strings.Contains(absPath, "umh-core/pkg") ||
+		strings.Contains(absPath, "umh-core/cmd")
+}
+
 // newFilteredStacktrace captures the current stacktrace and filters out internal frames.
 // This removes sentry, zap, and runtime frames so the trace shows application code.
 // It also sets in_app=true for UMH application code to help Sentry highlight relevant frames.
@@ -363,7 +369,7 @@ func newFilteredStacktrace() *sentry.Stacktrace {
 	for _, frame := range st.Frames {
 		if !IsInternalFrame(frame) {
 			// Mark UMH application code as in_app for Sentry UI highlighting
-			frame.InApp = strings.HasPrefix(frame.Module, appPackagePrefix)
+			frame.InApp = isAppFrame(frame.Module, frame.AbsPath)
 			filtered = append(filtered, frame)
 		}
 	}
@@ -380,18 +386,24 @@ func newFilteredStacktrace() *sentry.Stacktrace {
 // IsInternalFrame checks if a frame belongs to internal logging/sentry packages.
 // Exported for testing.
 func IsInternalFrame(frame sentry.Frame) bool {
-	// Check module (package path)
+	// Check module (package path) - use HasPrefix for module paths
 	for _, prefix := range internalPackagePrefixes {
 		if strings.HasPrefix(frame.Module, prefix) {
 			return true
 		}
-
-		if strings.HasPrefix(frame.AbsPath, prefix) {
-			return true
-		}
 	}
 
-	// Also filter by function name patterns
+	// Check AbsPath separately - use Contains since absolute paths start with /
+	// e.g., "/usr/local/go/src/runtime/debug/stack.go" contains "runtime/"
+	if strings.Contains(frame.AbsPath, "/sentry-go/") ||
+		strings.Contains(frame.AbsPath, "/zap/") ||
+		strings.Contains(frame.AbsPath, "/runtime/") ||
+		strings.Contains(frame.AbsPath, "pkg/sentry/") ||
+		strings.Contains(frame.AbsPath, "pkg/fsmv2/sentry/") {
+		return true
+	}
+
+	// Filter by function name patterns for edge cases
 	if strings.Contains(frame.Function, "captureToSentry") ||
 		strings.Contains(frame.Function, "SentryHook.Write") ||
 		strings.Contains(frame.Function, "zapcore.") {
