@@ -17,10 +17,15 @@ package integration
 import (
 	"strings"
 	"sync"
+	"time"
 
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest/observer"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
+	fsmv2sentry "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/sentry"
+	umhsentry "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 )
 
 // TestLogger provides a logger that captures logs for verification in integration tests.
@@ -31,9 +36,18 @@ type TestLogger struct {
 }
 
 // NewTestLogger creates a new TestLogger with the specified log level.
+// Sentry is always enabled for integration tests with environment "integration-test".
 func NewTestLogger(level zapcore.Level) *TestLogger {
-	core, logs := observer.New(level)
-	logger := zap.New(core).Sugar()
+	observerCore, logs := observer.New(level)
+
+	// Initialize Sentry for integration tests with dedicated environment
+	umhsentry.InitSentry(constants.IntegrationTestVersion, true)
+
+	// Wrap observer core with SentryHook to capture errors
+	hook := fsmv2sentry.NewSentryHook(1 * time.Minute)
+	wrappedCore := hook.Wrap(observerCore)
+
+	logger := zap.New(wrappedCore).Sugar()
 
 	return &TestLogger{
 		Logger: logger,

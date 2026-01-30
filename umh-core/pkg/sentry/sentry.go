@@ -53,16 +53,23 @@ func InitSentry(appVersion string, debounceErrors bool) {
 		return
 	}
 
-	environment := constants.DefaultDevelopmentEnvironment
+	var environment string
 
-	version, err := semver.NewVersion(appVersion)
-	if err != nil {
-		zap.S().Errorf("Failed to parse app version, using default environment (development): %s", err)
-	} else if version.Prerelease() == "" {
-		environment = constants.DefaultProductionEnvironment
+	// Handle integration test version with dedicated environment
+	if appVersion == constants.IntegrationTestVersion {
+		environment = constants.IntegrationTestEnvironment
+	} else {
+		environment = constants.DefaultDevelopmentEnvironment
+
+		version, versionErr := semver.NewVersion(appVersion)
+		if versionErr != nil {
+			zap.S().Errorf("Failed to parse app version, using default environment (development): %s", versionErr)
+		} else if version.Prerelease() == "" {
+			environment = constants.DefaultProductionEnvironment
+		}
 	}
 
-	err = sentry.Init(sentry.ClientOptions{
+	err := sentry.Init(sentry.ClientOptions{
 		// management.umh.app is not working anymore, so we use the direct DSN
 		Dsn:           "https://1e1f51c30e576ff39d2445e76dc89da7@o4507265932394496.ingest.de.sentry.io/4509039283798097",
 		Environment:   environment,
