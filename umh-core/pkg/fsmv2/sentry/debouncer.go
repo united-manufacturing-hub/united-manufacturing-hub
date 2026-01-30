@@ -28,8 +28,8 @@ type FingerprintDebouncer struct {
 	window   time.Duration
 }
 
-// NewFingerprintDebouncer creates a new debouncer with the specified debounce window.
-// The cleanup goroutine is started automatically to prevent memory leaks.
+// NewFingerprintDebouncer creates a debouncer with the specified debounce window.
+// A cleanup goroutine starts automatically to prevent memory leaks.
 func NewFingerprintDebouncer(window time.Duration) *FingerprintDebouncer {
 	d := &FingerprintDebouncer{
 		lastSeen: make(map[string]time.Time),
@@ -40,8 +40,8 @@ func NewFingerprintDebouncer(window time.Duration) *FingerprintDebouncer {
 	return d
 }
 
-// ShouldCapture returns true if this fingerprint should be captured to Sentry.
-// Returns false if the same fingerprint was seen within the debounce window.
+// ShouldCapture returns true if the debouncer has not recorded this fingerprint
+// within the debounce window; false if this fingerprint appeared recently.
 func (d *FingerprintDebouncer) ShouldCapture(fingerprint string) bool {
 	d.mu.Lock()
 	defer d.mu.Unlock()

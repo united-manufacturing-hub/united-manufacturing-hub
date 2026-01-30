@@ -155,9 +155,9 @@ func (ae *ActionExecutor) executeWorkWithRecovery(ctx context.Context, work acti
 			err = errors.New("action panicked")
 			status = "panic"
 
-			// Manual stack extraction required: Sentry SDK's ExtractStacktrace() only works
-			// on error types with stacktrace interfaces. Panic recovery values are plain
-			// interface{}, so we capture debug.Stack() explicitly for Sentry visibility.
+			// Extract stack manually because Sentry SDK's ExtractStacktrace() only works on
+			// error types with stacktrace interfaces. Panic recovery values are plain
+			// interface{}, so capture debug.Stack() explicitly for Sentry visibility.
 			ae.logger.Errorw("action_panic", append(fsmv2sentry.ErrorFields{
 				Feature:       "fsmv2",
 				Err:           err,
@@ -354,9 +354,9 @@ func (ae *ActionExecutor) GetActiveActionCount() int {
 	return len(ae.inProgress)
 }
 
-// SetOnActionComplete sets a callback invoked after each action execution.
-// Should be called during executor setup, before Start().
-// Thread-safe: can be called concurrently with action execution.
+// SetOnActionComplete sets a callback that runs after each action execution.
+// Call this during executor setup, before Start().
+// Thread-safe: runs concurrently with action execution.
 func (ae *ActionExecutor) SetOnActionComplete(fn func(deps.ActionResult)) {
 	ae.mu.Lock()
 	ae.onActionComplete = fn

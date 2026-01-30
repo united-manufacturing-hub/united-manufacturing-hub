@@ -71,9 +71,9 @@ func (h *SentryHook) Check(entry zapcore.Entry, ce *zapcore.CheckedEntry) *zapco
 	return ce
 }
 
-// With returns a new SentryHook that wraps the inner core with the given fields.
-// This is critical for maintaining Sentry capture when logger.With() is called,
-// which supervisors use to add "worker" fields.
+// With returns a SentryHook that wraps the inner core with the given fields.
+// Supervisors call logger.With() to add "worker" fields, and this method ensures
+// Sentry capture continues for derived loggers.
 func (h *SentryHook) With(fields []zapcore.Field) zapcore.Core {
 	return &SentryHook{
 		Core:      h.Core.With(fields),
@@ -124,8 +124,8 @@ func (h *SentryHook) captureToSentry(entry zapcore.Entry, fields []zapcore.Field
 		stacktrace = newFilteredStacktrace()
 	}
 
-	// Add error as exception with event_name as the Type (shows as title in Sentry UI)
-	// This makes the title "action_failed" instead of "*fmt.wrapError"
+	// Add error as exception with event_name as the Type (appears as title in Sentry UI).
+	// The title displays "action_failed" instead of "*fmt.wrapError".
 	if err != nil {
 		exception := sentry.Exception{
 			Type:  entry.Message, // "action_failed" - becomes the title
@@ -208,7 +208,7 @@ func FieldsToMap(fields []zapcore.Field) map[string]interface{} {
 }
 
 // ExtractErrorTypes walks the error chain and extracts type names.
-// Types are STABLE (same across customers), messages are VARIABLE (contain URLs/IPs).
+// Error types remain consistent across customers; error messages vary because they contain URLs and IPs.
 func ExtractErrorTypes(err error) string {
 	if err == nil {
 		return ""
@@ -263,8 +263,8 @@ func BuildFingerprint(level zapcore.Level, feature, eventName, errorTypes string
 
 // ExtractFeature extracts the feature field from a field map.
 // Returns "unknown" if the feature field is missing, empty, or not a string.
-// Note: This function intentionally does NOT log warnings to avoid recursive
-// Sentry captures when the warning itself triggers the hook.
+// The function avoids logging warnings to prevent recursive Sentry captures
+// when the warning itself triggers the hook.
 func ExtractFeature(fieldMap map[string]interface{}) string {
 	feature, ok := fieldMap["feature"].(string)
 	if !ok || feature == "" {
@@ -275,8 +275,8 @@ func ExtractFeature(fieldMap map[string]interface{}) string {
 }
 
 // ExtractErrorFromFields extracts the error interface directly from zap fields.
-// This is needed because FieldsToMap/MapObjectEncoder converts errors to strings,
-// losing the error interface needed for SetException and error type extraction.
+// FieldsToMap and MapObjectEncoder convert errors to strings, which loses the error
+// interface required by SetException and error type extraction.
 func ExtractErrorFromFields(fields []zapcore.Field) error {
 	for _, f := range fields {
 		if f.Key == "error" && f.Type == zapcore.ErrorType {
@@ -332,8 +332,8 @@ func ParseStackTrace(stack string) *sentry.Stacktrace {
 	}
 }
 
-// internalPackagePrefixes lists package paths that should be filtered from stacktraces.
-// These are internal logging/sentry infrastructure that clutter the trace.
+// internalPackagePrefixes lists package paths to filter from stacktraces.
+// These internal logging and sentry packages clutter the trace.
 var internalPackagePrefixes = []string{
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry",
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/sentry",
@@ -383,8 +383,8 @@ func newFilteredStacktrace() *sentry.Stacktrace {
 	}
 }
 
-// IsInternalFrame checks if a frame belongs to internal logging/sentry packages.
-// Exported for testing.
+// IsInternalFrame checks if a frame belongs to internal logging or sentry packages.
+// Tests use this function directly.
 func IsInternalFrame(frame sentry.Frame) bool {
 	// Check module (package path) - use HasPrefix for module paths
 	for _, prefix := range internalPackagePrefixes {

@@ -19,7 +19,7 @@ const DefaultAppVersion = "0.0.0-dev"
 const DefaultDevelopmentEnvironment = "development"
 const DefaultProductionEnvironment = "production"
 
-// IntegrationTestVersion is used by FSMv2 integration tests to enable Sentry
+// IntegrationTestVersion enables Sentry in FSMv2 integration tests
 // with a distinct environment tag for filtering.
 const IntegrationTestVersion = "0.0.0-integration"
 const IntegrationTestEnvironment = "integration-test"
