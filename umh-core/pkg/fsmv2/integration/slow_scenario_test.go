@@ -30,6 +30,7 @@ import (
 var _ = Describe("Slow Scenario Integration", func() {
 	It("should demonstrate long-running action handling and context cancellation", func() {
 		testLogger := integration.NewTestLogger(zapcore.DebugLevel)
+		defer testLogger.Stop()
 
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()

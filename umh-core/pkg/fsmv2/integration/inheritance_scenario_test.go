@@ -48,6 +48,7 @@ var _ = Describe("Inheritance Scenario Integration", Serial, func() {
 
 		By("Setting up test logger at DebugLevel")
 		testLogger := integration.NewTestLogger(zapcore.DebugLevel)
+		defer testLogger.Stop()
 
 		By("Setting up context with 30s timeout")
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

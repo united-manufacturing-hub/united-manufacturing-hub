@@ -30,6 +30,7 @@ import (
 var _ = Describe("Panic Scenario Integration", func() {
 	It("should demonstrate panic recovery and logging", func() {
 		testLogger := integration.NewTestLogger(zapcore.DebugLevel)
+		defer testLogger.Stop()
 
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()

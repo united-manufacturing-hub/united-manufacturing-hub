@@ -31,6 +31,7 @@ import (
 var _ = Describe("Cascade Scenario Integration", func() {
 	It("should demonstrate child failure propagation to parent state", func() {
 		testLogger := integration.NewTestLogger(zapcore.DebugLevel)
+		defer testLogger.Stop()
 
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()

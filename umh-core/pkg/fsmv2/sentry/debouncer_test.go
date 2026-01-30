@@ -31,6 +31,7 @@ var _ = Describe("FingerprintDebouncer", func() {
 
 		It("should return true for first call with any fingerprint", func() {
 			debouncer := sentry.NewFingerprintDebouncer(100 * time.Millisecond)
+			defer debouncer.Stop()
 
 			result := debouncer.ShouldCapture("fingerprint-1")
 
@@ -39,6 +40,7 @@ var _ = Describe("FingerprintDebouncer", func() {
 
 		It("should return false for immediate second call with same fingerprint", func() {
 			debouncer := sentry.NewFingerprintDebouncer(100 * time.Millisecond)
+			defer debouncer.Stop()
 
 			// First call - should capture
 			_ = debouncer.ShouldCapture("fingerprint-1")
@@ -51,6 +53,7 @@ var _ = Describe("FingerprintDebouncer", func() {
 
 		It("should return true after debounce window expires", func() {
 			debouncer := sentry.NewFingerprintDebouncer(50 * time.Millisecond)
+			defer debouncer.Stop()
 
 			// First call
 			_ = debouncer.ShouldCapture("fingerprint-1")
@@ -66,6 +69,7 @@ var _ = Describe("FingerprintDebouncer", func() {
 
 		It("should return true for different fingerprints (independent debouncing)", func() {
 			debouncer := sentry.NewFingerprintDebouncer(100 * time.Millisecond)
+			defer debouncer.Stop()
 
 			// First call with fingerprint-1
 			result1 := debouncer.ShouldCapture("fingerprint-1")
@@ -82,6 +86,25 @@ var _ = Describe("FingerprintDebouncer", func() {
 			// Second call with fingerprint-2 - should also be debounced
 			result4 := debouncer.ShouldCapture("fingerprint-2")
 			Expect(result4).To(BeFalse())
+		})
+	})
+
+	Describe("Stop", func() {
+		It("should stop the cleanup goroutine without blocking", func() {
+			debouncer := sentry.NewFingerprintDebouncer(100 * time.Millisecond)
+
+			// Verify debouncer works before stop
+			result := debouncer.ShouldCapture("test")
+			Expect(result).To(BeTrue())
+
+			// Stop should complete without blocking
+			done := make(chan struct{})
+			go func() {
+				debouncer.Stop()
+				close(done)
+			}()
+
+			Eventually(done, 1*time.Second).Should(BeClosed())
 		})
 	})
 })

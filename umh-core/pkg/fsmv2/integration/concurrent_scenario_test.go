@@ -31,6 +31,7 @@ import (
 var _ = Describe("Concurrent Scenario Integration", func() {
 	It("should run multiple workers concurrently without interference", func() {
 		testLogger := integration.NewTestLogger(zapcore.DebugLevel)
+		defer testLogger.Stop()
 
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()

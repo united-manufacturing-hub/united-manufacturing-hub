@@ -483,6 +483,8 @@ children:
 	// - Feature-based routing for error ownership
 	// This only affects FSMv2 logs, not the rest of the application
 	fsmv2Hook := fsmv2sentry.NewSentryHook(5 * time.Minute)
+	defer fsmv2Hook.Stop()
+
 	fsmv2Core := fsmv2Hook.Wrap(fsmv2Logger.Desugar().Core())
 	fsmv2Logger = zap.New(fsmv2Core).Sugar()
 

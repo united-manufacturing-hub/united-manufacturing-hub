@@ -31,6 +31,7 @@ import (
 var _ = Describe("Timeout Scenario Integration", func() {
 	It("should demonstrate timeout and retry behavior patterns", func() {
 		testLogger := integration.NewTestLogger(zapcore.DebugLevel)
+		defer testLogger.Stop()
 
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()

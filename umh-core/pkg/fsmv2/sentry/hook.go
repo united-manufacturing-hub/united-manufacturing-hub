@@ -45,6 +45,14 @@ func (h *SentryHook) Debouncer() *FingerprintDebouncer {
 	return h.debouncer
 }
 
+// Stop releases resources held by the hook, including the debouncer's cleanup goroutine.
+// Call this when the hook is no longer needed to prevent goroutine leaks.
+func (h *SentryHook) Stop() {
+	if h.debouncer != nil {
+		h.debouncer.Stop()
+	}
+}
+
 // Wrap wraps an existing zapcore.Core with Sentry capture functionality.
 func (h *SentryHook) Wrap(core zapcore.Core) zapcore.Core {
 	h.Core = core

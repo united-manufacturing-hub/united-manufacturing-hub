@@ -23,18 +23,25 @@ import (
 // This prevents duplicate errors with the same fingerprint from being captured
 // within the debounce window.
 type FingerprintDebouncer struct {
-	lastSeen map[string]time.Time
 	mu       sync.Mutex
+	wg       sync.WaitGroup
+	lastSeen map[string]time.Time
+	done     chan struct{}
 	window   time.Duration
 }
 
 // NewFingerprintDebouncer creates a debouncer with the specified debounce window.
 // A cleanup goroutine starts automatically to prevent memory leaks.
+// Call Stop() when the debouncer is no longer needed to release the goroutine.
 func NewFingerprintDebouncer(window time.Duration) *FingerprintDebouncer {
 	d := &FingerprintDebouncer{
 		lastSeen: make(map[string]time.Time),
+		done:     make(chan struct{}),
 		window:   window,
 	}
+
+	d.wg.Add(1)
+
 	go d.cleanupLoop()
 
 	return d
@@ -56,19 +63,35 @@ func (d *FingerprintDebouncer) ShouldCapture(fingerprint string) bool {
 	return true
 }
 
+// Stop signals the cleanup goroutine to exit and waits for it to finish.
+// Call this when the debouncer is no longer needed to prevent goroutine leaks.
+func (d *FingerprintDebouncer) Stop() {
+	close(d.done)
+	d.wg.Wait()
+}
+
 // cleanupLoop periodically removes old entries to prevent memory leaks.
 func (d *FingerprintDebouncer) cleanupLoop() {
+	defer d.wg.Done()
+
 	ticker := time.NewTicker(10 * time.Minute)
-	for range ticker.C {
-		d.mu.Lock()
+	defer ticker.Stop()
 
-		cutoff := time.Now().Add(-d.window * 2)
-		for fp, t := range d.lastSeen {
-			if t.Before(cutoff) {
-				delete(d.lastSeen, fp)
+	for {
+		select {
+		case <-d.done:
+			return
+		case <-ticker.C:
+			d.mu.Lock()
+
+			cutoff := time.Now().Add(-d.window * 2)
+			for fp, t := range d.lastSeen {
+				if t.Before(cutoff) {
+					delete(d.lastSeen, fp)
+				}
 			}
-		}
 
-		d.mu.Unlock()
+			d.mu.Unlock()
+		}
 	}
 }

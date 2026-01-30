@@ -32,6 +32,7 @@ import (
 type TestLogger struct {
 	Logger *zap.SugaredLogger
 	Logs   *observer.ObservedLogs
+	hook   *fsmv2sentry.SentryHook
 	mu     sync.RWMutex
 }
 
@@ -59,6 +60,15 @@ func NewTestLogger(level zapcore.Level) *TestLogger {
 	return &TestLogger{
 		Logger: logger,
 		Logs:   logs,
+		hook:   hook,
+	}
+}
+
+// Stop releases resources held by the test logger, including the Sentry hook's cleanup goroutine.
+// Call this in test cleanup (AfterEach/AfterSuite) to prevent goroutine leaks.
+func (tl *TestLogger) Stop() {
+	if tl.hook != nil {
+		tl.hook.Stop()
 	}
 }
 

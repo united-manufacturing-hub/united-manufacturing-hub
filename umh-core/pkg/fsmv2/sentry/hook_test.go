@@ -330,6 +330,7 @@ main.second()
 	Describe("NewSentryHook", func() {
 		It("should create hook with debouncer", func() {
 			hook := sentry.NewSentryHook(5 * time.Minute)
+			defer hook.Stop()
 
 			Expect(hook).NotTo(BeNil())
 			Expect(hook.Debouncer()).NotTo(BeNil())
@@ -339,6 +340,7 @@ main.second()
 	Describe("ShouldCapture integration", func() {
 		It("should call debouncer's ShouldCapture with correct fingerprint key", func() {
 			hook := sentry.NewSentryHook(5 * time.Minute)
+			defer hook.Stop()
 
 			// First capture should succeed
 			fp := []string{"level: error", "feature: test", "event_name: test_event"}
@@ -400,6 +402,11 @@ var _ = Describe("SentryHook Integration with Mock Transport", func() {
 		// Flush any pending events
 		sentrygo.Flush(time.Second)
 		time.Sleep(50 * time.Millisecond)
+
+		// Stop hook to release cleanup goroutine
+		if hook != nil {
+			hook.Stop()
+		}
 	})
 
 	Describe("Error as Exception", func() {

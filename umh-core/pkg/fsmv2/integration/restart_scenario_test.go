@@ -30,6 +30,7 @@ import (
 var _ = Describe("Restart Scenario Integration", func() {
 	It("should complete full worker restart cycle after SignalNeedsRestart", func() {
 		testLogger := integration.NewTestLogger(zapcore.DebugLevel)
+		defer testLogger.Stop()
 
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()

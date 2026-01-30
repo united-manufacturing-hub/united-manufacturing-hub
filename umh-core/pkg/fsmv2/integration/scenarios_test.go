@@ -48,6 +48,7 @@ var _ = Describe("Simple Scenario Integration", func() {
 		}()
 
 		testLogger := integration.NewTestLogger(zapcore.DebugLevel)
+		defer testLogger.Stop()
 
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
@@ -1102,6 +1103,7 @@ var _ = Describe("MetricsHolder Type Assertion", func() {
 		}()
 
 		testLogger := integration.NewTestLogger(zapcore.DebugLevel)
+		defer testLogger.Stop()
 
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
