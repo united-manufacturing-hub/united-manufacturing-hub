@@ -15,11 +15,14 @@
 package sentry
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/DataDog/gostackparse"
 	"github.com/getsentry/sentry-go"
 	"go.uber.org/zap/zapcore"
 )
@@ -68,6 +71,16 @@ func (h *SentryHook) Check(entry zapcore.Entry, ce *zapcore.CheckedEntry) *zapco
 	return ce
 }
 
+// With returns a new SentryHook that wraps the inner core with the given fields.
+// This is critical for maintaining Sentry capture when logger.With() is called,
+// which supervisors use to add "worker" fields.
+func (h *SentryHook) With(fields []zapcore.Field) zapcore.Core {
+	return &SentryHook{
+		Core:      h.Core.With(fields),
+		debouncer: h.debouncer, // Share debouncer across derived loggers
+	}
+}
+
 func (h *SentryHook) captureToSentry(entry zapcore.Entry, fields []zapcore.Field) {
 	fieldMap := FieldsToMap(fields)
 
@@ -97,13 +110,43 @@ func (h *SentryHook) captureToSentry(entry zapcore.Entry, fields []zapcore.Field
 	event.Level = ZapLevelToSentry(entry.Level)
 	event.Message = entry.Message
 
+	// Always capture a stacktrace for debugging context.
+	// Priority: 1) Explicit "stack" field (from panic recovery), 2) Capture at log point
+	// This follows Sentry best practice: errors without stacktraces are hard to debug.
+	// See: https://incident.io/blog/golang-errors
+	var stacktrace *sentry.Stacktrace
+
+	if stack, ok := fieldMap["stack"].(string); ok && stack != "" {
+		// Use explicit stack from panic recovery (already captured at panic site)
+		stacktrace = ParseStackTrace(stack)
+	} else {
+		// Capture stacktrace at the point of logging and filter out internal frames
+		stacktrace = newFilteredStacktrace()
+	}
+
 	// Add error as exception with event_name as the Type (shows as title in Sentry UI)
 	// This makes the title "action_failed" instead of "*fmt.wrapError"
 	if err != nil {
-		event.Exception = []sentry.Exception{
+		exception := sentry.Exception{
+			Type:  entry.Message, // "action_failed" - becomes the title
+			Value: err.Error(),   // "connection failed: ..." - becomes subtitle
+		}
+
+		// Attach stacktrace to exception for proper rendering in Sentry UI
+		if stacktrace != nil {
+			exception.Stacktrace = stacktrace
+		}
+
+		event.Exception = []sentry.Exception{exception}
+	} else if stacktrace != nil {
+		// For warnings without errors, attach stacktrace to event threads
+		// so there's still debugging context
+		event.Threads = []sentry.Thread{
 			{
-				Type:  entry.Message, // "action_failed" - becomes the title
-				Value: err.Error(),   // "connection failed: ..." - becomes subtitle
+				ID:         "main",
+				Name:       "main",
+				Stacktrace: stacktrace,
+				Current:    true,
 			},
 		}
 	}
@@ -123,6 +166,22 @@ func (h *SentryHook) captureToSentry(entry zapcore.Entry, fields []zapcore.Field
 		info := ParseHierarchyPath(path)
 		event.Tags["fsm_version"] = info.FSMVersion
 		event.Tags["worker_type"] = info.WorkerType
+	}
+
+	// Extract panic-specific fields for better debugging
+	event.Extra = make(map[string]interface{})
+
+	if panicVal, ok := fieldMap["panic"].(string); ok && panicVal != "" {
+		event.Extra["panic_value"] = panicVal
+	}
+
+	if actionName, ok := fieldMap["action_name"].(string); ok && actionName != "" {
+		event.Extra["action_name"] = actionName
+		event.Tags["action_name"] = actionName
+	}
+
+	if correlationID, ok := fieldMap["correlation_id"].(string); ok && correlationID != "" {
+		event.Extra["correlation_id"] = correlationID
 	}
 
 	event.Fingerprint = fingerprint
@@ -228,4 +287,116 @@ func ExtractErrorFromFields(fields []zapcore.Field) error {
 	}
 
 	return nil
+}
+
+// ParseStackTrace parses a raw Go stack trace string into a Sentry Stacktrace.
+// Returns nil if parsing fails or the stack is empty.
+func ParseStackTrace(stack string) *sentry.Stacktrace {
+	if stack == "" {
+		return nil
+	}
+
+	goroutines, err := gostackparse.Parse(bytes.NewReader([]byte(stack)))
+	if err != nil || len(goroutines) == 0 {
+		return nil
+	}
+
+	// Use the first goroutine (the one that panicked)
+	g := goroutines[0]
+	if len(g.Stack) == 0 {
+		return nil
+	}
+
+	var frames []sentry.Frame
+
+	for _, gf := range g.Stack {
+		absPath := gf.File
+		fileName := filepath.Base(absPath)
+		frame := sentry.Frame{
+			Function: gf.Func,
+			Filename: fileName,
+			Lineno:   gf.Line,
+			AbsPath:  absPath,
+			// Mark UMH application code as in_app for Sentry UI highlighting
+			InApp: strings.Contains(gf.Func, appPackagePrefix) ||
+				strings.Contains(absPath, "umh-core/pkg") ||
+				strings.Contains(absPath, "umh-core/cmd"),
+		}
+		frames = append(frames, frame)
+	}
+
+	if len(frames) == 0 {
+		return nil
+	}
+
+	return &sentry.Stacktrace{
+		Frames: frames,
+	}
+}
+
+// internalPackagePrefixes lists package paths that should be filtered from stacktraces.
+// These are internal logging/sentry infrastructure that clutter the trace.
+var internalPackagePrefixes = []string{
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry",
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/sentry",
+	"go.uber.org/zap",
+	"github.com/getsentry/sentry-go",
+	"runtime/",
+	"runtime.",
+}
+
+// appPackagePrefix is the prefix for UMH application code.
+// Frames with this prefix get in_app=true, helping Sentry highlight relevant code.
+const appPackagePrefix = "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core"
+
+// newFilteredStacktrace captures the current stacktrace and filters out internal frames.
+// This removes sentry, zap, and runtime frames so the trace shows application code.
+// It also sets in_app=true for UMH application code to help Sentry highlight relevant frames.
+func newFilteredStacktrace() *sentry.Stacktrace {
+	st := sentry.NewStacktrace()
+	if st == nil || len(st.Frames) == 0 {
+		return st
+	}
+
+	filtered := make([]sentry.Frame, 0, len(st.Frames))
+
+	for _, frame := range st.Frames {
+		if !IsInternalFrame(frame) {
+			// Mark UMH application code as in_app for Sentry UI highlighting
+			frame.InApp = strings.HasPrefix(frame.Module, appPackagePrefix)
+			filtered = append(filtered, frame)
+		}
+	}
+
+	if len(filtered) == 0 {
+		return st // Return original if filtering removes everything
+	}
+
+	return &sentry.Stacktrace{
+		Frames: filtered,
+	}
+}
+
+// IsInternalFrame checks if a frame belongs to internal logging/sentry packages.
+// Exported for testing.
+func IsInternalFrame(frame sentry.Frame) bool {
+	// Check module (package path)
+	for _, prefix := range internalPackagePrefixes {
+		if strings.HasPrefix(frame.Module, prefix) {
+			return true
+		}
+
+		if strings.HasPrefix(frame.AbsPath, prefix) {
+			return true
+		}
+	}
+
+	// Also filter by function name patterns
+	if strings.Contains(frame.Function, "captureToSentry") ||
+		strings.Contains(frame.Function, "SentryHook.Write") ||
+		strings.Contains(frame.Function, "zapcore.") {
+		return true
+	}
+
+	return false
 }

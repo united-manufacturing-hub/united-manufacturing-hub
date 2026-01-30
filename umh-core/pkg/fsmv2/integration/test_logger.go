@@ -35,13 +35,20 @@ type TestLogger struct {
 	mu     sync.RWMutex
 }
 
+// initSentryOnce ensures Sentry is only initialized once, even when NewTestLogger
+// is called multiple times concurrently in parallel tests.
+var initSentryOnce sync.Once
+
 // NewTestLogger creates a new TestLogger with the specified log level.
 // Sentry is always enabled for integration tests with environment "integration-test".
 func NewTestLogger(level zapcore.Level) *TestLogger {
 	observerCore, logs := observer.New(level)
 
-	// Initialize Sentry for integration tests with dedicated environment
-	umhsentry.InitSentry(constants.IntegrationTestVersion, true)
+	// Initialize Sentry for integration tests with dedicated environment.
+	// Use sync.Once to avoid reconfiguring global Sentry state in parallel tests.
+	initSentryOnce.Do(func() {
+		umhsentry.InitSentry(constants.IntegrationTestVersion, true)
+	})
 
 	// Wrap observer core with SentryHook to capture errors
 	hook := fsmv2sentry.NewSentryHook(1 * time.Minute)

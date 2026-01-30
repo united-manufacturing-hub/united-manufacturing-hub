@@ -36,6 +36,126 @@ import (
 
 var _ = Describe("SentryHook", func() {
 
+	Describe("ParseStackTrace", func() {
+		It("should parse a valid Go stack trace", func() {
+			// Sample stack trace from debug.Stack()
+			stack := `goroutine 1 [running]:
+runtime/debug.Stack()
+	/usr/local/go/src/runtime/debug/stack.go:24 +0x5e
+main.handlePanic()
+	/app/handler.go:42 +0x1a
+main.main()
+	/app/main.go:15 +0x25
+`
+			result := sentry.ParseStackTrace(stack)
+
+			Expect(result).NotTo(BeNil())
+			Expect(result.Frames).NotTo(BeEmpty())
+			Expect(len(result.Frames)).To(BeNumerically(">=", 2))
+
+			// Verify frame structure
+			var foundHandler bool
+
+			for _, frame := range result.Frames {
+				if frame.Function == "main.handlePanic" {
+					foundHandler = true
+					Expect(frame.Filename).To(Equal("handler.go"))
+					Expect(frame.Lineno).To(Equal(42))
+					Expect(frame.AbsPath).To(Equal("/app/handler.go"))
+				}
+			}
+
+			Expect(foundHandler).To(BeTrue(), "Should find handlePanic frame")
+		})
+
+		It("should return nil for empty stack", func() {
+			result := sentry.ParseStackTrace("")
+
+			Expect(result).To(BeNil())
+		})
+
+		It("should return nil for invalid stack trace", func() {
+			result := sentry.ParseStackTrace("not a valid stack trace")
+
+			Expect(result).To(BeNil())
+		})
+
+		It("should handle multi-goroutine stack traces", func() {
+			// Stack with multiple goroutines - should use first one
+			stack := `goroutine 1 [running]:
+main.first()
+	/app/first.go:10 +0x1a
+
+goroutine 2 [runnable]:
+main.second()
+	/app/second.go:20 +0x2b
+`
+			result := sentry.ParseStackTrace(stack)
+
+			Expect(result).NotTo(BeNil())
+			// Should only parse first goroutine
+			var foundFirst bool
+
+			for _, frame := range result.Frames {
+				if frame.Function == "main.first" {
+					foundFirst = true
+				}
+			}
+
+			Expect(foundFirst).To(BeTrue())
+		})
+	})
+
+	Describe("isInternalFrame", func() {
+		It("should filter sentry package frames", func() {
+			frame := sentrygo.Frame{
+				Module:   "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry",
+				Function: "reportError",
+			}
+			Expect(sentry.IsInternalFrame(frame)).To(BeTrue())
+		})
+
+		It("should filter fsmv2 sentry package frames", func() {
+			frame := sentrygo.Frame{
+				Module:   "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/sentry",
+				Function: "captureToSentry",
+			}
+			Expect(sentry.IsInternalFrame(frame)).To(BeTrue())
+		})
+
+		It("should filter zap frames", func() {
+			frame := sentrygo.Frame{
+				Module:   "go.uber.org/zap",
+				Function: "(*Logger).Error",
+			}
+			Expect(sentry.IsInternalFrame(frame)).To(BeTrue())
+		})
+
+		It("should filter runtime frames", func() {
+			frame := sentrygo.Frame{
+				Module:   "runtime/debug",
+				Function: "Stack",
+			}
+			Expect(sentry.IsInternalFrame(frame)).To(BeTrue())
+		})
+
+		It("should NOT filter application frames", func() {
+			frame := sentrygo.Frame{
+				Module:   "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/agent",
+				Function: "Agent.Run",
+			}
+			Expect(sentry.IsInternalFrame(frame)).To(BeFalse())
+		})
+
+		It("should NOT filter communicator frames", func() {
+			frame := sentrygo.Frame{
+				Module:   "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2",
+				Function: "NewLogin",
+			}
+			Expect(sentry.IsInternalFrame(frame)).To(BeFalse())
+		})
+	})
+
 	Describe("extractErrorTypes", func() {
 		It("should return type chain for wrapped errors", func() {
 			// Create a wrapped error chain
@@ -374,6 +494,55 @@ var _ = Describe("SentryHook Integration with Mock Transport", func() {
 			event := store.GetLast()
 			Expect(event).NotTo(BeNil())
 			Expect(event.Message).To(Equal("action_failed"))
+		})
+
+		It("attaches stacktrace to exception when stack field is present", func() {
+			// Given: error with a stack trace (simulating panic recovery)
+			err := errors.New("action panicked")
+			stack := `goroutine 1 [running]:
+runtime/debug.Stack()
+	/usr/local/go/src/runtime/debug/stack.go:24 +0x5e
+github.com/example/pkg/executor.executeWork()
+	/app/executor.go:142 +0x1a
+`
+			// When: logged with stack field (like action_executor does for panics)
+			logger.Errorw("action_panic",
+				sentry.ErrorFields{
+					Feature: "fsmv2",
+					Err:     err,
+				}.ZapFields()...)
+			// Add stack field separately to match action_executor pattern
+			logger.Errorw("action_panic_with_stack",
+				"feature", "fsmv2",
+				"error", err,
+				"stack", stack,
+				"panic", "test panic value",
+				"action_name", "test_action",
+			)
+
+			// Then: exception should have stacktrace attached
+			Eventually(func() int {
+				return store.Len()
+			}, time.Second, 10*time.Millisecond).Should(BeNumerically(">=", 2))
+
+			events := store.GetAll()
+			// Find the event with stack
+			var eventWithStack *sentrygo.Event
+
+			for _, evt := range events {
+				if evt.Message == "action_panic_with_stack" {
+					eventWithStack = evt
+
+					break
+				}
+			}
+
+			Expect(eventWithStack).NotTo(BeNil())
+			Expect(eventWithStack.Exception).NotTo(BeEmpty())
+			Expect(eventWithStack.Exception[0].Stacktrace).NotTo(BeNil(),
+				"Exception should have parsed stacktrace attached")
+			Expect(eventWithStack.Exception[0].Stacktrace.Frames).NotTo(BeEmpty(),
+				"Stacktrace should have parsed frames")
 		})
 	})
 

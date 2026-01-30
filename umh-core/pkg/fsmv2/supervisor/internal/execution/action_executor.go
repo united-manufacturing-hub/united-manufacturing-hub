@@ -155,6 +155,9 @@ func (ae *ActionExecutor) executeWorkWithRecovery(ctx context.Context, work acti
 			err = errors.New("action panicked")
 			status = "panic"
 
+			// Manual stack extraction required: Sentry SDK's ExtractStacktrace() only works
+			// on error types with stacktrace interfaces. Panic recovery values are plain
+			// interface{}, so we capture debug.Stack() explicitly for Sentry visibility.
 			ae.logger.Errorw("action_panic", append(fsmv2sentry.ErrorFields{
 				Feature:       "fsmv2",
 				Err:           err,
