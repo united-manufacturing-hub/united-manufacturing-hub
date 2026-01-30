@@ -225,14 +225,15 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 
 			if restartCount >= s.collectorHealth.maxRestartAttempts {
 				// Max attempts reached - escalate to shutdown (Layer 3)
+				maxAttemptsErr := fmt.Errorf("collector unresponsive after %d restart attempts", s.collectorHealth.maxRestartAttempts)
 				s.logger.Errorw("collector_unresponsive_max_attempts", append(fsmv2sentry.ErrorFields{
 					Feature:       "fsmv2",
+					Err:           maxAttemptsErr,
 					HierarchyPath: s.GetHierarchyPathUnlocked(),
 				}.ZapFields(),
 					"restart_attempts", s.collectorHealth.maxRestartAttempts)...)
 
-				if shutdownErr := s.requestShutdown(ctx, workerID,
-					fmt.Sprintf("collector unresponsive after %d restart attempts", s.collectorHealth.maxRestartAttempts)); shutdownErr != nil {
+				if shutdownErr := s.requestShutdown(ctx, workerID, maxAttemptsErr.Error()); shutdownErr != nil {
 					s.logger.Errorw("shutdown_request_failed", fsmv2sentry.ErrorFields{
 						Feature:       "fsmv2",
 						Err:           shutdownErr,
@@ -1097,14 +1098,16 @@ func (s *Supervisor[TObserved, TDesired]) processSignal(ctx context.Context, wor
 
 		return nil
 	default:
+		unknownSignalErr := fmt.Errorf("unknown signal: %d", signal)
 		s.logger.Errorw("unknown_signal_received", append(fsmv2sentry.ErrorFields{
 			Feature:       "fsmv2",
+			Err:           unknownSignalErr,
 			HierarchyPath: s.GetHierarchyPathUnlocked(),
 		}.ZapFields(),
 			"target_worker_id", workerID,
 			"signal", int(signal))...)
 
-		return errors.New("unknown signal")
+		return unknownSignalErr
 	}
 }
 
@@ -1251,13 +1254,15 @@ func (s *Supervisor[TObserved, TDesired]) restartCollector(ctx context.Context, 
 	s.mu.RUnlock()
 
 	if !exists {
+		notFoundErr := errors.New("worker not found")
 		s.logger.Errorw("collector_restart_worker_not_found", append(fsmv2sentry.ErrorFields{
 			Feature:       "fsmv2",
+			Err:           notFoundErr,
 			HierarchyPath: s.GetHierarchyPathUnlocked(),
 		}.ZapFields(),
 			"target_worker_id", workerID)...)
 
-		return errors.New("worker not found")
+		return notFoundErr
 	}
 
 	workerCtx.mu.Lock()
@@ -1472,8 +1477,10 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 
 			childSupervisor, ok := rawSupervisor.(SupervisorInterface)
 			if !ok {
+				typeErr := fmt.Errorf("factory returned %T (expected SupervisorInterface)", rawSupervisor)
 				s.logger.Errorw("factory_invalid_supervisor_type", append(fsmv2sentry.ErrorFields{
 					Feature:       "fsmv2",
+					Err:           typeErr,
 					HierarchyPath: s.GetHierarchyPathUnlocked(),
 				}.ZapFields(),
 					"child_name", spec.Name)...)
