@@ -23,6 +23,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
+	fsmv2sentry "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/sentry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/internal/collection"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/internal/execution"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/metrics"
@@ -55,7 +56,11 @@ func (s *Supervisor[TObserved, TDesired]) Start(ctx context.Context) <-chan stru
 
 	for _, workerCtx := range s.workers {
 		if err := workerCtx.collector.Start(supervisorCtx); err != nil {
-			s.logger.Errorw("collector_start_failed", "error", err)
+			s.logger.Errorw("collector_start_failed", fsmv2sentry.ErrorFields{
+				Feature:       "fsmv2",
+				Err:           err,
+				HierarchyPath: workerCtx.identity.HierarchyPath,
+			}.ZapFields()...)
 		}
 
 		workerCtx.executor.Start(supervisorCtx)
@@ -92,14 +97,19 @@ func (s *Supervisor[TObserved, TDesired]) tickLoop(ctx context.Context) {
 			return
 		case <-ticker.C:
 			if err := s.tick(ctx); err != nil {
-				s.logger.Errorw("tick_error", "error", err)
+				s.logger.Errorw("tick_error", fsmv2sentry.ErrorFields{
+					Feature:       "fsmv2",
+					Err:           err,
+					HierarchyPath: s.GetHierarchyPath(),
+				}.ZapFields()...)
 			}
 		}
 	}
 }
 
 // Shutdown gracefully shuts down this supervisor and all its workers.
-// Shutdown order: children first, then own workers, then cancel context.
+// Shutdown order: cancel context first (so children can exit their tickLoops),
+// then wait for children, then request worker shutdown, then cleanup executors.
 // Idempotent.
 func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 	s.logTrace("lifecycle",
@@ -157,7 +167,23 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 	// Release lock before graceful shutdown operations
 	s.mu.Unlock()
 
-	// Phase 1: Shutdown children first (context still active for FSM transitions).
+	// Phase 1: Cancel context first (allows tickLoops to exit via ctx.Done()).
+	// This MUST happen before waiting for child done channels, otherwise deadlock:
+	// - Parent waits for child's done channel
+	// - Child's done channel only closes when child's tickLoop exits
+	// - Child's tickLoop only exits when context is cancelled
+	// - Context cancellation happens here, before waiting
+	s.ctxMu.Lock()
+	if s.ctxCancel != nil {
+		s.ctxCancel()
+		s.ctxCancel = nil // Prevent double-cancel
+	}
+	s.ctxMu.Unlock()
+
+	// Wait for metrics reporter to finish (it will exit now that context is cancelled)
+	s.metricsWg.Wait()
+
+	// Phase 2: Wait for children to complete shutdown (now unblocked since context is cancelled).
 	if len(childrenToShutdown) > 0 {
 		s.logger.Debugw("graceful_shutdown_children_starting",
 			"child_count", len(childrenToShutdown))
@@ -191,7 +217,7 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 		s.logger.Debugw("graceful_shutdown_children_complete")
 	}
 
-	// Phase 2: Request graceful shutdown on own workers.
+	// Phase 3: Request graceful shutdown on own workers.
 	if len(workerIDs) > 0 {
 		s.logger.Debugw("graceful_shutdown_workers_starting",
 			"worker_count", len(workerIDs))
@@ -199,8 +225,11 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 		// Request graceful shutdown on all workers
 		for _, workerID := range workerIDs {
 			if err := s.requestShutdown(gracefulCtx, workerID, "supervisor_shutdown"); err != nil {
-				s.logger.Warnw("graceful_shutdown_request_failed",
-					"error", err)
+				s.logger.Warnw("graceful_shutdown_request_failed", fsmv2sentry.ErrorFields{
+					Feature:       "fsmv2",
+					Err:           err,
+					HierarchyPath: s.GetHierarchyPath(),
+				}.ZapFields()...)
 			}
 		}
 
@@ -233,19 +262,7 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 		ticker.Stop()
 	}
 
-	// Phase 3: Cancel context (must happen before waiting for metrics reporter).
-	s.ctxMu.Lock()
-
-	if s.ctxCancel != nil {
-		s.ctxCancel()
-		s.ctxCancel = nil // Prevent double-cancel
-	}
-
-	s.ctxMu.Unlock()
-
-	// Wait for metrics reporter to finish (it will exit now that context is cancelled)
-	s.metricsWg.Wait()
-
+	// Phase 4: Cleanup executors and collectors.
 	// Re-acquire lock for cleanup
 	s.mu.Lock()
 
@@ -272,7 +289,7 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 }
 
 // startMetricsReporter starts a goroutine that periodically records hierarchy metrics.
-// Metrics are recorded every 10 seconds to avoid excessive Prometheus cardinality.
+// Metrics are recorded at the configured interval (default 10s) to avoid excessive Prometheus cardinality.
 // The goroutine stops when the context is cancelled.
 func (s *Supervisor[TObserved, TDesired]) startMetricsReporter(ctx context.Context) {
 	s.metricsWg.Add(1)
@@ -280,7 +297,7 @@ func (s *Supervisor[TObserved, TDesired]) startMetricsReporter(ctx context.Conte
 	go func() {
 		defer s.metricsWg.Done()
 
-		ticker := time.NewTicker(10 * time.Second)
+		ticker := time.NewTicker(s.metricsReportInterval)
 		defer ticker.Stop()
 
 		s.recordHierarchyMetrics()
@@ -421,7 +438,11 @@ func (s *Supervisor[TObserved, TDesired]) RequestShutdown(ctx context.Context, r
 
 	for _, workerID := range workerIDs {
 		if err := s.requestShutdown(ctx, workerID, reason); err != nil {
-			s.logger.Warnw("shutdown_request_failed", "error", err)
+			s.logger.Warnw("shutdown_request_failed", fsmv2sentry.ErrorFields{
+				Feature:       "fsmv2",
+				Err:           err,
+				HierarchyPath: s.GetHierarchyPath(),
+			}.ZapFields()...)
 		}
 	}
 
@@ -451,9 +472,11 @@ func (s *Supervisor[TObserved, TDesired]) handleWorkerRestart(ctx context.Contex
 	if !exists {
 		s.mu.RUnlock()
 
-		s.logger.Errorw("worker_restart_not_found",
-			"hierarchy_path", s.GetHierarchyPathUnlocked(),
-			"target_worker_id", workerID)
+		s.logger.Errorw("worker_restart_not_found", append(fsmv2sentry.ErrorFields{
+			Feature:       "fsmv2",
+			HierarchyPath: s.GetHierarchyPathUnlocked(),
+		}.ZapFields(),
+			"target_worker_id", workerID)...)
 
 		return errors.New("worker not found for restart")
 	}
@@ -482,9 +505,11 @@ func (s *Supervisor[TObserved, TDesired]) handleWorkerRestart(ctx context.Contex
 
 	// 2. Clear shutdown flag in storage BEFORE creating new worker.
 	if err := s.clearShutdownRequested(ctx, workerID); err != nil {
-		s.logger.Warnw("restart_clear_shutdown_failed",
-			"hierarchy_path", identity.HierarchyPath,
-			"error", err)
+		s.logger.Warnw("restart_clear_shutdown_failed", fsmv2sentry.ErrorFields{
+			Feature:       "fsmv2",
+			Err:           err,
+			HierarchyPath: identity.HierarchyPath,
+		}.ZapFields()...)
 		// Continue anyway - the new worker might still work
 	}
 
@@ -525,9 +550,11 @@ func (s *Supervisor[TObserved, TDesired]) handleWorkerRestart(ctx context.Contex
 
 		if collector != nil {
 			if err := collector.Start(supervisorCtx); err != nil {
-				s.logger.Errorw("restart_collector_start_failed",
-					"hierarchy_path", identity.HierarchyPath,
-					"error", err)
+				s.logger.Errorw("restart_collector_start_failed", fsmv2sentry.ErrorFields{
+					Feature:       "fsmv2",
+					Err:           err,
+					HierarchyPath: identity.HierarchyPath,
+				}.ZapFields()...)
 			}
 		}
 
