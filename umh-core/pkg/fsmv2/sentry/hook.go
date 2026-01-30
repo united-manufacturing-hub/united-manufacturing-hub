@@ -184,12 +184,7 @@ func (h *SentryHook) captureToSentry(entry zapcore.Entry, fields []zapcore.Field
 	}
 
 	if actionName, ok := fieldMap["action_name"].(string); ok && actionName != "" {
-		event.Extra["action_name"] = actionName
 		event.Tags["action_name"] = actionName
-	}
-
-	if correlationID, ok := fieldMap["correlation_id"].(string); ok && correlationID != "" {
-		event.Extra["correlation_id"] = correlationID
 	}
 
 	event.Fingerprint = fingerprint
