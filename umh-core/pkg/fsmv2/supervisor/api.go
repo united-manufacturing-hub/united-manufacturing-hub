@@ -317,8 +317,15 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 
 		// Trigger immediate observation after action completes.
 		// This eliminates the delay between action and FSM progression.
-		if workerCtx != nil && workerCtx.collector != nil && workerCtx.collector.IsRunning() {
-			workerCtx.collector.TriggerNow()
+		// Capture collector under lock to prevent race with RemoveWorker().
+		if workerCtx != nil {
+			workerCtx.mu.RLock()
+			collector := workerCtx.collector
+			workerCtx.mu.RUnlock()
+
+			if collector != nil && collector.IsRunning() {
+				collector.TriggerNow()
+			}
 		}
 	})
 
