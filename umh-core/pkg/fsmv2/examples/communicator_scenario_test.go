@@ -207,10 +207,7 @@ var _ = Describe("Communicator Scenario", func() {
 			result := examples.RunCommunicatorScenario(ctx, examples.CommunicatorRunConfig{
 				Duration: 500 * time.Millisecond,
 			})
-			// Allow extra time for graceful shutdown.
-			// Shutdown may take up to 5s (GracefulShutdownTimeout) per supervisor level.
-			// With parent + child supervisors = up to 10s+ for shutdown.
-			// 15s timeout provides safety margin.
+			// Allow extra time for graceful shutdown (duration + cascading child shutdown timeouts)
 			Eventually(result.Done, 15*time.Second).Should(BeClosed())
 		})
 	})

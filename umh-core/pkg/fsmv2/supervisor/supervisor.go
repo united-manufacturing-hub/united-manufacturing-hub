@@ -184,9 +184,9 @@ type Supervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] stru
 	collectorHealth          CollectorHealth
 	metricsWg                sync.WaitGroup
 	tickInterval             time.Duration
-	metricsReportInterval    time.Duration
 	tickCount                uint64
 	gracefulShutdownTimeout  time.Duration
+	metricsReportInterval    time.Duration
 	circuitOpen              atomic.Bool
 	started                  atomic.Bool
 	enableTraceLogging       bool
@@ -267,9 +267,8 @@ func NewSupervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState](c
 		store:              cfg.Store,
 		logger:             cfg.Logger,
 		baseLogger:         cfg.Logger,
-		tickInterval:          tickInterval,
-		metricsReportInterval: metricsReportInterval,
-		freshnessChecker:      freshnessChecker,
+		tickInterval:       tickInterval,
+		freshnessChecker:   freshnessChecker,
 		children:           make(map[string]SupervisorInterface),
 		childDoneChans:     make(map[string]<-chan struct{}),
 		pendingRemoval:     make(map[string]bool),
@@ -289,6 +288,7 @@ func NewSupervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState](c
 		userSpec:                cfg.UserSpec,
 		enableTraceLogging:      cfg.EnableTraceLogging,
 		gracefulShutdownTimeout: gracefulShutdownTimeout,
+		metricsReportInterval:   metricsReportInterval,
 		deps:                    cfg.Dependencies,
 		validatedSpecHashes:     make(map[string]string),
 	}

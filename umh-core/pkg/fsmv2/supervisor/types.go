@@ -240,7 +240,7 @@ type Config struct {
 
 	// MetricsReportInterval is how often hierarchy metrics are recorded.
 	// Longer intervals reduce Prometheus cardinality at the cost of staler metrics.
-	// Optional - defaults to 10 seconds.
+	// Optional - defaults to 10 seconds (see DefaultMetricsReportInterval).
 	MetricsReportInterval time.Duration
 
 	// EnableTraceLogging enables verbose lifecycle event logging (mutex locks, tick events, etc.)
