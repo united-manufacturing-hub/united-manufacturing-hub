@@ -266,8 +266,10 @@ func (ae *ActionExecutor) EnqueueAction(actionID string, action fsmv2.Action[any
 		delete(ae.inProgress, actionID)
 		ae.mu.Unlock()
 
+		queueErr := errors.New("action queue full")
 		ae.logger.Errorw("action_queue_full", append(fsmv2sentry.ErrorFields{
 			Feature:       "fsmv2",
+			Err:           queueErr,
 			HierarchyPath: ae.identity.HierarchyPath,
 		}.ZapFields(),
 			"correlation_id", actionID,
@@ -275,7 +277,7 @@ func (ae *ActionExecutor) EnqueueAction(actionID string, action fsmv2.Action[any
 			"queue_capacity", cap(ae.actionQueue),
 			"worker_count", ae.workerCount)...)
 
-		return errors.New("action queue full")
+		return queueErr
 	}
 }
 
