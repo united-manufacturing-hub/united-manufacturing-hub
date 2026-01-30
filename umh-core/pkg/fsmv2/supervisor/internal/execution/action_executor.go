@@ -47,6 +47,7 @@ type ActionExecutor struct {
 	defaultTimeout   time.Duration
 	mu               sync.RWMutex
 	closeOnce        sync.Once
+	stopped          bool
 }
 
 type actionWork struct {
@@ -91,17 +92,25 @@ func NewActionExecutorWithTimeout(workerCount int, timeouts map[string]time.Dura
 }
 
 func (ae *ActionExecutor) Start(ctx context.Context) {
+	ae.mu.Lock()
 	ae.ctx, ae.cancel = context.WithCancel(ctx)
-
+	// Pre-add all workers to WaitGroup under lock to prevent race with Shutdown()
 	for range ae.workerCount {
 		ae.wg.Add(1)
+	}
+	ae.mu.Unlock()
 
+	// Start workers - they're already counted in the WaitGroup
+	for range ae.workerCount {
 		go ae.worker()
 	}
 
 	metricsCtx, metricsCancel := context.WithCancel(ctx)
+
+	ae.mu.Lock()
 	ae.metricsCancel = metricsCancel
-	ae.metricsWg.Add(1)
+	ae.metricsWg.Add(1) // Add inside lock to prevent race with Shutdown()
+	ae.mu.Unlock()
 
 	go ae.metricsReporter(metricsCtx)
 }
@@ -109,9 +118,14 @@ func (ae *ActionExecutor) Start(ctx context.Context) {
 func (ae *ActionExecutor) worker() {
 	defer ae.wg.Done()
 
+	// Capture context under lock to prevent race with Start()/Shutdown()
+	ae.mu.RLock()
+	ctx := ae.ctx
+	ae.mu.RUnlock()
+
 	for {
 		select {
-		case <-ae.ctx.Done():
+		case <-ctx.Done():
 			return
 
 		case work, ok := <-ae.actionQueue:
@@ -119,16 +133,17 @@ func (ae *ActionExecutor) worker() {
 				return
 			}
 
-			ae.executeWorkWithRecovery(work)
+			ae.executeWorkWithRecovery(ctx, work)
 		}
 	}
 }
 
 // executeWorkWithRecovery handles action execution with panic recovery.
-func (ae *ActionExecutor) executeWorkWithRecovery(work actionWork) {
+// ctx is passed from worker() which captures it under lock to prevent races.
+func (ae *ActionExecutor) executeWorkWithRecovery(ctx context.Context, work actionWork) {
 	startTime := time.Now()
 
-	actionCtx, cancel := context.WithTimeout(ae.ctx, work.timeout)
+	actionCtx, cancel := context.WithTimeout(ctx, work.timeout)
 	defer cancel()
 
 	var err error
@@ -153,6 +168,7 @@ func (ae *ActionExecutor) executeWorkWithRecovery(work actionWork) {
 
 		ae.mu.Lock()
 		delete(ae.inProgress, work.actionID)
+		callback := ae.onActionComplete
 		ae.mu.Unlock()
 
 		duration := time.Since(startTime)
@@ -171,13 +187,13 @@ func (ae *ActionExecutor) executeWorkWithRecovery(work actionWork) {
 
 		metrics.RecordActionExecutionDuration(ae.identity.HierarchyPath, work.action.Name(), status, duration)
 
-		if ae.onActionComplete != nil {
+		if callback != nil {
 			errorMsg := ""
 			if err != nil {
 				errorMsg = err.Error()
 			}
 
-			ae.onActionComplete(deps.ActionResult{
+			callback(deps.ActionResult{
 				Timestamp:  time.Now(),
 				ActionType: work.action.Name(),
 				Success:    status == "success",
@@ -225,9 +241,22 @@ func (ae *ActionExecutor) executeWorkWithRecovery(work actionWork) {
 }
 
 // EnqueueAction adds an action to the execution queue without blocking.
-// Returns error if action is already in progress or queue is full.
+// Returns error if action is already in progress, queue is full, or executor is stopped.
 func (ae *ActionExecutor) EnqueueAction(actionID string, action fsmv2.Action[any], deps any) error {
 	ae.mu.Lock()
+
+	// Check if executor is stopped to prevent sending on closed channel
+	if ae.stopped {
+		ae.mu.Unlock()
+
+		ae.logger.Warnw("action_enqueue_rejected",
+			"hierarchy_path", ae.identity.HierarchyPath,
+			"correlation_id", actionID,
+			"action_name", action.Name(),
+			"reason", "executor_stopped")
+
+		return errors.New("executor stopped")
+	}
 
 	if ae.inProgress[actionID] {
 		ae.mu.Unlock()
@@ -242,12 +271,13 @@ func (ae *ActionExecutor) EnqueueAction(actionID string, action fsmv2.Action[any
 	}
 
 	ae.inProgress[actionID] = true
-	ae.mu.Unlock()
 
+	// Read timeout while still holding lock to prevent race with concurrent access
 	timeout, exists := ae.timeouts[actionID]
 	if !exists {
 		timeout = ae.defaultTimeout
 	}
+	ae.mu.Unlock()
 
 	work := actionWork{
 		actionID: actionID,
@@ -323,13 +353,23 @@ func (ae *ActionExecutor) GetActiveActionCount() int {
 
 // SetOnActionComplete sets a callback invoked after each action execution.
 // Should be called during executor setup, before Start().
+// Thread-safe: can be called concurrently with action execution.
 func (ae *ActionExecutor) SetOnActionComplete(fn func(deps.ActionResult)) {
+	ae.mu.Lock()
 	ae.onActionComplete = fn
+	ae.mu.Unlock()
 }
 
 func (ae *ActionExecutor) Shutdown() {
-	if ae.metricsCancel != nil {
-		ae.metricsCancel()
+	// Mark as stopped and capture cancel functions under lock to prevent race with Start()
+	ae.mu.Lock()
+	ae.stopped = true
+	metricsCancel := ae.metricsCancel
+	cancel := ae.cancel
+	ae.mu.Unlock()
+
+	if metricsCancel != nil {
+		metricsCancel()
 	}
 
 	ae.metricsWg.Wait()
@@ -338,8 +378,8 @@ func (ae *ActionExecutor) Shutdown() {
 		close(ae.actionQueue)
 	})
 
-	if ae.cancel != nil {
-		ae.cancel()
+	if cancel != nil {
+		cancel()
 	}
 
 	ae.wg.Wait()

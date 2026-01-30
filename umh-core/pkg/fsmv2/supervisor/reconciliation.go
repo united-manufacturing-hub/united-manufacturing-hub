@@ -674,10 +674,16 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 		userSpecWithVars.Variables.User = make(map[string]any)
 	}
 
+	// Deep copy globalVars to prevent race with SetGlobalVariables().
+	// The map reference could be replaced while we use it for template expansion.
 	s.mu.RLock()
-	userSpecWithVars.Variables.Global = s.globalVars
-	globalVarCount := len(s.globalVars)
+	globalVarsCopy := make(map[string]any, len(s.globalVars))
+	for k, v := range s.globalVars {
+		globalVarsCopy[k] = v
+	}
+	globalVarCount := len(globalVarsCopy)
 	s.mu.RUnlock()
+	userSpecWithVars.Variables.Global = globalVarsCopy
 
 	userSpecWithVars.Variables.Internal = map[string]any{
 		FieldID:                firstWorkerID,
