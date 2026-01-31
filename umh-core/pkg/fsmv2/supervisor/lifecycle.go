@@ -55,6 +55,8 @@ func (s *Supervisor[TObserved, TDesired]) Start(ctx context.Context) <-chan stru
 	s.mu.RLock()
 
 	for _, workerCtx := range s.workers {
+		// NOTE: Start() currently always returns nil (panics on double-start instead).
+		// Error handling preserved for future extensibility (e.g., context validation, resource allocation).
 		if err := workerCtx.collector.Start(supervisorCtx); err != nil {
 			s.logger.Errorw("collector_start_failed", fsmv2sentry.ErrorFields{
 				Feature:       "fsmv2",
@@ -225,8 +227,13 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 		for {
 			select {
 			case <-timeoutCh:
+				s.mu.RLock()
+				remainingCount := len(s.workers)
+				s.mu.RUnlock()
+
 				s.logger.Warnw("graceful_shutdown_timeout",
-					"timeout", gracefulTimeout)
+					"timeout", gracefulTimeout,
+					"remaining_worker_count", remainingCount)
 
 				break gracefulWaitLoop
 			case <-ticker.C:
@@ -544,6 +551,8 @@ func (s *Supervisor[TObserved, TDesired]) handleWorkerRestart(ctx context.Contex
 		s.mu.RUnlock()
 
 		if collector != nil {
+			// NOTE: Start() currently always returns nil (panics on double-start instead).
+			// Error handling preserved for future extensibility (e.g., context validation, resource allocation).
 			if err := collector.Start(supervisorCtx); err != nil {
 				s.logger.Errorw("restart_collector_start_failed", fsmv2sentry.ErrorFields{
 					Feature:       "fsmv2",

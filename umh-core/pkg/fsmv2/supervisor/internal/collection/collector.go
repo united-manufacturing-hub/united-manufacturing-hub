@@ -212,7 +212,9 @@ func (c *Collector[TObserved]) Restart() {
 	c.restartChan = make(chan struct{}, 1)
 	c.mu.Unlock()
 
-	// Start again with the original parent context
+	// Start again with the original parent context.
+	// NOTE: Start() currently always returns nil (panics on double-start instead).
+	// Error handling preserved for future extensibility (e.g., context validation, resource allocation).
 	if parentCtx != nil {
 		if err := c.Start(parentCtx); err != nil {
 			c.config.Logger.Errorw("collector_restart_start_failed", fsmv2sentry.ErrorFields{

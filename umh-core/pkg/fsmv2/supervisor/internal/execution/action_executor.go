@@ -165,6 +165,8 @@ func (ae *ActionExecutor) executeWorkWithRecovery(ctx context.Context, work acti
 			}.ZapFields(),
 				"correlation_id", work.actionID,
 				"action_name", work.action.Name(),
+				"timeout_ms", work.timeout.Milliseconds(),
+				"deps_type", fmt.Sprintf("%T", work.deps),
 				"panic", fmt.Sprintf("%v", r),
 				"stack", string(debug.Stack()))...)
 		}
@@ -256,7 +258,9 @@ func (ae *ActionExecutor) EnqueueAction(actionID string, action fsmv2.Action[any
 			"hierarchy_path", ae.identity.HierarchyPath,
 			"correlation_id", actionID,
 			"action_name", action.Name(),
-			"reason", "executor_stopped")
+			"reason", "executor_stopped",
+			"queue_capacity", cap(ae.actionQueue),
+			"in_progress_count", len(ae.inProgress))
 
 		return errors.New("executor stopped")
 	}
@@ -308,6 +312,8 @@ func (ae *ActionExecutor) EnqueueAction(actionID string, action fsmv2.Action[any
 			"correlation_id", actionID,
 			"action_name", action.Name(),
 			"queue_capacity", cap(ae.actionQueue),
+			"queue_length", len(ae.actionQueue),
+			"in_progress_count", len(ae.inProgress),
 			"worker_count", ae.workerCount)...)
 
 		return queueErr

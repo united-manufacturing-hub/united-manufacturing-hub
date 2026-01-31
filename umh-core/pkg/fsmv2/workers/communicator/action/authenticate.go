@@ -149,7 +149,9 @@ func (a *AuthenticateAction) Execute(ctx context.Context, depsAny any) error {
 		)
 		deps.SetAuthenticatedUUID(authResp.InstanceUUID)
 	} else {
-		logger.Warnw("instance_uuid_missing_in_auth_response")
+		logger.Warnw("instance_uuid_missing_in_auth_response",
+			"instance_name", authResp.InstanceName,
+			"has_token", authResp.Token != "")
 	}
 
 	return nil

@@ -96,8 +96,16 @@ func (a *SyncAction) Execute(ctx context.Context, depsAny any) error {
 	// Track hysteresis state transitions
 	if shouldSkipPull {
 		if !wasBackpressured {
+			fillPercent := 0
+			if capacity > 0 {
+				fillPercent = (length * 100) / capacity
+			}
+
 			deps.GetLogger().Warnw("backpressure_entering",
+				"capacity", capacity,
+				"length", length,
 				"available", available,
+				"fill_percent", fillPercent,
 				"threshold", ExpectedBatchSize)
 			deps.SetBackpressured(true)
 			deps.MetricsRecorder().SetGauge(depspkg.GaugeBackpressureActive, 1)
@@ -106,7 +114,8 @@ func (a *SyncAction) Execute(ctx context.Context, depsAny any) error {
 		// Skip pull, but continue to push outbound - backpressure is NOT an error
 	} else {
 		if wasBackpressured {
-			deps.GetLogger().Warnw("backpressure_exiting",
+			// Downgraded to INFO: exiting backpressure is a positive signal, not a warning
+			deps.GetLogger().Infow("backpressure_exiting",
 				"available", available,
 				"low_water_mark", ExpectedBatchSize*LowWaterMarkMultiplier)
 			deps.SetBackpressured(false)

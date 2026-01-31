@@ -247,11 +247,18 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 			// I4: Safe to restart (restartCount < maxRestartAttempts)
 			// RestartCollector will panic if invariant violated (defensive check)
 			if err := s.restartCollector(ctx, workerID); err != nil {
-				s.logger.Errorw("collector_restart_failed", fsmv2sentry.ErrorFields{
+				s.mu.RLock()
+				restartAttempt := s.collectorHealth.restartCount
+				maxAttempts := s.collectorHealth.maxRestartAttempts
+				s.mu.RUnlock()
+
+				s.logger.Errorw("collector_restart_failed", append(fsmv2sentry.ErrorFields{
 					Feature:       "fsmv2",
 					Err:           err,
 					HierarchyPath: workerCtx.identity.HierarchyPath,
-				}.ZapFields()...)
+				}.ZapFields(),
+					"restart_attempt", restartAttempt,
+					"max_attempts", maxAttempts)...)
 
 				return fmt.Errorf("failed to restart collector: %w", err)
 			}
@@ -574,19 +581,29 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 		wasOpen := s.circuitOpen.Load()
 		s.circuitOpen.Store(true)
 
+		// Extract child error info early for logging context.
+		var childErr *ChildHealthError
+		errors.As(err, &childErr)
+
 		if !wasOpen {
+			// Build fields with failed_child info if available.
+			logFields := []interface{}{
+				"error_scope", "infrastructure",
+				"impact", "all_workers",
+			}
+			if childErr != nil {
+				logFields = append(logFields, "failed_child", childErr.ChildName)
+			}
+
 			s.logger.Errorw("circuit_breaker_opened", append(fsmv2sentry.ErrorFields{
 				Feature:       "fsmv2",
 				Err:           err,
 				HierarchyPath: s.GetHierarchyPathUnlocked(),
-			}.ZapFields(),
-				"error_scope", "infrastructure",
-				"impact", "all_workers")...)
+			}.ZapFields(), logFields...)...)
 			metrics.RecordCircuitOpen(s.GetHierarchyPathUnlocked(), true)
 		}
 
-		var childErr *ChildHealthError
-		if errors.As(err, &childErr) {
+		if childErr != nil {
 			attempts := s.healthChecker.backoff.GetAttempts()
 			nextDelay := s.healthChecker.backoff.NextDelay()
 
@@ -1244,10 +1261,28 @@ func (s *Supervisor[TObserved, TDesired]) restartCollector(ctx context.Context, 
 	maxRestartAttempts := s.collectorHealth.maxRestartAttempts
 	s.mu.Unlock()
 
-	s.logger.Warnw("collector_restarting",
-		"restart_attempt", restartCount,
-		"max_attempts", maxRestartAttempts,
-		"backoff", backoff)
+	// Tiered escalation: use ErrorFields when 50%+ of max attempts used
+	if restartCount >= maxRestartAttempts/2 {
+		escalationRisk := "high"
+		if restartCount == maxRestartAttempts-1 {
+			escalationRisk = "imminent"
+		}
+
+		s.logger.Warnw("collector_restarting", append(fsmv2sentry.ErrorFields{
+			Feature:       "fsmv2",
+			Err:           fmt.Errorf("collector restart attempt %d of %d", restartCount, maxRestartAttempts),
+			HierarchyPath: s.GetHierarchyPathUnlocked(),
+		}.ZapFields(),
+			"restart_attempt", restartCount,
+			"max_attempts", maxRestartAttempts,
+			"backoff", backoff,
+			"escalation_risk", escalationRisk)...)
+	} else {
+		s.logger.Warnw("collector_restarting",
+			"restart_attempt", restartCount,
+			"max_attempts", maxRestartAttempts,
+			"backoff", backoff)
+	}
 
 	s.mu.RLock()
 	workerCtx, exists := s.workers[workerID]
@@ -1290,9 +1325,12 @@ func (s *Supervisor[TObserved, TDesired]) checkDataFreshness(snapshot *fsmv2.Sna
 	}
 
 	if !hasTimestamp {
-		s.logger.Warnw("snapshot_missing_timestamp",
+		s.logger.Warnw("snapshot_missing_timestamp", append(fsmv2sentry.ErrorFields{
+			Feature:       "fsmv2",
+			HierarchyPath: snapshot.Identity.HierarchyPath,
+		}.ZapFields(),
 			"reason", "Snapshot.Observed does not implement GetTimestamp()",
-			"impact", "cannot check freshness")
+			"impact", "cannot check freshness")...)
 
 		return true
 	}
@@ -1310,6 +1348,7 @@ func (s *Supervisor[TObserved, TDesired]) checkDataFreshness(snapshot *fsmv2.Sna
 				"threshold", s.collectorHealth.timeout)
 		} else {
 			s.logger.Warnw("data_timeout",
+				"hierarchy_path", snapshot.Identity.HierarchyPath,
 				"age", age,
 				"threshold", s.collectorHealth.timeout)
 		}
@@ -1324,6 +1363,7 @@ func (s *Supervisor[TObserved, TDesired]) checkDataFreshness(snapshot *fsmv2.Sna
 				"threshold", s.collectorHealth.staleThreshold)
 		} else {
 			s.logger.Warnw("data_stale",
+				"hierarchy_path", snapshot.Identity.HierarchyPath,
 				"age", age,
 				"threshold", s.collectorHealth.staleThreshold)
 		}

@@ -1213,7 +1213,9 @@ func (ts *TriangularStore) GetDeltas(ctx context.Context, sub Subscription) (Del
 				Feature: "cse",
 				Err:     err,
 			}.ZapFields(),
-				"lastSyncID", sub.LastSyncID)...)
+				"lastSyncID", sub.LastSyncID,
+				"currentSyncID", currentSyncID,
+				"syncLag", currentSyncID-sub.LastSyncID)...)
 		} else if len(entries) > 0 {
 			deltas := make([]Delta, 0, len(entries))
 			for _, entry := range entries {

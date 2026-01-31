@@ -144,7 +144,10 @@ func (f *FreshnessChecker) IsTimeout(snapshot *fsmv2.Snapshot) bool {
 		f.logger.Warnw("observed_state_timeout",
 			"hierarchy_path", snapshot.Identity.HierarchyPath,
 			"age", age,
-			"threshold", f.timeout)
+			"age_ms", age.Milliseconds(),
+			"threshold", f.timeout,
+			"threshold_ms", f.timeout.Milliseconds(),
+			"collected_at", collectedAt.Format(time.RFC3339Nano))
 	}
 
 	return isTimedOut
