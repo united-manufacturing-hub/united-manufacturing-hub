@@ -1,7 +1,8 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
-    "config:recommended"
+    "config:recommended",
+    "group:allNonMajor"
   ],
   "includePaths": [
     "umh-core/**"
@@ -15,5 +16,5 @@
   ],
   "minimumReleaseAge": "7 days",
   "timezone": "Europe/Berlin",
-  "schedule": ["* 8 * * 0"]
+  "schedule": ["* * * * 0"]
 }
