@@ -19,7 +19,9 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps/retry"
 	communicator_transport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
+	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
 	"go.uber.org/zap"
 )
 
@@ -27,7 +29,8 @@ import (
 
 // TransportDependencies provides transport and channel access for transport worker actions.
 type TransportDependencies struct {
-	jwtExpiry time.Time
+	jwtExpiry         time.Time
+	lastAuthAttemptAt time.Time
 
 	transport communicator_transport.Transport
 
@@ -35,6 +38,9 @@ type TransportDependencies struct {
 	inboundChan  chan<- *communicator_transport.UMHMessage
 	outboundChan <-chan *communicator_transport.UMHMessage
 	jwtToken     string
+	instanceUUID string
+
+	lastErrorType httpTransport.ErrorType
 
 	mu sync.RWMutex
 }
@@ -106,8 +112,13 @@ func (d *TransportDependencies) RecordError() {
 	d.RetryTracker().RecordError()
 }
 
-// RecordSuccess resets all error tracking state.
+// RecordSuccess resets error tracking state but preserves auth attempt timestamp.
+// The lastAuthAttemptAt is preserved for backoff calculation even after success.
 func (d *TransportDependencies) RecordSuccess() {
+	d.mu.Lock()
+	d.lastErrorType = 0
+	d.mu.Unlock()
+
 	d.RetryTracker().RecordSuccess()
 }
 
@@ -143,4 +154,60 @@ func (d *TransportDependencies) GetInboundChanStats() (capacity int, length int)
 	}
 
 	return provider.GetInboundStats(d.GetWorkerID())
+}
+
+// RecordTypedError increments consecutive errors and records error type and retry-after.
+// Transport reset is handled by ResetTransportAction from RecoveringState, not here,
+// to avoid duplicate resets and maintain single responsibility.
+func (d *TransportDependencies) RecordTypedError(errType httpTransport.ErrorType, retryAfter time.Duration) {
+	d.mu.Lock()
+	d.lastErrorType = errType
+	d.mu.Unlock()
+
+	d.RetryTracker().RecordError(retry.WithClass(errType.String()), retry.WithRetryAfter(retryAfter))
+}
+
+// GetLastErrorType returns the last recorded error type.
+func (d *TransportDependencies) GetLastErrorType() httpTransport.ErrorType {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+
+	return d.lastErrorType
+}
+
+// GetLastRetryAfter returns the Retry-After duration from the last error.
+func (d *TransportDependencies) GetLastRetryAfter() time.Duration {
+	return d.RetryTracker().LastError().RetryAfter
+}
+
+// SetLastAuthAttemptAt records the timestamp of the last authentication attempt.
+func (d *TransportDependencies) SetLastAuthAttemptAt(t time.Time) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	d.lastAuthAttemptAt = t
+}
+
+// GetLastAuthAttemptAt returns the timestamp of the last authentication attempt.
+func (d *TransportDependencies) GetLastAuthAttemptAt() time.Time {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+
+	return d.lastAuthAttemptAt
+}
+
+// SetAuthenticatedUUID stores the UUID returned from the backend after authentication.
+func (d *TransportDependencies) SetAuthenticatedUUID(uuid string) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	d.instanceUUID = uuid
+}
+
+// GetAuthenticatedUUID returns the stored UUID from backend authentication.
+func (d *TransportDependencies) GetAuthenticatedUUID() string {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+
+	return d.instanceUUID
 }

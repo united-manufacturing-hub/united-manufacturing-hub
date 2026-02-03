@@ -20,12 +20,39 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
+	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
 )
 
 // TransportDependencies is the dependencies interface for transport actions (avoids import cycles).
 type TransportDependencies interface {
 	deps.Dependencies
 	MetricsRecorder() *deps.MetricsRecorder
+
+	// Transport management
+	GetTransport() transport.Transport
+	SetTransport(t transport.Transport)
+
+	// JWT token management
+	SetJWT(token string, expiry time.Time)
+	GetJWTToken() string
+	GetJWTExpiry() time.Time
+
+	// Error tracking for intelligent backoff
+	RecordError()
+	RecordSuccess()
+	RecordTypedError(errType httpTransport.ErrorType, retryAfter time.Duration)
+	GetConsecutiveErrors() int
+	GetLastErrorType() httpTransport.ErrorType
+	GetLastRetryAfter() time.Duration
+
+	// Auth attempt tracking
+	SetLastAuthAttemptAt(t time.Time)
+	GetLastAuthAttemptAt() time.Time
+
+	// Instance identity from backend
+	SetAuthenticatedUUID(uuid string)
+	GetAuthenticatedUUID() string
 }
 
 // TransportSnapshot represents a point-in-time view of the transport worker state.
@@ -51,6 +78,15 @@ type TransportDesiredState struct {
 // GetState returns the desired lifecycle state ("running" or "stopped").
 func (d *TransportDesiredState) GetState() string {
 	return d.BaseDesiredState.GetState()
+}
+
+// ShouldBeRunning returns true if the transport should be running.
+func (d *TransportDesiredState) ShouldBeRunning() bool {
+	if d.ShutdownRequested {
+		return false
+	}
+
+	return d.GetState() == config.DesiredStateRunning
 }
 
 // TransportObservedState represents the current state of the transport worker.
@@ -79,6 +115,12 @@ type TransportObservedState struct {
 
 	// TotalMessagesPulled tracks cumulative messages pulled from backend.
 	TotalMessagesPulled int64 `json:"total_messages_pulled"`
+
+	// ChildrenHealthy is the count of healthy child workers.
+	ChildrenHealthy int `json:"children_healthy"`
+
+	// ChildrenUnhealthy is the count of unhealthy child workers.
+	ChildrenUnhealthy int `json:"children_unhealthy"`
 }
 
 // GetTimestamp returns when this observed state was collected.
@@ -114,4 +156,17 @@ func (o TransportObservedState) IsTokenExpired() bool {
 	const refreshBuffer = 10 * time.Minute
 
 	return time.Now().Add(refreshBuffer).After(o.JWTExpiry)
+}
+
+// SetChildrenCounts sets the children health counts on this observed state.
+func (o TransportObservedState) SetChildrenCounts(healthy, unhealthy int) fsmv2.ObservedState {
+	o.ChildrenHealthy = healthy
+	o.ChildrenUnhealthy = unhealthy
+
+	return o
+}
+
+// HasValidToken returns true if there is a valid JWT token that hasn't expired.
+func (o TransportObservedState) HasValidToken() bool {
+	return o.JWTToken != "" && !o.IsTokenExpired()
 }
