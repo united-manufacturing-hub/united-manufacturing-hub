@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"github.com/prometheus/common/expfmt"
+	"github.com/prometheus/common/model"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
@@ -359,36 +360,36 @@ func (s *BenthosMonitorService) GetConfig(ctx context.Context, filesystemService
 	if ctx.Err() != nil {
 		return config.BenthosMonitorConfig{}, ctx.Err()
 	}
-	
+
 	// If we don't have an S6 service config stored, the service doesn't exist
 	if s.s6ServiceConfig == nil {
 		return config.BenthosMonitorConfig{}, ErrServiceNotExist
 	}
-	
+
 	// Read the actual script from the filesystem to get the configured port
 	s6ServiceName := s.GetS6ServiceName()
 	scriptPath := fmt.Sprintf("%s/%s/config/run_benthos_monitor.sh", constants.S6BaseDir, s6ServiceName)
-	
+
 	scriptContent, err := filesystemService.ReadFile(ctx, scriptPath)
 	if err != nil {
 		return config.BenthosMonitorConfig{}, fmt.Errorf("failed to read monitor script: %w", err)
 	}
-	
+
 	// Parse the port from the script content
 	// The script contains lines like: curl -sSL http://localhost:PORT/ping
 	// We need to extract the PORT value
 	portRegex := regexp.MustCompile(`http://localhost:(\d+)/ping`)
 	matches := portRegex.FindStringSubmatch(string(scriptContent))
-	
+
 	if len(matches) < 2 {
 		return config.BenthosMonitorConfig{}, errors.New("could not find port in monitor script")
 	}
-	
+
 	port, err := strconv.ParseUint(matches[1], 10, 16)
 	if err != nil {
 		return config.BenthosMonitorConfig{}, fmt.Errorf("failed to parse port from script: %w", err)
 	}
-	
+
 	// Return the config with the observed port
 	return config.BenthosMonitorConfig{
 		FSMInstanceConfig: config.FSMInstanceConfig{
@@ -1278,7 +1279,10 @@ func extractLabel(b []byte, key string) string {
 // ParseMetricsFromBytes parses prometheus metrics into structured format
 // Deprecated: Use ParseMetricsFromBytes instead.
 func ParseMetricsFromBytesSlow(data []byte) (Metrics, error) {
-	var parser expfmt.TextParser
+	var (
+		scheme = model.LegacyValidation
+		parser = expfmt.NewTextParser(scheme)
+	)
 
 	metrics := Metrics{
 		Input:  InputMetrics{},
