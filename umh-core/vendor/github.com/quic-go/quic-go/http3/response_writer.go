@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"github.com/quic-go/qpack"
+	"github.com/quic-go/quic-go/http3/qlog"
+
 	"golang.org/x/net/http/httpguts"
 )
 
@@ -20,16 +22,12 @@ type HTTPStreamer interface {
 	HTTPStream() *Stream
 }
 
-// The maximum length of an encoded HTTP/3 frame header is 16:
-// The frame has a type and length field, both QUIC varints (maximum 8 bytes in length)
-const frameHeaderLen = 16
-
 const maxSmallResponseSize = 4096
 
 type responseWriter struct {
 	str *Stream
 
-	conn     *Conn
+	conn     *rawConn
 	header   http.Header
 	trailers map[string]struct{}
 	buf      []byte
@@ -54,7 +52,7 @@ type responseWriter struct {
 var (
 	_ http.ResponseWriter = &responseWriter{}
 	_ http.Flusher        = &responseWriter{}
-	_ Hijacker            = &responseWriter{}
+	_ Settingser          = &responseWriter{}
 	_ HTTPStreamer        = &responseWriter{}
 	// make sure that we implement (some of the) methods used by the http.ResponseController
 	_ interface {
@@ -65,7 +63,7 @@ var (
 	} = &responseWriter{}
 )
 
-func newResponseWriter(str *Stream, conn *Conn, isHead bool, logger *slog.Logger) *responseWriter {
+func newResponseWriter(str *Stream, conn *rawConn, isHead bool, logger *slog.Logger) *responseWriter {
 	return &responseWriter{
 		str:    str,
 		conn:   conn,
@@ -181,6 +179,13 @@ func (w *responseWriter) doWrite(p []byte) (int, error) {
 	df := &dataFrame{Length: l}
 	w.buf = w.buf[:0]
 	w.buf = df.Append(w.buf)
+	if w.str.qlogger != nil {
+		w.str.qlogger.RecordEvent(qlog.FrameCreated{
+			StreamID: w.str.StreamID(),
+			Raw:      qlog.RawInfo{Length: len(w.buf) + int(l), PayloadLength: int(l)},
+			Frame:    qlog.Frame{Frame: qlog.DataFrame{}},
+		})
+	}
 	if _, err := w.str.writeUnframed(w.buf); err != nil {
 		return 0, maybeReplaceError(err)
 	}
@@ -202,10 +207,14 @@ func (w *responseWriter) doWrite(p []byte) (int, error) {
 }
 
 func (w *responseWriter) writeHeader(status int) error {
+	var headerFields []qlog.HeaderField // only used for qlog
 	var headers bytes.Buffer
 	enc := qpack.NewEncoder(&headers)
 	if err := enc.WriteField(qpack.HeaderField{Name: ":status", Value: strconv.Itoa(status)}); err != nil {
 		return err
+	}
+	if w.str.qlogger != nil {
+		headerFields = append(headerFields, qlog.HeaderField{Name: ":status", Value: strconv.Itoa(status)})
 	}
 
 	// Handle trailer fields
@@ -229,8 +238,13 @@ func (w *responseWriter) writeHeader(status int) error {
 			continue
 		}
 		for index := range v {
-			if err := enc.WriteField(qpack.HeaderField{Name: strings.ToLower(k), Value: v[index]}); err != nil {
+			name := strings.ToLower(k)
+			value := v[index]
+			if err := enc.WriteField(qpack.HeaderField{Name: name, Value: value}); err != nil {
 				return err
+			}
+			if w.str.qlogger != nil {
+				headerFields = append(headerFields, qlog.HeaderField{Name: name, Value: value})
 			}
 		}
 	}
@@ -238,6 +252,10 @@ func (w *responseWriter) writeHeader(status int) error {
 	buf := make([]byte, 0, frameHeaderLen+headers.Len())
 	buf = (&headersFrame{Length: uint64(headers.Len())}).Append(buf)
 	buf = append(buf, headers.Bytes()...)
+
+	if w.str.qlogger != nil {
+		qlogCreatedHeadersFrame(w.str.qlogger, w.str.StreamID(), len(buf), headers.Len(), headerFields)
+	}
 
 	_, err := w.str.writeUnframed(buf)
 	return err
@@ -282,52 +300,31 @@ func (w *responseWriter) declareTrailer(k string) {
 	w.trailers[k] = struct{}{}
 }
 
-// hasNonEmptyTrailers checks to see if there are any trailers with an actual
-// value set. This is possible by adding trailers to the "Trailers" header
-// but never actually setting those names as trailers in the course of handling
-// the request. In that case, this check may save us some allocations.
-func (w *responseWriter) hasNonEmptyTrailers() bool {
-	for trailer := range w.trailers {
-		if _, ok := w.header[trailer]; ok {
-			return true
-		}
-	}
-	return false
-}
-
 // writeTrailers will write trailers to the stream if there are any.
 func (w *responseWriter) writeTrailers() error {
 	// promote headers added via "Trailer:" convention as trailers, these can be added after
 	// streaming the status/headers have been written.
 	for k := range w.header {
-		// Handle "Trailer:" prefix
 		if strings.HasPrefix(k, http.TrailerPrefix) {
 			w.declareTrailer(k)
 		}
 	}
 
-	if !w.hasNonEmptyTrailers() {
+	if len(w.trailers) == 0 {
 		return nil
 	}
 
-	var b bytes.Buffer
-	enc := qpack.NewEncoder(&b)
+	trailers := make(http.Header, len(w.trailers))
 	for trailer := range w.trailers {
-		trailerName := strings.ToLower(strings.TrimPrefix(trailer, http.TrailerPrefix))
 		if vals, ok := w.header[trailer]; ok {
-			for _, val := range vals {
-				if err := enc.WriteField(qpack.HeaderField{Name: trailerName, Value: val}); err != nil {
-					return err
-				}
-			}
+			trailers[strings.TrimPrefix(trailer, http.TrailerPrefix)] = vals
 		}
 	}
 
-	buf := make([]byte, 0, frameHeaderLen+b.Len())
-	buf = (&headersFrame{Length: uint64(b.Len())}).Append(buf)
-	buf = append(buf, b.Bytes()...)
-	_, err := w.str.writeUnframed(buf)
-	w.trailerWritten = true
+	written, err := writeTrailers(w.str.datagramStream, trailers, w.str.StreamID(), w.str.qlogger)
+	if written {
+		w.trailerWritten = true
+	}
 	return err
 }
 
@@ -339,8 +336,12 @@ func (w *responseWriter) HTTPStream() *Stream {
 
 func (w *responseWriter) wasStreamHijacked() bool { return w.hijacked }
 
-func (w *responseWriter) Connection() *Conn {
-	return w.conn
+func (w *responseWriter) ReceivedSettings() <-chan struct{} {
+	return w.conn.ReceivedSettings()
+}
+
+func (w *responseWriter) Settings() *Settings {
+	return w.conn.Settings()
 }
 
 func (w *responseWriter) SetReadDeadline(deadline time.Time) error {

@@ -9,6 +9,7 @@ import (
 
 	"github.com/quic-go/quic-go/internal/ackhandler"
 	"github.com/quic-go/quic-go/internal/flowcontrol"
+	"github.com/quic-go/quic-go/internal/monotime"
 	"github.com/quic-go/quic-go/internal/protocol"
 	"github.com/quic-go/quic-go/internal/wire"
 )
@@ -116,11 +117,28 @@ func (s *Stream) Read(p []byte) (int, error) {
 	return s.receiveStr.Read(p)
 }
 
+// Peek fills b with stream data, without consuming the stream data.
+// It blocks until len(b) bytes are available, or an error occurs.
+// It respects the stream deadline set by SetReadDeadline.
+// If the stream ends before len(b) bytes are available,
+// it returns the number of bytes peeked along with io.EOF.
+func (s *Stream) Peek(b []byte) (int, error) {
+	return s.receiveStr.Peek(b)
+}
+
 // Write writes data to the stream.
 // Write can be made to time out using [Stream.SetWriteDeadline] or [Stream.SetDeadline].
 // If the stream was canceled, the error is a [StreamError].
 func (s *Stream) Write(p []byte) (int, error) {
 	return s.sendStr.Write(p)
+}
+
+// SetReliableBoundary marks the data written to this stream so far as reliable.
+// It is valid to call this function multiple times, thereby increasing the reliable size.
+// It only has an effect if the peer enabled support for the RESET_STREAM_AT extension,
+// otherwise, it is a no-op.
+func (s *Stream) SetReliableBoundary() {
+	s.sendStr.SetReliableBoundary()
 }
 
 // CancelWrite aborts sending on this stream.
@@ -147,11 +165,11 @@ func (s *Stream) Close() error {
 	return s.sendStr.Close()
 }
 
-func (s *Stream) handleResetStreamFrame(frame *wire.ResetStreamFrame, rcvTime time.Time) error {
+func (s *Stream) handleResetStreamFrame(frame *wire.ResetStreamFrame, rcvTime monotime.Time) error {
 	return s.receiveStr.handleResetStreamFrame(frame, rcvTime)
 }
 
-func (s *Stream) handleStreamFrame(frame *wire.StreamFrame, rcvTime time.Time) error {
+func (s *Stream) handleStreamFrame(frame *wire.StreamFrame, rcvTime monotime.Time) error {
 	return s.receiveStr.handleStreamFrame(frame, rcvTime)
 }
 
@@ -171,7 +189,7 @@ func (s *Stream) popStreamFrame(maxBytes protocol.ByteCount, v protocol.Version)
 	return s.sendStr.popStreamFrame(maxBytes, v)
 }
 
-func (s *Stream) getControlFrame(now time.Time) (_ ackhandler.Frame, ok, hasMore bool) {
+func (s *Stream) getControlFrame(now monotime.Time) (_ ackhandler.Frame, ok, hasMore bool) {
 	f, ok, _ := s.sendStr.getControlFrame(now)
 	if ok {
 		return f, true, true
