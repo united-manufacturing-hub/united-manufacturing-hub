@@ -19,7 +19,6 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/action"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/backoff"
@@ -29,11 +28,7 @@ import (
 
 // RecoveringState handles error recovery with exponential backoff and periodic transport resets.
 type RecoveringState struct {
-	BaseCommunicatorState
-}
-
-func (s *RecoveringState) LifecyclePhase() config.LifecyclePhase {
-	return config.PhaseRunningDegraded
+	helpers.RunningDegradedBase
 }
 
 func (s *RecoveringState) Next(snapAny any) fsmv2.NextResult[any, any] {

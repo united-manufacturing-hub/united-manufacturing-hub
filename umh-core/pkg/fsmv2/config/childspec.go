@@ -273,6 +273,7 @@ func (c ChildSpec) Hash() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to marshal Variables for hashing: %w", err)
 	}
+
 	h.Write(varsBytes)
 	h.Write([]byte{0}) // separator
 

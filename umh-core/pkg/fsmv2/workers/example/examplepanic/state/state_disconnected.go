@@ -16,17 +16,12 @@ package state
 
 import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplepanic/snapshot"
 )
 
 type DisconnectedState struct {
-	BaseExamplepanicState
-}
-
-func (s *DisconnectedState) LifecyclePhase() config.LifecyclePhase {
-	return config.PhaseRunningDegraded
+	helpers.RunningDegradedBase
 }
 
 func (s *DisconnectedState) Next(snapAny any) fsmv2.NextResult[any, any] {

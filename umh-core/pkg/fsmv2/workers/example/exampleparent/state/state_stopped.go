@@ -18,7 +18,6 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent/snapshot"
 )
@@ -30,11 +29,7 @@ var StoppedWaitDuration = 5 * time.Second
 // StoppedState represents the initial state before any children are spawned.
 // It waits for StoppedWaitDuration before transitioning to TryingToStart.
 type StoppedState struct {
-	BaseParentState
-}
-
-func (s *StoppedState) LifecyclePhase() config.LifecyclePhase {
-	return config.PhaseStopped
+	helpers.StoppedBase
 }
 
 func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
