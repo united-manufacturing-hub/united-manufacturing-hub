@@ -16,7 +16,6 @@ package examples_test
 
 import (
 	"context"
-	"testing"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -26,11 +25,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
 	transportWorker "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport"
 )
-
-func TestTransportScenario(t *testing.T) {
-	RegisterFailHandler(Fail)
-	RunSpecs(t, "Transport Scenario Suite")
-}
 
 var _ = Describe("Transport Scenario", func() {
 	var ctx context.Context
