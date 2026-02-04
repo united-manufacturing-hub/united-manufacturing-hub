@@ -1345,6 +1345,9 @@ func (ts *TriangularStore) GetLatestSyncID(ctx context.Context) (int64, error) {
 //   - error: Any error that occurred during compaction
 func (ts *TriangularStore) CompactDeltas(ctx context.Context, retentionWindow time.Duration) (int, error) {
 	if ts.store == nil {
+		ts.logger.Warnw("compaction_skipped",
+			"reason", "store is nil")
+
 		return 0, nil
 	}
 
@@ -1361,12 +1364,31 @@ func (ts *TriangularStore) CompactDeltas(ctx context.Context, retentionWindow ti
 	}
 
 	deleted := 0
+	skipped := 0
+	failed := 0
 
 	for _, doc := range docs {
-		timestampMs := extractTimestampMs(doc)
+		timestampMs, hasTimestamp := extractTimestampMs(doc)
+
+		if !hasTimestamp {
+			ts.logger.Warnw("delta_missing_timestamp",
+				"doc_id", doc["id"],
+				"reason", "missing or invalid timestamp field")
+
+			skipped++
+
+			continue
+		}
+
 		if timestampMs < cutoffMs {
 			id, ok := doc["id"].(string)
 			if !ok {
+				ts.logger.Warnw("delta_malformed",
+					"doc", doc,
+					"reason", "missing or invalid id field")
+
+				skipped++
+
 				continue
 			}
 
@@ -1375,6 +1397,8 @@ func (ts *TriangularStore) CompactDeltas(ctx context.Context, retentionWindow ti
 					"id", id,
 					"error", err)
 
+				failed++
+
 				continue
 			}
 
@@ -1382,26 +1406,33 @@ func (ts *TriangularStore) CompactDeltas(ctx context.Context, retentionWindow ti
 		}
 	}
 
-	if deleted > 0 {
+	if deleted > 0 || skipped > 0 || failed > 0 {
 		ts.logger.Infow("compaction_complete",
 			"deleted", deleted,
+			"skipped", skipped,
+			"failed", failed,
 			"retention_window", retentionWindow)
+	}
+
+	if failed > 0 {
+		return deleted, fmt.Errorf("compaction completed with %d failures (deleted %d, skipped %d)", failed, deleted, skipped)
 	}
 
 	return deleted, nil
 }
 
 // extractTimestampMs extracts the timestamp field from a delta document as milliseconds.
-func extractTimestampMs(doc persistence.Document) int64 {
+// Returns the timestamp and a boolean indicating whether a valid timestamp was found.
+func extractTimestampMs(doc persistence.Document) (int64, bool) {
 	if ts, ok := doc["timestamp"].(int64); ok {
-		return ts
+		return ts, true
 	}
 
 	if f, ok := doc["timestamp"].(float64); ok {
-		return int64(f)
+		return int64(f), true
 	}
 
-	return 0
+	return 0, false
 }
 
 // Maintenance performs heavyweight cleanup operations.
