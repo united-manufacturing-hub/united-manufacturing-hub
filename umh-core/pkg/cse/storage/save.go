@@ -187,7 +187,7 @@ func (ts *TriangularStore) saveWithDelta(
 			ID:         id,
 			Role:       opts.Role,
 			Changes:    diff,
-			Timestamp:  ts.clock.Now(),
+			Timestamp:  ts.clock.Now().UTC(),
 		}
 
 		if appendErr := ts.deltaStore.Append(ctx, entry); appendErr != nil {
