@@ -252,13 +252,13 @@ func (a *GetProtocolConverterAction) Execute() (interface{}, map[string]interfac
 				specConfig := observedState.ObservedProtocolConverterSpecConfig
 				if specConfig.Variables.User != nil {
 					for key, value := range specConfig.Variables.User {
-						valueStr := fmt.Sprintf("%v", value) // Convert any type to string
 						variables = append(variables, models.ProtocolConverterVariable{
 							Label: key,
-							Value: valueStr,
+							Value: value,
 						})
 
-						// Extract IP and Port from variables
+						// Extract IP and Port from variables (convert to string for connection info)
+						valueStr := fmt.Sprintf("%v", value)
 						switch key {
 						case "IP", "ip", "target", "Target":
 							ip = valueStr

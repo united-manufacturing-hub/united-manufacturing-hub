@@ -62,10 +62,9 @@ type DeployProtocolConverterAction struct {
 
 	outboundChannel       chan *models.UMHMessage
 	systemSnapshotManager *fsm.SnapshotManager // Snapshot Manager holds the latest system snapshot
+	actionLogger          *zap.SugaredLogger
 
-	actionLogger *zap.SugaredLogger
-	userEmail    string
-
+	userEmail string
 	// Parsed request payload (only populated after Parse)
 	payload models.ProtocolConverter
 
@@ -187,11 +186,8 @@ func (a *DeployProtocolConverterAction) Execute() (interface{}, map[string]inter
 
 // createProtocolConverterConfig creates a ProtocolConverterConfig with templated configuration.
 func (a *DeployProtocolConverterAction) createProtocolConverterConfig() config.ProtocolConverterConfig {
-	// Create variables bundle starting with IP and PORT as strings in the User namespace
-	userVars := map[string]any{
-		"IP":   a.payload.Connection.IP,                                   // Keep IP as string
-		"PORT": strconv.FormatUint(uint64(a.payload.Connection.Port), 10), // Convert port to string
-	}
+	// Create variables bundle - start empty to allow user variables first
+	userVars := map[string]any{}
 
 	// Add any additional user-supplied variables from TemplateInfo.Variables
 	if a.payload.TemplateInfo != nil {
@@ -199,6 +195,10 @@ func (a *DeployProtocolConverterAction) createProtocolConverterConfig() config.P
 			userVars[variable.Label] = variable.Value
 		}
 	}
+
+	// Enforce reserved connection variables after merging to prevent user overrides
+	userVars["IP"] = a.payload.Connection.IP                                     // Keep IP as string
+	userVars["PORT"] = strconv.FormatUint(uint64(a.payload.Connection.Port), 10) // Convert port to string
 
 	variableBundle := variables.VariableBundle{
 		User: userVars,
