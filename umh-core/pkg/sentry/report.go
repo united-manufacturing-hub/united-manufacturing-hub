@@ -155,9 +155,9 @@ func RecoverReportAndRePanic() {
 		}
 
 		// Report with context for better Sentry grouping
-		ReportIssueWithContext(
+		// Use the non-panicking version to avoid recursive panics
+		reportFatalWithContextNoPanic(
 			fmt.Errorf("panic: %v", r),
-			IssueTypeFatal,
 			log,
 			map[string]interface{}{
 				"panic_value": fmt.Sprintf("%v", r),
@@ -165,8 +165,6 @@ func RecoverReportAndRePanic() {
 			},
 		)
 
-		// Give Sentry time to send the event
-		sentry.Flush(time.Second * 2)
 		// Re-panic to maintain normal Go panic behavior
 		panic(r)
 	}
@@ -190,15 +188,13 @@ func RecoverReportAndRePanicWithContext(contextData map[string]interface{}) {
 		fullContext["panic_value"] = fmt.Sprintf("%v", r)
 
 		// Report with context
-		ReportIssueWithContext(
+		// Use the non-panicking version to avoid recursive panics
+		reportFatalWithContextNoPanic(
 			fmt.Errorf("panic: %v", r),
-			IssueTypeFatal,
 			log,
 			fullContext,
 		)
 
-		// Give Sentry time to send the event
-		sentry.Flush(time.Second * 2)
 		// Re-panic to maintain normal Go panic behavior
 		panic(r)
 	}
@@ -227,19 +223,22 @@ func GlobalPanicRecovery(log *zap.SugaredLogger) func() {
 				fmt.Fprintf(os.Stderr, "GLOBAL PANIC RECOVERED: %v\n", r)
 			}
 
-			// Capture the panic with Sentry using our custom function
-			ReportIssueWithContext(
+			// Use no-op logger if nil to avoid nil pointer dereference
+			logToUse := log
+			if logToUse == nil {
+				logToUse = zap.NewNop().Sugar()
+			}
+
+			// Capture the panic with Sentry using the non-panicking version
+			// to avoid recursive panics
+			reportFatalWithContextNoPanic(
 				fmt.Errorf("panic: %v", r),
-				IssueTypeFatal,
-				log,
+				logToUse,
 				map[string]interface{}{
 					"panic_value": fmt.Sprintf("%v", r),
 					"location":    "main_goroutine",
 				},
 			)
-
-			// Give Sentry time to send the event before the program exits
-			Flush(time.Second * 5)
 
 			// Re-panic to maintain normal crash behavior
 			panic(r)
@@ -258,19 +257,23 @@ func HandleGlobalPanic(log *zap.SugaredLogger) {
 			fmt.Fprintf(os.Stderr, "GLOBAL PANIC RECOVERED: %v\n", r)
 		}
 
-		// Capture the panic with Sentry using our custom function
-		ReportIssueWithContext(
+		// Use no-op logger if nil to avoid nil pointer dereference
+		logToUse := log
+		if logToUse == nil {
+			logToUse = zap.NewNop().Sugar()
+		}
+
+		// Capture the panic with Sentry using the non-panicking version
+		// to avoid recursive panics (the original panic triggered log.Panic(),
+		// calling ReportIssueWithContext with IssueTypeFatal would call log.Panic() again)
+		reportFatalWithContextNoPanic(
 			fmt.Errorf("panic: %v", r),
-			IssueTypeFatal,
-			log,
+			logToUse,
 			map[string]interface{}{
 				"panic_value": fmt.Sprintf("%v", r),
 				"location":    "main_goroutine",
 			},
 		)
-
-		// Give Sentry time to send the event before the program exits
-		Flush(time.Second * 5)
 
 		// Re-panic to maintain normal crash behavior
 		panic(r)

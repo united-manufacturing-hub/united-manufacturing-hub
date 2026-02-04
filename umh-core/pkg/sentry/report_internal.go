@@ -103,6 +103,25 @@ func reportFatalWithContext(err error, log *zap.SugaredLogger, context map[strin
 	log.Panic("Fatal error")
 }
 
+// reportFatalWithContextNoPanic sends a fatal error to Sentry with additional context data
+// but does NOT call log.Panic(). This is used by panic handlers to avoid recursive panics.
+// The caller is responsible for re-panicking after this function returns.
+func reportFatalWithContextNoPanic(err error, log *zap.SugaredLogger, context map[string]interface{}) {
+	log.Error("The UMH-Core has encountered a fatal error and will now terminate. Please contact our customer support.")
+	log.Errorf("Error: %s", err)
+	log.Errorf("Stack trace: %s", string(debug.Stack()))
+
+	event := createSentryEventWithContext(sentry.LevelFatal, err, context)
+	sendSentryEvent(event)
+
+	ok := sentry.Flush(time.Second * 5)
+	if !ok {
+		log.Error("Failed to flush Sentry events")
+	}
+	// NOTE: Unlike reportFatalWithContext, this does NOT call log.Panic()
+	// to avoid recursive panics when used in panic recovery handlers.
+}
+
 // reportErrorWithContext sends an error to Sentry with additional context data
 // Afterwards it will report the error to the logger.
 func reportErrorWithContext(err error, log *zap.SugaredLogger, context map[string]interface{}) {
