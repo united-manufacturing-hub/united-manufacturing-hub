@@ -17,6 +17,7 @@ package supervisor_test
 import (
 	"context"
 	"fmt"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -29,7 +30,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence/memory"
 )
 
-var _ = Describe("Memory Leak Characterization", func() {
+var _ = Describe("Delta Compaction", Label("memory-cleanup"), func() {
 	var (
 		s               *supervisor.Supervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState]
 		triangularStore *storage.TriangularStore
@@ -67,90 +68,58 @@ var _ = Describe("Memory Leak Characterization", func() {
 		}
 	})
 
-	Describe("Delta Entry Accumulation", Label("memory-leak"), func() {
-		It("should demonstrate unbounded delta growth after repeated worker create/remove cycles", func() {
-			const numCycles = 50
-			const ticksPerWorker = 5
+	Describe("CompactDeltas", func() {
+		It("should delete all deltas when retention window is zero", func() {
+			Skip("ENG-4295: Requires CompactDeltas implementation on TriangularStore")
 
-			initialDeltaCount := countDeltas(ctx, basicStore)
-			GinkgoWriter.Printf("Initial delta count: %d\n", initialDeltaCount)
+			generateDeltas(ctx, s, 5, 3)
 
-			for cycle := range numCycles {
-				workerID := fmt.Sprintf("leak-test-worker-%d", cycle)
-				identity := deps.Identity{ID: workerID, Name: fmt.Sprintf("Worker %d", cycle)}
-				worker := &mockWorker{observed: createMockObservedStateWithID(workerID)}
+			deltasBeforeCompact := countDeltas(ctx, basicStore)
+			GinkgoWriter.Printf("Deltas before compaction: %d\n", deltasBeforeCompact)
+			Expect(deltasBeforeCompact).To(BeNumerically(">", 0),
+				"Should have deltas before compaction")
 
-				err := s.AddWorker(identity, worker)
-				Expect(err).ToNot(HaveOccurred())
+			deleted, err := triangularStore.CompactDeltas(ctx, 0)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(deleted).To(Equal(deltasBeforeCompact),
+				"All deltas should be deleted with zero retention")
 
-				for range ticksPerWorker {
-					err = s.TestTickAll(ctx)
-					Expect(err).ToNot(HaveOccurred())
-				}
-
-				err = s.RemoveWorker(ctx, workerID)
-				Expect(err).ToNot(HaveOccurred())
-			}
-
-			finalDeltaCount := countDeltas(ctx, basicStore)
-			GinkgoWriter.Printf("Final delta count after %d cycles: %d\n", numCycles, finalDeltaCount)
-			GinkgoWriter.Printf("Delta growth: %d entries\n", finalDeltaCount-initialDeltaCount)
-
-			Expect(finalDeltaCount).To(BeNumerically(">", initialDeltaCount),
-				"Expected delta count to grow after worker cycles (demonstrating the leak)")
-
-			expectedMinGrowth := numCycles * ticksPerWorker / 2
-			Expect(finalDeltaCount-initialDeltaCount).To(BeNumerically(">=", expectedMinGrowth),
-				"Expected significant delta growth indicating memory leak")
+			deltasAfterCompact := countDeltas(ctx, basicStore)
+			GinkgoWriter.Printf("Deltas after compaction with 0 retention: %d\n", deltasAfterCompact)
+			Expect(deltasAfterCompact).To(Equal(0),
+				"No deltas should remain after compaction with zero retention")
 		})
 
-		It("should demonstrate worker document accumulation after removal", func() {
-			const numWorkers = 20
+		It("should preserve recent deltas within retention window", func() {
+			Skip("ENG-4295: Requires CompactDeltas implementation on TriangularStore")
 
-			for i := range numWorkers {
-				workerID := fmt.Sprintf("doc-leak-worker-%d", i)
-				identity := deps.Identity{ID: workerID, Name: fmt.Sprintf("Worker %d", i)}
-				worker := &mockWorker{observed: createMockObservedStateWithID(workerID)}
+			generateDeltas(ctx, s, 5, 3)
 
-				err := s.AddWorker(identity, worker)
-				Expect(err).ToNot(HaveOccurred())
+			deltasBeforeCompact := countDeltas(ctx, basicStore)
+			GinkgoWriter.Printf("Deltas before compaction: %d\n", deltasBeforeCompact)
+			Expect(deltasBeforeCompact).To(BeNumerically(">", 0),
+				"Should have deltas before compaction")
 
-				err = s.TestTickAll(ctx)
-				Expect(err).ToNot(HaveOccurred())
+			deleted, err := triangularStore.CompactDeltas(ctx, 1*time.Hour)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(deleted).To(Equal(0),
+				"No deltas should be deleted with 1-hour retention (all are recent)")
 
-				err = s.RemoveWorker(ctx, workerID)
-				Expect(err).ToNot(HaveOccurred())
-			}
-
-			Expect(s.ListWorkers()).To(BeEmpty(), "All workers should be removed from supervisor")
-
-			identityDocs := countDocuments(ctx, basicStore, "test_identity")
-			desiredDocs := countDocuments(ctx, basicStore, "test_desired")
-			observedDocs := countDocuments(ctx, basicStore, "test_observed")
-
-			GinkgoWriter.Printf("After removing %d workers:\n", numWorkers)
-			GinkgoWriter.Printf("  Identity documents: %d\n", identityDocs)
-			GinkgoWriter.Printf("  Desired documents: %d\n", desiredDocs)
-			GinkgoWriter.Printf("  Observed documents: %d\n", observedDocs)
-
-			totalDocs := identityDocs + desiredDocs + observedDocs
-			GinkgoWriter.Printf("  Total worker documents: %d (expected 0 after cleanup)\n", totalDocs)
-
-			Expect(totalDocs).To(BeNumerically(">", 0),
-				"Expected worker documents to remain after removal (demonstrating the leak)")
+			deltasAfterCompact := countDeltas(ctx, basicStore)
+			GinkgoWriter.Printf("Deltas after compaction with 1hr retention: %d\n", deltasAfterCompact)
+			Expect(deltasAfterCompact).To(Equal(deltasBeforeCompact),
+				"All recent deltas should be preserved within retention window")
 		})
-	})
 
-	Describe("Memory Cleanup Verification", Label("memory-cleanup"), func() {
-		It("should have bounded memory after cleanup is implemented", func() {
-			Skip("This test will pass after ENG-4295 implements storage cleanup")
+		It("should maintain bounded delta count with periodic compaction", func() {
+			Skip("ENG-4295: Requires CompactDeltas implementation on TriangularStore")
 
 			const numCycles = 100
 			const ticksPerWorker = 3
-			const maxExpectedDeltas = 1000
+			const maxExpectedDeltas = 50
 
 			for cycle := range numCycles {
-				workerID := fmt.Sprintf("cleanup-test-worker-%d", cycle)
+				workerID := fmt.Sprintf("compaction-test-worker-%d", cycle)
 				identity := deps.Identity{ID: workerID, Name: fmt.Sprintf("Worker %d", cycle)}
 				worker := &mockWorker{observed: createMockObservedStateWithID(workerID)}
 
@@ -164,36 +133,61 @@ var _ = Describe("Memory Leak Characterization", func() {
 
 				err = s.RemoveWorker(ctx, workerID)
 				Expect(err).ToNot(HaveOccurred())
+
+				_, err = triangularStore.CompactDeltas(ctx, 0)
+				Expect(err).ToNot(HaveOccurred())
 			}
 
 			finalDeltaCount := countDeltas(ctx, basicStore)
-			GinkgoWriter.Printf("Final delta count after %d cycles with cleanup: %d\n", numCycles, finalDeltaCount)
+			GinkgoWriter.Printf("Final delta count after %d cycles with compaction: %d\n", numCycles, finalDeltaCount)
 
 			Expect(finalDeltaCount).To(BeNumerically("<=", maxExpectedDeltas),
-				"Expected bounded delta count after cleanup implementation")
+				"Delta count should be bounded when compaction runs after each cycle")
+		})
+	})
 
-			identityDocs := countDocuments(ctx, basicStore, "test_identity")
-			desiredDocs := countDocuments(ctx, basicStore, "test_desired")
-			observedDocs := countDocuments(ctx, basicStore, "test_observed")
+	Describe("Maintenance", func() {
+		It("should clear internal caches without error", func() {
+			Skip("ENG-4295: Requires Maintenance implementation on TriangularStore")
 
-			Expect(identityDocs).To(Equal(0), "Expected no orphaned identity documents")
-			Expect(desiredDocs).To(Equal(0), "Expected no orphaned desired documents")
-			Expect(observedDocs).To(Equal(0), "Expected no orphaned observed documents")
+			generateDeltas(ctx, s, 3, 2)
+
+			err := triangularStore.Maintenance(ctx)
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("should be idempotent (safe to call multiple times)", func() {
+			Skip("ENG-4295: Requires Maintenance implementation on TriangularStore")
+
+			for range 3 {
+				err := triangularStore.Maintenance(ctx)
+				Expect(err).ToNot(HaveOccurred())
+			}
 		})
 	})
 })
 
-func countDeltas(ctx context.Context, store persistence.Store) int {
-	docs, err := store.Find(ctx, storage.DeltaCollectionName, persistence.Query{})
-	if err != nil {
-		return 0
-	}
+func generateDeltas(ctx context.Context, s *supervisor.Supervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState], numWorkers, ticksPerWorker int) {
+	for i := range numWorkers {
+		workerID := fmt.Sprintf("delta-gen-worker-%d", i)
+		identity := deps.Identity{ID: workerID, Name: fmt.Sprintf("Worker %d", i)}
+		worker := &mockWorker{observed: createMockObservedStateWithID(workerID)}
 
-	return len(docs)
+		err := s.AddWorker(identity, worker)
+		Expect(err).ToNot(HaveOccurred())
+
+		for range ticksPerWorker {
+			err = s.TestTickAll(ctx)
+			Expect(err).ToNot(HaveOccurred())
+		}
+
+		err = s.RemoveWorker(ctx, workerID)
+		Expect(err).ToNot(HaveOccurred())
+	}
 }
 
-func countDocuments(ctx context.Context, store persistence.Store, collectionName string) int {
-	docs, err := store.Find(ctx, collectionName, persistence.Query{})
+func countDeltas(ctx context.Context, store persistence.Store) int {
+	docs, err := store.Find(ctx, storage.DeltaCollectionName, persistence.Query{})
 	if err != nil {
 		return 0
 	}
