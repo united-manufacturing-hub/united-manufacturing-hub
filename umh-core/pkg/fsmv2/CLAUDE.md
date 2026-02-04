@@ -99,6 +99,28 @@ func init() {
 
 The folder name must match the worker type (e.g., `transport/` for type `"transport"`).
 
+## Graceful Shutdown Cascading
+
+Each supervisor level has a `DefaultGracefulShutdownTimeout` of 5 seconds. For nested supervisors (parent-child workers), timeouts cascade:
+
+| Nesting Level | Total Timeout |
+|---------------|---------------|
+| 1 (single worker) | 5s |
+| 2 (parent + child) | 10s |
+| 3 (grandparent + parent + child) | 15s |
+
+**Test implications**: When testing shutdown scenarios with parent-child workers, allow sufficient time:
+
+```go
+// For parent with child supervisor (2 levels)
+Eventually(result.Done, 15*time.Second).Should(BeClosed())
+```
+
+The shutdown flow:
+1. Phase 1: Request children to stop (waits for graceful timeout)
+2. Phase 2: Stop own workers (waits for graceful timeout)
+3. Phase 3: Cancel context
+
 ## Testing Patterns
 
 - Use Ginkgo/Gomega for tests
@@ -115,3 +137,32 @@ go test ./pkg/fsmv2/workers/transport/... -v
 go test ./pkg/fsmv2/workers/transport/... -coverprofile=coverage.out
 go tool cover -func=coverage.out
 ```
+
+## Ginkgo Test Suite Organization
+
+**One `RunSpecs()` per package** - multiple test files can have `var _ = Describe()` blocks, but only ONE file should call `RunSpecs()`:
+
+```go
+// examples_suite_test.go - THE ONLY file with RunSpecs
+package examples_test
+
+import (
+    "testing"
+    . "github.com/onsi/ginkgo/v2"
+    . "github.com/onsi/gomega"
+)
+
+func TestExamples(t *testing.T) {
+    RegisterFailHandler(Fail)
+    RunSpecs(t, "Examples Suite")
+}
+
+// transport_scenario_test.go - NO RunSpecs, just Describe blocks
+package examples_test
+
+var _ = Describe("Transport Scenario", func() {
+    // tests...
+})
+```
+
+**Common mistake**: Having multiple `RunSpecs()` calls causes "Rerunning Suite" errors in CI.
