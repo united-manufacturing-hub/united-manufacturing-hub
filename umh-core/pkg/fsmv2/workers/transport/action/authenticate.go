@@ -74,7 +74,10 @@ func (a *AuthenticateAction) Execute(ctx context.Context, depsAny any) error {
 	default:
 	}
 
-	deps := depsAny.(snapshot.TransportDependencies)
+	deps, ok := depsAny.(snapshot.TransportDependencies)
+	if !ok {
+		return errors.New("invalid dependencies type: expected TransportDependencies")
+	}
 
 	if deps.GetTransport() == nil {
 		newTransport := httpTransport.NewHTTPTransport(a.RelayURL, a.Timeout)
