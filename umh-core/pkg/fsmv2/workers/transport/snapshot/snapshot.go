@@ -67,12 +67,12 @@ var _ fsmv2.DesiredState = (*TransportDesiredState)(nil)
 
 // TransportDesiredState represents the target configuration for the transport worker.
 type TransportDesiredState struct {
-	config.BaseDesiredState // Provides State, ShutdownRequested + IsShutdownRequested() + SetShutdownRequested()
+	InstanceUUID            string `json:"instanceUUID"` // Used by AuthenticateAction for backend authentication
+	AuthToken               string `json:"authToken"`
+	RelayURL                string `json:"relayURL"`
+	config.BaseDesiredState        // Provides State, ShutdownRequested + IsShutdownRequested() + SetShutdownRequested()
 
-	InstanceUUID string        `json:"instanceUUID"` // Used by AuthenticateAction for backend authentication
-	AuthToken    string        `json:"authToken"`
-	RelayURL     string        `json:"relayURL"`
-	Timeout      time.Duration `json:"timeout"`
+	Timeout time.Duration `json:"timeout"`
 }
 
 // GetState returns the desired lifecycle state ("running" or "stopped").
@@ -95,20 +95,20 @@ type TransportObservedState struct {
 
 	JWTExpiry time.Time `json:"jwt_expiry,omitempty"`
 
+	// Children contains the observed state of child workers (PushWorker, PullWorker).
+	Children map[string]fsmv2.ObservedState `json:"children,omitempty"`
+
 	State string `json:"state"` // Observed lifecycle state (e.g., "running_healthy")
 
 	JWTToken string `json:"jwt_token,omitempty"`
 
-	// Children contains the observed state of child workers (PushWorker, PullWorker).
-	Children map[string]fsmv2.ObservedState `json:"children,omitempty"`
-
 	// DesiredState embedded for state consistency
 	TransportDesiredState `json:",inline"`
 
-	deps.MetricsEmbedder `json:",inline"`
-
 	// LastActionResults contains the action history from the last collection cycle (supervisor-managed).
 	LastActionResults []deps.ActionResult `json:"last_action_results,omitempty"`
+
+	deps.MetricsEmbedder `json:",inline"`
 
 	// TotalMessagesPushed tracks cumulative messages pushed to backend.
 	TotalMessagesPushed int64 `json:"total_messages_pushed"`
