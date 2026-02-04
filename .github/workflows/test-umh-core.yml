@@ -180,13 +180,18 @@ jobs:
         uses: ctrf-io/github-test-reporter@024bc4b64d997ca9da86833c6b9548c55c620e40 # v1.0.26
         with:
           report-path: merged-reports/combined-test-report.xml
-          github-report: true
-          pull-request-report: true
-          summary-delta-report: true
+          title: "UMH Core Test Results"
+          summary: true
+          pull-request: true
+          overwrite-comment: true
+          annotate: true
+          summary-report: true
+          failed-folded-report: true
+          flaky-report: true
           insights-report: true
           flaky-rate-report: true
           fail-rate-report: true
-          overwrite-comment: true
+          fetch-previous-results: true
           integrations-config: |
             {
               "junit-to-ctrf": {
@@ -195,7 +200,7 @@ jobs:
                 "options": {
                   "output": "./ctrf-reports/ctrf-report.json",
                   "toolname": "junit-to-ctrf",
-                  "useSuiteName": false,
+                  "useSuiteName": true,
                   "env": {
                     "appName": "umh-core"
                   }
