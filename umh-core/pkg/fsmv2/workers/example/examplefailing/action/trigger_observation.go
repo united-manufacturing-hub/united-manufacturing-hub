@@ -17,6 +17,7 @@ package action
 import (
 	"context"
 
+	depspkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplefailing/snapshot"
 )
 
@@ -44,12 +45,12 @@ func (a *TriggerObservationAction) Execute(ctx context.Context, depsAny any) err
 
 	deps := depsAny.(snapshot.ExamplefailingDependencies)
 	newTicks := deps.IncrementTicksInConnected()
-	deps.GetLogger().Infow("trigger_observation",
-		"new_ticks", newTicks,
-		"should_fail", deps.GetShouldFail(),
-		"all_cycles_complete", deps.AllCyclesComplete(),
-		"current_cycle", deps.GetCurrentCycle(),
-		"total_cycles", deps.GetFailureCycles(),
+	deps.GetLogger().Info("trigger_observation",
+		depspkg.Int("new_ticks", newTicks),
+		depspkg.Bool("should_fail", deps.GetShouldFail()),
+		depspkg.Bool("all_cycles_complete", deps.AllCyclesComplete()),
+		depspkg.Int("current_cycle", deps.GetCurrentCycle()),
+		depspkg.Int("total_cycles", deps.GetFailureCycles()),
 	)
 
 	return nil

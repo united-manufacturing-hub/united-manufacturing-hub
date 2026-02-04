@@ -56,9 +56,10 @@ type StateReader interface {
 // Dependencies provides access to worker-specific tools for actions.
 // Worker-specific dependencies embed BaseDependencies and extend with additional tools.
 type Dependencies interface {
-	GetLogger() *zap.SugaredLogger
+	// GetLogger returns the structured logger for this worker.
+	GetLogger() FSMLogger
 	// ActionLogger returns a logger enriched with action context for structured logs.
-	ActionLogger(actionType string) *zap.SugaredLogger
+	ActionLogger(actionType string) FSMLogger
 	// GetStateReader returns read-only access to the TriangularStore, or nil if not provided.
 	GetStateReader() StateReader
 }
@@ -67,7 +68,8 @@ type Dependencies interface {
 // Worker-specific dependencies should embed this struct.
 type BaseDependencies struct {
 	stateReader     StateReader
-	logger          *zap.SugaredLogger
+	logger          FSMLogger
+	rawLogger       *zap.SugaredLogger // Kept for supervisor/framework code during migration
 	metricsRecorder *MetricsRecorder
 	retryTracker    retry.Tracker     // Framework-level retry tracking for error/success recording
 	frameworkState  *FrameworkMetrics // Set by supervisor before collection, may be stale (~1 tick)
@@ -84,8 +86,11 @@ func NewBaseDependencies(logger *zap.SugaredLogger, stateReader StateReader, ide
 		panic("NewBaseDependencies: logger cannot be nil")
 	}
 
+	enrichedLogger := logger.With("worker", identity.String())
+
 	return &BaseDependencies{
-		logger:          logger.With("worker", identity.String()),
+		logger:          NewFSMLogger(enrichedLogger),
+		rawLogger:       enrichedLogger,
 		stateReader:     stateReader,
 		metricsRecorder: NewMetricsRecorder(),
 		retryTracker:    retry.New(),
@@ -94,12 +99,19 @@ func NewBaseDependencies(logger *zap.SugaredLogger, stateReader StateReader, ide
 	}
 }
 
-func (d *BaseDependencies) GetLogger() *zap.SugaredLogger {
+func (d *BaseDependencies) GetLogger() FSMLogger {
 	return d.logger
 }
 
-func (d *BaseDependencies) ActionLogger(actionType string) *zap.SugaredLogger {
-	return d.logger.With("log_source", "action", "action_type", actionType)
+func (d *BaseDependencies) ActionLogger(actionType string) FSMLogger {
+	return d.logger.With(String("log_source", "action"), String("action_type", actionType))
+}
+
+// GetRawLogger returns the underlying zap.SugaredLogger.
+// Use this only for supervisor/framework code during migration.
+// Workers should use GetLogger() which returns FSMLogger.
+func (d *BaseDependencies) GetRawLogger() *zap.SugaredLogger {
+	return d.rawLogger
 }
 
 func (d *BaseDependencies) GetStateReader() StateReader {

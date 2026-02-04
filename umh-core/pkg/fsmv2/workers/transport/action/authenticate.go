@@ -20,70 +20,32 @@ import (
 	"time"
 
 	depspkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps/retry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
 	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/snapshot"
 )
-
-// CommunicatorDependencies is an interface to avoid import cycles (action -> communicator -> snapshot -> action).
-type CommunicatorDependencies interface {
-	depspkg.Dependencies
-	GetTransport() transport.Transport
-	SetTransport(t transport.Transport)
-	SetJWT(token string, expiry time.Time)
-	SetPulledMessages(messages []*transport.UMHMessage)
-
-	RecordError()
-	RecordSuccess()
-	GetConsecutiveErrors() int
-
-	RecordTypedError(errType httpTransport.ErrorType, retryAfter time.Duration)
-	GetLastErrorType() httpTransport.ErrorType
-	GetLastRetryAfter() time.Duration
-	SetLastAuthAttemptAt(t time.Time)
-	GetLastAuthAttemptAt() time.Time
-
-	RetryTracker() retry.Tracker
-
-	GetInboundChan() chan<- *transport.UMHMessage  // May return nil
-	GetOutboundChan() <-chan *transport.UMHMessage // May return nil
-
-	RecordPullSuccess(latency time.Duration, msgCount int)
-	RecordPullFailure(latency time.Duration)
-	RecordPushSuccess(latency time.Duration, msgCount int)
-	RecordPushFailure(latency time.Duration)
-
-	MetricsRecorder() *depspkg.MetricsRecorder
-
-	// UUID exposed via CollectObservedState in ObservedState.AuthenticatedUUID
-	SetAuthenticatedUUID(uuid string)
-
-	// Backpressure detection
-	GetInboundChanStats() (capacity int, length int)
-	IsBackpressured() bool
-	SetBackpressured(backpressured bool)
-}
 
 const AuthenticateActionName = "authenticate"
 
 // AuthenticateAction obtains a JWT token from the relay server for sync operations.
 //
-// Flow: POST instanceUUID + authToken to relay → receive JWT token + expiry → store in deps.
+// Flow: POST instanceUUID + authToken to relay -> receive JWT token + expiry -> store in deps.
 // Idempotent: safe to retry on failure, multiple calls won't create multiple tokens.
 // Creates transport on first execution if not present.
 //
 // Returns error on network failure, invalid credentials (non-200), or malformed response.
-// See worker.go C1 (authentication precedence) and C3 (transport lifecycle).
+//
+// Architecture compliance:
+//   - Struct fields are read-only config (no mutable state) - Stateless Actions
+//   - Checks ctx.Done() in Execute - Context Cancellation in Actions
+//   - NO internal retry loops - Supervisor Manages Retries
+//   - NO channel operations - Synchronous Actions
+//   - Uses structured logging only (Infow, not Infof) - Structured Logging
 type AuthenticateAction struct {
 	RelayURL     string
 	InstanceUUID string
 	AuthToken    string
 	Timeout      time.Duration
-}
-
-type AuthenticateActionResult struct {
-	JWTTokenExpiry time.Time
-	JWTToken       string
 }
 
 // NewAuthenticateAction creates a new authentication action.
@@ -105,7 +67,14 @@ func NewAuthenticateAction(relayURL, instanceUUID, authToken string, timeout tim
 // Creates transport if not present, then POSTs auth request and stores JWT in deps.
 // Records auth attempt timestamp and error type for intelligent backoff.
 func (a *AuthenticateAction) Execute(ctx context.Context, depsAny any) error {
-	deps := depsAny.(CommunicatorDependencies)
+	// Check context cancellation first (Architecture: Context Cancellation in Actions)
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
+
+	deps := depsAny.(snapshot.TransportDependencies)
 
 	if deps.GetTransport() == nil {
 		newTransport := httpTransport.NewHTTPTransport(a.RelayURL, a.Timeout)
@@ -149,7 +118,7 @@ func (a *AuthenticateAction) Execute(ctx context.Context, depsAny any) error {
 		)
 		deps.SetAuthenticatedUUID(authResp.InstanceUUID)
 	} else {
-		logger.SentryWarn(depspkg.FeatureCommunicator, "instance_uuid_missing_in_auth_response")
+		logger.SentryWarn(depspkg.FeatureTransport, "instance_uuid_missing_in_auth_response")
 	}
 
 	return nil

@@ -96,9 +96,9 @@ func (a *SyncAction) Execute(ctx context.Context, depsAny any) error {
 	// Track hysteresis state transitions
 	if shouldSkipPull {
 		if !wasBackpressured {
-			deps.GetLogger().Warnw("backpressure_entering",
-				"available", available,
-				"threshold", ExpectedBatchSize)
+			deps.GetLogger().SentryWarn(depspkg.FeatureCommunicator, "backpressure_entering",
+				depspkg.Int("available", available),
+				depspkg.Int("threshold", ExpectedBatchSize))
 			deps.SetBackpressured(true)
 			deps.MetricsRecorder().SetGauge(depspkg.GaugeBackpressureActive, 1)
 			deps.MetricsRecorder().IncrementCounter(depspkg.CounterBackpressureEntryTotal, 1)
@@ -106,9 +106,9 @@ func (a *SyncAction) Execute(ctx context.Context, depsAny any) error {
 		// Skip pull, but continue to push outbound - backpressure is NOT an error
 	} else {
 		if wasBackpressured {
-			deps.GetLogger().Warnw("backpressure_exiting",
-				"available", available,
-				"low_water_mark", ExpectedBatchSize*LowWaterMarkMultiplier)
+			deps.GetLogger().SentryWarn(depspkg.FeatureCommunicator, "backpressure_exiting",
+				depspkg.Int("available", available),
+				depspkg.Int("low_water_mark", ExpectedBatchSize*LowWaterMarkMultiplier))
 			deps.SetBackpressured(false)
 			deps.MetricsRecorder().SetGauge(depspkg.GaugeBackpressureActive, 0)
 		}
@@ -166,10 +166,10 @@ func (a *SyncAction) Execute(ctx context.Context, depsAny any) error {
 				case <-ctx.Done():
 					return ctx.Err()
 				default:
-					deps.GetLogger().Warnw("inbound_channel_full_stopping_sync",
-						"total_messages", len(messages),
-						"delivered", i,
-						"pending", len(messages)-i)
+					deps.GetLogger().SentryWarn(depspkg.FeatureCommunicator, "inbound_channel_full_stopping_sync",
+						depspkg.Int("total_messages", len(messages)),
+						depspkg.Int("delivered", i),
+						depspkg.Int("pending", len(messages)-i))
 					// Record as typed error for proper backoff, then return
 					deps.RecordTypedError(httpTransport.ErrorTypeChannelFull, 0)
 

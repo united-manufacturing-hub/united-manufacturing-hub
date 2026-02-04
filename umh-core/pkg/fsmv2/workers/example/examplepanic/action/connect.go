@@ -17,6 +17,7 @@ package action
 import (
 	"context"
 
+	depspkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplepanic/snapshot"
 )
 
@@ -35,7 +36,7 @@ func (a *ConnectAction) Execute(ctx context.Context, depsAny any) error {
 	logger := deps.GetLogger()
 
 	if deps.IsShouldPanic() {
-		logger.Warn("Simulating panic in connect action")
+		logger.SentryWarn(depspkg.FeatureExamples, "Simulating panic in connect action")
 		panic("simulated panic in connect action")
 	}
 

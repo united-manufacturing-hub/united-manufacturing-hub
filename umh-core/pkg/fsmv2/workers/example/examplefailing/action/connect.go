@@ -19,6 +19,7 @@ import (
 	"errors"
 	"time"
 
+	depspkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplefailing/snapshot"
 )
 
@@ -55,21 +56,21 @@ func (a *ConnectAction) Execute(ctx context.Context, depsAny any) error {
 		currentCycle := deps.GetCurrentCycle()
 		totalCycles := deps.GetFailureCycles()
 
-		logger.Infow("connect_attempting",
-			"attempt", attempts,
-			"max_failures", maxFailures,
-			"should_fail", true,
-			"current_cycle", currentCycle+1, // Human-readable (1-indexed)
-			"total_cycles", totalCycles,
+		logger.Info("connect_attempting",
+			depspkg.Int("attempt", attempts),
+			depspkg.Int("max_failures", maxFailures),
+			depspkg.Bool("should_fail", true),
+			depspkg.Int("current_cycle", currentCycle+1), // Human-readable (1-indexed)
+			depspkg.Int("total_cycles", totalCycles),
 		)
 
 		if attempts <= maxFailures {
-			logger.Warnw("connect_failed_simulated",
-				"attempt", attempts,
-				"max_failures", maxFailures,
-				"remaining", maxFailures-attempts,
-				"current_cycle", currentCycle+1,
-				"total_cycles", totalCycles,
+			logger.SentryWarn(depspkg.FeatureExamples, "connect_failed_simulated",
+				depspkg.Int("attempt", attempts),
+				depspkg.Int("max_failures", maxFailures),
+				depspkg.Int("remaining", maxFailures-attempts),
+				depspkg.Int("current_cycle", currentCycle+1),
+				depspkg.Int("total_cycles", totalCycles),
 			)
 			// Record failure time for recovery delay and reset observation counter.
 			// The observation counter tracks how many CollectObservedState calls have
@@ -80,11 +81,11 @@ func (a *ConnectAction) Execute(ctx context.Context, depsAny any) error {
 			return ErrSimulatedFailure
 		}
 
-		logger.Infow("connect_succeeded_after_failures",
-			"total_attempts", attempts,
-			"current_cycle", currentCycle+1,
-			"total_cycles", totalCycles,
-			"more_cycles_remaining", currentCycle+1 < totalCycles,
+		logger.Info("connect_succeeded_after_failures",
+			depspkg.Int("total_attempts", attempts),
+			depspkg.Int("current_cycle", currentCycle+1),
+			depspkg.Int("total_cycles", totalCycles),
+			depspkg.Bool("more_cycles_remaining", currentCycle+1 < totalCycles),
 		)
 		deps.SetConnected(true)
 		deps.ResetTicksInConnected()
