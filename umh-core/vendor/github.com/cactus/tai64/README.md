@@ -1,10 +1,8 @@
 tai64
 =====
 
-[![Build Status](https://github.com/cactus/tai64/workflows/unit-tests/badge.svg)](https://github.com/cactus/tai64/actions)
-[![GoDoc](https://godoc.org/github.com/cactus/tai64?status.png)](https://godoc.org/github.com/cactus/tai64)
-[![Go Report Card](https://goreportcard.com/badge/github.com/cactus/tai64)](https://goreportcard.com/report/github.com/cactus/tai64)
-[![License](https://img.shields.io/github/license/cactus/tai64.svg)](https://github.com/cactus/tai64/blob/master/LICENSE.md)
+> [!IMPORTANT]
+> Moved to [codeberg](https://codeberg.org/dropwhile/tai64)!
 
 ## About
 
