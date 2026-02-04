@@ -16,7 +16,6 @@ package state
 
 import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplechild/action"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplechild/snapshot"
@@ -24,11 +23,7 @@ import (
 
 // TryingToConnectState represents the state where the worker is attempting to establish a connection.
 type TryingToConnectState struct {
-	BaseChildState
-}
-
-func (s *TryingToConnectState) LifecyclePhase() config.LifecyclePhase {
-	return config.PhaseStarting
+	helpers.StartingBase
 }
 
 func (s *TryingToConnectState) Next(snapAny any) fsmv2.NextResult[any, any] {

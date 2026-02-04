@@ -23,17 +23,14 @@ package state
 
 import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/helloworld/snapshot"
 )
 
 // StoppedState is the initial state where the worker is not running.
 // It waits for the desired state to request running, then transitions.
-type StoppedState struct{}
-
-func (s *StoppedState) LifecyclePhase() config.LifecyclePhase {
-	return config.PhaseStopped
+type StoppedState struct {
+	helpers.StoppedBase
 }
 
 // Next implements the state transition logic.

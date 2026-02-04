@@ -25,6 +25,66 @@ const (
 	DesiredStateRunning = "running"
 )
 
+// State Naming Framework
+//
+// FSMv2 classifies states by two dimensions: lifecycle phase and activity level.
+// This creates a mutually exclusive, collectively exhaustive (MECE) categorization.
+//
+// # Lifecycle Phases
+//
+// See LifecyclePhase constants below for the 6 phases:
+//   - PhaseUnknown:        Error condition. Do not return this.
+//   - PhaseStopped:        Terminal. Cleanly shut down.
+//   - PhaseStarting:       Transitional. Not yet serving requests.
+//   - PhaseRunningHealthy: Operational and stable.
+//   - PhaseRunningDegraded: Operational but impaired.
+//   - PhaseStopping:       Graceful shutdown in progress.
+//
+// # Activity Levels
+//
+//   - Active: Emits actions (connecting, syncing, recovering)
+//   - Stable: Observes only (connected, running, disconnected)
+//
+// # Naming Rules
+//
+//	| Phase    | Active (emits work)  | Stable (no work)    |
+//	|----------|----------------------|---------------------|
+//	| Starting | *ingState            | N/A (always active) |
+//	| Healthy  | *ingState            | *edState            |
+//	| Degraded | Re*ingState          | Dis*/Un*edState     |
+//	| Stopping | *ingState            | N/A (always active) |
+//	| Stopped  | N/A                  | StoppedState        |
+//
+// Examples:
+//   - Active Starting: ConnectingState, AuthenticatingState
+//   - Active Healthy: SyncingState
+//   - Stable Healthy: ConnectedState
+//   - Active Degraded: RecoveringState, ReconnectingState
+//   - Stable Degraded: DisconnectedState
+//
+// # State Name Construction
+//
+// The supervisor constructs observed state names as:
+//
+//	observed_state = LifecyclePhase.Prefix() + lowercase(State.String())
+//
+// Example: ConnectedState + PhaseRunningHealthy → "running_healthy_connected"
+//
+// Note: PhaseStopped is special—Prefix() returns "stopped" (no underscore),
+// and the state string is not appended. StoppedState → just "stopped".
+//
+// # Phase-Specific Base Types
+//
+// To reduce boilerplate and ensure compile-time phase safety, embed the
+// appropriate base type from pkg/fsmv2/internal/helpers:
+//
+//	type SyncingState struct {
+//	    helpers.RunningHealthyBase  // Provides LifecyclePhase() automatically
+//	}
+//
+// Available bases: StartingBase, RunningHealthyBase, RunningDegradedBase,
+// StoppingBase, StoppedBase.
+
 // LifecyclePhase represents the lifecycle phase of a worker state.
 // This is used by parent supervisors to classify child health without
 // knowing implementation details of the child's state machine.
@@ -75,7 +135,7 @@ const (
 
 	// PhaseStarting: Transitioning to running, not yet operational.
 	// Health: UNHEALTHY - dependency not satisfied.
-	// Prefix: "trying_to_start_"
+	// Prefix: "trying_to_start_".
 	PhaseStarting
 
 	// PhaseRunningHealthy: Operational AND stable - all good.
@@ -85,13 +145,13 @@ const (
 
 	// PhaseRunningDegraded: Operational but with issues.
 	// Health: UNHEALTHY (operational but NOT healthy!).
-	// Prefix: "running_degraded_"
+	// Prefix: "running_degraded_".
 	// Use case: Parent has unhealthy children but can still function.
 	PhaseRunningDegraded
 
 	// PhaseStopping: Graceful shutdown in progress.
 	// Health: UNHEALTHY - dependency being torn down.
-	// Prefix: "trying_to_stop_"
+	// Prefix: "trying_to_stop_".
 	PhaseStopping
 )
 

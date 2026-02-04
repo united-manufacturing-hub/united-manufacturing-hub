@@ -16,7 +16,6 @@ package state
 
 import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplefailing/action"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplefailing/snapshot"
@@ -24,11 +23,7 @@ import (
 
 // TryingToStopState represents the state where the worker is attempting to disconnect cleanly.
 type TryingToStopState struct {
-	BaseFailingState
-}
-
-func (s *TryingToStopState) LifecyclePhase() config.LifecyclePhase {
-	return config.PhaseStopping
+	helpers.StoppingBase
 }
 
 func (s *TryingToStopState) Next(snapAny any) fsmv2.NextResult[any, any] {

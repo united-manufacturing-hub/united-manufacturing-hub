@@ -16,7 +16,6 @@ package state
 
 import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application/snapshot"
 )
@@ -25,11 +24,7 @@ import (
 // In this state, the worker emits SignalNeedsRemoval to indicate it's ready
 // to be removed from the supervisor's registry.
 type StoppedState struct {
-	BaseApplicationState
-}
-
-func (s *StoppedState) LifecyclePhase() config.LifecyclePhase {
-	return config.PhaseStopped
+	helpers.StoppedBase
 }
 
 func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {

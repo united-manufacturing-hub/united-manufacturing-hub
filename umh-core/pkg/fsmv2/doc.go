@@ -273,11 +273,20 @@
 //
 // ## State naming conventions
 //
-// Active states emit actions until a condition is met. Use the prefix "TryingTo"
-// or "Ensuring" (e.g., TryingToStartState, EnsuringConnectedState).
+// States are classified by lifecycle phase and activity level (MECE framework).
+// For the complete framework and naming rules, see config/state.go.
 //
-// Passive states observe and react. Use descriptive nouns
-// (e.g., RunningState, StoppedState, DegradedState).
+// Quick reference:
+//   - Active states use "-ing" suffix (ConnectingState, SyncingState)
+//   - Stable states use "-ed" suffix (ConnectedState, DisconnectedState)
+//   - Degraded active states use "Re-" prefix (RecoveringState, ReconnectingState)
+//
+// The supervisor constructs observed state names:
+//
+//	observed_state = LifecyclePhase.Prefix() + lowercase(State.String())
+//
+// Use phase-specific base types (internal/helpers/base_states.go) to ensure
+// compile-time phase safety.
 //
 // ## Shutdown handling
 //
