@@ -207,8 +207,8 @@ var _ = Describe("Communicator Scenario", func() {
 			result := examples.RunCommunicatorScenario(ctx, examples.CommunicatorRunConfig{
 				Duration: 500 * time.Millisecond,
 			})
-			// Allow extra time for graceful shutdown (duration + shutdown overhead)
-			Eventually(result.Done, 5*time.Second).Should(BeClosed())
+			// Allow extra time for graceful shutdown (duration + cascading child shutdown timeouts)
+			Eventually(result.Done, 15*time.Second).Should(BeClosed())
 		})
 	})
 

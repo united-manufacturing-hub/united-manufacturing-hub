@@ -242,6 +242,11 @@ type Config struct {
 	// Optional - defaults to 5 seconds.
 	GracefulShutdownTimeout time.Duration
 
+	// MetricsReportInterval is how often hierarchy metrics are recorded.
+	// Longer intervals reduce Prometheus cardinality at the cost of staler metrics.
+	// Optional - defaults to 10 seconds (see DefaultMetricsReportInterval).
+	MetricsReportInterval time.Duration
+
 	// EnableTraceLogging enables verbose lifecycle event logging (mutex locks, tick events, etc.)
 	// Optional - defaults to false. Set ENABLE_TRACE_LOGGING=true for deep debugging.
 	// When false, these high-frequency internal logs are suppressed to improve signal-to-noise ratio.

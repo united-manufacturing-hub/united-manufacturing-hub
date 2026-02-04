@@ -16,18 +16,13 @@ package state
 
 import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplechild/snapshot"
 )
 
 // ConnectedState represents the operational state where the worker has an active connection.
 type ConnectedState struct {
-	BaseChildState
-}
-
-func (s *ConnectedState) LifecyclePhase() config.LifecyclePhase {
-	return config.PhaseRunningHealthy
+	helpers.RunningHealthyBase
 }
 
 func (s *ConnectedState) Next(snapAny any) fsmv2.NextResult[any, any] {

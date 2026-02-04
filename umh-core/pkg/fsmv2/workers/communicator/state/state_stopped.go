@@ -16,7 +16,6 @@ package state
 
 import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/snapshot"
 )
@@ -25,11 +24,7 @@ import (
 // Transitions to TryingToAuthenticateState on first tick, or emits SignalNeedsRemoval if shutdown.
 // No actions emitted. Enforces C1 (auth precedence) and C4 (shutdown priority).
 type StoppedState struct {
-	BaseCommunicatorState
-}
-
-func (s *StoppedState) LifecyclePhase() config.LifecyclePhase {
-	return config.PhaseStopped
+	helpers.StoppedBase
 }
 
 func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {

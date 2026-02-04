@@ -13,6 +13,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/getsentry/sentry-go/internal/debuglog"
+	httpinternal "github.com/getsentry/sentry-go/internal/http"
+	"github.com/getsentry/sentry-go/internal/protocol"
 	"github.com/getsentry/sentry-go/internal/ratelimit"
 )
 
@@ -87,14 +90,14 @@ func getRequestBodyFromEvent(event *Event) []byte {
 	}
 	body, err = json.Marshal(event)
 	if err == nil {
-		DebugLogger.Println(msg)
+		debuglog.Println(msg)
 		return body
 	}
 
 	// This should _only_ happen when Event.Exception[0].Stacktrace.Frames[0].Vars is unserializable
 	// Which won't ever happen, as we don't use it now (although it's the part of public interface accepted by Sentry)
 	// Juuust in case something, somehow goes utterly wrong.
-	DebugLogger.Println("Event couldn't be marshaled, even with stripped contextual data. Skipping delivery. " +
+	debuglog.Println("Event couldn't be marshaled, even with stripped contextual data. Skipping delivery. " +
 		"Please notify the SDK owners with possibly broken payload.")
 	return nil
 }
@@ -147,7 +150,7 @@ func encodeEnvelopeItem(enc *json.Encoder, itemType string, body json.RawMessage
 	return err
 }
 
-func encodeEnvelopeLogs(enc *json.Encoder, itemsLength int, body json.RawMessage) error {
+func encodeEnvelopeLogs(enc *json.Encoder, count int, body json.RawMessage) error {
 	err := enc.Encode(
 		struct {
 			Type        string `json:"type"`
@@ -155,8 +158,25 @@ func encodeEnvelopeLogs(enc *json.Encoder, itemsLength int, body json.RawMessage
 			ContentType string `json:"content_type"`
 		}{
 			Type:        logEvent.Type,
-			ItemCount:   itemsLength,
+			ItemCount:   count,
 			ContentType: logEvent.ContentType,
+		})
+	if err == nil {
+		err = enc.Encode(body)
+	}
+	return err
+}
+
+func encodeEnvelopeMetrics(enc *json.Encoder, count int, body json.RawMessage) error {
+	err := enc.Encode(
+		struct {
+			Type        string `json:"type"`
+			ItemCount   int    `json:"item_count"`
+			ContentType string `json:"content_type"`
+		}{
+			Type:        traceMetricEvent.Type,
+			ItemCount:   count,
+			ContentType: traceMetricEvent.ContentType,
 		})
 	if err == nil {
 		err = enc.Encode(body)
@@ -202,6 +222,8 @@ func envelopeFromBody(event *Event, dsn *Dsn, sentAt time.Time, body json.RawMes
 		err = encodeEnvelopeItem(enc, event.Type, body)
 	case logEvent.Type:
 		err = encodeEnvelopeLogs(enc, len(event.Logs), body)
+	case traceMetricEvent.Type:
+		err = encodeEnvelopeMetrics(enc, len(event.Metrics), body)
 	default:
 		err = encodeEnvelopeItem(enc, eventType, body)
 	}
@@ -227,13 +249,13 @@ func getRequestFromEvent(ctx context.Context, event *Event, dsn *Dsn) (r *http.R
 			r.Header.Set("Content-Type", "application/x-sentry-envelope")
 
 			auth := fmt.Sprintf("Sentry sentry_version=%s, "+
-				"sentry_client=%s/%s, sentry_key=%s", apiVersion, event.Sdk.Name, event.Sdk.Version, dsn.publicKey)
+				"sentry_client=%s/%s, sentry_key=%s", apiVersion, event.Sdk.Name, event.Sdk.Version, dsn.GetPublicKey())
 
 			// The key sentry_secret is effectively deprecated and no longer needs to be set.
 			// However, since it was required in older self-hosted versions,
 			// it should still passed through to Sentry if set.
-			if dsn.secretKey != "" {
-				auth = fmt.Sprintf("%s, sentry_secret=%s", auth, dsn.secretKey)
+			if dsn.GetSecretKey() != "" {
+				auth = fmt.Sprintf("%s, sentry_secret=%s", auth, dsn.GetSecretKey())
 			}
 
 			r.Header.Set("X-Sentry-Auth", auth)
@@ -260,17 +282,6 @@ func getRequestFromEvent(ctx context.Context, event *Event, dsn *Dsn) (r *http.R
 		dsn.GetAPIURL().String(),
 		envelope,
 	)
-}
-
-func categoryFor(eventType string) ratelimit.Category {
-	switch eventType {
-	case "":
-		return ratelimit.CategoryError
-	case transactionType:
-		return ratelimit.CategoryTransaction
-	default:
-		return ratelimit.Category(eventType)
-	}
 }
 
 // ================================
@@ -332,7 +343,7 @@ func NewHTTPTransport() *HTTPTransport {
 func (t *HTTPTransport) Configure(options ClientOptions) {
 	dsn, err := NewDsn(options.Dsn)
 	if err != nil {
-		DebugLogger.Printf("%v\n", err)
+		debuglog.Printf("%v\n", err)
 		return
 	}
 	t.dsn = dsn
@@ -381,7 +392,7 @@ func (t *HTTPTransport) SendEventWithContext(ctx context.Context, event *Event) 
 		return
 	}
 
-	category := categoryFor(event.Type)
+	category := event.toCategory()
 
 	if t.disabled(category) {
 		return
@@ -414,17 +425,17 @@ func (t *HTTPTransport) SendEventWithContext(ctx context.Context, event *Event) 
 		if event.Type == transactionType {
 			eventType = "transaction"
 		} else {
-			eventType = fmt.Sprintf("%s event", event.Level)
+			eventType = fmt.Sprintf("%s event", event.Type)
 		}
-		DebugLogger.Printf(
+		debuglog.Printf(
 			"Sending %s [%s] to %s project: %s",
 			eventType,
 			event.EventID,
-			t.dsn.host,
-			t.dsn.projectID,
+			t.dsn.GetHost(),
+			t.dsn.GetProjectID(),
 		)
 	default:
-		DebugLogger.Println("Event dropped due to transport buffer being full.")
+		debuglog.Println("Event dropped due to transport buffer being full.")
 	}
 
 	t.buffer <- b
@@ -441,11 +452,9 @@ func (t *HTTPTransport) SendEventWithContext(ctx context.Context, event *Event) 
 // have the SDK send events over the network synchronously, configure it to use
 // the HTTPSyncTransport in the call to Init.
 func (t *HTTPTransport) Flush(timeout time.Duration) bool {
-	timeoutCh := make(chan struct{})
-	time.AfterFunc(timeout, func() {
-		close(timeoutCh)
-	})
-	return t.flushInternal(timeoutCh)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	return t.FlushWithContext(ctx)
 }
 
 // FlushWithContext works like Flush, but it accepts a context.Context instead of a timeout.
@@ -490,14 +499,14 @@ started:
 	// Wait until the current batch is done or the timeout.
 	select {
 	case <-b.done:
-		DebugLogger.Println("Buffer flushed successfully.")
+		debuglog.Println("Buffer flushed successfully.")
 		return true
 	case <-timeout:
 		goto fail
 	}
 
 fail:
-	DebugLogger.Println("Buffer flushing was canceled or timed out.")
+	debuglog.Println("Buffer flushing was canceled or timed out.")
 	return false
 }
 
@@ -537,15 +546,15 @@ func (t *HTTPTransport) worker() {
 
 				response, err := t.client.Do(item.request)
 				if err != nil {
-					DebugLogger.Printf("There was an issue with sending an event: %v", err)
+					debuglog.Printf("There was an issue with sending an event: %v", err)
 					continue
 				}
 				if response.StatusCode >= 400 && response.StatusCode <= 599 {
 					b, err := io.ReadAll(response.Body)
 					if err != nil {
-						DebugLogger.Printf("Error while reading response code: %v", err)
+						debuglog.Printf("Error while reading response code: %v", err)
 					}
-					DebugLogger.Printf("Sending %s failed with the following error: %s", eventType, string(b))
+					debuglog.Printf("Sending %s failed with the following error: %s", eventType, string(b))
 				}
 
 				t.mu.Lock()
@@ -572,7 +581,7 @@ func (t *HTTPTransport) disabled(c ratelimit.Category) bool {
 	defer t.mu.RUnlock()
 	disabled := t.limits.IsRateLimited(c)
 	if disabled {
-		DebugLogger.Printf("Too many requests for %q, backing off till: %v", c, t.limits.Deadline(c))
+		debuglog.Printf("Too many requests for %q, backing off till: %v", c, t.limits.Deadline(c))
 	}
 	return disabled
 }
@@ -618,7 +627,7 @@ func NewHTTPSyncTransport() *HTTPSyncTransport {
 func (t *HTTPSyncTransport) Configure(options ClientOptions) {
 	dsn, err := NewDsn(options.Dsn)
 	if err != nil {
-		DebugLogger.Printf("%v\n", err)
+		debuglog.Printf("%v\n", err)
 		return
 	}
 	t.dsn = dsn
@@ -655,7 +664,7 @@ func (t *HTTPSyncTransport) SendEventWithContext(ctx context.Context, event *Eve
 		return
 	}
 
-	if t.disabled(categoryFor(event.Type)) {
+	if t.disabled(event.toCategory()) {
 		return
 	}
 
@@ -666,32 +675,36 @@ func (t *HTTPSyncTransport) SendEventWithContext(ctx context.Context, event *Eve
 
 	var eventIdentifier string
 	switch event.Type {
+	case errorType:
+		eventIdentifier = "error"
 	case transactionType:
 		eventIdentifier = "transaction"
 	case logEvent.Type:
-		eventIdentifier = fmt.Sprintf("%v log events", len(event.Logs))
+		eventIdentifier = fmt.Sprintf("%d log events", len(event.Logs))
+	case traceMetricEvent.Type:
+		eventIdentifier = fmt.Sprintf("%d metric events", len(event.Metrics))
 	default:
-		eventIdentifier = fmt.Sprintf("%s event", event.Level)
+		eventIdentifier = fmt.Sprintf("%s event", event.Type)
 	}
-	DebugLogger.Printf(
+	debuglog.Printf(
 		"Sending %s [%s] to %s project: %s",
 		eventIdentifier,
 		event.EventID,
-		t.dsn.host,
-		t.dsn.projectID,
+		t.dsn.GetHost(),
+		t.dsn.GetProjectID(),
 	)
 
 	response, err := t.client.Do(request)
 	if err != nil {
-		DebugLogger.Printf("There was an issue with sending an event: %v", err)
+		debuglog.Printf("There was an issue with sending an event: %v", err)
 		return
 	}
 	if response.StatusCode >= 400 && response.StatusCode <= 599 {
 		b, err := io.ReadAll(response.Body)
 		if err != nil {
-			DebugLogger.Printf("Error while reading response code: %v", err)
+			debuglog.Printf("Error while reading response code: %v", err)
 		}
-		DebugLogger.Printf("Sending %s failed with the following error: %s", eventIdentifier, string(b))
+		debuglog.Printf("Sending %s failed with the following error: %s", eventIdentifier, string(b))
 	}
 
 	t.mu.Lock()
@@ -723,7 +736,7 @@ func (t *HTTPSyncTransport) disabled(c ratelimit.Category) bool {
 	defer t.mu.Unlock()
 	disabled := t.limits.IsRateLimited(c)
 	if disabled {
-		DebugLogger.Printf("Too many requests for %q, backing off till: %v", c, t.limits.Deadline(c))
+		debuglog.Printf("Too many requests for %q, backing off till: %v", c, t.limits.Deadline(c))
 	}
 	return disabled
 }
@@ -739,11 +752,11 @@ type noopTransport struct{}
 var _ Transport = noopTransport{}
 
 func (noopTransport) Configure(ClientOptions) {
-	DebugLogger.Println("Sentry client initialized with an empty DSN. Using noopTransport. No events will be delivered.")
+	debuglog.Println("Sentry client initialized with an empty DSN. Using noopTransport. No events will be delivered.")
 }
 
 func (noopTransport) SendEvent(*Event) {
-	DebugLogger.Println("Event dropped due to noopTransport usage.")
+	debuglog.Println("Event dropped due to noopTransport usage.")
 }
 
 func (noopTransport) Flush(time.Duration) bool {
@@ -755,3 +768,82 @@ func (noopTransport) FlushWithContext(context.Context) bool {
 }
 
 func (noopTransport) Close() {}
+
+// ================================
+// Internal Transport Adapters
+// ================================
+
+// newInternalAsyncTransport creates a new AsyncTransport from internal/http
+// wrapped to satisfy the Transport interface.
+//
+// This is not yet exposed in the public API and is for internal experimentation.
+func newInternalAsyncTransport() Transport {
+	return &internalAsyncTransportAdapter{}
+}
+
+// internalAsyncTransportAdapter wraps the internal AsyncTransport to implement
+// the root-level Transport interface.
+type internalAsyncTransportAdapter struct {
+	transport protocol.TelemetryTransport
+	dsn       *protocol.Dsn
+}
+
+func (a *internalAsyncTransportAdapter) Configure(options ClientOptions) {
+	transportOptions := httpinternal.TransportOptions{
+		Dsn:           options.Dsn,
+		HTTPClient:    options.HTTPClient,
+		HTTPTransport: options.HTTPTransport,
+		HTTPProxy:     options.HTTPProxy,
+		HTTPSProxy:    options.HTTPSProxy,
+		CaCerts:       options.CaCerts,
+	}
+
+	a.transport = httpinternal.NewAsyncTransport(transportOptions)
+
+	if options.Dsn != "" {
+		dsn, err := protocol.NewDsn(options.Dsn)
+		if err != nil {
+			debuglog.Printf("Failed to parse DSN in adapter: %v\n", err)
+		} else {
+			a.dsn = dsn
+		}
+	}
+}
+
+func (a *internalAsyncTransportAdapter) SendEvent(event *Event) {
+	header := &protocol.EnvelopeHeader{EventID: string(event.EventID), SentAt: time.Now(), Sdk: &protocol.SdkInfo{Name: event.Sdk.Name, Version: event.Sdk.Version}}
+	if a.dsn != nil {
+		header.Dsn = a.dsn.String()
+	}
+	if header.EventID == "" {
+		header.EventID = protocol.GenerateEventID()
+	}
+	envelope := protocol.NewEnvelope(header)
+	item, err := event.ToEnvelopeItem()
+	if err != nil {
+		debuglog.Printf("Failed to convert event to envelope item: %v", err)
+		return
+	}
+	envelope.AddItem(item)
+
+	for _, attachment := range event.Attachments {
+		attachmentItem := protocol.NewAttachmentItem(attachment.Filename, attachment.ContentType, attachment.Payload)
+		envelope.AddItem(attachmentItem)
+	}
+
+	if err := a.transport.SendEnvelope(envelope); err != nil {
+		debuglog.Printf("Error sending envelope: %v", err)
+	}
+}
+
+func (a *internalAsyncTransportAdapter) Flush(timeout time.Duration) bool {
+	return a.transport.Flush(timeout)
+}
+
+func (a *internalAsyncTransportAdapter) FlushWithContext(ctx context.Context) bool {
+	return a.transport.FlushWithContext(ctx)
+}
+
+func (a *internalAsyncTransportAdapter) Close() {
+	a.transport.Close()
+}
