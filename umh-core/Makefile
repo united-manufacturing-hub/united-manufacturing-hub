@@ -308,6 +308,10 @@ test: vet-nilaway-lint-betteralign
 unit-test: vet-nilaway-lint-betteralign
 	go run github.com/onsi/ginkgo/v2/ginkgo -r --tags=test --race --label-filter='!integration && !redpanda-extended && !tls' --fail-fast ./...
 
+# unit-test-ci: Runs unit tests in CI environments with JUnit report output for PR reporting
+unit-test-ci: vet-nilaway-lint-betteralign
+	go run github.com/onsi/ginkgo/v2/ginkgo -r --tags=test --race --label-filter='!integration && !redpanda-extended && !tls' --fail-fast --junit-report=unit-test-report.xml ./...
+
 unit-test-fail-slow: vet-nilaway-lint-betteralign
 	go run github.com/onsi/ginkgo/v2/ginkgo -r --tags=test --race --label-filter='!integration && !redpanda-extended && !tls' ./...
 
@@ -366,8 +370,9 @@ badssl-test: pre-test
 # - Injects VERSION via ldflags into AppVersion for proper error identification in Sentry
 # - CI test failures SHOULD be reported to Sentry (unlike local dev failures)
 # - Helps identify flaky tests by consistently tracking failures in CI pipelines
+# - Outputs JUnit report for PR test result reporting
 integration-test-ci: pre-test-ci
-	VERSION=$(VERSION) go run github.com/onsi/ginkgo/v2/ginkgo -r --tags=test --label-filter='integration' --fail-fast -ldflags="-X 'github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/version.AppVersion=$(VERSION)'" ./...
+	VERSION=$(VERSION) go run github.com/onsi/ginkgo/v2/ginkgo -r --tags=test --label-filter='integration' --fail-fast --junit-report=integration-test-report.xml -ldflags="-X 'github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/version.AppVersion=$(VERSION)'" ./...
 
 update-go-dependencies:
 	go get -u ./...
