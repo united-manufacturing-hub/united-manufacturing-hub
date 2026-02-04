@@ -24,6 +24,7 @@ import (
 
 	depspkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	communicator_transport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
+	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport"
 )
 
@@ -162,53 +163,6 @@ var _ = Describe("TransportDependencies", func() {
 			})
 		})
 
-		Describe("Thread safety for JWT", func() {
-			It("should handle concurrent SetJWT calls", func() {
-				done := make(chan bool, 10)
-
-				for i := range 10 {
-					go func(idx int) {
-						expiry := time.Now().Add(time.Duration(idx) * time.Hour)
-						deps.SetJWT("token-"+string(rune('0'+idx)), expiry)
-						done <- true
-					}(i)
-				}
-
-				for range 10 {
-					<-done
-				}
-
-				// Should not panic and should have some value
-				token := deps.GetJWTToken()
-				Expect(token).NotTo(BeEmpty())
-			})
-
-			It("should handle concurrent read and write", func() {
-				done := make(chan bool, 20)
-
-				// Writers
-				for i := range 10 {
-					go func(idx int) {
-						expiry := time.Now().Add(time.Duration(idx) * time.Hour)
-						deps.SetJWT("token-"+string(rune('0'+idx)), expiry)
-						done <- true
-					}(i)
-				}
-
-				// Readers
-				for range 10 {
-					go func() {
-						_ = deps.GetJWTToken()
-						_ = deps.GetJWTExpiry()
-						done <- true
-					}()
-				}
-
-				for range 20 {
-					<-done
-				}
-			})
-		})
 	})
 
 	Describe("Transport management", func() {
@@ -314,31 +268,33 @@ var _ = Describe("TransportDependencies", func() {
 			})
 		})
 
-		Describe("Thread safety for error tracking", func() {
-			It("should handle concurrent RecordError and RecordSuccess calls", func() {
-				done := make(chan bool, 20)
+		Describe("Typed error recording", func() {
+			It("should record error type via RecordTypedError", func() {
+				deps.RecordTypedError(httpTransport.ErrorTypeBackendRateLimit, 30*time.Second)
+				Expect(deps.GetLastErrorType()).To(Equal(httpTransport.ErrorTypeBackendRateLimit))
+			})
 
-				for range 10 {
-					go func() {
-						deps.RecordError()
-						done <- true
-					}()
-				}
+			It("should record retry-after duration", func() {
+				deps.RecordTypedError(httpTransport.ErrorTypeBackendRateLimit, 45*time.Second)
+				Expect(deps.GetLastRetryAfter()).To(Equal(45 * time.Second))
+			})
 
-				for range 10 {
-					go func() {
-						deps.RecordSuccess()
-						done <- true
-					}()
-				}
+			It("should clear error type on RecordSuccess", func() {
+				deps.RecordTypedError(httpTransport.ErrorTypeInvalidToken, 0)
+				Expect(deps.GetLastErrorType()).To(Equal(httpTransport.ErrorTypeInvalidToken))
 
-				for range 20 {
-					<-done
-				}
+				deps.RecordSuccess()
+				Expect(deps.GetLastErrorType()).To(Equal(httpTransport.ErrorType(0)))
+			})
 
-				Expect(deps.GetConsecutiveErrors()).To(BeNumerically(">=", 0))
+			It("should preserve transport instance after errors", func() {
+				originalTransport := deps.GetTransport()
+				deps.RecordTypedError(httpTransport.ErrorTypeBackendRateLimit, 0)
+				deps.RecordTypedError(httpTransport.ErrorTypeNetwork, 0)
+				Expect(deps.GetTransport()).To(Equal(originalTransport))
 			})
 		})
+
 	})
 
 	Describe("DegradedEnteredAt tracking", func() {

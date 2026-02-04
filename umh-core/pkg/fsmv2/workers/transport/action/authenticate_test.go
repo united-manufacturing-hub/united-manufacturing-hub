@@ -196,17 +196,22 @@ var _ = Describe("AuthenticateAction", func() {
 	})
 
 	Describe("Error Tracking", func() {
-		It("should record auth attempt timestamp before authentication", func() {
+		It("should record auth attempt timestamp on failed authentication", func() {
 			ctx := context.Background()
 			beforeExec := time.Now()
 
+			// Use a failing auth to test timestamp recording (success clears it)
+			mockTransp.authError = errors.New("auth failed")
 			err := act.Execute(ctx, dependencies)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).To(HaveOccurred())
 
 			afterExec := time.Now()
 			attemptTime := dependencies.GetLastAuthAttemptAt()
 			Expect(attemptTime).To(BeTemporally(">=", beforeExec))
 			Expect(attemptTime).To(BeTemporally("<=", afterExec))
+
+			// Reset for subsequent tests
+			mockTransp.authError = nil
 		})
 
 		It("should record typed error on transport failure", func() {

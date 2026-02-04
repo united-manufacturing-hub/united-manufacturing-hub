@@ -202,7 +202,7 @@ var _ = Describe("Communicator Scenario", func() {
 				Duration: 500 * time.Millisecond,
 			})
 			// Allow extra time for graceful shutdown (duration + cascading child shutdown timeouts)
-			Eventually(result.Done, 15*time.Second).Should(BeClosed())
+			Eventually(result.Done, GracefulShutdownCascadingTimeout).Should(BeClosed())
 		})
 	})
 

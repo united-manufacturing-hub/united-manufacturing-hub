@@ -15,6 +15,7 @@
 package transport
 
 import (
+	"fmt"
 	"sync"
 	"time"
 
@@ -50,8 +51,9 @@ type TransportDependencies struct {
 func NewTransportDependencies(t communicator_transport.Transport, logger *zap.SugaredLogger, stateReader deps.StateReader, identity deps.Identity) *TransportDependencies {
 	provider := GetChannelProvider()
 	if provider == nil {
-		panic("ChannelProvider must be set before creating transport dependencies. " +
-			"Call SetChannelProvider() in main.go before starting the FSMv2 supervisor.")
+		panic(fmt.Sprintf("ChannelProvider must be set before creating dependencies (worker=%s). "+
+			"Call SetChannelProvider() in main() before starting FSMv2 supervisor.",
+			identity.ID))
 	}
 
 	inbound, outbound := provider.GetChannels(identity.ID)
@@ -112,11 +114,11 @@ func (d *TransportDependencies) RecordError() {
 	d.RetryTracker().RecordError()
 }
 
-// RecordSuccess resets error tracking state but preserves auth attempt timestamp.
-// The lastAuthAttemptAt is preserved for backoff calculation even after success.
+// RecordSuccess resets all error tracking state.
 func (d *TransportDependencies) RecordSuccess() {
 	d.mu.Lock()
 	d.lastErrorType = 0
+	d.lastAuthAttemptAt = time.Time{}
 	d.mu.Unlock()
 
 	d.RetryTracker().RecordSuccess()
@@ -150,6 +152,8 @@ func (d *TransportDependencies) GetOutboundChan() <-chan *communicator_transport
 func (d *TransportDependencies) GetInboundChanStats() (capacity int, length int) {
 	provider := GetChannelProvider()
 	if provider == nil {
+		d.GetLogger().Warnw("channel_provider_not_initialized", "worker_id", d.GetWorkerID())
+
 		return 0, 0
 	}
 

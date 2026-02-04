@@ -187,7 +187,9 @@ func init() {
 		func(id deps.Identity, logger *zap.SugaredLogger, stateReader deps.StateReader, _ map[string]any) fsmv2.Worker {
 			worker, err := NewTransportWorker(id, logger, stateReader)
 			if err != nil {
-				panic(fmt.Sprintf("failed to create transport worker: %v", err))
+				panic(fmt.Sprintf("failed to create transport worker (id=%s, name=%s): %v. "+
+					"Ensure ChannelProvider is set before supervisor starts.",
+					id.ID, id.Name, err))
 			}
 
 			return worker

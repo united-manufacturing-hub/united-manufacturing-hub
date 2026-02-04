@@ -25,7 +25,11 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/snapshot"
 )
 
-const AuthenticateActionName = "authenticate"
+const (
+	AuthenticateActionName = "authenticate"
+	// DefaultAuthenticateTimeout is the timeout for authentication requests when not specified.
+	DefaultAuthenticateTimeout = 10 * time.Second
+)
 
 // AuthenticateAction obtains a JWT token from the relay server for sync operations.
 //
@@ -49,10 +53,10 @@ type AuthenticateAction struct {
 }
 
 // NewAuthenticateAction creates a new authentication action.
-// Timeout defaults to 10s if 0. Dependencies injected via Execute().
+// Timeout defaults to DefaultAuthenticateTimeout if 0. Dependencies injected via Execute().
 func NewAuthenticateAction(relayURL, instanceUUID, authToken string, timeout time.Duration) *AuthenticateAction {
 	if timeout == 0 {
-		timeout = 10 * time.Second
+		timeout = DefaultAuthenticateTimeout
 	}
 
 	return &AuthenticateAction{

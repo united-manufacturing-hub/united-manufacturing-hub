@@ -26,6 +26,14 @@ import (
 	transportWorker "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport"
 )
 
+const (
+	// GracefulShutdownCascadingTimeout accounts for nested supervisor graceful shutdown:
+	// - Child supervisor timeout: 5s
+	// - Parent supervisor timeout: 5s
+	// - Processing overhead: 5s
+	GracefulShutdownCascadingTimeout = 15 * time.Second
+)
+
 var _ = Describe("Transport Scenario", func() {
 	var ctx context.Context
 	var cancel context.CancelFunc
@@ -179,7 +187,7 @@ var _ = Describe("Transport Scenario", func() {
 			// - Parent supervisor graceful timeout: 5s
 			// - Processing overhead
 			// Total: 15s should be sufficient
-			Eventually(result.Done, 15*time.Second).Should(BeClosed())
+			Eventually(result.Done, GracefulShutdownCascadingTimeout).Should(BeClosed())
 		})
 	})
 })
@@ -225,5 +233,17 @@ var _ = Describe("TransportTestChannelProvider", func() {
 		provider := examples.NewTransportTestChannelProvider(10)
 		messages := provider.DrainInbound()
 		Expect(messages).To(BeEmpty())
+	})
+
+	It("handles channel closure gracefully", func() {
+		provider := examples.NewTransportTestChannelProvider(10)
+		inbound, _ := provider.GetChannels("test-worker")
+
+		inbound <- &transport.UMHMessage{Content: "msg1"}
+		close(inbound)
+
+		messages := provider.DrainInbound()
+		Expect(messages).To(HaveLen(1))
+		Expect(messages[0].Content).To(Equal("msg1"))
 	})
 })
