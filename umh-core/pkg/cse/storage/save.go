@@ -18,7 +18,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 )
@@ -126,7 +125,7 @@ func (ts *TriangularStore) saveWithDelta(
 			if !hasChanges {
 				if opts.UpdateTimestampOnNoChange && existing != nil {
 					// Staleness detection for observed state
-					now := time.Now().UTC()
+					now := ts.clock.Now().UTC()
 					existing[FieldUpdatedAt] = now
 
 					err = ts.store.Update(ctx, collectionName, id, existing)
@@ -188,7 +187,7 @@ func (ts *TriangularStore) saveWithDelta(
 			ID:         id,
 			Role:       opts.Role,
 			Changes:    diff,
-			Timestamp:  time.Now(),
+			Timestamp:  ts.clock.Now(),
 		}
 
 		if appendErr := ts.deltaStore.Append(ctx, entry); appendErr != nil {
@@ -222,7 +221,7 @@ func (ts *TriangularStore) injectMetadataWithOptions(doc persistence.Document, o
 		return
 	}
 
-	now := time.Now().UTC()
+	now := ts.clock.Now().UTC()
 
 	if isNew {
 		doc[FieldCreatedAt] = now

@@ -25,6 +25,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/benbjohnson/clock"
 	"go.uber.org/zap"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
@@ -96,6 +97,7 @@ type TriangularStore struct {
 	syncID     *atomic.Int64
 	logger     *zap.SugaredLogger
 	deltaStore *DeltaStore
+	clock      clock.Clock
 
 	// Memory cache for hot path performance (LoadSnapshot is called 100-1000+ times/sec)
 	snapshotCache map[string]*cachedSnapshot // key: "{workerType}_{id}"
@@ -114,7 +116,7 @@ type cachedSnapshot struct {
 	syncID   int64 // syncID when cached - used to detect staleness
 }
 
-// NewTriangularStore creates a new TriangularStore.
+// NewTriangularStore creates a new TriangularStore with the real system clock.
 //
 // DESIGN DECISION: Convention-based system (no registry needed)
 // WHY: Collection names follow naming convention: {workerType}_{role}
@@ -128,11 +130,32 @@ type cachedSnapshot struct {
 // Returns:
 //   - *TriangularStore: Ready-to-use triangular store instance
 func NewTriangularStore(store persistence.Store, logger *zap.SugaredLogger) *TriangularStore {
+	return NewTriangularStoreWithClock(store, logger, nil)
+}
+
+// NewTriangularStoreWithClock creates a new TriangularStore with the provided clock.
+// If clock is nil, uses the real system clock.
+//
+// This constructor is useful for testing where deterministic time control is needed.
+//
+// Parameters:
+//   - store: Backend storage implementation (SQLite, Postgres, etc.)
+//   - logger: Logger for observation change logging (use zap.NewNop().Sugar() for tests)
+//   - c: Clock implementation for time operations. If nil, uses clock.New() (real time).
+//
+// Returns:
+//   - *TriangularStore: Ready-to-use triangular store instance
+func NewTriangularStoreWithClock(store persistence.Store, logger *zap.SugaredLogger, c clock.Clock) *TriangularStore {
+	if c == nil {
+		c = clock.New()
+	}
+
 	return &TriangularStore{
 		store:            store,
 		syncID:           &atomic.Int64{},
 		logger:           logger,
 		deltaStore:       NewDeltaStore(store),
+		clock:            c,
 		snapshotCache:    make(map[string]*cachedSnapshot),
 		knownWorkerTypes: make(map[string]struct{}),
 	}
@@ -1297,7 +1320,7 @@ func (ts *TriangularStore) buildBootstrap(ctx context.Context, atSyncID int64) (
 	return &BootstrapData{
 		Workers:     workers,
 		AtSyncID:    atSyncID,
-		TimestampMs: time.Now().UnixMilli(),
+		TimestampMs: ts.clock.Now().UnixMilli(),
 	}, nil
 }
 
@@ -1309,17 +1332,76 @@ func (ts *TriangularStore) GetLatestSyncID(ctx context.Context) (int64, error) {
 // CompactDeltas removes delta entries older than the retention window.
 // This is a lightweight, non-blocking operation safe to call during normal operation.
 //
+// Clients offline longer than retentionWindow will get bootstrap (full state) instead
+// of deltas. This is expected behavior - buildBootstrap() already handles this case.
+//
 // Parameters:
-//   - retentionWindow: Deltas older than time.Now() - retentionWindow will be deleted.
-//     Use 0 to delete all deltas (useful for testing).
+//   - ctx: Cancellation context
+//   - retentionWindow: Deltas older than now - retentionWindow will be deleted.
+//     Use 0 to delete all deltas.
 //
 // Returns:
 //   - int: Number of deltas deleted
 //   - error: Any error that occurred during compaction
-//
-// TODO(ENG-4295): Implement actual compaction logic using timestamp-based deletion.
 func (ts *TriangularStore) CompactDeltas(ctx context.Context, retentionWindow time.Duration) (int, error) {
-	return 0, errors.New("CompactDeltas not implemented - see ENG-4295")
+	if ts.store == nil {
+		return 0, nil
+	}
+
+	cutoffTime := ts.clock.Now().Add(-retentionWindow)
+	cutoffMs := cutoffTime.UnixMilli()
+
+	docs, err := ts.store.Find(ctx, DeltaCollectionName, persistence.Query{})
+	if err != nil {
+		if errors.Is(err, persistence.ErrNotFound) {
+			return 0, nil
+		}
+
+		return 0, fmt.Errorf("failed to query deltas for compaction: %w", err)
+	}
+
+	deleted := 0
+
+	for _, doc := range docs {
+		timestampMs := extractTimestampMs(doc)
+		if timestampMs < cutoffMs {
+			id, ok := doc["id"].(string)
+			if !ok {
+				continue
+			}
+
+			if err := ts.store.Delete(ctx, DeltaCollectionName, id); err != nil {
+				ts.logger.Warnw("failed_to_delete_delta",
+					"id", id,
+					"error", err)
+
+				continue
+			}
+
+			deleted++
+		}
+	}
+
+	if deleted > 0 {
+		ts.logger.Infow("compaction_complete",
+			"deleted", deleted,
+			"retention_window", retentionWindow)
+	}
+
+	return deleted, nil
+}
+
+// extractTimestampMs extracts the timestamp field from a delta document as milliseconds.
+func extractTimestampMs(doc persistence.Document) int64 {
+	if ts, ok := doc["timestamp"].(int64); ok {
+		return ts
+	}
+
+	if f, ok := doc["timestamp"].(float64); ok {
+		return int64(f)
+	}
+
+	return 0
 }
 
 // Maintenance performs heavyweight cleanup operations.
@@ -1328,7 +1410,6 @@ func (ts *TriangularStore) CompactDeltas(ctx context.Context, retentionWindow ti
 //
 // Current implementation (in-memory):
 //   - Clears snapshot cache
-//   - Resets metadata tracking maps
 //
 // Future implementation (SQLite):
 //   - Runs VACUUM to reclaim space
@@ -1336,8 +1417,16 @@ func (ts *TriangularStore) CompactDeltas(ctx context.Context, retentionWindow ti
 //   - Checkpoints WAL
 //
 // This method follows the persistence.Store.Maintenance() pattern for future compatibility.
-//
-// TODO(ENG-4295): Implement actual maintenance logic.
-func (ts *TriangularStore) Maintenance(ctx context.Context) error {
-	return errors.New("Maintenance not implemented - see ENG-4295")
+func (ts *TriangularStore) Maintenance(_ context.Context) error {
+	ts.cacheMutex.Lock()
+	cacheSize := len(ts.snapshotCache)
+	ts.snapshotCache = make(map[string]*cachedSnapshot)
+	ts.cacheMutex.Unlock()
+
+	if cacheSize > 0 {
+		ts.logger.Infow("maintenance_complete",
+			"cleared_cache_entries", cacheSize)
+	}
+
+	return nil
 }
