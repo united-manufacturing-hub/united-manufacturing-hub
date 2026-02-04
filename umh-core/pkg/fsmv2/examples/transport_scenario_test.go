@@ -174,8 +174,12 @@ var _ = Describe("Transport Scenario", func() {
 			result := examples.RunTransportScenario(ctx, examples.TransportRunConfig{
 				Duration: 500 * time.Millisecond,
 			})
-			// Allow extra time for graceful shutdown (duration + shutdown overhead)
-			Eventually(result.Done, 5*time.Second).Should(BeClosed())
+			// Allow extra time for cascading graceful shutdown:
+			// - Child supervisor graceful timeout: 5s
+			// - Parent supervisor graceful timeout: 5s
+			// - Processing overhead
+			// Total: 15s should be sufficient
+			Eventually(result.Done, 15*time.Second).Should(BeClosed())
 		})
 	})
 })
