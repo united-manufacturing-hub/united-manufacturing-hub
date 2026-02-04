@@ -138,7 +138,7 @@ func (d *CommunicatorDependencies) GetPulledMessages() []*transport.UMHMessage {
 }
 
 // RecordError increments consecutive errors and records when degraded mode started.
-// Transport reset is handled by ResetTransportAction from DegradedState, not here,
+// Transport reset is handled by ResetTransportAction from RecoveringState, not here,
 // to avoid duplicate resets and maintain single responsibility.
 func (d *CommunicatorDependencies) RecordError() {
 	d.RetryTracker().RecordError()
@@ -155,7 +155,7 @@ func (d *CommunicatorDependencies) RecordSuccess() {
 }
 
 // RecordTypedError increments consecutive errors and records error type and retry-after.
-// Transport reset is handled by ResetTransportAction from DegradedState, not here,
+// Transport reset is handled by ResetTransportAction from RecoveringState, not here,
 // to avoid duplicate resets and maintain single responsibility.
 func (d *CommunicatorDependencies) RecordTypedError(errType httpTransport.ErrorType, retryAfter time.Duration) {
 	d.mu.Lock()
