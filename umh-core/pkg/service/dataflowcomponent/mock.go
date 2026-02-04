@@ -156,7 +156,7 @@ func (m *MockDataFlowComponentService) GetComponentState(componentName string) *
 }
 
 // GenerateBenthosConfigForDataFlowComponent mocks generating Benthos config for a DataFlowComponent.
-func (m *MockDataFlowComponentService) GenerateBenthosConfigForDataFlowComponent(dataflowConfig *dataflowcomponentserviceconfig.DataflowComponentServiceConfig, componentName string) (benthosserviceconfig.BenthosServiceConfig, error) {
+func (m *MockDataFlowComponentService) GenerateBenthosConfigForDataFlowComponent(dataflowConfig *dataflowcomponentserviceconfig.DataflowComponentServiceConfig, componentName string, debugLevel bool) (benthosserviceconfig.BenthosServiceConfig, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -203,7 +203,7 @@ func (m *MockDataFlowComponentService) Status(ctx context.Context, filesystemSer
 }
 
 // AddDataFlowComponentToBenthosManager mocks adding a DataFlowComponent to the Benthos manager.
-func (m *MockDataFlowComponentService) AddDataFlowComponentToBenthosManager(ctx context.Context, filesystemService filesystem.Service, cfg *dataflowcomponentserviceconfig.DataflowComponentServiceConfig, componentName string) error {
+func (m *MockDataFlowComponentService) AddDataFlowComponentToBenthosManager(ctx context.Context, filesystemService filesystem.Service, cfg *dataflowcomponentserviceconfig.DataflowComponentServiceConfig, componentName string, debugLevel bool) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -237,7 +237,7 @@ func (m *MockDataFlowComponentService) AddDataFlowComponentToBenthosManager(ctx 
 }
 
 // UpdateDataFlowComponentInBenthosManager mocks updating a DataFlowComponent in the Benthos manager.
-func (m *MockDataFlowComponentService) UpdateDataFlowComponentInBenthosManager(ctx context.Context, filesystemService filesystem.Service, cfg *dataflowcomponentserviceconfig.DataflowComponentServiceConfig, componentName string) error {
+func (m *MockDataFlowComponentService) UpdateDataFlowComponentInBenthosManager(ctx context.Context, filesystemService filesystem.Service, cfg *dataflowcomponentserviceconfig.DataflowComponentServiceConfig, componentName string, debugLevel bool) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 

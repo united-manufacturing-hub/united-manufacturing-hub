@@ -189,6 +189,9 @@ type ProtocolConverterInstance struct {
 	// global variables, node name, …).
 	runtimeConfig protocolconverterconfig.ProtocolConverterServiceConfigRuntime
 
+	// debugLevel controls whether debug logging is enabled for the underlying Benthos processes
+	debugLevel bool
+
 	// ObservedState represents the observed state of the service
 	// ObservedState contains all metrics, logs, etc.
 	// that are updated at the beginning of Reconcile and then used to

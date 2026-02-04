@@ -115,6 +115,8 @@ type FSMInstanceConfig struct {
 	// Name of the service, we use omitempty here, as some services like redpanda will ignore this name, therefore writing the "empty" name back to the config file will cause confusion for the users
 	Name            string `yaml:"name,omitempty"`
 	DesiredFSMState string `yaml:"desiredState,omitempty"`
+	// DebugLevel enables debug logging for this instance (applies to dataflows and protocol converters)
+	DebugLevel bool `yaml:"debug_level"`
 }
 
 // ContainerConfig is the config for a container instance.

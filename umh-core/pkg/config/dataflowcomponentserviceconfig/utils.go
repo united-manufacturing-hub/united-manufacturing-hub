@@ -20,11 +20,9 @@ import (
 )
 
 // GetBenthosServiceConfig converts the component config to a full BenthosServiceConfig.
+// Note: DebugLevel is not set here - it must be set by the caller from FSMInstanceConfig.DebugLevel.
 func (c DataflowComponentServiceConfig) GetBenthosServiceConfig() benthosserviceconfig.BenthosServiceConfig {
-	cfg := c.BenthosConfig.ToBenthosServiceConfig()
-	cfg.DebugLevel = c.DebugLevel
-
-	return cfg
+	return c.BenthosConfig.ToBenthosServiceConfig()
 }
 
 // ToBenthosServiceConfig converts the simplified BenthosConfig to a full BenthosServiceConfig
@@ -47,6 +45,7 @@ func (bc BenthosConfig) ToBenthosServiceConfig() benthosserviceconfig.BenthosSer
 
 // FromBenthosServiceConfig creates a DataFlowComponentConfig from a BenthosServiceConfig,
 // ignoring advanced configuration fields.
+// Note: DebugLevel is not copied - it lives at FSMInstanceConfig level, not in DFC config.
 func FromBenthosServiceConfig(benthos benthosserviceconfig.BenthosServiceConfig) DataflowComponentServiceConfig {
 	return DataflowComponentServiceConfig{
 		BenthosConfig: BenthosConfig{
@@ -57,7 +56,6 @@ func FromBenthosServiceConfig(benthos benthosserviceconfig.BenthosServiceConfig)
 			RateLimitResources: benthos.RateLimitResources,
 			Buffer:             benthos.Buffer,
 		},
-		DebugLevel: benthos.DebugLevel,
 	}
 }
 

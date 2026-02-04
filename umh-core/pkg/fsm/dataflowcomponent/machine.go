@@ -88,6 +88,7 @@ func NewDataflowComponentInstance(
 		baseFSMInstance: internal_fsm.NewBaseFSMInstance(cfg, backoffConfig, logger),
 		service:         dataflowcomponent.NewDefaultDataFlowComponentService(config.Name),
 		config:          config.DataFlowComponentServiceConfig,
+		debugLevel:      config.DebugLevel,
 		ObservedState:   DataflowComponentObservedState{},
 	}
 

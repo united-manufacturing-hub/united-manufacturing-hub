@@ -68,10 +68,10 @@ type IProtocolConverterService interface {
 	Status(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot, protConvName string) (ServiceInfo, error)
 
 	// AddToManager adds a ProtocolConverter to the Connection & DFC manager
-	AddToManager(ctx context.Context, filesystemService filesystem.Service, protConvCfg *protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime, protConvName string) error
+	AddToManager(ctx context.Context, filesystemService filesystem.Service, protConvCfg *protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime, protConvName string, debugLevel bool) error
 
 	// UpdateInManager updates an existing ProtocolConverter in the Connection & DFC manager
-	UpdateInManager(ctx context.Context, filesystemService filesystem.Service, protConvCfg *protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime, protConvName string) error
+	UpdateInManager(ctx context.Context, filesystemService filesystem.Service, protConvCfg *protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime, protConvName string, debugLevel bool) error
 
 	// RemoveFromManager removes a ProtocolConverter from the Connection & DFC manager
 	RemoveFromManager(ctx context.Context, filesystemService filesystem.Service, protConvName string) error
@@ -453,6 +453,7 @@ func (p *ProtocolConverterService) AddToManager(
 	filesystemService filesystem.Service,
 	cfg *protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime,
 	protConvName string,
+	debugLevel bool,
 ) error {
 	if p.connectionManager == nil {
 		return errors.New("connection manager not initialized")
@@ -496,6 +497,7 @@ func (p *ProtocolConverterService) AddToManager(
 		FSMInstanceConfig: config.FSMInstanceConfig{
 			Name:            underlyingDFCReadName,
 			DesiredFSMState: dfcfsm.OperationalStateStopped,
+			DebugLevel:      debugLevel,
 		},
 		DataFlowComponentServiceConfig: dfcReadServiceConfig,
 	}
@@ -504,6 +506,7 @@ func (p *ProtocolConverterService) AddToManager(
 		FSMInstanceConfig: config.FSMInstanceConfig{
 			Name:            underlyingDFCWriteName,
 			DesiredFSMState: dfcfsm.OperationalStateStopped,
+			DebugLevel:      debugLevel,
 		},
 		DataFlowComponentServiceConfig: dfcWriteServiceConfig,
 	}
@@ -525,6 +528,7 @@ func (p *ProtocolConverterService) UpdateInManager(
 	filesystemService filesystem.Service,
 	cfg *protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime,
 	protConvName string,
+	debugLevel bool,
 ) error {
 	if p.connectionManager == nil {
 		return errors.New("connection manager not initialized")
@@ -612,6 +616,7 @@ func (p *ProtocolConverterService) UpdateInManager(
 			FSMInstanceConfig: config.FSMInstanceConfig{
 				Name:            p.getUnderlyingDFCReadName(protConvName),
 				DesiredFSMState: dfcCurrentDesiredState,
+				DebugLevel:      debugLevel,
 			},
 			DataFlowComponentServiceConfig: dfcReadConfig,
 		}
@@ -623,6 +628,7 @@ func (p *ProtocolConverterService) UpdateInManager(
 			FSMInstanceConfig: config.FSMInstanceConfig{
 				Name:            p.getUnderlyingDFCWriteName(protConvName),
 				DesiredFSMState: dfcCurrentDesiredState,
+				DebugLevel:      debugLevel,
 			},
 			DataFlowComponentServiceConfig: dfcWriteConfig,
 		}
