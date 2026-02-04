@@ -27,20 +27,20 @@ import (
 	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
 )
 
-// DegradedState handles error recovery with exponential backoff and periodic transport resets.
-type DegradedState struct {
+// RecoveringState handles error recovery with exponential backoff and periodic transport resets.
+type RecoveringState struct {
 	BaseCommunicatorState
 }
 
-func (s *DegradedState) LifecyclePhase() config.LifecyclePhase {
+func (s *RecoveringState) LifecyclePhase() config.LifecyclePhase {
 	return config.PhaseRunningDegraded
 }
 
-func (s *DegradedState) Next(snapAny any) fsmv2.NextResult[any, any] {
+func (s *RecoveringState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := helpers.ConvertSnapshot[snapshot.CommunicatorObservedState, *snapshot.CommunicatorDesiredState](snapAny)
 
 	if snap.Desired.IsShutdownRequested() {
-		return fsmv2.Result[any, any](&StoppedState{}, fsmv2.SignalNone, nil, "Shutdown requested during degraded state")
+		return fsmv2.Result[any, any](&StoppedState{}, fsmv2.SignalNone, nil, "Shutdown requested during recovering state")
 	}
 
 	// If token is invalid, re-authenticate
@@ -49,7 +49,7 @@ func (s *DegradedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	}
 
 	if snap.Observed.IsSyncHealthy() && snap.Observed.GetConsecutiveErrors() == 0 {
-		return fsmv2.Result[any, any](&SyncingState{}, fsmv2.SignalNone, nil, "Recovered from degraded state")
+		return fsmv2.Result[any, any](&SyncingState{}, fsmv2.SignalNone, nil, "Recovered from recovering state")
 	}
 
 	consecutiveErrors := snap.Observed.GetConsecutiveErrors()
@@ -60,7 +60,7 @@ func (s *DegradedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	)
 
 	// Build dynamic reason based on current error state
-	reason := buildDegradedReason(snap.Observed.LastErrorType, consecutiveErrors, backoffDelay)
+	reason := buildRecoveringReason(snap.Observed.LastErrorType, consecutiveErrors, backoffDelay)
 
 	// Check if we should still be waiting before retrying.
 	// When Retry-After is provided, use LastErrorAt (when the error occurred).
@@ -87,15 +87,15 @@ func (s *DegradedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	return fsmv2.Result[any, any](s, fsmv2.SignalNone, syncAction, reason)
 }
 
-func (s *DegradedState) String() string {
-	return "Degraded"
+func (s *RecoveringState) String() string {
+	return "Recovering"
 }
 
-// buildDegradedReason creates a dynamic reason string based on the current error state.
-func buildDegradedReason(errorType httpTransport.ErrorType, consecutiveErrors int, backoffDelay time.Duration) string {
+// buildRecoveringReason creates a dynamic reason string based on the current error state.
+func buildRecoveringReason(errorType httpTransport.ErrorType, consecutiveErrors int, backoffDelay time.Duration) string {
 	errorTypeStr := mapErrorTypeToReason(errorType)
 
-	return fmt.Sprintf("sync degraded: %d consecutive errors (%s), backoff %s",
+	return fmt.Sprintf("sync recovering: %d consecutive errors (%s), backoff %s",
 		consecutiveErrors, errorTypeStr, backoffDelay.Round(time.Second))
 }
 
