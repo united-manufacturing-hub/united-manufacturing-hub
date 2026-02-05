@@ -788,6 +788,7 @@ type SupervisorDebugInfo struct {
 	Workers             []WorkerDebugInfo              `json:"workers"`
 	CollectedAtUnixNano int64                          `json:"collected_at_unix_nano"`
 	CircuitOpen         bool                           `json:"circuit_open"`
+	PanicCircuitOpen    bool                           `json:"panic_circuit_open"`
 }
 
 // GetDebugInfo returns introspection data for debugging and monitoring.
@@ -802,6 +803,7 @@ func (s *Supervisor[TObserved, TDesired]) GetDebugInfo() interface{} {
 		WorkerType:          s.workerType,
 		HierarchyPath:       s.GetHierarchyPathUnlocked(),
 		CircuitOpen:         s.circuitOpen.Load(),
+		PanicCircuitOpen:    s.panicCircuitOpen.Load(),
 		MappedParentState:   s.mappedParentState,
 		CollectedAtUnixNano: time.Now().UnixNano(),
 		Workers:             make([]WorkerDebugInfo, 0, len(s.workers)),

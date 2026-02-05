@@ -249,16 +249,18 @@ var _ = Describe("Stuck Action Force-Removal", func() {
 		err := executor.EnqueueAction("orphan-cb", action, nil)
 		Expect(err).ToNot(HaveOccurred())
 
-		// Wait for force-removal
+		// Wait for force-removal (metricsReporter fires callback for force-removed actions)
 		time.Sleep(600 * time.Millisecond)
 		Expect(executor.HasActionInProgress("orphan-cb")).To(BeFalse())
+		Expect(atomic.LoadInt32(&callbackCount)).To(Equal(int32(1)),
+			"Force-removal should invoke callback with failure result")
 
 		// Release the orphaned goroutine
 		close(releaseChan)
 		time.Sleep(200 * time.Millisecond)
 
-		Expect(atomic.LoadInt32(&callbackCount)).To(Equal(int32(0)),
-			"Callback should NOT be invoked by orphaned goroutine after force-removal")
+		Expect(atomic.LoadInt32(&callbackCount)).To(Equal(int32(1)),
+			"Orphaned goroutine should NOT invoke callback after force-removal")
 	})
 
 	It("should not delete re-enqueued entry when orphaned goroutine finishes", func() {

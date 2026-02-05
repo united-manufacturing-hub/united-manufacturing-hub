@@ -129,6 +129,11 @@ func (s *Supervisor[TObserved, TDesired]) TestIsPanicCircuitOpen() bool {
 	return s.panicCircuitOpen.Load()
 }
 
+// TestSetCircuitOpen sets the infrastructure circuit breaker state for testing. DO NOT USE in production code.
+func (s *Supervisor[TObserved, TDesired]) TestSetCircuitOpen(open bool) {
+	s.circuitOpen.Store(open)
+}
+
 // TestPanicRecoveryTracker wraps panicRecovery for unit testing. DO NOT USE in production code.
 type TestPanicRecoveryTracker struct {
 	pr *panicRecovery

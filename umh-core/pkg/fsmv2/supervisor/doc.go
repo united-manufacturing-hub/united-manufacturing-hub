@@ -245,6 +245,13 @@
 //
 // circuitOpen (atomic.Bool):
 //   - Circuit breaker state (infrastructure health)
+//   - Auto-clears when health checks pass
+//   - No mutex needed for single boolean flag
+//
+// panicCircuitOpen (atomic.Bool):
+//   - Circuit breaker state (code bug detection)
+//   - Opens permanently after repeated tick panics within the escalation window
+//   - Unlike circuitOpen, never auto-clears (requires process restart)
 //   - No mutex needed for single boolean flag
 //
 // tickCount (atomic.Uint64):

@@ -353,22 +353,18 @@ func (c *Collector[TObserved]) observationLoop() {
 func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
-			var panicErr error
+			defer func() {
+				if r2 := recover(); r2 != nil {
+					err = fmt.Errorf("collector panic (recovery handler also panicked: %v): %v", r2, r)
+					func() {
+						defer func() { recover() }()
+						c.config.Logger.SentryError(deps.FeatureFSMv2, c.config.Identity.HierarchyPath, err, "collector_double_panic",
+							deps.String("stack", string(debug.Stack())))
+					}()
+				}
+			}()
 
-			var panicType string
-
-			switch v := r.(type) {
-			case error:
-				panicErr = v
-				panicType = "error"
-			case string:
-				panicErr = errors.New(v)
-				panicType = "string"
-			default:
-				panicErr = fmt.Errorf("%v", r)
-				panicType = "unknown"
-			}
-
+			panicType, panicErr := classifyPanic(r)
 			err = fmt.Errorf("collector panic: %w", panicErr)
 
 			hierarchyPath := c.config.Identity.HierarchyPath
@@ -453,8 +449,6 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 		}
 	}
 
-	// NOTE: ActionHistory injection was removed - collector must not modify ObservedState
-	// after CollectObservedState returns. Workers read deps.GetActionHistory() directly.
 	var observationTimestamp time.Time
 	if timestampProvider, ok := observed.(fsmv2.TimestampProvider); ok {
 		observationTimestamp = timestampProvider.GetTimestamp()
@@ -513,4 +507,17 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 	}
 
 	return nil
+}
+
+// classifyPanic converts a recovered panic value into a typed error and a classification string.
+// This is a local copy of the same logic in supervisor/panic_recovery.go to avoid circular imports.
+func classifyPanic(r interface{}) (panicType string, panicErr error) {
+	switch v := r.(type) {
+	case error:
+		return "error", v
+	case string:
+		return "string", errors.New(v)
+	default:
+		return "unknown", fmt.Errorf("%v", r)
+	}
 }
