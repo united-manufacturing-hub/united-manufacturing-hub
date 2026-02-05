@@ -1490,11 +1490,12 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 				"child_name", spec.Name,
 				"parent_worker_type", s.workerType)
 
-			// Start child supervisor if parent is already started
+			// Start child supervisor if parent is already started.
+			// Use StartAsChild() instead of Start() - children don't have their own tick loop.
+			// The parent ticks children synchronously during its own tick().
 			if childCtx, started := s.getStartedContext(); started {
 				if childCtx.Err() == nil {
-					done := childSupervisor.Start(childCtx)
-					s.childDoneChans[spec.Name] = done
+					childSupervisor.StartAsChild(childCtx)
 				} else {
 					s.logger.Warnw("child_start_skipped_context_cancelled",
 						"child_name", spec.Name)

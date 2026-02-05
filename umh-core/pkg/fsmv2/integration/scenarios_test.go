@@ -189,13 +189,13 @@ func verifyTriangularStoreChanges(t *integration.TestLogger) {
 
 func verifyShutdownOrder(t *integration.TestLogger) {
 	tickLoopStartedLogs := t.GetLogsMatching("tick_loop_started")
+	childStartedLogs := t.GetLogsMatching("supervisor_started_as_child")
 
 	var workerTypes []string
 
 	for _, entry := range tickLoopStartedLogs {
 		for _, field := range entry.Context {
 			if field.Key == "worker_type" {
-				// String values are stored in field.String, not field.Interface
 				if field.String != "" {
 					workerTypes = append(workerTypes, field.String)
 				}
@@ -203,12 +203,25 @@ func verifyShutdownOrder(t *integration.TestLogger) {
 		}
 	}
 
-	// Verify at least 2 tick loops were started (for children)
-	Expect(len(tickLoopStartedLogs)).To(BeNumerically(">=", 2),
-		"Expected at least 2 tick_loop_started logs (for child workers)")
+	for _, entry := range childStartedLogs {
+		for _, field := range entry.Context {
+			if field.Key == "worker_type" {
+				if field.String != "" {
+					workerTypes = append(workerTypes, field.String)
+				}
+			}
+		}
+	}
 
-	GinkgoWriter.Printf("✓ Tick loops started for workers (count: %d, types: %v)\n",
-		len(tickLoopStartedLogs), workerTypes)
+	// Single-tick architecture: only root has tick loop, children use StartAsChild()
+	Expect(len(tickLoopStartedLogs)).To(Equal(1),
+		"Expected exactly 1 tick_loop_started (root supervisor only)")
+
+	Expect(len(childStartedLogs)).To(BeNumerically(">=", 1),
+		"Expected at least 1 supervisor_started_as_child (child supervisors)")
+
+	GinkgoWriter.Printf("✓ Supervisors started (root tick_loop: %d, children as_child: %d, types: %v)\n",
+		len(tickLoopStartedLogs), len(childStartedLogs), workerTypes)
 }
 
 func verifyAllLogsHaveWorkerField(t *integration.TestLogger) {

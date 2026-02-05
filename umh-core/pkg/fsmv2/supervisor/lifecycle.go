@@ -37,14 +37,11 @@ func (s *Supervisor[TObserved, TDesired]) Start(ctx context.Context) <-chan stru
 	// Create a child context that we can cancel via Shutdown().
 	s.ctxMu.Lock()
 	s.ctx, s.ctxCancel = context.WithCancel(ctx)
+	supervisorCtx := s.ctx
 	s.ctxMu.Unlock()
 	s.started.Store(true)
 
 	s.logger.Debugw("supervisor_started")
-
-	s.ctxMu.RLock()
-	supervisorCtx := s.ctx
-	s.ctxMu.RUnlock()
 
 	s.actionExecutor.Start(supervisorCtx)
 
@@ -71,6 +68,39 @@ func (s *Supervisor[TObserved, TDesired]) Start(ctx context.Context) <-chan stru
 	}()
 
 	return done
+}
+
+// StartAsChild starts the supervisor without a tick loop.
+// The parent supervisor will call tick() synchronously during its own tick.
+// Collectors and executors still run in goroutines (they handle async I/O).
+//
+// This method is used by parent supervisors when spawning child supervisors
+// to avoid double-ticking (where children would be ticked both by their own
+// goroutine AND by the parent's synchronous tick() call).
+func (s *Supervisor[TObserved, TDesired]) StartAsChild(ctx context.Context) {
+	s.ctxMu.Lock()
+	s.ctx, s.ctxCancel = context.WithCancel(ctx)
+	supervisorCtx := s.ctx
+	s.ctxMu.Unlock()
+	s.started.Store(true)
+
+	s.logger.Debugw("supervisor_started_as_child")
+
+	s.actionExecutor.Start(supervisorCtx)
+
+	s.startMetricsReporter(supervisorCtx)
+
+	s.mu.RLock()
+
+	for _, workerCtx := range s.workers {
+		if err := workerCtx.collector.Start(supervisorCtx); err != nil {
+			s.logger.Errorw("collector_start_failed", "error", err)
+		}
+
+		workerCtx.executor.Start(supervisorCtx)
+	}
+
+	s.mu.RUnlock()
 }
 
 // tickLoop is the main FSM loop.
