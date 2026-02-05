@@ -1207,7 +1207,7 @@ func (s *Supervisor[TObserved, TDesired]) restartCollector(ctx context.Context, 
 	maxRestartAttempts := s.collectorHealth.maxRestartAttempts
 	s.mu.Unlock()
 
-	// Tiered escalation: use ErrorFields when 50%+ of max attempts used
+	// Tiered escalation: use SentryError when 50%+ of max attempts used
 	if restartCount >= maxRestartAttempts/2 {
 		escalationRisk := "high"
 		if restartCount == maxRestartAttempts-1 {

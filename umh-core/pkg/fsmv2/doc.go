@@ -84,8 +84,8 @@
 //   - Permanent failures: Return SignalNeedsRestart from state.Next() instead.
 //   - Expected conditions: For example, "already connected" is success.
 //
-// For Sentry error reporting, see sentry/doc.go. Use ErrorFields for all
-// error logs to ensure proper grouping and alerting.
+// For Sentry error reporting, use [deps.FSMLogger.SentryError] and
+// [deps.FSMLogger.SentryWarn] which enforce Feature and error at compile time.
 //
 // ## DesiredState constraints
 //

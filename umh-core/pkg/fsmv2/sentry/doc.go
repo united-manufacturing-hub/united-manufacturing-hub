@@ -14,22 +14,11 @@
 
 // Package sentry provides Sentry integration for fsmv2 error reporting.
 //
-// # Quick Start
+// The SentryHook wraps a zapcore.Core and intercepts warn/error-level log
+// entries, forwarding them to Sentry with fingerprinting and debouncing.
 //
-// Log errors using ErrorFields:
-//
-//	logger.Errorw("action_failed", sentry.ErrorFields{
-//	    Feature:       "communicator",  // Required: your component
-//	    Err:           err,             // Pass error, not err.Error()!
-//	    HierarchyPath: "app(umh-core)/worker(communicator)",
-//	}.ZapFields()...)
-//
-// # Feature Field
-//
-// Identifies which component owns the error. Common values:
-//   - "fsmv2" - FSMv2 framework
-//   - "communicator" - Backend communication
-//   - "benthos" - Benthos process management
+// Production code uses [deps.FSMLogger] methods (SentryWarn, SentryError)
+// which inject "feature" and "error" fields that this hook extracts.
 //
 // # How Errors Appear in Sentry
 //
@@ -41,10 +30,4 @@
 //
 //	level:error feature:communicator
 //	level:error feature:fsmv2 event_name:action_failed
-//
-// # Best Practices
-//
-//   - Always set Feature
-//   - Pass err (error), never err.Error() (string)
-//   - Include HierarchyPath for auto-tagging
 package sentry

@@ -415,11 +415,10 @@ var _ = Describe("SentryHook Integration with Mock Transport", func() {
 			rootErr := io.EOF
 			wrappedErr := fmt.Errorf("connection failed: %w", rootErr)
 
-			// When: logged with ErrorFields
-			logger.Errorw("action_failed", sentry.ErrorFields{
-				Feature: "communicator",
-				Err:     wrappedErr,
-			}.ZapFields()...)
+			// When: logged with error fields
+			logger.Errorw("action_failed",
+				"feature", "communicator",
+				"error", wrappedErr)
 
 			// Then: event has Exception (not just Message)
 			Eventually(func() int {
@@ -438,10 +437,9 @@ var _ = Describe("SentryHook Integration with Mock Transport", func() {
 			err3 := fmt.Errorf("layer 3: %w", err2)
 
 			// When: logged
-			logger.Errorw("action_failed", sentry.ErrorFields{
-				Feature: "fsmv2",
-				Err:     err3,
-			}.ZapFields()...)
+			logger.Errorw("action_failed",
+				"feature", "fsmv2",
+				"error", err3)
 
 			// Then: all error types in fingerprint
 			Eventually(func() int {
@@ -468,9 +466,8 @@ var _ = Describe("SentryHook Integration with Mock Transport", func() {
 
 		It("handles nil error gracefully", func() {
 			// When: logged without error
-			logger.Warnw("warning_event", sentry.ErrorFields{
-				Feature: "fsmv2",
-			}.ZapFields()...)
+			logger.Warnw("warning_event",
+				"feature", "fsmv2")
 
 			// Then: event captured with no exception
 			Eventually(func() int {
@@ -488,10 +485,9 @@ var _ = Describe("SentryHook Integration with Mock Transport", func() {
 			err := errors.New("specific error message")
 
 			// When: logged
-			logger.Errorw("action_failed", sentry.ErrorFields{
-				Feature: "fsmv2",
-				Err:     err,
-			}.ZapFields()...)
+			logger.Errorw("action_failed",
+				"feature", "fsmv2",
+				"error", err)
 
 			// Then: event message is the log message, not error message
 			Eventually(func() int {
@@ -514,10 +510,8 @@ github.com/example/pkg/executor.executeWork()
 `
 			// When: logged with stack field (like action_executor does for panics)
 			logger.Errorw("action_panic",
-				sentry.ErrorFields{
-					Feature: "fsmv2",
-					Err:     err,
-				}.ZapFields()...)
+				"feature", "fsmv2",
+				"error", err)
 			// Add stack field separately to match action_executor pattern
 			logger.Errorw("action_panic_with_stack",
 				"feature", "fsmv2",
@@ -562,10 +556,9 @@ github.com/example/pkg/executor.executeWork()
 			derivedLogger := logger.With("worker", "test-worker-123")
 
 			// Log an error through the derived logger
-			derivedLogger.Errorw("action_failed", sentry.ErrorFields{
-				Feature: "fsmv2",
-				Err:     io.EOF,
-			}.ZapFields()...)
+			derivedLogger.Errorw("action_failed",
+				"feature", "fsmv2",
+				"error", io.EOF)
 
 			// Event should be captured to Sentry
 			Eventually(func() int {
@@ -582,10 +575,9 @@ github.com/example/pkg/executor.executeWork()
 			// Test chained With() calls
 			derivedLogger := logger.With("worker", "test-worker").With("action", "test-action")
 
-			derivedLogger.Errorw("nested_error", sentry.ErrorFields{
-				Feature: "fsmv2",
-				Err:     errors.New("nested test error"),
-			}.ZapFields()...)
+			derivedLogger.Errorw("nested_error",
+				"feature", "fsmv2",
+				"error", errors.New("nested test error"))
 
 			Eventually(func() int {
 				return store.Len()
@@ -602,15 +594,13 @@ github.com/example/pkg/executor.executeWork()
 			derivedLogger2 := logger.With("worker", "worker-2")
 
 			// Log same error from both derived loggers
-			derivedLogger1.Errorw("shared_error", sentry.ErrorFields{
-				Feature: "fsmv2",
-				Err:     io.EOF,
-			}.ZapFields()...)
+			derivedLogger1.Errorw("shared_error",
+				"feature", "fsmv2",
+				"error", io.EOF)
 
-			derivedLogger2.Errorw("shared_error", sentry.ErrorFields{
-				Feature: "fsmv2",
-				Err:     io.EOF,
-			}.ZapFields()...)
+			derivedLogger2.Errorw("shared_error",
+				"feature", "fsmv2",
+				"error", io.EOF)
 
 			// Wait a bit for any async processing
 			time.Sleep(100 * time.Millisecond)
@@ -642,9 +632,9 @@ github.com/example/pkg/executor.executeWork()
 			err2 := &url.Error{Op: "Post", URL: "http://10.0.0.50:8090/api", Err: io.EOF}
 
 			// When: both logged
-			logger.Errorw("push_failed", sentry.ErrorFields{Feature: "communicator", Err: err1}.ZapFields()...)
+			logger.Errorw("push_failed", "feature", "communicator", "error", err1)
 			time.Sleep(10 * time.Millisecond)
-			logger.Errorw("push_failed", sentry.ErrorFields{Feature: "communicator", Err: err2}.ZapFields()...)
+			logger.Errorw("push_failed", "feature", "communicator", "error", err2)
 
 			// Then: same fingerprint (URLs excluded)
 			Eventually(func() int {
@@ -674,9 +664,9 @@ github.com/example/pkg/executor.executeWork()
 			err2 := context.DeadlineExceeded
 
 			// When: both logged
-			logger.Errorw("action_failed", sentry.ErrorFields{Feature: "fsmv2", Err: err1}.ZapFields()...)
+			logger.Errorw("action_failed", "feature", "fsmv2", "error", err1)
 			time.Sleep(10 * time.Millisecond)
-			logger.Errorw("action_failed", sentry.ErrorFields{Feature: "fsmv2", Err: err2}.ZapFields()...)
+			logger.Errorw("action_failed", "feature", "fsmv2", "error", err2)
 
 			// Then: different fingerprints
 			Eventually(func() int {
@@ -705,9 +695,9 @@ github.com/example/pkg/executor.executeWork()
 			err := io.EOF
 
 			// When: both logged
-			logger.Errorw("action_failed", sentry.ErrorFields{Feature: "fsmv2", Err: err}.ZapFields()...)
+			logger.Errorw("action_failed", "feature", "fsmv2", "error", err)
 			time.Sleep(10 * time.Millisecond)
-			logger.Errorw("action_failed", sentry.ErrorFields{Feature: "communicator", Err: err}.ZapFields()...)
+			logger.Errorw("action_failed", "feature", "communicator", "error", err)
 
 			// Then: different fingerprints due to different features
 			Eventually(func() int {
@@ -723,7 +713,7 @@ github.com/example/pkg/executor.executeWork()
 
 	Describe("Per-Fingerprint Debouncing", func() {
 		It("captures first event", func() {
-			logger.Errorw("action_failed", sentry.ErrorFields{Feature: "fsmv2", Err: io.EOF}.ZapFields()...)
+			logger.Errorw("action_failed", "feature", "fsmv2", "error", io.EOF)
 
 			Eventually(func() int {
 				return store.Len()
@@ -732,8 +722,8 @@ github.com/example/pkg/executor.executeWork()
 
 		It("debounces duplicate within window", func() {
 			// Both use same feature, same error, same message → same fingerprint
-			logger.Errorw("action_failed", sentry.ErrorFields{Feature: "fsmv2", Err: io.EOF}.ZapFields()...)
-			logger.Errorw("action_failed", sentry.ErrorFields{Feature: "fsmv2", Err: io.EOF}.ZapFields()...)
+			logger.Errorw("action_failed", "feature", "fsmv2", "error", io.EOF)
+			logger.Errorw("action_failed", "feature", "fsmv2", "error", io.EOF)
 
 			// Wait a bit for any async processing
 			time.Sleep(100 * time.Millisecond)
@@ -755,7 +745,7 @@ github.com/example/pkg/executor.executeWork()
 			logger = zap.New(wrappedCore).Sugar()
 
 			// First event
-			logger.Errorw("action_failed", sentry.ErrorFields{Feature: "fsmv2", Err: io.EOF}.ZapFields()...)
+			logger.Errorw("action_failed", "feature", "fsmv2", "error", io.EOF)
 
 			Eventually(func() int {
 				return store.Len()
@@ -765,7 +755,7 @@ github.com/example/pkg/executor.executeWork()
 			time.Sleep(100 * time.Millisecond)
 
 			// Second event after window
-			logger.Errorw("action_failed", sentry.ErrorFields{Feature: "fsmv2", Err: io.EOF}.ZapFields()...)
+			logger.Errorw("action_failed", "feature", "fsmv2", "error", io.EOF)
 
 			Eventually(func() int {
 				return store.Len()
@@ -774,8 +764,8 @@ github.com/example/pkg/executor.executeWork()
 
 		It("debounces different fingerprints independently", func() {
 			// Different features = different fingerprints = both captured
-			logger.Errorw("action_failed", sentry.ErrorFields{Feature: "fsmv2", Err: io.EOF}.ZapFields()...)
-			logger.Errorw("action_failed", sentry.ErrorFields{Feature: "communicator", Err: io.EOF}.ZapFields()...)
+			logger.Errorw("action_failed", "feature", "fsmv2", "error", io.EOF)
+			logger.Errorw("action_failed", "feature", "communicator", "error", io.EOF)
 
 			Eventually(func() int {
 				return store.Len()
@@ -785,11 +775,10 @@ github.com/example/pkg/executor.executeWork()
 
 	Describe("Hierarchy Path Auto-Tagging", func() {
 		It("extracts fsm_version=v2 and worker_type from fsmv2 path", func() {
-			logger.Errorw("action_failed", sentry.ErrorFields{
-				Feature:       "communicator",
-				HierarchyPath: "app(application)/worker(communicator)",
-				Err:           io.EOF,
-			}.ZapFields()...)
+			logger.Errorw("action_failed",
+				"feature", "communicator",
+				"error", io.EOF,
+				"hierarchy_path", "app(application)/worker(communicator)")
 
 			Eventually(func() int {
 				return store.Len()
@@ -802,11 +791,10 @@ github.com/example/pkg/executor.executeWork()
 		})
 
 		It("extracts fsm_version=v1 from legacy path", func() {
-			logger.Errorw("action_failed", sentry.ErrorFields{
-				Feature:       "legacy",
-				HierarchyPath: "Enterprise.Site.Area.WorkCell",
-				Err:           io.EOF,
-			}.ZapFields()...)
+			logger.Errorw("action_failed",
+				"feature", "legacy",
+				"error", io.EOF,
+				"hierarchy_path", "Enterprise.Site.Area.WorkCell")
 
 			Eventually(func() int {
 				return store.Len()
@@ -819,10 +807,9 @@ github.com/example/pkg/executor.executeWork()
 		})
 
 		It("handles empty hierarchy path gracefully", func() {
-			logger.Errorw("action_failed", sentry.ErrorFields{
-				Feature: "fsmv2",
-				Err:     io.EOF,
-			}.ZapFields()...)
+			logger.Errorw("action_failed",
+				"feature", "fsmv2",
+				"error", io.EOF)
 
 			Eventually(func() int {
 				return store.Len()
@@ -838,10 +825,9 @@ github.com/example/pkg/executor.executeWork()
 
 	Describe("Tag Extraction", func() {
 		It("sets feature tag", func() {
-			logger.Errorw("action_failed", sentry.ErrorFields{
-				Feature: "communicator",
-				Err:     io.EOF,
-			}.ZapFields()...)
+			logger.Errorw("action_failed",
+				"feature", "communicator",
+				"error", io.EOF)
 
 			Eventually(func() int {
 				return store.Len()
@@ -853,10 +839,9 @@ github.com/example/pkg/executor.executeWork()
 		})
 
 		It("sets event_name tag from message", func() {
-			logger.Errorw("custom_event_name", sentry.ErrorFields{
-				Feature: "fsmv2",
-				Err:     io.EOF,
-			}.ZapFields()...)
+			logger.Errorw("custom_event_name",
+				"feature", "fsmv2",
+				"error", io.EOF)
 
 			Eventually(func() int {
 				return store.Len()
@@ -868,7 +853,7 @@ github.com/example/pkg/executor.executeWork()
 		})
 
 		It("uses 'unknown' for missing feature", func() {
-			// Log without using ErrorFields (should still capture but use 'unknown')
+			// Log without feature field (should still capture but use 'unknown')
 			logger.Errorw("some_error", "some_field", "some_value")
 
 			Eventually(func() int {
@@ -883,7 +868,7 @@ github.com/example/pkg/executor.executeWork()
 
 	Describe("Level Filtering", func() {
 		It("captures Error level logs to Sentry", func() {
-			logger.Errorw("test_error", sentry.ErrorFields{Feature: "fsmv2"}.ZapFields()...)
+			logger.Errorw("test_error", "feature", "fsmv2")
 
 			Eventually(func() int {
 				return store.Len()
@@ -894,7 +879,7 @@ github.com/example/pkg/executor.executeWork()
 		})
 
 		It("captures Warn level logs to Sentry", func() {
-			logger.Warnw("test_warning", sentry.ErrorFields{Feature: "fsmv2"}.ZapFields()...)
+			logger.Warnw("test_warning", "feature", "fsmv2")
 
 			Eventually(func() int {
 				return store.Len()
@@ -905,7 +890,7 @@ github.com/example/pkg/executor.executeWork()
 		})
 
 		It("does NOT capture Info level logs to Sentry", func() {
-			logger.Infow("test_info", sentry.ErrorFields{Feature: "fsmv2"}.ZapFields()...)
+			logger.Infow("test_info", "feature", "fsmv2")
 
 			time.Sleep(100 * time.Millisecond)
 
@@ -913,7 +898,7 @@ github.com/example/pkg/executor.executeWork()
 		})
 
 		It("does NOT capture Debug level logs to Sentry", func() {
-			logger.Debugw("test_debug", sentry.ErrorFields{Feature: "fsmv2"}.ZapFields()...)
+			logger.Debugw("test_debug", "feature", "fsmv2")
 
 			time.Sleep(100 * time.Millisecond)
 
