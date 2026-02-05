@@ -17,6 +17,8 @@ package example_slow
 import (
 	"sync"
 
+	"go.uber.org/zap"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 )
 
@@ -51,9 +53,9 @@ type ExampleslowDependencies struct {
 	delaySeconds int
 }
 
-func NewExampleslowDependencies(connectionPool ConnectionPool, logger deps.FSMLogger, stateReader deps.StateReader, identity deps.Identity) *ExampleslowDependencies {
+func NewExampleslowDependencies(connectionPool ConnectionPool, logger *zap.SugaredLogger, stateReader deps.StateReader, identity deps.Identity) *ExampleslowDependencies {
 	return &ExampleslowDependencies{
-		BaseDependencies: deps.NewBaseDependenciesWithLogger(logger, stateReader, identity),
+		BaseDependencies: deps.NewBaseDependencies(logger, stateReader, identity),
 		connectionPool:   connectionPool,
 	}
 }

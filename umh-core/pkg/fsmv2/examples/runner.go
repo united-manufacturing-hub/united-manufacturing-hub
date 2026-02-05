@@ -21,7 +21,6 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence/memory"
 
@@ -77,7 +76,7 @@ func Run(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 		ID:                 "scenario-" + cfg.Scenario.Name,
 		Name:               cfg.Scenario.Name,
 		Store:              cfg.Store,
-		Logger:             deps.NewFSMLogger(cfg.Logger),
+		Logger:             cfg.Logger,
 		TickInterval:       cfg.TickInterval,
 		YAMLConfig:         cfg.Scenario.YAMLConfig,
 		EnableTraceLogging: cfg.EnableTraceLogging,
@@ -120,5 +119,5 @@ func Run(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 func SetupStore(logger *zap.SugaredLogger) storage.TriangularStoreInterface {
 	basicStore := memory.NewInMemoryStore()
 
-	return storage.NewTriangularStore(basicStore, deps.NewFSMLogger(logger))
+	return storage.NewTriangularStore(basicStore, logger)
 }

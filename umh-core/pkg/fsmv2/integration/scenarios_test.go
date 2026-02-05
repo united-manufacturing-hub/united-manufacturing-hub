@@ -241,7 +241,7 @@ func verifyAllLogsHaveWorkerField(t *integration.TestLogger) {
 func setupTestStoreForScenario(logger *zap.SugaredLogger) storage.TriangularStoreInterface {
 	basicStore := memory.NewInMemoryStore()
 
-	return storage.NewTriangularStore(basicStore, deps.NewFSMLogger(logger))
+	return storage.NewTriangularStore(basicStore, logger)
 }
 
 // =============================================================================

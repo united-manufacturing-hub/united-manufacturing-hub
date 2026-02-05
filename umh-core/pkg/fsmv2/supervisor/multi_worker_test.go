@@ -21,6 +21,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"go.uber.org/zap"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
@@ -51,12 +52,12 @@ var _ = Describe("Multi-Worker Supervisor", func() {
 		err = basicStore.CreateCollection(ctx, "test_observed", nil)
 		Expect(err).ToNot(HaveOccurred())
 
-		triangularStore = storage.NewTriangularStore(basicStore, deps.NewNopFSMLogger())
+		triangularStore = storage.NewTriangularStore(basicStore, zap.NewNop().Sugar())
 
 		s = supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 			WorkerType: "test",
 			Store:      triangularStore,
-			Logger:     deps.NewNopFSMLogger(),
+			Logger:     zap.NewNop().Sugar(),
 		})
 	})
 

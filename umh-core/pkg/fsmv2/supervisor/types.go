@@ -19,6 +19,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"go.uber.org/zap"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
@@ -209,8 +211,8 @@ type Config struct {
 	Store storage.TriangularStoreInterface
 
 	// Logger for supervisor operations.
-	// Required - no default (use deps.NewNopFSMLogger() for tests).
-	Logger deps.FSMLogger
+	// Required - no default (use zap.NewNop().Sugar() for tests).
+	Logger *zap.SugaredLogger
 
 	// Dependencies is an optional map of named dependencies to inject into child workers.
 	// Worker factories can access these via the deps parameter to avoid global state.

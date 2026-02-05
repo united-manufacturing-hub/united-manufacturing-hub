@@ -17,6 +17,8 @@ package hello_world
 import (
 	"sync"
 
+	"go.uber.org/zap"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 )
 
@@ -36,9 +38,9 @@ type HelloworldDependencies struct {
 }
 
 // NewHelloworldDependencies creates dependencies for the helloworld worker.
-func NewHelloworldDependencies(logger deps.FSMLogger, stateReader deps.StateReader, identity deps.Identity) *HelloworldDependencies {
+func NewHelloworldDependencies(logger *zap.SugaredLogger, stateReader deps.StateReader, identity deps.Identity) *HelloworldDependencies {
 	return &HelloworldDependencies{
-		BaseDependencies: deps.NewBaseDependenciesWithLogger(logger, stateReader, identity),
+		BaseDependencies: deps.NewBaseDependencies(logger, stateReader, identity),
 		helloSaid:        false,
 	}
 }

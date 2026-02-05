@@ -28,11 +28,6 @@ type FSMLogger interface {
 	// Info logs at INFO level with structured fields.
 	Info(msg string, fields ...Field)
 
-	// Warn logs at WARN level with structured fields.
-	// Use this for operational warnings that should NOT be sent to Sentry.
-	// For warnings that need Sentry visibility, use SentryWarn instead.
-	Warn(msg string, fields ...Field)
-
 	// SentryWarn logs at WARN level with required Feature for Sentry routing.
 	// The feature parameter identifies which subsystem owns this warning.
 	SentryWarn(feature Feature, msg string, fields ...Field)

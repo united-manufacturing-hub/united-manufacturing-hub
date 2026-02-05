@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"time"
 
+	"go.uber.org/zap"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
@@ -177,7 +179,7 @@ func CreateTriangularStore() *storage.TriangularStore {
 		panic(fmt.Sprintf("failed to create observed collection: %v", err))
 	}
 
-	return storage.NewTriangularStore(basicStore, deps.NewNopFSMLogger())
+	return storage.NewTriangularStore(basicStore, zap.NewNop().Sugar())
 }
 
 func CreateTriangularStoreForWorkerType(workerType string) *storage.TriangularStore {
@@ -196,7 +198,7 @@ func CreateTriangularStoreForWorkerType(workerType string) *storage.TriangularSt
 		panic(fmt.Sprintf("failed to create observed collection: %v", err))
 	}
 
-	return storage.NewTriangularStore(basicStore, deps.NewNopFSMLogger())
+	return storage.NewTriangularStore(basicStore, zap.NewNop().Sugar())
 }
 
 func CreateObservedStateWithID(id string) *ObservedState {

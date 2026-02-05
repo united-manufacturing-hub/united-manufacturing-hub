@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"time"
 
+	"go.uber.org/zap"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
@@ -34,14 +36,14 @@ import (
 // ParentWorker implements the FSM v2 Worker interface for parent-child relationships.
 type ParentWorker struct {
 	*helpers.BaseWorker[*ParentDependencies]
-	logger   deps.FSMLogger
+	logger   *zap.SugaredLogger
 	identity deps.Identity
 }
 
 // NewParentWorker creates a new example parent worker.
 func NewParentWorker(
 	identity deps.Identity,
-	logger deps.FSMLogger,
+	logger *zap.SugaredLogger,
 	stateReader deps.StateReader,
 ) (*ParentWorker, error) {
 	if logger == nil {
@@ -171,7 +173,7 @@ func (w *ParentWorker) GetInitialState() fsmv2.State[any, any] {
 
 func init() {
 	if err := factory.RegisterWorkerType[snapshot.ExampleparentObservedState, *snapshot.ExampleparentDesiredState](
-		func(id deps.Identity, logger deps.FSMLogger, stateReader deps.StateReader, _ map[string]any) fsmv2.Worker {
+		func(id deps.Identity, logger *zap.SugaredLogger, stateReader deps.StateReader, _ map[string]any) fsmv2.Worker {
 			worker, _ := NewParentWorker(id, logger, stateReader)
 
 			return worker

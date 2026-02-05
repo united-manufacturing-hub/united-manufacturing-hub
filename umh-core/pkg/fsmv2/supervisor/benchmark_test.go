@@ -24,6 +24,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
+	"go.uber.org/zap"
 )
 
 // =============================================================================
@@ -83,7 +84,7 @@ func benchmarkSupervisorTick(b *testing.B, workerCount int) {
 	s := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 		WorkerType: "test",
 		Store:      triangularStore,
-		Logger:     deps.NewNopFSMLogger(),
+		Logger:     zap.NewNop().Sugar(),
 	})
 
 	// Add N workers to supervisor
@@ -177,7 +178,7 @@ func BenchmarkTickLoopWithSlowWorker(b *testing.B) {
 	s := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 		WorkerType: "test",
 		Store:      triangularStore,
-		Logger:     deps.NewNopFSMLogger(),
+		Logger:     zap.NewNop().Sugar(),
 	})
 
 	// Add one slow worker (100ms delay) and several fast workers
@@ -243,7 +244,7 @@ func BenchmarkTickLoopConcurrentActions(b *testing.B) {
 	s := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 		WorkerType: "test",
 		Store:      triangularStore,
-		Logger:     deps.NewNopFSMLogger(),
+		Logger:     zap.NewNop().Sugar(),
 	})
 
 	// Add 50 workers with small random delays to simulate real-world variance
@@ -331,7 +332,7 @@ func BenchmarkObservationCollectionSingle(b *testing.B) {
 	s := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 		WorkerType: "test",
 		Store:      triangularStore,
-		Logger:     deps.NewNopFSMLogger(),
+		Logger:     zap.NewNop().Sugar(),
 	})
 
 	workerID := "latency-worker-0"
@@ -388,7 +389,7 @@ func benchmarkObservationCollectionN(b *testing.B, workerCount int) {
 	s := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 		WorkerType: "test",
 		Store:      triangularStore,
-		Logger:     deps.NewNopFSMLogger(),
+		Logger:     zap.NewNop().Sugar(),
 	})
 
 	workers := make([]*observationLatencyWorker, workerCount)

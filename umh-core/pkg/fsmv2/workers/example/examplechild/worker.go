@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"time"
 
+	"go.uber.org/zap"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
@@ -35,7 +37,7 @@ import (
 type ChildWorker struct {
 	connection Connection
 	*helpers.BaseWorker[*ExamplechildDependencies]
-	logger   deps.FSMLogger
+	logger   *zap.SugaredLogger
 	identity deps.Identity
 }
 
@@ -43,7 +45,7 @@ type ChildWorker struct {
 func NewChildWorker(
 	identity deps.Identity,
 	connectionPool ConnectionPool,
-	logger deps.FSMLogger,
+	logger *zap.SugaredLogger,
 	stateReader deps.StateReader,
 ) (*ChildWorker, error) {
 	if connectionPool == nil {
@@ -67,7 +69,7 @@ func NewChildWorker(
 
 	conn, err := connectionPool.Acquire()
 	if err != nil {
-		logger.SentryWarn(deps.FeatureExamples, "initial_connection_failed", deps.Err(err))
+		logger.Warnw("initial_connection_failed", "error", err)
 	}
 
 	return &ChildWorker{
@@ -149,7 +151,7 @@ func (w *ChildWorker) GetInitialState() fsmv2.State[any, any] {
 
 func init() {
 	if err := factory.RegisterWorkerType[snapshot.ExamplechildObservedState, *snapshot.ExamplechildDesiredState](
-		func(id deps.Identity, logger deps.FSMLogger, stateReader deps.StateReader, _ map[string]any) fsmv2.Worker {
+		func(id deps.Identity, logger *zap.SugaredLogger, stateReader deps.StateReader, _ map[string]any) fsmv2.Worker {
 			pool := &DefaultConnectionPool{}
 			worker, _ := NewChildWorker(id, pool, logger, stateReader)
 

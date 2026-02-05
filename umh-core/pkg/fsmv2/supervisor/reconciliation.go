@@ -42,22 +42,22 @@ func (f *factoryRegistryAdapter) ListRegisteredTypes() []string {
 // tickWorker performs one FSM tick for a specific worker.
 func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, workerID string) error {
 	s.logTrace("lifecycle",
-		deps.String("lifecycle_event", "mutex_lock_acquire"),
-		deps.String("mutex_name", "supervisor.mu"),
-		deps.String("lock_type", "read"))
+		"lifecycle_event", "mutex_lock_acquire",
+		"mutex_name", "supervisor.mu",
+		"lock_type", "read")
 
 	s.mu.RLock()
 
 	s.logTrace("lifecycle",
-		deps.String("lifecycle_event", "mutex_lock_acquired"),
-		deps.String("mutex_name", "supervisor.mu"))
+		"lifecycle_event", "mutex_lock_acquired",
+		"mutex_name", "supervisor.mu")
 
 	workerCtx, exists := s.workers[workerID]
 	s.mu.RUnlock()
 
 	s.logTrace("lifecycle",
-		deps.String("lifecycle_event", "mutex_unlock"),
-		deps.String("mutex_name", "supervisor.mu"))
+		"lifecycle_event", "mutex_unlock",
+		"mutex_name", "supervisor.mu")
 
 	if !exists {
 		// Worker was removed via SignalNeedsRemoval during concurrent tick.
@@ -66,10 +66,10 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 		// 2. RequestShutdown() from reconcileChildren (s.started == true)
 		// WorkerIDs are always obtained from iterating s.workers, so
 		// "not found" is only possible due to this benign race condition.
-		s.logger.Debug("tick_worker_skip",
-			deps.Reason("worker_removed_during_shutdown"),
-			deps.HierarchyPath(s.GetHierarchyPathUnlocked()),
-			deps.String("target_worker_id", workerID))
+		s.logger.Debugw("tick_worker_skip",
+			"reason", "worker_removed_during_shutdown",
+			"hierarchy_path", s.GetHierarchyPathUnlocked(),
+			"target_worker_id", workerID)
 
 		return nil
 	}
@@ -77,15 +77,15 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 	// Skip if tick already in progress
 	if !workerCtx.tickInProgress.CompareAndSwap(false, true) {
 		s.logTrace("lifecycle",
-			deps.String("lifecycle_event", "tick_skip"),
-			deps.String("reason", "previous_tick_in_progress"))
+			"lifecycle_event", "tick_skip",
+			"reason", "previous_tick_in_progress")
 
 		return nil
 	}
 	defer workerCtx.tickInProgress.Store(false)
 
 	s.logTrace("lifecycle",
-		deps.String("lifecycle_event", "tick_start"))
+		"lifecycle_event", "tick_start")
 
 	workerCtx.mu.RLock()
 
@@ -95,16 +95,17 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 	}
 
 	s.logTrace("tick_worker",
-		deps.String("current_state", currentStateStr))
+		"current_state", currentStateStr)
 	workerCtx.mu.RUnlock()
 
 	s.logTrace("loading_snapshot",
-		deps.String("stage", "data_freshness"))
+		"stage", "data_freshness")
 
 	storageSnapshot, err := s.store.LoadSnapshot(ctx, s.workerType, workerID)
 	if err != nil {
-		s.logger.SentryError(deps.FeatureReconciliation, err, "snapshot_load_failed",
-			deps.HierarchyPath(workerCtx.identity.HierarchyPath))
+		s.logger.Errorw("snapshot_load_failed",
+			"hierarchy_path", workerCtx.identity.HierarchyPath,
+			"error", err)
 
 		return fmt.Errorf("failed to load snapshot: %w", err)
 	}
@@ -118,8 +119,9 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 
 	err = s.store.LoadObservedTyped(ctx, s.workerType, workerID, &observed)
 	if err != nil {
-		s.logger.SentryError(deps.FeatureReconciliation, err, "observed_state_load_failed",
-			deps.HierarchyPath(workerCtx.identity.HierarchyPath))
+		s.logger.Errorw("observed_state_load_failed",
+			"hierarchy_path", workerCtx.identity.HierarchyPath,
+			"error", err)
 
 		return fmt.Errorf("failed to load typed observed state: %w", err)
 	}
@@ -128,8 +130,9 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 
 	err = s.store.LoadDesiredTyped(ctx, s.workerType, workerID, &desired)
 	if err != nil {
-		s.logger.SentryError(deps.FeatureReconciliation, err, "desired_state_load_failed",
-			deps.HierarchyPath(workerCtx.identity.HierarchyPath))
+		s.logger.Errorw("desired_state_load_failed",
+			"hierarchy_path", workerCtx.identity.HierarchyPath,
+			"error", err)
 
 		return fmt.Errorf("failed to load typed desired state: %w", err)
 	}
@@ -154,12 +157,12 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 		workerCtx.mu.Unlock()
 
 		s.logTrace("observation_timestamp_loaded",
-			deps.String("stage", "data_freshness"),
-			deps.String("timestamp", observationTimestamp.Format(time.RFC3339Nano)))
+			"stage", "data_freshness",
+			"timestamp", observationTimestamp.Format(time.RFC3339Nano))
 	} else {
 		s.logTrace("observation_no_timestamp",
-			deps.String("stage", "data_freshness"),
-			deps.String("type", fmt.Sprintf("%T", observed)))
+			"stage", "data_freshness",
+			"type", fmt.Sprintf("%T", observed))
 	}
 
 	// Cache observed state name for GetObservedStateName() - used by parent for lifecycle-based health checks
@@ -215,12 +218,13 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 
 			if restartCount >= s.collectorHealth.maxRestartAttempts {
 				// Max attempts reached - escalate to shutdown (Layer 3)
-				s.logger.SentryError(deps.FeatureHealth, errors.New("collector unresponsive after max restart attempts"), "collector_unresponsive_max_attempts",
-					deps.Attempts(s.collectorHealth.maxRestartAttempts))
+				s.logger.Errorw("collector_unresponsive_max_attempts",
+					"restart_attempts", s.collectorHealth.maxRestartAttempts)
 
 				if shutdownErr := s.requestShutdown(ctx, workerID,
 					fmt.Sprintf("collector unresponsive after %d restart attempts", s.collectorHealth.maxRestartAttempts)); shutdownErr != nil {
-					s.logger.SentryError(deps.FeatureReconciliation, shutdownErr, "shutdown_request_failed")
+					s.logger.Errorw("shutdown_request_failed",
+						"error", shutdownErr)
 				}
 
 				return errors.New("collector unresponsive, shutdown requested")
@@ -229,14 +233,15 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 			// I4: Safe to restart (restartCount < maxRestartAttempts)
 			// RestartCollector will panic if invariant violated (defensive check)
 			if err := s.restartCollector(ctx, workerID); err != nil {
-				s.logger.SentryError(deps.FeatureHealth, err, "collector_restart_failed",
-					deps.HierarchyPath(workerCtx.identity.HierarchyPath))
+				s.logger.Errorw("collector_restart_failed",
+					"hierarchy_path", workerCtx.identity.HierarchyPath,
+					"error", err)
 
 				return fmt.Errorf("failed to restart collector: %w", err)
 			}
 		}
 
-		s.logger.Debug("fsm_paused_stale_data")
+		s.logger.Debug("Pausing FSM due to stale/timeout data")
 
 		return nil
 	}
@@ -252,8 +257,8 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 	s.mu.Unlock()
 
 	if restartCount > 0 {
-		s.logger.Info("collector_recovered",
-			deps.Attempts(restartCount))
+		s.logger.Infow("collector_recovered",
+			"restart_attempts", restartCount)
 	}
 
 	// I16: Validate ObservedState is not nil before progressing FSM
@@ -285,10 +290,10 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 			workerCtx.gatingBlockedCount = 0
 			workerCtx.mu.Unlock()
 
-			s.logger.Debug("action_gating_cleared",
-				deps.Int64("waited_ticks", blockedCount),
-				deps.String("last_action_time", lastActionObsTime.Format(time.RFC3339Nano)),
-				deps.String("new_observation_time", currentObsTime.Format(time.RFC3339Nano)))
+			s.logger.Debugw("action_gating_cleared",
+				"waited_ticks", blockedCount,
+				"last_action_time", lastActionObsTime.Format(time.RFC3339Nano),
+				"new_observation_time", currentObsTime.Format(time.RFC3339Nano))
 		} else {
 			workerCtx.mu.Lock()
 			explained := workerCtx.gatingExplainedOnce
@@ -302,16 +307,16 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 			workerCtx.mu.Unlock()
 
 			if !explained {
-				s.logger.Debug("fsm_progression_paused",
-					deps.Reason("waiting_for_fresh_observation"),
-					deps.String("explanation", "FSM waits for fresh observation after action to prevent duplicate execution. "+
-						"This log appears once per gating cycle."))
+				s.logger.Debugw("fsm_progression_paused",
+					"reason", "waiting_for_fresh_observation",
+					"explanation", "FSM waits for fresh observation after action to prevent duplicate execution. "+
+						"This log appears once per gating cycle.")
 			}
 
 			s.logTrace("action_gating_blocked",
-				deps.Int64("blocked_count", blockedCount),
-				deps.String("last_action_time", lastActionObsTime.Format(time.RFC3339Nano)),
-				deps.String("current_observation_time", currentObsTime.Format(time.RFC3339Nano)))
+				"blocked_count", blockedCount,
+				"last_action_time", lastActionObsTime.Format(time.RFC3339Nano),
+				"current_observation_time", currentObsTime.Format(time.RFC3339Nano))
 
 			return nil
 		}
@@ -323,8 +328,8 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 
 	if currentState == nil {
 		if _, alreadyLogged := s.noStateMachineLoggedOnce.LoadOrStore(workerID, true); !alreadyLogged {
-			s.logger.Info("worker_has_no_state_machine",
-				deps.String("info", "This worker manages child workers without its own FSM"))
+			s.logger.Infow("worker_has_no_state_machine",
+				"info", "This worker manages child workers without its own FSM")
 		}
 
 		return nil
@@ -339,9 +344,9 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 	hasAction := result.Action != nil
 	// Per-tick log moved to TRACE for scalability
 	s.logTrace("state_evaluation",
-		deps.String("next_state", result.State.String()),
-		deps.Int("signal", int(result.Signal)),
-		deps.Bool("has_action", hasAction))
+		"next_state", result.State.String(),
+		"signal", int(result.Signal),
+		"has_action", hasAction)
 
 	// FSM invariant: state transition and action emission are mutually exclusive
 	if result.State != currentState && result.Action != nil {
@@ -354,26 +359,27 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 
 		if workerCtx.executor.HasActionInProgress(actionID) {
 			s.logTrace("action_skipped",
-				deps.String("action_id", actionID),
-				deps.String("reason", "already_in_progress"))
+				"action_id", actionID,
+				"reason", "already_in_progress")
 
 			return nil
 		}
 
 		// Get dependencies from worker if it implements DependencyProvider
-		var workerDeps any
+		var deps any
 		if provider, ok := workerCtx.worker.(fsmv2.DependencyProvider); ok {
-			workerDeps = provider.GetDependenciesAny()
+			deps = provider.GetDependenciesAny()
 		}
 
 		// Action enqueued at DEBUG - low signal for operators
-		s.logger.Debug("action_enqueued",
-			deps.ActionName(actionID))
+		s.logger.Debugw("action_enqueued",
+			"action_id", actionID)
 
-		if err := workerCtx.executor.EnqueueAction(actionID, result.Action, workerDeps); err != nil {
-			s.logger.SentryError(deps.FeatureActions, err, "action_enqueue_failed",
-				deps.HierarchyPath(workerCtx.identity.HierarchyPath),
-				deps.ActionName(actionID))
+		if err := workerCtx.executor.EnqueueAction(actionID, result.Action, deps); err != nil {
+			s.logger.Errorw("action_enqueue_failed",
+				"hierarchy_path", workerCtx.identity.HierarchyPath,
+				"action_id", actionID,
+				"error", err)
 
 			return fmt.Errorf("failed to enqueue action: %w", err)
 		}
@@ -391,9 +397,9 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 		workerCtx.lastActionObsTime = currentObsTime
 		workerCtx.mu.Unlock()
 
-		s.logger.Debug("action_gating_pending",
-			deps.ActionName(actionID),
-			deps.String("observation_time", currentObsTime.Format(time.RFC3339Nano)))
+		s.logger.Debugw("action_gating_pending",
+			"action_id", actionID,
+			"observation_time", currentObsTime.Format(time.RFC3339Nano))
 	}
 
 	if result.State != currentState {
@@ -402,26 +408,26 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 		now := time.Now()
 
 		s.logTrace("lifecycle",
-			deps.String("lifecycle_event", "state_transition"),
-			deps.String("from_state", fromState),
-			deps.String("to_state", toState),
-			deps.String("reason", result.Reason))
+			"lifecycle_event", "state_transition",
+			"from_state", fromState,
+			"to_state", toState,
+			"reason", result.Reason)
 
-		s.logger.Info("state_transition",
-			deps.String("from_state", fromState),
-			deps.String("to_state", toState),
-			deps.Reason(result.Reason))
+		s.logger.Infow("state_transition",
+			"from_state", fromState,
+			"to_state", toState,
+			"reason", result.Reason)
 
 		s.logTrace("lifecycle",
-			deps.String("lifecycle_event", "mutex_lock_acquire"),
-			deps.String("mutex_name", "workerCtx.mu"),
-			deps.String("lock_type", "write"))
+			"lifecycle_event", "mutex_lock_acquire",
+			"mutex_name", "workerCtx.mu",
+			"lock_type", "write")
 
 		workerCtx.mu.Lock()
 
 		s.logTrace("lifecycle",
-			deps.String("lifecycle_event", "mutex_lock_acquired"),
-			deps.String("mutex_name", "workerCtx.mu"))
+			"lifecycle_event", "mutex_lock_acquired",
+			"mutex_name", "workerCtx.mu")
 
 		if !workerCtx.stateEnteredAt.IsZero() {
 			timeInState := now.Sub(workerCtx.stateEnteredAt)
@@ -453,14 +459,14 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 		workerCtx.mu.Unlock()
 
 		s.logTrace("lifecycle",
-			deps.String("lifecycle_event", "mutex_unlock"),
-			deps.String("mutex_name", "workerCtx.mu"))
+			"lifecycle_event", "mutex_unlock",
+			"mutex_name", "workerCtx.mu")
 
 		// Record Prometheus metric AFTER lock release
 		metrics.RecordStateTransition(s.GetHierarchyPathUnlocked(), fromState, toState)
 	} else {
 		s.logTrace("state_unchanged",
-			deps.String("state", currentState.String()))
+			"state", currentState.String())
 	}
 
 	workerCtx.mu.RLock()
@@ -482,16 +488,17 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 	workerCtx.mu.RUnlock()
 
 	if err := s.processSignal(ctx, workerID, result.Signal); err != nil {
-		s.logger.SentryError(deps.FeatureReconciliation, err, "signal_processing_failed",
-			deps.HierarchyPath(workerCtx.identity.HierarchyPath),
-			deps.Int("signal", int(result.Signal)))
+		s.logger.Errorw("signal_processing_failed",
+			"hierarchy_path", workerCtx.identity.HierarchyPath,
+			"signal", int(result.Signal),
+			"error", err)
 
 		return fmt.Errorf("signal processing failed: %w", err)
 	}
 
 	s.logTrace("lifecycle",
-		deps.String("lifecycle_event", "tick_complete"),
-		deps.String("final_state", finalState))
+		"lifecycle_event", "tick_complete",
+		"final_state", finalState)
 
 	return nil
 }
@@ -548,9 +555,10 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 		s.circuitOpen.Store(true)
 
 		if !wasOpen {
-			s.logger.SentryError(deps.FeatureHealth, err, "circuit_breaker_opened",
-				deps.String("error_scope", "infrastructure"),
-				deps.String("impact", "all_workers"))
+			s.logger.Errorw("circuit_breaker_opened",
+				"error", err.Error(),
+				"error_scope", "infrastructure",
+				"impact", "all_workers")
 			metrics.RecordCircuitOpen(s.GetHierarchyPathUnlocked(), true)
 		}
 
@@ -559,28 +567,28 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 			attempts := s.healthChecker.backoff.GetAttempts()
 			nextDelay := s.healthChecker.backoff.NextDelay()
 
-			s.logger.SentryWarn(deps.FeatureHealth, "circuit_breaker_retry_scheduled",
-				deps.String("failed_child", childErr.ChildName),
-				deps.Attempts(attempts),
-				deps.Int("max_attempts", s.healthChecker.maxAttempts),
-				deps.Duration("elapsed_downtime", s.healthChecker.backoff.GetTotalDowntime()),
-				deps.Duration("next_retry_in", nextDelay),
-				deps.String("recovery_status", s.getRecoveryStatus()))
+			s.logger.Warnw("circuit_breaker_retry_scheduled",
+				"failed_child", childErr.ChildName,
+				"retry_attempt", attempts,
+				"max_attempts", s.healthChecker.maxAttempts,
+				"elapsed_downtime", s.healthChecker.backoff.GetTotalDowntime().String(),
+				"next_retry_in", nextDelay.String(),
+				"recovery_status", s.getRecoveryStatus())
 
 			if attempts == 4 {
-				s.logger.SentryWarn(deps.FeatureHealth, "escalation_warning_one_retry_remaining",
-					deps.String("child_name", childErr.ChildName),
-					deps.Int("attempts_remaining", 1),
-					deps.Duration("total_downtime", s.healthChecker.backoff.GetTotalDowntime()))
+				s.logger.Warnw("escalation_warning_one_retry_remaining",
+					"child_name", childErr.ChildName,
+					"attempts_remaining", 1,
+					"total_downtime", s.healthChecker.backoff.GetTotalDowntime().String())
 			}
 
 			if attempts >= 5 {
-				s.logger.SentryError(deps.FeatureHealth, errors.New("escalation required: max retry attempts exceeded"), "escalation_required",
-					deps.String("child_name", childErr.ChildName),
-					deps.Int("max_attempts", 5),
-					deps.Duration("total_downtime", s.healthChecker.backoff.GetTotalDowntime()),
-					deps.String("runbook_url", "https://docs.umh.app/runbooks/supervisor-escalation"),
-					deps.String("manual_steps", s.getEscalationSteps(childErr.ChildName)))
+				s.logger.Errorw("escalation_required",
+					"child_name", childErr.ChildName,
+					"max_attempts", 5,
+					"total_downtime", s.healthChecker.backoff.GetTotalDowntime().String(),
+					"runbook_url", "https://docs.umh.app/runbooks/supervisor-escalation",
+					"manual_steps", s.getEscalationSteps(childErr.ChildName))
 			}
 		}
 
@@ -589,9 +597,9 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 
 	if s.circuitOpen.Load() {
 		downtime := time.Since(s.healthChecker.backoff.GetStartTime())
-		s.logger.Info("circuit_breaker_closed",
-			deps.Reason("infrastructure_recovered"),
-			deps.Duration("total_downtime", downtime))
+		s.logger.Infow("circuit_breaker_closed",
+			"reason", "infrastructure_recovered",
+			"total_downtime", downtime.String())
 		metrics.RecordCircuitOpen(s.GetHierarchyPathUnlocked(), false)
 		metrics.RecordInfrastructureRecovery(s.GetHierarchyPathUnlocked(), downtime)
 	}
@@ -660,8 +668,8 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 	userVarCount := len(userSpecWithVars.Variables.User)
 	// Per-tick log moved to TRACE for scalability
 	s.logTrace("variables_propagated",
-		deps.Int("user_vars", userVarCount),
-		deps.Int("global_vars", globalVarCount))
+		"user_vars", userVarCount,
+		"global_vars", globalVarCount)
 	metrics.RecordVariablePropagation(s.GetHierarchyPathUnlocked())
 
 	// PHASE 0: Hierarchical Composition
@@ -682,7 +690,7 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 		desired = cachedState
 
 		s.logTrace("derive_desired_state_cached",
-			deps.String("hash", currentHash[:8]+"..."))
+			"hash", currentHash[:8]+"...")
 	} else {
 		// Cache miss - call DeriveDesiredState
 		templateStart := time.Now()
@@ -693,8 +701,9 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 		templateDuration := time.Since(templateStart)
 
 		if err != nil {
-			s.logger.SentryError(deps.FeatureReconciliation, err, "template_rendering_failed",
-				deps.DurationMs(templateDuration.Milliseconds()))
+			s.logger.Errorw("template_rendering_failed",
+				"error", err.Error(),
+				"duration_ms", templateDuration.Milliseconds())
 			metrics.RecordTemplateRenderingDuration(s.GetHierarchyPathUnlocked(), "error", templateDuration)
 			metrics.RecordTemplateRenderingError(s.GetHierarchyPathUnlocked(), "derivation_failed")
 
@@ -706,9 +715,10 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 		// This catches both developer mistakes (hardcoded wrong values) and user config mistakes
 		// Use GetState() method from fsmv2.DesiredState interface
 		if valErr := config.ValidateDesiredState(desired.GetState()); valErr != nil {
-			s.logger.SentryError(deps.FeatureReconciliation, valErr, "invalid_desired_state",
-				deps.String("state", desired.GetState()),
-				deps.WorkerID(firstWorkerID))
+			s.logger.Errorw("invalid_desired_state",
+				"state", desired.GetState(),
+				"worker_id", firstWorkerID,
+				"error", valErr)
 			metrics.RecordTemplateRenderingDuration(s.GetHierarchyPathUnlocked(), "error", templateDuration)
 			metrics.RecordTemplateRenderingError(s.GetHierarchyPathUnlocked(), "invalid_state_value")
 
@@ -723,8 +733,8 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 		s.mu.Unlock()
 
 		s.logTrace("derive_desired_state_computed",
-			deps.String("hash", currentHash[:8]+"..."),
-			deps.Int64("duration_ms", templateDuration.Milliseconds()))
+			"hash", currentHash[:8]+"...",
+			"duration_ms", templateDuration.Milliseconds())
 		metrics.RecordTemplateRenderingDuration(s.GetHierarchyPathUnlocked(), "success", templateDuration)
 	}
 
@@ -756,8 +766,8 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 	if err != nil {
 		// Log the error but continue with the tick - the system can recover on the next tick
 		// The tickWorker will use the previously saved desired state
-		s.logger.Warn("derived_desired_state_save_failed",
-			deps.Err(err))
+		s.logger.Warnw("derived_desired_state_save_failed",
+			"error", err)
 	} else {
 		// Per-tick log moved to TRACE for scalability
 		s.logTrace("derived_desired_state_saved")
@@ -777,9 +787,7 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 			hash, err := spec.Hash()
 			if err != nil {
 				// If hashing fails, always validate to be safe
-				s.logger.Warn("spec_hash_failed",
-					deps.String("spec", spec.Name),
-					deps.Err(err))
+				s.logger.Warnw("spec_hash_failed", "spec", spec.Name, "error", err)
 				specsToValidate = append(specsToValidate, spec)
 				continue
 			}
@@ -790,7 +798,8 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 
 		if len(specsToValidate) > 0 {
 			if err := config.ValidateChildSpecs(specsToValidate, registry); err != nil {
-				s.logger.SentryError(deps.FeatureReconciliation, err, "child_spec_validation_failed")
+				s.logger.Errorw("child_spec_validation_failed",
+					"error", err.Error())
 
 				return fmt.Errorf("invalid child specifications: %w", err)
 			}
@@ -800,17 +809,15 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 				hash, err := spec.Hash()
 				if err != nil {
 					// Skip caching if hash fails - will revalidate next time
-					s.logger.Warn("spec_hash_cache_failed",
-						deps.String("spec", spec.Name),
-						deps.Err(err))
+					s.logger.Warnw("spec_hash_cache_failed", "spec", spec.Name, "error", err)
 					continue
 				}
 				s.validatedSpecHashes[spec.Name] = hash
 			}
 
 			s.logTrace("child_specs_validated",
-				deps.Int("validated_count", len(specsToValidate)),
-				deps.Int("total_count", len(childrenSpecs)))
+				"validated_count", len(specsToValidate),
+				"total_count", len(childrenSpecs))
 		}
 
 		// Clean up removed specs from cache
@@ -854,7 +861,8 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 
 	for _, child := range childrenToTick {
 		if err := child.tick(ctx); err != nil {
-			s.logger.SentryError(deps.FeatureReconciliation, err, "child_tick_failed")
+			s.logger.Errorw("child_tick_failed",
+				"error", err)
 			// Continue with other children
 		}
 	}
@@ -897,15 +905,15 @@ func (s *Supervisor[TObserved, TDesired]) tickAll(ctx context.Context) error {
 // processSignal handles signals from states.
 func (s *Supervisor[TObserved, TDesired]) processSignal(ctx context.Context, workerID string, signal fsmv2.Signal) error {
 	s.logTrace("lifecycle",
-		deps.String("lifecycle_event", "signal_processing"),
-		deps.Int("signal", int(signal)))
+		"lifecycle_event", "signal_processing",
+		"signal", int(signal))
 
 	switch signal {
 	case fsmv2.SignalNone:
 		// Normal operation
 		return nil
 	case fsmv2.SignalNeedsRemoval:
-		s.logger.Debug("worker_removal_signaled")
+		s.logger.Debugw("worker_removal_signaled")
 
 		// Check if this worker should be restarted instead of removed
 		s.mu.Lock()
@@ -919,10 +927,10 @@ func (s *Supervisor[TObserved, TDesired]) processSignal(ctx context.Context, wor
 		s.mu.Unlock()
 
 		if shouldRestart {
-			s.logger.Info("worker_restarting",
-				deps.HierarchyPath(s.GetHierarchyPathUnlocked()),
-				deps.String("target_worker_id", workerID),
-				deps.Reason("restart requested after graceful shutdown"))
+			s.logger.Infow("worker_restarting",
+				"hierarchy_path", s.GetHierarchyPathUnlocked(),
+				"target_worker_id", workerID,
+				"reason", "restart requested after graceful shutdown")
 
 			return s.handleWorkerRestart(ctx, workerID)
 		}
@@ -934,9 +942,9 @@ func (s *Supervisor[TObserved, TDesired]) processSignal(ctx context.Context, wor
 		if !exists {
 			s.mu.Unlock()
 
-			s.logger.Warn("worker_removal_not_found",
-				deps.HierarchyPath(s.GetHierarchyPathUnlocked()),
-				deps.String("target_worker_id", workerID))
+			s.logger.Warnw("worker_removal_not_found",
+				"hierarchy_path", s.GetHierarchyPathUnlocked(),
+				"target_worker_id", workerID)
 
 			return errors.New("worker not found in registry")
 		}
@@ -952,9 +960,9 @@ func (s *Supervisor[TObserved, TDesired]) processSignal(ctx context.Context, wor
 				childrenToCleanup[name] = child // Capture children for cleanup outside lock
 			}
 
-			s.logger.Warn("worker_removal_has_children",
-				deps.Int("child_count", childCount),
-				deps.Any("children", childNames))
+			s.logger.Warnw("worker_removal_has_children",
+				"child_count", childCount,
+				"children", childNames)
 		}
 
 		delete(s.workers, workerID)
@@ -977,9 +985,9 @@ func (s *Supervisor[TObserved, TDesired]) processSignal(ctx context.Context, wor
 		_ = ctx
 
 		for name, child := range childrenToCleanup {
-			s.logger.Debug("child_supervisor_shutdown",
-				deps.String("child_name", name),
-				deps.String("context", "post_graceful_cleanup"))
+			s.logger.Debugw("child_supervisor_shutdown",
+				"child_name", name,
+				"context", "post_graceful_cleanup")
 			child.Shutdown()
 
 			// Wait for child supervisor to fully stop
@@ -1005,15 +1013,15 @@ func (s *Supervisor[TObserved, TDesired]) processSignal(ctx context.Context, wor
 		workerCtx.collector.Stop(ctx)
 		workerCtx.executor.Shutdown()
 
-		s.logger.Debug("worker_removed_successfully",
-			deps.Int("children_cleaned", childCount))
+		s.logger.Debugw("worker_removed_successfully",
+			"children_cleaned", childCount)
 
 		return nil
 	case fsmv2.SignalNeedsRestart:
-		s.logger.Info("worker_restart_requested",
-			deps.HierarchyPath(s.GetHierarchyPathUnlocked()),
-			deps.String("target_worker_id", workerID),
-			deps.Reason("worker signaled unrecoverable error"))
+		s.logger.Infow("worker_restart_requested",
+			"hierarchy_path", s.GetHierarchyPathUnlocked(),
+			"target_worker_id", workerID,
+			"reason", "worker signaled unrecoverable error")
 
 		// Mark for restart (will be checked when SignalNeedsRemoval is received)
 		s.mu.Lock()
@@ -1023,19 +1031,19 @@ func (s *Supervisor[TObserved, TDesired]) processSignal(ctx context.Context, wor
 
 		// Request graceful shutdown - worker will go through cleanup states
 		if err := s.requestShutdown(ctx, workerID, "restart_requested"); err != nil {
-			s.logger.Warn("restart_shutdown_request_failed",
-				deps.HierarchyPath(s.GetHierarchyPathUnlocked()),
-				deps.String("target_worker_id", workerID),
-				deps.Err(err))
+			s.logger.Warnw("restart_shutdown_request_failed",
+				"hierarchy_path", s.GetHierarchyPathUnlocked(),
+				"target_worker_id", workerID,
+				"error", err)
 			// Continue anyway - we want to restart even if request fails
 		}
 
 		return nil
 	default:
-		s.logger.SentryError(deps.FeatureReconciliation, errors.New("unknown signal received"), "unknown_signal_received",
-			deps.HierarchyPath(s.GetHierarchyPathUnlocked()),
-			deps.String("target_worker_id", workerID),
-			deps.Int("signal", int(signal)))
+		s.logger.Errorw("unknown_signal_received",
+			"hierarchy_path", s.GetHierarchyPathUnlocked(),
+			"target_worker_id", workerID,
+			"signal", int(signal))
 
 		return errors.New("unknown signal")
 	}
@@ -1054,11 +1062,11 @@ func (s *Supervisor[TObserved, TDesired]) checkRestartTimeouts(ctx context.Conte
 		}
 
 		if time.Since(requestedAt) > DefaultGracefulRestartTimeout {
-			s.logger.Warn("restart_graceful_timeout",
-				deps.HierarchyPath(s.GetHierarchyPathUnlocked()),
-				deps.String("target_worker_id", workerID),
-				deps.Duration("timeout", DefaultGracefulRestartTimeout),
-				deps.Duration("waited", time.Since(requestedAt)))
+			s.logger.Warnw("restart_graceful_timeout",
+				"hierarchy_path", s.GetHierarchyPathUnlocked(),
+				"target_worker_id", workerID,
+				"timeout", DefaultGracefulRestartTimeout,
+				"waited", time.Since(requestedAt))
 
 			workerCtx, workerExists := s.workers[workerID]
 			if !workerExists {
@@ -1078,9 +1086,9 @@ func (s *Supervisor[TObserved, TDesired]) checkRestartTimeouts(ctx context.Conte
 				fromState = workerCtx.currentState.String()
 			}
 
-			s.logger.Info("worker_restart_force_reset",
-				deps.HierarchyPath(workerCtx.identity.HierarchyPath),
-				deps.String("from_state", fromState))
+			s.logger.Infow("worker_restart_force_reset",
+				"hierarchy_path", workerCtx.identity.HierarchyPath,
+				"from_state", fromState)
 
 			workerCtx.currentState = workerCtx.worker.GetInitialState()
 
@@ -1099,9 +1107,9 @@ func (s *Supervisor[TObserved, TDesired]) checkRestartTimeouts(ctx context.Conte
 			delete(s.pendingRestart, workerID)
 			delete(s.restartRequestedAt, workerID)
 
-			s.logger.Info("worker_restart_force_complete",
-				deps.HierarchyPath(workerCtx.identity.HierarchyPath),
-				deps.String("to_state", toState))
+			s.logger.Infow("worker_restart_force_complete",
+				"hierarchy_path", workerCtx.identity.HierarchyPath,
+				"to_state", toState)
 		}
 	}
 }
@@ -1157,9 +1165,9 @@ func (s *Supervisor[TObserved, TDesired]) restartCollector(ctx context.Context, 
 			s.mu.Unlock()
 
 			// Backoff not yet elapsed - skip this restart attempt (non-blocking)
-			s.logger.Debug("collector_restart_backoff",
-				deps.Attempts(restartCount),
-				deps.Duration("backoff_remaining", backoff-elapsed))
+			s.logger.Debugw("collector_restart_backoff",
+				"restart_attempt", restartCount,
+				"backoff_remaining", backoff-elapsed)
 
 			return nil
 		}
@@ -1174,19 +1182,19 @@ func (s *Supervisor[TObserved, TDesired]) restartCollector(ctx context.Context, 
 	maxRestartAttempts := s.collectorHealth.maxRestartAttempts
 	s.mu.Unlock()
 
-	s.logger.SentryWarn(deps.FeatureHealth, "collector_restarting",
-		deps.Attempts(restartCount),
-		deps.Int("max_attempts", maxRestartAttempts),
-		deps.Duration("backoff", backoff))
+	s.logger.Warnw("collector_restarting",
+		"restart_attempt", restartCount,
+		"max_attempts", maxRestartAttempts,
+		"backoff", backoff)
 
 	s.mu.RLock()
 	workerCtx, exists := s.workers[workerID]
 	s.mu.RUnlock()
 
 	if !exists {
-		s.logger.SentryError(deps.FeatureHealth, errors.New("worker not found"), "collector_restart_worker_not_found",
-			deps.HierarchyPath(s.GetHierarchyPathUnlocked()),
-			deps.String("target_worker_id", workerID))
+		s.logger.Errorw("collector_restart_worker_not_found",
+			"hierarchy_path", s.GetHierarchyPathUnlocked(),
+			"target_worker_id", workerID)
 
 		return errors.New("worker not found")
 	}
@@ -1216,8 +1224,7 @@ func (s *Supervisor[TObserved, TDesired]) checkDataFreshness(snapshot *fsmv2.Sna
 	}
 
 	if !hasTimestamp {
-		s.logger.Warn("snapshot_missing_timestamp",
-			deps.String("info", "Snapshot.Observed does not implement GetTimestamp(), cannot check freshness"))
+		s.logger.Warn("Snapshot.Observed does not implement GetTimestamp(), cannot check freshness")
 
 		return true
 	}
@@ -1230,13 +1237,13 @@ func (s *Supervisor[TObserved, TDesired]) checkDataFreshness(snapshot *fsmv2.Sna
 
 	if s.freshnessChecker.IsTimeout(snapshot) {
 		if isShuttingDown {
-			s.logger.Debug("data_timeout_during_shutdown",
-				deps.Duration("age", age),
-				deps.Duration("threshold", s.collectorHealth.timeout))
+			s.logger.Debugw("data_timeout_during_shutdown",
+				"age", age,
+				"threshold", s.collectorHealth.timeout)
 		} else {
-			s.logger.SentryWarn(deps.FeatureHealth, "data_timeout",
-				deps.Duration("age", age),
-				deps.Duration("threshold", s.collectorHealth.timeout))
+			s.logger.Warnw("data_timeout",
+				"age", age,
+				"threshold", s.collectorHealth.timeout)
 		}
 
 		return false
@@ -1244,13 +1251,13 @@ func (s *Supervisor[TObserved, TDesired]) checkDataFreshness(snapshot *fsmv2.Sna
 
 	if !s.freshnessChecker.Check(snapshot) {
 		if isShuttingDown {
-			s.logger.Debug("data_stale_during_shutdown",
-				deps.Duration("age", age),
-				deps.Duration("threshold", s.collectorHealth.staleThreshold))
+			s.logger.Debugw("data_stale_during_shutdown",
+				"age", age,
+				"threshold", s.collectorHealth.staleThreshold)
 		} else {
-			s.logger.Warn("data_stale",
-				deps.Duration("age", age),
-				deps.Duration("threshold", s.collectorHealth.staleThreshold))
+			s.logger.Warnw("data_stale",
+				"age", age,
+				"threshold", s.collectorHealth.staleThreshold)
 		}
 
 		return false
@@ -1287,14 +1294,14 @@ func (s *Supervisor[TObserved, TDesired]) logHeartbeat() {
 
 	activeActions := 0
 
-	s.logger.Info("supervisor_heartbeat",
-		deps.HierarchyPath(s.GetHierarchyPathUnlocked()),
-		deps.Int64("tick", int64(atomic.LoadUint64(&s.tickCount))),
-		deps.Int("workers", workerCount),
-		deps.Int("children", childCount),
-		deps.Any("worker_states", workerStates),
-		deps.Any("worker_reasons", workerReasons),
-		deps.Int("active_actions", activeActions))
+	s.logger.Infow("supervisor_heartbeat",
+		"hierarchy_path", s.GetHierarchyPathUnlocked(),
+		"tick", atomic.LoadUint64(&s.tickCount),
+		"workers", workerCount,
+		"children", childCount,
+		"worker_states", workerStates,
+		"worker_reasons", workerReasons,
+		"active_actions", activeActions)
 }
 
 func (s *Supervisor[TObserved, TDesired]) getRecoveryStatus() string {
@@ -1334,16 +1341,16 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 
 		if child, exists := s.children[spec.Name]; exists {
 			s.logTrace("lifecycle",
-				deps.String("lifecycle_event", "child_update"),
-				deps.String("child_name", spec.Name),
-				deps.String("parent_worker_type", s.workerType))
+				"lifecycle_event", "child_update",
+				"child_name", spec.Name,
+				"parent_worker_type", s.workerType)
 
 			// Clear pendingRemoval if child was marked for removal but re-appeared in specs
 			// This handles the case where a child disappears temporarily (e.g., during restart)
 			// and then re-appears in the desired spec before shutdown completes
 			if s.pendingRemoval[spec.Name] {
-				s.logger.Debug("child_reappeared_clearing_pending_removal",
-					deps.String("child_name", spec.Name))
+				s.logger.Debugw("child_reappeared_clearing_pending_removal",
+					"child_name", spec.Name)
 				delete(s.pendingRemoval, spec.Name)
 			}
 
@@ -1357,14 +1364,14 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 			updatedCount++
 		} else {
 			s.logTrace("lifecycle",
-				deps.String("lifecycle_event", "child_add_start"),
-				deps.String("child_name", spec.Name),
-				deps.String("child_worker_type", spec.WorkerType),
-				deps.String("parent_worker_type", s.workerType))
+				"lifecycle_event", "child_add_start",
+				"child_name", spec.Name,
+				"child_worker_type", spec.WorkerType,
+				"parent_worker_type", s.workerType)
 
-			s.logger.Info("child_adding",
-				deps.String("child_name", spec.Name),
-				deps.WorkerType(spec.WorkerType))
+			s.logger.Infow("child_adding",
+				"child_name", spec.Name,
+				"child_worker_type", spec.WorkerType)
 
 			addedCount++
 
@@ -1372,11 +1379,11 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 			mergedDeps := config.MergeDependencies(s.deps, spec.Dependencies)
 
 			s.logTrace("lifecycle",
-				deps.String("lifecycle_event", "dependencies_merged"),
-				deps.String("child_name", spec.Name),
-				deps.Int("parent_dep_count", len(s.deps)),
-				deps.Int("child_dep_count", len(spec.Dependencies)),
-				deps.Int("merged_dep_count", len(mergedDeps)))
+				"lifecycle_event", "dependencies_merged",
+				"child_name", spec.Name,
+				"parent_dep_count", len(s.deps),
+				"child_dep_count", len(spec.Dependencies),
+				"merged_dep_count", len(mergedDeps))
 
 			childConfig := Config{
 				WorkerType:              spec.WorkerType,
@@ -1390,16 +1397,17 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 			// Use factory to create child supervisor with proper type
 			rawSupervisor, err := factory.NewSupervisorByType(spec.WorkerType, childConfig)
 			if err != nil {
-				s.logger.SentryError(deps.FeatureReconciliation, err, "child_supervisor_creation_failed",
-					deps.String("child_name", spec.Name))
+				s.logger.Errorw("child_supervisor_creation_failed",
+					"child_name", spec.Name,
+					"error", err)
 
 				continue
 			}
 
 			childSupervisor, ok := rawSupervisor.(SupervisorInterface)
 			if !ok {
-				s.logger.SentryError(deps.FeatureReconciliation, errors.New("invalid supervisor type from factory"), "factory_invalid_supervisor_type",
-					deps.String("child_name", spec.Name))
+				s.logger.Errorw("factory_invalid_supervisor_type",
+					"child_name", spec.Name)
 
 				continue
 			}
@@ -1443,17 +1451,19 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 			// Use mergedDeps to include both parent and child-specific dependencies
 			childWorker, err := factory.NewWorkerByType(spec.WorkerType, childIdentity, s.baseLogger, s.store, mergedDeps)
 			if err != nil {
-				s.logger.SentryError(deps.FeatureReconciliation, err, "child_worker_creation_failed",
-					deps.String("child_name", spec.Name),
-					deps.WorkerType(spec.WorkerType))
+				s.logger.Errorw("child_worker_creation_failed",
+					"child_name", spec.Name,
+					"worker_type", spec.WorkerType,
+					"error", err)
 
 				continue
 			}
 
 			// Add worker to child supervisor
 			if err := childSupervisor.AddWorker(childIdentity, childWorker); err != nil {
-				s.logger.SentryError(deps.FeatureReconciliation, err, "child_supervisor_add_worker_failed",
-					deps.String("child_name", spec.Name))
+				s.logger.Errorw("child_supervisor_add_worker_failed",
+					"child_name", spec.Name,
+					"error", err)
 
 				continue
 			}
@@ -1466,9 +1476,9 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 				FieldShutdownRequested: false,
 			}
 			if _, err := s.store.SaveDesired(childDesiredCtx, spec.WorkerType, childIdentity.ID, desiredDoc); err != nil {
-				s.logger.Warn("child_initial_desired_state_save_failed",
-					deps.String("child_name", spec.Name),
-					deps.Err(err))
+				s.logger.Warnw("child_initial_desired_state_save_failed",
+					"child_name", spec.Name,
+					"error", err)
 			}
 
 			cancel()
@@ -1476,9 +1486,9 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 			s.children[spec.Name] = childSupervisor
 
 			s.logTrace("lifecycle",
-				deps.String("lifecycle_event", "child_add_complete"),
-				deps.String("child_name", spec.Name),
-				deps.String("parent_worker_type", s.workerType))
+				"lifecycle_event", "child_add_complete",
+				"child_name", spec.Name,
+				"parent_worker_type", s.workerType)
 
 			// Start child supervisor if parent is already started
 			if childCtx, started := s.getStartedContext(); started {
@@ -1486,8 +1496,8 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 					done := childSupervisor.Start(childCtx)
 					s.childDoneChans[spec.Name] = done
 				} else {
-					s.logger.Warn("child_start_skipped_context_cancelled",
-						deps.String("child_name", spec.Name))
+					s.logger.Warnw("child_start_skipped_context_cancelled",
+						"child_name", spec.Name)
 				}
 			}
 		}
@@ -1497,12 +1507,12 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 	for name := range s.children {
 		if !specNames[name] && !s.pendingRemoval[name] {
 			s.logTrace("lifecycle",
-				deps.String("lifecycle_event", "child_shutdown_requested"),
-				deps.String("child_name", name),
-				deps.String("parent_worker_type", s.workerType))
+				"lifecycle_event", "child_shutdown_requested",
+				"child_name", name,
+				"parent_worker_type", s.workerType)
 
-			s.logger.Debug("child_shutdown_requesting",
-				deps.String("child_name", name))
+			s.logger.Debugw("child_shutdown_requesting",
+				"child_name", name)
 
 			// Mark child as pending removal
 			s.pendingRemoval[name] = true
@@ -1513,9 +1523,9 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 				// Child continues ticking and will emit SignalNeedsRemoval when ready
 				ctx := context.Background()
 				if err := child.RequestShutdown(ctx, "removed_from_specs"); err != nil {
-					s.logger.Warn("child_shutdown_request_failed",
-						deps.String("child_name", name),
-						deps.Err(err))
+					s.logger.Warnw("child_shutdown_request_failed",
+						"child_name", name,
+						"error", err)
 				}
 			}
 			// DON'T delete here - wait for child's workers to complete shutdown
@@ -1534,12 +1544,12 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 		// Check if child has no more workers (all emitted SignalNeedsRemoval)
 		if len(child.ListWorkers()) == 0 {
 			s.logTrace("lifecycle",
-				deps.String("lifecycle_event", "child_remove_start"),
-				deps.String("child_name", name),
-				deps.String("parent_worker_type", s.workerType))
+				"lifecycle_event", "child_remove_start",
+				"child_name", name,
+				"parent_worker_type", s.workerType)
 
-			s.logger.Debug("child_shutdown_complete",
-				deps.String("child_name", name))
+			s.logger.Debugw("child_shutdown_complete",
+				"child_name", name)
 
 			// Now safe to fully shut down and remove
 			child.Shutdown()
@@ -1553,9 +1563,9 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 			delete(s.pendingRemoval, name)
 
 			s.logTrace("lifecycle",
-				deps.String("lifecycle_event", "child_remove_complete"),
-				deps.String("child_name", name),
-				deps.String("parent_worker_type", s.workerType))
+				"lifecycle_event", "child_remove_complete",
+				"child_name", name,
+				"parent_worker_type", s.workerType)
 
 			removedCount++
 		}
@@ -1565,16 +1575,16 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 	// Log at DEBUG for all reconciliation completions
 	if addedCount > 0 || removedCount > 0 {
 		// Topology changed
-		s.logger.Debug("child_reconciliation_completed",
-			deps.Int("added", addedCount),
-			deps.Int("updated", updatedCount),
-			deps.Int("removed", removedCount),
-			deps.DurationMs(duration.Milliseconds()))
+		s.logger.Debugw("child_reconciliation_completed",
+			"added", addedCount,
+			"updated", updatedCount,
+			"removed", removedCount,
+			"duration_ms", duration.Milliseconds())
 	} else if updatedCount > 0 {
 		// Updates only - DEBUG level (per-tick noise)
-		s.logger.Debug("child_reconciliation_completed",
-			deps.Int("updated", updatedCount),
-			deps.DurationMs(duration.Milliseconds()))
+		s.logger.Debugw("child_reconciliation_completed",
+			"updated", updatedCount,
+			"duration_ms", duration.Milliseconds())
 	}
 
 	metrics.RecordReconciliation(s.GetHierarchyPathUnlocked(), "success", duration)
@@ -1609,9 +1619,9 @@ func (s *Supervisor[TObserved, TDesired]) applyStateMapping() {
 
 		child.setMappedParentState(mappedState)
 		s.logTrace("state_mapped",
-			deps.String("child_name", childName),
-			deps.String("parent_state", parentState),
-			deps.String("mapped_state", mappedState))
+			"child_name", childName,
+			"parent_state", parentState,
+			"mapped_state", mappedState)
 	}
 }
 

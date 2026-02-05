@@ -47,6 +47,7 @@ import (
 	"fmt"
 	"time"
 
+	"go.uber.org/zap"
 	"gopkg.in/yaml.v3"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
@@ -74,7 +75,7 @@ type TransportWorker struct {
 // Returns an error if required dependencies are missing.
 func NewTransportWorker(
 	identity deps.Identity,
-	logger deps.FSMLogger,
+	logger *zap.SugaredLogger,
 	stateReader deps.StateReader,
 ) (*TransportWorker, error) {
 	// Dependency validation: reject nil logger (architecture requirement)
@@ -183,7 +184,7 @@ func (w *TransportWorker) GetInitialState() fsmv2.State[any, any] {
 func init() {
 	if err := factory.RegisterWorkerType[snapshot.TransportObservedState, *snapshot.TransportDesiredState](
 		// Worker factory function
-		func(id deps.Identity, logger deps.FSMLogger, stateReader deps.StateReader, _ map[string]any) fsmv2.Worker {
+		func(id deps.Identity, logger *zap.SugaredLogger, stateReader deps.StateReader, _ map[string]any) fsmv2.Worker {
 			worker, err := NewTransportWorker(id, logger, stateReader)
 			if err != nil {
 				panic(fmt.Sprintf("failed to create transport worker: %v", err))

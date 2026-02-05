@@ -23,6 +23,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"go.uber.org/zap"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
@@ -62,7 +63,7 @@ func registerInternalTestWorkerFactories() {
 	for _, workerType := range workerTypes {
 		wt := workerType
 		// Register worker factory
-		_ = factory.RegisterFactoryByType(wt, func(identity deps.Identity, _ deps.FSMLogger, _ deps.StateReader, _ map[string]any) fsmv2.Worker {
+		_ = factory.RegisterFactoryByType(wt, func(identity deps.Identity, _ *zap.SugaredLogger, _ deps.StateReader, _ map[string]any) fsmv2.Worker {
 			return &TestWorkerWithType{
 				WorkerType: wt,
 			}
@@ -185,12 +186,12 @@ func (m *internalMockWorkerWithChildren) GetInitialState() fsmv2.State[any, any]
 var _ = Describe("Supervisor Internal", func() {
 	var (
 		ctx    context.Context
-		logger deps.FSMLogger
+		logger *zap.SugaredLogger
 	)
 
 	BeforeEach(func() {
 		ctx = context.Background()
-		logger = deps.NewNopFSMLogger()
+		logger = zap.NewNop().Sugar()
 		registerInternalTestWorkerFactories()
 	})
 
@@ -207,7 +208,7 @@ var _ = Describe("Supervisor Internal", func() {
 			Expect(basicStore.CreateCollection(ctx, "test_desired", nil)).To(Succeed())
 			Expect(basicStore.CreateCollection(ctx, "test_observed", nil)).To(Succeed())
 
-			triangularStore := storage.NewTriangularStore(basicStore, deps.NewNopFSMLogger())
+			triangularStore := storage.NewTriangularStore(basicStore, zap.NewNop().Sugar())
 
 			supervisorCfg := Config{
 				WorkerType: "test",
@@ -228,7 +229,7 @@ var _ = Describe("Supervisor Internal", func() {
 			Expect(basicStore.CreateCollection(ctx, "test_desired", nil)).To(Succeed())
 			Expect(basicStore.CreateCollection(ctx, "test_observed", nil)).To(Succeed())
 
-			triangularStore := storage.NewTriangularStore(basicStore, deps.NewNopFSMLogger())
+			triangularStore := storage.NewTriangularStore(basicStore, zap.NewNop().Sugar())
 
 			supervisorCfg := Config{
 				WorkerType: "test",
@@ -270,7 +271,7 @@ var _ = Describe("Supervisor Internal", func() {
 			Expect(basicStore.CreateCollection(ctx, "test_desired", nil)).To(Succeed())
 			Expect(basicStore.CreateCollection(ctx, "test_observed", nil)).To(Succeed())
 
-			triangularStore := storage.NewTriangularStore(basicStore, deps.NewNopFSMLogger())
+			triangularStore := storage.NewTriangularStore(basicStore, zap.NewNop().Sugar())
 
 			supervisorCfg := Config{
 				WorkerType: "test",
@@ -328,7 +329,7 @@ var _ = Describe("Supervisor Internal", func() {
 			Expect(basicStore.CreateCollection(ctx, "mqtt_client_desired", nil)).To(Succeed())
 			Expect(basicStore.CreateCollection(ctx, "mqtt_client_observed", nil)).To(Succeed())
 
-			triangularStore = storage.NewTriangularStore(basicStore, deps.NewNopFSMLogger())
+			triangularStore = storage.NewTriangularStore(basicStore, zap.NewNop().Sugar())
 		})
 
 		AfterEach(func() {

@@ -20,6 +20,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"go.uber.org/zap"
 
 	fsmv2types "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
@@ -35,11 +36,11 @@ func TestExampleParent(t *testing.T) {
 var _ = Describe("ParentWorker", func() {
 	var (
 		worker *exampleparent.ParentWorker
-		logger deps.FSMLogger
+		logger *zap.SugaredLogger
 	)
 
 	BeforeEach(func() {
-		logger = deps.NewNopFSMLogger()
+		logger = zap.NewNop().Sugar()
 		identity := deps.Identity{ID: "test-parent", Name: "Test Parent"}
 		var err error
 		worker, err = exampleparent.NewParentWorker(identity, logger, nil)

@@ -23,6 +23,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"go.uber.org/zap"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
@@ -37,12 +38,12 @@ var _ = Describe("ActionExecutor", func() {
 		executor *execution.ActionExecutor
 		ctx      context.Context
 		cancel   context.CancelFunc
-		logger   deps.FSMLogger
+		logger   *zap.SugaredLogger
 	)
 
 	BeforeEach(func() {
 		ctx, cancel = context.WithCancel(context.Background())
-		logger = deps.NewNopFSMLogger()
+		logger = zap.NewNop().Sugar()
 		executor = execution.NewActionExecutor(10, "test-supervisor", testIdentity, logger)
 		executor.Start(ctx)
 	})
@@ -55,24 +56,24 @@ var _ = Describe("ActionExecutor", func() {
 	Describe("Constructor Validation", func() {
 		Context("NewActionExecutor with invalid worker count", func() {
 			It("should default to 10 workers when workerCount is 0", func() {
-				executor := execution.NewActionExecutor(0, "test-supervisor", testIdentity, deps.NewNopFSMLogger())
+				executor := execution.NewActionExecutor(0, "test-supervisor", testIdentity, zap.NewNop().Sugar())
 				Expect(executor).ToNot(BeNil())
 			})
 
 			It("should default to 10 workers when workerCount is negative", func() {
-				executor := execution.NewActionExecutor(-5, "test-supervisor", testIdentity, deps.NewNopFSMLogger())
+				executor := execution.NewActionExecutor(-5, "test-supervisor", testIdentity, zap.NewNop().Sugar())
 				Expect(executor).ToNot(BeNil())
 			})
 		})
 
 		Context("NewActionExecutorWithTimeout with invalid worker count", func() {
 			It("should default to 10 workers when workerCount is 0", func() {
-				executor := execution.NewActionExecutorWithTimeout(0, map[string]time.Duration{}, "test-supervisor", testIdentity, deps.NewNopFSMLogger())
+				executor := execution.NewActionExecutorWithTimeout(0, map[string]time.Duration{}, "test-supervisor", testIdentity, zap.NewNop().Sugar())
 				Expect(executor).ToNot(BeNil())
 			})
 
 			It("should default to 10 workers when workerCount is negative", func() {
-				executor := execution.NewActionExecutorWithTimeout(-3, map[string]time.Duration{}, "test-supervisor", testIdentity, deps.NewNopFSMLogger())
+				executor := execution.NewActionExecutorWithTimeout(-3, map[string]time.Duration{}, "test-supervisor", testIdentity, zap.NewNop().Sugar())
 				Expect(executor).ToNot(BeNil())
 			})
 		})
@@ -271,7 +272,7 @@ var _ = Describe("ActionExecutor", func() {
 			It("should cancel action after configured timeout", func() {
 				executor := execution.NewActionExecutorWithTimeout(10, map[string]time.Duration{
 					"test-action": 100 * time.Millisecond,
-				}, "test-supervisor", testIdentity, deps.NewNopFSMLogger())
+				}, "test-supervisor", testIdentity, zap.NewNop().Sugar())
 				executor.Start(ctx)
 				defer executor.Shutdown()
 
@@ -298,7 +299,7 @@ var _ = Describe("ActionExecutor", func() {
 			It("should clear in-progress status after timeout", func() {
 				executor := execution.NewActionExecutorWithTimeout(10, map[string]time.Duration{
 					"timeout-action": 50 * time.Millisecond,
-				}, "test-supervisor", testIdentity, deps.NewNopFSMLogger())
+				}, "test-supervisor", testIdentity, zap.NewNop().Sugar())
 				executor.Start(ctx)
 				defer executor.Shutdown()
 
@@ -325,7 +326,7 @@ var _ = Describe("ActionExecutor", func() {
 			It("should allow action to complete successfully", func() {
 				executor := execution.NewActionExecutorWithTimeout(10, map[string]time.Duration{
 					"fast-action": 1 * time.Second,
-				}, "test-supervisor", testIdentity, deps.NewNopFSMLogger())
+				}, "test-supervisor", testIdentity, zap.NewNop().Sugar())
 				executor.Start(ctx)
 				defer executor.Shutdown()
 
@@ -352,7 +353,7 @@ var _ = Describe("ActionExecutor", func() {
 				// The default 30s timeout is too long for unit tests
 				executor := execution.NewActionExecutorWithTimeout(10, map[string]time.Duration{
 					"configured": 1 * time.Second,
-				}, "test-supervisor", testIdentity, deps.NewNopFSMLogger())
+				}, "test-supervisor", testIdentity, zap.NewNop().Sugar())
 				executor.Start(ctx)
 				defer executor.Shutdown()
 
@@ -393,7 +394,7 @@ var _ = Describe("ActionExecutor", func() {
 				}
 
 				// Create executor with supervisorID
-				executor := execution.NewActionExecutor(10, supervisorID, testIdentity, deps.NewNopFSMLogger())
+				executor := execution.NewActionExecutor(10, supervisorID, testIdentity, zap.NewNop().Sugar())
 				executor.Start(ctx)
 				defer executor.Shutdown()
 
@@ -420,7 +421,7 @@ var _ = Describe("ActionExecutor", func() {
 					},
 				}
 
-				executor := execution.NewActionExecutor(10, supervisorID, testIdentity, deps.NewNopFSMLogger())
+				executor := execution.NewActionExecutor(10, supervisorID, testIdentity, zap.NewNop().Sugar())
 				executor.Start(ctx)
 				defer executor.Shutdown()
 
@@ -446,7 +447,7 @@ var _ = Describe("ActionExecutor", func() {
 					},
 				}
 
-				executor := execution.NewActionExecutor(10, supervisorID, testIdentity, deps.NewNopFSMLogger())
+				executor := execution.NewActionExecutor(10, supervisorID, testIdentity, zap.NewNop().Sugar())
 				executor.Start(ctx)
 				defer executor.Shutdown()
 
@@ -463,7 +464,7 @@ var _ = Describe("ActionExecutor", func() {
 
 				executor := execution.NewActionExecutorWithTimeout(10, map[string]time.Duration{
 					"timeout-action": 50 * time.Millisecond,
-				}, supervisorID, testIdentity, deps.NewNopFSMLogger())
+				}, supervisorID, testIdentity, zap.NewNop().Sugar())
 				executor.Start(ctx)
 				defer executor.Shutdown()
 
@@ -488,7 +489,7 @@ var _ = Describe("ActionExecutor", func() {
 			It("should periodically record queue size and worker pool utilization", func() {
 				supervisorID := "test-supervisor"
 
-				executor := execution.NewActionExecutor(10, supervisorID, testIdentity, deps.NewNopFSMLogger())
+				executor := execution.NewActionExecutor(10, supervisorID, testIdentity, zap.NewNop().Sugar())
 				executor.Start(ctx)
 				defer executor.Shutdown()
 
@@ -521,7 +522,7 @@ var _ = Describe("ActionExecutor", func() {
 	Describe("Non-Blocking Guarantees", func() {
 		Context("EnqueueAction non-blocking behavior", func() {
 			It("should never block when enqueueing action (even when queue full)", func() {
-				smallExecutor := execution.NewActionExecutor(2, "test-supervisor", testIdentity, deps.NewNopFSMLogger())
+				smallExecutor := execution.NewActionExecutor(2, "test-supervisor", testIdentity, zap.NewNop().Sugar())
 				smallExecutor.Start(ctx)
 				defer smallExecutor.Shutdown()
 
@@ -544,7 +545,7 @@ var _ = Describe("ActionExecutor", func() {
 			})
 
 			It("should handle 100+ concurrent actions without blocking enqueue", func() {
-				executor := execution.NewActionExecutor(50, "test-supervisor", testIdentity, deps.NewNopFSMLogger())
+				executor := execution.NewActionExecutor(50, "test-supervisor", testIdentity, zap.NewNop().Sugar())
 				executor.Start(ctx)
 				defer executor.Shutdown()
 
@@ -593,7 +594,7 @@ var _ = Describe("ActionExecutor", func() {
 
 		Context("HasActionInProgress non-blocking behavior", func() {
 			It("should never block when checking action status", func() {
-				executor := execution.NewActionExecutor(10, "test-supervisor", testIdentity, deps.NewNopFSMLogger())
+				executor := execution.NewActionExecutor(10, "test-supervisor", testIdentity, zap.NewNop().Sugar())
 				executor.Start(ctx)
 				defer executor.Shutdown()
 

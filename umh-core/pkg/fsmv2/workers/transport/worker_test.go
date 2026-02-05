@@ -20,6 +20,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"go.uber.org/zap"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	fsmv2types "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
@@ -35,13 +36,13 @@ import (
 
 var _ = Describe("TransportWorker", func() {
 	var (
-		worker    *transport.TransportWorker
-		fsmLogger deps.FSMLogger
-		identity  deps.Identity
+		worker   *transport.TransportWorker
+		logger   *zap.SugaredLogger
+		identity deps.Identity
 	)
 
 	BeforeEach(func() {
-		fsmLogger = deps.NewNopFSMLogger()
+		logger = zap.NewNop().Sugar()
 		identity = deps.Identity{ID: "test-transport", Name: "Test Transport"}
 
 		// Set up mock channel provider using helper from dependencies_test.go
@@ -64,7 +65,7 @@ var _ = Describe("TransportWorker", func() {
 		Context("dependency validation", func() {
 			It("should create a worker with valid dependencies", func() {
 				var err error
-				worker, err = transport.NewTransportWorker(identity, fsmLogger, nil)
+				worker, err = transport.NewTransportWorker(identity, logger, nil)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(worker).NotTo(BeNil())
 			})
@@ -80,7 +81,7 @@ var _ = Describe("TransportWorker", func() {
 	Describe("CollectObservedState", func() {
 		BeforeEach(func() {
 			var err error
-			worker, err = transport.NewTransportWorker(identity, fsmLogger, nil)
+			worker, err = transport.NewTransportWorker(identity, logger, nil)
 			Expect(err).ToNot(HaveOccurred())
 		})
 
@@ -130,7 +131,7 @@ var _ = Describe("TransportWorker", func() {
 	Describe("DeriveDesiredState", func() {
 		BeforeEach(func() {
 			var err error
-			worker, err = transport.NewTransportWorker(identity, fsmLogger, nil)
+			worker, err = transport.NewTransportWorker(identity, logger, nil)
 			Expect(err).ToNot(HaveOccurred())
 		})
 
@@ -228,7 +229,7 @@ relayURL: "https://relay.example.com"`,
 	Describe("GetInitialState", func() {
 		BeforeEach(func() {
 			var err error
-			worker, err = transport.NewTransportWorker(identity, fsmLogger, nil)
+			worker, err = transport.NewTransportWorker(identity, logger, nil)
 			Expect(err).ToNot(HaveOccurred())
 		})
 
@@ -260,7 +261,7 @@ relayURL: "https://relay.example.com"`,
 			// This is enforced at compile time by the interface implementation,
 			// but we verify by testing that methods work on a pointer
 			var err error
-			worker, err = transport.NewTransportWorker(identity, fsmLogger, nil)
+			worker, err = transport.NewTransportWorker(identity, logger, nil)
 			Expect(err).ToNot(HaveOccurred())
 
 			// All these should work with pointer receiver

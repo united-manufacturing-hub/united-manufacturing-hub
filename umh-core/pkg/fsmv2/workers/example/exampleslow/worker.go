@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"time"
 
+	"go.uber.org/zap"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
@@ -33,14 +35,14 @@ import (
 
 type ExampleslowWorker struct {
 	*helpers.BaseWorker[*ExampleslowDependencies]
-	logger   deps.FSMLogger
+	logger   *zap.SugaredLogger
 	identity deps.Identity
 }
 
 func NewExampleslowWorker(
 	identity deps.Identity,
 	connectionPool ConnectionPool,
-	logger deps.FSMLogger,
+	logger *zap.SugaredLogger,
 	stateReader deps.StateReader,
 ) (*ExampleslowWorker, error) {
 	if connectionPool == nil {
@@ -131,7 +133,7 @@ func (w *ExampleslowWorker) GetInitialState() fsmv2.State[any, any] {
 
 func init() {
 	if err := factory.RegisterWorkerType[snapshot.ExampleslowObservedState, *snapshot.ExampleslowDesiredState](
-		func(id deps.Identity, logger deps.FSMLogger, stateReader deps.StateReader, _ map[string]any) fsmv2.Worker {
+		func(id deps.Identity, logger *zap.SugaredLogger, stateReader deps.StateReader, _ map[string]any) fsmv2.Worker {
 			pool := &DefaultConnectionPool{}
 			worker, _ := NewExampleslowWorker(id, pool, logger, stateReader)
 

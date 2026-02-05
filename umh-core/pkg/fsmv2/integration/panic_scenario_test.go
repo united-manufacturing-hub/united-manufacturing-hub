@@ -90,18 +90,18 @@ func verifyPanicWasCaught(t *integration.TestLogger) {
 	Expect(panicLogs).ToNot(BeEmpty(),
 		"Expected at least one action_panic log entry")
 
-	// Verify panic message contains expected text.
-	// SentryError stores the panic value as the "error" field.
+	// Verify panic message contains expected text
 	panicFound := false
 
 	for _, entry := range panicLogs {
 		for _, field := range entry.Context {
-			if field.Key == "error" {
-				var panicStr string
-				if errVal, ok := field.Interface.(error); ok {
-					panicStr = errVal.Error()
-				} else if strVal, ok := field.Interface.(string); ok {
-					panicStr = strVal
+			if field.Key == "panic" {
+				panicStr := field.String
+				if panicStr == "" {
+					// Try interface value
+					if interfaceVal, ok := field.Interface.(string); ok {
+						panicStr = interfaceVal
+					}
 				}
 
 				if strings.Contains(panicStr, "simulated panic") ||

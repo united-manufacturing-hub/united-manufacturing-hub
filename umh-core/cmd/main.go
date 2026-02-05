@@ -39,7 +39,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/redpanda"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/streamprocessor"
 	topicbrowserfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/topicbrowser"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/examples"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator"
@@ -476,12 +475,11 @@ children:
 	// Create ApplicationSupervisor with channel provider and auth callback injected via Dependencies
 	// This avoids global state and enables proper testing
 	// Use Named("fsmv2") to create [fsmv2] prefix in logs for easy filtering
-	fsmv2SugaredLogger := logger.Named("fsmv2")
+	fsmv2Logger := logger.Named("fsmv2")
 	// Wrap with SentryHook for automatic FSMv2 error capture to Sentry
 	// This only affects FSMv2 logs, not the rest of the application
-	fsmv2Core := sentry.NewSentryHook(fsmv2SugaredLogger.Desugar().Core())
-	fsmv2SugaredLogger = zap.New(fsmv2Core).Sugar()
-	fsmv2Logger := deps.NewFSMLogger(fsmv2SugaredLogger)
+	fsmv2Core := sentry.NewSentryHook(fsmv2Logger.Desugar().Core())
+	fsmv2Logger = zap.New(fsmv2Core).Sugar()
 
 	appSup, err := application.NewApplicationSupervisor(application.SupervisorConfig{
 		ID:           "application-fsmv2",

@@ -57,13 +57,12 @@ func (s *syncBuffer) Sync() error {
 
 var _ = Describe("Lifecycle Logging", func() {
 	var (
-		buf       *syncBuffer
-		zapLogger *zap.SugaredLogger
-		logger    deps.FSMLogger
-		store     *mockStore
-		sup       *supervisor.Supervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState]
-		done      <-chan struct{}
-		mu        sync.Mutex
+		buf    *syncBuffer
+		logger *zap.SugaredLogger
+		store  *mockStore
+		sup    *supervisor.Supervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState]
+		done   <-chan struct{}
+		mu     sync.Mutex
 	)
 
 	BeforeEach(func() {
@@ -99,8 +98,7 @@ var _ = Describe("Lifecycle Logging", func() {
 			zapcore.AddSync(buf),
 			level,
 		)
-		zapLogger = zap.New(core).Sugar()
-		logger = deps.NewFSMLogger(zapLogger)
+		logger = zap.New(core).Sugar()
 	}
 
 	setupSupervisor := func() {

@@ -19,19 +19,19 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
+	"go.uber.org/zap"
 )
 
 // FreshnessChecker validates observation data age against thresholds.
 type FreshnessChecker struct {
-	logger         deps.FSMLogger
+	logger         *zap.SugaredLogger
 	staleThreshold time.Duration
 	timeout        time.Duration
 }
 
 // NewFreshnessChecker creates a checker with the given thresholds.
-func NewFreshnessChecker(staleThreshold, timeout time.Duration, logger deps.FSMLogger) *FreshnessChecker {
+func NewFreshnessChecker(staleThreshold, timeout time.Duration, logger *zap.SugaredLogger) *FreshnessChecker {
 	return &FreshnessChecker{
 		staleThreshold: staleThreshold,
 		timeout:        timeout,
@@ -57,10 +57,10 @@ func (f *FreshnessChecker) extractTimestamp(snapshot *fsmv2.Snapshot) (time.Time
 	// Fall back to Document lookup for raw document access
 	doc, ok := snapshot.Observed.(persistence.Document)
 	if !ok {
-		f.logger.SentryWarn(deps.FeatureHealth, "observed_state_type_unknown",
-			deps.HierarchyPath(snapshot.Identity.HierarchyPath),
-			deps.String("type", fmt.Sprintf("%T", snapshot.Observed)),
-			deps.String("action", "assuming_fresh"))
+		f.logger.Warnw("observed_state_type_unknown",
+			"hierarchy_path", snapshot.Identity.HierarchyPath,
+			"type", fmt.Sprintf("%T", snapshot.Observed),
+			"action", "assuming_fresh")
 
 		return time.Time{}, false
 	}
@@ -68,9 +68,9 @@ func (f *FreshnessChecker) extractTimestamp(snapshot *fsmv2.Snapshot) (time.Time
 	// Check collected_at field (JSON-serialized from struct's CollectedAt)
 	ts, exists := doc["collected_at"]
 	if !exists {
-		f.logger.SentryWarn(deps.FeatureHealth, "observed_state_missing_timestamp",
-			deps.HierarchyPath(snapshot.Identity.HierarchyPath),
-			deps.String("action", "assuming_fresh"))
+		f.logger.Warnw("observed_state_missing_timestamp",
+			"hierarchy_path", snapshot.Identity.HierarchyPath,
+			"action", "assuming_fresh")
 
 		return time.Time{}, false
 	}
@@ -85,20 +85,20 @@ func (f *FreshnessChecker) extractTimestamp(snapshot *fsmv2.Snapshot) (time.Time
 	case string:
 		collectedAt, err := time.Parse(time.RFC3339Nano, v)
 		if err != nil {
-			f.logger.SentryWarn(deps.FeatureHealth, "observed_state_invalid_timestamp",
-				deps.HierarchyPath(snapshot.Identity.HierarchyPath),
-				deps.String("value", v),
-				deps.String("action", "assuming_fresh"))
+			f.logger.Warnw("observed_state_invalid_timestamp",
+				"hierarchy_path", snapshot.Identity.HierarchyPath,
+				"value", v,
+				"action", "assuming_fresh")
 
 			return time.Time{}, false
 		}
 
 		return collectedAt, true
 	default:
-		f.logger.SentryWarn(deps.FeatureHealth, "observed_state_unknown_timestamp_type",
-			deps.HierarchyPath(snapshot.Identity.HierarchyPath),
-			deps.String("type", fmt.Sprintf("%T", v)),
-			deps.String("action", "assuming_fresh"))
+		f.logger.Warnw("observed_state_unknown_timestamp_type",
+			"hierarchy_path", snapshot.Identity.HierarchyPath,
+			"type", fmt.Sprintf("%T", v),
+			"action", "assuming_fresh")
 
 		return time.Time{}, false
 	}
@@ -120,10 +120,10 @@ func (f *FreshnessChecker) Check(snapshot *fsmv2.Snapshot) bool {
 	isFresh := age < f.staleThreshold
 
 	if !isFresh {
-		f.logger.Debug("observed_state_stale",
-			deps.HierarchyPath(snapshot.Identity.HierarchyPath),
-			deps.Duration("age", age),
-			deps.Duration("threshold", f.staleThreshold))
+		f.logger.Debugw("observed_state_stale",
+			"hierarchy_path", snapshot.Identity.HierarchyPath,
+			"age", age,
+			"threshold", f.staleThreshold)
 	}
 
 	return isFresh
@@ -141,10 +141,10 @@ func (f *FreshnessChecker) IsTimeout(snapshot *fsmv2.Snapshot) bool {
 	isTimedOut := age >= f.timeout
 
 	if isTimedOut {
-		f.logger.SentryWarn(deps.FeatureHealth, "observed_state_timeout",
-			deps.HierarchyPath(snapshot.Identity.HierarchyPath),
-			deps.Duration("age", age),
-			deps.Duration("threshold", f.timeout))
+		f.logger.Warnw("observed_state_timeout",
+			"hierarchy_path", snapshot.Identity.HierarchyPath,
+			"age", age,
+			"threshold", f.timeout)
 	}
 
 	return isTimedOut

@@ -21,6 +21,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"go.uber.org/zap"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
@@ -73,12 +74,12 @@ var _ = Describe("DeriveDesiredState Caching", func() {
 	var (
 		ctx    context.Context
 		cancel context.CancelFunc
-		logger deps.FSMLogger
+		logger *zap.SugaredLogger
 	)
 
 	BeforeEach(func() {
 		ctx, cancel = context.WithCancel(context.Background())
-		logger = deps.NewNopFSMLogger()
+		logger = zap.NewNop().Sugar()
 	})
 
 	AfterEach(func() {

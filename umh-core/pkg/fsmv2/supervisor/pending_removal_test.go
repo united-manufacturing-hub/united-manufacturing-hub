@@ -20,6 +20,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"go.uber.org/zap"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
@@ -63,7 +64,7 @@ var _ = Describe("PendingRemoval Flag Clearing", func() {
 
 			parentSuper = supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 				WorkerType: "parent",
-				Logger:     deps.NewNopFSMLogger(),
+				Logger:     zap.NewNop().Sugar(),
 				Store:      mockStore,
 			})
 

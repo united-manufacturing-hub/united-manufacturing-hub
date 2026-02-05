@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"time"
 
+	"go.uber.org/zap"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
@@ -33,14 +35,14 @@ import (
 
 type ExamplepanicWorker struct {
 	*helpers.BaseWorker[*ExamplepanicDependencies]
-	logger   deps.FSMLogger
+	logger   *zap.SugaredLogger
 	identity deps.Identity
 }
 
 func NewExamplepanicWorker(
 	identity deps.Identity,
 	connectionPool ConnectionPool,
-	logger deps.FSMLogger,
+	logger *zap.SugaredLogger,
 	stateReader deps.StateReader,
 ) (*ExamplepanicWorker, error) {
 	if connectionPool == nil {
@@ -131,7 +133,7 @@ func (w *ExamplepanicWorker) GetInitialState() fsmv2.State[any, any] {
 
 func init() {
 	if err := factory.RegisterWorkerType[snapshot.ExamplepanicObservedState, *snapshot.ExamplepanicDesiredState](
-		func(id deps.Identity, logger deps.FSMLogger, stateReader deps.StateReader, _ map[string]any) fsmv2.Worker {
+		func(id deps.Identity, logger *zap.SugaredLogger, stateReader deps.StateReader, _ map[string]any) fsmv2.Worker {
 			pool := &DefaultConnectionPool{}
 			worker, _ := NewExamplepanicWorker(id, pool, logger, stateReader)
 

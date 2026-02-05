@@ -20,14 +20,14 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence/memory"
+	"go.uber.org/zap"
 )
 
 func setupTestStore(workerType string) *storage.TriangularStore {
 	basicStore := memory.NewInMemoryStore()
 
-	return storage.NewTriangularStore(basicStore, deps.NewNopFSMLogger())
+	return storage.NewTriangularStore(basicStore, zap.NewNop().Sugar())
 }
 
 var _ = Describe("Supervisor Configuration", func() {
@@ -36,7 +36,7 @@ var _ = Describe("Supervisor Configuration", func() {
 			cfg := Config{
 				WorkerType: "test",
 				Store:      setupTestStore("test"),
-				Logger:     deps.NewNopFSMLogger(),
+				Logger:     zap.NewNop().Sugar(),
 			}
 
 			s := NewSupervisor[*TestObservedState, *TestDesiredState](cfg)
@@ -52,7 +52,7 @@ var _ = Describe("Supervisor Configuration", func() {
 			cfg := Config{
 				WorkerType: "test",
 				Store:      setupTestStore("test"),
-				Logger:     deps.NewNopFSMLogger(),
+				Logger:     zap.NewNop().Sugar(),
 				CollectorHealth: CollectorHealthConfig{
 					StaleThreshold:     5 * time.Second,
 					Timeout:            15 * time.Second,
@@ -74,7 +74,7 @@ var _ = Describe("Supervisor Configuration", func() {
 				NewSupervisor[*TestObservedState, *TestDesiredState](Config{
 					WorkerType: "test",
 					Store:      setupTestStore("test"),
-					Logger:     deps.NewNopFSMLogger(),
+					Logger:     zap.NewNop().Sugar(),
 					CollectorHealth: CollectorHealthConfig{
 						StaleThreshold:     -5 * time.Second,
 						Timeout:            20 * time.Second,
@@ -89,7 +89,7 @@ var _ = Describe("Supervisor Configuration", func() {
 				NewSupervisor[*TestObservedState, *TestDesiredState](Config{
 					WorkerType: "test",
 					Store:      setupTestStore("test"),
-					Logger:     deps.NewNopFSMLogger(),
+					Logger:     zap.NewNop().Sugar(),
 					CollectorHealth: CollectorHealthConfig{
 						StaleThreshold:     10 * time.Second,
 						Timeout:            10 * time.Second,
@@ -104,7 +104,7 @@ var _ = Describe("Supervisor Configuration", func() {
 				NewSupervisor[*TestObservedState, *TestDesiredState](Config{
 					WorkerType: "test",
 					Store:      setupTestStore("test"),
-					Logger:     deps.NewNopFSMLogger(),
+					Logger:     zap.NewNop().Sugar(),
 					CollectorHealth: CollectorHealthConfig{
 						StaleThreshold:     20 * time.Second,
 						Timeout:            10 * time.Second,
@@ -119,7 +119,7 @@ var _ = Describe("Supervisor Configuration", func() {
 				NewSupervisor[*TestObservedState, *TestDesiredState](Config{
 					WorkerType: "test",
 					Store:      setupTestStore("test"),
-					Logger:     deps.NewNopFSMLogger(),
+					Logger:     zap.NewNop().Sugar(),
 					CollectorHealth: CollectorHealthConfig{
 						StaleThreshold:     10 * time.Second,
 						Timeout:            20 * time.Second,
@@ -136,7 +136,7 @@ var _ = Describe("Supervisor Configuration", func() {
 				NewSupervisor[*TestObservedState, *TestDesiredState](Config{
 					WorkerType: "test",
 					Store:      setupTestStore("test"),
-					Logger:     deps.NewNopFSMLogger(),
+					Logger:     zap.NewNop().Sugar(),
 					CollectorHealth: CollectorHealthConfig{
 						ObservationTimeout: 10 * time.Second,
 						StaleThreshold:     10 * time.Second,
@@ -152,7 +152,7 @@ var _ = Describe("Supervisor Configuration", func() {
 				NewSupervisor[*TestObservedState, *TestDesiredState](Config{
 					WorkerType: "test",
 					Store:      setupTestStore("test"),
-					Logger:     deps.NewNopFSMLogger(),
+					Logger:     zap.NewNop().Sugar(),
 					CollectorHealth: CollectorHealthConfig{
 						ObservationTimeout: 1 * time.Second,
 						StaleThreshold:     15 * time.Second,
@@ -168,7 +168,7 @@ var _ = Describe("Supervisor Configuration", func() {
 				NewSupervisor[*TestObservedState, *TestDesiredState](Config{
 					WorkerType: "test",
 					Store:      setupTestStore("test"),
-					Logger:     deps.NewNopFSMLogger(),
+					Logger:     zap.NewNop().Sugar(),
 					CollectorHealth: CollectorHealthConfig{
 						ObservationTimeout: 1 * time.Second,
 						StaleThreshold:     5 * time.Second,

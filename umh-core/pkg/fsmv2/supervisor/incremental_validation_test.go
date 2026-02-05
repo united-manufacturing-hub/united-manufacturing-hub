@@ -19,6 +19,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"go.uber.org/zap"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
@@ -34,22 +35,22 @@ var _ = Describe("Incremental Spec Validation", func() {
 		ctx             context.Context
 		basicStore      persistence.Store
 		triangularStore *storage.TriangularStore
-		logger          deps.FSMLogger
+		logger          *zap.SugaredLogger
 	)
 
 	BeforeEach(func() {
 		ctx = context.Background()
-		logger = deps.NewNopFSMLogger()
+		logger = zap.NewNop().Sugar()
 		basicStore = memory.NewInMemoryStore()
 
-		_ = factory.RegisterFactoryByType("incremental_child", func(id deps.Identity, _ deps.FSMLogger, _ deps.StateReader, _ map[string]any) fsmv2.Worker {
+		_ = factory.RegisterFactoryByType("incremental_child", func(id deps.Identity, _ *zap.SugaredLogger, _ deps.StateReader, _ map[string]any) fsmv2.Worker {
 			return &incrementalValidationMockWorker{
 				identity:     id,
 				initialState: &mockState{},
 			}
 		})
 
-		triangularStore = storage.NewTriangularStore(basicStore, deps.NewNopFSMLogger())
+		triangularStore = storage.NewTriangularStore(basicStore, zap.NewNop().Sugar())
 	})
 
 	AfterEach(func() {

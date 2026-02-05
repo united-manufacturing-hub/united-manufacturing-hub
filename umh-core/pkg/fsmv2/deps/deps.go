@@ -99,28 +99,6 @@ func NewBaseDependencies(logger *zap.SugaredLogger, stateReader StateReader, ide
 	}
 }
 
-// NewBaseDependenciesWithLogger creates base dependencies accepting an FSMLogger directly.
-// This is used by workers that are already working with FSMLogger during migration.
-// stateReader can be nil.
-func NewBaseDependenciesWithLogger(logger FSMLogger, stateReader StateReader, identity Identity) *BaseDependencies {
-	if logger == nil {
-		panic("NewBaseDependenciesWithLogger: logger cannot be nil")
-	}
-
-	// Enrich the FSMLogger with worker context
-	enrichedLogger := logger.With(String("worker", identity.String()))
-
-	return &BaseDependencies{
-		logger:          enrichedLogger,
-		rawLogger:       nil, // Not available when starting with FSMLogger
-		stateReader:     stateReader,
-		metricsRecorder: NewMetricsRecorder(),
-		retryTracker:    retry.New(),
-		workerType:      identity.WorkerType,
-		workerID:        identity.ID,
-	}
-}
-
 func (d *BaseDependencies) GetLogger() FSMLogger {
 	return d.logger
 }

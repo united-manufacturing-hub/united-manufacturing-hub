@@ -19,6 +19,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"go.uber.org/zap"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	example_child "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplechild"
@@ -34,7 +35,7 @@ var _ = Describe("DisconnectAction", func() {
 	BeforeEach(func() {
 		ctx = context.Background()
 		identity := deps.Identity{ID: "test-id", WorkerType: "child"}
-		depsAny = example_child.NewExamplechildDependencies(&example_child.DefaultConnectionPool{}, deps.NewNopFSMLogger(), nil, identity)
+		depsAny = example_child.NewExamplechildDependencies(&example_child.DefaultConnectionPool{}, zap.NewNop().Sugar(), nil, identity)
 	})
 
 	Describe("Execute", func() {

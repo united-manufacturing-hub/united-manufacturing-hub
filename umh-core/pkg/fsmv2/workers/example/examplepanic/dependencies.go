@@ -17,6 +17,8 @@ package example_panic
 import (
 	"sync"
 
+	"go.uber.org/zap"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 )
 
@@ -51,9 +53,9 @@ type ExamplepanicDependencies struct {
 	isConnected bool
 }
 
-func NewExamplepanicDependencies(connectionPool ConnectionPool, logger deps.FSMLogger, stateReader deps.StateReader, identity deps.Identity) *ExamplepanicDependencies {
+func NewExamplepanicDependencies(connectionPool ConnectionPool, logger *zap.SugaredLogger, stateReader deps.StateReader, identity deps.Identity) *ExamplepanicDependencies {
 	return &ExamplepanicDependencies{
-		BaseDependencies: deps.NewBaseDependenciesWithLogger(logger, stateReader, identity),
+		BaseDependencies: deps.NewBaseDependencies(logger, stateReader, identity),
 		connectionPool:   connectionPool,
 	}
 }

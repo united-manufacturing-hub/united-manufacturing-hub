@@ -20,6 +20,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"go.uber.org/zap"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
@@ -71,7 +72,7 @@ var _ = Describe("DeriveDesiredState saves to store", func() {
 		s := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 			WorkerType: workerType,
 			Store:      store,
-			Logger:     deps.NewNopFSMLogger(),
+			Logger:     zap.NewNop().Sugar(),
 			CollectorHealth: supervisor.CollectorHealthConfig{
 				StaleThreshold: 10 * time.Second,
 			},
@@ -150,7 +151,7 @@ var _ = Describe("DeriveDesiredState saves to store", func() {
 		s := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 			WorkerType: workerType,
 			Store:      store,
-			Logger:     deps.NewNopFSMLogger(),
+			Logger:     zap.NewNop().Sugar(),
 			CollectorHealth: supervisor.CollectorHealthConfig{
 				StaleThreshold: 10 * time.Second,
 			},
@@ -241,7 +242,7 @@ var _ = Describe("DeriveDesiredState saves to store", func() {
 		s := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 			WorkerType: workerType,
 			Store:      store,
-			Logger:     deps.NewNopFSMLogger(),
+			Logger:     zap.NewNop().Sugar(),
 			CollectorHealth: supervisor.CollectorHealthConfig{
 				StaleThreshold: 10 * time.Second,
 			},
