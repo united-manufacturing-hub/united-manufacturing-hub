@@ -557,7 +557,7 @@ func (s *Supervisor[TObserved, TDesired]) handleWorkerRestart(ctx context.Contex
 	s.logger.Debug("worker_restart_new_created",
 		deps.HierarchyPath(identity.HierarchyPath))
 
-	// 4. Add new worker to supervisor (this also starts the collector if supervisor is running)
+	// 4. Add new worker to supervisor (registers worker in the workers map)
 	if err := s.AddWorker(identity, newWorker); err != nil {
 		return fmt.Errorf("failed to add new worker for restart: %w", err)
 	}

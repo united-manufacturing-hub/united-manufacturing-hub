@@ -96,7 +96,8 @@ type SupervisorInterface interface {
 	// Used by ChildInfo to report infrastructure status to parents.
 	IsObservationStale() bool
 	// IsCircuitOpen returns true if the circuit breaker is open for this supervisor.
-	// When open, it indicates infrastructure failure (child consistency check failed).
+	// When open, it indicates infrastructure failure (child consistency check failed)
+	// or repeated tick panics (code bug triggered the panic circuit breaker).
 	// Used by ChildInfo to report infrastructure status to parents.
 	IsCircuitOpen() bool
 	// TestGetUserSpec returns the current userSpec for testing. DO NOT USE in production code.

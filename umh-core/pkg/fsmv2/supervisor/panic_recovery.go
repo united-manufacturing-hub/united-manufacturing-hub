@@ -48,7 +48,13 @@ func (p *panicRecovery) RecordPanic() bool {
 
 	now := time.Now()
 	p.timestamps = append(p.timestamps, now)
+	p.pruneExpired(now)
 
+	return len(p.timestamps) >= p.maxPanics
+}
+
+// pruneExpired removes timestamps older than the window. Caller must hold p.mu.
+func (p *panicRecovery) pruneExpired(now time.Time) {
 	cutoff := now.Add(-p.window)
 	pruned := p.timestamps[:0]
 	for _, ts := range p.timestamps {
@@ -57,24 +63,25 @@ func (p *panicRecovery) RecordPanic() bool {
 		}
 	}
 	p.timestamps = pruned
-
-	return len(p.timestamps) >= p.maxPanics
 }
 
-func (p *panicRecovery) PanicCount() int {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
-	now := time.Now()
-	cutoff := now.Add(-p.window)
+// countWithinWindow returns the number of timestamps within the window. Caller must hold p.mu.
+func (p *panicRecovery) countWithinWindow() int {
+	cutoff := time.Now().Add(-p.window)
 	count := 0
 	for _, ts := range p.timestamps {
 		if ts.After(cutoff) {
 			count++
 		}
 	}
-
 	return count
+}
+
+func (p *panicRecovery) PanicCount() int {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	return p.countWithinWindow()
 }
 
 func (p *panicRecovery) Reset() {

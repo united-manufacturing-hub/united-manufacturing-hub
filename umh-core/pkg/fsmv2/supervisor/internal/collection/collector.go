@@ -351,6 +351,9 @@ func (c *Collector[TObserved]) observationLoop() {
 }
 
 func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) (err error) {
+	logger := c.config.Logger
+	hierarchyPath := c.config.Identity.HierarchyPath
+
 	defer func() {
 		if r := recover(); r != nil {
 			defer func() {
@@ -358,7 +361,7 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 					err = fmt.Errorf("collector panic (recovery handler also panicked: %v): %v", r2, r)
 					func() {
 						defer func() { recover() }()
-						c.config.Logger.SentryError(deps.FeatureFSMv2, c.config.Identity.HierarchyPath, err, "collector_double_panic",
+						logger.SentryError(deps.FeatureFSMv2, hierarchyPath, err, "collector_double_panic",
 							deps.String("stack", string(debug.Stack())))
 					}()
 				}
@@ -367,10 +370,9 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 			panicType, panicErr := classifyPanic(r)
 			err = fmt.Errorf("collector panic: %w", panicErr)
 
-			hierarchyPath := c.config.Identity.HierarchyPath
 			metrics.RecordPanicRecovery(hierarchyPath, panicType)
 
-			c.config.Logger.SentryError(deps.FeatureFSMv2, hierarchyPath, err, "collector_panic",
+			logger.SentryError(deps.FeatureFSMv2, hierarchyPath, err, "collector_panic",
 				deps.Field{Key: "panic_value", Value: fmt.Sprintf("%v", r)},
 				deps.Field{Key: "panic_type", Value: panicType},
 				deps.Field{Key: "stack_trace", Value: string(debug.Stack())})
@@ -490,8 +492,6 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 	}
 
 	saveDuration := time.Since(saveStartTime)
-
-	hierarchyPath := c.config.Identity.HierarchyPath
 
 	metrics.RecordObservationSave(hierarchyPath, changed, saveDuration)
 	metrics.ExportWorkerMetrics(hierarchyPath, observed)
