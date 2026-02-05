@@ -108,8 +108,7 @@ func (d *TransportDependencies) GetJWTExpiry() time.Time {
 }
 
 // RecordError increments consecutive errors and records when degraded mode started.
-// Transport reset is handled by ResetTransportAction from RecoveringState, not here,
-// to avoid duplicate resets and maintain single responsibility.
+// Error tracking is used by the supervisor for retry backoff policy.
 func (d *TransportDependencies) RecordError() {
 	d.RetryTracker().RecordError()
 }
@@ -161,8 +160,7 @@ func (d *TransportDependencies) GetInboundChanStats() (capacity int, length int)
 }
 
 // RecordTypedError increments consecutive errors and records error type and retry-after.
-// Transport reset is handled by ResetTransportAction from RecoveringState, not here,
-// to avoid duplicate resets and maintain single responsibility.
+// Error tracking is used by the supervisor for retry backoff policy.
 func (d *TransportDependencies) RecordTypedError(errType httpTransport.ErrorType, retryAfter time.Duration) {
 	d.mu.Lock()
 	d.lastErrorType = errType

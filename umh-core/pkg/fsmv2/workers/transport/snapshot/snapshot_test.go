@@ -101,6 +101,65 @@ var _ = Describe("TransportObservedState", func() {
 		})
 	})
 
+	Describe("HasValidToken", func() {
+		It("should return false when JWT token is empty", func() {
+			observed := snapshot.TransportObservedState{
+				JWTToken:  "",
+				JWTExpiry: time.Now().Add(1 * time.Hour),
+			}
+			Expect(observed.HasValidToken()).To(BeFalse())
+		})
+
+		It("should return false when token is present but expired", func() {
+			observed := snapshot.TransportObservedState{
+				JWTToken:  "valid-token",
+				JWTExpiry: time.Now().Add(-1 * time.Hour),
+			}
+			Expect(observed.HasValidToken()).To(BeFalse())
+		})
+
+		It("should return true when token is present and not expired", func() {
+			observed := snapshot.TransportObservedState{
+				JWTToken:  "valid-token",
+				JWTExpiry: time.Now().Add(1 * time.Hour),
+			}
+			Expect(observed.HasValidToken()).To(BeTrue())
+		})
+	})
+
+	Describe("IsTokenExpired", func() {
+		It("should return false when expiry is zero", func() {
+			observed := snapshot.TransportObservedState{
+				JWTToken: "some-token",
+			}
+			Expect(observed.IsTokenExpired()).To(BeFalse())
+		})
+
+		It("should return true when token expires within refresh buffer (10 min)", func() {
+			observed := snapshot.TransportObservedState{
+				JWTToken:  "valid-token",
+				JWTExpiry: time.Now().Add(5 * time.Minute),
+			}
+			Expect(observed.IsTokenExpired()).To(BeTrue())
+		})
+
+		It("should return false when token expires beyond refresh buffer", func() {
+			observed := snapshot.TransportObservedState{
+				JWTToken:  "valid-token",
+				JWTExpiry: time.Now().Add(15 * time.Minute),
+			}
+			Expect(observed.IsTokenExpired()).To(BeFalse())
+		})
+
+		It("should return true when token already expired", func() {
+			observed := snapshot.TransportObservedState{
+				JWTToken:  "expired-token",
+				JWTExpiry: time.Now().Add(-1 * time.Hour),
+			}
+			Expect(observed.IsTokenExpired()).To(BeTrue())
+		})
+	})
+
 	Describe("Interface compliance", func() {
 		It("should implement fsmv2.ObservedState interface", func() {
 			var _ fsmv2.ObservedState = snapshot.TransportObservedState{}

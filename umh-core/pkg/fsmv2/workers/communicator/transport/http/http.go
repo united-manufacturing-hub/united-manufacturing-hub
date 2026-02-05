@@ -424,7 +424,11 @@ func (t *HTTPTransport) Pull(ctx context.Context, jwtToken string) ([]*transport
 
 	var payload transport.PullPayload
 	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
-		return nil, fmt.Errorf("failed to decode pull response: %w", err)
+		return nil, &TransportError{
+			Type:    ErrorTypeUnknown,
+			Message: fmt.Sprintf("failed to decode pull response: %v", err),
+			Err:     err,
+		}
 	}
 
 	return payload.UMHMessages, nil
@@ -442,7 +446,11 @@ func (t *HTTPTransport) Push(ctx context.Context, jwtToken string, messages []*t
 
 	body, err := json.Marshal(payload)
 	if err != nil {
-		return fmt.Errorf("failed to marshal push payload: %w", err)
+		return &TransportError{
+			Type:    ErrorTypeUnknown,
+			Message: fmt.Sprintf("failed to marshal push payload: %v", err),
+			Err:     err,
+		}
 	}
 
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, t.RelayURL+"/v2/instance/push", bytes.NewBuffer(body))

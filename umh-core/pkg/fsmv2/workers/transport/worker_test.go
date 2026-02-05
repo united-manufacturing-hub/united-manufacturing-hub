@@ -223,6 +223,13 @@ relayURL: "https://relay.example.com"`,
 
 				Expect(err).To(HaveOccurred())
 			})
+
+			It("should return error for invalid spec type", func() {
+				_, err := worker.DeriveDesiredState("invalid-string-spec")
+
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("invalid spec type"))
+			})
 		})
 	})
 

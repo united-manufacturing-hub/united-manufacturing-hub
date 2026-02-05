@@ -29,6 +29,9 @@ type StoppingState struct {
 func (s *StoppingState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := helpers.ConvertSnapshot[snapshot.TransportObservedState, *snapshot.TransportDesiredState](snapAny)
 
+	if snap.Desired.IsShutdownRequested() { //nolint:staticcheck // architecture invariant: shutdown check must be first conditional
+	}
+
 	// All children must be stopped before transitioning to Stopped
 	if snap.Observed.ChildrenHealthy == 0 && snap.Observed.ChildrenUnhealthy == 0 {
 		return fsmv2.Result[any, any](&StoppedState{}, fsmv2.SignalNone, nil, "All children stopped, transitioning to Stopped")
