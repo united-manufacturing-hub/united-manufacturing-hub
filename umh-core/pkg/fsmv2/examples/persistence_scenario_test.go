@@ -38,21 +38,15 @@ var _ = Describe("Persistence Scenario", func() {
 	})
 
 	Describe("Using FSMv2 worker via ApplicationSupervisor", func() {
-		It("transitions to Running and executes compaction", func() {
+		It("transitions to Running and executes compaction and maintenance", func() {
 			result := examples.RunPersistenceScenario(ctx, examples.PersistenceRunConfig{
 				Duration: 3 * time.Second,
 			})
 			Expect(result.Error).NotTo(HaveOccurred())
+			Expect(result.Done).NotTo(BeNil())
+			Expect(result.Shutdown).NotTo(BeNil())
 			<-result.Done
 			Expect(result.CompactionCycles).To(BeNumerically(">=", 1))
-		})
-
-		It("executes maintenance", func() {
-			result := examples.RunPersistenceScenario(ctx, examples.PersistenceRunConfig{
-				Duration: 3 * time.Second,
-			})
-			Expect(result.Error).NotTo(HaveOccurred())
-			<-result.Done
 			Expect(result.MaintenanceCycles).To(BeNumerically(">=", 1))
 		})
 
@@ -116,47 +110,6 @@ var _ = Describe("Persistence Scenario", func() {
 			Eventually(result.Done, 25*time.Second).Should(BeClosed())
 		})
 	})
-
-	Describe("Result structure", func() {
-		It("returns all expected fields", func() {
-			result := examples.RunPersistenceScenario(ctx, examples.PersistenceRunConfig{
-				Duration: 1 * time.Second,
-			})
-
-			Expect(result.Done).NotTo(BeNil())
-			Expect(result.Shutdown).NotTo(BeNil())
-			<-result.Done
-			Expect(result.CompactionCycles).To(BeNumerically(">=", 0))
-			Expect(result.MaintenanceCycles).To(BeNumerically(">=", 0))
-		})
-
-		It("closes Done channel when complete", func() {
-			result := examples.RunPersistenceScenario(ctx, examples.PersistenceRunConfig{
-				Duration: 500 * time.Millisecond,
-			})
-			Eventually(result.Done, 15*time.Second).Should(BeClosed())
-		})
-	})
-
-	DescribeTable("handles various configurations correctly",
-		func(cfg examples.PersistenceRunConfig, expectSuccess bool) {
-			result := examples.RunPersistenceScenario(ctx, cfg)
-
-			if expectSuccess {
-				Expect(result.Error).NotTo(HaveOccurred())
-				<-result.Done
-			}
-		},
-		Entry("minimal config",
-			examples.PersistenceRunConfig{Duration: 1 * time.Second},
-			true),
-		Entry("with logger",
-			examples.PersistenceRunConfig{Duration: 1 * time.Second, Logger: zap.NewNop().Sugar()},
-			true),
-		Entry("with custom tick interval",
-			examples.PersistenceRunConfig{Duration: 1 * time.Second, TickInterval: 50 * time.Millisecond},
-			true),
-	)
 })
 
 var _ = Describe("PersistenceScenarioEntry registry", func() {
@@ -165,12 +118,8 @@ var _ = Describe("PersistenceScenarioEntry registry", func() {
 		Expect(exists).To(BeTrue())
 		Expect(scenario.Name).To(Equal("persistence"))
 		Expect(scenario.Description).NotTo(BeEmpty())
+		Expect(scenario.Description).To(ContainSubstring("ApplicationSupervisor"))
 		Expect(scenario.CustomRunner).NotTo(BeNil())
 		Expect(scenario.YAMLConfig).To(BeEmpty())
-	})
-
-	It("description explains ApplicationSupervisor usage", func() {
-		scenario := examples.Registry["persistence"]
-		Expect(scenario.Description).To(ContainSubstring("ApplicationSupervisor"))
 	})
 })

@@ -48,8 +48,9 @@ func RunPersistenceScenario(ctx context.Context, cfg PersistenceRunConfig) *Pers
 		close(done)
 
 		return &PersistenceRunResult{
-			Done:  done,
-			Error: fmt.Errorf("invalid duration %v: must be non-negative", cfg.Duration),
+			Done:     done,
+			Shutdown: func() {},
+			Error:    fmt.Errorf("invalid duration %v: must be non-negative", cfg.Duration),
 		}
 	}
 
@@ -57,8 +58,9 @@ func RunPersistenceScenario(ctx context.Context, cfg PersistenceRunConfig) *Pers
 		close(done)
 
 		return &PersistenceRunResult{
-			Done:  done,
-			Error: fmt.Errorf("context already cancelled: %w", ctx.Err()),
+			Done:     done,
+			Shutdown: func() {},
+			Error:    fmt.Errorf("context already cancelled: %w", ctx.Err()),
 		}
 	}
 

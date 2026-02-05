@@ -267,7 +267,7 @@ var CommunicatorScenarioEntry = Scenario{
 //
 //   - FSMv2 persistence worker state machine (Stopped -> Running)
 //   - CompactDeltas action triggered on first tick (LastCompactionAt=zero fires immediately)
-//   - RunMaintenance action triggered after compaction
+//   - RunMaintenance action (independent of compaction; compaction takes priority per tick)
 //   - Metrics collection (compaction cycles, maintenance cycles, duration gauges)
 var PersistenceScenarioEntry = Scenario{
 	Name:        "persistence",
