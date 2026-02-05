@@ -1158,9 +1158,7 @@ var _ = Describe("MetricsHolder Type Assertion", func() {
 		Expect(ok).To(BeTrue(), "MetricsHolder type assertion should succeed - THIS FAILS WITH POINTER RECEIVERS")
 
 		if ok {
-			workerMetrics := holder.GetWorkerMetrics()
 			frameworkMetrics := holder.GetFrameworkMetrics()
-			_ = workerMetrics
 			GinkgoWriter.Printf("MetricsHolder interface works: frameworkMetrics=%+v\n", frameworkMetrics)
 		}
 	})

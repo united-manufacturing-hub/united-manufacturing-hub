@@ -509,7 +509,12 @@ func (s *Supervisor[TObserved, TDesired]) handleWorkerRestart(ctx context.Contex
 
 	// Hold workerCtx.mu while reading currentState to prevent race with reconciliation
 	workerCtx.mu.RLock()
-	fromState := workerCtx.currentState.String()
+
+	fromState := "unknown"
+	if workerCtx.currentState != nil {
+		fromState = workerCtx.currentState.String()
+	}
+
 	workerCtx.mu.RUnlock()
 
 	s.mu.RUnlock()
