@@ -85,8 +85,9 @@ type TransportDesiredState struct {
 	RelayURL                string `json:"relayURL"`
 	config.BaseDesiredState        // Provides State, ShutdownRequested + IsShutdownRequested() + SetShutdownRequested()
 
-	Timeout       time.Duration    `json:"timeout"`
 	ChildrenSpecs []config.ChildSpec `json:"childrenSpecs,omitempty"`
+
+	Timeout time.Duration `json:"timeout"`
 }
 
 // GetChildrenSpecs returns the children specifications.
@@ -114,6 +115,9 @@ type TransportObservedState struct {
 	CollectedAt time.Time `json:"collected_at"`
 
 	JWTExpiry time.Time `json:"jwt_expiry,omitempty"`
+
+	// LastAuthAttemptAt records when the last authentication attempt was made (for backoff gating).
+	LastAuthAttemptAt time.Time `json:"last_auth_attempt_at,omitempty"`
 
 	// Children contains the observed state of child workers (PushWorker, PullWorker).
 	Children map[string]fsmv2.ObservedState `json:"children,omitempty"`
@@ -154,9 +158,6 @@ type TransportObservedState struct {
 
 	// LastErrorType tracks the most recent error type for ShouldResetTransport evaluation.
 	LastErrorType httpTransport.ErrorType `json:"last_error_type"`
-
-	// LastAuthAttemptAt records when the last authentication attempt was made (for backoff gating).
-	LastAuthAttemptAt time.Time `json:"last_auth_attempt_at,omitempty"`
 
 	// LastRetryAfter holds the server-suggested retry delay from the most recent error (for backoff).
 	LastRetryAfter time.Duration `json:"last_retry_after,omitempty"`
