@@ -49,7 +49,7 @@ jobs:
           make download-docker-binaries
 
       - name: Run unit tests
-        run: make unit-test-ci
+        run: make unit-test
 
       - name: Add report to Summary
         uses: dorny/test-reporter@b082adf0eced0765477756c2a610396589b8c637 # v2.5.0
@@ -116,7 +116,7 @@ jobs:
           CI: true
           FORCE_DOCKER: true # Force Docker usage since image is built with docker buildx
           VERSION: ${{ github.ref_name }}
-        run: make integration-test-ci
+        run: make integration-test
 
       - name: Add report to Summary
         uses: dorny/test-reporter@b082adf0eced0765477756c2a610396589b8c637 # v2.5.0
