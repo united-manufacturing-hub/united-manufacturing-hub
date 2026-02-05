@@ -285,6 +285,46 @@ var (
 		},
 		[]string{"hierarchy_path", "changed"},
 	)
+
+	panicRecoveryTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: namespace,
+			Subsystem: subsystem,
+			Name:      "panic_recovery_total",
+			Help:      "Total number of panic recoveries in FSMv2 goroutines (tick loop, collector, etc.)",
+		},
+		[]string{"hierarchy_path", "panic_type"},
+	)
+
+	childShutdownTimeoutTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: namespace,
+			Subsystem: subsystem,
+			Name:      "child_shutdown_timeout_total",
+			Help:      "Total number of child supervisor shutdown timeouts",
+		},
+		[]string{"hierarchy_path", "child_name"},
+	)
+
+	stuckActionDetectedTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: namespace,
+			Subsystem: subsystem,
+			Name:      "stuck_action_detected_total",
+			Help:      "Total number of stuck action detections (action running > 2x timeout)",
+		},
+		[]string{"hierarchy_path", "action_name"},
+	)
+
+	stuckActionForceRemovedTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: namespace,
+			Subsystem: subsystem,
+			Name:      "stuck_action_force_removed_total",
+			Help:      "Total number of stuck actions force-removed from in-progress tracking (action running > 3x timeout)",
+		},
+		[]string{"hierarchy_path", "action_name"},
+	)
 )
 
 // RecordCircuitOpen records circuit breaker state.
@@ -403,6 +443,26 @@ func RecordStateDuration(hierarchyPath, state string, duration time.Duration) {
 // CleanupStateDuration removes state duration metric for a worker.
 func CleanupStateDuration(hierarchyPath, state string) {
 	stateDurationSeconds.DeleteLabelValues(hierarchyPath, state)
+}
+
+// RecordPanicRecovery records a panic recovery event in a supervisor goroutine.
+func RecordPanicRecovery(hierarchyPath, panicType string) {
+	panicRecoveryTotal.WithLabelValues(hierarchyPath, panicType).Inc()
+}
+
+// RecordChildShutdownTimeout records a child supervisor shutdown timeout event.
+func RecordChildShutdownTimeout(hierarchyPath, childName string) {
+	childShutdownTimeoutTotal.WithLabelValues(hierarchyPath, childName).Inc()
+}
+
+// RecordStuckActionDetected records detection of a stuck action (running > 2x timeout).
+func RecordStuckActionDetected(hierarchyPath, actionName string) {
+	stuckActionDetectedTotal.WithLabelValues(hierarchyPath, actionName).Inc()
+}
+
+// RecordStuckActionForceRemoved records force-removal of a stuck action (running > 3x timeout).
+func RecordStuckActionForceRemoved(hierarchyPath, actionName string) {
+	stuckActionForceRemovedTotal.WithLabelValues(hierarchyPath, actionName).Inc()
 }
 
 // WorkerMetricsExporter exports worker-specific metrics from ObservedState to Prometheus.
