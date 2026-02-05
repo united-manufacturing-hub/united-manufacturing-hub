@@ -24,6 +24,9 @@ import (
 const ResetTransportActionName = "reset_transport"
 
 // ResetTransportAction resets the HTTP transport to establish fresh connections.
+//
+// Deprecated: Transport reset is now handled by TransportWorker (ENG-4264). Will be deleted in ENG-4265.
+//
 // Triggered by RecoveringState at multiples of TransportResetThreshold (5, 10, 15...).
 // Resolves stale TCP connections, DNS caching, corrupted connection pool, or TLS issues.
 // Idempotent: creates fresh HTTP client while preserving JWT tokens.

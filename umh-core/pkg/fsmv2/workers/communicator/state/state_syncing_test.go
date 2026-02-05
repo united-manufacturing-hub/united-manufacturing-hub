@@ -16,7 +16,6 @@ package state_test
 
 import (
 	"testing"
-	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -47,47 +46,6 @@ var _ = Describe("SyncingState", func() {
 	})
 })
 
-var _ = Describe("SyncingState Circuit Breaker", func() {
-	It("applies backoff delay based on ConsecutiveErrors", func() {
-		observed := snapshot.CommunicatorObservedState{
-			ConsecutiveErrors: 5,
-			Authenticated:     true,
-		}
-
-		syncingState := &state.SyncingState{}
-		delay := syncingState.GetBackoffDelay(observed)
-
-		// 5 errors = 2^5 = 32 seconds (exponential backoff capped at 60s)
-		Expect(delay).To(BeNumerically(">=", 10*time.Second))
-		Expect(delay).To(BeNumerically("<=", 60*time.Second))
-	})
-
-	It("returns zero delay when no errors", func() {
-		observed := snapshot.CommunicatorObservedState{
-			ConsecutiveErrors: 0,
-			Authenticated:     true,
-		}
-
-		syncingState := &state.SyncingState{}
-		delay := syncingState.GetBackoffDelay(observed)
-
-		Expect(delay).To(Equal(time.Duration(0)))
-	})
-
-	It("caps backoff at 60 seconds for many errors", func() {
-		observed := snapshot.CommunicatorObservedState{
-			ConsecutiveErrors: 100, // Many errors
-			Authenticated:     true,
-		}
-
-		syncingState := &state.SyncingState{}
-		delay := syncingState.GetBackoffDelay(observed)
-
-		// 2^100 seconds would be huge, but should be capped at 60s
-		Expect(delay).To(Equal(60 * time.Second))
-	})
-})
-
 var _ = Describe("SyncingState Transitions", func() {
 	var stateObj *state.SyncingState
 
@@ -100,9 +58,8 @@ var _ = Describe("SyncingState Transitions", func() {
 			snap := fsmv2.Snapshot{
 				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
 				Observed: snapshot.CommunicatorObservedState{
-					Authenticated: true,
-					JWTToken:      "valid-token",
-					JWTExpiry:     time.Now().Add(time.Hour),
+					ChildrenHealthy:   1,
+					ChildrenUnhealthy: 0,
 				},
 				Desired: &snapshot.CommunicatorDesiredState{
 					BaseDesiredState: config.BaseDesiredState{ShutdownRequested: true},
@@ -116,12 +73,12 @@ var _ = Describe("SyncingState Transitions", func() {
 			Expect(result.Action).To(BeNil())
 		})
 
-		It("should prioritize shutdown over other conditions", func() {
+		It("should prioritize shutdown over unhealthy children", func() {
 			snap := fsmv2.Snapshot{
 				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
 				Observed: snapshot.CommunicatorObservedState{
-					Authenticated:     false,
-					ConsecutiveErrors: 10,
+					ChildrenHealthy:   0,
+					ChildrenUnhealthy: 1,
 				},
 				Desired: &snapshot.CommunicatorDesiredState{
 					BaseDesiredState: config.BaseDesiredState{ShutdownRequested: true},
@@ -131,93 +88,18 @@ var _ = Describe("SyncingState Transitions", func() {
 			result := stateObj.Next(snap)
 
 			Expect(result.State).To(BeAssignableToTypeOf(&state.StoppedState{}))
-			Expect(result.Signal).To(Equal(fsmv2.SignalNone))
-			Expect(result.Action).To(BeNil())
-		})
-	})
-
-	Describe("Syncing -> TryingToAuthenticateState", func() {
-		It("should transition to TryingToAuthenticateState when token is expired", func() {
-			snap := fsmv2.Snapshot{
-				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
-				Observed: snapshot.CommunicatorObservedState{
-					Authenticated: true,
-					JWTToken:      "expired-token",
-					JWTExpiry:     time.Now().Add(-time.Hour),
-				},
-				Desired: &snapshot.CommunicatorDesiredState{},
-			}
-
-			result := stateObj.Next(snap)
-
-			Expect(result.State).To(BeAssignableToTypeOf(&state.TryingToAuthenticateState{}))
-			Expect(result.Signal).To(Equal(fsmv2.SignalNone))
-			Expect(result.Action).To(BeNil())
-		})
-
-		It("should transition to TryingToAuthenticateState when token expires within 10 minutes", func() {
-			snap := fsmv2.Snapshot{
-				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
-				Observed: snapshot.CommunicatorObservedState{
-					Authenticated: true,
-					JWTToken:      "expiring-token",
-					JWTExpiry:     time.Now().Add(5 * time.Minute),
-				},
-				Desired: &snapshot.CommunicatorDesiredState{},
-			}
-
-			result := stateObj.Next(snap)
-
-			Expect(result.State).To(BeAssignableToTypeOf(&state.TryingToAuthenticateState{}))
-			Expect(result.Signal).To(Equal(fsmv2.SignalNone))
-			Expect(result.Action).To(BeNil())
-		})
-
-		It("should transition to TryingToAuthenticateState when not authenticated", func() {
-			snap := fsmv2.Snapshot{
-				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
-				Observed: snapshot.CommunicatorObservedState{
-					Authenticated: false,
-					JWTToken:      "",
-				},
-				Desired: &snapshot.CommunicatorDesiredState{},
-			}
-
-			result := stateObj.Next(snap)
-
-			Expect(result.State).To(BeAssignableToTypeOf(&state.TryingToAuthenticateState{}))
-			Expect(result.Signal).To(Equal(fsmv2.SignalNone))
-			Expect(result.Action).To(BeNil())
-		})
-
-		It("should transition to TryingToAuthenticateState when authenticated but token empty", func() {
-			snap := fsmv2.Snapshot{
-				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
-				Observed: snapshot.CommunicatorObservedState{
-					Authenticated: false,
-					JWTToken:      "some-token",
-					JWTExpiry:     time.Now().Add(time.Hour),
-				},
-				Desired: &snapshot.CommunicatorDesiredState{},
-			}
-
-			result := stateObj.Next(snap)
-
-			Expect(result.State).To(BeAssignableToTypeOf(&state.TryingToAuthenticateState{}))
 			Expect(result.Signal).To(Equal(fsmv2.SignalNone))
 			Expect(result.Action).To(BeNil())
 		})
 	})
 
 	Describe("Syncing -> RecoveringState", func() {
-		It("should transition to RecoveringState when sync is not healthy", func() {
+		It("should transition when children are unhealthy", func() {
 			snap := fsmv2.Snapshot{
 				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
 				Observed: snapshot.CommunicatorObservedState{
-					Authenticated:     true,
-					JWTToken:          "valid-token",
-					JWTExpiry:         time.Now().Add(time.Hour),
-					ConsecutiveErrors: 5,
+					ChildrenHealthy:   0,
+					ChildrenUnhealthy: 1,
 				},
 				Desired: &snapshot.CommunicatorDesiredState{},
 			}
@@ -229,33 +111,12 @@ var _ = Describe("SyncingState Transitions", func() {
 			Expect(result.Action).To(BeNil())
 		})
 
-		It("should transition to RecoveringState at exactly 5 consecutive errors", func() {
+		It("should transition when multiple children are unhealthy", func() {
 			snap := fsmv2.Snapshot{
 				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
 				Observed: snapshot.CommunicatorObservedState{
-					Authenticated:     true,
-					JWTToken:          "valid-token",
-					JWTExpiry:         time.Now().Add(time.Hour),
-					ConsecutiveErrors: 5,
-				},
-				Desired: &snapshot.CommunicatorDesiredState{},
-			}
-
-			result := stateObj.Next(snap)
-
-			Expect(result.State).To(BeAssignableToTypeOf(&state.RecoveringState{}))
-			Expect(result.Signal).To(Equal(fsmv2.SignalNone))
-			Expect(result.Action).To(BeNil())
-		})
-
-		It("should transition to RecoveringState with high consecutive errors", func() {
-			snap := fsmv2.Snapshot{
-				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
-				Observed: snapshot.CommunicatorObservedState{
-					Authenticated:     true,
-					JWTToken:          "valid-token",
-					JWTExpiry:         time.Now().Add(time.Hour),
-					ConsecutiveErrors: 100,
+					ChildrenHealthy:   1,
+					ChildrenUnhealthy: 2,
 				},
 				Desired: &snapshot.CommunicatorDesiredState{},
 			}
@@ -268,15 +129,13 @@ var _ = Describe("SyncingState Transitions", func() {
 		})
 	})
 
-	Describe("Syncing -> self (continuous sync)", func() {
-		It("should stay in SyncingState and emit SyncAction when healthy", func() {
+	Describe("Syncing -> self (healthy orchestration)", func() {
+		It("should stay in SyncingState with nil action when children are healthy", func() {
 			snap := fsmv2.Snapshot{
 				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
 				Observed: snapshot.CommunicatorObservedState{
-					Authenticated:     true,
-					JWTToken:          "valid-token",
-					JWTExpiry:         time.Now().Add(time.Hour),
-					ConsecutiveErrors: 0,
+					ChildrenHealthy:   1,
+					ChildrenUnhealthy: 0,
 				},
 				Desired: &snapshot.CommunicatorDesiredState{},
 			}
@@ -285,49 +144,24 @@ var _ = Describe("SyncingState Transitions", func() {
 
 			Expect(result.State).To(BeAssignableToTypeOf(&state.SyncingState{}))
 			Expect(result.Signal).To(Equal(fsmv2.SignalNone))
-			Expect(result.Action).NotTo(BeNil())
-			Expect(result.Action.Name()).To(Equal("sync"))
+			Expect(result.Action).To(BeNil())
 		})
 
-		It("should transition to RecoveringState on first consecutive error", func() {
+		It("should stay in SyncingState when no children exist yet", func() {
 			snap := fsmv2.Snapshot{
 				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
 				Observed: snapshot.CommunicatorObservedState{
-					Authenticated:     true,
-					JWTToken:          "valid-token",
-					JWTExpiry:         time.Now().Add(time.Hour),
-					ConsecutiveErrors: 1, // Any error triggers degraded state
+					ChildrenHealthy:   0,
+					ChildrenUnhealthy: 0,
 				},
 				Desired: &snapshot.CommunicatorDesiredState{},
 			}
 
 			result := stateObj.Next(snap)
 
-			// First error immediately transitions to RecoveringState
-			Expect(result.State).To(BeAssignableToTypeOf(&state.RecoveringState{}))
-			Expect(result.Signal).To(Equal(fsmv2.SignalNone))
-		})
-
-		It("should stay in SyncingState and emit SyncAction after successful recovery", func() {
-			snap := fsmv2.Snapshot{
-				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
-				Observed: snapshot.CommunicatorObservedState{
-					Authenticated:     true,
-					JWTToken:          "valid-token",
-					JWTExpiry:         time.Now().Add(30 * time.Minute),
-					ConsecutiveErrors: 0,
-				},
-				Desired: &snapshot.CommunicatorDesiredState{
-					BaseDesiredState: config.BaseDesiredState{ShutdownRequested: false},
-				},
-			}
-
-			result := stateObj.Next(snap)
-
 			Expect(result.State).To(BeAssignableToTypeOf(&state.SyncingState{}))
 			Expect(result.Signal).To(Equal(fsmv2.SignalNone))
-			Expect(result.Action).NotTo(BeNil())
-			Expect(result.Action.Name()).To(Equal("sync"))
+			Expect(result.Action).To(BeNil())
 		})
 	})
 })

@@ -26,6 +26,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/testutil"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
+	transportWorker "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport"
 )
 
 var _ = Describe("Communicator Scenario", func() {
@@ -38,8 +39,9 @@ var _ = Describe("Communicator Scenario", func() {
 
 	AfterEach(func() {
 		cancel()
-		// CRITICAL: Clean up global channel provider to prevent test pollution
+		// CRITICAL: Clean up global channel providers to prevent test pollution
 		communicator.ClearChannelProvider()
+		transportWorker.ClearChannelProvider()
 	})
 
 	Describe("Using FSMv2 worker via ApplicationSupervisor", func() {

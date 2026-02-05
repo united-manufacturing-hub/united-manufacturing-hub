@@ -45,9 +45,9 @@ var _ = Describe("StoppedState", func() {
 				}
 			})
 
-			It("should transition to TryingToAuthenticateState", func() {
+			It("should transition to SyncingState (ENG-4264: skip auth)", func() {
 				result := stateObj.Next(snap)
-				Expect(result.State).To(BeAssignableToTypeOf(&state.TryingToAuthenticateState{}))
+				Expect(result.State).To(BeAssignableToTypeOf(&state.SyncingState{}))
 			})
 
 			It("should not signal anything", func() {
@@ -76,7 +76,7 @@ var _ = Describe("StoppedState Transitions", func() {
 		stateObj = &state.StoppedState{}
 	})
 
-	Describe("Stopped -> TryingToAuthenticateState", func() {
+	Describe("Stopped -> SyncingState", func() {
 		It("should transition when shutdown is not requested", func() {
 			snap := fsmv2.Snapshot{
 				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
@@ -86,7 +86,7 @@ var _ = Describe("StoppedState Transitions", func() {
 
 			result := stateObj.Next(snap)
 
-			Expect(result.State).To(BeAssignableToTypeOf(&state.TryingToAuthenticateState{}))
+			Expect(result.State).To(BeAssignableToTypeOf(&state.SyncingState{}))
 			Expect(result.Signal).To(Equal(fsmv2.SignalNone))
 			Expect(result.Action).To(BeNil())
 		})
@@ -102,7 +102,7 @@ var _ = Describe("StoppedState Transitions", func() {
 
 			result := stateObj.Next(snap)
 
-			Expect(result.State).To(BeAssignableToTypeOf(&state.TryingToAuthenticateState{}))
+			Expect(result.State).To(BeAssignableToTypeOf(&state.SyncingState{}))
 			Expect(result.Signal).To(Equal(fsmv2.SignalNone))
 			Expect(result.Action).To(BeNil())
 		})

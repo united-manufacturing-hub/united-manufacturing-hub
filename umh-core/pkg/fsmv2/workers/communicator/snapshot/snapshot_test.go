@@ -118,11 +118,10 @@ var _ = Describe("CommunicatorObservedState", func() {
 	})
 
 	Describe("IsSyncHealthy", func() {
-		Context("when authenticated with valid token and no errors", func() {
+		Context("when all children are healthy", func() {
 			BeforeEach(func() {
-				observed.Authenticated = true
-				observed.JWTExpiry = time.Now().Add(1 * time.Hour) // Token valid for 1 hour
-				observed.ConsecutiveErrors = 0
+				observed.ChildrenHealthy = 1
+				observed.ChildrenUnhealthy = 0
 			})
 
 			It("should return true", func() {
@@ -130,114 +129,55 @@ var _ = Describe("CommunicatorObservedState", func() {
 			})
 		})
 
-		Context("when authenticated with valid token but has any consecutive errors", func() {
-			BeforeEach(func() {
-				observed.Authenticated = true
-				observed.JWTExpiry = time.Now().Add(1 * time.Hour)
-				observed.ConsecutiveErrors = 1 // Any error makes sync unhealthy
-			})
-
-			It("should return false (first error triggers degraded)", func() {
-				Expect(observed.IsSyncHealthy()).To(BeFalse())
-			})
-		})
-
-		Context("when authenticated with valid token but multiple errors", func() {
-			BeforeEach(func() {
-				observed.Authenticated = true
-				observed.JWTExpiry = time.Now().Add(1 * time.Hour)
-				observed.ConsecutiveErrors = 5 // Multiple errors
-			})
-
-			It("should return false", func() {
-				Expect(observed.IsSyncHealthy()).To(BeFalse())
-			})
-		})
-
-		Context("when authenticated with valid token but many errors", func() {
-			BeforeEach(func() {
-				observed.Authenticated = true
-				observed.JWTExpiry = time.Now().Add(1 * time.Hour)
-				observed.ConsecutiveErrors = 10 // Many errors
-			})
-
-			It("should return false", func() {
-				Expect(observed.IsSyncHealthy()).To(BeFalse())
-			})
-		})
-
-		Context("when not authenticated", func() {
-			BeforeEach(func() {
-				observed.Authenticated = false
-				observed.JWTExpiry = time.Now().Add(1 * time.Hour)
-				observed.ConsecutiveErrors = 0
-			})
-
-			It("should return false", func() {
-				Expect(observed.IsSyncHealthy()).To(BeFalse())
-			})
-		})
-
-		Context("when token is expired", func() {
-			BeforeEach(func() {
-				observed.Authenticated = true
-				observed.JWTExpiry = time.Now().Add(-1 * time.Hour) // Expired 1 hour ago
-				observed.ConsecutiveErrors = 0
-			})
-
-			It("should return false", func() {
-				Expect(observed.IsSyncHealthy()).To(BeFalse())
-			})
-		})
-
-		Context("when token is about to expire (within 10-minute buffer)", func() {
-			BeforeEach(func() {
-				observed.Authenticated = true
-				observed.JWTExpiry = time.Now().Add(5 * time.Minute) // Expires in 5 minutes
-				observed.ConsecutiveErrors = 0
-			})
-
-			It("should return false", func() {
-				Expect(observed.IsSyncHealthy()).To(BeFalse())
-			})
-		})
-
-		Context("when all conditions fail", func() {
-			BeforeEach(func() {
-				observed.Authenticated = false
-				observed.JWTExpiry = time.Now().Add(-1 * time.Hour)
-				observed.ConsecutiveErrors = 10
-			})
-
-			It("should return false", func() {
-				Expect(observed.IsSyncHealthy()).To(BeFalse())
-			})
-		})
-
-		Context("when backpressured with otherwise healthy state", func() {
-			BeforeEach(func() {
-				observed.Authenticated = true
-				observed.JWTExpiry = time.Now().Add(1 * time.Hour)
-				observed.ConsecutiveErrors = 0
-				observed.IsBackpressured = true
-			})
-
-			It("should return false (backpressure means not healthy)", func() {
-				Expect(observed.IsSyncHealthy()).To(BeFalse())
-			})
-		})
-
-		Context("when not backpressured with healthy state", func() {
-			BeforeEach(func() {
-				observed.Authenticated = true
-				observed.JWTExpiry = time.Now().Add(1 * time.Hour)
-				observed.ConsecutiveErrors = 0
-				observed.IsBackpressured = false
-			})
-
-			It("should return true", func() {
+		Context("when no children exist yet", func() {
+			It("should return true (zero unhealthy)", func() {
 				Expect(observed.IsSyncHealthy()).To(BeTrue())
 			})
+		})
+
+		Context("when some children are unhealthy", func() {
+			BeforeEach(func() {
+				observed.ChildrenHealthy = 1
+				observed.ChildrenUnhealthy = 1
+			})
+
+			It("should return false", func() {
+				Expect(observed.IsSyncHealthy()).To(BeFalse())
+			})
+		})
+
+		Context("when all children are unhealthy", func() {
+			BeforeEach(func() {
+				observed.ChildrenHealthy = 0
+				observed.ChildrenUnhealthy = 2
+			})
+
+			It("should return false", func() {
+				Expect(observed.IsSyncHealthy()).To(BeFalse())
+			})
+		})
+	})
+
+	Describe("SetChildrenCounts", func() {
+		It("should set both healthy and unhealthy counts", func() {
+			result := observed.SetChildrenCounts(3, 1)
+			updated := result.(snapshot.CommunicatorObservedState)
+			Expect(updated.ChildrenHealthy).To(Equal(3))
+			Expect(updated.ChildrenUnhealthy).To(Equal(1))
+		})
+
+		It("should handle zero counts", func() {
+			result := observed.SetChildrenCounts(0, 0)
+			updated := result.(snapshot.CommunicatorObservedState)
+			Expect(updated.ChildrenHealthy).To(Equal(0))
+			Expect(updated.ChildrenUnhealthy).To(Equal(0))
+		})
+	})
+
+	Describe("GetChildrenSpecs", func() {
+		It("should return nil when no specs set", func() {
+			desired := &snapshot.CommunicatorDesiredState{}
+			Expect(desired.GetChildrenSpecs()).To(BeNil())
 		})
 	})
 })

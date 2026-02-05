@@ -20,9 +20,9 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/snapshot"
 )
 
-// StoppedState is the initial state before authentication.
-// Transitions to TryingToAuthenticateState on first tick, or emits SignalNeedsRemoval if shutdown.
-// No actions emitted. Enforces C1 (auth precedence) and C4 (shutdown priority).
+// StoppedState is the initial state.
+// Transitions to SyncingState when running, or emits SignalNeedsRemoval if shutdown.
+// Authentication is handled by TransportWorker (ENG-4264).
 type StoppedState struct {
 	helpers.StoppedBase
 }
@@ -34,7 +34,7 @@ func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 		return fsmv2.Result[any, any](s, fsmv2.SignalNeedsRemoval, nil, "Communicator is stopped and shutdown was requested")
 	}
 
-	return fsmv2.Result[any, any](&TryingToAuthenticateState{}, fsmv2.SignalNone, nil, "Starting authentication")
+	return fsmv2.Result[any, any](&SyncingState{}, fsmv2.SignalNone, nil, "Starting sync orchestration")
 }
 
 func (s *StoppedState) String() string {

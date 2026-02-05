@@ -72,6 +72,9 @@ const AuthenticateActionName = "authenticate"
 // Idempotent: safe to retry on failure, multiple calls won't create multiple tokens.
 // Creates transport on first execution if not present.
 //
+// Deprecated: TransportWorker handles authentication (ENG-4264).
+// CommunicatorWorker no longer authenticates. Will be deleted in ENG-4265.
+//
 // Returns error on network failure, invalid credentials (non-200), or malformed response.
 // See worker.go C1 (authentication precedence) and C3 (transport lifecycle).
 type AuthenticateAction struct {

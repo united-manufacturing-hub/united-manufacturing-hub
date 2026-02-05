@@ -218,6 +218,7 @@ func (w *CommunicatorWorker) DeriveDesiredState(spec interface{}) (fsmv2.Desired
 			BaseDesiredState: fsmv2types.BaseDesiredState{
 				State: "running",
 			},
+			ChildrenSpecs: makeTransportChildSpec(fsmv2types.UserSpec{}),
 		}, nil
 	}
 
@@ -245,11 +246,23 @@ func (w *CommunicatorWorker) DeriveDesiredState(spec interface{}) (fsmv2.Desired
 		BaseDesiredState: fsmv2types.BaseDesiredState{
 			State: commSpec.GetState(),
 		},
-		RelayURL:     commSpec.RelayURL,
-		InstanceUUID: commSpec.InstanceUUID,
-		AuthToken:    commSpec.AuthToken,
-		Timeout:      commSpec.Timeout,
+		RelayURL:      commSpec.RelayURL,
+		InstanceUUID:  commSpec.InstanceUUID,
+		AuthToken:     commSpec.AuthToken,
+		Timeout:       commSpec.Timeout,
+		ChildrenSpecs: makeTransportChildSpec(userSpec),
 	}, nil
+}
+
+// makeTransportChildSpec creates the ChildSpec for the TransportWorker child.
+// TransportWorker handles authentication, push, and pull operations.
+func makeTransportChildSpec(parentSpec fsmv2types.UserSpec) []fsmv2types.ChildSpec {
+	return []fsmv2types.ChildSpec{{
+		Name:             "transport",
+		WorkerType:       "transport",
+		UserSpec:         fsmv2types.UserSpec{Config: parentSpec.Config},
+		ChildStartStates: []string{"Syncing", "Recovering"},
+	}}
 }
 
 // GetInitialState returns StoppedState as the initial FSM state.

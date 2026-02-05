@@ -45,6 +45,9 @@ const (
 // Pull: HTTPTransport.Pull() → inboundChan (backend → edge).
 // Push: outboundChan → HTTPTransport.Push() (edge → backend).
 //
+// Deprecated: Superseded by TransportWorker Push/Pull children (ENG-4264).
+// CommunicatorWorker no longer dispatches SyncAction. Will be deleted in ENG-4265.
+//
 // Records metrics and error counts for health monitoring. See worker.go C5 (syncing loop).
 type SyncAction struct {
 	JWTToken           string

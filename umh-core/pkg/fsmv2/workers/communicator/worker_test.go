@@ -135,6 +135,18 @@ var _ = Describe("CommunicatorWorker", func() {
 				Expect(desired.GetState()).To(Equal("running"))
 				Expect(desired.IsShutdownRequested()).To(BeFalse())
 			})
+
+			It("should include TransportWorker child spec", func() {
+				desiredIface, err := worker.DeriveDesiredState(nil)
+				Expect(err).NotTo(HaveOccurred())
+
+				desired := desiredIface.(*snapshot.CommunicatorDesiredState)
+				specs := desired.GetChildrenSpecs()
+				Expect(specs).To(HaveLen(1))
+				Expect(specs[0].Name).To(Equal("transport"))
+				Expect(specs[0].WorkerType).To(Equal("transport"))
+				Expect(specs[0].ChildStartStates).To(ConsistOf("Syncing", "Recovering"))
+			})
 		})
 
 		Context("with valid UserSpec", func() {
@@ -162,6 +174,14 @@ state: "running"
 				Expect(desired.AuthToken).To(Equal("test-auth-token-secret"))
 				Expect(desired.Timeout).To(Equal(15 * time.Second))
 				Expect(desired.GetState()).To(Equal("running"))
+
+				// Verify TransportWorker child spec with config passthrough
+				specs := desired.GetChildrenSpecs()
+				Expect(specs).To(HaveLen(1))
+				Expect(specs[0].Name).To(Equal("transport"))
+				Expect(specs[0].WorkerType).To(Equal("transport"))
+				Expect(specs[0].ChildStartStates).To(ConsistOf("Syncing", "Recovering"))
+				Expect(specs[0].UserSpec.Config).To(Equal(spec.Config))
 			})
 
 			It("should apply default timeout when not specified", func() {
