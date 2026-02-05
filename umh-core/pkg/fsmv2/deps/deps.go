@@ -61,6 +61,8 @@ type Dependencies interface {
 	ActionLogger(actionType string) FSMLogger
 	// GetStateReader returns read-only access to the TriangularStore, or nil if not provided.
 	GetStateReader() StateReader
+	// GetHierarchyPath returns the worker's hierarchy path for Sentry routing.
+	GetHierarchyPath() string
 }
 
 // BaseDependencies provides common tools for all workers.
@@ -73,6 +75,7 @@ type BaseDependencies struct {
 	frameworkState  *FrameworkMetrics // Set by supervisor before collection, may be stale (~1 tick)
 	workerType      string
 	workerID        string
+	hierarchyPath   string
 	actionHistory   []ActionResult // Set by supervisor before CollectObservedState, read-only for workers
 	mu              sync.RWMutex   // Protects frameworkState and actionHistory
 }
@@ -93,6 +96,7 @@ func NewBaseDependencies(logger FSMLogger, stateReader StateReader, identity Ide
 		retryTracker:    retry.New(),
 		workerType:      identity.WorkerType,
 		workerID:        identity.ID,
+		hierarchyPath:   identity.HierarchyPath,
 	}
 }
 
@@ -161,6 +165,10 @@ func (d *BaseDependencies) GetWorkerType() string {
 
 func (d *BaseDependencies) GetWorkerID() string {
 	return d.workerID
+}
+
+func (d *BaseDependencies) GetHierarchyPath() string {
+	return d.hierarchyPath
 }
 
 // RetryTracker returns the framework-level retry tracker for error/success recording.

@@ -1207,7 +1207,7 @@ func (ts *TriangularStore) GetDeltas(ctx context.Context, sub Subscription) (Del
 	if ts.deltaStore != nil {
 		entries, err := ts.deltaStore.GetAllSince(ctx, sub.LastSyncID, deltaLimit)
 		if err != nil {
-			ts.logger.SentryWarn(deps.FeatureCSE, "delta_query_fallback_to_bootstrap",
+			ts.logger.SentryWarn(deps.FeatureCSE, "", "delta_query_fallback_to_bootstrap",
 				deps.Err(err),
 				deps.Int64("lastSyncID", sub.LastSyncID),
 				deps.Int64("currentSyncID", currentSyncID),

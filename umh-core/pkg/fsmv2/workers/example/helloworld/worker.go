@@ -192,8 +192,7 @@ func init() {
 			worker, err := NewHelloworldWorker(id, logger, stateReader)
 			if err != nil {
 				if logger != nil {
-					logger.SentryError(deps.FeatureExamples, err, "helloworld_worker_creation_failed",
-						deps.HierarchyPath(id.HierarchyPath))
+					logger.SentryError(deps.FeatureExamples, id.HierarchyPath, err, "helloworld_worker_creation_failed")
 				}
 
 				return nil

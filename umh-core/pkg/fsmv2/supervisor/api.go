@@ -57,8 +57,7 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 	defer s.mu.Unlock()
 
 	if _, exists := s.workers[identity.ID]; exists {
-		s.logger.SentryWarn(deps.FeatureFSMv2, "worker_add_rejected",
-			deps.HierarchyPath(identity.HierarchyPath),
+		s.logger.SentryWarn(deps.FeatureFSMv2, identity.HierarchyPath, "worker_add_rejected",
 			deps.Reason("already_exists"))
 
 		return errors.New("worker already exists")
@@ -69,23 +68,20 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 
 	observed, err := worker.CollectObservedState(ctx)
 	if err != nil {
-		s.logger.SentryError(deps.FeatureFSMv2, err, "worker_add_collect_observed_failed",
-			deps.HierarchyPath(identity.HierarchyPath))
+		s.logger.SentryError(deps.FeatureFSMv2, identity.HierarchyPath, err, "worker_add_collect_observed_failed")
 
 		return fmt.Errorf("failed to collect initial observed state: %w", err)
 	}
 
 	initialDesired, err := worker.DeriveDesiredState(nil)
 	if err != nil {
-		s.logger.SentryError(deps.FeatureFSMv2, err, "worker_add_derive_desired_failed",
-			deps.HierarchyPath(identity.HierarchyPath))
+		s.logger.SentryError(deps.FeatureFSMv2, identity.HierarchyPath, err, "worker_add_derive_desired_failed")
 
 		return fmt.Errorf("failed to derive initial desired state: %w", err)
 	}
 
 	if valErr := config.ValidateDesiredState(initialDesired.GetState()); valErr != nil {
-		s.logger.SentryError(deps.FeatureFSMv2, valErr, "worker_add_validate_desired_failed",
-			deps.HierarchyPath(identity.HierarchyPath))
+		s.logger.SentryError(deps.FeatureFSMv2, identity.HierarchyPath, valErr, "worker_add_validate_desired_failed")
 
 		return fmt.Errorf("failed to derive initial desired state: %w", valErr)
 	}
@@ -97,8 +93,7 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 		"hierarchy_path": identity.HierarchyPath,
 	}
 	if err := s.store.SaveIdentity(ctx, s.workerType, identity.ID, identityDoc); err != nil {
-		s.logger.SentryError(deps.FeatureFSMv2, err, "worker_add_save_identity_failed",
-			deps.HierarchyPath(identity.HierarchyPath))
+		s.logger.SentryError(deps.FeatureFSMv2, identity.HierarchyPath, err, "worker_add_save_identity_failed")
 
 		return fmt.Errorf("failed to save identity: %w", err)
 	}
@@ -107,16 +102,14 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 
 	observedJSON, err := json.Marshal(observed)
 	if err != nil {
-		s.logger.SentryError(deps.FeatureFSMv2, err, "worker_add_marshal_observed_failed",
-			deps.HierarchyPath(identity.HierarchyPath))
+		s.logger.SentryError(deps.FeatureFSMv2, identity.HierarchyPath, err, "worker_add_marshal_observed_failed")
 
 		return fmt.Errorf("failed to marshal observed state: %w", err)
 	}
 
 	observedDoc := make(persistence.Document)
 	if err := json.Unmarshal(observedJSON, &observedDoc); err != nil {
-		s.logger.SentryError(deps.FeatureFSMv2, err, "worker_add_unmarshal_observed_failed",
-			deps.HierarchyPath(identity.HierarchyPath))
+		s.logger.SentryError(deps.FeatureFSMv2, identity.HierarchyPath, err, "worker_add_unmarshal_observed_failed")
 
 		return fmt.Errorf("failed to unmarshal observed state to document: %w", err)
 	}
@@ -125,8 +118,7 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 
 	_, err = s.store.SaveObserved(ctx, s.workerType, identity.ID, observedDoc)
 	if err != nil {
-		s.logger.SentryError(deps.FeatureFSMv2, err, "worker_add_save_observed_failed",
-			deps.HierarchyPath(identity.HierarchyPath))
+		s.logger.SentryError(deps.FeatureFSMv2, identity.HierarchyPath, err, "worker_add_save_observed_failed")
 
 		return fmt.Errorf("failed to save initial observation: %w", err)
 	}
@@ -135,16 +127,14 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 
 	desiredJSON, err := json.Marshal(initialDesired)
 	if err != nil {
-		s.logger.SentryError(deps.FeatureFSMv2, err, "worker_add_marshal_desired_failed",
-			deps.HierarchyPath(identity.HierarchyPath))
+		s.logger.SentryError(deps.FeatureFSMv2, identity.HierarchyPath, err, "worker_add_marshal_desired_failed")
 
 		return fmt.Errorf("failed to marshal desired state: %w", err)
 	}
 
 	desiredDoc := make(persistence.Document)
 	if err := json.Unmarshal(desiredJSON, &desiredDoc); err != nil {
-		s.logger.SentryError(deps.FeatureFSMv2, err, "worker_add_unmarshal_desired_failed",
-			deps.HierarchyPath(identity.HierarchyPath))
+		s.logger.SentryError(deps.FeatureFSMv2, identity.HierarchyPath, err, "worker_add_unmarshal_desired_failed")
 
 		return fmt.Errorf("failed to unmarshal desired state to document: %w", err)
 	}
@@ -153,8 +143,7 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 
 	_, err = s.store.SaveDesired(ctx, s.workerType, identity.ID, desiredDoc)
 	if err != nil {
-		s.logger.SentryError(deps.FeatureFSMv2, err, "worker_add_save_desired_failed",
-			deps.HierarchyPath(identity.HierarchyPath))
+		s.logger.SentryError(deps.FeatureFSMv2, identity.HierarchyPath, err, "worker_add_save_desired_failed")
 
 		return fmt.Errorf("failed to save initial desired state: %w", err)
 	}
@@ -192,8 +181,7 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 
 			var desired TDesired
 			if err := s.store.LoadDesiredTyped(ctx, s.workerType, identity.ID, &desired); err != nil {
-				s.logger.SentryWarn(deps.FeatureFSMv2, "shutdown_requested_load_failed",
-					deps.HierarchyPath(identity.HierarchyPath),
+				s.logger.SentryWarn(deps.FeatureFSMv2, identity.HierarchyPath, "shutdown_requested_load_failed",
 					deps.Err(err))
 
 				return false
@@ -395,8 +383,7 @@ func (s *Supervisor[TObserved, TDesired]) RemoveWorker(ctx context.Context, work
 	if !exists {
 		s.mu.Unlock()
 
-		s.logger.SentryWarn(deps.FeatureFSMv2, "worker_remove_not_found",
-			deps.HierarchyPath(hierarchyPath),
+		s.logger.SentryWarn(deps.FeatureFSMv2, hierarchyPath, "worker_remove_not_found",
 			deps.String("target_worker_id", workerID))
 
 		return errors.New("worker not found")

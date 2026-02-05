@@ -339,7 +339,7 @@ func (m *MyFSM) beforeRunning(e *fsm.Event) {
     // Pre-condition check
     if !m.isHealthy() {
         e.Cancel()
-        m.logger.SentryWarn(deps.FeatureHealth, "Cannot enter running: unhealthy")
+        m.logger.SentryWarn(deps.FeatureHealth, m.hierarchyPath, "Cannot enter running: unhealthy")
         return
     }
 }

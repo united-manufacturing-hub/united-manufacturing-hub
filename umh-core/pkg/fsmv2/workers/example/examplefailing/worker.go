@@ -67,8 +67,8 @@ func NewFailingWorker(
 
 	conn, err := connectionPool.Acquire()
 	if err != nil {
-		logger.SentryWarn(deps.FeatureExamples, "initial_connection_failed",
-			deps.Err(err), deps.HierarchyPath(identity.HierarchyPath))
+		logger.SentryWarn(deps.FeatureExamples, identity.HierarchyPath, "initial_connection_failed",
+			deps.Err(err))
 	}
 
 	return &FailingWorker{

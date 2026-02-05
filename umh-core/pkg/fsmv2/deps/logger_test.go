@@ -48,23 +48,34 @@ var _ = Describe("zapLogger field propagation", func() {
 	It("SentryError produces JSON with feature, error, and msg fields", func() {
 		logger := deps.NewJSONFSMLogger(buf, deps.LevelDebug)
 		testErr := errors.New("something broke")
-		logger.SentryError(deps.FeatureFSMv2, testErr, "lifecycle failed")
+		logger.SentryError(deps.FeatureFSMv2, "root/worker-1(helloworld)", testErr, "lifecycle failed")
 
 		m := parseLine(buf)
 		Expect(m).To(HaveKeyWithValue("msg", "lifecycle failed"))
 		Expect(m).To(HaveKeyWithValue("feature", "fsmv2"))
+		Expect(m).To(HaveKeyWithValue("hierarchy_path", "root/worker-1(helloworld)"))
 		Expect(m).To(HaveKey("error"))
 		Expect(m).To(HaveKeyWithValue("level", "error"))
 	})
 
 	It("SentryWarn produces JSON with feature and msg fields", func() {
 		logger := deps.NewJSONFSMLogger(buf, deps.LevelDebug)
-		logger.SentryWarn(deps.FeatureFSMv2, "reconciliation slow")
+		logger.SentryWarn(deps.FeatureFSMv2, "root/worker-1(helloworld)", "reconciliation slow")
 
 		m := parseLine(buf)
 		Expect(m).To(HaveKeyWithValue("msg", "reconciliation slow"))
 		Expect(m).To(HaveKeyWithValue("feature", "fsmv2"))
+		Expect(m).To(HaveKeyWithValue("hierarchy_path", "root/worker-1(helloworld)"))
 		Expect(m).To(HaveKeyWithValue("level", "warn"))
+	})
+
+	It("SentryError omits hierarchy_path when empty", func() {
+		logger := deps.NewJSONFSMLogger(buf, deps.LevelDebug)
+		testErr := errors.New("something broke")
+		logger.SentryError(deps.FeatureFSMv2, "", testErr, "lifecycle failed")
+
+		m := parseLine(buf)
+		Expect(m).NotTo(HaveKey("hierarchy_path"))
 	})
 
 	It("Info produces JSON with msg field at info level", func() {
@@ -131,9 +142,9 @@ var _ = Describe("nopLogger contract", func() {
 		Expect(func() {
 			logger.Debug("debug")
 			logger.Info("info")
-			logger.SentryWarn(deps.FeatureExamples, "warn")
-			logger.SentryWarn(deps.FeatureFSMv2, "health warn")
-			logger.SentryError(deps.FeatureFSMv2, testErr, "action error")
+			logger.SentryWarn(deps.FeatureExamples, "", "warn")
+			logger.SentryWarn(deps.FeatureFSMv2, "", "health warn")
+			logger.SentryError(deps.FeatureFSMv2, "", testErr, "action error")
 		}).NotTo(Panic())
 	})
 

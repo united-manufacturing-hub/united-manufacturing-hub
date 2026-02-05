@@ -156,8 +156,7 @@ func (c *Collector[TObserved]) TriggerNow() {
 	c.mu.RUnlock()
 
 	if !running {
-		c.config.Logger.SentryWarn(deps.FeatureFSMv2, "collector_trigger_now_failed",
-			deps.HierarchyPath(c.config.Identity.HierarchyPath),
+		c.config.Logger.SentryWarn(deps.FeatureFSMv2, c.config.Identity.HierarchyPath, "collector_trigger_now_failed",
 			deps.Reason("not_running"),
 			deps.String("current_state", c.state.String()))
 
@@ -184,8 +183,7 @@ func (c *Collector[TObserved]) Restart() {
 	c.mu.RUnlock()
 
 	if !running {
-		c.config.Logger.SentryWarn(deps.FeatureFSMv2, "collector_restart_failed",
-			deps.HierarchyPath(c.config.Identity.HierarchyPath),
+		c.config.Logger.SentryWarn(deps.FeatureFSMv2, c.config.Identity.HierarchyPath, "collector_restart_failed",
 			deps.Reason("not_running"),
 			deps.String("current_state", c.state.String()))
 
@@ -211,14 +209,12 @@ func (c *Collector[TObserved]) Restart() {
 	// Error handling preserved for future extensibility (e.g., context validation, resource allocation).
 	if parentCtx != nil {
 		if err := c.Start(parentCtx); err != nil {
-			c.config.Logger.SentryError(deps.FeatureFSMv2, err, "collector_restart_start_failed",
-				deps.HierarchyPath(c.config.Identity.HierarchyPath))
+			c.config.Logger.SentryError(deps.FeatureFSMv2, c.config.Identity.HierarchyPath, err, "collector_restart_start_failed")
 		} else {
 			c.config.Logger.Info("collector_restart_complete")
 		}
 	} else {
-		c.config.Logger.SentryError(deps.FeatureFSMv2, errors.New("no_parent_context"), "collector_restart_failed",
-			deps.HierarchyPath(c.config.Identity.HierarchyPath))
+		c.config.Logger.SentryError(deps.FeatureFSMv2, c.config.Identity.HierarchyPath, errors.New("no_parent_context"), "collector_restart_failed")
 	}
 }
 
@@ -226,7 +222,7 @@ func (c *Collector[TObserved]) Stop(ctx context.Context) {
 	c.mu.Lock()
 
 	if c.state != collectorStateRunning {
-		c.config.Logger.SentryWarn(deps.FeatureFSMv2, "collector_stop_skipped",
+		c.config.Logger.SentryWarn(deps.FeatureFSMv2, c.config.Identity.HierarchyPath, "collector_stop_skipped",
 			deps.Reason("not_running"),
 			deps.String("current_state", c.state.String()))
 		c.mu.Unlock()
@@ -244,11 +240,10 @@ func (c *Collector[TObserved]) Stop(ctx context.Context) {
 		c.config.Logger.Debug("collector_stopped",
 			deps.String("result", "success"))
 	case <-ctx.Done():
-		c.config.Logger.SentryWarn(deps.FeatureFSMv2, "collector_stopped",
+		c.config.Logger.SentryWarn(deps.FeatureFSMv2, c.config.Identity.HierarchyPath, "collector_stopped",
 			deps.String("result", "context_cancelled"))
 	case <-time.After(5 * time.Second):
-		c.config.Logger.SentryWarn(deps.FeatureFSMv2, "collector_stopped",
-			deps.HierarchyPath(c.config.Identity.HierarchyPath),
+		c.config.Logger.SentryWarn(deps.FeatureFSMv2, c.config.Identity.HierarchyPath, "collector_stopped",
 			deps.String("result", "timeout"))
 	}
 }
@@ -267,7 +262,7 @@ func (c *Collector[TObserved]) CollectFinalObservation(ctx context.Context) erro
 		currentState := c.state.String()
 		c.mu.RUnlock()
 
-		c.config.Logger.SentryWarn(deps.FeatureFSMv2, "collector_final_observation_skipped",
+		c.config.Logger.SentryWarn(deps.FeatureFSMv2, c.config.Identity.HierarchyPath, "collector_final_observation_skipped",
 			deps.Reason("not_running"),
 			deps.String("current_state", currentState))
 
@@ -284,8 +279,7 @@ func (c *Collector[TObserved]) CollectFinalObservation(ctx context.Context) erro
 
 	err := c.collectAndSaveObservedState(collectCtx)
 	if err != nil {
-		c.config.Logger.SentryWarn(deps.FeatureFSMv2, "collector_final_observation_failed",
-			deps.HierarchyPath(c.config.Identity.HierarchyPath),
+		c.config.Logger.SentryWarn(deps.FeatureFSMv2, c.config.Identity.HierarchyPath, "collector_final_observation_failed",
 			deps.Err(err))
 
 		return err
@@ -334,8 +328,7 @@ func (c *Collector[TObserved]) observationLoop() {
 
 			collectCtx, cancel := context.WithTimeout(ctx, timeout)
 			if err := c.collectAndSaveObservedState(collectCtx); err != nil {
-				c.config.Logger.SentryError(deps.FeatureFSMv2, err, "collector_observation_failed",
-					deps.HierarchyPath(c.config.Identity.HierarchyPath),
+				c.config.Logger.SentryError(deps.FeatureFSMv2, c.config.Identity.HierarchyPath, err, "collector_observation_failed",
 					deps.String("trigger", "restart"))
 			}
 
@@ -344,8 +337,7 @@ func (c *Collector[TObserved]) observationLoop() {
 		case <-ticker.C:
 			collectCtx, cancel := context.WithTimeout(ctx, timeout)
 			if err := c.collectAndSaveObservedState(collectCtx); err != nil {
-				c.config.Logger.SentryError(deps.FeatureFSMv2, err, "collector_observation_failed",
-					deps.HierarchyPath(c.config.Identity.HierarchyPath),
+				c.config.Logger.SentryError(deps.FeatureFSMv2, c.config.Identity.HierarchyPath, err, "collector_observation_failed",
 					deps.String("trigger", "ticker"))
 			}
 
@@ -444,8 +436,7 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 	observedTyped, ok := observed.(TObserved)
 	if !ok {
 		err := fmt.Errorf("observed state type mismatch: expected %T, got %T", *new(TObserved), observed)
-		c.config.Logger.SentryError(deps.FeatureFSMv2, err, "collector_type_mismatch",
-			deps.HierarchyPath(c.config.Identity.HierarchyPath),
+		c.config.Logger.SentryError(deps.FeatureFSMv2, c.config.Identity.HierarchyPath, err, "collector_type_mismatch",
 			deps.String("expected_type", fmt.Sprintf("%T", *new(TObserved))),
 			deps.String("actual_type", fmt.Sprintf("%T", observed)))
 
@@ -455,8 +446,7 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 	ts, ok := c.config.Store.(*storage.TriangularStore)
 	if !ok {
 		err := fmt.Errorf("store is not *TriangularStore, got %T", c.config.Store)
-		c.config.Logger.SentryError(deps.FeatureFSMv2, err, "collector_store_type_mismatch",
-			deps.HierarchyPath(c.config.Identity.HierarchyPath),
+		c.config.Logger.SentryError(deps.FeatureFSMv2, c.config.Identity.HierarchyPath, err, "collector_store_type_mismatch",
 			deps.String("expected_type", "*storage.TriangularStore"),
 			deps.String("actual_type", fmt.Sprintf("%T", c.config.Store)))
 

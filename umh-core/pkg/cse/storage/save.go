@@ -200,9 +200,8 @@ func (ts *TriangularStore) saveWithDelta(
 				}
 			}
 
-			ts.logger.SentryWarn(deps.FeatureCSE, "delta_append_failed",
+			ts.logger.SentryWarn(deps.FeatureCSE, hierarchyPath, "delta_append_failed",
 				deps.Err(appendErr),
-				deps.HierarchyPath(hierarchyPath),
 				deps.String("role", opts.Role))
 		}
 	}

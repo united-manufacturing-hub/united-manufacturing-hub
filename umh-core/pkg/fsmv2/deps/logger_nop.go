@@ -31,9 +31,9 @@ func (l *nopLogger) Debug(_ string, _ ...Field) {}
 
 func (l *nopLogger) Info(_ string, _ ...Field) {}
 
-func (l *nopLogger) SentryWarn(_ Feature, _ string, _ ...Field) {}
+func (l *nopLogger) SentryWarn(_ Feature, _ string, _ string, _ ...Field) {}
 
-func (l *nopLogger) SentryError(_ Feature, _ error, _ string, _ ...Field) {}
+func (l *nopLogger) SentryError(_ Feature, _ string, _ error, _ string, _ ...Field) {}
 
 func (l *nopLogger) With(_ ...Field) FSMLogger {
 	return l
