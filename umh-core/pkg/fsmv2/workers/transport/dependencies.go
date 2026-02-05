@@ -137,6 +137,11 @@ func (d *TransportDependencies) GetDegradedEnteredAt() time.Time {
 	return degradedSince
 }
 
+// GetLastErrorAt returns when the last error occurred, or zero if no errors recorded.
+func (d *TransportDependencies) GetLastErrorAt() time.Time {
+	return d.RetryTracker().LastError().OccurredAt
+}
+
 // GetInboundChan returns channel to write received messages, or nil if no provider set.
 func (d *TransportDependencies) GetInboundChan() chan<- *communicator_transport.UMHMessage {
 	return d.inboundChan

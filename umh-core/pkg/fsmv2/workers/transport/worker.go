@@ -126,6 +126,8 @@ func (w *TransportWorker) CollectObservedState(ctx context.Context) (fsmv2.Obser
 		JWTExpiry:         deps.GetJWTExpiry(),
 		ConsecutiveErrors: deps.GetConsecutiveErrors(),
 		LastErrorType:     deps.GetLastErrorType(),
+		LastAuthAttemptAt: deps.GetLastAuthAttemptAt(),
+		LastRetryAfter:    deps.GetLastRetryAfter(),
 	}
 
 	// Framework metrics copy (architecture requirement)

@@ -154,6 +154,12 @@ type TransportObservedState struct {
 
 	// LastErrorType tracks the most recent error type for ShouldResetTransport evaluation.
 	LastErrorType httpTransport.ErrorType `json:"last_error_type"`
+
+	// LastAuthAttemptAt records when the last authentication attempt was made (for backoff gating).
+	LastAuthAttemptAt time.Time `json:"last_auth_attempt_at,omitempty"`
+
+	// LastRetryAfter holds the server-suggested retry delay from the most recent error (for backoff).
+	LastRetryAfter time.Duration `json:"last_retry_after,omitempty"`
 }
 
 // GetTimestamp returns when this observed state was collected.

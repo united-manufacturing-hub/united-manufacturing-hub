@@ -16,9 +16,11 @@ package state
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/backoff"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/push/action"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/push/snapshot"
 )
@@ -41,6 +43,26 @@ func (s *DegradedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	}
 
 	if snap.Observed.HasTransport && snap.Observed.HasValidToken {
+		backoffDelay := backoff.CalculateDelayForErrorType(
+			snap.Observed.LastErrorType,
+			snap.Observed.ConsecutiveErrors,
+			snap.Observed.LastRetryAfter,
+		)
+
+		shouldWait := false
+		if snap.Observed.LastRetryAfter > 0 && !snap.Observed.LastErrorAt.IsZero() {
+			shouldWait = time.Since(snap.Observed.LastErrorAt) < snap.Observed.LastRetryAfter
+		} else if !snap.Observed.DegradedEnteredAt.IsZero() {
+			shouldWait = time.Since(snap.Observed.DegradedEnteredAt) < backoffDelay
+		}
+
+		if shouldWait {
+			return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil,
+				fmt.Sprintf("degraded (%d errors, %d pending), backoff %s",
+					snap.Observed.ConsecutiveErrors, snap.Observed.PendingMessageCount,
+					backoffDelay.Round(time.Second)))
+		}
+
 		return fsmv2.Result[any, any](s, fsmv2.SignalNone, &action.PushAction{},
 			fmt.Sprintf("degraded (%d consecutive errors, %d pending), still pushing",
 				snap.Observed.ConsecutiveErrors, snap.Observed.PendingMessageCount))

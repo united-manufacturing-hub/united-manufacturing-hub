@@ -33,6 +33,10 @@ func makeSnapshot(shutdownRequested bool, desiredState string, jwtToken string, 
 }
 
 func makeSnapshotFull(shutdownRequested bool, desiredState string, jwtToken string, jwtExpiry time.Time, childrenHealthy, childrenUnhealthy int, consecutiveErrors int, lastErrorType httpTransport.ErrorType) fsmv2.Snapshot {
+	return makeSnapshotWithBackoff(shutdownRequested, desiredState, jwtToken, jwtExpiry, childrenHealthy, childrenUnhealthy, consecutiveErrors, lastErrorType, time.Time{}, 0)
+}
+
+func makeSnapshotWithBackoff(shutdownRequested bool, desiredState string, jwtToken string, jwtExpiry time.Time, childrenHealthy, childrenUnhealthy int, consecutiveErrors int, lastErrorType httpTransport.ErrorType, lastAuthAttemptAt time.Time, lastRetryAfter time.Duration) fsmv2.Snapshot {
 	desired := &snapshot.TransportDesiredState{
 		BaseDesiredState: config.BaseDesiredState{
 			State:             desiredState,
@@ -53,6 +57,8 @@ func makeSnapshotFull(shutdownRequested bool, desiredState string, jwtToken stri
 		ChildrenUnhealthy:     childrenUnhealthy,
 		ConsecutiveErrors:     consecutiveErrors,
 		LastErrorType:         lastErrorType,
+		LastAuthAttemptAt:     lastAuthAttemptAt,
+		LastRetryAfter:        lastRetryAfter,
 	}
 
 	return fsmv2.Snapshot{
@@ -152,6 +158,62 @@ var _ = Describe("TransportWorker States", func() {
 			Expect(result.Signal).To(Equal(fsmv2.SignalNone))
 			Expect(result.State).To(BeAssignableToTypeOf(&state.RunningState{}))
 			Expect(result.Action).To(BeNil())
+		})
+
+		It("should wait for backoff before retrying auth after failure", func() {
+			snap := makeSnapshotWithBackoff(
+				false, config.DesiredStateRunning, "", time.Time{}, 0, 0,
+				3, httpTransport.ErrorTypeNetwork,
+				time.Now(), // last attempt just now
+				0,
+			)
+			result := s.Next(snap)
+
+			Expect(result.State).To(BeAssignableToTypeOf(&state.StartingState{}))
+			Expect(result.Action).To(BeNil())
+			Expect(result.Reason).To(ContainSubstring("auth backoff"))
+		})
+
+		It("should dispatch auth immediately on first attempt (no errors)", func() {
+			snap := makeSnapshotWithBackoff(
+				false, config.DesiredStateRunning, "", time.Time{}, 0, 0,
+				0, 0,
+				time.Time{}, // no previous attempt
+				0,
+			)
+			result := s.Next(snap)
+
+			Expect(result.State).To(BeAssignableToTypeOf(&state.StartingState{}))
+			Expect(result.Action).NotTo(BeNil())
+			Expect(result.Action.Name()).To(Equal("authenticate"))
+		})
+
+		It("should dispatch auth when backoff has expired", func() {
+			snap := makeSnapshotWithBackoff(
+				false, config.DesiredStateRunning, "", time.Time{}, 0, 0,
+				1, httpTransport.ErrorTypeNetwork,
+				time.Now().Add(-5*time.Second), // attempt was 5s ago, backoff for 1 error = 2s
+				0,
+			)
+			result := s.Next(snap)
+
+			Expect(result.State).To(BeAssignableToTypeOf(&state.StartingState{}))
+			Expect(result.Action).NotTo(BeNil())
+			Expect(result.Action.Name()).To(Equal("authenticate"))
+		})
+
+		It("should respect Retry-After from server", func() {
+			snap := makeSnapshotWithBackoff(
+				false, config.DesiredStateRunning, "", time.Time{}, 0, 0,
+				1, httpTransport.ErrorTypeServerError,
+				time.Now(), // just attempted
+				60*time.Second,
+			)
+			result := s.Next(snap)
+
+			Expect(result.State).To(BeAssignableToTypeOf(&state.StartingState{}))
+			Expect(result.Action).To(BeNil())
+			Expect(result.Reason).To(ContainSubstring("auth backoff"))
 		})
 	})
 

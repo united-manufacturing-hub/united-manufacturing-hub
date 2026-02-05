@@ -128,6 +128,18 @@ func (d *PushDependencies) IsTokenValid() bool {
 	return !time.Now().Add(safetyBuffer).After(expiry)
 }
 
+func (d *PushDependencies) GetLastRetryAfter() time.Duration {
+	return d.parentDeps.GetLastRetryAfter()
+}
+
+func (d *PushDependencies) GetDegradedEnteredAt() time.Time {
+	return d.parentDeps.GetDegradedEnteredAt()
+}
+
+func (d *PushDependencies) GetLastErrorAt() time.Time {
+	return d.parentDeps.GetLastErrorAt()
+}
+
 func (d *PushDependencies) GetResetGeneration() uint64 {
 	return d.parentDeps.GetResetGeneration()
 }

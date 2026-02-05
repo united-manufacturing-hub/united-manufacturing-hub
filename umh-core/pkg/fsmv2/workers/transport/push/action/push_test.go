@@ -72,10 +72,13 @@ type mockPushDeps struct {
 	consecutiveErrors     int
 	lastErrorType         httpTransport.ErrorType
 
-	pendingMessages []*transport.UMHMessage
-	tokenValid      bool
-	resetGeneration uint64
-	resetCleared    bool
+	pendingMessages   []*transport.UMHMessage
+	tokenValid        bool
+	resetGeneration   uint64
+	resetCleared      bool
+	lastRetryAfter    time.Duration
+	degradedEnteredAt time.Time
+	lastErrorAt       time.Time
 }
 
 type typedErrorCall struct {
@@ -174,6 +177,18 @@ func (m *mockPushDeps) CheckAndClearOnReset() bool {
 	}
 
 	return false
+}
+
+func (m *mockPushDeps) GetLastRetryAfter() time.Duration {
+	return m.lastRetryAfter
+}
+
+func (m *mockPushDeps) GetDegradedEnteredAt() time.Time {
+	return m.degradedEnteredAt
+}
+
+func (m *mockPushDeps) GetLastErrorAt() time.Time {
+	return m.lastErrorAt
 }
 
 var _ = Describe("PushAction", func() {

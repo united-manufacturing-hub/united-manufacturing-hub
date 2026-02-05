@@ -15,8 +15,12 @@
 package state
 
 import (
+	"fmt"
+	"time"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/backoff"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/action"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/snapshot"
 )
@@ -38,8 +42,21 @@ func (s *StartingState) Next(snapAny any) fsmv2.NextResult[any, any] {
 		return fsmv2.Result[any, any](&StoppingState{}, fsmv2.SignalNone, nil, "Shutdown requested, transitioning to Stopping")
 	}
 
-	// If we don't have a valid token, authenticate
+	// If we don't have a valid token, authenticate (with backoff on repeated failures)
 	if !snap.Observed.HasValidToken() {
+		if snap.Observed.ConsecutiveErrors > 0 && !snap.Observed.LastAuthAttemptAt.IsZero() {
+			delay := backoff.CalculateDelayForErrorType(
+				snap.Observed.LastErrorType,
+				snap.Observed.ConsecutiveErrors,
+				snap.Observed.LastRetryAfter,
+			)
+			if time.Since(snap.Observed.LastAuthAttemptAt) < delay {
+				return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil,
+					fmt.Sprintf("auth backoff: %d errors (%s), delay %s",
+						snap.Observed.ConsecutiveErrors, snap.Observed.LastErrorType, delay.Round(time.Second)))
+			}
+		}
+
 		authAction := action.NewAuthenticateAction(
 			snap.Desired.RelayURL,
 			snap.Desired.InstanceUUID,

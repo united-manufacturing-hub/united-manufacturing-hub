@@ -48,6 +48,11 @@ type PushDependencies interface {
 	// Parent transport reset detection
 	GetResetGeneration() uint64
 	CheckAndClearOnReset() bool
+
+	// Backoff timing from parent error tracking
+	GetLastRetryAfter() time.Duration
+	GetDegradedEnteredAt() time.Time
+	GetLastErrorAt() time.Time
 }
 
 // PushSnapshot represents a point-in-time view of the push worker state.
@@ -74,7 +79,9 @@ func (s *PushDesiredState) ShouldBeRunning() bool {
 
 // PushObservedState represents the current state of the push worker.
 type PushObservedState struct {
-	CollectedAt time.Time `json:"collected_at"`
+	CollectedAt       time.Time `json:"collected_at"`
+	DegradedEnteredAt time.Time `json:"degraded_entered_at,omitempty"`
+	LastErrorAt       time.Time `json:"last_error_at,omitempty"`
 
 	PushDesiredState `json:",inline"`
 
@@ -84,8 +91,11 @@ type PushObservedState struct {
 
 	deps.MetricsEmbedder `json:",inline"`
 
-	ConsecutiveErrors   int `json:"consecutive_errors"`
-	PendingMessageCount int `json:"pending_message_count"`
+	LastRetryAfter time.Duration `json:"last_retry_after,omitempty"`
+
+	LastErrorType       httpTransport.ErrorType `json:"last_error_type"`
+	ConsecutiveErrors   int                     `json:"consecutive_errors"`
+	PendingMessageCount int                     `json:"pending_message_count"`
 
 	HasTransport  bool `json:"has_transport"`
 	HasValidToken bool `json:"has_valid_token"`

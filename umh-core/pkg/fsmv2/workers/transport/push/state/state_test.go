@@ -23,6 +23,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
+	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/push/snapshot"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/push/state"
 )
@@ -45,6 +46,21 @@ func makeSnapshotFull(
 	hasValidToken bool,
 	pendingMessageCount int,
 ) fsmv2.Snapshot {
+	return makeSnapshotWithBackoff(parentMappedState, shutdownRequested, consecutiveErrors, hasTransport, hasValidToken, pendingMessageCount, 0, 0, time.Time{}, time.Time{})
+}
+
+func makeSnapshotWithBackoff(
+	parentMappedState string,
+	shutdownRequested bool,
+	consecutiveErrors int,
+	hasTransport bool,
+	hasValidToken bool,
+	pendingMessageCount int,
+	lastErrorType httpTransport.ErrorType,
+	lastRetryAfter time.Duration,
+	degradedEnteredAt time.Time,
+	lastErrorAt time.Time,
+) fsmv2.Snapshot {
 	desired := &snapshot.PushDesiredState{
 		ParentMappedState: parentMappedState,
 		BaseDesiredState: config.BaseDesiredState{
@@ -64,6 +80,10 @@ func makeSnapshotFull(
 		PendingMessageCount: pendingMessageCount,
 		HasTransport:        hasTransport,
 		HasValidToken:       hasValidToken,
+		LastErrorType:       lastErrorType,
+		LastRetryAfter:      lastRetryAfter,
+		DegradedEnteredAt:   degradedEnteredAt,
+		LastErrorAt:         lastErrorAt,
 	}
 
 	return fsmv2.Snapshot{
@@ -231,6 +251,58 @@ var _ = Describe("DegradedState", func() {
 		Expect(result.State).To(BeAssignableToTypeOf(&state.DegradedState{}))
 		Expect(result.Signal).To(Equal(fsmv2.SignalNone))
 		Expect(result.Action).To(BeNil())
+	})
+
+	It("should wait for backoff before retrying push in degraded", func() {
+		snap := makeSnapshotWithBackoff(
+			config.DesiredStateRunning, false, 3, true, true, 5,
+			httpTransport.ErrorTypeNetwork, 0,
+			time.Now(), // degraded just entered
+			time.Time{},
+		)
+		result := s.Next(snap)
+		Expect(result.State).To(BeAssignableToTypeOf(&state.DegradedState{}))
+		Expect(result.Action).To(BeNil())
+		Expect(result.Reason).To(ContainSubstring("backoff"))
+	})
+
+	It("should dispatch push when backoff has expired", func() {
+		snap := makeSnapshotWithBackoff(
+			config.DesiredStateRunning, false, 1, true, true, 2,
+			httpTransport.ErrorTypeNetwork, 0,
+			time.Now().Add(-10*time.Second), // degraded 10s ago, backoff for 1 error = 2s
+			time.Time{},
+		)
+		result := s.Next(snap)
+		Expect(result.State).To(BeAssignableToTypeOf(&state.DegradedState{}))
+		Expect(result.Action).NotTo(BeNil())
+		Expect(result.Action.Name()).To(Equal("push"))
+	})
+
+	It("should respect Retry-After header in degraded", func() {
+		snap := makeSnapshotWithBackoff(
+			config.DesiredStateRunning, false, 1, true, true, 1,
+			httpTransport.ErrorTypeServerError, 60*time.Second,
+			time.Time{},
+			time.Now(), // error just occurred, Retry-After = 60s
+		)
+		result := s.Next(snap)
+		Expect(result.State).To(BeAssignableToTypeOf(&state.DegradedState{}))
+		Expect(result.Action).To(BeNil())
+		Expect(result.Reason).To(ContainSubstring("backoff"))
+	})
+
+	It("should use DegradedEnteredAt for exponential backoff timing", func() {
+		snap := makeSnapshotWithBackoff(
+			config.DesiredStateRunning, false, 5, true, true, 3,
+			httpTransport.ErrorTypeNetwork, 0,
+			time.Now().Add(-1*time.Second), // degraded 1s ago, backoff for 5 errors = 32s
+			time.Time{},
+		)
+		result := s.Next(snap)
+		Expect(result.State).To(BeAssignableToTypeOf(&state.DegradedState{}))
+		Expect(result.Action).To(BeNil())
+		Expect(result.Reason).To(ContainSubstring("backoff"))
 	})
 
 	It("should return a valid String()", func() {
