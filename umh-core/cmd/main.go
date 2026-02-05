@@ -101,6 +101,19 @@ func main() {
 		return
 	}
 
+	// FSMv2 feature flags: read directly from env vars, not persisted to config.yaml.
+	// These bypass the config manager intentionally — they are temporary migration flags
+	// that will be replaced when the config manager becomes an FSMv2 worker.
+	if os.Getenv("USE_FSMV2_TRANSPORT") == "true" {
+		configData.Agent.UseFSMv2Transport = true
+	}
+	if os.Getenv("USE_FSMV2_MEMORY_CLEANUP") == "true" {
+		configData.Agent.UseFSMv2MemoryCleanup = true
+	}
+	if os.Getenv("USE_FSMV2_PROTOCOL_CONVERTER") == "true" {
+		configData.Agent.UseFSMv2ProtocolConverter = true
+	}
+
 	// Ensure the S6 repository directory exists
 	// This is particularly important when using /tmp/umh-core/services (the default)
 	if err := ensureS6RepositoryDirectory(log); err != nil {
