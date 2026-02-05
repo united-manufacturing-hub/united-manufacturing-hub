@@ -41,11 +41,6 @@ type PersistenceDesiredState struct {
 	MaintenanceInterval time.Duration `json:"maintenanceInterval"`
 }
 
-// GetState returns the desired lifecycle state.
-func (d *PersistenceDesiredState) GetState() string {
-	return d.State
-}
-
 var _ fsmv2.DesiredState = (*PersistenceDesiredState)(nil)
 
 // PersistenceObservedState represents the current state of the persistence worker.

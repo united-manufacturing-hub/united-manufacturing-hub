@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/persistence/snapshot"
 )
 
@@ -47,7 +48,7 @@ func (a *CompactDeltasAction) Execute(ctx context.Context, depsAny any) error {
 	d.SetLastCompactionAt(time.Now())
 	d.ActionLogger("compact_deltas").Infow("compaction completed",
 		"deleted_count", deleted, "retention_window", a.RetentionWindow)
-	d.MetricsRecorder().IncrementCounter("compaction_deltas_deleted_total", int64(deleted))
+	d.MetricsRecorder().IncrementCounter(deps.CounterCompactionDeltasDeletedTotal, int64(deleted))
 
 	return nil
 }

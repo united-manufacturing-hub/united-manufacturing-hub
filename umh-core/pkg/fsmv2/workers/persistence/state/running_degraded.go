@@ -31,7 +31,7 @@ func (s *RunningDegradedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 		return fsmv2.Result[any, any](&StoppedState{}, fsmv2.SignalNone, nil, "Shutdown requested")
 	}
 
-	if snap.Observed.IsHealthy() && snap.Observed.IsLastActionHealthy() {
+	if snap.Observed.IsHealthy() {
 		return fsmv2.Result[any, any](&RunningState{}, fsmv2.SignalNone, nil, "Action succeeded, recovered to healthy")
 	}
 
