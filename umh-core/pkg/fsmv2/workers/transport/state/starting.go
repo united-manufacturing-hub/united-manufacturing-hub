@@ -23,7 +23,9 @@ import (
 
 // StartingState represents the state where the transport worker is authenticating.
 // It emits AuthenticateAction to obtain a JWT token from the relay server.
-// Once authenticated and children are healthy, transitions to RunningState.
+// Once authenticated, transitions to RunningState. Children start via ChildStartStates
+// when the parent enters Running, avoiding a deadlock where children can't become healthy
+// while the parent waits in Starting.
 type StartingState struct {
 	helpers.StartingBase
 }

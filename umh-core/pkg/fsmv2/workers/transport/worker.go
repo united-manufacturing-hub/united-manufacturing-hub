@@ -151,6 +151,7 @@ func (w *TransportWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredSta
 			BaseDesiredState: config.BaseDesiredState{
 				State: config.DesiredStateRunning,
 			},
+			ChildrenSpecs: makePushChildSpec(config.UserSpec{}),
 		}, nil
 	}
 
@@ -196,10 +197,11 @@ func (w *TransportWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredSta
 		BaseDesiredState: config.BaseDesiredState{
 			State: transportSpec.GetState(), // Returns "running" or "stopped"
 		},
-		RelayURL:     transportSpec.RelayURL,
-		InstanceUUID: transportSpec.InstanceUUID,
-		AuthToken:    transportSpec.AuthToken,
-		Timeout:      transportSpec.Timeout,
+		RelayURL:      transportSpec.RelayURL,
+		InstanceUUID:  transportSpec.InstanceUUID,
+		AuthToken:     transportSpec.AuthToken,
+		Timeout:       transportSpec.Timeout,
+		ChildrenSpecs: makePushChildSpec(userSpec),
 	}, nil
 }
 
@@ -213,13 +215,15 @@ func (w *TransportWorker) GetInitialState() fsmv2.State[any, any] {
 func init() {
 	if err := factory.RegisterWorkerType[snapshot.TransportObservedState, *snapshot.TransportDesiredState](
 		// Worker factory function
-		func(id deps.Identity, logger deps.FSMLogger, stateReader deps.StateReader, _ map[string]any) fsmv2.Worker {
+		func(id deps.Identity, logger deps.FSMLogger, stateReader deps.StateReader, extraDeps map[string]any) fsmv2.Worker {
 			worker, err := NewTransportWorker(id, logger, stateReader)
 			if err != nil {
 				panic(fmt.Sprintf("failed to create transport worker (id=%s, name=%s): %v. "+
 					"Ensure ChannelProvider is set before supervisor starts.",
 					id.ID, id.Name, err))
 			}
+
+			extraDeps["transport_deps"] = worker.GetDependencies()
 
 			return worker
 		},
@@ -230,5 +234,21 @@ func init() {
 		},
 	); err != nil {
 		panic(fmt.Sprintf("failed to register transport worker: %v", err))
+	}
+}
+
+// makePushChildSpec creates the ChildSpec for the PushWorker child.
+// PushWorker runs when TransportWorker is in "Running" or "Degraded" states.
+// Including "Degraded" prevents an oscillation loop where Push stops on parent
+// degradation (caused by Push being unhealthy), parent recovers (no unhealthy children),
+// Push restarts, and the cycle repeats.
+func makePushChildSpec(parentSpec config.UserSpec) []config.ChildSpec {
+	return []config.ChildSpec{
+		{
+			Name:             "push",
+			WorkerType:       "push",
+			UserSpec:         config.UserSpec{Config: parentSpec.Config},
+			ChildStartStates: []string{"Running", "Degraded"},
+		},
 	}
 }

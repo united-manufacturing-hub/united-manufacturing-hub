@@ -65,6 +65,9 @@ type TransportSnapshot struct {
 // Compile-time check that TransportDesiredState implements fsmv2.DesiredState.
 var _ fsmv2.DesiredState = (*TransportDesiredState)(nil)
 
+// Compile-time check that TransportDesiredState implements config.ChildSpecProvider.
+var _ config.ChildSpecProvider = (*TransportDesiredState)(nil)
+
 // TransportDesiredState represents the target configuration for the transport worker.
 type TransportDesiredState struct {
 	InstanceUUID            string `json:"instanceUUID"` // Used by AuthenticateAction for backend authentication
@@ -74,7 +77,14 @@ type TransportDesiredState struct {
 	RelayURL                string `json:"relayURL"`
 	config.BaseDesiredState        // Provides State, ShutdownRequested + IsShutdownRequested() + SetShutdownRequested()
 
-	Timeout time.Duration `json:"timeout"`
+	Timeout       time.Duration    `json:"timeout"`
+	ChildrenSpecs []config.ChildSpec `json:"childrenSpecs,omitempty"`
+}
+
+// GetChildrenSpecs returns the children specifications.
+// Implements config.ChildSpecProvider interface.
+func (d *TransportDesiredState) GetChildrenSpecs() []config.ChildSpec {
+	return d.ChildrenSpecs
 }
 
 // GetState returns the desired lifecycle state ("running" or "stopped").

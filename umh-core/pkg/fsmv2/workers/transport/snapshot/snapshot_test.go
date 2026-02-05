@@ -21,6 +21,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/snapshot"
 )
 
@@ -199,6 +200,34 @@ var _ = Describe("TransportDesiredState", func() {
 	Describe("Interface compliance", func() {
 		It("should implement fsmv2.DesiredState interface", func() {
 			var _ fsmv2.DesiredState = &snapshot.TransportDesiredState{}
+		})
+	})
+
+	Describe("GetChildrenSpecs", func() {
+		It("should return nil when no children are configured", func() {
+			desired := &snapshot.TransportDesiredState{}
+			Expect(desired.GetChildrenSpecs()).To(BeNil())
+		})
+
+		It("should return children specs when configured", func() {
+			desired := &snapshot.TransportDesiredState{
+				ChildrenSpecs: []config.ChildSpec{
+					{
+						Name:             "push",
+						WorkerType:       "push",
+						ChildStartStates: []string{"Running", "Degraded"},
+					},
+				},
+			}
+			specs := desired.GetChildrenSpecs()
+			Expect(specs).To(HaveLen(1))
+			Expect(specs[0].Name).To(Equal("push"))
+			Expect(specs[0].WorkerType).To(Equal("push"))
+			Expect(specs[0].ChildStartStates).To(ConsistOf("Running", "Degraded"))
+		})
+
+		It("should implement config.ChildSpecProvider interface", func() {
+			var _ config.ChildSpecProvider = &snapshot.TransportDesiredState{}
 		})
 	})
 })
