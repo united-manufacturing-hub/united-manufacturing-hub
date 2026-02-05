@@ -42,6 +42,33 @@ func (a *PushAction) Execute(ctx context.Context, depsAny any) error {
 		return errors.New("invalid dependencies type: expected PushDependencies")
 	}
 
+	if !pushDeps.IsTokenValid() {
+		return errors.New("token not valid, skipping push")
+	}
+
+	t := pushDeps.GetTransport()
+	if t == nil {
+		return errors.New("transport is nil")
+	}
+
+	metrics := pushDeps.MetricsRecorder()
+
+	pushDeps.CheckAndClearOnReset()
+
+	// Phase 1: Retry pending messages one-by-one
+	pending := pushDeps.DrainPendingMessages()
+	if len(pending) > 0 {
+		remaining, err := a.retryPending(ctx, t, pushDeps, pending, metrics)
+		if len(remaining) > 0 {
+			pushDeps.StorePendingMessages(remaining)
+		}
+
+		metrics.SetGauge(depspkg.GaugePendingMessages, float64(pushDeps.PendingMessageCount()))
+
+		return err
+	}
+
+	// Phase 2: Drain and batch-push new messages
 	outChan := pushDeps.GetOutboundChan()
 	if outChan == nil {
 		return nil
@@ -63,17 +90,13 @@ drainLoop:
 		return nil
 	}
 
-	t := pushDeps.GetTransport()
-	if t == nil {
-		return errors.New("transport is nil")
-	}
-
 	jwtToken := pushDeps.GetJWTToken()
-	metrics := pushDeps.MetricsRecorder()
 
 	pushStart := time.Now()
 	if err := t.Push(ctx, jwtToken, messagesToPush); err != nil {
 		pushLatency := time.Since(pushStart)
+
+		pushDeps.StorePendingMessages(messagesToPush)
 
 		var transportErr *httpTransport.TransportError
 		if errors.As(err, &transportErr) {
@@ -87,6 +110,7 @@ drainLoop:
 		metrics.IncrementCounter(depspkg.CounterPushOps, 1)
 		metrics.IncrementCounter(depspkg.CounterPushFailures, 1)
 		metrics.SetGauge(depspkg.GaugeLastPushLatencyMs, float64(pushLatency.Milliseconds()))
+		metrics.SetGauge(depspkg.GaugePendingMessages, float64(pushDeps.PendingMessageCount()))
 
 		return fmt.Errorf("push failed: %w", err)
 	}
@@ -108,8 +132,69 @@ drainLoop:
 	metrics.IncrementCounter(depspkg.CounterMessagesPushed, int64(len(messagesToPush)))
 	metrics.IncrementCounter(depspkg.CounterBytesPushed, bytesPushed)
 	metrics.SetGauge(depspkg.GaugeLastPushLatencyMs, float64(pushLatency.Milliseconds()))
+	metrics.SetGauge(depspkg.GaugePendingMessages, 0)
 
 	return nil
+}
+
+func (a *PushAction) retryPending(ctx context.Context, t transport.Transport, pushDeps snapshot.PushDependencies, pending []*transport.UMHMessage, metrics *depspkg.MetricsRecorder) ([]*transport.UMHMessage, error) {
+	jwtToken := pushDeps.GetJWTToken()
+
+	for i, msg := range pending {
+		select {
+		case <-ctx.Done():
+			return pending[i:], ctx.Err()
+		default:
+		}
+
+		if err := t.Push(ctx, jwtToken, []*transport.UMHMessage{msg}); err != nil {
+			var transportErr *httpTransport.TransportError
+
+			if errors.As(err, &transportErr) {
+				pushDeps.RecordTypedError(transportErr.Type, transportErr.RetryAfter)
+				metrics.IncrementCounter(counterForErrorType(transportErr.Type), 1)
+
+				if isInfrastructureError(transportErr.Type) {
+					return pending[i:], fmt.Errorf("pending retry failed (infrastructure): %w", err)
+				}
+
+				pushDeps.GetLogger().Warnw("dropping_poison_message",
+					"errorType", transportErr.Type,
+					"error", transportErr.Error(),
+					"remaining", len(pending)-i-1)
+				metrics.IncrementCounter(depspkg.CounterMessagesDropped, 1)
+
+				continue
+			}
+
+			pushDeps.RecordTypedError(httpTransport.ErrorTypeNetwork, 0)
+			metrics.IncrementCounter(depspkg.CounterNetworkErrorsTotal, 1)
+
+			return pending[i:], fmt.Errorf("pending retry failed: %w", err)
+		}
+
+		pushDeps.RecordSuccess()
+		metrics.IncrementCounter(depspkg.CounterPushOps, 1)
+		metrics.IncrementCounter(depspkg.CounterPushSuccess, 1)
+		metrics.IncrementCounter(depspkg.CounterMessagesPushed, 1)
+	}
+
+	return nil, nil
+}
+
+func isInfrastructureError(errType httpTransport.ErrorType) bool {
+	switch errType {
+	case httpTransport.ErrorTypeNetwork,
+		httpTransport.ErrorTypeServerError,
+		httpTransport.ErrorTypeCloudflareChallenge,
+		httpTransport.ErrorTypeBackendRateLimit,
+		httpTransport.ErrorTypeInvalidToken,
+		httpTransport.ErrorTypeProxyBlock,
+		httpTransport.ErrorTypeChannelFull:
+		return true
+	default:
+		return false
+	}
 }
 
 func (a *PushAction) String() string {

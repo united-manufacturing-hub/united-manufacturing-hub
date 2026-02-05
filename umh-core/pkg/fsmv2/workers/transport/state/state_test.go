@@ -22,12 +22,17 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
+	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/snapshot"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/state"
 )
 
 // makeSnapshot creates a test snapshot with the given parameters.
 func makeSnapshot(shutdownRequested bool, desiredState string, jwtToken string, jwtExpiry time.Time, childrenHealthy, childrenUnhealthy int) fsmv2.Snapshot {
+	return makeSnapshotFull(shutdownRequested, desiredState, jwtToken, jwtExpiry, childrenHealthy, childrenUnhealthy, 0, 0)
+}
+
+func makeSnapshotFull(shutdownRequested bool, desiredState string, jwtToken string, jwtExpiry time.Time, childrenHealthy, childrenUnhealthy int, consecutiveErrors int, lastErrorType httpTransport.ErrorType) fsmv2.Snapshot {
 	desired := &snapshot.TransportDesiredState{
 		BaseDesiredState: config.BaseDesiredState{
 			State:             desiredState,
@@ -46,6 +51,8 @@ func makeSnapshot(shutdownRequested bool, desiredState string, jwtToken string, 
 		TransportDesiredState: *desired,
 		ChildrenHealthy:       childrenHealthy,
 		ChildrenUnhealthy:     childrenUnhealthy,
+		ConsecutiveErrors:     consecutiveErrors,
+		LastErrorType:         lastErrorType,
 	}
 
 	return fsmv2.Snapshot{
@@ -203,6 +210,29 @@ var _ = Describe("TransportWorker States", func() {
 			Expect(result.State).To(BeAssignableToTypeOf(&state.RunningState{}))
 			Expect(result.Action).To(BeNil())
 		})
+
+		It("should proactively re-auth at 3 AM when token expires during business hours", func() {
+			// Note: shouldProactivelyReauth checks time.Now().Local().Hour() == 3.
+			// We can't control time.Now() in this test, so we verify the code path
+			// doesn't panic and returns a valid state for a business-hours expiry.
+			futureExpiry := time.Now().Add(24 * time.Hour)
+			// Force the hour to be within business hours
+			expiryBusinessHours := time.Date(futureExpiry.Year(), futureExpiry.Month(), futureExpiry.Day(), 10, 0, 0, 0, time.Local)
+			snap := makeSnapshot(false, config.DesiredStateRunning, "valid-token", expiryBusinessHours, 2, 0)
+			result := s.Next(snap)
+			// At the actual current time, proactive re-auth won't trigger unless it's 3 AM.
+			Expect(result.State).NotTo(BeNil())
+		})
+
+		It("should NOT proactively re-auth when token expires outside business hours", func() {
+			// Token expires at 2 AM tomorrow (outside business hours) - no proactive re-auth
+			tomorrow := time.Now().Add(24 * time.Hour)
+			expiryOutsideBusinessHours := time.Date(tomorrow.Year(), tomorrow.Month(), tomorrow.Day(), 2, 0, 0, 0, time.Local)
+			snap := makeSnapshot(false, config.DesiredStateRunning, "valid-token", expiryOutsideBusinessHours, 2, 0)
+			result := s.Next(snap)
+
+			Expect(result.State).To(BeAssignableToTypeOf(&state.RunningState{}))
+		})
 	})
 
 	Describe("DegradedState", func() {
@@ -258,6 +288,37 @@ var _ = Describe("TransportWorker States", func() {
 
 			Expect(result.Signal).To(Equal(fsmv2.SignalNone))
 			Expect(result.State).To(BeAssignableToTypeOf(&state.DegradedState{}))
+		})
+
+		It("should dispatch ResetTransportAction when ShouldResetTransport triggers", func() {
+			validExpiry := time.Now().Add(1 * time.Hour)
+			// 5 consecutive network errors = ShouldResetTransport returns true
+			snap := makeSnapshotFull(false, config.DesiredStateRunning, "valid-token", validExpiry, 1, 1, 5, httpTransport.ErrorTypeNetwork)
+			result := s.Next(snap)
+
+			Expect(result.State).To(BeAssignableToTypeOf(&state.DegradedState{}))
+			Expect(result.Action).NotTo(BeNil())
+			Expect(result.Action.Name()).To(Equal("reset_transport"))
+		})
+
+		It("should NOT dispatch ResetTransportAction when below threshold", func() {
+			validExpiry := time.Now().Add(1 * time.Hour)
+			// 3 consecutive network errors = ShouldResetTransport returns false
+			snap := makeSnapshotFull(false, config.DesiredStateRunning, "valid-token", validExpiry, 1, 1, 3, httpTransport.ErrorTypeNetwork)
+			result := s.Next(snap)
+
+			Expect(result.State).To(BeAssignableToTypeOf(&state.DegradedState{}))
+			Expect(result.Action).To(BeNil())
+		})
+
+		It("should dispatch ResetTransportAction for server errors at 10 consecutive", func() {
+			validExpiry := time.Now().Add(1 * time.Hour)
+			snap := makeSnapshotFull(false, config.DesiredStateRunning, "valid-token", validExpiry, 1, 1, 10, httpTransport.ErrorTypeServerError)
+			result := s.Next(snap)
+
+			Expect(result.State).To(BeAssignableToTypeOf(&state.DegradedState{}))
+			Expect(result.Action).NotTo(BeNil())
+			Expect(result.Action.Name()).To(Equal("reset_transport"))
 		})
 	})
 

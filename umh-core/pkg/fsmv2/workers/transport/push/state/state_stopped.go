@@ -15,6 +15,8 @@
 package state
 
 import (
+	"fmt"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/push/snapshot"
@@ -29,14 +31,16 @@ func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := helpers.ConvertSnapshot[snapshot.PushObservedState, *snapshot.PushDesiredState](snapAny)
 
 	if snap.Desired.IsShutdownRequested() {
-		return fsmv2.Result[any, any](s, fsmv2.SignalNeedsRemoval, nil, "Shutdown requested")
+		return fsmv2.Result[any, any](s, fsmv2.SignalNeedsRemoval, nil, "shutdown requested, signaling removal")
 	}
 
 	if snap.Observed.ShouldBeRunning() {
-		return fsmv2.Result[any, any](&RunningState{}, fsmv2.SignalNone, nil, "Child should be running")
+		return fsmv2.Result[any, any](&RunningState{}, fsmv2.SignalNone, nil,
+			fmt.Sprintf("parent mapped state is %q, transitioning to Running", snap.Desired.ParentMappedState))
 	}
 
-	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, "Child is stopped")
+	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil,
+		fmt.Sprintf("stopped, parent mapped state is %q", snap.Desired.ParentMappedState))
 }
 
 func (s *StoppedState) String() string {

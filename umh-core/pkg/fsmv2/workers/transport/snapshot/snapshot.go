@@ -20,6 +20,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps/retry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
 	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
 )
@@ -53,6 +54,13 @@ type TransportDependencies interface {
 	// Instance identity from backend
 	SetAuthenticatedUUID(uuid string)
 	GetAuthenticatedUUID() string
+
+	// Reset generation for parent-level transport reset signaling to children
+	GetResetGeneration() uint64
+	IncrementResetGeneration()
+
+	// RetryTracker for backoff and modulo-trigger breaking after transport reset
+	RetryTracker() retry.Tracker
 }
 
 // TransportSnapshot represents a point-in-time view of the transport worker state.
@@ -140,6 +148,12 @@ type TransportObservedState struct {
 
 	// ChildrenUnhealthy is the count of unhealthy child workers.
 	ChildrenUnhealthy int `json:"children_unhealthy"`
+
+	// ConsecutiveErrors tracks consecutive push/pull errors for transport reset decisions.
+	ConsecutiveErrors int `json:"consecutive_errors"`
+
+	// LastErrorType tracks the most recent error type for ShouldResetTransport evaluation.
+	LastErrorType httpTransport.ErrorType `json:"last_error_type"`
 }
 
 // GetTimestamp returns when this observed state was collected.

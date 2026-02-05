@@ -90,6 +90,7 @@ func (w *PushWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedSt
 	}
 
 	observed.ConsecutiveErrors = d.GetConsecutiveErrors()
+	observed.PendingMessageCount = d.PendingMessageCount()
 
 	if fm := d.GetFrameworkState(); fm != nil {
 		observed.Metrics.Framework = *fm

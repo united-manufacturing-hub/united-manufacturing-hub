@@ -36,6 +36,18 @@ type PushDependencies interface {
 	GetConsecutiveErrors() int
 	GetLastErrorType() httpTransport.ErrorType
 	MetricsRecorder() *deps.MetricsRecorder
+
+	// Pending buffer for retry on push failure
+	StorePendingMessages(msgs []*transport.UMHMessage)
+	DrainPendingMessages() []*transport.UMHMessage
+	PendingMessageCount() int
+
+	// Token pre-check (1-minute safety buffer)
+	IsTokenValid() bool
+
+	// Parent transport reset detection
+	GetResetGeneration() uint64
+	CheckAndClearOnReset() bool
 }
 
 // PushSnapshot represents a point-in-time view of the push worker state.
@@ -72,9 +84,10 @@ type PushObservedState struct {
 
 	deps.MetricsEmbedder `json:",inline"`
 
-	ConsecutiveErrors int `json:"consecutive_errors"`
+	ConsecutiveErrors   int `json:"consecutive_errors"`
+	PendingMessageCount int `json:"pending_message_count"`
 
-	HasTransport bool `json:"has_transport"`
+	HasTransport  bool `json:"has_transport"`
 	HasValidToken bool `json:"has_valid_token"`
 }
 

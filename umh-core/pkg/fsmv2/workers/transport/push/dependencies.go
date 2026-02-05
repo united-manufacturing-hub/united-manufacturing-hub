@@ -16,6 +16,7 @@ package push
 
 import (
 	"errors"
+	"sync"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
@@ -26,11 +27,16 @@ import (
 	"go.uber.org/zap"
 )
 
+const maxPendingMessages = 1000
+
 var _ snapshot.PushDependencies = (*PushDependencies)(nil)
 
 type PushDependencies struct {
 	*deps.BaseDependencies
-	parentDeps *transport_pkg.TransportDependencies
+	parentDeps              *transport_pkg.TransportDependencies
+	pendingMessages         []*communicator_transport.UMHMessage
+	pendingMu               sync.Mutex
+	lastSeenResetGeneration uint64
 }
 
 func NewPushDependencies(parentDeps *transport_pkg.TransportDependencies, identity deps.Identity, logger *zap.SugaredLogger, stateReader deps.StateReader) (*PushDependencies, error) {
@@ -74,4 +80,72 @@ func (d *PushDependencies) GetConsecutiveErrors() int {
 
 func (d *PushDependencies) GetLastErrorType() httpTransport.ErrorType {
 	return d.parentDeps.GetLastErrorType()
+}
+
+func (d *PushDependencies) StorePendingMessages(msgs []*communicator_transport.UMHMessage) {
+	d.pendingMu.Lock()
+	defer d.pendingMu.Unlock()
+
+	d.pendingMessages = append(d.pendingMessages, msgs...)
+	if len(d.pendingMessages) > maxPendingMessages {
+		dropped := len(d.pendingMessages) - maxPendingMessages
+		d.pendingMessages = d.pendingMessages[len(d.pendingMessages)-maxPendingMessages:]
+		d.BaseDependencies.GetLogger().Warnw("pending_buffer_overflow",
+			"dropped", dropped, "cap", maxPendingMessages)
+	}
+}
+
+func (d *PushDependencies) DrainPendingMessages() []*communicator_transport.UMHMessage {
+	d.pendingMu.Lock()
+	defer d.pendingMu.Unlock()
+
+	msgs := d.pendingMessages
+	d.pendingMessages = nil
+
+	return msgs
+}
+
+func (d *PushDependencies) PendingMessageCount() int {
+	d.pendingMu.Lock()
+	defer d.pendingMu.Unlock()
+
+	return len(d.pendingMessages)
+}
+
+func (d *PushDependencies) IsTokenValid() bool {
+	token := d.parentDeps.GetJWTToken()
+	if token == "" {
+		return false
+	}
+
+	expiry := d.parentDeps.GetJWTExpiry()
+	if expiry.IsZero() {
+		return false
+	}
+
+	const safetyBuffer = 1 * time.Minute
+
+	return !time.Now().Add(safetyBuffer).After(expiry)
+}
+
+func (d *PushDependencies) GetResetGeneration() uint64 {
+	return d.parentDeps.GetResetGeneration()
+}
+
+// CheckAndClearOnReset checks if parent has done a transport reset.
+// If resetGeneration changed, clears all pending messages and returns true.
+func (d *PushDependencies) CheckAndClearOnReset() bool {
+	currentGen := d.parentDeps.GetResetGeneration()
+
+	d.pendingMu.Lock()
+	defer d.pendingMu.Unlock()
+
+	if currentGen != d.lastSeenResetGeneration {
+		d.pendingMessages = nil
+		d.lastSeenResetGeneration = currentGen
+
+		return true
+	}
+
+	return false
 }

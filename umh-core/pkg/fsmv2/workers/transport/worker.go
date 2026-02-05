@@ -121,9 +121,11 @@ func (w *TransportWorker) CollectObservedState(ctx context.Context) (fsmv2.Obser
 
 	// Build observed state
 	observed := snapshot.TransportObservedState{
-		CollectedAt: time.Now(),
-		JWTToken:    deps.GetJWTToken(),
-		JWTExpiry:   deps.GetJWTExpiry(),
+		CollectedAt:       time.Now(),
+		JWTToken:          deps.GetJWTToken(),
+		JWTExpiry:         deps.GetJWTExpiry(),
+		ConsecutiveErrors: deps.GetConsecutiveErrors(),
+		LastErrorType:     deps.GetLastErrorType(),
 	}
 
 	// Framework metrics copy (architecture requirement)

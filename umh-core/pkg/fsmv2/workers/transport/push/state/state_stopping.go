@@ -15,6 +15,8 @@
 package state
 
 import (
+	"fmt"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/push/snapshot"
@@ -29,10 +31,11 @@ func (s *StoppingState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := helpers.ConvertSnapshot[snapshot.PushObservedState, *snapshot.PushDesiredState](snapAny)
 
 	if snap.Observed.IsStopRequired() {
-		return fsmv2.Result[any, any](&StoppedState{}, fsmv2.SignalNone, nil, "Leaf worker stopped")
+		return fsmv2.Result[any, any](&StoppedState{}, fsmv2.SignalNone, nil,
+			fmt.Sprintf("leaf worker stopped: shutdown=%t, parentState=%s", snap.Desired.IsShutdownRequested(), snap.Desired.ParentMappedState))
 	}
 
-	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, "Stopping")
+	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, "stopping, waiting for stop condition")
 }
 
 func (s *StoppingState) String() string {

@@ -15,9 +15,18 @@
 package state
 
 import (
+	"fmt"
+	"time"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/snapshot"
+)
+
+const (
+	businessHoursStart  = 7
+	businessHoursEnd    = 20
+	proactiveReauthHour = 3
 )
 
 // RunningState represents the operational state where all children are healthy.
@@ -39,12 +48,35 @@ func (s *RunningState) Next(snapAny any) fsmv2.NextResult[any, any] {
 		return fsmv2.Result[any, any](&StartingState{}, fsmv2.SignalNone, nil, "Token expired, transitioning to Starting for re-authentication")
 	}
 
+	// Proactive night re-auth: if token would expire during business hours, re-auth at 3 AM
+	if shouldProactivelyReauth(snap.Observed.JWTExpiry, time.Now()) {
+		return fsmv2.Result[any, any](&StartingState{}, fsmv2.SignalNone, nil,
+			fmt.Sprintf("proactive night re-auth: token expires at %s (business hours), re-authing now",
+				snap.Observed.JWTExpiry.Local().Format("15:04")))
+	}
+
 	// If any children are unhealthy, transition to degraded
 	if snap.Observed.ChildrenUnhealthy > 0 {
-		return fsmv2.Result[any, any](&DegradedState{}, fsmv2.SignalNone, nil, "Children unhealthy, transitioning to Degraded")
+		return fsmv2.Result[any, any](&DegradedState{}, fsmv2.SignalNone, nil,
+			fmt.Sprintf("children unhealthy (%d), transitioning to Degraded", snap.Observed.ChildrenUnhealthy))
 	}
 
 	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, "All children healthy, transport running")
+}
+
+// shouldProactivelyReauth returns true if the token would expire during business
+// hours and it's currently the proactive re-auth hour (3 AM).
+func shouldProactivelyReauth(expiry time.Time, now time.Time) bool {
+	if expiry.IsZero() {
+		return false
+	}
+
+	expiryHour := expiry.Local().Hour()
+	if expiryHour < businessHoursStart || expiryHour >= businessHoursEnd {
+		return false
+	}
+
+	return now.Local().Hour() == proactiveReauthHour
 }
 
 // String returns the state name derived from the type.

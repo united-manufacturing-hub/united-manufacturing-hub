@@ -34,6 +34,17 @@ func makeSnapshot(
 	hasTransport bool,
 	hasValidToken bool,
 ) fsmv2.Snapshot {
+	return makeSnapshotFull(parentMappedState, shutdownRequested, consecutiveErrors, hasTransport, hasValidToken, 0)
+}
+
+func makeSnapshotFull(
+	parentMappedState string,
+	shutdownRequested bool,
+	consecutiveErrors int,
+	hasTransport bool,
+	hasValidToken bool,
+	pendingMessageCount int,
+) fsmv2.Snapshot {
 	desired := &snapshot.PushDesiredState{
 		ParentMappedState: parentMappedState,
 		BaseDesiredState: config.BaseDesiredState{
@@ -49,9 +60,10 @@ func makeSnapshot(
 				ShutdownRequested: shutdownRequested,
 			},
 		},
-		ConsecutiveErrors: consecutiveErrors,
-		HasTransport:      hasTransport,
-		HasValidToken:     hasValidToken,
+		ConsecutiveErrors:   consecutiveErrors,
+		PendingMessageCount: pendingMessageCount,
+		HasTransport:        hasTransport,
+		HasValidToken:       hasValidToken,
 	}
 
 	return fsmv2.Snapshot{
@@ -160,6 +172,20 @@ var _ = Describe("RunningState", func() {
 		Expect(result.State).To(BeAssignableToTypeOf(&state.RunningState{}))
 		Expect(result.Signal).To(Equal(fsmv2.SignalNone))
 		Expect(result.Action).To(BeNil())
+	})
+
+	It("should transition to Degraded when pending messages exceed threshold", func() {
+		snap := makeSnapshotFull(config.DesiredStateRunning, false, 0, true, true, 100)
+		result := s.Next(snap)
+		Expect(result.State).To(BeAssignableToTypeOf(&state.DegradedState{}))
+		Expect(result.Reason).To(ContainSubstring("pending"))
+	})
+
+	It("should stay Running when pending messages below threshold", func() {
+		snap := makeSnapshotFull(config.DesiredStateRunning, false, 0, true, true, 99)
+		result := s.Next(snap)
+		Expect(result.State).To(BeAssignableToTypeOf(&state.RunningState{}))
+		Expect(result.Action).NotTo(BeNil())
 	})
 
 	It("should return a valid String()", func() {
