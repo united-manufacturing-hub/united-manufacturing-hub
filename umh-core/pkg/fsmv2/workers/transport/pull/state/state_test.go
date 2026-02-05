@@ -230,10 +230,22 @@ var _ = Describe("DegradedState", func() {
 		Expect(result.State).To(BeAssignableToTypeOf(&state.StoppingState{}))
 	})
 
-	It("should recover to Running on 0 errors", func() {
-		snap := makeSnapshot(config.DesiredStateRunning, false, 0, true, true)
+	It("should recover to Running on 0 errors and low pending count", func() {
+		snap := makeSnapshotFull(config.DesiredStateRunning, false, 0, true, true, 0)
 		result := s.Next(snap)
 		Expect(result.State).To(BeAssignableToTypeOf(&state.RunningState{}))
+	})
+
+	It("should recover to Running on 0 errors when pending is below threshold", func() {
+		snap := makeSnapshotFull(config.DesiredStateRunning, false, 0, true, true, 99)
+		result := s.Next(snap)
+		Expect(result.State).To(BeAssignableToTypeOf(&state.RunningState{}))
+	})
+
+	It("should NOT recover to Running when errors are 0 but pending >= threshold (oscillation prevention)", func() {
+		snap := makeSnapshotFull(config.DesiredStateRunning, false, 0, true, true, 100)
+		result := s.Next(snap)
+		Expect(result.State).To(BeAssignableToTypeOf(&state.DegradedState{}))
 	})
 
 	It("should stay Degraded and emit PullAction with non-zero errors", func() {

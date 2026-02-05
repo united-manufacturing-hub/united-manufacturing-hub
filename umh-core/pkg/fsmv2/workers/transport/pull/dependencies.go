@@ -36,7 +36,7 @@ type PullDependencies struct {
 	*deps.BaseDependencies
 	parentDeps              *transport_pkg.TransportDependencies
 	pendingMessages         []*communicator_transport.UMHMessage
-	pendingMu               sync.Mutex
+	pendingMu               sync.RWMutex
 	lastSeenResetGeneration uint64
 	backpressured           bool
 	backpressureMu          sync.RWMutex
@@ -99,6 +99,7 @@ func (d *PullDependencies) StorePendingMessages(msgs []*communicator_transport.U
 		d.pendingMessages = d.pendingMessages[len(d.pendingMessages)-maxPendingMessages:]
 		d.BaseDependencies.GetLogger().Warnw("pending_buffer_overflow",
 			"dropped", dropped, "cap", maxPendingMessages)
+		d.MetricsRecorder().IncrementCounter(deps.CounterMessagesDropped, int64(dropped))
 	}
 }
 
@@ -113,8 +114,8 @@ func (d *PullDependencies) DrainPendingMessages() []*communicator_transport.UMHM
 }
 
 func (d *PullDependencies) PendingMessageCount() int {
-	d.pendingMu.Lock()
-	defer d.pendingMu.Unlock()
+	d.pendingMu.RLock()
+	defer d.pendingMu.RUnlock()
 
 	return len(d.pendingMessages)
 }
@@ -169,18 +170,20 @@ func (d *PullDependencies) CheckAndClearOnReset() bool {
 	currentGen := d.parentDeps.GetResetGeneration()
 
 	d.pendingMu.Lock()
-	defer d.pendingMu.Unlock()
 
-	if currentGen != d.lastSeenResetGeneration {
+	changed := currentGen != d.lastSeenResetGeneration
+	if changed {
 		d.pendingMessages = nil
 		d.lastSeenResetGeneration = currentGen
+	}
 
+	d.pendingMu.Unlock()
+
+	if changed {
 		d.backpressureMu.Lock()
 		d.backpressured = false
 		d.backpressureMu.Unlock()
-
-		return true
 	}
 
-	return false
+	return changed
 }

@@ -84,24 +84,22 @@ func (w *PullWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedSt
 	d := w.GetDependencies()
 
 	observed := snapshot.PullObservedState{
-		CollectedAt:     time.Now(),
-		HasTransport:    d.GetTransport() != nil,
-		HasValidToken:   d.IsTokenValid(),
-		IsBackpressured: d.IsBackpressured(),
+		CollectedAt:         time.Now(),
+		HasTransport:        d.GetTransport() != nil,
+		HasValidToken:       d.IsTokenValid(),
+		IsBackpressured:     d.IsBackpressured(),
+		ConsecutiveErrors:   d.GetConsecutiveErrors(),
+		PendingMessageCount: d.PendingMessageCount(),
+		LastErrorType:       d.GetLastErrorType(),
+		LastRetryAfter:      d.GetLastRetryAfter(),
+		DegradedEnteredAt:   d.GetDegradedEnteredAt(),
+		LastErrorAt:         d.GetLastErrorAt(),
+		LastActionResults:   d.GetActionHistory(),
 	}
-
-	observed.ConsecutiveErrors = d.GetConsecutiveErrors()
-	observed.PendingMessageCount = d.PendingMessageCount()
-	observed.LastErrorType = d.GetLastErrorType()
-	observed.LastRetryAfter = d.GetLastRetryAfter()
-	observed.DegradedEnteredAt = d.GetDegradedEnteredAt()
-	observed.LastErrorAt = d.GetLastErrorAt()
 
 	if fm := d.GetFrameworkState(); fm != nil {
 		observed.Metrics.Framework = *fm
 	}
-
-	observed.LastActionResults = d.GetActionHistory()
 
 	return observed, nil
 }

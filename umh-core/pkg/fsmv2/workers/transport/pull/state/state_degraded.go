@@ -37,8 +37,10 @@ func (s *DegradedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 			fmt.Sprintf("stop required: shutdown=%t, parentState=%s", snap.Desired.IsShutdownRequested(), snap.Desired.ParentMappedState))
 	}
 
-	if snap.Observed.ConsecutiveErrors == 0 {
-		return fsmv2.Result[any, any](&RunningState{}, fsmv2.SignalNone, nil, "errors cleared (consecutiveErrors=0), recovering to Running")
+	if snap.Observed.ConsecutiveErrors == 0 && snap.Observed.PendingMessageCount < pendingDegradedThreshold {
+		return fsmv2.Result[any, any](&RunningState{}, fsmv2.SignalNone, nil,
+			fmt.Sprintf("recovering to Running: consecutiveErrors=0, pendingMessages=%d (threshold=%d)",
+				snap.Observed.PendingMessageCount, pendingDegradedThreshold))
 	}
 
 	if snap.Observed.HasTransport && snap.Observed.HasValidToken {

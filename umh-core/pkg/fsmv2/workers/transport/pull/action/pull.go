@@ -53,7 +53,9 @@ func (a *PullAction) Execute(ctx context.Context, depsAny any) error {
 
 	metrics := pullDeps.MetricsRecorder()
 
-	pullDeps.CheckAndClearOnReset()
+	if pullDeps.CheckAndClearOnReset() {
+		pullDeps.GetLogger().Infow("pull_reset_cleared")
+	}
 
 	// Phase 1: Deliver pending messages (if any)
 	pending := pullDeps.DrainPendingMessages()
@@ -62,6 +64,7 @@ func (a *PullAction) Execute(ctx context.Context, depsAny any) error {
 		if len(remaining) > 0 {
 			pullDeps.StorePendingMessages(remaining)
 			metrics.SetGauge(depspkg.GaugePendingMessages, float64(pullDeps.PendingMessageCount()))
+			metrics.IncrementCounter(depspkg.CounterPartialDeliveries, 1)
 
 			select {
 			case <-ctx.Done():
@@ -74,13 +77,13 @@ func (a *PullAction) Execute(ctx context.Context, depsAny any) error {
 		pullDeps.RecordSuccess()
 		metrics.IncrementCounter(depspkg.CounterPullOps, 1)
 		metrics.IncrementCounter(depspkg.CounterPullSuccess, 1)
-		metrics.IncrementCounter(depspkg.CounterMessagesPulled, int64(len(pending)))
+		metrics.IncrementCounter(depspkg.CounterPendingDelivered, int64(len(pending)))
 		metrics.SetGauge(depspkg.GaugePendingMessages, 0)
 
 		return nil
 	}
 
-	// Phase 2: Backpressure check (only if no pending remaining)
+	// Phase 2: Backpressure check (only runs when DrainPendingMessages returned empty)
 	inChan := pullDeps.GetInboundChan()
 	if inChan == nil {
 		return nil
@@ -113,6 +116,8 @@ func (a *PullAction) Execute(ctx context.Context, depsAny any) error {
 	}
 
 	if shouldSkip {
+		metrics.IncrementCounter(depspkg.CounterBackpressureSkips, 1)
+
 		return nil
 	}
 
@@ -165,6 +170,7 @@ func (a *PullAction) Execute(ctx context.Context, depsAny any) error {
 	if len(remaining) > 0 {
 		pullDeps.StorePendingMessages(remaining)
 		metrics.SetGauge(depspkg.GaugePendingMessages, float64(pullDeps.PendingMessageCount()))
+		metrics.IncrementCounter(depspkg.CounterPartialDeliveries, 1)
 
 		select {
 		case <-ctx.Done():
@@ -181,6 +187,10 @@ func (a *PullAction) Execute(ctx context.Context, depsAny any) error {
 
 func (a *PullAction) deliverToChannel(ctx context.Context, inChan chan<- *transport.UMHMessage, messages []*transport.UMHMessage) []*transport.UMHMessage {
 	for i, msg := range messages {
+		if msg == nil {
+			continue
+		}
+
 		select {
 		case inChan <- msg:
 		case <-ctx.Done():
@@ -206,7 +216,6 @@ const (
 	LowWaterMarkMultiplier = 2
 )
 
-
 func counterForErrorType(t httpTransport.ErrorType) depspkg.CounterName {
 	switch t {
 	case httpTransport.ErrorTypeCloudflareChallenge:
@@ -221,10 +230,6 @@ func counterForErrorType(t httpTransport.ErrorType) depspkg.CounterName {
 		return depspkg.CounterServerErrorsTotal
 	case httpTransport.ErrorTypeProxyBlock:
 		return depspkg.CounterProxyBlockErrorsTotal
-	case httpTransport.ErrorTypeNetwork:
-		return depspkg.CounterNetworkErrorsTotal
-	case httpTransport.ErrorTypeUnknown:
-		return depspkg.CounterNetworkErrorsTotal
 	default:
 		return depspkg.CounterNetworkErrorsTotal
 	}

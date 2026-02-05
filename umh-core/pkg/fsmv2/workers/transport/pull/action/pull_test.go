@@ -408,7 +408,7 @@ var _ = Describe("PullAction", func() {
 	})
 
 	Describe("Backpressure hysteresis", func() {
-		It("should not exit backpressure when available is between 50 and 99", func() {
+		It("should not exit backpressure when available < LowWaterMark (100)", func() {
 			mockDeps.chanCapacity = 200
 			mockDeps.chanLength = 130
 			mockDeps.backpressured = true
@@ -462,7 +462,7 @@ var _ = Describe("PullAction", func() {
 			drained := mockDeps.metricsRecorder.Drain()
 			Expect(drained.Counters[string(deps.CounterPullOps)]).To(Equal(int64(1)))
 			Expect(drained.Counters[string(deps.CounterPullSuccess)]).To(Equal(int64(1)))
-			Expect(drained.Counters[string(deps.CounterMessagesPulled)]).To(Equal(int64(2)))
+			Expect(drained.Counters[string(deps.CounterPendingDelivered)]).To(Equal(int64(2)))
 		})
 	})
 
