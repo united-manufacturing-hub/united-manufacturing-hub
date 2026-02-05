@@ -30,6 +30,7 @@ type PersistenceDependencies struct {
 	*deps.BaseDependencies
 
 	store             storage.TriangularStoreInterface
+	scheduler         deps.Scheduler
 	lastCompactionAt  time.Time
 	lastMaintenanceAt time.Time
 	mu                sync.RWMutex
@@ -40,6 +41,7 @@ var _ snapshot.PersistenceDependencies = (*PersistenceDependencies)(nil)
 // NewPersistenceDependencies creates dependencies for the persistence worker.
 func NewPersistenceDependencies(
 	store storage.TriangularStoreInterface,
+	scheduler deps.Scheduler,
 	logger *zap.SugaredLogger,
 	stateReader deps.StateReader,
 	identity deps.Identity,
@@ -48,14 +50,23 @@ func NewPersistenceDependencies(
 		panic("NewPersistenceDependencies: store cannot be nil")
 	}
 
+	if scheduler == nil {
+		panic("NewPersistenceDependencies: scheduler cannot be nil")
+	}
+
 	return &PersistenceDependencies{
 		BaseDependencies: deps.NewBaseDependencies(logger, stateReader, identity),
 		store:            store,
+		scheduler:        scheduler,
 	}
 }
 
 func (d *PersistenceDependencies) GetStore() storage.TriangularStoreInterface {
 	return d.store
+}
+
+func (d *PersistenceDependencies) GetScheduler() deps.Scheduler {
+	return d.scheduler
 }
 
 func (d *PersistenceDependencies) SetLastCompactionAt(t time.Time) {

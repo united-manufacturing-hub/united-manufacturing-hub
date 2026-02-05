@@ -31,7 +31,7 @@ func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 		return fsmv2.Result[any, any](s, fsmv2.SignalNeedsRemoval, nil, "Persistence worker stopped and shutdown requested")
 	}
 
-	return fsmv2.Result[any, any](&RunningState{}, fsmv2.SignalNone, nil, "Starting persistence worker")
+	return fsmv2.Result[any, any](&TryingToStartState{}, fsmv2.SignalNone, nil, "Starting persistence worker")
 }
 
 func (s *StoppedState) String() string {

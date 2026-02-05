@@ -28,6 +28,7 @@ type PersistenceDependencies interface {
 	deps.Dependencies
 	MetricsRecorder() *deps.MetricsRecorder
 	GetStore() storage.TriangularStoreInterface
+	GetScheduler() deps.Scheduler
 	SetLastCompactionAt(time.Time)
 	SetLastMaintenanceAt(time.Time)
 }
@@ -58,6 +59,9 @@ type PersistenceObservedState struct {
 	deps.MetricsEmbedder `json:",inline"`
 
 	ConsecutiveActionErrors int `json:"consecutive_action_errors"`
+
+	IsPreferredMaintenanceWindow  bool `json:"is_preferred_maintenance_window"`
+	IsAcceptableMaintenanceWindow bool `json:"is_acceptable_maintenance_window"`
 }
 
 // IsLastActionHealthy returns true if ConsecutiveActionErrors is zero.

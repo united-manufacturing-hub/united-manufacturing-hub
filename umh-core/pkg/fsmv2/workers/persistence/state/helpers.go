@@ -15,6 +15,8 @@
 package state
 
 import (
+	"time"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/persistence/action"
@@ -31,11 +33,40 @@ func emitActionIfDue(
 			action.NewCompactDeltasAction(snap.Desired.RetentionWindow), "Running compaction")
 	}
 
-	timeSinceMaintenance := snap.Observed.CollectedAt.Sub(snap.Observed.LastMaintenanceAt)
-	if timeSinceMaintenance >= snap.Desired.MaintenanceInterval {
+	if isMaintenanceDue(snap) {
 		return fsmv2.Result[any, any](currentState, fsmv2.SignalNone,
 			action.NewRunMaintenanceAction(), "Running maintenance")
 	}
 
 	return fsmv2.Result[any, any](currentState, fsmv2.SignalNone, nil, "Monitoring for cleanup needs")
+}
+
+const shortIntervalThreshold = 3 * 24 * time.Hour
+
+func isMaintenanceDue(
+	snap helpers.TypedSnapshot[snapshot.PersistenceObservedState, *snapshot.PersistenceDesiredState],
+) bool {
+	interval := snap.Desired.MaintenanceInterval
+	timeSince := snap.Observed.CollectedAt.Sub(snap.Observed.LastMaintenanceAt)
+
+	if interval < shortIntervalThreshold {
+		return timeSince >= interval
+	}
+
+	lateDeadline := interval + 2*24*time.Hour
+	earlyStart := interval - 2*24*time.Hour
+
+	if timeSince >= lateDeadline {
+		return true
+	}
+
+	if timeSince >= interval && snap.Observed.IsAcceptableMaintenanceWindow {
+		return true
+	}
+
+	if timeSince >= earlyStart && snap.Observed.IsPreferredMaintenanceWindow {
+		return true
+	}
+
+	return false
 }

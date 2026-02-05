@@ -28,7 +28,7 @@ func (s *RunningState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := helpers.ConvertSnapshot[snapshot.PersistenceObservedState, *snapshot.PersistenceDesiredState](snapAny)
 
 	if snap.Desired.IsShutdownRequested() {
-		return fsmv2.Result[any, any](&StoppedState{}, fsmv2.SignalNone, nil, "Shutdown requested")
+		return fsmv2.Result[any, any](&ShuttingDownState{}, fsmv2.SignalNone, nil, "Shutdown requested")
 	}
 
 	if !snap.Observed.IsHealthy() {

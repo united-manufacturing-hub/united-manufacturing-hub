@@ -38,7 +38,7 @@ var _ = Describe("RunMaintenanceAction", func() {
 		ctx = context.Background()
 		mockStore = &mockTriangularStore{}
 		identity := deps.Identity{ID: "test-id", WorkerType: "persistence"}
-		d = persistence.NewPersistenceDependencies(mockStore, zap.NewNop().Sugar(), nil, identity)
+		d = persistence.NewPersistenceDependencies(mockStore, deps.DefaultScheduler{}, zap.NewNop().Sugar(), nil, identity)
 	})
 
 	Describe("Execute", func() {
