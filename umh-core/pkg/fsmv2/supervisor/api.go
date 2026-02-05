@@ -57,7 +57,7 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 	defer s.mu.Unlock()
 
 	if _, exists := s.workers[identity.ID]; exists {
-		s.logger.Warn("worker_add_rejected",
+		s.logger.SentryWarn(deps.FeatureLifecycle, "worker_add_rejected",
 			deps.HierarchyPath(identity.HierarchyPath),
 			deps.Reason("already_exists"))
 
@@ -386,7 +386,7 @@ func (s *Supervisor[TObserved, TDesired]) RemoveWorker(ctx context.Context, work
 	if !exists {
 		s.mu.Unlock()
 
-		s.logger.Warn("worker_remove_not_found",
+		s.logger.SentryWarn(deps.FeatureLifecycle, "worker_remove_not_found",
 			deps.HierarchyPath(hierarchyPath),
 			deps.String("target_worker_id", workerID))
 

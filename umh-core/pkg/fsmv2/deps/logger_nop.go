@@ -31,8 +31,6 @@ func (l *nopLogger) Debug(_ string, _ ...Field) {}
 
 func (l *nopLogger) Info(_ string, _ ...Field) {}
 
-func (l *nopLogger) Warn(_ string, _ ...Field) {}
-
 func (l *nopLogger) SentryWarn(_ Feature, _ string, _ ...Field) {}
 
 func (l *nopLogger) SentryError(_ Feature, _ error, _ string, _ ...Field) {}

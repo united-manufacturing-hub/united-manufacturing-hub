@@ -226,7 +226,7 @@ func (c *Collector[TObserved]) Stop(ctx context.Context) {
 	c.mu.Lock()
 
 	if c.state != collectorStateRunning {
-		c.config.Logger.Warn("collector_stop_skipped",
+		c.config.Logger.SentryWarn(deps.FeatureCollection, "collector_stop_skipped",
 			deps.Reason("not_running"),
 			deps.String("current_state", c.state.String()))
 		c.mu.Unlock()
@@ -244,7 +244,7 @@ func (c *Collector[TObserved]) Stop(ctx context.Context) {
 		c.config.Logger.Debug("collector_stopped",
 			deps.String("result", "success"))
 	case <-ctx.Done():
-		c.config.Logger.Warn("collector_stopped",
+		c.config.Logger.SentryWarn(deps.FeatureCollection, "collector_stopped",
 			deps.String("result", "context_cancelled"))
 	case <-time.After(5 * time.Second):
 		c.config.Logger.SentryWarn(deps.FeatureCollection, "collector_stopped",
@@ -267,7 +267,7 @@ func (c *Collector[TObserved]) CollectFinalObservation(ctx context.Context) erro
 		currentState := c.state.String()
 		c.mu.RUnlock()
 
-		c.config.Logger.Warn("collector_final_observation_skipped",
+		c.config.Logger.SentryWarn(deps.FeatureCollection, "collector_final_observation_skipped",
 			deps.Reason("not_running"),
 			deps.String("current_state", currentState))
 

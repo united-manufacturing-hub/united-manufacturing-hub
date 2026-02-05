@@ -131,7 +131,7 @@ var _ = Describe("nopLogger contract", func() {
 		Expect(func() {
 			logger.Debug("debug")
 			logger.Info("info")
-			logger.Warn("warn")
+			logger.SentryWarn(deps.FeatureExamples, "warn")
 			logger.SentryWarn(deps.FeatureHealth, "health warn")
 			logger.SentryError(deps.FeatureActions, testErr, "action error")
 		}).NotTo(Panic())

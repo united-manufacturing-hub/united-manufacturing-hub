@@ -87,7 +87,7 @@ drainLoop:
 
 // CommunicatorRunConfig configures a communicator scenario run with a mock relay server.
 type CommunicatorRunConfig struct {
-	Logger                  deps.FSMLogger            // If nil, creates a development logger
+	Logger                  deps.FSMLogger
 	MockServer              *testutil.MockRelayServer // If nil, creates and manages internally; caller closes if provided
 	AuthToken               string                    // Defaults to "test-auth-token"
 	InitialPullMessages     []*transport.UMHMessage   // Messages queued for communicator to pull

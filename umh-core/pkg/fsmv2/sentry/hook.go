@@ -62,7 +62,6 @@ func (h *SentryHook) Wrap(core zapcore.Core) zapcore.Core {
 
 // Write intercepts log writes to capture errors to Sentry.
 func (h *SentryHook) Write(entry zapcore.Entry, fields []zapcore.Field) error {
-	// Only capture WARN and ERROR levels
 	if entry.Level >= zapcore.WarnLevel {
 		h.captureToSentry(entry, fields)
 	}
@@ -107,13 +106,11 @@ func (h *SentryHook) captureToSentry(entry zapcore.Entry, fields []zapcore.Field
 	// Build fingerprint using error TYPES (stable), not messages (contain URLs/IPs)
 	fingerprint := BuildFingerprint(entry.Level, feature, entry.Message, errorTypes)
 
-	// Check debouncer
 	fpKey := strings.Join(fingerprint, "|")
 	if !h.debouncer.ShouldCapture(fpKey) {
 		return
 	}
 
-	// Build event manually for full control
 	event := sentry.NewEvent()
 	event.Level = ZapLevelToSentry(entry.Level)
 	event.Message = entry.Message
@@ -140,7 +137,6 @@ func (h *SentryHook) captureToSentry(entry zapcore.Entry, fields []zapcore.Field
 			Value: err.Error(),   // "connection failed: ..." - becomes subtitle
 		}
 
-		// Attach stacktrace to exception for proper rendering in Sentry UI
 		if stacktrace != nil {
 			exception.Stacktrace = stacktrace
 		}
@@ -159,7 +155,6 @@ func (h *SentryHook) captureToSentry(entry zapcore.Entry, fields []zapcore.Field
 		}
 	}
 
-	// Set tags - include error_types for searchability
 	event.Tags = map[string]string{
 		"feature":    feature,
 		"event_name": entry.Message,
@@ -176,7 +171,6 @@ func (h *SentryHook) captureToSentry(entry zapcore.Entry, fields []zapcore.Field
 		event.Tags["worker_type"] = info.WorkerType
 	}
 
-	// Extract panic-specific fields for better debugging
 	event.Extra = make(map[string]interface{})
 
 	if panicVal, ok := fieldMap["panic"].(string); ok && panicVal != "" {
@@ -371,7 +365,6 @@ func newFilteredStacktrace() *sentry.Stacktrace {
 
 	for _, frame := range st.Frames {
 		if !IsInternalFrame(frame) {
-			// Mark UMH application code as in_app for Sentry UI highlighting
 			frame.InApp = isAppFrame(frame.Module, frame.AbsPath)
 			filtered = append(filtered, frame)
 		}
@@ -406,7 +399,6 @@ func IsInternalFrame(frame sentry.Frame) bool {
 		return true
 	}
 
-	// Filter by function name patterns for edge cases
 	if strings.Contains(frame.Function, "captureToSentry") ||
 		strings.Contains(frame.Function, "SentryHook.Write") ||
 		strings.Contains(frame.Function, "zapcore.") {

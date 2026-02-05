@@ -579,7 +579,7 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 			attempts := s.healthChecker.backoff.GetAttempts()
 			nextDelay := s.healthChecker.backoff.NextDelay()
 
-			s.logger.Warn("circuit_breaker_retry_scheduled",
+			s.logger.SentryWarn(deps.FeatureReconciliation, "circuit_breaker_retry_scheduled",
 				deps.String("failed_child", childErr.ChildName),
 				deps.Attempts(attempts),
 				deps.Int("max_attempts", s.healthChecker.maxAttempts),
@@ -588,7 +588,7 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 				deps.String("recovery_status", s.getRecoveryStatus()))
 
 			if attempts == 4 {
-				s.logger.Warn("escalation_warning_one_retry_remaining",
+				s.logger.SentryWarn(deps.FeatureReconciliation, "escalation_warning_one_retry_remaining",
 					deps.String("child_name", childErr.ChildName),
 					deps.Int("attempts_remaining", 1),
 					deps.String("total_downtime", s.healthChecker.backoff.GetTotalDowntime().String()))
@@ -966,7 +966,7 @@ func (s *Supervisor[TObserved, TDesired]) processSignal(ctx context.Context, wor
 		if !exists {
 			s.mu.Unlock()
 
-			s.logger.Warn("worker_removal_not_found",
+			s.logger.SentryWarn(deps.FeatureReconciliation, "worker_removal_not_found",
 				deps.HierarchyPath(s.GetHierarchyPathUnlocked()),
 				deps.String("target_worker_id", workerID))
 
@@ -984,7 +984,7 @@ func (s *Supervisor[TObserved, TDesired]) processSignal(ctx context.Context, wor
 				childrenToCleanup[name] = child // Capture children for cleanup outside lock
 			}
 
-			s.logger.Warn("worker_removal_has_children",
+			s.logger.SentryWarn(deps.FeatureReconciliation, "worker_removal_has_children",
 				deps.Int("child_count", childCount),
 				deps.Any("children", childNames))
 		}
@@ -1087,7 +1087,7 @@ func (s *Supervisor[TObserved, TDesired]) checkRestartTimeouts(ctx context.Conte
 		}
 
 		if time.Since(requestedAt) > DefaultGracefulRestartTimeout {
-			s.logger.Warn("restart_graceful_timeout",
+			s.logger.SentryWarn(deps.FeatureReconciliation, "restart_graceful_timeout",
 				deps.HierarchyPath(s.GetHierarchyPathUnlocked()),
 				deps.String("target_worker_id", workerID),
 				deps.Duration("timeout", DefaultGracefulRestartTimeout),
@@ -1222,7 +1222,7 @@ func (s *Supervisor[TObserved, TDesired]) restartCollector(ctx context.Context, 
 			deps.Duration("backoff", backoff),
 			deps.String("escalation_risk", escalationRisk))
 	} else {
-		s.logger.Warn("collector_restarting",
+		s.logger.SentryWarn(deps.FeatureReconciliation, "collector_restarting",
 			deps.Int("restart_attempt", restartCount),
 			deps.Int("max_attempts", maxRestartAttempts),
 			deps.Duration("backoff", backoff))
@@ -1286,7 +1286,7 @@ func (s *Supervisor[TObserved, TDesired]) checkDataFreshness(snapshot *fsmv2.Sna
 				deps.Duration("age", age),
 				deps.Duration("threshold", s.collectorHealth.timeout))
 		} else {
-			s.logger.Warn("data_timeout",
+			s.logger.SentryWarn(deps.FeatureReconciliation, "data_timeout",
 				deps.HierarchyPath(snapshot.Identity.HierarchyPath),
 				deps.Duration("age", age),
 				deps.Duration("threshold", s.collectorHealth.timeout))
@@ -1301,7 +1301,7 @@ func (s *Supervisor[TObserved, TDesired]) checkDataFreshness(snapshot *fsmv2.Sna
 				deps.Duration("age", age),
 				deps.Duration("threshold", s.collectorHealth.staleThreshold))
 		} else {
-			s.logger.Warn("data_stale",
+			s.logger.SentryWarn(deps.FeatureReconciliation, "data_stale",
 				deps.HierarchyPath(snapshot.Identity.HierarchyPath),
 				deps.Duration("age", age),
 				deps.Duration("threshold", s.collectorHealth.staleThreshold))
@@ -1546,7 +1546,7 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 					done := childSupervisor.Start(childCtx)
 					s.childDoneChans[spec.Name] = done
 				} else {
-					s.logger.Warn("child_start_skipped_context_cancelled",
+					s.logger.SentryWarn(deps.FeatureReconciliation, "child_start_skipped_context_cancelled",
 						deps.String("child_name", spec.Name))
 				}
 			}

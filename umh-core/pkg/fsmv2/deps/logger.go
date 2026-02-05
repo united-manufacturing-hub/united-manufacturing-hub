@@ -18,20 +18,15 @@ import "time"
 
 // FSMLogger provides structured logging with compile-time enforcement of Sentry fields.
 //
-// Tier 1 methods (Debug, Info, Warn) accept flexible structured fields.
-// Tier 2 methods require a Feature parameter for Sentry routing:
-// SentryWarn requires Feature, SentryError requires Feature and error.
+// Debug and Info are general-purpose. All warn/error level logs require a Feature
+// parameter for Sentry routing — there is no bare Warn() method. This ensures every
+// warning and error reaches Sentry with a proper feature tag.
 type FSMLogger interface {
 	// Debug logs at DEBUG level with structured fields.
 	Debug(msg string, fields ...Field)
 
 	// Info logs at INFO level with structured fields.
 	Info(msg string, fields ...Field)
-
-	// Warn logs at WARN level with structured fields.
-	// Note: the Sentry hook captures all warn-level logs, but without a Feature
-	// tag they route to "unknown". Use SentryWarn for feature-routed warnings.
-	Warn(msg string, fields ...Field)
 
 	// SentryWarn logs at WARN level with required Feature for Sentry routing.
 	// The feature parameter identifies which subsystem owns this warning.
@@ -49,8 +44,8 @@ type FSMLogger interface {
 
 // Field represents a structured log field as a key-value pair.
 type Field struct {
-	Key   string
 	Value any
+	Key   string
 }
 
 // String creates a Field with a string value.

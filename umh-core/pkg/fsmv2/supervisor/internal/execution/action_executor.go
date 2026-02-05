@@ -241,7 +241,7 @@ func (ae *ActionExecutor) EnqueueAction(actionID string, action fsmv2.Action[any
 	if ae.stopped {
 		ae.mu.Unlock()
 
-		ae.logger.Warn("action_enqueue_rejected",
+		ae.logger.SentryWarn(deps.FeatureActions, "action_enqueue_rejected",
 			deps.HierarchyPath(ae.identity.HierarchyPath),
 			deps.CorrelationID(actionID),
 			deps.ActionName(action.Name()),
@@ -255,7 +255,7 @@ func (ae *ActionExecutor) EnqueueAction(actionID string, action fsmv2.Action[any
 	if ae.inProgress[actionID] {
 		ae.mu.Unlock()
 
-		ae.logger.Warn("action_enqueue_rejected",
+		ae.logger.SentryWarn(deps.FeatureActions, "action_enqueue_rejected",
 			deps.HierarchyPath(ae.identity.HierarchyPath),
 			deps.CorrelationID(actionID),
 			deps.ActionName(action.Name()),

@@ -39,7 +39,7 @@ func (a *ConnectAction) Execute(ctx context.Context, depsAny any) error {
 		case <-time.After(time.Duration(delaySeconds) * time.Second):
 			logger.Info("Connect delay completed successfully")
 		case <-ctx.Done():
-			logger.Warn("connect_cancelled_during_delay",
+			logger.SentryWarn(depspkg.FeatureExamples, "connect_cancelled_during_delay",
 				depspkg.String("reason", "context_done"),
 				depspkg.Int("delay_seconds", delaySeconds))
 

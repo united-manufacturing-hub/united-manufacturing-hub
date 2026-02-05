@@ -1055,17 +1055,6 @@ var _ = Describe("FSMLogger to Sentry Event Mapping", func() {
 		_ = workerIDFound
 	})
 
-	It("Warn() without feature routes to unknown", func() {
-		fsmLogger.Warn("something_unexpected")
-
-		Eventually(func() int {
-			return store.Len()
-		}, time.Second, 10*time.Millisecond).Should(BeNumerically(">=", 1))
-
-		event := store.GetLast()
-		Expect(event.Tags["feature"]).To(Equal("unknown"))
-		Expect(event.Level).To(Equal(sentrygo.LevelWarning))
-	})
 })
 
 // eventStore provides thread-safe storage for captured Sentry events.

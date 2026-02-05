@@ -101,7 +101,7 @@ func (a *SyncAction) Execute(ctx context.Context, depsAny any) error {
 				fillPercent = (length * 100) / capacity
 			}
 
-			deps.GetLogger().Warn("backpressure_entering",
+			deps.GetLogger().SentryWarn(depspkg.FeatureCommunicator, "backpressure_entering",
 				depspkg.Int("capacity", capacity),
 				depspkg.Int("length", length),
 				depspkg.Int("available", available),
@@ -175,7 +175,7 @@ func (a *SyncAction) Execute(ctx context.Context, depsAny any) error {
 				case <-ctx.Done():
 					return ctx.Err()
 				default:
-					deps.GetLogger().Warn("inbound_channel_full_stopping_sync",
+					deps.GetLogger().SentryWarn(depspkg.FeatureCommunicator, "inbound_channel_full_stopping_sync",
 						depspkg.Int("total_messages", len(messages)),
 						depspkg.Int("delivered", i),
 						depspkg.Int("pending", len(messages)-i))

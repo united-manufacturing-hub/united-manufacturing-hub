@@ -54,10 +54,6 @@ func (l *zapLogger) Info(msg string, fields ...Field) {
 	l.sugar.Infow(msg, fieldsToArgs(l.baseFields, fields)...)
 }
 
-func (l *zapLogger) Warn(msg string, fields ...Field) {
-	l.sugar.Warnw(msg, fieldsToArgs(l.baseFields, fields)...)
-}
-
 func (l *zapLogger) SentryWarn(feature Feature, msg string, fields ...Field) {
 	allFields := make([]Field, 0, 1+len(fields))
 	allFields = append(allFields, Field{Key: "feature", Value: string(feature)})

@@ -223,7 +223,7 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 				remainingCount := len(s.workers)
 				s.mu.RUnlock()
 
-				s.logger.Warn("graceful_shutdown_timeout",
+				s.logger.SentryWarn(deps.FeatureLifecycle, "graceful_shutdown_timeout",
 					deps.Duration("timeout", gracefulTimeout),
 					deps.Int("remaining_worker_count", remainingCount))
 

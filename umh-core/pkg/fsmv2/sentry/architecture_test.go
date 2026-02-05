@@ -87,7 +87,7 @@ loses the error chain and Sentry's ability to group related errors.
 
 CORRECT:
   logger.SentryError(feature, err, "operation_failed")
-  logger.Warn("problem detected", deps.Err(err))
+  logger.SentryWarn(feature, "problem detected", deps.Err(err))
 
 WRONG:
   logger.SentryError(feature, err, "failed", deps.String("detail", err.Error()))

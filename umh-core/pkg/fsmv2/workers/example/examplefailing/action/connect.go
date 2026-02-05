@@ -65,7 +65,7 @@ func (a *ConnectAction) Execute(ctx context.Context, depsAny any) error {
 		)
 
 		if attempts <= maxFailures {
-			logger.Warn("connect_failed_simulated",
+			logger.SentryWarn(depspkg.FeatureExamples, "connect_failed_simulated",
 				depspkg.Int("attempt", attempts),
 				depspkg.Int("max_failures", maxFailures),
 				depspkg.Int("remaining", maxFailures-attempts),

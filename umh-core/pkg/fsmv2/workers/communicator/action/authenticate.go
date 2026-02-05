@@ -149,7 +149,7 @@ func (a *AuthenticateAction) Execute(ctx context.Context, depsAny any) error {
 		)
 		deps.SetAuthenticatedUUID(authResp.InstanceUUID)
 	} else {
-		logger.Warn("instance_uuid_missing_in_auth_response",
+		logger.SentryWarn(depspkg.FeatureCommunicator, "instance_uuid_missing_in_auth_response",
 			depspkg.String("instance_name", authResp.InstanceName),
 			depspkg.Bool("has_token", authResp.Token != ""))
 	}
