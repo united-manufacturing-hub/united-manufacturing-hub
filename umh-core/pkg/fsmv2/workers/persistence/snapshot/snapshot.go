@@ -51,13 +51,13 @@ type PersistenceObservedState struct {
 
 	State string `json:"state"`
 
-	ConsecutiveActionErrors int `json:"consecutive_action_errors"`
-
 	LastActionResults []deps.ActionResult `json:"last_action_results,omitempty"`
 
 	PersistenceDesiredState `json:",inline"`
 
 	deps.MetricsEmbedder `json:",inline"`
+
+	ConsecutiveActionErrors int `json:"consecutive_action_errors"`
 }
 
 // IsLastActionHealthy returns true if ConsecutiveActionErrors is zero.
