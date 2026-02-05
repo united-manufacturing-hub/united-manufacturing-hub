@@ -37,14 +37,11 @@ func (s *Supervisor[TObserved, TDesired]) Start(ctx context.Context) <-chan stru
 	// Create a child context that we can cancel via Shutdown().
 	s.ctxMu.Lock()
 	s.ctx, s.ctxCancel = context.WithCancel(ctx)
+	supervisorCtx := s.ctx
 	s.ctxMu.Unlock()
 	s.started.Store(true)
 
 	s.logger.Debugw("supervisor_started")
-
-	s.ctxMu.RLock()
-	supervisorCtx := s.ctx
-	s.ctxMu.RUnlock()
 
 	s.actionExecutor.Start(supervisorCtx)
 
@@ -83,14 +80,11 @@ func (s *Supervisor[TObserved, TDesired]) Start(ctx context.Context) <-chan stru
 func (s *Supervisor[TObserved, TDesired]) StartAsChild(ctx context.Context) {
 	s.ctxMu.Lock()
 	s.ctx, s.ctxCancel = context.WithCancel(ctx)
+	supervisorCtx := s.ctx
 	s.ctxMu.Unlock()
 	s.started.Store(true)
 
 	s.logger.Debugw("supervisor_started_as_child")
-
-	s.ctxMu.RLock()
-	supervisorCtx := s.ctx
-	s.ctxMu.RUnlock()
 
 	s.actionExecutor.Start(supervisorCtx)
 
