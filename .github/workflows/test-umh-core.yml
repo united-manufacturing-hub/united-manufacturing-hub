@@ -152,7 +152,7 @@ jobs:
   test-report:
     name: Consolidated Test Report
     needs: [unit-tests, integration-tests]
-    if: always()
+    if: always() && github.event_name == 'pull_request'
     runs-on: depot-ubuntu-24.04
     permissions:
       pull-requests: write
@@ -170,7 +170,7 @@ jobs:
       - name: Merge JUnit reports
         run: |
           # Install junit-merge tool
-          npm install -g junit-report-merger
+          npm install -g junit-report-merger@9.0.3
 
           # Find all XML reports and merge them
           mkdir -p merged-reports
