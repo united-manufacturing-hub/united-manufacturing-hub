@@ -27,7 +27,10 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
 	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/pull/action"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/pull/snapshot"
 )
+
+var _ snapshot.PullDependencies = (*mockPullDeps)(nil)
 
 type mockTransport struct {
 	pullErr       error
@@ -515,6 +518,30 @@ var _ = Describe("PullAction", func() {
 
 			Expect(mockDeps.backpressured).To(BeFalse())
 			Expect(mockDeps.PendingMessageCount()).To(Equal(0))
+		})
+	})
+
+	Describe("Context cancellation during Phase 4 delivery", func() {
+		It("should return ctx.Err() when context cancelled with remaining messages", func() {
+			ctx, cancel := context.WithCancel(context.Background())
+
+			smallChan := make(chan *transport.UMHMessage, 1)
+			mockDeps.inboundBi = smallChan
+			mockDeps.chanCapacity = 1000
+			mockDeps.chanLength = 0
+
+			mockTrans.pullFunc = func(_ context.Context, _ string) ([]*transport.UMHMessage, error) {
+				cancel()
+
+				return []*transport.UMHMessage{
+					{Content: "msg1"},
+					{Content: "msg2"},
+					{Content: "msg3"},
+				}, nil
+			}
+
+			err := act.Execute(ctx, mockDeps)
+			Expect(err).To(Equal(context.Canceled))
 		})
 	})
 

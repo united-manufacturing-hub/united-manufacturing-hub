@@ -231,6 +231,16 @@ var _ = Describe("PullWorker", func() {
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("invalid spec type"))
 		})
+
+		It("should return error for malformed YAML", func() {
+			spec := fsmv2config.UserSpec{
+				Config:    "state: [invalid yaml: {",
+				Variables: fsmv2config.VariableBundle{},
+			}
+
+			_, err := worker.DeriveDesiredState(spec)
+			Expect(err).To(HaveOccurred())
+		})
 	})
 
 	Describe("GetInitialState", func() {

@@ -23,7 +23,10 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/pull/snapshot"
 )
 
-const pendingDegradedThreshold = 100
+const (
+	errorDegradedThreshold   = 3
+	pendingDegradedThreshold = 100
+)
 
 type RunningState struct {
 	helpers.RunningHealthyBase
@@ -37,9 +40,9 @@ func (s *RunningState) Next(snapAny any) fsmv2.NextResult[any, any] {
 			fmt.Sprintf("stop required: shutdown=%t, parentState=%s", snap.Desired.IsShutdownRequested(), snap.Desired.ParentMappedState))
 	}
 
-	if snap.Observed.ConsecutiveErrors >= 3 {
+	if snap.Observed.ConsecutiveErrors >= errorDegradedThreshold {
 		return fsmv2.Result[any, any](&DegradedState{}, fsmv2.SignalNone, nil,
-			fmt.Sprintf("degrading: %d consecutive errors", snap.Observed.ConsecutiveErrors))
+			fmt.Sprintf("degrading: %d consecutive errors (threshold=%d)", snap.Observed.ConsecutiveErrors, errorDegradedThreshold))
 	}
 
 	if snap.Observed.PendingMessageCount >= pendingDegradedThreshold {

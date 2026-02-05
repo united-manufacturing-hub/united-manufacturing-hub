@@ -257,6 +257,19 @@ var _ = Describe("DegradedState", func() {
 		Expect(result.Action.Name()).To(Equal("pull"))
 	})
 
+	It("should stay Degraded and emit PullAction with non-zero errors but low pending count", func() {
+		snap := makeSnapshotWithBackoff(
+			config.DesiredStateRunning, false, 2, true, true, 10,
+			httpTransport.ErrorTypeNetwork, 0,
+			time.Now().Add(-30*time.Second),
+			time.Time{},
+		)
+		result := s.Next(snap)
+		Expect(result.State).To(BeAssignableToTypeOf(&state.DegradedState{}))
+		Expect(result.Action).NotTo(BeNil())
+		Expect(result.Action.Name()).To(Equal("pull"))
+	})
+
 	It("should stay Degraded with nil action when waiting for transport or token", func() {
 		snap := makeSnapshot(config.DesiredStateRunning, false, 5, false, false)
 		result := s.Next(snap)
@@ -343,6 +356,14 @@ var _ = Describe("StoppingState", func() {
 		snap := makeSnapshot(config.DesiredStateRunning, true, 0, false, false)
 		result := s.Next(snap)
 		Expect(result.State).To(BeAssignableToTypeOf(&state.StoppedState{}))
+	})
+
+	It("should stay in Stopping when stop condition not yet met", func() {
+		snap := makeSnapshot(config.DesiredStateRunning, false, 0, true, true)
+		result := s.Next(snap)
+		Expect(result.State).To(BeAssignableToTypeOf(&state.StoppingState{}))
+		Expect(result.Signal).To(Equal(fsmv2.SignalNone))
+		Expect(result.Reason).To(ContainSubstring("stopping"))
 	})
 
 	It("should return a valid String()", func() {

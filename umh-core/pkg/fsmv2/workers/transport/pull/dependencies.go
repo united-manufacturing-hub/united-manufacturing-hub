@@ -37,9 +37,9 @@ type PullDependencies struct {
 	parentDeps              *transport_pkg.TransportDependencies
 	pendingMessages         []*communicator_transport.UMHMessage
 	pendingMu               sync.RWMutex
+	backpressureMu          sync.RWMutex
 	lastSeenResetGeneration uint64
 	backpressured           bool
-	backpressureMu          sync.RWMutex
 }
 
 func NewPullDependencies(parentDeps *transport_pkg.TransportDependencies, identity deps.Identity, logger *zap.SugaredLogger, stateReader deps.StateReader) (*PullDependencies, error) {

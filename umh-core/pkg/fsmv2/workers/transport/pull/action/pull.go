@@ -53,8 +53,14 @@ func (a *PullAction) Execute(ctx context.Context, depsAny any) error {
 
 	metrics := pullDeps.MetricsRecorder()
 
+	pendingBeforeReset := pullDeps.PendingMessageCount()
 	if pullDeps.CheckAndClearOnReset() {
-		pullDeps.GetLogger().Infow("pull_reset_cleared")
+		pullDeps.GetLogger().Infow("pull_reset_cleared",
+			"pending_dropped", pendingBeforeReset)
+
+		if pendingBeforeReset > 0 {
+			metrics.IncrementCounter(depspkg.CounterMessagesDropped, int64(pendingBeforeReset))
+		}
 	}
 
 	// Phase 1: Deliver pending messages (if any)
@@ -83,9 +89,11 @@ func (a *PullAction) Execute(ctx context.Context, depsAny any) error {
 		return nil
 	}
 
-	// Phase 2: Backpressure check (only runs when DrainPendingMessages returned empty)
+	// Phase 2: Backpressure check
 	inChan := pullDeps.GetInboundChan()
 	if inChan == nil {
+		pullDeps.GetLogger().Debugw("pull_skipped_nil_inbound_chan")
+
 		return nil
 	}
 
