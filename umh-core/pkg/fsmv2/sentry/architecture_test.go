@@ -265,7 +265,7 @@ func validateNoErrorDotError(baseDir string) []Violation {
 }
 
 // checkForErrorDotError parses a Go file and looks for .Error() calls on
-// variables inside logging method calls (SentryError, SentryWarn, Warn, Info, Debug,
+// variables inside logging method calls (SentryError, SentryWarn, Info, Debug,
 // or any method on a receiver whose name contains "log").
 func checkForErrorDotError(filename string) []Violation {
 	var violations []Violation
@@ -312,7 +312,7 @@ func checkForErrorDotError(filename string) []Violation {
 
 // isLoggingMethod returns true if the selector expression looks like a logging call.
 // It matches:
-//   - Known FSMLogger methods: SentryError, SentryWarn, Warn, Info, Debug
+//   - Known FSMLogger methods: SentryError, SentryWarn, Info, Debug
 //   - Any method on a receiver whose name contains "log" (case-insensitive)
 func isLoggingMethod(sel *ast.SelectorExpr) bool {
 	methodName := sel.Sel.Name
@@ -320,7 +320,6 @@ func isLoggingMethod(sel *ast.SelectorExpr) bool {
 	knownLogMethods := map[string]bool{
 		"SentryError": true,
 		"SentryWarn":  true,
-		"Warn":        true,
 		"Info":        true,
 		"Debug":       true,
 	}
@@ -337,15 +336,7 @@ func isLoggingMethod(sel *ast.SelectorExpr) bool {
 	receiverLooksLikeLogger := strings.Contains(strings.ToLower(receiverName), "log") ||
 		receiverName == "logger" || receiverName == "Logger"
 
-	if knownLogMethods[methodName] && receiverLooksLikeLogger {
-		return true
-	}
-
-	if receiverLooksLikeLogger && knownLogMethods[methodName] {
-		return true
-	}
-
-	return false
+	return knownLogMethods[methodName] && receiverLooksLikeLogger
 }
 
 // containsErrorDotError recursively checks if any argument in a call expression

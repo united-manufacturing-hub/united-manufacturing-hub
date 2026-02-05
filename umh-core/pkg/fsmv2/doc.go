@@ -85,7 +85,7 @@
 //   - Expected conditions: For example, "already connected" is success.
 //
 // For Sentry error reporting, use [deps.FSMLogger.SentryError] and
-// [deps.FSMLogger.SentryWarn] which enforce Feature and error at compile time.
+// [deps.FSMLogger.SentryWarn] which enforce required parameters at compile time.
 //
 // ## DesiredState constraints
 //

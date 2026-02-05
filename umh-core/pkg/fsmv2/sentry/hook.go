@@ -27,7 +27,7 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-// SentryHook wraps a zapcore.Core and sends error/warning logs to Sentry.
+// SentryHook wraps a zapcore.Core and sends warn- and error-level logs to Sentry.
 type SentryHook struct {
 	zapcore.Core
 	debouncer *FingerprintDebouncer
@@ -60,7 +60,7 @@ func (h *SentryHook) Wrap(core zapcore.Core) zapcore.Core {
 	return h
 }
 
-// Write intercepts log writes to capture errors to Sentry.
+// Write intercepts log writes to capture warnings and errors to Sentry.
 func (h *SentryHook) Write(entry zapcore.Entry, fields []zapcore.Field) error {
 	if entry.Level >= zapcore.WarnLevel {
 		h.captureToSentry(entry, fields)
@@ -91,7 +91,7 @@ func (h *SentryHook) With(fields []zapcore.Field) zapcore.Core {
 func (h *SentryHook) captureToSentry(entry zapcore.Entry, fields []zapcore.Field) {
 	fieldMap := FieldsToMap(fields)
 
-	// Extract feature field - use "unknown" if missing
+	// Extract feature field; falls back to "unknown" as a safety net (all FSMLogger warn/error methods inject feature)
 	feature := ExtractFeature(fieldMap)
 
 	// Extract error DIRECTLY from fields (FieldsToMap converts errors to strings)

@@ -1054,7 +1054,6 @@ var _ = Describe("FSMLogger to Sentry Event Mapping", func() {
 		Expect(event.Tags["feature"]).To(Equal("lifecycle"))
 		_ = workerIDFound
 	})
-
 })
 
 // eventStore provides thread-safe storage for captured Sentry events.
