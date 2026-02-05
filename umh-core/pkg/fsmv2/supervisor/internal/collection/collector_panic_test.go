@@ -224,6 +224,69 @@ var _ = Describe("Collector Panic Type Classification", func() {
 	})
 })
 
+var _ = Describe("Collector Double Panic", func() {
+	It("should recover when the recovery handler itself panics", func() {
+		var panicked atomic.Bool
+
+		worker := &supervisor.TestWorker{
+			CollectFunc: func(ctx context.Context) (fsmv2.ObservedState, error) {
+				if !panicked.Load() {
+					panicked.Store(true)
+					panic("trigger collector double panic")
+				}
+
+				return supervisor.CreateTestObservedStateWithID("test-worker"), nil
+			},
+		}
+
+		logger := &panicOnSentryErrorCollectorLogger{}
+
+		collector := collection.NewCollector[supervisor.TestObservedState](collection.CollectorConfig[supervisor.TestObservedState]{
+			Worker:              worker,
+			Identity:            supervisor.TestIdentity(),
+			Store:               supervisor.CreateTestTriangularStore(),
+			Logger:              logger,
+			ObservationInterval: 50 * time.Millisecond,
+			ObservationTimeout:  1 * time.Second,
+		})
+
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		err := collector.Start(ctx)
+		Expect(err).ToNot(HaveOccurred())
+
+		time.Sleep(200 * time.Millisecond)
+
+		Expect(collector.IsRunning()).To(BeTrue(),
+			"Collector should still be running after double panic recovery")
+
+		cancel()
+		time.Sleep(100 * time.Millisecond)
+		Expect(collector.IsRunning()).To(BeFalse())
+	})
+})
+
+// panicOnSentryErrorCollectorLogger panics on the first SentryError call only.
+// After the first call, subsequent SentryError calls are no-ops.
+// This tests the double-panic path inside collectAndSaveObservedState without
+// crashing observationLoop's error handler (which also calls SentryError).
+type panicOnSentryErrorCollectorLogger struct {
+	panicked atomic.Bool
+}
+
+func (p *panicOnSentryErrorCollectorLogger) Debug(msg string, fields ...deps.Field)     {}
+func (p *panicOnSentryErrorCollectorLogger) Info(msg string, fields ...deps.Field)       {}
+func (p *panicOnSentryErrorCollectorLogger) SentryWarn(_ deps.Feature, _ string, _ string, _ ...deps.Field) {
+}
+func (p *panicOnSentryErrorCollectorLogger) SentryError(_ deps.Feature, _ string, _ error, _ string, _ ...deps.Field) {
+	if !p.panicked.Load() {
+		p.panicked.Store(true)
+		panic("logger SentryError panicked in collector")
+	}
+}
+func (p *panicOnSentryErrorCollectorLogger) With(fields ...deps.Field) deps.FSMLogger { return p }
+
 func filterCollectorLogs(logs *observer.ObservedLogs, message string) []observer.LoggedEntry {
 	var filtered []observer.LoggedEntry
 

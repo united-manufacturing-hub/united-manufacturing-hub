@@ -228,19 +228,10 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 				s.logger.Debug("waiting_child_shutdown",
 					deps.String("child_name", childName))
 
-				shutdownTimer := time.NewTimer(s.childShutdownTimeout)
-				select {
-				case <-done:
-					shutdownTimer.Stop()
-					s.logger.Debug("child_shutdown_complete",
-						deps.String("child_name", childName))
-				case <-shutdownTimer.C:
-					metrics.RecordChildShutdownTimeout(s.GetHierarchyPath(), childName)
+				s.waitForChildDone(done, childName, s.GetHierarchyPath(), "shutdown")
 
-					s.logger.SentryWarn(deps.FeatureFSMv2, s.GetHierarchyPath(), "child_shutdown_timeout",
-						deps.String("child_name", childName),
-						deps.Duration("timeout", s.childShutdownTimeout))
-				}
+				s.logger.Debug("child_shutdown_complete",
+					deps.String("child_name", childName))
 			}
 
 			s.logTrace("lifecycle",
@@ -298,7 +289,6 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 			}
 		}
 
-		ticker.Stop()
 	}
 
 	// Phase 4: Cleanup executors and collectors.
@@ -326,6 +316,24 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 
 	s.logTrace("lifecycle",
 		deps.String("lifecycle_event", "shutdown_complete"))
+}
+
+// waitForChildDone waits for a child supervisor's done channel to close, with a timeout.
+// If the timeout fires, it records a metric and logs a warning. The hierarchyPath and
+// logContext parameters are used for metrics and log attribution.
+func (s *Supervisor[TObserved, TDesired]) waitForChildDone(done <-chan struct{}, childName, hierarchyPath, logContext string) {
+	shutdownTimer := time.NewTimer(s.childShutdownTimeout)
+	select {
+	case <-done:
+		shutdownTimer.Stop()
+	case <-shutdownTimer.C:
+		metrics.RecordChildShutdownTimeout(hierarchyPath, childName)
+
+		s.logger.SentryWarn(deps.FeatureFSMv2, hierarchyPath, "child_shutdown_timeout",
+			deps.String("child_name", childName),
+			deps.Duration("timeout", s.childShutdownTimeout),
+			deps.String("context", logContext))
+	}
 }
 
 // startMetricsReporter starts a goroutine that periodically records hierarchy metrics.
@@ -496,15 +504,13 @@ func (s *Supervisor[TObserved, TDesired]) RequestShutdown(ctx context.Context, r
 // including any attempt counters, connection pools, or cached data in dependencies.
 //
 // Flow:
-//  1. Extract identity from existing worker (before removal)
-//  2. RemoveWorker - stops collector, executor, removes from registry
-//  3. Clear ShutdownRequested in storage (so new worker starts fresh)
-//  4. factory.NewWorkerByType - creates completely new worker instance
-//  5. AddWorker - registers new worker, starts collector
+//  1. RemoveWorker - stops collector, executor, removes from registry
+//  2. Clear ShutdownRequested in storage (so new worker starts fresh)
+//  3. factory.NewWorkerByType - creates completely new worker instance
+//  4. AddWorker - registers new worker
+//  5. Start collector and executor if supervisor is running
+//  6. Reset health counters for fresh start
 func (s *Supervisor[TObserved, TDesired]) handleWorkerRestart(ctx context.Context, workerID string) error {
-	// Extract identity and state under lock before removal.
-	// NOTE: We hold both s.mu and workerCtx.mu to prevent TOCTOU race when
-	// reading currentState - otherwise reconciliation could modify it concurrently.
 	s.mu.RLock()
 
 	workerCtx, exists := s.workers[workerID]
@@ -566,11 +572,7 @@ func (s *Supervisor[TObserved, TDesired]) handleWorkerRestart(ctx context.Contex
 		return fmt.Errorf("failed to add new worker for restart: %w", err)
 	}
 
-	// 5. Start the new worker's collector and executor if supervisor is already running.
-	// NOTE: We capture collector and executor under lock to prevent TOCTOU race.
-	// Between checking worker existence and starting collector/executor, another
-	// goroutine could remove the worker. By capturing the pointers under lock,
-	// we ensure we have valid references even if the worker is subsequently removed.
+	// 5. Start collector and executor if supervisor is running
 	if supervisorCtx, started := s.getStartedContext(); started {
 		s.mu.RLock()
 
@@ -603,9 +605,6 @@ func (s *Supervisor[TObserved, TDesired]) handleWorkerRestart(ctx context.Contex
 	s.collectorHealth.restartCount = 0
 	s.mu.Unlock()
 
-	// Get new state for logging.
-	// NOTE: We hold both s.mu and workerCtx.mu to prevent TOCTOU race when
-	// reading currentState - otherwise reconciliation could modify it concurrently.
 	s.mu.RLock()
 
 	newWorkerCtx := s.workers[workerID]

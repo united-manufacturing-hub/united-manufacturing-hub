@@ -15,6 +15,8 @@
 package supervisor
 
 import (
+	"errors"
+	"fmt"
 	"sync"
 	"time"
 )
@@ -80,4 +82,18 @@ func (p *panicRecovery) Reset() {
 	defer p.mu.Unlock()
 
 	p.timestamps = nil
+}
+
+// classifyPanic converts a recovered panic value into a typed error and a classification string.
+// Used by the tick() panic recovery handler. The collector has a local copy
+// (internal/collection/collector.go) due to circular import constraints.
+func classifyPanic(r interface{}) (panicType string, panicErr error) {
+	switch v := r.(type) {
+	case error:
+		return "error", v
+	case string:
+		return "string", errors.New(v)
+	default:
+		return "unknown", fmt.Errorf("%v", r)
+	}
 }

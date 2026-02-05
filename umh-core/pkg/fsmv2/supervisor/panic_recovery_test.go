@@ -74,7 +74,7 @@ var _ = Describe("Tick Loop Panic Recovery", func() {
 				Expect(panicLog.ContextMap()).To(HaveKey("error"))
 				Expect(panicLog.ContextMap()).To(HaveKey("stack_trace"))
 				Expect(panicLog.ContextMap()).To(HaveKey("feature"))
-				Expect(panicLog.ContextMap()["feature"]).To(Equal("reconciliation"))
+				Expect(panicLog.ContextMap()["feature"]).To(Equal("fsmv2"))
 			})
 
 			It("should continue operating after recovering from panic", func() {
@@ -359,7 +359,7 @@ var _ = Describe("Panic Escalation", func() {
 			circuitLogs := filterLogs(observedLogs, "panic_circuit_open")
 			Expect(circuitLogs).ToNot(BeEmpty(), "Expected panic_circuit_open log entry")
 			circuitLog := circuitLogs[0]
-			Expect(circuitLog.ContextMap()["feature"]).To(Equal("reconciliation"))
+			Expect(circuitLog.ContextMap()["feature"]).To(Equal("fsmv2"))
 			Expect(circuitLog.ContextMap()["panic_count"]).To(BeEquivalentTo(3))
 		})
 
@@ -434,6 +434,71 @@ var _ = Describe("Panic Escalation", func() {
 		})
 	})
 })
+
+var _ = Describe("Tick Double Panic", func() {
+	It("should recover when the recovery handler itself panics", func() {
+		logger := &panicOnSentryErrorLogger{}
+
+		store := supervisor.CreateTestTriangularStore()
+
+		s := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
+			WorkerType:              "test",
+			Store:                   store,
+			Logger:                  logger,
+			TickInterval:            50 * time.Millisecond,
+			GracefulShutdownTimeout: 100 * time.Millisecond,
+		})
+
+		identity := supervisor.TestIdentity()
+		worker := &panickingWorker{
+			panicOnTick:  true,
+			panicMessage: "trigger double panic",
+		}
+		err := s.AddWorker(identity, worker)
+		Expect(err).ToNot(HaveOccurred())
+		defer s.Shutdown()
+
+		err = s.TestTick(context.Background())
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("recovery handler also panicked"))
+		Expect(s.TestIsPanicCircuitOpen()).To(BeTrue(), "Double panic should open panic circuit")
+	})
+})
+
+var _ = Describe("IsCircuitOpen Infra Path", func() {
+	It("should return true when infrastructure circuit is open", func() {
+		_, logger := createObservedLogger()
+		store := supervisor.CreateTestTriangularStore()
+
+		s := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
+			WorkerType:              "test",
+			Store:                   store,
+			Logger:                  logger,
+			TickInterval:            50 * time.Millisecond,
+			GracefulShutdownTimeout: 100 * time.Millisecond,
+		})
+
+		Expect(s.IsCircuitOpen()).To(BeFalse())
+
+		s.TestSetCircuitOpen(true)
+		Expect(s.IsCircuitOpen()).To(BeTrue(), "IsCircuitOpen should reflect infra circuit state")
+		Expect(s.TestIsPanicCircuitOpen()).To(BeFalse(), "Panic circuit should remain closed")
+
+		s.TestSetCircuitOpen(false)
+		Expect(s.IsCircuitOpen()).To(BeFalse())
+	})
+})
+
+// panicOnSentryErrorLogger panics when SentryError is called, used to test double-panic recovery.
+type panicOnSentryErrorLogger struct{}
+
+func (p *panicOnSentryErrorLogger) Debug(msg string, fields ...deps.Field)                         {}
+func (p *panicOnSentryErrorLogger) Info(msg string, fields ...deps.Field)                          {}
+func (p *panicOnSentryErrorLogger) SentryWarn(_ deps.Feature, _ string, _ string, _ ...deps.Field) {}
+func (p *panicOnSentryErrorLogger) SentryError(_ deps.Feature, _ string, _ error, _ string, _ ...deps.Field) {
+	panic("logger SentryError panicked")
+}
+func (p *panicOnSentryErrorLogger) With(fields ...deps.Field) deps.FSMLogger { return p }
 
 // panickingWorker is a test worker that panics during state machine execution.
 // This simulates a bug in a worker's state machine that causes a panic.

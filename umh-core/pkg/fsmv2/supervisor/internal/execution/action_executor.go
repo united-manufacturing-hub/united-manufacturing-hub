@@ -73,26 +73,16 @@ type actionWork struct {
 }
 
 func NewActionExecutor(workerCount int, supervisorID string, identity deps.Identity, logger deps.FSMLogger) *ActionExecutor {
-	if workerCount <= 0 {
-		workerCount = 10
-	}
-
-	return &ActionExecutor{
-		supervisorID:    supervisorID,
-		identity:        identity,
-		workerCount:     workerCount,
-		actionQueue:     make(chan actionWork, workerCount*2),
-		inProgress:      make(map[string]inProgressEntry),
-		timeouts:        make(map[string]time.Duration),
-		defaultTimeout:  30 * time.Second,
-		metricsInterval: 5 * time.Second,
-		logger:          logger,
-	}
+	return NewActionExecutorWithTimeout(workerCount, nil, supervisorID, identity, logger)
 }
 
 func NewActionExecutorWithTimeout(workerCount int, timeouts map[string]time.Duration, supervisorID string, identity deps.Identity, logger deps.FSMLogger) *ActionExecutor {
 	if workerCount <= 0 {
 		workerCount = 10
+	}
+
+	if timeouts == nil {
+		timeouts = make(map[string]time.Duration)
 	}
 
 	return &ActionExecutor{
@@ -191,11 +181,19 @@ func (ae *ActionExecutor) executeWorkWithRecovery(ctx context.Context, work acti
 		callback := ae.onActionComplete
 		ae.mu.Unlock()
 
-		if !generationMatch {
-			ae.logger.Debug("action_completion_discarded_stale_generation",
+		if !exists {
+			ae.logger.Info("action_completion_discarded_entry_missing",
 				deps.CorrelationID(work.actionID),
 				deps.ActionName(work.action.Name()),
 				deps.Field{Key: "work_generation", Value: work.generation})
+			return
+		}
+		if !generationMatch {
+			ae.logger.Info("action_completion_discarded_stale_generation",
+				deps.CorrelationID(work.actionID),
+				deps.ActionName(work.action.Name()),
+				deps.Field{Key: "work_generation", Value: work.generation},
+				deps.Field{Key: "current_generation", Value: entry.generation})
 			return
 		}
 
@@ -353,6 +351,7 @@ func (ae *ActionExecutor) metricsReporter(ctx context.Context) {
 			ae.mu.Lock()
 			queueSize := len(ae.actionQueue)
 			inProgressCount := len(ae.inProgress)
+			callback := ae.onActionComplete
 
 			now := time.Now()
 
@@ -399,6 +398,15 @@ func (ae *ActionExecutor) metricsReporter(ctx context.Context) {
 						deps.Field{Key: "action_name", Value: stuck.actionName},
 						deps.Field{Key: "elapsed_ms", Value: stuck.elapsedMs},
 						deps.Field{Key: "timeout_ms", Value: stuck.timeoutMs})
+
+					if callback != nil {
+						callback(deps.ActionResult{
+							Timestamp:  now,
+							ActionType: stuck.actionName,
+							ErrorMsg:   fmt.Sprintf("force-removed: stuck for %dms (timeout %dms)", stuck.elapsedMs, stuck.timeoutMs),
+							Latency:    time.Duration(stuck.elapsedMs) * time.Millisecond,
+						})
+					}
 				} else {
 					metrics.RecordStuckActionDetected(ae.identity.HierarchyPath, stuck.actionName)
 					ae.logger.SentryWarn(deps.FeatureFSMv2, ae.identity.HierarchyPath, "stuck_action_detected",

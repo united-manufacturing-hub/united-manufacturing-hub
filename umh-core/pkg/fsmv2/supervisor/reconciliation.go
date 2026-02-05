@@ -334,10 +334,6 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 		return nil
 	}
 
-	// NOTE: FrameworkMetrics injection is now handled automatically by the Collector
-	// via FrameworkMetricsProvider callback. See collector.go collectAndSaveObservedState().
-	// The provider is set up in api.go AddWorker() when creating the CollectorConfig.
-
 	result := currentState.Next(*snapshot)
 
 	hasAction := result.Action != nil
@@ -525,29 +521,26 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 // PHASE 2: Async Action Execution
 //   - State machine evaluates transitions and enqueues actions when needed
 //   - Actions execute in global worker pool (non-blocking)
-//   - Timeouts and retries handled automatically by ActionExecutor
+//   - Timeouts enforced by ActionExecutor; retries via tick-based re-evaluation
 //
 // PERFORMANCE: The complete tick loop is non-blocking and completes in <10ms,
 // making it safe to call at high frequency (100Hz+) without impacting system performance.
 func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
-			var panicErr error
+			defer func() {
+				if r2 := recover(); r2 != nil {
+					err = fmt.Errorf("tick panic (recovery handler also panicked: %v): %v", r2, r)
+					s.panicCircuitOpen.Store(true)
+					func() {
+						defer func() { recover() }()
+						s.logger.SentryError(deps.FeatureFSMv2, "unknown", err, "tick_double_panic",
+							deps.String("stack", string(debug.Stack())))
+					}()
+				}
+			}()
 
-			var panicType string
-
-			switch v := r.(type) {
-			case error:
-				panicErr = v
-				panicType = "error"
-			case string:
-				panicErr = errors.New(v)
-				panicType = "string"
-			default:
-				panicErr = fmt.Errorf("%v", r)
-				panicType = "unknown"
-			}
-
+			panicType, panicErr := classifyPanic(r)
 			err = fmt.Errorf("tick panic: %w", panicErr)
 
 			hierarchyPath := s.GetHierarchyPathUnlocked()
@@ -569,6 +562,8 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 	}()
 
 	if s.panicCircuitOpen.Load() {
+		s.logger.Debug("tick_suppressed_panic_circuit_open",
+			deps.HierarchyPath(s.GetHierarchyPathUnlocked()))
 		return nil
 	}
 
@@ -1037,9 +1032,6 @@ func (s *Supervisor[TObserved, TDesired]) processSignal(ctx context.Context, wor
 
 		s.mu.Unlock()
 
-		// TODO: Use context-aware RequestGracefulShutdown instead of immediate Shutdown
-		_ = ctx
-
 		for name, child := range childrenToCleanup {
 			s.logger.Debug("child_supervisor_shutdown",
 				deps.String("child_name", name),
@@ -1048,18 +1040,7 @@ func (s *Supervisor[TObserved, TDesired]) processSignal(ctx context.Context, wor
 
 			// Wait for child supervisor to fully stop (with timeout)
 			if done, exists := doneChannels[name]; exists {
-				shutdownTimer := time.NewTimer(s.childShutdownTimeout)
-				select {
-				case <-done:
-					shutdownTimer.Stop()
-				case <-shutdownTimer.C:
-					metrics.RecordChildShutdownTimeout(s.GetHierarchyPath(), name)
-
-					s.logger.SentryWarn(deps.FeatureFSMv2, s.GetHierarchyPath(), "child_shutdown_timeout",
-						deps.String("child_name", name),
-						deps.Duration("timeout", s.childShutdownTimeout),
-						deps.String("context", "worker_removal_cleanup"))
-				}
+				s.waitForChildDone(done, name, s.GetHierarchyPath(), "worker_removal_cleanup")
 			}
 
 			// Remove from parent's children map (requires lock)
@@ -1374,8 +1355,6 @@ func (s *Supervisor[TObserved, TDesired]) logHeartbeat() {
 
 	s.mu.RUnlock()
 
-	activeActions := 0
-
 	s.logger.Info("supervisor_heartbeat",
 		deps.HierarchyPath(s.GetHierarchyPathUnlocked()),
 		deps.Any("tick", atomic.LoadUint64(&s.tickCount)),
@@ -1383,7 +1362,7 @@ func (s *Supervisor[TObserved, TDesired]) logHeartbeat() {
 		deps.Int("children", childCount),
 		deps.Any("worker_states", workerStates),
 		deps.Any("worker_reasons", workerReasons),
-		deps.Int("active_actions", activeActions))
+		deps.Int("active_actions", s.actionExecutor.GetActiveActionCount()))
 }
 
 func (s *Supervisor[TObserved, TDesired]) getRecoveryStatus() string {
@@ -1638,19 +1617,7 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 			child.Shutdown()
 
 			if done, exists := s.childDoneChans[name]; exists {
-				shutdownTimer := time.NewTimer(s.childShutdownTimeout)
-				select {
-				case <-done:
-					shutdownTimer.Stop()
-				case <-shutdownTimer.C:
-					metrics.RecordChildShutdownTimeout(s.GetHierarchyPathUnlocked(), name)
-
-					s.logger.SentryWarn(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), "child_shutdown_timeout",
-						deps.String("child_name", name),
-						deps.Duration("timeout", s.childShutdownTimeout),
-						deps.String("context", "reconcile_children"))
-				}
-
+				s.waitForChildDone(done, name, s.GetHierarchyPathUnlocked(), "reconcile_children")
 				delete(s.childDoneChans, name)
 			}
 

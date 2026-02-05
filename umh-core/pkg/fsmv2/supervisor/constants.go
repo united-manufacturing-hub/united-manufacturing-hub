@@ -27,7 +27,7 @@ const (
 	// DefaultCollectorTimeout is the default age threshold for detecting stale data requiring restart.
 	DefaultCollectorTimeout = 20 * time.Second
 
-	// DefaultMaxRestartAttempts is the default maximum number of collector restart attempts before panic.
+	// DefaultMaxRestartAttempts is the default maximum number of collector restart attempts before escalation to graceful shutdown.
 	DefaultMaxRestartAttempts = 3
 
 	// DefaultObservationInterval is the default interval between observation collection attempts.
