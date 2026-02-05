@@ -223,13 +223,24 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 
 			child.Shutdown()
 
-			// Wait for child supervisor to fully shut down
+			// Wait for child supervisor to fully shut down (with timeout)
 			if done, exists := childDoneChans[childName]; exists {
 				s.logger.Debug("waiting_child_shutdown",
 					deps.String("child_name", childName))
-				<-done
-				s.logger.Debug("child_shutdown_complete",
-					deps.String("child_name", childName))
+
+				shutdownTimer := time.NewTimer(s.childShutdownTimeout)
+				select {
+				case <-done:
+					shutdownTimer.Stop()
+					s.logger.Debug("child_shutdown_complete",
+						deps.String("child_name", childName))
+				case <-shutdownTimer.C:
+					metrics.RecordChildShutdownTimeout(s.GetHierarchyPath(), childName)
+
+					s.logger.SentryWarn(deps.FeatureFSMv2, s.GetHierarchyPath(), "child_shutdown_timeout",
+						deps.String("child_name", childName),
+						deps.Duration("timeout", s.childShutdownTimeout))
+				}
 			}
 
 			s.logTrace("lifecycle",
@@ -257,12 +268,14 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 		// Wait for workers to complete graceful shutdown (with timeout)
 		gracefulTimeout := s.gracefulShutdownTimeout
 		ticker := time.NewTicker(100 * time.Millisecond)
-		timeoutCh := time.After(gracefulTimeout)
+		defer ticker.Stop()
+		gracefulTimer := time.NewTimer(gracefulTimeout)
+		defer gracefulTimer.Stop()
 
 	gracefulWaitLoop:
 		for {
 			select {
-			case <-timeoutCh:
+			case <-gracefulTimer.C:
 				s.mu.RLock()
 				remainingCount := len(s.workers)
 				s.mu.RUnlock()

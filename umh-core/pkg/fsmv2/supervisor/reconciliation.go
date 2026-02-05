@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"runtime/debug"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -528,7 +529,49 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 //
 // PERFORMANCE: The complete tick loop is non-blocking and completes in <10ms,
 // making it safe to call at high frequency (100Hz+) without impacting system performance.
-func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
+func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			var panicErr error
+
+			var panicType string
+
+			switch v := r.(type) {
+			case error:
+				panicErr = v
+				panicType = "error"
+			case string:
+				panicErr = errors.New(v)
+				panicType = "string"
+			default:
+				panicErr = fmt.Errorf("%v", r)
+				panicType = "unknown"
+			}
+
+			err = fmt.Errorf("tick panic: %w", panicErr)
+
+			hierarchyPath := s.GetHierarchyPathUnlocked()
+			metrics.RecordPanicRecovery(hierarchyPath, panicType)
+
+			s.logger.SentryError(deps.FeatureFSMv2, hierarchyPath, err, "tick_panic",
+				deps.WorkerType(s.workerType),
+				deps.Field{Key: "panic_type", Value: panicType},
+				deps.Field{Key: "stack_trace", Value: string(debug.Stack())})
+
+			if s.panicTracker.RecordPanic() {
+				s.panicCircuitOpen.Store(true)
+				panicCount := s.panicTracker.PanicCount()
+				s.logger.SentryError(deps.FeatureFSMv2, hierarchyPath, fmt.Errorf("tick panic circuit breaker opens after %d panics", panicCount), "panic_circuit_open",
+					deps.WorkerType(s.workerType),
+					deps.Field{Key: "panic_count", Value: panicCount})
+			}
+		}
+	}()
+
+	if s.panicCircuitOpen.Load() {
+		return nil
+	}
+
 	tickCount := atomic.AddUint64(&s.tickCount, 1)
 	if tickCount%heartbeatTickInterval == 0 {
 		s.logHeartbeat()
@@ -1003,9 +1046,20 @@ func (s *Supervisor[TObserved, TDesired]) processSignal(ctx context.Context, wor
 				deps.String("context", "post_graceful_cleanup"))
 			child.Shutdown()
 
-			// Wait for child supervisor to fully stop
+			// Wait for child supervisor to fully stop (with timeout)
 			if done, exists := doneChannels[name]; exists {
-				<-done
+				shutdownTimer := time.NewTimer(s.childShutdownTimeout)
+				select {
+				case <-done:
+					shutdownTimer.Stop()
+				case <-shutdownTimer.C:
+					metrics.RecordChildShutdownTimeout(s.GetHierarchyPath(), name)
+
+					s.logger.SentryWarn(deps.FeatureFSMv2, s.GetHierarchyPath(), "child_shutdown_timeout",
+						deps.String("child_name", name),
+						deps.Duration("timeout", s.childShutdownTimeout),
+						deps.String("context", "worker_removal_cleanup"))
+				}
 			}
 
 			// Remove from parent's children map (requires lock)
@@ -1419,6 +1473,8 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 				Logger:                  s.baseLogger, // Important: Use un-enriched logger to prevent duplicate "worker" fields
 				TickInterval:            s.tickInterval,
 				GracefulShutdownTimeout: s.gracefulShutdownTimeout,
+				ChildShutdownTimeout:    s.childShutdownTimeout,
+				EnableTraceLogging:      s.enableTraceLogging,
 				Dependencies:            mergedDeps,
 			}
 
@@ -1582,7 +1638,19 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 			child.Shutdown()
 
 			if done, exists := s.childDoneChans[name]; exists {
-				<-done
+				shutdownTimer := time.NewTimer(s.childShutdownTimeout)
+				select {
+				case <-done:
+					shutdownTimer.Stop()
+				case <-shutdownTimer.C:
+					metrics.RecordChildShutdownTimeout(s.GetHierarchyPathUnlocked(), name)
+
+					s.logger.SentryWarn(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), "child_shutdown_timeout",
+						deps.String("child_name", name),
+						deps.Duration("timeout", s.childShutdownTimeout),
+						deps.String("context", "reconcile_children"))
+				}
+
 				delete(s.childDoneChans, name)
 			}
 

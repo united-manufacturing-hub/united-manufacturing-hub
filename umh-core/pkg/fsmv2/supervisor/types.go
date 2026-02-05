@@ -245,6 +245,11 @@ type Config struct {
 	// Optional - defaults to 10 seconds (see DefaultMetricsReportInterval).
 	MetricsReportInterval time.Duration
 
+	// ChildShutdownTimeout is how long to wait for a child supervisor's done channel
+	// to close after calling Shutdown(). If exceeded, the parent logs a warning and proceeds.
+	// Optional - defaults to 30 seconds.
+	ChildShutdownTimeout time.Duration
+
 	// EnableTraceLogging enables verbose lifecycle event logging (mutex locks, tick events, etc.)
 	// Optional - defaults to false. Set ENABLE_TRACE_LOGGING=true for deep debugging.
 	// When false, these high-frequency internal logs are suppressed to improve signal-to-noise ratio.

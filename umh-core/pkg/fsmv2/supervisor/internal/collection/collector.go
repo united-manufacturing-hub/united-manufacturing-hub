@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"runtime/debug"
 	"sync"
 	"time"
 
@@ -235,6 +236,9 @@ func (c *Collector[TObserved]) Stop(ctx context.Context) {
 	doneChan := c.goroutineDone
 	c.mu.Unlock()
 
+	stopTimer := time.NewTimer(5 * time.Second)
+	defer stopTimer.Stop()
+
 	select {
 	case <-doneChan:
 		c.config.Logger.Debug("collector_stopped",
@@ -242,7 +246,7 @@ func (c *Collector[TObserved]) Stop(ctx context.Context) {
 	case <-ctx.Done():
 		c.config.Logger.SentryWarn(deps.FeatureFSMv2, c.config.Identity.HierarchyPath, "collector_stopped",
 			deps.String("result", "context_cancelled"))
-	case <-time.After(5 * time.Second):
+	case <-stopTimer.C:
 		c.config.Logger.SentryWarn(deps.FeatureFSMv2, c.config.Identity.HierarchyPath, "collector_stopped",
 			deps.String("result", "timeout"))
 	}
@@ -346,7 +350,37 @@ func (c *Collector[TObserved]) observationLoop() {
 	}
 }
 
-func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) error {
+func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			var panicErr error
+
+			var panicType string
+
+			switch v := r.(type) {
+			case error:
+				panicErr = v
+				panicType = "error"
+			case string:
+				panicErr = errors.New(v)
+				panicType = "string"
+			default:
+				panicErr = fmt.Errorf("%v", r)
+				panicType = "unknown"
+			}
+
+			err = fmt.Errorf("collector panic: %w", panicErr)
+
+			hierarchyPath := c.config.Identity.HierarchyPath
+			metrics.RecordPanicRecovery(hierarchyPath, panicType)
+
+			c.config.Logger.SentryError(deps.FeatureFSMv2, hierarchyPath, err, "collector_panic",
+				deps.Field{Key: "panic_value", Value: fmt.Sprintf("%v", r)},
+				deps.Field{Key: "panic_type", Value: panicType},
+				deps.Field{Key: "stack_trace", Value: string(debug.Stack())})
+		}
+	}()
+
 	collectionStartTime := time.Now()
 	c.logTrace("observation_collection_starting",
 		deps.String("collection_start_time", collectionStartTime.Format(time.RFC3339Nano)))
