@@ -18,7 +18,6 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/action"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/backoff"
@@ -34,11 +33,7 @@ import (
 //
 // Enforces C1 (auth precedence), C2 (token expiry), C4 (shutdown priority).
 type TryingToAuthenticateState struct {
-	BaseCommunicatorState
-}
-
-func (s *TryingToAuthenticateState) LifecyclePhase() config.LifecyclePhase {
-	return config.PhaseStarting
+	helpers.StartingBase
 }
 
 func (s *TryingToAuthenticateState) Next(snapAny any) fsmv2.NextResult[any, any] {

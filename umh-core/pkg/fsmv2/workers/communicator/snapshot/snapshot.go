@@ -108,7 +108,7 @@ func (o CommunicatorObservedState) IsTokenExpired() bool {
 }
 
 // IsSyncHealthy returns true if authenticated, token valid, no consecutive errors, and not backpressured.
-// Any error immediately makes sync unhealthy, triggering transition to DegradedState.
+// Any error immediately makes sync unhealthy, triggering transition to RecoveringState.
 func (o CommunicatorObservedState) IsSyncHealthy() bool {
 	return o.Authenticated && !o.IsTokenExpired() && o.ConsecutiveErrors == 0 && !o.IsBackpressured
 }

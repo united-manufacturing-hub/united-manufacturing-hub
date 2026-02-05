@@ -959,7 +959,7 @@ func ValidateBaseStateEmbedding(baseDir string) []Violation {
 	return violations
 }
 
-// checkBaseStateEmbedding checks for Base*State embedding.
+// checkBaseStateEmbedding checks for Base*State or phase-specific base type embedding.
 func checkBaseStateEmbedding(filename string) []Violation {
 	var violations []Violation
 
@@ -968,6 +968,15 @@ func checkBaseStateEmbedding(filename string) []Violation {
 	node, err := parser.ParseFile(fset, filename, nil, parser.ParseComments)
 	if err != nil {
 		return violations
+	}
+
+	// Valid phase-specific base types from helpers package
+	validPhaseBaseTypes := map[string]bool{
+		"StartingBase":       true,
+		"RunningHealthyBase": true,
+		"RunningDegradedBase": true,
+		"StoppingBase":       true,
+		"StoppedBase":        true,
 	}
 
 	ast.Inspect(node, func(n ast.Node) bool {
@@ -985,11 +994,22 @@ func checkBaseStateEmbedding(filename string) []Violation {
 
 		for _, field := range structType.Fields.List {
 			if len(field.Names) == 0 {
+				// Check for old pattern: BaseXxxState (simple identifier)
 				if ident, ok := field.Type.(*ast.Ident); ok {
 					if strings.HasPrefix(ident.Name, "Base") && strings.HasSuffix(ident.Name, "State") {
 						hasBaseState = true
 
 						break
+					}
+				}
+				// Check for new pattern: helpers.XxxBase (selector expression)
+				if selExpr, ok := field.Type.(*ast.SelectorExpr); ok {
+					if pkgIdent, ok := selExpr.X.(*ast.Ident); ok {
+						if pkgIdent.Name == "helpers" && validPhaseBaseTypes[selExpr.Sel.Name] {
+							hasBaseState = true
+
+							break
+						}
 					}
 				}
 			}

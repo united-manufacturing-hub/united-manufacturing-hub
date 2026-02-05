@@ -46,6 +46,10 @@ const (
 	// DefaultGracefulShutdownTimeout is the default time to wait for workers to complete graceful shutdown.
 	DefaultGracefulShutdownTimeout = 5 * time.Second
 
+	// DefaultMetricsReportInterval is the default interval for recording hierarchy metrics.
+	// Longer intervals reduce Prometheus cardinality at the cost of staler metrics.
+	DefaultMetricsReportInterval = 10 * time.Second
+
 	// DefaultGracefulRestartTimeout is how long to wait for graceful restart before force resetting.
 	DefaultGracefulRestartTimeout = 30 * time.Second
 )

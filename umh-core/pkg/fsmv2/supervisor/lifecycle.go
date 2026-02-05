@@ -38,14 +38,11 @@ func (s *Supervisor[TObserved, TDesired]) Start(ctx context.Context) <-chan stru
 	// Create a child context that we can cancel via Shutdown().
 	s.ctxMu.Lock()
 	s.ctx, s.ctxCancel = context.WithCancel(ctx)
+	supervisorCtx := s.ctx
 	s.ctxMu.Unlock()
 	s.started.Store(true)
 
 	s.logger.Debug("supervisor_started")
-
-	s.ctxMu.RLock()
-	supervisorCtx := s.ctx
-	s.ctxMu.RUnlock()
 
 	s.actionExecutor.Start(supervisorCtx)
 
@@ -77,6 +74,39 @@ func (s *Supervisor[TObserved, TDesired]) Start(ctx context.Context) <-chan stru
 	return done
 }
 
+// StartAsChild starts the supervisor without a tick loop.
+// The parent supervisor will call tick() synchronously during its own tick.
+// Collectors and executors still run in goroutines (they handle async I/O).
+//
+// This method is used by parent supervisors when spawning child supervisors
+// to avoid double-ticking (where children would be ticked both by their own
+// goroutine AND by the parent's synchronous tick() call).
+func (s *Supervisor[TObserved, TDesired]) StartAsChild(ctx context.Context) {
+	s.ctxMu.Lock()
+	s.ctx, s.ctxCancel = context.WithCancel(ctx)
+	supervisorCtx := s.ctx
+	s.ctxMu.Unlock()
+	s.started.Store(true)
+
+	s.logger.Debug("supervisor_started_as_child")
+
+	s.actionExecutor.Start(supervisorCtx)
+
+	s.startMetricsReporter(supervisorCtx)
+
+	s.mu.RLock()
+
+	for _, workerCtx := range s.workers {
+		if err := workerCtx.collector.Start(supervisorCtx); err != nil {
+			s.logger.SentryError(deps.FeatureFSMv2, err, "collector_start_failed")
+		}
+
+		workerCtx.executor.Start(supervisorCtx)
+	}
+
+	s.mu.RUnlock()
+}
+
 // tickLoop is the main FSM loop.
 // Calls Tick() which includes hierarchical composition (Phase 0) and worker state transitions.
 func (s *Supervisor[TObserved, TDesired]) tickLoop(ctx context.Context) {
@@ -104,7 +134,8 @@ func (s *Supervisor[TObserved, TDesired]) tickLoop(ctx context.Context) {
 }
 
 // Shutdown gracefully shuts down this supervisor and all its workers.
-// Shutdown order: children first, then own workers, then cancel context.
+// Shutdown order: cancel context first (so children can exit their tickLoops),
+// then wait for children, then request worker shutdown, then cleanup executors.
 // Idempotent.
 func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 	s.logTrace("lifecycle",
@@ -162,7 +193,23 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 	// Release lock before graceful shutdown operations
 	s.mu.Unlock()
 
-	// Phase 1: Shutdown children first (context still active for FSM transitions).
+	// Phase 1: Cancel context first (allows tickLoops to exit via ctx.Done()).
+	// This MUST happen before waiting for child done channels, otherwise deadlock:
+	// - Parent waits for child's done channel
+	// - Child's done channel only closes when child's tickLoop exits
+	// - Child's tickLoop only exits when context is cancelled
+	// - Context cancellation happens here, before waiting
+	s.ctxMu.Lock()
+	if s.ctxCancel != nil {
+		s.ctxCancel()
+		s.ctxCancel = nil // Prevent double-cancel
+	}
+	s.ctxMu.Unlock()
+
+	// Wait for metrics reporter to finish (it will exit now that context is cancelled)
+	s.metricsWg.Wait()
+
+	// Phase 2: Wait for children to complete shutdown (now unblocked since context is cancelled).
 	if len(childrenToShutdown) > 0 {
 		s.logger.Debug("graceful_shutdown_children_starting",
 			deps.Int("child_count", len(childrenToShutdown)))
@@ -196,7 +243,7 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 		s.logger.Debug("graceful_shutdown_children_complete")
 	}
 
-	// Phase 2: Request graceful shutdown on own workers.
+	// Phase 3: Request graceful shutdown on own workers.
 	if len(workerIDs) > 0 {
 		s.logger.Debug("graceful_shutdown_workers_starting",
 			deps.Int("worker_count", len(workerIDs)))
@@ -244,19 +291,7 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 		ticker.Stop()
 	}
 
-	// Phase 3: Cancel context (must happen before waiting for metrics reporter).
-	s.ctxMu.Lock()
-
-	if s.ctxCancel != nil {
-		s.ctxCancel()
-		s.ctxCancel = nil // Prevent double-cancel
-	}
-
-	s.ctxMu.Unlock()
-
-	// Wait for metrics reporter to finish (it will exit now that context is cancelled)
-	s.metricsWg.Wait()
-
+	// Phase 4: Cleanup executors and collectors.
 	// Re-acquire lock for cleanup
 	s.mu.Lock()
 
@@ -283,7 +318,7 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 }
 
 // startMetricsReporter starts a goroutine that periodically records hierarchy metrics.
-// Metrics are recorded every 10 seconds to avoid excessive Prometheus cardinality.
+// Metrics are recorded at the configured metricsReportInterval to avoid excessive Prometheus cardinality.
 // The goroutine stops when the context is cancelled.
 func (s *Supervisor[TObserved, TDesired]) startMetricsReporter(ctx context.Context) {
 	s.metricsWg.Add(1)
@@ -291,7 +326,7 @@ func (s *Supervisor[TObserved, TDesired]) startMetricsReporter(ctx context.Conte
 	go func() {
 		defer s.metricsWg.Done()
 
-		ticker := time.NewTicker(10 * time.Second)
+		ticker := time.NewTicker(s.metricsReportInterval)
 		defer ticker.Stop()
 
 		s.recordHierarchyMetrics()

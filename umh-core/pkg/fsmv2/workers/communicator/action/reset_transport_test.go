@@ -92,8 +92,8 @@ var _ = Describe("ResetTransportAction", func() {
 
 		// Note: We removed the "nil transport" test case because transport is now
 		// GUARANTEED to be non-nil when ResetTransportAction executes:
-		// - ResetTransportAction is ONLY called from DegradedState
-		// - DegradedState is only reachable AFTER SyncingState
+		// - ResetTransportAction is ONLY called from RecoveringState
+		// - RecoveringState is only reachable AFTER SyncingState
 		// - SyncingState is only reachable AFTER TryingToAuthenticateState
 		// - TryingToAuthenticateState runs AuthenticateAction which creates the transport
 		// Therefore, testing nil transport is testing an impossible scenario.

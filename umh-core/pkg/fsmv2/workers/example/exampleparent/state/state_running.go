@@ -18,7 +18,6 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent/snapshot"
 )
@@ -29,11 +28,7 @@ var RunningDuration = 10 * time.Second
 
 // RunningState represents normal operational state with all children healthy.
 type RunningState struct {
-	BaseParentState
-}
-
-func (s *RunningState) LifecyclePhase() config.LifecyclePhase {
-	return config.PhaseRunningHealthy
+	helpers.RunningHealthyBase
 }
 
 func (s *RunningState) Next(snapAny any) fsmv2.NextResult[any, any] {

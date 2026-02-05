@@ -184,6 +184,7 @@ type Supervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] stru
 	tickInterval             time.Duration
 	tickCount                uint64
 	gracefulShutdownTimeout  time.Duration
+	metricsReportInterval    time.Duration
 	circuitOpen              atomic.Bool
 	started                  atomic.Bool
 	enableTraceLogging       bool
@@ -250,6 +251,11 @@ func NewSupervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState](c
 		gracefulShutdownTimeout = DefaultGracefulShutdownTimeout
 	}
 
+	metricsReportInterval := cfg.MetricsReportInterval
+	if metricsReportInterval == 0 {
+		metricsReportInterval = DefaultMetricsReportInterval
+	}
+
 	return &Supervisor[TObserved, TDesired]{
 		workerType:         cfg.WorkerType,
 		workers:            make(map[string]*WorkerContext[TObserved, TDesired]),
@@ -280,6 +286,7 @@ func NewSupervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState](c
 		userSpec:                cfg.UserSpec,
 		enableTraceLogging:      cfg.EnableTraceLogging,
 		gracefulShutdownTimeout: gracefulShutdownTimeout,
+		metricsReportInterval:   metricsReportInterval,
 		deps:                    cfg.Dependencies,
 		validatedSpecHashes:     make(map[string]string),
 	}

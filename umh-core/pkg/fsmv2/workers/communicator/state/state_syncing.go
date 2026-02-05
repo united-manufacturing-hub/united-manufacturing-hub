@@ -18,7 +18,6 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/action"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/backoff"
@@ -30,16 +29,13 @@ import (
 //
 // Transitions:
 //   - → TryingToAuthenticateState: on token expiry or auth loss
-//   - → DegradedState: when !IsSyncHealthy()
+//   - → RecoveringState: when !IsSyncHealthy()
 //   - → StoppedState: if shutdown requested
 //   - → self: continuous sync loop (C5)
 //
 // Enforces C2 (token expiry), C4 (shutdown priority), C5 (syncing loop).
 type SyncingState struct {
-}
-
-func (s *SyncingState) LifecyclePhase() config.LifecyclePhase {
-	return config.PhaseRunningHealthy
+	helpers.RunningHealthyBase
 }
 
 func (s *SyncingState) Next(snapAny any) fsmv2.NextResult[any, any] {
@@ -58,7 +54,7 @@ func (s *SyncingState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	}
 
 	if !snap.Observed.IsSyncHealthy() {
-		return fsmv2.Result[any, any](&DegradedState{}, fsmv2.SignalNone, nil, "Sync health check failed")
+		return fsmv2.Result[any, any](&RecoveringState{}, fsmv2.SignalNone, nil, "Sync health check failed")
 	}
 
 	syncAction := action.NewSyncAction(snap.Observed.JWTToken)

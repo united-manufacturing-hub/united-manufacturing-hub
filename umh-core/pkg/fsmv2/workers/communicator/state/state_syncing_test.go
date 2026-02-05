@@ -209,8 +209,8 @@ var _ = Describe("SyncingState Transitions", func() {
 		})
 	})
 
-	Describe("Syncing -> DegradedState", func() {
-		It("should transition to DegradedState when sync is not healthy", func() {
+	Describe("Syncing -> RecoveringState", func() {
+		It("should transition to RecoveringState when sync is not healthy", func() {
 			snap := fsmv2.Snapshot{
 				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
 				Observed: snapshot.CommunicatorObservedState{
@@ -224,12 +224,12 @@ var _ = Describe("SyncingState Transitions", func() {
 
 			result := stateObj.Next(snap)
 
-			Expect(result.State).To(BeAssignableToTypeOf(&state.DegradedState{}))
+			Expect(result.State).To(BeAssignableToTypeOf(&state.RecoveringState{}))
 			Expect(result.Signal).To(Equal(fsmv2.SignalNone))
 			Expect(result.Action).To(BeNil())
 		})
 
-		It("should transition to DegradedState at exactly 5 consecutive errors", func() {
+		It("should transition to RecoveringState at exactly 5 consecutive errors", func() {
 			snap := fsmv2.Snapshot{
 				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
 				Observed: snapshot.CommunicatorObservedState{
@@ -243,12 +243,12 @@ var _ = Describe("SyncingState Transitions", func() {
 
 			result := stateObj.Next(snap)
 
-			Expect(result.State).To(BeAssignableToTypeOf(&state.DegradedState{}))
+			Expect(result.State).To(BeAssignableToTypeOf(&state.RecoveringState{}))
 			Expect(result.Signal).To(Equal(fsmv2.SignalNone))
 			Expect(result.Action).To(BeNil())
 		})
 
-		It("should transition to DegradedState with high consecutive errors", func() {
+		It("should transition to RecoveringState with high consecutive errors", func() {
 			snap := fsmv2.Snapshot{
 				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
 				Observed: snapshot.CommunicatorObservedState{
@@ -262,7 +262,7 @@ var _ = Describe("SyncingState Transitions", func() {
 
 			result := stateObj.Next(snap)
 
-			Expect(result.State).To(BeAssignableToTypeOf(&state.DegradedState{}))
+			Expect(result.State).To(BeAssignableToTypeOf(&state.RecoveringState{}))
 			Expect(result.Signal).To(Equal(fsmv2.SignalNone))
 			Expect(result.Action).To(BeNil())
 		})
@@ -289,7 +289,7 @@ var _ = Describe("SyncingState Transitions", func() {
 			Expect(result.Action.Name()).To(Equal("sync"))
 		})
 
-		It("should transition to DegradedState on first consecutive error", func() {
+		It("should transition to RecoveringState on first consecutive error", func() {
 			snap := fsmv2.Snapshot{
 				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
 				Observed: snapshot.CommunicatorObservedState{
@@ -303,8 +303,8 @@ var _ = Describe("SyncingState Transitions", func() {
 
 			result := stateObj.Next(snap)
 
-			// First error immediately transitions to DegradedState
-			Expect(result.State).To(BeAssignableToTypeOf(&state.DegradedState{}))
+			// First error immediately transitions to RecoveringState
+			Expect(result.State).To(BeAssignableToTypeOf(&state.RecoveringState{}))
 			Expect(result.Signal).To(Equal(fsmv2.SignalNone))
 		})
 

@@ -14,7 +14,7 @@
 
 # --- Build Stage ---
 ARG GOLANG_VERSION=1.25.3
-ARG ALPINE_VERSION=3.22.2
+ARG ALPINE_VERSION=3.23.3
 ARG NMAP_VERSION=MUST_BE_SET_BY_MAKEFILE
 
 # --- Cache Stage ---
@@ -182,6 +182,15 @@ ENV S6_YES_I_WANT_A_WORLD_WRITABLE_RUN_BECAUSE_KUBERNETES=1 \
     S6_SYNC_DISKS=1 \
     PATH="/opt/redpanda/bin:$PATH"
 VOLUME ["/data"]
+
+# Fix /tmp permissions for non-root user (umhuser, UID 1000).
+# Docker's COPY --from does not preserve top-level directory permissions,
+# causing /tmp to have mode 0755 instead of standard 1777.
+# This is a known Docker BuildKit behavior documented in:
+# - https://github.com/moby/moby/issues/38710
+# - https://github.com/moby/buildkit/issues/3602
+# The chmod restores standard Linux /tmp permissions (sticky bit + world-writable).
+RUN chmod 1777 /tmp
 
 # Switch to non-root user - S6 overlay will run as umhuser (UID 1000)
 USER umhuser:umhuser

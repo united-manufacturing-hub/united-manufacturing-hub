@@ -16,7 +16,6 @@ package state
 
 import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/helloworld/action"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/helloworld/snapshot"
@@ -24,10 +23,8 @@ import (
 
 // TryingToStartState is a transitional state that emits the SayHelloAction.
 // Once hello is said, transitions to RunningState.
-type TryingToStartState struct{}
-
-func (s *TryingToStartState) LifecyclePhase() config.LifecyclePhase {
-	return config.PhaseStarting
+type TryingToStartState struct {
+	helpers.StartingBase
 }
 
 // Next implements state transition logic for TryingToStartState.

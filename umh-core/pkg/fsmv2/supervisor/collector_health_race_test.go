@@ -42,6 +42,13 @@ var _ = Describe("CollectorHealth Race Conditions", func() {
 			WorkerType: "test",
 			Store:      triangularStore,
 			Logger:     deps.NewNopFSMLogger(),
+			// Use very high MaxRestartAttempts to prevent panic during race testing.
+			// The test's non-atomic sequence (SetRestartCount → RestartCollector) allows
+			// multiple concurrent RestartCollector calls to increment restartCount before
+			// any goroutine resets it, easily exceeding the default limit (3-5).
+			CollectorHealth: supervisor.CollectorHealthConfig{
+				MaxRestartAttempts: 100000,
+			},
 		})
 
 		// Add a worker so tick operations can proceed
