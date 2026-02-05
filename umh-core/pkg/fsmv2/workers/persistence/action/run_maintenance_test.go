@@ -43,13 +43,19 @@ var _ = Describe("RunMaintenanceAction", func() {
 
 	Describe("Execute", func() {
 		Context("when maintenance succeeds", func() {
-			It("should call Maintenance, set timestamp, and return nil", func() {
+			It("should call Maintenance, set timestamp, record metrics, and return nil", func() {
 				a := action.NewRunMaintenanceAction()
 
 				err := a.Execute(ctx, d)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(mockStore.maintenanceCalled).To(BeTrue())
 				Expect(d.GetLastMaintenanceAt()).NotTo(BeZero())
+
+				drained := d.MetricsRecorder().Drain()
+				Expect(drained.Counters).To(HaveKeyWithValue(
+					string(deps.CounterMaintenanceCycles), int64(1)))
+				Expect(drained.Gauges).To(HaveKey(
+					string(deps.GaugeLastMaintenanceDurationMs)))
 			})
 		})
 

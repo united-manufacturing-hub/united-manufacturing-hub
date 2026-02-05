@@ -57,6 +57,10 @@ var _ = Describe("CompactDeltasAction", func() {
 				drained := d.MetricsRecorder().Drain()
 				Expect(drained.Counters).To(HaveKeyWithValue(
 					string(deps.CounterCompactionDeltasDeletedTotal), int64(42)))
+				Expect(drained.Counters).To(HaveKeyWithValue(
+					string(deps.CounterCompactionCycles), int64(1)))
+				Expect(drained.Gauges).To(HaveKey(
+					string(deps.GaugeLastCompactionDurationMs)))
 			})
 		})
 

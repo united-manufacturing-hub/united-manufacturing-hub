@@ -40,15 +40,22 @@ func (a *CompactDeltasAction) Execute(ctx context.Context, depsAny any) error {
 
 	d := depsAny.(snapshot.PersistenceDependencies)
 
+	start := time.Now()
+
 	deleted, err := d.GetStore().CompactDeltas(ctx, a.RetentionWindow)
 	if err != nil {
 		return fmt.Errorf("compaction failed: %w", err)
 	}
 
+	duration := time.Since(start)
+
 	d.SetLastCompactionAt(time.Now())
 	d.ActionLogger("compact_deltas").Infow("compaction completed",
-		"deleted_count", deleted, "retention_window", a.RetentionWindow)
+		"deleted_count", deleted, "retention_window", a.RetentionWindow,
+		"duration_ms", duration.Milliseconds())
 	d.MetricsRecorder().IncrementCounter(deps.CounterCompactionDeltasDeletedTotal, int64(deleted))
+	d.MetricsRecorder().IncrementCounter(deps.CounterCompactionCycles, 1)
+	d.MetricsRecorder().SetGauge(deps.GaugeLastCompactionDurationMs, float64(duration.Milliseconds()))
 
 	return nil
 }

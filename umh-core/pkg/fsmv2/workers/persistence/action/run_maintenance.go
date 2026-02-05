@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/persistence/snapshot"
 )
 
@@ -37,12 +38,19 @@ func (a *RunMaintenanceAction) Execute(ctx context.Context, depsAny any) error {
 
 	d := depsAny.(snapshot.PersistenceDependencies)
 
+	start := time.Now()
+
 	if err := d.GetStore().Maintenance(ctx); err != nil {
 		return fmt.Errorf("maintenance failed: %w", err)
 	}
 
+	duration := time.Since(start)
+
 	d.SetLastMaintenanceAt(time.Now())
-	d.ActionLogger("run_maintenance").Infow("maintenance completed")
+	d.ActionLogger("run_maintenance").Infow("maintenance completed",
+		"duration_ms", duration.Milliseconds())
+	d.MetricsRecorder().IncrementCounter(deps.CounterMaintenanceCycles, 1)
+	d.MetricsRecorder().SetGauge(deps.GaugeLastMaintenanceDurationMs, float64(duration.Milliseconds()))
 
 	return nil
 }
