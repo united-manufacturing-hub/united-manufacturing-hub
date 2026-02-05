@@ -33,8 +33,8 @@ const (
 
 // zapLogger implements FSMLogger by wrapping zap.SugaredLogger.
 type zapLogger struct {
-	sugar      *zap.SugaredLogger
 	baseFields []Field
+	sugar      *zap.SugaredLogger
 }
 
 // NewFSMLogger creates a new FSMLogger wrapping a zap.SugaredLogger.
@@ -57,9 +57,11 @@ func (l *zapLogger) Info(msg string, fields ...Field) {
 func (l *zapLogger) SentryWarn(feature Feature, hierarchyPath string, msg string, fields ...Field) {
 	allFields := make([]Field, 0, 2+len(fields))
 	allFields = append(allFields, Field{Key: "feature", Value: string(feature)})
+
 	if hierarchyPath != "" {
 		allFields = append(allFields, Field{Key: "hierarchy_path", Value: hierarchyPath})
 	}
+
 	allFields = append(allFields, fields...)
 	l.sugar.Warnw(msg, fieldsToArgs(l.baseFields, allFields)...)
 }
@@ -67,9 +69,11 @@ func (l *zapLogger) SentryWarn(feature Feature, hierarchyPath string, msg string
 func (l *zapLogger) SentryError(feature Feature, hierarchyPath string, err error, msg string, fields ...Field) {
 	allFields := make([]Field, 0, 3+len(fields))
 	allFields = append(allFields, Field{Key: "feature", Value: string(feature)})
+
 	if hierarchyPath != "" {
 		allFields = append(allFields, Field{Key: "hierarchy_path", Value: hierarchyPath})
 	}
+
 	allFields = append(allFields, Field{Key: "error", Value: err})
 	allFields = append(allFields, fields...)
 	l.sugar.Errorw(msg, fieldsToArgs(l.baseFields, allFields)...)

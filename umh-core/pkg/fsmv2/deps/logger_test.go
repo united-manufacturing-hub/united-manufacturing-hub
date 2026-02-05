@@ -31,10 +31,12 @@ func parseLine(buf *bytes.Buffer) map[string]interface{} {
 	if line == "" {
 		return nil
 	}
+
 	lines := strings.Split(line, "\n")
 	last := strings.TrimSpace(lines[len(lines)-1])
 	m := make(map[string]interface{})
 	ExpectWithOffset(1, json.Unmarshal([]byte(last), &m)).To(Succeed())
+
 	return m
 }
 
@@ -162,7 +164,7 @@ var _ = Describe("nopLogger contract", func() {
 
 		Expect(child).NotTo(BeNil())
 
-		var iface deps.FSMLogger = child
+		var iface deps.FSMLogger = child //nolint:staticcheck // explicit interface check
 		Expect(iface).NotTo(BeNil())
 
 		Expect(func() {

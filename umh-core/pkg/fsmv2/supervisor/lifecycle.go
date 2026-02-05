@@ -52,8 +52,6 @@ func (s *Supervisor[TObserved, TDesired]) Start(ctx context.Context) <-chan stru
 	s.mu.RLock()
 
 	for _, workerCtx := range s.workers {
-		// NOTE: Start() currently always returns nil (panics on double-start instead).
-		// Error handling preserved for future extensibility (e.g., context validation, resource allocation).
 		if err := workerCtx.collector.Start(supervisorCtx); err != nil {
 			s.logger.SentryError(deps.FeatureFSMv2, workerCtx.identity.HierarchyPath, err, "collector_start_failed")
 		}
@@ -567,8 +565,6 @@ func (s *Supervisor[TObserved, TDesired]) handleWorkerRestart(ctx context.Contex
 		s.mu.RUnlock()
 
 		if collector != nil {
-			// NOTE: Start() currently always returns nil (panics on double-start instead).
-			// Error handling preserved for future extensibility (e.g., context validation, resource allocation).
 			if err := collector.Start(supervisorCtx); err != nil {
 				s.logger.SentryError(deps.FeatureFSMv2, identity.HierarchyPath, err, "restart_collector_start_failed")
 			}

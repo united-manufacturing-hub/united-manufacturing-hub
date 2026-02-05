@@ -152,9 +152,6 @@ func (ae *ActionExecutor) executeWorkWithRecovery(ctx context.Context, work acti
 			err = errors.New("action panicked")
 			status = "panic"
 
-			// Extract stack manually because Sentry SDK's ExtractStacktrace() only works on
-			// error types with stacktrace interfaces. Panic recovery values are plain
-			// interface{}, so capture debug.Stack() explicitly for Sentry visibility.
 			ae.logger.SentryError(deps.FeatureFSMv2, ae.identity.HierarchyPath, err, "action_panic",
 				deps.CorrelationID(work.actionID),
 				deps.ActionName(work.action.Name()),
@@ -236,6 +233,7 @@ func (ae *ActionExecutor) EnqueueAction(actionID string, action fsmv2.Action[any
 
 	// Check if executor is stopped to prevent sending on closed channel
 	if ae.stopped {
+		inProgressCount := len(ae.inProgress)
 		ae.mu.Unlock()
 
 		ae.logger.SentryWarn(deps.FeatureFSMv2, ae.identity.HierarchyPath, "action_enqueue_rejected",
@@ -243,7 +241,7 @@ func (ae *ActionExecutor) EnqueueAction(actionID string, action fsmv2.Action[any
 			deps.ActionName(action.Name()),
 			deps.Reason("executor_stopped"),
 			deps.Capacity(cap(ae.actionQueue)),
-			deps.Int("in_progress_count", len(ae.inProgress)))
+			deps.Int("in_progress_count", inProgressCount))
 
 		return errors.New("executor stopped")
 	}
@@ -283,6 +281,7 @@ func (ae *ActionExecutor) EnqueueAction(actionID string, action fsmv2.Action[any
 	default:
 		ae.mu.Lock()
 		delete(ae.inProgress, actionID)
+		inProgressCount := len(ae.inProgress)
 		ae.mu.Unlock()
 
 		queueErr := errors.New("action queue full")
@@ -291,7 +290,7 @@ func (ae *ActionExecutor) EnqueueAction(actionID string, action fsmv2.Action[any
 			deps.ActionName(action.Name()),
 			deps.Capacity(cap(ae.actionQueue)),
 			deps.Length(len(ae.actionQueue)),
-			deps.Int("in_progress_count", len(ae.inProgress)),
+			deps.Int("in_progress_count", inProgressCount),
 			deps.Int("worker_count", ae.workerCount))
 
 		return queueErr

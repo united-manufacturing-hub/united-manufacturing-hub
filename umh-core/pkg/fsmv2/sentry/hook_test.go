@@ -1043,19 +1043,7 @@ var _ = Describe("FSMLogger to Sentry Event Mapping", func() {
 		event := store.GetLast()
 		Expect(event.Tags["feature"]).To(Equal("fsmv2"))
 
-		workerIDFound := false
-		if val, ok := event.Extra["worker_id"]; ok {
-			if strVal, ok := val.(string); ok && strVal == "test-worker" {
-				workerIDFound = true
-			}
-		}
-		for _, fp := range event.Fingerprint {
-			_ = fp
-		}
-		// Worker ID may be in Extra or in the event fields depending on hook extraction
-		// The key assertion is that the event was captured with the correct feature
 		Expect(event.Tags["feature"]).To(Equal("fsmv2"))
-		_ = workerIDFound
 	})
 })
 

@@ -373,6 +373,7 @@ func hasErrorMethodCall(node ast.Node) bool {
 
 		if selExpr.Sel.Name == "Error" && len(callExpr.Args) == 0 {
 			found = true
+
 			return false
 		}
 
