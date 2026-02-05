@@ -220,9 +220,7 @@ func generateDeltas(ctx context.Context, s *supervisor.Supervisor[*supervisor.Te
 
 func countDeltas(ctx context.Context, store persistence.Store) int {
 	docs, err := store.Find(ctx, storage.DeltaCollectionName, persistence.Query{})
-	if err != nil {
-		return 0
-	}
+	Expect(err).ToNot(HaveOccurred(), "countDeltas failed to query delta collection")
 
 	return len(docs)
 }
