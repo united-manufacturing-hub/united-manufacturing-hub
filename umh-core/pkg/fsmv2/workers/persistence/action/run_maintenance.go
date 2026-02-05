@@ -44,12 +44,13 @@ func (a *RunMaintenanceAction) Execute(ctx context.Context, depsAny any) error {
 		return fmt.Errorf("maintenance failed: %w", err)
 	}
 
-	duration := time.Since(start)
+	now := time.Now()
+	duration := now.Sub(start)
 
-	d.SetLastMaintenanceAt(time.Now())
+	d.SetLastMaintenanceAt(now)
 	d.ActionLogger("run_maintenance").Infow("maintenance completed",
 		"duration_ms", duration.Milliseconds())
-	d.MetricsRecorder().IncrementCounter(deps.CounterMaintenanceCycles, 1)
+	d.MetricsRecorder().IncrementCounter(deps.CounterMaintenanceCyclesTotal, 1)
 	d.MetricsRecorder().SetGauge(deps.GaugeLastMaintenanceDurationMs, float64(duration.Milliseconds()))
 
 	return nil

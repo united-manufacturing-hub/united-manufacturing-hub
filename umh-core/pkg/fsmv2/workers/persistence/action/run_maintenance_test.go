@@ -53,7 +53,7 @@ var _ = Describe("RunMaintenanceAction", func() {
 
 				drained := d.MetricsRecorder().Drain()
 				Expect(drained.Counters).To(HaveKeyWithValue(
-					string(deps.CounterMaintenanceCycles), int64(1)))
+					string(deps.CounterMaintenanceCyclesTotal), int64(1)))
 				Expect(drained.Gauges).To(HaveKey(
 					string(deps.GaugeLastMaintenanceDurationMs)))
 			})

@@ -151,11 +151,11 @@ const (
 	// CounterCompactionDeltasDeletedTotal tracks the total number of delta entries removed during store compaction.
 	CounterCompactionDeltasDeletedTotal CounterName = "compaction_deltas_deleted_total"
 
-	// CounterCompactionCycles tracks total CompactDeltas() executions.
-	CounterCompactionCycles CounterName = "compaction_cycles_total"
+	// CounterCompactionCyclesTotal tracks total successful CompactDeltas() executions.
+	CounterCompactionCyclesTotal CounterName = "compaction_cycles_total"
 
-	// CounterMaintenanceCycles tracks total Maintenance() executions.
-	CounterMaintenanceCycles CounterName = "maintenance_cycles_total"
+	// CounterMaintenanceCyclesTotal tracks total successful Maintenance() executions.
+	CounterMaintenanceCyclesTotal CounterName = "maintenance_cycles_total"
 )
 
 // Persistence worker gauge names for store maintenance.
