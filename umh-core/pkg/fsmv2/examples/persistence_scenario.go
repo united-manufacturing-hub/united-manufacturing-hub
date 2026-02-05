@@ -37,6 +37,9 @@ type PersistenceRunResult struct {
 	Done              <-chan struct{}
 	Shutdown          func()
 	Error             error
+	LastCompactionAt  time.Time
+	LastMaintenanceAt time.Time
+	Healthy           bool
 	CompactionCycles  int64
 	MaintenanceCycles int64
 }
@@ -141,6 +144,9 @@ children:
 			workerMetrics := observed.GetWorkerMetrics()
 			result.CompactionCycles = workerMetrics.Counters[string(deps.CounterCompactionCyclesTotal)]
 			result.MaintenanceCycles = workerMetrics.Counters[string(deps.CounterMaintenanceCyclesTotal)]
+			result.LastCompactionAt = observed.LastCompactionAt
+			result.LastMaintenanceAt = observed.LastMaintenanceAt
+			result.Healthy = observed.IsHealthy()
 		}
 
 		close(done)

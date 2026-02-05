@@ -37,29 +37,113 @@ var _ = Describe("Persistence Scenario", func() {
 		cancel()
 	})
 
-	Describe("Using FSMv2 worker via ApplicationSupervisor", func() {
-		It("transitions to Running and executes compaction and maintenance", func() {
+	Describe("Worker lifecycle", func() {
+		It("fires compaction immediately on first tick because LastCompactionAt starts at zero time", func() {
+			result := examples.RunPersistenceScenario(ctx, examples.PersistenceRunConfig{
+				Duration: 2 * time.Second,
+			})
+			Expect(result.Error).NotTo(HaveOccurred())
+			<-result.Done
+			Expect(result.CompactionCycles).To(BeNumerically(">=", 1),
+				"compaction should fire on first tick because LastCompactionAt starts at Go zero time (year 0001)")
+		})
+
+		It("executes maintenance after compaction completes", func() {
 			result := examples.RunPersistenceScenario(ctx, examples.PersistenceRunConfig{
 				Duration: 3 * time.Second,
+			})
+			Expect(result.Error).NotTo(HaveOccurred())
+			<-result.Done
+			Expect(result.MaintenanceCycles).To(BeNumerically(">=", 1),
+				"maintenance should run after compaction; both start at zero time so both fire early")
+		})
+
+		It("reports healthy status when all actions succeed", func() {
+			result := examples.RunPersistenceScenario(ctx, examples.PersistenceRunConfig{
+				Duration: 2 * time.Second,
+			})
+			Expect(result.Error).NotTo(HaveOccurred())
+			<-result.Done
+			Expect(result.Healthy).To(BeTrue(),
+				"worker should be healthy when compaction and maintenance complete without errors")
+		})
+	})
+
+	Describe("Observable metrics and timestamps", func() {
+		It("updates LastCompactionAt to a time after scenario start", func() {
+			startTime := time.Now()
+			result := examples.RunPersistenceScenario(ctx, examples.PersistenceRunConfig{
+				Duration: 2 * time.Second,
+			})
+			Expect(result.Error).NotTo(HaveOccurred())
+			<-result.Done
+			Expect(result.LastCompactionAt).NotTo(BeZero())
+			Expect(result.LastCompactionAt.After(startTime)).To(BeTrue(),
+				"LastCompactionAt should be updated to execution time, not stay at zero")
+		})
+
+		It("updates LastMaintenanceAt to a time after scenario start", func() {
+			startTime := time.Now()
+			result := examples.RunPersistenceScenario(ctx, examples.PersistenceRunConfig{
+				Duration: 2 * time.Second,
+			})
+			Expect(result.Error).NotTo(HaveOccurred())
+			<-result.Done
+			Expect(result.LastMaintenanceAt).NotTo(BeZero())
+			Expect(result.LastMaintenanceAt.After(startTime)).To(BeTrue(),
+				"LastMaintenanceAt should be updated to execution time, not stay at zero")
+		})
+
+		It("returns all expected result fields after completion", func() {
+			result := examples.RunPersistenceScenario(ctx, examples.PersistenceRunConfig{
+				Duration: 2 * time.Second,
 			})
 			Expect(result.Error).NotTo(HaveOccurred())
 			Expect(result.Done).NotTo(BeNil())
 			Expect(result.Shutdown).NotTo(BeNil())
 			<-result.Done
-			Expect(result.CompactionCycles).To(BeNumerically(">=", 1))
-			Expect(result.MaintenanceCycles).To(BeNumerically(">=", 1))
+			Expect(result.CompactionCycles).To(BeNumerically(">=", 0))
+			Expect(result.MaintenanceCycles).To(BeNumerically(">=", 0))
+			Expect(result.Healthy).To(BeTrue())
+			Expect(result.LastCompactionAt).NotTo(BeZero())
+			Expect(result.LastMaintenanceAt).NotTo(BeZero())
+		})
+	})
+
+	Describe("Shutdown and lifecycle", func() {
+		It("closes Done channel after supervisor fully stops", func() {
+			result := examples.RunPersistenceScenario(ctx, examples.PersistenceRunConfig{
+				Duration: 500 * time.Millisecond,
+			})
+			Expect(result.Error).NotTo(HaveOccurred())
+			Eventually(result.Done, 25*time.Second).Should(BeClosed(),
+				"Done channel should close after supervisor completes graceful shutdown")
 		})
 
-		It("handles custom logger", func() {
+		It("Shutdown function triggers clean termination before duration expires", func() {
+			result := examples.RunPersistenceScenario(ctx, examples.PersistenceRunConfig{
+				Duration: 30 * time.Second,
+			})
+			Expect(result.Error).NotTo(HaveOccurred())
+			time.Sleep(500 * time.Millisecond)
+			result.Shutdown()
+			Eventually(result.Done, 25*time.Second).Should(BeClosed(),
+				"calling Shutdown should terminate scenario before full duration elapses")
+		})
+	})
+
+	Describe("Configuration", func() {
+		It("uses custom logger without affecting behavior", func() {
 			result := examples.RunPersistenceScenario(ctx, examples.PersistenceRunConfig{
 				Duration: 1 * time.Second,
 				Logger:   zap.NewNop().Sugar(),
 			})
 			Expect(result.Error).NotTo(HaveOccurred())
 			<-result.Done
+			Expect(result.CompactionCycles).To(BeNumerically(">=", 1))
 		})
 
-		It("handles custom tick interval", func() {
+		It("uses custom tick interval", func() {
 			result := examples.RunPersistenceScenario(ctx, examples.PersistenceRunConfig{
 				Duration:     1 * time.Second,
 				TickInterval: 50 * time.Millisecond,
@@ -99,7 +183,7 @@ var _ = Describe("Persistence Scenario", func() {
 			<-result.Done
 		})
 
-		It("handles zero duration (runs until context cancelled)", func() {
+		It("handles zero duration and runs until context cancelled", func() {
 			shortCtx, cancelFn := context.WithTimeout(ctx, 500*time.Millisecond)
 			defer cancelFn()
 
