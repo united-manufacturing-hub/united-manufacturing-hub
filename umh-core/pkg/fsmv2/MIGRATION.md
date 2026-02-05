@@ -253,7 +253,7 @@ func (m *MyFSM) Run() {
 
 type MyWorker struct {
     *helpers.BaseWorker[*MyDependencies]
-    logger *zap.SugaredLogger
+    logger deps.FSMLogger
 }
 
 func (w *MyWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedState, error) {

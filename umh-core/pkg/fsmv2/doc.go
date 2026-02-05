@@ -199,8 +199,8 @@
 //
 //	func init() {
 //	    if err := factory.RegisterWorkerType[snapshot.MyObserved, *snapshot.MyDesired](
-//	        func(id fsmv2.Identity, logger *zap.SugaredLogger, stateReader fsmv2.StateReader) fsmv2.Worker {
-//	            return NewMyWorker(id, logger, stateReader)
+//	        func(id fsmv2.Identity, logger deps.FSMLogger) fsmv2.Worker {
+//	            return NewMyWorker(id, logger)
 //	        },
 //	        func(cfg interface{}) interface{} {
 //	            return supervisor.NewSupervisor[snapshot.MyObserved, *snapshot.MyDesired](
