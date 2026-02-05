@@ -21,28 +21,27 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"go.uber.org/zap"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
 	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/action"
 	transportpkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/action"
 )
 
 var _ = Describe("AuthenticateAction", func() {
 	var (
 		act          *action.AuthenticateAction
 		dependencies *transportpkg.TransportDependencies
-		logger       *zap.SugaredLogger
+		fsmLogger    deps.FSMLogger
 		mockTransp   *mockTransport
 	)
 
 	BeforeEach(func() {
-		logger = zap.NewNop().Sugar()
+		fsmLogger = deps.NewNopFSMLogger()
 		mockTransp = &mockTransport{}
 		identity := deps.Identity{ID: "test-id", WorkerType: "transport"}
-		dependencies = transportpkg.NewTransportDependencies(mockTransp, logger, nil, identity)
+		dependencies = transportpkg.NewTransportDependencies(mockTransp, fsmLogger, nil, identity)
 		// Dependencies now passed to Execute(), not constructor
 		act = action.NewAuthenticateAction(
 			"https://relay.example.com",
@@ -102,7 +101,7 @@ var _ = Describe("AuthenticateAction", func() {
 	Describe("Transport Nil Safety", func() {
 		It("should create transport if nil in dependencies on first execution", func() {
 			identity := deps.Identity{ID: "test-nil-transport", WorkerType: "transport"}
-			depsWithNilTransport := transportpkg.NewTransportDependencies(nil, logger, nil, identity)
+			depsWithNilTransport := transportpkg.NewTransportDependencies(nil, fsmLogger, nil, identity)
 			Expect(depsWithNilTransport.GetTransport()).To(BeNil(), "transport should be nil before first auth")
 
 			authAction := action.NewAuthenticateAction(

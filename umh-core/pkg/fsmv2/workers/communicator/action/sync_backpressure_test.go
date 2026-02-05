@@ -29,13 +29,13 @@ import (
 
 var _ = Describe("SyncAction Backpressure", func() {
 	var (
-		act              *action.SyncAction
-		dependencies     *communicator.CommunicatorDependencies
-		logger           *zap.SugaredLogger
-		mockTransport    *mockBackpressureTransport
-		channelProvider  *mockBackpressureChannelProvider
-		inboundChan      chan *transport.UMHMessage
-		outboundChan     chan *transport.UMHMessage
+		act             *action.SyncAction
+		dependencies    *communicator.CommunicatorDependencies
+		logger          *zap.SugaredLogger
+		mockTransport   *mockBackpressureTransport
+		channelProvider *mockBackpressureChannelProvider
+		inboundChan     chan *transport.UMHMessage
+		outboundChan    chan *transport.UMHMessage
 	)
 
 	BeforeEach(func() {

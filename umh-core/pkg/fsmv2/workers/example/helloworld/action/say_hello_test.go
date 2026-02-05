@@ -19,7 +19,6 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"go.uber.org/zap"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	hello_world "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/helloworld"
@@ -30,11 +29,11 @@ var _ = Describe("SayHelloAction", func() {
 	var (
 		act          *action.SayHelloAction
 		dependencies *hello_world.HelloworldDependencies
-		logger       *zap.SugaredLogger
+		logger       deps.FSMLogger
 	)
 
 	BeforeEach(func() {
-		logger = zap.NewNop().Sugar()
+		logger = deps.NewNopFSMLogger()
 		identity := deps.Identity{ID: "test-id", WorkerType: "helloworld"}
 		dependencies = hello_world.NewHelloworldDependencies(logger, nil, identity)
 		act = &action.SayHelloAction{}

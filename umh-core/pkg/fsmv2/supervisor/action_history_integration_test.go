@@ -22,7 +22,6 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"go.uber.org/zap"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
@@ -36,12 +35,12 @@ var _ = Describe("ActionHistory Integration", func() {
 			executor *execution.ActionExecutor
 			ctx      context.Context
 			cancel   context.CancelFunc
-			logger   *zap.SugaredLogger
+			logger   deps.FSMLogger
 		)
 
 		BeforeEach(func() {
 			ctx, cancel = context.WithCancel(context.Background())
-			logger = zap.NewNop().Sugar()
+			logger = deps.NewNopFSMLogger()
 		})
 
 		AfterEach(func() {
@@ -291,7 +290,7 @@ var _ = Describe("ActionHistory Integration", func() {
 			sup = supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 				WorkerType: "test",
 				Store:      supervisor.CreateTestTriangularStore(),
-				Logger:     zap.NewNop().Sugar(),
+				Logger:     deps.NewNopFSMLogger(),
 				CollectorHealth: supervisor.CollectorHealthConfig{
 					ObservationTimeout: 5 * time.Second,
 					StaleThreshold:     10 * time.Second,
@@ -325,7 +324,7 @@ var _ = Describe("ActionHistory Integration", func() {
 			sup = supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 				WorkerType: "test",
 				Store:      supervisor.CreateTestTriangularStore(),
-				Logger:     zap.NewNop().Sugar(),
+				Logger:     deps.NewNopFSMLogger(),
 				CollectorHealth: supervisor.CollectorHealthConfig{
 					ObservationTimeout: 5 * time.Second,
 					StaleThreshold:     10 * time.Second,
@@ -374,7 +373,7 @@ var _ = Describe("ActionHistory Integration", func() {
 			defer cancel()
 
 			identity := deps.Identity{ID: "e2e-test-worker", WorkerType: "test"}
-			executor := execution.NewActionExecutor(10, "test-supervisor", identity, zap.NewNop().Sugar())
+			executor := execution.NewActionExecutor(10, "test-supervisor", identity, deps.NewNopFSMLogger())
 
 			// Wire the callback to the recorder BEFORE starting (this is what AddWorker does)
 			// SetOnActionComplete must be called before Start() to avoid races

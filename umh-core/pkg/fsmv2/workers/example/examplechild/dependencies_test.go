@@ -19,7 +19,6 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"go.uber.org/zap"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	example_child "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplechild"
@@ -87,13 +86,13 @@ func (m *MockConnectionPool) HealthCheck(conn example_child.Connection) error {
 
 var _ = Describe("ExamplechildDependencies", func() {
 	var (
-		logger   *zap.SugaredLogger
+		logger   deps.FSMLogger
 		mockPool *MockConnectionPool
 		identity deps.Identity
 	)
 
 	BeforeEach(func() {
-		logger = zap.NewNop().Sugar()
+		logger = deps.NewNopFSMLogger()
 		mockPool = NewMockConnectionPool()
 		identity = deps.Identity{ID: "test-id", WorkerType: "child"}
 	})

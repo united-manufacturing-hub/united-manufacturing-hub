@@ -27,6 +27,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application/snapshot"
@@ -320,13 +321,13 @@ func NewTestApplicationSupervisor(yamlConfig string, logger *zap.SugaredLogger) 
 	_ = basicStore.CreateCollection(ctx, applicationWorkerType+"_desired", nil)
 	_ = basicStore.CreateCollection(ctx, applicationWorkerType+"_observed", nil)
 
-	triangularStore := storage.NewTriangularStore(basicStore, logger)
+	triangularStore := storage.NewTriangularStore(basicStore, deps.NewFSMLogger(logger))
 
 	sup, err := application.NewApplicationSupervisor(application.SupervisorConfig{
 		ID:           "test-app-001",
 		Name:         "Test Application Supervisor",
 		Store:        triangularStore,
-		Logger:       logger,
+		Logger:       deps.NewFSMLogger(logger),
 		TickInterval: 100 * time.Millisecond,
 		YAMLConfig:   yamlConfig,
 	})

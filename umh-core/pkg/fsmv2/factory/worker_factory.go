@@ -21,15 +21,13 @@ import (
 	"fmt"
 	"sync"
 
-	"go.uber.org/zap"
-
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 )
 
 var (
-	registry   = make(map[string]func(deps.Identity, *zap.SugaredLogger, deps.StateReader, map[string]any) fsmv2.Worker)
+	registry   = make(map[string]func(deps.Identity, deps.FSMLogger, deps.StateReader, map[string]any) fsmv2.Worker)
 	registryMu sync.RWMutex
 
 	// Uses interface{} to avoid circular imports between factory and supervisor packages.
@@ -39,7 +37,7 @@ var (
 
 // RegisterFactoryByType adds a worker type to the global registry using a runtime string type.
 // For worker package initialization, use RegisterFactory[TObserved, TDesired]() instead.
-func RegisterFactoryByType(workerType string, factoryFunc func(deps.Identity, *zap.SugaredLogger, deps.StateReader, map[string]any) fsmv2.Worker) error {
+func RegisterFactoryByType(workerType string, factoryFunc func(deps.Identity, deps.FSMLogger, deps.StateReader, map[string]any) fsmv2.Worker) error {
 	if workerType == "" {
 		return errors.New("worker type cannot be empty")
 	}
@@ -63,7 +61,7 @@ func RegisterFactoryByType(workerType string, factoryFunc func(deps.Identity, *z
 // RegisterFactory adds a worker type to the global registry using compile-time type parameters.
 // The workerType is derived from the TObserved type parameter.
 func RegisterFactory[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState](
-	factoryFunc func(deps.Identity, *zap.SugaredLogger, deps.StateReader, map[string]any) fsmv2.Worker,
+	factoryFunc func(deps.Identity, deps.FSMLogger, deps.StateReader, map[string]any) fsmv2.Worker,
 ) error {
 	workerType, err := storage.DeriveWorkerType[TObserved]()
 	if err != nil {
@@ -123,7 +121,7 @@ func RegisterSupervisorFactoryByType(workerType string, factoryFunc func(interfa
 
 // NewWorkerByType creates a worker instance by runtime string type name.
 // For compile-time type-safe creation, use GetFactory[TObserved, TDesired]() instead.
-func NewWorkerByType(workerType string, identity deps.Identity, logger *zap.SugaredLogger, stateReader deps.StateReader, deps map[string]any) (fsmv2.Worker, error) {
+func NewWorkerByType(workerType string, identity deps.Identity, logger deps.FSMLogger, stateReader deps.StateReader, deps map[string]any) (fsmv2.Worker, error) {
 	if workerType == "" {
 		return nil, errors.New("worker type cannot be empty")
 	}
@@ -165,7 +163,7 @@ func NewSupervisorByType(workerType string, config interface{}) (interface{}, er
 func ResetRegistry() {
 	registryMu.Lock()
 
-	registry = make(map[string]func(deps.Identity, *zap.SugaredLogger, deps.StateReader, map[string]any) fsmv2.Worker)
+	registry = make(map[string]func(deps.Identity, deps.FSMLogger, deps.StateReader, map[string]any) fsmv2.Worker)
 
 	registryMu.Unlock()
 
@@ -190,7 +188,7 @@ func ListRegisteredTypes() []string {
 }
 
 // GetFactory retrieves a worker factory by compile-time type parameters.
-func GetFactory[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState]() (func(deps.Identity, *zap.SugaredLogger, deps.StateReader, map[string]any) fsmv2.Worker, bool, error) {
+func GetFactory[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState]() (func(deps.Identity, deps.FSMLogger, deps.StateReader, map[string]any) fsmv2.Worker, bool, error) {
 	workerType, err := storage.DeriveWorkerType[TObserved]()
 	if err != nil {
 		return nil, false, fmt.Errorf("failed to derive worker type: %w", err)
@@ -208,7 +206,7 @@ func GetFactory[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState]() (f
 // Not atomic: rolls back worker registration if supervisor registration fails.
 func RegisterWorkerAndSupervisorFactoryByType(
 	workerType string,
-	workerFactory func(deps.Identity, *zap.SugaredLogger, deps.StateReader, map[string]any) fsmv2.Worker,
+	workerFactory func(deps.Identity, deps.FSMLogger, deps.StateReader, map[string]any) fsmv2.Worker,
 	supervisorFactory func(interface{}) interface{},
 ) error {
 	if workerType == "" {
@@ -233,7 +231,7 @@ func RegisterWorkerAndSupervisorFactoryByType(
 // RegisterWorkerType registers both worker and supervisor factories using compile-time type parameters.
 // Preferred API: provides type safety and automatic worker type derivation.
 func RegisterWorkerType[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState](
-	workerFactory func(deps.Identity, *zap.SugaredLogger, deps.StateReader, map[string]any) fsmv2.Worker,
+	workerFactory func(deps.Identity, deps.FSMLogger, deps.StateReader, map[string]any) fsmv2.Worker,
 	supervisorFactory func(interface{}) interface{},
 ) error {
 	workerType, err := storage.DeriveWorkerType[TObserved]()

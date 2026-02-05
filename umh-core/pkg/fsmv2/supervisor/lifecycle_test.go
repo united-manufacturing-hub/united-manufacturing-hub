@@ -22,9 +22,9 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
-	"go.uber.org/zap"
 )
 
 var _ = Describe("Supervisor Lifecycle", func() {
@@ -36,7 +36,7 @@ var _ = Describe("Supervisor Lifecycle", func() {
 				s := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 					WorkerType:              "container",
 					Store:                   store,
-					Logger:                  zap.NewNop().Sugar(),
+					Logger:                  deps.NewNopFSMLogger(),
 					TickInterval:            50 * time.Millisecond,
 					GracefulShutdownTimeout: 100 * time.Millisecond, // Short timeout for tests
 				})

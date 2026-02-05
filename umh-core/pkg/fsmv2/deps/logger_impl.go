@@ -43,6 +43,12 @@ func (l *zapLogger) Info(msg string, fields ...Field) {
 	l.sugar.Infow(msg, fieldsToArgs(l.baseFields, fields)...)
 }
 
+// Warn logs at WARN level with structured fields.
+// Use this for operational warnings that should NOT be sent to Sentry.
+func (l *zapLogger) Warn(msg string, fields ...Field) {
+	l.sugar.Warnw(msg, fieldsToArgs(l.baseFields, fields)...)
+}
+
 // SentryWarn logs at WARN level with required Feature for Sentry routing.
 func (l *zapLogger) SentryWarn(feature Feature, msg string, fields ...Field) {
 	// Prepend feature to fields for Sentry hook extraction

@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 )
 
@@ -116,8 +117,8 @@ func (ts *TriangularStore) saveWithDelta(
 				}
 			}
 
-			ts.logger.Debugw(opts.Role+"_created",
-				"worker", hierarchyPath)
+			ts.logger.Debug(opts.Role+"_created",
+				deps.String("worker", hierarchyPath))
 		} else {
 			var hasChanges bool
 
@@ -152,9 +153,9 @@ func (ts *TriangularStore) saveWithDelta(
 				}
 			}
 
-			ts.logger.Debugw(opts.Role+"_changed",
-				"worker", hierarchyPath,
-				"changes", changes)
+			ts.logger.Debug(opts.Role+"_changed",
+				deps.String("worker", hierarchyPath),
+				deps.Any("changes", changes))
 		}
 	}
 
@@ -200,10 +201,10 @@ func (ts *TriangularStore) saveWithDelta(
 			}
 
 			// Snapshot saved successfully, delta append is best-effort
-			ts.logger.Warnw("delta_append_failed",
-				"worker", hierarchyPath,
-				"role", opts.Role,
-				"error", appendErr)
+			ts.logger.SentryWarn(deps.FeatureCSE, "delta_append_failed",
+				deps.String("worker", hierarchyPath),
+				deps.String("role", opts.Role),
+				deps.Err(appendErr))
 		}
 	}
 

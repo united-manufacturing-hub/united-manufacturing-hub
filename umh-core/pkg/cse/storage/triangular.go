@@ -25,8 +25,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"go.uber.org/zap"
-
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 )
 
@@ -94,7 +93,7 @@ import (
 type TriangularStore struct {
 	store      persistence.Store
 	syncID     *atomic.Int64
-	logger     *zap.SugaredLogger
+	logger     deps.FSMLogger
 	deltaStore *DeltaStore
 
 	// Memory cache for hot path performance (LoadSnapshot is called 100-1000+ times/sec)
@@ -123,11 +122,11 @@ type cachedSnapshot struct {
 //
 // Parameters:
 //   - store: Backend storage implementation (SQLite, Postgres, etc.)
-//   - logger: Logger for observation change logging (use zap.NewNop().Sugar() for tests)
+//   - logger: Logger for observation change logging (use deps.NewNopFSMLogger() for tests)
 //
 // Returns:
 //   - *TriangularStore: Ready-to-use triangular store instance
-func NewTriangularStore(store persistence.Store, logger *zap.SugaredLogger) *TriangularStore {
+func NewTriangularStore(store persistence.Store, logger deps.FSMLogger) *TriangularStore {
 	return &TriangularStore{
 		store:            store,
 		syncID:           &atomic.Int64{},
@@ -1208,9 +1207,9 @@ func (ts *TriangularStore) GetDeltas(ctx context.Context, sub Subscription) (Del
 	if ts.deltaStore != nil {
 		entries, err := ts.deltaStore.GetAllSince(ctx, sub.LastSyncID, deltaLimit)
 		if err != nil {
-			ts.logger.Warnw("delta_query_fallback_to_bootstrap",
-				"error", err,
-				"lastSyncID", sub.LastSyncID)
+			ts.logger.SentryWarn(deps.FeatureCSE, "delta_query_fallback_to_bootstrap",
+			deps.Err(err),
+			deps.Int64("lastSyncID", sub.LastSyncID))
 		} else if len(entries) > 0 {
 			deltas := make([]Delta, 0, len(entries))
 			for _, entry := range entries {

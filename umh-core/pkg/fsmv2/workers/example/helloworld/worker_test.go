@@ -41,7 +41,7 @@ var _ = Describe("HelloworldWorker", func() {
 	Describe("NewHelloworldWorker", func() {
 		It("should create worker with derived worker type", func() {
 			identity := deps.Identity{ID: "test-worker"}
-			w, err := hello_world.NewHelloworldWorker(identity, logger, nil)
+			w, err := hello_world.NewHelloworldWorker(identity, deps.NewFSMLogger(logger), nil)
 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(w).NotTo(BeNil())
@@ -61,7 +61,7 @@ var _ = Describe("HelloworldWorker", func() {
 		BeforeEach(func() {
 			identity := deps.Identity{ID: "test-worker"}
 			var err error
-			worker, err = hello_world.NewHelloworldWorker(identity, logger, nil)
+			worker, err = hello_world.NewHelloworldWorker(identity, deps.NewFSMLogger(logger), nil)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -89,7 +89,7 @@ var _ = Describe("HelloworldWorker", func() {
 		BeforeEach(func() {
 			identity := deps.Identity{ID: "test-worker"}
 			var err error
-			worker, err = hello_world.NewHelloworldWorker(identity, logger, nil)
+			worker, err = hello_world.NewHelloworldWorker(identity, deps.NewFSMLogger(logger), nil)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -105,7 +105,7 @@ var _ = Describe("HelloworldWorker", func() {
 		BeforeEach(func() {
 			identity := deps.Identity{ID: "test-worker"}
 			var err error
-			worker, err = hello_world.NewHelloworldWorker(identity, logger, nil)
+			worker, err = hello_world.NewHelloworldWorker(identity, deps.NewFSMLogger(logger), nil)
 			Expect(err).NotTo(HaveOccurred())
 		})
 

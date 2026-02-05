@@ -260,12 +260,12 @@ func (w *CommunicatorWorker) GetInitialState() fsmv2.State[any, any] {
 
 func init() {
 	if err := factory.RegisterWorkerType[snapshot.CommunicatorObservedState, *snapshot.CommunicatorDesiredState](
-		func(id depspkg.Identity, logger *zap.SugaredLogger, stateReader depspkg.StateReader, _ map[string]any) fsmv2.Worker {
+		func(id depspkg.Identity, _ depspkg.FSMLogger, stateReader depspkg.StateReader, _ map[string]any) fsmv2.Worker {
 			// ChannelProvider must be set via global singleton before factory is called (will panic if not set).
 			// Transport is created lazily by AuthenticateAction.
-			commDeps := NewCommunicatorDependencies(nil, logger, stateReader, id)
+			commDeps := NewCommunicatorDependencies(nil, nil, stateReader, id)
 
-			worker, err := NewCommunicatorWorker(id.ID, id.Name, nil, logger, stateReader)
+			worker, err := NewCommunicatorWorker(id.ID, id.Name, nil, nil, stateReader)
 			if err != nil {
 				panic(fmt.Sprintf("failed to create communicator worker: %v", err))
 			}

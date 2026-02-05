@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/internal/collection"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/internal/execution"
@@ -40,7 +41,7 @@ func (s *Supervisor[TObserved, TDesired]) Start(ctx context.Context) <-chan stru
 	s.ctxMu.Unlock()
 	s.started.Store(true)
 
-	s.logger.Debugw("supervisor_started")
+	s.logger.Debug("supervisor_started")
 
 	s.ctxMu.RLock()
 	supervisorCtx := s.ctx
@@ -55,7 +56,7 @@ func (s *Supervisor[TObserved, TDesired]) Start(ctx context.Context) <-chan stru
 
 	for _, workerCtx := range s.workers {
 		if err := workerCtx.collector.Start(supervisorCtx); err != nil {
-			s.logger.Errorw("collector_start_failed", "error", err)
+			s.logger.SentryError(deps.FeatureLifecycle, err, "collector_start_failed")
 		}
 
 		workerCtx.executor.Start(supervisorCtx)
@@ -81,18 +82,18 @@ func (s *Supervisor[TObserved, TDesired]) tickLoop(ctx context.Context) {
 	ticker := time.NewTicker(s.tickInterval)
 	defer ticker.Stop()
 
-	s.logger.Debugw("tick_loop_started",
-		"interval", s.tickInterval)
+	s.logger.Debug("tick_loop_started",
+		deps.Duration("interval", s.tickInterval))
 
 	for {
 		select {
 		case <-ctx.Done():
-			s.logger.Debugw("tick_loop_stopped")
+			s.logger.Debug("tick_loop_stopped")
 
 			return
 		case <-ticker.C:
 			if err := s.tick(ctx); err != nil {
-				s.logger.Errorw("tick_error", "error", err)
+				s.logger.SentryError(deps.FeatureLifecycle, err, "tick_error")
 			}
 		}
 	}
@@ -103,35 +104,35 @@ func (s *Supervisor[TObserved, TDesired]) tickLoop(ctx context.Context) {
 // Idempotent.
 func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 	s.logTrace("lifecycle",
-		"lifecycle_event", "shutdown_start")
+		deps.String("lifecycle_event", "shutdown_start"))
 
 	s.logTrace("lifecycle",
-		"lifecycle_event", "mutex_lock_acquire",
-		"mutex_name", "supervisor.mu",
-		"lock_type", "write")
+		deps.String("lifecycle_event", "mutex_lock_acquire"),
+		deps.String("mutex_name", "supervisor.mu"),
+		deps.String("lock_type", "write"))
 
 	s.mu.Lock()
 
 	s.logTrace("lifecycle",
-		"lifecycle_event", "mutex_lock_acquired",
-		"mutex_name", "supervisor.mu")
+		deps.String("lifecycle_event", "mutex_lock_acquired"),
+		deps.String("mutex_name", "supervisor.mu"))
 
 	// Make idempotent - check if already shut down
 	if !s.started.Load() {
 		s.mu.Unlock()
 
 		s.logTrace("lifecycle",
-			"lifecycle_event", "shutdown_skip",
-			"reason", "already_shutdown")
+			deps.String("lifecycle_event", "shutdown_skip"),
+			deps.Reason("already_shutdown"))
 
-		s.logger.Debugw("supervisor_already_shutdown")
+		s.logger.Debug("supervisor_already_shutdown")
 
 		return
 	}
 
 	s.started.Store(false)
 
-	s.logger.Infow("supervisor_shutting_down")
+	s.logger.Info("supervisor_shutting_down")
 
 	gracefulCtx := context.Background()
 
@@ -159,48 +160,48 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 
 	// Phase 1: Shutdown children first (context still active for FSM transitions).
 	if len(childrenToShutdown) > 0 {
-		s.logger.Debugw("graceful_shutdown_children_starting",
-			"child_count", len(childrenToShutdown))
+		s.logger.Debug("graceful_shutdown_children_starting",
+			deps.Int("child_count", len(childrenToShutdown)))
 
 		for childName, child := range childrenToShutdown {
 			s.logTrace("lifecycle",
-				"lifecycle_event", "child_shutdown_start",
-				"child_name", childName,
-				"parent_worker_type", s.workerType)
+				deps.String("lifecycle_event", "child_shutdown_start"),
+				deps.String("child_name", childName),
+				deps.String("parent_worker_type", s.workerType))
 
-			s.logger.Debugw("child_shutting_down",
-				"child_name", childName)
+			s.logger.Debug("child_shutting_down",
+				deps.String("child_name", childName))
 
 			child.Shutdown()
 
 			// Wait for child supervisor to fully shut down
 			if done, exists := childDoneChans[childName]; exists {
-				s.logger.Debugw("waiting_child_shutdown",
-					"child_name", childName)
+				s.logger.Debug("waiting_child_shutdown",
+					deps.String("child_name", childName))
 				<-done
-				s.logger.Debugw("child_shutdown_complete",
-					"child_name", childName)
+				s.logger.Debug("child_shutdown_complete",
+					deps.String("child_name", childName))
 			}
 
 			s.logTrace("lifecycle",
-				"lifecycle_event", "child_shutdown_complete",
-				"child_name", childName,
-				"parent_worker_type", s.workerType)
+				deps.String("lifecycle_event", "child_shutdown_complete"),
+				deps.String("child_name", childName),
+				deps.String("parent_worker_type", s.workerType))
 		}
 
-		s.logger.Debugw("graceful_shutdown_children_complete")
+		s.logger.Debug("graceful_shutdown_children_complete")
 	}
 
 	// Phase 2: Request graceful shutdown on own workers.
 	if len(workerIDs) > 0 {
-		s.logger.Debugw("graceful_shutdown_workers_starting",
-			"worker_count", len(workerIDs))
+		s.logger.Debug("graceful_shutdown_workers_starting",
+			deps.Int("worker_count", len(workerIDs)))
 
 		// Request graceful shutdown on all workers
 		for _, workerID := range workerIDs {
 			if err := s.requestShutdown(gracefulCtx, workerID, "supervisor_shutdown"); err != nil {
-				s.logger.Warnw("graceful_shutdown_request_failed",
-					"error", err)
+				s.logger.SentryWarn(deps.FeatureLifecycle, "graceful_shutdown_request_failed",
+					deps.Err(err))
 			}
 		}
 
@@ -213,8 +214,8 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 		for {
 			select {
 			case <-timeoutCh:
-				s.logger.Warnw("graceful_shutdown_timeout",
-					"timeout", gracefulTimeout)
+				s.logger.SentryWarn(deps.FeatureLifecycle, "graceful_shutdown_timeout",
+					deps.Duration("timeout", gracefulTimeout))
 
 				break gracefulWaitLoop
 			case <-ticker.C:
@@ -223,7 +224,7 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 				s.mu.RUnlock()
 
 				if remaining == 0 {
-					s.logger.Debugw("graceful_shutdown_workers_removed")
+					s.logger.Debug("graceful_shutdown_workers_removed")
 
 					break gracefulWaitLoop
 				}
@@ -256,7 +257,7 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 	shutdownCtx := context.Background()
 
 	for _, workerCtx := range s.workers {
-		s.logger.Debugw("worker_shutting_down")
+		s.logger.Debug("worker_shutting_down")
 
 		// Stop the collector's observation loop
 		workerCtx.collector.Stop(shutdownCtx)
@@ -268,7 +269,7 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 	s.mu.Unlock()
 
 	s.logTrace("lifecycle",
-		"lifecycle_event", "shutdown_complete")
+		deps.String("lifecycle_event", "shutdown_complete"))
 }
 
 // startMetricsReporter starts a goroutine that periodically records hierarchy metrics.
@@ -343,14 +344,14 @@ func (s *Supervisor[TObserved, TDesired]) getStartedContext() (context.Context, 
 	return s.ctx, true
 }
 
-func (s *Supervisor[TObserved, TDesired]) logTrace(msg string, fields ...interface{}) {
+func (s *Supervisor[TObserved, TDesired]) logTrace(msg string, fields ...deps.Field) {
 	if s.enableTraceLogging {
-		s.logger.Debugw(msg, fields...)
+		s.logger.Debug(msg, fields...)
 	}
 }
 
 func (s *Supervisor[TObserved, TDesired]) requestShutdown(ctx context.Context, workerID string, reason string) error {
-	s.logger.Infow("shutdown_requested", "reason", reason)
+	s.logger.Info("shutdown_requested", deps.Reason(reason))
 
 	s.mu.RLock()
 	_, exists := s.workers[workerID]
@@ -421,7 +422,7 @@ func (s *Supervisor[TObserved, TDesired]) RequestShutdown(ctx context.Context, r
 
 	for _, workerID := range workerIDs {
 		if err := s.requestShutdown(ctx, workerID, reason); err != nil {
-			s.logger.Warnw("shutdown_request_failed", "error", err)
+			s.logger.SentryWarn(deps.FeatureLifecycle, "shutdown_request_failed", deps.Err(err))
 		}
 	}
 
@@ -451,11 +452,12 @@ func (s *Supervisor[TObserved, TDesired]) handleWorkerRestart(ctx context.Contex
 	if !exists {
 		s.mu.RUnlock()
 
-		s.logger.Errorw("worker_restart_not_found",
-			"hierarchy_path", s.GetHierarchyPathUnlocked(),
-			"target_worker_id", workerID)
+		err := errors.New("worker not found for restart")
+		s.logger.SentryError(deps.FeatureLifecycle, err, "worker_restart_not_found",
+			deps.HierarchyPath(s.GetHierarchyPathUnlocked()),
+			deps.String("target_worker_id", workerID))
 
-		return errors.New("worker not found for restart")
+		return err
 	}
 
 	identity := workerCtx.identity
@@ -467,24 +469,24 @@ func (s *Supervisor[TObserved, TDesired]) handleWorkerRestart(ctx context.Contex
 
 	s.mu.RUnlock()
 
-	s.logger.Infow("worker_restart_executing",
-		"hierarchy_path", identity.HierarchyPath,
-		"from_state", fromState,
-		"action", "full_recreation")
+	s.logger.Info("worker_restart_executing",
+		deps.HierarchyPath(identity.HierarchyPath),
+		deps.String("from_state", fromState),
+		deps.String("action", "full_recreation"))
 
 	// 1. Remove old worker completely (stops collector, executor, removes from registry)
 	if err := s.RemoveWorker(ctx, workerID); err != nil {
 		return fmt.Errorf("failed to remove worker for restart: %w", err)
 	}
 
-	s.logger.Debugw("worker_restart_old_removed",
-		"hierarchy_path", identity.HierarchyPath)
+	s.logger.Debug("worker_restart_old_removed",
+		deps.HierarchyPath(identity.HierarchyPath))
 
 	// 2. Clear shutdown flag in storage BEFORE creating new worker.
 	if err := s.clearShutdownRequested(ctx, workerID); err != nil {
-		s.logger.Warnw("restart_clear_shutdown_failed",
-			"hierarchy_path", identity.HierarchyPath,
-			"error", err)
+		s.logger.SentryWarn(deps.FeatureLifecycle, "restart_clear_shutdown_failed",
+			deps.HierarchyPath(identity.HierarchyPath),
+			deps.Err(err))
 		// Continue anyway - the new worker might still work
 	}
 
@@ -494,8 +496,8 @@ func (s *Supervisor[TObserved, TDesired]) handleWorkerRestart(ctx context.Contex
 		return fmt.Errorf("failed to create new worker for restart: %w", err)
 	}
 
-	s.logger.Debugw("worker_restart_new_created",
-		"hierarchy_path", identity.HierarchyPath)
+	s.logger.Debug("worker_restart_new_created",
+		deps.HierarchyPath(identity.HierarchyPath))
 
 	// 4. Add new worker to supervisor (this also starts the collector if supervisor is running)
 	if err := s.AddWorker(identity, newWorker); err != nil {
@@ -525,9 +527,8 @@ func (s *Supervisor[TObserved, TDesired]) handleWorkerRestart(ctx context.Contex
 
 		if collector != nil {
 			if err := collector.Start(supervisorCtx); err != nil {
-				s.logger.Errorw("restart_collector_start_failed",
-					"hierarchy_path", identity.HierarchyPath,
-					"error", err)
+				s.logger.SentryError(deps.FeatureLifecycle, err, "restart_collector_start_failed",
+					deps.HierarchyPath(identity.HierarchyPath))
 			}
 		}
 
@@ -561,9 +562,9 @@ func (s *Supervisor[TObserved, TDesired]) handleWorkerRestart(ctx context.Contex
 
 	s.mu.RUnlock()
 
-	s.logger.Infow("worker_restart_complete",
-		"hierarchy_path", identity.HierarchyPath,
-		"to_state", toState)
+	s.logger.Info("worker_restart_complete",
+		deps.HierarchyPath(identity.HierarchyPath),
+		deps.String("to_state", toState))
 
 	return nil
 }
