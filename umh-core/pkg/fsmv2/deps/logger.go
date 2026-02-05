@@ -18,9 +18,9 @@ import "time"
 
 // FSMLogger provides structured logging with compile-time enforcement of Sentry fields.
 //
-// Tier 1 methods (Info, Debug) accept flexible structured fields.
-// Tier 2 methods (SentryWarn, SentryError) require Feature and error parameters,
-// ensuring proper Sentry integration at compile time.
+// Tier 1 methods (Debug, Info, Warn) accept flexible structured fields.
+// Tier 2 methods require a Feature parameter for Sentry routing:
+// SentryWarn requires Feature, SentryError requires Feature and error.
 type FSMLogger interface {
 	// Debug logs at DEBUG level with structured fields.
 	Debug(msg string, fields ...Field)
@@ -29,7 +29,8 @@ type FSMLogger interface {
 	Info(msg string, fields ...Field)
 
 	// Warn logs at WARN level with structured fields.
-	// Use this for operational warnings that should NOT be sent to Sentry.
+	// Note: the Sentry hook captures all warn-level logs, but without a Feature
+	// tag they route to "unknown". Use SentryWarn for feature-routed warnings.
 	Warn(msg string, fields ...Field)
 
 	// SentryWarn logs at WARN level with required Feature for Sentry routing.
@@ -97,9 +98,6 @@ func Any(key string, val any) Field {
 func Err(err error) Field {
 	return Field{Key: "error", Value: err}
 }
-
-// --- Pre-defined fields for fsmv2 context ---
-// These prevent typos in common field names.
 
 // HierarchyPath creates a Field for the worker hierarchy path.
 func HierarchyPath(path string) Field {

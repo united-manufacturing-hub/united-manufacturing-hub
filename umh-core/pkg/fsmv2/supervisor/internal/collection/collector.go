@@ -156,7 +156,7 @@ func (c *Collector[TObserved]) TriggerNow() {
 	c.mu.RUnlock()
 
 	if !running {
-		c.config.Logger.Warn("collector_trigger_now_failed",
+		c.config.Logger.SentryWarn(deps.FeatureCollection, "collector_trigger_now_failed",
 			deps.HierarchyPath(c.config.Identity.HierarchyPath),
 			deps.Reason("not_running"),
 			deps.String("current_state", c.state.String()))
@@ -184,7 +184,7 @@ func (c *Collector[TObserved]) Restart() {
 	c.mu.RUnlock()
 
 	if !running {
-		c.config.Logger.Warn("collector_restart_failed",
+		c.config.Logger.SentryWarn(deps.FeatureCollection, "collector_restart_failed",
 			deps.HierarchyPath(c.config.Identity.HierarchyPath),
 			deps.Reason("not_running"),
 			deps.String("current_state", c.state.String()))
@@ -443,22 +443,24 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 
 	observedTyped, ok := observed.(TObserved)
 	if !ok {
-		c.config.Logger.SentryWarn(deps.FeatureCollection, "collector_type_mismatch",
+		err := fmt.Errorf("observed state type mismatch: expected %T, got %T", *new(TObserved), observed)
+		c.config.Logger.SentryError(deps.FeatureCollection, err, "collector_type_mismatch",
 			deps.HierarchyPath(c.config.Identity.HierarchyPath),
 			deps.String("expected_type", fmt.Sprintf("%T", *new(TObserved))),
 			deps.String("actual_type", fmt.Sprintf("%T", observed)))
 
-		return fmt.Errorf("observed state type mismatch: expected %T, got %T", *new(TObserved), observed)
+		return err
 	}
 
 	ts, ok := c.config.Store.(*storage.TriangularStore)
 	if !ok {
-		c.config.Logger.SentryWarn(deps.FeatureCollection, "collector_store_type_mismatch",
+		err := fmt.Errorf("store is not *TriangularStore, got %T", c.config.Store)
+		c.config.Logger.SentryError(deps.FeatureCollection, err, "collector_store_type_mismatch",
 			deps.HierarchyPath(c.config.Identity.HierarchyPath),
 			deps.String("expected_type", "*storage.TriangularStore"),
 			deps.String("actual_type", fmt.Sprintf("%T", c.config.Store)))
 
-		return fmt.Errorf("store is not *TriangularStore, got %T", c.config.Store)
+		return err
 	}
 
 	changed, err := storage.SaveObservedTyped[TObserved](ts, ctx, c.config.Identity.ID, observedTyped)

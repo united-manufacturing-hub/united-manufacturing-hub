@@ -464,11 +464,12 @@ func (s *Supervisor[TObserved, TDesired]) handleWorkerRestart(ctx context.Contex
 	if !exists {
 		s.mu.RUnlock()
 
-		s.logger.SentryWarn(deps.FeatureLifecycle, "worker_restart_not_found",
+		err := errors.New("worker not found for restart")
+		s.logger.SentryError(deps.FeatureLifecycle, err, "worker_restart_not_found",
 			deps.HierarchyPath(s.GetHierarchyPathUnlocked()),
 			deps.String("target_worker_id", workerID))
 
-		return errors.New("worker not found for restart")
+		return err
 	}
 
 	identity := workerCtx.identity

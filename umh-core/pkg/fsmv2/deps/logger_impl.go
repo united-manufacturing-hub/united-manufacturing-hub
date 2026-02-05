@@ -46,39 +46,33 @@ func NewFSMLogger(sugar *zap.SugaredLogger) FSMLogger {
 	return &zapLogger{sugar: sugar}
 }
 
-// Debug logs at DEBUG level with structured fields.
 func (l *zapLogger) Debug(msg string, fields ...Field) {
 	l.sugar.Debugw(msg, fieldsToArgs(l.baseFields, fields)...)
 }
 
-// Info logs at INFO level with structured fields.
 func (l *zapLogger) Info(msg string, fields ...Field) {
 	l.sugar.Infow(msg, fieldsToArgs(l.baseFields, fields)...)
 }
 
-// Warn logs at WARN level with structured fields.
 func (l *zapLogger) Warn(msg string, fields ...Field) {
 	l.sugar.Warnw(msg, fieldsToArgs(l.baseFields, fields)...)
 }
 
-// SentryWarn logs at WARN level with required Feature for Sentry routing.
 func (l *zapLogger) SentryWarn(feature Feature, msg string, fields ...Field) {
-	// Prepend feature to fields for Sentry hook extraction
-	allFields := append([]Field{{Key: "feature", Value: string(feature)}}, fields...)
+	allFields := make([]Field, 0, 1+len(fields))
+	allFields = append(allFields, Field{Key: "feature", Value: string(feature)})
+	allFields = append(allFields, fields...)
 	l.sugar.Warnw(msg, fieldsToArgs(l.baseFields, allFields)...)
 }
 
-// SentryError logs at ERROR level with required Feature and error for Sentry.
 func (l *zapLogger) SentryError(feature Feature, err error, msg string, fields ...Field) {
-	// Prepend feature and error to fields for Sentry hook extraction
-	allFields := append([]Field{
-		{Key: "feature", Value: string(feature)},
-		{Key: "error", Value: err},
-	}, fields...)
+	allFields := make([]Field, 0, 2+len(fields))
+	allFields = append(allFields, Field{Key: "feature", Value: string(feature)})
+	allFields = append(allFields, Field{Key: "error", Value: err})
+	allFields = append(allFields, fields...)
 	l.sugar.Errorw(msg, fieldsToArgs(l.baseFields, allFields)...)
 }
 
-// With returns a new FSMLogger with additional context fields.
 func (l *zapLogger) With(fields ...Field) FSMLogger {
 	newBaseFields := make([]Field, len(l.baseFields)+len(fields))
 	copy(newBaseFields, l.baseFields)

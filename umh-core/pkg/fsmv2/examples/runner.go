@@ -67,7 +67,7 @@ func Run(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 
 		startSyncID, err = cfg.Store.GetLatestSyncID(ctx)
 		if err != nil {
-			cfg.Logger.SentryWarn(deps.Feature("examples"), "sync_id_fetch_failed",
+			cfg.Logger.SentryWarn(deps.FeatureExamples, "sync_id_fetch_failed",
 				deps.Err(err),
 				deps.String("impact", "dump_shows_all_changes"))
 		}
@@ -102,7 +102,7 @@ func Run(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 
 			dump, err := DumpScenario(dumpCtx, cfg.Store, startSyncID)
 			if err != nil {
-				cfg.Logger.SentryWarn(deps.Feature("examples"), "scenario_dump_failed",
+				cfg.Logger.SentryWarn(deps.FeatureExamples, "scenario_dump_failed",
 					deps.Err(err))
 			} else {
 				fmt.Print(dump.FormatHuman())
