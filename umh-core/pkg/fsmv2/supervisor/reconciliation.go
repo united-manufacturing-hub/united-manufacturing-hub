@@ -444,12 +444,14 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 		// If we update this before the transition, parent sees stale health status.
 		newPhase := result.State.LifecyclePhase()
 		newSuffix := strings.ToLower(result.State.String())
+
 		newPrefix := newPhase.Prefix()
 		if newPhase == config.PhaseStopped {
 			workerCtx.lastObservedStateName = newPrefix // "stopped" has no suffix
 		} else {
 			workerCtx.lastObservedStateName = newPrefix + newSuffix
 		}
+
 		workerCtx.lastLifecyclePhase = newPhase
 
 		workerCtx.mu.Unlock()
@@ -655,12 +657,16 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 	// Deep copy globalVars to prevent race with SetGlobalVariables().
 	// The map reference could be replaced while we use it for template expansion.
 	s.mu.RLock()
+
 	globalVarsCopy := make(map[string]any, len(s.globalVars))
 	for k, v := range s.globalVars {
 		globalVarsCopy[k] = v
 	}
+
 	globalVarCount := len(globalVarsCopy)
+
 	s.mu.RUnlock()
+
 	userSpecWithVars.Variables.Global = globalVarsCopy
 
 	userSpecWithVars.Variables.Internal = map[string]any{

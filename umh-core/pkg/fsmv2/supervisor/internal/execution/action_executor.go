@@ -95,6 +95,7 @@ func (ae *ActionExecutor) Start(ctx context.Context) {
 	for range ae.workerCount {
 		ae.wg.Add(1)
 	}
+
 	ae.mu.Unlock()
 
 	// Start workers - they're already counted in the WaitGroup
@@ -264,6 +265,7 @@ func (ae *ActionExecutor) EnqueueAction(actionID string, action fsmv2.Action[any
 	if !exists {
 		timeout = ae.defaultTimeout
 	}
+
 	ae.mu.Unlock()
 
 	work := actionWork{

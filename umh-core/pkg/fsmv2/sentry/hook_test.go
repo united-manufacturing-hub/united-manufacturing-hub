@@ -344,7 +344,6 @@ main.second()
 			defer hook.Stop()
 
 			// First capture should succeed
-			fp := []string{"level: error", "feature: test", "event_name: test_event"}
 			result1 := hook.Debouncer().ShouldCapture("level: error|feature: test|event_name: test_event")
 			Expect(result1).To(BeTrue())
 
@@ -353,7 +352,6 @@ main.second()
 			Expect(result2).To(BeFalse())
 
 			// Different fingerprint should succeed
-			_ = fp // suppress unused warning
 			result3 := hook.Debouncer().ShouldCapture("level: warn|feature: other|event_name: other_event")
 			Expect(result3).To(BeTrue())
 		})
@@ -1041,8 +1039,6 @@ var _ = Describe("FSMLogger to Sentry Event Mapping", func() {
 		}, time.Second, 10*time.Millisecond).Should(BeNumerically(">=", 1))
 
 		event := store.GetLast()
-		Expect(event.Tags["feature"]).To(Equal("fsmv2"))
-
 		Expect(event.Tags["feature"]).To(Equal("fsmv2"))
 	})
 })

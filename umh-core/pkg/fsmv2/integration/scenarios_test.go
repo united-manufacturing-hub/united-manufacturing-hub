@@ -213,10 +213,10 @@ func verifyShutdownOrder(t *integration.TestLogger) {
 	}
 
 	// Single-tick architecture: only root has tick loop, children use StartAsChild()
-	Expect(len(tickLoopStartedLogs)).To(Equal(1),
+	Expect(tickLoopStartedLogs).To(HaveLen(1),
 		"Expected exactly 1 tick_loop_started (root supervisor only)")
 
-	Expect(len(childStartedLogs)).To(BeNumerically(">=", 1),
+	Expect(childStartedLogs).ToNot(BeEmpty(),
 		"Expected at least 1 supervisor_started_as_child (child supervisors)")
 
 	GinkgoWriter.Printf("✓ Supervisors started (root tick_loop: %d, children as_child: %d, types: %v)\n",

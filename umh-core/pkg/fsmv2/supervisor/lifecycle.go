@@ -107,7 +107,7 @@ func (s *Supervisor[TObserved, TDesired]) StartAsChild(ctx context.Context) {
 // tickLoop is the main FSM loop.
 // Calls Tick() which includes hierarchical composition (Phase 0) and worker state transitions.
 func (s *Supervisor[TObserved, TDesired]) tickLoop(ctx context.Context) {
-	s.logger.Debug("Starting tick loop for supervisor")
+	s.logger.Debug("tick_loop_initializing")
 
 	ticker := time.NewTicker(s.tickInterval)
 	defer ticker.Stop()
@@ -196,10 +196,12 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 	// - Child's tickLoop only exits when context is cancelled
 	// - Context cancellation happens here, before waiting
 	s.ctxMu.Lock()
+
 	if s.ctxCancel != nil {
 		s.ctxCancel()
 		s.ctxCancel = nil // Prevent double-cancel
 	}
+
 	s.ctxMu.Unlock()
 
 	// Wait for metrics reporter to finish (it will exit now that context is cancelled)
@@ -297,7 +299,8 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 	shutdownCtx := context.Background()
 
 	for _, workerCtx := range s.workers {
-		s.logger.Debug("worker_shutting_down")
+		s.logger.Debug("worker_shutting_down",
+			deps.HierarchyPath(workerCtx.identity.HierarchyPath))
 
 		// Stop the collector's observation loop
 		workerCtx.collector.Stop(shutdownCtx)
@@ -391,7 +394,9 @@ func (s *Supervisor[TObserved, TDesired]) logTrace(msg string, fields ...deps.Fi
 }
 
 func (s *Supervisor[TObserved, TDesired]) requestShutdown(ctx context.Context, workerID string, reason string) error {
-	s.logger.Info("shutdown_requested", deps.Reason(reason))
+	s.logger.Info("shutdown_requested",
+		deps.String("worker_id", workerID),
+		deps.Reason(reason))
 
 	s.mu.RLock()
 	_, exists := s.workers[workerID]
