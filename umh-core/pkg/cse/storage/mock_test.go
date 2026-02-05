@@ -18,6 +18,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
@@ -229,6 +230,14 @@ func (m *mockTriangularStore) GetDeltas(ctx context.Context, sub storage.Subscri
 		Deltas:       []storage.Delta{},
 		LatestSyncID: 0,
 	}, nil
+}
+
+func (m *mockTriangularStore) CompactDeltas(ctx context.Context, retentionWindow time.Duration) (int, error) {
+	return 0, nil
+}
+
+func (m *mockTriangularStore) Maintenance(ctx context.Context) error {
+	return nil
 }
 
 var _ storage.TriangularStoreInterface = (*mockTriangularStore)(nil)
