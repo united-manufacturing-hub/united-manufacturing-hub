@@ -17,6 +17,7 @@ package action
 import (
 	"context"
 
+	depspkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplefailing/snapshot"
 )
 
@@ -43,10 +44,10 @@ func (a *DisconnectAction) Execute(ctx context.Context, depsAny any) error {
 
 	if deps.GetShouldFail() && !deps.AllCyclesComplete() {
 		newCycle := deps.AdvanceCycle() // Increments cycle AND resets attempts
-		logger.Infow("disconnect_advanced_cycle",
-			"new_cycle", newCycle+1, // Human-readable (1-indexed)
-			"total_cycles", deps.GetFailureCycles(),
-			"all_complete", deps.AllCyclesComplete(),
+		logger.Info("disconnect_advanced_cycle",
+			depspkg.Int("new_cycle", newCycle+1),
+			depspkg.Int("total_cycles", deps.GetFailureCycles()),
+			depspkg.Bool("all_complete", deps.AllCyclesComplete()),
 		)
 	} else {
 		deps.ResetAttempts()

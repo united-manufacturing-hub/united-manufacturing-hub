@@ -27,6 +27,7 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/examples"
 )
 
@@ -126,7 +127,7 @@ func main() {
 		defer timeoutCancel()
 	}
 
-	store := examples.SetupStore(logger.Sugar())
+	store := examples.SetupStore(deps.NewFSMLogger(logger.Sugar()))
 
 	durationStr := "endless (until Ctrl+C)"
 	if *duration > 0 {
@@ -143,7 +144,7 @@ func main() {
 	result, err := examples.Run(ctx, examples.RunConfig{
 		Scenario:           scenario,
 		TickInterval:       *tickInterval,
-		Logger:             logger.Sugar(),
+		Logger:             deps.NewFSMLogger(logger.Sugar()),
 		Store:              store,
 		EnableTraceLogging: *traceFlag,
 		DumpStore:          *dumpStore,

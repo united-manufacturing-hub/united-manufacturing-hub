@@ -20,15 +20,12 @@ import (
 	"fmt"
 	"time"
 
-	"go.uber.org/zap"
-
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	fsmv2types "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
-	fsmv2sentry "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/sentry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplefailing/snapshot"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplefailing/state"
@@ -38,7 +35,7 @@ import (
 type FailingWorker struct {
 	connection Connection
 	*helpers.BaseWorker[*FailingDependencies]
-	logger   *zap.SugaredLogger
+	logger   deps.FSMLogger
 	identity deps.Identity
 }
 
@@ -46,7 +43,7 @@ type FailingWorker struct {
 func NewFailingWorker(
 	identity deps.Identity,
 	connectionPool ConnectionPool,
-	logger *zap.SugaredLogger,
+	logger deps.FSMLogger,
 	stateReader deps.StateReader,
 ) (*FailingWorker, error) {
 	if connectionPool == nil {
@@ -70,11 +67,8 @@ func NewFailingWorker(
 
 	conn, err := connectionPool.Acquire()
 	if err != nil {
-		logger.Warnw("initial_connection_failed", fsmv2sentry.ErrorFields{
-			Feature:       "examples",
-			Err:           err,
-			HierarchyPath: identity.HierarchyPath,
-		}.ZapFields()...)
+		logger.SentryWarn(deps.FeatureExamples, "initial_connection_failed",
+			deps.Err(err), deps.HierarchyPath(identity.HierarchyPath))
 	}
 
 	return &FailingWorker{
@@ -170,7 +164,7 @@ func (w *FailingWorker) GetInitialState() fsmv2.State[any, any] {
 
 func init() {
 	if err := factory.RegisterWorkerType[snapshot.ExamplefailingObservedState, *snapshot.ExamplefailingDesiredState](
-		func(id deps.Identity, logger *zap.SugaredLogger, stateReader deps.StateReader, _ map[string]any) fsmv2.Worker {
+		func(id deps.Identity, logger deps.FSMLogger, stateReader deps.StateReader, _ map[string]any) fsmv2.Worker {
 			pool := &DefaultConnectionPool{}
 			worker, _ := NewFailingWorker(id, pool, logger, stateReader)
 

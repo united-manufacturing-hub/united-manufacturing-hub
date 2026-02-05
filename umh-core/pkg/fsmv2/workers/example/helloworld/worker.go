@@ -33,15 +33,12 @@ import (
 	"fmt"
 	"time"
 
-	"go.uber.org/zap"
-
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
-	fsmv2sentry "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/sentry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/helloworld/snapshot"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/helloworld/state"
@@ -57,14 +54,14 @@ import (
 // The supervisor drives the state machine by calling these methods each tick.
 type HelloworldWorker struct {
 	*helpers.BaseWorker[*HelloworldDependencies]
-	logger   *zap.SugaredLogger
+	logger   deps.FSMLogger
 	identity deps.Identity
 }
 
 // NewHelloworldWorker creates a new helloworld worker.
 func NewHelloworldWorker(
 	identity deps.Identity,
-	logger *zap.SugaredLogger,
+	logger deps.FSMLogger,
 	stateReader deps.StateReader,
 ) (*HelloworldWorker, error) {
 	if logger == nil {
@@ -191,15 +188,12 @@ func (w *HelloworldWorker) GetInitialState() fsmv2.State[any, any] {
 func init() {
 	if err := factory.RegisterWorkerType[snapshot.HelloworldObservedState, *snapshot.HelloworldDesiredState](
 		// Worker factory: creates worker instances
-		func(id deps.Identity, logger *zap.SugaredLogger, stateReader deps.StateReader, _ map[string]any) fsmv2.Worker {
+		func(id deps.Identity, logger deps.FSMLogger, stateReader deps.StateReader, _ map[string]any) fsmv2.Worker {
 			worker, err := NewHelloworldWorker(id, logger, stateReader)
 			if err != nil {
 				if logger != nil {
-					logger.Errorw("helloworld_worker_creation_failed", fsmv2sentry.ErrorFields{
-						Feature:       "examples",
-						Err:           err,
-						HierarchyPath: id.HierarchyPath,
-					}.ZapFields()...)
+					logger.SentryError(deps.FeatureExamples, err, "helloworld_worker_creation_failed",
+						deps.HierarchyPath(id.HierarchyPath))
 				}
 
 				return nil

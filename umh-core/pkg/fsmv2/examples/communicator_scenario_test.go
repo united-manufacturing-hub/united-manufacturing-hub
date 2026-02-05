@@ -21,8 +21,8 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"go.uber.org/zap"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/examples"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/testutil"
@@ -80,7 +80,7 @@ var _ = Describe("Communicator Scenario", func() {
 		It("handles custom logger", func() {
 			result := examples.RunCommunicatorScenario(ctx, examples.CommunicatorRunConfig{
 				Duration: 1 * time.Second,
-				Logger:   zap.NewNop().Sugar(),
+				Logger:   deps.NewNopFSMLogger(),
 			})
 			Expect(result.Error).NotTo(HaveOccurred())
 			<-result.Done // Wait for completion
@@ -230,7 +230,7 @@ var _ = Describe("Communicator Scenario", func() {
 			examples.CommunicatorRunConfig{Duration: 1 * time.Second, AuthToken: "custom"},
 			true),
 		Entry("with logger",
-			examples.CommunicatorRunConfig{Duration: 1 * time.Second, Logger: zap.NewNop().Sugar()},
+			examples.CommunicatorRunConfig{Duration: 1 * time.Second, Logger: deps.NewNopFSMLogger()},
 			true),
 		Entry("with custom tick interval",
 			examples.CommunicatorRunConfig{Duration: 1 * time.Second, TickInterval: 50 * time.Millisecond},

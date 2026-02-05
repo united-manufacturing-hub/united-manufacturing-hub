@@ -101,12 +101,12 @@ func (a *SyncAction) Execute(ctx context.Context, depsAny any) error {
 				fillPercent = (length * 100) / capacity
 			}
 
-			deps.GetLogger().Warnw("backpressure_entering",
-				"capacity", capacity,
-				"length", length,
-				"available", available,
-				"fill_percent", fillPercent,
-				"threshold", ExpectedBatchSize)
+			deps.GetLogger().Warn("backpressure_entering",
+				depspkg.Int("capacity", capacity),
+				depspkg.Int("length", length),
+				depspkg.Int("available", available),
+				depspkg.Int("fill_percent", fillPercent),
+				depspkg.Int("threshold", ExpectedBatchSize))
 			deps.SetBackpressured(true)
 			deps.MetricsRecorder().SetGauge(depspkg.GaugeBackpressureActive, 1)
 			deps.MetricsRecorder().IncrementCounter(depspkg.CounterBackpressureEntryTotal, 1)
@@ -115,9 +115,9 @@ func (a *SyncAction) Execute(ctx context.Context, depsAny any) error {
 	} else {
 		if wasBackpressured {
 			// Downgraded to INFO: exiting backpressure is a positive signal, not a warning
-			deps.GetLogger().Infow("backpressure_exiting",
-				"available", available,
-				"low_water_mark", ExpectedBatchSize*LowWaterMarkMultiplier)
+			deps.GetLogger().Info("backpressure_exiting",
+				depspkg.Int("available", available),
+				depspkg.Int("low_water_mark", ExpectedBatchSize*LowWaterMarkMultiplier))
 			deps.SetBackpressured(false)
 			deps.MetricsRecorder().SetGauge(depspkg.GaugeBackpressureActive, 0)
 		}
@@ -175,10 +175,10 @@ func (a *SyncAction) Execute(ctx context.Context, depsAny any) error {
 				case <-ctx.Done():
 					return ctx.Err()
 				default:
-					deps.GetLogger().Warnw("inbound_channel_full_stopping_sync",
-						"total_messages", len(messages),
-						"delivered", i,
-						"pending", len(messages)-i)
+					deps.GetLogger().Warn("inbound_channel_full_stopping_sync",
+						depspkg.Int("total_messages", len(messages)),
+						depspkg.Int("delivered", i),
+						depspkg.Int("pending", len(messages)-i))
 					// Record as typed error for proper backoff, then return
 					deps.RecordTypedError(httpTransport.ErrorTypeChannelFull, 0)
 

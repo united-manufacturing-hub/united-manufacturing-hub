@@ -20,7 +20,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"go.uber.org/zap"
+	
 
 	depspkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator"
@@ -97,12 +97,12 @@ func newTestChannelProvider() *mockChannelProvider {
 var _ = Describe("CommunicatorDependencies", func() {
 	var (
 		mt     communicator_transport.Transport
-		logger *zap.SugaredLogger
+		logger depspkg.FSMLogger
 	)
 
 	BeforeEach(func() {
 		mt = &mockTransport{}
-		logger = zap.NewNop().Sugar()
+		logger = depspkg.NewNopFSMLogger()
 		// Phase 1: Set up singleton for ALL tests (except Phase 1 architecture tests)
 		communicator.SetChannelProvider(newTestChannelProvider())
 	})

@@ -39,6 +39,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/redpanda"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/streamprocessor"
 	topicbrowserfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/topicbrowser"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/examples"
 	fsmv2sentry "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/sentry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application"
@@ -463,7 +464,7 @@ children:
 `, configData.Agent.APIURL, placeholderUUID, configData.Agent.AuthToken)
 
 	// Setup store (in-memory for now)
-	store := examples.SetupStore(logger)
+	store := examples.SetupStore(deps.NewFSMLogger(logger))
 
 	// Create callback to update LoginResponse with real UUID from backend (Bug #6 fix)
 	// This is called by AuthenticateAction after successful authentication
@@ -492,7 +493,7 @@ children:
 		ID:           "application-fsmv2",
 		Name:         "Application FSMv2",
 		Store:        store,
-		Logger:       fsmv2Logger,
+		Logger:       deps.NewFSMLogger(fsmv2Logger),
 		TickInterval: 100 * time.Millisecond,
 		YAMLConfig:   yamlConfig,
 		Dependencies: map[string]any{

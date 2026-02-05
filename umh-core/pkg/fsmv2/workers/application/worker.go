@@ -22,13 +22,12 @@ import (
 	"fmt"
 	"time"
 
-	"go.uber.org/zap"
 	"gopkg.in/yaml.v3"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
+	depspkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application/snapshot"
@@ -122,7 +121,7 @@ func (w *ApplicationWorker) GetDependenciesAny() any {
 // SupervisorConfig contains configuration for creating an application supervisor.
 type SupervisorConfig struct {
 	Store              storage.TriangularStoreInterface
-	Logger             *zap.SugaredLogger
+	Logger             depspkg.FSMLogger
 	Dependencies       map[string]any // Injected into child workers via deps parameter
 	ID                 string
 	Name               string
@@ -154,7 +153,7 @@ func NewApplicationSupervisor(cfg SupervisorConfig) (*supervisor.Supervisor[snap
 		Dependencies:       cfg.Dependencies,
 	})
 
-	appIdentity := deps.Identity{
+	appIdentity := depspkg.Identity{
 		ID:            cfg.ID,
 		Name:          cfg.Name,
 		WorkerType:    appWorkerType,
@@ -175,7 +174,7 @@ func NewApplicationSupervisor(cfg SupervisorConfig) (*supervisor.Supervisor[snap
 // init registers the application worker with the factory for automatic creation via factory.NewWorkerByType().
 func init() {
 	if err := factory.RegisterWorkerType[snapshot.ApplicationObservedState, *snapshot.ApplicationDesiredState](
-		func(id deps.Identity, _ *zap.SugaredLogger, _ deps.StateReader, _ map[string]any) fsmv2.Worker {
+		func(id depspkg.Identity, _ depspkg.FSMLogger, _ depspkg.StateReader, _ map[string]any) fsmv2.Worker {
 			return NewApplicationWorker(id.ID, id.Name)
 		},
 		func(cfg interface{}) interface{} {

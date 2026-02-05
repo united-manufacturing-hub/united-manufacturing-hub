@@ -21,19 +21,19 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"go.uber.org/zap"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/examples"
 )
 
 var _ = Describe("Runner CustomRunner Support", func() {
 	var ctx context.Context
 	var cancel context.CancelFunc
-	var logger *zap.SugaredLogger
+	var logger deps.FSMLogger
 
 	BeforeEach(func() {
 		ctx, cancel = context.WithTimeout(context.Background(), 30*time.Second)
-		logger = zap.NewNop().Sugar()
+		logger = deps.NewNopFSMLogger()
 	})
 
 	AfterEach(func() {

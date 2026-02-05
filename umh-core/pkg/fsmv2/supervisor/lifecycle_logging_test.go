@@ -24,8 +24,6 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
@@ -58,7 +56,7 @@ func (s *syncBuffer) Sync() error {
 var _ = Describe("Lifecycle Logging", func() {
 	var (
 		buf    *syncBuffer
-		logger *zap.SugaredLogger
+		logger deps.FSMLogger
 		store  *mockStore
 		sup    *supervisor.Supervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState]
 		done   <-chan struct{}
@@ -84,21 +82,8 @@ var _ = Describe("Lifecycle Logging", func() {
 		}
 	})
 
-	setupLogger := func(level zapcore.Level) {
-		encoderConfig := zapcore.EncoderConfig{
-			TimeKey:        "ts",
-			LevelKey:       "level",
-			MessageKey:     "msg",
-			EncodeLevel:    zapcore.LowercaseLevelEncoder,
-			EncodeTime:     zapcore.ISO8601TimeEncoder,
-			EncodeDuration: zapcore.StringDurationEncoder,
-		}
-		core := zapcore.NewCore(
-			zapcore.NewJSONEncoder(encoderConfig),
-			zapcore.AddSync(buf),
-			level,
-		)
-		logger = zap.New(core).Sugar()
+	setupLogger := func(level deps.LogLevel) {
+		logger = deps.NewJSONFSMLogger(buf, level)
 	}
 
 	setupSupervisor := func() {
@@ -165,7 +150,7 @@ var _ = Describe("Lifecycle Logging", func() {
 
 	Describe("Debug Level", func() {
 		BeforeEach(func() {
-			setupLogger(zapcore.DebugLevel)
+			setupLogger(deps.LevelDebug)
 		})
 
 		It("should log tick_start with worker info", func() {
@@ -260,7 +245,7 @@ var _ = Describe("Lifecycle Logging", func() {
 
 	Describe("Info Level", func() {
 		BeforeEach(func() {
-			setupLogger(zapcore.InfoLevel)
+			setupLogger(deps.LevelInfo)
 			setupSupervisor()
 		})
 
@@ -280,7 +265,7 @@ var _ = Describe("Lifecycle Logging", func() {
 	Describe("logTrace helper method", func() {
 		Context("when enableTraceLogging is true", func() {
 			BeforeEach(func() {
-				setupLogger(zapcore.DebugLevel)
+				setupLogger(deps.LevelDebug)
 			})
 
 			It("should emit log at debug level", func() {
@@ -324,7 +309,7 @@ var _ = Describe("Lifecycle Logging", func() {
 
 		Context("when enableTraceLogging is false", func() {
 			BeforeEach(func() {
-				setupLogger(zapcore.DebugLevel)
+				setupLogger(deps.LevelDebug)
 			})
 
 			It("should not emit lifecycle logs", func() {

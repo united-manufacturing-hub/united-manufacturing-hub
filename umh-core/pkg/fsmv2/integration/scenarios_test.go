@@ -23,8 +23,6 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
@@ -47,13 +45,13 @@ var _ = Describe("Simple Scenario Integration", func() {
 			state.RunningDuration = originalRunning
 		}()
 
-		testLogger := integration.NewTestLogger(zapcore.DebugLevel)
+		testLogger := integration.NewTestLogger()
 		defer testLogger.Stop()
 
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
-		store := setupTestStoreForScenario(testLogger.Logger)
+		store := setupTestStoreForScenario(testLogger.FSMLogger)
 
 		scenarioCtx, scenarioCancel := context.WithTimeout(ctx, 20*time.Second)
 		defer scenarioCancel()
@@ -61,7 +59,7 @@ var _ = Describe("Simple Scenario Integration", func() {
 		result, err := examples.Run(scenarioCtx, examples.RunConfig{
 			Scenario:     examples.SimpleScenario,
 			TickInterval: 100 * time.Millisecond,
-			Logger:       testLogger.Logger,
+			Logger:       testLogger.FSMLogger,
 			Store:        store,
 		})
 		Expect(err).NotTo(HaveOccurred())
@@ -239,7 +237,7 @@ func verifyAllLogsHaveWorkerField(t *integration.TestLogger) {
 		len(logsMissingWorker)-len(unexpectedMissing))
 }
 
-func setupTestStoreForScenario(logger *zap.SugaredLogger) storage.TriangularStoreInterface {
+func setupTestStoreForScenario(logger deps.FSMLogger) storage.TriangularStoreInterface {
 	basicStore := memory.NewInMemoryStore()
 
 	return storage.NewTriangularStore(basicStore, logger)
@@ -1102,19 +1100,19 @@ var _ = Describe("MetricsHolder Type Assertion", func() {
 			state.RunningDuration = originalRunning
 		}()
 
-		testLogger := integration.NewTestLogger(zapcore.DebugLevel)
+		testLogger := integration.NewTestLogger()
 		defer testLogger.Stop()
 
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
 
-		store := setupTestStoreForScenario(testLogger.Logger)
+		store := setupTestStoreForScenario(testLogger.FSMLogger)
 
 		result, err := examples.Run(ctx, examples.RunConfig{
 			Scenario:     examples.SimpleScenario,
 			Duration:     5 * time.Second,
 			TickInterval: 100 * time.Millisecond,
-			Logger:       testLogger.Logger,
+			Logger:       testLogger.FSMLogger,
 			Store:        store,
 		})
 		Expect(err).NotTo(HaveOccurred())

@@ -18,10 +18,8 @@ import (
 	"context"
 	"fmt"
 
-	"go.uber.org/zap"
-
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
-	fsmv2sentry "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/sentry"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence/memory"
 
@@ -69,10 +67,9 @@ func Run(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 
 		startSyncID, err = cfg.Store.GetLatestSyncID(ctx)
 		if err != nil {
-			cfg.Logger.Warnw("sync_id_fetch_failed", append(fsmv2sentry.ErrorFields{
-				Feature: "examples",
-				Err:     err,
-			}.ZapFields(), "impact", "dump_shows_all_changes")...)
+			cfg.Logger.SentryWarn(deps.Feature("examples"), "sync_id_fetch_failed",
+				deps.Err(err),
+				deps.String("impact", "dump_shows_all_changes"))
 		}
 	}
 
@@ -105,10 +102,8 @@ func Run(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 
 			dump, err := DumpScenario(dumpCtx, cfg.Store, startSyncID)
 			if err != nil {
-				cfg.Logger.Warnw("scenario_dump_failed", fsmv2sentry.ErrorFields{
-					Feature: "examples",
-					Err:     err,
-				}.ZapFields()...)
+				cfg.Logger.SentryWarn(deps.Feature("examples"), "scenario_dump_failed",
+					deps.Err(err))
 			} else {
 				fmt.Print(dump.FormatHuman())
 			}
@@ -123,7 +118,7 @@ func Run(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 }
 
 // SetupStore creates an in-memory TriangularStore for testing and CLI usage.
-func SetupStore(logger *zap.SugaredLogger) storage.TriangularStoreInterface {
+func SetupStore(logger deps.FSMLogger) storage.TriangularStoreInterface {
 	basicStore := memory.NewInMemoryStore()
 
 	return storage.NewTriangularStore(basicStore, logger)

@@ -24,26 +24,28 @@ import (
 	"go.uber.org/zap/zaptest/observer"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	fsmv2sentry "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/sentry"
 	umhsentry "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 )
 
 // TestLogger provides a logger that captures logs for verification in integration tests.
 type TestLogger struct {
-	Logger *zap.SugaredLogger
-	Logs   *observer.ObservedLogs
-	hook   *fsmv2sentry.SentryHook
-	mu     sync.RWMutex
+	Logger    *zap.SugaredLogger
+	FSMLogger deps.FSMLogger
+	Logs      *observer.ObservedLogs
+	hook      *fsmv2sentry.SentryHook
+	mu        sync.RWMutex
 }
 
 // initSentryOnce initializes Sentry once, even when parallel tests call NewTestLogger
 // multiple times concurrently.
 var initSentryOnce sync.Once
 
-// NewTestLogger creates a TestLogger with the specified log level.
+// NewTestLogger creates a TestLogger at DebugLevel.
 // Integration tests always enable Sentry with environment "integration-test".
-func NewTestLogger(level zapcore.Level) *TestLogger {
-	observerCore, logs := observer.New(level)
+func NewTestLogger() *TestLogger {
+	observerCore, logs := observer.New(zapcore.DebugLevel)
 
 	// Initialize Sentry for integration tests with dedicated environment.
 	// Use sync.Once to avoid reconfiguring global Sentry state in parallel tests.
@@ -58,9 +60,10 @@ func NewTestLogger(level zapcore.Level) *TestLogger {
 	logger := zap.New(wrappedCore).Sugar()
 
 	return &TestLogger{
-		Logger: logger,
-		Logs:   logs,
-		hook:   hook,
+		Logger:    logger,
+		FSMLogger: deps.NewFSMLogger(logger),
+		Logs:      logs,
+		hook:      hook,
 	}
 }
 

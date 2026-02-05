@@ -20,8 +20,7 @@ import (
 	"fmt"
 	"time"
 
-	"go.uber.org/zap"
-
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/testutil"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
@@ -88,7 +87,7 @@ drainLoop:
 
 // CommunicatorRunConfig configures a communicator scenario run with a mock relay server.
 type CommunicatorRunConfig struct {
-	Logger                  *zap.SugaredLogger        // If nil, creates a development logger
+	Logger                  deps.FSMLogger            // If nil, creates a development logger
 	MockServer              *testutil.MockRelayServer // If nil, creates and manages internally; caller closes if provided
 	AuthToken               string                    // Defaults to "test-auth-token"
 	InitialPullMessages     []*transport.UMHMessage   // Messages queued for communicator to pull
@@ -193,8 +192,7 @@ children:
 
 	logger := cfg.Logger
 	if logger == nil {
-		devLogger, _ := zap.NewDevelopment()
-		logger = devLogger.Sugar()
+		logger = deps.NewNopFSMLogger()
 	}
 
 	tickInterval := cfg.TickInterval
