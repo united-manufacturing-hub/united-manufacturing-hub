@@ -109,6 +109,8 @@ var _ = Describe("RunningState", func() {
 				Expect(result.State).To(BeAssignableToTypeOf(&state.RunningState{}))
 				Expect(result.Signal).To(Equal(fsmv2.SignalNone))
 				Expect(result.Action).To(BeAssignableToTypeOf(&action.CompactDeltasAction{}))
+				compactAction := result.Action.(*action.CompactDeltasAction)
+				Expect(compactAction.RetentionWindow).To(Equal(24 * time.Hour))
 			})
 		})
 

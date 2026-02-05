@@ -146,10 +146,19 @@ func (w *PersistenceWorker) CollectObservedState(ctx context.Context) (fsmv2.Obs
 }
 
 func (w *PersistenceWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
-	if spec != nil {
-		if _, ok := spec.(fsmv2config.UserSpec); !ok {
-			return nil, fmt.Errorf("invalid spec type: expected UserSpec, got %T", spec)
-		}
+	if spec == nil {
+		return &snapshot.PersistenceDesiredState{
+			BaseDesiredState: fsmv2config.BaseDesiredState{
+				State: "running",
+			},
+			CompactionInterval:  DefaultCompactionInterval,
+			RetentionWindow:     DefaultRetentionWindow,
+			MaintenanceInterval: DefaultMaintenanceInterval,
+		}, nil
+	}
+
+	if _, ok := spec.(fsmv2config.UserSpec); !ok {
+		return nil, fmt.Errorf("invalid spec type: expected UserSpec, got %T", spec)
 	}
 
 	return &snapshot.PersistenceDesiredState{

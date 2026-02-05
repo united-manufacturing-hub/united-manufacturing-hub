@@ -148,6 +148,7 @@ const (
 
 // Persistence worker counter names for store maintenance.
 const (
+	// CounterCompactionDeltasDeletedTotal tracks the total number of delta entries removed during store compaction.
 	CounterCompactionDeltasDeletedTotal CounterName = "compaction_deltas_deleted_total"
 )
 

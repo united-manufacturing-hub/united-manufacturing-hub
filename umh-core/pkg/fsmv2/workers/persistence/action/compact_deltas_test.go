@@ -53,6 +53,10 @@ var _ = Describe("CompactDeltasAction", func() {
 				Expect(mockStore.compactDeltasCalled).To(BeTrue())
 				Expect(mockStore.compactDeltasRetention).To(Equal(24 * time.Hour))
 				Expect(d.GetLastCompactionAt()).NotTo(BeZero())
+
+				drained := d.MetricsRecorder().Drain()
+				Expect(drained.Counters).To(HaveKeyWithValue(
+					string(deps.CounterCompactionDeltasDeletedTotal), int64(42)))
 			})
 		})
 
