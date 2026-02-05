@@ -33,8 +33,8 @@ const (
 
 // zapLogger implements FSMLogger by wrapping zap.SugaredLogger.
 type zapLogger struct {
-	baseFields []Field
 	sugar      *zap.SugaredLogger
+	baseFields []Field
 }
 
 // NewFSMLogger creates a new FSMLogger wrapping a zap.SugaredLogger.
