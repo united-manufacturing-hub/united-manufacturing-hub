@@ -166,27 +166,12 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 	currentStateForPhase := workerCtx.currentState
 	workerCtx.mu.RUnlock()
 
-	var (
-		lifecyclePhase    config.LifecyclePhase
-		observedStateName string
-	)
-
 	if currentStateForPhase != nil {
-		lifecyclePhase = currentStateForPhase.LifecyclePhase()
-		// Construct observed state name: phase.Prefix() + lowercase(state.String())
-		suffix := strings.ToLower(currentStateForPhase.String())
+		phase := currentStateForPhase.LifecyclePhase()
 
-		prefix := lifecyclePhase.Prefix()
-		if lifecyclePhase == config.PhaseStopped {
-			observedStateName = prefix // "stopped" has no suffix
-		} else {
-			observedStateName = prefix + suffix
-		}
-
-		// Cache both the observed state name and lifecycle phase
 		workerCtx.mu.Lock()
-		workerCtx.lastObservedStateName = observedStateName
-		workerCtx.lastLifecyclePhase = lifecyclePhase
+		workerCtx.lastObservedStateName = buildObservedStateName(phase, currentStateForPhase)
+		workerCtx.lastLifecyclePhase = phase
 		workerCtx.mu.Unlock()
 	}
 
@@ -440,15 +425,7 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 		// Parent supervisors call GetLifecyclePhase() which returns lastLifecyclePhase.
 		// If we update this before the transition, parent sees stale health status.
 		newPhase := result.State.LifecyclePhase()
-		newSuffix := strings.ToLower(result.State.String())
-
-		newPrefix := newPhase.Prefix()
-		if newPhase == config.PhaseStopped {
-			workerCtx.lastObservedStateName = newPrefix // "stopped" has no suffix
-		} else {
-			workerCtx.lastObservedStateName = newPrefix + newSuffix
-		}
-
+		workerCtx.lastObservedStateName = buildObservedStateName(newPhase, result.State)
 		workerCtx.lastLifecyclePhase = newPhase
 
 		workerCtx.mu.Unlock()
@@ -1160,6 +1137,16 @@ func (s *Supervisor[TObserved, TDesired]) checkRestartTimeouts(ctx context.Conte
 	}
 }
 
+// buildObservedStateName constructs the observed state name from a lifecycle phase and state string.
+// Format: phase.Prefix() + lowercase(state.String()), except PhaseStopped which has no suffix.
+func buildObservedStateName(phase config.LifecyclePhase, state fsmv2.State[any, any]) string {
+	prefix := phase.Prefix()
+	if phase == config.PhaseStopped {
+		return prefix
+	}
+	return prefix + strings.ToLower(state.String())
+}
+
 // getString extracts a string value from a document map with a default fallback.
 func getString(doc interface{}, key string, defaultValue string) string {
 	if doc == nil {
@@ -1299,34 +1286,29 @@ func (s *Supervisor[TObserved, TDesired]) checkDataFreshness(snapshot *fsmv2.Sna
 	isShuttingDown := !s.started.Load()
 
 	if s.freshnessChecker.IsTimeout(snapshot) {
-		if isShuttingDown {
-			s.logger.Debug("data_timeout_during_shutdown",
-				deps.Duration("age", age),
-				deps.Duration("threshold", s.collectorHealth.timeout))
-		} else {
-			s.logger.SentryWarn(deps.FeatureFSMv2, snapshot.Identity.HierarchyPath, "data_timeout",
-				deps.Duration("age", age),
-				deps.Duration("threshold", s.collectorHealth.timeout))
-		}
-
+		s.logFreshnessWarning(isShuttingDown, snapshot.Identity.HierarchyPath, "data_timeout", age, s.collectorHealth.timeout)
 		return false
 	}
 
 	if !s.freshnessChecker.Check(snapshot) {
-		if isShuttingDown {
-			s.logger.Debug("data_stale_during_shutdown",
-				deps.Duration("age", age),
-				deps.Duration("threshold", s.collectorHealth.staleThreshold))
-		} else {
-			s.logger.SentryWarn(deps.FeatureFSMv2, snapshot.Identity.HierarchyPath, "data_stale",
-				deps.Duration("age", age),
-				deps.Duration("threshold", s.collectorHealth.staleThreshold))
-		}
-
+		s.logFreshnessWarning(isShuttingDown, snapshot.Identity.HierarchyPath, "data_stale", age, s.collectorHealth.staleThreshold)
 		return false
 	}
 
 	return true
+}
+
+// logFreshnessWarning logs a data freshness issue at DEBUG during shutdown (expected) or SentryWarn otherwise.
+func (s *Supervisor[TObserved, TDesired]) logFreshnessWarning(isShuttingDown bool, hierarchyPath, msg string, age, threshold time.Duration) {
+	if isShuttingDown {
+		s.logger.Debug(msg+"_during_shutdown",
+			deps.Duration("age", age),
+			deps.Duration("threshold", threshold))
+	} else {
+		s.logger.SentryWarn(deps.FeatureFSMv2, hierarchyPath, msg,
+			deps.Duration("age", age),
+			deps.Duration("threshold", threshold))
+	}
 }
 
 func (s *Supervisor[TObserved, TDesired]) logHeartbeat() {
