@@ -616,6 +616,7 @@ github.com/example/pkg/executor.executeWork()
 			// Create new hook with very short debounce to allow both events
 			store = newEventStore()
 			transport.store = store
+			hook.Stop()
 			hook = sentry.NewSentryHook(time.Nanosecond) // Effectively no debouncing
 			wrappedCore := hook.Wrap(zapcore.NewCore(
 				zapcore.NewJSONEncoder(zap.NewProductionEncoderConfig()),
@@ -652,6 +653,7 @@ github.com/example/pkg/executor.executeWork()
 			// Create new hook with no debouncing
 			store = newEventStore()
 			transport.store = store
+			hook.Stop()
 			hook = sentry.NewSentryHook(time.Nanosecond)
 			wrappedCore := hook.Wrap(zapcore.NewCore(
 				zapcore.NewJSONEncoder(zap.NewProductionEncoderConfig()),
@@ -684,6 +686,7 @@ github.com/example/pkg/executor.executeWork()
 			// Create new hook with no debouncing
 			store = newEventStore()
 			transport.store = store
+			hook.Stop()
 			hook = sentry.NewSentryHook(time.Nanosecond)
 			wrappedCore := hook.Wrap(zapcore.NewCore(
 				zapcore.NewJSONEncoder(zap.NewProductionEncoderConfig()),
@@ -737,6 +740,7 @@ github.com/example/pkg/executor.executeWork()
 			// Create hook with very short debounce window
 			store = newEventStore()
 			transport.store = store
+			hook.Stop()
 			hook = sentry.NewSentryHook(50 * time.Millisecond) // 50ms window
 			wrappedCore := hook.Wrap(zapcore.NewCore(
 				zapcore.NewJSONEncoder(zap.NewProductionEncoderConfig()),
