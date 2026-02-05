@@ -22,20 +22,9 @@ package deps
 type Feature string
 
 const (
-	// FeatureLifecycle covers worker creation, removal, and lifecycle transitions.
-	FeatureLifecycle Feature = "lifecycle"
-
-	// FeatureReconciliation covers the main reconciliation loop and state synchronization.
-	FeatureReconciliation Feature = "reconciliation"
-
-	// FeatureCollection covers observed state collection from workers.
-	FeatureCollection Feature = "collection"
-
-	// FeatureActions covers action execution, queuing, and timeouts.
-	FeatureActions Feature = "actions"
-
-	// FeatureHealth covers health monitoring, freshness checks, and circuit breakers.
-	FeatureHealth Feature = "health"
+	// FeatureFSMv2 covers the FSMv2 supervisor core: lifecycle, reconciliation,
+	// collection, action execution, and health monitoring.
+	FeatureFSMv2 Feature = "fsmv2"
 
 	// FeatureExamples covers example workers used for testing and documentation.
 	FeatureExamples Feature = "examples"
@@ -46,6 +35,6 @@ const (
 	// FeatureCommunicator covers the communicator worker for external communication.
 	FeatureCommunicator Feature = "communicator"
 
-	// FeatureTransport covers the transport worker for message passing.
-	FeatureTransport Feature = "transport"
+	// FeaturePersistence covers the persistence layer for state storage.
+	FeaturePersistence Feature = "persistence"
 )

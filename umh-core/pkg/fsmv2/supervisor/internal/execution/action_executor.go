@@ -155,7 +155,7 @@ func (ae *ActionExecutor) executeWorkWithRecovery(ctx context.Context, work acti
 			// Extract stack manually because Sentry SDK's ExtractStacktrace() only works on
 			// error types with stacktrace interfaces. Panic recovery values are plain
 			// interface{}, so capture debug.Stack() explicitly for Sentry visibility.
-			ae.logger.SentryError(deps.FeatureActions, err, "action_panic",
+			ae.logger.SentryError(deps.FeatureFSMv2, err, "action_panic",
 				deps.HierarchyPath(ae.identity.HierarchyPath),
 				deps.CorrelationID(work.actionID),
 				deps.ActionName(work.action.Name()),
@@ -210,14 +210,14 @@ func (ae *ActionExecutor) executeWorkWithRecovery(ctx context.Context, work acti
 		if errors.Is(err, context.DeadlineExceeded) {
 			metrics.RecordActionTimeout(ae.identity.HierarchyPath, work.action.Name())
 
-			ae.logger.SentryError(deps.FeatureActions, err, "action_failed",
+			ae.logger.SentryError(deps.FeatureFSMv2, err, "action_failed",
 				deps.HierarchyPath(ae.identity.HierarchyPath),
 				deps.CorrelationID(work.actionID),
 				deps.ActionName(work.action.Name()),
 				deps.DurationMs(duration.Milliseconds()),
 				deps.Int64("timeout_ms", work.timeout.Milliseconds()))
 		} else {
-			ae.logger.SentryError(deps.FeatureActions, err, "action_failed",
+			ae.logger.SentryError(deps.FeatureFSMv2, err, "action_failed",
 				deps.HierarchyPath(ae.identity.HierarchyPath),
 				deps.CorrelationID(work.actionID),
 				deps.ActionName(work.action.Name()),
@@ -241,7 +241,7 @@ func (ae *ActionExecutor) EnqueueAction(actionID string, action fsmv2.Action[any
 	if ae.stopped {
 		ae.mu.Unlock()
 
-		ae.logger.SentryWarn(deps.FeatureActions, "action_enqueue_rejected",
+		ae.logger.SentryWarn(deps.FeatureFSMv2, "action_enqueue_rejected",
 			deps.HierarchyPath(ae.identity.HierarchyPath),
 			deps.CorrelationID(actionID),
 			deps.ActionName(action.Name()),
@@ -255,7 +255,7 @@ func (ae *ActionExecutor) EnqueueAction(actionID string, action fsmv2.Action[any
 	if ae.inProgress[actionID] {
 		ae.mu.Unlock()
 
-		ae.logger.SentryWarn(deps.FeatureActions, "action_enqueue_rejected",
+		ae.logger.SentryWarn(deps.FeatureFSMv2, "action_enqueue_rejected",
 			deps.HierarchyPath(ae.identity.HierarchyPath),
 			deps.CorrelationID(actionID),
 			deps.ActionName(action.Name()),
@@ -291,7 +291,7 @@ func (ae *ActionExecutor) EnqueueAction(actionID string, action fsmv2.Action[any
 		ae.mu.Unlock()
 
 		queueErr := errors.New("action queue full")
-		ae.logger.SentryError(deps.FeatureActions, queueErr, "action_queue_full",
+		ae.logger.SentryError(deps.FeatureFSMv2, queueErr, "action_queue_full",
 			deps.HierarchyPath(ae.identity.HierarchyPath),
 			deps.CorrelationID(actionID),
 			deps.ActionName(action.Name()),

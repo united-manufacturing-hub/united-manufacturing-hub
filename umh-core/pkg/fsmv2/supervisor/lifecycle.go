@@ -58,7 +58,7 @@ func (s *Supervisor[TObserved, TDesired]) Start(ctx context.Context) <-chan stru
 		// NOTE: Start() currently always returns nil (panics on double-start instead).
 		// Error handling preserved for future extensibility (e.g., context validation, resource allocation).
 		if err := workerCtx.collector.Start(supervisorCtx); err != nil {
-			s.logger.SentryError(deps.FeatureLifecycle, err, "collector_start_failed",
+			s.logger.SentryError(deps.FeatureFSMv2, err, "collector_start_failed",
 				deps.HierarchyPath(workerCtx.identity.HierarchyPath))
 		}
 
@@ -96,7 +96,7 @@ func (s *Supervisor[TObserved, TDesired]) tickLoop(ctx context.Context) {
 			return
 		case <-ticker.C:
 			if err := s.tick(ctx); err != nil {
-				s.logger.SentryError(deps.FeatureLifecycle, err, "tick_error",
+				s.logger.SentryError(deps.FeatureFSMv2, err, "tick_error",
 					deps.HierarchyPath(s.GetHierarchyPath()))
 			}
 		}
@@ -204,7 +204,7 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 		// Request graceful shutdown on all workers
 		for _, workerID := range workerIDs {
 			if err := s.requestShutdown(gracefulCtx, workerID, "supervisor_shutdown"); err != nil {
-				s.logger.SentryWarn(deps.FeatureLifecycle, "graceful_shutdown_request_failed",
+				s.logger.SentryWarn(deps.FeatureFSMv2, "graceful_shutdown_request_failed",
 					deps.HierarchyPath(s.GetHierarchyPath()),
 					deps.Err(err))
 			}
@@ -223,7 +223,7 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 				remainingCount := len(s.workers)
 				s.mu.RUnlock()
 
-				s.logger.SentryWarn(deps.FeatureLifecycle, "graceful_shutdown_timeout",
+				s.logger.SentryWarn(deps.FeatureFSMv2, "graceful_shutdown_timeout",
 					deps.Duration("timeout", gracefulTimeout),
 					deps.Int("remaining_worker_count", remainingCount))
 
@@ -432,7 +432,7 @@ func (s *Supervisor[TObserved, TDesired]) RequestShutdown(ctx context.Context, r
 
 	for _, workerID := range workerIDs {
 		if err := s.requestShutdown(ctx, workerID, reason); err != nil {
-			s.logger.SentryWarn(deps.FeatureLifecycle, "shutdown_request_failed",
+			s.logger.SentryWarn(deps.FeatureFSMv2, "shutdown_request_failed",
 				deps.HierarchyPath(s.GetHierarchyPath()),
 				deps.Err(err))
 		}
@@ -465,7 +465,7 @@ func (s *Supervisor[TObserved, TDesired]) handleWorkerRestart(ctx context.Contex
 		s.mu.RUnlock()
 
 		err := errors.New("worker not found for restart")
-		s.logger.SentryError(deps.FeatureLifecycle, err, "worker_restart_not_found",
+		s.logger.SentryError(deps.FeatureFSMv2, err, "worker_restart_not_found",
 			deps.HierarchyPath(s.GetHierarchyPathUnlocked()),
 			deps.String("target_worker_id", workerID))
 
@@ -496,7 +496,7 @@ func (s *Supervisor[TObserved, TDesired]) handleWorkerRestart(ctx context.Contex
 
 	// 2. Clear shutdown flag in storage BEFORE creating new worker.
 	if err := s.clearShutdownRequested(ctx, workerID); err != nil {
-		s.logger.SentryWarn(deps.FeatureLifecycle, "restart_clear_shutdown_failed",
+		s.logger.SentryWarn(deps.FeatureFSMv2, "restart_clear_shutdown_failed",
 			deps.HierarchyPath(identity.HierarchyPath),
 			deps.Err(err))
 		// Continue anyway - the new worker might still work
@@ -541,7 +541,7 @@ func (s *Supervisor[TObserved, TDesired]) handleWorkerRestart(ctx context.Contex
 			// NOTE: Start() currently always returns nil (panics on double-start instead).
 			// Error handling preserved for future extensibility (e.g., context validation, resource allocation).
 			if err := collector.Start(supervisorCtx); err != nil {
-				s.logger.SentryError(deps.FeatureLifecycle, err, "restart_collector_start_failed",
+				s.logger.SentryError(deps.FeatureFSMv2, err, "restart_collector_start_failed",
 					deps.HierarchyPath(identity.HierarchyPath))
 			}
 		}

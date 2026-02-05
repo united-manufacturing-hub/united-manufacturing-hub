@@ -48,22 +48,22 @@ var _ = Describe("zapLogger field propagation", func() {
 	It("SentryError produces JSON with feature, error, and msg fields", func() {
 		logger := deps.NewJSONFSMLogger(buf, deps.LevelDebug)
 		testErr := errors.New("something broke")
-		logger.SentryError(deps.FeatureLifecycle, testErr, "lifecycle failed")
+		logger.SentryError(deps.FeatureFSMv2, testErr, "lifecycle failed")
 
 		m := parseLine(buf)
 		Expect(m).To(HaveKeyWithValue("msg", "lifecycle failed"))
-		Expect(m).To(HaveKeyWithValue("feature", "lifecycle"))
+		Expect(m).To(HaveKeyWithValue("feature", "fsmv2"))
 		Expect(m).To(HaveKey("error"))
 		Expect(m).To(HaveKeyWithValue("level", "error"))
 	})
 
 	It("SentryWarn produces JSON with feature and msg fields", func() {
 		logger := deps.NewJSONFSMLogger(buf, deps.LevelDebug)
-		logger.SentryWarn(deps.FeatureReconciliation, "reconciliation slow")
+		logger.SentryWarn(deps.FeatureFSMv2, "reconciliation slow")
 
 		m := parseLine(buf)
 		Expect(m).To(HaveKeyWithValue("msg", "reconciliation slow"))
-		Expect(m).To(HaveKeyWithValue("feature", "reconciliation"))
+		Expect(m).To(HaveKeyWithValue("feature", "fsmv2"))
 		Expect(m).To(HaveKeyWithValue("level", "warn"))
 	})
 
@@ -132,8 +132,8 @@ var _ = Describe("nopLogger contract", func() {
 			logger.Debug("debug")
 			logger.Info("info")
 			logger.SentryWarn(deps.FeatureExamples, "warn")
-			logger.SentryWarn(deps.FeatureHealth, "health warn")
-			logger.SentryError(deps.FeatureActions, testErr, "action error")
+			logger.SentryWarn(deps.FeatureFSMv2, "health warn")
+			logger.SentryError(deps.FeatureFSMv2, testErr, "action error")
 		}).NotTo(Panic())
 	})
 
