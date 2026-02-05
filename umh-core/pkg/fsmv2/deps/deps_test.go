@@ -69,6 +69,24 @@ var _ = Describe("BaseDependencies", func() {
 		})
 	})
 
+	Describe("GetHierarchyPath", func() {
+		It("should return the identity's hierarchy path", func() {
+			identity := deps.Identity{
+				ID:            "test-id",
+				WorkerType:    "test-worker",
+				HierarchyPath: "root/parent-1(parent)/test-id(test-worker)",
+			}
+			dependencies := deps.NewBaseDependencies(logger, nil, identity)
+			Expect(dependencies.GetHierarchyPath()).To(Equal("root/parent-1(parent)/test-id(test-worker)"))
+		})
+
+		It("should return empty string when identity has no hierarchy path", func() {
+			identity := deps.Identity{ID: "test-id", WorkerType: "test-worker"}
+			dependencies := deps.NewBaseDependencies(logger, nil, identity)
+			Expect(dependencies.GetHierarchyPath()).To(BeEmpty())
+		})
+	})
+
 	Describe("GetActionHistory", func() {
 		It("should return nil when no action history has been set", func() {
 			identity := deps.Identity{ID: "test-id", WorkerType: "test-worker"}

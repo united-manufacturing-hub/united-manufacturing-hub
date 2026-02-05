@@ -18,7 +18,7 @@
 // entries, forwarding them to Sentry with fingerprinting and debouncing.
 //
 // Production code uses [deps.FSMLogger] methods (SentryWarn, SentryError)
-// which inject "feature" and "error" fields that this hook extracts.
+// which inject "feature", "hierarchy_path", and "error" fields that this hook extracts.
 //
 // # How Errors Appear in Sentry
 //

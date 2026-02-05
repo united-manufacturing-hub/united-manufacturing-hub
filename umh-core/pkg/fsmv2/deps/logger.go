@@ -96,6 +96,7 @@ func Err(err error) Field {
 }
 
 // HierarchyPath creates a Field for the worker hierarchy path.
+// For SentryWarn/SentryError, use the dedicated hierarchyPath parameter instead.
 func HierarchyPath(path string) Field {
 	return Field{Key: "hierarchy_path", Value: path}
 }

@@ -78,6 +78,14 @@ var _ = Describe("zapLogger field propagation", func() {
 		Expect(m).NotTo(HaveKey("hierarchy_path"))
 	})
 
+	It("SentryWarn omits hierarchy_path when empty", func() {
+		logger := deps.NewJSONFSMLogger(buf, deps.LevelDebug)
+		logger.SentryWarn(deps.FeatureFSMv2, "", "reconciliation slow")
+
+		m := parseLine(buf)
+		Expect(m).NotTo(HaveKey("hierarchy_path"))
+	})
+
 	It("Info produces JSON with msg field at info level", func() {
 		logger := deps.NewJSONFSMLogger(buf, deps.LevelDebug)
 		logger.Info("hello info")
