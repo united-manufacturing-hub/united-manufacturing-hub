@@ -50,7 +50,7 @@ No – the two big ones are still there:
 
 **Scalability**: Deploy one UMH Core instance per production line, each forwarding to a central site instance. This ISA-95 style hierarchy naturally distributes workload across your infrastructure.
 
-**Failover**: Kubernetes restarts crashed pods (30–60 seconds) and reschedules after node failure (1–2 minutes). See [High Availability](../production/high-availability.md).
+**Failover**: Your container manager restarts crashed containers (30-60 seconds) and reschedules after node failure (2-5 minutes). See [High Availability](../production/high-availability.md).
 
 ## Why is Kafka (Redpanda) embedded instead of its own container?
 
