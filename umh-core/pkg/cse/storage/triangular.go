@@ -667,7 +667,7 @@ func (ts *TriangularStore) LoadSnapshot(ctx context.Context, workerType string, 
 		ts.cacheMutex.RUnlock()
 
 		// Return a deep copy to prevent callers from corrupting the cache
-		return cloneSnapshot(cached.snapshot), nil
+		return ts.cloneSnapshot(cached.snapshot), nil
 	}
 
 	ts.cacheMutex.RUnlock()
@@ -718,7 +718,7 @@ func (ts *TriangularStore) LoadSnapshot(ctx context.Context, workerType string, 
 	}
 	ts.cacheMutex.Unlock()
 
-	return cloneSnapshot(snapshot), nil
+	return ts.cloneSnapshot(snapshot), nil
 }
 
 func (ts *TriangularStore) GetLastSyncID(_ context.Context) (int64, error) {
@@ -740,33 +740,31 @@ func (ts *TriangularStore) Close() error {
 
 // cloneSnapshot creates a deep copy of a Snapshot.
 // Callers may mutate returned snapshots, so we return copies, not references.
-func cloneSnapshot(s *Snapshot) *Snapshot {
+func (ts *TriangularStore) cloneSnapshot(s *Snapshot) *Snapshot {
 	if s == nil {
 		return nil
 	}
 
 	return &Snapshot{
-		Identity: deepCopyDocument(s.Identity),
-		Desired:  deepCopyDocument(s.Desired),
-		Observed: deepCopyObserved(s.Observed),
+		Identity: ts.deepCopyDocument(s.Identity),
+		Desired:  ts.deepCopyDocument(s.Desired),
+		Observed: ts.deepCopyObserved(s.Observed),
 	}
 }
 
-// deepCopyDocument creates a shallow copy of a persistence.Document.
-// For FSM v2's use case, documents contain only primitive types (strings, numbers, bools)
-// so a shallow copy is sufficient. If nested maps/slices are needed, this should be
-// extended to use json.Marshal/Unmarshal for true deep copy.
-func deepCopyDocument(doc persistence.Document) persistence.Document {
+// deepCopyDocument creates a deep copy of a persistence.Document using JSON round-trip.
+// This ensures nested maps and slices are fully cloned, preventing callers from
+// corrupting cached data. Falls back to shallow copy if JSON marshaling fails.
+func (ts *TriangularStore) deepCopyDocument(doc persistence.Document) persistence.Document {
 	if doc == nil {
 		return nil
 	}
 
-	// Use JSON round-trip to ensure true deep copy of nested maps/slices.
-	// A shallow copy (for k, v := range doc) would leave nested structures
-	// referencing the original data, allowing mutations to corrupt the cache.
 	data, err := json.Marshal(doc)
 	if err != nil {
-		// Fallback to shallow copy if marshal fails (should not happen in practice)
+		ts.logger.SentryWarn(deps.FeatureCSE, "", "deep_copy_document_marshal_failed",
+			deps.Err(err))
+
 		shallowCopy := make(persistence.Document, len(doc))
 		for k, v := range doc {
 			shallowCopy[k] = v
@@ -777,7 +775,9 @@ func deepCopyDocument(doc persistence.Document) persistence.Document {
 
 	var deepCopy persistence.Document
 	if err := json.Unmarshal(data, &deepCopy); err != nil {
-		// Fallback to shallow copy if unmarshal fails
+		ts.logger.SentryWarn(deps.FeatureCSE, "", "deep_copy_document_unmarshal_failed",
+			deps.Err(err))
+
 		shallowCopy := make(persistence.Document, len(doc))
 		for k, v := range doc {
 			shallowCopy[k] = v
@@ -791,23 +791,30 @@ func deepCopyDocument(doc persistence.Document) persistence.Document {
 
 // deepCopyObserved creates a copy of the Observed field which can be either
 // a persistence.Document or a typed struct.
-func deepCopyObserved(observed interface{}) interface{} {
+func (ts *TriangularStore) deepCopyObserved(observed interface{}) interface{} {
 	if observed == nil {
 		return nil
 	}
 
 	if doc, ok := observed.(persistence.Document); ok {
-		return deepCopyDocument(doc)
+		return ts.deepCopyDocument(doc)
 	}
 
-	// JSON round-trip for typed structs handles nested fields properly
 	data, err := json.Marshal(observed)
 	if err != nil {
+		ts.logger.SentryWarn(deps.FeatureCSE, "", "deep_copy_observed_marshal_failed",
+			deps.Err(err),
+			deps.String("type", fmt.Sprintf("%T", observed)))
+
 		return observed
 	}
 
 	newVal := reflect.New(reflect.TypeOf(observed)).Interface()
 	if err := json.Unmarshal(data, newVal); err != nil {
+		ts.logger.SentryWarn(deps.FeatureCSE, "", "deep_copy_observed_unmarshal_failed",
+			deps.Err(err),
+			deps.String("type", fmt.Sprintf("%T", observed)))
+
 		return observed
 	}
 
@@ -1206,13 +1213,15 @@ func (ts *TriangularStore) GetDeltas(ctx context.Context, sub Subscription) (Del
 
 	if ts.deltaStore != nil {
 		entries, err := ts.deltaStore.GetAllSince(ctx, sub.LastSyncID, deltaLimit)
-		if err != nil {
+
+		switch {
+		case err != nil:
 			ts.logger.SentryWarn(deps.FeatureCSE, "", "delta_query_fallback_to_bootstrap",
 				deps.Err(err),
 				deps.Int64("lastSyncID", sub.LastSyncID),
 				deps.Int64("currentSyncID", currentSyncID),
 				deps.Int64("syncLag", currentSyncID-sub.LastSyncID))
-		} else if len(entries) > 0 {
+		case len(entries) > 0:
 			deltas := make([]Delta, 0, len(entries))
 			for _, entry := range entries {
 				deltas = append(deltas, Delta{
@@ -1230,6 +1239,10 @@ func (ts *TriangularStore) GetDeltas(ctx context.Context, sub Subscription) (Del
 				LatestSyncID: currentSyncID,
 				HasMore:      len(deltas) >= deltaLimit,
 			}, nil
+		default:
+			ts.logger.Debug("delta_store_empty_falling_through_to_bootstrap",
+				deps.Int64("lastSyncID", sub.LastSyncID),
+				deps.Int64("currentSyncID", currentSyncID))
 		}
 	}
 
@@ -1264,17 +1277,30 @@ func (ts *TriangularStore) buildBootstrap(ctx context.Context, atSyncID int64) (
 
 		identityDocs, err := ts.store.Find(ctx, identityCollection, persistence.Query{})
 		if err != nil {
+			ts.logger.SentryWarn(deps.FeatureCSE, "", "bootstrap_identity_find_failed",
+				deps.Err(err),
+				deps.WorkerType(workerType))
+
 			continue
 		}
 
 		for _, identityDoc := range identityDocs {
 			id, ok := identityDoc["id"].(string)
 			if !ok {
+				ts.logger.SentryWarn(deps.FeatureCSE, "", "bootstrap_identity_id_not_string",
+					deps.WorkerType(workerType),
+					deps.Any("raw_id", identityDoc["id"]))
+
 				continue
 			}
 
 			snapshot, err := ts.LoadSnapshot(ctx, workerType, id)
 			if err != nil {
+				ts.logger.SentryWarn(deps.FeatureCSE, "", "bootstrap_load_snapshot_failed",
+					deps.Err(err),
+					deps.WorkerType(workerType),
+					deps.WorkerID(id))
+
 				continue
 			}
 

@@ -15,8 +15,10 @@
 package storage_test
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -1426,6 +1428,85 @@ var _ = Describe("TriangularStore", func() {
 				deltasAfter, _ := store.Find(ctx, storage.DeltaCollectionName, persistence.Query{})
 				Expect(deltasAfter).To(HaveLen(countBefore), "No delta should be added for document with only id")
 			})
+		})
+	})
+})
+
+type failingFindStore struct {
+	*mockStore
+	failCollection string
+	findErr        error
+}
+
+func (f *failingFindStore) Find(ctx context.Context, collection string, query persistence.Query) ([]persistence.Document, error) {
+	if f.failCollection == "" || strings.HasSuffix(collection, f.failCollection) {
+		return nil, f.findErr
+	}
+
+	return f.mockStore.Find(ctx, collection, query)
+}
+
+var _ = Describe("Silent failure logging", func() {
+	var (
+		ctx context.Context
+	)
+
+	BeforeEach(func() {
+		ctx = context.Background()
+	})
+
+	Describe("buildBootstrap via GetDeltas", func() {
+		It("should log warning when identity Find fails", func() {
+			var logBuf bytes.Buffer
+			logger := deps.NewJSONFSMLogger(&logBuf, deps.LevelDebug)
+
+			underlying := newMockStore()
+			failStore := &failingFindStore{
+				mockStore: underlying,
+				findErr:   errors.New("disk I/O error"),
+			}
+			ts := storage.NewTriangularStore(failStore, logger)
+
+			err := ts.SaveIdentity(ctx, "container", "w1", persistence.Document{
+				"id":   "w1",
+				"name": "Worker 1",
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			resp, err := ts.GetDeltas(ctx, storage.Subscription{LastSyncID: 0})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(resp.RequiresBootstrap).To(BeTrue())
+
+			logOutput := logBuf.String()
+			Expect(logOutput).To(ContainSubstring("bootstrap_identity_find_failed"))
+			Expect(logOutput).To(ContainSubstring("disk I/O error"))
+		})
+	})
+
+	Describe("GetDeltas empty delta fallthrough", func() {
+		It("should log debug when delta store returns empty entries", func() {
+			var logBuf bytes.Buffer
+			logger := deps.NewJSONFSMLogger(&logBuf, deps.LevelDebug)
+
+			ms := newMockStore()
+			ts := storage.NewTriangularStore(ms, logger)
+
+			err := ts.SaveIdentity(ctx, "container", "w1", persistence.Document{
+				"id":   "w1",
+				"name": "Worker 1",
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			ms.mu.Lock()
+			delete(ms.collections, storage.DeltaCollectionName)
+			ms.mu.Unlock()
+
+			resp, err := ts.GetDeltas(ctx, storage.Subscription{LastSyncID: 0})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(resp.RequiresBootstrap).To(BeTrue())
+
+			logOutput := logBuf.String()
+			Expect(logOutput).To(ContainSubstring("delta_store_empty_falling_through_to_bootstrap"))
 		})
 	})
 })
