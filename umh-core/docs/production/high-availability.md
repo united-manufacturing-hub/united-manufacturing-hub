@@ -12,7 +12,7 @@ UMH Core handles high availability without custom failover daemons. Inside the c
 
 ## How Failover Works
 
-All state lives in the `/data` volume (see [Container Layout](../reference/container-layout.md) for structure). When a container or node fails, your container manager starts a new container that mounts the same volume. Redpanda recovers from its commit log on disk and resumes processing.
+All state lives in the `/data` volume (see [Container Layout](../reference/container-layout.md) for structure). When a container or node fails, your container manager starts a new container that mounts the same volume. Redpanda recovers from its on-disk data and resumes processing.
 
 ## Why Not Custom Failover?
 
@@ -48,6 +48,6 @@ If you do not have enterprise storage, Longhorn is a good choice for k3s cluster
 
 The standard approach accepts 30-60 second recovery on container failure. If your process cannot tolerate any interruption, contact UMH to discuss active-active architectures.
 
-### OPC UA Sessions
+## OPC UA Sessions After Failover
 
-Your OPC UA clients must re-establish sessions after any failover. UMH Core reconnects automatically, but the re-establishment takes a few seconds during which no data is collected from OPC UA sources. The OPC UA protocol requires this.
+OPC UA sessions must be re-established after any failover. UMH Core reconnects to OPC UA servers automatically, but re-establishment takes a few seconds during which no data is collected from OPC UA sources. The OPC UA protocol requires this.
