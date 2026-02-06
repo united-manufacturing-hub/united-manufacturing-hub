@@ -31,6 +31,10 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 )
 
+// ErrMalformedDelta is a sentinel error for delta documents with missing or invalid fields.
+// Used for consistent Sentry fingerprinting - error types (not messages) become the fingerprint key.
+var ErrMalformedDelta = errors.New("malformed delta document")
+
 // TriangularStore provides high-level operations for FSM v2's triangular model.
 //
 // DESIGN DECISION: Auto-inject CSE metadata transparently
@@ -1330,7 +1334,8 @@ func (ts *TriangularStore) GetLatestSyncID(ctx context.Context) (int64, error) {
 }
 
 // CompactDeltas removes delta entries older than the retention window.
-// This is a lightweight, non-blocking operation safe to call during normal operation.
+// Malformed documents (missing timestamp/id) are skipped and counted.
+// On Delete error, returns progress so far and error (supervisor logs + retries).
 //
 // Clients offline longer than retentionWindow will get bootstrap (full state) instead
 // of deltas. This is expected behavior - buildBootstrap() already handles this case.
@@ -1366,6 +1371,7 @@ func (ts *TriangularStore) CompactDeltas(ctx context.Context, retentionWindow ti
 	}
 
 	deleted := 0
+	skipped := 0
 
 	for _, doc := range docs {
 		select {
@@ -1376,13 +1382,17 @@ func (ts *TriangularStore) CompactDeltas(ctx context.Context, retentionWindow ti
 
 		timestampMs, hasTimestamp := extractTimestampMs(doc)
 		if !hasTimestamp {
-			return deleted, fmt.Errorf("delta missing timestamp: doc_id=%v", doc["id"])
+			skipped++
+
+			continue
 		}
 
 		if timestampMs < cutoffMs {
 			id, ok := doc["id"].(string)
 			if !ok {
-				return deleted, fmt.Errorf("delta has invalid id field: doc=%v", doc)
+				skipped++
+
+				continue
 			}
 
 			if err := ts.store.Delete(ctx, DeltaCollectionName, id); err != nil {
@@ -1393,7 +1403,15 @@ func (ts *TriangularStore) CompactDeltas(ctx context.Context, retentionWindow ti
 		}
 	}
 
-	if deleted > 0 {
+	if skipped > 0 {
+		// Wrap with sentinel error type for consistent Sentry fingerprinting
+		err := fmt.Errorf("%w: skipped %d malformed documents during compaction", ErrMalformedDelta, skipped)
+		ts.logger.Warnw("compaction_skipped_documents",
+			"error", err,
+			"deleted", deleted,
+			"skipped", skipped,
+			"retention_window", retentionWindow)
+	} else if deleted > 0 {
 		ts.logger.Infow("compaction_complete",
 			"deleted", deleted,
 			"retention_window", retentionWindow)
