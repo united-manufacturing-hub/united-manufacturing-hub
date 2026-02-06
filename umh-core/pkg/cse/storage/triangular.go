@@ -1354,6 +1354,8 @@ func (ts *TriangularStore) CompactDeltas(ctx context.Context, retentionWindow ti
 	cutoffTime := ts.clock.Now().Add(-retentionWindow)
 	cutoffMs := cutoffTime.UnixMilli()
 
+	// TODO: When switching to SQLite, use a filtered query to push timestamp
+	// filtering to the database instead of loading all deltas into memory.
 	docs, err := ts.store.Find(ctx, DeltaCollectionName, persistence.Query{})
 	if err != nil {
 		if errors.Is(err, persistence.ErrNotFound) {
@@ -1364,58 +1366,37 @@ func (ts *TriangularStore) CompactDeltas(ctx context.Context, retentionWindow ti
 	}
 
 	deleted := 0
-	skipped := 0
-	failed := 0
 
 	for _, doc := range docs {
+		select {
+		case <-ctx.Done():
+			return deleted, ctx.Err()
+		default:
+		}
+
 		timestampMs, hasTimestamp := extractTimestampMs(doc)
-
 		if !hasTimestamp {
-			ts.logger.Warnw("delta_missing_timestamp",
-				"doc_id", doc["id"],
-				"reason", "missing or invalid timestamp field")
-
-			skipped++
-
-			continue
+			return deleted, fmt.Errorf("delta missing timestamp: doc_id=%v", doc["id"])
 		}
 
 		if timestampMs < cutoffMs {
 			id, ok := doc["id"].(string)
 			if !ok {
-				ts.logger.Warnw("delta_malformed",
-					"doc", doc,
-					"reason", "missing or invalid id field")
-
-				skipped++
-
-				continue
+				return deleted, fmt.Errorf("delta has invalid id field: doc=%v", doc)
 			}
 
 			if err := ts.store.Delete(ctx, DeltaCollectionName, id); err != nil {
-				ts.logger.Warnw("failed_to_delete_delta",
-					"id", id,
-					"error", err)
-
-				failed++
-
-				continue
+				return deleted, fmt.Errorf("failed to delete delta %s: %w", id, err)
 			}
 
 			deleted++
 		}
 	}
 
-	if deleted > 0 || skipped > 0 || failed > 0 {
+	if deleted > 0 {
 		ts.logger.Infow("compaction_complete",
 			"deleted", deleted,
-			"skipped", skipped,
-			"failed", failed,
 			"retention_window", retentionWindow)
-	}
-
-	if failed > 0 {
-		return deleted, fmt.Errorf("compaction completed with %d failures (deleted %d, skipped %d)", failed, deleted, skipped)
 	}
 
 	return deleted, nil
