@@ -30,11 +30,9 @@ import (
 // This state is unreachable but kept to avoid breaking architecture tests. Will be deleted in ENG-4265.
 //
 // Transitions:
-//   - → SyncingState: when authenticated && !tokenExpired
-//   - → StoppedState: if shutdown requested
-//   - → self: loops emitting AuthenticateAction until success
-//
-// Enforces C1 (auth precedence), C2 (token expiry), C4 (shutdown priority).
+//   - SyncingState: when authenticated and token is valid.
+//   - StoppedState: if shutdown requested.
+//   - self: loops emitting AuthenticateAction with backoff until token acquired.
 type TryingToAuthenticateState struct {
 	helpers.StartingBase
 }

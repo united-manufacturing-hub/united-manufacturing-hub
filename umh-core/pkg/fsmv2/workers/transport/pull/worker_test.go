@@ -22,7 +22,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	fsmv2config "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
+	depspkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/pull"
@@ -166,6 +166,46 @@ var _ = Describe("PullWorker", func() {
 			typedObs, ok := observed.(snapshot.PullObservedState)
 			Expect(ok).To(BeTrue())
 			Expect(typedObs.Metrics).NotTo(BeNil())
+		})
+
+		It("should drain worker metrics from MetricsRecorder into ObservedState", func() {
+			d := worker.GetDependencies()
+			d.MetricsRecorder().IncrementCounter(depspkg.CounterMessagesPulled, 10)
+			d.MetricsRecorder().IncrementCounter(depspkg.CounterBytesPulled, 2048)
+			d.MetricsRecorder().SetGauge(depspkg.GaugeLastPullLatencyMs, 35.0)
+
+			ctx := context.Background()
+			observed, err := worker.CollectObservedState(ctx)
+
+			Expect(err).ToNot(HaveOccurred())
+			typedObs, ok := observed.(snapshot.PullObservedState)
+			Expect(ok).To(BeTrue())
+
+			Expect(typedObs.Metrics.Worker.Counters).NotTo(BeNil())
+			Expect(typedObs.Metrics.Worker.Counters["messages_pulled"]).To(Equal(int64(10)))
+			Expect(typedObs.Metrics.Worker.Counters["bytes_pulled"]).To(Equal(int64(2048)))
+
+			Expect(typedObs.Metrics.Worker.Gauges).NotTo(BeNil())
+			Expect(typedObs.Metrics.Worker.Gauges["last_pull_latency_ms"]).To(Equal(35.0))
+		})
+
+		It("should drain metrics from recorder buffer on each tick", func() {
+			ctx := context.Background()
+
+			d := worker.GetDependencies()
+			d.MetricsRecorder().IncrementCounter(depspkg.CounterPullOps, 1)
+			observed1, err := worker.CollectObservedState(ctx)
+			Expect(err).ToNot(HaveOccurred())
+			typedObs1, ok := observed1.(snapshot.PullObservedState)
+			Expect(ok).To(BeTrue())
+			Expect(typedObs1.Metrics.Worker.Counters["pull_ops"]).To(Equal(int64(1)))
+
+			d.MetricsRecorder().IncrementCounter(depspkg.CounterPullOps, 2)
+			observed2, err := worker.CollectObservedState(ctx)
+			Expect(err).ToNot(HaveOccurred())
+			typedObs2, ok := observed2.(snapshot.PullObservedState)
+			Expect(ok).To(BeTrue())
+			Expect(typedObs2.Metrics.Worker.Counters["pull_ops"]).To(Equal(int64(2)))
 		})
 	})
 

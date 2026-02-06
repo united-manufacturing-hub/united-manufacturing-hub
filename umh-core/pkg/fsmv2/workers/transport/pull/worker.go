@@ -102,6 +102,37 @@ func (w *PullWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedSt
 		LastActionResults:   d.GetActionHistory(),
 	}
 
+	var prevWorkerMetrics deps.Metrics
+
+	stateReader := d.GetStateReader()
+	if stateReader != nil {
+		var prev snapshot.PullObservedState
+		if err := stateReader.LoadObservedTyped(ctx, d.GetWorkerType(), d.GetWorkerID(), &prev); err == nil {
+			prevWorkerMetrics = prev.Metrics.Worker
+		}
+	}
+
+	newWorkerMetrics := prevWorkerMetrics
+	if newWorkerMetrics.Counters == nil {
+		newWorkerMetrics.Counters = make(map[string]int64)
+	}
+
+	if newWorkerMetrics.Gauges == nil {
+		newWorkerMetrics.Gauges = make(map[string]float64)
+	}
+
+	tickMetrics := d.MetricsRecorder().Drain()
+
+	for name, delta := range tickMetrics.Counters {
+		newWorkerMetrics.Counters[name] += delta
+	}
+
+	for name, value := range tickMetrics.Gauges {
+		newWorkerMetrics.Gauges[name] = value
+	}
+
+	observed.Metrics.Worker = newWorkerMetrics
+
 	if fm := d.GetFrameworkState(); fm != nil {
 		observed.Metrics.Framework = *fm
 	}

@@ -119,11 +119,11 @@ func (o CommunicatorObservedState) IsTokenExpired() bool {
 	return time.Now().Add(refreshBuffer).After(o.JWTExpiry)
 }
 
-// IsSyncHealthy returns true when all children are healthy.
-// Authentication, token management, error tracking, and backpressure are now
-// internal to TransportWorker and its Push/Pull children (ENG-4264).
+// IsSyncHealthy returns true when at least one child is healthy and no children
+// are unhealthy. Returns false when no children exist, which is a transient
+// state during startup that resolves within 1-2 supervisor ticks.
 func (o CommunicatorObservedState) IsSyncHealthy() bool {
-	return o.ChildrenUnhealthy == 0
+	return o.ChildrenHealthy > 0 && o.ChildrenUnhealthy == 0
 }
 
 func (o CommunicatorObservedState) GetConsecutiveErrors() int {

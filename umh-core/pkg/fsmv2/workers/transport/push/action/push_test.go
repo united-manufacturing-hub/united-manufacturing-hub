@@ -194,6 +194,10 @@ func (m *mockPushDeps) GetLastErrorAt() time.Time {
 	return m.lastErrorAt
 }
 
+func (m *mockPushDeps) GetAuthenticatedUUID() string {
+	return m.authenticatedUUID
+}
+
 var _ = Describe("PushAction", func() {
 	var (
 		act           *action.PushAction
@@ -447,6 +451,51 @@ var _ = Describe("PushAction", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(mockTrans.pushCallCount).To(Equal(0))
+		})
+	})
+
+	Describe("UUID consistency (403 prevention)", func() {
+		It("should overwrite message InstanceUUID with authenticated UUID from dependencies", func() {
+			// Scenario: SubscriberHandler created messages with placeholder UUID before
+			// authentication completed. The backend validates JWT claims match message UUID.
+			// If they don't match → 403 Forbidden.
+			placeholderUUID := "placeholder-uuid-before-auth"
+			authenticatedUUID := "real-uuid-from-backend-jwt"
+
+			outboundBi <- &transport.UMHMessage{
+				InstanceUUID: placeholderUUID,
+				Content:      "status-update",
+				Email:        "user@example.com",
+			}
+
+			mockDeps.authenticatedUUID = authenticatedUUID
+
+			err := act.Execute(context.Background(), mockDeps)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(mockTrans.pushCallCount).To(Equal(1))
+			Expect(mockTrans.pushedMsgs).To(HaveLen(1))
+			// The pushed message MUST have the authenticated UUID, not the placeholder
+			Expect(mockTrans.pushedMsgs[0].InstanceUUID).To(Equal(authenticatedUUID))
+		})
+
+		It("should overwrite UUID in pending messages during retry", func() {
+			placeholderUUID := "placeholder-uuid"
+			authenticatedUUID := "real-authenticated-uuid"
+
+			mockDeps.pendingMessages = []*transport.UMHMessage{
+				{InstanceUUID: placeholderUUID, Content: "pending1"},
+				{InstanceUUID: placeholderUUID, Content: "pending2"},
+			}
+			mockDeps.authenticatedUUID = authenticatedUUID
+
+			err := act.Execute(context.Background(), mockDeps)
+			Expect(err).NotTo(HaveOccurred())
+
+			// All pushed messages should have the authenticated UUID
+			for _, pushed := range mockTrans.pushedMsgs {
+				Expect(pushed.InstanceUUID).To(Equal(authenticatedUUID))
+			}
 		})
 	})
 })

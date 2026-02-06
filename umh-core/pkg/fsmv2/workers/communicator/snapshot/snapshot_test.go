@@ -21,6 +21,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/snapshot"
 )
 
@@ -130,7 +131,18 @@ var _ = Describe("CommunicatorObservedState", func() {
 		})
 
 		Context("when no children exist yet", func() {
-			It("should return true (zero unhealthy)", func() {
+			It("should return false (no healthy children)", func() {
+				Expect(observed.IsSyncHealthy()).To(BeFalse())
+			})
+		})
+
+		Context("when multiple children are healthy and none unhealthy", func() {
+			BeforeEach(func() {
+				observed.ChildrenHealthy = 2
+				observed.ChildrenUnhealthy = 0
+			})
+
+			It("should return true", func() {
 				Expect(observed.IsSyncHealthy()).To(BeTrue())
 			})
 		})
@@ -178,6 +190,29 @@ var _ = Describe("CommunicatorObservedState", func() {
 		It("should return nil when no specs set", func() {
 			desired := &snapshot.CommunicatorDesiredState{}
 			Expect(desired.GetChildrenSpecs()).To(BeNil())
+		})
+
+		It("should return specs when set", func() {
+			desired := &snapshot.CommunicatorDesiredState{
+				ChildrenSpecs: []config.ChildSpec{
+					{Name: "transport", WorkerType: "transport"},
+				},
+			}
+			specs := desired.GetChildrenSpecs()
+			Expect(specs).To(HaveLen(1))
+			Expect(specs[0].Name).To(Equal("transport"))
+		})
+	})
+
+	Describe("SetChildrenCounts copy semantics", func() {
+		It("should not mutate the original struct", func() {
+			observed.ChildrenHealthy = 0
+			observed.ChildrenUnhealthy = 0
+
+			_ = observed.SetChildrenCounts(5, 3)
+
+			Expect(observed.ChildrenHealthy).To(Equal(0))
+			Expect(observed.ChildrenUnhealthy).To(Equal(0))
 		})
 	})
 })

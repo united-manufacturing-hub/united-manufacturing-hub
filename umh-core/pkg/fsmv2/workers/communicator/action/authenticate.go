@@ -76,7 +76,6 @@ const AuthenticateActionName = "authenticate"
 // CommunicatorWorker no longer authenticates. Will be deleted in ENG-4265.
 //
 // Returns error on network failure, invalid credentials (non-200), or malformed response.
-// See worker.go C1 (authentication precedence) and C3 (transport lifecycle).
 type AuthenticateAction struct {
 	RelayURL     string
 	InstanceUUID string

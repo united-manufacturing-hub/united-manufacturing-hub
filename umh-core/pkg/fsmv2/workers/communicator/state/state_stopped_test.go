@@ -128,10 +128,7 @@ var _ = Describe("StoppedState Transitions", func() {
 		It("should stay in StoppedState and emit SignalNeedsRemoval on shutdown", func() {
 			snap := fsmv2.Snapshot{
 				Identity: deps.Identity{ID: "comm-shutdown", Name: "communicator", WorkerType: "communicator"},
-				Observed: snapshot.CommunicatorObservedState{
-					Authenticated: true,
-					JWTToken:      "valid-token",
-				},
+				Observed: snapshot.CommunicatorObservedState{},
 				Desired: &snapshot.CommunicatorDesiredState{
 					BaseDesiredState: config.BaseDesiredState{ShutdownRequested: true},
 				},

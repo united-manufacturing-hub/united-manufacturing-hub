@@ -164,6 +164,23 @@ var _ = Describe("RecoveringState Transitions", func() {
 	})
 
 	Describe("Recovering -> self (waiting)", func() {
+		It("should stay in RecoveringState when no children exist yet", func() {
+			snap := fsmv2.Snapshot{
+				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
+				Observed: snapshot.CommunicatorObservedState{
+					ChildrenHealthy:   0,
+					ChildrenUnhealthy: 0,
+				},
+				Desired: &snapshot.CommunicatorDesiredState{},
+			}
+
+			result := stateObj.Next(snap)
+
+			Expect(result.State).To(BeAssignableToTypeOf(&state.RecoveringState{}))
+			Expect(result.Signal).To(Equal(fsmv2.SignalNone))
+			Expect(result.Action).To(BeNil())
+		})
+
 		It("should stay in RecoveringState with nil action when children unhealthy", func() {
 			snap := fsmv2.Snapshot{
 				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},

@@ -30,6 +30,7 @@ type PushDependencies interface {
 	GetOutboundChan() <-chan *transport.UMHMessage
 	GetTransport() transport.Transport
 	GetJWTToken() string
+	GetAuthenticatedUUID() string
 	RecordTypedError(errType httpTransport.ErrorType, retryAfter time.Duration)
 	RecordSuccess()
 	RecordError()

@@ -147,7 +147,7 @@ var _ = Describe("SyncingState Transitions", func() {
 			Expect(result.Action).To(BeNil())
 		})
 
-		It("should stay in SyncingState when no children exist yet", func() {
+		It("should transition to RecoveringState when no children exist yet", func() {
 			snap := fsmv2.Snapshot{
 				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
 				Observed: snapshot.CommunicatorObservedState{
@@ -159,7 +159,7 @@ var _ = Describe("SyncingState Transitions", func() {
 
 			result := stateObj.Next(snap)
 
-			Expect(result.State).To(BeAssignableToTypeOf(&state.SyncingState{}))
+			Expect(result.State).To(BeAssignableToTypeOf(&state.RecoveringState{}))
 			Expect(result.Signal).To(Equal(fsmv2.SignalNone))
 			Expect(result.Action).To(BeNil())
 		})

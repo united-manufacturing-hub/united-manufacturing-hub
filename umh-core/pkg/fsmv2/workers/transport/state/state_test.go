@@ -297,6 +297,69 @@ var _ = Describe("TransportWorker States", func() {
 		})
 	})
 
+	Describe("ShouldProactivelyReauth", func() {
+		It("should return false for zero expiry", func() {
+			now := time.Date(2025, 2, 6, 3, 0, 0, 0, time.Local) // 3 AM
+			Expect(state.ShouldProactivelyReauth(time.Time{}, now)).To(BeFalse())
+		})
+
+		It("should return false when token expires more than 24 hours away", func() {
+			// 3 AM today
+			now := time.Date(2025, 2, 6, 3, 0, 0, 0, time.Local)
+			// Expiry at 10 AM in 30 days (business hours, but too far away)
+			expiry := time.Date(2025, 3, 8, 10, 0, 0, 0, time.Local)
+			Expect(state.ShouldProactivelyReauth(expiry, now)).To(BeFalse())
+		})
+
+		It("should return false when token expires outside business hours", func() {
+			// 3 AM today
+			now := time.Date(2025, 2, 6, 3, 0, 0, 0, time.Local)
+			// Expiry at 2 AM tomorrow (within 24h but outside business hours)
+			expiry := time.Date(2025, 2, 7, 2, 0, 0, 0, time.Local)
+			Expect(state.ShouldProactivelyReauth(expiry, now)).To(BeFalse())
+		})
+
+		It("should return false when not at 3 AM", func() {
+			// 10 AM today (not proactive re-auth hour)
+			now := time.Date(2025, 2, 6, 10, 0, 0, 0, time.Local)
+			// Expiry at 10 AM tomorrow (within 24h, during business hours)
+			expiry := time.Date(2025, 2, 7, 10, 0, 0, 0, time.Local)
+			Expect(state.ShouldProactivelyReauth(expiry, now)).To(BeFalse())
+		})
+
+		It("should return true when all conditions met: 3 AM, within 24h, business hours expiry", func() {
+			// 3 AM today
+			now := time.Date(2025, 2, 6, 3, 0, 0, 0, time.Local)
+			// Expiry at 10 AM today (within 24h, during business hours)
+			expiry := time.Date(2025, 2, 6, 10, 0, 0, 0, time.Local)
+			Expect(state.ShouldProactivelyReauth(expiry, now)).To(BeTrue())
+		})
+
+		It("should return true for edge case: expiry exactly at business hours start", func() {
+			// 3 AM today
+			now := time.Date(2025, 2, 6, 3, 0, 0, 0, time.Local)
+			// Expiry at 7 AM today (business hours start boundary)
+			expiry := time.Date(2025, 2, 6, 7, 0, 0, 0, time.Local)
+			Expect(state.ShouldProactivelyReauth(expiry, now)).To(BeTrue())
+		})
+
+		It("should return false for edge case: expiry at business hours end", func() {
+			// 3 AM today
+			now := time.Date(2025, 2, 6, 3, 0, 0, 0, time.Local)
+			// Expiry at 20:00 today (business hours end boundary - exclusive)
+			expiry := time.Date(2025, 2, 6, 20, 0, 0, 0, time.Local)
+			Expect(state.ShouldProactivelyReauth(expiry, now)).To(BeFalse())
+		})
+
+		It("should return true for expiry at 19:59 (just before end)", func() {
+			// 3 AM today
+			now := time.Date(2025, 2, 6, 3, 0, 0, 0, time.Local)
+			// Expiry at 19:59 today (still within business hours)
+			expiry := time.Date(2025, 2, 6, 19, 59, 0, 0, time.Local)
+			Expect(state.ShouldProactivelyReauth(expiry, now)).To(BeTrue())
+		})
+	})
+
 	Describe("DegradedState", func() {
 		var s *state.DegradedState
 

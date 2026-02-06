@@ -61,6 +61,10 @@ func (d *PushDependencies) GetJWTToken() string {
 	return d.parentDeps.GetJWTToken()
 }
 
+func (d *PushDependencies) GetAuthenticatedUUID() string {
+	return d.parentDeps.GetAuthenticatedUUID()
+}
+
 func (d *PushDependencies) RecordTypedError(errType httpTransport.ErrorType, retryAfter time.Duration) {
 	d.parentDeps.RecordTypedError(errType, retryAfter)
 }
