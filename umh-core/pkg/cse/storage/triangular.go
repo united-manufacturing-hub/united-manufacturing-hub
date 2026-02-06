@@ -1371,7 +1371,13 @@ func (ts *TriangularStore) CompactDeltas(ctx context.Context, retentionWindow ti
 	}
 
 	deleted := 0
-	skipped := 0
+	skippedNoTimestamp := 0
+	skippedNoID := 0
+
+	// Capture first malformed document for diagnostics
+	var firstMalformedKeys []string
+
+	var firstMalformedReason string
 
 	for _, doc := range docs {
 		select {
@@ -1382,7 +1388,12 @@ func (ts *TriangularStore) CompactDeltas(ctx context.Context, retentionWindow ti
 
 		timestampMs, hasTimestamp := extractTimestampMs(doc)
 		if !hasTimestamp {
-			skipped++
+			skippedNoTimestamp++
+
+			if firstMalformedKeys == nil {
+				firstMalformedKeys = extractDocKeys(doc)
+				firstMalformedReason = "missing_timestamp"
+			}
 
 			continue
 		}
@@ -1390,7 +1401,12 @@ func (ts *TriangularStore) CompactDeltas(ctx context.Context, retentionWindow ti
 		if timestampMs < cutoffMs {
 			id, ok := doc["id"].(string)
 			if !ok {
-				skipped++
+				skippedNoID++
+
+				if firstMalformedKeys == nil {
+					firstMalformedKeys = extractDocKeys(doc)
+					firstMalformedReason = "missing_or_invalid_id"
+				}
 
 				continue
 			}
@@ -1403,6 +1419,7 @@ func (ts *TriangularStore) CompactDeltas(ctx context.Context, retentionWindow ti
 		}
 	}
 
+	skipped := skippedNoTimestamp + skippedNoID
 	if skipped > 0 {
 		// Wrap with sentinel error type for consistent Sentry fingerprinting
 		err := fmt.Errorf("%w: skipped %d malformed documents during compaction", ErrMalformedDelta, skipped)
@@ -1410,6 +1427,10 @@ func (ts *TriangularStore) CompactDeltas(ctx context.Context, retentionWindow ti
 			"error", err,
 			"deleted", deleted,
 			"skipped", skipped,
+			"skipped_no_timestamp", skippedNoTimestamp,
+			"skipped_no_id", skippedNoID,
+			"first_malformed_reason", firstMalformedReason,
+			"first_malformed_keys", firstMalformedKeys,
 			"retention_window", retentionWindow)
 	} else if deleted > 0 {
 		ts.logger.Infow("compaction_complete",
@@ -1432,6 +1453,17 @@ func extractTimestampMs(doc persistence.Document) (int64, bool) {
 	}
 
 	return 0, false
+}
+
+// extractDocKeys returns the keys present in a document for diagnostic logging.
+// Helps troubleshoot malformed documents by showing what fields ARE present.
+func extractDocKeys(doc persistence.Document) []string {
+	keys := make([]string, 0, len(doc))
+	for k := range doc {
+		keys = append(keys, k)
+	}
+
+	return keys
 }
 
 // Maintenance performs heavyweight cleanup operations.
