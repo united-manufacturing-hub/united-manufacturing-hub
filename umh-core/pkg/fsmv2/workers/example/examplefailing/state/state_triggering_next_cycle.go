@@ -16,7 +16,6 @@ package state
 
 import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplefailing/action"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplefailing/snapshot"
@@ -25,11 +24,7 @@ import (
 // TriggeringNextCycleState is an intermediate state used to trigger the next failure cycle.
 // It emits the DisconnectAction which advances the cycle counter, then transitions to Disconnected.
 type TriggeringNextCycleState struct {
-	BaseFailingState
-}
-
-func (s *TriggeringNextCycleState) LifecyclePhase() config.LifecyclePhase {
-	return config.PhaseRunningDegraded
+	helpers.RunningDegradedBase
 }
 
 func (s *TriggeringNextCycleState) Next(snapAny any) fsmv2.NextResult[any, any] {

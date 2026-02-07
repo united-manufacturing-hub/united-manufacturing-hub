@@ -16,18 +16,13 @@ package state
 
 import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application/snapshot"
 )
 
 // RunningState represents the normal operating state of the application supervisor.
 type RunningState struct {
-	BaseApplicationState
-}
-
-func (s *RunningState) LifecyclePhase() config.LifecyclePhase {
-	return config.PhaseRunningHealthy
+	helpers.RunningHealthyBase
 }
 
 func (s *RunningState) Next(snapAny any) fsmv2.NextResult[any, any] {

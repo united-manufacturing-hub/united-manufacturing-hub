@@ -16,18 +16,13 @@ package state
 
 import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplechild/snapshot"
 )
 
 // StoppedState represents the initial state where the child worker is not connected.
 type StoppedState struct {
-	BaseChildState
-}
-
-func (s *StoppedState) LifecyclePhase() config.LifecyclePhase {
-	return config.PhaseStopped
+	helpers.StoppedBase
 }
 
 func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {

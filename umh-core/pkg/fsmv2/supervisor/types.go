@@ -49,6 +49,10 @@ type CollectorHealth struct {
 // A parent Supervisor[TObserved, TDesired] can manage children of different types.
 type SupervisorInterface interface {
 	Start(ctx context.Context) <-chan struct{}
+	// StartAsChild starts the supervisor without a tick loop.
+	// The parent supervisor will call tick() synchronously during its own tick.
+	// Collectors and executors still run in goroutines (they handle async I/O).
+	StartAsChild(ctx context.Context)
 	Shutdown()
 	RequestShutdown(ctx context.Context, reason string) error
 	ListWorkers() []string
@@ -237,6 +241,11 @@ type Config struct {
 	// If this timeout is reached, the supervisor proceeds with forced shutdown.
 	// Optional - defaults to 5 seconds.
 	GracefulShutdownTimeout time.Duration
+
+	// MetricsReportInterval is how often hierarchy metrics are recorded.
+	// Longer intervals reduce Prometheus cardinality at the cost of staler metrics.
+	// Optional - defaults to 10 seconds (see DefaultMetricsReportInterval).
+	MetricsReportInterval time.Duration
 
 	// EnableTraceLogging enables verbose lifecycle event logging (mutex locks, tick events, etc.)
 	// Optional - defaults to false. Set ENABLE_TRACE_LOGGING=true for deep debugging.

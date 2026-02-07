@@ -1,20 +1,56 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": [
-    "config:recommended",
-    "group:allNonMajor"
-  ],
-  "includePaths": [
-    "umh-core/**"
-  ],
-  "enabledManagers": [
-    "dockerfile",
-    "gomod"
-  ],
-  "postUpdateOptions": [
-    "gomodTidy"
-  ],
+  "extends": ["config:recommended"],
+  "includePaths": ["umh-core/**"],
+  "enabledManagers": ["dockerfile", "gomod"],
+  "postUpdateOptions": ["gomodTidy", "gomodVendor"],
   "minimumReleaseAge": "7 days",
   "timezone": "Europe/Berlin",
-  "schedule": ["* * * * 0"]
+  "schedule": ["* * * * 0"],
+  "packageRules": [
+    {
+      "matchManagers": ["gomod"],
+      "matchUpdateTypes": [
+        "minor",
+        "patch",
+        "pin",
+        "digest",
+        "pinDigest",
+        "rollback",
+        "bump",
+        "replacement",
+        "lockFileMaintenance"
+      ],
+      "groupName": "Go dependencies (non-major)",
+      "groupSlug": "go-deps-non-major"
+    },
+    {
+      "matchManagers": ["gomod"],
+      "matchUpdateTypes": ["major"],
+      "groupName": "Go dependencies (major)",
+      "groupSlug": "go-deps-major"
+    },
+    {
+      "matchManagers": ["dockerfile"],
+      "matchUpdateTypes": [
+        "minor",
+        "patch",
+        "pin",
+        "digest",
+        "pinDigest",
+        "rollback",
+        "bump",
+        "replacement",
+        "lockFileMaintenance"
+      ],
+      "groupName": "Dockerfile dependencies (non-major)",
+      "groupSlug": "dockerfile-deps-non-major"
+    },
+    {
+      "matchManagers": ["dockerfile"],
+      "matchUpdateTypes": ["major"],
+      "groupName": "Dockerfile dependencies (major)",
+      "groupSlug": "dockerfile-deps-major"
+    }
+  ]
 }

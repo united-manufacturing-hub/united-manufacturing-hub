@@ -16,18 +16,13 @@ package state
 
 import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent/snapshot"
 )
 
 // DegradedState represents the state when some children have failed.
 type DegradedState struct {
-	BaseParentState
-}
-
-func (s *DegradedState) LifecyclePhase() config.LifecyclePhase {
-	return config.PhaseRunningDegraded
+	helpers.RunningDegradedBase
 }
 
 func (s *DegradedState) Next(snapAny any) fsmv2.NextResult[any, any] {

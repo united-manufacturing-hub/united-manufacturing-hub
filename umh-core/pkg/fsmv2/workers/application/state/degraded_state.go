@@ -16,7 +16,6 @@ package state
 
 import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application/snapshot"
 )
@@ -24,11 +23,7 @@ import (
 // DegradedState represents the state when infrastructure issues are detected.
 // The application enters this state when children have circuit breaker open or stale observations.
 type DegradedState struct {
-	BaseApplicationState
-}
-
-func (s *DegradedState) LifecyclePhase() config.LifecyclePhase {
-	return config.PhaseRunningDegraded
+	helpers.RunningDegradedBase
 }
 
 func (s *DegradedState) Next(snapAny any) fsmv2.NextResult[any, any] {

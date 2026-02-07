@@ -107,9 +107,11 @@ output_latency_ns_count{label="",path="root.output"} 18
 output_sent{label="",path="root.output"} 18
 `
 
-var samplePing = `pong`
-var sampleReady = `{"statuses":[{"label":"tcp_server","path":"root.input","connected":true},{"label":"http_client","path":"root.output","connected":true}]}`
-var sampleVersion = `{"version":"3.71.0","built":"2023-08-15T12:00:00Z"}`
+var (
+	samplePing    = `pong`
+	sampleReady   = `{"statuses":[{"label":"tcp_server","path":"root.input","connected":true},{"label":"http_client","path":"root.output","connected":true}]}`
+	sampleVersion = `{"version":"3.71.0","built":"2023-08-15T12:00:00Z"}`
+)
 
 // Returns a gzip compressed string of the sample metrics
 // Also returns the same data but hex encoded.
