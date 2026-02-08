@@ -33,6 +33,11 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 )
 
+// ErrPanicCircuitOpen is returned when the tick is suppressed because the panic circuit breaker is open.
+// Returning an error (instead of nil) ensures the supervisor knows the worker is unhealthy
+// and continues ticking it, allowing the circuit breaker to auto-reset after the cooling period.
+var ErrPanicCircuitOpen = errors.New("panic circuit breaker open")
+
 // factoryRegistryAdapter provides an adapter for config validation.
 type factoryRegistryAdapter struct{}
 
@@ -539,9 +544,15 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 	}()
 
 	if s.panicCircuitOpen.Load() {
-		s.logger.Debug("tick_suppressed_panic_circuit_open",
-			deps.HierarchyPath(s.GetHierarchyPathUnlocked()))
-		return nil
+		if s.panicTracker.PanicCount() == 0 {
+			s.panicCircuitOpen.Store(false)
+			s.logger.SentryWarn(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), "panic_circuit_auto_reset",
+				deps.WorkerType(s.workerType))
+		} else {
+			s.logger.Debug("tick_suppressed_panic_circuit_open",
+				deps.HierarchyPath(s.GetHierarchyPathUnlocked()))
+			return ErrPanicCircuitOpen
+		}
 	}
 
 	tickCount := atomic.AddUint64(&s.tickCount, 1)

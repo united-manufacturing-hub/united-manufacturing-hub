@@ -325,6 +325,19 @@ var (
 		},
 		[]string{"hierarchy_path", "action_name"},
 	)
+
+	// stuckActionLeakedGoroutines tracks goroutines that continue running after force-removal.
+	// Force-removing a stuck action removes it from tracking but cannot cancel the goroutine
+	// (the context.WithTimeout has already expired). This gauge helps operators detect accumulating leaks.
+	stuckActionLeakedGoroutines = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: namespace,
+			Subsystem: subsystem,
+			Name:      "stuck_action_leaked_goroutines",
+			Help:      "Estimated goroutines leaked from force-removed stuck actions (cannot be cancelled after timeout expiry)",
+		},
+		[]string{"hierarchy_path"},
+	)
 )
 
 // RecordCircuitOpen records circuit breaker state.
@@ -463,6 +476,7 @@ func RecordStuckActionDetected(hierarchyPath, actionName string) {
 // RecordStuckActionForceRemoved records force-removal of a stuck action (running > 3x timeout).
 func RecordStuckActionForceRemoved(hierarchyPath, actionName string) {
 	stuckActionForceRemovedTotal.WithLabelValues(hierarchyPath, actionName).Inc()
+	stuckActionLeakedGoroutines.WithLabelValues(hierarchyPath).Inc()
 }
 
 // WorkerMetricsExporter exports worker-specific metrics from ObservedState to Prometheus.
