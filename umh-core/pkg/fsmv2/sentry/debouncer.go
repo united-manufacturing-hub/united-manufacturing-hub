@@ -28,6 +28,7 @@ type FingerprintDebouncer struct {
 	wg       sync.WaitGroup
 	window   time.Duration
 	mu       sync.Mutex
+	stopOnce sync.Once
 }
 
 // NewFingerprintDebouncer creates a debouncer with the specified debounce window.
@@ -66,13 +67,20 @@ func (d *FingerprintDebouncer) ShouldCapture(fingerprint string) bool {
 // Stop signals the cleanup goroutine to exit and waits for it to finish.
 // Call this when the debouncer is no longer needed to prevent goroutine leaks.
 func (d *FingerprintDebouncer) Stop() {
-	close(d.done)
+	d.stopOnce.Do(func() {
+		close(d.done)
+	})
 	d.wg.Wait()
 }
 
 // cleanupLoop periodically removes old entries to prevent memory leaks.
 func (d *FingerprintDebouncer) cleanupLoop() {
 	defer d.wg.Done()
+	defer func() {
+		if r := recover(); r != nil {
+			// Prevent panic in background goroutine from crashing the process
+		}
+	}()
 
 	ticker := time.NewTicker(10 * time.Minute)
 	defer ticker.Stop()

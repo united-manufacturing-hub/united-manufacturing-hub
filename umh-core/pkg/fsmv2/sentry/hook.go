@@ -20,12 +20,15 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/DataDog/gostackparse"
 	"github.com/getsentry/sentry-go"
 	"go.uber.org/zap/zapcore"
 )
+
+var sentryEventsDropped atomic.Int64
 
 // SentryHook wraps a zapcore.Core and sends warn- and error-level logs to Sentry.
 type SentryHook struct {
@@ -62,6 +65,10 @@ func (h *SentryHook) Wrap(core zapcore.Core) zapcore.Core {
 
 // Write intercepts log writes to capture warnings and errors to Sentry.
 func (h *SentryHook) Write(entry zapcore.Entry, fields []zapcore.Field) error {
+	if h.Core == nil {
+		return nil
+	}
+
 	if entry.Level >= zapcore.WarnLevel {
 		h.captureToSentry(entry, fields)
 	}
@@ -71,6 +78,10 @@ func (h *SentryHook) Write(entry zapcore.Entry, fields []zapcore.Field) error {
 
 // Check returns a CheckedEntry if the log level is enabled.
 func (h *SentryHook) Check(entry zapcore.Entry, ce *zapcore.CheckedEntry) *zapcore.CheckedEntry {
+	if h.Core == nil {
+		return ce
+	}
+
 	if h.Enabled(entry.Level) {
 		return ce.AddCore(entry, h)
 	}
@@ -89,6 +100,12 @@ func (h *SentryHook) With(fields []zapcore.Field) zapcore.Core {
 }
 
 func (h *SentryHook) captureToSentry(entry zapcore.Entry, fields []zapcore.Field) {
+	defer func() {
+		if r := recover(); r != nil {
+			// Safety net must not crash the process
+		}
+	}()
+
 	fieldMap := FieldsToMap(fields)
 
 	// Extract feature field; falls back to "unknown" as a safety net (all FSMLogger warn/error methods inject feature)
@@ -184,7 +201,11 @@ func (h *SentryHook) captureToSentry(entry zapcore.Entry, fields []zapcore.Field
 	event.Fingerprint = fingerprint
 
 	hub := sentry.CurrentHub().Clone()
-	hub.CaptureEvent(event)
+	eventID := hub.CaptureEvent(event)
+
+	if eventID == nil {
+		sentryEventsDropped.Add(1)
+	}
 }
 
 // FieldsToMap converts zapcore.Field slice to a map for easier access.
@@ -213,12 +234,27 @@ func ExtractErrorTypes(err error) string {
 
 	var types []string
 
-	current := err
+	var walk func(e error)
+	walk = func(e error) {
+		if e == nil {
+			return
+		}
 
-	for current != nil {
-		types = append(types, fmt.Sprintf("%T", current))
-		current = errors.Unwrap(current)
+		types = append(types, fmt.Sprintf("%T", e))
+
+		// Handle multi-errors from errors.Join()
+		if joined, ok := e.(interface{ Unwrap() []error }); ok {
+			for _, inner := range joined.Unwrap() {
+				walk(inner)
+			}
+
+			return
+		}
+
+		walk(errors.Unwrap(e))
 	}
+
+	walk(err)
 
 	return strings.Join(types, "|")
 }
