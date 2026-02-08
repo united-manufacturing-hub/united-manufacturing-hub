@@ -497,5 +497,29 @@ var _ = Describe("PushAction", func() {
 				Expect(pushed.InstanceUUID).To(Equal(authenticatedUUID))
 			}
 		})
+
+		It("should preserve original UUID when authenticatedUUID is empty", func() {
+			// Edge case: If authenticatedUUID is empty (e.g., authentication not yet
+			// complete or failed), the original message UUID should be preserved.
+			// This prevents messages from having empty UUIDs which would cause
+			// different (possibly worse) backend errors.
+			originalUUID := "original-message-uuid"
+
+			outboundBi <- &transport.UMHMessage{
+				InstanceUUID: originalUUID,
+				Content:      "status-update",
+				Email:        "user@example.com",
+			}
+
+			mockDeps.authenticatedUUID = "" // Empty - authentication not complete
+
+			err := act.Execute(context.Background(), mockDeps)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(mockTrans.pushCallCount).To(Equal(1))
+			Expect(mockTrans.pushedMsgs).To(HaveLen(1))
+			// Original UUID should be preserved when authenticatedUUID is empty
+			Expect(mockTrans.pushedMsgs[0].InstanceUUID).To(Equal(originalUUID))
+		})
 	})
 })
