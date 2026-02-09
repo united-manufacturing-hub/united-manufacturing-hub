@@ -33,6 +33,7 @@ jobs:
       pull-requests: read
     outputs:
       code: ${{ steps.filter.outputs.code }}
+      changelog: ${{ steps.filter.outputs.changelog }}
     steps:
       - uses: actions/checkout@v6
       - uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
@@ -45,6 +46,9 @@ jobs:
               - '.github/workflows/test-umh-core.yml'
               - '!umh-core/CHANGELOG.md'
               - '!umh-core/changelog-images/**'
+            changelog:
+              - 'umh-core/CHANGELOG.md'
+              - 'umh-core/changelog-images/**'
 
   unit-tests:
     name: Unit Tests
@@ -235,3 +239,54 @@ jobs:
             }
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  validate-changelog:
+    name: Validate Changelog
+    needs: changes
+    if: needs.changes.outputs.changelog == 'true'
+    runs-on: depot-ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - name: Validate CHANGELOG.md
+        run: |
+          # Basic structure validation until the full validator is integrated
+          if [ ! -f umh-core/CHANGELOG.md ]; then
+            echo "Error: CHANGELOG.md not found"
+            exit 1
+          fi
+          # Check for at least one version section
+          if ! grep -qP '## \[\d+\.\d+\.\d+\]' umh-core/CHANGELOG.md; then
+            echo "Error: No valid version sections found"
+            exit 1
+          fi
+          echo "CHANGELOG.md structure is valid"
+
+  required-checks:
+    name: Test Required Checks
+    needs: [changes, unit-tests, integration-tests, test-report, validate-changelog]
+    if: always()
+    runs-on: depot-ubuntu-24.04
+    steps:
+      - name: Check results
+        run: |
+          if [ "${{ needs.changes.result }}" != "success" ]; then
+            echo "check-changes failed"
+            exit 1
+          fi
+          if [ "${{ needs.changes.outputs.code }}" == "true" ]; then
+            if [ "${{ needs.unit-tests.result }}" != "success" ]; then
+              echo "unit-tests failed"
+              exit 1
+            fi
+            if [ "${{ needs.integration-tests.result }}" != "success" ]; then
+              echo "integration-tests failed"
+              exit 1
+            fi
+          fi
+          if [ "${{ needs.changes.outputs.changelog }}" == "true" ]; then
+            if [ "${{ needs.validate-changelog.result }}" != "success" ]; then
+              echo "validate-changelog failed"
+              exit 1
+            fi
+          fi
+          echo "All required checks passed"
