@@ -282,16 +282,26 @@ var _ = Describe("PushAction", func() {
 	})
 
 	Describe("Empty outbound channel", func() {
-		It("should be a no-op with no metrics and no transport call", func() {
+		It("should record success to clear consecutive error counter", func() {
 			err := act.Execute(context.Background(), mockDeps)
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(mockTrans.pushCallCount).To(Equal(0))
-			Expect(mockDeps.recordSuccessCalls).To(Equal(0))
+			Expect(mockDeps.recordSuccessCalls).To(Equal(1))
 
 			drained := mockDeps.metricsRecorder.Drain()
 			Expect(drained.Counters).To(BeEmpty())
 			Expect(drained.Gauges).To(BeEmpty())
+		})
+
+		It("should clear stale error state from shared RetryTracker when nothing to push", func() {
+			mockDeps.consecutiveErrors = 3
+
+			err := act.Execute(context.Background(), mockDeps)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(mockTrans.pushCallCount).To(Equal(0))
+			Expect(mockDeps.recordSuccessCalls).To(Equal(1))
 		})
 	})
 
