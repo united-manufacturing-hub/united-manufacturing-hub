@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -1455,6 +1456,7 @@ func extractDocKeys(doc persistence.Document) []string {
 	for k := range doc {
 		keys = append(keys, k)
 	}
+	sort.Strings(keys)
 
 	return keys
 }
