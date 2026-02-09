@@ -81,6 +81,11 @@ func (w *PersistenceWorker) CollectObservedState(ctx context.Context) (fsmv2.Obs
 	if stateReader != nil {
 		if err := stateReader.LoadObservedTyped(ctx, d.GetWorkerType(), d.GetWorkerID(), &prev); err == nil {
 			prevWorkerMetrics = prev.Metrics.Worker
+		} else {
+			d.GetLogger().Warnw("previous_observed_load_failed",
+				"error", err,
+				"worker_type", d.GetWorkerType(),
+				"worker_id", d.GetWorkerID())
 		}
 	}
 
