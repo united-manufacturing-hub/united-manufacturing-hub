@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps/retry"
 	communicator_transport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
 	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
 	transport_pkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport"
@@ -39,9 +40,11 @@ type PullDependencies struct {
 	*deps.BaseDependencies
 	parentDeps              *transport_pkg.TransportDependencies
 	pendingMessages         []*communicator_transport.UMHMessage
+	errorMu                 sync.RWMutex
 	pendingMu               sync.RWMutex
 	backpressureMu          sync.RWMutex
 	lastSeenResetGeneration uint64
+	lastErrorType           httpTransport.ErrorType
 	backpressured           bool
 }
 
@@ -74,23 +77,35 @@ func (d *PullDependencies) GetJWTToken() string {
 }
 
 func (d *PullDependencies) RecordTypedError(errType httpTransport.ErrorType, retryAfter time.Duration) {
+	d.errorMu.Lock()
+	d.lastErrorType = errType
+	d.errorMu.Unlock()
+
+	d.RetryTracker().RecordError(retry.WithClass(errType.String()), retry.WithRetryAfter(retryAfter))
 	d.parentDeps.RecordTypedError(errType, retryAfter)
 }
 
 func (d *PullDependencies) RecordSuccess() {
-	d.parentDeps.RecordSuccess()
+	d.errorMu.Lock()
+	d.lastErrorType = 0
+	d.errorMu.Unlock()
+
+	d.RetryTracker().RecordSuccess()
 }
 
 func (d *PullDependencies) RecordError() {
+	d.RetryTracker().RecordError()
 	d.parentDeps.RecordError()
 }
 
 func (d *PullDependencies) GetConsecutiveErrors() int {
-	return d.parentDeps.GetConsecutiveErrors()
+	return d.RetryTracker().ConsecutiveErrors()
 }
 
 func (d *PullDependencies) GetLastErrorType() httpTransport.ErrorType {
-	return d.parentDeps.GetLastErrorType()
+	d.errorMu.RLock()
+	defer d.errorMu.RUnlock()
+	return d.lastErrorType
 }
 
 // StorePendingMessages appends messages to the pending buffer for retry on the next tick.
@@ -170,15 +185,16 @@ func (d *PullDependencies) IsTokenValid() bool {
 }
 
 func (d *PullDependencies) GetLastRetryAfter() time.Duration {
-	return d.parentDeps.GetLastRetryAfter()
+	return d.RetryTracker().LastError().RetryAfter
 }
 
 func (d *PullDependencies) GetDegradedEnteredAt() time.Time {
-	return d.parentDeps.GetDegradedEnteredAt()
+	degradedSince, _ := d.RetryTracker().DegradedSince()
+	return degradedSince
 }
 
 func (d *PullDependencies) GetLastErrorAt() time.Time {
-	return d.parentDeps.GetLastErrorAt()
+	return d.RetryTracker().LastError().OccurredAt
 }
 
 func (d *PullDependencies) GetResetGeneration() uint64 {

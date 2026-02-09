@@ -138,9 +138,9 @@ var _ = Describe("PushWorker", func() {
 			Expect(typedObs.HasValidToken).To(BeFalse())
 		})
 
-		It("should report consecutive errors from parent deps", func() {
-			parentDeps.RecordError()
-			parentDeps.RecordError()
+		It("should report consecutive errors from child deps", func() {
+			worker.GetDependencies().RecordError()
+			worker.GetDependencies().RecordError()
 
 			ctx := context.Background()
 			observed, err := worker.CollectObservedState(ctx)
