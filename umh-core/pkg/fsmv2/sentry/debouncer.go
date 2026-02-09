@@ -15,6 +15,8 @@
 package sentry
 
 import (
+	"fmt"
+	"os"
 	"sync"
 	"time"
 )
@@ -78,7 +80,7 @@ func (d *FingerprintDebouncer) cleanupLoop() {
 	defer d.wg.Done()
 	defer func() {
 		if r := recover(); r != nil {
-			// Prevent panic in background goroutine from crashing the process
+			fmt.Fprintf(os.Stderr, "sentry: recovered panic in debouncer cleanup: %v\n", r)
 		}
 	}()
 

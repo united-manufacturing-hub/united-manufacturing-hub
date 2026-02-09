@@ -409,7 +409,7 @@ var _ = Describe("SentryHook Integration with Mock Transport", func() {
 	})
 
 	Describe("Error as Exception", func() {
-		It("captures error as Exception via SetException", func() {
+		It("captures error as Exception", func() {
 			// Given: wrapped error chain
 			rootErr := io.EOF
 			wrappedErr := fmt.Errorf("connection failed: %w", rootErr)

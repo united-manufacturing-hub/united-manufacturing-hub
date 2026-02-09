@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync/atomic"
@@ -102,7 +103,7 @@ func (h *SentryHook) With(fields []zapcore.Field) zapcore.Core {
 func (h *SentryHook) captureToSentry(entry zapcore.Entry, fields []zapcore.Field) {
 	defer func() {
 		if r := recover(); r != nil {
-			// Safety net must not crash the process
+			fmt.Fprintf(os.Stderr, "sentry: recovered panic in captureToSentry: %v\n", r)
 		}
 	}()
 
@@ -235,6 +236,7 @@ func ExtractErrorTypes(err error) string {
 	var types []string
 
 	var walk func(e error)
+
 	walk = func(e error) {
 		if e == nil {
 			return
@@ -309,7 +311,7 @@ func ExtractFeature(fieldMap map[string]interface{}) string {
 
 // ExtractErrorFromFields extracts the error interface directly from zap fields.
 // FieldsToMap and MapObjectEncoder convert errors to strings, which loses the error
-// interface required by SetException and error type extraction.
+// interface required for manual exception construction and error type extraction.
 func ExtractErrorFromFields(fields []zapcore.Field) error {
 	for _, f := range fields {
 		if f.Key == "error" && f.Type == zapcore.ErrorType {
