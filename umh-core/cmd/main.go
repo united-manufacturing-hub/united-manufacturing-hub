@@ -31,6 +31,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/topicbrowser"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/env"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/control"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
@@ -104,13 +105,13 @@ func main() {
 	// FSMv2 feature flags: read directly from env vars, not persisted to config.yaml.
 	// These bypass the config manager intentionally — they are temporary migration flags
 	// that will be replaced when the config manager becomes an FSMv2 worker.
-	if os.Getenv("USE_FSMV2_TRANSPORT") == "true" {
+	if v, _ := env.GetAsBool("USE_FSMV2_TRANSPORT", false, false); v {
 		configData.Agent.UseFSMv2Transport = true
 	}
-	if os.Getenv("USE_FSMV2_MEMORY_CLEANUP") == "true" {
+	if v, _ := env.GetAsBool("USE_FSMV2_MEMORY_CLEANUP", false, false); v {
 		configData.Agent.UseFSMv2MemoryCleanup = true
 	}
-	if os.Getenv("USE_FSMV2_PROTOCOL_CONVERTER") == "true" {
+	if v, _ := env.GetAsBool("USE_FSMV2_PROTOCOL_CONVERTER", false, false); v {
 		configData.Agent.UseFSMv2ProtocolConverter = true
 	}
 
