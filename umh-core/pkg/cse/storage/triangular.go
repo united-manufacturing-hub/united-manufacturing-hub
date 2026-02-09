@@ -1334,8 +1334,9 @@ func (ts *TriangularStore) GetLatestSyncID(ctx context.Context) (int64, error) {
 }
 
 // CompactDeltas removes delta entries older than the retention window.
-// Malformed documents (missing timestamp/id) are skipped and counted.
-// On Delete error, returns progress so far and error (supervisor logs + retries).
+// Only deltas are deleted; snapshots (Identity/Desired/Observed) are never touched.
+// Malformed documents (missing timestamp/id) are skipped during iteration but cause
+// an ErrMalformedDelta error return with diagnostic details after processing.
 //
 // Clients offline longer than retentionWindow will get bootstrap (full state) instead
 // of deltas. This is expected behavior - buildBootstrap() already handles this case.
@@ -1350,15 +1351,14 @@ func (ts *TriangularStore) GetLatestSyncID(ctx context.Context) (int64, error) {
 //   - error: Any error that occurred during compaction
 func (ts *TriangularStore) CompactDeltas(ctx context.Context, retentionWindow time.Duration) (int, error) {
 	if ts.store == nil {
-		ts.logger.Warnw("compaction_skipped",
-			"reason", "store is nil")
-
-		return 0, nil
+		return 0, errors.New("store is nil, cannot compact deltas")
 	}
 
 	cutoffTime := ts.clock.Now().Add(-retentionWindow)
 	cutoffMs := cutoffTime.UnixMilli()
 
+	// NOTE: This loads all deltas into memory. Each delta is a small JSON document (~200-500 bytes),
+	// so even 10k deltas use ~5 MB. Deltas are ephemeral change records, not the bulk data.
 	// TODO: When switching to SQLite, use a filtered query to push timestamp
 	// filtering to the database instead of loading all deltas into memory.
 	docs, err := ts.store.Find(ctx, DeltaCollectionName, persistence.Query{})
@@ -1421,18 +1421,11 @@ func (ts *TriangularStore) CompactDeltas(ctx context.Context, retentionWindow ti
 
 	skipped := skippedNoTimestamp + skippedNoID
 	if skipped > 0 {
-		// Wrap with sentinel error type for consistent Sentry fingerprinting
-		err := fmt.Errorf("%w: skipped %d malformed documents during compaction", ErrMalformedDelta, skipped)
-		ts.logger.Warnw("compaction_skipped_documents",
-			"error", err,
-			"deleted", deleted,
-			"skipped", skipped,
-			"skipped_no_timestamp", skippedNoTimestamp,
-			"skipped_no_id", skippedNoID,
-			"first_malformed_reason", firstMalformedReason,
-			"first_malformed_keys", firstMalformedKeys,
-			"retention_window", retentionWindow)
-	} else if deleted > 0 {
+		return deleted, fmt.Errorf("%w: skipped %d malformed documents during compaction (no_timestamp=%d, no_id=%d, first_reason=%s, first_keys=%v)",
+			ErrMalformedDelta, skipped, skippedNoTimestamp, skippedNoID, firstMalformedReason, firstMalformedKeys)
+	}
+
+	if deleted > 0 {
 		ts.logger.Infow("compaction_complete",
 			"deleted", deleted,
 			"retention_window", retentionWindow)
