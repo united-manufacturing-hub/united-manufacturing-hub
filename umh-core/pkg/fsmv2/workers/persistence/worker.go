@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"go.uber.org/zap"
+	"gopkg.in/yaml.v3"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
@@ -162,17 +163,38 @@ func (w *PersistenceWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredS
 		}, nil
 	}
 
-	if _, ok := spec.(fsmv2config.UserSpec); !ok {
+	userSpec, ok := spec.(fsmv2config.UserSpec)
+	if !ok {
 		return nil, fmt.Errorf("invalid spec type: expected UserSpec, got %T", spec)
 	}
 
+	var persSpec PersistenceUserSpec
+	if userSpec.Config != "" {
+		if err := yaml.Unmarshal([]byte(userSpec.Config), &persSpec); err != nil {
+			return nil, fmt.Errorf("failed to parse persistence config: %w", err)
+		}
+	}
+
+	compactionInterval := persSpec.CompactionInterval
+	if compactionInterval == 0 {
+		compactionInterval = DefaultCompactionInterval
+	}
+
+	retentionWindow := persSpec.RetentionWindow
+	if retentionWindow == 0 {
+		retentionWindow = DefaultRetentionWindow
+	}
+
+	maintenanceInterval := persSpec.MaintenanceInterval
+	if maintenanceInterval == 0 {
+		maintenanceInterval = DefaultMaintenanceInterval
+	}
+
 	return &snapshot.PersistenceDesiredState{
-		BaseDesiredState: fsmv2config.BaseDesiredState{
-			State: "running",
-		},
-		CompactionInterval:  DefaultCompactionInterval,
-		RetentionWindow:     DefaultRetentionWindow,
-		MaintenanceInterval: DefaultMaintenanceInterval,
+		BaseDesiredState:    fsmv2config.BaseDesiredState{State: persSpec.GetState()},
+		CompactionInterval:  compactionInterval,
+		RetentionWindow:     retentionWindow,
+		MaintenanceInterval: maintenanceInterval,
 	}, nil
 }
 
