@@ -373,12 +373,10 @@ jobs:
               echo "build failed"
               exit 1
             fi
-            for result in "${{ needs.verify-binaries.result }}"; do
-              if [ "$result" != "success" ]; then
-                echo "verify-binaries failed"
-                exit 1
-              fi
-            done
+            if [ "${{ needs.verify-binaries.result }}" != "success" ]; then
+              echo "verify-binaries failed"
+              exit 1
+            fi
           fi
           # If changelog changed, validation must succeed
           if [ "${{ needs.changes.outputs.changelog }}" == "true" ]; then
