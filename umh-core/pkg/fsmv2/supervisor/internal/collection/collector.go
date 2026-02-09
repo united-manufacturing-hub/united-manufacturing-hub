@@ -25,6 +25,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/internal/panicutil"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/metrics"
 )
 
@@ -351,31 +352,9 @@ func (c *Collector[TObserved]) observationLoop() {
 }
 
 func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) (err error) {
-	logger := c.config.Logger
-	hierarchyPath := c.config.Identity.HierarchyPath
-
 	defer func() {
 		if r := recover(); r != nil {
-			defer func() {
-				if r2 := recover(); r2 != nil {
-					err = fmt.Errorf("collector panic (recovery handler also panicked: %v): %v", r2, r)
-					func() {
-						defer func() { recover() }()
-						logger.SentryError(deps.FeatureFSMv2, hierarchyPath, err, "collector_double_panic",
-							deps.String("stack", string(debug.Stack())))
-					}()
-				}
-			}()
-
-			panicType, panicErr := classifyPanic(r)
-			err = fmt.Errorf("collector panic: %w", panicErr)
-
-			metrics.RecordPanicRecovery(hierarchyPath, panicType)
-
-			logger.SentryError(deps.FeatureFSMv2, hierarchyPath, err, "collector_panic",
-				deps.Field{Key: "panic_value", Value: fmt.Sprintf("%v", r)},
-				deps.Field{Key: "panic_type", Value: panicType},
-				deps.Field{Key: "stack_trace", Value: string(debug.Stack())})
+			err = c.handleCollectorPanic(r)
 		}
 	}()
 
@@ -493,8 +472,8 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 
 	saveDuration := time.Since(saveStartTime)
 
-	metrics.RecordObservationSave(hierarchyPath, changed, saveDuration)
-	metrics.ExportWorkerMetrics(hierarchyPath, observed)
+	metrics.RecordObservationSave(c.config.Identity.HierarchyPath, changed, saveDuration)
+	metrics.ExportWorkerMetrics(c.config.Identity.HierarchyPath, observed)
 
 	if changed {
 		c.logTrace("observation_saved",
@@ -509,15 +488,35 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 	return nil
 }
 
-// classifyPanic converts a recovered panic value into a typed error and a classification string.
-// This is a local copy of the same logic in supervisor/panic_recovery.go to avoid circular imports.
-func classifyPanic(r interface{}) (panicType string, panicErr error) {
-	switch v := r.(type) {
-	case error:
-		return "error", v
-	case string:
-		return "string", errors.New(v)
-	default:
-		return "unknown", fmt.Errorf("%v", r)
-	}
+// handleCollectorPanic processes a recovered panic from collectAndSaveObservedState.
+// It classifies the panic, records metrics, and logs to Sentry. If the recovery handler
+// itself panics, that secondary panic is caught and logged separately.
+func (c *Collector[TObserved]) handleCollectorPanic(r interface{}) error {
+	logger := c.config.Logger
+	hierarchyPath := c.config.Identity.HierarchyPath
+
+	defer func() {
+		if r2 := recover(); r2 != nil {
+			doubleErr := fmt.Errorf("collector panic (recovery handler also panicked: %v): %v", r2, r)
+
+			func() {
+				defer func() { recover() }() //nolint:errcheck // recover() return value is intentionally unused in safety net
+
+				logger.SentryError(deps.FeatureFSMv2, hierarchyPath, doubleErr, "collector_double_panic",
+					deps.String("stack", string(debug.Stack())))
+			}()
+		}
+	}()
+
+	panicType, panicErr := panicutil.ClassifyPanic(r)
+	err := fmt.Errorf("collector panic: %w", panicErr)
+
+	metrics.RecordPanicRecovery(hierarchyPath, panicType)
+
+	logger.SentryError(deps.FeatureFSMv2, hierarchyPath, err, "collector_panic",
+		deps.Field{Key: "panic_value", Value: fmt.Sprintf("%v", r)},
+		deps.Field{Key: "panic_type", Value: panicType},
+		deps.Field{Key: "stack_trace", Value: string(debug.Stack())})
+
+	return err
 }

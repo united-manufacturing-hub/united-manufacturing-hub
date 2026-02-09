@@ -32,6 +32,14 @@ const (
 	stuckActionDetectionMultiplier = 2
 	// stuckActionForceRemoveMultiplier defines when a stuck action is force-removed, allowing re-enqueue.
 	stuckActionForceRemoveMultiplier = 3
+	// defaultWorkerCount is the number of concurrent action workers when none is specified.
+	defaultWorkerCount = 10
+	// queueSizeMultiplier determines queue capacity as workerCount * multiplier.
+	queueSizeMultiplier = 2
+	// defaultActionTimeout is the per-action execution timeout when no override is configured.
+	defaultActionTimeout = 30 * time.Second
+	// defaultMetricsInterval is how often the metrics reporter checks for stuck actions.
+	defaultMetricsInterval = 5 * time.Second
 )
 
 type inProgressEntry struct {
@@ -72,13 +80,21 @@ type actionWork struct {
 	generation uint64
 }
 
+type stuckEntry struct {
+	actionID    string
+	actionName  string
+	elapsedMs   int64
+	timeoutMs   int64
+	forceRemove bool
+}
+
 func NewActionExecutor(workerCount int, supervisorID string, identity deps.Identity, logger deps.FSMLogger) *ActionExecutor {
 	return NewActionExecutorWithTimeout(workerCount, nil, supervisorID, identity, logger)
 }
 
 func NewActionExecutorWithTimeout(workerCount int, timeouts map[string]time.Duration, supervisorID string, identity deps.Identity, logger deps.FSMLogger) *ActionExecutor {
 	if workerCount <= 0 {
-		workerCount = 10
+		workerCount = defaultWorkerCount
 	}
 
 	if timeouts == nil {
@@ -89,11 +105,11 @@ func NewActionExecutorWithTimeout(workerCount int, timeouts map[string]time.Dura
 		supervisorID:    supervisorID,
 		identity:        identity,
 		workerCount:     workerCount,
-		actionQueue:     make(chan actionWork, workerCount*2),
+		actionQueue:     make(chan actionWork, workerCount*queueSizeMultiplier),
 		inProgress:      make(map[string]inProgressEntry),
 		timeouts:        timeouts,
-		defaultTimeout:  30 * time.Second,
-		metricsInterval: 5 * time.Second,
+		defaultTimeout:  defaultActionTimeout,
+		metricsInterval: defaultMetricsInterval,
 		logger:          logger,
 	}
 }
@@ -355,13 +371,6 @@ func (ae *ActionExecutor) metricsReporter(ctx context.Context) {
 
 			now := time.Now()
 
-			type stuckEntry struct {
-				actionID    string
-				actionName  string
-				elapsedMs   int64
-				timeoutMs   int64
-				forceRemove bool
-			}
 			var stuckActions []stuckEntry
 
 			for actionID, entry := range ae.inProgress {

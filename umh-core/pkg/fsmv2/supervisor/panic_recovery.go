@@ -15,10 +15,10 @@
 package supervisor
 
 import (
-	"errors"
-	"fmt"
 	"sync"
 	"time"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/internal/panicutil"
 )
 
 type panicRecovery struct {
@@ -91,16 +91,7 @@ func (p *panicRecovery) Reset() {
 	p.timestamps = nil
 }
 
-// classifyPanic converts a recovered panic value into a typed error and a classification string.
-// Used by the tick() panic recovery handler. The collector has a local copy
-// (internal/collection/collector.go) due to circular import constraints.
+// classifyPanic delegates to the shared panicutil.ClassifyPanic implementation.
 func classifyPanic(r interface{}) (panicType string, panicErr error) {
-	switch v := r.(type) {
-	case error:
-		return "error", v
-	case string:
-		return "string", errors.New(v)
-	default:
-		return "unknown", fmt.Errorf("%v", r)
-	}
+	return panicutil.ClassifyPanic(r)
 }

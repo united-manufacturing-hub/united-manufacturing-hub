@@ -536,7 +536,7 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 			if s.panicTracker.RecordPanic() {
 				s.panicCircuitOpen.Store(true)
 				panicCount := s.panicTracker.PanicCount()
-				s.logger.SentryError(deps.FeatureFSMv2, hierarchyPath, fmt.Errorf("tick panic circuit breaker opens after %d panics", panicCount), "panic_circuit_open",
+				s.logger.SentryWarn(deps.FeatureFSMv2, hierarchyPath, "panic_circuit_open",
 					deps.WorkerType(s.workerType),
 					deps.Field{Key: "panic_count", Value: panicCount})
 			}
