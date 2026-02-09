@@ -101,11 +101,11 @@ func (a *AuthenticateAction) Execute(ctx context.Context, depsAny any) error {
 		if errors.As(err, &transportErr) {
 			deps.RecordTypedError(transportErr.Type, transportErr.RetryAfter)
 			deps.MetricsRecorder().IncrementCounter(counterForErrorType(transportErr.Type), 1)
-			deps.GetLogger().Warnw("authentication_failed", "error", err.Error(), "errorType", transportErr.Type)
+			deps.GetLogger().Warnw("authentication_failed", "error", err, "errorType", transportErr.Type)
 		} else {
 			deps.RecordTypedError(httpTransport.ErrorTypeNetwork, 0)
 			deps.MetricsRecorder().IncrementCounter(depspkg.CounterNetworkErrorsTotal, 1)
-			deps.GetLogger().Warnw("authentication_failed", "error", err.Error())
+			deps.GetLogger().Warnw("authentication_failed", "error", err)
 		}
 
 		return err
