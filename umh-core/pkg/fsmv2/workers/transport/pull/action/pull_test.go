@@ -342,12 +342,27 @@ var _ = Describe("PullAction", func() {
 	})
 
 	Describe("Nil inbound channel", func() {
-		It("should return nil (no-op)", func() {
+		It("should return nil (no-op) when no pending messages", func() {
 			mockDeps.inboundBi = nil
 
 			err := act.Execute(context.Background(), mockDeps)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(mockTrans.pullCallCount).To(Equal(0))
+		})
+
+		It("should re-store pending messages and skip delivery when inbound channel is nil", func() {
+			mockDeps.inboundBi = nil
+			mockDeps.pendingMessages = []*transport.UMHMessage{
+				{Content: "pending1"},
+				{Content: "pending2"},
+			}
+
+			err := act.Execute(context.Background(), mockDeps)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(mockTrans.pullCallCount).To(Equal(0))
+			Expect(mockDeps.PendingMessageCount()).To(Equal(2))
+			Expect(mockDeps.recordSuccessCalls).To(Equal(0))
 		})
 	})
 

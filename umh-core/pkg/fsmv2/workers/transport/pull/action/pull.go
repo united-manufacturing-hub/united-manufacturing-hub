@@ -66,7 +66,15 @@ func (a *PullAction) Execute(ctx context.Context, depsAny any) error {
 	// Phase 1: Deliver pending messages (if any)
 	pending := pullDeps.DrainPendingMessages()
 	if len(pending) > 0 {
-		remaining := a.deliverToChannel(ctx, pullDeps.GetInboundChan(), pending)
+		inChan := pullDeps.GetInboundChan()
+		if inChan == nil {
+			pullDeps.GetLogger().Debugw("pull_skipped_nil_inbound_chan_pending_delivery")
+			pullDeps.StorePendingMessages(pending)
+
+			return nil
+		}
+
+		remaining := a.deliverToChannel(ctx, inChan, pending)
 		if len(remaining) > 0 {
 			pullDeps.StorePendingMessages(remaining)
 			metrics.SetGauge(depspkg.GaugePendingMessages, float64(pullDeps.PendingMessageCount()))
