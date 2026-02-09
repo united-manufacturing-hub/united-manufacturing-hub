@@ -90,3 +90,7 @@ UMH Core is stateless besides the **`/data`** volume. To grow:
 1. Stop the container
 2. Move or resize the volume / attach it to a bigger VM
 3. Start the same image — no reinstall or re-configuration required
+
+#### High availability
+
+For multi-node failover, mount `/data` on storage accessible from multiple nodes. See [High Availability](./high-availability.md).
