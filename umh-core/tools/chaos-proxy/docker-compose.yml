@@ -1,0 +1,49 @@
+# Chaos Proxy + UMH Core docker-compose template
+#
+# Usage:
+#   1. Export required environment variables:
+#        export AUTH_TOKEN="your-auth-token-here"
+#        export UMH_CORE_IMAGE="ghcr.io/united-manufacturing-hub/united-manufacturing-hub:latest"
+#
+#   2. Start with default settings:
+#        docker compose up
+#
+#   3. Override chaos-proxy flags via CHAOS_PROXY_FLAGS:
+#        CHAOS_PROXY_FLAGS="--drop-every=0 --long-poll --long-poll-mu=8.5" docker compose up
+#
+#   4. Or use one of the scenario scripts in scenarios/ which set the flags for you.
+#
+# The chaos proxy sits between umh-core and the Management Console backend,
+# injecting network faults (drops, delays, mid-stream kills) to test resilience.
+#
+# Network topology:
+#   umh-core  -->  chaos-proxy (:8090)  -->  management.umh.app
+
+services:
+  chaos-proxy:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8090:8090"
+    command: ${CHAOS_PROXY_FLAGS:---drop-every=3}
+    networks:
+      - chaos-net
+
+  umh-core:
+    image: ${UMH_CORE_IMAGE:?Set UMH_CORE_IMAGE to the umh-core container image}
+    environment:
+      - AUTH_TOKEN=${AUTH_TOKEN:?Set AUTH_TOKEN to your instance auth token}
+      - API_URL=http://chaos-proxy:8090/api
+      - RELEASE_CHANNEL=stable
+      - LOCATION_0=${LOCATION_0:-CHAOSTEST}
+      - USE_FSMV2_TRANSPORT=true
+      - LOGGING_LEVEL=DEBUG
+    depends_on:
+      - chaos-proxy
+    networks:
+      - chaos-net
+
+networks:
+  chaos-net:
+    driver: bridge
