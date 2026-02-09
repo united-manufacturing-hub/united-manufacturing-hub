@@ -34,8 +34,31 @@ env:
   IMAGE_NAME: united-manufacturing-hub/umh-core
 
 jobs:
+  changes:
+    name: Detect Changes
+    runs-on: depot-ubuntu-24.04
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
+        id: filter
+        with:
+          filters: |
+            code:
+              - 'umh-core/**'
+              - 'Makefile'
+              - '.github/workflows/build-umh-core.yml'
+              - '!umh-core/CHANGELOG.md'
+              - '!umh-core/changelog-images/**'
+
   build:
     name: Build and Push
+    needs: changes
+    if: needs.changes.outputs.code == 'true' || github.event_name == 'push' || github.event_name == 'merge_group'
     permissions:
       contents: read
       packages: write
@@ -99,7 +122,8 @@ jobs:
 
   verify-binaries:
     name: Verify ${{ matrix.arch }} Image
-    needs: build
+    needs: [changes, build]
+    if: needs.changes.outputs.code == 'true' || github.event_name == 'push' || github.event_name == 'merge_group'
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 10
     permissions:
@@ -224,8 +248,8 @@ jobs:
 
   comment-pr:
     name: Comment PR with Image Tag
-    needs: build
-    if: github.event_name == 'pull_request'
+    needs: [changes, build]
+    if: github.event_name == 'pull_request' && (needs.changes.outputs.code == 'true')
     runs-on: depot-ubuntu-24.04
     permissions:
       pull-requests: write
@@ -251,7 +275,7 @@ jobs:
             ```
 
   notify-management-console:
-    needs: build
+    needs: [changes, build]
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: depot-ubuntu-24.04
     steps:

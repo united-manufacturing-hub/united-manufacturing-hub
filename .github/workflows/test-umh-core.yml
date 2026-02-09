@@ -23,9 +23,33 @@ on:
     branches:
       - "**"
   merge_group:
+
 jobs:
+  changes:
+    name: Detect Changes
+    runs-on: depot-ubuntu-24.04
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
+        id: filter
+        with:
+          filters: |
+            code:
+              - 'umh-core/**'
+              - 'Makefile'
+              - '.github/workflows/test-umh-core.yml'
+              - '!umh-core/CHANGELOG.md'
+              - '!umh-core/changelog-images/**'
+
   unit-tests:
     name: Unit Tests
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: depot-ubuntu-24.04
     defaults:
       run:
@@ -70,6 +94,8 @@ jobs:
 
   integration-tests:
     name: Integration Tests
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: depot-ubuntu-24.04-4
     strategy:
       matrix:
@@ -151,8 +177,8 @@ jobs:
 
   test-report:
     name: Consolidated Test Report
-    needs: [unit-tests, integration-tests]
-    if: always() && github.event_name == 'pull_request'
+    needs: [changes, unit-tests, integration-tests]
+    if: always() && github.event_name == 'pull_request' && needs.changes.outputs.code == 'true'
     runs-on: depot-ubuntu-24.04
     permissions:
       pull-requests: write
