@@ -92,6 +92,7 @@ func (d *PushDependencies) StorePendingMessages(msgs []*communicator_transport.U
 		d.pendingMessages = d.pendingMessages[len(d.pendingMessages)-maxPendingMessages:]
 		d.BaseDependencies.GetLogger().Warnw("pending_buffer_overflow",
 			"dropped", dropped, "cap", maxPendingMessages)
+		d.MetricsRecorder().IncrementCounter(deps.CounterMessagesDropped, int64(dropped))
 	}
 }
 

@@ -127,6 +127,18 @@ var _ = Describe("PushWorker", func() {
 			Expect(typedObs.HasValidToken).To(BeTrue())
 		})
 
+		It("should report HasValidToken false for expired token", func() {
+			parentDeps.SetJWT("expired-token", time.Now().Add(-1*time.Hour))
+
+			ctx := context.Background()
+			observed, err := worker.CollectObservedState(ctx)
+
+			Expect(err).ToNot(HaveOccurred())
+			typedObs, ok := observed.(snapshot.PushObservedState)
+			Expect(ok).To(BeTrue())
+			Expect(typedObs.HasValidToken).To(BeFalse())
+		})
+
 		It("should report consecutive errors from parent deps", func() {
 			parentDeps.RecordError()
 			parentDeps.RecordError()

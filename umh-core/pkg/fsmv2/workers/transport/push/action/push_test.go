@@ -313,11 +313,12 @@ var _ = Describe("PushAction", func() {
 	})
 
 	Describe("Nil outbound channel", func() {
-		It("should return nil (no-op)", func() {
+		It("should return error when outbound channel is nil", func() {
 			mockDeps.outboundChan = nil
 
 			err := act.Execute(context.Background(), mockDeps)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("outbound channel is nil"))
 			Expect(mockTrans.pushCallCount).To(Equal(0))
 		})
 	})

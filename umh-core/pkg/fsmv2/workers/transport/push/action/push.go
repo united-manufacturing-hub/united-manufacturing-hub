@@ -71,7 +71,7 @@ func (a *PushAction) Execute(ctx context.Context, depsAny any) error {
 	// Phase 2: Drain and batch-push new messages
 	outChan := pushDeps.GetOutboundChan()
 	if outChan == nil {
-		return nil
+		return errors.New("outbound channel is nil")
 	}
 
 	var messagesToPush []*transport.UMHMessage

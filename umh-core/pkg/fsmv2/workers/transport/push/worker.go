@@ -86,7 +86,7 @@ func (w *PushWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedSt
 	observed := snapshot.PushObservedState{
 		CollectedAt:   time.Now(),
 		HasTransport:  d.GetTransport() != nil,
-		HasValidToken: d.GetJWTToken() != "",
+		HasValidToken: d.IsTokenValid(),
 	}
 
 	observed.ConsecutiveErrors = d.GetConsecutiveErrors()

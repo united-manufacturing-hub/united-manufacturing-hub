@@ -16,6 +16,7 @@ package push_test
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -193,6 +194,52 @@ var _ = Describe("PushDependencies", func() {
 				parentDeps.RecordTypedError(httpTransport.ErrorTypeNetwork, 0)
 				Expect(d.GetLastErrorType()).To(Equal(httpTransport.ErrorTypeNetwork))
 			})
+		})
+	})
+
+	Describe("StorePendingMessages overflow", func() {
+		var d *push.PushDependencies
+
+		BeforeEach(func() {
+			var err error
+			d, err = push.NewPushDependencies(parentDeps, identity, logger, nil)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should increment CounterMessagesDropped when buffer overflows", func() {
+			msgs := make([]*communicator_transport.UMHMessage, 1005)
+			for i := range msgs {
+				msgs[i] = &communicator_transport.UMHMessage{Content: fmt.Sprintf("msg-%d", i)}
+			}
+
+			d.StorePendingMessages(msgs)
+
+			drained := d.MetricsRecorder().Drain()
+			Expect(drained.Counters[string(deps.CounterMessagesDropped)]).To(Equal(int64(5)))
+		})
+	})
+
+	Describe("IsTokenValid", func() {
+		var d *push.PushDependencies
+
+		BeforeEach(func() {
+			var err error
+			d, err = push.NewPushDependencies(parentDeps, identity, logger, nil)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should return false when token is empty", func() {
+			Expect(d.IsTokenValid()).To(BeFalse())
+		})
+
+		It("should return false when token is expired", func() {
+			parentDeps.SetJWT("expired-token", time.Now().Add(-1*time.Hour))
+			Expect(d.IsTokenValid()).To(BeFalse())
+		})
+
+		It("should return true when token is valid and not near expiry", func() {
+			parentDeps.SetJWT("good-token", time.Now().Add(1*time.Hour))
+			Expect(d.IsTokenValid()).To(BeTrue())
 		})
 	})
 
