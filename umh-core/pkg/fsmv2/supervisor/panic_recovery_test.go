@@ -394,9 +394,9 @@ var _ = Describe("Panic Escalation", func() {
 
 			Expect(s.TestIsPanicCircuitOpen()).To(BeTrue())
 
-			// 4th tick should be skipped (no panic, no error)
+			// 4th tick should return ErrPanicCircuitOpen (circuit is open, tick suppressed)
 			err = s.TestTick(ctx)
-			Expect(err).ToNot(HaveOccurred(), "Tick should be skipped when panic circuit is open")
+			Expect(err).To(MatchError(supervisor.ErrPanicCircuitOpen), "Tick should be suppressed when panic circuit is open")
 		})
 
 		It("should report panic circuit via IsCircuitOpen()", func() {

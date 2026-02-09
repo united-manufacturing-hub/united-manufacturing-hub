@@ -491,25 +491,25 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 // handleCollectorPanic processes a recovered panic from collectAndSaveObservedState.
 // It classifies the panic, records metrics, and logs to Sentry. If the recovery handler
 // itself panics, that secondary panic is caught and logged separately.
-func (c *Collector[TObserved]) handleCollectorPanic(r interface{}) error {
+func (c *Collector[TObserved]) handleCollectorPanic(r interface{}) (err error) {
 	logger := c.config.Logger
 	hierarchyPath := c.config.Identity.HierarchyPath
 
 	defer func() {
 		if r2 := recover(); r2 != nil {
-			doubleErr := fmt.Errorf("collector panic (recovery handler also panicked: %v): %v", r2, r)
+			err = fmt.Errorf("collector panic (recovery handler also panicked: %v): %v", r2, r)
 
 			func() {
 				defer func() { recover() }() //nolint:errcheck // recover() return value is intentionally unused in safety net
 
-				logger.SentryError(deps.FeatureFSMv2, hierarchyPath, doubleErr, "collector_double_panic",
+				logger.SentryError(deps.FeatureFSMv2, hierarchyPath, err, "collector_double_panic",
 					deps.String("stack", string(debug.Stack())))
 			}()
 		}
 	}()
 
 	panicType, panicErr := panicutil.ClassifyPanic(r)
-	err := fmt.Errorf("collector panic: %w", panicErr)
+	err = fmt.Errorf("collector panic: %w", panicErr)
 
 	metrics.RecordPanicRecovery(hierarchyPath, panicType)
 
