@@ -77,6 +77,10 @@ func (d *PushDependencies) RecordTypedError(errType httpTransport.ErrorType, ret
 	d.parentDeps.RecordTypedError(errType, retryAfter)
 }
 
+// RecordSuccess resets the child's error state. It intentionally does NOT
+// propagate to the parent tracker. The parent tracker is only reset by auth
+// success (authenticate.go). This prevents a push success from masking pull
+// errors (or vice versa) on the shared parent counter.
 func (d *PushDependencies) RecordSuccess() {
 	d.errorMu.Lock()
 	d.lastErrorType = 0

@@ -50,7 +50,7 @@ type PushDependencies interface {
 	GetResetGeneration() uint64
 	CheckAndClearOnReset() bool
 
-	// Backoff timing from parent error tracking
+	// Backoff timing from child's own error tracking
 	GetLastRetryAfter() time.Duration
 	GetDegradedEnteredAt() time.Time
 	GetLastErrorAt() time.Time

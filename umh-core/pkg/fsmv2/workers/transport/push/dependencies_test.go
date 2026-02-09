@@ -114,7 +114,7 @@ var _ = Describe("PushDependencies", func() {
 		})
 	})
 
-	Describe("Delegation to parent", func() {
+	Describe("Per-child error tracking", func() {
 		var d *push.PushDependencies
 
 		BeforeEach(func() {
@@ -323,16 +323,24 @@ var _ = Describe("PushDependencies", func() {
 	})
 
 	Describe("Cross-child isolation", func() {
-		It("push success does not mask pull errors", func() {
+		var (
+			pushDeps *push.PushDependencies
+			pullDeps *pull.PullDependencies
+		)
+
+		BeforeEach(func() {
 			pushIdentity := deps.Identity{ID: "push-id", WorkerType: "push"}
 			pullIdentity := deps.Identity{ID: "pull-id", WorkerType: "pull"}
 
-			pushDeps, err := push.NewPushDependencies(parentDeps, pushIdentity, logger, nil)
+			var err error
+			pushDeps, err = push.NewPushDependencies(parentDeps, pushIdentity, logger, nil)
 			Expect(err).NotTo(HaveOccurred())
 
-			pullDeps, err := pull.NewPullDependencies(parentDeps, pullIdentity, logger, nil)
+			pullDeps, err = pull.NewPullDependencies(parentDeps, pullIdentity, logger, nil)
 			Expect(err).NotTo(HaveOccurred())
+		})
 
+		It("push success does not mask pull errors", func() {
 			pullDeps.RecordError()
 			pullDeps.RecordError()
 			pullDeps.RecordError()
@@ -342,6 +350,18 @@ var _ = Describe("PushDependencies", func() {
 
 			Expect(pushDeps.GetConsecutiveErrors()).To(Equal(0))
 			Expect(pullDeps.GetConsecutiveErrors()).To(Equal(3))
+			Expect(parentDeps.GetConsecutiveErrors()).To(Equal(3))
+		})
+
+		It("pull success does not mask push errors", func() {
+			pushDeps.RecordError()
+			pushDeps.RecordError()
+			pushDeps.RecordError()
+
+			pullDeps.RecordSuccess()
+
+			Expect(pullDeps.GetConsecutiveErrors()).To(Equal(0))
+			Expect(pushDeps.GetConsecutiveErrors()).To(Equal(3))
 			Expect(parentDeps.GetConsecutiveErrors()).To(Equal(3))
 		})
 	})

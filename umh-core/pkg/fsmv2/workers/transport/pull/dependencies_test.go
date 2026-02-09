@@ -322,7 +322,7 @@ var _ = Describe("PullDependencies", func() {
 		})
 	})
 
-	Describe("Delegation to parent", func() {
+	Describe("Per-child error tracking", func() {
 		var d *pull.PullDependencies
 
 		BeforeEach(func() {
