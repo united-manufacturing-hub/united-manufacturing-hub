@@ -47,6 +47,30 @@ var _ = Describe("ParseHierarchyPath", func() {
 
 			Expect(info.WorkerChain).To(Equal("application/protocolconverter/dataflowcomponent"))
 		})
+
+		It("should handle single-segment path", func() {
+			info := sentry.ParseHierarchyPath("app(application)")
+
+			Expect(info.FSMVersion).To(Equal("v2"))
+			Expect(info.WorkerType).To(Equal("application"))
+			Expect(info.WorkerChain).To(Equal("application"))
+		})
+
+		It("should skip segments with empty type in parens", func() {
+			info := sentry.ParseHierarchyPath("app()/worker(communicator)")
+
+			Expect(info.FSMVersion).To(Equal("v2"))
+			Expect(info.WorkerType).To(Equal("communicator"))
+			Expect(info.WorkerChain).To(Equal("communicator"))
+		})
+
+		It("should skip segments with malformed parentheses", func() {
+			info := sentry.ParseHierarchyPath("app(application)/broken-segment/worker(communicator)")
+
+			Expect(info.FSMVersion).To(Equal("v2"))
+			Expect(info.WorkerType).To(Equal("communicator"))
+			Expect(info.WorkerChain).To(Equal("application/communicator"))
+		})
 	})
 
 	Describe("FSMv1 format (dot notation)", func() {

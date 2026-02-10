@@ -49,7 +49,9 @@ func ParseHierarchyPath(path string) HierarchyInfo {
 		for _, seg := range segments {
 			if start := strings.Index(seg, "("); start != -1 {
 				if end := strings.Index(seg, ")"); end > start {
-					types = append(types, seg[start+1:end])
+					if t := seg[start+1 : end]; t != "" {
+						types = append(types, t)
+					}
 				}
 			}
 		}
