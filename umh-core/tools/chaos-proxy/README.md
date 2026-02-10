@@ -40,6 +40,7 @@ CHAOS_PROXY_FLAGS="--drop-every=5 --long-poll --long-poll-mu=7.0" docker compose
 | `--long-poll-cap` | `31000` | Maximum delay in ms (caps lognormal outliers) |
 | `--long-poll-kill-pct` | `20` | Percentage chance (0-100) to kill connection mid-delay |
 | `--long-poll-method` | `` (all) | Only apply long-poll to this HTTP method (e.g., `GET`) |
+| `--long-poll-path` | `` (all) | Only apply long-poll to requests whose path contains this substring (e.g., `/v2/instance/pull`) |
 
 ## Scenarios
 
@@ -49,7 +50,8 @@ CHAOS_PROXY_FLAGS="--drop-every=5 --long-poll --long-poll-mu=7.0" docker compose
 | 2. Long-Poll | `scenario2-longpoll.sh` | `--long-poll --long-poll-mu=8.5 --long-poll-sigma=1.2 --long-poll-cap=31000 --long-poll-kill-pct=20` | Slow responses + 20% mid-stream kills | Context deadlines fire, killed requests retried | No goroutine leaks, elevated latency in metrics |
 | 3. Mid-Stream Kills | `scenario3-kills.sh` | `--long-poll --long-poll-mu=8.5 --long-poll-sigma=1.2 --long-poll-kill-pct=30` | 30% of connections killed mid-flight | Broken pipe detected, partial responses discarded | No panics, error metrics recover after kills |
 | 4. Combined | `scenario4-combined.sh` | `--drop-every=3 --long-poll --long-poll-mu=8.5 --long-poll-sigma=1.2 --long-poll-cap=31000 --long-poll-kill-pct=20` | All chaos types simultaneously | Mixed failures handled, no unrecoverable state | Instance recovers, no deadlocks, bounded errors |
-| 5. Pull-Only | `scenario5-pull-only.sh` | `--long-poll --long-poll-mu=10.0 --long-poll-sigma=0.3 --long-poll-cap=31000 --long-poll-kill-pct=20 --long-poll-method=GET` | GET delays only, POST unaffected | Push healthy, pull degraded | Push metrics normal, instance stays online |
+| 5a. Pull-Only (path) | `scenario5-pull-only.sh` | `--long-poll --long-poll-mu=10.0 --long-poll-sigma=0.3 --long-poll-cap=31000 --long-poll-kill-pct=20 --long-poll-path=/v2/instance/pull` | Pull path delays only, push unaffected | Push healthy, pull degraded | Push metrics normal, instance stays online |
+| 5b. Push-Only (path) | `scenario5b-push-only.sh` | `--long-poll --long-poll-mu=10.0 --long-poll-sigma=0.3 --long-poll-cap=31000 --long-poll-kill-pct=20 --long-poll-path=/v2/instance/push` | Push path delays only, pull unaffected | Pull healthy, push degraded | Pull metrics normal, actions received normally |
 
 ## Collecting Data
 

@@ -39,6 +39,7 @@ func main() {
 	longPollCap := flag.Int("long-poll-cap", 31000, "max long poll delay in ms (cap for outliers)")
 	longPollKillPct := flag.Int("long-poll-kill-pct", 20, "percentage chance to kill connection during long poll (0-100)")
 	longPollMethod := flag.String("long-poll-method", "", "only apply long-poll delay to this HTTP method (e.g. GET). Empty = all methods")
+	longPollPath := flag.String("long-poll-path", "", "only apply long-poll to requests whose path contains this substring (e.g. /v2/instance/pull)")
 	flag.Parse()
 
 	target, err := url.Parse(*targetURL)
@@ -81,7 +82,9 @@ func main() {
 		log.Printf("proxying request %d: %s %s", count, r.Method, r.URL.Path)
 
 		// Simulate long polling by holding the connection before proxying
-		if *longPoll && (*longPollMethod == "" || strings.EqualFold(r.Method, *longPollMethod)) {
+		methodMatch := *longPollMethod == "" || strings.EqualFold(r.Method, *longPollMethod)
+		pathMatch := *longPollPath == "" || strings.Contains(r.URL.Path, *longPollPath)
+		if *longPoll && methodMatch && pathMatch {
 			// Lognormal distribution: most delays cluster around the median, with occasional long tails
 			sample := math.Exp(*longPollMu + *longPollSigma*rand.NormFloat64())
 			delay := int(math.Min(sample, float64(*longPollCap)))
@@ -146,8 +149,12 @@ func main() {
 		if *longPollMethod != "" {
 			methodFilter = *longPollMethod + " only"
 		}
-		log.Printf("long polling enabled (lognormal mu=%.1f sigma=%.1f, median=%.0f ms, cap=%d ms, %d%% kill chance, %s)",
-			*longPollMu, *longPollSigma, median, *longPollCap, *longPollKillPct, methodFilter)
+		pathFilter := "all paths"
+		if *longPollPath != "" {
+			pathFilter = "path contains " + *longPollPath
+		}
+		log.Printf("long polling enabled (lognormal mu=%.1f sigma=%.1f, median=%.0f ms, cap=%d ms, %d%% kill chance, %s, %s)",
+			*longPollMu, *longPollSigma, median, *longPollCap, *longPollKillPct, methodFilter, pathFilter)
 	}
 
 	if err := http.ListenAndServe(*listenAddr, nil); err != nil {
