@@ -24,7 +24,21 @@
 //
 //   - Title: event_name (e.g., "action_failed")
 //   - Subtitle: error message
-//   - Tags: feature, event_name, error_types, fsm_version, worker_type, worker_chain
+//   - Tags: feature, event_name, error_types, fsm_version, worker_type, worker_chain, action_name
+//   - Contexts["umh_context"]: all remaining fields (reason, duration_ms, capacity, etc.)
+//
+// # Contexts (umh_context)
+//
+// All fields not extracted as tags are sent to event.Contexts["umh_context"].
+// This includes troubleshooting data like reason, duration_ms, capacity,
+// target_worker_id, child_name, and panic_value. These are visible on the
+// Sentry issue page but not searchable.
+//
+// The catch-all excludes:
+//   - Keys already handled: feature, stack, panic, action_name, hierarchy_path
+//   - The "error" key when a typed error was extracted (avoids duplication with Exception)
+//   - Keys matching a sensitive-name denylist (password, secret, token, etc.)
+//   - String values are truncated at 1024 characters
 //
 // # Creating Sentry Alerts
 //
@@ -47,13 +61,15 @@
 // 150-600 unique paths. The worker_chain strips instance IDs and names, keeping only
 // the structural type chain, which is bounded to ~10-15 unique values globally.
 //
+// Tag values are truncated at 200 characters (Sentry's server-side limit) with a
+// "..." suffix to make truncation visible. This applies to error_types and
+// worker_chain, the only tags with theoretical overflow risk.
+//
 // # Log-Only vs Sentry Fields
 //
-// Fields added via FSMLogger.With() (e.g., "worker" identity) are visible to
-// the SentryHook as per-call fields. However, the hook only extracts specific
-// keys ("feature", "hierarchy_path", "error", "stack", "panic", "action_name")
-// and ignores the rest. High-cardinality identifiers like "comm-001(communicator)"
-// appear in the "worker" field which the hook intentionally does not tag, keeping
-// Sentry tags bounded. These identifiers remain available in structured log output
-// for grep.
+// Fields added via FSMLogger.With() (e.g., "worker" identity) are captured by the
+// catch-all and appear in Contexts["umh_context"]. High-cardinality identifiers
+// like "comm-001(communicator)" are NOT promoted to tags (which would cause
+// cardinality issues), but they ARE visible in the Contexts panel on each
+// Sentry event for per-incident debugging.
 package sentry

@@ -103,6 +103,7 @@ func (h *SentryHook) With(fields []zapcore.Field) zapcore.Core {
 func (h *SentryHook) captureToSentry(entry zapcore.Entry, fields []zapcore.Field) {
 	defer func() {
 		if r := recover(); r != nil {
+			sentryEventsDropped.Add(1)
 			fmt.Fprintf(os.Stderr, "sentry: recovered panic in captureToSentry: %v\n", r)
 		}
 	}()
@@ -179,7 +180,7 @@ func (h *SentryHook) captureToSentry(entry zapcore.Entry, fields []zapcore.Field
 	}
 
 	if errorTypes != "" {
-		event.Tags["error_types"] = errorTypes
+		event.Tags["error_types"] = TruncateTag(errorTypes, maxTagLen)
 	}
 
 	// Auto-derive from hierarchy_path
@@ -188,18 +189,45 @@ func (h *SentryHook) captureToSentry(entry zapcore.Entry, fields []zapcore.Field
 		event.Tags["fsm_version"] = info.FSMVersion
 		event.Tags["worker_type"] = info.WorkerType
 		if info.WorkerChain != "" {
-			event.Tags["worker_chain"] = info.WorkerChain
+			event.Tags["worker_chain"] = TruncateTag(info.WorkerChain, maxTagLen)
 		}
-	}
-
-	event.Extra = make(map[string]interface{})
-
-	if panicVal, ok := fieldMap["panic"].(string); ok && panicVal != "" {
-		event.Extra["panic_value"] = panicVal
 	}
 
 	if actionName, ok := fieldMap["action_name"].(string); ok && actionName != "" {
 		event.Tags["action_name"] = actionName
+	}
+
+	// Catch-all: remaining fields go to Contexts for per-event troubleshooting.
+	// Tags are searchable; Contexts are visible per-event but not searchable.
+	handledKeys := map[string]struct{}{
+		"feature":        {},
+		"stack":          {},
+		"panic":          {},
+		"action_name":    {},
+		"hierarchy_path": {},
+	}
+	if err != nil {
+		handledKeys["error"] = struct{}{}
+	}
+
+	umhContext := make(map[string]interface{})
+	if panicVal, ok := fieldMap["panic"].(string); ok && panicVal != "" {
+		umhContext["panic_value"] = panicVal
+	}
+	for k, v := range fieldMap {
+		if _, handled := handledKeys[k]; handled {
+			continue
+		}
+		if IsSensitiveKey(k) {
+			continue
+		}
+		if s, ok := v.(string); ok && len(s) > 1024 {
+			v = s[:1024] + "...[truncated]"
+		}
+		umhContext[k] = v
+	}
+	if len(umhContext) > 0 {
+		event.Contexts["umh_context"] = umhContext
 	}
 
 	event.Fingerprint = fingerprint
@@ -310,6 +338,41 @@ func ExtractFeature(fieldMap map[string]interface{}) string {
 	}
 
 	return feature
+}
+
+const maxTagLen = 200
+
+// TruncateTag truncates a tag value to maxLen characters, adding "..." suffix.
+// Sentry silently truncates tags at 200 chars server-side; this makes truncation explicit.
+func TruncateTag(value string, maxLen int) string {
+	if len(value) <= maxLen {
+		return value
+	}
+	return value[:maxLen-3] + "..."
+}
+
+var sensitiveKeys = map[string]struct{}{
+	"password":            {},
+	"secret":              {},
+	"token":               {},
+	"credential":          {},
+	"auth_token":          {},
+	"api_key":             {},
+	"private_key":         {},
+	"access_token":        {},
+	"bearer_token":        {},
+	"connection_password": {},
+	"db_password":         {},
+	"jwt_token":           {},
+	"session_token":       {},
+	"refresh_token":       {},
+}
+
+// IsSensitiveKey checks if a field key matches the sensitive-name denylist.
+// Uses exact match (not substring) to avoid blocking legitimate fields like "cache_key".
+func IsSensitiveKey(key string) bool {
+	_, ok := sensitiveKeys[strings.ToLower(key)]
+	return ok
 }
 
 // ExtractErrorFromFields extracts the error interface directly from zap fields.

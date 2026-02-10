@@ -74,6 +74,8 @@ func (l *zapLogger) SentryError(feature Feature, hierarchyPath string, err error
 		allFields = append(allFields, Field{Key: "hierarchy_path", Value: hierarchyPath})
 	}
 
+	// Pass error as bare value. SugaredLogger.sweetenFields detects the error interface
+	// and creates zapcore.ErrorType, which ExtractErrorFromFields in sentry/hook.go relies on.
 	allFields = append(allFields, Field{Key: "error", Value: err})
 	allFields = append(allFields, fields...)
 	l.sugar.Errorw(msg, fieldsToArgs(l.baseFields, allFields)...)

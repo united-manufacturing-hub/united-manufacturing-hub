@@ -328,6 +328,66 @@ main.second()
 		})
 	})
 
+	Describe("TruncateTag", func() {
+		It("returns value unchanged when under limit", func() {
+			result := sentry.TruncateTag("short", 200)
+			Expect(result).To(Equal("short"))
+		})
+
+		It("truncates with ... when over limit", func() {
+			long := ""
+			for i := 0; i < 210; i++ {
+				long += "a"
+			}
+			result := sentry.TruncateTag(long, 200)
+			Expect(len(result)).To(Equal(200))
+			Expect(result).To(HaveSuffix("..."))
+		})
+
+		It("handles exact limit length", func() {
+			exact := ""
+			for i := 0; i < 200; i++ {
+				exact += "x"
+			}
+			result := sentry.TruncateTag(exact, 200)
+			Expect(result).To(Equal(exact))
+		})
+
+		It("handles empty string", func() {
+			result := sentry.TruncateTag("", 200)
+			Expect(result).To(Equal(""))
+		})
+	})
+
+	Describe("IsSensitiveKey", func() {
+		It("returns true for each denylist entry", func() {
+			Expect(sentry.IsSensitiveKey("password")).To(BeTrue())
+			Expect(sentry.IsSensitiveKey("secret")).To(BeTrue())
+			Expect(sentry.IsSensitiveKey("token")).To(BeTrue())
+			Expect(sentry.IsSensitiveKey("credential")).To(BeTrue())
+			Expect(sentry.IsSensitiveKey("auth_token")).To(BeTrue())
+			Expect(sentry.IsSensitiveKey("api_key")).To(BeTrue())
+			Expect(sentry.IsSensitiveKey("private_key")).To(BeTrue())
+		})
+
+		It("returns false for non-sensitive keys", func() {
+			Expect(sentry.IsSensitiveKey("reason")).To(BeFalse())
+			Expect(sentry.IsSensitiveKey("duration_ms")).To(BeFalse())
+			Expect(sentry.IsSensitiveKey("worker_id")).To(BeFalse())
+		})
+
+		It("is case-insensitive", func() {
+			Expect(sentry.IsSensitiveKey("PASSWORD")).To(BeTrue())
+			Expect(sentry.IsSensitiveKey("Token")).To(BeTrue())
+		})
+
+		It("uses exact match not substring", func() {
+			Expect(sentry.IsSensitiveKey("cache_key")).To(BeFalse())
+			Expect(sentry.IsSensitiveKey("worker_token_count")).To(BeFalse())
+			Expect(sentry.IsSensitiveKey("primary_key")).To(BeFalse())
+		})
+	})
+
 	Describe("NewSentryHook", func() {
 		It("should create hook with debouncer", func() {
 			hook := sentry.NewSentryHook(5 * time.Minute)
@@ -912,6 +972,298 @@ github.com/example/pkg/executor.executeWork()
 	})
 })
 
+// Contexts catch-all tests verify that extra fields reach Sentry via event.Contexts["umh_context"].
+var _ = Describe("Contexts Catch-All", func() {
+	var (
+		hook      *sentry.SentryHook
+		store     *eventStore
+		transport *mockTransport
+		logger    *zap.SugaredLogger
+	)
+
+	BeforeEach(func() {
+		store = newEventStore()
+		transport = &mockTransport{store: store}
+		err := sentrygo.Init(sentrygo.ClientOptions{
+			Dsn:       "https://test@sentry.io/123",
+			Transport: transport,
+		})
+		Expect(err).NotTo(HaveOccurred())
+		hook = sentry.NewSentryHook(time.Hour)
+		wrappedCore := hook.Wrap(zapcore.NewCore(
+			zapcore.NewJSONEncoder(zap.NewProductionEncoderConfig()),
+			zapcore.AddSync(&discardWriter{}),
+			zapcore.DebugLevel,
+		))
+		logger = zap.New(wrappedCore).Sugar()
+	})
+
+	AfterEach(func() {
+		sentrygo.Flush(time.Second)
+		time.Sleep(50 * time.Millisecond)
+		if hook != nil {
+			hook.Stop()
+		}
+	})
+
+	It("captures extra fields in Contexts['umh_context']", func() {
+		logger.Errorw("action_failed",
+			"feature", "fsmv2",
+			"error", io.EOF,
+			"reason", "timeout",
+			"duration_ms", 500)
+
+		Eventually(func() int {
+			return store.Len()
+		}, time.Second, 10*time.Millisecond).Should(BeNumerically(">=", 1))
+
+		event := store.GetLast()
+		Expect(event).NotTo(BeNil())
+		ctx, ok := event.Contexts["umh_context"]
+		Expect(ok).To(BeTrue(), "should have umh_context")
+		Expect(ctx["reason"]).To(Equal("timeout"))
+	})
+
+	It("excludes handled keys from Contexts", func() {
+		logger.Errorw("action_panic",
+			"feature", "fsmv2",
+			"error", io.EOF,
+			"hierarchy_path", "app(application)/w(communicator)",
+			"stack", "goroutine 1 [running]:\n",
+			"panic", "test panic",
+			"action_name", "connect",
+			"reason", "should_appear")
+
+		Eventually(func() int {
+			return store.Len()
+		}, time.Second, 10*time.Millisecond).Should(BeNumerically(">=", 1))
+
+		event := store.GetLast()
+		ctx, ok := event.Contexts["umh_context"]
+		Expect(ok).To(BeTrue())
+		// "reason" should be in context
+		Expect(ctx).To(HaveKey("reason"))
+		// Handled keys should NOT be in context (except panic_value which is remapped)
+		Expect(ctx).NotTo(HaveKey("feature"))
+		Expect(ctx).NotTo(HaveKey("stack"))
+		Expect(ctx).NotTo(HaveKey("action_name"))
+		Expect(ctx).NotTo(HaveKey("hierarchy_path"))
+		// panic is excluded but panic_value is explicitly added
+		Expect(ctx).NotTo(HaveKey("panic"))
+		Expect(ctx).To(HaveKey("panic_value"))
+	})
+
+	It("excludes 'error' from Contexts when typed error is present", func() {
+		logger.Errorw("action_failed",
+			"feature", "fsmv2",
+			"error", io.EOF,
+			"reason", "test")
+
+		Eventually(func() int {
+			return store.Len()
+		}, time.Second, 10*time.Millisecond).Should(BeNumerically(">=", 1))
+
+		event := store.GetLast()
+		ctx, ok := event.Contexts["umh_context"]
+		Expect(ok).To(BeTrue())
+		Expect(ctx).NotTo(HaveKey("error"), "error should be excluded when typed error present")
+		Expect(event.Exception).NotTo(BeEmpty(), "typed error should be in Exception")
+	})
+
+	It("includes 'error' string in Contexts when no typed error (SentryWarn pattern)", func() {
+		// Simulate SentryWarn + deps.Err: error becomes a string field, not typed
+		logger.Warnw("shutdown_failed",
+			"feature", "fsmv2",
+			"error", "connection reset by peer")
+
+		Eventually(func() int {
+			return store.Len()
+		}, time.Second, 10*time.Millisecond).Should(BeNumerically(">=", 1))
+
+		event := store.GetLast()
+		ctx, ok := event.Contexts["umh_context"]
+		Expect(ok).To(BeTrue())
+		Expect(ctx["error"]).To(Equal("connection reset by peer"))
+		Expect(event.Exception).To(BeEmpty())
+	})
+
+	It("does not create Contexts when no extra fields exist", func() {
+		logger.Warnw("simple_warning",
+			"feature", "fsmv2")
+
+		Eventually(func() int {
+			return store.Len()
+		}, time.Second, 10*time.Millisecond).Should(BeNumerically(">=", 1))
+
+		event := store.GetLast()
+		_, ok := event.Contexts["umh_context"]
+		Expect(ok).To(BeFalse(), "no umh_context when no extra fields")
+	})
+
+	It("captures panic_value in Contexts instead of Extra", func() {
+		logger.Errorw("action_panic",
+			"feature", "fsmv2",
+			"error", errors.New("panicked"),
+			"panic", "runtime error: nil pointer",
+			"stack", "goroutine 1 [running]:\n",
+			"action_name", "test_action")
+
+		Eventually(func() int {
+			return store.Len()
+		}, time.Second, 10*time.Millisecond).Should(BeNumerically(">=", 1))
+
+		event := store.GetLast()
+		ctx, ok := event.Contexts["umh_context"]
+		Expect(ok).To(BeTrue())
+		Expect(ctx["panic_value"]).To(Equal("runtime error: nil pointer"))
+		// Extra should not have panic_value
+		Expect(event.Extra).To(BeEmpty())
+	})
+
+	It("filters sensitive keys from Contexts", func() {
+		logger.Errorw("auth_error",
+			"feature", "fsmv2",
+			"error", io.EOF,
+			"password", "secret123",
+			"reason", "timeout")
+
+		Eventually(func() int {
+			return store.Len()
+		}, time.Second, 10*time.Millisecond).Should(BeNumerically(">=", 1))
+
+		event := store.GetLast()
+		ctx, ok := event.Contexts["umh_context"]
+		Expect(ok).To(BeTrue())
+		Expect(ctx).NotTo(HaveKey("password"))
+		Expect(ctx["reason"]).To(Equal("timeout"))
+	})
+
+	It("does not filter non-sensitive keys with sensitive substrings", func() {
+		logger.Warnw("test_event",
+			"feature", "fsmv2",
+			"cache_key", "abc",
+			"worker_token_count", "5")
+
+		Eventually(func() int {
+			return store.Len()
+		}, time.Second, 10*time.Millisecond).Should(BeNumerically(">=", 1))
+
+		event := store.GetLast()
+		ctx, ok := event.Contexts["umh_context"]
+		Expect(ok).To(BeTrue())
+		Expect(ctx).To(HaveKey("cache_key"))
+		Expect(ctx).To(HaveKey("worker_token_count"))
+	})
+
+	It("truncates long string values in Contexts at 1024 chars", func() {
+		longVal := ""
+		for i := 0; i < 2000; i++ {
+			longVal += "x"
+		}
+		logger.Warnw("test_event",
+			"feature", "fsmv2",
+			"long_field", longVal)
+
+		Eventually(func() int {
+			return store.Len()
+		}, time.Second, 10*time.Millisecond).Should(BeNumerically(">=", 1))
+
+		event := store.GetLast()
+		ctx, ok := event.Contexts["umh_context"]
+		Expect(ok).To(BeTrue())
+		val, ok := ctx["long_field"].(string)
+		Expect(ok).To(BeTrue())
+		Expect(len(val)).To(BeNumerically("<=", 1024+len("...[truncated]")))
+		Expect(val).To(HaveSuffix("...[truncated]"))
+	})
+
+	It("does not truncate short string values", func() {
+		logger.Warnw("test_event",
+			"feature", "fsmv2",
+			"short_field", "hello")
+
+		Eventually(func() int {
+			return store.Len()
+		}, time.Second, 10*time.Millisecond).Should(BeNumerically(">=", 1))
+
+		event := store.GetLast()
+		ctx, ok := event.Contexts["umh_context"]
+		Expect(ok).To(BeTrue())
+		Expect(ctx["short_field"]).To(Equal("hello"))
+	})
+})
+
+// Tag truncation tests verify that long tag values are safely truncated.
+var _ = Describe("Tag Truncation", func() {
+	var (
+		hook      *sentry.SentryHook
+		store     *eventStore
+		transport *mockTransport
+		logger    *zap.SugaredLogger
+	)
+
+	BeforeEach(func() {
+		store = newEventStore()
+		transport = &mockTransport{store: store}
+		err := sentrygo.Init(sentrygo.ClientOptions{
+			Dsn:       "https://test@sentry.io/123",
+			Transport: transport,
+		})
+		Expect(err).NotTo(HaveOccurred())
+		hook = sentry.NewSentryHook(time.Hour)
+		wrappedCore := hook.Wrap(zapcore.NewCore(
+			zapcore.NewJSONEncoder(zap.NewProductionEncoderConfig()),
+			zapcore.AddSync(&discardWriter{}),
+			zapcore.DebugLevel,
+		))
+		logger = zap.New(wrappedCore).Sugar()
+	})
+
+	AfterEach(func() {
+		sentrygo.Flush(time.Second)
+		time.Sleep(50 * time.Millisecond)
+		if hook != nil {
+			hook.Stop()
+		}
+	})
+
+	It("truncates error_types exceeding 200 chars", func() {
+		// Build a deeply wrapped error chain to exceed 200 chars
+		var err error = errors.New("root")
+		for i := 0; i < 15; i++ {
+			err = fmt.Errorf("wrap_%d: %w", i, err)
+		}
+		// error_types for 15 wraps + 1 base: ~16 types * ~20 chars = ~320 chars
+
+		logger.Errorw("action_failed",
+			"feature", "fsmv2",
+			"error", err)
+
+		Eventually(func() int {
+			return store.Len()
+		}, time.Second, 10*time.Millisecond).Should(BeNumerically(">=", 1))
+
+		event := store.GetLast()
+		Expect(len(event.Tags["error_types"])).To(BeNumerically("<=", 200))
+		Expect(event.Tags["error_types"]).To(HaveSuffix("..."))
+	})
+
+	It("does not truncate error_types under 200 chars", func() {
+		err := fmt.Errorf("wrap: %w", io.EOF)
+
+		logger.Errorw("action_failed",
+			"feature", "fsmv2",
+			"error", err)
+
+		Eventually(func() int {
+			return store.Len()
+		}, time.Second, 10*time.Millisecond).Should(BeNumerically(">=", 1))
+
+		event := store.GetLast()
+		Expect(event.Tags["error_types"]).NotTo(HaveSuffix("..."))
+	})
+})
+
 // FSMLogger-level tests verify the full pipeline: FSMLogger → zap → SentryHook → Sentry event.
 // This complements the raw-zap tests above by proving the FSMLogger wrapper produces
 // identical Sentry events to hand-written Errorw/Warnw calls.
@@ -1043,6 +1395,35 @@ var _ = Describe("FSMLogger to Sentry Event Mapping", func() {
 
 		event := store.GetLast()
 		Expect(event.Tags["feature"]).To(Equal("fsmv2"))
+	})
+
+	It("SentryWarn with deps.Err still extracts typed error into Exception", func() {
+		// deps.Err() creates a typed error field that zap preserves as ErrorType.
+		// ExtractErrorFromFields finds it, so even SentryWarn produces an Exception.
+		fsmLogger.SentryWarn(deps.FeatureFSMv2, "", "shutdown_failed",
+			deps.Err(errors.New("connection reset")))
+
+		Eventually(func() int {
+			return store.Len()
+		}, time.Second, 10*time.Millisecond).Should(BeNumerically(">=", 1))
+
+		event := store.GetLast()
+		Expect(event.Exception).NotTo(BeEmpty(), "deps.Err creates typed error, extracted as Exception")
+		Expect(event.Exception[0].Value).To(ContainSubstring("connection reset"))
+	})
+
+	It("SentryError with extra fields captures them in Contexts", func() {
+		fsmLogger.SentryError(deps.FeatureFSMv2, "", io.EOF, "action_failed",
+			deps.Attempts(3), deps.String("reason", "timeout"))
+
+		Eventually(func() int {
+			return store.Len()
+		}, time.Second, 10*time.Millisecond).Should(BeNumerically(">=", 1))
+
+		event := store.GetLast()
+		ctx, ok := event.Contexts["umh_context"]
+		Expect(ok).To(BeTrue())
+		Expect(ctx["reason"]).To(Equal("timeout"))
 	})
 })
 
