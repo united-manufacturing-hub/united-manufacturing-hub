@@ -183,8 +183,7 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 			if err := s.store.LoadDesiredTyped(ctx, s.workerType, identity.ID, &desired); err != nil {
 				s.logger.SentryWarn(deps.FeatureFSMv2, identity.HierarchyPath, "shutdown_requested_load_failed",
 					deps.Err(err))
-
-				return false
+				return true
 			}
 
 			return desired.IsShutdownRequested()
