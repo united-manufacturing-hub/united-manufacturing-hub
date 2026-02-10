@@ -145,7 +145,7 @@ func (w *PersistenceWorker) CollectObservedState(ctx context.Context) (fsmv2.Obs
 		LastMaintenanceAt:       lastMaintenanceAt,
 		ConsecutiveActionErrors: consecutiveErrors,
 		LastActionResults:       actionResults,
-		MetricsEmbedder:        deps.MetricsEmbedder{Metrics: metricsContainer},
+		MetricsEmbedder:         deps.MetricsEmbedder{Metrics: metricsContainer},
 	}
 
 	return observed, nil
