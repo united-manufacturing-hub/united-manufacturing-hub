@@ -22,7 +22,7 @@ on:
 jobs:
   cleanup:
     name: Delete old container images
-    runs-on: ubuntu-latest
+    runs-on: depot-ubuntu-24.04
     permissions:
       packages: write
     steps:
@@ -36,5 +36,5 @@ jobs:
           older-than: 30 days
           delete-untagged: true
           delete-ghost-images: true
-          dry-run: true
+          dry-run: false
           token: ${{ secrets.GITHUB_TOKEN }}
