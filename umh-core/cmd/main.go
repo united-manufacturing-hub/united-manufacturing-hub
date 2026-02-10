@@ -105,15 +105,26 @@ func main() {
 	// FSMv2 feature flags: read directly from env vars, not persisted to config.yaml.
 	// These bypass the config manager intentionally — they are temporary migration flags
 	// that will be replaced when the config manager becomes an FSMv2 worker.
-	if v, _ := env.GetAsBool("USE_FSMV2_TRANSPORT", false, false); v {
-		configData.Agent.UseFSMv2Transport = true
+	v, err := env.GetAsBool("USE_FSMV2_TRANSPORT", false, false)
+	if err != nil {
+		sentry.ReportIssuef(sentry.IssueTypeWarning, log, "Failed to parse USE_FSMV2_TRANSPORT: %v", err)
 	}
-	if v, _ := env.GetAsBool("USE_FSMV2_MEMORY_CLEANUP", false, false); v {
-		configData.Agent.UseFSMv2MemoryCleanup = true
+
+	configData.Agent.UseFSMv2Transport = v
+
+	v, err = env.GetAsBool("USE_FSMV2_MEMORY_CLEANUP", false, false)
+	if err != nil {
+		sentry.ReportIssuef(sentry.IssueTypeWarning, log, "Failed to parse USE_FSMV2_MEMORY_CLEANUP: %v", err)
 	}
-	if v, _ := env.GetAsBool("USE_FSMV2_PROTOCOL_CONVERTER", false, false); v {
-		configData.Agent.UseFSMv2ProtocolConverter = true
+
+	configData.Agent.UseFSMv2MemoryCleanup = v
+
+	v, err = env.GetAsBool("USE_FSMV2_PROTOCOL_CONVERTER", false, false)
+	if err != nil {
+		sentry.ReportIssuef(sentry.IssueTypeWarning, log, "Failed to parse USE_FSMV2_PROTOCOL_CONVERTER: %v", err)
 	}
+
+	configData.Agent.UseFSMv2ProtocolConverter = v
 
 	// Ensure the S6 repository directory exists
 	// This is particularly important when using /tmp/umh-core/services (the default)
