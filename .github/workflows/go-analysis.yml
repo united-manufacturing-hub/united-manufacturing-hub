@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
+---
 name: Go Code Analysis
 
 on:
@@ -30,14 +30,9 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Get Go version from Makefile
-        id: go_version
-        working-directory: ./umh-core
-        run: echo "version=$(go mod edit -json | jq -r .Go)" >> $GITHUB_OUTPUT
-
       - uses: actions/setup-go@v6
         with:
-          go-version: ${{ steps.go_version.outputs.version }}
+          go-version-file: umh-core/go.mod
           cache: true
 
       - name: Run go vet
@@ -53,15 +48,10 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Get Go version from Makefile
-        id: go_version
-        working-directory: ./umh-core
-        run: echo "version=$(go mod edit -json | jq -r .Go)" >> $GITHUB_OUTPUT
-
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
-          go-version: ${{ steps.go_version.outputs.version }}
+          go-version-file: umh-core/go.mod
           cache: true
 
       - name: Install nilaway
