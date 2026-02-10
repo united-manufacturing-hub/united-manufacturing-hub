@@ -258,8 +258,10 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 
 		// Wait for workers to complete graceful shutdown (with timeout)
 		gracefulTimeout := s.gracefulShutdownTimeout
+
 		ticker := time.NewTicker(100 * time.Millisecond)
 		defer ticker.Stop()
+
 		gracefulTimer := time.NewTimer(gracefulTimeout)
 		defer gracefulTimer.Stop()
 
@@ -288,7 +290,6 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 				}
 			}
 		}
-
 	}
 
 	// Phase 4: Cleanup executors and collectors.

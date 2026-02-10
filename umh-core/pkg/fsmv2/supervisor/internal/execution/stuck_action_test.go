@@ -56,6 +56,7 @@ var _ = Describe("Stuck Action Detection", func() {
 				name: "stuck-action",
 				execute: func(ctx context.Context) error {
 					<-blockChan
+
 					return nil
 				},
 			}
@@ -101,6 +102,7 @@ var _ = Describe("Stuck Action Detection", func() {
 				name: "fast-action",
 				execute: func(ctx context.Context) error {
 					time.Sleep(50 * time.Millisecond)
+
 					return nil
 				},
 			}
@@ -141,6 +143,7 @@ var _ = Describe("Stuck Action Force-Removal", func() {
 			name: "stuck-force",
 			execute: func(ctx context.Context) error {
 				<-blockChan
+
 				return nil
 			},
 		}
@@ -188,6 +191,7 @@ var _ = Describe("Stuck Action Force-Removal", func() {
 			name: "stuck-reenqueue",
 			execute: func(ctx context.Context) error {
 				<-blockChan
+
 				return nil
 			},
 		}
@@ -205,6 +209,7 @@ var _ = Describe("Stuck Action Force-Removal", func() {
 			name: "stuck-reenqueue",
 			execute: func(ctx context.Context) error {
 				completed <- true
+
 				return nil
 			},
 		}
@@ -242,6 +247,7 @@ var _ = Describe("Stuck Action Force-Removal", func() {
 			name: "orphan-cb",
 			execute: func(ctx context.Context) error {
 				<-releaseChan
+
 				return nil
 			},
 		}
@@ -286,6 +292,7 @@ var _ = Describe("Stuck Action Force-Removal", func() {
 			name: "orphan-del",
 			execute: func(ctx context.Context) error {
 				<-releaseChan
+
 				return nil
 			},
 		}
@@ -304,6 +311,7 @@ var _ = Describe("Stuck Action Force-Removal", func() {
 			name: "orphan-del",
 			execute: func(ctx context.Context) error {
 				<-blockChan
+
 				return nil
 			},
 		}
@@ -346,6 +354,7 @@ var _ = Describe("Stuck Action Deduplication", func() {
 			name: "stuck-dedup",
 			execute: func(ctx context.Context) error {
 				<-blockChan
+
 				return nil
 			},
 		}
@@ -387,6 +396,7 @@ var _ = Describe("Stuck Action Deduplication", func() {
 				name: id,
 				execute: func(ctx context.Context) error {
 					<-blockChan
+
 					return nil
 				},
 			}

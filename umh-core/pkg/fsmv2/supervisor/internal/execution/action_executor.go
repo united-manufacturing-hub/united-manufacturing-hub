@@ -190,10 +190,12 @@ func (ae *ActionExecutor) executeWorkWithRecovery(ctx context.Context, work acti
 
 		ae.mu.Lock()
 		entry, exists := ae.inProgress[work.actionID]
+
 		generationMatch := exists && entry.generation == work.generation
 		if generationMatch {
 			delete(ae.inProgress, work.actionID)
 		}
+
 		callback := ae.onActionComplete
 		ae.mu.Unlock()
 
@@ -202,14 +204,17 @@ func (ae *ActionExecutor) executeWorkWithRecovery(ctx context.Context, work acti
 				deps.CorrelationID(work.actionID),
 				deps.ActionName(work.action.Name()),
 				deps.Field{Key: "work_generation", Value: work.generation})
+
 			return
 		}
+
 		if !generationMatch {
 			ae.logger.Info("action_completion_discarded_stale_generation",
 				deps.CorrelationID(work.actionID),
 				deps.ActionName(work.action.Name()),
 				deps.Field{Key: "work_generation", Value: work.generation},
 				deps.Field{Key: "current_generation", Value: entry.generation})
+
 			return
 		}
 

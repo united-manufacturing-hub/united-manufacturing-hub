@@ -513,9 +513,11 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 			defer func() {
 				if r2 := recover(); r2 != nil {
 					err = fmt.Errorf("tick panic (recovery handler also panicked: %v): %v", r2, r)
+
 					s.panicCircuitOpen.Store(true)
 					func() {
-						defer func() { recover() }()
+						defer func() { _ = recover() }()
+
 						s.logger.SentryError(deps.FeatureFSMv2, "unknown", err, "tick_double_panic",
 							deps.String("stack", string(debug.Stack())))
 					}()
@@ -551,6 +553,7 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 		} else {
 			s.logger.Debug("tick_suppressed_panic_circuit_open",
 				deps.HierarchyPath(s.GetHierarchyPathUnlocked()))
+
 			return ErrPanicCircuitOpen
 		}
 	}
@@ -1155,6 +1158,7 @@ func buildObservedStateName(phase config.LifecyclePhase, state fsmv2.State[any, 
 	if phase == config.PhaseStopped {
 		return prefix
 	}
+
 	return prefix + strings.ToLower(state.String())
 }
 
@@ -1298,11 +1302,13 @@ func (s *Supervisor[TObserved, TDesired]) checkDataFreshness(snapshot *fsmv2.Sna
 
 	if s.freshnessChecker.IsTimeout(snapshot) {
 		s.logFreshnessWarning(isShuttingDown, snapshot.Identity.HierarchyPath, "data_timeout", age, s.collectorHealth.timeout)
+
 		return false
 	}
 
 	if !s.freshnessChecker.Check(snapshot) {
 		s.logFreshnessWarning(isShuttingDown, snapshot.Identity.HierarchyPath, "data_stale", age, s.collectorHealth.staleThreshold)
+
 		return false
 	}
 

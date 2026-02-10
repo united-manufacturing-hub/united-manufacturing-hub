@@ -32,9 +32,11 @@ func newPanicRecovery(window time.Duration, maxPanics int) *panicRecovery {
 	if window <= 0 {
 		panic("panicRecovery: window must be positive")
 	}
+
 	if maxPanics <= 0 {
 		panic("panicRecovery: maxPanics must be positive")
 	}
+
 	return &panicRecovery{
 		window:    window,
 		maxPanics: maxPanics,
@@ -56,12 +58,14 @@ func (p *panicRecovery) RecordPanic() bool {
 // pruneExpired removes timestamps older than the window. Caller must hold p.mu.
 func (p *panicRecovery) pruneExpired(now time.Time) {
 	cutoff := now.Add(-p.window)
+
 	pruned := p.timestamps[:0]
 	for _, ts := range p.timestamps {
 		if ts.After(cutoff) {
 			pruned = append(pruned, ts)
 		}
 	}
+
 	p.timestamps = pruned
 }
 
@@ -69,11 +73,13 @@ func (p *panicRecovery) pruneExpired(now time.Time) {
 func (p *panicRecovery) countWithinWindow() int {
 	cutoff := time.Now().Add(-p.window)
 	count := 0
+
 	for _, ts := range p.timestamps {
 		if ts.After(cutoff) {
 			count++
 		}
 	}
+
 	return count
 }
 

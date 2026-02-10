@@ -349,7 +349,7 @@ var _ = Describe("Panic Escalation", func() {
 
 			ctx := context.Background()
 
-			for i := 0; i < 3; i++ {
+			for range 3 {
 				err = s.TestTick(ctx)
 				Expect(err).To(HaveOccurred())
 			}
@@ -387,7 +387,7 @@ var _ = Describe("Panic Escalation", func() {
 			ctx := context.Background()
 
 			// Trigger 3 panics to open the circuit
-			for i := 0; i < 3; i++ {
+			for range 3 {
 				err = s.TestTick(ctx)
 				Expect(err).To(HaveOccurred())
 			}
@@ -425,7 +425,7 @@ var _ = Describe("Panic Escalation", func() {
 			Expect(s.IsCircuitOpen()).To(BeFalse())
 
 			// Trigger 3 panics to open circuit
-			for i := 0; i < 3; i++ {
+			for range 3 {
 				err = s.TestTick(ctx)
 				Expect(err).To(HaveOccurred())
 			}
