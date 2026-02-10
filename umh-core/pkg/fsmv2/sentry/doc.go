@@ -24,10 +24,34 @@
 //
 //   - Title: event_name (e.g., "action_failed")
 //   - Subtitle: error message
-//   - Tags: feature, event_name, error_types, fsm_version, worker_type
+//   - Tags: feature, event_name, error_types, fsm_version, worker_type, worker_chain
 //
 // # Creating Sentry Alerts
 //
 //	level:error feature:communicator
 //	level:error feature:fsmv2 event_name:action_failed
+//	level:error worker_chain:application/protocolconverter/dataflowcomponent/benthos/s6
+//
+// # Tag Design: hierarchy_path vs worker_chain
+//
+// The raw hierarchy_path (e.g., "app(myapp)/bridge-Factory-PLC-001(protocolconverter)/...")
+// is NOT sent as a Sentry tag. Instead, it is decomposed into bounded-cardinality tags:
+//
+//   - fsm_version: "v2" or "v1" (2 values)
+//   - worker_type: leaf segment type, e.g., "pull", "communicator" (~10 values)
+//   - worker_chain: type-only path, e.g., "application/communicator/transport/pull" (~10-15 values)
+//
+// Raw hierarchy paths contain customer-specific data (bridge names, instance IDs)
+// that would cause unbounded tag cardinality — each bridge a customer creates adds
+// a new unique path. With ~5 bridges per CPU core, a typical deployment would have
+// 150-600 unique paths. The worker_chain strips instance IDs and names, keeping only
+// the structural type chain, which is bounded to ~10-15 unique values globally.
+//
+// # Log-Only vs Sentry Fields
+//
+// Fields added via logger.With() (e.g., "worker" identity) are baked into the zap
+// core context and are NOT visible to the SentryHook — only per-call fields from
+// SentryWarn/SentryError reach the hook. This is by design: high-cardinality
+// identifiers like "comm-001(communicator)" belong in logs for grep, while Sentry
+// gets bounded-cardinality equivalents (worker_type, worker_chain).
 package sentry

@@ -18,13 +18,23 @@ import "strings"
 
 // HierarchyInfo contains parsed information from a hierarchy path.
 type HierarchyInfo struct {
-	FSMVersion string
-	WorkerType string
+	FSMVersion  string
+	WorkerType  string
+	WorkerChain string
 }
 
-// ParseHierarchyPath parses a hierarchy path string and extracts FSM version and worker type.
-// FSMv2 format: "app(application)/worker(communicator)" - uses parentheses.
+// ParseHierarchyPath parses a hierarchy path string and extracts FSM version, worker type,
+// and worker chain.
+//
+// FSMv2 format: "app(application)/comm-001(communicator)" - uses parentheses.
 // FSMv1 format: "Enterprise.Site.Area.Line.WorkCell" - uses dots.
+//
+// WorkerChain extracts only the type from each segment, omitting instance IDs:
+//
+//	"app(application)/comm-001(communicator)/pull-001(pull)" -> "application/communicator/pull"
+//
+// This provides the full hierarchy context without customer-specific data (instance names,
+// bridge names) that would cause tag cardinality issues in Sentry.
 func ParseHierarchyPath(path string) HierarchyInfo {
 	info := HierarchyInfo{FSMVersion: "unknown", WorkerType: "unknown"}
 
@@ -34,15 +44,18 @@ func ParseHierarchyPath(path string) HierarchyInfo {
 
 	if strings.Contains(path, "(") {
 		info.FSMVersion = "v2"
-		// Extract last segment's type: "app(application)/worker(communicator)" -> "communicator"
 		segments := strings.Split(path, "/")
-		if len(segments) > 0 {
-			lastSegment := segments[len(segments)-1]
-			if start := strings.Index(lastSegment, "("); start != -1 {
-				if end := strings.Index(lastSegment, ")"); end > start {
-					info.WorkerType = lastSegment[start+1 : end]
+		var types []string
+		for _, seg := range segments {
+			if start := strings.Index(seg, "("); start != -1 {
+				if end := strings.Index(seg, ")"); end > start {
+					types = append(types, seg[start+1:end])
 				}
 			}
+		}
+		if len(types) > 0 {
+			info.WorkerType = types[len(types)-1]
+			info.WorkerChain = strings.Join(types, "/")
 		}
 	} else {
 		info.FSMVersion = "v1"
@@ -50,6 +63,7 @@ func ParseHierarchyPath(path string) HierarchyInfo {
 		segments := strings.Split(path, ".")
 		if len(segments) > 0 {
 			info.WorkerType = segments[len(segments)-1]
+			info.WorkerChain = strings.Join(segments, "/")
 		}
 	}
 

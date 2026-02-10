@@ -26,11 +26,26 @@ import (
 var _ = Describe("ParseHierarchyPath", func() {
 
 	Describe("FSMv2 format (parentheses notation)", func() {
-		It("should parse app(application)/worker(communicator) correctly", func() {
+		It("should parse a two-segment path", func() {
 			info := sentry.ParseHierarchyPath("app(application)/worker(communicator)")
 
 			Expect(info.FSMVersion).To(Equal("v2"))
 			Expect(info.WorkerType).To(Equal("communicator"))
+			Expect(info.WorkerChain).To(Equal("application/communicator"))
+		})
+
+		It("should parse a deep hierarchy path", func() {
+			info := sentry.ParseHierarchyPath("app(application)/comm-001(communicator)/transport-001(transport)/pull-001(pull)")
+
+			Expect(info.FSMVersion).To(Equal("v2"))
+			Expect(info.WorkerType).To(Equal("pull"))
+			Expect(info.WorkerChain).To(Equal("application/communicator/transport/pull"))
+		})
+
+		It("should strip customer-specific instance IDs from worker chain", func() {
+			info := sentry.ParseHierarchyPath("app(application)/bridge-Factory-PLC-001(protocolconverter)/read-dfc-001(dataflowcomponent)")
+
+			Expect(info.WorkerChain).To(Equal("application/protocolconverter/dataflowcomponent"))
 		})
 	})
 
@@ -40,6 +55,7 @@ var _ = Describe("ParseHierarchyPath", func() {
 
 			Expect(info.FSMVersion).To(Equal("v1"))
 			Expect(info.WorkerType).To(Equal("WorkCell"))
+			Expect(info.WorkerChain).To(Equal("Enterprise/Site/Area/Line/WorkCell"))
 		})
 	})
 
@@ -49,6 +65,7 @@ var _ = Describe("ParseHierarchyPath", func() {
 
 			Expect(info.FSMVersion).To(Equal("unknown"))
 			Expect(info.WorkerType).To(Equal("unknown"))
+			Expect(info.WorkerChain).To(BeEmpty())
 		})
 	})
 })

@@ -187,6 +187,9 @@ func (h *SentryHook) captureToSentry(entry zapcore.Entry, fields []zapcore.Field
 		info := ParseHierarchyPath(path)
 		event.Tags["fsm_version"] = info.FSMVersion
 		event.Tags["worker_type"] = info.WorkerType
+		if info.WorkerChain != "" {
+			event.Tags["worker_chain"] = info.WorkerChain
+		}
 	}
 
 	event.Extra = make(map[string]interface{})

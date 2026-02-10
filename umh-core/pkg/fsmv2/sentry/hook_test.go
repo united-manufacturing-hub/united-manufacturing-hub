@@ -777,7 +777,7 @@ github.com/example/pkg/executor.executeWork()
 	})
 
 	Describe("Hierarchy Path Auto-Tagging", func() {
-		It("extracts fsm_version=v2 and worker_type from fsmv2 path", func() {
+		It("extracts fsm_version=v2, worker_type, and worker_chain from fsmv2 path", func() {
 			logger.Errorw("action_failed",
 				"feature", "communicator",
 				"error", io.EOF,
@@ -791,6 +791,7 @@ github.com/example/pkg/executor.executeWork()
 			Expect(event).NotTo(BeNil())
 			Expect(event.Tags["fsm_version"]).To(Equal("v2"))
 			Expect(event.Tags["worker_type"]).To(Equal("communicator"))
+			Expect(event.Tags["worker_chain"]).To(Equal("application/communicator"))
 		})
 
 		It("extracts fsm_version=v1 from legacy path", func() {
@@ -807,6 +808,7 @@ github.com/example/pkg/executor.executeWork()
 			Expect(event).NotTo(BeNil())
 			Expect(event.Tags["fsm_version"]).To(Equal("v1"))
 			Expect(event.Tags["worker_type"]).To(Equal("WorkCell"))
+			Expect(event.Tags["worker_chain"]).To(Equal("Enterprise/Site/Area/WorkCell"))
 		})
 
 		It("handles empty hierarchy path gracefully", func() {
@@ -1003,7 +1005,7 @@ var _ = Describe("FSMLogger to Sentry Event Mapping", func() {
 		Expect(event.Tags["error_types"]).To(ContainSubstring("*errors.errorString"))
 	})
 
-	It("SentryError with hierarchy_path derives fsm_version and worker_type", func() {
+	It("SentryError with hierarchy_path derives fsm_version, worker_type, and worker_chain", func() {
 		fsmLogger.SentryError(deps.FeatureCommunicator, "app(application)/worker(communicator)", io.EOF, "action_failed")
 
 		Eventually(func() int {
@@ -1013,6 +1015,7 @@ var _ = Describe("FSMLogger to Sentry Event Mapping", func() {
 		event := store.GetLast()
 		Expect(event.Tags["fsm_version"]).To(Equal("v2"))
 		Expect(event.Tags["worker_type"]).To(Equal("communicator"))
+		Expect(event.Tags["worker_chain"]).To(Equal("application/communicator"))
 	})
 
 	It("SentryWarn captures at warn level without exception", func() {
