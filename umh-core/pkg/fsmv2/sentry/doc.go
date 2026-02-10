@@ -30,7 +30,7 @@
 //
 //	level:error feature:communicator
 //	level:error feature:fsmv2 event_name:action_failed
-//	level:error worker_chain:application/protocolconverter/dataflowcomponent/benthos/s6
+//	level:error worker_chain:application/communicator
 //
 // # Tag Design: hierarchy_path vs worker_chain
 //
@@ -49,9 +49,11 @@
 //
 // # Log-Only vs Sentry Fields
 //
-// Fields added via logger.With() (e.g., "worker" identity) are baked into the zap
-// core context and are NOT visible to the SentryHook — only per-call fields from
-// SentryWarn/SentryError reach the hook. This is by design: high-cardinality
-// identifiers like "comm-001(communicator)" belong in logs for grep, while Sentry
-// gets bounded-cardinality equivalents (worker_type, worker_chain).
+// Fields added via FSMLogger.With() (e.g., "worker" identity) are visible to
+// the SentryHook as per-call fields. However, the hook only extracts specific
+// keys ("feature", "hierarchy_path", "error", "stack", "panic", "action_name")
+// and ignores the rest. High-cardinality identifiers like "comm-001(communicator)"
+// appear in the "worker" field which the hook intentionally does not tag, keeping
+// Sentry tags bounded. These identifiers remain available in structured log output
+// for grep.
 package sentry
