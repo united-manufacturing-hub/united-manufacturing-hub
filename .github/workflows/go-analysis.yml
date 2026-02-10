@@ -33,7 +33,7 @@ jobs:
       - name: Get Go version from Makefile
         id: go_version
         working-directory: ./umh-core
-        run: echo "version=$(make print-golang-version)" >> $GITHUB_OUTPUT
+        run: echo "version=$(go mod edit -json | jq -r .Go)" >> $GITHUB_OUTPUT
 
       - uses: actions/setup-go@v6
         with:
@@ -56,7 +56,7 @@ jobs:
       - name: Get Go version from Makefile
         id: go_version
         working-directory: ./umh-core
-        run: echo "version=$(make print-golang-version)" >> $GITHUB_OUTPUT
+        run: echo "version=$(go mod edit -json | jq -r .Go)" >> $GITHUB_OUTPUT
 
       - name: Set up Go
         uses: actions/setup-go@v6

@@ -63,7 +63,6 @@ BETTERALIGN_VERSION = v0.7.1
 DLV_VERSION = v1.25.1
 
 # Default values for build arguments
-GOLANG_VERSION = 1.25.3
 NMAP_VERSION = 7.97-r0
 S6_OVERLAY_VERSION = 3.2.0.2
 REDPANDA_VERSION = 24.3.18
@@ -183,7 +182,6 @@ download-docker-binaries:
 # ============== SHARED BUILD ARGS (single source of truth) ==============
 # Used by both local builds (make build) and CI builds (make build-depot)
 VERSION_ARGS = \
-	--build-arg GOLANG_VERSION=$(GOLANG_VERSION) \
 	--build-arg NMAP_VERSION=$(NMAP_VERSION) \
 	--build-arg S6_OVERLAY_VERSION=$(S6_OVERLAY_VERSION) \
 	--build-arg BENTHOS_UMH_VERSION=$(BENTHOS_UMH_VERSION) \
@@ -375,17 +373,11 @@ update-go-dependencies:
 
 # Print version variables for use in other scripts/tools
 print-versions:
-	@echo "GOLANG_VERSION=$(GOLANG_VERSION)"
 	@echo "NMAP_VERSION=$(NMAP_VERSION)"
 	@echo "S6_OVERLAY_VERSION=$(S6_OVERLAY_VERSION)"
 	@echo "BENTHOS_UMH_VERSION=$(BENTHOS_UMH_VERSION)"
 	@echo "REDPANDA_VERSION=$(REDPANDA_VERSION)"
 	@echo "DLV_VERSION=$(DLV_VERSION)"
-
-# Print the Go version
-## Used by go-analysis.yml
-print-golang-version:
-	@echo "$(GOLANG_VERSION)"
 
 ## Install buf for protobuf generation
 install-buf:
