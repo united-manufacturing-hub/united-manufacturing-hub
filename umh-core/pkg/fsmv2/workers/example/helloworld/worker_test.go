@@ -19,7 +19,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"go.uber.org/zap"
+	
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	hello_world "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/helloworld"
@@ -30,12 +30,12 @@ import (
 var _ = Describe("HelloworldWorker", func() {
 	var (
 		worker *hello_world.HelloworldWorker
-		logger *zap.SugaredLogger
+		logger deps.FSMLogger
 	)
 
 	BeforeEach(func() {
-		zapLogger, _ := zap.NewDevelopment()
-		logger = zapLogger.Sugar()
+		// Use nop logger for tests
+		logger = deps.NewNopFSMLogger()
 	})
 
 	Describe("NewHelloworldWorker", func() {

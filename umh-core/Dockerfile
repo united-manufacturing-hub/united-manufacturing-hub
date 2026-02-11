@@ -13,8 +13,6 @@
 # limitations under the License.
 
 # --- Build Stage ---
-ARG GOLANG_VERSION=1.25.3
-ARG ALPINE_VERSION=3.23.2
 ARG NMAP_VERSION=MUST_BE_SET_BY_MAKEFILE
 
 # --- Cache Stage ---
@@ -26,7 +24,7 @@ COPY .docker-cache/redpanda/arm64/ /redpanda/arm64/
 
 
 # --- Downloader Stage (using cached files) ---
-FROM alpine:${ALPINE_VERSION} AS downloader
+FROM alpine:3.23.3@sha256:25109184c71bdad752c8312a8623239686a9a2071e8825f20acb8f2198c3f659 AS downloader
 RUN apk add --no-cache bash curl jq tzdata ca-certificates xz bc
 
 ARG S6_OVERLAY_VERSION=MUST_BE_SET_BY_MAKEFILE
@@ -74,7 +72,7 @@ RUN apk add --no-cache nmap=${NMAP_VERSION}
 # Cleanup all the files we don't need
 RUN rm -rf /s6-overlay /benthos /redpanda
 
-FROM golang:${GOLANG_VERSION}-alpine AS build
+FROM golang:1.25.7-alpine@sha256:f6751d823c26342f9506c03797d2527668d095b0a15f1862cddb4d927a7a4ced AS build
 ARG S6_OVERLAY_VERSION=MUST_BE_SET_BY_MAKEFILE
 ARG BENTHOS_UMH_VERSION=MUST_BE_SET_BY_MAKEFILE
 ARG REDPANDA_VERSION=MUST_BE_SET_BY_MAKEFILE
@@ -120,7 +118,7 @@ RUN if [ "$DEBUG" = "true" ]; then \
     fi
 
 # --- Final Stage ---
-FROM alpine:${ALPINE_VERSION} AS runner
+FROM alpine:3.23.3@sha256:25109184c71bdad752c8312a8623239686a9a2071e8825f20acb8f2198c3f659 AS runner
 # Copy everything from the downloader stage
 COPY --from=downloader / /
 

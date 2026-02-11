@@ -51,6 +51,23 @@ jobs:
       - name: Run unit tests
         run: make unit-test
 
+      - name: Add report to Summary
+        uses: dorny/test-reporter@b082adf0eced0765477756c2a610396589b8c637 # v2.5.0
+        if: failure()
+        with:
+          name: Unit Test Results
+          path: umh-core/unit-test-report.xml
+          reporter: java-junit
+          fail-on-error: false
+
+      - name: Upload test report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: unit-test-report
+          path: umh-core/unit-test-report.xml
+          retention-days: 1
+
   integration-tests:
     name: Integration Tests
     runs-on: depot-ubuntu-24.04-4
@@ -99,7 +116,24 @@ jobs:
           CI: true
           FORCE_DOCKER: true # Force Docker usage since image is built with docker buildx
           VERSION: ${{ github.ref_name }}
-        run: make integration-test-ci
+        run: make integration-test
+
+      - name: Add report to Summary
+        uses: dorny/test-reporter@b082adf0eced0765477756c2a610396589b8c637 # v2.5.0
+        if: failure()
+        with:
+          name: Integration Test Results (${{ matrix.instance }})
+          path: umh-core/integration-test-report.xml
+          reporter: java-junit
+          fail-on-error: false
+
+      - name: Upload test report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: integration-test-report-${{ matrix.instance }}
+          path: umh-core/integration-test-report.xml
+          retention-days: 1
 
       - name: Upload logs on failure
         if: failure()
@@ -114,3 +148,64 @@ jobs:
         working-directory: ./umh-core
         run: |
           make cleanup-ci
+
+  test-report:
+    name: Consolidated Test Report
+    needs: [unit-tests, integration-tests]
+    if: always() && github.event_name == 'pull_request'
+    runs-on: depot-ubuntu-24.04
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Download all test reports
+        uses: actions/download-artifact@v4
+        with:
+          pattern: "*-test-report*"
+          path: test-reports
+          merge-multiple: false
+
+      - name: List downloaded reports
+        run: find test-reports -name "*.xml" -type f
+
+      - name: Merge JUnit reports
+        run: |
+          # Install junit-merge tool
+          npm install -g junit-report-merger@9.0.3
+
+          # Find all XML reports and merge them
+          mkdir -p merged-reports
+          jrm merged-reports/combined-test-report.xml "test-reports/**/*.xml"
+
+      - name: Add consolidated report to PR
+        uses: ctrf-io/github-test-reporter@024bc4b64d997ca9da86833c6b9548c55c620e40 # v1.0.26
+        with:
+          report-path: merged-reports/combined-test-report.xml
+          title: "UMH Core Test Results"
+          summary: true
+          pull-request: true
+          overwrite-comment: true
+          annotate: true
+          summary-report: true
+          failed-folded-report: true
+          flaky-report: true
+          insights-report: true
+          flaky-rate-report: true
+          fail-rate-report: true
+          fetch-previous-results: true
+          integrations-config: |
+            {
+              "junit-to-ctrf": {
+                "enabled": true,
+                "action": "convert",
+                "options": {
+                  "output": "./ctrf-reports/ctrf-report.json",
+                  "toolname": "junit-to-ctrf",
+                  "useSuiteName": true,
+                  "env": {
+                    "appName": "umh-core"
+                  }
+                }
+              }
+            }
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

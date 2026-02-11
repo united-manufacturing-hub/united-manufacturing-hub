@@ -46,8 +46,8 @@ var _ fsmv2.DesiredState = (*PersistenceDesiredState)(nil)
 // PersistenceObservedState represents the current state of the persistence worker.
 type PersistenceObservedState struct {
 	CollectedAt       time.Time `json:"collected_at"`
-	LastCompactionAt  time.Time `json:"last_compaction_at,omitempty"`
-	LastMaintenanceAt time.Time `json:"last_maintenance_at,omitempty"`
+	LastCompactionAt  time.Time `json:"last_compaction_at"`
+	LastMaintenanceAt time.Time `json:"last_maintenance_at"`
 
 	State string `json:"state"`
 

@@ -19,7 +19,6 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"go.uber.org/zap"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
@@ -32,11 +31,11 @@ import (
 var _ = Describe("RecoveringState", func() {
 	var (
 		stateObj *state.RecoveringState
-		logger   *zap.SugaredLogger
+		logger   deps.FSMLogger
 	)
 
 	BeforeEach(func() {
-		logger = zap.NewNop().Sugar()
+		logger = deps.NewNopFSMLogger()
 		_ = logger
 		stateObj = &state.RecoveringState{}
 	})

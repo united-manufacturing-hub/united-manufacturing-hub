@@ -20,7 +20,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"go.uber.org/zap"
+	
 
 	fsmdeps "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplefailing"
@@ -35,8 +35,8 @@ var _ = Describe("FailingDependencies Observation-Based Recovery", func() {
 	var failDeps *examplefailing.FailingDependencies
 
 	BeforeEach(func() {
-		zapLogger, _ := zap.NewDevelopment()
-		logger := zapLogger.Sugar()
+		// Use nop logger for tests
+		logger := fsmdeps.NewNopFSMLogger()
 		pool := &examplefailing.DefaultConnectionPool{}
 		identity := fsmdeps.Identity{ID: "test-worker", WorkerType: "examplefailing"}
 		failDeps = examplefailing.NewFailingDependencies(pool, logger, nil, identity)

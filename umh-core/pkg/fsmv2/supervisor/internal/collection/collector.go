@@ -25,7 +25,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/metrics"
-	"go.uber.org/zap"
 )
 
 type collectorState int
@@ -55,7 +54,7 @@ func (s collectorState) String() string {
 type CollectorConfig[TObserved any] struct {
 	Worker                    fsmv2.Worker
 	Store                     storage.TriangularStoreInterface
-	Logger                    *zap.SugaredLogger
+	Logger                    deps.FSMLogger
 	StateProvider             func() string                       // Returns current FSM state name (injected by supervisor)
 	ShutdownRequestedProvider func() bool                         // Returns current shutdown requested status (injected by supervisor)
 	ChildrenCountsProvider    func() (healthy int, unhealthy int) // Returns children health counts (injected by supervisor for parent workers)
@@ -109,9 +108,9 @@ func NewCollector[TObserved any](config CollectorConfig[TObserved]) *Collector[T
 
 // logTrace logs a structured message only when trace logging is enabled.
 // Used for per-collection verbose logs to reduce noise at scale.
-func (c *Collector[TObserved]) logTrace(msg string, keysAndValues ...any) {
+func (c *Collector[TObserved]) logTrace(msg string, fields ...deps.Field) {
 	if c.config.EnableTraceLogging {
-		c.config.Logger.Debugw(msg, keysAndValues...)
+		c.config.Logger.Debug(msg, fields...)
 	}
 }
 
@@ -125,9 +124,9 @@ func (c *Collector[TObserved]) Start(ctx context.Context) error {
 		panic("Invariant I8 violated: collector already started. Collector.Start() must not be called twice. Check lifecycle management in supervisor code.")
 	}
 
-	c.config.Logger.Infow("collector_starting",
-		"from_state", c.state.String(),
-		"to_state", "running")
+	c.config.Logger.Info("collector_starting",
+		deps.String("from_state", c.state.String()),
+		deps.String("to_state", "running"))
 
 	c.state = collectorStateRunning
 	c.parentCtx = ctx
@@ -157,20 +156,20 @@ func (c *Collector[TObserved]) TriggerNow() {
 	c.mu.RUnlock()
 
 	if !running {
-		c.config.Logger.Errorw("collector_trigger_now_failed",
-			"reason", "not_running",
-			"current_state", c.state.String())
+		c.config.Logger.SentryWarn(deps.FeatureFSMv2, c.config.Identity.HierarchyPath, "collector_trigger_now_failed",
+			deps.Reason("not_running"),
+			deps.String("current_state", c.state.String()))
 
 		return
 	}
 
-	c.config.Logger.Infow("collector_trigger_now_requested")
+	c.config.Logger.Info("collector_trigger_now_requested")
 
 	select {
 	case c.restartChan <- struct{}{}:
-		c.config.Logger.Debugw("collector_trigger_now_signal_sent")
+		c.config.Logger.Debug("collector_trigger_now_signal_sent")
 	default:
-		c.config.Logger.Debugw("collector_trigger_now_already_pending")
+		c.config.Logger.Debug("collector_trigger_now_already_pending")
 	}
 }
 
@@ -184,14 +183,14 @@ func (c *Collector[TObserved]) Restart() {
 	c.mu.RUnlock()
 
 	if !running {
-		c.config.Logger.Errorw("collector_restart_failed",
-			"reason", "not_running",
-			"current_state", c.state.String())
+		c.config.Logger.SentryWarn(deps.FeatureFSMv2, c.config.Identity.HierarchyPath, "collector_restart_failed",
+			deps.Reason("not_running"),
+			deps.String("current_state", c.state.String()))
 
 		return
 	}
 
-	c.config.Logger.Infow("collector_restart_starting")
+	c.config.Logger.Info("collector_restart_starting")
 
 	// Stop the current collector goroutine
 	stopCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -205,17 +204,17 @@ func (c *Collector[TObserved]) Restart() {
 	c.restartChan = make(chan struct{}, 1)
 	c.mu.Unlock()
 
-	// Start again with the original parent context
+	// Start again with the original parent context.
+	// NOTE: Start() currently always returns nil (panics on double-start instead).
+	// Error handling preserved for future extensibility (e.g., context validation, resource allocation).
 	if parentCtx != nil {
 		if err := c.Start(parentCtx); err != nil {
-			c.config.Logger.Errorw("collector_restart_start_failed",
-				"error", err)
+			c.config.Logger.SentryError(deps.FeatureFSMv2, c.config.Identity.HierarchyPath, err, "collector_restart_start_failed")
 		} else {
-			c.config.Logger.Infow("collector_restart_complete")
+			c.config.Logger.Info("collector_restart_complete")
 		}
 	} else {
-		c.config.Logger.Errorw("collector_restart_failed",
-			"reason", "no_parent_context")
+		c.config.Logger.SentryError(deps.FeatureFSMv2, c.config.Identity.HierarchyPath, errors.New("no_parent_context"), "collector_restart_failed")
 	}
 }
 
@@ -223,29 +222,29 @@ func (c *Collector[TObserved]) Stop(ctx context.Context) {
 	c.mu.Lock()
 
 	if c.state != collectorStateRunning {
-		c.config.Logger.Warnw("collector_stop_skipped",
-			"reason", "not_running",
-			"current_state", c.state.String())
+		c.config.Logger.SentryWarn(deps.FeatureFSMv2, c.config.Identity.HierarchyPath, "collector_stop_skipped",
+			deps.Reason("not_running"),
+			deps.String("current_state", c.state.String()))
 		c.mu.Unlock()
 
 		return
 	}
 
-	c.config.Logger.Debugw("collector_stopping")
+	c.config.Logger.Debug("collector_stopping")
 	c.cancel()
 	doneChan := c.goroutineDone
 	c.mu.Unlock()
 
 	select {
 	case <-doneChan:
-		c.config.Logger.Debugw("collector_stopped",
-			"result", "success")
+		c.config.Logger.Debug("collector_stopped",
+			deps.String("result", "success"))
 	case <-ctx.Done():
-		c.config.Logger.Warnw("collector_stopped",
-			"result", "context_cancelled")
+		c.config.Logger.SentryWarn(deps.FeatureFSMv2, c.config.Identity.HierarchyPath, "collector_stopped",
+			deps.String("result", "context_cancelled"))
 	case <-time.After(5 * time.Second):
-		c.config.Logger.Errorw("collector_stopped",
-			"result", "timeout")
+		c.config.Logger.SentryWarn(deps.FeatureFSMv2, c.config.Identity.HierarchyPath, "collector_stopped",
+			deps.String("result", "timeout"))
 	}
 }
 
@@ -263,9 +262,9 @@ func (c *Collector[TObserved]) CollectFinalObservation(ctx context.Context) erro
 		currentState := c.state.String()
 		c.mu.RUnlock()
 
-		c.config.Logger.Warnw("collector_final_observation_skipped",
-			"reason", "not_running",
-			"current_state", currentState)
+		c.config.Logger.SentryWarn(deps.FeatureFSMv2, c.config.Identity.HierarchyPath, "collector_final_observation_skipped",
+			deps.Reason("not_running"),
+			deps.String("current_state", currentState))
 
 		return errors.New("collector not running")
 	}
@@ -276,16 +275,17 @@ func (c *Collector[TObserved]) CollectFinalObservation(ctx context.Context) erro
 	collectCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	c.config.Logger.Debugw("collector_final_observation_starting")
+	c.config.Logger.Debug("collector_final_observation_starting")
 
 	err := c.collectAndSaveObservedState(collectCtx)
 	if err != nil {
-		c.config.Logger.Warnw("collector_final_observation_failed", "error", err)
+		c.config.Logger.SentryWarn(deps.FeatureFSMv2, c.config.Identity.HierarchyPath, "collector_final_observation_failed",
+			deps.Err(err))
 
 		return err
 	}
 
-	c.config.Logger.Debugw("collector_final_observation_completed")
+	c.config.Logger.Debug("collector_final_observation_completed")
 
 	return nil
 }
@@ -299,8 +299,8 @@ func (c *Collector[TObserved]) observationLoop() {
 		// Read state string while holding lock to avoid race with Restart()
 		finalState := c.state.String()
 		c.mu.Unlock()
-		c.config.Logger.Debugw("collector_loop_stopped",
-			"final_state", finalState)
+		c.config.Logger.Debug("collector_loop_stopped",
+			deps.String("final_state", finalState))
 	}()
 
 	c.mu.RLock()
@@ -309,9 +309,9 @@ func (c *Collector[TObserved]) observationLoop() {
 	timeout := c.config.ObservationTimeout
 	c.mu.RUnlock()
 
-	c.config.Logger.Infow("collector_loop_starting",
-		"interval", interval.String(),
-		"timeout", timeout.String())
+	c.config.Logger.Info("collector_loop_starting",
+		deps.String("interval", interval.String()),
+		deps.String("timeout", timeout.String()))
 
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
@@ -319,18 +319,17 @@ func (c *Collector[TObserved]) observationLoop() {
 	for {
 		select {
 		case <-ctx.Done():
-			c.config.Logger.Debugw("collector_loop_context_done")
+			c.config.Logger.Debug("collector_loop_context_done")
 
 			return
 
 		case <-c.restartChan:
-			c.config.Logger.Debugw("collector_restart_triggered")
+			c.config.Logger.Debug("collector_restart_triggered")
 
 			collectCtx, cancel := context.WithTimeout(ctx, timeout)
 			if err := c.collectAndSaveObservedState(collectCtx); err != nil {
-				c.config.Logger.Errorw("collector_observation_failed",
-					"trigger", "restart",
-					"error", err)
+				c.config.Logger.SentryError(deps.FeatureFSMv2, c.config.Identity.HierarchyPath, err, "collector_observation_failed",
+					deps.String("trigger", "restart"))
 			}
 
 			cancel()
@@ -338,9 +337,8 @@ func (c *Collector[TObserved]) observationLoop() {
 		case <-ticker.C:
 			collectCtx, cancel := context.WithTimeout(ctx, timeout)
 			if err := c.collectAndSaveObservedState(collectCtx); err != nil {
-				c.config.Logger.Errorw("collector_observation_failed",
-					"trigger", "ticker",
-					"error", err)
+				c.config.Logger.SentryError(deps.FeatureFSMv2, c.config.Identity.HierarchyPath, err, "collector_observation_failed",
+					deps.String("trigger", "ticker"))
 			}
 
 			cancel()
@@ -351,7 +349,7 @@ func (c *Collector[TObserved]) observationLoop() {
 func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) error {
 	collectionStartTime := time.Now()
 	c.logTrace("observation_collection_starting",
-		"collection_start_time", collectionStartTime.Format(time.RFC3339Nano))
+		deps.String("collection_start_time", collectionStartTime.Format(time.RFC3339Nano)))
 
 	// Inject framework metrics before CollectObservedState so workers can access via deps.GetFrameworkState()
 	if c.config.FrameworkMetricsProvider != nil && c.config.FrameworkMetricsSetter != nil {
@@ -367,8 +365,8 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 
 	observed, err := c.config.Worker.CollectObservedState(ctx)
 	if err != nil {
-		c.config.Logger.Debugw("collector_collect_failed",
-			"error", err)
+		c.config.Logger.Debug("collector_collect_failed",
+			deps.Err(err))
 
 		return err
 	}
@@ -427,36 +425,38 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 	if timestampProvider, ok := observed.(fsmv2.TimestampProvider); ok {
 		observationTimestamp = timestampProvider.GetTimestamp()
 		c.logTrace("observation_collected",
-			"observation_timestamp", observationTimestamp.Format(time.RFC3339Nano))
+			deps.String("observation_timestamp", observationTimestamp.Format(time.RFC3339Nano)))
 	} else {
 		c.logTrace("observation_collected_no_timestamp",
-			"actual_type", fmt.Sprintf("%T", observed))
+			deps.String("actual_type", fmt.Sprintf("%T", observed)))
 	}
 
 	saveStartTime := time.Now()
 
 	observedTyped, ok := observed.(TObserved)
 	if !ok {
-		c.config.Logger.Errorw("collector_type_mismatch",
-			"expected_type", fmt.Sprintf("%T", *new(TObserved)),
-			"actual_type", fmt.Sprintf("%T", observed))
+		err := fmt.Errorf("observed state type mismatch: expected %T, got %T", *new(TObserved), observed)
+		c.config.Logger.SentryError(deps.FeatureFSMv2, c.config.Identity.HierarchyPath, err, "collector_type_mismatch",
+			deps.String("expected_type", fmt.Sprintf("%T", *new(TObserved))),
+			deps.String("actual_type", fmt.Sprintf("%T", observed)))
 
-		return fmt.Errorf("observed state type mismatch: expected %T, got %T", *new(TObserved), observed)
+		return err
 	}
 
 	ts, ok := c.config.Store.(*storage.TriangularStore)
 	if !ok {
-		c.config.Logger.Errorw("collector_store_type_mismatch",
-			"expected_type", "*storage.TriangularStore",
-			"actual_type", fmt.Sprintf("%T", c.config.Store))
+		err := fmt.Errorf("store is not *TriangularStore, got %T", c.config.Store)
+		c.config.Logger.SentryError(deps.FeatureFSMv2, c.config.Identity.HierarchyPath, err, "collector_store_type_mismatch",
+			deps.String("expected_type", "*storage.TriangularStore"),
+			deps.String("actual_type", fmt.Sprintf("%T", c.config.Store)))
 
-		return fmt.Errorf("store is not *TriangularStore, got %T", c.config.Store)
+		return err
 	}
 
 	changed, err := storage.SaveObservedTyped[TObserved](ts, ctx, c.config.Identity.ID, observedTyped)
 	if err != nil {
-		c.config.Logger.Debugw("collector_save_failed",
-			"error", err)
+		c.config.Logger.Debug("collector_save_failed",
+			deps.Err(err))
 
 		return err
 	}
@@ -470,12 +470,12 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 
 	if changed {
 		c.logTrace("observation_saved",
-			"save_duration", saveDuration,
-			"changed", true)
+			deps.Duration("save_duration", saveDuration),
+			deps.Bool("changed", true))
 	} else {
 		c.logTrace("observation_unchanged",
-			"save_duration", saveDuration,
-			"changed", false)
+			deps.Duration("save_duration", saveDuration),
+			deps.Bool("changed", false))
 	}
 
 	return nil

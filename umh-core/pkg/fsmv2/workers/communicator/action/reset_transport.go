@@ -16,6 +16,8 @@ package action
 
 import (
 	"context"
+
+	depspkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 )
 
 const ResetTransportActionName = "reset_transport"
@@ -45,7 +47,7 @@ func (a *ResetTransportAction) Execute(ctx context.Context, depsAny any) error {
 
 	transport := deps.GetTransport()
 	transport.Reset()
-	deps.GetLogger().Infow("transport_reset_completed", "reason", "degraded_state_threshold")
+	deps.GetLogger().Info("transport_reset_completed", depspkg.String("reason", "degraded_state_threshold"))
 
 	// FIX: Advance the retry counter to break the modulo-N trigger condition.
 	// Without this, ShouldResetTransport(5) keeps returning true (5 % 5 == 0),

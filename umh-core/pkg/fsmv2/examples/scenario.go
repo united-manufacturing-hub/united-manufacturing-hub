@@ -47,9 +47,8 @@ import (
 	"context"
 	"time"
 
-	"go.uber.org/zap"
-
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
 )
 
@@ -236,10 +235,10 @@ var CommunicatorScenarioEntry = Scenario{
 		if cfg.Logger != nil {
 			go func() {
 				<-result.Done
-				cfg.Logger.Infow("scenario_complete",
-					"auth_calls", result.AuthCallCount,
-					"pushed_messages", len(result.PushedMessages),
-					"received_messages", len(result.ReceivedMessages),
+				cfg.Logger.Info("scenario_complete",
+					deps.Int("auth_calls", result.AuthCallCount),
+					deps.Int("pushed_messages", len(result.PushedMessages)),
+					deps.Int("received_messages", len(result.ReceivedMessages)),
 				)
 			}()
 		}
@@ -286,9 +285,9 @@ var PersistenceScenarioEntry = Scenario{
 		if cfg.Logger != nil {
 			go func() {
 				<-result.Done
-				cfg.Logger.Infow("scenario_complete",
-					"compaction_cycles", result.CompactionCycles,
-					"maintenance_cycles", result.MaintenanceCycles,
+				cfg.Logger.Info("scenario_complete",
+					deps.Int64("compaction_cycles", result.CompactionCycles),
+					deps.Int64("maintenance_cycles", result.MaintenanceCycles),
 				)
 			}()
 		}
@@ -303,7 +302,7 @@ var PersistenceScenarioEntry = Scenario{
 // RunConfig configures how a scenario is executed.
 type RunConfig struct {
 	Store              storage.TriangularStoreInterface
-	Logger             *zap.SugaredLogger
+	Logger             deps.FSMLogger
 	Scenario           Scenario
 	Duration           time.Duration // 0 means run forever (until context cancelled)
 	TickInterval       time.Duration

@@ -565,7 +565,7 @@ the FSM system will panic at runtime when trying to create the missing component
 Use RegisterWorkerType[TObserved, TDesired]() to register both atomically.`,
 		CorrectCode: `func init() {
     err := factory.RegisterWorkerType[snapshot.MyObservedState, *snapshot.MyDesiredState](
-        func(id fsmv2.Identity, logger *zap.SugaredLogger) fsmv2.Worker {
+        func(id deps.Identity, logger deps.FSMLogger, _ deps.StateReader, _ map[string]any) fsmv2.Worker {
             worker, _ := NewMyWorker(id, logger)
             return worker
         },
@@ -602,6 +602,26 @@ return fmt.Errorf("worker %s failed at %v", workerID, time.Now())
 return fmt.Errorf("failed after %d retries", count)
 return fmt.Errorf("connection to %s:%d failed", host, port)`,
 		ReferenceFile: "pkg/fsmv2/ARCHITECTURE.md",
+	},
+	"SPEC_RESULT_DISCARDED": {
+		Name: "Spec Result Used in DeriveDesiredState",
+		Why: `DeriveDesiredState() must USE the spec type assertion result, not discard it.
+WHY: When a worker type-asserts spec with a blank identifier (_, ok := spec.(Type)),
+it validates the type but discards the value. This means the spec's configuration
+fields are never read, and DeriveDesiredState returns hardcoded defaults regardless
+of what the user configured. Every worker should parse its spec to populate the
+DesiredState from user configuration.`,
+		CorrectCode: `// Correct: use the spec value
+userSpec, ok := spec.(config.UserSpec)
+if !ok {
+    return nil, fmt.Errorf("invalid spec type: %T", spec)
+}
+var mySpec MyUserSpec
+yaml.Unmarshal([]byte(userSpec.Config), &mySpec)
+
+// WRONG: discard with blank identifier
+_, ok := spec.(config.UserSpec)  // spec is validated but never used!`,
+		ReferenceFile: "workers/application/worker.go",
 	},
 	"OBSERVED_STATE_MUTATION": {
 		Name: "No Observed State Mutation (Pure Functions)",
