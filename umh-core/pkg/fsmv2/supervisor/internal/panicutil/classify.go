@@ -20,14 +20,20 @@ import (
 	"fmt"
 )
 
+const (
+	PanicTypeError   = "error_panic"
+	PanicTypeString  = "string_panic"
+	PanicTypeUnknown = "unknown_panic"
+)
+
 // ClassifyPanic converts a recovered panic value into a typed error and a classification string.
 func ClassifyPanic(r interface{}) (panicType string, panicErr error) {
 	switch v := r.(type) {
 	case error:
-		return "error", v
+		return PanicTypeError, v
 	case string:
-		return "string", errors.New(v)
+		return PanicTypeString, errors.New(v)
 	default:
-		return "unknown", fmt.Errorf("%v", r)
+		return PanicTypeUnknown, fmt.Errorf("%v", r)
 	}
 }

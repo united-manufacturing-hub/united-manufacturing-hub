@@ -17,8 +17,6 @@ package supervisor
 import (
 	"sync"
 	"time"
-
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/internal/panicutil"
 )
 
 type panicRecovery struct {
@@ -69,25 +67,13 @@ func (p *panicRecovery) pruneExpired(now time.Time) {
 	p.timestamps = pruned
 }
 
-// countWithinWindow returns the number of timestamps within the window. Caller must hold p.mu.
-func (p *panicRecovery) countWithinWindow() int {
-	cutoff := time.Now().Add(-p.window)
-	count := 0
-
-	for _, ts := range p.timestamps {
-		if ts.After(cutoff) {
-			count++
-		}
-	}
-
-	return count
-}
-
 func (p *panicRecovery) PanicCount() int {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	return p.countWithinWindow()
+	p.pruneExpired(time.Now())
+
+	return len(p.timestamps)
 }
 
 func (p *panicRecovery) Reset() {
@@ -97,7 +83,3 @@ func (p *panicRecovery) Reset() {
 	p.timestamps = nil
 }
 
-// classifyPanic delegates to the shared panicutil.ClassifyPanic implementation.
-func classifyPanic(r interface{}) (panicType string, panicErr error) {
-	return panicutil.ClassifyPanic(r)
-}

@@ -173,7 +173,7 @@ var _ = Describe("Collector Panic Type Classification", func() {
 		Expect(panicLogs).ToNot(BeEmpty())
 
 		panicLog := panicLogs[0]
-		Expect(panicLog.ContextMap()["panic_type"]).To(Equal("error"))
+		Expect(panicLog.ContextMap()["panic_type"]).To(Equal("error_panic"))
 
 		cancel()
 		time.Sleep(100 * time.Millisecond)
@@ -217,7 +217,7 @@ var _ = Describe("Collector Panic Type Classification", func() {
 		Expect(panicLogs).ToNot(BeEmpty())
 
 		panicLog := panicLogs[0]
-		Expect(panicLog.ContextMap()["panic_type"]).To(Equal("unknown"))
+		Expect(panicLog.ContextMap()["panic_type"]).To(Equal("unknown_panic"))
 
 		cancel()
 		time.Sleep(100 * time.Millisecond)

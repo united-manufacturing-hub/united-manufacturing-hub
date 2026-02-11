@@ -29,6 +29,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/internal/panicutil"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 )
@@ -528,7 +529,7 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 				}
 			}()
 
-			panicType, panicErr := classifyPanic(r)
+			panicType, panicErr := panicutil.ClassifyPanic(r)
 			err = fmt.Errorf("tick panic: %w", panicErr)
 
 			hierarchyPath := s.GetHierarchyPathUnlocked()

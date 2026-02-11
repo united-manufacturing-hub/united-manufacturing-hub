@@ -138,7 +138,7 @@ var _ = Describe("Tick Loop Panic Recovery", func() {
 
 				panicLogs := filterLogs(observedLogs, "tick_panic")
 				Expect(panicLogs).ToNot(BeEmpty())
-				Expect(panicLogs[0].ContextMap()["panic_type"]).To(Equal("string"))
+				Expect(panicLogs[0].ContextMap()["panic_type"]).To(Equal("string_panic"))
 			})
 
 			It("should log panic_type as 'error' and preserve error chain for error panics", func() {
@@ -175,7 +175,7 @@ var _ = Describe("Tick Loop Panic Recovery", func() {
 
 				panicLogs := filterLogs(observedLogs, "tick_panic")
 				Expect(panicLogs).ToNot(BeEmpty())
-				Expect(panicLogs[0].ContextMap()["panic_type"]).To(Equal("error"))
+				Expect(panicLogs[0].ContextMap()["panic_type"]).To(Equal("error_panic"))
 			})
 
 			It("should handle panic(nil) gracefully", func() {
@@ -208,7 +208,7 @@ var _ = Describe("Tick Loop Panic Recovery", func() {
 				panicLogs := filterLogs(observedLogs, "tick_panic")
 				Expect(panicLogs).ToNot(BeEmpty())
 				// In Go 1.21+, panic(nil) creates *runtime.PanicNilError which is an error type
-				Expect(panicLogs[0].ContextMap()["panic_type"]).To(Equal("error"))
+				Expect(panicLogs[0].ContextMap()["panic_type"]).To(Equal("error_panic"))
 			})
 
 			It("should log panic_type as 'unknown' for non-error non-string panics", func() {
@@ -241,7 +241,7 @@ var _ = Describe("Tick Loop Panic Recovery", func() {
 
 				panicLogs := filterLogs(observedLogs, "tick_panic")
 				Expect(panicLogs).ToNot(BeEmpty())
-				Expect(panicLogs[0].ContextMap()["panic_type"]).To(Equal("unknown"))
+				Expect(panicLogs[0].ContextMap()["panic_type"]).To(Equal("unknown_panic"))
 			})
 		})
 	})
