@@ -37,7 +37,7 @@ var _ = Describe("RunningDegradedState", func() {
 
 	Describe("Next", func() {
 		Context("when shutdown is requested", func() {
-			It("should transition to StoppedState", func() {
+			It("should transition to ShuttingDownState", func() {
 				snap := fsmv2.Snapshot{
 					Identity: deps.Identity{ID: "test", WorkerType: "persistence"},
 					Observed: snapshot.PersistenceObservedState{
@@ -56,7 +56,7 @@ var _ = Describe("RunningDegradedState", func() {
 				}
 
 				result := stateObj.Next(snap)
-				Expect(result.State).To(BeAssignableToTypeOf(&state.StoppedState{}))
+				Expect(result.State).To(BeAssignableToTypeOf(&state.ShuttingDownState{}))
 				Expect(result.Signal).To(Equal(fsmv2.SignalNone))
 				Expect(result.Action).To(BeNil())
 			})
@@ -122,7 +122,7 @@ var _ = Describe("RunningDegradedState", func() {
 					Observed: snapshot.PersistenceObservedState{
 						CollectedAt:             now,
 						LastCompactionAt:        now.Add(-1 * time.Minute),
-						LastMaintenanceAt:       now.Add(-8 * 24 * time.Hour),
+						LastMaintenanceAt:       now.Add(-10 * 24 * time.Hour),
 						ConsecutiveActionErrors: 1,
 					},
 					Desired: &snapshot.PersistenceDesiredState{
@@ -149,7 +149,7 @@ var _ = Describe("RunningDegradedState", func() {
 					Observed: snapshot.PersistenceObservedState{
 						CollectedAt:             now,
 						LastCompactionAt:        now.Add(-10 * time.Minute),
-						LastMaintenanceAt:       now.Add(-8 * 24 * time.Hour),
+						LastMaintenanceAt:       now.Add(-10 * 24 * time.Hour),
 						ConsecutiveActionErrors: 3,
 					},
 					Desired: &snapshot.PersistenceDesiredState{

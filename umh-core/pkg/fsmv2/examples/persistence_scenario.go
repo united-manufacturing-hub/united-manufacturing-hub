@@ -71,6 +71,15 @@ func RunPersistenceScenario(ctx context.Context, cfg PersistenceRunConfig) *Pers
 	}
 
 	tickInterval := cfg.TickInterval
+	if tickInterval < 0 {
+		close(done)
+
+		return &PersistenceRunResult{
+			Done:     done,
+			Shutdown: func() {},
+			Error:    fmt.Errorf("invalid tick interval %v: must be non-negative", cfg.TickInterval),
+		}
+	}
 	if tickInterval == 0 {
 		tickInterval = 100 * time.Millisecond
 	}

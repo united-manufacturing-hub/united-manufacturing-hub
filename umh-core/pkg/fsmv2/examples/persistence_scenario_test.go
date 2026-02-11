@@ -162,6 +162,15 @@ var _ = Describe("Persistence Scenario", func() {
 			Expect(result.Error.Error()).To(ContainSubstring("invalid duration"))
 		})
 
+		It("returns error for negative tick interval", func() {
+			result := examples.RunPersistenceScenario(ctx, examples.PersistenceRunConfig{
+				Duration:     1 * time.Second,
+				TickInterval: -1 * time.Millisecond,
+			})
+			Expect(result.Error).To(HaveOccurred())
+			Expect(result.Error.Error()).To(ContainSubstring("invalid tick interval"))
+		})
+
 		It("returns error when context already cancelled", func() {
 			cancelledCtx, cancelFn := context.WithCancel(ctx)
 			cancelFn()

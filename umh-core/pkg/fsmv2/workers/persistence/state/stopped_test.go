@@ -78,7 +78,7 @@ var _ = Describe("StoppedState", func() {
 				}
 
 				result := stateObj.Next(snap)
-				Expect(result.State).To(BeAssignableToTypeOf(&state.RunningState{}))
+				Expect(result.State).To(BeAssignableToTypeOf(&state.TryingToStartState{}))
 				Expect(result.Signal).To(Equal(fsmv2.SignalNone))
 				Expect(result.Action).To(BeNil())
 			})

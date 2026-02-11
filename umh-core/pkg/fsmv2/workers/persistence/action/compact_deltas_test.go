@@ -38,7 +38,7 @@ var _ = Describe("CompactDeltasAction", func() {
 		ctx = context.Background()
 		mockStore = &mockTriangularStore{}
 		identity := deps.Identity{ID: "test-id", WorkerType: "persistence"}
-		d = persistence.NewPersistenceDependencies(mockStore, deps.NewNopFSMLogger(), nil, identity)
+		d = persistence.NewPersistenceDependencies(mockStore, deps.DefaultScheduler{}, deps.NewNopFSMLogger(), nil, identity)
 	})
 
 	Describe("Execute", func() {

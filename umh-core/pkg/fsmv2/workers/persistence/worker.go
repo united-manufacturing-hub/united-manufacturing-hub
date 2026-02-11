@@ -57,7 +57,7 @@ func NewPersistenceWorker(
 		identity.WorkerType = workerType
 	}
 
-	d := NewPersistenceDependencies(store, logger, stateReader, identity)
+	d := NewPersistenceDependencies(store, deps.DefaultScheduler{}, logger, stateReader, identity)
 
 	return &PersistenceWorker{
 		BaseWorker: helpers.NewBaseWorker(d),
@@ -138,13 +138,18 @@ func (w *PersistenceWorker) CollectObservedState(ctx context.Context) (fsmv2.Obs
 		}
 	}
 
+	now := time.Now()
+	scheduler := d.GetScheduler()
+
 	observed := snapshot.PersistenceObservedState{
-		CollectedAt:             time.Now(),
-		LastCompactionAt:        lastCompactionAt,
-		LastMaintenanceAt:       lastMaintenanceAt,
-		ConsecutiveActionErrors: consecutiveErrors,
-		LastActionResults:       actionResults,
-		MetricsEmbedder:         deps.MetricsEmbedder{Metrics: metricsContainer},
+		CollectedAt:                   now,
+		LastCompactionAt:              lastCompactionAt,
+		LastMaintenanceAt:             lastMaintenanceAt,
+		IsPreferredMaintenanceWindow:  scheduler.IsPreferredMaintenanceWindow(now),
+		IsAcceptableMaintenanceWindow: scheduler.IsAcceptableMaintenanceWindow(now),
+		ConsecutiveActionErrors:       consecutiveErrors,
+		LastActionResults:             actionResults,
+		MetricsEmbedder:               deps.MetricsEmbedder{Metrics: metricsContainer},
 	}
 
 	return observed, nil

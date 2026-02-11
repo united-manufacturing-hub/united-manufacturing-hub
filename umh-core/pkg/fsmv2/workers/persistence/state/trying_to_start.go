@@ -17,27 +17,31 @@ package state
 import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/persistence/action"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/persistence/snapshot"
 )
 
-type RunningDegradedState struct {
-	helpers.RunningDegradedBase
+type TryingToStartState struct {
+	helpers.StartingBase
 }
 
-func (s *RunningDegradedState) Next(snapAny any) fsmv2.NextResult[any, any] {
+func (s *TryingToStartState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := helpers.ConvertSnapshot[snapshot.PersistenceObservedState, *snapshot.PersistenceDesiredState](snapAny)
 
 	if snap.Desired.IsShutdownRequested() {
-		return fsmv2.Result[any, any](&ShuttingDownState{}, fsmv2.SignalNone, nil, "Shutdown requested")
+		return fsmv2.Result[any, any](&StoppedState{}, fsmv2.SignalNone, nil, "Shutdown requested during startup")
 	}
 
-	if snap.Observed.IsHealthy() {
-		return fsmv2.Result[any, any](&RunningState{}, fsmv2.SignalNone, nil, "Action succeeded, recovered to healthy")
+	for _, result := range snap.Observed.LastActionResults {
+		if result.ActionType == action.NewRunMaintenanceAction().Name() && result.Success {
+			return fsmv2.Result[any, any](&RunningState{}, fsmv2.SignalNone, nil, "Startup maintenance completed")
+		}
 	}
 
-	return emitActionIfDue(s, snap)
+	return fsmv2.Result[any, any](s, fsmv2.SignalNone,
+		action.NewRunMaintenanceAction(), "Running startup maintenance")
 }
 
-func (s *RunningDegradedState) String() string {
-	return "RunningDegraded"
+func (s *TryingToStartState) String() string {
+	return "TryingToStart"
 }
