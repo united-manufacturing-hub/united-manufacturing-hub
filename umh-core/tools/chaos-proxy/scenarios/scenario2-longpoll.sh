@@ -21,7 +21,7 @@
 # overloaded upstream proxies.
 #
 # Parameters:
-#   mu=8.5, sigma=1.2  =>  median ~5s, with occasional 20-30s outliers
+#   mu=8.5, sigma=1.2  =>  median ~4.9s (e^8.5), with occasional 20-30s outliers
 #   cap=31000          =>  no delay exceeds 31s (just over HTTP timeout)
 #   kill-pct=20        =>  20% of delayed connections are killed mid-wait
 #

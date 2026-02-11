@@ -42,7 +42,7 @@ services:
       - "127.0.0.1:8090:8090"
     command: ${CHAOS_PROXY_FLAGS:---drop-every=3}
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8090/"]
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8090/healthz"]
       interval: 2s
       timeout: 2s
       retries: 5

@@ -38,7 +38,7 @@ func main() {
 	targetURL := flag.String("target", "https://management.umh.app", "target URL to proxy to")
 	dropEvery := flag.Int("drop-every", 3, "drop every n-th connection (0 = disable)")
 	longPoll := flag.Bool("long-poll", false, "enable long polling simulation")
-	longPollMu := flag.Float64("long-poll-mu", 8.5, "lognormal mu (ln of median delay in ms, e.g. 8.5 ≈ 5s median)")
+	longPollMu := flag.Float64("long-poll-mu", 8.5, "lognormal mu (ln of median delay in ms, e.g. 8.5 ≈ 4.9s median)")
 	longPollSigma := flag.Float64("long-poll-sigma", 1.2, "lognormal sigma (spread, higher = more variance)")
 	longPollCap := flag.Int("long-poll-cap", 31000, "max long poll delay in ms (cap for outliers)")
 	longPollKillPct := flag.Int("long-poll-kill-pct", 20, "percentage chance to kill connection during long poll (0-100)")
@@ -63,6 +63,9 @@ func main() {
 	if *longPollCap <= 0 {
 		log.Fatalf("--long-poll-cap must be > 0, got %d", *longPollCap)
 	}
+	if *longPollSigma < 0 {
+		log.Fatalf("--long-poll-sigma must be >= 0, got %f", *longPollSigma)
+	}
 
 	proxy := httputil.NewSingleHostReverseProxy(target)
 
@@ -71,10 +74,20 @@ func main() {
 		originalDirector(r)
 		r.Host = target.Host
 	}
+	proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
+		log.Printf("upstream error for %s %s: %v", r.Method, r.URL.Path, err)
+		w.WriteHeader(http.StatusBadGateway)
+	}
+
+	mux := http.NewServeMux()
+
+	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
 
 	var requestCount uint64
 
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		count := atomic.AddUint64(&requestCount, 1)
 
 		if *dropEvery > 0 && count%uint64(*dropEvery) == 0 {
@@ -91,9 +104,8 @@ func main() {
 			}
 			if tcpConn, ok := conn.(*net.TCPConn); ok {
 				tcpConn.CloseWrite()
-			} else {
-				conn.Close()
 			}
+			conn.Close()
 			return
 		}
 
@@ -126,9 +138,8 @@ func main() {
 				log.Printf("killing connection %d during long poll", count)
 				if tcpConn, ok := conn.(*net.TCPConn); ok {
 					tcpConn.CloseWrite()
-				} else {
-					conn.Close()
 				}
+				conn.Close()
 				return
 			}
 
@@ -157,11 +168,11 @@ func main() {
 			*longPollMu, *longPollSigma, median, *longPollCap, *longPollKillPct, methodFilter, pathFilter)
 	}
 
-	srv := &http.Server{Addr: *listenAddr}
+	srv := &http.Server{Addr: *listenAddr, Handler: mux}
 
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGTERM, syscall.SIGINT)
 	go func() {
-		sigCh := make(chan os.Signal, 1)
-		signal.Notify(sigCh, syscall.SIGTERM, syscall.SIGINT)
 		<-sigCh
 		log.Println("shutting down gracefully...")
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
