@@ -202,7 +202,8 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 
 			var desired TDesired
 			if err := s.store.LoadDesiredTyped(ctx, s.workerType, identity.ID, &desired); err != nil {
-				return false
+				s.logger.Warnw("shutdown_requested_load_failed", "error", err, "worker_type", s.workerType, "identity", identity.ID)
+				return true
 			}
 
 			return desired.IsShutdownRequested()

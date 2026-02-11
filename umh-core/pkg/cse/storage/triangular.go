@@ -1305,3 +1305,39 @@ func (ts *TriangularStore) buildBootstrap(ctx context.Context, atSyncID int64) (
 func (ts *TriangularStore) GetLatestSyncID(ctx context.Context) (int64, error) {
 	return ts.syncID.Load(), nil
 }
+
+// CompactDeltas removes delta entries older than the retention window.
+// This is a lightweight, non-blocking operation safe to call during normal operation.
+//
+// Parameters:
+//   - retentionWindow: Deltas older than time.Now() - retentionWindow will be deleted.
+//     Use 0 to delete all deltas (useful for testing).
+//
+// Returns:
+//   - int: Number of deltas deleted
+//   - error: Any error that occurred during compaction
+//
+// TODO(ENG-4295): Implement actual compaction logic using timestamp-based deletion.
+func (ts *TriangularStore) CompactDeltas(ctx context.Context, retentionWindow time.Duration) (int, error) {
+	return 0, errors.New("CompactDeltas not implemented - see ENG-4295")
+}
+
+// Maintenance performs heavyweight cleanup operations.
+// This operation may block briefly and should be called during maintenance windows
+// (startup, shutdown, or scheduled maintenance).
+//
+// Current implementation (in-memory):
+//   - Clears snapshot cache
+//   - Resets metadata tracking maps
+//
+// Future implementation (SQLite):
+//   - Runs VACUUM to reclaim space
+//   - Runs ANALYZE to update statistics
+//   - Checkpoints WAL
+//
+// This method follows the persistence.Store.Maintenance() pattern for future compatibility.
+//
+// TODO(ENG-4295): Implement actual maintenance logic.
+func (ts *TriangularStore) Maintenance(ctx context.Context) error {
+	return errors.New("Maintenance not implemented - see ENG-4295")
+}
