@@ -38,7 +38,7 @@ func main() {
 	targetURL := flag.String("target", "https://management.umh.app", "target URL to proxy to")
 	dropEvery := flag.Int("drop-every", 3, "drop every n-th connection (0 = disable)")
 	longPoll := flag.Bool("long-poll", false, "enable long polling simulation")
-	longPollMu := flag.Float64("long-poll-mu", 8.5, "lognormal mu (ln of median delay in ms, e.g. 8.5 ≈ 4.9s median)")
+	longPollMu := flag.Float64("long-poll-mu", 8.5, "lognormal mu (ln of median delay in ms, e.g. 8.5 ~ 4.9s median)")
 	longPollSigma := flag.Float64("long-poll-sigma", 1.2, "lognormal sigma (spread, higher = more variance)")
 	longPollCap := flag.Int("long-poll-cap", 31000, "max long poll delay in ms (cap for outliers)")
 	longPollKillPct := flag.Int("long-poll-kill-pct", 20, "percentage chance to kill connection during long poll (0-100)")
