@@ -188,14 +188,14 @@ type CollectorHealthConfig struct {
 	StaleThreshold time.Duration
 
 	// Timeout is how old observation data can be before collector is considered broken.
-	// When exceeded, supervisor triggers collector restart with exponential backoff.
+	// When exceeded, supervisor triggers collector restart with linear backoff.
 	// Should be significantly larger than StaleThreshold to avoid restart thrashing.
 	// Default: 20 seconds (see DefaultCollectorTimeout in constants.go)
 	Timeout time.Duration
 
 	// MaxRestartAttempts is the maximum number of collector restart attempts.
 	// After this many failed restarts, supervisor escalates to graceful FSM shutdown.
-	// Each restart uses exponential backoff: attempt N waits N*2 seconds.
+	// Each restart uses linear backoff: attempt N waits (N+1)*2 seconds.
 	// Default: 3 attempts (see DefaultMaxRestartAttempts in constants.go)
 	MaxRestartAttempts int
 }

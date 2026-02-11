@@ -147,8 +147,8 @@
 // Freshness check skipped during shutdown (collectors already stopped).
 //
 // On timeout:
-//   - Restarts collector with exponential backoff
-//   - Max restart attempts: 3 (DefaultMaxCollectorRestartAttempts)
+//   - Restarts collector with linear backoff
+//   - Max restart attempts: 3 (DefaultMaxRestartAttempts)
 //   - Escalates to shutdown if max attempts exhausted
 //
 // States assume data is fresh except during shutdown.
@@ -250,8 +250,8 @@
 //
 // panicCircuitOpen (atomic.Bool):
 //   - Circuit breaker state (code bug detection)
-//   - Opens permanently after repeated tick panics within the escalation window
-//   - Unlike circuitOpen, never auto-clears (requires process restart)
+//   - Opens after repeated tick panics within the sliding window
+//   - Auto-resets when the sliding window drains (panics older than the window are forgotten)
 //   - No mutex needed for single boolean flag
 //
 // tickCount (atomic.Uint64):
@@ -262,7 +262,7 @@
 //
 // CollectObservedState():
 //   - Runs in separate goroutine per worker
-//   - Timeout: DefaultObservationInterval (500ms)
+//   - Timeout: DefaultObservationTimeout (2.2s)
 //   - Saves observation to database (database handles concurrency)
 //   - Does not modify supervisor state directly
 //
