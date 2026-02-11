@@ -45,6 +45,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/snapshot"
+	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/persistence"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
@@ -463,6 +464,12 @@ children:
         state: "running"
 `, configData.Agent.APIURL, placeholderUUID, configData.Agent.AuthToken)
 
+	if configData.Agent.UseFSMv2MemoryCleanup {
+		yamlConfig += `  - name: "persistence"
+    workerType: "persistence"
+`
+	}
+
 	// Setup store (in-memory for now)
 	store := examples.SetupStore(deps.NewFSMLogger(logger))
 
@@ -489,6 +496,14 @@ children:
 	fsmv2Core := fsmv2Hook.Wrap(fsmv2Logger.Desugar().Core())
 	fsmv2Logger = zap.New(fsmv2Core).Sugar()
 
+	fsmv2Deps := map[string]any{
+		"channelProvider":       channelAdapter,
+		"onAuthSuccessCallback": onAuthSuccessCallback,
+	}
+	if configData.Agent.UseFSMv2MemoryCleanup {
+		fsmv2Deps["store"] = store
+	}
+
 	appSup, err := application.NewApplicationSupervisor(application.SupervisorConfig{
 		ID:           "application-fsmv2",
 		Name:         "Application FSMv2",
@@ -496,10 +511,7 @@ children:
 		Logger:       deps.NewFSMLogger(fsmv2Logger),
 		TickInterval: 100 * time.Millisecond,
 		YAMLConfig:   yamlConfig,
-		Dependencies: map[string]any{
-			"channelProvider":       channelAdapter,
-			"onAuthSuccessCallback": onAuthSuccessCallback,
-		},
+		Dependencies: fsmv2Deps,
 	})
 	if err != nil {
 		logger.Errorw("Failed to create FSMv2 supervisor", "error", err)

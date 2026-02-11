@@ -100,6 +100,7 @@ type AgentConfig struct {
 	// FSMv2 feature flags for incremental migration
 	EnableFSMv2               bool `yaml:"enableFSMv2,omitempty"`               // Master switch: starts ApplicationSupervisor
 	UseFSMv2ProtocolConverter bool `yaml:"useFSMv2ProtocolConverter,omitempty"` // Migrate Protocol Converter to FSMv2
+	UseFSMv2MemoryCleanup     bool `yaml:"useFSMv2MemoryCleanup,omitempty"`     // Enable PersistenceWorker for delta compaction
 }
 
 type CommunicatorConfig struct {
