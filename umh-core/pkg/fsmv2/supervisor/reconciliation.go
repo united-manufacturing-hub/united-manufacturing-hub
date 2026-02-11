@@ -35,8 +35,12 @@ import (
 
 // ErrPanicCircuitOpen is returned when the tick is suppressed because the panic circuit breaker is open.
 // Returning an error (instead of nil) ensures the supervisor knows the worker is unhealthy
-// and continues ticking it, allowing the circuit breaker to auto-reset after the cooling period.
+// and continues ticking it, allowing the circuit breaker to auto-reset once the sliding window
+// of recent panics drains (panics older than the window are forgotten).
 var ErrPanicCircuitOpen = errors.New("panic circuit breaker open")
+
+// ErrInfraCircuitOpen is returned when the tick is suppressed because the infrastructure circuit breaker is open.
+var ErrInfraCircuitOpen = errors.New("infrastructure circuit breaker open")
 
 // factoryRegistryAdapter provides an adapter for config validation.
 type factoryRegistryAdapter struct{}
@@ -545,6 +549,7 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 		}
 	}()
 
+	// tick() is called from a single goroutine (tickLoop or parent's tick). No concurrent ticks occur.
 	if s.panicCircuitOpen.Load() {
 		if s.panicTracker.PanicCount() == 0 {
 			s.panicCircuitOpen.Store(false)
@@ -627,7 +632,7 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 			}
 		}
 
-		return nil
+		return ErrInfraCircuitOpen
 	}
 
 	if s.circuitOpen.Load() {
@@ -1044,7 +1049,12 @@ func (s *Supervisor[TObserved, TDesired]) processSignal(ctx context.Context, wor
 		// Capture terminal state (e.g., "Stopped") before shutdown
 		if workerCtx.collector.IsRunning() {
 			collectCtx, cancel := context.WithTimeout(ctx, s.collectorHealth.observationTimeout)
-			_ = workerCtx.collector.CollectFinalObservation(collectCtx)
+
+			if err := workerCtx.collector.CollectFinalObservation(collectCtx); err != nil {
+				s.logger.Debug("final_observation_failed",
+					deps.Err(err),
+					deps.HierarchyPath(workerCtx.identity.HierarchyPath))
+			}
 
 			cancel()
 		}

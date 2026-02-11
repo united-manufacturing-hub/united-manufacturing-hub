@@ -417,6 +417,7 @@ func (ae *ActionExecutor) metricsReporter(ctx context.Context) {
 						callback(deps.ActionResult{
 							Timestamp:  now,
 							ActionType: stuck.actionName,
+							Success:    false,
 							ErrorMsg:   fmt.Sprintf("force-removed: stuck for %dms (timeout %dms)", stuck.elapsedMs, stuck.timeoutMs),
 							Latency:    time.Duration(stuck.elapsedMs) * time.Millisecond,
 						})

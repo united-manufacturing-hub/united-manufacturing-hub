@@ -123,7 +123,13 @@ func (s *Supervisor[TObserved, TDesired]) tickLoop(ctx context.Context) {
 			return
 		case <-ticker.C:
 			if err := s.tick(ctx); err != nil {
-				s.logger.SentryError(deps.FeatureFSMv2, s.GetHierarchyPath(), err, "tick_error")
+				if errors.Is(err, ErrPanicCircuitOpen) || errors.Is(err, ErrInfraCircuitOpen) {
+					s.logger.Debug("tick_suppressed_circuit_open",
+						deps.HierarchyPath(s.GetHierarchyPath()),
+						deps.Err(err))
+				} else {
+					s.logger.SentryError(deps.FeatureFSMv2, s.GetHierarchyPath(), err, "tick_error")
+				}
 			}
 		}
 	}
@@ -228,10 +234,10 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 				s.logger.Debug("waiting_child_shutdown",
 					deps.String("child_name", childName))
 
-				s.waitForChildDone(done, childName, s.GetHierarchyPath(), "shutdown")
-
-				s.logger.Debug("child_shutdown_complete",
-					deps.String("child_name", childName))
+				if s.waitForChildDone(done, childName, s.GetHierarchyPath(), "shutdown") {
+					s.logger.Debug("child_shutdown_complete",
+						deps.String("child_name", childName))
+				}
 			}
 
 			s.logTrace("lifecycle",
@@ -320,13 +326,15 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 }
 
 // waitForChildDone waits for a child supervisor's done channel to close, with a timeout.
-// If the timeout fires, it records a metric and logs a warning. The hierarchyPath and
-// logContext parameters are used for metrics and log attribution.
-func (s *Supervisor[TObserved, TDesired]) waitForChildDone(done <-chan struct{}, childName, hierarchyPath, logContext string) {
+// Returns true if the child completed, false if the timeout fired.
+// The hierarchyPath and logContext parameters are used for metrics and log attribution.
+func (s *Supervisor[TObserved, TDesired]) waitForChildDone(done <-chan struct{}, childName, hierarchyPath, logContext string) bool {
 	shutdownTimer := time.NewTimer(s.childShutdownTimeout)
+	defer shutdownTimer.Stop()
+
 	select {
 	case <-done:
-		shutdownTimer.Stop()
+		return true
 	case <-shutdownTimer.C:
 		metrics.RecordChildShutdownTimeout(hierarchyPath, childName)
 
@@ -334,6 +342,8 @@ func (s *Supervisor[TObserved, TDesired]) waitForChildDone(done <-chan struct{},
 			deps.String("child_name", childName),
 			deps.Duration("timeout", s.childShutdownTimeout),
 			deps.String("context", logContext))
+
+		return false
 	}
 }
 
@@ -640,6 +650,8 @@ func (s *Supervisor[TObserved, TDesired]) clearShutdownRequested(ctx context.Con
 
 	// Clear shutdown flag via interface
 	if sr, ok := any(desired).(fsmv2.ShutdownRequestable); ok {
+		sr.SetShutdownRequested(false)
+	} else if sr, ok := any(&desired).(fsmv2.ShutdownRequestable); ok {
 		sr.SetShutdownRequested(false)
 	}
 
