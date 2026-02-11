@@ -179,7 +179,7 @@ type CollectorHealthConfig struct {
 	// ObservationTimeout is the maximum time allowed for a single observation operation.
 	// If an observation takes longer than this, it is cancelled and considered failed.
 	// Must be less than StaleThreshold to ensure observation failures don't trigger stale detection.
-	// Default: ~1.3 seconds (see DefaultObservationTimeout in constants.go)
+	// Default: 2.2 seconds (see DefaultObservationTimeout in constants.go)
 	ObservationTimeout time.Duration
 
 	// StaleThreshold is how old observation data can be before FSM pauses.
