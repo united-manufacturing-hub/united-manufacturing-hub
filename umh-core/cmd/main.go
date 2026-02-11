@@ -107,21 +107,21 @@ func main() {
 	// that will be replaced when the config manager becomes an FSMv2 worker.
 	v, err := env.GetAsBool("USE_FSMV2_TRANSPORT", false, false)
 	if err != nil {
-		sentry.ReportIssuef(sentry.IssueTypeWarning, log, "Failed to parse USE_FSMV2_TRANSPORT: %v", err)
+		log.Warnf("Failed to parse USE_FSMV2_TRANSPORT: %v", err)
 	}
 
 	configData.Agent.UseFSMv2Transport = v
 
 	v, err = env.GetAsBool("USE_FSMV2_MEMORY_CLEANUP", false, false)
 	if err != nil {
-		sentry.ReportIssuef(sentry.IssueTypeWarning, log, "Failed to parse USE_FSMV2_MEMORY_CLEANUP: %v", err)
+		log.Warnf("Failed to parse USE_FSMV2_MEMORY_CLEANUP: %v", err)
 	}
 
 	configData.Agent.UseFSMv2MemoryCleanup = v
 
 	v, err = env.GetAsBool("USE_FSMV2_PROTOCOL_CONVERTER", false, false)
 	if err != nil {
-		sentry.ReportIssuef(sentry.IssueTypeWarning, log, "Failed to parse USE_FSMV2_PROTOCOL_CONVERTER: %v", err)
+		log.Warnf("Failed to parse USE_FSMV2_PROTOCOL_CONVERTER: %v", err)
 	}
 
 	configData.Agent.UseFSMv2ProtocolConverter = v
