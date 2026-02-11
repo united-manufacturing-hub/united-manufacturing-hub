@@ -35,7 +35,10 @@ func (a *RunMaintenanceAction) Execute(ctx context.Context, depsAny any) error {
 	default:
 	}
 
-	d := depsAny.(snapshot.PersistenceDependencies)
+	d, ok := depsAny.(snapshot.PersistenceDependencies)
+	if !ok {
+		return fmt.Errorf("unexpected deps type: %T", depsAny)
+	}
 
 	if err := d.GetStore().Maintenance(ctx); err != nil {
 		return fmt.Errorf("maintenance failed: %w", err)
