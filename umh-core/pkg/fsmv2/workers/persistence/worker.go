@@ -19,7 +19,7 @@ import (
 	"fmt"
 	"time"
 
-	"go.uber.org/zap"
+	"gopkg.in/yaml.v3"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
@@ -45,7 +45,7 @@ type PersistenceWorker struct {
 func NewPersistenceWorker(
 	identity deps.Identity,
 	store storage.TriangularStoreInterface,
-	logger *zap.SugaredLogger,
+	logger deps.FSMLogger,
 	stateReader deps.StateReader,
 ) (*PersistenceWorker, error) {
 	if identity.WorkerType == "" {
@@ -81,6 +81,11 @@ func (w *PersistenceWorker) CollectObservedState(ctx context.Context) (fsmv2.Obs
 	if stateReader != nil {
 		if err := stateReader.LoadObservedTyped(ctx, d.GetWorkerType(), d.GetWorkerID(), &prev); err == nil {
 			prevWorkerMetrics = prev.Metrics.Worker
+		} else {
+			d.GetLogger().SentryWarn(deps.FeaturePersistence, d.GetHierarchyPath(), "previous_observed_load_failed",
+				deps.Err(err),
+				deps.String("worker_type", d.GetWorkerType()),
+				deps.String("worker_id", d.GetWorkerID()))
 		}
 	}
 
@@ -139,7 +144,7 @@ func (w *PersistenceWorker) CollectObservedState(ctx context.Context) (fsmv2.Obs
 		LastMaintenanceAt:       lastMaintenanceAt,
 		ConsecutiveActionErrors: consecutiveErrors,
 		LastActionResults:       actionResults,
-		MetricsEmbedder:        deps.MetricsEmbedder{Metrics: metricsContainer},
+		MetricsEmbedder:         deps.MetricsEmbedder{Metrics: metricsContainer},
 	}
 
 	return observed, nil
@@ -157,17 +162,38 @@ func (w *PersistenceWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredS
 		}, nil
 	}
 
-	if _, ok := spec.(fsmv2config.UserSpec); !ok {
+	userSpec, ok := spec.(fsmv2config.UserSpec)
+	if !ok {
 		return nil, fmt.Errorf("invalid spec type: expected UserSpec, got %T", spec)
 	}
 
+	var persSpec PersistenceUserSpec
+	if userSpec.Config != "" {
+		if err := yaml.Unmarshal([]byte(userSpec.Config), &persSpec); err != nil {
+			return nil, fmt.Errorf("failed to parse persistence config: %w", err)
+		}
+	}
+
+	compactionInterval := persSpec.CompactionInterval
+	if compactionInterval == 0 {
+		compactionInterval = DefaultCompactionInterval
+	}
+
+	retentionWindow := persSpec.RetentionWindow
+	if retentionWindow == 0 {
+		retentionWindow = DefaultRetentionWindow
+	}
+
+	maintenanceInterval := persSpec.MaintenanceInterval
+	if maintenanceInterval == 0 {
+		maintenanceInterval = DefaultMaintenanceInterval
+	}
+
 	return &snapshot.PersistenceDesiredState{
-		BaseDesiredState: fsmv2config.BaseDesiredState{
-			State: "running",
-		},
-		CompactionInterval:  DefaultCompactionInterval,
-		RetentionWindow:     DefaultRetentionWindow,
-		MaintenanceInterval: DefaultMaintenanceInterval,
+		BaseDesiredState:    fsmv2config.BaseDesiredState{State: persSpec.GetState()},
+		CompactionInterval:  compactionInterval,
+		RetentionWindow:     retentionWindow,
+		MaintenanceInterval: maintenanceInterval,
 	}, nil
 }
 
@@ -177,7 +203,7 @@ func (w *PersistenceWorker) GetInitialState() fsmv2.State[any, any] {
 
 func init() {
 	if err := factory.RegisterWorkerType[snapshot.PersistenceObservedState, *snapshot.PersistenceDesiredState](
-		func(id deps.Identity, logger *zap.SugaredLogger, stateReader deps.StateReader, params map[string]any) fsmv2.Worker {
+		func(id deps.Identity, logger deps.FSMLogger, stateReader deps.StateReader, params map[string]any) fsmv2.Worker {
 			store, ok := params["store"].(storage.TriangularStoreInterface)
 			if !ok || store == nil {
 				panic("persistence worker factory: 'store' parameter must be a TriangularStoreInterface")

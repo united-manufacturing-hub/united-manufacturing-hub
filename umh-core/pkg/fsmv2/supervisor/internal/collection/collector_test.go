@@ -22,7 +22,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/internal/collection"
-	"go.uber.org/zap"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 )
 
 var _ = Describe("Collector", func() {
@@ -33,7 +33,7 @@ var _ = Describe("Collector", func() {
 				Worker:              worker,
 				Identity:            supervisor.TestIdentity(),
 				Store:               supervisor.CreateTestTriangularStore(),
-				Logger:              zap.NewNop().Sugar(),
+				Logger:              deps.NewNopFSMLogger(),
 				ObservationInterval: 1 * time.Second,
 				ObservationTimeout:  3 * time.Second,
 			})
@@ -64,7 +64,7 @@ var _ = Describe("Collector", func() {
 				Worker:              worker,
 				Identity:            supervisor.TestIdentity(),
 				Store:               supervisor.CreateTestTriangularStore(),
-				Logger:              zap.NewNop().Sugar(),
+				Logger:              deps.NewNopFSMLogger(),
 				ObservationInterval: 1 * time.Second,
 				ObservationTimeout:  3 * time.Second,
 			})
@@ -110,7 +110,7 @@ var _ = Describe("Collector", func() {
 				Worker:              &supervisor.TestWorker{},
 				Identity:            supervisor.TestIdentity(),
 				Store:               supervisor.CreateTestTriangularStore(),
-				Logger:              zap.NewNop().Sugar(),
+				Logger:              deps.NewNopFSMLogger(),
 				ObservationInterval: 1 * time.Second,
 				ObservationTimeout:  3 * time.Second,
 			})
@@ -136,7 +136,7 @@ var _ = Describe("Collector", func() {
 				Worker:              &supervisor.TestWorker{},
 				Identity:            supervisor.TestIdentity(),
 				Store:               supervisor.CreateTestTriangularStore(),
-				Logger:              zap.NewNop().Sugar(),
+				Logger:              deps.NewNopFSMLogger(),
 				ObservationInterval: 1 * time.Second,
 				ObservationTimeout:  3 * time.Second,
 			})
@@ -150,7 +150,7 @@ var _ = Describe("Collector", func() {
 				Worker:              &supervisor.TestWorker{},
 				Identity:            supervisor.TestIdentity(),
 				Store:               supervisor.CreateTestTriangularStore(),
-				Logger:              zap.NewNop().Sugar(),
+				Logger:              deps.NewNopFSMLogger(),
 				ObservationInterval: 1 * time.Second,
 				ObservationTimeout:  3 * time.Second,
 			})
@@ -168,7 +168,7 @@ var _ = Describe("Collector", func() {
 				Worker:              &supervisor.TestWorker{},
 				Identity:            supervisor.TestIdentity(),
 				Store:               supervisor.CreateTestTriangularStore(),
-				Logger:              zap.NewNop().Sugar(),
+				Logger:              deps.NewNopFSMLogger(),
 				ObservationInterval: 1 * time.Second,
 				ObservationTimeout:  3 * time.Second,
 			})
@@ -181,7 +181,7 @@ var _ = Describe("Collector", func() {
 				Worker:              &supervisor.TestWorker{},
 				Identity:            supervisor.TestIdentity(),
 				Store:               supervisor.CreateTestTriangularStore(),
-				Logger:              zap.NewNop().Sugar(),
+				Logger:              deps.NewNopFSMLogger(),
 				ObservationInterval: 1 * time.Second,
 				ObservationTimeout:  3 * time.Second,
 			})
@@ -210,7 +210,7 @@ var _ = Describe("Collector", func() {
 				Worker:              worker,
 				Identity:            supervisor.TestIdentity(),
 				Store:               supervisor.CreateTestTriangularStore(),
-				Logger:              zap.NewNop().Sugar(),
+				Logger:              deps.NewNopFSMLogger(),
 				ObservationInterval: 1 * time.Second,
 				ObservationTimeout:  3 * time.Second,
 			})
@@ -242,7 +242,7 @@ var _ = Describe("Collector", func() {
 				Worker:              &supervisor.TestWorker{},
 				Identity:            supervisor.TestIdentity(),
 				Store:               supervisor.CreateTestTriangularStore(),
-				Logger:              zap.NewNop().Sugar(),
+				Logger:              deps.NewNopFSMLogger(),
 				ObservationInterval: 1 * time.Second,
 				ObservationTimeout:  3 * time.Second,
 			})
@@ -259,7 +259,7 @@ var _ = Describe("Collector", func() {
 				Worker:              worker,
 				Identity:            supervisor.TestIdentity(),
 				Store:               supervisor.CreateTestTriangularStore(),
-				Logger:              zap.NewNop().Sugar(),
+				Logger:              deps.NewNopFSMLogger(),
 				ObservationInterval: 50 * time.Millisecond, // Short interval for fast test
 				ObservationTimeout:  1 * time.Second,
 			})
@@ -288,7 +288,7 @@ var _ = Describe("Collector", func() {
 				Worker:              worker,
 				Identity:            supervisor.TestIdentity(),
 				Store:               supervisor.CreateTestTriangularStore(),
-				Logger:              zap.NewNop().Sugar(),
+				Logger:              deps.NewNopFSMLogger(),
 				ObservationInterval: 1 * time.Second,
 				ObservationTimeout:  3 * time.Second,
 			})

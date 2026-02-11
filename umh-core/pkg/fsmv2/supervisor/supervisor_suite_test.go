@@ -24,8 +24,6 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"go.uber.org/zap"
-
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
@@ -79,7 +77,7 @@ func registerTestWorkerFactories() {
 	for _, workerType := range workerTypes {
 		wt := workerType
 		// Register worker factory
-		err := factory.RegisterFactoryByType(wt, func(identity deps.Identity, _ *zap.SugaredLogger, _ deps.StateReader, _ map[string]any) fsmv2.Worker {
+		err := factory.RegisterFactoryByType(wt, func(identity deps.Identity, _ deps.FSMLogger, _ deps.StateReader, _ map[string]any) fsmv2.Worker {
 			return &supervisor.TestWorkerWithType{
 				Worker:     supervisor.TestWorker{},
 				WorkerType: wt,
@@ -428,12 +426,12 @@ func newSupervisorWithWorker(worker *mockWorker, customStore storage.TriangularS
 			panic(fmt.Sprintf("failed to create observed collection: %v", err))
 		}
 
-		triangularStore = storage.NewTriangularStore(basicStore, zap.NewNop().Sugar())
+		triangularStore = storage.NewTriangularStore(basicStore, deps.NewNopFSMLogger())
 	}
 
 	s := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 		WorkerType:              workerType,
-		Logger:                  zap.NewNop().Sugar(),
+		Logger:                  deps.NewNopFSMLogger(),
 		CollectorHealth:         cfg,
 		Store:                   triangularStore,
 		GracefulShutdownTimeout: 100 * time.Millisecond, // Short timeout for tests
@@ -496,7 +494,7 @@ func createTestTriangularStore() *storage.TriangularStore {
 		}
 	}
 
-	return storage.NewTriangularStore(basicStore, zap.NewNop().Sugar())
+	return storage.NewTriangularStore(basicStore, deps.NewNopFSMLogger())
 }
 
 type mockTriangularStore struct {

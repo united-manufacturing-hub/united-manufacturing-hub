@@ -17,27 +17,61 @@ package integration
 import (
 	"strings"
 	"sync"
+	"time"
 
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest/observer"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
+	fsmv2sentry "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/sentry"
+	umhsentry "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 )
 
 // TestLogger provides a logger that captures logs for verification in integration tests.
 type TestLogger struct {
-	Logger *zap.SugaredLogger
-	Logs   *observer.ObservedLogs
-	mu     sync.RWMutex
+	Logger    *zap.SugaredLogger
+	FSMLogger deps.FSMLogger
+	Logs      *observer.ObservedLogs
+	hook      *fsmv2sentry.SentryHook
+	mu        sync.RWMutex
 }
 
-// NewTestLogger creates a new TestLogger with the specified log level.
-func NewTestLogger(level zapcore.Level) *TestLogger {
-	core, logs := observer.New(level)
-	logger := zap.New(core).Sugar()
+// initSentryOnce initializes Sentry once, even when parallel tests call NewTestLogger
+// multiple times concurrently.
+var initSentryOnce sync.Once
+
+// NewTestLogger creates a TestLogger at DebugLevel.
+// Integration tests always enable Sentry with environment "integration-test".
+func NewTestLogger() *TestLogger {
+	observerCore, logs := observer.New(zapcore.DebugLevel)
+
+	// Initialize Sentry for integration tests with dedicated environment.
+	// Use sync.Once to avoid reconfiguring global Sentry state in parallel tests.
+	initSentryOnce.Do(func() {
+		umhsentry.InitSentry(constants.IntegrationTestVersion, true)
+	})
+
+	// Wrap observer core with SentryHook to capture errors
+	hook := fsmv2sentry.NewSentryHook(1 * time.Minute)
+	wrappedCore := hook.Wrap(observerCore)
+
+	logger := zap.New(wrappedCore).Sugar()
 
 	return &TestLogger{
-		Logger: logger,
-		Logs:   logs,
+		Logger:    logger,
+		FSMLogger: deps.NewFSMLogger(logger),
+		Logs:      logs,
+		hook:      hook,
+	}
+}
+
+// Stop releases resources held by the test logger, including the Sentry hook's cleanup goroutine.
+// Call this in test cleanup (AfterEach/AfterSuite) to prevent goroutine leaks.
+func (tl *TestLogger) Stop() {
+	if tl.hook != nil {
+		tl.hook.Stop()
 	}
 }
 

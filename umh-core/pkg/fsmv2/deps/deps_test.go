@@ -19,16 +19,15 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"go.uber.org/zap"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 )
 
 var _ = Describe("BaseDependencies", func() {
-	var logger *zap.SugaredLogger
+	var logger deps.FSMLogger
 
 	BeforeEach(func() {
-		logger = zap.NewNop().Sugar()
+		logger = deps.NewNopFSMLogger()
 	})
 
 	Describe("NewBaseDependencies", func() {
@@ -70,6 +69,24 @@ var _ = Describe("BaseDependencies", func() {
 		})
 	})
 
+	Describe("GetHierarchyPath", func() {
+		It("should return the identity's hierarchy path", func() {
+			identity := deps.Identity{
+				ID:            "test-id",
+				WorkerType:    "test-worker",
+				HierarchyPath: "root/parent-1(parent)/test-id(test-worker)",
+			}
+			dependencies := deps.NewBaseDependencies(logger, nil, identity)
+			Expect(dependencies.GetHierarchyPath()).To(Equal("root/parent-1(parent)/test-id(test-worker)"))
+		})
+
+		It("should return empty string when identity has no hierarchy path", func() {
+			identity := deps.Identity{ID: "test-id", WorkerType: "test-worker"}
+			dependencies := deps.NewBaseDependencies(logger, nil, identity)
+			Expect(dependencies.GetHierarchyPath()).To(BeEmpty())
+		})
+	})
+
 	Describe("GetActionHistory", func() {
 		It("should return nil when no action history has been set", func() {
 			identity := deps.Identity{ID: "test-id", WorkerType: "test-worker"}
@@ -99,12 +116,11 @@ var _ = Describe("BaseDependencies", func() {
 
 var _ = Describe("ActionHistory Read-Only Pattern", func() {
 	var (
-		logger       *zap.SugaredLogger
 		dependencies *deps.BaseDependencies
 	)
 
 	BeforeEach(func() {
-		logger = zap.NewNop().Sugar()
+		logger := deps.NewNopFSMLogger()
 		identity := deps.Identity{ID: "test-id", WorkerType: "test-worker"}
 		dependencies = deps.NewBaseDependencies(logger, nil, identity)
 	})
@@ -230,12 +246,11 @@ var _ = Describe("ActionHistory Read-Only Pattern", func() {
 
 var _ = Describe("RetryTracker", func() {
 	var (
-		logger       *zap.SugaredLogger
 		dependencies *deps.BaseDependencies
 	)
 
 	BeforeEach(func() {
-		logger = zap.NewNop().Sugar()
+		logger := deps.NewNopFSMLogger()
 		identity := deps.Identity{ID: "test-id", WorkerType: "test-worker"}
 		dependencies = deps.NewBaseDependencies(logger, nil, identity)
 	})

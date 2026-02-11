@@ -21,7 +21,6 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"go.uber.org/zap/zapcore"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/examples"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/integration"
@@ -29,12 +28,13 @@ import (
 
 var _ = Describe("Restart Scenario Integration", func() {
 	It("should complete full worker restart cycle after SignalNeedsRestart", func() {
-		testLogger := integration.NewTestLogger(zapcore.DebugLevel)
+		testLogger := integration.NewTestLogger()
+		defer testLogger.Stop()
 
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
-		store := setupTestStoreForScenario(testLogger.Logger)
+		store := setupTestStoreForScenario(testLogger.FSMLogger)
 
 		// 10s is enough to see the restart worker:
 		// - 5 consecutive failures (at 100ms tick) triggers SignalNeedsRestart
@@ -46,7 +46,7 @@ var _ = Describe("Restart Scenario Integration", func() {
 		result, err := examples.Run(scenarioCtx, examples.RunConfig{
 			Scenario:     examples.FailingScenario,
 			TickInterval: 100 * time.Millisecond,
-			Logger:       testLogger.Logger,
+			Logger:       testLogger.FSMLogger,
 			Store:        store,
 		})
 		Expect(err).NotTo(HaveOccurred())
