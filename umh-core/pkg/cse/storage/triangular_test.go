@@ -23,9 +23,9 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"go.uber.org/zap"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 )
 
@@ -270,7 +270,7 @@ var _ = Describe("TriangularStore", func() {
 	BeforeEach(func() {
 		ctx = context.Background()
 		store = newMockStore()
-		ts = storage.NewTriangularStore(store, zap.NewNop().Sugar())
+		ts = storage.NewTriangularStore(store, deps.NewNopFSMLogger())
 	})
 
 	Describe("NewTriangularStore", func() {
@@ -722,7 +722,7 @@ var _ = Describe("TriangularStore", func() {
 
 		Context("when parts are missing", func() {
 			It("should succeed with nil desired and observed when only identity exists", func() {
-				ts := storage.NewTriangularStore(newMockStore(), zap.NewNop().Sugar())
+				ts := storage.NewTriangularStore(newMockStore(), deps.NewNopFSMLogger())
 				err := ts.SaveIdentity(ctx, "container", "worker-456", persistence.Document{
 					"id":   "worker-456",
 					"name": "Container B",
@@ -1434,7 +1434,7 @@ var _ = Describe("TriangularStore", func() {
 
 func BenchmarkSaveObservedNoChange(b *testing.B) {
 	store := newMockStore()
-	ts := storage.NewTriangularStore(store, zap.NewNop().Sugar())
+	ts := storage.NewTriangularStore(store, deps.NewNopFSMLogger())
 	ctx := context.Background()
 
 	// Create initial document
@@ -1456,7 +1456,7 @@ func BenchmarkSaveObservedNoChange(b *testing.B) {
 
 func BenchmarkSaveObservedWithChange(b *testing.B) {
 	store := newMockStore()
-	ts := storage.NewTriangularStore(store, zap.NewNop().Sugar())
+	ts := storage.NewTriangularStore(store, deps.NewNopFSMLogger())
 	ctx := context.Background()
 
 	// Create initial document

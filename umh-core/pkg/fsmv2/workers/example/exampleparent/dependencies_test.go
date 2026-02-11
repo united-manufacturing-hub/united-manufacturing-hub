@@ -17,7 +17,7 @@ package exampleparent_test
 import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"go.uber.org/zap"
+	
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent"
@@ -25,12 +25,12 @@ import (
 
 var _ = Describe("ParentDependencies", func() {
 	var (
-		logger     *zap.SugaredLogger
+		logger     deps.FSMLogger
 		parentDeps *exampleparent.ParentDependencies
 	)
 
 	BeforeEach(func() {
-		logger = zap.NewNop().Sugar()
+		logger = deps.NewNopFSMLogger()
 	})
 
 	Describe("NewParentDependencies", func() {

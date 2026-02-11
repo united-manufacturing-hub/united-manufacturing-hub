@@ -6,7 +6,7 @@ This guide covers dependency injection patterns for FSMv2 workers.
 
 | Dependency | Type | Purpose | Availability |
 |------------|------|---------|--------------|
-| `Logger` | `*zap.SugaredLogger` | Structured logging with worker context | All workers via `BaseDependencies` |
+| `Logger` | `deps.FSMLogger` | Structured logging with worker context | All workers via `BaseDependencies` |
 | `StateReader` | `deps.StateReader` | Read-only access to observed state from CSE | All workers via `BaseDependencies` |
 | `MetricsRecorder` | `*deps.MetricsRecorder` | Buffer and record per-tick metrics | All workers via `BaseDependencies` |
 | `FrameworkMetrics` | `*deps.FrameworkMetrics` | Supervisor-tracked metrics (read-only) | Injected via `deps.GetFrameworkState()` |

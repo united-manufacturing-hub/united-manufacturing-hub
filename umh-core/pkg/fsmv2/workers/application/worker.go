@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"time"
 
-	"go.uber.org/zap"
 	"gopkg.in/yaml.v3"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
@@ -122,7 +121,7 @@ func (w *ApplicationWorker) GetDependenciesAny() any {
 // SupervisorConfig contains configuration for creating an application supervisor.
 type SupervisorConfig struct {
 	Store              storage.TriangularStoreInterface
-	Logger             *zap.SugaredLogger
+	Logger             deps.FSMLogger
 	Dependencies       map[string]any // Injected into child workers via deps parameter
 	ID                 string
 	Name               string
@@ -175,7 +174,7 @@ func NewApplicationSupervisor(cfg SupervisorConfig) (*supervisor.Supervisor[snap
 // init registers the application worker with the factory for automatic creation via factory.NewWorkerByType().
 func init() {
 	if err := factory.RegisterWorkerType[snapshot.ApplicationObservedState, *snapshot.ApplicationDesiredState](
-		func(id deps.Identity, _ *zap.SugaredLogger, _ deps.StateReader, _ map[string]any) fsmv2.Worker {
+		func(id deps.Identity, _ deps.FSMLogger, _ deps.StateReader, _ map[string]any) fsmv2.Worker {
 			return NewApplicationWorker(id.ID, id.Name)
 		},
 		func(cfg interface{}) interface{} {

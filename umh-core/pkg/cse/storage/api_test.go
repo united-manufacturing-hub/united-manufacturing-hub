@@ -19,9 +19,9 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"go.uber.org/zap"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 )
 
@@ -48,7 +48,7 @@ var _ = Describe("TriangularStore Public API", func() {
 	BeforeEach(func() {
 		ctx = context.Background()
 		store = newMockStore()
-		ts = storage.NewTriangularStore(store, zap.NewNop().Sugar())
+		ts = storage.NewTriangularStore(store, deps.NewNopFSMLogger())
 	})
 
 	Describe("Worker Registration Lifecycle", func() {

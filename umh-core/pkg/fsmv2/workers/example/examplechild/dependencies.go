@@ -18,7 +18,6 @@ import (
 	"sync"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"go.uber.org/zap"
 )
 
 // Connection represents a connection to an external resource.
@@ -59,7 +58,7 @@ type ExamplechildDependencies struct {
 }
 
 // NewExamplechildDependencies creates new dependencies for the child worker.
-func NewExamplechildDependencies(connectionPool ConnectionPool, logger *zap.SugaredLogger, stateReader deps.StateReader, identity deps.Identity) *ExamplechildDependencies {
+func NewExamplechildDependencies(connectionPool ConnectionPool, logger deps.FSMLogger, stateReader deps.StateReader, identity deps.Identity) *ExamplechildDependencies {
 	return &ExamplechildDependencies{
 		BaseDependencies: deps.NewBaseDependencies(logger, stateReader, identity),
 		connectionPool:   connectionPool,

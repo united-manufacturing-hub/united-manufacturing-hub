@@ -17,17 +17,16 @@ package helpers_test
 import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"go.uber.org/zap"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 )
 
 var _ = Describe("BaseWorker", func() {
-	var logger *zap.SugaredLogger
+	var logger deps.FSMLogger
 
 	BeforeEach(func() {
-		logger = zap.NewNop().Sugar()
+		logger = deps.NewNopFSMLogger()
 	})
 
 	Describe("NewBaseWorker", func() {

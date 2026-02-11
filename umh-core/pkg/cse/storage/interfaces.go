@@ -112,6 +112,7 @@ type TriangularStoreInterface interface {
 	GetDeltas(ctx context.Context, sub Subscription) (DeltasResponse, error)
 
 	// CompactDeltas removes delta entries older than the retention window.
+	// Only deltas are deleted; snapshots (Identity/Desired/Observed) are never touched.
 	CompactDeltas(ctx context.Context, retentionWindow time.Duration) (int, error)
 
 	// Maintenance performs heavyweight cleanup operations (cache clearing, future SQLite VACUUM).

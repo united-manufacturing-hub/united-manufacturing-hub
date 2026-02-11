@@ -22,8 +22,6 @@ import (
 	"github.com/benbjohnson/clock"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"go.uber.org/zap"
-
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
@@ -59,12 +57,12 @@ var _ = Describe("Delta Compaction", Label("memory-cleanup"), func() {
 		// Initialize mock clock to a realistic time (not Unix epoch)
 		// This allows retention=0 tests to work correctly since cutoff time > delta timestamps
 		mockClock.Set(time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC))
-		triangularStore = storage.NewTriangularStoreWithClock(basicStore, zap.NewNop().Sugar(), mockClock)
+		triangularStore = storage.NewTriangularStoreWithClock(basicStore, deps.NewNopFSMLogger(), mockClock)
 
 		s = supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 			WorkerType: "test",
 			Store:      triangularStore,
-			Logger:     zap.NewNop().Sugar(),
+			Logger:     deps.NewNopFSMLogger(),
 		})
 	})
 

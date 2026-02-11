@@ -22,7 +22,6 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"go.uber.org/zap/zapcore"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/examples"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/integration"
@@ -30,12 +29,13 @@ import (
 
 var _ = Describe("Timeout Scenario Integration", func() {
 	It("should demonstrate timeout and retry behavior patterns", func() {
-		testLogger := integration.NewTestLogger(zapcore.DebugLevel)
+		testLogger := integration.NewTestLogger()
+		defer testLogger.Stop()
 
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
-		store := setupTestStoreForScenario(testLogger.Logger)
+		store := setupTestStoreForScenario(testLogger.FSMLogger)
 
 		scenarioCtx, scenarioCancel := context.WithTimeout(ctx, 10*time.Second)
 		defer scenarioCancel()
@@ -43,7 +43,7 @@ var _ = Describe("Timeout Scenario Integration", func() {
 		result, err := examples.Run(scenarioCtx, examples.RunConfig{
 			Scenario:     examples.TimeoutScenario,
 			TickInterval: 100 * time.Millisecond,
-			Logger:       testLogger.Logger,
+			Logger:       testLogger.FSMLogger,
 			Store:        store,
 		})
 		Expect(err).NotTo(HaveOccurred())

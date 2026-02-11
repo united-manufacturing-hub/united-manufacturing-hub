@@ -23,8 +23,6 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
@@ -47,12 +45,13 @@ var _ = Describe("Simple Scenario Integration", func() {
 			state.RunningDuration = originalRunning
 		}()
 
-		testLogger := integration.NewTestLogger(zapcore.DebugLevel)
+		testLogger := integration.NewTestLogger()
+		defer testLogger.Stop()
 
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
-		store := setupTestStoreForScenario(testLogger.Logger)
+		store := setupTestStoreForScenario(testLogger.FSMLogger)
 
 		scenarioCtx, scenarioCancel := context.WithTimeout(ctx, 20*time.Second)
 		defer scenarioCancel()
@@ -60,7 +59,7 @@ var _ = Describe("Simple Scenario Integration", func() {
 		result, err := examples.Run(scenarioCtx, examples.RunConfig{
 			Scenario:     examples.SimpleScenario,
 			TickInterval: 100 * time.Millisecond,
-			Logger:       testLogger.Logger,
+			Logger:       testLogger.FSMLogger,
 			Store:        store,
 		})
 		Expect(err).NotTo(HaveOccurred())
@@ -189,13 +188,13 @@ func verifyTriangularStoreChanges(t *integration.TestLogger) {
 
 func verifyShutdownOrder(t *integration.TestLogger) {
 	tickLoopStartedLogs := t.GetLogsMatching("tick_loop_started")
+	childStartedLogs := t.GetLogsMatching("supervisor_started_as_child")
 
 	var workerTypes []string
 
 	for _, entry := range tickLoopStartedLogs {
 		for _, field := range entry.Context {
 			if field.Key == "worker_type" {
-				// String values are stored in field.String, not field.Interface
 				if field.String != "" {
 					workerTypes = append(workerTypes, field.String)
 				}
@@ -203,12 +202,25 @@ func verifyShutdownOrder(t *integration.TestLogger) {
 		}
 	}
 
-	// Verify at least 2 tick loops were started (for children)
-	Expect(len(tickLoopStartedLogs)).To(BeNumerically(">=", 2),
-		"Expected at least 2 tick_loop_started logs (for child workers)")
+	for _, entry := range childStartedLogs {
+		for _, field := range entry.Context {
+			if field.Key == "worker_type" {
+				if field.String != "" {
+					workerTypes = append(workerTypes, field.String)
+				}
+			}
+		}
+	}
 
-	GinkgoWriter.Printf("✓ Tick loops started for workers (count: %d, types: %v)\n",
-		len(tickLoopStartedLogs), workerTypes)
+	// Single-tick architecture: only root has tick loop, children use StartAsChild()
+	Expect(tickLoopStartedLogs).To(HaveLen(1),
+		"Expected exactly 1 tick_loop_started (root supervisor only)")
+
+	Expect(childStartedLogs).ToNot(BeEmpty(),
+		"Expected at least 1 supervisor_started_as_child (child supervisors)")
+
+	GinkgoWriter.Printf("✓ Supervisors started (root tick_loop: %d, children as_child: %d, types: %v)\n",
+		len(tickLoopStartedLogs), len(childStartedLogs), workerTypes)
 }
 
 func verifyAllLogsHaveWorkerField(t *integration.TestLogger) {
@@ -238,7 +250,7 @@ func verifyAllLogsHaveWorkerField(t *integration.TestLogger) {
 		len(logsMissingWorker)-len(unexpectedMissing))
 }
 
-func setupTestStoreForScenario(logger *zap.SugaredLogger) storage.TriangularStoreInterface {
+func setupTestStoreForScenario(logger deps.FSMLogger) storage.TriangularStoreInterface {
 	basicStore := memory.NewInMemoryStore()
 
 	return storage.NewTriangularStore(basicStore, logger)
@@ -1101,18 +1113,19 @@ var _ = Describe("MetricsHolder Type Assertion", func() {
 			state.RunningDuration = originalRunning
 		}()
 
-		testLogger := integration.NewTestLogger(zapcore.DebugLevel)
+		testLogger := integration.NewTestLogger()
+		defer testLogger.Stop()
 
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
 
-		store := setupTestStoreForScenario(testLogger.Logger)
+		store := setupTestStoreForScenario(testLogger.FSMLogger)
 
 		result, err := examples.Run(ctx, examples.RunConfig{
 			Scenario:     examples.SimpleScenario,
 			Duration:     5 * time.Second,
 			TickInterval: 100 * time.Millisecond,
-			Logger:       testLogger.Logger,
+			Logger:       testLogger.FSMLogger,
 			Store:        store,
 		})
 		Expect(err).NotTo(HaveOccurred())
@@ -1145,9 +1158,7 @@ var _ = Describe("MetricsHolder Type Assertion", func() {
 		Expect(ok).To(BeTrue(), "MetricsHolder type assertion should succeed - THIS FAILS WITH POINTER RECEIVERS")
 
 		if ok {
-			workerMetrics := holder.GetWorkerMetrics()
 			frameworkMetrics := holder.GetFrameworkMetrics()
-			_ = workerMetrics
 			GinkgoWriter.Printf("MetricsHolder interface works: frameworkMetrics=%+v\n", frameworkMetrics)
 		}
 	})

@@ -19,7 +19,6 @@ import (
 	"sync"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps/retry"
-	"go.uber.org/zap"
 )
 
 // Identity uniquely identifies a worker instance.
@@ -56,50 +55,57 @@ type StateReader interface {
 // Dependencies provides access to worker-specific tools for actions.
 // Worker-specific dependencies embed BaseDependencies and extend with additional tools.
 type Dependencies interface {
-	GetLogger() *zap.SugaredLogger
+	// GetLogger returns the structured logger for this worker.
+	GetLogger() FSMLogger
 	// ActionLogger returns a logger enriched with action context for structured logs.
-	ActionLogger(actionType string) *zap.SugaredLogger
+	ActionLogger(actionType string) FSMLogger
 	// GetStateReader returns read-only access to the TriangularStore, or nil if not provided.
 	GetStateReader() StateReader
+	// GetHierarchyPath returns the worker's hierarchy path for Sentry routing.
+	GetHierarchyPath() string
 }
 
 // BaseDependencies provides common tools for all workers.
 // Worker-specific dependencies should embed this struct.
 type BaseDependencies struct {
 	stateReader     StateReader
-	logger          *zap.SugaredLogger
+	logger          FSMLogger
 	metricsRecorder *MetricsRecorder
 	retryTracker    retry.Tracker     // Framework-level retry tracking for error/success recording
 	frameworkState  *FrameworkMetrics // Set by supervisor before collection, may be stale (~1 tick)
 	workerType      string
 	workerID        string
+	hierarchyPath   string
 	actionHistory   []ActionResult // Set by supervisor before CollectObservedState, read-only for workers
 	mu              sync.RWMutex   // Protects frameworkState and actionHistory
 }
 
 // NewBaseDependencies creates base dependencies with common tools.
 // Logger is enriched with worker context; stateReader can be nil.
-func NewBaseDependencies(logger *zap.SugaredLogger, stateReader StateReader, identity Identity) *BaseDependencies {
+func NewBaseDependencies(logger FSMLogger, stateReader StateReader, identity Identity) *BaseDependencies {
 	if logger == nil {
 		panic("NewBaseDependencies: logger cannot be nil")
 	}
 
+	enrichedLogger := logger.With(String("worker", identity.String()))
+
 	return &BaseDependencies{
-		logger:          logger.With("worker", identity.String()),
+		logger:          enrichedLogger,
 		stateReader:     stateReader,
 		metricsRecorder: NewMetricsRecorder(),
 		retryTracker:    retry.New(),
 		workerType:      identity.WorkerType,
 		workerID:        identity.ID,
+		hierarchyPath:   identity.HierarchyPath,
 	}
 }
 
-func (d *BaseDependencies) GetLogger() *zap.SugaredLogger {
+func (d *BaseDependencies) GetLogger() FSMLogger {
 	return d.logger
 }
 
-func (d *BaseDependencies) ActionLogger(actionType string) *zap.SugaredLogger {
-	return d.logger.With("log_source", "action", "action_type", actionType)
+func (d *BaseDependencies) ActionLogger(actionType string) FSMLogger {
+	return d.logger.With(String("log_source", "action"), String("action_type", actionType))
 }
 
 func (d *BaseDependencies) GetStateReader() StateReader {
@@ -159,6 +165,10 @@ func (d *BaseDependencies) GetWorkerType() string {
 
 func (d *BaseDependencies) GetWorkerID() string {
 	return d.workerID
+}
+
+func (d *BaseDependencies) GetHierarchyPath() string {
+	return d.hierarchyPath
 }
 
 // RetryTracker returns the framework-level retry tracker for error/success recording.

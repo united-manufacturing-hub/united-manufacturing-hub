@@ -52,8 +52,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"go.uber.org/zap"
-
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
@@ -150,8 +148,8 @@ type Supervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] stru
 	// See package-level LOCK ORDER section for details.
 	mu                 *lockmanager.Lock
 	lockManager        *lockmanager.LockManager
-	logger             *zap.SugaredLogger
-	baseLogger         *zap.SugaredLogger // Un-enriched logger for child supervisors
+	logger             deps.FSMLogger
+	baseLogger         deps.FSMLogger // Un-enriched logger for child supervisors
 	freshnessChecker   *health.FreshnessChecker
 	children           map[string]SupervisorInterface
 	childDoneChans     map[string]<-chan struct{}
@@ -238,11 +236,11 @@ func NewSupervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState](c
 		panic(fmt.Sprintf("supervisor config error: staleThreshold (%v) must be less than collectorTimeout (%v)", staleThreshold, timeout))
 	}
 
-	cfg.Logger.Infow("timeout_configuration",
-		"worker", cfg.WorkerType,
-		"observation_timeout", observationTimeout,
-		"stale_threshold", staleThreshold,
-		"collector_timeout", timeout)
+	cfg.Logger.Info("timeout_configuration",
+		deps.String("worker", cfg.WorkerType),
+		deps.Duration("observation_timeout", observationTimeout),
+		deps.Duration("stale_threshold", staleThreshold),
+		deps.Duration("collector_timeout", timeout))
 
 	freshnessChecker := health.NewFreshnessChecker(staleThreshold, timeout, cfg.Logger)
 

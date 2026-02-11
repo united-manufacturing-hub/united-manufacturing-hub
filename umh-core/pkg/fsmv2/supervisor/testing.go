@@ -18,7 +18,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/testutil"
-	"go.uber.org/zap"
 )
 
 type TestObservedState = testutil.ObservedState
@@ -48,7 +47,7 @@ func CreateTestObservedStateWithID(id string) *TestObservedState {
 }
 
 func CreateTestSupervisorWithCircuitState(circuitOpen bool) *Supervisor[*TestObservedState, *TestDesiredState] {
-	logger := zap.NewNop().Sugar()
+	logger := deps.NewNopFSMLogger()
 	s := NewSupervisor[*TestObservedState, *TestDesiredState](Config{
 		WorkerType:      "test",
 		Store:           CreateTestTriangularStore(),
