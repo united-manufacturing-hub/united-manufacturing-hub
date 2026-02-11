@@ -27,6 +27,7 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/examples"
 )
 
@@ -126,7 +127,7 @@ func main() {
 		defer timeoutCancel()
 	}
 
-	store := examples.SetupStore(logger.Sugar())
+	store := examples.SetupStore(deps.NewFSMLogger(logger.Sugar()))
 
 	durationStr := "endless (until Ctrl+C)"
 	if *duration > 0 {
@@ -143,7 +144,7 @@ func main() {
 	result, err := examples.Run(ctx, examples.RunConfig{
 		Scenario:           scenario,
 		TickInterval:       *tickInterval,
-		Logger:             logger.Sugar(),
+		Logger:             deps.NewFSMLogger(logger.Sugar()),
 		Store:              store,
 		EnableTraceLogging: *traceFlag,
 		DumpStore:          *dumpStore,
@@ -157,6 +158,7 @@ func main() {
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
 	go func() {
+		sugar := logger.Sugar()
 		sig := <-sigChan
 		logger.Info("Received signal, initiating graceful shutdown...",
 			zap.String("signal", sig.String()),
@@ -166,8 +168,9 @@ func main() {
 
 		select {
 		case sig := <-sigChan:
-			logger.Warn("Received second signal, forcing immediate exit!",
-				zap.String("signal", sig.String()))
+			sugar.Warnw("forced_exit_second_signal",
+				"reason", "received_second_signal",
+				"signal", sig.String())
 			os.Exit(1)
 		case <-result.Done:
 		}

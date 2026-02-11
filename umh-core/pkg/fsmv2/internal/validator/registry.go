@@ -565,7 +565,7 @@ the FSM system will panic at runtime when trying to create the missing component
 Use RegisterWorkerType[TObserved, TDesired]() to register both atomically.`,
 		CorrectCode: `func init() {
     err := factory.RegisterWorkerType[snapshot.MyObservedState, *snapshot.MyDesiredState](
-        func(id fsmv2.Identity, logger *zap.SugaredLogger) fsmv2.Worker {
+        func(id deps.Identity, logger deps.FSMLogger, _ deps.StateReader, _ map[string]any) fsmv2.Worker {
             worker, _ := NewMyWorker(id, logger)
             return worker
         },

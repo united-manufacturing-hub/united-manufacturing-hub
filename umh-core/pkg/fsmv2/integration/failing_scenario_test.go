@@ -22,7 +22,6 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"go.uber.org/zap/zapcore"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/examples"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/integration"
@@ -31,14 +30,15 @@ import (
 var _ = Describe("Failing Scenario Integration", func() {
 	It("should demonstrate recovery vs permanent failure patterns", func() {
 		By("Setting up test logger at DebugLevel")
-		testLogger := integration.NewTestLogger(zapcore.DebugLevel)
+		testLogger := integration.NewTestLogger()
+		defer testLogger.Stop()
 
 		By("Setting up context with 30s timeout")
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
 		By("Setting up triangular store")
-		store := setupTestStoreForScenario(testLogger.Logger)
+		store := setupTestStoreForScenario(testLogger.FSMLogger)
 
 		By("Creating scenario context with 8s duration")
 		// 8s is enough to see:
@@ -51,7 +51,7 @@ var _ = Describe("Failing Scenario Integration", func() {
 		result, err := examples.Run(scenarioCtx, examples.RunConfig{
 			Scenario:     examples.FailingScenario,
 			TickInterval: 100 * time.Millisecond,
-			Logger:       testLogger.Logger,
+			Logger:       testLogger.FSMLogger,
 			Store:        store,
 		})
 		Expect(err).NotTo(HaveOccurred())

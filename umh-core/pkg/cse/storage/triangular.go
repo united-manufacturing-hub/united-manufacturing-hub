@@ -27,8 +27,8 @@ import (
 	"time"
 
 	"github.com/benbjohnson/clock"
-	"go.uber.org/zap"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 )
 
@@ -100,7 +100,7 @@ var ErrMalformedDelta = errors.New("malformed delta document")
 type TriangularStore struct {
 	store      persistence.Store
 	syncID     *atomic.Int64
-	logger     *zap.SugaredLogger
+	logger     deps.FSMLogger
 	deltaStore *DeltaStore
 	clock      clock.Clock
 
@@ -130,11 +130,11 @@ type cachedSnapshot struct {
 //
 // Parameters:
 //   - store: Backend storage implementation (SQLite, Postgres, etc.)
-//   - logger: Logger for observation change logging (use zap.NewNop().Sugar() for tests)
+//   - logger: Logger for observation change logging (use deps.NewNopFSMLogger() for tests)
 //
 // Returns:
 //   - *TriangularStore: Ready-to-use triangular store instance
-func NewTriangularStore(store persistence.Store, logger *zap.SugaredLogger) *TriangularStore {
+func NewTriangularStore(store persistence.Store, logger deps.FSMLogger) *TriangularStore {
 	return NewTriangularStoreWithClock(store, logger, nil)
 }
 
@@ -145,15 +145,16 @@ func NewTriangularStore(store persistence.Store, logger *zap.SugaredLogger) *Tri
 //
 // Parameters:
 //   - store: Backend storage implementation (SQLite, Postgres, etc.)
-//   - logger: Logger for observation change logging (use zap.NewNop().Sugar() for tests)
+//   - logger: Logger for observation change logging (use deps.NewNopFSMLogger() for tests)
 //   - c: Clock implementation for time operations. If nil, uses clock.New() (real time).
 //
 // Returns:
 //   - *TriangularStore: Ready-to-use triangular store instance
-func NewTriangularStoreWithClock(store persistence.Store, logger *zap.SugaredLogger, c clock.Clock) *TriangularStore {
+func NewTriangularStoreWithClock(store persistence.Store, logger deps.FSMLogger, c clock.Clock) *TriangularStore {
 	if c == nil {
 		c = clock.New()
 	}
+
 
 	return &TriangularStore{
 		store:            store,
@@ -1236,9 +1237,11 @@ func (ts *TriangularStore) GetDeltas(ctx context.Context, sub Subscription) (Del
 	if ts.deltaStore != nil {
 		entries, err := ts.deltaStore.GetAllSince(ctx, sub.LastSyncID, deltaLimit)
 		if err != nil {
-			ts.logger.Warnw("delta_query_fallback_to_bootstrap",
-				"error", err,
-				"lastSyncID", sub.LastSyncID)
+			ts.logger.SentryWarn(deps.FeatureCSE, "", "delta_query_fallback_to_bootstrap",
+				deps.Err(err),
+				deps.Int64("lastSyncID", sub.LastSyncID),
+				deps.Int64("currentSyncID", currentSyncID),
+				deps.Int64("syncLag", currentSyncID-sub.LastSyncID))
 		} else if len(entries) > 0 {
 			deltas := make([]Delta, 0, len(entries))
 			for _, entry := range entries {
@@ -1427,9 +1430,9 @@ func (ts *TriangularStore) CompactDeltas(ctx context.Context, retentionWindow ti
 	}
 
 	if deleted > 0 {
-		ts.logger.Infow("compaction_complete",
-			"deleted", deleted,
-			"retention_window", retentionWindow)
+		ts.logger.Info("compaction_complete",
+			deps.Field{Key: "deleted", Value: deleted},
+			deps.Field{Key: "retention_window", Value: retentionWindow})
 	}
 
 	return deleted, nil
@@ -1482,8 +1485,8 @@ func (ts *TriangularStore) Maintenance(_ context.Context) error {
 	ts.cacheMutex.Unlock()
 
 	if cacheSize > 0 {
-		ts.logger.Infow("maintenance_complete",
-			"cleared_cache_entries", cacheSize)
+		ts.logger.Info("maintenance_complete",
+			deps.Field{Key: "cleared_cache_entries", Value: cacheSize})
 	}
 
 	return nil

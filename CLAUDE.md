@@ -122,7 +122,7 @@ The United Manufacturing Hub (UMH) is an Industrial IoT platform for manufacturi
 1. **Do NOT add comments unless explicitly requested**
 2. **Prefer editing existing files over creating new ones**
 3. **Follow existing patterns in the codebase**
-4. **Struct field alignment**: Order fields by decreasing size
+4. **Struct field alignment**: Run `make betteralign-fix` (automated tool orders fields by decreasing size)
 5. **Error handling**: Return errors up the stack, handle in reconciliation loop
 6. **No direct FSM state changes**: Always go through reconciliation
 

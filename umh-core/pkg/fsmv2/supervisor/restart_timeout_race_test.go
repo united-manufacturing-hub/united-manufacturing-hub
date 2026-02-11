@@ -21,7 +21,6 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"go.uber.org/zap"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
@@ -44,7 +43,7 @@ var _ = Describe("Restart Timeout Race Conditions", func() {
 		s = supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 			WorkerType: "test",
 			Store:      triangularStore,
-			Logger:     zap.NewNop().Sugar(),
+			Logger:     deps.NewNopFSMLogger(),
 		})
 
 		// Add a worker so checkRestartTimeouts can access workerCtx

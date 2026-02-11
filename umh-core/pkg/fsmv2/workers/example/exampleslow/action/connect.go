@@ -18,6 +18,7 @@ import (
 	"context"
 	"time"
 
+	depspkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleslow/snapshot"
 )
 
@@ -31,14 +32,16 @@ func (a *ConnectAction) Execute(ctx context.Context, depsAny any) error {
 	logger := deps.GetLogger()
 	delaySeconds := deps.GetDelaySeconds()
 
-	logger.Infow("connect_attempting", "delay_seconds", delaySeconds)
+	logger.Info("connect_attempting", depspkg.Int("delay_seconds", delaySeconds))
 
 	if delaySeconds > 0 {
 		select {
 		case <-time.After(time.Duration(delaySeconds) * time.Second):
 			logger.Info("Connect delay completed successfully")
 		case <-ctx.Done():
-			logger.Warn("Connect action cancelled during delay")
+			logger.SentryWarn(depspkg.FeatureExamples, deps.GetHierarchyPath(), "connect_cancelled_during_delay",
+				depspkg.String("reason", "context_done"),
+				depspkg.Int("delay_seconds", delaySeconds))
 
 			return ctx.Err()
 		}

@@ -19,7 +19,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"go.uber.org/zap"
+	
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
@@ -28,13 +28,13 @@ import (
 
 var _ = Describe("ChildWorker", func() {
 	var (
-		logger   *zap.SugaredLogger
+		logger   deps.FSMLogger
 		mockPool *MockConnectionPool
 		identity deps.Identity
 	)
 
 	BeforeEach(func() {
-		logger = zap.NewNop().Sugar()
+		logger = deps.NewNopFSMLogger()
 		mockPool = NewMockConnectionPool()
 		identity = deps.Identity{ID: "test-id", Name: "test-child"}
 	})

@@ -220,7 +220,7 @@ package examples
 // Tests can capture log output for assertions:
 //
 //	type LogCapture struct {
-//	    *zap.SugaredLogger
+//	    deps.FSMLogger
 //	    entries []string
 //	}
 //
