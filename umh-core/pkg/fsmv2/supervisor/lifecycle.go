@@ -105,7 +105,7 @@ func (s *Supervisor[TObserved, TDesired]) StartAsChild(ctx context.Context) {
 }
 
 // tickLoop is the main FSM loop.
-// Calls Tick() which includes hierarchical composition (Phase 0) and worker state transitions.
+// Calls tick() which includes hierarchical composition (Phase 0) and worker state transitions.
 func (s *Supervisor[TObserved, TDesired]) tickLoop(ctx context.Context) {
 	s.logger.Debug("tick_loop_initializing")
 
@@ -653,6 +653,8 @@ func (s *Supervisor[TObserved, TDesired]) clearShutdownRequested(ctx context.Con
 		sr.SetShutdownRequested(false)
 	} else if sr, ok := any(&desired).(fsmv2.ShutdownRequestable); ok {
 		sr.SetShutdownRequested(false)
+	} else {
+		return fmt.Errorf("desired state type %T does not implement ShutdownRequestable", desired)
 	}
 
 	// Save back - need to convert to Document
