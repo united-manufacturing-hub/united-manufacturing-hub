@@ -40,11 +40,14 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR/.."
 
+: "${AUTH_TOKEN:?Set AUTH_TOKEN to your instance auth token}"
+: "${UMH_CORE_IMAGE:?Set UMH_CORE_IMAGE to the umh-core container image}"
+
 echo "=== Scenario 3: Mid-Stream Kills ==="
 echo "Lognormal delay: mu=8.5 sigma=1.2, 30% mid-stream kill"
 echo ""
 
 docker compose build --quiet chaos-proxy
 
-CHAOS_PROXY_FLAGS="--drop-every=0 --long-poll --long-poll-mu=8.5 --long-poll-sigma=1.2 --long-poll-kill-pct=30" \
+CHAOS_PROXY_FLAGS="--drop-every=0 --long-poll --long-poll-mu=8.5 --long-poll-sigma=1.2 --long-poll-cap=31000 --long-poll-kill-pct=30" \
   docker compose up

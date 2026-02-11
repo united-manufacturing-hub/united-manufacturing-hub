@@ -44,6 +44,9 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR/.."
 
+: "${AUTH_TOKEN:?Set AUTH_TOKEN to your instance auth token}"
+: "${UMH_CORE_IMAGE:?Set UMH_CORE_IMAGE to the umh-core container image}"
+
 echo "=== Scenario 5b: Push-Only Delays (path-based) ==="
 echo "Lognormal delay on /v2/instance/push: mu=10.0 sigma=0.3 cap=31000ms, 20% kill"
 echo ""

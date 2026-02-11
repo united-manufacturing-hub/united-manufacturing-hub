@@ -39,8 +39,13 @@ services:
       context: .
       dockerfile: Dockerfile
     ports:
-      - "8090:8090"
+      - "127.0.0.1:8090:8090"
     command: ${CHAOS_PROXY_FLAGS:---drop-every=3}
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8090/"]
+      interval: 2s
+      timeout: 2s
+      retries: 5
     networks:
       - chaos-net
 
@@ -53,8 +58,11 @@ services:
       - LOCATION_0=${LOCATION_0:-CHAOSTEST}
       - USE_FSMV2_TRANSPORT=true
       - LOGGING_LEVEL=DEBUG
+    ports:
+      - "127.0.0.1:2112:2112"
     depends_on:
-      - chaos-proxy
+      chaos-proxy:
+        condition: service_healthy
     networks:
       - chaos-net
 
