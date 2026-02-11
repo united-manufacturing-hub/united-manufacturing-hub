@@ -29,7 +29,7 @@ func (s *ShuttingDownState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := helpers.ConvertSnapshot[snapshot.PersistenceObservedState, *snapshot.PersistenceDesiredState](snapAny)
 
 	for _, result := range snap.Observed.LastActionResults {
-		if result.Success {
+		if result.ActionType == action.NewRunMaintenanceAction().Name() && result.Success {
 			return fsmv2.Result[any, any](&StoppedState{}, fsmv2.SignalNone, nil, "Shutdown maintenance completed")
 		}
 	}
