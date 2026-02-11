@@ -63,13 +63,11 @@ BETTERALIGN_VERSION = v0.7.1
 DLV_VERSION = v1.25.1
 
 # Default values for build arguments
-GOLANG_VERSION = 1.25.3
-ALPINE_VERSION = 3.22.2
 NMAP_VERSION = 7.97-r0
 S6_OVERLAY_VERSION = 3.2.0.2
 REDPANDA_VERSION = 24.3.18
 ## Benthos version is a tag or a sha-<commit hash> (e.g. 0.9.4 or sha-a51a685) to be used in the docker image
-BENTHOS_UMH_VERSION = 0.11.16
+BENTHOS_UMH_VERSION = 0.11.17
 BUF_VERSION = 1.55.1
 PROTOC_GEN_GO_VERSION = 1.36.6
 
@@ -184,8 +182,6 @@ download-docker-binaries:
 # ============== SHARED BUILD ARGS (single source of truth) ==============
 # Used by both local builds (make build) and CI builds (make build-depot)
 VERSION_ARGS = \
-	--build-arg GOLANG_VERSION=$(GOLANG_VERSION) \
-	--build-arg ALPINE_VERSION=$(ALPINE_VERSION) \
 	--build-arg NMAP_VERSION=$(NMAP_VERSION) \
 	--build-arg S6_OVERLAY_VERSION=$(S6_OVERLAY_VERSION) \
 	--build-arg BENTHOS_UMH_VERSION=$(BENTHOS_UMH_VERSION) \
@@ -218,6 +214,15 @@ define DEPOT_BUILD
 		--progress=plain -f Dockerfile \
 		$(TAGS) .
 endef
+
+# Check for CI, add junit report if in CI
+ifeq ($(CI), true)
+    UNIT_REPORT_FLAG := --junit-report=unit-test-report.xml
+    INTEGRATION_REPORT_FLAG := --junit-report=integration-test-report.xml -ldflags="-X 'github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/version.AppVersion=$(VERSION)'"
+else
+    UNIT_REPORT_FLAG :=
+    INTEGRATION_REPORT_FLAG := 
+endif
 
 build:
 build-pprof:       EXTRA_ARGS := --build-arg PPROF=true
@@ -306,7 +311,7 @@ test: vet-nilaway-lint-betteralign
 	go test -race -v -tags=test ./...
 
 unit-test: vet-nilaway-lint-betteralign
-	go run github.com/onsi/ginkgo/v2/ginkgo -r --tags=test --race --label-filter='!integration && !redpanda-extended && !tls' --fail-fast ./...
+	go run github.com/onsi/ginkgo/v2/ginkgo -r --tags=test --race --label-filter='!integration && !redpanda-extended && !tls' --fail-fast $(UNIT_REPORT_FLAG) ./...
 
 unit-test-fail-slow: vet-nilaway-lint-betteralign
 	go run github.com/onsi/ginkgo/v2/ginkgo -r --tags=test --race --label-filter='!integration && !redpanda-extended && !tls' ./...
@@ -345,29 +350,21 @@ benchmark-encoding:
 	@echo "Running encoding benchmarks..."
 	cd pkg/communicator/pkg/encoding && go test -bench=. -benchmem -benchtime=10s -count=1
 
-integration-test: stop-all-pods vet-nilaway-lint-betteralign
-
 # Meta target to setup the environment for the tests
 pre-test: build-protobuf stop-all-pods vet-nilaway-lint-betteralign
 
-# Meta target to setup the environment for the tests in CI environments
-pre-test-ci: vet-nilaway-lint-betteralign
-
+# - Injects VERSION via ldflags into AppVersion for proper error identification in Sentry
+# - CI test failures SHOULD be reported to Sentry (unlike local dev failures)
+# - Helps identify flaky tests by consistently tracking failures in CI pipelines
+# - Outputs JUnit report for PR test result reporting
 integration-test: pre-test
-	go run github.com/onsi/ginkgo/v2/ginkgo -r --tags=test --label-filter='integration' --fail-fast ./...
+	VERSION=$(VERSION) go run github.com/onsi/ginkgo/v2/ginkgo -r --tags=test --label-filter='integration' --fail-fast $(INTEGRATION_REPORT_FLAG) ./...
 
 redpanda-extended-test: pre-test
 	go run github.com/onsi/ginkgo/v2/ginkgo -r --tags=test --label-filter='redpanda-extended' --fail-fast --timeout=1.5h ./...
 
 badssl-test: pre-test
 	go run github.com/onsi/ginkgo/v2/ginkgo -r --tags=test --label-filter='tls' --fail-fast ./...
-
-# integration-test-ci: Runs integration tests in CI environments with proper version tagging
-# - Injects VERSION via ldflags into AppVersion for proper error identification in Sentry
-# - CI test failures SHOULD be reported to Sentry (unlike local dev failures)
-# - Helps identify flaky tests by consistently tracking failures in CI pipelines
-integration-test-ci: pre-test-ci
-	VERSION=$(VERSION) go run github.com/onsi/ginkgo/v2/ginkgo -r --tags=test --label-filter='integration' --fail-fast -ldflags="-X 'github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/version.AppVersion=$(VERSION)'" ./...
 
 update-go-dependencies:
 	go get -u ./...
@@ -376,18 +373,11 @@ update-go-dependencies:
 
 # Print version variables for use in other scripts/tools
 print-versions:
-	@echo "GOLANG_VERSION=$(GOLANG_VERSION)"
-	@echo "ALPINE_VERSION=$(ALPINE_VERSION)"
 	@echo "NMAP_VERSION=$(NMAP_VERSION)"
 	@echo "S6_OVERLAY_VERSION=$(S6_OVERLAY_VERSION)"
 	@echo "BENTHOS_UMH_VERSION=$(BENTHOS_UMH_VERSION)"
 	@echo "REDPANDA_VERSION=$(REDPANDA_VERSION)"
 	@echo "DLV_VERSION=$(DLV_VERSION)"
-
-# Print the Go version
-## Used by go-analysis.yml
-print-golang-version:
-	@echo "$(GOLANG_VERSION)"
 
 ## Install buf for protobuf generation
 install-buf:

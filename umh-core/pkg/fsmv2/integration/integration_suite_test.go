@@ -16,7 +16,9 @@ package integration_test
 
 import (
 	"testing"
+	"time"
 
+	"github.com/getsentry/sentry-go"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
@@ -25,3 +27,8 @@ func TestIntegration(t *testing.T) {
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "Phase 0.5 Integration Suite")
 }
+
+var _ = AfterSuite(func() {
+	// Flush Sentry events before test suite exits
+	sentry.Flush(5 * time.Second)
+})

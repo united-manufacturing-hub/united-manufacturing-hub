@@ -18,8 +18,6 @@ import (
 	"sync"
 	"time"
 
-	"go.uber.org/zap"
-
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/persistence/snapshot"
@@ -42,7 +40,7 @@ var _ snapshot.PersistenceDependencies = (*PersistenceDependencies)(nil)
 func NewPersistenceDependencies(
 	store storage.TriangularStoreInterface,
 	scheduler deps.Scheduler,
-	logger *zap.SugaredLogger,
+	logger deps.FSMLogger,
 	stateReader deps.StateReader,
 	identity deps.Identity,
 ) *PersistenceDependencies {

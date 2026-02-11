@@ -73,7 +73,6 @@ import (
 	"fmt"
 	"time"
 
-	"go.uber.org/zap"
 	"gopkg.in/yaml.v3"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
@@ -99,7 +98,7 @@ func NewCommunicatorWorker(
 	id string,
 	name string,
 	transportParam transport.Transport,
-	logger *zap.SugaredLogger,
+	logger depspkg.FSMLogger,
 	stateReader depspkg.StateReader,
 ) (*CommunicatorWorker, error) {
 	workerType, err := storage.DeriveWorkerType[snapshot.CommunicatorObservedState]()
@@ -260,7 +259,7 @@ func (w *CommunicatorWorker) GetInitialState() fsmv2.State[any, any] {
 
 func init() {
 	if err := factory.RegisterWorkerType[snapshot.CommunicatorObservedState, *snapshot.CommunicatorDesiredState](
-		func(id depspkg.Identity, logger *zap.SugaredLogger, stateReader depspkg.StateReader, _ map[string]any) fsmv2.Worker {
+		func(id depspkg.Identity, logger depspkg.FSMLogger, stateReader depspkg.StateReader, _ map[string]any) fsmv2.Worker {
 			// ChannelProvider must be set via global singleton before factory is called (will panic if not set).
 			// Transport is created lazily by AuthenticateAction.
 			commDeps := NewCommunicatorDependencies(nil, logger, stateReader, id)

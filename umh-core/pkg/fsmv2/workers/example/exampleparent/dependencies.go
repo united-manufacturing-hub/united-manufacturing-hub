@@ -17,7 +17,6 @@ package exampleparent
 import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent/dependency"
-	"go.uber.org/zap"
 )
 
 // ParentDependencies provides access to tools needed by parent worker actions.
@@ -27,7 +26,7 @@ type ParentDependencies struct {
 }
 
 // NewParentDependencies creates new dependencies for the parent worker.
-func NewParentDependencies(logger *zap.SugaredLogger, stateReader deps.StateReader, identity deps.Identity) *ParentDependencies {
+func NewParentDependencies(logger deps.FSMLogger, stateReader deps.StateReader, identity deps.Identity) *ParentDependencies {
 	return &ParentDependencies{
 		BaseDependencies: deps.NewBaseDependencies(logger, stateReader, identity),
 		stateTracker:     dependency.NewDefaultStateTracker(nil), // Uses real clock

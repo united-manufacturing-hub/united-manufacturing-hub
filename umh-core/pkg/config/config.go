@@ -103,20 +103,6 @@ type AgentConfig struct {
 	UseFSMv2MemoryCleanup     bool `yaml:"useFSMv2MemoryCleanup,omitempty"`     // Enable PersistenceWorker for delta compaction
 }
 
-// ValidateFSMv2Flags validates FSMv2 feature flags and auto-enables EnableFSMv2
-// if any component flag is set. Returns true if EnableFSMv2 was auto-enabled.
-func (c *AgentConfig) ValidateFSMv2Flags() (autoEnabled bool) {
-	hasComponentFlag := c.UseFSMv2Transport || c.UseFSMv2ProtocolConverter || c.UseFSMv2MemoryCleanup
-
-	if hasComponentFlag && !c.EnableFSMv2 {
-		c.EnableFSMv2 = true
-
-		return true
-	}
-
-	return false
-}
-
 type CommunicatorConfig struct {
 	APIURL            string `yaml:"apiUrl,omitempty"`
 	AuthToken         string `yaml:"authToken,omitempty"`

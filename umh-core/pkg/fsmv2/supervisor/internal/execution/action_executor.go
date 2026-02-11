@@ -22,8 +22,6 @@ import (
 	"sync"
 	"time"
 
-	"go.uber.org/zap"
-
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/metrics"
@@ -36,7 +34,7 @@ type ActionExecutor struct {
 	cancel           context.CancelFunc
 	timeouts         map[string]time.Duration
 	metricsCancel    context.CancelFunc
-	logger           *zap.SugaredLogger
+	logger           deps.FSMLogger
 	onActionComplete func(result deps.ActionResult)
 	identity         deps.Identity
 	supervisorID     string
@@ -56,7 +54,7 @@ type actionWork struct {
 	timeout  time.Duration
 }
 
-func NewActionExecutor(workerCount int, supervisorID string, identity deps.Identity, logger *zap.SugaredLogger) *ActionExecutor {
+func NewActionExecutor(workerCount int, supervisorID string, identity deps.Identity, logger deps.FSMLogger) *ActionExecutor {
 	if workerCount <= 0 {
 		workerCount = 10
 	}
@@ -73,7 +71,7 @@ func NewActionExecutor(workerCount int, supervisorID string, identity deps.Ident
 	}
 }
 
-func NewActionExecutorWithTimeout(workerCount int, timeouts map[string]time.Duration, supervisorID string, identity deps.Identity, logger *zap.SugaredLogger) *ActionExecutor {
+func NewActionExecutorWithTimeout(workerCount int, timeouts map[string]time.Duration, supervisorID string, identity deps.Identity, logger deps.FSMLogger) *ActionExecutor {
 	if workerCount <= 0 {
 		workerCount = 10
 	}
@@ -97,6 +95,7 @@ func (ae *ActionExecutor) Start(ctx context.Context) {
 	for range ae.workerCount {
 		ae.wg.Add(1)
 	}
+
 	ae.mu.Unlock()
 
 	// Start workers - they're already counted in the WaitGroup
@@ -154,12 +153,13 @@ func (ae *ActionExecutor) executeWorkWithRecovery(ctx context.Context, work acti
 			err = errors.New("action panicked")
 			status = "panic"
 
-			ae.logger.Errorw("action_panic",
-				"hierarchy_path", ae.identity.HierarchyPath,
-				"correlation_id", work.actionID,
-				"action_name", work.action.Name(),
-				"panic", fmt.Sprintf("%v", r),
-				"stack", string(debug.Stack()))
+			ae.logger.SentryError(deps.FeatureFSMv2, ae.identity.HierarchyPath, err, "action_panic",
+				deps.CorrelationID(work.actionID),
+				deps.ActionName(work.action.Name()),
+				deps.Int64("timeout_ms", work.timeout.Milliseconds()),
+				deps.String("deps_type", fmt.Sprintf("%T", work.deps)),
+				deps.String("panic", fmt.Sprintf("%v", r)),
+				deps.String("stack", string(debug.Stack())))
 		}
 
 		ae.mu.Lock()
@@ -207,45 +207,42 @@ func (ae *ActionExecutor) executeWorkWithRecovery(ctx context.Context, work acti
 		if errors.Is(err, context.DeadlineExceeded) {
 			metrics.RecordActionTimeout(ae.identity.HierarchyPath, work.action.Name())
 
-			ae.logger.Errorw("action_failed",
-				"hierarchy_path", ae.identity.HierarchyPath,
-				"correlation_id", work.actionID,
-				"action_name", work.action.Name(),
-				"error", "timeout",
-				"duration_ms", duration.Milliseconds(),
-				"timeout_ms", work.timeout.Milliseconds())
+			ae.logger.SentryError(deps.FeatureFSMv2, ae.identity.HierarchyPath, err, "action_failed",
+				deps.CorrelationID(work.actionID),
+				deps.ActionName(work.action.Name()),
+				deps.DurationMs(duration.Milliseconds()),
+				deps.Int64("timeout_ms", work.timeout.Milliseconds()))
 		} else {
-			ae.logger.Errorw("action_failed",
-				"hierarchy_path", ae.identity.HierarchyPath,
-				"correlation_id", work.actionID,
-				"action_name", work.action.Name(),
-				"error", err.Error(),
-				"duration_ms", duration.Milliseconds())
+			ae.logger.SentryError(deps.FeatureFSMv2, ae.identity.HierarchyPath, err, "action_failed",
+				deps.CorrelationID(work.actionID),
+				deps.ActionName(work.action.Name()),
+				deps.DurationMs(duration.Milliseconds()))
 		}
 	} else {
-		// Success logs at DEBUG - operators only need failures, not routine success
-		ae.logger.Debugw("action_completed",
-			"hierarchy_path", ae.identity.HierarchyPath,
-			"correlation_id", work.actionID,
-			"action_name", work.action.Name(),
-			"duration_ms", duration.Milliseconds())
+		ae.logger.Debug("action_completed",
+			deps.HierarchyPath(ae.identity.HierarchyPath),
+			deps.CorrelationID(work.actionID),
+			deps.ActionName(work.action.Name()),
+			deps.DurationMs(duration.Milliseconds()))
 	}
 }
 
 // EnqueueAction adds an action to the execution queue without blocking.
 // Returns error if action is already in progress, queue is full, or executor is stopped.
-func (ae *ActionExecutor) EnqueueAction(actionID string, action fsmv2.Action[any], deps any) error {
+func (ae *ActionExecutor) EnqueueAction(actionID string, action fsmv2.Action[any], workerDeps any) error {
 	ae.mu.Lock()
 
 	// Check if executor is stopped to prevent sending on closed channel
 	if ae.stopped {
+		inProgressCount := len(ae.inProgress)
 		ae.mu.Unlock()
 
-		ae.logger.Warnw("action_enqueue_rejected",
-			"hierarchy_path", ae.identity.HierarchyPath,
-			"correlation_id", actionID,
-			"action_name", action.Name(),
-			"reason", "executor_stopped")
+		ae.logger.SentryWarn(deps.FeatureFSMv2, ae.identity.HierarchyPath, "action_enqueue_rejected",
+			deps.CorrelationID(actionID),
+			deps.ActionName(action.Name()),
+			deps.Reason("executor_stopped"),
+			deps.Capacity(cap(ae.actionQueue)),
+			deps.Int("in_progress_count", inProgressCount))
 
 		return errors.New("executor stopped")
 	}
@@ -253,11 +250,10 @@ func (ae *ActionExecutor) EnqueueAction(actionID string, action fsmv2.Action[any
 	if ae.inProgress[actionID] {
 		ae.mu.Unlock()
 
-		ae.logger.Warnw("action_enqueue_rejected",
-			"hierarchy_path", ae.identity.HierarchyPath,
-			"correlation_id", actionID,
-			"action_name", action.Name(),
-			"reason", "already_in_progress")
+		ae.logger.SentryWarn(deps.FeatureFSMv2, ae.identity.HierarchyPath, "action_enqueue_rejected",
+			deps.CorrelationID(actionID),
+			deps.ActionName(action.Name()),
+			deps.Reason("already_in_progress"))
 
 		return errors.New("action already in progress")
 	}
@@ -269,13 +265,14 @@ func (ae *ActionExecutor) EnqueueAction(actionID string, action fsmv2.Action[any
 	if !exists {
 		timeout = ae.defaultTimeout
 	}
+
 	ae.mu.Unlock()
 
 	work := actionWork{
 		actionID: actionID,
 		action:   action,
 		timeout:  timeout,
-		deps:     deps,
+		deps:     workerDeps,
 	}
 
 	select {
@@ -286,16 +283,19 @@ func (ae *ActionExecutor) EnqueueAction(actionID string, action fsmv2.Action[any
 	default:
 		ae.mu.Lock()
 		delete(ae.inProgress, actionID)
+		inProgressCount := len(ae.inProgress)
 		ae.mu.Unlock()
 
-		ae.logger.Errorw("action_queue_full",
-			"hierarchy_path", ae.identity.HierarchyPath,
-			"correlation_id", actionID,
-			"action_name", action.Name(),
-			"queue_capacity", cap(ae.actionQueue),
-			"worker_count", ae.workerCount)
+		queueErr := errors.New("action queue full")
+		ae.logger.SentryError(deps.FeatureFSMv2, ae.identity.HierarchyPath, queueErr, "action_queue_full",
+			deps.CorrelationID(actionID),
+			deps.ActionName(action.Name()),
+			deps.Capacity(cap(ae.actionQueue)),
+			deps.Length(len(ae.actionQueue)),
+			deps.Int("in_progress_count", inProgressCount),
+			deps.Int("worker_count", ae.workerCount))
 
-		return errors.New("action queue full")
+		return queueErr
 	}
 }
 
@@ -339,9 +339,9 @@ func (ae *ActionExecutor) GetActiveActionCount() int {
 	return len(ae.inProgress)
 }
 
-// SetOnActionComplete sets a callback invoked after each action execution.
-// Should be called during executor setup, before Start().
-// Thread-safe: can be called concurrently with action execution.
+// SetOnActionComplete sets a callback that runs after each action execution.
+// Call this during executor setup, before Start().
+// Thread-safe: runs concurrently with action execution.
 func (ae *ActionExecutor) SetOnActionComplete(fn func(deps.ActionResult)) {
 	ae.mu.Lock()
 	ae.onActionComplete = fn

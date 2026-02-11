@@ -19,7 +19,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"go.uber.org/zap"
+	
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator"
@@ -30,12 +30,12 @@ var _ = Describe("ResetTransportAction", func() {
 	var (
 		act          *action.ResetTransportAction
 		dependencies *communicator.CommunicatorDependencies
-		logger       *zap.SugaredLogger
+		logger       deps.FSMLogger
 		mockTransp   *mockResettableTransport
 	)
 
 	BeforeEach(func() {
-		logger = zap.NewNop().Sugar()
+		logger = deps.NewNopFSMLogger()
 		mockTransp = &mockResettableTransport{}
 		identity := deps.Identity{ID: "test-id", WorkerType: "communicator"}
 		dependencies = communicator.NewCommunicatorDependencies(mockTransp, logger, nil, identity)

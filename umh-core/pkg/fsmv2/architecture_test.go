@@ -499,6 +499,17 @@ var _ = Describe("FSMv2 Architecture Validation", func() {
 			})
 		})
 
+		Describe("Spec Usage in DeriveDesiredState (Invariant: Spec Fields Must Be Used)", func() {
+			It("should not discard spec type assertion results", func() {
+				violations := validator.ValidateSpecUsage(getFsmv2Dir())
+				if len(violations) > 0 {
+					message := validator.FormatViolationsWithPattern(
+						"Spec Result Discarded Violations", violations, "SPEC_RESULT_DISCARDED")
+					Fail(message)
+				}
+			})
+		})
+
 		Describe("No Observed State Mutation (Invariant: Pure Functions)", func() {
 			It("should not mutate snap.Observed.* fields in Next() methods", func() {
 				violations := validator.ValidateNoObservedStateMutation(getFsmv2Dir())

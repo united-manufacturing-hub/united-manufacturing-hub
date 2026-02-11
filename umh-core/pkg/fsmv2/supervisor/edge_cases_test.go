@@ -26,7 +26,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
-	"go.uber.org/zap"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 )
 
 var _ = Describe("Edge Cases", func() {
@@ -69,7 +69,7 @@ var _ = Describe("Edge Cases", func() {
 				s := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 					WorkerType: "container",
 					Store:      mockStore,
-					Logger:     zap.NewNop().Sugar(),
+					Logger:     deps.NewNopFSMLogger(),
 					CollectorHealth: supervisor.CollectorHealthConfig{
 						StaleThreshold: 10 * time.Second,
 						Timeout:        20 * time.Second,
@@ -95,7 +95,7 @@ var _ = Describe("Edge Cases", func() {
 				s := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 					WorkerType: "container",
 					Store:      mockStore,
-					Logger:     zap.NewNop().Sugar(),
+					Logger:     deps.NewNopFSMLogger(),
 					CollectorHealth: supervisor.CollectorHealthConfig{
 						StaleThreshold: 10 * time.Second,
 						Timeout:        20 * time.Second,
@@ -250,7 +250,7 @@ var _ = Describe("Edge Cases", func() {
 				s := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 					WorkerType: "container",
 					Store:      mockStore,
-					Logger:     zap.NewNop().Sugar(),
+					Logger:     deps.NewNopFSMLogger(),
 					CollectorHealth: supervisor.CollectorHealthConfig{
 						StaleThreshold:     10 * time.Second,
 						Timeout:            20 * time.Second,
@@ -302,7 +302,7 @@ var _ = Describe("Edge Cases", func() {
 				s := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 					WorkerType: "container",
 					Store:      mockStore,
-					Logger:     zap.NewNop().Sugar(),
+					Logger:     deps.NewNopFSMLogger(),
 					CollectorHealth: supervisor.CollectorHealthConfig{
 						StaleThreshold:     10 * time.Second,
 						Timeout:            20 * time.Second,
@@ -348,7 +348,7 @@ var _ = Describe("Edge Cases", func() {
 				s := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 					WorkerType:      "container",
 					Store:           mockStore,
-					Logger:          zap.NewNop().Sugar(),
+					Logger:          deps.NewNopFSMLogger(),
 					CollectorHealth: supervisor.CollectorHealthConfig{},
 				})
 
@@ -383,7 +383,7 @@ var _ = Describe("Edge Cases", func() {
 				s := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 					WorkerType:      "container",
 					Store:           mockStore,
-					Logger:          zap.NewNop().Sugar(),
+					Logger:          deps.NewNopFSMLogger(),
 					CollectorHealth: supervisor.CollectorHealthConfig{},
 				})
 
@@ -468,7 +468,7 @@ var _ = Describe("Edge Cases", func() {
 				s := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 					WorkerType: "container",
 					Store:      mockStore,
-					Logger:     zap.NewNop().Sugar(),
+					Logger:     deps.NewNopFSMLogger(),
 					CollectorHealth: supervisor.CollectorHealthConfig{
 						StaleThreshold: 10 * time.Second,
 						Timeout:        20 * time.Second,
@@ -510,7 +510,7 @@ var _ = Describe("Edge Cases", func() {
 				s := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 					WorkerType: "container",
 					Store:      mockStore,
-					Logger:     zap.NewNop().Sugar(),
+					Logger:     deps.NewNopFSMLogger(),
 					CollectorHealth: supervisor.CollectorHealthConfig{
 						StaleThreshold: 10 * time.Second,
 						Timeout:        20 * time.Second,
@@ -561,7 +561,7 @@ var _ = Describe("Edge Cases", func() {
 				s := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 					WorkerType: "container",
 					Store:      mockStore,
-					Logger:     zap.NewNop().Sugar(),
+					Logger:     deps.NewNopFSMLogger(),
 					CollectorHealth: supervisor.CollectorHealthConfig{
 						StaleThreshold:     10 * time.Second,
 						Timeout:            20 * time.Second,
@@ -660,7 +660,7 @@ var _ = Describe("Type Safety (Invariant I16)", func() {
 				s := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 					WorkerType: "container",
 					Store:      mockStore,
-					Logger:     zap.NewNop().Sugar(),
+					Logger:     deps.NewNopFSMLogger(),
 					CollectorHealth: supervisor.CollectorHealthConfig{
 						StaleThreshold: 10 * time.Second,
 						Timeout:        20 * time.Second,
@@ -719,7 +719,7 @@ var _ = Describe("Type Safety (Invariant I16)", func() {
 				s := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 					WorkerType: "container",
 					Store:      mockStore,
-					Logger:     zap.NewNop().Sugar(),
+					Logger:     deps.NewNopFSMLogger(),
 					CollectorHealth: supervisor.CollectorHealthConfig{
 						StaleThreshold: 10 * time.Second,
 						Timeout:        20 * time.Second,

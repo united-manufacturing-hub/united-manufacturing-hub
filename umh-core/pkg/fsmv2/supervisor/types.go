@@ -19,8 +19,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"go.uber.org/zap"
-
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
@@ -49,6 +47,10 @@ type CollectorHealth struct {
 // A parent Supervisor[TObserved, TDesired] can manage children of different types.
 type SupervisorInterface interface {
 	Start(ctx context.Context) <-chan struct{}
+	// StartAsChild starts the supervisor without a tick loop.
+	// The parent supervisor will call tick() synchronously during its own tick.
+	// Collectors and executors still run in goroutines (they handle async I/O).
+	StartAsChild(ctx context.Context)
 	Shutdown()
 	RequestShutdown(ctx context.Context, reason string) error
 	ListWorkers() []string
@@ -211,8 +213,8 @@ type Config struct {
 	Store storage.TriangularStoreInterface
 
 	// Logger for supervisor operations.
-	// Required - no default (use zap.NewNop().Sugar() for tests).
-	Logger *zap.SugaredLogger
+	// Required - no default (use deps.NewNopFSMLogger() for tests).
+	Logger deps.FSMLogger
 
 	// Dependencies is an optional map of named dependencies to inject into child workers.
 	// Worker factories can access these via the deps parameter to avoid global state.
