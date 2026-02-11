@@ -202,7 +202,8 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 
 			var desired TDesired
 			if err := s.store.LoadDesiredTyped(ctx, s.workerType, identity.ID, &desired); err != nil {
-				return false
+				s.logger.Warnw("shutdown_requested_load_failed", "error", err, "worker_type", s.workerType, "identity", identity.ID)
+				return true
 			}
 
 			return desired.IsShutdownRequested()
@@ -349,12 +350,21 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 
 	initialState := worker.GetInitialState()
 
+	// Initialize lastLifecyclePhase to avoid use-before-initialization where
+	// the collector reads this field before the first tick sets it.
+	// Without this, lastLifecyclePhase defaults to PhaseUnknown (zero value).
+	var initialPhase config.LifecyclePhase
+	if initialState != nil {
+		initialPhase = initialState.LifecyclePhase()
+	}
+
 	workerCtx = &WorkerContext[TObserved, TDesired]{
 		mu:                 s.lockManager.NewLock(lockNameWorkerContextMu, lockLevelWorkerContextMu),
 		identity:           identity,
 		worker:             worker,
 		currentState:       initialState,
 		currentStateReason: "initial",
+		lastLifecyclePhase: initialPhase,
 		collector:          collector,
 		executor:           executor,
 		actionHistory:      actionHistoryBuffer,
