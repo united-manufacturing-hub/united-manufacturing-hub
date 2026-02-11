@@ -43,7 +43,7 @@ var _ = Describe("CompactDeltasAction", func() {
 
 	Describe("Execute", func() {
 		Context("when compaction succeeds", func() {
-			It("should call CompactDeltas, set timestamp, and return nil", func() {
+			It("should call CompactDeltas, set timestamp, record metrics, and return nil", func() {
 				mockStore.compactDeltasResult = 42
 				a := action.NewCompactDeltasAction(24 * time.Hour)
 
@@ -56,6 +56,10 @@ var _ = Describe("CompactDeltasAction", func() {
 				drained := d.MetricsRecorder().Drain()
 				Expect(drained.Counters).To(HaveKeyWithValue(
 					string(deps.CounterCompactionDeltasDeletedTotal), int64(42)))
+				Expect(drained.Counters).To(HaveKeyWithValue(
+					string(deps.CounterCompactionCyclesTotal), int64(1)))
+				Expect(drained.Gauges).To(HaveKey(
+					string(deps.GaugeLastCompactionDurationMs)))
 			})
 		})
 
