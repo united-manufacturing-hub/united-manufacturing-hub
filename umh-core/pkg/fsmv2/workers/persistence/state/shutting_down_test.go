@@ -43,7 +43,7 @@ var _ = Describe("ShuttingDownState", func() {
 					Observed: snapshot.PersistenceObservedState{
 						CollectedAt: time.Now(),
 						LastActionResults: []deps.ActionResult{
-							{Success: true},
+							{ActionType: "RunMaintenance", Success: true},
 						},
 					},
 					Desired: &snapshot.PersistenceDesiredState{
@@ -96,7 +96,7 @@ var _ = Describe("ShuttingDownState", func() {
 					Observed: snapshot.PersistenceObservedState{
 						CollectedAt: time.Now(),
 						LastActionResults: []deps.ActionResult{
-							{Success: false},
+							{ActionType: "RunMaintenance", Success: false},
 						},
 					},
 					Desired: &snapshot.PersistenceDesiredState{
@@ -124,7 +124,7 @@ var _ = Describe("ShuttingDownState", func() {
 					Observed: snapshot.PersistenceObservedState{
 						CollectedAt: time.Now(),
 						LastActionResults: []deps.ActionResult{
-							{Success: false},
+							{ActionType: "RunMaintenance", Success: false},
 						},
 					},
 					Desired: &snapshot.PersistenceDesiredState{
