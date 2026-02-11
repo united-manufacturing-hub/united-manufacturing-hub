@@ -21,7 +21,6 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"go.uber.org/zap"
 
 	depspkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator"
@@ -88,7 +87,7 @@ func (m *MockTransport) PullReturnsOnCall(callIndex int, messages []*transport.U
 	m.pullResults[callIndex] = pullResult{messages: messages, err: err}
 }
 
-var testLogger = zap.NewNop().Sugar()
+var testLogger = depspkg.NewNopFSMLogger()
 
 var _ = Describe("SyncAction Error Handling", func() {
 	var (

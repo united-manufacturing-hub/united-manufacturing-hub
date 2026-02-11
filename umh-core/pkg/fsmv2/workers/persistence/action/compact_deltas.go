@@ -38,7 +38,10 @@ func (a *CompactDeltasAction) Execute(ctx context.Context, depsAny any) error {
 	default:
 	}
 
-	d := depsAny.(snapshot.PersistenceDependencies)
+	d, ok := depsAny.(snapshot.PersistenceDependencies)
+	if !ok {
+		return fmt.Errorf("unexpected deps type: %T", depsAny)
+	}
 
 	start := time.Now()
 
@@ -51,9 +54,9 @@ func (a *CompactDeltasAction) Execute(ctx context.Context, depsAny any) error {
 	duration := now.Sub(start)
 
 	d.SetLastCompactionAt(now)
-	d.ActionLogger("compact_deltas").Infow("compaction completed",
-		"deleted_count", deleted, "retention_window", a.RetentionWindow,
-		"duration_ms", duration.Milliseconds())
+	d.ActionLogger("compact_deltas").Info("compaction completed",
+		deps.Int("deleted_count", deleted), deps.Duration("retention_window", a.RetentionWindow),
+		deps.Int64("duration_ms", duration.Milliseconds()))
 	d.MetricsRecorder().IncrementCounter(deps.CounterCompactionDeltasDeletedTotal, int64(deleted))
 	d.MetricsRecorder().IncrementCounter(deps.CounterCompactionCyclesTotal, 1)
 	d.MetricsRecorder().SetGauge(deps.GaugeLastCompactionDurationMs, float64(duration.Milliseconds()))

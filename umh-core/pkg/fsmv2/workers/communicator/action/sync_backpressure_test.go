@@ -19,7 +19,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"go.uber.org/zap"
+	
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator"
@@ -31,7 +31,7 @@ var _ = Describe("SyncAction Backpressure", func() {
 	var (
 		act              *action.SyncAction
 		dependencies     *communicator.CommunicatorDependencies
-		logger           *zap.SugaredLogger
+		logger           deps.FSMLogger
 		mockTransport    *mockBackpressureTransport
 		channelProvider  *mockBackpressureChannelProvider
 		inboundChan      chan *transport.UMHMessage
@@ -42,7 +42,7 @@ var _ = Describe("SyncAction Backpressure", func() {
 		// Clear any existing provider from suite setup
 		communicator.ClearChannelProvider()
 
-		logger = zap.NewNop().Sugar()
+		logger = deps.NewNopFSMLogger()
 		mockTransport = &mockBackpressureTransport{}
 
 		// Create channels with capacity 100 for testing

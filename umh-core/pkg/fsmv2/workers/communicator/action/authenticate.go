@@ -137,19 +137,21 @@ func (a *AuthenticateAction) Execute(ctx context.Context, depsAny any) error {
 	deps.SetJWT(authResp.Token, time.Unix(authResp.ExpiresAt, 0))
 
 	logger := deps.GetLogger()
-	logger.Infow("authentication_response_received",
-		"instance_uuid", authResp.InstanceUUID,
-		"instance_name", authResp.InstanceName,
-		"has_token", authResp.Token != "",
+	logger.Info("authentication_response_received",
+		depspkg.String("instance_uuid", authResp.InstanceUUID),
+		depspkg.String("instance_name", authResp.InstanceName),
+		depspkg.Bool("has_token", authResp.Token != ""),
 	)
 
 	if authResp.InstanceUUID != "" {
-		logger.Infow("authenticated_uuid_stored",
-			"uuid", authResp.InstanceUUID,
+		logger.Info("authenticated_uuid_stored",
+			depspkg.String("uuid", authResp.InstanceUUID),
 		)
 		deps.SetAuthenticatedUUID(authResp.InstanceUUID)
 	} else {
-		logger.Warnw("instance_uuid_missing_in_auth_response")
+		logger.SentryWarn(depspkg.FeatureCommunicator, deps.GetHierarchyPath(), "instance_uuid_missing_in_auth_response",
+			depspkg.String("instance_name", authResp.InstanceName),
+			depspkg.Bool("has_token", authResp.Token != ""))
 	}
 
 	return nil

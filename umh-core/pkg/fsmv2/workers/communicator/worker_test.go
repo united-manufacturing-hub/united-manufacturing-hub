@@ -23,7 +23,6 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"go.uber.org/zap"
 
 	fsmv2types "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	depspkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
@@ -84,12 +83,12 @@ var _ = Describe("CommunicatorWorker", func() {
 		worker        *communicator.CommunicatorWorker
 		ctx           context.Context
 		mockTransport *MockTransport
-		logger        *zap.SugaredLogger
+		logger        depspkg.FSMLogger
 	)
 
 	BeforeEach(func() {
 		ctx = context.Background()
-		logger = zap.NewNop().Sugar()
+		logger = depspkg.NewNopFSMLogger()
 		mockTransport = NewMockTransport()
 
 		// Phase 1: Set up ChannelProvider singleton BEFORE creating worker

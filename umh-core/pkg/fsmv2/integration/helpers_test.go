@@ -23,9 +23,9 @@ import (
 	"time"
 
 	. "github.com/onsi/gomega"
-	"go.uber.org/zap"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application"
@@ -306,7 +306,7 @@ func (m *MockConnection) IsHealthy() bool {
 	return true
 }
 
-func NewTestApplicationSupervisor(yamlConfig string, logger *zap.SugaredLogger) (*supervisor.Supervisor[snapshot.ApplicationObservedState, *snapshot.ApplicationDesiredState], error) {
+func NewTestApplicationSupervisor(yamlConfig string, logger deps.FSMLogger) (*supervisor.Supervisor[snapshot.ApplicationObservedState, *snapshot.ApplicationDesiredState], error) {
 	ctx := context.Background()
 
 	basicStore := memory.NewInMemoryStore()

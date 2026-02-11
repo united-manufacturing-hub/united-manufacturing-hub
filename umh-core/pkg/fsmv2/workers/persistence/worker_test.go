@@ -20,8 +20,8 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"go.uber.org/zap"
 
+	fsmv2config "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/persistence"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/persistence/snapshot"
@@ -30,13 +30,13 @@ import (
 
 var _ = Describe("PersistenceWorker", func() {
 	var (
-		logger   *zap.SugaredLogger
+		logger   deps.FSMLogger
 		identity deps.Identity
 		store    *mockTriangularStore
 	)
 
 	BeforeEach(func() {
-		logger = zap.NewNop().Sugar()
+		logger = deps.NewNopFSMLogger()
 		identity = deps.Identity{ID: "test-id", Name: "test-persistence"}
 		store = &mockTriangularStore{}
 	})
@@ -182,6 +182,68 @@ var _ = Describe("PersistenceWorker", func() {
 
 			_, err = worker.DeriveDesiredState("invalid")
 			Expect(err).To(HaveOccurred())
+		})
+
+		It("should parse custom intervals from spec", func() {
+			worker, err := persistence.NewPersistenceWorker(identity, store, logger, nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			spec := fsmv2config.UserSpec{
+				Config: "compactionInterval: 10m\nretentionWindow: 48h\nmaintenanceInterval: 336h\n",
+			}
+
+			desired, err := worker.DeriveDesiredState(spec)
+			Expect(err).NotTo(HaveOccurred())
+
+			d := desired.(*snapshot.PersistenceDesiredState)
+			Expect(d.GetState()).To(Equal("running"))
+			Expect(d.CompactionInterval).To(Equal(10 * time.Minute))
+			Expect(d.RetentionWindow).To(Equal(48 * time.Hour))
+			Expect(d.MaintenanceInterval).To(Equal(336 * time.Hour))
+		})
+
+		It("should apply defaults for unspecified fields", func() {
+			worker, err := persistence.NewPersistenceWorker(identity, store, logger, nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			spec := fsmv2config.UserSpec{
+				Config: "compactionInterval: 15m\n",
+			}
+
+			desired, err := worker.DeriveDesiredState(spec)
+			Expect(err).NotTo(HaveOccurred())
+
+			d := desired.(*snapshot.PersistenceDesiredState)
+			Expect(d.CompactionInterval).To(Equal(15 * time.Minute))
+			Expect(d.RetentionWindow).To(Equal(persistence.DefaultRetentionWindow))
+			Expect(d.MaintenanceInterval).To(Equal(persistence.DefaultMaintenanceInterval))
+		})
+
+		It("should return defaults for empty Config string", func() {
+			worker, err := persistence.NewPersistenceWorker(identity, store, logger, nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			spec := fsmv2config.UserSpec{Config: ""}
+
+			desired, err := worker.DeriveDesiredState(spec)
+			Expect(err).NotTo(HaveOccurred())
+
+			d := desired.(*snapshot.PersistenceDesiredState)
+			Expect(d.GetState()).To(Equal("running"))
+			Expect(d.CompactionInterval).To(Equal(persistence.DefaultCompactionInterval))
+			Expect(d.RetentionWindow).To(Equal(persistence.DefaultRetentionWindow))
+			Expect(d.MaintenanceInterval).To(Equal(persistence.DefaultMaintenanceInterval))
+		})
+
+		It("should return error for invalid YAML", func() {
+			worker, err := persistence.NewPersistenceWorker(identity, store, logger, nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			spec := fsmv2config.UserSpec{Config: "{{invalid yaml"}
+
+			_, err = worker.DeriveDesiredState(spec)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("failed to parse persistence config"))
 		})
 	})
 

@@ -39,7 +39,9 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/redpanda"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/streamprocessor"
 	topicbrowserfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/topicbrowser"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/examples"
+	fsmv2sentry "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/sentry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/snapshot"
@@ -469,7 +471,7 @@ children:
 	}
 
 	// Setup store (in-memory for now)
-	store := examples.SetupStore(logger)
+	store := examples.SetupStore(deps.NewFSMLogger(logger))
 
 	// Create callback to update LoginResponse with real UUID from backend (Bug #6 fix)
 	// This is called by AuthenticateAction after successful authentication
@@ -483,9 +485,15 @@ children:
 	// This avoids global state and enables proper testing
 	// Use Named("fsmv2") to create [fsmv2] prefix in logs for easy filtering
 	fsmv2Logger := logger.Named("fsmv2")
-	// Wrap with SentryHook for automatic FSMv2 error capture to Sentry
+	// Wrap with FSMv2 SentryHook for automatic error capture to Sentry with:
+	// - Per-fingerprint debouncing (5 min window)
+	// - Error chain extraction for stable fingerprinting
+	// - Feature-based routing for error ownership
 	// This only affects FSMv2 logs, not the rest of the application
-	fsmv2Core := sentry.NewSentryHook(fsmv2Logger.Desugar().Core())
+	fsmv2Hook := fsmv2sentry.NewSentryHook(5 * time.Minute)
+	defer fsmv2Hook.Stop()
+
+	fsmv2Core := fsmv2Hook.Wrap(fsmv2Logger.Desugar().Core())
 	fsmv2Logger = zap.New(fsmv2Core).Sugar()
 
 	fsmv2Deps := map[string]any{
@@ -500,7 +508,7 @@ children:
 		ID:           "application-fsmv2",
 		Name:         "Application FSMv2",
 		Store:        store,
-		Logger:       fsmv2Logger,
+		Logger:       deps.NewFSMLogger(fsmv2Logger),
 		TickInterval: 100 * time.Millisecond,
 		YAMLConfig:   yamlConfig,
 		Dependencies: fsmv2Deps,

@@ -36,7 +36,10 @@ func (a *RunMaintenanceAction) Execute(ctx context.Context, depsAny any) error {
 	default:
 	}
 
-	d := depsAny.(snapshot.PersistenceDependencies)
+	d, ok := depsAny.(snapshot.PersistenceDependencies)
+	if !ok {
+		return fmt.Errorf("unexpected deps type: %T", depsAny)
+	}
 
 	start := time.Now()
 
@@ -48,8 +51,8 @@ func (a *RunMaintenanceAction) Execute(ctx context.Context, depsAny any) error {
 	duration := now.Sub(start)
 
 	d.SetLastMaintenanceAt(now)
-	d.ActionLogger("run_maintenance").Infow("maintenance completed",
-		"duration_ms", duration.Milliseconds())
+	d.ActionLogger("run_maintenance").Info("maintenance completed",
+		deps.Int64("duration_ms", duration.Milliseconds()))
 	d.MetricsRecorder().IncrementCounter(deps.CounterMaintenanceCyclesTotal, 1)
 	d.MetricsRecorder().SetGauge(deps.GaugeLastMaintenanceDurationMs, float64(duration.Milliseconds()))
 

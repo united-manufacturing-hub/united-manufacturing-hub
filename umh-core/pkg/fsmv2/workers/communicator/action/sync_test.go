@@ -19,8 +19,6 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"go.uber.org/zap"
-
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/action"
@@ -31,12 +29,12 @@ var _ = Describe("SyncAction", func() {
 	var (
 		act           *action.SyncAction
 		dependencies  *communicator.CommunicatorDependencies
-		logger        *zap.SugaredLogger
+		logger        deps.FSMLogger
 		mockTransport *mockSyncTransport
 	)
 
 	BeforeEach(func() {
-		logger = zap.NewNop().Sugar()
+		logger = deps.NewNopFSMLogger()
 		mockTransport = &mockSyncTransport{}
 		identity := deps.Identity{ID: "test-id", WorkerType: "communicator"}
 		dependencies = communicator.NewCommunicatorDependencies(mockTransport, logger, nil, identity)

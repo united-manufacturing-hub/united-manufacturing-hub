@@ -20,15 +20,13 @@ import (
 	"fmt"
 	"time"
 
-	"go.uber.org/zap"
-
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application"
 	persistencesnapshot "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/persistence/snapshot"
 )
 
 type PersistenceRunConfig struct {
-	Logger       *zap.SugaredLogger
+	Logger       deps.FSMLogger
 	Duration     time.Duration
 	TickInterval time.Duration
 }
@@ -69,8 +67,7 @@ func RunPersistenceScenario(ctx context.Context, cfg PersistenceRunConfig) *Pers
 
 	logger := cfg.Logger
 	if logger == nil {
-		devLogger, _ := zap.NewDevelopment()
-		logger = devLogger.Sugar()
+		logger = deps.NewNopFSMLogger()
 	}
 
 	tickInterval := cfg.TickInterval
@@ -138,7 +135,8 @@ children:
 		var observed persistencesnapshot.PersistenceObservedState
 		if loadErr := store.LoadObservedTyped(loadCtx, "persistence", "persistence-001", &observed); loadErr != nil {
 			if !errors.Is(loadErr, context.Canceled) {
-				logger.Warnw("failed to load persistence observed state", "error", loadErr)
+				logger.SentryWarn(deps.FeatureExamples, "", "failed to load persistence observed state",
+					deps.Err(loadErr))
 			}
 		} else {
 			workerMetrics := observed.GetWorkerMetrics()

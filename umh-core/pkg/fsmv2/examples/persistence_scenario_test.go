@@ -20,8 +20,8 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"go.uber.org/zap"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/examples"
 )
 
@@ -136,7 +136,7 @@ var _ = Describe("Persistence Scenario", func() {
 		It("uses custom logger without affecting behavior", func() {
 			result := examples.RunPersistenceScenario(ctx, examples.PersistenceRunConfig{
 				Duration: 1 * time.Second,
-				Logger:   zap.NewNop().Sugar(),
+				Logger:   deps.NewNopFSMLogger(),
 			})
 			Expect(result.Error).NotTo(HaveOccurred())
 			<-result.Done

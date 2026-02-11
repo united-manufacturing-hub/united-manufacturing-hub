@@ -22,7 +22,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps/retry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
 	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
-	"go.uber.org/zap"
 )
 
 // Note: retry.Tracker is now inherited from BaseDependencies.
@@ -56,7 +55,7 @@ type CommunicatorDependencies struct {
 
 // NewCommunicatorDependencies creates dependencies for the communicator worker.
 // Panics if SetChannelProvider was not called first.
-func NewCommunicatorDependencies(t transport.Transport, logger *zap.SugaredLogger, stateReader deps.StateReader, identity deps.Identity) *CommunicatorDependencies {
+func NewCommunicatorDependencies(t transport.Transport, logger deps.FSMLogger, stateReader deps.StateReader, identity deps.Identity) *CommunicatorDependencies {
 	provider := GetChannelProvider()
 	if provider == nil {
 		panic("ChannelProvider must be set before creating communicator dependencies. " +
