@@ -15,31 +15,12 @@
 name: Go Code Analysis
 
 on:
-  pull_request:
-    branches:
-      - "**"
-  merge_group:
+  workflow_call:
+  workflow_dispatch:
 
 jobs:
-  changes:
-    name: Detect Changes
-    runs-on: depot-ubuntu-24.04
-    permissions:
-      contents: read
-      pull-requests: read
-    outputs:
-      code: ${{ steps.filter.outputs.code }}
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      - uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
-        id: filter
-        with:
-          filters: .github/path-filters.yml
-
   vet:
     name: Go Vet
-    needs: changes
-    if: needs.changes.outputs.code == 'true'
     runs-on: depot-ubuntu-24.04
     defaults:
       run:
@@ -58,8 +39,6 @@ jobs:
 
   nilaway:
     name: Nilaway Analysis
-    needs: changes
-    if: needs.changes.outputs.code == 'true'
     runs-on: depot-ubuntu-24.04
     defaults:
       run:
@@ -79,27 +58,3 @@ jobs:
 
       - name: Run nilaway
         run: make nilaway
-
-  required-checks:
-    name: Analysis Required Checks
-    needs: [changes, vet, nilaway]
-    if: always()
-    runs-on: depot-ubuntu-24.04
-    steps:
-      - name: Check results
-        run: |
-          if [ "${{ needs.changes.result }}" != "success" ]; then
-            echo "check-changes failed"
-            exit 1
-          fi
-          if [ "${{ needs.changes.outputs.code }}" == "true" ]; then
-            if [ "${{ needs.vet.result }}" != "success" ]; then
-              echo "vet failed"
-              exit 1
-            fi
-            if [ "${{ needs.nilaway.result }}" != "success" ]; then
-              echo "nilaway failed"
-              exit 1
-            fi
-          fi
-          echo "All required checks passed"

@@ -18,42 +18,21 @@
 name: Build UMH Core
 
 on:
-  pull_request:
-    branches:
-      - "**"
+  workflow_call:
   push:
     branches:
       - staging
       - main
     tags:
       - "v*"
-  merge_group:
 
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: united-manufacturing-hub/umh-core
 
 jobs:
-  changes:
-    name: Detect Changes
-    runs-on: depot-ubuntu-24.04
-    permissions:
-      contents: read
-      pull-requests: read
-    outputs:
-      code: ${{ steps.filter.outputs.code }}
-      changelog: ${{ steps.filter.outputs.changelog }}
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      - uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
-        id: filter
-        with:
-          filters: .github/path-filters.yml
-
   build:
     name: Build and Push
-    needs: changes
-    if: needs.changes.outputs.code == 'true' || github.event_name == 'push' || github.event_name == 'merge_group'
     permissions:
       contents: read
       packages: write
@@ -117,8 +96,7 @@ jobs:
 
   verify-binaries:
     name: Verify ${{ matrix.arch }} Image
-    needs: [changes, build]
-    if: needs.changes.outputs.code == 'true' || github.event_name == 'push' || github.event_name == 'merge_group'
+    needs: [build]
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 10
     permissions:
@@ -241,36 +219,8 @@ jobs:
             echo '```' >> $GITHUB_STEP_SUMMARY
           fi
 
-  comment-pr:
-    name: Comment PR with Image Tag
-    needs: [changes, build]
-    if: github.event_name == 'pull_request' && (needs.changes.outputs.code == 'true')
-    runs-on: depot-ubuntu-24.04
-    permissions:
-      pull-requests: write
-    steps:
-      - name: Compute short SHA
-        id: short-sha
-        run: echo "SHORT_SHA=$(echo '${{ github.sha }}' | cut -c1-7)" >> $GITHUB_OUTPUT
-
-      - name: Comment image tag on PR
-        uses: marocchino/sticky-pull-request-comment@773744901bac0e8cbb5a0dc842800d45e9b2b405 # v2.9.4
-        with:
-          header: docker-image
-          message: |
-            **Docker Image Built**
-
-            ```
-            ghcr.io/united-manufacturing-hub/umh-core:sha-${{ steps.short-sha.outputs.SHORT_SHA }}
-            ```
-
-            Pull with:
-            ```bash
-            docker pull ghcr.io/united-manufacturing-hub/umh-core:sha-${{ steps.short-sha.outputs.SHORT_SHA }}
-            ```
-
   notify-management-console:
-    needs: [changes, build]
+    needs: [build]
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: depot-ubuntu-24.04
     steps:
@@ -327,53 +277,3 @@ jobs:
 
           notify_mc "https://staging.management.umh.app"
           notify_mc "https://management.umh.app"
-
-  validate-changelog:
-    name: Validate Changelog
-    needs: changes
-    if: needs.changes.outputs.changelog == 'true'
-    runs-on: depot-ubuntu-24.04
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          repository: united-manufacturing-hub/changelog.umh.app
-          path: changelog-scripts
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
-        with:
-          node-version: '20'
-      - name: Validate CHANGELOG.md
-        run: npx tsx changelog-scripts/.github/scripts/validate-changelog.ts --format version --changelog-path umh-core/CHANGELOG.md
-
-  required-checks:
-    name: Build Required Checks
-    needs: [changes, build, verify-binaries, validate-changelog]
-    if: always()
-    runs-on: depot-ubuntu-24.04
-    steps:
-      - name: Check results
-        run: |
-          # check-changes must succeed
-          if [ "${{ needs.changes.result }}" != "success" ]; then
-            echo "check-changes failed"
-            exit 1
-          fi
-          # If code changed, build and verify must succeed
-          if [ "${{ needs.changes.outputs.code }}" == "true" ]; then
-            if [ "${{ needs.build.result }}" != "success" ]; then
-              echo "build failed"
-              exit 1
-            fi
-            if [ "${{ needs.verify-binaries.result }}" != "success" ]; then
-              echo "verify-binaries failed"
-              exit 1
-            fi
-          fi
-          # If changelog changed, validation must succeed
-          if [ "${{ needs.changes.outputs.changelog }}" == "true" ]; then
-            if [ "${{ needs.validate-changelog.result }}" != "success" ]; then
-              echo "validate-changelog failed"
-              exit 1
-            fi
-          fi
-          echo "All required checks passed"
