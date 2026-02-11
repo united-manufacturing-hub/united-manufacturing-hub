@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"time"
 
-	"go.uber.org/zap"
 	"gopkg.in/yaml.v3"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
@@ -46,7 +45,7 @@ type PersistenceWorker struct {
 func NewPersistenceWorker(
 	identity deps.Identity,
 	store storage.TriangularStoreInterface,
-	logger *zap.SugaredLogger,
+	logger deps.FSMLogger,
 	stateReader deps.StateReader,
 ) (*PersistenceWorker, error) {
 	if identity.WorkerType == "" {
@@ -83,10 +82,10 @@ func (w *PersistenceWorker) CollectObservedState(ctx context.Context) (fsmv2.Obs
 		if err := stateReader.LoadObservedTyped(ctx, d.GetWorkerType(), d.GetWorkerID(), &prev); err == nil {
 			prevWorkerMetrics = prev.Metrics.Worker
 		} else {
-			d.GetLogger().Warnw("previous_observed_load_failed",
-				"error", err,
-				"worker_type", d.GetWorkerType(),
-				"worker_id", d.GetWorkerID())
+			d.GetLogger().SentryWarn(deps.FeaturePersistence, d.GetHierarchyPath(), "previous_observed_load_failed",
+				deps.Err(err),
+				deps.String("worker_type", d.GetWorkerType()),
+				deps.String("worker_id", d.GetWorkerID()))
 		}
 	}
 
@@ -204,7 +203,7 @@ func (w *PersistenceWorker) GetInitialState() fsmv2.State[any, any] {
 
 func init() {
 	if err := factory.RegisterWorkerType[snapshot.PersistenceObservedState, *snapshot.PersistenceDesiredState](
-		func(id deps.Identity, logger *zap.SugaredLogger, stateReader deps.StateReader, params map[string]any) fsmv2.Worker {
+		func(id deps.Identity, logger deps.FSMLogger, stateReader deps.StateReader, params map[string]any) fsmv2.Worker {
 			store, ok := params["store"].(storage.TriangularStoreInterface)
 			if !ok || store == nil {
 				panic("persistence worker factory: 'store' parameter must be a TriangularStoreInterface")

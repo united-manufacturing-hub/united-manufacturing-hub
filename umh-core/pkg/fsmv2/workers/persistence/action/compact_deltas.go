@@ -46,8 +46,8 @@ func (a *CompactDeltasAction) Execute(ctx context.Context, depsAny any) error {
 	}
 
 	d.SetLastCompactionAt(time.Now())
-	d.ActionLogger("compact_deltas").Infow("compaction completed",
-		"deleted_count", deleted, "retention_window", a.RetentionWindow)
+	d.ActionLogger("compact_deltas").Info("compaction completed",
+		deps.Int("deleted_count", deleted), deps.Duration("retention_window", a.RetentionWindow))
 	d.MetricsRecorder().IncrementCounter(deps.CounterCompactionDeltasDeletedTotal, int64(deleted))
 
 	return nil

@@ -20,7 +20,6 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"go.uber.org/zap"
 
 	fsmv2config "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
@@ -31,13 +30,13 @@ import (
 
 var _ = Describe("PersistenceWorker", func() {
 	var (
-		logger   *zap.SugaredLogger
+		logger   deps.FSMLogger
 		identity deps.Identity
 		store    *mockTriangularStore
 	)
 
 	BeforeEach(func() {
-		logger = zap.NewNop().Sugar()
+		logger = deps.NewNopFSMLogger()
 		identity = deps.Identity{ID: "test-id", Name: "test-persistence"}
 		store = &mockTriangularStore{}
 	})

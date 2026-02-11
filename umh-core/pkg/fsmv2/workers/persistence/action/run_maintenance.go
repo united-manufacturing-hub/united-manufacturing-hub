@@ -42,7 +42,7 @@ func (a *RunMaintenanceAction) Execute(ctx context.Context, depsAny any) error {
 	}
 
 	d.SetLastMaintenanceAt(time.Now())
-	d.ActionLogger("run_maintenance").Infow("maintenance completed")
+	d.ActionLogger("run_maintenance").Info("maintenance completed")
 
 	return nil
 }
