@@ -33,9 +33,8 @@ CHAOS_PROXY_FLAGS="--drop-every=5 --long-poll --long-poll-mu=7.0" docker compose
 | `--listen` | `:8090` | Address the proxy listens on |
 | `--target` | `https://management.umh.app` | Upstream URL to forward requests to |
 | `--drop-every` | `3` | Drop every N-th connection by sending EOF (0 = disable) |
-| `--inspect-delay` | `false` | Enable async simulated packet inspection delay (0-31s random) |
 | `--long-poll` | `false` | Enable long-poll delay simulation before proxying |
-| `--long-poll-mu` | `8.5` | Lognormal mu parameter (ln of median delay in ms; 8.5 ~ 5s median) |
+| `--long-poll-mu` | `8.5` | Lognormal mu parameter (ln of median delay in ms; 8.5 ~ 4.9s median) |
 | `--long-poll-sigma` | `1.2` | Lognormal sigma parameter (spread; higher = more variance) |
 | `--long-poll-cap` | `31000` | Maximum delay in ms (caps lognormal outliers) |
 | `--long-poll-kill-pct` | `20` | Percentage chance (0-100) to kill connection mid-delay |
@@ -58,7 +57,7 @@ CHAOS_PROXY_FLAGS="--drop-every=5 --long-poll --long-poll-mu=7.0" docker compose
 ### Prometheus Metrics (port 2112)
 
 ```bash
-# Scrape all metrics
+# Scrape all metrics (port 2112 is exposed in docker-compose.yml)
 curl -s http://localhost:2112/metrics
 
 # Watch transport worker metrics
@@ -88,6 +87,17 @@ docker compose exec umh-core sh -c 'tail -f /data/logs/umh-core/current'
 - [ ] Push and pull workers retry with backoff (visible in logs)
 - [ ] No data corruption (partial responses not processed as valid)
 - [ ] Heartbeat continues even under heavy chaos
+
+## Known Limitations
+
+- **TLS topology differs from production**: In production, umh-core connects directly to
+  management.umh.app over HTTPS. In the chaos test setup, umh-core connects to the proxy
+  over HTTP, and the proxy connects to management.umh.app over HTTPS. TLS-specific failure
+  modes (certificate errors, handshake timeouts) are not exercised.
+- **No bandwidth throttling**: The proxy can drop, delay, or kill connections, but cannot
+  simulate slow throughput (e.g., 56kbps links).
+- **No response corruption**: The proxy either forwards the full response or kills the
+  connection. Partial/truncated responses are not simulated.
 
 ## Chaos Test Results
 
