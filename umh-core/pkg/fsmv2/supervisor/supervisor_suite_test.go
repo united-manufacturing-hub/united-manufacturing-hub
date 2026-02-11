@@ -389,6 +389,14 @@ func (m *mockStore) GetDeltas(ctx context.Context, sub storage.Subscription) (st
 	return storage.DeltasResponse{}, nil
 }
 
+func (m *mockStore) CompactDeltas(ctx context.Context, retentionWindow time.Duration) (int, error) {
+	return 0, nil
+}
+
+func (m *mockStore) Maintenance(ctx context.Context) error {
+	return nil
+}
+
 func mockIdentity() deps.Identity {
 	return deps.Identity{
 		ID:         "test-worker",
@@ -762,6 +770,14 @@ func (m *mockTriangularStore) GetLatestSyncID(ctx context.Context) (int64, error
 
 func (m *mockTriangularStore) GetDeltas(ctx context.Context, sub storage.Subscription) (storage.DeltasResponse, error) {
 	return storage.DeltasResponse{}, nil
+}
+
+func (m *mockTriangularStore) CompactDeltas(ctx context.Context, retentionWindow time.Duration) (int, error) {
+	return 0, nil
+}
+
+func (m *mockTriangularStore) Maintenance(ctx context.Context) error {
+	return nil
 }
 
 var _ storage.TriangularStoreInterface = (*mockTriangularStore)(nil)
