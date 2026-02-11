@@ -1,7 +1,7 @@
 module github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core
 
 // NOTE: Keep this in sync with GOLANG_VERSION in Makefile
-go 1.25.3
+go 1.25.7
 
 require (
 	github.com/99designs/gqlgen v0.17.86
@@ -25,6 +25,7 @@ require (
 	github.com/prometheus/common v0.67.5
 	github.com/prometheus/prometheus v0.309.1
 	github.com/shirou/gopsutil/v3 v3.24.5
+	github.com/shirou/gopsutil/v4 v4.26.1
 	github.com/testcontainers/testcontainers-go/modules/redpanda v0.40.0
 	github.com/tiendc/go-deepcopy v1.7.2
 	github.com/united-manufacturing-hub/expiremap/v2 v2.1.0
@@ -58,7 +59,7 @@ require (
 	github.com/docker/docker v28.5.2+incompatible // indirect
 	github.com/docker/go-connections v0.6.0 // indirect
 	github.com/docker/go-units v0.5.0 // indirect
-	github.com/ebitengine/purego v0.8.4 // indirect
+	github.com/ebitengine/purego v0.9.1 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.12 // indirect
 	github.com/gin-contrib/sse v1.1.0 // indirect
@@ -105,14 +106,13 @@ require (
 	github.com/prometheus/procfs v0.17.0 // indirect
 	github.com/quic-go/qpack v0.6.0 // indirect
 	github.com/quic-go/quic-go v0.59.0 // indirect
-	github.com/shirou/gopsutil/v4 v4.25.6 // indirect
 	github.com/shoenig/go-m1cpu v0.1.6 // indirect
 	github.com/sirupsen/logrus v1.9.3 // indirect
 	github.com/sosodev/duration v1.3.1 // indirect
 	github.com/stretchr/testify v1.11.1 // indirect
 	github.com/testcontainers/testcontainers-go v0.40.0 // indirect
-	github.com/tklauser/go-sysconf v0.3.15 // indirect
-	github.com/tklauser/numcpus v0.10.0 // indirect
+	github.com/tklauser/go-sysconf v0.3.16 // indirect
+	github.com/tklauser/numcpus v0.11.0 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/ugorji/go/codec v1.3.0 // indirect
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
