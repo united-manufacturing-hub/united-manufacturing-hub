@@ -15,6 +15,8 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"flag"
 	"log"
 	"math"
@@ -23,8 +25,11 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"os"
+	"os/signal"
 	"strings"
 	"sync/atomic"
+	"syscall"
 	"time"
 )
 
@@ -32,7 +37,6 @@ func main() {
 	listenAddr := flag.String("listen", ":8090", "address to listen on")
 	targetURL := flag.String("target", "https://management.umh.app", "target URL to proxy to")
 	dropEvery := flag.Int("drop-every", 3, "drop every n-th connection (0 = disable)")
-	inspectDelay := flag.Bool("inspect-delay", false, "simulated packet inspection delay (e.g., 100ms)")
 	longPoll := flag.Bool("long-poll", false, "enable long polling simulation")
 	longPollMu := flag.Float64("long-poll-mu", 8.5, "lognormal mu (ln of median delay in ms, e.g. 8.5 ≈ 5s median)")
 	longPollSigma := flag.Float64("long-poll-sigma", 1.2, "lognormal sigma (spread, higher = more variance)")
@@ -47,9 +51,21 @@ func main() {
 		log.Fatalf("invalid target URL: %v", err)
 	}
 
+	if (target.Scheme != "http" && target.Scheme != "https") || target.Host == "" {
+		log.Fatalf("--target must be a valid http/https URL, got %q", *targetURL)
+	}
+	if *dropEvery < 0 {
+		log.Fatalf("--drop-every must be >= 0, got %d", *dropEvery)
+	}
+	if *longPollKillPct < 0 || *longPollKillPct > 100 {
+		log.Fatalf("--long-poll-kill-pct must be 0-100, got %d", *longPollKillPct)
+	}
+	if *longPollCap <= 0 {
+		log.Fatalf("--long-poll-cap must be > 0, got %d", *longPollCap)
+	}
+
 	proxy := httputil.NewSingleHostReverseProxy(target)
 
-	// Customize the Director to set the Host header to the target host
 	originalDirector := proxy.Director
 	proxy.Director = func(r *http.Request) {
 		originalDirector(r)
@@ -64,28 +80,28 @@ func main() {
 		if *dropEvery > 0 && count%uint64(*dropEvery) == 0 {
 			log.Printf("sending EOF to interrupt connection %d", count)
 			hj, ok := w.(http.Hijacker)
-			if ok {
-				conn, _, err := hj.Hijack()
-				if err == nil {
-					if tcpConn, ok := conn.(*net.TCPConn); ok {
-						tcpConn.CloseWrite()
-					} else {
-						conn.Close()
-					}
-					return
-				}
+			if !ok {
+				log.Printf("hijack not supported for request %d, dropping without response", count)
+				return
 			}
-			// Fallback: just close without response
+			conn, _, err := hj.Hijack()
+			if err != nil {
+				log.Printf("hijack failed for request %d: %v, dropping without response", count, err)
+				return
+			}
+			if tcpConn, ok := conn.(*net.TCPConn); ok {
+				tcpConn.CloseWrite()
+			} else {
+				conn.Close()
+			}
 			return
 		}
 
 		log.Printf("proxying request %d: %s %s", count, r.Method, r.URL.Path)
 
-		// Simulate long polling by holding the connection before proxying
 		methodMatch := *longPollMethod == "" || strings.EqualFold(r.Method, *longPollMethod)
 		pathMatch := *longPollPath == "" || strings.Contains(r.URL.Path, *longPollPath)
 		if *longPoll && methodMatch && pathMatch {
-			// Lognormal distribution: most delays cluster around the median, with occasional long tails
 			sample := math.Exp(*longPollMu + *longPollSigma*rand.NormFloat64())
 			delay := int(math.Min(sample, float64(*longPollCap)))
 			if delay < 1 {
@@ -93,47 +109,31 @@ func main() {
 			}
 			log.Printf("long polling request %d, holding for %d ms...", count, delay)
 
-			// Randomly schedule a mid-wait kill in a goroutine
 			if *longPollKillPct > 0 && rand.IntN(100) < *longPollKillPct {
 				killAfter := rand.IntN(delay)
 				log.Printf("will kill connection %d after %d ms (mid long poll)", count, killAfter)
 				hj, ok := w.(http.Hijacker)
 				if !ok {
+					log.Printf("hijack not supported for request %d, dropping without response", count)
 					return
 				}
 				conn, _, err := hj.Hijack()
 				if err != nil {
+					log.Printf("hijack failed for request %d: %v", count, err)
 					return
 				}
-				go func() {
-					time.Sleep(time.Duration(killAfter) * time.Millisecond)
-					log.Printf("killing connection %d during long poll", count)
-					if tcpConn, ok := conn.(*net.TCPConn); ok {
-						tcpConn.CloseWrite()
-					} else {
-						conn.Close()
-					}
-				}()
-				// Block the handler for the full delay so the goroutine can kill mid-wait
-				time.Sleep(time.Duration(delay) * time.Millisecond)
+				time.Sleep(time.Duration(killAfter) * time.Millisecond)
+				log.Printf("killing connection %d during long poll", count)
+				if tcpConn, ok := conn.(*net.TCPConn); ok {
+					tcpConn.CloseWrite()
+				} else {
+					conn.Close()
+				}
 				return
 			}
 
 			time.Sleep(time.Duration(delay) * time.Millisecond)
 			log.Printf("long poll complete for request %d, proxying now", count)
-		}
-
-		// Simulate packet inspection in a goroutine (async, no blocking)
-		if *inspectDelay {
-			go func(reqNum uint64) {
-				min := uint(0)
-				max := uint(31000)
-				thisDelay := rand.UintN(max-min+1) + min
-				log.Printf("inspecting request %d...", reqNum)
-				log.Printf("delaying with %d ms...", thisDelay)
-				time.Sleep(time.Duration(thisDelay) * time.Millisecond)
-				log.Printf("inspection complete for request %d", reqNum)
-			}(count)
 		}
 
 		proxy.ServeHTTP(w, r)
@@ -157,7 +157,22 @@ func main() {
 			*longPollMu, *longPollSigma, median, *longPollCap, *longPollKillPct, methodFilter, pathFilter)
 	}
 
-	if err := http.ListenAndServe(*listenAddr, nil); err != nil {
+	srv := &http.Server{Addr: *listenAddr}
+
+	go func() {
+		sigCh := make(chan os.Signal, 1)
+		signal.Notify(sigCh, syscall.SIGTERM, syscall.SIGINT)
+		<-sigCh
+		log.Println("shutting down gracefully...")
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := srv.Shutdown(ctx); err != nil {
+			log.Printf("shutdown error: %v", err)
+		}
+	}()
+
+	if err := srv.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
 		log.Fatalf("server error: %v", err)
 	}
+	log.Println("shutdown complete")
 }
