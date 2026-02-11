@@ -102,10 +102,16 @@ func main() {
 				log.Printf("hijack failed for request %d: %v, dropping without response", count, err)
 				return
 			}
+			// CloseWrite sends a TCP FIN (half-close), which is a realistic EOF
+			// simulation. conn.Close then releases the file descriptor fully.
 			if tcpConn, ok := conn.(*net.TCPConn); ok {
-				tcpConn.CloseWrite()
+				if err := tcpConn.CloseWrite(); err != nil {
+					log.Printf("CloseWrite failed for request %d: %v", count, err)
+				}
 			}
-			conn.Close()
+			if err := conn.Close(); err != nil {
+				log.Printf("close failed for request %d: %v", count, err)
+			}
 			return
 		}
 
@@ -137,9 +143,13 @@ func main() {
 				time.Sleep(time.Duration(killAfter) * time.Millisecond)
 				log.Printf("killing connection %d during long poll", count)
 				if tcpConn, ok := conn.(*net.TCPConn); ok {
-					tcpConn.CloseWrite()
+					if err := tcpConn.CloseWrite(); err != nil {
+						log.Printf("CloseWrite failed for request %d: %v", count, err)
+					}
 				}
-				conn.Close()
+				if err := conn.Close(); err != nil {
+					log.Printf("close failed for request %d: %v", count, err)
+				}
 				return
 			}
 

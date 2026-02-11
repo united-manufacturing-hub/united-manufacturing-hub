@@ -44,6 +44,8 @@ cd "$SCRIPT_DIR/.."
 : "${AUTH_TOKEN:?Set AUTH_TOKEN to your instance auth token}"
 : "${UMH_CORE_IMAGE:?Set UMH_CORE_IMAGE to the umh-core container image}"
 
+trap 'docker compose down 2>/dev/null' EXIT
+
 echo "=== Scenario 4: Combined Chaos ==="
 echo "Drops every 3rd + lognormal delay (mu=8.5 sigma=1.2 cap=31000ms) + 20% kill"
 echo ""

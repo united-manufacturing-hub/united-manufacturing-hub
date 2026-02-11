@@ -38,6 +38,8 @@ cd "$SCRIPT_DIR/.."
 : "${AUTH_TOKEN:?Set AUTH_TOKEN to your instance auth token}"
 : "${UMH_CORE_IMAGE:?Set UMH_CORE_IMAGE to the umh-core container image}"
 
+trap 'docker compose down 2>/dev/null' EXIT
+
 echo "=== Scenario 1: Connection Drops ==="
 echo "Dropping every 3rd connection (EOF on TCP)"
 echo ""
