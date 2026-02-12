@@ -671,29 +671,6 @@ var _ = Describe("ActionExecutor", func() {
 				"Normal action should complete after previous action panicked")
 		})
 
-		It("should invoke callback with failure after panic", func() {
-			callbackCh := make(chan deps.ActionResult, 1)
-			executor.SetOnActionComplete(func(result deps.ActionResult) {
-				callbackCh <- result
-			})
-
-			panicAction := &testAction{
-				execute: func(ctx context.Context) error {
-					panic("callback test panic")
-				},
-				name: "panic-callback-test",
-			}
-
-			err := executor.EnqueueAction("panic-callback", panicAction, nil)
-			Expect(err).ToNot(HaveOccurred())
-
-			var result deps.ActionResult
-			Eventually(callbackCh, 2*time.Second).Should(Receive(&result))
-			Expect(result.Success).To(BeFalse())
-			Expect(result.ErrorMsg).ToNot(BeEmpty())
-			Expect(result.ActionType).To(Equal("panic-callback-test"))
-		})
-
 		It("should handle multiple consecutive panics without crashing", func() {
 			for i := range 5 {
 				actionID := fmt.Sprintf("panic-action-%d", i)

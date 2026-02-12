@@ -17,6 +17,7 @@ package supervisor_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync/atomic"
 	"time"
 
@@ -637,7 +638,7 @@ func (a *alternateObservedState) GetObservedDesiredState() fsmv2.DesiredState {
 var _ = Describe("Type Safety (Invariant I16)", func() {
 	Describe("ObservedState type validation", func() {
 		Context("when worker returns wrong ObservedState type", func() {
-			It("should return error with clear message (panic recovered)", func() {
+			It("should panic with clear message before calling state.Next()", func() {
 				mockStore := newMockTriangularStore()
 
 				identity := mockIdentity()
@@ -678,15 +679,25 @@ var _ = Describe("Type Safety (Invariant I16)", func() {
 				}
 				mockStore.Observed["container"][identity.ID] = wrongTypeObs
 
-				err = s.TestTick(context.Background())
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("tick panic"))
-				Expect(err.Error()).To(ContainSubstring("Invariant I16 violated"))
+				var panicMessage string
+				func() {
+					defer func() {
+						if r := recover(); r != nil {
+							panicMessage = fmt.Sprintf("%v", r)
+						}
+					}()
+					_ = s.TestTick(context.Background())
+				}()
+
+				Expect(panicMessage).To(ContainSubstring("Invariant I16 violated"))
+				Expect(panicMessage).To(ContainSubstring("test-worker"))
+				Expect(panicMessage).To(ContainSubstring("alternateObservedState"))
+				Expect(panicMessage).To(ContainSubstring("TestObservedState"))
 			})
 		})
 
 		Context("when worker returns nil ObservedState", func() {
-			It("should return error with clear message (panic recovered)", func() {
+			It("should panic with clear message before calling state.Next()", func() {
 				mockStore := newMockTriangularStore()
 
 				identity := mockIdentity()
@@ -726,10 +737,19 @@ var _ = Describe("Type Safety (Invariant I16)", func() {
 				}
 				mockStore.Observed["container"][identity.ID] = nil
 
-				err = s.TestTick(context.Background())
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("tick panic"))
-				Expect(err.Error()).To(ContainSubstring("Invariant I16 violated"))
+				var panicMessage string
+				func() {
+					defer func() {
+						if r := recover(); r != nil {
+							panicMessage = fmt.Sprintf("%v", r)
+						}
+					}()
+					_ = s.TestTick(context.Background())
+				}()
+
+				Expect(panicMessage).To(ContainSubstring("Invariant I16 violated"))
+				Expect(panicMessage).To(ContainSubstring("nil ObservedState"))
+				Expect(panicMessage).To(ContainSubstring("test-worker"))
 			})
 		})
 

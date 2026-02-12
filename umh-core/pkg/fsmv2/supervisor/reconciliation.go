@@ -19,7 +19,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"runtime/debug"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -29,19 +28,9 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/internal/panicutil"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 )
-
-// ErrPanicCircuitOpen is returned when the tick is suppressed because the panic circuit breaker is open.
-// Returning an error (instead of nil) ensures the supervisor knows the worker is unhealthy
-// and continues ticking it, allowing the circuit breaker to auto-reset once the sliding window
-// of recent panics drains (panics older than the window are forgotten).
-var ErrPanicCircuitOpen = errors.New("panic circuit breaker open")
-
-// ErrInfraCircuitOpen is returned when the tick is suppressed because the infrastructure circuit breaker is open.
-var ErrInfraCircuitOpen = errors.New("infrastructure circuit breaker open")
 
 // factoryRegistryAdapter provides an adapter for config validation.
 type factoryRegistryAdapter struct{}
@@ -176,12 +165,27 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 	currentStateForPhase := workerCtx.currentState
 	workerCtx.mu.RUnlock()
 
-	if currentStateForPhase != nil {
-		phase := currentStateForPhase.LifecyclePhase()
+	var (
+		lifecyclePhase    config.LifecyclePhase
+		observedStateName string
+	)
 
+	if currentStateForPhase != nil {
+		lifecyclePhase = currentStateForPhase.LifecyclePhase()
+		// Construct observed state name: phase.Prefix() + lowercase(state.String())
+		suffix := strings.ToLower(currentStateForPhase.String())
+
+		prefix := lifecyclePhase.Prefix()
+		if lifecyclePhase == config.PhaseStopped {
+			observedStateName = prefix // "stopped" has no suffix
+		} else {
+			observedStateName = prefix + suffix
+		}
+
+		// Cache both the observed state name and lifecycle phase
 		workerCtx.mu.Lock()
-		workerCtx.lastObservedStateName = buildObservedStateName(phase, currentStateForPhase)
-		workerCtx.lastLifecyclePhase = phase
+		workerCtx.lastObservedStateName = observedStateName
+		workerCtx.lastLifecyclePhase = lifecyclePhase
 		workerCtx.mu.Unlock()
 	}
 
@@ -329,6 +333,10 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 		return nil
 	}
 
+	// NOTE: FrameworkMetrics injection is now handled automatically by the Collector
+	// via FrameworkMetricsProvider callback. See collector.go collectAndSaveObservedState().
+	// The provider is set up in api.go AddWorker() when creating the CollectorConfig.
+
 	result := currentState.Next(*snapshot)
 
 	hasAction := result.Action != nil
@@ -435,7 +443,15 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 		// Parent supervisors call GetLifecyclePhase() which returns lastLifecyclePhase.
 		// If we update this before the transition, parent sees stale health status.
 		newPhase := result.State.LifecyclePhase()
-		workerCtx.lastObservedStateName = buildObservedStateName(newPhase, result.State)
+		newSuffix := strings.ToLower(result.State.String())
+
+		newPrefix := newPhase.Prefix()
+		if newPhase == config.PhaseStopped {
+			workerCtx.lastObservedStateName = newPrefix // "stopped" has no suffix
+		} else {
+			workerCtx.lastObservedStateName = newPrefix + newSuffix
+		}
+
 		workerCtx.lastLifecyclePhase = newPhase
 
 		workerCtx.mu.Unlock()
@@ -508,62 +524,11 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 // PHASE 2: Async Action Execution
 //   - State machine evaluates transitions and enqueues actions when needed
 //   - Actions execute in global worker pool (non-blocking)
-//   - Timeouts enforced by ActionExecutor; retries via tick-based re-evaluation
+//   - Timeouts and retries handled automatically by ActionExecutor
 //
 // PERFORMANCE: The complete tick loop is non-blocking and completes in <10ms,
 // making it safe to call at high frequency (100Hz+) without impacting system performance.
-func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) {
-	defer func() {
-		if r := recover(); r != nil {
-			defer func() {
-				if r2 := recover(); r2 != nil {
-					err = fmt.Errorf("tick panic (recovery handler also panicked: %v): %v", r2, r)
-
-					s.panicCircuitOpen.Store(true)
-					func() {
-						defer func() { _ = recover() }()
-
-						s.logger.SentryError(deps.FeatureFSMv2, "unknown", err, "tick_double_panic",
-							deps.String("stack", string(debug.Stack())))
-					}()
-				}
-			}()
-
-			panicType, panicErr := panicutil.ClassifyPanic(r)
-			err = fmt.Errorf("tick panic: %w", panicErr)
-
-			hierarchyPath := s.GetHierarchyPathUnlocked()
-			metrics.RecordPanicRecovery(hierarchyPath, panicType)
-
-			s.logger.SentryError(deps.FeatureFSMv2, hierarchyPath, err, "tick_panic",
-				deps.WorkerType(s.workerType),
-				deps.Field{Key: "panic_type", Value: panicType},
-				deps.Field{Key: "stack_trace", Value: string(debug.Stack())})
-
-			if s.panicTracker.RecordPanic() {
-				s.panicCircuitOpen.Store(true)
-				panicCount := s.panicTracker.PanicCount()
-				s.logger.SentryWarn(deps.FeatureFSMv2, hierarchyPath, "panic_circuit_open",
-					deps.WorkerType(s.workerType),
-					deps.Field{Key: "panic_count", Value: panicCount})
-			}
-		}
-	}()
-
-	// tick() is called from a single goroutine (tickLoop or parent's tick). No concurrent ticks occur.
-	if s.panicCircuitOpen.Load() {
-		if s.panicTracker.PanicCount() == 0 {
-			s.panicCircuitOpen.Store(false)
-			s.logger.SentryWarn(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), "panic_circuit_auto_reset",
-				deps.WorkerType(s.workerType))
-		} else {
-			s.logger.Debug("tick_suppressed_panic_circuit_open",
-				deps.HierarchyPath(s.GetHierarchyPathUnlocked()))
-
-			return ErrPanicCircuitOpen
-		}
-	}
-
+func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) error {
 	tickCount := atomic.AddUint64(&s.tickCount, 1)
 	if tickCount%heartbeatTickInterval == 0 {
 		s.logHeartbeat()
@@ -633,7 +598,7 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 			}
 		}
 
-		return ErrInfraCircuitOpen
+		return nil
 	}
 
 	if s.circuitOpen.Load() {
@@ -1029,15 +994,18 @@ func (s *Supervisor[TObserved, TDesired]) processSignal(ctx context.Context, wor
 
 		s.mu.Unlock()
 
+		// TODO: Use context-aware RequestGracefulShutdown instead of immediate Shutdown
+		_ = ctx
+
 		for name, child := range childrenToCleanup {
 			s.logger.Debug("child_supervisor_shutdown",
 				deps.String("child_name", name),
 				deps.String("context", "post_graceful_cleanup"))
 			child.Shutdown()
 
-			// Wait for child supervisor to fully stop (with timeout)
+			// Wait for child supervisor to fully stop
 			if done, exists := doneChannels[name]; exists {
-				s.waitForChildDone(done, name, s.GetHierarchyPath(), "worker_removal_cleanup")
+				<-done
 			}
 
 			// Remove from parent's children map (requires lock)
@@ -1050,12 +1018,7 @@ func (s *Supervisor[TObserved, TDesired]) processSignal(ctx context.Context, wor
 		// Capture terminal state (e.g., "Stopped") before shutdown
 		if workerCtx.collector.IsRunning() {
 			collectCtx, cancel := context.WithTimeout(ctx, s.collectorHealth.observationTimeout)
-
-			if err := workerCtx.collector.CollectFinalObservation(collectCtx); err != nil {
-				s.logger.Debug("final_observation_failed",
-					deps.Err(err),
-					deps.HierarchyPath(workerCtx.identity.HierarchyPath))
-			}
+			_ = workerCtx.collector.CollectFinalObservation(collectCtx)
 
 			cancel()
 		}
@@ -1160,17 +1123,6 @@ func (s *Supervisor[TObserved, TDesired]) checkRestartTimeouts(ctx context.Conte
 				deps.String("to_state", toState))
 		}
 	}
-}
-
-// buildObservedStateName constructs the observed state name from a lifecycle phase and state string.
-// Format: phase.Prefix() + lowercase(state.String()), except PhaseStopped which has no suffix.
-func buildObservedStateName(phase config.LifecyclePhase, state fsmv2.State[any, any]) string {
-	prefix := phase.Prefix()
-	if phase == config.PhaseStopped {
-		return prefix
-	}
-
-	return prefix + strings.ToLower(state.String())
 }
 
 // getString extracts a string value from a document map with a default fallback.
@@ -1312,31 +1264,34 @@ func (s *Supervisor[TObserved, TDesired]) checkDataFreshness(snapshot *fsmv2.Sna
 	isShuttingDown := !s.started.Load()
 
 	if s.freshnessChecker.IsTimeout(snapshot) {
-		s.logFreshnessWarning(isShuttingDown, snapshot.Identity.HierarchyPath, "data_timeout", age, s.collectorHealth.timeout)
+		if isShuttingDown {
+			s.logger.Debug("data_timeout_during_shutdown",
+				deps.Duration("age", age),
+				deps.Duration("threshold", s.collectorHealth.timeout))
+		} else {
+			s.logger.SentryWarn(deps.FeatureFSMv2, snapshot.Identity.HierarchyPath, "data_timeout",
+				deps.Duration("age", age),
+				deps.Duration("threshold", s.collectorHealth.timeout))
+		}
 
 		return false
 	}
 
 	if !s.freshnessChecker.Check(snapshot) {
-		s.logFreshnessWarning(isShuttingDown, snapshot.Identity.HierarchyPath, "data_stale", age, s.collectorHealth.staleThreshold)
+		if isShuttingDown {
+			s.logger.Debug("data_stale_during_shutdown",
+				deps.Duration("age", age),
+				deps.Duration("threshold", s.collectorHealth.staleThreshold))
+		} else {
+			s.logger.SentryWarn(deps.FeatureFSMv2, snapshot.Identity.HierarchyPath, "data_stale",
+				deps.Duration("age", age),
+				deps.Duration("threshold", s.collectorHealth.staleThreshold))
+		}
 
 		return false
 	}
 
 	return true
-}
-
-// logFreshnessWarning logs a data freshness issue at DEBUG during shutdown (expected) or SentryWarn otherwise.
-func (s *Supervisor[TObserved, TDesired]) logFreshnessWarning(isShuttingDown bool, hierarchyPath, msg string, age, threshold time.Duration) {
-	if isShuttingDown {
-		s.logger.Debug(msg+"_during_shutdown",
-			deps.Duration("age", age),
-			deps.Duration("threshold", threshold))
-	} else {
-		s.logger.SentryWarn(deps.FeatureFSMv2, hierarchyPath, msg,
-			deps.Duration("age", age),
-			deps.Duration("threshold", threshold))
-	}
 }
 
 func (s *Supervisor[TObserved, TDesired]) logHeartbeat() {
@@ -1365,6 +1320,8 @@ func (s *Supervisor[TObserved, TDesired]) logHeartbeat() {
 
 	s.mu.RUnlock()
 
+	activeActions := 0
+
 	s.logger.Info("supervisor_heartbeat",
 		deps.HierarchyPath(s.GetHierarchyPathUnlocked()),
 		deps.Any("tick", atomic.LoadUint64(&s.tickCount)),
@@ -1372,7 +1329,7 @@ func (s *Supervisor[TObserved, TDesired]) logHeartbeat() {
 		deps.Int("children", childCount),
 		deps.Any("worker_states", workerStates),
 		deps.Any("worker_reasons", workerReasons),
-		deps.Int("active_actions", s.actionExecutor.GetActiveActionCount()))
+		deps.Int("active_actions", activeActions))
 }
 
 func (s *Supervisor[TObserved, TDesired]) getRecoveryStatus() string {
@@ -1462,8 +1419,6 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 				Logger:                  s.baseLogger, // Important: Use un-enriched logger to prevent duplicate "worker" fields
 				TickInterval:            s.tickInterval,
 				GracefulShutdownTimeout: s.gracefulShutdownTimeout,
-				ChildShutdownTimeout:    s.childShutdownTimeout,
-				EnableTraceLogging:      s.enableTraceLogging,
 				Dependencies:            mergedDeps,
 			}
 
@@ -1627,7 +1582,7 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 			child.Shutdown()
 
 			if done, exists := s.childDoneChans[name]; exists {
-				s.waitForChildDone(done, name, s.GetHierarchyPathUnlocked(), "reconcile_children")
+				<-done
 				delete(s.childDoneChans, name)
 			}
 

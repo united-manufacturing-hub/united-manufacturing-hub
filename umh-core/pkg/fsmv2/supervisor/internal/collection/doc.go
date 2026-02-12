@@ -72,7 +72,7 @@
 //
 // # Automatic restart with backoff
 //
-// The collector restarts automatically with linear backoff for three reasons:
+// The collector restarts automatically with exponential backoff for three reasons:
 //
 // 1. Transient failures: Network blips, temporary resource exhaustion, or
 // brief service outages self-heal without operator intervention.

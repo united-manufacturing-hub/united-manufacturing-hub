@@ -100,7 +100,7 @@ var _ = Describe("Supervisor Lifecycle", func() {
 
 	Describe("Tick state transition edge case", func() {
 		Context("when state violates invariant by switching state AND emitting action", func() {
-			It("should return error (panic recovered)", func() {
+			It("should panic", func() {
 				store := newMockTriangularStore()
 
 				nextState := &mockState{}
@@ -112,9 +112,9 @@ var _ = Describe("Supervisor Lifecycle", func() {
 
 				s := newSupervisorWithWorker(&mockWorker{initialState: initialState}, store, supervisor.CollectorHealthConfig{})
 
-				err := s.TestTick(context.Background())
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("tick panic"))
+				Expect(func() {
+					_ = s.TestTick(context.Background())
+				}).To(Panic())
 			})
 		})
 	})

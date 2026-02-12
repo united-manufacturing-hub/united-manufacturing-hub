@@ -100,7 +100,7 @@ var _ = Describe("Tick with Data Freshness", func() {
 	})
 
 	Context("when ObservedState is nil (Invariant I16)", func() {
-		It("should return error with clear message (panic recovered)", func() {
+		It("should panic with clear error message about nil ObservedState", func() {
 			identity := mockIdentity()
 			worker := &mockWorker{
 				initialState: initialState,
@@ -125,10 +125,9 @@ var _ = Describe("Tick with Data Freshness", func() {
 				StaleThreshold: 10 * time.Second,
 			})
 
-			err := s.TestTick(context.Background())
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("tick panic"))
-			Expect(err.Error()).To(ContainSubstring("Invariant I16 violated"))
+			Expect(func() {
+				_ = s.TestTick(context.Background())
+			}).Should(PanicWith(MatchRegexp("Invariant I16 violated.*nil ObservedState")))
 		})
 	})
 })

@@ -96,8 +96,7 @@ type SupervisorInterface interface {
 	// Used by ChildInfo to report infrastructure status to parents.
 	IsObservationStale() bool
 	// IsCircuitOpen returns true if the circuit breaker is open for this supervisor.
-	// When open, it indicates infrastructure failure (child consistency check failed)
-	// or repeated tick panics (code bug triggered the panic circuit breaker).
+	// When open, it indicates infrastructure failure (child consistency check failed).
 	// Used by ChildInfo to report infrastructure status to parents.
 	IsCircuitOpen() bool
 	// TestGetUserSpec returns the current userSpec for testing. DO NOT USE in production code.
@@ -179,7 +178,7 @@ type CollectorHealthConfig struct {
 	// ObservationTimeout is the maximum time allowed for a single observation operation.
 	// If an observation takes longer than this, it is cancelled and considered failed.
 	// Must be less than StaleThreshold to ensure observation failures don't trigger stale detection.
-	// Default: 2.2 seconds (see DefaultObservationTimeout in constants.go)
+	// Default: ~1.3 seconds (see DefaultObservationTimeout in constants.go)
 	ObservationTimeout time.Duration
 
 	// StaleThreshold is how old observation data can be before FSM pauses.
@@ -188,14 +187,14 @@ type CollectorHealthConfig struct {
 	StaleThreshold time.Duration
 
 	// Timeout is how old observation data can be before collector is considered broken.
-	// When exceeded, supervisor triggers collector restart with linear backoff.
+	// When exceeded, supervisor triggers collector restart with exponential backoff.
 	// Should be significantly larger than StaleThreshold to avoid restart thrashing.
 	// Default: 20 seconds (see DefaultCollectorTimeout in constants.go)
 	Timeout time.Duration
 
 	// MaxRestartAttempts is the maximum number of collector restart attempts.
 	// After this many failed restarts, supervisor escalates to graceful FSM shutdown.
-	// Each restart uses linear backoff: attempt N waits (N+1)*2 seconds.
+	// Each restart uses exponential backoff: attempt N waits N*2 seconds.
 	// Default: 3 attempts (see DefaultMaxRestartAttempts in constants.go)
 	MaxRestartAttempts int
 }
@@ -245,11 +244,6 @@ type Config struct {
 	// Longer intervals reduce Prometheus cardinality at the cost of staler metrics.
 	// Optional - defaults to 10 seconds (see DefaultMetricsReportInterval).
 	MetricsReportInterval time.Duration
-
-	// ChildShutdownTimeout is how long to wait for a child supervisor's done channel
-	// to close after calling Shutdown(). If exceeded, the parent logs a warning and proceeds.
-	// Optional - defaults to 30 seconds.
-	ChildShutdownTimeout time.Duration
 
 	// EnableTraceLogging enables verbose lifecycle event logging (mutex locks, tick events, etc.)
 	// Optional - defaults to false. Set ENABLE_TRACE_LOGGING=true for deep debugging.

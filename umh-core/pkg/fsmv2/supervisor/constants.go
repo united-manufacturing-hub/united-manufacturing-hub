@@ -27,7 +27,7 @@ const (
 	// DefaultCollectorTimeout is the default age threshold for detecting stale data requiring restart.
 	DefaultCollectorTimeout = 20 * time.Second
 
-	// DefaultMaxRestartAttempts is the default maximum number of collector restart attempts before escalation to graceful shutdown.
+	// DefaultMaxRestartAttempts is the default maximum number of collector restart attempts before panic.
 	DefaultMaxRestartAttempts = 3
 
 	// DefaultObservationInterval is the default interval between observation collection attempts.
@@ -52,15 +52,4 @@ const (
 
 	// DefaultGracefulRestartTimeout is how long to wait for graceful restart before force resetting.
 	DefaultGracefulRestartTimeout = 30 * time.Second
-
-	// DefaultChildShutdownTimeout is how long to wait for a child supervisor's done channel
-	// to close after calling Shutdown(). If exceeded, the parent logs a warning and proceeds.
-	DefaultChildShutdownTimeout = 30 * time.Second
-
-	// DefaultPanicEscalationWindow is the time window for counting tick panics.
-	DefaultPanicEscalationWindow = 5 * time.Minute
-
-	// DefaultMaxTickPanics is the maximum number of tick panics allowed within the escalation window
-	// before the panic circuit breaker opens.
-	DefaultMaxTickPanics = 3
 )

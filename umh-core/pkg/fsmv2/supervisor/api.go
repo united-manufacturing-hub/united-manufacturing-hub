@@ -522,17 +522,17 @@ func (s *Supervisor[TObserved, TDesired]) getMappedParentState() string {
 	return s.GetMappedParentState()
 }
 
-// isCircuitOpen returns true if any circuit breaker is open for this supervisor.
+// isCircuitOpen returns true if the circuit breaker is open for this supervisor.
 // Used by InfrastructureHealthChecker.CheckChildConsistency() to detect unhealthy children.
 func (s *Supervisor[TObserved, TDesired]) isCircuitOpen() bool {
-	return s.IsCircuitOpen()
+	return s.circuitOpen.Load()
 }
 
 // IsCircuitOpen implements SupervisorInterface.
-// Returns true if any circuit breaker is open (infrastructure failure or repeated panics).
-// Used by ChildInfo to report health status to parents.
+// Returns true if the circuit breaker is open (infrastructure failure detected).
+// Used by ChildInfo to report infrastructure status to parents.
 func (s *Supervisor[TObserved, TDesired]) IsCircuitOpen() bool {
-	return s.circuitOpen.Load() || s.panicCircuitOpen.Load()
+	return s.circuitOpen.Load()
 }
 
 // IsObservationStale implements SupervisorInterface.
@@ -787,7 +787,6 @@ type SupervisorDebugInfo struct {
 	Workers             []WorkerDebugInfo              `json:"workers"`
 	CollectedAtUnixNano int64                          `json:"collected_at_unix_nano"`
 	CircuitOpen         bool                           `json:"circuit_open"`
-	PanicCircuitOpen    bool                           `json:"panic_circuit_open"`
 }
 
 // GetDebugInfo returns introspection data for debugging and monitoring.
@@ -802,7 +801,6 @@ func (s *Supervisor[TObserved, TDesired]) GetDebugInfo() interface{} {
 		WorkerType:          s.workerType,
 		HierarchyPath:       s.GetHierarchyPathUnlocked(),
 		CircuitOpen:         s.circuitOpen.Load(),
-		PanicCircuitOpen:    s.panicCircuitOpen.Load(),
 		MappedParentState:   s.mappedParentState,
 		CollectedAtUnixNano: time.Now().UnixNano(),
 		Workers:             make([]WorkerDebugInfo, 0, len(s.workers)),
