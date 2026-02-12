@@ -18,12 +18,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"runtime/debug"
 	"sync"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/internal/panicutil"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/metrics"
 )
 
@@ -235,6 +237,9 @@ func (c *Collector[TObserved]) Stop(ctx context.Context) {
 	doneChan := c.goroutineDone
 	c.mu.Unlock()
 
+	stopTimer := time.NewTimer(5 * time.Second)
+	defer stopTimer.Stop()
+
 	select {
 	case <-doneChan:
 		c.config.Logger.Debug("collector_stopped",
@@ -242,7 +247,7 @@ func (c *Collector[TObserved]) Stop(ctx context.Context) {
 	case <-ctx.Done():
 		c.config.Logger.SentryWarn(deps.FeatureFSMv2, c.config.Identity.HierarchyPath, "collector_stopped",
 			deps.String("result", "context_cancelled"))
-	case <-time.After(5 * time.Second):
+	case <-stopTimer.C:
 		c.config.Logger.SentryWarn(deps.FeatureFSMv2, c.config.Identity.HierarchyPath, "collector_stopped",
 			deps.String("result", "timeout"))
 	}
@@ -346,7 +351,13 @@ func (c *Collector[TObserved]) observationLoop() {
 	}
 }
 
-func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) error {
+func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = c.handleCollectorPanic(r)
+		}
+	}()
+
 	collectionStartTime := time.Now()
 	c.logTrace("observation_collection_starting",
 		deps.String("collection_start_time", collectionStartTime.Format(time.RFC3339Nano)))
@@ -419,8 +430,6 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 		}
 	}
 
-	// NOTE: ActionHistory injection was removed - collector must not modify ObservedState
-	// after CollectObservedState returns. Workers read deps.GetActionHistory() directly.
 	var observationTimestamp time.Time
 	if timestampProvider, ok := observed.(fsmv2.TimestampProvider); ok {
 		observationTimestamp = timestampProvider.GetTimestamp()
@@ -463,10 +472,8 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 
 	saveDuration := time.Since(saveStartTime)
 
-	hierarchyPath := c.config.Identity.HierarchyPath
-
-	metrics.RecordObservationSave(hierarchyPath, changed, saveDuration)
-	metrics.ExportWorkerMetrics(hierarchyPath, observed)
+	metrics.RecordObservationSave(c.config.Identity.HierarchyPath, changed, saveDuration)
+	metrics.ExportWorkerMetrics(c.config.Identity.HierarchyPath, observed)
 
 	if changed {
 		c.logTrace("observation_saved",
@@ -479,4 +486,37 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 	}
 
 	return nil
+}
+
+// handleCollectorPanic processes a recovered panic from collectAndSaveObservedState.
+// It classifies the panic, records metrics, and logs to Sentry. If the recovery handler
+// itself panics, that secondary panic is caught and logged separately.
+func (c *Collector[TObserved]) handleCollectorPanic(r interface{}) (err error) {
+	logger := c.config.Logger
+	hierarchyPath := c.config.Identity.HierarchyPath
+
+	defer func() {
+		if r2 := recover(); r2 != nil {
+			err = fmt.Errorf("collector panic (recovery handler also panicked: %v): %v", r2, r)
+
+			func() {
+				defer func() { recover() }() //nolint:errcheck // recover() return value is intentionally unused in safety net
+
+				logger.SentryError(deps.FeatureFSMv2, hierarchyPath, err, "collector_double_panic",
+					deps.String("stack", string(debug.Stack())))
+			}()
+		}
+	}()
+
+	panicType, panicErr := panicutil.ClassifyPanic(r)
+	err = fmt.Errorf("collector panic: %w", panicErr)
+
+	metrics.RecordPanicRecovery(hierarchyPath, panicType)
+
+	logger.SentryError(deps.FeatureFSMv2, hierarchyPath, err, "collector_panic",
+		deps.Field{Key: "panic_value", Value: fmt.Sprintf("%v", r)},
+		deps.Field{Key: "panic_type", Value: panicType},
+		deps.Field{Key: "stack_trace", Value: string(debug.Stack())})
+
+	return err
 }

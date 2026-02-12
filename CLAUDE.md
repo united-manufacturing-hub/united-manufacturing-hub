@@ -119,7 +119,7 @@ The United Manufacturing Hub (UMH) is an Industrial IoT platform for manufacturi
 
 ## Code Style Requirements
 
-1. **Do NOT add comments unless explicitly requested**
+1. **Comments**: Do NOT add inline comments unless explicitly requested. DO add godoc comments on exported functions/types and comments on non-obvious constants, following [Google Developer Documentation Style Guide](https://developers.google.com/style) (active voice, present tense, concise)
 2. **Prefer editing existing files over creating new ones**
 3. **Follow existing patterns in the codebase**
 4. **Struct field alignment**: Run `make betteralign-fix` (automated tool orders fields by decreasing size)

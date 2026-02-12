@@ -27,10 +27,33 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/metrics"
 )
 
+const (
+	// stuckActionDetectionMultiplier defines when an in-progress action is considered stuck (elapsed > multiplier * timeout).
+	stuckActionDetectionMultiplier = 2
+	// stuckActionForceRemoveMultiplier defines when a stuck action is force-removed, allowing re-enqueue.
+	stuckActionForceRemoveMultiplier = 3
+	// defaultWorkerCount is the number of concurrent action workers when none is specified.
+	defaultWorkerCount = 10
+	// queueSizeMultiplier determines queue capacity as workerCount * multiplier.
+	queueSizeMultiplier = 2
+	// defaultActionTimeout is the per-action execution timeout when no override is configured.
+	defaultActionTimeout = 30 * time.Second
+	// defaultMetricsInterval is how often the metrics reporter checks for stuck actions.
+	defaultMetricsInterval = 5 * time.Second
+)
+
+type inProgressEntry struct {
+	startTime     time.Time
+	actionName    string
+	timeout       time.Duration
+	generation    uint64
+	stuckReported bool
+}
+
 type ActionExecutor struct {
 	ctx              context.Context
 	actionQueue      chan actionWork
-	inProgress       map[string]bool
+	inProgress       map[string]inProgressEntry
 	cancel           context.CancelFunc
 	timeouts         map[string]time.Duration
 	metricsCancel    context.CancelFunc
@@ -42,49 +65,52 @@ type ActionExecutor struct {
 	metricsWg        sync.WaitGroup
 	workerCount      int
 	defaultTimeout   time.Duration
+	metricsInterval  time.Duration
+	nextGeneration   uint64
 	mu               sync.RWMutex
 	closeOnce        sync.Once
 	stopped          bool
 }
 
 type actionWork struct {
-	action   fsmv2.Action[any]
-	deps     any
-	actionID string
-	timeout  time.Duration
+	action     fsmv2.Action[any]
+	deps       any
+	actionID   string
+	timeout    time.Duration
+	generation uint64
+}
+
+type stuckEntry struct {
+	actionID    string
+	actionName  string
+	elapsedMs   int64
+	timeoutMs   int64
+	forceRemove bool
 }
 
 func NewActionExecutor(workerCount int, supervisorID string, identity deps.Identity, logger deps.FSMLogger) *ActionExecutor {
-	if workerCount <= 0 {
-		workerCount = 10
-	}
-
-	return &ActionExecutor{
-		supervisorID:   supervisorID,
-		identity:       identity,
-		workerCount:    workerCount,
-		actionQueue:    make(chan actionWork, workerCount*2),
-		inProgress:     make(map[string]bool),
-		timeouts:       make(map[string]time.Duration),
-		defaultTimeout: 30 * time.Second,
-		logger:         logger,
-	}
+	return NewActionExecutorWithTimeout(workerCount, nil, supervisorID, identity, logger)
 }
 
 func NewActionExecutorWithTimeout(workerCount int, timeouts map[string]time.Duration, supervisorID string, identity deps.Identity, logger deps.FSMLogger) *ActionExecutor {
 	if workerCount <= 0 {
-		workerCount = 10
+		workerCount = defaultWorkerCount
+	}
+
+	if timeouts == nil {
+		timeouts = make(map[string]time.Duration)
 	}
 
 	return &ActionExecutor{
-		supervisorID:   supervisorID,
-		identity:       identity,
-		workerCount:    workerCount,
-		actionQueue:    make(chan actionWork, workerCount*2),
-		inProgress:     make(map[string]bool),
-		timeouts:       timeouts,
-		defaultTimeout: 30 * time.Second,
-		logger:         logger,
+		supervisorID:    supervisorID,
+		identity:        identity,
+		workerCount:     workerCount,
+		actionQueue:     make(chan actionWork, workerCount*queueSizeMultiplier),
+		inProgress:      make(map[string]inProgressEntry),
+		timeouts:        timeouts,
+		defaultTimeout:  defaultActionTimeout,
+		metricsInterval: defaultMetricsInterval,
+		logger:          logger,
 	}
 }
 
@@ -150,7 +176,7 @@ func (ae *ActionExecutor) executeWorkWithRecovery(ctx context.Context, work acti
 
 	defer func() {
 		if r := recover(); r != nil {
-			err = errors.New("action panicked")
+			err = fmt.Errorf("action panicked: %v", r)
 			status = "panic"
 
 			ae.logger.SentryError(deps.FeatureFSMv2, ae.identity.HierarchyPath, err, "action_panic",
@@ -163,9 +189,34 @@ func (ae *ActionExecutor) executeWorkWithRecovery(ctx context.Context, work acti
 		}
 
 		ae.mu.Lock()
-		delete(ae.inProgress, work.actionID)
+		entry, exists := ae.inProgress[work.actionID]
+
+		generationMatch := exists && entry.generation == work.generation
+		if generationMatch {
+			delete(ae.inProgress, work.actionID)
+		}
+
 		callback := ae.onActionComplete
 		ae.mu.Unlock()
+
+		if !exists {
+			ae.logger.Info("action_completion_discarded_entry_missing",
+				deps.CorrelationID(work.actionID),
+				deps.ActionName(work.action.Name()),
+				deps.Field{Key: "work_generation", Value: work.generation})
+
+			return
+		}
+
+		if !generationMatch {
+			ae.logger.Info("action_completion_discarded_stale_generation",
+				deps.CorrelationID(work.actionID),
+				deps.ActionName(work.action.Name()),
+				deps.Field{Key: "work_generation", Value: work.generation},
+				deps.Field{Key: "current_generation", Value: entry.generation})
+
+			return
+		}
 
 		duration := time.Since(startTime)
 
@@ -247,7 +298,7 @@ func (ae *ActionExecutor) EnqueueAction(actionID string, action fsmv2.Action[any
 		return errors.New("executor stopped")
 	}
 
-	if ae.inProgress[actionID] {
+	if _, exists := ae.inProgress[actionID]; exists {
 		ae.mu.Unlock()
 
 		ae.logger.SentryWarn(deps.FeatureFSMv2, ae.identity.HierarchyPath, "action_enqueue_rejected",
@@ -258,21 +309,29 @@ func (ae *ActionExecutor) EnqueueAction(actionID string, action fsmv2.Action[any
 		return errors.New("action already in progress")
 	}
 
-	ae.inProgress[actionID] = true
-
 	// Read timeout while still holding lock to prevent race with concurrent access
-	timeout, exists := ae.timeouts[actionID]
-	if !exists {
+	timeout, timeoutExists := ae.timeouts[actionID]
+	if !timeoutExists {
 		timeout = ae.defaultTimeout
 	}
 
+	ae.nextGeneration++
+	gen := ae.nextGeneration
+
+	ae.inProgress[actionID] = inProgressEntry{
+		startTime:  time.Now(),
+		actionName: action.Name(),
+		timeout:    timeout,
+		generation: gen,
+	}
 	ae.mu.Unlock()
 
 	work := actionWork{
-		actionID: actionID,
-		action:   action,
-		timeout:  timeout,
-		deps:     workerDeps,
+		actionID:   actionID,
+		action:     action,
+		timeout:    timeout,
+		deps:       workerDeps,
+		generation: gen,
 	}
 
 	select {
@@ -302,7 +361,7 @@ func (ae *ActionExecutor) EnqueueAction(actionID string, action fsmv2.Action[any
 func (ae *ActionExecutor) metricsReporter(ctx context.Context) {
 	defer ae.metricsWg.Done()
 
-	ticker := time.NewTicker(5 * time.Second)
+	ticker := time.NewTicker(ae.metricsInterval)
 	defer ticker.Stop()
 
 	for {
@@ -310,10 +369,68 @@ func (ae *ActionExecutor) metricsReporter(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			ae.mu.RLock()
+			ae.mu.Lock()
 			queueSize := len(ae.actionQueue)
 			inProgressCount := len(ae.inProgress)
-			ae.mu.RUnlock()
+			callback := ae.onActionComplete
+
+			now := time.Now()
+
+			var stuckActions []stuckEntry
+
+			for actionID, entry := range ae.inProgress {
+				elapsed := now.Sub(entry.startTime)
+
+				if elapsed > stuckActionForceRemoveMultiplier*entry.timeout {
+					delete(ae.inProgress, actionID)
+					stuckActions = append(stuckActions, stuckEntry{
+						actionID:    actionID,
+						actionName:  entry.actionName,
+						elapsedMs:   elapsed.Milliseconds(),
+						timeoutMs:   entry.timeout.Milliseconds(),
+						forceRemove: true,
+					})
+				} else if elapsed > stuckActionDetectionMultiplier*entry.timeout && !entry.stuckReported {
+					entry.stuckReported = true
+					ae.inProgress[actionID] = entry
+					stuckActions = append(stuckActions, stuckEntry{
+						actionID:   actionID,
+						actionName: entry.actionName,
+						elapsedMs:  elapsed.Milliseconds(),
+						timeoutMs:  entry.timeout.Milliseconds(),
+					})
+				}
+			}
+
+			ae.mu.Unlock()
+
+			for _, stuck := range stuckActions {
+				if stuck.forceRemove {
+					metrics.RecordStuckActionForceRemoved(ae.identity.HierarchyPath, stuck.actionName)
+					ae.logger.SentryError(deps.FeatureFSMv2, ae.identity.HierarchyPath, fmt.Errorf("action %s stuck for %dms (timeout %dms), force-removed", stuck.actionName, stuck.elapsedMs, stuck.timeoutMs), "stuck_action_force_removed",
+						deps.Field{Key: "action_id", Value: stuck.actionID},
+						deps.Field{Key: "action_name", Value: stuck.actionName},
+						deps.Field{Key: "elapsed_ms", Value: stuck.elapsedMs},
+						deps.Field{Key: "timeout_ms", Value: stuck.timeoutMs})
+
+					if callback != nil {
+						callback(deps.ActionResult{
+							Timestamp:  now,
+							ActionType: stuck.actionName,
+							Success:    false,
+							ErrorMsg:   fmt.Sprintf("force-removed: stuck for %dms (timeout %dms)", stuck.elapsedMs, stuck.timeoutMs),
+							Latency:    time.Duration(stuck.elapsedMs) * time.Millisecond,
+						})
+					}
+				} else {
+					metrics.RecordStuckActionDetected(ae.identity.HierarchyPath, stuck.actionName)
+					ae.logger.SentryWarn(deps.FeatureFSMv2, ae.identity.HierarchyPath, "stuck_action_detected",
+						deps.Field{Key: "action_id", Value: stuck.actionID},
+						deps.Field{Key: "action_name", Value: stuck.actionName},
+						deps.Field{Key: "elapsed_ms", Value: stuck.elapsedMs},
+						deps.Field{Key: "timeout_ms", Value: stuck.timeoutMs})
+				}
+			}
 
 			metrics.RecordWorkerPoolQueueSize(ae.identity.HierarchyPath, queueSize)
 
@@ -328,7 +445,9 @@ func (ae *ActionExecutor) HasActionInProgress(actionID string) bool {
 	ae.mu.RLock()
 	defer ae.mu.RUnlock()
 
-	return ae.inProgress[actionID]
+	_, exists := ae.inProgress[actionID]
+
+	return exists
 }
 
 // GetActiveActionCount returns the number of actions currently in progress.
