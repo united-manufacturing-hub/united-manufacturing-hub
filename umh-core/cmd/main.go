@@ -31,6 +31,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/topicbrowser"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/env"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/control"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
@@ -102,6 +103,30 @@ func main() {
 
 		return
 	}
+
+	// FSMv2 feature flags: read directly from env vars, not persisted to config.yaml.
+	// These bypass the config manager intentionally — they are temporary migration flags
+	// that will be replaced when the config manager becomes an FSMv2 worker.
+	v, err := env.GetAsBool("USE_FSMV2_TRANSPORT", false, false)
+	if err != nil {
+		log.Warnf("Failed to parse USE_FSMV2_TRANSPORT: %v", err)
+	}
+
+	configData.Agent.UseFSMv2Transport = v
+
+	v, err = env.GetAsBool("USE_FSMV2_MEMORY_CLEANUP", false, false)
+	if err != nil {
+		log.Warnf("Failed to parse USE_FSMV2_MEMORY_CLEANUP: %v", err)
+	}
+
+	configData.Agent.UseFSMv2MemoryCleanup = v
+
+	v, err = env.GetAsBool("USE_FSMV2_PROTOCOL_CONVERTER", false, false)
+	if err != nil {
+		log.Warnf("Failed to parse USE_FSMV2_PROTOCOL_CONVERTER: %v", err)
+	}
+
+	configData.Agent.UseFSMv2ProtocolConverter = v
 
 	// Ensure the S6 repository directory exists
 	// This is particularly important when using /tmp/umh-core/services (the default)
