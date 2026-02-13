@@ -724,6 +724,110 @@ func getReceiverTypeName(expr ast.Expr) string {
 	return ""
 }
 
+// ValidateSpecUsage checks that DeriveDesiredState uses spec type assertion results.
+func ValidateSpecUsage(baseDir string) []Violation {
+	var violations []Violation
+
+	workerFiles := FindWorkerFiles(baseDir)
+
+	for _, file := range workerFiles {
+		fileViolations := checkSpecUsage(file)
+		violations = append(violations, fileViolations...)
+	}
+
+	return violations
+}
+
+// checkSpecUsage detects DeriveDesiredState methods that type-assert spec but discard the result.
+func checkSpecUsage(filename string) []Violation {
+	var violations []Violation
+
+	fset := token.NewFileSet()
+
+	node, err := parser.ParseFile(fset, filename, nil, parser.ParseComments)
+	if err != nil {
+		return violations
+	}
+
+	ast.Inspect(node, func(n ast.Node) bool {
+		funcDecl, ok := n.(*ast.FuncDecl)
+		if !ok || funcDecl.Name.Name != "DeriveDesiredState" {
+			return true
+		}
+
+		if funcDecl.Body == nil {
+			return true
+		}
+
+		if usesNilSafeHelper(funcDecl.Body) {
+			return true
+		}
+
+		ast.Inspect(funcDecl.Body, func(bodyNode ast.Node) bool {
+			if hasDiscardedTypeAssertion(bodyNode) {
+				pos := fset.Position(funcDecl.Pos())
+				violations = append(violations, Violation{
+					File:    filename,
+					Line:    pos.Line,
+					Type:    "SPEC_RESULT_DISCARDED",
+					Message: "DeriveDesiredState() type-asserts spec but discards the result with _ — spec fields should be parsed and used",
+				})
+
+				return false
+			}
+
+			return true
+		})
+
+		return true
+	})
+
+	return violations
+}
+
+// hasDiscardedTypeAssertion checks if a node contains a type assertion where the value is discarded with _.
+func hasDiscardedTypeAssertion(n ast.Node) bool {
+	switch stmt := n.(type) {
+	case *ast.AssignStmt:
+		return assignDiscardsTypeAssertion(stmt)
+	case *ast.IfStmt:
+		if stmt.Init != nil {
+			if assignStmt, ok := stmt.Init.(*ast.AssignStmt); ok {
+				return assignDiscardsTypeAssertion(assignStmt)
+			}
+		}
+	}
+
+	return false
+}
+
+// assignDiscardsTypeAssertion checks if an assignment discards a type assertion result with _.
+func assignDiscardsTypeAssertion(stmt *ast.AssignStmt) bool {
+	if len(stmt.Lhs) < 1 || len(stmt.Rhs) < 1 {
+		return false
+	}
+
+	hasTypeAssertion := false
+
+	for _, rhs := range stmt.Rhs {
+		if _, ok := rhs.(*ast.TypeAssertExpr); ok {
+			hasTypeAssertion = true
+
+			break
+		}
+	}
+
+	if !hasTypeAssertion {
+		return false
+	}
+
+	if ident, ok := stmt.Lhs[0].(*ast.Ident); ok && ident.Name == "_" {
+		return true
+	}
+
+	return false
+}
+
 // ValidateActionHistoryCopy checks that workers with dependencies copy action history.
 func ValidateActionHistoryCopy(baseDir string) []Violation {
 	var violations []Violation

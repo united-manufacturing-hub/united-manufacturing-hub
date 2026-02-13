@@ -253,7 +253,7 @@ func (m *MyFSM) Run() {
 
 type MyWorker struct {
     *helpers.BaseWorker[*MyDependencies]
-    logger *zap.SugaredLogger
+    logger deps.FSMLogger
 }
 
 func (w *MyWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedState, error) {
@@ -339,7 +339,7 @@ func (m *MyFSM) beforeRunning(e *fsm.Event) {
     // Pre-condition check
     if !m.isHealthy() {
         e.Cancel()
-        m.logger.Warn("Cannot enter running: unhealthy")
+        m.logger.SentryWarn(deps.FeatureFSMv2, m.hierarchyPath, "Cannot enter running: unhealthy")
         return
     }
 }

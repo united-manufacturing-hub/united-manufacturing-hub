@@ -20,7 +20,6 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"go.uber.org/zap"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
@@ -107,12 +106,12 @@ var _ = Describe("Variable Injection", func() {
 		testWorker *TestWorker
 		identity   deps.Identity
 		s          *supervisor.Supervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState]
-		logger     *zap.SugaredLogger
+		logger     deps.FSMLogger
 	)
 
 	BeforeEach(func() {
 		ctx = context.Background()
-		logger = zap.NewNop().Sugar()
+		logger = deps.NewNopFSMLogger()
 
 		basicStore := memory.NewInMemoryStore()
 
@@ -125,7 +124,7 @@ var _ = Describe("Variable Injection", func() {
 		err = basicStore.CreateCollection(ctx, "test_observed", nil)
 		Expect(err).ToNot(HaveOccurred())
 
-		store = storage.NewTriangularStore(basicStore, zap.NewNop().Sugar())
+		store = storage.NewTriangularStore(basicStore, deps.NewNopFSMLogger())
 
 		identity = deps.Identity{
 			ID:         "test-worker-1",

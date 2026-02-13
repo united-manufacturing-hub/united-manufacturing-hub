@@ -146,6 +146,27 @@ const (
 	CounterBackpressureEntryTotal CounterName = "backpressure_entry_total"
 )
 
+// Persistence worker counter names for store maintenance.
+const (
+	// CounterCompactionDeltasDeletedTotal tracks the total number of delta entries removed during store compaction.
+	CounterCompactionDeltasDeletedTotal CounterName = "compaction_deltas_deleted_total"
+
+	// CounterCompactionCyclesTotal tracks total successful CompactDeltas() executions.
+	CounterCompactionCyclesTotal CounterName = "compaction_cycles_total"
+
+	// CounterMaintenanceCyclesTotal tracks total successful Maintenance() executions.
+	CounterMaintenanceCyclesTotal CounterName = "maintenance_cycles_total"
+)
+
+// Persistence worker gauge names for store maintenance.
+const (
+	// GaugeLastCompactionDurationMs tracks the duration of the most recent CompactDeltas() in milliseconds.
+	GaugeLastCompactionDurationMs GaugeName = "last_compaction_duration_ms"
+
+	// GaugeLastMaintenanceDurationMs tracks the duration of the most recent Maintenance() in milliseconds.
+	GaugeLastMaintenanceDurationMs GaugeName = "last_maintenance_duration_ms"
+)
+
 // =============================================================================
 // METRICS INFRASTRUCTURE
 // =============================================================================

@@ -24,7 +24,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
-	"go.uber.org/zap"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 )
 
 var _ = Describe("Supervisor Lifecycle", func() {
@@ -36,7 +36,7 @@ var _ = Describe("Supervisor Lifecycle", func() {
 				s := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 					WorkerType:              "container",
 					Store:                   store,
-					Logger:                  zap.NewNop().Sugar(),
+					Logger:                  deps.NewNopFSMLogger(),
 					TickInterval:            50 * time.Millisecond,
 					GracefulShutdownTimeout: 100 * time.Millisecond, // Short timeout for tests
 				})
@@ -100,7 +100,7 @@ var _ = Describe("Supervisor Lifecycle", func() {
 
 	Describe("Tick state transition edge case", func() {
 		Context("when state violates invariant by switching state AND emitting action", func() {
-			It("should panic", func() {
+			It("should return error (panic recovered)", func() {
 				store := newMockTriangularStore()
 
 				nextState := &mockState{}
@@ -112,9 +112,9 @@ var _ = Describe("Supervisor Lifecycle", func() {
 
 				s := newSupervisorWithWorker(&mockWorker{initialState: initialState}, store, supervisor.CollectorHealthConfig{})
 
-				Expect(func() {
-					_ = s.TestTick(context.Background())
-				}).To(Panic())
+				err := s.TestTick(context.Background())
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("tick panic"))
 			})
 		})
 	})

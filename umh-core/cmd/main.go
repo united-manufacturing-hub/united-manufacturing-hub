@@ -31,6 +31,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/topicbrowser"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/env"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/control"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
@@ -39,10 +40,13 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/redpanda"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/streamprocessor"
 	topicbrowserfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/topicbrowser"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/examples"
+	fsmv2sentry "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/sentry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/snapshot"
+	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/persistence"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
@@ -99,6 +103,30 @@ func main() {
 
 		return
 	}
+
+	// FSMv2 feature flags: read directly from env vars, not persisted to config.yaml.
+	// These bypass the config manager intentionally — they are temporary migration flags
+	// that will be replaced when the config manager becomes an FSMv2 worker.
+	v, err := env.GetAsBool("USE_FSMV2_TRANSPORT", false, false)
+	if err != nil {
+		log.Warnf("Failed to parse USE_FSMV2_TRANSPORT: %v", err)
+	}
+
+	configData.Agent.UseFSMv2Transport = v
+
+	v, err = env.GetAsBool("USE_FSMV2_MEMORY_CLEANUP", false, false)
+	if err != nil {
+		log.Warnf("Failed to parse USE_FSMV2_MEMORY_CLEANUP: %v", err)
+	}
+
+	configData.Agent.UseFSMv2MemoryCleanup = v
+
+	v, err = env.GetAsBool("USE_FSMV2_PROTOCOL_CONVERTER", false, false)
+	if err != nil {
+		log.Warnf("Failed to parse USE_FSMV2_PROTOCOL_CONVERTER: %v", err)
+	}
+
+	configData.Agent.UseFSMv2ProtocolConverter = v
 
 	// Ensure the S6 repository directory exists
 	// This is particularly important when using /tmp/umh-core/services (the default)
@@ -461,8 +489,14 @@ children:
         state: "running"
 `, configData.Agent.APIURL, placeholderUUID, configData.Agent.AuthToken)
 
+	if configData.Agent.UseFSMv2MemoryCleanup {
+		yamlConfig += `  - name: "persistence"
+    workerType: "persistence"
+`
+	}
+
 	// Setup store (in-memory for now)
-	store := examples.SetupStore(logger)
+	store := examples.SetupStore(deps.NewFSMLogger(logger))
 
 	// Create callback to update LoginResponse with real UUID from backend (Bug #6 fix)
 	// This is called by AuthenticateAction after successful authentication
@@ -476,22 +510,33 @@ children:
 	// This avoids global state and enables proper testing
 	// Use Named("fsmv2") to create [fsmv2] prefix in logs for easy filtering
 	fsmv2Logger := logger.Named("fsmv2")
-	// Wrap with SentryHook for automatic FSMv2 error capture to Sentry
+	// Wrap with FSMv2 SentryHook for automatic error capture to Sentry with:
+	// - Per-fingerprint debouncing (5 min window)
+	// - Error chain extraction for stable fingerprinting
+	// - Feature-based routing for error ownership
 	// This only affects FSMv2 logs, not the rest of the application
-	fsmv2Core := sentry.NewSentryHook(fsmv2Logger.Desugar().Core())
+	fsmv2Hook := fsmv2sentry.NewSentryHook(5 * time.Minute)
+	defer fsmv2Hook.Stop()
+
+	fsmv2Core := fsmv2Hook.Wrap(fsmv2Logger.Desugar().Core())
 	fsmv2Logger = zap.New(fsmv2Core).Sugar()
+
+	fsmv2Deps := map[string]any{
+		"channelProvider":       channelAdapter,
+		"onAuthSuccessCallback": onAuthSuccessCallback,
+	}
+	if configData.Agent.UseFSMv2MemoryCleanup {
+		fsmv2Deps["store"] = store
+	}
 
 	appSup, err := application.NewApplicationSupervisor(application.SupervisorConfig{
 		ID:           "application-fsmv2",
 		Name:         "Application FSMv2",
 		Store:        store,
-		Logger:       fsmv2Logger,
+		Logger:       deps.NewFSMLogger(fsmv2Logger),
 		TickInterval: 100 * time.Millisecond,
 		YAMLConfig:   yamlConfig,
-		Dependencies: map[string]any{
-			"channelProvider":       channelAdapter,
-			"onAuthSuccessCallback": onAuthSuccessCallback,
-		},
+		Dependencies: fsmv2Deps,
 	})
 	if err != nil {
 		logger.Errorw("Failed to create FSMv2 supervisor", "error", err)

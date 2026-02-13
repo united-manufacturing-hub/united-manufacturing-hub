@@ -304,15 +304,17 @@ Stopped → TryingToAuthenticate → Syncing ↔ Degraded
 - Actions update shared state via Dependencies (thread-safe setters)
 - CollectObservedState reads from Dependencies (thread-safe getters)
 
-### Enabling FSMv2 Communicator
+### Enabling FSMv2 Features
 
-#### Option 1: Environment Variables
+FSMv2 features are controlled via environment variables:
 
 ```bash
 docker run -d \
   -e AUTH_TOKEN=your-auth-token \
   -e API_URL=https://management.umh.app \
   -e USE_FSMV2_TRANSPORT=true \
+  -e USE_FSMV2_MEMORY_CLEANUP=true \
+  -e USE_FSMV2_PROTOCOL_CONVERTER=true \
   umh-core:latest
 ```
 
@@ -320,35 +322,17 @@ docker run -d \
 |----------|----------|-------------|
 | `AUTH_TOKEN` | Yes | Authentication token from Management Console |
 | `API_URL` | Yes | Backend relay server URL (e.g., `https://management.umh.app`) |
-| `USE_FSMV2_TRANSPORT` | Yes | Set to `true` to enable FSMv2 communicator |
+| `USE_FSMV2_TRANSPORT` | No | Set to `true` to enable FSMv2 communicator |
+| `USE_FSMV2_MEMORY_CLEANUP` | No | Set to `true` to enable FSMv2 memory cleanup (persistence worker) |
+| `USE_FSMV2_PROTOCOL_CONVERTER` | No | Set to `true` to enable FSMv2 protocol converter |
 
-#### Option 2: config.yaml
+### Disabling FSMv2 Features
 
-```yaml
-agent:
-  communicator:
-    apiUrl: "https://management.umh.app"
-    authToken: "your-auth-token"
-    useFSMv2Transport: true
-```
-
-### Disabling FSMv2 Communicator
-
-To revert to the legacy communicator, explicitly set:
+To revert to the legacy behavior, set the corresponding flag to `false` or omit it (defaults to `false`):
 
 ```bash
 -e USE_FSMV2_TRANSPORT=false
 ```
-
-Or in config.yaml:
-
-```yaml
-agent:
-  communicator:
-    useFSMv2Transport: false
-```
-
-**Note:** If `useFSMv2Transport` was previously enabled and saved to config.yaml, you must explicitly set it to `false` - simply omitting the environment variable will not override the persisted config value.
 
 ### Verifying FSMv2 Communicator
 

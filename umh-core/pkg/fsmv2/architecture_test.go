@@ -38,6 +38,7 @@ import (
 	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplepanic"
 	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent"
 	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleslow"
+	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/persistence"
 )
 
 var _ = Describe("FSMv2 Architecture Validation", func() {
@@ -494,6 +495,17 @@ var _ = Describe("FSMv2 Architecture Validation", func() {
 						Skip(fmt.Sprintf("Found %d static error violations (to be fixed in P2-19):\n%s",
 							len(violations), message))
 					}
+				}
+			})
+		})
+
+		Describe("Spec Usage in DeriveDesiredState (Invariant: Spec Fields Must Be Used)", func() {
+			It("should not discard spec type assertion results", func() {
+				violations := validator.ValidateSpecUsage(getFsmv2Dir())
+				if len(violations) > 0 {
+					message := validator.FormatViolationsWithPattern(
+						"Spec Result Discarded Violations", violations, "SPEC_RESULT_DISCARDED")
+					Fail(message)
 				}
 			})
 		})

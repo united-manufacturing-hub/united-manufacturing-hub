@@ -39,7 +39,7 @@ Registers both factories atomically with automatic type derivation:
 func init() {
     // Worker type is automatically derived from ExamplechildObservedState → "examplechild"
     if err := factory.RegisterWorkerType[snapshot.ExamplechildObservedState, *snapshot.ExamplechildDesiredState](
-        func(id fsmv2.Identity, logger *zap.SugaredLogger) fsmv2.Worker {
+        func(id fsmv2.Identity, logger deps.FSMLogger) fsmv2.Worker {
             worker, _ := NewChildWorker(id, pool, logger)
             return worker
         },
@@ -69,7 +69,7 @@ func init() {
 
     err := factory.RegisterWorkerAndSupervisorFactoryByType(
         workerType,
-        func(id fsmv2.Identity, logger *zap.SugaredLogger) fsmv2.Worker {
+        func(id fsmv2.Identity, logger deps.FSMLogger) fsmv2.Worker {
             return NewChildWorker(id, logger)
         },
         func(raw interface{}) interface{} {

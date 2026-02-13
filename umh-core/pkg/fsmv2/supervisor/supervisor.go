@@ -52,8 +52,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"go.uber.org/zap"
-
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
@@ -150,8 +148,8 @@ type Supervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] stru
 	// See package-level LOCK ORDER section for details.
 	mu                 *lockmanager.Lock
 	lockManager        *lockmanager.LockManager
-	logger             *zap.SugaredLogger
-	baseLogger         *zap.SugaredLogger // Un-enriched logger for child supervisors
+	logger             deps.FSMLogger
+	baseLogger         deps.FSMLogger // Un-enriched logger for child supervisors
 	freshnessChecker   *health.FreshnessChecker
 	children           map[string]SupervisorInterface
 	childDoneChans     map[string]<-chan struct{}
@@ -160,6 +158,7 @@ type Supervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] stru
 	restartRequestedAt map[string]time.Time
 	globalVars         map[string]any
 	healthChecker      *InfrastructureHealthChecker
+	panicTracker       *panicRecovery
 	actionExecutor     *execution.ActionExecutor
 	ctxCancel          context.CancelFunc
 	// ctxMu Protects ctx and ctxCancel to prevent TOCTOU races during shutdown.
@@ -187,7 +186,9 @@ type Supervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] stru
 	tickCount                uint64
 	gracefulShutdownTimeout  time.Duration
 	metricsReportInterval    time.Duration
+	childShutdownTimeout     time.Duration
 	circuitOpen              atomic.Bool
+	panicCircuitOpen         atomic.Bool
 	started                  atomic.Bool
 	enableTraceLogging       bool
 }
@@ -238,11 +239,11 @@ func NewSupervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState](c
 		panic(fmt.Sprintf("supervisor config error: staleThreshold (%v) must be less than collectorTimeout (%v)", staleThreshold, timeout))
 	}
 
-	cfg.Logger.Infow("timeout_configuration",
-		"worker", cfg.WorkerType,
-		"observation_timeout", observationTimeout,
-		"stale_threshold", staleThreshold,
-		"collector_timeout", timeout)
+	cfg.Logger.Info("timeout_configuration",
+		deps.String("worker", cfg.WorkerType),
+		deps.Duration("observation_timeout", observationTimeout),
+		deps.Duration("stale_threshold", staleThreshold),
+		deps.Duration("collector_timeout", timeout))
 
 	freshnessChecker := health.NewFreshnessChecker(staleThreshold, timeout, cfg.Logger)
 
@@ -256,6 +257,11 @@ func NewSupervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState](c
 	metricsReportInterval := cfg.MetricsReportInterval
 	if metricsReportInterval == 0 {
 		metricsReportInterval = DefaultMetricsReportInterval
+	}
+
+	childShutdownTimeout := cfg.ChildShutdownTimeout
+	if childShutdownTimeout == 0 {
+		childShutdownTimeout = DefaultChildShutdownTimeout
 	}
 
 	return &Supervisor[TObserved, TDesired]{
@@ -277,6 +283,7 @@ func NewSupervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState](c
 		createdAt:          time.Now(),
 		parentID:           "",
 		healthChecker:      NewInfrastructureHealthChecker(DefaultMaxInfraRecoveryAttempts, DefaultRecoveryAttemptWindow),
+		panicTracker:       newPanicRecovery(DefaultPanicEscalationWindow, DefaultMaxTickPanics),
 		actionExecutor:     execution.NewActionExecutor(10, cfg.WorkerType, deps.Identity{WorkerType: cfg.WorkerType}, cfg.Logger),
 		collectorHealth: CollectorHealth{
 			observationTimeout: observationTimeout,
@@ -289,6 +296,7 @@ func NewSupervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState](c
 		enableTraceLogging:      cfg.EnableTraceLogging,
 		gracefulShutdownTimeout: gracefulShutdownTimeout,
 		metricsReportInterval:   metricsReportInterval,
+		childShutdownTimeout:    childShutdownTimeout,
 		deps:                    cfg.Dependencies,
 		validatedSpecHashes:     make(map[string]string),
 	}

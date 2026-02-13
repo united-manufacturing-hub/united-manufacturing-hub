@@ -16,6 +16,7 @@ package storage
 
 import (
 	"context"
+	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 )
@@ -109,6 +110,13 @@ type TriangularStoreInterface interface {
 
 	// GetDeltas returns incremental deltas or full bootstrap data if client is too far behind.
 	GetDeltas(ctx context.Context, sub Subscription) (DeltasResponse, error)
+
+	// CompactDeltas removes delta entries older than the retention window.
+	// Only deltas are deleted; snapshots (Identity/Desired/Observed) are never touched.
+	CompactDeltas(ctx context.Context, retentionWindow time.Duration) (int, error)
+
+	// Maintenance performs heavyweight cleanup operations (cache clearing, future SQLite VACUUM).
+	Maintenance(ctx context.Context) error
 }
 
 // Compile-time check that TriangularStore implements TriangularStoreInterface.

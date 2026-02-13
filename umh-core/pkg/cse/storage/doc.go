@@ -168,6 +168,30 @@
 // The infrastructure (sync_id auto-increment, delta checking) is in place.
 // The query API for streaming changes to clients is planned.
 //
+// # Storage lifecycle and cleanup
+//
+// Storage grows through three independent vectors:
+//
+//   - Snapshot collections (container_observed, etc.): One document per worker,
+//     replaced on update. Bounded in-memory. In SQLite, UPDATE creates WAL
+//     entries that accumulate.
+//   - Delta collection (_deltas): One entry per change (not per tick). Grows
+//     unboundedly when business data changes frequently.
+//   - Snapshot cache (snapshotCache): In-memory cache of assembled Snapshot
+//     structs. Grows as new workers are observed.
+//
+// Two operations maintain storage health:
+//
+// CompactDeltas(retentionWindow) removes delta entries older than the retention
+// window (default 24h). Clients offline longer than the window cannot use delta
+// sync and must request a full bootstrap snapshot instead. Called every 5 minutes
+// by the PersistenceWorker.
+//
+// Maintenance() performs heavyweight cleanup. Currently clears the snapshot cache.
+// For SQLite, this will be VACUUM. Called at startup (TryingToStartState), shutdown
+// (ShuttingDownState), and preferentially on weekend nights every 7 days by the
+// PersistenceWorker. See pkg/fsmv2/workers/persistence/ for scheduling details.
+//
 // # UserSpec and SAGA patterns
 //
 // The triangular model separates user intent from system state:

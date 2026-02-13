@@ -47,9 +47,8 @@ import (
 	"context"
 	"time"
 
-	"go.uber.org/zap"
-
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
 )
 
@@ -188,6 +187,7 @@ var Registry = map[string]Scenario{
 	"inheritance":  InheritanceScenario,
 	"communicator": CommunicatorScenarioEntry,
 	"concurrent":   ConcurrentScenario,
+	"persistence":  PersistenceScenarioEntry,
 }
 
 // CommunicatorScenarioEntry registers the communicator scenario for CLI access.
@@ -235,10 +235,10 @@ var CommunicatorScenarioEntry = Scenario{
 		if cfg.Logger != nil {
 			go func() {
 				<-result.Done
-				cfg.Logger.Infow("scenario_complete",
-					"auth_calls", result.AuthCallCount,
-					"pushed_messages", len(result.PushedMessages),
-					"received_messages", len(result.ReceivedMessages),
+				cfg.Logger.Info("scenario_complete",
+					deps.Int("auth_calls", result.AuthCallCount),
+					deps.Int("pushed_messages", len(result.PushedMessages)),
+					deps.Int("received_messages", len(result.ReceivedMessages)),
 				)
 			}()
 		}
@@ -250,10 +250,59 @@ var CommunicatorScenarioEntry = Scenario{
 	},
 }
 
+// PersistenceScenarioEntry registers the persistence scenario for CLI access.
+//
+// Uses a CustomRunner that wraps RunPersistenceScenario:
+//  1. Creates an in-memory TriangularStore
+//  2. Builds YAML config with persistence child
+//  3. Creates ApplicationSupervisor with Dependencies: {"store": store}
+//  4. Runs via ApplicationSupervisor
+//
+// # CLI Usage
+//
+//	go run pkg/fsmv2/cmd/runner/main.go --scenario persistence --duration 5s --dump-store
+//
+// # What Gets Tested
+//
+//   - FSMv2 persistence worker state machine (Stopped -> Running)
+//   - CompactDeltas action triggered on first tick (LastCompactionAt=zero fires immediately)
+//   - RunMaintenance action (independent of compaction; compaction takes priority per tick)
+//   - Metrics collection (compaction cycles, maintenance cycles, duration gauges)
+var PersistenceScenarioEntry = Scenario{
+	Name:        "persistence",
+	Description: "Tests FSMv2 persistence worker with delta compaction and maintenance (uses ApplicationSupervisor)",
+	CustomRunner: func(ctx context.Context, cfg RunConfig) (*RunResult, error) {
+		result := RunPersistenceScenario(ctx, PersistenceRunConfig{
+			Duration:     cfg.Duration,
+			TickInterval: cfg.TickInterval,
+			Logger:       cfg.Logger,
+		})
+
+		if result.Error != nil {
+			return nil, result.Error
+		}
+
+		if cfg.Logger != nil {
+			go func() {
+				<-result.Done
+				cfg.Logger.Info("scenario_complete",
+					deps.Int64("compaction_cycles", result.CompactionCycles),
+					deps.Int64("maintenance_cycles", result.MaintenanceCycles),
+				)
+			}()
+		}
+
+		return &RunResult{
+			Done:     result.Done,
+			Shutdown: result.Shutdown,
+		}, nil
+	},
+}
+
 // RunConfig configures how a scenario is executed.
 type RunConfig struct {
 	Store              storage.TriangularStoreInterface
-	Logger             *zap.SugaredLogger
+	Logger             deps.FSMLogger
 	Scenario           Scenario
 	Duration           time.Duration // 0 means run forever (until context cancelled)
 	TickInterval       time.Duration

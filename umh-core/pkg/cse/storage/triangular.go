@@ -20,15 +20,21 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	"go.uber.org/zap"
+	"github.com/benbjohnson/clock"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 )
+
+// ErrMalformedDelta is a sentinel error for delta documents with missing or invalid fields.
+// Used for consistent Sentry fingerprinting - error types (not messages) become the fingerprint key.
+var ErrMalformedDelta = errors.New("malformed delta document")
 
 // TriangularStore provides high-level operations for FSM v2's triangular model.
 //
@@ -94,8 +100,9 @@ import (
 type TriangularStore struct {
 	store      persistence.Store
 	syncID     *atomic.Int64
-	logger     *zap.SugaredLogger
+	logger     deps.FSMLogger
 	deltaStore *DeltaStore
+	clock      clock.Clock
 
 	// Memory cache for hot path performance (LoadSnapshot is called 100-1000+ times/sec)
 	snapshotCache map[string]*cachedSnapshot // key: "{workerType}_{id}"
@@ -114,7 +121,7 @@ type cachedSnapshot struct {
 	syncID   int64 // syncID when cached - used to detect staleness
 }
 
-// NewTriangularStore creates a new TriangularStore.
+// NewTriangularStore creates a new TriangularStore with the real system clock.
 //
 // DESIGN DECISION: Convention-based system (no registry needed)
 // WHY: Collection names follow naming convention: {workerType}_{role}
@@ -123,16 +130,38 @@ type cachedSnapshot struct {
 //
 // Parameters:
 //   - store: Backend storage implementation (SQLite, Postgres, etc.)
-//   - logger: Logger for observation change logging (use zap.NewNop().Sugar() for tests)
+//   - logger: Logger for observation change logging (use deps.NewNopFSMLogger() for tests)
 //
 // Returns:
 //   - *TriangularStore: Ready-to-use triangular store instance
-func NewTriangularStore(store persistence.Store, logger *zap.SugaredLogger) *TriangularStore {
+func NewTriangularStore(store persistence.Store, logger deps.FSMLogger) *TriangularStore {
+	return NewTriangularStoreWithClock(store, logger, nil)
+}
+
+// NewTriangularStoreWithClock creates a new TriangularStore with the provided clock.
+// If clock is nil, uses the real system clock.
+//
+// This constructor is useful for testing where deterministic time control is needed.
+//
+// Parameters:
+//   - store: Backend storage implementation (SQLite, Postgres, etc.)
+//   - logger: Logger for observation change logging (use deps.NewNopFSMLogger() for tests)
+//   - c: Clock implementation for time operations. If nil, uses clock.New() (real time).
+//
+// Returns:
+//   - *TriangularStore: Ready-to-use triangular store instance
+func NewTriangularStoreWithClock(store persistence.Store, logger deps.FSMLogger, c clock.Clock) *TriangularStore {
+	if c == nil {
+		c = clock.New()
+	}
+
+
 	return &TriangularStore{
 		store:            store,
 		syncID:           &atomic.Int64{},
 		logger:           logger,
 		deltaStore:       NewDeltaStore(store),
+		clock:            c,
 		snapshotCache:    make(map[string]*cachedSnapshot),
 		knownWorkerTypes: make(map[string]struct{}),
 	}
@@ -1208,9 +1237,11 @@ func (ts *TriangularStore) GetDeltas(ctx context.Context, sub Subscription) (Del
 	if ts.deltaStore != nil {
 		entries, err := ts.deltaStore.GetAllSince(ctx, sub.LastSyncID, deltaLimit)
 		if err != nil {
-			ts.logger.Warnw("delta_query_fallback_to_bootstrap",
-				"error", err,
-				"lastSyncID", sub.LastSyncID)
+			ts.logger.SentryWarn(deps.FeatureCSE, "", "delta_query_fallback_to_bootstrap",
+				deps.Err(err),
+				deps.Int64("lastSyncID", sub.LastSyncID),
+				deps.Int64("currentSyncID", currentSyncID),
+				deps.Int64("syncLag", currentSyncID-sub.LastSyncID))
 		} else if len(entries) > 0 {
 			deltas := make([]Delta, 0, len(entries))
 			for _, entry := range entries {
@@ -1297,11 +1328,166 @@ func (ts *TriangularStore) buildBootstrap(ctx context.Context, atSyncID int64) (
 	return &BootstrapData{
 		Workers:     workers,
 		AtSyncID:    atSyncID,
-		TimestampMs: time.Now().UnixMilli(),
+		TimestampMs: ts.clock.Now().UnixMilli(),
 	}, nil
 }
 
 // GetLatestSyncID returns the current sync_id for clients to establish initial sync position.
 func (ts *TriangularStore) GetLatestSyncID(ctx context.Context) (int64, error) {
 	return ts.syncID.Load(), nil
+}
+
+// CompactDeltas removes delta entries older than the retention window.
+// Only deltas are deleted; snapshots (Identity/Desired/Observed) are never touched.
+// Malformed documents (missing timestamp/id) are skipped during iteration but cause
+// an ErrMalformedDelta error return with diagnostic details after processing.
+//
+// Clients offline longer than retentionWindow will get bootstrap (full state) instead
+// of deltas. This is expected behavior - buildBootstrap() already handles this case.
+//
+// Parameters:
+//   - ctx: Cancellation context
+//   - retentionWindow: Deltas older than now - retentionWindow will be deleted.
+//     Use 0 to delete all deltas.
+//
+// Returns:
+//   - int: Number of deltas deleted
+//   - error: Any error that occurred during compaction
+func (ts *TriangularStore) CompactDeltas(ctx context.Context, retentionWindow time.Duration) (int, error) {
+	if ts.store == nil {
+		return 0, errors.New("store is nil, cannot compact deltas")
+	}
+
+	cutoffTime := ts.clock.Now().Add(-retentionWindow)
+	cutoffMs := cutoffTime.UnixMilli()
+
+	// NOTE: This loads all deltas into memory. Each delta is a small JSON document (~200-500 bytes),
+	// so even 10k deltas use ~5 MB. Deltas are ephemeral change records, not the bulk data.
+	// TODO: When switching to SQLite, use a filtered query to push timestamp
+	// filtering to the database instead of loading all deltas into memory.
+	docs, err := ts.store.Find(ctx, DeltaCollectionName, persistence.Query{})
+	if err != nil {
+		if errors.Is(err, persistence.ErrNotFound) {
+			return 0, nil
+		}
+
+		return 0, fmt.Errorf("failed to query deltas for compaction: %w", err)
+	}
+
+	deleted := 0
+	skippedNoTimestamp := 0
+	skippedNoID := 0
+
+	// Capture first malformed document for diagnostics
+	var firstMalformedKeys []string
+
+	var firstMalformedReason string
+
+	for _, doc := range docs {
+		select {
+		case <-ctx.Done():
+			return deleted, ctx.Err()
+		default:
+		}
+
+		timestampMs, hasTimestamp := extractTimestampMs(doc)
+		if !hasTimestamp {
+			skippedNoTimestamp++
+
+			if firstMalformedKeys == nil {
+				firstMalformedKeys = extractDocKeys(doc)
+				firstMalformedReason = "missing_timestamp"
+			}
+
+			continue
+		}
+
+		if timestampMs < cutoffMs {
+			id, ok := doc["id"].(string)
+			if !ok {
+				skippedNoID++
+
+				if firstMalformedKeys == nil {
+					firstMalformedKeys = extractDocKeys(doc)
+					firstMalformedReason = "missing_or_invalid_id"
+				}
+
+				continue
+			}
+
+			if err := ts.store.Delete(ctx, DeltaCollectionName, id); err != nil {
+				return deleted, fmt.Errorf("failed to delete delta %s: %w", id, err)
+			}
+
+			deleted++
+		}
+	}
+
+	skipped := skippedNoTimestamp + skippedNoID
+	if skipped > 0 {
+		return deleted, fmt.Errorf("%w: skipped %d malformed documents during compaction (no_timestamp=%d, no_id=%d, first_reason=%s, first_keys=%v)",
+			ErrMalformedDelta, skipped, skippedNoTimestamp, skippedNoID, firstMalformedReason, firstMalformedKeys)
+	}
+
+	if deleted > 0 {
+		ts.logger.Info("compaction_complete",
+			deps.Field{Key: "deleted", Value: deleted},
+			deps.Field{Key: "retention_window", Value: retentionWindow})
+	}
+
+	return deleted, nil
+}
+
+// extractTimestampMs extracts the timestamp field from a delta document as milliseconds.
+// Returns the timestamp and a boolean indicating whether a valid timestamp was found.
+func extractTimestampMs(doc persistence.Document) (int64, bool) {
+	if ts, ok := doc["timestamp"].(int64); ok {
+		return ts, true
+	}
+
+	if f, ok := doc["timestamp"].(float64); ok {
+		return int64(f), true
+	}
+
+	return 0, false
+}
+
+// extractDocKeys returns the keys present in a document for diagnostic logging.
+// Helps troubleshoot malformed documents by showing what fields ARE present.
+func extractDocKeys(doc persistence.Document) []string {
+	keys := make([]string, 0, len(doc))
+	for k := range doc {
+		keys = append(keys, k)
+	}
+
+	slices.Sort(keys)
+
+	return keys
+}
+
+// Maintenance performs heavyweight cleanup operations.
+// This operation may block briefly and should be called during maintenance windows
+// (startup, shutdown, or scheduled maintenance).
+//
+// Current implementation (in-memory):
+//   - Clears snapshot cache
+//
+// Future implementation (SQLite):
+//   - Runs VACUUM to reclaim space
+//   - Runs ANALYZE to update statistics
+//   - Checkpoints WAL
+//
+// This method follows the persistence.Store.Maintenance() pattern for future compatibility.
+func (ts *TriangularStore) Maintenance(_ context.Context) error {
+	ts.cacheMutex.Lock()
+	cacheSize := len(ts.snapshotCache)
+	ts.snapshotCache = make(map[string]*cachedSnapshot)
+	ts.cacheMutex.Unlock()
+
+	if cacheSize > 0 {
+		ts.logger.Info("maintenance_complete",
+			deps.Field{Key: "cleared_cache_entries", Value: cacheSize})
+	}
+
+	return nil
 }

@@ -17,7 +17,6 @@ package supervisor_test
 import (
 	"context"
 	"errors"
-	"fmt"
 	"sync/atomic"
 	"time"
 
@@ -26,7 +25,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
-	"go.uber.org/zap"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 )
 
 var _ = Describe("Edge Cases", func() {
@@ -69,7 +68,7 @@ var _ = Describe("Edge Cases", func() {
 				s := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 					WorkerType: "container",
 					Store:      mockStore,
-					Logger:     zap.NewNop().Sugar(),
+					Logger:     deps.NewNopFSMLogger(),
 					CollectorHealth: supervisor.CollectorHealthConfig{
 						StaleThreshold: 10 * time.Second,
 						Timeout:        20 * time.Second,
@@ -95,7 +94,7 @@ var _ = Describe("Edge Cases", func() {
 				s := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 					WorkerType: "container",
 					Store:      mockStore,
-					Logger:     zap.NewNop().Sugar(),
+					Logger:     deps.NewNopFSMLogger(),
 					CollectorHealth: supervisor.CollectorHealthConfig{
 						StaleThreshold: 10 * time.Second,
 						Timeout:        20 * time.Second,
@@ -250,7 +249,7 @@ var _ = Describe("Edge Cases", func() {
 				s := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 					WorkerType: "container",
 					Store:      mockStore,
-					Logger:     zap.NewNop().Sugar(),
+					Logger:     deps.NewNopFSMLogger(),
 					CollectorHealth: supervisor.CollectorHealthConfig{
 						StaleThreshold:     10 * time.Second,
 						Timeout:            20 * time.Second,
@@ -302,7 +301,7 @@ var _ = Describe("Edge Cases", func() {
 				s := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 					WorkerType: "container",
 					Store:      mockStore,
-					Logger:     zap.NewNop().Sugar(),
+					Logger:     deps.NewNopFSMLogger(),
 					CollectorHealth: supervisor.CollectorHealthConfig{
 						StaleThreshold:     10 * time.Second,
 						Timeout:            20 * time.Second,
@@ -348,7 +347,7 @@ var _ = Describe("Edge Cases", func() {
 				s := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 					WorkerType:      "container",
 					Store:           mockStore,
-					Logger:          zap.NewNop().Sugar(),
+					Logger:          deps.NewNopFSMLogger(),
 					CollectorHealth: supervisor.CollectorHealthConfig{},
 				})
 
@@ -383,7 +382,7 @@ var _ = Describe("Edge Cases", func() {
 				s := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 					WorkerType:      "container",
 					Store:           mockStore,
-					Logger:          zap.NewNop().Sugar(),
+					Logger:          deps.NewNopFSMLogger(),
 					CollectorHealth: supervisor.CollectorHealthConfig{},
 				})
 
@@ -468,7 +467,7 @@ var _ = Describe("Edge Cases", func() {
 				s := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 					WorkerType: "container",
 					Store:      mockStore,
-					Logger:     zap.NewNop().Sugar(),
+					Logger:     deps.NewNopFSMLogger(),
 					CollectorHealth: supervisor.CollectorHealthConfig{
 						StaleThreshold: 10 * time.Second,
 						Timeout:        20 * time.Second,
@@ -510,7 +509,7 @@ var _ = Describe("Edge Cases", func() {
 				s := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 					WorkerType: "container",
 					Store:      mockStore,
-					Logger:     zap.NewNop().Sugar(),
+					Logger:     deps.NewNopFSMLogger(),
 					CollectorHealth: supervisor.CollectorHealthConfig{
 						StaleThreshold: 10 * time.Second,
 						Timeout:        20 * time.Second,
@@ -561,7 +560,7 @@ var _ = Describe("Edge Cases", func() {
 				s := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 					WorkerType: "container",
 					Store:      mockStore,
-					Logger:     zap.NewNop().Sugar(),
+					Logger:     deps.NewNopFSMLogger(),
 					CollectorHealth: supervisor.CollectorHealthConfig{
 						StaleThreshold:     10 * time.Second,
 						Timeout:            20 * time.Second,
@@ -638,7 +637,7 @@ func (a *alternateObservedState) GetObservedDesiredState() fsmv2.DesiredState {
 var _ = Describe("Type Safety (Invariant I16)", func() {
 	Describe("ObservedState type validation", func() {
 		Context("when worker returns wrong ObservedState type", func() {
-			It("should panic with clear message before calling state.Next()", func() {
+			It("should return error with clear message (panic recovered)", func() {
 				mockStore := newMockTriangularStore()
 
 				identity := mockIdentity()
@@ -660,7 +659,7 @@ var _ = Describe("Type Safety (Invariant I16)", func() {
 				s := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 					WorkerType: "container",
 					Store:      mockStore,
-					Logger:     zap.NewNop().Sugar(),
+					Logger:     deps.NewNopFSMLogger(),
 					CollectorHealth: supervisor.CollectorHealthConfig{
 						StaleThreshold: 10 * time.Second,
 						Timeout:        20 * time.Second,
@@ -679,25 +678,15 @@ var _ = Describe("Type Safety (Invariant I16)", func() {
 				}
 				mockStore.Observed["container"][identity.ID] = wrongTypeObs
 
-				var panicMessage string
-				func() {
-					defer func() {
-						if r := recover(); r != nil {
-							panicMessage = fmt.Sprintf("%v", r)
-						}
-					}()
-					_ = s.TestTick(context.Background())
-				}()
-
-				Expect(panicMessage).To(ContainSubstring("Invariant I16 violated"))
-				Expect(panicMessage).To(ContainSubstring("test-worker"))
-				Expect(panicMessage).To(ContainSubstring("alternateObservedState"))
-				Expect(panicMessage).To(ContainSubstring("TestObservedState"))
+				err = s.TestTick(context.Background())
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("tick panic"))
+				Expect(err.Error()).To(ContainSubstring("Invariant I16 violated"))
 			})
 		})
 
 		Context("when worker returns nil ObservedState", func() {
-			It("should panic with clear message before calling state.Next()", func() {
+			It("should return error with clear message (panic recovered)", func() {
 				mockStore := newMockTriangularStore()
 
 				identity := mockIdentity()
@@ -719,7 +708,7 @@ var _ = Describe("Type Safety (Invariant I16)", func() {
 				s := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 					WorkerType: "container",
 					Store:      mockStore,
-					Logger:     zap.NewNop().Sugar(),
+					Logger:     deps.NewNopFSMLogger(),
 					CollectorHealth: supervisor.CollectorHealthConfig{
 						StaleThreshold: 10 * time.Second,
 						Timeout:        20 * time.Second,
@@ -737,19 +726,10 @@ var _ = Describe("Type Safety (Invariant I16)", func() {
 				}
 				mockStore.Observed["container"][identity.ID] = nil
 
-				var panicMessage string
-				func() {
-					defer func() {
-						if r := recover(); r != nil {
-							panicMessage = fmt.Sprintf("%v", r)
-						}
-					}()
-					_ = s.TestTick(context.Background())
-				}()
-
-				Expect(panicMessage).To(ContainSubstring("Invariant I16 violated"))
-				Expect(panicMessage).To(ContainSubstring("nil ObservedState"))
-				Expect(panicMessage).To(ContainSubstring("test-worker"))
+				err = s.TestTick(context.Background())
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("tick panic"))
+				Expect(err.Error()).To(ContainSubstring("Invariant I16 violated"))
 			})
 		})
 

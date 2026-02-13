@@ -19,7 +19,6 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"go.uber.org/zap"
 )
 
 // Connection represents a connection to an external resource.
@@ -66,7 +65,7 @@ type FailingDependencies struct {
 	connected              bool
 }
 
-func NewFailingDependencies(connectionPool ConnectionPool, logger *zap.SugaredLogger, stateReader deps.StateReader, identity deps.Identity) *FailingDependencies {
+func NewFailingDependencies(connectionPool ConnectionPool, logger deps.FSMLogger, stateReader deps.StateReader, identity deps.Identity) *FailingDependencies {
 	return &FailingDependencies{
 		BaseDependencies: deps.NewBaseDependencies(logger, stateReader, identity),
 		connectionPool:   connectionPool,

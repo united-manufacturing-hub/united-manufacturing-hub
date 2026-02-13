@@ -253,10 +253,6 @@ func (m *FileConfigManager) GetConfigWithOverwritesOrCreateNew(ctx context.Conte
 		config.Agent.AllowInsecureTLS = configOverride.Agent.AllowInsecureTLS
 	}
 
-	if configOverride.Agent.UseFSMv2Transport {
-		config.Agent.UseFSMv2Transport = configOverride.Agent.UseFSMv2Transport
-	}
-
 	if configOverride.Agent.Location != nil {
 		location := configOverride.Agent.Location
 		if location[0] != "" {

@@ -100,20 +100,7 @@ type AgentConfig struct {
 	// FSMv2 feature flags for incremental migration
 	EnableFSMv2               bool `yaml:"enableFSMv2,omitempty"`               // Master switch: starts ApplicationSupervisor
 	UseFSMv2ProtocolConverter bool `yaml:"useFSMv2ProtocolConverter,omitempty"` // Migrate Protocol Converter to FSMv2
-}
-
-// ValidateFSMv2Flags validates FSMv2 feature flags and auto-enables EnableFSMv2
-// if any component flag is set. Returns true if EnableFSMv2 was auto-enabled.
-func (c *AgentConfig) ValidateFSMv2Flags() (autoEnabled bool) {
-	hasComponentFlag := c.UseFSMv2Transport || c.UseFSMv2ProtocolConverter
-
-	if hasComponentFlag && !c.EnableFSMv2 {
-		c.EnableFSMv2 = true
-
-		return true
-	}
-
-	return false
+	UseFSMv2MemoryCleanup     bool `yaml:"useFSMv2MemoryCleanup,omitempty"`     // Enable PersistenceWorker for delta compaction
 }
 
 type CommunicatorConfig struct {
