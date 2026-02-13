@@ -158,6 +158,7 @@ type Supervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] stru
 	restartRequestedAt map[string]time.Time
 	globalVars         map[string]any
 	healthChecker      *InfrastructureHealthChecker
+	panicTracker       *panicRecovery
 	actionExecutor     *execution.ActionExecutor
 	ctxCancel          context.CancelFunc
 	// ctxMu Protects ctx and ctxCancel to prevent TOCTOU races during shutdown.
@@ -185,7 +186,9 @@ type Supervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] stru
 	tickCount                uint64
 	gracefulShutdownTimeout  time.Duration
 	metricsReportInterval    time.Duration
+	childShutdownTimeout     time.Duration
 	circuitOpen              atomic.Bool
+	panicCircuitOpen         atomic.Bool
 	started                  atomic.Bool
 	enableTraceLogging       bool
 }
@@ -256,6 +259,11 @@ func NewSupervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState](c
 		metricsReportInterval = DefaultMetricsReportInterval
 	}
 
+	childShutdownTimeout := cfg.ChildShutdownTimeout
+	if childShutdownTimeout == 0 {
+		childShutdownTimeout = DefaultChildShutdownTimeout
+	}
+
 	return &Supervisor[TObserved, TDesired]{
 		workerType:         cfg.WorkerType,
 		workers:            make(map[string]*WorkerContext[TObserved, TDesired]),
@@ -275,6 +283,7 @@ func NewSupervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState](c
 		createdAt:          time.Now(),
 		parentID:           "",
 		healthChecker:      NewInfrastructureHealthChecker(DefaultMaxInfraRecoveryAttempts, DefaultRecoveryAttemptWindow),
+		panicTracker:       newPanicRecovery(DefaultPanicEscalationWindow, DefaultMaxTickPanics),
 		actionExecutor:     execution.NewActionExecutor(10, cfg.WorkerType, deps.Identity{WorkerType: cfg.WorkerType}, cfg.Logger),
 		collectorHealth: CollectorHealth{
 			observationTimeout: observationTimeout,
@@ -287,6 +296,7 @@ func NewSupervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState](c
 		enableTraceLogging:      cfg.EnableTraceLogging,
 		gracefulShutdownTimeout: gracefulShutdownTimeout,
 		metricsReportInterval:   metricsReportInterval,
+		childShutdownTimeout:    childShutdownTimeout,
 		deps:                    cfg.Dependencies,
 		validatedSpecHashes:     make(map[string]string),
 	}

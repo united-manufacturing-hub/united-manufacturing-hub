@@ -105,7 +105,7 @@ func (s *Supervisor[TObserved, TDesired]) StartAsChild(ctx context.Context) {
 }
 
 // tickLoop is the main FSM loop.
-// Calls Tick() which includes hierarchical composition (Phase 0) and worker state transitions.
+// Calls tick() which includes hierarchical composition (Phase 0) and worker state transitions.
 func (s *Supervisor[TObserved, TDesired]) tickLoop(ctx context.Context) {
 	s.logger.Debug("tick_loop_initializing")
 
@@ -123,7 +123,13 @@ func (s *Supervisor[TObserved, TDesired]) tickLoop(ctx context.Context) {
 			return
 		case <-ticker.C:
 			if err := s.tick(ctx); err != nil {
-				s.logger.SentryError(deps.FeatureFSMv2, s.GetHierarchyPath(), err, "tick_error")
+				if errors.Is(err, ErrPanicCircuitOpen) || errors.Is(err, ErrInfraCircuitOpen) {
+					s.logger.Debug("tick_suppressed_circuit_open",
+						deps.HierarchyPath(s.GetHierarchyPath()),
+						deps.Err(err))
+				} else {
+					s.logger.SentryError(deps.FeatureFSMv2, s.GetHierarchyPath(), err, "tick_error")
+				}
 			}
 		}
 	}
@@ -223,13 +229,15 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 
 			child.Shutdown()
 
-			// Wait for child supervisor to fully shut down
+			// Wait for child supervisor to fully shut down (with timeout)
 			if done, exists := childDoneChans[childName]; exists {
 				s.logger.Debug("waiting_child_shutdown",
 					deps.String("child_name", childName))
-				<-done
-				s.logger.Debug("child_shutdown_complete",
-					deps.String("child_name", childName))
+
+				if s.waitForChildDone(done, childName, s.GetHierarchyPath(), "shutdown") {
+					s.logger.Debug("child_shutdown_complete",
+						deps.String("child_name", childName))
+				}
 			}
 
 			s.logTrace("lifecycle",
@@ -256,13 +264,17 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 
 		// Wait for workers to complete graceful shutdown (with timeout)
 		gracefulTimeout := s.gracefulShutdownTimeout
+
 		ticker := time.NewTicker(100 * time.Millisecond)
-		timeoutCh := time.After(gracefulTimeout)
+		defer ticker.Stop()
+
+		gracefulTimer := time.NewTimer(gracefulTimeout)
+		defer gracefulTimer.Stop()
 
 	gracefulWaitLoop:
 		for {
 			select {
-			case <-timeoutCh:
+			case <-gracefulTimer.C:
 				s.mu.RLock()
 				remainingCount := len(s.workers)
 				s.mu.RUnlock()
@@ -284,8 +296,6 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 				}
 			}
 		}
-
-		ticker.Stop()
 	}
 
 	// Phase 4: Cleanup executors and collectors.
@@ -313,6 +323,28 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 
 	s.logTrace("lifecycle",
 		deps.String("lifecycle_event", "shutdown_complete"))
+}
+
+// waitForChildDone waits for a child supervisor's done channel to close, with a timeout.
+// Returns true if the child completed, false if the timeout fired.
+// The hierarchyPath and logContext parameters are used for metrics and log attribution.
+func (s *Supervisor[TObserved, TDesired]) waitForChildDone(done <-chan struct{}, childName, hierarchyPath, logContext string) bool {
+	shutdownTimer := time.NewTimer(s.childShutdownTimeout)
+	defer shutdownTimer.Stop()
+
+	select {
+	case <-done:
+		return true
+	case <-shutdownTimer.C:
+		metrics.RecordChildShutdownTimeout(hierarchyPath, childName)
+
+		s.logger.SentryWarn(deps.FeatureFSMv2, hierarchyPath, "child_shutdown_timeout",
+			deps.String("child_name", childName),
+			deps.Duration("timeout", s.childShutdownTimeout),
+			deps.String("context", logContext))
+
+		return false
+	}
 }
 
 // startMetricsReporter starts a goroutine that periodically records hierarchy metrics.
@@ -483,15 +515,13 @@ func (s *Supervisor[TObserved, TDesired]) RequestShutdown(ctx context.Context, r
 // including any attempt counters, connection pools, or cached data in dependencies.
 //
 // Flow:
-//  1. Extract identity from existing worker (before removal)
-//  2. RemoveWorker - stops collector, executor, removes from registry
-//  3. Clear ShutdownRequested in storage (so new worker starts fresh)
-//  4. factory.NewWorkerByType - creates completely new worker instance
-//  5. AddWorker - registers new worker, starts collector
+//  1. RemoveWorker - stops collector, executor, removes from registry
+//  2. Clear ShutdownRequested in storage (so new worker starts fresh)
+//  3. factory.NewWorkerByType - creates completely new worker instance
+//  4. AddWorker - registers new worker
+//  5. Start collector and executor if supervisor is running
+//  6. Reset health counters for fresh start
 func (s *Supervisor[TObserved, TDesired]) handleWorkerRestart(ctx context.Context, workerID string) error {
-	// Extract identity and state under lock before removal.
-	// NOTE: We hold both s.mu and workerCtx.mu to prevent TOCTOU race when
-	// reading currentState - otherwise reconciliation could modify it concurrently.
 	s.mu.RLock()
 
 	workerCtx, exists := s.workers[workerID]
@@ -548,16 +578,12 @@ func (s *Supervisor[TObserved, TDesired]) handleWorkerRestart(ctx context.Contex
 	s.logger.Debug("worker_restart_new_created",
 		deps.HierarchyPath(identity.HierarchyPath))
 
-	// 4. Add new worker to supervisor (this also starts the collector if supervisor is running)
+	// 4. Add new worker to supervisor (registers worker in the workers map)
 	if err := s.AddWorker(identity, newWorker); err != nil {
 		return fmt.Errorf("failed to add new worker for restart: %w", err)
 	}
 
-	// 5. Start the new worker's collector and executor if supervisor is already running.
-	// NOTE: We capture collector and executor under lock to prevent TOCTOU race.
-	// Between checking worker existence and starting collector/executor, another
-	// goroutine could remove the worker. By capturing the pointers under lock,
-	// we ensure we have valid references even if the worker is subsequently removed.
+	// 5. Start collector and executor if supervisor is running
 	if supervisorCtx, started := s.getStartedContext(); started {
 		s.mu.RLock()
 
@@ -590,9 +616,6 @@ func (s *Supervisor[TObserved, TDesired]) handleWorkerRestart(ctx context.Contex
 	s.collectorHealth.restartCount = 0
 	s.mu.Unlock()
 
-	// Get new state for logging.
-	// NOTE: We hold both s.mu and workerCtx.mu to prevent TOCTOU race when
-	// reading currentState - otherwise reconciliation could modify it concurrently.
 	s.mu.RLock()
 
 	newWorkerCtx := s.workers[workerID]
@@ -628,6 +651,10 @@ func (s *Supervisor[TObserved, TDesired]) clearShutdownRequested(ctx context.Con
 	// Clear shutdown flag via interface
 	if sr, ok := any(desired).(fsmv2.ShutdownRequestable); ok {
 		sr.SetShutdownRequested(false)
+	} else if sr, ok := any(&desired).(fsmv2.ShutdownRequestable); ok {
+		sr.SetShutdownRequested(false)
+	} else {
+		return fmt.Errorf("desired state type %T does not implement ShutdownRequestable", desired)
 	}
 
 	// Save back - need to convert to Document

@@ -21,6 +21,27 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 )
 
+// TestSetChild injects a child supervisor and done channel for testing. DO NOT USE in production code.
+func (s *Supervisor[TObserved, TDesired]) TestSetChild(name string, child SupervisorInterface, done <-chan struct{}) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.children[name] = child
+	s.childDoneChans[name] = done
+}
+
+// TestMarkAsStarted sets the supervisor as started with a valid context. DO NOT USE in production code.
+func (s *Supervisor[TObserved, TDesired]) TestMarkAsStarted() {
+	ctx, cancel := context.WithCancel(context.Background())
+
+	s.ctxMu.Lock()
+	s.ctx = ctx
+	s.ctxCancel = cancel
+	s.ctxMu.Unlock()
+
+	s.started.Store(true)
+}
+
 // TestTick exposes tick() for testing. DO NOT USE in production code.
 func (s *Supervisor[TObserved, TDesired]) TestTick(ctx context.Context) error {
 	return s.tick(ctx)
@@ -103,6 +124,41 @@ func (s *Supervisor[TObserved, TDesired]) TestSetLastRestart(t time.Time) {
 	s.collectorHealth.lastRestart = t
 }
 
+// TestIsPanicCircuitOpen returns true if the panic circuit breaker is open. DO NOT USE in production code.
+func (s *Supervisor[TObserved, TDesired]) TestIsPanicCircuitOpen() bool {
+	return s.panicCircuitOpen.Load()
+}
+
+// TestSetCircuitOpen sets the infrastructure circuit breaker state for testing. DO NOT USE in production code.
+func (s *Supervisor[TObserved, TDesired]) TestSetCircuitOpen(open bool) {
+	s.circuitOpen.Store(open)
+}
+
+// TestPanicRecoveryTracker wraps panicRecovery for unit testing. DO NOT USE in production code.
+type TestPanicRecoveryTracker struct {
+	pr *panicRecovery
+}
+
+// NewTestPanicRecoveryTracker creates a panicRecovery tracker for testing. DO NOT USE in production code.
+func NewTestPanicRecoveryTracker(window time.Duration, maxPanics int) *TestPanicRecoveryTracker {
+	return &TestPanicRecoveryTracker{pr: newPanicRecovery(window, maxPanics)}
+}
+
+// RecordPanic records a panic and returns true if the escalation threshold has been reached.
+func (t *TestPanicRecoveryTracker) RecordPanic() bool {
+	return t.pr.RecordPanic()
+}
+
+// PanicCount returns the number of panics within the window.
+func (t *TestPanicRecoveryTracker) PanicCount() int {
+	return t.pr.PanicCount()
+}
+
+// Reset clears all recorded panics.
+func (t *TestPanicRecoveryTracker) Reset() {
+	t.pr.Reset()
+}
+
 // TestIsPendingRemoval checks if a child is in the pendingRemoval map. DO NOT USE in production code.
 func (s *Supervisor[TObserved, TDesired]) TestIsPendingRemoval(childName string) bool {
 	s.mu.RLock()
@@ -111,7 +167,7 @@ func (s *Supervisor[TObserved, TDesired]) TestIsPendingRemoval(childName string)
 	return s.pendingRemoval[childName]
 }
 
-// TestSetPendingRemoval marks a child as pending removal for testing. DO NOT USE in production code.
+// TestSetPendingRemovalFlag marks a child as pending removal for testing. DO NOT USE in production code.
 func (s *Supervisor[TObserved, TDesired]) TestSetPendingRemovalFlag(childName string, value bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
