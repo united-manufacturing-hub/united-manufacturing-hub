@@ -404,11 +404,14 @@ var _ = Describe("Stuck Action Deduplication", func() {
 			Expect(err).ToNot(HaveOccurred())
 		}
 
-		time.Sleep(800 * time.Millisecond)
+		// Use Eventually instead of fixed sleep to avoid race between action
+		// enqueue (worker must pick up action and add to inProgress map) and
+		// the metrics tick that detects stuck actions.
+		Eventually(func() int {
+			return len(filterStuckActionLogs(observedLogs, "stuck_action_detected"))
+		}, 5*time.Second, 50*time.Millisecond).Should(Equal(2), "Expected exactly 2 stuck_action_detected logs (one per action)")
 
 		stuckLogs := filterStuckActionLogs(observedLogs, "stuck_action_detected")
-		Expect(stuckLogs).To(HaveLen(2), "Expected exactly 2 stuck_action_detected logs (one per action)")
-
 		actionNames := map[string]bool{}
 		for _, log := range stuckLogs {
 			name, _ := log.ContextMap()["action_name"].(string)
