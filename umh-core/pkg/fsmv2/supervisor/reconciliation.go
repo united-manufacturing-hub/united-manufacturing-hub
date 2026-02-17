@@ -671,8 +671,14 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 			return nil
 		}
 
-		s.logger.Warnw("tick_skipped_no_workers",
-			"hierarchy_path", s.GetHierarchyPathUnlocked())
+		// Zero workers on a started supervisor is a transient state (e.g., during child
+		// restart). The supervisor self-heals on the next reconcileChildren cycle.
+		// MUST remain a warn+skip (not error) — returning an error here caused 614K
+		// Sentry events in 16 days on v0.44.5 (ENG-4386).
+		if s.noWorkersWarnedOnce.CompareAndSwap(false, true) {
+			s.logger.Warnw("tick_skipped_no_workers",
+				"hierarchy_path", s.GetHierarchyPathUnlocked())
+		}
 
 		return nil
 	}
