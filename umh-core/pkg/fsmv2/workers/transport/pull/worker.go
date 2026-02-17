@@ -35,12 +35,17 @@ import (
 
 var _ fsmv2.Worker = (*PullWorker)(nil)
 
+// PullWorker implements the FSM v2 Worker interface for inbound message pulling.
+// It polls the backend relay server and delivers messages to the inbound channel.
+// PullWorker is a child of TransportWorker and shares its parent's JWT token and transport.
 type PullWorker struct {
 	*helpers.BaseWorker[*PullDependencies]
 	logger   deps.FSMLogger
 	identity deps.Identity
 }
 
+// NewPullWorker creates a new PullWorker in Stopped state.
+// parentDeps must not be nil — the pull worker delegates auth and transport to the parent.
 func NewPullWorker(
 	identity deps.Identity,
 	logger deps.FSMLogger,
@@ -72,6 +77,8 @@ func NewPullWorker(
 	}, nil
 }
 
+// CollectObservedState snapshots the current pull worker state.
+// Handles context cancellation at entry as required by architecture tests.
 func (w *PullWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedState, error) {
 	select {
 	case <-ctx.Done():
@@ -102,6 +109,8 @@ func (w *PullWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedSt
 	return observed, nil
 }
 
+// DeriveDesiredState determines the desired state from the provided spec.
+// Must be PURE — only uses the spec parameter, never dependencies.
 func (w *PullWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
 	if spec == nil {
 		return &config.DesiredState{
@@ -133,6 +142,7 @@ func (w *PullWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, e
 	return &desired, nil
 }
 
+// GetInitialState returns StoppedState as the pull worker's initial FSM state.
 func (w *PullWorker) GetInitialState() fsmv2.State[any, any] {
 	return &state.StoppedState{}
 }

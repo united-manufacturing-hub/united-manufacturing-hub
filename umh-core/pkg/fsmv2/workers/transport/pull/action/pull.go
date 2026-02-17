@@ -228,7 +228,15 @@ func (a *PullAction) Name() string {
 	return PullActionName
 }
 
+// Backpressure thresholds for inbound channel capacity management.
+// These prevent pulling messages from the backend when the local channel is near full.
 const (
-	ExpectedBatchSize      = 50
+	// ExpectedBatchSize is the high water mark: stop pulling when available capacity < this value.
+	// This is the expected maximum number of messages that could be pulled in one request.
+	ExpectedBatchSize = 50
+
+	// LowWaterMarkMultiplier determines when to resume pulling after backpressure.
+	// Resume when available capacity >= ExpectedBatchSize * LowWaterMarkMultiplier.
+	// This hysteresis prevents oscillation between backpressured and normal states.
 	LowWaterMarkMultiplier = 2
 )
