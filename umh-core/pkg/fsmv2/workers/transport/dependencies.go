@@ -161,6 +161,11 @@ func (d *TransportDependencies) GetInboundChanStats() (capacity int, length int)
 
 // RecordTypedError increments consecutive errors and records error type and retry-after.
 // Error tracking is used by the supervisor for retry backoff policy.
+//
+// Asymmetry note: child workers propagate errors UP to this tracker via RecordTypedError
+// so the parent sees all child failures and can trigger transport reset decisions. However,
+// child successes do NOT propagate here — only successful auth resets the parent tracker.
+// This means the parent error count grows monotonically from child errors until re-auth.
 func (d *TransportDependencies) RecordTypedError(errType httpTransport.ErrorType, retryAfter time.Duration) {
 	d.mu.Lock()
 	d.lastErrorType = errType
