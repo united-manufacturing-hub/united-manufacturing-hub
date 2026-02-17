@@ -35,14 +35,14 @@ var _ fsmv2.Worker = (*pull.PullWorker)(nil)
 var _ = Describe("PullWorker", func() {
 	var (
 		worker     *pull.PullWorker
-		logger     deps.FSMLogger
-		identity   deps.Identity
+		logger     depspkg.FSMLogger
+		identity   depspkg.Identity
 		parentDeps *transport.TransportDependencies
 	)
 
 	BeforeEach(func() {
-		logger = deps.NewNopFSMLogger()
-		identity = deps.Identity{ID: "test-pull", Name: "Test Pull"}
+		logger = depspkg.NewNopFSMLogger()
+		identity = depspkg.Identity{ID: "test-pull", Name: "Test Pull"}
 		transport.SetChannelProvider(newTestChannelProvider())
 		parentDeps = createParentDeps(logger)
 	})

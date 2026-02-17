@@ -78,6 +78,7 @@ type mockPushDeps struct {
 	lastRetryAfter    time.Duration
 	degradedEnteredAt time.Time
 	lastErrorAt       time.Time
+	authenticatedUUID string
 }
 
 type typedErrorCall struct {
