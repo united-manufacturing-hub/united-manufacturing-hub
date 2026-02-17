@@ -20,7 +20,6 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"go.uber.org/zap"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	fsmv2types "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
@@ -37,12 +36,12 @@ import (
 var _ = Describe("TransportWorker", func() {
 	var (
 		worker   *transport.TransportWorker
-		logger   *zap.SugaredLogger
+		logger   deps.FSMLogger
 		identity deps.Identity
 	)
 
 	BeforeEach(func() {
-		logger = zap.NewNop().Sugar()
+		logger = deps.NewNopFSMLogger()
 		identity = deps.Identity{ID: "test-transport", Name: "Test Transport"}
 
 		// Set up mock channel provider using helper from dependencies_test.go

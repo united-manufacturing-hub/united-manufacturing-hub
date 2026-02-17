@@ -23,7 +23,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps/retry"
 	communicator_transport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
 	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
-	"go.uber.org/zap"
 )
 
 // ChannelProvider interface and singleton functions are defined in channel_provider.go
@@ -48,7 +47,7 @@ type TransportDependencies struct {
 
 // NewTransportDependencies creates dependencies for the transport worker.
 // Panics if SetChannelProvider was not called first.
-func NewTransportDependencies(t communicator_transport.Transport, logger *zap.SugaredLogger, stateReader deps.StateReader, identity deps.Identity) *TransportDependencies {
+func NewTransportDependencies(t communicator_transport.Transport, logger deps.FSMLogger, stateReader deps.StateReader, identity deps.Identity) *TransportDependencies {
 	provider := GetChannelProvider()
 	if provider == nil {
 		panic(fmt.Sprintf("ChannelProvider must be set before creating dependencies (worker=%s). "+
@@ -151,7 +150,8 @@ func (d *TransportDependencies) GetOutboundChan() <-chan *communicator_transport
 func (d *TransportDependencies) GetInboundChanStats() (capacity int, length int) {
 	provider := GetChannelProvider()
 	if provider == nil {
-		d.GetLogger().Warnw("channel_provider_not_initialized", "worker_id", d.GetWorkerID())
+		d.GetLogger().SentryWarn(deps.FeatureCommunicator, d.GetHierarchyPath(), "channel_provider_not_initialized",
+			deps.WorkerID(d.GetWorkerID()))
 
 		return 0, 0
 	}
