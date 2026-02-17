@@ -199,6 +199,12 @@ var _ = Describe("Transport Scenario", func() {
 
 `t.Reset()` belongs at the parent worker, not child actions. Parent `DegradedState` checks `backoff.ShouldResetTransport()` → dispatches `ResetTransportAction` → increments `resetGeneration`. Children compare generations via `CheckAndClearOnReset()` and clear their pending buffers. Always advance the retry counter after reset to break the modulo trigger in `ShouldResetTransport`.
 
-## Shared Error Tracking in Parent-Child Workers
+## Per-Child Error Tracking in Parent-Child Workers
 
-Children delegate `RecordTypedError`/`RecordSuccess`/`GetConsecutiveErrors` to parent `TransportDependencies`. Errors accumulate on the parent's `RetryTracker` so the parent sees child failures and can trigger transport reset.
+Each child (push/pull) has its own `RetryTracker` for independent health decisions:
+
+- **Errors** flow to BOTH the child's tracker AND the parent's tracker (`RecordTypedError`, `RecordError` delegate up)
+- **Successes** flow to the child's tracker ONLY (`RecordSuccess` does NOT propagate to parent; only auth success resets the parent tracker)
+- **Reads** (`GetConsecutiveErrors`, `GetDegradedEnteredAt`, `GetLastErrorAt`) come from the child's own tracker
+- Each child independently decides Running vs Degraded based on its own consecutive error count
+- The parent tracker accumulates ALL child errors for `ShouldResetTransport` decisions
