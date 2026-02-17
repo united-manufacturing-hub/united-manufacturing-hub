@@ -35,12 +35,17 @@ import (
 
 var _ fsmv2.Worker = (*PushWorker)(nil)
 
+// PushWorker implements the FSM v2 Worker interface for outbound message pushing.
+// It drains the outbound channel and pushes messages to the backend relay server.
+// PushWorker is a child of TransportWorker and shares its parent's JWT token and transport.
 type PushWorker struct {
 	*helpers.BaseWorker[*PushDependencies]
 	logger   deps.FSMLogger
 	identity deps.Identity
 }
 
+// NewPushWorker creates a new PushWorker in Stopped state.
+// parentDeps must not be nil — the push worker delegates auth and transport to the parent.
 func NewPushWorker(
 	identity deps.Identity,
 	logger deps.FSMLogger,
@@ -72,6 +77,8 @@ func NewPushWorker(
 	}, nil
 }
 
+// CollectObservedState snapshots the current push worker state.
+// Handles context cancellation at entry as required by architecture tests.
 func (w *PushWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedState, error) {
 	select {
 	case <-ctx.Done():
@@ -103,6 +110,8 @@ func (w *PushWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedSt
 	return observed, nil
 }
 
+// DeriveDesiredState determines the desired state from the provided spec.
+// Must be PURE — only uses the spec parameter, never dependencies.
 func (w *PushWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
 	if spec == nil {
 		return &config.DesiredState{
@@ -134,6 +143,7 @@ func (w *PushWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, e
 	return &desired, nil
 }
 
+// GetInitialState returns StoppedState as the push worker's initial FSM state.
 func (w *PushWorker) GetInitialState() fsmv2.State[any, any] {
 	return &state.StoppedState{}
 }
