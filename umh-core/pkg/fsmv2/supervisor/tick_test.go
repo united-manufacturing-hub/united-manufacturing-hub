@@ -99,6 +99,50 @@ var _ = Describe("Tick with Data Freshness", func() {
 		})
 	})
 
+	Context("when supervisor has zero workers", func() {
+		It("should skip tick gracefully when started", func() {
+			store = newMockStore()
+			store.loadSnapshot = func(ctx context.Context, workerType string, id string) (*storage.Snapshot, error) {
+				identity := mockIdentity()
+
+				return &storage.Snapshot{
+					Identity: persistence.Document{
+						"id":         identity.ID,
+						"name":       identity.Name,
+						"workerType": identity.WorkerType,
+					},
+					Desired:  persistence.Document{},
+					Observed: persistence.Document{"collectedAt": time.Now()},
+				}, nil
+			}
+
+			s = newSupervisorWithWorker(&mockWorker{initialState: initialState}, store, supervisor.CollectorHealthConfig{
+				StaleThreshold: 10 * time.Second,
+			})
+
+			s.TestSetStarted(true)
+			err := s.RemoveWorker(context.Background(), mockIdentity().ID)
+			Expect(err).ToNot(HaveOccurred())
+
+			err = s.TestTick(context.Background())
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("should skip tick silently when not yet started", func() {
+			store = newMockStore()
+
+			s = newSupervisorWithWorker(&mockWorker{initialState: initialState}, store, supervisor.CollectorHealthConfig{
+				StaleThreshold: 10 * time.Second,
+			})
+
+			err := s.RemoveWorker(context.Background(), mockIdentity().ID)
+			Expect(err).ToNot(HaveOccurred())
+
+			err = s.TestTick(context.Background())
+			Expect(err).ToNot(HaveOccurred())
+		})
+	})
+
 	Context("when ObservedState is nil (Invariant I16)", func() {
 		It("should return error with clear message (panic recovered)", func() {
 			identity := mockIdentity()

@@ -667,13 +667,14 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 	s.mu.RUnlock()
 
 	if firstWorkerID == "" {
-		// During shutdown (started=false), having no workers is expected.
-		// Return nil to allow tick loop to exit gracefully when context is cancelled.
 		if !s.started.Load() {
 			return nil
 		}
 
-		return errors.New("no workers in supervisor")
+		s.logger.Warnw("tick_skipped_no_workers",
+			"hierarchy_path", s.GetHierarchyPathUnlocked())
+
+		return nil
 	}
 
 	if worker == nil {
