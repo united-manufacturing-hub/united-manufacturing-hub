@@ -55,8 +55,8 @@ func (a *PullAction) Execute(ctx context.Context, depsAny any) error {
 
 	pendingBeforeReset := pullDeps.PendingMessageCount()
 	if pullDeps.CheckAndClearOnReset() {
-		pullDeps.GetLogger().Infow("pull_reset_cleared",
-			"pending_dropped", pendingBeforeReset)
+		pullDeps.GetLogger().Info("pull_reset_cleared",
+			depspkg.Int("pending_dropped", pendingBeforeReset))
 
 		if pendingBeforeReset > 0 {
 			metrics.IncrementCounter(depspkg.CounterMessagesDropped, int64(pendingBeforeReset))
@@ -68,7 +68,7 @@ func (a *PullAction) Execute(ctx context.Context, depsAny any) error {
 	if len(pending) > 0 {
 		inChan := pullDeps.GetInboundChan()
 		if inChan == nil {
-			pullDeps.GetLogger().Debugw("pull_skipped_nil_inbound_chan_pending_delivery")
+			pullDeps.GetLogger().Debug("pull_skipped_nil_inbound_chan_pending_delivery")
 			pullDeps.StorePendingMessages(pending)
 
 			return nil
@@ -100,7 +100,7 @@ func (a *PullAction) Execute(ctx context.Context, depsAny any) error {
 	// Phase 2: Backpressure check
 	inChan := pullDeps.GetInboundChan()
 	if inChan == nil {
-		pullDeps.GetLogger().Debugw("pull_skipped_nil_inbound_chan")
+		pullDeps.GetLogger().Debug("pull_skipped_nil_inbound_chan")
 
 		return nil
 	}
@@ -117,16 +117,16 @@ func (a *PullAction) Execute(ctx context.Context, depsAny any) error {
 	}
 
 	if shouldSkip && !wasBackpressured {
-		pullDeps.GetLogger().Warnw("backpressure_entering",
-			"available", available, "threshold", ExpectedBatchSize)
+		pullDeps.GetLogger().SentryWarn(depspkg.FeatureCommunicator, pullDeps.GetHierarchyPath(), "backpressure_entering",
+			depspkg.Int("available", available), depspkg.Int("threshold", ExpectedBatchSize))
 		pullDeps.SetBackpressured(true)
 		metrics.SetGauge(depspkg.GaugeBackpressureActive, 1)
 		metrics.IncrementCounter(depspkg.CounterBackpressureEntryTotal, 1)
 	}
 
 	if !shouldSkip && wasBackpressured {
-		pullDeps.GetLogger().Warnw("backpressure_exiting",
-			"available", available, "low_water_mark", ExpectedBatchSize*LowWaterMarkMultiplier)
+		pullDeps.GetLogger().SentryWarn(depspkg.FeatureCommunicator, pullDeps.GetHierarchyPath(), "backpressure_exiting",
+			depspkg.Int("available", available), depspkg.Int("low_water_mark", ExpectedBatchSize*LowWaterMarkMultiplier))
 		pullDeps.SetBackpressured(false)
 		metrics.SetGauge(depspkg.GaugeBackpressureActive, 0)
 	}

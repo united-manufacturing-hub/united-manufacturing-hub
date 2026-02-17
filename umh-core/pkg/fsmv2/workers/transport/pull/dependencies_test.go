@@ -20,8 +20,6 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"go.uber.org/zap"
-
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	communicator_transport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
 	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
@@ -73,7 +71,7 @@ func newTestChannelProvider() *mockChannelProvider {
 	}
 }
 
-func createParentDeps(logger *zap.SugaredLogger) *transport.TransportDependencies {
+func createParentDeps(logger deps.FSMLogger) *transport.TransportDependencies {
 	mt := &mockTransport{}
 	identity := deps.Identity{ID: "parent-id", WorkerType: "transport"}
 
@@ -91,13 +89,13 @@ func makeMessages(n int) []*communicator_transport.UMHMessage {
 
 var _ = Describe("PullDependencies", func() {
 	var (
-		logger     *zap.SugaredLogger
+		logger     deps.FSMLogger
 		parentDeps *transport.TransportDependencies
 		identity   deps.Identity
 	)
 
 	BeforeEach(func() {
-		logger = zap.NewNop().Sugar()
+		logger = deps.NewNopFSMLogger()
 		transport.SetChannelProvider(newTestChannelProvider())
 		parentDeps = createParentDeps(logger)
 		identity = deps.Identity{ID: "pull-child-id", WorkerType: "pull"}

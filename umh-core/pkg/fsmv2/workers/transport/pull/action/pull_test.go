@@ -21,8 +21,6 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"go.uber.org/zap"
-
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
 	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
@@ -65,7 +63,7 @@ type mockPullDeps struct {
 	transport       transport.Transport
 	jwtToken        string
 	metricsRecorder *deps.MetricsRecorder
-	logger          *zap.SugaredLogger
+	logger          deps.FSMLogger
 
 	inboundBi    chan *transport.UMHMessage
 	chanCapacity int
@@ -96,19 +94,23 @@ type typedErrorCall struct {
 func newMockPullDeps() *mockPullDeps {
 	return &mockPullDeps{
 		metricsRecorder: deps.NewMetricsRecorder(),
-		logger:          zap.NewNop().Sugar(),
+		logger:          deps.NewNopFSMLogger(),
 		tokenValid:      true,
 		chanCapacity:    1000,
 		chanLength:      0,
 	}
 }
 
-func (m *mockPullDeps) GetLogger() *zap.SugaredLogger {
+func (m *mockPullDeps) GetLogger() deps.FSMLogger {
 	return m.logger
 }
 
-func (m *mockPullDeps) ActionLogger(_ string) *zap.SugaredLogger {
+func (m *mockPullDeps) ActionLogger(_ string) deps.FSMLogger {
 	return m.logger
+}
+
+func (m *mockPullDeps) GetHierarchyPath() string {
+	return ""
 }
 
 func (m *mockPullDeps) GetStateReader() deps.StateReader {

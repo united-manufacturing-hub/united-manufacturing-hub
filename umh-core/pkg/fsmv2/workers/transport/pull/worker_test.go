@@ -20,8 +20,6 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"go.uber.org/zap"
-
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	fsmv2config "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
@@ -37,13 +35,13 @@ var _ fsmv2.Worker = (*pull.PullWorker)(nil)
 var _ = Describe("PullWorker", func() {
 	var (
 		worker     *pull.PullWorker
-		logger     *zap.SugaredLogger
+		logger     deps.FSMLogger
 		identity   deps.Identity
 		parentDeps *transport.TransportDependencies
 	)
 
 	BeforeEach(func() {
-		logger = zap.NewNop().Sugar()
+		logger = deps.NewNopFSMLogger()
 		identity = deps.Identity{ID: "test-pull", Name: "Test Pull"}
 		transport.SetChannelProvider(newTestChannelProvider())
 		parentDeps = createParentDeps(logger)
