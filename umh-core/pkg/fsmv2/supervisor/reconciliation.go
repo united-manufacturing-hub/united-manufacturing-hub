@@ -676,8 +676,8 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 		// MUST remain a warn+skip (not error) — returning an error here caused 614K
 		// Sentry events in 16 days on v0.44.5 (ENG-4386).
 		if s.noWorkersWarnedOnce.CompareAndSwap(false, true) {
-			s.logger.Warnw("tick_skipped_no_workers",
-				"hierarchy_path", s.GetHierarchyPathUnlocked())
+			s.logger.Info("tick_skipped_no_workers",
+				deps.HierarchyPath(s.GetHierarchyPathUnlocked()))
 		}
 
 		return nil
