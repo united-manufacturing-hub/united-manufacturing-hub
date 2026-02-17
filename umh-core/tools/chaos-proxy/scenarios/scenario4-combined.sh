@@ -35,7 +35,7 @@
 #   - Instance eventually reconnects after extended chaos
 #   - No deadlocks or goroutine leaks
 #   - Error counters are bounded (not growing unbounded)
-#   - Metrics endpoint (:2112) remains responsive
+#   - Metrics endpoint (:8080) remains responsive
 
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

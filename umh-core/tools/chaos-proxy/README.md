@@ -54,14 +54,14 @@ CHAOS_PROXY_FLAGS="--drop-every=5 --long-poll --long-poll-mu=7.0" docker compose
 
 ## Collecting data
 
-### Prometheus metrics (port 2112)
+### Prometheus metrics (port 8080)
 
 ```bash
-# Scrape all metrics (port 2112 is exposed in docker-compose.yml)
-curl -s http://localhost:2112/metrics
+# Scrape all metrics (port 8080 is exposed in docker-compose.yml)
+curl -s http://localhost:8080/metrics
 
 # Watch transport worker metrics
-watch -n5 'curl -s http://localhost:2112/metrics | grep -E "transport_worker|communicator"'
+watch -n5 'curl -s http://localhost:8080/metrics | grep -E "transport_worker|communicator"'
 ```
 
 ### Debug state (port 8090)
@@ -83,7 +83,7 @@ docker compose exec umh-core sh -c 'tail -f /data/logs/umh-core/current'
 - [ ] Instance appears "online" in Management Console (or recovers within 2 minutes after chaos stops)
 - [ ] No panics or goroutine leaks in umh-core logs
 - [ ] Error counters in Prometheus metrics are bounded (not growing unbounded)
-- [ ] Metrics endpoint (:2112) remains responsive throughout the test
+- [ ] Metrics endpoint (:8080) remains responsive throughout the test
 - [ ] Push and pull workers retry with backoff (visible in logs)
 - [ ] No data corruption (partial responses not processed as valid)
 - [ ] Heartbeat continues even under heavy chaos

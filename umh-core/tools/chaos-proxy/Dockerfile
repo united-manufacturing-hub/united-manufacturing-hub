@@ -12,13 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM golang:1.25.3-alpine AS builder
+FROM golang:1.25.7-alpine AS builder
 WORKDIR /app
 COPY go.mod .
 COPY main.go .
 RUN CGO_ENABLED=0 go build -ldflags "-s -w" -o chaos-proxy .
 
-FROM alpine:3.22.2
+FROM alpine:3.23.3
 RUN adduser -D -u 1000 -s /bin/sh umhuser
 COPY --from=builder /app/chaos-proxy /usr/local/bin/chaos-proxy
 USER umhuser

@@ -28,7 +28,7 @@
 #
 # Pass criteria:
 #   - Instance stays "online" in Management Console
-#   - Metrics show retry activity (check :2112/metrics)
+#   - Metrics show retry activity (check :8080/metrics)
 #   - No unbounded error accumulation
 
 set -euo pipefail

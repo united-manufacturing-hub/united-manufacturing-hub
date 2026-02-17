@@ -59,7 +59,7 @@ services:
       - USE_FSMV2_TRANSPORT=true
       - LOGGING_LEVEL=DEBUG
     ports:
-      - "127.0.0.1:2112:2112"
+      - "127.0.0.1:8080:8080"
     depends_on:
       chaos-proxy:
         condition: service_healthy
