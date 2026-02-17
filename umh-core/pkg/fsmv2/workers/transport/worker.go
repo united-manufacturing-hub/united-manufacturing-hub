@@ -36,9 +36,12 @@
 //
 // State flow:
 //
-//	Stopped → Starting → Running → Degraded → Stopping → Stopped
-//	   ↓         ↓          ↓          ↓
-//	  Stop ← ─ Error ← ── Error ← ── Error
+//	Stopped ──→ Starting ──→ Running ⇄ Degraded
+//	                ↑         ↓ (token expired)
+//	                └─────────┘
+//
+// All active states transition to Stopping → Stopped on shutdown.
+// Auth failures in Starting retry in place (no dedicated error state).
 package transport
 
 import (
