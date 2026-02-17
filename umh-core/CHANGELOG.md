@@ -1,5 +1,46 @@
 # Changelog
 
+## [0.44.8]
+
+If you enabled the FSMv2 communicator preview (introduced in v0.44.5), this release fixes three issues that could cause your instance to use a lot of memory, go offline, or restart unexpectedly. We strongly recommend upgrading.
+
+If you have not enabled the FSMv2 preview, this release does not affect you.
+
+### Breaking Changes
+
+**Action Required (FSMv2 Preview Users Only)** - You need to add a new environment variable to get the memory fix.
+
+Regardless of how you enabled FSMv2, set both of these environment variables and restart your container:
+
+- `USE_FSMV2_TRANSPORT=true` — enables FSMv2 (unchanged from before)
+- `USE_FSMV2_MEMORY_CLEANUP=true` — **new in v0.44.8**, enables the periodic memory cleanup
+
+```bash
+docker run -e USE_FSMV2_TRANSPORT=true -e USE_FSMV2_MEMORY_CLEANUP=true ...
+```
+
+**If you enabled FSMv2 via `useFSMv2Transport: true` in config.yaml**, that method no longer works — FSMv2 is silently not running. Remove that line from your config.yaml and use the environment variables above instead.
+
+To verify FSMv2 is running after the change:
+```bash
+docker exec <container-name> grep "Using FSMv2 communicator" /data/logs/umh-core/current
+```
+If this returns no output, FSMv2 is not running. Double-check that both environment variables are set and that the container was restarted.
+
+### Fixes
+
+- **Memory no longer grows unbounded over time** - Previously, long-running instances with FSMv2 enabled would slowly consume more and more memory because internal state changes accumulated without ever being cleaned up. One customer reported 13 GB of RAM usage at only 4 messages per second. Eventually, the system would kill the container to free memory, causing a brief data gap while it restarted. A periodic cleanup routine now keeps memory usage flat regardless of how long the instance runs. This fix requires `USE_FSMV2_MEMORY_CLEANUP=true` (see above).
+
+- **Instances no longer crash when a worker hits an unexpected error** - Previously, if one of the internal FSMv2 components encountered an unexpected error, it could crash the entire process, taking your instance offline until the container restarted. The system now catches these errors and automatically recovers. If the same error keeps recurring, the affected component is stopped to prevent crash loops while the rest of the system keeps running.
+
+- **Instances no longer get stuck after configuration changes** - When you changed a configuration and the system restarted an internal component, the new component could inherit a stale "shut down" signal from the old one and immediately stop itself. This could make the instance appear stuck or unresponsive after config changes. The shutdown signal is now properly cleared before starting a replacement.
+
+The crash fix and the configuration fix are automatically active for all FSMv2 users and do not require additional configuration.
+
+- **Updated container base image to Alpine with security patches**
+
+- **Updated Go dependencies**
+
 ## [0.44.7]
 
 This release removes the 20-address limit for S7 bridges and adds per-slave register mapping for Modbus gateways.
