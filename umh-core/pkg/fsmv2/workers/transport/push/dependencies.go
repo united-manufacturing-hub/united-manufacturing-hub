@@ -34,7 +34,7 @@ type PushDependencies struct {
 	*deps.BaseDependencies
 	parentDeps              *transport_pkg.TransportDependencies
 	pendingMessages         []*communicator_transport.UMHMessage
-	pendingMu               sync.Mutex
+	pendingMu               sync.RWMutex
 	lastSeenResetGeneration uint64
 }
 
@@ -106,8 +106,8 @@ func (d *PushDependencies) DrainPendingMessages() []*communicator_transport.UMHM
 }
 
 func (d *PushDependencies) PendingMessageCount() int {
-	d.pendingMu.Lock()
-	defer d.pendingMu.Unlock()
+	d.pendingMu.RLock()
+	defer d.pendingMu.RUnlock()
 
 	return len(d.pendingMessages)
 }
