@@ -108,6 +108,8 @@ func (w *PushWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedSt
 		var prev snapshot.PushObservedState
 		if err := stateReader.LoadObservedTyped(ctx, d.GetWorkerType(), d.GetWorkerID(), &prev); err == nil {
 			prevWorkerMetrics = prev.Metrics.Worker
+		} else {
+			d.GetLogger().Debug("observed_state_load_failed", deps.Err(err))
 		}
 	}
 
