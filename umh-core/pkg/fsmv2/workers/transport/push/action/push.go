@@ -158,10 +158,10 @@ func (a *PushAction) retryPending(ctx context.Context, t transport.Transport, pu
 					return pending[i:], fmt.Errorf("pending retry failed (infrastructure): %w", err)
 				}
 
-				pushDeps.GetLogger().Warnw("dropping_poison_message",
-					"errorType", transportErr.Type,
-					"error", transportErr.Error(),
-					"remaining", len(pending)-i-1)
+				pushDeps.GetLogger().SentryWarn(depspkg.FeatureCommunicator, pushDeps.GetHierarchyPath(), "dropping_poison_message",
+					depspkg.String("errorType", transportErr.Type.String()),
+					depspkg.Err(transportErr),
+					depspkg.Int("remaining", len(pending)-i-1))
 				metrics.IncrementCounter(depspkg.CounterMessagesDropped, 1)
 
 				continue

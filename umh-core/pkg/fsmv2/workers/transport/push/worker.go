@@ -20,8 +20,6 @@ import (
 	"fmt"
 	"time"
 
-	"go.uber.org/zap"
-
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
@@ -39,13 +37,13 @@ var _ fsmv2.Worker = (*PushWorker)(nil)
 
 type PushWorker struct {
 	*helpers.BaseWorker[*PushDependencies]
-	logger   *zap.SugaredLogger
+	logger   deps.FSMLogger
 	identity deps.Identity
 }
 
 func NewPushWorker(
 	identity deps.Identity,
-	logger *zap.SugaredLogger,
+	logger deps.FSMLogger,
 	stateReader deps.StateReader,
 	parentDeps *transport_pkg.TransportDependencies,
 ) (*PushWorker, error) {
@@ -142,7 +140,7 @@ func (w *PushWorker) GetInitialState() fsmv2.State[any, any] {
 
 func init() {
 	if err := factory.RegisterWorkerType[snapshot.PushObservedState, *snapshot.PushDesiredState](
-		func(id deps.Identity, logger *zap.SugaredLogger, stateReader deps.StateReader, extraDeps map[string]any) fsmv2.Worker {
+		func(id deps.Identity, logger deps.FSMLogger, stateReader deps.StateReader, extraDeps map[string]any) fsmv2.Worker {
 			parentDepsRaw, ok := extraDeps["transport_deps"]
 			if !ok {
 				panic("push worker requires transport_deps in extraDeps")

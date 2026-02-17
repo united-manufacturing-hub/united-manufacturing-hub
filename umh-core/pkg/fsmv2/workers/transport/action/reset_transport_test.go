@@ -23,19 +23,18 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	transportpkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/action"
-	"go.uber.org/zap"
 )
 
 var _ = Describe("ResetTransportAction", func() {
 	var (
 		act          *action.ResetTransportAction
 		dependencies *transportpkg.TransportDependencies
-		logger       *zap.SugaredLogger
+		logger       deps.FSMLogger
 		mockTransp   *mockTransport
 	)
 
 	BeforeEach(func() {
-		logger = zap.NewNop().Sugar()
+		logger = deps.NewNopFSMLogger()
 		mockTransp = &mockTransport{}
 		identity := deps.Identity{ID: "test-id", WorkerType: "transport"}
 		dependencies = transportpkg.NewTransportDependencies(mockTransp, logger, nil, identity)

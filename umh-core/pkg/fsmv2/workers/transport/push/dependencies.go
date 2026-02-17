@@ -24,7 +24,6 @@ import (
 	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
 	transport_pkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/push/snapshot"
-	"go.uber.org/zap"
 )
 
 const maxPendingMessages = 1000
@@ -39,7 +38,7 @@ type PushDependencies struct {
 	lastSeenResetGeneration uint64
 }
 
-func NewPushDependencies(parentDeps *transport_pkg.TransportDependencies, identity deps.Identity, logger *zap.SugaredLogger, stateReader deps.StateReader) (*PushDependencies, error) {
+func NewPushDependencies(parentDeps *transport_pkg.TransportDependencies, identity deps.Identity, logger deps.FSMLogger, stateReader deps.StateReader) (*PushDependencies, error) {
 	if parentDeps == nil {
 		return nil, errors.New("parentDeps must not be nil")
 	}
@@ -90,8 +89,8 @@ func (d *PushDependencies) StorePendingMessages(msgs []*communicator_transport.U
 	if len(d.pendingMessages) > maxPendingMessages {
 		dropped := len(d.pendingMessages) - maxPendingMessages
 		d.pendingMessages = d.pendingMessages[len(d.pendingMessages)-maxPendingMessages:]
-		d.BaseDependencies.GetLogger().Warnw("pending_buffer_overflow",
-			"dropped", dropped, "cap", maxPendingMessages)
+		d.BaseDependencies.GetLogger().SentryWarn(deps.FeatureCommunicator, d.GetHierarchyPath(), "pending_buffer_overflow",
+			deps.Int("dropped", dropped), deps.Int("cap", maxPendingMessages))
 		d.MetricsRecorder().IncrementCounter(deps.CounterMessagesDropped, int64(dropped))
 	}
 }

@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 
+	depspkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/snapshot"
 )
 
@@ -52,7 +53,7 @@ func (a *ResetTransportAction) Execute(ctx context.Context, depsAny any) error {
 
 	transport := deps.GetTransport()
 	transport.Reset()
-	deps.GetLogger().Infow("transport_reset_completed", "reason", "degraded_state_threshold")
+	deps.GetLogger().Info("transport_reset_completed", depspkg.String("reason", "degraded_state_threshold"))
 
 	deps.IncrementResetGeneration()
 
