@@ -1229,6 +1229,36 @@ agent:
 				}
 				Expect(configWrites).NotTo(BeEmpty())
 			})
+
+			It("should still write config via WriteYAMLConfigFromString even when backup fails", func() {
+				// Override WriteFileFunc to fail only for backup dir paths
+				mockFS.WithWriteFileFunc(func(ctx context.Context, path string, data []byte, perm os.FileMode) error {
+					writeFileCalls = append(writeFileCalls, path)
+					captured := make([]byte, len(data))
+					copy(captured, data)
+					writeFileDataCapture[path] = captured
+
+					if strings.HasPrefix(path, constants.ConfigBackupDir) {
+						return errors.New("disk full")
+					}
+
+					return nil
+				})
+
+				validYAML := "agent:\n  metricsPort: 9090\n  releaseChannel: stable\n  location:\n    0: test\n"
+
+				err := configManager.WriteYAMLConfigFromString(ctx, validYAML, "")
+				Expect(err).NotTo(HaveOccurred())
+
+				// Config write path should still exist in calls
+				configWrites := []string{}
+				for _, p := range writeFileCalls {
+					if !strings.HasPrefix(p, constants.ConfigBackupDir) {
+						configWrites = append(configWrites, p)
+					}
+				}
+				Expect(configWrites).NotTo(BeEmpty())
+			})
 		})
 
 		Describe("getLatestBackupContent", func() {
