@@ -28,7 +28,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	filesystem "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"go.uber.org/zap"
 	"gopkg.in/yaml.v3"
@@ -349,7 +348,7 @@ func (m *MockConfigManager) ResetCalls() {
 }
 
 // atomic set location.
-func (m *MockConfigManager) AtomicSetLocation(ctx context.Context, location models.EditInstanceLocationModel) error {
+func (m *MockConfigManager) AtomicSetLocation(ctx context.Context, location map[int]string) error {
 	m.mutexReadAndWrite.Lock()
 	defer m.mutexReadAndWrite.Unlock()
 
@@ -361,7 +360,7 @@ func (m *MockConfigManager) AtomicSetLocation(ctx context.Context, location mode
 
 	// Update location using the generic format
 	config.Agent.Location = make(map[int]string)
-	maps.Copy(config.Agent.Location, location.Location)
+	maps.Copy(config.Agent.Location, location)
 
 	// Convert the agent location to string map for use in other components
 	agentLocationStr := make(map[string]string)

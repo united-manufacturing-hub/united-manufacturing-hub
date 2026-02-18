@@ -423,7 +423,7 @@ func (w *writeFailingMockConfigManager) writeConfig(ctx context.Context, config 
 }
 
 // AtomicSetLocation implements the location update operation but forces the write to fail.
-func (w *writeFailingMockConfigManager) AtomicSetLocation(ctx context.Context, location models.EditInstanceLocationModel) error {
+func (w *writeFailingMockConfigManager) AtomicSetLocation(ctx context.Context, location map[int]string) error {
 	// Get the current config
 	config, err := w.GetConfig(ctx, 0)
 	if err != nil {
@@ -432,7 +432,7 @@ func (w *writeFailingMockConfigManager) AtomicSetLocation(ctx context.Context, l
 
 	// Update location using the generic format
 	config.Agent.Location = make(map[int]string)
-	maps.Copy(config.Agent.Location, location.Location)
+	maps.Copy(config.Agent.Location, location)
 
 	// Write config (will fail with this mock)
 	if err := w.writeConfig(ctx, config); err != nil {

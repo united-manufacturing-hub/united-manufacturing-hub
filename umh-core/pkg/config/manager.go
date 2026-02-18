@@ -38,7 +38,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/ctxutil/ctxrwmutex"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	filesystem "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
@@ -65,7 +64,7 @@ type ConfigManager interface {
 	// GetFileSystemService returns the filesystem service
 	GetFileSystemService() filesystem.Service
 	// AtomicSetLocation sets the location in the config atomically
-	AtomicSetLocation(ctx context.Context, location models.EditInstanceLocationModel) error
+	AtomicSetLocation(ctx context.Context, location map[int]string) error
 	// AtomicAddDataflowcomponent adds a dataflowcomponent to the config atomically
 	AtomicAddDataflowcomponent(ctx context.Context, dfc DataFlowComponentConfig) error
 	// AtomicDeleteDataflowcomponent deletes a dataflowcomponent from the config atomically
@@ -689,7 +688,7 @@ func (m *FileConfigManagerWithBackoff) GetLastError() error {
 // AtomicSetLocation sets the location in the config atomically
 // This function updates the agent location and propagates the changes to all
 // other components (ProtocolConverter, StreamProcessor) to maintain consistency.
-func (m *FileConfigManager) AtomicSetLocation(ctx context.Context, location models.EditInstanceLocationModel) error {
+func (m *FileConfigManager) AtomicSetLocation(ctx context.Context, location map[int]string) error {
 	err := m.mutexAtomicUpdate.Lock(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to lock config file: %w", err)
@@ -705,7 +704,7 @@ func (m *FileConfigManager) AtomicSetLocation(ctx context.Context, location mode
 	// Replace the agent location with the new location data
 	// The location is already in the correct map[int]string format
 	config.Agent.Location = make(map[int]string)
-	maps.Copy(config.Agent.Location, location.Location)
+	maps.Copy(config.Agent.Location, location)
 
 	// Convert the agent location to string map for use in other components
 	agentLocationStr := make(map[string]string)
@@ -748,7 +747,7 @@ func (m *FileConfigManager) AtomicSetLocation(ctx context.Context, location mode
 }
 
 // AtomicSetLocation delegates to the underlying FileConfigManager.
-func (m *FileConfigManagerWithBackoff) AtomicSetLocation(ctx context.Context, location models.EditInstanceLocationModel) error {
+func (m *FileConfigManagerWithBackoff) AtomicSetLocation(ctx context.Context, location map[int]string) error {
 	// Check if context is already cancelled
 	if ctx.Err() != nil {
 		return ctx.Err()

@@ -111,7 +111,7 @@ func (a *EditInstanceAction) Execute() (interface{}, map[string]interface{}, err
 	ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
 	defer cancel()
 
-	err := a.configManager.AtomicSetLocation(ctx, a.payload)
+	err := a.configManager.AtomicSetLocation(ctx, a.payload.Location)
 	if err != nil {
 		errorMsg := fmt.Sprintf("Failed to update instance location: %s", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errorMsg, a.outboundChannel, models.EditInstance)
