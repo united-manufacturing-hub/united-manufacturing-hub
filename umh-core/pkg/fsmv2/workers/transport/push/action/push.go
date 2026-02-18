@@ -23,7 +23,6 @@ import (
 	depspkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
 	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
-	transportAction "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/action"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/push/snapshot"
 )
 
@@ -110,7 +109,7 @@ drainLoop:
 		var transportErr *httpTransport.TransportError
 		if errors.As(err, &transportErr) {
 			pushDeps.RecordTypedError(transportErr.Type, transportErr.RetryAfter)
-			metrics.IncrementCounter(transportAction.CounterForErrorType(transportErr.Type), 1)
+			metrics.IncrementCounter(counterForErrorType(transportErr.Type), 1)
 		} else {
 			pushDeps.RecordTypedError(httpTransport.ErrorTypeNetwork, 0)
 			metrics.IncrementCounter(depspkg.CounterNetworkErrorsTotal, 1)
@@ -161,7 +160,7 @@ func (a *PushAction) retryPending(ctx context.Context, t transport.Transport, pu
 
 			if errors.As(err, &transportErr) {
 				pushDeps.RecordTypedError(transportErr.Type, transportErr.RetryAfter)
-				metrics.IncrementCounter(transportAction.CounterForErrorType(transportErr.Type), 1)
+				metrics.IncrementCounter(counterForErrorType(transportErr.Type), 1)
 
 				if isInfrastructureError(transportErr.Type) {
 					return pending[i:], fmt.Errorf("pending retry failed (infrastructure): %w", err)
@@ -189,6 +188,29 @@ func (a *PushAction) retryPending(ctx context.Context, t transport.Transport, pu
 	}
 
 	return nil, nil
+}
+
+func counterForErrorType(t httpTransport.ErrorType) depspkg.CounterName {
+	switch t {
+	case httpTransport.ErrorTypeCloudflareChallenge:
+		return depspkg.CounterCloudflareErrorsTotal
+	case httpTransport.ErrorTypeBackendRateLimit:
+		return depspkg.CounterBackendRateLimitErrorsTotal
+	case httpTransport.ErrorTypeInvalidToken:
+		return depspkg.CounterAuthFailuresTotal
+	case httpTransport.ErrorTypeInstanceDeleted:
+		return depspkg.CounterInstanceDeletedTotal
+	case httpTransport.ErrorTypeServerError:
+		return depspkg.CounterServerErrorsTotal
+	case httpTransport.ErrorTypeProxyBlock:
+		return depspkg.CounterProxyBlockErrorsTotal
+	case httpTransport.ErrorTypeNetwork:
+		return depspkg.CounterNetworkErrorsTotal
+	case httpTransport.ErrorTypeUnknown:
+		return depspkg.CounterNetworkErrorsTotal
+	default:
+		return depspkg.CounterNetworkErrorsTotal
+	}
 }
 
 func isInfrastructureError(errType httpTransport.ErrorType) bool {
