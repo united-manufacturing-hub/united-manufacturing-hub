@@ -48,13 +48,11 @@ type CdcfMeta struct {
 	Type string `json:"type"`
 }
 
-// EditInstanceLocation holds the location information for the instance.
+// EditInstanceLocationModel holds the location information for the instance using the generic location format.
+// The location is represented as a map where the key is the hierarchy level (0=enterprise, 1=site, 2=area, etc.)
+// and the value is the location name at that level.
 type EditInstanceLocationModel struct {
-	Site       *string `json:"site,omitempty"`
-	Area       *string `json:"area,omitempty"`
-	Line       *string `json:"line,omitempty"`
-	WorkCell   *string `json:"workCell,omitempty"`
-	Enterprise string  `json:"enterprise"`
+	Location map[int]string `json:"location"`
 }
 
 type MessageMetadata struct {

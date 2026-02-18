@@ -17,6 +17,7 @@ package actions_test
 import (
 	"context"
 	"errors"
+	"maps"
 	"time"
 
 	"github.com/google/uuid"
@@ -74,7 +75,7 @@ var _ = Describe("EditInstance", func() {
 		}
 
 		mockConfig = config.NewMockConfigManager().WithConfig(initialConfig)
-		snapshotManager := fsm.NewSnapshotManager()
+		snapshotManager = fsm.NewSnapshotManager()
 		action = actions.NewEditInstanceAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig, snapshotManager)
 	})
 
@@ -89,14 +90,14 @@ var _ = Describe("EditInstance", func() {
 
 	Describe("Parse", func() {
 		It("should parse valid location data", func() {
-			// Valid payload with complete location information
+			// Valid payload with complete location information using generic format
 			payload := map[string]interface{}{
 				"location": map[string]interface{}{
-					"enterprise": "Test Enterprise",
-					"site":       "Test Site",
-					"area":       "Test Area",
-					"line":       "Test Line",
-					"workCell":   "Test WorkCell",
+					"0": "Test Enterprise",
+					"1": "Test Site",
+					"2": "Test Area",
+					"3": "Test Line",
+					"4": "Test WorkCell",
 				},
 			}
 
@@ -105,21 +106,27 @@ var _ = Describe("EditInstance", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Check if the location was properly parsed
-			location := action.GetLocation()
-			Expect(location).NotTo(BeNil())
+			parsedPayload := action.GetParsedPayload()
+			Expect(parsedPayload.Location).NotTo(BeNil())
+			Expect(parsedPayload.Location[0]).To(Equal("Test Enterprise"))
+			Expect(parsedPayload.Location[1]).To(Equal("Test Site"))
+			Expect(parsedPayload.Location[2]).To(Equal("Test Area"))
+			Expect(parsedPayload.Location[3]).To(Equal("Test Line"))
+			Expect(parsedPayload.Location[4]).To(Equal("Test WorkCell"))
 		})
 
-		It("should handle missing location data", func() {
-			// Payload without location information
+		It("should parse but fail validation for missing location data", func() {
+			// Payload without location information - parsing succeeds but validation fails
 			payload := map[string]interface{}{}
 
-			// Call Parse method
+			// Parse should succeed
 			err := action.Parse(payload)
 			Expect(err).NotTo(HaveOccurred())
 
-			// Location should be nil
-			location := action.GetLocation()
-			Expect(location).To(BeNil())
+			// But validation should fail
+			err = action.Validate()
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("location is required"))
 		})
 
 		It("should return error for invalid location format", func() {
@@ -128,90 +135,155 @@ var _ = Describe("EditInstance", func() {
 				"location": "Invalid Location",
 			}
 
-			// Call Parse method
+			// Parse should fail
 			err := action.Parse(payload)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("invalid location format"))
+			Expect(err.Error()).To(ContainSubstring("failed to parse payload"))
 		})
 
-		It("should return error for missing enterprise in location", func() {
-			// Payload with location missing the required enterprise field
+		It("should parse successfully but fail validation for missing enterprise", func() {
+			// Payload with location missing the required enterprise field (level 0)
 			payload := map[string]interface{}{
 				"location": map[string]interface{}{
-					"site": "Test Site",
+					"1": "Test Site",
 				},
 			}
 
-			// Call Parse method
+			// Parse should succeed
+			err := action.Parse(payload)
+			Expect(err).NotTo(HaveOccurred())
+
+			// But validation should fail
+			err = action.Validate()
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("enterprise (level 0) is required"))
+		})
+
+		It("should return error for invalid location key", func() {
+			// Payload with invalid location key (non-integer)
+			payload := map[string]interface{}{
+				"location": map[string]interface{}{
+					"enterprise": "Test Enterprise", // Should be "0" instead
+				},
+			}
+
+			// Parse should fail
 			err := action.Parse(payload)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("missing or invalid enterprise"))
+			Expect(err.Error()).To(ContainSubstring("failed to parse payload"))
+		})
+
+		It("should parse successfully but fail validation for empty enterprise", func() {
+			// Payload with empty location value for enterprise
+			payload := map[string]interface{}{
+				"location": map[string]interface{}{
+					"0": "",
+				},
+			}
+
+			// Parse should succeed
+			err := action.Parse(payload)
+			Expect(err).NotTo(HaveOccurred())
+
+			// But validation should fail
+			err = action.Validate()
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("enterprise (level 0) is required"))
+		})
+
+		It("should return error for non-string location value", func() {
+			// Payload with non-string location value
+			payload := map[string]interface{}{
+				"location": map[string]interface{}{
+					"0": 123,
+				},
+			}
+
+			// Parse should fail
+			err := action.Parse(payload)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("failed to parse payload"))
 		})
 	})
 
 	Describe("Validate", func() {
 		It("should validate with valid location data", func() {
-			// Create a valid location and set it using the exported method
-			location := &models.EditInstanceLocationModel{
-				Enterprise: "Test Enterprise",
+			// Valid payload
+			payload := models.EditInstanceLocationModel{
+				Location: map[int]string{
+					0: "Test Enterprise",
+				},
 			}
 
-			action.SetLocation(location)
+			action.SetParsedPayload(payload)
 
-			// Validate
 			err := action.Validate()
 			Expect(err).NotTo(HaveOccurred())
 		})
 
-		It("should validate with nil location", func() {
-			// Don't set any location (which results in nil location)
-			action.SetLocation(nil)
+		It("should return error for location without enterprise", func() {
+			// Create a payload without enterprise (level 0)
+			payload := models.EditInstanceLocationModel{
+				Location: map[int]string{
+					1: "Test Site",
+				},
+			}
 
-			// Validate
+			action.SetParsedPayload(payload)
+
 			err := action.Validate()
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("enterprise (level 0) is required"))
+		})
+
+		It("should return error for location with empty enterprise", func() {
+			// Create a payload with empty enterprise (level 0)
+			payload := models.EditInstanceLocationModel{
+				Location: map[int]string{
+					0: "",
+				},
+			}
+
+			action.SetParsedPayload(payload)
+
+			err := action.Validate()
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("enterprise (level 0) is required"))
+		})
+
+		It("should return error for empty location map", func() {
+			// Create a payload with empty location map
+			payload := models.EditInstanceLocationModel{
+				Location: map[int]string{},
+			}
+
+			action.SetParsedPayload(payload)
+
+			err := action.Validate()
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("location is required"))
 		})
 	})
 
 	Describe("Execute", func() {
-		It("should handle nil location gracefully", func() {
-			// Parse with nil location
+		It("should fail validation for missing location", func() {
+			// Payload with missing location - parsing succeeds but validation fails
 			payload := map[string]interface{}{}
 			err := action.Parse(payload)
 			Expect(err).NotTo(HaveOccurred())
 
-			// Reset tracking for this test
-			mockConfig.ResetCalls()
-
-			// Execute the action
-			result, metadata, err := action.Execute()
-			Expect(err).NotTo(HaveOccurred())
-			Expect(result).To(ContainSubstring("No changes were made"))
-			Expect(metadata).To(BeNil())
-
-			// We should have 2 messages in the channel (Confirmed and Executing)
-			var messages []*models.UMHMessage
-			for range 2 {
-				select {
-				case msg := <-outboundChannel:
-					messages = append(messages, msg)
-				default:
-					Fail("Expected more messages in the outbound channel")
-				}
-			}
-			Expect(messages).To(HaveLen(2))
-
-			// Verify that GetConfig wasn't called
-			Expect(mockConfig.IsGetConfigCalled()).To(BeFalse())
+			err = action.Validate()
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("location is required"))
 		})
 
 		It("should update location successfully", func() {
-			// Parse with valid location
+			// Valid payload
 			payload := map[string]interface{}{
 				"location": map[string]interface{}{
-					"enterprise": "New Enterprise",
-					"site":       "New Site",
-					"area":       "New Area",
+					"0": "New Enterprise",
+					"1": "New Site",
+					"2": "New Area",
 				},
 			}
 			err := action.Parse(payload)
@@ -254,10 +326,10 @@ var _ = Describe("EditInstance", func() {
 			// Set up mock to fail on GetConfig
 			mockConfig.WithConfigError(errors.New("mock GetConfig failure"))
 
-			// Parse with valid location
+			// Valid payload
 			payload := map[string]interface{}{
 				"location": map[string]interface{}{
-					"enterprise": "New Enterprise",
+					"0": "New Enterprise",
 				},
 			}
 			err := action.Parse(payload)
@@ -295,10 +367,10 @@ var _ = Describe("EditInstance", func() {
 			// Create new action with our custom mock
 			action = actions.NewEditInstanceAction(userEmail, actionUUID, instanceUUID, outboundChannel, customMock, snapshotManager)
 
-			// Parse with valid location
+			// Valid payload
 			payload := map[string]interface{}{
 				"location": map[string]interface{}{
-					"enterprise": "New Enterprise",
+					"0": "New Enterprise",
 				},
 			}
 			err := action.Parse(payload)
@@ -358,25 +430,9 @@ func (w *writeFailingMockConfigManager) AtomicSetLocation(ctx context.Context, l
 		return err
 	}
 
-	// Update location
+	// Update location using the generic format
 	config.Agent.Location = make(map[int]string)
-
-	config.Agent.Location[0] = location.Enterprise
-	if location.Site != nil {
-		config.Agent.Location[1] = *location.Site
-	}
-
-	if location.Area != nil {
-		config.Agent.Location[2] = *location.Area
-	}
-
-	if location.Line != nil {
-		config.Agent.Location[3] = *location.Line
-	}
-
-	if location.WorkCell != nil {
-		config.Agent.Location[4] = *location.WorkCell
-	}
+	maps.Copy(config.Agent.Location, location.Location)
 
 	// Write config (will fail with this mock)
 	if err := w.writeConfig(ctx, config); err != nil {

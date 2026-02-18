@@ -19,6 +19,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -701,29 +702,10 @@ func (m *FileConfigManager) AtomicSetLocation(ctx context.Context, location mode
 		return fmt.Errorf("failed to get config: %w", err)
 	}
 
-	// Always create a new location map like in the mock implementation
+	// Replace the agent location with the new location data
+	// The location is already in the correct map[int]string format
 	config.Agent.Location = make(map[int]string)
-
-	// Location is a hierarchical structure represented as map[int]string
-	// 0: Enterprise, 1: Site, 2: Area, 3: Line, 4: WorkCell
-	config.Agent.Location[0] = location.Enterprise
-
-	// Update optional fields if they exist
-	if location.Site != nil {
-		config.Agent.Location[1] = *location.Site
-	}
-
-	if location.Area != nil {
-		config.Agent.Location[2] = *location.Area
-	}
-
-	if location.Line != nil {
-		config.Agent.Location[3] = *location.Line
-	}
-
-	if location.WorkCell != nil {
-		config.Agent.Location[4] = *location.WorkCell
-	}
+	maps.Copy(config.Agent.Location, location.Location)
 
 	// Convert the agent location to string map for use in other components
 	agentLocationStr := make(map[string]string)

@@ -29,16 +29,19 @@ import (
 )
 
 // EditInstanceAction implements the Action interface for editing instance properties.
-// Currently, it supports updating the location hierarchy (enterprise, site, area, line, workCell).
+// Currently, it supports updating the location hierarchy using the generic location format
+// where map keys represent hierarchy levels (example: 0=enterprise, 1=site, etc.)
 type EditInstanceAction struct {
 	configManager         config.ConfigManager
 	outboundChannel       chan *models.UMHMessage
-	location              *models.EditInstanceLocationModel
 	actionLogger          *zap.SugaredLogger
 	systemSnapshotManager *fsm.SnapshotManager
 	userEmail             string
 	actionUUID            uuid.UUID
 	instanceUUID          uuid.UUID
+
+	// Parsed request payload (populated after Parse)
+	payload models.EditInstanceLocationModel
 }
 
 // NewEditInstanceAction creates a new EditInstanceAction with the provided parameters.
@@ -58,75 +61,31 @@ func NewEditInstanceAction(userEmail string, actionUUID uuid.UUID, instanceUUID 
 }
 
 // Parse implements the Action interface by extracting location information from the payload.
-// It accepts a location structure containing enterprise (required) and optional site,
-// area, line, and workCell fields.
-//
-// The function handles the case where no location is provided by leaving the location field nil,
-// which is valid and indicates no location change is requested.
 func (a *EditInstanceAction) Parse(payload interface{}) error {
 	a.actionLogger.Debug("Parsing EditInstance action payload")
 
-	// Convert the payload to a map
-	payloadMap, ok := payload.(map[string]interface{})
-	if !ok {
-		return errors.New("invalid payload format, expected map")
+	parsedPayload, err := ParseActionPayload[models.EditInstanceLocationModel](payload)
+	if err != nil {
+		return fmt.Errorf("failed to parse payload: %w", err)
 	}
 
-	// Check if we have a location field
-	locationData, ok := payloadMap["location"]
-	if !ok {
-		// No location provided, which is fine since it's optional
-		return nil
-	}
+	a.payload = parsedPayload
 
-	// Parse location data
-	locationMap, ok := locationData.(map[string]interface{})
-	if !ok {
-		return errors.New("invalid location format, expected map")
-	}
-
-	// Extract enterprise (required)
-	enterprise, ok := locationMap["enterprise"].(string)
-	if !ok || enterprise == "" {
-		return errors.New("missing or invalid enterprise in location")
-	}
-
-	// Create location object
-	location := &models.EditInstanceLocationModel{
-		Enterprise: enterprise,
-	}
-
-	// Extract optional fields
-	if site, ok := locationMap["site"].(string); ok && site != "" {
-		location.Site = &site
-	}
-
-	if area, ok := locationMap["area"].(string); ok && area != "" {
-		location.Area = &area
-	}
-
-	if line, ok := locationMap["line"].(string); ok && line != "" {
-		location.Line = &line
-	}
-
-	if workCell, ok := locationMap["workCell"].(string); ok && workCell != "" {
-		location.WorkCell = &workCell
-	}
-
-	a.location = location
+	a.actionLogger.Debugf("Parsed EditInstance action payload: location=%v", a.payload.Location)
 
 	return nil
 }
 
 // Validate implements the Action interface by checking if the parsed data meets
-// the business requirements. For EditInstanceAction, it verifies that if a location
-// is provided, the enterprise field is not empty.
-//
-// If the location field is nil (no location update requested), validation passes.
+// the business requirements. For EditInstanceAction, it verifies that the location
+// is provided and that the enterprise field (level 0) exists and is not empty.
 func (a *EditInstanceAction) Validate() error {
-	// If location is provided, validate that enterprise is not empty
-	if a.location != nil && a.location.Enterprise == "" {
-		return errors.New("enterprise cannot be empty when location is provided")
+	if len(a.payload.Location) == 0 {
+		return errors.New("location is required")
+	}
+
+	if enterprise, exists := a.payload.Location[0]; !exists || enterprise == "" {
+		return errors.New("enterprise (level 0) is required and cannot be empty")
 	}
 
 	return nil
@@ -139,21 +98,11 @@ func (a *EditInstanceAction) Validate() error {
 // 3. Performs the configuration update using the configManager
 // 4. Sends ActionFinishedWithFailure if an error occurs
 // 5. Returns a success message (not sending ActionFinishedSuccessfull as that's done by the caller)
-//
-// For EditInstanceAction, if no location update is requested (location is nil),
-// it returns early with a message indicating no changes were made.
 func (a *EditInstanceAction) Execute() (interface{}, map[string]interface{}, error) {
 	a.actionLogger.Debug("Executing EditInstance action")
 
 	// Send confirmation that action is starting
 	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionConfirmed, "Starting EditInstance action", a.outboundChannel, models.EditInstance)
-
-	// If we don't have any location to update, return early
-	if a.location == nil {
-		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "No location changes requested", a.outboundChannel, models.EditInstance)
-
-		return "No changes were made to the instance", nil, nil
-	}
 
 	// Send progress update
 	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Updating instance location", a.outboundChannel, models.EditInstance)
@@ -162,7 +111,7 @@ func (a *EditInstanceAction) Execute() (interface{}, map[string]interface{}, err
 	ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
 	defer cancel()
 
-	err := a.configManager.AtomicSetLocation(ctx, *a.location)
+	err := a.configManager.AtomicSetLocation(ctx, a.payload)
 	if err != nil {
 		errorMsg := fmt.Sprintf("Failed to update instance location: %s", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errorMsg, a.outboundChannel, models.EditInstance)
@@ -189,12 +138,12 @@ func (a *EditInstanceAction) getUuid() uuid.UUID {
 
 // Methods added for testing purposes
 
-// GetLocation returns the location - for testing.
-func (a *EditInstanceAction) GetLocation() *models.EditInstanceLocationModel {
-	return a.location
+// GetParsedPayload returns the parsed payload - for testing.
+func (a *EditInstanceAction) GetParsedPayload() models.EditInstanceLocationModel {
+	return a.payload
 }
 
-// SetLocation sets the location - for testing.
-func (a *EditInstanceAction) SetLocation(location *models.EditInstanceLocationModel) {
-	a.location = location
+// SetParsedPayload sets the parsed payload - for testing.
+func (a *EditInstanceAction) SetParsedPayload(payload models.EditInstanceLocationModel) {
+	a.payload = payload
 }

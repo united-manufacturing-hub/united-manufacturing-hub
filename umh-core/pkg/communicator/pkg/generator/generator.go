@@ -275,6 +275,7 @@ func (s *StatusCollectorType) GenerateStatusMessage(ctx context.Context, isBoots
 					"protocol-converter-logs",
 					"protocol-converter-metrics",
 					"stream-processor-ignore-health-check",
+					"dynamic-instance-location",
 				},
 			},
 		},

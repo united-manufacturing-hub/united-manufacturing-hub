@@ -17,6 +17,7 @@ package config
 import (
 	"context"
 	"fmt"
+	"maps"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -358,24 +359,9 @@ func (m *MockConfigManager) AtomicSetLocation(ctx context.Context, location mode
 		return fmt.Errorf("failed to get config: %w", err)
 	}
 
+	// Update location using the generic format
 	config.Agent.Location = make(map[int]string)
-
-	config.Agent.Location[0] = location.Enterprise
-	if location.Site != nil {
-		config.Agent.Location[1] = *location.Site
-	}
-
-	if location.Area != nil {
-		config.Agent.Location[2] = *location.Area
-	}
-
-	if location.Line != nil {
-		config.Agent.Location[3] = *location.Line
-	}
-
-	if location.WorkCell != nil {
-		config.Agent.Location[4] = *location.WorkCell
-	}
+	maps.Copy(config.Agent.Location, location.Location)
 
 	// Convert the agent location to string map for use in other components
 	agentLocationStr := make(map[string]string)
