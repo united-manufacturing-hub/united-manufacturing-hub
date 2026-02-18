@@ -22,7 +22,9 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -531,6 +533,9 @@ func (m *FileConfigManager) writeConfig(ctx context.Context, config FullConfig) 
 		return ctx.Err()
 	}
 
+	// Create backup before writing (best-effort)
+	m.createConfigBackup(ctx)
+
 	// Create the directory if it doesn't exist
 	dir := filepath.Dir(m.configPath)
 	if err := m.fsService.EnsureDirectory(ctx, dir); err != nil {
@@ -570,6 +575,82 @@ func (m *FileConfigManager) writeConfig(ctx context.Context, config FullConfig) 
 	m.logger.Infof("Successfully wrote config to %s", m.configPath)
 
 	return nil
+}
+
+// createConfigBackup creates a timestamped backup of the current config before writing.
+// This is best-effort - failures are logged but don't prevent the main write operation.
+// Must be called while holding the write lock (mutexReadOrWrite).
+func (m *FileConfigManager) createConfigBackup(ctx context.Context) {
+	exists, err := m.fsService.FileExists(ctx, m.configPath)
+	if err != nil || !exists {
+		return
+	}
+
+	data, err := m.fsService.ReadFile(ctx, m.configPath)
+	if err != nil {
+		m.logger.Warnf("Failed to read config for backup: %v", err)
+		return
+	}
+
+	if err := m.fsService.EnsureDirectory(ctx, constants.ConfigBackupDir); err != nil {
+		m.logger.Warnf("Failed to create backup directory: %v", err)
+		return
+	}
+
+	timestamp := time.Now().Unix()
+	backupPath := filepath.Join(constants.ConfigBackupDir, fmt.Sprintf("%d.yaml", timestamp))
+	if err := m.fsService.WriteFile(ctx, backupPath, data, 0644); err != nil {
+		m.logger.Warnf("Failed to write config backup: %v", err)
+		return
+	}
+
+	m.logger.Debugf("Created config backup at %s", backupPath)
+
+	m.cleanupOldBackups(ctx)
+}
+
+// cleanupOldBackups removes old backups, keeping only the most recent entries.
+// Best-effort - failures are logged but don't affect other operations.
+func (m *FileConfigManager) cleanupOldBackups(ctx context.Context) {
+	entries, err := m.fsService.ReadDir(ctx, constants.ConfigBackupDir)
+	if err != nil {
+		return
+	}
+
+	type backupFile struct {
+		timestamp int64
+		path      string
+	}
+	var backups []backupFile
+
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".yaml") {
+			continue
+		}
+		timestampStr := strings.TrimSuffix(entry.Name(), ".yaml")
+		timestamp, err := strconv.ParseInt(timestampStr, 10, 64)
+		if err != nil {
+			continue
+		}
+		backups = append(backups, backupFile{
+			timestamp: timestamp,
+			path:      filepath.Join(constants.ConfigBackupDir, entry.Name()),
+		})
+	}
+
+	if len(backups) <= constants.ConfigBackupMaxEntries {
+		return
+	}
+
+	sort.Slice(backups, func(i, j int) bool {
+		return backups[i].timestamp > backups[j].timestamp
+	})
+
+	for i := constants.ConfigBackupMaxEntries; i < len(backups); i++ {
+		if err := m.fsService.Remove(ctx, backups[i].path); err != nil {
+			m.logger.Warnf("Failed to remove old backup %s: %v", backups[i].path, err)
+		}
+	}
 }
 
 func (m *FileConfigManager) WithConfigPath(configPath string) *FileConfigManager {
@@ -1077,6 +1158,9 @@ func (m *FileConfigManager) WriteYAMLConfigFromString(ctx context.Context, confi
 			}
 		}
 	}
+
+	// Create backup before writing (best-effort)
+	m.createConfigBackup(ctx)
 
 	// Create the directory if it doesn't exist
 	dir := filepath.Dir(m.configPath)

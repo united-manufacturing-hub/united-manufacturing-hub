@@ -833,4 +833,181 @@ agent:
 			})
 		})
 	})
+
+	Describe("Config Backup", func() {
+		var (
+			configContent    = "agent:\n  metricsPort: 8080\n"
+			writtenBackups   map[string][]byte
+			removedFiles     []string
+			fileExistsResult bool
+		)
+
+		BeforeEach(func() {
+			writtenBackups = make(map[string][]byte)
+			removedFiles = nil
+			fileExistsResult = true
+
+			mockFS.WithFileExistsFunc(func(ctx context.Context, path string) (bool, error) {
+				if path == DefaultConfigPath {
+					return fileExistsResult, nil
+				}
+				return false, nil
+			})
+
+			mockFS.WithReadFileFunc(func(ctx context.Context, path string) ([]byte, error) {
+				if path == DefaultConfigPath {
+					return []byte(configContent), nil
+				}
+				return nil, errors.New("file not found")
+			})
+
+			mockFS.WithEnsureDirectoryFunc(func(ctx context.Context, path string) error {
+				return nil
+			})
+
+			mockFS.WithWriteFileFunc(func(ctx context.Context, path string, data []byte, perm os.FileMode) error {
+				if strings.HasPrefix(path, constants.ConfigBackupDir) {
+					writtenBackups[path] = data
+				}
+				return nil
+			})
+
+			mockFS.WithStatFunc(func(ctx context.Context, path string) (os.FileInfo, error) {
+				return mockFS.NewMockFileInfo(filepath.Base(path), 100, 0644, time.Now(), false), nil
+			})
+
+			mockFS.WithRemoveFunc(func(ctx context.Context, path string) error {
+				removedFiles = append(removedFiles, path)
+				return nil
+			})
+		})
+
+		Context("createConfigBackup", func() {
+			It("should create backup when config exists", func() {
+				configManager.createConfigBackup(ctx)
+
+				Expect(writtenBackups).To(HaveLen(1))
+				for path, content := range writtenBackups {
+					Expect(path).To(HavePrefix(constants.ConfigBackupDir))
+					Expect(path).To(HaveSuffix(".yaml"))
+					Expect(content).To(Equal([]byte(configContent)))
+				}
+			})
+
+			It("should not create backup when config does not exist", func() {
+				fileExistsResult = false
+
+				configManager.createConfigBackup(ctx)
+
+				Expect(writtenBackups).To(BeEmpty())
+			})
+
+			It("should not fail when backup directory creation fails", func() {
+				mockFS.WithEnsureDirectoryFunc(func(ctx context.Context, path string) error {
+					if path == constants.ConfigBackupDir {
+						return errors.New("failed to create directory")
+					}
+					return nil
+				})
+
+				// Should not panic
+				configManager.createConfigBackup(ctx)
+				Expect(writtenBackups).To(BeEmpty())
+			})
+
+			It("should not fail when backup write fails", func() {
+				mockFS.WithWriteFileFunc(func(ctx context.Context, path string, data []byte, perm os.FileMode) error {
+					if strings.HasPrefix(path, constants.ConfigBackupDir) {
+						return errors.New("failed to write backup")
+					}
+					return nil
+				})
+
+				// Should not panic
+				configManager.createConfigBackup(ctx)
+			})
+		})
+
+		Context("cleanupOldBackups", func() {
+			It("should not remove files when under limit", func() {
+				mockFS.WithReadDirFunc(func(ctx context.Context, path string) ([]os.DirEntry, error) {
+					if path == constants.ConfigBackupDir {
+						return []os.DirEntry{
+							&mockDirEntry{name: "1000000001.yaml", isDir: false},
+							&mockDirEntry{name: "1000000002.yaml", isDir: false},
+						}, nil
+					}
+					return nil, nil
+				})
+
+				configManager.cleanupOldBackups(ctx)
+
+				Expect(removedFiles).To(BeEmpty())
+			})
+
+			It("should remove oldest files when over limit", func() {
+				var entries []os.DirEntry
+				// Create 102 backup entries (2 over limit)
+				for i := 0; i < 102; i++ {
+					entries = append(entries, &mockDirEntry{
+						name:  fmt.Sprintf("%d.yaml", 1000000000+i),
+						isDir: false,
+					})
+				}
+
+				mockFS.WithReadDirFunc(func(ctx context.Context, path string) ([]os.DirEntry, error) {
+					if path == constants.ConfigBackupDir {
+						return entries, nil
+					}
+					return nil, nil
+				})
+
+				configManager.cleanupOldBackups(ctx)
+
+				// Should remove 2 oldest files (timestamps 1000000000 and 1000000001)
+				Expect(removedFiles).To(HaveLen(2))
+				Expect(removedFiles).To(ContainElement(filepath.Join(constants.ConfigBackupDir, "1000000000.yaml")))
+				Expect(removedFiles).To(ContainElement(filepath.Join(constants.ConfigBackupDir, "1000000001.yaml")))
+			})
+
+			It("should ignore directories and non-yaml files", func() {
+				mockFS.WithReadDirFunc(func(ctx context.Context, path string) ([]os.DirEntry, error) {
+					if path == constants.ConfigBackupDir {
+						return []os.DirEntry{
+							&mockDirEntry{name: "subdir", isDir: true},
+							&mockDirEntry{name: "1000000001.yaml", isDir: false},
+							&mockDirEntry{name: "readme.txt", isDir: false},
+							&mockDirEntry{name: "invalid-name.yaml", isDir: false},
+						}, nil
+					}
+					return nil, nil
+				})
+
+				configManager.cleanupOldBackups(ctx)
+
+				Expect(removedFiles).To(BeEmpty())
+			})
+
+			It("should handle ReadDir failure gracefully", func() {
+				mockFS.WithReadDirFunc(func(ctx context.Context, path string) ([]os.DirEntry, error) {
+					return nil, errors.New("directory not found")
+				})
+
+				// Should not panic
+				configManager.cleanupOldBackups(ctx)
+				Expect(removedFiles).To(BeEmpty())
+			})
+		})
+	})
 })
+
+// mockDirEntry is a test helper implementing os.DirEntry
+type mockDirEntry struct {
+	name  string
+	isDir bool
+}
+
+func (m *mockDirEntry) Name() string               { return m.name }
+func (m *mockDirEntry) IsDir() bool                { return m.isDir }
+func (m *mockDirEntry) Type() os.FileMode          { return 0 }
+func (m *mockDirEntry) Info() (os.FileInfo, error) { return nil, nil }
