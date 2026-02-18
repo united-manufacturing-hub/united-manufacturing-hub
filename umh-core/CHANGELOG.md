@@ -4,7 +4,7 @@
 
 ### New Features
 
-- **Config backup versioning** - Automatic timestamped backups of config.yaml are created before every write operation, providing recovery options when config is accidentally overwritten. Identical configs are deduplicated to prevent backup churn during restarts. Last 100 backups are retained in /data/config-backups/.
+- **Config backup versioning** - Previously, config.yaml could be permanently lost during upgrades or crash loops with no way to recover. Timestamped backups are now created before every write, with deduplication to prevent churn during restarts, retaining the last 100 versions in /data/config-backups/
 
 ## [0.44.8]
 
