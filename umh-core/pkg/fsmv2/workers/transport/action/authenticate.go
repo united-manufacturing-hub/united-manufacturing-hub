@@ -100,7 +100,7 @@ func (a *AuthenticateAction) Execute(ctx context.Context, depsAny any) error {
 		var transportErr *httpTransport.TransportError
 		if errors.As(err, &transportErr) {
 			deps.RecordTypedError(transportErr.Type, transportErr.RetryAfter)
-			deps.MetricsRecorder().IncrementCounter(CounterForErrorType(transportErr.Type), 1)
+			deps.MetricsRecorder().IncrementCounter(counterForErrorType(transportErr.Type), 1)
 			deps.GetLogger().SentryWarn(depspkg.FeatureCommunicator, deps.GetHierarchyPath(), "authentication_failed",
 				depspkg.Err(err), depspkg.String("errorType", transportErr.Type.String()))
 		} else {
@@ -137,8 +137,7 @@ func (a *AuthenticateAction) Execute(ctx context.Context, depsAny any) error {
 	return nil
 }
 
-// CounterForErrorType maps ErrorType to Prometheus counter.
-func CounterForErrorType(t httpTransport.ErrorType) depspkg.CounterName {
+func counterForErrorType(t httpTransport.ErrorType) depspkg.CounterName {
 	switch t {
 	case httpTransport.ErrorTypeCloudflareChallenge:
 		return depspkg.CounterCloudflareErrorsTotal
