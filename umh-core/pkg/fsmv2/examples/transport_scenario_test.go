@@ -27,11 +27,8 @@ import (
 )
 
 const (
-	// GracefulShutdownCascadingTimeout accounts for nested supervisor graceful shutdown:
-	// - Grandchild supervisor timeout: 5s (push worker) + 5s (pull worker) — sequential
-	// - Child supervisor timeout: 5s (transport worker)
-	// - Parent supervisor timeout: 5s (application supervisor)
-	// - Scenario duration + processing overhead: 5s.
+	// GracefulShutdownCascadingTimeout is for transport-only scenario tests (3-level cascade).
+	// Communicator scenario tests use a longer inline timeout (35s) due to 4-level nesting.
 	GracefulShutdownCascadingTimeout = 25 * time.Second
 )
 
