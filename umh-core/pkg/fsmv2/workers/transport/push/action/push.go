@@ -162,8 +162,8 @@ func (a *PushAction) retryPending(ctx context.Context, t transport.Transport, pu
 				pushDeps.RecordTypedError(transportErr.Type, transportErr.RetryAfter)
 				metrics.IncrementCounter(counterForErrorType(transportErr.Type), 1)
 
-				if isInfrastructureError(transportErr.Type) {
-					return pending[i:], fmt.Errorf("pending retry failed (infrastructure): %w", err)
+				if isRecoverableByParent(transportErr.Type) {
+					return pending[i:], fmt.Errorf("pending retry failed (recoverable by parent): %w", err)
 				}
 
 				pushDeps.GetLogger().SentryWarn(depspkg.FeatureCommunicator, pushDeps.GetHierarchyPath(), "dropping_poison_message",
@@ -198,6 +198,9 @@ func counterForErrorType(t httpTransport.ErrorType) depspkg.CounterName {
 		return depspkg.CounterBackendRateLimitErrorsTotal
 	case httpTransport.ErrorTypeInvalidToken:
 		return depspkg.CounterAuthFailuresTotal
+	// ErrorTypeInstanceDeleted: reachable via HTTP 404 from classifyError().
+	// Rare in practice (push endpoint uses session auth, not instance lookup),
+	// but kept for correct metric attribution if backend returns 404.
 	case httpTransport.ErrorTypeInstanceDeleted:
 		return depspkg.CounterInstanceDeletedTotal
 	case httpTransport.ErrorTypeServerError:
@@ -213,15 +216,17 @@ func counterForErrorType(t httpTransport.ErrorType) depspkg.CounterName {
 	}
 }
 
-func isInfrastructureError(errType httpTransport.ErrorType) bool {
+// isRecoverableByParent returns true for error types where the message should be
+// preserved in the pending buffer rather than dropped. These errors are recoverable
+// by parent TransportWorker (re-authentication, transport reset, rate limit backoff).
+func isRecoverableByParent(errType httpTransport.ErrorType) bool {
 	switch errType {
 	case httpTransport.ErrorTypeNetwork,
 		httpTransport.ErrorTypeServerError,
 		httpTransport.ErrorTypeCloudflareChallenge,
 		httpTransport.ErrorTypeBackendRateLimit,
 		httpTransport.ErrorTypeInvalidToken,
-		httpTransport.ErrorTypeProxyBlock,
-		httpTransport.ErrorTypeChannelFull:
+		httpTransport.ErrorTypeProxyBlock:
 		return true
 	default:
 		return false

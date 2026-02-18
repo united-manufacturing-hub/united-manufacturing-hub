@@ -114,9 +114,8 @@ func (w *PushWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedSt
 // Must be PURE — only uses the spec parameter, never dependencies.
 func (w *PushWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
 	if spec == nil {
-		return &config.DesiredState{
+		return &snapshot.PushDesiredState{
 			BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
-			OriginalUserSpec: nil,
 		}, nil
 	}
 
@@ -135,12 +134,14 @@ func (w *PushWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, e
 		Variables: userSpec.Variables,
 	}
 
-	desired, err := config.DeriveLeafState[PushUserSpec](renderedSpec)
+	leafDesired, err := config.DeriveLeafState[PushUserSpec](renderedSpec)
 	if err != nil {
 		return nil, err
 	}
 
-	return &desired, nil
+	return &snapshot.PushDesiredState{
+		BaseDesiredState: leafDesired.BaseDesiredState,
+	}, nil
 }
 
 // GetInitialState returns StoppedState as the push worker's initial FSM state.

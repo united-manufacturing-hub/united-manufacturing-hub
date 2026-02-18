@@ -429,7 +429,7 @@ var _ = Describe("PushAction", func() {
 
 			err := act.Execute(context.Background(), mockDeps)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("infrastructure"))
+			Expect(err.Error()).To(ContainSubstring("recoverable by parent"))
 
 			Expect(mockDeps.PendingMessageCount()).To(Equal(2))
 		})

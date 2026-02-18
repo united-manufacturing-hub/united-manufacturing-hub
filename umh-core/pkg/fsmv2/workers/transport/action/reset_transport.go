@@ -52,6 +52,9 @@ func (a *ResetTransportAction) Execute(ctx context.Context, depsAny any) error {
 	}
 
 	transport := deps.GetTransport()
+	if transport == nil {
+		return errors.New("transport is nil, cannot reset")
+	}
 	transport.Reset()
 	deps.GetLogger().Info("transport_reset_completed", depspkg.String("reason", "degraded_state_threshold"))
 
