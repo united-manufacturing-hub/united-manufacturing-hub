@@ -111,6 +111,7 @@ func (w *PushWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedSt
 }
 
 // DeriveDesiredState determines the desired state from the provided spec.
+// Returns DesiredStateRunning when spec is nil (child workers default to running).
 // Must be PURE — only uses the spec parameter, never dependencies.
 func (w *PushWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
 	if spec == nil {

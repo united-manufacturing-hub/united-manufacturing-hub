@@ -217,8 +217,10 @@ func counterForErrorType(t httpTransport.ErrorType) depspkg.CounterName {
 }
 
 // isRecoverableByParent returns true for error types where the message should be
-// preserved in the pending buffer rather than dropped. These errors are recoverable
-// by parent TransportWorker (re-authentication, transport reset, rate limit backoff).
+// preserved in the pending buffer rather than dropped. These are transient errors
+// (network, server, auth, rate limit, proxy) where the message itself is valid.
+// Recovery happens via parent actions (re-authentication, transport reset) or
+// child-level backoff (rate limit delay), not by discarding the message.
 func isRecoverableByParent(errType httpTransport.ErrorType) bool {
 	switch errType {
 	case httpTransport.ErrorTypeNetwork,
