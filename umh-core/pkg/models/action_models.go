@@ -237,15 +237,6 @@ type EditMqttBrokerPayload struct {
 	UUID        uuid.UUID `binding:"required" json:"uuid"`
 }
 
-// EditInstanceLocationAction contains the necessary fields for setting the location of the UMH instance.
-type EditInstanceLocationAction struct {
-	Site       *string `json:"site"`
-	Area       *string `json:"area"`
-	Line       *string `json:"line"`
-	WorkCell   *string `json:"workCell"`
-	Enterprise string  `binding:"required" json:"enterprise"`
-}
-
 // GetProtocolConverterPayload contains the necessary fields for getting a protocol converter.
 type GetProtocolConverterPayload struct {
 	UUID uuid.UUID `binding:"required" json:"uuid"`

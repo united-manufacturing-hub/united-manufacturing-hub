@@ -90,7 +90,7 @@ var _ = Describe("EditInstance", func() {
 
 	Describe("Parse", func() {
 		It("should parse valid location data", func() {
-			// Valid payload with complete location information using generic format
+			// Valid payload with complete location information
 			payload := map[string]interface{}{
 				"location": map[string]interface{}{
 					"0": "Test Enterprise",
@@ -237,10 +237,9 @@ var _ = Describe("EditInstance", func() {
 		})
 
 		It("should return error for location with empty enterprise", func() {
-			// Create a payload with empty enterprise (level 0)
 			payload := models.EditInstanceLocationModel{
 				Location: map[int]string{
-					0: "",
+					0: "", // Empty level 0 is not allowed
 				},
 			}
 
@@ -267,7 +266,7 @@ var _ = Describe("EditInstance", func() {
 
 	Describe("Execute", func() {
 		It("should fail validation for missing location", func() {
-			// Payload with missing location - parsing succeeds but validation fails
+			// Parse should succeed but validation should fail
 			payload := map[string]interface{}{}
 			err := action.Parse(payload)
 			Expect(err).NotTo(HaveOccurred())
@@ -418,7 +417,7 @@ func (w *writeFailingMockConfigManager) GetConfig(ctx context.Context, tick uint
 }
 
 // writeConfig always returns an error to simulate write failures.
-func (w *writeFailingMockConfigManager) writeConfig(ctx context.Context, config config.FullConfig) error {
+func (w *writeFailingMockConfigManager) writeConfig(_ context.Context, _ config.FullConfig) error {
 	return errors.New("mock WriteConfig failure")
 }
 
@@ -430,7 +429,7 @@ func (w *writeFailingMockConfigManager) AtomicSetLocation(ctx context.Context, l
 		return err
 	}
 
-	// Update location using the generic format
+	// Update location
 	config.Agent.Location = make(map[int]string)
 	maps.Copy(config.Agent.Location, location)
 
