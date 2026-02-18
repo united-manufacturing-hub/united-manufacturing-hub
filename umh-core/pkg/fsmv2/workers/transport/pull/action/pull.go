@@ -23,7 +23,6 @@ import (
 	depspkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
 	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
-	transportAction "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/action"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/pull/snapshot"
 )
 
@@ -149,7 +148,7 @@ func (a *PullAction) Execute(ctx context.Context, depsAny any) error {
 		var transportErr *httpTransport.TransportError
 		if errors.As(err, &transportErr) {
 			pullDeps.RecordTypedError(transportErr.Type, transportErr.RetryAfter)
-			metrics.IncrementCounter(transportAction.CounterForErrorType(transportErr.Type), 1)
+			metrics.IncrementCounter(counterForErrorType(transportErr.Type), 1)
 		} else {
 			pullDeps.RecordTypedError(httpTransport.ErrorTypeNetwork, 0)
 			metrics.IncrementCounter(depspkg.CounterNetworkErrorsTotal, 1)
@@ -226,6 +225,29 @@ func (a *PullAction) String() string {
 
 func (a *PullAction) Name() string {
 	return PullActionName
+}
+
+func counterForErrorType(t httpTransport.ErrorType) depspkg.CounterName {
+	switch t {
+	case httpTransport.ErrorTypeCloudflareChallenge:
+		return depspkg.CounterCloudflareErrorsTotal
+	case httpTransport.ErrorTypeBackendRateLimit:
+		return depspkg.CounterBackendRateLimitErrorsTotal
+	case httpTransport.ErrorTypeInvalidToken:
+		return depspkg.CounterAuthFailuresTotal
+	case httpTransport.ErrorTypeInstanceDeleted:
+		return depspkg.CounterInstanceDeletedTotal
+	case httpTransport.ErrorTypeServerError:
+		return depspkg.CounterServerErrorsTotal
+	case httpTransport.ErrorTypeProxyBlock:
+		return depspkg.CounterProxyBlockErrorsTotal
+	case httpTransport.ErrorTypeNetwork:
+		return depspkg.CounterNetworkErrorsTotal
+	case httpTransport.ErrorTypeUnknown:
+		return depspkg.CounterNetworkErrorsTotal
+	default:
+		return depspkg.CounterNetworkErrorsTotal
+	}
 }
 
 // Backpressure thresholds for inbound channel capacity management.
