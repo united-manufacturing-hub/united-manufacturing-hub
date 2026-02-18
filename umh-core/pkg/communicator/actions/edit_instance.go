@@ -36,12 +36,12 @@ type EditInstanceAction struct {
 	outboundChannel       chan *models.UMHMessage
 	actionLogger          *zap.SugaredLogger
 	systemSnapshotManager *fsm.SnapshotManager
-	userEmail             string
-	actionUUID            uuid.UUID
-	instanceUUID          uuid.UUID
 
 	// Parsed request payload (populated after Parse)
-	payload models.EditInstanceLocationModel
+	payload      models.EditInstanceLocationModel
+	userEmail    string
+	actionUUID   uuid.UUID
+	instanceUUID uuid.UUID
 }
 
 // NewEditInstanceAction creates a new EditInstanceAction with the provided parameters.
