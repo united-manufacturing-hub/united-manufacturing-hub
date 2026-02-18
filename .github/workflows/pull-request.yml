@@ -16,6 +16,8 @@ name: Pull Request
 
 on:
   workflow_dispatch:
+  push:
+    branches: [eng-4313-implement-ci-fast-path-for-umh-core]
   pull_request:
     branches: [staging, main]
   merge_group:
