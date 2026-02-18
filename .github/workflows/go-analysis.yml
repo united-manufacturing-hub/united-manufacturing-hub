@@ -53,6 +53,11 @@ jobs:
           go-version-file: umh-core/go.mod
           cache: true
 
+      - name: Get Nilaway version from Makefile
+        id: nilaway_version
+        working-directory: ./umh-core
+        run: echo "version=$(make print-nilaway-version)" >> $GITHUB_OUTPUT
+
       - name: Install nilaway
         run: go install go.uber.org/nilaway/cmd/nilaway@${{ steps.nilaway_version.outputs.version }}
 
