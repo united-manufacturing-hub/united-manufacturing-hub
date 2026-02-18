@@ -68,9 +68,8 @@ var _ fsmv2.DesiredState = (*TransportDesiredState)(nil)
 // TransportDesiredState represents the target configuration for the transport worker.
 type TransportDesiredState struct {
 	InstanceUUID            string `json:"instanceUUID"` // Used by AuthenticateAction for backend authentication
-	// TODO(security): AuthToken is serialized to CSE storage in plain text.
-	// A cross-cutting secure credential storage pattern is needed for both
-	// communicator and transport workers (tracked separately).
+	// TODO(security): AuthToken included in CSE sync payloads. ENG-4405 tracks
+	// adding a CSE secret tier to persist locally but exclude from delta sync.
 	AuthToken string `json:"authToken"`
 	RelayURL                string `json:"relayURL"`
 	config.BaseDesiredState        // Provides State, ShutdownRequested + IsShutdownRequested() + SetShutdownRequested()
@@ -108,8 +107,8 @@ type TransportObservedState struct {
 	// serializes observed state to CSE storage between ticks and deserializes it
 	// via LoadObservedTyped(). Excluding JWTToken from JSON would force
 	// re-authentication on every tick (~10ms), hammering the relay server.
-	// TODO(security): Design a secure credential storage pattern that avoids
-	// plain-text serialization while maintaining CSE round-trip compatibility.
+	// TODO(security): JWTToken included in CSE sync payloads. ENG-4405 tracks
+	// adding a CSE secret tier to persist locally but exclude from delta sync.
 	JWTToken string `json:"jwt_token,omitempty"`
 
 	// DesiredState embedded for state consistency
