@@ -242,6 +242,15 @@ var _ = Describe("TransportWorker States", func() {
 			Expect(result.State).To(BeAssignableToTypeOf(&state.StoppingState{}))
 		})
 
+		It("should transition to Starting when token expired", func() {
+			expiredExpiry := time.Now().Add(-1 * time.Hour)
+			snap := makeSnapshot(false, config.DesiredStateRunning, "expired-token", expiredExpiry, 1, 1)
+			result := s.Next(snap)
+
+			Expect(result.Signal).To(Equal(fsmv2.SignalNone))
+			Expect(result.State).To(BeAssignableToTypeOf(&state.StartingState{}))
+		})
+
 		It("should transition to Running when all children healthy", func() {
 			validExpiry := time.Now().Add(1 * time.Hour)
 			snap := makeSnapshot(false, config.DesiredStateRunning, "valid-token", validExpiry, 2, 0)

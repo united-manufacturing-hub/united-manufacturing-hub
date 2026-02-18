@@ -26,6 +26,7 @@ type StoppedState struct {
 	helpers.StoppedBase
 }
 
+// Next evaluates the current snapshot and returns the next state or action.
 func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := helpers.ConvertSnapshot[snapshot.TransportObservedState, *snapshot.TransportDesiredState](snapAny)
 
@@ -40,6 +41,7 @@ func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, "Transport is stopped, waiting for running request")
 }
 
+// String returns the state name derived from the type.
 func (s *StoppedState) String() string {
 	return helpers.DeriveStateName(s)
 }

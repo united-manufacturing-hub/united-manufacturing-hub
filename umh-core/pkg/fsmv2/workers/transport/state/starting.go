@@ -28,6 +28,7 @@ type StartingState struct {
 	helpers.StartingBase
 }
 
+// Next evaluates the current snapshot and returns the next state or action.
 func (s *StartingState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := helpers.ConvertSnapshot[snapshot.TransportObservedState, *snapshot.TransportDesiredState](snapAny)
 
@@ -47,7 +48,9 @@ func (s *StartingState) Next(snapAny any) fsmv2.NextResult[any, any] {
 		return fsmv2.Result[any, any](s, fsmv2.SignalNone, authAction, "No valid token, authenticating with relay")
 	}
 
-	// Check if all children are healthy (healthy > 0, unhealthy == 0)
+	// Requires healthy children (PushWorker + PullWorker) — added in ENG-4262, ENG-4263.
+	// Zero children: stays in Starting. This is intentional — avoids reporting Running
+	// without actual push/pull capability.
 	if snap.Observed.ChildrenHealthy > 0 && snap.Observed.ChildrenUnhealthy == 0 {
 		return fsmv2.Result[any, any](&RunningState{}, fsmv2.SignalNone, nil, "All children healthy, transitioning to Running")
 	}
@@ -55,6 +58,7 @@ func (s *StartingState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, "Token valid, waiting for children to become healthy")
 }
 
+// String returns the state name derived from the type.
 func (s *StartingState) String() string {
 	return helpers.DeriveStateName(s)
 }

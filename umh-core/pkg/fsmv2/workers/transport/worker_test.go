@@ -184,7 +184,9 @@ relayURL: "https://relay.example.com"`,
 			It("should return running state when configured", func() {
 				spec := fsmv2types.UserSpec{
 					Config: `state: running
-relayURL: "https://relay.example.com"`,
+relayURL: "https://relay.example.com"
+instanceUUID: "test-uuid"
+authToken: "test-token"`,
 					Variables: fsmv2types.VariableBundle{},
 				}
 
@@ -198,7 +200,9 @@ relayURL: "https://relay.example.com"`,
 		Context("pure function requirement", func() {
 			It("should be deterministic (same input produces same output)", func() {
 				spec := fsmv2types.UserSpec{
-					Config:    `relayURL: "https://test.com"`,
+					Config: `relayURL: "https://test.com"
+instanceUUID: "test-uuid"
+authToken: "test-token"`,
 					Variables: fsmv2types.VariableBundle{},
 				}
 
@@ -208,6 +212,78 @@ relayURL: "https://relay.example.com"`,
 				Expect(err1).ToNot(HaveOccurred())
 				Expect(err2).ToNot(HaveOccurred())
 				Expect(desired1.GetState()).To(Equal(desired2.GetState()))
+			})
+		})
+
+		Context("field validation when running", func() {
+			It("should return error when relayURL is empty", func() {
+				spec := fsmv2types.UserSpec{
+					Config: `state: running
+instanceUUID: "test-uuid"
+authToken: "test-token"`,
+					Variables: fsmv2types.VariableBundle{},
+				}
+
+				_, err := worker.DeriveDesiredState(spec)
+
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("relayURL is required"))
+			})
+
+			It("should return error when instanceUUID is empty", func() {
+				spec := fsmv2types.UserSpec{
+					Config: `state: running
+relayURL: "https://relay.example.com"
+authToken: "test-token"`,
+					Variables: fsmv2types.VariableBundle{},
+				}
+
+				_, err := worker.DeriveDesiredState(spec)
+
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("instanceUUID is required"))
+			})
+
+			It("should return error when authToken is empty", func() {
+				spec := fsmv2types.UserSpec{
+					Config: `state: running
+relayURL: "https://relay.example.com"
+instanceUUID: "test-uuid"`,
+					Variables: fsmv2types.VariableBundle{},
+				}
+
+				_, err := worker.DeriveDesiredState(spec)
+
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("authToken is required"))
+			})
+
+			It("should not validate fields when state is stopped", func() {
+				spec := fsmv2types.UserSpec{
+					Config:    `state: stopped`,
+					Variables: fsmv2types.VariableBundle{},
+				}
+
+				desired, err := worker.DeriveDesiredState(spec)
+
+				Expect(err).ToNot(HaveOccurred())
+				Expect(desired.GetState()).To(Equal("stopped"))
+			})
+
+			It("should default timeout when zero", func() {
+				spec := fsmv2types.UserSpec{
+					Config: `state: running
+relayURL: "https://relay.example.com"
+instanceUUID: "test-uuid"
+authToken: "test-token"`,
+					Variables: fsmv2types.VariableBundle{},
+				}
+
+				desired, err := worker.DeriveDesiredState(spec)
+
+				Expect(err).ToNot(HaveOccurred())
+				transportDesired := desired.(*snapshot.TransportDesiredState)
+				Expect(transportDesired.Timeout).To(Equal(10 * time.Second))
 			})
 		})
 

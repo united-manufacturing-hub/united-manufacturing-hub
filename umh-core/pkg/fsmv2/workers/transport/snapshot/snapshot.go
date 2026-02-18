@@ -68,7 +68,10 @@ var _ fsmv2.DesiredState = (*TransportDesiredState)(nil)
 // TransportDesiredState represents the target configuration for the transport worker.
 type TransportDesiredState struct {
 	InstanceUUID            string `json:"instanceUUID"` // Used by AuthenticateAction for backend authentication
-	AuthToken               string `json:"authToken"`
+	// TODO(security): AuthToken is serialized to CSE storage in plain text.
+	// A cross-cutting secure credential storage pattern is needed for both
+	// communicator and transport workers (tracked separately).
+	AuthToken string `json:"authToken"`
 	RelayURL                string `json:"relayURL"`
 	config.BaseDesiredState        // Provides State, ShutdownRequested + IsShutdownRequested() + SetShutdownRequested()
 
@@ -100,6 +103,13 @@ type TransportObservedState struct {
 
 	State string `json:"state"` // Observed lifecycle state (e.g., "running_healthy")
 
+	// JWTToken is the current authentication token for relay communication.
+	// NOTE: This field must NOT use json:"-" — the supervisor reconciliation loop
+	// serializes observed state to CSE storage between ticks and deserializes it
+	// via LoadObservedTyped(). Excluding JWTToken from JSON would force
+	// re-authentication on every tick (~10ms), hammering the relay server.
+	// TODO(security): Design a secure credential storage pattern that avoids
+	// plain-text serialization while maintaining CSE round-trip compatibility.
 	JWTToken string `json:"jwt_token,omitempty"`
 
 	// DesiredState embedded for state consistency

@@ -26,11 +26,17 @@ type DegradedState struct {
 	helpers.RunningDegradedBase
 }
 
+// Next evaluates the current snapshot and returns the next state or action.
 func (s *DegradedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := helpers.ConvertSnapshot[snapshot.TransportObservedState, *snapshot.TransportDesiredState](snapAny)
 
 	if snap.Desired.IsShutdownRequested() {
 		return fsmv2.Result[any, any](&StoppingState{}, fsmv2.SignalNone, nil, "Shutdown requested, transitioning to Stopping")
+	}
+
+	// If token is expired, need to re-authenticate (mirrors RunningState)
+	if snap.Observed.IsTokenExpired() {
+		return fsmv2.Result[any, any](&StartingState{}, fsmv2.SignalNone, nil, "Token expired, transitioning to Starting for re-authentication")
 	}
 
 	// If all children are now healthy, transition back to Running
@@ -41,6 +47,7 @@ func (s *DegradedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, "Some children are unhealthy, transport degraded")
 }
 
+// String returns the state name derived from the type.
 func (s *DegradedState) String() string {
 	return helpers.DeriveStateName(s)
 }

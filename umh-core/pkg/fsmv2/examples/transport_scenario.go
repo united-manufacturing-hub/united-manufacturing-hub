@@ -159,7 +159,13 @@ func RunTransportScenario(ctx context.Context, cfg TransportRunConfig) *Transpor
 		mockServer.QueuePullMessage(msg)
 	}
 
-	channelProvider := NewTransportTestChannelProvider(100)
+	// Size buffer to accommodate seed messages (prevents QueueOutbound from blocking)
+	bufferSize := 100
+	if len(cfg.InitialOutboundMessages) > bufferSize {
+		bufferSize = len(cfg.InitialOutboundMessages)
+	}
+
+	channelProvider := NewTransportTestChannelProvider(bufferSize)
 	transportWorker.SetChannelProvider(channelProvider)
 
 	for _, msg := range cfg.InitialOutboundMessages {

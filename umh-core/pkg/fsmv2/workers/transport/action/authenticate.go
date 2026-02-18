@@ -90,7 +90,7 @@ func (a *AuthenticateAction) Execute(ctx context.Context, depsAny any) error {
 
 	authReq := transport.AuthRequest{
 		InstanceUUID: a.InstanceUUID,
-		Email:        a.AuthToken,
+		Email:        a.AuthToken, // Email field matches backend API JSON contract; carries auth token
 	}
 
 	deps.SetLastAuthAttemptAt(time.Now()) // Before attempt for backoff calculation

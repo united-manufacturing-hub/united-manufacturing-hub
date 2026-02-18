@@ -63,6 +63,10 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/state"
 )
 
+// defaultAuthenticateTimeout is the fallback timeout for authentication when not specified in config.
+// Defined locally to avoid import cycle with the action package.
+const defaultAuthenticateTimeout = 10 * time.Second
+
 // Compile-time interface check: TransportWorker implements fsmv2.Worker.
 var _ fsmv2.Worker = (*TransportWorker)(nil)
 
@@ -137,7 +141,11 @@ func (w *TransportWorker) CollectObservedState(ctx context.Context) (fsmv2.Obser
 // Must be PURE - only uses the spec parameter, never dependencies.
 // Returns "running" or "stopped" as valid state values.
 func (w *TransportWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
-	// Nil spec handling (architecture requirement): check before type cast
+	// Nil spec defaults to "running" — matches CommunicatorWorker convention.
+	// Transport will attempt auth with empty credentials, fail, and retry with backoff.
+	// This enables self-healing: if spec delivery is delayed during startup, the worker
+	// retries until config arrives. Field validation below catches empty fields once
+	// a real spec is parsed.
 	if spec == nil {
 		return &snapshot.TransportDesiredState{
 			BaseDesiredState: config.BaseDesiredState{
@@ -162,6 +170,25 @@ func (w *TransportWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredSta
 	var transportSpec TransportUserSpec
 	if err := yaml.Unmarshal([]byte(renderedConfig), &transportSpec); err != nil {
 		return nil, fmt.Errorf("config parse failed: %w", err)
+	}
+
+	// Validate required fields when worker should be running
+	if transportSpec.GetState() == config.DesiredStateRunning {
+		if transportSpec.RelayURL == "" {
+			return nil, fmt.Errorf("relayURL is required when state is running")
+		}
+
+		if transportSpec.InstanceUUID == "" {
+			return nil, fmt.Errorf("instanceUUID is required when state is running")
+		}
+
+		if transportSpec.AuthToken == "" {
+			return nil, fmt.Errorf("authToken is required when state is running")
+		}
+
+		if transportSpec.Timeout == 0 {
+			transportSpec.Timeout = defaultAuthenticateTimeout
+		}
 	}
 
 	// Build desired state with valid state values only ("stopped" or "running")
