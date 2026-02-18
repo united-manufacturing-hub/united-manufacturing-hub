@@ -55,6 +55,9 @@ jobs:
     if: ${{ needs.changes.outputs.code == 'true' }}
     uses: ./.github/workflows/build-umh-core.yml
     secrets: inherit
+    permissions:
+      contents: read
+      packages: write
 
   license-eye-header:
     uses: ./.github/workflows/license-eye-header.yaml
