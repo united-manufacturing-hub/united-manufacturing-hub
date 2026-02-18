@@ -2,6 +2,10 @@
 
 ## [0.44.9]
 
+### New Features
+
+- **Config backup versioning** - Automatic timestamped backups of config.yaml are created before every write operation, providing recovery options when config is accidentally overwritten. Identical configs are deduplicated to prevent backup churn during restarts. Last 100 backups are retained in /data/config-backups/.
+
 ## [0.44.8]
 
 If you enabled the FSMv2 communicator preview (introduced in v0.44.5), this release fixes three issues that could cause your instance to use a lot of memory, go offline, or restart unexpectedly. We strongly recommend upgrading.

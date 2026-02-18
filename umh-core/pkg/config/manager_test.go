@@ -15,9 +15,11 @@
 package config
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -833,4 +835,432 @@ agent:
 			})
 		})
 	})
+
+	Describe("Config Backup", func() {
+		var (
+			configContent        []byte
+			backupContent        []byte
+			writeFileCalls       []string
+			removeCalls          []string
+			ensureDirCalls       []string
+			readDirEntries       []os.DirEntry
+			readDirErr           error
+			readFileByPath       map[string][]byte
+			readFileErrByPath    map[string]error
+			writeFileErr         error
+			ensureDirErr         error
+			fileExistsResult     bool
+			fileExistsErr        error
+			writeFileDataCapture map[string][]byte
+		)
+
+		BeforeEach(func() {
+			configContent = []byte("agent:\n  metricsPort: 8080\n")
+			backupContent = []byte("agent:\n  metricsPort: 8080\n")
+			writeFileCalls = nil
+			removeCalls = nil
+			ensureDirCalls = nil
+			readDirEntries = nil
+			readDirErr = nil
+			readFileByPath = make(map[string][]byte)
+			readFileErrByPath = make(map[string]error)
+			writeFileErr = nil
+			ensureDirErr = nil
+			fileExistsResult = true
+			fileExistsErr = nil
+			writeFileDataCapture = make(map[string][]byte)
+
+			mockFS.WithEnsureDirectoryFunc(func(ctx context.Context, path string) error {
+				ensureDirCalls = append(ensureDirCalls, path)
+
+				return ensureDirErr
+			})
+
+			mockFS.WithFileExistsFunc(func(ctx context.Context, path string) (bool, error) {
+				return fileExistsResult, fileExistsErr
+			})
+
+			mockFS.WithReadFileFunc(func(ctx context.Context, path string) ([]byte, error) {
+				if errVal, ok := readFileErrByPath[path]; ok {
+					return nil, errVal
+				}
+				if data, ok := readFileByPath[path]; ok {
+					return data, nil
+				}
+				if path == DefaultConfigPath {
+					return configContent, nil
+				}
+
+				return nil, fmt.Errorf("file not found: %s", path)
+			})
+
+			mockFS.WithReadDirFunc(func(ctx context.Context, path string) ([]os.DirEntry, error) {
+				return readDirEntries, readDirErr
+			})
+
+			mockFS.WithWriteFileFunc(func(ctx context.Context, path string, data []byte, perm os.FileMode) error {
+				writeFileCalls = append(writeFileCalls, path)
+				captured := make([]byte, len(data))
+				copy(captured, data)
+				writeFileDataCapture[path] = captured
+
+				return writeFileErr
+			})
+
+			mockFS.WithRemoveFunc(func(ctx context.Context, path string) error {
+				removeCalls = append(removeCalls, path)
+
+				return nil
+			})
+		})
+
+		Describe("createConfigBackup", func() {
+			Context("when config exists", func() {
+				BeforeEach(func() {
+					fileExistsResult = true
+					configContent = []byte("agent:\n  metricsPort: 9090\n")
+					readDirEntries = nil
+				})
+
+				It("should create backup when config exists", func() {
+					configManager.createConfigBackup(ctx)
+
+					backupWrites := filterBackupDirPaths(writeFileCalls)
+					Expect(backupWrites).To(HaveLen(1))
+
+					writtenPath := backupWrites[0]
+					Expect(writtenPath).To(HavePrefix(constants.ConfigBackupDir + "/"))
+					Expect(writtenPath).To(HaveSuffix(".yaml"))
+					Expect(bytes.Equal(writeFileDataCapture[writtenPath], configContent)).To(BeTrue())
+				})
+			})
+
+			Context("when config does not exist", func() {
+				BeforeEach(func() {
+					fileExistsResult = false
+				})
+
+				It("should skip backup when config does not exist", func() {
+					configManager.createConfigBackup(ctx)
+
+					backupWrites := filterBackupDirPaths(writeFileCalls)
+					Expect(backupWrites).To(BeEmpty())
+				})
+			})
+
+			Context("when content is identical to latest backup", func() {
+				BeforeEach(func() {
+					fileExistsResult = true
+					configContent = []byte("agent:\n  metricsPort: 8080\n")
+					backupContent = []byte("agent:\n  metricsPort: 8080\n")
+
+					existingBackup := newMockDirEntry("20260101T120000Z.yaml", false)
+					readDirEntries = []os.DirEntry{existingBackup}
+
+					backupPath := filepath.Join(constants.ConfigBackupDir, "20260101T120000Z.yaml")
+					readFileByPath[backupPath] = backupContent
+				})
+
+				It("should skip backup when content identical to latest backup", func() {
+					configManager.createConfigBackup(ctx)
+
+					backupWrites := filterBackupDirPaths(writeFileCalls)
+					Expect(backupWrites).To(BeEmpty())
+				})
+			})
+
+			Context("when reading config file fails", func() {
+				BeforeEach(func() {
+					fileExistsResult = true
+					readFileErrByPath[DefaultConfigPath] = errors.New("I/O error")
+				})
+
+				It("should skip backup when config file is unreadable", func() {
+					configManager.createConfigBackup(ctx)
+
+					backupWrites := filterBackupDirPaths(writeFileCalls)
+					Expect(backupWrites).To(BeEmpty())
+				})
+			})
+
+			Context("when content differs from latest backup", func() {
+				BeforeEach(func() {
+					fileExistsResult = true
+					configContent = []byte("agent:\n  metricsPort: 9999\n")
+
+					existingBackup := newMockDirEntry("20260101T120000Z.yaml", false)
+					readDirEntries = []os.DirEntry{existingBackup}
+
+					backupPath := filepath.Join(constants.ConfigBackupDir, "20260101T120000Z.yaml")
+					readFileByPath[backupPath] = []byte("agent:\n  metricsPort: 8080\n")
+				})
+
+				It("should create backup when content differs from latest backup", func() {
+					configManager.createConfigBackup(ctx)
+
+					backupWrites := filterBackupDirPaths(writeFileCalls)
+					Expect(backupWrites).To(HaveLen(1))
+
+					writtenPath := backupWrites[0]
+					Expect(writeFileDataCapture[writtenPath]).To(Equal(configContent))
+				})
+			})
+
+			Context("when no previous backups exist", func() {
+				BeforeEach(func() {
+					fileExistsResult = true
+					configContent = []byte("agent:\n  metricsPort: 8080\n")
+					readDirEntries = []os.DirEntry{}
+				})
+
+				It("should create backup when no previous backups exist", func() {
+					configManager.createConfigBackup(ctx)
+
+					backupWrites := filterBackupDirPaths(writeFileCalls)
+					Expect(backupWrites).To(HaveLen(1))
+				})
+			})
+
+			Context("when latest backup is unreadable", func() {
+				BeforeEach(func() {
+					fileExistsResult = true
+					configContent = []byte("agent:\n  metricsPort: 8080\n")
+
+					existingBackup := newMockDirEntry("20260101T120000Z.yaml", false)
+					readDirEntries = []os.DirEntry{existingBackup}
+
+					backupPath := filepath.Join(constants.ConfigBackupDir, "20260101T120000Z.yaml")
+					readFileErrByPath[backupPath] = errors.New("permission denied")
+				})
+
+				It("should create backup when latest backup is unreadable", func() {
+					configManager.createConfigBackup(ctx)
+
+					backupWrites := filterBackupDirPaths(writeFileCalls)
+					Expect(backupWrites).To(HaveLen(1))
+				})
+			})
+
+			Context("when backup directory creation fails", func() {
+				BeforeEach(func() {
+					fileExistsResult = true
+					configContent = []byte("agent:\n  metricsPort: 8080\n")
+					ensureDirErr = errors.New("disk full")
+				})
+
+				It("should handle backup directory creation failure gracefully", func() {
+					Expect(func() {
+						configManager.createConfigBackup(ctx)
+					}).NotTo(Panic())
+				})
+			})
+
+			Context("when backup write fails", func() {
+				BeforeEach(func() {
+					fileExistsResult = true
+					configContent = []byte("agent:\n  metricsPort: 8080\n")
+					readDirEntries = []os.DirEntry{}
+					writeFileErr = errors.New("disk full")
+				})
+
+				It("should handle backup write failure gracefully", func() {
+					Expect(func() {
+						configManager.createConfigBackup(ctx)
+					}).NotTo(Panic())
+				})
+			})
+		})
+
+		Describe("cleanupOldBackups", func() {
+			Context("when under limit", func() {
+				BeforeEach(func() {
+					readDirEntries = []os.DirEntry{
+						newMockDirEntry("20260101T100000Z.yaml", false),
+						newMockDirEntry("20260101T110000Z.yaml", false),
+					}
+				})
+
+				It("should not remove files when under limit", func() {
+					configManager.cleanupOldBackups(ctx)
+
+					Expect(removeCalls).To(BeEmpty())
+				})
+			})
+
+			Context("when over limit", func() {
+				BeforeEach(func() {
+					entries := make([]os.DirEntry, 102)
+					for i := range 102 {
+						ts := fmt.Sprintf("20260101T%06dZ.yaml", i)
+						entries[i] = newMockDirEntry(ts, false)
+					}
+					readDirEntries = entries
+				})
+
+				It("should remove oldest files when over limit", func() {
+					configManager.cleanupOldBackups(ctx)
+
+					Expect(removeCalls).To(HaveLen(2))
+					Expect(removeCalls[0]).To(ContainSubstring("20260101T000000Z.yaml"))
+					Expect(removeCalls[1]).To(ContainSubstring("20260101T000001Z.yaml"))
+				})
+			})
+
+			Context("when directory contains non-yaml files and directories", func() {
+				BeforeEach(func() {
+					readDirEntries = []os.DirEntry{
+						newMockDirEntry("subdir", true),
+						newMockDirEntry("notes.txt", false),
+						newMockDirEntry("invalid-name", false),
+						newMockDirEntry("20260101T100000Z.yaml", false),
+					}
+				})
+
+				It("should ignore directories and non-yaml files", func() {
+					configManager.cleanupOldBackups(ctx)
+
+					Expect(removeCalls).To(BeEmpty())
+				})
+			})
+
+			Context("when ReadDir fails", func() {
+				BeforeEach(func() {
+					readDirErr = errors.New("permission denied")
+				})
+
+				It("should handle ReadDir failure gracefully", func() {
+					Expect(func() {
+						configManager.cleanupOldBackups(ctx)
+					}).NotTo(Panic())
+				})
+			})
+		})
+
+		Describe("call-site integration", func() {
+			BeforeEach(func() {
+				fileExistsResult = true
+				configContent = []byte("agent:\n  metricsPort: 8080\n")
+				readDirEntries = []os.DirEntry{}
+
+				mockFS.WithStatFunc(func(ctx context.Context, path string) (os.FileInfo, error) {
+					return mockFS.NewMockFileInfo(filepath.Base(path), 100, 0644, time.Now(), false), nil
+				})
+			})
+
+			It("should create a backup when writeConfig is called", func() {
+				config := FullConfig{}
+				config.Agent.MetricsPort = 9090
+				config.Agent.Location = map[int]string{0: "test"}
+				config.Agent.ReleaseChannel = ReleaseChannelStable
+
+				err := configManager.writeConfig(ctx, config)
+				Expect(err).NotTo(HaveOccurred())
+
+				backupWrites := filterBackupDirPaths(writeFileCalls)
+				Expect(backupWrites).To(HaveLen(1))
+				Expect(backupWrites[0]).To(HavePrefix(constants.ConfigBackupDir + "/"))
+				Expect(backupWrites[0]).To(HaveSuffix(".yaml"))
+			})
+
+			It("should create a backup when WriteYAMLConfigFromString is called", func() {
+				validYAML := "agent:\n  metricsPort: 9090\n  releaseChannel: stable\n  location:\n    0: test\n"
+
+				err := configManager.WriteYAMLConfigFromString(ctx, validYAML, "")
+				Expect(err).NotTo(HaveOccurred())
+
+				backupWrites := filterBackupDirPaths(writeFileCalls)
+				Expect(backupWrites).To(HaveLen(1))
+				Expect(backupWrites[0]).To(HavePrefix(constants.ConfigBackupDir + "/"))
+				Expect(backupWrites[0]).To(HaveSuffix(".yaml"))
+			})
+		})
+
+		Describe("getLatestBackupContent", func() {
+			Context("when backup directory is empty", func() {
+				BeforeEach(func() {
+					readDirEntries = []os.DirEntry{}
+				})
+
+				It("should return nil when backup directory is empty", func() {
+					result := configManager.getLatestBackupContent(ctx)
+					Expect(result).To(BeNil())
+				})
+			})
+
+			Context("when multiple backups exist", func() {
+				BeforeEach(func() {
+					readDirEntries = []os.DirEntry{
+						newMockDirEntry("20260101T080000Z.yaml", false),
+						newMockDirEntry("20260101T120000Z.yaml", false),
+						newMockDirEntry("20260101T100000Z.yaml", false),
+					}
+
+					latestPath := filepath.Join(constants.ConfigBackupDir, "20260101T120000Z.yaml")
+					readFileByPath[latestPath] = []byte("latest-content")
+				})
+
+				It("should return content of highest-timestamp backup", func() {
+					result := configManager.getLatestBackupContent(ctx)
+					Expect(result).To(Equal([]byte("latest-content")))
+				})
+			})
+
+			Context("when directory contains non-yaml files and directories", func() {
+				BeforeEach(func() {
+					readDirEntries = []os.DirEntry{
+						newMockDirEntry("subdir", true),
+						newMockDirEntry("notes.txt", false),
+						newMockDirEntry("20260101T100000Z.yaml", false),
+					}
+
+					backupPath := filepath.Join(constants.ConfigBackupDir, "20260101T100000Z.yaml")
+					readFileByPath[backupPath] = []byte("valid-content")
+				})
+
+				It("should ignore non-yaml files and directories", func() {
+					result := configManager.getLatestBackupContent(ctx)
+					Expect(result).To(Equal([]byte("valid-content")))
+				})
+			})
+
+			Context("when ReadDir fails", func() {
+				BeforeEach(func() {
+					readDirErr = errors.New("permission denied")
+				})
+
+				It("should return nil when ReadDir fails", func() {
+					result := configManager.getLatestBackupContent(ctx)
+					Expect(result).To(BeNil())
+				})
+			})
+		})
+	})
 })
+
+// filterBackupDirPaths returns only paths that start with the backup directory.
+func filterBackupDirPaths(paths []string) []string {
+	var result []string
+
+	for _, p := range paths {
+		if strings.HasPrefix(p, constants.ConfigBackupDir+"/") {
+			result = append(result, p)
+		}
+	}
+
+	return result
+}
+
+// mockDirEntry implements os.DirEntry for testing.
+type mockDirEntry struct {
+	name  string
+	isDir bool
+}
+
+func newMockDirEntry(name string, isDir bool) *mockDirEntry {
+	return &mockDirEntry{name: name, isDir: isDir}
+}
+
+func (m *mockDirEntry) Name() string               { return m.name }
+func (m *mockDirEntry) IsDir() bool                { return m.isDir }
+func (m *mockDirEntry) Type() fs.FileMode          { return 0 }
+func (m *mockDirEntry) Info() (fs.FileInfo, error)  { return nil, errors.New("mockDirEntry.Info() not implemented") }
