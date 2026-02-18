@@ -37,6 +37,9 @@ jobs:
       - name: Run go vet
         run: make vet
 
+      - name: Fail on purpose
+        run: exit 1
+
   nilaway:
     name: Nilaway Analysis
     runs-on: depot-ubuntu-24.04
