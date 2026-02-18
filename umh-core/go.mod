@@ -24,7 +24,7 @@ require (
 	github.com/prometheus/client_model v0.6.2
 	github.com/prometheus/common v0.67.5
 	github.com/prometheus/prometheus v0.309.1
-	github.com/shirou/gopsutil/v3 v3.24.5
+	github.com/shirou/gopsutil/v4 v4.26.1
 	github.com/shirou/gopsutil/v4 v4.26.1
 	github.com/testcontainers/testcontainers-go/modules/redpanda v0.40.0
 	github.com/tiendc/go-deepcopy v1.7.2
