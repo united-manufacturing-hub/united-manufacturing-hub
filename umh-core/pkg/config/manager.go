@@ -1189,6 +1189,8 @@ func (m *FileConfigManager) createConfigBackup(ctx context.Context) {
 func (m *FileConfigManager) getLatestBackupContent(ctx context.Context) []byte {
 	entries, err := m.fsService.ReadDir(ctx, constants.ConfigBackupDir)
 	if err != nil {
+		m.logger.Warnf("config backup: failed to read backup directory: %v", err)
+
 		return nil
 	}
 
@@ -1216,6 +1218,8 @@ func (m *FileConfigManager) getLatestBackupContent(ctx context.Context) []byte {
 
 	data, err := m.fsService.ReadFile(ctx, filepath.Join(constants.ConfigBackupDir, latest))
 	if err != nil {
+		m.logger.Warnf("config backup: failed to read latest backup file: %v", err)
+
 		return nil
 	}
 

@@ -1049,9 +1049,10 @@ agent:
 				})
 
 				It("should handle backup directory creation failure gracefully", func() {
-					Expect(func() {
-						configManager.createConfigBackup(ctx)
-					}).NotTo(Panic())
+					configManager.createConfigBackup(ctx)
+
+					backupWrites := filterBackupDirPaths(writeFileCalls)
+					Expect(backupWrites).To(BeEmpty())
 				})
 			})
 
@@ -1064,9 +1065,31 @@ agent:
 				})
 
 				It("should handle backup write failure gracefully", func() {
-					Expect(func() {
-						configManager.createConfigBackup(ctx)
-					}).NotTo(Panic())
+					configManager.createConfigBackup(ctx)
+
+					// EnsureDirectory should have been called for the backup dir
+					backupDirCalls := []string{}
+					for _, p := range ensureDirCalls {
+						if strings.HasPrefix(p, constants.ConfigBackupDir) {
+							backupDirCalls = append(backupDirCalls, p)
+						}
+					}
+					Expect(backupDirCalls).NotTo(BeEmpty())
+				})
+			})
+
+			Context("when FileExists returns an error", func() {
+				BeforeEach(func() {
+					fileExistsErr = errors.New("I/O error")
+					fileExistsResult = false
+					configContent = []byte("agent:\n  metricsPort: 8080\n")
+				})
+
+				It("should skip backup when FileExists returns error", func() {
+					configManager.createConfigBackup(ctx)
+
+					backupWrites := filterBackupDirPaths(writeFileCalls)
+					Expect(backupWrites).To(BeEmpty())
 				})
 			})
 		})
@@ -1129,9 +1152,9 @@ agent:
 				})
 
 				It("should handle ReadDir failure gracefully", func() {
-					Expect(func() {
-						configManager.cleanupOldBackups(ctx)
-					}).NotTo(Panic())
+					configManager.cleanupOldBackups(ctx)
+
+					Expect(removeCalls).To(BeEmpty())
 				})
 			})
 		})
@@ -1172,6 +1195,39 @@ agent:
 				Expect(backupWrites).To(HaveLen(1))
 				Expect(backupWrites[0]).To(HavePrefix(constants.ConfigBackupDir + "/"))
 				Expect(backupWrites[0]).To(HaveSuffix(".yaml"))
+			})
+
+			It("should still write config even when backup fails", func() {
+				// Override WriteFileFunc to fail only for backup dir paths
+				mockFS.WithWriteFileFunc(func(ctx context.Context, path string, data []byte, perm os.FileMode) error {
+					writeFileCalls = append(writeFileCalls, path)
+					captured := make([]byte, len(data))
+					copy(captured, data)
+					writeFileDataCapture[path] = captured
+
+					if strings.HasPrefix(path, constants.ConfigBackupDir) {
+						return errors.New("disk full")
+					}
+
+					return nil
+				})
+
+				config := FullConfig{}
+				config.Agent.MetricsPort = 9090
+				config.Agent.Location = map[int]string{0: "test"}
+				config.Agent.ReleaseChannel = ReleaseChannelStable
+
+				err := configManager.writeConfig(ctx, config)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Config write path should still exist in calls
+				configWrites := []string{}
+				for _, p := range writeFileCalls {
+					if !strings.HasPrefix(p, constants.ConfigBackupDir) {
+						configWrites = append(configWrites, p)
+					}
+				}
+				Expect(configWrites).NotTo(BeEmpty())
 			})
 		})
 
