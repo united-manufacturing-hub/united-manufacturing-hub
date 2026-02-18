@@ -2,6 +2,10 @@
 
 ## [0.44.9]
 
+### Improvements
+
+- **Instance location can now be updated from the Management Console** - Previously, editing an instance's location required manual config.yaml changes because the edit-instance action did not support the standard location format. The action now accepts the same location format used elsewhere in the configuration — a map of integer levels to names (e.g., `{"0": "ACME", "1": "Factory-1", "2": "Assembly"}`) — giving you full flexibility over hierarchy depth and structure. You can now update the instance location directly from the Management Console UI.
+
 ## [0.44.8]
 
 If you enabled the FSMv2 communicator preview (introduced in v0.44.5), this release fixes three issues that could cause your instance to use a lot of memory, go offline, or restart unexpectedly. We strongly recommend upgrading.
