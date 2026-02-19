@@ -19,7 +19,6 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -328,9 +327,9 @@ func (t *HTTPTransport) Authenticate(ctx context.Context, req transport.AuthRequ
 	}()
 
 	if resp.StatusCode != http.StatusOK {
-		bodyBytes, _ := io.ReadAll(resp.Body)
+		bodyBytes, readErr := io.ReadAll(resp.Body)
 
-		return transport.AuthResponse{}, newTransportError(resp.StatusCode, bodyBytes, resp.Header, nil)
+		return transport.AuthResponse{}, newTransportError(resp.StatusCode, bodyBytes, resp.Header, readErr)
 	}
 
 	bodyBytes, err := io.ReadAll(resp.Body)
@@ -347,7 +346,16 @@ func (t *HTTPTransport) Authenticate(ctx context.Context, req transport.AuthRequ
 		Name string `json:"name"`
 	}
 	if err := json.Unmarshal(bodyBytes, &loginResp); err != nil {
-		return transport.AuthResponse{}, fmt.Errorf("failed to decode auth response: %w", err)
+		bodyPreview := string(bodyBytes)
+		if len(bodyPreview) > 256 {
+			bodyPreview = bodyPreview[:256] + "..."
+		}
+
+		return transport.AuthResponse{}, &TransportError{
+			Type:    ErrorTypeUnknown,
+			Message: fmt.Sprintf("failed to decode auth response: %v (body preview: %s)", err, bodyPreview),
+			Err:     err,
+		}
 	}
 
 	var jwtToken string
@@ -361,7 +369,10 @@ func (t *HTTPTransport) Authenticate(ctx context.Context, req transport.AuthRequ
 	}
 
 	if jwtToken == "" {
-		return transport.AuthResponse{}, errors.New("no token cookie returned from login")
+		return transport.AuthResponse{}, &TransportError{
+			Type:    ErrorTypeInvalidToken,
+			Message: "no token cookie returned from login",
+		}
 	}
 
 	// Backend doesn't return expiresAt; estimate 23h (refresh before typical 24h JWT expiry)
@@ -406,14 +417,18 @@ func (t *HTTPTransport) Pull(ctx context.Context, jwtToken string) ([]*transport
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		bodyBytes, _ := io.ReadAll(resp.Body)
+		bodyBytes, readErr := io.ReadAll(resp.Body)
 
-		return nil, newTransportError(resp.StatusCode, bodyBytes, resp.Header, nil)
+		return nil, newTransportError(resp.StatusCode, bodyBytes, resp.Header, readErr)
 	}
 
 	var payload transport.PullPayload
 	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
-		return nil, fmt.Errorf("failed to decode pull response: %w", err)
+		return nil, &TransportError{
+			Type:    ErrorTypeUnknown,
+			Message: fmt.Sprintf("failed to decode pull response: %v", err),
+			Err:     err,
+		}
 	}
 
 	return payload.UMHMessages, nil
@@ -431,7 +446,11 @@ func (t *HTTPTransport) Push(ctx context.Context, jwtToken string, messages []*t
 
 	body, err := json.Marshal(payload)
 	if err != nil {
-		return fmt.Errorf("failed to marshal push payload: %w", err)
+		return &TransportError{
+			Type:    ErrorTypeUnknown,
+			Message: fmt.Sprintf("failed to marshal push payload: %v", err),
+			Err:     err,
+		}
 	}
 
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, t.RelayURL+"/v2/instance/push", bytes.NewBuffer(body))
@@ -460,9 +479,9 @@ func (t *HTTPTransport) Push(ctx context.Context, jwtToken string, messages []*t
 	}()
 
 	if resp.StatusCode >= 400 {
-		bodyBytes, _ := io.ReadAll(resp.Body)
+		bodyBytes, readErr := io.ReadAll(resp.Body)
 
-		return newTransportError(resp.StatusCode, bodyBytes, resp.Header, nil)
+		return newTransportError(resp.StatusCode, bodyBytes, resp.Header, readErr)
 	}
 
 	return nil
