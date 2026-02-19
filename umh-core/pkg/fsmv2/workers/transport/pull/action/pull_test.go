@@ -477,7 +477,7 @@ var _ = Describe("PullAction", func() {
 			msg2 := <-inboundBi
 			Expect(msg2.Content).To(Equal("pending2"))
 
-			Expect(mockDeps.recordSuccessCalls).To(Equal(1))
+			Expect(mockDeps.recordSuccessCalls).To(Equal(0))
 
 			drained := mockDeps.metricsRecorder.Drain()
 			Expect(drained.Counters[string(deps.CounterPullOps)]).To(Equal(int64(1)))

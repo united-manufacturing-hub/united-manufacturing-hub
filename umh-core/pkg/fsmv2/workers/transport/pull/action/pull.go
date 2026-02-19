@@ -68,7 +68,7 @@ func (a *PullAction) Execute(ctx context.Context, depsAny any) error {
 	if len(pending) > 0 {
 		inChan := pullDeps.GetInboundChan()
 		if inChan == nil {
-			pullDeps.GetLogger().Debug("pull_skipped_nil_inbound_chan_pending_delivery")
+			pullDeps.GetLogger().SentryWarn(depspkg.FeatureCommunicator, pullDeps.GetHierarchyPath(), "pull_skipped_nil_inbound_chan_pending_delivery")
 			pullDeps.StorePendingMessages(pending)
 
 			return nil
@@ -88,7 +88,6 @@ func (a *PullAction) Execute(ctx context.Context, depsAny any) error {
 			}
 		}
 
-		pullDeps.RecordSuccess()
 		metrics.IncrementCounter(depspkg.CounterPullOps, 1)
 		metrics.IncrementCounter(depspkg.CounterPullSuccess, 1)
 		metrics.IncrementCounter(depspkg.CounterPendingDelivered, int64(len(pending)))
@@ -100,7 +99,7 @@ func (a *PullAction) Execute(ctx context.Context, depsAny any) error {
 	// Phase 2: Backpressure check
 	inChan := pullDeps.GetInboundChan()
 	if inChan == nil {
-		pullDeps.GetLogger().Debug("pull_skipped_nil_inbound_chan")
+		pullDeps.GetLogger().SentryWarn(depspkg.FeatureCommunicator, pullDeps.GetHierarchyPath(), "pull_skipped_nil_inbound_chan")
 
 		return nil
 	}
@@ -162,16 +161,18 @@ func (a *PullAction) Execute(ctx context.Context, depsAny any) error {
 	}
 
 	var bytesPulled int64
+	var nonNilCount int64
 
 	for _, msg := range messages {
 		if msg != nil {
+			nonNilCount++
 			bytesPulled += int64(len(msg.InstanceUUID) + len(msg.Content) + len(msg.Email))
 		}
 	}
 
 	metrics.IncrementCounter(depspkg.CounterPullOps, 1)
 	metrics.IncrementCounter(depspkg.CounterPullSuccess, 1)
-	metrics.IncrementCounter(depspkg.CounterMessagesPulled, int64(len(messages)))
+	metrics.IncrementCounter(depspkg.CounterMessagesPulled, nonNilCount)
 	metrics.IncrementCounter(depspkg.CounterBytesPulled, bytesPulled)
 	metrics.SetGauge(depspkg.GaugeLastPullLatencyMs, float64(pullLatency.Milliseconds()))
 
