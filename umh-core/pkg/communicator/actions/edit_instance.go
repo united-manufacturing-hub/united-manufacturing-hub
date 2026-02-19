@@ -16,7 +16,6 @@ package actions
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"github.com/google/uuid"
@@ -77,18 +76,10 @@ func (a *EditInstanceAction) Parse(payload interface{}) error {
 }
 
 // Validate implements the Action interface by checking if the parsed data meets
-// the business requirements. For EditInstanceAction, it verifies that the location
-// is provided and that the enterprise field (level 0) exists and is not empty.
+// the business requirements. For EditInstanceAction, it validates the location
+// hierarchy for completeness and proper structure.
 func (a *EditInstanceAction) Validate() error {
-	if len(a.payload.Location) == 0 {
-		return errors.New("location is required")
-	}
-
-	if enterprise, exists := a.payload.Location[0]; !exists || enterprise == "" {
-		return errors.New("enterprise (level 0) is required and cannot be empty")
-	}
-
-	return nil
+	return config.ValidateLocation(a.payload.Location)
 }
 
 // Execute implements the Action interface by performing the actual instance update.

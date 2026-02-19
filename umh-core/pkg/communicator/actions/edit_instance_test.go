@@ -128,7 +128,7 @@ var _ = Describe("EditInstance", func() {
 			// But validation should fail
 			err = action.Validate()
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("location is required"))
+			Expect(err.Error()).To(ContainSubstring("location cannot be empty"))
 		})
 
 		It("should return error for invalid location format", func() {
@@ -158,7 +158,7 @@ var _ = Describe("EditInstance", func() {
 			// But validation should fail
 			err = action.Validate()
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("enterprise (level 0) is required"))
+			Expect(err.Error()).To(ContainSubstring("level 0 is required"))
 		})
 
 		It("should return error for invalid location key", func() {
@@ -190,7 +190,7 @@ var _ = Describe("EditInstance", func() {
 			// But validation should fail
 			err = action.Validate()
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("enterprise (level 0) is required"))
+			Expect(err.Error()).To(ContainSubstring("level 0 cannot be empty"))
 		})
 
 		It("should return error for non-string location value", func() {
@@ -235,7 +235,7 @@ var _ = Describe("EditInstance", func() {
 
 			err := action.Validate()
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("enterprise (level 0) is required"))
+			Expect(err.Error()).To(ContainSubstring("level 0 is required"))
 		})
 
 		It("should return error for location with empty enterprise", func() {
@@ -249,7 +249,7 @@ var _ = Describe("EditInstance", func() {
 
 			err := action.Validate()
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("enterprise (level 0) is required"))
+			Expect(err.Error()).To(ContainSubstring("level 0 cannot be empty"))
 		})
 
 		It("should return error for empty location map", func() {
@@ -262,7 +262,39 @@ var _ = Describe("EditInstance", func() {
 
 			err := action.Validate()
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("location is required"))
+			Expect(err.Error()).To(ContainSubstring("location cannot be empty"))
+		})
+
+		It("should return error for location with gaps", func() {
+			// Create a payload with gaps in location hierarchy
+			payload := models.EditInstanceLocationModel{
+				Location: map[int]string{
+					0: "ACME",
+					2: "Area-A", // Missing level 1 - should cause gap validation error
+				},
+			}
+
+			action.SetParsedPayload(payload)
+
+			err := action.Validate()
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("location hierarchy has a gap at level 1"))
+		})
+
+		It("should return error for empty values in location", func() {
+			// Create a payload with empty value at level 1
+			payload := models.EditInstanceLocationModel{
+				Location: map[int]string{
+					0: "ACME",
+					1: "", // Empty value should be rejected
+				},
+			}
+
+			action.SetParsedPayload(payload)
+
+			err := action.Validate()
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("location level 1 cannot be empty"))
 		})
 	})
 
@@ -275,7 +307,7 @@ var _ = Describe("EditInstance", func() {
 
 			err = action.Validate()
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("location is required"))
+			Expect(err.Error()).To(ContainSubstring("location cannot be empty"))
 		})
 
 		It("should update location successfully", func() {

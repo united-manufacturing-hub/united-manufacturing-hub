@@ -225,3 +225,108 @@ var _ = Describe("ValidateComponentName", func() {
 		})
 	})
 })
+
+var _ = Describe("ValidateLocation", func() {
+	Context("Valid locations", func() {
+		It("should accept single level (level 0 only)", func() {
+			location := map[int]string{
+				0: "ACME",
+			}
+			err := config.ValidateLocation(location)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should accept two consecutive levels", func() {
+			location := map[int]string{
+				0: "ACME",
+				1: "Factory-1",
+			}
+			err := config.ValidateLocation(location)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should accept multiple consecutive levels", func() {
+			location := map[int]string{
+				0: "ACME",
+				1: "Factory-1",
+				2: "Area-A",
+				3: "Line-1",
+				4: "Cell-5",
+			}
+			err := config.ValidateLocation(location)
+			Expect(err).NotTo(HaveOccurred())
+		})
+	})
+
+	Context("Invalid locations", func() {
+		It("should reject empty location", func() {
+			location := map[int]string{}
+			err := config.ValidateLocation(location)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(Equal("location cannot be empty"))
+		})
+
+		It("should reject location without level 0", func() {
+			location := map[int]string{
+				1: "Factory-1",
+				2: "Area-A",
+			}
+			err := config.ValidateLocation(location)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(Equal("level 0 is required"))
+		})
+
+		It("should reject empty level 0 value", func() {
+			location := map[int]string{
+				0: "",
+				1: "Factory-1",
+			}
+			err := config.ValidateLocation(location)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(Equal("level 0 cannot be empty"))
+		})
+
+		It("should reject gap at level 1", func() {
+			location := map[int]string{
+				0: "ACME",
+				2: "Area-A",
+			}
+			err := config.ValidateLocation(location)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(Equal("location hierarchy has a gap at level 1 (expected consecutive levels starting from 0)"))
+		})
+
+		It("should reject gap at level 2", func() {
+			location := map[int]string{
+				0: "ACME",
+				1: "Factory-1",
+				3: "Line-1",
+			}
+			err := config.ValidateLocation(location)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(Equal("location hierarchy has a gap at level 2 (expected consecutive levels starting from 0)"))
+		})
+
+		It("should reject empty value at any level", func() {
+			location := map[int]string{
+				0: "ACME",
+				1: "",
+				2: "Area-A",
+			}
+			err := config.ValidateLocation(location)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(Equal("location level 1 cannot be empty"))
+		})
+
+		It("should reject multiple gaps", func() {
+			location := map[int]string{
+				0: "ACME",
+				3: "Line-1",
+				5: "Cell-5",
+			}
+			err := config.ValidateLocation(location)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(Equal("location hierarchy has a gap at level 1 (expected consecutive levels starting from 0)"))
+		})
+	})
+})
