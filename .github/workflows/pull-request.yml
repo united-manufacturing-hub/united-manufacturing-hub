@@ -19,7 +19,7 @@ on:
   push:
     branches: [eng-4313-implement-ci-fast-path-for-umh-core]
   pull_request:
-    branches: [staging, main]
+    branches: ["**"]
   merge_group:
 
 jobs:
@@ -104,7 +104,7 @@ jobs:
           path: changelog-scripts
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: "20"
+          node-version: '20'
       - name: Validate CHANGELOG.md
         run: npx tsx changelog-scripts/.github/scripts/validate-changelog.ts --format version --changelog-path umh-core/CHANGELOG.md
 
