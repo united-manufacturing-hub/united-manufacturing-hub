@@ -358,14 +358,28 @@ func (m *MockConfigManager) AtomicSetLocation(ctx context.Context, location map[
 		return fmt.Errorf("failed to get config: %w", err)
 	}
 
-	// Update location using the generic format
+	// Capture the old agent location before overwriting it
+	oldAgentLocation := make(map[int]string)
+	if config.Agent.Location != nil {
+		maps.Copy(oldAgentLocation, config.Agent.Location)
+	}
+
+	// Replace the agent location with the new location data
 	config.Agent.Location = make(map[int]string)
 	maps.Copy(config.Agent.Location, location)
 
-	// Convert the agent location to string map for use in other components
-	agentLocationStr := make(map[string]string)
+	// Convert the new agent location to string map for use in other components
+	newAgentLocationStr := make(map[string]string)
 	for k, v := range config.Agent.Location {
-		agentLocationStr[strconv.Itoa(k)] = v
+		newAgentLocationStr[strconv.Itoa(k)] = v
+	}
+
+	// Agent levels that were removed from the config
+	staleAgentLevels := make(map[int]bool)
+	for oldLevel := range oldAgentLocation {
+		if _, stillExists := location[oldLevel]; !stillExists {
+			staleAgentLevels[oldLevel] = true
+		}
 	}
 
 	// Update all ProtocolConverter locations to match the agent location
@@ -374,11 +388,14 @@ func (m *MockConfigManager) AtomicSetLocation(ctx context.Context, location map[
 			config.ProtocolConverter[i].ProtocolConverterServiceConfig.Location = make(map[string]string)
 		}
 
-		// Update each level in the protocol converter location with the agent location
-		// Only update levels that exist in the agent location
-		for levelStr, value := range agentLocationStr {
-			config.ProtocolConverter[i].ProtocolConverterServiceConfig.Location[levelStr] = value
+		// Remove only the levels that we know were removed from the agent location
+		for staleLevel := range staleAgentLevels {
+			staleLevelStr := strconv.Itoa(staleLevel)
+			delete(config.ProtocolConverter[i].ProtocolConverterServiceConfig.Location, staleLevelStr)
 		}
+
+		// Then, update each level in the protocol converter location with the new agent location
+		maps.Copy(config.ProtocolConverter[i].ProtocolConverterServiceConfig.Location, newAgentLocationStr)
 	}
 
 	// Update all StreamProcessor locations to match the agent location
@@ -387,11 +404,14 @@ func (m *MockConfigManager) AtomicSetLocation(ctx context.Context, location map[
 			config.StreamProcessor[i].StreamProcessorServiceConfig.Location = make(map[string]string)
 		}
 
-		// Update each level in the stream processor location with the agent location
-		// Only update levels that exist in the agent location
-		for levelStr, value := range agentLocationStr {
-			config.StreamProcessor[i].StreamProcessorServiceConfig.Location[levelStr] = value
+		// Remove only the levels that we know were removed from the agent location
+		for staleLevel := range staleAgentLevels {
+			staleLevelStr := strconv.Itoa(staleLevel)
+			delete(config.StreamProcessor[i].StreamProcessorServiceConfig.Location, staleLevelStr)
 		}
+
+		// Then, update each level in the stream processor location with the new agent location
+		maps.Copy(config.StreamProcessor[i].StreamProcessorServiceConfig.Location, newAgentLocationStr)
 	}
 
 	// write the config

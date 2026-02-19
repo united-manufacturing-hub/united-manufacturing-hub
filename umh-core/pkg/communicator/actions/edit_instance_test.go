@@ -25,6 +25,8 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/streamprocessorserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
@@ -393,6 +395,168 @@ var _ = Describe("EditInstance", func() {
 				}
 			}
 			Expect(messages).To(HaveLen(3))
+		})
+
+		It("should properly handle location shrinking by removing stale levels from ProtocolConverters and StreamProcessors", func() {
+			// Set up initial config with ProtocolConverter and StreamProcessor that have existing location data
+			initialConfig := config.FullConfig{
+				Agent: config.AgentConfig{
+					Location: map[int]string{
+						0: "ACME",
+						1: "Factory-1",
+						2: "Area-A",
+					},
+				},
+				ProtocolConverter: []config.ProtocolConverterConfig{
+					{
+						ProtocolConverterServiceConfig: protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
+							Location: map[string]string{
+								"0": "ACME",
+								"1": "Factory-1",
+								"2": "Area-A",
+								"3": "Line-B", // Bridge-specific location level
+							},
+						},
+					},
+				},
+				StreamProcessor: []config.StreamProcessorConfig{
+					{
+						StreamProcessorServiceConfig: streamprocessorserviceconfig.StreamProcessorServiceConfigSpec{
+							Location: map[string]string{
+								"0": "ACME",
+								"1": "Factory-1",
+								"2": "Area-A",
+								"3": "Cell-C", // StreamProcessor-specific location level
+							},
+						},
+					},
+				},
+			}
+			mockConfig.WithConfig(initialConfig)
+
+			// Payload that shrinks location from 3 levels to 2 levels (removing level 2)
+			payload := map[string]any{
+				"location": map[string]any{
+					"0": "ACME",
+					"1": "Factory-2", // Changed factory
+				},
+			}
+			err := action.Parse(payload)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Reset tracking
+			mockConfig.ResetCalls()
+
+			// Execute the action
+			result, metadata, err := action.Execute()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result).To(ContainSubstring("Successfully updated"))
+			Expect(metadata).To(BeNil())
+
+			// Check that agent location was updated correctly
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			updatedConfig, err := mockConfig.GetConfig(ctx, 0)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Verify agent location is correct (only 2 levels now)
+			Expect(updatedConfig.Agent.Location).To(Equal(map[int]string{
+				0: "ACME",
+				1: "Factory-2",
+			}))
+
+			// Verify ProtocolConverter location is correctly updated
+			Expect(updatedConfig.ProtocolConverter).To(HaveLen(1))
+			pcLocation := updatedConfig.ProtocolConverter[0].ProtocolConverterServiceConfig.Location
+
+			// Gap in levels should be preserved to avoid potential breaking changes
+			Expect(pcLocation).To(Equal(map[string]string{
+				"0": "ACME",
+				"1": "Factory-2",
+				"3": "Line-B",
+			}))
+
+			// Verify StreamProcessor location is correctly updated
+			Expect(updatedConfig.StreamProcessor).To(HaveLen(1))
+			spLocation := updatedConfig.StreamProcessor[0].StreamProcessorServiceConfig.Location
+			Expect(spLocation).To(Equal(map[string]string{
+				"0": "ACME",
+				"1": "Factory-2",
+				"3": "Cell-C",
+			}))
+		})
+
+		It("should handle multiple levels being removed simultaneously", func() {
+			// Test scenario: Agent location shrinks from 5 levels to 2 levels
+			// Bridge adds its own level 5 for bridge-specific data
+			initialConfig := config.FullConfig{
+				Agent: config.AgentConfig{
+					Location: map[int]string{
+						0: "ACME",
+						1: "Factory-1",
+						2: "Area-A",
+						3: "Line-A",
+						4: "Cell-A",
+					},
+				},
+				ProtocolConverter: []config.ProtocolConverterConfig{
+					{
+						ProtocolConverterServiceConfig: protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
+							Location: map[string]string{
+								"0": "ACME",
+								"1": "Factory-1",
+								"2": "Area-A",
+								"3": "Line-A",
+								"4": "Cell-A",
+								"5": "Bridge-Device-ID", // Bridge-specific level
+							},
+						},
+					},
+				},
+			}
+			mockConfig.WithConfig(initialConfig)
+
+			// Agent location shrinks to just enterprise and site
+			payload := map[string]interface{}{
+				"location": map[string]interface{}{
+					"0": "ACME",
+					"1": "Factory-2", // Changed factory
+					// Levels 2,3,4 removed (area, line, cell no longer relevant)
+				},
+			}
+			err := action.Parse(payload)
+			Expect(err).NotTo(HaveOccurred())
+
+			mockConfig.ResetCalls()
+
+			// Execute the action
+			result, metadata, err := action.Execute()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result).To(ContainSubstring("Successfully updated"))
+			Expect(metadata).To(BeNil())
+
+			// Verify the config was updated correctly
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			updatedConfig, err := mockConfig.GetConfig(ctx, 0)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Verify agent location is updated
+			Expect(updatedConfig.Agent.Location).To(Equal(map[int]string{
+				0: "ACME",
+				1: "Factory-2",
+			}))
+
+			// Verify ProtocolConverter location is correctly updated
+			Expect(updatedConfig.ProtocolConverter).To(HaveLen(1))
+			pcLocation := updatedConfig.ProtocolConverter[0].ProtocolConverterServiceConfig.Location
+
+			// Should have exactly 3 levels: 0, 1, and 5
+			Expect(pcLocation).To(Equal(map[string]string{
+				"0": "ACME",
+				"1": "Factory-2",
+				"5": "Bridge-Device-ID", // Bridge-specific level preserved
+			}))
 		})
 	})
 })
