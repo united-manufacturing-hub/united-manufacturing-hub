@@ -102,8 +102,6 @@ func main() {
 				log.Printf("hijack failed for request %d: %v, dropping without response", count, err)
 				return
 			}
-			// CloseWrite sends a TCP FIN (half-close), which is a realistic EOF
-			// simulation. conn.Close then releases the file descriptor fully.
 			if tcpConn, ok := conn.(*net.TCPConn); ok {
 				if err := tcpConn.CloseWrite(); err != nil {
 					log.Printf("CloseWrite failed for request %d: %v", count, err)
@@ -178,7 +176,7 @@ func main() {
 			*longPollMu, *longPollSigma, median, *longPollCap, *longPollKillPct, methodFilter, pathFilter)
 	}
 
-	srv := &http.Server{Addr: *listenAddr, Handler: mux}
+	srv := &http.Server{Addr: *listenAddr, Handler: mux, ReadTimeout: 5 * time.Second}
 
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGTERM, syscall.SIGINT)
