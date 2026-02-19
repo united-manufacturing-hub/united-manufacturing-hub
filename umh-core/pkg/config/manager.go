@@ -152,6 +152,7 @@ type FileConfigManager struct {
 	// ---------- background refresh state ----------
 	refreshMu sync.Mutex // prevents concurrent background refreshes
 
+	backupEnabled bool // Feature flag: create config backups before writes
 }
 
 // NewFileConfigManager creates a new FileConfigManager
@@ -516,6 +517,11 @@ func (m *FileConfigManagerWithBackoff) GetConfigWithOverwritesOrCreateNew(ctx co
 // GetFileSystemService returns the filesystem service.
 func (m *FileConfigManagerWithBackoff) GetFileSystemService() filesystem.Service {
 	return m.configManager.GetFileSystemService()
+}
+
+// SetConfigBackupEnabled controls whether config backups are created before writes.
+func (m *FileConfigManagerWithBackoff) SetConfigBackupEnabled(enabled bool) {
+	m.configManager.backupEnabled = enabled
 }
 
 // writeConfig writes the config to the file
@@ -1146,6 +1152,10 @@ func (m *FileConfigManagerWithBackoff) WriteYAMLConfigFromString(ctx context.Con
 // (prevents backup spam during crash loops).
 // All operations are best-effort: errors are logged but never returned or panicked.
 func (m *FileConfigManager) createConfigBackup(ctx context.Context) {
+	if !m.backupEnabled {
+		return
+	}
+
 	exists, err := m.fsService.FileExists(ctx, m.configPath)
 	if err != nil || !exists {
 		if err != nil {

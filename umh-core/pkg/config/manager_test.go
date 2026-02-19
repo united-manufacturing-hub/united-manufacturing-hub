@@ -854,6 +854,12 @@ agent:
 			writeFileDataCapture map[string][]byte
 		)
 
+		// Enable config backup for all tests in this block (default is false).
+		// The FF-disabled test overrides this in its own JustBeforeEach.
+		JustBeforeEach(func() {
+			configManager.backupEnabled = true
+		})
+
 		BeforeEach(func() {
 			configContent = []byte("agent:\n  metricsPort: 8080\n")
 			backupContent = []byte("agent:\n  metricsPort: 8080\n")
@@ -941,6 +947,25 @@ agent:
 				})
 
 				It("should skip backup when config does not exist", func() {
+					configManager.createConfigBackup(ctx)
+
+					backupWrites := filterBackupDirPaths(writeFileCalls)
+					Expect(backupWrites).To(BeEmpty())
+				})
+			})
+
+			Context("when enableConfigBackup is false", func() {
+				BeforeEach(func() {
+					fileExistsResult = true
+					configContent = []byte("agent:\n  metricsPort: 9090\n")
+					readDirEntries = nil
+				})
+
+				JustBeforeEach(func() {
+					configManager.backupEnabled = false
+				})
+
+				It("should skip backup when feature flag is disabled", func() {
 					configManager.createConfigBackup(ctx)
 
 					backupWrites := filterBackupDirPaths(writeFileCalls)

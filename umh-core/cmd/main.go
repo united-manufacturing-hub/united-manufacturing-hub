@@ -128,6 +128,14 @@ func main() {
 
 	configData.Agent.UseFSMv2ProtocolConverter = v
 
+	// Config backup feature flag: read from env var, not persisted to config.yaml.
+	v, err = env.GetAsBool("ENABLE_CONFIG_BACKUP", false, false)
+	if err != nil {
+		log.Warnf("Failed to parse ENABLE_CONFIG_BACKUP: %v", err)
+	}
+
+	configManager.SetConfigBackupEnabled(v)
+
 	// Ensure the S6 repository directory exists
 	// This is particularly important when using /tmp/umh-core/services (the default)
 	if err := ensureS6RepositoryDirectory(log); err != nil {
