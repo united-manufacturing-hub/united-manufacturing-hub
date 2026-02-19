@@ -152,7 +152,8 @@ type FileConfigManager struct {
 	// ---------- background refresh state ----------
 	refreshMu sync.Mutex // prevents concurrent background refreshes
 
-	backupEnabled bool // Feature flag: create config backups before writes
+	// backupEnabled controls whether config backups are created before writes.
+	backupEnabled bool
 }
 
 // NewFileConfigManager creates a new FileConfigManager
