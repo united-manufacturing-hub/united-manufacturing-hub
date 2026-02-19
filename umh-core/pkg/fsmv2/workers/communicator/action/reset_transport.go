@@ -16,6 +16,7 @@ package action
 
 import (
 	"context"
+	"errors"
 
 	depspkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 )
@@ -46,6 +47,9 @@ func (a *ResetTransportAction) Execute(ctx context.Context, depsAny any) error {
 	deps := depsAny.(CommunicatorDependencies)
 
 	transport := deps.GetTransport()
+	if transport == nil {
+		return errors.New("transport is nil, cannot reset")
+	}
 	transport.Reset()
 	deps.GetLogger().Info("transport_reset_completed", depspkg.String("reason", "degraded_state_threshold"))
 
