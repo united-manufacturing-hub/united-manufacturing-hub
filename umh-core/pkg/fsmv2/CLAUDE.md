@@ -201,10 +201,6 @@ var _ = Describe("Transport Scenario", func() {
 
 ## Per-Child Error Tracking in Parent-Child Workers
 
-> **Note**: Per-child RetryTrackers are delivered by PR #2414. In the current PR (#2408),
-> PushDependencies delegates all error tracking to the parent's shared RetryTracker.
-> The architecture below describes the target state after #2414 is merged.
-
 Each child (push/pull) has its own `RetryTracker` for independent health decisions:
 
 - **Errors** flow to BOTH the child's tracker AND the parent's tracker (`RecordTypedError`, `RecordError` delegate up)
