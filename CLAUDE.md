@@ -132,6 +132,17 @@ The United Manufacturing Hub (UMH) is an Industrial IoT platform for manufacturi
 
 **No code change without corresponding documentation updates.** Every code modification must include relevant documentation changes in the same PR. See `docs/` directory for user-facing documentation.
 
+### Changelog
+
+Every PR with user-visible changes must add an entry to `umh-core/CHANGELOG.md` under the current (topmost) version section. Use the `/changelog-entry` skill to generate entries in the correct format.
+
+- **Format**: `- **Bold title** - Description in problem-solution format`
+- **Categories** (in order): `### Breaking Changes`, `### New Features`, `### Improvements`, `### Fixes`
+- **No entry needed** for: CI/CD changes, refactoring, test-only changes, documentation-only changes
+- **Never create a new version section** — only add to the existing topmost `## [X.Y.Z]` section
+- On tag push, a sync workflow automatically creates entries in changelog.umh.app from CHANGELOG.md
+- When creating a GitHub Release, copy the version's content from CHANGELOG.md as the release body. Include a link to the changelog.umh.app entry at the bottom: `See https://changelog.umh.app/changelog/<date>-umh-core-<version>`
+
 ## Support & Troubleshooting Workflows
 
 This section covers umh-core-specific troubleshooting workflows. For universal team processes (Linear/Sentry integration, ticket routing), see `/Users/jeremytheocharis/Documents/git/troubleshooting/CLAUDE.md`.
