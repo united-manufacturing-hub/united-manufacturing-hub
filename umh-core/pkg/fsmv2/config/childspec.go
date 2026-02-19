@@ -166,6 +166,11 @@ func (u UserSpec) Clone() UserSpec {
 // ChildStartStates specifies which parent FSM states cause children to run.
 // When the parent is in a listed state, children run. Otherwise, they stop.
 //
+// INVARIANT: If a parent state checks ChildrenHealthy/ChildrenUnhealthy to gate
+// its own transitions, that state MUST be listed in ChildStartStates. Otherwise,
+// children are mapped to "stopped" and can never satisfy the health check,
+// creating a permanent deadlock.
+//
 // Example use case: Children should only run when parent is in "Running" or "TryingToStart" states.
 //
 // Format:
