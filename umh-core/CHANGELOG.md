@@ -2,6 +2,10 @@
 
 ## [0.44.9]
 
+### Fixes
+
+- **Reduced memory usage for FSMv2 preview instances** - The memory cleanup routine introduced in v0.44.8 retained state history for 24 hours, which still allowed hundreds of thousands of entries to accumulate in RAM on busy systems before being cleaned up. The retention window is now 1 hour, reducing steady-state memory by roughly 95%. Requires `USE_FSMV2_MEMORY_CLEANUP=true`.
+
 ## [0.44.8]
 
 If you enabled the FSMv2 communicator preview (introduced in v0.44.5), this release fixes three issues that could cause your instance to use a lot of memory, go offline, or restart unexpectedly. We strongly recommend upgrading.
