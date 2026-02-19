@@ -4,7 +4,7 @@
 
 ### Improvements
 
-- **Instance location can now be updated from the Management Console** - Previously, editing an instance's location required manual config.yaml changes because the edit-instance action did not support the standard location format. The action now accepts the same location format used elsewhere in the configuration — a map of integer levels to names (e.g., `{"0": "ACME", "1": "Factory-1", "2": "Assembly"}`) — giving you full flexibility over hierarchy depth and structure. You can now update the instance location directly from the Management Console UI.
+- **Edit-instance action now supports generic location format** - The edit-instance action now accepts any number of location hierarchy levels instead of the previous five hardcoded fields (enterprise, site, area, line, workCell). This enables the Management Console to offer flexible location editing once updated.
 
 ## [0.44.8]
 
