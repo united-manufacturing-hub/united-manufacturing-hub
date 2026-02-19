@@ -113,9 +113,8 @@ func (w *PullWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedSt
 // Must be PURE — only uses the spec parameter, never dependencies.
 func (w *PullWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
 	if spec == nil {
-		return &config.DesiredState{
+		return &snapshot.PullDesiredState{
 			BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
-			OriginalUserSpec: nil,
 		}, nil
 	}
 
