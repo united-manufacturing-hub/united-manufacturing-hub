@@ -2,6 +2,10 @@
 
 ## [0.44.9]
 
+### Preview: FSMv2 Communicator
+
+- **Fixed repeated "no workers in supervisor" error in logs** - Previously, if the communicator temporarily had no active workers during a restart cycle, the supervisor logged an error on every tick. Now it skips the tick and self-heals when workers return.
+
 ## [0.44.8]
 
 If you enabled the FSMv2 communicator preview (introduced in v0.44.5), this release fixes three issues that could cause your instance to use a lot of memory, go offline, or restart unexpectedly. We strongly recommend upgrading.
