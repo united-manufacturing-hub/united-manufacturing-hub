@@ -67,14 +67,9 @@ func (s *StartingState) Next(snapAny any) fsmv2.NextResult[any, any] {
 		return fsmv2.Result[any, any](s, fsmv2.SignalNone, authAction, "No valid token, authenticating with relay")
 	}
 
-	// Requires healthy children (PushWorker + PullWorker) — added in ENG-4262, ENG-4263.
-	// Zero children: stays in Starting. This is intentional — avoids reporting Running
-	// without actual push/pull capability.
-	if snap.Observed.ChildrenHealthy > 0 && snap.Observed.ChildrenUnhealthy == 0 {
-		return fsmv2.Result[any, any](&RunningState{}, fsmv2.SignalNone, nil, "All children healthy, transitioning to Running")
-	}
-
-	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, "Token valid, waiting for children to become healthy")
+	// Authenticated — transition to Running. Children start via ChildStartStates
+	// once parent enters Running; RunningState handles unhealthy children.
+	return fsmv2.Result[any, any](&RunningState{}, fsmv2.SignalNone, nil, "Authenticated, transitioning to Running")
 }
 
 // String returns the state name derived from the type.

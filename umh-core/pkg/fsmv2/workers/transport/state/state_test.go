@@ -150,9 +150,9 @@ var _ = Describe("TransportWorker States", func() {
 			Expect(result.Action.Name()).To(Equal("authenticate"))
 		})
 
-		It("should transition to Running when token is valid and children are healthy", func() {
+		It("should transition to Running when token is valid", func() {
 			validExpiry := time.Now().Add(1 * time.Hour) // Token expires in 1 hour
-			snap := makeSnapshot(false, config.DesiredStateRunning, "valid-jwt-token", validExpiry, 1, 0)
+			snap := makeSnapshot(false, config.DesiredStateRunning, "valid-jwt-token", validExpiry, 0, 0)
 			result := s.Next(snap)
 
 			Expect(result.Signal).To(Equal(fsmv2.SignalNone))
