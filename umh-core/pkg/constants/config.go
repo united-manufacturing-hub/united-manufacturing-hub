@@ -28,4 +28,10 @@ const (
 	// It is more a safety net to prevent a single reader from blocking the config file
 	// The actual number does not really matter, it should be "high enough".
 	AmountReadersForConfigFile = 100
+
+	// ConfigBackupDir is the directory where config backups are stored.
+	ConfigBackupDir = "/data/config-backups"
+
+	// ConfigBackupMaxEntries is the maximum number of backup files to retain.
+	ConfigBackupMaxEntries = 100
 )

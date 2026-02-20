@@ -2,6 +2,10 @@
 
 ## [0.44.9]
 
+### New Features
+
+- **Config backup versioning** - Previously, config.yaml could be permanently lost during upgrades or crash loops with no way to recover. Timestamped backups are now created before every write, with deduplication to prevent churn during restarts, retaining the last 100 versions in /data/config-backups/. To enable, set the `ENABLE_CONFIG_BACKUP=true` environment variable and restart your container. To verify, check that backup files appear in /data/config-backups/ after a config change
+
 ### Fixes
 
 - **Reduced memory usage for FSMv2 preview instances** - The memory cleanup routine introduced in v0.44.8 retained state history for 24 hours, which still allowed hundreds of thousands of entries to accumulate in RAM on busy systems before being cleaned up. The retention window is now 1 hour, reducing steady-state memory by roughly 95%. Requires `USE_FSMV2_MEMORY_CLEANUP=true`.
