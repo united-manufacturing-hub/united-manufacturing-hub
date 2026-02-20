@@ -2,6 +2,10 @@
 
 ## [0.44.9]
 
+### Fixes
+
+- **Reduced memory usage for FSMv2 preview instances** - The memory cleanup routine introduced in v0.44.8 retained state history for 24 hours, which still allowed hundreds of thousands of entries to accumulate in RAM on busy systems before being cleaned up. The retention window is now 1 hour, reducing steady-state memory by roughly 95%. Requires `USE_FSMV2_MEMORY_CLEANUP=true`.
+
 ### Preview: FSMv2 Communicator
 
 - **Fixed repeated "no workers in supervisor" error in logs** - Previously, if the communicator temporarily had no active workers during a restart cycle, the supervisor logged an error on every tick. Now it skips the tick and self-heals when workers return.
