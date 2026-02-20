@@ -403,6 +403,7 @@ var _ = Describe("ControlLoop", func() {
 
 				// Set up a config manager that uses the mock file system
 				fileConfigManager := config.NewFileConfigManager()
+				defer fileConfigManager.Stop()
 				fileConfigManager.WithFileSystemService(mockFS)
 
 				// Replace the control loop's config manager

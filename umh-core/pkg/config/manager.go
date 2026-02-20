@@ -542,6 +542,11 @@ func (m *FileConfigManagerWithBackoff) GetFileSystemService() filesystem.Service
 	return m.configManager.GetFileSystemService()
 }
 
+// Stop releases resources held by the wrapped FileConfigManager.
+func (m *FileConfigManagerWithBackoff) Stop() {
+	m.configManager.Stop()
+}
+
 // SetConfigBackupEnabled controls whether config backups are created before writes.
 func (m *FileConfigManagerWithBackoff) SetConfigBackupEnabled(enabled bool) {
 	m.configManager.backupEnabled = enabled
