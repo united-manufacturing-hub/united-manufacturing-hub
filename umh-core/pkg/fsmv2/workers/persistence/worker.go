@@ -83,7 +83,11 @@ func (w *PersistenceWorker) CollectObservedState(ctx context.Context) (fsmv2.Obs
 	if stateReader != nil {
 		if err := stateReader.LoadObservedTyped(ctx, d.GetWorkerType(), d.GetWorkerID(), &prev); err == nil {
 			prevWorkerMetrics = prev.Metrics.Worker
-		} else if !errors.Is(err, persistencepkg.ErrNotFound) {
+
+			d.SetObservedStateLoaded()
+		} else if errors.Is(err, persistencepkg.ErrNotFound) && !d.GetObservedStateLoaded() {
+			// ErrNotFound is expected before state has been persisted for the first time
+		} else {
 			d.GetLogger().SentryWarn(deps.FeaturePersistence, d.GetHierarchyPath(), "previous_observed_load_failed",
 				deps.Err(err),
 				deps.String("worker_type", d.GetWorkerType()),

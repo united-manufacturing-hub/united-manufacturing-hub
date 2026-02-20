@@ -27,11 +27,12 @@ import (
 type PersistenceDependencies struct {
 	*deps.BaseDependencies
 
-	store             storage.TriangularStoreInterface
-	scheduler         deps.Scheduler
-	lastCompactionAt  time.Time
-	lastMaintenanceAt time.Time
-	mu                sync.RWMutex
+	store               storage.TriangularStoreInterface
+	scheduler           deps.Scheduler
+	lastCompactionAt    time.Time
+	lastMaintenanceAt   time.Time
+	observedStateLoaded bool
+	mu                  sync.RWMutex
 }
 
 var _ snapshot.PersistenceDependencies = (*PersistenceDependencies)(nil)
@@ -93,4 +94,18 @@ func (d *PersistenceDependencies) GetLastMaintenanceAt() time.Time {
 	defer d.mu.RUnlock()
 
 	return d.lastMaintenanceAt
+}
+
+func (d *PersistenceDependencies) SetObservedStateLoaded() {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	d.observedStateLoaded = true
+}
+
+func (d *PersistenceDependencies) GetObservedStateLoaded() bool {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+
+	return d.observedStateLoaded
 }
