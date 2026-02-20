@@ -34,7 +34,7 @@ import (
 
 const (
 	DefaultCompactionInterval  = 5 * time.Minute
-	DefaultRetentionWindow     = 24 * time.Hour
+	DefaultRetentionWindow     = 1 * time.Hour
 	DefaultMaintenanceInterval = 7 * 24 * time.Hour
 )
 

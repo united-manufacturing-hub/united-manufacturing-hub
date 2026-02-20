@@ -178,3 +178,8 @@ func (s *Supervisor[TObserved, TDesired]) TestSetPendingRemovalFlag(childName st
 		delete(s.pendingRemoval, childName)
 	}
 }
+
+// TestSetStarted sets the started flag for testing. DO NOT USE in production code.
+func (s *Supervisor[TObserved, TDesired]) TestSetStarted(value bool) {
+	s.started.Store(value)
+}
