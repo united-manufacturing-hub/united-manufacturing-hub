@@ -8,10 +8,6 @@ This release simplifies S7 addressing and fixes three edge cases in the Manageme
 
 - **Simplified S7 address format for non-Data Block memory areas** - Previously, S7 addresses for PE, PA, MK, C, and T areas required a block number that served no function. You can now write `PE.X0.0` instead of `PE0.X0.0`. The old format still works but logs a deprecation warning and will be removed in a future version. Data Block addresses (`DB1.DW20`) are unchanged
 
-### Improvements
-
-- **Structured Sentry logging for config manager** - Previously, config manager warnings and errors were logged via raw zap calls and were not tagged in Sentry, making them hard to filter. Now all config manager events are routed through the FSMLogger with `feature: fsmv1_config_manager` tagging, making them filterable and actionable in Sentry dashboards
-
 ### Fixes
 
 - **Fixed S7 DateAndTime crash** - The S7 `DateAndTime` data type crashed due to an incorrect buffer size and now reads correctly
