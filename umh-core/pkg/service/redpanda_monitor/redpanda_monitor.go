@@ -254,6 +254,9 @@ type RedpandaMonitorService struct {
 	previousTimestampDataByteHash     uint64
 	// cacheMutex is used to synchronize access to above cache variables
 	cacheMutex sync.Mutex
+
+	// cachedStatus holds the last successful Status result for reuse when log data is unchanged.
+	cachedStatus *ServiceInfo
 }
 
 // RedpandaMonitorServiceOption is a function that modifies a RedpandaMonitorService.
@@ -1195,9 +1198,21 @@ func (s *RedpandaMonitorService) Status(ctx context.Context, filesystemService f
 		}, monitor.ErrServiceStopped
 	}
 
-	// Get logs
+	// Skip expensive log parsing if no new data has arrived since last call.
 	s6ServicePath := filepath.Join(constants.S6BaseDir, s6ServiceName)
 
+	hasNew, hasNewErr := s.s6Service.HasNewData(ctx, s6ServicePath, filesystemService)
+	if hasNewErr == nil && !hasNew && s.cachedStatus != nil {
+		// Return cached parse result with fresh S6/FSM state.
+		cached := *s.cachedStatus
+		cached.S6ObservedState = s6State
+		cached.S6FSMState = fsmState
+		cached.RedpandaStatus.IsRunning = fsmState == s6fsm.OperationalStateRunning
+
+		return cached, nil
+	}
+
+	// Get logs.
 	logs, err := s.s6Service.GetLogs(ctx, s6ServicePath, filesystemService)
 	if err != nil {
 		return ServiceInfo{
@@ -1219,7 +1234,7 @@ func (s *RedpandaMonitorService) Status(ctx context.Context, filesystemService f
 		}, ErrServiceNoLogFile
 	}
 
-	// Parse the logs
+	// Parse the logs.
 	metrics, err := s.ParseRedpandaLogs(ctx, logs, tick)
 	if err != nil {
 		return ServiceInfo{
@@ -1231,7 +1246,7 @@ func (s *RedpandaMonitorService) Status(ctx context.Context, filesystemService f
 		}, fmt.Errorf("failed to parse metrics: %w", err)
 	}
 
-	return ServiceInfo{
+	result := ServiceInfo{
 		S6ObservedState: s6State,
 		S6FSMState:      fsmState,
 		RedpandaStatus: RedpandaMonitorStatus{
@@ -1239,7 +1254,10 @@ func (s *RedpandaMonitorService) Status(ctx context.Context, filesystemService f
 			IsRunning: fsmState == s6fsm.OperationalStateRunning,
 			Logs:      logs,
 		},
-	}, nil
+	}
+	s.cachedStatus = &result
+
+	return result, nil
 }
 
 // AddRedpandaMonitorToS6Manager adds a redpanda instance to the S6 manager.

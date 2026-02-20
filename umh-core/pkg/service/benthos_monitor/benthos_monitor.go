@@ -240,6 +240,9 @@ type BenthosMonitorService struct {
 	s6Service       s6service.Service
 	s6ServiceConfig *config.S6FSMConfig // There can only be one monitor per benthos instance
 	benthosName     string              // normally a service can handle multiple instances, the service monitor here is different and can only handle one instance
+
+	// cachedStatus holds the last successful Status result for reuse when log data is unchanged.
+	cachedStatus *ServiceInfo
 }
 
 // BenthosMonitorServiceOption is a function that modifies a BenthosMonitorService.
@@ -1508,9 +1511,21 @@ func (s *BenthosMonitorService) Status(ctx context.Context, services serviceregi
 		return ServiceInfo{}, monitor.ErrServiceStopped
 	}
 
-	// Get logs
+	// Skip expensive log parsing if no new data has arrived since last call.
 	s6ServicePath := filepath.Join(constants.S6BaseDir, s6ServiceName)
 
+	hasNew, hasNewErr := s.s6Service.HasNewData(ctx, s6ServicePath, services.GetFileSystem())
+	if hasNewErr == nil && !hasNew && s.cachedStatus != nil {
+		// Return cached parse result with fresh S6/FSM state.
+		cached := *s.cachedStatus
+		cached.S6ObservedState = s6State
+		cached.S6FSMState = fsmState
+		cached.BenthosStatus.IsRunning = fsmState == s6fsm.OperationalStateRunning
+
+		return cached, nil
+	}
+
+	// Get logs.
 	logs, err := s.s6Service.GetLogs(ctx, s6ServicePath, services.GetFileSystem())
 	if err != nil {
 		return ServiceInfo{}, fmt.Errorf("failed to get logs: %w", err)
@@ -1520,13 +1535,13 @@ func (s *BenthosMonitorService) Status(ctx context.Context, services serviceregi
 		return ServiceInfo{}, ErrServiceNoLogFile
 	}
 
-	// Parse the logs
+	// Parse the logs.
 	metrics, err := s.ParseBenthosLogs(ctx, logs, tick)
 	if err != nil {
 		return ServiceInfo{}, fmt.Errorf("failed to parse metrics: %w", err)
 	}
 
-	return ServiceInfo{
+	result := ServiceInfo{
 		S6ObservedState: s6State,
 		S6FSMState:      fsmState,
 		BenthosStatus: BenthosMonitorStatus{
@@ -1534,7 +1549,10 @@ func (s *BenthosMonitorService) Status(ctx context.Context, services serviceregi
 			IsRunning: fsmState == s6fsm.OperationalStateRunning,
 			Logs:      logs,
 		},
-	}, nil
+	}
+	s.cachedStatus = &result
+
+	return result, nil
 }
 
 // AddBenthosMonitorToS6Manager adds a benthos instance to the S6 manager.

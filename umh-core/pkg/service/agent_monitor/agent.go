@@ -109,6 +109,9 @@ type AgentMonitorService struct {
 	s6Service       s6.Service
 	logger          *zap.SugaredLogger
 	instanceName    string
+
+	// cachedLogs holds the last successful agent logs for reuse when log data is unchanged.
+	cachedLogs []s6.LogEntry
 }
 
 // NewAgentMonitorService creates a new agent monitor service instance.
@@ -184,22 +187,32 @@ func (c *AgentMonitorService) Status(ctx context.Context, systemSnapshot fsm.Sys
 	// Get the Latency
 	// TODO: get latency from the communication module
 
-	// Get the Agent Logs
-	logs, err := c.getAgentLogs(ctx)
-	if err != nil {
-		c.logger.Warnf("Failed to get agent logs: %v", err)
+	// Skip expensive log fetching if no new data has arrived since last call.
+	agentServicePath := filepath.Join(constants.S6BaseDir, "umh-core")
 
-		status.OverallHealth = models.Degraded
-
-		return nil, err
+	hasNew, hasNewErr := c.s6Service.HasNewData(ctx, agentServicePath, c.fs)
+	if hasNewErr == nil && !hasNew && c.cachedLogs != nil {
+		// Reuse cached logs — no new data in the log file.
+		status.AgentLogs = c.cachedLogs
 	} else {
+		// Get the Agent Logs.
+		logs, err := c.getAgentLogs(ctx)
+		if err != nil {
+			c.logger.Warnf("Failed to get agent logs: %v", err)
+
+			status.OverallHealth = models.Degraded
+
+			return nil, err
+		}
+
 		status.AgentLogs = logs
+		c.cachedLogs = logs
 	}
 
-	// Get the Agent Metrics
+	// Get the Agent Metrics.
 	// TODO: get its own metrics either by calling its own metrics endpoint of accessing the struct from the metrics package directly
 
-	// Get the Release Info
+	// Get the Release Info.
 	release, err := c.getReleaseInfo(systemSnapshot.CurrentConfig)
 	if err != nil {
 		c.logger.Warnf("Failed to get release info: %v", err)

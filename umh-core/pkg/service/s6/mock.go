@@ -40,6 +40,7 @@ type MockService struct {
 	GetS6ConfigFileError         error
 	ForceRemoveError             error
 	GetLogsError                 error
+	HasNewDataError              error
 
 	// Results for each method
 	CreateResult                  error
@@ -81,8 +82,10 @@ type MockService struct {
 	GetS6ConfigFileCalled         bool
 	ForceRemoveCalled             bool
 	GetLogsCalled                 bool
+	HasNewDataCalled              bool
 	GetStructuredLogsCalled       bool
 
+	HasNewDataResult    bool
 	ServiceExistsResult bool
 	// New fields for EnsureSupervision
 	MockExists bool
@@ -240,6 +243,13 @@ func (m *MockService) GetLogs(ctx context.Context, servicePath string, filesyste
 	m.GetLogsCalled = true
 
 	return m.GetLogsResult, m.GetLogsError
+}
+
+// HasNewData returns the mock result for new data checks.
+func (m *MockService) HasNewData(_ context.Context, _ string, _ filesystem.Service) (bool, error) {
+	m.HasNewDataCalled = true
+
+	return m.HasNewDataResult, m.HasNewDataError
 }
 
 // EnsureSupervision is a mock implementation that checks if supervise dir exists.

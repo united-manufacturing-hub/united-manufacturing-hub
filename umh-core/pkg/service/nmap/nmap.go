@@ -45,6 +45,9 @@ type NmapService struct {
 	s6Manager        *s6fsm.S6Manager
 	lastScanResult   *NmapScanResult // Cache for scan results
 	s6ServiceConfigs []config.S6FSMConfig
+
+	// cachedStatus holds the last successful Status result for reuse when log data is unchanged.
+	cachedStatus *ServiceInfo
 }
 
 // NmapServiceOption is a function that modifies a NmapService.
@@ -320,9 +323,21 @@ func (s *NmapService) Status(ctx context.Context, filesystemService filesystem.S
 		}, nil
 	}
 
-	// Get logs
+	// Skip expensive log parsing if no new data has arrived since last call.
 	s6ServicePath := filepath.Join(constants.S6BaseDir, s6ServiceName)
 
+	hasNew, hasNewErr := s.s6Service.HasNewData(ctx, s6ServicePath, filesystemService)
+	if hasNewErr == nil && !hasNew && s.cachedStatus != nil {
+		// Return cached parse result with fresh S6/FSM state.
+		cached := *s.cachedStatus
+		cached.S6ObservedState = s6State
+		cached.S6FSMState = fsmState
+		cached.NmapStatus.IsRunning = fsmState == s6fsm.OperationalStateRunning
+
+		return cached, nil
+	}
+
+	// Get logs.
 	logs, err := s.s6Service.GetLogs(ctx, s6ServicePath, filesystemService)
 	if err != nil {
 		if errors.Is(err, s6service.ErrServiceNotExist) {
@@ -339,13 +354,13 @@ func (s *NmapService) Status(ctx context.Context, filesystemService filesystem.S
 		return ServiceInfo{}, ErrServiceNotExist
 	}
 
-	// Get the current config to know which port we're scanning
+	// Get the current config to know which port we're scanning.
 	config, err := s.GetConfig(ctx, filesystemService, nmapName)
 	if err != nil {
 		return ServiceInfo{}, fmt.Errorf("failed to get config: %w", err)
 	}
 
-	// Parse logs to extract scan results
+	// Parse logs to extract scan results.
 	scanResult := s.parseScanLogs(logs, config.Port)
 	if scanResult == nil {
 		return ServiceInfo{}, fmt.Errorf("%w: %s", ErrScanFailed, "no scan result found")
@@ -353,7 +368,7 @@ func (s *NmapService) Status(ctx context.Context, filesystemService filesystem.S
 
 	// the check if the logs are too old is done in the fsm
 
-	return ServiceInfo{
+	result := ServiceInfo{
 		S6ObservedState: s6State,
 		S6FSMState:      fsmState,
 		NmapStatus: NmapServiceInfo{
@@ -361,7 +376,10 @@ func (s *NmapService) Status(ctx context.Context, filesystemService filesystem.S
 			IsRunning: fsmState == s6fsm.OperationalStateRunning,
 			Logs:      logs,
 		},
-	}, nil
+	}
+	s.cachedStatus = &result
+
+	return result, nil
 }
 
 // AddNmapToS6Manager adds a nmap instance to the S6 manager.

@@ -184,8 +184,12 @@ type Service interface {
 	GetS6ConfigFile(ctx context.Context, servicePath string, configFileName string, fsService filesystem.Service) ([]byte, error)
 	// ForceRemove removes a service from the S6 manager
 	ForceRemove(ctx context.Context, servicePath string, fsService filesystem.Service) error
-	// GetLogs gets the logs of the service
+	// GetLogs gets the logs of the service.
 	GetLogs(ctx context.Context, servicePath string, fsService filesystem.Service) ([]LogEntry, error)
+	// HasNewData checks if the log file has new data since the last GetLogs call.
+	// Uses a single stat syscall for efficiency — returns true if file size exceeds
+	// the stored cursor offset or inode changed (rotation).
+	HasNewData(ctx context.Context, servicePath string, fsService filesystem.Service) (bool, error)
 	// EnsureSupervision checks if the supervise directory exists for a service and notifies
 	// s6-svscan if it doesn't, to trigger supervision setup.
 	// Returns true if supervise directory exists (ready for supervision), false otherwise.
@@ -1379,6 +1383,63 @@ func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsServ
 	}
 
 	return out, nil
+}
+
+// HasNewData checks if the log file has grown since the last GetLogs call.
+// Returns true if new bytes are available, false if the file is unchanged.
+// Uses a single stat syscall to compare the current file size against the
+// stored cursor offset from the last GetLogs invocation.
+func (s *DefaultService) HasNewData(ctx context.Context, servicePath string, fsService filesystem.Service) (bool, error) {
+	start := time.Now()
+
+	defer func() {
+		metrics.ObserveReconcileTime(metrics.ComponentS6Service, servicePath+".hasNewData", time.Since(start))
+	}()
+
+	if ctx.Err() != nil {
+		return false, ctx.Err()
+	}
+
+	serviceName := filepath.Base(servicePath)
+	logFile := filepath.Join(constants.S6LogBaseDir, serviceName, "current")
+
+	// Check if the file exists.
+	exists, err := fsService.PathExists(ctx, logFile)
+	if err != nil {
+		return false, fmt.Errorf("failed to check if log file exists: %w", err)
+	}
+
+	if !exists {
+		return false, nil
+	}
+
+	// Get or create cursor state.
+	stAny, _ := s.logCursors.LoadOrStore(logFile, &logState{})
+	st := stAny.(*logState)
+
+	st.mu.Lock()
+	defer st.mu.Unlock()
+
+	// If we have never read this file, treat it as new data.
+	if st.inode == 0 {
+		return true, nil
+	}
+
+	// Single stat syscall to check file size and inode.
+	fi, err := fsService.Stat(ctx, logFile)
+	if err != nil {
+		return false, fmt.Errorf("failed to stat log file: %w", err)
+	}
+
+	if fi == nil {
+		return false, fmt.Errorf("stat returned nil for log file: %s", logFile)
+	}
+
+	sys := fi.Sys().(*syscall.Stat_t)
+	size, ino := fi.Size(), sys.Ino
+
+	// Inode changed means rotation — new data. Size grew means new bytes appended.
+	return ino != st.inode || size > st.offset, nil
 }
 
 // ParseLogsFromBytes is a zero-allocation* parser for an s6 "current"
