@@ -103,7 +103,7 @@ func (d *PersistenceDependencies) SetObservedStateLoaded() {
 	d.observedStateLoaded = true
 }
 
-func (d *PersistenceDependencies) GetObservedStateLoaded() bool {
+func (d *PersistenceDependencies) IsObservedStateLoaded() bool {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 
