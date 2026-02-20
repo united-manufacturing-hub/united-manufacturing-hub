@@ -144,6 +144,10 @@ type FileConfigManager struct {
 	// we use our own implementation of a context aware mutex here to avoid deadlocks
 	mutexReadOrWrite ctxrwmutex.CtxRWMutex
 
+	// sentryHook is the Sentry hook attached to the logger. Stored so Stop() can
+	// release its cleanup goroutine.
+	sentryHook *fsmv2sentry.SentryHook
+
 	// configPath is the path to the config file
 	configPath string
 
@@ -156,10 +160,6 @@ type FileConfigManager struct {
 
 	// ---------- background refresh state ----------
 	refreshMu sync.Mutex // prevents concurrent background refreshes
-
-	// sentryHook is the Sentry hook attached to the logger. Stored so Stop() can
-	// release its cleanup goroutine.
-	sentryHook *fsmv2sentry.SentryHook
 
 	// backupEnabled controls whether config backups are created before writes.
 	backupEnabled bool
