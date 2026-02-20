@@ -5,6 +5,7 @@
 ```
 /data
  ├─ config.yaml           # See also configuration reference
+ ├─ config-backups/       # Timestamped config.yaml backups (last 100 retained)
  ├─ logs/                 # Rolling logs for agent, every data flow, Redpanda …
  ├─ redpanda/             # Redpanda data & WALs (backup-worthy)
  ├─ services/             # S6 service directories (only when S6_PERSIST_DIRECTORY=true)

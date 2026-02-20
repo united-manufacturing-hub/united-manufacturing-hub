@@ -134,12 +134,13 @@ The United Manufacturing Hub (UMH) is an Industrial IoT platform for manufacturi
 
 ### Changelog
 
-Every PR with user-visible changes must add an entry to `umh-core/CHANGELOG.md` under the current (topmost) version section. Use the `/changelog-entry` skill to generate entries in the correct format.
+Every PR with user-visible changes must add an entry to `umh-core/CHANGELOG.md` under the current (topmost) version section. Use the `/changelog-entry` skill to generate entries when available. For writing guidelines and voice, follow the `changelog-writing` skill. When skills are unavailable (e.g., in subagents), follow these rules:
 
-- **Format**: `- **Bold title** - Description in problem-solution format`
+- **Format**: `- **Bold title** - Description in problem-solution format` — lead with the problem ("Previously, ..."), then the solution ("Now, ...")
 - **Categories** (in order): `### Breaking Changes`, `### New Features`, `### Improvements`, `### Fixes`
 - **No entry needed** for: CI/CD changes, refactoring, test-only changes, documentation-only changes
 - **Never create a new version section** — only add to the existing topmost `## [X.Y.Z]` section
+- **No trailing periods** on bullet points
 - On tag push, a sync workflow automatically creates entries in changelog.umh.app from CHANGELOG.md
 - When creating a GitHub Release, copy the version's content from CHANGELOG.md as the release body. Include a link to the changelog.umh.app entry at the bottom: `See https://changelog.umh.app/changelog/<date>-umh-core-<version>`
 

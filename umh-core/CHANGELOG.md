@@ -2,6 +2,28 @@
 
 ## [0.44.9]
 
+This release adds config backup as an opt-in preview and includes stability fixes for FSMv2 communicator preview users. All changes require feature flags -- if you haven't enabled any preview features, this release does not affect you.
+
+### Preview: Config Backup
+
+- **Config backup versioning** - Previously, config.yaml could be permanently lost during upgrades or crash loops with no way to recover. Timestamped backups are now created before every write, with deduplication to prevent churn during restarts, retaining the last 100 versions in /data/config-backups/
+
+To enable, set the `ENABLE_CONFIG_BACKUP=true` environment variable and restart your container:
+
+```bash
+docker run -e ENABLE_CONFIG_BACKUP=true ...
+```
+
+To verify, check that backup files appear in /data/config-backups/ after a config change. If no files appear, confirm the environment variable is set and the container was restarted.
+
+### Preview: FSMv2 Communicator
+
+- **Fixed high memory usage on busy systems** - The cleanup routine retained state history for 24 hours, allowing hundreds of thousands of entries to accumulate in RAM -- the retention window is now 1 hour, reducing steady-state memory by roughly 95%. Requires `USE_FSMV2_MEMORY_CLEANUP=true`
+
+- **Fixed repeated "no workers in supervisor" error in logs** - The supervisor logged an error on every tick when the communicator temporarily had no workers during a restart cycle -- it now skips the tick and self-heals when workers return. Requires `USE_FSMV2_TRANSPORT=true`
+
+- **Fixed potential crash when resetting transport** - A nil-pointer panic could occur in ResetTransportAction under specific timing conditions -- the action now safely handles nil state. Requires `USE_FSMV2_TRANSPORT=true`
+
 ## [0.44.8]
 
 If you enabled the FSMv2 communicator preview (introduced in v0.44.5), this release fixes three issues that could cause your instance to use a lot of memory, go offline, or restart unexpectedly. We strongly recommend upgrading.
