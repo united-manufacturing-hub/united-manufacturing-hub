@@ -118,7 +118,7 @@ func parseHistogramCount(metricsBody, metricName, component, instance string) (f
 }
 
 // printAllReconcileDurations prints all reconcile duration histogram bucket data for debugging.
-func printAllReconcileDurations(metricsBody string, _ float64) {
+func printAllReconcileDurations(metricsBody string) {
 	lines := strings.Split(metricsBody, "\n")
 
 	GinkgoWriter.Printf("\nReconcile duration histogram buckets:\n")
@@ -155,7 +155,7 @@ func checkWhetherMetricsHealthy(body string, enforceP99ReconcileTime bool, enfor
 	}
 
 	// Print all reconcile durations over threshold for debugging
-	printAllReconcileDurations(body, 20.0)
+	printAllReconcileDurations(body)
 
 	if err := checkReconcileTimeThresholds(body, enforceP99ReconcileTime, enforceP95ReconcileTime); err != nil {
 		errors = append(errors, err)

@@ -6,6 +6,8 @@ This release simplifies S7 addressing and fixes three edge cases in the Manageme
 
 ### Improvements
 
+- **Reduced memory usage for reconcile metrics** - Previously, reconcile timing used Prometheus SummaryVec which accumulated quantile data in memory, consuming up to 569 MB of heap on busy instances. Now uses HistogramVec with fixed buckets, reducing heap usage by ~75% and container memory by ~65%
+
 - **Simplified S7 address format for non-Data Block memory areas** - Previously, S7 addresses for PE, PA, MK, C, and T areas required a block number that served no function. You can now write `PE.X0.0` instead of `PE0.X0.0`. The old format still works but logs a deprecation warning and will be removed in a future version. Data Block addresses (`DB1.DW20`) are unchanged
 
 ### Fixes

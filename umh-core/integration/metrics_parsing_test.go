@@ -133,6 +133,18 @@ umh_core_reconcile_starved_total_seconds 3`
 				"umh_core_reconcile_duration_milliseconds", "90", "non_existent", "component")
 			Expect(found).To(BeFalse(), "Should not find a non-existent component")
 		})
+
+		It("should return false for a non-existent bucket boundary", func() {
+			_, found := parseHistogramBucket(testMetrics,
+				"umh_core_reconcile_duration_milliseconds", "999", "control_loop", "main")
+			Expect(found).To(BeFalse(), "Should not find le=999 bucket")
+		})
+
+		It("should return false for empty metrics string", func() {
+			_, found := parseHistogramBucket("",
+				"umh_core_reconcile_duration_milliseconds", "90", "control_loop", "main")
+			Expect(found).To(BeFalse(), "Should not find anything in empty metrics")
+		})
 	})
 
 	Describe("parseHistogramCount", Label("integration"), func() {
@@ -146,6 +158,12 @@ umh_core_reconcile_starved_total_seconds 3`
 				"umh_core_reconcile_duration_milliseconds", "base_fsm_manager", "S6ManagerCore")
 			Expect(found).To(BeTrue(), "Should find the count for base_fsm_manager/S6ManagerCore")
 			Expect(s6Count).To(BeNumerically("==", 50), "Should parse the S6 manager count correctly")
+		})
+
+		It("should return false when _count metric is missing", func() {
+			_, found := parseHistogramCount(testMetrics,
+				"umh_core_reconcile_duration_milliseconds", "non_existent", "instance")
+			Expect(found).To(BeFalse(), "Should not find count for non-existent component")
 		})
 	})
 
@@ -224,6 +242,18 @@ umh_core_reconcile_starved_total_seconds 3`
 				}
 			}
 			Expect(foundReconcileTimeError).To(BeTrue(), "Should have caught the reconcile time error")
+		})
+	})
+
+	Describe("checkReconcileTimeThresholds", Label("integration"), func() {
+		It("should return error when total count is zero", func() {
+			zeroCountMetrics := strings.ReplaceAll(testMetrics,
+				"umh_core_reconcile_duration_milliseconds_count{component=\"control_loop\",instance=\"main\"} 100",
+				"umh_core_reconcile_duration_milliseconds_count{component=\"control_loop\",instance=\"main\"} 0")
+
+			err := checkReconcileTimeThresholds(zeroCountMetrics, true, false)
+			Expect(err).To(HaveOccurred(), "Should return error when count is zero")
+			Expect(err.Error()).To(ContainSubstring("zero"), "Error should mention zero count")
 		})
 	})
 })
