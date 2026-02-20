@@ -50,7 +50,8 @@ const (
 	DefaultConfigPath = "/data/config.yaml"
 
 	// configManagerHierarchyPath is the Sentry hierarchy path for all config manager logs.
-	configManagerHierarchyPath = "fsmv1/ConfigManager"
+	// Uses dot separator: ParseHierarchyPath splits FSMv1 paths on "." (not "/").
+	configManagerHierarchyPath = "fsmv1.ConfigManager"
 )
 
 // singleton instance
@@ -1198,14 +1199,14 @@ func (m *FileConfigManager) createConfigBackup(ctx context.Context) {
 		return
 	}
 
-	if latest := m.getLatestBackupContent(ctx); latest != nil && bytes.Equal(content, latest) {
-		return
-	}
-
 	if err := m.fsService.EnsureDirectory(ctx, constants.ConfigBackupDir); err != nil {
 		m.logger.SentryWarn(deps.FeatureFSMv1ConfigManager, configManagerHierarchyPath,
 			"config backup: failed to create backup directory", deps.Err(err))
 
+		return
+	}
+
+	if latest := m.getLatestBackupContent(ctx); latest != nil && bytes.Equal(content, latest) {
 		return
 	}
 
