@@ -22,7 +22,9 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -150,6 +152,8 @@ type FileConfigManager struct {
 	// ---------- background refresh state ----------
 	refreshMu sync.Mutex // prevents concurrent background refreshes
 
+	// backupEnabled controls whether config backups are created before writes.
+	backupEnabled bool
 }
 
 // NewFileConfigManager creates a new FileConfigManager
@@ -516,6 +520,11 @@ func (m *FileConfigManagerWithBackoff) GetFileSystemService() filesystem.Service
 	return m.configManager.GetFileSystemService()
 }
 
+// SetConfigBackupEnabled controls whether config backups are created before writes.
+func (m *FileConfigManagerWithBackoff) SetConfigBackupEnabled(enabled bool) {
+	m.configManager.backupEnabled = enabled
+}
+
 // writeConfig writes the config to the file
 // it should not be exposed or used outside of the config manager, due to potential race conditions.
 func (m *FileConfigManager) writeConfig(ctx context.Context, config FullConfig) error {
@@ -530,6 +539,8 @@ func (m *FileConfigManager) writeConfig(ctx context.Context, config FullConfig) 
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
+
+	m.createConfigBackup(ctx)
 
 	// Create the directory if it doesn't exist
 	dir := filepath.Dir(m.configPath)
@@ -1078,6 +1089,8 @@ func (m *FileConfigManager) WriteYAMLConfigFromString(ctx context.Context, confi
 		}
 	}
 
+	m.createConfigBackup(ctx)
+
 	// Create the directory if it doesn't exist
 	dir := filepath.Dir(m.configPath)
 	if err := m.fsService.EnsureDirectory(ctx, dir); err != nil {
@@ -1133,4 +1146,132 @@ func (m *FileConfigManagerWithBackoff) WriteYAMLConfigFromString(ctx context.Con
 	}
 
 	return m.configManager.WriteYAMLConfigFromString(ctx, configStr, expectedModTime)
+}
+
+// createConfigBackup creates a timestamped backup of the current config file.
+// It skips backup creation if the content is identical to the latest backup
+// (prevents backup spam during crash loops).
+// All operations are best-effort: errors are logged but never returned or panicked.
+func (m *FileConfigManager) createConfigBackup(ctx context.Context) {
+	if !m.backupEnabled {
+		return
+	}
+
+	exists, err := m.fsService.FileExists(ctx, m.configPath)
+	if err != nil || !exists {
+		if err != nil {
+			m.logger.Warnf("config backup: failed to check if config exists: %v", err)
+		}
+
+		return
+	}
+
+	content, err := m.fsService.ReadFile(ctx, m.configPath)
+	if err != nil {
+		m.logger.Warnf("config backup: failed to read config file: %v", err)
+
+		return
+	}
+
+	if latest := m.getLatestBackupContent(ctx); latest != nil && bytes.Equal(content, latest) {
+		return
+	}
+
+	if err := m.fsService.EnsureDirectory(ctx, constants.ConfigBackupDir); err != nil {
+		m.logger.Warnf("config backup: failed to create backup directory: %v", err)
+
+		return
+	}
+
+	filename := time.Now().UTC().Format("20060102T150405.000000000Z") + ".yaml"
+	backupPath := filepath.Join(constants.ConfigBackupDir, filename)
+
+	if err := m.fsService.WriteFile(ctx, backupPath, content, 0666); err != nil {
+		m.logger.Warnf("config backup: failed to write backup file: %v", err)
+
+		return
+	}
+
+	m.cleanupOldBackups(ctx)
+}
+
+// getLatestBackupContent returns the content of the most recent backup file,
+// or nil if no backups exist or the directory is unreadable.
+func (m *FileConfigManager) getLatestBackupContent(ctx context.Context) []byte {
+	entries, err := m.fsService.ReadDir(ctx, constants.ConfigBackupDir)
+	if err != nil {
+		m.logger.Warnf("config backup: failed to read backup directory: %v", err)
+
+		return nil
+	}
+
+	var yamlFiles []string
+
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+
+		name := e.Name()
+		if !strings.HasSuffix(name, ".yaml") {
+			continue
+		}
+
+		yamlFiles = append(yamlFiles, name)
+	}
+
+	if len(yamlFiles) == 0 {
+		return nil
+	}
+
+	sort.Strings(yamlFiles)
+	latest := yamlFiles[len(yamlFiles)-1]
+
+	data, err := m.fsService.ReadFile(ctx, filepath.Join(constants.ConfigBackupDir, latest))
+	if err != nil {
+		m.logger.Warnf("config backup: failed to read latest backup file: %v", err)
+
+		return nil
+	}
+
+	return data
+}
+
+// cleanupOldBackups removes the oldest backup files when the total count
+// exceeds ConfigBackupMaxEntries.
+func (m *FileConfigManager) cleanupOldBackups(ctx context.Context) {
+	entries, err := m.fsService.ReadDir(ctx, constants.ConfigBackupDir)
+	if err != nil {
+		m.logger.Warnf("config backup cleanup: failed to read backup directory: %v", err)
+
+		return
+	}
+
+	var yamlFiles []string
+
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+
+		name := e.Name()
+		if !strings.HasSuffix(name, ".yaml") {
+			continue
+		}
+
+		yamlFiles = append(yamlFiles, name)
+	}
+
+	if len(yamlFiles) <= constants.ConfigBackupMaxEntries {
+		return
+	}
+
+	sort.Strings(yamlFiles)
+
+	toRemove := yamlFiles[:len(yamlFiles)-constants.ConfigBackupMaxEntries]
+	for _, name := range toRemove {
+		if err := m.fsService.Remove(ctx, filepath.Join(constants.ConfigBackupDir, name)); err != nil {
+			m.logger.Warnf("config backup cleanup: failed to remove %s: %v", name, err)
+		}
+	}
 }

@@ -94,6 +94,15 @@ func main() {
 		return
 	}
 
+	// Config backup feature flag: must be set before LoadConfigWithEnvOverrides,
+	// which writes config on startup and should back up the pre-write state.
+	v, err := env.GetAsBool("ENABLE_CONFIG_BACKUP", false, false)
+	if err != nil {
+		log.Warnf("Failed to parse ENABLE_CONFIG_BACKUP: %v", err)
+	}
+
+	configManager.SetConfigBackupEnabled(v)
+
 	// Load or create configuration with environment variable overrides
 	// This loads the config file if it exists, applies any environment variables as overrides,
 	// and persists the result back to the config file. See detailed docs in config.LoadConfigWithEnvOverrides.
@@ -107,7 +116,7 @@ func main() {
 	// FSMv2 feature flags: read directly from env vars, not persisted to config.yaml.
 	// These bypass the config manager intentionally — they are temporary migration flags
 	// that will be replaced when the config manager becomes an FSMv2 worker.
-	v, err := env.GetAsBool("USE_FSMV2_TRANSPORT", false, false)
+	v, err = env.GetAsBool("USE_FSMV2_TRANSPORT", false, false)
 	if err != nil {
 		log.Warnf("Failed to parse USE_FSMV2_TRANSPORT: %v", err)
 	}
