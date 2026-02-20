@@ -90,13 +90,16 @@ var _ = Describe("ResetTransportAction", func() {
 			Expect(dependencies.RetryTracker().ShouldReset(5)).To(BeFalse(), "should NOT trigger reset at 6 errors")
 		})
 
-		// Note: We removed the "nil transport" test case because transport is now
-		// GUARANTEED to be non-nil when ResetTransportAction executes:
-		// - ResetTransportAction is ONLY called from RecoveringState
-		// - RecoveringState is only reachable AFTER SyncingState
-		// - SyncingState is only reachable AFTER TryingToAuthenticateState
-		// - TryingToAuthenticateState runs AuthenticateAction which creates the transport
-		// Therefore, testing nil transport is testing an impossible scenario.
+		It("should return error when transport is nil instead of panicking", func() {
+			ctx := context.Background()
+			identity := deps.Identity{ID: "test-nil-transport", WorkerType: "communicator"}
+			depsWithNilTransport := communicator.NewCommunicatorDependencies(nil, logger, nil, identity)
+
+			err := act.Execute(ctx, depsWithNilTransport)
+
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("transport is nil"))
+		})
 	})
 })
 

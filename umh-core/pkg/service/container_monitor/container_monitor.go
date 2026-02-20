@@ -26,9 +26,9 @@ import (
 
 	"encoding/hex"
 
-	"github.com/shirou/gopsutil/v3/cpu"
-	"github.com/shirou/gopsutil/v3/disk"
-	"github.com/shirou/gopsutil/v3/mem"
+	"github.com/shirou/gopsutil/v4/cpu"
+	"github.com/shirou/gopsutil/v4/disk"
+	"github.com/shirou/gopsutil/v4/mem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
@@ -153,7 +153,7 @@ func (c *ContainerMonitorService) GetStatus(ctx context.Context) (*ServiceInfo, 
 		status.OverallHealth = models.Degraded
 	} else {
 		// Calculate CPU percentage against effective cores (cgroup limit if available)
-		// 
+		//
 		// NOTE: CPU percentage is fundamentally misleading for understanding performance:
 		// 1. In containers, throttling matters more than usage percentage
 		// 2. CPU % doesn't scale linearly due to hyperthreading, turbo boost, etc.
@@ -169,7 +169,7 @@ func (c *ContainerMonitorService) GetStatus(ctx context.Context) (*ServiceInfo, 
 			// Fall back to host cores if cgroup info unavailable
 			effectiveCores = float64(cpuStat.CoreCount)
 		}
-		
+
 		if effectiveCores > 0 {
 			cpuPercent := (cpuStat.TotalUsageMCpu / 1000.0) / effectiveCores * 100.0
 
@@ -254,17 +254,17 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 
 	// Get cgroup info for throttling and limits
 	cgroupInfo, cgroupErr := c.getCgroupCPUInfo(ctx)
-	
+
 	// Default to Active health
 	category := models.Active
 	message := "CPU utilization normal"
-	
+
 	// Check for throttling - only if cgroupInfo is not nil
 	isThrottled := cgroupErr == nil && cgroupInfo != nil && cgroupInfo.IsThrottled
 
 	if usagePercent >= constants.CPUHighThresholdPercent || isThrottled {
 		category = models.Degraded
-		
+
 		if isThrottled && cgroupInfo != nil {
 			message = fmt.Sprintf("CPU throttled (%.1f%% periods throttled)", cgroupInfo.ThrottleRatio*100)
 		} else {
@@ -274,7 +274,7 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 		// Warning level but not degraded
 		message = "CPU utilization warning"
 	}
-	
+
 	// Log throttling warnings
 	if isThrottled && cgroupInfo != nil {
 		c.logger.Warnf("CPU throttling detected: %.1f%% of periods throttled", cgroupInfo.ThrottleRatio*100)
@@ -290,7 +290,7 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 		TotalUsageMCpu: usageMCores,
 		CoreCount:      coreCount,
 	}
-	
+
 	// Add cgroup info if available
 	if cgroupErr == nil {
 		cpuStat.CgroupCores = cgroupInfo.QuotaCores
@@ -304,7 +304,7 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 func (c *ContainerMonitorService) getRawCPUMetrics(ctx context.Context) (usageMCores float64, coreCount int, usagePercent float64, err error) {
 	// Try to get cgroup info first for accurate container limits
 	cgroupInfo, cgroupErr := c.getCgroupCPUInfo(ctx)
-	
+
 	// Get actual CPU usage
 	usagePercentages, err := cpu.PercentWithContext(ctx, 0, false)
 	if err != nil {
@@ -327,9 +327,9 @@ func (c *ContainerMonitorService) getRawCPUMetrics(ctx context.Context) (usageMC
 			effectiveCores = 0.1
 		}
 	}
-	
+
 	coreCount = runtime.NumCPU() // Always report host cores for compatibility
-	
+
 	// Convert usage percent to mCPU based on effective cores
 	// This gives us a more accurate representation when cgroups limit CPU
 	usageCores := (usagePercent / 100.0) * effectiveCores
