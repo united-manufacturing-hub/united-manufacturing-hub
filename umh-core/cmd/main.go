@@ -90,6 +90,9 @@ func main() {
 	configManager, err := config.NewFileConfigManagerWithBackoff()
 	if err != nil {
 		sentry.ReportIssuef(sentry.IssueTypeFatal, log, "Failed to create config manager: %w", err)
+		log.Errorf("Sleeping 60s before exit to rate-limit restart loop (ENG-4369)")
+		sentry.Flush(5 * time.Second)
+		time.Sleep(60 * time.Second)
 		cancel()
 
 		return
@@ -110,6 +113,9 @@ func main() {
 	configData, err := config.LoadConfigWithEnvOverrides(ctx, configManager, log)
 	if err != nil {
 		sentry.ReportIssuef(sentry.IssueTypeFatal, log, "Failed to load config: %w", err)
+		log.Errorf("Sleeping 60s before exit to rate-limit restart loop (ENG-4369)")
+		sentry.Flush(5 * time.Second)
+		time.Sleep(60 * time.Second)
 
 		return
 	}
@@ -142,6 +148,9 @@ func main() {
 	// This is particularly important when using /tmp/umh-core/services (the default)
 	if err := ensureS6RepositoryDirectory(log); err != nil {
 		sentry.ReportIssuef(sentry.IssueTypeFatal, log, "Failed to ensure S6 repository directory: %w", err)
+		log.Errorf("Sleeping 60s before exit to rate-limit restart loop (ENG-4369)")
+		sentry.Flush(5 * time.Second)
+		time.Sleep(60 * time.Second)
 
 		return
 	}
