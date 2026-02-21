@@ -424,8 +424,8 @@ var _ = Describe("NmapInstance FSM", func() {
 			if mockService.ServiceStates[serviceName].NmapStatus.LastScan == nil {
 				mockService.ServiceStates[serviceName].NmapStatus.LastScan = &nmapsvc.NmapScanResult{}
 			}
-			// Set timestamp to 15 seconds ago (NmapScanTimeout is 10 seconds)
-			oldTimestamp := time.Now().Add(-15 * time.Second)
+			// Set timestamp to 65 seconds ago (NmapScanTimeout is 60 seconds)
+			oldTimestamp := time.Now().Add(-65 * time.Second)
 			mockService.ServiceStates[serviceName].NmapStatus.LastScan.Timestamp = oldTimestamp
 			mockService.ServiceStates[serviceName].NmapStatus.LastScan.PortResult.State = string(nmap.PortStateOpen)
 

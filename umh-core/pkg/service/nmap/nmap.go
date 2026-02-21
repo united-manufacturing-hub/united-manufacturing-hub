@@ -38,6 +38,18 @@ import (
 	"go.uber.org/zap"
 )
 
+// Pre-compiled regexes to avoid recompilation on every parseScanLogs / GetConfig call.
+var (
+	reConfigTarget = regexp.MustCompile(`nmap -n -Pn -p \d+ ([^ ]+)`)
+	reConfigPort   = regexp.MustCompile(`-p (\d+)`)
+	reTimestamp    = regexp.MustCompile(`NMAP_TIMESTAMP: (.+)`)
+	reDuration     = regexp.MustCompile(`NMAP_DURATION: ([0-9.]+)`)
+	// Generic port-state regex that matches any port number; the port is validated after the match.
+	rePortState = regexp.MustCompile(`(?i)(\d+)/tcp\s+(open|closed|filtered|unfiltered|open\|filtered|closed\|filtered)`)
+	reLatency   = regexp.MustCompile(`Host is up \(([0-9.]+)s latency\).`)
+	reError     = regexp.MustCompile(`(?im)^.*error.*$`)
+)
+
 // NmapService is the implementation of the INmapService interface.
 type NmapService struct {
 	s6Service        s6service.Service
@@ -84,27 +96,38 @@ func (s *NmapService) generateNmapScript(config *nmapserviceconfig.NmapServiceCo
 		return "", errors.New("config is nil")
 	}
 
-	// Build the nmap command - fixed format with -n -Pn -p PORT TARGET -v
-	nmapCmd := fmt.Sprintf("nmap -n -Pn -p %d %s -v", config.Port, config.Target)
+	// Build the nmap command - fixed format with -n -Pn -p PORT TARGET (no -v to reduce output)
+	nmapCmd := fmt.Sprintf("nmap -n -Pn -p %d %s", config.Port, config.Target)
 
-	// Create the script content with a loop that executes nmap every second
-	// Log output in a structured format that we can parse later
+	// Create the script content with a loop that executes nmap every second.
+	// Only write output when port state changes or every 30 iterations (heartbeat).
+	// This reduces log volume ~30x for stable connections, allowing HasNewData()
+	// to return false and skip expensive log parsing.
 	scriptContent := fmt.Sprintf(`#!/bin/sh
+LAST_STATE=""
+HEARTBEAT_COUNTER=0
 while true; do
-  echo "NMAP_SCAN_START"
-  echo "NMAP_TIMESTAMP: $(date -Iseconds)"
   SCAN_START=$(date +%%s.%%N)
-  echo "NMAP_COMMAND: %s"
-  %s
+  OUTPUT=$(%s 2>&1)
   EXIT_CODE=$?
   SCAN_END=$(date +%%s.%%N)
   SCAN_DURATION=$(echo "$SCAN_END - $SCAN_START" | bc)
-  echo "NMAP_EXIT_CODE: $EXIT_CODE"
-  echo "NMAP_DURATION: $SCAN_DURATION"
-  echo "NMAP_SCAN_END"
+  CURRENT_STATE=$(echo "$OUTPUT" | grep -ioE '%d/tcp[[:space:]]+(open|closed|filtered|unfiltered)' | awk '{print $2}')
+  if [ "$CURRENT_STATE" != "$LAST_STATE" ] || [ -z "$LAST_STATE" ] || [ $HEARTBEAT_COUNTER -ge 30 ]; then
+    echo "NMAP_SCAN_START"
+    echo "NMAP_TIMESTAMP: $(date -Iseconds)"
+    echo "NMAP_COMMAND: %s"
+    echo "$OUTPUT"
+    echo "NMAP_EXIT_CODE: $EXIT_CODE"
+    echo "NMAP_DURATION: $SCAN_DURATION"
+    echo "NMAP_SCAN_END"
+    LAST_STATE="$CURRENT_STATE"
+    HEARTBEAT_COUNTER=0
+  fi
+  HEARTBEAT_COUNTER=$((HEARTBEAT_COUNTER + 1))
   sleep %d
 done
-`, nmapCmd, nmapCmd, ScanIntervalSeconds)
+`, nmapCmd, config.Port, nmapCmd, ScanIntervalSeconds)
 
 	return scriptContent, nil
 }
@@ -154,14 +177,12 @@ func (s *NmapService) GetConfig(ctx context.Context, filesystemService filesyste
 	result := nmapserviceconfig.NmapServiceConfig{}
 
 	// Extract target
-	targetRegex := regexp.MustCompile(`nmap -n -Pn -p \d+ ([^ ]+) -v`)
-	if matches := targetRegex.FindStringSubmatch(string(scriptData)); len(matches) > 1 {
+	if matches := reConfigTarget.FindStringSubmatch(string(scriptData)); len(matches) > 1 {
 		result.Target = matches[1]
 	}
 
 	// Extract port
-	portRegex := regexp.MustCompile(`-p (\d+)`)
-	if matches := portRegex.FindStringSubmatch(string(scriptData)); len(matches) > 1 {
+	if matches := reConfigPort.FindStringSubmatch(string(scriptData)); len(matches) > 1 {
 		port, err := strconv.Atoi(matches[1])
 		if err == nil {
 			result.Port = uint16(port)
@@ -222,8 +243,7 @@ func (s *NmapService) parseScanLogs(logs []s6service.LogEntry, port uint16) *Nma
 	}
 
 	// Extract timestamp
-	timestampRegex := regexp.MustCompile(`NMAP_TIMESTAMP: (.+)`)
-	if matches := timestampRegex.FindStringSubmatch(scanOutput); len(matches) > 1 {
+	if matches := reTimestamp.FindStringSubmatch(scanOutput); len(matches) > 1 {
 		timestamp, err := time.Parse(time.RFC3339, matches[1])
 		if err == nil {
 			result.Timestamp = timestamp
@@ -231,27 +251,27 @@ func (s *NmapService) parseScanLogs(logs []s6service.LogEntry, port uint16) *Nma
 	}
 
 	// Extract duration
-	durationRegex := regexp.MustCompile(`NMAP_DURATION: ([0-9.]+)`)
-	if matches := durationRegex.FindStringSubmatch(scanOutput); len(matches) > 1 {
+	if matches := reDuration.FindStringSubmatch(scanOutput); len(matches) > 1 {
 		duration, err := strconv.ParseFloat(matches[1], 64)
 		if err == nil {
 			result.Metrics.ScanDuration = duration
 		}
 	}
 
-	// Extract port state
-	portStateRegex := regexp.MustCompile(`(?i)` + strconv.Itoa(int(port)) + `/tcp\s+(open|closed|filtered|unfiltered|open\|filtered|closed\|filtered)`)
-	if matches := portStateRegex.FindStringSubmatch(scanOutput); len(matches) > 1 {
-		result.PortResult.State = matches[1]
+	// Extract port state using the generic regex, then validate the port number.
+	if matches := rePortState.FindStringSubmatch(scanOutput); len(matches) > 2 {
+		matchedPort, convErr := strconv.Atoi(matches[1])
+		if convErr == nil && uint16(matchedPort) == port {
+			result.PortResult.State = matches[2]
+		} else {
+			result.PortResult.State = "unknown"
+		}
 	} else {
 		result.PortResult.State = "unknown"
 	}
 
 	// Extract latency (sample line: "Host is up (0.016s latency).")
-	latencyRegex := regexp.MustCompile(`Host is up \(([0-9.]+)s latency\).`)
-
-	matches := latencyRegex.FindStringSubmatch(scanOutput)
-	if len(matches) >= 2 {
+	if matches := reLatency.FindStringSubmatch(scanOutput); len(matches) >= 2 {
 		latency, err := strconv.ParseFloat(matches[1], 64)
 		if err == nil {
 			// Convert to milliseconds
@@ -261,8 +281,7 @@ func (s *NmapService) parseScanLogs(logs []s6service.LogEntry, port uint16) *Nma
 	}
 
 	// Extract errors if occurred (case-insensitive)
-	errorRegex := regexp.MustCompile(`(?im)^.*error.*$`)
-	if matches := errorRegex.FindString(scanOutput); matches != "" {
+	if matches := reError.FindString(scanOutput); matches != "" {
 		result.Error = matches
 	}
 

@@ -74,11 +74,14 @@ var _ = Describe("Nmap Service", func() {
 				script, err := service.generateNmapScript(config)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(script).To(ContainSubstring("#!/bin/sh"))
-				Expect(script).To(ContainSubstring("nmap -n -Pn -p 80 localhost -v"))
+				Expect(script).To(ContainSubstring("nmap -n -Pn -p 80 localhost"))
+				Expect(script).NotTo(ContainSubstring("-v")) // no verbose flag
 				Expect(script).To(ContainSubstring("NMAP_SCAN_START"))
 				Expect(script).To(ContainSubstring("NMAP_TIMESTAMP"))
 				Expect(script).To(ContainSubstring("NMAP_EXIT_CODE"))
 				Expect(script).To(ContainSubstring("NMAP_DURATION"))
+				Expect(script).To(ContainSubstring("LAST_STATE"))       // state-change filtering
+				Expect(script).To(ContainSubstring("HEARTBEAT_COUNTER")) // heartbeat
 				Expect(script).To(ContainSubstring("sleep 1"))
 			})
 		})
@@ -152,7 +155,7 @@ var _ = Describe("Nmap Service", func() {
 				// Verify the config was updated
 				s6cfg, err := service.GenerateS6ConfigForNmap(updatedCfg, s6Service)
 				Expect(err).NotTo(HaveOccurred())
-				Expect(s6cfg.ConfigFiles["run_nmap.sh"]).To(ContainSubstring("nmap -n -Pn -p 8080 example.com -v"))
+				Expect(s6cfg.ConfigFiles["run_nmap.sh"]).To(ContainSubstring("nmap -n -Pn -p 8080 example.com"))
 			})
 
 			It("should return error when service doesn't exist", func() {
@@ -196,18 +199,27 @@ var _ = Describe("Nmap Service", func() {
 			It("should extract config from script content", func() {
 				ctx := context.Background()
 				scriptContent := `#!/bin/sh
+LAST_STATE=""
+HEARTBEAT_COUNTER=0
 while true; do
-  echo "NMAP_SCAN_START"
-  echo "NMAP_TIMESTAMP: $(date -Iseconds)"
   SCAN_START=$(date +%s.%N)
-  echo "NMAP_COMMAND: nmap -n -Pn -p 8080 test-host.local -v"
-  nmap -n -Pn -p 8080 test-host.local -v
+  OUTPUT=$(nmap -n -Pn -p 8080 test-host.local 2>&1)
   EXIT_CODE=$?
   SCAN_END=$(date +%s.%N)
   SCAN_DURATION=$(echo "$SCAN_END - $SCAN_START" | bc)
-  echo "NMAP_EXIT_CODE: $EXIT_CODE"
-  echo "NMAP_DURATION: $SCAN_DURATION"
-  echo "NMAP_SCAN_END"
+  CURRENT_STATE=$(echo "$OUTPUT" | grep -ioE '8080/tcp[[:space:]]+(open|closed|filtered|unfiltered)' | awk '{print $2}')
+  if [ "$CURRENT_STATE" != "$LAST_STATE" ] || [ -z "$LAST_STATE" ] || [ $HEARTBEAT_COUNTER -ge 30 ]; then
+    echo "NMAP_SCAN_START"
+    echo "NMAP_TIMESTAMP: $(date -Iseconds)"
+    echo "NMAP_COMMAND: nmap -n -Pn -p 8080 test-host.local"
+    echo "$OUTPUT"
+    echo "NMAP_EXIT_CODE: $EXIT_CODE"
+    echo "NMAP_DURATION: $SCAN_DURATION"
+    echo "NMAP_SCAN_END"
+    LAST_STATE="$CURRENT_STATE"
+    HEARTBEAT_COUNTER=0
+  fi
+  HEARTBEAT_COUNTER=$((HEARTBEAT_COUNTER + 1))
   sleep 1
 done`
 

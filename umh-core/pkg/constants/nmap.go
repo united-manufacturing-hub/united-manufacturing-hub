@@ -29,5 +29,7 @@ const (
 	NmapReportTimeout = 10 * time.Second
 
 	// NmapScanTimeout is the timeout for the scan.
-	NmapScanTimeout = 10 * time.Second
+	// Set to 60s to accommodate the 30-iteration heartbeat interval in the nmap
+	// script (which only writes output on state change or every ~30s).
+	NmapScanTimeout = 60 * time.Second
 )
