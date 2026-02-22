@@ -71,6 +71,11 @@ type IDataFlowComponentService interface {
 
 	// ReconcileManager reconciles the DataFlowComponent manager with the actual state
 	ReconcileManager(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) (error, bool)
+
+	// GetLastConfigHash returns the xxhash of the last-read YAML config for the
+	// underlying benthos instance. Returns (0, false) if no config has been
+	// cached yet.
+	GetLastConfigHash(componentName string) (uint64, bool)
 }
 
 // ServiceInfo contains information about a DataFlowComponent service.
@@ -436,6 +441,12 @@ func (s *DataFlowComponentService) ReconcileManager(ctx context.Context, service
 		Tick:         snapshot.Tick,
 		SnapshotTime: snapshot.SnapshotTime,
 	}, services)
+}
+
+// GetLastConfigHash delegates to the underlying benthos service to return the
+// xxhash of the last-read YAML config for the given component.
+func (s *DataFlowComponentService) GetLastConfigHash(componentName string) (uint64, bool) {
+	return s.benthosService.GetLastConfigHash(s.getBenthosName(componentName))
 }
 
 // ServiceExists checks if a DataFlowComponent service exists.

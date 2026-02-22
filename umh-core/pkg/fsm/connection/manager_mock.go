@@ -22,7 +22,6 @@ import (
 	public_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/connection"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/nmap"
-	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 )
 
 func NewConnectionManagerWithMockedServices(name string) (*ConnectionManager, *connection.MockConnectionService) {
@@ -47,14 +46,6 @@ func NewConnectionManagerWithMockedServices(name string) (*ConnectionManager, *c
 		func(cfg config.ConnectionConfig) (public_fsm.FSMInstance, error) {
 			instance := NewConnectionInstance("/dev/null", cfg)
 			nmapMockService := nmap.NewMockNmapService()
-			s6MockService := s6svc.NewMockService()
-			s6MockService.ServiceExistsResult = true
-			s6MockService.StatusResult = s6svc.ServiceInfo{
-				Status: s6svc.ServiceUp,
-				Pid:    12345, // Fake PID
-				Uptime: 60,    // Fake uptime in seconds
-			}
-			nmapMockService.S6Service = s6MockService
 			mockSvc.NmapService = nmapMockService
 			instance.service = mockSvc
 

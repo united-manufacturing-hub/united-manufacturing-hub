@@ -1263,8 +1263,13 @@ func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsServ
 		return nil, fmt.Errorf("stat returned nil for log file: %s", logFile)
 	}
 
-	sys := fi.Sys().(*syscall.Stat_t) // on Linux / Alpine
-	size, ino := fi.Size(), sys.Ino
+	size := fi.Size()
+	var ino uint64
+	if sysVal := fi.Sys(); sysVal != nil {
+		if sys, ok := sysVal.(*syscall.Stat_t); ok {
+			ino = sys.Ino
+		}
+	}
 
 	// Check for rotation or truncation
 	var rotatedContent []byte
@@ -1435,8 +1440,13 @@ func (s *DefaultService) HasNewData(ctx context.Context, servicePath string, fsS
 		return false, fmt.Errorf("stat returned nil for log file: %s", logFile)
 	}
 
-	sys := fi.Sys().(*syscall.Stat_t)
-	size, ino := fi.Size(), sys.Ino
+	size := fi.Size()
+	var ino uint64
+	if sysVal := fi.Sys(); sysVal != nil {
+		if sys, ok := sysVal.(*syscall.Stat_t); ok {
+			ino = sys.Ino
+		}
+	}
 
 	// Inode changed means rotation — new data. Size grew means new bytes appended.
 	return ino != st.inode || size > st.offset, nil

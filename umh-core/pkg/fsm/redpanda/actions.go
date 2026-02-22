@@ -591,25 +591,52 @@ func (r *RedpandaInstance) IsRedpandaRunningWithoutErrors(currentTime time.Time,
 }
 
 // IsRedpandaLogsFine reports true when recent logs (within logWindow) have no
-// critical errors or warnings.
+// critical errors or warnings. Results are cached: if the log buffer hasn't
+// changed since the last call (same length, last-entry timestamp, and
+// transitionToRunningTime), the previous result is returned without re-scanning.
 //
 // It returns:
 //
 //	ok     – true when logs look clean, false otherwise.
 //	reason – empty when ok is true; otherwise the first offending log line.
 func (r *RedpandaInstance) IsRedpandaLogsFine(currentTime time.Time, logWindow time.Duration) (bool, string) {
-	logsFine, logEntry := r.service.IsLogsFine(r.PreviousObservedState.ServiceInfo.RedpandaStatus.Logs, currentTime, logWindow, r.transitionToRunningTime)
+	logs := r.PreviousObservedState.ServiceInfo.RedpandaStatus.Logs
+	logCount := len(logs)
+	var lastTS time.Time
+	if logCount > 0 {
+		lastTS = logs[logCount-1].Timestamp
+	}
+
+	// Cache hit: logs haven't changed and transitionToRunningTime is the same
+	if logCount == r.lastLogsFineLogCount && lastTS.Equal(r.lastLogsFineLastTS) && r.transitionToRunningTime.Equal(r.lastLogsFineTransitionToRunning) {
+		if r.lastLogsFineResult {
+			return true, ""
+		}
+		// Cached false — check if offending entry has aged out of window
+		if !r.lastLogsFineEntry.Timestamp.Add(logWindow).Before(currentTime) {
+			timeUntilClear := r.lastLogsFineEntry.Timestamp.Add(logWindow).Sub(currentTime)
+			return false, fmt.Sprintf("found error (clears in %v): %s",
+				timeUntilClear.Round(time.Second), r.lastLogsFineEntry.Content)
+		}
+		// Entry expired — need to re-scan (there may be other errors in window)
+	}
+
+	// Cache miss — full scan
+	logsFine, logEntry := r.service.IsLogsFine(logs, currentTime, logWindow, r.transitionToRunningTime)
+	r.lastLogsFineResult = logsFine
+	r.lastLogsFineEntry = logEntry
+	r.lastLogsFineLogCount = logCount
+	r.lastLogsFineLastTS = lastTS
+	r.lastLogsFineTransitionToRunning = r.transitionToRunningTime
+
 	if !logsFine {
 		timeUntilClear := logEntry.Timestamp.Add(logWindow).Sub(currentTime)
 		if timeUntilClear > 0 {
 			return false, fmt.Sprintf("found error (clears in %v): %s",
-				timeUntilClear.Round(time.Second),
-				logEntry.Content)
+				timeUntilClear.Round(time.Second), logEntry.Content)
 		}
-		// This shouldn't happen as IsLogsFine filters by time window, but keep as fallback
 		return false, "found error: " + logEntry.Content
 	}
-
 	return true, ""
 }
 

@@ -448,8 +448,8 @@ func (n *NmapInstance) reconcileRunningStates(ctx context.Context, services serv
 func (n *NmapInstance) isNmapHealthy(currentTime time.Time) bool {
 	status := n.ObservedState.ServiceInfo.NmapStatus
 
-	// If there is no LastScan and no Logs we consider Nmap to be unhealthy
-	if status.LastScan == nil && len(status.Logs) == 0 {
+	// If there is no LastScan we consider Nmap to be unhealthy
+	if status.LastScan == nil {
 		return false
 	}
 

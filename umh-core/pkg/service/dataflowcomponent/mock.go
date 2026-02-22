@@ -373,6 +373,11 @@ func (m *MockDataFlowComponentService) ForceRemoveDataFlowComponent(ctx context.
 	return m.ForceRemoveDataFlowComponentError
 }
 
+// GetLastConfigHash mocks returning the config hash. Always returns (0, false).
+func (m *MockDataFlowComponentService) GetLastConfigHash(componentName string) (uint64, bool) {
+	return 0, false
+}
+
 // ServiceExists mocks checking if a DataFlowComponent exists.
 func (m *MockDataFlowComponentService) ServiceExists(ctx context.Context, filesystemService filesystem.Service, componentName string) bool {
 	m.mu.Lock()

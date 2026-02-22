@@ -15,10 +15,13 @@
 package benthos
 
 import (
+	"time"
+
 	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
 	benthosserviceconfig "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
 	publicfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	benthossvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
+	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 )
 
 // Operational state constants (using internal_fsm compatible naming).
@@ -150,6 +153,17 @@ type BenthosInstance struct {
 	// healthChecksPassingSince tracks when health checks started passing continuously
 	// Used for debouncing health check status changes
 	healthChecksPassingSinceTick uint64
+
+	// IsLogsFine cache fields — avoid re-scanning unchanged log buffers every tick
+	lastLogsFineResult   bool
+	lastLogsFineEntry    s6service.LogEntry
+	lastLogsFineLogCount int
+	lastLogsFineLastTS   time.Time
+
+	// ConfigsEqual cache fields — skip expensive reflect.DeepEqual when nothing changed
+	configDirty            bool
+	lastObservedHash       uint64
+	lastConfigsEqualResult bool
 }
 
 // GetLastObservedState returns the last known state of the instance.

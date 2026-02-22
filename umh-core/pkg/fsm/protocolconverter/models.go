@@ -194,6 +194,18 @@ type ProtocolConverterInstance struct {
 	// that are updated at the beginning of Reconcile and then used to
 	// determine the next state
 	ObservedState ProtocolConverterObservedState
+
+	// Cache fields for BuildRuntimeConfig — only re-render when inputs change.
+	// This avoids expensive YAML marshal/template/unmarshal on every tick.
+	lastRenderedSpecConfig protocolconverterconfig.ProtocolConverterServiceConfigSpec
+	lastAgentLocation      map[string]string
+
+	// ConfigsEqualRuntime cache fields — skip expensive reflect.DeepEqual when nothing changed.
+	configDirty            bool
+	runtimeConfigChanged   bool
+	lastObservedReadHash   uint64
+	lastObservedWriteHash  uint64
+	lastConfigsEqualResult bool
 }
 
 // GetLastObservedState returns the last known state of the instance.

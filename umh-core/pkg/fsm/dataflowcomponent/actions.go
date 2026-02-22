@@ -230,7 +230,22 @@ func (d *DataflowComponentInstance) UpdateObservedStateOfInstance(ctx context.Co
 		}
 	}
 
-	if !dataflowcomponentserviceconfig.ConfigsEqual(d.config, d.ObservedState.ObservedDataflowComponentConfig) {
+	// Use hash-based caching to skip expensive ConfigsEqual when nothing changed
+	observedHash, hashOK := d.service.GetLastConfigHash(d.baseFSMInstance.GetID())
+	configChanged := true // assume changed unless we can prove otherwise
+	if hashOK && !d.configDirty && observedHash == d.lastObservedHash {
+		// Neither desired nor observed config changed — use cached result
+		configChanged = !d.lastConfigsEqualResult
+	} else {
+		// At least one side may have changed — do full comparison
+		equal := dataflowcomponentserviceconfig.ConfigsEqual(d.config, d.ObservedState.ObservedDataflowComponentConfig)
+		d.lastObservedHash = observedHash
+		d.configDirty = false
+		d.lastConfigsEqualResult = equal
+		configChanged = !equal
+	}
+
+	if configChanged {
 		// Check if the service exists before attempting to update
 		if d.service.ServiceExists(ctx, services.GetFileSystem(), d.baseFSMInstance.GetID()) {
 			d.baseFSMInstance.GetLogger().Debugf("Observed DataflowComponent config is different from desired config, updating Benthos configuration")

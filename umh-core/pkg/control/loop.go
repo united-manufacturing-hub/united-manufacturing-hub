@@ -41,8 +41,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/tiendc/go-deepcopy"
-
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/backoff"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
@@ -166,6 +164,14 @@ func NewControlLoop(configManager config.ConfigManager) *ControlLoop {
 // - Context cancelled: Clean shutdown
 // - Other errors: Abort the loop.
 func (c *ControlLoop) Execute(ctx context.Context) error {
+	// If the filesystem is buffered, do an initial full sync so the in-memory
+	// cache is populated before the first reconciliation tick.
+	if bufferedFs, ok := c.services.GetFileSystem().(*filesystem.BufferedService); ok {
+		if err := bufferedFs.SyncFromDisk(ctx); err != nil {
+			return fmt.Errorf("initial filesystem sync failed: %w", err)
+		}
+	}
+
 	ticker := time.NewTicker(c.tickerTime)
 	defer ticker.Stop()
 
@@ -280,14 +286,13 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 			Tick:         ticker,
 		}
 	} else {
-		// the new snapshot is a deep copy of the previous snapshot
-		err := deepcopy.Copy(&newSnapshot, prevSnapshot)
-		if err != nil {
-			sentry.ReportIssuef(sentry.IssueTypeError, c.logger, "Failed to deep copy snapshot: %v", err)
-
-			return fmt.Errorf("failed to deep copy snapshot: %w", err)
-		}
-
+		// Shallow struct copy — shares underlying map/slice pointers with prevSnapshot.
+		// This is safe because:
+		// 1. Managers receive the snapshot by value (Go copies the struct on call)
+		// 2. All manager Reconcile implementations only READ snapshot fields
+		// 3. After reconciliation, a fresh snapshot is built from scratch via GetManagerSnapshots()
+		// 4. The communicator gets its own deep copy via GetDeepCopySnapshot()
+		newSnapshot = *prevSnapshot
 		newSnapshot.Tick = ticker
 		newSnapshot.SnapshotTime = time.Now()
 	}
@@ -325,10 +330,11 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 	if c == nil {
 		return errors.New("service registry is nil, possible initialization failure")
 	}
-	// 4) If your filesystem service is a buffered FS, sync once per loop:
+	// 4) If your filesystem service is a buffered FS, sync writes every tick
+	//    and read from disk in batches to spread I/O evenly across ticks.
 	bufferedFs, ok := c.services.GetFileSystem().(*filesystem.BufferedService)
 	if ok {
-		// Step 1: Flush all pending writes to disk
+		// Step 1: Flush all pending writes to disk (every tick — don't lose data)
 		err = bufferedFs.SyncToDisk(ctx)
 		if err != nil {
 			sentry.ReportIssuef(sentry.IssueTypeError, c.logger, "Failed to sync S6 filesystem to disk: %v", err)
@@ -336,8 +342,11 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 			return fmt.Errorf("failed to sync S6 filesystem to disk: %w", err)
 		}
 
-		// Step 2: Read the filesystem from disk
-		err = bufferedFs.SyncFromDisk(ctx)
+		// Step 2: Read filesystem in batches — 1/N of file contents per tick.
+		// Directory tree walk happens every tick (detects new/removed services immediately).
+		// File content reading is spread across N ticks for constant I/O instead of bursts.
+		batchCount := constants.FilesystemSyncBatchCount
+		err = bufferedFs.SyncFromDiskPartial(ctx, int(ticker%uint64(batchCount)), batchCount)
 		if err != nil {
 			sentry.ReportIssuef(sentry.IssueTypeError, c.logger, "Failed to sync S6 filesystem from disk: %v", err)
 

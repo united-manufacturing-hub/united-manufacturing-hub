@@ -353,7 +353,12 @@ func (m *FileConfigManager) GetConfig(ctx context.Context, tick uint64) (FullCon
 	m.cacheMu.RLock()
 
 	if !m.cacheModTime.IsZero() && info.ModTime().Equal(m.cacheModTime) {
-		cfg := m.cacheConfig.Clone() // Use deep copy to prevent race conditions with slices/maps
+		// Return cached config directly without Clone(). The config flows read-only
+		// through the system: control loop uses shallow copy, managers pass by value,
+		// and the only mutator (benthos port injection) copies just its own slice.
+		// IMPORTANT: Callers MUST NOT mutate the returned config. If mutation is needed,
+		// copy the specific field being modified (see benthos/manager.go for example).
+		cfg := m.cacheConfig
 		m.cacheMu.RUnlock()
 
 		return cfg, nil
@@ -373,8 +378,9 @@ func (m *FileConfigManager) GetConfig(ctx context.Context, tick uint64) (FullCon
 
 	// always return the cached config while the background refresh is running
 	// this leads to the behavior that the config update always takes at least two ticks
+	// Return cached config without Clone — callers treat it as read-only.
 	m.cacheMu.RLock()
-	currentCacheConfig := m.cacheConfig.Clone()
+	currentCacheConfig := m.cacheConfig
 	cacheError := m.cacheError
 	m.cacheMu.RUnlock()
 	// checkk for empty config and return error if it is

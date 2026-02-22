@@ -132,6 +132,11 @@ type DataflowComponentInstance struct {
 	// that are updated at the beginning of Reconcile and then used to
 	// determine the next state
 	ObservedState DataflowComponentObservedState
+
+	// ConfigsEqual cache fields — skip expensive reflect.DeepEqual when nothing changed
+	configDirty            bool
+	lastObservedHash       uint64
+	lastConfigsEqualResult bool
 }
 
 // GetLastObservedState returns the last known state of the instance.

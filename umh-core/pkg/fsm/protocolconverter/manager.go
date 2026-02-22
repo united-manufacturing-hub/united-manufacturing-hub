@@ -82,6 +82,7 @@ func NewProtocolConverterManager(name string) *ProtocolConverterManager {
 			}
 
 			protocolConverterInstance.specConfig = cfg.ProtocolConverterServiceConfig
+			protocolConverterInstance.configDirty = true
 
 			return nil
 		},

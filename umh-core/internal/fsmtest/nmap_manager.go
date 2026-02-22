@@ -23,7 +23,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	nmapfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/nmap"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/nmap"
-	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
@@ -165,26 +164,6 @@ func SetupNmapServiceInManager(
 func CreateMockNmapManager(name string) (*nmapfsm.NmapManager, *nmap.MockNmapService) {
 	// Use the specialized constructor that sets up fully mocked services
 	manager, mockService := nmapfsm.NewNmapManagerWithMockedService(name)
-
-	// Set up the mock service to prevent real filesystem operations
-	s6MockService := mockService.S6Service.(*s6svc.MockService)
-
-	// Configure default responses to prevent real filesystem operations
-	s6MockService.CreateError = nil
-	s6MockService.RemoveError = nil
-	s6MockService.StartError = nil
-	s6MockService.StopError = nil
-	s6MockService.ForceRemoveError = nil
-
-	// Set up the mock to say services exist after creation
-	s6MockService.ServiceExistsResult = true
-
-	// Configure default successful statuses
-	s6MockService.StatusResult = s6svc.ServiceInfo{
-		Status: s6svc.ServiceUp,
-		Pid:    12345, // Fake PID
-		Uptime: 60,    // Fake uptime in seconds
-	}
 
 	return manager, mockService
 }

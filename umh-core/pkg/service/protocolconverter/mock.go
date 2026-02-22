@@ -696,3 +696,8 @@ func (m *MockProtocolConverterService) IsResourceLimited(snapshot fsm.SystemSnap
 	// For testing, always return false to allow bridge creation
 	return false, ""
 }
+
+// GetLastConfigHashes mocks returning config hashes. Always returns (0, 0, false).
+func (m *MockProtocolConverterService) GetLastConfigHashes(protConvName string) (uint64, uint64, bool) {
+	return 0, 0, false
+}

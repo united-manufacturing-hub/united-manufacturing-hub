@@ -29,7 +29,6 @@ const (
 	NmapReportTimeout = 10 * time.Second
 
 	// NmapScanTimeout is the timeout for the scan.
-	// Set to 60s to accommodate the 30-iteration heartbeat interval in the nmap
-	// script (which only writes output on state change or every ~30s).
-	NmapScanTimeout = 60 * time.Second
+	// The TCP check goroutine updates LastScan.Timestamp every 1s, so 10s is generous.
+	NmapScanTimeout = 10 * time.Second
 )

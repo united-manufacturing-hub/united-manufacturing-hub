@@ -527,8 +527,22 @@ func (b *BenthosInstance) UpdateObservedStateOfInstance(ctx context.Context, ser
 	}
 
 	// Detect a config change - but let the S6 manager handle the actual reconciliation
-	// Use new ConfigsEqual function that handles Benthos defaults properly
-	if !benthosserviceconfig.ConfigsEqual(b.config, b.ObservedState.ObservedBenthosServiceConfig) {
+	// Use hash-based caching to skip expensive ConfigsEqual when nothing changed
+	observedHash, hashOK := b.service.GetLastConfigHash(b.baseFSMInstance.GetID())
+	configChanged := true // assume changed unless we can prove otherwise
+	if hashOK && !b.configDirty && observedHash == b.lastObservedHash {
+		// Neither desired nor observed config changed — use cached result
+		configChanged = !b.lastConfigsEqualResult
+	} else {
+		// At least one side may have changed — do full comparison
+		equal := benthosserviceconfig.ConfigsEqual(b.config, b.ObservedState.ObservedBenthosServiceConfig)
+		b.lastObservedHash = observedHash
+		b.configDirty = false
+		b.lastConfigsEqualResult = equal
+		configChanged = !equal
+	}
+
+	if configChanged {
 		// Check if the service exists before attempting to update
 		if b.service.ServiceExists(ctx, services.GetFileSystem(), b.baseFSMInstance.GetID()) {
 			b.baseFSMInstance.GetLogger().Debugf("Observed Benthos config is different from desired config, updating S6 configuration")
@@ -737,25 +751,51 @@ func (b *BenthosInstance) IsBenthosRunningForSomeTimeWithoutErrors(currentTime t
 }
 
 // IsBenthosLogsFine reports true when no suspicious entries are found in the
-// recent log window.
+// recent log window. Results are cached: if the log buffer hasn't changed
+// since the last call (same length and last-entry timestamp), the previous
+// result is returned without re-scanning.
 //
 // It returns:
 //
 //	ok     – true when logs look clean, false otherwise.
 //	reason – empty when ok is true; otherwise the first offending log line.
 func (b *BenthosInstance) IsBenthosLogsFine(currentTime time.Time, logWindow time.Duration) (bool, string) {
-	logsFine, logEntry := b.service.IsLogsFine(b.ObservedState.ServiceInfo.BenthosStatus.BenthosLogs, currentTime, logWindow)
+	logs := b.ObservedState.ServiceInfo.BenthosStatus.BenthosLogs
+	logCount := len(logs)
+	var lastTS time.Time
+	if logCount > 0 {
+		lastTS = logs[logCount-1].Timestamp
+	}
+
+	// Cache hit: logs haven't changed since last scan
+	if logCount == b.lastLogsFineLogCount && lastTS.Equal(b.lastLogsFineLastTS) {
+		if b.lastLogsFineResult {
+			return true, ""
+		}
+		// Cached false — check if offending entry has aged out of window
+		if !b.lastLogsFineEntry.Timestamp.Add(logWindow).Before(currentTime) {
+			timeUntilClear := b.lastLogsFineEntry.Timestamp.Add(logWindow).Sub(currentTime)
+			return false, fmt.Sprintf("found error (clears in %v): %s",
+				timeUntilClear.Round(time.Second), b.lastLogsFineEntry.Content)
+		}
+		// Entry expired — need to re-scan (there may be other errors in window)
+	}
+
+	// Cache miss — full scan
+	logsFine, logEntry := b.service.IsLogsFine(logs, currentTime, logWindow)
+	b.lastLogsFineResult = logsFine
+	b.lastLogsFineEntry = logEntry
+	b.lastLogsFineLogCount = logCount
+	b.lastLogsFineLastTS = lastTS
+
 	if !logsFine {
 		timeUntilClear := logEntry.Timestamp.Add(logWindow).Sub(currentTime)
 		if timeUntilClear > 0 {
 			return false, fmt.Sprintf("found error (clears in %v): %s",
-				timeUntilClear.Round(time.Second),
-				logEntry.Content)
+				timeUntilClear.Round(time.Second), logEntry.Content)
 		}
-		// This shouldn't happen as IsLogsFine filters by time window, but keep as fallback
 		return false, "found error: " + logEntry.Content
 	}
-
 	return true, ""
 }
 

@@ -50,6 +50,12 @@ const (
 
 	RingBufferCapacity = 3
 
+	// FilesystemSyncBatchCount controls how many batches to split SyncFromDisk into.
+	// Each tick reads 1/N of file contents while walking the full directory tree.
+	// This spreads I/O evenly across ticks instead of one burst every Nth tick.
+	// All files are refreshed within N ticks (N * 100ms = 500ms at default tick rate).
+	FilesystemSyncBatchCount = 5
+
 	// MaxConcurrentFSMOperations defines the maximum number of concurrent FSM operations
 	// This applies to both manager-level and instance-level parallel execution
 	// Set high for I/O-bound operations like filesystem access, health checks, and network calls.

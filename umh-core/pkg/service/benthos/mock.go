@@ -481,6 +481,11 @@ func (m *MockBenthosService) UpdateBenthosInS6Manager(ctx context.Context, files
 	return m.UpdateBenthosInS6ManagerError
 }
 
+// GetLastConfigHash mocks returning the config hash. Always returns (0, false).
+func (m *MockBenthosService) GetLastConfigHash(benthosName string) (uint64, bool) {
+	return 0, false
+}
+
 // ServiceExists mocks checking if a Benthos service exists.
 func (m *MockBenthosService) ServiceExists(ctx context.Context, filesystemService filesystem.Service, serviceName string) bool {
 	m.mu.Lock()

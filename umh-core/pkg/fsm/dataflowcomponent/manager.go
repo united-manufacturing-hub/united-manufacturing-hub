@@ -82,6 +82,7 @@ func NewDataflowComponentManager(name string) *DataflowComponentManager {
 			}
 
 			dataflowComponentInstance.config = cfg.DataFlowComponentServiceConfig
+			dataflowComponentInstance.configDirty = true
 
 			return nil
 		},

@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"hash/fnv"
 	"io"
 	"os"
 	"os/user"
@@ -135,6 +136,9 @@ func ReadDirectoryTree(ctx context.Context, service Service, root string) (*Dire
 
 		info, err := entry.Info()
 		if err != nil {
+			if os.IsNotExist(err) {
+				continue // File disappeared between ReadDir and Info — skip it
+			}
 			return nil, fmt.Errorf("failed to get file info: %w", err)
 		}
 
@@ -150,6 +154,9 @@ func ReadDirectoryTree(ctx context.Context, service Service, root string) (*Dire
 			// Get the target of the symlink
 			target, err := os.Readlink(fullPath)
 			if err != nil {
+				if os.IsNotExist(err) {
+					continue // Symlink disappeared — skip it
+				}
 				return nil, fmt.Errorf("failed to read symlink %s: %w", fullPath, err)
 			}
 
@@ -161,6 +168,9 @@ func ReadDirectoryTree(ctx context.Context, service Service, root string) (*Dire
 			// Check if the target exists
 			targetInfo, err := os.Stat(target)
 			if err != nil {
+				if os.IsNotExist(err) {
+					continue // Symlink target disappeared — skip it
+				}
 				return nil, fmt.Errorf("failed to stat symlink target %s: %w", target, err)
 			}
 
@@ -187,6 +197,56 @@ func ReadDirectoryTree(ctx context.Context, service Service, root string) (*Dire
 	}
 
 	return dc, nil
+}
+
+// walkDirectoryNames performs a lightweight recursive directory walk that only returns
+// paths and whether each entry is a directory. It uses DirEntry.Type() (from getdents,
+// no lstat syscall) to determine types, only calling os.Stat for symlinks.
+// This is much cheaper than ReadDirectoryTree since it avoids lstat on regular files.
+func walkDirectoryNames(root string) (map[string]bool, error) {
+	// result maps absolute path -> isDir
+	result := make(map[string]bool)
+
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return result, nil
+		}
+		return nil, fmt.Errorf("failed to read directory %s: %w", root, err)
+	}
+
+	for _, entry := range entries {
+		fullPath := filepath.Join(root, entry.Name())
+		entryType := entry.Type()
+		isDir := entryType.IsDir()
+		isSymlink := entryType&os.ModeSymlink != 0
+
+		if isSymlink {
+			// Need to resolve symlink target to know if it's a directory
+			targetInfo, err := os.Stat(fullPath) // follows symlink
+			if err != nil {
+				if os.IsNotExist(err) {
+					continue
+				}
+				return nil, fmt.Errorf("failed to stat symlink %s: %w", fullPath, err)
+			}
+			isDir = targetInfo.IsDir()
+		}
+
+		result[fullPath] = isDir
+
+		if isDir {
+			subResult, err := walkDirectoryNames(fullPath)
+			if err != nil {
+				return nil, err
+			}
+			for k, v := range subResult {
+				result[k] = v
+			}
+		}
+	}
+
+	return result, nil
 }
 
 // BufferedService implements the Service interface in a "buffered" fashion.
@@ -229,6 +289,10 @@ type BufferedService struct {
 
 	// slowReadThreshold is the duration threshold to log slow file reads
 	slowReadThreshold time.Duration
+
+	// lastDiscoveredPaths caches the result of the last full directory walk.
+	// Maps absolute path -> isDir. Used to avoid re-walking unchanged directories.
+	lastDiscoveredPaths map[string]bool
 
 	// mu guards all maps below
 	mu sync.Mutex
@@ -315,7 +379,12 @@ func NewBufferedServiceWithDefaultAppendDirs(base Service, syncDirectories []str
 }
 
 // Chown changes the owner and group ids of the named file.
+// For paths outside synced directories, delegates directly to the base filesystem.
 func (bs *BufferedService) Chown(ctx context.Context, path string, username string, groupname string) error {
+	if !bs.isInSyncDir(path) {
+		return bs.base.Chown(ctx, path, username, groupname)
+	}
+
 	bs.mu.Lock()
 	defer bs.mu.Unlock()
 
@@ -432,6 +501,18 @@ func (bs *BufferedService) SetAppendOnlyDirs(dirs []string) {
 	defer bs.mu.Unlock()
 
 	bs.appendOnlyDirs = dirs
+}
+
+// isInSyncDir checks if a path falls under one of the synced directories.
+// Paths outside synced directories are delegated directly to the base filesystem.
+func (bs *BufferedService) isInSyncDir(path string) bool {
+	for _, dir := range bs.syncDirs {
+		if path == dir || strings.HasPrefix(path, dir+string(os.PathSeparator)) {
+			return true
+		}
+	}
+
+	return false
 }
 
 // isInAppendOnlyDir checks if a path is in one of the append-only directories.
@@ -947,6 +1028,335 @@ func (bs *BufferedService) SyncFromDisk(ctx context.Context) error {
 	return nil
 }
 
+// SyncFromDiskPartial reads the directory tree (discovering new/removed files) but only
+// reads file contents for a subset of files determined by batchIndex/totalBatches.
+// Files not in this batch keep their existing cached content. This spreads I/O across
+// ticks for constant CPU usage instead of periodic bursts.
+//
+// Call with batchIndex cycling 0..totalBatches-1 across ticks to refresh all files
+// within totalBatches ticks. New and removed files are detected every call via the
+// directory tree walk.
+func (bs *BufferedService) SyncFromDiskPartial(ctx context.Context, batchIndex, totalBatches int) error {
+	logger := logger.For(logger.ComponentFilesystem)
+	startTime := time.Now()
+
+	logger.Debugf("SyncFromDiskPartial started batch %d/%d for %d directories", batchIndex, totalBatches, len(bs.syncDirs))
+
+	defer func() {
+		logger.Debugf("SyncFromDiskPartial batch %d/%d took %dms", batchIndex, totalBatches, time.Since(startTime).Milliseconds())
+	}()
+
+	// Snapshot existing state under lock (single copy)
+	bs.mu.Lock()
+	existingFiles := make(map[string]fileState, len(bs.files))
+	for k, v := range bs.files {
+		existingFiles[k] = v
+	}
+	bs.mu.Unlock()
+
+	// newFiles starts as existing entries that survive the walk (pruning happens below)
+	newFiles := make(map[string]fileState, len(existingFiles))
+	var filesMutex sync.Mutex
+
+	// Track all paths discovered on disk so we can prune removed files
+	allDiscoveredPaths := make(map[string]bool, len(existingFiles))
+
+	for _, dir := range bs.syncDirs {
+		discovered, err := walkDirectoryNames(dir)
+		if err != nil {
+			return fmt.Errorf("failed to walk directory %s: %w", dir, err)
+		}
+
+		// Add the root dir itself
+		allDiscoveredPaths[dir] = true
+		if prev, exists := existingFiles[dir]; exists {
+			newFiles[dir] = prev
+		} else {
+			newFiles[dir] = fileState{isDir: true, fileMode: os.ModeDir | 0755}
+		}
+
+		// Process discovered paths
+		var batchJobs []fileReadJob
+		for absPath, isDir := range discovered {
+			if bs.shouldIgnorePath(absPath) {
+				continue
+			}
+			allDiscoveredPaths[absPath] = true
+
+			if isDir {
+				if prev, exists := existingFiles[absPath]; exists {
+					newFiles[absPath] = prev
+				} else {
+					newFiles[absPath] = fileState{isDir: true, fileMode: os.ModeDir | 0755}
+				}
+				continue
+			}
+
+			// Files: check if in this batch
+			h := fnv.New32a()
+			_, _ = h.Write([]byte(absPath))
+			if int(h.Sum32())%totalBatches != batchIndex {
+				// Not in this batch — keep existing cached state or add placeholder
+				if prev, exists := existingFiles[absPath]; exists {
+					newFiles[absPath] = prev
+				} else {
+					newFiles[absPath] = fileState{isDir: false}
+				}
+				continue
+			}
+
+			// In this batch — will be stat'd + read by readBatchFiles.
+			if prev, exists := existingFiles[absPath]; exists {
+				batchJobs = append(batchJobs, fileReadJob{
+					absPath: absPath,
+					size:    prev.size,
+					modTime: prev.modTime,
+					mode:    prev.fileMode,
+				})
+			} else {
+				batchJobs = append(batchJobs, fileReadJob{
+					absPath: absPath,
+				})
+			}
+		}
+
+		if err := bs.readBatchFiles(ctx, batchJobs, existingFiles, newFiles, &filesMutex, logger); err != nil {
+			return err
+		}
+	}
+
+	// Replace in-memory state (newFiles only contains discovered paths — pruning is implicit)
+	logger.Debugf("SyncFromDiskPartial: %d files total, batch %d/%d", len(newFiles), batchIndex, totalBatches)
+	bs.mu.Lock()
+	bs.files = newFiles
+	clear(bs.changed)
+	bs.mu.Unlock()
+
+	return nil
+}
+
+// fileReadJob describes a file whose content should be read from disk.
+type fileReadJob struct {
+	absPath string
+	size    int64
+	modTime time.Time
+	mode    os.FileMode
+}
+
+// readBatchFiles reads file contents for a batch of jobs using a worker pool,
+// updating newFiles with the results.
+func (bs *BufferedService) readBatchFiles(
+	ctx context.Context,
+	batchJobs []fileReadJob,
+	existingFiles map[string]fileState,
+	newFiles map[string]fileState,
+	filesMutex *sync.Mutex,
+	logger *zap.SugaredLogger,
+) error {
+	if len(batchJobs) == 0 {
+		return nil
+	}
+
+	type fileReadResult struct {
+		err     error
+		state   *fileState
+		absPath string
+	}
+
+	jobs := make(chan int, len(batchJobs))
+	results := make(chan fileReadResult, len(batchJobs))
+	errChan := make(chan error, 1)
+
+	var wg sync.WaitGroup
+
+	workerCount := bs.fileReadWorkers
+	if workerCount <= 0 {
+		workerCount = runtime.NumCPU() * 2
+	}
+
+	workerCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	for range workerCount {
+		wg.Add(1)
+		sentry.SafeGo(func() {
+			defer wg.Done()
+
+			for idx := range jobs {
+				select {
+				case <-workerCtx.Done():
+					return
+				default:
+				}
+
+				job := batchJobs[idx]
+
+				// Single stat call to get all metadata (size, modtime, mode, inode, uid/gid)
+				fi, statErr := os.Stat(job.absPath)
+				if statErr != nil {
+					if os.IsNotExist(statErr) {
+						results <- fileReadResult{absPath: job.absPath, err: os.ErrNotExist}
+					} else {
+						select {
+						case errChan <- fmt.Errorf("failed to stat file %s: %w", job.absPath, statErr):
+							cancel()
+						default:
+						}
+					}
+					continue
+				}
+
+				fileSize := fi.Size()
+				fileModTime := fi.ModTime()
+				fileMode := fi.Mode()
+				var fileInode uint64
+				var uid, gid int = -1, -1
+				if stat, ok := fi.Sys().(*syscall.Stat_t); ok {
+					fileInode = stat.Ino
+					uid = int(stat.Uid)
+					gid = int(stat.Gid)
+				}
+
+				if fileSize > bs.maxFileSize {
+					results <- fileReadResult{
+						absPath: job.absPath,
+						state: &fileState{
+							isDir:    false,
+							content:  nil,
+							modTime:  fileModTime,
+							fileMode: fileMode,
+							size:     fileSize,
+							uid:      uid,
+							gid:      gid,
+							inode:    fileInode,
+						},
+					}
+					continue
+				}
+
+				// Incremental read for append-only files
+				isIncremental := false
+				var (
+					previousContent []byte
+					previousSize    int64
+					previousInode   uint64
+				)
+
+				if bs.isInAppendOnlyDir(job.absPath) {
+					if prevState, exists := existingFiles[job.absPath]; exists && !prevState.isDir {
+						previousContent = prevState.content
+						previousSize = prevState.size
+						previousInode = prevState.inode
+
+						if previousInode == fileInode && fileSize >= previousSize {
+							isIncremental = true
+						} else if previousInode != fileInode || fileSize < previousSize {
+							logger.Debugf("Log rotation detected for %s (inode: %d->%d, size: %d->%d)",
+								job.absPath, previousInode, fileInode, previousSize, fileSize)
+						}
+					}
+				}
+
+				var (
+					data []byte
+					err  error
+				)
+
+				readStart := time.Now()
+
+				if isIncremental && fileSize > previousSize {
+					data, err = bs.readFileIncrementally(job.absPath, previousSize, previousContent, logger)
+					if err != nil {
+						results <- fileReadResult{absPath: job.absPath, err: err}
+						continue
+					}
+				} else {
+					data, err = bs.base.ReadFile(workerCtx, job.absPath)
+				}
+
+				readDuration := time.Since(readStart)
+				if readDuration > bs.slowReadThreshold {
+					logger.Debugf("Slow file read: %s took %v", job.absPath, readDuration)
+				}
+
+				if err != nil {
+					if os.IsNotExist(err) {
+						results <- fileReadResult{absPath: job.absPath, err: os.ErrNotExist}
+					} else {
+						select {
+						case errChan <- fmt.Errorf("failed to read file %s: %w", job.absPath, err):
+							cancel()
+						default:
+						}
+					}
+					continue
+				}
+
+				results <- fileReadResult{
+					absPath: job.absPath,
+					state: &fileState{
+						isDir:    false,
+						content:  data,
+						modTime:  fileModTime,
+						fileMode: fileMode,
+						size:     fileSize,
+						uid:      uid,
+						gid:      gid,
+						lastSize: fileSize,
+						inode:    fileInode,
+					},
+				}
+			}
+		})
+	}
+
+	var resultErr error
+	resultDone := make(chan struct{})
+	sentry.SafeGo(func() {
+		defer close(resultDone)
+		for result := range results {
+			if result.err != nil {
+				if errors.Is(result.err, os.ErrNotExist) {
+					logger.Debugf("File does not exist, skipping: %s", result.absPath)
+					continue
+				}
+				resultErr = result.err
+				cancel()
+				return
+			}
+			filesMutex.Lock()
+			newFiles[result.absPath] = *result.state
+			filesMutex.Unlock()
+		}
+	})
+
+	for i := range batchJobs {
+		select {
+		case jobs <- i:
+		case <-ctx.Done():
+			cancel()
+			return ctx.Err()
+		}
+	}
+
+	close(jobs)
+	wg.Wait()
+	close(results)
+	<-resultDone
+
+	select {
+	case err := <-errChan:
+		return err
+	default:
+	}
+
+	if resultErr != nil {
+		return resultErr
+	}
+
+	return nil
+}
+
 // SyncToDisk flushes all changed files to disk, and removes any marked for removal.
 func (bs *BufferedService) SyncToDisk(ctx context.Context) error {
 	start := time.Now()
@@ -1085,7 +1495,7 @@ func (bs *BufferedService) SyncToDisk(ctx context.Context) error {
 
 	// First remove files
 	for _, path := range filesToRemove {
-		if err := bs.base.Remove(ctx, path); err != nil {
+		if err := bs.base.Remove(ctx, path); err != nil && !os.IsNotExist(err) {
 			return fmt.Errorf("failed to remove file: %w", err)
 		}
 
@@ -1095,7 +1505,7 @@ func (bs *BufferedService) SyncToDisk(ctx context.Context) error {
 
 	// Then remove directories
 	for _, path := range dirsToRemove {
-		if err := bs.base.RemoveAll(ctx, path); err != nil {
+		if err := bs.base.RemoveAll(ctx, path); err != nil && !os.IsNotExist(err) {
 			return fmt.Errorf("failed to remove directory: %w", err)
 		}
 
@@ -1111,7 +1521,12 @@ func (bs *BufferedService) SyncToDisk(ctx context.Context) error {
 // =========================
 
 // EnsureDirectory creates the directory in-memory and marks it for creation on disk.
+// For paths outside synced directories, delegates directly to the base filesystem.
 func (bs *BufferedService) EnsureDirectory(ctx context.Context, path string) error {
+	if !bs.isInSyncDir(path) {
+		return bs.base.EnsureDirectory(ctx, path)
+	}
+
 	bs.mu.Lock()
 	defer bs.mu.Unlock()
 
@@ -1149,8 +1564,13 @@ func (bs *BufferedService) EnsureDirectory(ctx context.Context, path string) err
 }
 
 // ReadFile returns the content from the in-memory cache only.
+// For paths outside synced directories, delegates directly to the base filesystem.
 // If not present, returns os.ErrNotExist.
 func (bs *BufferedService) ReadFile(ctx context.Context, path string) ([]byte, error) {
+	if !bs.isInSyncDir(path) {
+		return bs.base.ReadFile(ctx, path)
+	}
+
 	bs.mu.Lock()
 	defer bs.mu.Unlock()
 
@@ -1172,7 +1592,12 @@ func (bs *BufferedService) ReadFile(ctx context.Context, path string) ([]byte, e
 }
 
 // WriteFile does not immediately write to disk; it marks the file as changed in memory.
+// For paths outside synced directories, delegates directly to the base filesystem.
 func (bs *BufferedService) WriteFile(ctx context.Context, path string, data []byte, perm os.FileMode) error {
+	if !bs.isInSyncDir(path) {
+		return bs.base.WriteFile(ctx, path, data, perm)
+	}
+
 	bs.mu.Lock()
 	defer bs.mu.Unlock()
 
@@ -1223,7 +1648,12 @@ func (bs *BufferedService) WriteFile(ctx context.Context, path string, data []by
 }
 
 // PathExists checks if a path (file or directory) exists in the in-memory map.
+// For paths outside synced directories, delegates directly to the base filesystem.
 func (bs *BufferedService) PathExists(ctx context.Context, path string) (bool, error) {
+	if !bs.isInSyncDir(path) {
+		return bs.base.PathExists(ctx, path)
+	}
+
 	bs.mu.Lock()
 	defer bs.mu.Unlock()
 
@@ -1247,7 +1677,12 @@ func (bs *BufferedService) FileExists(ctx context.Context, path string) (bool, e
 }
 
 // Remove marks the file for removal in memory.
+// For paths outside synced directories, delegates directly to the base filesystem.
 func (bs *BufferedService) Remove(ctx context.Context, path string) error {
+	if !bs.isInSyncDir(path) {
+		return bs.base.Remove(ctx, path)
+	}
+
 	bs.mu.Lock()
 	defer bs.mu.Unlock()
 
@@ -1277,7 +1712,12 @@ func (bs *BufferedService) Remove(ctx context.Context, path string) error {
 }
 
 // RemoveAll recursively marks all files and directories under the given path as removed in-memory.
+// For paths outside synced directories, delegates directly to the base filesystem.
 func (bs *BufferedService) RemoveAll(ctx context.Context, path string) error {
+	if !bs.isInSyncDir(path) {
+		return bs.base.RemoveAll(ctx, path)
+	}
+
 	bs.mu.Lock()
 	defer bs.mu.Unlock()
 
@@ -1317,7 +1757,12 @@ func (bs *BufferedService) RemoveAll(ctx context.Context, path string) error {
 }
 
 // Stat returns an os.FileInfo-like object if it is in the in-memory map. Otherwise os.ErrNotExist.
+// For paths outside synced directories, delegates directly to the base filesystem.
 func (bs *BufferedService) Stat(ctx context.Context, path string) (os.FileInfo, error) {
+	if !bs.isInSyncDir(path) {
+		return bs.base.Stat(ctx, path)
+	}
+
 	bs.mu.Lock()
 	defer bs.mu.Unlock()
 
@@ -1334,6 +1779,7 @@ func (bs *BufferedService) Stat(ctx context.Context, path string) (os.FileInfo, 
 			mode:  st.fileMode,
 			mtime: st.modTime,
 			dir:   true,
+			inode: st.inode,
 		}, nil
 	}
 
@@ -1343,12 +1789,19 @@ func (bs *BufferedService) Stat(ctx context.Context, path string) (os.FileInfo, 
 		mode:  st.fileMode,
 		mtime: st.modTime,
 		dir:   false,
+		inode: st.inode,
 	}, nil
 }
 
 // CreateFile creates a file in-memory and marks it for creation on disk during SyncToDisk.
+// For paths outside synced directories, delegates directly to the base filesystem.
 // It returns nil, nil because the actual file doesn't exist on disk yet.
 func (bs *BufferedService) CreateFile(ctx context.Context, path string, perm os.FileMode) (*os.File, error) {
+	if !bs.isInSyncDir(path) {
+		// CreateFile is not on the Service interface; use WriteFile to create an empty file.
+		return nil, bs.base.WriteFile(ctx, path, []byte{}, perm)
+	}
+
 	bs.mu.Lock()
 	defer bs.mu.Unlock()
 
@@ -1390,7 +1843,12 @@ func (bs *BufferedService) CreateFile(ctx context.Context, path string, perm os.
 }
 
 // Chmod updates the fileMode in memory (and later flush).
+// For paths outside synced directories, delegates directly to the base filesystem.
 func (bs *BufferedService) Chmod(ctx context.Context, path string, mode os.FileMode) error {
+	if !bs.isInSyncDir(path) {
+		return bs.base.Chmod(ctx, path, mode)
+	}
+
 	bs.mu.Lock()
 	defer bs.mu.Unlock()
 
@@ -1430,7 +1888,12 @@ func (bs *BufferedService) Chmod(ctx context.Context, path string, mode os.FileM
 }
 
 // ReadDir returns directories only from the in-memory map.
+// For paths outside synced directories, delegates directly to the base filesystem.
 func (bs *BufferedService) ReadDir(ctx context.Context, path string) ([]os.DirEntry, error) {
+	if !bs.isInSyncDir(path) {
+		return bs.base.ReadDir(ctx, path)
+	}
+
 	bs.mu.Lock()
 	defer bs.mu.Unlock()
 
@@ -1469,6 +1932,7 @@ func (bs *BufferedService) ReadDir(ctx context.Context, path string) ([]os.DirEn
 						mode:  fileState.fileMode,
 						mtime: fileState.modTime,
 						dir:   fileState.isDir,
+						inode: fileState.inode,
 					},
 				})
 			}
@@ -1520,6 +1984,7 @@ type memFileInfo struct {
 	size  int64
 	mode  os.FileMode
 	dir   bool
+	inode uint64
 }
 
 func (m *memFileInfo) Name() string       { return m.name }
@@ -1527,7 +1992,7 @@ func (m *memFileInfo) Size() int64        { return m.size }
 func (m *memFileInfo) Mode() os.FileMode  { return m.mode }
 func (m *memFileInfo) ModTime() time.Time { return m.mtime }
 func (m *memFileInfo) IsDir() bool        { return m.dir }
-func (m *memFileInfo) Sys() interface{}   { return nil }
+func (m *memFileInfo) Sys() interface{}   { return &syscall.Stat_t{Ino: m.inode} }
 
 // memDirEntry is a trivial in-memory dir entry.
 type memDirEntry struct {
@@ -1623,17 +2088,54 @@ func (bs *BufferedService) readFileIncrementally(absPath string, previousSize in
 // ReadFileRange reads the file starting at byte offset "from" and returns:
 //   - chunk   – the data that was read (nil if nothing new)
 //   - newSize – the file size **after** the read (use it as next offset)
+//
+// For paths in synced directories, reads from the in-memory cache.
+// For paths outside synced directories, delegates to the base filesystem.
 func (bs *BufferedService) ReadFileRange(ctx context.Context, path string, from int64) ([]byte, int64, error) {
-	panic("not implemented")
+	if !bs.isInSyncDir(path) {
+		return bs.base.ReadFileRange(ctx, path, from)
+	}
+
+	bs.mu.Lock()
+	defer bs.mu.Unlock()
+
+	st, ok := bs.files[path]
+	if !ok || st.isDir {
+		return nil, 0, os.ErrNotExist
+	}
+
+	newSize := st.size
+	if from >= newSize {
+		// No new data
+		return nil, newSize, nil
+	}
+
+	// Content may be nil for large files
+	if st.content == nil {
+		return nil, newSize, nil
+	}
+
+	if from < 0 {
+		from = 0
+	}
+
+	chunk := st.content[from:]
+	return chunk, newSize, nil
 }
 
 // Glob is a wrapper around filepath.Glob that respects the context.
+// Always delegates to the base filesystem.
 func (bs *BufferedService) Glob(ctx context.Context, pattern string) ([]string, error) {
-	panic("not implemented")
+	return bs.base.Glob(ctx, pattern)
 }
 
 // Rename renames (moves) a file or directory from oldPath to newPath.
+// For paths outside synced directories, delegates directly to the base filesystem.
 func (bs *BufferedService) Rename(ctx context.Context, oldPath, newPath string) error {
+	if !bs.isInSyncDir(oldPath) && !bs.isInSyncDir(newPath) {
+		return bs.base.Rename(ctx, oldPath, newPath)
+	}
+
 	bs.mu.Lock()
 	defer bs.mu.Unlock()
 

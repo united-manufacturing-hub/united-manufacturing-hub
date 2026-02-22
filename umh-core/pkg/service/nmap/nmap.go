@@ -16,73 +16,57 @@ package nmap
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"path/filepath"
-	"regexp"
-	"strconv"
-	"strings"
+	"net"
+	"sync"
 	"time"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/nmapserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
-	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
 	"go.uber.org/zap"
 )
 
-// Pre-compiled regexes to avoid recompilation on every parseScanLogs / GetConfig call.
+// tcpCheckInstance holds the state for a single TCP check goroutine.
+type tcpCheckInstance struct {
+	config     nmapserviceconfig.NmapServiceConfig
+	lastResult *NmapScanResult
+	running    bool
+	cancel     context.CancelFunc
+	mu         sync.RWMutex
+}
+
+// globalInstances is a package-level shared registry of all TCP check instances.
+// This replaces the shared filesystem that the old nmap binary implementation used.
+// Multiple NmapService instances (e.g., from ConnectionService in different FSM layers)
+// all read/write to this shared map, mimicking the old shared-filesystem behavior.
 var (
-	reConfigTarget = regexp.MustCompile(`nmap -n -Pn -p \d+ ([^ ]+)`)
-	reConfigPort   = regexp.MustCompile(`-p (\d+)`)
-	reTimestamp    = regexp.MustCompile(`NMAP_TIMESTAMP: (.+)`)
-	reDuration     = regexp.MustCompile(`NMAP_DURATION: ([0-9.]+)`)
-	// Generic port-state regex that matches any port number; the port is validated after the match.
-	rePortState = regexp.MustCompile(`(?i)(\d+)/tcp\s+(open|closed|filtered|unfiltered|open\|filtered|closed\|filtered)`)
-	reLatency   = regexp.MustCompile(`Host is up \(([0-9.]+)s latency\).`)
-	reError     = regexp.MustCompile(`(?im)^.*error.*$`)
+	globalInstances   = make(map[string]*tcpCheckInstance)
+	globalInstancesMu sync.Mutex
 )
 
 // NmapService is the implementation of the INmapService interface.
+// It replaces nmap binary invocations with in-process net.DialTimeout goroutines.
+// All instances share a package-level registry (globalInstances) so that
+// configs and status are visible across different NmapService instances.
 type NmapService struct {
-	s6Service        s6service.Service
-	logger           *zap.SugaredLogger
-	s6Manager        *s6fsm.S6Manager
-	lastScanResult   *NmapScanResult // Cache for scan results
-	s6ServiceConfigs []config.S6FSMConfig
-
-	// cachedStatus holds the last successful Status result for reuse when log data is unchanged.
-	cachedStatus *ServiceInfo
+	logger *zap.SugaredLogger
 }
 
 // NmapServiceOption is a function that modifies a NmapService.
 type NmapServiceOption func(*NmapService)
 
-// WithS6Service sets a custom S6 service for the NmapService.
-func WithS6Service(s6Service s6service.Service) NmapServiceOption {
-	return func(s *NmapService) {
-		s.s6Service = s6Service
-	}
-}
-
 // NewDefaultNmapService creates a new default Nmap service manager.
 func NewDefaultNmapService(nmapName string, opts ...NmapServiceOption) *NmapService {
 	managerName := fmt.Sprintf("%s%s", logger.ComponentNmapService, nmapName)
 	service := &NmapService{
-		logger:         logger.For(managerName),
-		s6Manager:      s6fsm.NewS6Manager(managerName),
-		s6Service:      s6service.NewDefaultService(),
-		lastScanResult: nil,
+		logger: logger.For(managerName),
 	}
 
-	// Apply options
 	for _, opt := range opts {
 		opt(service)
 	}
@@ -90,554 +74,236 @@ func NewDefaultNmapService(nmapName string, opts ...NmapServiceOption) *NmapServ
 	return service
 }
 
-// generateNmapScript generates a shell script to run nmap periodically.
-func (s *NmapService) generateNmapScript(config *nmapserviceconfig.NmapServiceConfig) (string, error) {
-	if config == nil {
-		return "", errors.New("config is nil")
-	}
+// tcpCheck performs a single TCP connectivity check using net.DialTimeout.
+// It returns open (connect success), closed (connection refused), or filtered (timeout).
+func tcpCheck(target string, port uint16, timeout time.Duration) *NmapScanResult {
+	start := time.Now()
+	addr := fmt.Sprintf("%s:%d", target, port)
+	conn, err := net.DialTimeout("tcp", addr, timeout)
+	duration := time.Since(start)
 
-	// Build the nmap command - fixed format with -n -Pn -p PORT TARGET (no -v to reduce output)
-	nmapCmd := fmt.Sprintf("nmap -n -Pn -p %d %s", config.Port, config.Target)
-
-	// Create the script content with a loop that executes nmap every second.
-	// Only write output when port state changes or every 30 iterations (heartbeat).
-	// This reduces log volume ~30x for stable connections, allowing HasNewData()
-	// to return false and skip expensive log parsing.
-	scriptContent := fmt.Sprintf(`#!/bin/sh
-LAST_STATE=""
-HEARTBEAT_COUNTER=0
-while true; do
-  SCAN_START=$(date +%%s.%%N)
-  OUTPUT=$(%s 2>&1)
-  EXIT_CODE=$?
-  SCAN_END=$(date +%%s.%%N)
-  SCAN_DURATION=$(echo "$SCAN_END - $SCAN_START" | bc)
-  CURRENT_STATE=$(echo "$OUTPUT" | grep -ioE '%d/tcp[[:space:]]+(open|closed|filtered|unfiltered)' | awk '{print $2}')
-  if [ "$CURRENT_STATE" != "$LAST_STATE" ] || [ -z "$LAST_STATE" ] || [ $HEARTBEAT_COUNTER -ge 30 ]; then
-    echo "NMAP_SCAN_START"
-    echo "NMAP_TIMESTAMP: $(date -Iseconds)"
-    echo "NMAP_COMMAND: %s"
-    echo "$OUTPUT"
-    echo "NMAP_EXIT_CODE: $EXIT_CODE"
-    echo "NMAP_DURATION: $SCAN_DURATION"
-    echo "NMAP_SCAN_END"
-    LAST_STATE="$CURRENT_STATE"
-    HEARTBEAT_COUNTER=0
-  fi
-  HEARTBEAT_COUNTER=$((HEARTBEAT_COUNTER + 1))
-  sleep %d
-done
-`, nmapCmd, config.Port, nmapCmd, ScanIntervalSeconds)
-
-	return scriptContent, nil
-}
-
-// getS6ServiceName converts a nmapName (e.g. "myscan") to its S6 service name (e.g. "nmap-myscan").
-func (s *NmapService) getS6ServiceName(nmapName string) string {
-	return "nmap-" + nmapName
-}
-
-// GenerateS6ConfigForNmap creates a S6 config for a given nmap instance.
-func (s *NmapService) GenerateS6ConfigForNmap(nmapConfig *nmapserviceconfig.NmapServiceConfig, s6ServiceName string) (s6serviceconfig.S6ServiceConfig, error) {
-	scriptContent, err := s.generateNmapScript(nmapConfig)
-	if err != nil {
-		return s6serviceconfig.S6ServiceConfig{}, err
-	}
-
-	s6Config := s6serviceconfig.S6ServiceConfig{
-		Command: []string{
-			"/bin/sh",
-			fmt.Sprintf("%s/%s/config/run_nmap.sh", constants.S6BaseDir, s6ServiceName),
-		},
-		Env: map[string]string{},
-		ConfigFiles: map[string]string{
-			"run_nmap.sh": scriptContent,
-		},
-	}
-
-	return s6Config, nil
-}
-
-// GetConfig returns the actual nmap config from the S6 service.
-func (s *NmapService) GetConfig(ctx context.Context, filesystemService filesystem.Service, nmapName string) (nmapserviceconfig.NmapServiceConfig, error) {
-	if ctx.Err() != nil {
-		return nmapserviceconfig.NmapServiceConfig{}, ctx.Err()
-	}
-
-	s6ServiceName := s.getS6ServiceName(nmapName)
-	s6ServicePath := filepath.Join(constants.S6BaseDir, s6ServiceName)
-
-	// Get the script file
-	scriptData, err := s.s6Service.GetS6ConfigFile(ctx, s6ServicePath, "run_nmap.sh", filesystemService)
-	if err != nil {
-		return nmapserviceconfig.NmapServiceConfig{}, fmt.Errorf("failed to get nmap config file for service %s: %w", s6ServiceName, err)
-	}
-
-	// Parse the script to extract configuration
-	result := nmapserviceconfig.NmapServiceConfig{}
-
-	// Extract target
-	if matches := reConfigTarget.FindStringSubmatch(string(scriptData)); len(matches) > 1 {
-		result.Target = matches[1]
-	}
-
-	// Extract port
-	if matches := reConfigPort.FindStringSubmatch(string(scriptData)); len(matches) > 1 {
-		port, err := strconv.Atoi(matches[1])
-		if err == nil {
-			result.Port = uint16(port)
-		}
-	}
-
-	return result, nil
-}
-
-// parseScanLogs parses the logs of an nmap service and extracts scan results.
-func (s *NmapService) parseScanLogs(logs []s6service.LogEntry, port uint16) *NmapScanResult {
-	if len(logs) == 0 {
-		return nil
-	}
-
-	// We'll reconstruct scan blocks from the logs
-	var (
-		currentScan []string
-		scanBlocks  [][]string
-	)
-
-	inScanBlock := false
-
-	// First, extract complete scan blocks from logs
-	for _, log := range logs {
-		switch {
-		case strings.Contains(log.Content, "NMAP_SCAN_START"):
-			inScanBlock = true
-			currentScan = []string{log.Content}
-		case strings.Contains(log.Content, "NMAP_SCAN_END"):
-			if inScanBlock {
-				currentScan = append(currentScan, log.Content)
-				scanBlocks = append(scanBlocks, currentScan)
-				currentScan = []string{}
-				inScanBlock = false
-			}
-		case inScanBlock:
-			currentScan = append(currentScan, log.Content)
-		}
-	}
-
-	// If no complete scans, return nil
-	if len(scanBlocks) == 0 {
-		return nil
-	}
-
-	// Parse the most recent complete scan
-	latestScan := scanBlocks[len(scanBlocks)-1]
-	scanOutput := strings.Join(latestScan, "\n")
-
-	// Create the scan result
 	result := &NmapScanResult{
-		RawOutput: scanOutput,
-		PortResult: PortResult{
-			Port: port,
-		},
-		Metrics: ScanMetrics{},
+		Timestamp:  time.Now(),
+		PortResult: PortResult{Port: port, LatencyMs: duration.Seconds() * 1000},
+		Metrics:    ScanMetrics{ScanDuration: duration.Seconds()},
 	}
 
-	// Extract timestamp
-	if matches := reTimestamp.FindStringSubmatch(scanOutput); len(matches) > 1 {
-		timestamp, err := time.Parse(time.RFC3339, matches[1])
-		if err == nil {
-			result.Timestamp = timestamp
-		}
-	}
-
-	// Extract duration
-	if matches := reDuration.FindStringSubmatch(scanOutput); len(matches) > 1 {
-		duration, err := strconv.ParseFloat(matches[1], 64)
-		if err == nil {
-			result.Metrics.ScanDuration = duration
-		}
-	}
-
-	// Extract port state using the generic regex, then validate the port number.
-	if matches := rePortState.FindStringSubmatch(scanOutput); len(matches) > 2 {
-		matchedPort, convErr := strconv.Atoi(matches[1])
-		if convErr == nil && uint16(matchedPort) == port {
-			result.PortResult.State = matches[2]
+	if err != nil {
+		if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+			result.PortResult.State = "filtered"
 		} else {
-			result.PortResult.State = "unknown"
+			result.PortResult.State = "closed"
 		}
 	} else {
-		result.PortResult.State = "unknown"
-	}
-
-	// Extract latency (sample line: "Host is up (0.016s latency).")
-	if matches := reLatency.FindStringSubmatch(scanOutput); len(matches) >= 2 {
-		latency, err := strconv.ParseFloat(matches[1], 64)
-		if err == nil {
-			// Convert to milliseconds
-			latency *= 1000
-			result.PortResult.LatencyMs = latency
-		}
-	}
-
-	// Extract errors if occurred (case-insensitive)
-	if matches := reError.FindString(scanOutput); matches != "" {
-		result.Error = matches
+		conn.Close()
+		result.PortResult.State = "open"
 	}
 
 	return result
 }
 
-// Status checks the status of a nmap service.
-func (s *NmapService) Status(ctx context.Context, filesystemService filesystem.Service, nmapName string, tick uint64) (ServiceInfo, error) {
-	if ctx.Err() != nil {
-		return ServiceInfo{}, ctx.Err()
-	}
+// run starts the background TCP check loop for an instance.
+func (inst *tcpCheckInstance) run(ctx context.Context) {
+	// Perform an immediate check before starting the ticker
+	result := tcpCheck(inst.config.Target, inst.config.Port, 5*time.Second)
+	inst.mu.Lock()
+	inst.lastResult = result
+	inst.mu.Unlock()
 
-	s6ServiceName := s.getS6ServiceName(nmapName)
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
 
-	// Check if service exists in the S6 manager
-	if _, exists := s.s6Manager.GetInstance(s6ServiceName); !exists {
-		return ServiceInfo{}, ErrServiceNotExist
-	}
-
-	// Get S6 state
-	s6StateRaw, err := s.s6Manager.GetLastObservedState(s6ServiceName)
-	if err != nil {
-		if strings.Contains(err.Error(), "instance "+s6ServiceName+" not found") ||
-			strings.Contains(err.Error(), "not found") {
-			return ServiceInfo{}, ErrServiceNotExist
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			result := tcpCheck(inst.config.Target, inst.config.Port, 5*time.Second)
+			inst.mu.Lock()
+			inst.lastResult = result
+			inst.mu.Unlock()
 		}
-
-		return ServiceInfo{}, fmt.Errorf("failed to get last observed state: %w", err)
 	}
+}
 
-	s6State, ok := s6StateRaw.(s6fsm.S6ObservedState)
+// getS6ServiceName converts a nmapName (e.g. "myscan") to its service name (e.g. "nmap-myscan").
+func (s *NmapService) getS6ServiceName(nmapName string) string {
+	return "nmap-" + nmapName
+}
+
+// GenerateS6ConfigForNmap returns an empty S6 config for interface compatibility.
+// With the TCP check approach, no S6 service is created.
+func (s *NmapService) GenerateS6ConfigForNmap(_ *nmapserviceconfig.NmapServiceConfig, _ string) (s6serviceconfig.S6ServiceConfig, error) {
+	return s6serviceconfig.S6ServiceConfig{}, nil
+}
+
+// GetConfig returns the nmap config from the shared in-memory instances registry.
+func (s *NmapService) GetConfig(_ context.Context, _ filesystem.Service, nmapName string) (nmapserviceconfig.NmapServiceConfig, error) {
+	globalInstancesMu.Lock()
+	defer globalInstancesMu.Unlock()
+
+	inst, ok := globalInstances[nmapName]
 	if !ok {
-		return ServiceInfo{}, fmt.Errorf("observed state is not a S6ObservedState: %v", s6StateRaw)
+		return nmapserviceconfig.NmapServiceConfig{}, ErrServiceNotExist
 	}
 
-	// Get FSM state
-	fsmState, err := s.s6Manager.GetCurrentFSMState(s6ServiceName)
-	if err != nil {
-		if strings.Contains(err.Error(), "instance "+s6ServiceName+" not found") ||
-			strings.Contains(err.Error(), "not found") {
-			return ServiceInfo{}, ErrServiceNotExist
-		}
+	return inst.config, nil
+}
 
-		return ServiceInfo{}, fmt.Errorf("failed to get current FSM state: %w", err)
-	}
+// Status checks the status of a nmap service.
+func (s *NmapService) Status(_ context.Context, _ filesystem.Service, nmapName string, _ uint64) (ServiceInfo, error) {
+	globalInstancesMu.Lock()
+	defer globalInstancesMu.Unlock()
 
-	// Now only proceed if the s6 service underneath it is running
-	// otherwise the following code doesn't make sense and will just throw errors
-	// and if it throws errors (that is not ErrServiceNotExist), it will stop the reconilation from happening
-	// might prevent the service from ever moving from starting to running
-	if fsmState != s6fsm.OperationalStateRunning {
-		return ServiceInfo{
-			S6ObservedState: s6State,
-			S6FSMState:      fsmState,
-			NmapStatus: NmapServiceInfo{
-				IsRunning: false,
-			},
-		}, nil
-	}
-
-	// Skip expensive log parsing if no new data has arrived since last call.
-	s6ServicePath := filepath.Join(constants.S6BaseDir, s6ServiceName)
-
-	hasNew, hasNewErr := s.s6Service.HasNewData(ctx, s6ServicePath, filesystemService)
-	if hasNewErr == nil && !hasNew && s.cachedStatus != nil {
-		// Return cached parse result with fresh S6/FSM state.
-		cached := *s.cachedStatus
-		cached.S6ObservedState = s6State
-		cached.S6FSMState = fsmState
-		cached.NmapStatus.IsRunning = fsmState == s6fsm.OperationalStateRunning
-
-		return cached, nil
-	}
-
-	// Get logs.
-	logs, err := s.s6Service.GetLogs(ctx, s6ServicePath, filesystemService)
-	if err != nil {
-		if errors.Is(err, s6service.ErrServiceNotExist) {
-			return ServiceInfo{}, ErrServiceNotExist
-		} else if errors.Is(err, s6service.ErrLogFileNotFound) {
-			return ServiceInfo{}, ErrServiceNotExist
-		}
-
-		return ServiceInfo{}, fmt.Errorf("failed to get logs: %w", err)
-	}
-
-	// if the logs are empty, then it did not have the time yet to run
-	if len(logs) == 0 {
+	inst, ok := globalInstances[nmapName]
+	if !ok {
 		return ServiceInfo{}, ErrServiceNotExist
 	}
 
-	// Get the current config to know which port we're scanning.
-	config, err := s.GetConfig(ctx, filesystemService, nmapName)
-	if err != nil {
-		return ServiceInfo{}, fmt.Errorf("failed to get config: %w", err)
+	inst.mu.RLock()
+	defer inst.mu.RUnlock()
+
+	fsmState := s6fsm.OperationalStateStopped
+	if inst.running {
+		fsmState = s6fsm.OperationalStateRunning
 	}
 
-	// Parse logs to extract scan results.
-	scanResult := s.parseScanLogs(logs, config.Port)
-	if scanResult == nil {
-		return ServiceInfo{}, fmt.Errorf("%w: %s", ErrScanFailed, "no scan result found")
-	}
-
-	// the check if the logs are too old is done in the fsm
-
-	result := ServiceInfo{
-		S6ObservedState: s6State,
-		S6FSMState:      fsmState,
+	return ServiceInfo{
+		S6FSMState: fsmState,
 		NmapStatus: NmapServiceInfo{
-			LastScan:  scanResult,
-			IsRunning: fsmState == s6fsm.OperationalStateRunning,
-			Logs:      logs,
+			LastScan:  inst.lastResult,
+			IsRunning: inst.running,
 		},
-	}
-	s.cachedStatus = &result
-
-	return result, nil
+	}, nil
 }
 
-// AddNmapToS6Manager adds a nmap instance to the S6 manager.
-func (s *NmapService) AddNmapToS6Manager(ctx context.Context, cfg *nmapserviceconfig.NmapServiceConfig, nmapName string) error {
-	if s.s6Manager == nil {
-		return errors.New("s6 manager not initialized")
+// AddNmapToS6Manager adds a nmap instance and starts its TCP check goroutine.
+func (s *NmapService) AddNmapToS6Manager(_ context.Context, cfg *nmapserviceconfig.NmapServiceConfig, nmapName string) error {
+	globalInstancesMu.Lock()
+	defer globalInstancesMu.Unlock()
+
+	if _, ok := globalInstances[nmapName]; ok {
+		return ErrServiceAlreadyExists
 	}
 
-	if ctx.Err() != nil {
-		return ctx.Err()
+	ctx, cancel := context.WithCancel(context.Background())
+	inst := &tcpCheckInstance{
+		config:  *cfg,
+		running: true,
+		cancel:  cancel,
 	}
 
-	s6ServiceName := s.getS6ServiceName(nmapName)
-
-	// Check whether s6ServiceConfigs already contains an entry for this instance
-	for _, s6Config := range s.s6ServiceConfigs {
-		if s6Config.Name == s6ServiceName {
-			return ErrServiceAlreadyExists
-		}
-	}
-
-	// Generate the S6 config for this instance
-	s6Config, err := s.GenerateS6ConfigForNmap(cfg, s6ServiceName)
-	if err != nil {
-		return fmt.Errorf("failed to generate S6 config for Nmap service %s: %w", s6ServiceName, err)
-	}
-
-	// Create the S6 FSM config for this instance
-	s6FSMConfig := config.S6FSMConfig{
-		FSMInstanceConfig: config.FSMInstanceConfig{
-			Name:            s6ServiceName,
-			DesiredFSMState: s6fsm.OperationalStateRunning,
-		},
-		S6ServiceConfig: s6Config,
-	}
-
-	// Add the S6 FSM config to the list of S6 FSM configs
-	s.s6ServiceConfigs = append(s.s6ServiceConfigs, s6FSMConfig)
+	globalInstances[nmapName] = inst
+	go inst.run(ctx)
 
 	return nil
 }
 
-// UpdateNmapInS6Manager updates an existing nmap instance in the S6 manager.
-func (s *NmapService) UpdateNmapInS6Manager(ctx context.Context, cfg *nmapserviceconfig.NmapServiceConfig, nmapName string) error {
-	if s.s6Manager == nil {
-		return errors.New("s6 manager not initialized")
-	}
+// UpdateNmapInS6Manager updates an existing nmap instance by restarting its goroutine with the new config.
+func (s *NmapService) UpdateNmapInS6Manager(_ context.Context, cfg *nmapserviceconfig.NmapServiceConfig, nmapName string) error {
+	globalInstancesMu.Lock()
+	defer globalInstancesMu.Unlock()
 
-	if ctx.Err() != nil {
-		return ctx.Err()
-	}
-
-	s6ServiceName := s.getS6ServiceName(nmapName)
-
-	// Check if the service exists
-	found := false
-	index := -1
-
-	for i, s6Config := range s.s6ServiceConfigs {
-		if s6Config.Name == s6ServiceName {
-			found = true
-			index = i
-
-			break
-		}
-	}
-
-	if !found {
+	inst, ok := globalInstances[nmapName]
+	if !ok {
 		return ErrServiceNotExist
 	}
 
-	// Generate the new S6 config for this instance
-	s6Config, err := s.GenerateS6ConfigForNmap(cfg, s6ServiceName)
-	if err != nil {
-		return fmt.Errorf("failed to generate S6 config for Nmap service %s: %w", s6ServiceName, err)
+	// Stop old goroutine
+	if inst.cancel != nil {
+		inst.cancel()
 	}
 
-	// Update the S6 service config while preserving the desired state
-	currentDesiredState := s.s6ServiceConfigs[index].DesiredFSMState
-	s.s6ServiceConfigs[index] = config.S6FSMConfig{
-		FSMInstanceConfig: config.FSMInstanceConfig{
-			Name:            s6ServiceName,
-			DesiredFSMState: currentDesiredState,
-		},
-		S6ServiceConfig: s6Config,
+	// Start new goroutine with updated config
+	ctx, cancel := context.WithCancel(context.Background())
+	inst.config = *cfg
+	inst.cancel = cancel
+	inst.running = true
+
+	go inst.run(ctx)
+
+	return nil
+}
+
+// RemoveNmapFromS6Manager removes a nmap instance and stops its goroutine.
+func (s *NmapService) RemoveNmapFromS6Manager(_ context.Context, nmapName string) error {
+	globalInstancesMu.Lock()
+	defer globalInstancesMu.Unlock()
+
+	inst, ok := globalInstances[nmapName]
+	if ok {
+		if inst.cancel != nil {
+			inst.cancel()
+		}
+
+		delete(globalInstances, nmapName)
 	}
 
 	return nil
 }
 
-// RemoveNmapFromS6Manager removes a nmap instance from the S6 manager.
-func (s *NmapService) RemoveNmapFromS6Manager(ctx context.Context, nmapName string) error {
-	if s.s6Manager == nil {
-		return errors.New("s6 manager not initialized")
-	}
-
-	if ctx.Err() != nil {
-		return ctx.Err()
-	}
-
-	// ------------------------------------------------------------------
-	// 1) Delete the *desired* config entry so the S6-manager will stop it
-	// ------------------------------------------------------------------
-	s6Name := s.getS6ServiceName(nmapName)
-
-	// Helper that deletes exactly one element *without* reallocating when the
-	// element is already missing – keeps the call idempotent and allocation-free.
-	sliceRemoveByName := func(arr []config.S6FSMConfig, name string) []config.S6FSMConfig {
-		for i, cfg := range arr {
-			if cfg.Name == name {
-				return append(arr[:i], arr[i+1:]...)
-			}
-		}
-
-		return arr
-	}
-
-	s.s6ServiceConfigs = sliceRemoveByName(s.s6ServiceConfigs, s6Name)
-
-	// ------------------------------------------------------------------
-	// 2) is the child FSM still alive?
-	// ------------------------------------------------------------------
-	if inst, ok := s.s6Manager.GetInstance(s6Name); ok {
-		return fmt.Errorf("%w: S6 instance state=%s", standarderrors.ErrRemovalPending, inst.GetCurrentFSMState())
-	}
-
-	// Clean up the cached scan results
-	s.lastScanResult = nil
-
-	return nil
+// ForceRemoveNmap is the same as Remove for the TCP check implementation.
+func (s *NmapService) ForceRemoveNmap(_ context.Context, _ filesystem.Service, nmapName string) error {
+	return s.RemoveNmapFromS6Manager(context.Background(), nmapName)
 }
 
-// StartNmap starts a nmap instance.
-func (s *NmapService) StartNmap(ctx context.Context, nmapName string) error {
-	if s.s6Manager == nil {
-		return errors.New("s6 manager not initialized")
-	}
+// StartNmap starts the TCP check goroutine for a nmap instance.
+func (s *NmapService) StartNmap(_ context.Context, nmapName string) error {
+	globalInstancesMu.Lock()
+	defer globalInstancesMu.Unlock()
 
-	if ctx.Err() != nil {
-		return ctx.Err()
-	}
-
-	s6ServiceName := s.getS6ServiceName(nmapName)
-
-	found := false
-
-	// Set the desired state to running for the given instance
-	for i, s6Config := range s.s6ServiceConfigs {
-		if s6Config.Name == s6ServiceName {
-			s.s6ServiceConfigs[i].DesiredFSMState = s6fsm.OperationalStateRunning
-			found = true
-
-			break
-		}
-	}
-
-	if !found {
+	inst, ok := globalInstances[nmapName]
+	if !ok {
 		return ErrServiceNotExist
 	}
 
+	if inst.running {
+		return nil
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	inst.cancel = cancel
+	inst.running = true
+
+	go inst.run(ctx)
+
 	return nil
 }
 
-// StopNmap stops a nmap instance.
-func (s *NmapService) StopNmap(ctx context.Context, nmapName string) error {
-	if s.s6Manager == nil {
-		return errors.New("s6 manager not initialized")
-	}
+// StopNmap stops the TCP check goroutine for a nmap instance.
+func (s *NmapService) StopNmap(_ context.Context, nmapName string) error {
+	globalInstancesMu.Lock()
+	defer globalInstancesMu.Unlock()
 
-	if ctx.Err() != nil {
-		return ctx.Err()
-	}
-
-	s6ServiceName := s.getS6ServiceName(nmapName)
-
-	found := false
-
-	// Set the desired state to stopped for the given instance
-	for i, s6Config := range s.s6ServiceConfigs {
-		if s6Config.Name == s6ServiceName {
-			s.s6ServiceConfigs[i].DesiredFSMState = s6fsm.OperationalStateStopped
-			found = true
-
-			break
-		}
-	}
-
-	if !found {
+	inst, ok := globalInstances[nmapName]
+	if !ok {
 		return ErrServiceNotExist
 	}
 
+	if !inst.running {
+		return nil
+	}
+
+	if inst.cancel != nil {
+		inst.cancel()
+	}
+
+	inst.running = false
+
 	return nil
 }
 
-// ReconcileManager reconciles the Nmap manager.
-// Maintains "one time.Now() per tick" principle by using the provided snapshot timestamp.
-func (s *NmapService) ReconcileManager(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) (err error, reconciled bool) {
-	if s.s6Manager == nil {
-		return errors.New("s6 manager not initialized"), false
-	}
-
-	if ctx.Err() != nil {
-		return ctx.Err(), false
-	}
-
-	// Create a snapshot from the full config
-	updatedSnapshot := fsm.SystemSnapshot{
-		CurrentConfig: config.FullConfig{Internal: config.InternalConfig{Services: s.s6ServiceConfigs}},
-		Tick:          snapshot.Tick,
-		SnapshotTime:  snapshot.SnapshotTime,
-	}
-
-	return s.s6Manager.Reconcile(ctx, updatedSnapshot, services)
+// ReconcileManager is a no-op for the TCP check implementation.
+// There is no S6 manager to reconcile.
+func (s *NmapService) ReconcileManager(_ context.Context, _ serviceregistry.Provider, _ fsm.SystemSnapshot) (error, bool) {
+	return nil, false
 }
 
-// ServiceExists checks if a nmap service exists.
-func (s *NmapService) ServiceExists(ctx context.Context, filesystemService filesystem.Service, nmapName string) bool {
-	s6ServiceName := s.getS6ServiceName(nmapName)
-	s6ServicePath := filepath.Join(constants.S6BaseDir, s6ServiceName)
+// ServiceExists checks if a nmap service exists in the shared instances registry.
+func (s *NmapService) ServiceExists(_ context.Context, _ filesystem.Service, nmapName string) bool {
+	globalInstancesMu.Lock()
+	defer globalInstancesMu.Unlock()
 
-	exists, err := s.s6Service.ServiceExists(ctx, s6ServicePath, filesystemService)
-	if err != nil {
-		return false
-	}
-
-	return exists
-}
-
-// ForceRemoveNmap removes a Nmap instance from the S6 manager
-// This should only be called if the Nmap instance is in a permanent failure state
-// and the instance itself cannot be stopped or removed
-// Expects nmapName (e.g. "myservice") as defined in the UMH config.
-func (s *NmapService) ForceRemoveNmap(
-	ctx context.Context,
-	filesystemService filesystem.Service,
-	nmapName string,
-) error {
-	s6ServiceName := s.getS6ServiceName(nmapName)
-	s6ServicePath := filepath.Join(constants.S6BaseDir, s6ServiceName)
-
-	return s.s6Service.ForceRemove(ctx, s6ServicePath, filesystemService)
+	_, ok := globalInstances[nmapName]
+	return ok
 }

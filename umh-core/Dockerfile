@@ -117,13 +117,17 @@ RUN if [ "$DEBUG" = "true" ]; then \
     -o /go/bin/umh-core cmd/main.go; \
     fi
 
+# Build the benthos-monitor-helper binary (replaces shell curl|gzip|xxd pipeline)
+RUN CGO_ENABLED=0 go build -ldflags "-s -w" -o /go/bin/benthos-monitor-helper cmd/benthos-monitor-helper/main.go
+
 # --- Final Stage ---
 FROM alpine:3.23.3@sha256:25109184c71bdad752c8312a8623239686a9a2071e8825f20acb8f2198c3f659 AS runner
 # Copy everything from the downloader stage
 COPY --from=downloader / /
 
-# Copy built application
+# Copy built applications
 COPY --from=build /go/bin/umh-core /usr/local/bin/umh-core
+COPY --from=build /go/bin/benthos-monitor-helper /usr/local/bin/benthos-monitor-helper
 
 # Install coreutils (this allows date resolution beyond seconds)
 RUN apk add --no-cache coreutils

@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"strconv"
 	"strings"
 	"time"
@@ -324,26 +325,57 @@ func (p *ProtocolConverterInstance) UpdateObservedStateOfInstance(ctx context.Co
 		}
 	}
 
-	// Now render the config
+	// Render the config — but only if inputs have changed since last render.
+	// BuildRuntimeConfig does YAML marshal → Go template → YAML unmarshal for 3 sub-configs,
+	// which is expensive. Since specConfig and agentLocation rarely change, cache the result.
 	start = time.Now()
 
-	p.runtimeConfig, err = runtime_config.BuildRuntimeConfig(
-		p.specConfig,
-		agentLocationStr,
-		nil,             // TODO: add global vars
-		"unimplemented", // TODO: add node name
-		p.baseFSMInstance.GetID(),
-	)
-	if err != nil {
-		// Capture the configuration error in StatusReason for troubleshooting
-		p.ObservedState.ServiceInfo.StatusReason = "config error: " + err.Error()
+	inputsChanged := !p.specConfig.Equal(p.lastRenderedSpecConfig) || !maps.Equal(agentLocationStr, p.lastAgentLocation)
+	if inputsChanged {
+		p.runtimeConfig, err = runtime_config.BuildRuntimeConfig(
+			p.specConfig,
+			agentLocationStr,
+			nil,             // TODO: add global vars
+			"unimplemented", // TODO: add node name
+			p.baseFSMInstance.GetID(),
+		)
+		if err != nil {
+			// Capture the configuration error in StatusReason for troubleshooting
+			p.ObservedState.ServiceInfo.StatusReason = "config error: " + err.Error()
 
-		return fmt.Errorf("failed to build runtime config: %w", err)
+			return fmt.Errorf("failed to build runtime config: %w", err)
+		}
+
+		// Cache inputs so we can skip rendering on the next tick
+		p.lastRenderedSpecConfig = p.specConfig
+		p.lastAgentLocation = maps.Clone(agentLocationStr)
+		p.runtimeConfigChanged = true
 	}
 
 	metrics.ObserveReconcileTime(logger.ComponentProtocolConverterInstance, p.baseFSMInstance.GetID()+".buildRuntimeConfig", time.Since(start))
 
-	if !protocolconverterserviceconfig.ConfigsEqualRuntime(p.runtimeConfig, p.ObservedState.ObservedProtocolConverterRuntimeConfig) {
+	// Check if we can skip the expensive ConfigsEqualRuntime comparison.
+	// We skip when: (1) desired config hasn't changed (no configDirty, no runtimeConfigChanged)
+	// AND (2) observed config hasn't changed (DFC hashes match cached values).
+	configChanged := true
+	observedReadHash, observedWriteHash, hashOK := p.service.GetLastConfigHashes(p.baseFSMInstance.GetID())
+
+	if hashOK && !p.configDirty && !p.runtimeConfigChanged &&
+		observedReadHash == p.lastObservedReadHash && observedWriteHash == p.lastObservedWriteHash {
+		// Neither desired nor observed config changed — use cached result
+		configChanged = !p.lastConfigsEqualResult
+	} else {
+		// At least one side may have changed — do full comparison
+		equal := protocolconverterserviceconfig.ConfigsEqualRuntime(p.runtimeConfig, p.ObservedState.ObservedProtocolConverterRuntimeConfig)
+		p.lastObservedReadHash = observedReadHash
+		p.lastObservedWriteHash = observedWriteHash
+		p.configDirty = false
+		p.runtimeConfigChanged = false
+		p.lastConfigsEqualResult = equal
+		configChanged = !equal
+	}
+
+	if configChanged {
 		// Check if the service exists before attempting to update
 		if p.service.ServiceExists(ctx, services.GetFileSystem(), p.baseFSMInstance.GetID()) {
 			p.baseFSMInstance.GetLogger().Debugf("Observed bridge config is different from desired config, updating bridge configuration")

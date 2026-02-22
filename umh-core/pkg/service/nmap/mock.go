@@ -16,7 +16,6 @@ package nmap
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"time"
 
@@ -26,7 +25,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
-	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
@@ -45,9 +43,6 @@ type MockNmapService struct {
 	StopServiceError              error
 	ReconcileManagerError         error
 	ForceRemoveNmapError          error
-
-	// S6 service mock
-	S6Service s6service.Service
 
 	// Configs keeps track of registered services
 	Configs map[string]*nmapserviceconfig.NmapServiceConfig
@@ -158,7 +153,6 @@ func NewMockNmapService() *MockNmapService {
 		ServiceStates:    make(map[string]*ServiceInfo),
 		ExistingServices: make(map[string]bool),
 		stateFlags:       make(map[string]*ServiceStateFlags),
-		S6Service:        &s6service.MockService{},
 	}
 }
 
@@ -446,76 +440,8 @@ func (m *MockNmapService) SetServicePortState(serviceName string, state string, 
 						ScanDuration: 0.5,
 					},
 				},
-				Logs: []s6service.LogEntry{},
 			},
 		}
-	}
-
-	logs := []s6service.LogEntry{
-		{
-			Timestamp: now,
-			Content:   "NMAP_SCAN_START",
-		},
-		{
-			Timestamp: now,
-			Content:   "NMAP_TIMESTAMP: 2023-04-01T12:34:56+00:00",
-		},
-		{
-			Timestamp: now,
-			Content:   "NMAP_COMMAND: nmap -n -Pn -p 80 example.com -v",
-		},
-		{
-			Timestamp: now,
-			Content:   "Starting Nmap 7.92 ( https://nmap.org ) at 2023-04-01 12:34 UTC",
-		},
-		{
-			Timestamp: now,
-			Content:   "Scanning example.com (93.184.216.34) [1 port]",
-		},
-		{
-			Timestamp: now,
-			Content:   "Completed SYN Stealth Scan at 12:34, 0.05s elapsed (1 total ports)",
-		},
-		{
-			Timestamp: now,
-			Content:   "Nmap scan report for example.com (93.184.216.34)",
-		},
-		{
-			Timestamp: now,
-			Content:   "Host is up (0.045s latency).",
-		},
-		{
-			Timestamp: now,
-			Content:   "PORT   STATE SERVICE",
-		},
-		{
-			Timestamp: now,
-			Content:   fmt.Sprintf("%d/tcp %s  http", 443, state),
-		},
-		{
-			Timestamp: now,
-			Content:   "Read data files from: /usr/bin/../share/nmap",
-		},
-		{
-			Timestamp: now,
-			Content:   "Nmap done: 1 IP address (1 host up) scanned in 0.10 seconds",
-		},
-		{
-			Timestamp: now,
-			Content:   "           Raw packets sent: 1 (44B) | Rcvd: 1 (44B)",
-		},
-		{
-			Timestamp: now,
-			Content:   "NMAP_EXIT_CODE: 0",
-		},
-		{
-			Timestamp: now,
-			Content:   "NMAP_DURATION: .102345",
-		},
-		{
-			Timestamp: now,
-			Content:   "NMAP_SCAN_END",
-		},
 	}
 
 	// Set the port state and latency
@@ -523,7 +449,6 @@ func (m *MockNmapService) SetServicePortState(serviceName string, state string, 
 	if info.NmapStatus.LastScan != nil {
 		info.NmapStatus.LastScan.PortResult.State = state
 		info.NmapStatus.LastScan.PortResult.LatencyMs = latencyMs
-		info.NmapStatus.Logs = logs
 	}
 
 	m.StatusResult = *info
@@ -548,7 +473,6 @@ func (m *MockNmapService) SetNmapError(serviceName string, latencyMs float64) {
 						ScanDuration: 0.5,
 					},
 				},
-				Logs: []s6service.LogEntry{},
 			},
 		}
 	}

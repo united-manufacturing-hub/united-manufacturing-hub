@@ -226,7 +226,7 @@ func (c *ConnectionService) GenerateNmapConfigForConnection(connectionConfig *co
 	return connectionConfig.GetNmapServiceConfig(), nil
 }
 
-// GetConfig returns the actual Connection config from the nmap service.
+// GetConfig returns the actual Connection config from the Nmap service.
 func (c *ConnectionService) GetConfig(
 	ctx context.Context,
 	filesystemService filesystem.Service,
@@ -602,7 +602,6 @@ func (c *ConnectionService) ServiceExists(
 
 	nmapName := c.getNmapName(connectionName)
 
-	// Check if the actual service exists
 	return c.nmapService.ServiceExists(ctx, filesystemService, nmapName)
 }
 

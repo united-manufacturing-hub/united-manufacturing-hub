@@ -303,30 +303,11 @@ const METRICS_END_MARKER = "METRICSENDMETRICSENDMETRICSENDMETRICSENDMETRICSENDME
 const BLOCK_END_MARKER = "ENDENDENDENDENDENDENDENDENDENDENDENDENDENDENDENDENDENDENDENDENDENDENDENDENDENDENDENDENDENDENDENDEND"
 
 func (s *BenthosMonitorService) generateBenthosScript(port uint16) (string, error) {
-	// Build the benthos command - curl http://localhost:9644/public_metrics
-	// Create the script content with a loop that executes benthos every second
-	// Also let's use gzip to compress the output & hex encode it
-	// We use gzip here, to prevent the output from being rotated halfway through the logs & hex encode it to avoid issues with special characters
-	// Max-time: https://everything.monitor.dev/usingcurl/timeouts.html
-	// The timestamp here is the unix nanosecond timestamp of the current time
-	// It is gathered AFTER the curl commands, preventing long curl execution times from affecting the timestamp
-	// +%s%9N: %s is the unix timestamp in seconds with 9 decimal places for nanoseconds
-	scriptContent := fmt.Sprintf(`#!/bin/sh
-while true; do
-  echo "%s"
-  curl -sSL --max-time 1 http://localhost:%d/ping 2>&1 | gzip -c | xxd -p
-  echo "%s"
-  curl -sSL --max-time 1 http://localhost:%d/ready 2>&1 | gzip -c | xxd -p
-  echo "%s"
-  curl -sSL --max-time 1 http://localhost:%d/version 2>&1 | gzip -c | xxd -p
-  echo "%s"
-  curl -sSL --max-time 1 http://localhost:%d/metrics 2>&1 | gzip -c | xxd -p
-  echo "%s"
-  date +%%s%%9N
-  echo "%s"
-  sleep 1
-done
-`, BLOCK_START_MARKER, port, PING_END_MARKER, port, READY_END, port, VERSION_END, port, METRICS_END_MARKER, BLOCK_END_MARKER)
+	// exec replaces the shell process with the Go binary, so s6 supervises
+	// the Go process directly (no extra shell PID).
+	// The Go binary handles HTTP fetches, gzip+hex encoding, markers, timestamps,
+	// and wall-clock aligned sleep — all without forking any child processes.
+	scriptContent := fmt.Sprintf("#!/bin/sh\nexec /usr/local/bin/benthos-monitor-helper --port %d\n", port)
 
 	return scriptContent, nil
 }
@@ -379,9 +360,8 @@ func (s *BenthosMonitorService) GetConfig(ctx context.Context, filesystemService
 	}
 
 	// Parse the port from the script content
-	// The script contains lines like: curl -sSL http://localhost:PORT/ping
-	// We need to extract the PORT value
-	portRegex := regexp.MustCompile(`http://localhost:(\d+)/ping`)
+	// The script contains: exec benthos-monitor-helper --port PORT
+	portRegex := regexp.MustCompile(`--port (\d+)`)
 	matches := portRegex.FindStringSubmatch(string(scriptContent))
 
 	if len(matches) < 2 {

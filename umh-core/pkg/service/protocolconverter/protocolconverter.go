@@ -24,6 +24,7 @@ import (
 	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
@@ -114,6 +115,12 @@ type IProtocolConverterService interface {
 	//    limited – true when resources are limited and bridge creation should be blocked, false otherwise.
 	//    reason  – empty when limited is false; otherwise a short explanation of why resources are limited.
 	IsResourceLimited(snapshot fsm.SystemSnapshot) (bool, string)
+
+	// GetLastConfigHashes returns the config cache hashes for the underlying
+	// DFC read and write sub-services. The FSM uses these to detect whether
+	// the observed config has changed since the last tick, avoiding expensive
+	// reflect.DeepEqual via ConfigsEqualRuntime.
+	GetLastConfigHashes(protConvName string) (readHash uint64, writeHash uint64, ok bool)
 }
 
 // ServiceInfo holds information about the ProtocolConverters underlying health states.
@@ -306,9 +313,12 @@ func (p *ProtocolConverterService) GetConfig(
 		return protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime{}, fmt.Errorf("failed to get read dataflowcomponent config: %w", err)
 	}
 
-	dfcWriteConfig, err := p.dataflowComponentService.GetConfig(ctx, filesystemService, underlyingDFCWriteName)
-	if err != nil {
-		return protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime{}, fmt.Errorf("failed to get write dataflowcomponent config: %w", err)
+	// Write DFC may not exist when no dataflowcomponent_write template was defined.
+	// In that case, use zero-value config.
+	var dfcWriteConfig dataflowcomponentserviceconfig.DataflowComponentServiceConfig
+	dfcWriteConfigResult, err := p.dataflowComponentService.GetConfig(ctx, filesystemService, underlyingDFCWriteName)
+	if err == nil {
+		dfcWriteConfig = dfcWriteConfigResult
 	}
 
 	actualConfig := protocolconverterserviceconfig.FromConnectionAndDFCServiceConfig(connConfig, dfcReadConfig, dfcWriteConfig)
@@ -500,17 +510,23 @@ func (p *ProtocolConverterService) AddToManager(
 		DataFlowComponentServiceConfig: dfcReadServiceConfig,
 	}
 
-	dfcWriteConfig := config.DataFlowComponentConfig{
-		FSMInstanceConfig: config.FSMInstanceConfig{
-			Name:            underlyingDFCWriteName,
-			DesiredFSMState: dfcfsm.OperationalStateStopped,
-		},
-		DataFlowComponentServiceConfig: dfcWriteServiceConfig,
-	}
-
 	// Add the configurations to the lists
 	p.connectionConfig = append(p.connectionConfig, connectionConfig)
-	p.dataflowComponentConfig = append(p.dataflowComponentConfig, dfcReadConfig, dfcWriteConfig)
+	p.dataflowComponentConfig = append(p.dataflowComponentConfig, dfcReadConfig)
+
+	// Only add write DFC if it has a non-empty benthos config (i.e. a write template was defined).
+	// When no dataflowcomponent_write template exists, the generated config has empty Input/Output
+	// and would never be started — but the s6 supervisor processes would still consume resources.
+	if len(dfcWriteServiceConfig.BenthosConfig.Input) > 0 {
+		dfcWriteConfig := config.DataFlowComponentConfig{
+			FSMInstanceConfig: config.FSMInstanceConfig{
+				Name:            underlyingDFCWriteName,
+				DesiredFSMState: dfcfsm.OperationalStateStopped,
+			},
+			DataFlowComponentServiceConfig: dfcWriteServiceConfig,
+		}
+		p.dataflowComponentConfig = append(p.dataflowComponentConfig, dfcWriteConfig)
+	}
 
 	p.logger.Infof("ProtocolConverter %s added to manager", protConvName)
 	p.logger.Infof("Connection config: %+v", p.connectionConfig)
@@ -1259,4 +1275,17 @@ func (p *ProtocolConverterService) IsResourceLimited(snapshot fsm.SystemSnapshot
 	}
 
 	return false, ""
+}
+
+// GetLastConfigHashes returns the config cache hashes for the underlying
+// DFC read and write sub-services. These hashes come from the BenthosService
+// config cache and change only when the underlying YAML files are modified.
+func (p *ProtocolConverterService) GetLastConfigHashes(protConvName string) (uint64, uint64, bool) {
+	readName := p.getUnderlyingDFCReadName(protConvName)
+	writeName := p.getUnderlyingDFCWriteName(protConvName)
+
+	readHash, readOK := p.dataflowComponentService.GetLastConfigHash(readName)
+	writeHash, writeOK := p.dataflowComponentService.GetLastConfigHash(writeName)
+
+	return readHash, writeHash, readOK || writeOK
 }

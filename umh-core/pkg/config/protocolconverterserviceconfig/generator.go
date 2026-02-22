@@ -132,7 +132,7 @@ func normalizeConfig(raw map[string]any) map[string]any {
 
 	dfcWriteConfig, ok := template["dataflowcomponent_write"].(map[string]any)
 	if !ok {
-		dfcWriteConfig = template
+		dfcWriteConfig = make(map[string]any) // no write template defined — produce empty config
 	}
 
 	connectionConfig, ok := template["connection"].(map[string]any)

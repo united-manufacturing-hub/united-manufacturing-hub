@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/portmanager"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
@@ -38,7 +39,11 @@ func NewRegistry() (*Registry, error) {
 		panic("NewRegistry called more than once - registry must be initialized once and explicitly passed between components")
 	}
 
-	fs := filesystem.NewDefaultService()
+	fs := filesystem.NewBufferedServiceWithDirs(
+		filesystem.NewDefaultService(),
+		[]string{constants.S6BaseDir, constants.S6LogBaseDir},
+		constants.FilesAndDirectoriesToIgnore,
+	)
 
 	pm, portErr := portmanager.NewDefaultPortManager()
 	if portErr != nil {

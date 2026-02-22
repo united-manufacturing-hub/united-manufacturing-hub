@@ -15,14 +15,14 @@
 package redpanda
 
 import (
-	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
-	redpandaserviceconfig "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/redpandaserviceconfig"
-	publicfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
-
 	"time"
 
+	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	redpandaserviceconfig "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/redpandaserviceconfig"
+	publicfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	redpandasvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda"
+	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 )
 
 // Operational state constants (using internal_fsm compatible naming).
@@ -143,6 +143,13 @@ type RedpandaInstance struct {
 	// that are updated at the beginning of Reconcile and then used to
 	// determine the next state
 	PreviousObservedState RedpandaObservedState
+
+	// IsLogsFine cache fields — avoid re-scanning unchanged log buffers every tick
+	lastLogsFineResult              bool
+	lastLogsFineEntry               s6service.LogEntry
+	lastLogsFineLogCount            int
+	lastLogsFineLastTS              time.Time
+	lastLogsFineTransitionToRunning time.Time
 }
 
 // GetLastObservedState returns the last known state of the instance.

@@ -89,6 +89,7 @@ func NewBenthosManager(name string) *BenthosManager {
 			}
 
 			benthosInstance.config = cfg.BenthosServiceConfig
+			benthosInstance.configDirty = true
 
 			return nil
 		},
@@ -189,16 +190,21 @@ func (m *BenthosManager) Reconcile(ctx context.Context, snapshot public_fsm.Syst
 	// Save the instance count before reconciliation to detect removals
 	countBefore := len(m.GetInstances())
 
-	// Create a new config based on the current config with allocated ports
-	cfgWithPorts := snapshot.CurrentConfig.Clone()
-	for i, bc := range cfgWithPorts.Internal.Benthos {
-		if port, exists := portManager.GetPort(bc.Name); exists {
-			// Update the BenthosServiceConfig with the allocated port
-			cfgWithPorts.Internal.Benthos[i].BenthosServiceConfig.MetricsPort = port
+	// Inject allocated ports into a lightweight copy of the Benthos config slice.
+	// We only copy the slice (not the entire FullConfig) since MetricsPort is the
+	// only field modified, and it's a uint16 scalar — no deep copy needed.
+	// IMPORTANT: Do NOT mutate snapshot.CurrentConfig directly — it is shared read-only.
+	cfgWithPorts := snapshot.CurrentConfig
+	benthosCopy := make([]config.BenthosConfig, len(cfgWithPorts.Internal.Benthos))
+	copy(benthosCopy, cfgWithPorts.Internal.Benthos)
+	for i := range benthosCopy {
+		if port, exists := portManager.GetPort(benthosCopy[i].Name); exists {
+			benthosCopy[i].BenthosServiceConfig.MetricsPort = port
 		}
 	}
+	cfgWithPorts.Internal.Benthos = benthosCopy
 
-	snapshotWithPorts := snapshot // <- inexpensive value copy
+	snapshotWithPorts := snapshot
 	snapshotWithPorts.CurrentConfig = cfgWithPorts
 
 	// Phase 2: Base FSM Reconciliation with port-aware config

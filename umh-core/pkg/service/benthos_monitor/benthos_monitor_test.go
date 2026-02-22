@@ -124,16 +124,14 @@ var _ = Describe("Benthos Monitor Service", func() {
 			Expect(s6Config.Command[0]).To(Equal("/bin/sh"))
 			Expect(s6Config.ConfigFiles).To(HaveKey("run_benthos_monitor.sh"))
 
-			// Verify the script content contains the necessary markers
+			// Verify the script invokes the Go binary with the correct port
 			script := s6Config.ConfigFiles["run_benthos_monitor.sh"]
-			Expect(script).To(ContainSubstring(benthos_monitor.BLOCK_START_MARKER))
-			Expect(script).To(ContainSubstring(benthos_monitor.PING_END_MARKER))
-			Expect(script).To(ContainSubstring(benthos_monitor.READY_END))
-			Expect(script).To(ContainSubstring(benthos_monitor.VERSION_END))
-			Expect(script).To(ContainSubstring(benthos_monitor.METRICS_END_MARKER))
-			Expect(script).To(ContainSubstring(benthos_monitor.BLOCK_END_MARKER))
-			Expect(script).To(ContainSubstring("curl -sSL"))
-			Expect(script).To(ContainSubstring("sleep 1"))
+			Expect(script).To(ContainSubstring("exec /usr/local/bin/benthos-monitor-helper --port 8080"))
+			// Should NOT contain shell pipeline commands (replaced by Go binary)
+			Expect(script).NotTo(ContainSubstring("curl"))
+			Expect(script).NotTo(ContainSubstring("gzip"))
+			Expect(script).NotTo(ContainSubstring("xxd"))
+			Expect(script).NotTo(ContainSubstring("sleep"))
 		})
 	})
 
@@ -501,32 +499,29 @@ var _ = Describe("Benthos Monitor Service", func() {
 				expectError   bool
 			}{
 				{
-					name: "should parse port from standard script",
+					name: "should parse port from Go binary script",
 					scriptContent: `#!/bin/sh
-while true; do
-  echo "BEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGIN"
-  curl -sSL --max-time 1 http://localhost:25387/ping 2>&1 | gzip -c | xxd -p
-  curl -sSL --max-time 1 http://localhost:25387/ready 2>&1 | gzip -c | xxd -p
-done`,
+exec /usr/local/bin/benthos-monitor-helper --port 25387
+`,
 					expectedPort: 25387,
 					expectError:  false,
 				},
 				{
 					name: "should parse different port numbers",
-					scriptContent: `curl -sSL --max-time 1 http://localhost:8080/ping`,
+					scriptContent: `exec /usr/local/bin/benthos-monitor-helper --port 8080`,
 					expectedPort: 8080,
 					expectError:  false,
 				},
 				{
 					name: "should handle port 65535",
-					scriptContent: `curl -sSL http://localhost:65535/ping`,
+					scriptContent: `exec /usr/local/bin/benthos-monitor-helper --port 65535`,
 					expectedPort: 65535,
 					expectError:  false,
 				},
 				{
 					name: "should return error when no port pattern found",
 					scriptContent: `#!/bin/sh
-echo "No curl commands here"`,
+echo "No port commands here"`,
 					expectedPort: 0,
 					expectError:  true,
 				},
@@ -534,9 +529,9 @@ echo "No curl commands here"`,
 
 			for _, tc := range testCases {
 				// Use regex pattern from the actual implementation
-				portRegex := regexp.MustCompile(`http://localhost:(\d+)/ping`)
+				portRegex := regexp.MustCompile(`--port (\d+)`)
 				matches := portRegex.FindStringSubmatch(tc.scriptContent)
-				
+
 				if tc.expectError {
 					Expect(len(matches)).To(BeNumerically("<", 2), "Test case: %s", tc.name)
 				} else {
