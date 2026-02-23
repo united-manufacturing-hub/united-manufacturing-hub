@@ -98,10 +98,19 @@ jobs:
     steps:
       # Check out THIS repo
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      # Generate token for cross-repo access
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@29824e69f54612133e76f7eaac726eef6c875baf # v2
+        with:
+          app-id: ${{ secrets.CHANGELOG_SYNC_APP_ID }}
+          private-key: ${{ secrets.CHANGELOG_SYNC_APP_PK }}
+          repositories: changelog.umh.app
       # Check out the changelog.umh.app repo
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           repository: united-manufacturing-hub/changelog.umh.app
+          token: ${{ steps.app-token.outputs.token }}
           path: changelog-scripts
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
