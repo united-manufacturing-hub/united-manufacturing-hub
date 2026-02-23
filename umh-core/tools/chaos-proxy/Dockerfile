@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM golang:1.25.7-alpine AS builder
+FROM golang:1.26.0-alpine AS builder
 WORKDIR /app
 COPY go.mod .
 COPY main.go .
