@@ -167,6 +167,18 @@ const (
 	GaugeLastMaintenanceDurationMs GaugeName = "last_maintenance_duration_ms"
 )
 
+// Transport push worker counter names for retry buffer monitoring.
+const (
+	// CounterMessagesDropped tracks messages permanently dropped due to non-retryable errors.
+	CounterMessagesDropped CounterName = "messages_dropped"
+)
+
+// Transport push worker gauge names for retry buffer monitoring.
+const (
+	// GaugePendingMessages tracks messages waiting for retry after push failure.
+	GaugePendingMessages GaugeName = "pending_messages"
+)
+
 // =============================================================================
 // METRICS INFRASTRUCTURE
 // =============================================================================

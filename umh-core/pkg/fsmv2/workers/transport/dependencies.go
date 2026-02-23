@@ -42,6 +42,8 @@ type TransportDependencies struct {
 
 	lastErrorType httpTransport.ErrorType
 
+	resetGeneration uint64
+
 	mu sync.RWMutex
 }
 
@@ -135,6 +137,11 @@ func (d *TransportDependencies) GetDegradedEnteredAt() time.Time {
 	return degradedSince
 }
 
+// GetLastErrorAt returns when the last error occurred, or zero if no errors recorded.
+func (d *TransportDependencies) GetLastErrorAt() time.Time {
+	return d.RetryTracker().LastError().OccurredAt
+}
+
 // GetInboundChan returns channel to write received messages, or nil if no provider set.
 func (d *TransportDependencies) GetInboundChan() chan<- *communicator_transport.UMHMessage {
 	return d.inboundChan
@@ -217,4 +224,22 @@ func (d *TransportDependencies) GetAuthenticatedUUID() string {
 	defer d.mu.RUnlock()
 
 	return d.instanceUUID
+}
+
+// GetResetGeneration returns the current reset generation counter.
+// Children compare this to detect parent transport resets and clear pending buffers.
+func (d *TransportDependencies) GetResetGeneration() uint64 {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+
+	return d.resetGeneration
+}
+
+// IncrementResetGeneration bumps the reset generation counter.
+// Called by ResetTransportAction after resetting the HTTP transport.
+func (d *TransportDependencies) IncrementResetGeneration() {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	d.resetGeneration++
 }

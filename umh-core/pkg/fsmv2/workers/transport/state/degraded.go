@@ -15,8 +15,12 @@
 package state
 
 import (
+	"fmt"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/backoff"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/action"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/snapshot"
 )
 
@@ -39,12 +43,21 @@ func (s *DegradedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 		return fsmv2.Result[any, any](&StartingState{}, fsmv2.SignalNone, nil, "Token expired, transitioning to Starting for re-authentication")
 	}
 
+	// Nuclear fallback: reset transport on prolonged child failures
+	if backoff.ShouldResetTransport(snap.Observed.LastErrorType, snap.Observed.ConsecutiveErrors) {
+		return fsmv2.Result[any, any](s, fsmv2.SignalNone, action.NewResetTransportAction(),
+			fmt.Sprintf("resetting transport: %d consecutive errors (type=%d)",
+				snap.Observed.ConsecutiveErrors, snap.Observed.LastErrorType))
+	}
+
 	// If all children are now healthy, transition back to Running
 	if snap.Observed.ChildrenUnhealthy == 0 {
 		return fsmv2.Result[any, any](&RunningState{}, fsmv2.SignalNone, nil, "All children now healthy, transitioning to Running")
 	}
 
-	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, "Some children are unhealthy, transport degraded")
+	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil,
+		fmt.Sprintf("degraded: %d unhealthy children, %d consecutive errors",
+			snap.Observed.ChildrenUnhealthy, snap.Observed.ConsecutiveErrors))
 }
 
 // String returns the state name derived from the type.

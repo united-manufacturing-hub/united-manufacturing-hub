@@ -82,6 +82,26 @@ func (s *RunningState) Next(snapAny any) fsmv2.NextResult[any, any] {
 }
 ```
 
+## Reason Strings in State Transitions
+
+The `Reason` parameter in `fsmv2.Result()` is visible in structured JSON logs (every state transition), supervisor heartbeats (every ~100 ticks), and parent supervisor's `ChildInfo.StateReason`. Write reasons that help operators troubleshoot without reading code.
+
+**Rules:**
+- Include dynamic snapshot values via `fmt.Sprintf` — never hardcode values that exist in the snapshot
+- For "stop required" transitions: `fmt.Sprintf("stop required: shutdown=%t, parentState=%s", ...)`
+- For "waiting" catch-alls: include which preconditions are missing (`hasTransport=%t, hasValidToken=%t`)
+- For degraded/error states: include the consecutive error count
+- For child lifecycle: include the parent mapped state (`parentState=%q`)
+
+**Gold standard** — communicator worker's `buildRecoveringReason()` in `state_recovering.go`:
+```go
+fmt.Sprintf("sync recovering: %d consecutive errors (%s), backoff %s",
+    consecutiveErrors, mapErrorTypeToReason(errorType), backoffDelay.Round(time.Second))
+```
+
+**Bad**: `"Stop required"`, `"Waiting for transport or token"`, `"Degraded, still pushing"`
+**Good**: `"stop required: shutdown=false, parentState=stopped"`, `"waiting: hasTransport=true, hasValidToken=false"`, `"degraded (5 consecutive errors), still pushing"`
+
 ## Factory Registration
 
 Workers register in `init()` with both worker and supervisor factories:
@@ -166,3 +186,25 @@ var _ = Describe("Transport Scenario", func() {
 ```
 
 **Common mistake**: Having multiple `RunSpecs()` calls causes "Rerunning Suite" errors in CI.
+
+## Destructive Channel Drain Safety
+
+`<-chan` reads are destructive — once a message is read from a channel, it's gone. Pre-check all preconditions (token valid, transport exists) BEFORE draining. Use a `pendingMessages` buffer to store failed messages for retry on the next tick.
+
+## Error Classification Pattern
+
+9 ErrorTypes exist in `communicator/transport/http`. `ShouldStopRetrying` always returns false — classify locally as infrastructure (retry forever) vs non-infrastructure (drop). No retry cap: at 100ms tick rate, even `maxRetries=3` = 300ms, meaning a 1-second network outage drops messages.
+
+## Parent-Level Transport Reset (resetGeneration Pattern)
+
+`t.Reset()` belongs at the parent worker, not child actions. Parent `DegradedState` checks `backoff.ShouldResetTransport()` → dispatches `ResetTransportAction` → increments `resetGeneration`. Children compare generations via `CheckAndClearOnReset()` and clear their pending buffers. Always advance the retry counter after reset to break the modulo trigger in `ShouldResetTransport`.
+
+## Per-Child Error Tracking in Parent-Child Workers
+
+Each child (push/pull) has its own `RetryTracker` for independent health decisions:
+
+- **Errors** flow to BOTH the child's tracker AND the parent's tracker (`RecordTypedError`, `RecordError` delegate up)
+- **Successes** flow to the child's tracker ONLY (`RecordSuccess` does NOT propagate to parent; only auth success resets the parent tracker)
+- **Reads** (`GetConsecutiveErrors`, `GetDegradedEnteredAt`, `GetLastErrorAt`) come from the child's own tracker
+- Each child independently decides Running vs Degraded based on its own consecutive error count
+- The parent tracker accumulates ALL child errors for `ShouldResetTransport` decisions

@@ -143,6 +143,17 @@ var _ = Describe("TransportWorker", func() {
 				// Default to running when spec is nil
 				Expect(desired.GetState()).To(Equal("running"))
 			})
+
+			It("should include PushWorker ChildrenSpecs even with nil spec", func() {
+				desired, err := worker.DeriveDesiredState(nil)
+				Expect(err).ToNot(HaveOccurred())
+
+				transportDesired, ok := desired.(*snapshot.TransportDesiredState)
+				Expect(ok).To(BeTrue())
+				Expect(transportDesired.ChildrenSpecs).To(HaveLen(1))
+				Expect(transportDesired.ChildrenSpecs[0].Name).To(Equal("push"))
+				Expect(transportDesired.ChildrenSpecs[0].WorkerType).To(Equal("push"))
+			})
 		})
 
 		Context("valid spec handling", func() {
@@ -166,6 +177,27 @@ authToken: "test-token"`,
 				Expect(transportDesired.RelayURL).To(Equal("https://relay.example.com"))
 				Expect(transportDesired.InstanceUUID).To(Equal("test-uuid"))
 				Expect(transportDesired.AuthToken).To(Equal("test-token"))
+			})
+
+			It("should include PushWorker ChildrenSpecs", func() {
+				spec := fsmv2types.UserSpec{
+					Config: `relayURL: "https://relay.example.com"
+instanceUUID: "test-uuid"
+authToken: "test-token"`,
+					Variables: fsmv2types.VariableBundle{},
+				}
+
+				desired, err := worker.DeriveDesiredState(spec)
+				Expect(err).ToNot(HaveOccurred())
+
+				transportDesired, ok := desired.(*snapshot.TransportDesiredState)
+				Expect(ok).To(BeTrue())
+				Expect(transportDesired.ChildrenSpecs).To(HaveLen(1))
+
+				pushSpec := transportDesired.ChildrenSpecs[0]
+				Expect(pushSpec.Name).To(Equal("push"))
+				Expect(pushSpec.WorkerType).To(Equal("push"))
+				Expect(pushSpec.ChildStartStates).To(ConsistOf("Running", "Degraded"))
 			})
 
 			It("should return stopped state when configured", func() {

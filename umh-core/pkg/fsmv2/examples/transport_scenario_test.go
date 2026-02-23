@@ -28,10 +28,11 @@ import (
 
 const (
 	// GracefulShutdownCascadingTimeout accounts for nested supervisor graceful shutdown:
-	// - Child supervisor timeout: 5s
-	// - Parent supervisor timeout: 5s
-	// - Processing overhead: 5s
-	GracefulShutdownCascadingTimeout = 15 * time.Second
+	// - Grandchild supervisor timeout: 5s (push worker)
+	// - Child supervisor timeout: 5s (transport worker)
+	// - Parent supervisor timeout: 5s (application supervisor)
+	// - Scenario duration + processing overhead: 5s
+	GracefulShutdownCascadingTimeout = 20 * time.Second
 )
 
 var _ = Describe("Transport Scenario", func() {
@@ -66,15 +67,19 @@ var _ = Describe("Transport Scenario", func() {
 		// ============================================================================
 
 		// ENG-4262: PushWorker implementation
-		// It("creates PushWorker child", func() {
-		// 	result := examples.RunTransportScenario(ctx, examples.TransportRunConfig{
-		// 		Duration: 2 * time.Second,
-		// 	})
-		// 	Expect(result.Error).NotTo(HaveOccurred())
-		// 	<-result.Done
-		// 	// Verify PushWorker child was created
-		// 	// TODO: Add assertion for PushWorker child existence
-		// })
+		It("creates PushWorker child and pushes messages", func() {
+			result := examples.RunTransportScenario(ctx, examples.TransportRunConfig{
+				Duration: 3 * time.Second,
+				InitialOutboundMessages: []*transport.UMHMessage{
+					{InstanceUUID: "test-instance", Content: "msg1"},
+					{InstanceUUID: "test-instance", Content: "msg2"},
+				},
+			})
+			Expect(result.Error).NotTo(HaveOccurred())
+			Eventually(result.Done, GracefulShutdownCascadingTimeout).Should(BeClosed())
+			Expect(result.AuthCallCount).To(BeNumerically(">=", 1))
+			Expect(result.PushedMessages).To(HaveLen(2))
+		})
 
 		// ENG-4263: PullWorker implementation
 		// It("creates PullWorker child", func() {
@@ -87,20 +92,19 @@ var _ = Describe("Transport Scenario", func() {
 		// 	// TODO: Add assertion for PullWorker child existence
 		// })
 
-		// ENG-4262: PushWorker pushes messages
-		// It("pushes messages every 100ms", func() {
-		// 	result := examples.RunTransportScenario(ctx, examples.TransportRunConfig{
-		// 		Duration: 2 * time.Second,
-		// 		InitialOutboundMessages: []*transport.UMHMessage{{
-		// 			InstanceUUID: "test-instance",
-		// 			Content:      "status-update",
-		// 		}},
-		// 	})
-		// 	Expect(result.Error).NotTo(HaveOccurred())
-		// 	<-result.Done
-		// 	// Verify messages were pushed at expected interval
-		// 	Expect(result.PushedMessages).To(HaveLen(1))
-		// })
+		// ENG-4262: PushWorker pushes queued messages
+		It("pushes single queued message", func() {
+			result := examples.RunTransportScenario(ctx, examples.TransportRunConfig{
+				Duration: 3 * time.Second,
+				InitialOutboundMessages: []*transport.UMHMessage{{
+					InstanceUUID: "test-instance",
+					Content:      "status-update",
+				}},
+			})
+			Expect(result.Error).NotTo(HaveOccurred())
+			Eventually(result.Done, GracefulShutdownCascadingTimeout).Should(BeClosed())
+			Expect(result.PushedMessages).To(HaveLen(1))
+		})
 
 		// ENG-4263: PullWorker pulls messages continuously
 		// It("pulls messages continuously", func() {
