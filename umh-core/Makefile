@@ -56,7 +56,7 @@ TARGETARCH := $(shell go env GOARCH)
 
 # Default values for go tools
 GINKGO_VERSION = v2.23.4
-NILAWAY_VERSION = v0.0.0-20251119034912-44f92224c998
+NILAWAY_VERSION = v0.0.0-20260213150243-937701de96c7
 LEFTHOOK_VERSION = v1.13.2
 GOLANGCI_LINT_VERSION = v2.5.0
 BETTERALIGN_VERSION = v0.7.1
@@ -221,7 +221,7 @@ ifeq ($(CI), true)
     INTEGRATION_REPORT_FLAG := --junit-report=integration-test-report.xml -ldflags="-X 'github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/version.AppVersion=$(VERSION)'"
 else
     UNIT_REPORT_FLAG :=
-    INTEGRATION_REPORT_FLAG := 
+    INTEGRATION_REPORT_FLAG :=
 endif
 
 build:
@@ -378,6 +378,16 @@ print-versions:
 	@echo "BENTHOS_UMH_VERSION=$(BENTHOS_UMH_VERSION)"
 	@echo "REDPANDA_VERSION=$(REDPANDA_VERSION)"
 	@echo "DLV_VERSION=$(DLV_VERSION)"
+
+# Print the Go version
+## Used by go-analysis.yml
+print-golang-version:
+	@echo "$(GOLANG_VERSION)"
+
+# Print the Nilaway version
+## Used by go-analysis.yml
+print-nilaway-version:
+	@echo "$(NILAWAY_VERSION)"
 
 ## Install buf for protobuf generation
 install-buf:

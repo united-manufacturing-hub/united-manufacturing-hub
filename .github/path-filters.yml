@@ -12,16 +12,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-name: license-eye-header
-on:
-  workflow_call:
-  workflow_dispatch:
+# Shared path filters for umh-core CI workflows.
+# Used by build-umh-core.yml, test-umh-core.yml, and go-analysis.yml.
 
-jobs:
-  license-eye-header:
-    name: License Eye Header
-    runs-on: depot-ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v6
-      - uses: apache/skywalking-eyes@5c5b974209f0de5d905f37deb69369068ebfc15c # v0.7.0
-        name: License Eye Header
+code:
+  - "umh-core/**"
+  - "Makefile"
+  - ".github/workflows/pull-request.yml"
+  - ".github/workflows/build-umh-core.yml"
+  - ".github/workflows/test-umh-core.yml"
+  - ".github/workflows/go-analysis.yml"
+  - ".github/path-filters.yml"
+  - "!umh-core/CHANGELOG.md"
+  - "!umh-core/changelog-images/**"
+changelog:
+  - "umh-core/CHANGELOG.md"
+  - "umh-core/changelog-images/**"
