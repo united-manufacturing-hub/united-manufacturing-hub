@@ -14,5 +14,6 @@
 
 package state
 
+// BasePullState defines the interface that all pull state implementations must satisfy.
 type BasePullState interface {
 }

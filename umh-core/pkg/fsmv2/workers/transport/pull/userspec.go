@@ -18,6 +18,8 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 )
 
+// PullUserSpec defines the typed configuration for the pull worker.
+// PullWorker config comes from parent TransportWorker, so this is minimal.
 type PullUserSpec struct {
 	config.BaseUserSpec `yaml:",inline"`
 }

@@ -25,6 +25,8 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/pull/snapshot"
 )
 
+// DegradedState represents the unhealthy state where the pull worker continues
+// pulling with exponential backoff after repeated errors or high pending counts.
 type DegradedState struct {
 	helpers.RunningDegradedBase
 }

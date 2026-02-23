@@ -333,6 +333,14 @@ var _ = Describe("StoppingState", func() {
 		Expect(result.State).To(BeAssignableToTypeOf(&state.StoppedState{}))
 	})
 
+	It("should stay in Stopping when stop condition not yet met", func() {
+		snap := makeSnapshot(config.DesiredStateRunning, false, 0, true, true)
+		result := s.Next(snap)
+		Expect(result.State).To(BeAssignableToTypeOf(&state.StoppingState{}))
+		Expect(result.Signal).To(Equal(fsmv2.SignalNone))
+		Expect(result.Reason).To(ContainSubstring("stopping"))
+	})
+
 	It("should return a valid String()", func() {
 		Expect(s.String()).To(Equal("Stopping"))
 	})

@@ -24,10 +24,16 @@ import (
 )
 
 const (
-	errorDegradedThreshold   = 3
+	// errorDegradedThreshold is the number of consecutive pull errors that triggers
+	// a transition from Running to Degraded.
+	errorDegradedThreshold = 3
+
+	// pendingDegradedThreshold is the number of undelivered pending messages that
+	// triggers a transition from Running to Degraded.
 	pendingDegradedThreshold = 100
 )
 
+// RunningState represents the operational state where the pull worker actively pulls messages.
 type RunningState struct {
 	helpers.RunningHealthyBase
 }

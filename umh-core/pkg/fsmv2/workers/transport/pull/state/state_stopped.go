@@ -22,6 +22,8 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/pull/snapshot"
 )
 
+// StoppedState represents the idle state where the pull worker waits for the parent
+// to transition to Running before resuming.
 type StoppedState struct {
 	helpers.StoppedBase
 }

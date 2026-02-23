@@ -32,10 +32,11 @@ func (s *StoppingState) Next(snapAny any) fsmv2.NextResult[any, any] {
 
 	if snap.Observed.IsStopRequired() {
 		return fsmv2.Result[any, any](&StoppedState{}, fsmv2.SignalNone, nil,
-			fmt.Sprintf("leaf worker stopped: shutdown=%t, parentState=%s", snap.Desired.IsShutdownRequested(), snap.Desired.ParentMappedState))
+			fmt.Sprintf("stop required: shutdown=%t, parentState=%s", snap.Desired.IsShutdownRequested(), snap.Desired.ParentMappedState))
 	}
 
-	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, "stopping, waiting for stop condition")
+	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil,
+		fmt.Sprintf("stopping, waiting for stop condition: shutdown=%t, parentState=%s", snap.Desired.IsShutdownRequested(), snap.Desired.ParentMappedState))
 }
 
 func (s *StoppingState) String() string {

@@ -24,6 +24,8 @@ import (
 	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
 )
 
+// PullDependencies abstracts the pull worker's runtime dependencies to avoid import
+// cycles between the pull and transport packages.
 type PullDependencies interface {
 	deps.Dependencies
 	GetInboundChan() chan<- *transport.UMHMessage
@@ -54,11 +56,13 @@ type PullDependencies interface {
 	GetLastErrorAt() time.Time
 }
 
+// PullDesiredState represents the target configuration for the pull worker.
 type PullDesiredState struct {
 	ParentMappedState string `json:"parent_mapped_state"`
 	config.BaseDesiredState
 }
 
+// ShouldBeRunning returns true if the pull worker should be in a running state.
 func (s *PullDesiredState) ShouldBeRunning() bool {
 	if s.ShutdownRequested {
 		return false
@@ -67,6 +71,7 @@ func (s *PullDesiredState) ShouldBeRunning() bool {
 	return s.ParentMappedState == config.DesiredStateRunning
 }
 
+// PullObservedState represents the current observed state of the pull worker.
 type PullObservedState struct {
 	CollectedAt       time.Time `json:"collected_at"`
 	DegradedEnteredAt time.Time `json:"degraded_entered_at,omitempty"`
@@ -99,24 +104,28 @@ func (o PullObservedState) GetObservedDesiredState() fsmv2.DesiredState {
 	return &o.PullDesiredState
 }
 
+// SetState sets the FSM state name on this observed state.
 func (o PullObservedState) SetState(s string) fsmv2.ObservedState {
 	o.State = s
 
 	return o
 }
 
+// SetShutdownRequested sets the shutdown requested status on this observed state.
 func (o PullObservedState) SetShutdownRequested(v bool) fsmv2.ObservedState {
 	o.ShutdownRequested = v
 
 	return o
 }
 
+// SetParentMappedState sets the parent's mapped state on this observed state.
 func (o PullObservedState) SetParentMappedState(state string) fsmv2.ObservedState {
 	o.ParentMappedState = state
 
 	return o
 }
 
+// IsStopRequired reports whether the pull worker needs to stop.
 func (o PullObservedState) IsStopRequired() bool {
 	return o.IsShutdownRequested() || !o.ShouldBeRunning()
 }

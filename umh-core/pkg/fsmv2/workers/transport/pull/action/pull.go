@@ -26,10 +26,16 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/pull/snapshot"
 )
 
+// PullActionName identifies the pull action in FSM action results.
 const PullActionName = "pull"
 
+// PullAction pulls inbound messages from the backend via long-poll and delivers
+// them to the inbound channel. It manages a pending-message buffer for partial
+// deliveries and applies backpressure when the channel nears capacity.
 type PullAction struct{}
 
+// Execute runs one pull cycle: delivers pending messages, checks backpressure,
+// pulls new messages from the backend, and delivers them to the inbound channel.
 func (a *PullAction) Execute(ctx context.Context, depsAny any) error {
 	select {
 	case <-ctx.Done():
@@ -220,10 +226,12 @@ func (a *PullAction) deliverToChannel(ctx context.Context, inChan chan<- *transp
 	return nil
 }
 
+// String returns the action name for logging.
 func (a *PullAction) String() string {
 	return PullActionName
 }
 
+// Name returns the action name for FSM registration.
 func (a *PullAction) Name() string {
 	return PullActionName
 }
