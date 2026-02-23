@@ -87,7 +87,11 @@ func (a *PushAction) Execute(ctx context.Context, depsAny any) error {
 drainLoop:
 	for {
 		select {
-		case msg := <-outChan:
+		case msg, ok := <-outChan:
+			if !ok {
+				break drainLoop
+			}
+
 			messagesToPush = append(messagesToPush, msg)
 		default:
 			break drainLoop

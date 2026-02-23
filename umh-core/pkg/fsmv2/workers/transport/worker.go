@@ -251,7 +251,7 @@ func makePushChildSpec(parentSpec config.UserSpec) []config.ChildSpec {
 		{
 			Name:             "push",
 			WorkerType:       "push",
-			UserSpec:         config.UserSpec{Config: parentSpec.Config},
+			UserSpec:         config.UserSpec{Config: parentSpec.Config, Variables: parentSpec.Variables},
 			ChildStartStates: []string{"Running", "Degraded"},
 		},
 	}
