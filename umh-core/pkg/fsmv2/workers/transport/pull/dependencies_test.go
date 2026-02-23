@@ -141,6 +141,24 @@ var _ = Describe("PullDependencies", func() {
 			Expect(d.PendingMessageCount()).To(Equal(7))
 		})
 
+		It("should filter nil messages from a mixed slice", func() {
+			msgs := []*communicator_transport.UMHMessage{
+				{Content: "a"},
+				nil,
+				{Content: "b"},
+				nil,
+				{Content: "c"},
+			}
+			d.StorePendingMessages(msgs)
+			Expect(d.PendingMessageCount()).To(Equal(3))
+		})
+
+		It("should store nothing when all messages are nil", func() {
+			msgs := []*communicator_transport.UMHMessage{nil, nil, nil}
+			d.StorePendingMessages(msgs)
+			Expect(d.PendingMessageCount()).To(Equal(0))
+		})
+
 		It("should cap at 1000 messages, keeping the newest", func() {
 			first := makeMessages(800)
 			d.StorePendingMessages(first)
@@ -172,6 +190,22 @@ var _ = Describe("PullDependencies", func() {
 
 			drained := d.DrainPendingMessages()
 			Expect(drained).To(HaveLen(10))
+			Expect(d.PendingMessageCount()).To(Equal(0))
+		})
+
+		It("should return only non-nil messages after mixed input", func() {
+			msgs := []*communicator_transport.UMHMessage{
+				nil,
+				{Content: "x"},
+				nil,
+				{Content: "y"},
+			}
+			d.StorePendingMessages(msgs)
+
+			drained := d.DrainPendingMessages()
+			Expect(drained).To(HaveLen(2))
+			Expect(drained[0].Content).To(Equal("x"))
+			Expect(drained[1].Content).To(Equal("y"))
 			Expect(d.PendingMessageCount()).To(Equal(0))
 		})
 

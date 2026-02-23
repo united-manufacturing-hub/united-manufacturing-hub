@@ -196,6 +196,50 @@ var _ = Describe("PushDependencies", func() {
 		})
 	})
 
+	Describe("StorePendingMessages nil filtering", func() {
+		var d *push.PushDependencies
+
+		BeforeEach(func() {
+			var err error
+			d, err = push.NewPushDependencies(parentDeps, identity, logger, nil)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should filter nil messages from a mixed slice", func() {
+			msgs := []*communicator_transport.UMHMessage{
+				{Content: "a"},
+				nil,
+				{Content: "b"},
+				nil,
+				{Content: "c"},
+			}
+			d.StorePendingMessages(msgs)
+			Expect(d.PendingMessageCount()).To(Equal(3))
+		})
+
+		It("should store nothing when all messages are nil", func() {
+			msgs := []*communicator_transport.UMHMessage{nil, nil, nil}
+			d.StorePendingMessages(msgs)
+			Expect(d.PendingMessageCount()).To(Equal(0))
+		})
+
+		It("should return only non-nil messages after mixed input via drain", func() {
+			msgs := []*communicator_transport.UMHMessage{
+				nil,
+				{Content: "x"},
+				nil,
+				{Content: "y"},
+			}
+			d.StorePendingMessages(msgs)
+
+			drained := d.DrainPendingMessages()
+			Expect(drained).To(HaveLen(2))
+			Expect(drained[0].Content).To(Equal("x"))
+			Expect(drained[1].Content).To(Equal("y"))
+			Expect(d.PendingMessageCount()).To(Equal(0))
+		})
+	})
+
 	Describe("StorePendingMessages overflow", func() {
 		var d *push.PushDependencies
 

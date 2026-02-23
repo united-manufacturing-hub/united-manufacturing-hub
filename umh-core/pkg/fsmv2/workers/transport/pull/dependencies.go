@@ -91,7 +91,11 @@ func (d *PullDependencies) StorePendingMessages(msgs []*communicator_transport.U
 	d.pendingMu.Lock()
 	defer d.pendingMu.Unlock()
 
-	d.pendingMessages = append(d.pendingMessages, msgs...)
+	for _, msg := range msgs {
+		if msg != nil {
+			d.pendingMessages = append(d.pendingMessages, msg)
+		}
+	}
 	if len(d.pendingMessages) > maxPendingMessages {
 		dropped := len(d.pendingMessages) - maxPendingMessages
 		d.pendingMessages = d.pendingMessages[len(d.pendingMessages)-maxPendingMessages:]
