@@ -168,12 +168,10 @@ jobs:
 
       - name: Merge JUnit reports
         run: |
-          # Install junit-merge tool
-          npm install -g junit-report-merger@9.0.3
-
-          # Find all XML reports and merge them
           mkdir -p merged-reports
-          jrm merged-reports/combined-test-report.xml "test-reports/**/*.xml"
+          go install github.com/nezorflame/junit-merger@v1.0.0
+
+          $(go env GOPATH)/bin/junit-merger -o merged-reports/combined-test-report.xml test-reports/**/*.xml
 
       - name: Add consolidated report to PR
         uses: ctrf-io/github-test-reporter@024bc4b64d997ca9da86833c6b9548c55c620e40 # v1.0.26
