@@ -1095,7 +1095,7 @@ func (bs *BufferedService) SyncFromDiskPartial(ctx context.Context, batchIndex, 
 			// Files: check if in this batch
 			h := fnv.New32a()
 			_, _ = h.Write([]byte(absPath))
-			if int(h.Sum32())%totalBatches != batchIndex {
+			if int(h.Sum32()%uint32(totalBatches)) != batchIndex {
 				// Not in this batch — keep existing cached state or add placeholder
 				if prev, exists := existingFiles[absPath]; exists {
 					newFiles[absPath] = prev
@@ -2076,8 +2076,8 @@ func (bs *BufferedService) readFileIncrementally(absPath string, previousSize in
 	// Read the new content
 	newContent := make([]byte, fileInfo.Size()-previousSize)
 
-	_, err = file.Read(newContent)
-	if err != nil && !errors.Is(err, io.EOF) {
+	_, err = io.ReadFull(file, newContent)
+	if err != nil {
 		return nil, fmt.Errorf("failed to read new content: %w", err)
 	}
 
@@ -2181,18 +2181,21 @@ func (bs *BufferedService) Rename(ctx context.Context, oldPath, newPath string) 
 			newPrefix += string(os.PathSeparator)
 		}
 
-		// Rename all child paths
+		// Rename all child paths — collect keys first to avoid map mutation during iteration
+		var toRename []string
 		for childPath := range bs.files {
 			if strings.HasPrefix(childPath, oldPrefix) {
-				newChildPath := newPrefix + childPath[len(oldPrefix):]
-				bs.files[newChildPath] = bs.files[childPath]
-				delete(bs.files, childPath)
+				toRename = append(toRename, childPath)
+			}
+		}
+		for _, childPath := range toRename {
+			newChildPath := newPrefix + childPath[len(oldPrefix):]
+			bs.files[newChildPath] = bs.files[childPath]
+			delete(bs.files, childPath)
 
-				// Move any changes as well
-				if chg, inChg := bs.changed[childPath]; inChg {
-					bs.changed[newChildPath] = chg
-					delete(bs.changed, childPath)
-				}
+			if chg, inChg := bs.changed[childPath]; inChg {
+				bs.changed[newChildPath] = chg
+				delete(bs.changed, childPath)
 			}
 		}
 	}
