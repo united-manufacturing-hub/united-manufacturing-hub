@@ -173,6 +173,21 @@ const (
 	CounterMessagesDropped CounterName = "messages_dropped"
 )
 
+// Transport pull worker counter names for delivery monitoring.
+const (
+	// CounterPendingDelivered tracks pending messages successfully delivered to the inbound channel.
+	// Separate from CounterMessagesPulled to avoid double-counting (messages are counted as pulled
+	// when received from backend, then counted as pending-delivered when re-delivered from buffer).
+	CounterPendingDelivered CounterName = "pending_messages_delivered"
+
+	// CounterPartialDeliveries tracks delivery attempts where only some messages could be sent
+	// to the channel before it became full.
+	CounterPartialDeliveries CounterName = "partial_deliveries"
+
+	// CounterBackpressureSkips tracks pull operations skipped due to backpressure.
+	CounterBackpressureSkips CounterName = "backpressure_skips"
+)
+
 // Transport push worker gauge names for retry buffer monitoring.
 const (
 	// GaugePendingMessages tracks messages waiting for retry after push failure.

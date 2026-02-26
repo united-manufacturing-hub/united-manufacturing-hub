@@ -28,11 +28,11 @@ import (
 
 const (
 	// GracefulShutdownCascadingTimeout accounts for nested supervisor graceful shutdown:
-	// - Grandchild supervisor timeout: 5s (push worker)
+	// - Grandchild supervisor timeout: 5s (push worker) + 5s (pull worker) — sequential
 	// - Child supervisor timeout: 5s (transport worker)
 	// - Parent supervisor timeout: 5s (application supervisor)
-	// - Scenario duration + processing overhead: 5s
-	GracefulShutdownCascadingTimeout = 20 * time.Second
+	// - Scenario duration + processing overhead: 5s.
+	GracefulShutdownCascadingTimeout = 25 * time.Second
 )
 
 var _ = Describe("Transport Scenario", func() {
@@ -40,7 +40,7 @@ var _ = Describe("Transport Scenario", func() {
 	var cancel context.CancelFunc
 
 	BeforeEach(func() {
-		ctx, cancel = context.WithTimeout(context.Background(), 30*time.Second)
+		ctx, cancel = context.WithTimeout(context.Background(), 35*time.Second)
 	})
 
 	AfterEach(func() {

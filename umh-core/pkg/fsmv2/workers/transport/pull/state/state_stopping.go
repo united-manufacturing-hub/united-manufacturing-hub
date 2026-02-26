@@ -19,16 +19,16 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/push/snapshot"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/pull/snapshot"
 )
 
-// StoppingState represents the shutdown state where the push worker is stopping.
+// StoppingState represents the shutdown state where the pull worker is stopping.
 type StoppingState struct {
 	helpers.StoppingBase
 }
 
 func (s *StoppingState) Next(snapAny any) fsmv2.NextResult[any, any] {
-	snap := helpers.ConvertSnapshot[snapshot.PushObservedState, *snapshot.PushDesiredState](snapAny)
+	snap := helpers.ConvertSnapshot[snapshot.PullObservedState, *snapshot.PullDesiredState](snapAny)
 
 	if snap.Observed.IsStopRequired() {
 		return fsmv2.Result[any, any](&StoppedState{}, fsmv2.SignalNone, nil,

@@ -67,7 +67,7 @@ var _ = Describe("Requester", func() {
 	}
 
 	// The tests in this context are ported from the old requester_test.go file
-	Context("Requester", func() {
+	Context("Requester", Label("live"), func() {
 		var header map[string]string
 		var cookies map[string]string
 		var data map[string]string

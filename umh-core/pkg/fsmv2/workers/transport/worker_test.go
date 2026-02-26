@@ -150,9 +150,11 @@ var _ = Describe("TransportWorker", func() {
 
 				transportDesired, ok := desired.(*snapshot.TransportDesiredState)
 				Expect(ok).To(BeTrue())
-				Expect(transportDesired.ChildrenSpecs).To(HaveLen(1))
+				Expect(transportDesired.ChildrenSpecs).To(HaveLen(2))
 				Expect(transportDesired.ChildrenSpecs[0].Name).To(Equal("push"))
 				Expect(transportDesired.ChildrenSpecs[0].WorkerType).To(Equal("push"))
+				Expect(transportDesired.ChildrenSpecs[1].Name).To(Equal("pull"))
+				Expect(transportDesired.ChildrenSpecs[1].WorkerType).To(Equal("pull"))
 			})
 		})
 
@@ -192,12 +194,17 @@ authToken: "test-token"`,
 
 				transportDesired, ok := desired.(*snapshot.TransportDesiredState)
 				Expect(ok).To(BeTrue())
-				Expect(transportDesired.ChildrenSpecs).To(HaveLen(1))
+				Expect(transportDesired.ChildrenSpecs).To(HaveLen(2))
 
 				pushSpec := transportDesired.ChildrenSpecs[0]
 				Expect(pushSpec.Name).To(Equal("push"))
 				Expect(pushSpec.WorkerType).To(Equal("push"))
 				Expect(pushSpec.ChildStartStates).To(ConsistOf("Running", "Degraded"))
+
+				pullSpec := transportDesired.ChildrenSpecs[1]
+				Expect(pullSpec.Name).To(Equal("pull"))
+				Expect(pullSpec.WorkerType).To(Equal("pull"))
+				Expect(pullSpec.ChildStartStates).To(ConsistOf("Running", "Degraded"))
 			})
 
 			It("should return stopped state when configured", func() {
