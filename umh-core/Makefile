@@ -316,11 +316,11 @@ test: vet-nilaway-lint-betteralign
 
 unit-test: vet-nilaway-lint-betteralign
 ifeq ($(CI), true)
-	GINKGO_LABEL_FILTER='$(UNIT_LABEL_FILTER)' \
-	gotestsum --junitfile unit-test-report.xml -- -race -tags=test -count=1 -failfast ./...
+	gotestsum --junitfile unit-test-report.xml -- -race -tags=test -count=1 -failfast \
+		-ginkgo.label-filter='$(UNIT_LABEL_FILTER)' ./cmd/... ./internal/... ./pkg/... ./test/...
 else
-	GINKGO_LABEL_FILTER='$(UNIT_LABEL_FILTER)' \
-	go test -race -tags=test -count=1 -failfast ./...
+	go test -race -tags=test -count=1 -failfast \
+		-ginkgo.label-filter='$(UNIT_LABEL_FILTER)' ./cmd/... ./internal/... ./pkg/... ./test/...
 endif
 
 unit-test-fail-slow: vet-nilaway-lint-betteralign
