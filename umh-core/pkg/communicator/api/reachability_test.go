@@ -23,7 +23,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 )
 
-var _ = Describe("Checking API reachability", func() {
+var _ = Describe("Checking API reachability", Label("live"), func() {
 	const apiUrl = "https://management.umh.app/api"
 	var log *zap.SugaredLogger
 
