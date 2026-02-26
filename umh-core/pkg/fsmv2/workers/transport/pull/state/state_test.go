@@ -24,8 +24,8 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/push/snapshot"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/push/state"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/pull/snapshot"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/pull/state"
 )
 
 func makeSnapshot(
@@ -61,16 +61,16 @@ func makeSnapshotWithBackoff(
 	degradedEnteredAt time.Time,
 	lastErrorAt time.Time,
 ) fsmv2.Snapshot {
-	desired := &snapshot.PushDesiredState{
+	desired := &snapshot.PullDesiredState{
 		ParentMappedState: parentMappedState,
 		BaseDesiredState: config.BaseDesiredState{
 			ShutdownRequested: shutdownRequested,
 		},
 	}
 
-	observed := snapshot.PushObservedState{
+	observed := snapshot.PullObservedState{
 		CollectedAt: time.Now(),
-		PushDesiredState: snapshot.PushDesiredState{
+		PullDesiredState: snapshot.PullDesiredState{
 			ParentMappedState: parentMappedState,
 			BaseDesiredState: config.BaseDesiredState{
 				ShutdownRequested: shutdownRequested,
@@ -90,9 +90,9 @@ func makeSnapshotWithBackoff(
 		Observed: observed,
 		Desired:  desired,
 		Identity: deps.Identity{
-			ID:         "test-push-worker",
-			Name:       "push",
-			WorkerType: "push",
+			ID:         "test-pull-worker",
+			Name:       "pull",
+			WorkerType: "pull",
 		},
 	}
 }
@@ -161,21 +161,21 @@ var _ = Describe("RunningState", func() {
 		Expect(result.State).To(BeAssignableToTypeOf(&state.DegradedState{}))
 	})
 
-	It("should stay Running and emit PushAction when less than 3 errors", func() {
+	It("should stay Running and emit PullAction when less than 3 errors", func() {
 		snap := makeSnapshot(config.DesiredStateRunning, false, 2, true, true)
 		result := s.Next(snap)
 		Expect(result.State).To(BeAssignableToTypeOf(&state.RunningState{}))
 		Expect(result.Action).NotTo(BeNil())
-		Expect(result.Action.Name()).To(Equal("push"))
+		Expect(result.Action.Name()).To(Equal("pull"))
 	})
 
-	It("should stay Running and emit PushAction with 0 errors", func() {
+	It("should stay Running and emit PullAction with 0 errors", func() {
 		snap := makeSnapshot(config.DesiredStateRunning, false, 0, true, true)
 		result := s.Next(snap)
 		Expect(result.State).To(BeAssignableToTypeOf(&state.RunningState{}))
 		Expect(result.Signal).To(Equal(fsmv2.SignalNone))
 		Expect(result.Action).NotTo(BeNil())
-		Expect(result.Action.Name()).To(Equal("push"))
+		Expect(result.Action.Name()).To(Equal("pull"))
 	})
 
 	It("should stay Running with nil action when waiting for transport", func() {
@@ -230,19 +230,44 @@ var _ = Describe("DegradedState", func() {
 		Expect(result.State).To(BeAssignableToTypeOf(&state.StoppingState{}))
 	})
 
-	It("should recover to Running on 0 errors", func() {
-		snap := makeSnapshot(config.DesiredStateRunning, false, 0, true, true)
+	It("should recover to Running on 0 errors and low pending count", func() {
+		snap := makeSnapshotFull(config.DesiredStateRunning, false, 0, true, true, 0)
 		result := s.Next(snap)
 		Expect(result.State).To(BeAssignableToTypeOf(&state.RunningState{}))
 	})
 
-	It("should stay Degraded and emit PushAction with non-zero errors", func() {
+	It("should recover to Running on 0 errors when pending is below threshold", func() {
+		snap := makeSnapshotFull(config.DesiredStateRunning, false, 0, true, true, 99)
+		result := s.Next(snap)
+		Expect(result.State).To(BeAssignableToTypeOf(&state.RunningState{}))
+	})
+
+	It("should NOT recover to Running when errors are 0 but pending >= threshold (oscillation prevention)", func() {
+		snap := makeSnapshotFull(config.DesiredStateRunning, false, 0, true, true, 100)
+		result := s.Next(snap)
+		Expect(result.State).To(BeAssignableToTypeOf(&state.DegradedState{}))
+	})
+
+	It("should stay Degraded and emit PullAction with non-zero errors", func() {
 		snap := makeSnapshot(config.DesiredStateRunning, false, 5, true, true)
 		result := s.Next(snap)
 		Expect(result.State).To(BeAssignableToTypeOf(&state.DegradedState{}))
 		Expect(result.Signal).To(Equal(fsmv2.SignalNone))
 		Expect(result.Action).NotTo(BeNil())
-		Expect(result.Action.Name()).To(Equal("push"))
+		Expect(result.Action.Name()).To(Equal("pull"))
+	})
+
+	It("should stay Degraded and emit PullAction with non-zero errors but low pending count", func() {
+		snap := makeSnapshotWithBackoff(
+			config.DesiredStateRunning, false, 2, true, true, 10,
+			httpTransport.ErrorTypeNetwork, 0,
+			time.Now().Add(-30*time.Second),
+			time.Time{},
+		)
+		result := s.Next(snap)
+		Expect(result.State).To(BeAssignableToTypeOf(&state.DegradedState{}))
+		Expect(result.Action).NotTo(BeNil())
+		Expect(result.Action.Name()).To(Equal("pull"))
 	})
 
 	It("should stay Degraded with nil action when waiting for transport or token", func() {
@@ -253,7 +278,7 @@ var _ = Describe("DegradedState", func() {
 		Expect(result.Action).To(BeNil())
 	})
 
-	It("should wait for backoff before retrying push in degraded", func() {
+	It("should wait for backoff before retrying pull in degraded", func() {
 		snap := makeSnapshotWithBackoff(
 			config.DesiredStateRunning, false, 3, true, true, 5,
 			httpTransport.ErrorTypeNetwork, 0,
@@ -266,7 +291,7 @@ var _ = Describe("DegradedState", func() {
 		Expect(result.Reason).To(ContainSubstring("backoff"))
 	})
 
-	It("should dispatch push when backoff has expired", func() {
+	It("should dispatch pull when backoff has expired", func() {
 		snap := makeSnapshotWithBackoff(
 			config.DesiredStateRunning, false, 1, true, true, 2,
 			httpTransport.ErrorTypeNetwork, 0,
@@ -276,7 +301,7 @@ var _ = Describe("DegradedState", func() {
 		result := s.Next(snap)
 		Expect(result.State).To(BeAssignableToTypeOf(&state.DegradedState{}))
 		Expect(result.Action).NotTo(BeNil())
-		Expect(result.Action.Name()).To(Equal("push"))
+		Expect(result.Action.Name()).To(Equal("pull"))
 	})
 
 	It("should respect Retry-After header in degraded", func() {
