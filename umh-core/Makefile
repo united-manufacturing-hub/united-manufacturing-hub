@@ -219,14 +219,14 @@ endef
 
 # Check for CI, add junit report if in CI
 ifeq ($(CI), true)
-    UNIT_REPORT_FLAG := --junit-report=unit-test-report.xml
     INTEGRATION_REPORT_FLAG := --junit-report=integration-test-report.xml -ldflags="-X 'github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/version.AppVersion=$(VERSION)'"
 else
-    UNIT_REPORT_FLAG :=
     INTEGRATION_REPORT_FLAG :=
 endif
 
 UNIT_LABEL_FILTER := !integration && !redpanda-extended && !tls && !live
+# Explicit list: excludes integration/ (requires Docker; has its own make target)
+UNIT_TEST_PKGS := ./cmd/... ./internal/... ./pkg/... ./test/...
 
 build:
 build-pprof:       EXTRA_ARGS := --build-arg PPROF=true
@@ -316,15 +316,16 @@ test: vet-nilaway-lint-betteralign
 
 unit-test: vet-nilaway-lint-betteralign
 ifeq ($(CI), true)
-	gotestsum --junitfile unit-test-report.xml -- -race -tags=test -count=1 -failfast \
-		./cmd/... ./internal/... ./pkg/... ./test/... \
+	gotestsum --junitfile unit-test-report.xml -- -race -v -tags=test -count=1 -failfast \
+		$(UNIT_TEST_PKGS) \
 		-args -ginkgo.label-filter='$(UNIT_LABEL_FILTER)'
 else
-	go test -race -tags=test -count=1 -failfast \
-		./cmd/... ./internal/... ./pkg/... ./test/... \
+	go test -race -v -tags=test -count=1 -failfast \
+		$(UNIT_TEST_PKGS) \
 		-args -ginkgo.label-filter='$(UNIT_LABEL_FILTER)'
 endif
 
+# Sequential fallback using ginkgo directly (no fail-fast, full failure report, covers ./...)
 unit-test-fail-slow: vet-nilaway-lint-betteralign
 	go run github.com/onsi/ginkgo/v2/ginkgo -r --tags=test --race --label-filter='$(UNIT_LABEL_FILTER)' ./...
 
