@@ -27,7 +27,7 @@ import (
 // TryingToAuthenticateState obtains a JWT token via AuthenticateAction.
 //
 // Deprecated: CommunicatorWorker no longer authenticates. TransportWorker handles auth (ENG-4264).
-// This state is unreachable but kept to avoid breaking architecture tests. Will be deleted in ENG-4265.
+// This state is unreachable but kept to avoid churn until ENG-4265 cleanup.
 //
 // Transitions:
 //   - SyncingState: when authenticated and token is valid.

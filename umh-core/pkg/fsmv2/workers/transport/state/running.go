@@ -74,7 +74,8 @@ func ShouldProactivelyReauth(expiry time.Time, now time.Time) bool {
 	}
 
 	// Only consider tokens expiring within 24 hours
-	if expiry.Sub(now) > 24*time.Hour {
+	delta := expiry.Sub(now)
+	if delta <= 0 || delta > 24*time.Hour {
 		return false
 	}
 

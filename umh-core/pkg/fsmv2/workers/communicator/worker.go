@@ -138,7 +138,9 @@ func (w *CommunicatorWorker) CollectObservedState(ctx context.Context) (fsmv2.Ob
 	stateReader := deps.GetStateReader()
 	if stateReader != nil {
 		var prev snapshot.CommunicatorObservedState
-		if err := stateReader.LoadObservedTyped(ctx, deps.GetWorkerType(), deps.GetWorkerID(), &prev); err == nil {
+		if err := stateReader.LoadObservedTyped(ctx, deps.GetWorkerType(), deps.GetWorkerID(), &prev); err != nil {
+			deps.GetLogger().Debug("observed_state_load_failed", depspkg.Err(err))
+		} else {
 			prevWorkerMetrics = prev.Metrics.Worker
 		}
 	}
@@ -260,7 +262,7 @@ func init() {
 	if err := factory.RegisterWorkerType[snapshot.CommunicatorObservedState, *snapshot.CommunicatorDesiredState](
 		func(id depspkg.Identity, logger depspkg.FSMLogger, stateReader depspkg.StateReader, _ map[string]any) fsmv2.Worker {
 			// ChannelProvider must be set via global singleton before factory is called (will panic if not set).
-			// Transport is created lazily by AuthenticateAction.
+			// Transport creation and auth are handled by TransportWorker (ENG-4264).
 			commDeps := NewCommunicatorDependencies(nil, logger, stateReader, id)
 
 			return &CommunicatorWorker{

@@ -323,9 +323,8 @@ var _ = Describe("PullAction", func() {
 	Describe("Nil messages in pulled array", func() {
 		It("should skip nil messages and only deliver valid ones", func() {
 			// Edge case: Transport returns array containing nil pointers.
-			// The defensive code `if msg == nil { continue }` should skip them during delivery.
-			// Metrics count total messages from backend (including nils) - this is intentional
-			// since it reflects what the backend actually returned.
+			// The defensive code `if msg == nil { continue }` skips them during delivery.
+			// CounterMessagesPulled uses nonNilCount — only valid messages are counted.
 			mockTrans.pullMessages = []*transport.UMHMessage{
 				{InstanceUUID: "uuid-1", Content: "msg1", Email: "a@b.com"},
 				nil,
@@ -350,11 +349,11 @@ var _ = Describe("PullAction", func() {
 			msg3 := <-inboundBi
 			Expect(msg3.Content).To(Equal("msg3"))
 
-			// Metrics count total messages from backend response (5), not delivered count (3)
+			// Metrics count non-nil messages only (nonNilCount=3), not total backend response size (5)
 			drained := mockDeps.metricsRecorder.Drain()
 			Expect(drained.Counters[string(deps.CounterPullOps)]).To(Equal(int64(1)))
 			Expect(drained.Counters[string(deps.CounterPullSuccess)]).To(Equal(int64(1)))
-			Expect(drained.Counters[string(deps.CounterMessagesPulled)]).To(Equal(int64(5)))
+			Expect(drained.Counters[string(deps.CounterMessagesPulled)]).To(Equal(int64(3)))
 		})
 	})
 
