@@ -2,14 +2,17 @@
 
 ## [0.44.10]
 
+This release simplifies S7 addressing and fixes three edge cases in the Management Console editor and S7 data type handling.
+
 ### Improvements
 
-- **Simplified S7 address format for non-Data Block memory areas** - S7 addresses for PE, PA, MK, C, and T areas no longer need a block number. You can now write `PE.X0.0` instead of `PE0.X0.0`. The old format still works but logs a deprecation warning and will be removed in a future version. Data Block addresses (`DB1.DW20`) are unchanged
+- **Simplified S7 address format for non-Data Block memory areas** - Previously, S7 addresses for PE, PA, MK, C, and T areas required a block number that served no function. You can now write `PE.X0.0` instead of `PE0.X0.0`. The old format still works but logs a deprecation warning and will be removed in a future version. Data Block addresses (`DB1.DW20`) are unchanged
 
 ### Fixes
 
-- **Fixed S7 DateAndTime crash** - The S7 `DateAndTime` data type previously caused a crash due to an incorrect buffer size
-- **Fixed false "required" warnings in the Management Console editor** - Fields with children that already have default values were incorrectly marked as required, causing unnecessary validation warnings when editing bridge configurations
+- **Fixed S7 DateAndTime crash** - The S7 `DateAndTime` data type crashed due to an incorrect buffer size and now reads correctly
+- **Fixed false "required" warnings in the Management Console editor** - Fields with children that already have default values were incorrectly marked as required when editing bridge configurations -- they are now correctly treated as optional
+- **Fixed deprecated fields not shown as deprecated in the editor** - Fields marked as deprecated in bridge plugin definitions were not flagged in the Management Console editor -- they now correctly appear as deprecated
 
 ## [0.44.9]
 
