@@ -292,6 +292,7 @@ jobs:
         env:
           VERSION: ${{ github.ref_name }}
         run: |
+          set -euo pipefail
           SEMVER="${VERSION#v}"
 
           awk "/^## \\[${SEMVER}\\]/{found=1; next} /^## \\[/{if(found) exit} found" \
@@ -303,9 +304,20 @@ jobs:
             exit 0
           fi
 
-          DATE=$(date +%Y-%m-%d)
-          echo "" >> /tmp/release-body.md
-          echo "See https://changelog.umh.app/changelog/${DATE}-umh-core-${VERSION}" >> /tmp/release-body.md
+          # Extract first bold title (mirrors sync-changelog.ts extractTitle)
+          TITLE=$(grep -m1 -oP '(?<=\*\*).+?(?=\*\*)' /tmp/release-body.md || echo "")
+
+          if [ -n "$TITLE" ]; then
+            # Generate slug (mirrors sync-changelog.ts generateSlug)
+            SLUG=$(echo "$TITLE" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-//; s/-$//')
+            DATE=$(date +%Y-%m-%d)
+            echo "" >> /tmp/release-body.md
+            echo "See https://changelog.umh.app/changelog/${DATE}-${SLUG}-${VERSION}" >> /tmp/release-body.md
+          else
+            DATE=$(date +%Y-%m-%d)
+            echo "" >> /tmp/release-body.md
+            echo "See https://changelog.umh.app/changelog/${DATE}-umh-core-${VERSION}" >> /tmp/release-body.md
+          fi
 
       - name: Update GitHub Release
         if: steps.changelog.outputs.skip != 'true'
@@ -313,4 +325,5 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ github.ref_name }}
         run: |
+          set -euo pipefail
           gh release edit "$VERSION" --notes-file /tmp/release-body.md
