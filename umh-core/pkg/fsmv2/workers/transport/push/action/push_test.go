@@ -78,6 +78,7 @@ type mockPushDeps struct {
 	lastRetryAfter    time.Duration
 	degradedEnteredAt time.Time
 	lastErrorAt       time.Time
+	authenticatedUUID string
 }
 
 type typedErrorCall struct {
@@ -194,6 +195,10 @@ func (m *mockPushDeps) GetLastErrorAt() time.Time {
 	return m.lastErrorAt
 }
 
+func (m *mockPushDeps) GetAuthenticatedUUID() string {
+	return m.authenticatedUUID
+}
+
 var _ = Describe("PushAction", func() {
 	var (
 		act           *action.PushAction
@@ -278,16 +283,26 @@ var _ = Describe("PushAction", func() {
 	})
 
 	Describe("Empty outbound channel", func() {
-		It("should be a no-op with no metrics and no transport call", func() {
+		It("should record success to clear consecutive error counter", func() {
 			err := act.Execute(context.Background(), mockDeps)
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(mockTrans.pushCallCount).To(Equal(0))
-			Expect(mockDeps.recordSuccessCalls).To(Equal(0))
+			Expect(mockDeps.recordSuccessCalls).To(Equal(1))
 
 			drained := mockDeps.metricsRecorder.Drain()
 			Expect(drained.Counters).To(BeEmpty())
 			Expect(drained.Gauges).To(BeEmpty())
+		})
+
+		It("should clear stale error state from shared RetryTracker when nothing to push", func() {
+			mockDeps.consecutiveErrors = 3
+
+			err := act.Execute(context.Background(), mockDeps)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(mockTrans.pushCallCount).To(Equal(0))
+			Expect(mockDeps.recordSuccessCalls).To(Equal(1))
 		})
 	})
 
@@ -447,6 +462,75 @@ var _ = Describe("PushAction", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(mockTrans.pushCallCount).To(Equal(0))
+		})
+	})
+
+	Describe("UUID consistency (403 prevention)", func() {
+		It("should overwrite message InstanceUUID with authenticated UUID from dependencies", func() {
+			// Scenario: SubscriberHandler created messages with placeholder UUID before
+			// authentication completed. The backend validates JWT claims match message UUID.
+			// If they don't match → 403 Forbidden.
+			placeholderUUID := "placeholder-uuid-before-auth"
+			authenticatedUUID := "real-uuid-from-backend-jwt"
+
+			outboundBi <- &transport.UMHMessage{
+				InstanceUUID: placeholderUUID,
+				Content:      "status-update",
+				Email:        "user@example.com",
+			}
+
+			mockDeps.authenticatedUUID = authenticatedUUID
+
+			err := act.Execute(context.Background(), mockDeps)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(mockTrans.pushCallCount).To(Equal(1))
+			Expect(mockTrans.pushedMsgs).To(HaveLen(1))
+			// The pushed message MUST have the authenticated UUID, not the placeholder
+			Expect(mockTrans.pushedMsgs[0].InstanceUUID).To(Equal(authenticatedUUID))
+		})
+
+		It("should overwrite UUID in pending messages during retry", func() {
+			placeholderUUID := "placeholder-uuid"
+			authenticatedUUID := "real-authenticated-uuid"
+
+			mockDeps.pendingMessages = []*transport.UMHMessage{
+				{InstanceUUID: placeholderUUID, Content: "pending1"},
+				{InstanceUUID: placeholderUUID, Content: "pending2"},
+			}
+			mockDeps.authenticatedUUID = authenticatedUUID
+
+			err := act.Execute(context.Background(), mockDeps)
+			Expect(err).NotTo(HaveOccurred())
+
+			// All pushed messages should have the authenticated UUID
+			for _, pushed := range mockTrans.pushedMsgs {
+				Expect(pushed.InstanceUUID).To(Equal(authenticatedUUID))
+			}
+		})
+
+		It("should preserve original UUID when authenticatedUUID is empty", func() {
+			// Edge case: If authenticatedUUID is empty (e.g., authentication not yet
+			// complete or failed), the original message UUID should be preserved.
+			// This prevents messages from having empty UUIDs which would cause
+			// different (possibly worse) backend errors.
+			originalUUID := "original-message-uuid"
+
+			outboundBi <- &transport.UMHMessage{
+				InstanceUUID: originalUUID,
+				Content:      "status-update",
+				Email:        "user@example.com",
+			}
+
+			mockDeps.authenticatedUUID = "" // Empty - authentication not complete
+
+			err := act.Execute(context.Background(), mockDeps)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(mockTrans.pushCallCount).To(Equal(1))
+			Expect(mockTrans.pushedMsgs).To(HaveLen(1))
+			// Original UUID should be preserved when authenticatedUUID is empty
+			Expect(mockTrans.pushedMsgs[0].InstanceUUID).To(Equal(originalUUID))
 		})
 	})
 })

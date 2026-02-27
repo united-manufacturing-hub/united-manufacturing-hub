@@ -26,12 +26,13 @@ import (
 
 // TryingToAuthenticateState obtains a JWT token via AuthenticateAction.
 //
-// Transitions:
-//   - → SyncingState: when authenticated && !tokenExpired
-//   - → StoppedState: if shutdown requested
-//   - → self: loops emitting AuthenticateAction until success
+// Deprecated: CommunicatorWorker no longer authenticates. TransportWorker handles auth (ENG-4264).
+// This state is unreachable but kept to avoid churn until ENG-4265 cleanup.
 //
-// Enforces C1 (auth precedence), C2 (token expiry), C4 (shutdown priority).
+// Transitions:
+//   - SyncingState: when authenticated and token is valid.
+//   - StoppedState: if shutdown requested.
+//   - self: loops emitting AuthenticateAction with backoff until token acquired.
 type TryingToAuthenticateState struct {
 	helpers.StartingBase
 }

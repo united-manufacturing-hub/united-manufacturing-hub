@@ -30,6 +30,7 @@ type PushDependencies interface {
 	GetOutboundChan() <-chan *transport.UMHMessage
 	GetTransport() transport.Transport
 	GetJWTToken() string
+	GetAuthenticatedUUID() string
 	RecordTypedError(errType httpTransport.ErrorType, retryAfter time.Duration)
 	RecordSuccess()
 	RecordError()
@@ -49,7 +50,7 @@ type PushDependencies interface {
 	GetResetGeneration() uint64
 	CheckAndClearOnReset() bool
 
-	// Backoff timing from parent error tracking
+	// Backoff timing from child's own error tracking
 	GetLastRetryAfter() time.Duration
 	GetDegradedEnteredAt() time.Time
 	GetLastErrorAt() time.Time

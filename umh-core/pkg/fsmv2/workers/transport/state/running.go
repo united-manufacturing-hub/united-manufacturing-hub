@@ -49,7 +49,7 @@ func (s *RunningState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	}
 
 	// Proactive night re-auth: if token would expire during business hours, re-auth at 3 AM
-	if shouldProactivelyReauth(snap.Observed.JWTExpiry, time.Now()) {
+	if ShouldProactivelyReauth(snap.Observed.JWTExpiry, time.Now()) {
 		return fsmv2.Result[any, any](&StartingState{}, fsmv2.SignalNone, nil,
 			fmt.Sprintf("proactive night re-auth: token expires at %s (business hours), re-authing now",
 				snap.Observed.JWTExpiry.Local().Format("15:04")))
@@ -64,10 +64,18 @@ func (s *RunningState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, "All children healthy, transport running")
 }
 
-// shouldProactivelyReauth returns true if the token would expire during business
-// hours and it's currently the proactive re-auth hour (3 AM).
-func shouldProactivelyReauth(expiry time.Time, now time.Time) bool {
+// ShouldProactivelyReauth returns true if the token would expire during business
+// hours, within 24 hours, and it's currently the proactive re-auth hour (3 AM).
+// The 24-hour proximity check prevents unnecessary nightly re-auth for tokens
+// that expire weeks away.
+func ShouldProactivelyReauth(expiry time.Time, now time.Time) bool {
 	if expiry.IsZero() {
+		return false
+	}
+
+	// Only consider tokens expiring within 24 hours
+	delta := expiry.Sub(now)
+	if delta <= 0 || delta > 24*time.Hour {
 		return false
 	}
 

@@ -38,6 +38,7 @@ type CommunicatorSnapshot struct {
 }
 
 var _ fsmv2.DesiredState = (*CommunicatorDesiredState)(nil)
+var _ config.ChildSpecProvider = (*CommunicatorDesiredState)(nil)
 
 // CommunicatorDesiredState represents the target configuration for the communicator.
 type CommunicatorDesiredState struct {
@@ -48,9 +49,16 @@ type CommunicatorDesiredState struct {
 	AuthToken    string `json:"authToken"`
 	RelayURL     string `json:"relayURL"`
 
+	ChildrenSpecs []config.ChildSpec `json:"childrenSpecs,omitempty"`
+
 	// Messages
 	MessagesToBeSent []transport.UMHMessage `json:"messagesToBeSent,omitempty"`
 	Timeout          time.Duration          `json:"timeout"`
+}
+
+// GetChildrenSpecs returns the children specifications for the communicator worker.
+func (d *CommunicatorDesiredState) GetChildrenSpecs() []config.ChildSpec {
+	return d.ChildrenSpecs
 }
 
 // GetState returns the desired lifecycle state ("running" or "stopped").
@@ -90,10 +98,15 @@ type CommunicatorObservedState struct {
 
 	// Backpressure indicates inbound channel is near full capacity.
 	// When true, pull operations are skipped to prevent message loss.
+	// Deprecated: Backpressure is now tracked internally by PullWorker (ENG-4264).
 	IsBackpressured bool `json:"isBackpressured,omitempty"`
 
 	// Authentication
+	// Deprecated: Authentication is now handled by TransportWorker (ENG-4264).
 	Authenticated bool
+
+	ChildrenHealthy   int `json:"children_healthy"`
+	ChildrenUnhealthy int `json:"children_unhealthy"`
 }
 
 // IsTokenExpired returns true if the JWT token is expired or will expire within 10 minutes.
@@ -107,10 +120,11 @@ func (o CommunicatorObservedState) IsTokenExpired() bool {
 	return time.Now().Add(refreshBuffer).After(o.JWTExpiry)
 }
 
-// IsSyncHealthy returns true if authenticated, token valid, no consecutive errors, and not backpressured.
-// Any error immediately makes sync unhealthy, triggering transition to RecoveringState.
+// IsSyncHealthy returns true when at least one child is healthy and no children
+// are unhealthy. Returns false when no children exist, which is a transient
+// state during startup that resolves within 1-2 supervisor ticks.
 func (o CommunicatorObservedState) IsSyncHealthy() bool {
-	return o.Authenticated && !o.IsTokenExpired() && o.ConsecutiveErrors == 0 && !o.IsBackpressured
+	return o.ChildrenHealthy > 0 && o.ChildrenUnhealthy == 0
 }
 
 func (o CommunicatorObservedState) GetConsecutiveErrors() int {
@@ -135,6 +149,14 @@ func (o CommunicatorObservedState) SetState(s string) fsmv2.ObservedState {
 // SetShutdownRequested sets the shutdown requested status on this observed state.
 func (o CommunicatorObservedState) SetShutdownRequested(v bool) fsmv2.ObservedState {
 	o.ShutdownRequested = v
+
+	return o
+}
+
+// SetChildrenCounts sets the children health counts on this observed state.
+func (o CommunicatorObservedState) SetChildrenCounts(healthy, unhealthy int) fsmv2.ObservedState {
+	o.ChildrenHealthy = healthy
+	o.ChildrenUnhealthy = unhealthy
 
 	return o
 }

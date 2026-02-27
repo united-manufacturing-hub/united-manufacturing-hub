@@ -26,6 +26,7 @@ import (
 	communicator_transport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
 	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/pull"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/push"
 )
 
@@ -113,7 +114,7 @@ var _ = Describe("PushDependencies", func() {
 		})
 	})
 
-	Describe("Delegation to parent", func() {
+	Describe("Per-child error tracking", func() {
 		var d *push.PushDependencies
 
 		BeforeEach(func() {
@@ -152,46 +153,81 @@ var _ = Describe("PushDependencies", func() {
 		})
 
 		Describe("RecordTypedError", func() {
-			It("should delegate to parent", func() {
+			It("should record on both child and parent", func() {
 				d.RecordTypedError(httpTransport.ErrorTypeBackendRateLimit, 30*time.Second)
-				Expect(parentDeps.GetLastErrorType()).To(Equal(httpTransport.ErrorTypeBackendRateLimit))
+				Expect(d.GetConsecutiveErrors()).To(Equal(1))
 				Expect(parentDeps.GetConsecutiveErrors()).To(Equal(1))
+				Expect(parentDeps.GetLastErrorType()).To(Equal(httpTransport.ErrorTypeBackendRateLimit))
 			})
 		})
 
 		Describe("RecordSuccess", func() {
-			It("should delegate to parent", func() {
+			It("should zero child errors but not parent errors", func() {
 				parentDeps.RecordError()
 				parentDeps.RecordError()
 				Expect(parentDeps.GetConsecutiveErrors()).To(Equal(2))
 
+				d.RecordError()
+				d.RecordError()
+				Expect(d.GetConsecutiveErrors()).To(Equal(2))
+				Expect(parentDeps.GetConsecutiveErrors()).To(Equal(4))
+
 				d.RecordSuccess()
-				Expect(parentDeps.GetConsecutiveErrors()).To(Equal(0))
+				Expect(d.GetConsecutiveErrors()).To(Equal(0))
+				Expect(parentDeps.GetConsecutiveErrors()).To(Equal(4))
 			})
 		})
 
 		Describe("RecordError", func() {
-			It("should delegate to parent", func() {
+			It("should record on both child and parent", func() {
 				d.RecordError()
 				d.RecordError()
+				Expect(d.GetConsecutiveErrors()).To(Equal(2))
 				Expect(parentDeps.GetConsecutiveErrors()).To(Equal(2))
 			})
 		})
 
 		Describe("GetConsecutiveErrors", func() {
-			It("should return parent consecutive errors", func() {
+			It("should read from child tracker, not parent", func() {
 				Expect(d.GetConsecutiveErrors()).To(Equal(0))
 				parentDeps.RecordError()
 				parentDeps.RecordError()
 				parentDeps.RecordError()
-				Expect(d.GetConsecutiveErrors()).To(Equal(3))
+				Expect(d.GetConsecutiveErrors()).To(Equal(0))
 			})
 		})
 
 		Describe("GetLastErrorType", func() {
-			It("should return parent last error type", func() {
-				parentDeps.RecordTypedError(httpTransport.ErrorTypeNetwork, 0)
+			It("should read from child field", func() {
+				d.RecordTypedError(httpTransport.ErrorTypeNetwork, 0)
 				Expect(d.GetLastErrorType()).To(Equal(httpTransport.ErrorTypeNetwork))
+				d.RecordSuccess()
+				Expect(d.GetLastErrorType()).To(Equal(httpTransport.ErrorType(0)))
+			})
+		})
+
+		Describe("GetDegradedEnteredAt", func() {
+			It("should read from child tracker", func() {
+				Expect(d.GetDegradedEnteredAt().IsZero()).To(BeTrue())
+				d.RecordError()
+				Expect(d.GetDegradedEnteredAt().IsZero()).To(BeFalse())
+				d.RecordSuccess()
+				Expect(d.GetDegradedEnteredAt().IsZero()).To(BeTrue())
+			})
+		})
+
+		Describe("GetLastErrorAt", func() {
+			It("should read from child tracker", func() {
+				before := time.Now()
+				d.RecordTypedError(httpTransport.ErrorTypeNetwork, 0)
+				Expect(d.GetLastErrorAt()).To(BeTemporally(">=", before))
+			})
+		})
+
+		Describe("GetLastRetryAfter", func() {
+			It("should read from child tracker", func() {
+				d.RecordTypedError(httpTransport.ErrorTypeBackendRateLimit, 30*time.Second)
+				Expect(d.GetLastRetryAfter()).To(Equal(30 * time.Second))
 			})
 		})
 	})
@@ -283,6 +319,50 @@ var _ = Describe("PushDependencies", func() {
 		It("should return true when token is valid and not near expiry", func() {
 			parentDeps.SetJWT("good-token", time.Now().Add(1*time.Hour))
 			Expect(d.IsTokenValid()).To(BeTrue())
+		})
+	})
+
+	Describe("Cross-child isolation", func() {
+		var (
+			pushDeps *push.PushDependencies
+			pullDeps *pull.PullDependencies
+		)
+
+		BeforeEach(func() {
+			pushIdentity := deps.Identity{ID: "push-id", WorkerType: "push"}
+			pullIdentity := deps.Identity{ID: "pull-id", WorkerType: "pull"}
+
+			var err error
+			pushDeps, err = push.NewPushDependencies(parentDeps, pushIdentity, logger, nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			pullDeps, err = pull.NewPullDependencies(parentDeps, pullIdentity, logger, nil)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("push success does not mask pull errors", func() {
+			pullDeps.RecordError()
+			pullDeps.RecordError()
+			pullDeps.RecordError()
+			Expect(pullDeps.GetConsecutiveErrors()).To(Equal(3))
+
+			pushDeps.RecordSuccess()
+
+			Expect(pushDeps.GetConsecutiveErrors()).To(Equal(0))
+			Expect(pullDeps.GetConsecutiveErrors()).To(Equal(3))
+			Expect(parentDeps.GetConsecutiveErrors()).To(Equal(3))
+		})
+
+		It("pull success does not mask push errors", func() {
+			pushDeps.RecordError()
+			pushDeps.RecordError()
+			pushDeps.RecordError()
+
+			pullDeps.RecordSuccess()
+
+			Expect(pullDeps.GetConsecutiveErrors()).To(Equal(0))
+			Expect(pushDeps.GetConsecutiveErrors()).To(Equal(3))
+			Expect(parentDeps.GetConsecutiveErrors()).To(Equal(3))
 		})
 	})
 

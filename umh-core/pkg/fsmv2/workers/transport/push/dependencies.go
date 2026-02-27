@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps/retry"
 	communicator_transport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
 	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
 	transport_pkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport"
@@ -34,8 +35,10 @@ type PushDependencies struct {
 	*deps.BaseDependencies
 	parentDeps              *transport_pkg.TransportDependencies
 	pendingMessages         []*communicator_transport.UMHMessage
+	errorMu                 sync.RWMutex
 	pendingMu               sync.RWMutex
 	lastSeenResetGeneration uint64
+	lastErrorType           httpTransport.ErrorType
 }
 
 func NewPushDependencies(parentDeps *transport_pkg.TransportDependencies, identity deps.Identity, logger deps.FSMLogger, stateReader deps.StateReader) (*PushDependencies, error) {
@@ -61,24 +64,44 @@ func (d *PushDependencies) GetJWTToken() string {
 	return d.parentDeps.GetJWTToken()
 }
 
+func (d *PushDependencies) GetAuthenticatedUUID() string {
+	return d.parentDeps.GetAuthenticatedUUID()
+}
+
 func (d *PushDependencies) RecordTypedError(errType httpTransport.ErrorType, retryAfter time.Duration) {
+	d.errorMu.Lock()
+	d.lastErrorType = errType
+	d.errorMu.Unlock()
+
+	d.RetryTracker().RecordError(retry.WithClass(errType.String()), retry.WithRetryAfter(retryAfter))
 	d.parentDeps.RecordTypedError(errType, retryAfter)
 }
 
+// RecordSuccess resets the child's error state. It intentionally does NOT
+// propagate to the parent tracker. The parent tracker is only reset by auth
+// success (authenticate.go). This prevents a push success from masking pull
+// errors (or vice versa) on the shared parent counter.
 func (d *PushDependencies) RecordSuccess() {
-	d.parentDeps.RecordSuccess()
+	d.errorMu.Lock()
+	d.lastErrorType = 0
+	d.errorMu.Unlock()
+
+	d.RetryTracker().RecordSuccess()
 }
 
 func (d *PushDependencies) RecordError() {
+	d.RetryTracker().RecordError()
 	d.parentDeps.RecordError()
 }
 
 func (d *PushDependencies) GetConsecutiveErrors() int {
-	return d.parentDeps.GetConsecutiveErrors()
+	return d.RetryTracker().ConsecutiveErrors()
 }
 
 func (d *PushDependencies) GetLastErrorType() httpTransport.ErrorType {
-	return d.parentDeps.GetLastErrorType()
+	d.errorMu.RLock()
+	defer d.errorMu.RUnlock()
+	return d.lastErrorType
 }
 
 func (d *PushDependencies) StorePendingMessages(msgs []*communicator_transport.UMHMessage) {
@@ -133,15 +156,16 @@ func (d *PushDependencies) IsTokenValid() bool {
 }
 
 func (d *PushDependencies) GetLastRetryAfter() time.Duration {
-	return d.parentDeps.GetLastRetryAfter()
+	return d.RetryTracker().LastError().RetryAfter
 }
 
 func (d *PushDependencies) GetDegradedEnteredAt() time.Time {
-	return d.parentDeps.GetDegradedEnteredAt()
+	degradedSince, _ := d.RetryTracker().DegradedSince()
+	return degradedSince
 }
 
 func (d *PushDependencies) GetLastErrorAt() time.Time {
-	return d.parentDeps.GetLastErrorAt()
+	return d.RetryTracker().LastError().OccurredAt
 }
 
 func (d *PushDependencies) GetResetGeneration() uint64 {

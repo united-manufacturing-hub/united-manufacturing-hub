@@ -23,7 +23,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	fsmv2config "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
+	depspkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/push"
@@ -36,14 +36,14 @@ var _ fsmv2.Worker = (*push.PushWorker)(nil)
 var _ = Describe("PushWorker", func() {
 	var (
 		worker     *push.PushWorker
-		logger     deps.FSMLogger
-		identity   deps.Identity
+		logger     depspkg.FSMLogger
+		identity   depspkg.Identity
 		parentDeps *transport.TransportDependencies
 	)
 
 	BeforeEach(func() {
-		logger = deps.NewNopFSMLogger()
-		identity = deps.Identity{ID: "test-push", Name: "Test Push"}
+		logger = depspkg.NewNopFSMLogger()
+		identity = depspkg.Identity{ID: "test-push", Name: "Test Push"}
 		transport.SetChannelProvider(newTestChannelProvider())
 		parentDeps = createParentDeps(logger)
 	})
@@ -138,9 +138,9 @@ var _ = Describe("PushWorker", func() {
 			Expect(typedObs.HasValidToken).To(BeFalse())
 		})
 
-		It("should report consecutive errors from parent deps", func() {
-			parentDeps.RecordError()
-			parentDeps.RecordError()
+		It("should report consecutive errors from child deps", func() {
+			worker.GetDependencies().RecordError()
+			worker.GetDependencies().RecordError()
 
 			ctx := context.Background()
 			observed, err := worker.CollectObservedState(ctx)
@@ -159,6 +159,46 @@ var _ = Describe("PushWorker", func() {
 			typedObs, ok := observed.(snapshot.PushObservedState)
 			Expect(ok).To(BeTrue())
 			Expect(typedObs.Metrics).NotTo(BeNil())
+		})
+
+		It("should drain worker metrics from MetricsRecorder into ObservedState", func() {
+			d := worker.GetDependencies()
+			d.MetricsRecorder().IncrementCounter(depspkg.CounterMessagesPushed, 5)
+			d.MetricsRecorder().IncrementCounter(depspkg.CounterBytesPushed, 1024)
+			d.MetricsRecorder().SetGauge(depspkg.GaugeLastPushLatencyMs, 42.0)
+
+			ctx := context.Background()
+			observed, err := worker.CollectObservedState(ctx)
+
+			Expect(err).ToNot(HaveOccurred())
+			typedObs, ok := observed.(snapshot.PushObservedState)
+			Expect(ok).To(BeTrue())
+
+			Expect(typedObs.Metrics.Worker.Counters).NotTo(BeNil())
+			Expect(typedObs.Metrics.Worker.Counters["messages_pushed"]).To(Equal(int64(5)))
+			Expect(typedObs.Metrics.Worker.Counters["bytes_pushed"]).To(Equal(int64(1024)))
+
+			Expect(typedObs.Metrics.Worker.Gauges).NotTo(BeNil())
+			Expect(typedObs.Metrics.Worker.Gauges["last_push_latency_ms"]).To(Equal(42.0))
+		})
+
+		It("should drain metrics from recorder buffer on each tick", func() {
+			ctx := context.Background()
+
+			d := worker.GetDependencies()
+			d.MetricsRecorder().IncrementCounter(depspkg.CounterPushOps, 1)
+			observed1, err := worker.CollectObservedState(ctx)
+			Expect(err).ToNot(HaveOccurred())
+			typedObs1, ok := observed1.(snapshot.PushObservedState)
+			Expect(ok).To(BeTrue())
+			Expect(typedObs1.Metrics.Worker.Counters["push_ops"]).To(Equal(int64(1)))
+
+			d.MetricsRecorder().IncrementCounter(depspkg.CounterPushOps, 2)
+			observed2, err := worker.CollectObservedState(ctx)
+			Expect(err).ToNot(HaveOccurred())
+			typedObs2, ok := observed2.(snapshot.PushObservedState)
+			Expect(ok).To(BeTrue())
+			Expect(typedObs2.Metrics.Worker.Counters["push_ops"]).To(Equal(int64(2)))
 		})
 	})
 

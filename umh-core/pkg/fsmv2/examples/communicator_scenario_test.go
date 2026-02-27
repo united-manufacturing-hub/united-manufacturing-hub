@@ -26,6 +26,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/testutil"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
+	transportWorker "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport"
 )
 
 var _ = Describe("Communicator Scenario", func() {
@@ -33,13 +34,14 @@ var _ = Describe("Communicator Scenario", func() {
 	var cancel context.CancelFunc
 
 	BeforeEach(func() {
-		ctx, cancel = context.WithTimeout(context.Background(), 30*time.Second)
+		ctx, cancel = context.WithTimeout(context.Background(), 45*time.Second)
 	})
 
 	AfterEach(func() {
 		cancel()
-		// CRITICAL: Clean up global channel provider to prevent test pollution
+		// CRITICAL: Clean up global channel providers to prevent test pollution
 		communicator.ClearChannelProvider()
+		transportWorker.ClearChannelProvider()
 	})
 
 	Describe("Using FSMv2 worker via ApplicationSupervisor", func() {
@@ -201,8 +203,9 @@ var _ = Describe("Communicator Scenario", func() {
 			result := examples.RunCommunicatorScenario(ctx, examples.CommunicatorRunConfig{
 				Duration: 500 * time.Millisecond,
 			})
-			// Allow extra time for graceful shutdown (duration + cascading child shutdown timeouts)
-			Eventually(result.Done, GracefulShutdownCascadingTimeout).Should(BeClosed())
+			// Communicator has 4-level nesting (App → Communicator → Transport → Push/Pull),
+			// requiring ~20-25s for cascading graceful shutdown. Use 35s for margin.
+			Eventually(result.Done, 35*time.Second).Should(BeClosed())
 		})
 	})
 

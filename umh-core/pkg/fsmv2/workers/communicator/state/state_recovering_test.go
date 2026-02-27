@@ -15,8 +15,6 @@
 package state_test
 
 import (
-	"time"
-
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
@@ -25,7 +23,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/snapshot"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/state"
-	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
 )
 
 var _ = Describe("RecoveringState", func() {
@@ -41,62 +38,39 @@ var _ = Describe("RecoveringState", func() {
 	})
 
 	Describe("Next", func() {
-		Context("when sync recovers", func() {
-			var snap fsmv2.Snapshot
-
-			BeforeEach(func() {
-				snap = fsmv2.Snapshot{
+		Context("when children recover", func() {
+			It("should transition to SyncingState", func() {
+				snap := fsmv2.Snapshot{
 					Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
 					Observed: snapshot.CommunicatorObservedState{
-						Authenticated: true,
+						ChildrenHealthy:   1,
+						ChildrenUnhealthy: 0,
 					},
 					Desired: &snapshot.CommunicatorDesiredState{},
 				}
-			})
 
-			It("should transition to SyncingState", func() {
 				result := stateObj.Next(snap)
 				Expect(result.State).To(BeAssignableToTypeOf(&state.SyncingState{}))
-			})
-
-			It("should not signal anything", func() {
-				result := stateObj.Next(snap)
 				Expect(result.Signal).To(Equal(fsmv2.SignalNone))
-			})
-
-			It("should not return an action", func() {
-				result := stateObj.Next(snap)
 				Expect(result.Action).To(BeNil())
 			})
 		})
 
-		Context("when sync is still unhealthy", func() {
-			var snap fsmv2.Snapshot
-
-			BeforeEach(func() {
-				snap = fsmv2.Snapshot{
+		Context("when children are still unhealthy", func() {
+			It("should stay in RecoveringState with nil action", func() {
+				snap := fsmv2.Snapshot{
 					Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
 					Observed: snapshot.CommunicatorObservedState{
-						Authenticated: false,
+						ChildrenHealthy:   0,
+						ChildrenUnhealthy: 1,
 					},
 					Desired: &snapshot.CommunicatorDesiredState{},
 				}
-			})
 
-			It("should stay in RecoveringState", func() {
 				result := stateObj.Next(snap)
 				Expect(result.State).To(BeAssignableToTypeOf(&state.RecoveringState{}))
-			})
-
-			It("should emit SyncAction to retry", func() {
-				result := stateObj.Next(snap)
-				Expect(result.Action).NotTo(BeNil())
-				Expect(result.Action.Name()).To(Equal("sync"))
-			})
-
-			It("should not signal anything", func() {
-				result := stateObj.Next(snap)
 				Expect(result.Signal).To(Equal(fsmv2.SignalNone))
+				Expect(result.Action).To(BeNil())
 			})
 		})
 	})
@@ -108,240 +82,6 @@ var _ = Describe("RecoveringState", func() {
 	})
 })
 
-var _ = Describe("RecoveringState Transport Reset", func() {
-	Context("for network errors", func() {
-		It("should emit ResetTransportAction at exactly 5 consecutive errors", func() {
-			stateObj := &state.RecoveringState{}
-
-			snap := fsmv2.Snapshot{
-				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
-				Observed: snapshot.CommunicatorObservedState{
-					Authenticated:     false,
-					ConsecutiveErrors: 5,
-					LastErrorType:     httpTransport.ErrorTypeNetwork,
-					DegradedEnteredAt: time.Now().Add(-35 * time.Second),
-				},
-				Desired: &snapshot.CommunicatorDesiredState{},
-			}
-
-			result := stateObj.Next(snap)
-
-			Expect(result.State).To(BeAssignableToTypeOf(&state.RecoveringState{}))
-			Expect(result.Signal).To(Equal(fsmv2.SignalNone))
-			Expect(result.Action).NotTo(BeNil())
-			Expect(result.Action.Name()).To(Equal("reset_transport"))
-		})
-
-		It("should NOT emit ResetTransportAction at 6 consecutive errors", func() {
-			stateObj := &state.RecoveringState{}
-
-			snap := fsmv2.Snapshot{
-				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
-				Observed: snapshot.CommunicatorObservedState{
-					Authenticated:     false,
-					ConsecutiveErrors: 6,
-					LastErrorType:     httpTransport.ErrorTypeNetwork,
-					DegradedEnteredAt: time.Now().Add(-65 * time.Second),
-				},
-				Desired: &snapshot.CommunicatorDesiredState{},
-			}
-
-			result := stateObj.Next(snap)
-
-			Expect(result.Action).NotTo(BeNil())
-			Expect(result.Action.Name()).To(Equal("sync"))
-		})
-
-		It("should emit ResetTransportAction again at 10 consecutive errors", func() {
-			stateObj := &state.RecoveringState{}
-
-			snap := fsmv2.Snapshot{
-				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
-				Observed: snapshot.CommunicatorObservedState{
-					Authenticated:     false,
-					ConsecutiveErrors: 10,
-					LastErrorType:     httpTransport.ErrorTypeNetwork,
-					DegradedEnteredAt: time.Now().Add(-65 * time.Second),
-				},
-				Desired: &snapshot.CommunicatorDesiredState{},
-			}
-
-			result := stateObj.Next(snap)
-
-			Expect(result.Action).NotTo(BeNil())
-			Expect(result.Action.Name()).To(Equal("reset_transport"))
-		})
-
-		It("should NOT emit ResetTransportAction at 0 errors", func() {
-			stateObj := &state.RecoveringState{}
-
-			snap := fsmv2.Snapshot{
-				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
-				Observed: snapshot.CommunicatorObservedState{
-					Authenticated:     false,
-					ConsecutiveErrors: 0,
-					LastErrorType:     httpTransport.ErrorTypeNetwork,
-					DegradedEnteredAt: time.Now().Add(-1 * time.Second),
-				},
-				Desired: &snapshot.CommunicatorDesiredState{},
-			}
-
-			result := stateObj.Next(snap)
-
-			Expect(result.Action).NotTo(BeNil())
-			Expect(result.Action.Name()).To(Equal("sync"))
-		})
-	})
-
-	Context("for server errors", func() {
-		It("should NOT emit ResetTransportAction at 5 errors (needs 10)", func() {
-			stateObj := &state.RecoveringState{}
-
-			snap := fsmv2.Snapshot{
-				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
-				Observed: snapshot.CommunicatorObservedState{
-					Authenticated:     false,
-					ConsecutiveErrors: 5,
-					LastErrorType:     httpTransport.ErrorTypeServerError,
-					DegradedEnteredAt: time.Now().Add(-35 * time.Second),
-				},
-				Desired: &snapshot.CommunicatorDesiredState{},
-			}
-
-			result := stateObj.Next(snap)
-
-			Expect(result.Action).NotTo(BeNil())
-			Expect(result.Action.Name()).To(Equal("sync"))
-		})
-
-		It("should emit ResetTransportAction at 10 consecutive errors", func() {
-			stateObj := &state.RecoveringState{}
-
-			snap := fsmv2.Snapshot{
-				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
-				Observed: snapshot.CommunicatorObservedState{
-					Authenticated:     false,
-					ConsecutiveErrors: 10,
-					LastErrorType:     httpTransport.ErrorTypeServerError,
-					DegradedEnteredAt: time.Now().Add(-65 * time.Second),
-				},
-				Desired: &snapshot.CommunicatorDesiredState{},
-			}
-
-			result := stateObj.Next(snap)
-
-			Expect(result.Action).NotTo(BeNil())
-			Expect(result.Action.Name()).To(Equal("reset_transport"))
-		})
-
-		It("should emit ResetTransportAction at 20 consecutive errors", func() {
-			stateObj := &state.RecoveringState{}
-
-			snap := fsmv2.Snapshot{
-				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
-				Observed: snapshot.CommunicatorObservedState{
-					Authenticated:     false,
-					ConsecutiveErrors: 20,
-					LastErrorType:     httpTransport.ErrorTypeServerError,
-					DegradedEnteredAt: time.Now().Add(-65 * time.Second),
-				},
-				Desired: &snapshot.CommunicatorDesiredState{},
-			}
-
-			result := stateObj.Next(snap)
-
-			Expect(result.Action).NotTo(BeNil())
-			Expect(result.Action.Name()).To(Equal("reset_transport"))
-		})
-	})
-
-	Context("for unknown/other error types", func() {
-		It("should NOT emit ResetTransportAction regardless of error count", func() {
-			stateObj := &state.RecoveringState{}
-
-			snap := fsmv2.Snapshot{
-				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
-				Observed: snapshot.CommunicatorObservedState{
-					Authenticated:     false,
-					ConsecutiveErrors: 100,
-					LastErrorType:     httpTransport.ErrorTypeBackendRateLimit,
-					DegradedEnteredAt: time.Now().Add(-600 * time.Second),
-				},
-				Desired: &snapshot.CommunicatorDesiredState{},
-			}
-
-			result := stateObj.Next(snap)
-
-			Expect(result.Action).NotTo(BeNil())
-			Expect(result.Action.Name()).To(Equal("sync"))
-		})
-	})
-})
-
-var _ = Describe("RecoveringState Auth Transition", func() {
-	It("should transition to TryingToAuthenticateState when last error is InvalidToken", func() {
-		stateObj := &state.RecoveringState{}
-
-		snap := fsmv2.Snapshot{
-			Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
-			Observed: snapshot.CommunicatorObservedState{
-				LastErrorType:     httpTransport.ErrorTypeInvalidToken,
-				ConsecutiveErrors: 1,
-				DegradedEnteredAt: time.Now().Add(-65 * time.Second), // Past backoff
-			},
-			Desired: &snapshot.CommunicatorDesiredState{},
-		}
-
-		result := stateObj.Next(snap)
-
-		Expect(result.State).To(BeAssignableToTypeOf(&state.TryingToAuthenticateState{}))
-		Expect(result.Signal).To(Equal(fsmv2.SignalNone))
-		Expect(result.Action).To(BeNil())
-	})
-})
-
-var _ = Describe("RecoveringState Backoff", func() {
-	It("stays in degraded state during backoff period", func() {
-		stateObj := &state.RecoveringState{}
-
-		snap := fsmv2.Snapshot{
-			Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
-			Observed: snapshot.CommunicatorObservedState{
-				Authenticated:     false,
-				ConsecutiveErrors: 3,
-				DegradedEnteredAt: time.Now(), // Just entered degraded
-			},
-			Desired: &snapshot.CommunicatorDesiredState{},
-		}
-
-		result := stateObj.Next(snap)
-
-		Expect(result.State).To(BeAssignableToTypeOf(&state.RecoveringState{}))
-		Expect(result.Signal).To(Equal(fsmv2.SignalNone))
-		Expect(result.Action).To(BeNil(), "Should NOT emit action during backoff period")
-	})
-
-	It("attempts sync after backoff period expires", func() {
-		stateObj := &state.RecoveringState{}
-
-		snap := fsmv2.Snapshot{
-			Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
-			Observed: snapshot.CommunicatorObservedState{
-				Authenticated:     false,
-				ConsecutiveErrors: 3,
-				DegradedEnteredAt: time.Now().Add(-10 * time.Second), // Past backoff period
-			},
-			Desired: &snapshot.CommunicatorDesiredState{},
-		}
-
-		result := stateObj.Next(snap)
-
-		Expect(result.State).To(BeAssignableToTypeOf(&state.RecoveringState{}))
-		Expect(result.Action).NotTo(BeNil(), "Should emit SyncAction after backoff expires")
-		Expect(result.Action.Name()).To(Equal("sync"))
-	})
-})
-
 var _ = Describe("RecoveringState Transitions", func() {
 	var stateObj *state.RecoveringState
 
@@ -349,14 +89,13 @@ var _ = Describe("RecoveringState Transitions", func() {
 		stateObj = &state.RecoveringState{}
 	})
 
-	Describe("Degraded -> StoppedState", func() {
+	Describe("Recovering -> StoppedState", func() {
 		It("should transition to StoppedState when shutdown is requested", func() {
 			snap := fsmv2.Snapshot{
 				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
 				Observed: snapshot.CommunicatorObservedState{
-					Authenticated:     true,
-					ConsecutiveErrors: 10,
-					DegradedEnteredAt: time.Now().Add(-5 * time.Minute),
+					ChildrenHealthy:   0,
+					ChildrenUnhealthy: 1,
 				},
 				Desired: &snapshot.CommunicatorDesiredState{
 					BaseDesiredState: config.BaseDesiredState{ShutdownRequested: true},
@@ -374,9 +113,8 @@ var _ = Describe("RecoveringState Transitions", func() {
 			snap := fsmv2.Snapshot{
 				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
 				Observed: snapshot.CommunicatorObservedState{
-					Authenticated:     true,
-					ConsecutiveErrors: 0,
-					DegradedEnteredAt: time.Time{},
+					ChildrenHealthy:   1,
+					ChildrenUnhealthy: 0,
 				},
 				Desired: &snapshot.CommunicatorDesiredState{
 					BaseDesiredState: config.BaseDesiredState{ShutdownRequested: true},
@@ -391,52 +129,13 @@ var _ = Describe("RecoveringState Transitions", func() {
 		})
 	})
 
-	Describe("Degraded -> TryingToAuthenticateState", func() {
-		It("should transition to TryingToAuthenticateState when last error is InvalidToken", func() {
+	Describe("Recovering -> SyncingState", func() {
+		It("should transition when all children become healthy", func() {
 			snap := fsmv2.Snapshot{
 				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
 				Observed: snapshot.CommunicatorObservedState{
-					LastErrorType:     httpTransport.ErrorTypeInvalidToken,
-					ConsecutiveErrors: 1,
-					DegradedEnteredAt: time.Now().Add(-65 * time.Second),
-				},
-				Desired: &snapshot.CommunicatorDesiredState{},
-			}
-
-			result := stateObj.Next(snap)
-
-			Expect(result.State).To(BeAssignableToTypeOf(&state.TryingToAuthenticateState{}))
-			Expect(result.Signal).To(Equal(fsmv2.SignalNone))
-			Expect(result.Action).To(BeNil())
-		})
-
-		It("should transition to TryingToAuthenticateState on InvalidToken regardless of consecutive errors", func() {
-			snap := fsmv2.Snapshot{
-				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
-				Observed: snapshot.CommunicatorObservedState{
-					LastErrorType:     httpTransport.ErrorTypeInvalidToken,
-					ConsecutiveErrors: 100,
-					DegradedEnteredAt: time.Now().Add(-5 * time.Minute),
-				},
-				Desired: &snapshot.CommunicatorDesiredState{},
-			}
-
-			result := stateObj.Next(snap)
-
-			Expect(result.State).To(BeAssignableToTypeOf(&state.TryingToAuthenticateState{}))
-			Expect(result.Signal).To(Equal(fsmv2.SignalNone))
-			Expect(result.Action).To(BeNil())
-		})
-	})
-
-	Describe("Degraded -> SyncingState", func() {
-		It("should transition to SyncingState when sync is healthy and no errors", func() {
-			snap := fsmv2.Snapshot{
-				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
-				Observed: snapshot.CommunicatorObservedState{
-					Authenticated:     true,
-					JWTExpiry:         time.Now().Add(time.Hour),
-					ConsecutiveErrors: 0,
+					ChildrenHealthy:   1,
+					ChildrenUnhealthy: 0,
 				},
 				Desired: &snapshot.CommunicatorDesiredState{},
 			}
@@ -448,36 +147,12 @@ var _ = Describe("RecoveringState Transitions", func() {
 			Expect(result.Action).To(BeNil())
 		})
 
-		It("should transition to SyncingState after full recovery", func() {
+		It("should NOT transition when some children are still unhealthy", func() {
 			snap := fsmv2.Snapshot{
 				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
 				Observed: snapshot.CommunicatorObservedState{
-					Authenticated:     true,
-					JWTToken:          "valid-token",
-					JWTExpiry:         time.Now().Add(30 * time.Minute),
-					ConsecutiveErrors: 0,
-					DegradedEnteredAt: time.Time{},
-				},
-				Desired: &snapshot.CommunicatorDesiredState{
-					BaseDesiredState: config.BaseDesiredState{ShutdownRequested: false},
-				},
-			}
-
-			result := stateObj.Next(snap)
-
-			Expect(result.State).To(BeAssignableToTypeOf(&state.SyncingState{}))
-			Expect(result.Signal).To(Equal(fsmv2.SignalNone))
-			Expect(result.Action).To(BeNil())
-		})
-
-		It("should NOT transition to SyncingState if sync is healthy but has errors", func() {
-			snap := fsmv2.Snapshot{
-				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
-				Observed: snapshot.CommunicatorObservedState{
-					Authenticated:     true,
-					JWTExpiry:         time.Now().Add(time.Hour),
-					ConsecutiveErrors: 3,
-					DegradedEnteredAt: time.Now().Add(-20 * time.Second),
+					ChildrenHealthy:   1,
+					ChildrenUnhealthy: 1,
 				},
 				Desired: &snapshot.CommunicatorDesiredState{},
 			}
@@ -488,14 +163,13 @@ var _ = Describe("RecoveringState Transitions", func() {
 		})
 	})
 
-	Describe("Degraded -> self (backoff/retry)", func() {
-		It("should stay in RecoveringState during backoff period", func() {
+	Describe("Recovering -> self (waiting)", func() {
+		It("should stay in RecoveringState when no children exist yet", func() {
 			snap := fsmv2.Snapshot{
 				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
 				Observed: snapshot.CommunicatorObservedState{
-					Authenticated:     false,
-					ConsecutiveErrors: 3,
-					DegradedEnteredAt: time.Now(),
+					ChildrenHealthy:   0,
+					ChildrenUnhealthy: 0,
 				},
 				Desired: &snapshot.CommunicatorDesiredState{},
 			}
@@ -507,13 +181,12 @@ var _ = Describe("RecoveringState Transitions", func() {
 			Expect(result.Action).To(BeNil())
 		})
 
-		It("should stay in RecoveringState and emit SyncAction after backoff", func() {
+		It("should stay in RecoveringState with nil action when children unhealthy", func() {
 			snap := fsmv2.Snapshot{
 				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
 				Observed: snapshot.CommunicatorObservedState{
-					Authenticated:     false,
-					ConsecutiveErrors: 3,
-					DegradedEnteredAt: time.Now().Add(-10 * time.Second),
+					ChildrenHealthy:   0,
+					ChildrenUnhealthy: 2,
 				},
 				Desired: &snapshot.CommunicatorDesiredState{},
 			}
@@ -522,67 +195,7 @@ var _ = Describe("RecoveringState Transitions", func() {
 
 			Expect(result.State).To(BeAssignableToTypeOf(&state.RecoveringState{}))
 			Expect(result.Signal).To(Equal(fsmv2.SignalNone))
-			Expect(result.Action).NotTo(BeNil())
-			Expect(result.Action.Name()).To(Equal("sync"))
-		})
-
-		It("should emit ResetTransportAction at 5 consecutive network errors after backoff", func() {
-			snap := fsmv2.Snapshot{
-				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
-				Observed: snapshot.CommunicatorObservedState{
-					Authenticated:     false,
-					ConsecutiveErrors: 5,
-					LastErrorType:     httpTransport.ErrorTypeNetwork,
-					DegradedEnteredAt: time.Now().Add(-35 * time.Second),
-				},
-				Desired: &snapshot.CommunicatorDesiredState{},
-			}
-
-			result := stateObj.Next(snap)
-
-			Expect(result.State).To(BeAssignableToTypeOf(&state.RecoveringState{}))
-			Expect(result.Signal).To(Equal(fsmv2.SignalNone))
-			Expect(result.Action).NotTo(BeNil())
-			Expect(result.Action.Name()).To(Equal("reset_transport"))
-		})
-
-		It("should emit ResetTransportAction at 10 consecutive network errors", func() {
-			snap := fsmv2.Snapshot{
-				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
-				Observed: snapshot.CommunicatorObservedState{
-					Authenticated:     false,
-					ConsecutiveErrors: 10,
-					LastErrorType:     httpTransport.ErrorTypeNetwork,
-					DegradedEnteredAt: time.Now().Add(-65 * time.Second),
-				},
-				Desired: &snapshot.CommunicatorDesiredState{},
-			}
-
-			result := stateObj.Next(snap)
-
-			Expect(result.State).To(BeAssignableToTypeOf(&state.RecoveringState{}))
-			Expect(result.Signal).To(Equal(fsmv2.SignalNone))
-			Expect(result.Action).NotTo(BeNil())
-			Expect(result.Action.Name()).To(Equal("reset_transport"))
-		})
-
-		It("should emit SyncAction at 6 consecutive errors (not a reset threshold)", func() {
-			snap := fsmv2.Snapshot{
-				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
-				Observed: snapshot.CommunicatorObservedState{
-					Authenticated:     false,
-					ConsecutiveErrors: 6,
-					DegradedEnteredAt: time.Now().Add(-65 * time.Second),
-				},
-				Desired: &snapshot.CommunicatorDesiredState{},
-			}
-
-			result := stateObj.Next(snap)
-
-			Expect(result.State).To(BeAssignableToTypeOf(&state.RecoveringState{}))
-			Expect(result.Signal).To(Equal(fsmv2.SignalNone))
-			Expect(result.Action).NotTo(BeNil())
-			Expect(result.Action.Name()).To(Equal("sync"))
+			Expect(result.Action).To(BeNil())
 		})
 	})
 })

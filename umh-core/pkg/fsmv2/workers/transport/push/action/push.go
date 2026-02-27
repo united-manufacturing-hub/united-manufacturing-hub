@@ -99,10 +99,19 @@ drainLoop:
 	}
 
 	if len(messagesToPush) == 0 {
+		pushDeps.RecordSuccess()
+
 		return nil
 	}
 
 	jwtToken := pushDeps.GetJWTToken()
+	authenticatedUUID := pushDeps.GetAuthenticatedUUID()
+
+	for _, msg := range messagesToPush {
+		if msg != nil && authenticatedUUID != "" {
+			msg.InstanceUUID = authenticatedUUID
+		}
+	}
 
 	pushStart := time.Now()
 	if err := t.Push(ctx, jwtToken, messagesToPush); err != nil {
@@ -151,8 +160,13 @@ drainLoop:
 
 func (a *PushAction) retryPending(ctx context.Context, t transport.Transport, pushDeps snapshot.PushDependencies, pending []*transport.UMHMessage, metrics *depspkg.MetricsRecorder) ([]*transport.UMHMessage, error) {
 	jwtToken := pushDeps.GetJWTToken()
+	authenticatedUUID := pushDeps.GetAuthenticatedUUID()
 
 	for i, msg := range pending {
+		if msg != nil && authenticatedUUID != "" {
+			msg.InstanceUUID = authenticatedUUID
+		}
+
 		select {
 		case <-ctx.Done():
 			return pending[i:], ctx.Err()

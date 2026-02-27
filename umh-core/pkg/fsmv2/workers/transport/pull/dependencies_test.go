@@ -322,7 +322,7 @@ var _ = Describe("PullDependencies", func() {
 		})
 	})
 
-	Describe("Delegation to parent", func() {
+	Describe("Per-child error tracking", func() {
 		var d *pull.PullDependencies
 
 		BeforeEach(func() {
@@ -361,46 +361,81 @@ var _ = Describe("PullDependencies", func() {
 		})
 
 		Describe("RecordTypedError", func() {
-			It("should delegate to parent", func() {
+			It("should record on both child and parent", func() {
 				d.RecordTypedError(httpTransport.ErrorTypeBackendRateLimit, 30*time.Second)
-				Expect(parentDeps.GetLastErrorType()).To(Equal(httpTransport.ErrorTypeBackendRateLimit))
+				Expect(d.GetConsecutiveErrors()).To(Equal(1))
 				Expect(parentDeps.GetConsecutiveErrors()).To(Equal(1))
+				Expect(parentDeps.GetLastErrorType()).To(Equal(httpTransport.ErrorTypeBackendRateLimit))
 			})
 		})
 
 		Describe("RecordSuccess", func() {
-			It("should delegate to parent", func() {
+			It("should zero child errors but not parent errors", func() {
 				parentDeps.RecordError()
 				parentDeps.RecordError()
 				Expect(parentDeps.GetConsecutiveErrors()).To(Equal(2))
 
+				d.RecordError()
+				d.RecordError()
+				Expect(d.GetConsecutiveErrors()).To(Equal(2))
+				Expect(parentDeps.GetConsecutiveErrors()).To(Equal(4))
+
 				d.RecordSuccess()
-				Expect(parentDeps.GetConsecutiveErrors()).To(Equal(0))
+				Expect(d.GetConsecutiveErrors()).To(Equal(0))
+				Expect(parentDeps.GetConsecutiveErrors()).To(Equal(4))
 			})
 		})
 
 		Describe("RecordError", func() {
-			It("should delegate to parent", func() {
+			It("should record on both child and parent", func() {
 				d.RecordError()
 				d.RecordError()
+				Expect(d.GetConsecutiveErrors()).To(Equal(2))
 				Expect(parentDeps.GetConsecutiveErrors()).To(Equal(2))
 			})
 		})
 
 		Describe("GetConsecutiveErrors", func() {
-			It("should return parent consecutive errors", func() {
+			It("should read from child tracker, not parent", func() {
 				Expect(d.GetConsecutiveErrors()).To(Equal(0))
 				parentDeps.RecordError()
 				parentDeps.RecordError()
 				parentDeps.RecordError()
-				Expect(d.GetConsecutiveErrors()).To(Equal(3))
+				Expect(d.GetConsecutiveErrors()).To(Equal(0))
 			})
 		})
 
 		Describe("GetLastErrorType", func() {
-			It("should return parent last error type", func() {
-				parentDeps.RecordTypedError(httpTransport.ErrorTypeNetwork, 0)
+			It("should read from child field", func() {
+				d.RecordTypedError(httpTransport.ErrorTypeNetwork, 0)
 				Expect(d.GetLastErrorType()).To(Equal(httpTransport.ErrorTypeNetwork))
+				d.RecordSuccess()
+				Expect(d.GetLastErrorType()).To(Equal(httpTransport.ErrorType(0)))
+			})
+		})
+
+		Describe("GetDegradedEnteredAt", func() {
+			It("should read from child tracker", func() {
+				Expect(d.GetDegradedEnteredAt().IsZero()).To(BeTrue())
+				d.RecordError()
+				Expect(d.GetDegradedEnteredAt().IsZero()).To(BeFalse())
+				d.RecordSuccess()
+				Expect(d.GetDegradedEnteredAt().IsZero()).To(BeTrue())
+			})
+		})
+
+		Describe("GetLastErrorAt", func() {
+			It("should read from child tracker", func() {
+				before := time.Now()
+				d.RecordTypedError(httpTransport.ErrorTypeNetwork, 0)
+				Expect(d.GetLastErrorAt()).To(BeTemporally(">=", before))
+			})
+		})
+
+		Describe("GetLastRetryAfter", func() {
+			It("should read from child tracker", func() {
+				d.RecordTypedError(httpTransport.ErrorTypeBackendRateLimit, 30*time.Second)
+				Expect(d.GetLastRetryAfter()).To(Equal(30 * time.Second))
 			})
 		})
 	})

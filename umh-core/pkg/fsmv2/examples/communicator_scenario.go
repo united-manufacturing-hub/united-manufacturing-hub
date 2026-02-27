@@ -24,6 +24,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/testutil"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
+	transportWorker "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport"
 )
 
 // TestChannelProvider implements communicator.ChannelProvider for test scenarios.
@@ -162,6 +163,7 @@ func RunCommunicatorScenario(ctx context.Context, cfg CommunicatorRunConfig) *Co
 
 	channelProvider := NewTestChannelProvider(100)
 	communicator.SetChannelProvider(channelProvider)
+	transportWorker.SetChannelProvider(channelProvider)
 
 	for _, msg := range cfg.InitialOutboundMessages {
 		channelProvider.QueueOutbound(msg)
@@ -212,6 +214,7 @@ children:
 	if err != nil {
 		if channelProvider != nil {
 			communicator.ClearChannelProvider()
+			transportWorker.ClearChannelProvider()
 		}
 
 		if ownsMockServer {
@@ -261,6 +264,7 @@ children:
 
 		if channelProvider != nil {
 			communicator.ClearChannelProvider()
+			transportWorker.ClearChannelProvider()
 		}
 
 		if ownsMockServer {

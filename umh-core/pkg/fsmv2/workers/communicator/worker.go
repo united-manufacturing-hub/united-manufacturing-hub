@@ -12,60 +12,40 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package communicator implements the Channel Communicator FSM worker for
-// bidirectional message exchange between Edge and Backend tiers.
+// Package communicator implements the CommunicatorWorker, a parent orchestrator
+// that manages bidirectional message exchange between Edge and Backend tiers.
 //
 // # Architecture
 //
-// The Communicator FSM manages the complete lifecycle of channel-based sync:
-//  1. Authentication: Obtain JWT token from relay server
-//  2. Synchronization: Push/pull messages via HTTP transport
-//  3. Connection management: Handle network failures and reconnects
+// CommunicatorWorker delegates all transport operations to a TransportWorker child.
+// TransportWorker handles authentication, push, pull, backoff, and transport reset.
+// CommunicatorWorker monitors child health and manages lifecycle transitions.
+//
+// Channel sharing: Both communicator and transport packages use a ChannelProvider
+// singleton to supply inbound and outbound message channels. Call
+// communicator.SetChannelProvider() and transport.SetChannelProvider() before
+// starting the supervisor.
 //
 // # FSM v2 Pattern
 //
 // This package follows the FSM v2 pattern:
 //   - worker.go: Implements Worker interface (CollectObservedState, DeriveDesiredState)
-//   - states.go: Defines state machine states and transitions
-//   - action_*.go: Idempotent actions executed during state transitions
-//   - models.go: Observed and desired state structures
-//
-// The FSM v2 Supervisor manages the worker, calling CollectObservedState
-// periodically and executing actions when state transitions occur.
+//   - state/*.go: Defines state machine states and transitions
+//   - action/*.go: Deprecated actions retained for architecture test compliance (ENG-4265)
+//   - snapshot/snapshot.go: Observed and desired state structures
 //
 // # States and Transitions
 //
 // State flow:
 //
-//	Stopped → Authenticating → Authenticated → Syncing → Syncing (loop)
-//	   ↓            ↓               ↓             ↓
-//	  Error ← ─── Error ← ─────── Error ← ───── Error
+//	Stopped → Syncing ↔ Recovering → Stopped
+//
+// TransportWorker runs as a child when the parent is in Syncing or Recovering.
 //
 // Actions by state:
-//   - Authenticating: AuthenticateAction obtains JWT token
-//   - Syncing: SyncAction performs push/pull operations via HTTP
-//
-// # Integration with Channel Protocol
-//
-// The worker operates using a 2-goroutine pattern with channels:
-//
-// Inbound flow (backend → edge):
-//   - Pull goroutine: HTTPTransport.Pull() → inboundChan
-//   - Messages arrive from backend and are queued for local processing
-//
-// Outbound flow (edge → backend):
-//   - Push goroutine: outboundChan → HTTPTransport.Push()
-//   - Messages from edge are batched and sent to backend
-//
-// HTTPTransport handles:
-//   - HTTP POST/GET operations to relay server
-//   - JWT token management and refresh
-//   - Network error handling and retries
-//
-// This channel-based approach eliminates:
-//   - CSE delta sync and conflict resolution
-//   - Distributed state synchronization
-//   - Bidirectional merge logic
+//   - Syncing: Monitors child health. Transitions to Recovering when any child is unhealthy.
+//   - Recovering: Waits for children to recover. Transitions to Syncing when all children are healthy.
+//   - Stopped: Transitions to Syncing on start, or emits SignalNeedsRemoval on shutdown.
 package communicator
 
 import (
@@ -120,8 +100,18 @@ func NewCommunicatorWorker(
 	}, nil
 }
 
+// TODO(ENG-4265): Remove deprecated fields (JWTToken, JWTExpiry, Authenticated,
+// AuthenticatedUUID, MessagesReceived, ConsecutiveErrors, IsBackpressured) from
+// CommunicatorObservedState. These are now tracked by TransportWorker.
+
 // CollectObservedState returns the current observed state of the communicator.
 func (w *CommunicatorWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedState, error) {
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
+
 	deps := w.GetDependencies()
 
 	jwtToken := deps.GetJWTToken()
@@ -154,7 +144,9 @@ func (w *CommunicatorWorker) CollectObservedState(ctx context.Context) (fsmv2.Ob
 	stateReader := deps.GetStateReader()
 	if stateReader != nil {
 		var prev snapshot.CommunicatorObservedState
-		if err := stateReader.LoadObservedTyped(ctx, deps.GetWorkerType(), deps.GetWorkerID(), &prev); err == nil {
+		if err := stateReader.LoadObservedTyped(ctx, deps.GetWorkerType(), deps.GetWorkerID(), &prev); err != nil {
+			deps.GetLogger().Debug("observed_state_load_failed", depspkg.Err(err))
+		} else {
 			prevWorkerMetrics = prev.Metrics.Worker
 		}
 	}
@@ -218,6 +210,7 @@ func (w *CommunicatorWorker) DeriveDesiredState(spec interface{}) (fsmv2.Desired
 			BaseDesiredState: fsmv2types.BaseDesiredState{
 				State: "running",
 			},
+			ChildrenSpecs: makeTransportChildSpec(fsmv2types.UserSpec{}),
 		}, nil
 	}
 
@@ -245,11 +238,25 @@ func (w *CommunicatorWorker) DeriveDesiredState(spec interface{}) (fsmv2.Desired
 		BaseDesiredState: fsmv2types.BaseDesiredState{
 			State: commSpec.GetState(),
 		},
-		RelayURL:     commSpec.RelayURL,
-		InstanceUUID: commSpec.InstanceUUID,
-		AuthToken:    commSpec.AuthToken,
-		Timeout:      commSpec.Timeout,
+		RelayURL:      commSpec.RelayURL,
+		InstanceUUID:  commSpec.InstanceUUID,
+		AuthToken:     commSpec.AuthToken,
+		Timeout:       commSpec.Timeout,
+		ChildrenSpecs: makeTransportChildSpec(userSpec),
 	}, nil
+}
+
+// makeTransportChildSpec creates the ChildSpec for the TransportWorker child.
+// TransportWorker handles authentication, push, and pull operations.
+// ChildStartStates includes both Syncing and Recovering so the child remains
+// running during error recovery and does not restart on parent state oscillation.
+func makeTransportChildSpec(parentSpec fsmv2types.UserSpec) []fsmv2types.ChildSpec {
+	return []fsmv2types.ChildSpec{{
+		Name:             "transport",
+		WorkerType:       "transport",
+		UserSpec:         parentSpec,
+		ChildStartStates: []string{"Syncing", "Recovering"},
+	}}
 }
 
 // GetInitialState returns StoppedState as the initial FSM state.
@@ -261,16 +268,12 @@ func init() {
 	if err := factory.RegisterWorkerType[snapshot.CommunicatorObservedState, *snapshot.CommunicatorDesiredState](
 		func(id depspkg.Identity, logger depspkg.FSMLogger, stateReader depspkg.StateReader, _ map[string]any) fsmv2.Worker {
 			// ChannelProvider must be set via global singleton before factory is called (will panic if not set).
-			// Transport is created lazily by AuthenticateAction.
+			// Transport creation and auth are handled by TransportWorker (ENG-4264).
 			commDeps := NewCommunicatorDependencies(nil, logger, stateReader, id)
 
-			worker, err := NewCommunicatorWorker(id.ID, id.Name, nil, logger, stateReader)
-			if err != nil {
-				panic(fmt.Sprintf("failed to create communicator worker: %v", err))
+			return &CommunicatorWorker{
+				BaseWorker: helpers.NewBaseWorker(commDeps),
 			}
-			worker.BaseWorker = helpers.NewBaseWorker(commDeps)
-
-			return worker
 		},
 		func(cfg interface{}) interface{} {
 			return supervisor.NewSupervisor[snapshot.CommunicatorObservedState, *snapshot.CommunicatorDesiredState](
