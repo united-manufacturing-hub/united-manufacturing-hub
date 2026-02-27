@@ -277,3 +277,40 @@ jobs:
 
           notify_mc "https://staging.management.umh.app"
           notify_mc "https://management.umh.app"
+
+  update-github-release:
+    needs: [build]
+    if: startsWith(github.ref, 'refs/tags/v') && !contains(github.ref, '-pre.')
+    runs-on: depot-ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Extract changelog section
+        id: changelog
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: |
+          SEMVER="${VERSION#v}"
+
+          awk "/^## \\[${SEMVER}\\]/{found=1; next} /^## \\[/{if(found) exit} found" \
+            umh-core/CHANGELOG.md | sed 's/^### /## /' > /tmp/release-body.md
+
+          if [ ! -s /tmp/release-body.md ]; then
+            echo "No changelog content found for ${SEMVER}, skipping"
+            echo "skip=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          DATE=$(date +%Y-%m-%d)
+          echo "" >> /tmp/release-body.md
+          echo "See https://changelog.umh.app/changelog/${DATE}-umh-core-${VERSION}" >> /tmp/release-body.md
+
+      - name: Update GitHub Release
+        if: steps.changelog.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ github.ref_name }}
+        run: |
+          gh release edit "$VERSION" --notes-file /tmp/release-body.md
