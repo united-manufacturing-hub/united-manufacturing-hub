@@ -56,6 +56,7 @@ type CommunicatorDesiredState struct {
 	Timeout          time.Duration          `json:"timeout"`
 }
 
+// GetChildrenSpecs returns the children specifications for the communicator worker.
 func (d *CommunicatorDesiredState) GetChildrenSpecs() []config.ChildSpec {
 	return d.ChildrenSpecs
 }
