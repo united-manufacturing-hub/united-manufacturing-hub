@@ -316,7 +316,7 @@ test: vet-nilaway-lint-betteralign
 
 unit-test: vet-nilaway-lint-betteralign
 ifeq ($(CI), true)
-	gotestsum --junitfile unit-test-report.xml -- -race -v -p 16 -tags=test -count=1 -failfast \
+	gotestsum --junitfile unit-test-report.xml -- -race -v -p 10 -tags=test -count=1 -failfast \
 		$(UNIT_TEST_PKGS) \
 		-args -ginkgo.label-filter='$(UNIT_LABEL_FILTER)'
 else
