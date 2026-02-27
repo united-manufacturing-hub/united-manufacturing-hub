@@ -25,7 +25,7 @@ on:
 jobs:
   unit-tests:
     name: Unit Tests
-    runs-on: depot-ubuntu-24.04
+    runs-on: depot-ubuntu-24.04-4
     defaults:
       run:
         working-directory: ./umh-core
