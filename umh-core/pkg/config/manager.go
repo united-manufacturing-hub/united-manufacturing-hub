@@ -253,6 +253,7 @@ func (m *FileConfigManager) GetConfigWithOverwritesOrCreateNew(ctx context.Conte
 	case err != nil:
 		m.logger.SentryWarn(deps.FeatureFSMv1ConfigManager, configManagerHierarchyPath,
 			"config_file_exists_check_failed", deps.String("path", m.configPath), deps.Err(err))
+		return FullConfig{}, fmt.Errorf("failed to check config file existence: %w", err)
 	case exists:
 		config, err = m.GetConfig(ctx, 0)
 		if err != nil {

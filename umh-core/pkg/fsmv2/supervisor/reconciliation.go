@@ -673,8 +673,7 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 
 		// Zero workers on a started supervisor is a transient state (e.g., during child
 		// restart). The supervisor self-heals on the next reconcileChildren cycle.
-		// Log at Info (not Warn/Error) — Warn+ routes to Sentry and caused 614K
-		// events in 16 days on v0.44.5 (ENG-4386).
+		// Log at Info, not Warn/Error, to avoid Sentry noise.
 		if s.noWorkersWarnedOnce.CompareAndSwap(false, true) {
 			s.logger.Info("tick_skipped_no_workers",
 				deps.HierarchyPath(s.GetHierarchyPathUnlocked()))
