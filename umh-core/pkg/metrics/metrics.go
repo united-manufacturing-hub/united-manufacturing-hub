@@ -86,18 +86,13 @@ var (
 	)
 
 	// Reconcile timing.
-	reconcileTime = promauto.NewSummaryVec(
-		prometheus.SummaryOpts{
+	reconcileTime = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
 			Namespace: namespace,
 			Subsystem: subsystem,
 			Name:      "reconcile_duration_milliseconds",
 			Help:      "Time taken to reconcile (in milliseconds)",
-			Objectives: map[float64]float64{
-				0.5:  0.01, // 50th percentile with 1% error
-				0.9:  0.01, // 90th percentile with 1% error
-				0.95: 0.01, // 95th percentile with 1% error
-				0.99: 0.01, // 99th percentile with 1% error
-			},
+			Buckets:   []float64{1, 2, 5, 10, 20, 50, 90, 100, 200, 500, 1000},
 		},
 		[]string{"component", "instance"},
 	)

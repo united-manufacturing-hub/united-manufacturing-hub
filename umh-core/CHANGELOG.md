@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.44.11]
+
+### Improvements
+
+- **Reduced container memory by up to 30%** - Previously, internal timing metrics grew continuously in memory the longer your instance ran, consuming over 500 MB on busy systems with many bridges and data flows. These metrics now use fixed-size histogram buckets that no longer grow with uptime, reducing steady-state container memory by roughly 30%
+
 ## [0.44.10]
 
 This release simplifies S7 addressing and fixes three edge cases in the Management Console editor and S7 data type handling.

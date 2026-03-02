@@ -52,24 +52,22 @@ func parseMetricValue(metricsBody, metricName string) (float64, bool) {
 	return 0, false
 }
 
-// parseSummaryQuantile scans the metrics for a summary line, e.g.:
+// parseHistogramBucket scans the metrics for a histogram bucket line, e.g.:
 //
-//	metricName{component="control_loop",instance="main",quantile="0.99"}  12
+//	metricName_bucket{component="control_loop",instance="main",le="90"}  450
 //
-// We'll look for lines that start with metricName and contain 'quantile="<quantile>"'
-// (and optionally we can also filter by component=..., instance=..., if needed).
-func parseSummaryQuantile(metricsBody, metricName, quantile, component, instance string) (float64, bool) {
-	// Build a regex that matches the line with specific labels including component and instance
-	// For example:
-	//   umh_core_reconcile_duration_milliseconds{component="control_loop",instance="main",quantile="0.99"}  31
-	pattern := fmt.Sprintf(`^%s\{[^}]*component="%s"[^}]*instance="%s"[^}]*quantile="%s"[^}]*\}\s+([0-9.+-eE]+)$`,
-		regexp.QuoteMeta(metricName), regexp.QuoteMeta(component), regexp.QuoteMeta(instance), regexp.QuoteMeta(quantile))
+// Returns the cumulative count for the given bucket boundary.
+// When verbose is true, prints debug output on miss (use for targeted diagnostics).
+func parseHistogramBucket(metricsBody, metricName, le, component, instance string, verbose ...bool) (float64, bool) {
+	bucketMetric := metricName + "_bucket"
+	pattern := fmt.Sprintf(`^%s\{[^}]*component="%s"[^}]*instance="%s"[^}]*le="%s"[^}]*\}\s+([0-9.+-eE]+)$`,
+		regexp.QuoteMeta(bucketMetric), regexp.QuoteMeta(component), regexp.QuoteMeta(instance), regexp.QuoteMeta(le))
 
 	re := regexp.MustCompile(pattern)
 
 	lines := strings.Split(metricsBody, "\n")
 	for _, line := range lines {
-		if strings.Contains(line, metricName) && strings.Contains(line, quantile) {
+		if strings.Contains(line, bucketMetric) && strings.Contains(line, fmt.Sprintf(`le="%s"`, le)) {
 			if match := re.FindStringSubmatch(line); match != nil {
 				valStr := match[1]
 
@@ -81,39 +79,126 @@ func parseSummaryQuantile(metricsBody, metricName, quantile, component, instance
 		}
 	}
 
-	// If no match, dump all relevant lines for debugging
-	GinkgoWriter.Println("No exact match found. Relevant lines:")
+	// Only dump debug output when explicitly requested
+	if len(verbose) > 0 && verbose[0] {
+		GinkgoWriter.Println("No exact match found. Relevant bucket lines:")
 
-	for _, line := range lines {
-		if strings.Contains(line, metricName) && strings.Contains(line, "quantile=\"0.99\"") {
-			GinkgoWriter.Printf("  %s\n", line)
+		for _, line := range lines {
+			if strings.Contains(line, bucketMetric) && strings.Contains(line, fmt.Sprintf(`component="%s"`, component)) {
+				GinkgoWriter.Printf("  %s\n", line)
+			}
 		}
 	}
 
 	return 0, false
 }
 
-// printAllReconcileDurations prints all reconcile duration p99 metrics that are over a threshold.
-func printAllReconcileDurations(metricsBody string, thresholdMs float64) {
+// parseHistogramCount scans the metrics for a histogram _count line, e.g.:
+//
+//	metricName_count{component="control_loop",instance="main"}  500
+func parseHistogramCount(metricsBody, metricName, component, instance string) (float64, bool) {
+	countMetric := metricName + "_count"
+	pattern := fmt.Sprintf(`^%s\{[^}]*component="%s"[^}]*instance="%s"[^}]*\}\s+([0-9.+-eE]+)$`,
+		regexp.QuoteMeta(countMetric), regexp.QuoteMeta(component), regexp.QuoteMeta(instance))
+
+	re := regexp.MustCompile(pattern)
+
 	lines := strings.Split(metricsBody, "\n")
-
-	GinkgoWriter.Printf("\nReconcile p99 durations over %.1f ms:\n", thresholdMs)
-
 	for _, line := range lines {
-		if strings.Contains(line, "umh_core_reconcile_duration_milliseconds") && strings.Contains(line, `quantile="0.99"`) {
-			fields := strings.Fields(line)
-			if len(fields) < 2 {
-				continue
-			}
+		if strings.Contains(line, countMetric) {
+			if match := re.FindStringSubmatch(line); match != nil {
+				valStr := match[1]
 
-			valStr := fields[len(fields)-1]
-
-			val, err := strconv.ParseFloat(valStr, 64)
-			if err == nil && val > thresholdMs {
-				GinkgoWriter.Printf("  %s\n", line)
+				f, err := strconv.ParseFloat(valStr, 64)
+				if err == nil {
+					return f, true
+				}
 			}
 		}
 	}
+
+	return 0, false
+}
+
+// printSlowReconcileComponents prints reconcile duration data only for components where
+// less than 95% of observations fall within the 90ms bucket, indicating potential issues.
+// This avoids flooding JUnit XML with thousands of lines of debug output from healthy components.
+func printSlowReconcileComponents(metricsBody string, thresholdBucket string) {
+	lines := strings.Split(metricsBody, "\n")
+
+	// Extract unique component/instance pairs from _count lines
+	type componentKey struct {
+		component string
+		instance  string
+	}
+
+	var slow []componentKey
+
+	countMetric := "umh_core_reconcile_duration_milliseconds_count"
+	bucketMetric := "umh_core_reconcile_duration_milliseconds_bucket"
+
+	for _, line := range lines {
+		if !strings.Contains(line, countMetric) {
+			continue
+		}
+
+		component := extractLabel(line, "component")
+		instance := extractLabel(line, "instance")
+		if component == "" || instance == "" {
+			continue
+		}
+
+		total, foundTotal := parseHistogramCount(metricsBody, "umh_core_reconcile_duration_milliseconds", component, instance)
+		if !foundTotal || total == 0 {
+			continue
+		}
+
+		bucket, foundBucket := parseHistogramBucket(metricsBody, "umh_core_reconcile_duration_milliseconds", thresholdBucket, component, instance)
+		if !foundBucket {
+			continue
+		}
+
+		if bucket/total < 0.95 {
+			slow = append(slow, componentKey{component, instance})
+		}
+	}
+
+	if len(slow) == 0 {
+		return
+	}
+
+	GinkgoWriter.Printf("\nSlow reconcile components (>5%% above %sms):\n", thresholdBucket)
+
+	for _, k := range slow {
+		GinkgoWriter.Printf("  %s/%s:\n", k.component, k.instance)
+
+		for _, line := range lines {
+			if (strings.Contains(line, bucketMetric) ||
+				strings.Contains(line, countMetric) ||
+				strings.Contains(line, "umh_core_reconcile_duration_milliseconds_sum")) &&
+				strings.Contains(line, fmt.Sprintf(`component="%s"`, k.component)) &&
+				strings.Contains(line, fmt.Sprintf(`instance="%s"`, k.instance)) {
+				GinkgoWriter.Printf("    %s\n", line)
+			}
+		}
+	}
+}
+
+// extractLabel extracts a label value from a Prometheus metric line.
+func extractLabel(line, label string) string {
+	prefix := label + `="`
+	idx := strings.Index(line, prefix)
+	if idx < 0 {
+		return ""
+	}
+
+	start := idx + len(prefix)
+	end := strings.Index(line[start:], `"`)
+	if end < 0 {
+		return ""
+	}
+
+	return line[start : start+end]
 }
 
 // checkWhetherMetricsHealthy checks that the metrics are healthy and returns an error if they are not.
@@ -134,12 +219,12 @@ func checkWhetherMetricsHealthy(body string, enforceP99ReconcileTime bool, enfor
 		errors = append(errors, err)
 	}
 
-	if err := displayReconcileTimeQuantiles(body); err != nil {
+	if err := displayReconcileTimeHistogram(body); err != nil {
 		errors = append(errors, err)
 	}
 
-	// Print all reconcile durations over threshold for debugging
-	printAllReconcileDurations(body, 20.0)
+	// Print only slow reconcile components for debugging
+	printSlowReconcileComponents(body, fmt.Sprintf("%g", maxReconcileTime99th))
 
 	if err := checkReconcileTimeThresholds(body, enforceP99ReconcileTime, enforceP95ReconcileTime); err != nil {
 		errors = append(errors, err)
@@ -206,47 +291,62 @@ func checkErrorCounters(body string) error {
 	return nil
 }
 
-// displayReconcileTimeQuantiles displays the reconcile time quantiles for the control loop.
-func displayReconcileTimeQuantiles(body string) error {
-	GinkgoWriter.Println("\nControl loop reconcile time quantiles:")
+// displayReconcileTimeHistogram displays the reconcile time histogram bucket distribution for the control loop.
+func displayReconcileTimeHistogram(body string) error {
+	GinkgoWriter.Println("\nControl loop reconcile time histogram buckets:")
 
-	quantiles := []string{"0.5", "0.9", "0.95", "0.99"}
-	for _, q := range quantiles {
-		val, found := parseSummaryQuantile(body,
-			"umh_core_reconcile_duration_milliseconds", q, "control_loop", "main")
+	buckets := []string{"1", "2", "5", "10", "20", "50", "90", "100", "200", "500", "1000", "+Inf"}
+	for _, b := range buckets {
+		val, found := parseHistogramBucket(body,
+			"umh_core_reconcile_duration_milliseconds", b, "control_loop", "main", true)
 		if found {
-			GinkgoWriter.Printf("  %s quantile: %.2f ms\n", q, val)
+			GinkgoWriter.Printf("  le=%s: %.0f\n", b, val)
 		} else {
-			GinkgoWriter.Printf("  %s quantile: not found\n", q)
+			GinkgoWriter.Printf("  le=%s: not found\n", b)
 		}
+	}
+
+	count, found := parseHistogramCount(body, "umh_core_reconcile_duration_milliseconds", "control_loop", "main")
+	if found {
+		GinkgoWriter.Printf("  count: %.0f\n", count)
 	}
 
 	return nil
 }
 
-// checkReconcileTimeThresholds checks the reconcile time thresholds based on configuration.
+// checkReconcileTimeThresholds checks reconcile time thresholds using histogram bucket ratios.
+// For p99 enforcement: verifies that >=99% of observations fall within the le="90" bucket.
+// For p95 enforcement: verifies that >=95% of observations fall within the le="90" bucket.
 func checkReconcileTimeThresholds(body string, enforceP99ReconcileTime bool, enforceP95ReconcileTime bool) error {
-	if enforceP99ReconcileTime {
-		// Enforce the 99th percentile threshold
-		recon99, found := parseSummaryQuantile(body,
-			"umh_core_reconcile_duration_milliseconds", "0.99", "control_loop", "main")
-		if !found {
-			return errors.New("expected to find 0.99 quantile for control_loop's reconcile time")
-		}
+	if !enforceP99ReconcileTime && !enforceP95ReconcileTime {
+		return nil
+	}
 
-		if recon99 > maxReconcileTime99th {
-			return fmt.Errorf("99th percentile reconcile time (%.2f ms) exceeded %.1f ms", recon99, maxReconcileTime99th)
+	// Use the bucket boundary matching our threshold (90ms)
+	thresholdBucket := fmt.Sprintf("%g", maxReconcileTime99th)
+	bucketCount, foundBucket := parseHistogramBucket(body,
+		"umh_core_reconcile_duration_milliseconds", thresholdBucket, "control_loop", "main", true)
+
+	totalCount, foundCount := parseHistogramCount(body,
+		"umh_core_reconcile_duration_milliseconds", "control_loop", "main")
+
+	if !foundBucket || !foundCount {
+		return fmt.Errorf("expected to find histogram bucket le=%s and count for control_loop's reconcile time", thresholdBucket)
+	}
+
+	if totalCount == 0 {
+		return errors.New("histogram count is zero for control_loop's reconcile time")
+	}
+
+	ratio := bucketCount / totalCount
+
+	if enforceP99ReconcileTime {
+		if ratio < 0.99 {
+			return fmt.Errorf("less than 99%% of reconciliations completed within %.0f ms (%.1f%% did)", maxReconcileTime99th, ratio*100)
 		}
 	} else if enforceP95ReconcileTime {
-		// Enforce the 95th percentile threshold
-		recon95, found := parseSummaryQuantile(body,
-			"umh_core_reconcile_duration_milliseconds", "0.95", "control_loop", "main")
-		if !found {
-			return errors.New("expected to find 0.95 quantile for control_loop's reconcile time")
-		}
-
-		if recon95 > maxReconcileTime99th { // For now this uses the same limit as the 99th percentile
-			return fmt.Errorf("95th percentile reconcile time (%.2f ms) exceeded %.1f ms", recon95, maxReconcileTime99th)
+		if ratio < 0.95 {
+			return fmt.Errorf("less than 95%% of reconciliations completed within %.0f ms (%.1f%% did)", maxReconcileTime99th, ratio*100)
 		}
 	}
 

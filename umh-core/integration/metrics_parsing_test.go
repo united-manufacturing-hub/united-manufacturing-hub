@@ -28,7 +28,6 @@
 package integration_test
 
 import (
-	"strconv"
 	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -41,6 +40,9 @@ var _ = Describe("Metrics Parsing", Label("metrics_parsing"), func() {
 
 	BeforeEach(func() {
 		// This is our test metrics data with various violations
+		// Uses histogram format (buckets) instead of summary (quantiles).
+		// The control_loop/main has 100 total observations: 95 under 90ms, 99 under 100ms, 1 over 1000ms.
+		// The base_fsm_manager/S6ManagerCore has 50 total observations all under 1ms.
 		testMetrics = `# HELP go_memstats_alloc_bytes Number of bytes allocated in heap and currently in use.
 # TYPE go_memstats_alloc_bytes gauge
 go_memstats_alloc_bytes 3.05356e+06
@@ -54,15 +56,35 @@ umh_core_errors_total{component="s6_instance",instance="golden-service"} 3
 umh_core_errors_total{component="s6_instance",instance="sleepy"} 0
 umh_core_errors_total{component="s6_manager",instance="Core"} 0
 # HELP umh_core_reconcile_duration_milliseconds Time taken to reconcile (in milliseconds)
-# TYPE umh_core_reconcile_duration_milliseconds summary
-umh_core_reconcile_duration_milliseconds{component="base_fsm_manager",instance="S6ManagerCore",quantile="0.5"} 0
-umh_core_reconcile_duration_milliseconds{component="base_fsm_manager",instance="S6ManagerCore",quantile="0.9"} 0
-umh_core_reconcile_duration_milliseconds{component="base_fsm_manager",instance="S6ManagerCore",quantile="0.95"} 0
-umh_core_reconcile_duration_milliseconds{component="base_fsm_manager",instance="S6ManagerCore",quantile="0.99"} 0
-umh_core_reconcile_duration_milliseconds{component="control_loop",instance="main",quantile="0.5"} 1
-umh_core_reconcile_duration_milliseconds{component="control_loop",instance="main",quantile="0.9"} 1
-umh_core_reconcile_duration_milliseconds{component="control_loop",instance="main",quantile="0.95"} 2
-umh_core_reconcile_duration_milliseconds{component="control_loop",instance="main",quantile="0.99"} 16
+# TYPE umh_core_reconcile_duration_milliseconds histogram
+umh_core_reconcile_duration_milliseconds_bucket{component="base_fsm_manager",instance="S6ManagerCore",le="1"} 50
+umh_core_reconcile_duration_milliseconds_bucket{component="base_fsm_manager",instance="S6ManagerCore",le="2"} 50
+umh_core_reconcile_duration_milliseconds_bucket{component="base_fsm_manager",instance="S6ManagerCore",le="5"} 50
+umh_core_reconcile_duration_milliseconds_bucket{component="base_fsm_manager",instance="S6ManagerCore",le="10"} 50
+umh_core_reconcile_duration_milliseconds_bucket{component="base_fsm_manager",instance="S6ManagerCore",le="20"} 50
+umh_core_reconcile_duration_milliseconds_bucket{component="base_fsm_manager",instance="S6ManagerCore",le="50"} 50
+umh_core_reconcile_duration_milliseconds_bucket{component="base_fsm_manager",instance="S6ManagerCore",le="90"} 50
+umh_core_reconcile_duration_milliseconds_bucket{component="base_fsm_manager",instance="S6ManagerCore",le="100"} 50
+umh_core_reconcile_duration_milliseconds_bucket{component="base_fsm_manager",instance="S6ManagerCore",le="200"} 50
+umh_core_reconcile_duration_milliseconds_bucket{component="base_fsm_manager",instance="S6ManagerCore",le="500"} 50
+umh_core_reconcile_duration_milliseconds_bucket{component="base_fsm_manager",instance="S6ManagerCore",le="1000"} 50
+umh_core_reconcile_duration_milliseconds_bucket{component="base_fsm_manager",instance="S6ManagerCore",le="+Inf"} 50
+umh_core_reconcile_duration_milliseconds_sum{component="base_fsm_manager",instance="S6ManagerCore"} 10
+umh_core_reconcile_duration_milliseconds_count{component="base_fsm_manager",instance="S6ManagerCore"} 50
+umh_core_reconcile_duration_milliseconds_bucket{component="control_loop",instance="main",le="1"} 60
+umh_core_reconcile_duration_milliseconds_bucket{component="control_loop",instance="main",le="2"} 75
+umh_core_reconcile_duration_milliseconds_bucket{component="control_loop",instance="main",le="5"} 85
+umh_core_reconcile_duration_milliseconds_bucket{component="control_loop",instance="main",le="10"} 90
+umh_core_reconcile_duration_milliseconds_bucket{component="control_loop",instance="main",le="20"} 93
+umh_core_reconcile_duration_milliseconds_bucket{component="control_loop",instance="main",le="50"} 95
+umh_core_reconcile_duration_milliseconds_bucket{component="control_loop",instance="main",le="90"} 95
+umh_core_reconcile_duration_milliseconds_bucket{component="control_loop",instance="main",le="100"} 99
+umh_core_reconcile_duration_milliseconds_bucket{component="control_loop",instance="main",le="200"} 99
+umh_core_reconcile_duration_milliseconds_bucket{component="control_loop",instance="main",le="500"} 99
+umh_core_reconcile_duration_milliseconds_bucket{component="control_loop",instance="main",le="1000"} 99
+umh_core_reconcile_duration_milliseconds_bucket{component="control_loop",instance="main",le="+Inf"} 100
+umh_core_reconcile_duration_milliseconds_sum{component="control_loop",instance="main"} 450
+umh_core_reconcile_duration_milliseconds_count{component="control_loop",instance="main"} 100
 # HELP umh_core_reconcile_starved_total_seconds Total seconds the reconcile loop was starved
 # TYPE umh_core_reconcile_starved_total_seconds counter
 umh_core_reconcile_starved_total_seconds 3`
@@ -86,30 +108,62 @@ umh_core_reconcile_starved_total_seconds 3`
 		})
 	})
 
-	Describe("parseSummaryQuantile", Label("integration"), func() {
-		It("should parse quantile metrics correctly when filtering by component and instance", func() {
-			// Test finding the 99th percentile for control_loop/main
-			p99, found := parseSummaryQuantile(testMetrics,
-				"umh_core_reconcile_duration_milliseconds", "0.99", "control_loop", "main")
-			Expect(found).To(BeTrue(), "Should find the 0.99 quantile for control_loop/main")
-			Expect(p99).To(BeNumerically("==", 16), "Should parse the 99th percentile correctly")
+	Describe("parseHistogramBucket", Label("integration"), func() {
+		It("should parse histogram bucket metrics correctly when filtering by component and instance", func() {
+			// Test finding the le="90" bucket for control_loop/main (95 of 100 observations)
+			bucket90, found := parseHistogramBucket(testMetrics,
+				"umh_core_reconcile_duration_milliseconds", "90", "control_loop", "main")
+			Expect(found).To(BeTrue(), "Should find the le=90 bucket for control_loop/main")
+			Expect(bucket90).To(BeNumerically("==", 95), "Should parse the le=90 bucket correctly")
 
-			// Test finding the 95th percentile for control_loop/main
-			p95, found := parseSummaryQuantile(testMetrics,
-				"umh_core_reconcile_duration_milliseconds", "0.95", "control_loop", "main")
-			Expect(found).To(BeTrue(), "Should find the 0.95 quantile for control_loop/main")
-			Expect(p95).To(BeNumerically("==", 2), "Should parse the 95th percentile correctly")
+			// Test finding the le="100" bucket for control_loop/main (99 of 100 observations)
+			bucket100, found := parseHistogramBucket(testMetrics,
+				"umh_core_reconcile_duration_milliseconds", "100", "control_loop", "main")
+			Expect(found).To(BeTrue(), "Should find the le=100 bucket for control_loop/main")
+			Expect(bucket100).To(BeNumerically("==", 99), "Should parse the le=100 bucket correctly")
 
-			// Test finding a metric for a different component
-			p99s6, found := parseSummaryQuantile(testMetrics,
-				"umh_core_reconcile_duration_milliseconds", "0.99", "base_fsm_manager", "S6ManagerCore")
-			Expect(found).To(BeTrue(), "Should find the 0.99 quantile for base_fsm_manager/S6ManagerCore")
-			Expect(p99s6).To(BeNumerically("==", 0), "Should parse the S6 manager 99th percentile correctly")
+			// Test finding a bucket for a different component (all 50 observations under 1ms)
+			s6Bucket, found := parseHistogramBucket(testMetrics,
+				"umh_core_reconcile_duration_milliseconds", "1", "base_fsm_manager", "S6ManagerCore")
+			Expect(found).To(BeTrue(), "Should find the le=1 bucket for base_fsm_manager/S6ManagerCore")
+			Expect(s6Bucket).To(BeNumerically("==", 50), "Should parse the S6 manager le=1 bucket correctly")
 
 			// Test a non-existent component/instance
-			_, found = parseSummaryQuantile(testMetrics,
-				"umh_core_reconcile_duration_milliseconds", "0.99", "non_existent", "component")
+			_, found = parseHistogramBucket(testMetrics,
+				"umh_core_reconcile_duration_milliseconds", "90", "non_existent", "component")
 			Expect(found).To(BeFalse(), "Should not find a non-existent component")
+		})
+
+		It("should return false for a non-existent bucket boundary", func() {
+			_, found := parseHistogramBucket(testMetrics,
+				"umh_core_reconcile_duration_milliseconds", "999", "control_loop", "main")
+			Expect(found).To(BeFalse(), "Should not find le=999 bucket")
+		})
+
+		It("should return false for empty metrics string", func() {
+			_, found := parseHistogramBucket("",
+				"umh_core_reconcile_duration_milliseconds", "90", "control_loop", "main")
+			Expect(found).To(BeFalse(), "Should not find anything in empty metrics")
+		})
+	})
+
+	Describe("parseHistogramCount", Label("integration"), func() {
+		It("should parse histogram count correctly", func() {
+			count, found := parseHistogramCount(testMetrics,
+				"umh_core_reconcile_duration_milliseconds", "control_loop", "main")
+			Expect(found).To(BeTrue(), "Should find the count for control_loop/main")
+			Expect(count).To(BeNumerically("==", 100), "Should parse the count correctly")
+
+			s6Count, found := parseHistogramCount(testMetrics,
+				"umh_core_reconcile_duration_milliseconds", "base_fsm_manager", "S6ManagerCore")
+			Expect(found).To(BeTrue(), "Should find the count for base_fsm_manager/S6ManagerCore")
+			Expect(s6Count).To(BeNumerically("==", 50), "Should parse the S6 manager count correctly")
+		})
+
+		It("should return false when _count metric is missing", func() {
+			_, found := parseHistogramCount(testMetrics,
+				"umh_core_reconcile_duration_milliseconds", "non_existent", "instance")
+			Expect(found).To(BeFalse(), "Should not find count for non-existent component")
 		})
 	})
 
@@ -153,26 +207,28 @@ umh_core_reconcile_starved_total_seconds 3`
 		})
 
 		It("should pass with healthy metrics", func() {
-			// Modify metrics to be healthy (no errors, no starved seconds, p99 under threshold)
+			// Modify metrics to be healthy: no errors, no starved seconds, and >=99% within 90ms.
+			// Change le="90" bucket from 95 to 99 so ratio is 99/100 = 99% (passes p99).
+			// Using 99 (not 100) to maintain cumulative histogram ordering: le="90" <= le="100" (both 99).
 			healthyMetrics := strings.ReplaceAll(testMetrics, "umh_core_errors_total{component=\"s6_instance\",instance=\"golden-service\"} 3",
 				"umh_core_errors_total{component=\"s6_instance\",instance=\"golden-service\"} 0")
 			healthyMetrics = strings.ReplaceAll(healthyMetrics, "umh_core_reconcile_starved_total_seconds 3",
 				"umh_core_reconcile_starved_total_seconds 0")
+			healthyMetrics = strings.ReplaceAll(healthyMetrics,
+				"umh_core_reconcile_duration_milliseconds_bucket{component=\"control_loop\",instance=\"main\",le=\"90\"} 95",
+				"umh_core_reconcile_duration_milliseconds_bucket{component=\"control_loop\",instance=\"main\",le=\"90\"} 99")
 
 			metricsErrors := checkWhetherMetricsHealthy(healthyMetrics, true, true)
 			Expect(metricsErrors).To(BeEmpty(), "Should not have any failures with healthy metrics")
 		})
 
 		It("should fail when p99 reconcile time exceeds max", func() {
-			// Using the non-error metrics but changing the reconcile time to exceed the threshold
+			// Modify metrics to have no errors/starved seconds but too many observations above 90ms.
+			// The default fixture has le="90" = 95 out of 100 = 95%, which fails the 99% threshold.
 			noErrorMetrics := strings.ReplaceAll(testMetrics, "umh_core_errors_total{component=\"s6_instance\",instance=\"golden-service\"} 3",
 				"umh_core_errors_total{component=\"s6_instance\",instance=\"golden-service\"} 0")
-			noErrorStarvedMetrics := strings.ReplaceAll(noErrorMetrics, "umh_core_reconcile_starved_total_seconds 3",
+			highReconcileMetrics := strings.ReplaceAll(noErrorMetrics, "umh_core_reconcile_starved_total_seconds 3",
 				"umh_core_reconcile_starved_total_seconds 0")
-
-			highReconcileMetrics := strings.ReplaceAll(noErrorStarvedMetrics,
-				"umh_core_reconcile_duration_milliseconds{component=\"control_loop\",instance=\"main\",quantile=\"0.99\"} 16",
-				"umh_core_reconcile_duration_milliseconds{component=\"control_loop\",instance=\"main\",quantile=\"0.99\"} "+strconv.FormatFloat(maxReconcileTime99th+1, 'f', -1, 64))
 
 			metricsErrors := checkWhetherMetricsHealthy(highReconcileMetrics, true, true)
 			Expect(metricsErrors).NotTo(BeEmpty(), "Should have detected high reconcile time")
@@ -180,13 +236,25 @@ umh_core_reconcile_starved_total_seconds 3`
 			// Check that we caught the reconcile time issue
 			foundReconcileTimeError := false
 			for _, failure := range metricsErrors {
-				if strings.Contains(failure.Error(), "reconcile time") && strings.Contains(failure.Error(), strconv.FormatFloat(maxReconcileTime99th, 'f', -1, 64)) {
+				if strings.Contains(failure.Error(), "reconciliations completed within") {
 					foundReconcileTimeError = true
 
 					break
 				}
 			}
 			Expect(foundReconcileTimeError).To(BeTrue(), "Should have caught the reconcile time error")
+		})
+	})
+
+	Describe("checkReconcileTimeThresholds", Label("integration"), func() {
+		It("should return error when total count is zero", func() {
+			zeroCountMetrics := strings.ReplaceAll(testMetrics,
+				"umh_core_reconcile_duration_milliseconds_count{component=\"control_loop\",instance=\"main\"} 100",
+				"umh_core_reconcile_duration_milliseconds_count{component=\"control_loop\",instance=\"main\"} 0")
+
+			err := checkReconcileTimeThresholds(zeroCountMetrics, true, false)
+			Expect(err).To(HaveOccurred(), "Should return error when count is zero")
+			Expect(err.Error()).To(ContainSubstring("zero"), "Error should mention zero count")
 		})
 	})
 })
