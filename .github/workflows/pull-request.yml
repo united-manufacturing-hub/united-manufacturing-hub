@@ -96,7 +96,8 @@ jobs:
     if: ${{ needs.changes.outputs.changelog == 'true' }}
     runs-on: depot-ubuntu-24.04
     steps:
-      # Check out THIS repo (fetch-depth: 0 needed for git show TAG:path)
+      # Check out THIS repo (fetch-depth: 0 fetches all tags + history, needed by
+      # the changelog guard for "git tag --list --sort=-version:refname" and "git show TAG:path")
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 0
@@ -170,10 +171,17 @@ jobs:
           # Extract the released tail from the tag
           TAG_TAIL=$(printf '%s\n' "$TAG_FILE" | tail -n +"$TAG_LINE_NUM")
 
-          # Compare — use printf '%s' to avoid trailing newline false positives
-          if ! diff --unified \
+          # Compare — use printf '%s' (no trailing newline) so diff is not thrown off by newline differences at EOF
+          DIFF_OUTPUT=$(diff --unified \
+            --label "released ($LATEST_TAG)" \
+            --label "current (PR)" \
             <(printf '%s' "$TAG_TAIL") \
-            <(printf '%s' "$CURRENT_TAIL"); then
+            <(printf '%s' "$CURRENT_TAIL")) || true
+
+          if [[ -n "$DIFF_OUTPUT" ]]; then
+            echo "::group::Diff of released sections"
+            echo "$DIFF_OUTPUT"
+            echo "::endgroup::"
             echo ""
             echo "::error::Released CHANGELOG sections have been modified!"
             echo ""
