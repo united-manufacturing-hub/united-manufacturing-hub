@@ -20,6 +20,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps/retry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
 	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
 )
@@ -53,6 +54,13 @@ type TransportDependencies interface {
 	// Instance identity from backend
 	SetAuthenticatedUUID(uuid string)
 	GetAuthenticatedUUID() string
+
+	// Reset generation for parent-level transport reset signaling to children
+	GetResetGeneration() uint64
+	IncrementResetGeneration()
+
+	// RetryTracker for backoff and modulo-trigger breaking after transport reset
+	RetryTracker() retry.Tracker
 }
 
 // TransportSnapshot represents a point-in-time view of the transport worker state.
@@ -65,6 +73,9 @@ type TransportSnapshot struct {
 // Compile-time check that TransportDesiredState implements fsmv2.DesiredState.
 var _ fsmv2.DesiredState = (*TransportDesiredState)(nil)
 
+// Compile-time check that TransportDesiredState implements config.ChildSpecProvider.
+var _ config.ChildSpecProvider = (*TransportDesiredState)(nil)
+
 // TransportDesiredState represents the target configuration for the transport worker.
 type TransportDesiredState struct {
 	InstanceUUID            string `json:"instanceUUID"` // Used by AuthenticateAction for backend authentication
@@ -74,7 +85,15 @@ type TransportDesiredState struct {
 	RelayURL                string `json:"relayURL"`
 	config.BaseDesiredState        // Provides State, ShutdownRequested + IsShutdownRequested() + SetShutdownRequested()
 
+	ChildrenSpecs []config.ChildSpec `json:"childrenSpecs,omitempty"`
+
 	Timeout time.Duration `json:"timeout"`
+}
+
+// GetChildrenSpecs returns the children specifications.
+// Implements config.ChildSpecProvider interface.
+func (d *TransportDesiredState) GetChildrenSpecs() []config.ChildSpec {
+	return d.ChildrenSpecs
 }
 
 // GetState returns the desired lifecycle state ("running" or "stopped").
@@ -96,6 +115,9 @@ type TransportObservedState struct {
 	CollectedAt time.Time `json:"collected_at"`
 
 	JWTExpiry time.Time `json:"jwt_expiry,omitempty"`
+
+	// LastAuthAttemptAt records when the last authentication attempt was made (for backoff gating).
+	LastAuthAttemptAt time.Time `json:"last_auth_attempt_at,omitempty"`
 
 	// Children contains the observed state of child workers (PushWorker, PullWorker).
 	Children map[string]fsmv2.ObservedState `json:"children,omitempty"`
@@ -130,6 +152,15 @@ type TransportObservedState struct {
 
 	// ChildrenUnhealthy is the count of unhealthy child workers.
 	ChildrenUnhealthy int `json:"children_unhealthy"`
+
+	// ConsecutiveErrors tracks consecutive push/pull errors for transport reset decisions.
+	ConsecutiveErrors int `json:"consecutive_errors"`
+
+	// LastErrorType tracks the most recent error type for ShouldResetTransport evaluation.
+	LastErrorType httpTransport.ErrorType `json:"last_error_type"`
+
+	// LastRetryAfter holds the server-suggested retry delay from the most recent error (for backoff).
+	LastRetryAfter time.Duration `json:"last_retry_after,omitempty"`
 }
 
 // GetTimestamp returns when this observed state was collected.

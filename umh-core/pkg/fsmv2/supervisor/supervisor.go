@@ -298,7 +298,19 @@ func NewSupervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState](c
 		gracefulShutdownTimeout: gracefulShutdownTimeout,
 		metricsReportInterval:   metricsReportInterval,
 		childShutdownTimeout:    childShutdownTimeout,
-		deps:                    cfg.Dependencies,
+		deps:                    ensureNonNilDeps(cfg.Dependencies),
 		validatedSpecHashes:     make(map[string]string),
 	}
+}
+
+// ensureNonNilDeps returns deps if non-nil, or an initialized empty map.
+// Worker factories may write to the deps map (e.g., to pass dependencies to child workers),
+// so it must always be non-nil. This is consistent with how other maps in the supervisor
+// (children, pendingRemoval, etc.) are always initialized.
+func ensureNonNilDeps(deps map[string]any) map[string]any {
+	if deps == nil {
+		return make(map[string]any)
+	}
+
+	return deps
 }

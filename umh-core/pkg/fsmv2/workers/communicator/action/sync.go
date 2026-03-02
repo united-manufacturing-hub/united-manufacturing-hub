@@ -42,10 +42,11 @@ const (
 
 // SyncAction performs bidirectional message sync via HTTP transport.
 //
-// Pull: HTTPTransport.Pull() → inboundChan (backend → edge).
-// Push: outboundChan → HTTPTransport.Push() (edge → backend).
+// Pull: HTTPTransport.Pull() delivers messages to inboundChan (backend to edge).
+// Push: outboundChan messages go to HTTPTransport.Push() (edge to backend).
 //
-// Records metrics and error counts for health monitoring. See worker.go C5 (syncing loop).
+// Deprecated: Superseded by TransportWorker Push/Pull children (ENG-4264).
+// CommunicatorWorker no longer dispatches SyncAction. Will be deleted in ENG-4265.
 type SyncAction struct {
 	JWTToken           string
 	MessagesToBePushed []*transport.UMHMessage

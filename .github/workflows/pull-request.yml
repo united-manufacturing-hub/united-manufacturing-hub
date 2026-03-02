@@ -1,0 +1,129 @@
+# Copyright 2025 UMH Systems GmbH
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+name: Pull Request
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: ["**"]
+  merge_group:
+
+jobs:
+  changes:
+    name: Detect Changes
+    runs-on: ubuntu-latest # Use GH runner for fast startup, does not need Depot
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+      changelog: ${{ steps.filter.outputs.changelog }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
+        id: filter
+        with:
+          filters: .github/path-filters.yml
+
+  go-analysis:
+    needs: changes
+    if: ${{ needs.changes.outputs.code == 'true' }}
+    uses: ./.github/workflows/go-analysis.yml
+
+  tests:
+    needs: [changes, go-analysis]
+    if: ${{ needs.changes.outputs.code == 'true' }}
+    uses: ./.github/workflows/test-umh-core.yml
+    secrets: inherit
+    permissions:
+      contents: read
+      pull-requests: write
+
+  build:
+    needs: [changes, go-analysis]
+    if: ${{ needs.changes.outputs.code == 'true' }}
+    uses: ./.github/workflows/build-umh-core.yml
+    secrets: inherit
+    permissions:
+      contents: read
+      packages: write
+
+  license-eye-header:
+    uses: ./.github/workflows/license-eye-header.yaml
+
+  comment-pr:
+    name: Comment PR with Image Tag
+    needs: [changes, build]
+    if: github.event_name == 'pull_request' && needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Compute short SHA
+        id: short-sha
+        run: echo "SHORT_SHA=$(echo '${{ github.sha }}' | cut -c1-7)" >> $GITHUB_OUTPUT
+
+      - name: Comment image tag on PR
+        uses: marocchino/sticky-pull-request-comment@773744901bac0e8cbb5a0dc842800d45e9b2b405 # v2.9.4
+        with:
+          header: docker-image
+          message: |
+            **Docker Image Built**
+
+            ```
+            ghcr.io/united-manufacturing-hub/umh-core:sha-${{ steps.short-sha.outputs.SHORT_SHA }}
+            ```
+
+            Pull with:
+            ```bash
+            docker pull ghcr.io/united-manufacturing-hub/umh-core:sha-${{ steps.short-sha.outputs.SHORT_SHA }}
+            ```
+
+  validate-changelog:
+    needs: changes
+    if: ${{ needs.changes.outputs.changelog == 'true' }}
+    runs-on: depot-ubuntu-24.04
+    steps:
+      # Check out THIS repo
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      # Generate token for cross-repo access
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@29824e69f54612133e76f7eaac726eef6c875baf # v2
+        with:
+          app-id: ${{ secrets.CHANGELOG_SYNC_APP_ID }}
+          private-key: ${{ secrets.CHANGELOG_SYNC_APP_PK }}
+          repositories: changelog.umh.app
+      # Check out the changelog.umh.app repo
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: united-manufacturing-hub/changelog.umh.app
+          token: ${{ steps.app-token.outputs.token }}
+          path: changelog-scripts
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "20"
+      - name: Validate CHANGELOG.md
+        run: npx tsx changelog-scripts/.github/scripts/validate-changelog.ts --format version --changelog-path umh-core/CHANGELOG.md
+
+  # Gather results from all required steps
+  # Also marks them as "success", if they are "skipped" by paths-filter
+  required-checks:
+    name: Required Checks
+    runs-on: ubuntu-latest # Use GH runner for fast startup, does not need Depot
+    needs: [go-analysis, tests, build, license-eye-header, validate-changelog]
+    if: always()
+    steps:
+      - run: echo '${{ toJSON(needs) }}' | jq -e 'to_entries | all(.value.result == "success" or .value.result == "skipped")'

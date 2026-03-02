@@ -14,12 +14,9 @@
 
 name: license-eye-header
 on:
-  pull_request:
-    branches:
-      - main
-      - staging
-  merge_group:
-    
+  workflow_call:
+  workflow_dispatch:
+
 jobs:
   license-eye-header:
     name: License Eye Header

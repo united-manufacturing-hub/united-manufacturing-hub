@@ -15,15 +15,21 @@
 package state
 
 import (
+	"fmt"
+	"time"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/backoff"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/action"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/snapshot"
 )
 
 // StartingState represents the state where the transport worker is authenticating.
 // It emits AuthenticateAction to obtain a JWT token from the relay server.
-// Once authenticated and children are healthy, transitions to RunningState.
+// Once authenticated, transitions to RunningState. Children start via ChildStartStates
+// when the parent enters Running, avoiding a deadlock where children can't become healthy
+// while the parent waits in Starting.
 type StartingState struct {
 	helpers.StartingBase
 }
@@ -36,8 +42,21 @@ func (s *StartingState) Next(snapAny any) fsmv2.NextResult[any, any] {
 		return fsmv2.Result[any, any](&StoppingState{}, fsmv2.SignalNone, nil, "Shutdown requested, transitioning to Stopping")
 	}
 
-	// If we don't have a valid token, authenticate
+	// If we don't have a valid token, authenticate (with backoff on repeated failures)
 	if !snap.Observed.HasValidToken() {
+		if snap.Observed.ConsecutiveErrors > 0 && !snap.Observed.LastAuthAttemptAt.IsZero() {
+			delay := backoff.CalculateDelayForErrorType(
+				snap.Observed.LastErrorType,
+				snap.Observed.ConsecutiveErrors,
+				snap.Observed.LastRetryAfter,
+			)
+			if time.Since(snap.Observed.LastAuthAttemptAt) < delay {
+				return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil,
+					fmt.Sprintf("auth backoff: %d errors (%s), delay %s",
+						snap.Observed.ConsecutiveErrors, snap.Observed.LastErrorType, delay.Round(time.Second)))
+			}
+		}
+
 		authAction := action.NewAuthenticateAction(
 			snap.Desired.RelayURL,
 			snap.Desired.InstanceUUID,
@@ -48,14 +67,9 @@ func (s *StartingState) Next(snapAny any) fsmv2.NextResult[any, any] {
 		return fsmv2.Result[any, any](s, fsmv2.SignalNone, authAction, "No valid token, authenticating with relay")
 	}
 
-	// Requires healthy children (PushWorker + PullWorker) — added in ENG-4262, ENG-4263.
-	// Zero children: stays in Starting. This is intentional — avoids reporting Running
-	// without actual push/pull capability.
-	if snap.Observed.ChildrenHealthy > 0 && snap.Observed.ChildrenUnhealthy == 0 {
-		return fsmv2.Result[any, any](&RunningState{}, fsmv2.SignalNone, nil, "All children healthy, transitioning to Running")
-	}
-
-	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, "Token valid, waiting for children to become healthy")
+	// Authenticated — transition to Running. Children start via ChildStartStates
+	// once parent enters Running; RunningState handles unhealthy children.
+	return fsmv2.Result[any, any](&RunningState{}, fsmv2.SignalNone, nil, "Authenticated, transitioning to Running")
 }
 
 // String returns the state name derived from the type.

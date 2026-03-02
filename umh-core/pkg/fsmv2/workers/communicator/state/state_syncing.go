@@ -15,25 +15,22 @@
 package state
 
 import (
-	"time"
+	"fmt"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/action"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/backoff"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/snapshot"
 )
 
-// SyncingState is the primary operational state for bidirectional message sync.
-// Emits SyncAction continuously while healthy and authenticated.
+// SyncingState is the primary operational state for the communicator orchestrator.
+// TransportWorker (child) handles authentication, push, and pull operations.
+// CommunicatorWorker monitors child health and transitions to RecoveringState
+// when children report unhealthy.
 //
 // Transitions:
-//   - → TryingToAuthenticateState: on token expiry or auth loss
-//   - → RecoveringState: when !IsSyncHealthy()
+//   - → RecoveringState: when ChildrenUnhealthy > 0
 //   - → StoppedState: if shutdown requested
-//   - → self: continuous sync loop (C5)
-//
-// Enforces C2 (token expiry), C4 (shutdown priority), C5 (syncing loop).
+//   - → self: children healthy, continue orchestration
 type SyncingState struct {
 	helpers.RunningHealthyBase
 }
@@ -45,28 +42,17 @@ func (s *SyncingState) Next(snapAny any) fsmv2.NextResult[any, any] {
 		return fsmv2.Result[any, any](&StoppedState{}, fsmv2.SignalNone, nil, "Shutdown requested during sync")
 	}
 
-	if snap.Observed.IsTokenExpired() {
-		return fsmv2.Result[any, any](&TryingToAuthenticateState{}, fsmv2.SignalNone, nil, "Token expired, re-authenticating")
-	}
-
-	if !snap.Observed.Authenticated {
-		return fsmv2.Result[any, any](&TryingToAuthenticateState{}, fsmv2.SignalNone, nil, "Not authenticated, re-authenticating")
-	}
-
 	if !snap.Observed.IsSyncHealthy() {
-		return fsmv2.Result[any, any](&RecoveringState{}, fsmv2.SignalNone, nil, "Sync health check failed")
+		return fsmv2.Result[any, any](&RecoveringState{}, fsmv2.SignalNone, nil,
+			fmt.Sprintf("children unhealthy: healthy=%d, unhealthy=%d",
+				snap.Observed.ChildrenHealthy, snap.Observed.ChildrenUnhealthy))
 	}
 
-	syncAction := action.NewSyncAction(snap.Observed.JWTToken)
-
-	return fsmv2.Result[any, any](s, fsmv2.SignalNone, syncAction, "Syncing with relay server")
+	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil,
+		fmt.Sprintf("syncing: healthy=%d, unhealthy=%d",
+			snap.Observed.ChildrenHealthy, snap.Observed.ChildrenUnhealthy))
 }
 
 func (s *SyncingState) String() string {
 	return "Syncing"
-}
-
-// GetBackoffDelay calculates exponential backoff based on consecutive errors.
-func (s *SyncingState) GetBackoffDelay(observed snapshot.CommunicatorObservedState) time.Duration {
-	return backoff.CalculateDelay(observed.ConsecutiveErrors)
 }

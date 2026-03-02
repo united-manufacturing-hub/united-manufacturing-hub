@@ -72,8 +72,10 @@ const AuthenticateActionName = "authenticate"
 // Idempotent: safe to retry on failure, multiple calls won't create multiple tokens.
 // Creates transport on first execution if not present.
 //
+// Deprecated: TransportWorker handles authentication (ENG-4264).
+// CommunicatorWorker no longer authenticates. Will be deleted in ENG-4265.
+//
 // Returns error on network failure, invalid credentials (non-200), or malformed response.
-// See worker.go C1 (authentication precedence) and C3 (transport lifecycle).
 type AuthenticateAction struct {
 	RelayURL     string
 	InstanceUUID string
@@ -105,7 +107,16 @@ func NewAuthenticateAction(relayURL, instanceUUID, authToken string, timeout tim
 // Creates transport if not present, then POSTs auth request and stores JWT in deps.
 // Records auth attempt timestamp and error type for intelligent backoff.
 func (a *AuthenticateAction) Execute(ctx context.Context, depsAny any) error {
-	deps := depsAny.(CommunicatorDependencies)
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
+
+	deps, ok := depsAny.(CommunicatorDependencies)
+	if !ok {
+		return errors.New("invalid dependencies type: expected CommunicatorDependencies")
+	}
 
 	if deps.GetTransport() == nil {
 		newTransport := httpTransport.NewHTTPTransport(a.RelayURL, a.Timeout)

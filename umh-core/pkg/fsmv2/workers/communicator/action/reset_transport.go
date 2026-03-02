@@ -24,9 +24,12 @@ import (
 const ResetTransportActionName = "reset_transport"
 
 // ResetTransportAction resets the HTTP transport to establish fresh connections.
-// Triggered by RecoveringState at multiples of TransportResetThreshold (5, 10, 15...).
-// Resolves stale TCP connections, DNS caching, corrupted connection pool, or TLS issues.
-// Idempotent: creates fresh HTTP client while preserving JWT tokens.
+//
+// Deprecated: Transport reset is now handled by TransportWorker (ENG-4264).
+// Will be deleted in ENG-4265. Previously triggered by RecoveringState at
+// multiples of TransportResetThreshold (5, 10, 15...) to resolve stale TCP
+// connections, DNS caching, corrupted connection pools, or TLS issues.
+// Idempotent: creates a fresh HTTP client while preserving JWT tokens.
 type ResetTransportAction struct{}
 
 func NewResetTransportAction() *ResetTransportAction {
@@ -37,7 +40,7 @@ func (a *ResetTransportAction) Name() string {
 	return ResetTransportActionName
 }
 
-// Execute resets the transport. Transport guaranteed non-nil per worker.go C3.
+// Execute resets the transport and advances the retry counter.
 func (a *ResetTransportAction) Execute(ctx context.Context, depsAny any) error {
 	// Check for context cancellation before proceeding
 	if err := ctx.Err(); err != nil {
