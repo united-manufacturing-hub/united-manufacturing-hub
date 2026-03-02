@@ -311,7 +311,7 @@ var _ = Describe("DataFlowComponentService", func() {
 
 		It("should update an existing component", func() {
 			// Act - update the component
-			err := service.UpdateInManager(ctx, mockSvcRegistry.GetFileSystem(), &updatedRuntimeCfg, protConvName)
+			err := service.UpdateInManager(ctx, mockSvcRegistry.GetFileSystem(), &updatedRuntimeCfg, protConvName, false)
 
 			// Assert
 			Expect(err).NotTo(HaveOccurred())
@@ -352,7 +352,7 @@ var _ = Describe("DataFlowComponentService", func() {
 
 		It("should return error when protocolConverter doesn't exist", func() {
 			// Act - try to update a non-existent component
-			err := service.UpdateInManager(ctx, mockSvcRegistry.GetFileSystem(), &updatedRuntimeCfg, "non-existent")
+			err := service.UpdateInManager(ctx, mockSvcRegistry.GetFileSystem(), &updatedRuntimeCfg, "non-existent", false)
 
 			// Assert
 			Expect(err).To(MatchError(ErrServiceNotExist))
