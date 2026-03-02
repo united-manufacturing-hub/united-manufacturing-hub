@@ -27,11 +27,11 @@ import (
 type PersistenceDependencies struct {
 	*deps.BaseDependencies
 
-	mu                  sync.RWMutex
 	lastCompactionAt    time.Time
 	lastMaintenanceAt   time.Time
 	store               storage.TriangularStoreInterface
 	scheduler           deps.Scheduler
+	mu                  sync.RWMutex
 	observedStateLoaded bool
 }
 
