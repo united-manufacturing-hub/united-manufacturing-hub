@@ -57,7 +57,8 @@ func parseMetricValue(metricsBody, metricName string) (float64, bool) {
 //	metricName_bucket{component="control_loop",instance="main",le="90"}  450
 //
 // Returns the cumulative count for the given bucket boundary.
-func parseHistogramBucket(metricsBody, metricName, le, component, instance string) (float64, bool) {
+// When verbose is true, prints debug output on miss (use for targeted diagnostics).
+func parseHistogramBucket(metricsBody, metricName, le, component, instance string, verbose ...bool) (float64, bool) {
 	bucketMetric := metricName + "_bucket"
 	pattern := fmt.Sprintf(`^%s\{[^}]*component="%s"[^}]*instance="%s"[^}]*le="%s"[^}]*\}\s+([0-9.+-eE]+)$`,
 		regexp.QuoteMeta(bucketMetric), regexp.QuoteMeta(component), regexp.QuoteMeta(instance), regexp.QuoteMeta(le))
@@ -78,12 +79,14 @@ func parseHistogramBucket(metricsBody, metricName, le, component, instance strin
 		}
 	}
 
-	// If no match, dump all relevant lines for debugging
-	GinkgoWriter.Println("No exact match found. Relevant bucket lines:")
+	// Only dump debug output when explicitly requested
+	if len(verbose) > 0 && verbose[0] {
+		GinkgoWriter.Println("No exact match found. Relevant bucket lines:")
 
-	for _, line := range lines {
-		if strings.Contains(line, bucketMetric) && strings.Contains(line, fmt.Sprintf(`component="%s"`, component)) {
-			GinkgoWriter.Printf("  %s\n", line)
+		for _, line := range lines {
+			if strings.Contains(line, bucketMetric) && strings.Contains(line, fmt.Sprintf(`component="%s"`, component)) {
+				GinkgoWriter.Printf("  %s\n", line)
+			}
 		}
 	}
 
@@ -117,19 +120,85 @@ func parseHistogramCount(metricsBody, metricName, component, instance string) (f
 	return 0, false
 }
 
-// printAllReconcileDurations prints all reconcile duration histogram bucket data for debugging.
-func printAllReconcileDurations(metricsBody string) {
+// printSlowReconcileComponents prints reconcile duration data only for components where
+// less than 95% of observations fall within the 90ms bucket, indicating potential issues.
+// This avoids flooding JUnit XML with thousands of lines of debug output from healthy components.
+func printSlowReconcileComponents(metricsBody string, thresholdBucket string) {
 	lines := strings.Split(metricsBody, "\n")
 
-	GinkgoWriter.Printf("\nReconcile duration histogram buckets:\n")
+	// Extract unique component/instance pairs from _count lines
+	type componentKey struct {
+		component string
+		instance  string
+	}
+
+	var slow []componentKey
+
+	countMetric := "umh_core_reconcile_duration_milliseconds_count"
+	bucketMetric := "umh_core_reconcile_duration_milliseconds_bucket"
 
 	for _, line := range lines {
-		if strings.Contains(line, "umh_core_reconcile_duration_milliseconds_bucket") ||
-			strings.Contains(line, "umh_core_reconcile_duration_milliseconds_count") ||
-			strings.Contains(line, "umh_core_reconcile_duration_milliseconds_sum") {
-			GinkgoWriter.Printf("  %s\n", line)
+		if !strings.Contains(line, countMetric) {
+			continue
+		}
+
+		component := extractLabel(line, "component")
+		instance := extractLabel(line, "instance")
+		if component == "" || instance == "" {
+			continue
+		}
+
+		total, foundTotal := parseHistogramCount(metricsBody, "umh_core_reconcile_duration_milliseconds", component, instance)
+		if !foundTotal || total == 0 {
+			continue
+		}
+
+		bucket, foundBucket := parseHistogramBucket(metricsBody, "umh_core_reconcile_duration_milliseconds", thresholdBucket, component, instance)
+		if !foundBucket {
+			continue
+		}
+
+		if bucket/total < 0.95 {
+			slow = append(slow, componentKey{component, instance})
 		}
 	}
+
+	if len(slow) == 0 {
+		return
+	}
+
+	GinkgoWriter.Printf("\nSlow reconcile components (>5%% above %sms):\n", thresholdBucket)
+
+	for _, k := range slow {
+		GinkgoWriter.Printf("  %s/%s:\n", k.component, k.instance)
+
+		for _, line := range lines {
+			if (strings.Contains(line, bucketMetric) ||
+				strings.Contains(line, countMetric) ||
+				strings.Contains(line, "umh_core_reconcile_duration_milliseconds_sum")) &&
+				strings.Contains(line, fmt.Sprintf(`component="%s"`, k.component)) &&
+				strings.Contains(line, fmt.Sprintf(`instance="%s"`, k.instance)) {
+				GinkgoWriter.Printf("    %s\n", line)
+			}
+		}
+	}
+}
+
+// extractLabel extracts a label value from a Prometheus metric line.
+func extractLabel(line, label string) string {
+	prefix := label + `="`
+	idx := strings.Index(line, prefix)
+	if idx < 0 {
+		return ""
+	}
+
+	start := idx + len(prefix)
+	end := strings.Index(line[start:], `"`)
+	if end < 0 {
+		return ""
+	}
+
+	return line[start : start+end]
 }
 
 // checkWhetherMetricsHealthy checks that the metrics are healthy and returns an error if they are not.
@@ -154,8 +223,8 @@ func checkWhetherMetricsHealthy(body string, enforceP99ReconcileTime bool, enfor
 		errors = append(errors, err)
 	}
 
-	// Print all reconcile durations over threshold for debugging
-	printAllReconcileDurations(body)
+	// Print only slow reconcile components for debugging
+	printSlowReconcileComponents(body, fmt.Sprintf("%g", maxReconcileTime99th))
 
 	if err := checkReconcileTimeThresholds(body, enforceP99ReconcileTime, enforceP95ReconcileTime); err != nil {
 		errors = append(errors, err)
@@ -229,7 +298,7 @@ func displayReconcileTimeQuantiles(body string) error {
 	buckets := []string{"1", "2", "5", "10", "20", "50", "90", "100", "200", "500", "1000", "+Inf"}
 	for _, b := range buckets {
 		val, found := parseHistogramBucket(body,
-			"umh_core_reconcile_duration_milliseconds", b, "control_loop", "main")
+			"umh_core_reconcile_duration_milliseconds", b, "control_loop", "main", true)
 		if found {
 			GinkgoWriter.Printf("  le=%s: %.0f\n", b, val)
 		} else {
@@ -256,7 +325,7 @@ func checkReconcileTimeThresholds(body string, enforceP99ReconcileTime bool, enf
 	// Use the bucket boundary matching our threshold (90ms)
 	thresholdBucket := fmt.Sprintf("%g", maxReconcileTime99th)
 	bucketCount, foundBucket := parseHistogramBucket(body,
-		"umh_core_reconcile_duration_milliseconds", thresholdBucket, "control_loop", "main")
+		"umh_core_reconcile_duration_milliseconds", thresholdBucket, "control_loop", "main", true)
 
 	totalCount, foundCount := parseHistogramCount(body,
 		"umh_core_reconcile_duration_milliseconds", "control_loop", "main")
