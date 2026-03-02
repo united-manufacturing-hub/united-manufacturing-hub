@@ -129,8 +129,9 @@ jobs:
 
           CHANGELOG="umh-core/CHANGELOG.md"
 
-          # Find the latest stable tag (vX.Y.Z, no pre-release suffixes)
-          LATEST_TAG=$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-version:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -1)
+          # Find the latest stable tag (vX.Y.Z, no pre-release suffixes).
+          # "|| true" prevents set -e from aborting when grep finds no matches.
+          LATEST_TAG=$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-version:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -1 || true)
 
           if [[ -z "$LATEST_TAG" ]]; then
             echo "::warning::No stable tags found — skipping released-section guard"
@@ -141,8 +142,8 @@ jobs:
 
           HEADER="## [${LATEST_TAG#v}]"
 
-          # Find the header line in the current CHANGELOG (fixed-string match)
-          LINE_NUM=$(grep -Fn "$HEADER" "$CHANGELOG" | head -1 | cut -d: -f1)
+          # Find the header line in the current CHANGELOG (fixed-string match; || true for set -e safety)
+          LINE_NUM=$(grep -Fn "$HEADER" "$CHANGELOG" | head -1 | cut -d: -f1 || true)
 
           if [[ -z "$LINE_NUM" ]]; then
             echo "::warning::Header '$HEADER' not found in current $CHANGELOG — skipping guard"
@@ -160,8 +161,8 @@ jobs:
             exit 0
           }
 
-          # Find the same header in the tag version (fixed-string match)
-          TAG_LINE_NUM=$(printf '%s\n' "$TAG_FILE" | grep -Fn "$HEADER" | head -1 | cut -d: -f1)
+          # Find the same header in the tag version (fixed-string match; || true for set -e safety)
+          TAG_LINE_NUM=$(printf '%s\n' "$TAG_FILE" | grep -Fn "$HEADER" | head -1 | cut -d: -f1 || true)
 
           if [[ -z "$TAG_LINE_NUM" ]]; then
             echo "::warning::Header '$HEADER' not found in $LATEST_TAG:$CHANGELOG — skipping guard"
