@@ -118,7 +118,10 @@ jobs:
         with:
           node-version: "20"
       - name: Check released sections are unmodified
-        if: ${{ !contains(github.event.pull_request.labels.*.name, 'skip-changelog-guard') }}
+        if: >-
+          ${{ github.event_name != 'merge_group'
+              && github.event_name != 'workflow_dispatch'
+              && !contains(github.event.pull_request.labels.*.name, 'skip-changelog-guard') }}
         shell: bash
         run: |
           set -euo pipefail
@@ -135,9 +138,7 @@ jobs:
 
           echo "Latest tag: $LATEST_TAG"
 
-          # Extract version number (v0.44.10 -> 0.44.10)
-          VERSION="${LATEST_TAG#v}"
-          HEADER="## [$VERSION]"
+          HEADER="## [${LATEST_TAG#v}]"
 
           # Find the header line in the current CHANGELOG (fixed-string match)
           LINE_NUM=$(grep -Fn "$HEADER" "$CHANGELOG" | head -1 | cut -d: -f1)
