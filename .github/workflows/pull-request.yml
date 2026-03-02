@@ -95,6 +95,8 @@ jobs:
     needs: changes
     if: ${{ needs.changes.outputs.changelog == 'true' }}
     runs-on: depot-ubuntu-24.04
+    permissions:
+      contents: read
     steps:
       # Check out THIS repo (fetch-depth: 0 fetches all tags + history, needed by
       # the changelog guard for "git tag --list --sort=-version:refname" and "git show TAG:path")
@@ -130,7 +132,7 @@ jobs:
           CHANGELOG="umh-core/CHANGELOG.md"
 
           # Find the latest stable tag (vX.Y.Z, no pre-release suffixes).
-          # "|| true" prevents set -e from aborting when grep finds no matches.
+          # "|| true" keeps the script alive if git tag itself fails (e.g. no git history yet).
           LATEST_TAG=$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-version:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -1 || true)
 
           if [[ -z "$LATEST_TAG" ]]; then
@@ -142,7 +144,8 @@ jobs:
 
           HEADER="## [${LATEST_TAG#v}]"
 
-          # Find the header line in the current CHANGELOG (fixed-string match; || true for set -e safety)
+          # Find the header line in the current CHANGELOG (-F = fixed-string to avoid bracket metacharacters, -n = emit line numbers for cut)
+          # "|| true": grep exits 1 on no match which would abort the script under set -euo pipefail
           LINE_NUM=$(grep -Fn "$HEADER" "$CHANGELOG" | head -1 | cut -d: -f1 || true)
 
           if [[ -z "$LINE_NUM" ]]; then
@@ -155,13 +158,13 @@ jobs:
           # Extract the released tail (from the header line to EOF)
           CURRENT_TAIL=$(tail -n +"$LINE_NUM" "$CHANGELOG")
 
-          # Get the same file from the tag commit
-          TAG_FILE=$(git show "$LATEST_TAG:$CHANGELOG" 2>/dev/null) || {
-            echo "::warning::Could not read $CHANGELOG from $LATEST_TAG — skipping guard"
+          # Get the same file from the tag commit (2>&1 captures error into variable for the warning)
+          if ! TAG_FILE=$(git show "$LATEST_TAG:$CHANGELOG" 2>&1); then
+            echo "::warning::Could not read $CHANGELOG from $LATEST_TAG (git: $TAG_FILE) — skipping guard"
             exit 0
-          }
+          fi
 
-          # Find the same header in the tag version (fixed-string match; || true for set -e safety)
+          # Find the same header in the tag version (-F = fixed-string, -n = line numbers; || true for set -e safety)
           TAG_LINE_NUM=$(printf '%s\n' "$TAG_FILE" | grep -Fn "$HEADER" | head -1 | cut -d: -f1 || true)
 
           if [[ -z "$TAG_LINE_NUM" ]]; then
@@ -172,12 +175,19 @@ jobs:
           # Extract the released tail from the tag
           TAG_TAIL=$(printf '%s\n' "$TAG_FILE" | tail -n +"$TAG_LINE_NUM")
 
-          # Compare — use printf '%s' (no trailing newline) so diff is not thrown off by newline differences at EOF
+          # Compare — use printf '%s' (no trailing newline) so diff is not thrown off by newline differences at EOF.
+          # Capture exit code separately: 0=identical, 1=differences, 2=error. Treat 2 as a hard failure.
+          DIFF_EXIT=0
           DIFF_OUTPUT=$(diff --unified \
             --label "released ($LATEST_TAG)" \
             --label "current (PR)" \
             <(printf '%s' "$TAG_TAIL") \
-            <(printf '%s' "$CURRENT_TAIL")) || true
+            <(printf '%s' "$CURRENT_TAIL")) || DIFF_EXIT=$?
+
+          if [[ "$DIFF_EXIT" -gt 1 ]]; then
+            echo "::error::diff failed unexpectedly (exit $DIFF_EXIT)"
+            exit 1
+          fi
 
           if [[ -n "$DIFF_OUTPUT" ]]; then
             echo "::group::Diff of released sections"
