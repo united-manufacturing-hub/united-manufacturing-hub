@@ -208,14 +208,15 @@ umh_core_reconcile_starved_total_seconds 3`
 
 		It("should pass with healthy metrics", func() {
 			// Modify metrics to be healthy: no errors, no starved seconds, and >=99% within 90ms.
-			// Change le="90" bucket from 95 to 100 so ratio is 100/100 = 100% (passes p99).
+			// Change le="90" bucket from 95 to 99 so ratio is 99/100 = 99% (passes p99).
+			// Using 99 (not 100) to maintain cumulative histogram ordering: le="90" <= le="100" (both 99).
 			healthyMetrics := strings.ReplaceAll(testMetrics, "umh_core_errors_total{component=\"s6_instance\",instance=\"golden-service\"} 3",
 				"umh_core_errors_total{component=\"s6_instance\",instance=\"golden-service\"} 0")
 			healthyMetrics = strings.ReplaceAll(healthyMetrics, "umh_core_reconcile_starved_total_seconds 3",
 				"umh_core_reconcile_starved_total_seconds 0")
 			healthyMetrics = strings.ReplaceAll(healthyMetrics,
 				"umh_core_reconcile_duration_milliseconds_bucket{component=\"control_loop\",instance=\"main\",le=\"90\"} 95",
-				"umh_core_reconcile_duration_milliseconds_bucket{component=\"control_loop\",instance=\"main\",le=\"90\"} 100")
+				"umh_core_reconcile_duration_milliseconds_bucket{component=\"control_loop\",instance=\"main\",le=\"90\"} 99")
 
 			metricsErrors := checkWhetherMetricsHealthy(healthyMetrics, true, true)
 			Expect(metricsErrors).To(BeEmpty(), "Should not have any failures with healthy metrics")
