@@ -1,12 +1,16 @@
 # Changelog
 
+## [0.44.11]
+
+### Improvements
+
+- **Reduced container memory by up to 30%** - Previously, internal timing metrics grew continuously in memory the longer your instance ran, consuming over 500 MB on busy systems with many bridges and data flows. These metrics now use fixed-size histogram buckets that no longer grow with uptime, reducing steady-state container memory by roughly 30%
+
 ## [0.44.10]
 
 This release simplifies S7 addressing and fixes three edge cases in the Management Console editor and S7 data type handling.
 
 ### Improvements
-
-- **Reduced container memory by up to 30%** - Previously, internal timing metrics grew continuously in memory the longer your instance ran, consuming over 500 MB on busy systems with many bridges and data flows. These metrics now use fixed-size histogram buckets that no longer grow with uptime, reducing steady-state container memory by roughly 30%
 
 - **Simplified S7 address format for non-Data Block memory areas** - Previously, S7 addresses for PE, PA, MK, C, and T areas required a block number that served no function. You can now write `PE.X0.0` instead of `PE0.X0.0`. The old format still works but logs a deprecation warning and will be removed in a future version. Data Block addresses (`DB1.DW20`) are unchanged
 
