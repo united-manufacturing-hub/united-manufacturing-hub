@@ -133,6 +133,7 @@ jobs:
 
           # Find the latest stable tag (vX.Y.Z, no pre-release suffixes).
           # "|| true" keeps the script alive if git tag itself fails (e.g. no git history yet).
+          # Note: set -e alone would not abort a $() assignment; pipefail is the actual hazard here.
           LATEST_TAG=$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-version:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -1 || true)
 
           if [[ -z "$LATEST_TAG" ]]; then
@@ -202,8 +203,8 @@ jobs:
             echo "This usually happens when a rebase resolves CHANGELOG.md merge conflicts"
             echo "and accidentally moves entries into an already-released version section."
             echo ""
-            echo "To fix: move your entries above '${HEADER}' (into the current unreleased section)."
-            echo "To bypass: add the 'skip-changelog-guard' label to this PR."
+            echo "To fix: move your entries above '${HEADER}' (under the next unreleased version header)."
+            echo "To bypass: add the 'skip-changelog-guard' label to this PR (maintainers only)."
             exit 1
           fi
 
