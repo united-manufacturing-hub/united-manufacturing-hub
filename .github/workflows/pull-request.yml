@@ -149,8 +149,10 @@ jobs:
           LINE_NUM=$(grep -Fn "$HEADER" "$CHANGELOG" | head -1 | cut -d: -f1 || true)
 
           if [[ -z "$LINE_NUM" ]]; then
-            echo "::warning::Header '$HEADER' not found in current $CHANGELOG — skipping guard"
-            exit 0
+            echo "::error::Header '$HEADER' not found in current $CHANGELOG"
+            echo "The released version section was deleted or renamed. If this is intentional,"
+            echo "add the 'skip-changelog-guard' label to bypass this check."
+            exit 1
           fi
 
           echo "Found '$HEADER' at line $LINE_NUM"
