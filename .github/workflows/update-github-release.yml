@@ -31,7 +31,7 @@ on:
 
 jobs:
   update-github-release:
-    if: "!contains(github.ref, '-pre.')"
+    if: ${{ !contains(inputs.version || github.ref_name, '-pre.') }}
     runs-on: depot-ubuntu-24.04
     timeout-minutes: 5
     permissions:
