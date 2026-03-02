@@ -72,7 +72,8 @@ func NewDataflowComponentManager(name string) *DataflowComponentManager {
 				return false, errors.New("instance is not a DataflowComponentInstance")
 			}
 
-			return dataflowComponentInstance.config.Equal(cfg.DataFlowComponentServiceConfig), nil
+			return dataflowComponentInstance.config.Equal(cfg.DataFlowComponentServiceConfig) &&
+				dataflowComponentInstance.debugLevel == cfg.DebugLevel, nil
 		},
 		// Set DataflowComponent config
 		func(instance public_fsm.FSMInstance, cfg config.DataFlowComponentConfig) error {
@@ -82,6 +83,8 @@ func NewDataflowComponentManager(name string) *DataflowComponentManager {
 			}
 
 			dataflowComponentInstance.config = cfg.DataFlowComponentServiceConfig
+			dataflowComponentInstance.config.DebugLevel = cfg.DebugLevel
+			dataflowComponentInstance.debugLevel = cfg.DebugLevel
 
 			return nil
 		},

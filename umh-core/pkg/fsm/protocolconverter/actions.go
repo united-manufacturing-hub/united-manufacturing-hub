@@ -341,6 +341,10 @@ func (p *ProtocolConverterInstance) UpdateObservedStateOfInstance(ctx context.Co
 		return fmt.Errorf("failed to build runtime config: %w", err)
 	}
 
+	// DebugLevel is yaml:"-" so BuildRuntimeConfig won't set it; propagate from instance.
+	p.runtimeConfig.DataflowComponentReadServiceConfig.DebugLevel = p.debugLevel
+	p.runtimeConfig.DataflowComponentWriteServiceConfig.DebugLevel = p.debugLevel
+
 	metrics.ObserveReconcileTime(logger.ComponentProtocolConverterInstance, p.baseFSMInstance.GetID()+".buildRuntimeConfig", time.Since(start))
 
 	if !protocolconverterserviceconfig.ConfigsEqualRuntime(p.runtimeConfig, p.ObservedState.ObservedProtocolConverterRuntimeConfig) {

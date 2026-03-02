@@ -58,7 +58,7 @@ var _ = Describe("DataFlowComponentConfig", func() {
 			Expect(fullConfig.DebugLevel).To(BeFalse())         // Default value (DebugLevel set by caller from FSMInstanceConfig)
 		})
 
-		It("should convert BenthosServiceConfig to BenthosConfig, ignoring MetricsPort and DebugLevel", func() {
+		It("should convert BenthosServiceConfig to BenthosConfig, ignoring MetricsPort but preserving DebugLevel", func() {
 			// Create a full BenthosServiceConfig
 			fullConfig := benthosserviceconfig.BenthosServiceConfig{
 				Input: map[string]interface{}{
@@ -71,7 +71,7 @@ var _ = Describe("DataFlowComponentConfig", func() {
 					"stdout": map[string]interface{}{},
 				},
 				MetricsPort: 8080, // This should be ignored in conversion
-				DebugLevel:  true, // DebugLevel is now at FSMInstanceConfig level, not in DFC config
+				DebugLevel:  true, // DebugLevel is preserved for config comparison round-trip
 			}
 
 			// Convert to simplified BenthosConfig
@@ -80,13 +80,14 @@ var _ = Describe("DataFlowComponentConfig", func() {
 			// Verify conversion
 			Expect(simplified.BenthosConfig.Input).To(Equal(fullConfig.Input))
 			Expect(simplified.BenthosConfig.Output).To(Equal(fullConfig.Output))
+			Expect(simplified.DebugLevel).To(BeTrue()) // DebugLevel preserved through round-trip
 
 			// Convert back to BenthosServiceConfig
 			convertedBack := simplified.GetBenthosServiceConfig()
 
-			// Verify MetricsPort and DebugLevel use defaults (DebugLevel is set by caller from FSMInstanceConfig)
+			// MetricsPort uses default, but DebugLevel is preserved for comparison
 			Expect(convertedBack.MetricsPort).To(Equal(uint16(0))) // Default, not 8080
-			Expect(convertedBack.DebugLevel).To(BeFalse())         // Default, caller must set from FSMInstanceConfig
+			Expect(convertedBack.DebugLevel).To(BeTrue())          // Preserved for config comparison
 		})
 	})
 

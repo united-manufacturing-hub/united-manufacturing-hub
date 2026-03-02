@@ -497,8 +497,8 @@ func (p *ProtocolConverterService) AddToManager(
 		FSMInstanceConfig: config.FSMInstanceConfig{
 			Name:            underlyingDFCReadName,
 			DesiredFSMState: dfcfsm.OperationalStateStopped,
-			DebugLevel:      debugLevel,
 		},
+		DebugLevel:                     debugLevel,
 		DataFlowComponentServiceConfig: dfcReadServiceConfig,
 	}
 
@@ -506,8 +506,8 @@ func (p *ProtocolConverterService) AddToManager(
 		FSMInstanceConfig: config.FSMInstanceConfig{
 			Name:            underlyingDFCWriteName,
 			DesiredFSMState: dfcfsm.OperationalStateStopped,
-			DebugLevel:      debugLevel,
 		},
+		DebugLevel:                     debugLevel,
 		DataFlowComponentServiceConfig: dfcWriteServiceConfig,
 	}
 
@@ -616,8 +616,8 @@ func (p *ProtocolConverterService) UpdateInManager(
 			FSMInstanceConfig: config.FSMInstanceConfig{
 				Name:            p.getUnderlyingDFCReadName(protConvName),
 				DesiredFSMState: dfcCurrentDesiredState,
-				DebugLevel:      debugLevel,
 			},
+			DebugLevel:                     debugLevel,
 			DataFlowComponentServiceConfig: dfcReadConfig,
 		}
 	}
@@ -628,8 +628,8 @@ func (p *ProtocolConverterService) UpdateInManager(
 			FSMInstanceConfig: config.FSMInstanceConfig{
 				Name:            p.getUnderlyingDFCWriteName(protConvName),
 				DesiredFSMState: dfcCurrentDesiredState,
-				DebugLevel:      debugLevel,
 			},
+			DebugLevel:                     debugLevel,
 			DataFlowComponentServiceConfig: dfcWriteConfig,
 		}
 	}
