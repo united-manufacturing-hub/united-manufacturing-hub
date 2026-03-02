@@ -219,7 +219,7 @@ func checkWhetherMetricsHealthy(body string, enforceP99ReconcileTime bool, enfor
 		errors = append(errors, err)
 	}
 
-	if err := displayReconcileTimeQuantiles(body); err != nil {
+	if err := displayReconcileTimeHistogram(body); err != nil {
 		errors = append(errors, err)
 	}
 
@@ -291,8 +291,8 @@ func checkErrorCounters(body string) error {
 	return nil
 }
 
-// displayReconcileTimeQuantiles displays the reconcile time histogram bucket distribution for the control loop.
-func displayReconcileTimeQuantiles(body string) error {
+// displayReconcileTimeHistogram displays the reconcile time histogram bucket distribution for the control loop.
+func displayReconcileTimeHistogram(body string) error {
 	GinkgoWriter.Println("\nControl loop reconcile time histogram buckets:")
 
 	buckets := []string{"1", "2", "5", "10", "20", "50", "90", "100", "200", "500", "1000", "+Inf"}
