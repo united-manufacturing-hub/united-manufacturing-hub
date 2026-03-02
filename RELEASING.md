@@ -27,7 +27,7 @@ All development happens on `staging`. To release, merge `staging` into `main` vi
 3. Go to [Releases > Draft a new release](https://github.com/united-manufacturing-hub/united-manufacturing-hub/releases/new)
 4. Create a **new tag** with the format `v0.X.Y` (e.g., `v0.44.10`) — no `-pre.` suffix
 5. Target: `main`
-6. Body: paste the CHANGELOG.md section for this version. Automation will overwrite it with a formatted version including the changelog.umh.app link, but if automation fails the original body is preserved as fallback.
+6. Body (optional): paste the CHANGELOG.md section for this version as a fallback. Automation will overwrite it with a formatted version including the changelog.umh.app link. If automation fails, the original body is preserved.
 7. Do NOT check "Set as a pre-release"
 8. Click **Publish release**
 
