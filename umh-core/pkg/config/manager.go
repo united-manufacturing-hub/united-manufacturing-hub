@@ -172,8 +172,8 @@ func NewFileConfigManager() *FileConfigManager {
 	configPath := DefaultConfigPath
 	baseLogger := logger.For(logger.ComponentConfigManager)
 	sentryHook := fsmv2sentry.NewSentryHook(5 * time.Minute)
-	wrappedCore := sentryHook.Wrap(baseLogger.Desugar().Core())
-	fsmLogger := deps.NewFSMLogger(zap.New(wrappedCore).Sugar())
+	wrapped := baseLogger.Desugar().WithOptions(zap.WrapCore(sentryHook.Wrap))
+	fsmLogger := deps.NewFSMLogger(wrapped.Sugar())
 
 	fc := &FileConfigManager{
 		configPath:        configPath,
