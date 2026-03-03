@@ -417,6 +417,7 @@ var _ = Describe("ControlLoop", func() {
 
 				// Clean up
 				fuzzCancel()
+				fileConfigManager.Stop()
 
 				// We're not asserting specific outcomes because we want to simulate chaos
 				// Just make sure the system doesn't panic

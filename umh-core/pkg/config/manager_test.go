@@ -58,7 +58,7 @@ var _ = Describe("ConfigManager", func() {
 	})
 
 	AfterEach(func() {
-		// Clean up resources
+		configManager.Stop()
 		ctxWithCancelFunc()
 	})
 

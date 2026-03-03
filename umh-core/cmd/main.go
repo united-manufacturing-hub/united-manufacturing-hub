@@ -529,8 +529,7 @@ children:
 	fsmv2Hook := fsmv2sentry.NewSentryHook(5 * time.Minute)
 	defer fsmv2Hook.Stop()
 
-	fsmv2Core := fsmv2Hook.Wrap(fsmv2Logger.Desugar().Core())
-	fsmv2Logger = zap.New(fsmv2Core).Sugar()
+	fsmv2Logger = fsmv2Logger.Desugar().WithOptions(zap.WrapCore(fsmv2Hook.Wrap)).Sugar()
 
 	fsmv2Deps := map[string]any{
 		"channelProvider":       channelAdapter,

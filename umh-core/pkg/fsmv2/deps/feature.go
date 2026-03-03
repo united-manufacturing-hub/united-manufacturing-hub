@@ -37,4 +37,8 @@ const (
 
 	// FeaturePersistence covers the persistence layer for state storage.
 	FeaturePersistence Feature = "persistence"
+
+	// FeatureFSMv1ConfigManager covers the FSMv1 config manager: config loading,
+	// writing, backup, and validation.
+	FeatureFSMv1ConfigManager Feature = "fsmv1_config_manager"
 )

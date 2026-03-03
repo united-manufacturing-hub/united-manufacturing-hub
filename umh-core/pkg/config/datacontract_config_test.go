@@ -37,6 +37,7 @@ var _ = Describe("DataContract Configuration", func() {
 		configManager = NewFileConfigManager()
 		configManager.WithFileSystemService(mockFS)
 		ctx = context.Background()
+		DeferCleanup(configManager.Stop)
 	})
 
 	Describe("AtomicAddDataContract", func() {
