@@ -95,9 +95,14 @@ jobs:
     needs: changes
     if: ${{ needs.changes.outputs.changelog == 'true' }}
     runs-on: depot-ubuntu-24.04
+    permissions:
+      contents: read
     steps:
-      # Check out THIS repo
+      # Check out THIS repo (fetch-depth: 0 fetches all tags + history, needed by
+      # the changelog guard for "git tag --list --sort=-version:refname" and "git show TAG:path")
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
       # Generate token for cross-repo access
       - name: Generate GitHub App token
         id: app-token
@@ -115,6 +120,96 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "20"
+      - name: Check released sections are unmodified
+        if: >-
+          ${{ github.event_name != 'merge_group'
+              && github.event_name != 'workflow_dispatch'
+              && !contains(github.event.pull_request.labels.*.name, 'skip-changelog-guard') }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          CHANGELOG="umh-core/CHANGELOG.md"
+
+          # Find the latest stable tag (vX.Y.Z, no pre-release suffixes).
+          # "|| true": grep exits 1 when no tag matches the stable pattern, which would abort
+          # the script under set -euo pipefail (pipefail propagates grep's exit 1 even though
+          # head -1 exits 0 after reading empty input).
+          LATEST_TAG=$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-version:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -1 || true)
+
+          if [[ -z "$LATEST_TAG" ]]; then
+            echo "::warning::No stable tags found — skipping released-section guard"
+            exit 0
+          fi
+
+          echo "Latest tag: $LATEST_TAG"
+
+          HEADER="## [${LATEST_TAG#v}]"
+
+          # Find the header line in the current CHANGELOG (-F = fixed-string to avoid bracket metacharacters, -n = emit line numbers for cut)
+          # "|| true": grep exits 1 on no match which would abort the script under set -euo pipefail
+          LINE_NUM=$(grep -Fn "$HEADER" "$CHANGELOG" | head -1 | cut -d: -f1 || true)
+
+          if [[ -z "$LINE_NUM" ]]; then
+            echo "::error::Header '$HEADER' not found in current $CHANGELOG"
+            echo "The released version section was deleted or renamed. If this is intentional,"
+            echo "add the 'skip-changelog-guard' label to bypass this check."
+            exit 1
+          fi
+
+          echo "Found '$HEADER' at line $LINE_NUM"
+
+          # Extract the released tail (from the header line to EOF)
+          CURRENT_TAIL=$(tail -n +"$LINE_NUM" "$CHANGELOG")
+
+          # Get the same file from the tag commit (2>&1 captures error into variable for the warning)
+          if ! TAG_FILE=$(git show "$LATEST_TAG:$CHANGELOG" 2>&1); then
+            echo "::warning::Could not read $CHANGELOG from $LATEST_TAG (git: $TAG_FILE) — skipping guard"
+            exit 0
+          fi
+
+          # Find the same header in the tag version (-F = fixed-string, -n = line numbers; || true for set -e safety)
+          TAG_LINE_NUM=$(printf '%s\n' "$TAG_FILE" | grep -Fn "$HEADER" | head -1 | cut -d: -f1 || true)
+
+          if [[ -z "$TAG_LINE_NUM" ]]; then
+            echo "::warning::Header '$HEADER' not found in $LATEST_TAG:$CHANGELOG — skipping guard"
+            exit 0
+          fi
+
+          # Extract the released tail from the tag
+          TAG_TAIL=$(printf '%s\n' "$TAG_FILE" | tail -n +"$TAG_LINE_NUM")
+
+          # Compare — use printf '%s' (no trailing newline) so diff is not thrown off by newline differences at EOF.
+          # Capture exit code separately: 0=identical, 1=differences, 2=error. Treat 2 as a hard failure.
+          DIFF_EXIT=0
+          DIFF_OUTPUT=$(diff --unified \
+            --label "released ($LATEST_TAG)" \
+            --label "current (PR)" \
+            <(printf '%s' "$TAG_TAIL") \
+            <(printf '%s' "$CURRENT_TAIL")) || DIFF_EXIT=$?
+
+          if [[ "$DIFF_EXIT" -gt 1 ]]; then
+            echo "::error::diff failed unexpectedly (exit $DIFF_EXIT)"
+            exit 1
+          fi
+
+          if [[ -n "$DIFF_OUTPUT" ]]; then
+            echo "::group::Diff of released sections"
+            echo "$DIFF_OUTPUT"
+            echo "::endgroup::"
+            echo ""
+            echo "::error::Released CHANGELOG sections have been modified!"
+            echo ""
+            echo "The content below '${HEADER}' differs from what was tagged in ${LATEST_TAG}."
+            echo "This usually happens when a rebase resolves CHANGELOG.md merge conflicts"
+            echo "and accidentally moves entries into an already-released version section."
+            echo ""
+            echo "To fix: move your entries above '${HEADER}' (under the next unreleased version header)."
+            echo "To bypass: add the 'skip-changelog-guard' label to this PR (maintainers only)."
+            exit 1
+          fi
+
+          echo "Released sections match $LATEST_TAG — OK"
       - name: Validate CHANGELOG.md
         run: npx tsx changelog-scripts/.github/scripts/validate-changelog.ts --format version --changelog-path umh-core/CHANGELOG.md
 

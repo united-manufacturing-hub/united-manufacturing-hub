@@ -48,7 +48,7 @@ var _ = Describe("DataModel Configuration", func() {
 	})
 
 	AfterEach(func() {
-		// Clean up resources
+		configManager.Stop()
 		ctxWithCancelFunc()
 	})
 

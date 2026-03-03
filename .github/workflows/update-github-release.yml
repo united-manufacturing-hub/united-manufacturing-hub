@@ -1,0 +1,85 @@
+# Copyright 2025 UMH Systems GmbH
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Populates GitHub Release notes from CHANGELOG.md on stable tag pushes.
+# Extracted from build-umh-core.yml to avoid granting contents:write
+# in the reusable-workflow (workflow_call) path used by pull-request.yml.
+
+name: Update GitHub Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Tag to update (e.g., v0.44.10). Must already exist as a GitHub Release.'
+        required: true
+        type: string
+
+jobs:
+  update-github-release:
+    if: ${{ !contains(inputs.version || github.ref_name, '-pre.') }}
+    runs-on: depot-ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ inputs.version || github.ref_name }}
+
+      - name: Extract changelog section
+        id: changelog
+        env:
+          VERSION: ${{ inputs.version || github.ref_name }}
+        run: |
+          set -euo pipefail
+          SEMVER="${VERSION#v}"
+
+          awk "/^## \\[${SEMVER}\\]/{found=1; next} /^## \\[/{if(found) exit} found" \
+            umh-core/CHANGELOG.md | sed 's/^### /## /' > /tmp/release-body.md
+
+          if [ ! -s /tmp/release-body.md ]; then
+            echo "::warning::No changelog content found for ${SEMVER} in umh-core/CHANGELOG.md. GitHub Release body was NOT updated. Add a ## [${SEMVER}] section and re-run this workflow."
+            echo "skip=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # IMPORTANT: Slug generation must match sync-changelog.ts generateSlug()
+          # in the changelog.umh.app repo. If that function changes, update this too.
+          # Extract first bold title (mirrors sync-changelog.ts extractTitle)
+          TITLE=$(grep -m1 -oP '(?<=\*\*).+?(?=\*\*)' /tmp/release-body.md || echo "")
+
+          if [ -n "$TITLE" ]; then
+            # Generate slug (mirrors sync-changelog.ts generateSlug)
+            SLUG=$(echo "$TITLE" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-//; s/-$//')
+            DATE=$(date +%Y-%m-%d)
+            echo "" >> /tmp/release-body.md
+            echo "See https://changelog.umh.app/changelog/${DATE}-${SLUG}-${VERSION}" >> /tmp/release-body.md
+          else
+            DATE=$(date +%Y-%m-%d)
+            echo "" >> /tmp/release-body.md
+            echo "See https://changelog.umh.app/changelog/${DATE}-umh-core-${VERSION}" >> /tmp/release-body.md
+          fi
+
+      - name: Update GitHub Release
+        if: steps.changelog.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version || github.ref_name }}
+        run: |
+          set -euo pipefail
+          gh release edit "$VERSION" --notes-file /tmp/release-body.md

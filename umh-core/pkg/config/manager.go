@@ -37,16 +37,21 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/ctxutil/ctxmutex"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/ctxutil/ctxrwmutex"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
+	fsmv2sentry "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/sentry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	filesystem "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
 const (
 	// DefaultConfigPath is the default path to the config file.
 	DefaultConfigPath = "/data/config.yaml"
+
+	// configManagerHierarchyPath is the Sentry hierarchy path for all config manager logs.
+	// Uses dot separator: ParseHierarchyPath splits FSMv1 paths on "." (not "/").
+	configManagerHierarchyPath = "fsmv1.ConfigManager"
 )
 
 // singleton instance
@@ -124,7 +129,7 @@ type FileConfigManager struct {
 	cacheError error
 
 	// logger is the logger for the config manager
-	logger *zap.SugaredLogger
+	logger deps.FSMLogger
 
 	// mutexAtomicUpdate for full cycle read and write access (atomic update) to the config file
 	// all writes to the config need to happen under this mutex via a atomic set method -> writeConfig is therefore not exposed
@@ -138,6 +143,10 @@ type FileConfigManager struct {
 	// it will prevent multiple reads or read/write cycles to happen at the same time
 	// we use our own implementation of a context aware mutex here to avoid deadlocks
 	mutexReadOrWrite ctxrwmutex.CtxRWMutex
+
+	// sentryHook is the Sentry hook attached to the logger. Stored so Stop() can
+	// release its cleanup goroutine.
+	sentryHook *fsmv2sentry.SentryHook
 
 	// configPath is the path to the config file
 	configPath string
@@ -161,12 +170,16 @@ type FileConfigManager struct {
 // Prefer NewFileConfigManagerWithBackoff() for application use.
 func NewFileConfigManager() *FileConfigManager {
 	configPath := DefaultConfigPath
-	logger := logger.For(logger.ComponentConfigManager)
+	baseLogger := logger.For(logger.ComponentConfigManager)
+	sentryHook := fsmv2sentry.NewSentryHook(5 * time.Minute)
+	wrapped := baseLogger.Desugar().WithOptions(zap.WrapCore(sentryHook.Wrap))
+	fsmLogger := deps.NewFSMLogger(wrapped.Sugar())
 
 	fc := &FileConfigManager{
 		configPath:        configPath,
 		fsService:         filesystem.NewDefaultService(),
-		logger:            logger,
+		logger:            fsmLogger,
+		sentryHook:        sentryHook,
 		mutexAtomicUpdate: *ctxmutex.NewCtxMutex(),
 		mutexReadOrWrite:  *ctxrwmutex.NewCtxRWMutex(),
 	}
@@ -191,7 +204,7 @@ func NewFileConfigManager() *FileConfigManager {
 		fc.cacheError = err
 		fc.cacheModTime = info.ModTime()
 		fc.cacheMu.Unlock()
-		logger.Debugf("Initial config cache populated successfully")
+		fsmLogger.Debug("Initial config cache populated successfully")
 	} else {
 		fc.cacheError = statErr
 	}
@@ -205,6 +218,16 @@ func (m *FileConfigManager) WithFileSystemService(fsService filesystem.Service) 
 	m.fsService = fsService
 
 	return m
+}
+
+// Stop releases resources held by the FileConfigManager, including the Sentry
+// hook's cleanup goroutine. Call this when the manager is no longer needed.
+// In production the process exits before this matters, but tests should call it
+// to avoid goroutine leaks across test cases.
+func (m *FileConfigManager) Stop() {
+	if m.sentryHook != nil {
+		m.sentryHook.Stop()
+	}
 }
 
 // GetFileSystemService returns the filesystem service.
@@ -228,7 +251,9 @@ func (m *FileConfigManager) GetConfigWithOverwritesOrCreateNew(ctx context.Conte
 	exists, err := m.fsService.FileExists(ctx, m.configPath)
 	switch {
 	case err != nil:
-		m.logger.Warnf("failed to check if config file exists in %s: %v", m.configPath, err)
+		m.logger.SentryWarn(deps.FeatureFSMv1ConfigManager, configManagerHierarchyPath,
+			"config_file_exists_check_failed", deps.String("path", m.configPath), deps.Err(err))
+		return FullConfig{}, fmt.Errorf("failed to check config file existence: %w", err)
 	case exists:
 		config, err = m.GetConfig(ctx, 0)
 		if err != nil {
@@ -279,7 +304,7 @@ func (m *FileConfigManager) GetConfigWithOverwritesOrCreateNew(ctx context.Conte
 		return FullConfig{}, fmt.Errorf("failed to write new config: %w", err)
 	}
 
-	m.logger.Infof("Successfully wrote config to %s", m.configPath)
+	m.logger.Info("Successfully wrote config", deps.String("path", m.configPath))
 
 	return config, nil
 }
@@ -415,7 +440,7 @@ func (m *FileConfigManager) backgroundRefresh(modTime time.Time) {
 	m.cacheMu.Unlock()
 
 	duration := time.Since(start)
-	m.logger.Debugf("Background config refresh completed in %s", duration)
+	m.logger.Debug("Background config refresh completed", deps.Duration("duration", duration))
 }
 
 // readAndParseConfig contains the shared logic for reading and parsing the config file
@@ -456,7 +481,8 @@ func (m *FileConfigManager) readAndParseConfig(ctx context.Context) (FullConfig,
 	// Validate the location map
 	// This ensures downstream code doesn't panic when trying to access the location map
 	if config.Agent.Location == nil {
-		m.logger.Warnf("config file has no location map: %s", m.configPath)
+		m.logger.SentryWarn(deps.FeatureFSMv1ConfigManager, configManagerHierarchyPath,
+			"config_missing_location_map", deps.String("path", m.configPath))
 
 		config.Agent.Location = make(map[int]string)
 	}
@@ -464,7 +490,8 @@ func (m *FileConfigManager) readAndParseConfig(ctx context.Context) (FullConfig,
 	// Validate that the release channel is valid
 	// This prevent weird values from being set by the user
 	if config.Agent.ReleaseChannel != ReleaseChannelNightly && config.Agent.ReleaseChannel != ReleaseChannelStable && config.Agent.ReleaseChannel != ReleaseChannelEnterprise {
-		m.logger.Warnf("config file has invalid release channel: %s", config.Agent.ReleaseChannel)
+		m.logger.SentryWarn(deps.FeatureFSMv1ConfigManager, configManagerHierarchyPath,
+			"config_invalid_release_channel", deps.String("release_channel", string(config.Agent.ReleaseChannel)))
 		config.Agent.ReleaseChannel = "n/a"
 	}
 
@@ -479,9 +506,6 @@ type FileConfigManagerWithBackoff struct {
 
 	// Backoff manager
 	backoffManager *backoff.BackoffManager
-
-	// Logger
-	logger *zap.SugaredLogger
 }
 
 // NewFileConfigManagerWithBackoff creates a new FileConfigManagerWithBackoff with exponential backoff.
@@ -502,7 +526,6 @@ func NewFileConfigManagerWithBackoff() (*FileConfigManagerWithBackoff, error) {
 		instance = &FileConfigManagerWithBackoff{
 			configManager:  configManager,
 			backoffManager: backoffManager,
-			logger:         logger,
 		}
 	})
 
@@ -518,6 +541,11 @@ func (m *FileConfigManagerWithBackoff) GetConfigWithOverwritesOrCreateNew(ctx co
 // GetFileSystemService returns the filesystem service.
 func (m *FileConfigManagerWithBackoff) GetFileSystemService() filesystem.Service {
 	return m.configManager.GetFileSystemService()
+}
+
+// Stop releases resources held by the wrapped FileConfigManager.
+func (m *FileConfigManagerWithBackoff) Stop() {
+	m.configManager.Stop()
 }
 
 // SetConfigBackupEnabled controls whether config backups are created before writes.
@@ -578,7 +606,7 @@ func (m *FileConfigManager) writeConfig(ctx context.Context, config FullConfig) 
 	m.cacheRawConfig = string(data)
 	m.cacheMu.Unlock()
 
-	m.logger.Infof("Successfully wrote config to %s", m.configPath)
+	m.logger.Info("Successfully wrote config", deps.String("path", m.configPath))
 
 	return nil
 }
@@ -656,7 +684,9 @@ func (m *FileConfigManagerWithBackoff) GetConfig(ctx context.Context, tick uint6
 
 		// Log additional information for permanent failures
 		if m.backoffManager.IsPermanentlyFailed() {
-			sentry.ReportIssuef(sentry.IssueTypeError, m.logger, "ConfigManager is permanently failed. Last error: %v", m.backoffManager.GetLastError())
+			m.configManager.logger.SentryError(deps.FeatureFSMv1ConfigManager, configManagerHierarchyPath,
+				m.backoffManager.GetLastError(), "config_manager_permanently_failed",
+				deps.String("path", m.configManager.configPath))
 		}
 
 		return FullConfig{}, backoffErr
@@ -1133,7 +1163,7 @@ func (m *FileConfigManager) WriteYAMLConfigFromString(ctx context.Context, confi
 	m.cacheError = nil
 	m.cacheMu.Unlock()
 
-	m.logger.Infof("Successfully wrote config to %s", m.configPath)
+	m.logger.Info("Successfully wrote config", deps.String("path", m.configPath))
 
 	return nil
 }
@@ -1160,7 +1190,8 @@ func (m *FileConfigManager) createConfigBackup(ctx context.Context) {
 	exists, err := m.fsService.FileExists(ctx, m.configPath)
 	if err != nil || !exists {
 		if err != nil {
-			m.logger.Warnf("config backup: failed to check if config exists: %v", err)
+			m.logger.SentryWarn(deps.FeatureFSMv1ConfigManager, configManagerHierarchyPath,
+				"config_backup_exists_check_failed", deps.Err(err))
 		}
 
 		return
@@ -1168,7 +1199,15 @@ func (m *FileConfigManager) createConfigBackup(ctx context.Context) {
 
 	content, err := m.fsService.ReadFile(ctx, m.configPath)
 	if err != nil {
-		m.logger.Warnf("config backup: failed to read config file: %v", err)
+		m.logger.SentryWarn(deps.FeatureFSMv1ConfigManager, configManagerHierarchyPath,
+			"config_backup_read_failed", deps.Err(err))
+
+		return
+	}
+
+	if err := m.fsService.EnsureDirectory(ctx, constants.ConfigBackupDir); err != nil {
+		m.logger.SentryWarn(deps.FeatureFSMv1ConfigManager, configManagerHierarchyPath,
+			"config_backup_dir_create_failed", deps.Err(err))
 
 		return
 	}
@@ -1177,17 +1216,12 @@ func (m *FileConfigManager) createConfigBackup(ctx context.Context) {
 		return
 	}
 
-	if err := m.fsService.EnsureDirectory(ctx, constants.ConfigBackupDir); err != nil {
-		m.logger.Warnf("config backup: failed to create backup directory: %v", err)
-
-		return
-	}
-
 	filename := time.Now().UTC().Format("20060102T150405.000000000Z") + ".yaml"
 	backupPath := filepath.Join(constants.ConfigBackupDir, filename)
 
 	if err := m.fsService.WriteFile(ctx, backupPath, content, 0666); err != nil {
-		m.logger.Warnf("config backup: failed to write backup file: %v", err)
+		m.logger.SentryWarn(deps.FeatureFSMv1ConfigManager, configManagerHierarchyPath,
+			"config_backup_write_failed", deps.Err(err))
 
 		return
 	}
@@ -1200,7 +1234,8 @@ func (m *FileConfigManager) createConfigBackup(ctx context.Context) {
 func (m *FileConfigManager) getLatestBackupContent(ctx context.Context) []byte {
 	entries, err := m.fsService.ReadDir(ctx, constants.ConfigBackupDir)
 	if err != nil {
-		m.logger.Warnf("config backup: failed to read backup directory: %v", err)
+		m.logger.SentryWarn(deps.FeatureFSMv1ConfigManager, configManagerHierarchyPath,
+			"config_backup_dir_read_failed", deps.Err(err))
 
 		return nil
 	}
@@ -1229,7 +1264,8 @@ func (m *FileConfigManager) getLatestBackupContent(ctx context.Context) []byte {
 
 	data, err := m.fsService.ReadFile(ctx, filepath.Join(constants.ConfigBackupDir, latest))
 	if err != nil {
-		m.logger.Warnf("config backup: failed to read latest backup file: %v", err)
+		m.logger.SentryWarn(deps.FeatureFSMv1ConfigManager, configManagerHierarchyPath,
+			"config_backup_latest_read_failed", deps.Err(err))
 
 		return nil
 	}
@@ -1242,7 +1278,8 @@ func (m *FileConfigManager) getLatestBackupContent(ctx context.Context) []byte {
 func (m *FileConfigManager) cleanupOldBackups(ctx context.Context) {
 	entries, err := m.fsService.ReadDir(ctx, constants.ConfigBackupDir)
 	if err != nil {
-		m.logger.Warnf("config backup cleanup: failed to read backup directory: %v", err)
+		m.logger.SentryWarn(deps.FeatureFSMv1ConfigManager, configManagerHierarchyPath,
+			"config_backup_cleanup_dir_read_failed", deps.Err(err))
 
 		return
 	}
@@ -1271,7 +1308,8 @@ func (m *FileConfigManager) cleanupOldBackups(ctx context.Context) {
 	toRemove := yamlFiles[:len(yamlFiles)-constants.ConfigBackupMaxEntries]
 	for _, name := range toRemove {
 		if err := m.fsService.Remove(ctx, filepath.Join(constants.ConfigBackupDir, name)); err != nil {
-			m.logger.Warnf("config backup cleanup: failed to remove %s: %v", name, err)
+			m.logger.SentryWarn(deps.FeatureFSMv1ConfigManager, configManagerHierarchyPath,
+				"config_backup_cleanup_remove_failed", deps.String("file", name), deps.Err(err))
 		}
 	}
 }

@@ -27,11 +27,12 @@ import (
 type PersistenceDependencies struct {
 	*deps.BaseDependencies
 
-	store             storage.TriangularStoreInterface
-	scheduler         deps.Scheduler
-	lastCompactionAt  time.Time
-	lastMaintenanceAt time.Time
-	mu                sync.RWMutex
+	lastCompactionAt    time.Time
+	lastMaintenanceAt   time.Time
+	store               storage.TriangularStoreInterface
+	scheduler           deps.Scheduler
+	mu                  sync.RWMutex
+	observedStateLoaded bool
 }
 
 var _ snapshot.PersistenceDependencies = (*PersistenceDependencies)(nil)
@@ -93,4 +94,22 @@ func (d *PersistenceDependencies) GetLastMaintenanceAt() time.Time {
 	defer d.mu.RUnlock()
 
 	return d.lastMaintenanceAt
+}
+
+// SetObservedStateLoaded marks that observed state was successfully loaded at least once.
+// It is safe for concurrent use.
+func (d *PersistenceDependencies) SetObservedStateLoaded() {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	d.observedStateLoaded = true
+}
+
+// IsObservedStateLoaded reports whether observed state was successfully loaded at least once.
+// It is safe for concurrent use.
+func (d *PersistenceDependencies) IsObservedStateLoaded() bool {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+
+	return d.observedStateLoaded
 }
