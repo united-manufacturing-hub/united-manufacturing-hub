@@ -127,14 +127,14 @@ type DataflowComponentInstance struct {
 	// config contains all the configuration for this service
 	config dataflowcomponentconfig.DataflowComponentServiceConfig
 
-	// debugLevel controls whether debug logging is enabled for the Benthos process
-	debugLevel bool
-
 	// ObservedState represents the observed state of the service
 	// ObservedState contains all metrics, logs, etc.
 	// that are updated at the beginning of Reconcile and then used to
 	// determine the next state
 	ObservedState DataflowComponentObservedState
+
+	// debugLevel controls whether debug logging is enabled for the Benthos process
+	debugLevel bool
 }
 
 // GetLastObservedState returns the last known state of the instance.

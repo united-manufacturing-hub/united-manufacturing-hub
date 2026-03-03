@@ -168,11 +168,10 @@ type DataFlowComponentConfig struct {
 	// For the FSM
 	FSMInstanceConfig `yaml:",inline"`
 
-	// DebugLevel enables debug logging for this instance
-	DebugLevel bool `yaml:"debug_level"`
-
 	DataFlowComponentServiceConfig dataflowcomponentserviceconfig.DataflowComponentServiceConfig `yaml:"dataFlowComponentConfig"`
 
+	// DebugLevel enables debug logging for this instance
+	DebugLevel bool `yaml:"debug_level"`
 	// private marker – not (un)marshalled
 	// explanation see templating.go
 	hasAnchors bool `yaml:"-"`
@@ -187,13 +186,12 @@ type ProtocolConverterConfig struct {
 	// For the FSM
 	FSMInstanceConfig `yaml:",inline"`
 
-	// DebugLevel enables debug logging for this instance
-	DebugLevel bool `yaml:"debug_level"`
-
 	anchorName string `yaml:"-"`
 
 	ProtocolConverterServiceConfig protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec `yaml:"protocolConverterServiceConfig"`
 
+	// DebugLevel enables debug logging for this instance
+	DebugLevel bool `yaml:"debug_level"`
 	// private marker – not (un)marshalled
 	// explanation see templating.go
 	hasAnchors bool `yaml:"-"`
