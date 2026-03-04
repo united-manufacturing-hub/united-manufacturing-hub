@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.44.12]
+
+### Fixes
+
+- **Fixed rapid container restarts when config.yaml is missing or invalid** -- the container previously restarted hundreds of times per minute and now waits 60 seconds before retrying, giving you time to fix the configuration
+
 ## [0.44.11]
 
 ### Improvements
