@@ -11,6 +11,7 @@
 ### Improvements
 
 - **Reduced container memory by up to 30%** - Previously, internal timing metrics grew continuously in memory the longer your instance ran, consuming over 500 MB on busy systems with many bridges and data flows. These metrics now use fixed-size histogram buckets that no longer grow with uptime, reducing steady-state container memory by roughly 30%
+- **Reduced Sentry noise from transport workers** - Previously, every transient network error (connection reset, DNS failure, server 500, rate limiting) in pull/push workers generated a Sentry error event, creating excessive noise and auto-generated Linear tickets. Now, transient errors are tracked via metrics and the state machine's DegradedState, and only escalate to Sentry after 10 minutes of persistent failure
 
 ## [0.44.10]
 

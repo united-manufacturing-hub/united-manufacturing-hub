@@ -73,6 +73,9 @@ func (a *PushAction) Execute(ctx context.Context, depsAny any) error {
 
 		metrics.SetGauge(depspkg.GaugePendingMessages, float64(pushDeps.PendingMessageCount()))
 
+		if err != nil && pushDeps.GetLastErrorType().IsTransient() {
+			return nil
+		}
 		return err
 	}
 
@@ -119,11 +122,14 @@ drainLoop:
 
 		pushDeps.StorePendingMessages(messagesToPush)
 
+		var errType httpTransport.ErrorType
 		var transportErr *httpTransport.TransportError
 		if errors.As(err, &transportErr) {
+			errType = transportErr.Type
 			pushDeps.RecordTypedError(transportErr.Type, transportErr.RetryAfter)
 			metrics.IncrementCounter(counterForErrorType(transportErr.Type), 1)
 		} else {
+			errType = httpTransport.ErrorTypeNetwork
 			pushDeps.RecordTypedError(httpTransport.ErrorTypeNetwork, 0)
 			metrics.IncrementCounter(depspkg.CounterNetworkErrorsTotal, 1)
 		}
@@ -132,6 +138,10 @@ drainLoop:
 		metrics.IncrementCounter(depspkg.CounterPushFailures, 1)
 		metrics.SetGauge(depspkg.GaugeLastPushLatencyMs, float64(pushLatency.Milliseconds()))
 		metrics.SetGauge(depspkg.GaugePendingMessages, float64(pushDeps.PendingMessageCount()))
+
+		if errType.IsTransient() {
+			return nil
+		}
 
 		return fmt.Errorf("push failed: %w", err)
 	}

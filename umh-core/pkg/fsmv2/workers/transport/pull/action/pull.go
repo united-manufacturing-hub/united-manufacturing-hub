@@ -150,11 +150,14 @@ func (a *PullAction) Execute(ctx context.Context, depsAny any) error {
 	pullLatency := time.Since(pullStart)
 
 	if err != nil {
+		var errType httpTransport.ErrorType
 		var transportErr *httpTransport.TransportError
 		if errors.As(err, &transportErr) {
+			errType = transportErr.Type
 			pullDeps.RecordTypedError(transportErr.Type, transportErr.RetryAfter)
 			metrics.IncrementCounter(counterForErrorType(transportErr.Type), 1)
 		} else {
+			errType = httpTransport.ErrorTypeNetwork
 			pullDeps.RecordTypedError(httpTransport.ErrorTypeNetwork, 0)
 			metrics.IncrementCounter(depspkg.CounterNetworkErrorsTotal, 1)
 		}
@@ -162,6 +165,10 @@ func (a *PullAction) Execute(ctx context.Context, depsAny any) error {
 		metrics.IncrementCounter(depspkg.CounterPullOps, 1)
 		metrics.IncrementCounter(depspkg.CounterPullFailures, 1)
 		metrics.SetGauge(depspkg.GaugeLastPullLatencyMs, float64(pullLatency.Milliseconds()))
+
+		if errType.IsTransient() {
+			return nil
+		}
 
 		return fmt.Errorf("pull failed: %w", err)
 	}

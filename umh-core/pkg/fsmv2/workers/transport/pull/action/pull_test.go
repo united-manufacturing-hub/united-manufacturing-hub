@@ -261,7 +261,7 @@ var _ = Describe("PullAction", func() {
 	})
 
 	Describe("Failed pull with TransportError", func() {
-		It("should record typed error and increment failure counter", func() {
+		It("should record typed error and return nil for transient error", func() {
 			mockTrans.pullErr = &httpTransport.TransportError{
 				Type:       httpTransport.ErrorTypeServerError,
 				Message:    "HTTP 500: server_error",
@@ -269,8 +269,7 @@ var _ = Describe("PullAction", func() {
 			}
 
 			err := act.Execute(context.Background(), mockDeps)
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("pull failed"))
+			Expect(err).NotTo(HaveOccurred())
 
 			Expect(mockDeps.recordTypedErrorCalls).To(HaveLen(1))
 			Expect(mockDeps.recordTypedErrorCalls[0].errType).To(Equal(httpTransport.ErrorTypeServerError))
@@ -284,12 +283,11 @@ var _ = Describe("PullAction", func() {
 	})
 
 	Describe("Failed pull with non-TransportError", func() {
-		It("should default to ErrorTypeNetwork", func() {
+		It("should default to ErrorTypeNetwork and return nil (transient)", func() {
 			mockTrans.pullErr = errors.New("connection refused")
 
 			err := act.Execute(context.Background(), mockDeps)
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("pull failed"))
+			Expect(err).NotTo(HaveOccurred())
 
 			Expect(mockDeps.recordTypedErrorCalls).To(HaveLen(1))
 			Expect(mockDeps.recordTypedErrorCalls[0].errType).To(Equal(httpTransport.ErrorTypeNetwork))
@@ -298,6 +296,22 @@ var _ = Describe("PullAction", func() {
 			drained := mockDeps.metricsRecorder.Drain()
 			Expect(drained.Counters[string(deps.CounterPullFailures)]).To(Equal(int64(1)))
 			Expect(drained.Counters[string(deps.CounterNetworkErrorsTotal)]).To(Equal(int64(1)))
+		})
+	})
+
+	Describe("Non-transient error returns error", func() {
+		It("should return error for ErrorTypeInstanceDeleted", func() {
+			mockTrans.pullErr = &httpTransport.TransportError{
+				Type:    httpTransport.ErrorTypeInstanceDeleted,
+				Message: "HTTP 404: instance_deleted",
+			}
+
+			err := act.Execute(context.Background(), mockDeps)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("pull failed"))
+
+			Expect(mockDeps.recordTypedErrorCalls).To(HaveLen(1))
+			Expect(mockDeps.recordTypedErrorCalls[0].errType).To(Equal(httpTransport.ErrorTypeInstanceDeleted))
 		})
 	})
 

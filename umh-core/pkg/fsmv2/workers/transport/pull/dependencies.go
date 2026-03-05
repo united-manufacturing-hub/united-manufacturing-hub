@@ -31,6 +31,8 @@ import (
 // when the inbound channel stays full. Oldest messages are dropped on overflow.
 const maxPendingMessages = 1000
 
+const persistentFailureThreshold = 10 * time.Minute
+
 var _ snapshot.PullDependencies = (*PullDependencies)(nil)
 
 // PullDependencies holds runtime state for the pull worker, including a pending-message
@@ -44,8 +46,10 @@ type PullDependencies struct {
 	pendingMu               sync.RWMutex
 	backpressureMu          sync.RWMutex
 	lastSeenResetGeneration uint64
-	lastErrorType           httpTransport.ErrorType
-	backpressured           bool
+	lastErrorType                httpTransport.ErrorType
+	backpressured                bool
+	persistentFailureEscalated   bool
+	persistentFailureEscalatedMu sync.RWMutex
 }
 
 // NewPullDependencies creates a PullDependencies backed by the given parent transport dependencies.
@@ -82,7 +86,34 @@ func (d *PullDependencies) RecordTypedError(errType httpTransport.ErrorType, ret
 	d.errorMu.Unlock()
 
 	d.RetryTracker().RecordError(retry.WithClass(errType.String()), retry.WithRetryAfter(retryAfter))
+
+	d.checkPersistentFailure(errType)
+
 	d.parentDeps.RecordTypedError(errType, retryAfter)
+}
+
+func (d *PullDependencies) checkPersistentFailure(errType httpTransport.ErrorType) {
+	d.persistentFailureEscalatedMu.RLock()
+	already := d.persistentFailureEscalated
+	d.persistentFailureEscalatedMu.RUnlock()
+
+	if already {
+		return
+	}
+
+	degradedSince, isDegraded := d.RetryTracker().DegradedSince()
+	if !isDegraded || time.Since(degradedSince) < persistentFailureThreshold {
+		return
+	}
+
+	d.persistentFailureEscalatedMu.Lock()
+	d.persistentFailureEscalated = true
+	d.persistentFailureEscalatedMu.Unlock()
+
+	d.GetLogger().SentryWarn(deps.FeatureCommunicator, d.GetHierarchyPath(), "persistent_pull_failure",
+		deps.Duration("degraded_duration", time.Since(degradedSince)),
+		deps.Int("consecutive_errors", d.RetryTracker().ConsecutiveErrors()),
+		deps.String("last_error_type", errType.String()))
 }
 
 // RecordSuccess resets the child's error state. It intentionally does NOT
@@ -95,6 +126,10 @@ func (d *PullDependencies) RecordSuccess() {
 	d.errorMu.Unlock()
 
 	d.RetryTracker().RecordSuccess()
+
+	d.persistentFailureEscalatedMu.Lock()
+	d.persistentFailureEscalated = false
+	d.persistentFailureEscalatedMu.Unlock()
 }
 
 func (d *PullDependencies) RecordError() {

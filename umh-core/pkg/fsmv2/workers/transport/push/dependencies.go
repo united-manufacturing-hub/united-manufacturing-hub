@@ -29,6 +29,8 @@ import (
 
 const maxPendingMessages = 1000
 
+const persistentFailureThreshold = 10 * time.Minute
+
 var _ snapshot.PushDependencies = (*PushDependencies)(nil)
 
 type PushDependencies struct {
@@ -38,7 +40,9 @@ type PushDependencies struct {
 	errorMu                 sync.RWMutex
 	pendingMu               sync.RWMutex
 	lastSeenResetGeneration uint64
-	lastErrorType           httpTransport.ErrorType
+	lastErrorType                httpTransport.ErrorType
+	persistentFailureEscalated   bool
+	persistentFailureEscalatedMu sync.RWMutex
 }
 
 func NewPushDependencies(parentDeps *transport_pkg.TransportDependencies, identity deps.Identity, logger deps.FSMLogger, stateReader deps.StateReader) (*PushDependencies, error) {
@@ -74,7 +78,34 @@ func (d *PushDependencies) RecordTypedError(errType httpTransport.ErrorType, ret
 	d.errorMu.Unlock()
 
 	d.RetryTracker().RecordError(retry.WithClass(errType.String()), retry.WithRetryAfter(retryAfter))
+
+	d.checkPersistentFailure(errType)
+
 	d.parentDeps.RecordTypedError(errType, retryAfter)
+}
+
+func (d *PushDependencies) checkPersistentFailure(errType httpTransport.ErrorType) {
+	d.persistentFailureEscalatedMu.RLock()
+	already := d.persistentFailureEscalated
+	d.persistentFailureEscalatedMu.RUnlock()
+
+	if already {
+		return
+	}
+
+	degradedSince, isDegraded := d.RetryTracker().DegradedSince()
+	if !isDegraded || time.Since(degradedSince) < persistentFailureThreshold {
+		return
+	}
+
+	d.persistentFailureEscalatedMu.Lock()
+	d.persistentFailureEscalated = true
+	d.persistentFailureEscalatedMu.Unlock()
+
+	d.GetLogger().SentryWarn(deps.FeatureCommunicator, d.GetHierarchyPath(), "persistent_push_failure",
+		deps.Duration("degraded_duration", time.Since(degradedSince)),
+		deps.Int("consecutive_errors", d.RetryTracker().ConsecutiveErrors()),
+		deps.String("last_error_type", errType.String()))
 }
 
 // RecordSuccess resets the child's error state. It intentionally does NOT
@@ -87,6 +118,10 @@ func (d *PushDependencies) RecordSuccess() {
 	d.errorMu.Unlock()
 
 	d.RetryTracker().RecordSuccess()
+
+	d.persistentFailureEscalatedMu.Lock()
+	d.persistentFailureEscalated = false
+	d.persistentFailureEscalatedMu.Unlock()
 }
 
 func (d *PushDependencies) RecordError() {

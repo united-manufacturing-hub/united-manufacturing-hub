@@ -123,6 +123,7 @@ func (m *mockPushDeps) GetJWTToken() string {
 }
 
 func (m *mockPushDeps) RecordTypedError(errType httpTransport.ErrorType, retryAfter time.Duration) {
+	m.lastErrorType = errType
 	m.recordTypedErrorCalls = append(m.recordTypedErrorCalls, typedErrorCall{
 		errType:    errType,
 		retryAfter: retryAfter,
@@ -240,7 +241,7 @@ var _ = Describe("PushAction", func() {
 	})
 
 	Describe("Failed push with TransportError", func() {
-		It("should record typed error and increment failure counter", func() {
+		It("should record typed error and return nil for transient error", func() {
 			outboundBi <- &transport.UMHMessage{Content: "msg1"}
 			mockTrans.pushErr = &httpTransport.TransportError{
 				Type:       httpTransport.ErrorTypeServerError,
@@ -249,8 +250,7 @@ var _ = Describe("PushAction", func() {
 			}
 
 			err := act.Execute(context.Background(), mockDeps)
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("push failed"))
+			Expect(err).NotTo(HaveOccurred())
 
 			Expect(mockDeps.recordTypedErrorCalls).To(HaveLen(1))
 			Expect(mockDeps.recordTypedErrorCalls[0].errType).To(Equal(httpTransport.ErrorTypeServerError))
@@ -264,13 +264,12 @@ var _ = Describe("PushAction", func() {
 	})
 
 	Describe("Failed push with non-TransportError", func() {
-		It("should default to ErrorTypeNetwork", func() {
+		It("should default to ErrorTypeNetwork and return nil (transient)", func() {
 			outboundBi <- &transport.UMHMessage{Content: "msg1"}
 			mockTrans.pushErr = errors.New("connection refused")
 
 			err := act.Execute(context.Background(), mockDeps)
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("push failed"))
+			Expect(err).NotTo(HaveOccurred())
 
 			Expect(mockDeps.recordTypedErrorCalls).To(HaveLen(1))
 			Expect(mockDeps.recordTypedErrorCalls[0].errType).To(Equal(httpTransport.ErrorTypeNetwork))
@@ -279,6 +278,23 @@ var _ = Describe("PushAction", func() {
 			drained := mockDeps.metricsRecorder.Drain()
 			Expect(drained.Counters[string(deps.CounterPushFailures)]).To(Equal(int64(1)))
 			Expect(drained.Counters[string(deps.CounterNetworkErrorsTotal)]).To(Equal(int64(1)))
+		})
+	})
+
+	Describe("Non-transient error returns error", func() {
+		It("should return error for ErrorTypeInstanceDeleted", func() {
+			outboundBi <- &transport.UMHMessage{Content: "msg1"}
+			mockTrans.pushErr = &httpTransport.TransportError{
+				Type:    httpTransport.ErrorTypeInstanceDeleted,
+				Message: "HTTP 404: instance_deleted",
+			}
+
+			err := act.Execute(context.Background(), mockDeps)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("push failed"))
+
+			Expect(mockDeps.recordTypedErrorCalls).To(HaveLen(1))
+			Expect(mockDeps.recordTypedErrorCalls[0].errType).To(Equal(httpTransport.ErrorTypeInstanceDeleted))
 		})
 	})
 
@@ -370,7 +386,7 @@ var _ = Describe("PushAction", func() {
 			mockTrans.pushErr = errors.New("network error")
 
 			err := act.Execute(context.Background(), mockDeps)
-			Expect(err).To(HaveOccurred())
+			Expect(err).NotTo(HaveOccurred())
 
 			Expect(mockDeps.PendingMessageCount()).To(Equal(2))
 		})
@@ -443,8 +459,7 @@ var _ = Describe("PushAction", func() {
 			}
 
 			err := act.Execute(context.Background(), mockDeps)
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("recoverable by parent"))
+			Expect(err).NotTo(HaveOccurred())
 
 			Expect(mockDeps.PendingMessageCount()).To(Equal(2))
 		})

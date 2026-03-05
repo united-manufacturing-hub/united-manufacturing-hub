@@ -87,6 +87,19 @@ func (e ErrorType) String() string {
 	}
 }
 
+// IsTransient returns true for error types where the transport worker's
+// state machine handles recovery internally via RetryTracker and DegradedState.
+// Actions returning transient errors return nil to prevent the action_executor
+// from firing SentryError("action_failed") for expected transient failures.
+func (e ErrorType) IsTransient() bool {
+	switch e {
+	case ErrorTypeNetwork, ErrorTypeServerError, ErrorTypeChannelFull, ErrorTypeBackendRateLimit:
+		return true
+	default:
+		return false
+	}
+}
+
 // TransportError represents a classified HTTP transport error.
 // It embeds error type information for intelligent backoff strategies.
 type TransportError struct {
