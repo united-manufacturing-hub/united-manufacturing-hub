@@ -16,13 +16,22 @@ package transport
 
 import "context"
 
+// ProtocolVersion indicates the message protocol version.
+type ProtocolVersion string
+
+const (
+	V0    ProtocolVersion = ""       // legacy, no encryption
+	CseV1 ProtocolVersion = "cse_v1" // client-side encryption v1
+)
+
 // UMHMessage represents a message in the umh-core push/pull protocol.
 // Note: InstanceUUID uses json tag "umhInstance" to match backend API (models.UMHMessage).
 type UMHMessage struct {
-	InstanceUUID string `json:"umhInstance"`
-	Content      string `json:"content"`
-	Email        string `json:"email"`
-	TraceID      string `json:"traceId,omitempty"`
+	InstanceUUID    string          `json:"umhInstance"`
+	Content         string          `json:"content"`
+	Email           string          `json:"email"`
+	TraceID         string          `json:"traceId,omitempty"`
+	ProtocolVersion ProtocolVersion `json:"protocolVersion,omitempty"`
 }
 
 // AuthRequest represents an authentication request.

@@ -1,3 +1,4 @@
+// Package validator provides certificate-based permission validation.
 package validator
 
 import (

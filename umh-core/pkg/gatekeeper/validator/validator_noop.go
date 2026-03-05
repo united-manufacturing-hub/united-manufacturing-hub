@@ -8,6 +8,7 @@ import (
 	"go.uber.org/zap"
 )
 
+// NoopValidator is a stub validator for OSS builds without the cryptolib dependency.
 type NoopValidator struct {
 	log *zap.SugaredLogger
 }

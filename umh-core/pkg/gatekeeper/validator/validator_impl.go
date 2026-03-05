@@ -10,6 +10,7 @@ import (
 	"github.com/united-manufacturing-hub/ManagementConsole/cryptolib"
 )
 
+// CryptoValidator delegates to the ManagementConsole cryptolib for permission validation.
 type CryptoValidator struct {
 	log *zap.SugaredLogger
 }

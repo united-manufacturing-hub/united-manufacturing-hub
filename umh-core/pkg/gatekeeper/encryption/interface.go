@@ -1,3 +1,4 @@
+// Package encryption provides protocol-specific encryption and decryption handlers.
 package encryption
 
 // Handler handles encryption/decryption for a specific protocol version.

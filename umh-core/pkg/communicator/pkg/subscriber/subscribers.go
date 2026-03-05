@@ -95,7 +95,8 @@ func (s *Handler) AddOrRefreshSubscriber(identifier string, bootstrapped bool) {
 	s.dog.SetHasSubscribers(true)
 }
 
-func (s *Handler) GetSubscribers() []string {
+// Subscribers returns the list of active subscriber emails.
+func (s *Handler) Subscribers() []string {
 	subscribers := s.subscriberRegistry.List()
 	s.dog.SetHasSubscribers(len(subscribers) > 0)
 

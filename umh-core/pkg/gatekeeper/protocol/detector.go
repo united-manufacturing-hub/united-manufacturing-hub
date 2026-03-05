@@ -3,8 +3,8 @@ package protocol
 import (
 	"go.uber.org/zap"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/gatekeeper/encryption"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 )
 
 type detector struct {
@@ -13,6 +13,7 @@ type detector struct {
 	log          *zap.SugaredLogger
 }
 
+// NewDetector creates a Detector that routes messages to the appropriate encryption handler.
 func NewDetector(log *zap.SugaredLogger) Detector {
 	return &detector{
 		v0Handler:    encryption.NewV0Handler(log),
@@ -21,9 +22,9 @@ func NewDetector(log *zap.SugaredLogger) Detector {
 	}
 }
 
-func (d *detector) Detect(msg *models.UMHMessage) encryption.Handler {
+func (d *detector) Detect(msg *transport.UMHMessage) encryption.Handler {
 	switch msg.ProtocolVersion {
-	case models.CseV1:
+	case transport.CseV1:
 		return d.cseV1Handler
 	default:
 		return d.v0Handler
