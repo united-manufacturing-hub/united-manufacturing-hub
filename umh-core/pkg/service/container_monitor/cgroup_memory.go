@@ -76,6 +76,9 @@ func ParseMemoryCurrent(data []byte) (currentBytes int64, err error) {
 func (c *ContainerMonitorService) getCgroupMemoryInfo(ctx context.Context) (*MemoryCgroupInfo, error) {
 	info := &MemoryCgroupInfo{}
 
+	// TODO: ENG-4555 - use the filesystem service abstraction (c.fs.ReadFile) instead of os.ReadFile
+	// for proper context propagation and testability (same as cgroup_cpu.go)
+
 	memMaxData, err := os.ReadFile("/sys/fs/cgroup/memory.max")
 	if err != nil {
 		return nil, fmt.Errorf("failed to read memory.max: %w", err)
