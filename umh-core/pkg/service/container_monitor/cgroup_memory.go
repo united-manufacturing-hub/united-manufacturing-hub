@@ -46,6 +46,9 @@ func ParseMemoryMax(data []byte) (limitBytes int64, unlimited bool, err error) {
 	if err != nil {
 		return 0, false, fmt.Errorf("failed to parse memory.max value %q: %w", s, err)
 	}
+	if limitBytes < 0 {
+		return 0, false, fmt.Errorf("negative memory.max value %q", s)
+	}
 
 	return limitBytes, false, nil
 }
@@ -61,6 +64,9 @@ func ParseMemoryCurrent(data []byte) (currentBytes int64, err error) {
 	currentBytes, err = strconv.ParseInt(s, 10, 64)
 	if err != nil {
 		return 0, fmt.Errorf("failed to parse memory.current value %q: %w", s, err)
+	}
+	if currentBytes < 0 {
+		return 0, fmt.Errorf("negative memory.current value %q", s)
 	}
 
 	return currentBytes, nil

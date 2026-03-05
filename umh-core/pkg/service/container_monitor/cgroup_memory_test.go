@@ -74,6 +74,12 @@ var _ = Describe("Cgroup Memory", func() {
 			_, _, err := container_monitor.ParseMemoryMax(data)
 			Expect(err).To(HaveOccurred())
 		})
+
+		It("should return error for negative values", func() {
+			data := []byte("-1\n")
+			_, _, err := container_monitor.ParseMemoryMax(data)
+			Expect(err).To(HaveOccurred())
+		})
 	})
 
 	Describe("ParseMemoryCurrent", func() {
@@ -99,6 +105,12 @@ var _ = Describe("Cgroup Memory", func() {
 
 		It("should return error for non-numeric data", func() {
 			data := []byte("abc\n")
+			_, err := container_monitor.ParseMemoryCurrent(data)
+			Expect(err).To(HaveOccurred())
+		})
+
+		It("should return error for negative values", func() {
+			data := []byte("-100\n")
 			_, err := container_monitor.ParseMemoryCurrent(data)
 			Expect(err).To(HaveOccurred())
 		})
