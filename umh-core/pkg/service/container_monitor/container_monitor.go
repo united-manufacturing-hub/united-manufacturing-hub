@@ -338,8 +338,8 @@ func (c *ContainerMonitorService) getRawCPUMetrics(ctx context.Context) (usageMC
 	return usageMCores, coreCount, usagePercent, nil
 }
 
-// getMemoryMetrics collects memory metrics using gopsutil.
-// By default, this returns host-level usage, not cgroup-limited usage.
+// getMemoryMetrics collects memory metrics, preferring cgroup values when available.
+// Falls back to host-level gopsutil values in non-container environments.
 func (c *ContainerMonitorService) getMemoryMetrics(ctx context.Context) (*models.Memory, error) {
 	vmStat, err := mem.VirtualMemoryWithContext(ctx)
 	if err != nil {
@@ -348,6 +348,13 @@ func (c *ContainerMonitorService) getMemoryMetrics(ctx context.Context) (*models
 
 	usedBytes := vmStat.Used
 	totalBytes := vmStat.Total
+
+	// Try cgroup values — prefer container-aware limits over host values
+	cgroupInfo, cgroupErr := c.getCgroupMemoryInfo(ctx)
+	if cgroupErr == nil && !cgroupInfo.Unlimited {
+		usedBytes = uint64(cgroupInfo.CurrentBytes)
+		totalBytes = uint64(cgroupInfo.LimitBytes)
+	}
 
 	// Default to Active health
 	category := models.Active
