@@ -35,14 +35,14 @@ var _ snapshot.PushDependencies = (*PushDependencies)(nil)
 
 type PushDependencies struct {
 	*deps.BaseDependencies
-	parentDeps              *transport_pkg.TransportDependencies
-	pendingMessages         []*communicator_transport.UMHMessage
-	errorMu                 sync.RWMutex
-	pendingMu               sync.RWMutex
-	lastSeenResetGeneration uint64
+	parentDeps                   *transport_pkg.TransportDependencies
+	pendingMessages              []*communicator_transport.UMHMessage
+	errorMu                      sync.RWMutex
+	pendingMu                    sync.RWMutex
+	persistentFailureEscalatedMu sync.RWMutex
+	lastSeenResetGeneration      uint64
 	lastErrorType                httpTransport.ErrorType
 	persistentFailureEscalated   bool
-	persistentFailureEscalatedMu sync.RWMutex
 }
 
 func NewPushDependencies(parentDeps *transport_pkg.TransportDependencies, identity deps.Identity, logger deps.FSMLogger, stateReader deps.StateReader) (*PushDependencies, error) {
@@ -137,6 +137,13 @@ func (d *PushDependencies) GetLastErrorType() httpTransport.ErrorType {
 	d.errorMu.RLock()
 	defer d.errorMu.RUnlock()
 	return d.lastErrorType
+}
+
+// IsPersistentFailureEscalated reports whether the one-shot escalation has fired.
+func (d *PushDependencies) IsPersistentFailureEscalated() bool {
+	d.persistentFailureEscalatedMu.RLock()
+	defer d.persistentFailureEscalatedMu.RUnlock()
+	return d.persistentFailureEscalated
 }
 
 func (d *PushDependencies) StorePendingMessages(msgs []*communicator_transport.UMHMessage) {

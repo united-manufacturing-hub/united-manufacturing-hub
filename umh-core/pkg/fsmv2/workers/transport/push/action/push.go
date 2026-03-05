@@ -73,6 +73,9 @@ func (a *PushAction) Execute(ctx context.Context, depsAny any) error {
 
 		metrics.SetGauge(depspkg.GaugePendingMessages, float64(pushDeps.PendingMessageCount()))
 
+		// GetLastErrorType() reflects the error being returned because
+		// RecordTypedError() is called inside retryPending() BEFORE the error
+		// return. This is single-threaded (FSM reconcile loop), so no race.
 		if err != nil && pushDeps.GetLastErrorType().IsTransient() {
 			return nil
 		}

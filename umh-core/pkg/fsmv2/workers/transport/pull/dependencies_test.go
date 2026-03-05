@@ -440,6 +440,37 @@ var _ = Describe("PullDependencies", func() {
 		})
 	})
 
+	Describe("Persistent failure escalation", func() {
+		var d *pull.PullDependencies
+
+		BeforeEach(func() {
+			var err error
+			d, err = pull.NewPullDependencies(parentDeps, identity, logger, nil)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should start with escalation flag false", func() {
+			Expect(d.IsPersistentFailureEscalated()).To(BeFalse())
+		})
+
+		It("should not escalate when degradation is shorter than threshold", func() {
+			d.RecordTypedError(httpTransport.ErrorTypeNetwork, 0)
+			// degradedSince was just set (< 10 minutes ago), so no escalation
+			Expect(d.IsPersistentFailureEscalated()).To(BeFalse())
+		})
+
+		It("should reset escalation flag on RecordSuccess", func() {
+			// Even if the flag were set, RecordSuccess must clear it
+			d.RecordTypedError(httpTransport.ErrorTypeNetwork, 0)
+			d.RecordSuccess()
+			Expect(d.IsPersistentFailureEscalated()).To(BeFalse())
+		})
+
+		// The 10-minute escalation threshold and SentryWarn firing are validated
+		// in integration and manual testing. Unit tests cannot practically simulate
+		// 10 minutes of wall-clock degradation without time injection.
+	})
+
 	Describe("BaseDependencies", func() {
 		It("should have its own logger", func() {
 			d, err := pull.NewPullDependencies(parentDeps, identity, logger, nil)

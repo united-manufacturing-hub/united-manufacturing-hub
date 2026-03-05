@@ -40,16 +40,16 @@ var _ snapshot.PullDependencies = (*PullDependencies)(nil)
 // parent TransportDependencies.
 type PullDependencies struct {
 	*deps.BaseDependencies
-	parentDeps              *transport_pkg.TransportDependencies
-	pendingMessages         []*communicator_transport.UMHMessage
-	errorMu                 sync.RWMutex
-	pendingMu               sync.RWMutex
-	backpressureMu          sync.RWMutex
-	lastSeenResetGeneration uint64
+	parentDeps                   *transport_pkg.TransportDependencies
+	pendingMessages              []*communicator_transport.UMHMessage
+	errorMu                      sync.RWMutex
+	pendingMu                    sync.RWMutex
+	backpressureMu               sync.RWMutex
+	persistentFailureEscalatedMu sync.RWMutex
+	lastSeenResetGeneration      uint64
 	lastErrorType                httpTransport.ErrorType
 	backpressured                bool
 	persistentFailureEscalated   bool
-	persistentFailureEscalatedMu sync.RWMutex
 }
 
 // NewPullDependencies creates a PullDependencies backed by the given parent transport dependencies.
@@ -145,6 +145,13 @@ func (d *PullDependencies) GetLastErrorType() httpTransport.ErrorType {
 	d.errorMu.RLock()
 	defer d.errorMu.RUnlock()
 	return d.lastErrorType
+}
+
+// IsPersistentFailureEscalated reports whether the one-shot escalation has fired.
+func (d *PullDependencies) IsPersistentFailureEscalated() bool {
+	d.persistentFailureEscalatedMu.RLock()
+	defer d.persistentFailureEscalatedMu.RUnlock()
+	return d.persistentFailureEscalated
 }
 
 // StorePendingMessages appends messages to the pending buffer for retry on the next tick.

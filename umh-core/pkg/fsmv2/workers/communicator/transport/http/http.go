@@ -91,6 +91,12 @@ func (e ErrorType) String() string {
 // state machine handles recovery internally via RetryTracker and DegradedState.
 // Actions returning transient errors return nil to prevent the action_executor
 // from firing SentryError("action_failed") for expected transient failures.
+//
+// CloudflareChallenge and ProxyBlock are deliberately excluded: while they can
+// self-resolve, they often indicate persistent environmental problems (corporate
+// firewall policy, WAF rule changes) that operators should investigate. Erring on
+// the side of alerting is safer. If they turn out to be noise in practice, they
+// can be added to the transient list in a follow-up.
 func (e ErrorType) IsTransient() bool {
 	switch e {
 	case ErrorTypeNetwork, ErrorTypeServerError, ErrorTypeChannelFull, ErrorTypeBackendRateLimit:
