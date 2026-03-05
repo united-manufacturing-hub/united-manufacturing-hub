@@ -16,6 +16,7 @@ package container_monitor
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -34,7 +35,7 @@ type MemoryCgroupInfo struct {
 func ParseMemoryMax(data []byte) (limitBytes int64, unlimited bool, err error) {
 	s := strings.TrimSpace(string(data))
 	if s == "" {
-		return 0, false, fmt.Errorf("empty memory.max data")
+		return 0, false, errors.New("empty memory.max data")
 	}
 
 	if s == "max" {
@@ -54,7 +55,7 @@ func ParseMemoryMax(data []byte) (limitBytes int64, unlimited bool, err error) {
 func ParseMemoryCurrent(data []byte) (currentBytes int64, err error) {
 	s := strings.TrimSpace(string(data))
 	if s == "" {
-		return 0, fmt.Errorf("empty memory.current data")
+		return 0, errors.New("empty memory.current data")
 	}
 
 	currentBytes, err = strconv.ParseInt(s, 10, 64)
