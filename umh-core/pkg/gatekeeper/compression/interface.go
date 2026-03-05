@@ -1,3 +1,4 @@
+// Package compression handles encoding and decoding of message content.
 package compression
 
 import "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"

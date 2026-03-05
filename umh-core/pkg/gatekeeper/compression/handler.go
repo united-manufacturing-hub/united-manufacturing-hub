@@ -11,6 +11,7 @@ type handler struct {
 	log *zap.SugaredLogger
 }
 
+// NewHandler creates a compression Handler that delegates to the encoding package.
 func NewHandler(log *zap.SugaredLogger) Handler {
 	return &handler{log: log}
 }

@@ -2,10 +2,12 @@ package encryption
 
 import "go.uber.org/zap"
 
+// V0Handler is a no-op encryption handler for the legacy v0 protocol.
 type V0Handler struct {
 	log *zap.SugaredLogger
 }
 
+// NewV0Handler creates a no-op encryption handler for the legacy v0 protocol.
 func NewV0Handler(log *zap.SugaredLogger) Handler {
 	return &V0Handler{log: log}
 }
