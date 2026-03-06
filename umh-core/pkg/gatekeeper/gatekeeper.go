@@ -43,6 +43,16 @@ type SubHandler interface {
 // (decrypt, decompress, validate), and outputs MessageWithSender to the Router.
 // The reverse path handles outbound messages from Router to PushWorker.
 type Gatekeeper struct {
+
+	// Sub-components
+	protocolDetector protocol.Detector
+	compression      compression.Handler
+	validator        validator.Validator
+	certHandler      certificatehandler.Handler
+
+	// External state (read-only)
+	subHandler SubHandler
+
 	// Raw channels (received, not owned)
 	inboundChan  chan *transport.UMHMessage
 	outboundChan chan *transport.UMHMessage
@@ -55,24 +65,16 @@ type Gatekeeper struct {
 	// TODO(ENG-4558): Remove once actions write MessageWithSender directly.
 	legacyOutbound chan *models.UMHMessage
 
-	// Sub-components
-	protocolDetector protocol.Detector
-	compression      compression.Handler
-	validator        validator.Validator
-	certHandler      certificatehandler.Handler
-
-	// External state (read-only)
-	subHandler SubHandler
+	// Runtime
+	logger *zap.SugaredLogger
+	cancel context.CancelFunc
+	wg     sync.WaitGroup
 
 	// Config (set by options, or defaults)
 	verifiedInboundSize  int
 	verifiedOutboundSize int
 	certFetchInterval    time.Duration
 
-	// Runtime
-	logger  *zap.SugaredLogger
-	cancel  context.CancelFunc
-	wg      sync.WaitGroup
 	mu      sync.RWMutex
 	running bool
 }
@@ -90,7 +92,7 @@ func New(
 	g := &Gatekeeper{
 		inboundChan:          inbound,
 		outboundChan:         outbound,
-		subHandler:            subHandler,
+		subHandler:           subHandler,
 		certHandler:          certHandler,
 		validator:            v,
 		protocolDetector:     protocol.NewDetector(logger),

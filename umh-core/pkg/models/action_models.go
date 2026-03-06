@@ -86,8 +86,8 @@ type UMHMessage struct {
 	Metadata        *MessageMetadata `json:"metadata"`
 	Email           string           `json:"email"`
 	Content         string           `json:"content"`
-	InstanceUUID    uuid.UUID        `json:"umhInstance"`
 	ProtocolVersion ProtocolVersion  `json:"protocolVersion,omitempty"`
+	InstanceUUID    uuid.UUID        `json:"umhInstance"`
 }
 
 // MessageWithSender is the output of Gatekeeper after decryption and validation.

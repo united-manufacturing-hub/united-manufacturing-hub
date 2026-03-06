@@ -49,19 +49,19 @@ type certificateBundle struct {
 
 // CertHandler implements Handler with an in-memory cache and Management Console API fetching.
 type CertHandler struct {
-	rootCA          *x509.Certificate
+	validator validator.Validator
+	rootCA    *x509.Certificate
+	userCerts map[string]*certificateBundle
+
+	log             *zap.SugaredLogger
 	encryptedRootCA string
-	userCerts       map[string]*certificateBundle
+	jwt             string
+	apiURL          string
+	authToken       string
+	instanceUUID    string
 	mu              sync.RWMutex
 
-	validator    validator.Validator
-	jwt          string
-	apiURL       string
-	authToken    string
-	instanceUUID string
-	insecureTLS  bool
-
-	log *zap.SugaredLogger
+	insecureTLS bool
 }
 
 // NewHandler creates a CertHandler with the given API configuration.
