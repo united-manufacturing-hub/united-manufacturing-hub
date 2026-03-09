@@ -342,8 +342,9 @@ func (t *HTTPTransport) Authenticate(ctx context.Context, req transport.AuthRequ
 	}
 
 	var loginResp struct {
-		UUID string `json:"uuid"`
-		Name string `json:"name"`
+		UUID      string `json:"uuid"`
+		Name      string `json:"name"`
+		ExpiresAt int64  `json:"expiresAt,omitempty"`
 	}
 	if err := json.Unmarshal(bodyBytes, &loginResp); err != nil {
 		bodyPreview := string(bodyBytes)
@@ -375,12 +376,15 @@ func (t *HTTPTransport) Authenticate(ctx context.Context, req transport.AuthRequ
 		}
 	}
 
-	// Backend doesn't return expiresAt; estimate 23h (refresh before typical 24h JWT expiry)
-	defaultExpiry := time.Now().Add(23 * time.Hour).Unix()
+	// Use server-provided expiresAt if present, otherwise estimate 23h (refresh before typical 24h JWT expiry)
+	expiresAt := loginResp.ExpiresAt
+	if expiresAt == 0 {
+		expiresAt = time.Now().Add(23 * time.Hour).Unix()
+	}
 
 	return transport.AuthResponse{
 		Token:        jwtToken,
-		ExpiresAt:    defaultExpiry,
+		ExpiresAt:    expiresAt,
 		InstanceUUID: loginResp.UUID,
 		InstanceName: loginResp.Name,
 	}, nil

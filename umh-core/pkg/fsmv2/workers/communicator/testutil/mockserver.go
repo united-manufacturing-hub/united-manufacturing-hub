@@ -36,10 +36,15 @@ type MockRelayServer struct {
 	pullQueue         []*transport.UMHMessage
 	pushedMsgs        []*transport.UMHMessage
 	connectionHeaders []string
+	jwtExpiresAt      int64
 	authCalls         int
+	pullCalls         int
 	nextError         int
-	slowDelay         time.Duration
-	mu                sync.Mutex
+	persistentError   int
+	slowDelay             time.Duration
+	persistentPushDelay   time.Duration
+	persistentPushError   int
+	mu                    sync.Mutex
 }
 
 // NewMockRelayServer creates and starts a new mock relay server.
@@ -75,7 +80,20 @@ func (m *MockRelayServer) handler(w http.ResponseWriter, r *http.Request) {
 	m.connectionHeaders = append(m.connectionHeaders, r.Header.Get("Connection"))
 	m.mu.Unlock()
 
-	// Check for injected errors (except for login endpoint)
+	// Check for injected errors (except for login endpoint, unless persistent auth error)
+	m.mu.Lock()
+	persistentErr := m.persistentError
+	m.mu.Unlock()
+
+	if r.URL.Path == "/v2/instance/login" && persistentErr != 0 {
+		m.mu.Lock()
+		m.authCalls++
+		m.mu.Unlock()
+		w.WriteHeader(persistentErr)
+
+		return
+	}
+
 	if r.URL.Path != "/v2/instance/login" {
 		m.mu.Lock()
 		errCode := m.nextError
@@ -99,6 +117,30 @@ func (m *MockRelayServer) handler(w http.ResponseWriter, r *http.Request) {
 
 		if slowDelay > 0 {
 			time.Sleep(slowDelay)
+		}
+	}
+
+	// Apply persistent push error (separate from one-shot nextError)
+	if r.URL.Path == "/v2/instance/push" {
+		m.mu.Lock()
+		pushErr := m.persistentPushError
+		m.mu.Unlock()
+
+		if pushErr != 0 {
+			w.WriteHeader(pushErr)
+
+			return
+		}
+	}
+
+	// Apply persistent push delay (separate from one-shot slowDelay)
+	if r.URL.Path == "/v2/instance/push" {
+		m.mu.Lock()
+		pushDelay := m.persistentPushDelay
+		m.mu.Unlock()
+
+		if pushDelay > 0 {
+			time.Sleep(pushDelay)
 		}
 	}
 
@@ -138,6 +180,7 @@ func (m *MockRelayServer) handleLogin(w http.ResponseWriter, r *http.Request) {
 	token := m.jwtToken
 	backendUUID := m.backendUUID
 	backendName := m.backendName
+	expiresAt := m.jwtExpiresAt
 	m.mu.Unlock()
 
 	// Set JWT cookie (matching real backend behavior)
@@ -148,13 +191,15 @@ func (m *MockRelayServer) handleLogin(w http.ResponseWriter, r *http.Request) {
 		HttpOnly: true,
 	})
 
-	// Return uuid and name in response body (matches real backend behavior)
+	// Return uuid, name, and optional expiresAt in response body
 	resp := struct {
-		UUID string `json:"uuid"`
-		Name string `json:"name"`
+		UUID      string `json:"uuid"`
+		Name      string `json:"name"`
+		ExpiresAt int64  `json:"expiresAt,omitempty"`
 	}{
-		UUID: backendUUID,
-		Name: backendName,
+		UUID:      backendUUID,
+		Name:      backendName,
+		ExpiresAt: expiresAt,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -170,6 +215,7 @@ func (m *MockRelayServer) handlePull(w http.ResponseWriter, r *http.Request) {
 	}
 
 	m.mu.Lock()
+	m.pullCalls++
 	messages := m.pullQueue
 	m.pullQueue = make([]*transport.UMHMessage, 0) // Clear queue after pull
 	m.mu.Unlock()
@@ -256,6 +302,14 @@ func (m *MockRelayServer) AuthCallCount() int {
 	return m.authCalls
 }
 
+// PullCallCount returns the number of pull HTTP requests made to the server.
+func (m *MockRelayServer) PullCallCount() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	return m.pullCalls
+}
+
 // SimulateAuthExpiry sets the next request to return 401 Unauthorized.
 func (m *MockRelayServer) SimulateAuthExpiry() {
 	m.mu.Lock()
@@ -278,6 +332,75 @@ func (m *MockRelayServer) SimulateSlowResponse(delay time.Duration) {
 	defer m.mu.Unlock()
 
 	m.slowDelay = delay
+}
+
+// SetJWTExpiry sets the expiresAt value returned in login responses.
+// When non-zero, the expiresAt field is included in the JSON response body,
+// allowing tests to control when token expiry triggers.
+func (m *MockRelayServer) SetJWTExpiry(expiresAt int64) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.jwtExpiresAt = expiresAt
+}
+
+// SimulatePersistentAuthError makes ALL subsequent login requests return the given status code.
+// Unlike SimulateServerError (one-shot), this persists until ClearPersistentAuthError is called.
+func (m *MockRelayServer) SimulatePersistentAuthError(statusCode int) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.persistentError = statusCode
+}
+
+// ClearPersistentAuthError stops rejecting login requests.
+func (m *MockRelayServer) ClearPersistentAuthError() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.persistentError = 0
+}
+
+// SimulatePersistentSlowPush makes ALL subsequent push requests delay for the specified duration.
+// Unlike SimulateSlowResponse (one-shot for any non-login endpoint), this persists until ClearPersistentSlowPush is called.
+func (m *MockRelayServer) SimulatePersistentSlowPush(delay time.Duration) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.persistentPushDelay = delay
+}
+
+// ClearPersistentSlowPush stops delaying push requests.
+func (m *MockRelayServer) ClearPersistentSlowPush() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.persistentPushDelay = 0
+}
+
+// SimulatePersistentPushError makes ALL subsequent push requests return the given status code.
+// Pull and login endpoints are unaffected. Persists until ClearPersistentPushError is called.
+func (m *MockRelayServer) SimulatePersistentPushError(statusCode int) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.persistentPushError = statusCode
+}
+
+// ClearPersistentPushError stops rejecting push requests.
+func (m *MockRelayServer) ClearPersistentPushError() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.persistentPushError = 0
+}
+
+// PushCallCount returns the number of messages pushed to the server.
+func (m *MockRelayServer) PushCallCount() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	return len(m.pushedMsgs)
 }
 
 // GetReceivedConnectionHeaders returns all Connection headers received from requests.

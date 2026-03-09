@@ -65,6 +65,16 @@ func (p *TestChannelProvider) QueueOutbound(msg *transport.UMHMessage) {
 	p.outbound <- msg
 }
 
+// GetOutboundStats returns the capacity and current length of the outbound channel.
+func (p *TestChannelProvider) GetOutboundStats() (capacity int, length int) {
+	return cap(p.outbound), len(p.outbound)
+}
+
+// GetOutboundChanForTest returns the outbound channel for direct test writes.
+func (p *TestChannelProvider) GetOutboundChanForTest() chan *transport.UMHMessage {
+	return p.outbound
+}
+
 // DrainInbound reads all available messages from the inbound channel (non-blocking).
 func (p *TestChannelProvider) DrainInbound() []*transport.UMHMessage {
 	var messages []*transport.UMHMessage
