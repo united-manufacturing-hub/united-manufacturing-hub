@@ -19,6 +19,7 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -115,6 +116,18 @@ func (e *TransportError) Is(target error) bool {
 	}
 
 	return e.Type == t.Type
+}
+
+// ExtractErrorType unwraps a *TransportError from err and returns its ErrorType
+// and RetryAfter duration. If err does not wrap a *TransportError, it defaults
+// to ErrorTypeNetwork with zero retry delay.
+func ExtractErrorType(err error) (ErrorType, time.Duration) {
+	var transportErr *TransportError
+	if errors.As(err, &transportErr) {
+		return transportErr.Type, transportErr.RetryAfter
+	}
+
+	return ErrorTypeNetwork, 0
 }
 
 // isCloudflareChallenge detects Cloudflare challenge pages via headers and body content.

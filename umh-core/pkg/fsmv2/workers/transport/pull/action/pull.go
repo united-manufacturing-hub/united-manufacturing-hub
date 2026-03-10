@@ -150,14 +150,9 @@ func (a *PullAction) Execute(ctx context.Context, depsAny any) error {
 	pullLatency := time.Since(pullStart)
 
 	if err != nil {
-		var transportErr *httpTransport.TransportError
-		if errors.As(err, &transportErr) {
-			pullDeps.RecordTypedError(transportErr.Type, transportErr.RetryAfter)
-			metrics.IncrementCounter(counterForErrorType(transportErr.Type), 1)
-		} else {
-			pullDeps.RecordTypedError(httpTransport.ErrorTypeNetwork, 0)
-			metrics.IncrementCounter(depspkg.CounterNetworkErrorsTotal, 1)
-		}
+		errType, retryAfter := httpTransport.ExtractErrorType(err)
+		pullDeps.RecordTypedError(errType, retryAfter)
+		metrics.IncrementCounter(counterForErrorType(errType), 1)
 
 		metrics.IncrementCounter(depspkg.CounterPullOps, 1)
 		metrics.IncrementCounter(depspkg.CounterPullFailures, 1)
