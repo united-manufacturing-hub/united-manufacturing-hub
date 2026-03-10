@@ -22,26 +22,22 @@
 // Transport errors fall into two categories:
 //
 //   - Transient errors self-resolve without human intervention: network timeouts,
-//     DNS failures, HTTP 5xx responses, rate limits, and full channels. These
-//     appear as ErrorTypeNetwork, ErrorTypeServerError, ErrorTypeChannelFull, and
-//     ErrorTypeBackendRateLimit in [communicator/transport/http].
+//     DNS failures, HTTP 5xx responses, rate limits, and full channels.
 //
 //   - Persistent errors require human intervention: invalid tokens, deleted
-//     instances, proxy blocks, and Cloudflare challenges. These appear as
-//     ErrorTypeInvalidToken, ErrorTypeInstanceDeleted, ErrorTypeProxyBlock, and
-//     ErrorTypeCloudflareChallenge.
+//     instances, proxy blocks, and Cloudflare challenges.
 //
-// The action layer suppresses Sentry alerts for transient errors (they fire
-// metrics and update DegradedState instead). Persistent errors still fire
-// SentryError immediately.
+// The intended integration (wired in subsequent PRs) suppresses Sentry alerts
+// for transient errors while still updating metrics and DegradedState.
+// Persistent errors continue to fire SentryError immediately.
 //
 // # Escalation Lifecycle
 //
-// When transient errors dominate — the failure rate exceeds the configured
-// threshold over the rolling window — the Tracker fires a one-shot escalation.
-// The caller (typically push or pull dependencies) fires a SentryWarn to alert
-// operators. After enough successes bring the rate below the threshold, the
-// Tracker rearms and can fire again on the next crossing.
+// When transient errors dominate and the failure rate exceeds the configured
+// threshold over the rolling window, the Tracker fires a one-shot escalation.
+// The caller fires a SentryWarn to alert operators. After enough successes
+// bring the rate below the threshold, the Tracker rearms and can fire again
+// on the next crossing.
 //
 // # Why a Rolling Window
 //
@@ -53,8 +49,8 @@
 //
 // # Integration
 //
-// Error classification lives in [communicator/transport/http] (ErrorType and
-// IsTransient). Transient suppression lives in the pull and push action files.
-// Rate tracking lives in this package. Push and pull dependencies each hold a
-// *[Tracker] and call [Tracker.RecordOutcome] on every error or success.
+// Error classification lives in the communicator/transport/http package
+// (ErrorType constants). Rate tracking lives in this package. Push and pull
+// dependencies will each hold a *[Tracker] and call [Tracker.RecordOutcome]
+// on every error or success.
 package failurerate

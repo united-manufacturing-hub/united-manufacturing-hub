@@ -37,8 +37,9 @@ type Config struct {
 }
 
 // Tracker tracks the failure rate of the last N outcomes using a fixed-size
-// circular buffer. Call [RecordOutcome] with true (success) or false (failure);
-// the Tracker computes the rolling failure rate and detects threshold crossings.
+// circular buffer. Call [Tracker.RecordOutcome] with true (success) or false
+// (failure); the Tracker computes the rolling failure rate and detects
+// threshold crossings.
 //
 // Tracker is safe for concurrent use.
 type Tracker struct {
@@ -129,8 +130,8 @@ func (t *Tracker) FailureRate() float64 {
 	return float64(t.failures) / float64(t.count)
 }
 
-// IsEscalated reports whether the failure rate exceeds the threshold and at
-// least [Config.MinSamples] outcomes have been recorded.
+// IsEscalated reports whether the failure rate meets or exceeds the threshold
+// and at least [Config.MinSamples] outcomes have been recorded.
 func (t *Tracker) IsEscalated() bool {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
@@ -138,7 +139,7 @@ func (t *Tracker) IsEscalated() bool {
 	return t.escalated
 }
 
-// Reset clears all recorded outcomes. Use this when the transport is
+// Reset clears all recorded outcomes. Use this when the tracked entity is
 // recreated from scratch and historical data is no longer relevant.
 func (t *Tracker) Reset() {
 	t.mu.Lock()
