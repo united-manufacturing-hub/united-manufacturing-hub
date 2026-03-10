@@ -96,7 +96,6 @@ RUN echo "GOOS: ${GOOS:-$(go env GOOS)}, GOARCH: ${GOARCH:-$(go env GOARCH)}"
 RUN echo "Go version: $(go version)"
 # CGO_ENABLED=1 is needed for the race detector to work
 RUN --mount=type=cache,target=/root/.cache/go-build \
-    --mount=type=cache,target=/go/pkg/mod \
     if [ "$DEBUG" = "true" ]; then \
     CGO_ENABLED=1 go build \
     -race \

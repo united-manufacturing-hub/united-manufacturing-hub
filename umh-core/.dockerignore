@@ -24,3 +24,5 @@ changelog-images/
 # Test files (not needed for the binary)
 **/*_test.go
 tools/
+integration/
+test/
