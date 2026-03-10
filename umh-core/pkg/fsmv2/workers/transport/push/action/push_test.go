@@ -423,7 +423,7 @@ var _ = Describe("PushAction", func() {
 			Expect(drained.Counters[string(deps.CounterMessagesDropped)]).To(Equal(int64(1)))
 		})
 
-		It("should suppress transient error during pending retry", func() {
+		It("should suppress transient error during pending retry and retain remaining messages", func() {
 			mockDeps.pendingMessages = []*transport.UMHMessage{
 				{Content: "msg1"},
 				{Content: "msg2"},
@@ -446,7 +446,7 @@ var _ = Describe("PushAction", func() {
 			err := act.Execute(context.Background(), mockDeps)
 			Expect(err).NotTo(HaveOccurred())
 
-			Expect(mockDeps.PendingMessageCount()).To(Equal(0))
+			Expect(mockDeps.PendingMessageCount()).To(Equal(2), "msg2 (failed) and msg3 (unattempted) should be retained for retry")
 		})
 
 		It("should propagate persistent error during pending retry and keep remaining", func() {
