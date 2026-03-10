@@ -8,3 +8,19 @@ tmp/
 data/
 
 metrics.txt
+
+# Git metadata
+.git
+.gitignore
+.gitattributes
+
+# Documentation and non-code assets
+docs/
+examples/
+changelog-images/
+*.md
+*.txt
+
+# Test files (not needed for the binary)
+**/*_test.go
+tools/
