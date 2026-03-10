@@ -123,6 +123,23 @@ var _ = Describe("Failure Rate Tracker", func() {
 			Expect(firedAgain).To(BeTrue(), "should fire again after rearm")
 		})
 
+		It("should fire escalation at exact threshold boundary (rate == threshold)", func() {
+			// 9 failures + 1 success = 90% rate == 0.9 threshold — should fire (>= comparator)
+			cfg := failurerate.Config{
+				WindowSize: 100,
+				Threshold:  0.9,
+				MinSamples: 10,
+			}
+			t := failurerate.New(cfg)
+
+			for range 9 {
+				t.RecordOutcome(false)
+			}
+			t.RecordOutcome(true)
+			// 9/10 = 0.9 == threshold — should have fired on the 10th outcome
+			Expect(t.IsEscalated()).To(BeTrue(), "should escalate when rate exactly equals threshold")
+		})
+
 		It("should not escalate before MinSamples even at 100% failure rate", func() {
 			cfg := failurerate.Config{
 				WindowSize: 100,
@@ -225,12 +242,12 @@ var _ = Describe("Failure Rate Tracker", func() {
 	})
 
 	Describe("Thread Safety", func() {
-		It("should handle concurrent RecordOutcome calls without panic", func() {
+		It("should handle concurrent RecordOutcome and Reset calls without panic", func() {
 			const goroutines = 10
 			const iterations = 100
 
 			var wg sync.WaitGroup
-			wg.Add(goroutines * 3)
+			wg.Add(goroutines * 4)
 
 			// Concurrent failures
 			for range goroutines {
@@ -263,8 +280,62 @@ var _ = Describe("Failure Rate Tracker", func() {
 				}()
 			}
 
+			// Concurrent resets
+			for range goroutines {
+				go func() {
+					defer wg.Done()
+					for range iterations {
+						tracker.Reset()
+					}
+				}()
+			}
+
 			wg.Wait()
 			// If we get here without deadlock or panic, the test passes
+		})
+	})
+
+	Describe("Config Validation", func() {
+		It("should panic on WindowSize=0", func() {
+			Expect(func() {
+				failurerate.New(failurerate.Config{WindowSize: 0, Threshold: 0.9, MinSamples: 0})
+			}).To(Panic())
+		})
+
+		It("should panic on negative WindowSize", func() {
+			Expect(func() {
+				failurerate.New(failurerate.Config{WindowSize: -1, Threshold: 0.9, MinSamples: 0})
+			}).To(Panic())
+		})
+
+		It("should panic on Threshold=0", func() {
+			Expect(func() {
+				failurerate.New(failurerate.Config{WindowSize: 100, Threshold: 0.0, MinSamples: 10})
+			}).To(Panic())
+		})
+
+		It("should panic on Threshold > 1.0", func() {
+			Expect(func() {
+				failurerate.New(failurerate.Config{WindowSize: 100, Threshold: 1.5, MinSamples: 10})
+			}).To(Panic())
+		})
+
+		It("should panic on MinSamples > WindowSize", func() {
+			Expect(func() {
+				failurerate.New(failurerate.Config{WindowSize: 10, Threshold: 0.9, MinSamples: 20})
+			}).To(Panic())
+		})
+
+		It("should not panic on valid edge configs", func() {
+			// Threshold=1.0 is valid (only 100% failure escalates)
+			Expect(func() {
+				failurerate.New(failurerate.Config{WindowSize: 1, Threshold: 1.0, MinSamples: 0})
+			}).NotTo(Panic())
+
+			// MinSamples=0 is valid (no startup protection)
+			Expect(func() {
+				failurerate.New(failurerate.Config{WindowSize: 100, Threshold: 0.5, MinSamples: 0})
+			}).NotTo(Panic())
 		})
 	})
 

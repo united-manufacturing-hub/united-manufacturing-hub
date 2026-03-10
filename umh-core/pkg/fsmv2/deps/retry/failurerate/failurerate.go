@@ -14,7 +14,10 @@
 
 package failurerate
 
-import "sync"
+import (
+	"fmt"
+	"sync"
+)
 
 // Config controls the Tracker's window size, escalation threshold, and
 // minimum sample count.
@@ -51,8 +54,19 @@ type Tracker struct {
 }
 
 // New creates a Tracker with the given configuration. The circular buffer
-// is pre-allocated to cfg.WindowSize.
+// is pre-allocated to cfg.WindowSize. New panics if the configuration is
+// invalid (WindowSize <= 0, Threshold out of (0,1], or MinSamples > WindowSize).
 func New(cfg Config) *Tracker {
+	if cfg.WindowSize <= 0 {
+		panic(fmt.Sprintf("failurerate: WindowSize must be > 0, got %d", cfg.WindowSize))
+	}
+	if cfg.Threshold <= 0.0 || cfg.Threshold > 1.0 {
+		panic(fmt.Sprintf("failurerate: Threshold must be in (0.0, 1.0], got %f", cfg.Threshold))
+	}
+	if cfg.MinSamples < 0 || cfg.MinSamples > cfg.WindowSize {
+		panic(fmt.Sprintf("failurerate: MinSamples must be in [0, WindowSize], got %d (WindowSize=%d)", cfg.MinSamples, cfg.WindowSize))
+	}
+
 	return &Tracker{
 		outcomes: make([]bool, cfg.WindowSize),
 		cfg:      cfg,
@@ -109,7 +123,7 @@ func (t *Tracker) FailureRate() float64 {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 
-	if t.count < t.cfg.MinSamples {
+	if t.count == 0 || t.count < t.cfg.MinSamples {
 		return 0.0
 	}
 	return float64(t.failures) / float64(t.count)
@@ -134,10 +148,6 @@ func (t *Tracker) Reset() {
 	t.count = 0
 	t.failures = 0
 	t.escalated = false
-	// Re-zero the buffer to avoid stale data on wraparound.
-	for i := range t.outcomes {
-		t.outcomes[i] = false
-	}
 }
 
 // SetEscalatedForTest sets the escalated flag directly. This is only for
