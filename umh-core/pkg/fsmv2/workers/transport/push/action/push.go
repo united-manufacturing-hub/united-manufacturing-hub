@@ -126,6 +126,10 @@ drainLoop:
 		metrics.SetGauge(depspkg.GaugeLastPushLatencyMs, float64(pushLatency.Milliseconds()))
 		metrics.SetGauge(depspkg.GaugePendingMessages, float64(pushDeps.PendingMessageCount()))
 
+		if errType.IsTransient() {
+			return nil
+		}
+
 		return fmt.Errorf("push failed: %w", err)
 	}
 
@@ -191,6 +195,10 @@ func (a *PushAction) retryPending(ctx context.Context, t transport.Transport, pu
 
 			if ctx.Err() != nil {
 				return pending[i:], fmt.Errorf("context canceled during retry: %w", ctx.Err())
+			}
+
+			if errType.IsTransient() {
+				return pending[i:], nil
 			}
 
 			if isRecoverableByParent(errType) {

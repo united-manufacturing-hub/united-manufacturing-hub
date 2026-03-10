@@ -261,7 +261,7 @@ var _ = Describe("PullAction", func() {
 	})
 
 	Describe("Failed pull with TransportError", func() {
-		It("should record typed error and increment failure counter", func() {
+		It("should record typed error and suppress transient errors", func() {
 			mockTrans.pullErr = &httpTransport.TransportError{
 				Type:       httpTransport.ErrorTypeServerError,
 				Message:    "HTTP 500: server_error",
@@ -269,8 +269,7 @@ var _ = Describe("PullAction", func() {
 			}
 
 			err := act.Execute(context.Background(), mockDeps)
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("pull failed"))
+			Expect(err).NotTo(HaveOccurred())
 
 			Expect(mockDeps.recordTypedErrorCalls).To(HaveLen(1))
 			Expect(mockDeps.recordTypedErrorCalls[0].errType).To(Equal(httpTransport.ErrorTypeServerError))
@@ -281,15 +280,25 @@ var _ = Describe("PullAction", func() {
 			Expect(drained.Counters[string(deps.CounterPullFailures)]).To(Equal(int64(1)))
 			Expect(drained.Counters[string(deps.CounterServerErrorsTotal)]).To(Equal(int64(1)))
 		})
-	})
 
-	Describe("Failed pull with non-TransportError", func() {
-		It("should default to ErrorTypeNetwork", func() {
-			mockTrans.pullErr = errors.New("connection refused")
+		It("should propagate persistent errors", func() {
+			mockTrans.pullErr = &httpTransport.TransportError{
+				Type:    httpTransport.ErrorTypeInstanceDeleted,
+				Message: "HTTP 404: instance_deleted",
+			}
 
 			err := act.Execute(context.Background(), mockDeps)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("pull failed"))
+		})
+	})
+
+	Describe("Failed pull with non-TransportError", func() {
+		It("should default to ErrorTypeNetwork and suppress as transient", func() {
+			mockTrans.pullErr = errors.New("connection refused")
+
+			err := act.Execute(context.Background(), mockDeps)
+			Expect(err).NotTo(HaveOccurred())
 
 			Expect(mockDeps.recordTypedErrorCalls).To(HaveLen(1))
 			Expect(mockDeps.recordTypedErrorCalls[0].errType).To(Equal(httpTransport.ErrorTypeNetwork))

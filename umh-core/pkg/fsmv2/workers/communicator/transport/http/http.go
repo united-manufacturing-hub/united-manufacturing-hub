@@ -65,6 +65,17 @@ const (
 	ErrorTypeChannelFull
 )
 
+// IsTransient reports whether the error type represents a transient condition
+// that typically self-resolves without human intervention.
+func (e ErrorType) IsTransient() bool {
+	switch e {
+	case ErrorTypeNetwork, ErrorTypeServerError, ErrorTypeChannelFull, ErrorTypeBackendRateLimit:
+		return true
+	default:
+		return false
+	}
+}
+
 // String returns a human-readable name for the error type.
 func (e ErrorType) String() string {
 	switch e {
