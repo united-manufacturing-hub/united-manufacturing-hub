@@ -17,12 +17,46 @@
 // failure; the [Tracker] computes the rolling failure rate and fires a one-shot
 // escalation when the rate crosses a configurable threshold.
 //
+// # Problem
+//
+// Transport push and pull workers each need to detect sustained failure
+// patterns and alert operators via Sentry. Without a shared abstraction,
+// each worker would implement its own escalation infrastructure: a mutex,
+// a flag, a threshold check, and a timer or counter. This duplication is
+// error-prone and makes the escalation behavior hard to review, test, and
+// reason about across workers.
+//
+// The naive approach — escalate when degraded longer than N minutes — has a
+// known blind spot (ENG-4565): a single success in a 99% failure pattern
+// resets the timer completely. The system never escalates even though it is
+// failing 99% of the time.
+//
+// # Design
+//
+// The Tracker uses a fixed-size circular buffer to compute a rolling failure
+// rate. A single success shifts the window from 100/100 failures to 99/100.
+// The rate barely changes, and escalation holds.
+//
+// A rolling window was chosen over an exponentially weighted moving average
+// (EWMA) because the window provides exact, bounded semantics: "90% of the
+// last 6000 outcomes failed" is easy to reason about and configure. EWMA
+// gives a fuzzy decay where the effective window size depends on the smoothing
+// factor, making threshold tuning less intuitive. The circular buffer also
+// makes tests fully deterministic (no time dependency, no floating-point
+// drift from repeated multiplication).
+//
+// The window size is outcome-count-based, not time-based. At a 100 ms tick
+// rate, WindowSize=6000 covers roughly 10 minutes. Under backoff the
+// effective duration stretches because fewer outcomes are recorded per unit
+// of time.
+//
 // # Transient and Persistent Errors
 //
 // Transport errors fall into two categories:
 //
-//   - Transient errors self-resolve without human intervention: network timeouts,
-//     DNS failures, HTTP 5xx responses, rate limits, and full channels.
+//   - Transient errors self-resolve without human intervention: network
+//     timeouts, DNS failures, HTTP 5xx responses, rate limits, and full
+//     channels.
 //
 //   - Persistent errors require human intervention: invalid tokens, deleted
 //     instances, proxy blocks, and Cloudflare challenges.
