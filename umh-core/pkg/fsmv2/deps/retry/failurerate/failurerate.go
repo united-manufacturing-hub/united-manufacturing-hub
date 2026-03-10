@@ -118,8 +118,8 @@ func (t *Tracker) RecordOutcome(success bool) bool {
 	return false
 }
 
-// FailureRate returns the current failure rate (0.0–1.0).
-// It returns 0.0 if fewer than [Config.MinSamples] outcomes have been recorded.
+// FailureRate returns the current failure rate (0.0–1.0). It returns 0.0 if
+// no outcomes have been recorded or if fewer than [Config.MinSamples] have.
 func (t *Tracker) FailureRate() float64 {
 	t.mu.RLock()
 	defer t.mu.RUnlock()

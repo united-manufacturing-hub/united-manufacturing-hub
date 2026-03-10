@@ -17,33 +17,29 @@
 // failure; the [Tracker] computes the rolling failure rate and fires a one-shot
 // escalation when the rate crosses a configurable threshold.
 //
-// # Problem
+// # Why This Exists
 //
-// Transport push and pull workers each need to detect sustained failure
-// patterns and alert operators via Sentry. Without a shared abstraction,
-// each worker would implement its own escalation infrastructure: a mutex,
-// a flag, a threshold check, and a timer or counter. This duplication is
-// error-prone and makes the escalation behavior hard to review, test, and
-// reason about across workers.
+// Transient transport errors (network timeouts, HTTP 5xx, rate limits) should
+// not fire SentryError immediately. They self-resolve. But if they persist
+// continuously at a high rate, something is genuinely wrong (server issue,
+// broken network path) and needs attention. This package provides the filter:
+// it tracks the rolling failure rate and signals when transient errors cross
+// from "expected noise" to "sustained problem."
 //
-// The naive approach — escalate when degraded longer than N minutes — has a
-// known blind spot (ENG-4565): a single success in a 99% failure pattern
-// resets the timer completely. The system never escalates even though it is
-// failing 99% of the time.
+// [Tracker.RecordOutcome] returns true exactly once when the failure rate
+// first crosses the threshold. Callers (push/pull dependencies) use this
+// signal to fire a one-shot SentryWarn.
+//
+// Persistent errors (invalid tokens, deleted instances, proxy blocks) are not
+// tracked here. They fire SentryError immediately and always require human
+// intervention.
 //
 // # Design
 //
-// The Tracker uses a fixed-size circular buffer to compute a rolling failure
-// rate. A single success shifts the window from 100/100 failures to 99/100.
-// The rate barely changes, and escalation holds.
-//
-// A rolling window was chosen over an exponentially weighted moving average
-// (EWMA) because the window provides exact, bounded semantics: "90% of the
-// last 6000 outcomes failed" is easy to reason about and configure. EWMA
-// gives a fuzzy decay where the effective window size depends on the smoothing
-// factor, making threshold tuning less intuitive. The circular buffer also
-// makes tests fully deterministic (no time dependency, no floating-point
-// drift from repeated multiplication).
+// The Tracker uses a fixed-size circular buffer over the last N outcomes.
+// If push fails for 5 minutes, succeeds once, then fails for another
+// 5 minutes, the window still sees ~99% failure and keeps the alert. One
+// brief success doesn't reset anything.
 //
 // The window size is outcome-count-based, not time-based. At a 100 ms tick
 // rate, WindowSize=6000 covers roughly 10 minutes. Under backoff the
@@ -62,9 +58,9 @@
 //     instances, proxy blocks, and Cloudflare challenges.
 //
 // All error types (transient and persistent) feed the rolling window.
-// Persistent errors also fire SentryError immediately. The downstream
-// suppression logic (wired in subsequent PRs) suppresses SentryError for
-// transient errors while still updating metrics and DegradedState.
+// Persistent errors also fire SentryError immediately. The suppression
+// logic suppresses SentryError for transient errors while still updating
+// metrics and DegradedState.
 //
 // # Escalation Lifecycle
 //
@@ -84,10 +80,10 @@
 //
 // # Integration
 //
-// Error classification lives in the communicator/transport/http package
-// (ErrorType constants). Rate tracking lives in this package. Push and pull
-// dependencies each hold a *[Tracker] and call [Tracker.RecordOutcome]
-// after every real HTTP operation (success or failure). Idle ticks — where
-// no HTTP request was made — must NOT record an outcome, as this would
-// dilute the failure rate with phantom data.
+// Error classification (ErrorType, IsTransient) lives in the
+// communicator/transport/http package. Rate tracking lives in this package.
+// Push and pull dependencies each hold a *[Tracker] and call
+// [Tracker.RecordOutcome] after every real HTTP operation (success or
+// failure). Idle ticks — where no HTTP request was made — must NOT record
+// an outcome, as this would dilute the failure rate with phantom data.
 package failurerate
