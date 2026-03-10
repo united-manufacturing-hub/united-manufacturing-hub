@@ -1,0 +1,150 @@
+// Copyright 2025 UMH Systems GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package failurerate
+
+import "sync"
+
+// Config controls the Tracker's window size, escalation threshold, and
+// minimum sample count.
+type Config struct {
+	// WindowSize is the number of outcomes the circular buffer retains.
+	// Older outcomes are evicted when the buffer is full.
+	// Example: 6000 ≈ 10 minutes at one outcome per 100 ms tick.
+	WindowSize int
+
+	// Threshold is the failure rate (0.0–1.0) that triggers escalation.
+	// Example: 0.9 means 90 % failures.
+	Threshold float64
+
+	// MinSamples is the minimum number of recorded outcomes before the
+	// Tracker can escalate. This prevents spurious alerts during startup.
+	MinSamples int
+}
+
+// Tracker tracks the failure rate of the last N outcomes using a fixed-size
+// circular buffer. Call [RecordOutcome] with true (success) or false (failure);
+// the Tracker computes the rolling failure rate and detects threshold crossings.
+//
+// Tracker is safe for concurrent use.
+type Tracker struct {
+	mu       sync.RWMutex
+	outcomes []bool // circular buffer: true = success, false = failure
+	head     int    // next write position
+	count    int    // total recorded outcomes (capped at WindowSize)
+	failures int    // running failure count within the window
+	// escalated tracks the one-shot state: true after the failure rate
+	// first crosses the threshold, false after it drops back below.
+	escalated bool
+	cfg       Config
+}
+
+// New creates a Tracker with the given configuration. The circular buffer
+// is pre-allocated to cfg.WindowSize.
+func New(cfg Config) *Tracker {
+	return &Tracker{
+		outcomes: make([]bool, cfg.WindowSize),
+		cfg:      cfg,
+	}
+}
+
+// RecordOutcome records a success (true) or failure (false) and updates the
+// rolling window. It returns true exactly once when the failure rate first
+// crosses the escalation threshold (one-shot). After the rate drops below
+// the threshold, the one-shot rearms and can fire again on the next crossing.
+func (t *Tracker) RecordOutcome(success bool) bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	// Evict the oldest outcome if the buffer is full.
+	if t.count == t.cfg.WindowSize {
+		evicted := t.outcomes[t.head]
+		if !evicted {
+			t.failures--
+		}
+	} else {
+		t.count++
+	}
+
+	// Write the new outcome.
+	t.outcomes[t.head] = success
+	if !success {
+		t.failures++
+	}
+	t.head = (t.head + 1) % t.cfg.WindowSize
+
+	// Check escalation transition.
+	if t.count < t.cfg.MinSamples {
+		return false
+	}
+
+	rate := float64(t.failures) / float64(t.count)
+	aboveThreshold := rate >= t.cfg.Threshold
+
+	if aboveThreshold && !t.escalated {
+		t.escalated = true
+		return true // one-shot: first crossing
+	}
+	if !aboveThreshold && t.escalated {
+		t.escalated = false // rearm for next crossing
+	}
+
+	return false
+}
+
+// FailureRate returns the current failure rate (0.0–1.0).
+// It returns 0.0 if fewer than [Config.MinSamples] outcomes have been recorded.
+func (t *Tracker) FailureRate() float64 {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+
+	if t.count < t.cfg.MinSamples {
+		return 0.0
+	}
+	return float64(t.failures) / float64(t.count)
+}
+
+// IsEscalated reports whether the failure rate exceeds the threshold and at
+// least [Config.MinSamples] outcomes have been recorded.
+func (t *Tracker) IsEscalated() bool {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+
+	return t.escalated
+}
+
+// Reset clears all recorded outcomes. Use this when the transport is
+// recreated from scratch and historical data is no longer relevant.
+func (t *Tracker) Reset() {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	t.head = 0
+	t.count = 0
+	t.failures = 0
+	t.escalated = false
+	// Re-zero the buffer to avoid stale data on wraparound.
+	for i := range t.outcomes {
+		t.outcomes[i] = false
+	}
+}
+
+// SetEscalatedForTest sets the escalated flag directly. This is only for
+// use in external test packages that need to set up specific escalation states.
+func (t *Tracker) SetEscalatedForTest(v bool) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	t.escalated = v
+}
