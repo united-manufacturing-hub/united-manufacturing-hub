@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/hash"
+	depspkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
 )
 
@@ -128,6 +129,31 @@ func ExtractErrorType(err error) (ErrorType, time.Duration) {
 	}
 
 	return ErrorTypeNetwork, 0
+}
+
+// CounterForErrorType maps an ErrorType to its corresponding Prometheus counter.
+// Unknown and unrecognized types default to CounterNetworkErrorsTotal.
+func CounterForErrorType(t ErrorType) depspkg.CounterName {
+	switch t {
+	case ErrorTypeCloudflareChallenge:
+		return depspkg.CounterCloudflareErrorsTotal
+	case ErrorTypeBackendRateLimit:
+		return depspkg.CounterBackendRateLimitErrorsTotal
+	case ErrorTypeInvalidToken:
+		return depspkg.CounterAuthFailuresTotal
+	case ErrorTypeInstanceDeleted:
+		return depspkg.CounterInstanceDeletedTotal
+	case ErrorTypeServerError:
+		return depspkg.CounterServerErrorsTotal
+	case ErrorTypeProxyBlock:
+		return depspkg.CounterProxyBlockErrorsTotal
+	case ErrorTypeNetwork:
+		return depspkg.CounterNetworkErrorsTotal
+	case ErrorTypeUnknown:
+		return depspkg.CounterNetworkErrorsTotal
+	default:
+		return depspkg.CounterNetworkErrorsTotal
+	}
 }
 
 // isCloudflareChallenge detects Cloudflare challenge pages via headers and body content.

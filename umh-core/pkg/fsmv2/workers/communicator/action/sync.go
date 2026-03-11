@@ -137,7 +137,7 @@ func (a *SyncAction) Execute(ctx context.Context, depsAny any) error {
 			var transportErr *httpTransport.TransportError
 			if errors.As(err, &transportErr) {
 				deps.RecordTypedError(transportErr.Type, transportErr.RetryAfter)
-				deps.MetricsRecorder().IncrementCounter(counterForErrorType(transportErr.Type), 1)
+				deps.MetricsRecorder().IncrementCounter(httpTransport.CounterForErrorType(transportErr.Type), 1)
 			} else {
 				deps.RecordTypedError(httpTransport.ErrorTypeNetwork, 0)
 				deps.MetricsRecorder().IncrementCounter(depspkg.CounterNetworkErrorsTotal, 1)
@@ -220,7 +220,7 @@ func (a *SyncAction) Execute(ctx context.Context, depsAny any) error {
 			var transportErr *httpTransport.TransportError
 			if errors.As(err, &transportErr) {
 				deps.RecordTypedError(transportErr.Type, transportErr.RetryAfter)
-				deps.MetricsRecorder().IncrementCounter(counterForErrorType(transportErr.Type), 1)
+				deps.MetricsRecorder().IncrementCounter(httpTransport.CounterForErrorType(transportErr.Type), 1)
 			} else {
 				deps.RecordTypedError(httpTransport.ErrorTypeNetwork, 0)
 				deps.MetricsRecorder().IncrementCounter(depspkg.CounterNetworkErrorsTotal, 1)

@@ -152,7 +152,7 @@ func (a *PullAction) Execute(ctx context.Context, depsAny any) error {
 	if err != nil {
 		errType, retryAfter := httpTransport.ExtractErrorType(err)
 		pullDeps.RecordTypedError(errType, retryAfter)
-		metrics.IncrementCounter(counterForErrorType(errType), 1)
+		metrics.IncrementCounter(httpTransport.CounterForErrorType(errType), 1)
 
 		metrics.IncrementCounter(depspkg.CounterPullOps, 1)
 		metrics.IncrementCounter(depspkg.CounterPullFailures, 1)
@@ -229,29 +229,6 @@ func (a *PullAction) String() string {
 // Name returns the action name for FSM registration.
 func (a *PullAction) Name() string {
 	return PullActionName
-}
-
-func counterForErrorType(t httpTransport.ErrorType) depspkg.CounterName {
-	switch t {
-	case httpTransport.ErrorTypeCloudflareChallenge:
-		return depspkg.CounterCloudflareErrorsTotal
-	case httpTransport.ErrorTypeBackendRateLimit:
-		return depspkg.CounterBackendRateLimitErrorsTotal
-	case httpTransport.ErrorTypeInvalidToken:
-		return depspkg.CounterAuthFailuresTotal
-	case httpTransport.ErrorTypeInstanceDeleted:
-		return depspkg.CounterInstanceDeletedTotal
-	case httpTransport.ErrorTypeServerError:
-		return depspkg.CounterServerErrorsTotal
-	case httpTransport.ErrorTypeProxyBlock:
-		return depspkg.CounterProxyBlockErrorsTotal
-	case httpTransport.ErrorTypeNetwork:
-		return depspkg.CounterNetworkErrorsTotal
-	case httpTransport.ErrorTypeUnknown:
-		return depspkg.CounterNetworkErrorsTotal
-	default:
-		return depspkg.CounterNetworkErrorsTotal
-	}
 }
 
 // Backpressure thresholds for inbound channel capacity management.

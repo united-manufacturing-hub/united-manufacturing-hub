@@ -121,7 +121,7 @@ drainLoop:
 
 		errType, retryAfter := httpTransport.ExtractErrorType(err)
 		pushDeps.RecordTypedError(errType, retryAfter)
-		metrics.IncrementCounter(counterForErrorType(errType), 1)
+		metrics.IncrementCounter(httpTransport.CounterForErrorType(errType), 1)
 
 		metrics.IncrementCounter(depspkg.CounterPushOps, 1)
 		metrics.IncrementCounter(depspkg.CounterPushFailures, 1)
@@ -171,7 +171,7 @@ func (a *PushAction) retryPending(ctx context.Context, t transport.Transport, pu
 		if err := t.Push(ctx, jwtToken, []*transport.UMHMessage{msg}); err != nil {
 			errType, retryAfter := httpTransport.ExtractErrorType(err)
 			pushDeps.RecordTypedError(errType, retryAfter)
-			metrics.IncrementCounter(counterForErrorType(errType), 1)
+			metrics.IncrementCounter(httpTransport.CounterForErrorType(errType), 1)
 
 			if ctx.Err() != nil {
 				return pending[i:], fmt.Errorf("context canceled during retry: %w", ctx.Err())
@@ -197,32 +197,6 @@ func (a *PushAction) retryPending(ctx context.Context, t transport.Transport, pu
 	}
 
 	return nil, nil
-}
-
-func counterForErrorType(t httpTransport.ErrorType) depspkg.CounterName {
-	switch t {
-	case httpTransport.ErrorTypeCloudflareChallenge:
-		return depspkg.CounterCloudflareErrorsTotal
-	case httpTransport.ErrorTypeBackendRateLimit:
-		return depspkg.CounterBackendRateLimitErrorsTotal
-	case httpTransport.ErrorTypeInvalidToken:
-		return depspkg.CounterAuthFailuresTotal
-	// ErrorTypeInstanceDeleted: reachable via HTTP 404 from classifyError().
-	// Rare in practice (push endpoint uses session auth, not instance lookup),
-	// but kept for correct metric attribution if backend returns 404.
-	case httpTransport.ErrorTypeInstanceDeleted:
-		return depspkg.CounterInstanceDeletedTotal
-	case httpTransport.ErrorTypeServerError:
-		return depspkg.CounterServerErrorsTotal
-	case httpTransport.ErrorTypeProxyBlock:
-		return depspkg.CounterProxyBlockErrorsTotal
-	case httpTransport.ErrorTypeNetwork:
-		return depspkg.CounterNetworkErrorsTotal
-	case httpTransport.ErrorTypeUnknown:
-		return depspkg.CounterNetworkErrorsTotal
-	default:
-		return depspkg.CounterNetworkErrorsTotal
-	}
 }
 
 // isRecoverableByParent returns true for error types where the message itself is
