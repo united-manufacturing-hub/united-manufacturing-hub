@@ -60,7 +60,7 @@ func NewPullDependencies(parentDeps *transport_pkg.TransportDependencies, identi
 		BaseDependencies: deps.NewBaseDependencies(logger, stateReader, identity),
 		parentDeps:       parentDeps,
 		failureRate: failurerate.New(failurerate.Config{
-			WindowSize: 6000,
+			WindowSize: 600,
 			Threshold:  0.9,
 			MinSamples: 100,
 		}),
