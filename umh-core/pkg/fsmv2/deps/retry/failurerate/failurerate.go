@@ -24,7 +24,7 @@ import (
 type Config struct {
 	// WindowSize is the number of outcomes the circular buffer retains.
 	// Older outcomes are evicted when the buffer is full.
-	// Example: 6000 ≈ 10 minutes at one outcome per 100 ms tick.
+	// Example: 600 ≈ 10 minutes at one outcome per 1 second tick.
 	WindowSize int
 
 	// Threshold is the failure rate (0.0–1.0) that triggers escalation.
