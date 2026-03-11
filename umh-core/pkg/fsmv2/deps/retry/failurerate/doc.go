@@ -27,14 +27,15 @@
 //   - Persistent errors require human intervention: invalid tokens, deleted
 //     instances, proxy blocks, and Cloudflare challenges.
 //
-// The intended integration (wired in subsequent PRs) suppresses Sentry alerts
-// for transient errors while still updating metrics and DegradedState.
-// Persistent errors continue to fire SentryError immediately.
+// All error types (transient and persistent) feed the rolling window.
+// Persistent errors also fire SentryError immediately. The downstream
+// suppression logic (wired in subsequent PRs) suppresses SentryError for
+// transient errors while still updating metrics and DegradedState.
 //
 // # Escalation Lifecycle
 //
-// When transient errors dominate and the failure rate exceeds the configured
-// threshold over the rolling window, the Tracker fires a one-shot escalation.
+// When the failure rate exceeds the configured threshold over the rolling
+// window, the Tracker fires a one-shot escalation.
 // The caller fires a SentryWarn to alert operators. After enough successes
 // bring the rate below the threshold, the Tracker rearms and can fire again
 // on the next crossing.
@@ -51,6 +52,6 @@
 //
 // Error classification lives in the communicator/transport/http package
 // (ErrorType constants). Rate tracking lives in this package. Push and pull
-// dependencies will each hold a *[Tracker] and call [Tracker.RecordOutcome]
+// dependencies each hold a *[Tracker] and call [Tracker.RecordOutcome]
 // on every error or success.
 package failurerate

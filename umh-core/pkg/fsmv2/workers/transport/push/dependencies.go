@@ -51,11 +51,7 @@ func NewPushDependencies(parentDeps *transport_pkg.TransportDependencies, identi
 	return &PushDependencies{
 		BaseDependencies: deps.NewBaseDependencies(logger, stateReader, identity),
 		parentDeps:       parentDeps,
-		failureRate: failurerate.New(failurerate.Config{
-			WindowSize: 600,
-			Threshold:  0.9,
-			MinSamples: 100,
-		}),
+		failureRate: failurerate.New(transport_pkg.ChildFailureRateConfig),
 	}, nil
 }
 
@@ -188,26 +184,30 @@ func (d *PushDependencies) GetResetGeneration() uint64 {
 }
 
 // CheckAndClearOnReset checks if parent has done a transport reset.
-// If resetGeneration changed, clears all pending messages and returns true.
+// If resetGeneration changed, clears all pending messages, resets the failure
+// rate tracker, and returns true.
 func (d *PushDependencies) CheckAndClearOnReset() bool {
 	currentGen := d.parentDeps.GetResetGeneration()
 
 	d.pendingMu.Lock()
-	defer d.pendingMu.Unlock()
 
-	if currentGen != d.lastSeenResetGeneration {
+	changed := currentGen != d.lastSeenResetGeneration
+	if changed {
 		d.pendingMessages = nil
 		d.lastSeenResetGeneration = currentGen
-		d.failureRate.Reset()
-
-		return true
 	}
 
-	return false
+	d.pendingMu.Unlock()
+
+	if changed {
+		d.failureRate.Reset()
+	}
+
+	return changed
 }
 
-// IsPersistentFailureEscalated reports whether the failure rate exceeds the
-// escalation threshold over the rolling window.
+// IsPersistentFailureEscalated reports whether the failure rate meets or exceeds
+// the escalation threshold over the rolling window.
 func (d *PushDependencies) IsPersistentFailureEscalated() bool {
 	return d.failureRate.IsEscalated()
 }

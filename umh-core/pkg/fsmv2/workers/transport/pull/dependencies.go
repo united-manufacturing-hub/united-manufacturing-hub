@@ -59,11 +59,7 @@ func NewPullDependencies(parentDeps *transport_pkg.TransportDependencies, identi
 	return &PullDependencies{
 		BaseDependencies: deps.NewBaseDependencies(logger, stateReader, identity),
 		parentDeps:       parentDeps,
-		failureRate: failurerate.New(failurerate.Config{
-			WindowSize: 600,
-			Threshold:  0.9,
-			MinSamples: 100,
-		}),
+		failureRate: failurerate.New(transport_pkg.ChildFailureRateConfig),
 	}, nil
 }
 
@@ -247,8 +243,8 @@ func (d *PullDependencies) CheckAndClearOnReset() bool {
 	return changed
 }
 
-// IsPersistentFailureEscalated reports whether the failure rate exceeds the
-// escalation threshold over the rolling window.
+// IsPersistentFailureEscalated reports whether the failure rate meets or exceeds
+// the escalation threshold over the rolling window.
 func (d *PullDependencies) IsPersistentFailureEscalated() bool {
 	return d.failureRate.IsEscalated()
 }
