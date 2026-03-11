@@ -43,14 +43,14 @@ type Config struct {
 // Tracker is safe for concurrent use.
 type Tracker struct {
 	mu       sync.RWMutex
-	outcomes []bool // circular buffer: true = success, false = failure
-	head     int    // next write position
-	count    int    // total recorded outcomes (capped at WindowSize)
-	failures int    // running failure count within the window
+	outcomes []bool  // circular buffer: true = success, false = failure
+	cfg      Config  // immutable after construction
+	head     int     // next write position
+	count    int     // total recorded outcomes (capped at WindowSize)
+	failures int     // running failure count within the window
 	// escalated tracks the one-shot state: true after the failure rate
 	// first crosses the threshold, false after it drops back below.
 	escalated bool
-	cfg       Config
 }
 
 // New creates a Tracker with the given configuration. The circular buffer
