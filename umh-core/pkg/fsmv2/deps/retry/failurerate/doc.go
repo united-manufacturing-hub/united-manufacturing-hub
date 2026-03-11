@@ -30,9 +30,9 @@
 // first crosses the threshold. Callers (push/pull dependencies) use this
 // signal to fire a one-shot SentryWarn.
 //
-// Persistent errors (invalid tokens, deleted instances, proxy blocks) are not
-// tracked here. They fire SentryError immediately and always require human
-// intervention.
+// Persistent errors (invalid tokens, deleted instances, proxy blocks) also
+// feed the rolling window but fire SentryError immediately and always
+// require human intervention.
 //
 // # Design
 //
@@ -41,10 +41,10 @@
 // 5 minutes, the window still sees ~99% failure and keeps the alert. One
 // brief success doesn't reset anything.
 //
-// The window size is outcome-count-based, not time-based. At a 100 ms tick
-// rate, WindowSize=6000 covers roughly 10 minutes. Under backoff the
-// effective duration stretches because fewer outcomes are recorded per unit
-// of time.
+// The window size is outcome-count-based, not time-based. At the production
+// default of 1 second per tick, WindowSize=600 covers roughly 10 minutes.
+// Under backoff the effective duration stretches because fewer outcomes are
+// recorded per unit of time.
 //
 // # Transient and Persistent Errors
 //
