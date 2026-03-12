@@ -23,6 +23,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
+	deps "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
@@ -60,6 +61,7 @@ type Action interface {
 // Error handling for each step is done within this function.
 func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePayload, sender string, outboundChannel chan *models.UMHMessage, releaseChannel config.ReleaseChannel, dog watchdog.Iface, traceID uuid.UUID, systemSnapshotManager *fsm.SnapshotManager, configManager config.ConfigManager) {
 	log := logger.For(logger.ComponentCommunicator)
+	fsmLogger := deps.NewFSMLogger(log)
 
 	// Start a new transaction for this action
 	log.Debugf("Handling action message: Type: %s, Payload: %v", payload.ActionType, payload.ActionPayload)
@@ -211,6 +213,18 @@ func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePay
 		return
 	}
 
+	// Check if payload contains a state field and is a deploy protocol converter action. If yes, log any errors via Sentry
+	// TODO: This can be removed once the "Write flows" feature is fully implemented
+	var state string
+	if s, ok := payload.ActionPayload.(map[string]interface{})["state"]; ok {
+		if str, ok := s.(string); ok {
+			state = str
+		} else {
+			log.Errorf("Invalid state type: %v", s)
+		}
+	}
+	isLogToSentry := state != "" && payload.ActionType == models.EditProtocolConverter
+
 	SendActionReply(instanceUUID, sender, payload.ActionUUID, models.ActionExecuting, "Parsing action payload", outboundChannel, payload.ActionType)
 	// Parse the action payload
 	err := action.Parse(payload.ActionPayload)
@@ -219,6 +233,9 @@ func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePay
 		// this will allow the UI to retry the action
 		SendActionReplyV2(instanceUUID, sender, payload.ActionUUID, models.ActionFinishedWithFailure, "Failed to parse action payload: "+err.Error(), models.ErrParseFailed, nil, outboundChannel, payload.ActionType, nil)
 		log.Errorf("Error parsing action payload: %s", err)
+		if isLogToSentry {
+			fsmLogger.SentryError(deps.FeatureDisableReadFlows, "", err, "protocol_converter_parse_failed")
+		}
 
 		return
 	}
@@ -230,6 +247,9 @@ func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePay
 		// If validation fails, send a structured error reply using SendActionReplyV2 with ErrEditValidationFailed
 		SendActionReplyV2(instanceUUID, sender, payload.ActionUUID, models.ActionFinishedWithFailure, "Failed to validate action payload: "+err.Error(), models.ErrValidationFailed, nil, outboundChannel, payload.ActionType, nil)
 		log.Errorf("Error validating action payload: %s", err)
+		if isLogToSentry {
+			fsmLogger.SentryError(deps.FeatureDisableReadFlows, "", err, "protocol_converter_validate_failed")
+		}
 
 		return
 	}
@@ -239,6 +259,9 @@ func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePay
 	result, metadata, err := action.Execute()
 	if err != nil {
 		log.Errorf("Error executing action: %s", err)
+		if isLogToSentry {
+			fsmLogger.SentryError(deps.FeatureDisableReadFlows, "", err, "protocol_converter_execute_failed")
+		}
 
 		return
 	}
