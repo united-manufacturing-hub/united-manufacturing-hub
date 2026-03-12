@@ -223,13 +223,13 @@ func (a *PushAction) retryPending(ctx context.Context, t transport.Transport, pu
 	return nil, nil
 }
 
-// isRecoverableByParent returns true for error types where the message itself is
-// valid but delivery failed due to an external condition. These messages are
-// preserved in the pending buffer for retry rather than dropped.
+// isRecoverableByParent returns true for persistent error types where the
+// message is valid but delivery failed due to an external condition requiring
+// parent action (re-authentication, transport reset). Messages are preserved
+// in the pending buffer for retry rather than dropped.
 //
-// Covers both infrastructure errors (network, server, rate limit) and
-// access errors (auth, cloudflare, proxy) that resolve via parent actions
-// (re-authentication, transport reset) or child-level backoff.
+// Transient errors (network, server, rate limit, channel full) are handled
+// before this function by IsTransient() in retryPending and never reach here.
 func isRecoverableByParent(errType httpTransport.ErrorType) bool {
 	switch errType {
 	case httpTransport.ErrorTypeNetwork,

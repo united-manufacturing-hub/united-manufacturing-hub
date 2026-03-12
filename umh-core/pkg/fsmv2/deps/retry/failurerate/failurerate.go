@@ -44,12 +44,14 @@ type Config struct {
 //
 // Tracker is safe for concurrent use.
 type Tracker struct {
-	outcomes  []bool
-	cfg       Config
-	mu        sync.RWMutex
-	head      int
-	count     int
-	failures  int
+	outcomes []bool  // circular buffer: true = success, false = failure
+	cfg      Config  // immutable after construction
+	mu       sync.RWMutex
+	head     int // next write position
+	count    int // total recorded outcomes (capped at WindowSize)
+	failures int // running failure count within the window
+	// escalated tracks the one-shot state: true after the failure rate
+	// first crosses the threshold, false after it drops back below.
 	escalated bool
 }
 
@@ -118,8 +120,8 @@ func (t *Tracker) RecordOutcome(success bool) bool {
 	return false
 }
 
-// FailureRate returns the current failure rate (0.0–1.0). It returns 0.0 if
-// no outcomes have been recorded or if fewer than [Config.MinSamples] have.
+// FailureRate returns the current failure rate (0.0–1.0).
+// It returns 0.0 if fewer than [Config.MinSamples] outcomes have been recorded.
 func (t *Tracker) FailureRate() float64 {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
