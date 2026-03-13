@@ -153,6 +153,22 @@ drainLoop:
 	return nil
 }
 
+// retryPending sends previously failed messages one at a time. Messages are
+// sent individually (not batched) because a prior batch push already failed,
+// and we need per-message error handling to isolate poison messages.
+//
+// For each message the error cascade is:
+//  1. Context canceled → return remaining messages with cancellation error.
+//  2. Recoverable by parent (auth failure, proxy block, etc.) → return
+//     remaining messages with error so the parent triggers re-authentication
+//     or transport reset.
+//  3. Poison message (unrecoverable) → log SentryWarn, drop the message,
+//     continue to next.
+//  4. Success → record metrics, continue.
+//
+// Returns (nil, nil) when all messages are sent successfully. Otherwise
+// returns the unsent tail of pending so the caller can buffer them for
+// the next tick.
 func (a *PushAction) retryPending(ctx context.Context, t transport.Transport, pushDeps snapshot.PushDependencies, pending []*transport.UMHMessage, metrics *depspkg.MetricsRecorder) ([]*transport.UMHMessage, error) {
 	jwtToken := pushDeps.GetJWTToken()
 	authenticatedUUID := pushDeps.GetAuthenticatedUUID()
