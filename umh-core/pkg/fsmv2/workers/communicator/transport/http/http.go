@@ -40,33 +40,57 @@ const (
 	LongPollingBuffer = 1 * time.Second
 )
 
-// ErrorType classifies HTTP errors for intelligent backoff strategies.
+// ErrorType classifies transport-layer HTTP errors into categories that
+// determine how the system responds. Each type maps to a Prometheus counter
+// (via [CounterForErrorType]) and a transient/persistent classification
+// (via [IsTransient]) that controls whether the error propagates to the FSM
+// or is silently absorbed.
 type ErrorType int
 
 const (
 	// ErrorTypeUnknown represents an unclassified error.
 	ErrorTypeUnknown ErrorType = iota
 	// ErrorTypeCloudflareChallenge represents Cloudflare challenge page (429 + HTML "Just a moment").
+	// Persistent: requires network path change or Cloudflare allowlisting.
 	ErrorTypeCloudflareChallenge
 	// ErrorTypeBackendRateLimit represents backend rate limiting (429 + JSON + Retry-After).
+	// Transient: self-resolves after the rate limit window expires.
 	ErrorTypeBackendRateLimit
 	// ErrorTypeInvalidToken represents authentication failure (401/403).
+	// Persistent: requires re-authentication by the parent worker.
 	ErrorTypeInvalidToken
 	// ErrorTypeInstanceDeleted represents instance not found (404).
+	// Persistent: requires instance re-registration or human intervention.
 	ErrorTypeInstanceDeleted
 	// ErrorTypeServerError represents server-side errors (5xx).
+	// Transient: backend recovers on its own.
 	ErrorTypeServerError
 	// ErrorTypeProxyBlock represents proxy block pages (Zscaler, BlueCoat, etc.).
+	// Persistent: requires proxy configuration change.
 	ErrorTypeProxyBlock
-	// ErrorTypeNetwork represents network/connection errors.
+	// ErrorTypeNetwork represents network/connection errors (DNS, TCP, TLS).
+	// Transient: network path recovers on its own.
 	ErrorTypeNetwork
 	// ErrorTypeChannelFull represents inbound channel capacity exceeded.
-	// Not a transport error per se, but uses same classification for backoff.
+	// Transient: resolves as the consumer drains the channel.
+	// Not a transport error per se, but uses the same classification for backoff.
 	ErrorTypeChannelFull
 )
 
-// IsTransient reports whether the error type represents a transient condition
-// that typically self-resolves without human intervention.
+// IsTransient reports whether the error type represents a condition that
+// typically self-resolves without human intervention.
+//
+// Transient: Network, ServerError, ChannelFull, BackendRateLimit.
+// Persistent: everything else (InvalidToken, InstanceDeleted, ProxyBlock,
+// CloudflareChallenge, Unknown).
+//
+// The classification controls error propagation in push and pull actions:
+//   - Transient errors are suppressed (action returns nil). Metrics and
+//     DegradedState are still updated. The [failurerate.Tracker] monitors
+//     the rolling failure rate; if transient errors dominate the window,
+//     it fires a one-shot SentryWarn escalation.
+//   - Persistent errors propagate to the FSM as errors, triggering state
+//     transitions (recovering, re-authentication) and firing SentryError.
 func (e ErrorType) IsTransient() bool {
 	switch e {
 	case ErrorTypeNetwork, ErrorTypeServerError, ErrorTypeChannelFull, ErrorTypeBackendRateLimit:
