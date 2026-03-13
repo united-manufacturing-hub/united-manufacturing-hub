@@ -462,6 +462,22 @@ func (a *EditDataflowComponentAction) Execute() (interface{}, map[string]interfa
 	// Normalize the config
 	normalizedConfig := benthosserviceconfig.NormalizeBenthosConfig(benthosConfig)
 
+	// Preserve the existing DebugLevel so that UI edits don't reset it to false
+	debugLevel := false
+	fetchCtx, fetchCancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
+	defer fetchCancel()
+
+	existingCfg, err := a.configManager.GetConfig(fetchCtx, 0)
+	if err == nil {
+		for _, component := range existingCfg.DataFlow {
+			if dataflowcomponentserviceconfig.GenerateUUIDFromName(component.Name) == a.oldComponentUUID {
+				debugLevel = component.DebugLevel
+
+				break
+			}
+		}
+	}
+
 	// Create the DataFlowComponentConfig
 	dfc := config.DataFlowComponentConfig{
 		FSMInstanceConfig: config.FSMInstanceConfig{
@@ -478,6 +494,7 @@ func (a *EditDataflowComponentAction) Execute() (interface{}, map[string]interfa
 				Buffer:             normalizedConfig.Buffer,
 			},
 		},
+		DebugLevel: debugLevel,
 	}
 
 	a.dfc = dfc
