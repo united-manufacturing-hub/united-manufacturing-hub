@@ -44,7 +44,7 @@ const (
 // determine how the system responds. Each type maps to a Prometheus counter
 // (via [CounterForErrorType]) and a transient/persistent classification
 // (via [IsTransient]) that controls whether the error propagates to the FSM
-// or is silently absorbed.
+// or is suppressed at the action layer (metrics are still recorded).
 type ErrorType int
 
 const (
@@ -86,7 +86,7 @@ const (
 //
 // The classification controls error propagation in push and pull actions:
 //   - Transient errors are suppressed (action returns nil). Metrics and
-//     DegradedState are still updated. The [failurerate.Tracker] monitors
+//     DegradedState are still updated. The failurerate.Tracker monitors
 //     the rolling failure rate; if transient errors dominate the window,
 //     it fires a one-shot SentryWarn escalation.
 //   - Persistent errors propagate to the FSM as errors, triggering state
