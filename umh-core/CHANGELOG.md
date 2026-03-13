@@ -9,6 +9,8 @@
 
 ## [0.44.11]
 
+This release reduces steady-state container memory by roughly 30% on busy systems with many bridges and data flows.
+
 ### Improvements
 
 - Previously, internal timing metrics grew continuously in memory the longer your instance ran, consuming over 500 MB on busy systems with many bridges and data flows. These metrics now use fixed-size histogram buckets that no longer grow with uptime, reducing steady-state container memory by roughly 30%
