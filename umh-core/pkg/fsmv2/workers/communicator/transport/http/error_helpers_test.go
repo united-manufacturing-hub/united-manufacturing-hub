@@ -15,6 +15,7 @@
 package transport_test
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -27,7 +28,7 @@ import (
 
 var _ = Describe("ExtractErrorType", func() {
 	It("extracts type and RetryAfter from a TransportError", func() {
-		inner := fmt.Errorf("rate limited")
+		inner := errors.New("rate limited")
 		transportErr := httpTransport.NewTransportErrorForTest(
 			httpTransport.ErrorTypeBackendRateLimit, 429, "rate limited", 30*time.Second, inner,
 		)
@@ -38,7 +39,7 @@ var _ = Describe("ExtractErrorType", func() {
 	})
 
 	It("extracts type from a wrapped TransportError", func() {
-		inner := fmt.Errorf("server error")
+		inner := errors.New("server error")
 		transportErr := httpTransport.NewTransportErrorForTest(
 			httpTransport.ErrorTypeServerError, 500, "server error", 0, inner,
 		)
@@ -50,7 +51,7 @@ var _ = Describe("ExtractErrorType", func() {
 	})
 
 	It("defaults to ErrorTypeNetwork for non-TransportError", func() {
-		plainErr := fmt.Errorf("connection refused")
+		plainErr := errors.New("connection refused")
 
 		errType, retryAfter := httpTransport.ExtractErrorType(plainErr)
 		Expect(errType).To(Equal(httpTransport.ErrorTypeNetwork))
