@@ -4,14 +4,14 @@
 
 ### Fixes
 
-- **Fixed rapid container restarts when config.yaml is missing or invalid** -- the container previously restarted hundreds of times per minute and now waits 60 seconds before retrying, giving you time to fix the configuration
-- **Fixed container memory metrics showing host values instead of container limits** -- memory monitoring read host-level values even inside containers, while CPU monitoring already used cgroup-aware values. Memory metrics now read cgroup v2 limits and usage, so dashboards show correct container memory utilization
+- The container previously restarted hundreds of times per minute when config.yaml was missing or invalid and now waits 60 seconds before retrying, giving you time to fix the configuration
+- Previously, memory monitoring read host-level values even inside containers, while CPU monitoring already used cgroup-aware values. Memory metrics now read cgroup v2 limits and usage, so dashboards show correct container memory utilization
 
 ## [0.44.11]
 
 ### Improvements
 
-- **Reduced container memory by up to 30%** - Previously, internal timing metrics grew continuously in memory the longer your instance ran, consuming over 500 MB on busy systems with many bridges and data flows. These metrics now use fixed-size histogram buckets that no longer grow with uptime, reducing steady-state container memory by roughly 30%
+- Previously, internal timing metrics grew continuously in memory the longer your instance ran, consuming over 500 MB on busy systems with many bridges and data flows. These metrics now use fixed-size histogram buckets that no longer grow with uptime, reducing steady-state container memory by roughly 30%
 
 ## [0.44.10]
 
@@ -19,17 +19,17 @@ This release simplifies S7 addressing and fixes three edge cases in the Manageme
 
 ### Improvements
 
-- **Simplified S7 address format for non-Data Block memory areas** - Previously, S7 addresses for PE, PA, MK, C, and T areas required a block number that served no function. You can now write `PE.X0.0` instead of `PE0.X0.0`. The old format still works but logs a deprecation warning and will be removed in a future version. Data Block addresses (`DB1.DW20`) are unchanged
+- Previously, S7 addresses for PE, PA, MK, C, and T areas required a block number that served no function. You can now write `PE.X0.0` instead of `PE0.X0.0`. The old format still works but logs a deprecation warning and will be removed in a future version. Data Block addresses (`DB1.DW20`) are unchanged
 
 ### Fixes
 
-- **Fixed S7 DateAndTime crash** - The S7 `DateAndTime` data type crashed due to an incorrect buffer size and now reads correctly
-- **Fixed false "required" warnings in the Management Console editor** - Fields with children that already have default values were incorrectly marked as required when editing bridge configurations -- they are now correctly treated as optional
-- **Fixed deprecated fields not shown as deprecated in the editor** - Fields marked as deprecated in bridge plugin definitions were not flagged in the Management Console editor -- they now correctly appear as deprecated
+- The S7 `DateAndTime` data type crashed due to an incorrect buffer size and now reads correctly
+- Fields with children that already have default values were incorrectly marked as required when editing bridge configurations -- they are now correctly treated as optional
+- Fields marked as deprecated in bridge plugin definitions were not flagged in the Management Console editor -- they now correctly appear as deprecated
 
 ### Preview: FSMv2 Communicator
 
-- **Fixed instance appearing offline when the long-poll connection drops** -- Status updates and incoming commands now use independent connections, so a connection dropped by an enterprise proxy or firewall no longer prevents the instance from sending heartbeats. Requires `USE_FSMV2_TRANSPORT=true`
+- Status updates and incoming commands now use independent connections, so a connection dropped by an enterprise proxy or firewall no longer prevents the instance from sending heartbeats. Requires `USE_FSMV2_TRANSPORT=true`
 
 ## [0.44.9]
 
@@ -37,7 +37,7 @@ This release adds config backup as an opt-in preview and includes stability fixe
 
 ### Preview: Config Backup
 
-- **Config backup versioning** - Previously, config.yaml could be permanently lost during upgrades or crash loops with no way to recover. Timestamped backups are now created before every write, with deduplication to prevent churn during restarts, retaining the last 100 versions in /data/config-backups/
+- Previously, config.yaml could be permanently lost during upgrades or crash loops with no way to recover. Timestamped backups are now created before every write, with deduplication to prevent churn during restarts, retaining the last 100 versions in /data/config-backups/
 
 To enable, set the `ENABLE_CONFIG_BACKUP=true` environment variable and restart your container:
 
@@ -49,11 +49,11 @@ To verify, check that backup files appear in /data/config-backups/ after a confi
 
 ### Preview: FSMv2 Communicator
 
-- **Fixed high memory usage on busy systems** - The cleanup routine retained state history for 24 hours, allowing hundreds of thousands of entries to accumulate in RAM -- the retention window is now 1 hour, reducing steady-state memory by roughly 95%. Requires `USE_FSMV2_MEMORY_CLEANUP=true`
+- The cleanup routine retained state history for 24 hours, allowing hundreds of thousands of entries to accumulate in RAM -- the retention window is now 1 hour, reducing steady-state memory by roughly 95%. Requires `USE_FSMV2_MEMORY_CLEANUP=true`
 
-- **Fixed repeated "no workers in supervisor" error in logs** - The supervisor logged an error on every tick when the communicator temporarily had no workers during a restart cycle -- it now skips the tick and self-heals when workers return. Requires `USE_FSMV2_TRANSPORT=true`
+- The supervisor logged an error on every tick when the communicator temporarily had no workers during a restart cycle -- it now skips the tick and self-heals when workers return. Requires `USE_FSMV2_TRANSPORT=true`
 
-- **Fixed potential crash when resetting transport** - A nil-pointer panic could occur in ResetTransportAction under specific timing conditions -- the action now safely handles nil state. Requires `USE_FSMV2_TRANSPORT=true`
+- A nil-pointer panic could occur in ResetTransportAction under specific timing conditions -- the action now safely handles nil state. Requires `USE_FSMV2_TRANSPORT=true`
 
 ## [0.44.8]
 
@@ -84,17 +84,17 @@ If this returns no output, FSMv2 is not running. Double-check that both environm
 
 ### Fixes
 
-- **Memory no longer grows unbounded over time** - Previously, long-running instances with FSMv2 enabled would slowly consume more and more memory because internal state changes accumulated without ever being cleaned up. One customer reported 13 GB of RAM usage at only 4 messages per second. Eventually, the system would kill the container to free memory, causing a brief data gap while it restarted. A periodic cleanup routine now keeps memory usage flat regardless of how long the instance runs. This fix requires `USE_FSMV2_MEMORY_CLEANUP=true` (see above).
+- Previously, long-running instances with FSMv2 enabled would slowly consume more and more memory because internal state changes accumulated without ever being cleaned up. One customer reported 13 GB of RAM usage at only 4 messages per second. Eventually, the system would kill the container to free memory, causing a brief data gap while it restarted. A periodic cleanup routine now keeps memory usage flat regardless of how long the instance runs. This fix requires `USE_FSMV2_MEMORY_CLEANUP=true` (see above).
 
-- **Instances no longer crash when a worker hits an unexpected error** - Previously, if one of the internal FSMv2 components encountered an unexpected error, it could crash the entire process, taking your instance offline until the container restarted. The system now catches these errors and automatically recovers. If the same error keeps recurring, the affected component is stopped to prevent crash loops while the rest of the system keeps running.
+- Previously, if one of the internal FSMv2 components encountered an unexpected error, it could crash the entire process, taking your instance offline until the container restarted. The system now catches these errors and automatically recovers. If the same error keeps recurring, the affected component is stopped to prevent crash loops while the rest of the system keeps running.
 
-- **Instances no longer get stuck after configuration changes** - When you changed a configuration and the system restarted an internal component, the new component could inherit a stale "shut down" signal from the old one and immediately stop itself. This could make the instance appear stuck or unresponsive after config changes. The shutdown signal is now properly cleared before starting a replacement.
+- When you changed a configuration and the system restarted an internal component, the new component could inherit a stale "shut down" signal from the old one and immediately stop itself. This could make the instance appear stuck or unresponsive after config changes. The shutdown signal is now properly cleared before starting a replacement.
 
 The crash fix and the configuration fix are automatically active for all FSMv2 users and do not require additional configuration.
 
-- **Updated container base image to Alpine with security patches**
+- Updated container base image to Alpine with security patches
 
-- **Updated Go dependencies**
+- Updated Go dependencies
 
 ## [0.44.7]
 
@@ -102,17 +102,17 @@ This release removes the 20-address limit for S7 bridges and adds per-slave regi
 
 ### New Features
 
-- **Modbus per-slave address mapping** - You can now assign specific registers to individual slaves when reading from a Modbus TCP/RTU gateway. Previously, all configured addresses were read from every slave, when different slaves expose different registers. This forced you to create separate connections per slave, which could exhaust the limited TCP connections available on many industrial gateways. Now you can add a `slaveID` field to each address entry to target a specific slave. Addresses without a `slaveID` are still read from all configured slaves, so existing configurations work without changes.
+- You can now assign specific registers to individual slaves when reading from a Modbus TCP/RTU gateway. Previously, all configured addresses were read from every slave, when different slaves expose different registers. This forced you to create separate connections per slave, which could exhaust the limited TCP connections available on many industrial gateways. Now you can add a `slaveID` field to each address entry to target a specific slave. Addresses without a `slaveID` are still read from all configured slaves, so existing configurations work without changes.
 
 ### Improvements
 
-- **S7 bridges no longer have a 20-address limit** - S7 connections now negotiate the actual PDU size with the PLC during connection and automatically split addresses into optimally-sized batches. If you previously had to create multiple connections to the same PLC because of the 20-address limit, you can now configure all addresses in a single connection. The `batchMaxSize` configuration field is deprecated and ignored — PDU size is handled automatically. Existing configs with `batchMaxSize` continue to work with a deprecation warning.
+- S7 connections now negotiate the actual PDU size with the PLC during connection and automatically split addresses into optimally-sized batches. If you previously had to create multiple connections to the same PLC because of the 20-address limit, you can now configure all addresses in a single connection. The `batchMaxSize` configuration field is deprecated and ignored — PDU size is handled automatically. Existing configs with `batchMaxSize` continue to work with a deprecation warning.
 
 ### Fixes
 
-- **Updated container base image to Alpine 3.23.3** - Includes security patches for OpenSSL vulnerabilities.
+- Updated container base image to Alpine 3.23.3, includes security patches for OpenSSL vulnerabilities.
 
-- **Updated Go dependencies** - Includes security fixes for the Gin framework (GraphQL API) and other dependencies.
+- Updated Go dependencies, includes security fixes for the Gin framework (GraphQL API) and other dependencies.
 
 ## [0.44.6]
 
@@ -120,11 +120,11 @@ This release fixes container startup failures on fresh deployments and enables a
 
 ### Fixes
 
-- **Containers now start reliably on fresh deployments** - Previously, containers could fail to start with "permission denied" errors when services tried to write to temporary directories. This only affected fresh installations without Docker cache - upgrades and cached deployments were not impacted. The issue was caused by a known Docker BuildKit limitation that doesn't preserve directory permissions during multi-stage builds.
+- Previously, containers could fail to start with "permission denied" errors when services tried to write to temporary directories. This only affected fresh installations without Docker cache - upgrades and cached deployments were not impacted. The issue was caused by a known Docker BuildKit limitation that doesn't preserve directory permissions during multi-stage builds.
 
 ### Improvements
 
-- **Bridge templates now support array and object variables** - You can now use complex variable types in your protocol converter YAML configurations, not just simple text values. This enables bulk configuration patterns like defining a list of PLC addresses with their tag names, units, and data contracts as a single variable, then iterating over them in your template with `{{ range .AddressMappings }}`. This is particularly useful for S7 and OPC UA bridges where you need to map many addresses to tags.
+- You can now use complex variable types in your protocol converter YAML configurations, not just simple text values. This enables bulk configuration patterns like defining a list of PLC addresses with their tag names, units, and data contracts as a single variable, then iterating over them in your template with `{{ range .AddressMappings }}`. This is particularly useful for S7 and OPC UA bridges where you need to map many addresses to tags.
 
 Example usage in YAML:
 ```yaml
@@ -151,11 +151,11 @@ Some users have experienced instances appearing "offline" in the Management Cons
 
 ### Improvements
 
-- **Infrastructure improvements** - Backend servers are now more stable, reducing connection interruptions.
+- Backend servers are now more stable, reducing connection interruptions.
 
 ### New Features
 
-- **Preview: FSMv2 Communicator** - If you've been experiencing connection issues (instances showing offline when they're actually running), you can try our completely rewritten communicator which has better recovery from network interruptions.
+- If you've been experiencing connection issues (instances showing offline when they're actually running), you can try our completely rewritten communicator which has better recovery from network interruptions.
 
 To enable, add to your `config.yaml`:
 ```yaml
@@ -185,9 +185,9 @@ This release fixes issues affecting OPC UA data collection and JavaScript-based 
 
 ### Fixes
 
-- **OPC UA connections now properly rediscover nodes after reconnecting** - Previously, if an OPC UA connection dropped and reconnected, the system would report zero detected nodes even though the server was available. Connections now correctly rediscover all nodes after network interruptions.
+- Previously, if an OPC UA connection dropped and reconnected, the system would report zero detected nodes even though the server was available. Connections now correctly rediscover all nodes after network interruptions.
 
-- **JavaScript processors now correctly handle numbers from JSON data** - When using the Tag Processor or Node-RED JS processor with structured JSON data, numeric values were incorrectly treated as objects instead of numbers. Calculations and comparisons involving numbers now work as expected.
+- When using the Tag Processor or Node-RED JS processor with structured JSON data, numeric values were incorrectly treated as objects instead of numbers. Calculations and comparisons involving numbers now work as expected.
 
 ## [0.44.3]
 
@@ -228,9 +228,9 @@ docker run -v umh-core-data:/data ...
 
 ### New Features
 
-- **Non-Root Container Security** - umh-core now runs all processes as a regular user instead of root. This limits potential damage if a vulnerability is ever exploited—even if an attacker gets into the container, they can't gain root-level access.
+- umh-core now runs all processes as a regular user instead of root. This limits potential damage if a vulnerability is ever exploited—even if an attacker gets into the container, they can't gain root-level access.
 
-- **Comprehensive Security Documentation** - New documentation at docs/production/security/ explains our security approach including threat model, shared responsibility, and compliance mapping for OWASP, NIST, and IEC 62443 standards.
+- New documentation at docs/production/security/ explains our security approach including threat model, shared responsibility, and compliance mapping for OWASP, NIST, and IEC 62443 standards.
 
 ### Breaking Changes
 
@@ -269,13 +269,13 @@ You can now add `debug_level: true` to your bridge or data flow configurations t
 
 ### Improvements
 
-- **More Flexible Component Naming** - You can now use uppercase letters (A-Z) in bridge and component names, in addition to lowercase letters, numbers, dashes, and underscores.
+- You can now use uppercase letters (A-Z) in bridge and component names, in addition to lowercase letters, numbers, dashes, and underscores.
 
 ### Fixes
 
-- **Security Vulnerability Fixed** - Fixed a critical security vulnerability where malicious service names could potentially be used to access sensitive files on the system. Component names are now strictly validated to prevent path traversal attacks.
+- Fixed a critical security vulnerability where malicious service names could potentially be used to access sensitive files on the system. Component names are now strictly validated to prevent path traversal attacks.
 
-- **Production Build Optimization** - Fixed production build configuration to properly disable CGO, improving binary performance and security.
+- Fixed production build configuration to properly disable CGO, improving binary performance and security.
 
 ## [0.43.16]
 
@@ -283,17 +283,17 @@ Browse operations now use a global worker pool instead of creating separate pool
 
 ### Improvements
 
-- **Documentation Consistency** - Getting started guide now uses "umh-core-data" folder name consistently across all documentation
+- Getting started guide now uses "umh-core-data" folder name consistently across all documentation
 
-- **OPC UA Server Compatibility** - Automatic detection and optimization for Ignition, Kepware, Siemens S7-1200/S7-1500, and Prosys OPC UA servers with vendor-specific tuning
+- Automatic detection and optimization for Ignition, Kepware, Siemens S7-1200/S7-1500, and Prosys OPC UA servers with vendor-specific tuning
 
-- **S7-1200 PLC Support** - Automatic detection when Siemens S7-1200 PLCs don't support DataChangeFilter (Micro Embedded Device Profile), preventing subscription errors
+- Automatic detection when Siemens S7-1200 PLCs don't support DataChangeFilter (Micro Embedded Device Profile), preventing subscription errors
 
 ### Fixes
 
-- **S7-1200 Subscription Errors** - Fixed StatusBadFilterNotAllowed errors when subscribing to S7-1200 PLCs with data filters
+- Fixed StatusBadFilterNotAllowed errors when subscribing to S7-1200 PLCs with data filters
 
-- **Browse Operation Stability** - Resolved potential deadlocks during high-concurrency browse operations
+- Resolved potential deadlocks during high-concurrency browse operations
 
 ## [0.43.15]
 
@@ -305,9 +305,9 @@ Deployments complete 80-90% faster for customers with large configurations (e.g.
 
 ### Fixes
 
-- **Location Levels Now Display Correctly** - Fixed issue where location level fields (Level 2-5) showed placeholder text like "Your level 2 name" instead of actual saved values in Bridge edit views.
+- Fixed issue where location level fields (Level 2-5) showed placeholder text like "Your level 2 name" instead of actual saved values in Bridge edit views.
 
-- **Log Spam Prevention** - When Management Console is unreachable, error logging is now limited to 1 error per second instead of 100 errors per second.
+- When Management Console is unreachable, error logging is now limited to 1 error per second instead of 100 errors per second.
 
 ## [0.43.14]
 
@@ -327,7 +327,7 @@ Fixed console.log() and other console methods in JavaScript processors to work l
 
 ### Fixes
 
-- **Connection Failures in High-Latency Regions** - Fixed timing mismatch that caused frequent EOF errors and connection failures in high-latency environments, particularly affecting sites in Japan and other regions with network latency above 200ms.
+- Fixed timing mismatch that caused frequent EOF errors and connection failures in high-latency environments, particularly affecting sites in Japan and other regions with network latency above 200ms.
 
 ## [0.43.13]
 
@@ -335,9 +335,9 @@ Fixed certificate generation issues that prevented connections to OPC UA servers
 
 ### Fixes
 
-- **Array Data Type Preservation** - Fixed array handling to preserve whether values are numbers or text when passing data between systems. Previously, arrays like [1,2,3] could be confused with ["1","2","3"], causing data processing errors.
+- Fixed array handling to preserve whether values are numbers or text when passing data between systems. Previously, arrays like [1,2,3] could be confused with ["1","2","3"], causing data processing errors.
 
-- **Service Restart Stability** - Fixed crashes that could occur when restarting services with active Sparkplug B connections.
+- Fixed crashes that could occur when restarting services with active Sparkplug B connections.
 
 ## [0.43.12]
 
@@ -347,13 +347,13 @@ You can disable this protection by setting `agent.enableResourceLimitBlocking: f
 
 ### Improvements
 
-- **Clearer Resource Blocking Messages** - When deployment is blocked due to resource constraints, you'll now see the actual reason (like "CPU utilization critical - Reduce system load or disable resource limits") instead of a generic timeout message.
+- When deployment is blocked due to resource constraints, you'll now see the actual reason (like "CPU utilization critical - Reduce system load or disable resource limits") instead of a generic timeout message.
 
 ### Fixes
 
-- **Redpanda Configuration Persistence** - Your custom Redpanda resource limits (CPU cores and memory settings) now persist correctly across restarts. Previously, MaxCores and MemoryPerCoreInBytes were being overwritten to defaults.
+- Your custom Redpanda resource limits (CPU cores and memory settings) now persist correctly across restarts. Previously, MaxCores and MemoryPerCoreInBytes were being overwritten to defaults.
 
-- **Blocked Converter UI Display** - Protocol converters blocked by resource limits now show their configured connection details (IP address, port, flows) in the UI instead of "Connection Unavailable".
+- Protocol converters blocked by resource limits now show their configured connection details (IP address, port, flows) in the UI instead of "Connection Unavailable".
 
 ## [0.43.10]
 
