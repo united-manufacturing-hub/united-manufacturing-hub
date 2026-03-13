@@ -349,13 +349,15 @@ func (c *ContainerMonitorService) getMemoryMetrics(ctx context.Context) (*models
 	usedBytes := vmStat.Used
 	totalBytes := vmStat.Total
 
-	// Try cgroup values — prefer container-aware limits over host values
+	// Try cgroup values: prefer container-aware limits over host values
 	cgroupInfo, cgroupErr := c.getCgroupMemoryInfo(ctx)
 	if cgroupErr == nil {
 		usedBytes = uint64(cgroupInfo.CurrentBytes)
 		if !cgroupInfo.Unlimited && cgroupInfo.LimitBytes > 0 {
 			totalBytes = uint64(cgroupInfo.LimitBytes)
 		}
+	} else {
+		c.logger.Debugf("cgroup memory info unavailable, using host values: %v", cgroupErr)
 	}
 
 	// Default to Active health
