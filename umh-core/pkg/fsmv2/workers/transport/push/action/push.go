@@ -158,13 +158,15 @@ drainLoop:
 // and we need per-message error handling to isolate poison messages.
 //
 // For each message the error cascade is:
-//  1. Context canceled → return remaining messages with cancellation error.
-//  2. Recoverable by parent (auth failure, proxy block, etc.) → return
+//  1. Context canceled (pre-push) → return remaining messages immediately.
+//  2. Push fails, context expired during push → return remaining with
+//     cancellation error.
+//  3. Recoverable by parent (auth failure, proxy block, etc.) → return
 //     remaining messages with error so the parent triggers re-authentication
 //     or transport reset.
-//  3. Poison message (unrecoverable) → log SentryWarn, drop the message,
+//  4. Poison message (unrecoverable) → log SentryWarn, drop the message,
 //     continue to next.
-//  4. Success → record metrics, continue.
+//  5. Success → record metrics, continue.
 //
 // Returns (nil, nil) when all messages are sent successfully. Otherwise
 // returns the unsent tail of pending so the caller can buffer them for
