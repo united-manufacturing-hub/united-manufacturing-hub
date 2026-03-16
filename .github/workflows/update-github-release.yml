@@ -64,7 +64,6 @@ jobs:
           # Fetch title from GitHub release (e.g., "v0.44.12 - Modbus Mapping" -> "Modbus Mapping")
           RAW_TITLE=$(gh release view "$VERSION" --json name --jq '.name' 2>/dev/null || echo "")
           TITLE=$(echo "$RAW_TITLE" | sed -E 's/^v?[0-9]+\.[0-9]+\.[0-9]+[[:space:]]*-[[:space:]]*//')
-          if [ "$TITLE" = "$RAW_TITLE" ]; then TITLE=""; fi
 
           if [ -n "$TITLE" ]; then
             # Generate slug (mirrors sync-changelog.ts generateSlug)
