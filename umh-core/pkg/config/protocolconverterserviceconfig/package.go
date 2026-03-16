@@ -94,7 +94,8 @@ type ProtocolConverterServiceConfigRuntime struct {
 //   - Location  – used to further specify the exact location of the converter in addition to the agent.location
 //     (which takes precedence). Will be added to the variables and then accessible via `{{ .location }}`.
 //
-// Note: debug_level is configured at the DFC level (dataflowcomponent_read/write) for single source of truth.
+// Note: debug_level is configured at the instance level (ProtocolConverterConfig.DebugLevel),
+// not inside dataflowcomponent_read/write (that field is yaml:"-" and ignored during unmarshal).
 //
 // Spec → (render) → Runtime → FSM.
 type ProtocolConverterServiceConfigSpec struct {

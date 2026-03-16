@@ -468,7 +468,9 @@ func (a *EditDataflowComponentAction) Execute() (interface{}, map[string]interfa
 	defer fetchCancel()
 
 	existingCfg, err := a.configManager.GetConfig(fetchCtx, 0)
-	if err == nil {
+	if err != nil {
+		a.actionLogger.Warnf("failed to fetch existing config to preserve DebugLevel for %s: %v", a.name, err)
+	} else {
 		for _, component := range existingCfg.DataFlow {
 			if dataflowcomponentserviceconfig.GenerateUUIDFromName(component.Name) == a.oldComponentUUID {
 				debugLevel = component.DebugLevel
