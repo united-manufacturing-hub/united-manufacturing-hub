@@ -35,10 +35,9 @@ func (s *StoppingState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	if snap.Desired.IsShutdownRequested() { //nolint:staticcheck // architecture invariant: shutdown check must be first conditional
 	}
 
-	// Unconditional transition to Stopped. The decision to stop was already made
-	// on entry to StoppingState. The supervisor handles child teardown independently.
-	// Previously, waiting for ChildrenHealthy==0 && ChildrenUnhealthy==0 caused a
-	// cascade deadlock when children were stuck in Stopping (ENG-4608).
+	// Cleanup hook: add resource cleanup here if needed.
+	// Self-return during cleanup MUST carry an action — never nil.
+
 	return fsmv2.Result[any, any](&StoppedState{}, fsmv2.SignalNone, nil,
 		fmt.Sprintf("stop complete: children healthy=%d, unhealthy=%d",
 			snap.Observed.ChildrenHealthy, snap.Observed.ChildrenUnhealthy))

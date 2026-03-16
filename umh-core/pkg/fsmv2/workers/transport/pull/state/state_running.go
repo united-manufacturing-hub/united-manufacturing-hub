@@ -43,7 +43,7 @@ func (s *RunningState) Next(snapAny any) fsmv2.NextResult[any, any] {
 
 	if snap.Observed.IsStopRequired() {
 		return fsmv2.Result[any, any](&StoppingState{}, fsmv2.SignalNone, nil,
-			fmt.Sprintf("stop required: shutdown=%t, parentState=%s", snap.Desired.IsShutdownRequested(), snap.Observed.ParentMappedState))
+			fmt.Sprintf("stop required: shutdown=%t, parentState(observed)=%s", snap.Desired.IsShutdownRequested(), snap.Observed.ParentMappedState))
 	}
 
 	if snap.Observed.ConsecutiveErrors >= errorDegradedThreshold {

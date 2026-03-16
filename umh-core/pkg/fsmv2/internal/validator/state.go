@@ -1039,3 +1039,139 @@ func GetStateFilePath(fsmv2Dir, typeName string) string {
 
 	return filepath.Join(fsmv2Dir, "workers", "example", fileName+".go")
 }
+
+// ValidateStoppingStateNoCatchAllSelfReturn checks that states embedding StoppingBase
+// do not have a catch-all self-return with nil action (which causes deadlocks).
+// Self-return WITH an action is allowed (cleanup in progress).
+func ValidateStoppingStateNoCatchAllSelfReturn(baseDir string) []Violation {
+	var violations []Violation
+
+	stateFiles := FindStateFiles(baseDir)
+
+	for _, file := range stateFiles {
+		fileViolations := checkStoppingStateNoCatchAllSelfReturn(file)
+		violations = append(violations, fileViolations...)
+	}
+
+	return violations
+}
+
+// checkStoppingStateNoCatchAllSelfReturn checks a single file for the stopping deadlock pattern.
+// A StoppingBase state is flagged if it has NO return path that transitions to a different state.
+// States that wait for supervisor-controlled conditions (e.g., children count) are safe because
+// they have at least one return that transitions to StoppedState.
+func checkStoppingStateNoCatchAllSelfReturn(filename string) []Violation {
+	var violations []Violation
+
+	fset := token.NewFileSet()
+
+	node, err := parser.ParseFile(fset, filename, nil, parser.ParseComments)
+	if err != nil {
+		return violations
+	}
+
+	// First, check if any state struct in this file embeds helpers.StoppingBase.
+	embedsStoppingBase := false
+
+	ast.Inspect(node, func(n ast.Node) bool {
+		typeSpec, ok := n.(*ast.TypeSpec)
+		if !ok || !strings.HasSuffix(typeSpec.Name.Name, "State") {
+			return true
+		}
+
+		structType, ok := typeSpec.Type.(*ast.StructType)
+		if !ok {
+			return true
+		}
+
+		for _, field := range structType.Fields.List {
+			if len(field.Names) == 0 {
+				if selExpr, ok := field.Type.(*ast.SelectorExpr); ok {
+					if pkgIdent, ok := selExpr.X.(*ast.Ident); ok {
+						if pkgIdent.Name == "helpers" && selExpr.Sel.Name == "StoppingBase" {
+							embedsStoppingBase = true
+
+							return false
+						}
+					}
+				}
+			}
+		}
+
+		return true
+	})
+
+	if !embedsStoppingBase {
+		return violations
+	}
+
+	// Check that the Next() method has at least one return that transitions to a different state
+	// or carries a non-nil action. If all returns are self-returns with nil action, the state
+	// will deadlock (no path to progress).
+	ast.Inspect(node, func(n ast.Node) bool {
+		funcDecl, ok := n.(*ast.FuncDecl)
+		if !ok || funcDecl.Name.Name != "Next" {
+			return true
+		}
+
+		if funcDecl.Body == nil || len(funcDecl.Body.List) == 0 {
+			return true
+		}
+
+		hasProgressPath := false
+
+		ast.Inspect(funcDecl.Body, func(bodyNode ast.Node) bool {
+			retStmt, ok := bodyNode.(*ast.ReturnStmt)
+			if !ok || len(retStmt.Results) != 1 {
+				return true
+			}
+
+			stateResult, _, actionResult := extractResultArgsWithSignal(retStmt.Results[0])
+			if stateResult == nil {
+				return true
+			}
+
+			// Check if this return transitions to a different state (not self)
+			isSelfReturn := false
+			if ident, ok := stateResult.(*ast.Ident); ok && ident.Name == "s" {
+				isSelfReturn = true
+			}
+
+			if !isSelfReturn {
+				// Transitions to a different state — this is a progress path
+				hasProgressPath = true
+
+				return false
+			}
+
+			// Self-return with non-nil action is also a progress path (cleanup in progress)
+			if actionResult != nil {
+				if ident, ok := actionResult.(*ast.Ident); !ok || ident.Name != "nil" {
+					hasProgressPath = true
+
+					return false
+				}
+			}
+
+			return true
+		})
+
+		if !hasProgressPath {
+			// Get position of the last return for the violation
+			lastStmt := funcDecl.Body.List[len(funcDecl.Body.List)-1]
+
+			pos := fset.Position(lastStmt.Pos())
+			violations = append(violations, Violation{
+				File: filename,
+				Line: pos.Line,
+				Type: "STOPPING_STATE_DEADLOCK",
+				Message: "StoppingState has no path to progress (all returns are self-returns with nil action). " +
+					"StoppingState must have at least one return that transitions to StoppedState or carries a cleanup action.",
+			})
+		}
+
+		return true
+	})
+
+	return violations
+}
