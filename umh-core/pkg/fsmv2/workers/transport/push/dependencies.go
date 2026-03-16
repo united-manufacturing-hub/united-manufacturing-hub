@@ -102,7 +102,10 @@ func (d *PushDependencies) RecordSuccess() {
 func (d *PushDependencies) RecordError() {
 	d.RetryTracker().RecordError()
 	d.parentDeps.RecordError()
-	d.failureRate.RecordOutcome(false)
+	if d.failureRate.RecordOutcome(false) {
+		d.BaseDependencies.GetLogger().SentryWarn(deps.FeatureCommunicator, d.GetHierarchyPath(), "persistent_push_failure",
+			deps.Float64("failure_rate", d.failureRate.FailureRate()))
+	}
 }
 
 func (d *PushDependencies) GetConsecutiveErrors() int {
