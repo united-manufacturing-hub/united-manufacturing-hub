@@ -29,6 +29,10 @@ on:
         description: 'Version to sync (e.g., v0.44.8). Required for workflow_dispatch.'
         required: false
         type: string
+      title:
+        description: 'Title for the changelog entry (5-10 words). If omitted for push triggers, fetched from the GitHub release.'
+        required: false
+        type: string
 
 jobs:
   sync:
@@ -53,6 +57,25 @@ jobs:
             fi
             echo "version=$INPUT_VERSION" >> $GITHUB_OUTPUT
           fi
+
+      - name: Get release title
+        id: release-title
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: ${{ github.ref_name }}
+          INPUT_TITLE: ${{ github.event.inputs.title }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          if [ -n "$INPUT_TITLE" ]; then
+            title="$INPUT_TITLE"
+          elif [ "$EVENT_NAME" = "push" ]; then
+            title=$(gh release view "$TAG_NAME" --json name --jq '.name' 2>/dev/null || echo "")
+          fi
+          if [ -z "$title" ]; then
+            echo "Error: No title found. Create a GitHub release with a descriptive title, or pass --title via workflow_dispatch."
+            exit 1
+          fi
+          echo "title=$title" >> $GITHUB_OUTPUT
 
       - name: Checkout umh-core
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -87,10 +110,12 @@ jobs:
         working-directory: changelog-app
         env:
           SYNC_VERSION: ${{ steps.version.outputs.version }}
+          SYNC_TITLE: ${{ steps.release-title.outputs.title }}
         run: |
           npx tsx .github/scripts/sync-changelog.ts \
             --repo umh-core \
             --version "$SYNC_VERSION" \
+            --title "$SYNC_TITLE" \
             --changelog-path ../umh-core/umh-core/CHANGELOG.md \
             --images-path ../umh-core/umh-core/changelog-images \
             --output-path public/changelog/entries

@@ -60,8 +60,8 @@ jobs:
 
           # IMPORTANT: Slug generation must match sync-changelog.ts generateSlug()
           # in the changelog.umh.app repo. If that function changes, update this too.
-          # Extract first bold title (mirrors sync-changelog.ts extractTitle)
-          TITLE=$(grep -m1 -oP '(?<=\*\*).+?(?=\*\*)' /tmp/release-body.md || echo "")
+          # Fetch title from GitHub release (single source of truth, matches sync-changelog.yml)
+          TITLE=$(gh release view "$VERSION" --json name --jq '.name' 2>/dev/null || echo "")
 
           if [ -n "$TITLE" ]; then
             # Generate slug (mirrors sync-changelog.ts generateSlug)

@@ -142,6 +142,7 @@ Every PR with user-visible changes must add an entry to `umh-core/CHANGELOG.md` 
 - **Never create a new version section** — only add to the existing topmost `## [X.Y.Z]` section
 - **No trailing periods** on bullet points
 - On tag push, a sync workflow automatically creates entries in changelog.umh.app from CHANGELOG.md
+- **Release titles**: When creating a GitHub release, use a descriptive title (5-10 words, e.g., "Modbus Per-Slave Address Mapping") — this becomes the changelog.umh.app entry title
 - GitHub Release notes are automatically populated from CHANGELOG.md by the `update-github-release.yml` workflow (runs on tag push). The job extracts the version's section, transforms headers for standalone display, and appends a changelog.umh.app link. You can still edit the Release body manually after if needed.
 
 ## Support & Troubleshooting Workflows
