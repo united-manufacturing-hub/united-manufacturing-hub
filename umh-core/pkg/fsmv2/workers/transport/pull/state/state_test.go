@@ -358,12 +358,30 @@ var _ = Describe("StoppingState", func() {
 		Expect(result.State).To(BeAssignableToTypeOf(&state.StoppedState{}))
 	})
 
-	It("should stay in Stopping when stop condition not yet met", func() {
+	It("should transition to Stopped unconditionally (ENG-4608)", func() {
 		snap := makeSnapshot(config.DesiredStateRunning, false, 0, true, true)
 		result := s.Next(snap)
-		Expect(result.State).To(BeAssignableToTypeOf(&state.StoppingState{}))
+		Expect(result.State).To(BeAssignableToTypeOf(&state.StoppedState{}))
 		Expect(result.Signal).To(Equal(fsmv2.SignalNone))
-		Expect(result.Reason).To(ContainSubstring("stopping"))
+		Expect(result.Reason).To(ContainSubstring("stop complete"))
+	})
+
+	It("ENG-4608: should not get stuck when parent recovers from Starting to Running", func() {
+		// Reproduction: transport parent temporarily enters Starting for token refresh,
+		// which maps to "stopped" for children. Pull enters Stopping. Parent returns to
+		// Running, but pull was permanently stuck in Stopping because IsStopRequired()
+		// returned false (parent is Running again, shutdown not requested).
+		// Fix: StoppingState always transitions to Stopped. StoppedState handles recovery.
+		snap := makeSnapshot(config.DesiredStateRunning, false, 0, true, true)
+		result := s.Next(snap)
+		Expect(result.State).To(BeAssignableToTypeOf(&state.StoppedState{}),
+			"StoppingState must not get stuck when parent recovers to Running")
+
+		// Verify that StoppedState recovers to Running
+		stopped := &state.StoppedState{}
+		result = stopped.Next(snap)
+		Expect(result.State).To(BeAssignableToTypeOf(&state.RunningState{}),
+			"StoppedState should recover to Running when ShouldBeRunning is true")
 	})
 
 	It("should return a valid String()", func() {
