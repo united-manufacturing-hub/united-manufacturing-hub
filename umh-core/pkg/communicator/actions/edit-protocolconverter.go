@@ -603,25 +603,28 @@ func (a *EditProtocolConverterAction) awaitRollout(pcConfig config.ProtocolConve
 
 				if a.dfcType == DFCTypeEmpty {
 					// For empty DFC type (connection/location/state update only)
-					// Check if connection port matches
-					nmapPort := strconv.FormatUint(
-						uint64(pcSnapshot.ServiceInfo.ConnectionObservedState.ServiceInfo.NmapObservedState.ObservedNmapServiceConfig.Port),
-						10,
-					)
-
-					if nmapPort != a.connectionPort {
-						currentStateReason = "waiting for nmap to connect to port " + a.connectionPort
-						SendActionReply(
-							a.instanceUUID,
-							a.userEmail,
-							a.actionUUID,
-							models.ActionExecuting,
-							RemainingPrefixSec(remainingSeconds)+currentStateReason,
-							a.outboundChannel,
-							models.EditProtocolConverter,
+					// Only check the nmap port when activating; when stopping, nmap is also
+					// stopped so it will never update to the new port.
+					if a.state != protocolconverter.OperationalStateStopped {
+						nmapPort := strconv.FormatUint(
+							uint64(pcSnapshot.ServiceInfo.ConnectionObservedState.ServiceInfo.NmapObservedState.ObservedNmapServiceConfig.Port),
+							10,
 						)
 
-						continue
+						if nmapPort != a.connectionPort {
+							currentStateReason = "waiting for nmap to connect to port " + a.connectionPort
+							SendActionReply(
+								a.instanceUUID,
+								a.userEmail,
+								a.actionUUID,
+								models.ActionExecuting,
+								RemainingPrefixSec(remainingSeconds)+currentStateReason,
+								a.outboundChannel,
+								models.EditProtocolConverter,
+							)
+
+							continue
+						}
 					}
 
 					// Check if the protocol converter has reached the desired state
@@ -661,6 +664,40 @@ func (a *EditProtocolConverterAction) awaitRollout(pcConfig config.ProtocolConve
 					}
 
 					return "", nil
+				}
+
+				// When desired state is "stopped", the Benthos process is not running so
+				// compareProtocolConverterDFCConfig always returns false (observed Input is nil).
+				// Check the state first to avoid an infinite loop in this case.
+				if a.state == protocolconverter.OperationalStateStopped {
+					if instance.CurrentState == protocolconverter.OperationalStateStopped {
+						SendActionReply(
+							a.instanceUUID,
+							a.userEmail,
+							a.actionUUID,
+							models.ActionExecuting,
+							RemainingPrefixSec(remainingSeconds)+"protocol converter successfully stopped",
+							a.outboundChannel,
+							models.EditProtocolConverter,
+						)
+
+						return "", nil
+					}
+
+					SendActionReply(
+						a.instanceUUID,
+						a.userEmail,
+						a.actionUUID,
+						models.ActionExecuting,
+						RemainingPrefixSec(remainingSeconds)+fmt.Sprintf(
+							"waiting for state to become stopped (current: %s)",
+							instance.CurrentState,
+						),
+						a.outboundChannel,
+						models.EditProtocolConverter,
+					)
+
+					continue
 				}
 
 				// Verify that the protocol converter has applied the desired DFC configuration.
