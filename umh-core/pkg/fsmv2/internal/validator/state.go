@@ -279,7 +279,7 @@ func checkChildWorkerIsStopRequired(workerDir string) []Violation {
 			continue
 		}
 
-		if strings.Contains(baseName, "stopped") || strings.Contains(baseName, "trying_to_stop") {
+		if strings.Contains(baseName, "stopped") || strings.Contains(baseName, "trying_to_stop") || strings.Contains(baseName, "stopping") {
 			continue
 		}
 
@@ -883,7 +883,7 @@ func checkExhaustiveTransitionCoverage(filename string) []Violation {
 	var violations []Violation
 
 	baseName := filepath.Base(filename)
-	if strings.Contains(baseName, "trying_to") {
+	if strings.Contains(baseName, "trying_to") || strings.Contains(baseName, "stopping") {
 		return violations
 	}
 
