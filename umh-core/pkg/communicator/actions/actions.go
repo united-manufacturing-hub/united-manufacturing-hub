@@ -216,11 +216,13 @@ func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePay
 	// Check if payload contains a state field and is a deploy protocol converter action. If yes, log any errors via Sentry
 	// TODO: This can be removed once the "Write flows" feature is fully implemented
 	var state string
-	if s, ok := payload.ActionPayload.(map[string]interface{})["state"]; ok {
-		if str, ok := s.(string); ok {
-			state = str
-		} else {
-			log.Errorf("Invalid state type: %v", s)
+	if m, ok := payload.ActionPayload.(map[string]interface{}); ok {
+		if s, ok := m["state"]; ok {
+			if str, ok := s.(string); ok {
+				state = str
+			} else {
+				log.Errorf("Invalid state type: %v", s)
+			}
 		}
 	}
 	isLogToSentry := state != "" && payload.ActionType == models.EditProtocolConverter
