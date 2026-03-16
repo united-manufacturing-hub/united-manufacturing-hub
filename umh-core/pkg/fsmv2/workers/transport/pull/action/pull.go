@@ -178,7 +178,7 @@ func (a *PullAction) Execute(ctx context.Context, depsAny any) error {
 	metrics.SetGauge(depspkg.GaugeLastPullLatencyMs, float64(pullLatency.Milliseconds()))
 
 	if len(messages) == 0 {
-		pullDeps.RecordSuccess()
+		pullDeps.RecordTransportSuccess()
 
 		return nil
 	}
@@ -198,7 +198,7 @@ func (a *PullAction) Execute(ctx context.Context, depsAny any) error {
 		}
 	}
 
-	pullDeps.RecordSuccess()
+	pullDeps.RecordTransportSuccess()
 
 	return nil
 }

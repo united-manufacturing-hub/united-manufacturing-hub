@@ -69,9 +69,10 @@ type mockPullDeps struct {
 	chanCapacity int
 	chanLength   int
 
-	recordTypedErrorCalls []typedErrorCall
-	recordSuccessCalls    int
-	recordErrorCalls      int
+	recordTypedErrorCalls          []typedErrorCall
+	recordSuccessCalls             int
+	recordTransportSuccessCalls    int
+	recordErrorCalls               int
 	consecutiveErrors     int
 	lastErrorType         httpTransport.ErrorType
 
@@ -154,6 +155,10 @@ func (m *mockPullDeps) RecordTypedError(errType httpTransport.ErrorType, retryAf
 
 func (m *mockPullDeps) RecordSuccess() {
 	m.recordSuccessCalls++
+}
+
+func (m *mockPullDeps) RecordTransportSuccess() {
+	m.recordTransportSuccessCalls++
 }
 
 func (m *mockPullDeps) RecordError() {
@@ -247,7 +252,7 @@ var _ = Describe("PullAction", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(mockTrans.pullCallCount).To(Equal(1))
-			Expect(mockDeps.recordSuccessCalls).To(Equal(1))
+			Expect(mockDeps.recordTransportSuccessCalls).To(Equal(1))
 
 			Expect(inboundBi).To(HaveLen(2))
 
@@ -302,14 +307,14 @@ var _ = Describe("PullAction", func() {
 	})
 
 	Describe("Empty pull (no messages)", func() {
-		It("should call RecordSuccess with no delivery", func() {
+		It("should call RecordTransportSuccess with no delivery", func() {
 			mockTrans.pullMessages = nil
 
 			err := act.Execute(context.Background(), mockDeps)
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(mockTrans.pullCallCount).To(Equal(1))
-			Expect(mockDeps.recordSuccessCalls).To(Equal(1))
+			Expect(mockDeps.recordTransportSuccessCalls).To(Equal(1))
 
 			Expect(inboundBi).To(BeEmpty())
 
@@ -337,7 +342,7 @@ var _ = Describe("PullAction", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(mockTrans.pullCallCount).To(Equal(1))
-			Expect(mockDeps.recordSuccessCalls).To(Equal(1))
+			Expect(mockDeps.recordTransportSuccessCalls).To(Equal(1))
 
 			// Only 3 non-nil messages should be delivered to channel
 			Expect(inboundBi).To(HaveLen(3))

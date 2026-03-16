@@ -94,23 +94,33 @@ func (d *PullDependencies) RecordTypedError(errType httpTransport.ErrorType, ret
 	}
 }
 
-// RecordSuccess resets the child's error state. It intentionally does NOT
-// propagate to the parent tracker. The parent tracker is only reset by auth
-// success (authenticate.go). This prevents a pull success from masking push
-// errors (or vice versa) on the shared parent counter.
+// RecordSuccess resets the child's backoff state on idle ticks (no pending work).
+// Does NOT propagate to the parent tracker (only auth success resets the parent).
+// Does NOT record a failure rate outcome. See RecordTransportSuccess for real HTTP ops.
 func (d *PullDependencies) RecordSuccess() {
 	d.errorMu.Lock()
 	d.lastErrorType = 0
 	d.errorMu.Unlock()
 
 	d.RetryTracker().RecordSuccess()
+}
+
+// RecordTransportSuccess records a successful HTTP transport operation.
+// Resets the child's backoff state AND records a success in the failure rate window.
+// Does NOT propagate to the parent tracker (only auth success resets the parent).
+// Called after successful Pull HTTP calls. See RecordSuccess for idle ticks.
+func (d *PullDependencies) RecordTransportSuccess() {
+	d.RecordSuccess()
 	d.failureRate.RecordOutcome(true)
 }
 
 func (d *PullDependencies) RecordError() {
 	d.RetryTracker().RecordError()
 	d.parentDeps.RecordError()
-	d.failureRate.RecordOutcome(false)
+	if d.failureRate.RecordOutcome(false) {
+		d.BaseDependencies.GetLogger().SentryWarn(deps.FeatureCommunicator, d.GetHierarchyPath(), "persistent_pull_failure",
+			deps.Float64("failure_rate", d.failureRate.FailureRate()))
+	}
 }
 
 func (d *PullDependencies) GetConsecutiveErrors() int {
