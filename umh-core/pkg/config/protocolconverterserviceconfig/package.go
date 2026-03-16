@@ -74,7 +74,8 @@ type ProtocolConverterServiceConfigRuntime struct {
 	ConnectionServiceConfig connectionserviceconfig.ConnectionServiceConfigRuntime `yaml:"connection"`
 
 	// DataflowComponentReadServiceConfig and DataflowComponentWriteServiceConfig
-	// contain the debug_level setting at the DFC level (single source of truth).
+	// hold the rendered DFC runtime configs. debug_level is configured at the
+	// instance level (ProtocolConverterConfig.DebugLevel) and propagated here at runtime.
 	DataflowComponentReadServiceConfig  dataflowcomponentserviceconfig.DataflowComponentServiceConfig `yaml:"dataflowcomponent_read"`
 	DataflowComponentWriteServiceConfig dataflowcomponentserviceconfig.DataflowComponentServiceConfig `yaml:"dataflowcomponent_write"`
 }

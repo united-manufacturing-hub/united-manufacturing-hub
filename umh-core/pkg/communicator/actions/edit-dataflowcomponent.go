@@ -471,12 +471,19 @@ func (a *EditDataflowComponentAction) Execute() (interface{}, map[string]interfa
 	if err != nil {
 		a.actionLogger.Warnf("failed to fetch existing config to preserve DebugLevel for %s: %v", a.name, err)
 	} else {
+		found := false
+
 		for _, component := range existingCfg.DataFlow {
 			if dataflowcomponentserviceconfig.GenerateUUIDFromName(component.Name) == a.oldComponentUUID {
 				debugLevel = component.DebugLevel
+				found = true
 
 				break
 			}
+		}
+
+		if !found {
+			a.actionLogger.Warnf("failed to preserve DebugLevel for %s: component UUID %s not found in current config", a.name, a.oldComponentUUID)
 		}
 	}
 
