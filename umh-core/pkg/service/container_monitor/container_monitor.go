@@ -354,6 +354,8 @@ func (c *ContainerMonitorService) getMemoryMetrics(ctx context.Context) (*models
 	if cgroupErr == nil {
 		usedBytes = uint64(cgroupInfo.CurrentBytes)
 		if !cgroupInfo.Unlimited && cgroupInfo.LimitBytes > 0 {
+			// Only override totalBytes when a cgroup limit is set.
+			// When unlimited, keep host total (same approach as CPU with unlimited quota).
 			totalBytes = uint64(cgroupInfo.LimitBytes)
 		}
 	} else {

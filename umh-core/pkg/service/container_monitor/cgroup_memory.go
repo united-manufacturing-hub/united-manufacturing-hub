@@ -30,9 +30,9 @@ type MemoryCgroupInfo struct {
 	Unlimited    bool  // True if memory.max is "max" (no limit set)
 }
 
-// ParseMemoryMax parses the memory.max file content.
+// parseMemoryMax parses the memory.max file content.
 // Returns the limit in bytes, whether the limit is unlimited ("max"), and any error.
-func ParseMemoryMax(data []byte) (limitBytes int64, unlimited bool, err error) {
+func parseMemoryMax(data []byte) (limitBytes int64, unlimited bool, err error) {
 	s := strings.TrimSpace(string(data))
 	if s == "" {
 		return 0, false, errors.New("empty memory.max data")
@@ -53,9 +53,9 @@ func ParseMemoryMax(data []byte) (limitBytes int64, unlimited bool, err error) {
 	return limitBytes, false, nil
 }
 
-// ParseMemoryCurrent parses the memory.current file content.
+// parseMemoryCurrent parses the memory.current file content.
 // Returns the current memory usage in bytes.
-func ParseMemoryCurrent(data []byte) (currentBytes int64, err error) {
+func parseMemoryCurrent(data []byte) (currentBytes int64, err error) {
 	s := strings.TrimSpace(string(data))
 	if s == "" {
 		return 0, errors.New("empty memory.current data")
@@ -84,7 +84,7 @@ func (c *ContainerMonitorService) getCgroupMemoryInfo(ctx context.Context) (*Mem
 		return nil, fmt.Errorf("failed to read memory.max: %w", err)
 	}
 
-	limitBytes, unlimited, err := ParseMemoryMax(memMaxData)
+	limitBytes, unlimited, err := parseMemoryMax(memMaxData)
 	if err != nil {
 		return nil, err
 	}
@@ -97,7 +97,7 @@ func (c *ContainerMonitorService) getCgroupMemoryInfo(ctx context.Context) (*Mem
 		return nil, fmt.Errorf("failed to read memory.current: %w", err)
 	}
 
-	currentBytes, err := ParseMemoryCurrent(memCurrentData)
+	currentBytes, err := parseMemoryCurrent(memCurrentData)
 	if err != nil {
 		return nil, err
 	}
