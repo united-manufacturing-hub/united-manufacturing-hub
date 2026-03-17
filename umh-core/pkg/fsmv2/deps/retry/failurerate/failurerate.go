@@ -16,6 +16,7 @@ package failurerate
 
 import (
 	"fmt"
+	"math"
 	"sync"
 )
 
@@ -56,12 +57,13 @@ type Tracker struct {
 
 // New creates a Tracker with the given configuration. The circular buffer
 // is pre-allocated to cfg.WindowSize. New panics if the configuration is
-// invalid (WindowSize <= 0, Threshold out of (0,1], or MinSamples > WindowSize).
+// invalid (WindowSize <= 0, Threshold out of (0,1] or NaN, MinSamples < 0,
+// or MinSamples > WindowSize).
 func New(cfg Config) *Tracker {
 	if cfg.WindowSize <= 0 {
 		panic(fmt.Sprintf("failurerate: WindowSize must be > 0, got %d", cfg.WindowSize))
 	}
-	if cfg.Threshold <= 0.0 || cfg.Threshold > 1.0 {
+	if math.IsNaN(cfg.Threshold) || cfg.Threshold <= 0.0 || cfg.Threshold > 1.0 {
 		panic(fmt.Sprintf("failurerate: Threshold must be in (0.0, 1.0], got %f", cfg.Threshold))
 	}
 	if cfg.MinSamples < 0 || cfg.MinSamples > cfg.WindowSize {

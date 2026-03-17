@@ -34,6 +34,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"slices"
 	"strconv"
 	"time"
 
@@ -97,6 +98,7 @@ type EditProtocolConverterAction struct {
 	dfcType        DFCType
 	connectionPort string
 	connectionIP   string
+	state          string
 
 	dfcPayload models.CDFCPayload
 
@@ -192,8 +194,14 @@ func (a *EditProtocolConverterAction) Parse(payload interface{}) error {
 		}
 	}
 
-	a.actionLogger.Debugf("Parsed EditProtocolConverter action payload: uuid=%s, name=%s, dfcType=%s",
-		a.protocolConverterUUID, a.name, a.dfcType)
+	// Extract the desired state, defaulting to "active" if not provided
+	a.state = pcPayload.State
+	if a.state == "" {
+		a.state = protocolconverter.OperationalStateActive
+	}
+
+	a.actionLogger.Debugf("Parsed EditProtocolConverter action payload: uuid=%s, name=%s, dfcType=%s, state=%s",
+		a.protocolConverterUUID, a.name, a.dfcType, a.state)
 
 	return nil
 }
@@ -213,6 +221,10 @@ func (a *EditProtocolConverterAction) Validate() error {
 		if err := ValidateCustomDataFlowComponentPayload(a.dfcPayload, false); err != nil {
 			return fmt.Errorf("invalid dataflow component configuration: %w", err)
 		}
+	}
+
+	if err := ValidateDataFlowComponentState(a.state); err != nil {
+		return err
 	}
 
 	return nil
@@ -449,6 +461,8 @@ func (a *EditProtocolConverterAction) applyMutation(benthosConfig dataflowcompon
 		return config.ProtocolConverterConfig{}, uuid.Nil, fmt.Errorf("invalid DFC type: %s", a.dfcType.String())
 	}
 
+	instanceToModify.DesiredFSMState = a.state
+
 	return instanceToModify, atomicEditUUID, nil
 }
 
@@ -482,23 +496,29 @@ func (a *EditProtocolConverterAction) persistConfig(atomicEditUUID uuid.UUID, ne
 	return oldConfig, nil
 }
 
-// awaitRollout waits for the protocol converter to become active and performs health checks.
+// awaitRollout waits for the protocol converter to reach the desired state and performs health checks.
 // Returns error code and error message for proper error handling in the caller.
-func (a *EditProtocolConverterAction) awaitRollout(oldConfig config.ProtocolConverterConfig) (string, error) {
-	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
-		fmt.Sprintf("Waiting for protocol converter %s to be active...", a.name),
-		a.outboundChannel, models.EditProtocolConverter)
-
-	return a.waitForComponentToBeActive(oldConfig)
-}
-
-// waitForComponentToBeActive polls live FSM state until the protocol converter
-// becomes active or the timeout hits. Unlike deploy operations, this method
-// does not remove the component on timeout since it's an edit operation.
+//
+// It polls live FSM state until the protocol converter reaches the desired state or the timeout hits.
+// Unlike deploy operations, this method does not remove the component on timeout since it's an edit operation.
 // The function returns the error code and the error message via an error object.
 // The error code is a string that is sent to the frontend to allow it to determine if the action can be retried or not.
 // The error message is sent to the frontend to allow the user to see the error message.
-func (a *EditProtocolConverterAction) waitForComponentToBeActive(oldConfig config.ProtocolConverterConfig) (string, error) {
+func (a *EditProtocolConverterAction) awaitRollout(pcConfig config.ProtocolConverterConfig) (string, error) {
+	SendActionReply(
+		a.instanceUUID,
+		a.userEmail,
+		a.actionUUID,
+		models.ActionExecuting,
+		fmt.Sprintf(
+			"Waiting for protocol converter %s to be %s...",
+			a.name,
+			a.state,
+		),
+		a.outboundChannel,
+		models.EditProtocolConverter,
+	)
+
 	ticker := time.NewTicker(constants.ActionTickerTime)
 	defer ticker.Stop()
 
@@ -522,14 +542,14 @@ func (a *EditProtocolConverterAction) waitForComponentToBeActive(oldConfig confi
 			ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
 			defer cancel()
 
-			_, err := a.configManager.AtomicEditProtocolConverter(ctx, a.atomicEditUUID, oldConfig)
+			_, err := a.configManager.AtomicEditProtocolConverter(ctx, a.atomicEditUUID, pcConfig)
 			if err != nil {
 				a.actionLogger.Errorf("Failed to rollback to previous configuration: %v", err)
-				stateMessage := fmt.Sprintf("Protocol converter '%s' edit timeout reached. It did not become active in time. Rolling back to previous configuration failed: %v", a.name, err)
+				stateMessage := fmt.Sprintf("Protocol converter '%s' edit timeout reached. It did not become %s in time. Rolling back to previous configuration failed: %v", a.name, a.state, err)
 
 				return models.ErrRetryRollbackTimeout, fmt.Errorf("%s", stateMessage)
 			} else {
-				stateMessage := fmt.Sprintf("Protocol converter '%s' edit timeout reached. It did not become active in time. Rolled back to previous configuration", a.name)
+				stateMessage := fmt.Sprintf("Protocol converter '%s' edit timeout reached. It did not become %s in time. Rolled back to previous configuration", a.name, a.state)
 
 				return models.ErrRetryRollbackTimeout, fmt.Errorf("%s", stateMessage)
 			}
@@ -537,107 +557,276 @@ func (a *EditProtocolConverterAction) waitForComponentToBeActive(oldConfig confi
 		case <-ticker.C:
 			// Get a deep copy of the system snapshot to prevent race conditions
 			systemSnapshot := a.systemSnapshotManager.GetDeepCopySnapshot()
-			if protocolConverterManager, exists := systemSnapshot.Managers[constants.ProtocolConverterManagerName]; exists {
-				instances := protocolConverterManager.GetInstances()
-				found := false
 
-				for _, instance := range instances {
-					curName := instance.ID
-					if curName != a.name {
-						continue
-					}
+			protocolConverterManager, exists := systemSnapshot.Managers[constants.ProtocolConverterManagerName]
+			if !exists {
+				SendActionReply(
+					a.instanceUUID,
+					a.userEmail,
+					a.actionUUID,
+					models.ActionExecuting,
+					RemainingPrefixSec(remainingSeconds)+"waiting for protocol converter manager to initialise",
+					a.outboundChannel,
+					models.EditProtocolConverter,
+				)
 
-					// Cast the instance LastObservedState to a protocolconverter instance
-					pcSnapshot, ok := instance.LastObservedState.(*protocolconverter.ProtocolConverterObservedStateSnapshot)
-					if !ok {
-						stateMessage := RemainingPrefixSec(remainingSeconds) + "waiting for state info of protocol converter instance"
-						SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
-							stateMessage, a.outboundChannel, models.EditProtocolConverter)
+				continue
+			}
 
-						continue
-					}
+			instances := protocolConverterManager.GetInstances()
+			found := false
 
-					found = true
+			for _, instance := range instances {
+				curName := instance.ID
+				if curName != a.name {
+					continue
+				}
 
-					currentStateReason := "current state: " + instance.CurrentState
+				// Cast the instance LastObservedState to a protocolconverter instance
+				pcSnapshot, ok := instance.LastObservedState.(*protocolconverter.ProtocolConverterObservedStateSnapshot)
+				if !ok {
+					SendActionReply(
+						a.instanceUUID,
+						a.userEmail,
+						a.actionUUID,
+						models.ActionExecuting,
+						RemainingPrefixSec(remainingSeconds)+"waiting for state info of protocol converter instance",
+						a.outboundChannel,
+						models.EditProtocolConverter,
+					)
 
-					if a.dfcType != DFCTypeEmpty {
-						// Verify that the protocol converter has applied the desired DFC configuration.
-						// We compare the desired DFC config with the observed DFC configuration
-						// in the protocol converter snapshot.
-						if !a.compareProtocolConverterDFCConfig(pcSnapshot) {
-							stateMessage := RemainingPrefixSec(remainingSeconds) + fmt.Sprintf("%s DFC config not yet applied. State: %s, Status reason: %s", a.dfcType.String(), instance.CurrentState, pcSnapshot.ServiceInfo.StatusReason)
-							SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
-								stateMessage, a.outboundChannel, models.EditProtocolConverter)
+					continue
+				}
+
+				found = true
+				currentStateReason := "current state: " + instance.CurrentState
+
+				if a.dfcType == DFCTypeEmpty {
+					// For empty DFC type (connection/location/state update only)
+					// Only check the nmap port when activating; when stopping, nmap is also
+					// stopped so it will never update to the new port.
+					if a.state != protocolconverter.OperationalStateStopped {
+						nmapPort := strconv.FormatUint(
+							uint64(pcSnapshot.ServiceInfo.ConnectionObservedState.ServiceInfo.NmapObservedState.ObservedNmapServiceConfig.Port),
+							10,
+						)
+
+						if nmapPort != a.connectionPort {
+							currentStateReason = "waiting for nmap to connect to port " + a.connectionPort
+							SendActionReply(
+								a.instanceUUID,
+								a.userEmail,
+								a.actionUUID,
+								models.ActionExecuting,
+								RemainingPrefixSec(remainingSeconds)+currentStateReason,
+								a.outboundChannel,
+								models.EditProtocolConverter,
+							)
 
 							continue
 						}
-
-						// Check if the protocol converter is in an active state
-						if instance.CurrentState == "active" || instance.CurrentState == "idle" {
-							stateMessage := RemainingPrefixSec(remainingSeconds) + fmt.Sprintf("protocol converter successfully activated with state '%s', %s DFC configuration verified", instance.CurrentState, a.dfcType.String())
-							SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, stateMessage,
-								a.outboundChannel, models.EditProtocolConverter)
-
-							return "", nil
-						}
-
-						// Get the current state reason for more detailed information
-						if pcSnapshot != nil && pcSnapshot.ServiceInfo.StatusReason != "" {
-							currentStateReason = pcSnapshot.ServiceInfo.StatusReason
-						}
-
-						// send the benthos logs to the user
-						logs = pcSnapshot.ServiceInfo.DataflowComponentReadObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosLogs
-
-						// only send the logs that have not been sent yet
-						if len(logs) > len(lastLogs) {
-							lastLogs = SendLimitedLogs(logs, lastLogs, a.instanceUUID, a.userEmail, a.actionUUID, a.outboundChannel, models.EditProtocolConverter, remainingSeconds)
-						}
-
-						// CheckBenthosLogLinesForConfigErrors is used to detect fatal configuration errors that would cause
-						// Benthos to enter a CrashLoop. When such errors are detected, we can immediately
-						// abort the startup process rather than waiting for the full timeout period,
-						// as these errors require configuration changes to resolve.
-						if CheckBenthosLogLinesForConfigErrors(logs) {
-							SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, Label("edit", a.name)+"configuration error detected. Rolling back...", a.outboundChannel, models.EditProtocolConverter)
-
-							ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
-							defer cancel()
-
-							a.actionLogger.Infof("rolling back to previous configuration with user variables: %v", oldConfig.ProtocolConverterServiceConfig.Variables.User)
-
-							_, err := a.configManager.AtomicEditProtocolConverter(ctx, a.atomicEditUUID, oldConfig)
-							if err != nil {
-								a.actionLogger.Errorf("failed to roll back protocol converter %s: %v", a.name, err)
-
-								return models.ErrConfigFileInvalid, fmt.Errorf("protocol converter '%s' has invalid configuration but could not be rolled back: %w. Please check your logs and consider manually restoring the previous configuration", a.name, err)
-							}
-
-							return models.ErrConfigFileInvalid, fmt.Errorf("protocol converter '%s' was rolled back to its previous configuration due to configuration errors. Please check the component logs, fix the configuration issues, and try editing again", a.name)
-						}
-					} else {
-						if strconv.FormatUint(uint64(pcSnapshot.ServiceInfo.ConnectionObservedState.ServiceInfo.NmapObservedState.ObservedNmapServiceConfig.Port), 10) != a.connectionPort {
-							currentStateReason = "waiting for nmap to connect to port " + a.connectionPort
-						} else {
-							return "", nil
-						}
 					}
 
-					stateMessage := RemainingPrefixSec(remainingSeconds) + currentStateReason
-					SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
-						stateMessage, a.outboundChannel, models.EditProtocolConverter)
+					// Check if the protocol converter has reached the desired state
+					hasReachedDesiredState := false
+
+					switch a.state {
+					case protocolconverter.OperationalStateActive:
+						hasReachedDesiredState = slices.Contains(
+							[]string{
+								protocolconverter.OperationalStateActive,
+								protocolconverter.OperationalStateIdle,
+								protocolconverter.OperationalStateStartingFailedDFCMissing,
+							},
+							instance.CurrentState,
+						)
+					case protocolconverter.OperationalStateStopped:
+						hasReachedDesiredState = instance.CurrentState == protocolconverter.OperationalStateStopped
+					}
+
+					if !hasReachedDesiredState {
+						currentStateReason = fmt.Sprintf(
+							"waiting for state to become %s (current: %s)",
+							a.state,
+							instance.CurrentState,
+						)
+						SendActionReply(
+							a.instanceUUID,
+							a.userEmail,
+							a.actionUUID,
+							models.ActionExecuting,
+							RemainingPrefixSec(remainingSeconds)+currentStateReason,
+							a.outboundChannel,
+							models.EditProtocolConverter,
+						)
+
+						continue
+					}
+
+					return "", nil
 				}
 
-				if !found {
-					stateMessage := RemainingPrefixSec(remainingSeconds) + "waiting for protocol converter to appear in the system"
-					SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
-						stateMessage, a.outboundChannel, models.EditProtocolConverter)
+				// When desired state is "stopped", the Benthos process is not running so
+				// compareProtocolConverterDFCConfig always returns false (observed Input is nil).
+				// Check the state first to avoid an infinite loop in this case.
+				if a.state == protocolconverter.OperationalStateStopped {
+					if instance.CurrentState == protocolconverter.OperationalStateStopped {
+						SendActionReply(
+							a.instanceUUID,
+							a.userEmail,
+							a.actionUUID,
+							models.ActionExecuting,
+							RemainingPrefixSec(remainingSeconds)+"protocol converter successfully stopped",
+							a.outboundChannel,
+							models.EditProtocolConverter,
+						)
+
+						return "", nil
+					}
+
+					SendActionReply(
+						a.instanceUUID,
+						a.userEmail,
+						a.actionUUID,
+						models.ActionExecuting,
+						RemainingPrefixSec(remainingSeconds)+fmt.Sprintf(
+							"waiting for state to become stopped (current: %s)",
+							instance.CurrentState,
+						),
+						a.outboundChannel,
+						models.EditProtocolConverter,
+					)
+
+					continue
 				}
-			} else {
-				stateMessage := RemainingPrefixSec(remainingSeconds) + "waiting for protocol converter manager to initialise"
-				SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
-					stateMessage, a.outboundChannel, models.EditProtocolConverter)
+
+				// Verify that the protocol converter has applied the desired DFC configuration.
+				// We compare the desired DFC config with the observed DFC configuration
+				// in the protocol converter snapshot.
+				if !a.compareProtocolConverterDFCConfig(pcSnapshot) {
+					SendActionReply(
+						a.instanceUUID,
+						a.userEmail,
+						a.actionUUID,
+						models.ActionExecuting,
+						RemainingPrefixSec(remainingSeconds)+fmt.Sprintf(
+							"%s DFC config not yet applied. State: %s, Status reason: %s",
+							a.dfcType.String(),
+							instance.CurrentState,
+							pcSnapshot.ServiceInfo.StatusReason,
+						),
+						a.outboundChannel,
+						models.EditProtocolConverter,
+					)
+
+					continue
+				}
+
+				// Check if the protocol converter has reached the desired state
+				// For "active" state: accept "active" or "idle"
+				// For "stopped" state: accept only "stopped"
+				hasReachedDesiredState := false
+
+				switch a.state {
+				case protocolconverter.OperationalStateActive:
+					hasReachedDesiredState = slices.Contains(
+						[]string{
+							protocolconverter.OperationalStateActive,
+							protocolconverter.OperationalStateIdle,
+						},
+						instance.CurrentState,
+					)
+				case protocolconverter.OperationalStateStopped:
+					hasReachedDesiredState = instance.CurrentState == protocolconverter.OperationalStateStopped
+				}
+
+				if hasReachedDesiredState {
+					terminal := map[string]string{
+						protocolconverter.OperationalStateActive:  "activated",
+						protocolconverter.OperationalStateStopped: "stopped",
+					}[a.state]
+					SendActionReply(
+						a.instanceUUID,
+						a.userEmail,
+						a.actionUUID,
+						models.ActionExecuting,
+						RemainingPrefixSec(remainingSeconds)+fmt.Sprintf(
+							"protocol converter successfully %s with state '%s', %s DFC configuration verified",
+							terminal,
+							instance.CurrentState,
+							a.dfcType.String(),
+						),
+						a.outboundChannel,
+						models.EditProtocolConverter,
+					)
+
+					return "", nil
+				}
+
+				// Get the current state reason for more detailed information
+				if pcSnapshot != nil && pcSnapshot.ServiceInfo.StatusReason != "" {
+					currentStateReason = pcSnapshot.ServiceInfo.StatusReason
+				}
+
+				// send the benthos logs to the user
+				logs = pcSnapshot.ServiceInfo.DataflowComponentReadObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosLogs
+
+				// only send the logs that have not been sent yet
+				if len(logs) > len(lastLogs) {
+					lastLogs = SendLimitedLogs(logs, lastLogs, a.instanceUUID, a.userEmail, a.actionUUID, a.outboundChannel, models.EditProtocolConverter, remainingSeconds)
+				}
+
+				// CheckBenthosLogLinesForConfigErrors is used to detect fatal configuration errors that would cause
+				// Benthos to enter a CrashLoop. When such errors are detected, we can immediately
+				// abort the startup process rather than waiting for the full timeout period,
+				// as these errors require configuration changes to resolve.
+				if CheckBenthosLogLinesForConfigErrors(logs) {
+					SendActionReply(
+						a.instanceUUID,
+						a.userEmail,
+						a.actionUUID,
+						models.ActionExecuting,
+						Label("edit", a.name)+"configuration error detected. Rolling back...",
+						a.outboundChannel,
+						models.EditProtocolConverter,
+					)
+
+					ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
+					defer cancel()
+
+					a.actionLogger.Infof("rolling back to previous configuration with user variables: %v", pcConfig.ProtocolConverterServiceConfig.Variables.User)
+
+					_, err := a.configManager.AtomicEditProtocolConverter(ctx, a.atomicEditUUID, pcConfig)
+					if err != nil {
+						a.actionLogger.Errorf("failed to roll back protocol converter %s: %v", a.name, err)
+
+						return models.ErrConfigFileInvalid, fmt.Errorf("protocol converter '%s' has invalid configuration but could not be rolled back: %w. Please check your logs and consider manually restoring the previous configuration", a.name, err)
+					}
+
+					return models.ErrConfigFileInvalid, fmt.Errorf("protocol converter '%s' was rolled back to its previous configuration due to configuration errors. Please check the component logs, fix the configuration issues, and try editing again", a.name)
+				}
+
+				SendActionReply(
+					a.instanceUUID,
+					a.userEmail,
+					a.actionUUID,
+					models.ActionExecuting,
+					RemainingPrefixSec(remainingSeconds)+currentStateReason,
+					a.outboundChannel,
+					models.EditProtocolConverter,
+				)
+			}
+
+			if !found {
+				SendActionReply(
+					a.instanceUUID,
+					a.userEmail,
+					a.actionUUID,
+					models.ActionExecuting,
+					RemainingPrefixSec(remainingSeconds)+"waiting for protocol converter to appear in the system",
+					a.outboundChannel,
+					models.EditProtocolConverter,
+				)
 			}
 		}
 	}
@@ -796,4 +985,9 @@ func (a *EditProtocolConverterAction) GetProtocolConverterUUID() uuid.UUID {
 // GetDFCType returns the DFC type (read/write) - exposed for testing purposes.
 func (a *EditProtocolConverterAction) GetDFCType() string {
 	return a.dfcType.String()
+}
+
+// GetState returns the desired state - exposed for testing purposes.
+func (a *EditProtocolConverterAction) GetState() string {
+	return a.state
 }

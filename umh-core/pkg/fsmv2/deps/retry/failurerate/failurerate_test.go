@@ -15,6 +15,7 @@
 package failurerate_test
 
 import (
+	"math"
 	"sync"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -317,6 +318,12 @@ var _ = Describe("Failure Rate Tracker", func() {
 		It("should panic on Threshold > 1.0", func() {
 			Expect(func() {
 				failurerate.New(failurerate.Config{WindowSize: 100, Threshold: 1.5, MinSamples: 10})
+			}).To(Panic())
+		})
+
+		It("should panic on NaN Threshold", func() {
+			Expect(func() {
+				failurerate.New(failurerate.Config{WindowSize: 100, Threshold: math.NaN(), MinSamples: 10})
 			}).To(Panic())
 		})
 

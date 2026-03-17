@@ -41,4 +41,7 @@ const (
 	// FeatureFSMv1ConfigManager covers the FSMv1 config manager: config loading,
 	// writing, backup, and validation.
 	FeatureFSMv1ConfigManager Feature = "fsmv1_config_manager"
+
+	// FeatureDisableReadFlows controls the feature about activating and deactivating read flows.
+	FeatureDisableReadFlows Feature = "disable_read_flows"
 )
