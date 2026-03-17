@@ -5,6 +5,7 @@
 ### Fixes
 
 - **Fixed rapid container restarts when config.yaml is missing or invalid** -- the container previously restarted hundreds of times per minute and now waits 60 seconds before retrying, giving you time to fix the configuration
+- **Fixed container memory metrics showing host values instead of container limits** -- memory monitoring read host-level values even inside containers, while CPU monitoring already used cgroup-aware values. Memory metrics now read cgroup v2 limits and usage, so dashboards show correct container memory utilization
 
 ## [0.44.11]
 
