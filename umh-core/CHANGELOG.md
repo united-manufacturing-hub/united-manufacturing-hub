@@ -86,11 +86,11 @@ If this returns no output, FSMv2 is not running. Double-check that both environm
 
 ### Fixes
 
-- Previously, long-running instances with FSMv2 enabled would slowly consume more and more memory because internal state changes accumulated without ever being cleaned up. One customer reported 13 GB of RAM usage at only 4 messages per second. Eventually, the system would kill the container to free memory, causing a brief data gap while it restarted. A periodic cleanup routine now keeps memory usage flat regardless of how long the instance runs. This fix requires `USE_FSMV2_MEMORY_CLEANUP=true` (see above).
+- Previously, long-running instances with FSMv2 enabled would slowly consume more and more memory because internal state changes accumulated without ever being cleaned up. One customer reported 13 GB of RAM usage at only 4 messages per second. Eventually, the system would kill the container to free memory, causing a brief data gap while it restarted. A periodic cleanup routine now keeps memory usage flat regardless of how long the instance runs. This fix requires `USE_FSMV2_MEMORY_CLEANUP=true` (see above)
 
-- Previously, if one of the internal FSMv2 components encountered an unexpected error, it could crash the entire process, taking your instance offline until the container restarted. The system now catches these errors and automatically recovers. If the same error keeps recurring, the affected component is stopped to prevent crash loops while the rest of the system keeps running.
+- Previously, if one of the internal FSMv2 components encountered an unexpected error, it could crash the entire process, taking your instance offline until the container restarted. The system now catches these errors and automatically recovers. If the same error keeps recurring, the affected component is stopped to prevent crash loops while the rest of the system keeps running
 
-- When you changed a configuration and the system restarted an internal component, the new component could inherit a stale "shut down" signal from the old one and immediately stop itself. This could make the instance appear stuck or unresponsive after config changes. The shutdown signal is now properly cleared before starting a replacement.
+- When you changed a configuration and the system restarted an internal component, the new component could inherit a stale "shut down" signal from the old one and immediately stop itself. This could make the instance appear stuck or unresponsive after config changes. The shutdown signal is now properly cleared before starting a replacement
 
 The crash fix and the configuration fix are automatically active for all FSMv2 users and do not require additional configuration.
 
@@ -104,17 +104,17 @@ This release removes the 20-address limit for S7 bridges and adds per-slave regi
 
 ### New Features
 
-- You can now assign specific registers to individual slaves when reading from a Modbus TCP/RTU gateway. Previously, all configured addresses were read from every slave, when different slaves expose different registers. This forced you to create separate connections per slave, which could exhaust the limited TCP connections available on many industrial gateways. Now you can add a `slaveID` field to each address entry to target a specific slave. Addresses without a `slaveID` are still read from all configured slaves, so existing configurations work without changes.
+- You can now assign specific registers to individual slaves when reading from a Modbus TCP/RTU gateway. Previously, all configured addresses were read from every slave, when different slaves expose different registers. This forced you to create separate connections per slave, which could exhaust the limited TCP connections available on many industrial gateways. Now you can add a `slaveID` field to each address entry to target a specific slave. Addresses without a `slaveID` are still read from all configured slaves, so existing configurations work without changes
 
 ### Improvements
 
-- S7 connections now negotiate the actual PDU size with the PLC during connection and automatically split addresses into optimally-sized batches. If you previously had to create multiple connections to the same PLC because of the 20-address limit, you can now configure all addresses in a single connection. The `batchMaxSize` configuration field is deprecated and ignored — PDU size is handled automatically. Existing configs with `batchMaxSize` continue to work with a deprecation warning.
+- S7 connections now negotiate the actual PDU size with the PLC during connection and automatically split addresses into optimally-sized batches. If you previously had to create multiple connections to the same PLC because of the 20-address limit, you can now configure all addresses in a single connection. The `batchMaxSize` configuration field is deprecated and ignored — PDU size is handled automatically. Existing configs with `batchMaxSize` continue to work with a deprecation warning
 
 ### Fixes
 
-- Updated container base image to Alpine 3.23.3, includes security patches for OpenSSL vulnerabilities.
+- Updated container base image to Alpine 3.23.3, includes security patches for OpenSSL vulnerabilities
 
-- Updated Go dependencies, includes security fixes for the Gin framework (GraphQL API) and other dependencies.
+- Updated Go dependencies, includes security fixes for the Gin framework (GraphQL API) and other dependencies
 
 ## [0.44.6]
 
@@ -122,11 +122,11 @@ This release fixes container startup failures on fresh deployments and enables a
 
 ### Fixes
 
-- Previously, containers could fail to start with "permission denied" errors when services tried to write to temporary directories. This only affected fresh installations without Docker cache - upgrades and cached deployments were not impacted. The issue was caused by a known Docker BuildKit limitation that doesn't preserve directory permissions during multi-stage builds.
+- Previously, containers could fail to start with "permission denied" errors when services tried to write to temporary directories. This only affected fresh installations without Docker cache - upgrades and cached deployments were not impacted. The issue was caused by a known Docker BuildKit limitation that doesn't preserve directory permissions during multi-stage builds
 
 ### Improvements
 
-- You can now use complex variable types in your protocol converter YAML configurations, not just simple text values. This enables bulk configuration patterns like defining a list of PLC addresses with their tag names, units, and data contracts as a single variable, then iterating over them in your template with `{{ range .AddressMappings }}`. This is particularly useful for S7 and OPC UA bridges where you need to map many addresses to tags.
+- You can now use complex variable types in your protocol converter YAML configurations, not just simple text values. This enables bulk configuration patterns like defining a list of PLC addresses with their tag names, units, and data contracts as a single variable, then iterating over them in your template with `{{ range .AddressMappings }}`. This is particularly useful for S7 and OPC UA bridges where you need to map many addresses to tags
 
 Example usage in YAML:
 ```yaml
@@ -153,11 +153,11 @@ Some users have experienced instances appearing "offline" in the Management Cons
 
 ### Improvements
 
-- Backend servers are now more stable, reducing connection interruptions.
+- Backend servers are now more stable, reducing connection interruptions
 
 ### New Features
 
-- If you've been experiencing connection issues (instances showing offline when they're actually running), you can try our completely rewritten communicator which has better recovery from network interruptions.
+- If you've been experiencing connection issues (instances showing offline when they're actually running), you can try our completely rewritten communicator which has better recovery from network interruptions
 
 To enable, add to your `config.yaml`:
 ```yaml
@@ -187,9 +187,9 @@ This release fixes issues affecting OPC UA data collection and JavaScript-based 
 
 ### Fixes
 
-- Previously, if an OPC UA connection dropped and reconnected, the system would report zero detected nodes even though the server was available. Connections now correctly rediscover all nodes after network interruptions.
+- Previously, if an OPC UA connection dropped and reconnected, the system would report zero detected nodes even though the server was available. Connections now correctly rediscover all nodes after network interruptions
 
-- When using the Tag Processor or Node-RED JS processor with structured JSON data, numeric values were incorrectly treated as objects instead of numbers. Calculations and comparisons involving numbers now work as expected.
+- When using the Tag Processor or Node-RED JS processor with structured JSON data, numeric values were incorrectly treated as objects instead of numbers. Calculations and comparisons involving numbers now work as expected
 
 ## [0.44.3]
 
@@ -207,7 +207,7 @@ The Docker Compose stack includes umh-core, TimescaleDB for time-series storage,
 
 ### Fixes
 
-- Fixed confusing documentation about Docker volume permissions when upgrading from versions before v0.44.0. Previously, the guide showed a `chown` command that didn't match the volume path in the `docker run` command. The guide now correctly explains how to fix permissions for both named volumes (using a temporary container) and bind mounts (using `chown` directly).
+- Fixed confusing documentation about Docker volume permissions when upgrading from versions before v0.44.0. Previously, the guide showed a `chown` command that didn't match the volume path in the `docker run` command. The guide now correctly explains how to fix permissions for both named volumes (using a temporary container) and bind mounts (using `chown` directly)
 
 ## [0.44.0]
 
@@ -230,13 +230,13 @@ docker run -v umh-core-data:/data ...
 
 ### New Features
 
-- umh-core now runs all processes as a regular user instead of root. This limits potential damage if a vulnerability is ever exploited—even if an attacker gets into the container, they can't gain root-level access.
+- umh-core now runs all processes as a regular user instead of root. This limits potential damage if a vulnerability is ever exploited—even if an attacker gets into the container, they can't gain root-level access
 
-- New documentation at docs/production/security/ explains our security approach including threat model, shared responsibility, and compliance mapping for OWASP, NIST, and IEC 62443 standards.
+- New documentation at docs/production/security/ explains our security approach including threat model, shared responsibility, and compliance mapping for OWASP, NIST, and IEC 62443 standards
 
 ### Breaking Changes
 
-- Container now runs as non-root user (UID 1000). Existing data directories require ownership change before upgrade.
+- Container now runs as non-root user (UID 1000). Existing data directories require ownership change before upgrade
 
 ## [0.43.18]
 
@@ -271,13 +271,13 @@ You can now add `debug_level: true` to your bridge or data flow configurations t
 
 ### Improvements
 
-- You can now use uppercase letters (A-Z) in bridge and component names, in addition to lowercase letters, numbers, dashes, and underscores.
+- You can now use uppercase letters (A-Z) in bridge and component names, in addition to lowercase letters, numbers, dashes, and underscores
 
 ### Fixes
 
-- Fixed a critical security vulnerability where malicious service names could potentially be used to access sensitive files on the system. Component names are now strictly validated to prevent path traversal attacks.
+- Fixed a critical security vulnerability where malicious service names could potentially be used to access sensitive files on the system. Component names are now strictly validated to prevent path traversal attacks
 
-- Fixed production build configuration to properly disable CGO, improving binary performance and security.
+- Fixed production build configuration to properly disable CGO, improving binary performance and security
 
 ## [0.43.16]
 
@@ -307,9 +307,9 @@ Deployments complete 80-90% faster for customers with large configurations (e.g.
 
 ### Fixes
 
-- Fixed issue where location level fields (Level 2-5) showed placeholder text like "Your level 2 name" instead of actual saved values in Bridge edit views.
+- Fixed issue where location-level fields (Level 2-5) showed placeholder text like "Your level 2 name" instead of actual saved values in Bridge edit views
 
-- When Management Console is unreachable, error logging is now limited to 1 error per second instead of 100 errors per second.
+- When Management Console is unreachable, error logging is now limited to 1 error per second instead of 100 errors per second
 
 ## [0.43.14]
 
@@ -329,7 +329,7 @@ Fixed console.log() and other console methods in JavaScript processors to work l
 
 ### Fixes
 
-- Fixed timing mismatch that caused frequent EOF errors and connection failures in high-latency environments, particularly affecting sites in Japan and other regions with network latency above 200ms.
+- Fixed timing mismatch that caused frequent EOF errors and connection failures in high-latency environments, particularly affecting sites in Japan and other regions with network latency above 200ms
 
 ## [0.43.13]
 
@@ -337,9 +337,9 @@ Fixed certificate generation issues that prevented connections to OPC UA servers
 
 ### Fixes
 
-- Fixed array handling to preserve whether values are numbers or text when passing data between systems. Previously, arrays like [1,2,3] could be confused with ["1","2","3"], causing data processing errors.
+- Fixed array handling to preserve whether values are numbers or text when passing data between systems. Previously, arrays like [1,2,3] could be confused with ["1","2","3"], causing data processing errors
 
-- Fixed crashes that could occur when restarting services with active Sparkplug B connections.
+- Fixed crashes that could occur when restarting services with active Sparkplug B connections
 
 ## [0.43.12]
 
@@ -349,13 +349,13 @@ You can disable this protection by setting `agent.enableResourceLimitBlocking: f
 
 ### Improvements
 
-- When deployment is blocked due to resource constraints, you'll now see the actual reason (like "CPU utilization critical - Reduce system load or disable resource limits") instead of a generic timeout message.
+- When deployment is blocked due to resource constraints, you'll now see the actual reason (like "CPU utilization critical - Reduce system load or disable resource limits") instead of a generic timeout message
 
 ### Fixes
 
-- Your custom Redpanda resource limits (CPU cores and memory settings) now persist correctly across restarts. Previously, MaxCores and MemoryPerCoreInBytes were being overwritten to defaults.
+- Your custom Redpanda resource limits (CPU cores and memory settings) now persist correctly across restarts. Previously, MaxCores and MemoryPerCoreInBytes were being overwritten to defaults
 
-- Protocol converters blocked by resource limits now show their configured connection details (IP address, port, flows) in the UI instead of "Connection Unavailable".
+- Protocol converters blocked by resource limits now show their configured connection details (IP address, port, flows) in the UI instead of "Connection Unavailable"
 
 ## [0.43.10]
 

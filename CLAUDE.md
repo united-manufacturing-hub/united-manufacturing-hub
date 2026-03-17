@@ -917,10 +917,10 @@ This PR bumps benthos-umh from vX.Y.Z to vA.B.C
 
 🐛 Bug Fixes
 
-**[User-facing symptom]** (from vX.Y.Z+1)
+[User-facing symptom] (from vX.Y.Z+1)
 [One concise paragraph: what was broken, why, what's fixed, technical details inline]
 
-**[User-facing symptom]** (from vA.B.C)
+[User-facing symptom] (from vA.B.C)
 [Same format]
 
 📝 Notes
@@ -932,7 +932,7 @@ This PR bumps benthos-umh from vX.Y.Z to vA.B.C
 **Important**:
 - Include ALL versions between current and target (jumping 0.11.3 → 0.11.5 needs both 0.11.4 and 0.11.5)
 - Focus on user impact, not code changes
-- Keep concise: bold title + inline version marker + one paragraph
+- Keep concise: plain title + inline version marker + one paragraph
 - Add emoji sections (🐛, 💪, 📝) for visual hierarchy
 - This PR description becomes the changelog for next umh-core release
 
