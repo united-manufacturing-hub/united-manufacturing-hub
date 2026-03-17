@@ -86,33 +86,23 @@ func (d *PushDependencies) RecordTypedError(errType httpTransport.ErrorType, ret
 	}
 }
 
-// RecordSuccess resets the child's backoff state on idle ticks (no pending work).
-// Does NOT propagate to the parent tracker (only auth success resets the parent).
-// Does NOT record a failure rate outcome. See RecordTransportSuccess for real HTTP ops.
+// RecordSuccess resets the child's error state. It intentionally does NOT
+// propagate to the parent tracker. The parent tracker is only reset by auth
+// success (authenticate.go). This prevents a push success from masking pull
+// errors (or vice versa) on the shared parent counter.
 func (d *PushDependencies) RecordSuccess() {
 	d.errorMu.Lock()
 	d.lastErrorType = 0
 	d.errorMu.Unlock()
 
 	d.RetryTracker().RecordSuccess()
-}
-
-// RecordTransportSuccess records a successful HTTP transport operation.
-// Resets the child's backoff state AND records a success in the failure rate window.
-// Does NOT propagate to the parent tracker (only auth success resets the parent).
-// Called after successful Push HTTP calls. See RecordSuccess for idle ticks.
-func (d *PushDependencies) RecordTransportSuccess() {
-	d.RecordSuccess()
 	d.failureRate.RecordOutcome(true)
 }
 
 func (d *PushDependencies) RecordError() {
 	d.RetryTracker().RecordError()
 	d.parentDeps.RecordError()
-	if d.failureRate.RecordOutcome(false) {
-		d.BaseDependencies.GetLogger().SentryWarn(deps.FeatureCommunicator, d.GetHierarchyPath(), "persistent_push_failure",
-			deps.Float64("failure_rate", d.failureRate.FailureRate()))
-	}
+	d.failureRate.RecordOutcome(false)
 }
 
 func (d *PushDependencies) GetConsecutiveErrors() int {

@@ -34,7 +34,6 @@ type PullDependencies interface {
 	GetJWTToken() string
 	RecordTypedError(errType httpTransport.ErrorType, retryAfter time.Duration)
 	RecordSuccess()
-	RecordTransportSuccess()
 	RecordError()
 	GetConsecutiveErrors() int
 	GetLastErrorType() httpTransport.ErrorType

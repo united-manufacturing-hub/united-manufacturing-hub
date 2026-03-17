@@ -133,7 +133,7 @@ drainLoop:
 
 	pushLatency := time.Since(pushStart)
 
-	pushDeps.RecordTransportSuccess()
+	pushDeps.RecordSuccess()
 
 	var bytesPushed int64
 
@@ -208,7 +208,7 @@ func (a *PushAction) retryPending(ctx context.Context, t transport.Transport, pu
 			continue
 		}
 
-		pushDeps.RecordTransportSuccess()
+		pushDeps.RecordSuccess()
 		metrics.IncrementCounter(depspkg.CounterPushOps, 1)
 		metrics.IncrementCounter(depspkg.CounterPushSuccess, 1)
 		metrics.IncrementCounter(depspkg.CounterMessagesPushed, 1)

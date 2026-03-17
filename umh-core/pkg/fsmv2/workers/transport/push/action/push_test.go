@@ -65,10 +65,9 @@ type mockPushDeps struct {
 	metricsRecorder *deps.MetricsRecorder
 	logger          deps.FSMLogger
 
-	recordTypedErrorCalls          []typedErrorCall
-	recordSuccessCalls             int
-	recordTransportSuccessCalls    int
-	recordErrorCalls               int
+	recordTypedErrorCalls []typedErrorCall
+	recordSuccessCalls    int
+	recordErrorCalls      int
 	consecutiveErrors     int
 	lastErrorType         httpTransport.ErrorType
 
@@ -132,10 +131,6 @@ func (m *mockPushDeps) RecordTypedError(errType httpTransport.ErrorType, retryAf
 
 func (m *mockPushDeps) RecordSuccess() {
 	m.recordSuccessCalls++
-}
-
-func (m *mockPushDeps) RecordTransportSuccess() {
-	m.recordTransportSuccessCalls++
 }
 
 func (m *mockPushDeps) RecordError() {
@@ -233,7 +228,7 @@ var _ = Describe("PushAction", func() {
 			Expect(mockTrans.pushCallCount).To(Equal(1))
 			Expect(mockTrans.pushedMsgs).To(HaveLen(2))
 
-			Expect(mockDeps.recordTransportSuccessCalls).To(Equal(1))
+			Expect(mockDeps.recordSuccessCalls).To(Equal(1))
 
 			drained := mockDeps.metricsRecorder.Drain()
 			Expect(drained.Counters[string(deps.CounterPushOps)]).To(Equal(int64(1)))

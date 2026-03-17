@@ -33,7 +33,6 @@ type PushDependencies interface {
 	GetAuthenticatedUUID() string
 	RecordTypedError(errType httpTransport.ErrorType, retryAfter time.Duration)
 	RecordSuccess()
-	RecordTransportSuccess()
 	RecordError()
 	GetConsecutiveErrors() int
 	GetLastErrorType() httpTransport.ErrorType
