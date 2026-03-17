@@ -136,7 +136,7 @@ The United Manufacturing Hub (UMH) is an Industrial IoT platform for manufacturi
 
 Every PR with user-visible changes must add an entry to `umh-core/CHANGELOG.md` under the current (topmost) version section. Use the `/changelog-entry` skill to generate entries when available. For writing guidelines and voice, follow the `changelog-writing` skill. When skills are unavailable (e.g., in subagents), follow these rules:
 
-- **Format**: `- **Bold title** - Description in problem-solution format` — lead with the problem ("Previously, ..."), then the solution ("Now, ...")
+- **Format**: Plain bullets with no bold lead-in — lead with the problem ("Previously, ..."), then the solution ("Now, ...")
 - **Categories** (in order): `### Breaking Changes`, `### New Features`, `### Improvements`, `### Fixes`
 - **No entry needed** for: CI/CD changes, refactoring, test-only changes, documentation-only changes
 - **Never create a new version section** — only add to the existing topmost `## [X.Y.Z]` section
@@ -917,10 +917,10 @@ This PR bumps benthos-umh from vX.Y.Z to vA.B.C
 
 🐛 Bug Fixes
 
-**[User-facing symptom]** (from vX.Y.Z+1)
+[User-facing symptom] (from vX.Y.Z+1)
 [One concise paragraph: what was broken, why, what's fixed, technical details inline]
 
-**[User-facing symptom]** (from vA.B.C)
+[User-facing symptom] (from vA.B.C)
 [Same format]
 
 📝 Notes
@@ -932,7 +932,7 @@ This PR bumps benthos-umh from vX.Y.Z to vA.B.C
 **Important**:
 - Include ALL versions between current and target (jumping 0.11.3 → 0.11.5 needs both 0.11.4 and 0.11.5)
 - Focus on user impact, not code changes
-- Keep concise: bold title + inline version marker + one paragraph
+- Keep concise: plain title + inline version marker + one paragraph
 - Add emoji sections (🐛, 💪, 📝) for visual hierarchy
 - This PR description becomes the changelog for next umh-core release
 
