@@ -18,9 +18,7 @@ package gatekeeper
 
 import (
 	"context"
-	"sort"
 	"sync"
-	"time"
 
 	"go.uber.org/zap"
 
@@ -50,9 +48,6 @@ type Gatekeeper struct {
 	validator        validator.Validator
 	certHandler      certificatehandler.Handler
 
-	// External state (read-only)
-	subHandler SubHandler
-
 	// Raw channels (received, not owned)
 	inboundChan  chan *transport.UMHMessage
 	outboundChan chan *transport.UMHMessage
@@ -73,7 +68,6 @@ type Gatekeeper struct {
 	// Config (set by options, or defaults)
 	verifiedInboundSize  int
 	verifiedOutboundSize int
-	certFetchInterval    time.Duration
 
 	mu      sync.RWMutex
 	running bool
@@ -83,7 +77,6 @@ type Gatekeeper struct {
 func New(
 	inbound chan *transport.UMHMessage,
 	outbound chan *transport.UMHMessage,
-	subHandler SubHandler,
 	certHandler certificatehandler.Handler,
 	v validator.Validator,
 	logger *zap.SugaredLogger,
@@ -92,14 +85,12 @@ func New(
 	g := &Gatekeeper{
 		inboundChan:          inbound,
 		outboundChan:         outbound,
-		subHandler:           subHandler,
 		certHandler:          certHandler,
 		validator:            v,
 		protocolDetector:     protocol.NewDetector(logger),
 		compression:          compression.NewHandler(logger),
 		verifiedInboundSize:  DefaultVerifiedInboundBufferSize,
 		verifiedOutboundSize: DefaultVerifiedOutboundBufferSize,
-		certFetchInterval:    DefaultCertFetchInterval,
 		logger:               logger,
 	}
 	for _, opt := range opts {
@@ -122,11 +113,10 @@ func (g *Gatekeeper) Start(ctx context.Context) {
 	ctx, g.cancel = context.WithCancel(ctx)
 	g.mu.Unlock()
 
-	g.wg.Add(4)
+	g.wg.Add(3)
 	go g.processInbound(ctx)
 	go g.processOutbound(ctx)
 	go g.processLegacyOutbound(ctx)
-	go g.fetchCertificates(ctx)
 }
 
 // Stop gracefully shuts down the Gatekeeper.
@@ -143,7 +133,6 @@ func (g *Gatekeeper) Stop() {
 	g.mu.Unlock()
 
 	g.wg.Wait()
-	close(g.verifiedInbound)
 }
 
 // VerifiedInboundChan returns the channel for the Router to read verified messages.
@@ -179,6 +168,12 @@ func (g *Gatekeeper) CertificateHandler() certificatehandler.Handler {
 
 func (g *Gatekeeper) processInbound(ctx context.Context) {
 	defer g.wg.Done()
+	defer func() {
+		r := recover()
+		if r != nil {
+			g.logger.Errorw("panic in processInbound", "panic", r)
+		}
+	}()
 
 	for {
 		select {
@@ -213,18 +208,21 @@ func (g *Gatekeeper) handleInbound(ctx context.Context, msg *transport.UMHMessag
 
 	// 4. Validate permissions
 	cert := g.certHandler.Certificate(msg.Email)
-	if cert != nil {
-		rootCA := g.certHandler.RootCA()
-		intermediates := g.certHandler.IntermediateCerts(msg.Email)
-		allowed, err := g.validator.ValidateUserPermissions(cert, string(messageContent.MessageType), "", rootCA, intermediates)
-		if err != nil {
-			g.logger.Warnw("Permission validation error", "email", msg.Email, "error", err)
-			return
-		}
-		if !allowed {
-			g.logger.Warnw("Permission denied", "email", msg.Email, "messageType", messageContent.MessageType)
-			return
-		}
+	if cert == nil {
+		g.logger.Warnw("No certificate cached, dropping message", "email", msg.Email)
+		return
+	}
+
+	rootCA := g.certHandler.RootCA()
+	intermediates := g.certHandler.IntermediateCerts(msg.Email)
+	allowed, err := g.validator.ValidateUserPermissions(cert, string(messageContent.MessageType), "", rootCA, intermediates)
+	if err != nil {
+		g.logger.Warnw("Permission validation error", "email", msg.Email, "error", err)
+		return
+	}
+	if !allowed {
+		g.logger.Warnw("Permission denied", "email", msg.Email, "messageType", messageContent.MessageType)
+		return
 	}
 
 	// 5. Send to verified channel
@@ -241,6 +239,12 @@ func (g *Gatekeeper) handleInbound(ctx context.Context, msg *transport.UMHMessag
 
 func (g *Gatekeeper) processOutbound(ctx context.Context) {
 	defer g.wg.Done()
+	defer func() {
+		r := recover()
+		if r != nil {
+			g.logger.Errorw("panic in processOutbound", "panic", r)
+		}
+	}()
 
 	for {
 		select {
@@ -284,6 +288,12 @@ func (g *Gatekeeper) handleOutbound(ctx context.Context, msg *models.MessageWith
 // TODO(ENG-4558): Remove once actions write MessageWithSender directly.
 func (g *Gatekeeper) processLegacyOutbound(ctx context.Context) {
 	defer g.wg.Done()
+	defer func() {
+		r := recover()
+		if r != nil {
+			g.logger.Errorw("panic in processLegacyOutbound", "panic", r)
+		}
+	}()
 
 	for {
 		select {
@@ -306,27 +316,3 @@ func (g *Gatekeeper) processLegacyOutbound(ctx context.Context) {
 	}
 }
 
-func (g *Gatekeeper) fetchCertificates(ctx context.Context) {
-	defer g.wg.Done()
-
-	ticker := time.NewTicker(g.certFetchInterval)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			emails := g.subHandler.Subscribers()
-			sort.Strings(emails)
-			for _, email := range emails {
-				if ctx.Err() != nil {
-					return
-				}
-				if err := g.certHandler.FetchAndStore(ctx, email); err != nil {
-					g.logger.Warnw("Failed to fetch certificate", "email", email, "error", err)
-				}
-			}
-		}
-	}
-}

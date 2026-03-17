@@ -18,6 +18,7 @@ package validator
 
 import (
 	"crypto/x509"
+	"errors"
 
 	"go.uber.org/zap"
 )
@@ -44,7 +45,7 @@ func (v *NoopValidator) ValidateUserPermissions(
 }
 
 // DecryptRootCA returns an error in the noop implementation since
-// encryption/decryption requires the cryptolib dependency.
+// decryption requires the cryptolib dependency.
 func (v *NoopValidator) DecryptRootCA(_ string, _ string, _ string) (string, error) {
-	return "", nil
+	return "", errors.New("DecryptRootCA requires cryptolib build tag")
 }

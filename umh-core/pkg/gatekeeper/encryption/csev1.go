@@ -31,11 +31,11 @@ func NewCseV1Handler(log *zap.SugaredLogger) Handler {
 }
 
 func (h *CseV1Handler) Decrypt(data []byte) ([]byte, error) {
-	// TODO: Implement actual decryption
+	// TODO(ENG-4627): Implement actual decryption
 	return nil, errors.New("cseV1 decryption not yet implemented")
 }
 
 func (h *CseV1Handler) Encrypt(data []byte) ([]byte, error) {
-	// TODO: Implement actual encryption
+	// TODO(ENG-4627): Implement actual encryption
 	return nil, errors.New("cseV1 encryption not yet implemented")
 }

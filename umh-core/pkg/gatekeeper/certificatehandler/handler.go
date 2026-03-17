@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"strings"
 	"sync"
 
 	"go.uber.org/zap"
@@ -105,7 +106,7 @@ func (h *CertHandler) Certificate(email string) *x509.Certificate {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 
-	cached := h.userCerts[email]
+	cached := h.userCerts[strings.ToLower(email)]
 	if cached != nil {
 		return cached.cert
 	}
@@ -118,7 +119,7 @@ func (h *CertHandler) IntermediateCerts(email string) []*x509.Certificate {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 
-	cached := h.userCerts[email]
+	cached := h.userCerts[strings.ToLower(email)]
 	if cached != nil {
 		return cached.certificateChain
 	}
@@ -143,12 +144,17 @@ func (h *CertHandler) FetchAndStore(ctx context.Context, email string) error {
 
 	cookies := map[string]string{"token": jwt}
 
-	resp, err := h.fetchUserCertificate(ctx, email, &cookies)
+	normalizedEmail := strings.ToLower(email)
+
+	resp, err := h.fetchUserCertificate(ctx, normalizedEmail, &cookies)
 	if err != nil {
-		return fmt.Errorf("fetch certificate for %s: %w", email, err)
+		return fmt.Errorf("fetch certificate for %s: %w", normalizedEmail, err)
 	}
 
 	if resp == nil {
+		// HTTP 204: user has no certificate (revoked or not yet issued).
+		// Clear any previously cached cert.
+		h.deleteCertificate(normalizedEmail)
 		return nil
 	}
 
@@ -162,7 +168,7 @@ func (h *CertHandler) FetchAndStore(ctx context.Context, email string) error {
 		return fmt.Errorf("parse certificate chain for %s: %w", email, err)
 	}
 
-	h.setCertificate(resp.UserEmail, cert, chain)
+	h.setCertificate(strings.ToLower(resp.UserEmail), cert, chain)
 
 	h.mu.RLock()
 	encryptedRootCA := h.encryptedRootCA
@@ -201,6 +207,13 @@ func (h *CertHandler) setCertificate(email string, cert *x509.Certificate, inter
 		cert:             cert,
 		certificateChain: intermediates,
 	}
+}
+
+func (h *CertHandler) deleteCertificate(email string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	delete(h.userCerts, email)
 }
 
 func (h *CertHandler) setRootCA(rootCA *x509.Certificate) {
