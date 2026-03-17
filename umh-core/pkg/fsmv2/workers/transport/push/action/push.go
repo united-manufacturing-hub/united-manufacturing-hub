@@ -99,8 +99,6 @@ drainLoop:
 	}
 
 	if len(messagesToPush) == 0 {
-		pushDeps.RecordSuccess()
-
 		return nil
 	}
 
