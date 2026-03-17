@@ -73,29 +73,15 @@ const (
 	BenthosGeneric Protocol = "benthos_generic"
 )
 
-// ProtocolVersion indicates the message protocol version.
-type ProtocolVersion string
-
-const (
-	V0    ProtocolVersion = ""       // legacy, no encryption
-	CseV1 ProtocolVersion = "cse_v1" // client-side encryption v1
-)
-
 // UMHMessage is sent between UMH instances and users.
 type UMHMessage struct {
-	Metadata        *MessageMetadata `json:"metadata"`
-	Email           string           `json:"email"`
-	Content         string           `json:"content"`
-	ProtocolVersion ProtocolVersion  `json:"protocolVersion,omitempty"`
-	InstanceUUID    uuid.UUID        `json:"umhInstance"`
+	Metadata     *MessageMetadata `json:"metadata"`
+	Email        string           `json:"email"`
+	Content      string           `json:"content"`
+	InstanceUUID uuid.UUID        `json:"umhInstance"`
 }
 
-// MessageWithSender is the output of Gatekeeper after decryption and validation.
-type MessageWithSender struct {
-	Content     UMHMessageContent
-	SenderEmail string
-	TraceID     string
-}
+
 
 // Define MessageType as a custom type for better type safety.
 type MessageType string

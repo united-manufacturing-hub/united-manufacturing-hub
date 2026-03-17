@@ -24,7 +24,6 @@ import (
 	v2 "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2/pull"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2/push"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/gatekeeper"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/subscriber"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/router"
@@ -51,7 +50,6 @@ type CommunicationState struct {
 	SubscriberHandler     *subscriber.Handler
 	OutboundChannel       chan *models.UMHMessage
 	Router                *router.Router
-	Gatekeeper            *gatekeeper.Gatekeeper
 	SystemSnapshotManager *fsm.SnapshotManager
 	Logger                *zap.SugaredLogger
 	TopicBrowserCache     *topicbrowser.Cache
@@ -444,15 +442,10 @@ func (c *CommunicationState) InitializeRouterForFSMv2() {
 		return
 	}
 
-	if c.Gatekeeper == nil {
-		sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "Gatekeeper is nil, cannot start router for FSMv2")
-
-		return
-	}
-
 	c.mu.Lock()
 	c.LoginResponseMu.RLock()
-	c.Router = router.NewRouterForFSMv2(c.Watchdog, c.Gatekeeper.VerifiedInboundChan(), c.LoginResponse.UUID, c.Gatekeeper.LegacyOutboundChan(), c.ReleaseChannel, c.SubscriberHandler, c.SystemSnapshotManager, c.ConfigManager, c.Logger)
+	// Note: Puller is nil for FSMv2 mode - FSMv2 handles pulling via SyncAction
+	c.Router = router.NewRouter(c.Watchdog, c.InboundChannel, c.LoginResponse.UUID, c.OutboundChannel, c.ReleaseChannel, c.SubscriberHandler, c.SystemSnapshotManager, c.ConfigManager, c.Logger)
 	c.LoginResponseMu.RUnlock()
 	c.mu.Unlock()
 

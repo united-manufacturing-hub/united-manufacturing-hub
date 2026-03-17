@@ -18,9 +18,7 @@ package gatekeeper
 
 import (
 	"context"
-	"sort"
 	"sync"
-	"time"
 
 	"go.uber.org/zap"
 
@@ -50,30 +48,27 @@ type Gatekeeper struct {
 	validator        validator.Validator
 	certHandler      certificatehandler.Handler
 
-	// External state (read-only)
-	subHandler SubHandler
-
 	// Raw channels (received, not owned)
 	inboundChan  chan *transport.UMHMessage
 	outboundChan chan *transport.UMHMessage
 
 	// Verified channels (created and owned by gatekeeper)
-	verifiedInbound  chan *models.MessageWithSender
-	verifiedOutbound chan *models.MessageWithSender
+	verifiedInbound  chan *transport.MessageWithSender
+	verifiedOutbound chan *transport.MessageWithSender
 
 	// Legacy outbound for pre-encoded models.UMHMessage from actions.
 	// TODO(ENG-4558): Remove once actions write MessageWithSender directly.
 	legacyOutbound chan *models.UMHMessage
 
 	// Runtime
-	logger *zap.SugaredLogger
-	cancel context.CancelFunc
-	wg     sync.WaitGroup
+	logger       *zap.SugaredLogger
+	cancel       context.CancelFunc
+	instanceUUID string
+	wg           sync.WaitGroup
 
 	// Config (set by options, or defaults)
 	verifiedInboundSize  int
 	verifiedOutboundSize int
-	certFetchInterval    time.Duration
 
 	mu      sync.RWMutex
 	running bool
@@ -83,7 +78,6 @@ type Gatekeeper struct {
 func New(
 	inbound chan *transport.UMHMessage,
 	outbound chan *transport.UMHMessage,
-	subHandler SubHandler,
 	certHandler certificatehandler.Handler,
 	v validator.Validator,
 	logger *zap.SugaredLogger,
@@ -92,21 +86,19 @@ func New(
 	g := &Gatekeeper{
 		inboundChan:          inbound,
 		outboundChan:         outbound,
-		subHandler:           subHandler,
 		certHandler:          certHandler,
 		validator:            v,
 		protocolDetector:     protocol.NewDetector(logger),
 		compression:          compression.NewHandler(logger),
 		verifiedInboundSize:  DefaultVerifiedInboundBufferSize,
 		verifiedOutboundSize: DefaultVerifiedOutboundBufferSize,
-		certFetchInterval:    DefaultCertFetchInterval,
 		logger:               logger,
 	}
 	for _, opt := range opts {
 		opt(g)
 	}
-	g.verifiedInbound = make(chan *models.MessageWithSender, g.verifiedInboundSize)
-	g.verifiedOutbound = make(chan *models.MessageWithSender, g.verifiedOutboundSize)
+	g.verifiedInbound = make(chan *transport.MessageWithSender, g.verifiedInboundSize)
+	g.verifiedOutbound = make(chan *transport.MessageWithSender, g.verifiedOutboundSize)
 	g.legacyOutbound = make(chan *models.UMHMessage, g.verifiedOutboundSize)
 	return g
 }
@@ -122,11 +114,10 @@ func (g *Gatekeeper) Start(ctx context.Context) {
 	ctx, g.cancel = context.WithCancel(ctx)
 	g.mu.Unlock()
 
-	g.wg.Add(4)
+	g.wg.Add(3)
 	go g.processInbound(ctx)
 	go g.processOutbound(ctx)
 	go g.processLegacyOutbound(ctx)
-	go g.fetchCertificates(ctx)
 }
 
 // Stop gracefully shuts down the Gatekeeper.
@@ -143,16 +134,15 @@ func (g *Gatekeeper) Stop() {
 	g.mu.Unlock()
 
 	g.wg.Wait()
-	close(g.verifiedInbound)
 }
 
 // VerifiedInboundChan returns the channel for the Router to read verified messages.
-func (g *Gatekeeper) VerifiedInboundChan() <-chan *models.MessageWithSender {
+func (g *Gatekeeper) VerifiedInboundChan() <-chan *transport.MessageWithSender {
 	return g.verifiedInbound
 }
 
 // VerifiedOutboundChan returns the channel for the Router to write messages to send.
-func (g *Gatekeeper) VerifiedOutboundChan() chan<- *models.MessageWithSender {
+func (g *Gatekeeper) VerifiedOutboundChan() chan<- *transport.MessageWithSender {
 	return g.verifiedOutbound
 }
 
@@ -172,6 +162,13 @@ func (g *Gatekeeper) GetInboundStats(_ string) (capacity int, length int) {
 	return cap(g.inboundChan), len(g.inboundChan)
 }
 
+// SetInstanceUUID updates the instance UUID used for outbound message wrapping.
+func (g *Gatekeeper) SetInstanceUUID(uuid string) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.instanceUUID = uuid
+}
+
 // CertificateHandler returns the certificate handler.
 func (g *Gatekeeper) CertificateHandler() certificatehandler.Handler {
 	return g.certHandler
@@ -179,6 +176,12 @@ func (g *Gatekeeper) CertificateHandler() certificatehandler.Handler {
 
 func (g *Gatekeeper) processInbound(ctx context.Context) {
 	defer g.wg.Done()
+	defer func() {
+		r := recover()
+		if r != nil {
+			g.logger.Errorw("panic in processInbound", "panic", r)
+		}
+	}()
 
 	for {
 		select {
@@ -213,23 +216,26 @@ func (g *Gatekeeper) handleInbound(ctx context.Context, msg *transport.UMHMessag
 
 	// 4. Validate permissions
 	cert := g.certHandler.Certificate(msg.Email)
-	if cert != nil {
-		rootCA := g.certHandler.RootCA()
-		intermediates := g.certHandler.IntermediateCerts(msg.Email)
-		allowed, err := g.validator.ValidateUserPermissions(cert, string(messageContent.MessageType), "", rootCA, intermediates)
-		if err != nil {
-			g.logger.Warnw("Permission validation error", "email", msg.Email, "error", err)
-			return
-		}
-		if !allowed {
-			g.logger.Warnw("Permission denied", "email", msg.Email, "messageType", messageContent.MessageType)
-			return
-		}
+	if cert == nil {
+		g.logger.Warnw("No certificate cached, dropping message", "email", msg.Email)
+		return
+	}
+
+	rootCA := g.certHandler.RootCA()
+	intermediates := g.certHandler.IntermediateCerts(msg.Email)
+	allowed, err := g.validator.ValidateUserPermissions(cert, string(messageContent.MessageType), "", rootCA, intermediates)
+	if err != nil {
+		g.logger.Warnw("Permission validation error", "email", msg.Email, "error", err)
+		return
+	}
+	if !allowed {
+		g.logger.Warnw("Permission denied", "email", msg.Email, "messageType", messageContent.MessageType)
+		return
 	}
 
 	// 5. Send to verified channel
 	select {
-	case g.verifiedInbound <- &models.MessageWithSender{
+	case g.verifiedInbound <- &transport.MessageWithSender{
 		Content:     messageContent,
 		SenderEmail: msg.Email,
 		TraceID:     msg.TraceID,
@@ -241,6 +247,12 @@ func (g *Gatekeeper) handleInbound(ctx context.Context, msg *transport.UMHMessag
 
 func (g *Gatekeeper) processOutbound(ctx context.Context) {
 	defer g.wg.Done()
+	defer func() {
+		r := recover()
+		if r != nil {
+			g.logger.Errorw("panic in processOutbound", "panic", r)
+		}
+	}()
 
 	for {
 		select {
@@ -255,7 +267,7 @@ func (g *Gatekeeper) processOutbound(ctx context.Context) {
 	}
 }
 
-func (g *Gatekeeper) handleOutbound(ctx context.Context, msg *models.MessageWithSender) {
+func (g *Gatekeeper) handleOutbound(ctx context.Context, msg *transport.MessageWithSender) {
 	// 1. Encode and compress
 	encoded, err := g.compression.Encode(msg.Content)
 	if err != nil {
@@ -267,9 +279,14 @@ func (g *Gatekeeper) handleOutbound(ctx context.Context, msg *models.MessageWith
 	encrypted := []byte(encoded)
 
 	// 3. Wrap as transport.UMHMessage
+	g.mu.RLock()
+	instanceUUID := g.instanceUUID
+	g.mu.RUnlock()
+
 	transportMsg := &transport.UMHMessage{
-		Content: string(encrypted),
-		Email:   msg.SenderEmail,
+		InstanceUUID: instanceUUID,
+		Content:      string(encrypted),
+		Email:        msg.SenderEmail,
 	}
 
 	// 4. Send to outbound channel
@@ -284,6 +301,12 @@ func (g *Gatekeeper) handleOutbound(ctx context.Context, msg *models.MessageWith
 // TODO(ENG-4558): Remove once actions write MessageWithSender directly.
 func (g *Gatekeeper) processLegacyOutbound(ctx context.Context) {
 	defer g.wg.Done()
+	defer func() {
+		r := recover()
+		if r != nil {
+			g.logger.Errorw("panic in processLegacyOutbound", "panic", r)
+		}
+	}()
 
 	for {
 		select {
@@ -301,31 +324,6 @@ func (g *Gatekeeper) processLegacyOutbound(ctx context.Context) {
 			case g.outboundChan <- transportMsg:
 			case <-ctx.Done():
 				return
-			}
-		}
-	}
-}
-
-func (g *Gatekeeper) fetchCertificates(ctx context.Context) {
-	defer g.wg.Done()
-
-	ticker := time.NewTicker(g.certFetchInterval)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			emails := g.subHandler.Subscribers()
-			sort.Strings(emails)
-			for _, email := range emails {
-				if ctx.Err() != nil {
-					return
-				}
-				if err := g.certHandler.FetchAndStore(ctx, email); err != nil {
-					g.logger.Warnw("Failed to fetch certificate", "email", email, "error", err)
-				}
 			}
 		}
 	}

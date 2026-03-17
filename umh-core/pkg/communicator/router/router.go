@@ -27,6 +27,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/subscriber"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/maptostruct"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"go.uber.org/zap"
 )
@@ -34,7 +35,7 @@ import (
 type Router struct {
 	dog                   watchdog.Iface
 	configManager         config.ConfigManager
-	inboundChannel        <-chan *models.MessageWithSender
+	inboundChannel        <-chan *transport.MessageWithSender
 	outboundChannel       chan *models.UMHMessage
 	clientConnections     map[string]*ClientConnection
 	subHandler            *subscriber.Handler
@@ -65,7 +66,7 @@ func NewRouter(dog watchdog.Iface,
 	logger *zap.SugaredLogger,
 ) *Router {
 	// Legacy path: spawn adapter goroutine that decodes and forwards
-	verifiedChan := make(chan *models.MessageWithSender, cap(inboundChannel))
+	verifiedChan := make(chan *transport.MessageWithSender, cap(inboundChannel))
 	go func() {
 		for msg := range inboundChannel {
 			messageContent, err := encoding.DecodeMessageFromUserToUMHInstance(msg.Content)
@@ -80,7 +81,7 @@ func NewRouter(dog watchdog.Iface,
 				traceID = msg.Metadata.TraceID.String()
 			}
 
-			verifiedChan <- &models.MessageWithSender{
+			verifiedChan <- &transport.MessageWithSender{
 				Content:     messageContent,
 				SenderEmail: msg.Email,
 				TraceID:     traceID,
@@ -108,7 +109,7 @@ func NewRouter(dog watchdog.Iface,
 // NewRouterForFSMv2 creates a Router for FSMv2 mode where the gatekeeper
 // provides pre-decoded MessageWithSender on the inbound channel.
 func NewRouterForFSMv2(dog watchdog.Iface,
-	inboundChannel <-chan *models.MessageWithSender,
+	inboundChannel <-chan *transport.MessageWithSender,
 	instanceUUID uuid.UUID,
 	outboundChannel chan *models.UMHMessage,
 	releaseChannel config.ReleaseChannel,
@@ -200,7 +201,7 @@ func (r *Router) router() {
 // this is an optimization to avoid sending a "new subscriber" message, containing the cached uns data with at least
 // one event for every topic, to the frontend when the user is already subscribed
 // we should avoid unnecessary new subscriber message generation because of its high memory and cpu usage.
-func (r *Router) handleSub(message *models.MessageWithSender, watcherUUID uuid.UUID) {
+func (r *Router) handleSub(message *transport.MessageWithSender, watcherUUID uuid.UUID) {
 	if r.subHandler == nil {
 		r.dog.ReportHeartbeatStatus(watcherUUID, watchdog.HEARTBEAT_STATUS_WARNING)
 		r.routerLogger.Warnf("Subscribe handler not yet initialized")
@@ -219,7 +220,7 @@ func (r *Router) handleSub(message *models.MessageWithSender, watcherUUID uuid.U
 	r.subHandler.AddOrRefreshSubscriber(message.SenderEmail, subscribePayload.Resubscribed)
 }
 
-func (r *Router) handleAction(message *models.MessageWithSender, watcherUUID uuid.UUID) {
+func (r *Router) handleAction(message *transport.MessageWithSender, watcherUUID uuid.UUID) {
 	var actionPayload models.ActionMessagePayload
 
 	payloadMap, ok := message.Content.Payload.(map[string]interface{})
