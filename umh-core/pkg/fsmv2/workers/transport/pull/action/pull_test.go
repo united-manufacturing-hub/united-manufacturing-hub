@@ -294,14 +294,15 @@ var _ = Describe("PullAction", func() {
 	})
 
 	Describe("Failed pull with non-TransportError", func() {
-		It("should default to ErrorTypeNetwork and suppress as transient", func() {
+		It("should default to ErrorTypeUnknown and propagate as persistent", func() {
 			mockTrans.pullErr = errors.New("connection refused")
 
 			err := act.Execute(context.Background(), mockDeps)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("pull failed"))
 
 			Expect(mockDeps.recordTypedErrorCalls).To(HaveLen(1))
-			Expect(mockDeps.recordTypedErrorCalls[0].errType).To(Equal(httpTransport.ErrorTypeNetwork))
+			Expect(mockDeps.recordTypedErrorCalls[0].errType).To(Equal(httpTransport.ErrorTypeUnknown))
 			Expect(mockDeps.recordTypedErrorCalls[0].retryAfter).To(Equal(time.Duration(0)))
 
 			drained := mockDeps.metricsRecorder.Drain()

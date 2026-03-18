@@ -50,11 +50,11 @@ var _ = Describe("ExtractErrorType", func() {
 		Expect(retryAfter).To(BeZero())
 	})
 
-	It("defaults to ErrorTypeNetwork for non-TransportError", func() {
+	It("defaults to ErrorTypeUnknown for non-TransportError", func() {
 		plainErr := errors.New("connection refused")
 
 		errType, retryAfter := httpTransport.ExtractErrorType(plainErr)
-		Expect(errType).To(Equal(httpTransport.ErrorTypeNetwork))
+		Expect(errType).To(Equal(httpTransport.ErrorTypeUnknown))
 		Expect(retryAfter).To(BeZero())
 	})
 })

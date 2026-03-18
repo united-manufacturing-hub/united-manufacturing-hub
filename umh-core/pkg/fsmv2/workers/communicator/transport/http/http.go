@@ -155,15 +155,16 @@ func (e *TransportError) Is(target error) bool {
 }
 
 // ExtractErrorType unwraps a *TransportError from err and returns its ErrorType
-// and RetryAfter duration. If err does not wrap a *TransportError, it defaults
-// to ErrorTypeNetwork with zero retry delay.
+// and RetryAfter duration. If err does not wrap a *TransportError, it returns
+// ErrorTypeUnknown — a persistent type that propagates to the FSM and fires
+// SentryError, ensuring unclassified errors are never silently suppressed.
 func ExtractErrorType(err error) (ErrorType, time.Duration) {
 	var transportErr *TransportError
 	if errors.As(err, &transportErr) {
 		return transportErr.Type, transportErr.RetryAfter
 	}
 
-	return ErrorTypeNetwork, 0
+	return ErrorTypeUnknown, 0
 }
 
 // CounterForErrorType maps an ErrorType to its corresponding Prometheus counter.

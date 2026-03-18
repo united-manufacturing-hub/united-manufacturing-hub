@@ -275,15 +275,16 @@ var _ = Describe("PushAction", func() {
 	})
 
 	Describe("Failed push with non-TransportError", func() {
-		It("should default to ErrorTypeNetwork and suppress as transient", func() {
+		It("should default to ErrorTypeUnknown and propagate as persistent", func() {
 			outboundBi <- &transport.UMHMessage{Content: "msg1"}
 			mockTrans.pushErr = errors.New("connection refused")
 
 			err := act.Execute(context.Background(), mockDeps)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("push failed"))
 
 			Expect(mockDeps.recordTypedErrorCalls).To(HaveLen(1))
-			Expect(mockDeps.recordTypedErrorCalls[0].errType).To(Equal(httpTransport.ErrorTypeNetwork))
+			Expect(mockDeps.recordTypedErrorCalls[0].errType).To(Equal(httpTransport.ErrorTypeUnknown))
 			Expect(mockDeps.recordTypedErrorCalls[0].retryAfter).To(Equal(time.Duration(0)))
 
 			drained := mockDeps.metricsRecorder.Drain()
@@ -371,7 +372,7 @@ var _ = Describe("PushAction", func() {
 			mockTrans.pushErr = errors.New("network error")
 
 			err := act.Execute(context.Background(), mockDeps)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).To(HaveOccurred())
 
 			Expect(mockDeps.PendingMessageCount()).To(Equal(2))
 		})
