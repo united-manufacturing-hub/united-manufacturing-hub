@@ -126,6 +126,14 @@ drainLoop:
 		metrics.SetGauge(depspkg.GaugeLastPushLatencyMs, float64(pushLatency.Milliseconds()))
 		metrics.SetGauge(depspkg.GaugePendingMessages, float64(pushDeps.PendingMessageCount()))
 
+		if ctx.Err() != nil {
+			return fmt.Errorf("push failed (context canceled): %w", ctx.Err())
+		}
+
+		if errType.IsTransient() {
+			return nil
+		}
+
 		return fmt.Errorf("push failed: %w", err)
 	}
 
@@ -193,6 +201,10 @@ func (a *PushAction) retryPending(ctx context.Context, t transport.Transport, pu
 				return pending[i:], fmt.Errorf("context canceled during retry: %w", ctx.Err())
 			}
 
+			if errType.IsTransient() {
+				return pending[i:], nil
+			}
+
 			if isRecoverableByParent(errType) {
 				return pending[i:], fmt.Errorf("pending retry failed (recoverable by parent): %w", err)
 			}
@@ -215,19 +227,16 @@ func (a *PushAction) retryPending(ctx context.Context, t transport.Transport, pu
 	return nil, nil
 }
 
-// isRecoverableByParent returns true for error types where the message itself is
-// valid but delivery failed due to an external condition. These messages are
-// preserved in the pending buffer for retry rather than dropped.
+// isRecoverableByParent returns true for persistent error types where the
+// message is valid but delivery failed due to an external condition requiring
+// parent action (re-authentication, transport reset). Messages are preserved
+// in the pending buffer for retry rather than dropped.
 //
-// Covers both infrastructure errors (network, server, rate limit) and
-// access errors (auth, cloudflare, proxy) that resolve via parent actions
-// (re-authentication, transport reset) or child-level backoff.
+// Only persistent types reach here — transient errors (network, server, rate
+// limit, channel full) are intercepted by IsTransient() earlier in retryPending.
 func isRecoverableByParent(errType httpTransport.ErrorType) bool {
 	switch errType {
-	case httpTransport.ErrorTypeNetwork,
-		httpTransport.ErrorTypeServerError,
-		httpTransport.ErrorTypeCloudflareChallenge,
-		httpTransport.ErrorTypeBackendRateLimit,
+	case httpTransport.ErrorTypeCloudflareChallenge,
 		httpTransport.ErrorTypeInvalidToken,
 		httpTransport.ErrorTypeProxyBlock:
 		return true
