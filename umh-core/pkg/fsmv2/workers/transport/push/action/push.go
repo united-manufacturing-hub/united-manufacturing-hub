@@ -126,6 +126,10 @@ drainLoop:
 		metrics.SetGauge(depspkg.GaugeLastPushLatencyMs, float64(pushLatency.Milliseconds()))
 		metrics.SetGauge(depspkg.GaugePendingMessages, float64(pushDeps.PendingMessageCount()))
 
+		if ctx.Err() != nil {
+			return fmt.Errorf("push failed (context canceled): %w", ctx.Err())
+		}
+
 		if errType.IsTransient() {
 			return nil
 		}
@@ -228,14 +232,11 @@ func (a *PushAction) retryPending(ctx context.Context, t transport.Transport, pu
 // parent action (re-authentication, transport reset). Messages are preserved
 // in the pending buffer for retry rather than dropped.
 //
-// Transient errors (network, server, rate limit, channel full) are handled
-// before this function by IsTransient() in retryPending and never reach here.
+// Only persistent types reach here — transient errors (network, server, rate
+// limit, channel full) are intercepted by IsTransient() earlier in retryPending.
 func isRecoverableByParent(errType httpTransport.ErrorType) bool {
 	switch errType {
-	case httpTransport.ErrorTypeNetwork,
-		httpTransport.ErrorTypeServerError,
-		httpTransport.ErrorTypeCloudflareChallenge,
-		httpTransport.ErrorTypeBackendRateLimit,
+	case httpTransport.ErrorTypeCloudflareChallenge,
 		httpTransport.ErrorTypeInvalidToken,
 		httpTransport.ErrorTypeProxyBlock:
 		return true

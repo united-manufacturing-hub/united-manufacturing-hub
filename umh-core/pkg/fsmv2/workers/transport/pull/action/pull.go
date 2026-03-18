@@ -158,6 +158,10 @@ func (a *PullAction) Execute(ctx context.Context, depsAny any) error {
 		metrics.IncrementCounter(depspkg.CounterPullFailures, 1)
 		metrics.SetGauge(depspkg.GaugeLastPullLatencyMs, float64(pullLatency.Milliseconds()))
 
+		if ctx.Err() != nil {
+			return fmt.Errorf("pull failed (context canceled): %w", ctx.Err())
+		}
+
 		if errType.IsTransient() {
 			return nil
 		}
