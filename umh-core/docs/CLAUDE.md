@@ -4,7 +4,7 @@ Full GitBook editing reference (syntax, blocks, variables): <https://gitbook.com
 
 ## File Structure
 
-```
+```text
 docs/
   .gitbook.yaml    # Space config (root, structure, redirects)
   SUMMARY.md       # Navigation — all pages MUST be listed here
