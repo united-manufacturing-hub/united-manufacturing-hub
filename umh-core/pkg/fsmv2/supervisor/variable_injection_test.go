@@ -37,7 +37,7 @@ type TestWorker struct {
 	deriveDesiredStateFunc func(spec config.UserSpec) (fsmv2.DesiredState, error)
 }
 
-func (t *TestWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedState, error) {
+func (t *TestWorker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
 	return &TestObservedState{
 		ID:          t.identity.ID,
 		CollectedAt: time.Now(),

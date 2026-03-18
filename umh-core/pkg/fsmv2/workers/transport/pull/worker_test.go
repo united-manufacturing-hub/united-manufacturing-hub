@@ -86,7 +86,7 @@ var _ = Describe("PullWorker", func() {
 
 		It("should return valid observed state with timestamp", func() {
 			ctx := context.Background()
-			observed, err := worker.CollectObservedState(ctx)
+			observed, err := worker.CollectObservedState(ctx, nil)
 
 			Expect(err).ToNot(HaveOccurred())
 			Expect(observed).NotTo(BeNil())
@@ -97,7 +97,7 @@ var _ = Describe("PullWorker", func() {
 			ctx, cancel := context.WithCancel(context.Background())
 			cancel()
 
-			_, err := worker.CollectObservedState(ctx)
+			_, err := worker.CollectObservedState(ctx, nil)
 
 			Expect(err).To(HaveOccurred())
 			Expect(err).To(Equal(context.Canceled))
@@ -105,7 +105,7 @@ var _ = Describe("PullWorker", func() {
 
 		It("should report transport availability from parent deps", func() {
 			ctx := context.Background()
-			observed, err := worker.CollectObservedState(ctx)
+			observed, err := worker.CollectObservedState(ctx, nil)
 
 			Expect(err).ToNot(HaveOccurred())
 			typedObs, ok := observed.(snapshot.PullObservedState)
@@ -117,7 +117,7 @@ var _ = Describe("PullWorker", func() {
 			parentDeps.SetJWT("test-token", time.Now().Add(time.Hour))
 
 			ctx := context.Background()
-			observed, err := worker.CollectObservedState(ctx)
+			observed, err := worker.CollectObservedState(ctx, nil)
 
 			Expect(err).ToNot(HaveOccurred())
 			typedObs, ok := observed.(snapshot.PullObservedState)
@@ -130,7 +130,7 @@ var _ = Describe("PullWorker", func() {
 			worker.GetDependencies().RecordError()
 
 			ctx := context.Background()
-			observed, err := worker.CollectObservedState(ctx)
+			observed, err := worker.CollectObservedState(ctx, nil)
 
 			Expect(err).ToNot(HaveOccurred())
 			typedObs, ok := observed.(snapshot.PullObservedState)
@@ -140,7 +140,7 @@ var _ = Describe("PullWorker", func() {
 
 		It("should report pending message count", func() {
 			ctx := context.Background()
-			observed, err := worker.CollectObservedState(ctx)
+			observed, err := worker.CollectObservedState(ctx, nil)
 
 			Expect(err).ToNot(HaveOccurred())
 			typedObs, ok := observed.(snapshot.PullObservedState)
@@ -150,7 +150,7 @@ var _ = Describe("PullWorker", func() {
 
 		It("should report backpressure state", func() {
 			ctx := context.Background()
-			observed, err := worker.CollectObservedState(ctx)
+			observed, err := worker.CollectObservedState(ctx, nil)
 
 			Expect(err).ToNot(HaveOccurred())
 			typedObs, ok := observed.(snapshot.PullObservedState)
@@ -160,7 +160,7 @@ var _ = Describe("PullWorker", func() {
 
 		It("should include framework metrics", func() {
 			ctx := context.Background()
-			observed, err := worker.CollectObservedState(ctx)
+			observed, err := worker.CollectObservedState(ctx, nil)
 
 			Expect(err).ToNot(HaveOccurred())
 			typedObs, ok := observed.(snapshot.PullObservedState)
@@ -175,7 +175,7 @@ var _ = Describe("PullWorker", func() {
 			d.MetricsRecorder().SetGauge(depspkg.GaugeLastPullLatencyMs, 35.0)
 
 			ctx := context.Background()
-			observed, err := worker.CollectObservedState(ctx)
+			observed, err := worker.CollectObservedState(ctx, nil)
 
 			Expect(err).ToNot(HaveOccurred())
 			typedObs, ok := observed.(snapshot.PullObservedState)
@@ -194,14 +194,14 @@ var _ = Describe("PullWorker", func() {
 
 			d := worker.GetDependencies()
 			d.MetricsRecorder().IncrementCounter(depspkg.CounterPullOps, 1)
-			observed1, err := worker.CollectObservedState(ctx)
+			observed1, err := worker.CollectObservedState(ctx, nil)
 			Expect(err).ToNot(HaveOccurred())
 			typedObs1, ok := observed1.(snapshot.PullObservedState)
 			Expect(ok).To(BeTrue())
 			Expect(typedObs1.Metrics.Worker.Counters["pull_ops"]).To(Equal(int64(1)))
 
 			d.MetricsRecorder().IncrementCounter(depspkg.CounterPullOps, 2)
-			observed2, err := worker.CollectObservedState(ctx)
+			observed2, err := worker.CollectObservedState(ctx, nil)
 			Expect(err).ToNot(HaveOccurred())
 			typedObs2, ok := observed2.(snapshot.PullObservedState)
 			Expect(ok).To(BeTrue())

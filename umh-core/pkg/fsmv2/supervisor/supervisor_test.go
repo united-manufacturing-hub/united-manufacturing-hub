@@ -84,7 +84,7 @@ type internalMockWorker struct {
 	observed     persistence.Document
 }
 
-func (m *internalMockWorker) CollectObservedState(_ context.Context) (fsmv2.ObservedState, error) {
+func (m *internalMockWorker) CollectObservedState(_ context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
 	return &mockObservedState{
 		doc:       m.observed,
 		timestamp: time.Now(),
@@ -163,7 +163,7 @@ type internalMockWorkerWithChildren struct {
 	childrenSpecs []config.ChildSpec
 }
 
-func (m *internalMockWorkerWithChildren) CollectObservedState(_ context.Context) (fsmv2.ObservedState, error) {
+func (m *internalMockWorkerWithChildren) CollectObservedState(_ context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
 	return &mockObservedState{
 		doc:       m.observed,
 		timestamp: time.Now(),

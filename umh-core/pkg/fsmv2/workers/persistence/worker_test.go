@@ -60,7 +60,7 @@ var _ = Describe("PersistenceWorker", func() {
 			worker, err := persistence.NewPersistenceWorker(identity, store, logger, nil)
 			Expect(err).NotTo(HaveOccurred())
 
-			observed, err := worker.CollectObservedState(context.Background())
+			observed, err := worker.CollectObservedState(context.Background(), nil)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(observed).NotTo(BeNil())
 
@@ -76,7 +76,7 @@ var _ = Describe("PersistenceWorker", func() {
 			cancelledCtx, cancel := context.WithCancel(context.Background())
 			cancel()
 
-			_, err = worker.CollectObservedState(cancelledCtx)
+			_, err = worker.CollectObservedState(cancelledCtx, nil)
 			Expect(err).To(Equal(context.Canceled))
 		})
 
@@ -90,7 +90,7 @@ var _ = Describe("PersistenceWorker", func() {
 					{Success: false, ActionType: "CompactDeltas", Timestamp: time.Now()},
 				})
 
-				observed, err := worker.CollectObservedState(context.Background())
+				observed, err := worker.CollectObservedState(context.Background(), nil)
 				Expect(err).NotTo(HaveOccurred())
 
 				obs := observed.(snapshot.PersistenceObservedState)
@@ -108,7 +108,7 @@ var _ = Describe("PersistenceWorker", func() {
 					{Success: true, ActionType: "CompactDeltas", Timestamp: time.Now()},
 				})
 
-				observed, err := worker.CollectObservedState(context.Background())
+				observed, err := worker.CollectObservedState(context.Background(), nil)
 				Expect(err).NotTo(HaveOccurred())
 
 				obs := observed.(snapshot.PersistenceObservedState)
@@ -124,7 +124,7 @@ var _ = Describe("PersistenceWorker", func() {
 					{Success: false, ActionType: "CompactDeltas", Timestamp: time.Now()},
 				})
 
-				observed1, err := worker.CollectObservedState(context.Background())
+				observed1, err := worker.CollectObservedState(context.Background(), nil)
 				Expect(err).NotTo(HaveOccurred())
 				obs1 := observed1.(snapshot.PersistenceObservedState)
 				Expect(obs1.ConsecutiveActionErrors).To(Equal(1))
@@ -134,7 +134,7 @@ var _ = Describe("PersistenceWorker", func() {
 				// won't persist across ticks in this unit test. This test verifies the
 				// within-tick computation: empty action history preserves previous count.
 				d.SetActionHistory(nil)
-				observed2, err := worker.CollectObservedState(context.Background())
+				observed2, err := worker.CollectObservedState(context.Background(), nil)
 				Expect(err).NotTo(HaveOccurred())
 				obs2 := observed2.(snapshot.PersistenceObservedState)
 				// Without stateReader, prev.ConsecutiveActionErrors is 0 and empty results
@@ -152,7 +152,7 @@ var _ = Describe("PersistenceWorker", func() {
 			d.SetLastCompactionAt(now)
 			d.SetLastMaintenanceAt(now.Add(-time.Hour))
 
-			observed, err := worker.CollectObservedState(context.Background())
+			observed, err := worker.CollectObservedState(context.Background(), nil)
 			Expect(err).NotTo(HaveOccurred())
 
 			obs := observed.(snapshot.PersistenceObservedState)

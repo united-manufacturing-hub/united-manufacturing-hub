@@ -78,7 +78,13 @@ type CollectorConfig[TObserved any] struct {
 	// Workers then access via deps.GetActionHistory() and assign to their ObservedState.
 	// This follows the same pattern as FrameworkMetricsSetter.
 	ActionHistorySetter func([]deps.ActionResult)
-	Identity            deps.Identity
+	// DesiredStateProvider returns the current desired state from the CSE store.
+	// Called BEFORE CollectObservedState so workers can access configuration
+	// (target IP, port, etc.) without workarounds. If nil is returned (desired
+	// state not yet saved), collection is skipped entirely — workers are
+	// guaranteed to always receive a non-nil desired state.
+	DesiredStateProvider func() fsmv2.DesiredState
+	Identity             deps.Identity
 	ObservationInterval time.Duration
 	ObservationTimeout  time.Duration
 	EnableTraceLogging  bool // Whether to emit verbose per-collection logs
@@ -374,7 +380,21 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 		c.config.ActionHistorySetter(actionHistory)
 	}
 
-	observed, err := c.config.Worker.CollectObservedState(ctx)
+	// Load desired state to pass to CollectObservedState.
+	// Skip collection entirely if no desired state exists yet — the supervisor
+	// guarantees workers always receive a non-nil desired state.
+	var desired fsmv2.DesiredState
+	if c.config.DesiredStateProvider != nil {
+		desired = c.config.DesiredStateProvider()
+	}
+
+	if desired == nil {
+		c.logTrace("collector_skipped_no_desired_state")
+
+		return nil
+	}
+
+	observed, err := c.config.Worker.CollectObservedState(ctx, desired)
 	if err != nil {
 		c.config.Logger.Debug("collector_collect_failed",
 			deps.Err(err))

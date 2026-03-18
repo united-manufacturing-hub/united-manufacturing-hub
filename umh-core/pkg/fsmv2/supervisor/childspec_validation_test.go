@@ -591,7 +591,7 @@ type validChildSpecMockWorker struct {
 	childSpecs   []config.ChildSpec
 }
 
-func (m *validChildSpecMockWorker) CollectObservedState(_ context.Context) (fsmv2.ObservedState, error) {
+func (m *validChildSpecMockWorker) CollectObservedState(_ context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
 	return &mockObservedState{
 		doc: persistence.Document{
 			"id": m.identity.ID,
@@ -620,7 +620,7 @@ type trackedCallOrderMockWorker struct {
 	callTracker  *[]string
 }
 
-func (m *trackedCallOrderMockWorker) CollectObservedState(_ context.Context) (fsmv2.ObservedState, error) {
+func (m *trackedCallOrderMockWorker) CollectObservedState(_ context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
 	return &mockObservedState{
 		doc: persistence.Document{
 			"id": m.identity.ID,

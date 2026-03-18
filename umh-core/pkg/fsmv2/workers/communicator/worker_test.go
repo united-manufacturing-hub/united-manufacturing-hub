@@ -260,7 +260,7 @@ state: "running"
 
 	Describe("CollectObservedState", func() {
 		It("should return observed state with CollectedAt timestamp", func() {
-			observed, err := worker.CollectObservedState(ctx)
+			observed, err := worker.CollectObservedState(ctx, nil)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(observed).NotTo(BeNil())
 
@@ -274,7 +274,7 @@ state: "running"
 			deps.RecordError()
 			deps.RecordError()
 
-			observed, err := worker.CollectObservedState(ctx)
+			observed, err := worker.CollectObservedState(ctx, nil)
 			Expect(err).NotTo(HaveOccurred())
 
 			communicatorObserved := observed.(snapshot.CommunicatorObservedState)
@@ -303,7 +303,7 @@ state: "running"
 
 			// Helper to collect observed state and save it (simulates collector)
 			collectAndSave := func(tc *metricsTestContext) snapshot.CommunicatorObservedState {
-				observed, err := tc.worker.CollectObservedState(ctx)
+				observed, err := tc.worker.CollectObservedState(ctx, nil)
 				Expect(err).NotTo(HaveOccurred())
 				communicatorObserved := observed.(snapshot.CommunicatorObservedState)
 				// Simulate collector saving observed state
@@ -319,7 +319,7 @@ state: "running"
 				deps.MetricsRecorder().IncrementCounter(depspkg.CounterMessagesPulled, 5)
 				deps.MetricsRecorder().SetGauge(depspkg.GaugeLastPullLatencyMs, 100.0)
 
-				observed, err := worker.CollectObservedState(ctx)
+				observed, err := worker.CollectObservedState(ctx, nil)
 				Expect(err).NotTo(HaveOccurred())
 
 				communicatorObserved := observed.(snapshot.CommunicatorObservedState)
@@ -336,7 +336,7 @@ state: "running"
 				deps.MetricsRecorder().IncrementCounter(depspkg.CounterPullFailures, 1)
 				deps.MetricsRecorder().SetGauge(depspkg.GaugeLastPullLatencyMs, 50.0)
 
-				observed, err := worker.CollectObservedState(ctx)
+				observed, err := worker.CollectObservedState(ctx, nil)
 				Expect(err).NotTo(HaveOccurred())
 
 				communicatorObserved := observed.(snapshot.CommunicatorObservedState)
@@ -354,7 +354,7 @@ state: "running"
 				deps.MetricsRecorder().IncrementCounter(depspkg.CounterMessagesPushed, 3)
 				deps.MetricsRecorder().SetGauge(depspkg.GaugeLastPushLatencyMs, 200.0)
 
-				observed, err := worker.CollectObservedState(ctx)
+				observed, err := worker.CollectObservedState(ctx, nil)
 				Expect(err).NotTo(HaveOccurred())
 
 				communicatorObserved := observed.(snapshot.CommunicatorObservedState)
@@ -371,7 +371,7 @@ state: "running"
 				deps.MetricsRecorder().IncrementCounter(depspkg.CounterPushFailures, 1)
 				deps.MetricsRecorder().SetGauge(depspkg.GaugeLastPushLatencyMs, 150.0)
 
-				observed, err := worker.CollectObservedState(ctx)
+				observed, err := worker.CollectObservedState(ctx, nil)
 				Expect(err).NotTo(HaveOccurred())
 
 				communicatorObserved := observed.(snapshot.CommunicatorObservedState)

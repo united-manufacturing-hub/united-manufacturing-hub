@@ -79,7 +79,7 @@ func NewPushWorker(
 
 // CollectObservedState snapshots the current push worker state.
 // Handles context cancellation at entry as required by architecture tests.
-func (w *PushWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedState, error) {
+func (w *PushWorker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()

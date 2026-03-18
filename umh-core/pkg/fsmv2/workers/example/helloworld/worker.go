@@ -101,7 +101,7 @@ func NewHelloworldWorker(
 //   - Read external state via blocking I/O (file, network, etc.)
 //   - Copy framework metrics if available
 //   - Return the observed state
-func (w *HelloworldWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedState, error) {
+func (w *HelloworldWorker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
