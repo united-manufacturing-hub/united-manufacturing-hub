@@ -523,6 +523,20 @@ var _ = Describe("FSMv2 Architecture Validation", func() {
 				}
 			})
 		})
+
+		Describe("StoppingState No Catch-All Self-Return (Invariant: No Stopping Deadlock)", func() {
+			It("should not have catch-all self-return with nil action in StoppingBase states", func() {
+				violations := validator.ValidateStoppingStateNoCatchAllSelfReturn(getFsmv2Dir())
+				if len(violations) > 0 {
+					message := validator.FormatViolationsWithPattern(
+						"StoppingState Deadlock Violations",
+						violations,
+						"STOPPING_STATE_DEADLOCK",
+					)
+					Fail(message)
+				}
+			})
+		})
 	})
 })
 

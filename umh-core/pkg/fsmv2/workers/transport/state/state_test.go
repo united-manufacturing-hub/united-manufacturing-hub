@@ -474,20 +474,20 @@ var _ = Describe("TransportWorker States", func() {
 			Expect(result.State).To(BeAssignableToTypeOf(&state.StoppedState{}))
 		})
 
-		It("should stay Stopping when children still running", func() {
+		It("should transition to Stopped unconditionally even with children still running (ENG-4608)", func() {
 			snap := makeSnapshot(true, config.DesiredStateStopped, "", time.Time{}, 1, 0)
 			result := s.Next(snap)
 
 			Expect(result.Signal).To(Equal(fsmv2.SignalNone))
-			Expect(result.State).To(BeAssignableToTypeOf(&state.StoppingState{}))
+			Expect(result.State).To(BeAssignableToTypeOf(&state.StoppedState{}))
 		})
 
-		It("should stay Stopping when children unhealthy but not stopped", func() {
+		It("should transition to Stopped unconditionally even with unhealthy children (ENG-4608)", func() {
 			snap := makeSnapshot(true, config.DesiredStateStopped, "", time.Time{}, 0, 1)
 			result := s.Next(snap)
 
 			Expect(result.Signal).To(Equal(fsmv2.SignalNone))
-			Expect(result.State).To(BeAssignableToTypeOf(&state.StoppingState{}))
+			Expect(result.State).To(BeAssignableToTypeOf(&state.StoppedState{}))
 		})
 	})
 

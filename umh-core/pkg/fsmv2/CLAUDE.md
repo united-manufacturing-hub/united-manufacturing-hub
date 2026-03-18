@@ -64,7 +64,7 @@ Each state file follows this pattern:
 
 ```go
 type RunningState struct {
-    helpers.BaseRunningState  // Embed exactly one base type
+    helpers.RunningHealthyBase  // Embed exactly one base type
 }
 
 func (s *RunningState) Next(snapAny any) fsmv2.NextResult[any, any] {
@@ -216,3 +216,17 @@ Each child (push/pull) has its own `RetryTracker` and `failurerate.Tracker` for 
 **The rule**: if no HTTP round-trip occurred this tick, the action should return without calling any `Record*` method. "Nothing happened" is not a success and not a failure — it is the absence of an outcome.
 
 This prevents failure rate dilution: if idle ticks feed phantom "successes" into the rolling window, a 100% broken transport can appear healthy because idle ticks vastly outnumber real operations in bursty workloads.
+
+## State Transition Traps
+
+### StoppingState must always progress
+
+- MUST transition to StoppedState (or self-return with a cleanup action)
+- Self-return with `nil` action is **forbidden** — creates a permanent deadlock (worker stuck in PhaseStopping)
+- Self-return WITH an action (e.g., `&FlushAction{}`) is allowed (active cleanup)
+- CI enforced: `ValidateStoppingStateNoCatchAllSelfReturn` in `internal/validator/state.go`
+- See any `state_stopping.go` for the pattern
+
+### Observed vs Desired ParentMappedState
+
+`ParentMappedState` is only populated on the **observed** state (via `SetParentMappedState()`). The **desired** state copy is always empty. Use `snap.Observed.ParentMappedState` in reason strings, never `snap.Desired.ParentMappedState`.
