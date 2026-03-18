@@ -7,6 +7,10 @@
 - The container previously restarted hundreds of times per minute when config.yaml was missing or invalid and now waits 60 seconds before retrying, giving you time to fix the configuration
 - Previously, memory monitoring read host-level values even inside containers, while CPU monitoring already used cgroup-aware values. Memory metrics now read cgroup v2 limits and usage, so dashboards show correct container memory utilization
 
+### Preview: FSMv2 Communicator
+
+- Instances could appear permanently offline in the Management Console even though the pod was running and healthy -- only a restart would fix it. This happened because token re-authentication briefly caused child workers to enter a stopping state from which they could not recover, leaving the communicator stuck indefinitely. Workers now always complete the stop and automatically recover when the parent is healthy again. Requires `USE_FSMV2_TRANSPORT=true`
+
 ## [0.44.11]
 
 This release reduces steady-state container memory by roughly 30% on busy systems with many bridges and data flows.
