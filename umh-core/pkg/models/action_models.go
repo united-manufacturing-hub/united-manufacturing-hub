@@ -81,12 +81,7 @@ type UMHMessage struct {
 	InstanceUUID uuid.UUID        `json:"umhInstance"`
 }
 
-// MessageWithSender is the output of Gatekeeper after decryption and validation.
-type MessageWithSender struct {
-	Content     UMHMessageContent
-	SenderEmail string
-	TraceID     string
-}
+
 
 // Define MessageType as a custom type for better type safety.
 type MessageType string

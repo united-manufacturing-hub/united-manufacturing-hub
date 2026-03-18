@@ -14,7 +14,11 @@
 
 package transport
 
-import "context"
+import (
+	"context"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
+)
 
 // ProtocolVersion indicates the message protocol version.
 type ProtocolVersion string
@@ -32,6 +36,13 @@ type UMHMessage struct {
 	Email           string          `json:"email"`
 	TraceID         string          `json:"traceId,omitempty"`
 	ProtocolVersion ProtocolVersion `json:"protocolVersion,omitempty"`
+}
+
+// MessageWithSender is the internal transport format between gatekeeper and business logic.
+type MessageWithSender struct {
+	Content     models.UMHMessageContent
+	SenderEmail string
+	TraceID     string
 }
 
 // AuthRequest represents an authentication request.

@@ -53,17 +53,18 @@ type Gatekeeper struct {
 	outboundChan chan *transport.UMHMessage
 
 	// Verified channels (created and owned by gatekeeper)
-	verifiedInbound  chan *models.MessageWithSender
-	verifiedOutbound chan *models.MessageWithSender
+	verifiedInbound  chan *transport.MessageWithSender
+	verifiedOutbound chan *transport.MessageWithSender
 
 	// Legacy outbound for pre-encoded models.UMHMessage from actions.
 	// TODO(ENG-4558): Remove once actions write MessageWithSender directly.
 	legacyOutbound chan *models.UMHMessage
 
 	// Runtime
-	logger *zap.SugaredLogger
-	cancel context.CancelFunc
-	wg     sync.WaitGroup
+	logger       *zap.SugaredLogger
+	cancel       context.CancelFunc
+	instanceUUID string
+	wg           sync.WaitGroup
 
 	// Config (set by options, or defaults)
 	verifiedInboundSize  int
@@ -96,8 +97,8 @@ func New(
 	for _, opt := range opts {
 		opt(g)
 	}
-	g.verifiedInbound = make(chan *models.MessageWithSender, g.verifiedInboundSize)
-	g.verifiedOutbound = make(chan *models.MessageWithSender, g.verifiedOutboundSize)
+	g.verifiedInbound = make(chan *transport.MessageWithSender, g.verifiedInboundSize)
+	g.verifiedOutbound = make(chan *transport.MessageWithSender, g.verifiedOutboundSize)
 	g.legacyOutbound = make(chan *models.UMHMessage, g.verifiedOutboundSize)
 	return g
 }
@@ -136,12 +137,12 @@ func (g *Gatekeeper) Stop() {
 }
 
 // VerifiedInboundChan returns the channel for the Router to read verified messages.
-func (g *Gatekeeper) VerifiedInboundChan() <-chan *models.MessageWithSender {
+func (g *Gatekeeper) VerifiedInboundChan() <-chan *transport.MessageWithSender {
 	return g.verifiedInbound
 }
 
 // VerifiedOutboundChan returns the channel for the Router to write messages to send.
-func (g *Gatekeeper) VerifiedOutboundChan() chan<- *models.MessageWithSender {
+func (g *Gatekeeper) VerifiedOutboundChan() chan<- *transport.MessageWithSender {
 	return g.verifiedOutbound
 }
 
@@ -159,6 +160,13 @@ func (g *Gatekeeper) GetChannels(_ string) (chan<- *transport.UMHMessage, <-chan
 // GetInboundStats implements communicator.ChannelProvider.
 func (g *Gatekeeper) GetInboundStats(_ string) (capacity int, length int) {
 	return cap(g.inboundChan), len(g.inboundChan)
+}
+
+// SetInstanceUUID updates the instance UUID used for outbound message wrapping.
+func (g *Gatekeeper) SetInstanceUUID(uuid string) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.instanceUUID = uuid
 }
 
 // CertificateHandler returns the certificate handler.
@@ -227,7 +235,7 @@ func (g *Gatekeeper) handleInbound(ctx context.Context, msg *transport.UMHMessag
 
 	// 5. Send to verified channel
 	select {
-	case g.verifiedInbound <- &models.MessageWithSender{
+	case g.verifiedInbound <- &transport.MessageWithSender{
 		Content:     messageContent,
 		SenderEmail: msg.Email,
 		TraceID:     msg.TraceID,
@@ -259,7 +267,7 @@ func (g *Gatekeeper) processOutbound(ctx context.Context) {
 	}
 }
 
-func (g *Gatekeeper) handleOutbound(ctx context.Context, msg *models.MessageWithSender) {
+func (g *Gatekeeper) handleOutbound(ctx context.Context, msg *transport.MessageWithSender) {
 	// 1. Encode and compress
 	encoded, err := g.compression.Encode(msg.Content)
 	if err != nil {
@@ -271,9 +279,14 @@ func (g *Gatekeeper) handleOutbound(ctx context.Context, msg *models.MessageWith
 	encrypted := []byte(encoded)
 
 	// 3. Wrap as transport.UMHMessage
+	g.mu.RLock()
+	instanceUUID := g.instanceUUID
+	g.mu.RUnlock()
+
 	transportMsg := &transport.UMHMessage{
-		Content: string(encrypted),
-		Email:   msg.SenderEmail,
+		InstanceUUID: instanceUUID,
+		Content:      string(encrypted),
+		Email:        msg.SenderEmail,
 	}
 
 	// 4. Send to outbound channel
@@ -315,4 +328,3 @@ func (g *Gatekeeper) processLegacyOutbound(ctx context.Context) {
 		}
 	}
 }
-
