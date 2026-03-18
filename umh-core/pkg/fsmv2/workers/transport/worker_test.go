@@ -86,7 +86,7 @@ var _ = Describe("TransportWorker", func() {
 
 		It("should return observed state with timestamp", func() {
 			ctx := context.Background()
-			observed, err := worker.CollectObservedState(ctx)
+			observed, err := worker.CollectObservedState(ctx, nil)
 
 			Expect(err).ToNot(HaveOccurred())
 			Expect(observed).NotTo(BeNil())
@@ -97,7 +97,7 @@ var _ = Describe("TransportWorker", func() {
 			ctx, cancel := context.WithCancel(context.Background())
 			cancel() // Cancel immediately
 
-			_, err := worker.CollectObservedState(ctx)
+			_, err := worker.CollectObservedState(ctx, nil)
 
 			Expect(err).To(HaveOccurred())
 			Expect(err).To(Equal(context.Canceled))
@@ -105,7 +105,7 @@ var _ = Describe("TransportWorker", func() {
 
 		It("should call GetFrameworkState from dependencies", func() {
 			ctx := context.Background()
-			observed, err := worker.CollectObservedState(ctx)
+			observed, err := worker.CollectObservedState(ctx, nil)
 
 			Expect(err).ToNot(HaveOccurred())
 			// The observed state should have metrics container
@@ -116,7 +116,7 @@ var _ = Describe("TransportWorker", func() {
 
 		It("should call GetActionHistory from dependencies", func() {
 			ctx := context.Background()
-			observed, err := worker.CollectObservedState(ctx)
+			observed, err := worker.CollectObservedState(ctx, nil)
 
 			Expect(err).ToNot(HaveOccurred())
 			// The observed state should have last action results (even if empty)
@@ -389,7 +389,7 @@ authToken: "test-token"`,
 			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 			defer cancel()
 
-			_, err = worker.CollectObservedState(ctx)
+			_, err = worker.CollectObservedState(ctx, nil)
 			Expect(err).ToNot(HaveOccurred())
 
 			_, err = worker.DeriveDesiredState(nil)

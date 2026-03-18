@@ -29,7 +29,7 @@ var _ = Describe("Testutil Helpers", func() {
 			worker := &testutil.Worker{}
 			ctx := context.Background()
 
-			observed, err := worker.CollectObservedState(ctx)
+			observed, err := worker.CollectObservedState(ctx, nil)
 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(observed).NotTo(BeNil())
@@ -70,7 +70,7 @@ var _ = Describe("Testutil Helpers", func() {
 			}
 			ctx := context.Background()
 
-			observed, err := worker.CollectObservedState(ctx)
+			observed, err := worker.CollectObservedState(ctx, nil)
 
 			Expect(err).NotTo(HaveOccurred())
 

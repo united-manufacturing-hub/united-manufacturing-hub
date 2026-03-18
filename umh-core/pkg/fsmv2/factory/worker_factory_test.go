@@ -33,7 +33,7 @@ type mockWorker struct {
 	identity deps.Identity
 }
 
-func (m *mockWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedState, error) {
+func (m *mockWorker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
 	return nil, nil
 }
 

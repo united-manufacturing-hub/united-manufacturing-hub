@@ -261,7 +261,7 @@ state: "running"
 
 	Describe("CollectObservedState", func() {
 		It("should return observed state with CollectedAt timestamp", func() {
-			observed, err := worker.CollectObservedState(ctx)
+			observed, err := worker.CollectObservedState(ctx, nil)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(observed).NotTo(BeNil())
 
@@ -274,7 +274,7 @@ state: "running"
 			expectedToken := "test-jwt-token-12345"
 			deps.SetJWT(expectedToken, time.Now().Add(1*time.Hour))
 
-			observed, err := worker.CollectObservedState(ctx)
+			observed, err := worker.CollectObservedState(ctx, nil)
 			Expect(err).NotTo(HaveOccurred())
 
 			communicatorObserved := observed.(snapshot.CommunicatorObservedState)
@@ -286,7 +286,7 @@ state: "running"
 			expectedExpiry := time.Now().Add(2 * time.Hour).Truncate(time.Second)
 			deps.SetJWT("some-token", expectedExpiry)
 
-			observed, err := worker.CollectObservedState(ctx)
+			observed, err := worker.CollectObservedState(ctx, nil)
 			Expect(err).NotTo(HaveOccurred())
 
 			communicatorObserved := observed.(snapshot.CommunicatorObservedState)
@@ -301,7 +301,7 @@ state: "running"
 			}
 			deps.SetPulledMessages(expectedMessages)
 
-			observed, err := worker.CollectObservedState(ctx)
+			observed, err := worker.CollectObservedState(ctx, nil)
 			Expect(err).NotTo(HaveOccurred())
 
 			communicatorObserved := observed.(snapshot.CommunicatorObservedState)
@@ -316,7 +316,7 @@ state: "running"
 			deps.RecordError()
 			deps.RecordError()
 
-			observed, err := worker.CollectObservedState(ctx)
+			observed, err := worker.CollectObservedState(ctx, nil)
 			Expect(err).NotTo(HaveOccurred())
 
 			communicatorObserved := observed.(snapshot.CommunicatorObservedState)
@@ -327,7 +327,7 @@ state: "running"
 			deps := worker.GetDependencies()
 			deps.SetJWT("valid-token", time.Now().Add(1*time.Hour))
 
-			observed, err := worker.CollectObservedState(ctx)
+			observed, err := worker.CollectObservedState(ctx, nil)
 			Expect(err).NotTo(HaveOccurred())
 
 			communicatorObserved := observed.(snapshot.CommunicatorObservedState)
@@ -335,7 +335,7 @@ state: "running"
 		})
 
 		It("should set Authenticated to false when JWT token is empty", func() {
-			observed, err := worker.CollectObservedState(ctx)
+			observed, err := worker.CollectObservedState(ctx, nil)
 			Expect(err).NotTo(HaveOccurred())
 
 			communicatorObserved := observed.(snapshot.CommunicatorObservedState)
@@ -364,7 +364,7 @@ state: "running"
 
 			// Helper to collect observed state and save it (simulates collector)
 			collectAndSave := func(tc *metricsTestContext) snapshot.CommunicatorObservedState {
-				observed, err := tc.worker.CollectObservedState(ctx)
+				observed, err := tc.worker.CollectObservedState(ctx, nil)
 				Expect(err).NotTo(HaveOccurred())
 				communicatorObserved := observed.(snapshot.CommunicatorObservedState)
 				// Simulate collector saving observed state
@@ -380,7 +380,7 @@ state: "running"
 				deps.MetricsRecorder().IncrementCounter(depspkg.CounterMessagesPulled, 5)
 				deps.MetricsRecorder().SetGauge(depspkg.GaugeLastPullLatencyMs, 100.0)
 
-				observed, err := worker.CollectObservedState(ctx)
+				observed, err := worker.CollectObservedState(ctx, nil)
 				Expect(err).NotTo(HaveOccurred())
 
 				communicatorObserved := observed.(snapshot.CommunicatorObservedState)
@@ -397,7 +397,7 @@ state: "running"
 				deps.MetricsRecorder().IncrementCounter(depspkg.CounterPullFailures, 1)
 				deps.MetricsRecorder().SetGauge(depspkg.GaugeLastPullLatencyMs, 50.0)
 
-				observed, err := worker.CollectObservedState(ctx)
+				observed, err := worker.CollectObservedState(ctx, nil)
 				Expect(err).NotTo(HaveOccurred())
 
 				communicatorObserved := observed.(snapshot.CommunicatorObservedState)
@@ -415,7 +415,7 @@ state: "running"
 				deps.MetricsRecorder().IncrementCounter(depspkg.CounterMessagesPushed, 3)
 				deps.MetricsRecorder().SetGauge(depspkg.GaugeLastPushLatencyMs, 200.0)
 
-				observed, err := worker.CollectObservedState(ctx)
+				observed, err := worker.CollectObservedState(ctx, nil)
 				Expect(err).NotTo(HaveOccurred())
 
 				communicatorObserved := observed.(snapshot.CommunicatorObservedState)
@@ -432,7 +432,7 @@ state: "running"
 				deps.MetricsRecorder().IncrementCounter(depspkg.CounterPushFailures, 1)
 				deps.MetricsRecorder().SetGauge(depspkg.GaugeLastPushLatencyMs, 150.0)
 
-				observed, err := worker.CollectObservedState(ctx)
+				observed, err := worker.CollectObservedState(ctx, nil)
 				Expect(err).NotTo(HaveOccurred())
 
 				communicatorObserved := observed.(snapshot.CommunicatorObservedState)
@@ -522,7 +522,7 @@ state: "running"
 				expectedUUID := "backend-authenticated-uuid-12345"
 				deps.SetAuthenticatedUUID(expectedUUID)
 
-				observed, err := worker.CollectObservedState(ctx)
+				observed, err := worker.CollectObservedState(ctx, nil)
 				Expect(err).NotTo(HaveOccurred())
 
 				communicatorObserved := observed.(snapshot.CommunicatorObservedState)
@@ -530,7 +530,7 @@ state: "running"
 			})
 
 			It("should return empty string when no UUID has been set", func() {
-				observed, err := worker.CollectObservedState(ctx)
+				observed, err := worker.CollectObservedState(ctx, nil)
 				Expect(err).NotTo(HaveOccurred())
 
 				communicatorObserved := observed.(snapshot.CommunicatorObservedState)
@@ -542,7 +542,7 @@ state: "running"
 				deps.SetAuthenticatedUUID("first-uuid")
 				deps.SetAuthenticatedUUID("second-uuid-after-reauth")
 
-				observed, err := worker.CollectObservedState(ctx)
+				observed, err := worker.CollectObservedState(ctx, nil)
 				Expect(err).NotTo(HaveOccurred())
 
 				communicatorObserved := observed.(snapshot.CommunicatorObservedState)

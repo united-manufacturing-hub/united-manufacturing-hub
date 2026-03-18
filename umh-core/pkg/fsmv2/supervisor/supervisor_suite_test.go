@@ -138,7 +138,7 @@ type mockWorker struct {
 	requestShutdownFunc func() // Callback for when RequestShutdown is called
 }
 
-func (m *mockWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedState, error) {
+func (m *mockWorker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
 	if m.collectFunc != nil {
 		return m.collectFunc(ctx)
 	}

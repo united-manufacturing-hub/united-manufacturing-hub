@@ -226,7 +226,7 @@ WHY: Collection runs with a timeout. Without context cancellation handling, the
 method blocks until I/O completes (network timeout, disk read) even after the
 context is cancelled. This delays shutdown and can cause timeouts to cascade.
 Early exit on ctx.Done() enables responsive shutdown.`,
-		CorrectCode: `func (w *Worker) CollectObservedState(ctx context.Context) (ObservedState, error) {
+		CorrectCode: `func (w *Worker) CollectObservedState(ctx context.Context, _ DesiredState) (ObservedState, error) {
     select {
     case <-ctx.Done():
         return nil, ctx.Err()  // Early exit
@@ -319,12 +319,12 @@ More importantly, Go interfaces work differently with pointer vs value
 receivers - inconsistent receiver types cause subtle interface satisfaction
 bugs where methods "disappear" depending on how the type is used.`,
 		CorrectCode: `// Correct: pointer receiver
-func (w *MyWorker) CollectObservedState(ctx context.Context) (ObservedState, error) {
+func (w *MyWorker) CollectObservedState(ctx context.Context, _ DesiredState) (ObservedState, error) {
     return w.doCollection(ctx)
 }
 
 // WRONG: value receiver loses state
-func (w MyWorker) CollectObservedState(ctx context.Context) (ObservedState, error) {
+func (w MyWorker) CollectObservedState(ctx context.Context, _ DesiredState) (ObservedState, error) {
     return w.doCollection(ctx)  // Changes to w are lost!
 }`,
 		ReferenceFile: "example-child/worker.go",

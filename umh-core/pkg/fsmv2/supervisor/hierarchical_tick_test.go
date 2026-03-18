@@ -61,7 +61,7 @@ type hierarchicalWorker struct {
 	observed      *mockObservedState
 }
 
-func (h *hierarchicalWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedState, error) {
+func (h *hierarchicalWorker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
 	return h.observed, nil
 }
 

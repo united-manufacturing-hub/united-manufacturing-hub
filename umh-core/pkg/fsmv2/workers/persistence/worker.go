@@ -66,7 +66,7 @@ func NewPersistenceWorker(
 	}, nil
 }
 
-func (w *PersistenceWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedState, error) {
+func (w *PersistenceWorker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()

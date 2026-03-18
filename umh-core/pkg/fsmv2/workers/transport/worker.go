@@ -109,7 +109,7 @@ func NewTransportWorker(
 
 // CollectObservedState returns the current observed state of the transport worker.
 // Handles context cancellation at entry as required by architecture tests.
-func (w *TransportWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedState, error) {
+func (w *TransportWorker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
 	// Context cancellation check at entry (architecture requirement)
 	select {
 	case <-ctx.Done():

@@ -60,7 +60,7 @@ var _ = Describe("ChildWorker", func() {
 			worker, err := example_child.NewChildWorker(identity, mockPool, logger, nil)
 			Expect(err).NotTo(HaveOccurred())
 
-			observed, err := worker.CollectObservedState(context.Background())
+			observed, err := worker.CollectObservedState(context.Background(), nil)
 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(observed).NotTo(BeNil())
