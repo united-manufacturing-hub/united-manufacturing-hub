@@ -100,7 +100,7 @@ func (a *AuthenticateAction) Execute(ctx context.Context, depsAny any) error {
 		var transportErr *httpTransport.TransportError
 		if errors.As(err, &transportErr) {
 			deps.RecordTypedError(transportErr.Type, transportErr.RetryAfter)
-			deps.MetricsRecorder().IncrementCounter(counterForErrorType(transportErr.Type), 1)
+			deps.MetricsRecorder().IncrementCounter(httpTransport.CounterForErrorType(transportErr.Type), 1)
 			deps.GetLogger().SentryWarn(depspkg.FeatureCommunicator, deps.GetHierarchyPath(), "authentication_failed",
 				depspkg.Err(err), depspkg.String("errorType", transportErr.Type.String()))
 		} else {
@@ -135,29 +135,6 @@ func (a *AuthenticateAction) Execute(ctx context.Context, depsAny any) error {
 	}
 
 	return nil
-}
-
-func counterForErrorType(t httpTransport.ErrorType) depspkg.CounterName {
-	switch t {
-	case httpTransport.ErrorTypeCloudflareChallenge:
-		return depspkg.CounterCloudflareErrorsTotal
-	case httpTransport.ErrorTypeBackendRateLimit:
-		return depspkg.CounterBackendRateLimitErrorsTotal
-	case httpTransport.ErrorTypeInvalidToken:
-		return depspkg.CounterAuthFailuresTotal
-	case httpTransport.ErrorTypeInstanceDeleted:
-		return depspkg.CounterInstanceDeletedTotal
-	case httpTransport.ErrorTypeServerError:
-		return depspkg.CounterServerErrorsTotal
-	case httpTransport.ErrorTypeProxyBlock:
-		return depspkg.CounterProxyBlockErrorsTotal
-	case httpTransport.ErrorTypeNetwork:
-		return depspkg.CounterNetworkErrorsTotal
-	case httpTransport.ErrorTypeUnknown:
-		return depspkg.CounterNetworkErrorsTotal
-	default:
-		return depspkg.CounterNetworkErrorsTotal
-	}
 }
 
 func (a *AuthenticateAction) Name() string {

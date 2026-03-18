@@ -19,6 +19,7 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -28,6 +29,7 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/hash"
+	depspkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
 )
 
@@ -115,6 +117,43 @@ func (e *TransportError) Is(target error) bool {
 	}
 
 	return e.Type == t.Type
+}
+
+// ExtractErrorType unwraps a *TransportError from err and returns its ErrorType
+// and RetryAfter duration. If err does not wrap a *TransportError, it defaults
+// to ErrorTypeNetwork with zero retry delay.
+func ExtractErrorType(err error) (ErrorType, time.Duration) {
+	var transportErr *TransportError
+	if errors.As(err, &transportErr) {
+		return transportErr.Type, transportErr.RetryAfter
+	}
+
+	return ErrorTypeNetwork, 0
+}
+
+// CounterForErrorType maps an ErrorType to its corresponding Prometheus counter.
+// Unknown and unrecognized types default to CounterNetworkErrorsTotal.
+func CounterForErrorType(t ErrorType) depspkg.CounterName {
+	switch t {
+	case ErrorTypeCloudflareChallenge:
+		return depspkg.CounterCloudflareErrorsTotal
+	case ErrorTypeBackendRateLimit:
+		return depspkg.CounterBackendRateLimitErrorsTotal
+	case ErrorTypeInvalidToken:
+		return depspkg.CounterAuthFailuresTotal
+	case ErrorTypeInstanceDeleted:
+		return depspkg.CounterInstanceDeletedTotal
+	case ErrorTypeServerError:
+		return depspkg.CounterServerErrorsTotal
+	case ErrorTypeProxyBlock:
+		return depspkg.CounterProxyBlockErrorsTotal
+	case ErrorTypeNetwork:
+		return depspkg.CounterNetworkErrorsTotal
+	case ErrorTypeUnknown:
+		return depspkg.CounterNetworkErrorsTotal
+	default:
+		return depspkg.CounterNetworkErrorsTotal
+	}
 }
 
 // isCloudflareChallenge detects Cloudflare challenge pages via headers and body content.

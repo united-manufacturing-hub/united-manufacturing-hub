@@ -201,10 +201,18 @@ var _ = Describe("Transport Scenario", func() {
 
 ## Per-Child Error Tracking in Parent-Child Workers
 
-Each child (push/pull) has its own `RetryTracker` for independent health decisions:
+Each child (push/pull) has its own `RetryTracker` and `failurerate.Tracker` for independent health decisions:
 
 - **Errors** flow to BOTH the child's tracker AND the parent's tracker (`RecordTypedError`, `RecordError` delegate up)
 - **Successes** flow to the child's tracker ONLY (`RecordSuccess` does NOT propagate to parent; only auth success resets the parent tracker)
 - **Reads** (`GetConsecutiveErrors`, `GetDegradedEnteredAt`, `GetLastErrorAt`) come from the child's own tracker
 - Each child independently decides Running vs Degraded based on its own consecutive error count
 - The parent tracker accumulates ALL child errors for `ShouldResetTransport` decisions
+
+## Record* Methods: Only Call After Real Transport Operations
+
+`RecordSuccess()` and `RecordTypedError()` both feed the `failurerate.Tracker` rolling window. They must ONLY be called after a real HTTP request completed (success or failure). Never call them when nothing happened (e.g., empty channel, backpressure skip, precondition failure).
+
+**The rule**: if no HTTP round-trip occurred this tick, the action should return without calling any `Record*` method. "Nothing happened" is not a success and not a failure — it is the absence of an outcome.
+
+This prevents failure rate dilution: if idle ticks feed phantom "successes" into the rolling window, a 100% broken transport can appear healthy because idle ticks vastly outnumber real operations in bursty workloads.

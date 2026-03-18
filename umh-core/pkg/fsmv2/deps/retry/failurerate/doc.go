@@ -53,5 +53,7 @@
 // Error classification lives in the communicator/transport/http package
 // (ErrorType constants). Rate tracking lives in this package. Push and pull
 // dependencies each hold a *[Tracker] and call [Tracker.RecordOutcome]
-// on every error or success.
+// after every real HTTP operation (success or failure). Idle ticks — where
+// no HTTP request was made — must NOT record an outcome, as this would
+// dilute the failure rate with phantom data.
 package failurerate
