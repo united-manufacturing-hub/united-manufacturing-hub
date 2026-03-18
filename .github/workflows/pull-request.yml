@@ -148,7 +148,11 @@ jobs:
           # This ensures the guard only catches changes introduced by THIS PR,
           # not formatting/editorial changes that already landed on the base branch.
           BASE_REF="${{ github.event.pull_request.base.ref }}"
-          git fetch origin "$BASE_REF" --no-tags 2>/dev/null || true
+          if [[ -z "$BASE_REF" ]]; then
+            echo "::warning::No base ref available — skipping released-section guard"
+            exit 0
+          fi
+          git fetch origin "$BASE_REF" --no-tags || true
           MERGE_BASE=$(git merge-base "origin/$BASE_REF" HEAD || true)
 
           if [[ -z "$MERGE_BASE" ]]; then
@@ -165,7 +169,13 @@ jobs:
           LINE_NUM=$(grep -Fn "$HEADER" "$CHANGELOG" | head -1 | cut -d: -f1 || true)
 
           if [[ -z "$LINE_NUM" ]]; then
-            echo "::error::Header '$HEADER' not found in current $CHANGELOG"
+            # Check if merge-base also lacks this header — if so, this PR predates the tag
+            BASE_CHECK=$(git show "$MERGE_BASE:$CHANGELOG" 2>/dev/null | grep -Fn "$HEADER" | head -1 | cut -d: -f1 || true)
+            if [[ -z "$BASE_CHECK" ]]; then
+              echo "::warning::Header '$HEADER' not in current CHANGELOG or merge-base — PR predates tag, skipping guard"
+              exit 0
+            fi
+            echo "::error::Header '$HEADER' not found in current $CHANGELOG but exists in merge-base"
             echo "The released version section was deleted or renamed. If this is intentional,"
             echo "add the 'skip-changelog-guard' label to bypass this check."
             exit 1
