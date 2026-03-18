@@ -99,7 +99,7 @@ jobs:
       contents: read
     steps:
       # Check out THIS repo (fetch-depth: 0 fetches all tags + history, needed by
-      # the changelog guard for "git tag --list --sort=-version:refname" and "git show TAG:path")
+      # the changelog guard for tag lookup and merge-base computation)
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 0
@@ -144,6 +144,20 @@ jobs:
 
           echo "Latest tag: $LATEST_TAG"
 
+          # Compute merge-base between this PR and its target branch.
+          # This ensures the guard only catches changes introduced by THIS PR,
+          # not formatting/editorial changes that already landed on the base branch.
+          BASE_REF="${{ github.event.pull_request.base.ref }}"
+          git fetch origin "$BASE_REF" --no-tags 2>/dev/null || true
+          MERGE_BASE=$(git merge-base "origin/$BASE_REF" HEAD || true)
+
+          if [[ -z "$MERGE_BASE" ]]; then
+            echo "::warning::Could not compute merge-base with $BASE_REF — skipping released-section guard"
+            exit 0
+          fi
+
+          echo "Merge base: $MERGE_BASE"
+
           HEADER="## [${LATEST_TAG#v}]"
 
           # Find the header line in the current CHANGELOG (-F = fixed-string to avoid bracket metacharacters, -n = emit line numbers for cut)
@@ -162,30 +176,30 @@ jobs:
           # Extract the released tail (from the header line to EOF)
           CURRENT_TAIL=$(tail -n +"$LINE_NUM" "$CHANGELOG")
 
-          # Get the same file from the tag commit (2>&1 captures error into variable for the warning)
-          if ! TAG_FILE=$(git show "$LATEST_TAG:$CHANGELOG" 2>&1); then
-            echo "::warning::Could not read $CHANGELOG from $LATEST_TAG (git: $TAG_FILE) — skipping guard"
+          # Get the same file from the merge-base commit (2>&1 captures error into variable for the warning)
+          if ! BASE_FILE=$(git show "$MERGE_BASE:$CHANGELOG" 2>&1); then
+            echo "::warning::Could not read $CHANGELOG from merge-base $MERGE_BASE (git: $BASE_FILE) — skipping guard"
             exit 0
           fi
 
-          # Find the same header in the tag version (-F = fixed-string, -n = line numbers; || true for set -e safety)
-          TAG_LINE_NUM=$(printf '%s\n' "$TAG_FILE" | grep -Fn "$HEADER" | head -1 | cut -d: -f1 || true)
+          # Find the same header in the merge-base version (-F = fixed-string, -n = line numbers; || true for set -e safety)
+          BASE_LINE_NUM=$(printf '%s\n' "$BASE_FILE" | grep -Fn "$HEADER" | head -1 | cut -d: -f1 || true)
 
-          if [[ -z "$TAG_LINE_NUM" ]]; then
-            echo "::warning::Header '$HEADER' not found in $LATEST_TAG:$CHANGELOG — skipping guard"
+          if [[ -z "$BASE_LINE_NUM" ]]; then
+            echo "::warning::Header '$HEADER' not found in merge-base:$CHANGELOG — skipping guard"
             exit 0
           fi
 
-          # Extract the released tail from the tag
-          TAG_TAIL=$(printf '%s\n' "$TAG_FILE" | tail -n +"$TAG_LINE_NUM")
+          # Extract the released tail from the merge-base
+          BASE_TAIL=$(printf '%s\n' "$BASE_FILE" | tail -n +"$BASE_LINE_NUM")
 
           # Compare — use printf '%s' (no trailing newline) so diff is not thrown off by newline differences at EOF.
           # Capture exit code separately: 0=identical, 1=differences, 2=error. Treat 2 as a hard failure.
           DIFF_EXIT=0
           DIFF_OUTPUT=$(diff --unified \
-            --label "released ($LATEST_TAG)" \
+            --label "released (merge-base)" \
             --label "current (PR)" \
-            <(printf '%s' "$TAG_TAIL") \
+            <(printf '%s' "$BASE_TAIL") \
             <(printf '%s' "$CURRENT_TAIL")) || DIFF_EXIT=$?
 
           if [[ "$DIFF_EXIT" -gt 1 ]]; then
@@ -200,7 +214,7 @@ jobs:
             echo ""
             echo "::error::Released CHANGELOG sections have been modified!"
             echo ""
-            echo "The content below '${HEADER}' differs from what was tagged in ${LATEST_TAG}."
+            echo "The content below '${HEADER}' differs from the merge-base with ${BASE_REF}."
             echo "This usually happens when a rebase resolves CHANGELOG.md merge conflicts"
             echo "and accidentally moves entries into an already-released version section."
             echo ""
@@ -209,7 +223,7 @@ jobs:
             exit 1
           fi
 
-          echo "Released sections match $LATEST_TAG — OK"
+          echo "Released sections unchanged vs merge-base — OK"
       - name: Validate CHANGELOG.md
         run: npx tsx changelog-scripts/.github/scripts/validate-changelog.ts --format version --changelog-path umh-core/CHANGELOG.md
 
