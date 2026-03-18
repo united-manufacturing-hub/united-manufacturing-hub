@@ -93,18 +93,36 @@ jobs:
 
   validate-changelog:
     needs: changes
-    if: ${{ needs.changes.outputs.changelog == 'true' }}
+    if: ${{ needs.changes.outputs.changelog == 'true' || needs.changes.outputs.code == 'true' }}
     runs-on: depot-ubuntu-24.04
     permissions:
       contents: read
     steps:
+      # workflow_dispatch has no PR context — labels are unavailable
+      - name: Require CHANGELOG.md for code changes
+        if: >-
+          ${{ github.event_name != 'merge_group'
+              && github.event_name != 'workflow_dispatch'
+              && needs.changes.outputs.code == 'true'
+              && needs.changes.outputs.changelog != 'true'
+              && !contains(github.event.pull_request.labels.*.name, 'skip-changelog-guard') }}
+        run: |
+          echo "::error::No changes to umh-core/CHANGELOG.md detected."
+          echo ""
+          echo "This PR modifies code but doesn't include a changelog entry."
+          echo "Add an entry under the topmost version section (e.g. ## [X.Y.Z]) in umh-core/CHANGELOG.md,"
+          echo "or add the 'skip-changelog-guard' label if not needed (CI, refactoring, tests-only)"
+          echo "and re-run this check."
+          exit 1
       # Check out THIS repo (fetch-depth: 0 fetches all tags + history, needed by
       # the changelog guard for "git tag --list --sort=-version:refname" and "git show TAG:path")
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        if: ${{ needs.changes.outputs.changelog == 'true' }}
         with:
           fetch-depth: 0
       # Generate token for cross-repo access
       - name: Generate GitHub App token
+        if: ${{ needs.changes.outputs.changelog == 'true' }}
         id: app-token
         uses: actions/create-github-app-token@29824e69f54612133e76f7eaac726eef6c875baf # v2
         with:
@@ -113,16 +131,19 @@ jobs:
           repositories: changelog.umh.app
       # Check out the changelog.umh.app repo
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        if: ${{ needs.changes.outputs.changelog == 'true' }}
         with:
           repository: united-manufacturing-hub/changelog.umh.app
           token: ${{ steps.app-token.outputs.token }}
           path: changelog-scripts
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        if: ${{ needs.changes.outputs.changelog == 'true' }}
         with:
           node-version: "20"
       - name: Check released sections are unmodified
         if: >-
-          ${{ github.event_name != 'merge_group'
+          ${{ needs.changes.outputs.changelog == 'true'
+              && github.event_name != 'merge_group'
               && github.event_name != 'workflow_dispatch'
               && !contains(github.event.pull_request.labels.*.name, 'skip-changelog-guard') }}
         shell: bash
@@ -211,6 +232,7 @@ jobs:
 
           echo "Released sections match $LATEST_TAG — OK"
       - name: Validate CHANGELOG.md
+        if: ${{ needs.changes.outputs.changelog == 'true' }}
         run: npx tsx changelog-scripts/.github/scripts/validate-changelog.ts --format version --changelog-path umh-core/CHANGELOG.md
 
   # Gather results from all required steps

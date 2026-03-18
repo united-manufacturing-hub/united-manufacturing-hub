@@ -143,6 +143,7 @@ Every PR with user-visible changes must add an entry to `umh-core/CHANGELOG.md` 
 - **No trailing periods** on bullet points
 - On tag push, a sync workflow automatically creates entries in changelog.umh.app from CHANGELOG.md
 - GitHub Release notes are automatically populated from CHANGELOG.md by the `update-github-release.yml` workflow (runs on tag push). The job extracts the version's section, transforms headers for standalone display, and appends a changelog.umh.app link. You can still edit the Release body manually after if needed.
+- **CI enforcement**: PRs with code changes must modify CHANGELOG.md, or CI will fail. Add the `skip-changelog-guard` label to bypass (for CI/CD, refactoring, or test-only changes).
 
 ## Support & Troubleshooting Workflows
 
