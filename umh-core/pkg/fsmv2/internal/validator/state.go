@@ -201,7 +201,7 @@ func checkShutdownCheckFirst(filename string) []Violation {
 
 		if !isShutdownCheck {
 			baseName := filepath.Base(filename)
-			if strings.Contains(baseName, "stopped") || strings.Contains(baseName, "trying_to_stop") {
+			if strings.Contains(baseName, "stopped") || strings.Contains(baseName, "trying_to_stop") || strings.Contains(baseName, "stopping") {
 				return true
 			}
 
