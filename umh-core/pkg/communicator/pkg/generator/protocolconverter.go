@@ -169,8 +169,12 @@ func buildProtocolConverterAsDfc(
 	svcInfo := observed.ServiceInfo
 	if m := svcInfo.DataflowComponentReadObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.MetricsState; m != nil &&
 		m.Input.LastCount > 0 {
+		avgThroughput := m.Input.MessagesPerTick / constants.DefaultTickerTime.Seconds()
+		if instance.DesiredState == protocolconverter.OperationalStateStopped {
+			avgThroughput = 0
+		}
 		dfc.Metrics = &models.DfcMetrics{
-			AvgInputThroughputPerMinuteInMsgSec: m.Input.MessagesPerTick / constants.DefaultTickerTime.Seconds(),
+			AvgInputThroughputPerMinuteInMsgSec: avgThroughput,
 		}
 	}
 
