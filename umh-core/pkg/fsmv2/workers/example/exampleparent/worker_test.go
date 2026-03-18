@@ -55,7 +55,7 @@ var _ = Describe("ParentWorker", func() {
 
 	Describe("CollectObservedState", func() {
 		It("should return observed state with timestamp", func() {
-			observed, err := worker.CollectObservedState(context.Background())
+			observed, err := worker.CollectObservedState(context.Background(), nil)
 
 			Expect(err).ToNot(HaveOccurred())
 			Expect(observed).NotTo(BeNil())

@@ -66,7 +66,7 @@ var _ = Describe("HelloworldWorker", func() {
 		})
 
 		It("should collect initial state with HelloSaid=false", func() {
-			obs, err := worker.CollectObservedState(context.Background())
+			obs, err := worker.CollectObservedState(context.Background(), nil)
 
 			Expect(err).NotTo(HaveOccurred())
 			typedObs, ok := obs.(snapshot.HelloworldObservedState)
@@ -78,7 +78,7 @@ var _ = Describe("HelloworldWorker", func() {
 			ctx, cancel := context.WithCancel(context.Background())
 			cancel()
 
-			obs, err := worker.CollectObservedState(ctx)
+			obs, err := worker.CollectObservedState(ctx, nil)
 
 			Expect(err).To(Equal(context.Canceled))
 			Expect(obs).To(BeNil())

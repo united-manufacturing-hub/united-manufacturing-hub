@@ -66,13 +66,8 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	observed, err := worker.CollectObservedState(ctx)
-	if err != nil {
-		s.logger.SentryError(deps.FeatureFSMv2, identity.HierarchyPath, err, "worker_add_collect_observed_failed")
-
-		return fmt.Errorf("failed to collect initial observed state: %w", err)
-	}
-
+	// Derive desired state first so we can pass it to CollectObservedState.
+	// Workers are guaranteed a non-nil desired state parameter.
 	initialDesired, err := worker.DeriveDesiredState(nil)
 	if err != nil {
 		s.logger.SentryError(deps.FeatureFSMv2, identity.HierarchyPath, err, "worker_add_derive_desired_failed")
@@ -84,6 +79,13 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 		s.logger.SentryError(deps.FeatureFSMv2, identity.HierarchyPath, valErr, "worker_add_validate_desired_failed")
 
 		return fmt.Errorf("failed to derive initial desired state: %w", valErr)
+	}
+
+	observed, err := worker.CollectObservedState(ctx, initialDesired)
+	if err != nil {
+		s.logger.SentryError(deps.FeatureFSMv2, identity.HierarchyPath, err, "worker_add_collect_observed_failed")
+
+		return fmt.Errorf("failed to collect initial observed state: %w", err)
 	}
 
 	identityDoc := persistence.Document{
@@ -286,6 +288,19 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 					setter.SetActionHistory(history)
 				}
 			}
+		},
+		DesiredStateProvider: func() fsmv2.DesiredState {
+			ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+			defer cancel()
+
+			var desired TDesired
+			if err := s.store.LoadDesiredTyped(ctx, s.workerType, identity.ID, &desired); err != nil {
+				s.logger.SentryWarn(deps.FeatureFSMv2, identity.HierarchyPath, "desired_state_load_failed",
+					deps.Err(err))
+				return nil
+			}
+
+			return desired
 		},
 	})
 

@@ -186,7 +186,11 @@ func Result[TSnapshot any, TDeps any](
 // not by a method on this interface.
 type Worker interface {
 	// CollectObservedState monitors the actual system state.
-	CollectObservedState(ctx context.Context) (ObservedState, error)
+	// The desired parameter provides the current desired state so observation-based
+	// workers can access configuration (target IP, port, etc.) without workarounds.
+	// The supervisor guarantees desired is always non-nil; collection is skipped
+	// until a desired state exists in the store.
+	CollectObservedState(ctx context.Context, desired DesiredState) (ObservedState, error)
 
 	// DeriveDesiredState derives the target state from user configuration (spec).
 	DeriveDesiredState(spec interface{}) (DesiredState, error)

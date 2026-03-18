@@ -326,7 +326,7 @@ type incrementalValidationMockWorker struct {
 	childSpecs   []config.ChildSpec
 }
 
-func (m *incrementalValidationMockWorker) CollectObservedState(_ context.Context) (fsmv2.ObservedState, error) {
+func (m *incrementalValidationMockWorker) CollectObservedState(_ context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
 	return &mockObservedState{
 		doc: persistence.Document{
 			"id": m.identity.ID,
@@ -352,7 +352,7 @@ type dynamicChildSpecMockWorker struct {
 	childSpecs   []config.ChildSpec
 }
 
-func (m *dynamicChildSpecMockWorker) CollectObservedState(_ context.Context) (fsmv2.ObservedState, error) {
+func (m *dynamicChildSpecMockWorker) CollectObservedState(_ context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
 	return &mockObservedState{
 		doc: persistence.Document{
 			"id": m.identity.ID,
