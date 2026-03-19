@@ -94,7 +94,8 @@ jobs:
   require-changelog-entry:
     needs: changes
     if: ${{ needs.changes.outputs.code == 'true' }}
-    runs-on: depot-ubuntu-24.04
+    # Use GH runner for fast startup, does not need Depot
+    runs-on: ubuntu-latest
     permissions:
       contents: read
     steps:
