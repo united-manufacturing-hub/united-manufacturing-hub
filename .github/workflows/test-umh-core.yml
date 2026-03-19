@@ -20,6 +20,11 @@ concurrency:
 
 on:
   workflow_call:
+    inputs:
+      run-integration-tests:
+        description: "Whether to run integration tests"
+        type: boolean
+        default: true
   workflow_dispatch:
 
 jobs:
@@ -69,6 +74,7 @@ jobs:
 
   integration-tests:
     name: Integration Tests
+    if: inputs.run-integration-tests != false
     runs-on: depot-ubuntu-24.04-4
     strategy:
       matrix:

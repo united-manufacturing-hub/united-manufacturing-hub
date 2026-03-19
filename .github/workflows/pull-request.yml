@@ -46,6 +46,8 @@ jobs:
     needs: [changes, go-analysis]
     if: ${{ needs.changes.outputs.code == 'true' }}
     uses: ./.github/workflows/test-umh-core.yml
+    with:
+      run-integration-tests: ${{ github.event_name == 'merge_group' }}
     secrets: inherit
     permissions:
       contents: read
