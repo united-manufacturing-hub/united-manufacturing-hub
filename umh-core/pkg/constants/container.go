@@ -49,4 +49,9 @@ const (
 	// CPUThrottleRatioThreshold defines when CPU throttling is considered significant.
 	// If more than 5% of periods are throttled, the CPU is considered throttled.
 	CPUThrottleRatioThreshold = 0.05
+
+	// CPUThrottleWindow defines the sliding window duration for throttle ratio calculation.
+	// At the 5% threshold, a 5-second window requires ~250ms of sustained throttling
+	// (2-3 CFS periods) before flagging degraded, filtering out transient spikes.
+	CPUThrottleWindow = 5 * time.Second
 )
