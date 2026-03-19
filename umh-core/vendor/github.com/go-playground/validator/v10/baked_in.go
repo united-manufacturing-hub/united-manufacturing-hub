@@ -1,6 +1,7 @@
 package validator
 
 import (
+	"bufio"
 	"bytes"
 	"cmp"
 	"context"
@@ -15,6 +16,7 @@ import (
 	"net/url"
 	"os"
 	"reflect"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -118,7 +120,9 @@ var (
 		"fieldcontains":                 fieldContains,
 		"fieldexcludes":                 fieldExcludes,
 		"alpha":                         isAlpha,
+		"alphaspace":                    isAlphaSpace,
 		"alphanum":                      isAlphanum,
+		"alphanumspace":                 isAlphaNumericSpace,
 		"alphaunicode":                  isAlphaUnicode,
 		"alphanumunicode":               isAlphanumUnicode,
 		"boolean":                       isBoolean,
@@ -134,6 +138,7 @@ var (
 		"email":                         isEmail,
 		"url":                           isURL,
 		"http_url":                      isHttpURL,
+		"https_url":                     isHttpsURL,
 		"uri":                           isURI,
 		"urn_rfc2141":                   isUrnRFC2141, // RFC 2141
 		"file":                          isFile,
@@ -203,6 +208,7 @@ var (
 		"ip6_addr":                      isIP6AddrResolvable,
 		"ip_addr":                       isIPAddrResolvable,
 		"unix_addr":                     isUnixAddrResolvable,
+		"uds_exists":                    isUnixDomainSocketExists,
 		"mac":                           isMAC,
 		"hostname":                      isHostnameRFC952,  // RFC 952
 		"hostname_rfc1123":              isHostnameRFC1123, // RFC 1123
@@ -235,7 +241,8 @@ var (
 		"bcp47_language_tag":            isBCP47LanguageTag,
 		"postcode_iso3166_alpha2":       isPostcodeByIso3166Alpha2,
 		"postcode_iso3166_alpha2_field": isPostcodeByIso3166Alpha2Field,
-		"bic":                           isIsoBicFormat,
+		"bic_iso_9362_2014":             isIsoBic2014Format,
+		"bic":                           isIsoBic2022Format,
 		"semver":                        isSemverFormat,
 		"dns_rfc1035_label":             isDnsRFC1035LabelFormat,
 		"credit_card":                   isCreditCard,
@@ -531,12 +538,20 @@ func hasMultiByteCharacter(fl FieldLevel) bool {
 
 // isPrintableASCII is the validation function for validating if the field's value is a valid printable ASCII character.
 func isPrintableASCII(fl FieldLevel) bool {
-	return printableASCIIRegex().MatchString(fl.Field().String())
+	field := fl.Field()
+	if field.Kind() == reflect.String {
+		return printableASCIIRegex().MatchString(field.String())
+	}
+	return false
 }
 
 // isASCII is the validation function for validating if the field's value is a valid ASCII character.
 func isASCII(fl FieldLevel) bool {
-	return aSCIIRegex().MatchString(fl.Field().String())
+	field := fl.Field()
+	if field.Kind() == reflect.String {
+		return aSCIIRegex().MatchString(field.String())
+	}
+	return false
 }
 
 // isUUID5 is the validation function for validating if the field's value is a valid v5 UUID.
@@ -1513,6 +1528,29 @@ func isHttpURL(fl FieldLevel) bool {
 	panic(fmt.Sprintf("Bad field type %s", field.Type()))
 }
 
+// isHttpsURL is the validation function for validating if the current field's value is a valid HTTPS-only URL.
+func isHttpsURL(fl FieldLevel) bool {
+	if !isURL(fl) {
+		return false
+	}
+
+	field := fl.Field()
+	switch field.Kind() {
+	case reflect.String:
+
+		s := strings.ToLower(field.String())
+
+		url, err := url.Parse(s)
+		if err != nil || url.Host == "" {
+			return false
+		}
+
+		return url.Scheme == "https"
+	}
+
+	panic(fmt.Sprintf("Bad field type %s", field.Type()))
+}
+
 // isUrnRFC2141 is the validation function for validating if the current field's value is a valid URN as per RFC 2141.
 func isUrnRFC2141(fl FieldLevel) bool {
 	field := fl.Field()
@@ -1743,6 +1781,16 @@ func isAlphanumUnicode(fl FieldLevel) bool {
 	return alphaUnicodeNumericRegex().MatchString(fl.Field().String())
 }
 
+// isAlphaSpace is the validation function for validating if the current field's value is a valid alpha value with spaces.
+func isAlphaSpace(fl FieldLevel) bool {
+	return alphaSpaceRegex().MatchString(fl.Field().String())
+}
+
+// isAlphaNumericSpace is the validation function for validating if the current field's value is a valid alphanumeric value with spaces.
+func isAlphaNumericSpace(fl FieldLevel) bool {
+	return alphanNumericSpaceRegex().MatchString(fl.Field().String())
+}
+
 // isAlphaUnicode is the validation function for validating if the current field's value is a valid alpha unicode value.
 func isAlphaUnicode(fl FieldLevel) bool {
 	return alphaUnicodeRegex().MatchString(fl.Field().String())
@@ -1872,6 +1920,15 @@ func requiredIf(fl FieldLevel) bool {
 	if len(params)%2 != 0 {
 		panic(fmt.Sprintf("Bad param number for required_if %s", fl.FieldName()))
 	}
+
+	seen := make(map[string]struct{})
+	for i := 0; i < len(params); i += 2 {
+		if _, ok := seen[params[i]]; ok {
+			panic(fmt.Sprintf("Duplicate param %s for required_if %s", params[i], fl.FieldName()))
+		}
+		seen[params[i]] = struct{}{}
+	}
+
 	for i := 0; i < len(params); i += 2 {
 		if !requireCheckFieldValue(fl, params[i], params[i+1], false) {
 			return true
@@ -1935,11 +1992,12 @@ func excludedUnless(fl FieldLevel) bool {
 		panic(fmt.Sprintf("Bad param number for excluded_unless %s", fl.FieldName()))
 	}
 	for i := 0; i < len(params); i += 2 {
-		if !requireCheckFieldValue(fl, params[i], params[i+1], false) {
-			return !hasValue(fl)
+		if requireCheckFieldValue(fl, params[i], params[i+1], false) {
+			return true
 		}
 	}
-	return true
+
+	return !hasValue(fl)
 }
 
 // excludedWith is the validation function
@@ -2556,6 +2614,70 @@ func isUnixAddrResolvable(fl FieldLevel) bool {
 	return err == nil
 }
 
+// isUnixDomainSocketExists is the validation function for validating if the field's value is an existing Unix domain socket.
+// It handles both filesystem-based sockets and Linux abstract sockets.
+// It always returns false for Windows.
+func isUnixDomainSocketExists(fl FieldLevel) bool {
+	if runtime.GOOS == "windows" {
+		return false
+	}
+
+	sockpath := fl.Field().String()
+
+	if sockpath == "" {
+		return false
+	}
+
+	// On Linux, check for abstract sockets (prefixed with @)
+	if runtime.GOOS == "linux" && strings.HasPrefix(sockpath, "@") {
+		return isAbstractSocketExists(sockpath)
+	}
+
+	// For filesystem-based sockets, check if the path exists and is a socket
+	stats, err := os.Stat(sockpath)
+	if err != nil {
+		return false
+	}
+
+	return stats.Mode().Type() == fs.ModeSocket
+}
+
+// isAbstractSocketExists checks if a Linux abstract socket exists by reading /proc/net/unix.
+// Abstract sockets are identified by an @ prefix in human-readable form.
+func isAbstractSocketExists(sockpath string) bool {
+	file, err := os.Open("/proc/net/unix")
+	if err != nil {
+		return false
+	}
+	defer func() {
+		_ = file.Close()
+	}()
+
+	scanner := bufio.NewScanner(file)
+
+	// Skip the header line
+	if !scanner.Scan() {
+		return false
+	}
+
+	// Abstract sockets in /proc/net/unix are represented with @ prefix
+	// The socket path is the last field in each line
+	for scanner.Scan() {
+		line := scanner.Text()
+		fields := strings.Fields(line)
+
+		// The path is the last field (8th field typically)
+		if len(fields) >= 8 {
+			path := fields[len(fields)-1]
+			if path == sockpath {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
 func isIP4Addr(fl FieldLevel) bool {
 	val := fl.Field().String()
 
@@ -2904,11 +3026,18 @@ func isBCP47LanguageTag(fl FieldLevel) bool {
 	panic(fmt.Sprintf("Bad field type %s", field.Type()))
 }
 
-// isIsoBicFormat is the validation function for validating if the current field's value is a valid Business Identifier Code (SWIFT code), defined in ISO 9362
-func isIsoBicFormat(fl FieldLevel) bool {
+// isIsoBic2014Format is the validation function for validating if the current field's value is a valid Business Identifier Code (SWIFT code), defined in ISO 9362 2014
+func isIsoBic2014Format(fl FieldLevel) bool {
 	bicString := fl.Field().String()
 
-	return bicRegex().MatchString(bicString)
+	return bic2014Regex().MatchString(bicString)
+}
+
+// isIsoBic2022Format is the validation function for validating if the current field's value is a valid Business Identifier Code (SWIFT code), defined in ISO 9362 2022
+func isIsoBic2022Format(fl FieldLevel) bool {
+	bicString := fl.Field().String()
+
+	return bic2022Regex().MatchString(bicString)
 }
 
 // isSemverFormat is the validation function for validating if the current field's value is a valid semver version, defined in Semantic Versioning 2.0.0
