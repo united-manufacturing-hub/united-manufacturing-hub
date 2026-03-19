@@ -31,6 +31,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
@@ -96,6 +98,7 @@ func NewHelloworldWorker(
 // IMPLEMENTATION PATTERN:
 //   - Check context cancellation first
 //   - Read state from dependencies (what actions have set)
+//   - Read external state via blocking I/O (file, network, etc.)
 //   - Copy framework metrics if available
 //   - Return the observed state
 func (w *HelloworldWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedState, error) {
@@ -119,6 +122,14 @@ func (w *HelloworldWorker) CollectObservedState(ctx context.Context) (fsmv2.Obse
 
 	// Include action history for debugging
 	observed.LastActionResults = deps.GetActionHistory()
+
+	// Observation: read mood from external file (blocking disk I/O).
+	// This demonstrates why CollectObservedState runs in a background goroutine —
+	// file reads block, and on network mounts or slow storage (common in factories),
+	// this can take seconds. The supervisor ensures slow reads never block the tick loop.
+	if data, err := os.ReadFile("/tmp/helloworld-mood"); err == nil {
+		observed.Mood = strings.TrimSpace(string(data))
+	}
 
 	return observed, nil
 }

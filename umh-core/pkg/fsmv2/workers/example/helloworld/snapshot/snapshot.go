@@ -69,6 +69,10 @@ type HelloworldObservedState struct {
 
 	// HelloSaid tracks whether the SayHelloAction has been executed
 	HelloSaid bool `json:"hello_said"`
+
+	// Mood is read from an external file (/tmp/helloworld-mood) by CollectObservedState.
+	// Demonstrates real blocking I/O in observation collection.
+	Mood string `json:"mood,omitempty"`
 }
 
 // GetTimestamp returns when this observation was collected.
