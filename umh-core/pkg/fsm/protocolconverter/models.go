@@ -194,6 +194,9 @@ type ProtocolConverterInstance struct {
 	// that are updated at the beginning of Reconcile and then used to
 	// determine the next state
 	ObservedState ProtocolConverterObservedState
+
+	// debugLevel controls whether debug logging is enabled for the underlying Benthos processes
+	debugLevel bool
 }
 
 // GetLastObservedState returns the last known state of the instance.

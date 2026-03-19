@@ -318,6 +318,7 @@ func (m *MockProtocolConverterService) AddToManager(
 	filesystemService filesystem.Service,
 	cfg *protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime,
 	protConvName string,
+	debugLevel bool,
 ) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -374,6 +375,7 @@ func (m *MockProtocolConverterService) UpdateInManager(
 	filesystemService filesystem.Service,
 	cfg *protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime,
 	protConvName string,
+	debugLevel bool,
 ) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()

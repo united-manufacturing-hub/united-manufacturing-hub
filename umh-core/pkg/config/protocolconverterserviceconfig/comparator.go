@@ -56,8 +56,7 @@ func (c *Comparator) ConfigsEqual(desired, observed ProtocolConverterServiceConf
 		locationEqual &&
 		comparatorDFC.ConfigsEqual(dfcReadD, dfcReadO) &&
 		comparatorDFC.ConfigsEqual(dfcWriteD, dfcWriteO) &&
-		comparatorVariable.ConfigsEqual(desired.Variables, observed.Variables) &&
-		desired.DebugLevel == observed.DebugLevel
+		comparatorVariable.ConfigsEqual(desired.Variables, observed.Variables)
 }
 
 // ConfigDiff returns a human-readable string describing differences between configs.
@@ -90,10 +89,5 @@ func (c *Comparator) ConfigDiff(desired, observed ProtocolConverterServiceConfig
 	comparatorVariable := variables.NewComparator()
 	variableDiff := comparatorVariable.ConfigDiff(desired.Variables, observed.Variables)
 
-	debugLevelDiff := ""
-	if desired.DebugLevel != observed.DebugLevel {
-		debugLevelDiff = fmt.Sprintf("DebugLevel: Want: %v, Have: %v\n", desired.DebugLevel, observed.DebugLevel)
-	}
-
-	return connectionDiff + locationDiff + dfcReadDiff + dfcWriteDiff + variableDiff + debugLevelDiff
+	return connectionDiff + locationDiff + dfcReadDiff + dfcWriteDiff + variableDiff
 }
