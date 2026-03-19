@@ -126,6 +126,8 @@ jobs:
               && github.event_name != 'workflow_dispatch'
               && !contains(github.event.pull_request.labels.*.name, 'skip-changelog-guard') }}
         shell: bash
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
         run: |
           set -euo pipefail
 
@@ -147,7 +149,6 @@ jobs:
           # Compute merge-base between this PR and its target branch.
           # This ensures the guard only catches changes introduced by THIS PR,
           # not formatting/editorial changes that already landed on the base branch.
-          BASE_REF="${{ github.event.pull_request.base.ref }}"
           if [[ -z "$BASE_REF" ]]; then
             echo "::warning::No base ref available — skipping released-section guard"
             exit 0
@@ -207,7 +208,7 @@ jobs:
           # Capture exit code separately: 0=identical, 1=differences, 2=error. Treat 2 as a hard failure.
           DIFF_EXIT=0
           DIFF_OUTPUT=$(diff --unified \
-            --label "released (merge-base)" \
+            --label "released (merge-base ${MERGE_BASE:0:10})" \
             --label "current (PR)" \
             <(printf '%s' "$BASE_TAIL") \
             <(printf '%s' "$CURRENT_TAIL")) || DIFF_EXIT=$?
