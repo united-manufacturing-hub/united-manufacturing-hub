@@ -91,6 +91,32 @@ jobs:
             docker pull ghcr.io/united-manufacturing-hub/umh-core:sha-${{ steps.short-sha.outputs.SHORT_SHA }}
             ```
 
+  require-changelog-entry:
+    needs: changes
+    if: ${{ needs.changes.outputs.code == 'true' }}
+    # Use GH runner for fast startup, does not need Depot
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      # merge_group: already validated at PR level; workflow_dispatch: no PR context (labels unavailable)
+      - name: Require CHANGELOG.md for code changes
+        if: >-
+          ${{ github.event_name != 'merge_group'
+              && github.event_name != 'workflow_dispatch'
+              && needs.changes.outputs.changelog != 'true'
+              && !contains(github.event.pull_request.labels.*.name, 'skip-changelog-guard') }}
+        run: |
+          echo "::error::No changes to umh-core/CHANGELOG.md detected."
+          echo ""
+          echo "This PR modifies code but doesn't include a changelog entry."
+          echo "Add an entry under the topmost version section (e.g. ## [X.Y.Z]) in umh-core/CHANGELOG.md,"
+          echo "or add the 'skip-changelog-guard' label if not needed (CI/CD, refactoring, or test-only changes)"
+          echo "and push a commit to re-trigger CI."
+          echo ""
+          echo "See CLAUDE.md > Changelog for entry format and guidelines."
+          exit 1
+
   validate-changelog:
     needs: changes
     if: ${{ needs.changes.outputs.changelog == 'true' }}
@@ -218,7 +244,7 @@ jobs:
   required-checks:
     name: Required Checks
     runs-on: ubuntu-latest # Use GH runner for fast startup, does not need Depot
-    needs: [go-analysis, tests, build, license-eye-header, validate-changelog]
+    needs: [go-analysis, tests, build, license-eye-header, require-changelog-entry, validate-changelog]
     if: always()
     steps:
       - run: echo '${{ toJSON(needs) }}' | jq -e 'to_entries | all(.value.result == "success" or .value.result == "skipped")'
