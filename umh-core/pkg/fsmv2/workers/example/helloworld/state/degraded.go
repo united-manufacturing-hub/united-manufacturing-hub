@@ -20,36 +20,38 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/helloworld/snapshot"
 )
 
-// RunningState represents the worker actively running.
-// This is the steady state - worker stays here until shutdown.
-type RunningState struct {
-	helpers.RunningHealthyBase
+// DegradedState represents the worker running but impaired.
+// Entered when the external mood file contains "sad".
+// Transitions back to RunningState when the mood changes.
+type DegradedState struct {
+	helpers.RunningDegradedBase
 }
 
-// Next implements state transition logic for RunningState.
+// Next implements state transition logic for DegradedState.
 //
-// RUNNING STATE PATTERN:
-//   - Check shutdown first (transition to stopped)
-//   - Check observed mood from external file
-//   - Otherwise stay in running state
-func (s *RunningState) Next(snapAny any) fsmv2.NextResult[any, any] {
+// DEGRADED STATE PATTERN:
+//   - Check shutdown first
+//   - Check if the condition that caused degradation has cleared
+//   - If cleared, transition back to running
+//   - Otherwise stay degraded
+func (s *DegradedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := helpers.ConvertSnapshot[snapshot.HelloworldObservedState, *snapshot.HelloworldDesiredState](snapAny)
 
-	// 1. Check shutdown - transition back to stopped
+	// 1. Check shutdown
 	if snap.Desired.IsShutdownRequested() {
 		return fsmv2.Result[any, any](&StoppedState{}, fsmv2.SignalNone, nil, "Shutdown requested, transitioning to stopped")
 	}
 
-	// 2. Check mood from external observation (file read in CollectObservedState)
-	if snap.Observed.Mood == "sad" {
-		return fsmv2.Result[any, any](&DegradedState{}, fsmv2.SignalNone, nil, "Mood is sad, transitioning to degraded")
+	// 2. Check if mood has recovered (no longer "sad")
+	if snap.Observed.Mood != "sad" {
+		return fsmv2.Result[any, any](&RunningState{}, fsmv2.SignalNone, nil, "Mood recovered, transitioning to running")
 	}
 
-	// 3. Stay in running state
-	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, "Worker is running and has said hello")
+	// 3. Stay degraded
+	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, "Mood is still sad")
 }
 
 // String returns the state name for logging and metrics.
-func (s *RunningState) String() string {
+func (s *DegradedState) String() string {
 	return helpers.DeriveStateName(s)
 }

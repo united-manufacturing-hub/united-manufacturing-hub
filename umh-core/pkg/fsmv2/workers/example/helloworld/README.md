@@ -16,9 +16,28 @@ _ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm
 ┌──────────┐    ShouldBeRunning()    ┌──────────────────┐    HelloSaid    ┌─────────┐
 │ stopped  │ ──────────────────────▶ │ trying_to_start  │ ─────────────▶ │ running │
 └──────────┘                         └──────────────────┘                └─────────┘
-     ▲                                        │                              │
-     │        IsShutdownRequested()           │                              │
-     └────────────────────────────────────────┴──────────────────────────────┘
+     ▲                                        │                    mood="sad" │ ▲ mood!="sad"
+     │        IsShutdownRequested()           │                              ▼ │
+     │                                        │                        ┌──────────┐
+     └────────────────────────────────────────┴────────────────────────┤ degraded │
+                                                                       └──────────┘
+```
+
+### Control loop mapping
+
+| Control loop role | Helloworld implementation |
+|-------------------|--------------------------|
+| **Sensor** (`CollectObservedState`) | Reads `deps.HasSaidHello()` + reads `/tmp/helloworld-mood` from disk |
+| **Controller** (`State.Next()`) | Checks shutdown → checks hello said → checks mood → decides |
+| **Actuator** (Actions) | `SayHelloAction` logs a greeting and sets `deps.HelloSaid` |
+
+See the parent [README's control loop section](../../../README.md#the-control-loop) for the general pattern.
+
+```bash
+# Demo: observation-driven transitions
+echo "happy" > /tmp/helloworld-mood   # stays Running
+echo "sad" > /tmp/helloworld-mood     # → Degraded
+rm /tmp/helloworld-mood               # → Running (no mood file = fine)
 ```
 
 ## File Structure
@@ -34,7 +53,8 @@ helloworld/
 ├── state/
 │   ├── stopped.go      # Initial state - waiting to start
 │   ├── trying_to_start.go  # Transitional state - emits action
-│   └── running.go      # Running state - worker is active
+│   ├── running.go      # Running state - worker is active
+│   └── degraded.go     # Degraded state - mood file says "sad"
 └── action/
     └── say_hello.go    # Action that transitions to running
 ```
@@ -109,9 +129,14 @@ func init() {
 
 ## Testing
 
-Run the hello world scenario:
+Run the helloworld scenario:
 ```bash
 go run pkg/fsmv2/cmd/runner/main.go --scenario=helloworld --duration=5s
+
+# Interactive mood demo (in a separate terminal while the scenario is running):
+echo "sad" > /tmp/helloworld-mood     # watch the worker transition to Degraded
+echo "happy" > /tmp/helloworld-mood   # back to Running
+rm /tmp/helloworld-mood               # stays Running (no mood file = fine)
 ```
 
 ## Common Mistakes
