@@ -2,14 +2,20 @@
 
 ## [0.44.12]
 
+### Improvements
+
+- Bridges can now be stopped and started from the Management Console -- previously, bridges were always active and could only be removed entirely
+
 ### Fixes
 
 - The container previously restarted hundreds of times per minute when config.yaml was missing or invalid and now waits 60 seconds before retrying, giving you time to fix the configuration
 - Previously, memory monitoring read host-level values even inside containers, while CPU monitoring already used cgroup-aware values. Memory metrics now read cgroup v2 limits and usage, so dashboards show correct container memory utilization
+- Fixed debug logging settings being lost when editing bridges or data flows -- the debug_level flag is now preserved across configuration changes
 
 ### Preview: FSMv2 Communicator
 
 - Instances could appear permanently offline in the Management Console even though the pod was running and healthy -- only a restart would fix it. This happened because token re-authentication briefly caused child workers to enter a stopping state from which they could not recover, leaving the communicator stuck indefinitely. Workers now always complete the stop and automatically recover when the parent is healthy again. Requires `USE_FSMV2_TRANSPORT=true`
+- Temporary network errors (DNS failures, HTTP timeouts, connection resets) no longer trigger alerts. These transient errors are still tracked in metrics and the system retries automatically -- if they persist above 90% failure rate for roughly 10 minutes, a warning is escalated. Requires `USE_FSMV2_TRANSPORT=true`
 
 ## [0.44.11]
 

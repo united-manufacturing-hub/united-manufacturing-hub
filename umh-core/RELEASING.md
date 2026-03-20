@@ -4,6 +4,10 @@
 
 All development happens on `staging`. To release, merge `staging` into `main` via PR, then create a GitHub Release on `main`. Creating the Release also creates the git tag, which triggers all downstream automation.
 
+## Changelog convention
+
+During development, all changelog entries go under `## Unreleased` at the top of `CHANGELOG.md`. At release time, this section is renamed to the version number (e.g., `## [0.44.12]`) and a fresh empty `## Unreleased` is added above it. This keeps it clear during PR review which entries are pending release, and defers the version number decision to release time.
+
 ## Pre-release (nightly)
 
 1. Create a PR from `staging` → `main`, review and merge
@@ -22,8 +26,8 @@ All development happens on `staging`. To release, merge `staging` into `main` vi
 
 ## Stable release
 
-1. Ensure `umh-core/CHANGELOG.md` has a section for this version (e.g., `## [0.44.10]`) with all entries
-2. Create a PR from `staging` → `main` (if not already merged for a pre-release), review and merge
+1. In `CHANGELOG.md`, rename `## Unreleased` to the version being released (e.g., `## [0.44.12]`) and add a fresh empty `## Unreleased` section above it. Review all entries.
+2. Create a PR from `staging` → `main`, review and merge
 3. Go to [Releases > Draft a new release](https://github.com/united-manufacturing-hub/united-manufacturing-hub/releases/new)
 4. Create a **new tag** with the format `v0.X.Y` (e.g., `v0.44.10`) — no `-pre.` suffix
 5. Target: `main`
@@ -54,6 +58,7 @@ Both staging and production MC instances are notified.
 - [ ] Verify the GitHub Release body was updated with CHANGELOG.md content
 - [ ] Merge the changelog.umh.app PR created by `sync-changelog.yml` (the changelog link in the GitHub Release is a 404 until this PR is merged)
 - [ ] Verify MC shows the new version (check both staging and production)
+- [ ] Bump the version section on `staging`: ensure `## Unreleased` exists at the top of `CHANGELOG.md` for the next cycle
 
 ## Troubleshooting
 
