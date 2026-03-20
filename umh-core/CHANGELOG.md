@@ -4,7 +4,7 @@
 
 ### Improvements
 
-- Bridges can now be stopped and started from the Management Console -- previously, bridges were always active and could only be removed entirely
+- Starting with this version, umh-core supports stopping and starting bridges. Previously, bridges were always active and could only be removed entirely. A Management Console update is required to expose this in the UI
 
 ### Fixes
 
