@@ -50,7 +50,7 @@ func (p *TestChannelProvider) GetChannels(_ string) (
 }
 
 // GetInboundStats returns the capacity and current length of the inbound channel.
-// Used by SyncAction to detect backpressure before pulling messages.
+// Used by PullWorker to detect backpressure before pulling messages.
 func (p *TestChannelProvider) GetInboundStats(_ string) (capacity int, length int) {
 	return cap(p.inbound), len(p.inbound)
 }

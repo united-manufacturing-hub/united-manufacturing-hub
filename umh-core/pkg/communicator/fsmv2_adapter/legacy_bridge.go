@@ -257,7 +257,7 @@ func (b *LegacyChannelBridge) GetChannels(_ string) (
 }
 
 // GetInboundStats returns the capacity and current length of the FSMv2 inbound channel.
-// Used by SyncAction to detect backpressure before pulling messages.
+// Used by PullWorker to detect backpressure before pulling messages.
 func (b *LegacyChannelBridge) GetInboundStats(_ string) (capacity int, length int) {
 	return cap(b.fsmInbound), len(b.fsmInbound)
 }

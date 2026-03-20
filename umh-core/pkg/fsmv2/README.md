@@ -292,7 +292,7 @@ Stopped → TryingToAuthenticate → Syncing ↔ Degraded
 **State machine flow**:
 1. `StoppedState`: Initial state, transitions on startup
 2. `TryingToAuthenticateState`: Emits `AuthenticateAction` (HTTP POST) with exponential backoff
-3. `SyncingState`: Emits `SyncAction` continuously (HTTP pull/push loop), checks token expiry
+3. `SyncingState`: Orchestrates `TransportWorker` child (which runs `PushWorker`/`PullWorker`), monitors child health
 4. `DegradedState`: Error recovery with intelligent backoff by error type
 
 **Token expiry handling**: `SyncingState` checks `IsTokenExpired()` and transitions back to `TryingToAuthenticateState` to refresh JWT before continuing.

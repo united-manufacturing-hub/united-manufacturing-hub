@@ -302,7 +302,7 @@ func (d *CommunicatorDependencies) IsBackpressured() bool {
 }
 
 // SetBackpressured sets the backpressure state.
-// Called by SyncAction when entering or exiting backpressure.
+// Called by PullWorker when entering or exiting backpressure.
 func (d *CommunicatorDependencies) SetBackpressured(backpressured bool) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -315,7 +315,7 @@ func (d *CommunicatorDependencies) SetBackpressured(backpressured bool) {
 //
 // Returning (0, 0) when provider is nil intentionally triggers backpressure as a safe default.
 // With capacity=0 and length=0, available = 0 - 0 = 0, which is < ExpectedBatchSize (50),
-// so the sync action will skip pulling. This prevents pulling messages when we have no
+// so the pull action will skip pulling. This prevents pulling messages when we have no
 // channel to deliver them to, avoiding potential message loss.
 func (d *CommunicatorDependencies) GetInboundChanStats() (capacity int, length int) {
 	provider := GetChannelProvider()
