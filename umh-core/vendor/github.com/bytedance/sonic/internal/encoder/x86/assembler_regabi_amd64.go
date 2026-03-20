@@ -1,5 +1,5 @@
-//go:build go1.17 && !go1.26
-// +build go1.17,!go1.26
+//go:build go1.17 && !go1.27
+// +build go1.17,!go1.27
 
 /*
  * Copyright 2021 ByteDance Inc.
@@ -28,6 +28,7 @@ import (
 	"github.com/bytedance/sonic/internal/cpu"
 	"github.com/bytedance/sonic/internal/encoder/alg"
 	"github.com/bytedance/sonic/internal/encoder/ir"
+	"github.com/bytedance/sonic/internal/encoder/prim"
 	"github.com/bytedance/sonic/internal/encoder/vars"
 	"github.com/bytedance/sonic/internal/jit"
 	"github.com/bytedance/sonic/internal/native/types"
@@ -662,6 +663,8 @@ var (
 func (self *Assembler) go_panic() {
 	self.Link(_LB_panic)
 	self.Emit("MOVQ", _SP_p, _BX)
+	self.Emit("MOVQ", _RP, _CX)
+	self.Emit("MOVQ", _RL, _DI)
 	self.call_go(_F_panic)
 }
 
@@ -764,7 +767,7 @@ var (
 var (
 	_F_memmove       = jit.Func(rt.Memmove)
 	_F_error_number  = jit.Func(vars.Error_number)
-	_F_isValidNumber = jit.Func(rt.IsValidNumber)
+	_F_isValidNumber = jit.Func(alg.IsValidNumber)
 )
 
 var (
@@ -784,8 +787,8 @@ const (
 )
 
 func init() {
-	_F_encodeJsonMarshaler = jit.Func(alg.EncodeJsonMarshaler)
-	_F_encodeTextMarshaler = jit.Func(alg.EncodeTextMarshaler)
+	_F_encodeJsonMarshaler = jit.Func(prim.EncodeJsonMarshaler)
+	_F_encodeTextMarshaler = jit.Func(prim.EncodeTextMarshaler)
 	_F_encodeTypedPointer  = jit.Func(EncodeTypedPointer)
 }
 
@@ -1100,7 +1103,7 @@ func (self *Assembler) _asm_OP_is_zero_map(p *ir.Instr) {
 }
 
 var (
-	_F_is_zero = jit.Func(alg.IsZero)
+	_F_is_zero = jit.Func(prim.IsZero)
 	_T_reflect_Type = rt.UnpackIface(reflect.Type(nil))
 )
 

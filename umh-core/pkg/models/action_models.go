@@ -780,13 +780,14 @@ type ProtocolConverterTemplateInfo struct {
 }
 
 type ProtocolConverter struct {
-	UUID         *uuid.UUID                     `binding:"required"  json:"uuid"`
+	UUID         *uuid.UUID                     `binding:"required"     json:"uuid"`
 	Location     map[int]string                 `json:"location"`
 	ReadDFC      *ProtocolConverterDFC          `json:"readDFC"`
 	WriteDFC     *ProtocolConverterDFC          `json:"writeDFC"`
 	TemplateInfo *ProtocolConverterTemplateInfo `json:"templateInfo"`
 	Meta         *ProtocolConverterMeta         `json:"meta"`
-	Name         string                         `binding:"required" json:"name"`
+	Name         string                         `binding:"required"     json:"name"`
+	State        string                         `json:"state,omitempty"`
 	Connection   ProtocolConverterConnection    `json:"connection"`
 }
 

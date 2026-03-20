@@ -33,7 +33,7 @@ type BenthosServiceConfig struct {
 
 	// Advanced configuration
 	MetricsPort uint16 `yaml:"metrics_port"`
-	DebugLevel  bool   `yaml:"debug_level,omitempty"`
+	DebugLevel  bool   `yaml:"debug_level"`
 }
 
 // DefaultTopicBrowserBenthosServiceConfig is the default Benthos service config for the topic browser

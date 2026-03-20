@@ -134,15 +134,10 @@ The United Manufacturing Hub (UMH) is an Industrial IoT platform for manufacturi
 
 ### Changelog
 
-Every PR with user-visible changes must add an entry to `umh-core/CHANGELOG.md` under the current (topmost) version section. Use the `/changelog-entry` skill to generate entries when available. For writing guidelines and voice, follow the `changelog-writing` skill. When skills are unavailable (e.g., in subagents), follow these rules:
+Every PR with user-visible changes must add an entry to `umh-core/CHANGELOG.md` under the `## Unreleased` section at the top. For format, voice, and what to include/skip, follow the `changelog-writing` skill (use `/changelog-entry` to generate entries). Never create a new version section — only add to `## Unreleased`. The section is renamed to a version number at release time (see `umh-core/RELEASING.md`).
 
-- **Format**: `- **Bold title** - Description in problem-solution format` — lead with the problem ("Previously, ..."), then the solution ("Now, ...")
-- **Categories** (in order): `### Breaking Changes`, `### New Features`, `### Improvements`, `### Fixes`
-- **No entry needed** for: CI/CD changes, refactoring, test-only changes, documentation-only changes
-- **Never create a new version section** — only add to the existing topmost `## [X.Y.Z]` section
-- **No trailing periods** on bullet points
-- On tag push, a sync workflow automatically creates entries in changelog.umh.app from CHANGELOG.md
-- GitHub Release notes are automatically populated from CHANGELOG.md by the `update-github-release.yml` workflow (runs on tag push). The job extracts the version's section, transforms headers for standalone display, and appends a changelog.umh.app link. You can still edit the Release body manually after if needed.
+- **CI enforcement**: PRs with code changes must modify CHANGELOG.md, or CI will fail. Add the `skip-changelog-guard` label to bypass (for CI/CD, refactoring, or test-only changes).
+- **Automation**: On tag push, workflows sync entries to changelog.umh.app and populate GitHub Release notes from CHANGELOG.md.
 
 ## Support & Troubleshooting Workflows
 
@@ -916,10 +911,10 @@ This PR bumps benthos-umh from vX.Y.Z to vA.B.C
 
 🐛 Bug Fixes
 
-**[User-facing symptom]** (from vX.Y.Z+1)
+[User-facing symptom] (from vX.Y.Z+1)
 [One concise paragraph: what was broken, why, what's fixed, technical details inline]
 
-**[User-facing symptom]** (from vA.B.C)
+[User-facing symptom] (from vA.B.C)
 [Same format]
 
 📝 Notes
@@ -931,7 +926,7 @@ This PR bumps benthos-umh from vX.Y.Z to vA.B.C
 **Important**:
 - Include ALL versions between current and target (jumping 0.11.3 → 0.11.5 needs both 0.11.4 and 0.11.5)
 - Focus on user impact, not code changes
-- Keep concise: bold title + inline version marker + one paragraph
+- Keep concise: plain title + inline version marker + one paragraph
 - Add emoji sections (🐛, 💪, 📝) for visual hierarchy
 - This PR description becomes the changelog for next umh-core release
 

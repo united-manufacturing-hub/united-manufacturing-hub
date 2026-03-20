@@ -123,6 +123,7 @@ func NewProtocolConverterInstance(
 		baseFSMInstance: internal_fsm.NewBaseFSMInstance(cfg, backoffConfig, logger),
 		service:         protocolconvertersvc.NewDefaultProtocolConverterService(config.Name),
 		specConfig:      config.ProtocolConverterServiceConfig,
+		debugLevel:      config.DebugLevel,
 		ObservedState:   ProtocolConverterObservedState{},
 		runtimeConfig:   protocolconverterconfig.ProtocolConverterServiceConfigRuntime{},
 	}

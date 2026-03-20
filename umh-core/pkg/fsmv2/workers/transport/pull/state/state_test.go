@@ -358,12 +358,76 @@ var _ = Describe("StoppingState", func() {
 		Expect(result.State).To(BeAssignableToTypeOf(&state.StoppedState{}))
 	})
 
-	It("should stay in Stopping when stop condition not yet met", func() {
+	It("should transition to Stopped unconditionally (ENG-4608)", func() {
 		snap := makeSnapshot(config.DesiredStateRunning, false, 0, true, true)
 		result := s.Next(snap)
-		Expect(result.State).To(BeAssignableToTypeOf(&state.StoppingState{}))
+		Expect(result.State).To(BeAssignableToTypeOf(&state.StoppedState{}))
 		Expect(result.Signal).To(Equal(fsmv2.SignalNone))
-		Expect(result.Reason).To(ContainSubstring("stopping"))
+		Expect(result.Reason).To(ContainSubstring("stop complete"))
+	})
+
+	// ENG-4608: Scenarios where the stop signal disappears while in Stopping.
+	// StoppingState must always progress to Stopped — it must never get stuck.
+	// StoppedState handles recovery back to Running when conditions change.
+	Describe("stop signal reverted during shutdown", func() {
+		It("should recover when parent transitions back to Running (token re-auth)", func() {
+			// Scenario: transport parent briefly enters Starting for JWT refresh.
+			// Children get ParentMappedState="stopped", enter Stopping.
+			// Parent re-authenticates in one tick, returns to Running.
+			// Children now have ParentMappedState="running" but are in Stopping.
+
+			// Tick N: parent in Starting → child told to stop
+			snapParentStopped := makeSnapshot(config.DesiredStateStopped, false, 0, true, true)
+			result := s.Next(snapParentStopped)
+			Expect(result.State).To(BeAssignableToTypeOf(&state.StoppedState{}),
+				"Stopping always progresses to Stopped")
+
+			// Tick N+1: parent back in Running → child should recover
+			stopped := result.State.(*state.StoppedState)
+			snapParentRunning := makeSnapshot(config.DesiredStateRunning, false, 0, true, true)
+			result = stopped.Next(snapParentRunning)
+			Expect(result.State).To(BeAssignableToTypeOf(&state.RunningState{}),
+				"StoppedState recovers to Running when parent is healthy")
+		})
+
+		It("should recover when shutdown is cancelled mid-stop", func() {
+			// Scenario: shutdown requested, worker enters Stopping.
+			// Shutdown is then cancelled (e.g., operator decision, rolling restart aborted).
+
+			// Tick N: shutdown requested
+			snapShutdown := makeSnapshot(config.DesiredStateRunning, true, 0, true, true)
+			result := s.Next(snapShutdown)
+			Expect(result.State).To(BeAssignableToTypeOf(&state.StoppedState{}),
+				"Stopping always progresses to Stopped")
+
+			// Tick N+1: shutdown cancelled, parent still Running
+			stopped := result.State.(*state.StoppedState)
+			snapNoShutdown := makeSnapshot(config.DesiredStateRunning, false, 0, true, true)
+			result = stopped.Next(snapNoShutdown)
+			Expect(result.State).To(BeAssignableToTypeOf(&state.RunningState{}),
+				"StoppedState recovers to Running when shutdown is cancelled")
+		})
+
+		It("should handle parent flapping between Running and Starting", func() {
+			// Scenario: parent oscillates (e.g., repeated auth failures/retries).
+			// Each cycle: Running → Starting → Running. Children must not get stuck.
+
+			for i := 0; i < 3; i++ {
+				// Parent enters Starting → child enters Stopping → Stopped
+				stopping := &state.StoppingState{}
+				snapStopped := makeSnapshot(config.DesiredStateStopped, false, 0, true, true)
+				result := stopping.Next(snapStopped)
+				Expect(result.State).To(BeAssignableToTypeOf(&state.StoppedState{}),
+					"Cycle %d: Stopping must progress to Stopped", i)
+
+				// Parent returns to Running → child recovers
+				stopped := result.State.(*state.StoppedState)
+				snapRunning := makeSnapshot(config.DesiredStateRunning, false, 0, true, true)
+				result = stopped.Next(snapRunning)
+				Expect(result.State).To(BeAssignableToTypeOf(&state.RunningState{}),
+					"Cycle %d: Stopped must recover to Running", i)
+			}
+		})
 	})
 
 	It("should return a valid String()", func() {

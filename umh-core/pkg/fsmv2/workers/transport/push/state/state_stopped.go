@@ -36,11 +36,11 @@ func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 
 	if snap.Observed.ShouldBeRunning() {
 		return fsmv2.Result[any, any](&RunningState{}, fsmv2.SignalNone, nil,
-			fmt.Sprintf("parent mapped state is %q, transitioning to Running", snap.Desired.ParentMappedState))
+			fmt.Sprintf("parent mapped state is %q, transitioning to Running", snap.Observed.ParentMappedState))
 	}
 
 	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil,
-		fmt.Sprintf("stopped, parent mapped state is %q", snap.Desired.ParentMappedState))
+		fmt.Sprintf("stopped, parent mapped state is %q", snap.Observed.ParentMappedState))
 }
 
 func (s *StoppedState) String() string {

@@ -72,7 +72,7 @@ RUN apk add --no-cache nmap=${NMAP_VERSION}
 # Cleanup all the files we don't need
 RUN rm -rf /s6-overlay /benthos /redpanda
 
-FROM golang:1.26.0-alpine@sha256:d4c4845f5d60c6a974c6000ce58ae079328d03ab7f721a0734277e69905473e5 AS build
+FROM golang:1.26.1-alpine@sha256:2389ebfa5b7f43eeafbd6be0c3700cc46690ef842ad962f6c5bd6be49ed82039 AS build
 ARG S6_OVERLAY_VERSION=MUST_BE_SET_BY_MAKEFILE
 ARG BENTHOS_UMH_VERSION=MUST_BE_SET_BY_MAKEFILE
 ARG REDPANDA_VERSION=MUST_BE_SET_BY_MAKEFILE
@@ -83,14 +83,20 @@ WORKDIR /go/src/github.com/united-manufacturing-hub/united-manufacturing-hub
 # Set app version with a default value - can be overridden at build time
 ARG APP_VERSION=MUST_BE_SET_BY_MAKEFILE
 RUN apk add --no-cache gcc musl-dev
-# Copy go.mod first for better caching
-COPY ./go.mod ./umh-core/
 WORKDIR /go/src/github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core
-COPY . .
+# Copy dependency manifests first — only invalidated when deps change
+COPY ./go.mod ./go.sum ./
+# Copy vendored dependencies — invalidated only when vendor/ changes
+COPY ./vendor ./vendor
+# Copy source code — most frequently changing layer
+COPY ./cmd ./cmd
+COPY ./pkg ./pkg
+COPY ./internal ./internal
 RUN echo "GOOS: ${GOOS:-$(go env GOOS)}, GOARCH: ${GOARCH:-$(go env GOARCH)}"
 RUN echo "Go version: $(go version)"
 # CGO_ENABLED=1 is needed for the race detector to work
-RUN if [ "$DEBUG" = "true" ]; then \
+RUN --mount=type=cache,target=/root/.cache/go-build \
+    if [ "$DEBUG" = "true" ]; then \
     CGO_ENABLED=1 go build \
     -race \
     -gcflags="all=-N -l" \

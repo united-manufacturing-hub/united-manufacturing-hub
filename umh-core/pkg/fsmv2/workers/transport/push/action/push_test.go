@@ -240,7 +240,7 @@ var _ = Describe("PushAction", func() {
 	})
 
 	Describe("Failed push with TransportError", func() {
-		It("should record typed error and increment failure counter", func() {
+		It("should record typed error and suppress transient errors", func() {
 			outboundBi <- &transport.UMHMessage{Content: "msg1"}
 			mockTrans.pushErr = &httpTransport.TransportError{
 				Type:       httpTransport.ErrorTypeServerError,
@@ -249,8 +249,7 @@ var _ = Describe("PushAction", func() {
 			}
 
 			err := act.Execute(context.Background(), mockDeps)
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("push failed"))
+			Expect(err).NotTo(HaveOccurred())
 
 			Expect(mockDeps.recordTypedErrorCalls).To(HaveLen(1))
 			Expect(mockDeps.recordTypedErrorCalls[0].errType).To(Equal(httpTransport.ErrorTypeServerError))
@@ -261,10 +260,22 @@ var _ = Describe("PushAction", func() {
 			Expect(drained.Counters[string(deps.CounterPushFailures)]).To(Equal(int64(1)))
 			Expect(drained.Counters[string(deps.CounterServerErrorsTotal)]).To(Equal(int64(1)))
 		})
+
+		It("should propagate persistent errors", func() {
+			outboundBi <- &transport.UMHMessage{Content: "msg1"}
+			mockTrans.pushErr = &httpTransport.TransportError{
+				Type:    httpTransport.ErrorTypeInstanceDeleted,
+				Message: "HTTP 404: instance_deleted",
+			}
+
+			err := act.Execute(context.Background(), mockDeps)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("push failed"))
+		})
 	})
 
 	Describe("Failed push with non-TransportError", func() {
-		It("should default to ErrorTypeNetwork", func() {
+		It("should default to ErrorTypeUnknown and propagate as persistent", func() {
 			outboundBi <- &transport.UMHMessage{Content: "msg1"}
 			mockTrans.pushErr = errors.New("connection refused")
 
@@ -273,7 +284,7 @@ var _ = Describe("PushAction", func() {
 			Expect(err.Error()).To(ContainSubstring("push failed"))
 
 			Expect(mockDeps.recordTypedErrorCalls).To(HaveLen(1))
-			Expect(mockDeps.recordTypedErrorCalls[0].errType).To(Equal(httpTransport.ErrorTypeNetwork))
+			Expect(mockDeps.recordTypedErrorCalls[0].errType).To(Equal(httpTransport.ErrorTypeUnknown))
 			Expect(mockDeps.recordTypedErrorCalls[0].retryAfter).To(Equal(time.Duration(0)))
 
 			drained := mockDeps.metricsRecorder.Drain()
@@ -283,26 +294,17 @@ var _ = Describe("PushAction", func() {
 	})
 
 	Describe("Empty outbound channel", func() {
-		It("should record success to clear consecutive error counter", func() {
+		It("should return nil without calling transport or recording any outcome", func() {
 			err := act.Execute(context.Background(), mockDeps)
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(mockTrans.pushCallCount).To(Equal(0))
-			Expect(mockDeps.recordSuccessCalls).To(Equal(1))
+			Expect(mockDeps.recordSuccessCalls).To(Equal(0))
+			Expect(mockDeps.recordTypedErrorCalls).To(BeEmpty())
 
 			drained := mockDeps.metricsRecorder.Drain()
 			Expect(drained.Counters).To(BeEmpty())
 			Expect(drained.Gauges).To(BeEmpty())
-		})
-
-		It("should clear stale error state from shared RetryTracker when nothing to push", func() {
-			mockDeps.consecutiveErrors = 3
-
-			err := act.Execute(context.Background(), mockDeps)
-			Expect(err).NotTo(HaveOccurred())
-
-			Expect(mockTrans.pushCallCount).To(Equal(0))
-			Expect(mockDeps.recordSuccessCalls).To(Equal(1))
 		})
 	})
 
@@ -422,7 +424,7 @@ var _ = Describe("PushAction", func() {
 			Expect(drained.Counters[string(deps.CounterMessagesDropped)]).To(Equal(int64(1)))
 		})
 
-		It("should stop pending retry on infrastructure error and keep remaining", func() {
+		It("should suppress transient error during pending retry and retain remaining messages", func() {
 			mockDeps.pendingMessages = []*transport.UMHMessage{
 				{Content: "msg1"},
 				{Content: "msg2"},
@@ -436,6 +438,32 @@ var _ = Describe("PushAction", func() {
 					return &httpTransport.TransportError{
 						Type:    httpTransport.ErrorTypeNetwork,
 						Message: "connection refused",
+					}
+				}
+
+				return nil
+			}
+
+			err := act.Execute(context.Background(), mockDeps)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(mockDeps.PendingMessageCount()).To(Equal(2), "msg2 (failed) and msg3 (unattempted) should be retained for retry")
+		})
+
+		It("should propagate persistent error during pending retry and keep remaining", func() {
+			mockDeps.pendingMessages = []*transport.UMHMessage{
+				{Content: "msg1"},
+				{Content: "msg2"},
+				{Content: "msg3"},
+			}
+
+			callCount := 0
+			mockTrans.pushFunc = func(_ context.Context, _ string, msgs []*transport.UMHMessage) error {
+				callCount++
+				if callCount == 2 {
+					return &httpTransport.TransportError{
+						Type:    httpTransport.ErrorTypeInvalidToken,
+						Message: "HTTP 401: invalid_token",
 					}
 				}
 

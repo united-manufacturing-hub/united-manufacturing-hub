@@ -72,7 +72,8 @@ func NewProtocolConverterManager(name string) *ProtocolConverterManager {
 				return false, errors.New("instance is not a ProtocolConverterInstance")
 			}
 
-			return protocolConverterInstance.specConfig.Equal(cfg.ProtocolConverterServiceConfig), nil
+			return protocolConverterInstance.specConfig.Equal(cfg.ProtocolConverterServiceConfig) &&
+				protocolConverterInstance.debugLevel == cfg.DebugLevel, nil
 		},
 		// Set ProtocolConverter config
 		func(instance public_fsm.FSMInstance, cfg config.ProtocolConverterConfig) error {
@@ -82,6 +83,7 @@ func NewProtocolConverterManager(name string) *ProtocolConverterManager {
 			}
 
 			protocolConverterInstance.specConfig = cfg.ProtocolConverterServiceConfig
+			protocolConverterInstance.debugLevel = cfg.DebugLevel
 
 			return nil
 		},

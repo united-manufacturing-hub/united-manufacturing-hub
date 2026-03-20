@@ -48,7 +48,7 @@ import (
 func (d *DataflowComponentInstance) CreateInstance(ctx context.Context, filesystemService filesystem.Service) error {
 	d.baseFSMInstance.GetLogger().Debugf("Starting Action: Adding DataflowComponent service %s to Benthos manager ...", d.baseFSMInstance.GetID())
 
-	err := d.service.AddDataFlowComponentToBenthosManager(ctx, filesystemService, &d.config, d.baseFSMInstance.GetID())
+	err := d.service.AddDataFlowComponentToBenthosManager(ctx, filesystemService, &d.config, d.baseFSMInstance.GetID(), d.debugLevel)
 	if err != nil {
 		if errors.Is(err, dataflowcomponentservice.ErrServiceAlreadyExists) {
 			d.baseFSMInstance.GetLogger().Debugf("DataflowComponent service %s already exists in Benthos manager", d.baseFSMInstance.GetID())
@@ -239,7 +239,7 @@ func (d *DataflowComponentInstance) UpdateObservedStateOfInstance(ctx context.Co
 			d.baseFSMInstance.GetLogger().Debugf("Configuration differences: %s", diffStr)
 
 			// Update the config in the Benthos manager
-			err := d.service.UpdateDataFlowComponentInBenthosManager(ctx, services.GetFileSystem(), &d.config, d.baseFSMInstance.GetID())
+			err := d.service.UpdateDataFlowComponentInBenthosManager(ctx, services.GetFileSystem(), &d.config, d.baseFSMInstance.GetID(), d.debugLevel)
 			if err != nil {
 				return fmt.Errorf("failed to update DataflowComponent service configuration: %w", err)
 			}

@@ -132,6 +132,9 @@ type DataflowComponentInstance struct {
 	// that are updated at the beginning of Reconcile and then used to
 	// determine the next state
 	ObservedState DataflowComponentObservedState
+
+	// debugLevel controls whether debug logging is enabled for the Benthos process
+	debugLevel bool
 }
 
 // GetLastObservedState returns the last known state of the instance.

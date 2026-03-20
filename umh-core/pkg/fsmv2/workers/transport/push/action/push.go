@@ -99,8 +99,6 @@ drainLoop:
 	}
 
 	if len(messagesToPush) == 0 {
-		pushDeps.RecordSuccess()
-
 		return nil
 	}
 
@@ -119,19 +117,22 @@ drainLoop:
 
 		pushDeps.StorePendingMessages(messagesToPush)
 
-		var transportErr *httpTransport.TransportError
-		if errors.As(err, &transportErr) {
-			pushDeps.RecordTypedError(transportErr.Type, transportErr.RetryAfter)
-			metrics.IncrementCounter(counterForErrorType(transportErr.Type), 1)
-		} else {
-			pushDeps.RecordTypedError(httpTransport.ErrorTypeNetwork, 0)
-			metrics.IncrementCounter(depspkg.CounterNetworkErrorsTotal, 1)
-		}
+		errType, retryAfter := httpTransport.ExtractErrorType(err)
+		pushDeps.RecordTypedError(errType, retryAfter)
+		metrics.IncrementCounter(httpTransport.CounterForErrorType(errType), 1)
 
 		metrics.IncrementCounter(depspkg.CounterPushOps, 1)
 		metrics.IncrementCounter(depspkg.CounterPushFailures, 1)
 		metrics.SetGauge(depspkg.GaugeLastPushLatencyMs, float64(pushLatency.Milliseconds()))
 		metrics.SetGauge(depspkg.GaugePendingMessages, float64(pushDeps.PendingMessageCount()))
+
+		if ctx.Err() != nil {
+			return fmt.Errorf("push failed (context canceled): %w", ctx.Err())
+		}
+
+		if errType.IsTransient() {
+			return nil
+		}
 
 		return fmt.Errorf("push failed: %w", err)
 	}
@@ -158,6 +159,24 @@ drainLoop:
 	return nil
 }
 
+// retryPending sends previously failed messages one at a time. Messages are
+// sent individually (not batched) because a prior batch push already failed,
+// and we need per-message error handling to isolate poison messages.
+//
+// For each message the error cascade is:
+//  1. Context canceled (pre-push) → return remaining messages immediately.
+//  2. Push fails, context expired during push → return remaining with
+//     cancellation error.
+//  3. Recoverable by parent (auth failure, proxy block, etc.) → return
+//     remaining messages with error so the parent triggers re-authentication
+//     or transport reset.
+//  4. Poison message (unrecoverable) → log SentryWarn, drop the message,
+//     continue to next.
+//  5. Success → record metrics, continue.
+//
+// Returns (nil, nil) when all messages are sent successfully. Otherwise
+// returns the unsent tail of pending so the caller can buffer them for
+// the next tick.
 func (a *PushAction) retryPending(ctx context.Context, t transport.Transport, pushDeps snapshot.PushDependencies, pending []*transport.UMHMessage, metrics *depspkg.MetricsRecorder) ([]*transport.UMHMessage, error) {
 	jwtToken := pushDeps.GetJWTToken()
 	authenticatedUUID := pushDeps.GetAuthenticatedUUID()
@@ -174,29 +193,29 @@ func (a *PushAction) retryPending(ctx context.Context, t transport.Transport, pu
 		}
 
 		if err := t.Push(ctx, jwtToken, []*transport.UMHMessage{msg}); err != nil {
-			var transportErr *httpTransport.TransportError
+			errType, retryAfter := httpTransport.ExtractErrorType(err)
+			pushDeps.RecordTypedError(errType, retryAfter)
+			metrics.IncrementCounter(httpTransport.CounterForErrorType(errType), 1)
 
-			if errors.As(err, &transportErr) {
-				pushDeps.RecordTypedError(transportErr.Type, transportErr.RetryAfter)
-				metrics.IncrementCounter(counterForErrorType(transportErr.Type), 1)
-
-				if isRecoverableByParent(transportErr.Type) {
-					return pending[i:], fmt.Errorf("pending retry failed (recoverable by parent): %w", err)
-				}
-
-				pushDeps.GetLogger().SentryWarn(depspkg.FeatureCommunicator, pushDeps.GetHierarchyPath(), "dropping_poison_message",
-					depspkg.String("errorType", transportErr.Type.String()),
-					depspkg.Err(transportErr),
-					depspkg.Int("remaining", len(pending)-i-1))
-				metrics.IncrementCounter(depspkg.CounterMessagesDropped, 1)
-
-				continue
+			if ctx.Err() != nil {
+				return pending[i:], fmt.Errorf("context canceled during retry: %w", ctx.Err())
 			}
 
-			pushDeps.RecordTypedError(httpTransport.ErrorTypeNetwork, 0)
-			metrics.IncrementCounter(depspkg.CounterNetworkErrorsTotal, 1)
+			if errType.IsTransient() {
+				return pending[i:], nil
+			}
 
-			return pending[i:], fmt.Errorf("pending retry failed: %w", err)
+			if isRecoverableByParent(errType) {
+				return pending[i:], fmt.Errorf("pending retry failed (recoverable by parent): %w", err)
+			}
+
+			pushDeps.GetLogger().SentryWarn(depspkg.FeatureCommunicator, pushDeps.GetHierarchyPath(), "dropping_poison_message",
+				depspkg.String("errorType", errType.String()),
+				depspkg.Err(err),
+				depspkg.Int("remaining", len(pending)-i-1))
+			metrics.IncrementCounter(depspkg.CounterMessagesDropped, 1)
+
+			continue
 		}
 
 		pushDeps.RecordSuccess()
@@ -208,43 +227,16 @@ func (a *PushAction) retryPending(ctx context.Context, t transport.Transport, pu
 	return nil, nil
 }
 
-func counterForErrorType(t httpTransport.ErrorType) depspkg.CounterName {
-	switch t {
-	case httpTransport.ErrorTypeCloudflareChallenge:
-		return depspkg.CounterCloudflareErrorsTotal
-	case httpTransport.ErrorTypeBackendRateLimit:
-		return depspkg.CounterBackendRateLimitErrorsTotal
-	case httpTransport.ErrorTypeInvalidToken:
-		return depspkg.CounterAuthFailuresTotal
-	// ErrorTypeInstanceDeleted: reachable via HTTP 404 from classifyError().
-	// Rare in practice (push endpoint uses session auth, not instance lookup),
-	// but kept for correct metric attribution if backend returns 404.
-	case httpTransport.ErrorTypeInstanceDeleted:
-		return depspkg.CounterInstanceDeletedTotal
-	case httpTransport.ErrorTypeServerError:
-		return depspkg.CounterServerErrorsTotal
-	case httpTransport.ErrorTypeProxyBlock:
-		return depspkg.CounterProxyBlockErrorsTotal
-	case httpTransport.ErrorTypeNetwork:
-		return depspkg.CounterNetworkErrorsTotal
-	case httpTransport.ErrorTypeUnknown:
-		return depspkg.CounterNetworkErrorsTotal
-	default:
-		return depspkg.CounterNetworkErrorsTotal
-	}
-}
-
-// isRecoverableByParent returns true for error types where the message should be
-// preserved in the pending buffer rather than dropped. These are transient errors
-// (network, server, auth, rate limit, proxy) where the message itself is valid.
-// Recovery happens via parent actions (re-authentication, transport reset) or
-// child-level backoff (rate limit delay), not by discarding the message.
+// isRecoverableByParent returns true for persistent error types where the
+// message is valid but delivery failed due to an external condition requiring
+// parent action (re-authentication, transport reset). Messages are preserved
+// in the pending buffer for retry rather than dropped.
+//
+// Only persistent types reach here — transient errors (network, server, rate
+// limit, channel full) are intercepted by IsTransient() earlier in retryPending.
 func isRecoverableByParent(errType httpTransport.ErrorType) bool {
 	switch errType {
-	case httpTransport.ErrorTypeNetwork,
-		httpTransport.ErrorTypeServerError,
-		httpTransport.ErrorTypeCloudflareChallenge,
-		httpTransport.ErrorTypeBackendRateLimit,
+	case httpTransport.ErrorTypeCloudflareChallenge,
 		httpTransport.ErrorTypeInvalidToken,
 		httpTransport.ErrorTypeProxyBlock:
 		return true
