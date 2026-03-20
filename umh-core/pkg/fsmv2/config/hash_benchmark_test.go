@@ -66,13 +66,29 @@ var _ = Describe("ComputeUserSpecHash Performance", func() {
 
 	Describe("hash vs render performance ratio", func() {
 		const (
-			warmupIterations    = 100
-			measureIterations   = 1000
 			minimumSpeedupRatio = 5.0 // Conservative: actual is ~50x
 		)
 
+		// iterationsForSize returns warmup and measure counts scaled down for
+		// large configs to avoid multi-minute test runs. Parsing a 1MB template
+		// ~1100 times (100 warmup + 1000 measure) is the sole cause of slowness;
+		// even 5–10 iterations produce a stable ratio because both operations are
+		// deterministic with low variance.
+		iterationsForSize := func(sizeBytes int) (warmup, measure int) {
+			switch {
+			case sizeBytes >= 1024*1024: // ≥ 1 MB
+				return 2, 5
+			case sizeBytes >= 100*1024: // ≥ 100 KB
+				return 10, 50
+			default:
+				return 100, 1000
+			}
+		}
+
 		measurePerformance := func(configSize int, description string) {
 			It(fmt.Sprintf("hash is at least %.0fx faster than render for %s configs", minimumSpeedupRatio, description), func() {
+				warmupIterations, measureIterations := iterationsForSize(configSize)
+
 				// Create test data
 				configTemplate := generateConfigWithTemplates(configSize)
 				spec := config.UserSpec{
