@@ -28,16 +28,10 @@ type TryingToStartState struct {
 }
 
 // Next implements state transition logic for TryingToStartState.
-//
-// TRANSITIONAL STATE PATTERN:
-//   - Check shutdown first
-//   - Check if the action we need has completed (observe the effect)
-//   - If completed, transition to next state
-//   - If not completed, emit the action and stay in this state
 func (s *TryingToStartState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := helpers.ConvertSnapshot[snapshot.HelloworldObservedState, *snapshot.HelloworldDesiredState](snapAny)
 
-	// 1. ALWAYS check shutdown first
+	// 1. Check shutdown first
 	if snap.Desired.IsShutdownRequested() {
 		return fsmv2.Result[any, any](&StoppedState{}, fsmv2.SignalNone, nil, "Shutdown requested, transitioning to stopped")
 	}

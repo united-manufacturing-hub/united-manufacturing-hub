@@ -27,11 +27,6 @@ type RunningState struct {
 }
 
 // Next implements state transition logic for RunningState.
-//
-// RUNNING STATE PATTERN:
-//   - Check shutdown first (transition to stopped)
-//   - Check observed mood from external file
-//   - Otherwise stay in running state
 func (s *RunningState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := helpers.ConvertSnapshot[snapshot.HelloworldObservedState, *snapshot.HelloworldDesiredState](snapAny)
 
@@ -40,7 +35,7 @@ func (s *RunningState) Next(snapAny any) fsmv2.NextResult[any, any] {
 		return fsmv2.Result[any, any](&StoppedState{}, fsmv2.SignalNone, nil, "Shutdown requested, transitioning to stopped")
 	}
 
-	// 2. Check mood from external observation (file read in CollectObservedState)
+	// 2. Check mood from mood file (read in CollectObservedState)
 	if snap.Observed.Mood == "sad" {
 		return fsmv2.Result[any, any](&DegradedState{}, fsmv2.SignalNone, nil, "Mood is sad, transitioning to degraded")
 	}

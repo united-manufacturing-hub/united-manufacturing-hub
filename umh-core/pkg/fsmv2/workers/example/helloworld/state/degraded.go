@@ -21,19 +21,13 @@ import (
 )
 
 // DegradedState represents the worker running but impaired.
-// Entered when the external mood file contains "sad".
+// Entered when the mood file contains "sad".
 // Transitions back to RunningState when the mood changes.
 type DegradedState struct {
 	helpers.RunningDegradedBase
 }
 
 // Next implements state transition logic for DegradedState.
-//
-// DEGRADED STATE PATTERN:
-//   - Check shutdown first
-//   - Check if the condition that caused degradation has cleared
-//   - If cleared, transition back to running
-//   - Otherwise stay degraded
 func (s *DegradedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := helpers.ConvertSnapshot[snapshot.HelloworldObservedState, *snapshot.HelloworldDesiredState](snapAny)
 
