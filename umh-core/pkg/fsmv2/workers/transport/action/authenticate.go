@@ -38,7 +38,7 @@ const (
 // Idempotent: safe to retry on failure, multiple calls won't create multiple tokens.
 // Creates transport on first execution if not present.
 //
-// Returns nil on classified TransportError (tracked via deps for snapshot-based backoff).
+// Returns nil on classified TransportError (tracked via RecordAuthError for snapshot-based backoff).
 // Returns error on context cancellation, invalid dependency type, or non-TransportError
 // (programming bugs that must propagate to the executor).
 //
@@ -116,12 +116,13 @@ func (a *AuthenticateAction) Execute(ctx context.Context, depsAny any) error {
 		}
 
 		errType, retryAfter := transportErr.Type, transportErr.RetryAfter
-		deps.RecordTypedError(errType, retryAfter)
+		deps.RecordAuthError(errType, retryAfter)
 		deps.MetricsRecorder().IncrementCounter(httpTransport.CounterForErrorType(errType), 1)
 
-		// First-occurrence SentryWarn: alert once per failure episode, not on every retry.
-		// Resets when RecordSuccess() clears consecutiveErrors to 0.
-		if deps.GetConsecutiveErrors() == 1 {
+		// Persistent errors get an immediate first-occurrence SentryWarn.
+		// Transient errors are silent -- the failurerate.Tracker in RecordAuthError
+		// fires SentryWarn("persistent_auth_failure") if they sustain.
+		if !errType.IsTransient() && deps.GetPersistentAuthErrorCount() == 1 {
 			deps.GetLogger().SentryWarn(depspkg.FeatureCommunicator, deps.GetHierarchyPath(), "authentication_failed",
 				depspkg.Err(err), depspkg.String("errorType", errType.String()))
 		}
