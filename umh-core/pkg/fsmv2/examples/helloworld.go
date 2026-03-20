@@ -18,7 +18,10 @@ package examples
 //
 // Demonstrates both I/O patterns:
 //   - Action: SayHelloAction writes to in-memory deps
-//   - Observation: CollectObservedState reads /tmp/helloworld-mood from disk
+//   - Observation: CollectObservedState reads the mood file path from disk
+//
+// The mood file path is configured via DesiredState (moodFilePath).
+// When omitted, mood checking is skipped entirely (backwards compatible).
 //
 // Interactive demo:
 //
@@ -27,7 +30,7 @@ package examples
 //	rm /tmp/helloworld-mood               # → Running
 var HelloworldScenario = Scenario{
 	Name:        "helloworld",
-	Description: "Minimal worker: says hello, reads mood from /tmp/helloworld-mood",
+	Description: "Minimal worker: says hello, reads mood from configurable file path",
 	YAMLConfig: `
 children:
   - name: "hello-1"
@@ -35,5 +38,6 @@ children:
     userSpec:
       config: |
         state: running
+        moodFilePath: /tmp/helloworld-mood
 `,
 }

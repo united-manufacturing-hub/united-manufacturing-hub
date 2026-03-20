@@ -41,6 +41,10 @@ type HelloworldDependencies interface {
 // HelloworldDesiredState represents the target configuration for the worker.
 // Embed BaseDesiredState to get standard fields like ShutdownRequested.
 type HelloworldDesiredState struct {
+
+	// MoodFilePath is the path to an external file whose contents set the worker's mood.
+	// When empty, mood checking is skipped (backwards compatible).
+	MoodFilePath string `json:"moodFilePath,omitempty"`
 	config.BaseDesiredState
 }
 
@@ -56,8 +60,8 @@ type HelloworldObservedState struct {
 	// State is the current FSM state name (set by supervisor)
 	State string `json:"state"`
 
-	// Mood is read from an external file (/tmp/helloworld-mood) by CollectObservedState.
-	// Demonstrates real blocking I/O in observation collection.
+	// Mood is read from the external file at DesiredState.MoodFilePath by CollectObservedState.
+	// When MoodFilePath is empty, this field stays empty. Demonstrates real blocking I/O.
 	Mood string `json:"mood,omitempty"`
 
 	// LastActionResults contains action history (managed by supervisor)
