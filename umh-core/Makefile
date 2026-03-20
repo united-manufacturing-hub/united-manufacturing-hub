@@ -227,6 +227,10 @@ endif
 UNIT_LABEL_FILTER := !integration && !redpanda-extended && !tls && !live
 # Explicit list: excludes integration/ (requires Docker; has its own make target)
 UNIT_TEST_PKGS := ./cmd/... ./internal/... ./pkg/... ./test/...
+# Package that runs its Ginkgo suite in parallel (--procs); must be kept separate
+UNIT_TEST_PKGS_PARALLEL := ./pkg/fsmv2/examples/...
+# All unit-test packages except the parallel ones (evaluated on first use)
+UNIT_TEST_PKGS_SERIAL = $(shell go list -tags=test ./cmd/... ./internal/... ./pkg/... ./test/... | grep -v 'fsmv2/examples' | tr '\n' ' ')
 
 build:
 build-pprof:       EXTRA_ARGS := --build-arg PPROF=true
@@ -314,15 +318,24 @@ vet-nilaway-lint-betteralign: vet nilaway lint betteralign
 test: vet-nilaway-lint-betteralign
 	go test -race -v -tags=test ./...
 
-unit-test: vet-nilaway-lint-betteralign
+unit-test:
 ifeq ($(CI), true)
-	gotestsum --junitfile unit-test-report.xml -- -race -v -tags=test -count=1 -failfast \
-		$(UNIT_TEST_PKGS) \
-		-args -ginkgo.label-filter='$(UNIT_LABEL_FILTER)'
+	rm -f /tmp/unit-test-failed
+	gotestsum --junitfile unit-test-report.xml -- -race -v -tags=test -count=1 -failfast -p 4 \
+		$(UNIT_TEST_PKGS_SERIAL) \
+		-args -ginkgo.label-filter='$(UNIT_LABEL_FILTER)' -ginkgo.no-color || touch /tmp/unit-test-failed
+	go run github.com/onsi/ginkgo/v2/ginkgo run --procs=30 --race --tags=test \
+		--label-filter='$(UNIT_LABEL_FILTER)' --junit-report=unit-test-report-parallel.xml \
+		--no-color \
+		$(UNIT_TEST_PKGS_PARALLEL) || touch /tmp/unit-test-failed
+	test ! -f /tmp/unit-test-failed
 else
-	go test -race -v -tags=test -count=1 -failfast \
-		$(UNIT_TEST_PKGS) \
+	go test -race -v -tags=test -count=1 -failfast -p 4 \
+		$(UNIT_TEST_PKGS_SERIAL) \
 		-args -ginkgo.label-filter='$(UNIT_LABEL_FILTER)'
+	go run github.com/onsi/ginkgo/v2/ginkgo run --procs=30 --race --tags=test \
+		--label-filter='$(UNIT_LABEL_FILTER)' \
+		$(UNIT_TEST_PKGS_PARALLEL)
 endif
 
 # Sequential fallback using ginkgo directly (no fail-fast, full failure report, covers ./...)
