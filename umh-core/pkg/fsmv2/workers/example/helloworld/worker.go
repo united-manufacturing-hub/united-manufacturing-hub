@@ -101,7 +101,7 @@ func NewHelloworldWorker(
 //   - Read external state via blocking I/O (file, network, etc.)
 //   - Copy framework metrics if available
 //   - Return the observed state
-func (w *HelloworldWorker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
+func (w *HelloworldWorker) CollectObservedState(ctx context.Context, desired fsmv2.DesiredState) (fsmv2.ObservedState, error) {
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
@@ -123,28 +123,25 @@ func (w *HelloworldWorker) CollectObservedState(ctx context.Context, _ fsmv2.Des
 	// Include action history for debugging
 	observed.LastActionResults = deps.GetActionHistory()
 
-	// Observation: read mood from external file (blocking disk I/O).
-	// This demonstrates why CollectObservedState runs in a background goroutine —
-	// file reads block, and on network mounts or slow storage (common in factories),
-	// this can take seconds. The supervisor ensures slow reads never block the tick loop.
-	if data, err := os.ReadFile("/tmp/helloworld-mood"); err == nil {
+	// Observation: read mood from the file configured in DesiredState.
+	// This is blocking disk I/O, which is why CollectObservedState runs in a
+	// background goroutine. The supervisor ensures slow reads never block the tick loop.
+	d := desired.(*snapshot.HelloworldDesiredState)
+	if data, err := os.ReadFile(d.MoodFilePath); err == nil {
 		observed.Mood = strings.TrimSpace(string(data))
 	}
 
 	return observed, nil
 }
 
-// DeriveDesiredState determines what state the worker should be in.
+// DeriveDesiredState parses UserSpec.Config YAML into typed HelloworldDesiredState.
 //
-// This method parses user configuration (from scenarios or external config)
-// and returns the desired state. The supervisor compares this with observed
-// state to drive transitions.
-//
-// For simple workers, this just returns "running" as the desired state.
+// Uses config.ParseUserSpec instead of config.DeriveLeafState because
+// DeriveLeafState returns a generic config.DesiredState that loses
+// worker-specific fields like MoodFilePath. ParseUserSpec returns the
+// full typed struct so custom fields flow through to CollectObservedState.
 func (w *HelloworldWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
 	if spec == nil {
-		// Default: desired state is running
-		// Return the registered type (*snapshot.HelloworldDesiredState) to avoid type assertion failures
 		return &snapshot.HelloworldDesiredState{
 			BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
 		}, nil
@@ -155,26 +152,20 @@ func (w *HelloworldWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredSt
 		return nil, fmt.Errorf("invalid spec type: expected UserSpec, got %T", spec)
 	}
 
-	// Render any template variables in the config
 	renderedConfig, err := config.RenderConfigTemplate(userSpec.Config, userSpec.Variables)
 	if err != nil {
 		return nil, fmt.Errorf("template rendering failed: %w", err)
 	}
 
-	renderedSpec := config.UserSpec{
-		Config:    renderedConfig,
-		Variables: userSpec.Variables,
-	}
-
-	// Parse into typed config and derive desired state
-	desired, err := config.DeriveLeafState[HelloworldUserSpec](renderedSpec)
+	renderedSpec := config.UserSpec{Config: renderedConfig, Variables: userSpec.Variables}
+	hwSpec, err := config.ParseUserSpec[HelloworldUserSpec](renderedSpec)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("config parse failed: %w", err)
 	}
 
-	// Return the registered type (*snapshot.HelloworldDesiredState) to avoid type assertion failures
 	return &snapshot.HelloworldDesiredState{
-		BaseDesiredState: desired.BaseDesiredState,
+		BaseDesiredState: config.BaseDesiredState{State: hwSpec.GetState()},
+		MoodFilePath:     hwSpec.MoodFilePath,
 	}, nil
 }
 
