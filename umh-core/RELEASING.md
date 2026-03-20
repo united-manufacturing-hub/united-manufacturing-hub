@@ -63,7 +63,7 @@ Both staging and production MC instances are notified.
 ## Troubleshooting
 
 ### GitHub Release body is empty or wrong
-Check the `update-github-release.yml` run in the Actions tab. Common causes: missing `## [X.Y.Z]` section in CHANGELOG.md (shows as warning in the workflow summary). Re-run via Actions > Update GitHub Release > Run workflow > enter the tag name.
+Check the `update-github-release.yml` run in the Actions tab. Common causes: `## Unreleased` was not renamed to `## [X.Y.Z]` before tagging, or the version section is missing entirely (shows as warning in the workflow summary). Re-run via Actions > Update GitHub Release > Run workflow > enter the tag name.
 
 ### changelog.umh.app entry was not created
 Re-trigger via Actions > Sync Changelog > Run workflow > enter the version. Supports `dry_run` mode for testing.
