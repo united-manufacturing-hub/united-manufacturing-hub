@@ -38,7 +38,7 @@ const (
 // Idempotent: safe to retry on failure, multiple calls won't create multiple tokens.
 // Creates transport on first execution if not present.
 //
-// Returns nil on classified TransportError (tracked via RecordTypedError for snapshot-based backoff).
+// Returns nil on classified TransportError (tracked via deps for snapshot-based backoff).
 // Returns error on context cancellation, invalid dependency type, or non-TransportError
 // (programming bugs that must propagate to the executor).
 //
@@ -106,8 +106,10 @@ func (a *AuthenticateAction) Execute(ctx context.Context, depsAny any) error {
 		}
 
 		// Only suppress classified TransportErrors. Non-TransportErrors are programming
-		// bugs that must propagate to the executor for SentryError. Same pattern as
-		// push/pull actions (ENG-4450).
+		// bugs that must propagate to the executor for SentryError.
+		// Note: unlike push/pull (which only suppress transient errors), auth suppresses
+		// ALL classified TransportErrors because persistent auth errors are handled via
+		// snapshot-based state transitions (AuthFailedState), not error propagation.
 		var transportErr *httpTransport.TransportError
 		if !errors.As(err, &transportErr) {
 			return err
@@ -128,7 +130,7 @@ func (a *AuthenticateAction) Execute(ctx context.Context, depsAny any) error {
 		// and LastErrorType from the snapshot for backoff decisions (StartingState.Next()).
 		// Returning nil suppresses the executor's SentryError("action_failed"), which is
 		// appropriate because auth failures are expected business errors, not programming
-		// errors. Same pattern as pull/push transient error suppression (ENG-4450).
+		// errors.
 		return nil
 	}
 

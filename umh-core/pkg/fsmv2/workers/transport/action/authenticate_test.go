@@ -17,6 +17,7 @@ package action_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -230,13 +231,41 @@ var _ = Describe("AuthenticateAction", func() {
 			Expect(dependencies.GetLastErrorType()).To(Equal(httpTransport.ErrorTypeBackendRateLimit))
 		})
 
-		It("should propagate unclassified errors (ErrorTypeUnknown)", func() {
+		It("should propagate non-TransportError (programming bug)", func() {
 			ctx := context.Background()
 			mockTransp.authError = errors.New("unexpected programming error")
 
 			err := act.Execute(ctx, dependencies)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("unexpected programming error"))
+		})
+
+		It("should suppress TransportError with ErrorTypeUnknown (operational error)", func() {
+			ctx := context.Background()
+			// ErrorTypeUnknown TransportErrors represent operational issues (e.g., JSON decode
+			// failure from relay, unrecognized HTTP status). They ARE TransportErrors and should
+			// be tracked and suppressed, unlike plain errors.
+			mockTransp.authError = &httpTransport.TransportError{
+				Type:    httpTransport.ErrorTypeUnknown,
+				Message: "failed to decode auth response",
+			}
+
+			err := act.Execute(ctx, dependencies)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(dependencies.GetConsecutiveErrors()).To(Equal(1))
+		})
+
+		It("should suppress wrapped TransportError via errors.As unwrapping", func() {
+			ctx := context.Background()
+			innerErr := &httpTransport.TransportError{
+				Type:    httpTransport.ErrorTypeNetwork,
+				Message: "connection refused",
+			}
+			mockTransp.authError = fmt.Errorf("auth request failed: %w", innerErr)
+
+			err := act.Execute(ctx, dependencies)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(dependencies.GetLastErrorType()).To(Equal(httpTransport.ErrorTypeNetwork))
 		})
 
 		It("should record success and reset error state on successful auth", func() {
