@@ -25,30 +25,58 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/helloworld/state"
 )
 
-var _ = Describe("StoppedState", func() {
+var _ = Describe("DegradedState", func() {
 	var (
-		stateObj *state.StoppedState
+		stateObj *state.DegradedState
 		snap     fsmv2.Snapshot
 	)
 
 	BeforeEach(func() {
-		stateObj = &state.StoppedState{}
+		stateObj = &state.DegradedState{}
 	})
 
 	Describe("Next", func() {
-		Context("when shutdown is not requested", func() {
+		Context("when mood is still sad", func() {
 			BeforeEach(func() {
 				snap = fsmv2.Snapshot{
 					Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "helloworld"},
-					Observed: snapshot.HelloworldObservedState{},
+					Observed: snapshot.HelloworldObservedState{Mood: "sad", HelloSaid: true},
 					Desired:  &snapshot.HelloworldDesiredState{},
 				}
 			})
 
-			It("should transition to TryingToStartState", func() {
+			It("should stay in DegradedState", func() {
 				result := stateObj.Next(snap)
 
-				Expect(result.State).To(BeAssignableToTypeOf(&state.TryingToStartState{}))
+				Expect(result.State).To(BeAssignableToTypeOf(&state.DegradedState{}))
+			})
+
+			It("should not signal anything", func() {
+				result := stateObj.Next(snap)
+
+				Expect(result.Signal).To(Equal(fsmv2.SignalNone))
+			})
+
+			It("should not return an action", func() {
+				result := stateObj.Next(snap)
+
+				Expect(result.Action).To(BeNil())
+			})
+		})
+
+		Context("when mood has recovered", func() {
+			BeforeEach(func() {
+				snap = fsmv2.Snapshot{
+					Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "helloworld"},
+					Observed: snapshot.HelloworldObservedState{Mood: "happy", HelloSaid: true},
+					Desired:  &snapshot.HelloworldDesiredState{},
+				}
+			})
+
+			It("should transition to RunningState", func() {
+				result := stateObj.Next(snap)
+
+				Expect(result.State).To(BeAssignableToTypeOf(&state.RunningState{}))
 			})
 
 			It("should not signal anything", func() {
@@ -68,23 +96,23 @@ var _ = Describe("StoppedState", func() {
 			BeforeEach(func() {
 				snap = fsmv2.Snapshot{
 					Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "helloworld"},
-					Observed: snapshot.HelloworldObservedState{},
+					Observed: snapshot.HelloworldObservedState{Mood: "sad", HelloSaid: true},
 					Desired: &snapshot.HelloworldDesiredState{
 						BaseDesiredState: config.BaseDesiredState{ShutdownRequested: true},
 					},
 				}
 			})
 
-			It("should stay in StoppedState", func() {
+			It("should transition to StoppedState", func() {
 				result := stateObj.Next(snap)
 
 				Expect(result.State).To(BeAssignableToTypeOf(&state.StoppedState{}))
 			})
 
-			It("should signal needs removal", func() {
+			It("should not signal anything", func() {
 				result := stateObj.Next(snap)
 
-				Expect(result.Signal).To(Equal(fsmv2.SignalNeedsRemoval))
+				Expect(result.Signal).To(Equal(fsmv2.SignalNone))
 			})
 
 			It("should not return an action", func() {
@@ -97,55 +125,53 @@ var _ = Describe("StoppedState", func() {
 
 	Describe("String", func() {
 		It("should return the state name", func() {
-			Expect(stateObj.String()).To(Equal("Stopped"))
+			Expect(stateObj.String()).To(Equal("Degraded"))
 		})
 	})
 })
 
-var _ = Describe("StoppedState Transitions", func() {
-	var stateObj *state.StoppedState
+var _ = Describe("DegradedState Transitions", func() {
+	var stateObj *state.DegradedState
 
 	BeforeEach(func() {
-		stateObj = &state.StoppedState{}
+		stateObj = &state.DegradedState{}
 	})
 
-	Describe("Stopped -> TryingToStartState", func() {
-		It("should transition with default desired state", func() {
+	Describe("Degraded -> RunningState", func() {
+		It("should transition when mood is no longer sad", func() {
 			snap := fsmv2.Snapshot{
 				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "helloworld"},
-				Observed: snapshot.HelloworldObservedState{},
+				Observed: snapshot.HelloworldObservedState{Mood: "happy", HelloSaid: true},
 				Desired:  &snapshot.HelloworldDesiredState{},
 			}
 
 			result := stateObj.Next(snap)
 
-			Expect(result.State).To(BeAssignableToTypeOf(&state.TryingToStartState{}))
+			Expect(result.State).To(BeAssignableToTypeOf(&state.RunningState{}))
 			Expect(result.Signal).To(Equal(fsmv2.SignalNone))
 			Expect(result.Action).To(BeNil())
 		})
 
-		It("should transition with explicit shutdown=false", func() {
+		It("should transition when mood file is absent (empty mood)", func() {
 			snap := fsmv2.Snapshot{
-				Identity: deps.Identity{ID: "hello-1", Name: "helloworld", WorkerType: "helloworld"},
-				Observed: snapshot.HelloworldObservedState{},
-				Desired: &snapshot.HelloworldDesiredState{
-					BaseDesiredState: config.BaseDesiredState{ShutdownRequested: false},
-				},
+				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "helloworld"},
+				Observed: snapshot.HelloworldObservedState{Mood: "", HelloSaid: true},
+				Desired:  &snapshot.HelloworldDesiredState{},
 			}
 
 			result := stateObj.Next(snap)
 
-			Expect(result.State).To(BeAssignableToTypeOf(&state.TryingToStartState{}))
+			Expect(result.State).To(BeAssignableToTypeOf(&state.RunningState{}))
 			Expect(result.Signal).To(Equal(fsmv2.SignalNone))
 			Expect(result.Action).To(BeNil())
 		})
 	})
 
-	Describe("Stopped -> SignalNeedsRemoval", func() {
-		It("should signal removal when shutdown is requested", func() {
+	Describe("Degraded -> StoppedState", func() {
+		It("should transition on shutdown request", func() {
 			snap := fsmv2.Snapshot{
 				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "helloworld"},
-				Observed: snapshot.HelloworldObservedState{},
+				Observed: snapshot.HelloworldObservedState{Mood: "sad", HelloSaid: true},
 				Desired: &snapshot.HelloworldDesiredState{
 					BaseDesiredState: config.BaseDesiredState{ShutdownRequested: true},
 				},
@@ -154,16 +180,14 @@ var _ = Describe("StoppedState Transitions", func() {
 			result := stateObj.Next(snap)
 
 			Expect(result.State).To(BeAssignableToTypeOf(&state.StoppedState{}))
-			Expect(result.Signal).To(Equal(fsmv2.SignalNeedsRemoval))
+			Expect(result.Signal).To(Equal(fsmv2.SignalNone))
 			Expect(result.Action).To(BeNil())
 		})
 
-		It("should signal removal even with HelloSaid=true", func() {
+		It("should shutdown even if mood has recovered", func() {
 			snap := fsmv2.Snapshot{
-				Identity: deps.Identity{ID: "hello-shutdown", Name: "helloworld", WorkerType: "helloworld"},
-				Observed: snapshot.HelloworldObservedState{
-					HelloSaid: true,
-				},
+				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "helloworld"},
+				Observed: snapshot.HelloworldObservedState{Mood: "happy", HelloSaid: true},
 				Desired: &snapshot.HelloworldDesiredState{
 					BaseDesiredState: config.BaseDesiredState{ShutdownRequested: true},
 				},
@@ -172,7 +196,23 @@ var _ = Describe("StoppedState Transitions", func() {
 			result := stateObj.Next(snap)
 
 			Expect(result.State).To(BeAssignableToTypeOf(&state.StoppedState{}))
-			Expect(result.Signal).To(Equal(fsmv2.SignalNeedsRemoval))
+			Expect(result.Signal).To(Equal(fsmv2.SignalNone))
+			Expect(result.Action).To(BeNil())
+		})
+	})
+
+	Describe("Degraded -> Stay", func() {
+		It("should stay degraded when mood is still sad", func() {
+			snap := fsmv2.Snapshot{
+				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "helloworld"},
+				Observed: snapshot.HelloworldObservedState{Mood: "sad", HelloSaid: true},
+				Desired:  &snapshot.HelloworldDesiredState{},
+			}
+
+			result := stateObj.Next(snap)
+
+			Expect(result.State).To(BeAssignableToTypeOf(&state.DegradedState{}))
+			Expect(result.Signal).To(Equal(fsmv2.SignalNone))
 			Expect(result.Action).To(BeNil())
 		})
 	})

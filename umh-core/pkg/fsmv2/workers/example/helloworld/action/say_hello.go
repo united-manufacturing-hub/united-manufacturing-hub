@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package action contains the actions for the helloworld worker.
+// Package action defines the actions for the helloworld worker.
 package action
 
 import (
@@ -21,18 +21,12 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/helloworld/snapshot"
 )
 
+// SayHelloActionName is the name used for logging and metrics.
 const SayHelloActionName = "say_hello"
 
 // SayHelloAction prints a greeting and marks hello as said.
 //
-// ACTION PATTERN:
-//   - Check context cancellation first
-//   - Check if action is already done (IDEMPOTENCY)
-//   - Perform the action
-//   - Update dependencies state
-//
-// IDEMPOTENCY: Actions must be safe to call multiple times.
-// The state machine may retry actions, so always check if already done.
+// The state machine retries actions, so check if already done.
 type SayHelloAction struct{}
 
 // Execute performs the say hello action.
@@ -47,7 +41,7 @@ func (a *SayHelloAction) Execute(ctx context.Context, depsAny any) error {
 	deps := depsAny.(snapshot.HelloworldDependencies)
 	logger := deps.ActionLogger(SayHelloActionName)
 
-	// 2. Check if already done (IDEMPOTENCY)
+	// 2. Check if already done (idempotency)
 	if deps.HasSaidHello() {
 		logger.Debug("already_said_hello")
 
@@ -63,7 +57,8 @@ func (a *SayHelloAction) Execute(ctx context.Context, depsAny any) error {
 	return nil
 }
 
-// String returns the action name for logging.
+// String returns the action name for logging (implements fmt.Stringer).
+// Both String and Name are required: String for fmt.Stringer, Name for the action interface.
 func (a *SayHelloAction) String() string {
 	return SayHelloActionName
 }

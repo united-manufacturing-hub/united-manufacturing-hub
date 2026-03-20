@@ -18,10 +18,10 @@ package examples
 //
 // Demonstrates both I/O patterns:
 //   - Action: SayHelloAction writes to in-memory deps
-//   - Observation: CollectObservedState reads the mood file path from disk
+//   - Observation: CollectObservedState reads the mood file from disk
 //
-// The mood file path is configured via DesiredState (moodFilePath).
-// When omitted, mood checking is skipped entirely (backwards compatible).
+// Set the mood file path via the moodFilePath field in the scenario config.
+// When omitted, mood checking is skipped.
 //
 // Interactive demo:
 //

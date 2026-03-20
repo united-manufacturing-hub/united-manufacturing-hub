@@ -20,7 +20,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 )
 
-// HelloworldDependencies provides resources needed by worker actions.
+// HelloworldDependencies holds mutable state shared between actions and CollectObservedState.
 //
 // Actions interact with external systems (databases, APIs, hardware) through
 // dependencies. The dependencies struct stores state that actions modify
@@ -39,7 +39,6 @@ type HelloworldDependencies struct {
 func NewHelloworldDependencies(logger deps.FSMLogger, stateReader deps.StateReader, identity deps.Identity) *HelloworldDependencies {
 	return &HelloworldDependencies{
 		BaseDependencies: deps.NewBaseDependencies(logger, stateReader, identity),
-		helloSaid:        false,
 	}
 }
 
