@@ -332,7 +332,7 @@ var _ = Describe("CommunicatorDependencies", func() {
 
 	// Transport reset responsibility belongs to ResetTransportAction, NOT RecordError.
 	// RecordError/RecordTypedError only track error counts; transport reset is triggered
-	// by RecoveringState returning ResetTransportAction at threshold multiples.
+	// by TransportWorker's DegradedState dispatching ResetTransportAction at threshold multiples.
 	// This separation ensures single responsibility and avoids double resets.
 	Describe("RecordError does NOT reset transport (reset via FSM action only)", func() {
 		var (
@@ -362,7 +362,7 @@ var _ = Describe("CommunicatorDependencies", func() {
 					deps.RecordError()
 				}
 
-				// Transport reset is handled by ResetTransportAction from RecoveringState,
+				// Transport reset is handled by ResetTransportAction from TransportWorker's DegradedState,
 				// not by RecordError. This avoids double resets.
 				Expect(mockTrans.ResetCallCount()).To(Equal(0))
 			})
@@ -372,7 +372,7 @@ var _ = Describe("CommunicatorDependencies", func() {
 					deps.RecordError()
 				}
 
-				// Transport reset is handled by ResetTransportAction from RecoveringState,
+				// Transport reset is handled by ResetTransportAction from TransportWorker's DegradedState,
 				// not by RecordError. This avoids double resets.
 				Expect(mockTrans.ResetCallCount()).To(Equal(0))
 			})
@@ -406,7 +406,7 @@ var _ = Describe("CommunicatorDependencies", func() {
 					deps.RecordError()
 				}
 				Expect(deps.GetConsecutiveErrors()).To(Equal(5))
-				// Still no reset - that's the FSM's job via ResetTransportAction
+				// Still no reset - that's TransportWorker's DegradedState job via ResetTransportAction
 				Expect(mockTrans.ResetCallCount()).To(Equal(0))
 			})
 		})

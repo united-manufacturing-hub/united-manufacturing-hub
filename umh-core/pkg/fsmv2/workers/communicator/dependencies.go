@@ -137,8 +137,8 @@ func (d *CommunicatorDependencies) GetPulledMessages() []*transport.UMHMessage {
 }
 
 // RecordError increments consecutive errors and records when degraded mode started.
-// Transport reset is handled by ResetTransportAction from RecoveringState, not here,
-// to avoid duplicate resets and maintain single responsibility.
+// Transport reset is handled by ResetTransportAction from TransportWorker's DegradedState,
+// not here, to avoid duplicate resets and maintain single responsibility.
 func (d *CommunicatorDependencies) RecordError() {
 	d.RetryTracker().RecordError()
 }
@@ -154,8 +154,8 @@ func (d *CommunicatorDependencies) RecordSuccess() {
 }
 
 // RecordTypedError increments consecutive errors and records error type and retry-after.
-// Transport reset is handled by ResetTransportAction from RecoveringState, not here,
-// to avoid duplicate resets and maintain single responsibility.
+// Transport reset is handled by ResetTransportAction from TransportWorker's DegradedState,
+// not here, to avoid duplicate resets and maintain single responsibility.
 func (d *CommunicatorDependencies) RecordTypedError(errType httpTransport.ErrorType, retryAfter time.Duration) {
 	d.mu.Lock()
 	d.lastErrorType = errType
@@ -315,7 +315,7 @@ func (d *CommunicatorDependencies) SetBackpressured(backpressured bool) {
 //
 // Returning (0, 0) when provider is nil intentionally triggers backpressure as a safe default.
 // With capacity=0 and length=0, available = 0 - 0 = 0, which is < ExpectedBatchSize (50),
-// so the pull action will skip pulling. This prevents pulling messages when we have no
+// so PullAction will skip pulling. This prevents pulling messages when we have no
 // channel to deliver them to, avoiding potential message loss.
 func (d *CommunicatorDependencies) GetInboundChanStats() (capacity int, length int) {
 	provider := GetChannelProvider()

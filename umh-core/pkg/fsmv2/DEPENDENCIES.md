@@ -94,7 +94,7 @@ Actions use typed constants from `pkg/fsmv2/deps` for compile-time safety:
 
 ```go
 func (a *PullAction) Execute(ctx context.Context, depsAny any) error {
-    deps := depsAny.(TransportDependencies)
+    deps := depsAny.(PullDependencies)
 
     // Increment counters (cumulative values)
     deps.MetricsRecorder().IncrementCounter(deps.CounterPullOps, 1)
