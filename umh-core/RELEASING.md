@@ -26,7 +26,7 @@ During development, all changelog entries go under `## Unreleased` at the top of
 
 ## Stable release
 
-1. In `CHANGELOG.md`, rename `## Unreleased` to the version being released (e.g., `## [0.44.12]`) and add a fresh empty `## Unreleased` section above it. Review all entries.
+1. Create a PR to `staging` that renames `## Unreleased` in `CHANGELOG.md` to the version being released (e.g., `## [0.44.12]`) and adds a fresh empty `## Unreleased` section above it. Review all entries. Merge this PR.
 2. Create a PR from `staging` → `main`, review and merge
 3. Go to [Releases > Draft a new release](https://github.com/united-manufacturing-hub/united-manufacturing-hub/releases/new)
 4. Create a **new tag** with the format `v0.X.Y` (e.g., `v0.44.10`) — no `-pre.` suffix
