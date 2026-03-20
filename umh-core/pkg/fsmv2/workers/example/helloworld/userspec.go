@@ -29,6 +29,6 @@ import (
 type HelloworldUserSpec struct {
 	config.BaseUserSpec // Provides State field with GetState() defaulting to "running"
 
-	// MoodFilePath is the path to an external file whose contents set the worker's mood.
+	// MoodFilePath is the path to the mood file whose contents set the worker's mood.
 	MoodFilePath string `json:"moodFilePath" yaml:"moodFilePath"`
 }
