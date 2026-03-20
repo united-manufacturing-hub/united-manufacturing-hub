@@ -320,15 +320,15 @@ test: vet-nilaway-lint-betteralign
 
 unit-test:
 ifeq ($(CI), true)
-	rm -f /tmp/unit-test-failed
+	FAILED=0; \
 	gotestsum --junitfile unit-test-report.xml -- -race -v -tags=test -count=1 -failfast -p 4 \
 		$(UNIT_TEST_PKGS_SERIAL) \
-		-args -ginkgo.label-filter='$(UNIT_LABEL_FILTER)' -ginkgo.no-color || touch /tmp/unit-test-failed
+		-args -ginkgo.label-filter='$(UNIT_LABEL_FILTER)' -ginkgo.no-color || FAILED=1; \
 	go run github.com/onsi/ginkgo/v2/ginkgo run --procs=30 --race --tags=test \
 		--label-filter='$(UNIT_LABEL_FILTER)' --junit-report=unit-test-report-parallel.xml \
 		--no-color \
-		$(UNIT_TEST_PKGS_PARALLEL) || touch /tmp/unit-test-failed
-	test ! -f /tmp/unit-test-failed
+		$(UNIT_TEST_PKGS_PARALLEL) || FAILED=1; \
+	exit $$FAILED
 else
 	go test -race -v -tags=test -count=1 -failfast -p 4 \
 		$(UNIT_TEST_PKGS_SERIAL) \
