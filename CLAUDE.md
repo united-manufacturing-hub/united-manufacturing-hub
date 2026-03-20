@@ -134,17 +134,10 @@ The United Manufacturing Hub (UMH) is an Industrial IoT platform for manufacturi
 
 ### Changelog
 
-Every PR with user-visible changes must add an entry to `umh-core/CHANGELOG.md` under the current (topmost) version section. Use the `/changelog-entry` skill to generate entries when available. For writing guidelines and voice, follow the `changelog-writing` skill. When skills are unavailable (e.g., in subagents), follow these rules:
+Every PR with user-visible changes must add an entry to `umh-core/CHANGELOG.md` under the `## Unreleased` section at the top. For format, voice, and what to include/skip, follow the `changelog-writing` skill (use `/changelog-entry` to generate entries). Never create a new version section — only add to `## Unreleased`. The section is renamed to a version number at release time (see `umh-core/RELEASING.md`).
 
-- **Format**: Plain bullets with no bold lead-in — lead with the problem ("Previously, ..."), then the solution ("Now, ...")
-- **Categories** (in order): `### Breaking Changes`, `### New Features`, `### Improvements`, `### Fixes`
-- **No entry needed** for: CI/CD changes, refactoring, test-only changes, documentation-only changes
-- **Never create a new version section** — only add to the existing topmost `## [X.Y.Z]` section
-- **No trailing periods** on bullet points
-- On tag push, a sync workflow automatically creates entries in changelog.umh.app from CHANGELOG.md
-- **Release titles**: Use format `vX.Y.Z - Short Descriptive Title` (e.g., `v0.44.12 - Modbus Per-Slave Address Mapping`). The part after the dash becomes the changelog.umh.app entry title.
-- GitHub Release notes are automatically populated from CHANGELOG.md by the `update-github-release.yml` workflow (runs on tag push). The job extracts the version's section, transforms headers for standalone display, and appends a changelog.umh.app link. You can still edit the Release body manually after if needed.
 - **CI enforcement**: PRs with code changes must modify CHANGELOG.md, or CI will fail. Add the `skip-changelog-guard` label to bypass (for CI/CD, refactoring, or test-only changes).
+- **Automation**: On tag push, workflows sync entries to changelog.umh.app and populate GitHub Release notes from CHANGELOG.md.
 
 ## Support & Troubleshooting Workflows
 

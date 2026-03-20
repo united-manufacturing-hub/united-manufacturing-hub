@@ -110,7 +110,7 @@ jobs:
           echo "::error::No changes to umh-core/CHANGELOG.md detected."
           echo ""
           echo "This PR modifies code but doesn't include a changelog entry."
-          echo "Add an entry under the topmost version section (e.g. ## [X.Y.Z]) in umh-core/CHANGELOG.md,"
+          echo "Add an entry under the ## Unreleased section in umh-core/CHANGELOG.md,"
           echo "or add the 'skip-changelog-guard' label if not needed (CI/CD, refactoring, or test-only changes)"
           echo "and push a commit to re-trigger CI."
           echo ""

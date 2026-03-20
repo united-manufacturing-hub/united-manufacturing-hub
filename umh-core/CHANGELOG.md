@@ -1,11 +1,18 @@
 # Changelog
 
+## Unreleased
+
 ## [0.44.12]
+
+### Improvements
+
+- Starting with this version, umh-core supports stopping and starting bridges. Previously, bridges were always active and could only be removed entirely. A Management Console update is required to expose this in the UI
 
 ### Fixes
 
 - The container previously restarted hundreds of times per minute when config.yaml was missing or invalid and now waits 60 seconds before retrying, giving you time to fix the configuration
 - Previously, memory monitoring read host-level values even inside containers, while CPU monitoring already used cgroup-aware values. Memory metrics now read cgroup v2 limits and usage, so dashboards show correct container memory utilization
+- Fixed debug logging settings being lost when editing bridges or data flows -- the debug_level flag is now preserved across configuration changes
 
 ### Preview: FSMv2 Communicator
 
