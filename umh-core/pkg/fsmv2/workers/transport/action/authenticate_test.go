@@ -25,8 +25,8 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
 	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/action"
 	transportpkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/action"
 )
 
 var _ = Describe("AuthenticateAction", func() {
@@ -330,34 +330,36 @@ var _ = Describe("AuthenticateAction", func() {
 			// increments correctly (the guard condition for SentryWarn).
 		})
 
-		It("should propagate context cancellation", func() {
+		It("should propagate context cancellation during Authenticate", func() {
 			ctx, cancel := context.WithCancel(context.Background())
+			// Cancel inside Authenticate() to exercise the post-Authenticate ctx.Err() branch,
+			// not the top-of-method guard (which is tested in "Context Cancellation" above).
+			mockTransp.cancelDuringAuth = cancel
 			mockTransp.authError = &httpTransport.TransportError{
 				Type:    httpTransport.ErrorTypeNetwork,
 				Message: "connection refused",
 			}
 
-			// Cancel context after transport is set up but the mock returns error
-			// We need to NOT cancel before Execute (that's tested in Context Cancellation above)
-			// Instead, simulate: transport returns error AND context is cancelled
-			cancel()
-
-			// Even though auth fails, context cancellation should propagate
 			err := act.Execute(ctx, dependencies)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("context"))
+			Expect(err.Error()).To(ContainSubstring("context canceled"))
 		})
 	})
 })
 
 type mockTransport struct {
-	authCallCount int
-	authResponse  transport.AuthResponse
-	authError     error
+	authCallCount    int
+	authResponse     transport.AuthResponse
+	authError        error
+	cancelDuringAuth context.CancelFunc
 }
 
 func (m *mockTransport) Authenticate(ctx context.Context, req transport.AuthRequest) (transport.AuthResponse, error) {
 	m.authCallCount++
+
+	if m.cancelDuringAuth != nil {
+		m.cancelDuringAuth()
+	}
 
 	if m.authError != nil {
 		return transport.AuthResponse{}, m.authError

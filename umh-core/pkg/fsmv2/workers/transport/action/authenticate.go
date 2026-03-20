@@ -39,8 +39,8 @@ const (
 // Creates transport on first execution if not present.
 //
 // Returns nil on classified TransportError (tracked via RecordTypedError for snapshot-based backoff).
-// Returns error on context cancellation, invalid dependency type, or unclassified errors
-// (ErrorTypeUnknown), which are programming errors that must propagate to the executor.
+// Returns error on context cancellation, invalid dependency type, or non-TransportError
+// (programming bugs that must propagate to the executor).
 //
 // Architecture compliance:
 //   - Struct fields are read-only config (no mutable state) - Stateless Actions
@@ -105,14 +105,15 @@ func (a *AuthenticateAction) Execute(ctx context.Context, depsAny any) error {
 			return fmt.Errorf("authentication failed (context canceled): %w", ctx.Err())
 		}
 
-		errType, retryAfter := httpTransport.ExtractErrorType(err)
-
-		// Non-TransportErrors (ErrorTypeUnknown) are programming errors.
-		// Let them propagate to the executor for SentryError.
-		if errType == httpTransport.ErrorTypeUnknown {
+		// Only suppress classified TransportErrors. Non-TransportErrors are programming
+		// bugs that must propagate to the executor for SentryError. Same pattern as
+		// push/pull actions (ENG-4450).
+		var transportErr *httpTransport.TransportError
+		if !errors.As(err, &transportErr) {
 			return err
 		}
 
+		errType, retryAfter := transportErr.Type, transportErr.RetryAfter
 		deps.RecordTypedError(errType, retryAfter)
 		deps.MetricsRecorder().IncrementCounter(httpTransport.CounterForErrorType(errType), 1)
 
