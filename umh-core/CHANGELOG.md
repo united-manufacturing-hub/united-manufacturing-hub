@@ -15,7 +15,6 @@
 ### Preview: FSMv2 Communicator
 
 - Instances could appear permanently offline in the Management Console even though the pod was running and healthy -- only a restart would fix it. This happened because token re-authentication briefly caused child workers to enter a stopping state from which they could not recover, leaving the communicator stuck indefinitely. Workers now always complete the stop and automatically recover when the parent is healthy again. Requires `USE_FSMV2_TRANSPORT=true`
-- Temporary network errors (DNS failures, HTTP timeouts, connection resets) no longer trigger alerts. These transient errors are still tracked in metrics and the system retries automatically -- if they persist above 90% failure rate for roughly 10 minutes, a warning is escalated. Requires `USE_FSMV2_TRANSPORT=true`
 
 ## [0.44.11]
 
