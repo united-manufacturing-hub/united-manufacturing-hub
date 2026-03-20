@@ -53,11 +53,15 @@ type HelloworldObservedState struct {
 	// CollectedAt is when this observation was taken
 	CollectedAt time.Time `json:"collected_at"`
 
-	// LastActionResults contains action history (managed by supervisor)
-	LastActionResults []deps.ActionResult `json:"last_action_results,omitempty"`
-
 	// State is the current FSM state name (set by supervisor)
 	State string `json:"state"`
+
+	// Mood is read from an external file (/tmp/helloworld-mood) by CollectObservedState.
+	// Demonstrates real blocking I/O in observation collection.
+	Mood string `json:"mood,omitempty"`
+
+	// LastActionResults contains action history (managed by supervisor)
+	LastActionResults []deps.ActionResult `json:"last_action_results,omitempty"`
 
 	// HelloworldDesiredState embedded for state consistency
 	// REQUIRED: Architecture tests verify this pattern
@@ -69,10 +73,6 @@ type HelloworldObservedState struct {
 
 	// HelloSaid tracks whether the SayHelloAction has been executed
 	HelloSaid bool `json:"hello_said"`
-
-	// Mood is read from an external file (/tmp/helloworld-mood) by CollectObservedState.
-	// Demonstrates real blocking I/O in observation collection.
-	Mood string `json:"mood,omitempty"`
 }
 
 // GetTimestamp returns when this observation was collected.
