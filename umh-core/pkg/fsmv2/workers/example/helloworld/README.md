@@ -27,14 +27,24 @@ _ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm
 
 | Control loop role | Helloworld implementation |
 |-------------------|--------------------------|
-| **Sensor** (`CollectObservedState`) | Reads `deps.HasSaidHello()` + reads `/tmp/helloworld-mood` from disk |
+| **Sensor** (`CollectObservedState`) | Reads `deps.HasSaidHello()` + reads mood file from `DesiredState.MoodFilePath` |
 | **Controller** (`State.Next()`) | Checks shutdown → checks hello said → checks mood → decides |
 | **Actuator** (Actions) | `SayHelloAction` logs a greeting and sets `deps.HelloSaid` |
 
 See the parent [README's control loop section](../../../README.md#the-control-loop) for the general pattern.
 
+The mood file path is configurable via `moodFilePath` in the worker's YAML config.
+When omitted, mood checking is skipped entirely (backwards compatible).
+
+```yaml
+# Scenario config example
+config: |
+  state: running
+  moodFilePath: /tmp/helloworld-mood
+```
+
 ```bash
-# Demo: observation-driven transitions
+# Demo: observation-driven transitions (assuming moodFilePath: /tmp/helloworld-mood)
 echo "happy" > /tmp/helloworld-mood   # stays Running
 echo "sad" > /tmp/helloworld-mood     # → Degraded
 rm /tmp/helloworld-mood               # → Running (no mood file = fine)
@@ -133,7 +143,8 @@ Run the helloworld scenario:
 ```bash
 go run pkg/fsmv2/cmd/runner/main.go --scenario=helloworld --duration=5s
 
-# Interactive mood demo (in a separate terminal while the scenario is running):
+# Interactive mood demo (in a separate terminal while the scenario is running).
+# The scenario configures moodFilePath: /tmp/helloworld-mood by default.
 echo "sad" > /tmp/helloworld-mood     # watch the worker transition to Degraded
 echo "happy" > /tmp/helloworld-mood   # back to Running
 rm /tmp/helloworld-mood               # stays Running (no mood file = fine)
