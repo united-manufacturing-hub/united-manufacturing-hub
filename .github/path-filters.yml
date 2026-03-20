@@ -16,15 +16,14 @@
 # Used by build-umh-core.yml, test-umh-core.yml, and go-analysis.yml.
 
 code:
-  - "umh-core/**"
+  - "umh-core/!(CHANGELOG.md|changelog-images)"
+  - "umh-core/!(CHANGELOG.md|changelog-images)/**"
   - "Makefile"
   - ".github/workflows/pull-request.yml"
   - ".github/workflows/build-umh-core.yml"
   - ".github/workflows/test-umh-core.yml"
   - ".github/workflows/go-analysis.yml"
   - ".github/path-filters.yml"
-  - "!umh-core/CHANGELOG.md"
-  - "!umh-core/changelog-images/**"
 changelog:
   - "umh-core/CHANGELOG.md"
   - "umh-core/changelog-images/**"

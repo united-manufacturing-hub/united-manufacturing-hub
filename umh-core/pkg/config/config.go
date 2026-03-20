@@ -170,6 +170,8 @@ type DataFlowComponentConfig struct {
 
 	DataFlowComponentServiceConfig dataflowcomponentserviceconfig.DataflowComponentServiceConfig `yaml:"dataFlowComponentConfig"`
 
+	// DebugLevel enables debug logging for this instance
+	DebugLevel bool `yaml:"debug_level"`
 	// private marker – not (un)marshalled
 	// explanation see templating.go
 	hasAnchors bool `yaml:"-"`
@@ -188,6 +190,8 @@ type ProtocolConverterConfig struct {
 
 	ProtocolConverterServiceConfig protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec `yaml:"protocolConverterServiceConfig"`
 
+	// DebugLevel enables debug logging for this instance
+	DebugLevel bool `yaml:"debug_level"`
 	// private marker – not (un)marshalled
 	// explanation see templating.go
 	hasAnchors bool `yaml:"-"`

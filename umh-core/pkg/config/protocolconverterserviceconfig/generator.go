@@ -57,15 +57,8 @@ func (g *Generator) configToMap(cfg ProtocolConverterServiceConfigSpec) map[stri
 	connectionGenerator := connectionserviceconfig.NewGenerator()
 	variableBundleGenerator := variables.NewGenerator()
 
-	// Get the template configs with DebugLevel properly set
-	// Priority: DFC level (most specific) > Spec level (least specific)
-	dfcReadConfig := cfg.Config.DataflowComponentReadServiceConfig
-	dfcReadConfig.DebugLevel = dfcReadConfig.DebugLevel || cfg.DebugLevel
-	dfcReadConfigMap := dfcGenerator.ConfigToMap(dfcReadConfig)
-
-	dfcWriteConfig := cfg.Config.DataflowComponentWriteServiceConfig
-	dfcWriteConfig.DebugLevel = dfcWriteConfig.DebugLevel || cfg.DebugLevel
-	dfcWriteConfigMap := dfcGenerator.ConfigToMap(dfcWriteConfig)
+	dfcReadConfigMap := dfcGenerator.ConfigToMap(cfg.Config.DataflowComponentReadServiceConfig)
+	dfcWriteConfigMap := dfcGenerator.ConfigToMap(cfg.Config.DataflowComponentWriteServiceConfig)
 	// Convert template to runtime for config map generation
 	connRuntime, err := connectionserviceconfig.ConvertTemplateToRuntime(cfg.Config.ConnectionServiceConfig)
 	if err != nil {
@@ -89,7 +82,6 @@ func (g *Generator) configToMap(cfg ProtocolConverterServiceConfigSpec) map[stri
 	configMap["variables"] = variableBundleConfigMap
 
 	configMap["location"] = cfg.Location
-	configMap["debug_level"] = cfg.DebugLevel
 
 	return configMap
 }
@@ -158,11 +150,6 @@ func normalizeConfig(raw map[string]any) map[string]any {
 	normalized["template"] = normalizedTemplate
 	normalized["variables"] = normalizedVariables
 	normalized["location"] = locationMap // Use our correctly processed location map
-
-	// Preserve debug_level if it exists in raw config
-	if debugLevel, ok := raw["debug_level"]; ok {
-		normalized["debug_level"] = debugLevel
-	}
 
 	return normalized
 }

@@ -30,13 +30,13 @@ type StoppingState struct {
 func (s *StoppingState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := helpers.ConvertSnapshot[snapshot.PushObservedState, *snapshot.PushDesiredState](snapAny)
 
-	if snap.Observed.IsStopRequired() {
-		return fsmv2.Result[any, any](&StoppedState{}, fsmv2.SignalNone, nil,
-			fmt.Sprintf("stop required: shutdown=%t, parentState=%s", snap.Desired.IsShutdownRequested(), snap.Desired.ParentMappedState))
-	}
+	// Cleanup hook: add resource cleanup actions here in the future.
+	// Self-return is valid during cleanup but MUST carry an action — never nil.
+	// See CLAUDE.md "State Transition Traps" for the full pattern.
 
-	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil,
-		fmt.Sprintf("stopping, waiting for stop condition: shutdown=%t, parentState=%s", snap.Desired.IsShutdownRequested(), snap.Desired.ParentMappedState))
+	return fsmv2.Result[any, any](&StoppedState{}, fsmv2.SignalNone, nil,
+		fmt.Sprintf("stop complete: shutdown=%t, parentState(observed)=%s",
+			snap.Desired.IsShutdownRequested(), snap.Observed.ParentMappedState))
 }
 
 func (s *StoppingState) String() string {

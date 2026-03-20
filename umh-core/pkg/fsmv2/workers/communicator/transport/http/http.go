@@ -19,6 +19,7 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -28,6 +29,7 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/hash"
+	depspkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
 )
 
@@ -38,30 +40,65 @@ const (
 	LongPollingBuffer = 1 * time.Second
 )
 
-// ErrorType classifies HTTP errors for intelligent backoff strategies.
+// ErrorType classifies transport-layer HTTP errors into categories that
+// determine how the system responds. Each type maps to a Prometheus counter
+// (via [CounterForErrorType]) and a transient/persistent classification
+// (via [IsTransient]) that controls whether the error propagates to the FSM
+// or is suppressed at the action layer (metrics are still recorded).
 type ErrorType int
 
 const (
 	// ErrorTypeUnknown represents an unclassified error.
 	ErrorTypeUnknown ErrorType = iota
 	// ErrorTypeCloudflareChallenge represents Cloudflare challenge page (429 + HTML "Just a moment").
+	// Persistent: requires network path change or Cloudflare allowlisting.
 	ErrorTypeCloudflareChallenge
 	// ErrorTypeBackendRateLimit represents backend rate limiting (429 + JSON + Retry-After).
+	// Transient: self-resolves after the rate limit window expires.
 	ErrorTypeBackendRateLimit
 	// ErrorTypeInvalidToken represents authentication failure (401/403).
+	// Persistent: requires re-authentication by the parent worker.
 	ErrorTypeInvalidToken
 	// ErrorTypeInstanceDeleted represents instance not found (404).
+	// Persistent: requires instance re-registration or human intervention.
 	ErrorTypeInstanceDeleted
 	// ErrorTypeServerError represents server-side errors (5xx).
+	// Transient: backend recovers on its own.
 	ErrorTypeServerError
 	// ErrorTypeProxyBlock represents proxy block pages (Zscaler, BlueCoat, etc.).
+	// Persistent: requires proxy configuration change.
 	ErrorTypeProxyBlock
-	// ErrorTypeNetwork represents network/connection errors.
+	// ErrorTypeNetwork represents network/connection errors (DNS, TCP, TLS).
+	// Transient: network path recovers on its own.
 	ErrorTypeNetwork
 	// ErrorTypeChannelFull represents inbound channel capacity exceeded.
-	// Not a transport error per se, but uses same classification for backoff.
+	// Transient: resolves as the consumer drains the channel.
+	// Not a transport error per se, but uses the same classification for backoff.
 	ErrorTypeChannelFull
 )
+
+// IsTransient reports whether the error type represents a condition that
+// typically self-resolves without human intervention.
+//
+// Transient: Network, ServerError, ChannelFull, BackendRateLimit.
+// Persistent: everything else (InvalidToken, InstanceDeleted, ProxyBlock,
+// CloudflareChallenge, Unknown).
+//
+// The classification controls error propagation in push and pull actions:
+//   - Transient errors are suppressed (action returns nil). Metrics and
+//     DegradedState are still updated. The failurerate.Tracker monitors
+//     the rolling failure rate; if transient errors dominate the window,
+//     it fires a one-shot SentryWarn escalation.
+//   - Persistent errors propagate to the FSM as errors, triggering state
+//     transitions (recovering, re-authentication) and firing SentryError.
+func (e ErrorType) IsTransient() bool {
+	switch e {
+	case ErrorTypeNetwork, ErrorTypeServerError, ErrorTypeChannelFull, ErrorTypeBackendRateLimit:
+		return true
+	default:
+		return false
+	}
+}
 
 // String returns a human-readable name for the error type.
 func (e ErrorType) String() string {
@@ -115,6 +152,44 @@ func (e *TransportError) Is(target error) bool {
 	}
 
 	return e.Type == t.Type
+}
+
+// ExtractErrorType unwraps a *TransportError from err and returns its ErrorType
+// and RetryAfter duration. If err does not wrap a *TransportError, it returns
+// ErrorTypeUnknown — a persistent type that propagates to the FSM and fires
+// SentryError, ensuring unclassified errors are never silently suppressed.
+func ExtractErrorType(err error) (ErrorType, time.Duration) {
+	var transportErr *TransportError
+	if errors.As(err, &transportErr) {
+		return transportErr.Type, transportErr.RetryAfter
+	}
+
+	return ErrorTypeUnknown, 0
+}
+
+// CounterForErrorType maps an ErrorType to its corresponding Prometheus counter.
+// Unknown and unrecognized types default to CounterNetworkErrorsTotal.
+func CounterForErrorType(t ErrorType) depspkg.CounterName {
+	switch t {
+	case ErrorTypeCloudflareChallenge:
+		return depspkg.CounterCloudflareErrorsTotal
+	case ErrorTypeBackendRateLimit:
+		return depspkg.CounterBackendRateLimitErrorsTotal
+	case ErrorTypeInvalidToken:
+		return depspkg.CounterAuthFailuresTotal
+	case ErrorTypeInstanceDeleted:
+		return depspkg.CounterInstanceDeletedTotal
+	case ErrorTypeServerError:
+		return depspkg.CounterServerErrorsTotal
+	case ErrorTypeProxyBlock:
+		return depspkg.CounterProxyBlockErrorsTotal
+	case ErrorTypeNetwork:
+		return depspkg.CounterNetworkErrorsTotal
+	case ErrorTypeUnknown:
+		return depspkg.CounterNetworkErrorsTotal
+	default:
+		return depspkg.CounterNetworkErrorsTotal
+	}
 }
 
 // isCloudflareChallenge detects Cloudflare challenge pages via headers and body content.

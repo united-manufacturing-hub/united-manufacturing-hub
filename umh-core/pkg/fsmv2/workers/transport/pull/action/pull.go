@@ -150,18 +150,21 @@ func (a *PullAction) Execute(ctx context.Context, depsAny any) error {
 	pullLatency := time.Since(pullStart)
 
 	if err != nil {
-		var transportErr *httpTransport.TransportError
-		if errors.As(err, &transportErr) {
-			pullDeps.RecordTypedError(transportErr.Type, transportErr.RetryAfter)
-			metrics.IncrementCounter(counterForErrorType(transportErr.Type), 1)
-		} else {
-			pullDeps.RecordTypedError(httpTransport.ErrorTypeNetwork, 0)
-			metrics.IncrementCounter(depspkg.CounterNetworkErrorsTotal, 1)
-		}
+		errType, retryAfter := httpTransport.ExtractErrorType(err)
+		pullDeps.RecordTypedError(errType, retryAfter)
+		metrics.IncrementCounter(httpTransport.CounterForErrorType(errType), 1)
 
 		metrics.IncrementCounter(depspkg.CounterPullOps, 1)
 		metrics.IncrementCounter(depspkg.CounterPullFailures, 1)
 		metrics.SetGauge(depspkg.GaugeLastPullLatencyMs, float64(pullLatency.Milliseconds()))
+
+		if ctx.Err() != nil {
+			return fmt.Errorf("pull failed (context canceled): %w", ctx.Err())
+		}
+
+		if errType.IsTransient() {
+			return nil
+		}
 
 		return fmt.Errorf("pull failed: %w", err)
 	}
@@ -234,29 +237,6 @@ func (a *PullAction) String() string {
 // Name returns the action name for FSM registration.
 func (a *PullAction) Name() string {
 	return PullActionName
-}
-
-func counterForErrorType(t httpTransport.ErrorType) depspkg.CounterName {
-	switch t {
-	case httpTransport.ErrorTypeCloudflareChallenge:
-		return depspkg.CounterCloudflareErrorsTotal
-	case httpTransport.ErrorTypeBackendRateLimit:
-		return depspkg.CounterBackendRateLimitErrorsTotal
-	case httpTransport.ErrorTypeInvalidToken:
-		return depspkg.CounterAuthFailuresTotal
-	case httpTransport.ErrorTypeInstanceDeleted:
-		return depspkg.CounterInstanceDeletedTotal
-	case httpTransport.ErrorTypeServerError:
-		return depspkg.CounterServerErrorsTotal
-	case httpTransport.ErrorTypeProxyBlock:
-		return depspkg.CounterProxyBlockErrorsTotal
-	case httpTransport.ErrorTypeNetwork:
-		return depspkg.CounterNetworkErrorsTotal
-	case httpTransport.ErrorTypeUnknown:
-		return depspkg.CounterNetworkErrorsTotal
-	default:
-		return depspkg.CounterNetworkErrorsTotal
-	}
 }
 
 // Backpressure thresholds for inbound channel capacity management.

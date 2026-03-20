@@ -21,9 +21,20 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps/retry"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps/retry/failurerate"
 	communicator_transport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
 	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
 )
+
+// ChildFailureRateConfig is the shared failurerate.Config for push and pull
+// child workers. WindowSize=600 at the 1-second production tick rate covers
+// roughly 10 minutes. Threshold=0.9 triggers escalation at 90% failure rate.
+// MinSamples=100 suppresses spurious alerts during startup.
+var ChildFailureRateConfig = failurerate.Config{
+	WindowSize: 600,
+	Threshold:  0.9,
+	MinSamples: 100,
+}
 
 // ChannelProvider interface and singleton functions are defined in channel_provider.go
 

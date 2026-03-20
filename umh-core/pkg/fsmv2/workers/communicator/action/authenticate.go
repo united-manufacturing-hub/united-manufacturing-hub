@@ -135,7 +135,7 @@ func (a *AuthenticateAction) Execute(ctx context.Context, depsAny any) error {
 		var transportErr *httpTransport.TransportError
 		if errors.As(err, &transportErr) {
 			deps.RecordTypedError(transportErr.Type, transportErr.RetryAfter)
-			deps.MetricsRecorder().IncrementCounter(counterForErrorType(transportErr.Type), 1)
+			deps.MetricsRecorder().IncrementCounter(httpTransport.CounterForErrorType(transportErr.Type), 1)
 		} else {
 			deps.RecordTypedError(httpTransport.ErrorTypeNetwork, 0)
 			deps.MetricsRecorder().IncrementCounter(depspkg.CounterNetworkErrorsTotal, 1)
@@ -166,30 +166,6 @@ func (a *AuthenticateAction) Execute(ctx context.Context, depsAny any) error {
 	}
 
 	return nil
-}
-
-// counterForErrorType maps ErrorType to Prometheus counter.
-func counterForErrorType(t httpTransport.ErrorType) depspkg.CounterName {
-	switch t {
-	case httpTransport.ErrorTypeCloudflareChallenge:
-		return depspkg.CounterCloudflareErrorsTotal
-	case httpTransport.ErrorTypeBackendRateLimit:
-		return depspkg.CounterBackendRateLimitErrorsTotal
-	case httpTransport.ErrorTypeInvalidToken:
-		return depspkg.CounterAuthFailuresTotal
-	case httpTransport.ErrorTypeInstanceDeleted:
-		return depspkg.CounterInstanceDeletedTotal
-	case httpTransport.ErrorTypeServerError:
-		return depspkg.CounterServerErrorsTotal
-	case httpTransport.ErrorTypeProxyBlock:
-		return depspkg.CounterProxyBlockErrorsTotal
-	case httpTransport.ErrorTypeNetwork:
-		return depspkg.CounterNetworkErrorsTotal
-	case httpTransport.ErrorTypeUnknown:
-		return depspkg.CounterNetworkErrorsTotal
-	default:
-		return depspkg.CounterNetworkErrorsTotal
-	}
 }
 
 func (a *AuthenticateAction) Name() string {

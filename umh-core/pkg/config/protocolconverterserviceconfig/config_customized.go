@@ -30,13 +30,7 @@ func (c ProtocolConverterServiceConfigSpec) GetConnectionServiceConfig() connect
 // For a read DFC, the user is not allowed to set its own output config, so we "enforce" the output config
 // to be the UNS output config. This ensures protocol converters always write to the unified namespace.
 func (c ProtocolConverterServiceConfigSpec) GetDFCReadServiceConfig() dataflowcomponentserviceconfig.DataflowComponentServiceConfig {
-	// copy the config
 	dfcReadConfig := c.Config.DataflowComponentReadServiceConfig
-
-	// Propagate debug_level: DFC-level OR Spec-level (any true enables debug)
-	if !dfcReadConfig.DebugLevel {
-		dfcReadConfig.DebugLevel = c.DebugLevel
-	}
 
 	// Only append UNS output if there's an input config
 	if len(dfcReadConfig.BenthosConfig.Input) > 0 {
@@ -55,11 +49,6 @@ func (c ProtocolConverterServiceConfigSpec) GetDFCReadServiceConfig() dataflowco
 // to be the UNS input config. This ensures protocol converters always read from the unified namespace.
 func (c ProtocolConverterServiceConfigSpec) GetDFCWriteServiceConfig() dataflowcomponentserviceconfig.DataflowComponentServiceConfig {
 	dfcWriteConfig := c.Config.DataflowComponentWriteServiceConfig
-
-	// Propagate debug_level: DFC-level OR Spec-level (any true enables debug)
-	if !dfcWriteConfig.DebugLevel {
-		dfcWriteConfig.DebugLevel = c.DebugLevel
-	}
 
 	// Only append UNS input if there's an output config
 	if len(dfcWriteConfig.BenthosConfig.Output) > 0 {
@@ -85,6 +74,5 @@ func FromConnectionAndDFCServiceConfig(
 		ConnectionServiceConfig:             connection,
 		DataflowComponentReadServiceConfig:  dfcRead,
 		DataflowComponentWriteServiceConfig: dfcWrite,
-		DebugLevel:                          dfcRead.DebugLevel,
 	}
 }

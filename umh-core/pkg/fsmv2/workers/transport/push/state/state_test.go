@@ -333,12 +333,50 @@ var _ = Describe("StoppingState", func() {
 		Expect(result.State).To(BeAssignableToTypeOf(&state.StoppedState{}))
 	})
 
-	It("should stay in Stopping when stop condition not yet met", func() {
+	It("should transition to Stopped unconditionally (ENG-4608)", func() {
 		snap := makeSnapshot(config.DesiredStateRunning, false, 0, true, true)
 		result := s.Next(snap)
-		Expect(result.State).To(BeAssignableToTypeOf(&state.StoppingState{}))
+		Expect(result.State).To(BeAssignableToTypeOf(&state.StoppedState{}))
 		Expect(result.Signal).To(Equal(fsmv2.SignalNone))
-		Expect(result.Reason).To(ContainSubstring("stopping"))
+		Expect(result.Reason).To(ContainSubstring("stop complete"))
+	})
+
+	Describe("stop signal reverted during shutdown", func() {
+		It("should recover when parent transitions back to Running (token re-auth)", func() {
+			snapParentStopped := makeSnapshot(config.DesiredStateStopped, false, 0, true, true)
+			result := s.Next(snapParentStopped)
+			Expect(result.State).To(BeAssignableToTypeOf(&state.StoppedState{}))
+
+			stopped := result.State.(*state.StoppedState)
+			snapParentRunning := makeSnapshot(config.DesiredStateRunning, false, 0, true, true)
+			result = stopped.Next(snapParentRunning)
+			Expect(result.State).To(BeAssignableToTypeOf(&state.RunningState{}))
+		})
+
+		It("should recover when shutdown is cancelled mid-stop", func() {
+			snapShutdown := makeSnapshot(config.DesiredStateRunning, true, 0, true, true)
+			result := s.Next(snapShutdown)
+			Expect(result.State).To(BeAssignableToTypeOf(&state.StoppedState{}))
+
+			stopped := result.State.(*state.StoppedState)
+			snapNoShutdown := makeSnapshot(config.DesiredStateRunning, false, 0, true, true)
+			result = stopped.Next(snapNoShutdown)
+			Expect(result.State).To(BeAssignableToTypeOf(&state.RunningState{}))
+		})
+
+		It("should handle parent flapping between Running and Starting", func() {
+			for i := 0; i < 3; i++ {
+				stopping := &state.StoppingState{}
+				snapStopped := makeSnapshot(config.DesiredStateStopped, false, 0, true, true)
+				result := stopping.Next(snapStopped)
+				Expect(result.State).To(BeAssignableToTypeOf(&state.StoppedState{}))
+
+				stopped := result.State.(*state.StoppedState)
+				snapRunning := makeSnapshot(config.DesiredStateRunning, false, 0, true, true)
+				result = stopped.Next(snapRunning)
+				Expect(result.State).To(BeAssignableToTypeOf(&state.RunningState{}))
+			}
+		})
 	})
 
 	It("should return a valid String()", func() {

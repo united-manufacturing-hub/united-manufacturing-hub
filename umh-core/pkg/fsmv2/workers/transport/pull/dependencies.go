@@ -21,6 +21,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps/retry"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps/retry/failurerate"
 	communicator_transport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
 	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
 	transport_pkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport"
@@ -39,6 +40,7 @@ var _ snapshot.PullDependencies = (*PullDependencies)(nil)
 type PullDependencies struct {
 	*deps.BaseDependencies
 	parentDeps              *transport_pkg.TransportDependencies
+	failureRate             *failurerate.Tracker
 	pendingMessages         []*communicator_transport.UMHMessage
 	errorMu                 sync.RWMutex
 	pendingMu               sync.RWMutex
@@ -57,6 +59,7 @@ func NewPullDependencies(parentDeps *transport_pkg.TransportDependencies, identi
 	return &PullDependencies{
 		BaseDependencies: deps.NewBaseDependencies(logger, stateReader, identity),
 		parentDeps:       parentDeps,
+		failureRate: failurerate.New(transport_pkg.ChildFailureRateConfig),
 	}, nil
 }
 
@@ -83,6 +86,12 @@ func (d *PullDependencies) RecordTypedError(errType httpTransport.ErrorType, ret
 
 	d.RetryTracker().RecordError(retry.WithClass(errType.String()), retry.WithRetryAfter(retryAfter))
 	d.parentDeps.RecordTypedError(errType, retryAfter)
+
+	if d.failureRate.RecordOutcome(false) {
+		d.BaseDependencies.GetLogger().SentryWarn(deps.FeatureCommunicator, d.GetHierarchyPath(), "persistent_pull_failure",
+			deps.String("error_type", errType.String()),
+			deps.Float64("failure_rate", d.failureRate.FailureRate()))
+	}
 }
 
 // RecordSuccess resets the child's error state. It intentionally does NOT
@@ -95,11 +104,16 @@ func (d *PullDependencies) RecordSuccess() {
 	d.errorMu.Unlock()
 
 	d.RetryTracker().RecordSuccess()
+	d.failureRate.RecordOutcome(true)
 }
 
 func (d *PullDependencies) RecordError() {
 	d.RetryTracker().RecordError()
 	d.parentDeps.RecordError()
+	if d.failureRate.RecordOutcome(false) {
+		d.BaseDependencies.GetLogger().SentryWarn(deps.FeatureCommunicator, d.GetHierarchyPath(), "persistent_pull_failure",
+			deps.Float64("failure_rate", d.failureRate.FailureRate()))
+	}
 }
 
 func (d *PullDependencies) GetConsecutiveErrors() int {
@@ -225,7 +239,20 @@ func (d *PullDependencies) CheckAndClearOnReset() bool {
 		d.backpressureMu.Lock()
 		d.backpressured = false
 		d.backpressureMu.Unlock()
+
+		d.failureRate.Reset()
 	}
 
 	return changed
+}
+
+// IsPersistentFailureEscalated reports whether the failure rate meets or exceeds
+// the escalation threshold over the rolling window.
+func (d *PullDependencies) IsPersistentFailureEscalated() bool {
+	return d.failureRate.IsEscalated()
+}
+
+// SetPersistentFailureEscalatedForTest sets the escalation flag directly for tests.
+func (d *PullDependencies) SetPersistentFailureEscalatedForTest(v bool) {
+	d.failureRate.SetEscalatedForTest(v)
 }

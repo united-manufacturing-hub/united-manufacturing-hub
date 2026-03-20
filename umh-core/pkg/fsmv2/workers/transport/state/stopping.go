@@ -15,13 +15,15 @@
 package state
 
 import (
+	"fmt"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/snapshot"
 )
 
 // StoppingState represents the graceful shutdown state.
-// Waits for all children to stop before transitioning to StoppedState.
+// Transitions unconditionally to StoppedState; the supervisor handles child teardown independently.
 type StoppingState struct {
 	helpers.StoppingBase
 }
@@ -33,12 +35,12 @@ func (s *StoppingState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	if snap.Desired.IsShutdownRequested() { //nolint:staticcheck // architecture invariant: shutdown check must be first conditional
 	}
 
-	// All children must be stopped before transitioning to Stopped
-	if snap.Observed.ChildrenHealthy == 0 && snap.Observed.ChildrenUnhealthy == 0 {
-		return fsmv2.Result[any, any](&StoppedState{}, fsmv2.SignalNone, nil, "All children stopped, transitioning to Stopped")
-	}
+	// Cleanup hook: add resource cleanup here if needed.
+	// Self-return during cleanup MUST carry an action — never nil.
 
-	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, "Gracefully stopping all children")
+	return fsmv2.Result[any, any](&StoppedState{}, fsmv2.SignalNone, nil,
+		fmt.Sprintf("stop complete: children healthy=%d, unhealthy=%d",
+			snap.Observed.ChildrenHealthy, snap.Observed.ChildrenUnhealthy))
 }
 
 // String returns the state name derived from the type.
