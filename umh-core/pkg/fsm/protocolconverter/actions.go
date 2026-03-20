@@ -160,8 +160,8 @@ func (p *ProtocolConverterInstance) StartConnectionInstance(ctx context.Context,
 func (p *ProtocolConverterInstance) StartDFCInstance(ctx context.Context, filesystemService filesystem.Service) error {
 	p.baseFSMInstance.GetLogger().Debugf("Starting Action: Starting flows for bridge %s ...", p.baseFSMInstance.GetID())
 
-	// Start the DFC components with conditional evaluation
-	err := p.service.StartDFC(ctx, filesystemService, p.baseFSMInstance.GetID())
+	// Start the DFC components with conditional evaluation, honouring per-DFC state overrides.
+	err := p.service.StartDFC(ctx, filesystemService, p.baseFSMInstance.GetID(), p.specConfig.ReadDFCDesiredState, p.specConfig.WriteDFCDesiredState)
 	if err != nil {
 		return fmt.Errorf("failed to start flows for bridge %s: %w", p.baseFSMInstance.GetID(), err)
 	}
@@ -362,26 +362,28 @@ func (p *ProtocolConverterInstance) UpdateObservedStateOfInstance(ctx context.Co
 			}
 
 			p.baseFSMInstance.GetLogger().Debugf("config updated")
-
-			// UNIQUE BEHAVIOR: Re-evaluate DFC desired states after config changes
-			// This is different from other FSMs which set desired states once and don't change them.
-			// Protocol converters must re-evaluate because:
-			// 1. DFC configs may transition from empty -> populated as templates are rendered
-			// 2. Empty DFCs should remain stopped, populated DFCs should be started
-			// 3. This ensures we don't start broken Benthos instances with empty configs
-			if p.baseFSMInstance.GetDesiredFSMState() == OperationalStateActive {
-				p.baseFSMInstance.GetLogger().Debugf("re-evaluating flow desired states and will be active")
-
-				err := p.service.EvaluateDFCDesiredStates(p.baseFSMInstance.GetID(), "active", p.baseFSMInstance.GetCurrentFSMState()) // NOTE: Hardcoded to avoid circular import
-				if err != nil {
-					p.baseFSMInstance.GetLogger().Debugf("Failed to re-evaluate flow states after config update: %v", err)
-					// Don't fail the entire update - this is a best-effort re-evaluation
-				} else {
-					p.baseFSMInstance.GetLogger().Debugf("Re-evaluated flow desired states after config update")
-				}
-			}
 		} else {
 			p.baseFSMInstance.GetLogger().Debugf("Config differences detected but service does not exist yet, skipping update")
+		}
+	}
+
+	// UNIQUE BEHAVIOR: Always re-evaluate DFC desired states when the PC is active.
+	// This is different from other FSMs which set desired states once and don't change them.
+	// Protocol converters must re-evaluate every tick because:
+	// 1. DFC configs may transition from empty -> populated as templates are rendered.
+	// 2. Empty DFCs should remain stopped; populated DFCs should be started.
+	// 3. Per-DFC desired state overrides (ReadDFCDesiredState/WriteDFCDesiredState) must be
+	//    applied even when only the state changed and the Benthos config stayed the same —
+	//    ConfigsEqualRuntime does not include those fields, so the block above would not fire.
+	if p.baseFSMInstance.GetDesiredFSMState() == OperationalStateActive {
+		if p.service.ServiceExists(ctx, services.GetFileSystem(), p.baseFSMInstance.GetID()) {
+			p.baseFSMInstance.GetLogger().Debugf("re-evaluating flow desired states")
+
+			err := p.service.EvaluateDFCDesiredStates(p.baseFSMInstance.GetID(), "active", p.baseFSMInstance.GetCurrentFSMState(), p.specConfig.ReadDFCDesiredState, p.specConfig.WriteDFCDesiredState) // NOTE: Hardcoded to avoid circular import
+			if err != nil {
+				p.baseFSMInstance.GetLogger().Debugf("Failed to re-evaluate flow states: %v", err)
+				// Don't fail the entire update - this is a best-effort re-evaluation
+			}
 		}
 	}
 
@@ -435,24 +437,49 @@ func (p *ProtocolConverterInstance) IsRedpandaHealthy() (bool, string) {
 	return false, statusReason
 }
 
-// IsDFCHealthy checks whether the underlying DFC is healthy
-// so either idle or active
+// IsDFCHealthy checks whether the underlying DFCs are healthy.
+// A DFC is considered healthy when it is active/idle, intentionally stopped
+// (ReadDFCDesiredState/WriteDFCDesiredState == "stopped"), or has no configuration
+// (nothing deployed means nothing to check).
 //
 // It returns:
 //
-//	ok     – true when the DFC is healthy, false otherwise.
-//	reason – empty when ok is true; otherwise a explanation
+//	ok     – true when all relevant DFCs are healthy, false otherwise.
+//	reason – empty when ok is true; otherwise an explanation.
 func (p *ProtocolConverterInstance) IsDFCHealthy() (bool, string) {
-	if p.ObservedState.ServiceInfo.DataflowComponentReadFSMState == dataflowfsm.OperationalStateIdle || p.ObservedState.ServiceInfo.DataflowComponentReadFSMState == dataflowfsm.OperationalStateActive {
+	readState := p.ObservedState.ServiceInfo.DataflowComponentReadFSMState
+	writeState := p.ObservedState.ServiceInfo.DataflowComponentWriteFSMState
+
+	readRunning := readState == dataflowfsm.OperationalStateIdle || readState == dataflowfsm.OperationalStateActive
+	writeRunning := writeState == dataflowfsm.OperationalStateIdle || writeState == dataflowfsm.OperationalStateActive
+
+	readIntentionallyStopped := p.specConfig.ReadDFCDesiredState == OperationalStateStopped
+	writeIntentionallyStopped := p.specConfig.WriteDFCDesiredState == OperationalStateStopped
+
+	readHasConfig := len(p.specConfig.Config.DataflowComponentReadServiceConfig.BenthosConfig.Input) > 0
+	writeHasConfig := len(p.specConfig.Config.DataflowComponentWriteServiceConfig.BenthosConfig.Input) > 0
+
+	readHealthy := readRunning || readIntentionallyStopped || !readHasConfig
+	writeHealthy := writeRunning || writeIntentionallyStopped || !writeHasConfig
+
+	if readHealthy && writeHealthy {
 		return true, ""
 	}
 
-	statusReason := p.ObservedState.ServiceInfo.DataflowComponentReadObservedState.ServiceInfo.StatusReason
+	if !readHealthy {
+		statusReason := p.ObservedState.ServiceInfo.DataflowComponentReadObservedState.ServiceInfo.StatusReason
+		if statusReason == "" {
+			statusReason = "flow health status unknown"
+		}
+
+		return false, statusReason
+	}
+
+	statusReason := p.ObservedState.ServiceInfo.DataflowComponentWriteObservedState.ServiceInfo.StatusReason
 	if statusReason == "" {
 		statusReason = "flow health status unknown"
 	}
 
-	// TODO: check the write DFC as well
 	return false, statusReason
 }
 

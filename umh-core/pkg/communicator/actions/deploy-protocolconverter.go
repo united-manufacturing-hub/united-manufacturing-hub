@@ -96,11 +96,6 @@ func (a *DeployProtocolConverterAction) Parse(payload interface{}) error {
 
 	a.payload = parsedPayload
 
-	// If state empty, default to active
-	if a.payload.State == "" {
-		a.payload.State = dataflowcomponent.OperationalStateActive
-	}
-
 	a.actionLogger.Debugf("Parsed DeployProtocolConverter action payload: name=%s, ip=%s, port=%d",
 		a.payload.Name, a.payload.Connection.IP, a.payload.Connection.Port)
 
@@ -126,7 +121,10 @@ func (a *DeployProtocolConverterAction) Validate() error {
 		return err
 	}
 
-	if err := ValidateDataFlowComponentState(a.payload.State); err != nil {
+	if err := validateProtocolConverterDFC(a.payload.ReadDFC, "read"); err != nil {
+		return err
+	}
+	if err := validateProtocolConverterDFC(a.payload.WriteDFC, "write"); err != nil {
 		return err
 	}
 
@@ -142,7 +140,14 @@ func (a *DeployProtocolConverterAction) Execute() (interface{}, map[string]inter
 		"Starting deployment of protocol converter: "+a.payload.Name, a.outboundChannel, models.DeployProtocolConverter)
 
 	// Create the protocol converter config with template and variables
-	pcConfig := a.createProtocolConverterConfig()
+	pcConfig, err := a.createProtocolConverterConfig()
+	if err != nil {
+		errorMsg := fmt.Sprintf("Failed to create protocol converter configuration: %v", err)
+		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
+			errorMsg, a.outboundChannel, models.DeployProtocolConverter)
+
+		return nil, nil, fmt.Errorf("%s", errorMsg)
+	}
 
 	// currently, we canot reuse templates, so we need to create a new one
 	pcConfig.ProtocolConverterServiceConfig.TemplateRef = pcConfig.Name
@@ -154,7 +159,7 @@ func (a *DeployProtocolConverterAction) Execute() (interface{}, map[string]inter
 	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
 		"Adding protocol converter to configuration...", a.outboundChannel, models.DeployProtocolConverter)
 
-	err := a.configManager.AtomicAddProtocolConverter(ctx, pcConfig)
+	err = a.configManager.AtomicAddProtocolConverter(ctx, pcConfig)
 	if err != nil {
 		errorMsg := fmt.Sprintf("Failed to add protocol converter: %v", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
@@ -172,7 +177,6 @@ func (a *DeployProtocolConverterAction) Execute() (interface{}, map[string]inter
 		Name:       a.payload.Name,
 		Location:   a.payload.Location,
 		Connection: a.payload.Connection,
-		State:      pcConfig.DesiredFSMState,
 		// ReadDFC, WriteDFC, and TemplateInfo are nil as they will be added later
 	}
 
@@ -232,7 +236,7 @@ func (a *DeployProtocolConverterAction) Execute() (interface{}, map[string]inter
 }
 
 // createProtocolConverterConfig creates a ProtocolConverterConfig with templated configuration.
-func (a *DeployProtocolConverterAction) createProtocolConverterConfig() config.ProtocolConverterConfig {
+func (a *DeployProtocolConverterAction) createProtocolConverterConfig() (config.ProtocolConverterConfig, error) {
 	// Create variables bundle - start empty to allow user variables first
 	userVars := map[string]any{}
 
@@ -264,21 +268,54 @@ func (a *DeployProtocolConverterAction) createProtocolConverterConfig() config.P
 		DataflowComponentWriteServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{},
 	}
 
+	// If a ReadDFC is provided in the payload, configure it immediately
+	if a.payload.ReadDFC != nil {
+		benthosConfig, err := CreateBenthosConfigFromCDFCPayload(dfcToPayload(a.payload.ReadDFC), a.payload.Name)
+		if err != nil {
+			return config.ProtocolConverterConfig{}, fmt.Errorf("failed to create read DFC benthos config: %w", err)
+		}
+		template.DataflowComponentReadServiceConfig = dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+			BenthosConfig: benthosConfig,
+		}
+	}
+
+	// If a WriteDFC is provided in the payload, configure it immediately
+	if a.payload.WriteDFC != nil {
+		benthosConfig, err := CreateBenthosConfigFromCDFCPayload(dfcToPayload(a.payload.WriteDFC), a.payload.Name)
+		if err != nil {
+			return config.ProtocolConverterConfig{}, fmt.Errorf("failed to create write DFC benthos config: %w", err)
+		}
+		template.DataflowComponentWriteServiceConfig = dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+			BenthosConfig: benthosConfig,
+		}
+	}
+
+	// Determine per-DFC desired states and derive PC-level state.
+	var readDFCDesiredState, writeDFCDesiredState string
+	if a.payload.ReadDFC != nil {
+		readDFCDesiredState = a.payload.ReadDFC.State
+	}
+	if a.payload.WriteDFC != nil {
+		writeDFCDesiredState = a.payload.WriteDFC.State
+	}
+
 	// Create the spec with template and variables
 	spec := protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
-		Config:    template,
-		Variables: variableBundle,
-		Location:  convertIntMapToStringMap(a.payload.Location),
+		Config:               template,
+		Variables:            variableBundle,
+		Location:             convertIntMapToStringMap(a.payload.Location),
+		ReadDFCDesiredState:  readDFCDesiredState,
+		WriteDFCDesiredState: writeDFCDesiredState,
 	}
 
 	// Create the full config
 	return config.ProtocolConverterConfig{
 		FSMInstanceConfig: config.FSMInstanceConfig{
 			Name:            a.payload.Name,
-			DesiredFSMState: a.payload.State,
+			DesiredFSMState: derivePCDesiredState(readDFCDesiredState, writeDFCDesiredState, "", ""),
 		},
 		ProtocolConverterServiceConfig: spec,
-	}
+	}, nil
 }
 
 // convertIntMapToStringMap converts map[int]string to map[string]string.

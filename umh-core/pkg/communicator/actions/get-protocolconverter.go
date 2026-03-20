@@ -193,6 +193,7 @@ func buildProtocolConverterDFCFromConfig(dfcConfig dataflowcomponentserviceconfi
 	dfc := &models.ProtocolConverterDFC{
 		Inputs:   commonPayload.CDFCProperties.Inputs,
 		Pipeline: commonPayload.CDFCProperties.Pipeline,
+		Outputs:  commonPayload.CDFCProperties.Outputs,
 		RawYAML:  commonPayload.CDFCProperties.RawYAML,
 	}
 
@@ -311,6 +312,10 @@ func (a *GetProtocolConverterAction) Execute() (interface{}, map[string]interfac
 							fmt.Sprintf("Warning: Failed to build read DFC for protocol converter '%s': %v", instance.ID, err),
 							a.outboundChannel, models.GetProtocolConverter)
 					}
+
+					if readDFC != nil {
+						readDFC.State = specConfig.ReadDFCDesiredState
+					}
 				}
 
 				// Build WriteDFC if present
@@ -325,6 +330,10 @@ func (a *GetProtocolConverterAction) Execute() (interface{}, map[string]interfac
 						SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
 							fmt.Sprintf("Warning: Failed to build write DFC for protocol converter '%s': %v", instance.ID, err),
 							a.outboundChannel, models.GetProtocolConverter)
+					}
+
+					if writeDFC != nil {
+						writeDFC.State = specConfig.WriteDFCDesiredState
 					}
 				}
 
@@ -360,7 +369,6 @@ func (a *GetProtocolConverterAction) Execute() (interface{}, map[string]interfac
 					WriteDFC:     writeDFC,
 					Meta:         meta,
 					TemplateInfo: templateInfo,
-					State:        instance.DesiredState,
 				}
 
 				a.actionLogger.Info("Protocol converter found and built, returning response")

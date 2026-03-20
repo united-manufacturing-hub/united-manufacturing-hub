@@ -194,6 +194,7 @@ func BuildRuntimeConfig(
 	}
 
 	vb.Internal["bridged_by"] = config.GenerateBridgedBy(config.ComponentTypeProtocolConverter, nodeName, pcName)
+	vb.Internal["umh_topic"] = "umh.v1." + locationPath + ".*"
 
 	//----------------------------------------------------------------------
 	// 4. Render all three sub-templates

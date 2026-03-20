@@ -104,6 +104,12 @@ type ProtocolConverterServiceConfigSpec struct {
 	Location    map[string]string                      `yaml:"location,omitempty"`
 	TemplateRef string                                 `yaml:"templateRef,omitempty"`
 	Config      ProtocolConverterServiceConfigTemplate `yaml:"config,omitempty"`
+	// ReadDFCDesiredState overrides the desired state for the read DFC ("active" or "stopped").
+	// When empty, the overall protocol converter desired state is used.
+	ReadDFCDesiredState string `yaml:"readDFCDesiredState,omitempty"`
+	// WriteDFCDesiredState overrides the desired state for the write DFC ("active" or "stopped").
+	// When empty, the overall protocol converter desired state is used.
+	WriteDFCDesiredState string `yaml:"writeDFCDesiredState,omitempty"`
 }
 
 // Equal checks if two ProtocolConverterServiceConfigs are equal.
