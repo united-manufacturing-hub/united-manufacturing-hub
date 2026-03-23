@@ -191,7 +191,6 @@ func (d *CommunicatorDependencies) GetOutboundChan() <-chan *transport.UMHMessag
 	return d.outboundChan
 }
 
-
 // SetInstanceInfo stores the instance UUID and name. Deprecated: Use SetAuthenticatedUUID instead.
 func (d *CommunicatorDependencies) SetInstanceInfo(uuid, name string) {
 	d.mu.Lock()

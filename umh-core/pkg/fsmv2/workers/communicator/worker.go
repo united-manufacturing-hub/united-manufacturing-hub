@@ -31,7 +31,7 @@
 // This package follows the FSM v2 pattern:
 //   - worker.go: Implements Worker interface (CollectObservedState, DeriveDesiredState)
 //   - state/*.go: Defines state machine states and transitions
-//   - action/*.go: Deprecated actions retained for architecture test compliance (ENG-4265)
+//   - action/*.go: AuthenticateAction (active) for communicator authentication
 //   - snapshot/snapshot.go: Observed and desired state structures
 //
 // # States and Transitions
@@ -63,9 +63,9 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/snapshot"
-	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/state"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
+	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
 )
 
 // CommunicatorWorker implements the FSM v2 Worker interface for channel-based synchronization.

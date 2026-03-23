@@ -370,7 +370,7 @@ var _ = Describe("TransportDependencies", func() {
 					deps.RecordError()
 				}
 
-				// Transport reset is handled by ResetTransportAction from RecoveringState,
+				// Transport reset is handled by ResetTransportAction from TransportWorker's DegradedState,
 				// not by RecordError.
 				Expect(mockTrans.ResetCallCount()).To(Equal(0))
 			})
