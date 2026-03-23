@@ -29,7 +29,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/snapshot"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/state"
-	transportpkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
 	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
 )
 
@@ -291,23 +290,6 @@ state: "running"
 
 			communicatorObserved := observed.(snapshot.CommunicatorObservedState)
 			Expect(communicatorObserved.JWTExpiry.Truncate(time.Second)).To(Equal(expectedExpiry))
-		})
-
-		It("should return the pulled messages stored in dependencies", func() {
-			deps := worker.GetDependencies()
-			expectedMessages := []*transportpkg.UMHMessage{
-				{Content: "message-1"},
-				{Content: "message-2"},
-			}
-			deps.SetPulledMessages(expectedMessages)
-
-			observed, err := worker.CollectObservedState(ctx)
-			Expect(err).NotTo(HaveOccurred())
-
-			communicatorObserved := observed.(snapshot.CommunicatorObservedState)
-			Expect(communicatorObserved.MessagesReceived).To(HaveLen(2))
-			Expect(communicatorObserved.MessagesReceived[0].Content).To(Equal("message-1"))
-			Expect(communicatorObserved.MessagesReceived[1].Content).To(Equal("message-2"))
 		})
 
 		It("should return the consecutive error count from dependencies", func() {

@@ -42,8 +42,6 @@ type CommunicatorDependencies struct {
 	instanceUUID string
 	instanceName string
 
-	pulledMessages []*transport.UMHMessage
-
 	lastErrorType httpTransport.ErrorType
 
 	// backpressured tracks hysteresis state for backpressure detection.
@@ -111,29 +109,6 @@ func (d *CommunicatorDependencies) GetJWTExpiry() time.Time {
 	defer d.mu.RUnlock()
 
 	return d.jwtExpiry
-}
-
-// SetPulledMessages stores the messages retrieved from the backend.
-func (d *CommunicatorDependencies) SetPulledMessages(messages []*transport.UMHMessage) {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-
-	d.pulledMessages = messages
-}
-
-// GetPulledMessages returns a shallow copy of the pulled messages. Treat as read-only.
-func (d *CommunicatorDependencies) GetPulledMessages() []*transport.UMHMessage {
-	d.mu.RLock()
-	defer d.mu.RUnlock()
-
-	if d.pulledMessages == nil {
-		return nil
-	}
-
-	result := make([]*transport.UMHMessage, len(d.pulledMessages))
-	copy(result, d.pulledMessages)
-
-	return result
 }
 
 // RecordError increments consecutive errors and records when degraded mode started.
@@ -216,31 +191,6 @@ func (d *CommunicatorDependencies) GetOutboundChan() <-chan *transport.UMHMessag
 	return d.outboundChan
 }
 
-// -----------------------------------------------------------------------------
-// Legacy Metrics Methods (No-op)
-//
-// These methods exist for interface compatibility with legacy metric recording
-// interfaces. In FSMv2, metrics are recorded through deps.MetricsRecorder which
-// is automatically exported to Prometheus by the supervisor.
-//
-// Actions should use:
-//   deps.Metrics().IncrementCounter(deps.CounterPullSuccess, 1)
-//   deps.Metrics().SetGauge(deps.GaugeLastPullLatencyMs, float64(latency.Milliseconds()))
-//
-// The supervisor handles delta computation and Prometheus export.
-// -----------------------------------------------------------------------------
-
-// RecordPullSuccess is a no-op. Use MetricsRecorder instead (see above).
-func (d *CommunicatorDependencies) RecordPullSuccess(latency time.Duration, msgCount int) {}
-
-// RecordPullFailure is a no-op. Use MetricsRecorder instead (see above).
-func (d *CommunicatorDependencies) RecordPullFailure(latency time.Duration) {}
-
-// RecordPushSuccess is a no-op. Use MetricsRecorder instead (see above).
-func (d *CommunicatorDependencies) RecordPushSuccess(latency time.Duration, msgCount int) {}
-
-// RecordPushFailure is a no-op. Use MetricsRecorder instead (see above).
-func (d *CommunicatorDependencies) RecordPushFailure(latency time.Duration) {}
 
 // SetInstanceInfo stores the instance UUID and name. Deprecated: Use SetAuthenticatedUUID instead.
 func (d *CommunicatorDependencies) SetInstanceInfo(uuid, name string) {

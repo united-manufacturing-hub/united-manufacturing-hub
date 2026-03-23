@@ -82,9 +82,6 @@ type CommunicatorObservedState struct {
 	JWTToken          string
 	AuthenticatedUUID string `json:"authenticatedUUID,omitempty"`
 
-	// Inbound Messages
-	MessagesReceived []transport.UMHMessage
-
 	// DesiredState
 	CommunicatorDesiredState `json:",inline"`
 

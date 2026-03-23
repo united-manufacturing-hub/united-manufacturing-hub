@@ -31,7 +31,6 @@ type CommunicatorDependencies interface {
 	GetTransport() transport.Transport
 	SetTransport(t transport.Transport)
 	SetJWT(token string, expiry time.Time)
-	SetPulledMessages(messages []*transport.UMHMessage)
 
 	RecordError()
 	RecordSuccess()
@@ -47,11 +46,6 @@ type CommunicatorDependencies interface {
 
 	GetInboundChan() chan<- *transport.UMHMessage  // May return nil
 	GetOutboundChan() <-chan *transport.UMHMessage // May return nil
-
-	RecordPullSuccess(latency time.Duration, msgCount int)
-	RecordPullFailure(latency time.Duration)
-	RecordPushSuccess(latency time.Duration, msgCount int)
-	RecordPushFailure(latency time.Duration)
 
 	MetricsRecorder() *depspkg.MetricsRecorder
 

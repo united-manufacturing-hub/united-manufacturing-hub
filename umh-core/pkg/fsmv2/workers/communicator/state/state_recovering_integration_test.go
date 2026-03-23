@@ -15,63 +15,23 @@
 package state_test
 
 import (
-	"context"
-	"time"
-
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/snapshot"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/state"
-	commTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
 )
 
-type mockResettableTransport struct {
-	resetCount int
-}
-
-func (m *mockResettableTransport) Authenticate(_ context.Context, _ commTransport.AuthRequest) (commTransport.AuthResponse, error) {
-	return commTransport.AuthResponse{}, nil
-}
-
-func (m *mockResettableTransport) Pull(_ context.Context, _ string) ([]*commTransport.UMHMessage, error) {
-	return nil, nil
-}
-
-func (m *mockResettableTransport) Push(_ context.Context, _ string, _ []*commTransport.UMHMessage) error {
-	return nil
-}
-
-func (m *mockResettableTransport) Close() {}
-
-func (m *mockResettableTransport) Reset() {
-	m.resetCount++
-}
-
-const (
-	// DegradedBackoffDelay is the minimum wait time in RecoveringState before emitting actions.
-	// Tests use values > 60s to ensure backoff has elapsed.
-	DegradedBackoffDelay = 60 * time.Second
-)
-
-// This test simulates the full FSM cycle to verify we don't get stuck in an
-// infinite reset_transport loop. It tests the fix for the bug where
-// ResetTransportAction didn't advance the retry counter.
-var _ = Describe("RecoveringState Integration - Infinite Loop Prevention", func() {
+// This test verifies RecoveringState correctly transitions through the
+// child-health recovery cycle: unhealthy children → stay recovering → healthy children → syncing.
+var _ = Describe("RecoveringState Integration - Recovery Cycle", func() {
 	var (
-		stateObj   *state.RecoveringState
-		logger     deps.FSMLogger
-		mockTransp *mockResettableTransport
+		stateObj *state.RecoveringState
 	)
 
 	BeforeEach(func() {
-		logger = deps.NewNopFSMLogger()
-		mockTransp = &mockResettableTransport{}
-		identity := deps.Identity{ID: "test-id", WorkerType: "communicator"}
-		_ = communicator.NewCommunicatorDependencies(mockTransp, logger, nil, identity)
 		stateObj = &state.RecoveringState{}
 	})
 

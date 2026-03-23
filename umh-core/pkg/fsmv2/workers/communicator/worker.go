@@ -100,10 +100,6 @@ func NewCommunicatorWorker(
 	}, nil
 }
 
-// TODO(ENG-4265): Remove deprecated fields (JWTToken, JWTExpiry, Authenticated,
-// AuthenticatedUUID, MessagesReceived, ConsecutiveErrors, IsBackpressured) from
-// CommunicatorObservedState. These are now tracked by TransportWorker.
-
 // CollectObservedState returns the current observed state of the communicator.
 func (w *CommunicatorWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedState, error) {
 	select {
@@ -116,18 +112,6 @@ func (w *CommunicatorWorker) CollectObservedState(ctx context.Context) (fsmv2.Ob
 
 	jwtToken := deps.GetJWTToken()
 	jwtExpiry := deps.GetJWTExpiry()
-
-	pulledMessages := deps.GetPulledMessages()
-
-	var messagesReceived []transport.UMHMessage
-	if pulledMessages != nil {
-		messagesReceived = make([]transport.UMHMessage, len(pulledMessages))
-		for i, msg := range pulledMessages {
-			if msg != nil {
-				messagesReceived[i] = *msg
-			}
-		}
-	}
 
 	authenticated := jwtToken != "" && !time.Now().After(jwtExpiry)
 
@@ -188,7 +172,6 @@ func (w *CommunicatorWorker) CollectObservedState(ctx context.Context) (fsmv2.Ob
 		JWTToken:          jwtToken,
 		JWTExpiry:         jwtExpiry,
 		AuthenticatedUUID: authenticatedUUID,
-		MessagesReceived:  messagesReceived,
 		Authenticated:     authenticated,
 		ConsecutiveErrors: consecutiveErrors,
 		DegradedEnteredAt: degradedEnteredAt,
