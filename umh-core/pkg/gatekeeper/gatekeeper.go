@@ -201,7 +201,7 @@ func (g *Gatekeeper) handleInbound(ctx context.Context, msg *transport.UMHMessag
 	cryptHandler := g.protocolDetector.Detect(msg)
 
 	// 2. Decrypt
-	decrypted, err := cryptHandler.Decrypt([]byte(msg.Content))
+	decrypted, err := cryptHandler.Decrypt([]byte(msg.Content), msg.Email)
 	if err != nil {
 		g.logger.Warnw("Failed to decrypt message", "email", msg.Email, "error", err)
 		return

@@ -46,8 +46,12 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/snapshot"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/certfetcher"
 	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/persistence"
 	transportWorker "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/gatekeeper"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/gatekeeper/certificatehandler"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/gatekeeper/validator"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
@@ -492,6 +496,27 @@ func enableFSMv2BackendConnection(
 	communicator.SetChannelProvider(channelAdapter)
 	transportWorker.SetChannelProvider(channelAdapter)
 
+	// Create gatekeeper between bridge and Router.
+	inboundRaw, outboundRaw := channelAdapter.RawChannels()
+	certHandler := certificatehandler.NewHandler(
+		validator.NewValidator(logger),
+		"", // JWT set after auth via polling
+		configData.Agent.APIURL,
+		configData.Agent.AuthToken,
+		"", // instanceUUID set after auth via polling
+		configData.Agent.AllowInsecureTLS,
+		logger,
+	)
+	gk := gatekeeper.New(
+		inboundRaw,
+		outboundRaw,
+		certHandler,
+		validator.NewValidator(logger),
+		logger,
+	)
+	gk.Start(ctx)
+	communicationState.Gatekeeper = gk
+
 	// Build YAML config for FSMv2 ApplicationSupervisor
 	// Note: instanceUUID in config is a placeholder - the real UUID is returned by the backend
 	// and will be set via onAuthSuccessCallback (Bug #6 fix)
@@ -508,6 +533,10 @@ children:
         timeout: "10s"
         state: "running"
 `, configData.Agent.APIURL, placeholderUUID, configData.Agent.AuthToken)
+
+	yamlConfig += `  - name: "certfetcher"
+    workerType: "certfetcher"
+`
 
 	if configData.Agent.UseFSMv2MemoryCleanup {
 		yamlConfig += `  - name: "persistence"
@@ -543,6 +572,7 @@ children:
 	fsmv2Deps := map[string]any{
 		"channelProvider":       channelAdapter,
 		"onAuthSuccessCallback": onAuthSuccessCallback,
+		"certHandler":           certHandler,
 	}
 	if configData.Agent.UseFSMv2MemoryCleanup {
 		fsmv2Deps["store"] = store
@@ -582,8 +612,14 @@ children:
 		configData,
 		communicationState.SystemSnapshotManager,
 		communicationState.ConfigManager,
-		channelAdapter.GetOutboundWriteChannel(), // FSMv2 mode: bypass Pusher, write directly to FSMv2 transport
+		gk.VerifiedOutboundChan(), // FSMv2 mode: write MessageWithSender to gatekeeper
 	)
+
+	// Set SubHandler on certfetcher worker (created by supervisor via factory)
+	if cfWorker, ok := fsmv2Deps["certfetcherWorker"]; ok && cfWorker != nil {
+		cfWorker.(*certfetcher.CertFetcherWorker).GetDependencies().SetSubHandler(communicationState.SubscriberHandler)
+	}
+
 	communicationState.InitializeRouterForFSMv2()
 
 	// Poll ObservedState for AuthenticatedUUID and update SetLoginResponseForFSMv2.
@@ -607,14 +643,21 @@ children:
 					continue
 				}
 
-				if observed.AuthenticatedUUID != "" && observed.AuthenticatedUUID != placeholderUUID {
-					logger.Infow("Detected real UUID from ObservedState, updating LoginResponse",
-						"realUUID", observed.AuthenticatedUUID,
-						"placeholderUUID", placeholderUUID)
-					communicationState.SetLoginResponseForFSMv2(observed.AuthenticatedUUID)
+				// Update cert handler JWT from observed state
+			if observed.JWTToken != "" {
+				certHandler.SetJWT(observed.JWTToken)
+			}
 
-					return
-				}
+			if observed.AuthenticatedUUID != "" && observed.AuthenticatedUUID != placeholderUUID {
+				logger.Infow("Detected real UUID from ObservedState, updating LoginResponse",
+					"realUUID", observed.AuthenticatedUUID,
+					"placeholderUUID", placeholderUUID)
+				communicationState.SetLoginResponseForFSMv2(observed.AuthenticatedUUID)
+				certHandler.SetInstanceUUID(observed.AuthenticatedUUID)
+				gk.SetInstanceUUID(observed.AuthenticatedUUID)
+
+				return
+			}
 			}
 		}
 	}()
