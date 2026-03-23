@@ -57,6 +57,9 @@ var _ = Describe("Collector Panic Recovery", func() {
 				Identity:            supervisor.TestIdentity(),
 				Store:               supervisor.CreateTestTriangularStore(),
 				Logger:              logger,
+				DesiredStateProvider: func() fsmv2.DesiredState {
+					return &supervisor.TestDesiredState{State: "running"}
+				},
 				ObservationInterval: 50 * time.Millisecond,
 				ObservationTimeout:  1 * time.Second,
 			})
@@ -109,6 +112,9 @@ var _ = Describe("Collector Panic Recovery", func() {
 				Identity:            supervisor.TestIdentity(),
 				Store:               supervisor.CreateTestTriangularStore(),
 				Logger:              logger,
+				DesiredStateProvider: func() fsmv2.DesiredState {
+					return &supervisor.TestDesiredState{State: "running"}
+				},
 				ObservationInterval: 50 * time.Millisecond,
 				ObservationTimeout:  1 * time.Second,
 			})
@@ -157,6 +163,9 @@ var _ = Describe("Collector Panic Type Classification", func() {
 			Identity:            supervisor.TestIdentity(),
 			Store:               supervisor.CreateTestTriangularStore(),
 			Logger:              logger,
+			DesiredStateProvider: func() fsmv2.DesiredState {
+				return &supervisor.TestDesiredState{State: "running"}
+			},
 			ObservationInterval: 50 * time.Millisecond,
 			ObservationTimeout:  1 * time.Second,
 		})
@@ -201,6 +210,9 @@ var _ = Describe("Collector Panic Type Classification", func() {
 			Identity:            supervisor.TestIdentity(),
 			Store:               supervisor.CreateTestTriangularStore(),
 			Logger:              logger,
+			DesiredStateProvider: func() fsmv2.DesiredState {
+				return &supervisor.TestDesiredState{State: "running"}
+			},
 			ObservationInterval: 50 * time.Millisecond,
 			ObservationTimeout:  1 * time.Second,
 		})
@@ -246,6 +258,9 @@ var _ = Describe("Collector Double Panic", func() {
 			Identity:            supervisor.TestIdentity(),
 			Store:               supervisor.CreateTestTriangularStore(),
 			Logger:              logger,
+			DesiredStateProvider: func() fsmv2.DesiredState {
+				return &supervisor.TestDesiredState{State: "running"}
+			},
 			ObservationInterval: 50 * time.Millisecond,
 			ObservationTimeout:  1 * time.Second,
 		})
