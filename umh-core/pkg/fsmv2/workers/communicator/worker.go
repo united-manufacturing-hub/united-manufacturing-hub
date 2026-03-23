@@ -31,7 +31,6 @@
 // This package follows the FSM v2 pattern:
 //   - worker.go: Implements Worker interface (CollectObservedState, DeriveDesiredState)
 //   - state/*.go: Defines state machine states and transitions
-//   - action/*.go: AuthenticateAction (active) for communicator authentication
 //   - snapshot/snapshot.go: Observed and desired state structures
 //
 // # States and Transitions
@@ -110,18 +109,8 @@ func (w *CommunicatorWorker) CollectObservedState(ctx context.Context) (fsmv2.Ob
 
 	deps := w.GetDependencies()
 
-	jwtToken := deps.GetJWTToken()
-	jwtExpiry := deps.GetJWTExpiry()
-
-	authenticated := jwtToken != "" && !time.Now().After(jwtExpiry)
-
 	consecutiveErrors := deps.GetConsecutiveErrors()
 	degradedEnteredAt := deps.GetDegradedEnteredAt()
-
-	lastErrorType := deps.GetLastErrorType()
-	lastRetryAfter := deps.GetLastRetryAfter()
-	lastAuthAttemptAt := deps.GetLastAuthAttemptAt()
-	lastErrorAt := deps.RetryTracker().LastError().OccurredAt
 
 	var prevWorkerMetrics depspkg.Metrics
 
@@ -157,8 +146,6 @@ func (w *CommunicatorWorker) CollectObservedState(ctx context.Context) (fsmv2.Ob
 
 	newWorkerMetrics.Gauges[string(depspkg.GaugeConsecutiveErrors)] = float64(consecutiveErrors)
 
-	authenticatedUUID := deps.GetAuthenticatedUUID()
-
 	metricsContainer := depspkg.MetricsContainer{
 		Worker: newWorkerMetrics,
 	}
@@ -169,17 +156,8 @@ func (w *CommunicatorWorker) CollectObservedState(ctx context.Context) (fsmv2.Ob
 
 	observed := snapshot.CommunicatorObservedState{
 		CollectedAt:       time.Now(),
-		JWTToken:          jwtToken,
-		JWTExpiry:         jwtExpiry,
-		AuthenticatedUUID: authenticatedUUID,
-		Authenticated:     authenticated,
 		ConsecutiveErrors: consecutiveErrors,
 		DegradedEnteredAt: degradedEnteredAt,
-		LastErrorType:     lastErrorType,
-		LastRetryAfter:    lastRetryAfter,
-		LastErrorAt:       lastErrorAt,
-		LastAuthAttemptAt: lastAuthAttemptAt,
-		IsBackpressured:   deps.IsBackpressured(),
 		MetricsEmbedder:   depspkg.MetricsEmbedder{Metrics: metricsContainer},
 	}
 

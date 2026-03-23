@@ -162,92 +162,6 @@ var _ = Describe("CommunicatorDependencies", func() {
 		})
 	})
 
-	Describe("Phase 2: AuthenticatedUUID storage via ObservedState", func() {
-		var deps *communicator.CommunicatorDependencies
-
-		BeforeEach(func() {
-			identity := depspkg.Identity{ID: "test-id", WorkerType: "communicator"}
-			deps = communicator.NewCommunicatorDependencies(mt, logger, nil, identity)
-		})
-
-		Describe("SetAuthenticatedUUID", func() {
-			It("should store the authenticated UUID", func() {
-				deps.SetAuthenticatedUUID("backend-real-uuid-12345")
-				uuid := deps.GetAuthenticatedUUID()
-				Expect(uuid).To(Equal("backend-real-uuid-12345"))
-			})
-
-			It("should update UUID when called multiple times (re-authentication)", func() {
-				deps.SetAuthenticatedUUID("first-uuid")
-				deps.SetAuthenticatedUUID("second-uuid-after-reauth")
-				uuid := deps.GetAuthenticatedUUID()
-				Expect(uuid).To(Equal("second-uuid-after-reauth"))
-			})
-		})
-
-		Describe("GetAuthenticatedUUID", func() {
-			It("should return empty string when no UUID has been set", func() {
-				uuid := deps.GetAuthenticatedUUID()
-				Expect(uuid).To(BeEmpty())
-			})
-		})
-
-		Describe("Thread safety for authenticated UUID", func() {
-			It("should handle concurrent SetAuthenticatedUUID calls", func() {
-				done := make(chan bool, 10)
-
-				for i := range 10 {
-					go func(idx int) {
-						deps.SetAuthenticatedUUID("uuid-" + string(rune('0'+idx)))
-						done <- true
-					}(i)
-				}
-
-				for range 10 {
-					<-done
-				}
-
-				// Should not panic and should have some value
-				uuid := deps.GetAuthenticatedUUID()
-				Expect(uuid).NotTo(BeEmpty())
-			})
-
-			It("should handle concurrent read and write", func() {
-				done := make(chan bool, 20)
-
-				// Writers
-				for i := range 10 {
-					go func(idx int) {
-						deps.SetAuthenticatedUUID("uuid-" + string(rune('0'+idx)))
-						done <- true
-					}(i)
-				}
-
-				// Readers
-				for range 10 {
-					go func() {
-						_ = deps.GetAuthenticatedUUID()
-						done <- true
-					}()
-				}
-
-				for range 20 {
-					<-done
-				}
-
-			})
-		})
-
-		Describe("Backward compatibility: SetInstanceInfo (deprecated)", func() {
-			It("should store instance UUID and name via deprecated method", func() {
-				deps.SetInstanceInfo("backend-real-uuid-12345", "My Instance")
-				uuid, name := deps.GetInstanceInfo()
-				Expect(uuid).To(Equal("backend-real-uuid-12345"))
-				Expect(name).To(Equal("My Instance"))
-			})
-		})
-	})
-
 	Describe("Consecutive error tracking", func() {
 		var deps *communicator.CommunicatorDependencies
 
@@ -330,8 +244,8 @@ var _ = Describe("CommunicatorDependencies", func() {
 	})
 
 	// Transport reset responsibility belongs to ResetTransportAction, NOT RecordError.
-	// RecordError/RecordTypedError only track error counts; transport reset is triggered
-	// by TransportWorker's DegradedState dispatching ResetTransportAction at threshold multiples.
+	// RecordError only tracks error counts; transport reset is triggered by
+	// TransportWorker's DegradedState dispatching ResetTransportAction at threshold multiples.
 	// This separation ensures single responsibility and avoids double resets.
 	Describe("RecordError does NOT reset transport (reset via FSM action only)", func() {
 		var (

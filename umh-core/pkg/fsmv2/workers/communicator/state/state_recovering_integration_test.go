@@ -36,7 +36,7 @@ var _ = Describe("RecoveringState Integration - Recovery Cycle", func() {
 	})
 
 	Describe("Recovery Cycle", func() {
-		It("should complete full cycle: healthy -> degraded -> recovery", func() {
+		It("should complete full cycle: unhealthy children -> stay recovering -> healthy children -> syncing", func() {
 			// Phase 1: Children go unhealthy — stay in Recovering
 			snap1 := fsmv2.Snapshot{
 				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},

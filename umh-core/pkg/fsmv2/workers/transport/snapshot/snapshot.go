@@ -78,10 +78,10 @@ var _ config.ChildSpecProvider = (*TransportDesiredState)(nil)
 
 // TransportDesiredState represents the target configuration for the transport worker.
 type TransportDesiredState struct {
-	InstanceUUID            string `json:"instanceUUID"` // Used by AuthenticateAction for backend authentication
+	InstanceUUID string `json:"instanceUUID"` // Used by AuthenticateAction for backend authentication
 	// TODO(security): AuthToken included in CSE sync payloads. ENG-4405 tracks
 	// adding a CSE secret tier to persist locally but exclude from delta sync.
-	AuthToken string `json:"authToken"`
+	AuthToken               string `json:"authToken"`
 	RelayURL                string `json:"relayURL"`
 	config.BaseDesiredState        // Provides State, ShutdownRequested + IsShutdownRequested() + SetShutdownRequested()
 
@@ -123,6 +123,9 @@ type TransportObservedState struct {
 	Children map[string]fsmv2.ObservedState `json:"children,omitempty"`
 
 	State string `json:"state"` // Observed lifecycle state (e.g., "running_healthy")
+
+	// AuthenticatedUUID is the instance UUID returned from the backend after authentication.
+	AuthenticatedUUID string `json:"authenticated_uuid,omitempty"`
 
 	// JWTToken is the current authentication token for relay communication.
 	// NOTE: This field must NOT use json:"-" — the supervisor reconciliation loop

@@ -15,40 +15,19 @@
 package communicator
 
 import (
-	"sync"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps/retry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
-	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
 )
-
-// Note: retry.Tracker is now inherited from BaseDependencies.
-// CommunicatorDependencies only keeps lastErrorType because backoff/backoff.go
-// uses type-safe switch statements on httpTransport.ErrorType.
 
 // CommunicatorDependencies provides transport and channel access for communicator worker actions.
 type CommunicatorDependencies struct {
-	jwtExpiry         time.Time
-	lastAuthAttemptAt time.Time
-
 	transport transport.Transport
 
 	*deps.BaseDependencies
 	inboundChan  chan<- *transport.UMHMessage
 	outboundChan <-chan *transport.UMHMessage
-	jwtToken     string
-	instanceUUID string
-	instanceName string
-
-	lastErrorType httpTransport.ErrorType
-
-	// backpressured tracks hysteresis state for backpressure detection.
-	// When true, a higher threshold (low water mark) is required to resume pulling.
-	backpressured bool
-
-	mu sync.RWMutex
 }
 
 // NewCommunicatorDependencies creates dependencies for the communicator worker.
@@ -72,100 +51,22 @@ func NewCommunicatorDependencies(t transport.Transport, logger deps.FSMLogger, s
 
 // SetTransport sets the transport instance.
 func (d *CommunicatorDependencies) SetTransport(t transport.Transport) {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-
 	d.transport = t
 }
 
-// GetTransport returns the transport. Nil only before AuthenticateAction runs.
+// GetTransport returns the transport instance, or nil if not yet set.
 func (d *CommunicatorDependencies) GetTransport() transport.Transport {
-	d.mu.RLock()
-	defer d.mu.RUnlock()
-
 	return d.transport
 }
 
-// SetJWT stores the JWT token and expiry from authentication response.
-func (d *CommunicatorDependencies) SetJWT(token string, expiry time.Time) {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-
-	d.jwtToken = token
-	d.jwtExpiry = expiry
-}
-
-// GetJWTToken returns the stored JWT token.
-func (d *CommunicatorDependencies) GetJWTToken() string {
-	d.mu.RLock()
-	defer d.mu.RUnlock()
-
-	return d.jwtToken
-}
-
-// GetJWTExpiry returns the stored JWT expiry time.
-func (d *CommunicatorDependencies) GetJWTExpiry() time.Time {
-	d.mu.RLock()
-	defer d.mu.RUnlock()
-
-	return d.jwtExpiry
-}
-
 // RecordError increments consecutive errors and records when degraded mode started.
-// Transport reset is handled by ResetTransportAction from TransportWorker's DegradedState,
-// not here, to avoid duplicate resets and maintain single responsibility.
 func (d *CommunicatorDependencies) RecordError() {
 	d.RetryTracker().RecordError()
 }
 
 // RecordSuccess resets all error tracking state.
 func (d *CommunicatorDependencies) RecordSuccess() {
-	d.mu.Lock()
-	d.lastErrorType = 0
-	d.lastAuthAttemptAt = time.Time{}
-	d.mu.Unlock()
-
 	d.RetryTracker().RecordSuccess()
-}
-
-// RecordTypedError increments consecutive errors and records error type and retry-after.
-// Transport reset is handled by ResetTransportAction from TransportWorker's DegradedState,
-// not here, to avoid duplicate resets and maintain single responsibility.
-func (d *CommunicatorDependencies) RecordTypedError(errType httpTransport.ErrorType, retryAfter time.Duration) {
-	d.mu.Lock()
-	d.lastErrorType = errType
-	d.mu.Unlock()
-
-	d.RetryTracker().RecordError(retry.WithClass(errType.String()), retry.WithRetryAfter(retryAfter))
-}
-
-// GetLastErrorType returns the last recorded error type.
-func (d *CommunicatorDependencies) GetLastErrorType() httpTransport.ErrorType {
-	d.mu.RLock()
-	defer d.mu.RUnlock()
-
-	return d.lastErrorType
-}
-
-// GetLastRetryAfter returns the Retry-After duration from the last error.
-func (d *CommunicatorDependencies) GetLastRetryAfter() time.Duration {
-	return d.RetryTracker().LastError().RetryAfter
-}
-
-// SetLastAuthAttemptAt records the timestamp of the last authentication attempt.
-func (d *CommunicatorDependencies) SetLastAuthAttemptAt(t time.Time) {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-
-	d.lastAuthAttemptAt = t
-}
-
-// GetLastAuthAttemptAt returns the timestamp of the last authentication attempt.
-func (d *CommunicatorDependencies) GetLastAuthAttemptAt() time.Time {
-	d.mu.RLock()
-	defer d.mu.RUnlock()
-
-	return d.lastAuthAttemptAt
 }
 
 // GetConsecutiveErrors returns the current consecutive error count.
@@ -189,74 +90,6 @@ func (d *CommunicatorDependencies) GetInboundChan() chan<- *transport.UMHMessage
 // GetOutboundChan returns channel to read messages for pushing, or nil if no provider set.
 func (d *CommunicatorDependencies) GetOutboundChan() <-chan *transport.UMHMessage {
 	return d.outboundChan
-}
-
-// SetInstanceInfo stores the instance UUID and name. Deprecated: Use SetAuthenticatedUUID instead.
-func (d *CommunicatorDependencies) SetInstanceInfo(uuid, name string) {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-
-	d.instanceUUID = uuid
-	d.instanceName = name
-}
-
-// GetInstanceUUID returns the stored instance UUID from backend authentication.
-func (d *CommunicatorDependencies) GetInstanceUUID() string {
-	d.mu.RLock()
-	defer d.mu.RUnlock()
-
-	return d.instanceUUID
-}
-
-// GetInstanceName returns the stored instance name from backend authentication.
-func (d *CommunicatorDependencies) GetInstanceName() string {
-	d.mu.RLock()
-	defer d.mu.RUnlock()
-
-	return d.instanceName
-}
-
-// GetInstanceInfo returns both the stored instance UUID and name.
-func (d *CommunicatorDependencies) GetInstanceInfo() (uuid, name string) {
-	d.mu.RLock()
-	defer d.mu.RUnlock()
-
-	return d.instanceUUID, d.instanceName
-}
-
-// SetAuthenticatedUUID stores the UUID returned from the backend after authentication.
-func (d *CommunicatorDependencies) SetAuthenticatedUUID(uuid string) {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-
-	d.instanceUUID = uuid
-}
-
-// GetAuthenticatedUUID returns the stored UUID from backend authentication.
-func (d *CommunicatorDependencies) GetAuthenticatedUUID() string {
-	d.mu.RLock()
-	defer d.mu.RUnlock()
-
-	return d.instanceUUID
-}
-
-// IsBackpressured returns true if the communicator is in backpressure state.
-// Backpressure occurs when the inbound channel doesn't have enough capacity
-// for the expected batch size from the backend.
-func (d *CommunicatorDependencies) IsBackpressured() bool {
-	d.mu.RLock()
-	defer d.mu.RUnlock()
-
-	return d.backpressured
-}
-
-// SetBackpressured sets the backpressure state.
-// Called by PullWorker when entering or exiting backpressure.
-func (d *CommunicatorDependencies) SetBackpressured(backpressured bool) {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-
-	d.backpressured = backpressured
 }
 
 // GetInboundChanStats returns the capacity and current length of the inbound channel.

@@ -31,9 +31,9 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/topicbrowser"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/env"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/control"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/env"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/protocolconverter"
@@ -45,9 +45,9 @@ import (
 	fsmv2sentry "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/sentry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/snapshot"
 	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/persistence"
 	transportWorker "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport"
+	transportSnapshot "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/snapshot"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
@@ -586,9 +586,10 @@ children:
 	)
 	communicationState.InitializeRouterForFSMv2()
 
-	// Poll ObservedState for AuthenticatedUUID and update SetLoginResponseForFSMv2.
-	// Phase 2 architecture: UUID is read from ObservedState instead of callback.
-	// This goroutine runs until the real UUID is received from the backend.
+	// Poll the TransportWorker's ObservedState for AuthenticatedUUID.
+	// TransportWorker handles authentication (ENG-4264) and exposes the UUID
+	// from the backend response. The transport child ID follows the supervisor
+	// naming convention: spec.Name + "-001" = "transport-001".
 	go func() {
 		ticker := time.NewTicker(100 * time.Millisecond)
 		defer ticker.Stop()
@@ -598,17 +599,15 @@ children:
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				// Load the communicator's observed state from the store
-				var observed snapshot.CommunicatorObservedState
+				var observed transportSnapshot.TransportObservedState
 
-				err := store.LoadObservedTyped(ctx, "communicator", CommunicatorWorkerID, &observed)
+				err := store.LoadObservedTyped(ctx, "transport", "transport-001", &observed)
 				if err != nil {
-					// Not found yet or error - keep polling
 					continue
 				}
 
 				if observed.AuthenticatedUUID != "" && observed.AuthenticatedUUID != placeholderUUID {
-					logger.Infow("Detected real UUID from ObservedState, updating LoginResponse",
+					logger.Infow("Detected real UUID from TransportWorker ObservedState, updating LoginResponse",
 						"realUUID", observed.AuthenticatedUUID,
 						"placeholderUUID", placeholderUUID)
 					communicationState.SetLoginResponseForFSMv2(observed.AuthenticatedUUID)
