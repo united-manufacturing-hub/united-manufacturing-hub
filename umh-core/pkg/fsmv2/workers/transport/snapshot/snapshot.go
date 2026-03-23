@@ -63,6 +63,10 @@ type TransportDependencies interface {
 
 	// RetryTracker for backoff and modulo-trigger breaking after transport reset
 	RetryTracker() retry.Tracker
+
+	// Failed auth config tracking for AuthFailedState config-change detection
+	SetFailedAuthConfig(token, relayURL, uuid string)
+	GetFailedAuthConfig() (token, relayURL, uuid string)
 }
 
 // TransportSnapshot represents a point-in-time view of the transport worker state.
@@ -112,6 +116,21 @@ func (d *TransportDesiredState) ShouldBeRunning() bool {
 	return d.GetState() == config.DesiredStateRunning
 }
 
+// FailedAuthConfig captures the auth configuration that was used in the last
+// permanently-failed auth attempt (InvalidToken or InstanceDeleted). Stored in
+// dependencies, exposed via CollectObservedState, and compared against the current
+// desired state by AuthFailedState to detect config changes that warrant a retry.
+type FailedAuthConfig struct {
+	AuthToken    string `json:"auth_token,omitempty"`
+	RelayURL     string `json:"relay_url,omitempty"`
+	InstanceUUID string `json:"instance_uuid,omitempty"`
+}
+
+// IsEmpty returns true if no failed auth config has been recorded.
+func (f FailedAuthConfig) IsEmpty() bool {
+	return f.AuthToken == "" && f.RelayURL == "" && f.InstanceUUID == ""
+}
+
 // TransportObservedState represents the current state of the transport worker.
 type TransportObservedState struct {
 	CollectedAt time.Time `json:"collected_at"`
@@ -123,6 +142,12 @@ type TransportObservedState struct {
 
 	// Children contains the observed state of child workers (PushWorker, PullWorker).
 	Children map[string]fsmv2.ObservedState `json:"children,omitempty"`
+
+	// FailedAuthConfig holds the auth config (token, relay URL, instance UUID) that was
+	// used in the last permanently-failed auth attempt. Set by AuthenticateAction on
+	// InvalidToken/InstanceDeleted, cleared by RecordSuccess. AuthFailedState compares
+	// snap.Desired fields against this to detect config changes that warrant a retry.
+	FailedAuthConfig FailedAuthConfig `json:"failed_auth_config,omitempty"`
 
 	State string `json:"state"` // Observed lifecycle state (e.g., "running_healthy")
 
@@ -138,11 +163,11 @@ type TransportObservedState struct {
 	// adding a CSE secret tier to persist locally but exclude from delta sync.
 	JWTToken string `json:"jwt_token,omitempty"`
 
-	// DesiredState embedded for state consistency
-	TransportDesiredState `json:",inline"`
-
 	// LastActionResults contains the action history from the last collection cycle (supervisor-managed).
 	LastActionResults []deps.ActionResult `json:"last_action_results,omitempty"`
+
+	// DesiredState embedded for state consistency
+	TransportDesiredState `json:",inline"`
 
 	deps.MetricsEmbedder `json:",inline"`
 

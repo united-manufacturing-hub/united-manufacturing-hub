@@ -71,6 +71,10 @@ type TransportDependencies struct {
 	jwtToken        string
 	instanceUUID    string
 
+	failedAuthToken    string
+	failedRelayURL     string
+	failedInstanceUUID string
+
 	lastErrorType            httpTransport.ErrorType
 	persistentAuthErrorCount int
 
@@ -166,16 +170,41 @@ func (d *TransportDependencies) RecordAuthError(errType httpTransport.ErrorType,
 	}
 }
 
-// RecordSuccess resets all error tracking state.
+// RecordSuccess resets all error tracking state including the failed auth config.
+// The failed auth config fields are cleared inline (not via SetFailedAuthConfig) to
+// avoid a mutex deadlock — this method already holds d.mu.
 func (d *TransportDependencies) RecordSuccess() {
 	d.mu.Lock()
 	d.lastErrorType = httpTransport.ErrorTypeUnknown
 	d.lastAuthAttemptAt = time.Time{}
 	d.persistentAuthErrorCount = 0
+	d.failedAuthToken = ""
+	d.failedRelayURL = ""
+	d.failedInstanceUUID = ""
 	d.mu.Unlock()
 
 	d.RetryTracker().RecordSuccess()
 	d.authFailureRate.Reset()
+}
+
+// SetFailedAuthConfig stores the auth config that caused a permanent auth failure.
+// Called by AuthenticateAction when InvalidToken or InstanceDeleted is returned.
+func (d *TransportDependencies) SetFailedAuthConfig(token, relayURL, uuid string) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	d.failedAuthToken = token
+	d.failedRelayURL = relayURL
+	d.failedInstanceUUID = uuid
+}
+
+// GetFailedAuthConfig returns the auth config from the last permanent auth failure.
+// Returns empty strings if no permanent failure has been recorded (or after RecordSuccess).
+func (d *TransportDependencies) GetFailedAuthConfig() (token, relayURL, uuid string) {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+
+	return d.failedAuthToken, d.failedRelayURL, d.failedInstanceUUID
 }
 
 // GetConsecutiveErrors returns the current consecutive error count.

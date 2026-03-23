@@ -119,6 +119,11 @@ func (a *AuthenticateAction) Execute(ctx context.Context, depsAny any) error {
 		deps.RecordAuthError(errType, retryAfter)
 		deps.MetricsRecorder().IncrementCounter(httpTransport.CounterForErrorType(errType), 1)
 
+		// Store the config that caused the failure so AuthFailedState can detect config changes.
+		if !errType.IsTransient() {
+			deps.SetFailedAuthConfig(a.AuthToken, a.RelayURL, a.InstanceUUID)
+		}
+
 		// Persistent errors get an immediate first-occurrence SentryWarn.
 		// Transient errors are silent -- the failurerate.Tracker in RecordAuthError
 		// fires SentryWarn("persistent_auth_failure") if they sustain.
