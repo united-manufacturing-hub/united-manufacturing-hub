@@ -61,6 +61,7 @@ var _ = Describe("SubscriberHandler Race Condition", func() {
 			logger,
 			nil, // topicBrowserCommunicator
 			nil, // fsmOutboundChannel - nil for legacy mode test
+			nil, // gatekeeperOutboundChannel - nil for legacy mode test
 		)
 	})
 

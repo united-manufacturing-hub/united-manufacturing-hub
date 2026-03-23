@@ -41,7 +41,8 @@ type Handler struct {
 	configManager              config.ConfigManager
 	subscriberRegistry         *subscribers.Registry
 	pusher                     *push.Pusher
-	fsmOutboundChannel         chan<- *transport.MessageWithSender // FSMv2: gatekeeper's verifiedOutbound (nil for legacy mode)
+	fsmOutboundChannel         chan<- *transport.UMHMessage        // FSMv2 without gatekeeper (nil for legacy mode)
+	gatekeeperOutboundChannel  chan<- *transport.MessageWithSender // FSMv2 with gatekeeper (nil when gatekeeper disabled)
 	StatusCollector            *generator.StatusCollectorType
 	systemSnapshotManager      *fsm.SnapshotManager
 	topicBrowserCommunicator   *topicbrowser.TopicBrowserCommunicator
@@ -63,13 +64,15 @@ func NewHandler(
 	configManager config.ConfigManager,
 	logger *zap.SugaredLogger,
 	topicBrowserCommunicator *topicbrowser.TopicBrowserCommunicator,
-	fsmOutboundChannel chan<- *transport.MessageWithSender, // FSMv2: gatekeeper's verifiedOutbound (nil for legacy mode)
+	fsmOutboundChannel chan<- *transport.UMHMessage, // FSMv2 without gatekeeper (nil for legacy mode)
+	gatekeeperOutboundChannel chan<- *transport.MessageWithSender, // FSMv2 with gatekeeper (nil when gatekeeper disabled)
 ) *Handler {
 	s := &Handler{}
 	s.subscriberRegistry = subscribers.NewRegistry(cull, ttl)
 	s.dog = dog
 	s.pusher = pusher
 	s.fsmOutboundChannel = fsmOutboundChannel
+	s.gatekeeperOutboundChannel = gatekeeperOutboundChannel
 	s.instanceUUID = instanceUUID
 	s.systemSnapshotManager = systemSnapshotManager
 	s.configManager = configManager
@@ -179,9 +182,8 @@ func (s *Handler) notify() {
 			return
 		}
 
-		// FSMv2 mode: write raw MessageWithSender to gatekeeper's verifiedOutbound
-		// Legacy mode: encode and use Pusher
-		if s.fsmOutboundChannel != nil {
+		// Gatekeeper mode: write raw MessageWithSender
+		if s.gatekeeperOutboundChannel != nil {
 			msg := &transport.MessageWithSender{
 				Content: models.UMHMessageContent{
 					MessageType: models.Status,
@@ -190,7 +192,7 @@ func (s *Handler) notify() {
 				SenderEmail: email,
 			}
 			select {
-			case s.fsmOutboundChannel <- msg:
+			case s.gatekeeperOutboundChannel <- msg:
 				// Successfully sent to gatekeeper
 			default:
 				s.logger.Warnf("Gatekeeper outbound channel full, dropping message for subscriber %s", email)
@@ -208,11 +210,29 @@ func (s *Handler) notify() {
 				return
 			}
 
-			s.pusher.Push(models.UMHMessage{
-				Content:      message,
-				Email:        email,
-				InstanceUUID: s.GetInstanceUUID(),
-			})
+			// FSMv2 mode without gatekeeper: write encoded transport.UMHMessage
+			if s.fsmOutboundChannel != nil {
+				msg := &transport.UMHMessage{
+					InstanceUUID: s.GetInstanceUUID().String(),
+					Content:      message,
+					Email:        email,
+				}
+				select {
+				case s.fsmOutboundChannel <- msg:
+					// Successfully sent to FSMv2 transport
+				default:
+					s.logger.Warnf("FSMv2 outbound channel full, dropping message for subscriber %s", email)
+
+					return
+				}
+			} else {
+				// Legacy mode: use Pusher
+				s.pusher.Push(models.UMHMessage{
+					Content:      message,
+					Email:        email,
+					InstanceUUID: s.GetInstanceUUID(),
+				})
+			}
 		}
 
 		// Mark subscriber as bootstrapped after first message

@@ -148,6 +148,13 @@ func main() {
 
 	configData.Agent.UseFSMv2ProtocolConverter = v
 
+	v, err = env.GetAsBool("USE_GATEKEEPER", false, false)
+	if err != nil {
+		log.Warnf("Failed to parse USE_GATEKEEPER: %v", err)
+	}
+
+	configData.Agent.UseGatekeeper = v
+
 	// Ensure the S6 repository directory exists
 	// This is particularly important when using /tmp/umh-core/services (the default)
 	if err := ensureS6RepositoryDirectory(log); err != nil {
@@ -452,7 +459,7 @@ func enableBackendConnection(ctx context.Context, config *config.FullConfig, com
 
 		communicationState.InitialiseAndStartPuller()
 		communicationState.InitialiseAndStartPusher()
-		communicationState.InitialiseAndStartSubscriberHandler(time.Minute*5, time.Minute, config, snapshotManager, configManager, nil) // nil = legacy mode uses Pusher
+		communicationState.InitialiseAndStartSubscriberHandler(time.Minute*5, time.Minute, config, snapshotManager, configManager, nil, nil) // nil = legacy mode uses Pusher
 		communicationState.InitialiseAndStartRouter()
 		communicationState.InitialiseReAuthHandler(config.Agent.AuthToken, config.Agent.AllowInsecureTLS)
 
@@ -496,26 +503,29 @@ func enableFSMv2BackendConnection(
 	communicator.SetChannelProvider(channelAdapter)
 	transportWorker.SetChannelProvider(channelAdapter)
 
-	// Create gatekeeper between bridge and Router.
-	inboundRaw, outboundRaw := channelAdapter.RawChannels()
-	certHandler := certificatehandler.NewHandler(
-		validator.NewValidator(logger),
-		"", // JWT set after auth via polling
-		configData.Agent.APIURL,
-		configData.Agent.AuthToken,
-		"", // instanceUUID set after auth via polling
-		configData.Agent.AllowInsecureTLS,
-		logger,
-	)
-	gk := gatekeeper.New(
-		inboundRaw,
-		outboundRaw,
-		certHandler,
-		validator.NewValidator(logger),
-		logger,
-	)
-	gk.Start(ctx)
-	communicationState.Gatekeeper = gk
+	// Gatekeeper setup (behind feature flag)
+	if configData.Agent.UseGatekeeper {
+		logger.Info("Gatekeeper enabled (feature flag)")
+		inboundRaw, outboundRaw := channelAdapter.RawChannels()
+		certHandler := certificatehandler.NewHandler(
+			validator.NewValidator(logger),
+			"", // JWT set after auth via polling
+			configData.Agent.APIURL,
+			configData.Agent.AuthToken,
+			"", // instanceUUID set after auth via polling
+			configData.Agent.AllowInsecureTLS,
+			logger,
+		)
+		gk := gatekeeper.New(
+			inboundRaw,
+			outboundRaw,
+			certHandler,
+			validator.NewValidator(logger),
+			logger,
+		)
+		gk.Start(ctx)
+		communicationState.Gatekeeper = gk
+	}
 
 	// Build YAML config for FSMv2 ApplicationSupervisor
 	// Note: instanceUUID in config is a placeholder - the real UUID is returned by the backend
@@ -534,9 +544,11 @@ children:
         state: "running"
 `, configData.Agent.APIURL, placeholderUUID, configData.Agent.AuthToken)
 
-	yamlConfig += `  - name: "certfetcher"
+	if configData.Agent.UseGatekeeper {
+		yamlConfig += `  - name: "certfetcher"
     workerType: "certfetcher"
 `
+	}
 
 	if configData.Agent.UseFSMv2MemoryCleanup {
 		yamlConfig += `  - name: "persistence"
@@ -572,7 +584,9 @@ children:
 	fsmv2Deps := map[string]any{
 		"channelProvider":       channelAdapter,
 		"onAuthSuccessCallback": onAuthSuccessCallback,
-		"certHandler":           certHandler,
+	}
+	if configData.Agent.UseGatekeeper {
+		fsmv2Deps["certHandler"] = communicationState.Gatekeeper.CertificateHandler()
 	}
 	if configData.Agent.UseFSMv2MemoryCleanup {
 		fsmv2Deps["store"] = store
@@ -606,21 +620,37 @@ children:
 	// 4. Start Router (processes inbound messages, generates status via Subscriber)
 	communicationState.InitializeWriteOnlyPusher(placeholderUUID)
 	communicationState.SetLoginResponseForFSMv2(placeholderUUID)
-	communicationState.InitialiseAndStartSubscriberHandler(
-		5*time.Minute, // TTL: time until subscriber considered dead
-		1*time.Minute, // Cull: cycle time to remove dead subscribers
-		configData,
-		communicationState.SystemSnapshotManager,
-		communicationState.ConfigManager,
-		gk.VerifiedOutboundChan(), // FSMv2 mode: write MessageWithSender to gatekeeper
-	)
+	if configData.Agent.UseGatekeeper {
+		communicationState.InitialiseAndStartSubscriberHandler(
+			5*time.Minute, // TTL: time until subscriber considered dead
+			1*time.Minute, // Cull: cycle time to remove dead subscribers
+			configData,
+			communicationState.SystemSnapshotManager,
+			communicationState.ConfigManager,
+			nil, // no legacy FSMv2 channel when gatekeeper is active
+			communicationState.Gatekeeper.VerifiedOutboundChan(), // Gatekeeper mode: write MessageWithSender
+		)
 
-	// Set SubHandler on certfetcher worker (created by supervisor via factory)
-	if cfWorker, ok := fsmv2Deps["certfetcherWorker"]; ok && cfWorker != nil {
-		cfWorker.(*certfetcher.CertFetcherWorker).GetDependencies().SetSubHandler(communicationState.SubscriberHandler)
+		// Set SubHandler on certfetcher worker (created by supervisor via factory)
+		cfWorker, ok := fsmv2Deps["certfetcherWorker"]
+		if ok && cfWorker != nil {
+			cfWorker.(*certfetcher.CertFetcherWorker).GetDependencies().SetSubHandler(communicationState.SubscriberHandler)
+		}
+
+		communicationState.InitializeRouterForFSMv2()
+	} else {
+		communicationState.InitialiseAndStartSubscriberHandler(
+			5*time.Minute,
+			1*time.Minute,
+			configData,
+			communicationState.SystemSnapshotManager,
+			communicationState.ConfigManager,
+			channelAdapter.GetOutboundWriteChannel(), // FSMv2 without gatekeeper
+			nil, // no gatekeeper channel
+		)
+
+		communicationState.InitializeRouterForFSMv2()
 	}
-
-	communicationState.InitializeRouterForFSMv2()
 
 	// Poll ObservedState for AuthenticatedUUID and update SetLoginResponseForFSMv2.
 	// Phase 2 architecture: UUID is read from ObservedState instead of callback.
@@ -643,20 +673,25 @@ children:
 					continue
 				}
 
-				// Update cert handler JWT from observed state
-			if observed.JWTToken != "" {
-				certHandler.SetJWT(observed.JWTToken)
-			}
-
-			if observed.AuthenticatedUUID != "" && observed.AuthenticatedUUID != placeholderUUID {
+				if observed.AuthenticatedUUID != "" && observed.AuthenticatedUUID != placeholderUUID {
 				logger.Infow("Detected real UUID from ObservedState, updating LoginResponse",
 					"realUUID", observed.AuthenticatedUUID,
 					"placeholderUUID", placeholderUUID)
 				communicationState.SetLoginResponseForFSMv2(observed.AuthenticatedUUID)
-				certHandler.SetInstanceUUID(observed.AuthenticatedUUID)
-				gk.SetInstanceUUID(observed.AuthenticatedUUID)
+
+				if communicationState.Gatekeeper != nil {
+					ch := communicationState.Gatekeeper.CertificateHandler()
+					ch.SetJWT(observed.JWTToken)
+					ch.SetInstanceUUID(observed.AuthenticatedUUID)
+					communicationState.Gatekeeper.SetInstanceUUID(observed.AuthenticatedUUID)
+				}
 
 				return
+			}
+
+			// Update cert handler JWT on every poll tick (token may refresh)
+			if communicationState.Gatekeeper != nil && observed.JWTToken != "" {
+				communicationState.Gatekeeper.CertificateHandler().SetJWT(observed.JWTToken)
 			}
 			}
 		}

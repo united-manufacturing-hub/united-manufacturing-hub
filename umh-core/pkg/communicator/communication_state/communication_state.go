@@ -245,7 +245,7 @@ func (c *CommunicationState) UpdateTopicBrowserCache() error {
 // InitialiseAndStartSubscriberHandler creates a new subscriber handler and starts it
 // ttl is the time until a subscriber is considered dead (if no new subscriber message is received)
 // cull is the cycle time to remove dead subscribers.
-func (c *CommunicationState) InitialiseAndStartSubscriberHandler(ttl time.Duration, cull time.Duration, config *config.FullConfig, systemSnapshotManager *fsm.SnapshotManager, configManager config.ConfigManager, fsmOutboundChannel chan<- *transport.MessageWithSender) {
+func (c *CommunicationState) InitialiseAndStartSubscriberHandler(ttl time.Duration, cull time.Duration, config *config.FullConfig, systemSnapshotManager *fsm.SnapshotManager, configManager config.ConfigManager, fsmOutboundChannel chan<- *transport.UMHMessage, gatekeeperOutboundChannel chan<- *transport.MessageWithSender) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -296,7 +296,8 @@ func (c *CommunicationState) InitialiseAndStartSubscriberHandler(ttl time.Durati
 		configManager,
 		c.Logger,
 		topicBrowserCommunicator,
-		fsmOutboundChannel, // FSMv2 direct channel (nil for legacy mode)
+		fsmOutboundChannel,
+		gatekeeperOutboundChannel,
 	)
 	if c.SubscriberHandler == nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "Failed to create subscriber handler")
@@ -432,12 +433,6 @@ func (c *CommunicationState) SetLoginResponseForFSMv2(instanceUUID string) {
 // InitializeRouterForFSMv2 initializes the Router for FSMv2 mode.
 // Unlike InitialiseAndStartRouter, this does not require a Puller (FSMv2 handles pulling).
 func (c *CommunicationState) InitializeRouterForFSMv2() {
-	if c.Gatekeeper == nil {
-		sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "Gatekeeper is nil, cannot start router for FSMv2")
-
-		return
-	}
-
 	if c.Pusher == nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "Pusher is nil, cannot start router for FSMv2")
 
@@ -452,7 +447,11 @@ func (c *CommunicationState) InitializeRouterForFSMv2() {
 
 	c.mu.Lock()
 	c.LoginResponseMu.RLock()
-	c.Router = router.NewRouterForFSMv2(c.Watchdog, c.Gatekeeper.VerifiedInboundChan(), c.LoginResponse.UUID, c.Gatekeeper.LegacyOutboundChan(), c.ReleaseChannel, c.SubscriberHandler, c.SystemSnapshotManager, c.ConfigManager, c.Logger)
+	// Without gatekeeper: use legacy Router with LegacyChannelBridge channels
+	c.Router = router.NewRouter(c.Watchdog, c.InboundChannel, c.LoginResponse.UUID, c.OutboundChannel, c.ReleaseChannel, c.SubscriberHandler, c.SystemSnapshotManager, c.ConfigManager, c.Logger)
+	if c.Gatekeeper != nil {
+		c.Router = router.NewRouterForFSMv2(c.Watchdog, c.Gatekeeper.VerifiedInboundChan(), c.LoginResponse.UUID, c.Gatekeeper.LegacyOutboundChan(), c.ReleaseChannel, c.SubscriberHandler, c.SystemSnapshotManager, c.ConfigManager, c.Logger)
+	}
 	c.LoginResponseMu.RUnlock()
 	c.mu.Unlock()
 
