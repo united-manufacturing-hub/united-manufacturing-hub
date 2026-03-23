@@ -137,7 +137,7 @@ The United Manufacturing Hub (UMH) is an Industrial IoT platform for manufacturi
 Every PR with user-visible changes must add an entry to `umh-core/CHANGELOG.md` under the `## Unreleased` section at the top. For format, voice, and what to include/skip, follow the `changelog-writing` skill (use `/changelog-entry` to generate entries). Never create a new version section — only add to `## Unreleased`. The section is renamed to a version number at release time (see `umh-core/RELEASING.md`).
 
 - **CI enforcement**: PRs with code changes must modify CHANGELOG.md, or CI will fail. Add the `skip-changelog-guard` label to bypass (for CI/CD, refactoring, or test-only changes).
-- **Automation**: On tag push, workflows sync entries to changelog.umh.app and populate GitHub Release notes from CHANGELOG.md.
+- **Automation**: On release published, workflows sync entries to changelog.umh.app and populate GitHub Release notes from CHANGELOG.md.
 
 ## Support & Troubleshooting Workflows
 

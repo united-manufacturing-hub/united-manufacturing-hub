@@ -29,7 +29,7 @@ on:
         required: false
         type: string
       title:
-        description: 'Title for the changelog entry (5-10 words). If omitted for push triggers, fetched from the GitHub release.'
+        description: 'Title for the changelog entry (5-10 words). If omitted for release events, fetched from the GitHub release.'
         required: false
         type: string
 
@@ -61,7 +61,6 @@ jobs:
       - name: Get release title
         id: release-title
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_NAME: ${{ github.event.release.name }}
           RELEASE_TAG: ${{ github.event.release.tag_name }}
           INPUT_TITLE: ${{ github.event.inputs.title }}
@@ -73,6 +72,7 @@ jobs:
             raw="${RELEASE_NAME:-$RELEASE_TAG}"
             # Strip version prefix: "v0.44.12 - Title" -> "Title"
             title=$(echo "$raw" | sed -E 's/^v?[0-9]+\.[0-9]+\.[0-9]+[[:space:]]*-[[:space:]]*//')
+            # If stripping didn't change anything (no version prefix), keep raw
             if [ "$title" = "$raw" ]; then
               title="$raw"
             fi
