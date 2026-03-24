@@ -263,6 +263,22 @@ jobs:
           fi
 
           echo "Released sections unchanged vs merge-base — OK"
+
+          # Informational: warn if the released section on this branch differs from the tag.
+          # This happens when a feature branch was forked before the release was tagged.
+          # Not an error (the PR didn't cause it), but the branch should be updated eventually.
+          # The 2>/dev/null intentionally suppresses git errors (missing file at tag, shallow
+          # clone, etc.) — this is a best-effort informational check, not a gate.
+          if TAG_CHANGELOG=$(git show "$LATEST_TAG:$CHANGELOG" 2>/dev/null); then
+            TAG_LINE=$(printf '%s\n' "$TAG_CHANGELOG" | grep -Fn "$HEADER" | head -1 | cut -d: -f1 || true)
+            if [[ -n "$TAG_LINE" ]]; then
+              TAG_TAIL=$(printf '%s\n' "$TAG_CHANGELOG" | tail -n +"$TAG_LINE")
+              if [[ "$(printf '%s' "$TAG_TAIL")" != "$(printf '%s' "$CURRENT_TAIL")" ]]; then
+                echo ""
+                echo "::warning file=$CHANGELOG::The '$HEADER' section on this branch differs from the $LATEST_TAG tag. Your base branch ($BASE_REF) was forked before the release was tagged. This is not blocking. Merge 'staging' into '$BASE_REF' to pick up release-time edits."
+              fi
+            fi
+          fi
       - name: Validate CHANGELOG.md
         run: npx tsx changelog-scripts/.github/scripts/validate-changelog.ts --format version --changelog-path umh-core/CHANGELOG.md
 
