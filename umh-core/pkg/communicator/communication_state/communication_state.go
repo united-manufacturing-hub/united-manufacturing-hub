@@ -447,10 +447,10 @@ func (c *CommunicationState) InitializeRouterForFSMv2() {
 
 	c.mu.Lock()
 	c.LoginResponseMu.RLock()
-	// Without gatekeeper: use legacy Router with LegacyChannelBridge channels
-	c.Router = router.NewRouter(c.Watchdog, c.InboundChannel, c.LoginResponse.UUID, c.OutboundChannel, c.ReleaseChannel, c.SubscriberHandler, c.SystemSnapshotManager, c.ConfigManager, c.Logger)
 	if c.Gatekeeper != nil {
 		c.Router = router.NewRouterForFSMv2(c.Watchdog, c.Gatekeeper.VerifiedInboundChan(), c.LoginResponse.UUID, c.Gatekeeper.LegacyOutboundChan(), c.ReleaseChannel, c.SubscriberHandler, c.SystemSnapshotManager, c.ConfigManager, c.Logger)
+	} else {
+		c.Router = router.NewRouter(c.Watchdog, c.InboundChannel, c.LoginResponse.UUID, c.OutboundChannel, c.ReleaseChannel, c.SubscriberHandler, c.SystemSnapshotManager, c.ConfigManager, c.Logger)
 	}
 	c.LoginResponseMu.RUnlock()
 	c.mu.Unlock()
@@ -462,6 +462,13 @@ func (c *CommunicationState) InitializeRouterForFSMv2() {
 	}
 
 	c.Router.Start()
+}
+
+// GetSubscriberHandler returns the current subscriber handler (thread-safe).
+func (c *CommunicationState) GetSubscriberHandler() *subscriber.Handler {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.SubscriberHandler
 }
 
 // parseUUIDForFSMv2 attempts to parse a UUID string, returning uuid.Nil on failure.

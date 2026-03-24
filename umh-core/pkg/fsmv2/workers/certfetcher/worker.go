@@ -35,6 +35,24 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/gatekeeper/certificatehandler"
 )
 
+// lazySubHandler resolves the SubHandler lazily via a provider callback.
+type lazySubHandler struct {
+	provider func() gatekeeper.SubHandler
+}
+
+func (l *lazySubHandler) Subscribers() []string {
+	sh := l.provider()
+	if sh == nil {
+		return nil
+	}
+	return sh.Subscribers()
+}
+
+// IsReady returns true when the underlying subscriber handler is available.
+func (l *lazySubHandler) IsReady() bool {
+	return l.provider() != nil
+}
+
 var _ fsmv2.Worker = (*CertFetcherWorker)(nil)
 
 // CertFetcherWorker fetches certificates for active subscribers.
@@ -143,11 +161,6 @@ func (w *CertFetcherWorker) GetInitialState() fsmv2.State[any, any] {
 func init() {
 	if err := factory.RegisterWorkerType[snapshot.CertFetcherObservedState, *snapshot.CertFetcherDesiredState](
 		func(id deps.Identity, logger deps.FSMLogger, stateReader deps.StateReader, extraDeps map[string]any) fsmv2.Worker {
-			var subHandler gatekeeper.SubHandler
-			if sh, ok := extraDeps["subHandler"]; ok && sh != nil {
-				subHandler, _ = sh.(gatekeeper.SubHandler)
-			}
-
 			certHandlerRaw, ok := extraDeps["certHandler"]
 			if !ok || certHandlerRaw == nil {
 				panic("certfetcher worker requires certHandler in extraDeps")
@@ -157,13 +170,20 @@ func init() {
 				panic("certHandler must implement certificatehandler.Handler")
 			}
 
+			// SubHandler resolved lazily via provider callback.
+			var subHandler gatekeeper.SubHandler
+			if provider, ok := extraDeps["subHandlerProvider"]; ok && provider != nil {
+				providerFn, ok := provider.(func() gatekeeper.SubHandler)
+				if !ok {
+					panic("subHandlerProvider must be func() gatekeeper.SubHandler")
+				}
+				subHandler = &lazySubHandler{provider: providerFn}
+			}
+
 			worker, err := NewCertFetcherWorker(id, logger, stateReader, subHandler, certHandler)
 			if err != nil {
 				panic(fmt.Sprintf("failed to create certfetcher worker: %v", err))
 			}
-
-			// Store worker in extraDeps so main.go can call SetSubHandler later
-			extraDeps["certfetcherWorker"] = worker
 
 			return worker
 		},

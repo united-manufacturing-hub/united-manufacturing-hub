@@ -31,17 +31,13 @@ import (
 )
 
 // SubHandler provides access to the list of active subscribers.
-// Implemented by subscriber.Handler.
 type SubHandler interface {
 	Subscribers() []string
 }
 
-// Gatekeeper sits between Transport and Business Logic layers.
-// It receives raw transport.UMHMessage from PullWorker, processes them
-// (decrypt, decompress, validate), and outputs MessageWithSender to the Router.
-// The reverse path handles outbound messages from Router to PushWorker.
+// Gatekeeper sits between FSMv2 transport and Router, handling protocol detection,
+// encryption, compression, and permission validation.
 type Gatekeeper struct {
-
 	// Sub-components
 	protocolDetector protocol.Detector
 	compression      compression.Handler
@@ -56,7 +52,6 @@ type Gatekeeper struct {
 	verifiedInbound  chan *transport.MessageWithSender
 	verifiedOutbound chan *transport.MessageWithSender
 
-	// Legacy outbound for pre-encoded models.UMHMessage from actions.
 	// TODO(ENG-4558): Remove once actions write MessageWithSender directly.
 	legacyOutbound chan *models.UMHMessage
 
@@ -66,7 +61,7 @@ type Gatekeeper struct {
 	instanceUUID string
 	wg           sync.WaitGroup
 
-	// Config (set by options, or defaults)
+	// Config
 	verifiedInboundSize  int
 	verifiedOutboundSize int
 
@@ -210,43 +205,42 @@ func (g *Gatekeeper) processInbound(ctx context.Context) {
 }
 
 func (g *Gatekeeper) handleInbound(ctx context.Context, msg *transport.UMHMessage) {
-	// 1. Detect protocol and get encryption handler
 	cryptHandler := g.protocolDetector.Detect(msg)
 
-	// 2. Decrypt
 	decrypted, err := cryptHandler.Decrypt([]byte(msg.Content), msg.Email)
 	if err != nil {
 		g.logger.Warnw("Failed to decrypt message", "email", msg.Email, "error", err)
 		return
 	}
 
-	// 3. Decompress and decode
 	messageContent, err := g.compression.Decode(string(decrypted))
 	if err != nil {
 		g.logger.Warnw("Failed to decode message", "email", msg.Email, "error", err)
 		return
 	}
 
-	// 4. Validate permissions
-	cert := g.certHandler.Certificate(msg.Email)
-	if cert == nil {
-		g.logger.Warnw("No certificate cached, dropping message", "email", msg.Email)
-		return
+	// Subscribe bypasses cert validation to bootstrap the cert fetcher flow.
+	isSubscribe := messageContent.MessageType == models.Subscribe
+	if !isSubscribe {
+		cert := g.certHandler.Certificate(msg.Email)
+		if cert == nil {
+			g.logger.Warnw("No certificate cached, dropping message", "email", msg.Email)
+			return
+		}
+
+		rootCA := g.certHandler.RootCA()
+		intermediates := g.certHandler.IntermediateCerts(msg.Email)
+		allowed, err := g.validator.ValidateUserPermissions(cert, string(messageContent.MessageType), "", rootCA, intermediates)
+		if err != nil {
+			g.logger.Warnw("Permission validation error", "email", msg.Email, "error", err)
+			return
+		}
+		if !allowed {
+			g.logger.Warnw("Permission denied", "email", msg.Email, "messageType", messageContent.MessageType)
+			return
+		}
 	}
 
-	rootCA := g.certHandler.RootCA()
-	intermediates := g.certHandler.IntermediateCerts(msg.Email)
-	allowed, err := g.validator.ValidateUserPermissions(cert, string(messageContent.MessageType), "", rootCA, intermediates)
-	if err != nil {
-		g.logger.Warnw("Permission validation error", "email", msg.Email, "error", err)
-		return
-	}
-	if !allowed {
-		g.logger.Warnw("Permission denied", "email", msg.Email, "messageType", messageContent.MessageType)
-		return
-	}
-
-	// 5. Send to verified channel
 	select {
 	case g.verifiedInbound <- &transport.MessageWithSender{
 		Content:     messageContent,
@@ -281,17 +275,14 @@ func (g *Gatekeeper) processOutbound(ctx context.Context) {
 }
 
 func (g *Gatekeeper) handleOutbound(ctx context.Context, msg *transport.MessageWithSender) {
-	// 1. Encode and compress
 	encoded, err := g.compression.Encode(msg.Content)
 	if err != nil {
 		g.logger.Warnw("Failed to encode outbound message", "email", msg.SenderEmail, "error", err)
 		return
 	}
 
-	// 2. Encrypt (v0 = noop for now)
 	encrypted := []byte(encoded)
 
-	// 3. Wrap as transport.UMHMessage
 	g.mu.RLock()
 	instanceUUID := g.instanceUUID
 	g.mu.RUnlock()
@@ -302,7 +293,6 @@ func (g *Gatekeeper) handleOutbound(ctx context.Context, msg *transport.MessageW
 		Email:        msg.SenderEmail,
 	}
 
-	// 4. Send to outbound channel
 	select {
 	case g.outboundChan <- transportMsg:
 	case <-ctx.Done():
@@ -329,9 +319,13 @@ func (g *Gatekeeper) processLegacyOutbound(ctx context.Context) {
 			if !ok {
 				return
 			}
+			g.mu.RLock()
+			instanceUUID := g.instanceUUID
+			g.mu.RUnlock()
 			transportMsg := &transport.UMHMessage{
-				Content: msg.Content,
-				Email:   msg.Email,
+				InstanceUUID: instanceUUID,
+				Content:      msg.Content,
+				Email:        msg.Email,
 			}
 			select {
 			case g.outboundChan <- transportMsg:

@@ -46,7 +46,8 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/snapshot"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/certfetcher"
+	transportSnapshot "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/snapshot"
+	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/certfetcher"
 	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/persistence"
 	transportWorker "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/gatekeeper"
@@ -494,8 +495,10 @@ func enableFSMv2BackendConnection(
 		0,
 	)
 
-	// Start conversion goroutines
-	channelAdapter.Start(ctx)
+	// Bridge conversion goroutines only needed without gatekeeper.
+	if !configData.Agent.UseGatekeeper {
+		channelAdapter.Start(ctx)
+	}
 
 	// Set the global ChannelProvider singleton BEFORE creating the supervisor.
 	// Phase 1 architecture: singleton is THE ONLY way to provide channels to the communicator.
@@ -587,6 +590,13 @@ children:
 	}
 	if configData.Agent.UseGatekeeper {
 		fsmv2Deps["certHandler"] = communicationState.Gatekeeper.CertificateHandler()
+		fsmv2Deps["subHandlerProvider"] = func() gatekeeper.SubHandler {
+			sh := communicationState.GetSubscriberHandler()
+			if sh == nil {
+				return nil
+			}
+			return sh
+		}
 	}
 	if configData.Agent.UseFSMv2MemoryCleanup {
 		fsmv2Deps["store"] = store
@@ -631,12 +641,6 @@ children:
 			communicationState.Gatekeeper.VerifiedOutboundChan(), // Gatekeeper mode: write MessageWithSender
 		)
 
-		// Set SubHandler on certfetcher worker (created by supervisor via factory)
-		cfWorker, ok := fsmv2Deps["certfetcherWorker"]
-		if ok && cfWorker != nil {
-			cfWorker.(*certfetcher.CertFetcherWorker).GetDependencies().SetSubHandler(communicationState.SubscriberHandler)
-		}
-
 		communicationState.InitializeRouterForFSMv2()
 	} else {
 		communicationState.InitialiseAndStartSubscriberHandler(
@@ -652,45 +656,35 @@ children:
 		communicationState.InitializeRouterForFSMv2()
 	}
 
-	// Poll ObservedState for AuthenticatedUUID and update SetLoginResponseForFSMv2.
-	// Phase 2 architecture: UUID is read from ObservedState instead of callback.
-	// This goroutine runs until the real UUID is received from the backend.
+	// Poll ObservedState for UUID and JWT updates.
 	go func() {
 		ticker := time.NewTicker(100 * time.Millisecond)
 		defer ticker.Stop()
 
+		uuidSet := false
 		for {
 			select {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				// Load the communicator's observed state from the store
-				var observed snapshot.CommunicatorObservedState
-
-				err := store.LoadObservedTyped(ctx, "communicator", CommunicatorWorkerID, &observed)
-				if err != nil {
-					// Not found yet or error - keep polling
-					continue
+				// UUID from communicator, JWT from transport observed state
+				var commObserved snapshot.CommunicatorObservedState
+				commErr := store.LoadObservedTyped(ctx, "communicator", CommunicatorWorkerID, &commObserved)
+				if commErr == nil && !uuidSet && commObserved.AuthenticatedUUID != "" && commObserved.AuthenticatedUUID != placeholderUUID {
+					logger.Infow("Detected real UUID from communicator ObservedState",
+						"realUUID", commObserved.AuthenticatedUUID)
+					communicationState.SetLoginResponseForFSMv2(commObserved.AuthenticatedUUID)
+					if communicationState.Gatekeeper != nil {
+						communicationState.Gatekeeper.SetInstanceUUID(commObserved.AuthenticatedUUID)
+					}
+					uuidSet = true
 				}
 
-				if observed.AuthenticatedUUID != "" && observed.AuthenticatedUUID != placeholderUUID {
-				logger.Infow("Detected real UUID from ObservedState, updating LoginResponse",
-					"realUUID", observed.AuthenticatedUUID,
-					"placeholderUUID", placeholderUUID)
-				communicationState.SetLoginResponseForFSMv2(observed.AuthenticatedUUID)
-
-				if communicationState.Gatekeeper != nil {
-					communicationState.Gatekeeper.SetJWT(observed.JWTToken)
-					communicationState.Gatekeeper.SetInstanceUUID(observed.AuthenticatedUUID)
+				var tpObserved transportSnapshot.TransportObservedState
+				tpErr := store.LoadObservedTyped(ctx, "transport", "transport-001", &tpObserved)
+				if tpErr == nil && communicationState.Gatekeeper != nil && tpObserved.JWTToken != "" {
+					communicationState.Gatekeeper.SetJWT(tpObserved.JWTToken)
 				}
-
-				return
-			}
-
-			// Update cert handler JWT on every poll tick (token may refresh)
-			if communicationState.Gatekeeper != nil && observed.JWTToken != "" {
-				communicationState.Gatekeeper.SetJWT(observed.JWTToken)
-			}
 			}
 		}
 	}()
