@@ -92,7 +92,6 @@ func (d *CertFetcherDependencies) Subscribers() []string {
 func (d *CertFetcherDependencies) FetchAllCerts(ctx context.Context) error {
 	emails := d.Subscribers()
 	if len(emails) == 0 {
-		d.RecordFetchSuccess()
 		return nil
 	}
 
