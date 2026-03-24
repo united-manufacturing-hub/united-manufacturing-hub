@@ -162,11 +162,24 @@ func (g *Gatekeeper) GetInboundStats(_ string) (capacity int, length int) {
 	return cap(g.inboundChan), len(g.inboundChan)
 }
 
-// SetInstanceUUID updates the instance UUID used for outbound message wrapping.
+// SetInstanceUUID updates the instance UUID on the gatekeeper and cert handler.
 func (g *Gatekeeper) SetInstanceUUID(uuid string) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	g.instanceUUID = uuid
+
+	ch, ok := g.certHandler.(*certificatehandler.CertHandler)
+	if ok {
+		ch.SetInstanceUUID(uuid)
+	}
+}
+
+// SetJWT updates the JWT on the certificate handler.
+func (g *Gatekeeper) SetJWT(jwt string) {
+	ch, ok := g.certHandler.(*certificatehandler.CertHandler)
+	if ok {
+		ch.SetJWT(jwt)
+	}
 }
 
 // CertificateHandler returns the certificate handler.

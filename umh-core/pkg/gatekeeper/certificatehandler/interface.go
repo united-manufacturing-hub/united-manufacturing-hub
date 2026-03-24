@@ -27,6 +27,4 @@ type Handler interface {
 	IntermediateCerts(email string) []*x509.Certificate
 	RootCA() *x509.Certificate
 	FetchAndStore(ctx context.Context, email string) error
-	SetJWT(jwt string)
-	SetInstanceUUID(uuid string)
 }

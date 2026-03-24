@@ -680,9 +680,7 @@ children:
 				communicationState.SetLoginResponseForFSMv2(observed.AuthenticatedUUID)
 
 				if communicationState.Gatekeeper != nil {
-					ch := communicationState.Gatekeeper.CertificateHandler()
-					ch.SetJWT(observed.JWTToken)
-					ch.SetInstanceUUID(observed.AuthenticatedUUID)
+					communicationState.Gatekeeper.SetJWT(observed.JWTToken)
 					communicationState.Gatekeeper.SetInstanceUUID(observed.AuthenticatedUUID)
 				}
 
@@ -691,7 +689,7 @@ children:
 
 			// Update cert handler JWT on every poll tick (token may refresh)
 			if communicationState.Gatekeeper != nil && observed.JWTToken != "" {
-				communicationState.Gatekeeper.CertificateHandler().SetJWT(observed.JWTToken)
+				communicationState.Gatekeeper.SetJWT(observed.JWTToken)
 			}
 			}
 		}
