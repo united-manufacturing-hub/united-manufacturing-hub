@@ -45,8 +45,9 @@ type WorkerBase[TConfig any, TStatus any] struct {
 }
 
 // InitBase initializes the embedded WorkerBase with framework dependencies.
-// Must be called in the worker constructor before any other method.
-func (w *WorkerBase[TConfig, TStatus]) InitBase(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) {
+// Returns the framework-managed BaseDependencies that workers with custom deps
+// MUST embed (not create a new one) to ensure metrics are visible to WrapStatus.
+func (w *WorkerBase[TConfig, TStatus]) InitBase(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) *deps.BaseDependencies {
 	w.identity = id
 	w.logger = logger
 	w.stateReader = sr
@@ -56,6 +57,8 @@ func (w *WorkerBase[TConfig, TStatus]) InitBase(id deps.Identity, logger deps.FS
 	w.baseDeps = bd
 	w.initialized = true
 	w.mu.Unlock()
+
+	return bd
 }
 
 // Config returns the cached TConfig from the last DeriveDesiredState call.
