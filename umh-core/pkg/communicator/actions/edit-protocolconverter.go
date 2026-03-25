@@ -470,9 +470,13 @@ func (a *EditProtocolConverterAction) applyMutation(readBenthosConfig, writeBent
 		instanceToModify.ProtocolConverterServiceConfig.Variables.User["PORT"] = a.connectionPort
 	}
 
-	// Store per-DFC desired state overrides in the spec so the FSM can propagate them.
-	instanceToModify.ProtocolConverterServiceConfig.ReadDFCDesiredState = a.readDFCState
-	instanceToModify.ProtocolConverterServiceConfig.WriteDFCDesiredState = a.writeDFCState
+	// Only update the per-DFC desired states if the user provided new values.
+	if a.readDFCState != "" {
+		instanceToModify.ProtocolConverterServiceConfig.ReadDFCDesiredState = a.readDFCState
+	}
+	if a.writeDFCState != "" {
+		instanceToModify.ProtocolConverterServiceConfig.WriteDFCDesiredState = a.writeDFCState
+	}
 
 	// Derive the PC-level FSM state from the per-DFC states.
 	// For DFCTypeEmpty (connection/location-only edits) the new states are empty,
@@ -884,11 +888,11 @@ func (a *EditProtocolConverterAction) compareProtocolConverterDFCConfig(pcSnapsh
 // compareSingleDFCConfig compares a single DFC (read or write) against its observed state.
 func (a *EditProtocolConverterAction) compareSingleDFCConfig(pcSnapshot *protocolconverter.ProtocolConverterObservedStateSnapshot, dfcType DFCType) bool {
 	var (
-		desiredState     string
-		observedFSMState string
+		desiredState      string
+		observedFSMState  string
 		observedDFCConfig dataflowcomponentserviceconfig.DataflowComponentServiceConfig
-		presenceField    interface{} // the field that indicates the observed config is available
-		excludeInput     bool        // true for write DFC (input is auto-generated)
+		presenceField     interface{} // the field that indicates the observed config is available
+		excludeInput      bool        // true for write DFC (input is auto-generated)
 	)
 
 	switch dfcType {
