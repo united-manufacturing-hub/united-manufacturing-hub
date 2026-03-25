@@ -144,6 +144,29 @@ var _ = Describe("register.Worker", func() {
 				Name:       "err-test",
 				WorkerType: "regtest-errconstructor",
 			}, nopLogger, nil, nil)
-		}).To(PanicWith(ContainSubstring("constructor failed")))
+		}).To(PanicWith(And(
+			ContainSubstring("constructor failed"),
+			ContainSubstring("err-1"),
+		)))
+	})
+
+	It("panics when constructor returns nil worker without error", func() {
+		register.Worker[regTestConfig, regTestStatus]("regtest-nilworker",
+			func(_ deps.Identity, _ deps.FSMLogger, _ deps.StateReader) (fsmv2.Worker, error) {
+				return nil, nil
+			},
+		)
+
+		nopLogger := deps.NewNopFSMLogger()
+		Expect(func() {
+			_, _ = factory.NewWorkerByType("regtest-nilworker", deps.Identity{
+				ID:         "nil-1",
+				Name:       "nil-test",
+				WorkerType: "regtest-nilworker",
+			}, nopLogger, nil, nil)
+		}).To(PanicWith(And(
+			ContainSubstring("returned nil worker"),
+			ContainSubstring("nil-1"),
+		)))
 	})
 })

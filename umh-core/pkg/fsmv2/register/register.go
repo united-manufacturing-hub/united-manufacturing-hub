@@ -65,6 +65,9 @@ func Worker[TConfig any, TStatus any](
 		if err != nil {
 			panic(fmt.Sprintf("register.Worker(%q): constructor failed for %s: %v", workerType, id.String(), err))
 		}
+		if w == nil {
+			panic(fmt.Sprintf("register.Worker(%q): constructor returned nil worker for %s", workerType, id.String()))
+		}
 
 		return w
 	}
