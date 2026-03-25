@@ -156,6 +156,7 @@ jobs:
         shell: bash
         env:
           BASE_REF: ${{ github.event.pull_request.base.ref }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
         run: |
           set -euo pipefail
 
@@ -275,7 +276,7 @@ jobs:
               TAG_TAIL=$(printf '%s\n' "$TAG_CHANGELOG" | tail -n +"$TAG_LINE")
               if [[ "$(printf '%s' "$TAG_TAIL")" != "$(printf '%s' "$CURRENT_TAIL")" ]]; then
                 echo ""
-                echo "::warning file=$CHANGELOG::The '$HEADER' section on this branch differs from the $LATEST_TAG tag. Your base branch ($BASE_REF) was forked before the release was tagged. This is not blocking. Merge 'staging' into '$BASE_REF' to pick up release-time edits."
+                echo "::warning file=$CHANGELOG::The '$HEADER' section on this branch differs from the $LATEST_TAG tag. Your branch was forked before the release was tagged. This is not blocking. Merge '$BASE_REF' into '$HEAD_REF' to pick up release-time edits."
               fi
             fi
           fi
