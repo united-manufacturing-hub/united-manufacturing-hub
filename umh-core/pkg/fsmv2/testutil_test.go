@@ -36,3 +36,9 @@ type testStateReader struct{}
 func (r *testStateReader) LoadObservedTyped(_ context.Context, _ string, _ string, _ interface{}) error {
 	return nil
 }
+
+// mockDesiredState satisfies fsmv2.DesiredState for tests.
+type mockDesiredState struct{}
+
+func (d *mockDesiredState) IsShutdownRequested() bool { return false }
+func (d *mockDesiredState) GetState() string          { return "running" }
