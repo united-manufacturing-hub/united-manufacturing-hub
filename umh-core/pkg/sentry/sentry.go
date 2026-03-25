@@ -27,16 +27,6 @@ import (
 // Package-level state for debouncing errors.
 var shouldDebounceErrors = true
 
-// EnableTestMode disables debouncing for testing.
-func EnableTestMode() {
-	shouldDebounceErrors = false
-}
-
-// DisableTestMode restores normal debouncing behavior.
-func DisableTestMode() {
-	shouldDebounceErrors = true
-}
-
 // InitSentry initializes sentry with the given app name and version
 // If debounceErrors is true, errors will be debounced to avoid spamming Sentry.
 func InitSentry(appVersion string, debounceErrors bool) {
