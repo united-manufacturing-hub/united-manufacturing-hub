@@ -319,6 +319,13 @@ port: 2`}
 				wb.GetInitialState()
 			}).To(PanicWith(ContainSubstring("no initial state registered")))
 		})
+
+		It("panics when InitBase was not called", func() {
+			uninit := &fsmv2.WorkerBase[workerTestConfig, workerTestStatus]{}
+			Expect(func() {
+				uninit.GetInitialState()
+			}).To(PanicWith(ContainSubstring("InitBase was not called")))
+		})
 	})
 
 	Describe("GetDependenciesAny", func() {
