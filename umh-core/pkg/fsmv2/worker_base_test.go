@@ -297,11 +297,27 @@ port: 2`}
 	})
 
 	Describe("GetInitialState", func() {
-		It("returns a non-nil state", func() {
+		BeforeEach(func() {
+			fsmv2.RegisterInitialState("test", &testStoppedState{})
+		})
+
+		AfterEach(func() {
+			fsmv2.ResetInitialStateRegistry()
+		})
+
+		It("returns the registered state for the worker type", func() {
 			wb.InitBase(identity, mockLogger, mockStateReader)
 			state := wb.GetInitialState()
 			Expect(state).NotTo(BeNil())
 			Expect(state.String()).To(Equal("Stopped"))
+		})
+
+		It("panics when no state is registered for the worker type", func() {
+			fsmv2.ResetInitialStateRegistry()
+			wb.InitBase(identity, mockLogger, mockStateReader)
+			Expect(func() {
+				wb.GetInitialState()
+			}).To(PanicWith(ContainSubstring("no initial state registered")))
 		})
 	})
 

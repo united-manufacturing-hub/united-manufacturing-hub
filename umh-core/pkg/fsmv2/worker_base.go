@@ -45,8 +45,9 @@ type WorkerBase[TConfig any, TStatus any] struct {
 }
 
 // InitBase initializes the embedded WorkerBase with framework dependencies.
-// Returns the framework-managed BaseDependencies that workers with custom deps
-// MUST embed (not create a new one) to ensure metrics are visible to WrapStatus.
+// Returns the BaseDependencies instance that WrapStatus reads from. Workers
+// that construct custom dependencies MUST use this returned pointer — do not call
+// deps.NewBaseDependencies separately, as a separate instance is invisible to WrapStatus.
 func (w *WorkerBase[TConfig, TStatus]) InitBase(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) *deps.BaseDependencies {
 	w.identity = id
 	w.logger = logger
@@ -163,9 +164,16 @@ func (w *WorkerBase[TConfig, TStatus]) DeriveDesiredState(spec interface{}) (Des
 	}, nil
 }
 
-// GetInitialState returns the default starting state (Stopped).
+// GetInitialState returns the registered initial state for this worker type.
+// Panics if no state is registered — call fsmv2.RegisterInitialState in
+// the state package init() function.
 func (w *WorkerBase[TConfig, TStatus]) GetInitialState() State[any, any] {
-	return &defaultStoppedState{}
+	wt := w.identity.WorkerType
+	s := LookupInitialState(wt)
+	if s == nil {
+		panic(fmt.Sprintf("WorkerBase.GetInitialState: no initial state registered for worker type %q — call fsmv2.RegisterInitialState in your state package init()", wt))
+	}
+	return s
 }
 
 // Identity returns the worker's identity.
@@ -181,25 +189,4 @@ func (w *WorkerBase[TConfig, TStatus]) Logger() deps.FSMLogger {
 // GetDependenciesAny returns the base dependencies. Satisfies DependencyProvider.
 func (w *WorkerBase[TConfig, TStatus]) GetDependenciesAny() any {
 	return w.baseDeps
-}
-
-// defaultStoppedState is the generic stopped state returned by WorkerBase.GetInitialState().
-type defaultStoppedState struct{}
-
-func (s *defaultStoppedState) Next(snapshot any) NextResult[any, any] {
-	if snap, ok := snapshot.(Snapshot); ok {
-		if ds, ok := snap.Desired.(DesiredState); ok && ds.IsShutdownRequested() {
-			return Result[any, any](s, SignalNeedsRemoval, nil, "Shutdown requested, ready for removal")
-		}
-	}
-
-	return Result[any, any](s, SignalNone, nil, "Worker is stopped")
-}
-
-func (s *defaultStoppedState) String() string {
-	return "Stopped"
-}
-
-func (s *defaultStoppedState) LifecyclePhase() config.LifecyclePhase {
-	return config.PhaseStopped
 }
