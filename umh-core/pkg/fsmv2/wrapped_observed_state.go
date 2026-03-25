@@ -34,7 +34,7 @@ type WrappedObservedState[TStatus any] struct {
 	// Status is the developer's business data. Flattened to top level via custom MarshalJSON.
 	Status TStatus `json:"-"`
 	// observedDesiredState is the desired state reference for ObservedState interface.
-	// Populated by the collector after CollectObservedState returns. Methods added in a subsequent commit.
+	// Populated by the collector via SetObservedDesiredState after CollectObservedState returns.
 	observedDesiredState DesiredState
 	// State is the current FSM state name (set by supervisor via SetState).
 	State string `json:"state"`
@@ -141,4 +141,77 @@ func (w *WrappedObservedState[TStatus]) UnmarshalJSON(data []byte) error {
 	w.Status = status
 
 	return nil
+}
+
+// ---------------------------------------------------------------------------
+// ObservedState interface methods
+// ---------------------------------------------------------------------------
+
+// GetTimestamp returns when this observation was collected.
+func (w WrappedObservedState[TStatus]) GetTimestamp() time.Time {
+	return w.CollectedAt
+}
+
+// GetObservedDesiredState returns the desired state that was active when this
+// observation was collected. Injected by the collector via SetObservedDesiredState.
+func (w WrappedObservedState[TStatus]) GetObservedDesiredState() DesiredState {
+	return w.observedDesiredState
+}
+
+// ---------------------------------------------------------------------------
+// Collector duck-typed setters (value receivers returning ObservedState)
+// ---------------------------------------------------------------------------
+
+// SetState sets the FSM state name. Matches collector pattern:
+//
+//	interface{ SetState(string) fsmv2.ObservedState }
+func (w WrappedObservedState[TStatus]) SetState(s string) ObservedState {
+	w.State = s
+
+	return w
+}
+
+// SetShutdownRequested sets the shutdown requested flag. Matches collector pattern:
+//
+//	interface{ SetShutdownRequested(bool) fsmv2.ObservedState }
+func (w WrappedObservedState[TStatus]) SetShutdownRequested(v bool) ObservedState {
+	w.ShutdownRequested = v
+
+	return w
+}
+
+// SetParentMappedState sets the mapped parent state. Matches collector pattern:
+//
+//	interface{ SetParentMappedState(string) fsmv2.ObservedState }
+func (w WrappedObservedState[TStatus]) SetParentMappedState(s string) ObservedState {
+	w.ParentMappedState = s
+
+	return w
+}
+
+// SetChildrenCounts sets the healthy/unhealthy child counts. Matches collector pattern:
+//
+//	interface{ SetChildrenCounts(int, int) fsmv2.ObservedState }
+func (w WrappedObservedState[TStatus]) SetChildrenCounts(healthy, unhealthy int) ObservedState {
+	w.ChildrenHealthy = healthy
+	w.ChildrenUnhealthy = unhealthy
+
+	return w
+}
+
+// SetChildrenView sets the runtime children view. Matches collector pattern:
+//
+//	interface{ SetChildrenView(any) fsmv2.ObservedState }
+func (w WrappedObservedState[TStatus]) SetChildrenView(v any) ObservedState {
+	w.ChildrenView = v
+
+	return w
+}
+
+// SetObservedDesiredState injects the desired state reference for GetObservedDesiredState.
+// Called by the collector after CollectObservedState returns.
+func (w WrappedObservedState[TStatus]) SetObservedDesiredState(d DesiredState) ObservedState {
+	w.observedDesiredState = d
+
+	return w
 }

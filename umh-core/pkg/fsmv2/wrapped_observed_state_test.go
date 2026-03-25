@@ -32,6 +32,146 @@ var _ = Describe("WrappedObservedState", func() {
 		LatencyMs int64 `json:"latencyMs"`
 	}
 
+	// Compile-time assertion: WrappedObservedState satisfies ObservedState interface.
+	var _ fsmv2.ObservedState = fsmv2.WrappedObservedState[TestStatus]{}
+
+	Describe("ObservedState interface", func() {
+		It("GetTimestamp returns CollectedAt", func() {
+			ts := time.Date(2026, 3, 25, 12, 0, 0, 0, time.UTC)
+			obs := fsmv2.WrappedObservedState[TestStatus]{
+				CollectedAt: ts,
+			}
+			Expect(obs.GetTimestamp()).To(Equal(ts))
+		})
+
+		It("GetObservedDesiredState returns the injected desired state", func() {
+			obs := fsmv2.WrappedObservedState[TestStatus]{}
+
+			// Before injection, should return nil.
+			Expect(obs.GetObservedDesiredState()).To(BeNil())
+
+			// After injection via SetObservedDesiredState.
+			mockDesired := &mockDesiredState{}
+			var asAny fsmv2.ObservedState = obs
+			setter, ok := asAny.(interface {
+				SetObservedDesiredState(fsmv2.DesiredState) fsmv2.ObservedState
+			})
+			Expect(ok).To(BeTrue())
+
+			result := setter.SetObservedDesiredState(mockDesired)
+			typed := result.(fsmv2.WrappedObservedState[TestStatus])
+			Expect(typed.GetObservedDesiredState()).To(Equal(mockDesired))
+		})
+	})
+
+	Describe("Collector duck-typed setters", func() {
+		It("SetState matches collector pattern and returns modified copy", func() {
+			obs := fsmv2.WrappedObservedState[TestStatus]{State: "stopped"}
+			var asAny fsmv2.ObservedState = obs
+
+			setter, ok := asAny.(interface {
+				SetState(string) fsmv2.ObservedState
+			})
+			Expect(ok).To(BeTrue(), "must satisfy collector SetState duck-type")
+
+			result := setter.SetState("running")
+			typed := result.(fsmv2.WrappedObservedState[TestStatus])
+			Expect(typed.State).To(Equal("running"))
+
+			// Original unchanged (value semantics).
+			Expect(obs.State).To(Equal("stopped"))
+		})
+
+		It("SetShutdownRequested matches collector pattern and returns modified copy", func() {
+			obs := fsmv2.WrappedObservedState[TestStatus]{ShutdownRequested: false}
+			var asAny fsmv2.ObservedState = obs
+
+			setter, ok := asAny.(interface {
+				SetShutdownRequested(bool) fsmv2.ObservedState
+			})
+			Expect(ok).To(BeTrue(), "must satisfy collector SetShutdownRequested duck-type")
+
+			result := setter.SetShutdownRequested(true)
+			typed := result.(fsmv2.WrappedObservedState[TestStatus])
+			Expect(typed.ShutdownRequested).To(BeTrue())
+
+			// Original unchanged.
+			Expect(obs.ShutdownRequested).To(BeFalse())
+		})
+
+		It("SetParentMappedState matches collector pattern and returns modified copy", func() {
+			obs := fsmv2.WrappedObservedState[TestStatus]{}
+			var asAny fsmv2.ObservedState = obs
+
+			setter, ok := asAny.(interface {
+				SetParentMappedState(string) fsmv2.ObservedState
+			})
+			Expect(ok).To(BeTrue(), "must satisfy collector SetParentMappedState duck-type")
+
+			result := setter.SetParentMappedState("running")
+			typed := result.(fsmv2.WrappedObservedState[TestStatus])
+			Expect(typed.ParentMappedState).To(Equal("running"))
+
+			// Original unchanged.
+			Expect(obs.ParentMappedState).To(BeEmpty())
+		})
+
+		It("SetChildrenCounts matches collector pattern and returns modified copy", func() {
+			obs := fsmv2.WrappedObservedState[TestStatus]{}
+			var asAny fsmv2.ObservedState = obs
+
+			setter, ok := asAny.(interface {
+				SetChildrenCounts(int, int) fsmv2.ObservedState
+			})
+			Expect(ok).To(BeTrue(), "must satisfy collector SetChildrenCounts duck-type")
+
+			result := setter.SetChildrenCounts(3, 1)
+			typed := result.(fsmv2.WrappedObservedState[TestStatus])
+			Expect(typed.ChildrenHealthy).To(Equal(3))
+			Expect(typed.ChildrenUnhealthy).To(Equal(1))
+
+			// Original unchanged.
+			Expect(obs.ChildrenHealthy).To(Equal(0))
+			Expect(obs.ChildrenUnhealthy).To(Equal(0))
+		})
+
+		It("SetChildrenView matches collector pattern and returns modified copy", func() {
+			obs := fsmv2.WrappedObservedState[TestStatus]{}
+			var asAny fsmv2.ObservedState = obs
+
+			setter, ok := asAny.(interface {
+				SetChildrenView(any) fsmv2.ObservedState
+			})
+			Expect(ok).To(BeTrue(), "must satisfy collector SetChildrenView duck-type")
+
+			mockView := "test-children-view"
+			result := setter.SetChildrenView(mockView)
+			typed := result.(fsmv2.WrappedObservedState[TestStatus])
+			Expect(typed.ChildrenView).To(Equal(mockView))
+
+			// Original unchanged.
+			Expect(obs.ChildrenView).To(BeNil())
+		})
+
+		It("SetObservedDesiredState matches expected pattern and returns modified copy", func() {
+			obs := fsmv2.WrappedObservedState[TestStatus]{}
+			var asAny fsmv2.ObservedState = obs
+
+			setter, ok := asAny.(interface {
+				SetObservedDesiredState(fsmv2.DesiredState) fsmv2.ObservedState
+			})
+			Expect(ok).To(BeTrue(), "must satisfy SetObservedDesiredState duck-type")
+
+			mockDesired := &mockDesiredState{}
+			result := setter.SetObservedDesiredState(mockDesired)
+			typed := result.(fsmv2.WrappedObservedState[TestStatus])
+			Expect(typed.GetObservedDesiredState()).To(Equal(mockDesired))
+
+			// Original unchanged.
+			Expect(obs.GetObservedDesiredState()).To(BeNil())
+		})
+	})
+
 	Describe("MarshalJSON", func() {
 		It("produces flat JSON with framework and business fields at same level", func() {
 			obs := fsmv2.WrappedObservedState[TestStatus]{
