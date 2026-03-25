@@ -34,14 +34,16 @@ import (
 // The developer must implement CollectObservedState.
 // It also implements DependencyProvider (1 method).
 type WorkerBase[TConfig any, TStatus any] struct {
-	logger      deps.FSMLogger
-	stateReader deps.StateReader
-	config      TConfig
-	baseDeps    *deps.BaseDependencies
-	identity    deps.Identity
-	mu          sync.RWMutex
-	configReady bool
-	initialized bool
+	logger           deps.FSMLogger
+	stateReader      deps.StateReader
+	config           TConfig
+	baseDeps         *deps.BaseDependencies
+	postParseHook    func(*TConfig) error
+	childSpecFactory func(TConfig) []config.ChildSpec
+	identity         deps.Identity
+	mu               sync.RWMutex
+	configReady      bool
+	initialized      bool
 }
 
 // InitBase initializes the embedded WorkerBase with framework dependencies.
@@ -60,6 +62,20 @@ func (w *WorkerBase[TConfig, TStatus]) InitBase(id deps.Identity, logger deps.FS
 	w.mu.Unlock()
 
 	return bd
+}
+
+// SetPostParseHook registers a hook called after config parsing in DeriveDesiredState.
+// The hook receives a pointer to the parsed config and may modify or validate it.
+// Must be called in the constructor, before any DeriveDesiredState call.
+func (w *WorkerBase[TConfig, TStatus]) SetPostParseHook(hook func(*TConfig) error) {
+	w.postParseHook = hook
+}
+
+// SetChildSpecsFactory registers a factory that produces child specifications
+// from the parsed config. Called after the post-parse hook in DeriveDesiredState.
+// Must be called in the constructor, before any DeriveDesiredState call.
+func (w *WorkerBase[TConfig, TStatus]) SetChildSpecsFactory(factory func(TConfig) []config.ChildSpec) {
+	w.childSpecFactory = factory
 }
 
 // Config returns the cached TConfig from the last DeriveDesiredState call.
@@ -119,13 +135,23 @@ func (w *WorkerBase[TConfig, TStatus]) WrapStatus(status TStatus) ObservedState 
 // caches the config (write-lock), and wraps in WrappedDesiredState.
 func (w *WorkerBase[TConfig, TStatus]) DeriveDesiredState(spec interface{}) (DesiredState, error) {
 	if spec == nil {
+		var cfg TConfig
+		if err := w.runPostParseHook(&cfg); err != nil {
+			return nil, err
+		}
+
 		w.mu.Lock()
+		w.config = cfg
 		w.configReady = true
 		w.mu.Unlock()
 
-		return &WrappedDesiredState[TConfig]{
+		wds := &WrappedDesiredState[TConfig]{
 			BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
-		}, nil
+			Config:           cfg,
+		}
+		w.populateChildrenSpecs(wds, cfg)
+
+		return wds, nil
 	}
 
 	userSpec, ok := spec.(config.UserSpec)
@@ -145,6 +171,10 @@ func (w *WorkerBase[TConfig, TStatus]) DeriveDesiredState(spec interface{}) (Des
 		}
 	}
 
+	if err := w.runPostParseHook(&cfg); err != nil {
+		return nil, err
+	}
+
 	// Extract state from config if it implements StateGetter (e.g., embeds BaseUserSpec).
 	desiredState := config.DesiredStateRunning
 	if sg, ok := any(&cfg).(config.StateGetter); ok {
@@ -158,10 +188,28 @@ func (w *WorkerBase[TConfig, TStatus]) DeriveDesiredState(spec interface{}) (Des
 	w.configReady = true
 	w.mu.Unlock()
 
-	return &WrappedDesiredState[TConfig]{
+	wds := &WrappedDesiredState[TConfig]{
 		BaseDesiredState: config.BaseDesiredState{State: desiredState},
 		Config:           cfg,
-	}, nil
+	}
+	w.populateChildrenSpecs(wds, cfg)
+
+	return wds, nil
+}
+
+func (w *WorkerBase[TConfig, TStatus]) runPostParseHook(cfg *TConfig) error {
+	if w.postParseHook != nil {
+		if err := w.postParseHook(cfg); err != nil {
+			return fmt.Errorf("post-parse hook failed: %w", err)
+		}
+	}
+	return nil
+}
+
+func (w *WorkerBase[TConfig, TStatus]) populateChildrenSpecs(wds *WrappedDesiredState[TConfig], cfg TConfig) {
+	if w.childSpecFactory != nil {
+		wds.ChildrenSpecs = w.childSpecFactory(cfg)
+	}
 }
 
 // GetInitialState returns the registered initial state for this worker type.
