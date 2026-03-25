@@ -6,7 +6,4 @@ These are not step-by-step guides. They describe architectures so you can choose
 
 ## Patterns
 
-- [Redundant Data Collection](redundant-data-collection.md) — two umh-core instances reading from redundant PLCs for zero data loss
-- Single Instance — the default deployment *(coming soon)*
-- Historian Stack — umh-core with TimescaleDB, PgBouncer, and Grafana *(coming soon)*
-- Multi-Instance Hierarchy — ISA-95 line-to-site-to-enterprise topology *(coming soon)*
+- [Redundant Data Collection](redundant-data-collection.md) -- two umh-core instances reading from redundant PLCs for zero data loss

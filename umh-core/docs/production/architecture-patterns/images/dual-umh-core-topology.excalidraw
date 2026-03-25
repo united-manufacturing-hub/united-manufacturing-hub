@@ -161,7 +161,7 @@
       "x": 280,
       "y": 370,
       "width": 320,
-      "height": 100,
+      "height": 90,
       "angle": 0,
       "strokeColor": "#1e1e1e",
       "backgroundColor": "transparent",
@@ -202,7 +202,7 @@
       "id": "umh-core-1-label",
       "type": "text",
       "x": 290,
-      "y": 407.5,
+      "y": 402.5,
       "width": 300,
       "height": 25,
       "angle": 0,
@@ -225,8 +225,8 @@
       "updated": 1774100000000,
       "link": null,
       "locked": false,
-      "text": "umh-core\n(Instance 1)",
-      "originalText": "umh-core\n(Instance 1)",
+      "text": "umh-core Instance 1",
+      "originalText": "umh-core Instance 1",
       "fontSize": 20,
       "fontFamily": 5,
       "textAlign": "center",
@@ -241,7 +241,7 @@
       "x": 1320,
       "y": 370,
       "width": 320,
-      "height": 100,
+      "height": 90,
       "angle": 0,
       "strokeColor": "#1e1e1e",
       "backgroundColor": "transparent",
@@ -282,7 +282,7 @@
       "id": "umh-core-2-label",
       "type": "text",
       "x": 1330,
-      "y": 407.5,
+      "y": 402.5,
       "width": 300,
       "height": 25,
       "angle": 0,
@@ -305,8 +305,8 @@
       "updated": 1774100000000,
       "link": null,
       "locked": false,
-      "text": "umh-core\n(Instance 2)",
-      "originalText": "umh-core\n(Instance 2)",
+      "text": "umh-core Instance 2",
+      "originalText": "umh-core Instance 2",
       "fontSize": 20,
       "fontFamily": 5,
       "textAlign": "center",
@@ -507,9 +507,9 @@
       "id": "core1-to-uns",
       "type": "arrow",
       "x": 440,
-      "y": 470,
+      "y": 460,
       "width": 520,
-      "height": 180,
+      "height": 190,
       "angle": 0,
       "strokeColor": "#1e1e1e",
       "backgroundColor": "transparent",
@@ -552,7 +552,7 @@
         ],
         [
           520,
-          180
+          190
         ]
       ],
       "elbowed": false
@@ -561,9 +561,9 @@
       "id": "core2-to-uns",
       "type": "arrow",
       "x": 1480,
-      "y": 470,
+      "y": 460,
       "width": 520,
-      "height": 180,
+      "height": 190,
       "angle": 0,
       "strokeColor": "#1e1e1e",
       "backgroundColor": "transparent",
@@ -606,7 +606,7 @@
         ],
         [
           -520,
-          180
+          190
         ]
       ],
       "elbowed": false
