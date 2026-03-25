@@ -17,8 +17,8 @@ package state
 import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
+	hello_world "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/helloworld"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/helloworld/action"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/helloworld/snapshot"
 )
 
 // TryingToStartState is a transitional state that emits the SayHelloAction.
@@ -29,21 +29,19 @@ type TryingToStartState struct {
 
 // Next implements state transition logic for TryingToStartState.
 func (s *TryingToStartState) Next(snapAny any) fsmv2.NextResult[any, any] {
-	snap := helpers.ConvertSnapshot[snapshot.HelloworldObservedState, *snapshot.HelloworldDesiredState](snapAny)
+	snap := fsmv2.ConvertWorkerSnapshot[hello_world.HelloworldConfig, hello_world.HelloworldStatus](snapAny)
 
 	// 1. Check shutdown first
-	if snap.Desired.IsShutdownRequested() {
+	if snap.IsShutdownRequested {
 		return fsmv2.Result[any, any](&StoppedState{}, fsmv2.SignalNone, nil, "Shutdown requested, transitioning to stopped")
 	}
 
 	// 2. Check if action has already completed (observe the effect)
-	// This makes the state machine resilient to action replay
-	if snap.Observed.HelloSaid {
+	if snap.Status.HelloSaid {
 		return fsmv2.Result[any, any](&RunningState{}, fsmv2.SignalNone, nil, "Hello has been said, transitioning to running")
 	}
 
 	// 3. Emit action and stay in this state
-	// The action will set HelloSaid=true, which we'll observe next tick
 	return fsmv2.Result[any, any](s, fsmv2.SignalNone, &action.SayHelloAction{}, "Saying hello to the world")
 }
 
