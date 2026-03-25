@@ -16,13 +16,16 @@ package collection_test
 
 import (
 	"context"
+	"sync/atomic"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/internal/collection"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 )
 
 var _ = Describe("Collector", func() {
@@ -252,6 +255,44 @@ var _ = Describe("Collector", func() {
 		})
 	})
 
+	Context("when observed state supports SetObservedDesiredState", func() {
+		It("should inject desired state via duck-typing", func() {
+			injected := &atomic.Bool{}
+			obs := &desiredInjectionObserved{
+				ID:           "test-worker",
+				CollectedAt:  time.Now(),
+				injectedFlag: injected,
+			}
+			worker := &desiredInjectionWorker{observed: obs}
+
+			collector := collection.NewCollector[*desiredInjectionObserved](collection.CollectorConfig[*desiredInjectionObserved]{
+				Worker:              worker,
+				Identity:            supervisor.TestIdentity(),
+				Store:               supervisor.CreateTestTriangularStore(),
+				Logger:              deps.NewNopFSMLogger(),
+				ObservationInterval: 50 * time.Millisecond,
+				ObservationTimeout:  3 * time.Second,
+				DesiredStateProvider: func() fsmv2.DesiredState {
+					return &config.DesiredState{BaseDesiredState: config.BaseDesiredState{State: "running"}}
+				},
+			})
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			err := collector.Start(ctx)
+			Expect(err).NotTo(HaveOccurred())
+
+			Eventually(func() bool {
+				return injected.Load()
+			}, 2*time.Second, 50*time.Millisecond).Should(BeTrue(),
+				"collector should call SetObservedDesiredState on observed state")
+
+			cancel()
+			time.Sleep(100 * time.Millisecond)
+		})
+	})
+
 	Context("when context is cancelled during collection", func() {
 		It("should stop gracefully and mark as not running", func() {
 			worker := &supervisor.TestWorker{Observed: supervisor.CreateTestObservedStateWithID("test-worker")}
@@ -308,6 +349,43 @@ var _ = Describe("Collector", func() {
 		})
 	})
 })
+
+// desiredInjectionObserved is a test observed state that tracks whether
+// SetObservedDesiredState was called by the collector.
+type desiredInjectionObserved struct {
+	CollectedAt  time.Time    `json:"collectedAt"`
+	ID           string       `json:"id"`
+	injectedFlag *atomic.Bool // shared with test for race-safe verification
+}
+
+func (o *desiredInjectionObserved) GetTimestamp() time.Time { return o.CollectedAt }
+
+func (o *desiredInjectionObserved) GetObservedDesiredState() fsmv2.DesiredState { return nil }
+
+func (o *desiredInjectionObserved) SetObservedDesiredState(desired fsmv2.DesiredState) fsmv2.ObservedState {
+	if o.injectedFlag != nil {
+		o.injectedFlag.Store(true)
+	}
+
+	return o
+}
+
+// desiredInjectionWorker returns a desiredInjectionObserved from CollectObservedState.
+type desiredInjectionWorker struct {
+	observed *desiredInjectionObserved
+}
+
+func (w *desiredInjectionWorker) CollectObservedState(_ context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
+	return w.observed, nil
+}
+
+func (w *desiredInjectionWorker) DeriveDesiredState(_ interface{}) (fsmv2.DesiredState, error) {
+	return &config.DesiredState{BaseDesiredState: config.BaseDesiredState{State: "running"}}, nil
+}
+
+func (w *desiredInjectionWorker) GetInitialState() fsmv2.State[any, any] {
+	return &supervisor.TestState{}
+}
 
 type testCollectorWithHangingLoop struct {
 	collection.Collector[supervisor.TestObservedState]

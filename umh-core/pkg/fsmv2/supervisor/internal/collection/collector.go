@@ -450,6 +450,13 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 		}
 	}
 
+	// Inject desired state reference so ObservedState.GetObservedDesiredState() works
+	if setter, ok := observed.(interface {
+		SetObservedDesiredState(fsmv2.DesiredState) fsmv2.ObservedState
+	}); ok {
+		observed = setter.SetObservedDesiredState(desired)
+	}
+
 	var observationTimestamp time.Time
 	if timestampProvider, ok := observed.(fsmv2.TimestampProvider); ok {
 		observationTimestamp = timestampProvider.GetTimestamp()
