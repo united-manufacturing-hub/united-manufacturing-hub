@@ -148,7 +148,7 @@ func (w *HelloworldWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredSt
 	}
 
 	renderedSpec := config.UserSpec{Config: renderedConfig, Variables: userSpec.Variables}
-	hwSpec, err := config.ParseUserSpec[HelloworldUserSpec](renderedSpec)
+	hwSpec, err := config.ParseUserSpec[HelloworldConfig](renderedSpec)
 	if err != nil {
 		return nil, fmt.Errorf("config parse failed: %w", err)
 	}
