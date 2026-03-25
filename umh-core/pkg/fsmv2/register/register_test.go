@@ -16,6 +16,7 @@ package register_test
 
 import (
 	"context"
+	"errors"
 	"reflect"
 	"testing"
 
@@ -126,5 +127,23 @@ var _ = Describe("register.Worker", func() {
 		Expect(func() {
 			register.Worker[regTestConfig, regTestStatus]("regtest-nil", nil)
 		}).To(PanicWith(ContainSubstring("non-nil")))
+	})
+
+	It("panics when constructor returns an error at factory call time", func() {
+		constructorErr := errors.New("device unreachable")
+		register.Worker[regTestConfig, regTestStatus]("regtest-errconstructor",
+			func(_ deps.Identity, _ deps.FSMLogger, _ deps.StateReader) (fsmv2.Worker, error) {
+				return nil, constructorErr
+			},
+		)
+
+		nopLogger := deps.NewNopFSMLogger()
+		Expect(func() {
+			_, _ = factory.NewWorkerByType("regtest-errconstructor", deps.Identity{
+				ID:         "err-1",
+				Name:       "err-test",
+				WorkerType: "regtest-errconstructor",
+			}, nopLogger, nil, nil)
+		}).To(PanicWith(ContainSubstring("constructor failed")))
 	})
 })

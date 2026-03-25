@@ -63,15 +63,7 @@ func Worker[TConfig any, TStatus any](
 	wrappedFactory := func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader, _ map[string]any) fsmv2.Worker {
 		w, err := constructor(id, logger, sr)
 		if err != nil {
-			if logger != nil {
-				logger.SentryError(deps.FeatureFSMv2, id.HierarchyPath, err, workerType+"_worker_creation_failed")
-			}
-
-			// TODO: This returns (nil, nil) to factory callers — a silent failure.
-			// The factory API signature (func → Worker) doesn't support error returns.
-			// Consider changing factory API to return (Worker, error), or panic here
-			// for fail-fast consistency with the rest of register.Worker.
-			return nil
+			panic(fmt.Sprintf("register.Worker(%q): constructor failed for %s: %v", workerType, id.String(), err))
 		}
 
 		return w
