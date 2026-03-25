@@ -453,11 +453,12 @@ func (p *ProtocolConverterInstance) IsDFCHealthy() (bool, string) {
 	readRunning := readState == dataflowfsm.OperationalStateIdle || readState == dataflowfsm.OperationalStateActive
 	writeRunning := writeState == dataflowfsm.OperationalStateIdle || writeState == dataflowfsm.OperationalStateActive
 
+	// Intentionally stopped counts as healthy
 	readIntentionallyStopped := p.specConfig.ReadDFCDesiredState == OperationalStateStopped
 	writeIntentionallyStopped := p.specConfig.WriteDFCDesiredState == OperationalStateStopped
 
 	readHasConfig := len(p.specConfig.Config.DataflowComponentReadServiceConfig.BenthosConfig.Input) > 0
-	writeHasConfig := len(p.specConfig.Config.DataflowComponentWriteServiceConfig.BenthosConfig.Input) > 0
+	writeHasConfig := len(p.specConfig.Config.DataflowComponentWriteServiceConfig.BenthosConfig.Output) > 0
 
 	readHealthy := readRunning || readIntentionallyStopped || !readHasConfig
 	writeHealthy := writeRunning || writeIntentionallyStopped || !writeHasConfig
