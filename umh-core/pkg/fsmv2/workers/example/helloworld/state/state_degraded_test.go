@@ -21,7 +21,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/helloworld/snapshot"
+	hello_world "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/helloworld"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/helloworld/state"
 )
 
@@ -40,8 +40,10 @@ var _ = Describe("DegradedState", func() {
 			BeforeEach(func() {
 				snap = fsmv2.Snapshot{
 					Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "helloworld"},
-					Observed: snapshot.HelloworldObservedState{Mood: "sad", HelloSaid: true},
-					Desired:  &snapshot.HelloworldDesiredState{},
+					Observed: fsmv2.WrappedObservedState[hello_world.HelloworldStatus]{
+						Status: hello_world.HelloworldStatus{Mood: "sad", HelloSaid: true},
+					},
+					Desired: &fsmv2.WrappedDesiredState[hello_world.HelloworldConfig]{},
 				}
 			})
 
@@ -68,8 +70,10 @@ var _ = Describe("DegradedState", func() {
 			BeforeEach(func() {
 				snap = fsmv2.Snapshot{
 					Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "helloworld"},
-					Observed: snapshot.HelloworldObservedState{Mood: "happy", HelloSaid: true},
-					Desired:  &snapshot.HelloworldDesiredState{},
+					Observed: fsmv2.WrappedObservedState[hello_world.HelloworldStatus]{
+						Status: hello_world.HelloworldStatus{Mood: "happy", HelloSaid: true},
+					},
+					Desired: &fsmv2.WrappedDesiredState[hello_world.HelloworldConfig]{},
 				}
 			})
 
@@ -96,8 +100,10 @@ var _ = Describe("DegradedState", func() {
 			BeforeEach(func() {
 				snap = fsmv2.Snapshot{
 					Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "helloworld"},
-					Observed: snapshot.HelloworldObservedState{Mood: "sad", HelloSaid: true},
-					Desired: &snapshot.HelloworldDesiredState{
+					Observed: fsmv2.WrappedObservedState[hello_world.HelloworldStatus]{
+						Status: hello_world.HelloworldStatus{Mood: "sad", HelloSaid: true},
+					},
+					Desired: &fsmv2.WrappedDesiredState[hello_world.HelloworldConfig]{
 						BaseDesiredState: config.BaseDesiredState{ShutdownRequested: true},
 					},
 				}
@@ -141,8 +147,10 @@ var _ = Describe("DegradedState Transitions", func() {
 		It("should transition when mood is no longer sad", func() {
 			snap := fsmv2.Snapshot{
 				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "helloworld"},
-				Observed: snapshot.HelloworldObservedState{Mood: "happy", HelloSaid: true},
-				Desired:  &snapshot.HelloworldDesiredState{},
+				Observed: fsmv2.WrappedObservedState[hello_world.HelloworldStatus]{
+					Status: hello_world.HelloworldStatus{Mood: "happy", HelloSaid: true},
+				},
+				Desired: &fsmv2.WrappedDesiredState[hello_world.HelloworldConfig]{},
 			}
 
 			result := stateObj.Next(snap)
@@ -155,8 +163,10 @@ var _ = Describe("DegradedState Transitions", func() {
 		It("should transition when mood file is absent (empty mood)", func() {
 			snap := fsmv2.Snapshot{
 				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "helloworld"},
-				Observed: snapshot.HelloworldObservedState{Mood: "", HelloSaid: true},
-				Desired:  &snapshot.HelloworldDesiredState{},
+				Observed: fsmv2.WrappedObservedState[hello_world.HelloworldStatus]{
+					Status: hello_world.HelloworldStatus{Mood: "", HelloSaid: true},
+				},
+				Desired: &fsmv2.WrappedDesiredState[hello_world.HelloworldConfig]{},
 			}
 
 			result := stateObj.Next(snap)
@@ -171,8 +181,10 @@ var _ = Describe("DegradedState Transitions", func() {
 		It("should transition on shutdown request", func() {
 			snap := fsmv2.Snapshot{
 				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "helloworld"},
-				Observed: snapshot.HelloworldObservedState{Mood: "sad", HelloSaid: true},
-				Desired: &snapshot.HelloworldDesiredState{
+				Observed: fsmv2.WrappedObservedState[hello_world.HelloworldStatus]{
+					Status: hello_world.HelloworldStatus{Mood: "sad", HelloSaid: true},
+				},
+				Desired: &fsmv2.WrappedDesiredState[hello_world.HelloworldConfig]{
 					BaseDesiredState: config.BaseDesiredState{ShutdownRequested: true},
 				},
 			}
@@ -187,8 +199,10 @@ var _ = Describe("DegradedState Transitions", func() {
 		It("should shutdown even if mood has recovered", func() {
 			snap := fsmv2.Snapshot{
 				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "helloworld"},
-				Observed: snapshot.HelloworldObservedState{Mood: "happy", HelloSaid: true},
-				Desired: &snapshot.HelloworldDesiredState{
+				Observed: fsmv2.WrappedObservedState[hello_world.HelloworldStatus]{
+					Status: hello_world.HelloworldStatus{Mood: "happy", HelloSaid: true},
+				},
+				Desired: &fsmv2.WrappedDesiredState[hello_world.HelloworldConfig]{
 					BaseDesiredState: config.BaseDesiredState{ShutdownRequested: true},
 				},
 			}
@@ -205,8 +219,10 @@ var _ = Describe("DegradedState Transitions", func() {
 		It("should stay degraded when mood is still sad", func() {
 			snap := fsmv2.Snapshot{
 				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "helloworld"},
-				Observed: snapshot.HelloworldObservedState{Mood: "sad", HelloSaid: true},
-				Desired:  &snapshot.HelloworldDesiredState{},
+				Observed: fsmv2.WrappedObservedState[hello_world.HelloworldStatus]{
+					Status: hello_world.HelloworldStatus{Mood: "sad", HelloSaid: true},
+				},
+				Desired: &fsmv2.WrappedDesiredState[hello_world.HelloworldConfig]{},
 			}
 
 			result := stateObj.Next(snap)

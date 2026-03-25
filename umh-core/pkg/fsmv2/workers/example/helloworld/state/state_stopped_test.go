@@ -21,7 +21,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/helloworld/snapshot"
+	hello_world "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/helloworld"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/helloworld/state"
 )
 
@@ -40,8 +40,8 @@ var _ = Describe("StoppedState", func() {
 			BeforeEach(func() {
 				snap = fsmv2.Snapshot{
 					Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "helloworld"},
-					Observed: snapshot.HelloworldObservedState{},
-					Desired:  &snapshot.HelloworldDesiredState{},
+					Observed: fsmv2.WrappedObservedState[hello_world.HelloworldStatus]{},
+					Desired:  &fsmv2.WrappedDesiredState[hello_world.HelloworldConfig]{},
 				}
 			})
 
@@ -68,8 +68,8 @@ var _ = Describe("StoppedState", func() {
 			BeforeEach(func() {
 				snap = fsmv2.Snapshot{
 					Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "helloworld"},
-					Observed: snapshot.HelloworldObservedState{},
-					Desired: &snapshot.HelloworldDesiredState{
+					Observed: fsmv2.WrappedObservedState[hello_world.HelloworldStatus]{},
+					Desired: &fsmv2.WrappedDesiredState[hello_world.HelloworldConfig]{
 						BaseDesiredState: config.BaseDesiredState{ShutdownRequested: true},
 					},
 				}
@@ -113,8 +113,8 @@ var _ = Describe("StoppedState Transitions", func() {
 		It("should transition with default desired state", func() {
 			snap := fsmv2.Snapshot{
 				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "helloworld"},
-				Observed: snapshot.HelloworldObservedState{},
-				Desired:  &snapshot.HelloworldDesiredState{},
+				Observed: fsmv2.WrappedObservedState[hello_world.HelloworldStatus]{},
+				Desired:  &fsmv2.WrappedDesiredState[hello_world.HelloworldConfig]{},
 			}
 
 			result := stateObj.Next(snap)
@@ -127,8 +127,8 @@ var _ = Describe("StoppedState Transitions", func() {
 		It("should transition with explicit shutdown=false", func() {
 			snap := fsmv2.Snapshot{
 				Identity: deps.Identity{ID: "hello-1", Name: "helloworld", WorkerType: "helloworld"},
-				Observed: snapshot.HelloworldObservedState{},
-				Desired: &snapshot.HelloworldDesiredState{
+				Observed: fsmv2.WrappedObservedState[hello_world.HelloworldStatus]{},
+				Desired: &fsmv2.WrappedDesiredState[hello_world.HelloworldConfig]{
 					BaseDesiredState: config.BaseDesiredState{ShutdownRequested: false},
 				},
 			}
@@ -145,8 +145,8 @@ var _ = Describe("StoppedState Transitions", func() {
 		It("should signal removal when shutdown is requested", func() {
 			snap := fsmv2.Snapshot{
 				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "helloworld"},
-				Observed: snapshot.HelloworldObservedState{},
-				Desired: &snapshot.HelloworldDesiredState{
+				Observed: fsmv2.WrappedObservedState[hello_world.HelloworldStatus]{},
+				Desired: &fsmv2.WrappedDesiredState[hello_world.HelloworldConfig]{
 					BaseDesiredState: config.BaseDesiredState{ShutdownRequested: true},
 				},
 			}
@@ -161,10 +161,10 @@ var _ = Describe("StoppedState Transitions", func() {
 		It("should signal removal even with HelloSaid=true", func() {
 			snap := fsmv2.Snapshot{
 				Identity: deps.Identity{ID: "hello-shutdown", Name: "helloworld", WorkerType: "helloworld"},
-				Observed: snapshot.HelloworldObservedState{
-					HelloSaid: true,
+				Observed: fsmv2.WrappedObservedState[hello_world.HelloworldStatus]{
+					Status: hello_world.HelloworldStatus{HelloSaid: true},
 				},
-				Desired: &snapshot.HelloworldDesiredState{
+				Desired: &fsmv2.WrappedDesiredState[hello_world.HelloworldConfig]{
 					BaseDesiredState: config.BaseDesiredState{ShutdownRequested: true},
 				},
 			}
