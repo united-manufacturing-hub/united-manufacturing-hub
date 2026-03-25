@@ -17,7 +17,7 @@ package state
 import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/helloworld/snapshot"
+	hello_world "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/helloworld"
 )
 
 // DegradedState represents the worker running but impaired.
@@ -29,15 +29,15 @@ type DegradedState struct {
 
 // Next implements state transition logic for DegradedState.
 func (s *DegradedState) Next(snapAny any) fsmv2.NextResult[any, any] {
-	snap := helpers.ConvertSnapshot[snapshot.HelloworldObservedState, *snapshot.HelloworldDesiredState](snapAny)
+	snap := fsmv2.ConvertWorkerSnapshot[hello_world.HelloworldConfig, hello_world.HelloworldStatus](snapAny)
 
 	// 1. Check shutdown
-	if snap.Desired.IsShutdownRequested() {
+	if snap.IsShutdownRequested {
 		return fsmv2.Result[any, any](&StoppedState{}, fsmv2.SignalNone, nil, "Shutdown requested, transitioning to stopped", nil)
 	}
 
 	// 2. Check if mood has recovered (no longer "sad")
-	if snap.Observed.Mood != "sad" {
+	if snap.Status.Mood != "sad" {
 		return fsmv2.Result[any, any](&RunningState{}, fsmv2.SignalNone, nil, "Mood recovered, transitioning to running", nil)
 	}
 

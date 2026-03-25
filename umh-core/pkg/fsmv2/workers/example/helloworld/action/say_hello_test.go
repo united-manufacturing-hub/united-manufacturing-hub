@@ -36,7 +36,8 @@ var _ = Describe("SayHelloAction", func() {
 	BeforeEach(func() {
 		logger = deps.NewNopFSMLogger()
 		identity := deps.Identity{ID: "test-id", WorkerType: "helloworld"}
-		dependencies = hello_world.NewHelloworldDependencies(logger, nil, identity)
+		baseDeps := deps.NewBaseDependencies(logger, nil, identity)
+		dependencies = hello_world.NewHelloworldDependencies(baseDeps)
 		act = &action.SayHelloAction{}
 	})
 

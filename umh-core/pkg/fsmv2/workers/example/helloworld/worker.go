@@ -32,6 +32,16 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/helloworld/action"
 )
 
+// registeredInitialState holds the worker-specific initial state, set by the state
+// package via RegisterInitialState. This avoids a circular import (worker -> state -> worker).
+var registeredInitialState fsmv2.State[any, any]
+
+// RegisterInitialState sets the worker-specific initial state.
+// Called from the state package's init() to break the circular import.
+func RegisterInitialState(s fsmv2.State[any, any]) {
+	registeredInitialState = s
+}
+
 // HelloworldWorker implements the FSMv2 Worker interface using the WorkerBase API.
 type HelloworldWorker struct {
 	fsmv2.WorkerBase[HelloworldConfig, HelloworldStatus]
@@ -46,7 +56,10 @@ func NewHelloworldWorker(id deps.Identity, logger deps.FSMLogger, sr deps.StateR
 
 	w := &HelloworldWorker{}
 	w.InitBase(id, logger, sr)
-	w.deps = NewHelloworldDependencies(logger, sr, id)
+
+	// Share WorkerBase's BaseDependencies to avoid dual-instance metrics divergence.
+	baseDeps := w.WorkerBase.GetDependenciesAny().(*deps.BaseDependencies)
+	w.deps = NewHelloworldDependencies(baseDeps)
 
 	return w, nil
 }
@@ -84,6 +97,16 @@ func (w *HelloworldWorker) Actions() map[string]fsmv2.Action[any] {
 	return map[string]fsmv2.Action[any]{
 		action.SayHelloActionName: &action.SayHelloAction{},
 	}
+}
+
+// GetInitialState returns the worker-specific StoppedState that knows how to
+// transition to TryingToStartState. Falls back to WorkerBase's default if
+// the state package hasn't registered itself.
+func (w *HelloworldWorker) GetInitialState() fsmv2.State[any, any] {
+	if registeredInitialState != nil {
+		return registeredInitialState
+	}
+	return w.WorkerBase.GetInitialState()
 }
 
 // readMoodFile reads the mood from a file path. Returns empty string on error or empty path.
