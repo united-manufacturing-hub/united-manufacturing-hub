@@ -33,6 +33,14 @@ import (
 // TStatus is the developer's status/observation type.
 // The workerType string is the canonical name used in config YAML and CSE storage.
 //
+// Constructor receives only the standard framework dependencies (identity, logger, stateReader).
+// Workers that require parent-injected dependencies via the extraDeps mechanism
+// (e.g., transport push/pull children) must use factory.RegisterWorkerType directly.
+//
+// Workers registered via this function MUST use WorkerBase[TConfig, TStatus] and
+// return w.WrapStatus(status) from CollectObservedState. Workers with custom
+// ObservedState types must use factory.RegisterWorkerType directly.
+//
 // Panics on field name collision or duplicate worker type (fail-fast at init time).
 func Worker[TConfig any, TStatus any](
 	workerType string,
@@ -59,6 +67,10 @@ func Worker[TConfig any, TStatus any](
 				logger.SentryError(deps.FeatureFSMv2, id.HierarchyPath, err, workerType+"_worker_creation_failed")
 			}
 
+			// TODO: This returns (nil, nil) to factory callers — a silent failure.
+			// The factory API signature (func → Worker) doesn't support error returns.
+			// Consider changing factory API to return (Worker, error), or panic here
+			// for fail-fast consistency with the rest of register.Worker.
 			return nil
 		}
 
@@ -73,16 +85,17 @@ func Worker[TConfig any, TStatus any](
 		](cfg.(supervisor.Config))
 	}
 
-	// Step 4: Register with CSE TypeRegistry.
+	// Step 4: Register with factory (worker + supervisor).
+	// Factory first: if it panics on duplicate, CSE never gets an orphaned entry.
+	if err := factory.RegisterWorkerAndSupervisorFactoryByType(workerType, wrappedFactory, supervisorFactory); err != nil {
+		panic(fmt.Sprintf("register.Worker(%q): %v", workerType, err))
+	}
+
+	// Step 5: Register with CSE TypeRegistry.
 	observedType := reflect.TypeOf(fsmv2.WrappedObservedState[TStatus]{})
 	desiredType := reflect.TypeOf(fsmv2.WrappedDesiredState[TConfig]{})
 
 	if err := storage.GlobalRegistry().RegisterWorkerType(workerType, observedType, desiredType); err != nil {
-		panic(fmt.Sprintf("register.Worker(%q): %v", workerType, err))
-	}
-
-	// Step 5: Register with factory (worker + supervisor).
-	if err := factory.RegisterWorkerAndSupervisorFactoryByType(workerType, wrappedFactory, supervisorFactory); err != nil {
 		panic(fmt.Sprintf("register.Worker(%q): %v", workerType, err))
 	}
 }

@@ -34,7 +34,7 @@ func GlobalRegistry() *TypeRegistry {
 	return globalRegistry
 }
 
-// ResetGlobalRegistry replaces the global registry with a fresh instance. For testing only.
+// ResetGlobalRegistry resets the global registry so the next GlobalRegistry() call creates a fresh instance. For testing only.
 func ResetGlobalRegistry() {
 	globalRegistryOnce = sync.Once{}
 	globalRegistry = nil
