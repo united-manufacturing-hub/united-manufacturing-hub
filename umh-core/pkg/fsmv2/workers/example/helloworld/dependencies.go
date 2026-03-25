@@ -36,9 +36,10 @@ type HelloworldDependencies struct {
 }
 
 // NewHelloworldDependencies creates dependencies for the helloworld worker.
-func NewHelloworldDependencies(logger deps.FSMLogger, stateReader deps.StateReader, identity deps.Identity) *HelloworldDependencies {
+// Accepts a shared BaseDependencies to avoid dual-instance metrics divergence.
+func NewHelloworldDependencies(baseDeps *deps.BaseDependencies) *HelloworldDependencies {
 	return &HelloworldDependencies{
-		BaseDependencies: deps.NewBaseDependencies(logger, stateReader, identity),
+		BaseDependencies: baseDeps,
 	}
 }
 
