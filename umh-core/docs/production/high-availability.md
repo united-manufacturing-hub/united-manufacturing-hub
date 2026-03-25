@@ -46,7 +46,7 @@ If you do not have enterprise storage, Longhorn is a good choice for k3s cluster
 
 ## If You Need Zero Downtime
 
-The standard approach accepts 30-60 second recovery on container failure. If your process cannot tolerate any interruption, contact UMH to discuss active-active architectures.
+The standard approach accepts 30-60 second recovery on container failure. If your process cannot tolerate any data loss during an infrastructure failure, see [Redundant Data Collection](architecture-patterns/redundant-data-collection.md) for a topology that provides zero data loss using redundant PLCs and two umh-core instances.
 
 ## OPC UA Sessions After Failover
 
