@@ -15,11 +15,14 @@
 package fsmv2_test
 
 import (
+	"context"
+	"sync"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
@@ -291,6 +294,108 @@ port: 2`}
 		It("returns nil before initialization", func() {
 			uninit := &fsmv2.WorkerBase[workerTestConfig, workerTestStatus]{}
 			Expect(uninit.GetDependenciesAny()).To(BeNil())
+		})
+	})
+
+	Describe("thread safety", func() {
+		It("is safe for concurrent DeriveDesiredState and Config access", func() {
+			wb.InitBase(identity, mockLogger, mockStateReader)
+
+			var wg sync.WaitGroup
+			stop := make(chan struct{})
+
+			for i := 0; i < 3; i++ {
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					defer GinkgoRecover()
+					spec := config.UserSpec{
+						Config: "host: \"localhost\"\nport: 8080",
+					}
+					for {
+						select {
+						case <-stop:
+							return
+						default:
+							_, _ = wb.DeriveDesiredState(spec)
+						}
+					}
+				}()
+			}
+
+			for i := 0; i < 3; i++ {
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					defer GinkgoRecover()
+					for {
+						select {
+						case <-stop:
+							return
+						default:
+							_ = wb.Config()
+							_ = wb.ConfigReady()
+						}
+					}
+				}()
+			}
+
+			for i := 0; i < 3; i++ {
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					defer GinkgoRecover()
+					for {
+						select {
+						case <-stop:
+							return
+						default:
+							_ = wb.WrapStatus(workerTestStatus{})
+						}
+					}
+				}()
+			}
+
+			time.Sleep(100 * time.Millisecond)
+			close(stop)
+			wg.Wait()
+		})
+	})
+
+	Describe("L5 invariant", func() {
+		It("does not satisfy ActionProvider", func() {
+			_, ok := any(wb).(interface {
+				Actions() map[string]fsmv2.Action[any]
+			})
+			Expect(ok).To(BeFalse(), "WorkerBase must not satisfy ActionProvider (L5)")
+		})
+
+		It("does not satisfy ChildSpecProvider", func() {
+			_, ok := any(wb).(interface {
+				ChildSpecs() []config.ChildSpec
+			})
+			Expect(ok).To(BeFalse(), "WorkerBase must not satisfy ChildSpecProvider (L5)")
+		})
+
+		It("does not satisfy MetricsProvider", func() {
+			_, ok := any(wb).(interface {
+				Metrics() []prometheus.Collector
+			})
+			Expect(ok).To(BeFalse(), "WorkerBase must not satisfy MetricsProvider (L5)")
+		})
+
+		It("does not satisfy GracefulShutdowner", func() {
+			_, ok := any(wb).(interface {
+				Shutdown(ctx context.Context) error
+			})
+			Expect(ok).To(BeFalse(), "WorkerBase must not satisfy GracefulShutdowner (L5)")
+		})
+
+		It("does not satisfy ChildrenViewConsumer", func() {
+			_, ok := any(wb).(interface {
+				SetChildrenView(view any)
+			})
+			Expect(ok).To(BeFalse(), "WorkerBase must not satisfy ChildrenViewConsumer (L5)")
 		})
 	})
 })
