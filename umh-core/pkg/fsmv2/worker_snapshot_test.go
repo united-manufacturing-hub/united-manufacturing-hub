@@ -155,6 +155,14 @@ var _ = Describe("IsStopRequired", func() {
 		Expect(snap.IsStopRequired()).To(BeFalse())
 	})
 
+	It("returns false when ParentMappedState is empty (root worker)", func() {
+		snap := fsmv2.WorkerSnapshot[workerTestConfig, workerTestStatus]{
+			IsShutdownRequested: false,
+			ParentMappedState:   "",
+		}
+		Expect(snap.IsStopRequired()).To(BeFalse())
+	})
+
 	It("returns true when both conditions are met", func() {
 		snap := fsmv2.WorkerSnapshot[workerTestConfig, workerTestStatus]{
 			IsShutdownRequested: true,

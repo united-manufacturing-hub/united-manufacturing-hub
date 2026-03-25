@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 )
 
@@ -40,7 +41,7 @@ type WorkerSnapshot[TConfig any, TStatus any] struct {
 // IsStopRequired returns true when the worker should transition to stopped.
 // Covers both explicit shutdown requests and parent-driven stop signals.
 func (s WorkerSnapshot[TConfig, TStatus]) IsStopRequired() bool {
-	return s.IsShutdownRequested || s.ParentMappedState == "stopped"
+	return s.IsShutdownRequested || s.ParentMappedState == config.DesiredStateStopped
 }
 
 // ConvertWorkerSnapshot type-asserts the raw snapshot from State.Next() into a
