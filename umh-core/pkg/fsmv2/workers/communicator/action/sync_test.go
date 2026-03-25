@@ -37,7 +37,9 @@ var _ = Describe("SyncAction", func() {
 		logger = deps.NewNopFSMLogger()
 		mockTransport = &mockSyncTransport{}
 		identity := deps.Identity{ID: "test-id", WorkerType: "communicator"}
-		dependencies = communicator.NewCommunicatorDependencies(mockTransport, logger, nil, identity)
+		baseDeps := deps.NewBaseDependencies(logger, nil, identity)
+		dependencies = communicator.NewCommunicatorDependencies(baseDeps)
+		dependencies.SetTransport(mockTransport)
 		// Dependencies now passed to Execute(), not constructor
 		act = action.NewSyncAction("test-jwt-token")
 	})

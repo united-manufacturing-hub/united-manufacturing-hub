@@ -39,7 +39,9 @@ var _ = Describe("AuthenticateAction", func() {
 		logger = deps.NewNopFSMLogger()
 		mockTransp = &mockTransport{}
 		identity := deps.Identity{ID: "test-id", WorkerType: "communicator"}
-		dependencies = communicator.NewCommunicatorDependencies(mockTransp, logger, nil, identity)
+		baseDeps := deps.NewBaseDependencies(logger, nil, identity)
+		dependencies = communicator.NewCommunicatorDependencies(baseDeps)
+		dependencies.SetTransport(mockTransp)
 		// Dependencies now passed to Execute(), not constructor
 		act = action.NewAuthenticateAction(
 			"https://relay.example.com",
@@ -69,7 +71,8 @@ var _ = Describe("AuthenticateAction", func() {
 	Describe("Transport Nil Safety", func() {
 		It("should create transport if nil in dependencies on first execution", func() {
 			identity := deps.Identity{ID: "test-nil-transport", WorkerType: "communicator"}
-			depsWithNilTransport := communicator.NewCommunicatorDependencies(nil, logger, nil, identity)
+			nilBaseDeps := deps.NewBaseDependencies(logger, nil, identity)
+			depsWithNilTransport := communicator.NewCommunicatorDependencies(nilBaseDeps)
 			Expect(depsWithNilTransport.GetTransport()).To(BeNil(), "transport should be nil before first auth")
 
 			authAction := action.NewAuthenticateAction(

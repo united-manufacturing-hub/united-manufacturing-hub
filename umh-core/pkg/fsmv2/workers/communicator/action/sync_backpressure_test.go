@@ -19,7 +19,6 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator"
@@ -56,7 +55,9 @@ var _ = Describe("SyncAction Backpressure", func() {
 		communicator.SetChannelProvider(channelProvider)
 
 		identity := deps.Identity{ID: "test-id", WorkerType: "communicator"}
-		dependencies = communicator.NewCommunicatorDependencies(mockTransport, logger, nil, identity)
+		baseDeps := deps.NewBaseDependencies(logger, nil, identity)
+		dependencies = communicator.NewCommunicatorDependencies(baseDeps)
+		dependencies.SetTransport(mockTransport)
 		act = action.NewSyncAction("test-jwt-token")
 	})
 

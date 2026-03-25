@@ -24,10 +24,10 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	fsmv2types "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	depspkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/snapshot"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/state"
 	transportpkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
 	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
@@ -78,31 +78,30 @@ func TestCommunicator(t *testing.T) {
 	RunSpecs(t, "Communicator Suite")
 }
 
+// createCommunicatorWorker creates a CommunicatorWorker using the new WorkerBase API.
+func createCommunicatorWorker(id string, logger depspkg.FSMLogger, sr depspkg.StateReader) *communicator.CommunicatorWorker {
+	identity := depspkg.Identity{ID: id, WorkerType: "communicator", Name: id}
+	w, err := communicator.NewCommunicatorWorker(identity, logger, sr)
+	Expect(err).ToNot(HaveOccurred())
+
+	return w.(*communicator.CommunicatorWorker)
+}
+
 var _ = Describe("CommunicatorWorker", func() {
 	var (
-		worker        *communicator.CommunicatorWorker
-		ctx           context.Context
-		mockTransport *MockTransport
-		logger        depspkg.FSMLogger
+		worker *communicator.CommunicatorWorker
+		ctx    context.Context
+		logger depspkg.FSMLogger
 	)
 
 	BeforeEach(func() {
 		ctx = context.Background()
 		logger = depspkg.NewNopFSMLogger()
-		mockTransport = NewMockTransport()
 
 		// Phase 1: Set up ChannelProvider singleton BEFORE creating worker
 		communicator.SetChannelProvider(NewMockChannelProvider())
 
-		var err error
-		worker, err = communicator.NewCommunicatorWorker(
-			"test-id",
-			"Test Communicator",
-			mockTransport,
-			logger,
-			nil,
-		)
-		Expect(err).ToNot(HaveOccurred())
+		worker = createCommunicatorWorker("test-id", logger, nil)
 	})
 
 	AfterEach(func() {
@@ -125,13 +124,12 @@ var _ = Describe("CommunicatorWorker", func() {
 
 	Describe("DeriveDesiredState", func() {
 		Context("with nil spec", func() {
-			It("should return default CommunicatorDesiredState", func() {
+			It("should return default WrappedDesiredState", func() {
 				desiredIface, err := worker.DeriveDesiredState(nil)
 				Expect(err).NotTo(HaveOccurred())
 
-				// Type assert to typed CommunicatorDesiredState
-				desired, ok := desiredIface.(*snapshot.CommunicatorDesiredState)
-				Expect(ok).To(BeTrue(), "expected *snapshot.CommunicatorDesiredState")
+				desired, ok := desiredIface.(*fsmv2.WrappedDesiredState[communicator.CommunicatorConfig])
+				Expect(ok).To(BeTrue(), "expected *fsmv2.WrappedDesiredState[CommunicatorConfig]")
 				Expect(desired.GetState()).To(Equal("running"))
 				Expect(desired.IsShutdownRequested()).To(BeFalse())
 			})
@@ -140,7 +138,7 @@ var _ = Describe("CommunicatorWorker", func() {
 				desiredIface, err := worker.DeriveDesiredState(nil)
 				Expect(err).NotTo(HaveOccurred())
 
-				desired := desiredIface.(*snapshot.CommunicatorDesiredState)
+				desired := desiredIface.(*fsmv2.WrappedDesiredState[communicator.CommunicatorConfig])
 				specs := desired.GetChildrenSpecs()
 				Expect(specs).To(HaveLen(1))
 				Expect(specs[0].Name).To(Equal("transport"))
@@ -150,7 +148,7 @@ var _ = Describe("CommunicatorWorker", func() {
 		})
 
 		Context("with valid UserSpec", func() {
-			It("should return typed CommunicatorDesiredState with all fields populated", func() {
+			It("should return typed WrappedDesiredState with all fields populated", func() {
 				spec := fsmv2types.UserSpec{
 					Config: `
 relayURL: "https://relay.umh.app"
@@ -164,18 +162,15 @@ state: "running"
 				desiredIface, err := worker.DeriveDesiredState(spec)
 				Expect(err).NotTo(HaveOccurred())
 
-				// Type assert to typed CommunicatorDesiredState
-				desired, ok := desiredIface.(*snapshot.CommunicatorDesiredState)
-				Expect(ok).To(BeTrue(), "expected *snapshot.CommunicatorDesiredState")
+				desired, ok := desiredIface.(*fsmv2.WrappedDesiredState[communicator.CommunicatorConfig])
+				Expect(ok).To(BeTrue(), "expected *fsmv2.WrappedDesiredState[CommunicatorConfig]")
 
-				// Verify typed fields are populated
-				Expect(desired.RelayURL).To(Equal("https://relay.umh.app"))
-				Expect(desired.InstanceUUID).To(Equal("test-uuid-12345"))
-				Expect(desired.AuthToken).To(Equal("test-auth-token-secret"))
-				Expect(desired.Timeout).To(Equal(15 * time.Second))
+				Expect(desired.Config.RelayURL).To(Equal("https://relay.umh.app"))
+				Expect(desired.Config.InstanceUUID).To(Equal("test-uuid-12345"))
+				Expect(desired.Config.AuthToken).To(Equal("test-auth-token-secret"))
+				Expect(desired.Config.Timeout).To(Equal(15 * time.Second))
 				Expect(desired.GetState()).To(Equal("running"))
 
-				// Verify TransportWorker child spec with config passthrough
 				specs := desired.GetChildrenSpecs()
 				Expect(specs).To(HaveLen(1))
 				Expect(specs[0].Name).To(Equal("transport"))
@@ -196,15 +191,14 @@ authToken: "test-token"
 				desiredIface, err := worker.DeriveDesiredState(spec)
 				Expect(err).NotTo(HaveOccurred())
 
-				desired := desiredIface.(*snapshot.CommunicatorDesiredState)
+				desired := desiredIface.(*fsmv2.WrappedDesiredState[communicator.CommunicatorConfig])
 				// Default timeout = LongPollingDuration (30s) + LongPollingBuffer (1s) = 31s
-				Expect(desired.Timeout).To(Equal(httpTransport.LongPollingDuration + httpTransport.LongPollingBuffer))
+				Expect(desired.Config.Timeout).To(Equal(httpTransport.LongPollingDuration + httpTransport.LongPollingBuffer))
 			})
 		})
 
 		Context("type assertion and roundtrip", func() {
 			It("should preserve typed fields through marshal/unmarshal roundtrip", func() {
-				// Create spec with all typed fields
 				spec := fsmv2types.UserSpec{
 					Config: `
 relayURL: "https://relay.example.com"
@@ -215,33 +209,27 @@ state: "running"
 `,
 				}
 
-				// Derive desired state
 				desiredIface, err := worker.DeriveDesiredState(spec)
 				Expect(err).NotTo(HaveOccurred())
 
-				// Type assert to verify type
-				originalDesired, ok := desiredIface.(*snapshot.CommunicatorDesiredState)
+				originalDesired, ok := desiredIface.(*fsmv2.WrappedDesiredState[communicator.CommunicatorConfig])
 				Expect(ok).To(BeTrue())
 
-				// Marshal to JSON (simulates what supervisor does)
 				jsonBytes, err := json.Marshal(originalDesired)
 				Expect(err).NotTo(HaveOccurred())
 
-				// Unmarshal back (simulates what supervisor does when loading)
-				var loadedDesired snapshot.CommunicatorDesiredState
+				var loadedDesired fsmv2.WrappedDesiredState[communicator.CommunicatorConfig]
 				err = json.Unmarshal(jsonBytes, &loadedDesired)
 				Expect(err).NotTo(HaveOccurred())
 
-				// Verify ALL typed fields survived the roundtrip
-				Expect(loadedDesired.RelayURL).To(Equal("https://relay.example.com"))
-				Expect(loadedDesired.InstanceUUID).To(Equal("roundtrip-uuid-test"))
-				Expect(loadedDesired.AuthToken).To(Equal("roundtrip-auth-token"))
-				Expect(loadedDesired.Timeout).To(Equal(30 * time.Second))
+				Expect(loadedDesired.Config.RelayURL).To(Equal("https://relay.example.com"))
+				Expect(loadedDesired.Config.InstanceUUID).To(Equal("roundtrip-uuid-test"))
+				Expect(loadedDesired.Config.AuthToken).To(Equal("roundtrip-auth-token"))
+				Expect(loadedDesired.Config.Timeout).To(Equal(30 * time.Second))
 				Expect(loadedDesired.GetState()).To(Equal("running"))
 			})
 
 			It("should return clear error on invalid spec type", func() {
-				// Pass wrong type
 				_, err := worker.DeriveDesiredState("invalid-string-spec")
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("invalid spec type"))
@@ -265,7 +253,7 @@ state: "running"
 			Expect(err).NotTo(HaveOccurred())
 			Expect(observed).NotTo(BeNil())
 
-			communicatorObserved := observed.(snapshot.CommunicatorObservedState)
+			communicatorObserved := observed.(fsmv2.WrappedObservedState[communicator.CommunicatorStatus])
 			Expect(communicatorObserved.CollectedAt).NotTo(BeZero())
 		})
 
@@ -277,8 +265,8 @@ state: "running"
 			observed, err := worker.CollectObservedState(ctx, nil)
 			Expect(err).NotTo(HaveOccurred())
 
-			communicatorObserved := observed.(snapshot.CommunicatorObservedState)
-			Expect(communicatorObserved.JWTToken).To(Equal(expectedToken))
+			communicatorObserved := observed.(fsmv2.WrappedObservedState[communicator.CommunicatorStatus])
+			Expect(communicatorObserved.Status.JWTToken).To(Equal(expectedToken))
 		})
 
 		It("should return the JWT expiry stored in dependencies", func() {
@@ -289,8 +277,8 @@ state: "running"
 			observed, err := worker.CollectObservedState(ctx, nil)
 			Expect(err).NotTo(HaveOccurred())
 
-			communicatorObserved := observed.(snapshot.CommunicatorObservedState)
-			Expect(communicatorObserved.JWTExpiry.Truncate(time.Second)).To(Equal(expectedExpiry))
+			communicatorObserved := observed.(fsmv2.WrappedObservedState[communicator.CommunicatorStatus])
+			Expect(communicatorObserved.Status.JWTExpiry.Truncate(time.Second)).To(Equal(expectedExpiry))
 		})
 
 		It("should return the pulled messages stored in dependencies", func() {
@@ -304,10 +292,10 @@ state: "running"
 			observed, err := worker.CollectObservedState(ctx, nil)
 			Expect(err).NotTo(HaveOccurred())
 
-			communicatorObserved := observed.(snapshot.CommunicatorObservedState)
-			Expect(communicatorObserved.MessagesReceived).To(HaveLen(2))
-			Expect(communicatorObserved.MessagesReceived[0].Content).To(Equal("message-1"))
-			Expect(communicatorObserved.MessagesReceived[1].Content).To(Equal("message-2"))
+			communicatorObserved := observed.(fsmv2.WrappedObservedState[communicator.CommunicatorStatus])
+			Expect(communicatorObserved.Status.MessagesReceived).To(HaveLen(2))
+			Expect(communicatorObserved.Status.MessagesReceived[0].Content).To(Equal("message-1"))
+			Expect(communicatorObserved.Status.MessagesReceived[1].Content).To(Equal("message-2"))
 		})
 
 		It("should return the consecutive error count from dependencies", func() {
@@ -319,8 +307,8 @@ state: "running"
 			observed, err := worker.CollectObservedState(ctx, nil)
 			Expect(err).NotTo(HaveOccurred())
 
-			communicatorObserved := observed.(snapshot.CommunicatorObservedState)
-			Expect(communicatorObserved.ConsecutiveErrors).To(Equal(3))
+			communicatorObserved := observed.(fsmv2.WrappedObservedState[communicator.CommunicatorStatus])
+			Expect(communicatorObserved.Status.ConsecutiveErrors).To(Equal(3))
 		})
 
 		It("should set Authenticated to true when JWT token is present and not expired", func() {
@@ -330,16 +318,16 @@ state: "running"
 			observed, err := worker.CollectObservedState(ctx, nil)
 			Expect(err).NotTo(HaveOccurred())
 
-			communicatorObserved := observed.(snapshot.CommunicatorObservedState)
-			Expect(communicatorObserved.Authenticated).To(BeTrue())
+			communicatorObserved := observed.(fsmv2.WrappedObservedState[communicator.CommunicatorStatus])
+			Expect(communicatorObserved.Status.Authenticated).To(BeTrue())
 		})
 
 		It("should set Authenticated to false when JWT token is empty", func() {
 			observed, err := worker.CollectObservedState(ctx, nil)
 			Expect(err).NotTo(HaveOccurred())
 
-			communicatorObserved := observed.(snapshot.CommunicatorObservedState)
-			Expect(communicatorObserved.Authenticated).To(BeFalse())
+			communicatorObserved := observed.(fsmv2.WrappedObservedState[communicator.CommunicatorStatus])
+			Expect(communicatorObserved.Status.Authenticated).To(BeFalse())
 		})
 
 		Context("metrics accumulation", func() {
@@ -350,23 +338,16 @@ state: "running"
 
 			createWorkerWithStateReader := func() *metricsTestContext {
 				stateReader := NewMockStateReader()
-				w, err := communicator.NewCommunicatorWorker(
-					"test-metrics-id",
-					"Test Metrics Worker",
-					mockTransport,
-					logger,
-					stateReader,
-				)
-				Expect(err).NotTo(HaveOccurred())
+				w := createCommunicatorWorker("test-metrics-id", logger, stateReader)
 
 				return &metricsTestContext{worker: w, stateReader: stateReader}
 			}
 
 			// Helper to collect observed state and save it (simulates collector)
-			collectAndSave := func(tc *metricsTestContext) snapshot.CommunicatorObservedState {
+			collectAndSave := func(tc *metricsTestContext) fsmv2.WrappedObservedState[communicator.CommunicatorStatus] {
 				observed, err := tc.worker.CollectObservedState(ctx, nil)
 				Expect(err).NotTo(HaveOccurred())
-				communicatorObserved := observed.(snapshot.CommunicatorObservedState)
+				communicatorObserved := observed.(fsmv2.WrappedObservedState[communicator.CommunicatorStatus])
 				// Simulate collector saving observed state
 				tc.stateReader.SaveObserved("communicator", "test-metrics-id", communicatorObserved)
 
@@ -383,7 +364,7 @@ state: "running"
 				observed, err := worker.CollectObservedState(ctx, nil)
 				Expect(err).NotTo(HaveOccurred())
 
-				communicatorObserved := observed.(snapshot.CommunicatorObservedState)
+				communicatorObserved := observed.(fsmv2.WrappedObservedState[communicator.CommunicatorStatus])
 				Expect(communicatorObserved.Metrics.Worker.Counters[string(depspkg.CounterPullOps)]).To(Equal(int64(1)))
 				Expect(communicatorObserved.Metrics.Worker.Counters[string(depspkg.CounterPullSuccess)]).To(Equal(int64(1)))
 				Expect(communicatorObserved.Metrics.Worker.Counters[string(depspkg.CounterPullFailures)]).To(Equal(int64(0)))
@@ -400,7 +381,7 @@ state: "running"
 				observed, err := worker.CollectObservedState(ctx, nil)
 				Expect(err).NotTo(HaveOccurred())
 
-				communicatorObserved := observed.(snapshot.CommunicatorObservedState)
+				communicatorObserved := observed.(fsmv2.WrappedObservedState[communicator.CommunicatorStatus])
 				Expect(communicatorObserved.Metrics.Worker.Counters[string(depspkg.CounterPullOps)]).To(Equal(int64(1)))
 				Expect(communicatorObserved.Metrics.Worker.Counters[string(depspkg.CounterPullSuccess)]).To(Equal(int64(0)))
 				Expect(communicatorObserved.Metrics.Worker.Counters[string(depspkg.CounterPullFailures)]).To(Equal(int64(1)))
@@ -418,7 +399,7 @@ state: "running"
 				observed, err := worker.CollectObservedState(ctx, nil)
 				Expect(err).NotTo(HaveOccurred())
 
-				communicatorObserved := observed.(snapshot.CommunicatorObservedState)
+				communicatorObserved := observed.(fsmv2.WrappedObservedState[communicator.CommunicatorStatus])
 				Expect(communicatorObserved.Metrics.Worker.Counters[string(depspkg.CounterPushOps)]).To(Equal(int64(1)))
 				Expect(communicatorObserved.Metrics.Worker.Counters[string(depspkg.CounterPushSuccess)]).To(Equal(int64(1)))
 				Expect(communicatorObserved.Metrics.Worker.Counters[string(depspkg.CounterPushFailures)]).To(Equal(int64(0)))
@@ -435,7 +416,7 @@ state: "running"
 				observed, err := worker.CollectObservedState(ctx, nil)
 				Expect(err).NotTo(HaveOccurred())
 
-				communicatorObserved := observed.(snapshot.CommunicatorObservedState)
+				communicatorObserved := observed.(fsmv2.WrappedObservedState[communicator.CommunicatorStatus])
 				Expect(communicatorObserved.Metrics.Worker.Counters[string(depspkg.CounterPushOps)]).To(Equal(int64(1)))
 				Expect(communicatorObserved.Metrics.Worker.Counters[string(depspkg.CounterPushSuccess)]).To(Equal(int64(0)))
 				Expect(communicatorObserved.Metrics.Worker.Counters[string(depspkg.CounterPushFailures)]).To(Equal(int64(1)))
@@ -525,16 +506,16 @@ state: "running"
 				observed, err := worker.CollectObservedState(ctx, nil)
 				Expect(err).NotTo(HaveOccurred())
 
-				communicatorObserved := observed.(snapshot.CommunicatorObservedState)
-				Expect(communicatorObserved.AuthenticatedUUID).To(Equal(expectedUUID))
+				communicatorObserved := observed.(fsmv2.WrappedObservedState[communicator.CommunicatorStatus])
+				Expect(communicatorObserved.Status.AuthenticatedUUID).To(Equal(expectedUUID))
 			})
 
 			It("should return empty string when no UUID has been set", func() {
 				observed, err := worker.CollectObservedState(ctx, nil)
 				Expect(err).NotTo(HaveOccurred())
 
-				communicatorObserved := observed.(snapshot.CommunicatorObservedState)
-				Expect(communicatorObserved.AuthenticatedUUID).To(BeEmpty())
+				communicatorObserved := observed.(fsmv2.WrappedObservedState[communicator.CommunicatorStatus])
+				Expect(communicatorObserved.Status.AuthenticatedUUID).To(BeEmpty())
 			})
 
 			It("should update AuthenticatedUUID when SetAuthenticatedUUID is called multiple times", func() {
@@ -545,8 +526,8 @@ state: "running"
 				observed, err := worker.CollectObservedState(ctx, nil)
 				Expect(err).NotTo(HaveOccurred())
 
-				communicatorObserved := observed.(snapshot.CommunicatorObservedState)
-				Expect(communicatorObserved.AuthenticatedUUID).To(Equal("second-uuid-after-reauth"))
+				communicatorObserved := observed.(fsmv2.WrappedObservedState[communicator.CommunicatorStatus])
+				Expect(communicatorObserved.Status.AuthenticatedUUID).To(Equal("second-uuid-after-reauth"))
 			})
 		})
 	})

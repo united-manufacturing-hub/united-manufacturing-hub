@@ -19,9 +19,9 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/action"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/backoff"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/snapshot"
 )
 
 // TryingToAuthenticateState obtains a JWT token via AuthenticateAction.
@@ -38,33 +38,33 @@ type TryingToAuthenticateState struct {
 }
 
 func (s *TryingToAuthenticateState) Next(snapAny any) fsmv2.NextResult[any, any] {
-	snap := helpers.ConvertSnapshot[snapshot.CommunicatorObservedState, *snapshot.CommunicatorDesiredState](snapAny)
+	snap := fsmv2.ConvertWorkerSnapshot[communicator.CommunicatorConfig, communicator.CommunicatorStatus](snapAny)
 
-	if snap.Desired.IsShutdownRequested() {
+	if snap.IsShutdownRequested {
 		return fsmv2.Result[any, any](&StoppedState{}, fsmv2.SignalNone, nil, "Shutdown requested during authentication")
 	}
 
-	if snap.Observed.Authenticated && !snap.Observed.IsTokenExpired() {
+	if snap.Status.Authenticated && !snap.Status.IsTokenExpired() {
 		return fsmv2.Result[any, any](&SyncingState{}, fsmv2.SignalNone, nil, "Authentication successful, starting sync")
 	}
 
 	// Backoff to avoid hammering backend on repeated auth failures
-	if snap.Observed.ConsecutiveErrors > 0 && !snap.Observed.LastAuthAttemptAt.IsZero() {
+	if snap.Status.ConsecutiveErrors > 0 && !snap.Status.LastAuthAttemptAt.IsZero() {
 		delay := backoff.CalculateDelayForErrorType(
-			snap.Observed.LastErrorType,
-			snap.Observed.ConsecutiveErrors,
-			snap.Observed.LastRetryAfter, // Respect server's Retry-After
+			snap.Status.LastErrorType,
+			snap.Status.ConsecutiveErrors,
+			snap.Status.LastRetryAfter, // Respect server's Retry-After
 		)
-		if time.Since(snap.Observed.LastAuthAttemptAt) < delay {
+		if time.Since(snap.Status.LastAuthAttemptAt) < delay {
 			return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, "Waiting for backoff to expire before retry")
 		}
 	}
 
 	authenticateAction := action.NewAuthenticateAction(
-		snap.Desired.RelayURL,
-		snap.Desired.InstanceUUID,
-		snap.Desired.AuthToken,
-		snap.Desired.Timeout,
+		snap.Config.RelayURL,
+		snap.Config.InstanceUUID,
+		snap.Config.AuthToken,
+		snap.Config.Timeout,
 	)
 
 	return fsmv2.Result[any, any](s, fsmv2.SignalNone, authenticateAction, "Attempting to authenticate with relay server")

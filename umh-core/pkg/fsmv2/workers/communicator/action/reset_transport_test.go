@@ -19,7 +19,6 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator"
@@ -38,7 +37,9 @@ var _ = Describe("ResetTransportAction", func() {
 		logger = deps.NewNopFSMLogger()
 		mockTransp = &mockResettableTransport{}
 		identity := deps.Identity{ID: "test-id", WorkerType: "communicator"}
-		dependencies = communicator.NewCommunicatorDependencies(mockTransp, logger, nil, identity)
+		baseDeps := deps.NewBaseDependencies(logger, nil, identity)
+		dependencies = communicator.NewCommunicatorDependencies(baseDeps)
+		dependencies.SetTransport(mockTransp)
 		act = action.NewResetTransportAction()
 	})
 
@@ -93,7 +94,8 @@ var _ = Describe("ResetTransportAction", func() {
 		It("should return error when transport is nil instead of panicking", func() {
 			ctx := context.Background()
 			identity := deps.Identity{ID: "test-nil-transport", WorkerType: "communicator"}
-			depsWithNilTransport := communicator.NewCommunicatorDependencies(nil, logger, nil, identity)
+			nilBaseDeps := deps.NewBaseDependencies(logger, nil, identity)
+			depsWithNilTransport := communicator.NewCommunicatorDependencies(nilBaseDeps)
 
 			err := act.Execute(ctx, depsWithNilTransport)
 

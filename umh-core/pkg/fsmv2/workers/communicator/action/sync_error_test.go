@@ -100,8 +100,10 @@ var _ = Describe("SyncAction Error Handling", func() {
 	BeforeEach(func() {
 		ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
 		mockTransport = NewMockTransport()
-		identity := depspkg.Identity{ID: "test-worker", Name: "Test Worker"}
-		deps = communicator.NewCommunicatorDependencies(mockTransport, testLogger, nil, identity)
+		identity := depspkg.Identity{ID: "test-worker", Name: "Test Worker", WorkerType: "communicator"}
+		baseDeps := depspkg.NewBaseDependencies(testLogger, nil, identity)
+		deps = communicator.NewCommunicatorDependencies(baseDeps)
+		deps.SetTransport(mockTransport)
 	})
 
 	AfterEach(func() {

@@ -24,7 +24,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/snapshot"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/state"
 	commTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
 )
@@ -71,7 +70,10 @@ var _ = Describe("RecoveringState Integration - Infinite Loop Prevention", func(
 		logger = deps.NewNopFSMLogger()
 		mockTransp = &mockResettableTransport{}
 		identity := deps.Identity{ID: "test-id", WorkerType: "communicator"}
-		_ = communicator.NewCommunicatorDependencies(mockTransp, logger, nil, identity)
+		baseDeps := deps.NewBaseDependencies(logger, nil, identity)
+		commDeps := communicator.NewCommunicatorDependencies(baseDeps)
+		commDeps.SetTransport(mockTransp)
+		_ = commDeps
 		stateObj = &state.RecoveringState{}
 	})
 
@@ -80,11 +82,11 @@ var _ = Describe("RecoveringState Integration - Infinite Loop Prevention", func(
 			// Phase 1: Children go unhealthy — stay in Recovering
 			snap1 := fsmv2.Snapshot{
 				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
-				Observed: snapshot.CommunicatorObservedState{
+				Observed: fsmv2.WrappedObservedState[communicator.CommunicatorStatus]{
 					ChildrenHealthy:   0,
 					ChildrenUnhealthy: 1,
 				},
-				Desired: &snapshot.CommunicatorDesiredState{},
+				Desired: &fsmv2.WrappedDesiredState[communicator.CommunicatorConfig]{},
 			}
 
 			result1 := stateObj.Next(snap1)
@@ -94,11 +96,11 @@ var _ = Describe("RecoveringState Integration - Infinite Loop Prevention", func(
 			// Phase 2: Children still unhealthy — stay in Recovering
 			snap2 := fsmv2.Snapshot{
 				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
-				Observed: snapshot.CommunicatorObservedState{
+				Observed: fsmv2.WrappedObservedState[communicator.CommunicatorStatus]{
 					ChildrenHealthy:   0,
 					ChildrenUnhealthy: 1,
 				},
-				Desired: &snapshot.CommunicatorDesiredState{},
+				Desired: &fsmv2.WrappedDesiredState[communicator.CommunicatorConfig]{},
 			}
 
 			result2 := stateObj.Next(snap2)
@@ -108,11 +110,11 @@ var _ = Describe("RecoveringState Integration - Infinite Loop Prevention", func(
 			// Phase 3: Children recover — transition to Syncing
 			snap3 := fsmv2.Snapshot{
 				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
-				Observed: snapshot.CommunicatorObservedState{
+				Observed: fsmv2.WrappedObservedState[communicator.CommunicatorStatus]{
 					ChildrenHealthy:   1,
 					ChildrenUnhealthy: 0,
 				},
-				Desired: &snapshot.CommunicatorDesiredState{},
+				Desired: &fsmv2.WrappedDesiredState[communicator.CommunicatorConfig]{},
 			}
 
 			result3 := stateObj.Next(snap3)
