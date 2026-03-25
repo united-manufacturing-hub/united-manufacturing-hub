@@ -133,6 +133,37 @@ var _ = Describe("ConvertWorkerSnapshot", func() {
 	})
 })
 
+var _ = Describe("IsStopRequired", func() {
+	It("returns true when IsShutdownRequested is true", func() {
+		snap := fsmv2.WorkerSnapshot[workerTestConfig, workerTestStatus]{
+			IsShutdownRequested: true,
+		}
+		Expect(snap.IsStopRequired()).To(BeTrue())
+	})
+
+	It("returns true when ParentMappedState is stopped", func() {
+		snap := fsmv2.WorkerSnapshot[workerTestConfig, workerTestStatus]{
+			ParentMappedState: "stopped",
+		}
+		Expect(snap.IsStopRequired()).To(BeTrue())
+	})
+
+	It("returns false when neither condition is met", func() {
+		snap := fsmv2.WorkerSnapshot[workerTestConfig, workerTestStatus]{
+			ParentMappedState: "running",
+		}
+		Expect(snap.IsStopRequired()).To(BeFalse())
+	})
+
+	It("returns true when both conditions are met", func() {
+		snap := fsmv2.WorkerSnapshot[workerTestConfig, workerTestStatus]{
+			IsShutdownRequested: true,
+			ParentMappedState:   "stopped",
+		}
+		Expect(snap.IsStopRequired()).To(BeTrue())
+	})
+})
+
 var _ = Describe("ExtractConfig", func() {
 	It("returns typed config from WrappedDesiredState", func() {
 		wds := &fsmv2.WrappedDesiredState[workerTestConfig]{
