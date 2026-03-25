@@ -44,8 +44,8 @@ func RegisterInitialState(s fsmv2.State[any, any]) {
 
 // HelloworldWorker implements the FSMv2 Worker interface using the WorkerBase API.
 type HelloworldWorker struct {
-	fsmv2.WorkerBase[HelloworldConfig, HelloworldStatus]
 	deps *HelloworldDependencies
+	fsmv2.WorkerBase[HelloworldConfig, HelloworldStatus]
 }
 
 // NewHelloworldWorker creates a new helloworld worker with the standard framework dependencies.
