@@ -74,13 +74,9 @@ func checkSingleEntryPointPattern(filename string) []Violation {
 			}
 
 			if callExpr, ok := bodyNode.(*ast.CallExpr); ok {
-				if indexExpr, ok := callExpr.Fun.(*ast.IndexListExpr); ok {
-					if selExpr, ok := indexExpr.X.(*ast.SelectorExpr); ok {
-						if selExpr.Sel.Name == "ConvertSnapshot" {
-							pos := fset.Position(callExpr.Pos())
-							convertSnapshotCalls = append(convertSnapshotCalls, pos.Line)
-						}
-					}
+				if isConvertSnapshotCall(callExpr) {
+					pos := fset.Position(callExpr.Pos())
+					convertSnapshotCalls = append(convertSnapshotCalls, pos.Line)
 				}
 			}
 
@@ -186,6 +182,7 @@ func checkShutdownCheckFirst(filename string) []Violation {
 		isShutdownCheck := false
 
 		ast.Inspect(firstIfStmt.Cond, func(condNode ast.Node) bool {
+			// Old API: method call like snap.Desired.IsShutdownRequested()
 			if callExpr, ok := condNode.(*ast.CallExpr); ok {
 				if selExpr, ok := callExpr.Fun.(*ast.SelectorExpr); ok {
 					if selExpr.Sel.Name == "IsShutdownRequested" || selExpr.Sel.Name == "IsStopRequired" {
@@ -193,6 +190,15 @@ func checkShutdownCheckFirst(filename string) []Violation {
 
 						return false
 					}
+				}
+			}
+
+			// New API: field access like snap.IsShutdownRequested
+			if selExpr, ok := condNode.(*ast.SelectorExpr); ok {
+				if selExpr.Sel.Name == "IsShutdownRequested" {
+					isShutdownCheck = true
+
+					return false
 				}
 			}
 
@@ -352,6 +358,37 @@ func checkFirstConditionalUsesIsStopRequired(filename string) bool {
 	})
 
 	return usesIsStopRequired
+}
+
+// isConvertSnapshotCall checks if a call expression is ConvertSnapshot or ConvertWorkerSnapshot.
+// Both are valid entry-point type conversions: ConvertSnapshot for old-API, ConvertWorkerSnapshot for new-API.
+func isConvertSnapshotCall(callExpr *ast.CallExpr) bool {
+	validNames := map[string]bool{
+		"ConvertSnapshot":       true,
+		"ConvertWorkerSnapshot": true,
+	}
+
+	if indexExpr, ok := callExpr.Fun.(*ast.IndexListExpr); ok {
+		if selExpr, ok := indexExpr.X.(*ast.SelectorExpr); ok {
+			return validNames[selExpr.Sel.Name]
+		}
+
+		if ident, ok := indexExpr.X.(*ast.Ident); ok {
+			return validNames[ident.Name]
+		}
+	}
+
+	if indexExpr, ok := callExpr.Fun.(*ast.IndexExpr); ok {
+		if selExpr, ok := indexExpr.X.(*ast.SelectorExpr); ok {
+			return validNames[selExpr.Sel.Name]
+		}
+
+		if ident, ok := indexExpr.X.(*ast.Ident); ok {
+			return validNames[ident.Name]
+		}
+	}
+
+	return false
 }
 
 // ValidateStateXORAction checks that Next() returns either state change OR action, not both.

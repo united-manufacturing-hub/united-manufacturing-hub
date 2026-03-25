@@ -15,6 +15,9 @@
 package validator
 
 import (
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"path/filepath"
 	"strings"
@@ -95,6 +98,87 @@ func FindWorkerFiles(baseDir string) []string {
 	})
 
 	return files
+}
+
+// IsNewAPIWorkerFile checks if a worker.go file uses the Worker API v2
+// by scanning for a struct that embeds fsmv2.WorkerBase[...].
+func IsNewAPIWorkerFile(filename string) bool {
+	fset := token.NewFileSet()
+
+	node, err := parser.ParseFile(fset, filename, nil, 0)
+	if err != nil {
+		return false
+	}
+
+	found := false
+
+	ast.Inspect(node, func(n ast.Node) bool {
+		if found {
+			return false
+		}
+
+		typeSpec, ok := n.(*ast.TypeSpec)
+		if !ok {
+			return true
+		}
+
+		structType, ok := typeSpec.Type.(*ast.StructType)
+		if !ok {
+			return true
+		}
+
+		for _, field := range structType.Fields.List {
+			if len(field.Names) != 0 {
+				continue
+			}
+
+			if containsWorkerBase(field.Type) {
+				found = true
+
+				return false
+			}
+		}
+
+		return true
+	})
+
+	return found
+}
+
+// containsWorkerBase checks if an AST expression refers to WorkerBase.
+// WorkerBase[TConfig, TStatus] appears as IndexListExpr or IndexExpr in the AST.
+func containsWorkerBase(expr ast.Expr) bool {
+	switch t := expr.(type) {
+	case *ast.IndexListExpr:
+		return identifierContains(t.X, "WorkerBase")
+	case *ast.IndexExpr:
+		return identifierContains(t.X, "WorkerBase")
+	}
+
+	return false
+}
+
+// identifierContains checks if an expression ends with the given name.
+func identifierContains(expr ast.Expr, name string) bool {
+	switch t := expr.(type) {
+	case *ast.SelectorExpr:
+		return t.Sel.Name == name
+	case *ast.Ident:
+		return t.Name == name
+	}
+
+	return false
+}
+
+// IsNewAPIWorkerDir checks if a worker directory uses the Worker API v2
+// by scanning the worker.go file for WorkerBase embed.
+func IsNewAPIWorkerDir(workerDir string) bool {
+	workerFile := filepath.Join(workerDir, "worker.go")
+	if _, err := os.Stat(workerFile); err != nil {
+		return false
+	}
+
+	return IsNewAPIWorkerFile(workerFile)
 }
 
 // FindSnapshotFiles discovers all snapshot.go files in the workers directory.
