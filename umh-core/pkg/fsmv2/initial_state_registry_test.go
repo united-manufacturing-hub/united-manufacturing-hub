@@ -58,6 +58,18 @@ var _ = Describe("InitialStateRegistry", func() {
 		fsmv2.ResetInitialStateRegistry()
 		Expect(fsmv2.LookupInitialState("test-reset")).To(BeNil())
 	})
+
+	It("panics on empty workerType", func() {
+		Expect(func() {
+			fsmv2.RegisterInitialState("", &testStoppedState{})
+		}).To(PanicWith(ContainSubstring("must not be empty")))
+	})
+
+	It("panics on nil state", func() {
+		Expect(func() {
+			fsmv2.RegisterInitialState("test-nil", nil)
+		}).To(PanicWith(ContainSubstring("must not be nil")))
+	})
 })
 
 // testStoppedState is a minimal State implementation for registry tests.

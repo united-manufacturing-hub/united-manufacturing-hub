@@ -26,7 +26,15 @@ var (
 
 // RegisterInitialState registers the initial state for a worker type.
 // Called from state package init() functions. Panics on duplicate registration.
+// The registered state is shared across all worker instances of this type —
+// it must be stateless (no mutable fields, per architecture test "Empty State Structs").
 func RegisterInitialState(workerType string, state State[any, any]) {
+	if workerType == "" {
+		panic("RegisterInitialState: workerType must not be empty")
+	}
+	if state == nil {
+		panic(fmt.Sprintf("RegisterInitialState(%q): state must not be nil", workerType))
+	}
 	initialStateRegistryMu.Lock()
 	defer initialStateRegistryMu.Unlock()
 	if _, exists := initialStateRegistry[workerType]; exists {
