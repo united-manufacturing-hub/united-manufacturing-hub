@@ -56,11 +56,6 @@ import (
 	"go.uber.org/zap"
 )
 
-// CommunicatorWorkerID is the ID used for the communicator child worker.
-// This matches the pattern from reconciliation.go:1218 (childID := spec.Name + "-001")
-// where spec.Name is "communicator".
-const CommunicatorWorkerID = "communicator-001"
-
 func main() {
 	// Initialize the global logger first thing
 	logger.Initialize()

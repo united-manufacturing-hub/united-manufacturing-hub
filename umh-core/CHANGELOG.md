@@ -188,7 +188,7 @@ docker exec -it <container-name> sh
 grep fsmv2 /data/logs/umh-core/current
 ```
 
-You should see log entries with `fsmv2` and states like `Syncing` or `TryingToAuthenticate`.
+You should see log entries with `fsmv2` and states like `Syncing` or `Recovering`.
 
 **Note:** To disable later, you must explicitly set `useFSMv2Transport: false` in config.yaml.
 
