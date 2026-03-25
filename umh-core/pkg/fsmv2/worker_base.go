@@ -168,6 +168,9 @@ func (w *WorkerBase[TConfig, TStatus]) DeriveDesiredState(spec interface{}) (Des
 // Panics if no state is registered — call fsmv2.RegisterInitialState in
 // the state package init() function.
 func (w *WorkerBase[TConfig, TStatus]) GetInitialState() State[any, any] {
+	if !w.initialized {
+		panic("WorkerBase.GetInitialState: InitBase was not called — ensure your constructor calls w.InitBase(id, logger, sr)")
+	}
 	wt := w.identity.WorkerType
 	s := LookupInitialState(wt)
 	if s == nil {
