@@ -12,14 +12,14 @@ When a site has redundant PLCs, each controller independently reads the same sen
 
 Run two umh-core instances, each connected to one of the redundant PLCs. Each instance collects into its own [Unified Namespace](../../usage/unified-namespace/README.md) under a PLC-specific topic:
 
-```
+```text
 umh.v1.enterprise.line.PLC-A._historian   (umh-core 1, from its own bridge)
 umh.v1.enterprise.line.PLC-B._historian   (umh-core 2, from its own bridge)
 ```
 
 umh-core 2 pushes its data into umh-core 1's UNS. umh-core 1 now has both PLC-specific topics. A [stream processor](../../usage/data-flows/stream-processor.md) then does redundancy resolution: it selects the primary source from the two streams and writes a single consolidated topic:
 
-```
+```text
 umh.v1.enterprise.line._historian         (consolidated, PLC-agnostic)
 ```
 
