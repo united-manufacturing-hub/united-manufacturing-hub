@@ -372,6 +372,8 @@ var _ = Describe("AuthenticateAction", func() {
 			err := act.Execute(ctx, dependencies)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("context canceled"))
+			// Verify RecordTypedError was NOT called (ctx.Err() short-circuits before recording)
+			Expect(dependencies.GetConsecutiveErrors()).To(Equal(0))
 		})
 	})
 })
