@@ -19,27 +19,24 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	hello_world "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/helloworld"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/helloworld/snapshot"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/helloworld/state"
 )
 
 var _ = Describe("HelloworldWorker", func() {
 	var (
-		worker *hello_world.HelloworldWorker
+		worker fsmv2.Worker
 		logger deps.FSMLogger
 	)
 
 	BeforeEach(func() {
-		// Use nop logger for tests
 		logger = deps.NewNopFSMLogger()
 	})
 
 	Describe("NewHelloworldWorker", func() {
-		It("should create worker with derived worker type", func() {
+		It("should create worker successfully", func() {
 			identity := deps.Identity{ID: "test-worker"}
 			w, err := hello_world.NewHelloworldWorker(identity, logger, nil)
 
@@ -66,19 +63,21 @@ var _ = Describe("HelloworldWorker", func() {
 		})
 
 		It("should collect initial state with HelloSaid=false", func() {
-			obs, err := worker.CollectObservedState(context.Background(), nil)
+			desired := &fsmv2.WrappedDesiredState[hello_world.HelloworldConfig]{}
+			obs, err := worker.CollectObservedState(context.Background(), desired)
 
 			Expect(err).NotTo(HaveOccurred())
-			typedObs, ok := obs.(snapshot.HelloworldObservedState)
+			typedObs, ok := obs.(fsmv2.WrappedObservedState[hello_world.HelloworldStatus])
 			Expect(ok).To(BeTrue())
-			Expect(typedObs.HelloSaid).To(BeFalse())
+			Expect(typedObs.Status.HelloSaid).To(BeFalse())
 		})
 
 		It("should return error on cancelled context", func() {
 			ctx, cancel := context.WithCancel(context.Background())
 			cancel()
 
-			obs, err := worker.CollectObservedState(ctx, nil)
+			desired := &fsmv2.WrappedDesiredState[hello_world.HelloworldConfig]{}
+			obs, err := worker.CollectObservedState(ctx, desired)
 
 			Expect(err).To(Equal(context.Canceled))
 			Expect(obs).To(BeNil())
@@ -93,11 +92,11 @@ var _ = Describe("HelloworldWorker", func() {
 			Expect(err).NotTo(HaveOccurred())
 		})
 
-		It("should return StoppedState", func() {
+		It("should return Stopped state", func() {
 			initialState := worker.GetInitialState()
 
-			_, ok := initialState.(*state.StoppedState)
-			Expect(ok).To(BeTrue())
+			Expect(initialState).NotTo(BeNil())
+			Expect(initialState.String()).To(Equal("Stopped"))
 		})
 	})
 
