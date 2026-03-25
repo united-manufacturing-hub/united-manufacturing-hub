@@ -26,12 +26,12 @@
 // communicator.SetChannelProvider() and transport.SetChannelProvider() before
 // starting the supervisor.
 //
-// # FSM v2 Pattern
+// # Worker API v2
 //
-// This package follows the FSM v2 pattern:
-//   - worker.go: Implements Worker interface (CollectObservedState, DeriveDesiredState)
-//   - state/*.go: Defines state machine states and transitions
-//   - snapshot/snapshot.go: Observed and desired state structures
+// This package uses the WorkerBase[TConfig, TStatus] API with custom overrides:
+//   - Custom CollectObservedState: reads previous metrics from CSE for accumulation
+//   - Custom DeriveDesiredState: constructs TransportWorker child specs
+//   - RegisterInitialState pattern: breaks circular import with state package
 //
 // # States and Transitions
 //
@@ -40,66 +40,70 @@
 //	Stopped → Syncing ↔ Recovering → Stopped
 //
 // TransportWorker runs as a child when the parent is in Syncing or Recovering.
-//
-// Actions by state:
-//   - Syncing: Monitors child health. Transitions to Recovering when any child is unhealthy.
-//   - Recovering: Waits for children to recover. Transitions to Syncing when all children are healthy.
-//   - Stopped: Transitions to Syncing on start, or emits SignalNeedsRemoval on shutdown.
 package communicator
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	fsmv2types "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
-	depspkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/snapshot"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/state"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
 	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
 )
 
-// CommunicatorWorker implements the FSM v2 Worker interface for channel-based synchronization.
-type CommunicatorWorker struct {
-	*helpers.BaseWorker[*CommunicatorDependencies]
+// registeredInitialState holds the worker-specific initial state, set by the state
+// package via RegisterInitialState. This avoids a circular import (worker -> state -> worker).
+var registeredInitialState fsmv2.State[any, any]
+
+// RegisterInitialState sets the worker-specific initial state.
+// Called from the state package's init() to break the circular import.
+func RegisterInitialState(s fsmv2.State[any, any]) {
+	registeredInitialState = s
 }
 
-// NewCommunicatorWorker creates a new Channel-based Communicator worker in Stopped state.
-func NewCommunicatorWorker(
-	id string,
-	name string,
-	transportParam transport.Transport,
-	logger depspkg.FSMLogger,
-	stateReader depspkg.StateReader,
-) (*CommunicatorWorker, error) {
-	workerType, err := storage.DeriveWorkerType[snapshot.CommunicatorObservedState]()
-	if err != nil {
-		return nil, fmt.Errorf("failed to derive worker type: %w", err)
+// CommunicatorWorker implements the FSMv2 Worker interface using the WorkerBase API.
+type CommunicatorWorker struct {
+	deps *CommunicatorDependencies
+	fsmv2.WorkerBase[CommunicatorConfig, CommunicatorStatus]
+}
+
+// NewCommunicatorWorker creates a new communicator worker with the standard framework dependencies.
+func NewCommunicatorWorker(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) (fsmv2.Worker, error) {
+	if logger == nil {
+		return nil, errors.New("logger must not be nil")
 	}
 
-	identity := depspkg.Identity{
-		ID:         id,
-		Name:       name,
-		WorkerType: workerType,
-		// HierarchyPath is set by the supervisor when adding workers via factory.
-	}
+	w := &CommunicatorWorker{}
+	w.InitBase(id, logger, sr)
 
-	dependencies := NewCommunicatorDependencies(transportParam, logger, stateReader, identity)
+	// Share WorkerBase's BaseDependencies to avoid dual-instance metrics divergence.
+	baseDeps := w.WorkerBase.GetDependenciesAny().(*deps.BaseDependencies)
+	w.deps = NewCommunicatorDependencies(baseDeps)
 
-	return &CommunicatorWorker{
-		BaseWorker: helpers.NewBaseWorker(dependencies),
-	}, nil
+	return w, nil
+}
+
+// GetDependencies returns the typed communicator dependencies.
+func (w *CommunicatorWorker) GetDependencies() *CommunicatorDependencies {
+	return w.deps
+}
+
+// GetDependenciesAny returns the worker's dependencies for action execution.
+// Overrides WorkerBase.GetDependenciesAny to return *CommunicatorDependencies
+// instead of *deps.BaseDependencies.
+func (w *CommunicatorWorker) GetDependenciesAny() any {
+	return w.deps
 }
 
 // CollectObservedState returns the current observed state of the communicator.
+// Constructs WrappedObservedState manually instead of using WrapStatus because
+// the communicator accumulates metrics across ticks by reading previous state from CSE.
 func (w *CommunicatorWorker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
 	select {
 	case <-ctx.Done():
@@ -107,18 +111,18 @@ func (w *CommunicatorWorker) CollectObservedState(ctx context.Context, _ fsmv2.D
 	default:
 	}
 
-	deps := w.GetDependencies()
+	d := w.deps
 
-	consecutiveErrors := deps.GetConsecutiveErrors()
-	degradedEnteredAt := deps.GetDegradedEnteredAt()
+	consecutiveErrors := d.GetConsecutiveErrors()
+	degradedEnteredAt := d.GetDegradedEnteredAt()
 
-	var prevWorkerMetrics depspkg.Metrics
+	var prevWorkerMetrics deps.Metrics
 
-	stateReader := deps.GetStateReader()
-	if stateReader != nil {
-		var prev snapshot.CommunicatorObservedState
-		if err := stateReader.LoadObservedTyped(ctx, deps.GetWorkerType(), deps.GetWorkerID(), &prev); err != nil {
-			deps.GetLogger().Debug("observed_state_load_failed", depspkg.Err(err))
+	sr := d.GetStateReader()
+	if sr != nil {
+		var prev fsmv2.WrappedObservedState[CommunicatorStatus]
+		if err := sr.LoadObservedTyped(ctx, d.GetWorkerType(), d.GetWorkerID(), &prev); err != nil {
+			d.GetLogger().Debug("observed_state_load_failed", deps.Err(err))
 		} else {
 			prevWorkerMetrics = prev.Metrics.Worker
 		}
@@ -134,7 +138,7 @@ func (w *CommunicatorWorker) CollectObservedState(ctx context.Context, _ fsmv2.D
 		newWorkerMetrics.Gauges = make(map[string]float64)
 	}
 
-	tickMetrics := deps.MetricsRecorder().Drain()
+	tickMetrics := d.MetricsRecorder().Drain()
 
 	for name, delta := range tickMetrics.Counters {
 		newWorkerMetrics.Counters[name] += delta
@@ -144,65 +148,76 @@ func (w *CommunicatorWorker) CollectObservedState(ctx context.Context, _ fsmv2.D
 		newWorkerMetrics.Gauges[name] = value
 	}
 
-	newWorkerMetrics.Gauges[string(depspkg.GaugeConsecutiveErrors)] = float64(consecutiveErrors)
+	newWorkerMetrics.Gauges[string(deps.GaugeConsecutiveErrors)] = float64(consecutiveErrors)
 
-	metricsContainer := depspkg.MetricsContainer{
+	metricsContainer := deps.MetricsContainer{
 		Worker: newWorkerMetrics,
 	}
 
-	if fm := deps.GetFrameworkState(); fm != nil {
+	if fm := d.GetFrameworkState(); fm != nil {
 		metricsContainer.Framework = *fm
 	}
 
-	observed := snapshot.CommunicatorObservedState{
-		CollectedAt:       time.Now(),
+	status := CommunicatorStatus{
 		ConsecutiveErrors: consecutiveErrors,
 		DegradedEnteredAt: degradedEnteredAt,
-		MetricsEmbedder:   depspkg.MetricsEmbedder{Metrics: metricsContainer},
+	}
+
+	observed := fsmv2.WrappedObservedState[CommunicatorStatus]{
+		CollectedAt:     time.Now(),
+		Status:          status,
+		MetricsEmbedder: deps.MetricsEmbedder{Metrics: metricsContainer},
+	}
+
+	if actionHistory := d.GetActionHistory(); actionHistory != nil {
+		observed.LastActionResults = actionHistory
 	}
 
 	return observed, nil
 }
 
-// DeriveDesiredState parses UserSpec.Config YAML into typed CommunicatorDesiredState.
+// DeriveDesiredState parses UserSpec.Config YAML into typed CommunicatorConfig
+// and constructs the TransportWorker child spec.
 func (w *CommunicatorWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
 	if spec == nil {
-		return &snapshot.CommunicatorDesiredState{
-			BaseDesiredState: fsmv2types.BaseDesiredState{
-				State: "running",
+		return &fsmv2.WrappedDesiredState[CommunicatorConfig]{
+			BaseDesiredState: config.BaseDesiredState{
+				State: config.DesiredStateRunning,
 			},
-			ChildrenSpecs: makeTransportChildSpec(fsmv2types.UserSpec{}),
+			ChildrenSpecs: makeTransportChildSpec(config.UserSpec{}),
 		}, nil
 	}
 
-	userSpec, ok := spec.(fsmv2types.UserSpec)
+	userSpec, ok := spec.(config.UserSpec)
 	if !ok {
 		return nil, fmt.Errorf("invalid spec type: expected UserSpec, got %T", spec)
 	}
 
-	renderedConfig, err := fsmv2types.RenderConfigTemplate(userSpec.Config, userSpec.Variables)
+	renderedConfig, err := config.RenderConfigTemplate(userSpec.Config, userSpec.Variables)
 	if err != nil {
 		return nil, fmt.Errorf("template rendering failed: %w", err)
 	}
 
-	var commSpec CommunicatorUserSpec
-	if err := yaml.Unmarshal([]byte(renderedConfig), &commSpec); err != nil {
+	var cfg CommunicatorConfig
+	if err := yaml.Unmarshal([]byte(renderedConfig), &cfg); err != nil {
 		return nil, fmt.Errorf("config parse failed: %w", err)
 	}
 
-	if commSpec.Timeout == 0 {
+	if cfg.Timeout == 0 {
 		// Default to LongPollingDuration + buffer to prevent premature action timeouts
-		commSpec.Timeout = httpTransport.LongPollingDuration + httpTransport.LongPollingBuffer
+		cfg.Timeout = httpTransport.LongPollingDuration + httpTransport.LongPollingBuffer
 	}
 
-	return &snapshot.CommunicatorDesiredState{
-		BaseDesiredState: fsmv2types.BaseDesiredState{
-			State: commSpec.GetState(),
+	desiredState := config.DesiredStateRunning
+	if s := cfg.GetState(); s != "" {
+		desiredState = s
+	}
+
+	return &fsmv2.WrappedDesiredState[CommunicatorConfig]{
+		BaseDesiredState: config.BaseDesiredState{
+			State: desiredState,
 		},
-		RelayURL:      commSpec.RelayURL,
-		InstanceUUID:  commSpec.InstanceUUID,
-		AuthToken:     commSpec.AuthToken,
-		Timeout:       commSpec.Timeout,
+		Config:        cfg,
 		ChildrenSpecs: makeTransportChildSpec(userSpec),
 	}, nil
 }
@@ -211,8 +226,8 @@ func (w *CommunicatorWorker) DeriveDesiredState(spec interface{}) (fsmv2.Desired
 // TransportWorker handles authentication, push, and pull operations.
 // ChildStartStates includes both Syncing and Recovering so the child remains
 // running during error recovery and does not restart on parent state oscillation.
-func makeTransportChildSpec(parentSpec fsmv2types.UserSpec) []fsmv2types.ChildSpec {
-	return []fsmv2types.ChildSpec{{
+func makeTransportChildSpec(parentSpec config.UserSpec) []config.ChildSpec {
+	return []config.ChildSpec{{
 		Name:             "transport",
 		WorkerType:       "transport",
 		UserSpec:         parentSpec,
@@ -220,27 +235,17 @@ func makeTransportChildSpec(parentSpec fsmv2types.UserSpec) []fsmv2types.ChildSp
 	}}
 }
 
-// GetInitialState returns StoppedState as the initial FSM state.
+// GetInitialState returns the worker-specific StoppedState that knows how to
+// transition to SyncingState. Falls back to WorkerBase's default if
+// the state package hasn't registered itself.
 func (w *CommunicatorWorker) GetInitialState() fsmv2.State[any, any] {
-	return &state.StoppedState{}
+	if registeredInitialState != nil {
+		return registeredInitialState
+	}
+
+	return w.WorkerBase.GetInitialState()
 }
 
 func init() {
-	if err := factory.RegisterWorkerType[snapshot.CommunicatorObservedState, *snapshot.CommunicatorDesiredState](
-		func(id depspkg.Identity, logger depspkg.FSMLogger, stateReader depspkg.StateReader, _ map[string]any) fsmv2.Worker {
-			// ChannelProvider must be set via global singleton before factory is called (will panic if not set).
-			// Transport creation and auth are handled by TransportWorker (ENG-4264).
-			commDeps := NewCommunicatorDependencies(nil, logger, stateReader, id)
-
-			return &CommunicatorWorker{
-				BaseWorker: helpers.NewBaseWorker(commDeps),
-			}
-		},
-		func(cfg interface{}) interface{} {
-			return supervisor.NewSupervisor[snapshot.CommunicatorObservedState, *snapshot.CommunicatorDesiredState](
-				cfg.(supervisor.Config))
-		},
-	); err != nil {
-		panic(fmt.Sprintf("failed to register communicator worker: %v", err))
-	}
+	register.Worker[CommunicatorConfig, CommunicatorStatus]("communicator", NewCommunicatorWorker)
 }

@@ -19,7 +19,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/snapshot"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator"
 )
 
 // SyncingState is the primary operational state for the communicator orchestrator.
@@ -36,21 +36,21 @@ type SyncingState struct {
 }
 
 func (s *SyncingState) Next(snapAny any) fsmv2.NextResult[any, any] {
-	snap := helpers.ConvertSnapshot[snapshot.CommunicatorObservedState, *snapshot.CommunicatorDesiredState](snapAny)
+	snap := fsmv2.ConvertWorkerSnapshot[communicator.CommunicatorConfig, communicator.CommunicatorStatus](snapAny)
 
-	if snap.Desired.IsShutdownRequested() {
+	if snap.IsShutdownRequested {
 		return fsmv2.Result[any, any](&StoppedState{}, fsmv2.SignalNone, nil, "Shutdown requested during sync", nil)
 	}
 
-	if !snap.Observed.IsSyncHealthy() {
+	if snap.ChildrenHealthy == 0 || snap.ChildrenUnhealthy > 0 {
 		return fsmv2.Result[any, any](&RecoveringState{}, fsmv2.SignalNone, nil,
 			fmt.Sprintf("children unhealthy: healthy=%d, unhealthy=%d",
-				snap.Observed.ChildrenHealthy, snap.Observed.ChildrenUnhealthy), nil)
+				snap.ChildrenHealthy, snap.ChildrenUnhealthy), nil)
 	}
 
 	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil,
 		fmt.Sprintf("syncing: healthy=%d, unhealthy=%d",
-			snap.Observed.ChildrenHealthy, snap.Observed.ChildrenUnhealthy), nil)
+			snap.ChildrenHealthy, snap.ChildrenUnhealthy), nil)
 }
 
 func (s *SyncingState) String() string {
