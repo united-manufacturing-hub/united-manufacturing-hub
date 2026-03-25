@@ -112,6 +112,39 @@ FSMv2 implements the same [observe → compare → actuate](#the-control-loop) p
 
 **Key mindset shift**: You write business logic (states, actions). The supervisor handles everything else.
 
+### Worker API v2 (reduced boilerplate)
+
+Worker API v2 reduces a minimal worker from ~662 SLOC / 7 files to ~50 SLOC / 1 file using generics. Instead of hand-writing ObservedState, DesiredState, snapshot conversion, and factory registration, you embed `WorkerBase[TConfig, TStatus]` and call `register.Worker`.
+
+```go
+// Registration (replaces init() + factory wiring + supervisor factory + CSE type registry)
+func init() {
+    register.Worker[MyConfig, MyStatus]("myworker", NewMyWorker)
+}
+
+// Worker struct (replaces separate dependencies, observed state, desired state files)
+type MyWorker struct {
+    fsmv2.WorkerBase[MyConfig, MyStatus]
+}
+
+func NewMyWorker(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) (fsmv2.Worker, error) {
+    w := &MyWorker{}
+    w.InitBase(id, logger, sr)
+    return w, nil
+}
+
+// CollectObservedState — the only required method
+func (w *MyWorker) CollectObservedState(ctx context.Context, desired fsmv2.DesiredState) (fsmv2.ObservedState, error) {
+    cfg := fsmv2.ExtractConfig[MyConfig](desired) // typed config access
+    // ... observe the world using cfg.Host, cfg.Port, etc.
+    return w.WrapStatus(MyStatus{Reachable: true}), nil
+}
+```
+
+The framework provides: `DeriveDesiredState`, `GetInitialState`, `Config()`, `WrapStatus()`, `ConvertWorkerSnapshot`, flat JSON serialization, and CSE type registry wiring. Optional capabilities (`ActionProvider`, `ChildSpecProvider`, `MetricsProvider`, `GracefulShutdowner`) are detected via interface implementation on your worker struct.
+
+See `MIGRATION.md` for migrating existing workers from old-API to new-API.
+
 ## Worker interface
 
 ### The 3 worker methods
