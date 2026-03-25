@@ -18,11 +18,20 @@ package action
 import (
 	"context"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/helloworld/snapshot"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 )
 
 // SayHelloActionName is the name used for logging and metrics.
 const SayHelloActionName = "say_hello"
+
+// HelloDeps declares the dependency interface required by SayHelloAction.
+// Satisfied by *HelloworldDependencies via structural typing, avoiding
+// circular imports between the action and worker packages.
+type HelloDeps interface {
+	ActionLogger(actionType string) deps.FSMLogger
+	SetHelloSaid(said bool)
+	HasSaidHello() bool
+}
 
 // SayHelloAction prints a greeting and marks hello as said.
 //
@@ -31,34 +40,29 @@ type SayHelloAction struct{}
 
 // Execute performs the say hello action.
 func (a *SayHelloAction) Execute(ctx context.Context, depsAny any) error {
-	// 1. Check context cancellation
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
 	default:
 	}
 
-	deps := depsAny.(snapshot.HelloworldDependencies)
+	deps := depsAny.(HelloDeps)
 	logger := deps.ActionLogger(SayHelloActionName)
 
-	// 2. Check if already done (idempotency)
 	if deps.HasSaidHello() {
 		logger.Debug("already_said_hello")
 
 		return nil
 	}
 
-	// 3. Perform the action
 	logger.Info("hello_world")
 
-	// 4. Update dependencies state (observed on next collection)
 	deps.SetHelloSaid(true)
 
 	return nil
 }
 
 // String returns the action name for logging (implements fmt.Stringer).
-// Both String and Name are required: String for fmt.Stringer, Name for the action interface.
 func (a *SayHelloAction) String() string {
 	return SayHelloActionName
 }
