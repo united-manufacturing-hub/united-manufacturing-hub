@@ -765,6 +765,7 @@ func (p *ProtocolConverterService) EvaluateDFCDesiredStates(protConvName string,
 
 	for i, config := range p.dataflowComponentConfig {
 		if config.Name == dfcReadName {
+			// First check, if PC is force stopped by another function call from the dev, not the user payload
 			if protocolConverterDesiredState == "stopped" { // NOTE: Hardcoded to avoid circular import with pkg/fsm/protocolconverter
 				p.dataflowComponentConfig[i].DesiredFSMState = dfcfsm.OperationalStateStopped
 			} else if readDFCDesiredState == "stopped" {
@@ -799,6 +800,7 @@ func (p *ProtocolConverterService) EvaluateDFCDesiredStates(protConvName string,
 	// Find and update our cached config for write DFC
 	for i, config := range p.dataflowComponentConfig {
 		if config.Name == dfcWriteName {
+			// First check, if PC is force stopped by another function call from the dev, not the user payload
 			if protocolConverterDesiredState == "stopped" { // NOTE: Hardcoded to avoid circular import with pkg/fsm/protocolconverter
 				p.dataflowComponentConfig[i].DesiredFSMState = dfcfsm.OperationalStateStopped
 			} else if writeDFCDesiredState == "stopped" {
@@ -806,7 +808,7 @@ func (p *ProtocolConverterService) EvaluateDFCDesiredStates(protConvName string,
 				p.dataflowComponentConfig[i].DesiredFSMState = dfcfsm.OperationalStateStopped
 			} else {
 				// Only start the DFC if it has been configured AND connection is confirmed up
-				if len(p.dataflowComponentConfig[i].DataFlowComponentServiceConfig.BenthosConfig.Input) > 0 {
+				if len(p.dataflowComponentConfig[i].DataFlowComponentServiceConfig.BenthosConfig.Output) > 0 {
 					// CRITICAL: Only set DFC to active when FSM state indicates connection is up
 					// This prevents the issue where Benthos might connect and send data even when
 					// the connection is flaky or filtered, leading to unreliable data transmission
