@@ -1,0 +1,296 @@
+// Copyright 2025 UMH Systems GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package fsmv2_test
+
+import (
+	"time"
+
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
+)
+
+// workerTestConfig is a typed config used in WorkerBase tests.
+type workerTestConfig struct {
+	Host string `json:"host" yaml:"host"`
+	Port int    `json:"port" yaml:"port"`
+}
+
+// stateGetterConfig embeds BaseUserSpec so it implements config.StateGetter.
+type stateGetterConfig struct {
+	config.BaseUserSpec `yaml:",inline"`
+	Host                string `json:"host" yaml:"host"`
+}
+
+// workerTestStatus is a typed status used in WorkerBase tests.
+type workerTestStatus struct {
+	Reachable bool  `json:"reachable"`
+	LatencyMs int64 `json:"latencyMs"`
+}
+
+var _ = Describe("WorkerBase", func() {
+	var (
+		wb       *fsmv2.WorkerBase[workerTestConfig, workerTestStatus]
+		identity deps.Identity
+	)
+
+	BeforeEach(func() {
+		wb = &fsmv2.WorkerBase[workerTestConfig, workerTestStatus]{}
+		identity = deps.Identity{
+			ID:         "test-worker-1",
+			Name:       "test-worker",
+			WorkerType: "test",
+		}
+	})
+
+	Describe("InitBase", func() {
+		It("initializes the worker with identity, logger, and state reader", func() {
+			wb.InitBase(identity, mockLogger, mockStateReader)
+			Expect(wb.Identity()).To(Equal(identity))
+			Expect(wb.Logger()).NotTo(BeNil())
+		})
+	})
+
+	Describe("WrapStatus", func() {
+		It("returns WrappedObservedState with CollectedAt set and correct Status", func() {
+			wb.InitBase(identity, mockLogger, mockStateReader)
+			before := time.Now()
+			status := workerTestStatus{Reachable: true, LatencyMs: 42}
+
+			obs := wb.WrapStatus(status)
+
+			Expect(obs).NotTo(BeNil())
+			Expect(obs.GetTimestamp()).To(BeTemporally(">=", before))
+			Expect(obs.GetTimestamp()).To(BeTemporally("<=", time.Now()))
+
+			typed, ok := obs.(fsmv2.WrappedObservedState[workerTestStatus])
+			Expect(ok).To(BeTrue(), "WrapStatus should return WrappedObservedState[TStatus]")
+			Expect(typed.Status.Reachable).To(BeTrue())
+			Expect(typed.Status.LatencyMs).To(Equal(int64(42)))
+		})
+
+		It("handles uninitialized WorkerBase gracefully (no panic)", func() {
+			uninit := &fsmv2.WorkerBase[workerTestConfig, workerTestStatus]{}
+			status := workerTestStatus{Reachable: false}
+
+			Expect(func() {
+				obs := uninit.WrapStatus(status)
+				Expect(obs).NotTo(BeNil())
+			}).NotTo(Panic())
+		})
+
+		It("copies framework metrics from baseDeps when available", func() {
+			wb.InitBase(identity, mockLogger, mockStateReader)
+
+			status := workerTestStatus{Reachable: true}
+			obs := wb.WrapStatus(status)
+
+			typed, ok := obs.(fsmv2.WrappedObservedState[workerTestStatus])
+			Expect(ok).To(BeTrue())
+			// Framework metrics are zero since supervisor hasn't injected them,
+			// but the field should exist (not panic).
+			Expect(typed.Metrics.Framework.StateTransitionsTotal).To(Equal(int64(0)))
+		})
+
+		It("drains worker metrics from MetricsRecorder", func() {
+			wb.InitBase(identity, mockLogger, mockStateReader)
+
+			// Record some metrics via baseDeps
+			bd := wb.GetDependenciesAny().(*deps.BaseDependencies)
+			bd.MetricsRecorder().IncrementCounter(deps.CounterPullOps, 5)
+			bd.MetricsRecorder().SetGauge(deps.GaugeConsecutiveErrors, 3.0)
+
+			status := workerTestStatus{Reachable: true}
+			obs := wb.WrapStatus(status)
+
+			typed, ok := obs.(fsmv2.WrappedObservedState[workerTestStatus])
+			Expect(ok).To(BeTrue())
+			Expect(typed.Metrics.Worker.Counters["pull_ops"]).To(Equal(int64(5)))
+			Expect(typed.Metrics.Worker.Gauges["consecutive_errors"]).To(Equal(3.0))
+
+			// Second WrapStatus should have empty worker metrics (drained)
+			obs2 := wb.WrapStatus(status)
+			typed2 := obs2.(fsmv2.WrappedObservedState[workerTestStatus])
+			Expect(typed2.Metrics.Worker.Counters).To(BeEmpty())
+			Expect(typed2.Metrics.Worker.Gauges).To(BeEmpty())
+		})
+	})
+
+	Describe("Config and ConfigReady", func() {
+		It("returns zero-value Config before first DeriveDesiredState", func() {
+			wb.InitBase(identity, mockLogger, mockStateReader)
+			cfg := wb.Config()
+			Expect(cfg.Host).To(BeEmpty())
+			Expect(cfg.Port).To(Equal(0))
+		})
+
+		It("returns false for ConfigReady before first DeriveDesiredState", func() {
+			wb.InitBase(identity, mockLogger, mockStateReader)
+			Expect(wb.ConfigReady()).To(BeFalse())
+		})
+
+		It("returns correct Config and true ConfigReady after DeriveDesiredState", func() {
+			wb.InitBase(identity, mockLogger, mockStateReader)
+
+			spec := config.UserSpec{
+				Config: `host: "localhost"
+port: 8080`,
+			}
+			_, err := wb.DeriveDesiredState(spec)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(wb.ConfigReady()).To(BeTrue())
+			cfg := wb.Config()
+			Expect(cfg.Host).To(Equal("localhost"))
+			Expect(cfg.Port).To(Equal(8080))
+		})
+	})
+
+	Describe("DeriveDesiredState", func() {
+		BeforeEach(func() {
+			wb.InitBase(identity, mockLogger, mockStateReader)
+		})
+
+		It("returns default WrappedDesiredState with running state for nil spec", func() {
+			ds, err := wb.DeriveDesiredState(nil)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(ds).NotTo(BeNil())
+			Expect(ds.GetState()).To(Equal("running"))
+			Expect(ds.IsShutdownRequested()).To(BeFalse())
+		})
+
+		It("sets configReady=true even for nil spec", func() {
+			Expect(wb.ConfigReady()).To(BeFalse())
+			_, err := wb.DeriveDesiredState(nil)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(wb.ConfigReady()).To(BeTrue())
+		})
+
+		It("parses UserSpec YAML into typed config", func() {
+			spec := config.UserSpec{
+				Config: `host: "192.168.1.100"
+port: 502`,
+			}
+			ds, err := wb.DeriveDesiredState(spec)
+			Expect(err).NotTo(HaveOccurred())
+
+			typed, ok := ds.(*fsmv2.WrappedDesiredState[workerTestConfig])
+			Expect(ok).To(BeTrue(), "should return *WrappedDesiredState[TConfig]")
+			Expect(typed.Config.Host).To(Equal("192.168.1.100"))
+			Expect(typed.Config.Port).To(Equal(502))
+		})
+
+		It("renders templates before parsing", func() {
+			spec := config.UserSpec{
+				Config: `host: "{{ .IP }}"
+port: {{ .PORT }}`,
+				Variables: config.VariableBundle{
+					User: map[string]interface{}{
+						"IP":   "10.0.0.1",
+						"PORT": 1234,
+					},
+				},
+			}
+			ds, err := wb.DeriveDesiredState(spec)
+			Expect(err).NotTo(HaveOccurred())
+
+			typed := ds.(*fsmv2.WrappedDesiredState[workerTestConfig])
+			Expect(typed.Config.Host).To(Equal("10.0.0.1"))
+			Expect(typed.Config.Port).To(Equal(1234))
+		})
+
+		It("returns error for invalid spec type", func() {
+			_, err := wb.DeriveDesiredState("not-a-userspec")
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("expected UserSpec"))
+		})
+
+		It("returns error for invalid template syntax", func() {
+			spec := config.UserSpec{
+				Config: `host: "{{ .Missing }}"`,
+			}
+			_, err := wb.DeriveDesiredState(spec)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("template"))
+		})
+
+		It("returns error for invalid YAML in config", func() {
+			spec := config.UserSpec{
+				Config: `[invalid yaml`,
+			}
+			_, err := wb.DeriveDesiredState(spec)
+			Expect(err).To(HaveOccurred())
+		})
+
+		It("extracts state from config implementing StateGetter", func() {
+			sgWb := &fsmv2.WorkerBase[stateGetterConfig, workerTestStatus]{}
+			sgWb.InitBase(identity, mockLogger, mockStateReader)
+
+			spec := config.UserSpec{
+				Config: `state: "stopped"
+host: "example.com"`,
+			}
+			ds, err := sgWb.DeriveDesiredState(spec)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(ds.GetState()).To(Equal("stopped"))
+
+			typed := ds.(*fsmv2.WrappedDesiredState[stateGetterConfig])
+			Expect(typed.Config.Host).To(Equal("example.com"))
+		})
+
+		It("caches config for subsequent Config() calls", func() {
+			spec := config.UserSpec{Config: `host: "first"
+port: 1`}
+			_, err := wb.DeriveDesiredState(spec)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(wb.Config().Host).To(Equal("first"))
+
+			spec2 := config.UserSpec{Config: `host: "second"
+port: 2`}
+			_, err = wb.DeriveDesiredState(spec2)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(wb.Config().Host).To(Equal("second"))
+		})
+	})
+
+	Describe("GetInitialState", func() {
+		It("returns a non-nil state", func() {
+			wb.InitBase(identity, mockLogger, mockStateReader)
+			state := wb.GetInitialState()
+			Expect(state).NotTo(BeNil())
+			Expect(state.String()).To(Equal("Stopped"))
+		})
+	})
+
+	Describe("GetDependenciesAny", func() {
+		It("returns baseDeps after initialization", func() {
+			wb.InitBase(identity, mockLogger, mockStateReader)
+			d := wb.GetDependenciesAny()
+			Expect(d).NotTo(BeNil())
+
+			baseDeps, ok := d.(*deps.BaseDependencies)
+			Expect(ok).To(BeTrue())
+			Expect(baseDeps).NotTo(BeNil())
+		})
+
+		It("returns nil before initialization", func() {
+			uninit := &fsmv2.WorkerBase[workerTestConfig, workerTestStatus]{}
+			Expect(uninit.GetDependenciesAny()).To(BeNil())
+		})
+	})
+})
