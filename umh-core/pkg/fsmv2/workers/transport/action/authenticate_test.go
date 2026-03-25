@@ -339,24 +339,34 @@ var _ = Describe("AuthenticateAction", func() {
 
 		It("should fire SentryWarn on first occurrence only", func() {
 			ctx := context.Background()
+			spy := &spyLogger{FSMLogger: deps.NewNopFSMLogger()}
+			identity := deps.Identity{ID: "test-spy", WorkerType: "transport"}
+			spyDeps := transportpkg.NewTransportDependencies(mockTransp, spy, nil, identity)
+
 			mockTransp.authError = &httpTransport.TransportError{
 				Type:    httpTransport.ErrorTypeNetwork,
 				Message: "connection refused",
 			}
 
-			// First failure: consecutiveErrors goes 0 -> 1
-			err := act.Execute(ctx, dependencies)
+			// First failure: consecutiveErrors 0 -> 1, SentryWarn fires
+			err := act.Execute(ctx, spyDeps)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(dependencies.GetConsecutiveErrors()).To(Equal(1))
+			Expect(spyDeps.GetConsecutiveErrors()).To(Equal(1))
 
-			// Second failure: consecutiveErrors goes 1 -> 2
-			err = act.Execute(ctx, dependencies)
+			// Second failure: consecutiveErrors 1 -> 2, SentryWarn does NOT fire
+			err = act.Execute(ctx, spyDeps)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(dependencies.GetConsecutiveErrors()).To(Equal(2))
+			Expect(spyDeps.GetConsecutiveErrors()).To(Equal(2))
 
-			// SentryWarn is called via NopFSMLogger which discards output.
-			// The behavior is verified by checking that consecutiveErrors
-			// increments correctly (the guard condition for SentryWarn).
+			// Third failure: consecutiveErrors 2 -> 3, SentryWarn does NOT fire
+			err = act.Execute(ctx, spyDeps)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(spyDeps.GetConsecutiveErrors()).To(Equal(3))
+
+			// SentryWarn was called exactly once (on first failure)
+			Expect(spy.sentryWarnCount).To(Equal(1))
+			Expect(spy.sentryWarnMsgs).To(HaveLen(1))
+			Expect(spy.sentryWarnMsgs[0]).To(Equal("authentication_failed"))
 		})
 
 		It("should propagate context cancellation during Authenticate", func() {
@@ -412,3 +422,18 @@ func (m *mockTransport) Close() {
 
 func (m *mockTransport) Reset() {
 }
+
+// spyLogger wraps NopFSMLogger to count SentryWarn calls.
+// Test-local: only used by "should fire SentryWarn on first occurrence only".
+type spyLogger struct {
+	deps.FSMLogger
+	sentryWarnCount int
+	sentryWarnMsgs  []string
+}
+
+func (s *spyLogger) SentryWarn(_ deps.Feature, _ string, msg string, _ ...deps.Field) {
+	s.sentryWarnCount++
+	s.sentryWarnMsgs = append(s.sentryWarnMsgs, msg)
+}
+
+func (s *spyLogger) With(_ ...deps.Field) deps.FSMLogger { return s }
