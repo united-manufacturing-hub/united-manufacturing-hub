@@ -17,10 +17,91 @@ package fsmv2
 import (
 	"encoding/json"
 	"fmt"
+	"reflect"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 )
+
+// DetectFieldCollisions checks at init time whether T's JSON field names
+// collide with reserved framework field names used by WrappedObservedState.
+// Called by register.Worker to fail-fast on namespace conflicts.
+func DetectFieldCollisions[T any]() error {
+	reserved := collectJSONFieldNames(reflect.TypeOf(wrappedFrameworkFields{}))
+
+	var zero T
+	tType := reflect.TypeOf(zero)
+	if tType == nil {
+		return fmt.Errorf("DetectFieldCollisions: T must be a concrete type, got nil (interface type)")
+	}
+	if tType.Kind() == reflect.Ptr {
+		tType = tType.Elem()
+	}
+
+	if tType.Kind() != reflect.Struct {
+		return fmt.Errorf("DetectFieldCollisions: T must be a struct, got %s", tType.Kind())
+	}
+
+	statusNames := collectJSONFieldNames(tType)
+
+	var collisions []string
+	for name := range statusNames {
+		if reserved[name] {
+			collisions = append(collisions, name)
+		}
+	}
+
+	if len(collisions) > 0 {
+		sort.Strings(collisions)
+
+		return fmt.Errorf("DetectFieldCollisions: TStatus JSON field(s) %v collide with framework reserved field(s)", collisions)
+	}
+
+	return nil
+}
+
+// collectJSONFieldNames returns the set of JSON field names for a struct type,
+// recursing into anonymous (embedded) structs that have no JSON tag.
+func collectJSONFieldNames(t reflect.Type) map[string]bool {
+	names := make(map[string]bool)
+
+	for i := range t.NumField() {
+		field := t.Field(i)
+		tag := field.Tag.Get("json")
+
+		if tag == "-" {
+			continue
+		}
+
+		if tag == "" {
+			if field.Anonymous {
+				ft := field.Type
+				if ft.Kind() == reflect.Ptr {
+					ft = ft.Elem()
+				}
+				if ft.Kind() == reflect.Struct {
+					for k := range collectJSONFieldNames(ft) {
+						names[k] = true
+					}
+				}
+			}
+
+			continue
+		}
+
+		name, _, _ := strings.Cut(tag, ",")
+		if name == "" {
+			name = field.Name
+		}
+		if name != "" {
+			names[name] = true
+		}
+	}
+
+	return names
+}
 
 // WrappedObservedState wraps a developer's TStatus into the full ObservedState
 // required by the supervisor. Framework fields and TStatus fields are flattened

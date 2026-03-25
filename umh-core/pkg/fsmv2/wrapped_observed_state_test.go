@@ -32,8 +32,9 @@ var _ = Describe("WrappedObservedState", func() {
 		LatencyMs int64 `json:"latencyMs"`
 	}
 
-	// Compile-time assertion: WrappedObservedState satisfies ObservedState interface.
+	// Compile-time assertions.
 	var _ fsmv2.ObservedState = fsmv2.WrappedObservedState[TestStatus]{}
+	var _ fsmv2.TimestampProvider = fsmv2.WrappedObservedState[TestStatus]{}
 
 	Describe("ObservedState interface", func() {
 		It("GetTimestamp returns CollectedAt", func() {
@@ -325,5 +326,57 @@ var _ = Describe("WrappedObservedState", func() {
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("must marshal to a JSON object"))
 		})
+	})
+})
+
+var _ = Describe("DetectFieldCollisions", func() {
+	type CleanStatus struct {
+		Reachable bool  `json:"reachable"`
+		LatencyMs int64 `json:"latencyMs"`
+	}
+
+	type StateCollision struct {
+		State string `json:"state"`
+	}
+
+	type CollectedAtCollision struct {
+		CollectedAt string `json:"collected_at"`
+	}
+
+	type MetricsCollision struct {
+		Metrics string `json:"metrics"`
+	}
+
+	type SkippedField struct {
+		InternalOnly string `json:"-"`
+		Reachable    bool   `json:"reachable"`
+	}
+
+	It("returns nil for clean status with no collisions", func() {
+		err := fsmv2.DetectFieldCollisions[CleanStatus]()
+		Expect(err).NotTo(HaveOccurred())
+	})
+
+	It("returns error when TStatus has 'state' field colliding with framework", func() {
+		err := fsmv2.DetectFieldCollisions[StateCollision]()
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("state"))
+	})
+
+	It("returns error when TStatus has 'collected_at' field colliding with framework", func() {
+		err := fsmv2.DetectFieldCollisions[CollectedAtCollision]()
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("collected_at"))
+	})
+
+	It("returns error when TStatus has 'metrics' field colliding with MetricsEmbedder", func() {
+		err := fsmv2.DetectFieldCollisions[MetricsCollision]()
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("metrics"))
+	})
+
+	It("skips fields with json:\"-\" tag", func() {
+		err := fsmv2.DetectFieldCollisions[SkippedField]()
+		Expect(err).NotTo(HaveOccurred())
 	})
 })
