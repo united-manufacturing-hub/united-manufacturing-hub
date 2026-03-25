@@ -134,6 +134,31 @@ var _ = Describe("WorkerBase", func() {
 		})
 	})
 
+	Describe("InitBase returns BaseDeps", func() {
+		It("returns the same BaseDependencies that WrapStatus reads from", func() {
+			bd := wb.InitBase(identity, mockLogger, mockStateReader)
+			Expect(bd).NotTo(BeNil())
+
+			bd.MetricsRecorder().IncrementCounter(deps.CounterPullOps, 7)
+
+			obs := wb.WrapStatus(workerTestStatus{Reachable: true})
+			typed := obs.(fsmv2.WrappedObservedState[workerTestStatus])
+			Expect(typed.Metrics.Worker.Counters["pull_ops"]).To(Equal(int64(7)))
+		})
+
+		It("documents that a separate BaseDependencies is invisible to WrapStatus", func() {
+			wb.InitBase(identity, mockLogger, mockStateReader)
+
+			separate := deps.NewBaseDependencies(mockLogger, mockStateReader, identity)
+			separate.MetricsRecorder().IncrementCounter(deps.CounterPullOps, 99)
+
+			obs := wb.WrapStatus(workerTestStatus{Reachable: true})
+			typed := obs.(fsmv2.WrappedObservedState[workerTestStatus])
+			Expect(typed.Metrics.Worker.Counters).To(BeEmpty(),
+				"metrics on a separate BaseDependencies must not appear in WrapStatus")
+		})
+	})
+
 	Describe("Config and ConfigReady", func() {
 		It("returns zero-value Config before first DeriveDesiredState", func() {
 			wb.InitBase(identity, mockLogger, mockStateReader)
