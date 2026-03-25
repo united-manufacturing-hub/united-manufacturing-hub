@@ -205,7 +205,7 @@ var Registry = map[string]Scenario{
 //
 //   - FSMv2 communicator worker state machine (Stopped -> Authenticating -> Syncing)
 //   - Authentication with relay server via HTTPTransport
-//   - Message pulling (backend -> edge) and pushing (edge -> backend) via SyncAction
+//   - Message pulling (backend -> edge) and pushing (edge -> backend) via TransportWorker
 //   - Metrics collection and observability
 var CommunicatorScenarioEntry = Scenario{
 	Name:        "communicator",

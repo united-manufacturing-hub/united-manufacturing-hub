@@ -378,7 +378,7 @@ func (c *CommunicationState) InitializeWriteOnlyPusher(instanceUUID string) {
 	)
 
 	// NOTE: We intentionally do NOT call c.Pusher.Start() here.
-	// FSMv2 communicator handles the HTTP push via SyncAction.
+	// FSMv2 communicator handles the HTTP push via PushWorker.
 }
 
 // SetLoginResponseForFSMv2 sets a minimal LoginResponse needed by the Router for FSMv2 mode.
@@ -444,7 +444,7 @@ func (c *CommunicationState) InitializeRouterForFSMv2() {
 
 	c.mu.Lock()
 	c.LoginResponseMu.RLock()
-	// Note: Puller is nil for FSMv2 mode - FSMv2 handles pulling via SyncAction
+	// Note: Puller is nil for FSMv2 mode - FSMv2 handles pulling via PullWorker
 	c.Router = router.NewRouter(c.Watchdog, c.InboundChannel, c.LoginResponse.UUID, c.OutboundChannel, c.ReleaseChannel, c.SubscriberHandler, c.SystemSnapshotManager, c.ConfigManager, c.Logger)
 	c.LoginResponseMu.RUnlock()
 	c.mu.Unlock()

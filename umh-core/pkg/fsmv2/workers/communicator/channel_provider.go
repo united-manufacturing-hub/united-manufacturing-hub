@@ -24,7 +24,7 @@ import (
 type ChannelProvider interface {
 	GetChannels(workerID string) (inbound chan<- *transport.UMHMessage, outbound <-chan *transport.UMHMessage)
 	// GetInboundStats returns the capacity and current length of the inbound channel.
-	// Used by SyncAction to detect backpressure before pulling messages.
+	// Used by PullWorker to detect backpressure before pulling messages.
 	GetInboundStats(workerID string) (capacity int, length int)
 }
 
