@@ -35,6 +35,7 @@ type StatusCollectorType struct {
 	logger                   *zap.SugaredLogger
 	configManager            config.ConfigManager
 	topicBrowserCommunicator *topicbrowser.TopicBrowserCommunicator
+	featureUsage             *models.FeatureUsage
 }
 
 func NewStatusCollector(
@@ -43,6 +44,7 @@ func NewStatusCollector(
 	configManager config.ConfigManager,
 	logger *zap.SugaredLogger,
 	topicBrowserCommunicator *topicbrowser.TopicBrowserCommunicator,
+	featureUsage *models.FeatureUsage,
 ) *StatusCollectorType {
 	collector := &StatusCollectorType{
 		dog:                      dog,
@@ -50,6 +52,7 @@ func NewStatusCollector(
 		logger:                   logger,
 		configManager:            configManager,
 		topicBrowserCommunicator: topicBrowserCommunicator,
+		featureUsage:             featureUsage,
 	}
 
 	return collector
@@ -244,6 +247,7 @@ func (s *StatusCollectorType) GenerateStatusMessage(ctx context.Context, isBoots
 			TopicBrowser:  *topicBrowserData,
 			DataModels:    dataModelData,
 			DataContracts: dataContractData,
+			FeatureUsage:  s.featureUsage,
 			Release: models.Release{
 				Health: &models.Health{
 					Message:       "",

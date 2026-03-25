@@ -64,6 +64,7 @@ func NewHandler(
 	logger *zap.SugaredLogger,
 	topicBrowserCommunicator *topicbrowser.TopicBrowserCommunicator,
 	fsmOutboundChannel chan<- *transport.UMHMessage, // FSMv2 direct channel (nil for legacy mode)
+	featureUsage *models.FeatureUsage,
 ) *Handler {
 	s := &Handler{}
 	s.subscriberRegistry = subscribers.NewRegistry(cull, ttl)
@@ -81,6 +82,7 @@ func NewHandler(
 		configManager,
 		logger,
 		topicBrowserCommunicator,
+		featureUsage,
 	)
 
 	return s

@@ -56,6 +56,7 @@ type CommunicationState struct {
 	// TopicBrowserSimulator is used to access the simulated topic browser state if the agent is running in simulator mode
 	// it is accessed by the generator to generate the topic browser part of the status message
 	TopicBrowserSimulator *topicbrowser.Simulator
+	FeatureUsage          *models.FeatureUsage
 	ReleaseChannel        config.ReleaseChannel
 	ApiUrl                string
 	InsecureTLS           bool
@@ -75,6 +76,7 @@ func NewCommunicationState(
 	logger *zap.SugaredLogger,
 	insecureTLS bool,
 	topicBrowserCache *topicbrowser.Cache,
+	featureUsage *models.FeatureUsage,
 ) *CommunicationState {
 	return &CommunicationState{
 		mu:                    &sync.RWMutex{},
@@ -89,6 +91,7 @@ func NewCommunicationState(
 		Logger:                logger,
 		InsecureTLS:           insecureTLS,
 		TopicBrowserCache:     topicBrowserCache,
+		FeatureUsage:          featureUsage,
 	}
 }
 
@@ -295,6 +298,7 @@ func (c *CommunicationState) InitialiseAndStartSubscriberHandler(ttl time.Durati
 		c.Logger,
 		topicBrowserCommunicator,
 		fsmOutboundChannel, // FSMv2 direct channel (nil for legacy mode)
+		c.FeatureUsage,
 	)
 	if c.SubscriberHandler == nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "Failed to create subscriber handler")

@@ -51,6 +51,7 @@ var _ = Describe("CommunicationState Lock Ordering", func() {
 			logger,
 			false,
 			nil, // topicBrowserCache
+			nil, // featureUsage
 		)
 	})
 
