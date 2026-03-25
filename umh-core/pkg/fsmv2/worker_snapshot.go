@@ -37,6 +37,12 @@ type WorkerSnapshot[TConfig any, TStatus any] struct {
 	IsShutdownRequested bool
 }
 
+// IsStopRequired returns true when the worker should transition to stopped.
+// Covers both explicit shutdown requests and parent-driven stop signals.
+func (s WorkerSnapshot[TConfig, TStatus]) IsStopRequired() bool {
+	return s.IsShutdownRequested || s.ParentMappedState == "stopped"
+}
+
 // ConvertWorkerSnapshot type-asserts the raw snapshot from State.Next() into a
 // fully typed WorkerSnapshot. Panics with a descriptive message if the snapshot
 // contains unexpected types.
