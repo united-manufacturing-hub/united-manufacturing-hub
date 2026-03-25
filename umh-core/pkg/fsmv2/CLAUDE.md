@@ -119,6 +119,30 @@ func init() {
 
 The folder name must match the worker type (e.g., `transport/` for type `"transport"`).
 
+## Worker API v2 (WorkerBase)
+
+New workers should use `WorkerBase[TConfig, TStatus]` instead of the legacy 7-file pattern. Key types:
+
+- **`WorkerBase[TConfig, TStatus]`** — embed in your worker struct; provides `InitBase`, `Config()`, `WrapStatus()`, `DeriveDesiredState`
+- **`WrappedObservedState[TStatus]`** — flat JSON serialization with framework fields (state, shutdown, children counts)
+- **`WrappedDesiredState[TConfig]`** — promotes `BaseDesiredState` fields alongside TConfig
+- **`WorkerSnapshot[TConfig, TStatus]`** — typed snapshot for state `Next()` methods
+- **`ConvertWorkerSnapshot[TConfig, TStatus]`** — entry-point type assertion in states
+- **`ExtractConfig[TConfig](desired)`** — typed config access in `CollectObservedState`
+- **`WrapAction[TDeps]`** — adapts typed actions to `Action[any]`
+- **`register.Worker[TConfig, TStatus]`** — one-line registration (factory + supervisor + CSE types)
+
+**Architecture validators** accept both APIs: `ConvertWorkerSnapshot` and `ConvertSnapshot` are valid entry points; `snap.IsShutdownRequested` (field) and `snap.Desired.IsShutdownRequested()` (method) are valid shutdown checks.
+
+**Capability interfaces** (optional, detected via type assertion on first instantiation):
+- `ActionProvider` — `Actions() map[string]Action[any]`
+- `ChildSpecProvider` — `ChildSpecs() []config.ChildSpec`
+- `MetricsProvider` — `Metrics() []prometheus.Collector`
+- `GracefulShutdowner` — `Shutdown(ctx context.Context) error`
+- `ChildrenViewConsumer` — `SetChildrenView(view any)`
+
+**L5 invariant**: `WorkerBase` must NEVER implement optional capability interfaces. Only the concrete worker struct should implement them.
+
 ## Graceful Shutdown Cascading
 
 Each supervisor level has a `DefaultGracefulShutdownTimeout` of 5 seconds. For nested supervisors (parent-child workers), timeouts cascade:

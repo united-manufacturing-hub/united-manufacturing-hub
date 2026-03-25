@@ -761,6 +761,41 @@ func (d *MyDependencies) SetConnected(v bool) {
 }
 ```
 
+## Migrating from FSMv2 Old-API to Worker API v2
+
+Worker API v2 replaces the 7-file pattern with a single-file approach using generics. Both APIs coexist; migrate workers one at a time.
+
+### What changes
+
+| Old API | Worker API v2 |
+|---------|---------------|
+| `snapshot/snapshot.go` with ObservedState, DesiredState, Snapshot structs | `WrappedObservedState[TStatus]`, `WrappedDesiredState[TConfig]`, `WorkerSnapshot[TConfig, TStatus]` |
+| `worker.go` with `CollectObservedState`, `DeriveDesiredState`, `GetInitialState` | Only `CollectObservedState` required; others provided by `WorkerBase` |
+| `dependencies.go` with custom deps struct | `deps.Identity`, `deps.FSMLogger`, `deps.StateReader` passed to constructor |
+| `init()` with `factory.RegisterWorkerType[...]` + supervisor factory | `register.Worker[TConfig, TStatus]("type", constructor)` |
+| `helpers.ConvertSnapshot[Obs, *Des](snapAny)` in states | `fsmv2.ConvertWorkerSnapshot[TConfig, TStatus](snapAny)` in states |
+| `snap.Desired.IsShutdownRequested()` method call | `snap.IsShutdownRequested` field access |
+| Manual `SetState`, `SetShutdownRequested`, `SetChildrenCounts` in ObservedState | Automatic via collector duck-typing on `WrappedObservedState` |
+
+### Migration steps
+
+1. **Define TConfig and TStatus** — extract config fields from your DesiredState and status fields from your ObservedState into plain structs with JSON tags
+2. **Embed WorkerBase** — replace your worker struct fields with `fsmv2.WorkerBase[TConfig, TStatus]`
+3. **Replace constructor** — call `w.InitBase(id, logger, sr)` instead of manual dependency wiring
+4. **Simplify CollectObservedState** — use `fsmv2.ExtractConfig[TConfig](desired)` for config access, return `w.WrapStatus(TStatus{...})`
+5. **Delete DeriveDesiredState and GetInitialState** — provided by WorkerBase (override only if needed)
+6. **Update states** — use `fsmv2.ConvertWorkerSnapshot[TConfig, TStatus](snapAny)` and `snap.IsShutdownRequested` field access
+7. **Replace registration** — single `register.Worker[TConfig, TStatus]("type", constructor)` call
+8. **Delete snapshot/, dependencies.go, userspec.go** — no longer needed
+9. **Implement capability interfaces** on your worker struct if needed (ActionProvider, ChildSpecProvider, etc.)
+
+### What you can delete after migration
+
+- `snapshot/snapshot.go` — replaced by framework types
+- `dependencies.go` — replaced by `deps.Identity` + `deps.FSMLogger` + `deps.StateReader`
+- `userspec.go` — TConfig IS your userspec
+- Factory/supervisor registration boilerplate in `init()`
+
 ## Further Reading
 
 - [README.md](README.md) - Overview of FSMv2 and the triangle model
