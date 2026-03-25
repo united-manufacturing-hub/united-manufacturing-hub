@@ -31,8 +31,8 @@ type HelloworldConfig struct {
 
 // HelloworldStatus holds the runtime observation data for the helloworld worker.
 type HelloworldStatus struct {
-	// HelloSaid tracks whether the SayHelloAction has been executed.
-	HelloSaid bool `json:"helloSaid"`
 	// Mood is read from the mood file at HelloworldConfig.MoodFilePath by CollectObservedState.
 	Mood string `json:"mood,omitempty"`
+	// HelloSaid tracks whether the SayHelloAction has been executed.
+	HelloSaid bool `json:"helloSaid"`
 }
