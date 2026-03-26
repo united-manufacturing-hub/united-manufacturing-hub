@@ -29,8 +29,26 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/helloworld/action"
 )
+
+// SayHelloActionName is the name used for logging and metrics.
+const SayHelloActionName = "say_hello"
+
+// SayHello implements the say-hello action logic.
+// Idempotent: skips if hello was already said.
+func SayHello(_ context.Context, d *HelloworldDependencies) error {
+	logger := d.ActionLogger(SayHelloActionName)
+
+	if d.HasSaidHello() {
+		logger.Debug("already_said_hello")
+		return nil
+	}
+
+	logger.Info("hello_world")
+	d.SetHelloSaid(true)
+
+	return nil
+}
 
 // HelloworldWorker implements the FSMv2 Worker interface using the WorkerBase API.
 type HelloworldWorker struct {
@@ -76,7 +94,7 @@ func (w *HelloworldWorker) GetDependenciesAny() any {
 // Implements ActionProvider capability interface.
 func (w *HelloworldWorker) Actions() map[string]fsmv2.Action[any] {
 	return map[string]fsmv2.Action[any]{
-		action.SayHelloActionName: &action.SayHelloAction{},
+		SayHelloActionName: fsmv2.SimpleAction[*HelloworldDependencies](SayHelloActionName, SayHello),
 	}
 }
 

@@ -116,4 +116,39 @@ var _ = Describe("HelloworldWorker", func() {
 			Expect(desired).NotTo(BeNil())
 		})
 	})
+
+	Describe("SayHello action", func() {
+		var d *hello_world.HelloworldDependencies
+
+		BeforeEach(func() {
+			identity := deps.Identity{ID: "test-id", WorkerType: "helloworld"}
+			baseDeps := deps.NewBaseDependencies(logger, nil, identity)
+			d = hello_world.NewHelloworldDependencies(baseDeps)
+		})
+
+		It("should set HelloSaid to true", func() {
+			Expect(d.HasSaidHello()).To(BeFalse())
+
+			err := hello_world.SayHello(context.Background(), d)
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(d.HasSaidHello()).To(BeTrue())
+		})
+
+		It("should be idempotent when called multiple times", func() {
+			ctx := context.Background()
+
+			err := hello_world.SayHello(ctx, d)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(d.HasSaidHello()).To(BeTrue())
+
+			err = hello_world.SayHello(ctx, d)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(d.HasSaidHello()).To(BeTrue())
+
+			err = hello_world.SayHello(ctx, d)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(d.HasSaidHello()).To(BeTrue())
+		})
+	})
 })
