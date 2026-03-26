@@ -137,11 +137,11 @@ func NewMyWorker(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) (
 func (w *MyWorker) CollectObservedState(ctx context.Context, desired fsmv2.DesiredState) (fsmv2.ObservedState, error) {
     cfg := fsmv2.ExtractConfig[MyConfig](desired) // typed config access
     // ... observe the world using cfg.Host, cfg.Port, etc.
-    return w.WrapStatus(MyStatus{Reachable: true}), nil
+    return fsmv2.NewObservation(MyStatus{Reachable: true}), nil
 }
 ```
 
-The framework provides: `DeriveDesiredState`, `GetInitialState`, `Config()`, `WrapStatus()`, `ConvertWorkerSnapshot`, flat JSON serialization, and CSE type registry wiring. Optional capabilities (`ActionProvider`, `ChildSpecProvider`, `MetricsProvider`, `GracefulShutdowner`) are detected via interface implementation on your worker struct.
+The framework provides: `DeriveDesiredState`, `GetInitialState`, `Config()`, `NewObservation()`, `ConvertWorkerSnapshot`, flat JSON serialization, and CSE type registry wiring. The collector handles CollectedAt, framework metrics, action history, and metric accumulation automatically. Optional capabilities (`ActionProvider`, `ChildSpecProvider`, `MetricsProvider`, `GracefulShutdowner`) are detected via interface implementation on your worker struct.
 
 See `MIGRATION.md` for migrating existing workers from old-API to new-API.
 

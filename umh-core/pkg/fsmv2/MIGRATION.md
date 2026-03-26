@@ -688,7 +688,16 @@ func (s *TryingToConnectState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.S
 
 ObservedState must include a timestamp for staleness detection. The supervisor uses this to detect when observations are too old.
 
-**Required:**
+**Worker API v2 (preferred):** Use `fsmv2.NewObservation(status)` — the collector sets `CollectedAt` automatically.
+
+```go
+func (w *MyWorker) CollectObservedState(ctx context.Context, desired fsmv2.DesiredState) (fsmv2.ObservedState, error) {
+    return fsmv2.NewObservation(MyStatus{Healthy: true}), nil
+}
+```
+
+**Legacy API:** Set `CollectedAt` manually in your ObservedState.
+
 ```go
 type MyObservedState struct {
     CollectedAt time.Time  // REQUIRED for staleness detection
@@ -782,7 +791,7 @@ Worker API v2 replaces the 7-file pattern with a single-file approach using gene
 1. **Define TConfig and TStatus** — extract config fields from your DesiredState and status fields from your ObservedState into plain structs with JSON tags
 2. **Embed WorkerBase** — replace your worker struct fields with `fsmv2.WorkerBase[TConfig, TStatus]`
 3. **Replace constructor** — call `w.InitBase(id, logger, sr)` instead of manual dependency wiring
-4. **Simplify CollectObservedState** — use `fsmv2.ExtractConfig[TConfig](desired)` for config access, return `w.WrapStatus(TStatus{...})`
+4. **Simplify CollectObservedState** — use `fsmv2.ExtractConfig[TConfig](desired)` for config access, return `fsmv2.NewObservation(TStatus{...})` (the collector handles CollectedAt, framework metrics, action history, and metric accumulation automatically)
 5. **Delete DeriveDesiredState and GetInitialState** — provided by WorkerBase (override only if needed)
 6. **Update states** — use `fsmv2.ConvertWorkerSnapshot[TConfig, TStatus](snapAny)` and `snap.IsShutdownRequested` field access
 7. **Replace registration** — single `register.Worker[TConfig, TStatus]("type", constructor)` call
