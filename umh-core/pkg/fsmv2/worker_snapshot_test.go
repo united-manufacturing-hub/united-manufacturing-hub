@@ -41,7 +41,7 @@ var _ = Describe("ConvertWorkerSnapshot", func() {
 	})
 
 	It("extracts typed Config and Status from a raw Snapshot", func() {
-		obs := fsmv2.WrappedObservedState[workerTestStatus]{
+		obs := fsmv2.Observation[workerTestStatus]{
 			CollectedAt: now,
 			Status:      workerTestStatus{Reachable: true, LatencyMs: 42},
 		}
@@ -72,7 +72,7 @@ var _ = Describe("ConvertWorkerSnapshot", func() {
 		actionResults := []deps.ActionResult{
 			{ActionType: "connect", Success: true, Timestamp: now},
 		}
-		obs := fsmv2.WrappedObservedState[workerTestStatus]{
+		obs := fsmv2.Observation[workerTestStatus]{
 			CollectedAt:       now,
 			Status:            workerTestStatus{Reachable: true},
 			ParentMappedState: "running",
@@ -118,12 +118,12 @@ var _ = Describe("ConvertWorkerSnapshot", func() {
 		}
 		Expect(func() {
 			fsmv2.ConvertWorkerSnapshot[workerTestConfig, workerTestStatus](raw)
-		}).To(PanicWith(ContainSubstring("WrappedObservedState")))
+		}).To(PanicWith(ContainSubstring("Observation")))
 	})
 
 	It("panics with descriptive message on wrong desired state type", func() {
 		raw := fsmv2.Snapshot{
-			Observed: fsmv2.WrappedObservedState[workerTestStatus]{},
+			Observed: fsmv2.Observation[workerTestStatus]{},
 			Desired:  "wrong-type",
 			Identity: identity,
 		}

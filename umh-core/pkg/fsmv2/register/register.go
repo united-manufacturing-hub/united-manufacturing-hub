@@ -75,7 +75,7 @@ func Worker[TConfig any, TStatus any](
 	// Step 3: Auto-generate supervisor factory with concrete wrapper types.
 	supervisorFactory := func(cfg interface{}) interface{} {
 		return supervisor.NewSupervisor[
-			fsmv2.WrappedObservedState[TStatus],
+			fsmv2.Observation[TStatus],
 			*fsmv2.WrappedDesiredState[TConfig],
 		](cfg.(supervisor.Config))
 	}
@@ -87,7 +87,7 @@ func Worker[TConfig any, TStatus any](
 	}
 
 	// Step 5: Register with CSE TypeRegistry.
-	observedType := reflect.TypeOf(fsmv2.WrappedObservedState[TStatus]{})
+	observedType := reflect.TypeOf(fsmv2.Observation[TStatus]{})
 	desiredType := reflect.TypeOf(fsmv2.WrappedDesiredState[TConfig]{})
 
 	if err := storage.GlobalRegistry().RegisterWorkerType(workerType, observedType, desiredType); err != nil {

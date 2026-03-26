@@ -769,13 +769,13 @@ Worker API v2 replaces the 7-file pattern with a single-file approach using gene
 
 | Old API | Worker API v2 |
 |---------|---------------|
-| `snapshot/snapshot.go` with ObservedState, DesiredState, Snapshot structs | `WrappedObservedState[TStatus]`, `WrappedDesiredState[TConfig]`, `WorkerSnapshot[TConfig, TStatus]` |
+| `snapshot/snapshot.go` with ObservedState, DesiredState, Snapshot structs | `Observation[TStatus]`, `WrappedDesiredState[TConfig]`, `WorkerSnapshot[TConfig, TStatus]` |
 | `worker.go` with `CollectObservedState`, `DeriveDesiredState`, `GetInitialState` | Only `CollectObservedState` required; others provided by `WorkerBase` |
 | `dependencies.go` with custom deps struct | `deps.Identity`, `deps.FSMLogger`, `deps.StateReader` passed to constructor |
 | `init()` with `factory.RegisterWorkerType[...]` + supervisor factory | `register.Worker[TConfig, TStatus]("type", constructor)` |
 | `helpers.ConvertSnapshot[Obs, *Des](snapAny)` in states | `fsmv2.ConvertWorkerSnapshot[TConfig, TStatus](snapAny)` in states |
 | `snap.Desired.IsShutdownRequested()` method call | `snap.IsShutdownRequested` field access |
-| Manual `SetState`, `SetShutdownRequested`, `SetChildrenCounts` in ObservedState | Automatic via collector duck-typing on `WrappedObservedState` |
+| Manual `SetState`, `SetShutdownRequested`, `SetChildrenCounts` in ObservedState | Automatic via collector duck-typing on `Observation` |
 
 ### Migration steps
 
