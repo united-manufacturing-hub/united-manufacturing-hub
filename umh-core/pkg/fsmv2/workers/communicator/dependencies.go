@@ -55,7 +55,7 @@ type CommunicatorDependencies struct {
 
 // NewCommunicatorDependencies creates dependencies for the communicator worker.
 // Accepts a shared BaseDependencies to avoid dual-instance metrics divergence
-// (WorkerBase.WrapStatus reads metrics from baseDeps; supervisor writes to the same one).
+// (collector reads metrics from baseDeps; supervisor writes to the same one).
 // Panics if SetChannelProvider was not called first.
 func NewCommunicatorDependencies(baseDeps *deps.BaseDependencies) *CommunicatorDependencies {
 	provider := GetChannelProvider()

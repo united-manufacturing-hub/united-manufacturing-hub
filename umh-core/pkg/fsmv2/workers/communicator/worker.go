@@ -29,7 +29,7 @@
 // # Worker API v2
 //
 // This package uses the WorkerBase[TConfig, TStatus] API with custom overrides:
-//   - Custom CollectObservedState: builds status from deps, delegates metric accumulation to WrapStatusAccumulated
+//   - Custom CollectObservedState: builds status from deps, returns NewObservation (collector handles metric accumulation)
 //   - Post-parse hook: applies timeout default
 //   - ChildSpecFactory: produces TransportWorker child specs
 //
@@ -52,6 +52,9 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
 	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
 )
+
+// WorkerType is the registered type name for this worker.
+const WorkerType = "communicator"
 
 // CommunicatorWorker implements the FSMv2 Worker interface using the WorkerBase API.
 type CommunicatorWorker struct {
@@ -101,10 +104,10 @@ func (w *CommunicatorWorker) GetDependenciesAny() any {
 }
 
 // CollectObservedState returns the current observed state of the communicator.
-// Records the consecutive-errors gauge and delegates metric accumulation
-// to WrapStatusAccumulated. Deprecated transport fields (JWT, messages,
-// auth state) are now tracked by TransportWorker (ENG-4264).
-func (w *CommunicatorWorker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
+// Records the consecutive-errors gauge. Returns NewObservation; the collector
+// handles CollectedAt, framework metrics, action history, and metric
+// accumulation (load previous from CSE, drain, merge) automatically.
+func (w *CommunicatorWorker) CollectObservedState(_ context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
 	d := w.deps
 
 	d.MetricsRecorder().SetGauge(deps.GaugeConsecutiveErrors, float64(d.GetConsecutiveErrors()))
@@ -117,9 +120,9 @@ func (w *CommunicatorWorker) CollectObservedState(ctx context.Context, _ fsmv2.D
 		LastAuthAttemptAt: d.GetLastAuthAttemptAt(),
 	}
 
-	return w.WrapStatusAccumulated(ctx, status), nil
+	return fsmv2.NewObservation(status), nil
 }
 
 func init() {
-	register.Worker[CommunicatorConfig, CommunicatorStatus]("communicator", NewCommunicatorWorker)
+	register.Worker[CommunicatorConfig, CommunicatorStatus](WorkerType, NewCommunicatorWorker)
 }

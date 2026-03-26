@@ -40,7 +40,7 @@ var _ = Describe("RunningState", func() {
 			BeforeEach(func() {
 				snap = fsmv2.Snapshot{
 					Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "helloworld"},
-					Observed: fsmv2.WrappedObservedState[hello_world.HelloworldStatus]{
+					Observed: fsmv2.Observation[hello_world.HelloworldStatus]{
 						Status: hello_world.HelloworldStatus{HelloSaid: true},
 					},
 					Desired: &fsmv2.WrappedDesiredState[hello_world.HelloworldConfig]{},
@@ -70,7 +70,7 @@ var _ = Describe("RunningState", func() {
 			BeforeEach(func() {
 				snap = fsmv2.Snapshot{
 					Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "helloworld"},
-					Observed: fsmv2.WrappedObservedState[hello_world.HelloworldStatus]{
+					Observed: fsmv2.Observation[hello_world.HelloworldStatus]{
 						Status: hello_world.HelloworldStatus{HelloSaid: true},
 					},
 					Desired: &fsmv2.WrappedDesiredState[hello_world.HelloworldConfig]{
@@ -117,7 +117,7 @@ var _ = Describe("RunningState Transitions", func() {
 		It("should transition on shutdown request", func() {
 			snap := fsmv2.Snapshot{
 				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "helloworld"},
-				Observed: fsmv2.WrappedObservedState[hello_world.HelloworldStatus]{
+				Observed: fsmv2.Observation[hello_world.HelloworldStatus]{
 					Status: hello_world.HelloworldStatus{HelloSaid: true},
 				},
 				Desired: &fsmv2.WrappedDesiredState[hello_world.HelloworldConfig]{
@@ -137,7 +137,7 @@ var _ = Describe("RunningState Transitions", func() {
 		It("should stay running with default desired state", func() {
 			snap := fsmv2.Snapshot{
 				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "helloworld"},
-				Observed: fsmv2.WrappedObservedState[hello_world.HelloworldStatus]{
+				Observed: fsmv2.Observation[hello_world.HelloworldStatus]{
 					Status: hello_world.HelloworldStatus{HelloSaid: true},
 				},
 				Desired: &fsmv2.WrappedDesiredState[hello_world.HelloworldConfig]{},
@@ -153,7 +153,7 @@ var _ = Describe("RunningState Transitions", func() {
 		It("should stay running with explicit shutdown=false", func() {
 			snap := fsmv2.Snapshot{
 				Identity: deps.Identity{ID: "hello-running", Name: "helloworld", WorkerType: "helloworld"},
-				Observed: fsmv2.WrappedObservedState[hello_world.HelloworldStatus]{
+				Observed: fsmv2.Observation[hello_world.HelloworldStatus]{
 					Status: hello_world.HelloworldStatus{HelloSaid: true},
 				},
 				Desired: &fsmv2.WrappedDesiredState[hello_world.HelloworldConfig]{
@@ -171,7 +171,7 @@ var _ = Describe("RunningState Transitions", func() {
 		It("should stay running even if HelloSaid becomes false", func() {
 			snap := fsmv2.Snapshot{
 				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "helloworld"},
-				Observed: fsmv2.WrappedObservedState[hello_world.HelloworldStatus]{
+				Observed: fsmv2.Observation[hello_world.HelloworldStatus]{
 					Status: hello_world.HelloworldStatus{HelloSaid: false},
 				},
 				Desired: &fsmv2.WrappedDesiredState[hello_world.HelloworldConfig]{},

@@ -40,7 +40,7 @@ var _ = Describe("DegradedState", func() {
 			BeforeEach(func() {
 				snap = fsmv2.Snapshot{
 					Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "helloworld"},
-					Observed: fsmv2.WrappedObservedState[hello_world.HelloworldStatus]{
+					Observed: fsmv2.Observation[hello_world.HelloworldStatus]{
 						Status: hello_world.HelloworldStatus{Mood: "sad", HelloSaid: true},
 					},
 					Desired: &fsmv2.WrappedDesiredState[hello_world.HelloworldConfig]{},
@@ -70,7 +70,7 @@ var _ = Describe("DegradedState", func() {
 			BeforeEach(func() {
 				snap = fsmv2.Snapshot{
 					Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "helloworld"},
-					Observed: fsmv2.WrappedObservedState[hello_world.HelloworldStatus]{
+					Observed: fsmv2.Observation[hello_world.HelloworldStatus]{
 						Status: hello_world.HelloworldStatus{Mood: "happy", HelloSaid: true},
 					},
 					Desired: &fsmv2.WrappedDesiredState[hello_world.HelloworldConfig]{},
@@ -100,7 +100,7 @@ var _ = Describe("DegradedState", func() {
 			BeforeEach(func() {
 				snap = fsmv2.Snapshot{
 					Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "helloworld"},
-					Observed: fsmv2.WrappedObservedState[hello_world.HelloworldStatus]{
+					Observed: fsmv2.Observation[hello_world.HelloworldStatus]{
 						Status: hello_world.HelloworldStatus{Mood: "sad", HelloSaid: true},
 					},
 					Desired: &fsmv2.WrappedDesiredState[hello_world.HelloworldConfig]{
@@ -147,7 +147,7 @@ var _ = Describe("DegradedState Transitions", func() {
 		It("should transition when mood is no longer sad", func() {
 			snap := fsmv2.Snapshot{
 				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "helloworld"},
-				Observed: fsmv2.WrappedObservedState[hello_world.HelloworldStatus]{
+				Observed: fsmv2.Observation[hello_world.HelloworldStatus]{
 					Status: hello_world.HelloworldStatus{Mood: "happy", HelloSaid: true},
 				},
 				Desired: &fsmv2.WrappedDesiredState[hello_world.HelloworldConfig]{},
@@ -163,7 +163,7 @@ var _ = Describe("DegradedState Transitions", func() {
 		It("should transition when mood file is absent (empty mood)", func() {
 			snap := fsmv2.Snapshot{
 				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "helloworld"},
-				Observed: fsmv2.WrappedObservedState[hello_world.HelloworldStatus]{
+				Observed: fsmv2.Observation[hello_world.HelloworldStatus]{
 					Status: hello_world.HelloworldStatus{Mood: "", HelloSaid: true},
 				},
 				Desired: &fsmv2.WrappedDesiredState[hello_world.HelloworldConfig]{},
@@ -181,7 +181,7 @@ var _ = Describe("DegradedState Transitions", func() {
 		It("should transition on shutdown request", func() {
 			snap := fsmv2.Snapshot{
 				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "helloworld"},
-				Observed: fsmv2.WrappedObservedState[hello_world.HelloworldStatus]{
+				Observed: fsmv2.Observation[hello_world.HelloworldStatus]{
 					Status: hello_world.HelloworldStatus{Mood: "sad", HelloSaid: true},
 				},
 				Desired: &fsmv2.WrappedDesiredState[hello_world.HelloworldConfig]{
@@ -199,7 +199,7 @@ var _ = Describe("DegradedState Transitions", func() {
 		It("should shutdown even if mood has recovered", func() {
 			snap := fsmv2.Snapshot{
 				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "helloworld"},
-				Observed: fsmv2.WrappedObservedState[hello_world.HelloworldStatus]{
+				Observed: fsmv2.Observation[hello_world.HelloworldStatus]{
 					Status: hello_world.HelloworldStatus{Mood: "happy", HelloSaid: true},
 				},
 				Desired: &fsmv2.WrappedDesiredState[hello_world.HelloworldConfig]{
@@ -219,7 +219,7 @@ var _ = Describe("DegradedState Transitions", func() {
 		It("should stay degraded when mood is still sad", func() {
 			snap := fsmv2.Snapshot{
 				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "helloworld"},
-				Observed: fsmv2.WrappedObservedState[hello_world.HelloworldStatus]{
+				Observed: fsmv2.Observation[hello_world.HelloworldStatus]{
 					Status: hello_world.HelloworldStatus{Mood: "sad", HelloSaid: true},
 				},
 				Desired: &fsmv2.WrappedDesiredState[hello_world.HelloworldConfig]{},
