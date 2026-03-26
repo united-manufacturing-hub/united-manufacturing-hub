@@ -181,6 +181,27 @@ func (m *internalMockWorkerWithChildren) GetInitialState() fsmv2.State[any, any]
 	return m.initialState
 }
 
+// newObservationMockWorker returns fsmv2.NewObservation (zero CollectedAt) from CollectObservedState.
+type newObservationMockWorker struct {
+	initialState fsmv2.State[any, any]
+}
+
+type newObsStatus struct {
+	Ready bool `json:"ready"`
+}
+
+func (m *newObservationMockWorker) CollectObservedState(_ context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
+	return fsmv2.NewObservation(newObsStatus{Ready: true}), nil
+}
+
+func (m *newObservationMockWorker) DeriveDesiredState(_ interface{}) (fsmv2.DesiredState, error) {
+	return &config.DesiredState{BaseDesiredState: config.BaseDesiredState{State: "running"}}, nil
+}
+
+func (m *newObservationMockWorker) GetInitialState() fsmv2.State[any, any] {
+	return m.initialState
+}
+
 var _ = Describe("Supervisor Internal", func() {
 	var (
 		ctx    context.Context
@@ -656,6 +677,49 @@ var _ = Describe("Supervisor Internal", func() {
 
 			mappedState := typedChild.GetMappedParentState()
 			Expect(mappedState).To(Equal("running"))
+		})
+	})
+
+	Describe("AddWorker with NewObservation", func() {
+		It("should set CollectedAt when worker returns zero-time observation", func() {
+			basicStore := memory.NewInMemoryStore()
+			defer func() { _ = basicStore.Close(ctx) }()
+
+			Expect(basicStore.CreateCollection(ctx, "test_identity", nil)).To(Succeed())
+			Expect(basicStore.CreateCollection(ctx, "test_desired", nil)).To(Succeed())
+			Expect(basicStore.CreateCollection(ctx, "test_observed", nil)).To(Succeed())
+
+			triangularStore := storage.NewTriangularStore(basicStore, deps.NewNopFSMLogger())
+
+			sup := NewSupervisor[*TestObservedState, *TestDesiredState](Config{
+				WorkerType: "test",
+				Store:      triangularStore,
+				Logger:     logger,
+			})
+
+			beforeAdd := time.Now()
+
+			identity := deps.Identity{
+				ID:         "worker-obs",
+				Name:       "Observation Worker",
+				WorkerType: "test",
+			}
+
+			newObsWorker := &newObservationMockWorker{
+				initialState: &mockState{name: "initial"},
+			}
+
+			err := sup.AddWorker(identity, newObsWorker)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Load the saved observation and verify CollectedAt was set.
+			var loaded struct {
+				CollectedAt time.Time `json:"collected_at"`
+			}
+			err = triangularStore.LoadObservedTyped(ctx, "test", "worker-obs", &loaded)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(loaded.CollectedAt).NotTo(BeZero(), "CollectedAt should be set by AddWorker")
+			Expect(loaded.CollectedAt).To(BeTemporally(">=", beforeAdd))
 		})
 	})
 
