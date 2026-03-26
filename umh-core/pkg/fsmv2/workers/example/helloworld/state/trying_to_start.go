@@ -18,7 +18,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	hello_world "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/helloworld"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/helloworld/action"
 )
 
 // TryingToStartState is a transitional state that emits the SayHelloAction.
@@ -42,7 +41,9 @@ func (s *TryingToStartState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	}
 
 	// 3. Emit action and stay in this state
-	return fsmv2.Result[any, any](s, fsmv2.SignalNone, &action.SayHelloAction{}, "Saying hello to the world")
+	return fsmv2.Result[any, any](s, fsmv2.SignalNone,
+		fsmv2.SimpleAction[*hello_world.HelloworldDependencies](hello_world.SayHelloActionName, hello_world.SayHello),
+		"Saying hello to the world")
 }
 
 // String returns the state name for logging and metrics.
