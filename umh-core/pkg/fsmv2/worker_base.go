@@ -98,6 +98,10 @@ func (w *WorkerBase[TConfig, TStatus]) ConfigReady() bool {
 	return w.configReady
 }
 
+// Deprecated: Use fsmv2.NewObservation(status) instead. The collector now handles
+// CollectedAt, framework metrics, action history, and metric accumulation automatically
+// after CollectObservedState returns (post-COS wrapping).
+//
 // WrapStatus constructs an Observation from the developer's TStatus.
 // Sets CollectedAt to time.Now() (BW2), copies framework metrics and action history from baseDeps (BW3).
 // Safe to call on uninitialized WorkerBase (returns observation with zero metrics, no panic).
@@ -134,6 +138,10 @@ func (w *WorkerBase[TConfig, TStatus]) WrapStatus(status TStatus) ObservedState 
 	return obs
 }
 
+// Deprecated: Use fsmv2.NewObservation(status) instead. The collector now handles
+// metric accumulation (load previous from CSE, drain recorder, merge) automatically
+// after CollectObservedState returns (post-COS wrapping).
+//
 // WrapStatusAccumulated constructs an Observation with cross-tick metric accumulation.
 // Unlike WrapStatus (current-tick only), this reads the previous observed state from CSE,
 // merges counters (additive) and gauges (replace), then drains the current tick's metrics on top.
