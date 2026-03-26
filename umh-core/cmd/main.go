@@ -139,18 +139,12 @@ func main() {
 
 	configData.Agent.UseFSMv2ProtocolConverter = v
 
-	now := time.Now()
-	var configBackupEnabledSince *time.Time
-	if configBackupEnabled {
-		configBackupEnabledSince = &now
-	}
 	featureUsage := &models.FeatureUsage{
-		ConfigBackupEnabledSince: configBackupEnabledSince,
-		ConfigBackupEnabled:      configBackupEnabled,
-		FSMv2Transport:           configData.Agent.UseFSMv2Transport,
-		FSMv2MemoryCleanup:       configData.Agent.UseFSMv2MemoryCleanup,
-		FSMv2ProtocolConverter:   configData.Agent.UseFSMv2ProtocolConverter,
-		ResourceLimitBlocking:    configData.Agent.EnableResourceLimitBlocking,
+		ConfigBackupEnabled:           configBackupEnabled,
+		FSMv2TransportEnabled:         configData.Agent.UseFSMv2Transport,
+		FSMv2MemoryCleanupEnabled:     configData.Agent.UseFSMv2MemoryCleanup,
+		FSMv2ProtocolConverterEnabled: configData.Agent.UseFSMv2ProtocolConverter,
+		ResourceLimitBlockingEnabled:  configData.Agent.EnableResourceLimitBlocking,
 	}
 
 	// Ensure the S6 repository directory exists

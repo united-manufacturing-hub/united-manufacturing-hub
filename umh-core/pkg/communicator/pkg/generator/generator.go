@@ -234,6 +234,16 @@ func (s *StatusCollectorType) GenerateStatusMessage(ctx context.Context, isBoots
 	}
 
 	// Step 3: Create the status message
+
+	// Copy the base FeatureUsage struct and overlay the dynamic backup count so
+	// the original (immutable after startup) is never mutated.
+	var featureUsage *models.FeatureUsage
+	if s.featureUsage != nil {
+		fu := *s.featureUsage
+		fu.ConfigBackupCount = int(s.configManager.GetBackupCount())
+		featureUsage = &fu
+	}
+
 	statusMessage := &models.StatusMessage{
 		Core: models.Core{
 			Agent: models.Agent{
@@ -247,7 +257,7 @@ func (s *StatusCollectorType) GenerateStatusMessage(ctx context.Context, isBoots
 			TopicBrowser:  *topicBrowserData,
 			DataModels:    dataModelData,
 			DataContracts: dataContractData,
-			FeatureUsage:  s.featureUsage,
+			FeatureUsage:  featureUsage,
 			Release: models.Release{
 				Health: &models.Health{
 					Message:       "",

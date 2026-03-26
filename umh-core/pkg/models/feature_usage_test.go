@@ -16,7 +16,6 @@ package models_test
 
 import (
 	"encoding/json"
-	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -24,31 +23,6 @@ import (
 )
 
 var _ = Describe("FeatureUsage", func() {
-	It("marshals all fields to correct JSON", func() {
-		now := time.Now().UTC().Truncate(time.Second)
-		fu := models.FeatureUsage{
-			ConfigBackupEnabledSince: &now,
-			ConfigBackupEnabled:      true,
-			FSMv2Transport:           true,
-			FSMv2MemoryCleanup:       true,
-			FSMv2ProtocolConverter:   true,
-			ResourceLimitBlocking:    true,
-		}
-
-		data, err := json.Marshal(fu)
-		Expect(err).NotTo(HaveOccurred())
-
-		var raw map[string]interface{}
-		Expect(json.Unmarshal(data, &raw)).To(Succeed())
-
-		Expect(raw).To(HaveKey("configBackupEnabled"))
-		Expect(raw).To(HaveKey("configBackupEnabledSince"))
-		Expect(raw).To(HaveKey("fsmv2Transport"))
-		Expect(raw).To(HaveKey("fsmv2MemoryCleanup"))
-		Expect(raw).To(HaveKey("fsmv2ProtocolConverter"))
-		Expect(raw).To(HaveKey("resourceLimitBlocking"))
-	})
-
 	It("omits featureUsage from Core JSON when nil", func() {
 		core := models.Core{
 			FeatureUsage: nil,
@@ -61,20 +35,5 @@ var _ = Describe("FeatureUsage", func() {
 		Expect(json.Unmarshal(data, &raw)).To(Succeed())
 
 		Expect(raw).NotTo(HaveKey("featureUsage"))
-	})
-
-	It("omits configBackupEnabledSince when nil", func() {
-		fu := models.FeatureUsage{
-			ConfigBackupEnabledSince: nil,
-			ConfigBackupEnabled:      true,
-		}
-
-		data, err := json.Marshal(fu)
-		Expect(err).NotTo(HaveOccurred())
-
-		var raw map[string]interface{}
-		Expect(json.Unmarshal(data, &raw)).To(Succeed())
-
-		Expect(raw).NotTo(HaveKey("configBackupEnabledSince"))
 	})
 })

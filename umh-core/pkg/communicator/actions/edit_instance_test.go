@@ -639,3 +639,8 @@ func (w *writeFailingMockConfigManager) AtomicDeleteStreamProcessor(ctx context.
 
 	return nil
 }
+
+// GetBackupCount returns 0 for the mock (no real backups are created).
+func (w *writeFailingMockConfigManager) GetBackupCount() uint64 {
+	return 0
+}
