@@ -18,8 +18,6 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
-	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
 )
 
 // CommunicatorConfig holds the user-provided configuration for the communicator worker.
@@ -35,43 +33,10 @@ type CommunicatorConfig struct {
 }
 
 // CommunicatorStatus holds the runtime observation data for the communicator worker.
-// JSON tags must match the old CommunicatorObservedState serialization exactly
-// for CSE backward compatibility. Fields without explicit tags in the old code
-// used Go-default serialization (capitalized field name).
+// Deprecated fields (JWTToken, JWTExpiry, Authenticated, AuthenticatedUUID,
+// MessagesReceived, ConsecutiveErrors, IsBackpressured, LastErrorType,
+// LastRetryAfter, LastErrorAt, LastAuthAttemptAt) were removed in ENG-4265.
+// These are now tracked by TransportWorker.
 type CommunicatorStatus struct {
-	JWTExpiry         time.Time
 	DegradedEnteredAt time.Time `json:"degradedEnteredAt,omitempty"`
-	LastAuthAttemptAt time.Time `json:"lastAuthAttemptAt,omitempty"`
-	LastErrorAt       time.Time `json:"lastErrorAt,omitempty"`
-
-	JWTToken          string
-	AuthenticatedUUID string `json:"authenticatedUUID,omitempty"`
-
-	MessagesReceived []transport.UMHMessage
-
-	ConsecutiveErrors int
-
-	LastErrorType  httpTransport.ErrorType `json:"lastErrorType,omitempty"`
-	LastRetryAfter time.Duration           `json:"lastRetryAfter,omitempty"`
-
-	IsBackpressured bool `json:"isBackpressured,omitempty"`
-
-	// Deprecated: Authentication is now handled by TransportWorker (ENG-4264).
-	Authenticated bool
-}
-
-// IsTokenExpired returns true if the JWT token is expired or will expire within 10 minutes.
-func (s CommunicatorStatus) IsTokenExpired() bool {
-	if s.JWTExpiry.IsZero() {
-		return false
-	}
-
-	const refreshBuffer = 10 * time.Minute
-
-	return time.Now().Add(refreshBuffer).After(s.JWTExpiry)
-}
-
-// GetConsecutiveErrors returns the number of consecutive errors.
-func (s CommunicatorStatus) GetConsecutiveErrors() int {
-	return s.ConsecutiveErrors
 }
