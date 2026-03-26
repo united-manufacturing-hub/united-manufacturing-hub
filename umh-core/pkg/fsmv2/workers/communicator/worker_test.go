@@ -241,7 +241,7 @@ state: "running"
 
 				_, err := worker.DeriveDesiredState(spec)
 				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("config parse failed"))
+				Expect(err.Error()).To(ContainSubstring("config unmarshal failed"))
 			})
 		})
 	})

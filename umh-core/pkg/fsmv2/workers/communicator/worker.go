@@ -29,9 +29,9 @@
 // # Worker API v2
 //
 // This package uses the WorkerBase[TConfig, TStatus] API with custom overrides:
-//   - Custom CollectObservedState: reads previous metrics from CSE for accumulation
-//   - Custom DeriveDesiredState: constructs TransportWorker child specs
-//   - RegisterInitialState pattern: breaks circular import with state package
+//   - Custom CollectObservedState: builds status from deps, delegates metric accumulation to WrapStatusAccumulated
+//   - Post-parse hook: applies timeout default
+//   - ChildSpecFactory: produces TransportWorker child specs
 //
 // # States and Transitions
 //
@@ -45,10 +45,6 @@ package communicator
 import (
 	"context"
 	"errors"
-	"fmt"
-	"time"
-
-	"gopkg.in/yaml.v3"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
@@ -56,16 +52,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
 	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
 )
-
-// registeredInitialState holds the worker-specific initial state, set by the state
-// package via RegisterInitialState. This avoids a circular import (worker -> state -> worker).
-var registeredInitialState fsmv2.State[any, any]
-
-// RegisterInitialState sets the worker-specific initial state.
-// Called from the state package's init() to break the circular import.
-func RegisterInitialState(s fsmv2.State[any, any]) {
-	registeredInitialState = s
-}
 
 // CommunicatorWorker implements the FSMv2 Worker interface using the WorkerBase API.
 type CommunicatorWorker struct {
@@ -80,11 +66,24 @@ func NewCommunicatorWorker(id deps.Identity, logger deps.FSMLogger, sr deps.Stat
 	}
 
 	w := &CommunicatorWorker{}
-	w.InitBase(id, logger, sr)
-
-	// Share WorkerBase's BaseDependencies to avoid dual-instance metrics divergence.
-	baseDeps := w.WorkerBase.GetDependenciesAny().(*deps.BaseDependencies)
+	baseDeps := w.InitBase(id, logger, sr)
 	w.deps = NewCommunicatorDependencies(baseDeps)
+
+	w.SetPostParseHook(func(cfg *CommunicatorConfig) error {
+		if cfg.Timeout == 0 {
+			cfg.Timeout = httpTransport.LongPollingDuration + httpTransport.LongPollingBuffer
+		}
+		return nil
+	})
+
+	w.SetChildSpecsFactory(func(_ CommunicatorConfig, spec config.UserSpec) []config.ChildSpec {
+		return []config.ChildSpec{{
+			Name:             "transport",
+			WorkerType:       "transport",
+			UserSpec:         spec,
+			ChildStartStates: []string{"Syncing", "Recovering"},
+		}}
+	})
 
 	return w, nil
 }
@@ -102,148 +101,22 @@ func (w *CommunicatorWorker) GetDependenciesAny() any {
 }
 
 // CollectObservedState returns the current observed state of the communicator.
-// Constructs WrappedObservedState manually instead of using WrapStatus because
-// the communicator accumulates metrics across ticks by reading previous state from CSE.
+// Builds the status struct from deps, records the consecutive-errors gauge,
+// and delegates metric accumulation to WrapStatusAccumulated.
 func (w *CommunicatorWorker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
-	select {
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	default:
-	}
-
 	d := w.deps
 
 	consecutiveErrors := d.GetConsecutiveErrors()
-	degradedEnteredAt := d.GetDegradedEnteredAt()
 
-	var prevWorkerMetrics deps.Metrics
-
-	sr := d.GetStateReader()
-	if sr != nil {
-		var prev fsmv2.WrappedObservedState[CommunicatorStatus]
-		if err := sr.LoadObservedTyped(ctx, d.GetWorkerType(), d.GetWorkerID(), &prev); err != nil {
-			d.GetLogger().Debug("observed_state_load_failed", deps.Err(err))
-		} else {
-			prevWorkerMetrics = prev.Metrics.Worker
-		}
-	}
-
-	newWorkerMetrics := prevWorkerMetrics
-
-	if newWorkerMetrics.Counters == nil {
-		newWorkerMetrics.Counters = make(map[string]int64)
-	}
-
-	if newWorkerMetrics.Gauges == nil {
-		newWorkerMetrics.Gauges = make(map[string]float64)
-	}
-
-	tickMetrics := d.MetricsRecorder().Drain()
-
-	for name, delta := range tickMetrics.Counters {
-		newWorkerMetrics.Counters[name] += delta
-	}
-
-	for name, value := range tickMetrics.Gauges {
-		newWorkerMetrics.Gauges[name] = value
-	}
-
-	newWorkerMetrics.Gauges[string(deps.GaugeConsecutiveErrors)] = float64(consecutiveErrors)
-
-	metricsContainer := deps.MetricsContainer{
-		Worker: newWorkerMetrics,
-	}
-
-	if fm := d.GetFrameworkState(); fm != nil {
-		metricsContainer.Framework = *fm
-	}
+	// Record as gauge so WrapStatusAccumulated includes it in the drain.
+	d.MetricsRecorder().SetGauge(deps.GaugeConsecutiveErrors, float64(consecutiveErrors))
 
 	status := CommunicatorStatus{
 		ConsecutiveErrors: consecutiveErrors,
-		DegradedEnteredAt: degradedEnteredAt,
+		DegradedEnteredAt: d.GetDegradedEnteredAt(),
 	}
 
-	observed := fsmv2.WrappedObservedState[CommunicatorStatus]{
-		CollectedAt:     time.Now(),
-		Status:          status,
-		MetricsEmbedder: deps.MetricsEmbedder{Metrics: metricsContainer},
-	}
-
-	if actionHistory := d.GetActionHistory(); actionHistory != nil {
-		observed.LastActionResults = actionHistory
-	}
-
-	return observed, nil
-}
-
-// DeriveDesiredState parses UserSpec.Config YAML into typed CommunicatorConfig
-// and constructs the TransportWorker child spec.
-func (w *CommunicatorWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
-	if spec == nil {
-		return &fsmv2.WrappedDesiredState[CommunicatorConfig]{
-			BaseDesiredState: config.BaseDesiredState{
-				State: config.DesiredStateRunning,
-			},
-			ChildrenSpecs: makeTransportChildSpec(config.UserSpec{}),
-		}, nil
-	}
-
-	userSpec, ok := spec.(config.UserSpec)
-	if !ok {
-		return nil, fmt.Errorf("invalid spec type: expected UserSpec, got %T", spec)
-	}
-
-	renderedConfig, err := config.RenderConfigTemplate(userSpec.Config, userSpec.Variables)
-	if err != nil {
-		return nil, fmt.Errorf("template rendering failed: %w", err)
-	}
-
-	var cfg CommunicatorConfig
-	if err := yaml.Unmarshal([]byte(renderedConfig), &cfg); err != nil {
-		return nil, fmt.Errorf("config parse failed: %w", err)
-	}
-
-	if cfg.Timeout == 0 {
-		// Default to LongPollingDuration + buffer to prevent premature action timeouts
-		cfg.Timeout = httpTransport.LongPollingDuration + httpTransport.LongPollingBuffer
-	}
-
-	desiredState := config.DesiredStateRunning
-	if s := cfg.GetState(); s != "" {
-		desiredState = s
-	}
-
-	return &fsmv2.WrappedDesiredState[CommunicatorConfig]{
-		BaseDesiredState: config.BaseDesiredState{
-			State: desiredState,
-		},
-		Config:        cfg,
-		ChildrenSpecs: makeTransportChildSpec(userSpec),
-	}, nil
-}
-
-// makeTransportChildSpec creates the ChildSpec for the TransportWorker child.
-// TransportWorker handles authentication, push, and pull operations.
-// ChildStartStates includes both Syncing and Recovering so the child remains
-// running during error recovery and does not restart on parent state oscillation.
-func makeTransportChildSpec(parentSpec config.UserSpec) []config.ChildSpec {
-	return []config.ChildSpec{{
-		Name:             "transport",
-		WorkerType:       "transport",
-		UserSpec:         parentSpec,
-		ChildStartStates: []string{"Syncing", "Recovering"},
-	}}
-}
-
-// GetInitialState returns the worker-specific StoppedState that knows how to
-// transition to SyncingState. Falls back to WorkerBase's default if
-// the state package hasn't registered itself.
-func (w *CommunicatorWorker) GetInitialState() fsmv2.State[any, any] {
-	if registeredInitialState != nil {
-		return registeredInitialState
-	}
-
-	return w.WorkerBase.GetInitialState()
+	return w.WrapStatusAccumulated(ctx, status), nil
 }
 
 func init() {
