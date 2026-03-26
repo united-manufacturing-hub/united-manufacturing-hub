@@ -71,7 +71,7 @@ var _ = Describe("WorkerBase", func() {
 	})
 
 	Describe("WrapStatus", func() {
-		It("returns WrappedObservedState with CollectedAt set and correct Status", func() {
+		It("returns Observation with CollectedAt set and correct Status", func() {
 			wb.InitBase(identity, mockLogger, mockStateReader)
 			before := time.Now()
 			status := workerTestStatus{Reachable: true, LatencyMs: 42}
@@ -82,8 +82,8 @@ var _ = Describe("WorkerBase", func() {
 			Expect(obs.GetTimestamp()).To(BeTemporally(">=", before))
 			Expect(obs.GetTimestamp()).To(BeTemporally("<=", time.Now()))
 
-			typed, ok := obs.(fsmv2.WrappedObservedState[workerTestStatus])
-			Expect(ok).To(BeTrue(), "WrapStatus should return WrappedObservedState[TStatus]")
+			typed, ok := obs.(fsmv2.Observation[workerTestStatus])
+			Expect(ok).To(BeTrue(), "WrapStatus should return Observation[TStatus]")
 			Expect(typed.Status.Reachable).To(BeTrue())
 			Expect(typed.Status.LatencyMs).To(Equal(int64(42)))
 		})
@@ -104,7 +104,7 @@ var _ = Describe("WorkerBase", func() {
 			status := workerTestStatus{Reachable: true}
 			obs := wb.WrapStatus(status)
 
-			typed, ok := obs.(fsmv2.WrappedObservedState[workerTestStatus])
+			typed, ok := obs.(fsmv2.Observation[workerTestStatus])
 			Expect(ok).To(BeTrue())
 			// Framework metrics are zero since supervisor hasn't injected them,
 			// but the field should exist (not panic).
@@ -122,14 +122,14 @@ var _ = Describe("WorkerBase", func() {
 			status := workerTestStatus{Reachable: true}
 			obs := wb.WrapStatus(status)
 
-			typed, ok := obs.(fsmv2.WrappedObservedState[workerTestStatus])
+			typed, ok := obs.(fsmv2.Observation[workerTestStatus])
 			Expect(ok).To(BeTrue())
 			Expect(typed.Metrics.Worker.Counters["pull_ops"]).To(Equal(int64(5)))
 			Expect(typed.Metrics.Worker.Gauges["consecutive_errors"]).To(Equal(3.0))
 
 			// Second WrapStatus should have empty worker metrics (drained)
 			obs2 := wb.WrapStatus(status)
-			typed2 := obs2.(fsmv2.WrappedObservedState[workerTestStatus])
+			typed2 := obs2.(fsmv2.Observation[workerTestStatus])
 			Expect(typed2.Metrics.Worker.Counters).To(BeEmpty())
 			Expect(typed2.Metrics.Worker.Gauges).To(BeEmpty())
 		})
@@ -143,7 +143,7 @@ var _ = Describe("WorkerBase", func() {
 			bd.MetricsRecorder().IncrementCounter(deps.CounterPullOps, 7)
 
 			obs := wb.WrapStatus(workerTestStatus{Reachable: true})
-			typed := obs.(fsmv2.WrappedObservedState[workerTestStatus])
+			typed := obs.(fsmv2.Observation[workerTestStatus])
 			Expect(typed.Metrics.Worker.Counters["pull_ops"]).To(Equal(int64(7)))
 		})
 
@@ -154,7 +154,7 @@ var _ = Describe("WorkerBase", func() {
 			separate.MetricsRecorder().IncrementCounter(deps.CounterPullOps, 99)
 
 			obs := wb.WrapStatus(workerTestStatus{Reachable: true})
-			typed := obs.(fsmv2.WrappedObservedState[workerTestStatus])
+			typed := obs.(fsmv2.Observation[workerTestStatus])
 			Expect(typed.Metrics.Worker.Counters).To(BeEmpty(),
 				"metrics on a separate BaseDependencies must not appear in WrapStatus")
 		})
@@ -433,7 +433,7 @@ port: 1`}
 
 	Describe("WrapStatusAccumulated", func() {
 		It("accumulates counters additively with previous state", func() {
-			prevObs := fsmv2.WrappedObservedState[workerTestStatus]{
+			prevObs := fsmv2.Observation[workerTestStatus]{
 				CollectedAt: time.Now().Add(-time.Second),
 				Status:      workerTestStatus{Reachable: true},
 			}
@@ -450,12 +450,12 @@ port: 1`}
 
 			obs := wb.WrapStatusAccumulated(context.Background(), workerTestStatus{Reachable: true})
 
-			typed := obs.(fsmv2.WrappedObservedState[workerTestStatus])
+			typed := obs.(fsmv2.Observation[workerTestStatus])
 			Expect(typed.Metrics.Worker.Counters["pull_ops"]).To(Equal(int64(15)))
 		})
 
 		It("replaces gauges from drain, keeps previous gauges not in drain", func() {
-			prevObs := fsmv2.WrappedObservedState[workerTestStatus]{
+			prevObs := fsmv2.Observation[workerTestStatus]{
 				CollectedAt: time.Now().Add(-time.Second),
 				Status:      workerTestStatus{},
 			}
@@ -475,7 +475,7 @@ port: 1`}
 
 			obs := wb.WrapStatusAccumulated(context.Background(), workerTestStatus{})
 
-			typed := obs.(fsmv2.WrappedObservedState[workerTestStatus])
+			typed := obs.(fsmv2.Observation[workerTestStatus])
 			Expect(typed.Metrics.Worker.Gauges["consecutive_errors"]).To(Equal(3.0))
 			Expect(typed.Metrics.Worker.Gauges["last_pull_latency_ms"]).To(Equal(100.0))
 		})
@@ -490,7 +490,7 @@ port: 1`}
 
 			obs := wb.WrapStatusAccumulated(context.Background(), workerTestStatus{Reachable: true})
 
-			typed := obs.(fsmv2.WrappedObservedState[workerTestStatus])
+			typed := obs.(fsmv2.Observation[workerTestStatus])
 			Expect(typed.Metrics.Worker.Counters["pull_ops"]).To(Equal(int64(5)))
 			Expect(typed.Metrics.Worker.Gauges["consecutive_errors"]).To(Equal(1.0))
 		})
@@ -512,7 +512,7 @@ port: 1`}
 			obs := wb.WrapStatusAccumulated(context.Background(), status)
 
 			Expect(obs.GetTimestamp()).To(BeTemporally(">=", before))
-			typed := obs.(fsmv2.WrappedObservedState[workerTestStatus])
+			typed := obs.(fsmv2.Observation[workerTestStatus])
 			Expect(typed.Status.Reachable).To(BeTrue())
 			Expect(typed.Status.LatencyMs).To(Equal(int64(42)))
 		})
@@ -522,7 +522,7 @@ port: 1`}
 			wb.InitBase(identity, mockLogger, sr)
 
 			obs := wb.WrapStatusAccumulated(context.Background(), workerTestStatus{})
-			typed := obs.(fsmv2.WrappedObservedState[workerTestStatus])
+			typed := obs.(fsmv2.Observation[workerTestStatus])
 			Expect(typed.Metrics.Framework.StateTransitionsTotal).To(Equal(int64(0)))
 		})
 
@@ -545,7 +545,7 @@ port: 1`}
 
 			obs := wb.WrapStatusAccumulated(context.Background(), workerTestStatus{})
 
-			typed := obs.(fsmv2.WrappedObservedState[workerTestStatus])
+			typed := obs.(fsmv2.Observation[workerTestStatus])
 			Expect(typed.Metrics.Worker.Counters["pull_ops"]).To(Equal(int64(3)))
 		})
 
@@ -559,7 +559,7 @@ port: 1`}
 			})
 
 			obs := wb.WrapStatusAccumulated(context.Background(), workerTestStatus{})
-			typed := obs.(fsmv2.WrappedObservedState[workerTestStatus])
+			typed := obs.(fsmv2.Observation[workerTestStatus])
 			Expect(typed.LastActionResults).To(HaveLen(1))
 			Expect(typed.LastActionResults[0].ActionType).To(Equal("test-action"))
 		})

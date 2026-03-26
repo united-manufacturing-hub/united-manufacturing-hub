@@ -26,27 +26,27 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 )
 
-var _ = Describe("WrappedObservedState", func() {
+var _ = Describe("Observation", func() {
 	type TestStatus struct {
 		Reachable bool  `json:"reachable"`
 		LatencyMs int64 `json:"latencyMs"`
 	}
 
 	// Compile-time assertions.
-	var _ fsmv2.ObservedState = fsmv2.WrappedObservedState[TestStatus]{}
-	var _ fsmv2.TimestampProvider = fsmv2.WrappedObservedState[TestStatus]{}
+	var _ fsmv2.ObservedState = fsmv2.Observation[TestStatus]{}
+	var _ fsmv2.TimestampProvider = fsmv2.Observation[TestStatus]{}
 
 	Describe("ObservedState interface", func() {
 		It("GetTimestamp returns CollectedAt", func() {
 			ts := time.Date(2026, 3, 25, 12, 0, 0, 0, time.UTC)
-			obs := fsmv2.WrappedObservedState[TestStatus]{
+			obs := fsmv2.Observation[TestStatus]{
 				CollectedAt: ts,
 			}
 			Expect(obs.GetTimestamp()).To(Equal(ts))
 		})
 
 		It("GetObservedDesiredState returns the injected desired state", func() {
-			obs := fsmv2.WrappedObservedState[TestStatus]{}
+			obs := fsmv2.Observation[TestStatus]{}
 
 			// Before injection, should return nil.
 			Expect(obs.GetObservedDesiredState()).To(BeNil())
@@ -60,14 +60,14 @@ var _ = Describe("WrappedObservedState", func() {
 			Expect(ok).To(BeTrue())
 
 			result := setter.SetObservedDesiredState(mockDesired)
-			typed := result.(fsmv2.WrappedObservedState[TestStatus])
+			typed := result.(fsmv2.Observation[TestStatus])
 			Expect(typed.GetObservedDesiredState()).To(Equal(mockDesired))
 		})
 	})
 
 	Describe("Collector duck-typed setters", func() {
 		It("SetState matches collector pattern and returns modified copy", func() {
-			obs := fsmv2.WrappedObservedState[TestStatus]{State: "stopped"}
+			obs := fsmv2.Observation[TestStatus]{State: "stopped"}
 			var asAny fsmv2.ObservedState = obs
 
 			setter, ok := asAny.(interface {
@@ -76,7 +76,7 @@ var _ = Describe("WrappedObservedState", func() {
 			Expect(ok).To(BeTrue(), "must satisfy collector SetState duck-type")
 
 			result := setter.SetState("running")
-			typed := result.(fsmv2.WrappedObservedState[TestStatus])
+			typed := result.(fsmv2.Observation[TestStatus])
 			Expect(typed.State).To(Equal("running"))
 
 			// Original unchanged (value semantics).
@@ -84,7 +84,7 @@ var _ = Describe("WrappedObservedState", func() {
 		})
 
 		It("SetShutdownRequested matches collector pattern and returns modified copy", func() {
-			obs := fsmv2.WrappedObservedState[TestStatus]{ShutdownRequested: false}
+			obs := fsmv2.Observation[TestStatus]{ShutdownRequested: false}
 			var asAny fsmv2.ObservedState = obs
 
 			setter, ok := asAny.(interface {
@@ -93,7 +93,7 @@ var _ = Describe("WrappedObservedState", func() {
 			Expect(ok).To(BeTrue(), "must satisfy collector SetShutdownRequested duck-type")
 
 			result := setter.SetShutdownRequested(true)
-			typed := result.(fsmv2.WrappedObservedState[TestStatus])
+			typed := result.(fsmv2.Observation[TestStatus])
 			Expect(typed.ShutdownRequested).To(BeTrue())
 
 			// Original unchanged.
@@ -101,7 +101,7 @@ var _ = Describe("WrappedObservedState", func() {
 		})
 
 		It("SetParentMappedState matches collector pattern and returns modified copy", func() {
-			obs := fsmv2.WrappedObservedState[TestStatus]{}
+			obs := fsmv2.Observation[TestStatus]{}
 			var asAny fsmv2.ObservedState = obs
 
 			setter, ok := asAny.(interface {
@@ -110,7 +110,7 @@ var _ = Describe("WrappedObservedState", func() {
 			Expect(ok).To(BeTrue(), "must satisfy collector SetParentMappedState duck-type")
 
 			result := setter.SetParentMappedState("running")
-			typed := result.(fsmv2.WrappedObservedState[TestStatus])
+			typed := result.(fsmv2.Observation[TestStatus])
 			Expect(typed.ParentMappedState).To(Equal("running"))
 
 			// Original unchanged.
@@ -118,7 +118,7 @@ var _ = Describe("WrappedObservedState", func() {
 		})
 
 		It("SetChildrenCounts matches collector pattern and returns modified copy", func() {
-			obs := fsmv2.WrappedObservedState[TestStatus]{}
+			obs := fsmv2.Observation[TestStatus]{}
 			var asAny fsmv2.ObservedState = obs
 
 			setter, ok := asAny.(interface {
@@ -127,7 +127,7 @@ var _ = Describe("WrappedObservedState", func() {
 			Expect(ok).To(BeTrue(), "must satisfy collector SetChildrenCounts duck-type")
 
 			result := setter.SetChildrenCounts(3, 1)
-			typed := result.(fsmv2.WrappedObservedState[TestStatus])
+			typed := result.(fsmv2.Observation[TestStatus])
 			Expect(typed.ChildrenHealthy).To(Equal(3))
 			Expect(typed.ChildrenUnhealthy).To(Equal(1))
 
@@ -137,7 +137,7 @@ var _ = Describe("WrappedObservedState", func() {
 		})
 
 		It("SetChildrenView matches collector pattern and returns modified copy", func() {
-			obs := fsmv2.WrappedObservedState[TestStatus]{}
+			obs := fsmv2.Observation[TestStatus]{}
 			var asAny fsmv2.ObservedState = obs
 
 			setter, ok := asAny.(interface {
@@ -147,7 +147,7 @@ var _ = Describe("WrappedObservedState", func() {
 
 			mockView := "test-children-view"
 			result := setter.SetChildrenView(mockView)
-			typed := result.(fsmv2.WrappedObservedState[TestStatus])
+			typed := result.(fsmv2.Observation[TestStatus])
 			Expect(typed.ChildrenView).To(Equal(mockView))
 
 			// Original unchanged.
@@ -155,7 +155,7 @@ var _ = Describe("WrappedObservedState", func() {
 		})
 
 		It("SetObservedDesiredState matches expected pattern and returns modified copy", func() {
-			obs := fsmv2.WrappedObservedState[TestStatus]{}
+			obs := fsmv2.Observation[TestStatus]{}
 			var asAny fsmv2.ObservedState = obs
 
 			setter, ok := asAny.(interface {
@@ -165,7 +165,7 @@ var _ = Describe("WrappedObservedState", func() {
 
 			mockDesired := &mockDesiredState{}
 			result := setter.SetObservedDesiredState(mockDesired)
-			typed := result.(fsmv2.WrappedObservedState[TestStatus])
+			typed := result.(fsmv2.Observation[TestStatus])
 			Expect(typed.GetObservedDesiredState()).To(Equal(mockDesired))
 
 			// Original unchanged.
@@ -175,7 +175,7 @@ var _ = Describe("WrappedObservedState", func() {
 
 	Describe("MarshalJSON", func() {
 		It("produces flat JSON with framework and business fields at same level", func() {
-			obs := fsmv2.WrappedObservedState[TestStatus]{
+			obs := fsmv2.Observation[TestStatus]{
 				CollectedAt: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
 				State:       "running",
 			}
@@ -201,7 +201,7 @@ var _ = Describe("WrappedObservedState", func() {
 		})
 
 		It("round-trips via UnmarshalJSON preserving ALL fields", func() {
-			original := fsmv2.WrappedObservedState[TestStatus]{
+			original := fsmv2.Observation[TestStatus]{
 				CollectedAt:       time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
 				State:             "running",
 				ShutdownRequested: true,
@@ -231,7 +231,7 @@ var _ = Describe("WrappedObservedState", func() {
 			data, err := json.Marshal(original)
 			Expect(err).NotTo(HaveOccurred())
 
-			var restored fsmv2.WrappedObservedState[TestStatus]
+			var restored fsmv2.Observation[TestStatus]
 			Expect(json.Unmarshal(data, &restored)).To(Succeed())
 
 			// Framework fields
@@ -260,7 +260,7 @@ var _ = Describe("WrappedObservedState", func() {
 		})
 
 		It("includes ShutdownRequested=false in JSON (not omitted)", func() {
-			obs := fsmv2.WrappedObservedState[TestStatus]{
+			obs := fsmv2.Observation[TestStatus]{
 				State:             "stopped",
 				ShutdownRequested: false,
 			}
@@ -274,7 +274,7 @@ var _ = Describe("WrappedObservedState", func() {
 		})
 
 		It("includes MetricsEmbedder fields at top level with correct values", func() {
-			obs := fsmv2.WrappedObservedState[TestStatus]{
+			obs := fsmv2.Observation[TestStatus]{
 				State: "running",
 			}
 			obs.Status = TestStatus{Reachable: true}
@@ -306,7 +306,7 @@ var _ = Describe("WrappedObservedState", func() {
 				State string `json:"state"` // collides with framework "state"
 			}
 
-			obs := fsmv2.WrappedObservedState[BadStatus]{
+			obs := fsmv2.Observation[BadStatus]{
 				State: "running",
 			}
 			obs.Status = BadStatus{State: "conflict"}
@@ -317,7 +317,7 @@ var _ = Describe("WrappedObservedState", func() {
 		})
 
 		It("returns error when TStatus is not a JSON object", func() {
-			obs := fsmv2.WrappedObservedState[string]{
+			obs := fsmv2.Observation[string]{
 				State: "running",
 			}
 			obs.Status = "not-an-object"

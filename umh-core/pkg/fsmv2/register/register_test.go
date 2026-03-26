@@ -97,7 +97,7 @@ var _ = Describe("register.Worker", func() {
 
 		Expect(obsType).NotTo(BeNil())
 		Expect(desType).NotTo(BeNil())
-		Expect(obsType).To(Equal(reflect.TypeOf(fsmv2.WrappedObservedState[regTestStatus]{})))
+		Expect(obsType).To(Equal(reflect.TypeOf(fsmv2.Observation[regTestStatus]{})))
 		Expect(desType).To(Equal(reflect.TypeOf(fsmv2.WrappedDesiredState[regTestConfig]{})))
 	})
 

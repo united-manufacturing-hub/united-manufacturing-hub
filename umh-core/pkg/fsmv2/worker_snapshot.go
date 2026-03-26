@@ -53,9 +53,9 @@ func ConvertWorkerSnapshot[TConfig any, TStatus any](snapAny any) WorkerSnapshot
 		panic(fmt.Sprintf("ConvertWorkerSnapshot: expected fsmv2.Snapshot, got %T", snapAny))
 	}
 
-	obs, ok := snap.Observed.(WrappedObservedState[TStatus])
+	obs, ok := snap.Observed.(Observation[TStatus])
 	if !ok {
-		panic(fmt.Sprintf("ConvertWorkerSnapshot: expected WrappedObservedState[TStatus], got %T", snap.Observed))
+		panic(fmt.Sprintf("ConvertWorkerSnapshot: expected Observation[TStatus], got %T", snap.Observed))
 	}
 
 	des, ok := snap.Desired.(*WrappedDesiredState[TConfig])
