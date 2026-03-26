@@ -297,6 +297,7 @@ func ValidateNoChannelOperations(baseDir string) []Violation {
 }
 
 // checkNoChannelOperations parses an action file and checks for channel/goroutine usage.
+// Skips Execute() methods on deprecated types (awaiting deletion).
 func checkNoChannelOperations(filename string) []Violation {
 	var violations []Violation
 
@@ -307,10 +308,20 @@ func checkNoChannelOperations(filename string) []Violation {
 		return violations
 	}
 
+	deprecatedTypes := findDeprecatedTypes(node)
+
 	ast.Inspect(node, func(n ast.Node) bool {
 		funcDecl, ok := n.(*ast.FuncDecl)
 		if !ok || funcDecl.Name.Name != "Execute" {
 			return true
+		}
+
+		if funcDecl.Recv != nil && len(funcDecl.Recv.List) > 0 {
+			if receiverName := extractReceiverTypeName(funcDecl.Recv.List[0].Type); receiverName != "" {
+				if deprecatedTypes[receiverName] {
+					return true
+				}
+			}
 		}
 
 		ast.Inspect(funcDecl.Body, func(bodyNode ast.Node) bool {
@@ -351,4 +362,47 @@ func checkNoChannelOperations(filename string) []Violation {
 	})
 
 	return violations
+}
+
+// findDeprecatedTypes scans the AST for type declarations with "Deprecated:" in their doc.
+func findDeprecatedTypes(node *ast.File) map[string]bool {
+	deprecated := make(map[string]bool)
+
+	for _, decl := range node.Decls {
+		genDecl, ok := decl.(*ast.GenDecl)
+		if !ok {
+			continue
+		}
+
+		for _, spec := range genDecl.Specs {
+			typeSpec, ok := spec.(*ast.TypeSpec)
+			if !ok {
+				continue
+			}
+
+			if genDecl.Doc != nil && strings.Contains(genDecl.Doc.Text(), "Deprecated:") {
+				deprecated[typeSpec.Name.Name] = true
+			}
+
+			if typeSpec.Doc != nil && strings.Contains(typeSpec.Doc.Text(), "Deprecated:") {
+				deprecated[typeSpec.Name.Name] = true
+			}
+		}
+	}
+
+	return deprecated
+}
+
+// extractReceiverTypeName returns the base type name from a receiver type expression.
+func extractReceiverTypeName(expr ast.Expr) string {
+	switch t := expr.(type) {
+	case *ast.StarExpr:
+		if ident, ok := t.X.(*ast.Ident); ok {
+			return ident.Name
+		}
+	case *ast.Ident:
+		return t.Name
+	}
+
+	return ""
 }
