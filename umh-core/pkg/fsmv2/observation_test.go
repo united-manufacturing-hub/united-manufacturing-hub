@@ -36,6 +36,66 @@ var _ = Describe("Observation", func() {
 	var _ fsmv2.ObservedState = fsmv2.Observation[TestStatus]{}
 	var _ fsmv2.TimestampProvider = fsmv2.Observation[TestStatus]{}
 
+	Describe("NewObservation", func() {
+		It("returns Observation with correct Status", func() {
+			status := TestStatus{Reachable: true, LatencyMs: 42}
+			obs := fsmv2.NewObservation(status)
+
+			typed, ok := obs.(fsmv2.Observation[TestStatus])
+			Expect(ok).To(BeTrue(), "NewObservation should return Observation[TStatus]")
+			Expect(typed.Status.Reachable).To(BeTrue())
+			Expect(typed.Status.LatencyMs).To(Equal(int64(42)))
+		})
+
+		It("leaves CollectedAt as zero value (set later by collector)", func() {
+			obs := fsmv2.NewObservation(TestStatus{})
+
+			typed := obs.(fsmv2.Observation[TestStatus])
+			Expect(typed.CollectedAt.IsZero()).To(BeTrue(),
+				"NewObservation must not set CollectedAt — the collector sets it")
+		})
+
+		It("satisfies the ObservedState interface", func() {
+			obs := fsmv2.NewObservation(TestStatus{})
+			_, ok := obs.(fsmv2.ObservedState)
+			Expect(ok).To(BeTrue())
+		})
+
+		It("satisfies all collector duck-type setter interfaces", func() {
+			obs := fsmv2.NewObservation(TestStatus{})
+
+			_, ok := obs.(interface {
+				SetState(string) fsmv2.ObservedState
+			})
+			Expect(ok).To(BeTrue(), "must satisfy SetState duck-type")
+
+			_, ok = obs.(interface {
+				SetShutdownRequested(bool) fsmv2.ObservedState
+			})
+			Expect(ok).To(BeTrue(), "must satisfy SetShutdownRequested duck-type")
+
+			_, ok = obs.(interface {
+				SetParentMappedState(string) fsmv2.ObservedState
+			})
+			Expect(ok).To(BeTrue(), "must satisfy SetParentMappedState duck-type")
+
+			_, ok = obs.(interface {
+				SetChildrenCounts(int, int) fsmv2.ObservedState
+			})
+			Expect(ok).To(BeTrue(), "must satisfy SetChildrenCounts duck-type")
+
+			_, ok = obs.(interface {
+				SetChildrenView(any) fsmv2.ObservedState
+			})
+			Expect(ok).To(BeTrue(), "must satisfy SetChildrenView duck-type")
+
+			_, ok = obs.(interface {
+				SetObservedDesiredState(fsmv2.DesiredState) fsmv2.ObservedState
+			})
+			Expect(ok).To(BeTrue(), "must satisfy SetObservedDesiredState duck-type")
+		})
+	})
+
 	Describe("ObservedState interface", func() {
 		It("GetTimestamp returns CollectedAt", func() {
 			ts := time.Date(2026, 3, 25, 12, 0, 0, 0, time.UTC)

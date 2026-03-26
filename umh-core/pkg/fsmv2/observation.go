@@ -103,6 +103,20 @@ func collectJSONFieldNames(t reflect.Type) map[string]bool {
 	return names
 }
 
+// NewObservation wraps a developer's TStatus into an Observation
+// ready for collector post-processing. The collector sets CollectedAt,
+// framework metrics, action history, and accumulated worker metrics
+// after CollectObservedState returns.
+//
+// Usage in CollectObservedState:
+//
+//	return fsmv2.NewObservation(MyStatus{
+//	    Reachable: w.deps.CheckReachable(ctx, cfg),
+//	}), nil
+func NewObservation[TStatus any](status TStatus) ObservedState {
+	return Observation[TStatus]{Status: status}
+}
+
 // Observation wraps a developer's TStatus into the full ObservedState
 // required by the supervisor. Framework fields and TStatus fields are flattened
 // to the same JSON level via custom MarshalJSON/UnmarshalJSON, preserving CSE
