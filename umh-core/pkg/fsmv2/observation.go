@@ -310,3 +310,39 @@ func (o Observation[TStatus]) SetObservedDesiredState(d DesiredState) ObservedSt
 
 	return o
 }
+
+// SetCollectedAt sets the observation timestamp. Matches collector pattern:
+//
+//	interface{ SetCollectedAt(time.Time) fsmv2.ObservedState }
+func (o Observation[TStatus]) SetCollectedAt(t time.Time) ObservedState {
+	o.CollectedAt = t
+
+	return o
+}
+
+// SetWorkerMetrics sets the worker-level metrics. Matches collector pattern:
+//
+//	interface{ SetWorkerMetrics(deps.Metrics) fsmv2.ObservedState }
+func (o Observation[TStatus]) SetWorkerMetrics(m deps.Metrics) ObservedState {
+	o.Metrics.Worker = m
+
+	return o
+}
+
+// SetFrameworkMetrics sets the framework-level metrics. Matches collector pattern:
+//
+//	interface{ SetFrameworkMetrics(deps.FrameworkMetrics) fsmv2.ObservedState }
+func (o Observation[TStatus]) SetFrameworkMetrics(fm deps.FrameworkMetrics) ObservedState {
+	o.Metrics.Framework = fm
+
+	return o
+}
+
+// SetActionHistory sets the action result history. Matches collector pattern:
+//
+//	interface{ SetActionHistory([]deps.ActionResult) fsmv2.ObservedState }
+func (o Observation[TStatus]) SetActionHistory(h []deps.ActionResult) ObservedState {
+	o.LastActionResults = h
+
+	return o
+}
