@@ -131,9 +131,6 @@ func (a *SyncAction) Execute(ctx context.Context, depsAny any) error {
 		pullLatency := time.Since(pullStart)
 
 		if err != nil {
-			// ENG-3600: RecordTypedError only on actual failure, not before
-			deps.RecordPullFailure(pullLatency)
-
 			var transportErr *httpTransport.TransportError
 			if errors.As(err, &transportErr) {
 				deps.RecordTypedError(transportErr.Type, transportErr.RetryAfter)
@@ -149,8 +146,6 @@ func (a *SyncAction) Execute(ctx context.Context, depsAny any) error {
 
 			return fmt.Errorf("pull failed: %w", err)
 		}
-
-		deps.RecordPullSuccess(pullLatency, len(messages))
 
 		var bytesPulled int64
 
@@ -215,7 +210,6 @@ func (a *SyncAction) Execute(ctx context.Context, depsAny any) error {
 		pushStart := time.Now()
 		if err := deps.GetTransport().Push(ctx, a.JWTToken, messagesToPush); err != nil {
 			pushLatency := time.Since(pushStart)
-			deps.RecordPushFailure(pushLatency)
 
 			var transportErr *httpTransport.TransportError
 			if errors.As(err, &transportErr) {
@@ -234,7 +228,6 @@ func (a *SyncAction) Execute(ctx context.Context, depsAny any) error {
 		}
 
 		pushLatency := time.Since(pushStart)
-		deps.RecordPushSuccess(pushLatency, len(messagesToPush))
 
 		var bytesPushed int64
 

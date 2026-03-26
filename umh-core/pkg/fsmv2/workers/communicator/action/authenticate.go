@@ -48,11 +48,6 @@ type CommunicatorDependencies interface {
 	GetInboundChan() chan<- *transport.UMHMessage  // May return nil
 	GetOutboundChan() <-chan *transport.UMHMessage // May return nil
 
-	RecordPullSuccess(latency time.Duration, msgCount int)
-	RecordPullFailure(latency time.Duration)
-	RecordPushSuccess(latency time.Duration, msgCount int)
-	RecordPushFailure(latency time.Duration)
-
 	MetricsRecorder() *depspkg.MetricsRecorder
 
 	// UUID exposed via CollectObservedState in ObservedState.AuthenticatedUUID

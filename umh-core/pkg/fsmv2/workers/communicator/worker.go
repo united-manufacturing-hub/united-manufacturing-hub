@@ -45,13 +45,11 @@ package communicator
 import (
 	"context"
 	"errors"
-	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
 	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
 )
 
@@ -102,49 +100,21 @@ func (w *CommunicatorWorker) GetDependenciesAny() any {
 	return w.deps
 }
 
-// TODO(ENG-4265): Remove deprecated fields (JWTToken, JWTExpiry, Authenticated,
-// AuthenticatedUUID, MessagesReceived, ConsecutiveErrors, IsBackpressured) from
-// CommunicatorStatus. These are now tracked by TransportWorker.
-
 // CollectObservedState returns the current observed state of the communicator.
-// Builds the status struct from deps, records the consecutive-errors gauge,
-// and delegates metric accumulation to WrapStatusAccumulated.
+// Records the consecutive-errors gauge and delegates metric accumulation
+// to WrapStatusAccumulated. Deprecated transport fields (JWT, messages,
+// auth state) are now tracked by TransportWorker (ENG-4264).
 func (w *CommunicatorWorker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
 	d := w.deps
 
-	jwtToken := d.GetJWTToken()
-	jwtExpiry := d.GetJWTExpiry()
-
-	pulledMessages := d.GetPulledMessages()
-
-	var messagesReceived []transport.UMHMessage
-	if pulledMessages != nil {
-		messagesReceived = make([]transport.UMHMessage, len(pulledMessages))
-		for i, msg := range pulledMessages {
-			if msg != nil {
-				messagesReceived[i] = *msg
-			}
-		}
-	}
-
-	consecutiveErrors := d.GetConsecutiveErrors()
-
-	// Record as gauge so WrapStatusAccumulated includes it in the drain.
-	d.MetricsRecorder().SetGauge(deps.GaugeConsecutiveErrors, float64(consecutiveErrors))
+	d.MetricsRecorder().SetGauge(deps.GaugeConsecutiveErrors, float64(d.GetConsecutiveErrors()))
 
 	status := CommunicatorStatus{
-		JWTToken:          jwtToken,
-		JWTExpiry:         jwtExpiry,
-		AuthenticatedUUID: d.GetAuthenticatedUUID(),
-		MessagesReceived:  messagesReceived,
-		Authenticated:     jwtToken != "" && !time.Now().After(jwtExpiry),
-		ConsecutiveErrors: consecutiveErrors,
 		DegradedEnteredAt: d.GetDegradedEnteredAt(),
 		LastErrorType:     d.GetLastErrorType(),
 		LastRetryAfter:    d.GetLastRetryAfter(),
 		LastErrorAt:       d.RetryTracker().LastError().OccurredAt,
 		LastAuthAttemptAt: d.GetLastAuthAttemptAt(),
-		IsBackpressured:   d.IsBackpressured(),
 	}
 
 	return w.WrapStatusAccumulated(ctx, status), nil
