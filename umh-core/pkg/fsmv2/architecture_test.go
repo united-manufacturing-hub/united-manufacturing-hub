@@ -456,6 +456,20 @@ var _ = Describe("FSMv2 Architecture Validation", func() {
 			})
 		})
 
+		Describe("GetDependenciesAny Override (Invariant: Custom Deps Visibility)", func() {
+			It("should override GetDependenciesAny when custom Dependencies struct exists", func() {
+				violations := validator.ValidateGetDependenciesAny(getFsmv2Dir())
+				if len(violations) > 0 {
+					message := validator.FormatViolationsWithPattern(
+						"GetDependenciesAny Override Violations",
+						violations,
+						"MISSING_GET_DEPENDENCIES_ANY_OVERRIDE",
+					)
+					Fail(message)
+				}
+			})
+		})
+
 		Describe("MetricsEmbedder Value Receivers (Invariant: Interface Satisfaction)", func() {
 			It("should use value receivers for MetricsHolder interface methods", func() {
 				violations := validator.ValidateMetricsEmbedderValueReceivers(getFsmv2Dir())

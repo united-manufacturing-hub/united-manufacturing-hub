@@ -19,6 +19,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"os"
 	"path/filepath"
 	"strings"
 )
@@ -894,4 +895,184 @@ func checkActionHistoryCopy(filename string) []Violation {
 	})
 
 	return violations
+}
+
+// ValidateGetDependenciesAny checks that new-API workers with custom dependencies
+// override GetDependenciesAny(). WorkerBase's default returns *BaseDependencies,
+// which is incorrect when a worker defines its own dependency struct.
+func ValidateGetDependenciesAny(baseDir string) []Violation {
+	var violations []Violation
+
+	workerFiles := FindWorkerFiles(baseDir)
+
+	for _, file := range workerFiles {
+		if !IsNewAPIWorkerFile(file) {
+			continue
+		}
+
+		fileViolations := checkGetDependenciesAny(file)
+		violations = append(violations, fileViolations...)
+	}
+
+	return violations
+}
+
+// checkGetDependenciesAny scans a new-API worker directory for custom dependency
+// structs and verifies the worker overrides GetDependenciesAny().
+func checkGetDependenciesAny(filename string) []Violation {
+	var violations []Violation
+
+	fset := token.NewFileSet()
+
+	node, err := parser.ParseFile(fset, filename, nil, parser.ParseComments)
+	if err != nil {
+		return violations
+	}
+
+	// Find the worker struct name (the one embedding WorkerBase).
+	workerTypeName := findWorkerBaseStructName(node)
+	if workerTypeName == "" {
+		return violations
+	}
+
+	// Check if GetDependenciesAny is explicitly defined on the worker type.
+	hasOverride := hasMethodOnType(node, workerTypeName, "GetDependenciesAny")
+	if hasOverride {
+		return violations
+	}
+
+	// Scan all .go files in the same directory for custom dependency structs.
+	dir := filepath.Dir(filename)
+	if hasCustomDependenciesStruct(dir) {
+		violations = append(violations, Violation{
+			File:    filename,
+			Type:    "MISSING_GET_DEPENDENCIES_ANY_OVERRIDE",
+			Message: fmt.Sprintf("Worker %s has custom Dependencies struct but does not override GetDependenciesAny() — default returns *BaseDependencies", workerTypeName),
+		})
+	}
+
+	return violations
+}
+
+// findWorkerBaseStructName returns the name of the struct that embeds WorkerBase,
+// or empty string if none found.
+func findWorkerBaseStructName(node *ast.File) string {
+	var name string
+
+	ast.Inspect(node, func(n ast.Node) bool {
+		if name != "" {
+			return false
+		}
+
+		typeSpec, ok := n.(*ast.TypeSpec)
+		if !ok {
+			return true
+		}
+
+		structType, ok := typeSpec.Type.(*ast.StructType)
+		if !ok {
+			return true
+		}
+
+		for _, field := range structType.Fields.List {
+			if len(field.Names) != 0 {
+				continue
+			}
+
+			if containsWorkerBase(field.Type) {
+				name = typeSpec.Name.Name
+
+				return false
+			}
+		}
+
+		return true
+	})
+
+	return name
+}
+
+// hasMethodOnType checks if a specific method is defined on the given type
+// (pointer or value receiver) within the AST.
+func hasMethodOnType(node *ast.File, typeName, methodName string) bool {
+	found := false
+
+	ast.Inspect(node, func(n ast.Node) bool {
+		if found {
+			return false
+		}
+
+		funcDecl, ok := n.(*ast.FuncDecl)
+		if !ok || funcDecl.Recv == nil || len(funcDecl.Recv.List) == 0 {
+			return true
+		}
+
+		if funcDecl.Name.Name != methodName {
+			return true
+		}
+
+		recvName := getReceiverTypeName(funcDecl.Recv.List[0].Type)
+		if recvName == typeName {
+			found = true
+
+			return false
+		}
+
+		return true
+	})
+
+	return found
+}
+
+// hasCustomDependenciesStruct scans all .go files in a directory for a struct
+// type whose name ends in "Dependencies" (excluding "BaseDependencies").
+func hasCustomDependenciesStruct(dir string) bool {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return false
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") || strings.HasSuffix(entry.Name(), "_test.go") {
+			continue
+		}
+
+		fset := token.NewFileSet()
+
+		node, parseErr := parser.ParseFile(fset, filepath.Join(dir, entry.Name()), nil, 0)
+		if parseErr != nil {
+			continue
+		}
+
+		found := false
+
+		ast.Inspect(node, func(n ast.Node) bool {
+			if found {
+				return false
+			}
+
+			typeSpec, ok := n.(*ast.TypeSpec)
+			if !ok {
+				return true
+			}
+
+			if _, ok := typeSpec.Type.(*ast.StructType); !ok {
+				return true
+			}
+
+			if strings.HasSuffix(typeSpec.Name.Name, "Dependencies") && typeSpec.Name.Name != "BaseDependencies" {
+				found = true
+
+				return false
+			}
+
+			return true
+		})
+
+		if found {
+			return true
+		}
+	}
+
+	return false
 }
