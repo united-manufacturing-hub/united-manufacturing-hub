@@ -42,5 +42,5 @@ func (s *StoppedState) String() string {
 }
 
 func init() {
-	communicator.RegisterInitialState(&StoppedState{})
+	fsmv2.RegisterInitialState("communicator", &StoppedState{})
 }
