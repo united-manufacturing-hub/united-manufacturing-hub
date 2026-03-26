@@ -22,7 +22,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	hello_world "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/helloworld"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/helloworld/action"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/helloworld/state"
 )
 
@@ -63,7 +62,8 @@ var _ = Describe("TryingToStartState", func() {
 			It("should emit SayHelloAction", func() {
 				result := stateObj.Next(snap)
 
-				Expect(result.Action).To(BeAssignableToTypeOf(&action.SayHelloAction{}))
+				Expect(result.Action).NotTo(BeNil())
+				Expect(result.Action.Name()).To(Equal(hello_world.SayHelloActionName))
 			})
 		})
 
@@ -216,7 +216,8 @@ var _ = Describe("TryingToStartState Transitions", func() {
 
 			Expect(result.State).To(BeAssignableToTypeOf(&state.TryingToStartState{}))
 			Expect(result.Signal).To(Equal(fsmv2.SignalNone))
-			Expect(result.Action).To(BeAssignableToTypeOf(&action.SayHelloAction{}))
+			Expect(result.Action).NotTo(BeNil())
+			Expect(result.Action.Name()).To(Equal(hello_world.SayHelloActionName))
 		})
 	})
 })
