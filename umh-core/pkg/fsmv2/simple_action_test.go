@@ -54,14 +54,15 @@ var _ = Describe("SimpleAction", func() {
 		Expect(err).To(MatchError(context.Canceled))
 	})
 
-	It("panics on wrong deps type", func() {
+	It("returns error on wrong deps type", func() {
 		action := fsmv2.SimpleAction[*simpleTestDeps]("typed-action", func(_ context.Context, _ *simpleTestDeps) error {
 			return nil
 		})
 
-		Expect(func() {
-			_ = action.Execute(context.Background(), "wrong-type")
-		}).To(Panic())
+		err := action.Execute(context.Background(), "wrong-type")
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring(`SimpleAction "typed-action"`))
+		Expect(err.Error()).To(ContainSubstring("expected deps type"))
 	})
 
 	It("returns Name() and String() as the registered name", func() {
