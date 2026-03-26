@@ -410,6 +410,12 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 		return err
 	}
 
+	// Post-COS framework wrapping for NewObservation-based workers.
+	// Gate: zero CollectedAt means NewObservation (not WrapStatus).
+	if observed.GetTimestamp().IsZero() {
+		observed = c.wrapNewObservation(ctx, observed)
+	}
+
 	// Inject FSM state via callback to preserve "Collector-only writes ObservedState" boundary
 	if c.config.StateProvider != nil {
 		stateName := c.config.StateProvider()
@@ -521,6 +527,104 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 	}
 
 	return nil
+}
+
+// baseDepsAccessor is a duck-type interface for extracting framework data from
+// any worker's dependencies (BaseDependencies or a struct embedding it).
+type baseDepsAccessor interface {
+	GetFrameworkState() *deps.FrameworkMetrics
+	GetActionHistory() []deps.ActionResult
+	MetricsRecorder() *deps.MetricsRecorder
+}
+
+// wrapNewObservation fills framework fields on a NewObservation-based ObservedState.
+// Called only when the zero-time gate fires (CollectedAt is zero), meaning the
+// developer used NewObservation instead of WrapStatus/WrapStatusAccumulated.
+//
+// Steps: set CollectedAt, inject framework metrics + action history,
+// accumulate worker metrics (load previous from CSE, drain recorder, merge).
+func (c *Collector[TObserved]) wrapNewObservation(ctx context.Context, observed fsmv2.ObservedState) fsmv2.ObservedState {
+	// Step 1: Set CollectedAt to now.
+	if setter, ok := observed.(interface {
+		SetCollectedAt(time.Time) fsmv2.ObservedState
+	}); ok {
+		observed = setter.SetCollectedAt(time.Now())
+	}
+
+	// Step 2: Get BaseDependencies from worker via DependencyProvider → baseDepsAccessor.
+	depProvider, ok := c.config.Worker.(fsmv2.DependencyProvider)
+	if !ok {
+		return observed
+	}
+
+	bd, ok := depProvider.GetDependenciesAny().(baseDepsAccessor)
+	if !ok {
+		return observed
+	}
+
+	// Step 3: Inject framework metrics.
+	if fm := bd.GetFrameworkState(); fm != nil {
+		if setter, ok := observed.(interface {
+			SetFrameworkMetrics(deps.FrameworkMetrics) fsmv2.ObservedState
+		}); ok {
+			observed = setter.SetFrameworkMetrics(*fm)
+		}
+	}
+
+	// Step 4: Inject action history.
+	if ah := bd.GetActionHistory(); ah != nil {
+		if setter, ok := observed.(interface {
+			SetActionHistory([]deps.ActionResult) fsmv2.ObservedState
+		}); ok {
+			observed = setter.SetActionHistory(ah)
+		}
+	}
+
+	// Step 5: Accumulate worker metrics (load previous → drain → merge).
+	var prevWorkerMetrics deps.Metrics
+
+	// Step 5a: Load previous state from CSE BEFORE drain (drain is destructive).
+	if ts, ok := c.config.Store.(*storage.TriangularStore); ok && ctx.Err() == nil {
+		var prev struct {
+			Metrics deps.MetricsContainer `json:"metrics"`
+		}
+
+		if err := ts.LoadObservedTyped(ctx, c.config.Identity.WorkerType, c.config.Identity.ID, &prev); err == nil {
+			prevWorkerMetrics = prev.Metrics.Worker
+		}
+	}
+
+	// Step 5b: Init empty maps if CSE load failed or returned nil maps.
+	if prevWorkerMetrics.Counters == nil {
+		prevWorkerMetrics.Counters = make(map[string]int64)
+	}
+
+	if prevWorkerMetrics.Gauges == nil {
+		prevWorkerMetrics.Gauges = make(map[string]float64)
+	}
+
+	// Step 5c: Drain MetricsRecorder AFTER CSE read.
+	if recorder := bd.MetricsRecorder(); recorder != nil {
+		drained := recorder.Drain()
+
+		// Step 5d: Merge — counters additive, gauges replace.
+		for name, delta := range drained.Counters {
+			prevWorkerMetrics.Counters[name] += delta
+		}
+
+		for name, value := range drained.Gauges {
+			prevWorkerMetrics.Gauges[name] = value
+		}
+	}
+
+	// Step 5e: Set accumulated worker metrics.
+	if setter, ok := observed.(interface {
+		SetWorkerMetrics(deps.Metrics) fsmv2.ObservedState
+	}); ok {
+		observed = setter.SetWorkerMetrics(prevWorkerMetrics)
+	}
+
+	return observed
 }
 
 // handleCollectorPanic processes a recovered panic from collectAndSaveObservedState.
