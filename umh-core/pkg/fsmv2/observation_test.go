@@ -233,6 +233,95 @@ var _ = Describe("Observation", func() {
 		})
 	})
 
+	Describe("Collector setter methods", func() {
+		It("SetCollectedAt matches collector pattern and returns modified copy", func() {
+			obs := fsmv2.Observation[TestStatus]{}
+			var asAny fsmv2.ObservedState = obs
+
+			setter, ok := asAny.(interface {
+				SetCollectedAt(time.Time) fsmv2.ObservedState
+			})
+			Expect(ok).To(BeTrue(), "must satisfy collector SetCollectedAt duck-type")
+
+			ts := time.Date(2026, 3, 26, 12, 0, 0, 0, time.UTC)
+			result := setter.SetCollectedAt(ts)
+			typed := result.(fsmv2.Observation[TestStatus])
+			Expect(typed.CollectedAt).To(Equal(ts))
+
+			// Original unchanged.
+			Expect(obs.CollectedAt.IsZero()).To(BeTrue())
+		})
+
+		It("SetWorkerMetrics matches collector pattern and returns modified copy", func() {
+			obs := fsmv2.Observation[TestStatus]{}
+			var asAny fsmv2.ObservedState = obs
+
+			setter, ok := asAny.(interface {
+				SetWorkerMetrics(deps.Metrics) fsmv2.ObservedState
+			})
+			Expect(ok).To(BeTrue(), "must satisfy collector SetWorkerMetrics duck-type")
+
+			m := deps.Metrics{
+				Counters: map[string]int64{"pull_ops": 10},
+				Gauges:   map[string]float64{"latency": 1.5},
+			}
+			result := setter.SetWorkerMetrics(m)
+			typed := result.(fsmv2.Observation[TestStatus])
+			Expect(typed.Metrics.Worker.Counters["pull_ops"]).To(Equal(int64(10)))
+			Expect(typed.Metrics.Worker.Gauges["latency"]).To(Equal(1.5))
+
+			// Original unchanged.
+			Expect(obs.Metrics.Worker.Counters).To(BeNil())
+		})
+
+		It("SetFrameworkMetrics matches collector pattern and returns modified copy", func() {
+			obs := fsmv2.Observation[TestStatus]{}
+			var asAny fsmv2.ObservedState = obs
+
+			setter, ok := asAny.(interface {
+				SetFrameworkMetrics(deps.FrameworkMetrics) fsmv2.ObservedState
+			})
+			Expect(ok).To(BeTrue(), "must satisfy collector SetFrameworkMetrics duck-type")
+
+			fm := deps.FrameworkMetrics{
+				StateTransitionsTotal: 5,
+				TimeInCurrentStateMs:  12000,
+				StateEnteredAtUnix:    1767225600,
+			}
+			result := setter.SetFrameworkMetrics(fm)
+			typed := result.(fsmv2.Observation[TestStatus])
+			Expect(typed.Metrics.Framework.StateTransitionsTotal).To(Equal(int64(5)))
+			Expect(typed.Metrics.Framework.TimeInCurrentStateMs).To(Equal(int64(12000)))
+			Expect(typed.Metrics.Framework.StateEnteredAtUnix).To(Equal(int64(1767225600)))
+
+			// Original unchanged.
+			Expect(obs.Metrics.Framework.StateTransitionsTotal).To(Equal(int64(0)))
+		})
+
+		It("SetActionHistory matches collector pattern and returns modified copy", func() {
+			obs := fsmv2.Observation[TestStatus]{}
+			var asAny fsmv2.ObservedState = obs
+
+			setter, ok := asAny.(interface {
+				SetActionHistory([]deps.ActionResult) fsmv2.ObservedState
+			})
+			Expect(ok).To(BeTrue(), "must satisfy collector SetActionHistory duck-type")
+
+			history := []deps.ActionResult{
+				{ActionType: "connect", Success: true},
+				{ActionType: "fetch", Success: false},
+			}
+			result := setter.SetActionHistory(history)
+			typed := result.(fsmv2.Observation[TestStatus])
+			Expect(typed.LastActionResults).To(HaveLen(2))
+			Expect(typed.LastActionResults[0].ActionType).To(Equal("connect"))
+			Expect(typed.LastActionResults[1].Success).To(BeFalse())
+
+			// Original unchanged.
+			Expect(obs.LastActionResults).To(BeEmpty())
+		})
+	})
+
 	Describe("MarshalJSON", func() {
 		It("produces flat JSON with framework and business fields at same level", func() {
 			obs := fsmv2.Observation[TestStatus]{
