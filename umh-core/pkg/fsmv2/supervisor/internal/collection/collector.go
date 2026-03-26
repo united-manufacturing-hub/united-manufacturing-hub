@@ -16,6 +16,7 @@ package collection
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"runtime/debug"
@@ -23,6 +24,7 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/internal/panicutil"
@@ -101,6 +103,7 @@ type Collector[TObserved any] struct {
 	config        CollectorConfig[TObserved]
 	state         collectorState
 	mu            sync.RWMutex
+	collectionMu  sync.Mutex // Serializes collectAndSaveObservedState between observation loop and CollectFinalObservation
 	running       bool
 }
 
@@ -288,7 +291,10 @@ func (c *Collector[TObserved]) CollectFinalObservation(ctx context.Context) erro
 
 	c.config.Logger.Debug("collector_final_observation_starting")
 
+	c.collectionMu.Lock()
 	err := c.collectAndSaveObservedState(collectCtx)
+	c.collectionMu.Unlock()
+
 	if err != nil {
 		c.config.Logger.SentryWarn(deps.FeatureForWorker(c.config.Identity.WorkerType), c.config.Identity.HierarchyPath, "collector_final_observation_failed",
 			deps.Err(err))
@@ -338,7 +344,12 @@ func (c *Collector[TObserved]) observationLoop() {
 			c.config.Logger.Debug("collector_restart_triggered")
 
 			collectCtx, cancel := context.WithTimeout(ctx, timeout)
-			if err := c.collectAndSaveObservedState(collectCtx); err != nil {
+
+			c.collectionMu.Lock()
+			err := c.collectAndSaveObservedState(collectCtx)
+			c.collectionMu.Unlock()
+
+			if err != nil {
 				c.config.Logger.SentryError(deps.FeatureForWorker(c.config.Identity.WorkerType), c.config.Identity.HierarchyPath, err, "collector_observation_failed",
 					deps.String("trigger", "restart"))
 			}
@@ -347,7 +358,12 @@ func (c *Collector[TObserved]) observationLoop() {
 
 		case <-ticker.C:
 			collectCtx, cancel := context.WithTimeout(ctx, timeout)
-			if err := c.collectAndSaveObservedState(collectCtx); err != nil {
+
+			c.collectionMu.Lock()
+			err := c.collectAndSaveObservedState(collectCtx)
+			c.collectionMu.Unlock()
+
+			if err != nil {
 				c.config.Logger.SentryError(deps.FeatureForWorker(c.config.Identity.WorkerType), c.config.Identity.HierarchyPath, err, "collector_observation_failed",
 					deps.String("trigger", "ticker"))
 			}
@@ -493,17 +509,22 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 		return err
 	}
 
-	ts, ok := c.config.Store.(*storage.TriangularStore)
-	if !ok {
-		err := fmt.Errorf("store is not *TriangularStore, got %T", c.config.Store)
-		c.config.Logger.SentryError(deps.FeatureForWorker(c.config.Identity.WorkerType), c.config.Identity.HierarchyPath, err, "collector_store_type_mismatch",
-			deps.String("expected_type", "*storage.TriangularStore"),
-			deps.String("actual_type", fmt.Sprintf("%T", c.config.Store)))
-
-		return err
+	// Use non-generic save path: marshal to JSON → unmarshal to Document → SaveObserved.
+	// SaveObservedTyped[TObserved] would call DeriveWorkerType which fails for generic
+	// type names like Observation[SomeStatus] (name ends in "]" not "ObservedState").
+	observedJSON, err := json.Marshal(observedTyped)
+	if err != nil {
+		return fmt.Errorf("collector marshal observed: %w", err)
 	}
 
-	changed, err := storage.SaveObservedTyped[TObserved](ts, ctx, c.config.Identity.ID, observedTyped)
+	observedDoc := make(persistence.Document)
+	if err := json.Unmarshal(observedJSON, &observedDoc); err != nil {
+		return fmt.Errorf("collector unmarshal observed to document: %w", err)
+	}
+
+	observedDoc["id"] = c.config.Identity.ID
+
+	changed, err := c.config.Store.SaveObserved(ctx, c.config.Identity.WorkerType, c.config.Identity.ID, observedDoc)
 	if err != nil {
 		c.config.Logger.Debug("collector_save_failed",
 			deps.Err(err))
@@ -554,11 +575,19 @@ func (c *Collector[TObserved]) wrapNewObservation(ctx context.Context, observed 
 	// Step 2: Get BaseDependencies from worker via DependencyProvider → baseDepsAccessor.
 	depProvider, ok := c.config.Worker.(fsmv2.DependencyProvider)
 	if !ok {
+		c.config.Logger.Debug("wrap_new_observation_no_dependency_provider",
+			deps.String("worker_type", fmt.Sprintf("%T", c.config.Worker)))
+
 		return observed
 	}
 
-	bd, ok := depProvider.GetDependenciesAny().(baseDepsAccessor)
+	depsAny := depProvider.GetDependenciesAny()
+
+	bd, ok := depsAny.(baseDepsAccessor)
 	if !ok {
+		c.config.Logger.Debug("wrap_new_observation_no_base_deps_accessor",
+			deps.String("deps_type", fmt.Sprintf("%T", depsAny)))
+
 		return observed
 	}
 
@@ -584,13 +613,16 @@ func (c *Collector[TObserved]) wrapNewObservation(ctx context.Context, observed 
 	var prevWorkerMetrics deps.Metrics
 
 	// Step 5a: Load previous state from CSE BEFORE drain (drain is destructive).
-	if ts, ok := c.config.Store.(*storage.TriangularStore); ok && ctx.Err() == nil {
+	if ctx.Err() == nil {
 		var prev struct {
 			Metrics deps.MetricsContainer `json:"metrics"`
 		}
 
-		if err := ts.LoadObservedTyped(ctx, c.config.Identity.WorkerType, c.config.Identity.ID, &prev); err == nil {
+		if err := c.config.Store.LoadObservedTyped(ctx, c.config.Identity.WorkerType, c.config.Identity.ID, &prev); err == nil {
 			prevWorkerMetrics = prev.Metrics.Worker
+		} else {
+			c.config.Logger.Debug("wrap_new_observation_cse_load_failed",
+				deps.Err(err))
 		}
 	}
 
