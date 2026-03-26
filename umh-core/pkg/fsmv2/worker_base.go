@@ -15,6 +15,7 @@
 package fsmv2
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"time"
@@ -126,6 +127,79 @@ func (w *WorkerBase[TConfig, TStatus]) WrapStatus(status TStatus) ObservedState 
 				Gauges:   drained.Gauges,
 			}
 		}
+	}
+
+	return obs
+}
+
+// WrapStatusAccumulated constructs a WrappedObservedState like WrapStatus, but
+// additionally reads the previous observation from CSE and merges metrics:
+//   - Counters are additive (previous + drained delta).
+//   - Gauges replace (drained overwrites previous; previous retained if not drained).
+//
+// Falls back to WrapStatus semantics (fresh metrics) when the previous state
+// cannot be loaded (first tick, CSE error, nil StateReader).
+func (w *WorkerBase[TConfig, TStatus]) WrapStatusAccumulated(ctx context.Context, status TStatus) ObservedState {
+	obs := WrappedObservedState[TStatus]{
+		CollectedAt: time.Now(),
+		Status:      status,
+	}
+
+	w.mu.RLock()
+	initialized := w.initialized
+	bd := w.baseDeps
+	id := w.identity
+	sr := w.stateReader
+	w.mu.RUnlock()
+
+	if !initialized || bd == nil {
+		return obs
+	}
+
+	if fm := bd.GetFrameworkState(); fm != nil {
+		obs.Metrics.Framework = *fm
+	}
+
+	actionHistory := bd.GetActionHistory()
+	if actionHistory != nil {
+		obs.LastActionResults = actionHistory
+	}
+
+	var drained deps.DrainResult
+	if recorder := bd.MetricsRecorder(); recorder != nil {
+		drained = recorder.Drain()
+	}
+
+	var prev WrappedObservedState[TStatus]
+	var hasPrev bool
+	if sr != nil {
+		err := sr.LoadObservedTyped(ctx, id.WorkerType, id.ID, &prev)
+		hasPrev = err == nil
+	}
+
+	counters := make(map[string]int64)
+	if hasPrev {
+		for k, v := range prev.Metrics.Worker.Counters {
+			counters[k] = v
+		}
+	}
+	for k, v := range drained.Counters {
+		counters[k] += v
+	}
+
+	gauges := make(map[string]float64)
+	if hasPrev {
+		for k, v := range prev.Metrics.Worker.Gauges {
+			gauges[k] = v
+		}
+	}
+	for k, v := range drained.Gauges {
+		gauges[k] = v
+	}
+
+	obs.Metrics.Worker = deps.Metrics{
+		Counters: counters,
+		Gauges:   gauges,
 	}
 
 	return obs
