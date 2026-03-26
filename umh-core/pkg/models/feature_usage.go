@@ -35,6 +35,6 @@ type FeatureUsage struct {
 	FSMv2MemoryCleanupEnabled bool `json:"fsmv2MemoryCleanupEnabled"`
 	// FSMv2ProtocolConverterEnabled reports whether USE_FSMV2_PROTOCOL_CONVERTER is set.
 	FSMv2ProtocolConverterEnabled bool `json:"fsmv2ProtocolConverterEnabled"`
-	// ResourceLimitBlockingEnabled reports whether agent.enableResourceLimitBlocking is set.
+	// ResourceLimitBlockingEnabled reports the value of agent.enableResourceLimitBlocking in config.yaml (defaults to true).
 	ResourceLimitBlockingEnabled bool `json:"resourceLimitBlockingEnabled"`
 }
