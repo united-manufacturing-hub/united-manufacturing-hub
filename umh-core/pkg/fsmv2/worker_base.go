@@ -98,11 +98,11 @@ func (w *WorkerBase[TConfig, TStatus]) ConfigReady() bool {
 	return w.configReady
 }
 
-// WrapStatus constructs a WrappedObservedState from the developer's TStatus.
+// WrapStatus constructs an Observation from the developer's TStatus.
 // Sets CollectedAt to time.Now() (BW2), copies framework metrics and action history from baseDeps (BW3).
 // Safe to call on uninitialized WorkerBase (returns observation with zero metrics, no panic).
 func (w *WorkerBase[TConfig, TStatus]) WrapStatus(status TStatus) ObservedState {
-	obs := WrappedObservedState[TStatus]{
+	obs := Observation[TStatus]{
 		CollectedAt: time.Now(),
 		Status:      status,
 	}
@@ -134,7 +134,7 @@ func (w *WorkerBase[TConfig, TStatus]) WrapStatus(status TStatus) ObservedState 
 	return obs
 }
 
-// WrapStatusAccumulated constructs a WrappedObservedState with cross-tick metric accumulation.
+// WrapStatusAccumulated constructs an Observation with cross-tick metric accumulation.
 // Unlike WrapStatus (current-tick only), this reads the previous observed state from CSE,
 // merges counters (additive) and gauges (replace), then drains the current tick's metrics on top.
 //
@@ -144,7 +144,7 @@ func (w *WorkerBase[TConfig, TStatus]) WrapStatus(status TStatus) ObservedState 
 // Calls MetricsRecorder().Drain() which is destructive — calling this method
 // twice in the same tick yields zero deltas on the second call.
 func (w *WorkerBase[TConfig, TStatus]) WrapStatusAccumulated(ctx context.Context, status TStatus) ObservedState {
-	obs := WrappedObservedState[TStatus]{
+	obs := Observation[TStatus]{
 		CollectedAt: time.Now(),
 		Status:      status,
 	}
@@ -171,7 +171,7 @@ func (w *WorkerBase[TConfig, TStatus]) WrapStatusAccumulated(ctx context.Context
 	// the drained deltas are lost and the cumulative counter resets to zero.
 	var prevWorkerMetrics deps.Metrics
 	if sr := bd.GetStateReader(); sr != nil && ctx.Err() == nil {
-		var prev WrappedObservedState[TStatus]
+		var prev Observation[TStatus]
 		if err := sr.LoadObservedTyped(ctx, bd.GetWorkerType(), bd.GetWorkerID(), &prev); err == nil {
 			prevWorkerMetrics = prev.Metrics.Worker
 		} else if w.logger != nil {

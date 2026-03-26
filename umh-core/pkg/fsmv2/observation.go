@@ -26,10 +26,10 @@ import (
 )
 
 // DetectFieldCollisions checks at init time whether T's JSON field names
-// collide with reserved framework field names used by WrappedObservedState.
+// collide with reserved framework field names used by Observation.
 // Called by register.Worker to fail-fast on namespace conflicts.
 func DetectFieldCollisions[T any]() error {
-	reserved := collectJSONFieldNames(reflect.TypeOf(wrappedFrameworkFields{}))
+	reserved := collectJSONFieldNames(reflect.TypeOf(observationFrameworkFields{}))
 
 	var zero T
 	tType := reflect.TypeOf(zero)
@@ -103,11 +103,11 @@ func collectJSONFieldNames(t reflect.Type) map[string]bool {
 	return names
 }
 
-// WrappedObservedState wraps a developer's TStatus into the full ObservedState
+// Observation wraps a developer's TStatus into the full ObservedState
 // required by the supervisor. Framework fields and TStatus fields are flattened
 // to the same JSON level via custom MarshalJSON/UnmarshalJSON, preserving CSE
 // delta sync granularity.
-type WrappedObservedState[TStatus any] struct {
+type Observation[TStatus any] struct {
 	// CollectedAt is when this observation was taken.
 	CollectedAt time.Time `json:"collected_at"`
 	// ChildrenView provides runtime access to child state (not persisted).
@@ -133,9 +133,9 @@ type WrappedObservedState[TStatus any] struct {
 	ShutdownRequested bool `json:"ShutdownRequested"` //nolint:tagliatelle // Match existing API field name
 }
 
-// wrappedFrameworkFields is the shared alias type used by MarshalJSON and UnmarshalJSON
+// observationFrameworkFields is the shared alias type used by MarshalJSON and UnmarshalJSON
 // to serialize/deserialize framework fields without triggering recursive custom marshal.
-type wrappedFrameworkFields struct {
+type observationFrameworkFields struct {
 	CollectedAt       time.Time           `json:"collected_at"`
 	State             string              `json:"state"`
 	ParentMappedState string              `json:"parent_mapped_state"`
@@ -148,16 +148,16 @@ type wrappedFrameworkFields struct {
 
 // MarshalJSON produces flat JSON with framework fields and TStatus fields at the same level.
 // This is required for CSE delta sync which does field-level comparison.
-func (w WrappedObservedState[TStatus]) MarshalJSON() ([]byte, error) {
-	fw := wrappedFrameworkFields{
-		CollectedAt:       w.CollectedAt,
-		State:             w.State,
-		ShutdownRequested: w.ShutdownRequested,
-		ParentMappedState: w.ParentMappedState,
-		LastActionResults: w.LastActionResults,
-		ChildrenHealthy:   w.ChildrenHealthy,
-		ChildrenUnhealthy: w.ChildrenUnhealthy,
-		MetricsEmbedder:   w.MetricsEmbedder,
+func (o Observation[TStatus]) MarshalJSON() ([]byte, error) {
+	fw := observationFrameworkFields{
+		CollectedAt:       o.CollectedAt,
+		State:             o.State,
+		ShutdownRequested: o.ShutdownRequested,
+		ParentMappedState: o.ParentMappedState,
+		LastActionResults: o.LastActionResults,
+		ChildrenHealthy:   o.ChildrenHealthy,
+		ChildrenUnhealthy: o.ChildrenUnhealthy,
+		MetricsEmbedder:   o.MetricsEmbedder,
 	}
 
 	// Step 1: Marshal framework fields to intermediate map.
@@ -172,20 +172,20 @@ func (w WrappedObservedState[TStatus]) MarshalJSON() ([]byte, error) {
 	}
 
 	// Step 2: Marshal TStatus fields into the same map.
-	statusBytes, err := json.Marshal(w.Status)
+	statusBytes, err := json.Marshal(o.Status)
 	if err != nil {
 		return nil, fmt.Errorf("marshal status: %w", err)
 	}
 
 	var statusMap map[string]json.RawMessage
 	if err := json.Unmarshal(statusBytes, &statusMap); err != nil {
-		return nil, fmt.Errorf("WrappedObservedState: TStatus must marshal to a JSON object, got: %s", string(statusBytes))
+		return nil, fmt.Errorf("Observation: TStatus must marshal to a JSON object, got: %s", string(statusBytes))
 	}
 
 	// Step 3: Merge status fields, detecting collisions with framework fields.
 	for k, v := range statusMap {
 		if _, exists := merged[k]; exists {
-			return nil, fmt.Errorf("WrappedObservedState: TStatus field %q collides with framework field", k)
+			return nil, fmt.Errorf("Observation: TStatus field %q collides with framework field", k)
 		}
 
 		merged[k] = v
@@ -195,21 +195,21 @@ func (w WrappedObservedState[TStatus]) MarshalJSON() ([]byte, error) {
 }
 
 // UnmarshalJSON reverses the flat JSON back into framework fields and TStatus.
-func (w *WrappedObservedState[TStatus]) UnmarshalJSON(data []byte) error {
+func (o *Observation[TStatus]) UnmarshalJSON(data []byte) error {
 	// Step 1: Unmarshal framework fields using the shared alias to avoid recursion.
-	var fw wrappedFrameworkFields
+	var fw observationFrameworkFields
 	if err := json.Unmarshal(data, &fw); err != nil {
 		return fmt.Errorf("unmarshal framework fields: %w", err)
 	}
 
-	w.CollectedAt = fw.CollectedAt
-	w.State = fw.State
-	w.ShutdownRequested = fw.ShutdownRequested
-	w.ParentMappedState = fw.ParentMappedState
-	w.LastActionResults = fw.LastActionResults
-	w.ChildrenHealthy = fw.ChildrenHealthy
-	w.ChildrenUnhealthy = fw.ChildrenUnhealthy
-	w.MetricsEmbedder = fw.MetricsEmbedder
+	o.CollectedAt = fw.CollectedAt
+	o.State = fw.State
+	o.ShutdownRequested = fw.ShutdownRequested
+	o.ParentMappedState = fw.ParentMappedState
+	o.LastActionResults = fw.LastActionResults
+	o.ChildrenHealthy = fw.ChildrenHealthy
+	o.ChildrenUnhealthy = fw.ChildrenUnhealthy
+	o.MetricsEmbedder = fw.MetricsEmbedder
 
 	// Step 2: Unmarshal the full blob into TStatus.
 	// TStatus fields coexist at the same level as framework fields;
@@ -219,7 +219,7 @@ func (w *WrappedObservedState[TStatus]) UnmarshalJSON(data []byte) error {
 		return fmt.Errorf("unmarshal status: %w", err)
 	}
 
-	w.Status = status
+	o.Status = status
 
 	return nil
 }
@@ -229,14 +229,14 @@ func (w *WrappedObservedState[TStatus]) UnmarshalJSON(data []byte) error {
 // ---------------------------------------------------------------------------
 
 // GetTimestamp returns when this observation was collected.
-func (w WrappedObservedState[TStatus]) GetTimestamp() time.Time {
-	return w.CollectedAt
+func (o Observation[TStatus]) GetTimestamp() time.Time {
+	return o.CollectedAt
 }
 
 // GetObservedDesiredState returns the desired state that was active when this
 // observation was collected. Injected by the collector via SetObservedDesiredState.
-func (w WrappedObservedState[TStatus]) GetObservedDesiredState() DesiredState {
-	return w.observedDesiredState
+func (o Observation[TStatus]) GetObservedDesiredState() DesiredState {
+	return o.observedDesiredState
 }
 
 // ---------------------------------------------------------------------------
@@ -246,53 +246,53 @@ func (w WrappedObservedState[TStatus]) GetObservedDesiredState() DesiredState {
 // SetState sets the FSM state name. Matches collector pattern:
 //
 //	interface{ SetState(string) fsmv2.ObservedState }
-func (w WrappedObservedState[TStatus]) SetState(s string) ObservedState {
-	w.State = s
+func (o Observation[TStatus]) SetState(s string) ObservedState {
+	o.State = s
 
-	return w
+	return o
 }
 
 // SetShutdownRequested sets the shutdown requested flag. Matches collector pattern:
 //
 //	interface{ SetShutdownRequested(bool) fsmv2.ObservedState }
-func (w WrappedObservedState[TStatus]) SetShutdownRequested(v bool) ObservedState {
-	w.ShutdownRequested = v
+func (o Observation[TStatus]) SetShutdownRequested(v bool) ObservedState {
+	o.ShutdownRequested = v
 
-	return w
+	return o
 }
 
 // SetParentMappedState sets the mapped parent state. Matches collector pattern:
 //
 //	interface{ SetParentMappedState(string) fsmv2.ObservedState }
-func (w WrappedObservedState[TStatus]) SetParentMappedState(s string) ObservedState {
-	w.ParentMappedState = s
+func (o Observation[TStatus]) SetParentMappedState(s string) ObservedState {
+	o.ParentMappedState = s
 
-	return w
+	return o
 }
 
 // SetChildrenCounts sets the healthy/unhealthy child counts. Matches collector pattern:
 //
 //	interface{ SetChildrenCounts(int, int) fsmv2.ObservedState }
-func (w WrappedObservedState[TStatus]) SetChildrenCounts(healthy, unhealthy int) ObservedState {
-	w.ChildrenHealthy = healthy
-	w.ChildrenUnhealthy = unhealthy
+func (o Observation[TStatus]) SetChildrenCounts(healthy, unhealthy int) ObservedState {
+	o.ChildrenHealthy = healthy
+	o.ChildrenUnhealthy = unhealthy
 
-	return w
+	return o
 }
 
 // SetChildrenView sets the runtime children view. Matches collector pattern:
 //
 //	interface{ SetChildrenView(any) fsmv2.ObservedState }
-func (w WrappedObservedState[TStatus]) SetChildrenView(v any) ObservedState {
-	w.ChildrenView = v
+func (o Observation[TStatus]) SetChildrenView(v any) ObservedState {
+	o.ChildrenView = v
 
-	return w
+	return o
 }
 
 // SetObservedDesiredState injects the desired state reference for GetObservedDesiredState.
 // Called by the collector after CollectObservedState returns.
-func (w WrappedObservedState[TStatus]) SetObservedDesiredState(d DesiredState) ObservedState {
-	w.observedDesiredState = d
+func (o Observation[TStatus]) SetObservedDesiredState(d DesiredState) ObservedState {
+	o.observedDesiredState = d
 
-	return w
+	return o
 }

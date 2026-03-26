@@ -124,7 +124,7 @@ The folder name must match the worker type (e.g., `transport/` for type `"transp
 New workers should use `WorkerBase[TConfig, TStatus]` instead of the legacy 7-file pattern. Key types:
 
 - **`WorkerBase[TConfig, TStatus]`** — embed in your worker struct; provides `InitBase`, `Config()`, `WrapStatus()`, `DeriveDesiredState`
-- **`WrappedObservedState[TStatus]`** — flat JSON serialization with framework fields (state, shutdown, children counts)
+- **`Observation[TStatus]`** — flat JSON serialization with framework fields (state, shutdown, children counts)
 - **`WrappedDesiredState[TConfig]`** — promotes `BaseDesiredState` fields alongside TConfig
 - **`WorkerSnapshot[TConfig, TStatus]`** — typed snapshot for state `Next()` methods
 - **`ConvertWorkerSnapshot[TConfig, TStatus]`** — entry-point type assertion in states
