@@ -94,6 +94,10 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 	if observed.GetTimestamp().IsZero() {
 		if setter, ok := observed.(interface{ SetCollectedAt(time.Time) fsmv2.ObservedState }); ok {
 			observed = setter.SetCollectedAt(time.Now())
+		} else {
+			s.logger.SentryWarn(deps.FeatureFSMv2, identity.HierarchyPath,
+				"worker_add_zero_timestamp_not_settable",
+				deps.String("type", fmt.Sprintf("%T", observed)))
 		}
 	}
 
