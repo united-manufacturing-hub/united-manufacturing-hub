@@ -52,12 +52,12 @@ type WorkerBase[TConfig any, TStatus any] struct {
 // that construct custom dependencies MUST use this returned pointer — do not call
 // deps.NewBaseDependencies separately, as a separate instance is invisible to WrapStatus.
 func (w *WorkerBase[TConfig, TStatus]) InitBase(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) *deps.BaseDependencies {
-	w.identity = id
-	w.logger = logger
-	w.stateReader = sr
 	bd := deps.NewBaseDependencies(logger, sr, id)
 
 	w.mu.Lock()
+	w.identity = id
+	w.logger = logger
+	w.stateReader = sr
 	w.baseDeps = bd
 	w.initialized = true
 	w.mu.Unlock()
@@ -134,13 +134,15 @@ func (w *WorkerBase[TConfig, TStatus]) WrapStatus(status TStatus) ObservedState 
 	return obs
 }
 
-// WrapStatusAccumulated constructs a WrappedObservedState like WrapStatus, but
-// additionally reads the previous observation from CSE and merges metrics:
-//   - Counters are additive (previous + drained delta).
-//   - Gauges replace (drained overwrites previous; previous retained if not drained).
+// WrapStatusAccumulated constructs a WrappedObservedState with cross-tick metric accumulation.
+// Unlike WrapStatus (current-tick only), this reads the previous observed state from CSE,
+// merges counters (additive) and gauges (replace), then drains the current tick's metrics on top.
 //
-// Falls back to WrapStatus semantics (fresh metrics) when the previous state
-// cannot be loaded (first tick, CSE error, nil StateReader).
+// Use for workers that accumulate metrics across ticks (communicator, transport push/pull).
+// Workers without cross-tick metrics should use WrapStatus instead.
+//
+// Calls MetricsRecorder().Drain() which is destructive — calling this method
+// twice in the same tick yields zero deltas on the second call.
 func (w *WorkerBase[TConfig, TStatus]) WrapStatusAccumulated(ctx context.Context, status TStatus) ObservedState {
 	obs := WrappedObservedState[TStatus]{
 		CollectedAt: time.Now(),
@@ -150,8 +152,6 @@ func (w *WorkerBase[TConfig, TStatus]) WrapStatusAccumulated(ctx context.Context
 	w.mu.RLock()
 	initialized := w.initialized
 	bd := w.baseDeps
-	id := w.identity
-	sr := w.stateReader
 	w.mu.RUnlock()
 
 	if !initialized || bd == nil {
@@ -162,47 +162,42 @@ func (w *WorkerBase[TConfig, TStatus]) WrapStatusAccumulated(ctx context.Context
 		obs.Metrics.Framework = *fm
 	}
 
-	actionHistory := bd.GetActionHistory()
-	if actionHistory != nil {
-		obs.LastActionResults = actionHistory
+	if ah := bd.GetActionHistory(); ah != nil {
+		obs.LastActionResults = ah
 	}
 
-	var drained deps.DrainResult
+	// Step 1: Load previous state FIRST (before drain).
+	// Drain is destructive — if we drain first and the CSE read then fails,
+	// the drained deltas are lost and the cumulative counter resets to zero.
+	var prevWorkerMetrics deps.Metrics
+	if sr := bd.GetStateReader(); sr != nil && ctx.Err() == nil {
+		var prev WrappedObservedState[TStatus]
+		if err := sr.LoadObservedTyped(ctx, bd.GetWorkerType(), bd.GetWorkerID(), &prev); err == nil {
+			prevWorkerMetrics = prev.Metrics.Worker
+		} else if w.logger != nil {
+			w.logger.Debug("WrapStatusAccumulated: could not load previous state, starting fresh: " + err.Error())
+		}
+	}
+
+	if prevWorkerMetrics.Counters == nil {
+		prevWorkerMetrics.Counters = make(map[string]int64)
+	}
+	if prevWorkerMetrics.Gauges == nil {
+		prevWorkerMetrics.Gauges = make(map[string]float64)
+	}
+
+	// Step 2: Drain AFTER CSE read — if CSE failed, deltas are still correct.
 	if recorder := bd.MetricsRecorder(); recorder != nil {
-		drained = recorder.Drain()
-	}
-
-	var prev WrappedObservedState[TStatus]
-	var hasPrev bool
-	if sr != nil {
-		err := sr.LoadObservedTyped(ctx, id.WorkerType, id.ID, &prev)
-		hasPrev = err == nil
-	}
-
-	counters := make(map[string]int64)
-	if hasPrev {
-		for k, v := range prev.Metrics.Worker.Counters {
-			counters[k] = v
+		drained := recorder.Drain()
+		for name, delta := range drained.Counters {
+			prevWorkerMetrics.Counters[name] += delta
+		}
+		for name, value := range drained.Gauges {
+			prevWorkerMetrics.Gauges[name] = value
 		}
 	}
-	for k, v := range drained.Counters {
-		counters[k] += v
-	}
 
-	gauges := make(map[string]float64)
-	if hasPrev {
-		for k, v := range prev.Metrics.Worker.Gauges {
-			gauges[k] = v
-		}
-	}
-	for k, v := range drained.Gauges {
-		gauges[k] = v
-	}
-
-	obs.Metrics.Worker = deps.Metrics{
-		Counters: counters,
-		Gauges:   gauges,
-	}
+	obs.Metrics.Worker = prevWorkerMetrics
 
 	return obs
 }
