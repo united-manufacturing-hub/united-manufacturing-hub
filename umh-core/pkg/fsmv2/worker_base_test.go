@@ -341,7 +341,7 @@ port: 1`}
 		})
 
 		It("populates ChildrenSpecs from childSpecsFactory", func() {
-			wb.SetChildSpecsFactory(func(cfg workerTestConfig) []config.ChildSpec {
+			wb.SetChildSpecsFactory(func(cfg workerTestConfig, _ config.UserSpec) []config.ChildSpec {
 				return []config.ChildSpec{
 					{Name: "child-" + cfg.Host, WorkerType: "child"},
 				}
@@ -358,7 +358,7 @@ port: 1`}
 		})
 
 		It("populates ChildrenSpecs on nil-spec path", func() {
-			wb.SetChildSpecsFactory(func(_ workerTestConfig) []config.ChildSpec {
+			wb.SetChildSpecsFactory(func(_ workerTestConfig, _ config.UserSpec) []config.ChildSpec {
 				return []config.ChildSpec{
 					{Name: "default-child", WorkerType: "child"},
 				}
@@ -372,12 +372,50 @@ port: 1`}
 			Expect(typed.ChildrenSpecs[0].Name).To(Equal("default-child"))
 		})
 
+		It("passes raw UserSpec to childSpecsFactory for child DDS", func() {
+			var receivedSpec config.UserSpec
+			wb.SetChildSpecsFactory(func(_ workerTestConfig, spec config.UserSpec) []config.ChildSpec {
+				receivedSpec = spec
+				return []config.ChildSpec{
+					{Name: "transport", WorkerType: "transport", UserSpec: spec},
+				}
+			})
+
+			spec := config.UserSpec{
+				Config: `host: "parent"
+port: 1`,
+				Variables: config.VariableBundle{
+					User: map[string]interface{}{"KEY": "val"},
+				},
+			}
+			ds, err := wb.DeriveDesiredState(spec)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(receivedSpec.Config).To(Equal(spec.Config))
+			Expect(receivedSpec.Variables.User).To(HaveKeyWithValue("KEY", "val"))
+
+			typed := ds.(*fsmv2.WrappedDesiredState[workerTestConfig])
+			Expect(typed.ChildrenSpecs[0].UserSpec.Config).To(Equal(spec.Config))
+		})
+
+		It("passes empty UserSpec to childSpecsFactory on nil-spec path", func() {
+			var receivedSpec config.UserSpec
+			wb.SetChildSpecsFactory(func(_ workerTestConfig, spec config.UserSpec) []config.ChildSpec {
+				receivedSpec = spec
+				return nil
+			})
+
+			_, err := wb.DeriveDesiredState(nil)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(receivedSpec.Config).To(BeEmpty())
+		})
+
 		It("calls postParseHook before childSpecsFactory", func() {
 			wb.SetPostParseHook(func(cfg *workerTestConfig) error {
 				cfg.Port = 9999
 				return nil
 			})
-			wb.SetChildSpecsFactory(func(cfg workerTestConfig) []config.ChildSpec {
+			wb.SetChildSpecsFactory(func(cfg workerTestConfig, _ config.UserSpec) []config.ChildSpec {
 				return []config.ChildSpec{
 					{Name: fmt.Sprintf("child-%d", cfg.Port), WorkerType: "child"},
 				}
