@@ -256,19 +256,6 @@ state: "running"
 			Expect(communicatorObserved.CollectedAt).NotTo(BeZero())
 		})
 
-		It("should return the consecutive error count from dependencies", func() {
-			deps := worker.GetDependencies()
-			deps.RecordError()
-			deps.RecordError()
-			deps.RecordError()
-
-			observed, err := worker.CollectObservedState(ctx, nil)
-			Expect(err).NotTo(HaveOccurred())
-
-			communicatorObserved := observed.(fsmv2.WrappedObservedState[communicator.CommunicatorStatus])
-			Expect(communicatorObserved.Status.ConsecutiveErrors).To(Equal(3))
-		})
-
 		Context("metrics accumulation", func() {
 			type metricsTestContext struct {
 				worker      *communicator.CommunicatorWorker

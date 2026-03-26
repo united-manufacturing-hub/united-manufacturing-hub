@@ -101,18 +101,15 @@ func (w *CommunicatorWorker) GetDependenciesAny() any {
 }
 
 // CollectObservedState returns the current observed state of the communicator.
-// Builds the status struct from deps, records the consecutive-errors gauge,
-// and delegates metric accumulation to WrapStatusAccumulated.
+// Records the consecutive-errors gauge and delegates metric accumulation
+// to WrapStatusAccumulated. Deprecated transport fields (JWT, messages,
+// auth state) are now tracked by TransportWorker (ENG-4264).
 func (w *CommunicatorWorker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
 	d := w.deps
 
-	consecutiveErrors := d.GetConsecutiveErrors()
-
-	// Record as gauge so WrapStatusAccumulated includes it in the drain.
-	d.MetricsRecorder().SetGauge(deps.GaugeConsecutiveErrors, float64(consecutiveErrors))
+	d.MetricsRecorder().SetGauge(deps.GaugeConsecutiveErrors, float64(d.GetConsecutiveErrors()))
 
 	status := CommunicatorStatus{
-		ConsecutiveErrors: consecutiveErrors,
 		DegradedEnteredAt: d.GetDegradedEnteredAt(),
 	}
 
