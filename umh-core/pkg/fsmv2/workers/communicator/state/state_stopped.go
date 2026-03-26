@@ -34,7 +34,11 @@ func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 		return fsmv2.Result[any, any](s, fsmv2.SignalNeedsRemoval, nil, "Communicator is stopped and shutdown was requested", nil)
 	}
 
-	return fsmv2.Result[any, any](&SyncingState{}, fsmv2.SignalNone, nil, "Starting sync orchestration", nil)
+	if !snap.IsShutdownRequested {
+		return fsmv2.Result[any, any](&SyncingState{}, fsmv2.SignalNone, nil, "Starting sync orchestration", nil)
+	}
+
+	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, "Communicator stopped", nil)
 }
 
 func (s *StoppedState) String() string {
