@@ -42,9 +42,10 @@ func (a *ResetTransportAction) Name() string {
 
 // Execute resets the transport and advances the retry counter.
 func (a *ResetTransportAction) Execute(ctx context.Context, depsAny any) error {
-	// Check for context cancellation before proceeding
-	if err := ctx.Err(); err != nil {
-		return err
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
 	}
 
 	deps := depsAny.(CommunicatorDependencies)
