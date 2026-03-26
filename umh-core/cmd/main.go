@@ -599,7 +599,7 @@ children:
 				return
 			case <-ticker.C:
 				// Load the communicator's observed state from the store
-				var observed fsmv2.WrappedObservedState[communicator.CommunicatorStatus]
+				var observed fsmv2.Observation[communicator.CommunicatorStatus]
 
 				err := store.LoadObservedTyped(ctx, "communicator", CommunicatorWorkerID, &observed)
 				if err != nil {

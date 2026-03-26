@@ -34,13 +34,16 @@ type CommunicatorConfig struct {
 }
 
 // CommunicatorStatus holds the runtime observation data for the communicator worker.
-// Deprecated fields (JWTToken, JWTExpiry, Authenticated, AuthenticatedUUID,
+// Deprecated fields (JWTToken, JWTExpiry, Authenticated,
 // MessagesReceived, ConsecutiveErrors, IsBackpressured) were removed in ENG-4265.
 // These are now tracked by TransportWorker.
+// AuthenticatedUUID is retained because cmd/main.go reads it from CSE to update LoginResponse.
 type CommunicatorStatus struct {
 	DegradedEnteredAt time.Time `json:"degradedEnteredAt,omitempty"`
-	LastAuthAttemptAt  time.Time `json:"lastAuthAttemptAt,omitempty"`
-	LastErrorAt        time.Time `json:"lastErrorAt,omitempty"`
+	LastAuthAttemptAt time.Time `json:"lastAuthAttemptAt,omitempty"`
+	LastErrorAt       time.Time `json:"lastErrorAt,omitempty"`
+
+	AuthenticatedUUID string `json:"authenticatedUUID,omitempty"`
 
 	LastErrorType  httpTransport.ErrorType `json:"lastErrorType,omitempty"`
 	LastRetryAfter time.Duration           `json:"lastRetryAfter,omitempty"`

@@ -118,6 +118,7 @@ func (w *CommunicatorWorker) CollectObservedState(_ context.Context, _ fsmv2.Des
 		LastRetryAfter:    d.GetLastRetryAfter(),
 		LastErrorAt:       d.RetryTracker().LastError().OccurredAt,
 		LastAuthAttemptAt: d.GetLastAuthAttemptAt(),
+		AuthenticatedUUID: d.GetAuthenticatedUUID(),
 	}
 
 	return fsmv2.NewObservation(status), nil
