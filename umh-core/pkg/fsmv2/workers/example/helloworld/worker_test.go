@@ -23,6 +23,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	hello_world "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/helloworld"
+	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/helloworld/state"
 )
 
 var _ = Describe("HelloworldWorker", func() {
@@ -37,7 +38,7 @@ var _ = Describe("HelloworldWorker", func() {
 
 	Describe("NewHelloworldWorker", func() {
 		It("should create worker successfully", func() {
-			identity := deps.Identity{ID: "test-worker"}
+			identity := deps.Identity{ID: "test-worker", WorkerType: "helloworld"}
 			w, err := hello_world.NewHelloworldWorker(identity, logger, nil)
 
 			Expect(err).NotTo(HaveOccurred())
@@ -45,7 +46,7 @@ var _ = Describe("HelloworldWorker", func() {
 		})
 
 		It("should fail with nil logger", func() {
-			identity := deps.Identity{ID: "test-worker"}
+			identity := deps.Identity{ID: "test-worker", WorkerType: "helloworld"}
 			w, err := hello_world.NewHelloworldWorker(identity, nil, nil)
 
 			Expect(err).To(HaveOccurred())
@@ -56,7 +57,7 @@ var _ = Describe("HelloworldWorker", func() {
 
 	Describe("CollectObservedState", func() {
 		BeforeEach(func() {
-			identity := deps.Identity{ID: "test-worker"}
+			identity := deps.Identity{ID: "test-worker", WorkerType: "helloworld"}
 			var err error
 			worker, err = hello_world.NewHelloworldWorker(identity, logger, nil)
 			Expect(err).NotTo(HaveOccurred())
@@ -72,21 +73,21 @@ var _ = Describe("HelloworldWorker", func() {
 			Expect(typedObs.Status.HelloSaid).To(BeFalse())
 		})
 
-		It("should return error on cancelled context", func() {
+		It("should succeed even with cancelled context (framework handles ctx cancellation)", func() {
 			ctx, cancel := context.WithCancel(context.Background())
 			cancel()
 
 			desired := &fsmv2.WrappedDesiredState[hello_world.HelloworldConfig]{}
 			obs, err := worker.CollectObservedState(ctx, desired)
 
-			Expect(err).To(Equal(context.Canceled))
-			Expect(obs).To(BeNil())
+			Expect(err).NotTo(HaveOccurred())
+			Expect(obs).NotTo(BeNil())
 		})
 	})
 
 	Describe("GetInitialState", func() {
 		BeforeEach(func() {
-			identity := deps.Identity{ID: "test-worker"}
+			identity := deps.Identity{ID: "test-worker", WorkerType: "helloworld"}
 			var err error
 			worker, err = hello_world.NewHelloworldWorker(identity, logger, nil)
 			Expect(err).NotTo(HaveOccurred())
@@ -102,7 +103,7 @@ var _ = Describe("HelloworldWorker", func() {
 
 	Describe("DeriveDesiredState", func() {
 		BeforeEach(func() {
-			identity := deps.Identity{ID: "test-worker"}
+			identity := deps.Identity{ID: "test-worker", WorkerType: "helloworld"}
 			var err error
 			worker, err = hello_world.NewHelloworldWorker(identity, logger, nil)
 			Expect(err).NotTo(HaveOccurred())

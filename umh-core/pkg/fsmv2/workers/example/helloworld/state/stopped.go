@@ -30,7 +30,7 @@ import (
 )
 
 func init() {
-	hello_world.RegisterInitialState(&StoppedState{})
+	fsmv2.RegisterInitialState("helloworld", &StoppedState{})
 }
 
 // StoppedState is the initial state where the worker is not running.
