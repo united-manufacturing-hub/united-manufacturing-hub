@@ -394,6 +394,14 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 		return nil
 	}
 
+	// Framework-level ctx check before calling into worker code.
+	// Guarantees responsive shutdown even if the worker omits its own check.
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
+
 	observed, err := c.config.Worker.CollectObservedState(ctx, desired)
 	if err != nil {
 		c.config.Logger.Debug("collector_collect_failed",

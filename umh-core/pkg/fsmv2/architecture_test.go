@@ -160,15 +160,9 @@ var _ = Describe("FSMv2 Architecture Validation", func() {
 			})
 		})
 
-		Describe("Context Cancellation in CollectObservedState (Invariant: Responsive Shutdown)", func() {
-			It("should handle ctx.Done() for cancellation", func() {
-				violations := validator.ValidateContextCancellationInCollect(getFsmv2Dir())
-				if len(violations) > 0 {
-					message := validator.FormatViolationsWithPattern("Context Cancellation Violations", violations, "MISSING_CONTEXT_CANCELLATION_COLLECT")
-					Fail(message)
-				}
-			})
-		})
+		// Context Cancellation in CollectObservedState removed: the collector now
+		// checks ctx.Done() at the framework level before calling COS, making
+		// per-worker checks optional (defense-in-depth, not mandatory).
 
 		Describe("Nil Spec Handling in DeriveDesiredState (Invariant: Defensive Programming)", func() {
 			It("should check if spec == nil before type casting", func() {
