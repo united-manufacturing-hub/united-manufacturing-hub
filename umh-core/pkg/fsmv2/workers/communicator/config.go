@@ -37,6 +37,7 @@ type CommunicatorConfig struct {
 // MessagesReceived, ConsecutiveErrors, IsBackpressured, LastErrorType,
 // LastRetryAfter, LastErrorAt, LastAuthAttemptAt) were removed in ENG-4265.
 // These are now tracked by TransportWorker.
+// AuthenticatedUUID is retained because cmd/main.go reads it from CSE to update LoginResponse.
 type CommunicatorStatus struct {
 	DegradedEnteredAt time.Time `json:"degradedEnteredAt,omitempty"`
 }
