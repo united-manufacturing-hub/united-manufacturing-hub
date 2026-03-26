@@ -323,6 +323,43 @@ var _ = Describe("Collector", func() {
 			}, 2*time.Second, 50*time.Millisecond).Should(BeFalse())
 		})
 
+		It("should skip COS when context is cancelled after desired state load", func() {
+			cosCalled := &atomic.Bool{}
+			worker := &cosTrackingWorker{called: cosCalled}
+
+			var cancelCollector context.CancelFunc
+
+			collector := collection.NewCollector[supervisor.TestObservedState](collection.CollectorConfig[supervisor.TestObservedState]{
+				Worker:              worker,
+				Identity:            supervisor.TestIdentity(),
+				Store:               supervisor.CreateTestTriangularStore(),
+				Logger:              deps.NewNopFSMLogger(),
+				ObservationInterval: 50 * time.Millisecond,
+				ObservationTimeout:  5 * time.Second,
+				DesiredStateProvider: func() fsmv2.DesiredState {
+					// Cancel context inside DesiredStateProvider — after desired
+					// state is loaded but before the framework ctx check.
+					if cancelCollector != nil {
+						cancelCollector()
+					}
+
+					return &config.DesiredState{BaseDesiredState: config.BaseDesiredState{State: "running"}}
+				},
+			})
+
+			ctx, cancel := context.WithCancel(context.Background())
+			cancelCollector = cancel
+
+			err := collector.Start(ctx)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Wait for collector to process at least one tick.
+			time.Sleep(200 * time.Millisecond)
+
+			// COS should NOT have been called — the framework ctx check caught the cancellation.
+			Expect(cosCalled.Load()).To(BeFalse())
+		})
+
 		It("should handle immediate cancellation after start", func() {
 			worker := &supervisor.TestWorker{Observed: supervisor.CreateTestObservedStateWithID("test-worker")}
 			collector := collection.NewCollector[supervisor.TestObservedState](collection.CollectorConfig[supervisor.TestObservedState]{
@@ -426,4 +463,24 @@ func (c *testCollectorWithHangingLoop) TriggerNow() {
 	}
 
 	_ = c.Start(parentCtx)
+}
+
+// cosTrackingWorker records whether CollectObservedState was called.
+// Used to verify the framework-level ctx.Done() check in the collector.
+type cosTrackingWorker struct {
+	called *atomic.Bool
+}
+
+func (w *cosTrackingWorker) CollectObservedState(_ context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
+	w.called.Store(true)
+
+	return supervisor.CreateTestObservedStateWithID("cos-tracking"), nil
+}
+
+func (w *cosTrackingWorker) DeriveDesiredState(_ interface{}) (fsmv2.DesiredState, error) {
+	return &config.DesiredState{BaseDesiredState: config.BaseDesiredState{State: "running"}}, nil
+}
+
+func (w *cosTrackingWorker) GetInitialState() fsmv2.State[any, any] {
+	return &supervisor.TestState{}
 }
