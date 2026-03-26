@@ -14,14 +14,17 @@
 
 package fsmv2
 
-import "context"
+import (
+	"context"
+	"fmt"
+)
 
 // SimpleAction creates an Action[any] from a typed function.
 // Handles ctx cancellation automatically before invoking fn.
 // Eliminates the need for action structs in simple cases.
 //
 // The returned action type-asserts depsAny to TDeps at call time.
-// A wrong type will panic (programming error, not runtime failure).
+// A wrong type returns a descriptive error.
 func SimpleAction[TDeps any](name string, fn func(ctx context.Context, deps TDeps) error) Action[any] {
 	return &simpleAction[TDeps]{name: name, fn: fn}
 }
@@ -38,7 +41,12 @@ func (a *simpleAction[TDeps]) Execute(ctx context.Context, depsAny any) error {
 	default:
 	}
 
-	return a.fn(ctx, depsAny.(TDeps))
+	typedDeps, ok := depsAny.(TDeps)
+	if !ok {
+		return fmt.Errorf("SimpleAction %q: expected deps type %T, got %T", a.name, *new(TDeps), depsAny)
+	}
+
+	return a.fn(ctx, typedDeps)
 }
 
 func (a *simpleAction[TDeps]) Name() string   { return a.name }

@@ -98,9 +98,9 @@ func (w *WorkerBase[TConfig, TStatus]) ConfigReady() bool {
 	return w.configReady
 }
 
-// Deprecated: Use fsmv2.NewObservation(status) instead. The collector now handles
-// CollectedAt, framework metrics, action history, and metric accumulation automatically
-// after CollectObservedState returns (post-COS wrapping).
+// Deprecated: Use fsmv2.NewObservation(status) instead. When NewObservation is used
+// (zero CollectedAt), the collector handles CollectedAt, framework metrics, action
+// history, and metric accumulation automatically after CollectObservedState returns.
 //
 // WrapStatus constructs an Observation from the developer's TStatus.
 // Sets CollectedAt to time.Now() (BW2), copies framework metrics and action history from baseDeps (BW3).
