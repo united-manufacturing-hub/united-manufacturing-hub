@@ -31,6 +31,9 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
 )
 
+// WorkerType is the registered type name for this worker.
+const WorkerType = "helloworld"
+
 // SayHelloActionName is the name used for logging and metrics.
 const SayHelloActionName = "say_hello"
 
@@ -70,8 +73,9 @@ func NewHelloworldWorker(id deps.Identity, logger deps.FSMLogger, sr deps.StateR
 }
 
 // CollectObservedState collects and returns the current observed state.
-// Uses ExtractConfig to get typed config from the desired state, and
-// WrapStatus to produce the framework-compatible observed state.
+// Uses ExtractConfig to get typed config from the desired state.
+// Returns NewObservation; the collector handles CollectedAt, framework
+// metrics, action history, and metric accumulation automatically.
 func (w *HelloworldWorker) CollectObservedState(_ context.Context, desired fsmv2.DesiredState) (fsmv2.ObservedState, error) {
 	cfg := fsmv2.ExtractConfig[HelloworldConfig](desired)
 
@@ -80,7 +84,7 @@ func (w *HelloworldWorker) CollectObservedState(_ context.Context, desired fsmv2
 		Mood:      readMoodFile(cfg.MoodFilePath),
 	}
 
-	return w.WrapStatus(status), nil
+	return fsmv2.NewObservation(status), nil
 }
 
 // GetDependenciesAny returns the worker's dependencies for action execution.
@@ -113,5 +117,5 @@ func readMoodFile(path string) string {
 }
 
 func init() {
-	register.Worker[HelloworldConfig, HelloworldStatus]("helloworld", NewHelloworldWorker)
+	register.Worker[HelloworldConfig, HelloworldStatus](WorkerType, NewHelloworldWorker)
 }

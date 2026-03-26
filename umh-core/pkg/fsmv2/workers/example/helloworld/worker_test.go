@@ -68,7 +68,7 @@ var _ = Describe("HelloworldWorker", func() {
 			obs, err := worker.CollectObservedState(context.Background(), desired)
 
 			Expect(err).NotTo(HaveOccurred())
-			typedObs, ok := obs.(fsmv2.WrappedObservedState[hello_world.HelloworldStatus])
+			typedObs, ok := obs.(fsmv2.Observation[hello_world.HelloworldStatus])
 			Expect(ok).To(BeTrue())
 			Expect(typedObs.Status.HelloSaid).To(BeFalse())
 		})

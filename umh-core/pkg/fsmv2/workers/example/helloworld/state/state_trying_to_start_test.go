@@ -40,7 +40,7 @@ var _ = Describe("TryingToStartState", func() {
 			BeforeEach(func() {
 				snap = fsmv2.Snapshot{
 					Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "helloworld"},
-					Observed: fsmv2.WrappedObservedState[hello_world.HelloworldStatus]{
+					Observed: fsmv2.Observation[hello_world.HelloworldStatus]{
 						Status: hello_world.HelloworldStatus{HelloSaid: false},
 					},
 					Desired: &fsmv2.WrappedDesiredState[hello_world.HelloworldConfig]{},
@@ -71,7 +71,7 @@ var _ = Describe("TryingToStartState", func() {
 			BeforeEach(func() {
 				snap = fsmv2.Snapshot{
 					Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "helloworld"},
-					Observed: fsmv2.WrappedObservedState[hello_world.HelloworldStatus]{
+					Observed: fsmv2.Observation[hello_world.HelloworldStatus]{
 						Status: hello_world.HelloworldStatus{HelloSaid: true},
 					},
 					Desired: &fsmv2.WrappedDesiredState[hello_world.HelloworldConfig]{},
@@ -101,7 +101,7 @@ var _ = Describe("TryingToStartState", func() {
 			BeforeEach(func() {
 				snap = fsmv2.Snapshot{
 					Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "helloworld"},
-					Observed: fsmv2.WrappedObservedState[hello_world.HelloworldStatus]{
+					Observed: fsmv2.Observation[hello_world.HelloworldStatus]{
 						Status: hello_world.HelloworldStatus{HelloSaid: false},
 					},
 					Desired: &fsmv2.WrappedDesiredState[hello_world.HelloworldConfig]{
@@ -133,7 +133,7 @@ var _ = Describe("TryingToStartState", func() {
 			It("should shutdown even if HelloSaid is true", func() {
 				snap = fsmv2.Snapshot{
 					Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "helloworld"},
-					Observed: fsmv2.WrappedObservedState[hello_world.HelloworldStatus]{
+					Observed: fsmv2.Observation[hello_world.HelloworldStatus]{
 						Status: hello_world.HelloworldStatus{HelloSaid: true},
 					},
 					Desired: &fsmv2.WrappedDesiredState[hello_world.HelloworldConfig]{
@@ -168,7 +168,7 @@ var _ = Describe("TryingToStartState Transitions", func() {
 		It("should transition when HelloSaid is observed", func() {
 			snap := fsmv2.Snapshot{
 				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "helloworld"},
-				Observed: fsmv2.WrappedObservedState[hello_world.HelloworldStatus]{
+				Observed: fsmv2.Observation[hello_world.HelloworldStatus]{
 					Status: hello_world.HelloworldStatus{HelloSaid: true},
 				},
 				Desired: &fsmv2.WrappedDesiredState[hello_world.HelloworldConfig]{},
@@ -186,7 +186,7 @@ var _ = Describe("TryingToStartState Transitions", func() {
 		It("should transition on shutdown request", func() {
 			snap := fsmv2.Snapshot{
 				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "helloworld"},
-				Observed: fsmv2.WrappedObservedState[hello_world.HelloworldStatus]{
+				Observed: fsmv2.Observation[hello_world.HelloworldStatus]{
 					Status: hello_world.HelloworldStatus{HelloSaid: false},
 				},
 				Desired: &fsmv2.WrappedDesiredState[hello_world.HelloworldConfig]{
@@ -206,7 +206,7 @@ var _ = Describe("TryingToStartState Transitions", func() {
 		It("should emit SayHelloAction while waiting", func() {
 			snap := fsmv2.Snapshot{
 				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "helloworld"},
-				Observed: fsmv2.WrappedObservedState[hello_world.HelloworldStatus]{
+				Observed: fsmv2.Observation[hello_world.HelloworldStatus]{
 					Status: hello_world.HelloworldStatus{HelloSaid: false},
 				},
 				Desired: &fsmv2.WrappedDesiredState[hello_world.HelloworldConfig]{},

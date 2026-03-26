@@ -247,179 +247,39 @@ state: "running"
 	})
 
 	Describe("CollectObservedState", func() {
-		It("should return observed state with CollectedAt timestamp", func() {
+		It("should return observed state with zero CollectedAt (collector sets it)", func() {
 			observed, err := worker.CollectObservedState(ctx, nil)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(observed).NotTo(BeNil())
 
-			communicatorObserved := observed.(fsmv2.WrappedObservedState[communicator.CommunicatorStatus])
-			Expect(communicatorObserved.CollectedAt).NotTo(BeZero())
+			communicatorObserved := observed.(fsmv2.Observation[communicator.CommunicatorStatus])
+			Expect(communicatorObserved.CollectedAt).To(BeZero(), "NewObservation leaves CollectedAt zero; collector fills it")
 		})
 
-		Context("metrics accumulation", func() {
-			type metricsTestContext struct {
-				worker      *communicator.CommunicatorWorker
-				stateReader *MockStateReader
-			}
+		It("should set consecutive errors gauge on MetricsRecorder", func() {
+			d := worker.GetDependencies()
+			d.RecordError()
+			d.RecordError()
 
-			createWorkerWithStateReader := func() *metricsTestContext {
-				stateReader := NewMockStateReader()
-				w := createCommunicatorWorker("test-metrics-id", logger, stateReader)
+			_, err := worker.CollectObservedState(ctx, nil)
+			Expect(err).NotTo(HaveOccurred())
 
-				return &metricsTestContext{worker: w, stateReader: stateReader}
-			}
+			drained := d.MetricsRecorder().Drain()
+			Expect(drained.Gauges[string(depspkg.GaugeConsecutiveErrors)]).To(Equal(float64(2)))
+		})
 
-			// Helper to collect observed state and save it (simulates collector)
-			collectAndSave := func(tc *metricsTestContext) fsmv2.WrappedObservedState[communicator.CommunicatorStatus] {
-				observed, err := tc.worker.CollectObservedState(ctx, nil)
-				Expect(err).NotTo(HaveOccurred())
-				communicatorObserved := observed.(fsmv2.WrappedObservedState[communicator.CommunicatorStatus])
-				// Simulate collector saving observed state
-				tc.stateReader.SaveObserved("communicator", "test-metrics-id", communicatorObserved)
+		It("should not drain MetricsRecorder into observation (collector handles accumulation)", func() {
+			d := worker.GetDependencies()
+			d.MetricsRecorder().IncrementCounter(depspkg.CounterPullOps, 1)
+			d.MetricsRecorder().SetGauge(depspkg.GaugeLastPullLatencyMs, 100.0)
 
-				return communicatorObserved
-			}
+			observed, err := worker.CollectObservedState(ctx, nil)
+			Expect(err).NotTo(HaveOccurred())
 
-			It("should accumulate pull metrics on successful pull", func() {
-				deps := worker.GetDependencies()
-				deps.MetricsRecorder().IncrementCounter(depspkg.CounterPullOps, 1)
-				deps.MetricsRecorder().IncrementCounter(depspkg.CounterPullSuccess, 1)
-				deps.MetricsRecorder().IncrementCounter(depspkg.CounterMessagesPulled, 5)
-				deps.MetricsRecorder().SetGauge(depspkg.GaugeLastPullLatencyMs, 100.0)
-
-				observed, err := worker.CollectObservedState(ctx, nil)
-				Expect(err).NotTo(HaveOccurred())
-
-				communicatorObserved := observed.(fsmv2.WrappedObservedState[communicator.CommunicatorStatus])
-				Expect(communicatorObserved.Metrics.Worker.Counters[string(depspkg.CounterPullOps)]).To(Equal(int64(1)))
-				Expect(communicatorObserved.Metrics.Worker.Counters[string(depspkg.CounterPullSuccess)]).To(Equal(int64(1)))
-				Expect(communicatorObserved.Metrics.Worker.Counters[string(depspkg.CounterPullFailures)]).To(Equal(int64(0)))
-				Expect(communicatorObserved.Metrics.Worker.Counters[string(depspkg.CounterMessagesPulled)]).To(Equal(int64(5)))
-				Expect(communicatorObserved.Metrics.Worker.Gauges[string(depspkg.GaugeLastPullLatencyMs)]).To(Equal(100.0))
-			})
-
-			It("should accumulate pull metrics on failed pull", func() {
-				deps := worker.GetDependencies()
-				deps.MetricsRecorder().IncrementCounter(depspkg.CounterPullOps, 1)
-				deps.MetricsRecorder().IncrementCounter(depspkg.CounterPullFailures, 1)
-				deps.MetricsRecorder().SetGauge(depspkg.GaugeLastPullLatencyMs, 50.0)
-
-				observed, err := worker.CollectObservedState(ctx, nil)
-				Expect(err).NotTo(HaveOccurred())
-
-				communicatorObserved := observed.(fsmv2.WrappedObservedState[communicator.CommunicatorStatus])
-				Expect(communicatorObserved.Metrics.Worker.Counters[string(depspkg.CounterPullOps)]).To(Equal(int64(1)))
-				Expect(communicatorObserved.Metrics.Worker.Counters[string(depspkg.CounterPullSuccess)]).To(Equal(int64(0)))
-				Expect(communicatorObserved.Metrics.Worker.Counters[string(depspkg.CounterPullFailures)]).To(Equal(int64(1)))
-				Expect(communicatorObserved.Metrics.Worker.Counters[string(depspkg.CounterMessagesPulled)]).To(Equal(int64(0)))
-				Expect(communicatorObserved.Metrics.Worker.Gauges[string(depspkg.GaugeLastPullLatencyMs)]).To(Equal(50.0))
-			})
-
-			It("should accumulate push metrics on successful push", func() {
-				deps := worker.GetDependencies()
-				deps.MetricsRecorder().IncrementCounter(depspkg.CounterPushOps, 1)
-				deps.MetricsRecorder().IncrementCounter(depspkg.CounterPushSuccess, 1)
-				deps.MetricsRecorder().IncrementCounter(depspkg.CounterMessagesPushed, 3)
-				deps.MetricsRecorder().SetGauge(depspkg.GaugeLastPushLatencyMs, 200.0)
-
-				observed, err := worker.CollectObservedState(ctx, nil)
-				Expect(err).NotTo(HaveOccurred())
-
-				communicatorObserved := observed.(fsmv2.WrappedObservedState[communicator.CommunicatorStatus])
-				Expect(communicatorObserved.Metrics.Worker.Counters[string(depspkg.CounterPushOps)]).To(Equal(int64(1)))
-				Expect(communicatorObserved.Metrics.Worker.Counters[string(depspkg.CounterPushSuccess)]).To(Equal(int64(1)))
-				Expect(communicatorObserved.Metrics.Worker.Counters[string(depspkg.CounterPushFailures)]).To(Equal(int64(0)))
-				Expect(communicatorObserved.Metrics.Worker.Counters[string(depspkg.CounterMessagesPushed)]).To(Equal(int64(3)))
-				Expect(communicatorObserved.Metrics.Worker.Gauges[string(depspkg.GaugeLastPushLatencyMs)]).To(Equal(200.0))
-			})
-
-			It("should accumulate push metrics on failed push", func() {
-				deps := worker.GetDependencies()
-				deps.MetricsRecorder().IncrementCounter(depspkg.CounterPushOps, 1)
-				deps.MetricsRecorder().IncrementCounter(depspkg.CounterPushFailures, 1)
-				deps.MetricsRecorder().SetGauge(depspkg.GaugeLastPushLatencyMs, 150.0)
-
-				observed, err := worker.CollectObservedState(ctx, nil)
-				Expect(err).NotTo(HaveOccurred())
-
-				communicatorObserved := observed.(fsmv2.WrappedObservedState[communicator.CommunicatorStatus])
-				Expect(communicatorObserved.Metrics.Worker.Counters[string(depspkg.CounterPushOps)]).To(Equal(int64(1)))
-				Expect(communicatorObserved.Metrics.Worker.Counters[string(depspkg.CounterPushSuccess)]).To(Equal(int64(0)))
-				Expect(communicatorObserved.Metrics.Worker.Counters[string(depspkg.CounterPushFailures)]).To(Equal(int64(1)))
-				Expect(communicatorObserved.Metrics.Worker.Counters[string(depspkg.CounterMessagesPushed)]).To(Equal(int64(0)))
-			})
-
-			It("should clear per-tick results after CollectObservedState", func() {
-				tc := createWorkerWithStateReader()
-				deps := tc.worker.GetDependencies()
-
-				deps.MetricsRecorder().IncrementCounter(depspkg.CounterPullOps, 1)
-				deps.MetricsRecorder().IncrementCounter(depspkg.CounterMessagesPulled, 2)
-
-				observed1 := collectAndSave(tc)
-				Expect(observed1.Metrics.Worker.Counters[string(depspkg.CounterPullOps)]).To(Equal(int64(1)))
-
-				observed2 := collectAndSave(tc)
-				Expect(observed2.Metrics.Worker.Counters[string(depspkg.CounterPullOps)]).To(Equal(int64(1))) // Still 1, no new tick
-			})
-
-			It("should track last latency as gauge", func() {
-				tc := createWorkerWithStateReader()
-				deps := tc.worker.GetDependencies()
-
-				deps.MetricsRecorder().IncrementCounter(depspkg.CounterPullOps, 1)
-				deps.MetricsRecorder().SetGauge(depspkg.GaugeLastPullLatencyMs, 100.0)
-				observed1 := collectAndSave(tc)
-				Expect(observed1.Metrics.Worker.Gauges[string(depspkg.GaugeLastPullLatencyMs)]).To(Equal(100.0))
-
-				deps.MetricsRecorder().IncrementCounter(depspkg.CounterPullOps, 1)
-				deps.MetricsRecorder().SetGauge(depspkg.GaugeLastPullLatencyMs, 200.0)
-				observed2 := collectAndSave(tc)
-				Expect(observed2.Metrics.Worker.Counters[string(depspkg.CounterPullOps)]).To(Equal(int64(2)))
-				Expect(observed2.Metrics.Worker.Gauges[string(depspkg.GaugeLastPullLatencyMs)]).To(Equal(200.0))
-			})
-
-			It("should accumulate message counts across multiple pulls", func() {
-				tc := createWorkerWithStateReader()
-				deps := tc.worker.GetDependencies()
-
-				deps.MetricsRecorder().IncrementCounter(depspkg.CounterPullOps, 1)
-				deps.MetricsRecorder().IncrementCounter(depspkg.CounterMessagesPulled, 5)
-				collectAndSave(tc)
-
-				deps.MetricsRecorder().IncrementCounter(depspkg.CounterPullOps, 1)
-				deps.MetricsRecorder().IncrementCounter(depspkg.CounterMessagesPulled, 3)
-				observed2 := collectAndSave(tc)
-				Expect(observed2.Metrics.Worker.Counters[string(depspkg.CounterMessagesPulled)]).To(Equal(int64(8)))
-
-				deps.MetricsRecorder().IncrementCounter(depspkg.CounterPullOps, 1)
-				deps.MetricsRecorder().IncrementCounter(depspkg.CounterMessagesPulled, 2)
-				observed3 := collectAndSave(tc)
-				Expect(observed3.Metrics.Worker.Counters[string(depspkg.CounterMessagesPulled)]).To(Equal(int64(10)))
-			})
-
-			It("should track both successful and failed ops separately", func() {
-				tc := createWorkerWithStateReader()
-				deps := tc.worker.GetDependencies()
-
-				deps.MetricsRecorder().IncrementCounter(depspkg.CounterPullOps, 1)
-				deps.MetricsRecorder().IncrementCounter(depspkg.CounterPullSuccess, 1)
-				deps.MetricsRecorder().IncrementCounter(depspkg.CounterMessagesPulled, 1)
-				collectAndSave(tc)
-
-				deps.MetricsRecorder().IncrementCounter(depspkg.CounterPullOps, 1)
-				deps.MetricsRecorder().IncrementCounter(depspkg.CounterPullFailures, 1)
-				collectAndSave(tc)
-
-				deps.MetricsRecorder().IncrementCounter(depspkg.CounterPullOps, 1)
-				deps.MetricsRecorder().IncrementCounter(depspkg.CounterPullSuccess, 1)
-				deps.MetricsRecorder().IncrementCounter(depspkg.CounterMessagesPulled, 1)
-				observed := collectAndSave(tc)
-
-				Expect(observed.Metrics.Worker.Counters[string(depspkg.CounterPullOps)]).To(Equal(int64(3)))
-				Expect(observed.Metrics.Worker.Counters[string(depspkg.CounterPullSuccess)]).To(Equal(int64(2)))
-				Expect(observed.Metrics.Worker.Counters[string(depspkg.CounterPullFailures)]).To(Equal(int64(1)))
-			})
+			communicatorObserved := observed.(fsmv2.Observation[communicator.CommunicatorStatus])
+			Expect(communicatorObserved.Metrics.Worker.Counters).To(BeEmpty(),
+				"NewObservation does not drain MetricsRecorder; collector handles accumulation")
+			Expect(communicatorObserved.Metrics.Worker.Gauges).To(BeEmpty())
 		})
 
 	})

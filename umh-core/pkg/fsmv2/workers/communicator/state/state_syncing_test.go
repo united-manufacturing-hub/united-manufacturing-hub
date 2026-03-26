@@ -57,7 +57,7 @@ var _ = Describe("SyncingState Transitions", func() {
 		It("should transition to StoppedState when shutdown is requested", func() {
 			snap := fsmv2.Snapshot{
 				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
-				Observed: fsmv2.WrappedObservedState[communicator.CommunicatorStatus]{
+				Observed: fsmv2.Observation[communicator.CommunicatorStatus]{
 					ChildrenHealthy:   1,
 					ChildrenUnhealthy: 0,
 				},
@@ -76,7 +76,7 @@ var _ = Describe("SyncingState Transitions", func() {
 		It("should prioritize shutdown over unhealthy children", func() {
 			snap := fsmv2.Snapshot{
 				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
-				Observed: fsmv2.WrappedObservedState[communicator.CommunicatorStatus]{
+				Observed: fsmv2.Observation[communicator.CommunicatorStatus]{
 					ChildrenHealthy:   0,
 					ChildrenUnhealthy: 1,
 				},
@@ -97,7 +97,7 @@ var _ = Describe("SyncingState Transitions", func() {
 		It("should transition when children are unhealthy", func() {
 			snap := fsmv2.Snapshot{
 				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
-				Observed: fsmv2.WrappedObservedState[communicator.CommunicatorStatus]{
+				Observed: fsmv2.Observation[communicator.CommunicatorStatus]{
 					ChildrenHealthy:   0,
 					ChildrenUnhealthy: 1,
 				},
@@ -114,7 +114,7 @@ var _ = Describe("SyncingState Transitions", func() {
 		It("should transition when multiple children are unhealthy", func() {
 			snap := fsmv2.Snapshot{
 				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
-				Observed: fsmv2.WrappedObservedState[communicator.CommunicatorStatus]{
+				Observed: fsmv2.Observation[communicator.CommunicatorStatus]{
 					ChildrenHealthy:   1,
 					ChildrenUnhealthy: 2,
 				},
@@ -133,7 +133,7 @@ var _ = Describe("SyncingState Transitions", func() {
 		It("should stay in SyncingState with nil action when children are healthy", func() {
 			snap := fsmv2.Snapshot{
 				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
-				Observed: fsmv2.WrappedObservedState[communicator.CommunicatorStatus]{
+				Observed: fsmv2.Observation[communicator.CommunicatorStatus]{
 					ChildrenHealthy:   1,
 					ChildrenUnhealthy: 0,
 				},
@@ -150,7 +150,7 @@ var _ = Describe("SyncingState Transitions", func() {
 		It("should transition to RecoveringState when no children exist yet", func() {
 			snap := fsmv2.Snapshot{
 				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
-				Observed: fsmv2.WrappedObservedState[communicator.CommunicatorStatus]{
+				Observed: fsmv2.Observation[communicator.CommunicatorStatus]{
 					ChildrenHealthy:   0,
 					ChildrenUnhealthy: 0,
 				},

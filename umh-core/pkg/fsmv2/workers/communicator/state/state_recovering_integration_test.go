@@ -40,7 +40,7 @@ var _ = Describe("RecoveringState Integration - Recovery Cycle", func() {
 			// Phase 1: Children go unhealthy — stay in Recovering
 			snap1 := fsmv2.Snapshot{
 				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
-				Observed: fsmv2.WrappedObservedState[communicator.CommunicatorStatus]{
+				Observed: fsmv2.Observation[communicator.CommunicatorStatus]{
 					ChildrenHealthy:   0,
 					ChildrenUnhealthy: 1,
 				},
@@ -54,7 +54,7 @@ var _ = Describe("RecoveringState Integration - Recovery Cycle", func() {
 			// Phase 2: Children still unhealthy — stay in Recovering
 			snap2 := fsmv2.Snapshot{
 				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
-				Observed: fsmv2.WrappedObservedState[communicator.CommunicatorStatus]{
+				Observed: fsmv2.Observation[communicator.CommunicatorStatus]{
 					ChildrenHealthy:   0,
 					ChildrenUnhealthy: 1,
 				},
@@ -68,7 +68,7 @@ var _ = Describe("RecoveringState Integration - Recovery Cycle", func() {
 			// Phase 3: Children recover — transition to Syncing
 			snap3 := fsmv2.Snapshot{
 				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
-				Observed: fsmv2.WrappedObservedState[communicator.CommunicatorStatus]{
+				Observed: fsmv2.Observation[communicator.CommunicatorStatus]{
 					ChildrenHealthy:   1,
 					ChildrenUnhealthy: 0,
 				},
