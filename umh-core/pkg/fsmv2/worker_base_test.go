@@ -393,6 +393,140 @@ port: 1`}
 		})
 	})
 
+	Describe("WrapStatusAccumulated", func() {
+		It("accumulates counters additively with previous state", func() {
+			prevObs := fsmv2.WrappedObservedState[workerTestStatus]{
+				CollectedAt: time.Now().Add(-time.Second),
+				Status:      workerTestStatus{Reachable: true},
+			}
+			prevObs.Metrics.Worker = deps.Metrics{
+				Counters: map[string]int64{"pull_ops": 10},
+				Gauges:   map[string]float64{},
+			}
+
+			sr := &configurableStateReader{previousState: prevObs}
+			wb.InitBase(identity, mockLogger, sr)
+
+			bd := wb.GetDependenciesAny().(*deps.BaseDependencies)
+			bd.MetricsRecorder().IncrementCounter(deps.CounterPullOps, 5)
+
+			obs := wb.WrapStatusAccumulated(context.Background(), workerTestStatus{Reachable: true})
+
+			typed := obs.(fsmv2.WrappedObservedState[workerTestStatus])
+			Expect(typed.Metrics.Worker.Counters["pull_ops"]).To(Equal(int64(15)))
+		})
+
+		It("replaces gauges from drain, keeps previous gauges not in drain", func() {
+			prevObs := fsmv2.WrappedObservedState[workerTestStatus]{
+				CollectedAt: time.Now().Add(-time.Second),
+				Status:      workerTestStatus{},
+			}
+			prevObs.Metrics.Worker = deps.Metrics{
+				Counters: map[string]int64{},
+				Gauges: map[string]float64{
+					"consecutive_errors":   5.0,
+					"last_pull_latency_ms": 100.0,
+				},
+			}
+
+			sr := &configurableStateReader{previousState: prevObs}
+			wb.InitBase(identity, mockLogger, sr)
+
+			bd := wb.GetDependenciesAny().(*deps.BaseDependencies)
+			bd.MetricsRecorder().SetGauge(deps.GaugeConsecutiveErrors, 3.0)
+
+			obs := wb.WrapStatusAccumulated(context.Background(), workerTestStatus{})
+
+			typed := obs.(fsmv2.WrappedObservedState[workerTestStatus])
+			Expect(typed.Metrics.Worker.Gauges["consecutive_errors"]).To(Equal(3.0))
+			Expect(typed.Metrics.Worker.Gauges["last_pull_latency_ms"]).To(Equal(100.0))
+		})
+
+		It("starts fresh when CSE read fails (no previous state)", func() {
+			sr := &configurableStateReader{err: fmt.Errorf("no state")}
+			wb.InitBase(identity, mockLogger, sr)
+
+			bd := wb.GetDependenciesAny().(*deps.BaseDependencies)
+			bd.MetricsRecorder().IncrementCounter(deps.CounterPullOps, 5)
+			bd.MetricsRecorder().SetGauge(deps.GaugeConsecutiveErrors, 1.0)
+
+			obs := wb.WrapStatusAccumulated(context.Background(), workerTestStatus{Reachable: true})
+
+			typed := obs.(fsmv2.WrappedObservedState[workerTestStatus])
+			Expect(typed.Metrics.Worker.Counters["pull_ops"]).To(Equal(int64(5)))
+			Expect(typed.Metrics.Worker.Gauges["consecutive_errors"]).To(Equal(1.0))
+		})
+
+		It("handles uninitialized WorkerBase gracefully (no panic)", func() {
+			uninit := &fsmv2.WorkerBase[workerTestConfig, workerTestStatus]{}
+			Expect(func() {
+				obs := uninit.WrapStatusAccumulated(context.Background(), workerTestStatus{})
+				Expect(obs).NotTo(BeNil())
+			}).NotTo(Panic())
+		})
+
+		It("sets CollectedAt and Status correctly", func() {
+			sr := &configurableStateReader{err: fmt.Errorf("no state")}
+			wb.InitBase(identity, mockLogger, sr)
+
+			before := time.Now()
+			status := workerTestStatus{Reachable: true, LatencyMs: 42}
+			obs := wb.WrapStatusAccumulated(context.Background(), status)
+
+			Expect(obs.GetTimestamp()).To(BeTemporally(">=", before))
+			typed := obs.(fsmv2.WrappedObservedState[workerTestStatus])
+			Expect(typed.Status.Reachable).To(BeTrue())
+			Expect(typed.Status.LatencyMs).To(Equal(int64(42)))
+		})
+
+		It("copies framework metrics from baseDeps", func() {
+			sr := &configurableStateReader{err: fmt.Errorf("no state")}
+			wb.InitBase(identity, mockLogger, sr)
+
+			obs := wb.WrapStatusAccumulated(context.Background(), workerTestStatus{})
+			typed := obs.(fsmv2.WrappedObservedState[workerTestStatus])
+			Expect(typed.Metrics.Framework.StateTransitionsTotal).To(Equal(int64(0)))
+		})
+
+		It("calls LoadObservedTyped with correct workerType and ID", func() {
+			sr := &configurableStateReader{err: fmt.Errorf("no state")}
+			wb.InitBase(identity, mockLogger, sr)
+
+			_ = wb.WrapStatusAccumulated(context.Background(), workerTestStatus{})
+
+			Expect(sr.called).To(BeTrue())
+			Expect(sr.calledType).To(Equal("test"))
+			Expect(sr.calledID).To(Equal("test-worker-1"))
+		})
+
+		It("handles nil stateReader gracefully", func() {
+			wb.InitBase(identity, mockLogger, nil)
+
+			bd := wb.GetDependenciesAny().(*deps.BaseDependencies)
+			bd.MetricsRecorder().IncrementCounter(deps.CounterPullOps, 3)
+
+			obs := wb.WrapStatusAccumulated(context.Background(), workerTestStatus{})
+
+			typed := obs.(fsmv2.WrappedObservedState[workerTestStatus])
+			Expect(typed.Metrics.Worker.Counters["pull_ops"]).To(Equal(int64(3)))
+		})
+
+		It("copies action history from baseDeps", func() {
+			sr := &configurableStateReader{err: fmt.Errorf("no state")}
+			wb.InitBase(identity, mockLogger, sr)
+
+			bd := wb.GetDependenciesAny().(*deps.BaseDependencies)
+			bd.SetActionHistory([]deps.ActionResult{
+				{ActionType: "test-action", Success: true},
+			})
+
+			obs := wb.WrapStatusAccumulated(context.Background(), workerTestStatus{})
+			typed := obs.(fsmv2.WrappedObservedState[workerTestStatus])
+			Expect(typed.LastActionResults).To(HaveLen(1))
+			Expect(typed.LastActionResults[0].ActionType).To(Equal("test-action"))
+		})
+	})
+
 	Describe("GetInitialState", func() {
 		BeforeEach(func() {
 			fsmv2.RegisterInitialState("test", &testStoppedState{})
