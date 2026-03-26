@@ -51,6 +51,8 @@ type Handler struct {
 	disableHardwareStatusCheck bool //nolint:unused // will be used in the future
 }
 
+// NewHandler creates a subscriber handler that manages instance subscriptions
+// and coordinates status collection with the management console.
 func NewHandler(
 	dog watchdog.Iface,
 	pusher *push.Pusher,

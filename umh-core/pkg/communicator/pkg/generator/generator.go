@@ -38,6 +38,8 @@ type StatusCollectorType struct {
 	featureUsage             *models.FeatureUsage
 }
 
+// NewStatusCollector creates a status collector that generates periodic status payloads
+// including system snapshots, topic browser data, and feature usage metrics.
 func NewStatusCollector(
 	dog watchdog.Iface,
 	systemSnapshotManager *fsm.SnapshotManager,
