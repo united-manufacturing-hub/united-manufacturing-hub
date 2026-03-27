@@ -15,10 +15,8 @@
 package fsmv2
 
 import (
-	"context"
 	"fmt"
 	"sync"
-	"time"
 
 	"gopkg.in/yaml.v3"
 
@@ -36,7 +34,6 @@ import (
 // It also implements DependencyProvider (1 method).
 type WorkerBase[TConfig any, TStatus any] struct {
 	logger           deps.FSMLogger
-	stateReader      deps.StateReader
 	config           TConfig
 	baseDeps         *deps.BaseDependencies
 	postParseHook    func(*TConfig) error
@@ -48,16 +45,15 @@ type WorkerBase[TConfig any, TStatus any] struct {
 }
 
 // InitBase initializes the embedded WorkerBase with framework dependencies.
-// Returns the BaseDependencies instance that WrapStatus reads from. Workers
+// Returns the BaseDependencies instance that the collector reads from. Workers
 // that construct custom dependencies MUST use this returned pointer — do not call
-// deps.NewBaseDependencies separately, as a separate instance is invisible to WrapStatus.
+// deps.NewBaseDependencies separately, as a separate instance is invisible to the collector.
 func (w *WorkerBase[TConfig, TStatus]) InitBase(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) *deps.BaseDependencies {
 	bd := deps.NewBaseDependencies(logger, sr, id)
 
 	w.mu.Lock()
 	w.identity = id
 	w.logger = logger
-	w.stateReader = sr
 	w.baseDeps = bd
 	w.initialized = true
 	w.mu.Unlock()
@@ -96,118 +92,6 @@ func (w *WorkerBase[TConfig, TStatus]) ConfigReady() bool {
 	defer w.mu.RUnlock()
 
 	return w.configReady
-}
-
-// Deprecated: Use fsmv2.NewObservation(status) instead. When NewObservation is used
-// (zero CollectedAt), the collector handles CollectedAt, framework metrics, action
-// history, and metric accumulation automatically after CollectObservedState returns.
-//
-// WrapStatus constructs an Observation from the developer's TStatus.
-// Sets CollectedAt to time.Now() (BW2), copies framework metrics and action history from baseDeps (BW3).
-// Safe to call on uninitialized WorkerBase (returns observation with zero metrics, no panic).
-func (w *WorkerBase[TConfig, TStatus]) WrapStatus(status TStatus) ObservedState {
-	obs := Observation[TStatus]{
-		CollectedAt: time.Now(),
-		Status:      status,
-	}
-
-	w.mu.RLock()
-	initialized := w.initialized
-	bd := w.baseDeps
-	w.mu.RUnlock()
-
-	if initialized && bd != nil {
-		if fm := bd.GetFrameworkState(); fm != nil {
-			obs.Metrics.Framework = *fm
-		}
-
-		actionHistory := bd.GetActionHistory()
-		if actionHistory != nil {
-			obs.LastActionResults = actionHistory
-		}
-
-		if recorder := bd.MetricsRecorder(); recorder != nil {
-			drained := recorder.Drain()
-			obs.Metrics.Worker = deps.Metrics{
-				Counters: drained.Counters,
-				Gauges:   drained.Gauges,
-			}
-		}
-	}
-
-	return obs
-}
-
-// Deprecated: Use fsmv2.NewObservation(status) instead. The collector now handles
-// metric accumulation (load previous from CSE, drain recorder, merge) automatically
-// after CollectObservedState returns (post-COS wrapping).
-//
-// WrapStatusAccumulated constructs an Observation with cross-tick metric accumulation.
-// Unlike WrapStatus (current-tick only), this reads the previous observed state from CSE,
-// merges counters (additive) and gauges (replace), then drains the current tick's metrics on top.
-//
-// Use for workers that accumulate metrics across ticks (communicator, transport push/pull).
-// Workers without cross-tick metrics should use WrapStatus instead.
-//
-// Calls MetricsRecorder().Drain() which is destructive — calling this method
-// twice in the same tick yields zero deltas on the second call.
-func (w *WorkerBase[TConfig, TStatus]) WrapStatusAccumulated(ctx context.Context, status TStatus) ObservedState {
-	obs := Observation[TStatus]{
-		CollectedAt: time.Now(),
-		Status:      status,
-	}
-
-	w.mu.RLock()
-	initialized := w.initialized
-	bd := w.baseDeps
-	w.mu.RUnlock()
-
-	if !initialized || bd == nil {
-		return obs
-	}
-
-	if fm := bd.GetFrameworkState(); fm != nil {
-		obs.Metrics.Framework = *fm
-	}
-
-	if ah := bd.GetActionHistory(); ah != nil {
-		obs.LastActionResults = ah
-	}
-
-	// Step 1: Load previous state FIRST (before drain).
-	// Drain is destructive — if we drain first and the CSE read then fails,
-	// the drained deltas are lost and the cumulative counter resets to zero.
-	var prevWorkerMetrics deps.Metrics
-	if sr := bd.GetStateReader(); sr != nil && ctx.Err() == nil {
-		var prev Observation[TStatus]
-		if err := sr.LoadObservedTyped(ctx, bd.GetWorkerType(), bd.GetWorkerID(), &prev); err == nil {
-			prevWorkerMetrics = prev.Metrics.Worker
-		} else if w.logger != nil {
-			w.logger.Debug("WrapStatusAccumulated: could not load previous state, starting fresh: " + err.Error())
-		}
-	}
-
-	if prevWorkerMetrics.Counters == nil {
-		prevWorkerMetrics.Counters = make(map[string]int64)
-	}
-	if prevWorkerMetrics.Gauges == nil {
-		prevWorkerMetrics.Gauges = make(map[string]float64)
-	}
-
-	// Step 2: Drain AFTER CSE read — if CSE failed, deltas are still correct.
-	if recorder := bd.MetricsRecorder(); recorder != nil {
-		drained := recorder.Drain()
-		for name, delta := range drained.Counters {
-			prevWorkerMetrics.Counters[name] += delta
-		}
-		for name, value := range drained.Gauges {
-			prevWorkerMetrics.Gauges[name] = value
-		}
-	}
-
-	obs.Metrics.Worker = prevWorkerMetrics
-
-	return obs
 }
 
 // DeriveDesiredState parses UserSpec, renders templates, unmarshals into TConfig,

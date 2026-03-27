@@ -146,17 +146,9 @@ New workers should use `WorkerBase[TConfig, TStatus]` instead of the legacy 7-fi
 
 ## Metrics Patterns
 
-Workers record metrics via `deps.MetricsRecorder()`. There are two observation return paths with different metric handling:
+Workers record metrics via `deps.MetricsRecorder()`. Return `fsmv2.NewObservation(status)` from `CollectObservedState` — the collector fills CollectedAt, framework metrics, action history, and accumulated worker metrics automatically after COS returns.
 
-| Return Path | CollectedAt | Metrics Handling | When to Use |
-|-------------|-------------|------------------|-------------|
-| `fsmv2.NewObservation(status)` | Zero (collector sets it) | Collector loads previous from CSE, drains recorder, merges (counters additive, gauges replace) | New workers (preferred) |
-| `w.WrapStatus(status)` | Set by caller | Worker drains recorder in COS, current-tick only | Legacy workers (deprecated) |
-| `w.WrapStatusAccumulated(ctx, status)` | Set by caller | Worker loads CSE + drains + merges in COS | Legacy workers needing cross-tick accumulation (deprecated) |
-
-**The zero-time gate**: The collector checks `observed.GetTimestamp().IsZero()`. If true (NewObservation), it runs post-COS wrapping. If false (WrapStatus/WrapStatusAccumulated), it skips wrapping since the worker already handled it. Both paths coexist safely during migration.
-
-**Drain is destructive**: `MetricsRecorder().Drain()` empties the buffer. Only one path should drain per tick. NewObservation workers must not call Drain() in COS — the collector does it. WrapStatus workers drain in COS — the collector skips it.
+The collector loads the previous observed state from CSE, drains the recorder, and merges (counters additive, gauges replace). Workers must NOT call `MetricsRecorder().Drain()` in COS — the collector does it.
 
 ## Graceful Shutdown Cascading
 

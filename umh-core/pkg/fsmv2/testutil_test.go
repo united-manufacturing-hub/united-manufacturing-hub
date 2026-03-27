@@ -16,8 +16,6 @@ package fsmv2_test
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 )
@@ -45,36 +43,3 @@ type mockDesiredState struct{}
 func (d *mockDesiredState) IsShutdownRequested() bool { return false }
 func (d *mockDesiredState) GetState() string          { return "running" }
 
-// configurableStateReader satisfies deps.StateReader with configurable responses.
-// Use for testing methods that read previous state from CSE.
-type configurableStateReader struct {
-	previousState interface{}
-	err           error
-	called        bool
-	calledType    string
-	calledID      string
-}
-
-// Compile-time interface satisfaction check.
-var _ deps.StateReader = (*configurableStateReader)(nil)
-
-func (r *configurableStateReader) LoadObservedTyped(_ context.Context, workerType, id string, result interface{}) error {
-	r.called = true
-	r.calledType = workerType
-	r.calledID = id
-
-	if r.err != nil {
-		return r.err
-	}
-
-	if r.previousState == nil {
-		return fmt.Errorf("configurableStateReader: no previousState configured")
-	}
-
-	data, marshalErr := json.Marshal(r.previousState)
-	if marshalErr != nil {
-		return marshalErr
-	}
-
-	return json.Unmarshal(data, result)
-}

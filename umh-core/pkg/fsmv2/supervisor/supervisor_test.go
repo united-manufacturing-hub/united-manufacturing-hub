@@ -181,7 +181,7 @@ func (m *internalMockWorkerWithChildren) GetInitialState() fsmv2.State[any, any]
 	return m.initialState
 }
 
-// newObservationMockWorker returns fsmv2.NewObservation (zero CollectedAt) from CollectObservedState.
+// newObservationMockWorker uses fsmv2.NewObservation in CollectObservedState.
 type newObservationMockWorker struct {
 	initialState fsmv2.State[any, any]
 }

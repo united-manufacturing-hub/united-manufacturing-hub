@@ -38,7 +38,7 @@ import (
 // (e.g., transport push/pull children) must use factory.RegisterWorkerType directly.
 //
 // Workers registered via this function MUST use WorkerBase[TConfig, TStatus] and
-// return w.WrapStatus(status) from CollectObservedState. Workers with custom
+// return fsmv2.NewObservation(status) from CollectObservedState. Workers with custom
 // ObservedState types must use factory.RegisterWorkerType directly.
 //
 // Panics on field name collision or duplicate worker type (fail-fast at init time).
