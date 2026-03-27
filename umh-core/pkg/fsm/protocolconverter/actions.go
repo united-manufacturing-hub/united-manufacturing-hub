@@ -484,22 +484,40 @@ func (p *ProtocolConverterInstance) IsDFCHealthy() (bool, string) {
 	return false, statusReason
 }
 
-// safeBenthosMetrics safely extracts Benthos metrics from the observed state,
-// returning a zero-value metrics struct if any part of the chain is nil.
+// stateOrNotExisting returns the state string, or "not existing" if empty.
+func stateOrNotExisting(state string) string {
+	if state == "" {
+		return "not existing"
+	}
+	return state
+}
+
+// connectionMetrics holds aggregated connection up/lost counters for a single direction.
+type connectionMetrics struct {
+	ConnectionUp   int64
+	ConnectionLost int64
+}
+
+// isActive returns true when more connections have come up than have been lost.
+func (m connectionMetrics) isActive() bool {
+	return m.ConnectionUp-m.ConnectionLost > 0
+}
+
+// safeBenthosMetricsFrom safely extracts Benthos metrics from a DFC observed state,
+// returning zero-value metrics if any part of the chain is nil.
 // This prevents panics during startup or error conditions when the full
 // observedState structure may not be populated yet.
-func (p *ProtocolConverterInstance) safeBenthosMetrics() (input, output struct{ ConnectionUp, ConnectionLost int64 }) {
-	// Return zero values if the MetricsState pointer is nil (this is the only field that can actually be nil)
-	if p.ObservedState.ServiceInfo.DataflowComponentReadObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.MetricsState == nil {
+func safeBenthosMetricsFrom(obs dataflowfsm.DataflowComponentObservedState) (input, output connectionMetrics) {
+	if obs.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.MetricsState == nil {
 		return
 	}
 
-	metrics := p.ObservedState.ServiceInfo.DataflowComponentReadObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.Metrics
+	metrics := obs.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.Metrics
 
-	return struct{ ConnectionUp, ConnectionLost int64 }{
+	return connectionMetrics{
 			ConnectionUp:   metrics.Input.ConnectionUp,
 			ConnectionLost: metrics.Input.ConnectionLost,
-		}, struct{ ConnectionUp, ConnectionLost int64 }{
+		}, connectionMetrics{
 			ConnectionUp:   metrics.Output.ConnectionUp,
 			ConnectionLost: metrics.Output.ConnectionLost,
 		}
@@ -516,30 +534,47 @@ func (p *ProtocolConverterInstance) safeBenthosMetrics() (input, output struct{ 
 //	ok     – true when there is an issue, false otherwise.
 //	reason – empty when ok is true; otherwise a explanation
 func (p *ProtocolConverterInstance) IsOtherDegraded() (bool, string) {
-	// TODO: check the write DFC as well
-
-	// Check for case 1.1
-	if p.ObservedState.ServiceInfo.DataflowComponentReadFSMState == dataflowfsm.OperationalStateActive &&
-		p.ObservedState.ServiceInfo.RedpandaFSMState == redpandafsm.OperationalStateIdle {
-		return true, "flow is active, but redpanda is idle"
+	// dfcCheck holds the per-DFC data needed for degradation checks.
+	// For a read DFC: kafkaMetrics = output (→ Kafka), deviceMetrics = input (← device).
+	// For a write DFC: kafkaMetrics = input (← Kafka), deviceMetrics = output (→ device).
+	type dfcCheck struct {
+		label         string
+		fsmState      string
+		kafkaMetrics  connectionMetrics
+		deviceMetrics connectionMetrics
 	}
 
-	// Safely extract Benthos metrics to avoid nil pointer panics
-	inputMetrics, outputMetrics := p.safeBenthosMetrics()
+	readInput, readOutput := safeBenthosMetricsFrom(p.ObservedState.ServiceInfo.DataflowComponentReadObservedState)
+	writeInput, writeOutput := safeBenthosMetricsFrom(p.ObservedState.ServiceInfo.DataflowComponentWriteObservedState)
 
-	// Check for case 2
-	isBenthosOutputActive := outputMetrics.ConnectionUp-outputMetrics.ConnectionLost > 0 // if the amount of connection losts is bigger than the amount of connection ups, the output is not active
-	if (p.ObservedState.ServiceInfo.RedpandaFSMState == redpandafsm.OperationalStateIdle ||
-		p.ObservedState.ServiceInfo.RedpandaFSMState == redpandafsm.OperationalStateActive) &&
-		!isBenthosOutputActive {
-		return true, fmt.Sprintf("Redpanda is %s, but the flow has no output active (connection up: %d, connection lost: %d)", p.ObservedState.ServiceInfo.RedpandaFSMState, outputMetrics.ConnectionUp, outputMetrics.ConnectionLost)
+	checks := []dfcCheck{
+		{"read flow", p.ObservedState.ServiceInfo.DataflowComponentReadFSMState, readOutput, readInput},
+		{"write flow", p.ObservedState.ServiceInfo.DataflowComponentWriteFSMState, writeInput, writeOutput},
 	}
 
-	// Check for case 3
-	isBenthosInputActive := inputMetrics.ConnectionUp-inputMetrics.ConnectionLost > 0 // if the amount of connection losts is bigger than the amount of connection ups, the input is not active
-	if p.ObservedState.ServiceInfo.ConnectionFSMState != connectionfsm.OperationalStateUp &&
-		isBenthosInputActive {
-		return true, fmt.Sprintf("Connection is %s, but the flow has input active (connection up: %d, connection lost: %d)", p.ObservedState.ServiceInfo.ConnectionFSMState, inputMetrics.ConnectionUp, inputMetrics.ConnectionLost)
+	for _, c := range checks {
+
+		// Case 1: DFC active but redpanda idle
+		if c.fsmState == dataflowfsm.OperationalStateActive &&
+			p.ObservedState.ServiceInfo.RedpandaFSMState == redpandafsm.OperationalStateIdle {
+			return true, c.label + " is active, but redpanda is idle"
+		}
+
+		// Case 2: redpanda up but DFC's kafka-side connection not active
+		if (p.ObservedState.ServiceInfo.RedpandaFSMState == redpandafsm.OperationalStateIdle ||
+			p.ObservedState.ServiceInfo.RedpandaFSMState == redpandafsm.OperationalStateActive) &&
+			c.fsmState == dataflowfsm.OperationalStateActive &&
+			!c.kafkaMetrics.isActive() {
+			return true, fmt.Sprintf("Redpanda is %s, but the %s has no kafka-side connection active (connection up: %d, connection lost: %d)",
+				p.ObservedState.ServiceInfo.RedpandaFSMState, c.label, c.kafkaMetrics.ConnectionUp, c.kafkaMetrics.ConnectionLost)
+		}
+
+		// Case 3: connection down but DFC's device-side connection active
+		if p.ObservedState.ServiceInfo.ConnectionFSMState != connectionfsm.OperationalStateUp &&
+			c.deviceMetrics.isActive() {
+			return true, fmt.Sprintf("Connection is %s, but the %s has device-side connection active (connection up: %d, connection lost: %d)",
+				p.ObservedState.ServiceInfo.ConnectionFSMState, c.label, c.deviceMetrics.ConnectionUp, c.deviceMetrics.ConnectionLost)
+		}
 	}
 
 	return false, ""
@@ -553,17 +588,14 @@ func (p *ProtocolConverterInstance) IsOtherDegraded() (bool, string) {
 //	ok     – true when the DFC is active, false otherwise.
 //	reason – empty when ok is true; otherwise a explanation
 func (p *ProtocolConverterInstance) IsDataflowComponentWithProcessingActivity() (bool, string) {
-	// TODO: check the write DFC as well
-	if p.ObservedState.ServiceInfo.DataflowComponentReadFSMState == dataflowfsm.OperationalStateActive {
+	readState := p.ObservedState.ServiceInfo.DataflowComponentReadFSMState
+	writeState := p.ObservedState.ServiceInfo.DataflowComponentWriteFSMState
+
+	if readState == dataflowfsm.OperationalStateActive || writeState == dataflowfsm.OperationalStateActive {
 		return true, ""
 	}
 
-	dfcState := p.ObservedState.ServiceInfo.DataflowComponentReadFSMState
-	if dfcState == "" {
-		dfcState = "not existing"
-	}
-
-	return false, "flow is " + dfcState
+	return false, fmt.Sprintf("read flow is %s, write flow is %s", stateOrNotExisting(readState), stateOrNotExisting(writeState))
 }
 
 // IsProtocolConverterStopped checks whether the ProtocolConverter is stopped
@@ -574,23 +606,21 @@ func (p *ProtocolConverterInstance) IsDataflowComponentWithProcessingActivity() 
 //	ok     – true when the ProtocolConverter is stopped, false otherwise.
 //	reason – empty when ok is true; otherwise a service‑provided explanation
 func (p *ProtocolConverterInstance) IsProtocolConverterStopped() (bool, string) {
-	// TODO: check the write DFC as well
-	if p.ObservedState.ServiceInfo.ConnectionFSMState == connectionfsm.OperationalStateStopped &&
-		p.ObservedState.ServiceInfo.DataflowComponentReadFSMState == dataflowfsm.OperationalStateStopped {
+	connStopped := p.ObservedState.ServiceInfo.ConnectionFSMState == connectionfsm.OperationalStateStopped
+	readStopped := p.ObservedState.ServiceInfo.DataflowComponentReadFSMState == dataflowfsm.OperationalStateStopped
+	writeStopped := p.ObservedState.ServiceInfo.DataflowComponentWriteFSMState == dataflowfsm.OperationalStateStopped
+
+	writeHasConfig := len(p.specConfig.Config.DataflowComponentWriteServiceConfig.BenthosConfig.Output) > 0
+	writeEffectivelyStopped := writeStopped || !writeHasConfig
+
+	if connStopped && readStopped && writeEffectivelyStopped {
 		return true, ""
 	}
 
-	connState := p.ObservedState.ServiceInfo.ConnectionFSMState
-	if connState == "" {
-		connState = "not existing"
-	}
-
-	dfcState := p.ObservedState.ServiceInfo.DataflowComponentReadFSMState
-	if dfcState == "" {
-		dfcState = "not existing"
-	}
-
-	return false, fmt.Sprintf("connection is %s, flow is %s", connState, dfcState)
+	return false, fmt.Sprintf("connection is %s, read flow is %s, write flow is %s",
+		stateOrNotExisting(p.ObservedState.ServiceInfo.ConnectionFSMState),
+		stateOrNotExisting(p.ObservedState.ServiceInfo.DataflowComponentReadFSMState),
+		stateOrNotExisting(p.ObservedState.ServiceInfo.DataflowComponentWriteFSMState))
 }
 
 // IsDFCExisting checks whether either the read or write DFC is existing
