@@ -20,20 +20,17 @@ go run pkg/fsmv2/cmd/runner/main.go --scenario=simple --duration=5s      # Paren
 ```bash
 # 1. Copy the template structure
 workers/myworker/
-├── worker.go           # Worker interface (3 methods) + init() for registration
-├── userspec.go         # User configuration schema
-├── dependencies.go     # External dependencies
-├── snapshot/
-│   └── snapshot.go     # ObservedState (embeds DesiredState with json:",inline")
-├── state/
-│   ├── stopped.go      # Initial state
-│   └── running.go      # Target state
-└── action/
-    └── start.go        # I/O operation (idempotent)
+├── worker.go           # Worker struct + COS + Actions() + registration
+├── config.go           # Config + Status types
+├── dependencies.go     # Dependencies struct
+├── action.go           # Action functions (simple workers) or action/ dir (complex)
+└── state/
+    ├── stopped.go      # Initial state
+    └── running.go      # Target state
 
 # 2. CRITICAL: Name types correctly (folder "myworker" → types "MyworkerXxx")
-# 3. Implement the 3 Worker methods in worker.go
-# 4. Add init() function to register with factory
+# 3. Implement CollectObservedState in worker.go
+# 4. Add init() with register.Worker[MyConfig, MyStatus]("myworker", NewMyWorker)
 # 5. Test with local runner
 ```
 
@@ -47,8 +44,8 @@ FSMv2 runs the same control loop as a PLC or a room thermostat: observe the proc
 
 ### The control loop
 
-- **`CollectObservedState` is the sensor.** Read the world: check if an action completed, query a service, measure a connection. Read-only I/O. Example: helloworld reads `deps.HasSaidHello()` to see if the greeting was logged (`worker.go:115`).
-- **`State.Next()` is the controller.** Pure logic, no I/O. It compares observed state to desired state and decides: change state, or emit an action. Example: helloworld's `RunningState` checks shutdown, then checks the observed mood (`state/running.go:35`).
+- **`CollectObservedState` is the sensor.** Read the world: check if an action completed, query a service, measure a connection. Read-only I/O. Example: helloworld reads `deps.HasSaidHello()` to see if the greeting was logged (`worker.go:104`).
+- **`State.Next()` is the controller.** Side-effect-free, no I/O. It compares observed state to desired state and decides: change state, or emit an action. Example: helloworld's `RunningState` checks shutdown, then checks the observed mood (`state/running.go:38`).
 - **Actions are the actuator.** Change the world: write files, send HTTP requests, authenticate. Always idempotent. Example: helloworld's `SayHelloAction` logs a greeting and sets a flag; the communicator's `AuthenticateAction` gets a JWT token.
 
 Sensor reads from Dependencies; actuator changes the external world and writes results back through Dependencies. The controller touches neither.
@@ -105,16 +102,16 @@ FSMv2 implements the same [observe → compare → actuate](#the-control-loop) p
 | looplab FSM library with callbacks | Struct-based states with `Next()` method |
 | State as string constants | State as Go types (compile-time safety) |
 | Business logic mixed with boilerplate | Worker has business logic, Supervisor has boilerplate |
-| `fsm_callbacks.go` (fail-free) | States are pure functions (no I/O) |
+| `fsm_callbacks.go` (fail-free) | State `Next()` is side-effect-free (no I/O) |
 | `manager.go` lifecycle handling | Supervisor handles automatically |
 | Observation snapshot via complex manager | `CollectObservedState()` - you implement |
 | Desired via config parsing | `DeriveDesiredState()` - you implement |
 
 **Key mindset shift**: You write business logic (states, actions). The supervisor handles everything else.
 
-### Worker API v2 (reduced boilerplate)
+### Worker registration
 
-Worker API v2 reduces a minimal worker from ~662 SLOC / 7 files to ~50 SLOC / 1 file using generics. Instead of hand-writing ObservedState, DesiredState, snapshot conversion, and factory registration, you embed `WorkerBase[TConfig, TStatus]` and call `register.Worker`.
+WorkerBase reduces a minimal worker from ~662 SLOC / 7 files to ~50 SLOC / 1 file using generics. Instead of hand-writing ObservedState, DesiredState, snapshot conversion, and factory registration, you embed `WorkerBase[TConfig, TStatus]` and call `register.Worker`.
 
 ```go
 // Registration (replaces init() + factory wiring + supervisor factory + CSE type registry)
@@ -143,7 +140,7 @@ func (w *MyWorker) CollectObservedState(ctx context.Context, desired fsmv2.Desir
 
 The framework provides: `DeriveDesiredState`, `GetInitialState`, `Config()`, `NewObservation()`, `ConvertWorkerSnapshot`, flat JSON serialization, and CSE type registry wiring. The collector handles CollectedAt, framework metrics, action history, and metric accumulation automatically. Optional capabilities (`ActionProvider`, `ChildSpecProvider`, `MetricsProvider`, `GracefulShutdowner`) are detected via interface implementation on your worker struct.
 
-See `MIGRATION.md` for migrating existing workers from old-API to new-API.
+See `MIGRATION.md` for migrating 7-file workers to WorkerBase.
 
 ## Worker interface
 
@@ -163,7 +160,7 @@ type Worker interface {
 }
 ```
 
-### States: pure functions with Next()
+### States: side-effect-free Next()
 
 States are concrete Go types (not strings). Each state implements `Next()`, which returns a `NextResult` via `fsmv2.Result()`:
 
@@ -247,7 +244,7 @@ func (a *StartProcessAction) Name() string { return "StartProcess" }
 
 | Component | I/O | Purpose |
 |-----------|-----|---------|
-| States | NO (pure functions) | Decide next state + action |
+| States | NO (side-effect-free) | Decide next state + action |
 | Actions | WRITE (idempotent) | Change the world: HTTP, file, network I/O |
 | Worker | READ (query system state) | Collect observations from dependencies and state store |
 
@@ -268,6 +265,20 @@ return NewState{}, SignalNone, &SomeAction{}  // Don't do this
 
 ## File structure for a worker
 
+**WorkerBase layout** (preferred for new workers):
+```text
+workers/myworker/
+├── worker.go           # Worker struct + COS + Actions() + registration
+├── config.go           # Config + Status types
+├── dependencies.go     # Dependencies struct
+├── action.go           # Action functions (simple workers) or action/ dir (complex)
+└── state/
+    ├── stopped.go      # Initial state
+    ├── trying_to_start.go  # Transitional state
+    └── running.go      # Target state
+```
+
+**Legacy layout** (existing workers):
 ```text
 workers/myworker/
 ├── worker.go           # Worker interface (3 methods)

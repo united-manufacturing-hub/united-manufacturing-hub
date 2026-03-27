@@ -119,9 +119,9 @@ func init() {
 
 The folder name must match the worker type (e.g., `transport/` for type `"transport"`).
 
-## Worker API v2 (WorkerBase)
+## Worker API (WorkerBase)
 
-New workers should use `WorkerBase[TConfig, TStatus]` instead of the legacy 7-file pattern. Key types:
+New workers should use `WorkerBase[TConfig, TStatus]` instead of the 7-file pattern. Key types:
 
 - **`WorkerBase[TConfig, TStatus]`** — embed in your worker struct; provides `InitBase`, `Config()`, `DeriveDesiredState`
 - **`NewObservation[TStatus](status)`** — preferred constructor for `CollectObservedState` return values; the collector fills CollectedAt, framework metrics, action history, and accumulated worker metrics automatically after COS returns
@@ -133,7 +133,7 @@ New workers should use `WorkerBase[TConfig, TStatus]` instead of the legacy 7-fi
 - **`WrapAction[TDeps]`** — adapts typed actions to `Action[any]`
 - **`register.Worker[TConfig, TStatus]`** — one-line registration (factory + supervisor + CSE types)
 
-**Architecture validators** accept both APIs: `ConvertWorkerSnapshot` and `ConvertSnapshot` are valid entry points; `snap.IsShutdownRequested` (field) and `snap.Desired.IsShutdownRequested()` (method) are valid shutdown checks.
+**Architecture validators** support both `ConvertWorkerSnapshot` and `ConvertSnapshot` entry points; `snap.IsShutdownRequested` (field) and `snap.Desired.IsShutdownRequested()` (method) are valid shutdown checks.
 
 **Capability interfaces** (optional, detected via type assertion on first instantiation):
 - `ActionProvider` — `Actions() map[string]Action[any]`
@@ -151,11 +151,10 @@ Workers record metrics via `deps.MetricsRecorder()`. There are two observation r
 | Return Path | CollectedAt | Metrics Handling | When to Use |
 |-------------|-------------|------------------|-------------|
 | `fsmv2.NewObservation(status)` | Zero (collector sets it) | Collector loads previous from CSE, drains recorder, merges (counters additive, gauges replace) | New workers (preferred) |
-| `w.WrapStatus(status)` | Set by caller | Worker drains recorder in COS, current-tick only | Legacy workers (deprecated) |
-| `w.WrapStatusAccumulated(ctx, status)` | Set by caller | Worker loads CSE + drains + merges in COS | Legacy workers needing cross-tick accumulation (deprecated) |
+| `w.WrapStatus(status)` | Set by caller | Worker drains recorder in COS, current-tick only | Legacy, will be removed after migration. Use NewObservation instead |
+| `w.WrapStatusAccumulated(ctx, status)` | Set by caller | Worker loads CSE + drains + merges in COS | Legacy, will be removed after migration. Use NewObservation instead |
 
-**The zero-time gate**: The collector checks `observed.GetTimestamp().IsZero()`. If true (NewObservation), it runs post-COS wrapping. If false (WrapStatus/WrapStatusAccumulated), it skips wrapping since the worker already handled it. Both paths coexist safely during migration.
-
+**The zero-time gate**: The collector checks `observed.GetTimestamp().IsZero()`. If true (NewObservation), it runs post-COS wrapping. If false (WrapStatus/WrapStatusAccumulated), it skips wrapping since the worker already handled it.
 **Drain is destructive**: `MetricsRecorder().Drain()` empties the buffer. Only one path should drain per tick. NewObservation workers must not call Drain() in COS — the collector does it. WrapStatus workers drain in COS — the collector skips it.
 
 ## Graceful Shutdown Cascading

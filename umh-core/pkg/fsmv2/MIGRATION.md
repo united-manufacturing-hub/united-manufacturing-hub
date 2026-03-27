@@ -17,7 +17,7 @@ This guide helps developers migrate existing FSMv1 workers to FSMv2. If you are 
 | 8 files per FSM (machine.go, actions.go, reconcile.go, ...) | 3 Worker methods + states + actions |
 | Channels and goroutines for coordination | Single-threaded tick loop, no async coordination |
 | Business logic mixed with boilerplate | Worker has business logic, Supervisor has boilerplate |
-| `fsm_callbacks.go` (fail-free) | States are pure functions (no I/O) |
+| `fsm_callbacks.go` (fail-free) | State `Next()` is side-effect-free (no I/O) |
 | `manager.go` lifecycle handling | Supervisor handles automatically |
 | Self-managed lifecycle | Supervisor-owned lifecycle |
 
@@ -51,7 +51,7 @@ FSMv2 fundamentally changes the approach:
 - **Decision via `Next()` method**: Each state returns (nextState, signal, action)
 - **Single-threaded tick loop**: No channels, no goroutines for coordination
 - **Supervisor-owned lifecycle**: The supervisor handles retries, timeouts, metrics, and shutdown
-- **Separation of concerns**: States are pure (no I/O), Actions perform I/O, Worker collects observations
+- **Separation of concerns**: State `Next()` is side-effect-free (no I/O), Actions perform I/O, Worker collects observations
 
 A typical FSMv2 implementation has these files:
 ```text
@@ -653,7 +653,7 @@ func (a *CreateResourceAction) Execute(ctx context.Context, deps any) error {
 }
 ```
 
-### States are pure (no I/O)
+### State Next() is side-effect-free (no I/O)
 
 State.Next() must not perform I/O operations. It should only make decisions based on the snapshot.
 
@@ -688,7 +688,7 @@ func (s *TryingToConnectState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.S
 
 ObservedState must include a timestamp for staleness detection. The supervisor uses this to detect when observations are too old.
 
-**Worker API v2 (preferred):** Use `fsmv2.NewObservation(status)` — the collector sets `CollectedAt` automatically.
+**NewObservation (preferred):** Use `fsmv2.NewObservation(status)` — the collector sets `CollectedAt` automatically.
 
 ```go
 func (w *MyWorker) CollectObservedState(ctx context.Context, desired fsmv2.DesiredState) (fsmv2.ObservedState, error) {
@@ -770,13 +770,13 @@ func (d *MyDependencies) SetConnected(v bool) {
 }
 ```
 
-## Migrating from FSMv2 Old-API to Worker API v2
+## Internal Migration: 7-File Pattern to WorkerBase
 
-Worker API v2 replaces the 7-file pattern with a single-file approach using generics. Both APIs coexist; migrate workers one at a time.
+WorkerBase replaces the 7-file pattern with a single-file approach using generics. Migrate workers one at a time.
 
 ### What changes
 
-| Old API | Worker API v2 |
+| 7-File Pattern | WorkerBase Pattern |
 |---------|---------------|
 | `snapshot/snapshot.go` with ObservedState, DesiredState, Snapshot structs | `Observation[TStatus]`, `WrappedDesiredState[TConfig]`, `WorkerSnapshot[TConfig, TStatus]` |
 | `worker.go` with `CollectObservedState`, `DeriveDesiredState`, `GetInitialState` | Only `CollectObservedState` required; others provided by `WorkerBase` |
@@ -809,5 +809,5 @@ Worker API v2 replaces the 7-file pattern with a single-file approach using gene
 
 - [README.md](README.md) - Overview of FSMv2 and the triangle model
 - [doc.go](doc.go) - API contracts, patterns, and best practices
-- [workers/example/examplechild/](workers/example/examplechild/) - Complete example implementation
+- [workers/example/helloworld/](workers/example/helloworld/) - Complete example implementation
 - [DEPENDENCIES.md](DEPENDENCIES.md) - Dependency injection patterns
