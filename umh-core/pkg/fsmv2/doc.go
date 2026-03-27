@@ -17,24 +17,25 @@
 //
 // # Overview
 //
-// For background on FSMv2 and its relation to Kubernetes/PLC control loop patterns,
-// see README.md. The Triangle Model defines the data architecture: Identity (who),
-// Desired (want), Observed (actual).
+// FSMv2 runs a control loop inspired by Kubernetes controllers and PLC scan cycles.
+// Each tick: collect observed state → derive desired state → evaluate state machine → execute action.
+// See README.md for the Triangle Model (Identity/Desired/Observed) and architectural background.
 //
-// A tick is one iteration of the supervisor's control loop: collect observation,
-// derive desired state, evaluate the state machine, and execute any returned action.
+// Developers implement one method — CollectObservedState — to read external state.
+// WorkerBase provides DeriveDesiredState and GetInitialState. States are structs whose
+// side-effect-free Next() methods decide transitions. Actions are idempotent side effects.
 //
 // FSMv2 separates concerns into three layers:
-//   - Worker: Business logic (what the worker does)
+//   - Worker: Business logic (CollectObservedState — the sensor)
 //   - State: Decision logic (when to transition, what actions to take)
 //   - Supervisor: Orchestration (tick loop, action execution, child management)
 //
 // # Quick Start
 //
 // For complete working examples, see:
-//   - workers/example/examplechild/worker.go - Child worker implementation
-//   - workers/example/examplechild/state/ - State definitions and transitions
-//   - workers/example/examplechild/action/ - Idempotent actions
+//   - workers/example/helloworld/worker.go - Minimal worker implementation
+//   - workers/example/helloworld/state/ - State definitions and transitions
+//   - workers/example/helloworld/action/ - Idempotent actions
 //   - workers/example/exampleparent/worker.go - Parent with child management
 //   - examples/cascade.go - Runnable example with YAML config
 //
@@ -46,7 +47,7 @@
 //
 // States are concrete Go types implementing the State interface, providing
 // compile-time type safety, explicit transitions, and encapsulated logic.
-// See workers/example/examplechild/state/ for implementations.
+// See workers/example/helloworld/state/ for implementations.
 //
 // ## Immutability
 //
@@ -64,11 +65,12 @@
 // They do not cause state transitions directly.
 //
 // Key requirements:
-//   - Actions are empty structs. Dependencies are injected via Execute(ctx, depsAny).
-//   - Check ctx.Done() first for cancellation.
+//   - Use fsmv2.SimpleAction[TDeps] for function-based actions (preferred for simple cases).
+//   - For complex actions, implement the Action[TDeps] interface as a struct.
+//   - Check ctx.Done() first for cancellation (SimpleAction does this automatically).
 //   - Check if work is already done before performing it (idempotency).
 //
-// See workers/example/examplechild/action/connect.go for a complete example.
+// See workers/example/helloworld/action/say_hello.go for a complete example.
 //
 // When an action fails, the state remains unchanged. On the next tick,
 // the supervisor calls state.Next() again, which may return the same action.
@@ -97,7 +99,26 @@
 //  2. Collector writes to ObservedState field (e.g., ConnectionHealth)
 //  3. State.Next() checks ObservedState, not dependencies
 //
-// See workers/example/examplechild/worker.go for the pattern.
+// See workers/example/helloworld/worker.go for the pattern.
+//
+// ## CollectObservedState pattern
+//
+// CollectObservedState is the sensor — it reads external state and returns an Observation:
+//
+//	func (w *MyWorker) CollectObservedState(ctx context.Context, desired fsmv2.DesiredState) (fsmv2.ObservedState, error) {
+//	    select {
+//	    case <-ctx.Done():
+//	        return nil, ctx.Err()
+//	    default:
+//	    }
+//	    cfg := fsmv2.ExtractConfig[MyConfig](desired)
+//	    return fsmv2.NewObservation(MyStatus{
+//	        Reachable: w.deps.CheckReachable(ctx, cfg.Address),
+//	    }), nil
+//	}
+//
+// The collector fills framework fields (CollectedAt, metrics, action history)
+// after CollectObservedState returns. See workers/example/helloworld/worker.go.
 //
 // ## Retry mechanism
 //
@@ -199,8 +220,8 @@
 //
 //	func init() {
 //	    if err := factory.RegisterWorkerType[snapshot.MyObserved, *snapshot.MyDesired](
-//	        func(id fsmv2.Identity, logger deps.FSMLogger) fsmv2.Worker {
-//	            return NewMyWorker(id, logger)
+//	        func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader, extra map[string]any) fsmv2.Worker {
+//	            return NewMyWorker(id, logger, sr)
 //	        },
 //	        func(cfg interface{}) interface{} {
 //	            return supervisor.NewSupervisor[snapshot.MyObserved, *snapshot.MyDesired](
@@ -212,6 +233,13 @@
 //	}
 //
 // The worker type is derived from the ObservedState struct name (MyObserved → "my").
+//
+// For workers using WorkerBase, use the simpler one-line registration:
+//
+//	func init() {
+//	    register.Worker[MyConfig, MyStatus]("myworker", NewMyWorker)
+//	}
+//
 // See factory/README.md for naming conventions and common mistakes.
 //
 // ## Parent-child visibility
@@ -294,12 +322,12 @@
 // ## Shutdown handling
 //
 // Check IsShutdownRequested() as the first conditional in Next().
-// See workers/example/examplechild/state/ for examples.
+// See workers/example/helloworld/state/ for examples.
 //
 // ## Type-safe dependencies
 //
 // Use BaseWorker[D] for type-safe dependency access without casting.
-// See workers/example/examplechild/dependencies.go for the pattern.
+// See workers/example/helloworld/dependencies.go for the pattern.
 // See DEPENDENCIES.md for comprehensive documentation including dependency
 // inventory, custom dependencies, global variables, StateReader, metrics,
 // and parent-child sharing patterns.
@@ -310,8 +338,8 @@
 // test snapshots, and verifying the returned state, signal, and action.
 // Use VerifyActionIdempotency helper for action tests.
 //
-// See workers/example/examplechild/state/*_test.go for state transition tests.
-// See workers/example/examplechild/action/*_test.go for action idempotency tests.
+// See workers/example/helloworld/state/*_test.go for state transition tests.
+// See workers/example/helloworld/action/*_test.go for action idempotency tests.
 //
 // # Thread safety
 //
