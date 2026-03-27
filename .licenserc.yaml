@@ -73,5 +73,6 @@ header:
     - "umh-core/coverage.out"
     - "umh-core/coverprofile.out"
     - "umh-core/integration/umh-config/*.yaml"
+    - "**/*.excalidraw"
 
   comment: on-failure
