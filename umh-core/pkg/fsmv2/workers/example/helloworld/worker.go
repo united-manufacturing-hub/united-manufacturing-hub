@@ -34,25 +34,6 @@ import (
 // WorkerType is the registered type name for this worker.
 const WorkerType = "helloworld"
 
-// SayHelloActionName is the name used for logging and metrics.
-const SayHelloActionName = "say_hello"
-
-// SayHello implements the say-hello action logic.
-// Idempotent: skips if hello was already said.
-func SayHello(_ context.Context, d *HelloworldDependencies) error {
-	logger := d.ActionLogger(SayHelloActionName)
-
-	if d.HasSaidHello() {
-		logger.Debug("already_said_hello")
-		return nil
-	}
-
-	logger.Info("hello_world")
-	d.SetHelloSaid(true)
-
-	return nil
-}
-
 // HelloworldWorker implements the FSMv2 Worker interface using the WorkerBase API.
 type HelloworldWorker struct {
 	deps *HelloworldDependencies
