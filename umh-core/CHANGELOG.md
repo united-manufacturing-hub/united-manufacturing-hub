@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## [0.44.13]
+
+### Fixes
+
+- Updated gRPC to v1.79.3 to patch CVE-2026-33186, a critical authorization bypass where path-based access control policies could be circumvented via malformed HTTP/2 requests
+
 ## [0.44.12]
 
 ### Improvements
@@ -188,7 +194,7 @@ docker exec -it <container-name> sh
 grep fsmv2 /data/logs/umh-core/current
 ```
 
-You should see log entries with `fsmv2` and states like `Syncing` or `Recovering`.
+You should see log entries with `fsmv2` and states like `Syncing` or `TryingToAuthenticate`.
 
 **Note:** To disable later, you must explicitly set `useFSMv2Transport: false` in config.yaml.
 
