@@ -62,6 +62,8 @@ const (
 )
 
 // ObservedState represents the actual state gathered from monitoring the system.
+// Create via fsmv2.NewObservation(status) — the Observation[T] type satisfies this interface
+// and the collector fills all framework fields automatically.
 type ObservedState interface {
 	// GetObservedDesiredState returns the desired state that is actually deployed.
 	GetObservedDesiredState() DesiredState
@@ -182,21 +184,26 @@ func Result[TSnapshot any, TDeps any](
 }
 
 // Worker is the business logic interface that developers implement.
-// Note: Shutdown is managed by the supervisor via ShutdownRequested in desired state,
-// not by a method on this interface.
+// Each method maps to a part of the control loop (see README.md):
+//   - CollectObservedState: the sensor — reads external state
+//   - DeriveDesiredState: provided by WorkerBase — do not override
+//   - GetInitialState: provided by WorkerBase — do not override
 type Worker interface {
-	// CollectObservedState monitors the actual system state.
-	// The desired parameter provides the current desired state so observation-based
-	// workers can access configuration (target IP, port, etc.) without workarounds.
+	// CollectObservedState is the sensor — it reads the actual system state.
+	// Return fsmv2.NewObservation(status) with your business data.
+	// Use fsmv2.ExtractConfig[MyConfig](desired) to access typed configuration.
 	// The supervisor guarantees desired is always non-nil; collection is skipped
 	// until a desired state exists in the store.
+	// WorkerBase provides DeriveDesiredState and GetInitialState; you only implement this method.
 	CollectObservedState(ctx context.Context, desired DesiredState) (ObservedState, error)
 
-	// DeriveDesiredState derives the target state from user configuration (spec).
+	// DeriveDesiredState derives the target state from user configuration.
+	// WorkerBase provides a full implementation (parses YAML, renders templates, caches config).
+	// Customize via SetPostParseHook (validation/defaults) or SetChildSpecsFactory (parent workers).
 	DeriveDesiredState(spec interface{}) (DesiredState, error)
 
 	// GetInitialState returns the starting state for this worker.
-	// Called once during worker creation.
+	// WorkerBase provides this via fsmv2.RegisterInitialState (called in state package init()).
 	GetInitialState() State[any, any]
 }
 

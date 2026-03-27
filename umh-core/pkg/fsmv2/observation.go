@@ -117,10 +117,10 @@ func NewObservation[TStatus any](status TStatus) ObservedState {
 	return Observation[TStatus]{Status: status}
 }
 
-// Observation wraps a developer's TStatus into the full ObservedState
-// required by the supervisor. Framework fields and TStatus fields are flattened
-// to the same JSON level via custom MarshalJSON/UnmarshalJSON, preserving CSE
-// delta sync granularity.
+// Observation holds a worker's observed state. Create one via NewObservation(status).
+// Your TStatus fields are serialized alongside framework fields (state, collected_at,
+// metrics, etc.) at the same JSON level. The collector fills all framework fields
+// automatically after CollectObservedState returns.
 type Observation[TStatus any] struct {
 	// CollectedAt is when this observation was taken.
 	CollectedAt time.Time `json:"collected_at"`
