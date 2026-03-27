@@ -1,159 +1,70 @@
 # Hello World Worker
 
-A minimal FSMv2 worker example demonstrating the core patterns for building
-state-machine-based workers. Use this as a template when creating new workers.
+A minimal FSMv2 worker demonstrating the WorkerBase API: typed config/status,
+action wrapping via `SimpleAction`, and one-line registration.
 
 ## Quick Start
 
 ```go
-// Import to register the worker (blank import in your main.go or scenario)
+// Blank imports to register worker type and initial state at init time
 _ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/helloworld"
+_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/helloworld/state"
 ```
 
-## State Machine
+## State Diagram
 
 ```text
-┌──────────┐   !IsShutdownRequested()  ┌──────────────────┐   HelloSaid   ┌─────────┐
-│ stopped  │ ────────────────────────▶ │ trying_to_start  │ ────────────▶ │ running │
-└──────────┘                           └──────────────────┘              └─────────┘
-     ▲                                          │                  mood="sad" │ ▲ mood!="sad"
-     │         IsShutdownRequested()            │                            ▼ │
-     │                                          │                      ┌──────────┐
-     └──────────────────────────────────────────┴──────────────────────┤ degraded │
-                                                                       └──────────┘
+                          !shutdown              HelloSaid       mood="sad"   mood!="sad"
+ ┌─────────┐          ┌──────────────────┐          ┌─────────┐ ────────▶ ┌──────────┐
+ │ Stopped │────────▶│ TryingToStart    │────────▶│ Running │ ◀──────── │ Degraded │
+ └─────────┘          └──────────────────┘          └─────────┘           └──────────┘
+      ▲                       │                          │                    │
+      └───────────────────────┴──────────────────────────┴────────────────────┘
+                                   shutdown
 ```
 
-### Control loop mapping
+## Control-Loop Mapping
 
-| Control loop role | Helloworld implementation |
-|-------------------|--------------------------|
-| **Sensor** (`CollectObservedState`) | Reads `deps.HasSaidHello()` + reads mood file from `DesiredState.MoodFilePath` |
-| **Controller** (`State.Next()`) | Checks shutdown → checks hello said → checks mood → decides |
-| **Actuator** (Actions) | `SayHelloAction` logs a greeting and sets `deps.HelloSaid` |
+| Phase | Implementation |
+|-------|---------------|
+| **Observe** (`CollectObservedState`) | Reads `deps.HasSaidHello()` + mood file from `cfg.MoodFilePath` |
+| **Derive** (`DeriveDesiredState`) | WorkerBase parses YAML into `HelloworldConfig` |
+| **Evaluate** (`State.Next()`) | Checks shutdown, hello said, mood — returns state or action |
+| **Execute** (Actions) | `SayHello` logs a greeting and calls `deps.SetHelloSaid(true)` |
 
 See the parent [README's control loop section](../../../README.md#the-control-loop) for the general pattern.
 
-The mood file path is configurable via `moodFilePath` in the worker's YAML config.
-When omitted, mood checking is skipped.
+## File Layout
+
+```text
+helloworld/
+├── worker.go         # Worker struct, COS, Actions(), init registration
+├── action.go         # SayHello action function + SayHelloActionName const
+├── config.go         # HelloworldConfig (TConfig) + HelloworldStatus (TStatus)
+├── dependencies.go   # HelloworldDependencies (action state)
+└── state/
+    ├── stopped.go          # Initial state — waits for !shutdown
+    ├── trying_to_start.go  # Emits SayHello action
+    ├── running.go          # Steady state — checks mood
+    └── degraded.go         # mood="sad" — returns to Running when mood clears
+```
+
+## Config Example
 
 ```yaml
-# Scenario config example
 config: |
   state: running
   moodFilePath: /tmp/helloworld-mood
 ```
 
 ```bash
-# Demo: observation-driven transitions (assuming moodFilePath: /tmp/helloworld-mood)
 echo "happy" > /tmp/helloworld-mood   # stays Running
-echo "sad" > /tmp/helloworld-mood     # → Degraded
-rm /tmp/helloworld-mood               # → Running (no mood file = fine)
-```
-
-## File Structure
-
-```text
-helloworld/
-├── README.md           # Overview and step-by-step guide
-├── worker.go           # Main worker implementation (3 required methods)
-├── dependencies.go     # Action dependencies and state storage
-├── userspec.go         # User configuration parsing
-├── snapshot/
-│   └── snapshot.go     # ObservedState and DesiredState definitions
-├── state/
-│   ├── stopped.go      # Initial state - waiting to start
-│   ├── trying_to_start.go  # Transitional state - emits action
-│   ├── running.go      # Running state - worker is active
-│   └── degraded.go     # Degraded state - mood file says "sad"
-└── action/
-    └── say_hello.go    # Action that logs a greeting and sets HelloSaid=true
-```
-
-## Naming Convention
-
-The folder name determines the type prefix. The worker type is derived
-from `{TypePrefix}ObservedState` by lowercasing `{TypePrefix}`.
-
-| Folder Name | Type Prefix | Example Type |
-|-------------|-------------|--------------|
-| `helloworld` | `Helloworld` | `HelloworldObservedState` |
-| `examplechild` | `Examplechild` | `ExamplechildObservedState` |
-
-**Incorrect**: `HelloWorldObservedState` (two capitals would derive to `helloworld` but
-the type name wouldn't match the folder convention).
-
-## Creating a New Worker (Step by Step)
-
-### 1. Create directory structure
-
-```bash
-mkdir -p pkg/fsmv2/workers/yourworker/{snapshot,state,action}
-```
-
-### 2. Define snapshot types (`snapshot/snapshot.go`)
-
-```go
-// Type name must be {FolderName}ObservedState with matching capitalization
-type YourworkerObservedState struct {
-    CollectedAt time.Time `json:"collected_at"`
-    deps.MetricsEmbedder `json:",inline"`  // Required for metrics
-    // ... your fields
-}
-
-type YourworkerDesiredState struct {
-    config.BaseDesiredState  // Provides ShutdownRequested, etc.
-}
-```
-
-### 3. Implement states (`state/stopped.go`, etc.)
-
-Each state needs two methods:
-- `Next()` - Decision logic: return NextResult (state, signal, optional action, and **reason**)
-- `String()` - State name for logging (use `helpers.DeriveStateName(s)`)
-
-The **reason** is required and should explain why the transition/state is chosen.
-
-### 4. Implement actions (`action/say_hello.go`)
-
-Actions perform side effects. They must be **idempotent** (running twice has same
-effect as running once).
-
-### 5. Implement worker (`worker.go`)
-
-Three required methods:
-- `CollectObservedState()` - Read current state from dependencies
-- `DeriveDesiredState()` - Parse user spec to desired state
-- `GetInitialState()` - Return the starting state
-
-### 6. Register with factory (`init()` in worker.go)
-
-```go
-func init() {
-    if err := factory.RegisterWorkerType[snapshot.YourworkerObservedState, *snapshot.YourworkerDesiredState](
-        workerFactory, supervisorFactory,
-    ); err != nil {
-        panic(err)
-    }
-}
-```
-
-## Testing
-
-Run the helloworld scenario:
-```bash
-go run pkg/fsmv2/cmd/runner/main.go --scenario=helloworld --duration=5s
-
-# Interactive mood demo. Run these in a separate terminal while the scenario runs.
-# These commands use the path from moodFilePath in the scenario YAML.
-echo "sad" > /tmp/helloworld-mood     # watch the worker transition to Degraded
-echo "happy" > /tmp/helloworld-mood   # back to Running
-rm /tmp/helloworld-mood               # stays Running (no mood file = fine)
+echo "sad"   > /tmp/helloworld-mood   # → Degraded
+rm /tmp/helloworld-mood               # → Running (no file = fine)
 ```
 
 ## Common Mistakes
 
-1. **Wrong type name capitalization**: `HelloWorldObservedState` vs `HelloworldObservedState`
-2. **Missing factory registration**: Forgot the `init()` function
-3. **Missing blank import**: Forgot to import the package in scenario/main
-4. **Missing MetricsEmbedder**: ObservedState must embed `deps.MetricsEmbedder`
-5. **Non-idempotent actions**: Action must be safe to call multiple times
+1. **Non-idempotent actions**: `SayHello` checks `HasSaidHello()` before acting — actions may run more than once
+2. **Missing registration**: Forgot `register.Worker[...]()` in `init()` — worker type unknown at runtime
+3. **Missing blank import**: Forgot to import the package in scenario/main — `init()` never runs
