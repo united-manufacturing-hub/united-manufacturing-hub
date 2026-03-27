@@ -29,7 +29,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/snapshot"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/state"
-	transportpkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
 	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
 )
 
@@ -269,47 +268,6 @@ state: "running"
 			Expect(communicatorObserved.CollectedAt).NotTo(BeZero())
 		})
 
-		It("should return the JWT token stored in dependencies", func() {
-			deps := worker.GetDependencies()
-			expectedToken := "test-jwt-token-12345"
-			deps.SetJWT(expectedToken, time.Now().Add(1*time.Hour))
-
-			observed, err := worker.CollectObservedState(ctx)
-			Expect(err).NotTo(HaveOccurred())
-
-			communicatorObserved := observed.(snapshot.CommunicatorObservedState)
-			Expect(communicatorObserved.JWTToken).To(Equal(expectedToken))
-		})
-
-		It("should return the JWT expiry stored in dependencies", func() {
-			deps := worker.GetDependencies()
-			expectedExpiry := time.Now().Add(2 * time.Hour).Truncate(time.Second)
-			deps.SetJWT("some-token", expectedExpiry)
-
-			observed, err := worker.CollectObservedState(ctx)
-			Expect(err).NotTo(HaveOccurred())
-
-			communicatorObserved := observed.(snapshot.CommunicatorObservedState)
-			Expect(communicatorObserved.JWTExpiry.Truncate(time.Second)).To(Equal(expectedExpiry))
-		})
-
-		It("should return the pulled messages stored in dependencies", func() {
-			deps := worker.GetDependencies()
-			expectedMessages := []*transportpkg.UMHMessage{
-				{Content: "message-1"},
-				{Content: "message-2"},
-			}
-			deps.SetPulledMessages(expectedMessages)
-
-			observed, err := worker.CollectObservedState(ctx)
-			Expect(err).NotTo(HaveOccurred())
-
-			communicatorObserved := observed.(snapshot.CommunicatorObservedState)
-			Expect(communicatorObserved.MessagesReceived).To(HaveLen(2))
-			Expect(communicatorObserved.MessagesReceived[0].Content).To(Equal("message-1"))
-			Expect(communicatorObserved.MessagesReceived[1].Content).To(Equal("message-2"))
-		})
-
 		It("should return the consecutive error count from dependencies", func() {
 			deps := worker.GetDependencies()
 			deps.RecordError()
@@ -321,25 +279,6 @@ state: "running"
 
 			communicatorObserved := observed.(snapshot.CommunicatorObservedState)
 			Expect(communicatorObserved.ConsecutiveErrors).To(Equal(3))
-		})
-
-		It("should set Authenticated to true when JWT token is present and not expired", func() {
-			deps := worker.GetDependencies()
-			deps.SetJWT("valid-token", time.Now().Add(1*time.Hour))
-
-			observed, err := worker.CollectObservedState(ctx)
-			Expect(err).NotTo(HaveOccurred())
-
-			communicatorObserved := observed.(snapshot.CommunicatorObservedState)
-			Expect(communicatorObserved.Authenticated).To(BeTrue())
-		})
-
-		It("should set Authenticated to false when JWT token is empty", func() {
-			observed, err := worker.CollectObservedState(ctx)
-			Expect(err).NotTo(HaveOccurred())
-
-			communicatorObserved := observed.(snapshot.CommunicatorObservedState)
-			Expect(communicatorObserved.Authenticated).To(BeFalse())
 		})
 
 		Context("metrics accumulation", func() {
@@ -515,39 +454,5 @@ state: "running"
 			})
 		})
 
-		// Phase 2: AuthenticatedUUID in ObservedState tests
-		Context("authenticated UUID tracking", func() {
-			It("should return the authenticated UUID stored in dependencies", func() {
-				deps := worker.GetDependencies()
-				expectedUUID := "backend-authenticated-uuid-12345"
-				deps.SetAuthenticatedUUID(expectedUUID)
-
-				observed, err := worker.CollectObservedState(ctx)
-				Expect(err).NotTo(HaveOccurred())
-
-				communicatorObserved := observed.(snapshot.CommunicatorObservedState)
-				Expect(communicatorObserved.AuthenticatedUUID).To(Equal(expectedUUID))
-			})
-
-			It("should return empty string when no UUID has been set", func() {
-				observed, err := worker.CollectObservedState(ctx)
-				Expect(err).NotTo(HaveOccurred())
-
-				communicatorObserved := observed.(snapshot.CommunicatorObservedState)
-				Expect(communicatorObserved.AuthenticatedUUID).To(BeEmpty())
-			})
-
-			It("should update AuthenticatedUUID when SetAuthenticatedUUID is called multiple times", func() {
-				deps := worker.GetDependencies()
-				deps.SetAuthenticatedUUID("first-uuid")
-				deps.SetAuthenticatedUUID("second-uuid-after-reauth")
-
-				observed, err := worker.CollectObservedState(ctx)
-				Expect(err).NotTo(HaveOccurred())
-
-				communicatorObserved := observed.(snapshot.CommunicatorObservedState)
-				Expect(communicatorObserved.AuthenticatedUUID).To(Equal("second-uuid-after-reauth"))
-			})
-		})
 	})
 })

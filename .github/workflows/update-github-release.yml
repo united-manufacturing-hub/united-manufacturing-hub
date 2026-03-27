@@ -12,16 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Populates GitHub Release notes from CHANGELOG.md on stable tag pushes.
+# Populates GitHub Release notes from CHANGELOG.md on stable releases.
 # Extracted from build-umh-core.yml to avoid granting contents:write
 # in the reusable-workflow (workflow_call) path used by pull-request.yml.
 
 name: Update GitHub Release
 
 on:
-  push:
-    tags:
-      - "v*"
+  release:
+    types: [published]
   workflow_dispatch:
     inputs:
       version:
@@ -31,7 +30,7 @@ on:
 
 jobs:
   update-github-release:
-    if: ${{ !contains(inputs.version || github.ref_name, '-pre.') }}
+    if: ${{ github.event_name == 'workflow_dispatch' || !github.event.release.prerelease }}
     runs-on: depot-ubuntu-24.04
     timeout-minutes: 5
     permissions:
@@ -39,12 +38,13 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: ${{ inputs.version || github.ref_name }}
+          ref: ${{ inputs.version || github.event.release.tag_name }}
 
       - name: Extract changelog section
         id: changelog
         env:
-          VERSION: ${{ inputs.version || github.ref_name }}
+          VERSION: ${{ inputs.version || github.event.release.tag_name }}
+          RELEASE_NAME: ${{ github.event.release.name }}
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
@@ -61,8 +61,11 @@ jobs:
 
           # IMPORTANT: Slug generation must match sync-changelog.ts generateSlug()
           # in the changelog.umh.app repo. If that function changes, update this too.
-          # Fetch title from GitHub release (e.g., "v0.44.12 - Modbus Mapping" -> "Modbus Mapping")
-          RAW_TITLE=$(gh release view "$VERSION" --json name --jq '.name' 2>/dev/null || echo "")
+          # Extract title from release event payload (or fetch via gh for workflow_dispatch)
+          RAW_TITLE="${RELEASE_NAME:-}"
+          if [ -z "$RAW_TITLE" ]; then
+            RAW_TITLE=$(gh release view "$VERSION" --json name --jq '.name' 2>/dev/null || echo "")
+          fi
           TITLE=$(echo "$RAW_TITLE" | sed -E 's/^v?[0-9]+\.[0-9]+\.[0-9]+[[:space:]]*-[[:space:]]*//')
 
           if [ -n "$TITLE" ]; then
@@ -81,7 +84,7 @@ jobs:
         if: steps.changelog.outputs.skip != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          VERSION: ${{ inputs.version || github.ref_name }}
+          VERSION: ${{ inputs.version || github.event.release.tag_name }}
         run: |
           set -euo pipefail
           gh release edit "$VERSION" --notes-file /tmp/release-body.md

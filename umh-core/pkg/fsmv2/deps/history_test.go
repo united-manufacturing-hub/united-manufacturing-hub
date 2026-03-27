@@ -62,7 +62,7 @@ var _ = Describe("ActionHistoryRecorder", func() {
 
 				recorder.Record(deps.ActionResult{
 					Timestamp:  now,
-					ActionType: "SyncAction",
+					ActionType: "PushAction",
 					ErrorMsg:   "connection refused",
 					Latency:    latency,
 					Success:    false,
@@ -71,7 +71,7 @@ var _ = Describe("ActionHistoryRecorder", func() {
 				results := recorder.Drain()
 				Expect(results).To(HaveLen(1))
 				Expect(results[0].Timestamp).To(Equal(now))
-				Expect(results[0].ActionType).To(Equal("SyncAction"))
+				Expect(results[0].ActionType).To(Equal("PushAction"))
 				Expect(results[0].ErrorMsg).To(Equal("connection refused"))
 				Expect(results[0].Latency).To(Equal(latency))
 				Expect(results[0].Success).To(BeFalse())

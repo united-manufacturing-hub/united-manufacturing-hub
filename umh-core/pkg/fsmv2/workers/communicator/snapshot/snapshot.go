@@ -21,7 +21,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
-	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
 )
 
 // CommunicatorDependencies is the dependencies interface for communicator actions (avoids import cycles).
@@ -44,8 +43,8 @@ var _ config.ChildSpecProvider = (*CommunicatorDesiredState)(nil)
 type CommunicatorDesiredState struct {
 	config.BaseDesiredState // Provides ShutdownRequested + IsShutdownRequested() + SetShutdownRequested()
 
-	// Authentication - typed fields populated by DeriveDesiredState
-	InstanceUUID string `json:"instanceUUID"` // Used by AuthenticateAction for backend authentication
+	// Authentication fields passed through to TransportWorker child via UserSpec.
+	InstanceUUID string `json:"instanceUUID"`
 	AuthToken    string `json:"authToken"`
 	RelayURL     string `json:"relayURL"`
 
@@ -68,22 +67,10 @@ func (d *CommunicatorDesiredState) GetState() string {
 
 // CommunicatorObservedState represents the current state of the communicator.
 type CommunicatorObservedState struct {
-	CollectedAt time.Time
-
-	JWTExpiry         time.Time
+	CollectedAt       time.Time `json:"collectedAt"`
 	DegradedEnteredAt time.Time `json:"degradedEnteredAt,omitempty"` // When errors started (zero = not degraded)
 
-	LastAuthAttemptAt time.Time `json:"lastAuthAttemptAt,omitempty"`
-
-	LastErrorAt time.Time `json:"lastErrorAt,omitempty"` // When the last error occurred (for Retry-After timing)
-
 	State string `json:"state"` // Observed lifecycle state (e.g., "running_connected")
-
-	JWTToken          string
-	AuthenticatedUUID string `json:"authenticatedUUID,omitempty"`
-
-	// Inbound Messages
-	MessagesReceived []transport.UMHMessage
 
 	// DesiredState
 	CommunicatorDesiredState `json:",inline"`
@@ -91,33 +78,10 @@ type CommunicatorObservedState struct {
 	deps.MetricsEmbedder `json:",inline"`
 
 	// Error tracking for health monitoring
-	ConsecutiveErrors int
-
-	LastErrorType  httpTransport.ErrorType `json:"lastErrorType,omitempty"`
-	LastRetryAfter time.Duration           `json:"lastRetryAfter,omitempty"` // Server-provided Retry-After duration
-
-	// Backpressure indicates inbound channel is near full capacity.
-	// When true, pull operations are skipped to prevent message loss.
-	// Deprecated: Backpressure is now tracked internally by PullWorker (ENG-4264).
-	IsBackpressured bool `json:"isBackpressured,omitempty"`
-
-	// Authentication
-	// Deprecated: Authentication is now handled by TransportWorker (ENG-4264).
-	Authenticated bool
+	ConsecutiveErrors int `json:"consecutiveErrors"`
 
 	ChildrenHealthy   int `json:"children_healthy"`
 	ChildrenUnhealthy int `json:"children_unhealthy"`
-}
-
-// IsTokenExpired returns true if the JWT token is expired or will expire within 10 minutes.
-func (o CommunicatorObservedState) IsTokenExpired() bool {
-	if o.JWTExpiry.IsZero() {
-		return false
-	}
-
-	const refreshBuffer = 10 * time.Minute
-
-	return time.Now().Add(refreshBuffer).After(o.JWTExpiry)
 }
 
 // IsSyncHealthy returns true when at least one child is healthy and no children

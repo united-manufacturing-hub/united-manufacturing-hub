@@ -283,21 +283,17 @@ The old Communicator had "6 channels and 4 goroutines to send messages to REST A
 FSMv2 Communicator is a clean state machine:
 
 ```text
-Stopped → TryingToAuthenticate → Syncing ↔ Degraded
-   ↑              ↓                 ↓         ↓
-   └──────────────┴─────────────────┴─────────┘
-              (Token expiry or auth loss)
+Stopped → Syncing ↔ Recovering
+   ↑         ↓          ↓
+   └─────────┴──────────┘
 ```
 
 **State machine flow**:
 1. `StoppedState`: Initial state, transitions on startup
-2. `TryingToAuthenticateState`: Emits `AuthenticateAction` (HTTP POST) with exponential backoff
-3. `SyncingState`: Emits `SyncAction` continuously (HTTP pull/push loop), checks token expiry
-4. `DegradedState`: Error recovery with intelligent backoff by error type
+2. `SyncingState`: Orchestrates `TransportWorker` child (which runs `PushWorker`/`PullWorker`), monitors child health
+3. `RecoveringState`: Error recovery with intelligent backoff by error type
 
-**Token expiry handling**: `SyncingState` checks `IsTokenExpired()` and transitions back to `TryingToAuthenticateState` to refresh JWT before continuing.
-
-**Consecutive error handling**: Tracks consecutive errors per operation type. When threshold is exceeded, triggers automatic transport reset for recovery from transient network failures.
+Authentication, token expiry, and transport lifecycle are handled internally by `TransportWorker` and its children (ENG-4264).
 
 **Key design decisions**:
 - I/O operations (HTTP) isolated in Actions, never in States

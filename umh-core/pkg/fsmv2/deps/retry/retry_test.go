@@ -253,8 +253,8 @@ var _ = Describe("Retry Tracker", func() {
 			Expect(tracker.ConsecutiveErrors()).To(Equal(6))
 			Expect(tracker.ShouldReset(5)).To(BeFalse(), "should NOT trigger reset at 6 errors")
 
-			// Now SyncAction can run instead of another ResetTransport
-			// If sync fails, counter goes to 7, 8, 9, 10...
+			// Now the transport action can run instead of another ResetTransport
+			// If the action fails, counter goes to 7, 8, 9, 10...
 			// At 10, another reset is triggered (which is correct behavior)
 			tracker.RecordError(retry.WithClass("network")) // 7
 			tracker.RecordError(retry.WithClass("network")) // 8

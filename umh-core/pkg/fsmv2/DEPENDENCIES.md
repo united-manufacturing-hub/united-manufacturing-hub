@@ -93,8 +93,8 @@ func (w *ParentWorker) checkChildHealth(ctx context.Context, childID string) boo
 Actions use typed constants from `pkg/fsmv2/deps` for compile-time safety:
 
 ```go
-func (a *SyncAction) Execute(ctx context.Context, depsAny any) error {
-    deps := depsAny.(CommunicatorDependencies)
+func (a *PullAction) Execute(ctx context.Context, depsAny any) error {
+    deps := depsAny.(PullDependencies)
 
     // Increment counters (cumulative values)
     deps.MetricsRecorder().IncrementCounter(deps.CounterPullOps, 1)

@@ -31,7 +31,6 @@
 // This package follows the FSM v2 pattern:
 //   - worker.go: Implements Worker interface (CollectObservedState, DeriveDesiredState)
 //   - state/*.go: Defines state machine states and transitions
-//   - action/*.go: Deprecated actions retained for architecture test compliance (ENG-4265)
 //   - snapshot/snapshot.go: Observed and desired state structures
 //
 // # States and Transitions
@@ -63,9 +62,9 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/snapshot"
-	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/state"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
+	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
 )
 
 // CommunicatorWorker implements the FSM v2 Worker interface for channel-based synchronization.
@@ -100,10 +99,6 @@ func NewCommunicatorWorker(
 	}, nil
 }
 
-// TODO(ENG-4265): Remove deprecated fields (JWTToken, JWTExpiry, Authenticated,
-// AuthenticatedUUID, MessagesReceived, ConsecutiveErrors, IsBackpressured) from
-// CommunicatorObservedState. These are now tracked by TransportWorker.
-
 // CollectObservedState returns the current observed state of the communicator.
 func (w *CommunicatorWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedState, error) {
 	select {
@@ -114,30 +109,8 @@ func (w *CommunicatorWorker) CollectObservedState(ctx context.Context) (fsmv2.Ob
 
 	deps := w.GetDependencies()
 
-	jwtToken := deps.GetJWTToken()
-	jwtExpiry := deps.GetJWTExpiry()
-
-	pulledMessages := deps.GetPulledMessages()
-
-	var messagesReceived []transport.UMHMessage
-	if pulledMessages != nil {
-		messagesReceived = make([]transport.UMHMessage, len(pulledMessages))
-		for i, msg := range pulledMessages {
-			if msg != nil {
-				messagesReceived[i] = *msg
-			}
-		}
-	}
-
-	authenticated := jwtToken != "" && !time.Now().After(jwtExpiry)
-
 	consecutiveErrors := deps.GetConsecutiveErrors()
 	degradedEnteredAt := deps.GetDegradedEnteredAt()
-
-	lastErrorType := deps.GetLastErrorType()
-	lastRetryAfter := deps.GetLastRetryAfter()
-	lastAuthAttemptAt := deps.GetLastAuthAttemptAt()
-	lastErrorAt := deps.RetryTracker().LastError().OccurredAt
 
 	var prevWorkerMetrics depspkg.Metrics
 
@@ -173,8 +146,6 @@ func (w *CommunicatorWorker) CollectObservedState(ctx context.Context) (fsmv2.Ob
 
 	newWorkerMetrics.Gauges[string(depspkg.GaugeConsecutiveErrors)] = float64(consecutiveErrors)
 
-	authenticatedUUID := deps.GetAuthenticatedUUID()
-
 	metricsContainer := depspkg.MetricsContainer{
 		Worker: newWorkerMetrics,
 	}
@@ -185,18 +156,8 @@ func (w *CommunicatorWorker) CollectObservedState(ctx context.Context) (fsmv2.Ob
 
 	observed := snapshot.CommunicatorObservedState{
 		CollectedAt:       time.Now(),
-		JWTToken:          jwtToken,
-		JWTExpiry:         jwtExpiry,
-		AuthenticatedUUID: authenticatedUUID,
-		MessagesReceived:  messagesReceived,
-		Authenticated:     authenticated,
 		ConsecutiveErrors: consecutiveErrors,
 		DegradedEnteredAt: degradedEnteredAt,
-		LastErrorType:     lastErrorType,
-		LastRetryAfter:    lastRetryAfter,
-		LastErrorAt:       lastErrorAt,
-		LastAuthAttemptAt: lastAuthAttemptAt,
-		IsBackpressured:   deps.IsBackpressured(),
 		MetricsEmbedder:   depspkg.MetricsEmbedder{Metrics: metricsContainer},
 	}
 

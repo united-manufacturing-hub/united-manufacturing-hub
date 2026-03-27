@@ -513,7 +513,7 @@ func (s *TryingToSyncState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Sign
     }
 
     // Emit action - supervisor handles retry on failure
-    return s, fsmv2.SignalNone, &SyncAction{}
+    return s, fsmv2.SignalNone, &MyAction{}
 }
 ```
 

@@ -41,8 +41,8 @@ During development, all changelog entries go under `## Unreleased` at the top of
 | Workflow | Trigger | What it does |
 |----------|---------|-------------|
 | `build-umh-core.yml` | tag push | Builds Docker image, pushes to GHCR, verifies binaries, notifies MC webhook (see promotion logic below) |
-| `sync-changelog.yml` | tag push | Extracts version section from CHANGELOG.md, creates PR on [changelog.umh.app](https://github.com/united-manufacturing-hub/changelog.umh.app) |
-| `update-github-release.yml` | tag push | Extracts version section from CHANGELOG.md, overwrites the GitHub Release body, appends changelog.umh.app link |
+| `sync-changelog.yml` | release published | Extracts version section from CHANGELOG.md, creates PR on [changelog.umh.app](https://github.com/united-manufacturing-hub/changelog.umh.app) |
+| `update-github-release.yml` | release published | Extracts version section from CHANGELOG.md, overwrites the GitHub Release body, appends changelog.umh.app link |
 
 ### MC webhook promotion logic
 

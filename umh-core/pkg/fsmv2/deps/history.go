@@ -23,7 +23,7 @@ import (
 // Parent workers can use this to understand WHY children are in their current state.
 type ActionResult struct {
 	Timestamp  time.Time     `json:"timestamp"`            // When the action completed
-	ActionType string        `json:"action_type"`          // e.g., "AuthenticateAction", "SyncAction"
+	ActionType string        `json:"action_type"`          // e.g., "AuthenticateAction", "PushAction"
 	ErrorMsg   string        `json:"error_msg,omitempty"`  // Error message if Success=false
 	Latency    time.Duration `json:"latency_ns,omitempty"` // Time taken to execute
 	Success    bool          `json:"success"`              // True if action completed without error

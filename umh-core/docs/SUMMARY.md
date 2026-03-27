@@ -25,6 +25,8 @@
     * [Stream Processors](usage/data-modeling/stream-processors.md)
   * [Management Console](usage/management-console/README.md)
 * [Production](production/README.md)
+  * [Architecture Patterns](production/architecture-patterns/README.md)
+    * [Redundant Data Collection](production/architecture-patterns/redundant-data-collection.md)
   * [Deployment](production/deployment/README.md)
     * [Docker](production/deployment/docker/README.md)
       * [Setup](production/deployment/docker/setup.md)

@@ -46,6 +46,8 @@ jobs:
     needs: [changes, go-analysis]
     if: ${{ needs.changes.outputs.code == 'true' }}
     uses: ./.github/workflows/test-umh-core.yml
+    with:
+      run-integration-tests: ${{ github.event_name == 'merge_group' }}
     secrets: inherit
     permissions:
       contents: read
@@ -269,7 +271,15 @@ jobs:
   required-checks:
     name: Required Checks
     runs-on: ubuntu-latest # Use GH runner for fast startup, does not need Depot
-    needs: [go-analysis, tests, build, license-eye-header, require-changelog-entry, validate-changelog]
+    needs:
+      [
+        go-analysis,
+        tests,
+        build,
+        license-eye-header,
+        require-changelog-entry,
+        validate-changelog,
+      ]
     if: always()
     steps:
       - run: echo '${{ toJSON(needs) }}' | jq -e 'to_entries | all(.value.result == "success" or .value.result == "skipped")'

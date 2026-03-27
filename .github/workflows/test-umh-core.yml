@@ -20,7 +20,17 @@ concurrency:
 
 on:
   workflow_call:
+    inputs:
+      run-integration-tests:
+        description: "Whether to run integration tests"
+        type: boolean
+        default: true
   workflow_dispatch:
+    inputs:
+      run-integration-tests:
+        description: "Whether to run integration tests"
+        type: boolean
+        default: true
 
 jobs:
   unit-tests:
@@ -55,7 +65,7 @@ jobs:
         if: failure()
         with:
           name: Unit Test Results
-          path: umh-core/unit-test-report.xml
+          path: "umh-core/unit-test-report*.xml"
           reporter: java-junit
           fail-on-error: false
 
@@ -64,11 +74,14 @@ jobs:
         if: always()
         with:
           name: unit-test-report
-          path: umh-core/unit-test-report.xml
+          path: |
+            umh-core/unit-test-report.xml
+            umh-core/unit-test-report-parallel.xml
           retention-days: 1
 
   integration-tests:
     name: Integration Tests
+    if: inputs.run-integration-tests != false
     runs-on: depot-ubuntu-24.04-4
     strategy:
       matrix:
