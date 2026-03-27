@@ -44,7 +44,7 @@ The default k3s storage (`local-path`) binds the volume to one node. If that nod
 
 If you do not have enterprise storage, Longhorn is a good choice for k3s clusters. See the [Longhorn Quick Installation Guide](https://longhorn.io/docs/latest/deploy/install/) and [K3s-specific configuration](https://longhorn.io/docs/latest/advanced-resources/os-distro-specific/csi-on-k3s/).
 
-## If You Need Zero Downtime
+## If You Need Zero Data Loss
 
 The standard approach accepts 30-60 second recovery on container failure. If your process cannot tolerate any data loss during a single-instance failure, see [Redundant Data Collection](architecture-patterns/redundant-data-collection.md) for a topology that provides zero data loss using redundant PLCs and two umh-core instances.
 
