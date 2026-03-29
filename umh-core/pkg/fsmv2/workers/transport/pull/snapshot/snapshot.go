@@ -12,20 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Package snapshot provides the dependencies interface for pull actions.
+// Action packages import this interface to avoid import cycles with the parent pull package.
 package snapshot
 
 import (
 	"time"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
 	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
 )
 
-// PullDependencies abstracts the pull worker's runtime dependencies to avoid import
-// cycles between the pull and transport packages.
+// PullDependencies interface to avoid import cycles between pull and transport packages.
 type PullDependencies interface {
 	deps.Dependencies
 	GetInboundChan() chan<- *transport.UMHMessage
@@ -54,74 +53,4 @@ type PullDependencies interface {
 	GetLastRetryAfter() time.Duration
 	GetDegradedEnteredAt() time.Time
 	GetLastErrorAt() time.Time
-}
-
-// PullDesiredState represents the target configuration for the pull worker.
-type PullDesiredState struct {
-	ParentMappedState string `json:"parent_mapped_state"`
-	config.BaseDesiredState
-}
-
-// ShouldBeRunning returns true if the pull worker should be in a running state.
-func (s *PullDesiredState) ShouldBeRunning() bool {
-	if s.ShutdownRequested {
-		return false
-	}
-
-	return s.ParentMappedState == config.DesiredStateRunning
-}
-
-// PullObservedState represents the current observed state of the pull worker.
-type PullObservedState struct {
-	CollectedAt       time.Time `json:"collected_at"`
-	DegradedEnteredAt time.Time `json:"degraded_entered_at,omitempty"`
-	LastErrorAt       time.Time `json:"last_error_at,omitempty"`
-
-	PullDesiredState `json:",inline"`
-
-	State string `json:"state"`
-
-	LastActionResults []deps.ActionResult `json:"last_action_results,omitempty"`
-
-	deps.MetricsEmbedder `json:",inline"`
-
-	LastRetryAfter time.Duration `json:"last_retry_after,omitempty"`
-
-	LastErrorType       httpTransport.ErrorType `json:"last_error_type"`
-	ConsecutiveErrors   int                     `json:"consecutive_errors"`
-	PendingMessageCount int                     `json:"pending_message_count"`
-
-	HasTransport    bool `json:"has_transport"`
-	HasValidToken   bool `json:"has_valid_token"`
-	IsBackpressured bool `json:"is_backpressured"`
-}
-
-func (o PullObservedState) GetTimestamp() time.Time {
-	return o.CollectedAt
-}
-
-// SetState sets the FSM state name on this observed state.
-func (o PullObservedState) SetState(s string) fsmv2.ObservedState {
-	o.State = s
-
-	return o
-}
-
-// SetShutdownRequested sets the shutdown requested status on this observed state.
-func (o PullObservedState) SetShutdownRequested(v bool) fsmv2.ObservedState {
-	o.ShutdownRequested = v
-
-	return o
-}
-
-// SetParentMappedState sets the parent's mapped state on this observed state.
-func (o PullObservedState) SetParentMappedState(state string) fsmv2.ObservedState {
-	o.ParentMappedState = state
-
-	return o
-}
-
-// ShouldStop reports whether the pull worker needs to stop.
-func (o PullObservedState) ShouldStop() bool {
-	return o.IsShutdownRequested() || !o.ShouldBeRunning()
 }

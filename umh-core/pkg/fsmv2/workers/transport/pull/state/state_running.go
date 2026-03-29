@@ -20,16 +20,11 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/pull/action"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/pull/snapshot"
+	pull_pkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/pull"
 )
 
 const (
-	// errorDegradedThreshold is the number of consecutive pull errors that triggers
-	// a transition from Running to Degraded.
-	errorDegradedThreshold = 3
-
-	// pendingDegradedThreshold is the number of undelivered pending messages that
-	// triggers a transition from Running to Degraded.
+	errorDegradedThreshold   = 3
 	pendingDegradedThreshold = 100
 )
 
@@ -39,30 +34,30 @@ type RunningState struct {
 }
 
 func (s *RunningState) Next(snapAny any) fsmv2.NextResult[any, any] {
-	snap := helpers.ConvertSnapshot[snapshot.PullObservedState, *snapshot.PullDesiredState](snapAny)
+	snap := fsmv2.ConvertWorkerSnapshot[pull_pkg.PullConfig, pull_pkg.PullStatus](snapAny)
 
-	if snap.Observed.ShouldStop() {
+	if snap.ShouldStop() {
 		return fsmv2.Result[any, any](&StoppingState{}, fsmv2.SignalNone, nil,
-			fmt.Sprintf("stop required: shutdown=%t, parentState(observed)=%s", snap.Desired.IsShutdownRequested(), snap.Observed.ParentMappedState), nil)
+			fmt.Sprintf("stop required: shutdown=%t, parentState=%s", snap.IsShutdownRequested, snap.ParentMappedState), nil)
 	}
 
-	if snap.Observed.ConsecutiveErrors >= errorDegradedThreshold {
+	if snap.Status.ConsecutiveErrors >= errorDegradedThreshold {
 		return fsmv2.Result[any, any](&DegradedState{}, fsmv2.SignalNone, nil,
-			fmt.Sprintf("degrading: %d consecutive errors (threshold=%d)", snap.Observed.ConsecutiveErrors, errorDegradedThreshold), nil)
+			fmt.Sprintf("degrading: %d consecutive errors (threshold=%d)", snap.Status.ConsecutiveErrors, errorDegradedThreshold), nil)
 	}
 
-	if snap.Observed.PendingMessageCount >= pendingDegradedThreshold {
+	if snap.Status.PendingMessageCount >= pendingDegradedThreshold {
 		return fsmv2.Result[any, any](&DegradedState{}, fsmv2.SignalNone, nil,
 			fmt.Sprintf("degrading: %d pending messages (threshold=%d)",
-				snap.Observed.PendingMessageCount, pendingDegradedThreshold), nil)
+				snap.Status.PendingMessageCount, pendingDegradedThreshold), nil)
 	}
 
-	if snap.Observed.HasTransport && snap.Observed.HasValidToken {
+	if snap.Status.HasTransport && snap.Status.HasValidToken {
 		return fsmv2.Result[any, any](s, fsmv2.SignalNone, &action.PullAction{}, "pulling messages (transport and token available)", nil)
 	}
 
 	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil,
-		fmt.Sprintf("waiting: hasTransport=%t, hasValidToken=%t", snap.Observed.HasTransport, snap.Observed.HasValidToken), nil)
+		fmt.Sprintf("waiting: hasTransport=%t, hasValidToken=%t", snap.Status.HasTransport, snap.Status.HasValidToken), nil)
 }
 
 func (s *RunningState) String() string {
