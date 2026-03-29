@@ -19,7 +19,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/snapshot"
+	transport_pkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport"
 )
 
 // AuthFailedState represents a permanent authentication failure (InvalidToken or
@@ -35,18 +35,18 @@ type AuthFailedState struct {
 
 // Next evaluates the current snapshot and returns the next state or action.
 func (s *AuthFailedState) Next(snapAny any) fsmv2.NextResult[any, any] {
-	snap := helpers.ConvertSnapshot[snapshot.TransportObservedState, *snapshot.TransportDesiredState](snapAny)
+	snap := fsmv2.ConvertWorkerSnapshot[transport_pkg.TransportConfig, transport_pkg.TransportStatus](snapAny)
 
-	if snap.Desired.IsShutdownRequested() {
+	if snap.IsShutdownRequested {
 		return fsmv2.Result[any, any](&StoppingState{}, fsmv2.SignalNone, nil, "Shutdown requested, transitioning to Stopping", nil)
 	}
 
 	// FailedAuthConfig is guaranteed populated here because only permanent errors
 	// (which call SetFailedAuthConfig via the !IsTransient() guard in authenticate.go)
 	// reach AuthFailedState via isPermanentAuthError().
-	tokenChanged := snap.Desired.AuthToken != snap.Observed.FailedAuthConfig.AuthToken
-	relayChanged := snap.Desired.RelayURL != snap.Observed.FailedAuthConfig.RelayURL
-	uuidChanged := snap.Desired.InstanceUUID != snap.Observed.FailedAuthConfig.InstanceUUID
+	tokenChanged := snap.Config.AuthToken != snap.Status.FailedAuthConfig.AuthToken
+	relayChanged := snap.Config.RelayURL != snap.Status.FailedAuthConfig.RelayURL
+	uuidChanged := snap.Config.InstanceUUID != snap.Status.FailedAuthConfig.InstanceUUID
 
 	if tokenChanged || relayChanged || uuidChanged {
 		return fsmv2.Result[any, any](&StartingState{}, fsmv2.SignalNone, nil,
@@ -56,7 +56,7 @@ func (s *AuthFailedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 
 	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil,
 		fmt.Sprintf("auth failed (%s), waiting for config change",
-			snap.Observed.LastErrorType), nil)
+			snap.Status.LastErrorType), nil)
 }
 
 // String returns the state name derived from the type.

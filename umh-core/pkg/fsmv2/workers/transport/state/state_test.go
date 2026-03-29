@@ -23,7 +23,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/snapshot"
+	transport_pkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/state"
 )
 
@@ -37,32 +37,36 @@ func makeSnapshotFull(shutdownRequested bool, desiredState string, jwtToken stri
 }
 
 func makeSnapshotWithBackoff(shutdownRequested bool, desiredState string, jwtToken string, jwtExpiry time.Time, childrenHealthy, childrenUnhealthy int, consecutiveErrors int, lastErrorType httpTransport.ErrorType, lastAuthAttemptAt time.Time, lastRetryAfter time.Duration) fsmv2.Snapshot {
-	desired := &snapshot.TransportDesiredState{
+	desired := &fsmv2.WrappedDesiredState[transport_pkg.TransportConfig]{
 		BaseDesiredState: config.BaseDesiredState{
 			State:             desiredState,
 			ShutdownRequested: shutdownRequested,
 		},
-		InstanceUUID: "test-uuid",
-		AuthToken:    "test-auth-token",
-		RelayURL:     "https://relay.test.com",
-		Timeout:      30 * time.Second,
+		Config: transport_pkg.TransportConfig{
+			BaseUserSpec: config.BaseUserSpec{State: desiredState},
+			RelayURL:     "https://relay.test.com",
+			InstanceUUID: "test-uuid",
+			AuthToken:    "test-auth-token",
+			Timeout:      30 * time.Second,
+		},
 	}
 
-	observed := snapshot.TransportObservedState{
-		CollectedAt:           time.Now(),
-		JWTToken:              jwtToken,
-		JWTExpiry:             jwtExpiry,
-		TransportDesiredState: *desired,
-		ChildrenHealthy:       childrenHealthy,
-		ChildrenUnhealthy:     childrenUnhealthy,
-		ConsecutiveErrors:     consecutiveErrors,
-		LastErrorType:         lastErrorType,
-		LastAuthAttemptAt:     lastAuthAttemptAt,
-		LastRetryAfter:        lastRetryAfter,
-		FailedAuthConfig: snapshot.FailedAuthConfig{
-			AuthToken:    desired.AuthToken,
-			RelayURL:     desired.RelayURL,
-			InstanceUUID: desired.InstanceUUID,
+	observed := fsmv2.Observation[transport_pkg.TransportStatus]{
+		CollectedAt:       time.Now(),
+		ChildrenHealthy:   childrenHealthy,
+		ChildrenUnhealthy: childrenUnhealthy,
+		Status: transport_pkg.TransportStatus{
+			JWTToken:          jwtToken,
+			JWTExpiry:         jwtExpiry,
+			ConsecutiveErrors: consecutiveErrors,
+			LastErrorType:     lastErrorType,
+			LastAuthAttemptAt: lastAuthAttemptAt,
+			LastRetryAfter:    lastRetryAfter,
+			FailedAuthConfig: transport_pkg.FailedAuthConfig{
+				AuthToken:    desired.Config.AuthToken,
+				RelayURL:     desired.Config.RelayURL,
+				InstanceUUID: desired.Config.InstanceUUID,
+			},
 		},
 	}
 
@@ -75,25 +79,30 @@ func makeSnapshotWithBackoff(shutdownRequested bool, desiredState string, jwtTok
 // makeAuthFailedSnapshot creates a snapshot for testing AuthFailedState.
 // The failed config matches the desired config (simulating "config unchanged since failure").
 func makeAuthFailedSnapshot(authToken, relayURL, instanceUUID string, shutdownRequested bool) fsmv2.Snapshot {
-	desired := &snapshot.TransportDesiredState{
+	desired := &fsmv2.WrappedDesiredState[transport_pkg.TransportConfig]{
 		BaseDesiredState: config.BaseDesiredState{
 			State:             config.DesiredStateRunning,
 			ShutdownRequested: shutdownRequested,
 		},
-		InstanceUUID: instanceUUID,
-		AuthToken:    authToken,
-		RelayURL:     relayURL,
-		Timeout:      30 * time.Second,
-	}
-	observed := snapshot.TransportObservedState{
-		CollectedAt:   time.Now(),
-		LastErrorType: httpTransport.ErrorTypeInvalidToken,
-		FailedAuthConfig: snapshot.FailedAuthConfig{
+		Config: transport_pkg.TransportConfig{
+			BaseUserSpec: config.BaseUserSpec{State: config.DesiredStateRunning},
+			InstanceUUID: instanceUUID,
 			AuthToken:    authToken,
 			RelayURL:     relayURL,
-			InstanceUUID: instanceUUID,
+			Timeout:      30 * time.Second,
 		},
-		ConsecutiveErrors: 3,
+	}
+	observed := fsmv2.Observation[transport_pkg.TransportStatus]{
+		CollectedAt: time.Now(),
+		Status: transport_pkg.TransportStatus{
+			LastErrorType: httpTransport.ErrorTypeInvalidToken,
+			FailedAuthConfig: transport_pkg.FailedAuthConfig{
+				AuthToken:    authToken,
+				RelayURL:     relayURL,
+				InstanceUUID: instanceUUID,
+			},
+			ConsecutiveErrors: 3,
+		},
 	}
 	return fsmv2.Snapshot{Observed: observed, Desired: desired}
 }
@@ -105,22 +114,27 @@ func makeAuthFailedStartingSnapshot(
 	failedToken, failedRelay, failedUUID string,
 	consecutiveErrors int, lastErrorType httpTransport.ErrorType,
 ) fsmv2.Snapshot {
-	desired := &snapshot.TransportDesiredState{
+	desired := &fsmv2.WrappedDesiredState[transport_pkg.TransportConfig]{
 		BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
-		InstanceUUID:     desiredUUID,
-		AuthToken:        desiredToken,
-		RelayURL:         desiredRelay,
-		Timeout:          30 * time.Second,
+		Config: transport_pkg.TransportConfig{
+			BaseUserSpec: config.BaseUserSpec{State: config.DesiredStateRunning},
+			InstanceUUID: desiredUUID,
+			AuthToken:    desiredToken,
+			RelayURL:     desiredRelay,
+			Timeout:      30 * time.Second,
+		},
 	}
-	observed := snapshot.TransportObservedState{
-		CollectedAt:       time.Now(),
-		ConsecutiveErrors: consecutiveErrors,
-		LastErrorType:     lastErrorType,
-		LastAuthAttemptAt: time.Now(),
-		FailedAuthConfig: snapshot.FailedAuthConfig{
-			AuthToken:    failedToken,
-			RelayURL:     failedRelay,
-			InstanceUUID: failedUUID,
+	observed := fsmv2.Observation[transport_pkg.TransportStatus]{
+		CollectedAt: time.Now(),
+		Status: transport_pkg.TransportStatus{
+			ConsecutiveErrors: consecutiveErrors,
+			LastErrorType:     lastErrorType,
+			LastAuthAttemptAt: time.Now(),
+			FailedAuthConfig: transport_pkg.FailedAuthConfig{
+				AuthToken:    failedToken,
+				RelayURL:     failedRelay,
+				InstanceUUID: failedUUID,
+			},
 		},
 	}
 	return fsmv2.Snapshot{Observed: observed, Desired: desired}
@@ -327,21 +341,26 @@ var _ = Describe("TransportWorker States", func() {
 		})
 
 		It("should apply backoff after transient error even when FailedAuthConfig is empty", func() {
-			desired := &snapshot.TransportDesiredState{
+			desired := &fsmv2.WrappedDesiredState[transport_pkg.TransportConfig]{
 				BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
-				InstanceUUID:     "test-uuid",
-				AuthToken:        "test-auth-token",
-				RelayURL:         "https://relay.test.com",
-				Timeout:          30 * time.Second,
+				Config: transport_pkg.TransportConfig{
+					BaseUserSpec: config.BaseUserSpec{State: config.DesiredStateRunning},
+					InstanceUUID: "test-uuid",
+					AuthToken:    "test-auth-token",
+					RelayURL:     "https://relay.test.com",
+					Timeout:      30 * time.Second,
+				},
 			}
-			observed := snapshot.TransportObservedState{
-				CollectedAt:       time.Now(),
-				ConsecutiveErrors: 3,
-				LastErrorType:     httpTransport.ErrorTypeNetwork,
-				LastAuthAttemptAt: time.Now(),
+			observed := fsmv2.Observation[transport_pkg.TransportStatus]{
+				CollectedAt: time.Now(),
+				Status: transport_pkg.TransportStatus{
+					ConsecutiveErrors: 3,
+					LastErrorType:     httpTransport.ErrorTypeNetwork,
+					LastAuthAttemptAt: time.Now(),
+				},
 			}
 
-			Expect(observed.FailedAuthConfig.IsEmpty()).To(BeTrue(),
+			Expect(observed.Status.FailedAuthConfig.IsEmpty()).To(BeTrue(),
 				"precondition: FailedAuthConfig must be empty to simulate transient error path")
 
 			snap := fsmv2.Snapshot{Observed: observed, Desired: desired}
@@ -411,20 +430,14 @@ var _ = Describe("TransportWorker States", func() {
 		})
 
 		It("should proactively re-auth at 3 AM when token expires during business hours", func() {
-			// Note: shouldProactivelyReauth checks time.Now().Local().Hour() == 3.
-			// We can't control time.Now() in this test, so we verify the code path
-			// doesn't panic and returns a valid state for a business-hours expiry.
 			futureExpiry := time.Now().Add(24 * time.Hour)
-			// Force the hour to be within business hours
 			expiryBusinessHours := time.Date(futureExpiry.Year(), futureExpiry.Month(), futureExpiry.Day(), 10, 0, 0, 0, time.Local)
 			snap := makeSnapshot(false, config.DesiredStateRunning, "valid-token", expiryBusinessHours, 2, 0)
 			result := s.Next(snap)
-			// At the actual current time, proactive re-auth won't trigger unless it's 3 AM.
 			Expect(result.State).NotTo(BeNil())
 		})
 
 		It("should NOT proactively re-auth when token expires outside business hours", func() {
-			// Token expires at 2 AM tomorrow (outside business hours) - no proactive re-auth
 			tomorrow := time.Now().Add(24 * time.Hour)
 			expiryOutsideBusinessHours := time.Date(tomorrow.Year(), tomorrow.Month(), tomorrow.Day(), 2, 0, 0, 0, time.Local)
 			snap := makeSnapshot(false, config.DesiredStateRunning, "valid-token", expiryOutsideBusinessHours, 2, 0)
@@ -441,57 +454,43 @@ var _ = Describe("TransportWorker States", func() {
 		})
 
 		It("should return false when token expires more than 24 hours away", func() {
-			// 3 AM today
 			now := time.Date(2025, 2, 6, 3, 0, 0, 0, time.Local)
-			// Expiry at 10 AM in 30 days (business hours, but too far away)
 			expiry := time.Date(2025, 3, 8, 10, 0, 0, 0, time.Local)
 			Expect(state.ShouldProactivelyReauth(expiry, now)).To(BeFalse())
 		})
 
 		It("should return false when token expires outside business hours", func() {
-			// 3 AM today
 			now := time.Date(2025, 2, 6, 3, 0, 0, 0, time.Local)
-			// Expiry at 2 AM tomorrow (within 24h but outside business hours)
 			expiry := time.Date(2025, 2, 7, 2, 0, 0, 0, time.Local)
 			Expect(state.ShouldProactivelyReauth(expiry, now)).To(BeFalse())
 		})
 
 		It("should return false when not at 3 AM", func() {
-			// 10 AM today (not proactive re-auth hour)
 			now := time.Date(2025, 2, 6, 10, 0, 0, 0, time.Local)
-			// Expiry at 10 AM tomorrow (within 24h, during business hours)
 			expiry := time.Date(2025, 2, 7, 10, 0, 0, 0, time.Local)
 			Expect(state.ShouldProactivelyReauth(expiry, now)).To(BeFalse())
 		})
 
 		It("should return true when all conditions met: 3 AM, within 24h, business hours expiry", func() {
-			// 3 AM today
 			now := time.Date(2025, 2, 6, 3, 0, 0, 0, time.Local)
-			// Expiry at 10 AM today (within 24h, during business hours)
 			expiry := time.Date(2025, 2, 6, 10, 0, 0, 0, time.Local)
 			Expect(state.ShouldProactivelyReauth(expiry, now)).To(BeTrue())
 		})
 
 		It("should return true for edge case: expiry exactly at business hours start", func() {
-			// 3 AM today
 			now := time.Date(2025, 2, 6, 3, 0, 0, 0, time.Local)
-			// Expiry at 7 AM today (business hours start boundary)
 			expiry := time.Date(2025, 2, 6, 7, 0, 0, 0, time.Local)
 			Expect(state.ShouldProactivelyReauth(expiry, now)).To(BeTrue())
 		})
 
 		It("should return false for edge case: expiry at business hours end", func() {
-			// 3 AM today
 			now := time.Date(2025, 2, 6, 3, 0, 0, 0, time.Local)
-			// Expiry at 20:00 today (business hours end boundary - exclusive)
 			expiry := time.Date(2025, 2, 6, 20, 0, 0, 0, time.Local)
 			Expect(state.ShouldProactivelyReauth(expiry, now)).To(BeFalse())
 		})
 
 		It("should return true for expiry at 19:59 (just before end)", func() {
-			// 3 AM today
 			now := time.Date(2025, 2, 6, 3, 0, 0, 0, time.Local)
-			// Expiry at 19:59 today (still within business hours)
 			expiry := time.Date(2025, 2, 6, 19, 59, 0, 0, time.Local)
 			Expect(state.ShouldProactivelyReauth(expiry, now)).To(BeTrue())
 		})
@@ -554,7 +553,6 @@ var _ = Describe("TransportWorker States", func() {
 
 		It("should dispatch ResetTransportAction when ShouldResetTransport triggers", func() {
 			validExpiry := time.Now().Add(1 * time.Hour)
-			// 5 consecutive network errors = ShouldResetTransport returns true
 			snap := makeSnapshotFull(false, config.DesiredStateRunning, "valid-token", validExpiry, 1, 1, 5, httpTransport.ErrorTypeNetwork)
 			result := s.Next(snap)
 
@@ -565,7 +563,6 @@ var _ = Describe("TransportWorker States", func() {
 
 		It("should NOT dispatch ResetTransportAction when below threshold", func() {
 			validExpiry := time.Now().Add(1 * time.Hour)
-			// 3 consecutive network errors = ShouldResetTransport returns false
 			snap := makeSnapshotFull(false, config.DesiredStateRunning, "valid-token", validExpiry, 1, 1, 3, httpTransport.ErrorTypeNetwork)
 			result := s.Next(snap)
 
@@ -668,22 +665,27 @@ var _ = Describe("TransportWorker States", func() {
 
 		// Scenario 1 tick 3: AuthFailed exits when AuthToken changes
 		It("should transition to Starting when AuthToken changes", func() {
-			desired := &snapshot.TransportDesiredState{
+			desired := &fsmv2.WrappedDesiredState[transport_pkg.TransportConfig]{
 				BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
-				InstanceUUID:     "test-uuid",
-				AuthToken:        "new-auth-token",
-				RelayURL:         "https://relay.test.com",
-				Timeout:          30 * time.Second,
-			}
-			observed := snapshot.TransportObservedState{
-				CollectedAt:        time.Now(),
-				FailedAuthConfig: snapshot.FailedAuthConfig{
-					AuthToken:    "old-auth-token",
-					RelayURL:     "https://relay.test.com",
+				Config: transport_pkg.TransportConfig{
+					BaseUserSpec: config.BaseUserSpec{State: config.DesiredStateRunning},
 					InstanceUUID: "test-uuid",
+					AuthToken:    "new-auth-token",
+					RelayURL:     "https://relay.test.com",
+					Timeout:      30 * time.Second,
 				},
-				ConsecutiveErrors:  3,
-				LastErrorType:      httpTransport.ErrorTypeInvalidToken,
+			}
+			observed := fsmv2.Observation[transport_pkg.TransportStatus]{
+				CollectedAt: time.Now(),
+				Status: transport_pkg.TransportStatus{
+					FailedAuthConfig: transport_pkg.FailedAuthConfig{
+						AuthToken:    "old-auth-token",
+						RelayURL:     "https://relay.test.com",
+						InstanceUUID: "test-uuid",
+					},
+					ConsecutiveErrors: 3,
+					LastErrorType:     httpTransport.ErrorTypeInvalidToken,
+				},
 			}
 			result := s.Next(fsmv2.Snapshot{Observed: observed, Desired: desired})
 
@@ -694,22 +696,27 @@ var _ = Describe("TransportWorker States", func() {
 
 		// Scenario 7: Only relay changes
 		It("should transition to Starting when RelayURL changes", func() {
-			desired := &snapshot.TransportDesiredState{
+			desired := &fsmv2.WrappedDesiredState[transport_pkg.TransportConfig]{
 				BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
-				InstanceUUID:     "test-uuid",
-				AuthToken:        "test-auth-token",
-				RelayURL:         "https://new-relay.test.com",
-				Timeout:          30 * time.Second,
-			}
-			observed := snapshot.TransportObservedState{
-				CollectedAt:        time.Now(),
-				FailedAuthConfig: snapshot.FailedAuthConfig{
-					AuthToken:    "test-auth-token",
-					RelayURL:     "https://relay.test.com",
+				Config: transport_pkg.TransportConfig{
+					BaseUserSpec: config.BaseUserSpec{State: config.DesiredStateRunning},
 					InstanceUUID: "test-uuid",
+					AuthToken:    "test-auth-token",
+					RelayURL:     "https://new-relay.test.com",
+					Timeout:      30 * time.Second,
 				},
-				ConsecutiveErrors:  3,
-				LastErrorType:      httpTransport.ErrorTypeInvalidToken,
+			}
+			observed := fsmv2.Observation[transport_pkg.TransportStatus]{
+				CollectedAt: time.Now(),
+				Status: transport_pkg.TransportStatus{
+					FailedAuthConfig: transport_pkg.FailedAuthConfig{
+						AuthToken:    "test-auth-token",
+						RelayURL:     "https://relay.test.com",
+						InstanceUUID: "test-uuid",
+					},
+					ConsecutiveErrors: 3,
+					LastErrorType:     httpTransport.ErrorTypeInvalidToken,
+				},
 			}
 			result := s.Next(fsmv2.Snapshot{Observed: observed, Desired: desired})
 
@@ -719,22 +726,27 @@ var _ = Describe("TransportWorker States", func() {
 
 		// Scenario 2: InstanceDeleted → UUID changes
 		It("should transition to Starting when InstanceUUID changes", func() {
-			desired := &snapshot.TransportDesiredState{
+			desired := &fsmv2.WrappedDesiredState[transport_pkg.TransportConfig]{
 				BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
-				InstanceUUID:     "new-uuid",
-				AuthToken:        "test-auth-token",
-				RelayURL:         "https://relay.test.com",
-				Timeout:          30 * time.Second,
-			}
-			observed := snapshot.TransportObservedState{
-				CollectedAt:        time.Now(),
-				FailedAuthConfig: snapshot.FailedAuthConfig{
+				Config: transport_pkg.TransportConfig{
+					BaseUserSpec: config.BaseUserSpec{State: config.DesiredStateRunning},
+					InstanceUUID: "new-uuid",
 					AuthToken:    "test-auth-token",
 					RelayURL:     "https://relay.test.com",
-					InstanceUUID: "test-uuid",
+					Timeout:      30 * time.Second,
 				},
-				ConsecutiveErrors:  3,
-				LastErrorType:      httpTransport.ErrorTypeInstanceDeleted,
+			}
+			observed := fsmv2.Observation[transport_pkg.TransportStatus]{
+				CollectedAt: time.Now(),
+				Status: transport_pkg.TransportStatus{
+					FailedAuthConfig: transport_pkg.FailedAuthConfig{
+						AuthToken:    "test-auth-token",
+						RelayURL:     "https://relay.test.com",
+						InstanceUUID: "test-uuid",
+					},
+					ConsecutiveErrors: 3,
+					LastErrorType:     httpTransport.ErrorTypeInstanceDeleted,
+				},
 			}
 			result := s.Next(fsmv2.Snapshot{Observed: observed, Desired: desired})
 
@@ -744,17 +756,22 @@ var _ = Describe("TransportWorker States", func() {
 
 		// Scenario 8: Empty failed config = safety net (fresh deps after restart)
 		It("should transition to Starting when failed config is empty (safety net)", func() {
-			desired := &snapshot.TransportDesiredState{
+			desired := &fsmv2.WrappedDesiredState[transport_pkg.TransportConfig]{
 				BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
-				InstanceUUID:     "test-uuid",
-				AuthToken:        "test-auth-token",
-				RelayURL:         "https://relay.test.com",
+				Config: transport_pkg.TransportConfig{
+					BaseUserSpec: config.BaseUserSpec{State: config.DesiredStateRunning},
+					InstanceUUID: "test-uuid",
+					AuthToken:    "test-auth-token",
+					RelayURL:     "https://relay.test.com",
+				},
 			}
-			observed := snapshot.TransportObservedState{
-				CollectedAt:       time.Now(),
-				ConsecutiveErrors: 3,
-				LastErrorType:     httpTransport.ErrorTypeInvalidToken,
-				// FailedAuth* fields all empty (zero values) — simulates fresh deps
+			observed := fsmv2.Observation[transport_pkg.TransportStatus]{
+				CollectedAt: time.Now(),
+				Status: transport_pkg.TransportStatus{
+					ConsecutiveErrors: 3,
+					LastErrorType:     httpTransport.ErrorTypeInvalidToken,
+					// FailedAuth* fields all empty (zero values) -- simulates fresh deps
+				},
 			}
 			result := s.Next(fsmv2.Snapshot{Observed: observed, Desired: desired})
 
