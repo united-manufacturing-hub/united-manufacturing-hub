@@ -24,13 +24,11 @@
 // The worker authenticates with the relay server and coordinates its children
 // for continuous message exchange.
 //
-// # FSM v2 Pattern
+// # Control Loop
 //
-// This package follows the FSM v2 pattern:
-//   - worker.go: Implements Worker interface (CollectObservedState, DeriveDesiredState)
-//   - state/*.go: Defines state machine states and transitions
-//   - action/*.go: Idempotent actions executed during state transitions
-//   - snapshot/snapshot.go: Observed and desired state structures
+// Sensor (CollectObservedState): reads JWT token, error counters, auth timing from deps
+// Controller (state machine): Stopped → Starting → Running ⇄ Degraded
+// Actuator (Actions): AuthenticateAction, ResetTransportAction
 //
 // # States and Transitions
 //
@@ -53,17 +51,14 @@ import (
 	"fmt"
 	"time"
 
-	"gopkg.in/yaml.v3"
+	"reflect"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/snapshot"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/state"
 )
 
 // defaultAuthenticateTimeout is the fallback timeout for authentication when not specified in config.
@@ -73,162 +68,113 @@ const defaultAuthenticateTimeout = 10 * time.Second
 // Compile-time interface check: TransportWorker implements fsmv2.Worker.
 var _ fsmv2.Worker = (*TransportWorker)(nil)
 
-// TransportWorker implements the FSM v2 Worker interface for HTTP transport.
+// TransportWorker implements the FSM Worker interface for HTTP transport.
 // It manages authentication and coordinates PushWorker/PullWorker children
 // for bidirectional message exchange with the backend relay server.
 type TransportWorker struct {
-	*helpers.BaseWorker[*TransportDependencies]
+	fsmv2.WorkerBase[TransportConfig, TransportStatus]
+	deps *TransportDependencies
 }
 
-// NewTransportWorker creates a new Transport worker in Stopped state.
+// NewTransportWorker creates a new Transport worker.
 // Returns an error if required dependencies are missing.
 func NewTransportWorker(
 	identity deps.Identity,
 	logger deps.FSMLogger,
 	stateReader deps.StateReader,
 ) (*TransportWorker, error) {
-	// Dependency validation: reject nil logger (architecture requirement)
 	if logger == nil {
 		return nil, errors.New("logger must not be nil")
 	}
 
-	// Derive worker type if not set
 	if identity.WorkerType == "" {
-		workerType, err := storage.DeriveWorkerType[snapshot.TransportObservedState]()
-		if err != nil {
-			return nil, fmt.Errorf("failed to derive worker type: %w", err)
-		}
-
 		identity.WorkerType = workerType
 	}
 
-	// Create dependencies (will panic if ChannelProvider not set)
-	dependencies := NewTransportDependencies(nil, logger, stateReader, identity)
+	w := &TransportWorker{}
+	w.InitBase(identity, logger, stateReader)
 
-	return &TransportWorker{
-		BaseWorker: helpers.NewBaseWorker(dependencies),
-	}, nil
+	// Create dependencies (will panic if ChannelProvider not set)
+	w.deps = NewTransportDependencies(nil, logger, stateReader, identity)
+
+	// Validation hook: required fields when running.
+	// When all fields are empty (nil spec startup path), skip validation —
+	// transport will attempt auth with empty credentials, fail, and retry with backoff.
+	// This enables self-healing when spec delivery is delayed during startup.
+	w.SetPostParseHook(func(cfg *TransportConfig) error {
+		if cfg.GetState() == config.DesiredStateRunning {
+			if cfg.RelayURL == "" && cfg.InstanceUUID == "" && cfg.AuthToken == "" {
+				return nil
+			}
+			if cfg.RelayURL == "" {
+				return fmt.Errorf("relayURL is required when state is running")
+			}
+			if cfg.InstanceUUID == "" {
+				return fmt.Errorf("instanceUUID is required when state is running")
+			}
+			if cfg.AuthToken == "" {
+				return fmt.Errorf("authToken is required when state is running")
+			}
+			if cfg.Timeout == 0 {
+				cfg.Timeout = defaultAuthenticateTimeout
+			}
+		}
+		return nil
+	})
+
+	// Child specs factory: Push and Pull children
+	w.SetChildSpecsFactory(func(_ TransportConfig, rawSpec config.UserSpec) []config.ChildSpec {
+		return append(makePushChildSpec(rawSpec), makePullChildSpec(rawSpec)...)
+	})
+
+	return w, nil
+}
+
+// GetDependenciesAny returns the custom TransportDependencies.
+// Overrides WorkerBase's default which returns *BaseDependencies.
+// Required by architecture test: custom deps must be visible to the supervisor.
+func (w *TransportWorker) GetDependenciesAny() any {
+	return w.deps
 }
 
 // CollectObservedState returns the current observed state of the transport worker.
-// Handles context cancellation at entry as required by architecture tests.
+// Returns NewObservation — the collector handles CollectedAt, framework metrics,
+// action history, and metric accumulation automatically after COS returns.
 func (w *TransportWorker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
-	// Context cancellation check at entry (architecture requirement)
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	default:
 	}
 
-	deps := w.GetDependencies()
+	failedToken, failedRelay, failedUUID := w.deps.GetFailedAuthConfig()
 
-	failedToken, failedRelay, failedUUID := deps.GetFailedAuthConfig()
-
-	// Build observed state
-	observed := snapshot.TransportObservedState{
-		CollectedAt:       time.Now(),
-		JWTToken:          deps.GetJWTToken(),
-		JWTExpiry:         deps.GetJWTExpiry(),
-		AuthenticatedUUID: deps.GetAuthenticatedUUID(),
-		ConsecutiveErrors: deps.GetConsecutiveErrors(),
-		LastErrorType:     deps.GetLastErrorType(),
-		LastAuthAttemptAt: deps.GetLastAuthAttemptAt(),
-		LastRetryAfter:    deps.GetLastRetryAfter(),
-		FailedAuthConfig: snapshot.FailedAuthConfig{
+	return fsmv2.NewObservation(TransportStatus{
+		JWTToken:          w.deps.GetJWTToken(),
+		JWTExpiry:         w.deps.GetJWTExpiry(),
+		AuthenticatedUUID: w.deps.GetAuthenticatedUUID(),
+		ConsecutiveErrors: w.deps.GetConsecutiveErrors(),
+		LastErrorType:     w.deps.GetLastErrorType(),
+		LastAuthAttemptAt: w.deps.GetLastAuthAttemptAt(),
+		LastRetryAfter:    w.deps.GetLastRetryAfter(),
+		FailedAuthConfig: FailedAuthConfig{
 			AuthToken:    failedToken,
 			RelayURL:     failedRelay,
 			InstanceUUID: failedUUID,
 		},
-	}
-
-	// Framework metrics copy (architecture requirement)
-	if fm := deps.GetFrameworkState(); fm != nil {
-		observed.Metrics.Framework = *fm
-	}
-
-	// Action history copy (architecture requirement)
-	observed.LastActionResults = deps.GetActionHistory()
-
-	return observed, nil
+	}), nil
 }
 
-// DeriveDesiredState determines what state the transport worker should be in.
-// Must be PURE - only uses the spec parameter, never dependencies.
-// Returns "running" or "stopped" as valid state values.
-func (w *TransportWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
-	// Nil spec defaults to "running" — matches CommunicatorWorker convention.
-	// Transport will attempt auth with empty credentials, fail, and retry with backoff.
-	// This enables self-healing: if spec delivery is delayed during startup, the worker
-	// retries until config arrives. Field validation below catches empty fields once
-	// a real spec is parsed.
-	if spec == nil {
-		return &snapshot.TransportDesiredState{
-			BaseDesiredState: config.BaseDesiredState{
-				State: config.DesiredStateRunning,
-			},
-			ChildrenSpecs: append(makePushChildSpec(config.UserSpec{}), makePullChildSpec(config.UserSpec{})...),
-		}, nil
-	}
-
-	// Type cast to UserSpec
-	userSpec, ok := spec.(config.UserSpec)
-	if !ok {
-		return nil, fmt.Errorf("invalid spec type: expected UserSpec, got %T", spec)
-	}
-
-	// Render template variables
-	renderedConfig, err := config.RenderConfigTemplate(userSpec.Config, userSpec.Variables)
-	if err != nil {
-		return nil, fmt.Errorf("template rendering failed: %w", err)
-	}
-
-	// Parse YAML config
-	var transportSpec TransportUserSpec
-	if err := yaml.Unmarshal([]byte(renderedConfig), &transportSpec); err != nil {
-		return nil, fmt.Errorf("config parse failed: %w", err)
-	}
-
-	// Validate required fields when worker should be running
-	if transportSpec.GetState() == config.DesiredStateRunning {
-		if transportSpec.RelayURL == "" {
-			return nil, fmt.Errorf("relayURL is required when state is running")
-		}
-
-		if transportSpec.InstanceUUID == "" {
-			return nil, fmt.Errorf("instanceUUID is required when state is running")
-		}
-
-		if transportSpec.AuthToken == "" {
-			return nil, fmt.Errorf("authToken is required when state is running")
-		}
-
-		if transportSpec.Timeout == 0 {
-			transportSpec.Timeout = defaultAuthenticateTimeout
-		}
-	}
-
-	// Build desired state with valid state values only ("stopped" or "running")
-	return &snapshot.TransportDesiredState{
-		BaseDesiredState: config.BaseDesiredState{
-			State: transportSpec.GetState(), // Returns "running" or "stopped"
-		},
-		RelayURL:      transportSpec.RelayURL,
-		InstanceUUID:  transportSpec.InstanceUUID,
-		AuthToken:     transportSpec.AuthToken,
-		Timeout:       transportSpec.Timeout,
-		ChildrenSpecs: append(makePushChildSpec(userSpec), makePullChildSpec(userSpec)...),
-	}, nil
-}
-
-// GetInitialState returns StoppedState as the initial FSM state.
-func (w *TransportWorker) GetInitialState() fsmv2.State[any, any] {
-	return &state.StoppedState{}
-}
+const workerType = "transport"
 
 // init registers the transport worker and supervisor factory.
-// This is called automatically when the package is imported.
+// Uses factory.RegisterWorkerAndSupervisorFactoryByType (explicit workerType) instead of
+// factory.RegisterWorkerType (derived from type name) because Observation[TransportStatus]
+// doesn't match the legacy "FooObservedState" naming convention.
 func init() {
-	if err := factory.RegisterWorkerType[snapshot.TransportObservedState, *snapshot.TransportDesiredState](
+	// Step 1: Register worker + supervisor factories.
+	if err := factory.RegisterWorkerAndSupervisorFactoryByType(
+		workerType,
 		// Worker factory function
 		func(id deps.Identity, logger deps.FSMLogger, stateReader deps.StateReader, extraDeps map[string]any) fsmv2.Worker {
 			worker, err := NewTransportWorker(id, logger, stateReader)
@@ -238,17 +184,25 @@ func init() {
 					id.ID, id.Name, err))
 			}
 
-			extraDeps["transport_deps"] = worker.GetDependencies()
+			extraDeps["transport_deps"] = worker.deps
 
 			return worker
 		},
 		// Supervisor factory function
 		func(cfg interface{}) interface{} {
-			return supervisor.NewSupervisor[snapshot.TransportObservedState, *snapshot.TransportDesiredState](
+			return supervisor.NewSupervisor[fsmv2.Observation[TransportStatus], *fsmv2.WrappedDesiredState[TransportConfig]](
 				cfg.(supervisor.Config))
 		},
 	); err != nil {
 		panic(fmt.Sprintf("failed to register transport worker: %v", err))
+	}
+
+	// Step 2: Register with CSE TypeRegistry for storage.
+	observedType := reflect.TypeOf(fsmv2.Observation[TransportStatus]{})
+	desiredType := reflect.TypeOf(fsmv2.WrappedDesiredState[TransportConfig]{})
+
+	if err := storage.GlobalRegistry().RegisterWorkerType(workerType, observedType, desiredType); err != nil {
+		panic(fmt.Sprintf("failed to register transport CSE types: %v", err))
 	}
 }
 

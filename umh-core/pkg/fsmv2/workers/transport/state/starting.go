@@ -23,7 +23,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/backoff"
 	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/action"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/snapshot"
+	transport_pkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport"
 )
 
 // StartingState represents the state where the transport worker is authenticating.
@@ -37,42 +37,42 @@ type StartingState struct {
 
 // Next evaluates the current snapshot and returns the next state or action.
 func (s *StartingState) Next(snapAny any) fsmv2.NextResult[any, any] {
-	snap := helpers.ConvertSnapshot[snapshot.TransportObservedState, *snapshot.TransportDesiredState](snapAny)
+	snap := fsmv2.ConvertWorkerSnapshot[transport_pkg.TransportConfig, transport_pkg.TransportStatus](snapAny)
 
-	if snap.Desired.IsShutdownRequested() {
+	if snap.IsShutdownRequested {
 		return fsmv2.Result[any, any](&StoppingState{}, fsmv2.SignalNone, nil, "Shutdown requested, transitioning to Stopping")
 	}
 
 	// If we don't have a valid token, authenticate (with backoff on repeated failures)
-	if !snap.Observed.HasValidToken() {
-		configChanged := authConfigChanged(snap.Desired, snap.Observed)
+	if !snap.Status.HasValidToken() {
+		configChanged := authConfigChanged(&snap.Config, snap.Status)
 
 		// Apply error handling only when config hasn't changed since last attempt.
 		// If config changed, stale errors and backoff are irrelevant — go straight to auth dispatch.
-		if !configChanged && snap.Observed.ConsecutiveErrors > 0 && !snap.Observed.LastAuthAttemptAt.IsZero() {
-			if isPermanentAuthError(snap.Observed.LastErrorType) {
+		if !configChanged && snap.Status.ConsecutiveErrors > 0 && !snap.Status.LastAuthAttemptAt.IsZero() {
+			if isPermanentAuthError(snap.Status.LastErrorType) {
 				return fsmv2.Result[any, any](&AuthFailedState{}, fsmv2.SignalNone, nil,
 					fmt.Sprintf("permanent auth failure (%s after %d errors), entering AuthFailed",
-						snap.Observed.LastErrorType, snap.Observed.ConsecutiveErrors))
+						snap.Status.LastErrorType, snap.Status.ConsecutiveErrors))
 			}
 
 			delay := backoff.CalculateDelayForErrorType(
-				snap.Observed.LastErrorType,
-				snap.Observed.ConsecutiveErrors,
-				snap.Observed.LastRetryAfter,
+				snap.Status.LastErrorType,
+				snap.Status.ConsecutiveErrors,
+				snap.Status.LastRetryAfter,
 			)
-			if time.Since(snap.Observed.LastAuthAttemptAt) < delay {
+			if time.Since(snap.Status.LastAuthAttemptAt) < delay {
 				return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil,
 					fmt.Sprintf("auth backoff: %d errors (%s), delay %s",
-						snap.Observed.ConsecutiveErrors, snap.Observed.LastErrorType, delay.Round(time.Second)))
+						snap.Status.ConsecutiveErrors, snap.Status.LastErrorType, delay.Round(time.Second)))
 			}
 		}
 
 		authAction := action.NewAuthenticateAction(
-			snap.Desired.RelayURL,
-			snap.Desired.InstanceUUID,
-			snap.Desired.AuthToken,
-			snap.Desired.Timeout,
+			snap.Config.RelayURL,
+			snap.Config.InstanceUUID,
+			snap.Config.AuthToken,
+			snap.Config.Timeout,
 		)
 
 		return fsmv2.Result[any, any](s, fsmv2.SignalNone, authAction, "No valid token, authenticating with relay")
@@ -100,13 +100,13 @@ func isPermanentAuthError(errType httpTransport.ErrorType) bool {
 // config that was used in the last permanently-failed auth attempt. Used by StartingState
 // to skip stale permanent errors after a config change. AuthFailedState performs the same
 // comparison inline to capture per-field diagnostics in the reason string.
-func authConfigChanged(desired *snapshot.TransportDesiredState, observed snapshot.TransportObservedState) bool {
-	if observed.FailedAuthConfig.IsEmpty() {
+func authConfigChanged(config *transport_pkg.TransportConfig, status transport_pkg.TransportStatus) bool {
+	if status.FailedAuthConfig.IsEmpty() {
 		return false
 	}
-	return desired.AuthToken != observed.FailedAuthConfig.AuthToken ||
-		desired.RelayURL != observed.FailedAuthConfig.RelayURL ||
-		desired.InstanceUUID != observed.FailedAuthConfig.InstanceUUID
+	return config.AuthToken != status.FailedAuthConfig.AuthToken ||
+		config.RelayURL != status.FailedAuthConfig.RelayURL ||
+		config.InstanceUUID != status.FailedAuthConfig.InstanceUUID
 }
 
 // String returns the state name derived from the type.
