@@ -27,7 +27,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/push"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/push/snapshot"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/push/state"
 )
 
@@ -85,13 +84,14 @@ var _ = Describe("PushWorker", func() {
 			Expect(err).ToNot(HaveOccurred())
 		})
 
-		It("should return valid observed state with timestamp", func() {
+		It("should return observed state (NewObservation with zero timestamp for collector)", func() {
 			ctx := context.Background()
 			observed, err := worker.CollectObservedState(ctx, nil)
 
 			Expect(err).ToNot(HaveOccurred())
 			Expect(observed).NotTo(BeNil())
-			Expect(observed.GetTimestamp()).NotTo(BeZero())
+			// NewObservation returns zero timestamp — the collector sets it after COS returns
+			Expect(observed.GetTimestamp()).To(BeZero())
 		})
 
 		It("should handle context cancellation", func() {
@@ -109,9 +109,9 @@ var _ = Describe("PushWorker", func() {
 			observed, err := worker.CollectObservedState(ctx, nil)
 
 			Expect(err).ToNot(HaveOccurred())
-			typedObs, ok := observed.(snapshot.PushObservedState)
+			typedObs, ok := observed.(fsmv2.Observation[push.PushStatus])
 			Expect(ok).To(BeTrue())
-			Expect(typedObs.HasTransport).To(BeTrue())
+			Expect(typedObs.Status.HasTransport).To(BeTrue())
 		})
 
 		It("should report JWT token availability from parent deps", func() {
@@ -121,9 +121,9 @@ var _ = Describe("PushWorker", func() {
 			observed, err := worker.CollectObservedState(ctx, nil)
 
 			Expect(err).ToNot(HaveOccurred())
-			typedObs, ok := observed.(snapshot.PushObservedState)
+			typedObs, ok := observed.(fsmv2.Observation[push.PushStatus])
 			Expect(ok).To(BeTrue())
-			Expect(typedObs.HasValidToken).To(BeTrue())
+			Expect(typedObs.Status.HasValidToken).To(BeTrue())
 		})
 
 		It("should report HasValidToken false for expired token", func() {
@@ -133,9 +133,9 @@ var _ = Describe("PushWorker", func() {
 			observed, err := worker.CollectObservedState(ctx, nil)
 
 			Expect(err).ToNot(HaveOccurred())
-			typedObs, ok := observed.(snapshot.PushObservedState)
+			typedObs, ok := observed.(fsmv2.Observation[push.PushStatus])
 			Expect(ok).To(BeTrue())
-			Expect(typedObs.HasValidToken).To(BeFalse())
+			Expect(typedObs.Status.HasValidToken).To(BeFalse())
 		})
 
 		It("should report consecutive errors from child deps", func() {
@@ -146,59 +146,20 @@ var _ = Describe("PushWorker", func() {
 			observed, err := worker.CollectObservedState(ctx, nil)
 
 			Expect(err).ToNot(HaveOccurred())
-			typedObs, ok := observed.(snapshot.PushObservedState)
+			typedObs, ok := observed.(fsmv2.Observation[push.PushStatus])
 			Expect(ok).To(BeTrue())
-			Expect(typedObs.ConsecutiveErrors).To(Equal(2))
+			Expect(typedObs.Status.ConsecutiveErrors).To(Equal(2))
 		})
 
-		It("should include framework metrics", func() {
+		It("should return Observation[PushStatus] with zero metrics (collector handles metrics)", func() {
 			ctx := context.Background()
 			observed, err := worker.CollectObservedState(ctx, nil)
 
 			Expect(err).ToNot(HaveOccurred())
-			typedObs, ok := observed.(snapshot.PushObservedState)
+			typedObs, ok := observed.(fsmv2.Observation[push.PushStatus])
 			Expect(ok).To(BeTrue())
-			Expect(typedObs.Metrics).NotTo(BeNil())
-		})
-
-		It("should drain worker metrics from MetricsRecorder into ObservedState", func() {
-			d := worker.GetDependencies()
-			d.MetricsRecorder().IncrementCounter(depspkg.CounterMessagesPushed, 5)
-			d.MetricsRecorder().IncrementCounter(depspkg.CounterBytesPushed, 1024)
-			d.MetricsRecorder().SetGauge(depspkg.GaugeLastPushLatencyMs, 42.0)
-
-			ctx := context.Background()
-			observed, err := worker.CollectObservedState(ctx, nil)
-
-			Expect(err).ToNot(HaveOccurred())
-			typedObs, ok := observed.(snapshot.PushObservedState)
-			Expect(ok).To(BeTrue())
-
-			Expect(typedObs.Metrics.Worker.Counters).NotTo(BeNil())
-			Expect(typedObs.Metrics.Worker.Counters["messages_pushed"]).To(Equal(int64(5)))
-			Expect(typedObs.Metrics.Worker.Counters["bytes_pushed"]).To(Equal(int64(1024)))
-
-			Expect(typedObs.Metrics.Worker.Gauges).NotTo(BeNil())
-			Expect(typedObs.Metrics.Worker.Gauges["last_push_latency_ms"]).To(Equal(42.0))
-		})
-
-		It("should drain metrics from recorder buffer on each tick", func() {
-			ctx := context.Background()
-
-			d := worker.GetDependencies()
-			d.MetricsRecorder().IncrementCounter(depspkg.CounterPushOps, 1)
-			observed1, err := worker.CollectObservedState(ctx, nil)
-			Expect(err).ToNot(HaveOccurred())
-			typedObs1, ok := observed1.(snapshot.PushObservedState)
-			Expect(ok).To(BeTrue())
-			Expect(typedObs1.Metrics.Worker.Counters["push_ops"]).To(Equal(int64(1)))
-
-			d.MetricsRecorder().IncrementCounter(depspkg.CounterPushOps, 2)
-			observed2, err := worker.CollectObservedState(ctx, nil)
-			Expect(err).ToNot(HaveOccurred())
-			typedObs2, ok := observed2.(snapshot.PushObservedState)
-			Expect(ok).To(BeTrue())
-			Expect(typedObs2.Metrics.Worker.Counters["push_ops"]).To(Equal(int64(2)))
+			// NewObservation returns zero Metrics — the collector handles metric accumulation
+			Expect(typedObs.Metrics.Worker.Counters).To(BeNil())
 		})
 	})
 
