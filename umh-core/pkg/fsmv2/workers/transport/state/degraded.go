@@ -21,7 +21,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/backoff"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/action"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/snapshot"
+	transport_pkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport"
 )
 
 // DegradedState represents the state when some children have failed.
@@ -32,32 +32,32 @@ type DegradedState struct {
 
 // Next evaluates the current snapshot and returns the next state or action.
 func (s *DegradedState) Next(snapAny any) fsmv2.NextResult[any, any] {
-	snap := helpers.ConvertSnapshot[snapshot.TransportObservedState, *snapshot.TransportDesiredState](snapAny)
+	snap := fsmv2.ConvertWorkerSnapshot[transport_pkg.TransportConfig, transport_pkg.TransportStatus](snapAny)
 
-	if snap.Desired.IsShutdownRequested() {
+	if snap.IsShutdownRequested {
 		return fsmv2.Result[any, any](&StoppingState{}, fsmv2.SignalNone, nil, "Shutdown requested, transitioning to Stopping", nil)
 	}
 
 	// If token is expired, need to re-authenticate (mirrors RunningState)
-	if snap.Observed.IsTokenExpired() {
+	if snap.Status.IsTokenExpired() {
 		return fsmv2.Result[any, any](&StartingState{}, fsmv2.SignalNone, nil, "Token expired, transitioning to Starting for re-authentication", nil)
 	}
 
 	// Nuclear fallback: reset transport on prolonged child failures
-	if backoff.ShouldResetTransport(snap.Observed.LastErrorType, snap.Observed.ConsecutiveErrors) {
+	if backoff.ShouldResetTransport(snap.Status.LastErrorType, snap.Status.ConsecutiveErrors) {
 		return fsmv2.Result[any, any](s, fsmv2.SignalNone, action.NewResetTransportAction(),
 			fmt.Sprintf("resetting transport: %d consecutive errors (type=%d)",
-				snap.Observed.ConsecutiveErrors, snap.Observed.LastErrorType), nil)
+				snap.Status.ConsecutiveErrors, snap.Status.LastErrorType), nil)
 	}
 
 	// If all children are now healthy, transition back to Running
-	if snap.Observed.ChildrenUnhealthy == 0 {
+	if snap.ChildrenUnhealthy == 0 {
 		return fsmv2.Result[any, any](&RunningState{}, fsmv2.SignalNone, nil, "All children now healthy, transitioning to Running", nil)
 	}
 
 	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil,
 		fmt.Sprintf("degraded: %d unhealthy children, %d consecutive errors",
-			snap.Observed.ChildrenUnhealthy, snap.Observed.ConsecutiveErrors), nil)
+			snap.ChildrenUnhealthy, snap.Status.ConsecutiveErrors), nil)
 }
 
 // String returns the state name derived from the type.
