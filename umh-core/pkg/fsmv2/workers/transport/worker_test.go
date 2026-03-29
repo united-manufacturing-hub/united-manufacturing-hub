@@ -26,7 +26,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/snapshot"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/state"
 )
 
@@ -84,13 +83,14 @@ var _ = Describe("TransportWorker", func() {
 			Expect(err).ToNot(HaveOccurred())
 		})
 
-		It("should return observed state with timestamp", func() {
+		It("should return observed state (NewObservation with zero timestamp for collector)", func() {
 			ctx := context.Background()
 			observed, err := worker.CollectObservedState(ctx, nil)
 
 			Expect(err).ToNot(HaveOccurred())
 			Expect(observed).NotTo(BeNil())
-			Expect(observed.GetTimestamp()).NotTo(BeZero())
+			// NewObservation returns zero timestamp — the collector sets it after COS returns
+			Expect(observed.GetTimestamp()).To(BeZero())
 		})
 
 		It("should handle context cancellation at entry", func() {
@@ -103,27 +103,16 @@ var _ = Describe("TransportWorker", func() {
 			Expect(err).To(Equal(context.Canceled))
 		})
 
-		It("should call GetFrameworkState from dependencies", func() {
+		It("should return Observation[TransportStatus] from COS", func() {
 			ctx := context.Background()
 			observed, err := worker.CollectObservedState(ctx, nil)
 
 			Expect(err).ToNot(HaveOccurred())
-			// The observed state should have metrics container
-			typedObs, ok := observed.(snapshot.TransportObservedState)
+			typedObs, ok := observed.(fsmv2.Observation[transport.TransportStatus])
 			Expect(ok).To(BeTrue())
-			Expect(typedObs.Metrics).NotTo(BeNil())
-		})
-
-		It("should call GetActionHistory from dependencies", func() {
-			ctx := context.Background()
-			observed, err := worker.CollectObservedState(ctx, nil)
-
-			Expect(err).ToNot(HaveOccurred())
-			// The observed state should have last action results (even if empty)
-			typedObs, ok := observed.(snapshot.TransportObservedState)
-			Expect(ok).To(BeTrue())
-			// LastActionResults should be initialized (possibly empty slice)
-			Expect(typedObs.LastActionResults).To(BeNil()) // Empty when no actions recorded
+			// Status fields populated from deps (empty deps → zero values)
+			Expect(typedObs.Status.JWTToken).To(BeEmpty())
+			Expect(typedObs.Status.ConsecutiveErrors).To(BeZero())
 		})
 	})
 
@@ -148,7 +137,7 @@ var _ = Describe("TransportWorker", func() {
 				desired, err := worker.DeriveDesiredState(nil)
 				Expect(err).ToNot(HaveOccurred())
 
-				transportDesired, ok := desired.(*snapshot.TransportDesiredState)
+				transportDesired, ok := desired.(*fsmv2.WrappedDesiredState[transport.TransportConfig])
 				Expect(ok).To(BeTrue())
 				Expect(transportDesired.ChildrenSpecs).To(HaveLen(2))
 				Expect(transportDesired.ChildrenSpecs[0].Name).To(Equal("push"))
@@ -174,11 +163,11 @@ authToken: "test-token"`,
 				Expect(desired.GetState()).To(Equal("running"))
 
 				// Type assert to access transport-specific fields
-				transportDesired, ok := desired.(*snapshot.TransportDesiredState)
+				transportDesired, ok := desired.(*fsmv2.WrappedDesiredState[transport.TransportConfig])
 				Expect(ok).To(BeTrue())
-				Expect(transportDesired.RelayURL).To(Equal("https://relay.example.com"))
-				Expect(transportDesired.InstanceUUID).To(Equal("test-uuid"))
-				Expect(transportDesired.AuthToken).To(Equal("test-token"))
+				Expect(transportDesired.Config.RelayURL).To(Equal("https://relay.example.com"))
+				Expect(transportDesired.Config.InstanceUUID).To(Equal("test-uuid"))
+				Expect(transportDesired.Config.AuthToken).To(Equal("test-token"))
 			})
 
 			It("should include PushWorker ChildrenSpecs", func() {
@@ -192,7 +181,7 @@ authToken: "test-token"`,
 				desired, err := worker.DeriveDesiredState(spec)
 				Expect(err).ToNot(HaveOccurred())
 
-				transportDesired, ok := desired.(*snapshot.TransportDesiredState)
+				transportDesired, ok := desired.(*fsmv2.WrappedDesiredState[transport.TransportConfig])
 				Expect(ok).To(BeTrue())
 				Expect(transportDesired.ChildrenSpecs).To(HaveLen(2))
 
@@ -321,8 +310,8 @@ authToken: "test-token"`,
 				desired, err := worker.DeriveDesiredState(spec)
 
 				Expect(err).ToNot(HaveOccurred())
-				transportDesired := desired.(*snapshot.TransportDesiredState)
-				Expect(transportDesired.Timeout).To(Equal(10 * time.Second))
+				transportDesired := desired.(*fsmv2.WrappedDesiredState[transport.TransportConfig])
+				Expect(transportDesired.Config.Timeout).To(Equal(10 * time.Second))
 			})
 		})
 

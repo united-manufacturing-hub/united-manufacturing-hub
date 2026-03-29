@@ -22,7 +22,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/backoff"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/action"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/snapshot"
+	transport_pkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport"
 )
 
 // StartingState represents the state where the transport worker is authenticating.
@@ -36,32 +36,32 @@ type StartingState struct {
 
 // Next evaluates the current snapshot and returns the next state or action.
 func (s *StartingState) Next(snapAny any) fsmv2.NextResult[any, any] {
-	snap := helpers.ConvertSnapshot[snapshot.TransportObservedState, *snapshot.TransportDesiredState](snapAny)
+	snap := fsmv2.ConvertWorkerSnapshot[transport_pkg.TransportConfig, transport_pkg.TransportStatus](snapAny)
 
-	if snap.Desired.IsShutdownRequested() {
+	if snap.IsShutdownRequested {
 		return fsmv2.Result[any, any](&StoppingState{}, fsmv2.SignalNone, nil, "Shutdown requested, transitioning to Stopping")
 	}
 
 	// If we don't have a valid token, authenticate (with backoff on repeated failures)
-	if !snap.Observed.HasValidToken() {
-		if snap.Observed.ConsecutiveErrors > 0 && !snap.Observed.LastAuthAttemptAt.IsZero() {
+	if !snap.Status.HasValidToken() {
+		if snap.Status.ConsecutiveErrors > 0 && !snap.Status.LastAuthAttemptAt.IsZero() {
 			delay := backoff.CalculateDelayForErrorType(
-				snap.Observed.LastErrorType,
-				snap.Observed.ConsecutiveErrors,
-				snap.Observed.LastRetryAfter,
+				snap.Status.LastErrorType,
+				snap.Status.ConsecutiveErrors,
+				snap.Status.LastRetryAfter,
 			)
-			if time.Since(snap.Observed.LastAuthAttemptAt) < delay {
+			if time.Since(snap.Status.LastAuthAttemptAt) < delay {
 				return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil,
 					fmt.Sprintf("auth backoff: %d errors (%s), delay %s",
-						snap.Observed.ConsecutiveErrors, snap.Observed.LastErrorType, delay.Round(time.Second)))
+						snap.Status.ConsecutiveErrors, snap.Status.LastErrorType, delay.Round(time.Second)))
 			}
 		}
 
 		authAction := action.NewAuthenticateAction(
-			snap.Desired.RelayURL,
-			snap.Desired.InstanceUUID,
-			snap.Desired.AuthToken,
-			snap.Desired.Timeout,
+			snap.Config.RelayURL,
+			snap.Config.InstanceUUID,
+			snap.Config.AuthToken,
+			snap.Config.Timeout,
 		)
 
 		return fsmv2.Result[any, any](s, fsmv2.SignalNone, authAction, "No valid token, authenticating with relay")

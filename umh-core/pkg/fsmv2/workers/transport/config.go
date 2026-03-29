@@ -1,0 +1,81 @@
+// Copyright 2025 UMH Systems GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package transport
+
+import (
+	"time"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
+	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
+)
+
+// TransportConfig holds the user-provided configuration for the transport worker.
+// Embeds BaseUserSpec to support the StateGetter interface, allowing WorkerBase.DeriveDesiredState
+// to extract the desired state from the "state" YAML field.
+type TransportConfig struct {
+	config.BaseUserSpec `yaml:",inline"`
+	RelayURL            string        `json:"relayURL"     yaml:"relayURL"`
+	InstanceUUID        string        `json:"instanceUUID" yaml:"instanceUUID"`
+	AuthToken           string        `json:"authToken"    yaml:"authToken"`
+	Timeout             time.Duration `json:"timeout"      yaml:"timeout"`
+}
+
+// TransportStatus holds the runtime observation data for the transport worker.
+type TransportStatus struct {
+	// JWTExpiry is when the current JWT token expires.
+	JWTExpiry time.Time `json:"jwt_expiry,omitempty"`
+	// LastAuthAttemptAt records when the last authentication attempt was made (for backoff gating).
+	LastAuthAttemptAt time.Time `json:"last_auth_attempt_at,omitempty"`
+
+	// JWTToken is the current authentication token for relay communication.
+	// NOTE: This field must NOT use json:"-" — the supervisor reconciliation loop
+	// serializes observed state to CSE storage between ticks and deserializes it
+	// via LoadObservedTyped(). Excluding JWTToken from JSON would force
+	// re-authentication on every tick (~10ms), hammering the relay server.
+	// TODO(security): JWTToken included in CSE sync payloads. ENG-4405 tracks
+	// adding a CSE secret tier to persist locally but exclude from delta sync.
+	JWTToken string `json:"jwt_token,omitempty"`
+
+	// LastRetryAfter holds the server-suggested retry delay from the most recent error (for backoff).
+	LastRetryAfter time.Duration `json:"last_retry_after,omitempty"`
+
+	// ConsecutiveErrors tracks consecutive push/pull errors for transport reset decisions.
+	ConsecutiveErrors int `json:"consecutive_errors"`
+	// LastErrorType tracks the most recent error type for ShouldResetTransport evaluation.
+	LastErrorType httpTransport.ErrorType `json:"last_error_type"`
+}
+
+// IsTokenExpired returns true if the JWT token is expired or will expire within 10 minutes.
+//
+// Token buffer architecture: the parent TransportWorker uses a 10-minute buffer (proactive
+// refresh trigger) while child workers (push/pull) use a 1-minute buffer via IsTokenValid().
+// The 9-minute gap is safe by design: when IsTokenExpired triggers here, the parent
+// transitions Running → Starting, which causes children to stop (they are not in ChildStartStates
+// while the parent is Starting). Children never push or pull during the refresh window.
+// The children's 1-minute buffer is a last-resort safety net for edge cases only.
+func (s TransportStatus) IsTokenExpired() bool {
+	if s.JWTExpiry.IsZero() {
+		return false
+	}
+
+	const refreshBuffer = 10 * time.Minute
+
+	return time.Now().Add(refreshBuffer).After(s.JWTExpiry)
+}
+
+// HasValidToken returns true if there is a valid JWT token that hasn't expired.
+func (s TransportStatus) HasValidToken() bool {
+	return s.JWTToken != "" && !s.IsTokenExpired()
+}
