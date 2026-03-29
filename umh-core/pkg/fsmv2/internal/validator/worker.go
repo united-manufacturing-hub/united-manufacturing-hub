@@ -531,6 +531,7 @@ func checkFrameworkMetricsCopy(filename string) []Violation {
 
 		hasGetDependencies := false
 		hasGetFrameworkState := false
+		hasNewObservation := false
 
 		ast.Inspect(funcDecl.Body, func(bodyNode ast.Node) bool {
 			callExpr, ok := bodyNode.(*ast.CallExpr)
@@ -544,11 +545,18 @@ func checkFrameworkMetricsCopy(filename string) []Violation {
 					hasGetDependencies = true
 				case "GetFrameworkState":
 					hasGetFrameworkState = true
+				case "NewObservation":
+					hasNewObservation = true
 				}
 			}
 
 			return true
 		})
+
+		// NewObservation workers: the collector handles framework metrics after COS returns.
+		if hasNewObservation {
+			return true
+		}
 
 		if hasGetDependencies && !hasGetFrameworkState {
 			pos := fset.Position(funcDecl.Pos())
@@ -777,6 +785,7 @@ func checkActionHistoryCopy(filename string) []Violation {
 
 		hasGetDependencies := false
 		hasGetActionHistory := false
+		hasNewObservation := false
 
 		ast.Inspect(funcDecl.Body, func(bodyNode ast.Node) bool {
 			callExpr, ok := bodyNode.(*ast.CallExpr)
@@ -790,11 +799,18 @@ func checkActionHistoryCopy(filename string) []Violation {
 					hasGetDependencies = true
 				case "GetActionHistory":
 					hasGetActionHistory = true
+				case "NewObservation":
+					hasNewObservation = true
 				}
 			}
 
 			return true
 		})
+
+		// NewObservation workers: the collector handles action history after COS returns.
+		if hasNewObservation {
+			return true
+		}
 
 		if hasGetDependencies && !hasGetActionHistory {
 			pos := fset.Position(funcDecl.Pos())

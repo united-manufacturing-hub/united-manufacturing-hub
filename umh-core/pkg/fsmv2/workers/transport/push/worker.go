@@ -18,7 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
+	"reflect"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
@@ -27,15 +27,15 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/push/snapshot"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/push/state"
 
 	transport_pkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport"
 )
 
+const workerType = "push"
+
 var _ fsmv2.Worker = (*PushWorker)(nil)
 
-// PushWorker implements the FSM v2 Worker interface for outbound message pushing.
+// PushWorker implements the FSM Worker interface for outbound message pushing.
 // It drains the outbound channel and pushes messages to the backend relay server.
 // PushWorker is a child of TransportWorker and shares its parent's JWT token and transport.
 type PushWorker struct {
@@ -57,11 +57,6 @@ func NewPushWorker(
 	}
 
 	if identity.WorkerType == "" {
-		workerType, err := storage.DeriveWorkerType[snapshot.PushObservedState]()
-		if err != nil {
-			return nil, fmt.Errorf("failed to derive worker type: %w", err)
-		}
-
 		identity.WorkerType = workerType
 	}
 
@@ -78,7 +73,8 @@ func NewPushWorker(
 }
 
 // CollectObservedState snapshots the current push worker state.
-// Handles context cancellation at entry as required by architecture tests.
+// Returns NewObservation — the collector handles CollectedAt, framework metrics,
+// action history, and metric accumulation automatically after COS returns.
 func (w *PushWorker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
 	select {
 	case <-ctx.Done():
@@ -88,59 +84,16 @@ func (w *PushWorker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredSt
 
 	d := w.GetDependencies()
 
-	observed := snapshot.PushObservedState{
-		CollectedAt:   time.Now(),
-		HasTransport:  d.GetTransport() != nil,
-		HasValidToken: d.IsTokenValid(),
-	}
-
-	observed.ConsecutiveErrors = d.GetConsecutiveErrors()
-	observed.PendingMessageCount = d.PendingMessageCount()
-	observed.LastErrorType = d.GetLastErrorType()
-	observed.LastRetryAfter = d.GetLastRetryAfter()
-	observed.DegradedEnteredAt = d.GetDegradedEnteredAt()
-	observed.LastErrorAt = d.GetLastErrorAt()
-
-	var prevWorkerMetrics deps.Metrics
-
-	stateReader := d.GetStateReader()
-	if stateReader != nil {
-		var prev snapshot.PushObservedState
-		if err := stateReader.LoadObservedTyped(ctx, d.GetWorkerType(), d.GetWorkerID(), &prev); err == nil {
-			prevWorkerMetrics = prev.Metrics.Worker
-		} else {
-			d.GetLogger().Debug("observed_state_load_failed", deps.Err(err))
-		}
-	}
-
-	newWorkerMetrics := prevWorkerMetrics
-	if newWorkerMetrics.Counters == nil {
-		newWorkerMetrics.Counters = make(map[string]int64)
-	}
-
-	if newWorkerMetrics.Gauges == nil {
-		newWorkerMetrics.Gauges = make(map[string]float64)
-	}
-
-	tickMetrics := d.MetricsRecorder().Drain()
-
-	for name, delta := range tickMetrics.Counters {
-		newWorkerMetrics.Counters[name] += delta
-	}
-
-	for name, value := range tickMetrics.Gauges {
-		newWorkerMetrics.Gauges[name] = value
-	}
-
-	observed.Metrics.Worker = newWorkerMetrics
-
-	if fm := d.GetFrameworkState(); fm != nil {
-		observed.Metrics.Framework = *fm
-	}
-
-	observed.LastActionResults = d.GetActionHistory()
-
-	return observed, nil
+	return fsmv2.NewObservation(PushStatus{
+		HasTransport:        d.GetTransport() != nil,
+		HasValidToken:       d.IsTokenValid(),
+		ConsecutiveErrors:   d.GetConsecutiveErrors(),
+		PendingMessageCount: d.PendingMessageCount(),
+		LastErrorType:       d.GetLastErrorType(),
+		LastRetryAfter:      d.GetLastRetryAfter(),
+		DegradedEnteredAt:   d.GetDegradedEnteredAt(),
+		LastErrorAt:         d.GetLastErrorAt(),
+	}), nil
 }
 
 // DeriveDesiredState determines the desired state from the provided spec.
@@ -148,7 +101,7 @@ func (w *PushWorker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredSt
 // Must be PURE — only uses the spec parameter, never dependencies.
 func (w *PushWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
 	if spec == nil {
-		return &snapshot.PushDesiredState{
+		return &fsmv2.WrappedDesiredState[PushConfig]{
 			BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
 		}, nil
 	}
@@ -168,23 +121,28 @@ func (w *PushWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, e
 		Variables: userSpec.Variables,
 	}
 
-	leafDesired, err := config.DeriveLeafState[PushUserSpec](renderedSpec)
+	leafDesired, err := config.DeriveLeafState[PushConfig](renderedSpec)
 	if err != nil {
 		return nil, err
 	}
 
-	return &snapshot.PushDesiredState{
+	return &fsmv2.WrappedDesiredState[PushConfig]{
 		BaseDesiredState: leafDesired.BaseDesiredState,
 	}, nil
 }
 
-// GetInitialState returns StoppedState as the push worker's initial FSM state.
+// GetInitialState returns the registered initial state for the push worker.
 func (w *PushWorker) GetInitialState() fsmv2.State[any, any] {
-	return &state.StoppedState{}
+	s := fsmv2.LookupInitialState(workerType)
+	if s == nil {
+		panic(fmt.Sprintf("no initial state registered for worker type %q", workerType))
+	}
+	return s
 }
 
 func init() {
-	if err := factory.RegisterWorkerType[snapshot.PushObservedState, *snapshot.PushDesiredState](
+	if err := factory.RegisterWorkerAndSupervisorFactoryByType(
+		workerType,
 		func(id deps.Identity, logger deps.FSMLogger, stateReader deps.StateReader, extraDeps map[string]any) fsmv2.Worker {
 			parentDepsRaw, ok := extraDeps["transport_deps"]
 			if !ok {
@@ -204,10 +162,17 @@ func init() {
 			return worker
 		},
 		func(cfg interface{}) interface{} {
-			return supervisor.NewSupervisor[snapshot.PushObservedState, *snapshot.PushDesiredState](
+			return supervisor.NewSupervisor[fsmv2.Observation[PushStatus], *fsmv2.WrappedDesiredState[PushConfig]](
 				cfg.(supervisor.Config))
 		},
 	); err != nil {
 		panic(fmt.Sprintf("failed to register push worker: %v", err))
+	}
+
+	observedType := reflect.TypeOf(fsmv2.Observation[PushStatus]{})
+	desiredType := reflect.TypeOf(fsmv2.WrappedDesiredState[PushConfig]{})
+
+	if err := storage.GlobalRegistry().RegisterWorkerType(workerType, observedType, desiredType); err != nil {
+		panic(fmt.Sprintf("failed to register push CSE types: %v", err))
 	}
 }
