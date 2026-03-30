@@ -21,7 +21,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 )
 
 // CPUCgroupInfo contains cgroup v2 CPU metrics including throttling information.
@@ -137,13 +136,6 @@ func (c *ContainerMonitorService) getCgroupCPUInfo(ctx context.Context) (*CPUCgr
 	info.NrPeriods = nrPeriods
 	info.NrThrottled = nrThrottled
 	info.ThrottledUsec = throttledUsec
-
-	// Calculate throttle ratio
-	if info.NrPeriods > 0 {
-		info.ThrottleRatio = float64(info.NrThrottled) / float64(info.NrPeriods)
-		// Consider throttled if throttle ratio exceeds threshold
-		info.IsThrottled = info.ThrottleRatio > constants.CPUThrottleRatioThreshold
-	}
 
 	return info, nil
 }

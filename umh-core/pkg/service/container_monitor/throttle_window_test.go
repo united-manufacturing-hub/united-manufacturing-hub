@@ -125,9 +125,9 @@ var _ = Describe("updateThrottleWindow", func() {
 		It("should remove entries older than the throttle window", func() {
 			now := time.Now()
 			svc.throttleSnapshots = []cgroupSnapshot{
-				{timestamp: now.Add(-10 * time.Second), nrPeriods: 500, nrThrottled: 25},
-				{timestamp: now.Add(-8 * time.Second), nrPeriods: 600, nrThrottled: 30},
-				{timestamp: now.Add(-3 * time.Second), nrPeriods: 900, nrThrottled: 45},
+				{timestamp: now.Add(-120 * time.Second), nrPeriods: 500, nrThrottled: 25},
+				{timestamp: now.Add(-90 * time.Second), nrPeriods: 600, nrThrottled: 30},
+				{timestamp: now.Add(-30 * time.Second), nrPeriods: 900, nrThrottled: 45},
 			}
 
 			svc.updateThrottleWindow(&CPUCgroupInfo{

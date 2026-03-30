@@ -51,7 +51,7 @@ const (
 	CPUThrottleRatioThreshold = 0.05
 
 	// CPUThrottleWindow defines the sliding window duration for throttle ratio calculation.
-	// At the 5% threshold, a 5-second window requires ~250ms of sustained throttling
-	// (2-3 CFS periods) before flagging degraded, filtering out transient spikes.
-	CPUThrottleWindow = 5 * time.Second
+	// 60 seconds aligns with Prometheus/K8s rate windows for counter-derived metrics
+	// and avoids rapid Degraded/Active flips during bursty throttle events.
+	CPUThrottleWindow = 60 * time.Second
 )

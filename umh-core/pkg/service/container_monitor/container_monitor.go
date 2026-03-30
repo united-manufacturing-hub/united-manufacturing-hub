@@ -76,6 +76,7 @@ type ContainerMonitorService struct {
 	architecture      models.ContainerArchitecture //nolint:unused // will be used in the future
 	dataPath          string                       // Path to check for disk metrics and HWID file
 	throttleSnapshots []cgroupSnapshot             // Sliding window of cgroup counter snapshots
+	wasThrottled      bool                         // Previous throttle state for transition logging
 }
 
 // NewContainerMonitorService creates a new container monitor service instance.
@@ -290,10 +291,11 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 		message = "CPU utilization warning"
 	}
 
-	// Log throttling warnings
-	if isThrottled && cgroupInfo != nil {
+	// Log only on false→true transition to avoid flooding stdout
+	if isThrottled && !c.wasThrottled && cgroupInfo != nil {
 		c.logger.Warnf("CPU throttling detected: %.1f%% of periods throttled", cgroupInfo.ThrottleRatio*100)
 	}
+	c.wasThrottled = isThrottled
 
 	cpuStat := &models.CPU{
 		Health: &models.Health{
