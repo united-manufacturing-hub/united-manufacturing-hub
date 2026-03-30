@@ -1247,6 +1247,11 @@ func (m *MockConfigManager) WriteYAMLConfigFromString(ctx context.Context, confi
 	return nil
 }
 
+// GetBackupCount returns 0 for the mock (no real backups are created).
+func (m *MockConfigManager) GetBackupCount() uint64 {
+	return 0
+}
+
 // IsGetConfigCalled returns true if GetConfig has been called (thread-safe).
 func (m *MockConfigManager) IsGetConfigCalled() bool {
 	return atomic.LoadInt32(&m.GetConfigCalled) != 0

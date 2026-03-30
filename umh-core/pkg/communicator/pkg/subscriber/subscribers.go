@@ -51,6 +51,8 @@ type Handler struct {
 	disableHardwareStatusCheck bool //nolint:unused // will be used in the future
 }
 
+// NewHandler creates a subscriber handler that manages instance subscriptions
+// and coordinates status collection with the management console.
 func NewHandler(
 	dog watchdog.Iface,
 	pusher *push.Pusher,
@@ -64,6 +66,7 @@ func NewHandler(
 	logger *zap.SugaredLogger,
 	topicBrowserCommunicator *topicbrowser.TopicBrowserCommunicator,
 	fsmOutboundChannel chan<- *transport.UMHMessage, // FSMv2 direct channel (nil for legacy mode)
+	featureUsage *models.FeatureUsage,
 ) *Handler {
 	s := &Handler{}
 	s.subscriberRegistry = subscribers.NewRegistry(cull, ttl)
@@ -81,6 +84,7 @@ func NewHandler(
 		configManager,
 		logger,
 		topicBrowserCommunicator,
+		featureUsage,
 	)
 
 	return s
