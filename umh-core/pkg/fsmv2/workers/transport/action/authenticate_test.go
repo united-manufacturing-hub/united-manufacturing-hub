@@ -17,6 +17,7 @@ package action_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -25,8 +26,8 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
 	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/action"
 	transportpkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/action"
 )
 
 var _ = Describe("AuthenticateAction", func() {
@@ -199,10 +200,13 @@ var _ = Describe("AuthenticateAction", func() {
 			ctx := context.Background()
 			beforeExec := time.Now()
 
-			// Use a failing auth to test timestamp recording (success clears it)
-			mockTransp.authError = errors.New("auth failed")
+			// Use a classified TransportError to test timestamp recording
+			mockTransp.authError = &httpTransport.TransportError{
+				Type:    httpTransport.ErrorTypeNetwork,
+				Message: "connection refused",
+			}
 			err := act.Execute(ctx, dependencies)
-			Expect(err).To(HaveOccurred())
+			Expect(err).NotTo(HaveOccurred())
 
 			afterExec := time.Now()
 			attemptTime := dependencies.GetLastAuthAttemptAt()
@@ -213,7 +217,7 @@ var _ = Describe("AuthenticateAction", func() {
 			mockTransp.authError = nil
 		})
 
-		It("should record typed error on transport failure", func() {
+		It("should suppress auth errors and still record typed error", func() {
 			ctx := context.Background()
 			mockTransp.authError = &httpTransport.TransportError{
 				Type:       httpTransport.ErrorTypeBackendRateLimit,
@@ -222,15 +226,55 @@ var _ = Describe("AuthenticateAction", func() {
 			}
 
 			err := act.Execute(ctx, dependencies)
-			Expect(err).To(HaveOccurred())
+			Expect(err).NotTo(HaveOccurred())
 
 			Expect(dependencies.GetLastErrorType()).To(Equal(httpTransport.ErrorTypeBackendRateLimit))
 		})
 
+		It("should propagate non-TransportError (programming bug)", func() {
+			ctx := context.Background()
+			mockTransp.authError = errors.New("unexpected programming error")
+
+			err := act.Execute(ctx, dependencies)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("unexpected programming error"))
+		})
+
+		It("should suppress TransportError with ErrorTypeUnknown (operational error)", func() {
+			ctx := context.Background()
+			// ErrorTypeUnknown TransportErrors represent operational issues (e.g., JSON decode
+			// failure from relay, unrecognized HTTP status). They ARE TransportErrors and should
+			// be tracked and suppressed, unlike plain errors.
+			mockTransp.authError = &httpTransport.TransportError{
+				Type:    httpTransport.ErrorTypeUnknown,
+				Message: "failed to decode auth response",
+			}
+
+			err := act.Execute(ctx, dependencies)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(dependencies.GetConsecutiveErrors()).To(Equal(1))
+		})
+
+		It("should suppress wrapped TransportError via errors.As unwrapping", func() {
+			ctx := context.Background()
+			innerErr := &httpTransport.TransportError{
+				Type:    httpTransport.ErrorTypeNetwork,
+				Message: "connection refused",
+			}
+			mockTransp.authError = fmt.Errorf("auth request failed: %w", innerErr)
+
+			err := act.Execute(ctx, dependencies)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(dependencies.GetLastErrorType()).To(Equal(httpTransport.ErrorTypeNetwork))
+		})
+
 		It("should record success and reset error state on successful auth", func() {
 			ctx := context.Background()
-			// First, simulate an error to set error state
-			mockTransp.authError = errors.New("temporary error")
+			// First, simulate a classified error to set error state
+			mockTransp.authError = &httpTransport.TransportError{
+				Type:    httpTransport.ErrorTypeNetwork,
+				Message: "connection refused",
+			}
 			_ = act.Execute(ctx, dependencies)
 			Expect(dependencies.GetConsecutiveErrors()).To(BeNumerically(">", 0))
 
@@ -257,22 +301,106 @@ var _ = Describe("AuthenticateAction", func() {
 			}
 
 			err := act.Execute(ctx, dependencies)
-			Expect(err).To(HaveOccurred())
+			Expect(err).NotTo(HaveOccurred())
 
 			// Metrics are recorded via MetricsRecorder, which is tested separately
-			// This test verifies the action returns error as expected
+			// This test verifies the action suppresses auth errors
+		})
+	})
+
+	Describe("Auth Error Suppression", func() {
+		It("should suppress persistent auth errors (InvalidToken)", func() {
+			ctx := context.Background()
+			mockTransp.authError = &httpTransport.TransportError{
+				Type:    httpTransport.ErrorTypeInvalidToken,
+				Message: "invalid credentials",
+			}
+
+			err := act.Execute(ctx, dependencies)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(dependencies.GetLastErrorType()).To(Equal(httpTransport.ErrorTypeInvalidToken))
+			Expect(dependencies.GetConsecutiveErrors()).To(Equal(1))
+		})
+
+		It("should suppress persistent auth errors (InstanceDeleted)", func() {
+			ctx := context.Background()
+			mockTransp.authError = &httpTransport.TransportError{
+				Type:    httpTransport.ErrorTypeInstanceDeleted,
+				Message: "instance not found",
+			}
+
+			err := act.Execute(ctx, dependencies)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(dependencies.GetLastErrorType()).To(Equal(httpTransport.ErrorTypeInstanceDeleted))
+			Expect(dependencies.GetConsecutiveErrors()).To(Equal(1))
+		})
+
+		It("should fire SentryWarn on first occurrence only", func() {
+			ctx := context.Background()
+			spy := &spyLogger{FSMLogger: deps.NewNopFSMLogger()}
+			identity := deps.Identity{ID: "test-spy", WorkerType: "transport"}
+			spyDeps := transportpkg.NewTransportDependencies(mockTransp, spy, nil, identity)
+
+			mockTransp.authError = &httpTransport.TransportError{
+				Type:    httpTransport.ErrorTypeNetwork,
+				Message: "connection refused",
+			}
+
+			// First failure: consecutiveErrors 0 -> 1, SentryWarn fires
+			err := act.Execute(ctx, spyDeps)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(spyDeps.GetConsecutiveErrors()).To(Equal(1))
+
+			// Second failure: consecutiveErrors 1 -> 2, SentryWarn does NOT fire
+			err = act.Execute(ctx, spyDeps)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(spyDeps.GetConsecutiveErrors()).To(Equal(2))
+
+			// Third failure: consecutiveErrors 2 -> 3, SentryWarn does NOT fire
+			err = act.Execute(ctx, spyDeps)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(spyDeps.GetConsecutiveErrors()).To(Equal(3))
+
+			// SentryWarn was called exactly once (on first failure)
+			Expect(spy.sentryWarnCount).To(Equal(1))
+			Expect(spy.sentryWarnMsgs).To(HaveLen(1))
+			Expect(spy.sentryWarnMsgs[0]).To(Equal("authentication_failed"))
+		})
+
+		It("should propagate context cancellation during Authenticate", func() {
+			ctx, cancel := context.WithCancel(context.Background())
+			// Cancel inside Authenticate() to exercise the post-Authenticate ctx.Err() branch,
+			// not the top-of-method guard (which is tested in "Context Cancellation" above).
+			mockTransp.cancelDuringAuth = cancel
+			mockTransp.authError = &httpTransport.TransportError{
+				Type:    httpTransport.ErrorTypeNetwork,
+				Message: "connection refused",
+			}
+
+			err := act.Execute(ctx, dependencies)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("context canceled"))
+			// Verify RecordTypedError was NOT called (ctx.Err() short-circuits before recording)
+			Expect(dependencies.GetConsecutiveErrors()).To(Equal(0))
 		})
 	})
 })
 
 type mockTransport struct {
-	authCallCount int
-	authResponse  transport.AuthResponse
-	authError     error
+	authCallCount    int
+	authResponse     transport.AuthResponse
+	authError        error
+	cancelDuringAuth context.CancelFunc
 }
 
 func (m *mockTransport) Authenticate(ctx context.Context, req transport.AuthRequest) (transport.AuthResponse, error) {
 	m.authCallCount++
+
+	if m.cancelDuringAuth != nil {
+		m.cancelDuringAuth()
+	}
 
 	if m.authError != nil {
 		return transport.AuthResponse{}, m.authError
@@ -294,3 +422,18 @@ func (m *mockTransport) Close() {
 
 func (m *mockTransport) Reset() {
 }
+
+// spyLogger wraps NopFSMLogger to count SentryWarn calls.
+// Test-local: only used by "should fire SentryWarn on first occurrence only".
+type spyLogger struct {
+	deps.FSMLogger
+	sentryWarnCount int
+	sentryWarnMsgs  []string
+}
+
+func (s *spyLogger) SentryWarn(_ deps.Feature, _ string, msg string, _ ...deps.Field) {
+	s.sentryWarnCount++
+	s.sentryWarnMsgs = append(s.sentryWarnMsgs, msg)
+}
+
+func (s *spyLogger) With(_ ...deps.Field) deps.FSMLogger { return s }

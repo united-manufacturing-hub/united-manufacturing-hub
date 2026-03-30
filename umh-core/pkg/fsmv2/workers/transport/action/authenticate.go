@@ -17,6 +17,7 @@ package action
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	depspkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
@@ -37,7 +38,9 @@ const (
 // Idempotent: safe to retry on failure, multiple calls won't create multiple tokens.
 // Creates transport on first execution if not present.
 //
-// Returns error on network failure, invalid credentials (non-200), or malformed response.
+// Returns nil on classified TransportError (tracked via deps for snapshot-based backoff).
+// Returns error on context cancellation, invalid dependency type, or non-TransportError
+// (programming bugs that must propagate to the executor).
 //
 // Architecture compliance:
 //   - Struct fields are read-only config (no mutable state) - Stateless Actions
@@ -97,20 +100,38 @@ func (a *AuthenticateAction) Execute(ctx context.Context, depsAny any) error {
 
 	authResp, err := deps.GetTransport().Authenticate(ctx, authReq)
 	if err != nil {
-		var transportErr *httpTransport.TransportError
-		if errors.As(err, &transportErr) {
-			deps.RecordTypedError(transportErr.Type, transportErr.RetryAfter)
-			deps.MetricsRecorder().IncrementCounter(httpTransport.CounterForErrorType(transportErr.Type), 1)
-			deps.GetLogger().SentryWarn(depspkg.FeatureCommunicator, deps.GetHierarchyPath(), "authentication_failed",
-				depspkg.Err(err), depspkg.String("errorType", transportErr.Type.String()))
-		} else {
-			deps.RecordTypedError(httpTransport.ErrorTypeNetwork, 0)
-			deps.MetricsRecorder().IncrementCounter(depspkg.CounterNetworkErrorsTotal, 1)
-			deps.GetLogger().SentryWarn(depspkg.FeatureCommunicator, deps.GetHierarchyPath(), "authentication_failed",
-				depspkg.Err(err))
+		// Context cancellation propagates immediately for shutdown.
+		if ctx.Err() != nil {
+			return fmt.Errorf("authentication failed (context canceled): %w", ctx.Err())
 		}
 
-		return err
+		// Only suppress classified TransportErrors. Non-TransportErrors are programming
+		// bugs that must propagate to the executor for SentryError.
+		// Note: unlike push/pull (which only suppress transient errors), auth suppresses
+		// ALL classified TransportErrors because persistent auth errors are handled via
+		// snapshot-based state transitions (AuthFailedState), not error propagation.
+		var transportErr *httpTransport.TransportError
+		if !errors.As(err, &transportErr) {
+			return err
+		}
+
+		errType, retryAfter := transportErr.Type, transportErr.RetryAfter
+		deps.RecordTypedError(errType, retryAfter)
+		deps.MetricsRecorder().IncrementCounter(httpTransport.CounterForErrorType(errType), 1)
+
+		// First-occurrence SentryWarn: alert once per failure episode, not on every retry.
+		// Resets when RecordSuccess() clears consecutiveErrors to 0.
+		if deps.GetConsecutiveErrors() == 1 {
+			deps.GetLogger().SentryWarn(depspkg.FeatureCommunicator, deps.GetHierarchyPath(), "authentication_failed",
+				depspkg.Err(err), depspkg.String("errorType", errType.String()))
+		}
+
+		// Return nil for classified TransportErrors. The state machine reads ConsecutiveErrors
+		// and LastErrorType from the snapshot for backoff decisions (StartingState.Next()).
+		// Returning nil suppresses the executor's SentryError("action_failed"), which is
+		// appropriate because auth failures are expected business errors, not programming
+		// errors.
+		return nil
 	}
 
 	deps.RecordSuccess()
