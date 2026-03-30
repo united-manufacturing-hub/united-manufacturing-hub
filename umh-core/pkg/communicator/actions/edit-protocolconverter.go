@@ -478,15 +478,10 @@ func (a *EditProtocolConverterAction) applyMutation(readBenthosConfig, writeBent
 		instanceToModify.ProtocolConverterServiceConfig.WriteDFCDesiredState = a.writeDFCState
 	}
 
-	// Derive the PC-level FSM state from the per-DFC states.
-	// For DFCTypeEmpty (connection/location-only edits) the new states are empty,
-	// so we fall back to the existing spec values via derivePCDesiredState.
-	instanceToModify.DesiredFSMState = derivePCDesiredState(
-		a.readDFCState,
-		a.writeDFCState,
-		instanceToModify.ProtocolConverterServiceConfig.ReadDFCDesiredState,
-		instanceToModify.ProtocolConverterServiceConfig.WriteDFCDesiredState,
-	)
+	// The PC is always active so that the connection monitor stays alive.
+	// Individual DFC states are tracked separately; the bridge (and its
+	// connection monitor) is only torn down when the bridge itself is removed.
+	instanceToModify.DesiredFSMState = protocolconverter.OperationalStateActive
 
 	return instanceToModify, atomicEditUUID, instanceToModify.DesiredFSMState, nil
 }
@@ -1113,22 +1108,3 @@ func validateProtocolConverterDFC(dfc *models.ProtocolConverterDFC, label string
 	return nil
 }
 
-// derivePCDesiredState computes the protocol converter desired state from per-DFC states.
-// newRead/newWrite are the states from the current action (may be empty).
-// existingRead/existingWrite are the states already stored in the spec (fallback).
-// The PC is stopped only when both effective DFC states are "stopped".
-func derivePCDesiredState(newRead, newWrite, existingRead, existingWrite string) string {
-	effectiveRead := newRead
-	if effectiveRead == "" {
-		effectiveRead = existingRead
-	}
-	effectiveWrite := newWrite
-	if effectiveWrite == "" {
-		effectiveWrite = existingWrite
-	}
-	if effectiveRead == protocolconverter.OperationalStateStopped &&
-		effectiveWrite == protocolconverter.OperationalStateStopped {
-		return protocolconverter.OperationalStateStopped
-	}
-	return protocolconverter.OperationalStateActive
-}

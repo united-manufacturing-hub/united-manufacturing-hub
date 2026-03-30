@@ -484,6 +484,18 @@ func (p *ProtocolConverterInstance) IsDFCHealthy() (bool, string) {
 	return false, statusReason
 }
 
+// areBothDFCsIntentionallyStopped returns true when both the read and write DFC
+// desired states are set to stopped and at least one of them has a config deployed.
+func (p *ProtocolConverterInstance) areBothDFCsIntentionallyStopped() bool {
+	if p.specConfig.ReadDFCDesiredState != OperationalStateStopped ||
+		p.specConfig.WriteDFCDesiredState != OperationalStateStopped {
+		return false
+	}
+	readHasConfig := len(p.specConfig.Config.DataflowComponentReadServiceConfig.BenthosConfig.Input) > 0
+	writeHasConfig := len(p.specConfig.Config.DataflowComponentWriteServiceConfig.BenthosConfig.Output) > 0
+	return readHasConfig || writeHasConfig
+}
+
 // stateOrNotExisting returns the state string, or "not existing" if empty.
 func stateOrNotExisting(state string) string {
 	if state == "" {

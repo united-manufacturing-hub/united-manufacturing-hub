@@ -312,7 +312,7 @@ func (a *DeployProtocolConverterAction) createProtocolConverterConfig() (config.
 	return config.ProtocolConverterConfig{
 		FSMInstanceConfig: config.FSMInstanceConfig{
 			Name:            a.payload.Name,
-			DesiredFSMState: derivePCDesiredState(readDFCDesiredState, writeDFCDesiredState, "", ""),
+			DesiredFSMState: protocolconverter.OperationalStateActive,
 		},
 		ProtocolConverterServiceConfig: spec,
 	}, nil
