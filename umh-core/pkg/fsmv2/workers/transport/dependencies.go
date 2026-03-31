@@ -223,7 +223,7 @@ func (d *TransportDependencies) GetOutboundChan() <-chan *communicator_transport
 func (d *TransportDependencies) GetInboundChanStats() (capacity int, length int) {
 	provider := GetChannelProvider()
 	if provider == nil {
-		d.GetLogger().SentryWarn(deps.FeatureCommunicator, d.GetHierarchyPath(), "channel_provider_not_initialized",
+		d.GetLogger().SentryWarn(deps.FeatureForWorker(d.GetWorkerType()), d.GetHierarchyPath(), "channel_provider_not_initialized",
 			deps.WorkerID(d.GetWorkerID()))
 
 		return 0, 0

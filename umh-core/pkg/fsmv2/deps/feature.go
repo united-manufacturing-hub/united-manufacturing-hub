@@ -17,13 +17,18 @@ package deps
 // Feature identifies the subsystem for Sentry routing and alerting.
 // Using a typed enum prevents typos at compile time.
 //
-// Each Feature maps to a Sentry alert owner. When adding new subsystems,
-// define a new Feature constant and document the owner.
+// For worker-specific events, use FeatureForWorker(workerType) to auto-generate
+// the feature from the worker's type string. This ensures each worker produces
+// Sentry events under its own feature tag for ownership routing.
+//
+// Static constants below cover non-worker subsystems.
 type Feature string
 
 const (
 	// FeatureFSMv2 covers the FSMv2 supervisor core: lifecycle, reconciliation,
-	// collection, action execution, and health monitoring.
+	// tick panics, circuit breakers, and child management.
+	// Worker-owned events (action_failed, collector_timeout, etc.) use
+	// FeatureForWorker(workerType) instead.
 	FeatureFSMv2 Feature = "fsmv2"
 
 	// FeatureExamples covers example workers used for testing and documentation.
@@ -32,12 +37,6 @@ const (
 	// FeatureCSE covers the CSE (Convergent State Engine) storage layer.
 	FeatureCSE Feature = "cse"
 
-	// FeatureCommunicator covers the communicator worker for external communication.
-	FeatureCommunicator Feature = "communicator"
-
-	// FeaturePersistence covers the persistence layer for state storage.
-	FeaturePersistence Feature = "persistence"
-
 	// FeatureFSMv1ConfigManager covers the FSMv1 config manager: config loading,
 	// writing, backup, and validation.
 	FeatureFSMv1ConfigManager Feature = "fsmv1_config_manager"
@@ -45,3 +44,10 @@ const (
 	// FeatureDisableReadFlows controls the feature about activating and deactivating read flows.
 	FeatureDisableReadFlows Feature = "disable_read_flows"
 )
+
+// FeatureForWorker returns the Feature for a specific worker type.
+// The feature tag matches the worker type string (e.g., "pull", "push",
+// "certfetcher", "persistence"), enabling per-worker Sentry alert routing.
+func FeatureForWorker(workerType string) Feature {
+	return Feature(workerType)
+}

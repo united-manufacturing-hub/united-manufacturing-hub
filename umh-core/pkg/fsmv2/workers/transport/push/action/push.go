@@ -209,7 +209,7 @@ func (a *PushAction) retryPending(ctx context.Context, t transport.Transport, pu
 				return pending[i:], fmt.Errorf("pending retry failed (recoverable by parent): %w", err)
 			}
 
-			pushDeps.GetLogger().SentryWarn(depspkg.FeatureCommunicator, pushDeps.GetHierarchyPath(), "dropping_poison_message",
+			pushDeps.GetLogger().SentryWarn(depspkg.FeatureForWorker(pushDeps.GetWorkerType()), pushDeps.GetHierarchyPath(), "dropping_poison_message",
 				depspkg.String("errorType", errType.String()),
 				depspkg.Err(err),
 				depspkg.Int("remaining", len(pending)-i-1))

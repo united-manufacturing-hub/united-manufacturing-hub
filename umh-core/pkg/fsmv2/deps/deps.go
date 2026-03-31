@@ -63,6 +63,8 @@ type Dependencies interface {
 	GetStateReader() StateReader
 	// GetHierarchyPath returns the worker's hierarchy path for Sentry routing.
 	GetHierarchyPath() string
+	// GetWorkerType returns the worker's type identifier for Sentry feature tagging.
+	GetWorkerType() string
 }
 
 // BaseDependencies provides common tools for all workers.

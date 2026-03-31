@@ -246,7 +246,7 @@ func NewSupervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState](c
 		deps.Duration("stale_threshold", staleThreshold),
 		deps.Duration("collector_timeout", timeout))
 
-	freshnessChecker := health.NewFreshnessChecker(staleThreshold, timeout, cfg.Logger)
+	freshnessChecker := health.NewFreshnessChecker(staleThreshold, timeout, cfg.WorkerType, cfg.Logger)
 
 	lm := lockmanager.NewLockManager()
 

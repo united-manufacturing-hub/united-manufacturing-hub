@@ -110,6 +110,10 @@ func (m *mockPushDeps) GetHierarchyPath() string {
 	return ""
 }
 
+func (m *mockPushDeps) GetWorkerType() string {
+	return "push"
+}
+
 func (m *mockPushDeps) GetOutboundChan() <-chan *transport.UMHMessage {
 	return m.outboundChan
 }

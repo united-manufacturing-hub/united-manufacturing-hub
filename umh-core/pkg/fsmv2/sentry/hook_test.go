@@ -1358,7 +1358,7 @@ var _ = Describe("FSMLogger to Sentry Event Mapping", func() {
 	})
 
 	It("SentryError with hierarchy_path derives fsm_version, worker_type, and worker_chain", func() {
-		fsmLogger.SentryError(deps.FeatureCommunicator, "app(application)/worker(communicator)", io.EOF, "action_failed")
+		fsmLogger.SentryError(deps.FeatureForWorker("communicator"), "app(application)/worker(communicator)", io.EOF, "action_failed")
 
 		Eventually(func() int {
 			return store.Len()
