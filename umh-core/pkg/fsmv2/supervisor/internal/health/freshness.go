@@ -26,9 +26,9 @@ import (
 // FreshnessChecker validates observation data age against thresholds.
 type FreshnessChecker struct {
 	logger         deps.FSMLogger
+	workerType     string
 	staleThreshold time.Duration
 	timeout        time.Duration
-	workerType     string
 }
 
 // NewFreshnessChecker creates a checker with the given thresholds.
