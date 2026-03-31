@@ -17,10 +17,8 @@ package deps
 // Feature identifies the subsystem for Sentry routing and alerting.
 // Using a typed enum prevents typos at compile time.
 //
-// For worker-specific events, use FeatureForWorker(workerType) to auto-generate
-// the feature from the worker's type string. This ensures each worker produces
-// Sentry events under its own feature tag for ownership routing.
-//
+// Worker-specific events use [FeatureForWorker] to derive the feature
+// from the worker's type string (e.g., "pull", "push", "certfetcher").
 // Static constants below cover non-worker subsystems.
 type Feature string
 
@@ -46,8 +44,8 @@ const (
 )
 
 // FeatureForWorker returns the Feature for a specific worker type.
-// The feature tag matches the worker type string (e.g., "pull", "push",
-// "certfetcher", "persistence"), enabling per-worker Sentry alert routing.
+// The returned feature tag matches the worker type string (e.g., "pull",
+// "push", "certfetcher"), so each worker's Sentry events route separately.
 func FeatureForWorker(workerType string) Feature {
 	return Feature(workerType)
 }

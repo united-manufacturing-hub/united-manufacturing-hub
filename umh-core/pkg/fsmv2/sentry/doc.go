@@ -40,15 +40,15 @@
 //   - Keys matching a sensitive-name denylist (password, secret, token, etc.)
 //   - String values are truncated at 1024 characters
 //
-// # Feature Tags
+// # Feature tags
 //
-// Worker-owned events use auto-generated features via [deps.FeatureForWorker]:
-// each worker produces Sentry events tagged with its own worker type
-// (e.g., feature:pull, feature:push, feature:certfetcher, feature:persistence).
-// Supervisor-internal events (tick panics, circuit breakers) use feature:fsmv2.
+// Each worker's Sentry events are tagged with its own type via
+// [deps.FeatureForWorker] (e.g., feature:pull, feature:push,
+// feature:certfetcher). Supervisor-internal events (tick panics,
+// circuit breakers) use feature:fsmv2.
 //
-// This enables per-worker Sentry ownership routing. Configure ownership rules
-// in Sentry (Settings > Projects > Ownership Rules):
+// Sentry ownership rules route alerts per worker type
+// (Settings > Projects > Ownership Rules):
 //
 //	tags.feature:certfetcher {certfetcher-owner-email}
 //	tags.feature:fsmv2 {fsmv2-owner-email}
