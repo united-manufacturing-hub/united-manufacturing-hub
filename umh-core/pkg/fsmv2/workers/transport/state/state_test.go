@@ -325,6 +325,33 @@ var _ = Describe("TransportWorker States", func() {
 			Expect(result.Action).To(BeNil())
 			Expect(result.Reason).To(ContainSubstring("auth backoff"))
 		})
+
+		It("should apply backoff after transient error even when FailedAuthConfig is empty", func() {
+			desired := &snapshot.TransportDesiredState{
+				BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
+				InstanceUUID:     "test-uuid",
+				AuthToken:        "test-auth-token",
+				RelayURL:         "https://relay.test.com",
+				Timeout:          30 * time.Second,
+			}
+			observed := snapshot.TransportObservedState{
+				CollectedAt:       time.Now(),
+				ConsecutiveErrors: 3,
+				LastErrorType:     httpTransport.ErrorTypeNetwork,
+				LastAuthAttemptAt: time.Now(),
+			}
+
+			Expect(observed.FailedAuthConfig.IsEmpty()).To(BeTrue(),
+				"precondition: FailedAuthConfig must be empty to simulate transient error path")
+
+			snap := fsmv2.Snapshot{Observed: observed, Desired: desired}
+			result := s.Next(snap)
+
+			Expect(result.State).To(BeAssignableToTypeOf(&state.StartingState{}))
+			Expect(result.Action).To(BeNil(),
+				"should NOT dispatch auth during backoff — transient error with empty FailedAuthConfig must still respect backoff")
+			Expect(result.Reason).To(ContainSubstring("auth backoff"))
+		})
 	})
 
 	Describe("RunningState", func() {

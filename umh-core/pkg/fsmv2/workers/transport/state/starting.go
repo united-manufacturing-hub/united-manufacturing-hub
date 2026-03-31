@@ -101,6 +101,9 @@ func isPermanentAuthError(errType httpTransport.ErrorType) bool {
 // to skip stale permanent errors after a config change. AuthFailedState performs the same
 // comparison inline to capture per-field diagnostics in the reason string.
 func authConfigChanged(desired *snapshot.TransportDesiredState, observed snapshot.TransportObservedState) bool {
+	if observed.FailedAuthConfig.IsEmpty() {
+		return false
+	}
 	return desired.AuthToken != observed.FailedAuthConfig.AuthToken ||
 		desired.RelayURL != observed.FailedAuthConfig.RelayURL ||
 		desired.InstanceUUID != observed.FailedAuthConfig.InstanceUUID

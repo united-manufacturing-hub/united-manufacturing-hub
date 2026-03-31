@@ -41,6 +41,9 @@ func (s *AuthFailedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 		return fsmv2.Result[any, any](&StoppingState{}, fsmv2.SignalNone, nil, "Shutdown requested, transitioning to Stopping")
 	}
 
+	// FailedAuthConfig is guaranteed populated here because only permanent errors
+	// (which call SetFailedAuthConfig via the !IsTransient() guard in authenticate.go)
+	// reach AuthFailedState via isPermanentAuthError().
 	tokenChanged := snap.Desired.AuthToken != snap.Observed.FailedAuthConfig.AuthToken
 	relayChanged := snap.Desired.RelayURL != snap.Observed.FailedAuthConfig.RelayURL
 	uuidChanged := snap.Desired.InstanceUUID != snap.Observed.FailedAuthConfig.InstanceUUID
