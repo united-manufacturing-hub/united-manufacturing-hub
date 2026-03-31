@@ -399,6 +399,36 @@ var _ = Describe("AuthenticateAction", func() {
 			// the tracker itself, not through the action's SentryWarn guard.
 		})
 
+		It("should fire persistent_auth_failure SentryWarn after MinSamples consecutive transient errors", func() {
+			spy := &spyLogger{FSMLogger: deps.NewNopFSMLogger()}
+			identity := deps.Identity{ID: "test-spy", WorkerType: "transport"}
+			spyDeps := transportpkg.NewTransportDependencies(mockTransp, spy, nil, identity)
+
+			ctx := context.Background()
+			mockTransp.authError = &httpTransport.TransportError{
+				Type:    httpTransport.ErrorTypeNetwork,
+				Message: "connection refused",
+			}
+
+			for i := 0; i < 4; i++ {
+				err := act.Execute(ctx, spyDeps)
+				Expect(err).NotTo(HaveOccurred())
+			}
+			Expect(spy.sentryWarnMsgs).NotTo(ContainElement("persistent_auth_failure"),
+				"tracker should not fire before MinSamples=5")
+
+			err := act.Execute(ctx, spyDeps)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(spy.sentryWarnMsgs).To(ContainElement("persistent_auth_failure"),
+				"tracker should fire persistent_auth_failure after 5 consecutive failures")
+
+			sentryCountBefore := len(spy.sentryWarnMsgs)
+			err = act.Execute(ctx, spyDeps)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(spy.sentryWarnMsgs).To(HaveLen(sentryCountBefore),
+				"one-shot should not re-fire on 6th failure")
+		})
+
 		It("should propagate context cancellation during Authenticate", func() {
 			ctx, cancel := context.WithCancel(context.Background())
 			// Cancel inside Authenticate() to exercise the post-Authenticate ctx.Err() branch,
