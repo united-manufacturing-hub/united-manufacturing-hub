@@ -308,8 +308,24 @@ var _ = Describe("AuthenticateAction", func() {
 		})
 	})
 
-	Describe("Auth Error Suppression", func() {
-		It("should suppress persistent auth errors (InvalidToken)", func() {
+	Describe("Tiered Auth Error Handling", func() {
+		It("should suppress transient auth errors without SentryWarn from action", func() {
+			ctx := context.Background()
+			mockTransp.authError = &httpTransport.TransportError{
+				Type:    httpTransport.ErrorTypeNetwork,
+				Message: "connection refused",
+			}
+
+			err := act.Execute(ctx, dependencies)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Error is tracked but transient errors don't fire SentryWarn from action.
+			// The failurerate.Tracker in RecordAuthError fires after sustained failures.
+			Expect(dependencies.GetLastErrorType()).To(Equal(httpTransport.ErrorTypeNetwork))
+			Expect(dependencies.GetConsecutiveErrors()).To(Equal(1))
+		})
+
+		It("should fire SentryWarn on first occurrence of persistent error (InvalidToken)", func() {
 			ctx := context.Background()
 			mockTransp.authError = &httpTransport.TransportError{
 				Type:    httpTransport.ErrorTypeInvalidToken,
@@ -319,11 +335,13 @@ var _ = Describe("AuthenticateAction", func() {
 			err := act.Execute(ctx, dependencies)
 			Expect(err).NotTo(HaveOccurred())
 
+			// Persistent errors fire SentryWarn("authentication_failed") on first occurrence
+			// (persistentAuthErrorCount == 1) via the !IsTransient() guard.
 			Expect(dependencies.GetLastErrorType()).To(Equal(httpTransport.ErrorTypeInvalidToken))
 			Expect(dependencies.GetConsecutiveErrors()).To(Equal(1))
 		})
 
-		It("should suppress persistent auth errors (InstanceDeleted)", func() {
+		It("should fire SentryWarn on first occurrence of persistent error (InstanceDeleted)", func() {
 			ctx := context.Background()
 			mockTransp.authError = &httpTransport.TransportError{
 				Type:    httpTransport.ErrorTypeInstanceDeleted,
@@ -337,7 +355,25 @@ var _ = Describe("AuthenticateAction", func() {
 			Expect(dependencies.GetConsecutiveErrors()).To(Equal(1))
 		})
 
-		It("should fire SentryWarn on first occurrence only", func() {
+		It("should not fire SentryWarn on second persistent error", func() {
+			ctx := context.Background()
+			mockTransp.authError = &httpTransport.TransportError{
+				Type:    httpTransport.ErrorTypeInvalidToken,
+				Message: "invalid credentials",
+			}
+
+			// First failure: persistentAuthErrorCount 0 -> 1, SentryWarn fires
+			err := act.Execute(ctx, dependencies)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(dependencies.GetConsecutiveErrors()).To(Equal(1))
+
+			// Second failure: persistentAuthErrorCount 1 -> 2, no SentryWarn (guard: == 1)
+			err = act.Execute(ctx, dependencies)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(dependencies.GetConsecutiveErrors()).To(Equal(2))
+		})
+
+		It("should not fire SentryWarn on repeated transient errors", func() {
 			ctx := context.Background()
 			spy := &spyLogger{FSMLogger: deps.NewNopFSMLogger()}
 			identity := deps.Identity{ID: "test-spy", WorkerType: "transport"}
@@ -348,25 +384,49 @@ var _ = Describe("AuthenticateAction", func() {
 				Message: "connection refused",
 			}
 
-			// First failure: consecutiveErrors 0 -> 1, SentryWarn fires
+			// First transient failure: no SentryWarn from action (IsTransient)
 			err := act.Execute(ctx, spyDeps)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(spyDeps.GetConsecutiveErrors()).To(Equal(1))
 
-			// Second failure: consecutiveErrors 1 -> 2, SentryWarn does NOT fire
+			// Second transient failure: still no SentryWarn from action
 			err = act.Execute(ctx, spyDeps)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(spyDeps.GetConsecutiveErrors()).To(Equal(2))
 
-			// Third failure: consecutiveErrors 2 -> 3, SentryWarn does NOT fire
+			// The failurerate.Tracker will eventually fire persistent_auth_failure
+			// after MinSamples=5 consecutive failures, but that is tested via
+			// the tracker itself, not through the action's SentryWarn guard.
+		})
+
+		It("should fire persistent_auth_failure SentryWarn after MinSamples consecutive transient errors", func() {
+			spy := &spyLogger{FSMLogger: deps.NewNopFSMLogger()}
+			identity := deps.Identity{ID: "test-spy", WorkerType: "transport"}
+			spyDeps := transportpkg.NewTransportDependencies(mockTransp, spy, nil, identity)
+
+			ctx := context.Background()
+			mockTransp.authError = &httpTransport.TransportError{
+				Type:    httpTransport.ErrorTypeNetwork,
+				Message: "connection refused",
+			}
+
+			for i := 0; i < 4; i++ {
+				err := act.Execute(ctx, spyDeps)
+				Expect(err).NotTo(HaveOccurred())
+			}
+			Expect(spy.sentryWarnMsgs).NotTo(ContainElement("persistent_auth_failure"),
+				"tracker should not fire before MinSamples=5")
+
+			err := act.Execute(ctx, spyDeps)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(spy.sentryWarnMsgs).To(ContainElement("persistent_auth_failure"),
+				"tracker should fire persistent_auth_failure after 5 consecutive failures")
+
+			sentryCountBefore := len(spy.sentryWarnMsgs)
 			err = act.Execute(ctx, spyDeps)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(spyDeps.GetConsecutiveErrors()).To(Equal(3))
-
-			// SentryWarn was called exactly once (on first failure)
-			Expect(spy.sentryWarnCount).To(Equal(1))
-			Expect(spy.sentryWarnMsgs).To(HaveLen(1))
-			Expect(spy.sentryWarnMsgs[0]).To(Equal("authentication_failed"))
+			Expect(spy.sentryWarnMsgs).To(HaveLen(sentryCountBefore),
+				"one-shot should not re-fire on 6th failure")
 		})
 
 		It("should propagate context cancellation during Authenticate", func() {

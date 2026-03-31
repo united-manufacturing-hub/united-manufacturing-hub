@@ -10,6 +10,10 @@
 
 - ADS symbol downloads failed in certain configurations -- bumped ADS plugin to v1.0.8 which fixes the issue
 
+### Preview: FSMv2 Communicator
+
+- Brief network interruptions during authentication (DNS failures, server errors) no longer produce Sentry warnings. If authentication keeps failing for five consecutive failures, a single `persistent_auth_failure` warning is logged. Permanent errors like invalid credentials or a deleted instance still warn immediately on first occurrence. Only affects instances with `USE_FSMV2_TRANSPORT=true`
+
 ## [0.44.13]
 
 ### Fixes

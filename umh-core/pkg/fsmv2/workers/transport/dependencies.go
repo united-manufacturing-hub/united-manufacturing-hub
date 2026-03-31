@@ -36,6 +36,25 @@ var ChildFailureRateConfig = failurerate.Config{
 	MinSamples: 100,
 }
 
+// AuthFailureRateConfig controls when the tracker fires a one-shot
+// SentryWarn("persistent_auth_failure") during auth failure episodes.
+//
+// Because auth uses Reset() on success (not RecordOutcome(true)), the
+// window only ever contains failures during an episode. The failure rate
+// is always 100% during failures and 0% after reset. Threshold is
+// therefore irrelevant -- MinSamples alone controls escalation timing.
+//
+// The tracker escalation only matters for sustained transient errors (Network,
+// ServerError, etc.) where the state machine retries indefinitely. For persistent
+// errors (InvalidToken, InstanceDeleted), AuthFailedState stops retries after 1
+// failure, so the tracker never reaches MinSamples.
+// MinSamples=5 at Network's exponential backoff (2-60s) = ~10-30s before escalation.
+var AuthFailureRateConfig = failurerate.Config{
+	WindowSize: 30,
+	Threshold:  0.9,
+	MinSamples: 5,
+}
+
 // ChannelProvider interface and singleton functions are defined in channel_provider.go
 
 // TransportDependencies provides transport and channel access for transport worker actions.
@@ -46,12 +65,14 @@ type TransportDependencies struct {
 	transport communicator_transport.Transport
 
 	*deps.BaseDependencies
-	inboundChan  chan<- *communicator_transport.UMHMessage
-	outboundChan <-chan *communicator_transport.UMHMessage
-	jwtToken     string
-	instanceUUID string
+	authFailureRate *failurerate.Tracker
+	inboundChan     chan<- *communicator_transport.UMHMessage
+	outboundChan    <-chan *communicator_transport.UMHMessage
+	jwtToken        string
+	instanceUUID    string
 
-	lastErrorType httpTransport.ErrorType
+	lastErrorType            httpTransport.ErrorType
+	persistentAuthErrorCount int
 
 	resetGeneration uint64
 
@@ -73,6 +94,7 @@ func NewTransportDependencies(t communicator_transport.Transport, logger deps.FS
 	return &TransportDependencies{
 		BaseDependencies: deps.NewBaseDependencies(logger, stateReader, identity),
 		transport:        t,
+		authFailureRate:  failurerate.New(AuthFailureRateConfig),
 		inboundChan:      inbound,
 		outboundChan:     outbound,
 	}
@@ -125,20 +147,53 @@ func (d *TransportDependencies) RecordError() {
 	d.RetryTracker().RecordError()
 }
 
+// RecordAuthError records a typed auth error and feeds the auth failure rate
+// tracker. If the tracker's one-shot fires (sustained failures crossing the
+// MinSamples threshold), a SentryWarn("persistent_auth_failure") is emitted.
+func (d *TransportDependencies) RecordAuthError(errType httpTransport.ErrorType, retryAfter time.Duration) {
+	d.RecordTypedError(errType, retryAfter)
+
+	if !errType.IsTransient() {
+		d.mu.Lock()
+		d.persistentAuthErrorCount++
+		d.mu.Unlock()
+	}
+
+	if d.authFailureRate.RecordOutcome(false) {
+		d.BaseDependencies.GetLogger().SentryWarn(deps.FeatureCommunicator, d.GetHierarchyPath(), "persistent_auth_failure",
+			deps.String("error_type", errType.String()),
+			deps.Float64("failure_rate", d.authFailureRate.FailureRate()))
+	}
+}
+
 // RecordSuccess resets all error tracking state.
 func (d *TransportDependencies) RecordSuccess() {
 	d.mu.Lock()
-	d.lastErrorType = 0
+	d.lastErrorType = httpTransport.ErrorTypeUnknown
 	d.lastAuthAttemptAt = time.Time{}
+	d.persistentAuthErrorCount = 0
 	d.mu.Unlock()
 
 	d.RetryTracker().RecordSuccess()
+	d.authFailureRate.Reset()
 }
 
 // GetConsecutiveErrors returns the current consecutive error count.
 // Delegates to RetryTracker for single source of truth.
 func (d *TransportDependencies) GetConsecutiveErrors() int {
 	return d.RetryTracker().ConsecutiveErrors()
+}
+
+// GetPersistentAuthErrorCount returns the number of non-transient auth errors
+// (InvalidToken, InstanceDeleted, ProxyBlock, CloudflareChallenge, Unknown)
+// since the last successful auth. Unlike GetConsecutiveErrors which uses the
+// shared RetryTracker (contaminated by child push/pull errors and transient
+// auth errors), this counter is only incremented in RecordAuthError for
+// non-transient errors and reset in RecordSuccess.
+func (d *TransportDependencies) GetPersistentAuthErrorCount() int {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	return d.persistentAuthErrorCount
 }
 
 // GetDegradedEnteredAt returns when degraded mode started, or zero if not degraded.
@@ -182,7 +237,7 @@ func (d *TransportDependencies) GetInboundChanStats() (capacity int, length int)
 //
 // Asymmetry note: child workers propagate errors UP to this tracker via RecordTypedError
 // so the parent sees all child failures and can trigger transport reset decisions. However,
-// child successes do NOT propagate here — only successful auth resets the parent tracker.
+// child successes do NOT propagate here -- only successful auth resets the parent tracker.
 // This means the parent error count grows monotonically from child errors until re-auth.
 func (d *TransportDependencies) RecordTypedError(errType httpTransport.ErrorType, retryAfter time.Duration) {
 	d.mu.Lock()

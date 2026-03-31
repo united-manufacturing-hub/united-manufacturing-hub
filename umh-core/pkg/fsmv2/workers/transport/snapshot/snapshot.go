@@ -43,7 +43,9 @@ type TransportDependencies interface {
 	RecordError()
 	RecordSuccess()
 	RecordTypedError(errType httpTransport.ErrorType, retryAfter time.Duration)
+	RecordAuthError(errType httpTransport.ErrorType, retryAfter time.Duration)
 	GetConsecutiveErrors() int
+	GetPersistentAuthErrorCount() int
 	GetLastErrorType() httpTransport.ErrorType
 	GetLastRetryAfter() time.Duration
 
