@@ -27,7 +27,7 @@ type Feature string
 const (
 	// FeatureFSMv2 covers the FSMv2 supervisor core: lifecycle, reconciliation,
 	// tick panics, circuit breakers, and child management.
-	// Worker-owned events (action_failed, collector_timeout, etc.) use
+	// Worker-owned events (action_failed, collector_observation_failed, etc.) use
 	// FeatureForWorker(workerType) instead.
 	FeatureFSMv2 Feature = "fsmv2"
 
