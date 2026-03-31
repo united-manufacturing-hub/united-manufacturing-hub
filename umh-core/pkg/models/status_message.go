@@ -171,7 +171,8 @@ type Dfc struct {
 }
 
 type DfcMetrics struct {
-	AvgInputThroughputPerMinuteInMsgSec float64 `json:"avgInputThroughputPerMinuteInMsgSec"` // Messages per second, averaged over a minute
+	AvgInputThroughputPerMinuteInMsgSec  float64 `json:"avgInputThroughputPerMinuteInMsgSec"` // Messages per second, averaged over a minute
+	AvgOutputThroughputPerMinuteInMsgSec float64 `json:"avgOutputThroughputPerMinuteInMsgSec"`
 }
 
 // Connection represents a connection to an external system and only exists within a DFC.

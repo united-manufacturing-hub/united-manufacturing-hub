@@ -131,9 +131,10 @@ type Connection struct {
 type DFCMetrics struct {
 	FailedMessages float64 `json:"failedMessages"`
 	// Throughput expressed in messages per second
-	ThroughputMsgPerSEC float64 `json:"throughputMsgPerSec"`
-	Unprocessable       float64 `json:"unprocessable"`
-	Unprocessable24H    float64 `json:"unprocessable24h"`
+	ReadThroughputMsgPerSEC  float64 `json:"readThroughputMsgPerSec"`
+	WriteThroughputMsgPerSEC float64 `json:"writeThroughputMsgPerSec"`
+	Unprocessable            float64 `json:"unprocessable"`
+	Unprocessable24H         float64 `json:"unprocessable24h"`
 }
 
 type EventsTable struct {

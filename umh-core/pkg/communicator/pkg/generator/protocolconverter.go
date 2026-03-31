@@ -166,17 +166,34 @@ func buildProtocolConverterAsDfc(
 	}
 
 	// ---- metrics --------------------------------------------------------
+
 	svcInfo := observed.ServiceInfo
-	if m := svcInfo.DataflowComponentReadObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.MetricsState; m != nil &&
-		m.Input.LastCount > 0 {
-		avgThroughput := m.Input.MessagesPerTick / constants.DefaultTickerTime.Seconds()
+	avgReadThroughput := 0.0
+	avgWriteThroughput := 0.0
+	// Caluclate read throughput
+	if readMetrics := svcInfo.DataflowComponentReadObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.MetricsState; readMetrics != nil &&
+		readMetrics.Input.LastCount > 0 {
+		avgReadThroughput = readMetrics.Input.MessagesPerTick / constants.DefaultTickerTime.Seconds()
 		if instance.DesiredState == protocolconverter.OperationalStateStopped ||
 			observed.ObservedProtocolConverterSpecConfig.ReadDFCDesiredState == protocolconverter.OperationalStateStopped {
-			avgThroughput = 0
+			avgReadThroughput = 0
 		}
-		dfc.Metrics = &models.DfcMetrics{
-			AvgInputThroughputPerMinuteInMsgSec: avgThroughput,
+	}
+
+	// Calculate write throughput
+
+	if writeMetrics := svcInfo.DataflowComponentWriteObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.MetricsState; writeMetrics != nil &&
+		writeMetrics.Output.LastCount > 0 {
+		avgWriteThroughput = writeMetrics.Output.MessagesPerTick / constants.DefaultTickerTime.Seconds()
+		if instance.DesiredState == protocolconverter.OperationalStateStopped ||
+			observed.ObservedProtocolConverterSpecConfig.WriteDFCDesiredState == protocolconverter.OperationalStateStopped {
+			avgWriteThroughput = 0
 		}
+	}
+
+	dfc.Metrics = &models.DfcMetrics{
+		AvgInputThroughputPerMinuteInMsgSec:  avgReadThroughput,
+		AvgOutputThroughputPerMinuteInMsgSec: avgWriteThroughput,
 	}
 
 	return dfc, nil
