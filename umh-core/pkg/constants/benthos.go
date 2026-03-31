@@ -21,7 +21,7 @@ const (
 	BenthosConfigDirName  = "config"
 	BenthosLogBaseDir     = "/data/logs"
 	BenthosConfigFileName = "benthos.yaml"
-	BenthosLogWindow      = time.Minute * 10
+	BenthosLogWindow      = time.Minute * 1
 )
 
 const (
