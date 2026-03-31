@@ -1365,6 +1365,7 @@ var _ = Describe("FSMLogger to Sentry Event Mapping", func() {
 		}, time.Second, 10*time.Millisecond).Should(BeNumerically(">=", 1))
 
 		event := store.GetLast()
+		Expect(event.Tags["feature"]).To(Equal("communicator"))
 		Expect(event.Tags["fsm_version"]).To(Equal("v2"))
 		Expect(event.Tags["worker_type"]).To(Equal("communicator"))
 		Expect(event.Tags["worker_chain"]).To(Equal("application/communicator"))

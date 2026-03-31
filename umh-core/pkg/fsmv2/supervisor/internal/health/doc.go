@@ -111,6 +111,7 @@
 //	checker := health.NewFreshnessChecker(
 //	    5 * time.Second,   // staleThreshold
 //	    30 * time.Second,  // timeout
+//	    "pull",            // workerType
 //	    logger,
 //	)
 //
