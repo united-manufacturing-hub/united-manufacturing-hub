@@ -308,6 +308,72 @@ var _ = Describe("AuthenticateAction", func() {
 		})
 	})
 
+	Describe("SetFailedAuthConfig Plumbing", func() {
+		It("should call SetFailedAuthConfig on permanent error (InvalidToken)", func() {
+			ctx := context.Background()
+			mockTransp.authError = &httpTransport.TransportError{
+				Type:    httpTransport.ErrorTypeInvalidToken,
+				Message: "invalid credentials",
+			}
+
+			err := act.Execute(ctx, dependencies)
+			Expect(err).NotTo(HaveOccurred())
+
+			token, relayURL, uuid := dependencies.GetFailedAuthConfig()
+			Expect(token).To(Equal("test-token"))
+			Expect(relayURL).To(Equal("https://relay.example.com"))
+			Expect(uuid).To(Equal("test-uuid"))
+		})
+
+		It("should call SetFailedAuthConfig on permanent error (InstanceDeleted)", func() {
+			ctx := context.Background()
+			mockTransp.authError = &httpTransport.TransportError{
+				Type:    httpTransport.ErrorTypeInstanceDeleted,
+				Message: "instance not found",
+			}
+
+			err := act.Execute(ctx, dependencies)
+			Expect(err).NotTo(HaveOccurred())
+
+			token, relayURL, uuid := dependencies.GetFailedAuthConfig()
+			Expect(token).To(Equal("test-token"))
+			Expect(relayURL).To(Equal("https://relay.example.com"))
+			Expect(uuid).To(Equal("test-uuid"))
+		})
+
+		It("should NOT call SetFailedAuthConfig on transient error (Network)", func() {
+			ctx := context.Background()
+			mockTransp.authError = &httpTransport.TransportError{
+				Type:    httpTransport.ErrorTypeNetwork,
+				Message: "connection refused",
+			}
+
+			err := act.Execute(ctx, dependencies)
+			Expect(err).NotTo(HaveOccurred())
+
+			token, relayURL, uuid := dependencies.GetFailedAuthConfig()
+			Expect(token).To(BeEmpty())
+			Expect(relayURL).To(BeEmpty())
+			Expect(uuid).To(BeEmpty())
+		})
+
+		It("should NOT call SetFailedAuthConfig on transient error (ServerError)", func() {
+			ctx := context.Background()
+			mockTransp.authError = &httpTransport.TransportError{
+				Type:    httpTransport.ErrorTypeServerError,
+				Message: "internal server error",
+			}
+
+			err := act.Execute(ctx, dependencies)
+			Expect(err).NotTo(HaveOccurred())
+
+			token, relayURL, uuid := dependencies.GetFailedAuthConfig()
+			Expect(token).To(BeEmpty())
+			Expect(relayURL).To(BeEmpty())
+			Expect(uuid).To(BeEmpty())
+		})
+	})
+
 	Describe("Tiered Auth Error Handling", func() {
 		It("should suppress transient auth errors without SentryWarn from action", func() {
 			ctx := context.Background()

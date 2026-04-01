@@ -37,11 +37,14 @@
 // State flow:
 //
 //	Stopped ──→ Starting ──→ Running ⇄ Degraded
-//	                ↑         ↓ (token expired)
-//	                └─────────┘
+//	                ↑   ↘       ↓ (token expired)
+//	                │  AuthFailed ← (InvalidToken/InstanceDeleted)
+//	                │    ↓ (config changed)
+//	                └────┘
 //
 // All active states transition to Stopping → Stopped on shutdown.
-// Auth failures in Starting retry in place (no dedicated error state).
+// Permanent auth errors (InvalidToken, InstanceDeleted) enter AuthFailedState,
+// which waits for a config change before retrying.
 package transport
 
 import (
@@ -119,6 +122,8 @@ func (w *TransportWorker) CollectObservedState(ctx context.Context) (fsmv2.Obser
 
 	deps := w.GetDependencies()
 
+	failedToken, failedRelay, failedUUID := deps.GetFailedAuthConfig()
+
 	// Build observed state
 	observed := snapshot.TransportObservedState{
 		CollectedAt:       time.Now(),
@@ -129,6 +134,11 @@ func (w *TransportWorker) CollectObservedState(ctx context.Context) (fsmv2.Obser
 		LastErrorType:     deps.GetLastErrorType(),
 		LastAuthAttemptAt: deps.GetLastAuthAttemptAt(),
 		LastRetryAfter:    deps.GetLastRetryAfter(),
+		FailedAuthConfig: snapshot.FailedAuthConfig{
+			AuthToken:    failedToken,
+			RelayURL:     failedRelay,
+			InstanceUUID: failedUUID,
+		},
 	}
 
 	// Framework metrics copy (architecture requirement)

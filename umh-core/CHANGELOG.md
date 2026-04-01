@@ -13,6 +13,7 @@
 ### Preview: FSMv2 Communicator
 
 - Brief network interruptions during authentication (DNS failures, server errors) no longer produce Sentry warnings. If authentication keeps failing for five consecutive failures, a single `persistent_auth_failure` warning is logged. Permanent errors like invalid credentials or a deleted instance still warn immediately on first occurrence. Only affects instances with `USE_FSMV2_TRANSPORT=true`
+- When authentication permanently fails (invalid credentials or deleted instance), the transport worker now enters a dedicated failed state instead of retrying indefinitely. It re-attempts authentication automatically when the configuration changes (new auth token, relay URL, or instance UUID). Only affects instances with `USE_FSMV2_TRANSPORT=true`
 
 ## [0.44.13]
 

@@ -21,6 +21,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/backoff"
+	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/action"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/snapshot"
 )
@@ -44,7 +45,17 @@ func (s *StartingState) Next(snapAny any) fsmv2.NextResult[any, any] {
 
 	// If we don't have a valid token, authenticate (with backoff on repeated failures)
 	if !snap.Observed.HasValidToken() {
-		if snap.Observed.ConsecutiveErrors > 0 && !snap.Observed.LastAuthAttemptAt.IsZero() {
+		configChanged := authConfigChanged(snap.Desired, snap.Observed)
+
+		// Apply error handling only when config hasn't changed since last attempt.
+		// If config changed, stale errors and backoff are irrelevant — go straight to auth dispatch.
+		if !configChanged && snap.Observed.ConsecutiveErrors > 0 && !snap.Observed.LastAuthAttemptAt.IsZero() {
+			if isPermanentAuthError(snap.Observed.LastErrorType) {
+				return fsmv2.Result[any, any](&AuthFailedState{}, fsmv2.SignalNone, nil,
+					fmt.Sprintf("permanent auth failure (%s after %d errors), entering AuthFailed",
+						snap.Observed.LastErrorType, snap.Observed.ConsecutiveErrors))
+			}
+
 			delay := backoff.CalculateDelayForErrorType(
 				snap.Observed.LastErrorType,
 				snap.Observed.ConsecutiveErrors,
@@ -70,6 +81,32 @@ func (s *StartingState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	// Authenticated — transition to Running. Children start via ChildStartStates
 	// once parent enters Running; RunningState handles unhealthy children.
 	return fsmv2.Result[any, any](&RunningState{}, fsmv2.SignalNone, nil, "Authenticated, transitioning to Running")
+}
+
+// isPermanentAuthError returns true for error types that indicate a configuration
+// problem requiring human intervention (new token, re-registration).
+//
+// This is intentionally narrower than !IsTransient(): ProxyBlock, CloudflareChallenge,
+// and ErrorTypeUnknown are non-transient but may self-resolve (infrastructure issues,
+// not config problems). Only InvalidToken and InstanceDeleted warrant parking in
+// AuthFailedState. SetFailedAuthConfig in the action uses the broader !IsTransient()
+// guard so that config changes also skip backoff for those error types.
+func isPermanentAuthError(errType httpTransport.ErrorType) bool {
+	return errType == httpTransport.ErrorTypeInvalidToken ||
+		errType == httpTransport.ErrorTypeInstanceDeleted
+}
+
+// authConfigChanged returns true if the current desired auth config differs from the
+// config that was used in the last permanently-failed auth attempt. Used by StartingState
+// to skip stale permanent errors after a config change. AuthFailedState performs the same
+// comparison inline to capture per-field diagnostics in the reason string.
+func authConfigChanged(desired *snapshot.TransportDesiredState, observed snapshot.TransportObservedState) bool {
+	if observed.FailedAuthConfig.IsEmpty() {
+		return false
+	}
+	return desired.AuthToken != observed.FailedAuthConfig.AuthToken ||
+		desired.RelayURL != observed.FailedAuthConfig.RelayURL ||
+		desired.InstanceUUID != observed.FailedAuthConfig.InstanceUUID
 }
 
 // String returns the state name derived from the type.
