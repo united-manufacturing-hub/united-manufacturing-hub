@@ -59,6 +59,7 @@ type Gatekeeper struct {
 	logger       *zap.SugaredLogger
 	cancel       context.CancelFunc
 	instanceUUID string
+	locationPath string
 	wg           sync.WaitGroup
 
 	// Config
@@ -229,14 +230,28 @@ func (g *Gatekeeper) handleInbound(ctx context.Context, msg *transport.UMHMessag
 		}
 
 		rootCA := g.certHandler.RootCA()
+		if rootCA == nil {
+			g.logger.Warnw("Root CA not yet available, dropping message", "email", msg.Email)
+			return
+		}
 		intermediates := g.certHandler.IntermediateCerts(msg.Email)
-		allowed, err := g.validator.ValidateUserPermissions(cert, string(messageContent.MessageType), "", rootCA, intermediates)
+
+		actionStr := string(messageContent.MessageType)
+		if messageContent.MessageType == models.Action {
+			if payloadMap, ok := messageContent.Payload.(map[string]interface{}); ok {
+				if at, ok := payloadMap["actionType"].(string); ok && at != "" {
+					actionStr = at
+				}
+			}
+		}
+
+		allowed, err := g.validator.ValidateUserPermissions(cert, actionStr, g.locationPath, rootCA, intermediates)
 		if err != nil {
-			g.logger.Warnw("Permission validation error", "email", msg.Email, "error", err)
+			g.logger.Warnw("Permission validation error", "email", msg.Email, "action", actionStr, "location", g.locationPath, "error", err)
 			return
 		}
 		if !allowed {
-			g.logger.Warnw("Permission denied", "email", msg.Email, "messageType", messageContent.MessageType)
+			g.logger.Warnw("Permission denied", "email", msg.Email, "action", actionStr, "location", g.locationPath)
 			return
 		}
 	}

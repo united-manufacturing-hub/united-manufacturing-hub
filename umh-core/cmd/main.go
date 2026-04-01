@@ -45,7 +45,6 @@ import (
 	fsmv2sentry "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/sentry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/snapshot"
 	transportSnapshot "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/snapshot"
 	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/certfetcher"
 	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/persistence"
@@ -525,6 +524,7 @@ func enableFSMv2BackendConnection(
 			certHandler,
 			validator.NewValidator(logger),
 			logger,
+			gatekeeper.WithLocation(configData.Agent.Location),
 		)
 		gk.Start(ctx)
 		communicationState.Gatekeeper = gk
@@ -568,6 +568,9 @@ children:
 		logger.Infow("Authentication succeeded, updating LoginResponse with backend UUID",
 			"realUUID", realUUID, "name", name, "placeholderUUID", placeholderUUID)
 		communicationState.SetLoginResponseForFSMv2(realUUID)
+		if communicationState.Gatekeeper != nil {
+			communicationState.Gatekeeper.SetInstanceUUID(realUUID)
+		}
 	}
 
 	// Create ApplicationSupervisor with channel provider and auth callback injected via Dependencies
@@ -656,7 +659,7 @@ children:
 		communicationState.InitializeRouterForFSMv2()
 	}
 
-	// Poll ObservedState for UUID and JWT updates.
+	// Poll TransportWorker ObservedState for UUID and JWT updates.
 	go func() {
 		ticker := time.NewTicker(100 * time.Millisecond)
 		defer ticker.Stop()
@@ -667,22 +670,23 @@ children:
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				// UUID from communicator, JWT from transport observed state
-				var commObserved snapshot.CommunicatorObservedState
-				commErr := store.LoadObservedTyped(ctx, "communicator", CommunicatorWorkerID, &commObserved)
-				if commErr == nil && !uuidSet && commObserved.AuthenticatedUUID != "" && commObserved.AuthenticatedUUID != placeholderUUID {
-					logger.Infow("Detected real UUID from communicator ObservedState",
-						"realUUID", commObserved.AuthenticatedUUID)
-					communicationState.SetLoginResponseForFSMv2(commObserved.AuthenticatedUUID)
+				var tpObserved transportSnapshot.TransportObservedState
+				tpErr := store.LoadObservedTyped(ctx, "transport", "transport-001", &tpObserved)
+				if tpErr != nil {
+					continue
+				}
+
+				if !uuidSet && tpObserved.AuthenticatedUUID != "" && tpObserved.AuthenticatedUUID != placeholderUUID {
+					logger.Infow("Detected real UUID from TransportWorker ObservedState",
+						"realUUID", tpObserved.AuthenticatedUUID)
+					communicationState.SetLoginResponseForFSMv2(tpObserved.AuthenticatedUUID)
 					if communicationState.Gatekeeper != nil {
-						communicationState.Gatekeeper.SetInstanceUUID(commObserved.AuthenticatedUUID)
+						communicationState.Gatekeeper.SetInstanceUUID(tpObserved.AuthenticatedUUID)
 					}
 					uuidSet = true
 				}
 
-				var tpObserved transportSnapshot.TransportObservedState
-				tpErr := store.LoadObservedTyped(ctx, "transport", "transport-001", &tpObserved)
-				if tpErr == nil && communicationState.Gatekeeper != nil && tpObserved.JWTToken != "" {
+				if communicationState.Gatekeeper != nil && tpObserved.JWTToken != "" {
 					communicationState.Gatekeeper.SetJWT(tpObserved.JWTToken)
 				}
 			}
