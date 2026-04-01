@@ -47,6 +47,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/protocolconverter"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
@@ -299,14 +300,43 @@ func (a *EditProtocolConverterAction) Execute() (interface{}, map[string]interfa
 	// Store the atomic edit UUID for use in rollback operations
 	a.atomicEditUUID = atomicEditUUID
 
-	// Persist the configuration changes
-	oldConfig, err := a.persistConfig(atomicEditUUID, newSpec)
-	if err != nil {
-		errorMsg := fmt.Sprintf("Failed to persist configuration changes: %v", err)
-		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
-			errorMsg, a.outboundChannel, models.EditProtocolConverter)
+	var oldConfig config.ProtocolConverterConfig
 
-		return nil, nil, fmt.Errorf("%s", errorMsg)
+	// For DFC modifications, stop the affected DFCs first to ensure a clean redeployment.
+	// This prevents stale errors from a previously degraded DFC from blocking the new deployment.
+	if a.dfcType != DFCTypeEmpty && a.systemSnapshotManager != nil && !a.ignoreHealthCheck {
+		var stopErr error
+		oldConfig, stopErr = a.stopAndAwaitDFCs(atomicEditUUID, newSpec)
+		if stopErr != nil {
+			errorMsg := fmt.Sprintf("Failed to stop DFCs before edit: %v", stopErr)
+			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
+				errorMsg, a.outboundChannel, models.EditProtocolConverter)
+
+			return nil, nil, fmt.Errorf("%s", errorMsg)
+		}
+
+		// Persist the actual new config (DFCs will start fresh from stopped state)
+		persistCtx, persistCancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
+		defer persistCancel()
+
+		_, err = a.configManager.AtomicEditProtocolConverter(persistCtx, atomicEditUUID, newSpec)
+		if err != nil {
+			errorMsg := fmt.Sprintf("Failed to persist new configuration: %v", err)
+			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
+				errorMsg, a.outboundChannel, models.EditProtocolConverter)
+
+			return nil, nil, fmt.Errorf("%s", errorMsg)
+		}
+	} else {
+		// No DFC changes or no health check — just persist directly
+		oldConfig, err = a.persistConfig(atomicEditUUID, newSpec)
+		if err != nil {
+			errorMsg := fmt.Sprintf("Failed to persist configuration changes: %v", err)
+			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
+				errorMsg, a.outboundChannel, models.EditProtocolConverter)
+
+			return nil, nil, fmt.Errorf("%s", errorMsg)
+		}
 	}
 
 	// Await rollout and perform health checks
@@ -516,6 +546,89 @@ func (a *EditProtocolConverterAction) persistConfig(atomicEditUUID uuid.UUID, ne
 	return oldConfig, nil
 }
 
+// stopAndAwaitDFCs stops the affected DFCs before applying a new configuration.
+// This ensures a clean redeployment: any previously degraded DFC is stopped first,
+// then started fresh with the new config, avoiding stale errors blocking progress.
+// Returns the original (pre-edit) config for rollback purposes.
+func (a *EditProtocolConverterAction) stopAndAwaitDFCs(atomicEditUUID uuid.UUID, newSpec config.ProtocolConverterConfig) (config.ProtocolConverterConfig, error) {
+	// Build a stop variant: same new config but affected DFCs set to stopped.
+	stopSpec := newSpec
+	switch a.dfcType {
+	case DFCTypeRead:
+		stopSpec.ProtocolConverterServiceConfig.ReadDFCDesiredState = dataflowcomponent.OperationalStateStopped
+	case DFCTypeWrite:
+		stopSpec.ProtocolConverterServiceConfig.WriteDFCDesiredState = dataflowcomponent.OperationalStateStopped
+	case DFCTypeBoth:
+		stopSpec.ProtocolConverterServiceConfig.ReadDFCDesiredState = dataflowcomponent.OperationalStateStopped
+		stopSpec.ProtocolConverterServiceConfig.WriteDFCDesiredState = dataflowcomponent.OperationalStateStopped
+	}
+
+	oldConfig, err := a.persistConfig(atomicEditUUID, stopSpec)
+	if err != nil {
+		return config.ProtocolConverterConfig{}, fmt.Errorf("failed to persist stop config: %w", err)
+	}
+
+	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
+		"Stopping affected data flow components for clean redeployment...",
+		a.outboundChannel, models.EditProtocolConverter)
+
+	ticker := time.NewTicker(constants.ActionTickerTime)
+	defer ticker.Stop()
+
+	// Use half the normal timeout for the stop phase, leaving enough time for the start phase.
+	timeout := time.After(constants.DataflowComponentWaitForActiveTimeout / 2)
+
+	for {
+		select {
+		case <-timeout:
+			a.actionLogger.Warnf("timeout waiting for DFCs to stop, continuing with deployment")
+
+			return oldConfig, nil
+		case <-ticker.C:
+			systemSnapshot := a.systemSnapshotManager.GetDeepCopySnapshot()
+
+			pcManager, exists := systemSnapshot.Managers[constants.ProtocolConverterManagerName]
+			if !exists {
+				continue
+			}
+
+			for _, instance := range pcManager.GetInstances() {
+				if instance.ID != a.name {
+					continue
+				}
+
+				pcSnapshot, ok := instance.LastObservedState.(*protocolconverter.ProtocolConverterObservedStateSnapshot)
+				if !ok {
+					continue
+				}
+
+				readStopped := true
+				writeStopped := true
+
+				if a.dfcType == DFCTypeRead || a.dfcType == DFCTypeBoth {
+					readStopped = pcSnapshot.ServiceInfo.DataflowComponentReadFSMState == dataflowcomponent.OperationalStateStopped
+				}
+
+				if a.dfcType == DFCTypeWrite || a.dfcType == DFCTypeBoth {
+					writeStopped = pcSnapshot.ServiceInfo.DataflowComponentWriteFSMState == dataflowcomponent.OperationalStateStopped
+				}
+
+				if readStopped && writeStopped {
+					a.actionLogger.Infof("DFCs stopped successfully, proceeding with new config")
+
+					return oldConfig, nil
+				}
+
+				SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
+					fmt.Sprintf("Waiting for DFCs to stop (read: %s, write: %s)...",
+						pcSnapshot.ServiceInfo.DataflowComponentReadFSMState,
+						pcSnapshot.ServiceInfo.DataflowComponentWriteFSMState),
+					a.outboundChannel, models.EditProtocolConverter)
+			}
+		}
+	}
+}
+
 // awaitRollout waits for the protocol converter to reach the desired state and performs health checks.
 // Returns error code and error message for proper error handling in the caller.
 //
@@ -652,6 +765,7 @@ func (a *EditProtocolConverterAction) awaitRollout(pcConfig config.ProtocolConve
 
 					switch desiredPCState {
 					case protocolconverter.OperationalStateActive:
+
 						hasReachedDesiredState = slices.Contains(
 							[]string{
 								protocolconverter.OperationalStateActive,
@@ -747,8 +861,10 @@ func (a *EditProtocolConverterAction) awaitRollout(pcConfig config.ProtocolConve
 				// For "stopped" state: accept only "stopped"
 				hasReachedDesiredState := false
 
+				a.actionLogger.Errorf("desiredPCState empty: %s, currentState empty: %s", desiredPCState, instance.CurrentState)
 				switch desiredPCState {
 				case protocolconverter.OperationalStateActive:
+
 					hasReachedDesiredState = slices.Contains(
 						[]string{
 							protocolconverter.OperationalStateActive,
@@ -790,6 +906,7 @@ func (a *EditProtocolConverterAction) awaitRollout(pcConfig config.ProtocolConve
 
 				// send the benthos logs to the user; for DFCTypeBoth, prefer write logs since
 				// read logs are also included below via the merged slice.
+
 				switch a.dfcType {
 				case DFCTypeWrite, DFCTypeBoth:
 					logs = pcSnapshot.ServiceInfo.DataflowComponentWriteObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosLogs
@@ -800,6 +917,7 @@ func (a *EditProtocolConverterAction) awaitRollout(pcConfig config.ProtocolConve
 				// only send the logs that have not been sent yet
 				if len(logs) > len(lastLogs) {
 					lastLogs = SendLimitedLogs(logs, lastLogs, a.instanceUUID, a.userEmail, a.actionUUID, a.outboundChannel, models.EditProtocolConverter, remainingSeconds)
+
 				}
 
 				// CheckBenthosLogLinesForConfigErrors is used to detect fatal configuration errors that would cause
@@ -1107,4 +1225,3 @@ func validateProtocolConverterDFC(dfc *models.ProtocolConverterDFC, label string
 	}
 	return nil
 }
-

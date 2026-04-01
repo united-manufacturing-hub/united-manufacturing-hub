@@ -744,6 +744,16 @@ func (b *BenthosInstance) IsBenthosRunningForSomeTimeWithoutErrors(currentTime t
 //	ok     – true when logs look clean, false otherwise.
 //	reason – empty when ok is true; otherwise the first offending log line.
 func (b *BenthosInstance) IsBenthosLogsFine(currentTime time.Time, logWindow time.Duration) (bool, string) {
+	// Cap the log window to the current process uptime so that errors from a
+	// previous process instance (before a stop/start or config-change restart)
+	// are ignored. When uptime is 0 (process not yet running or just started),
+	// the window becomes 0 and no historical logs are considered.
+	currentUptime := b.ObservedState.ServiceInfo.S6ObservedState.ServiceInfo.Uptime
+	uptimeDuration := time.Duration(currentUptime) * time.Second
+	if uptimeDuration < logWindow {
+		logWindow = uptimeDuration
+	}
+
 	logsFine, logEntry := b.service.IsLogsFine(b.ObservedState.ServiceInfo.BenthosStatus.BenthosLogs, currentTime, logWindow)
 	if !logsFine {
 		timeUntilClear := logEntry.Timestamp.Add(logWindow).Sub(currentTime)
