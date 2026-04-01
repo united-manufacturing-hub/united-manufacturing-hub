@@ -14,6 +14,8 @@
 
 package gatekeeper
 
+import "strings"
+
 // Default configuration values for the Gatekeeper.
 const (
 	DefaultVerifiedInboundBufferSize  = 100
@@ -31,4 +33,26 @@ func WithVerifiedInboundBufferSize(size int) Option {
 // WithVerifiedOutboundBufferSize sets the buffer size for the verified outbound channel.
 func WithVerifiedOutboundBufferSize(size int) Option {
 	return func(g *Gatekeeper) { g.verifiedOutboundSize = size }
+}
+
+// WithLocation sets the instance location path from the agent config's location map.
+func WithLocation(location map[int]string) Option {
+	return func(g *Gatekeeper) {
+		if len(location) == 0 {
+			return
+		}
+		maxLevel := -1
+		for k := range location {
+			if k > maxLevel {
+				maxLevel = k
+			}
+		}
+		parts := make([]string, 0, maxLevel+1)
+		for i := 0; i <= maxLevel; i++ {
+			if val, ok := location[i]; ok && val != "" {
+				parts = append(parts, val)
+			}
+		}
+		g.locationPath = strings.Join(parts, ".")
+	}
 }

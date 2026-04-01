@@ -124,6 +124,9 @@ type TransportObservedState struct {
 
 	State string `json:"state"` // Observed lifecycle state (e.g., "running_healthy")
 
+	// AuthenticatedUUID is the instance UUID returned from the backend after authentication.
+	AuthenticatedUUID string `json:"authenticated_uuid,omitempty"`
+
 	// JWTToken is the current authentication token for relay communication.
 	// NOTE: This field must NOT use json:"-" — the supervisor reconciliation loop
 	// serializes observed state to CSE storage between ticks and deserializes it

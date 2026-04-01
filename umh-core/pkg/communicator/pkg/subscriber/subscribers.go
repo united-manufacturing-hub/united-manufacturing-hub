@@ -41,7 +41,8 @@ type Handler struct {
 	configManager              config.ConfigManager
 	subscriberRegistry         *subscribers.Registry
 	pusher                     *push.Pusher
-	fsmOutboundChannel         chan<- *transport.UMHMessage // FSMv2 direct channel (nil for legacy mode)
+	fsmOutboundChannel         chan<- *transport.UMHMessage        // FSMv2 without gatekeeper (nil for legacy mode)
+	gatekeeperOutboundChannel  chan<- *transport.MessageWithSender // FSMv2 with gatekeeper (nil when gatekeeper disabled)
 	StatusCollector            *generator.StatusCollectorType
 	systemSnapshotManager      *fsm.SnapshotManager
 	topicBrowserCommunicator   *topicbrowser.TopicBrowserCommunicator
@@ -63,13 +64,15 @@ func NewHandler(
 	configManager config.ConfigManager,
 	logger *zap.SugaredLogger,
 	topicBrowserCommunicator *topicbrowser.TopicBrowserCommunicator,
-	fsmOutboundChannel chan<- *transport.UMHMessage, // FSMv2 direct channel (nil for legacy mode)
+	fsmOutboundChannel chan<- *transport.UMHMessage, // FSMv2 without gatekeeper (nil for legacy mode)
+	gatekeeperOutboundChannel chan<- *transport.MessageWithSender, // FSMv2 with gatekeeper (nil when gatekeeper disabled)
 ) *Handler {
 	s := &Handler{}
 	s.subscriberRegistry = subscribers.NewRegistry(cull, ttl)
 	s.dog = dog
 	s.pusher = pusher
 	s.fsmOutboundChannel = fsmOutboundChannel
+	s.gatekeeperOutboundChannel = gatekeeperOutboundChannel
 	s.instanceUUID = instanceUUID
 	s.systemSnapshotManager = systemSnapshotManager
 	s.configManager = configManager
@@ -179,38 +182,57 @@ func (s *Handler) notify() {
 			return
 		}
 
-		message, err := encoding.EncodeMessageFromUMHInstanceToUser(models.UMHMessageContent{
-			MessageType: models.Status,
-			Payload:     statusMessage,
-		})
-		if err != nil {
-			s.logger.Warnf("Failed to encrypt message for subscriber %s", email)
-
-			return
-		}
-
-		// FSMv2 mode: write directly to FSMv2 outbound channel (bypasses legacy Pusher)
-		// Legacy mode: use Pusher as before
-		if s.fsmOutboundChannel != nil {
-			msg := &transport.UMHMessage{
-				InstanceUUID: s.GetInstanceUUID().String(),
-				Content:      message,
-				Email:        email,
+		// Gatekeeper mode: write raw MessageWithSender
+		if s.gatekeeperOutboundChannel != nil {
+			msg := &transport.MessageWithSender{
+				Content: models.UMHMessageContent{
+					MessageType: models.Status,
+					Payload:     statusMessage,
+				},
+				SenderEmail: email,
 			}
 			select {
-			case s.fsmOutboundChannel <- msg:
-				// Successfully sent to FSMv2 transport
+			case s.gatekeeperOutboundChannel <- msg:
+				// Successfully sent to gatekeeper
 			default:
-				s.logger.Warnf("FSMv2 outbound channel full, dropping message for subscriber %s", email)
+				s.logger.Warnf("Gatekeeper outbound channel full, dropping message for subscriber %s", email)
 
 				return
 			}
 		} else {
-			s.pusher.Push(models.UMHMessage{
-				Content:      message,
-				Email:        email,
-				InstanceUUID: s.GetInstanceUUID(),
+			message, err := encoding.EncodeMessageFromUMHInstanceToUser(models.UMHMessageContent{
+				MessageType: models.Status,
+				Payload:     statusMessage,
 			})
+			if err != nil {
+				s.logger.Warnf("Failed to encrypt message for subscriber %s", email)
+
+				return
+			}
+
+			// FSMv2 mode without gatekeeper: write encoded transport.UMHMessage
+			if s.fsmOutboundChannel != nil {
+				msg := &transport.UMHMessage{
+					InstanceUUID: s.GetInstanceUUID().String(),
+					Content:      message,
+					Email:        email,
+				}
+				select {
+				case s.fsmOutboundChannel <- msg:
+					// Successfully sent to FSMv2 transport
+				default:
+					s.logger.Warnf("FSMv2 outbound channel full, dropping message for subscriber %s", email)
+
+					return
+				}
+			} else {
+				// Legacy mode: use Pusher
+				s.pusher.Push(models.UMHMessage{
+					Content:      message,
+					Email:        email,
+					InstanceUUID: s.GetInstanceUUID(),
+				})
+			}
 		}
 
 		// Mark subscriber as bootstrapped after first message

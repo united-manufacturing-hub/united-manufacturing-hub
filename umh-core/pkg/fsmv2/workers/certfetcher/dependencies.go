@@ -58,18 +58,23 @@ func NewCertFetcherDependencies(
 	}, nil
 }
 
-// SetSubHandler sets the subscriber handler after construction.
-func (d *CertFetcherDependencies) SetSubHandler(sh gatekeeper.SubHandler) {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	d.subHandler = sh
-}
-
-// HasSubHandler returns true if the subscriber handler has been set.
+// HasSubHandler returns true if the subscriber handler is available.
 func (d *CertFetcherDependencies) HasSubHandler() bool {
 	d.mu.RLock()
-	defer d.mu.RUnlock()
-	return d.subHandler != nil
+	sh := d.subHandler
+	d.mu.RUnlock()
+
+	if sh == nil {
+		return false
+	}
+
+	// Check if the lazy handler's underlying provider is ready
+	lazy, ok := sh.(*lazySubHandler)
+	if ok {
+		return lazy.IsReady()
+	}
+
+	return true
 }
 
 // Subscribers returns the list of active subscriber emails.
@@ -87,7 +92,6 @@ func (d *CertFetcherDependencies) Subscribers() []string {
 func (d *CertFetcherDependencies) FetchAllCerts(ctx context.Context) error {
 	emails := d.Subscribers()
 	if len(emails) == 0 {
-		d.RecordFetchSuccess()
 		return nil
 	}
 
@@ -98,6 +102,8 @@ func (d *CertFetcherDependencies) FetchAllCerts(ctx context.Context) error {
 		}
 		err := d.certHandler.FetchAndStore(ctx, email)
 		if err != nil {
+			d.GetLogger().SentryError(deps.FeatureGatekeeper, d.GetHierarchyPath(), err, "cert_fetch_failed",
+				deps.String("email", email))
 			lastErr = err
 		}
 	}

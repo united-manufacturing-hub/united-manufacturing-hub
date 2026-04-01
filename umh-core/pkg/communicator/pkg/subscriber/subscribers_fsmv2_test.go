@@ -30,7 +30,7 @@ var _ = Describe("FSMv2 Direct Channel Mode", func() {
 	var (
 		handler            *subscriber.Handler
 		logger             *zap.SugaredLogger
-		fsmOutboundChannel chan *transport.UMHMessage
+		fsmOutboundChannel chan *transport.MessageWithSender
 	)
 
 	BeforeEach(func() {
@@ -48,7 +48,7 @@ var _ = Describe("FSMv2 Direct Channel Mode", func() {
 	Describe("FSMv2 mode (fsmOutboundChannel != nil)", func() {
 		BeforeEach(func() {
 			// Create buffered channel for FSMv2 mode
-			fsmOutboundChannel = make(chan *transport.UMHMessage, 10)
+			fsmOutboundChannel = make(chan *transport.MessageWithSender, 10)
 
 			handler = subscriber.NewHandler(
 				&mockWatchdog{},
@@ -62,6 +62,7 @@ var _ = Describe("FSMv2 Direct Channel Mode", func() {
 				nil, // configManager
 				logger,
 				nil, // topicBrowserCommunicator
+				nil, // no legacy FSMv2 channel
 				fsmOutboundChannel,
 			)
 		})
@@ -99,6 +100,7 @@ var _ = Describe("FSMv2 Direct Channel Mode", func() {
 				logger,
 				nil, // topicBrowserCommunicator
 				nil, // fsmOutboundChannel - nil for legacy mode
+				nil, // gatekeeperOutboundChannel - nil for legacy mode
 			)
 		})
 
@@ -130,10 +132,11 @@ var _ = Describe("FSMv2 Direct Channel Mode", func() {
 				logger,
 				nil,
 				nil, // legacy mode
+				nil,
 			)
 
 			// Create FSMv2 handler (with channel)
-			fsmv2Channel := make(chan *transport.UMHMessage, 10)
+			fsmv2Channel := make(chan *transport.MessageWithSender, 10)
 			defer close(fsmv2Channel)
 
 			fsmv2Handler := subscriber.NewHandler(
@@ -148,7 +151,8 @@ var _ = Describe("FSMv2 Direct Channel Mode", func() {
 				nil,
 				logger,
 				nil,
-				fsmv2Channel, // FSMv2 mode
+				nil, // no legacy FSMv2 channel
+				fsmv2Channel, // gatekeeper mode
 			)
 
 			// Both handlers should work independently

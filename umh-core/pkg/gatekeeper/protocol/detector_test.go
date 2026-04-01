@@ -37,7 +37,7 @@ var _ = Describe("Detector", func() {
 				Email:   "test@example.com",
 			}
 			handler := det.Detect(msg)
-			out, err := handler.Decrypt([]byte("hello"))
+			out, err := handler.Decrypt([]byte("hello"), "test@example.com")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(string(out)).To(Equal("hello"))
 		})
@@ -49,7 +49,7 @@ var _ = Describe("Detector", func() {
 				ProtocolVersion: transport.CseV1,
 			}
 			handler := det.Detect(msg)
-			_, err := handler.Decrypt([]byte("hello"))
+			_, err := handler.Decrypt([]byte("hello"), "test@example.com")
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("not yet implemented"))
 		})

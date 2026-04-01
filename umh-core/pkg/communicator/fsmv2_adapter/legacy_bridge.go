@@ -269,3 +269,8 @@ func (b *LegacyChannelBridge) GetInboundStats(_ string) (capacity int, length in
 func (b *LegacyChannelBridge) GetOutboundWriteChannel() chan<- *transport.UMHMessage {
 	return b.fsmOutbound
 }
+
+// RawChannels returns the raw bidirectional FSMv2 channels for the gatekeeper.
+func (b *LegacyChannelBridge) RawChannels() (inbound chan *transport.UMHMessage, outbound chan *transport.UMHMessage) {
+	return b.fsmInbound, b.fsmOutbound
+}

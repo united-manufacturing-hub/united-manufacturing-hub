@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Preview: FSMv2 Gatekeeper
+
+- A new gatekeeper middleware now sits between the FSMv2 transport layer and the business logic, handling protocol detection, message validation, and certificate-based permission checks. Previously, messages from the Management Console passed through without validation. Now, each inbound message is verified against the sender's certificate before reaching the Router, and a dedicated certificate fetcher worker periodically retrieves certificates for active subscribers. Requires `USE_FSMV2_TRANSPORT=true` and `USE_GATEKEEPER=true`
+
 ## [0.44.12]
 
 ### Improvements

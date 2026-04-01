@@ -124,6 +124,7 @@ func (w *TransportWorker) CollectObservedState(ctx context.Context) (fsmv2.Obser
 		CollectedAt:       time.Now(),
 		JWTToken:          deps.GetJWTToken(),
 		JWTExpiry:         deps.GetJWTExpiry(),
+		AuthenticatedUUID: deps.GetAuthenticatedUUID(),
 		ConsecutiveErrors: deps.GetConsecutiveErrors(),
 		LastErrorType:     deps.GetLastErrorType(),
 		LastAuthAttemptAt: deps.GetLastAuthAttemptAt(),
