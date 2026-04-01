@@ -160,7 +160,7 @@ func (d *TransportDependencies) RecordAuthError(errType httpTransport.ErrorType,
 	}
 
 	if d.authFailureRate.RecordOutcome(false) {
-		d.BaseDependencies.GetLogger().SentryWarn(deps.FeatureCommunicator, d.GetHierarchyPath(), "persistent_auth_failure",
+		d.BaseDependencies.GetLogger().SentryWarn(deps.FeatureForWorker(d.GetWorkerType()), d.GetHierarchyPath(), "persistent_auth_failure",
 			deps.String("error_type", errType.String()),
 			deps.Float64("failure_rate", d.authFailureRate.FailureRate()))
 	}
