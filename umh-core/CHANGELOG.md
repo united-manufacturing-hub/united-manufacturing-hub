@@ -8,6 +8,7 @@
 
 ### Fixes
 
+- CPU health stayed Degraded permanently after any brief throttle event because the ratio used cumulative counters since pod start. Now uses a sliding window, so health recovers when throttling stops
 - ADS symbol downloads failed in certain configurations -- bumped ADS plugin to v1.0.8 which fixes the issue
 
 ### Preview: FSMv2 Communicator
