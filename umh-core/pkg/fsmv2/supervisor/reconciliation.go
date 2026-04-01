@@ -209,11 +209,11 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 			if restartCount >= s.collectorHealth.maxRestartAttempts {
 				// Max attempts reached - escalate to shutdown (Layer 3)
 				maxAttemptsErr := fmt.Errorf("collector unresponsive after %d restart attempts", s.collectorHealth.maxRestartAttempts)
-				s.logger.SentryError(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), maxAttemptsErr, "collector_unresponsive_max_attempts",
+				s.logger.SentryError(deps.FeatureForWorker(s.workerType), s.GetHierarchyPathUnlocked(), maxAttemptsErr, "collector_unresponsive_max_attempts",
 					deps.Attempts(s.collectorHealth.maxRestartAttempts))
 
 				if shutdownErr := s.requestShutdown(ctx, workerID, maxAttemptsErr.Error()); shutdownErr != nil {
-					s.logger.SentryError(deps.FeatureFSMv2, workerCtx.identity.HierarchyPath, shutdownErr, "shutdown_request_failed")
+					s.logger.SentryError(deps.FeatureForWorker(s.workerType), workerCtx.identity.HierarchyPath, shutdownErr, "shutdown_request_failed")
 				}
 
 				return errors.New("collector unresponsive, shutdown requested")
@@ -227,7 +227,7 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 				maxAttempts := s.collectorHealth.maxRestartAttempts
 				s.mu.RUnlock()
 
-				s.logger.SentryError(deps.FeatureFSMv2, workerCtx.identity.HierarchyPath, err, "collector_restart_failed",
+				s.logger.SentryError(deps.FeatureForWorker(s.workerType), workerCtx.identity.HierarchyPath, err, "collector_restart_failed",
 					deps.Int("restart_attempt", restartAttempt),
 					deps.Int("max_attempts", maxAttempts))
 
@@ -366,7 +366,7 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 			deps.String("action_id", actionID))
 
 		if err := workerCtx.executor.EnqueueAction(actionID, result.Action, workerDeps); err != nil {
-			s.logger.SentryError(deps.FeatureFSMv2, workerCtx.identity.HierarchyPath, err, "action_enqueue_failed",
+			s.logger.SentryError(deps.FeatureForWorker(s.workerType), workerCtx.identity.HierarchyPath, err, "action_enqueue_failed",
 				deps.String("action_id", actionID))
 
 			return fmt.Errorf("failed to enqueue action: %w", err)
@@ -1254,14 +1254,14 @@ func (s *Supervisor[TObserved, TDesired]) restartCollector(ctx context.Context, 
 			escalationRisk = "imminent"
 		}
 
-		s.logger.SentryWarn(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), "collector_restarting",
+		s.logger.SentryWarn(deps.FeatureForWorker(s.workerType), s.GetHierarchyPathUnlocked(), "collector_restarting",
 			deps.Err(fmt.Errorf("collector restart attempt %d of %d", restartCount, maxRestartAttempts)),
 			deps.Int("restart_attempt", restartCount),
 			deps.Int("max_attempts", maxRestartAttempts),
 			deps.Duration("backoff", backoff),
 			deps.String("escalation_risk", escalationRisk))
 	} else {
-		s.logger.SentryWarn(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), "collector_restarting",
+		s.logger.SentryWarn(deps.FeatureForWorker(s.workerType), s.GetHierarchyPathUnlocked(), "collector_restarting",
 			deps.Int("restart_attempt", restartCount),
 			deps.Int("max_attempts", maxRestartAttempts),
 			deps.Duration("backoff", backoff))
@@ -1273,7 +1273,7 @@ func (s *Supervisor[TObserved, TDesired]) restartCollector(ctx context.Context, 
 
 	if !exists {
 		notFoundErr := errors.New("worker not found")
-		s.logger.SentryError(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), notFoundErr, "collector_restart_worker_not_found",
+		s.logger.SentryError(deps.FeatureForWorker(s.workerType), s.GetHierarchyPathUnlocked(), notFoundErr, "collector_restart_worker_not_found",
 			deps.String("target_worker_id", workerID))
 
 		return notFoundErr
@@ -1304,7 +1304,7 @@ func (s *Supervisor[TObserved, TDesired]) checkDataFreshness(snapshot *fsmv2.Sna
 	}
 
 	if !hasTimestamp {
-		s.logger.SentryWarn(deps.FeatureFSMv2, snapshot.Identity.HierarchyPath, "snapshot_missing_timestamp",
+		s.logger.SentryWarn(deps.FeatureForWorker(s.workerType), snapshot.Identity.HierarchyPath, "snapshot_missing_timestamp",
 			deps.Reason("Snapshot.Observed does not implement GetTimestamp()"),
 			deps.String("impact", "cannot check freshness"))
 
@@ -1339,7 +1339,7 @@ func (s *Supervisor[TObserved, TDesired]) logFreshnessWarning(isShuttingDown boo
 			deps.Duration("age", age),
 			deps.Duration("threshold", threshold))
 	} else {
-		s.logger.SentryWarn(deps.FeatureFSMv2, hierarchyPath, msg,
+		s.logger.SentryWarn(deps.FeatureForWorker(s.workerType), hierarchyPath, msg,
 			deps.Duration("age", age),
 			deps.Duration("threshold", threshold))
 	}
