@@ -88,7 +88,7 @@ func (w *PersistenceWorker) CollectObservedState(ctx context.Context) (fsmv2.Obs
 		} else if errors.Is(err, persistencepkg.ErrNotFound) && !d.IsObservedStateLoaded() {
 			d.GetLogger().Debug("no previous observed state found, using zero-value defaults")
 		} else {
-			d.GetLogger().SentryWarn(deps.FeaturePersistence, d.GetHierarchyPath(), "previous_observed_load_failed",
+			d.GetLogger().SentryWarn(deps.FeatureForWorker(d.GetWorkerType()), d.GetHierarchyPath(), "previous_observed_load_failed",
 				deps.Err(err),
 				deps.String("worker_type", d.GetWorkerType()),
 				deps.String("worker_id", d.GetWorkerID()))

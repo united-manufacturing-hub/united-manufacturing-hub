@@ -114,6 +114,32 @@ var _ = Describe("TransportWorker", func() {
 			Expect(typedObs.Metrics).NotTo(BeNil())
 		})
 
+		It("should populate FailedAuthConfig from dependencies", func() {
+			// Set failed auth config on the worker's dependencies
+			workerDeps := worker.GetDependencies()
+			workerDeps.SetFailedAuthConfig("failed-token", "https://failed-relay.example.com", "failed-uuid")
+
+			ctx := context.Background()
+			observed, err := worker.CollectObservedState(ctx)
+
+			Expect(err).ToNot(HaveOccurred())
+			typedObs, ok := observed.(snapshot.TransportObservedState)
+			Expect(ok).To(BeTrue())
+			Expect(typedObs.FailedAuthConfig.AuthToken).To(Equal("failed-token"))
+			Expect(typedObs.FailedAuthConfig.RelayURL).To(Equal("https://failed-relay.example.com"))
+			Expect(typedObs.FailedAuthConfig.InstanceUUID).To(Equal("failed-uuid"))
+		})
+
+		It("should return empty FailedAuthConfig when none is set", func() {
+			ctx := context.Background()
+			observed, err := worker.CollectObservedState(ctx)
+
+			Expect(err).ToNot(HaveOccurred())
+			typedObs, ok := observed.(snapshot.TransportObservedState)
+			Expect(ok).To(BeTrue())
+			Expect(typedObs.FailedAuthConfig.IsEmpty()).To(BeTrue())
+		})
+
 		It("should call GetActionHistory from dependencies", func() {
 			ctx := context.Background()
 			observed, err := worker.CollectObservedState(ctx)

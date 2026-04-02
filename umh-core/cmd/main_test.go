@@ -80,6 +80,7 @@ var _ = Describe("Backend Connection", Ordered, func() {
 			log,
 			configData.Agent.AllowInsecureTLS,
 			topicbrowser.NewCache(),
+			nil, // featureUsage
 		)
 	})
 

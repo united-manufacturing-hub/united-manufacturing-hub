@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+## [0.44.14]
+
+### Improvements
+
+- Unified Address Field for Modbus: introduces `unifiedAddresses` as a single-string alternative to the existing address object list. Format: `name.register.address.type[:key=value]*` (e.g., `temperature.holding.100.INT16:scale=0.1`). The legacy `addresses` object list continues to work with a deprecation warning. Both fields are mutually exclusive
+
+### Fixes
+
+- CPU health stayed Degraded permanently after any brief throttle event because the ratio used cumulative counters since pod start. Now uses a sliding window, so health recovers when throttling stops
+- ADS symbol downloads failed in certain configurations -- bumped ADS plugin to v1.0.8 which fixes the issue
+
+### Preview: FSMv2 Communicator
+
+- Brief network interruptions during authentication (DNS failures, server errors) no longer produce Sentry warnings. If authentication keeps failing for five consecutive failures, a single `persistent_auth_failure` warning is logged. Permanent errors like invalid credentials or a deleted instance still warn immediately on first occurrence. Only affects instances with `USE_FSMV2_TRANSPORT=true`
+- When authentication permanently fails (invalid credentials or deleted instance), the transport worker now enters a dedicated failed state instead of retrying indefinitely. It re-attempts authentication automatically when the configuration changes (new auth token, relay URL, or instance UUID). Only affects instances with `USE_FSMV2_TRANSPORT=true`
 ## [0.44.13]
 
 ### Fixes

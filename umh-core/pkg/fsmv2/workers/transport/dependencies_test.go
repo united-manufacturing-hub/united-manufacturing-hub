@@ -390,6 +390,51 @@ var _ = Describe("TransportDependencies", func() {
 		})
 	})
 
+	Describe("FailedAuthConfig tracking", func() {
+		var deps *transport.TransportDependencies
+
+		BeforeEach(func() {
+			identity := depspkg.Identity{ID: "test-id", WorkerType: "transport"}
+			deps = transport.NewTransportDependencies(mt, logger, nil, identity)
+		})
+
+		Describe("SetFailedAuthConfig and GetFailedAuthConfig", func() {
+			It("should store and return the failed auth config values", func() {
+				deps.SetFailedAuthConfig("my-token", "https://relay.example.com", "instance-uuid-123")
+
+				token, relay, uuid := deps.GetFailedAuthConfig()
+				Expect(token).To(Equal("my-token"))
+				Expect(relay).To(Equal("https://relay.example.com"))
+				Expect(uuid).To(Equal("instance-uuid-123"))
+			})
+
+			It("should return empty strings when no failed auth config is set", func() {
+				token, relay, uuid := deps.GetFailedAuthConfig()
+				Expect(token).To(BeEmpty())
+				Expect(relay).To(BeEmpty())
+				Expect(uuid).To(BeEmpty())
+			})
+		})
+
+		Describe("RecordSuccess clears FailedAuthConfig", func() {
+			It("should clear all failed auth config fields on success", func() {
+				deps.SetFailedAuthConfig("my-token", "https://relay.example.com", "instance-uuid-123")
+
+				token, relay, uuid := deps.GetFailedAuthConfig()
+				Expect(token).To(Equal("my-token"))
+				Expect(relay).To(Equal("https://relay.example.com"))
+				Expect(uuid).To(Equal("instance-uuid-123"))
+
+				deps.RecordSuccess()
+
+				token, relay, uuid = deps.GetFailedAuthConfig()
+				Expect(token).To(BeEmpty())
+				Expect(relay).To(BeEmpty())
+				Expect(uuid).To(BeEmpty())
+			})
+		})
+	})
+
 	Describe("Dependencies interface implementation", func() {
 		It("should implement deps.Dependencies interface", func() {
 			identity := depspkg.Identity{ID: "test-id", WorkerType: "transport"}

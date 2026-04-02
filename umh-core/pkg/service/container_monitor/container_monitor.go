@@ -59,15 +59,24 @@ type Service interface {
 	GetStatus(ctx context.Context) (*ServiceInfo, error)
 }
 
+// cgroupSnapshot stores cgroup CPU counters at a point in time for sliding window calculation.
+type cgroupSnapshot struct {
+	timestamp   time.Time
+	nrPeriods   int64
+	nrThrottled int64
+}
+
 // ContainerMonitorService implements the Service interface.
 type ContainerMonitorService struct {
-	fs              filesystem.Service
-	logger          *zap.SugaredLogger
-	instanceName    string
-	lastCollectedAt time.Time
-	hwid            string
-	architecture    models.ContainerArchitecture //nolint:unused // will be used in the future
-	dataPath        string                       // Path to check for disk metrics and HWID file
+	fs                filesystem.Service
+	logger            *zap.SugaredLogger
+	instanceName      string
+	lastCollectedAt   time.Time
+	hwid              string
+	architecture      models.ContainerArchitecture //nolint:unused // will be used in the future
+	dataPath          string                       // Path to check for disk metrics and HWID file
+	throttleSnapshots []cgroupSnapshot             // Sliding window of cgroup counter snapshots
+	wasThrottled      bool                         // Previous throttle state for transition logging
 }
 
 // NewContainerMonitorService creates a new container monitor service instance.
@@ -259,8 +268,15 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 	category := models.Active
 	message := "CPU utilization normal"
 
-	// Check for throttling - only if cgroupInfo is not nil
-	isThrottled := cgroupErr == nil && cgroupInfo != nil && cgroupInfo.IsThrottled
+	// Compute windowed throttle ratio (replaces cumulative ratio from cgroup)
+	var windowedRatio float64
+	var isThrottled bool
+	if cgroupErr == nil && cgroupInfo != nil {
+		windowedRatio, isThrottled = c.updateThrottleWindow(cgroupInfo)
+		// Override the cumulative values with windowed values
+		cgroupInfo.ThrottleRatio = windowedRatio
+		cgroupInfo.IsThrottled = isThrottled
+	}
 
 	if usagePercent >= constants.CPUHighThresholdPercent || isThrottled {
 		category = models.Degraded
@@ -275,10 +291,11 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 		message = "CPU utilization warning"
 	}
 
-	// Log throttling warnings
-	if isThrottled && cgroupInfo != nil {
+	// Log only on false→true transition to avoid flooding stdout
+	if isThrottled && !c.wasThrottled && cgroupInfo != nil {
 		c.logger.Warnf("CPU throttling detected: %.1f%% of periods throttled", cgroupInfo.ThrottleRatio*100)
 	}
+	c.wasThrottled = isThrottled
 
 	cpuStat := &models.CPU{
 		Health: &models.Health{
@@ -299,6 +316,65 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 	}
 
 	return cpuStat, nil
+}
+
+// updateThrottleWindow appends a cgroup snapshot and computes the throttle ratio
+// over a sliding window defined by constants.CPUThrottleWindow.
+// Returns (0.0, false) when there is insufficient data, nil input, or counter reset.
+func (c *ContainerMonitorService) updateThrottleWindow(cgroupInfo *CPUCgroupInfo) (ratio float64, isThrottled bool) {
+	// Guard: nil input or zero periods (cpu.stat unreadable)
+	if cgroupInfo == nil || cgroupInfo.NrPeriods <= 0 {
+		return 0.0, false
+	}
+
+	now := time.Now()
+
+	// Detect counter reset: if new counters are lower than the newest snapshot,
+	// the cgroup was recreated (pod rescheduled). Clear buffer and start fresh.
+	if len(c.throttleSnapshots) > 0 {
+		newest := c.throttleSnapshots[len(c.throttleSnapshots)-1]
+		if cgroupInfo.NrPeriods < newest.nrPeriods || cgroupInfo.NrThrottled < newest.nrThrottled {
+			c.throttleSnapshots = nil
+		}
+	}
+
+	// Append current snapshot
+	c.throttleSnapshots = append(c.throttleSnapshots, cgroupSnapshot{
+		timestamp:   now,
+		nrPeriods:   cgroupInfo.NrPeriods,
+		nrThrottled: cgroupInfo.NrThrottled,
+	})
+
+	// Prune entries older than the window
+	cutoff := now.Add(-constants.CPUThrottleWindow)
+	pruneIdx := 0
+	for pruneIdx < len(c.throttleSnapshots) && c.throttleSnapshots[pruneIdx].timestamp.Before(cutoff) {
+		pruneIdx++
+	}
+	if pruneIdx > 0 {
+		c.throttleSnapshots = c.throttleSnapshots[pruneIdx:]
+	}
+
+	// Need at least 2 snapshots for a delta
+	if len(c.throttleSnapshots) < 2 {
+		return 0.0, false
+	}
+
+	// Compute delta between newest and oldest snapshot in window
+	oldest := c.throttleSnapshots[0]
+	current := c.throttleSnapshots[len(c.throttleSnapshots)-1]
+
+	deltaPeriods := current.nrPeriods - oldest.nrPeriods
+	deltaThrottled := current.nrThrottled - oldest.nrThrottled
+
+	if deltaPeriods <= 0 {
+		return 0.0, false
+	}
+
+	ratio = float64(deltaThrottled) / float64(deltaPeriods)
+	isThrottled = ratio > constants.CPUThrottleRatioThreshold
+
+	return ratio, isThrottled
 }
 
 func (c *ContainerMonitorService) getRawCPUMetrics(ctx context.Context) (usageMCores float64, coreCount int, usagePercent float64, err error) {

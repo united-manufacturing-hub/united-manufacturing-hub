@@ -21,13 +21,14 @@ type StatusMessage struct {
 }
 
 type Core struct {
-	Health        *Health        `json:"health"`
 	Agent         Agent          `json:"agent"`
+	Health        *Health        `json:"health"`
+	FeatureUsage  *FeatureUsage  `json:"featureUsage,omitempty"`
 	Container     Container      `json:"container"`
-	Dfcs          []Dfc          `json:"dfcs"`
-	Redpanda      Redpanda       `json:"redpanda"`
 	TopicBrowser  TopicBrowser   `json:"topicBrowser"`
 	Release       Release        `json:"release"`
+	Dfcs          []Dfc          `json:"dfcs"`
+	Redpanda      Redpanda       `json:"redpanda"`
 	DataModels    []DataModel    `json:"dataModels"`
 	DataContracts []DataContract `json:"dataContracts"`
 }
@@ -123,10 +124,9 @@ type CPU struct {
 	Health         *Health `json:"health"`
 	TotalUsageMCpu float64 `json:"totalUsageMCpu"` // Total usage in milli-cores (1000m = 1 core)
 	CoreCount      int     `json:"coreCount"`      // Number of CPU cores
-	
 	// Cgroup-specific fields for container resource limits
 	CgroupCores   float64 `json:"cgroupCores,omitempty"`   // CPU quota from cgroup (e.g., 2.0 = 2 cores)
-	ThrottleRatio float64 `json:"throttleRatio,omitempty"` // Ratio of time throttled (0.0-1.0)
+	ThrottleRatio float64 `json:"throttleRatio,omitempty"` // Ratio of throttled periods (0.0-1.0)
 	IsThrottled   bool    `json:"isThrottled,omitempty"`   // True if recently throttled
 }
 

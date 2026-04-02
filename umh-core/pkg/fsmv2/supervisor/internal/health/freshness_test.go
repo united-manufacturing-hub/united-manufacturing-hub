@@ -31,6 +31,7 @@ var _ = Describe("FreshnessChecker", func() {
 			checker := health.NewFreshnessChecker(
 				10*time.Second,
 				20*time.Second,
+				"test",
 				deps.NewNopFSMLogger(),
 			)
 
@@ -53,6 +54,7 @@ var _ = Describe("FreshnessChecker", func() {
 			checker := health.NewFreshnessChecker(
 				10*time.Second,
 				20*time.Second,
+				"test",
 				deps.NewNopFSMLogger(),
 			)
 
@@ -75,6 +77,7 @@ var _ = Describe("FreshnessChecker", func() {
 			checker := health.NewFreshnessChecker(
 				10*time.Second,
 				20*time.Second,
+				"test",
 				deps.NewNopFSMLogger(),
 			)
 

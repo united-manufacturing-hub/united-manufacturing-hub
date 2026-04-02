@@ -35,14 +35,18 @@ type StatusCollectorType struct {
 	logger                   *zap.SugaredLogger
 	configManager            config.ConfigManager
 	topicBrowserCommunicator *topicbrowser.TopicBrowserCommunicator
+	featureUsage             *models.FeatureUsage
 }
 
+// NewStatusCollector creates a status collector that generates periodic status payloads
+// including system snapshots, topic browser data, and feature usage metrics.
 func NewStatusCollector(
 	dog watchdog.Iface,
 	systemSnapshotManager *fsm.SnapshotManager,
 	configManager config.ConfigManager,
 	logger *zap.SugaredLogger,
 	topicBrowserCommunicator *topicbrowser.TopicBrowserCommunicator,
+	featureUsage *models.FeatureUsage,
 ) *StatusCollectorType {
 	collector := &StatusCollectorType{
 		dog:                      dog,
@@ -50,6 +54,7 @@ func NewStatusCollector(
 		logger:                   logger,
 		configManager:            configManager,
 		topicBrowserCommunicator: topicBrowserCommunicator,
+		featureUsage:             featureUsage,
 	}
 
 	return collector
@@ -231,6 +236,16 @@ func (s *StatusCollectorType) GenerateStatusMessage(ctx context.Context, isBoots
 	}
 
 	// Step 3: Create the status message
+
+	// Copy the base FeatureUsage struct and overlay the dynamic backup count so
+	// the original (immutable after startup) is never mutated.
+	var featureUsage *models.FeatureUsage
+	if s.featureUsage != nil {
+		fu := *s.featureUsage
+		fu.ConfigBackupCount = int(s.configManager.GetBackupCount())
+		featureUsage = &fu
+	}
+
 	statusMessage := &models.StatusMessage{
 		Core: models.Core{
 			Agent: models.Agent{
@@ -244,6 +259,7 @@ func (s *StatusCollectorType) GenerateStatusMessage(ctx context.Context, isBoots
 			TopicBrowser:  *topicBrowserData,
 			DataModels:    dataModelData,
 			DataContracts: dataContractData,
+			FeatureUsage:  featureUsage,
 			Release: models.Release{
 				Health: &models.Health{
 					Message:       "",

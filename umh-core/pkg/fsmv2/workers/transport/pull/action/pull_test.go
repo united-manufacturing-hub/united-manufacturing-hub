@@ -113,6 +113,10 @@ func (m *mockPullDeps) GetHierarchyPath() string {
 	return ""
 }
 
+func (m *mockPullDeps) GetWorkerType() string {
+	return "pull"
+}
+
 func (m *mockPullDeps) GetStateReader() deps.StateReader {
 	return nil
 }

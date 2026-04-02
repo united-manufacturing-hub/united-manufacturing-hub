@@ -74,7 +74,7 @@ func (a *PullAction) Execute(ctx context.Context, depsAny any) error {
 	if len(pending) > 0 {
 		inChan := pullDeps.GetInboundChan()
 		if inChan == nil {
-			pullDeps.GetLogger().SentryWarn(depspkg.FeatureCommunicator, pullDeps.GetHierarchyPath(), "pull_skipped_nil_inbound_chan_pending_delivery")
+			pullDeps.GetLogger().SentryWarn(depspkg.FeatureForWorker(pullDeps.GetWorkerType()), pullDeps.GetHierarchyPath(), "pull_skipped_nil_inbound_chan_pending_delivery")
 			pullDeps.StorePendingMessages(pending)
 
 			return nil
@@ -105,7 +105,7 @@ func (a *PullAction) Execute(ctx context.Context, depsAny any) error {
 	// Phase 2: Backpressure check
 	inChan := pullDeps.GetInboundChan()
 	if inChan == nil {
-		pullDeps.GetLogger().SentryWarn(depspkg.FeatureCommunicator, pullDeps.GetHierarchyPath(), "pull_skipped_nil_inbound_chan")
+		pullDeps.GetLogger().SentryWarn(depspkg.FeatureForWorker(pullDeps.GetWorkerType()), pullDeps.GetHierarchyPath(), "pull_skipped_nil_inbound_chan")
 
 		return nil
 	}
@@ -122,7 +122,7 @@ func (a *PullAction) Execute(ctx context.Context, depsAny any) error {
 	}
 
 	if shouldSkip && !wasBackpressured {
-		pullDeps.GetLogger().SentryWarn(depspkg.FeatureCommunicator, pullDeps.GetHierarchyPath(), "backpressure_entering",
+		pullDeps.GetLogger().SentryWarn(depspkg.FeatureForWorker(pullDeps.GetWorkerType()), pullDeps.GetHierarchyPath(), "backpressure_entering",
 			depspkg.Int("available", available), depspkg.Int("threshold", ExpectedBatchSize))
 		pullDeps.SetBackpressured(true)
 		metrics.SetGauge(depspkg.GaugeBackpressureActive, 1)
@@ -130,7 +130,7 @@ func (a *PullAction) Execute(ctx context.Context, depsAny any) error {
 	}
 
 	if !shouldSkip && wasBackpressured {
-		pullDeps.GetLogger().SentryWarn(depspkg.FeatureCommunicator, pullDeps.GetHierarchyPath(), "backpressure_exiting",
+		pullDeps.GetLogger().SentryWarn(depspkg.FeatureForWorker(pullDeps.GetWorkerType()), pullDeps.GetHierarchyPath(), "backpressure_exiting",
 			depspkg.Int("available", available), depspkg.Int("low_water_mark", ExpectedBatchSize*LowWaterMarkMultiplier))
 		pullDeps.SetBackpressured(false)
 		metrics.SetGauge(depspkg.GaugeBackpressureActive, 0)

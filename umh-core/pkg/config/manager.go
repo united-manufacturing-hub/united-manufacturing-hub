@@ -26,6 +26,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"go.uber.org/zap"
@@ -109,6 +110,8 @@ type ConfigManager interface {
 	UpdateAndGetCacheModTime(ctx context.Context) (time.Time, error)
 	// WriteYAMLConfigFromString writes a config from a string to the config file
 	WriteYAMLConfigFromString(ctx context.Context, configStr string, expectedModTime string) error
+	// GetBackupCount returns the number of config backups created since startup.
+	GetBackupCount() uint64
 
 	// TODO: Add AtomicUnlinkFromTemplate method
 	// AtomicUnlinkFromTemplate converts a templated configuration (using YAML anchors/aliases)
@@ -160,6 +163,9 @@ type FileConfigManager struct {
 
 	// ---------- background refresh state ----------
 	refreshMu sync.Mutex // prevents concurrent background refreshes
+
+	// backupCount tracks the number of config backups created since startup.
+	backupCount atomic.Uint64
 
 	// backupEnabled controls whether config backups are created before writes.
 	backupEnabled bool
@@ -551,6 +557,16 @@ func (m *FileConfigManagerWithBackoff) Stop() {
 // SetConfigBackupEnabled controls whether config backups are created before writes.
 func (m *FileConfigManagerWithBackoff) SetConfigBackupEnabled(enabled bool) {
 	m.configManager.backupEnabled = enabled
+}
+
+// GetBackupCount returns the number of config backups created since startup.
+func (m *FileConfigManagerWithBackoff) GetBackupCount() uint64 {
+	return m.configManager.GetBackupCount()
+}
+
+// GetBackupCount returns the number of config backups created since startup.
+func (m *FileConfigManager) GetBackupCount() uint64 {
+	return m.backupCount.Load()
 }
 
 // writeConfig writes the config to the file
@@ -1225,6 +1241,8 @@ func (m *FileConfigManager) createConfigBackup(ctx context.Context) {
 
 		return
 	}
+
+	m.backupCount.Add(1)
 
 	m.cleanupOldBackups(ctx)
 }

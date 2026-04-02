@@ -40,10 +40,24 @@
 //   - Keys matching a sensitive-name denylist (password, secret, token, etc.)
 //   - String values are truncated at 1024 characters
 //
+// # Feature tags
+//
+// Each worker's Sentry events are tagged with its own type via
+// [deps.FeatureForWorker] (e.g., feature:pull, feature:push,
+// feature:certfetcher). Supervisor-internal events (tick panics,
+// circuit breakers) use feature:fsmv2.
+//
+// Sentry ownership rules route alerts per worker type
+// (Settings > Projects > Ownership Rules):
+//
+//	tags.feature:certfetcher {certfetcher-owner-email}
+//	tags.feature:fsmv2 {fsmv2-owner-email}
+//	tags.feature:* {default-owner-email}
+//
 // # Creating Sentry Alerts
 //
-//	level:error feature:communicator
-//	level:error feature:fsmv2 event_name:action_failed
+//	level:error feature:pull
+//	level:error feature:fsmv2 event_name:tick_panic
 //	level:error worker_chain:application/communicator
 //
 // # Tag Design: hierarchy_path vs worker_chain

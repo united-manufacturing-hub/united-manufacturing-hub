@@ -80,7 +80,7 @@ func (d *PushDependencies) RecordTypedError(errType httpTransport.ErrorType, ret
 	d.parentDeps.RecordTypedError(errType, retryAfter)
 
 	if d.failureRate.RecordOutcome(false) {
-		d.BaseDependencies.GetLogger().SentryWarn(deps.FeatureCommunicator, d.GetHierarchyPath(), "persistent_push_failure",
+		d.BaseDependencies.GetLogger().SentryWarn(deps.FeatureForWorker(d.GetWorkerType()), d.GetHierarchyPath(), "persistent_push_failure",
 			deps.String("error_type", errType.String()),
 			deps.Float64("failure_rate", d.failureRate.FailureRate()))
 	}
@@ -103,7 +103,7 @@ func (d *PushDependencies) RecordError() {
 	d.RetryTracker().RecordError()
 	d.parentDeps.RecordError()
 	if d.failureRate.RecordOutcome(false) {
-		d.BaseDependencies.GetLogger().SentryWarn(deps.FeatureCommunicator, d.GetHierarchyPath(), "persistent_push_failure",
+		d.BaseDependencies.GetLogger().SentryWarn(deps.FeatureForWorker(d.GetWorkerType()), d.GetHierarchyPath(), "persistent_push_failure",
 			deps.Float64("failure_rate", d.failureRate.FailureRate()))
 	}
 }
@@ -130,7 +130,7 @@ func (d *PushDependencies) StorePendingMessages(msgs []*communicator_transport.U
 	if len(d.pendingMessages) > maxPendingMessages {
 		dropped := len(d.pendingMessages) - maxPendingMessages
 		d.pendingMessages = d.pendingMessages[len(d.pendingMessages)-maxPendingMessages:]
-		d.BaseDependencies.GetLogger().SentryWarn(deps.FeatureCommunicator, d.GetHierarchyPath(), "pending_buffer_overflow",
+		d.BaseDependencies.GetLogger().SentryWarn(deps.FeatureForWorker(d.GetWorkerType()), d.GetHierarchyPath(), "pending_buffer_overflow",
 			deps.Int("dropped", dropped), deps.Int("cap", maxPendingMessages))
 		d.MetricsRecorder().IncrementCounter(deps.CounterMessagesDropped, int64(dropped))
 	}
