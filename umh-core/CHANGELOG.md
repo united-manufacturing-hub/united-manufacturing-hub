@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## [0.44.14]
+
 ### Improvements
 
 - Unified Address Field for Modbus: introduces `unifiedAddresses` as a single-string alternative to the existing address object list. Format: `name.register.address.type[:key=value]*` (e.g., `temperature.holding.100.INT16:scale=0.1`). The legacy `addresses` object list continues to work with a deprecation warning. Both fields are mutually exclusive
