@@ -197,8 +197,12 @@ COMMON_ARGS = \
 	--build-arg TARGETARCH=$(TARGETARCH) \
 	$(VERSION_ARGS)
 
+ROOT_DIR := $(shell git rev-parse --show-toplevel)
+MC_PATH := $(ROOT_DIR)/../ManagementConsole
+
 define DOCKER_BUILD
 	docker buildx build $(COMMON_ARGS) $(EXTRA_ARGS) \
+		--build-context mc=$(MC_PATH) \
 		--progress=plain --load -f Dockerfile \
 		-t $(IMAGE_NAME):$(TAG) .
 endef
@@ -211,6 +215,7 @@ CI_ARGS = \
 # TAGS should be passed as: TAGS="-t ghcr.io/.../umh-core:tag1 -t ghcr.io/.../umh-core:tag2"
 define DEPOT_BUILD
 	depot build $(CI_ARGS) $(EXTRA_ARGS) \
+		--build-context mc=$(MC_PATH) \
 		--project $(DEPOT_PROJECT_ID) \
 		--push \
 		--progress=plain -f Dockerfile \

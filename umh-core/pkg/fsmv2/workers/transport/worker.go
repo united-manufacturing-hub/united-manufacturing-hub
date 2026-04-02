@@ -147,6 +147,7 @@ func (w *TransportWorker) CollectObservedState(ctx context.Context, _ fsmv2.Desi
 	return fsmv2.NewObservation(TransportStatus{
 		JWTToken:          w.deps.GetJWTToken(),
 		JWTExpiry:         w.deps.GetJWTExpiry(),
+		AuthenticatedUUID: w.deps.GetAuthenticatedUUID(),
 		ConsecutiveErrors: w.deps.GetConsecutiveErrors(),
 		LastErrorType:     w.deps.GetLastErrorType(),
 		LastAuthAttemptAt: w.deps.GetLastAuthAttemptAt(),

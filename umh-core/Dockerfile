@@ -88,6 +88,9 @@ WORKDIR /go/src/github.com/united-manufacturing-hub/united-manufacturing-hub/umh
 COPY ./go.mod ./go.sum ./
 # Copy vendored dependencies — invalidated only when vendor/ changes
 COPY ./vendor ./vendor
+# Copy ManagementConsole cryptolib into vendor (private, provided via --build-context mc=...)
+COPY --from=mc cryptolib ./vendor/github.com/united-manufacturing-hub/ManagementConsole/cryptolib
+COPY --from=mc shared ./vendor/github.com/united-manufacturing-hub/ManagementConsole/shared
 # Copy source code — most frequently changing layer
 COPY ./cmd ./cmd
 COPY ./pkg ./pkg
@@ -99,6 +102,7 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
     if [ "$DEBUG" = "true" ]; then \
     CGO_ENABLED=1 go build \
     -race \
+    -tags cryptolib \
     -gcflags="all=-N -l" \
     -ldflags "-X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants.S6OverlayVersion=${S6_OVERLAY_VERSION} \
     -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants.BenthosVersion=${BENTHOS_UMH_VERSION} \
@@ -106,7 +110,7 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
     -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/version.AppVersion=${APP_VERSION}" \
     -o /go/bin/umh-core cmd/main.go; \
     elif [ "$PPROF" = "true" ]; then \
-    CGO_ENABLED=1 go build -mod=vendor -tags pprof \
+    CGO_ENABLED=1 go build -mod=vendor -tags cryptolib,pprof \
     -ldflags "-s -w \
     -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants.S6OverlayVersion=${S6_OVERLAY_VERSION} \
     -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants.BenthosVersion=${BENTHOS_UMH_VERSION} \
@@ -114,7 +118,7 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
     -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/version.AppVersion=${APP_VERSION}" \
     -o /go/bin/umh-core cmd/main.go; \
     else \
-    CGO_ENABLED=0 go build -mod=vendor  \
+    CGO_ENABLED=0 go build -mod=vendor -tags cryptolib \
     -ldflags "-s -w \
     -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants.S6OverlayVersion=${S6_OVERLAY_VERSION} \
     -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants.BenthosVersion=${BENTHOS_UMH_VERSION} \

@@ -51,6 +51,9 @@ type TransportStatus struct {
 	// LastRetryAfter holds the server-suggested retry delay from the most recent error (for backoff).
 	LastRetryAfter time.Duration `json:"last_retry_after,omitempty"`
 
+	// AuthenticatedUUID is the instance UUID returned from the backend after authentication.
+	AuthenticatedUUID string `json:"authenticated_uuid,omitempty"`
+
 	// ConsecutiveErrors tracks consecutive push/pull errors for transport reset decisions.
 	ConsecutiveErrors int `json:"consecutive_errors"`
 	// LastErrorType tracks the most recent error type for ShouldResetTransport evaluation.
