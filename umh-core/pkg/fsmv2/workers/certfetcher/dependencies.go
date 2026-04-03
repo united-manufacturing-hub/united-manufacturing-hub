@@ -102,7 +102,7 @@ func (d *CertFetcherDependencies) FetchAllCerts(ctx context.Context) error {
 		}
 		err := d.certHandler.FetchAndStore(ctx, email)
 		if err != nil {
-			d.GetLogger().SentryError(deps.FeatureGatekeeper, d.GetHierarchyPath(), err, "cert_fetch_failed",
+			d.GetLogger().SentryError(deps.FeatureForWorker(d.GetWorkerType()), d.GetHierarchyPath(), err, "cert_fetch_failed",
 				deps.String("email", email))
 			lastErr = err
 		}

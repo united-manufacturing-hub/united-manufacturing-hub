@@ -28,6 +28,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/gatekeeper/protocol"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/gatekeeper/validator"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 )
 
 // SubHandler provides access to the list of active subscribers.
@@ -189,6 +190,7 @@ func (g *Gatekeeper) processInbound(ctx context.Context) {
 		r := recover()
 		if r != nil {
 			g.logger.Errorw("panic in processInbound", "panic", r)
+			sentry.ReportIssuef(sentry.IssueTypeError, g.logger, "gatekeeper processInbound panic: %v", r)
 		}
 	}()
 
@@ -226,12 +228,14 @@ func (g *Gatekeeper) handleInbound(ctx context.Context, msg *transport.UMHMessag
 		cert := g.certHandler.Certificate(msg.Email)
 		if cert == nil {
 			g.logger.Warnw("No certificate cached, dropping message", "email", msg.Email)
+			sentry.ReportIssuef(sentry.IssueTypeWarning, g.logger, "gatekeeper: no certificate cached for %s, dropping message", msg.Email)
 			return
 		}
 
 		rootCA := g.certHandler.RootCA()
 		if rootCA == nil {
 			g.logger.Warnw("Root CA not yet available, dropping message", "email", msg.Email)
+			sentry.ReportIssuef(sentry.IssueTypeWarning, g.logger, "gatekeeper: Root CA not yet available, dropping message for %s", msg.Email)
 			return
 		}
 		intermediates := g.certHandler.IntermediateCerts(msg.Email)
@@ -273,6 +277,7 @@ func (g *Gatekeeper) processOutbound(ctx context.Context) {
 		r := recover()
 		if r != nil {
 			g.logger.Errorw("panic in processOutbound", "panic", r)
+			sentry.ReportIssuef(sentry.IssueTypeError, g.logger, "gatekeeper processOutbound panic: %v", r)
 		}
 	}()
 
@@ -323,6 +328,7 @@ func (g *Gatekeeper) processLegacyOutbound(ctx context.Context) {
 		r := recover()
 		if r != nil {
 			g.logger.Errorw("panic in processLegacyOutbound", "panic", r)
+			sentry.ReportIssuef(sentry.IssueTypeError, g.logger, "gatekeeper processLegacyOutbound panic: %v", r)
 		}
 	}()
 
