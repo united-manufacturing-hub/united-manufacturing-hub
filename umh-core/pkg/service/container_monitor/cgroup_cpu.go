@@ -117,6 +117,9 @@ func (c *ContainerMonitorService) getCgroupCPUInfo(ctx context.Context) (*CPUCgr
 
 	cpuStatData, err := c.fs.ReadFile(ctx, cpuStatPath)
 	if err != nil {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
 		// cpu.stat might not exist in all environments
 		c.logger.Debugf("Could not read cpu.stat: %v", err)
 
