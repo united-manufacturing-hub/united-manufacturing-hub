@@ -271,35 +271,32 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 	category := models.Active
 	message := "CPU utilization normal"
 
-	// Compute windowed throttle ratio (replaces cumulative ratio from cgroup)
-	var windowedRatio float64
-	var isThrottled bool
+	// Compute windowed throttle ratio; skip entirely on cgroup read failure to preserve wasThrottled state
+	var (
+		windowedRatio float64
+		isThrottled   bool
+	)
 	if cgroupErr == nil && cgroupInfo != nil {
 		windowedRatio, isThrottled = c.updateThrottleWindow(cgroupInfo)
-		// Override the cumulative values with windowed values
 		cgroupInfo.ThrottleRatio = windowedRatio
 		cgroupInfo.IsThrottled = isThrottled
+
+		if isThrottled && !c.wasThrottled {
+			c.logger.Warnf("CPU throttling detected: %.1f%% of periods throttled", cgroupInfo.ThrottleRatio*100)
+		}
+		c.wasThrottled = isThrottled
 	}
 
-	if usagePercent >= constants.CPUHighThresholdPercent || isThrottled {
+	switch {
+	case usagePercent >= constants.CPUHighThresholdPercent || isThrottled:
 		category = models.Degraded
-
 		if isThrottled && cgroupInfo != nil {
 			message = fmt.Sprintf("CPU throttled (%.1f%% periods throttled)", cgroupInfo.ThrottleRatio*100)
 		} else {
 			message = "CPU utilization critical"
 		}
-	} else if usagePercent >= constants.CPUMediumThresholdPercent {
-		// Warning level but not degraded
+	case usagePercent >= constants.CPUMediumThresholdPercent:
 		message = "CPU utilization warning"
-	}
-
-	// Only update throttle state on valid cgroup reads
-	if cgroupErr == nil {
-		if isThrottled && !c.wasThrottled {
-			c.logger.Warnf("CPU throttling detected: %.1f%% of periods throttled", cgroupInfo.ThrottleRatio*100)
-		}
-		c.wasThrottled = isThrottled
 	}
 
 	cpuStat := &models.CPU{
