@@ -294,11 +294,13 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 		message = "CPU utilization warning"
 	}
 
-	// Log only on false→true transition to avoid flooding stdout
-	if isThrottled && !c.wasThrottled && cgroupInfo != nil {
-		c.logger.Warnf("CPU throttling detected: %.1f%% of periods throttled", cgroupInfo.ThrottleRatio*100)
+	// Only update throttle state on valid cgroup reads
+	if cgroupErr == nil {
+		if isThrottled && !c.wasThrottled {
+			c.logger.Warnf("CPU throttling detected: %.1f%% of periods throttled", cgroupInfo.ThrottleRatio*100)
+		}
+		c.wasThrottled = isThrottled
 	}
-	c.wasThrottled = isThrottled
 
 	cpuStat := &models.CPU{
 		Health: &models.Health{
