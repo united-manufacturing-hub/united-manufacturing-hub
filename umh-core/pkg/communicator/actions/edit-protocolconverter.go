@@ -849,7 +849,6 @@ func (a *EditProtocolConverterAction) awaitRollout(pcConfig config.ProtocolConve
 				// For "stopped" state: accept only "stopped"
 				hasReachedDesiredState := false
 
-				a.actionLogger.Errorf("desiredPCState empty: %s, currentState empty: %s", desiredPCState, instance.CurrentState)
 				switch desiredPCState {
 				case protocolconverter.OperationalStateActive:
 
