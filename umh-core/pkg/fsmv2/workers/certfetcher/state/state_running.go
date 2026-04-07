@@ -54,7 +54,7 @@ func (s *RunningState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	}
 
 	timeSinceLastFetch := snap.Observed.CollectedAt.Sub(snap.Observed.LastFetchAt)
-	if timeSinceLastFetch >= FetchInterval || snap.Observed.LastFetchAt.IsZero() {
+	if timeSinceLastFetch >= FetchInterval || (snap.Observed.LastFetchAt.IsZero() && timeSinceLastFetch >= 10*time.Second) {
 		return fsmv2.Result[any, any](s, fsmv2.SignalNone, &action.FetchCertsAction{},
 			fmt.Sprintf("fetching: %d subscribers, last fetch %s ago",
 				snap.Observed.SubscriberCount, timeSinceLastFetch.Round(time.Second)))
