@@ -63,7 +63,7 @@ func InitSentry(appVersion string, debounceErrors bool) {
 		// management.umh.app is not working anymore, so we use the direct DSN
 		Dsn:           "https://1e1f51c30e576ff39d2445e76dc89da7@o4507265932394496.ingest.de.sentry.io/4509039283798097",
 		Environment:   environment,
-		Release:       "umhcore@" + appVersion,
+		Release:       "umhcore@" + strings.TrimPrefix(appVersion, "v"),
 		EnableTracing: false, // no need for tracing, it doesnt work anyway
 	})
 	if err != nil {
