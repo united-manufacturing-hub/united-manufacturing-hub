@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Improvements
+
+- Previously, a DFC only exposed a single health and throughput metric. Starting with this version, umh-core exposes separate throughput metrics and health status for read and write flows.
+
 ## [0.44.15]
 
 Fix issue when redeploying a bridge.
