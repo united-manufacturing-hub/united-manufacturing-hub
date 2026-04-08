@@ -1181,6 +1181,17 @@ func (a *EditProtocolConverterAction) deriveDFCType() DFCType {
 		return dfcTypeFromPresence(hasRead, hasWrite)
 	}
 
+	// Connection IP/PORT changes affect all DFCs since they use {{ .IP }}/{{ .PORT }} templates.
+	// So if a change is detected, all present DFCs need redeploy.
+	deployedVars := currentPC.ProtocolConverterServiceConfig.Variables.User
+	connectionChanged := fmt.Sprint(deployedVars["IP"]) != a.connectionIP ||
+		fmt.Sprint(deployedVars["PORT"]) != a.connectionPort
+	if connectionChanged {
+		a.actionLogger.Debugf("Connection changed (IP or PORT), all present DFCs need redeploy")
+		return dfcTypeFromPresence(hasRead, hasWrite)
+	}
+
+	// Check if read or write payload is different from the deployed config.
 	readChanged := hasRead && a.dfcPayloadDiffers(*a.readDFCPayload, a.readDFCState,
 		currentPC.ProtocolConverterServiceConfig.Config.DataflowComponentReadServiceConfig,
 		currentPC.ProtocolConverterServiceConfig.ReadDFCDesiredState)
