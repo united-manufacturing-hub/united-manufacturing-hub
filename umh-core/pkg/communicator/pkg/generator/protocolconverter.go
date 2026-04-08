@@ -183,12 +183,12 @@ func buildProtocolConverterAsDfc(
 	svcInfo := observed.ServiceInfo
 	avgReadThroughput := 0.0
 	avgWriteThroughput := 0.0
-	// Caluclate read throughput
+	// Calculate read throughput
 	if readMetrics := svcInfo.DataflowComponentReadObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.MetricsState; readMetrics != nil &&
 		readMetrics.Input.LastCount > 0 {
 		avgReadThroughput = readMetrics.Input.MessagesPerTick / constants.DefaultTickerTime.Seconds()
-		if instance.DesiredState == protocolconverter.OperationalStateStopped ||
-			observed.ObservedProtocolConverterSpecConfig.ReadDFCDesiredState == protocolconverter.OperationalStateStopped {
+		if instance.DesiredState == dataflowcomponent.OperationalStateStopped ||
+			observed.ObservedProtocolConverterSpecConfig.ReadDFCDesiredState == dataflowcomponent.OperationalStateStopped {
 			avgReadThroughput = 0
 		}
 	}
@@ -198,8 +198,8 @@ func buildProtocolConverterAsDfc(
 	if writeMetrics := svcInfo.DataflowComponentWriteObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.MetricsState; writeMetrics != nil &&
 		writeMetrics.Output.LastCount > 0 {
 		avgWriteThroughput = writeMetrics.Output.MessagesPerTick / constants.DefaultTickerTime.Seconds()
-		if instance.DesiredState == protocolconverter.OperationalStateStopped ||
-			observed.ObservedProtocolConverterSpecConfig.WriteDFCDesiredState == protocolconverter.OperationalStateStopped {
+		if instance.DesiredState == dataflowcomponent.OperationalStateStopped ||
+			observed.ObservedProtocolConverterSpecConfig.WriteDFCDesiredState == dataflowcomponent.OperationalStateStopped {
 			avgWriteThroughput = 0
 		}
 	}
@@ -223,7 +223,7 @@ func getProtocolConverterStatusMessage(state string, statusReason string, connec
 		baseMessage = "Protocol converter is active and processing data"
 	case protocolconverter.OperationalStateIdle:
 		baseMessage = "Protocol converter is idle"
-	case protocolconverter.OperationalStateStopped:
+	case dataflowcomponent.OperationalStateStopped:
 		baseMessage = "Protocol converter is stopped"
 	case protocolconverter.OperationalStateDegradedConnection:
 		baseMessage = "Protocol converter connection is degraded"
